@@ -248,6 +248,12 @@ impl MockPushbuffer {
 }
 
 impl PushbufferAbi for MockPushbuffer {
+    fn method_len(&self, header: u32) -> usize {
+        // Fake convention: the header's low 16 bits are the arg-word count (set by
+        // `method`). Capped so a hostile header cannot request an unbounded read.
+        (header & 0xffff).min(16) as usize
+    }
+
     fn decode_method(&self, header: u32, args: &[u32]) -> PushMethod {
         let lo64 = |i: usize| u64::from(*args.get(i).unwrap_or(&0));
         let pair = |i: usize| lo64(i) | (lo64(i + 1) << 32);

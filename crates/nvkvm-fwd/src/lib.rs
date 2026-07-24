@@ -347,3 +347,193 @@ pub fn signal_golden_capture(gpu: &mut Gpu, event: OsEventRef) -> OsEventRef {
     gpu.system.completion.observe(event);
     event
 }
+
+// =================================================================================
+// The ONE pushbuffer parser (`execution_plane.md` §2.3) — the address-table
+// populator + sema/fence extractor. It decodes JUST the four fact kinds; everything
+// else is opaque and passes through (the anti-emulation boundary, trap-min #6). The
+// decode LOGIC is core; the method ENCODINGS come from `Arch::pushbuffer()`.
+//
+// Two co-equal address-table populate sources meet here (address_table.md, L3): the
+// bind-time RPC bindings (batch 1, `Gpu::sync_rpc_mappings`) and the observed CE
+// PT-writes captured below. Both land in the same per-`Vas` table.
+// =================================================================================
+
+/// Upper bound on a single GPFIFO range's method bytes the parser will read. A
+/// hostile GPFIFO entry can declare any length; this caps it to a bounded read so an
+/// attacker-controlled length is never an arbitrary allocation (boundary-1). Real
+/// pushbuffer segments are far smaller; a range hitting this cap is simply truncated
+/// (the surplus decodes to nothing actionable, MISS=FAULT at use).
+const MAX_PUSH_RANGE_BYTES: usize = 1 << 20;
+
+/// What one pushbuffer parse observed (for assertions + the caller's next steps).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PushbufferOutcome {
+    /// CE PT-write destination pages captured (#13): physical PT pages this
+    /// pushbuffer's CE copies wrote, added to the channel's `Vas.pt_pages`.
+    pub pt_writes: Vec<u64>,
+    /// Semaphore releases observed → each `observe`d on the owning proc's queue.
+    pub sem_releases: Vec<(GpuVa, u64)>,
+    /// TLB invalidates seen (pdb, membar). A membar is honored as a hard barrier
+    /// (the parser records it; a real transport blocks advance until refresh).
+    pub invalidates: Vec<(Pdb, bool)>,
+    /// Count of opaque methods passed through (acted on by no core state).
+    pub opaque: usize,
+}
+
+/// Decode a byte range of method words into `(header, args)` pairs, arch-driven.
+/// Total on any input (a hostile/truncated range yields fewer methods, never a
+/// panic or an unbounded read).
+fn decode_methods(arch: &dyn nvkvm_arch::Arch, bytes: &[u8]) -> Vec<(u32, Vec<u32>)> {
+    let words: Vec<u32> = bytes
+        .chunks_exact(4)
+        .map(|w| u32::from_le_bytes(w.try_into().expect("4 bytes")))
+        .collect();
+    let pb = arch.pushbuffer();
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < words.len() {
+        let header = words[i];
+        let nargs = pb.method_len(header);
+        let start = i + 1;
+        let end = start.saturating_add(nargs).min(words.len());
+        out.push((header, words[start..end].to_vec()));
+        // Always advance past at least the header, so a bogus count cannot stall.
+        i = end.max(i + 1);
+    }
+    out
+}
+
+/// Parse the pushbuffer `ring` submitted on channel `cid` of proc `pid`, reading its
+/// method words from guest memory via `vmm`. Feeds: CE-PT-write capture → the
+/// channel's `Vas.pt_pages` + address table; `SemRelease` → the proc's
+/// `CompletionQueue`; honors `TlbInvalidate` membars; passes opaque methods through.
+///
+/// **Only runs where the core is already the mediator** (kernel/CeUtils/scrubber
+/// channels + the CE-PT-write point). A userspace ring never carries a fact the core
+/// must extract (verified safe, address_table.md §opaque-fast-path) — callers pass it
+/// through as shared pages, no per-submit parse.
+pub fn parse_pushbuffer(
+    gpu: &mut Gpu,
+    vmm: &mut dyn Vmm,
+    pid: ProcId,
+    cid: ChanId,
+    ring: &[u8],
+) -> Result<PushbufferOutcome, FwdFault> {
+    // Walk the GPFIFO entries (arch format), reading each range's method bytes. A
+    // hostile GPFIFO entry can name any length; cap the per-range read so a bogus
+    // length is a bounded read, never an arbitrary allocation (boundary-1 posture).
+    let ranges = gpu.arch.pushbuffer().gpfifo_entries(ring);
+    let mut methods = Vec::new();
+    for r in ranges {
+        let len = (r.len as usize).min(MAX_PUSH_RANGE_BYTES);
+        let mut buf = vec![0u8; len];
+        vmm.gpa_read(r.gpa, &mut buf).map_err(|_| FwdFault::Arena)?;
+        methods.extend(decode_methods(gpu.arch.as_ref(), &buf));
+    }
+
+    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(pid));
+    }
+    let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
+    let chan_pdb = chan.vas;
+
+    let mut out = PushbufferOutcome::default();
+    for (header, args) in methods {
+        match gpu.arch.pushbuffer().decode_method(header, &args) {
+            nvkvm_arch::PushMethod::SetObject { .. } => {
+                // Routing confirmation only — no address/completion state changes.
+            }
+            nvkvm_arch::PushMethod::CeLaunchDma { dst, len, dst_is_virtual } => {
+                // #13 CE-PT-write capture: a PHYSICAL destination is a page-table write
+                // into this channel's compute VAS. Record the dirtied PT page and
+                // forward-populate the same per-`Vas` table (co-equal RPC source).
+                if !dst_is_virtual {
+                    let pdb = chan_pdb.ok_or(FwdFault::NoVas(cid))?;
+                    let vas = proc.vases.get_mut(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+                    let page = dst.0 & !0xfffu64;
+                    vas.pt_pages.insert(page);
+                    out.pt_writes.push(page);
+                    // Co-populate the address table with the captured mapping (the leaf
+                    // the PT-write publishes), MISS=FAULT on overlap.
+                    if vas.table.resolve(pdb, dst).is_err() {
+                        vas.table.bind(
+                            pdb,
+                            dst,
+                            len.max(0x1000),
+                            Binding { phys: dst.0, aperture: Aperture::Vidmem, host_va: None },
+                        )?;
+                    }
+                }
+            }
+            nvkvm_arch::PushMethod::SemRelease { addr, payload } => {
+                // Completion observe on the OWNING proc's queue (per-`Proc`, §2.4).
+                proc.completion.observe(OsEventRef(addr.0 ^ payload));
+                out.sem_releases.push((addr, payload));
+            }
+            nvkvm_arch::PushMethod::TlbInvalidate { pdb, membar } => {
+                out.invalidates.push((pdb, membar));
+                // A membar is a hard barrier: the interpreter honors it before
+                // advancing (recorded here; the real transport blocks on refresh).
+            }
+            nvkvm_arch::PushMethod::Opaque => out.opaque += 1,
+        }
+    }
+    Ok(out)
+}
+
+// =================================================================================
+// Per-`Proc` working-set publication + ring-gate — THE #14 fix in code
+// (`execution_plane.md` §2.4, decision #7, C: 6de85e7). The proven #14 root cause was
+// an EXECUTION fault: the loser's GR channel took a host FAULT_PDE because its
+// (identical) guest VAs were never published into its OWN host GR VAS. So before a
+// channel's doorbell rings, its working set MUST be forward-populated into that
+// channel's Vas's own host VAS; an unpublished VA at ring time is a LOUD fault, never
+// a cross-proc content-pick (the exact confused-deputy designed out).
+// =================================================================================
+
+/// Ensure every VA in `working_set` is published into channel `cid`'s Vas's own host
+/// VAS before the doorbell may ring. A VA with no host publication (`host_va = None`)
+/// is a loud [`FwdFault`], never guessed — the #14 ring-gate.
+///
+/// This is the load-bearing per-`Vas` publication check: two procs' identical guest
+/// VAs each resolve in their OWN Vas (keyed by PDB), so the gate passes for both only
+/// because each published into its OWN host VAS (distinct `HostHandle`s).
+pub fn gate_working_set(
+    gpu: &Gpu,
+    pid: ProcId,
+    cid: ChanId,
+    working_set: &[GpuVa],
+) -> Result<(), FwdFault> {
+    let proc = gpu.procs.get(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
+    let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
+    let vas = proc.vases.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+    for &va in working_set {
+        let (binding, _off) = vas.table.resolve(pdb, va)?; // MISS=FAULT
+        if binding.host_va.is_none() {
+            // Bound but not published into a host VAS — the exact #14 EXECUTION fault.
+            return Err(FwdFault::Address(AddressFault::Miss { pdb, va }));
+        }
+    }
+    Ok(())
+}
+
+/// Ring channel `cid`'s doorbell only after its `working_set` is gated (published into
+/// its OWN host VAS). This composes [`gate_working_set`] with the host doorbell ring
+/// so the #14 EXECUTION fault is impossible by construction: a channel whose working
+/// set is unpublished cannot ring.
+pub fn ring_gated(
+    gpu: &mut Gpu,
+    pid: ProcId,
+    cid: ChanId,
+    working_set: &[GpuVa],
+) -> Result<u64, FwdFault> {
+    gate_working_set(gpu, pid, cid, working_set)?;
+    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
+    let token = chan.host_token.ok_or(FwdFault::NoVas(cid))?;
+    proc.isolate.rm().ring_doorbell(token)?;
+    Ok(token)
+}

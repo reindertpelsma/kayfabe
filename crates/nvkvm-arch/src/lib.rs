@@ -248,6 +248,13 @@ pub struct PushRange {
 /// *encodings* (how a raw method word decodes, which method ID is `SEM_RELEASE`, the
 /// GPFIFO entry stride/format).
 pub trait PushbufferAbi {
+    /// Number of 32-bit **argument** words that follow a method `header` word (the
+    /// method's count field). The core parser uses this to advance the method stream;
+    /// the *meaning* of the args is [`PushbufferAbi::decode_method`]'s job. A header
+    /// this arch cannot size returns `0` (the core then advances past just the header,
+    /// so a hostile stream cannot desync the parser into an unbounded read).
+    fn method_len(&self, header: u32) -> usize;
+
     /// Decode one method word (`header` + its trailing `args`) into core terms.
     /// Anything this arch does not model → [`PushMethod::Opaque`] (never guessed).
     fn decode_method(&self, header: u32, args: &[u32]) -> PushMethod;
