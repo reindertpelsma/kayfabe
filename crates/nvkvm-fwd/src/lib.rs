@@ -39,7 +39,7 @@
 
 use nvkvm_arch::Aperture;
 use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
-use nvkvm_completion::{OsEventRef, PostBatch};
+use nvkvm_completion::{CompletionError, OsEventRef, PostBatch};
 use nvkvm_core::gpu::{Channel, Gpu, Proc, Vas};
 use nvkvm_core::{ChanId, ProcId};
 use nvkvm_isolate::{HostHandle, RmError};
@@ -84,6 +84,15 @@ pub enum FwdFault {
     NotAnEngine(ClassId),
     /// The present/display sink refused a GR-graphics scanout.
     Present(PresentError),
+    /// The owning proc's completion queue is full — a hostile guest triggered more
+    /// completions than it drained. Loud-fault, never unbounded growth (boundary-1).
+    Completion(CompletionError),
+}
+
+impl From<CompletionError> for FwdFault {
+    fn from(e: CompletionError) -> Self {
+        FwdFault::Completion(e)
+    }
 }
 
 impl From<AddressFault> for FwdFault {
@@ -355,9 +364,9 @@ pub fn route_control(
 ///
 /// Typed to the system proc by construction (lesson L5 / the #12 finishPayload rule):
 /// forging a completion for a userspace proc is unrepresentable here.
-pub fn signal_golden_capture(gpu: &mut Gpu, event: OsEventRef) -> OsEventRef {
-    gpu.system.completion.observe(event);
-    event
+pub fn signal_golden_capture(gpu: &mut Gpu, event: OsEventRef) -> Result<OsEventRef, FwdFault> {
+    gpu.system.completion.observe(event)?;
+    Ok(event)
 }
 
 // =================================================================================
@@ -377,6 +386,13 @@ pub fn signal_golden_capture(gpu: &mut Gpu, event: OsEventRef) -> OsEventRef {
 /// pushbuffer segments are far smaller; a range hitting this cap is simply truncated
 /// (the surplus decodes to nothing actionable, MISS=FAULT at use).
 const MAX_PUSH_RANGE_BYTES: usize = 1 << 20;
+
+/// Upper bound on the TOTAL method bytes one `parse_pushbuffer` call will read across
+/// ALL of a ring's GPFIFO ranges. `MAX_PUSH_RANGE_BYTES` bounds any single range, but a
+/// hostile ring can declare *many* maxed-out ranges; this caps their sum so the decoded
+/// method vector cannot grow without bound either (boundary-1). Ranges past the budget
+/// are skipped (their content decodes to nothing actionable — MISS=FAULT at use).
+const MAX_PUSH_TOTAL_BYTES: usize = 8 << 20;
 
 /// What one pushbuffer parse observed (for assertions + the caller's next steps).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -437,11 +453,17 @@ pub fn parse_pushbuffer(
     // length is a bounded read, never an arbitrary allocation (boundary-1 posture).
     let ranges = gpu.arch.pushbuffer().gpfifo_entries(ring);
     let mut methods = Vec::new();
+    let mut total = 0usize;
     for r in ranges {
-        let len = (r.len as usize).min(MAX_PUSH_RANGE_BYTES);
+        if total >= MAX_PUSH_TOTAL_BYTES {
+            break; // Total-work budget spent — a hostile many-range ring stops here.
+        }
+        let len =
+            (r.len as usize).min(MAX_PUSH_RANGE_BYTES).min(MAX_PUSH_TOTAL_BYTES - total);
         let mut buf = vec![0u8; len];
         vmm.gpa_read(r.gpa, &mut buf).map_err(|_| FwdFault::Arena)?;
         methods.extend(decode_methods(gpu.arch.as_ref(), &buf));
+        total += len;
     }
 
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
@@ -481,7 +503,8 @@ pub fn parse_pushbuffer(
             }
             nvkvm_arch::PushMethod::SemRelease { addr, payload } => {
                 // Completion observe on the OWNING proc's queue (per-`Proc`, §2.4).
-                proc.completion.observe(OsEventRef(addr.0 ^ payload));
+                // A hostile guest flooding sem-releases is loud-capped, not OOM.
+                proc.completion.observe(OsEventRef(addr.0 ^ payload))?;
                 out.sem_releases.push((addr, payload));
             }
             nvkvm_arch::PushMethod::TlbInvalidate { pdb, membar } => {
@@ -575,7 +598,7 @@ pub fn present_scanout(
     }
     let vblank = present.present(buffer, meta).map_err(FwdFault::Present)?;
     // Synthetic vblank → the proc's completion queue (the graphics completion arm).
-    proc.completion.observe(OsEventRef(vblank.seq));
+    proc.completion.observe(OsEventRef(vblank.seq))?;
     Ok(vblank.seq)
 }
 

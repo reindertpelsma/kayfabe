@@ -409,7 +409,7 @@ fn stress_multi_vcpu_interleaved_ops() {
                             );
                             ev_seq += 1;
                             let mut g = gpu.write().unwrap();
-                            g.procs.get_mut(&pid).unwrap().completion.observe(ev);
+                            g.procs.get_mut(&pid).unwrap().completion.observe(ev).unwrap();
                             local_observed.insert(ev);
                             let batch = match rng.next() % 3 {
                                 0 => g.pump_completions(),

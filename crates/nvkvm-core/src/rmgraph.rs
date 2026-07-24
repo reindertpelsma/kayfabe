@@ -233,6 +233,35 @@ struct Resource {
     map_refs: usize,
 }
 
+/// Which capacity-bounded table a hostile guest overflowed (see [`RmGraphError::CapacityExceeded`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Capacity {
+    /// The live-handle table (`Alloc`/`Dup` flood) — bound [`MAX_LIVE_HANDLES`].
+    Handles,
+    /// The live-mapping table (`MapMemoryDma` flood) — bound [`MAX_LIVE_MAPPINGS`].
+    Mappings,
+    /// Parked (unresolved) dup edges — bound [`MAX_PARKED`].
+    PendingDups,
+    /// Parked (unresolved) `SET_PAGE_DIRECTORY` facts — bound [`MAX_PARKED`].
+    PendingPdbs,
+    /// Parked (unresolved) `MAP_MEMORY_DMA` facts — bound [`MAX_PARKED`].
+    PendingMaps,
+}
+
+/// Maximum live handles (origin allocs + surviving dup aliases) the graph tracks
+/// before a hostile flood is refused. **Boundary-1: no unbounded allocation from
+/// guest input** — without this bound an attacker could `Alloc`/`Dup` until the host
+/// OOM-aborts (taking every other guest's process down with it). The bound is orders
+/// of magnitude above any real guest's live object count, so it never trips a benign
+/// workload — only a flood, which gets a loud [`RmGraphError::CapacityExceeded`].
+pub const MAX_LIVE_HANDLES: usize = 1 << 18;
+/// Maximum live DMA mappings (see [`MAX_LIVE_HANDLES`] rationale; `MapMemoryDma` flood).
+pub const MAX_LIVE_MAPPINGS: usize = 1 << 18;
+/// Maximum parked (order-tolerance) facts of any one kind — a hostile guest can name
+/// endpoints that never arrive, so each parked table is bounded too (dangling-`Dup`,
+/// orphan-`SetPageDir`, orphan-`MapMemoryDma` floods). See [`MAX_LIVE_HANDLES`].
+pub const MAX_PARKED: usize = 1 << 18;
+
 /// Errors from [`RmGraph::apply`]. All loud; the caller decides whether a guest
 /// protocol violation is fatal or logged-and-refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -253,6 +282,10 @@ pub enum RmGraphError {
     },
     /// Free of a handle that references no resource (never allocated or dup'd).
     FreeUnknown(NodeKey),
+    /// A capacity-bounded table was full: a hostile guest tried to grow the graph
+    /// past its bound. Loud-fault, never OOM (boundary-1). The existing graph is
+    /// unchanged — the offending event is simply refused.
+    CapacityExceeded(Capacity),
 }
 
 /// The RM resource graph. Facts in, projections out; no policy.
@@ -284,15 +317,18 @@ pub struct RmGraph {
     /// very map-ref). Faithful RM refcounting requires this back-pointer.
     map_mem_res: BTreeMap<MapKey, ResId>,
     /// `MapMemoryDma` facts whose VASpace or memory handle is not observed *yet*
-    /// (order tolerance), replayed once both resolve.
-    pending_maps: Vec<PendingMap>,
+    /// (order tolerance), replayed once both resolve. A **set** (not a Vec): a hostile
+    /// guest can flood orphan maps, and a linear-scan dedup would make that O(n²) CPU —
+    /// a complexity DoS even under the count cap. Ordered so replay is deterministic.
+    pending_maps: BTreeSet<PendingMap>,
     /// Monotonic resource-id counter — never reused, so a re-allocated handle value
     /// mints a fresh resource distinct from a survivor a dup still holds.
     next_res_id: u64,
 }
 
 /// A parked `MAP_MEMORY_DMA` awaiting its VASpace/memory handles (order tolerance).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// `Ord` so the parked set dedups + caps in O(log n) (see [`RmGraph::pending_maps`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct PendingMap {
     client: HClient,
     vaspace: HObject,
@@ -329,6 +365,12 @@ impl RmGraph {
                     // The key is already taken (by a different alloc, or by a resolved dup) — loud.
                     Some(_) => Err(RmGraphError::ConflictingAlloc(key)),
                     None => {
+                        // Boundary-1: a genuinely new resource grows the handle table —
+                        // refuse a flood loudly rather than OOM. (Idempotent re-sends
+                        // take the branches above and never reach here.)
+                        if self.handles.len() >= MAX_LIVE_HANDLES {
+                            return Err(RmGraphError::CapacityExceeded(Capacity::Handles));
+                        }
                         let id = ResId(self.next_res_id);
                         self.next_res_id += 1;
                         self.handles.insert(key, id);
@@ -367,6 +409,10 @@ impl RmGraph {
                 match self.resource_of(src) {
                     // Source known now: dst gets its own reference to it immediately.
                     Some(id) => {
+                        // A new alias handle grows the handle table (boundary-1).
+                        if self.handles.len() >= MAX_LIVE_HANDLES {
+                            return Err(RmGraphError::CapacityExceeded(Capacity::Handles));
+                        }
                         self.handles.insert(dst, id);
                         self.resources
                             .get_mut(&id)
@@ -377,6 +423,11 @@ impl RmGraph {
                     // Source not observed yet (order tolerance). Park the edge so a
                     // later Alloc of `src` (or a chain) resolves it.
                     None => {
+                        // A hostile guest can dup endpoints that never arrive; bound
+                        // the parked table so the flood is loud, not an OOM (boundary-1).
+                        if self.pending_dups.len() >= MAX_PARKED {
+                            return Err(RmGraphError::CapacityExceeded(Capacity::PendingDups));
+                        }
                         self.pending_dups.insert(dst, src);
                     }
                 }
@@ -403,6 +454,10 @@ impl RmGraph {
                         }
                     }
                     None => {
+                        // Bound the parked page-dir table (orphan-SetPageDir flood).
+                        if self.pending_pdbs.len() >= MAX_PARKED {
+                            return Err(RmGraphError::CapacityExceeded(Capacity::PendingPdbs));
+                        }
                         self.pending_pdbs.insert(target, pdb);
                     }
                 }
@@ -563,9 +618,13 @@ impl RmGraph {
         let mem_key = NodeKey::new(m.client, m.memory);
         let (Some(vas_id), Some(_mem_id)) = (self.resource_of(vas_key), self.resource_of(mem_key))
         else {
-            // Park (dedup identical parked entries so replay is idempotent).
+            // Park (the set dedups identical parked entries so replay is idempotent).
             if !self.pending_maps.contains(&m) {
-                self.pending_maps.push(m);
+                // Bound the parked-map table (orphan-MapMemoryDma flood, boundary-1).
+                if self.pending_maps.len() >= MAX_PARKED {
+                    return Err(RmGraphError::CapacityExceeded(Capacity::PendingMaps));
+                }
+                self.pending_maps.insert(m);
             }
             return Ok(());
         };
@@ -585,6 +644,10 @@ impl RmGraph {
             Some(existing) if *existing == mapping => Ok(()), // idempotent retry
             Some(_) => Err(RmGraphError::ConflictingMap { vaspace: vas_origin, va: m.va }),
             None => {
+                // A new live mapping grows the mapping table (boundary-1).
+                if self.mappings.len() >= MAX_LIVE_MAPPINGS {
+                    return Err(RmGraphError::CapacityExceeded(Capacity::Mappings));
+                }
                 self.mappings.insert(key, mapping);
                 if let Some(mem_id) = self.resource_of(mem_key)
                     && let Some(res) = self.resources.get_mut(&mem_id)
@@ -600,11 +663,16 @@ impl RmGraph {
     /// Replay every parked map whose endpoints now resolve. Fixpoint (a parked map may
     /// depend on an alloc that also unparked a dup — re-scan until quiescent).
     fn resolve_pending_maps(&mut self) {
-        while let Some(pos) = self.pending_maps.iter().position(|m| {
-            self.resource_of(NodeKey::new(m.client, m.vaspace)).is_some()
-                && self.resource_of(NodeKey::new(m.client, m.memory)).is_some()
-        }) {
-            let m = self.pending_maps.remove(pos);
+        while let Some(m) = self
+            .pending_maps
+            .iter()
+            .find(|m| {
+                self.resource_of(NodeKey::new(m.client, m.vaspace)).is_some()
+                    && self.resource_of(NodeKey::new(m.client, m.memory)).is_some()
+            })
+            .copied()
+        {
+            self.pending_maps.remove(&m);
             // A conflict at replay is dropped silently here (the loud path is the
             // direct `apply`); replay only ever installs cleanly-resolvable maps.
             let _ = self.apply_map(m);

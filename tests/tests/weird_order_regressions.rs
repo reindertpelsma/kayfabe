@@ -225,7 +225,7 @@ fn wo_teardown_during_active_inflight_completion_is_clean() {
     publish_backing(gpu.procs.get_mut(&pid).unwrap(), PDB, GpuVa(0x2_0020_0000), 0x10000).unwrap();
     handle_doorbell(&mut gpu, gr_token).expect("channel rung");
     // An in-flight completion is pending for this proc.
-    gpu.procs.get_mut(&pid).unwrap().completion.observe(OsEventRef(0xDEAD));
+    gpu.procs.get_mut(&pid).unwrap().completion.observe(OsEventRef(0xDEAD)).unwrap();
     assert!(gpu.procs.get(&pid).unwrap().completion.has_outstanding());
 
     // Teardown WHILE that completion is outstanding.

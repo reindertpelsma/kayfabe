@@ -304,7 +304,40 @@ impl Gpu {
     }
 
     /// Apply one RM protocol event and re-sync all derived state to the graph.
+    ///
+    /// **Atomic under hostile input (boundary-1, decision #9).** The derived state is
+    /// a *global* projection of the graph (`by_pdb`/`by_vchid` route the whole device),
+    /// so an event that makes the graph unprojectable — e.g. a hostile process
+    /// declaring two VASpaces with the same PDB (`PdbCollision`) or two channels that
+    /// decode to one vChid (`VchidCollision`) — must NOT be allowed to wedge the device
+    /// for *every other* process. This apply is therefore transactional: on ANY
+    /// derivation fault the graph mutation is **rolled back** and the device is
+    /// re-derived from its last-good graph, so the offending event is refused
+    /// atomically and no other `Proc`'s state is disturbed. A hostile stream can only
+    /// ever earn its own loud refusal.
     pub fn apply(&mut self, ev: RmEvent) -> Result<(), GpuError> {
+        // Snapshot the last-good graph so a faulting derivation can be undone. (Apply
+        // is the control plane — RM alloc/free/map — not the doorbell/pushbuffer hot
+        // path, so a clone here is off the performance-critical path.)
+        let snapshot = self.rmgraph.clone();
+        match self.apply_inner(ev) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                // Undo: restore the last-good graph and re-derive from it. That graph
+                // projected cleanly before this event (every prior apply upheld the
+                // same invariant, inductively), so re-derivation cannot fault.
+                self.rmgraph = snapshot;
+                self.refresh().expect("last-good graph re-projects");
+                self.sync_rpc_mappings().expect("last-good graph re-syncs");
+                Err(e)
+            }
+        }
+    }
+
+    /// The non-atomic apply body: mutate the graph, re-derive, forward-populate. Any
+    /// error here leaves derived state possibly half-updated — [`Self::apply`] wraps it
+    /// to guarantee all-or-nothing.
+    fn apply_inner(&mut self, ev: RmEvent) -> Result<(), GpuError> {
         self.rmgraph.apply(self.arch.as_ref(), ev)?;
         self.refresh()?;
         // Forward-populate the address table from the RPC map source (co-equal with

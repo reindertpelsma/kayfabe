@@ -170,7 +170,7 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
             assert_eq!(out.proc, pid, "doorbell routes to the owning proc");
 
             // --- completion observed for this proc (host sema advance) ---
-            gpu.procs.get_mut(&pid).unwrap().completion.observe(OsEventRef(it * 100 + idx as u64));
+            gpu.procs.get_mut(&pid).unwrap().completion.observe(OsEventRef(it * 100 + idx as u64)).unwrap();
         }
 
         // --- sync: each proc polls (MC_SERVICE_INTERRUPTS) and its completions are

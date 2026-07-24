@@ -36,6 +36,25 @@ pub struct OsEventRef(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BatchId(pub u64);
 
+/// Maximum completions one process may hold outstanding (pending + in-flight +
+/// awaiting-ack) before [`CompletionQueue::observe`] loud-faults.
+///
+/// **Boundary-1: no unbounded allocation from guest input.** A hostile guest can
+/// trigger completions (pushbuffer `SEM_RELEASE`s, present vblanks) far faster than
+/// it drains them; without this bound one process's `pending` queue would grow until
+/// the host OOM-aborts — taking every *other* guest process down with it. The bound
+/// is orders of magnitude above any legitimate outstanding depth, so a real workload
+/// never trips it; only a flood does, and it gets a loud [`CompletionError::QueueFull`].
+pub const MAX_OUTSTANDING_COMPLETIONS: usize = 1 << 18;
+
+/// A loud completion-plane fault (boundary-1). The queue is left unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompletionError {
+    /// The per-process completion queue is at [`MAX_OUTSTANDING_COMPLETIONS`]; the
+    /// observation is refused rather than growing the queue unboundedly.
+    QueueFull,
+}
+
 /// Per-`Proc` completion state (`mode2_rust_rewrite_architecture.md` §4.3.2 layout).
 ///
 /// Lifecycle of one event: `observe` → `pending` → (composed into a batch) →
@@ -65,8 +84,24 @@ impl CompletionQueue {
     /// A completion was observed for this proc (host semaphore advance on a shared
     /// page, isolate `CoreEvent`, or — system proc only — a forge). Observation is
     /// decoupled from delivery: this never posts anything by itself.
-    pub fn observe(&mut self, ev: OsEventRef) {
+    ///
+    /// Loud-faults with [`CompletionError::QueueFull`] once the process holds
+    /// [`MAX_OUTSTANDING_COMPLETIONS`] undrained completions (boundary-1: a hostile
+    /// guest cannot grow this queue without bound). The queue is left unchanged on
+    /// refusal.
+    pub fn observe(&mut self, ev: OsEventRef) -> Result<(), CompletionError> {
+        if self.outstanding_len() >= MAX_OUTSTANDING_COMPLETIONS {
+            return Err(CompletionError::QueueFull);
+        }
         self.pending.push_back(ev);
+        Ok(())
+    }
+
+    /// Total outstanding completions (pending + in-flight + awaiting-ack) — the
+    /// quantity [`MAX_OUTSTANDING_COMPLETIONS`] bounds.
+    #[must_use]
+    pub fn outstanding_len(&self) -> usize {
+        self.pending.len() + self.in_flight.len() + self.awaiting_ack.len()
     }
 
     /// True if this proc has anything undelivered or un-acked.
@@ -201,7 +236,14 @@ impl DeliveryPlane {
 }
 
 // The concurrency contract, compile-time-asserted (decision #17).
-nvkvm_util::assert_send_sync!(OsEventRef, BatchId, CompletionQueue, DeliveryPlane, PostBatch);
+nvkvm_util::assert_send_sync!(
+    OsEventRef,
+    BatchId,
+    CompletionError,
+    CompletionQueue,
+    DeliveryPlane,
+    PostBatch,
+);
 
 #[cfg(test)]
 mod tests {
@@ -217,7 +259,7 @@ mod tests {
         let mut qb = CompletionQueue::new();
 
         // B submits and completes; a batch containing B's event posts and drains.
-        qb.observe(OsEventRef(0xb0));
+        qb.observe(OsEventRef(0xb0)).unwrap();
         let post = plane.try_post([&mut qa, &mut qb]).expect("B's completion posts");
         assert_eq!(post.events, vec![OsEventRef(0xb0)]);
         plane.drained([&mut qa, &mut qb]);
@@ -225,7 +267,7 @@ mod tests {
 
         // A's completion is observed... but composed into a batch that the guest
         // drains WITHOUT A's waiter waking (the lost-wakeup window).
-        qa.observe(OsEventRef(0xa0));
+        qa.observe(OsEventRef(0xa0)).unwrap();
         let post = plane.try_post([&mut qa, &mut qb]).expect("A's completion posts");
         assert_eq!(post.events, vec![OsEventRef(0xa0)]);
         plane.drained([&mut qa, &mut qb]);
@@ -249,12 +291,12 @@ mod tests {
         let mut plane = DeliveryPlane::new();
         let mut qa = CompletionQueue::new();
         let mut qb = CompletionQueue::new();
-        qa.observe(OsEventRef(1));
-        qb.observe(OsEventRef(2));
+        qa.observe(OsEventRef(1)).unwrap();
+        qb.observe(OsEventRef(2)).unwrap();
         let post = plane.try_post([&mut qa, &mut qb]).unwrap();
         assert_eq!(post.events, vec![OsEventRef(1), OsEventRef(2)], "one batch, both procs");
         // Gate closed while outstanding.
-        qa.observe(OsEventRef(3));
+        qa.observe(OsEventRef(3)).unwrap();
         assert!(plane.try_post([&mut qa, &mut qb]).is_none(), "gate closed until drain");
         plane.drained([&mut qa, &mut qb]);
         let post = plane.try_post([&mut qa, &mut qb]).unwrap();

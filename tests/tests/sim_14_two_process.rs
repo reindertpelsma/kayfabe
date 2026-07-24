@@ -159,7 +159,7 @@ fn t14_polling_proc_is_not_starved() {
     let pid_b = *gpu.by_pdb.get(&B_PDB).unwrap();
 
     // B completes work; its completion is observed, posted, drained, acked.
-    gpu.procs.get_mut(&pid_b).unwrap().completion.observe(OsEventRef(0xB0));
+    gpu.procs.get_mut(&pid_b).unwrap().completion.observe(OsEventRef(0xB0)).unwrap();
     let batch = deliver_completions(&mut gpu, &mut vmm).expect("B's completion posts");
     assert_eq!(batch.events, vec![OsEventRef(0xB0)]);
     gpu.completions_drained();
@@ -167,7 +167,7 @@ fn t14_polling_proc_is_not_starved() {
 
     // A's completion is observed and posted, but the guest drains the batch WITHOUT
     // A's waiter waking (the lost-wakeup window), and B rings no more doorbells.
-    gpu.procs.get_mut(&pid_a).unwrap().completion.observe(OsEventRef(0xA0));
+    gpu.procs.get_mut(&pid_a).unwrap().completion.observe(OsEventRef(0xA0)).unwrap();
     let batch = deliver_completions(&mut gpu, &mut vmm).expect("A's completion posts");
     assert_eq!(batch.events, vec![OsEventRef(0xA0)]);
     gpu.completions_drained();
