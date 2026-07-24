@@ -376,3 +376,219 @@ proptest! {
         assert_boundary_invariants(&g, &arch);
     }
 }
+
+// ---------------------------------------------------------------------------------
+// A4 — DUP_OBJECT reference counting: a resource is alive ⟺ ≥1 live handle references
+// it; freeing the LAST reference destroys it (no leak); no ordering ever panics.
+// ---------------------------------------------------------------------------------
+
+/// A refcount-shaped event stream over a TINY universe so dup/free interleavings —
+/// free-src-first, free-dst-first, double-free, dup-of-freed, free-then-dup — are all
+/// frequent. Every `Alloc` uses a FRESH, never-reused handle (a monotonic counter in
+/// the strategy), while `Dup`/`Free` range over the already-minted handle universe.
+/// Unique allocations keep the "which resource" question unambiguous, so the resource
+/// IS its origin `(client, handle)` for the whole run — exactly the case an
+/// independent live-handle tracker can mirror without reimplementing the graph.
+fn refcount_stream() -> impl Strategy<Value = Vec<(bool, RmEvent)>> {
+    // We generate raw choices, then post-process into events assigning fresh alloc
+    // handles. The `bool` tags each event as an alloc (for the harness's convenience).
+    let client = || (0u32..3).prop_map(|n| HClient(0xB000 + n));
+    let handle_pick = || (0u32..8).prop_map(|n| HObject(0x7000_0000 + n));
+    #[derive(Debug, Clone, Copy)]
+    enum Choice {
+        Alloc(HClient, ClassId),
+        Dup(HClient, HObject, HClient, HObject),
+        Free(HClient, HObject),
+    }
+    let choice = prop_oneof![
+        (client(), any_class()).prop_map(|(c, cl)| Choice::Alloc(c, cl)),
+        (client(), handle_pick(), client(), handle_pick())
+            .prop_map(|(sc, sh, dc, dh)| Choice::Dup(sc, sh, dc, dh)),
+        (client(), handle_pick()).prop_map(|(c, h)| Choice::Free(c, h)),
+    ];
+    vec(choice, 0..30).prop_map(|choices| {
+        let mut next: u32 = 0x7000_0000;
+        choices
+            .into_iter()
+            .map(|c| match c {
+                Choice::Alloc(client, class) => {
+                    let handle = HObject(next);
+                    next += 1;
+                    // A fresh top-level object; parent = itself makes it a root of its
+                    // own tiny tree (Client roots free their namespace, others are leaves).
+                    (true, RmEvent::Alloc {
+                        client, parent: handle, handle, class, facts: AllocFacts::default(),
+                    })
+                }
+                Choice::Dup(sc, sh, dc, dh) => (false, RmEvent::Dup {
+                    src: NodeKey::new(sc, sh), dst: NodeKey::new(dc, dh),
+                }),
+                Choice::Free(c, h) => (false, RmEvent::Free { client: c, handle: h }),
+            })
+            .collect()
+    })
+}
+
+/// An independent live-handle tracker (NOT a reimplementation of the graph's subtree
+/// logic — every generated object is a self-parented leaf/root, so `Free` of a
+/// non-client handle drops exactly that handle's reference). It knows only: which
+/// handles are live, which origin each references, and which parked dups await their
+/// source. From that it computes the refcount-live resource set the graph must match.
+#[derive(Default)]
+struct RefTracker {
+    /// live handle → origin `(client, handle)` it references (self for an alloc).
+    handle_to_origin: BTreeMap<(HClient, HObject), (HClient, HObject)>,
+    /// which live origins are Client roots (a `Free` of one drops its whole namespace).
+    client_roots: BTreeSet<(HClient, HObject)>,
+    /// parked dups whose source is not yet allocated: dst → src.
+    pending: BTreeMap<(HClient, HObject), (HClient, HObject)>,
+}
+
+impl RefTracker {
+    fn origin_of(&self, mut k: (HClient, HObject)) -> Option<(HClient, HObject)> {
+        for _ in 0..64 {
+            if let Some(o) = self.handle_to_origin.get(&k) {
+                return Some(*o);
+            }
+            k = *self.pending.get(&k)?;
+        }
+        None
+    }
+
+    /// Live resources = the set of distinct origins some live handle references.
+    fn live_resources(&self) -> BTreeSet<(HClient, HObject)> {
+        self.handle_to_origin.values().copied().collect()
+    }
+
+    fn apply(&mut self, arch: &dyn Arch, ev: RmEvent) {
+        match ev {
+            RmEvent::Alloc { client, handle, class, .. } => {
+                let k = (client, handle);
+                // Mirror the graph: an alloc onto an already-bound handle (e.g. one a
+                // dup aliased) is a loud ConflictingAlloc — rejected, changes nothing.
+                if self.handle_to_origin.contains_key(&k) || self.pending.contains_key(&k) {
+                    return;
+                }
+                // Fresh alloc handle by construction → a fresh resource.
+                self.handle_to_origin.insert(k, k);
+                if matches!(arch.classify(class), ObjectKind::Client) {
+                    self.client_roots.insert(k);
+                }
+                // Promote any parked dup whose source just appeared (fixpoint).
+                loop {
+                    let ready = self.pending.iter().find_map(|(dst, src)| {
+                        (!self.handle_to_origin.contains_key(dst))
+                            .then(|| self.origin_of(*src).map(|o| (*dst, o)))
+                            .flatten()
+                    });
+                    let Some((dst, origin)) = ready else { break };
+                    self.pending.remove(&dst);
+                    self.handle_to_origin.insert(dst, origin);
+                }
+            }
+            RmEvent::Dup { src, dst } => {
+                let (src, dst) = ((src.client, src.handle), (dst.client, dst.handle));
+                if self.handle_to_origin.contains_key(&dst) || self.pending.contains_key(&dst) {
+                    return; // dst already bound/parked — graph rejects the conflict.
+                }
+                match self.origin_of(src) {
+                    Some(origin) => {
+                        self.handle_to_origin.insert(dst, origin);
+                    }
+                    None => {
+                        self.pending.insert(dst, src);
+                    }
+                }
+            }
+            RmEvent::SetPageDir { .. } => {}
+            RmEvent::Free { client, handle } => {
+                let key = (client, handle);
+                let is_root = self.client_roots.contains(&key);
+                // Mirror the graph: an unknown free is a loud no-op (touches nothing).
+                if !self.handle_to_origin.contains_key(&key)
+                    && !self.pending.contains_key(&key)
+                    && !is_root
+                {
+                    return;
+                }
+                // All generated non-client objects are self-parented leaves, so the only
+                // subtree free is a Client root freeing every handle in its namespace.
+                let doomed: BTreeSet<(HClient, HObject)> = if is_root {
+                    self.handle_to_origin.keys().filter(|k| k.0 == client).copied().collect()
+                } else {
+                    BTreeSet::from([key])
+                };
+                for k in &doomed {
+                    self.handle_to_origin.remove(k);
+                    self.client_roots.remove(k);
+                }
+                self.pending.retain(|d, s| !doomed.contains(d) && !doomed.contains(s));
+            }
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(3000))]
+
+    /// A4 — DUP_OBJECT is refcounted. Over ANY alloc/dup/free ordering:
+    ///  (1) nothing ever panics — `apply` returns a `Result`;
+    ///  (2) a resource is present in the graph IFF ≥1 live handle references it — the
+    ///      graph's live-resource set EXACTLY matches an independent live-handle
+    ///      tracker (a dup keeps the resource alive after its source frees; the LAST
+    ///      free destroys it), asserted every event;
+    ///  (3) the refcount set is self-consistent: every handle the graph reports as a
+    ///      reference resolves back to that same resource; and
+    ///  (4) NO LEAK: after every live handle is freed, the graph drains to empty.
+    #[test]
+    fn a4_dup_object_is_reference_counted(stream in refcount_stream()) {
+        let arch = MockArch::new();
+        let mut g = RmGraph::new();
+        let mut tracker = RefTracker::default();
+
+        for (_is_alloc, ev) in &stream {
+            let _ = g.apply(&arch, *ev); // never panics — a Result, at worst a loud error
+            tracker.apply(&arch, *ev);
+
+            // (2) alive ⟺ ≥1 live handle references it.
+            let graph_live: BTreeSet<(HClient, HObject)> =
+                g.nodes().map(|n| (n.key.client, n.key.handle)).collect();
+            prop_assert_eq!(&graph_live, &tracker.live_resources(),
+                "graph live-resource set must equal the independent refcount tracker");
+
+            // (3) every reference the graph reports resolves to its resource, and each
+            //     live resource has at least one such reference (non-empty refcount).
+            for origin in &graph_live {
+                let key = NodeKey::new(origin.0, origin.1);
+                let refs: Vec<_> = g.references(key).collect();
+                prop_assert!(!refs.is_empty(), "a live resource must have ≥1 reference");
+                for h in refs {
+                    prop_assert_eq!(g.origin_of(h).map(|n| n.key), Some(key),
+                        "a reported reference must resolve back to its resource");
+                }
+            }
+            // A fully-freed handle resolves to nothing and references nothing (no leak).
+            // (Check the whole small handle universe for stale resolution.)
+            for c in 0..3u32 {
+                for h in 0..8u32 {
+                    let k = NodeKey::new(HClient(0xB000 + c), HObject(0x7000_0000 + h));
+                    if tracker.origin_of((k.client, k.handle)).is_none() {
+                        prop_assert!(g.origin_of(k).is_none(),
+                            "a handle that references nothing must resolve to nothing (no stale/leak)");
+                    }
+                }
+            }
+        }
+
+        // (4) NO LEAK: free every remaining live handle; the graph must drain to empty.
+        let remaining: Vec<NodeKey> = tracker
+            .handle_to_origin
+            .keys()
+            .map(|(c, h)| NodeKey::new(*c, *h))
+            .collect();
+        for k in remaining {
+            let _ = g.apply(&arch, RmEvent::Free { client: k.client, handle: k.handle });
+        }
+        prop_assert_eq!(g.nodes().count(), 0, "no resource leaks after every handle is freed");
+    }
+}

@@ -246,50 +246,93 @@ fn wo_teardown_during_active_inflight_completion_is_clean() {
 
 /// **Guards the dup-src-lifetime class** (RM DUP_OBJECT semantics, decision #14): UVM
 /// DUPs the compute client's VASpace, then the COMPUTE (source) client is freed while
-/// UVM still holds the alias. Per RM semantics the object stays alive via the dst
-/// ref; the dst alias + its Proc grouping must remain correct. (A naive impl that
-/// tied the object's life to the src client would drop UVM's VAS out from under it.)
+/// UVM still holds the alias. Per RM refcounting (`RsResource`, `resource_list.h`) the
+/// resource stays alive via UVM's reference — freeing the source must NOT destroy it,
+/// and the dst alias + its Proc grouping/VAS/PDB must remain resolvable. (A naive impl
+/// that tied the resource's life to the src client would drop UVM's VAS out from under
+/// it — the gap this test now pins CLOSED.)
 ///
-/// NOTE: this encodes the *observable protocol contract* the rewrite targets — the
-/// dst-kept-alive rule. If the current graph frees the aliased node with the source,
-/// this test documents the gap loudly rather than papering over it.
+/// Covers all three lifetime corners: free-src (dst survives), free-dst (src survives),
+/// and free-both (resource finally destroyed — no leak).
 #[test]
-fn wo_dup_then_free_src_keeps_dst_alias_grouped() {
+fn wo_dup_then_free_src_keeps_dst_alias_alive() {
     let arch = MockArch::new();
-    let mut g = RmGraph::new();
 
-    // Compute client with a VASpace (the dup source).
+    // Compute client with a VASpace (the dup source), UVM client dups it.
     const COMPUTE: HClient = HClient(0xAA);
     const UVM: HClient = HClient(0xA1);
+    const PDB: Pdb = Pdb(0x3401_000);
     let compute_vas = NodeKey::new(COMPUTE, HObject(0x5c00_0010));
-
-    g.apply(&arch, RmEvent::Alloc { client: COMPUTE, parent: HObject(0x5c00_0000), handle: HObject(0x5c00_0000), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: COMPUTE, parent: HObject(0x5c00_0000), handle: HObject(0x5c00_0001), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: COMPUTE, parent: HObject(0x5c00_0001), handle: HObject(0x5c00_0010), class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::SetPageDir { client: COMPUTE, vaspace: HObject(0x5c00_0010), pdb: Pdb(0x3401_000) }).unwrap();
-
-    // UVM client dups the compute VASpace into its own namespace.
-    g.apply(&arch, RmEvent::Alloc { client: UVM, parent: HObject(0x9000_0000), handle: HObject(0x9000_0000), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
     let alias = NodeKey::new(UVM, HObject(0x9000_00ff));
-    g.apply(&arch, RmEvent::Dup { src: compute_vas, dst: alias }).unwrap();
 
-    // Before the free: UVM + compute group into ONE proc via the dup edge.
-    let before = project(&g, &arch).unwrap();
-    assert_eq!(before.procs.len(), 1, "dup joins compute+UVM into one proc");
+    // Reusable fixture builder: compute (client→device→VASpace+PDB) + UVM dup of the VAS.
+    let build = || {
+        let mut g = RmGraph::new();
+        g.apply(&arch, RmEvent::Alloc { client: COMPUTE, parent: HObject(0x5c00_0000), handle: HObject(0x5c00_0000), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
+        g.apply(&arch, RmEvent::Alloc { client: COMPUTE, parent: HObject(0x5c00_0000), handle: HObject(0x5c00_0001), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
+        g.apply(&arch, RmEvent::Alloc { client: COMPUTE, parent: HObject(0x5c00_0001), handle: HObject(0x5c00_0010), class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
+        g.apply(&arch, RmEvent::SetPageDir { client: COMPUTE, vaspace: HObject(0x5c00_0010), pdb: PDB }).unwrap();
+        g.apply(&arch, RmEvent::Alloc { client: UVM, parent: HObject(0x9000_0000), handle: HObject(0x9000_0000), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
+        g.apply(&arch, RmEvent::Dup { src: compute_vas, dst: alias }).unwrap();
+        g
+    };
 
-    // Free the SOURCE (compute) client root while UVM holds the alias.
-    g.apply(&arch, RmEvent::Free { client: COMPUTE, handle: HObject(0x5c00_0000) }).unwrap();
+    // ---- Baseline: the dup joins compute+UVM into ONE proc owning the VAS/PDB. ----
+    {
+        let g = build();
+        let before = project(&g, &arch).unwrap();
+        assert_eq!(before.procs.len(), 1, "dup joins compute+UVM into one proc");
+        assert_eq!(before.by_pdb.get(&PDB).map(|x| x.1), Some(compute_vas), "PDB routes to the VAS");
+    }
 
-    // The projection must remain CONSISTENT and not panic. UVM's client is still
-    // present and correctly grouped; whatever survives is loudly self-consistent.
-    let after = project(&g, &arch).unwrap();
-    assert!(
-        after.procs.iter().any(|p| p.clients.contains(&UVM)),
-        "UVM's client still projects after the source client's free"
-    );
-    // The dup edge whose SOURCE died is dropped (no dangling alias into a dead
-    // namespace) — the alias no longer resolves to a live VAS, which is loud, not UB.
-    assert!(g.origin_of(alias).is_none(), "alias to a freed source no longer resolves (loud, not stale)");
+    // ---- (A) free the SOURCE client: the resource SURVIVES via UVM's dst ref. ----
+    {
+        let mut g = build();
+        g.apply(&arch, RmEvent::Free { client: COMPUTE, handle: HObject(0x5c00_0000) }).unwrap();
+
+        // The alias still resolves to the (living) origin VASpace resource...
+        let origin = g.origin_of(alias).expect("dst alias survives the source's free");
+        assert_eq!(origin.key, compute_vas, "alias resolves to the same stable resource identity");
+
+        // ...and the projection keeps the VAS/PDB routed, now grouped under UVM's proc.
+        let after = project(&g, &arch).unwrap();
+        assert!(
+            after.procs.iter().any(|p| p.clients.contains(&UVM)),
+            "UVM's client still projects after the source client's free"
+        );
+        assert!(after.by_pdb.contains_key(&PDB), "the dup'd VAS's PDB still routes via the dst ref");
+        // The compute client's OTHER nodes (device root) are gone — only the dup'd
+        // resource, kept alive by UVM's reference, survives.
+        assert!(g.node(NodeKey::new(COMPUTE, HObject(0x5c00_0001))).is_none(), "non-dup'd source nodes are freed");
+    }
+
+    // ---- (B) symmetric: free the DST client instead → the SOURCE survives. ----
+    {
+        let mut g = build();
+        g.apply(&arch, RmEvent::Free { client: UVM, handle: HObject(0x9000_0000) }).unwrap();
+        // The origin still resolves via its own (source) handle.
+        assert!(g.origin_of(compute_vas).is_some(), "source VAS survives the dst client's free");
+        assert!(g.origin_of(alias).is_none(), "the freed dst alias no longer resolves");
+        let after = project(&g, &arch).unwrap();
+        assert!(after.by_pdb.contains_key(&PDB), "source VAS's PDB still routes");
+        // With the dup edge gone, compute stands alone as its own proc.
+        assert!(after.procs.iter().all(|p| !p.clients.contains(&UVM)), "freed UVM client gone");
+    }
+
+    // ---- (C) free BOTH references → the resource is finally destroyed (NO LEAK). ----
+    {
+        let mut g = build();
+        g.apply(&arch, RmEvent::Free { client: COMPUTE, handle: HObject(0x5c00_0000) }).unwrap();
+        assert!(g.origin_of(alias).is_some(), "still alive after the first of two refs freed");
+        g.apply(&arch, RmEvent::Free { client: UVM, handle: HObject(0x9000_0000) }).unwrap();
+        // Last reference gone: the resource is removed and nothing dangles.
+        assert!(g.origin_of(alias).is_none(), "resource destroyed once its LAST reference is freed");
+        assert!(g.origin_of(compute_vas).is_none(), "no residual origin after full teardown");
+        assert_eq!(g.nodes().count(), 0, "no leaked resources after both refs freed");
+        let after = project(&g, &arch).unwrap();
+        assert!(after.procs.is_empty(), "no procs remain after full teardown");
+        assert!(!after.by_pdb.contains_key(&PDB), "PDB no longer routes after the resource is destroyed");
+    }
 }
 
 // =================================================================================

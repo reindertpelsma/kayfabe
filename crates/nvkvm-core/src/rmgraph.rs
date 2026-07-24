@@ -13,20 +13,31 @@
 //! the Axis-A adapter's job — it produces these events), and any *policy* (grouping,
 //! routing — those are pure projections in [`crate::project`]).
 //!
+//! ## The resource / handle split (RM refcounting, faithfully)
+//!
+//! A single RM *resource* (`RsResource`, `resource_list.h`) is reference-counted: a
+//! `RM_ALLOC` creates it with one reference, `DUP_OBJECT` (NVOS55) hands **another
+//! client its own handle to the SAME resource**, and the resource is destroyed only
+//! when its *last* reference is freed. We model this literally: a [`Resource`] carries
+//! the object's payload once and the **set of live handles** that reference it, and
+//! its liveness is exactly *"that set is non-empty"* — an invariant the type makes
+//! obvious. Freeing the source client therefore does NOT destroy a resource that a
+//! dup still references; the alias keeps resolving.
+//!
 //! **Order tolerance mechanics:** `apply` records facts keyed by handle and resolves
 //! references only at projection time, so a `Dup` may arrive before its source's
 //! `Alloc`, a `SetPageDir` before its VASpace exists, etc. Only [`RmEvent::Free`] is
 //! inherently ordered (lifecycle), which is why the shuffle property is stated over
 //! alloc/dup/bind facts.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use nvkvm_arch::ids::{ClassId, HClient, HObject, Pdb};
 use nvkvm_arch::{Arch, ObjectKind};
 
-/// Global identity of an RM object: handles are **per-client namespaces** (two
+/// Global identity of an RM *handle*: handles are **per-client namespaces** (two
 /// processes routinely present identical `HObject` values — #14 round 1), so a
-/// node is keyed by `(client, handle)`.
+/// handle is keyed by `(client, handle)`. Several handles may reference one resource.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeKey {
     /// Owning client namespace.
@@ -42,6 +53,14 @@ impl NodeKey {
         NodeKey { client, handle }
     }
 }
+
+/// Stable identity of an underlying RM *resource*, distinct from the handles that
+/// reference it. Minted from a monotonic counter at the origin `RM_ALLOC` and never
+/// reused — crucially NOT derived from the origin `(client, handle)`, because a handle
+/// value can be freed and *re-allocated* while a `DUP_OBJECT` alias keeps the ORIGINAL
+/// resource alive; the two must stay distinct identities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct ResId(u64);
 
 /// Declared, abstract alloc parameters — ONLY the protocol facts the graph needs.
 /// The Axis-A adapter decodes real wire structs into this.
@@ -77,7 +96,8 @@ pub enum RmEvent {
     },
     /// `DUP_OBJECT` (NVOS55): alias `src` into another client's namespace as `dst`.
     /// The ONLY cross-client transfer edge — the protocol-correct source of process
-    /// grouping (how UVM aliases the compute client's VASpace).
+    /// grouping (how UVM aliases the compute client's VASpace). The dst gets its own
+    /// reference to the SAME resource, which now survives until BOTH handles free.
     Dup {
         /// Source object (may not have been observed yet — resolved lazily).
         src: NodeKey,
@@ -94,8 +114,9 @@ pub enum RmEvent {
         /// The declared page-directory base.
         pdb: Pdb,
     },
-    /// `RM_FREE`: destroy `handle` and (per RM semantics) its subtree. Freeing the
-    /// client root destroys the whole namespace.
+    /// `RM_FREE`: drop THIS handle's reference to its resource and (per RM semantics)
+    /// its subtree. The resource itself dies only when its last reference goes.
+    /// Freeing the client root drops every handle in that namespace.
     Free {
         /// Owning client namespace.
         client: HClient,
@@ -104,10 +125,12 @@ pub enum RmEvent {
     },
 }
 
-/// One node of the graph.
+/// One node of the graph — the resolved *payload* of a resource, reported at its
+/// stable origin key. (The set of handles that reference it lives on [`Resource`].)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RmNode {
-    /// Identity.
+    /// Identity: the resource's ORIGIN handle (its first allocator). Stable across
+    /// dups and across the origin client's free, as long as any reference survives.
     pub key: NodeKey,
     /// Declared parent handle (same namespace). For a client root, equals `key.handle`.
     pub parent: HObject,
@@ -119,6 +142,24 @@ pub struct RmNode {
     pub facts: AllocFacts,
 }
 
+/// An underlying RM resource: its payload plus the set of handles referencing it.
+///
+/// **The liveness invariant, in the type:** a resource is alive ⟺ `refs` is
+/// non-empty. `apply` upholds it — a resource is only ever inserted with a
+/// non-empty `refs`, and is removed the instant `refs` becomes empty.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Resource {
+    /// The resolved payload, reported at the origin key.
+    node: RmNode,
+    /// Every live handle `(client, handle)` that references this resource: the origin
+    /// alloc plus each surviving `DUP_OBJECT` alias. NEVER empty for a live resource.
+    refs: BTreeSet<NodeKey>,
+    /// Declared page-directory base, for a VASpace resource (`SET_PAGE_DIRECTORY`).
+    /// A property of the RESOURCE, not of any one handle — so it survives the origin
+    /// handle's free as long as a dup keeps the resource alive. Last declaration wins.
+    pdb: Option<Pdb>,
+}
+
 /// Errors from [`RmGraph::apply`]. All loud; the caller decides whether a guest
 /// protocol violation is fatal or logged-and-refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,19 +169,33 @@ pub enum RmGraphError {
     ConflictingAlloc(NodeKey),
     /// A second, *different* dup for an existing dst key.
     ConflictingDup(NodeKey),
-    /// Free of a handle that was never allocated or dup'd.
+    /// Free of a handle that references no resource (never allocated or dup'd).
     FreeUnknown(NodeKey),
 }
 
 /// The RM resource graph. Facts in, projections out; no policy.
+///
+/// Resources are refcounted by their live-handle set; the handle table maps every
+/// live `(client, handle)` to the resource it references (origin alloc or dup alias).
 #[derive(Debug, Clone, Default)]
 pub struct RmGraph {
-    /// Allocated nodes by key.
-    nodes: BTreeMap<NodeKey, RmNode>,
-    /// Dup aliases: dst → src. Chains allowed (dup of a dup).
-    dups: BTreeMap<NodeKey, NodeKey>,
-    /// Declared PDB per VASpace node key (tolerates arriving before the alloc).
-    pdbs: BTreeMap<NodeKey, Pdb>,
+    /// Live resources, keyed by their stable origin id.
+    resources: BTreeMap<ResId, Resource>,
+    /// Every live handle → the resource it references. The origin handle and each
+    /// dup alias both appear here; freeing a handle removes exactly its entry.
+    handles: BTreeMap<NodeKey, ResId>,
+    /// Dup edges whose source resource is not observed *yet* (order tolerance): a
+    /// `Dup` may arrive before its `src`'s `Alloc`. Kept as `dst → src` and resolved
+    /// lazily by [`Self::resource_of`]. When `src` becomes known and `dst` is used,
+    /// the edge still resolves; freeing either end prunes it.
+    pending_dups: BTreeMap<NodeKey, NodeKey>,
+    /// `SET_PAGE_DIRECTORY` facts whose target handle is not observed *yet* (order
+    /// tolerance): declaring-handle → declared PDB. Drained onto the resource as soon
+    /// as its handle resolves (see [`Self::resolve_pending_pdbs`]).
+    pending_pdbs: BTreeMap<NodeKey, Pdb>,
+    /// Monotonic resource-id counter — never reused, so a re-allocated handle value
+    /// mints a fresh resource distinct from a survivor a dup still holds.
+    next_res_id: u64,
 }
 
 impl RmGraph {
@@ -158,32 +213,94 @@ impl RmGraph {
                 let key = NodeKey::new(client, handle);
                 let node =
                     RmNode { key, parent, class, kind: arch.classify(class), facts };
-                match self.nodes.get(&key) {
-                    Some(existing) if *existing == node => Ok(()), // idempotent retry
+                // A handle names EITHER an allocated resource OR a dup alias, never
+                // both — so an alloc onto a handle already claimed by a (parked) dup is
+                // a loud conflict, symmetric with the dup-onto-alloc rejection.
+                if self.pending_dups.contains_key(&key) {
+                    return Err(RmGraphError::ConflictingAlloc(key));
+                }
+                match self.handles.get(&key) {
+                    // Idempotent retry: the same origin alloc re-sent.
+                    Some(res) if self.resources.get(res).map(|r| r.node) == Some(node) => Ok(()),
+                    // The key is already taken (by a different alloc, or by a resolved dup) — loud.
                     Some(_) => Err(RmGraphError::ConflictingAlloc(key)),
                     None => {
-                        self.nodes.insert(key, node);
+                        let id = ResId(self.next_res_id);
+                        self.next_res_id += 1;
+                        self.handles.insert(key, id);
+                        self.resources
+                            .insert(id, Resource { node, refs: BTreeSet::from([key]), pdb: None });
+                        // A dup / SetPageDir that arrived BEFORE this alloc parked
+                        // itself; now that its target exists, promote each parked fact
+                        // so the resource is refcounted and PDB-tagged correctly (and so
+                        // it survives the source's later free, order-independently).
+                        self.resolve_pending_dups();
+                        self.resolve_pending_pdbs();
                         Ok(())
                     }
                 }
             }
-            RmEvent::Dup { src, dst } => match self.dups.get(&dst) {
-                Some(existing) if *existing == src => Ok(()), // idempotent retry
-                Some(_) => Err(RmGraphError::ConflictingDup(dst)),
-                None => {
-                    self.dups.insert(dst, src);
-                    Ok(())
+            RmEvent::Dup { src, dst } => {
+                // The dst handle must be FREE. It is already taken if it references a
+                // live resource (`handles`) or names a parked (not-yet-resolved) edge
+                // (`pending_dups`). Either way an identical re-send is idempotent and a
+                // conflicting one is loud — dst must never end up doubly-bound.
+                if let Some(existing) = self.handles.get(&dst) {
+                    return if Some(*existing) == self.resource_of(src) {
+                        Ok(()) // retry: dst already references THIS same resource
+                    } else {
+                        Err(RmGraphError::ConflictingDup(dst))
+                    };
                 }
-            },
+                if let Some(parked_src) = self.pending_dups.get(&dst) {
+                    return if *parked_src == src {
+                        Ok(()) // retry: dst already parked against THIS same source
+                    } else {
+                        Err(RmGraphError::ConflictingDup(dst))
+                    };
+                }
+                match self.resource_of(src) {
+                    // Source known now: dst gets its own reference to it immediately.
+                    Some(id) => {
+                        self.handles.insert(dst, id);
+                        self.resources
+                            .get_mut(&id)
+                            .expect("resource_of returned a live id")
+                            .refs
+                            .insert(dst);
+                    }
+                    // Source not observed yet (order tolerance). Park the edge so a
+                    // later Alloc of `src` (or a chain) resolves it.
+                    None => {
+                        self.pending_dups.insert(dst, src);
+                    }
+                }
+                Ok(())
+            }
             RmEvent::SetPageDir { client, vaspace, pdb } => {
                 // Re-binding a VASpace to a new PDB is protocol-legal
-                // (UNSET/SET_PAGE_DIRECTORY); last declaration wins.
-                self.pdbs.insert(NodeKey::new(client, vaspace), pdb);
+                // (UNSET/SET_PAGE_DIRECTORY); last declaration wins. The PDB belongs to
+                // the RESOURCE (survives the origin handle's free); a declaration on an
+                // as-yet-unknown handle parks until that handle resolves.
+                let target = NodeKey::new(client, vaspace);
+                match self.resource_of(target) {
+                    Some(id) => {
+                        self.resources
+                            .get_mut(&id)
+                            .expect("resource_of returned a live id")
+                            .pdb = Some(pdb);
+                    }
+                    None => {
+                        self.pending_pdbs.insert(target, pdb);
+                    }
+                }
                 Ok(())
             }
             RmEvent::Free { client, handle } => {
                 let key = NodeKey::new(client, handle);
-                let known = self.nodes.contains_key(&key) || self.dups.contains_key(&key);
+                // Known iff the handle references a live resource or names a parked dup.
+                let known =
+                    self.handles.contains_key(&key) || self.pending_dups.contains_key(&key);
                 if !known {
                     return Err(RmGraphError::FreeUnknown(key));
                 }
@@ -193,87 +310,195 @@ impl RmGraph {
         }
     }
 
-    /// RM free semantics: remove `key`, its same-namespace descendants, its dup
-    /// aliases (an alias dies with its target's namespace entry), and — for a
-    /// client root — the entire namespace.
+    /// RM free semantics: drop `key`'s reference and those of its same-namespace
+    /// descendants; for a client root, drop every handle in the namespace. A resource
+    /// survives as long as any *other* client's handle still references it (a dup keeps
+    /// it alive); it is removed only when its last reference goes — no leak, no
+    /// premature destroy.
     fn free_subtree(&mut self, key: NodeKey) {
-        let is_client_root = self
-            .nodes
-            .get(&key)
-            .is_some_and(|n| matches!(n.kind, ObjectKind::Client));
-
-        let doomed: Vec<NodeKey> = if is_client_root {
-            self.nodes.keys().filter(|k| k.client == key.client).copied().collect()
+        // The set of HANDLES (not resources) this free removes, all within one client
+        // namespace: the target plus its transitive same-namespace children.
+        let doomed: BTreeSet<NodeKey> = if self.is_client_root(key) {
+            self.handles.keys().filter(|k| k.client == key.client).copied().collect()
         } else {
-            // key + transitive children within the same client namespace.
-            let mut doomed = vec![key];
+            let mut doomed = BTreeSet::from([key]);
             let mut changed = true;
             while changed {
                 changed = false;
-                for n in self.nodes.values() {
-                    let parent_key = NodeKey::new(n.key.client, n.parent);
-                    if doomed.contains(&parent_key)
-                        && !doomed.contains(&n.key)
-                        && n.key != parent_key
-                    {
-                        doomed.push(n.key);
+                for (&hkey, &id) in &self.handles {
+                    // A handle's parent is same-namespace; read it from the resource's
+                    // payload (only the ORIGIN handle carries a parent — a dup alias is
+                    // a leaf reference with no children of its own).
+                    if hkey.client != key.client || doomed.contains(&hkey) {
+                        continue;
+                    }
+                    let Some(res) = self.resources.get(&id) else { continue };
+                    // Only follow the parent edge from the resource's origin handle.
+                    if res.node.key != hkey {
+                        continue;
+                    }
+                    let parent_key = NodeKey::new(hkey.client, res.node.parent);
+                    if parent_key != hkey && doomed.contains(&parent_key) {
+                        doomed.insert(hkey);
                         changed = true;
                     }
                 }
             }
             doomed
         };
+
         for k in &doomed {
-            self.nodes.remove(k);
-            self.pdbs.remove(k);
+            self.drop_handle(*k);
         }
-        // Drop dup edges whose src or dst died (dst alias handles too).
-        self.dups
-            .retain(|dst, src| !doomed.contains(dst) && !doomed.contains(src) && *dst != key);
+        // A parked (unresolved) dup whose dst OR src handle was just freed is stale.
+        self.pending_dups
+            .retain(|dst, src| !doomed.contains(dst) && !doomed.contains(src));
+        // Likewise a parked PDB declared on a now-freed handle.
+        self.pending_pdbs.retain(|target, _| !doomed.contains(target));
     }
 
-    /// Resolve `key` through dup aliasing to its **origin** node (the non-alias
-    /// source). `None` if the chain dangles (fact not yet observed) or the origin
-    /// was never allocated.
-    #[must_use]
-    pub fn origin_of(&self, key: NodeKey) -> Option<&RmNode> {
+    /// Promote every parked dup whose source is now a live resource into a real
+    /// reference (so the resource is refcounted by it). Fixpoint to resolve chains
+    /// (a dup of a dup whose middle just resolved). A parked dst that would collide
+    /// with an existing handle is left parked — [`Self::apply`]'s conflict check owns
+    /// that decision; here we only ever add references for free dst keys.
+    fn resolve_pending_dups(&mut self) {
+        loop {
+            let ready: Option<(NodeKey, ResId)> =
+                self.pending_dups.iter().find_map(|(dst, src)| {
+                    (!self.handles.contains_key(dst))
+                        .then(|| self.resource_of(*src).map(|id| (*dst, id)))
+                        .flatten()
+                });
+            let Some((dst, id)) = ready else { break };
+            self.pending_dups.remove(&dst);
+            self.handles.insert(dst, id);
+            self.resources
+                .get_mut(&id)
+                .expect("resource_of returned a live id")
+                .refs
+                .insert(dst);
+        }
+    }
+
+    /// Attach every parked `SET_PAGE_DIRECTORY` whose target handle now resolves onto
+    /// its resource. Order tolerance for a PDB declared before its VASpace's alloc.
+    fn resolve_pending_pdbs(&mut self) {
+        let ready: Vec<(NodeKey, ResId, Pdb)> = self
+            .pending_pdbs
+            .iter()
+            .filter_map(|(target, pdb)| self.resource_of(*target).map(|id| (*target, id, *pdb)))
+            .collect();
+        for (target, id, pdb) in ready {
+            self.pending_pdbs.remove(&target);
+            if let Some(res) = self.resources.get_mut(&id) {
+                res.pdb = Some(pdb);
+            }
+        }
+    }
+
+    /// Is `key` the client root of its OWN namespace? True only when `key` is a
+    /// resource's origin handle AND that resource is a [`ObjectKind::Client`]. A dup
+    /// *alias* that happens to reference a Client resource is NOT a root — freeing it
+    /// drops only that alias's reference, never the aliasing client's whole namespace.
+    fn is_client_root(&self, key: NodeKey) -> bool {
+        self.node(key)
+            .is_some_and(|n| n.key == key && matches!(n.kind, ObjectKind::Client))
+    }
+
+    /// Drop ONE handle's reference to its resource; remove the resource (and its
+    /// PDB, which lives ON the resource) iff that was its last reference. Freeing the
+    /// origin handle while a dup still references the resource keeps BOTH the resource
+    /// and its declared PDB alive.
+    fn drop_handle(&mut self, key: NodeKey) {
+        let Some(id) = self.handles.remove(&key) else { return };
+        if let Some(res) = self.resources.get_mut(&id) {
+            res.refs.remove(&key);
+            if res.refs.is_empty() {
+                // Last reference gone → the resource (and its PDB) is destroyed (no leak).
+                self.resources.remove(&id);
+            }
+        }
+    }
+
+    /// Resolve a handle to its resource id through dup aliasing, following a parked
+    /// (not-yet-alloc'd) chain if needed. `None` if the chain dangles.
+    fn resource_of(&self, key: NodeKey) -> Option<ResId> {
         let mut k = key;
         // Bounded: dup chains are tiny; guard against a (protocol-invalid) cycle.
         for _ in 0..64 {
-            if let Some(node) = self.nodes.get(&k) {
-                return Some(node);
+            if let Some(id) = self.handles.get(&k) {
+                return Some(*id);
             }
-            k = *self.dups.get(&k)?;
+            k = *self.pending_dups.get(&k)?;
         }
         None
     }
 
-    /// Declared PDB of the VASpace whose **origin** is `origin_key`, if declared.
-    /// (A PDB declared on an alias key resolves to the same origin.)
+    /// Resolve `key` through dup aliasing to its **origin** node (the resource's
+    /// payload). `None` if the chain dangles (fact not yet observed) or the resource
+    /// was never allocated / has been fully freed.
+    #[must_use]
+    pub fn origin_of(&self, key: NodeKey) -> Option<&RmNode> {
+        let id = self.resource_of(key)?;
+        self.resources.get(&id).map(|r| &r.node)
+    }
+
+    /// The live handles that reference the resource whose **origin** is `origin_key` —
+    /// the origin alloc plus every surviving `DUP_OBJECT` alias. This IS the refcount
+    /// set: the resource is alive ⟺ this is non-empty, and it is destroyed the instant
+    /// its last reference is freed. Keyed by the resource's stable origin (as reported
+    /// by [`Self::nodes`]), so it stays correct even after the origin *handle* itself
+    /// has been freed while a dup keeps the resource alive. Empty if no such resource.
+    pub fn references(&self, origin_key: NodeKey) -> impl Iterator<Item = NodeKey> + '_ {
+        let refs = self.resources.values().find(|r| r.node.key == origin_key).map(|r| &r.refs);
+        refs.into_iter().flat_map(|set| set.iter().copied())
+    }
+
+    /// Declared PDB of the VASpace whose **origin** is `origin_key`, if declared. The
+    /// PDB is a property of the resource (declared via the origin OR any alias handle,
+    /// possibly before the alloc), so it resolves regardless of which handle carried
+    /// the `SET_PAGE_DIRECTORY` and survives the origin handle's free.
     #[must_use]
     pub fn pdb_of(&self, origin_key: NodeKey) -> Option<Pdb> {
-        if let Some(p) = self.pdbs.get(&origin_key) {
-            return Some(*p);
+        // The resource's own attached PDB (identified by its stable origin key —
+        // survives the origin handle's free).
+        if let Some(res) = self.resources.values().find(|r| r.node.key == origin_key)
+            && let Some(pdb) = res.pdb
+        {
+            return Some(pdb);
         }
-        // A SetPageDir may have been declared via an alias handle.
-        self.pdbs.iter().find_map(|(k, p)| {
+        // A SetPageDir may still be parked (declared before the target's alloc, via
+        // the origin handle or any alias that resolves to this resource).
+        self.pending_pdbs.iter().find_map(|(k, p)| {
             (self.origin_of(*k).map(|n| n.key) == Some(origin_key)).then_some(*p)
         })
     }
 
-    /// All live nodes, ascending key order (deterministic).
+    /// All live resource payloads, ascending origin-key order (deterministic).
     pub fn nodes(&self) -> impl Iterator<Item = &RmNode> {
-        self.nodes.values()
+        self.resources.values().map(|r| &r.node)
     }
 
-    /// All dup edges as `(dst, src)`, ascending dst order (deterministic).
+    /// All dup edges as `(dst, src)` where `dst` is a non-origin handle and `src` is
+    /// the resource's origin handle — ascending dst order (deterministic). Includes
+    /// both resolved references and parked (not-yet-resolved) edges.
     pub fn dups(&self) -> impl Iterator<Item = (NodeKey, NodeKey)> {
-        self.dups.iter().map(|(d, s)| (*d, *s))
+        let resolved = self.resources.values().flat_map(|r| {
+            let origin = r.node.key;
+            r.refs.iter().filter(move |h| **h != origin).map(move |h| (*h, origin))
+        });
+        let parked = self.pending_dups.iter().map(|(d, s)| (*d, *s));
+        // Deterministic order: collect into a BTreeMap by dst, then iterate.
+        let ordered: BTreeMap<NodeKey, NodeKey> = resolved.chain(parked).collect();
+        ordered.into_iter()
     }
 
-    /// Look up a node by exact key (no alias resolution).
+    /// Look up a resource's payload by exact handle (origin or alias; no alias
+    /// resolution beyond the one-hop handle-table lookup).
     #[must_use]
     pub fn node(&self, key: NodeKey) -> Option<&RmNode> {
-        self.nodes.get(&key)
+        let id = self.handles.get(&key)?;
+        self.resources.get(id).map(|r| &r.node)
     }
 }
