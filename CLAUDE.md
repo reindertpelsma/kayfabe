@@ -32,7 +32,10 @@ The design is settled — **implement it, do not re-improvise architecture.**
   identical-handle collision, not a sanitized version. A mock that resolves the loser's
   VA too easily is a bug in the test — flag and harden it.
 - **Every C quirk becomes a named regression test** (`t12_*`/`t13_*`/`t14_*`,
-  `taddr_*`) as its subsystem ports. A red there = regressing a fix that cost days.
+  `taddr_*`, `cb*`) as its subsystem ports. A red there = regressing a fix that cost
+  days. The full classification (impossible / tested / gap-deferred, per C bug) is
+  `docs/design/c_bug_regression_matrix.md` (decision #18B) — extend it when a new
+  subsystem ports or a new C incident lands.
 - **Security is the highest bar** (priority ladder, decision #8): a boundary-1/2/3
   failure or a fuzz crash outranks every other signal.
 

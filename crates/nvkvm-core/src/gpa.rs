@@ -28,6 +28,8 @@ pub struct GpaSpace {
     window: Range<u64>,
     arena_len: u64,
     next: u64,
+    /// Arenas released at a reap point, ready for recycling (LIFO).
+    free: Vec<Range<u64>>,
 }
 
 impl GpaSpace {
@@ -36,12 +38,17 @@ impl GpaSpace {
     pub fn new(window: Range<u64>, arena_len: u64) -> Self {
         assert!(arena_len > 0 && window.start < window.end);
         let next = window.start;
-        GpaSpace { window, arena_len, next }
+        GpaSpace { window, arena_len, next, free: Vec::new() }
     }
 
-    /// Carve the next disjoint arena. (Freed-arena recycling is a later concern —
-    /// tracked with the reap/quiesce design, lesson L10.)
+    /// Carve a disjoint arena: recycle a released one first, else cut fresh from
+    /// the window. Recycling is what makes the device-lifecycle sustainable — the
+    /// C paid for this with #80's GPA free-list after sequential process churn
+    /// exhausted the shared window (`teardown_hardening_done`).
     pub fn carve(&mut self) -> Result<GpaArena, GpaError> {
+        if let Some(range) = self.free.pop() {
+            return Ok(GpaArena { cursor: range.start, range });
+        }
         let start = self.next;
         let end = start.checked_add(self.arena_len).ok_or(GpaError::WindowExhausted)?;
         if end > self.window.end {
@@ -49,6 +56,19 @@ impl GpaSpace {
         }
         self.next = end;
         Ok(GpaArena { range: start..end, cursor: start })
+    }
+
+    /// Return a carved arena to the window for recycling. Takes the arena **by
+    /// value**: releasing an arena a live `Proc` still owns is unrepresentable —
+    /// only a reaped proc's arena (moved out of the dropped `Proc` at the quiesce
+    /// point, `Gpu::reap_retired`) can arrive here. Recycled GPAs are safe by
+    /// construction: the dead proc's host mappings died with its isolate session,
+    /// and its address tables died with its `Vas`es — the C's stale-backing /
+    /// `ALREADY-MAPPED`-on-reuse class (#12 cont.29) has nothing to be stale.
+    pub fn release(&mut self, arena: GpaArena) {
+        debug_assert_eq!(arena.range.end - arena.range.start, self.arena_len);
+        debug_assert!(arena.range.start >= self.window.start && arena.range.end <= self.next);
+        self.free.push(arena.range);
     }
 }
 

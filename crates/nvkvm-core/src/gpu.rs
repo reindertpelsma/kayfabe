@@ -510,6 +510,29 @@ impl Gpu {
         Ok(())
     }
 
+    /// ★ The deferred-reap quiesce point (lesson L10 — the C's P0 fix: reaping the
+    /// heavy tables AT the client-root free hung the dying context's residual
+    /// polls, so it reaps at the GSP queue re-handshake instead). The core keeps
+    /// that split: teardown *retires* eagerly (`Proc::retire` — new ops refused,
+    /// isolate stopped) and this call *reaps* deferredly — the **adapter** declares
+    /// the quiesce point (its GSP re-handshake / idle-release equivalent) and calls
+    /// it.
+    ///
+    /// Reaping drops every retired proc and **recycles its GPA arena** into the
+    /// window ([`GpaSpace::release`]) — without this, sequential process churn
+    /// (create → destroy → create …, the device teardown→restart lifecycle)
+    /// exhausts the window, exactly the leak the C paid for in #80
+    /// (`teardown_hardening_done`: "host reaper + GPA free-list"). A retired
+    /// proc's undelivered completions die with it — the guest tore the context
+    /// down; there is no waiter left to starve. Returns the number reaped.
+    pub fn reap_retired(&mut self) -> usize {
+        let n = self.retired.len();
+        for p in self.retired.drain(..) {
+            self.gpa.release(p.arena);
+        }
+        n
+    }
+
     /// Compose+post one completion batch across all procs if the drain gate is
     /// open (§4.3.2). The caller (fwd/adapter) encodes it on the GSP queue and
     /// raises SWGEN0 via `Vmm::raise_irq` — the core stays VMM-free.

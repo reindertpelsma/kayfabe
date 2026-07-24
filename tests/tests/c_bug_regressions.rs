@@ -1,0 +1,416 @@
+//! ★ THE C-BUG REGRESSION MATRIX — the GAP rows (decision #18B).
+//!
+//! Companion to `docs/design/c_bug_regression_matrix.md`, which classifies EVERY
+//! hard-won C bug as impossible-by-construction / already-tested / gap. This file
+//! adds the regressions for the gap rows, so the rewrite can never silently
+//! reintroduce a bug the C already paid (days of bench time) to find. Each test's
+//! doc comment names the C incident it guards against, with its memory-file ref.
+//!
+//! Everything here drives the real core through the mock seams — no GPU, no OS,
+//! millisecond-fast (decision #15: test invariants/behavior, never internals).
+
+#![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
+
+use nvkvm_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
+use nvkvm_completion::OsEventRef;
+use nvkvm_core::gpa::GpaSpace;
+use nvkvm_core::gpu::{Gpu, GpuError};
+use nvkvm_core::rmgraph::{NodeKey, RmEvent};
+use nvkvm_fwd::{
+    FwdFault, handle_doorbell, parse_pushbuffer, publish_backing, resolve,
+    signal_golden_capture,
+};
+use nvkvm_mocks::{MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, mock_classes as mc};
+use nvkvm_tests::{Scenario, identical_handles};
+use nvkvm_vmm::Vmm;
+
+const A_PDB: Pdb = Pdb(0x3401_000);
+const B_PDB: Pdb = Pdb(0x3405_000);
+const VA: GpuVa = GpuVa(0x2_0020_0000);
+
+/// Fresh device with a generous window (default geometry for non-lifecycle tests).
+fn fresh_gpu() -> (Gpu, std::sync::Arc<std::sync::Mutex<nvkvm_mocks::RmRecorder>>) {
+    gpu_with_window(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000)
+}
+
+/// Fresh device over an explicit window geometry (the lifecycle tests size the
+/// window tightly so exhaustion-vs-recycling is observable).
+fn gpu_with_window(
+    window: core::ops::Range<u64>,
+    arena_len: u64,
+) -> (Gpu, std::sync::Arc<std::sync::Mutex<nvkvm_mocks::RmRecorder>>) {
+    let arch = Box::new(MockArch::new());
+    let (factory, rec) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(window, arena_len);
+    (Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"), rec)
+}
+
+fn apply_all(gpu: &mut Gpu, evs: impl IntoIterator<Item = RmEvent>) {
+    for ev in evs {
+        gpu.apply(ev).expect("scenario event applies");
+    }
+}
+
+/// Build one compute process and return its (pid, first ChanId).
+fn build_proc(gpu: &mut Gpu, client: HClient, pdb: Pdb, vchids: (u16, u16)) -> (nvkvm_core::ProcId, nvkvm_core::ChanId) {
+    let mut s = Scenario::new();
+    s.compute_process(client, pdb, identical_handles(vchids.0, vchids.1));
+    apply_all(gpu, s.events);
+    let pid = *gpu.by_pdb.get(&pdb).expect("routed by PDB");
+    let cid = *gpu.procs[&pid].chan_ids.values().next().expect("has a channel");
+    (pid, cid)
+}
+
+/// Lay out a one-entry GPFIFO ring pointing at method words written to guest RAM.
+fn script_pushbuffer(vmm: &mut MockVmm, gpa: u64, methods: &[(u32, Vec<u32>)]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for (h, args) in methods {
+        bytes.extend_from_slice(&h.to_le_bytes());
+        for a in args {
+            bytes.extend_from_slice(&a.to_le_bytes());
+        }
+    }
+    vmm.gpa_write(gpa, &bytes).unwrap();
+    let mut ring = Vec::new();
+    ring.extend_from_slice(&gpa.to_le_bytes());
+    ring.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+    ring
+}
+
+// =================================================================================
+// #11 — the USERD-wipe class: a CE fill/copy must never clobber live core state.
+// =================================================================================
+
+/// **Guards #11** (`mode2_baremetal_32`: the CE zero-fill that WIPED a live USERD
+/// page — PyTorch's channel ring state — fixed in the C by `nvkvm_fb_is_live_userd`).
+///
+/// The core half of that invariant: an observed CE **physical** write landing on an
+/// address the core already tracks as LIVE state must never silently REPLACE that
+/// state. The parser's capture path is resolve-first — a dst that already resolves
+/// keeps its live binding (recorded as a dirtied PT page only); the live mapping's
+/// phys/host publication survive untouched.
+///
+/// (The *content* half — refusing the actual byte wipe over a live USERD in the FB
+/// shadow — is the FB-shadow/regs port's job and is flagged as a deferred-milestone
+/// row in the matrix. This pins the state half the pure core owns today.)
+#[test]
+fn cb11_ce_write_never_clobbers_live_binding() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let mut vmm = MockVmm::new();
+    let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+
+    // Live state: a published backing at VA (host-mapped in this Vas's host VAS).
+    let live = publish_backing(gpu.procs.get_mut(&pid).unwrap(), A_PDB, VA, 0x10000).unwrap();
+
+    // A scrubber-shaped CE physical write lands INSIDE the live range.
+    let ring = script_pushbuffer(&mut vmm, 0x5000_0000, &[
+        MockPushbuffer::set_object(mc::DMA_COPY),
+        MockPushbuffer::ce_launch_dma(VA.0 + 0x20, 0x1000, false),
+    ]);
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("parses");
+
+    // Observed (dirty-latched), but the LIVE binding was not replaced: the VA still
+    // resolves to its original backing + host publication — never to the CE write's
+    // identity mapping (the wipe-shaped clobber).
+    assert_eq!(out.pt_writes, vec![VA.0 & !0xfff], "write observed as a dirtied page");
+    let (b, off) = resolve(&gpu, A_PDB, GpuVa(VA.0 + 0x20)).unwrap();
+    assert_eq!(off, 0x20);
+    assert_eq!(b.phys, live.gpa, "live binding's phys survives the CE write");
+    assert_eq!(b.host_va, Some(live.host_va), "live host publication survives the CE write");
+}
+
+// =================================================================================
+// #12 — the sema-write VAS collapse (UVM MAX_JUMP): completion writes must route by
+// the OWNING identity, never through a foreign VAS fallback.
+// =================================================================================
+
+/// **Guards #12 cont.32/33** (`mode2_12_layered_status`): the C's `chan_translate`
+/// blind fallback resolved a scrubber's sema release under a STALE FOREIGN client's
+/// PDB and wrote onto UVM's persistent tracking-sema page → UVM read a BACKWARDS
+/// value → `uvm_gpu_semaphore.c:776 MAX_JUMP` fatal → CTX2 dead.
+///
+/// The rewrite must route a channel's sema release to the OWNING proc's completion
+/// queue only — never to any other proc's (there is no fallback resolve to reach a
+/// foreign queue through). And once the owner is torn down, the release is a LOUD
+/// refusal — never consumed against a surviving proc's state.
+#[test]
+fn cb12_sema_release_routes_to_owner_never_a_foreign_proc() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let mut vmm = MockVmm::new();
+    let (pid_a, cid_a) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _cid_b) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+
+    // A's channel releases a sema. ONLY A's queue observes it.
+    let ring = script_pushbuffer(&mut vmm, 0x5000_0000, &[
+        MockPushbuffer::sem_release(0x2_0044_0f00, 0x45),
+    ]);
+    parse_pushbuffer(&mut gpu, &mut vmm, pid_a, cid_a, &ring).expect("parses");
+    assert!(gpu.procs[&pid_a].completion.has_outstanding(), "owner's queue observed");
+    assert!(
+        !gpu.procs[&pid_b].completion.has_outstanding(),
+        "foreign proc's queue NEVER sees another channel's release (the MAX_JUMP write)"
+    );
+    assert!(!gpu.system.completion.has_outstanding(), "nor does the system queue");
+
+    // Tear A down; replaying its release is a LOUD refusal — the C's fallback would
+    // have resolved it under the survivor's PDB and poisoned B's live state.
+    gpu.apply(RmEvent::Free { client: HClient(0xAA), handle: HObject(0x5c00_0000) }).unwrap();
+    let replay = parse_pushbuffer(&mut gpu, &mut vmm, pid_a, cid_a, &ring);
+    assert!(
+        matches!(replay, Err(FwdFault::RetiredProc(_))),
+        "a torn-down channel's release is refused, never re-routed: {replay:?}"
+    );
+    assert!(!gpu.procs[&pid_b].completion.has_outstanding(), "survivor B untouched");
+}
+
+/// **Guards the #12 finishPayload-forge scoping rule + the scrubber-timeout class**
+/// (`mode2_12_layered_status` cont.33 fix 2: the forge is for KERNEL CeUtils ONLY,
+/// user-CE/GR excluded; lesson L5): a fabricated/system completion must land on the
+/// SYSTEM proc's queue and can never reach a user proc's completion state. In the
+/// rewrite the forge entry point is *typed* to the system proc
+/// (`signal_golden_capture`) — this pins the runtime half.
+#[test]
+fn cb12_system_forge_never_reaches_a_user_proc_queue() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+
+    let ev = signal_golden_capture(&mut gpu, OsEventRef(0x60)).expect("system-typed forge");
+    assert_eq!(ev, OsEventRef(0x60));
+    assert!(gpu.system.completion.has_outstanding(), "forge landed on the SYSTEM queue");
+    assert!(
+        !gpu.procs[&pid_a].completion.has_outstanding(),
+        "a user proc's queue never receives a forged completion (L5)"
+    );
+    // It still DELIVERS (the guest's 4s golden-capture poll is satisfied).
+    let batch = gpu.pump_completions().expect("system completion posts");
+    assert_eq!(batch.events, vec![OsEventRef(0x60)]);
+}
+
+// =================================================================================
+// #13 — CE-PT-write publication: decode the observed write DIRECTLY, never a
+// root walk racing the guest's leaf-filled-then-linked build order.
+// =================================================================================
+
+/// **Guards #13 rounds 1-3's mystery** (`mode2_13_multiiter_idle_hang`): the guest
+/// fills a leaf PT page and links it under the root a SEPARATE push later. The C's
+/// root walks read `runs=0` while the host faulted one page past the last-backed
+/// leaf; the v6 fix decodes each dirtied page DIRECTLY. The rewrite's capture path
+/// must make an observed CE PT-write resolvable IMMEDIATELY — with zero
+/// root-reachability, before any "linking" write arrives — and a later linking
+/// write must not disturb it. (There is no root-walk resolve path to get this
+/// wrong, but this pins the observable contract.)
+#[test]
+fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let mut vmm = MockVmm::new();
+    let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+
+    // Push 1: the CE fills an ORPHAN leaf PT page — nothing references it yet.
+    let leaf_page: u64 = 0x1_2340_0000;
+    let ring1 = script_pushbuffer(&mut vmm, 0x5000_0000, &[
+        MockPushbuffer::ce_launch_dma(leaf_page, 0x1000, false),
+    ]);
+    parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring1).expect("push 1 parses");
+
+    // ★ Resolvable IMMEDIATELY at the release point — no link, no walk, no sweep.
+    let (b, _) = resolve(&gpu, A_PDB, GpuVa(leaf_page)).expect(
+        "an observed PT-write is resolvable directly — the C's root walk read runs=0 here",
+    );
+    assert_eq!(b.phys, leaf_page);
+    assert!(gpu.procs[&pid].vases[&A_PDB].pt_pages.contains(&leaf_page));
+
+    // Push 2 (a push LATER): the upper-PD "linking" write. Both captured; the leaf
+    // from push 1 is undisturbed.
+    let upper_pd: u64 = 0x1_2000_0000;
+    let ring2 = script_pushbuffer(&mut vmm, 0x5001_0000, &[
+        MockPushbuffer::ce_launch_dma(upper_pd, 0x1000, false),
+    ]);
+    parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring2).expect("push 2 parses");
+    assert!(resolve(&gpu, A_PDB, GpuVa(upper_pd)).is_ok());
+    assert!(resolve(&gpu, A_PDB, GpuVa(leaf_page)).is_ok(), "leaf capture survives the link");
+}
+
+// =================================================================================
+// #14 — the arming-window class: there is no "multiproc mode" to arm too late.
+// =================================================================================
+
+/// **Guards #14 round 3's transition window** (`mode2_14_concurrent_apps`): the C
+/// gated its per-process divergences on `multiproc() = n>1`, but n flips only after
+/// the 2nd process is DETECTED — proc 1 + shared state ran blind first, and the
+/// corruption had landed by arming time. The rewrite has NO gate (single-process is
+/// the N=1 case of the only code path, lesson L9) — so a second process arriving
+/// AFTER the first is fully active (the exact C order: wo_14 interleaves; this test
+/// serializes) must build cleanly AND leave the first's state untouched.
+#[test]
+fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
+    let (mut gpu, _rec) = fresh_gpu();
+    // Proc A is built AND fully active: published, scheduled, rung, completed.
+    let (pid_a, _cid_a) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let pub_a = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, VA, 0x10000).unwrap();
+    let out_a = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10))).unwrap();
+    assert!(out_a.scheduled_now);
+    gpu.procs.get_mut(&pid_a).unwrap().completion.observe(OsEventRef(0xA)).unwrap();
+    let batch = gpu.pump_completions().expect("A's completion posts");
+    gpu.completions_drained();
+    gpu.procs.get_mut(&pid_a).unwrap().completion.ack(batch.events[0]);
+
+    // NOW proc B arrives — identical handles, identical guest VA.
+    let (pid_b, _cid_b) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let pub_b = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, VA, 0x10000).unwrap();
+    assert_ne!(pub_a.gpa, pub_b.gpa, "late-arriving B still gets disjoint backing");
+    assert_ne!(pub_a.host_va, pub_b.host_va);
+    let out_b = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20))).unwrap();
+    assert!(out_b.scheduled_now, "B's channel schedules on ITS OWN plane");
+    assert_ne!(out_a.host_token, out_b.host_token);
+
+    // A's pre-existing state is untouched by B's arrival: same resolution, and its
+    // already-scheduled channel rings again WITHOUT rescheduling (state preserved).
+    let (ba, _) = resolve(&gpu, A_PDB, VA).unwrap();
+    assert_eq!(ba.phys, pub_a.gpa, "A resolves ITS backing after B armed");
+    let again = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10))).unwrap();
+    assert!(!again.scheduled_now, "A's exec-plane state survived B's arrival");
+}
+
+/// **Guards the silent-state-fold half of the same class** (lesson L9): a dup edge
+/// that would MERGE two procs after both touched their data planes is a LOUD
+/// `LateMerge` refusal, applied ATOMICALLY — the device rolls back and BOTH procs
+/// stay fully functional (the C instead folded/aliased state and corrupted the
+/// loser).
+#[test]
+fn cb14_late_merge_after_touch_is_loud_and_atomic() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let pub_a = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, VA, 0x10000).unwrap();
+    let pub_b = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, VA, 0x10000).unwrap();
+
+    // A hostile/late dup edge that would join the two touched components.
+    let late_dup = RmEvent::Dup {
+        src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
+        dst: NodeKey::new(HClient(0xBB), HObject(0x9999_0000)),
+    };
+    let refused = gpu.apply(late_dup);
+    assert!(
+        matches!(refused, Err(GpuError::LateMerge { .. })),
+        "merging two touched procs is a loud refusal, never a silent fold: {refused:?}"
+    );
+
+    // ATOMIC: both procs still live, still routed, still resolving their OWN state.
+    assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
+    let (ba, _) = resolve(&gpu, A_PDB, VA).unwrap();
+    let (bb, _) = resolve(&gpu, B_PDB, VA).unwrap();
+    assert_eq!(ba.phys, pub_a.gpa);
+    assert_eq!(bb.phys, pub_b.gpa);
+    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10))).is_ok());
+    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20))).is_ok());
+}
+
+// =================================================================================
+// ★ The device teardown→restart lifecycle (decision #18B's known-gap probe).
+// The GSP-reboot FSM half (WPR2/fn-47/seqNum) is NOT MODELED yet (`nvkvm-gsp` is a
+// skeleton) — that is a named MILESTONE row in the matrix, not faked here. The
+// teardown→recreate half IS core-coverable today: these two tests pin it.
+// =================================================================================
+
+/// **Guards the full-device teardown→rebuild cycle** (the C's "turn down, turn up"
+/// probe: #12's fn-47 idle-release path, `mode2_12_layered_status` cont.30-32, minus
+/// the unmodeled GSP FSM): tear EVERY process down, reap at the quiesce point, then
+/// rebuild with IDENTICAL handles/PDBs/VAs. The rebuilt device must be
+/// indistinguishable from fresh: everything routes, backs, schedules and completes,
+/// on FRESH isolate sessions, with the old procs' arenas RECYCLED (the tight window
+/// makes non-recycling loudly impossible).
+#[test]
+fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
+    // Window fits EXACTLY 3 arenas: system + two procs. A rebuild can only succeed
+    // if reap actually recycled the torn-down procs' arenas.
+    let (mut gpu, rec) = gpu_with_window(0x1_0000_0000..0x1_3000_0000, 0x1000_0000);
+
+    // ---- Generation 1: two procs, real work. ----
+    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, VA, 0x10000).unwrap();
+    publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, VA, 0x10000).unwrap();
+    handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10))).unwrap();
+    handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20))).unwrap();
+    let gen1_arenas: Vec<_> =
+        gpu.procs.values().map(|p| p.arena.range.clone()).collect();
+    let gen1_sessions: std::collections::BTreeSet<u32> =
+        rec.lock().unwrap().log.iter().map(|(id, _)| id.0).collect();
+
+    // ---- Full teardown: every client root freed. ----
+    gpu.apply(RmEvent::Free { client: HClient(0xAA), handle: HObject(0x5c00_0000) }).unwrap();
+    gpu.apply(RmEvent::Free { client: HClient(0xBB), handle: HObject(0x5c00_0000) }).unwrap();
+    assert!(gpu.procs.is_empty(), "all procs retired");
+    assert!(gpu.by_pdb.is_empty() && gpu.by_vchid.is_empty(), "no routing residue");
+    assert_eq!(gpu.retired.len(), 2, "both staged for the deferred reap (L10)");
+
+    // ---- The quiesce point: reap + recycle. ----
+    assert_eq!(gpu.reap_retired(), 2);
+    assert!(gpu.retired.is_empty(), "reap drained the staging area");
+
+    // ---- Generation 2: IDENTICAL handles, PDBs, VAs. ----
+    let (pid_a2, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b2, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let pa2 = publish_backing(gpu.procs.get_mut(&pid_a2).unwrap(), A_PDB, VA, 0x10000)
+        .expect("gen-2 backs the identical VA cleanly — no stale residue");
+    let pb2 = publish_backing(gpu.procs.get_mut(&pid_b2).unwrap(), B_PDB, VA, 0x10000).unwrap();
+    assert_ne!(pa2.gpa, pb2.gpa, "gen-2 procs still disjoint");
+    // Recycled arenas: gen-2 procs run inside gen-1's ranges (the tight window
+    // leaves nothing else) — and that reuse is CLEAN by construction.
+    for p in gpu.procs.values() {
+        assert!(
+            gen1_arenas.contains(&p.arena.range),
+            "gen-2 arena {:x?} recycled from gen-1's {gen1_arenas:x?}",
+            p.arena.range
+        );
+    }
+    // Fresh channels schedule on fresh exec planes; completions flow.
+    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10))).unwrap().scheduled_now);
+    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20))).unwrap().scheduled_now);
+    gpu.procs.get_mut(&pid_a2).unwrap().completion.observe(OsEventRef(0xA2)).unwrap();
+    assert!(gpu.pump_completions().is_some(), "gen-2 completions deliver");
+
+    // Fresh isolate sessions — gen 2 never ran on a dead proc's host session.
+    let all_sessions: std::collections::BTreeSet<u32> =
+        rec.lock().unwrap().log.iter().map(|(id, _)| id.0).collect();
+    assert!(
+        all_sessions.len() > gen1_sessions.len(),
+        "gen-2 spawned FRESH isolate sessions (gen1={gen1_sessions:?}, all={all_sessions:?})"
+    );
+}
+
+/// **Guards sustained process churn** (the C's #80 `teardown_hardening_done`: "host
+/// reaper + GPA free-list" — the shared window exhausted under create→destroy
+/// churn; and the C-era "fresh boot per GPU run" tax, lesson L12, that the rewrite
+/// exists to kill): many sequential process generations through a window sized for
+/// FOUR arenas must never exhaust, because every reap recycles.
+///
+/// ★ This regression EXPOSED a real core gap when written: `GpaSpace::carve` never
+/// recycled and `Gpu::retired` was never reaped, so generation ~4 died with
+/// `WindowExhausted` — exactly the C's leak, silently reintroduced. Fixed by
+/// `Gpu::reap_retired` + `GpaSpace::release` (see the matrix doc).
+#[test]
+fn cb_lifecycle_process_churn_never_exhausts_the_window() {
+    // Room for system + 3 concurrent procs only; 24 generations churn through it.
+    let (mut gpu, _rec) = gpu_with_window(0x1_0000_0000..0x1_4000_0000, 0x1000_0000);
+
+    for generation in 0..24u64 {
+        // Same client handle + PDB + VA every generation — the #12 identical-reuse
+        // shape, at device-lifecycle scale.
+        let (pid, _cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+        let p = publish_backing(gpu.procs.get_mut(&pid).unwrap(), A_PDB, VA, 0x10000)
+            .unwrap_or_else(|e| panic!("generation {generation}: publish must succeed: {e:?}"));
+        let out = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)))
+            .unwrap_or_else(|e| panic!("generation {generation}: doorbell must ring: {e:?}"));
+        assert!(out.scheduled_now, "generation {generation}: fresh channel schedules");
+        let (b, _) = resolve(&gpu, A_PDB, VA).unwrap();
+        assert_eq!(b.phys, p.gpa, "generation {generation}: resolves its OWN backing");
+
+        // Teardown + reap at the quiesce point.
+        gpu.apply(RmEvent::Free { client: HClient(0xAA), handle: HObject(0x5c00_0000) })
+            .unwrap();
+        assert_eq!(gpu.reap_retired(), 1, "generation {generation}: reaped");
+    }
+    assert!(gpu.retired.is_empty(), "no unbounded staging growth across churn");
+    assert!(gpu.procs.is_empty());
+}
