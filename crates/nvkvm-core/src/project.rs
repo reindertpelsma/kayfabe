@@ -141,28 +141,30 @@ impl ClientUnion {
 /// non-VASpace returns `None`: the channel is treated as having no declared VAS
 /// (a loud MISS at use time), never silently bound to an unrelated object's PDB.
 fn resolve_vaspace_handle(g: &RmGraph, ns: HClient, handle: HObject) -> Option<&RmNode> {
-    let node = g.origin_of(NodeKey::new(ns, handle))?;
-    matches!(node.kind, ObjectKind::VaSpace).then_some(node)
+    // The ONE typed-resolution primitive (decision #18C): resolving a handle to the
+    // wrong `ObjectKind` is a single centrally-enforced check, not a per-caller
+    // `matches!` a new site could forget.
+    g.origin_of_kind(NodeKey::new(ns, handle), ObjectKind::VaSpace)
 }
 
 /// Resolve a channel node's VASpace origin per the declared-facts precedence:
-/// own `hVASpace` → CtxShare's → parent TSG's. Every hop must land on an actual
-/// VASpace (see [`resolve_vaspace_handle`]).
+/// own `hVASpace` → CtxShare's → parent TSG's. Every hop is a typed resolution
+/// through [`RmGraph::origin_of_kind`] — an `hVASpace` naming a non-VASpace, an
+/// `hContextShare` naming a non-CtxShare, or a `parent` that is not a TSG each
+/// resolves to `None` (a loud MISS at use time), never a silent cross-object bind.
 fn resolve_channel_vas<'g>(g: &'g RmGraph, chan: &RmNode) -> Option<&'g RmNode> {
     let ns = chan.key.client;
     if let Some(hv) = chan.facts.h_vaspace {
         return resolve_vaspace_handle(g, ns, hv);
     }
     if let Some(hcs) = chan.facts.h_ctx_share
-        && let Some(cs) = g.origin_of(NodeKey::new(ns, hcs))
-        && matches!(cs.kind, ObjectKind::CtxShare)
+        && let Some(cs) = g.origin_of_kind(NodeKey::new(ns, hcs), ObjectKind::CtxShare)
         && let Some(hv) = cs.facts.h_vaspace
     {
         return resolve_vaspace_handle(g, cs.key.client, hv);
     }
     // Parent may be a TSG that declares the VAS.
-    if let Some(parent) = g.origin_of(NodeKey::new(ns, chan.parent))
-        && matches!(parent.kind, ObjectKind::Tsg)
+    if let Some(parent) = g.origin_of_kind(NodeKey::new(ns, chan.parent), ObjectKind::Tsg)
         && let Some(hv) = parent.facts.h_vaspace
     {
         return resolve_vaspace_handle(g, parent.key.client, hv);
@@ -214,9 +216,14 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
     // (the real protocol allocates one engine object per channel context).
     let mut engine_refine: BTreeMap<NodeKey, EngineKind> = BTreeMap::new();
     for node in g.nodes() {
+        // The engine-object's parent must typed-resolve to a Channel (any engine —
+        // discriminant match) before its kind refines that channel; a hostile engine
+        // object parented on a non-channel never refines anyone (decision #18C).
         if let ObjectKind::EngineObject { engine } = node.kind
-            && let Some(chan) = g.origin_of(NodeKey::new(node.key.client, node.parent))
-            && matches!(chan.kind, ObjectKind::Channel { .. })
+            && let Some(chan) = g.origin_of_kind(
+                NodeKey::new(node.key.client, node.parent),
+                ObjectKind::Channel { engine: EngineKind::GrCompute },
+            )
         {
             engine_refine.entry(chan.key).or_insert(engine);
         }

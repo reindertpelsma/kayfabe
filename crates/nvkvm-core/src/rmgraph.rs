@@ -464,7 +464,7 @@ impl RmGraph {
                 Ok(())
             }
             RmEvent::MapMemoryDma { client, vaspace, memory, va, offset, len } => {
-                self.apply_map(PendingMap { client, vaspace, memory, va, offset, len })
+                self.apply_map(PendingMap { client, vaspace, memory, va, offset, len }, false)
             }
             RmEvent::Unmap { client, vaspace, va } => {
                 let vas_key = NodeKey::new(client, vaspace);
@@ -594,6 +594,21 @@ impl RmGraph {
 
     /// Attach every parked `SET_PAGE_DIRECTORY` whose target handle now resolves onto
     /// its resource. Order tolerance for a PDB declared before its VASpace's alloc.
+    ///
+    /// ★ A parked declaration only fills a resource whose PDB is **not already set**
+    /// (decision #18C — the parked-PDB wedge fix). A `SET_PAGE_DIRECTORY` that arrives
+    /// *directly* on a live VASpace is authoritative and always wins (the handler
+    /// overwrites); a *parked* one is by construction older (declared before its handle
+    /// existed), so it must never overwrite a PDB a later direct declaration already
+    /// set. Without this guard a hostile guest could park a `SET_PAGE_DIRECTORY` on a
+    /// handle it *later* dup-aliases onto a different live VASpace: draining the stale
+    /// PDB would overwrite that VASpace's real PDB and forge a projection `PdbCollision`
+    /// — and because the drain fires inside `RmGraph::apply` while the surrounding
+    /// `Gpu::apply` rolls back (restoring the parked fact), the collision re-fires on
+    /// EVERY subsequent `Alloc`, wedging the device's control plane for every other
+    /// process (a global DoS, not a contained refusal — the #18A violation this closes).
+    /// Draining without overwriting is also what makes PDB resolution order-independent:
+    /// a direct declaration wins over a parked one regardless of arrival order.
     fn resolve_pending_pdbs(&mut self) {
         let ready: Vec<(NodeKey, ResId, Pdb)> = self
             .pending_pdbs
@@ -601,8 +616,13 @@ impl RmGraph {
             .filter_map(|(target, pdb)| self.resource_of(*target).map(|id| (*target, id, *pdb)))
             .collect();
         for (target, id, pdb) in ready {
+            // Drain the parked fact unconditionally (so it never lingers to re-fire),
+            // but only APPLY it to a resource that has no PDB yet — never overwrite a
+            // PDB a direct declaration already set.
             self.pending_pdbs.remove(&target);
-            if let Some(res) = self.resources.get_mut(&id) {
+            if let Some(res) = self.resources.get_mut(&id)
+                && res.pdb.is_none()
+            {
                 res.pdb = Some(pdb);
             }
         }
@@ -613,7 +633,11 @@ impl RmGraph {
     /// reference on the memory resource. If either handle is unobserved, parks the map
     /// for order-tolerant replay. An identical re-send is idempotent; a conflicting
     /// map at the same `(vaspace, va)` is a loud [`RmGraphError::ConflictingMap`].
-    fn apply_map(&mut self, m: PendingMap) -> Result<(), RmGraphError> {
+    ///
+    /// `replay` is `true` when this is a parked map being retried by
+    /// [`Self::resolve_pending_maps`] (as opposed to a guest's direct
+    /// `MAP_MEMORY_DMA`). It gates the parked-map wedge guard below (decision #18C).
+    fn apply_map(&mut self, m: PendingMap, replay: bool) -> Result<(), RmGraphError> {
         let vas_key = NodeKey::new(m.client, m.vaspace);
         let mem_key = NodeKey::new(m.client, m.memory);
         let (Some(vas_id), Some(_mem_id)) = (self.resource_of(vas_key), self.resource_of(mem_key))
@@ -638,8 +662,31 @@ impl RmGraph {
             va: m.va,
             offset: m.offset,
             len: m.len,
-            mem_phys: mem_node.facts.mem_phys.map(|base| base + m.offset),
+            // ★ Typed-resolve the backing through [`Self::backing_of`] (which requires
+            // an `ObjectKind::Memory`), NOT by reading `facts.mem_phys` off whatever
+            // object the `memory` handle happens to name (decision #18C). Without this,
+            // a hostile guest could name a NON-memory object (e.g. a VASpace) carrying
+            // an attacker-set `mem_phys` in its alloc facts and have it silently accepted
+            // as a mapping's backing — the "two memory→phys resolvers disagree"
+            // confused-deputy (`backing_of` type-checks; this site used not to). Now
+            // both use the ONE typed path: a non-Memory `memory` resolves to no backing
+            // → a loud `UnbackedMapping` fault at sync, never a silent guess.
+            mem_phys: self.backing_of(mem_key).map(|base| base + m.offset),
         };
+        // ★ Parked-map wedge guard (decision #18C — the parked-PDB wedge's twin). A
+        // *replayed* parked map that resolves to an UNBACKED backing can never populate
+        // (backing is alloc-time; an unbacked memory stays unbacked), so installing it
+        // would make `Gpu::sync_rpc_mappings` fault (`UnbackedMapping`) on whatever
+        // UNRELATED apply happened to trigger the replay — and because the parked fact
+        // survives that apply's rollback, the fault re-fires on every subsequent
+        // `Alloc`, wedging the control plane for every other process (a global DoS). So
+        // a replayed unbacked map is dropped (the caller already removed it from
+        // `pending_maps`): the VA simply never forward-populates → a loud MISS=FAULT at
+        // USE, contained to the toucher. A DIRECT unbacked map (`replay == false`) still
+        // installs, so the guest's own map op earns its loud `UnbackedMapping` refusal.
+        if replay && mapping.mem_phys.is_none() {
+            return Ok(());
+        }
         match self.mappings.get(&key) {
             Some(existing) if *existing == mapping => Ok(()), // idempotent retry
             Some(_) => Err(RmGraphError::ConflictingMap { vaspace: vas_origin, va: m.va }),
@@ -674,8 +721,9 @@ impl RmGraph {
         {
             self.pending_maps.remove(&m);
             // A conflict at replay is dropped silently here (the loud path is the
-            // direct `apply`); replay only ever installs cleanly-resolvable maps.
-            let _ = self.apply_map(m);
+            // direct `apply`); replay only ever installs cleanly-resolvable maps, and an
+            // unbacked replay is dropped by the wedge guard (`replay = true`).
+            let _ = self.apply_map(m, true);
         }
     }
 
@@ -749,6 +797,25 @@ impl RmGraph {
     pub fn origin_of(&self, key: NodeKey) -> Option<&RmNode> {
         let id = self.resource_of(key)?;
         self.resources.get(&id).map(|r| &r.node)
+    }
+
+    /// ★ THE ONE typed-resolution primitive (decision #18C — the confused-deputy
+    /// collapse). Resolve `key` (dup-aliases followed) to its origin node **only if**
+    /// that origin's kind matches `want`, comparing by *discriminant* so a payload
+    /// variant (`Channel { engine }` / `EngineObject { engine }`) matches any engine.
+    ///
+    /// Every site that turns a guest-supplied handle into a *typed* object — a
+    /// channel's `hVASpace` → a VASpace, a `MAP_MEMORY_DMA`'s `memory` → a Memory, a
+    /// CtxShare/TSG hop — routes through here, so "resolved a handle to the WRONG
+    /// `ObjectKind`" is a **single centrally-enforced check**, not an ad-hoc
+    /// `matches!` a new call site could forget (the exact confused-deputy the C's
+    /// heuristic resolvers were, and that M2's `resolve_vaspace_handle` fixed
+    /// piecemeal). A hostile guest naming an object of the wrong type gets a loud MISS
+    /// at use time (`None` here), never a silent bind to an unrelated object.
+    #[must_use]
+    pub fn origin_of_kind(&self, key: NodeKey, want: ObjectKind) -> Option<&RmNode> {
+        let node = self.origin_of(key)?;
+        (core::mem::discriminant(&node.kind) == core::mem::discriminant(&want)).then_some(node)
     }
 
     /// The live handles that reference the resource whose **origin** is `origin_key` —
