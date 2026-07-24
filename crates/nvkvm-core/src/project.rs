@@ -92,11 +92,6 @@ pub enum ProjectionError {
         /// Second claimant.
         b: NodeKey,
     },
-    /// A dup edge whose origin cannot be resolved in the complete graph.
-    DanglingDup {
-        /// The alias with no resolvable source.
-        dst: NodeKey,
-    },
 }
 
 /// Tiny deterministic union-find over client handles.
@@ -175,18 +170,38 @@ fn resolve_channel_vas<'g>(g: &'g RmGraph, chan: &RmNode) -> Option<&'g RmNode> 
 /// Derive the full boundary picture from the graph. Pure; order-independent by
 /// construction (it looks only at the graph's declared facts).
 pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionError> {
-    // Client universe: explicit client-root nodes + every referenced namespace.
+    // Client universe: explicit resource-owning namespaces + the endpoints of every
+    // **resolved** dup (a dst client that only receives an alias and allocates nothing
+    // has no origin node of its own, so it must be picked up here to be grouped). A
+    // still-parked, not-yet-resolvable dup is deliberately NOT chained — it must not
+    // conjure a phantom, resource-less proc into the projection (which would make an
+    // intermediate `Dup`-before-`Alloc` state differ from the fully-applied one).
     let clients: BTreeSet<HClient> = g
         .nodes()
         .map(|n| n.key.client)
-        .chain(g.dups().flat_map(|(d, s)| [d.client, s.client]))
+        .chain(
+            g.dups()
+                .filter(|(d, _)| g.origin_of(*d).is_some())
+                .flat_map(|(d, s)| [d.client, s.client]),
+        )
         .collect();
 
-    // Grouping: dup edges connect client namespaces.
+    // Grouping: dup edges connect client namespaces. A dup whose origin does not yet
+    // resolve is a **still-parked** edge (its source `Alloc` has not arrived — the
+    // order-tolerance case the rmgraph layer explicitly supports, decision #4): it is
+    // not yet a grouping edge, so it is SKIPPED, never a hard fault. Turning a transient
+    // parked dup into a permanent refusal would make `Gpu::apply` — which re-projects
+    // after EVERY event — reject a `Dup`-before-`Alloc` ordering that the protocol
+    // allows, so the SAME facts in a different order would yield a different observable
+    // end-state (the whole-core determinism the differential proves). When the source
+    // later allocs, `resolve_pending_dups` promotes the edge and the next projection
+    // unions the clients — the union happens iff the edge is resolvable, regardless of
+    // arrival order. A dup that NEVER resolves stays inert (no grouping, no alias):
+    // MISS=FAULT at use, never a silent wrong-grouping.
     let mut uf = ClientUnion::new(clients.iter().copied());
     for (dst, src) in g.dups() {
         if g.origin_of(dst).is_none() {
-            return Err(ProjectionError::DanglingDup { dst });
+            continue;
         }
         uf.union(dst.client, src.client);
     }

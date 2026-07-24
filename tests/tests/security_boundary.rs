@@ -715,22 +715,40 @@ fn b5_channel_cannot_bind_another_clients_vaspace_handle() {
     assert_eq!(bounds.by_pdb.get(&B_PDB).map(|(_, k)| k.client), Some(B_CLIENT));
 }
 
-/// **Boundary 1.** A `Dup` naming a source that is NEVER allocated dangles: it must be
-/// a LOUD projection fault (contained by atomic apply), never a silent cross-object
-/// binding. And a `Free` of a never-seen handle is a loud `FreeUnknown`.
+/// **Boundary 1.** A `Dup` naming a source that is NEVER allocated is INERT, never a
+/// silent cross-object binding: it parks (its source may still arrive — a `Dup` before
+/// its `Alloc` is a legal ordering, decision #4, and is INDISTINGUISHABLE at apply time
+/// from a source that never comes), contributes no grouping and no alias, and leaves the
+/// bystander untouched. The containment property is what matters — not the *mechanism*:
+/// making it a hard fault instead would reject the order-tolerant `Dup`-before-`Alloc`
+/// case and break whole-core determinism (see `tests/determinism.rs`). A `Free` of a
+/// never-seen handle IS a loud `FreeUnknown` (a free is lifecycle-ordered, not parkable).
 #[test]
-fn b5_dangling_dup_and_unknown_free_are_loud() {
+fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
     let mut gpu = fresh_gpu();
     for ev in benign_b_events() {
         gpu.apply(ev).unwrap();
     }
-    // Dup with a source that will never exist → dangling → loud, and rolled back so
-    // B is undisturbed.
-    let bad_dup = gpu.apply(RmEvent::Dup {
+    // Dup with a source that will never exist → parked, inert. Accepted (it may yet
+    // resolve), but it binds NOTHING and groups NOTHING until/unless its source arrives.
+    let inert_dup = gpu.apply(RmEvent::Dup {
         src: NodeKey::new(HClient(0xDEAD), HObject(0xDEAD)),
         dst: NodeKey::new(HClient(0xBEEF), HObject(0xBEEF)),
     });
-    assert!(matches!(bad_dup, Err(GpuError::Projection(_))), "dangling dup must be loud, got {bad_dup:?}");
+    assert!(inert_dup.is_ok(), "an unresolved dup parks (order tolerance), got {inert_dup:?}");
+    // No cross-object binding: the dst alias resolves to nothing (no silent reach).
+    assert!(
+        gpu.rmgraph.origin_of(NodeKey::new(HClient(0xBEEF), HObject(0xBEEF))).is_none(),
+        "a parked dup must not bind its dst to any object"
+    );
+    // No phantom proc: the never-allocated clients group into nothing.
+    let bounds = project(&gpu.rmgraph, gpu.arch.as_ref()).expect("projects");
+    assert!(
+        bounds.procs.iter().all(|p| {
+            !p.clients.contains(&HClient(0xBEEF)) && !p.clients.contains(&HClient(0xDEAD))
+        }),
+        "a dangling dup must not conjure a resource-less phantom proc"
+    );
     // B is undisturbed.
     assert!(resolve(&gpu, B_PDB, B_MAP_VA).is_ok(), "B undisturbed by a dangling dup");
 
