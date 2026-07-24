@@ -17,7 +17,7 @@ use nvkvm_core::gpa::GpaSpace;
 use nvkvm_core::rmgraph::{AllocFacts, RmEvent};
 use nvkvm_fwd::{
     CompletionArm, ControlRoute, FwdFault, arm_fence, completion_arm, fence_observed,
-    forward_engine_object, publish_backing, route_control,
+    forward_engine_object, handle_doorbell, publish_backing, route_control,
 };
 use nvkvm_mocks::{MockArch, MockIsolateFactory, RmVerb, SharedRecorder, mock_classes as mc, mock_ctrl};
 use nvkvm_tests::{Scenario, identical_handles};
@@ -251,6 +251,7 @@ fn host_verb_surface_does_not_grow_per_engine() {
             RmVerb::RingDoorbell { .. } => "RingDoorbell",
             RmVerb::Free { .. } => "Free",
             RmVerb::Control { .. } => "Control",
+            RmVerb::ExportSurface { .. } => "ExportSurface",
         }
     };
 
@@ -275,6 +276,68 @@ fn host_verb_surface_does_not_grow_per_engine() {
     let r = reference.unwrap();
     assert!(r.contains("AllocEngineObject"), "every engine forwards via the one engine verb");
     assert!(!r.contains("Alloc"), "no engine falls back to a generic raw alloc");
+}
+
+/// ★ GR-1 — the C's `dma_copy_class_alloc_params` wrong-runlist class, pinned at the
+/// core (memory: missing engine typing → `engineType=0` → wrong runlist →
+/// cuCtxCreate 401): every host channel alloc carries the channel's graph-derived
+/// `EngineKind`, so a graphics/NVENC/CE channel is materialized on ITS OWN
+/// engine/runlist — never a compute default the adapter would have to guess.
+/// Covers BOTH materialization sites: the engine-object forward and the doorbell.
+#[test]
+fn channel_materialization_declares_its_engine_to_the_backend() {
+    // The recorded engine of the ONE AllocChannel in a recorder's log.
+    let recorded_engine = |rec: &SharedRecorder| -> EngineKind {
+        let log = rec.lock().unwrap();
+        let engines: Vec<EngineKind> = log
+            .log
+            .iter()
+            .filter_map(|(_, v)| match v {
+                RmVerb::AllocChannel { engine, .. } => Some(*engine),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(engines.len(), 1, "exactly one host channel alloc");
+        engines[0]
+    };
+
+    // Site 1 (`forward_engine_object`): for each engine kind, refine the GR channel's
+    // context through the graph (the guest's engine-object alloc), then let the
+    // Case-1 forward materialize the host channel — the alloc must carry THAT kind.
+    for (class, kind) in [
+        (mc::COMPUTE, EngineKind::GrCompute),
+        (mc::GRAPHICS, EngineKind::GrGraphics),
+        (mc::DMA_COPY, EngineKind::Ce),
+        (mc::NVENC, EngineKind::NvEnc),
+    ] {
+        let (mut gpu, recorder) = compute_gpu();
+        gpu.apply(RmEvent::Alloc {
+            client: CLIENT,
+            parent: HObject(0x5c00_0019), // the GR channel handle
+            handle: HObject(0x5c00_0030),
+            class,
+            facts: AllocFacts::default(),
+        })
+        .expect("engine object refines the channel");
+        forward_engine_object(&mut gpu, GR_VCHID, class, &[])
+            .unwrap_or_else(|_| panic!("{kind:?} forwards"));
+        assert_eq!(
+            recorded_engine(&recorder),
+            kind,
+            "{kind:?} channel materialized on a WRONG engine/runlist (the 401 class)"
+        );
+    }
+
+    // Site 2 (`handle_doorbell` lazy materialization): the CE channel's first ring
+    // materializes it as Ce — not the GR/compute default.
+    let (mut gpu, recorder) = compute_gpu();
+    handle_doorbell(&mut gpu, MockArch::token_for(CE_VCHID), &[])
+        .expect("CE doorbell materializes + rings");
+    assert_eq!(
+        recorded_engine(&recorder),
+        EngineKind::Ce,
+        "doorbell-materialized CE channel must land on the CE runlist"
+    );
 }
 
 // =================================================================================

@@ -29,8 +29,9 @@
 //! never exists — requiring `Sync` would constrain real impls (socket buffers to the
 //! sandboxed worker) for a capability no call path can use.
 
-use nvkvm_arch::ids::ClassId;
+use nvkvm_arch::ids::{ClassId, EngineKind};
 pub use nvkvm_arch::ids::ControlCmd;
+use nvkvm_vmm::SurfaceHandle;
 
 /// A host-side RM object handle, scoped to ONE isolate's handle namespace.
 ///
@@ -96,9 +97,19 @@ pub trait RmBackend: Send {
     /// Intent verb: allocate `len` bytes of host-visible system memory.
     fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError>;
 
-    /// Intent verb: allocate a host GPU channel bound to host VAS `vas`.
-    /// Returns `(channel_handle, host_work_submit_token)`.
-    fn alloc_channel(&mut self, vas: HostHandle) -> Result<(HostHandle, u64), RmError>;
+    /// Intent verb: allocate a host GPU channel bound to host VAS `vas`, on the
+    /// runlist/engine named by `engine` — the channel's graph-derived [`EngineKind`],
+    /// which the adapter lowers to the host `NV_CHANNEL_ALLOC_PARAMS` engine type.
+    /// The engine is declared HERE because the adapter cannot invent it: an
+    /// engine-blind channel alloc is the C's proven wrong-runlist bug class
+    /// (`dma_copy_class_alloc_params`: `engineType=0` → wrong runlist →
+    /// cuCtxCreate 401 — seam audit GR-1). Returns
+    /// `(channel_handle, host_work_submit_token)`.
+    fn alloc_channel(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+    ) -> Result<(HostHandle, u64), RmError>;
 
     /// Intent verb: allocate an **engine object** (compute / graphics / CE / NVENC)
     /// of `class` on host channel `chan` — the Case-1 forward that makes the host
@@ -146,6 +157,15 @@ pub trait RmBackend: Send {
 
     /// Ring the host work-submit doorbell with an (already host-translated) token.
     fn ring_doorbell(&mut self, host_token: u64) -> Result<(), RmError>;
+
+    /// Intent verb: export the host memory object `memory` (a render target in host
+    /// VRAM) as a presentable [`SurfaceHandle`] — the **producer half of the display
+    /// seam** (`execution_plane.md` §3.3, seam audit GR-2b). The C proved this runs
+    /// in the ISOLATE (stub `PRIME_HANDLE_TO_FD` dma-buf export, session-owned —
+    /// `present_path_b_done`); the flow is one-way guest→host. The consumer half is
+    /// `Present::present`. Anti-bolt-on note: this is the ONE named display verb —
+    /// the verb surface does not grow per engine.
+    fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError>;
 }
 
 /// Session identity of an isolate. Equals the owning `ProcId` by construction

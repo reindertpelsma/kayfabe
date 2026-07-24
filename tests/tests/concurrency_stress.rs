@@ -215,7 +215,7 @@ fn assert_verb_in_namespace(iso: u32, verb: &RmVerb) {
             own(handle);
         }
         RmVerb::AllocVaSpace { handle } | RmVerb::AllocSysmem { handle, .. } => own(handle),
-        RmVerb::AllocChannel { vas, handle, token } => {
+        RmVerb::AllocChannel { vas, handle, token, engine: _ } => {
             own(vas);
             own(handle);
             assert_eq!(token >> 20, ns, "host token leaked across isolates");
@@ -231,6 +231,10 @@ fn assert_verb_in_namespace(iso: u32, verb: &RmVerb) {
         }
         RmVerb::Free { obj } => own(obj),
         RmVerb::Control { obj, .. } => own(obj),
+        RmVerb::ExportSurface { memory, surface } => {
+            own(memory);
+            assert_eq!(surface.0 >> 32, ns, "surface token leaked across isolates");
+        }
     }
 }
 

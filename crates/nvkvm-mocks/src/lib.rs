@@ -33,7 +33,7 @@ use nvkvm_isolate::{HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, R
 use nvkvm_util::Instant;
 use nvkvm_vmm::{
     BarId, CoreEvent, CoreEventKind, FbMeta, HostRegion, IrqSpec, Present, PresentError, Prot,
-    RamHandle, SlotId, TrapMode, Vblank, Vmm, VmmError,
+    RamHandle, SlotId, SurfaceHandle, TrapMode, Vblank, Vmm, VmmError,
 };
 
 // ---------------------------------------------------------------------------------
@@ -565,10 +565,13 @@ pub enum RmVerb {
         /// Requested length.
         len: u64,
     },
-    /// Intent: host channel allocated on a host VAS.
+    /// Intent: host channel allocated on a host VAS, on a declared engine/runlist.
     AllocChannel {
         /// The host VAS.
         vas: HostHandle,
+        /// The engine/runlist the channel was declared for (GR-1: the wrong-runlist
+        /// class is pinned by asserting THIS field, per channel).
+        engine: EngineKind,
         /// Returned channel handle.
         handle: HostHandle,
         /// Returned host work-submit token.
@@ -601,6 +604,14 @@ pub enum RmVerb {
     RingDoorbell {
         /// The token.
         token: u64,
+    },
+    /// Intent: a host memory object exported as a presentable surface (the display
+    /// seam's producer half, GR-2b — the isolate-side PRIME export).
+    ExportSurface {
+        /// The host memory object (render target) that was exported.
+        memory: HostHandle,
+        /// The minted surface token.
+        surface: SurfaceHandle,
     },
     /// Object freed.
     Free {
@@ -716,13 +727,17 @@ impl RmBackend for MockRmBackend {
         Ok(handle)
     }
 
-    fn alloc_channel(&mut self, vas: HostHandle) -> Result<(HostHandle, u64), RmError> {
+    fn alloc_channel(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+    ) -> Result<(HostHandle, u64), RmError> {
         self.gate()?;
         self.check(vas)?;
         let handle = self.mint();
         let token = self.next_token;
         self.next_token += 1;
-        self.record(RmVerb::AllocChannel { vas, handle, token });
+        self.record(RmVerb::AllocChannel { vas, engine, handle, token });
         Ok((handle, token))
     }
 
@@ -808,6 +823,19 @@ impl RmBackend for MockRmBackend {
         self.record(RmVerb::RingDoorbell { token: host_token });
         Ok(())
     }
+
+    fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {
+        self.gate()?;
+        // An unknown memory object is a LOUD BadHandle — never a silently minted
+        // surface (and cross-isolate render targets are refused by the same check).
+        self.check(memory)?;
+        // Namespaced like host handles ((id+1) << 32 | n) so cross-isolate surface
+        // use is visible in assertions.
+        let surface = SurfaceHandle(((u64::from(self.id.0) + 1) << 32) | self.next);
+        self.next += 1;
+        self.record(RmVerb::ExportSurface { memory, surface });
+        Ok(surface)
+    }
 }
 
 /// A fake per-process isolate wrapping one [`MockRmBackend`].
@@ -871,8 +899,8 @@ impl IsolateFactory for MockIsolateFactory {
 /// Can be scripted to fail (`fail_next`) for the negative path.
 #[derive(Debug, Default)]
 pub struct MockPresent {
-    /// Every presented frame in order (assert the scanout buffer reached the sink).
-    pub presented: Vec<(RamHandle, FbMeta)>,
+    /// Every presented frame in order (assert the scanout surface reached the sink).
+    pub presented: Vec<(SurfaceHandle, FbMeta)>,
     /// If set, the next present fails with this error (then clears).
     pub fail_next: Option<PresentError>,
     next_seq: u64,
@@ -887,7 +915,7 @@ impl MockPresent {
 }
 
 impl Present for MockPresent {
-    fn present(&mut self, buffer: RamHandle, meta: FbMeta) -> Result<Vblank, PresentError> {
+    fn present(&mut self, buffer: SurfaceHandle, meta: FbMeta) -> Result<Vblank, PresentError> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
         }

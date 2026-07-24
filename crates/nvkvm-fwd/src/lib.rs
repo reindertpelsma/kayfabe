@@ -48,7 +48,7 @@ use nvkvm_core::gpu::{Channel, Gpu, Proc, Vas};
 use nvkvm_core::{ChanId, ProcId};
 use nvkvm_isolate::{HostHandle, RmError};
 use nvkvm_mmu::{AddressFault, Binding};
-use nvkvm_vmm::{FbMeta, IrqSpec, Present, PresentError, RamHandle, Vmm};
+use nvkvm_vmm::{FbMeta, IrqSpec, Present, PresentError, SurfaceHandle, Vmm};
 
 /// The MSI-X vector completions are raised on. Abstract placeholder until the
 /// interrupt-tree model ports (`nvkvm-regs`-equivalent); the mocks assert on it.
@@ -275,12 +275,14 @@ pub fn handle_doorbell(
         None => return Err(FwdFault::NoVas(cid)),
     }
 
-    // Lazy per-proc materialization.
+    // Lazy per-proc materialization. The channel's graph-derived `EngineKind` rides
+    // the alloc so the adapter lands it on the RIGHT runlist (GR-1: the C's
+    // `dma_copy_class_alloc_params` engineType=0 → 401 class, designed out).
     if chan.host_channel.is_none() {
         let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
         let vas = vases.get_mut(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
         let hvas = ensure_host_vas(vas, rm)?;
-        let (hchan, htok) = rm.alloc_channel(hvas)?;
+        let (hchan, htok) = rm.alloc_channel(hvas, chan.engine)?;
         chan.host_channel = Some(hchan);
         chan.host_token = Some(htok);
     }
@@ -395,7 +397,9 @@ pub fn forward_engine_object(
         let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
         let vas = vases.get_mut(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
         let hvas = ensure_host_vas(vas, rm)?;
-        let (hchan, htok) = rm.alloc_channel(hvas)?;
+        // The channel's graph-derived `EngineKind` rides the alloc (GR-1, wrong-runlist
+        // class): the adapter cannot invent the runlist, so the core declares it.
+        let (hchan, htok) = rm.alloc_channel(hvas, chan.engine)?;
         chan.host_channel = Some(hchan);
         chan.host_token = Some(htok);
     }
@@ -731,15 +735,18 @@ pub fn fence_observed(
 // vblank via the OWNING proc's completion queue — never NVKMS.
 // =================================================================================
 
-/// Route proc `pid`'s GR-graphics scanout `buffer` to the abstract [`Present`] sink,
-/// then feed the present-complete back as a synthetic vblank on that proc's completion
-/// queue (§2.4's graphics arm). Keeps display hypervisor/host-agnostic: the core names
-/// only the [`Present`] seam; the concrete adapter (QEMU/PRIME) is a later fill.
+/// Route proc `pid`'s GR-graphics scanout `buffer` — a [`SurfaceHandle`] minted by
+/// that proc's own isolate (`RmBackend::export_surface`, the host-VRAM PRIME export;
+/// guest-RAM handles do not typecheck here, GR-2a) — to the abstract [`Present`]
+/// sink, then feed the present-complete back as a synthetic vblank on that proc's
+/// completion queue (§2.4's graphics arm). Keeps display hypervisor/host-agnostic:
+/// the core names only the [`Present`] seam; the concrete adapter (QEMU/PRIME) is a
+/// later fill.
 pub fn present_scanout(
     gpu: &mut Gpu,
     pid: ProcId,
     present: &mut dyn Present,
-    buffer: RamHandle,
+    buffer: SurfaceHandle,
     meta: FbMeta,
 ) -> Result<u64, FwdFault> {
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;

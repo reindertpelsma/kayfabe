@@ -106,6 +106,15 @@ pub struct RamHandle {
     pub covers: Option<Range<u64>>,
 }
 
+/// An opaque **host-surface** token: a presentable render-target surface minted by
+/// the owning isolate's `RmBackend::export_surface` (the `PRIME_HANDLE_TO_FD`
+/// dma-buf export, C-proven — `present_path_b_done`). Deliberately DISTINCT from
+/// [`RamHandle`]: the proven present path scans out **host VRAM**, not a slice of
+/// guest RAM, so a guest-RAM handle must never typecheck into [`Present::present`]
+/// (seam audit GR-2a).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SurfaceHandle(pub u64);
+
 /// Metadata describing a scanout framebuffer to present (`execution_plane.md` §2.6).
 /// Abstract: the core names the geometry; the concrete adapter (QEMU/PRIME) knows how
 /// to turn `buffer` into a real dma-buf and scan it out.
@@ -148,10 +157,11 @@ pub enum PresentError {
 /// This crate defines only the trait; the QEMU/PRIME adapter is a LATER concrete impl.
 /// `nvkvm-mocks::MockPresent` is the test impl so the seam exists and is exercised now.
 pub trait Present {
-    /// Present the scanout `buffer` (a shareable handle over the render target) with
+    /// Present the scanout `buffer` — a [`SurfaceHandle`] minted by the owning
+    /// isolate's `RmBackend::export_surface` (host VRAM, never guest RAM) — with
     /// geometry `meta`. Returns the [`Vblank`] the present completed on — the core
     /// feeds it back as a synthetic vblank via the completion tie-in.
-    fn present(&mut self, buffer: RamHandle, meta: FbMeta) -> Result<Vblank, PresentError>;
+    fn present(&mut self, buffer: SurfaceHandle, meta: FbMeta) -> Result<Vblank, PresentError>;
 }
 
 /// Discriminates deferred-work callbacks so `Vmm::defer`/`lock_region` can name
@@ -307,7 +317,7 @@ pub trait Device {
 // crossing the seam is `Send + Sync`; `dyn Vmm` is `Send` by supertrait (the
 // threading contract in the crate docs explains why `Sync` is not required).
 nvkvm_util::assert_send_sync!(
-    VmmError, SlotId, BarId, HostRegion, Prot, TrapMode, IrqSpec, RamHandle, FbMeta, Vblank,
-    PresentError, CoreEventKind, CoreEvent,
+    VmmError, SlotId, BarId, HostRegion, Prot, TrapMode, IrqSpec, RamHandle, SurfaceHandle,
+    FbMeta, Vblank, PresentError, CoreEventKind, CoreEvent,
 );
 nvkvm_util::assert_send!(dyn Vmm);

@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 nvkvm-util.workspace = true
 nvkvm-arch.workspace = true
+nvkvm-vmm.workspace = true
 
 [lints]
 workspace = true

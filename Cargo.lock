@@ -161,6 +161,7 @@ version = "0.1.0"
 dependencies = [
  "nvkvm-arch",
  "nvkvm-util",
+ "nvkvm-vmm",
 ]
 
 [[package]]
