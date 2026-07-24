@@ -66,9 +66,16 @@ fn any_class() -> impl Strategy<Value = ClassId> {
         Just(mc::CHANNEL_GR),
         Just(mc::CHANNEL_CE),
         Just(mc::MEMORY),
+        Just(mc::EVENT),
         // Junk: not a class the arch recognizes → ObjectKind::Unknown. Must never panic.
         (0u32..0x10000).prop_map(ClassId),
     ]
+}
+
+/// A tiny VA universe (so map/unmap of the same VA — the overlap/eager-unmap paths —
+/// are frequent).
+fn any_va() -> impl Strategy<Value = nvkvm_arch::ids::GpuVa> {
+    (0u32..4).prop_map(|n| nvkvm_arch::ids::GpuVa(0x2_0020_0000 + u64::from(n) * 0x10000))
 }
 
 /// A doorbell/vchid flags word — arbitrary bits, so vChid collisions are reachable.
@@ -96,9 +103,19 @@ fn any_event() -> impl Strategy<Value = RmEvent> {
                         },
                         h_ctx_share: None,
                         userd_flags: flags,
+                        // A memory alloc may or may not declare a backing (both paths).
+                        mem_phys: (flags & 2 == 0).then_some(0x8000_0000 | u64::from(flags)),
                     },
                 }
             }),
+        // MapMemoryDma: vaspace/memory may dangle, not be a VAS/memory, or double-map.
+        (any_client(), any_handle(), any_handle(), any_va())
+            .prop_map(|(client, vaspace, memory, va)| RmEvent::MapMemoryDma {
+                client, vaspace, memory, va, offset: 0, len: 0x10000,
+            }),
+        // Unmap: of any (vaspace, va) — mapped, never-mapped, or already-unmapped.
+        (any_client(), any_handle(), any_va())
+            .prop_map(|(client, vaspace, va)| RmEvent::Unmap { client, vaspace, va }),
         // Dup: src/dst may dangle, form cycles, or alias a freed object.
         (any_client(), any_handle(), any_client(), any_handle()).prop_map(
             |(sc, sh, dc, dh)| RmEvent::Dup {
@@ -500,7 +517,9 @@ impl RefTracker {
                     }
                 }
             }
-            RmEvent::SetPageDir { .. } => {}
+            RmEvent::SetPageDir { .. }
+            | RmEvent::MapMemoryDma { .. }
+            | RmEvent::Unmap { .. } => {}
             RmEvent::Free { client, handle } => {
                 let key = (client, handle);
                 let is_root = self.client_roots.contains(&key);

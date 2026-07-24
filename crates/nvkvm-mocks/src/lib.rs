@@ -67,8 +67,10 @@ pub mod mock_classes {
     pub const COMPUTE: ClassId = ClassId(0xF040);
     /// Copy-engine object.
     pub const DMA_COPY: ClassId = ClassId(0xF041);
-    /// Plain memory object.
+    /// Plain memory object (`NV01_MEMORY_*` / `NV_MEMORY_VIRTUAL` shaped).
     pub const MEMORY: ClassId = ClassId(0xF050);
+    /// Os-event / notifier object (`NV01_EVENT` shaped).
+    pub const EVENT: ClassId = ClassId(0xF051);
 }
 
 /// A complete fake GPU generation. See crate docs.
@@ -118,7 +120,8 @@ impl Arch for MockArch {
             c::CHANNEL_CE => ObjectKind::Channel { engine: EngineClass::Ce },
             c::COMPUTE => ObjectKind::EngineObject { engine: EngineClass::Gr },
             c::DMA_COPY => ObjectKind::EngineObject { engine: EngineClass::Ce },
-            c::MEMORY => ObjectKind::Other,
+            c::MEMORY => ObjectKind::Memory,
+            c::EVENT => ObjectKind::Event,
             _ => ObjectKind::Unknown,
         }
     }

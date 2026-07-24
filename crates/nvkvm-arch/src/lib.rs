@@ -67,7 +67,16 @@ pub enum ObjectKind {
         /// Engine class the object targets.
         engine: EngineClass,
     },
-    /// Memory / semaphore / event / anything else the graph tracks as a plain node.
+    /// A memory resource (`NV01_MEMORY_*`, `NV_MEMORY_VIRTUAL`, …): the thing a
+    /// `MAP_MEMORY_DMA` maps into a VAS at an offset. First-class because the
+    /// address-table's RPC populate source resolves a mapping's `memory` handle to
+    /// this node's backing (`execution_plane.md` §1 object-model gap).
+    Memory,
+    /// An os-event / notifier object (`NV01_EVENT`, semaphore surface): owned by a
+    /// client, so completion routing (which os-event → which client/notify-index) is
+    /// **graph-derived**, not an opaque id (`execution_plane.md` §1 object-model gap).
+    Event,
+    /// Semaphore / context-DMA / anything else the graph tracks as a plain node.
     Other,
     /// Not a class this architecture knows. The graph records it as [`ObjectKind::Other`]
     /// but callers on stricter paths must treat it as a loud fault, never guess.

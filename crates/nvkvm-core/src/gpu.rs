@@ -16,10 +16,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nvkvm_arch::Arch;
-use nvkvm_arch::ids::{EngineClass, HClient, Pdb, VChid};
+use nvkvm_arch::ids::{EngineClass, GpuVa, HClient, Pdb, VChid};
 use nvkvm_completion::{CompletionQueue, DeliveryPlane, PostBatch};
 use nvkvm_isolate::{HostHandle, Isolate, IsolateFactory, IsolateId};
-use nvkvm_mmu::AddressTable;
+use nvkvm_mmu::{AddressFault, AddressTable};
 use nvkvm_util::Instant;
 
 use crate::gpa::{GpaArena, GpaError, GpaSpace};
@@ -47,6 +47,16 @@ pub enum GpuError {
     },
     /// GPA window/arena exhaustion.
     Gpa(GpaError),
+    /// The address table refused an RPC-map forward-population (overlap/miss).
+    Address(AddressFault),
+    /// A `MapMemoryDma` named a memory resource with no declared backing — the RPC
+    /// populate source cannot resolve `memory → phys`. MISS=FAULT (never guess).
+    UnbackedMapping {
+        /// The VAS's PDB.
+        pdb: Pdb,
+        /// The faulting mapping VA.
+        va: u64,
+    },
 }
 
 impl From<RmGraphError> for GpuError {
@@ -83,11 +93,22 @@ pub struct Vas {
     /// Captured page-table pages of this VAS (#13's per-PDB `m2_cpt` equivalent;
     /// populated by the CE-PT-write capture feed once the mmu port lands).
     pub pt_pages: BTreeSet<u64>,
+    /// VAs currently bound into `table` by the **RPC map source** (`MapMemoryDma`),
+    /// so the sync can idempotently add/remove them without disturbing bindings from
+    /// other populate sources (`publish_backing`, CE-PT-write capture).
+    pub rpc_bound: BTreeSet<u64>,
 }
 
 impl Vas {
     fn new(pdb: Pdb, origin: NodeKey) -> Self {
-        Vas { pdb, origin, table: AddressTable::new(), host_vas: None, pt_pages: BTreeSet::new() }
+        Vas {
+            pdb,
+            origin,
+            table: AddressTable::new(),
+            host_vas: None,
+            pt_pages: BTreeSet::new(),
+            rpc_bound: BTreeSet::new(),
+        }
     }
 }
 
@@ -194,9 +215,16 @@ impl Proc {
     /// True while this proc has touched no data-plane state (merge legality,
     /// lesson L9).
     fn is_untouched(&self) -> bool {
+        // "Touched" = host-materialized data-plane state (arena carved, host channel /
+        // host VAS allocated, or a binding published into a host VAS). Pure RPC
+        // address-table bookkeeping (host_va = None) is NOT host state — it is
+        // re-derivable from the graph, so it never blocks an early merge.
         self.arena.is_untouched()
             && self.channels.values().all(|c| c.host_channel.is_none())
-            && self.vases.values().all(|v| v.host_vas.is_none() && v.table.iter().next().is_none())
+            && self
+                .vases
+                .values()
+                .all(|v| v.host_vas.is_none() && v.table.iter().all(|(_, _, b)| b.host_va.is_none()))
     }
 }
 
@@ -263,7 +291,67 @@ impl Gpu {
     /// Apply one RM protocol event and re-sync all derived state to the graph.
     pub fn apply(&mut self, ev: RmEvent) -> Result<(), GpuError> {
         self.rmgraph.apply(self.arch.as_ref(), ev)?;
-        self.refresh()
+        self.refresh()?;
+        // Forward-populate the address table from the RPC map source (co-equal with
+        // the CE-PT-write capture source — `mode2_address_table.md`). Bindings track
+        // the graph's live mappings; unmap eagerly depopulates.
+        self.sync_rpc_mappings()?;
+        Ok(())
+    }
+
+    /// Sync each `Vas`'s address table to the graph's live DMA mappings (the RPC
+    /// populate source). Idempotent: binds mappings not yet in the table, unbinds
+    /// table entries whose mapping is gone. MISS=FAULT is preserved — a mapping with
+    /// no resolvable PDB or backing is a loud fault, never a silent skip.
+    fn sync_rpc_mappings(&mut self) -> Result<(), GpuError> {
+        use nvkvm_arch::Aperture;
+        use nvkvm_mmu::Binding;
+
+        // Desired: (pdb, va) -> (len, phys) for every live mapping with a resolved PDB.
+        let mut desired: BTreeMap<(u64, u64), (u64, u64)> = BTreeMap::new();
+        for m in self.rmgraph.mappings() {
+            let Some(pdb) = m.pdb else {
+                // A mapping whose VAS has no PDB yet is not routable — deferred until
+                // SET_PAGE_DIRECTORY arrives (which re-runs this sync). Not a fault:
+                // the guest legitimately maps before binding the page directory.
+                continue;
+            };
+            let phys = m.mem_phys.ok_or(GpuError::UnbackedMapping { pdb, va: m.va.0 })?;
+            desired.insert((pdb.0, m.va.0), (m.len, phys));
+        }
+
+        for proc in self.procs.values_mut().chain(core::iter::once(&mut self.system)) {
+            for (&pdb, vas) in proc.vases.iter_mut() {
+                // Unbind stale RPC bindings (mapping gone), leaving host-backed
+                // publish_backing entries (host_va = Some) alone.
+                let stale: Vec<u64> = vas
+                    .rpc_bound
+                    .iter()
+                    .filter(|&&va| !desired.contains_key(&(pdb.0, va)))
+                    .copied()
+                    .collect();
+                for va in stale {
+                    vas.table.unbind(GpuVa(va));
+                    vas.rpc_bound.remove(&va);
+                }
+                // Bind newly-declared mappings for this PDB.
+                for (&(mpdb, va), &(len, phys)) in desired.iter() {
+                    if mpdb != pdb.0 || vas.rpc_bound.contains(&va) {
+                        continue;
+                    }
+                    vas.table
+                        .bind(
+                            pdb,
+                            GpuVa(va),
+                            len,
+                            Binding { phys, aperture: Aperture::SysmemCoherent, host_va: None },
+                        )
+                        .map_err(GpuError::Address)?;
+                    vas.rpc_bound.insert(va);
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Re-derive boundaries and sync `procs`/`by_pdb`/`by_vchid` to them.

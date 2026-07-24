@@ -8,7 +8,7 @@
 //! as abstract `RmEvent`s, with helpers to build the exact shapes the design docs
 //! name (a compute process, a UVM dup, two processes with identical VAs/handles).
 
-use nvkvm_arch::ids::{ClassId, HClient, HObject, Pdb};
+use nvkvm_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb};
 use nvkvm_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
 use nvkvm_mocks::{MockArch, mock_classes as mc};
 
@@ -101,6 +101,46 @@ impl Scenario {
             },
         });
         NodeKey::new(client, vas)
+    }
+
+    /// Allocate a MEMORY object with a declared physical backing, under `parent`.
+    pub fn memory(
+        &mut self,
+        client: HClient,
+        parent: HObject,
+        handle: HObject,
+        phys: u64,
+    ) -> &mut Self {
+        self.push(RmEvent::Alloc {
+            client,
+            parent,
+            handle,
+            class: mc::MEMORY,
+            facts: AllocFacts { mem_phys: Some(phys), ..Default::default() },
+        })
+    }
+
+    /// Allocate an EVENT (os-event / notifier) object under `parent`.
+    pub fn event(&mut self, client: HClient, parent: HObject, handle: HObject) -> &mut Self {
+        self.push(RmEvent::Alloc {
+            client,
+            parent,
+            handle,
+            class: mc::EVENT,
+            facts: AllocFacts::default(),
+        })
+    }
+
+    /// Map `memory` into `vaspace` at `va` for `len` bytes (offset 0).
+    pub fn map(
+        &mut self,
+        client: HClient,
+        vaspace: HObject,
+        memory: HObject,
+        va: GpuVa,
+        len: u64,
+    ) -> &mut Self {
+        self.push(RmEvent::MapMemoryDma { client, vaspace, memory, va, offset: 0, len })
     }
 
     /// Model UVM aliasing a compute VASpace into its own client via `DUP_OBJECT`,

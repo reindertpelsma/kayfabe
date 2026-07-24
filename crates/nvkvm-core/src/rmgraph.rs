@@ -32,7 +32,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nvkvm_arch::ids::{ClassId, HClient, HObject, Pdb};
+use nvkvm_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb};
 use nvkvm_arch::{Arch, ObjectKind};
 
 /// Global identity of an RM *handle*: handles are **per-client namespaces** (two
@@ -74,6 +74,12 @@ pub struct AllocFacts {
     /// Opaque USERD/flags word from channel alloc params; the arch recovers the
     /// channel's `VChid` from it (`Arch::vchid_from_userd_flags`).
     pub userd_flags: u32,
+    /// Physical/backing address a MEMORY object names, if the alloc declared one
+    /// (`NV01_MEMORY_*` / `NV_MEMORY_VIRTUAL` backing). The RPC populate source
+    /// resolves a `MapMemoryDma`'s `memory` handle to this, so the address table can
+    /// be forward-populated with `memory → phys` at bind time. `None` = a memory
+    /// object with no declared backing yet (map against it faults loudly).
+    pub mem_phys: Option<u64>,
 }
 
 /// One abstract RM protocol event. Produced by the ABI adapter (or a test),
@@ -114,6 +120,37 @@ pub enum RmEvent {
         /// The declared page-directory base.
         pdb: Pdb,
     },
+    /// `RM_MAP_MEMORY_DMA` (NVOS46) — the RPC/control bind-time transport that maps a
+    /// MEMORY resource into a VASpace at `va` for `len` bytes (from `offset` into the
+    /// memory). This is the **object-model-level** map event: it creates a *mapping*
+    /// that references the memory resource (so the memory stays alive while mapped),
+    /// and is the RPC populate source for the address table (`va → memory's phys`,
+    /// resolved by [`crate::gpu::Gpu`] via [`RmGraph::backing_of`]). Forward-populate
+    /// only — see `mode2_address_table.md`.
+    MapMemoryDma {
+        /// Client namespace issuing the map.
+        client: HClient,
+        /// The target VASpace handle (in `client`'s namespace).
+        vaspace: HObject,
+        /// The MEMORY object being mapped (in `client`'s namespace).
+        memory: HObject,
+        /// Guest VA the mapping starts at.
+        va: GpuVa,
+        /// Byte offset into the memory resource.
+        offset: u64,
+        /// Length of the mapping in bytes.
+        len: u64,
+    },
+    /// `RM_UNMAP_MEMORY_DMA` — eagerly drop the mapping at `va` in `vaspace`. Releases
+    /// the mapping's reference to its memory resource (unmap eager, reclaim deferred).
+    Unmap {
+        /// Client namespace issuing the unmap.
+        client: HClient,
+        /// The target VASpace handle.
+        vaspace: HObject,
+        /// Guest VA the mapping starts at.
+        va: GpuVa,
+    },
     /// `RM_FREE`: drop THIS handle's reference to its resource and (per RM semantics)
     /// its subtree. The resource itself dies only when its last reference goes.
     /// Freeing the client root drops every handle in that namespace.
@@ -123,6 +160,38 @@ pub enum RmEvent {
         /// Handle to free.
         handle: HObject,
     },
+}
+
+/// A live DMA mapping: a MEMORY resource mapped into a VASpace resource at a VA.
+///
+/// The mapping is the object-model witness of a `MAP_MEMORY_DMA`. It holds a
+/// reference to the memory resource (so a mapped memory object survives its source
+/// handle's free — faithful RM semantics), and carries the facts the address table's
+/// RPC populate source needs (`va → memory-phys + offset`, resolved by the runtime).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Mapping {
+    /// The VASpace resource's origin key (stable identity).
+    pub vaspace: NodeKey,
+    /// The declared PDB of that VASpace at map time, if known (the address-table key).
+    pub pdb: Option<Pdb>,
+    /// The mapped memory resource's origin key.
+    pub memory: NodeKey,
+    /// Guest VA the mapping starts at.
+    pub va: GpuVa,
+    /// Byte offset into the memory resource.
+    pub offset: u64,
+    /// Length in bytes.
+    pub len: u64,
+    /// Declared physical/backing address of the memory (from its alloc facts), if
+    /// declared — the address-table's forward-populate value (`phys = base + offset`).
+    pub mem_phys: Option<u64>,
+}
+
+/// Key of a live mapping: `(vaspace resource, va)`. A VA is unique within one VAS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct MapKey {
+    vaspace: ResId,
+    va: GpuVa,
 }
 
 /// One node of the graph — the resolved *payload* of a resource, reported at its
@@ -158,6 +227,10 @@ struct Resource {
     /// A property of the RESOURCE, not of any one handle — so it survives the origin
     /// handle's free as long as a dup keeps the resource alive. Last declaration wins.
     pdb: Option<Pdb>,
+    /// Live DMA mappings referencing this resource (a MEMORY resource is kept alive by
+    /// its mappings as well as its handles — a mapping references the memory it maps).
+    /// Faithful RM refcounting: liveness ⟺ (`refs` non-empty OR `map_refs` > 0).
+    map_refs: usize,
 }
 
 /// Errors from [`RmGraph::apply`]. All loud; the caller decides whether a guest
@@ -169,6 +242,15 @@ pub enum RmGraphError {
     ConflictingAlloc(NodeKey),
     /// A second, *different* dup for an existing dst key.
     ConflictingDup(NodeKey),
+    /// A second, *different* `MAP_MEMORY_DMA` at a `(vaspace, va)` already mapped
+    /// (an identical re-send is idempotent). Overlapping/replacing a live mapping
+    /// without an eager unmap is a loud fault (the `ALREADY-MAPPED` collision class).
+    ConflictingMap {
+        /// The VASpace origin whose VA is doubly-mapped.
+        vaspace: NodeKey,
+        /// The colliding VA.
+        va: GpuVa,
+    },
     /// Free of a handle that references no resource (never allocated or dup'd).
     FreeUnknown(NodeKey),
 }
@@ -193,9 +275,31 @@ pub struct RmGraph {
     /// tolerance): declaring-handle → declared PDB. Drained onto the resource as soon
     /// as its handle resolves (see [`Self::resolve_pending_pdbs`]).
     pending_pdbs: BTreeMap<NodeKey, Pdb>,
+    /// Live DMA mappings, keyed by `(vaspace resource, va)`. Each holds a reference to
+    /// the memory resource it maps (counted in `Resource::map_refs`).
+    mappings: BTreeMap<MapKey, Mapping>,
+    /// The memory `ResId` each mapping references — kept alongside `mappings` so a
+    /// mapping can release its memory ref even after ALL of that memory's *handles*
+    /// were freed (the resource is then reachable only by ResId, kept alive by this
+    /// very map-ref). Faithful RM refcounting requires this back-pointer.
+    map_mem_res: BTreeMap<MapKey, ResId>,
+    /// `MapMemoryDma` facts whose VASpace or memory handle is not observed *yet*
+    /// (order tolerance), replayed once both resolve.
+    pending_maps: Vec<PendingMap>,
     /// Monotonic resource-id counter — never reused, so a re-allocated handle value
     /// mints a fresh resource distinct from a survivor a dup still holds.
     next_res_id: u64,
+}
+
+/// A parked `MAP_MEMORY_DMA` awaiting its VASpace/memory handles (order tolerance).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PendingMap {
+    client: HClient,
+    vaspace: HObject,
+    memory: HObject,
+    va: GpuVa,
+    offset: u64,
+    len: u64,
 }
 
 impl RmGraph {
@@ -229,13 +333,14 @@ impl RmGraph {
                         self.next_res_id += 1;
                         self.handles.insert(key, id);
                         self.resources
-                            .insert(id, Resource { node, refs: BTreeSet::from([key]), pdb: None });
+                            .insert(id, Resource { node, refs: BTreeSet::from([key]), pdb: None, map_refs: 0 });
                         // A dup / SetPageDir that arrived BEFORE this alloc parked
                         // itself; now that its target exists, promote each parked fact
                         // so the resource is refcounted and PDB-tagged correctly (and so
                         // it survives the source's later free, order-independently).
                         self.resolve_pending_dups();
                         self.resolve_pending_pdbs();
+                        self.resolve_pending_maps();
                         Ok(())
                     }
                 }
@@ -289,12 +394,39 @@ impl RmGraph {
                             .get_mut(&id)
                             .expect("resource_of returned a live id")
                             .pdb = Some(pdb);
+                        // Any mapping already installed against this VAS learns the PDB
+                        // now (a MAP_MEMORY_DMA that preceded SET_PAGE_DIRECTORY).
+                        for (mk, mapping) in self.mappings.iter_mut() {
+                            if mk.vaspace == id {
+                                mapping.pdb = Some(pdb);
+                            }
+                        }
                     }
                     None => {
                         self.pending_pdbs.insert(target, pdb);
                     }
                 }
                 Ok(())
+            }
+            RmEvent::MapMemoryDma { client, vaspace, memory, va, offset, len } => {
+                self.apply_map(PendingMap { client, vaspace, memory, va, offset, len })
+            }
+            RmEvent::Unmap { client, vaspace, va } => {
+                let vas_key = NodeKey::new(client, vaspace);
+                match self.resource_of(vas_key) {
+                    Some(vas_id) => {
+                        self.drop_mapping(MapKey { vaspace: vas_id, va });
+                        Ok(())
+                    }
+                    // Unmap of a VAS we never saw: drop any parked map for it (idempotent
+                    // teardown), never a loud error — teardown races the bind.
+                    None => {
+                        self.pending_maps.retain(|m| {
+                            !(NodeKey::new(m.client, m.vaspace) == vas_key && m.va == va)
+                        });
+                        Ok(())
+                    }
+                }
             }
             RmEvent::Free { client, handle } => {
                 let key = NodeKey::new(client, handle);
@@ -347,14 +479,38 @@ impl RmGraph {
             doomed
         };
 
+        // Resource ids referenced by the doomed handles, captured BEFORE dropping so we
+        // can tell afterwards which resources actually died (last reference gone) — a
+        // VASpace resource that dies takes its mappings with it (releasing memory refs).
+        let touched_ids: BTreeSet<ResId> =
+            doomed.iter().filter_map(|k| self.handles.get(k).copied()).collect();
+
         for k in &doomed {
             self.drop_handle(*k);
         }
+
+        // Any mapping whose VASpace resource no longer exists is gone: drop it (which
+        // releases its memory resource's map-ref, possibly freeing the memory too).
+        let dead_vas: Vec<MapKey> = self
+            .mappings
+            .keys()
+            .filter(|mk| touched_ids.contains(&mk.vaspace) && !self.resources.contains_key(&mk.vaspace))
+            .copied()
+            .collect();
+        for mk in dead_vas {
+            self.drop_mapping(mk);
+        }
+
         // A parked (unresolved) dup whose dst OR src handle was just freed is stale.
         self.pending_dups
             .retain(|dst, src| !doomed.contains(dst) && !doomed.contains(src));
         // Likewise a parked PDB declared on a now-freed handle.
         self.pending_pdbs.retain(|target, _| !doomed.contains(target));
+        // And a parked map naming a now-freed VASpace or memory handle.
+        self.pending_maps.retain(|m| {
+            !doomed.contains(&NodeKey::new(m.client, m.vaspace))
+                && !doomed.contains(&NodeKey::new(m.client, m.memory))
+        });
     }
 
     /// Promote every parked dup whose source is now a live resource into a real
@@ -397,6 +553,87 @@ impl RmGraph {
         }
     }
 
+    /// Apply (or park) one `MAP_MEMORY_DMA`. Resolves the VASpace and memory handles
+    /// to their resources; if both are known, installs a [`Mapping`] and takes a
+    /// reference on the memory resource. If either handle is unobserved, parks the map
+    /// for order-tolerant replay. An identical re-send is idempotent; a conflicting
+    /// map at the same `(vaspace, va)` is a loud [`RmGraphError::ConflictingMap`].
+    fn apply_map(&mut self, m: PendingMap) -> Result<(), RmGraphError> {
+        let vas_key = NodeKey::new(m.client, m.vaspace);
+        let mem_key = NodeKey::new(m.client, m.memory);
+        let (Some(vas_id), Some(_mem_id)) = (self.resource_of(vas_key), self.resource_of(mem_key))
+        else {
+            // Park (dedup identical parked entries so replay is idempotent).
+            if !self.pending_maps.contains(&m) {
+                self.pending_maps.push(m);
+            }
+            return Ok(());
+        };
+        let vas_origin = self.origin_of(vas_key).expect("resource_of => live").key;
+        let mem_node = *self.origin_of(mem_key).expect("resource_of => live");
+        let key = MapKey { vaspace: vas_id, va: m.va };
+        let mapping = Mapping {
+            vaspace: vas_origin,
+            pdb: self.resource_pdb(vas_id),
+            memory: mem_node.key,
+            va: m.va,
+            offset: m.offset,
+            len: m.len,
+            mem_phys: mem_node.facts.mem_phys.map(|base| base + m.offset),
+        };
+        match self.mappings.get(&key) {
+            Some(existing) if *existing == mapping => Ok(()), // idempotent retry
+            Some(_) => Err(RmGraphError::ConflictingMap { vaspace: vas_origin, va: m.va }),
+            None => {
+                self.mappings.insert(key, mapping);
+                if let Some(mem_id) = self.resource_of(mem_key)
+                    && let Some(res) = self.resources.get_mut(&mem_id)
+                {
+                    res.map_refs += 1;
+                    self.map_mem_res.insert(key, mem_id);
+                }
+                Ok(())
+            }
+        }
+    }
+
+    /// Replay every parked map whose endpoints now resolve. Fixpoint (a parked map may
+    /// depend on an alloc that also unparked a dup — re-scan until quiescent).
+    fn resolve_pending_maps(&mut self) {
+        while let Some(pos) = self.pending_maps.iter().position(|m| {
+            self.resource_of(NodeKey::new(m.client, m.vaspace)).is_some()
+                && self.resource_of(NodeKey::new(m.client, m.memory)).is_some()
+        }) {
+            let m = self.pending_maps.remove(pos);
+            // A conflict at replay is dropped silently here (the loud path is the
+            // direct `apply`); replay only ever installs cleanly-resolvable maps.
+            let _ = self.apply_map(m);
+        }
+    }
+
+    /// Drop the mapping at `key`, releasing its reference to the memory resource
+    /// (removing the memory resource iff that was its last reference — unmap eager).
+    fn drop_mapping(&mut self, key: MapKey) {
+        if self.mappings.remove(&key).is_none() {
+            return;
+        }
+        // Release the memory resource's mapping-reference. Resolved by the stored
+        // ResId (not a handle lookup) so it works even after all handles were freed.
+        if let Some(mem_id) = self.map_mem_res.remove(&key)
+            && let Some(res) = self.resources.get_mut(&mem_id)
+        {
+            res.map_refs = res.map_refs.saturating_sub(1);
+            if res.refs.is_empty() && res.map_refs == 0 {
+                self.resources.remove(&mem_id);
+            }
+        }
+    }
+
+    /// The declared PDB attached to a resource id, if any (used at map time).
+    fn resource_pdb(&self, id: ResId) -> Option<Pdb> {
+        self.resources.get(&id).and_then(|r| r.pdb)
+    }
+
     /// Is `key` the client root of its OWN namespace? True only when `key` is a
     /// resource's origin handle AND that resource is a [`ObjectKind::Client`]. A dup
     /// *alias* that happens to reference a Client resource is NOT a root — freeing it
@@ -414,8 +651,10 @@ impl RmGraph {
         let Some(id) = self.handles.remove(&key) else { return };
         if let Some(res) = self.resources.get_mut(&id) {
             res.refs.remove(&key);
-            if res.refs.is_empty() {
-                // Last reference gone → the resource (and its PDB) is destroyed (no leak).
+            // A resource stays alive while any handle OR any live mapping references it
+            // (a mapped memory object survives its source handle's free — faithful RM
+            // refcounting). Destroyed only when the LAST reference of any kind goes.
+            if res.refs.is_empty() && res.map_refs == 0 {
                 self.resources.remove(&id);
             }
         }
@@ -478,6 +717,45 @@ impl RmGraph {
     /// All live resource payloads, ascending origin-key order (deterministic).
     pub fn nodes(&self) -> impl Iterator<Item = &RmNode> {
         self.resources.values().map(|r| &r.node)
+    }
+
+    /// All live DMA mappings, ascending `(vaspace, va)` order (deterministic). The
+    /// runtime consumes these to forward-populate the address table (RPC populate
+    /// source, co-equal with CE-PT-write capture — `mode2_address_table.md`).
+    pub fn mappings(&self) -> impl Iterator<Item = &Mapping> {
+        self.mappings.values()
+    }
+
+    /// The declared physical/backing base of the MEMORY resource whose **origin** is
+    /// `memory_key` (dup-aliases resolved), if declared. This is how a `MapMemoryDma`
+    /// resolves `memory → phys` for the address table. `None` if the handle is not a
+    /// memory resource, is unobserved, or declared no backing.
+    #[must_use]
+    pub fn backing_of(&self, memory_key: NodeKey) -> Option<u64> {
+        // Resolve by handle when possible; else fall back to the resource's stable
+        // origin key (a memory kept alive ONLY by a live mapping has no live handle).
+        let node = self
+            .origin_of(memory_key)
+            .or_else(|| self.resources.values().map(|r| &r.node).find(|n| n.key == memory_key))?;
+        matches!(node.kind, ObjectKind::Memory).then(|| node.facts.mem_phys).flatten()
+    }
+
+    /// Number of live mappings referencing the resource whose origin is `origin_key`
+    /// (the map-refcount — a memory object is kept alive by these as well as by its
+    /// handles). Zero if no such resource.
+    #[must_use]
+    pub fn map_ref_count(&self, origin_key: NodeKey) -> usize {
+        self.resources.values().find(|r| r.node.key == origin_key).map_or(0, |r| r.map_refs)
+    }
+
+    /// All live EVENT (os-event / notifier) nodes owned by `client` — completion
+    /// routing is graph-derived from these, not from an opaque id
+    /// (`execution_plane.md` §1). Ascending origin-key order (deterministic).
+    pub fn events_of(&self, client: HClient) -> impl Iterator<Item = &RmNode> {
+        self.resources
+            .values()
+            .map(|r| &r.node)
+            .filter(move |n| n.key.client == client && matches!(n.kind, ObjectKind::Event))
     }
 
     /// All dup edges as `(dst, src)` where `dst` is a non-origin handle and `src` is
