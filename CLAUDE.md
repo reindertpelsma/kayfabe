@@ -46,6 +46,11 @@ Fully implemented this milestone: `util`, `arch`, `vmm` (traits), `isolate` (tra
 `mmu`, `completion`, `core`, `fwd` (core slice), `mocks`. Skeletons: `abi`, `gsp`,
 `trace`. `tests/` — the VMM-agnostic conformance suite.
 
+Queued design (documented, not yet built): `docs/design/multi_gpu_and_mig.md` — the
+first-class routable-GPU-target axis + the honest MIG reality-check (datacenter-only,
+GI/CI + `nvidia-caps`, *not* a new `/dev/nvidiaX`; target abstraction left
+MIG-accommodating so MIG is a later adapter, not a refactor).
+
 ## Working notes
 
 - The C repo (`../nvidia-gpu-passthrough`) is the single-process **differential oracle**
