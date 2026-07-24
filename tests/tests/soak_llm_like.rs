@@ -166,7 +166,7 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
             }
 
             // --- launch: ring this proc's GR doorbell (its own channel/isolate) ---
-            let out = handle_doorbell(&mut gpu, tokens[idx]).expect("launch routes");
+            let out = handle_doorbell(&mut gpu, tokens[idx], &[]).expect("launch routes");
             assert_eq!(out.proc, pid, "doorbell routes to the owning proc");
 
             // --- completion observed for this proc (host sema advance) ---

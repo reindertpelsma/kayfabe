@@ -375,7 +375,7 @@ fn stress_multi_vcpu_interleaved_ops() {
                                 ce_vchid(i)
                             };
                             let mut g = gpu.write().unwrap();
-                            let out = handle_doorbell(&mut g, MockArch::token_for(vchid))
+                            let out = handle_doorbell(&mut g, MockArch::token_for(vchid), &[])
                                 .expect("doorbell routes");
                             assert_eq!(out.proc, pid, "doorbell demuxed to the wrong proc");
                             assert_eq!(

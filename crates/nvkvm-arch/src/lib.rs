@@ -42,7 +42,7 @@
 
 pub mod ids;
 
-use ids::{ClassId, ControlCmd, EngineClass, EngineKind, GpuVa, Pdb, VChid};
+use ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
 
 /// What kind of RM object a class ID denotes, as far as the *core* needs to know.
 ///
@@ -68,13 +68,19 @@ pub enum ObjectKind {
     CtxShare,
     /// A GPFIFO channel (parent = device or TSG). The exec boundary (vChid).
     Channel {
-        /// Engine class the channel targets (GR/CE/…).
-        engine: EngineClass,
+        /// The [`EngineKind`] the channel's *class* declares (its runlist target).
+        /// A GR channel classifies as [`EngineKind::GrCompute`] until an engine
+        /// object refines it (graphics/NVENC land as engine objects on a GR-class
+        /// channel; the projection derives the refinement — `execution_plane.md`
+        /// §2.1/§2.2).
+        engine: EngineKind,
     },
-    /// An engine object allocated on a channel (compute class, DMA-copy class, …).
+    /// An engine object allocated on a channel (compute class, DMA-copy class,
+    /// graphics class, NVENC session/encoder class, …). This is what makes its
+    /// channel a context of that [`EngineKind`].
     EngineObject {
-        /// Engine class the object targets.
-        engine: EngineClass,
+        /// The engine kind the object makes its channel's context.
+        engine: EngineKind,
     },
     /// A memory resource (`NV01_MEMORY_*`, `NV_MEMORY_VIRTUAL`, …): the thing a
     /// `MAP_MEMORY_DMA` maps into a VAS at an offset. First-class because the
@@ -324,9 +330,16 @@ pub trait Arch: Send + Sync {
 
     /// Which engine (if any) an *object* class denotes — the §2.1 [`EngineKind`]
     /// mapping (a compute/graphics/CE/NVENC object makes its channel that kind of
-    /// context). `None` for a class that is not an engine object. A real `impl` fills
-    /// this from the Axis-A class-ID tables; the core never names a class value.
-    fn engine_of_object(&self, class: ClassId) -> Option<EngineKind>;
+    /// context). `None` for a class that is not an engine object.
+    ///
+    /// Provided: derived from [`Arch::classify`] — there is ONE class table per
+    /// arch, so the engine mapping cannot drift from the graph's classification.
+    fn engine_of_object(&self, class: ClassId) -> Option<EngineKind> {
+        match self.classify(class) {
+            ObjectKind::EngineObject { engine } => Some(engine),
+            _ => None,
+        }
+    }
 
     /// Is this control a **Case-2** GSP-internal / ROUTE_TO_PHYSICAL control with no
     /// unprivileged userspace equivalent (`PROMOTE_CTX`, `GET_CTX_BUFFER_INFO`, …)?
@@ -350,7 +363,6 @@ nvkvm_util::assert_send_sync!(
     ids::GpuVa,
     ids::Gpa,
     ids::ControlCmd,
-    ids::EngineClass,
     ids::EngineKind,
     ObjectKind,
     DoorbellTarget,

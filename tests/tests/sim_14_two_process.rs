@@ -113,8 +113,8 @@ fn t14_doorbell_demux_routes_to_own_isolate() {
     // Ring A's GR channel and B's GR channel via their (distinct) vChid tokens.
     let a_token = MockArch::token_for(nvkvm_arch::ids::VChid(0x10));
     let b_token = MockArch::token_for(nvkvm_arch::ids::VChid(0x20));
-    let out_a = handle_doorbell(&mut gpu, a_token).expect("A's doorbell routes");
-    let out_b = handle_doorbell(&mut gpu, b_token).expect("B's doorbell routes");
+    let out_a = handle_doorbell(&mut gpu, a_token, &[]).expect("A's doorbell routes");
+    let out_b = handle_doorbell(&mut gpu, b_token, &[]).expect("B's doorbell routes");
 
     assert_ne!(out_a.proc, out_b.proc, "doorbells demux to different procs");
     assert!(out_a.scheduled_now && out_b.scheduled_now, "first submission schedules each");
@@ -130,7 +130,7 @@ fn t14_doorbell_demux_routes_to_own_isolate() {
     // Ringing A's doorbell again does NOT re-schedule (per-proc exec state is sticky
     // per channel, not a global one-shot that starves the other proc).
     drop(log);
-    let out_a2 = handle_doorbell(&mut gpu, a_token).expect("A rings again");
+    let out_a2 = handle_doorbell(&mut gpu, a_token, &[]).expect("A rings again");
     assert!(!out_a2.scheduled_now, "already scheduled");
 }
 
@@ -139,13 +139,13 @@ fn t14_malformed_and_unknown_tokens_fault_loudly() {
     let (mut gpu, _vmm, _rec) = two_process_gpu();
     // A token that does not decode (hostile bytes) — MalformedToken, never a guess.
     assert!(matches!(
-        handle_doorbell(&mut gpu, 0xdead_beef),
+        handle_doorbell(&mut gpu, 0xdead_beef, &[]),
         Err(nvkvm_fwd::FwdFault::MalformedToken { .. })
     ));
     // A well-formed token for a vChid no channel registered — UnknownVchid MISS=FAULT.
     let ghost = MockArch::token_for(nvkvm_arch::ids::VChid(0xfff));
     assert!(matches!(
-        handle_doorbell(&mut gpu, ghost),
+        handle_doorbell(&mut gpu, ghost, &[]),
         Err(nvkvm_fwd::FwdFault::UnknownVchid { .. })
     ));
 }

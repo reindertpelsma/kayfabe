@@ -16,7 +16,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nvkvm_arch::ids::{EngineClass, HClient, HObject, Pdb, VChid};
+use nvkvm_arch::ids::{EngineKind, HClient, HObject, Pdb, VChid};
 use nvkvm_arch::{Arch, ObjectKind};
 
 use crate::ProcAnchor;
@@ -33,8 +33,14 @@ pub struct ChannelFacts {
     pub vas_origin: Option<NodeKey>,
     /// The PDB of that VASpace, once declared via `SetPageDir`.
     pub vas_pdb: Option<Pdb>,
-    /// Engine class as classified from the channel's class id.
-    pub engine: EngineClass,
+    /// ★ The fine [`EngineKind`] of this channel's context (`execution_plane.md`
+    /// §2.1/§2.2): the channel *class*'s declared kind, **refined by the engine
+    /// object allocated on it** (an NVENC session on a GR-class channel makes it an
+    /// `NvEnc` context — distinguishable AT the channel, so routing and
+    /// completion-arm selection are exact). Graph-derived, hence order/replay
+    /// independent: the refinement is a pure function of the graph, not of when the
+    /// engine-object alloc arrived.
+    pub engine: EngineKind,
 }
 
 /// One derived process boundary (a dup-connected component of clients).
@@ -201,6 +207,21 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
     let mut by_pdb: BTreeMap<Pdb, (ProcAnchor, NodeKey)> = BTreeMap::new();
     let mut by_vchid: BTreeMap<VChid, (ProcAnchor, NodeKey)> = BTreeMap::new();
 
+    // Pre-pass: the engine-object refinement (channel origin → EngineKind). An
+    // engine object's parent is its channel (same namespace, dup-aliases resolved).
+    // `nodes()` iterates ascending origin-key order, so with several engine objects
+    // on one channel the smallest-key one wins — deterministic and order-independent
+    // (the real protocol allocates one engine object per channel context).
+    let mut engine_refine: BTreeMap<NodeKey, EngineKind> = BTreeMap::new();
+    for node in g.nodes() {
+        if let ObjectKind::EngineObject { engine } = node.kind
+            && let Some(chan) = g.origin_of(NodeKey::new(node.key.client, node.parent))
+            && matches!(chan.kind, ObjectKind::Channel { .. })
+        {
+            engine_refine.entry(chan.key).or_insert(engine);
+        }
+    }
+
     for node in g.nodes() {
         let anchor = ProcAnchor(uf.find(node.key.client));
         match node.kind {
@@ -224,7 +245,8 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
                     vchid,
                     vas_origin: vas.map(|v| v.key),
                     vas_pdb: vas.and_then(|v| g.pdb_of(v.key)),
-                    engine,
+                    // The engine-object refinement wins over the channel-class default.
+                    engine: engine_refine.get(&node.key).copied().unwrap_or(engine),
                 };
                 if let Some(&(_, prev)) = by_vchid.get(&vchid)
                     && prev != node.key

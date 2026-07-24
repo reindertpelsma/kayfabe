@@ -9,11 +9,16 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
-use nvkvm_arch::ids::{ClassId, EngineKind, HClient, Pdb, VChid};
+use nvkvm_arch::ids::{ClassId, EngineKind, GpuVa, HClient, HObject, Pdb, VChid};
 use nvkvm_arch::Arch;
+use nvkvm_completion::{CompletionError, MAX_FENCE_JUMP, OsEventRef};
 use nvkvm_core::gpu::Gpu;
 use nvkvm_core::gpa::GpaSpace;
-use nvkvm_fwd::{ControlRoute, FwdFault, forward_engine_object, route_control};
+use nvkvm_core::rmgraph::{AllocFacts, RmEvent};
+use nvkvm_fwd::{
+    CompletionArm, ControlRoute, FwdFault, arm_fence, completion_arm, fence_observed,
+    forward_engine_object, publish_backing, route_control,
+};
 use nvkvm_mocks::{MockArch, MockIsolateFactory, RmVerb, SharedRecorder, mock_classes as mc, mock_ctrl};
 use nvkvm_tests::{Scenario, identical_handles};
 
@@ -86,6 +91,85 @@ fn case1_second_forward_reuses_channel() {
     assert!(first.materialized_channel);
     let second = forward_engine_object(&mut gpu, GR_VCHID, mc::COMPUTE, &[]).unwrap();
     assert!(!second.materialized_channel, "host channel already materialized");
+}
+
+/// ★ Engine-object forward idempotency (§2.2: "re-sends are idempotent"): a REPLAYED
+/// Case-1 engine-object alloc — same channel, same declared class, re-sent any number
+/// of times (the protocol is order-/repeat-independent) — yields exactly ONE host
+/// engine object. The replay resolves from the channel's idempotency table and
+/// returns the ORIGINAL host handle; the host backend never sees a duplicate alloc
+/// (the same retried-RPC discipline the graph applies to alloc/DUP replay).
+#[test]
+fn replayed_engine_object_alloc_forwards_exactly_one_host_object() {
+    let (mut gpu, recorder) = compute_gpu();
+
+    let first = forward_engine_object(&mut gpu, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+    assert!(!first.reused, "first forward is the real alloc");
+    for _ in 0..3 {
+        let replay = forward_engine_object(&mut gpu, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+        assert!(replay.reused, "replay resolves from the idempotency table");
+        assert_eq!(replay.host_object, first.host_object, "the ORIGINAL host object");
+        assert_eq!(replay.engine, EngineKind::GrCompute);
+    }
+
+    // The host saw EXACTLY ONE engine-object alloc — no duplicate host object.
+    let log = recorder.lock().unwrap();
+    let engine_allocs = log
+        .log
+        .iter()
+        .filter(|(_, v)| matches!(v, RmVerb::AllocEngineObject { .. }))
+        .count();
+    assert_eq!(engine_allocs, 1, "a replayed alloc must NOT create a duplicate host object");
+
+    // A DIFFERENT class on the same channel is a genuinely new object, not a replay.
+    drop(log);
+    let ce = forward_engine_object(&mut gpu, GR_VCHID, mc::DMA_COPY, &[]).unwrap();
+    assert!(!ce.reused);
+    assert_ne!(ce.host_object, first.host_object);
+}
+
+/// ★ The fine `EngineKind` lands ON the `Channel` (§2.2 "what the core tracks"),
+/// graph-derived: the channel class's declared kind, refined by the engine object
+/// allocated on it — so NVENC vs GR-compute is distinguishable at the channel
+/// (routing + completion-arm selection), not just at parse. Order-independent and
+/// replay-tolerant like everything graph-derived.
+#[test]
+fn engine_kind_lands_on_the_channel_via_the_graph() {
+    let (mut gpu, _rec) = compute_gpu();
+    let kind_of = |gpu: &Gpu, vchid: VChid| {
+        let (pid, cid) = gpu.by_vchid[&vchid];
+        gpu.procs[&pid].channels[&cid].engine
+    };
+
+    // Channel-class defaults: GR-class channel = GrCompute, CE-class channel = Ce.
+    assert_eq!(kind_of(&gpu, GR_VCHID), EngineKind::GrCompute);
+    assert_eq!(kind_of(&gpu, CE_VCHID), EngineKind::Ce);
+
+    // An NVENC session object allocated ON the GR channel refines the channel's
+    // context to NvEnc — the distinguishability the completion tie-in keys on.
+    let nvenc_alloc = RmEvent::Alloc {
+        client: CLIENT,
+        parent: HObject(0x5c00_0019), // the GR channel handle
+        handle: HObject(0x5c00_0030),
+        class: mc::NVENC,
+        facts: AllocFacts::default(),
+    };
+    gpu.apply(nvenc_alloc).expect("engine-object alloc applies");
+    assert_eq!(kind_of(&gpu, GR_VCHID), EngineKind::NvEnc, "engine object refined the channel");
+    assert_eq!(kind_of(&gpu, CE_VCHID), EngineKind::Ce, "the other channel is untouched");
+
+    // Replay tolerance: the identical alloc re-sent changes nothing.
+    gpu.apply(nvenc_alloc).expect("replayed alloc is idempotent");
+    assert_eq!(kind_of(&gpu, GR_VCHID), EngineKind::NvEnc);
+
+    // The refinement is graph-derived, so it SURVIVES unrelated re-derivations
+    // (any later apply re-syncs channels from the projection).
+    let mut s2 = Scenario::new();
+    s2.compute_process(HClient(0xBB), Pdb(0x3405_000), identical_handles(0x20, 0x21));
+    for ev in s2.events {
+        gpu.apply(ev).expect("second proc applies");
+    }
+    assert_eq!(kind_of(&gpu, GR_VCHID), EngineKind::NvEnc, "refinement survives re-derivation");
 }
 
 /// Case-2 controls are ACK-ONLY: never reach the host backend (replaying an
@@ -191,4 +275,115 @@ fn host_verb_surface_does_not_grow_per_engine() {
     let r = reference.unwrap();
     assert!(r.contains("AllocEngineObject"), "every engine forwards via the one engine verb");
     assert!(!r.contains("Alloc"), "no engine falls back to a generic raw alloc");
+}
+
+// =================================================================================
+// Completion pattern (e) — the mapped-fence arm (`execution_plane.md` §1.2/§2.4;
+// NVENC's fence-not-event shape, `nvenc_101`). Arm selection keys on the CHANNEL's
+// EngineKind; firing is value-observation, never event delivery.
+// =================================================================================
+
+const FENCE_VA: GpuVa = GpuVa(0x2_0060_0000);
+
+/// Build a compute proc whose GR channel is refined to an NVENC context (session
+/// object on the channel, through the graph) with a published fence page.
+fn nvenc_gpu() -> (Gpu, nvkvm_core::ProcId, nvkvm_core::ChanId) {
+    let (mut gpu, _rec) = compute_gpu();
+    gpu.apply(RmEvent::Alloc {
+        client: CLIENT,
+        parent: HObject(0x5c00_0019), // the GR channel handle
+        handle: HObject(0x5c00_0030),
+        class: mc::NVENC,
+        facts: AllocFacts::default(),
+    })
+    .expect("NVENC session allocs on the channel");
+    let (pid, cid) = gpu.by_vchid[&GR_VCHID];
+    assert_eq!(gpu.procs[&pid].channels[&cid].engine, EngineKind::NvEnc);
+    publish_backing(gpu.procs.get_mut(&pid).unwrap(), PDB, FENCE_VA, 0x1000)
+        .expect("fence page publishes into the channel's own host VAS");
+    (gpu, pid, cid)
+}
+
+/// ★ Pattern (e), end to end: an NVENC-shaped channel arms a mapped-fence
+/// completion; it fires when the observed value reaches/passes the target — and it
+/// is DISTINCT from the event-delivery path: nothing enters the completion queue,
+/// nothing posts, no SWGEN0 (the guest worker reads the mapped value directly,
+/// `nvenc_101`).
+#[test]
+fn nvenc_mapped_fence_arms_and_fires_distinct_from_event_delivery() {
+    let (mut gpu, pid, cid) = nvenc_gpu();
+
+    // Arm at current=7, target=9 (the encoder will advance the fence to 9).
+    assert_eq!(arm_fence(&mut gpu, pid, cid, FENCE_VA, 7, 9, OsEventRef(0xF0)), Ok(None));
+
+    // Below target: not fired. At target: fired, exactly once.
+    assert_eq!(fence_observed(&mut gpu, PDB, FENCE_VA, 8), Ok(None));
+    assert_eq!(fence_observed(&mut gpu, PDB, FENCE_VA, 9), Ok(Some(OsEventRef(0xF0))));
+    assert_eq!(fence_observed(&mut gpu, PDB, FENCE_VA, 10), Ok(None), "fired exactly once");
+
+    // Distinct from the event path: the queue observed NOTHING, nothing to post.
+    assert!(
+        !gpu.procs[&pid].completion.has_outstanding(),
+        "a fired fence never enters the completion queue (fence-not-event)"
+    );
+    assert!(gpu.pump_completions().is_none(), "nothing rides the GSP/SWGEN0 path");
+}
+
+/// The #12 wrap guard on the arm: a fence sequence crossing the u32 boundary fires
+/// correctly, and a BACKWARDS (stale/foreign) value is a loud refusal that never
+/// counts as completion progress.
+#[test]
+fn nvenc_fence_wrap_guard_fires_across_wrap_and_refuses_backwards_jumps() {
+    let (mut gpu, pid, cid) = nvenc_gpu();
+
+    // Arm just below the u32 boundary; the target is past the wrap.
+    assert_eq!(
+        arm_fence(&mut gpu, pid, cid, FENCE_VA, u32::MAX - 1, 2, OsEventRef(0xF1)),
+        Ok(None)
+    );
+    // A stale/backwards value (a huge forward step under wrap arithmetic) is LOUD.
+    let stale = u32::MAX - 1 - (MAX_FENCE_JUMP as u32 + 1);
+    assert_eq!(
+        fence_observed(&mut gpu, PDB, FENCE_VA, stale),
+        Err(FwdFault::Completion(CompletionError::FenceJump {
+            last: u32::MAX - 1,
+            value: stale
+        })),
+        "the #12 backwards-jump class is refused, never treated as completion"
+    );
+    // The genuine advance across the wrap still fires.
+    assert_eq!(fence_observed(&mut gpu, PDB, FENCE_VA, 1), Ok(None), "before target");
+    assert_eq!(fence_observed(&mut gpu, PDB, FENCE_VA, 2), Ok(Some(OsEventRef(0xF1))));
+}
+
+/// Arm selection is exact AT the channel: a GR-compute or CE channel (shared-sema
+/// arm) REFUSES a mapped-fence arm — the NVENC-vs-compute distinction the coarse
+/// `EngineClass` could not express. And an unmapped fence address is a loud MISS
+/// even on an NVENC channel (the fence must live in the channel's own Vas).
+#[test]
+fn fence_arm_selection_is_exact_at_the_channel() {
+    // Selection table: only NVENC rides the fence arm (NVDEC = honest gap, sema).
+    assert_eq!(completion_arm(EngineKind::NvEnc), CompletionArm::MappedFence);
+    for k in [EngineKind::GrCompute, EngineKind::GrGraphics, EngineKind::Ce, EngineKind::NvDec] {
+        assert_eq!(completion_arm(k), CompletionArm::SharedSema, "{k:?} is not fence-signalled");
+    }
+
+    // A compute-shaped channel refuses the fence arm loudly.
+    let (mut gpu, _rec) = compute_gpu();
+    let (pid, cid) = gpu.by_vchid[&GR_VCHID];
+    publish_backing(gpu.procs.get_mut(&pid).unwrap(), PDB, FENCE_VA, 0x1000).unwrap();
+    assert!(
+        matches!(
+            arm_fence(&mut gpu, pid, cid, FENCE_VA, 0, 1, OsEventRef(0xF2)),
+            Err(FwdFault::WrongArm { engine: EngineKind::GrCompute, .. })
+        ),
+        "arming a fence on a sema-signalled channel is a WrongArm fault"
+    );
+
+    // An NVENC channel with an UNMAPPED fence address is a loud MISS (never armed).
+    let (mut gpu, pid, cid) = nvenc_gpu();
+    assert!(matches!(
+        arm_fence(&mut gpu, pid, cid, GpuVa(0xdead_0000), 0, 1, OsEventRef(0xF3)),
+        Err(FwdFault::Address(_))
+    ));
 }

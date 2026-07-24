@@ -24,7 +24,7 @@ use std::ops::Range;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use nvkvm_arch::ids::{ClassId, ControlCmd, EngineClass, EngineKind, GpuVa, Pdb, VChid};
+use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
 use nvkvm_arch::{
     Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, ObjectKind, PageSize, PteDecode,
     PushMethod, PushRange, PushbufferAbi, UserdModel,
@@ -119,10 +119,14 @@ impl Arch for MockArch {
             c::VASPACE => ObjectKind::VaSpace,
             c::TSG => ObjectKind::Tsg,
             c::CTXSHARE => ObjectKind::CtxShare,
-            c::CHANNEL_GR => ObjectKind::Channel { engine: EngineClass::Gr },
-            c::CHANNEL_CE => ObjectKind::Channel { engine: EngineClass::Ce },
-            c::COMPUTE => ObjectKind::EngineObject { engine: EngineClass::Gr },
-            c::DMA_COPY => ObjectKind::EngineObject { engine: EngineClass::Ce },
+            // A GR-class channel is GrCompute until an engine object refines it
+            // (graphics/NVENC arrive as engine objects on a GR channel).
+            c::CHANNEL_GR => ObjectKind::Channel { engine: EngineKind::GrCompute },
+            c::CHANNEL_CE => ObjectKind::Channel { engine: EngineKind::Ce },
+            c::COMPUTE => ObjectKind::EngineObject { engine: EngineKind::GrCompute },
+            c::DMA_COPY => ObjectKind::EngineObject { engine: EngineKind::Ce },
+            c::GRAPHICS => ObjectKind::EngineObject { engine: EngineKind::GrGraphics },
+            c::NVENC => ObjectKind::EngineObject { engine: EngineKind::NvEnc },
             c::MEMORY => ObjectKind::Memory,
             c::EVENT => ObjectKind::Event,
             _ => ObjectKind::Unknown,
@@ -149,16 +153,8 @@ impl Arch for MockArch {
         &self.userd
     }
 
-    fn engine_of_object(&self, class: ClassId) -> Option<EngineKind> {
-        use mock_classes as c;
-        match class {
-            c::COMPUTE => Some(EngineKind::GrCompute),
-            c::GRAPHICS => Some(EngineKind::GrGraphics),
-            c::DMA_COPY => Some(EngineKind::Ce),
-            c::NVENC => Some(EngineKind::NvEnc),
-            _ => None,
-        }
-    }
+    // `engine_of_object` is the provided derivation from `classify` — one class
+    // table, so the engine mapping cannot drift from the graph's classification.
 
     fn is_case2_control(&self, cmd: ControlCmd) -> bool {
         // Mockingbird's Case-2 (GSP-internal, ack-only) control set.

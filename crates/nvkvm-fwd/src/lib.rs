@@ -12,10 +12,13 @@
 //!   #14) with a fresh GPA-arena allocation + a host mapping in *that Vas's own host
 //!   VAS*. This function IS the #14 fix in code: two procs' identical guest VAs run
 //!   through disjoint arenas and disjoint host VASes by construction.
-//! - [`handle_doorbell`] — the exec-plane demux: `Arch::decode_doorbell` → vChid →
-//!   `by_vchid` → `(Proc, Channel)` → materialize/schedule that channel on **its
-//!   proc's own** exec plane (nothing one-shot, nothing scalar — crack ⚠4) → ring its
-//!   host token on **its proc's own** isolate.
+//! - [`handle_doorbell`] — **the ONE ring path** (there is no other function that
+//!   reaches `RmBackend::ring_doorbell`): `Arch::decode_doorbell` → vChid →
+//!   `by_vchid` → `(Proc, Channel)` → **the #14 ring-gate** (the channel's Vas
+//!   working set must be host-published — structural, not caller discipline) →
+//!   materialize/schedule that channel on **its proc's own** exec plane (nothing
+//!   one-shot, nothing scalar — crack ⚠4) → ring its host token on **its proc's
+//!   own** isolate.
 //! - [`deliver_completions`] / [`poll_completions`] — glue from the core's completion
 //!   policy to `Vmm::raise_irq` (the SWGEN0 edge; transport encoding is `nvkvm-gsp`'s
 //!   job once it ports).
@@ -40,6 +43,7 @@
 use nvkvm_arch::Aperture;
 use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
 use nvkvm_completion::{CompletionError, OsEventRef, PostBatch};
+use nvkvm_mmu::AddressTable;
 use nvkvm_core::gpu::{Channel, Gpu, Proc, Vas};
 use nvkvm_core::{ChanId, ProcId};
 use nvkvm_isolate::{HostHandle, RmError};
@@ -82,6 +86,16 @@ pub enum FwdFault {
     /// A class the guest tried to alloc as an engine object is not one this arch
     /// recognizes as an engine — MISS=FAULT (never guessed into a GR/CE object).
     NotAnEngine(ClassId),
+    /// A completion-arm operation was issued on a channel whose [`EngineKind`]
+    /// signals through a *different* arm (e.g. arming a mapped fence on a
+    /// GR-compute channel, whose completion is the shared-sema arm). The channel's
+    /// engine kind selects the arm — exact, never guessed (§2.4's tie-in).
+    WrongArm {
+        /// The channel the operation targeted.
+        chan: ChanId,
+        /// Its engine kind (which selects a different arm).
+        engine: EngineKind,
+    },
     /// The present/display sink refused a GR-graphics scanout.
     Present(PresentError),
     /// The owning proc's completion queue is full — a hostile guest triggered more
@@ -184,8 +198,40 @@ pub struct DoorbellOutcome {
     pub scheduled_now: bool,
 }
 
-/// The exec-plane demux: one guest doorbell write → the owning proc's channel rung
-/// on the owning proc's isolate.
+/// Check every VA in `working_set` resolves **host-published** in `table` — the
+/// #14 gate condition. Bound-but-unpublished (`host_va = None`, the exact #14
+/// EXECUTION fault: the shadow had it, the host VAS did not) and unbound are both
+/// loud faults, never a guess (`execution_plane.md` §2.4).
+fn gate_vas(
+    table: &AddressTable,
+    pdb: Pdb,
+    working_set: impl IntoIterator<Item = GpuVa>,
+) -> Result<(), FwdFault> {
+    for va in working_set {
+        let (binding, _off) = table.resolve(pdb, va)?; // MISS=FAULT
+        if binding.host_va.is_none() {
+            return Err(FwdFault::Address(AddressFault::Miss { pdb, va }));
+        }
+    }
+    Ok(())
+}
+
+/// ★ THE ONE ring path — the exec-plane demux, **structurally gated** (#14,
+/// `execution_plane.md` §2.4; the C's "one exec path" refactor-debt lesson): one
+/// guest doorbell write → gate → the owning proc's channel rung on the owning
+/// proc's isolate. No ungated sibling exists; nothing else in the workspace calls
+/// `RmBackend::ring_doorbell`.
+///
+/// `working_set` is the set of VAs this submission's work touches, as recovered by
+/// the caller (launch descriptors / submit parse). The gate is **structural, not
+/// caller discipline**: this is the ONLY function that reaches
+/// `RmBackend::ring_doorbell`, and it ALWAYS runs the gate before any host op — a
+/// caller cannot choose an ungated door because none exists (the removed `ring_gated`
+/// sibling was the debt). A declared VA that is unbound or bound-but-unpublished
+/// (`host_va = None` — the emulator's shadow had it, the channel's OWN host VAS did
+/// not) is a loud fault BEFORE the channel is even materialized, never a cross-proc
+/// content-pick. (An empty `working_set` is an honest "this submission touches no
+/// tracked VA" — there is nothing to fault on, and no host state is at risk.)
 ///
 /// Materialization is lazy and **per-proc**: the first doorbell on a channel
 /// allocates + schedules its host channel in its Vas's host VAS through its own
@@ -193,7 +239,11 @@ pub struct DoorbellOutcome {
 /// immediate_doorbell`), and the "already scheduled" state lives on the proc's
 /// [`nvkvm_core::gpu::ExecPlane`] — there is no global one-shot to leave a second
 /// proc's channel off-runlist (#12's CTX2 bug, crack ⚠4).
-pub fn handle_doorbell(gpu: &mut Gpu, token: u64) -> Result<DoorbellOutcome, FwdFault> {
+pub fn handle_doorbell(
+    gpu: &mut Gpu,
+    token: u64,
+    working_set: &[GpuVa],
+) -> Result<DoorbellOutcome, FwdFault> {
     let target = gpu
         .arch
         .decode_doorbell(token)
@@ -206,13 +256,24 @@ pub fn handle_doorbell(gpu: &mut Gpu, token: u64) -> Result<DoorbellOutcome, Fwd
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));
     }
-    proc.poll.last_token = Some(token);
 
-    let Proc { vases, channels, exec, isolate, .. } = proc;
+    let Proc { vases, channels, exec, isolate, poll, .. } = proc;
     let chan: &mut Channel = channels.get_mut(&cid).ok_or(FwdFault::UnknownVchid {
         vchid: target.vchid,
     })?;
     let rm = isolate.rm();
+
+    // ---- The #14 ring-gate, BEFORE any host op (the ONE ring path always runs it). ----
+    match chan.vas {
+        Some(pdb) => {
+            let vas = vases.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+            gate_vas(&vas.table, pdb, working_set.iter().copied())?;
+        }
+        // No declared VAS (GSP-managed, system-routed): there is no address space to
+        // have published a working set into — only an empty declaration is gateable.
+        None if working_set.is_empty() => {}
+        None => return Err(FwdFault::NoVas(cid)),
+    }
 
     // Lazy per-proc materialization.
     if chan.host_channel.is_none() {
@@ -230,6 +291,7 @@ pub fn handle_doorbell(gpu: &mut Gpu, token: u64) -> Result<DoorbellOutcome, Fwd
         scheduled_now = true;
     }
 
+    poll.last_token = Some(token);
     let host_token = chan.host_token.expect("materialized above");
     rm.ring_doorbell(host_token)?;
     Ok(DoorbellOutcome { proc: pid, chan: cid, host_token, scheduled_now })
@@ -285,6 +347,11 @@ pub struct EngineObjectForwarded {
     /// True if this forward materialized the host channel first (idempotent re-sends
     /// do not re-materialize).
     pub materialized_channel: bool,
+    /// True if this forward was a **replay** resolved from the channel's
+    /// idempotency table ([`Channel::host_engine_objects`]) — no host alloc was
+    /// issued; `host_object` is the ORIGINAL host object (§2.2: re-sends are
+    /// idempotent, the same discipline as the graph's alloc/DUP replay).
+    pub reused: bool,
 }
 
 /// **Case 1**: forward an engine-object alloc (compute / graphics / CE / NVENC) on the
@@ -295,6 +362,12 @@ pub struct EngineObjectForwarded {
 /// `class` is the guest's engine-object class; the arch maps it to an [`EngineKind`]
 /// (a class the arch does not recognize as an engine object is a loud `NotAnEngine`).
 /// `params` is the ABI-lowered alloc blob (Axis A). MISS=FAULT throughout.
+///
+/// **Idempotent under replay** (§2.2; the protocol is order-/repeat-independent): a
+/// re-sent alloc for a class already forwarded on this channel resolves from
+/// [`Channel::host_engine_objects`] and returns the ORIGINAL host object — the host
+/// never sees a duplicate engine-object alloc (the guest-retry hazard the graph
+/// already covers for alloc/DUP, extended to the host-forward plane).
 pub fn forward_engine_object(
     gpu: &mut Gpu,
     vchid: VChid,
@@ -327,8 +400,14 @@ pub fn forward_engine_object(
         chan.host_token = Some(htok);
     }
     let hchan = chan.host_channel.expect("materialized above");
+    // Replay resolves from the idempotency table — exactly one host object per
+    // declared (channel, class), no matter how often the guest re-sends.
+    if let Some(&host_object) = chan.host_engine_objects.get(&class) {
+        return Ok(EngineObjectForwarded { engine, host_object, materialized_channel, reused: true });
+    }
     let host_object = rm.alloc_engine_object(hchan, class, params)?;
-    Ok(EngineObjectForwarded { engine, host_object, materialized_channel })
+    chan.host_engine_objects.insert(class, host_object);
+    Ok(EngineObjectForwarded { engine, host_object, materialized_channel, reused: false })
 }
 
 /// Route a `GSP_RM_CONTROL` through the Case-1/Case-2 split. A **Case-2** control is
@@ -526,15 +605,22 @@ pub fn parse_pushbuffer(
 // channel's doorbell rings, its working set MUST be forward-populated into that
 // channel's Vas's own host VAS; an unpublished VA at ring time is a LOUD fault, never
 // a cross-proc content-pick (the exact confused-deputy designed out).
+//
+// The gate is STRUCTURAL: [`handle_doorbell`] is the ONE ring path (nothing else in
+// the workspace reaches `RmBackend::ring_doorbell`) and it gates the channel's sticky
+// `Vas::working_set` on every ring — there is no ungated sibling to bypass (the C's
+// "one exec path" refactor-debt lesson, closed by construction). `gate_working_set`
+// below is the read-only QUERY form of the same predicate; it cannot ring anything.
 // =================================================================================
 
-/// Ensure every VA in `working_set` is published into channel `cid`'s Vas's own host
-/// VAS before the doorbell may ring. A VA with no host publication (`host_va = None`)
-/// is a loud [`FwdFault`], never guessed — the #14 ring-gate.
+/// Read-only query: would `working_set` pass channel `cid`'s ring-gate right now
+/// (every VA published into that channel's Vas's own host VAS)? A VA with no host
+/// publication (`host_va = None`) is a loud [`FwdFault`], never guessed.
 ///
 /// This is the load-bearing per-`Vas` publication check: two procs' identical guest
 /// VAs each resolve in their OWN Vas (keyed by PDB), so the gate passes for both only
-/// because each published into its OWN host VAS (distinct `HostHandle`s).
+/// because each published into its OWN host VAS (distinct `HostHandle`s). The
+/// ENFORCING form lives inside [`handle_doorbell`] — this query cannot ring.
 pub fn gate_working_set(
     gpu: &Gpu,
     pid: ProcId,
@@ -545,32 +631,96 @@ pub fn gate_working_set(
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
     let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
     let vas = proc.vases.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
-    for &va in working_set {
-        let (binding, _off) = vas.table.resolve(pdb, va)?; // MISS=FAULT
-        if binding.host_va.is_none() {
-            // Bound but not published into a host VAS — the exact #14 EXECUTION fault.
-            return Err(FwdFault::Address(AddressFault::Miss { pdb, va }));
-        }
-    }
-    Ok(())
+    gate_vas(&vas.table, pdb, working_set.iter().copied())
 }
 
-/// Ring channel `cid`'s doorbell only after its `working_set` is gated (published into
-/// its OWN host VAS). This composes [`gate_working_set`] with the host doorbell ring
-/// so the #14 EXECUTION fault is impossible by construction: a channel whose working
-/// set is unpublished cannot ring.
-pub fn ring_gated(
+// =================================================================================
+// Completion pattern (e) — the mapped-fence arm (`execution_plane.md` §1.2/§2.4;
+// NVENC's fence-not-event shape, bench-proven in `nvenc_101`: the worker reads a
+// GPU-written mapped fence with NO syscall). The channel's EngineKind selects the
+// arm — exact at the Channel, never guessed from a parse. Distinct from the
+// event-delivery path by construction: a fired fence never enters a
+// CompletionQueue, never rides a DeliveryPlane batch, never raises SWGEN0.
+// =================================================================================
+
+/// Which completion arm a channel's [`EngineKind`] signals through (§2.4's
+/// per-engine tie-in — the ONE place engine variety touches the completion plane).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompletionArm {
+    /// Patterns (a)/(c): a semaphore write on a shared/published page (GR-compute,
+    /// GR-graphics, CE) — passthrough-polled or parser-observed.
+    SharedSema,
+    /// Pattern (e): a mapped coherent fence the GPU writes and the guest worker
+    /// reads with no syscall (NVENC).
+    MappedFence,
+}
+
+/// The arm selection, keyed on the channel's [`EngineKind`] (which the `Channel`
+/// carries — NVENC vs GR-compute is distinguishable at the channel, not just at
+/// parse). NVDEC's completion shape is unproven (the declared honest gap): it stays
+/// on the default shared-sema arm until bench-proven, never guessed onto the fence.
+#[must_use]
+pub fn completion_arm(engine: EngineKind) -> CompletionArm {
+    match engine {
+        EngineKind::NvEnc => CompletionArm::MappedFence,
+        _ => CompletionArm::SharedSema,
+    }
+}
+
+/// Arm a mapped-fence completion (pattern **e**) on channel `cid`: fire once the
+/// fence at `addr` (in the channel's Vas) is observed at/after `target`, starting
+/// from `current`. Returns `Ok(Some(event))` if the target is already reached at
+/// arm time.
+///
+/// Discipline, all loud (MISS=FAULT):
+/// - the channel's engine must select the fence arm ([`completion_arm`]) — arming
+///   a fence on a sema-signalling channel is a [`FwdFault::WrongArm`];
+/// - `addr` must be **mapped and host-published** in the channel's OWN Vas (the
+///   host GPU writes it; an unpublished fence could never advance) — the same
+///   per-`Vas` publication rule as the ring-gate;
+/// - re-arms follow the retried-RPC discipline (identical = idempotent,
+///   conflicting = loud) and the armed table is capacity-bounded (boundary-1);
+/// - firing respects the #12 jump guard (`MAX_FENCE_JUMP`).
+pub fn arm_fence(
     gpu: &mut Gpu,
     pid: ProcId,
     cid: ChanId,
-    working_set: &[GpuVa],
-) -> Result<u64, FwdFault> {
-    gate_working_set(gpu, pid, cid, working_set)?;
+    addr: GpuVa,
+    current: u32,
+    target: u32,
+    event: OsEventRef,
+) -> Result<Option<OsEventRef>, FwdFault> {
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(pid));
+    }
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
-    let token = chan.host_token.ok_or(FwdFault::NoVas(cid))?;
-    proc.isolate.rm().ring_doorbell(token)?;
-    Ok(token)
+    if completion_arm(chan.engine) != CompletionArm::MappedFence {
+        return Err(FwdFault::WrongArm { chan: cid, engine: chan.engine });
+    }
+    let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
+    let vas = proc.vases.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+    // The fence must be a mapped, host-published address in this channel's OWN Vas.
+    gate_vas(&vas.table, pdb, [addr])?;
+    Ok(proc.fences.arm((pdb.0, addr.0), current, target, event)?)
+}
+
+/// A host write to the fence at `(pdb, addr)` was observed carrying `value` (the
+/// adapter feeds this from its fence-page observation point). Routes by PDB — the
+/// data-plane identity — to the owning proc's fence arms; fires at/after target
+/// under the #12 jump guard. A value on an un-armed fence is inert (`Ok(None)`).
+pub fn fence_observed(
+    gpu: &mut Gpu,
+    pdb: Pdb,
+    addr: GpuVa,
+    value: u32,
+) -> Result<Option<OsEventRef>, FwdFault> {
+    let pid = *gpu.by_pdb.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(pid));
+    }
+    Ok(proc.fences.observe((pdb.0, addr.0), value)?)
 }
 
 // =================================================================================
@@ -608,6 +758,7 @@ nvkvm_util::assert_send_sync!(
     Published,
     DoorbellOutcome,
     ControlRoute,
+    CompletionArm,
     EngineObjectForwarded,
     PushbufferOutcome,
 );

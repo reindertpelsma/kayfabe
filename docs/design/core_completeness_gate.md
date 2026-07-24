@@ -98,29 +98,41 @@ pins 20 of 25 incident classes as impossible-or-tested. Two procs with identical
 and identical handles is the single best-covered scenario in the codebase — the #14
 class cannot silently recur.
 
-### 2.1 Must-close before descending (core logic genuinely missing — all small)
+### 2.1 Must-close before descending — ✅ ALL THREE CLOSED (see below)
 
-1. **Engine-object forward idempotency + `EngineKind` on `Channel`** (§1.3 lifecycle
-   row). `execution_plane.md` §2.2 names both as core-tracked state; neither exists.
-   Today a re-sent Case-1 alloc allocates a duplicate host engine object (a real
-   guest-retry hazard — retried-RPC tolerance is a stated invariant everywhere else,
-   `wo_retried_duplicate_events_are_idempotent`), and the channel never learns which
-   `EngineKind` its context is (needed by the §2.4 completion tie-in's per-engine
-   arm). Fix ≈ one `Option<(EngineKind, HostHandle)>` field + a test.
-2. **One gated ring path.** `handle_doorbell` must not be able to ring an
-   ungated channel while `ring_gated` exists as the safe sibling — the #14
-   ring-gate must be structural, not caller-discipline (the exact "one exec path"
-   debt the C accumulated). Fold the gate into the single doorbell path (empty
-   working-set = trivially gated for pre-publication channels, loud otherwise).
-3. **The mapped-fence completion arm (pattern e).** NVENC is in the 20-app surface
-   and its completion shape is *proven different* (`nvenc_101`: the worker reads a
-   GPU-written mapped fence with NO syscall; the C initially mis-diagnosed this as
-   an event gap and paid for it). The core needs the small arm §2.4 specifies —
-   "observe when the mapped value advances" — driven by an `Arch`/`RmBackend` fact,
-   plus one mock test. Without it, NVENC's completion semantics would be
-   *discovered* at the adapter layer, which is precisely what the bar forbids.
+**Status update (post-audit):** the three must-close items are now landed and tested
+(96/96 workspace tests). Details:
 
-None of these is a redesign; all are hours-scale against existing seams.
+1. **Engine-object forward idempotency + fine `EngineKind` on `Channel`** — ✅ DONE.
+   The coarse `EngineClass{Gr,Ce,Other}` was **removed** and collapsed into the fine
+   `EngineKind{GrCompute,GrGraphics,Ce,NvEnc,NvDec,Other}` everywhere (`ObjectKind`,
+   `ChannelFacts`, `Channel`). `EngineKind` is now graph-derived onto the `Channel`
+   (channel-class default, refined by the engine object allocated on it — order- and
+   replay-independent), so NVENC vs GR-compute is distinguishable AT the channel.
+   `forward_engine_object` is now idempotent: a per-channel `host_engine_objects`
+   table (keyed by declared class) makes a replayed Case-1 alloc resolve to the
+   ORIGINAL host object — exactly one host object per `(channel, class)`. Tests:
+   `replayed_engine_object_alloc_forwards_exactly_one_host_object`,
+   `engine_kind_lands_on_the_channel_via_the_graph`.
+2. **One gated ring path** — ✅ DONE. The ungated `ring_gated` sibling was **removed**;
+   `handle_doorbell` is now the ONLY function that reaches `RmBackend::ring_doorbell`,
+   and it ALWAYS runs the #14 ring-gate before any host op (bound-but-unpublished =
+   loud fault, empty declaration = trivially gated). The gate is structural, not
+   caller discipline. `gate_working_set` remains as the read-only QUERY form (cannot
+   ring). Test: `t14_ring_gate_is_structural_no_ungated_door` (+ the existing
+   `t14_per_vas_publication_gates_the_ring` updated to the single path).
+3. **The mapped-fence completion arm (pattern e)** — ✅ DONE. `nvkvm-completion`
+   gained `FenceArms` — per-`Proc` mapped-fence arms (`arm`/`observe`) that fire when
+   the observed value reaches/passes target under 32-bit wrap, with the #12 backwards-
+   jump guard (`MAX_FENCE_JUMP`, mirroring UVM's `2 × GPFIFO`). `nvkvm-fwd` exposes
+   `completion_arm` (engine→arm selection, NVENC=fence, everything else=shared-sema),
+   `arm_fence`, `fence_observed`. Distinct from event delivery by construction (never
+   enters `CompletionQueue`, never posts, never raises SWGEN0). Tests: four unit tests
+   in `nvkvm-completion` + `nvenc_mapped_fence_arms_and_fires_distinct_from_event_delivery`,
+   `nvenc_fence_wrap_guard_fires_across_wrap_and_refuses_backwards_jumps`,
+   `fence_arm_selection_is_exact_at_the_channel`.
+
+None was a redesign; all landed as pure core against existing seams.
 
 ### 2.2 Deferred-as-milestone but honestly PURE LOGIC (descent will write more core)
 

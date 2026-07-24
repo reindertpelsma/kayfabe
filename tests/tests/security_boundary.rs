@@ -405,7 +405,7 @@ proptest! {
 
         for t in tokens {
             // Arbitrary doorbell token → routes to a channel or a loud fault; never panics.
-            let _ = handle_doorbell(&mut gpu, t);
+            let _ = handle_doorbell(&mut gpu, t, &[]);
         }
         // A GPFIFO ring of arbitrary (gpa, bounded-len) entries → arbitrary method
         // decodes over arbitrary bytes, always a bounded parse, never a panic.

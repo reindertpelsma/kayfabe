@@ -65,7 +65,7 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
 
     let pid1 = *gpu.by_pdb.get(&PDB).expect("CTX1 routed by PDB");
     publish_backing(gpu.procs.get_mut(&pid1).unwrap(), PDB, VA, 0x10000).expect("CTX1 backs VA");
-    let out1 = handle_doorbell(&mut gpu, gr_token).expect("CTX1 doorbell");
+    let out1 = handle_doorbell(&mut gpu, gr_token, &[]).expect("CTX1 doorbell");
     assert!(out1.scheduled_now, "CTX1's channel scheduled on first submit");
 
     // ---- CTX1 teardown: free the client root (destroys the whole namespace) ----
@@ -91,7 +91,7 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
 
     // CTX2's doorbell schedules CTX2's OWN channel — the sticky-one-shot #12 bug
     // would have left it off-runlist (scheduled_now == false).
-    let out2 = handle_doorbell(&mut gpu, gr_token).expect("CTX2 doorbell");
+    let out2 = handle_doorbell(&mut gpu, gr_token, &[]).expect("CTX2 doorbell");
     assert!(out2.scheduled_now, "CTX2's fresh channel is scheduled (no CTX1 one-shot residue)");
 
     // Two distinct isolate sessions were spawned across the two contexts.
@@ -223,7 +223,7 @@ fn wo_teardown_during_active_inflight_completion_is_clean() {
 
     let pid = *gpu.by_pdb.get(&PDB).unwrap();
     publish_backing(gpu.procs.get_mut(&pid).unwrap(), PDB, GpuVa(0x2_0020_0000), 0x10000).unwrap();
-    handle_doorbell(&mut gpu, gr_token).expect("channel rung");
+    handle_doorbell(&mut gpu, gr_token, &[]).expect("channel rung");
     // An in-flight completion is pending for this proc.
     gpu.procs.get_mut(&pid).unwrap().completion.observe(OsEventRef(0xDEAD)).unwrap();
     assert!(gpu.procs.get(&pid).unwrap().completion.has_outstanding());
@@ -237,7 +237,7 @@ fn wo_teardown_during_active_inflight_completion_is_clean() {
     // The retired proc was staged for deferred reap (L10), not dropped mid-flight.
     assert!(gpu.retired.iter().any(|p| p.is_retired()), "proc staged for deferred reap");
     // A doorbell to the now-retired channel is a loud MISS, never a stale consume.
-    assert!(matches!(handle_doorbell(&mut gpu, gr_token), Err(FwdFault::UnknownVchid { .. })));
+    assert!(matches!(handle_doorbell(&mut gpu, gr_token, &[]), Err(FwdFault::UnknownVchid { .. })));
 }
 
 // =================================================================================

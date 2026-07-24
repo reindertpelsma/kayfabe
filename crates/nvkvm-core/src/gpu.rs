@@ -16,8 +16,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nvkvm_arch::Arch;
-use nvkvm_arch::ids::{EngineClass, GpuVa, HClient, Pdb, VChid};
-use nvkvm_completion::{CompletionQueue, DeliveryPlane, PostBatch};
+use nvkvm_arch::ids::{ClassId, EngineKind, GpuVa, HClient, Pdb, VChid};
+use nvkvm_completion::{CompletionQueue, DeliveryPlane, FenceArms, PostBatch};
 use nvkvm_isolate::{HostHandle, Isolate, IsolateFactory, IsolateId};
 use nvkvm_mmu::{AddressFault, AddressTable};
 use nvkvm_util::Instant;
@@ -123,12 +123,23 @@ pub struct Channel {
     /// The PDB of the VAS this channel is declared against (None = GSP-managed
     /// with no declared VAS — system-routed).
     pub vas: Option<Pdb>,
-    /// Engine class.
-    pub engine: EngineClass,
+    /// ★ The fine [`EngineKind`] of this channel's context (`execution_plane.md`
+    /// §2.2 "what the core tracks"): graph-synced from the projection — the channel
+    /// class's declared kind, refined by the engine object allocated on it. NVENC
+    /// vs GR-compute is distinguishable HERE, so routing and completion-arm
+    /// selection key on the channel, not just on a parse.
+    pub engine: EngineKind,
     /// Host channel object, once materialized by the fwd plane.
     pub host_channel: Option<HostHandle>,
     /// Host work-submit token, once materialized.
     pub host_token: Option<u64>,
+    /// Host engine objects forwarded on this channel, keyed by the guest's declared
+    /// engine-object class — the Case-1 forward's **idempotency table**
+    /// (`execution_plane.md` §2.2: "the object's Case-1 alloc has been forwarded, so
+    /// re-sends are idempotent"). A replayed alloc resolves HERE and never re-allocs
+    /// a duplicate host object (the same retried-RPC discipline as the graph's
+    /// alloc/DUP replay).
+    pub host_engine_objects: BTreeMap<ClassId, HostHandle>,
 }
 
 /// Per-proc execution plane. Nothing scalar, nothing one-shot (the C's
@@ -177,6 +188,11 @@ pub struct Proc {
     pub exec: ExecPlane,
     /// Per-proc completion queue (§4.3.2 — the starvation fix's per-proc half).
     pub completion: CompletionQueue,
+    /// Per-proc mapped-fence completion arms (pattern **e**, `execution_plane.md`
+    /// §1.2/§2.4 — the NVENC fence-not-event shape, `nvenc_101`). Distinct from the
+    /// event-delivery plane by construction: a fired fence is read by the guest
+    /// straight from the mapped page, it never rides the GSP queue.
+    pub fences: FenceArms,
     /// This proc's own unprivileged host isolate (`session == ProcId`).
     pub isolate: Box<dyn Isolate>,
     /// This proc's private GPA arena (disjoint by construction).
@@ -198,6 +214,7 @@ impl Proc {
             chan_ids: BTreeMap::new(),
             exec: ExecPlane::default(),
             completion: CompletionQueue::new(),
+            fences: FenceArms::new(),
             isolate,
             arena,
             poll: PollState::default(),
@@ -470,6 +487,7 @@ impl Gpu {
                     engine: facts.engine,
                     host_channel: None,
                     host_token: None,
+                    host_engine_objects: BTreeMap::new(),
                 });
                 entry.vchid = facts.vchid;
                 entry.vas = facts.vas_pdb;

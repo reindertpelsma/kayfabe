@@ -18,9 +18,9 @@ use nvkvm_arch::ids::{GpuVa, HClient, Pdb, VChid};
 use nvkvm_core::gpu::Gpu;
 use nvkvm_core::gpa::GpaSpace;
 use nvkvm_fwd::{
-    FwdFault, gate_working_set, parse_pushbuffer, publish_backing, ring_gated,
+    FwdFault, gate_working_set, handle_doorbell, parse_pushbuffer, publish_backing,
 };
-use nvkvm_mocks::{MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, mock_classes as mc};
+use nvkvm_mocks::{MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, RmVerb, SharedRecorder, mock_classes as mc};
 use nvkvm_tests::{Scenario, identical_handles};
 use nvkvm_vmm::Vmm;
 
@@ -126,9 +126,9 @@ fn hostile_ring_never_panics() {
 // ★ The #14 fix through the REAL exec path: per-Vas working-set publication.
 // ---------------------------------------------------------------------------------
 
-fn two_proc_gpu() -> (Gpu, MockVmm) {
+fn two_proc_gpu() -> (Gpu, MockVmm, SharedRecorder) {
     let arch = Box::new(MockArch::new());
-    let (factory, _rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
     let mut s = Scenario::new();
@@ -137,26 +137,38 @@ fn two_proc_gpu() -> (Gpu, MockVmm) {
     for ev in s.events {
         gpu.apply(ev).expect("applies");
     }
-    (gpu, MockVmm::new())
+    (gpu, MockVmm::new(), rec)
 }
 
-/// ★ THE #14 regression through the exec path: two Procs, identical guest VAs. Each
-/// publishes its working set into its OWN host VAS; `gate_working_set` passes for
-/// BOTH (they resolve in distinct host VASes), and neither can ring before publishing.
+/// ★ THE #14 regression through the exec path — now STRUCTURAL: `handle_doorbell` is
+/// the ONE ring path and it gates. Two Procs, identical guest VAs: neither can ring
+/// its declared working set before publishing (loud fault, ZERO host ops — not even
+/// channel materialization); after each publishes into its OWN host VAS, both ring,
+/// on distinct host tokens.
 #[test]
 fn t14_per_vas_publication_gates_the_ring() {
-    let (mut gpu, _vmm) = two_proc_gpu();
+    let (mut gpu, _vmm, rec) = two_proc_gpu();
     let pid_a = *gpu.by_pdb.get(&A_PDB).unwrap();
     let pid_b = *gpu.by_pdb.get(&B_PDB).unwrap();
     let cid_a = *gpu.procs[&pid_a].chan_ids.values().next().unwrap();
-    let cid_b = *gpu.procs[&pid_b].chan_ids.values().next().unwrap();
+    let a_token = MockArch::token_for(VChid(0x10));
+    let b_token = MockArch::token_for(VChid(0x20));
 
-    // Before publication: ringing the identical working-set VA is a LOUD fault for
-    // BOTH — the exact #14 EXECUTION fault (VA not published into the host VAS).
+    // Before publication: a doorbell declaring the identical working-set VA is a
+    // LOUD fault for BOTH — the exact #14 EXECUTION fault, refused by the ONE ring
+    // path itself (there is no ungated sibling to reach the host through).
     assert!(matches!(
-        gate_working_set(&gpu, pid_a, cid_a, &[SHARED_VA]),
-        Err(FwdFault::Address(_)) | Err(FwdFault::UnknownPdb(_))
+        handle_doorbell(&mut gpu, a_token, &[SHARED_VA]),
+        Err(FwdFault::Address(_))
     ));
+    assert!(matches!(
+        handle_doorbell(&mut gpu, b_token, &[SHARED_VA]),
+        Err(FwdFault::Address(_))
+    ));
+    // The refused rings did NOTHING host-side: no channel, no schedule, no doorbell.
+    assert!(rec.lock().unwrap().log.is_empty(), "a gated-out ring performs ZERO host ops");
+    // The query form agrees (and cannot ring anything by construction).
+    assert!(gate_working_set(&gpu, pid_a, cid_a, &[SHARED_VA]).is_err());
 
     // Publish the SAME guest VA in each proc's OWN Vas (distinct host VASes).
     let pub_a =
@@ -165,23 +177,68 @@ fn t14_per_vas_publication_gates_the_ring() {
         publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, SHARED_VA, 0x10000).unwrap();
     assert_ne!(pub_a.host_va, pub_b.host_va, "identical guest VA → distinct host VA");
 
-    // Now the ring-gate passes for BOTH — each resolves in its OWN published host VAS.
-    // (Materialize each channel first so it has a host token to ring.)
-    let a_token = MockArch::token_for(VChid(0x10));
-    let b_token = MockArch::token_for(VChid(0x20));
-    nvkvm_fwd::handle_doorbell(&mut gpu, a_token).unwrap();
-    nvkvm_fwd::handle_doorbell(&mut gpu, b_token).unwrap();
+    // Now the SAME ring path passes for BOTH — each resolves in its OWN host VAS.
+    let out_a = handle_doorbell(&mut gpu, a_token, &[SHARED_VA]).expect("A rings after publish");
+    let out_b = handle_doorbell(&mut gpu, b_token, &[SHARED_VA]).expect("B rings after publish");
+    assert_ne!(
+        out_a.host_token, out_b.host_token,
+        "each proc rang its OWN host token — no cross-proc content-pick"
+    );
+}
 
-    let ta = ring_gated(&mut gpu, pid_a, cid_a, &[SHARED_VA]).expect("A rings after publish");
-    let tb = ring_gated(&mut gpu, pid_b, cid_b, &[SHARED_VA]).expect("B rings after publish");
-    assert_ne!(ta, tb, "each proc rang its OWN host token — no cross-proc content-pick");
+/// ★ The gate is STRUCTURAL, not caller discipline: `handle_doorbell` is the ONE
+/// ring path (the ungated `ring_gated` sibling is gone), so a doorbell whose working
+/// set is bound-but-unpublished (the #14 EXECUTION-fault state — the shadow had the
+/// VA, the channel's OWN host VAS did not) is refused BEFORE any host op, and there is
+/// no other function to reach the host doorbell through. Once published, the SAME path
+/// rings.
+#[test]
+fn t14_ring_gate_is_structural_no_ungated_door() {
+    let (mut gpu, _vmm, rec) = two_proc_gpu();
+    let pid_a = *gpu.by_pdb.get(&A_PDB).unwrap();
+    let a_token = MockArch::token_for(VChid(0x10));
+    const MEM: nvkvm_arch::ids::HObject = nvkvm_arch::ids::HObject(0x5c00_0100);
+
+    // Bind the VA through the RPC source ONLY (declared backing, host_va = None): it
+    // resolves in the guest-side table but was never published into the channel's own
+    // host VAS — exactly the #14 EXECUTION-fault shape.
+    let mut s = Scenario::new();
+    s.memory(HClient(0xAA), nvkvm_arch::ids::HObject(0x5c00_0001), MEM, 0x9_0000_0000);
+    s.map(HClient(0xAA), nvkvm_arch::ids::HObject(0x5c00_0010), MEM, SHARED_VA, 0x10000);
+    for ev in s.events {
+        gpu.apply(ev).expect("rpc map applies");
+    }
+
+    // The ONE ring path refuses it — bound but not host-published — with ZERO host
+    // ops (not even channel materialization). There is no ungated door to try instead.
+    let before = rec.lock().unwrap().log.len();
+    assert!(matches!(
+        handle_doorbell(&mut gpu, a_token, &[SHARED_VA]),
+        Err(FwdFault::Address(_))
+    ));
+    assert_eq!(rec.lock().unwrap().log.len(), before, "a gated-out ring did no host op");
+
+    // The guest eager-unmaps the RPC binding, then the VA is published into the
+    // channel's OWN host VAS (host_va = Some): the SAME path now rings.
+    gpu.apply(nvkvm_core::rmgraph::RmEvent::Unmap {
+        client: HClient(0xAA),
+        vaspace: nvkvm_arch::ids::HObject(0x5c00_0010),
+        va: SHARED_VA,
+    })
+    .expect("unmap applies");
+    publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, SHARED_VA, 0x10000).unwrap();
+    handle_doorbell(&mut gpu, a_token, &[SHARED_VA]).expect("published set rings");
+    assert!(
+        rec.lock().unwrap().log.iter().any(|(_, v)| matches!(v, RmVerb::RingDoorbell { .. })),
+        "the successful ring reached the host doorbell"
+    );
 }
 
 /// A VA outside any binding is a loud MISS at gate time — never a guess, never a
 /// cross-proc reach.
 #[test]
 fn t14_unpublished_va_is_a_loud_fault() {
-    let (mut gpu, _vmm) = two_proc_gpu();
+    let (mut gpu, _vmm, _rec) = two_proc_gpu();
     let pid_a = *gpu.by_pdb.get(&A_PDB).unwrap();
     let cid_a = *gpu.procs[&pid_a].chan_ids.values().next().unwrap();
     publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, SHARED_VA, 0x10000).unwrap();

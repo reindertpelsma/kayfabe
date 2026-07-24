@@ -247,7 +247,7 @@ fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
     // Proc A is built AND fully active: published, scheduled, rung, completed.
     let (pid_a, _cid_a) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
     let pub_a = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, VA, 0x10000).unwrap();
-    let out_a = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10))).unwrap();
+    let out_a = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[]).unwrap();
     assert!(out_a.scheduled_now);
     gpu.procs.get_mut(&pid_a).unwrap().completion.observe(OsEventRef(0xA)).unwrap();
     let batch = gpu.pump_completions().expect("A's completion posts");
@@ -259,7 +259,7 @@ fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
     let pub_b = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, VA, 0x10000).unwrap();
     assert_ne!(pub_a.gpa, pub_b.gpa, "late-arriving B still gets disjoint backing");
     assert_ne!(pub_a.host_va, pub_b.host_va);
-    let out_b = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20))).unwrap();
+    let out_b = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20)), &[]).unwrap();
     assert!(out_b.scheduled_now, "B's channel schedules on ITS OWN plane");
     assert_ne!(out_a.host_token, out_b.host_token);
 
@@ -267,7 +267,7 @@ fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
     // already-scheduled channel rings again WITHOUT rescheduling (state preserved).
     let (ba, _) = resolve(&gpu, A_PDB, VA).unwrap();
     assert_eq!(ba.phys, pub_a.gpa, "A resolves ITS backing after B armed");
-    let again = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10))).unwrap();
+    let again = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[]).unwrap();
     assert!(!again.scheduled_now, "A's exec-plane state survived B's arrival");
 }
 
@@ -301,8 +301,8 @@ fn cb14_late_merge_after_touch_is_loud_and_atomic() {
     let (bb, _) = resolve(&gpu, B_PDB, VA).unwrap();
     assert_eq!(ba.phys, pub_a.gpa);
     assert_eq!(bb.phys, pub_b.gpa);
-    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10))).is_ok());
-    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20))).is_ok());
+    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[]).is_ok());
+    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20)), &[]).is_ok());
 }
 
 // =================================================================================
@@ -330,8 +330,8 @@ fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
     let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
     publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, VA, 0x10000).unwrap();
     publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, VA, 0x10000).unwrap();
-    handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10))).unwrap();
-    handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20))).unwrap();
+    handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[]).unwrap();
+    handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20)), &[]).unwrap();
     let gen1_arenas: Vec<_> =
         gpu.procs.values().map(|p| p.arena.range.clone()).collect();
     let gen1_sessions: std::collections::BTreeSet<u32> =
@@ -365,8 +365,8 @@ fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
         );
     }
     // Fresh channels schedule on fresh exec planes; completions flow.
-    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10))).unwrap().scheduled_now);
-    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20))).unwrap().scheduled_now);
+    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[]).unwrap().scheduled_now);
+    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20)), &[]).unwrap().scheduled_now);
     gpu.procs.get_mut(&pid_a2).unwrap().completion.observe(OsEventRef(0xA2)).unwrap();
     assert!(gpu.pump_completions().is_some(), "gen-2 completions deliver");
 
@@ -400,7 +400,7 @@ fn cb_lifecycle_process_churn_never_exhausts_the_window() {
         let (pid, _cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
         let p = publish_backing(gpu.procs.get_mut(&pid).unwrap(), A_PDB, VA, 0x10000)
             .unwrap_or_else(|e| panic!("generation {generation}: publish must succeed: {e:?}"));
-        let out = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)))
+        let out = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[])
             .unwrap_or_else(|e| panic!("generation {generation}: doorbell must ring: {e:?}"));
         assert!(out.scheduled_now, "generation {generation}: fresh channel schedules");
         let (b, _) = resolve(&gpu, A_PDB, VA).unwrap();

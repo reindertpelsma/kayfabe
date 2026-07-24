@@ -77,26 +77,18 @@ id_newtype!(
     ControlCmd(u32)
 );
 
-/// Engine class of a channel or engine object, in core terms.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EngineClass {
-    /// Graphics/compute engine (GR).
-    Gr,
-    /// Copy engine (CE).
-    Ce,
-    /// Any other engine the core routes but does not interpret.
-    Other,
-}
-
-/// The execution-plane routing tag for an engine object (`execution_plane.md` §2.1).
+/// The execution-plane routing tag for a channel or engine object
+/// (`execution_plane.md` §2.1) — THE one engine vocabulary of the core.
 ///
 /// A **routing tag, not a `dyn Engine`**: the engines do not have divergent *core*
 /// behavior — each gets a Case-1 alloc forwarded, its pushbuffer decoded by the same
-/// loop, and signals via a sema. Their differences are entirely *encodings* (class
-/// IDs, method IDs, sema offsets), which live behind the [`crate::Arch`] seams. So the
-/// core programs against this small enum; a new engine for an existing arch is a new
-/// arm + the arch's class-ID/method rows, **zero core edits**. (`EngineClass{Gr,Ce,
-/// Other}` is too coarse for graphics-vs-compute and NVENC; this is the refinement.)
+/// loop, and signals via its completion arm. Their differences are entirely
+/// *encodings* (class IDs, method IDs, sema offsets), which live behind the
+/// [`crate::Arch`] seams. So the core programs against this small enum; a new engine
+/// for an existing arch is a new arm + the arch's class-ID/method rows, **zero core
+/// edits**. (The coarse `EngineClass{Gr,Ce,Other}` this replaced could not tell
+/// NVENC from GR-compute at the `Channel` — routing and completion-arm selection
+/// key on THIS enum, at the channel, not just at parse.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EngineKind {
     /// GR engine running a compute context (the CUDA/LLM/PyTorch path, incl. the
