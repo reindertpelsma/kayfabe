@@ -298,6 +298,47 @@ fn b1_projection_collision_is_contained_not_a_device_wedge() {
     assert!(resolve(&gpu, B_PDB, B_MAP_VA).is_ok(), "B fully functional after A's collision");
 }
 
+/// ★ Mutation-gate kill (`project` `prev != node.key`→`==` on the vChid dedup, and the
+/// same exec-plane twin of the PDB collision above): two DISTINCT channel nodes that
+/// decode to the SAME vChid make the exec-plane demux ambiguous — that MUST be a loud
+/// `VchidCollision`, never a silent last-writer-wins (which would route one guest's
+/// doorbell to another's channel). The prior suite had a PDB-collision test but no
+/// vChid one, and the `!=`→`==` mutant silently accepts the collision (the guard only
+/// fires on `prev == node.key`, which never happens for two distinct nodes). This pins
+/// it, and confirms the fault is contained (a separate process B is unaffected).
+#[test]
+fn b1_vchid_collision_is_a_loud_contained_projection_fault() {
+    let mut gpu = fresh_gpu();
+    let a = HClient(0xA000);
+    // Two channels in A's namespace whose userd flags decode to the SAME vChid.
+    let dup_vchid = VChid(0x33);
+    let flags = MockArch::userd_flags_for(dup_vchid);
+    gpu.apply(RmEvent::Alloc { client: a, parent: HObject(a.0), handle: HObject(a.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
+    gpu.apply(RmEvent::Alloc { client: a, parent: HObject(a.0), handle: HObject(1), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
+    gpu.apply(RmEvent::Alloc { client: a, parent: HObject(1), handle: HObject(2), class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
+    gpu.apply(RmEvent::SetPageDir { client: a, vaspace: HObject(2), pdb: Pdb(0xA11) }).unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: a, parent: HObject(1), handle: HObject(0x10), class: mc::CHANNEL_GR,
+        facts: AllocFacts { h_vaspace: Some(HObject(2)), userd_flags: flags, ..Default::default() },
+    }).unwrap();
+
+    // The SECOND channel claiming the same vChid is a LOUD, contained refusal.
+    let collide = gpu.apply(RmEvent::Alloc {
+        client: a, parent: HObject(1), handle: HObject(0x11), class: mc::CHANNEL_CE,
+        facts: AllocFacts { h_vaspace: Some(HObject(2)), userd_flags: flags, ..Default::default() },
+    });
+    assert!(
+        matches!(collide, Err(GpuError::Projection(_))),
+        "two channels decoding to one vChid must be a loud projection fault, got {collide:?}"
+    );
+
+    // Contained: a wholly-separate process B proceeds normally after A's collision.
+    for ev in benign_b_events() {
+        gpu.apply(ev).expect("B unaffected by A's vChid collision");
+    }
+    assert!(resolve(&gpu, B_PDB, B_MAP_VA).is_ok(), "B fully functional after A's collision");
+}
+
 /// **Boundary 1 (honest scope).** A hostile process forging the *global hardware
 /// identity* of another — the same physical PDB — is a **contained** loud fault, never
 /// catastrophic: the collision is refused (first-declarer keeps the identity), the

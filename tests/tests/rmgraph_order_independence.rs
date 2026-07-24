@@ -130,6 +130,43 @@ fn multi_vaspace_per_process_keys_address_ops_on_vas_not_proc() {
     assert_eq!(b.by_pdb.get(&Pdb(0x2efa_6c000)).map(|x| x.0), Some(proc_a.anchor));
 }
 
+/// ★ Mutation-gate kill (`ClientUnion::union` `ra < rb`→`ra == rb`): the process
+/// anchor is the DETERMINISTIC **minimum** client handle in the dup-connected component
+/// (`ProcBoundary::anchor` doc; rule L7 — a stable, order-independent identity, never a
+/// minted id). The union must therefore make the SMALLER root the representative; the
+/// `<`→`==` mutant (equality is already handled by the early return, so it always takes
+/// the `else` branch) picks the OTHER root, yielding a non-minimum anchor. The prior
+/// suite asserted the anchor was used consistently but never pinned its VALUE, so the
+/// mutant survived. Here we assert, for every component, `anchor == min(clients)`.
+#[test]
+fn proc_anchor_is_the_minimum_client_in_its_component() {
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    for ev in scenario().events {
+        g.apply(&arch, ev).unwrap();
+    }
+    let b = project(&g, &arch).unwrap();
+    assert_eq!(b.procs.len(), 2);
+    for p in &b.procs {
+        let min_client = p.clients.iter().min().copied().expect("component non-empty");
+        assert_eq!(
+            p.anchor.0, min_client,
+            "the anchor must be the SMALLEST client handle in the component (deterministic identity)",
+        );
+        // The routing maps must agree with that same minimum-anchor for this proc's PDBs.
+        for pdb in p.vases.values().flatten() {
+            assert_eq!(
+                b.by_pdb.get(pdb).map(|x| x.0),
+                Some(p.anchor),
+                "by_pdb routes to the minimum-client anchor",
+            );
+        }
+    }
+    // Concretely: proc A's clients are {0xA1, 0xAA}; its anchor is 0xA1 (the smaller).
+    let proc_a = b.procs.iter().find(|p| p.clients.contains(&HClient(0xAA))).unwrap();
+    assert_eq!(proc_a.anchor.0, HClient(0xA1), "0xA1 < 0xAA, so 0xA1 anchors proc A");
+}
+
 #[test]
 fn identical_handles_across_procs_do_not_collide() {
     let arch = MockArch::new();

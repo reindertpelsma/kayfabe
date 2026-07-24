@@ -1,2 +1,7 @@
 /target
 Cargo.lock.orig
+# cargo-mutants run artifacts (the mutation-testing gate, decision #28)
+/mutants.out
+/mutants.out.old
+/mutants_fwdmmu
+/mutants_triage

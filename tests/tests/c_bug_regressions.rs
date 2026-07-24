@@ -372,6 +372,123 @@ fn cb14_late_merge_after_touch_is_loud_and_atomic() {
     assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20)), &[]).is_ok());
 }
 
+/// ★ Mutation-gate kill (`Proc::is_untouched` `&&`→`||` between the ARENA clause and
+/// the host-channel clause): a proc is untouched ONLY if EVERY data-plane clause holds
+/// — arena un-carved AND no host channel AND no host VAS. `cb14` above touches all
+/// three at once (via `publish_backing`), so it cannot distinguish an `&&`→`||`
+/// mutation (which only differs when the clauses DISAGREE). This isolates the arena
+/// clause: it carves the arena DIRECTLY (no host channel/VAS materialized), so
+/// `is_untouched` must be false on the arena clause ALONE. A late merge that would
+/// absorb this arena-touched proc is therefore a loud `LateMerge` — the `||` mutant
+/// (which would read `arena_touched || channels_clean = true`) would wrongly permit the
+/// silent fold the C corrupted the loser with.
+#[test]
+fn cb14_arena_touch_alone_blocks_a_late_merge() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+
+    // Touch ONLY proc B's arena — carve a GPA directly, materializing NO host channel
+    // and NO host VAS (so the arena clause of `is_untouched` is the only false one).
+    gpu.procs
+        .get_mut(&pid_b)
+        .unwrap()
+        .arena
+        .alloc(0x10000, 0x1000)
+        .expect("arena carves");
+    let _ = pid_a;
+
+    // A late dup edge that would join A's and B's components. B's arena is touched, so
+    // the merge must be refused loudly and atomically — never a silent fold.
+    let late_dup = RmEvent::Dup {
+        src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
+        dst: NodeKey::new(HClient(0xBB), HObject(0x9999_0000)),
+    };
+    let refused = gpu.apply(late_dup);
+    assert!(
+        matches!(refused, Err(GpuError::LateMerge { .. })),
+        "an arena-touched proc cannot be silently merge-absorbed: {refused:?}"
+    );
+    assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
+}
+
+/// ★ Mutation-gate kill (`Proc::is_untouched` `&&`→`||` between the HOST-CHANNEL clause
+/// and the host-VAS clause): the twin of the test above, isolating the OTHER `&&`. A
+/// materialized host channel alone (arena un-carved, no host VAS) must make a proc
+/// touched — so a late merge absorbing it is a loud `LateMerge`. The `||` mutant would
+/// read `channels_clean(false) || vases_clean(true) = true` and wrongly permit the fold.
+/// We set the host channel DIRECTLY (the only touched clause) rather than via a doorbell
+/// (which would also materialize the host VAS and mask the disagreement).
+#[test]
+fn cb14_host_channel_touch_alone_blocks_a_late_merge() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, cid_b) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let _ = pid_a;
+
+    // Touch ONLY proc B's host-channel clause: give one channel a host channel object,
+    // leaving the arena un-carved and every VAS's host VAS unmaterialized.
+    gpu.procs
+        .get_mut(&pid_b)
+        .unwrap()
+        .channels
+        .get_mut(&cid_b)
+        .unwrap()
+        .host_channel = Some(nvkvm_isolate::HostHandle(0xC0FFEE));
+
+    let late_dup = RmEvent::Dup {
+        src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
+        dst: NodeKey::new(HClient(0xBB), HObject(0x9999_0000)),
+    };
+    let refused = gpu.apply(late_dup);
+    assert!(
+        matches!(refused, Err(GpuError::LateMerge { .. })),
+        "a host-channel-touched proc cannot be silently merge-absorbed: {refused:?}"
+    );
+    assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
+}
+
+/// ★ Mutation-gate kill (`Proc::is_untouched` `&&`→`||` INSIDE the per-VAS clause,
+/// between `host_vas.is_none()` and the "no published binding" check): a VAS is
+/// untouched only if it has NEITHER a materialized host VAS NOR any host-published
+/// binding — either one alone is host state that blocks an early merge. `publish_backing`
+/// sets BOTH at once, so the two sub-conditions always agree there; this isolates the
+/// host-VAS sub-condition by materializing ONLY a host VAS (no published binding, arena
+/// un-carved, no host channel). The `||` mutant would read `host_vas_absent(false) ||
+/// no_published_binding(true) = true` and wrongly call the VAS untouched.
+#[test]
+fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let _ = pid_a;
+
+    // Materialize ONLY a host VAS on proc B (no published binding, no host channel,
+    // arena un-carved) — the host-VAS sub-condition is the only touched one.
+    let vas = gpu.procs.get_mut(&pid_b).unwrap().vases.get_mut(&B_PDB).unwrap();
+    vas.host_vas = Some(nvkvm_isolate::HostHandle(0xBADA55));
+
+    let late_dup = RmEvent::Dup {
+        src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
+        dst: NodeKey::new(HClient(0xBB), HObject(0x9999_0000)),
+    };
+    let refused = gpu.apply(late_dup);
+    assert!(
+        matches!(refused, Err(GpuError::LateMerge { .. })),
+        "a host-VAS-touched proc cannot be silently merge-absorbed: {refused:?}"
+    );
+    assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
+}
+
+// NOTE (mutation-gate triage): the two `handle_doorbell` match-guard mutants at
+// `None if working_set.is_empty()` (→`true` / →`false`) are EQUIVALENT, not real gaps.
+// A channel with no declared VAS (`chan.vas == None`) can never materialize a host
+// channel — the lazy materialization does `chan.vas.ok_or(NoVas)?` — so EVERY
+// combination of the guard and the working-set emptiness returns the SAME
+// `FwdFault::NoVas(cid)` with zero host ops; the guard only chooses WHICH line emits
+// the identical fault. Documented in `docs/design/core_mutation_gate.md`, not chased
+// with a brittle test (decision #15).
+
 // =================================================================================
 // ★ The device teardown→restart lifecycle (decision #18B's known-gap probe).
 // The GSP-reboot FSM half (WPR2/fn-47/seqNum) is NOT MODELED yet (`nvkvm-gsp` is a

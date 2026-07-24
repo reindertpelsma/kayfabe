@@ -521,4 +521,170 @@ mod tests {
         let post = plane.try_post([&mut qa, &mut qb]).unwrap();
         assert_eq!(post.events, vec![OsEventRef(3)]);
     }
+
+    /// ★ Mutation-gate kill (`outstanding_len` `+`→`*`, `has_outstanding` `||`→`&&`):
+    /// the boundedness accounting must sum ALL THREE internal queues, and "has
+    /// anything outstanding" must stay true whenever ANY one of them is non-empty —
+    /// including a state where the OTHER two are empty. The prior suite only ever
+    /// exercised states where at most one internal queue was non-empty at a time, so a
+    /// `+`→`*` (0-absorbing) or a `||`→`&&` (all-required) mutation survived. This
+    /// drives a queue through every co-populated combination and asserts the observable
+    /// count + predicate directly.
+    #[test]
+    fn outstanding_accounting_sums_all_three_queues_and_predicate_is_any() {
+        let mut q = CompletionQueue::new();
+        // pending only.
+        q.observe(OsEventRef(1)).unwrap();
+        q.observe(OsEventRef(2)).unwrap();
+        assert_eq!(q.outstanding_len(), 2);
+        assert!(q.has_outstanding());
+
+        // Compose one pending into in_flight, leave one pending: pending AND in_flight
+        // both non-empty. `+` gives 2; `*` would give 1×1 = 1 — the kill.
+        q.observe(OsEventRef(3)).unwrap(); // pending = {1,2,3}
+        let posted = q.compose_into(BatchId(7)); // in_flight = {1,2,3}, pending = {}
+        assert_eq!(posted.len(), 3);
+        q.observe(OsEventRef(4)).unwrap(); // pending = {4}, in_flight = {1,2,3}
+        assert_eq!(q.outstanding_len(), 4, "pending(1) + in_flight(3) must SUM, not multiply");
+        assert!(q.has_outstanding());
+
+        // Drain the batch: its events go to awaiting_ack; the freshly-observed 4 stays
+        // pending. Now pending AND awaiting_ack both non-empty (in_flight empty).
+        q.drained(BatchId(7)); // awaiting_ack = {1,2,3}, pending = {4}
+        assert_eq!(
+            q.outstanding_len(),
+            4,
+            "pending(1) + awaiting_ack(3) must SUM even with in_flight empty",
+        );
+        assert!(q.has_outstanding());
+
+        // Ack the lone pending event: ONLY awaiting_ack remains non-empty. The
+        // `has_outstanding` `||`→`&&` mutant would report FALSE here (pending empty);
+        // the truth is TRUE — un-acked completions are still outstanding.
+        q.ack(OsEventRef(4));
+        assert_eq!(q.outstanding_len(), 3, "only awaiting_ack remains");
+        assert!(
+            q.has_outstanding(),
+            "un-acked (drained-but-unconsumed) completions ARE outstanding, even alone",
+        );
+
+        // Ack all three awaiting-ack events → fully drained → nothing outstanding.
+        q.ack(OsEventRef(1));
+        q.ack(OsEventRef(2));
+        q.ack(OsEventRef(3));
+        assert_eq!(q.outstanding_len(), 0);
+        assert!(!q.has_outstanding());
+    }
+
+    /// ★ Mutation-gate kill (`ack` in_flight retain `!=`→`==`): `ack` must remove the
+    /// consumed event from EVERY internal queue, including one still `in_flight`
+    /// (composed into a posted-but-not-yet-drained batch). The prior suite only acked
+    /// events that had already reached `awaiting_ack`, so the in_flight retain arm was
+    /// never exercised — a `!=`→`==` there (which would DELETE every OTHER in-flight
+    /// event and KEEP the acked one) survived. Here the guest acks an in-flight event
+    /// directly (its waiter woke before the IRQSCLR drain); the acked event must be
+    /// gone and its in-flight sibling must remain.
+    #[test]
+    fn ack_removes_an_in_flight_event_and_spares_its_siblings() {
+        let mut q = CompletionQueue::new();
+        q.observe(OsEventRef(0xA)).unwrap();
+        q.observe(OsEventRef(0xB)).unwrap();
+        let posted = q.compose_into(BatchId(1)); // both now in_flight, pending empty
+        assert_eq!(posted, vec![OsEventRef(0xA), OsEventRef(0xB)]);
+        assert_eq!(q.outstanding_len(), 2);
+
+        // Ack 0xA while it is still in_flight (waiter woke pre-drain).
+        q.ack(OsEventRef(0xA));
+        assert_eq!(q.outstanding_len(), 1, "exactly the acked in-flight event is removed");
+        assert!(q.has_outstanding(), "0xB is still in flight");
+
+        // Draining the batch must carry 0xB (the survivor) to awaiting_ack — and NOT
+        // resurrect 0xA. The `==` mutant would have kept 0xA and dropped 0xB here.
+        q.drained(BatchId(1));
+        assert_eq!(q.take_unacked(), 1, "only the un-acked 0xB awaits re-post");
+        q.ack(OsEventRef(0xB));
+        assert!(!q.has_outstanding());
+    }
+
+    /// ★ Mutation-gate kill (`MAX_FENCE_JUMP` `2 * 1024`→`2 + 1024`): the #12 jump
+    /// guard's bound is observable, not a free-to-tune constant — a LEGITIMATE fence
+    /// step just under `2 * 1024 = 2048` must be ACCEPTED (a real GPFIFO can advance a
+    /// completion sema by up to 2× its entry count in one observation), while an absurd
+    /// backwards/wrap step is refused. The `2 + 1024 = 1026` mutant lowers the cap so a
+    /// legitimate 1500-step is wrongly rejected as a jump — this test pins the real
+    /// boundary: 1500 accepted, 2^32-scale refused.
+    #[test]
+    fn fence_jump_guard_accepts_a_legitimate_large_step() {
+        assert_eq!(MAX_FENCE_JUMP, 2048, "the guard is 2 x max GPFIFO entries");
+        let mut f = FenceArms::new();
+        let key = (7, 7);
+        // Target far ahead so the legitimate step below does not itself complete.
+        f.arm(key, 0, 100_000, OsEventRef(0xF)).unwrap();
+        // A 1500-step advance is legitimate (< 2048) — it must be accepted, not faulted.
+        // Under the `2 + 1024 = 1026` mutant this loud-faults as a spurious jump.
+        assert_eq!(f.observe(key, 1500), Ok(None), "a <2048 step is legitimate progress");
+        // A step of EXACTLY MAX_FENCE_JUMP (1500 -> 1500+2048 = 3548) is at the bound and
+        // must be ACCEPTED (`step > MAX_FENCE_JUMP` is false at equality). The `>`→`>=`
+        // mutant rejects this exactly-at-bound step — this is its kill.
+        assert_eq!(
+            f.observe(key, 1500 + MAX_FENCE_JUMP as u32),
+            Ok(None),
+            "a step of exactly MAX_FENCE_JUMP is at the bound and accepted",
+        );
+        // An absurd backwards write (≈2^32 under wrap) is still refused loudly.
+        let last = 1500 + MAX_FENCE_JUMP as u32;
+        assert_eq!(
+            f.observe(key, 1),
+            Err(CompletionError::FenceJump { last, value: 1 }),
+            "a wrap-scale backwards step is a loud refusal",
+        );
+    }
+
+    /// ★ Mutation-gate kill (`DeliveryPlane::batch_outstanding`→`true`): the drain-gate
+    /// state predicate must report FALSE on a fresh plane and again after a drain — it
+    /// is what a caller checks before posting (over-posting desyncs the seqNum ring,
+    /// L10). The prior suite drove `try_post`/`drained` but never asserted
+    /// `batch_outstanding` directly, so a "always true" mutant survived. This pins the
+    /// observable gate state across the full post→drain cycle.
+    #[test]
+    fn batch_outstanding_tracks_the_drain_gate_state() {
+        let mut plane = DeliveryPlane::new();
+        let mut q = CompletionQueue::new();
+        // Fresh plane: nothing posted, gate OPEN.
+        assert!(!plane.batch_outstanding(), "a fresh plane has no batch outstanding");
+
+        q.observe(OsEventRef(1)).unwrap();
+        plane.try_post([&mut q]).expect("posts the pending event");
+        // A batch is now outstanding: gate CLOSED.
+        assert!(plane.batch_outstanding(), "after a post a batch is outstanding");
+
+        plane.drained([&mut q]);
+        // Drained: gate OPEN again.
+        assert!(!plane.batch_outstanding(), "after the drain the gate is open again");
+    }
+
+    /// ★ Mutation-gate kill (`DeliveryPlane::try_post` `next_batch += 1`→`*= 1`): each
+    /// posted batch must get a DISTINCT, monotonic `BatchId` — the id is the drain key
+    /// (`CompletionQueue::drained(batch)` moves exactly that batch's in-flight events),
+    /// so a reused id would let one drain sweep a later batch's events. `next_batch`
+    /// starts at 0, so `*= 1` pins it at 0 forever (every batch is `BatchId(0)`), while
+    /// `+= 1` increments. The prior suite never asserted the id VALUE across two posts.
+    #[test]
+    fn successive_batches_carry_distinct_monotonic_ids() {
+        let mut plane = DeliveryPlane::new();
+        let mut q = CompletionQueue::new();
+
+        q.observe(OsEventRef(1)).unwrap();
+        let first = plane.try_post([&mut q]).expect("first post");
+        plane.drained([&mut q]);
+
+        q.observe(OsEventRef(2)).unwrap();
+        let second = plane.try_post([&mut q]).expect("second post");
+
+        assert_ne!(
+            first.batch, second.batch,
+            "successive batches must carry distinct ids (the drain key must not collide)",
+        );
+        assert!(second.batch.0 > first.batch.0, "batch ids advance monotonically");
+    }
 }

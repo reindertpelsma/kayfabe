@@ -125,4 +125,53 @@ mod tests {
         assert_ne!(ga, gb, "identical requests must land at disjoint GPAs");
         assert!(space.carve().is_err(), "window exhaustion is loud");
     }
+
+    /// ★ Mutation-gate kill (`GpaArena::alloc` `end > range.end`→`==`/`>=`): the arena
+    /// bound is inclusive of a perfect fill — an allocation whose end lands EXACTLY on
+    /// `range.end` must SUCCEED (the last usable byte is available), while any allocation
+    /// that would run one byte past must FAIL loudly. The prior suite only ever made
+    /// small sub-arena allocations, so the exact-fill boundary was never exercised: a
+    /// `>`→`>=` mutant (rejecting the perfect fill) and a `>`→`==` mutant (accepting an
+    /// over-run) both survived. This pins the exact boundary from both sides.
+    #[test]
+    fn arena_alloc_boundary_exact_fill_ok_overrun_loud() {
+        let mut space = GpaSpace::new(0..0x10000, 0x10000);
+        let mut a = space.carve().unwrap();
+        let len = a.range.end - a.range.start; // exactly the whole arena
+        // Exact fill: end == range.end must SUCCEED (kills `>`→`>=`).
+        let g = a.alloc(len, 0x1000).expect("an exact-fill allocation is legal");
+        assert_eq!(g, Gpa(a.range.start));
+        // Now the arena is full; a further byte over-runs and must FAIL loudly
+        // (kills `>`→`==`, which would accept a one-past-end allocation).
+        assert!(
+            matches!(a.alloc(1, 1), Err(GpaError::ArenaExhausted { .. })),
+            "an allocation past the exact fill is a loud fault, never silently accepted",
+        );
+
+        // And an over-run in one shot (len one past the arena) is also loud — the `==`
+        // mutant would only reject the exact fill, letting this strictly-larger request
+        // through.
+        let mut space2 = GpaSpace::new(0..0x10000, 0x10000);
+        let mut b = space2.carve().unwrap();
+        let over = (b.range.end - b.range.start) + 0x1000;
+        assert!(
+            matches!(b.alloc(over, 0x1000), Err(GpaError::ArenaExhausted { .. })),
+            "an allocation strictly past range.end is a loud fault",
+        );
+    }
+
+    /// ★ Mutation-gate kill (`GpaArena::is_untouched`→`true`): the early-arm merge
+    /// discipline (lesson L9) depends on this predicate distinguishing a pristine arena
+    /// from one that has carved even a single allocation — merging is legal ONLY while
+    /// the absorbed proc is untouched. The prior suite never asserted it, so a
+    /// "always untouched" mutant survived (it would let a touched proc be silently
+    /// merge-absorbed). A fresh arena is untouched; after ANY alloc it is not.
+    #[test]
+    fn is_untouched_flips_on_first_allocation() {
+        let mut space = GpaSpace::new(0..0x10000, 0x10000);
+        let mut a = space.carve().unwrap();
+        assert!(a.is_untouched(), "a freshly carved arena has allocated nothing");
+        a.alloc(0x1000, 0x1000).unwrap();
+        assert!(!a.is_untouched(), "after one allocation the arena is touched");
+    }
 }
