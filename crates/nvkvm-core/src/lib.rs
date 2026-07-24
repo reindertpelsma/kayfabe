@@ -27,6 +27,52 @@
 //! architecture is `impl Arch for <Gen>` in an adapter crate with **zero edits here**;
 //! the mock-driven test suite is the standing proof (it runs this exact code against a
 //! fake architecture).
+//!
+//! ## ★ The concurrency contract (decision #17)
+//!
+//! The core WILL be invoked concurrently from multiple vCPUs (different guest
+//! processes ringing doorbells / allocating / mapping at once). The contract is
+//! **"thread-safe by default, exceptions explicit"** — and it is *enforced*, not
+//! aspirational:
+//!
+//! - **Every core type is `Send + Sync`**, compile-time-asserted at the bottom of
+//!   each defining crate (`nvkvm_util::assert_send_sync!`): sneaking in an `Rc`, a
+//!   `Cell`, or an un-bounded trait object **fails the build**, on every
+//!   `cargo check`. The workspace-wide `#![forbid(unsafe_code)]` closes the other
+//!   half: safe Rust is data-race-free by construction, so a safe-code data race
+//!   cannot exist in these crates *at all* — only the shape of the caller's
+//!   synchronization is left to decide, never memory safety.
+//! - **No interior mutability, anywhere.** Core state is plain owned data
+//!   (`BTreeMap`/`Vec`/newtypes); there is no `Mutex`, `RefCell`, or atomic in any
+//!   logic crate. **All mutation takes `&mut self`** — the borrow checker forbids
+//!   concurrent calls, and the *caller* provides exclusivity (a device-global lock,
+//!   a per-`Proc` shard, an actor loop — any strategy is sound because the core
+//!   presumes none). **All reads take `&self`** and are concurrent-safe: any number
+//!   of threads may share `&Gpu` and resolve/route/inspect in parallel, lock-free.
+//! - **No thread-unsafe exceptions exist.** The audit for this milestone found
+//!   none to document: no core type needs `!Sync`. The single *relaxation* is
+//!   `dyn RmBackend` (`Send` but not `Sync` — reachable only through
+//!   `Isolate::rm(&mut self)`, so a shared reference to one is unrepresentable;
+//!   documented in `nvkvm-isolate`).
+//! - **Ports the core *stores* carry the bound; ports passed as arguments don't.**
+//!   `Arch`, `Isolate`, `IsolateFactory` live inside `Gpu` and are `Send + Sync`
+//!   supertraits. `Vmm` (`Send`), `Present`, `FbRead`, `TraceSink` are only ever
+//!   *arguments* (`&mut dyn`), so their synchronization belongs to whoever owns
+//!   them — the adapter.
+//!
+//! **The architectural payoff — per-`Proc` parallelism:** because each [`gpu::Proc`]
+//! owns all four of its planes (address/exec/completion/isolate + arena) and the
+//! per-proc entry points take `&mut Proc` (not `&mut Gpu`), two vCPUs driving
+//! *different* guest processes can mutate their `Proc`s **simultaneously with no
+//! shared lock** — disjoint `&mut` borrows out of `Gpu::procs` are safe by the
+//! borrow checker, and the state they reach (arena, host VAS, isolate, completion
+//! queue) is disjoint by construction (#14's isolation, cashed in as concurrency).
+//! Only device-global state — `RmGraph` mutation (`Gpu::apply`), routing-map
+//! refresh, the `DeliveryPlane`'s single drain gate — needs coarser exclusivity.
+//! The concrete locking *strategy* is the L1 OS layer's decision;
+//! `tests/concurrency_stress.rs` proves the realistic one (device-global
+//! `RwLock` + split per-`Proc` borrows) over millions of interleaved ops, and is
+//! the suite to run under ThreadSanitizer (invocation documented there).
 
 pub mod gpa;
 pub mod gpu;
@@ -34,6 +80,37 @@ pub mod project;
 pub mod rmgraph;
 
 use nvkvm_arch::ids::HClient;
+
+// The concurrency contract, compile-time-asserted (decision #17): every public
+// type of the core — including `Gpu` itself, whose `Box<dyn Arch>`/`Box<dyn
+// Isolate>` fields are exactly where a missing bound would hide.
+nvkvm_util::assert_send_sync!(
+    ProcId,
+    ChanId,
+    Traffic,
+    ProcAnchor,
+    gpu::Gpu,
+    gpu::Proc,
+    gpu::Vas,
+    gpu::Channel,
+    gpu::ExecPlane,
+    gpu::PollState,
+    gpu::GpuError,
+    gpa::GpaSpace,
+    gpa::GpaArena,
+    gpa::GpaError,
+    rmgraph::RmGraph,
+    rmgraph::RmEvent,
+    rmgraph::RmGraphError,
+    rmgraph::NodeKey,
+    rmgraph::AllocFacts,
+    rmgraph::Mapping,
+    rmgraph::RmNode,
+    project::Boundaries,
+    project::ProcBoundary,
+    project::ChannelFacts,
+    project::ProjectionError,
+);
 
 /// A derived guest-process identity. NOT a hardware concept ("there is no GPU
 /// process" — decision #14): purely the label of one dup-connected component of the

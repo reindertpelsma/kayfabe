@@ -12,10 +12,17 @@
 //! The core is *deterministically testable without a GPU or a hypervisor* precisely
 //! because every effect crosses this seam.
 //!
-//! **Threading contract** (§4.1): the adapter serializes all [`Device`] entry points
-//! per device (QEMU's BQL; a per-device mutex elsewhere). The core is
-//! single-threaded-per-device by contract; isolate I/O completes via [`CoreEvent`]s,
-//! never by re-entry from another thread.
+//! **Threading contract** (§4.1 + decision #17): the adapter provides the
+//! synchronization; the core provides safety under *any* strategy. All [`Device`]
+//! entry points take `&mut self`, so the adapter must give the core exclusive
+//! access per call — a whole-device serialization (QEMU's BQL, a per-device mutex)
+//! is the simplest valid strategy, and per-`Proc` sharding is equally sound
+//! (core types are `Send + Sync`, mutation is `&mut`-exclusive, and the per-proc
+//! planes are disjoint — see `nvkvm-core`'s concurrency contract). Isolate I/O
+//! completes via [`CoreEvent`]s on the adapter's executor, never by re-entry from
+//! an isolate thread. [`Vmm`] itself is a *passed argument*, not core-owned state:
+//! it is `Send` (handed between adapter threads) but carries no `Sync` bound — the
+//! adapter owns its synchronization.
 
 use core::ops::Range;
 use core::time::Duration;
@@ -295,3 +302,12 @@ pub trait Device {
     /// A deferred callback, lock fault, or isolate completion.
     fn event(&mut self, vmm: &mut dyn Vmm, ev: CoreEvent);
 }
+
+// The concurrency contract, compile-time-asserted (decision #17): every value type
+// crossing the seam is `Send + Sync`; `dyn Vmm` is `Send` by supertrait (the
+// threading contract in the crate docs explains why `Sync` is not required).
+nvkvm_util::assert_send_sync!(
+    VmmError, SlotId, BarId, HostRegion, Prot, TrapMode, IrqSpec, RamHandle, FbMeta, Vblank,
+    PresentError, CoreEventKind, CoreEvent,
+);
+nvkvm_util::assert_send!(dyn Vmm);

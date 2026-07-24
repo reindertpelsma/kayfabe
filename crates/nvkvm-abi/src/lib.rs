@@ -36,7 +36,10 @@ pub struct DriverVersion {
 /// decomposition: frontend ioctls, UVM ioctls, control commands, alloc classes —
 /// each handler carrying its generated param size + capability allowlist entry
 /// (closing the default-allow gap, `nvproxy_gap_analysis`).
-pub trait DriverAbi {
+///
+/// `Send + Sync` supertrait (decision #17): like `Arch`, a driver-version table set
+/// is immutable shared data, selected once at realize and stored core-side.
+pub trait DriverAbi: Send + Sync {
     /// The version this table set was generated from.
     fn version(&self) -> DriverVersion;
 
@@ -45,3 +48,6 @@ pub trait DriverAbi {
     /// version's table (loud refusal upstream, never a guessed size).
     fn alloc_param_size(&self, class: ClassId) -> Option<usize>;
 }
+
+// The concurrency contract, compile-time-asserted (decision #17).
+nvkvm_util::assert_send_sync!(DriverVersion, dyn DriverAbi);

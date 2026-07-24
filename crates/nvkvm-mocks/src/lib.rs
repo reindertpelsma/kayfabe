@@ -881,6 +881,26 @@ impl Present for MockPresent {
     }
 }
 
+// The concurrency contract, compile-time-asserted (decision #17): the mocks must be
+// `Send + Sync` like the real adapters they stand in for — the multi-thread stress
+// harness (`tests/concurrency_stress.rs`) drives a mock-realized `Gpu` from many
+// simulated vCPU threads.
+nvkvm_util::assert_send_sync!(
+    MockArch,
+    MockGmmuFmt,
+    MockUserd,
+    MockPushbuffer,
+    MockVmm,
+    MockRmBackend,
+    MockIsolate,
+    MockIsolateFactory,
+    MockPresent,
+    RmRecorder,
+    SharedRecorder,
+    SlotRecord,
+    RmVerb,
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

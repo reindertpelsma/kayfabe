@@ -19,6 +19,11 @@
 //! Also here (skeleton this milestone): the GMMU **walk algorithm** — regime-independent
 //! core logic written against [`nvkvm_arch::GmmuFmt`], used only at forward-populate
 //! commit points (decode-dirtied-PT-pages, #13), never as a resolve fallback.
+//!
+//! Concurrency (decision #17): plain owned data, no interior mutability;
+//! [`AddressTable::resolve`]/[`AddressTable::iter`] are `&self` (concurrent reads
+//! safe), bind/unbind are `&mut self` (caller-exclusive). `Send + Sync`
+//! compile-time-asserted below; full contract in `nvkvm-core`'s crate docs.
 
 pub mod walker;
 
@@ -128,6 +133,9 @@ impl AddressTable {
         self.map.iter()
     }
 }
+
+// The concurrency contract, compile-time-asserted (decision #17).
+nvkvm_util::assert_send_sync!(AddressTable, Binding, AddressFault, walker::WalkResult);
 
 #[cfg(test)]
 mod tests {

@@ -26,6 +26,16 @@
 //! §7), the Case-1 shadow-forwarding / Case-2 ack-only tables, CE PT-write capture
 //! feed (#13), channel/TSG lifecycle. Each arrives with its regression tests
 //! (testing strategy §2).
+//!
+//! ## Concurrency (decision #17)
+//!
+//! This crate is stateless — free functions over the core's types, so the
+//! concurrency contract is inherited verbatim from `nvkvm-core` (see its crate
+//! docs): functions taking `&Gpu` ([`resolve`], [`gate_working_set`]) are
+//! concurrent-safe under a shared borrow; functions taking `&mut Gpu` or
+//! `&mut Proc` require caller-provided exclusivity — and the `&mut Proc` ones
+//! ([`publish_backing`]) parallelize per-proc (disjoint borrows out of
+//! `Gpu::procs`, no shared lock).
 
 use nvkvm_arch::Aperture;
 use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
@@ -568,3 +578,13 @@ pub fn present_scanout(
     proc.completion.observe(OsEventRef(vblank.seq));
     Ok(vblank.seq)
 }
+
+// The concurrency contract, compile-time-asserted (decision #17).
+nvkvm_util::assert_send_sync!(
+    FwdFault,
+    Published,
+    DoorbellOutcome,
+    ControlRoute,
+    EngineObjectForwarded,
+    PushbufferOutcome,
+);

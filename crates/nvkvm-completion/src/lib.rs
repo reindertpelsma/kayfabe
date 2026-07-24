@@ -20,12 +20,16 @@
 //!
 //! Transport (seqNum ring discipline, the actual queue encoding) is `nvkvm-gsp`'s job;
 //! this crate is pure policy and holds no NVIDIA layout.
+//!
+//! Concurrency (decision #17): plain owned data, no interior mutability; all
+//! mutation is `&mut self` — see `nvkvm-core`'s crate docs for the full contract.
+//! `Send + Sync` compile-time-asserted below.
 
 use std::collections::VecDeque;
 
 /// A reference to one guest-visible os-event completion (opaque to policy;
 /// the GSP transport knows how to encode it on the queue).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OsEventRef(pub u64);
 
 /// Identifies one posted SWGEN0 batch awaiting the guest's IRQSCLR drain.
@@ -195,6 +199,9 @@ impl DeliveryPlane {
         self.try_post(core::iter::once(poller).chain(others))
     }
 }
+
+// The concurrency contract, compile-time-asserted (decision #17).
+nvkvm_util::assert_send_sync!(OsEventRef, BatchId, CompletionQueue, DeliveryPlane, PostBatch);
 
 #[cfg(test)]
 mod tests {

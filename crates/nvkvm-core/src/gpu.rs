@@ -151,6 +151,13 @@ pub struct PollState {
 }
 
 /// The per-process container — the unit of ownership for all four planes.
+///
+/// Also the unit of **parallelism** (concurrency contract, crate docs): the
+/// per-proc entry points (`nvkvm-fwd`'s `publish_backing`, this type's methods)
+/// take `&mut Proc`, so two vCPU threads holding disjoint `&mut` borrows out of
+/// [`Gpu::procs`] mutate different procs simultaneously with no shared lock —
+/// their arenas, host VASes, isolates, and completion queues are disjoint by
+/// construction.
 pub struct Proc {
     /// Derived identity (grouping label only — address ops key on [`Vas`],
     /// exec ops on [`Channel`]).
@@ -233,6 +240,14 @@ impl Proc {
 /// Will additionally implement `nvkvm_vmm::Device` once the register/GSP models
 /// port (`nvkvm-regs`-equivalent + `nvkvm-gsp`); this milestone exposes the
 /// event-level API the adapters and tests drive.
+///
+/// `Send + Sync` (compile-time-asserted; concurrency contract, crate docs): share
+/// `&Gpu` across vCPU threads for lock-free reads (`nvkvm-fwd::resolve`,
+/// `gate_working_set`, routing lookups); mutation (`apply`, doorbells, completion
+/// pumping) takes `&mut self` under caller-provided exclusivity. Device-global
+/// state here (the graph, routing maps, the delivery gate) is exactly the state
+/// that needs a device-wide lock; everything per-process lives in [`Proc`] and
+/// parallelizes per-proc.
 pub struct Gpu {
     /// The Axis-B behavior this device was realized with. The core only ever
     /// calls trait methods on it — never names a generation.

@@ -30,6 +30,15 @@
 //! misplaced (decision #1). The `MockArch` in `nvkvm-mocks` is the first `impl` and
 //! the proof of the seam: it uses deliberately fake encodings so any core code that
 //! secretly assumes a real NVIDIA encoding fails the mock-driven tests.
+//!
+//! ## Concurrency (decision #17)
+//!
+//! The four seams here ([`Arch`], [`GmmuFmt`], [`UserdModel`], [`PushbufferAbi`]) are
+//! **`Send + Sync` supertraits**: an implementation is a stateless (or immutable)
+//! encoding table, every method takes `&self`, and the composition root stores one
+//! `Box<dyn Arch>` inside the `Gpu` that multiple vCPU threads share — so the seam
+//! itself must be shareable. An `impl` needing interior mutation would be a design
+//! smell (encodings don't change at runtime) and is rejected by the compiler.
 
 pub mod ids;
 
@@ -155,7 +164,9 @@ pub enum PteDecode {
 /// this trait supplies only the per-regime *format*: how many levels, how an entry
 /// decodes, which leaf sizes exist. ~two heavy impls (VER2/VER3) with thin per-gen
 /// deltas (`mode2_abi_agnostic_layer.md` §4.2). #13 lives or dies here.
-pub trait GmmuFmt {
+///
+/// `Send + Sync`: a format codec is immutable shared data (crate docs, decision #17).
+pub trait GmmuFmt: Send + Sync {
     /// The format regime.
     fn version(&self) -> GmmuVersion;
     /// Every real leaf page size, ascending. MUST be exhaustive (see [`PageSize`]).
@@ -177,7 +188,9 @@ pub trait GmmuFmt {
 /// impl knows the offsets. (The #11 USERD-wipe bug is prevented structurally in the
 /// core by type-distinguishing pages backing live host objects; this trait only
 /// supplies the geometry.)
-pub trait UserdModel {
+///
+/// `Send + Sync`: geometry is immutable shared data (crate docs, decision #17).
+pub trait UserdModel: Send + Sync {
     /// Total USERD size in bytes for one channel.
     fn userd_size(&self) -> u64;
     /// Byte offset of the GP_GET field (host progress pointer) within USERD.
@@ -247,7 +260,9 @@ pub struct PushRange {
 /// dispatch on [`PushMethod`]) is **core**; this trait supplies only the per-arch
 /// *encodings* (how a raw method word decodes, which method ID is `SEM_RELEASE`, the
 /// GPFIFO entry stride/format).
-pub trait PushbufferAbi {
+///
+/// `Send + Sync`: a method codec is immutable shared data (crate docs, decision #17).
+pub trait PushbufferAbi: Send + Sync {
     /// Number of 32-bit **argument** words that follow a method `header` word (the
     /// method's count field). The core parser uses this to advance the method stream;
     /// the *meaning* of the args is [`PushbufferAbi::decode_method`]'s job. A header
@@ -273,13 +288,15 @@ pub trait PushbufferAbi {
 /// grep gate, testing strategy §7 Tier 2).
 ///
 /// Object-safe: the composition root holds `Box<dyn Arch>` selected once at device
-/// realize (`mode2_abi_agnostic_layer.md` §4.3).
+/// realize (`mode2_abi_agnostic_layer.md` §4.3). `Send + Sync` supertrait: that box
+/// lives inside the `Gpu` that vCPU threads share, and an arch is an immutable
+/// encoding table — every method takes `&self` (crate docs, decision #17).
 ///
 /// **A real implementer's checklist** (`impl Arch for Ampere`, zero core edits):
 /// classify the generation's class-ID set (sourced from the Axis-A codegen tables in
 /// `nvkvm-abi`), decode the work-submit token and channel USERD flags, and supply the
 /// generation's `GmmuFmt`/`UserdModel`. That is the whole surface.
-pub trait Arch {
+pub trait Arch: Send + Sync {
     /// Human-readable generation name (trace/diagnostics only — the core must
     /// never branch on it).
     fn name(&self) -> &'static str;
@@ -321,3 +338,30 @@ pub trait Arch {
     /// The pushbuffer / method ABI for this generation (the ONE parser's encodings).
     fn pushbuffer(&self) -> &dyn PushbufferAbi;
 }
+
+// The concurrency contract, compile-time-asserted (decision #17): every public type
+// — and every trait-object seam the core stores or returns — is `Send + Sync`.
+nvkvm_util::assert_send_sync!(
+    ids::HClient,
+    ids::HObject,
+    ids::Pdb,
+    ids::VChid,
+    ids::ClassId,
+    ids::GpuVa,
+    ids::Gpa,
+    ids::ControlCmd,
+    ids::EngineClass,
+    ids::EngineKind,
+    ObjectKind,
+    DoorbellTarget,
+    GmmuVersion,
+    PageSize,
+    Aperture,
+    PteDecode,
+    PushMethod,
+    PushRange,
+    dyn Arch,
+    dyn GmmuFmt,
+    dyn UserdModel,
+    dyn PushbufferAbi,
+);

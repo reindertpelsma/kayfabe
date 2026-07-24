@@ -29,3 +29,6 @@ pub enum BootPhase {
     /// `GSP_INIT_DONE` posted; RPC plane live.
     Running,
 }
+
+// The concurrency contract, compile-time-asserted (decision #17).
+nvkvm_util::assert_send_sync!(BootPhase);

@@ -12,6 +12,8 @@
 //! - [`Instant`] / [`Duration`] re-export — a **virtual clock**. The core never reads
 //!   real time; time is a value the VMM adapter (or a test's mock) advances explicitly
 //!   (`mode2_rust_testing_strategy.md` §4: "the virtual clock is load-bearing").
+//! - [`assert_send_sync!`] / [`assert_send!`] — the compile-time concurrency
+//!   assertions every logic crate applies to its public types (decision #17).
 
 pub mod interval_map;
 pub mod time;
@@ -20,3 +22,40 @@ pub use interval_map::{IntervalMap, OverlapError};
 pub use time::Instant;
 /// Re-export of the pure, OS-free duration type (from `core::time`).
 pub use core::time::Duration;
+
+/// Compile-time assertion that each listed type is [`Send`]`+`[`Sync`] — **the
+/// concurrency contract, enforced by the build** (design decision #17).
+///
+/// Every logic crate invokes this over its public types at the bottom of the
+/// defining module, so the assertion is checked on every `cargo check`/`build`:
+/// if a future edit sneaks an `Rc`, `Cell`, `RefCell`, or an un-bounded trait
+/// object into a core type, **compilation fails** — a data-race hazard can never
+/// reach a test run, let alone production. Accepts unsized types, so trait-object
+/// seams are assertable directly (`assert_send_sync!(dyn Arch)`).
+#[macro_export]
+macro_rules! assert_send_sync {
+    ($($t:ty),+ $(,)?) => {
+        const _: () = {
+            const fn assert_send_sync<T: Send + Sync + ?Sized>() {}
+            $(assert_send_sync::<$t>();)+
+        };
+    };
+}
+
+/// Compile-time assertion that each listed type is [`Send`] (see
+/// [`assert_send_sync!`]). For the rare seam that is deliberately only `Send`
+/// (e.g. `dyn RmBackend`, reachable exclusively through `&mut`): the exception is
+/// explicit in the source, per the "thread-safe by default, exceptions documented"
+/// rule (decision #17).
+#[macro_export]
+macro_rules! assert_send {
+    ($($t:ty),+ $(,)?) => {
+        const _: () = {
+            const fn assert_send<T: Send + ?Sized>() {}
+            $(assert_send::<$t>();)+
+        };
+    };
+}
+
+// The contract applies to this crate's own types first.
+crate::assert_send_sync!(Instant, IntervalMap<()>, OverlapError);

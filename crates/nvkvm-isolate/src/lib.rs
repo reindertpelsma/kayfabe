@@ -16,6 +16,18 @@
 //! socket wire protocol — the Mode-1 stub posture) is an adapter crate concern.
 //! This crate is pure interface + value types so the core and its tests never touch
 //! an OS. `nvkvm-mocks::{MockRmBackend, MockIsolate}` are the test impls.
+//!
+//! ## Concurrency (decision #17)
+//!
+//! [`Isolate`] and [`IsolateFactory`] are **`Send + Sync` supertraits**: the core
+//! *stores* them (each `Proc` owns its `Box<dyn Isolate>`, the `Gpu` owns the
+//! factory), so they inherit the core's shareability requirement. Their `&self`
+//! surface is pure reads (`id`/`is_retired`); every mutation takes `&mut self`, so
+//! exclusivity comes from the caller's borrow, as everywhere in the core.
+//! [`RmBackend`] is the **one documented `Send`-only exception**: it is reachable
+//! exclusively through [`Isolate::rm`]`(&mut self)`, so a shared reference to one
+//! never exists — requiring `Sync` would constrain real impls (socket buffers to the
+//! sandboxed worker) for a capability no call path can use.
 
 use nvkvm_arch::ids::ClassId;
 pub use nvkvm_arch::ids::ControlCmd;
@@ -62,7 +74,10 @@ pub enum RmError {
 ///
 /// Object-safe; implemented by the linux-ioctl adapter inside the sandbox, and by
 /// `MockRmBackend` in tests (scriptable failures, recorded verb log).
-pub trait RmBackend {
+///
+/// `Send` (not `Sync`) — the documented exception, see crate docs: only ever
+/// reached via `&mut`, so shared cross-thread references are unrepresentable.
+pub trait RmBackend: Send {
     /// Allocate an RM object of `class` under `parent`. `params` is an opaque,
     /// already-encoded parameter blob (encoding is the ABI adapter's job).
     fn alloc(
@@ -145,7 +160,9 @@ pub struct IsolateId(pub u32);
 /// unambiguous signal (the DUP_OBJECT dup-src registration — arch doc §4.3.4),
 /// retired in two stages (`retire()` → drop) so cross-teardown consumption is
 /// impossible by construction (lesson L10).
-pub trait Isolate {
+///
+/// `Send + Sync`: owned by a `Proc` inside the shared `Gpu` (crate docs, #17).
+pub trait Isolate: Send + Sync {
     /// This isolate's session id (== `ProcId`).
     fn id(&self) -> IsolateId;
 
@@ -163,7 +180,14 @@ pub trait Isolate {
 
 /// Spawns isolates. The composition root holds one; per-`Proc` isolates are created
 /// through it so the core never knows *how* a sandbox is made.
-pub trait IsolateFactory {
+///
+/// `Send + Sync`: owned by the shared `Gpu` (crate docs, #17); spawning takes `&mut`.
+pub trait IsolateFactory: Send + Sync {
     /// Spawn (or lazily reserve) the isolate for session `id`.
     fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate>;
 }
+
+// The concurrency contract, compile-time-asserted (decision #17). `dyn RmBackend`
+// is the one documented Send-only exception (crate docs).
+nvkvm_util::assert_send_sync!(HostHandle, RmError, IsolateId, dyn Isolate, dyn IsolateFactory);
+nvkvm_util::assert_send!(dyn RmBackend);

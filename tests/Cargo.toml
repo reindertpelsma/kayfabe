@@ -10,6 +10,7 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+nvkvm-util.workspace = true
 nvkvm-arch.workspace = true
 nvkvm-core.workspace = true
 nvkvm-fwd.workspace = true

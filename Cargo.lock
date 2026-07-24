@@ -106,15 +106,22 @@ name = "nvkvm-abi"
 version = "0.1.0"
 dependencies = [
  "nvkvm-arch",
+ "nvkvm-util",
 ]
 
 [[package]]
 name = "nvkvm-arch"
 version = "0.1.0"
+dependencies = [
+ "nvkvm-util",
+]
 
 [[package]]
 name = "nvkvm-completion"
 version = "0.1.0"
+dependencies = [
+ "nvkvm-util",
+]
 
 [[package]]
 name = "nvkvm-core"
@@ -153,6 +160,7 @@ name = "nvkvm-isolate"
 version = "0.1.0"
 dependencies = [
  "nvkvm-arch",
+ "nvkvm-util",
 ]
 
 [[package]]
@@ -184,6 +192,7 @@ dependencies = [
  "nvkvm-isolate",
  "nvkvm-mmu",
  "nvkvm-mocks",
+ "nvkvm-util",
  "nvkvm-vmm",
  "proptest",
 ]
