@@ -34,7 +34,7 @@ use nvkvm_core::gpu::{Channel, Gpu, Proc, Vas};
 use nvkvm_core::{ChanId, ProcId};
 use nvkvm_isolate::{HostHandle, RmError};
 use nvkvm_mmu::{AddressFault, Binding};
-use nvkvm_vmm::{IrqSpec, Vmm};
+use nvkvm_vmm::{FbMeta, IrqSpec, Present, PresentError, RamHandle, Vmm};
 
 /// The MSI-X vector completions are raised on. Abstract placeholder until the
 /// interrupt-tree model ports (`nvkvm-regs`-equivalent); the mocks assert on it.
@@ -72,6 +72,8 @@ pub enum FwdFault {
     /// A class the guest tried to alloc as an engine object is not one this arch
     /// recognizes as an engine — MISS=FAULT (never guessed into a GR/CE object).
     NotAnEngine(ClassId),
+    /// The present/display sink refused a GR-graphics scanout.
+    Present(PresentError),
 }
 
 impl From<AddressFault> for FwdFault {
@@ -536,4 +538,33 @@ pub fn ring_gated(
     let token = chan.host_token.ok_or(FwdFault::NoVas(cid))?;
     proc.isolate.rm().ring_doorbell(token)?;
     Ok(token)
+}
+
+// =================================================================================
+// The abstract present/display seam — GR-graphics's home (`execution_plane.md` §2.6).
+// GR-graphics is the SAME engine as GR-compute (EngineKind::GrGraphics); the ONLY
+// added surface is routing its scanout buffer to a `Present` sink, host-agnostic
+// (QEMU/PRIME later; MockPresent now). The present-complete is fed back as a synthetic
+// vblank via the OWNING proc's completion queue — never NVKMS.
+// =================================================================================
+
+/// Route proc `pid`'s GR-graphics scanout `buffer` to the abstract [`Present`] sink,
+/// then feed the present-complete back as a synthetic vblank on that proc's completion
+/// queue (§2.4's graphics arm). Keeps display hypervisor/host-agnostic: the core names
+/// only the [`Present`] seam; the concrete adapter (QEMU/PRIME) is a later fill.
+pub fn present_scanout(
+    gpu: &mut Gpu,
+    pid: ProcId,
+    present: &mut dyn Present,
+    buffer: RamHandle,
+    meta: FbMeta,
+) -> Result<u64, FwdFault> {
+    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(pid));
+    }
+    let vblank = present.present(buffer, meta).map_err(FwdFault::Present)?;
+    // Synthetic vblank → the proc's completion queue (the graphics completion arm).
+    proc.completion.observe(OsEventRef(vblank.seq));
+    Ok(vblank.seq)
 }

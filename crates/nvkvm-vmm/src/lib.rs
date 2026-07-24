@@ -99,6 +99,54 @@ pub struct RamHandle {
     pub covers: Option<Range<u64>>,
 }
 
+/// Metadata describing a scanout framebuffer to present (`execution_plane.md` §2.6).
+/// Abstract: the core names the geometry; the concrete adapter (QEMU/PRIME) knows how
+/// to turn `buffer` into a real dma-buf and scan it out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbMeta {
+    /// Framebuffer width in pixels.
+    pub width: u32,
+    /// Framebuffer height in pixels.
+    pub height: u32,
+    /// Row stride in bytes.
+    pub stride: u32,
+    /// Abstract pixel format tag (the adapter maps it to a concrete fourcc).
+    pub format: u32,
+}
+
+/// A completed present, fed back into the core as a synthetic vblank
+/// (`execution_plane.md` §2.6). The GR-graphics completion tie-in observes this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Vblank {
+    /// Monotonic present/frame sequence number.
+    pub seq: u64,
+}
+
+/// Error from a [`Present`] sink.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresentError {
+    /// The buffer handle is unknown / not a valid scanout source (its token).
+    BadBuffer(u64),
+    /// The sink cannot present (unsupported format, no display, …).
+    Unsupported(&'static str),
+}
+
+/// # The abstract present / display sink — GR-graphics's home
+///
+/// The seam that keeps display **hypervisor/host-agnostic** (`execution_plane.md`
+/// §2.6/§3.3): a GR-graphics context routes its scanout buffer here; the concrete
+/// adapter turns it into a `PRIME_HANDLE_TO_FD` dma-buf → VMM present → host
+/// present-complete, fed back as a synthetic [`Vblank`]. **NEVER NVKMS forwarding.**
+///
+/// This crate defines only the trait; the QEMU/PRIME adapter is a LATER concrete impl.
+/// `nvkvm-mocks::MockPresent` is the test impl so the seam exists and is exercised now.
+pub trait Present {
+    /// Present the scanout `buffer` (a shareable handle over the render target) with
+    /// geometry `meta`. Returns the [`Vblank`] the present completed on — the core
+    /// feeds it back as a synthetic vblank via the completion tie-in.
+    fn present(&mut self, buffer: RamHandle, meta: FbMeta) -> Result<Vblank, PresentError>;
+}
+
 /// Discriminates deferred-work callbacks so `Vmm::defer`/`lock_region` can name
 /// which core path to re-enter without a closure crossing the boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

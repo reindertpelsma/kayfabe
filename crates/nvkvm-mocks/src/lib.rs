@@ -32,8 +32,8 @@ use nvkvm_arch::{
 use nvkvm_isolate::{HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError};
 use nvkvm_util::Instant;
 use nvkvm_vmm::{
-    BarId, CoreEvent, CoreEventKind, HostRegion, IrqSpec, Prot, RamHandle, SlotId, TrapMode, Vmm,
-    VmmError,
+    BarId, CoreEvent, CoreEventKind, FbMeta, HostRegion, IrqSpec, Present, PresentError, Prot,
+    RamHandle, SlotId, TrapMode, Vblank, Vmm, VmmError,
 };
 
 // ---------------------------------------------------------------------------------
@@ -842,6 +842,42 @@ impl IsolateFactory for MockIsolateFactory {
             rm: MockRmBackend::new(id, Arc::clone(&self.recorder)),
             retired: false,
         })
+    }
+}
+
+// ---------------------------------------------------------------------------------
+// MockPresent — a scriptable display/scanout sink (the GR-graphics `Present` seam)
+// ---------------------------------------------------------------------------------
+
+/// A fake present sink: records every presented `(buffer, meta)` and hands back a
+/// monotonic [`Vblank`], so a GR-graphics scanout route is testable with no display.
+/// Can be scripted to fail (`fail_next`) for the negative path.
+#[derive(Debug, Default)]
+pub struct MockPresent {
+    /// Every presented frame in order (assert the scanout buffer reached the sink).
+    pub presented: Vec<(RamHandle, FbMeta)>,
+    /// If set, the next present fails with this error (then clears).
+    pub fail_next: Option<PresentError>,
+    next_seq: u64,
+}
+
+impl MockPresent {
+    /// A fresh sink with no frames presented.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Present for MockPresent {
+    fn present(&mut self, buffer: RamHandle, meta: FbMeta) -> Result<Vblank, PresentError> {
+        if let Some(e) = self.fail_next.take() {
+            return Err(e);
+        }
+        self.presented.push((buffer, meta));
+        let seq = self.next_seq;
+        self.next_seq += 1;
+        Ok(Vblank { seq })
     }
 }
 
