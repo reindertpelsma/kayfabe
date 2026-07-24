@@ -637,7 +637,7 @@ pub struct MockRmBackend {
     handles: BTreeSet<HostHandle>,
     next: u64,
     next_token: u64,
-    next_va: u64,
+    next_map_page: u64,
     retired: bool,
 }
 
@@ -651,7 +651,7 @@ impl MockRmBackend {
             // Namespaced fake host tokens / host VAs: disjoint across isolates by
             // construction, so "disjoint host backing" is directly assertable.
             next_token: (u64::from(id.0) + 1) << 20,
-            next_va: 0x7000_0000_0000 + ((u64::from(id.0) + 1) << 36),
+            next_map_page: 0,
             retired: false,
         }
     }
@@ -771,10 +771,23 @@ impl RmBackend for MockRmBackend {
         self.gate()?;
         self.check(vas)?;
         self.check(memory)?;
-        // Fake placement: per-isolate VA range + per-VAS lane, so distinct host
-        // VASes yield visibly distinct host VAs.
-        let va = self.next_va | ((vas.0 & 0xff) << 28);
-        self.next_va += len.next_multiple_of(0x1000);
+        // Fake placement with strictly disjoint fields, so every minted VA is
+        // distinct by construction and its provenance is readable off the bits:
+        //   [46..] base | [40..46) isolate lane | [32..40) VAS lane | [12..32) page
+        // The page counter is shared per backend (monotonic), capped LOUDLY before
+        // it could bleed into the VAS lane. (The old scheme OR-ed the lane at bit
+        // 28 over a bump counter, which wrapped into duplicates after 2^16 pages —
+        // caught by the M4b concurrency stress.)
+        assert!(
+            self.next_map_page < 1 << 20,
+            "MockRmBackend VA lane exhausted (2^20 pages mapped on isolate {:?})",
+            self.id
+        );
+        let va = 0x4000_0000_0000
+            + ((u64::from(self.id.0) + 1) << 40)
+            + ((vas.0 & 0xff) << 32)
+            + (self.next_map_page << 12);
+        self.next_map_page += len.next_multiple_of(0x1000) >> 12;
         self.record(RmVerb::MapGpuVa { vas, memory, len, va });
         Ok(va)
     }
@@ -932,6 +945,26 @@ mod tests {
             ],
             "due in deadline order, deterministically"
         );
+    }
+
+    /// Regression (found by the M4b concurrency stress): the old VA minting OR-ed a
+    /// per-VAS lane at bit 28 over a page-bump counter, so after 2^16 single-page
+    /// maps the counter wrapped into the lane and duplicate host VAs came out. The
+    /// mock must mint distinct VAs well past that boundary, across multiple VASes.
+    #[test]
+    fn mock_rm_map_gpu_va_stays_distinct_past_65536_pages() {
+        let (mut f, _rec) = MockIsolateFactory::new();
+        let mut iso = f.spawn(IsolateId(1));
+        let rm = iso.rm();
+        let vas_a = rm.alloc_vaspace().unwrap();
+        let vas_b = rm.alloc_vaspace().unwrap();
+        let mem = rm.alloc_sysmem(0x1000).unwrap();
+        let mut seen = std::collections::BTreeSet::new();
+        for k in 0..70_000u64 {
+            let vas = if k % 2 == 0 { vas_a } else { vas_b };
+            let va = rm.map_gpu_va(vas, mem, 0x1000).unwrap();
+            assert!(seen.insert(va), "duplicate host VA {va:#x} at map #{k}");
+        }
     }
 
     #[test]
