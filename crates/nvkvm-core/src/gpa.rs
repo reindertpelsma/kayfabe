@@ -58,6 +58,19 @@ impl GpaSpace {
         Ok(GpaArena { range: start..end, cursor: start })
     }
 
+    /// This window's guest-physical range (used to mint a fresh, disjoint per-target
+    /// window for another GPU — MG-6).
+    #[must_use]
+    pub fn window(&self) -> Range<u64> {
+        self.window.clone()
+    }
+
+    /// The fixed arena size this window carves (cloned into a new target's geometry).
+    #[must_use]
+    pub fn arena_len(&self) -> u64 {
+        self.arena_len
+    }
+
     /// Return a carved arena to the window for recycling. Takes the arena **by
     /// value**: releasing an arena a live `Proc` still owns is unrepresentable —
     /// only a reaped proc's arena (moved out of the dropped `Proc` at the quiesce

@@ -13,6 +13,7 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{HClient, Pdb};
 use nvkvm_completion::OsEventRef;
 use nvkvm_core::gpu::Gpu;
@@ -50,7 +51,7 @@ fn fb() -> (SurfaceHandle, FbMeta) {
 #[test]
 fn scanout_routes_to_present_and_feeds_vblank() {
     let (mut gpu, _rec) = graphics_gpu();
-    let pid = *gpu.by_pdb.get(&PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
     let mut present = MockPresent::new();
     let (buffer, meta) = fb();
 
@@ -77,11 +78,11 @@ fn scanout_routes_to_present_and_feeds_vblank() {
 #[test]
 fn render_target_exports_to_surface_presents_and_vblanks() {
     let (mut gpu, recorder) = graphics_gpu();
-    let pid = *gpu.by_pdb.get(&PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
 
     // Producer: a host render-target memory object, exported by the OWNING proc's
     // OWN isolate to a presentable surface.
-    let rm = gpu.procs.get_mut(&pid).expect("proc").isolate.rm();
+    let rm = gpu.procs.get_mut(&pid).expect("proc").isolates.get_mut(&GpuId::ZERO).unwrap().rm();
     let target = rm.alloc(HostHandle(0), mc::MEMORY, &[]).expect("render-target memory allocs");
     let surface = rm.export_surface(target).expect("render target exports to a surface");
     {
@@ -102,7 +103,7 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
         .expect("exported surface presents");
     assert_eq!(present.presented, vec![(surface, meta)], "the EXPORTED surface was presented");
     assert!(gpu.procs[&pid].completion.has_outstanding(), "present-complete = vblank observed");
-    let batch = gpu.pump_completions().expect("vblank posts");
+    let batch = gpu.pump_completions(GpuId::ZERO).expect("vblank posts");
     assert_eq!(batch.events, vec![OsEventRef(seq)], "the vblank rides the owner's batch");
 }
 
@@ -111,8 +112,8 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
 #[test]
 fn exporting_an_unknown_render_target_is_a_loud_fault() {
     let (mut gpu, _rec) = graphics_gpu();
-    let pid = *gpu.by_pdb.get(&PDB).unwrap();
-    let rm = gpu.procs.get_mut(&pid).expect("proc").isolate.rm();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    let rm = gpu.procs.get_mut(&pid).expect("proc").isolates.get_mut(&GpuId::ZERO).unwrap().rm();
     let bogus = HostHandle(0xdead_beef);
     assert_eq!(rm.export_surface(bogus), Err(RmError::BadHandle(bogus)));
 }
@@ -122,21 +123,21 @@ fn exporting_an_unknown_render_target_is_a_loud_fault() {
 #[test]
 fn vblank_flows_through_the_completion_plane() {
     let (mut gpu, _rec) = graphics_gpu();
-    let pid = *gpu.by_pdb.get(&PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
     let mut present = MockPresent::new();
     let (buffer, meta) = fb();
 
     let seq = present_scanout(&mut gpu, pid, &mut present, buffer, meta).unwrap();
-    let batch = gpu.pump_completions().expect("vblank posts");
+    let batch = gpu.pump_completions(GpuId::ZERO).expect("vblank posts");
     assert_eq!(batch.events, vec![OsEventRef(seq)], "the vblank rides the normal completion batch");
-    gpu.completions_drained();
+    gpu.completions_drained(GpuId::ZERO);
 }
 
 /// A present failure is a loud fault, never a silent drop.
 #[test]
 fn present_failure_is_a_loud_fault() {
     let (mut gpu, _rec) = graphics_gpu();
-    let pid = *gpu.by_pdb.get(&PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
     let mut present = MockPresent::new();
     present.fail_next = Some(PresentError::Unsupported("no display"));
     let (buffer, meta) = fb();

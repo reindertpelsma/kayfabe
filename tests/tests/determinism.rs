@@ -51,6 +51,7 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
+use nvkvm_arch::ids::GpuId;
 use std::collections::{BTreeMap, BTreeSet};
 
 use nvkvm_arch::Aperture;
@@ -217,16 +218,19 @@ struct MappingObs {
 struct CoreSnapshot {
     /// Per-proc grouping: anchor → its dup-connected client set.
     procs: BTreeMap<ProcAnchor, BTreeSet<HClient>>,
-    /// Data-plane routing (canonicalized ProcId → anchor): PDB → owning anchor.
-    by_pdb: BTreeMap<Pdb, ProcAnchor>,
-    /// Exec-plane routing: vChid → (owning anchor, channel node).
-    by_vchid: BTreeMap<VChid, (ProcAnchor, NodeKey)>,
-    /// Address plane: anchor → (PDB → VASpace origin node).
-    vases: BTreeMap<ProcAnchor, BTreeMap<Pdb, NodeKey>>,
+    /// Data-plane routing (canonicalized ProcId → anchor): (target, PDB) → owning
+    /// anchor. Keyed on the GPU axis (MG-3) so the axis is part of the observable
+    /// end-state and cannot leak arrival order.
+    by_pdb: BTreeMap<(GpuId, Pdb), ProcAnchor>,
+    /// Exec-plane routing: (target, vChid) → (owning anchor, channel node).
+    by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, NodeKey)>,
+    /// Address plane: anchor → ((target, PDB) → VASpace origin node).
+    vases: BTreeMap<ProcAnchor, BTreeMap<(GpuId, Pdb), NodeKey>>,
     /// Engine routing: anchor → (channel node → its routing facts).
     channels: BTreeMap<ProcAnchor, BTreeMap<NodeKey, ChannelObs>>,
-    /// Address resolutions / backing state: every bound (PDB, VA) → what it resolves to.
-    resolutions: BTreeMap<(Pdb, GpuVa), ResolvedObs>,
+    /// Address resolutions / backing state: every bound (target, PDB, VA) → what it
+    /// resolves to.
+    resolutions: BTreeMap<(GpuId, Pdb, GpuVa), ResolvedObs>,
     /// Refcount liveness: live resource origin → its live reference set.
     refs: BTreeMap<NodeKey, BTreeSet<NodeKey>>,
     /// The graph's live DMA mappings (the RPC populate source).
@@ -253,12 +257,12 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
         procs.insert(anchor, p.clients.clone());
 
         let mut vs = BTreeMap::new();
-        for (pdb, vas) in &p.vases {
-            vs.insert(*pdb, vas.origin);
+        for (&(gpu, pdb), vas) in &p.vases {
+            vs.insert((gpu, pdb), vas.origin);
             for (va, _len, b) in vas.table.iter() {
                 let host_published = b.host_va.is_some();
                 resolutions.insert(
-                    (*pdb, GpuVa(va)),
+                    (gpu, pdb, GpuVa(va)),
                     ResolvedObs {
                         phys_if_rpc: (!host_published).then_some(b.phys),
                         aperture: b.aperture,
@@ -424,10 +428,10 @@ proptest! {
 /// legitimately order-dependent) are NOT here; only guest-observable invariants are.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DataPlaneProjection {
-    /// (anchor, PDB) → publish_backing succeeded.
-    published: BTreeMap<(ProcAnchor, Pdb), bool>,
-    /// (anchor, PDB) → the published VA resolves AND is host-published.
-    pub_resolves: BTreeMap<(ProcAnchor, Pdb), bool>,
+    /// (anchor, target, PDB) → publish_backing succeeded.
+    published: BTreeMap<(ProcAnchor, GpuId, Pdb), bool>,
+    /// (anchor, target, PDB) → the published VA resolves AND is host-published.
+    pub_resolves: BTreeMap<(ProcAnchor, GpuId, Pdb), bool>,
     /// (anchor, channel node) → an NVENC channel armed its mapped fence successfully.
     arms: BTreeMap<(ProcAnchor, NodeKey), bool>,
     /// anchor → number of mapped fences left armed.
@@ -440,22 +444,24 @@ struct DataPlaneProjection {
 /// projection must be identical across orderings — if engine routing or per-`Vas`
 /// backing were order-dependent, this would catch it.
 fn materialize(gpu: &mut Gpu) -> DataPlaneProjection {
-    // (ProcId, Pdb, anchor) for every live Vas.
-    let vases: Vec<(nvkvm_core::ProcId, Pdb, ProcAnchor)> = gpu
+    // (ProcId, (GpuId, Pdb), anchor) for every live Vas — the target is part of the
+    // address identity (MG-3).
+    let vases: Vec<(nvkvm_core::ProcId, (GpuId, Pdb), ProcAnchor)> = gpu
         .procs
         .iter()
-        .flat_map(|(pid, p)| p.vases.keys().map(move |pdb| (*pid, *pdb, p.anchor)))
+        .flat_map(|(pid, p)| p.vases.keys().map(move |k| (*pid, *k, p.anchor)))
         .collect();
 
     let mut published = BTreeMap::new();
-    for (pid, pdb, anchor) in &vases {
-        let r = publish_backing(gpu.procs.get_mut(pid).expect("live"), *pdb, VA_PUB, 0x1000);
-        published.insert((*anchor, *pdb), r.is_ok());
+    for (pid, (gpu_t, pdb), anchor) in &vases {
+        let r =
+            publish_backing(gpu.procs.get_mut(pid).expect("live"), *gpu_t, *pdb, VA_PUB, 0x1000);
+        published.insert((*anchor, *gpu_t, *pdb), r.is_ok());
     }
     let mut pub_resolves = BTreeMap::new();
-    for (_pid, pdb, anchor) in &vases {
-        let ok = matches!(resolve(gpu, *pdb, VA_PUB), Ok((b, _)) if b.host_va.is_some());
-        pub_resolves.insert((*anchor, *pdb), ok);
+    for (_pid, (gpu_t, pdb), anchor) in &vases {
+        let ok = matches!(resolve(gpu, *gpu_t, *pdb, VA_PUB), Ok((b, _)) if b.host_va.is_some());
+        pub_resolves.insert((*anchor, *gpu_t, *pdb), ok);
     }
 
     let chans: Vec<(nvkvm_core::ProcId, nvkvm_core::ChanId)> =

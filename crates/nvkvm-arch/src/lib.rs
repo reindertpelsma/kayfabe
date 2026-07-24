@@ -362,6 +362,7 @@ nvkvm_util::assert_send_sync!(
     ids::ClassId,
     ids::GpuVa,
     ids::Gpa,
+    ids::GpuId,
     ids::ControlCmd,
     ids::EngineKind,
     ObjectKind,

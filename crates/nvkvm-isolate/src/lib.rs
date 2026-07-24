@@ -29,7 +29,7 @@
 //! never exists — requiring `Sync` would constrain real impls (socket buffers to the
 //! sandboxed worker) for a capability no call path can use.
 
-use nvkvm_arch::ids::{ClassId, EngineKind};
+use nvkvm_arch::ids::{ClassId, EngineKind, GpuId};
 pub use nvkvm_arch::ids::ControlCmd;
 use nvkvm_vmm::SurfaceHandle;
 
@@ -198,13 +198,17 @@ pub trait Isolate: Send + Sync {
     fn is_retired(&self) -> bool;
 }
 
-/// Spawns isolates. The composition root holds one; per-`Proc` isolates are created
-/// through it so the core never knows *how* a sandbox is made.
+/// Spawns isolates. The composition root holds one; per-`(Proc, GpuId)` isolates are
+/// created through it so the core never knows *how* a sandbox is made.
 ///
 /// `Send + Sync`: owned by the shared `Gpu` (crate docs, #17); spawning takes `&mut`.
 pub trait IsolateFactory: Send + Sync {
-    /// Spawn (or lazily reserve) the isolate for session `id`.
-    fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate>;
+    /// Spawn (or lazily reserve) the isolate for session `(id, gpu)` — one sandboxed
+    /// host worker **per guest process per target GPU** (`multi_gpu_and_mig.md` item
+    /// 3: a proc spanning two GPUs gets distinct isolates, so a bug forwarding its
+    /// GPU0 traffic cannot reach its GPU1 host handles — the #14 blast-radius
+    /// boundary lifted onto the GPU axis).
+    fn spawn(&mut self, id: IsolateId, gpu: GpuId) -> Box<dyn Isolate>;
 }
 
 // The concurrency contract, compile-time-asserted (decision #17). `dyn RmBackend`

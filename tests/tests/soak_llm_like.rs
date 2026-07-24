@@ -18,6 +18,7 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
+use nvkvm_arch::ids::GpuId;
 use std::collections::BTreeSet;
 use std::time::Duration;
 
@@ -87,7 +88,7 @@ fn build(n: u64) -> (Gpu, MockVmm, Vec<Inference>, Vec<nvkvm_core::ProcId>) {
     for ev in s.events {
         gpu.apply(ev).expect("fixture applies");
     }
-    let pids: Vec<_> = infs.iter().map(|inf| *gpu.by_pdb.get(&inf.pdb).unwrap()).collect();
+    let pids: Vec<_> = infs.iter().map(|inf| *gpu.by_pdb.get(&(GpuId::ZERO, inf.pdb)).unwrap()).collect();
     (gpu, MockVmm::new(), infs, pids)
 }
 
@@ -97,7 +98,7 @@ fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[nvkvm_core::Pro
     assert_eq!(gpu.procs.len() as u64, n, "proc count stays bounded (no leak/dup)");
 
     // (2) No arena collision: all live arenas pairwise disjoint.
-    let ranges: Vec<_> = gpu.procs.values().map(|p| p.arena.range.clone()).collect();
+    let ranges: Vec<_> = gpu.procs.values().map(|p| p.arenas[&GpuId::ZERO].range.clone()).collect();
     for i in 0..ranges.len() {
         for j in (i + 1)..ranges.len() {
             assert!(
@@ -113,7 +114,7 @@ fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[nvkvm_core::Pro
     let mut seen_phys: BTreeSet<u64> = BTreeSet::new();
     let mut seen_hva: BTreeSet<u64> = BTreeSet::new();
     for inf in infs {
-        if let Ok((bind, _)) = resolve(gpu, inf.pdb, shared) {
+        if let Ok((bind, _)) = resolve(gpu, GpuId::ZERO, inf.pdb, shared) {
             assert!(seen_phys.insert(bind.phys), "two procs' identical VA share a GPA backing");
             if let Some(hva) = bind.host_va {
                 assert!(seen_hva.insert(hva), "two procs' identical VA share a host VA");
@@ -149,12 +150,12 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
             // (unmap eager, map lazy) — never a silent stale reuse.
             {
                 let p = gpu.procs.get_mut(&pid).unwrap();
-                if p.vases.get(&infs[idx].pdb).unwrap().table.resolve(infs[idx].pdb, va).is_ok() {
-                    p.vases.get_mut(&infs[idx].pdb).unwrap().table.unbind(va);
+                if p.vases.get(&(GpuId::ZERO, infs[idx].pdb)).unwrap().table.resolve(infs[idx].pdb, va).is_ok() {
+                    p.vases.get_mut(&(GpuId::ZERO, infs[idx].pdb)).unwrap().table.unbind(va);
                 }
             }
             let p = gpu.procs.get_mut(&pid).unwrap();
-            publish_backing(p, infs[idx].pdb, va, KV_LEN)
+            publish_backing(p, GpuId::ZERO, infs[idx].pdb, va, KV_LEN)
                 .unwrap_or_else(|e| panic!("iter {it} proc {idx}: KV alloc failed: {e:?}"));
             infs[idx].live_kv.push(va);
 
@@ -162,11 +163,11 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
             if infs[idx].live_kv.len() > KV_RING {
                 let old = infs[idx].live_kv.remove(0);
                 let p = gpu.procs.get_mut(&pid).unwrap();
-                p.vases.get_mut(&infs[idx].pdb).unwrap().table.unbind(old);
+                p.vases.get_mut(&(GpuId::ZERO, infs[idx].pdb)).unwrap().table.unbind(old);
             }
 
             // --- launch: ring this proc's GR doorbell (its own channel/isolate) ---
-            let out = handle_doorbell(&mut gpu, tokens[idx], &[]).expect("launch routes");
+            let out = handle_doorbell(&mut gpu, GpuId::ZERO, tokens[idx], &[]).expect("launch routes");
             assert_eq!(out.proc, pid, "doorbell routes to the owning proc");
 
             // --- completion observed for this proc (host sema advance) ---
@@ -180,8 +181,8 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
         // (encoded owner = ev % 100) so per-proc progress is measured exactly. ---
         vmm.advance(Duration::from_micros(1));
         for idx in 0..n as usize {
-            if let Some(batch) = poll_completions(&mut gpu, &mut vmm, pids[idx]) {
-                gpu.completions_drained();
+            if let Some(batch) = poll_completions(&mut gpu, &mut vmm, GpuId::ZERO, pids[idx]) {
+                gpu.completions_drained(GpuId::ZERO);
                 // Ack every delivered event on its OWNING proc's queue (keeps each
                 // proc's awaiting_ack bounded — a leak would grow it unboundedly).
                 for ev in &batch.events {

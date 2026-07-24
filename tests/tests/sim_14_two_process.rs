@@ -15,6 +15,7 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
+use nvkvm_arch::ids::GpuId;
 use std::time::Duration;
 
 use nvkvm_arch::ids::{GpuVa, Pdb};
@@ -59,8 +60,8 @@ fn t14_two_procs_own_isolates_and_arenas() {
     let mut sessions = Vec::new();
     let mut ranges = Vec::new();
     for p in gpu.procs.values() {
-        sessions.push(p.isolate.id().0);
-        ranges.push(p.arena.range.clone());
+        sessions.push(p.isolates[&GpuId::ZERO].id().0);
+        ranges.push(p.arenas[&GpuId::ZERO].range.clone());
     }
     sessions.sort_unstable();
     sessions.dedup();
@@ -78,12 +79,12 @@ fn t14_identical_va_disjoint_backing() {
 
     // Route by PDB (data-plane identity) to each proc, then publish the SAME guest
     // VA in each. This is exactly the collision #14 hit in the C's shared arena.
-    let pid_a = *gpu.by_pdb.get(&A_PDB).expect("A routed by its PDB");
-    let pub_a = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, SHARED_VA, 0x10000)
+    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).expect("A routed by its PDB");
+    let pub_a = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), GpuId::ZERO, A_PDB, SHARED_VA, 0x10000)
         .expect("A publishes");
 
-    let pid_b = *gpu.by_pdb.get(&B_PDB).expect("B routed by its PDB");
-    let pub_b = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, SHARED_VA, 0x10000)
+    let pid_b = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).expect("B routed by its PDB");
+    let pub_b = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), GpuId::ZERO, B_PDB, SHARED_VA, 0x10000)
         .expect("B publishes — must NOT collide with A");
 
     // Disjoint GPA (different arenas) AND disjoint host VA (different host VASes).
@@ -91,8 +92,8 @@ fn t14_identical_va_disjoint_backing() {
     assert_ne!(pub_a.host_va, pub_b.host_va, "identical guest VA → distinct host VA");
 
     // Each Vas resolves ITS OWN backing for the identical VA — no cross-talk.
-    let (bind_a, off_a) = resolve(&gpu, A_PDB, GpuVa(SHARED_VA.0 + 0x40)).unwrap();
-    let (bind_b, _off_b) = resolve(&gpu, B_PDB, GpuVa(SHARED_VA.0 + 0x40)).unwrap();
+    let (bind_a, off_a) = resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(SHARED_VA.0 + 0x40)).unwrap();
+    let (bind_b, _off_b) = resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(SHARED_VA.0 + 0x40)).unwrap();
     assert_eq!(off_a, 0x40);
     assert_eq!(bind_a.host_va, Some(pub_a.host_va));
     assert_eq!(bind_b.host_va, Some(pub_b.host_va));
@@ -113,8 +114,8 @@ fn t14_doorbell_demux_routes_to_own_isolate() {
     // Ring A's GR channel and B's GR channel via their (distinct) vChid tokens.
     let a_token = MockArch::token_for(nvkvm_arch::ids::VChid(0x10));
     let b_token = MockArch::token_for(nvkvm_arch::ids::VChid(0x20));
-    let out_a = handle_doorbell(&mut gpu, a_token, &[]).expect("A's doorbell routes");
-    let out_b = handle_doorbell(&mut gpu, b_token, &[]).expect("B's doorbell routes");
+    let out_a = handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[]).expect("A's doorbell routes");
+    let out_b = handle_doorbell(&mut gpu, GpuId::ZERO, b_token, &[]).expect("B's doorbell routes");
 
     assert_ne!(out_a.proc, out_b.proc, "doorbells demux to different procs");
     assert!(out_a.scheduled_now && out_b.scheduled_now, "first submission schedules each");
@@ -130,7 +131,7 @@ fn t14_doorbell_demux_routes_to_own_isolate() {
     // Ringing A's doorbell again does NOT re-schedule (per-proc exec state is sticky
     // per channel, not a global one-shot that starves the other proc).
     drop(log);
-    let out_a2 = handle_doorbell(&mut gpu, a_token, &[]).expect("A rings again");
+    let out_a2 = handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[]).expect("A rings again");
     assert!(!out_a2.scheduled_now, "already scheduled");
 }
 
@@ -139,13 +140,13 @@ fn t14_malformed_and_unknown_tokens_fault_loudly() {
     let (mut gpu, _vmm, _rec) = two_process_gpu();
     // A token that does not decode (hostile bytes) — MalformedToken, never a guess.
     assert!(matches!(
-        handle_doorbell(&mut gpu, 0xdead_beef, &[]),
+        handle_doorbell(&mut gpu, GpuId::ZERO, 0xdead_beef, &[]),
         Err(nvkvm_fwd::FwdFault::MalformedToken { .. })
     ));
     // A well-formed token for a vChid no channel registered — UnknownVchid MISS=FAULT.
     let ghost = MockArch::token_for(nvkvm_arch::ids::VChid(0xfff));
     assert!(matches!(
-        handle_doorbell(&mut gpu, ghost, &[]),
+        handle_doorbell(&mut gpu, GpuId::ZERO, ghost, &[]),
         Err(nvkvm_fwd::FwdFault::UnknownVchid { .. })
     ));
 }
@@ -155,34 +156,34 @@ fn t14_malformed_and_unknown_tokens_fault_loudly() {
 #[test]
 fn t14_polling_proc_is_not_starved() {
     let (mut gpu, mut vmm, _rec) = two_process_gpu();
-    let pid_a = *gpu.by_pdb.get(&A_PDB).unwrap();
-    let pid_b = *gpu.by_pdb.get(&B_PDB).unwrap();
+    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid_b = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
 
     // B completes work; its completion is observed, posted, drained, acked.
     gpu.procs.get_mut(&pid_b).unwrap().completion.observe(OsEventRef(0xB0)).unwrap();
-    let batch = deliver_completions(&mut gpu, &mut vmm).expect("B's completion posts");
+    let batch = deliver_completions(&mut gpu, &mut vmm, GpuId::ZERO).expect("B's completion posts");
     assert_eq!(batch.events, vec![OsEventRef(0xB0)]);
-    gpu.completions_drained();
+    gpu.completions_drained(GpuId::ZERO);
     gpu.procs.get_mut(&pid_b).unwrap().completion.ack(OsEventRef(0xB0));
 
     // A's completion is observed and posted, but the guest drains the batch WITHOUT
     // A's waiter waking (the lost-wakeup window), and B rings no more doorbells.
     gpu.procs.get_mut(&pid_a).unwrap().completion.observe(OsEventRef(0xA0)).unwrap();
-    let batch = deliver_completions(&mut gpu, &mut vmm).expect("A's completion posts");
+    let batch = deliver_completions(&mut gpu, &mut vmm, GpuId::ZERO).expect("A's completion posts");
     assert_eq!(batch.events, vec![OsEventRef(0xA0)]);
-    gpu.completions_drained();
+    gpu.completions_drained(GpuId::ZERO);
 
     // In the C, delivery is now dead (doorbell-driven + any_completed-gated). Here,
     // A polls (MC_SERVICE_INTERRUPTS-shaped) and its un-acked completion is re-posted
     // off A's OWN poll. Advance the virtual clock to prove no real timer is involved.
     let _ = vmm.advance(Duration::from_micros(10));
     let irqs_before = vmm.irqs.len();
-    let repost = poll_completions(&mut gpu, &mut vmm, pid_a).expect("poll re-delivers A");
+    let repost = poll_completions(&mut gpu, &mut vmm, GpuId::ZERO, pid_a).expect("poll re-delivers A");
     assert_eq!(repost.events, vec![OsEventRef(0xA0)], "A's own poll re-posts A's event");
     assert_eq!(vmm.irqs.len(), irqs_before + 1, "SWGEN0 edge raised for the re-post");
 
     // Drain + ack: now A has nothing outstanding and a further poll posts nothing.
-    gpu.completions_drained();
+    gpu.completions_drained(GpuId::ZERO);
     gpu.procs.get_mut(&pid_a).unwrap().completion.ack(OsEventRef(0xA0));
-    assert!(poll_completions(&mut gpu, &mut vmm, pid_a).is_none(), "no over-posting");
+    assert!(poll_completions(&mut gpu, &mut vmm, GpuId::ZERO, pid_a).is_none(), "no over-posting");
 }

@@ -70,6 +70,26 @@ id_newtype!(
 );
 
 id_newtype!(
+    /// A **routable GPU target** — the multi-GPU axis (`multi_gpu_and_mig.md`).
+    ///
+    /// Derived from a `Device`'s declared `deviceInstance` (a protocol fact), never
+    /// guessed. Deliberately a *target*, not "physical device node": a future MIG
+    /// partition-target is another value of this same identity (the accommodation),
+    /// with zero re-keying.
+    ///
+    /// ★ `Pdb` and `VChid` are **per-GPU namespaces** (a PDB is a per-GPU FB address,
+    /// a vChid a per-GPU runlist index): two GPUs legally present identical values,
+    /// so every routing table keys on `(GpuId, Pdb)` / `(GpuId, VChid)` — the #14
+    /// disjoint-by-key-construction lesson lifted onto the GPU axis.
+    GpuId(u32)
+);
+
+impl GpuId {
+    /// The single-target default (the N=1 device realized via `Gpu::new`).
+    pub const ZERO: GpuId = GpuId(0);
+}
+
+id_newtype!(
     /// An RM control-command identifier (`GSP_RM_CONTROL` cmd). Values are per-version
     /// (Axis A, codegen'd in `nvkvm-abi`); the core only ever passes them to
     /// [`crate::Arch::is_case2_control`] and the host backend. Lives here (not in

@@ -24,7 +24,7 @@ use std::ops::Range;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
+use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
 use nvkvm_arch::{
     Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, ObjectKind, PageSize, PteDecode,
     PushMethod, PushRange, PushbufferAbi, UserdModel,
@@ -648,6 +648,10 @@ pub type SharedRecorder = Arc<Mutex<RmRecorder>>;
 #[derive(Debug)]
 pub struct MockRmBackend {
     id: IsolateId,
+    gpu: GpuId,
+    /// `id + 1` — the isolate's primary namespace lane (unchanged, so the high bits of
+    /// every minted handle/token/VA still read back as the session's ProcId+1).
+    idlane: u64,
     recorder: SharedRecorder,
     handles: BTreeSet<HostHandle>,
     next: u64,
@@ -657,18 +661,29 @@ pub struct MockRmBackend {
 }
 
 impl MockRmBackend {
-    fn new(id: IsolateId, recorder: SharedRecorder) -> Self {
+    fn new(id: IsolateId, gpu: GpuId, recorder: SharedRecorder) -> Self {
+        let idlane = u64::from(id.0) + 1;
         MockRmBackend {
             id,
+            gpu,
+            idlane,
             recorder,
             handles: BTreeSet::new(),
             next: 1,
-            // Namespaced fake host tokens / host VAs: disjoint across isolates by
-            // construction, so "disjoint host backing" is directly assertable.
-            next_token: (u64::from(id.0) + 1) << 20,
+            // Namespaced fake host tokens: primary lane = idlane (so `>>20` still reads
+            // ProcId+1); the target GPU is folded into a LOWER field, so two isolates of
+            // ONE proc on DIFFERENT GPUs still mint provably-disjoint tokens (MG-5).
+            next_token: (idlane << 20) | (u64::from(gpu.0) << 8),
             next_map_page: 0,
             retired: false,
         }
+    }
+
+    /// High 40 bits shared by every handle/surface: `idlane` (bits ≥32, so `>>32`
+    /// reads ProcId+1) with the target GPU folded into bits [24..32) — distinct per
+    /// `(isolate, GPU)`, the MG-5 cross-GPU blast-radius property.
+    fn handle_hi(&self) -> u64 {
+        (self.idlane << 32) | (u64::from(self.gpu.0) << 24)
     }
 
     fn gate(&mut self) -> Result<(), RmError> {
@@ -682,7 +697,7 @@ impl MockRmBackend {
     }
 
     fn mint(&mut self) -> HostHandle {
-        let h = HostHandle(((u64::from(self.id.0) + 1) << 32) | self.next);
+        let h = HostHandle(self.handle_hi() | self.next);
         self.next += 1;
         self.handles.insert(h);
         h
@@ -799,11 +814,13 @@ impl RmBackend for MockRmBackend {
         // caught by the M4b concurrency stress.)
         assert!(
             self.next_map_page < 1 << 20,
-            "MockRmBackend VA lane exhausted (2^20 pages mapped on isolate {:?})",
-            self.id
+            "MockRmBackend VA lane exhausted (2^20 pages mapped on isolate {:?} gpu {:?})",
+            self.id,
+            self.gpu
         );
         let va = 0x4000_0000_0000
-            + ((u64::from(self.id.0) + 1) << 40)
+            + (self.idlane << 40)
+            + (u64::from(self.gpu.0) << 47)
             + ((vas.0 & 0xff) << 32)
             + (self.next_map_page << 12);
         self.next_map_page += len.next_multiple_of(0x1000) >> 12;
@@ -829,9 +846,9 @@ impl RmBackend for MockRmBackend {
         // An unknown memory object is a LOUD BadHandle — never a silently minted
         // surface (and cross-isolate render targets are refused by the same check).
         self.check(memory)?;
-        // Namespaced like host handles ((id+1) << 32 | n) so cross-isolate surface
-        // use is visible in assertions.
-        let surface = SurfaceHandle(((u64::from(self.id.0) + 1) << 32) | self.next);
+        // Namespaced like host handles (handle_hi | n) so cross-(isolate, GPU)
+        // surface use is visible in assertions.
+        let surface = SurfaceHandle(self.handle_hi() | self.next);
         self.next += 1;
         self.record(RmVerb::ExportSurface { memory, surface });
         Ok(surface)
@@ -866,8 +883,9 @@ impl Isolate for MockIsolate {
 #[derive(Debug, Default)]
 pub struct MockIsolateFactory {
     recorder: SharedRecorder,
-    /// Every spawned session id, in order (assert isolate-per-proc).
-    pub spawned: Vec<IsolateId>,
+    /// Every spawned `(session id, target GPU)`, in order (assert isolate-per-`(proc,
+    /// GPU)`).
+    pub spawned: Vec<(IsolateId, GpuId)>,
 }
 
 impl MockIsolateFactory {
@@ -880,11 +898,11 @@ impl MockIsolateFactory {
 }
 
 impl IsolateFactory for MockIsolateFactory {
-    fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate> {
-        self.spawned.push(id);
+    fn spawn(&mut self, id: IsolateId, gpu: GpuId) -> Box<dyn Isolate> {
+        self.spawned.push((id, gpu));
         Box::new(MockIsolate {
             id,
-            rm: MockRmBackend::new(id, Arc::clone(&self.recorder)),
+            rm: MockRmBackend::new(id, gpu, Arc::clone(&self.recorder)),
             retired: false,
         })
     }
@@ -986,7 +1004,7 @@ mod tests {
     #[test]
     fn mock_rm_map_gpu_va_stays_distinct_past_65536_pages() {
         let (mut f, _rec) = MockIsolateFactory::new();
-        let mut iso = f.spawn(IsolateId(1));
+        let mut iso = f.spawn(IsolateId(1), GpuId::ZERO);
         let rm = iso.rm();
         let vas_a = rm.alloc_vaspace().unwrap();
         let vas_b = rm.alloc_vaspace().unwrap();
@@ -1002,8 +1020,8 @@ mod tests {
     #[test]
     fn mock_rm_handles_are_isolate_scoped() {
         let (mut f, _rec) = MockIsolateFactory::new();
-        let mut a = f.spawn(IsolateId(1));
-        let mut b = f.spawn(IsolateId(2));
+        let mut a = f.spawn(IsolateId(1), GpuId::ZERO);
+        let mut b = f.spawn(IsolateId(2), GpuId::ZERO);
         let ha = a.rm().alloc_vaspace().unwrap();
         // Using isolate A's handle on isolate B is refused: blast-radius containment.
         assert_eq!(b.rm().schedule(ha), Err(RmError::BadHandle(ha)));

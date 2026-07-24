@@ -44,6 +44,7 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb, VChid};
 use nvkvm_arch::ObjectKind;
 use nvkvm_completion::{CompletionError, FenceArms, OsEventRef, MAX_FENCE_JUMP};
@@ -212,12 +213,12 @@ proptest! {
 
         // THE property: each PDB resolves the shared VA to ITS OWN phys, never another's.
         for &(pdb, phys) in &oracle {
-            let got = resolve(&gpu, pdb, I1_VA).map(|(b, _)| b.phys);
+            let got = resolve(&gpu, GpuId::ZERO, pdb, I1_VA).map(|(b, _)| b.phys);
             prop_assert_eq!(got, Ok(phys), "PDB {:?} resolved the shared VA to the wrong backing", pdb);
         }
         // And injectivity, checked directly: no PDB resolves to a DIFFERENT proc's phys.
         for &(pdb, _) in &oracle {
-            let got = resolve(&gpu, pdb, I1_VA).map(|(b, _)| b.phys).unwrap();
+            let got = resolve(&gpu, GpuId::ZERO, pdb, I1_VA).map(|(b, _)| b.phys).unwrap();
             for &(other_pdb, other_phys) in &oracle {
                 if other_pdb != pdb {
                     prop_assert_ne!(got, other_phys, "cross-proc backing leak: {:?} -> another proc's phys", pdb);
@@ -585,7 +586,7 @@ proptest! {
         for ev in bystander_events() {
             gpu.apply(ev).expect("benign bystander applies cleanly");
         }
-        let baseline = resolve(&gpu, BY_PDB, BY_VA).map(|(b, _)| b.phys);
+        let baseline = resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys);
         prop_assert_eq!(baseline, Ok(BY_PHYS), "bystander baseline resolution");
 
         // The storm: apply each hostile event; a loud typed refusal is fine, a panic is
@@ -601,9 +602,9 @@ proptest! {
 
         // The bystander is intact: routing + resolution unchanged (a squat on BY_PDB
         // was refused — first-declarer-wins — never honored over the bystander).
-        prop_assert!(gpu.by_pdb.contains_key(&BY_PDB), "bystander PDB stopped routing");
+        prop_assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, BY_PDB)), "bystander PDB stopped routing");
         prop_assert_eq!(
-            resolve(&gpu, BY_PDB, BY_VA).map(|(b, _)| b.phys),
+            resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys),
             Ok(BY_PHYS),
             "bystander VA no longer resolves to its own backing"
         );
@@ -618,7 +619,7 @@ proptest! {
             let r = gpu.apply(ev);
             prop_assert!(r.is_ok(), "device unusable after storm: fresh benign op refused: {r:?} on {ev:?}");
         }
-        prop_assert!(gpu.by_pdb.contains_key(&LATE_PDB), "post-storm fresh proc did not route");
+        prop_assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)), "post-storm fresh proc did not route");
     }
 }
 
@@ -739,7 +740,7 @@ fn p3_channel_vas_resolution_type_checks_every_hop() {
     assert_eq!(chan_facts.vas_pdb, None, "channel bound to a non-VASpace's baited PDB");
     assert_eq!(chan_facts.vas_origin, None, "channel resolved a VAS origin it should not have");
     // The baited PDB never routes (it was never a real VASpace's PDB).
-    assert!(!bounds.by_pdb.contains_key(&bait_pdb), "a baited non-VASpace PDB entered routing");
+    assert!(!bounds.by_pdb.contains_key(&(GpuId::ZERO, bait_pdb)), "a baited non-VASpace PDB entered routing");
 }
 
 // =================================================================================
@@ -789,14 +790,14 @@ fn p4_map_naming_a_non_memory_object_is_a_loud_unbacked_fault_not_a_silent_bind(
         "mapping a non-Memory object as backing must be a loud UnbackedMapping fault, got {attack:?}"
     );
     // The VA never resolved to the attacker's phys — the confused-deputy is closed.
-    assert!(resolve(&gpu, pdb, va).is_err(), "the VA silently bound to a non-Memory backing");
+    assert!(resolve(&gpu, GpuId::ZERO, pdb, va).is_err(), "the VA silently bound to a non-Memory backing");
 
     // Sanity: a REAL memory object with the same phys DOES map cleanly (the fix does not
     // over-reject legitimate mappings — only the type-confused ones).
     let real_mem = HObject(0x920);
     gpu.apply(RmEvent::Alloc { client: c, parent: dev, handle: real_mem, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(evil_phys), ..Default::default() } }).unwrap();
     gpu.apply(RmEvent::MapMemoryDma { client: c, vaspace: real_vas, memory: real_mem, va, offset: 0, len: 0x1000 }).expect("a real memory maps cleanly");
-    assert_eq!(resolve(&gpu, pdb, va).map(|(b, _)| b.phys), Ok(evil_phys), "a legitimate memory mapping must resolve");
+    assert_eq!(resolve(&gpu, GpuId::ZERO, pdb, va).map(|(b, _)| b.phys), Ok(evil_phys), "a legitimate memory mapping must resolve");
 }
 
 /// **Phase 4 regression — the PARKED-PDB WEDGE (found by `i4`).** A hostile process
@@ -841,9 +842,9 @@ fn p4_parked_setpagedir_via_dup_alias_cannot_wedge_the_device() {
         gpu.apply(ev).expect("device wedged: fresh benign proc refused after the parked-PDB attack");
     }
     // The victim keeps its PDB + backing; the attacker kept ITS own PDB (never the victim's).
-    assert_eq!(resolve(&gpu, BY_PDB, BY_VA).map(|(b, _)| b.phys), Ok(BY_PHYS), "victim corrupted");
-    assert!(gpu.by_pdb.contains_key(&a_pdb), "attacker VAS lost its own PDB (stale parked one clobbered it)");
-    assert!(gpu.by_pdb.contains_key(&LATE_PDB), "fresh proc did not route");
+    assert_eq!(resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys), Ok(BY_PHYS), "victim corrupted");
+    assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, a_pdb)), "attacker VAS lost its own PDB (stale parked one clobbered it)");
+    assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)), "fresh proc did not route");
 }
 
 /// **Phase 4 regression — the PARKED-MAP WEDGE (the parked-PDB wedge's twin).** A
@@ -892,8 +893,8 @@ fn p4_parked_unbacked_map_via_dup_alias_cannot_wedge_the_device() {
     for ev in sl.events {
         gpu.apply(ev).expect("device wedged: fresh benign proc refused after the parked-map attack");
     }
-    assert_eq!(resolve(&gpu, BY_PDB, BY_VA).map(|(b, _)| b.phys), Ok(BY_PHYS), "victim corrupted");
-    assert!(gpu.by_pdb.contains_key(&LATE_PDB), "fresh proc did not route");
+    assert_eq!(resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys), Ok(BY_PHYS), "victim corrupted");
+    assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)), "fresh proc did not route");
     // The unbacked VA never populated — a loud MISS at use, contained (never a wedge).
-    assert!(resolve(&gpu, a_pdb, va).is_err(), "an unbacked VA must MISS at use");
+    assert!(resolve(&gpu, GpuId::ZERO, a_pdb, va).is_err(), "an unbacked VA must MISS at use");
 }

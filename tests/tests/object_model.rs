@@ -9,6 +9,7 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{GpuVa, HClient, HObject, Pdb};
 use nvkvm_core::gpa::GpaSpace;
 use nvkvm_core::gpu::{Gpu, GpuError};
@@ -51,7 +52,7 @@ fn map_populates_the_address_table() {
     let (gpu, _vas) = compute_with_mapping();
 
     // Resolve inside the mapping: MISS=FAULT elsewhere, hit here with the memory's phys.
-    let (bind, off) = resolve(&gpu, PDB, GpuVa(MAP_VA.0 + 0x40)).expect("mapped VA resolves");
+    let (bind, off) = resolve(&gpu, GpuId::ZERO, PDB, GpuVa(MAP_VA.0 + 0x40)).expect("mapped VA resolves");
     assert_eq!(off, 0x40, "offset within the mapping");
     assert_eq!(
         bind.phys, MEM_PHYS,
@@ -60,7 +61,7 @@ fn map_populates_the_address_table() {
 
     // Outside the mapping: MISS=FAULT (no fallback walk, no guess).
     assert!(matches!(
-        resolve(&gpu, PDB, GpuVa(MAP_VA.0 + MAP_LEN + 0x1000)),
+        resolve(&gpu, GpuId::ZERO, PDB, GpuVa(MAP_VA.0 + MAP_LEN + 0x1000)),
         Err(FwdFault::Address(_))
     ));
 }
@@ -103,7 +104,7 @@ fn map_at_offset_forward_populates_base_plus_offset() {
 #[test]
 fn unmap_depopulates_eagerly() {
     let (mut gpu, vas) = compute_with_mapping();
-    assert!(resolve(&gpu, PDB, MAP_VA).is_ok(), "mapped before unmap");
+    assert!(resolve(&gpu, GpuId::ZERO, PDB, MAP_VA).is_ok(), "mapped before unmap");
 
     gpu.apply(RmEvent::Unmap {
         client: CLIENT,
@@ -113,7 +114,7 @@ fn unmap_depopulates_eagerly() {
     .expect("unmap applies");
 
     assert!(
-        matches!(resolve(&gpu, PDB, MAP_VA), Err(FwdFault::Address(_))),
+        matches!(resolve(&gpu, GpuId::ZERO, PDB, MAP_VA), Err(FwdFault::Address(_))),
         "unmapped VA faults immediately (unmap eager)"
     );
 }
@@ -147,7 +148,7 @@ fn mapping_refcount_keeps_memory_alive() {
         "memory resource survives its handle's free while a mapping references it"
     );
     assert!(
-        resolve(&gpu, PDB, MAP_VA).is_ok(),
+        resolve(&gpu, GpuId::ZERO, PDB, MAP_VA).is_ok(),
         "the mapping still resolves"
     );
 
@@ -480,8 +481,8 @@ fn map_before_backing_and_pdb_resolves() {
     }
     // Not resolvable yet (no PDB routed).
     assert!(matches!(
-        resolve(&gpu, PDB, MAP_VA),
-        Err(FwdFault::UnknownPdb(_))
+        resolve(&gpu, GpuId::ZERO, PDB, MAP_VA),
+        Err(FwdFault::UnknownPdb { .. })
     ));
 
     // Now the memory backing + the PDB arrive, in that order.
@@ -503,7 +504,7 @@ fn map_before_backing_and_pdb_resolves() {
     })
     .expect("setpagedir applies");
 
-    let (bind, _off) = resolve(&gpu, PDB, MAP_VA).expect("map resolves once facts land");
+    let (bind, _off) = resolve(&gpu, GpuId::ZERO, PDB, MAP_VA).expect("map resolves once facts land");
     assert_eq!(
         bind.phys, MEM_PHYS,
         "forward-populated from the late-arriving facts"

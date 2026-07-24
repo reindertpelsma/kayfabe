@@ -11,6 +11,7 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
+use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
 use nvkvm_completion::OsEventRef;
 use nvkvm_core::gpa::GpaSpace;
@@ -56,7 +57,7 @@ fn build_proc(gpu: &mut Gpu, client: HClient, pdb: Pdb, vchids: (u16, u16)) -> (
     let mut s = Scenario::new();
     s.compute_process(client, pdb, identical_handles(vchids.0, vchids.1));
     apply_all(gpu, s.events);
-    let pid = *gpu.by_pdb.get(&pdb).expect("routed by PDB");
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, pdb)).expect("routed by PDB");
     let cid = *gpu.procs[&pid].chan_ids.values().next().expect("has a channel");
     (pid, cid)
 }
@@ -100,7 +101,7 @@ fn cb11_ce_write_never_clobbers_live_binding() {
     let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
 
     // Live state: a published backing at VA (host-mapped in this Vas's host VAS).
-    let live = publish_backing(gpu.procs.get_mut(&pid).unwrap(), A_PDB, VA, 0x10000).unwrap();
+    let live = publish_backing(gpu.procs.get_mut(&pid).unwrap(), GpuId::ZERO, A_PDB, VA, 0x10000).unwrap();
 
     // A scrubber-shaped CE physical write lands INSIDE the live range.
     let ring = script_pushbuffer(&mut vmm, 0x5000_0000, &[
@@ -113,7 +114,7 @@ fn cb11_ce_write_never_clobbers_live_binding() {
     // resolves to its original backing + host publication — never to the CE write's
     // identity mapping (the wipe-shaped clobber).
     assert_eq!(out.pt_writes, vec![VA.0 & !0xfff], "write observed as a dirtied page");
-    let (b, off) = resolve(&gpu, A_PDB, GpuVa(VA.0 + 0x20)).unwrap();
+    let (b, off) = resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(VA.0 + 0x20)).unwrap();
     assert_eq!(off, 0x20);
     assert_eq!(b.phys, live.gpa, "live binding's phys survives the CE write");
     assert_eq!(b.host_va, Some(live.host_va), "live host publication survives the CE write");
@@ -182,7 +183,7 @@ fn cb12_system_forge_never_reaches_a_user_proc_queue() {
         "a user proc's queue never receives a forged completion (L5)"
     );
     // It still DELIVERS (the guest's 4s golden-capture poll is satisfied).
-    let batch = gpu.pump_completions().expect("system completion posts");
+    let batch = gpu.pump_completions(GpuId::ZERO).expect("system completion posts");
     assert_eq!(batch.events, vec![OsEventRef(0x60)]);
 }
 
@@ -213,11 +214,11 @@ fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
     parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring1).expect("push 1 parses");
 
     // ★ Resolvable IMMEDIATELY at the release point — no link, no walk, no sweep.
-    let (b, _) = resolve(&gpu, A_PDB, GpuVa(leaf_page)).expect(
+    let (b, _) = resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(leaf_page)).expect(
         "an observed PT-write is resolvable directly — the C's root walk read runs=0 here",
     );
     assert_eq!(b.phys, leaf_page);
-    assert!(gpu.procs[&pid].vases[&A_PDB].pt_pages.contains(&leaf_page));
+    assert!(gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)].pt_pages.contains(&leaf_page));
 
     // Push 2 (a push LATER): the upper-PD "linking" write. Both captured; the leaf
     // from push 1 is undisturbed.
@@ -226,8 +227,8 @@ fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
         MockPushbuffer::ce_launch_dma(upper_pd, 0x1000, false),
     ]);
     parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring2).expect("push 2 parses");
-    assert!(resolve(&gpu, A_PDB, GpuVa(upper_pd)).is_ok());
-    assert!(resolve(&gpu, A_PDB, GpuVa(leaf_page)).is_ok(), "leaf capture survives the link");
+    assert!(resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(upper_pd)).is_ok());
+    assert!(resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(leaf_page)).is_ok(), "leaf capture survives the link");
 }
 
 // =================================================================================
@@ -266,7 +267,7 @@ fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
     );
     // No torn state: nothing was left half-bound.
     assert_eq!(
-        gpu.procs[&pid].vases[&A_PDB].table.iter().count(),
+        gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)].table.iter().count(),
         0,
         "a refused malformed bind leaves the table empty (no torn partial state)"
     );
@@ -313,28 +314,28 @@ fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
     let (mut gpu, _rec) = fresh_gpu();
     // Proc A is built AND fully active: published, scheduled, rung, completed.
     let (pid_a, _cid_a) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
-    let pub_a = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, VA, 0x10000).unwrap();
-    let out_a = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[]).unwrap();
+    let pub_a = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), GpuId::ZERO, A_PDB, VA, 0x10000).unwrap();
+    let out_a = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).unwrap();
     assert!(out_a.scheduled_now);
     gpu.procs.get_mut(&pid_a).unwrap().completion.observe(OsEventRef(0xA)).unwrap();
-    let batch = gpu.pump_completions().expect("A's completion posts");
-    gpu.completions_drained();
+    let batch = gpu.pump_completions(GpuId::ZERO).expect("A's completion posts");
+    gpu.completions_drained(GpuId::ZERO);
     gpu.procs.get_mut(&pid_a).unwrap().completion.ack(batch.events[0]);
 
     // NOW proc B arrives — identical handles, identical guest VA.
     let (pid_b, _cid_b) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
-    let pub_b = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, VA, 0x10000).unwrap();
+    let pub_b = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), GpuId::ZERO, B_PDB, VA, 0x10000).unwrap();
     assert_ne!(pub_a.gpa, pub_b.gpa, "late-arriving B still gets disjoint backing");
     assert_ne!(pub_a.host_va, pub_b.host_va);
-    let out_b = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20)), &[]).unwrap();
+    let out_b = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x20)), &[]).unwrap();
     assert!(out_b.scheduled_now, "B's channel schedules on ITS OWN plane");
     assert_ne!(out_a.host_token, out_b.host_token);
 
     // A's pre-existing state is untouched by B's arrival: same resolution, and its
     // already-scheduled channel rings again WITHOUT rescheduling (state preserved).
-    let (ba, _) = resolve(&gpu, A_PDB, VA).unwrap();
+    let (ba, _) = resolve(&gpu, GpuId::ZERO, A_PDB, VA).unwrap();
     assert_eq!(ba.phys, pub_a.gpa, "A resolves ITS backing after B armed");
-    let again = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[]).unwrap();
+    let again = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).unwrap();
     assert!(!again.scheduled_now, "A's exec-plane state survived B's arrival");
 }
 
@@ -348,8 +349,8 @@ fn cb14_late_merge_after_touch_is_loud_and_atomic() {
     let (mut gpu, _rec) = fresh_gpu();
     let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
     let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
-    let pub_a = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, VA, 0x10000).unwrap();
-    let pub_b = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, VA, 0x10000).unwrap();
+    let pub_a = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), GpuId::ZERO, A_PDB, VA, 0x10000).unwrap();
+    let pub_b = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), GpuId::ZERO, B_PDB, VA, 0x10000).unwrap();
 
     // A hostile/late dup edge that would join the two touched components.
     let late_dup = RmEvent::Dup {
@@ -364,12 +365,12 @@ fn cb14_late_merge_after_touch_is_loud_and_atomic() {
 
     // ATOMIC: both procs still live, still routed, still resolving their OWN state.
     assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
-    let (ba, _) = resolve(&gpu, A_PDB, VA).unwrap();
-    let (bb, _) = resolve(&gpu, B_PDB, VA).unwrap();
+    let (ba, _) = resolve(&gpu, GpuId::ZERO, A_PDB, VA).unwrap();
+    let (bb, _) = resolve(&gpu, GpuId::ZERO, B_PDB, VA).unwrap();
     assert_eq!(ba.phys, pub_a.gpa);
     assert_eq!(bb.phys, pub_b.gpa);
-    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[]).is_ok());
-    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20)), &[]).is_ok());
+    assert!(handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).is_ok());
+    assert!(handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x20)), &[]).is_ok());
 }
 
 /// ★ Mutation-gate kill (`Proc::is_untouched` `&&`→`||` between the ARENA clause and
@@ -393,7 +394,7 @@ fn cb14_arena_touch_alone_blocks_a_late_merge() {
     gpu.procs
         .get_mut(&pid_b)
         .unwrap()
-        .arena
+        .arenas.get_mut(&GpuId::ZERO).unwrap()
         .alloc(0x10000, 0x1000)
         .expect("arena carves");
     let _ = pid_a;
@@ -465,7 +466,7 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
 
     // Materialize ONLY a host VAS on proc B (no published binding, no host channel,
     // arena un-carved) — the host-VAS sub-condition is the only touched one.
-    let vas = gpu.procs.get_mut(&pid_b).unwrap().vases.get_mut(&B_PDB).unwrap();
+    let vas = gpu.procs.get_mut(&pid_b).unwrap().vases.get_mut(&(GpuId::ZERO, B_PDB)).unwrap();
     vas.host_vas = Some(nvkvm_isolate::HostHandle(0xBADA55));
 
     let late_dup = RmEvent::Dup {
@@ -502,7 +503,7 @@ fn cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty() {
     let token = MockArch::token_for(VChid(0x10));
 
     // Materialize + schedule the GR channel with an empty (trivially gated) ring.
-    let first = handle_doorbell(&mut gpu, token, &[]).expect("first ring materializes");
+    let first = handle_doorbell(&mut gpu, GpuId::ZERO, token, &[]).expect("first ring materializes");
     assert!(first.scheduled_now);
 
     // The guest frees its VASpace HANDLE: re-projection nulls the channel's declared
@@ -512,7 +513,7 @@ fn cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty() {
 
     // Non-empty working set on the VAS-less channel: loud NoVas, zero host ops.
     let ops_before = rec.lock().unwrap().log.len();
-    let refused = handle_doorbell(&mut gpu, token, &[VA]);
+    let refused = handle_doorbell(&mut gpu, GpuId::ZERO, token, &[VA]);
     assert!(
         matches!(refused, Err(FwdFault::NoVas(_))),
         "a non-empty submission with no declared VAS is refused loudly: {refused:?}"
@@ -525,7 +526,7 @@ fn cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty() {
 
     // Empty working set: nothing to gate — the ring on the still-materialized host
     // channel proceeds (and needs no re-materialization/re-schedule).
-    let ok = handle_doorbell(&mut gpu, token, &[])
+    let ok = handle_doorbell(&mut gpu, GpuId::ZERO, token, &[])
         .expect("an empty submission has nothing to gate and rings");
     assert!(!ok.scheduled_now, "already scheduled — no re-materialization");
 }
@@ -553,12 +554,12 @@ fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
     // ---- Generation 1: two procs, real work. ----
     let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
     let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
-    publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, VA, 0x10000).unwrap();
-    publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, VA, 0x10000).unwrap();
-    handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[]).unwrap();
-    handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20)), &[]).unwrap();
+    publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), GpuId::ZERO, A_PDB, VA, 0x10000).unwrap();
+    publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), GpuId::ZERO, B_PDB, VA, 0x10000).unwrap();
+    handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).unwrap();
+    handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x20)), &[]).unwrap();
     let gen1_arenas: Vec<_> =
-        gpu.procs.values().map(|p| p.arena.range.clone()).collect();
+        gpu.procs.values().map(|p| p.arenas[&GpuId::ZERO].range.clone()).collect();
     let gen1_sessions: std::collections::BTreeSet<u32> =
         rec.lock().unwrap().log.iter().map(|(id, _)| id.0).collect();
 
@@ -576,24 +577,24 @@ fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
     // ---- Generation 2: IDENTICAL handles, PDBs, VAs. ----
     let (pid_a2, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
     let (pid_b2, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
-    let pa2 = publish_backing(gpu.procs.get_mut(&pid_a2).unwrap(), A_PDB, VA, 0x10000)
+    let pa2 = publish_backing(gpu.procs.get_mut(&pid_a2).unwrap(), GpuId::ZERO, A_PDB, VA, 0x10000)
         .expect("gen-2 backs the identical VA cleanly — no stale residue");
-    let pb2 = publish_backing(gpu.procs.get_mut(&pid_b2).unwrap(), B_PDB, VA, 0x10000).unwrap();
+    let pb2 = publish_backing(gpu.procs.get_mut(&pid_b2).unwrap(), GpuId::ZERO, B_PDB, VA, 0x10000).unwrap();
     assert_ne!(pa2.gpa, pb2.gpa, "gen-2 procs still disjoint");
     // Recycled arenas: gen-2 procs run inside gen-1's ranges (the tight window
     // leaves nothing else) — and that reuse is CLEAN by construction.
     for p in gpu.procs.values() {
         assert!(
-            gen1_arenas.contains(&p.arena.range),
+            gen1_arenas.contains(&p.arenas[&GpuId::ZERO].range),
             "gen-2 arena {:x?} recycled from gen-1's {gen1_arenas:x?}",
-            p.arena.range
+            p.arenas[&GpuId::ZERO].range
         );
     }
     // Fresh channels schedule on fresh exec planes; completions flow.
-    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[]).unwrap().scheduled_now);
-    assert!(handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x20)), &[]).unwrap().scheduled_now);
+    assert!(handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).unwrap().scheduled_now);
+    assert!(handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x20)), &[]).unwrap().scheduled_now);
     gpu.procs.get_mut(&pid_a2).unwrap().completion.observe(OsEventRef(0xA2)).unwrap();
-    assert!(gpu.pump_completions().is_some(), "gen-2 completions deliver");
+    assert!(gpu.pump_completions(GpuId::ZERO).is_some(), "gen-2 completions deliver");
 
     // Fresh isolate sessions — gen 2 never ran on a dead proc's host session.
     let all_sessions: std::collections::BTreeSet<u32> =
@@ -623,12 +624,12 @@ fn cb_lifecycle_process_churn_never_exhausts_the_window() {
         // Same client handle + PDB + VA every generation — the #12 identical-reuse
         // shape, at device-lifecycle scale.
         let (pid, _cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
-        let p = publish_backing(gpu.procs.get_mut(&pid).unwrap(), A_PDB, VA, 0x10000)
+        let p = publish_backing(gpu.procs.get_mut(&pid).unwrap(), GpuId::ZERO, A_PDB, VA, 0x10000)
             .unwrap_or_else(|e| panic!("generation {generation}: publish must succeed: {e:?}"));
-        let out = handle_doorbell(&mut gpu, MockArch::token_for(VChid(0x10)), &[])
+        let out = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[])
             .unwrap_or_else(|e| panic!("generation {generation}: doorbell must ring: {e:?}"));
         assert!(out.scheduled_now, "generation {generation}: fresh channel schedules");
-        let (b, _) = resolve(&gpu, A_PDB, VA).unwrap();
+        let (b, _) = resolve(&gpu, GpuId::ZERO, A_PDB, VA).unwrap();
         assert_eq!(b.phys, p.gpa, "generation {generation}: resolves its OWN backing");
 
         // Teardown + reap at the quiesce point.

@@ -32,7 +32,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nvkvm_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb};
+use nvkvm_arch::ids::{ClassId, GpuId, GpuVa, HClient, HObject, Pdb};
 use nvkvm_arch::{Arch, ObjectKind};
 
 /// Global identity of an RM *handle*: handles are **per-client namespaces** (two
@@ -80,6 +80,13 @@ pub struct AllocFacts {
     /// be forward-populated with `memory → phys` at bind time. `None` = a memory
     /// object with no declared backing yet (map against it faults loudly).
     pub mem_phys: Option<u64>,
+    /// The physical-GPU index a **Device** object declares (`deviceInstance` in the
+    /// NV0080 alloc params) — THE multi-GPU protocol fact (`multi_gpu_and_mig.md`):
+    /// every object resolves its [`GpuId`] target via its `Device` ancestor's declared
+    /// instance ([`RmGraph::gpu_of`]). `None` = not declared (only meaningful on a
+    /// Device; an object under an un-instanced Device has no resolvable target —
+    /// MISS at use, never a default-GPU0 guess).
+    pub device_instance: Option<u32>,
 }
 
 /// One abstract RM protocol event. Produced by the ABI adapter (or a test),
@@ -227,6 +234,14 @@ struct Resource {
     /// A property of the RESOURCE, not of any one handle — so it survives the origin
     /// handle's free as long as a dup keeps the resource alive. Last declaration wins.
     pdb: Option<Pdb>,
+    /// ★ Cached GPU target (`multi_gpu_and_mig.md`): resolved from this resource's
+    /// `Device` ancestor's `deviceInstance` the moment it becomes resolvable, then
+    /// STICKY — a property of the resource that survives the origin handle's (and its
+    /// device's) free, exactly like [`Self::pdb`]. Without this, a UVM dup that
+    /// outlives the source client would lose its VAS's target when the source `Device`
+    /// is freed (the parent chain breaks). Which physical GPU a PDB lives on is an
+    /// immutable fact of the VAS, so caching it is correct, not a guess.
+    gpu: Option<GpuId>,
     /// Live DMA mappings referencing this resource (a MEMORY resource is kept alive by
     /// its mappings as well as its handles — a mapping references the memory it maps).
     /// Faithful RM refcounting: liveness ⟺ (`refs` non-empty OR `map_refs` > 0).
@@ -345,8 +360,53 @@ impl RmGraph {
         Self::default()
     }
 
+    /// Populate the sticky GPU-target cache for any resource that can now resolve its
+    /// `Device` ancestor (never overwriting a value already cached — a target is an
+    /// immutable fact, so once resolved it survives the source's later free).
+    ///
+    /// Called ONLY when a new `Device` is allocated (back-filling descendants that
+    /// declared before their device — the order-tolerance case). A per-resource inline
+    /// resolve in the `Alloc` handler covers the common case, so this O(n) scan runs at
+    /// most once per Device alloc (a handful per client), never per object — a flood of
+    /// non-device allocs stays O(1) amortized (boundary-1).
+    fn cache_targets(&mut self) {
+        let pending: Vec<(ResId, NodeKey)> = self
+            .resources
+            .iter()
+            .filter(|(_, r)| r.gpu.is_none())
+            .map(|(&id, r)| (id, r.node.key))
+            .collect();
+        for (id, origin) in pending {
+            if let Some(g) = self.walk_gpu(origin)
+                && let Some(r) = self.resources.get_mut(&id)
+            {
+                r.gpu = Some(g);
+            }
+        }
+    }
+
+    /// Live walk of `key`'s parent chain to its nearest `Device` ancestor's declared
+    /// target (used to POPULATE the cache; [`Self::gpu_of`] reads the cache first).
+    fn walk_gpu(&self, key: NodeKey) -> Option<GpuId> {
+        let mut node = self.origin_of(key)?;
+        for _ in 0..64 {
+            if matches!(node.kind, nvkvm_arch::ObjectKind::Device) {
+                return Some(GpuId(node.facts.device_instance.unwrap_or(0)));
+            }
+            let parent = NodeKey::new(node.key.client, node.parent);
+            if parent == node.key {
+                return None;
+            }
+            node = self.origin_of(parent)?;
+        }
+        None
+    }
+
     /// Apply one declared fact. Idempotent for identical re-sends; conflicting
-    /// redefinitions are loud errors.
+    /// redefinitions are loud errors. The sticky per-resource GPU-target cache is
+    /// maintained inline (per-alloc resolve + Device-triggered back-fill), so a
+    /// newly-arrived `Device` back-fills targets for objects that declared before it
+    /// (order tolerance for the multi-GPU axis) without an O(n) scan per event.
     pub fn apply(&mut self, arch: &dyn Arch, ev: RmEvent) -> Result<(), RmGraphError> {
         match ev {
             RmEvent::Alloc { client, parent, handle, class, facts } => {
@@ -375,7 +435,7 @@ impl RmGraph {
                         self.next_res_id += 1;
                         self.handles.insert(key, id);
                         self.resources
-                            .insert(id, Resource { node, refs: BTreeSet::from([key]), pdb: None, map_refs: 0 });
+                            .insert(id, Resource { node, refs: BTreeSet::from([key]), pdb: None, gpu: None, map_refs: 0 });
                         // A dup / SetPageDir that arrived BEFORE this alloc parked
                         // itself; now that its target exists, promote each parked fact
                         // so the resource is refcounted and PDB-tagged correctly (and so
@@ -383,6 +443,20 @@ impl RmGraph {
                         self.resolve_pending_dups();
                         self.resolve_pending_pdbs();
                         self.resolve_pending_maps();
+                        // ★ Cache THIS resource's GPU target inline (cheap: a short
+                        // parent walk) — the common case, O(1) per alloc. Only when the
+                        // new node is a `Device` do we back-fill descendants that
+                        // declared before it (order tolerance), a scan that runs at most
+                        // once per Device — never per object, so a hostile alloc flood
+                        // stays O(n), not O(n²) (boundary-1).
+                        if let Some(g) = self.walk_gpu(key)
+                            && let Some(r) = self.resources.get_mut(&id)
+                        {
+                            r.gpu = Some(g);
+                        }
+                        if matches!(arch.classify(class), nvkvm_arch::ObjectKind::Device) {
+                            self.cache_targets();
+                        }
                         Ok(())
                     }
                 }
@@ -913,5 +987,37 @@ impl RmGraph {
     pub fn node(&self, key: NodeKey) -> Option<&RmNode> {
         let id = self.handles.get(&key)?;
         self.resources.get(id).map(|r| &r.node)
+    }
+
+    /// ★ The Device→[`GpuId`] derivation (`multi_gpu_and_mig.md` item 1): resolve
+    /// `key` (dup-aliases followed) to its owning GPU **target** by walking its
+    /// declared parent chain to the nearest `Device` ancestor and reading that
+    /// Device's declared `device_instance`.
+    ///
+    /// Pure and order-independent — a projection of declared facts, like every other
+    /// derivation. `None` (MISS, never a default-GPU0 guess) when: the key does not
+    /// resolve, no `Device` ancestor exists on the chain, or the Device declared no
+    /// instance. Callers treat a `None` as "not routable (yet)": routing/materialization
+    /// simply defers until the Device fact arrives, and use faults loudly.
+    #[must_use]
+    pub fn gpu_of(&self, key: NodeKey) -> Option<GpuId> {
+        // The sticky per-resource cache first (survives the source Device's free — a
+        // dup-kept VAS keeps its target). A Device that declared no `deviceInstance`
+        // is the single-GPU default selection (NV0080 `deviceInstance` defaults to 0)
+        // — the N=1 case of the axis, routing to `GpuId::ZERO`. Only the absence of a
+        // Device ancestor entirely is a MISS (`None`), never a default-GPU0 guess.
+        if let Some(id) = self.resource_of(key)
+            && let Some(g) = self.resources.get(&id).and_then(|r| r.gpu)
+        {
+            return Some(g);
+        }
+        // A live parent walk (uncached objects whose chain is intact).
+        if let Some(g) = self.walk_gpu(key) {
+            return Some(g);
+        }
+        // The origin handle was freed but a dup keeps the resource alive: read the
+        // cached target off the resource by its stable origin key (mirrors `pdb_of` —
+        // the target, like the PDB, is a resource property that survives the free).
+        self.resources.values().find(|r| r.node.key == key).and_then(|r| r.gpu)
     }
 }

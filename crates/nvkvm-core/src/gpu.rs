@@ -16,7 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nvkvm_arch::Arch;
-use nvkvm_arch::ids::{ClassId, EngineKind, GpuVa, HClient, Pdb, VChid};
+use nvkvm_arch::ids::{ClassId, EngineKind, GpuId, GpuVa, HClient, Pdb, VChid};
 use nvkvm_completion::{CompletionQueue, DeliveryPlane, FenceArms, PostBatch};
 use nvkvm_isolate::{HostHandle, Isolate, IsolateFactory, IsolateId};
 use nvkvm_mmu::{AddressFault, AddressTable};
@@ -57,6 +57,19 @@ pub enum GpuError {
         /// The faulting mapping VA.
         va: u64,
     },
+    /// ★ MG-6: a GPU target was presented under a **different architecture** than the
+    /// device was realized with. V1 multi-GPU is **homogeneous-arch only**
+    /// (`multi_gpu_and_mig.md`): a heterogeneous/mixed-arch config is refused loudly at
+    /// realize, never silently misbehaved. (Heterogeneous multi-arch is explicitly out
+    /// of scope — the seam audit's avoid-list.)
+    HeterogeneousArch {
+        /// The target whose arch disagreed.
+        gpu: GpuId,
+        /// The device's realized arch name.
+        expected: &'static str,
+        /// The arch the target was presented under.
+        got: &'static str,
+    },
 }
 
 impl From<RmGraphError> for GpuError {
@@ -82,7 +95,12 @@ impl From<GpaError> for GpuError {
 /// #14 fix — identical guest VAs in distinct `Vas`es publish into distinct host
 /// address spaces and cannot collide. Address ops key HERE, never on [`Proc`].
 pub struct Vas {
-    /// The hardware identity (the GPU's CR3).
+    /// ★ MG-4: the GPU target this VAS lives on (graph-derived from its `Device`
+    /// ancestor, never guessed). `Pdb` is a per-GPU namespace, so a `Vas` is keyed by
+    /// `(GpuId, Pdb)` in [`Proc::vases`] and this tag disambiguates identical PDBs on
+    /// different GPUs.
+    pub gpu: GpuId,
+    /// The hardware identity (the GPU's CR3), unique only WITHIN [`Self::gpu`].
     pub pdb: Pdb,
     /// The VASpace origin node in the RM graph.
     pub origin: NodeKey,
@@ -100,8 +118,9 @@ pub struct Vas {
 }
 
 impl Vas {
-    fn new(pdb: Pdb, origin: NodeKey) -> Self {
+    fn new(gpu: GpuId, pdb: Pdb, origin: NodeKey) -> Self {
         Vas {
+            gpu,
             pdb,
             origin,
             table: AddressTable::new(),
@@ -118,10 +137,14 @@ pub struct Channel {
     pub id: ChanId,
     /// The channel node in the RM graph.
     pub key: NodeKey,
-    /// The exec-plane identity the doorbell demuxes on.
+    /// ★ MG-4: the GPU target this channel lives on (graph-derived from its `Device`
+    /// ancestor). `VChid` is a per-GPU runlist index, so the exec-plane routing map is
+    /// keyed `(GpuId, VChid)` and this tag names which GPU the doorbell demuxes on.
+    pub gpu: GpuId,
+    /// The exec-plane identity the doorbell demuxes on (unique only WITHIN [`Self::gpu`]).
     pub vchid: VChid,
     /// The PDB of the VAS this channel is declared against (None = GSP-managed
-    /// with no declared VAS — system-routed).
+    /// with no declared VAS — system-routed). Keyed under [`Self::gpu`] in the Vas map.
     pub vas: Option<Pdb>,
     /// ★ The fine [`EngineKind`] of this channel's context (`execution_plane.md`
     /// §2.2 "what the core tracks"): graph-synced from the projection — the channel
@@ -177,9 +200,11 @@ pub struct Proc {
     pub anchor: ProcAnchor,
     /// Clients in this proc's dup-connected component.
     pub clients: BTreeSet<HClient>,
-    /// ★ The address plane: one [`Vas`] per declared PDB. A proc holds several
-    /// (compute + UVM) — which is exactly why address ops must key on `Vas`.
-    pub vases: BTreeMap<Pdb, Vas>,
+    /// ★ The address plane: one [`Vas`] per declared **`(GpuId, Pdb)`** (MG-4). A proc
+    /// holds several (compute + UVM, and — spanning GPUs — per target); address ops
+    /// key on `(GpuId, Pdb)` because a `Pdb` is a per-GPU namespace (two GPUs legally
+    /// present identical PDB values).
+    pub vases: BTreeMap<(GpuId, Pdb), Vas>,
     /// The exec plane's channels.
     pub channels: BTreeMap<ChanId, Channel>,
     /// Channel node → slot (stable across graph re-derivations).
@@ -193,10 +218,18 @@ pub struct Proc {
     /// event-delivery plane by construction: a fired fence is read by the guest
     /// straight from the mapped page, it never rides the GSP queue.
     pub fences: FenceArms,
-    /// This proc's own unprivileged host isolate (`session == ProcId`).
-    pub isolate: Box<dyn Isolate>,
-    /// This proc's private GPA arena (disjoint by construction).
-    pub arena: GpaArena,
+    /// ★ MG-5: this proc's per-**target** unprivileged host isolates — one sandboxed
+    /// host worker per GPU this proc touches (`session == ProcId`, distinct namespace
+    /// per GPU). A bug forwarding this proc's GPU0 traffic cannot reach its GPU1 host
+    /// handles: the #14 blast-radius boundary lifted onto the GPU axis. Materialized
+    /// lazily by [`Gpu`] as the proc's targets are derived.
+    pub isolates: BTreeMap<GpuId, Box<dyn Isolate>>,
+    /// ★ MG-5: this proc's per-**target** private GPA arenas (disjoint by
+    /// construction, per GPU). Recycled per target at the reap quiesce point (#80).
+    pub arenas: BTreeMap<GpuId, GpaArena>,
+    /// The set of GPU targets this proc spans (has materialized an isolate/arena for).
+    /// Drives per-target completion composition (no cross-GPU serialization).
+    pub targets: BTreeSet<GpuId>,
     /// Per-proc poll bookkeeping.
     pub poll: PollState,
     retired: bool,
@@ -204,7 +237,7 @@ pub struct Proc {
 }
 
 impl Proc {
-    fn new(id: ProcId, anchor: ProcAnchor, isolate: Box<dyn Isolate>, arena: GpaArena) -> Self {
+    fn new(id: ProcId, anchor: ProcAnchor) -> Self {
         Proc {
             id,
             anchor,
@@ -215,19 +248,34 @@ impl Proc {
             exec: ExecPlane::default(),
             completion: CompletionQueue::new(),
             fences: FenceArms::new(),
-            isolate,
-            arena,
+            isolates: BTreeMap::new(),
+            arenas: BTreeMap::new(),
+            targets: BTreeSet::new(),
             poll: PollState::default(),
             retired: false,
             next_chan: 0,
         }
     }
 
-    /// Stage 1 of teardown (lesson L10): stop the isolate, mark retired. Heavy
-    /// data-plane reap happens at the proven quiesce point, then drop.
+    /// This proc's isolate for GPU `gpu`, if materialized. Address/exec ops route
+    /// through the isolate of their **op's target GPU** (MG-5).
+    #[must_use]
+    pub fn isolate(&self, gpu: GpuId) -> Option<&dyn Isolate> {
+        self.isolates.get(&gpu).map(core::convert::AsRef::as_ref)
+    }
+
+    /// Mutable access to this proc's isolate for GPU `gpu` (materialized by [`Gpu`]).
+    pub fn isolate_mut(&mut self, gpu: GpuId) -> Option<&mut Box<dyn Isolate>> {
+        self.isolates.get_mut(&gpu)
+    }
+
+    /// Stage 1 of teardown (lesson L10): stop every per-target isolate, mark retired.
+    /// Heavy data-plane reap happens at the proven quiesce point, then drop.
     pub fn retire(&mut self) {
         self.retired = true;
-        self.isolate.retire();
+        for iso in self.isolates.values_mut() {
+            iso.retire();
+        }
     }
 
     /// True once retired (a retired proc must refuse new ops).
@@ -239,11 +287,12 @@ impl Proc {
     /// True while this proc has touched no data-plane state (merge legality,
     /// lesson L9).
     fn is_untouched(&self) -> bool {
-        // "Touched" = host-materialized data-plane state (arena carved, host channel /
-        // host VAS allocated, or a binding published into a host VAS). Pure RPC
-        // address-table bookkeeping (host_va = None) is NOT host state — it is
-        // re-derivable from the graph, so it never blocks an early merge.
-        self.arena.is_untouched()
+        // "Touched" = host-materialized data-plane state (any target's arena carved,
+        // host channel / host VAS allocated, or a binding published into a host VAS).
+        // Pure RPC address-table bookkeeping (host_va = None) is NOT host state — it is
+        // re-derivable from the graph, so it never blocks an early merge. (A proc that
+        // has materialized no target yet has empty `arenas` → vacuously untouched.)
+        self.arenas.values().all(GpaArena::is_untouched)
             && self.channels.values().all(|c| c.host_channel.is_none())
             && self
                 .vases
@@ -267,7 +316,8 @@ impl Proc {
 /// parallelizes per-proc.
 pub struct Gpu {
     /// The Axis-B behavior this device was realized with. The core only ever
-    /// calls trait methods on it — never names a generation.
+    /// calls trait methods on it — never names a generation. **One arch for all
+    /// targets** (MG-6: V1 multi-GPU is homogeneous-arch).
     pub arch: Box<dyn Arch>,
     /// ★ Source of truth (decision #14).
     pub rmgraph: RmGraph,
@@ -275,49 +325,142 @@ pub struct Gpu {
     pub procs: BTreeMap<ProcId, Proc>,
     /// The system proc: kernel RM / scrubber / CeUtils traffic ([`crate::Traffic`]).
     pub system: Proc,
-    /// Data-plane routing (derived): PDB → owning proc. The `Vas` itself lives in
-    /// `procs[pid].vases[pdb]`.
-    pub by_pdb: BTreeMap<Pdb, ProcId>,
-    /// Exec-plane routing (derived): vChid → (proc, channel).
-    pub by_vchid: BTreeMap<VChid, (ProcId, ChanId)>,
-    /// The guest-physical window (hands out per-proc arenas).
-    pub gpa: GpaSpace,
-    /// Device-global completion posting policy (drain gate over the one GSP queue).
-    pub delivery: DeliveryPlane,
+    /// ★ Data-plane routing (derived): `(GpuId, PDB)` → owning proc (MG-3). Keyed on
+    /// the target because a `Pdb` is a per-GPU namespace. The `Vas` lives in
+    /// `procs[pid].vases[(gpu, pdb)]`.
+    pub by_pdb: BTreeMap<(GpuId, Pdb), ProcId>,
+    /// ★ Exec-plane routing (derived): `(GpuId, vChid)` → (proc, channel) (MG-3).
+    pub by_vchid: BTreeMap<(GpuId, VChid), (ProcId, ChanId)>,
+    /// ★ MG-6: per-target device state — one [`GpuTarget`] (its own guest-physical
+    /// window + GSP-queue drain gate) per routable GPU. `GpuId::ZERO` is realized at
+    /// [`Gpu::new`]; further targets are minted lazily as their Devices are derived.
+    pub targets: BTreeMap<GpuId, GpuTarget>,
     isolates: Box<dyn IsolateFactory>,
+    /// Geometry template for minting a fresh disjoint per-target window.
+    geom: TargetGeom,
     next_proc: u32,
     /// Procs retired but not yet reaped (awaiting the quiesce point).
     pub retired: Vec<Proc>,
+}
+
+/// Per-target device state (MG-6): each routable GPU has its OWN guest-physical
+/// window (arenas) and its OWN completion drain gate over its OWN GSP queue — so a
+/// batch outstanding on one GPU never gates another GPU's post (no cross-GPU
+/// serialization).
+pub struct GpuTarget {
+    /// This target's guest-physical window (hands out this target's per-proc arenas).
+    pub gpa: GpaSpace,
+    /// This target's completion posting policy (drain gate over ITS GSP queue).
+    pub delivery: DeliveryPlane,
+    /// The arch this target was realized under — MG-6's homogeneity guard compares it
+    /// against the device's one arch; a mismatch is a loud [`GpuError::HeterogeneousArch`].
+    arch_name: &'static str,
+}
+
+/// The window geometry a new [`GpuTarget`] is minted with — cloned from the
+/// realize-time `GpaSpace` so every target gets an identically-sized but **disjoint**
+/// guest-physical window (a real multi-GPU guest sees each GPU's BAR window at a
+/// distinct GPA).
+#[derive(Debug, Clone, Copy)]
+struct TargetGeom {
+    window_len: u64,
+    arena_len: u64,
+    /// Base of the NEXT target's window (starts past `GpuId::ZERO`'s window end).
+    next_base: u64,
 }
 
 impl Gpu {
     /// System proc's reserved id.
     pub const SYSTEM_PROC: ProcId = ProcId(0);
 
-    /// Realize a device: pick the arch (once), the isolate factory, and the GPA
-    /// window geometry. Spawns the system proc's isolate eagerly.
+    /// Realize a device: pick the arch (once), the isolate factory, and the
+    /// `GpuId::ZERO` target's GPA window geometry. Materializes the system proc's
+    /// `GpuId::ZERO` isolate + arena eagerly (the N=1 single-target case).
     pub fn new(
         arch: Box<dyn Arch>,
-        mut isolates: Box<dyn IsolateFactory>,
-        mut gpa: GpaSpace,
+        isolates: Box<dyn IsolateFactory>,
+        gpa: GpaSpace,
     ) -> Result<Self, GpuError> {
-        let system_isolate = isolates.spawn(IsolateId(Self::SYSTEM_PROC.0));
-        let system_arena = gpa.carve()?;
-        let system =
-            Proc::new(Self::SYSTEM_PROC, ProcAnchor(HClient(0)), system_isolate, system_arena);
-        Ok(Gpu {
+        let window = gpa.window();
+        let arch_name = arch.name();
+        let geom = TargetGeom {
+            window_len: window.end - window.start,
+            arena_len: gpa.arena_len(),
+            next_base: window.end,
+        };
+        let mut targets = BTreeMap::new();
+        targets.insert(
+            GpuId::ZERO,
+            GpuTarget { gpa, delivery: DeliveryPlane::new(), arch_name },
+        );
+        let mut gpu = Gpu {
             arch,
             rmgraph: RmGraph::new(),
             procs: BTreeMap::new(),
-            system,
+            system: Proc::new(Self::SYSTEM_PROC, ProcAnchor(HClient(0))),
             by_pdb: BTreeMap::new(),
             by_vchid: BTreeMap::new(),
-            gpa,
-            delivery: DeliveryPlane::new(),
+            targets,
             isolates,
+            geom,
             next_proc: 1,
             retired: Vec::new(),
-        })
+        };
+        // The system proc always touches the default target (kernel/scrubber traffic).
+        gpu.ensure_proc_target(Self::SYSTEM_PROC, GpuId::ZERO)?;
+        Ok(gpu)
+    }
+
+    /// Ensure target `gpu` exists (minting its disjoint window + drain gate on first
+    /// touch, MG-6), enforcing the homogeneous-arch invariant loudly.
+    fn ensure_target(&mut self, gpu: GpuId) -> Result<(), GpuError> {
+        if let Some(t) = self.targets.get(&gpu) {
+            if t.arch_name != self.arch.name() {
+                return Err(GpuError::HeterogeneousArch {
+                    gpu,
+                    expected: self.arch.name(),
+                    got: t.arch_name,
+                });
+            }
+            return Ok(());
+        }
+        let base = self.geom.next_base;
+        let end = base
+            .checked_add(self.geom.window_len)
+            .ok_or(GpuError::Gpa(GpaError::WindowExhausted))?;
+        self.geom.next_base = end;
+        self.targets.insert(
+            gpu,
+            GpuTarget {
+                gpa: GpaSpace::new(base..end, self.geom.arena_len),
+                delivery: DeliveryPlane::new(),
+                arch_name: self.arch.name(),
+            },
+        );
+        Ok(())
+    }
+
+    /// Ensure proc `pid` has a materialized isolate + GPA arena for target `gpu`
+    /// (MG-5: per-`(Proc, GpuId)`). Idempotent; disjoint by construction.
+    fn ensure_proc_target(&mut self, pid: ProcId, gpu: GpuId) -> Result<(), GpuError> {
+        self.ensure_target(gpu)?;
+        // Disjoint field borrows: the factory, the target, and the proc are separate
+        // fields (system is its own field, distinct from `procs`).
+        let isolates = &mut self.isolates;
+        let target = self.targets.get_mut(&gpu).expect("ensured above");
+        let proc = if pid == Self::SYSTEM_PROC {
+            &mut self.system
+        } else {
+            self.procs.get_mut(&pid).expect("live proc")
+        };
+        proc.isolates
+            .entry(gpu)
+            .or_insert_with(|| isolates.spawn(IsolateId(pid.0), gpu));
+        if let std::collections::btree_map::Entry::Vacant(e) = proc.arenas.entry(gpu) {
+            e.insert(target.gpa.carve()?);
+        }
+        proc.targets.insert(gpu);
+        Ok(())
     }
 
     /// Apply one RM protocol event and re-sync all derived state to the graph.
@@ -372,8 +515,10 @@ impl Gpu {
         use nvkvm_arch::Aperture;
         use nvkvm_mmu::Binding;
 
-        // Desired: (pdb, va) -> (len, phys) for every live mapping with a resolved PDB.
-        let mut desired: BTreeMap<(u64, u64), (u64, u64)> = BTreeMap::new();
+        // Desired: (GpuId, pdb, va) -> (len, phys) for every live mapping with a
+        // resolved target + PDB. The target is derived from the mapping's VAS `Device`
+        // ancestor — a `Pdb` is per-GPU, so the binding must be keyed by target too.
+        let mut desired: BTreeMap<(GpuId, u64, u64), (u64, u64)> = BTreeMap::new();
         for m in self.rmgraph.mappings() {
             let Some(pdb) = m.pdb else {
                 // A mapping whose VAS has no PDB yet is not routable — deferred until
@@ -381,27 +526,31 @@ impl Gpu {
                 // the guest legitimately maps before binding the page directory.
                 continue;
             };
+            let Some(gpu) = self.rmgraph.gpu_of(m.vaspace) else {
+                // No resolvable target (no Device ancestor) — deferred, never guessed.
+                continue;
+            };
             let phys = m.mem_phys.ok_or(GpuError::UnbackedMapping { pdb, va: m.va.0 })?;
-            desired.insert((pdb.0, m.va.0), (m.len, phys));
+            desired.insert((gpu, pdb.0, m.va.0), (m.len, phys));
         }
 
         for proc in self.procs.values_mut().chain(core::iter::once(&mut self.system)) {
-            for (&pdb, vas) in proc.vases.iter_mut() {
+            for (&(gpu, pdb), vas) in proc.vases.iter_mut() {
                 // Unbind stale RPC bindings (mapping gone), leaving host-backed
                 // publish_backing entries (host_va = Some) alone.
                 let stale: Vec<u64> = vas
                     .rpc_bound
                     .iter()
-                    .filter(|&&va| !desired.contains_key(&(pdb.0, va)))
+                    .filter(|&&va| !desired.contains_key(&(gpu, pdb.0, va)))
                     .copied()
                     .collect();
                 for va in stale {
                     vas.table.unbind(GpuVa(va));
                     vas.rpc_bound.remove(&va);
                 }
-                // Bind newly-declared mappings for this PDB.
-                for (&(mpdb, va), &(len, phys)) in desired.iter() {
-                    if mpdb != pdb.0 || vas.rpc_bound.contains(&va) {
+                // Bind newly-declared mappings for this (target, PDB).
+                for (&(mgpu, mpdb, va), &(len, phys)) in desired.iter() {
+                    if mgpu != gpu || mpdb != pdb.0 || vas.rpc_bound.contains(&va) {
                         continue;
                     }
                     vas.table
@@ -452,9 +601,9 @@ impl Gpu {
                 None => {
                     let id = ProcId(self.next_proc);
                     self.next_proc += 1;
-                    let isolate = self.isolates.spawn(IsolateId(id.0));
-                    let arena = self.gpa.carve()?;
-                    self.procs.insert(id, Proc::new(id, b.anchor, isolate, arena));
+                    // Per-(Proc, GpuId) isolates/arenas are materialized lazily below,
+                    // once the proc's target set is derived (MG-5).
+                    self.procs.insert(id, Proc::new(id, b.anchor));
                     id
                 }
             };
@@ -464,14 +613,20 @@ impl Gpu {
             let p = self.procs.get_mut(&pid).expect("live proc exists");
             p.anchor = b.anchor;
             p.clients = b.clients.clone();
-            // Vases: create for newly-declared PDBs; drop ones no longer derived.
-            let live_pdbs: BTreeSet<Pdb> = b.vases.values().flatten().copied().collect();
-            for (&origin, &pdb) in &b.vases {
-                if let Some(pdb) = pdb {
-                    p.vases.entry(pdb).or_insert_with(|| Vas::new(pdb, origin));
+            // Vases: create for newly-declared (GpuId, PDB); drop ones no longer
+            // derived. Only vases with a resolvable target AND a declared PDB become
+            // runtime `Vas`es (an unroutable one defers — MISS at use, never guessed).
+            let live_keys: BTreeSet<(GpuId, Pdb)> = b
+                .vases
+                .values()
+                .filter_map(|f| Some((f.gpu?, f.pdb?)))
+                .collect();
+            for (&origin, facts) in &b.vases {
+                if let (Some(gpu), Some(pdb)) = (facts.gpu, facts.pdb) {
+                    p.vases.entry((gpu, pdb)).or_insert_with(|| Vas::new(gpu, pdb, origin));
                 }
             }
-            p.vases.retain(|pdb, _| live_pdbs.contains(pdb));
+            p.vases.retain(|key, _| live_keys.contains(key));
             // Channels: stable ChanId per node key.
             for (&key, facts) in &b.channels {
                 let cid = *p.chan_ids.entry(key).or_insert_with(|| {
@@ -479,9 +634,11 @@ impl Gpu {
                     p.next_chan += 1;
                     c
                 });
+                let gpu = facts.gpu.unwrap_or(GpuId::ZERO);
                 let entry = p.channels.entry(cid).or_insert_with(|| Channel {
                     id: cid,
                     key,
+                    gpu,
                     vchid: facts.vchid,
                     vas: facts.vas_pdb,
                     engine: facts.engine,
@@ -489,6 +646,7 @@ impl Gpu {
                     host_token: None,
                     host_engine_objects: BTreeMap::new(),
                 });
+                entry.gpu = gpu;
                 entry.vchid = facts.vchid;
                 entry.vas = facts.vas_pdb;
                 entry.engine = facts.engine;
@@ -508,21 +666,42 @@ impl Gpu {
             self.retired.push(p);
         }
 
-        // 4. Rebuild routing maps from the projection (never accreted).
+        // 3b. ★ MG-5: materialize each live proc's per-(Proc, GpuId) isolate + arena
+        // for every target it now spans (its vases' + routable channels' GPUs). Minting
+        // a per-target window (MG-6) happens here too. Collected first to avoid holding
+        // a proc borrow across the `&mut self` ensure call.
+        let mut needed: BTreeSet<(ProcId, GpuId)> = BTreeSet::new();
+        for (&pid, p) in &self.procs {
+            for &(gpu, _pdb) in p.vases.keys() {
+                needed.insert((pid, gpu));
+            }
+            for c in p.channels.values() {
+                // Only channels that actually route (resolvable target) need a host isolate.
+                if bounds.by_vchid.contains_key(&(c.gpu, c.vchid)) {
+                    needed.insert((pid, c.gpu));
+                }
+            }
+        }
+        for (pid, gpu) in needed {
+            self.ensure_proc_target(pid, gpu)?;
+        }
+
+        // 4. Rebuild routing maps from the projection (never accreted). Keyed on the
+        // target (MG-3): a `Pdb`/`VChid` is a per-GPU namespace.
         self.by_pdb.clear();
         self.by_vchid.clear();
         let anchor_to_pid: BTreeMap<ProcAnchor, ProcId> =
             self.procs.iter().map(|(&id, p)| (p.anchor, id)).collect();
-        for (&pdb, &(anchor, _)) in &bounds.by_pdb {
+        for (&(gpu, pdb), &(anchor, _)) in &bounds.by_pdb {
             if let Some(&pid) = anchor_to_pid.get(&anchor) {
-                self.by_pdb.insert(pdb, pid);
+                self.by_pdb.insert((gpu, pdb), pid);
             }
         }
-        for (&vchid, &(anchor, key)) in &bounds.by_vchid {
+        for (&(gpu, vchid), &(anchor, key)) in &bounds.by_vchid {
             if let Some(&pid) = anchor_to_pid.get(&anchor)
                 && let Some(&cid) = self.procs[&pid].chan_ids.get(&key)
             {
-                self.by_vchid.insert(vchid, (pid, cid));
+                self.by_vchid.insert((gpu, vchid), (pid, cid));
             }
         }
         Ok(())
@@ -546,42 +725,72 @@ impl Gpu {
     pub fn reap_retired(&mut self) -> usize {
         let n = self.retired.len();
         for p in self.retired.drain(..) {
-            self.gpa.release(p.arena);
+            // Release EACH target's arena back to ITS target window (MG-5: per-GPU
+            // arena recycle — the #80 class per target).
+            for (gpu, arena) in p.arenas {
+                if let Some(t) = self.targets.get_mut(&gpu) {
+                    t.gpa.release(arena);
+                }
+            }
         }
         n
     }
 
-    /// Compose+post one completion batch across all procs if the drain gate is
-    /// open (§4.3.2). The caller (fwd/adapter) encodes it on the GSP queue and
-    /// raises SWGEN0 via `Vmm::raise_irq` — the core stays VMM-free.
-    pub fn pump_completions(&mut self) -> Option<PostBatch> {
-        let queues =
-            core::iter::once(&mut self.system.completion)
-                .chain(self.procs.values_mut().map(|p| &mut p.completion));
-        self.delivery.try_post(queues)
+    /// Compose+post one completion batch for target `gpu` if ITS drain gate is open
+    /// (§4.3.2, MG-6: per-target GSP queue). Composes from the procs that span this
+    /// target (+ the system proc) — a batch outstanding on one GPU never gates
+    /// another's post. The caller encodes it on that target's GSP queue and raises
+    /// SWGEN0 via `Vmm::raise_irq`.
+    pub fn pump_completions(&mut self, gpu: GpuId) -> Option<PostBatch> {
+        let Self { targets, procs, system, .. } = self;
+        let target = targets.get_mut(&gpu)?;
+        let mut queues: Vec<&mut CompletionQueue> = Vec::new();
+        if system.targets.contains(&gpu) {
+            queues.push(&mut system.completion);
+        }
+        for p in procs.values_mut().filter(|p| p.targets.contains(&gpu)) {
+            queues.push(&mut p.completion);
+        }
+        target.delivery.try_post(queues)
     }
 
-    /// ★ The starvation fix's entry point: proc `pid` issued a completion-poll
-    /// RPC. Its un-acked completions are re-posted off its OWN poll, regardless
-    /// of any other proc's doorbell activity.
-    pub fn completion_poll(&mut self, pid: ProcId, now: Instant) -> Option<PostBatch> {
+    /// ★ The starvation fix's entry point, per target (MG-6): proc `pid` issued a
+    /// completion-poll RPC on target `gpu`. Its un-acked completions are re-posted off
+    /// its OWN poll, regardless of any other proc's doorbell activity.
+    pub fn completion_poll(&mut self, gpu: GpuId, pid: ProcId, now: Instant) -> Option<PostBatch> {
+        if !self.targets.contains_key(&gpu) {
+            return None;
+        }
         // Split borrows: take the poller out, poll against the rest, put it back.
         let mut poller = self.procs.remove(&pid)?;
         poller.poll.last_poll = Some(now);
         let batch = {
-            let others = core::iter::once(&mut self.system.completion)
-                .chain(self.procs.values_mut().map(|p| &mut p.completion));
-            self.delivery.on_poll(&mut poller.completion, others)
+            let Self { targets, procs, system, .. } = self;
+            let target = targets.get_mut(&gpu).expect("checked above");
+            let mut others: Vec<&mut CompletionQueue> = Vec::new();
+            if system.targets.contains(&gpu) {
+                others.push(&mut system.completion);
+            }
+            for p in procs.values_mut().filter(|p| p.targets.contains(&gpu)) {
+                others.push(&mut p.completion);
+            }
+            target.delivery.on_poll(&mut poller.completion, others)
         };
         self.procs.insert(pid, poller);
         batch
     }
 
-    /// The guest drained the outstanding batch (IRQSCLR observed).
-    pub fn completions_drained(&mut self) {
-        let queues =
-            core::iter::once(&mut self.system.completion)
-                .chain(self.procs.values_mut().map(|p| &mut p.completion));
-        self.delivery.drained(queues);
+    /// The guest drained target `gpu`'s outstanding batch (IRQSCLR observed).
+    pub fn completions_drained(&mut self, gpu: GpuId) {
+        let Self { targets, procs, system, .. } = self;
+        let Some(target) = targets.get_mut(&gpu) else { return };
+        let mut queues: Vec<&mut CompletionQueue> = Vec::new();
+        if system.targets.contains(&gpu) {
+            queues.push(&mut system.completion);
+        }
+        for p in procs.values_mut().filter(|p| p.targets.contains(&gpu)) {
+            queues.push(&mut p.completion);
+        }
+        target.delivery.drained(queues);
     }
 }

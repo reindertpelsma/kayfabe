@@ -93,6 +93,7 @@ nvkvm_util::assert_send_sync!(
     gpu::Proc,
     gpu::Vas,
     gpu::Channel,
+    gpu::GpuTarget,
     gpu::ExecPlane,
     gpu::PollState,
     gpu::GpuError,
@@ -109,6 +110,7 @@ nvkvm_util::assert_send_sync!(
     project::Boundaries,
     project::ProcBoundary,
     project::ChannelFacts,
+    project::VasFacts,
     project::ProjectionError,
 );
 

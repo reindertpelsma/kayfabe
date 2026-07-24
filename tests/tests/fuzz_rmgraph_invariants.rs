@@ -23,6 +23,7 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use nvkvm_arch::ids::GpuId;
 use std::collections::{BTreeMap, BTreeSet};
 
 use nvkvm_arch::ids::{ClassId, HClient, HObject, Pdb};
@@ -105,6 +106,8 @@ fn any_event() -> impl Strategy<Value = RmEvent> {
                         userd_flags: flags,
                         // A memory alloc may or may not declare a backing (both paths).
                         mem_phys: (flags & 2 == 0).then_some(0x8000_0000 | u64::from(flags)),
+                        // Single-GPU fuzz: Devices default to instance 0 (GpuId::ZERO).
+                        device_instance: None,
                     },
                 }
             }),
@@ -148,40 +151,47 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
         Err(_) => return, // A loud typed error is a valid outcome (MISS=FAULT posture).
     };
 
-    // INV1: no two procs share a PDB, and by_pdb is 1:1 with a proc's declared PDB.
-    let mut pdb_owner: BTreeMap<Pdb, nvkvm_core::ProcAnchor> = BTreeMap::new();
+    // INV1: no two procs share a (target, PDB); by_pdb is 1:1 with a proc's declared
+    // (target, PDB). Keyed on the GPU target — a PDB is per-GPU (MG-3).
+    let mut pdb_owner: BTreeMap<(Option<GpuId>, Pdb), nvkvm_core::ProcAnchor> = BTreeMap::new();
     for p in &bounds.procs {
-        for pdb in p.vases.values().flatten() {
-            assert!(
-                pdb_owner.insert(*pdb, p.anchor).is_none(),
-                "two Procs share PDB {pdb} — cross-context memory boundary broken"
-            );
+        for f in p.vases.values() {
+            if let Some(pdb) = f.pdb {
+                assert!(
+                    pdb_owner.insert((f.gpu, pdb), p.anchor).is_none(),
+                    "two Procs share (target, PDB {pdb}) — cross-context memory boundary broken"
+                );
+            }
         }
     }
 
-    // INV2: no two procs share a vChid; by_vchid is 1:1.
+    // INV2: no two procs share a (target, vChid); by_vchid is 1:1.
     let mut vchid_owner: BTreeMap<_, nvkvm_core::ProcAnchor> = BTreeMap::new();
     for p in &bounds.procs {
         for facts in p.channels.values() {
             assert!(
-                vchid_owner.insert(facts.vchid, p.anchor).is_none(),
-                "two Procs share vChid {:?} — exec boundary broken",
+                vchid_owner.insert((facts.gpu, facts.vchid), p.anchor).is_none(),
+                "two Procs share (target, vChid {:?}) — exec boundary broken",
                 facts.vchid
             );
         }
     }
 
-    // INV3: every channel maps to at most one Vas/PDB, and if it has a PDB that PDB
-    // is owned by the SAME proc (never another proc's address space).
+    // INV3: every channel maps to at most one Vas, and the VAS it resolved — wherever
+    // it routes in the (target, PDB) map — is owned by the SAME proc (never another
+    // proc's address space). Matching on the VAS origin node (not a bare PDB) is robust
+    // to the per-GPU scoping of `by_pdb`.
     for p in &bounds.procs {
         for facts in p.channels.values() {
-            if let Some(pdb) = facts.vas_pdb {
-                let owner = bounds.by_pdb.get(&pdb).map(|x| x.0);
-                assert_eq!(
-                    owner,
-                    Some(p.anchor),
-                    "channel resolved to a PDB owned by another Proc (confused deputy)"
-                );
+            if let Some(vas_node) = facts.vas_origin {
+                for (anchor, node) in bounds.by_pdb.values() {
+                    if *node == vas_node {
+                        assert_eq!(
+                            *anchor, p.anchor,
+                            "channel resolved to a VAS owned by another Proc (confused deputy)"
+                        );
+                    }
+                }
             }
         }
     }
@@ -251,9 +261,15 @@ proptest! {
 
         for ev in stream {
             let _ = gpu.apply(ev); // Result — never a panic.
-            // Arenas of live procs are always pairwise disjoint (the #14 invariant,
-            // maintained by construction regardless of hostile input).
-            let ranges: Vec<_> = gpu.procs.values().map(|p| p.arena.range.clone()).collect();
+            // Arenas of live procs (across every target they span) are always pairwise
+            // disjoint (the #14 invariant, maintained by construction regardless of
+            // hostile input). Arenas are materialized lazily per (proc, GPU), so a proc
+            // that touched no target yet simply contributes none.
+            let ranges: Vec<_> = gpu
+                .procs
+                .values()
+                .flat_map(|p| p.arenas.values().map(|a| a.range.clone()))
+                .collect();
             for i in 0..ranges.len() {
                 for j in (i + 1)..ranges.len() {
                     prop_assert!(
@@ -373,7 +389,7 @@ proptest! {
             .procs
             .iter()
             .filter(|p| p.clients.contains(&victim))
-            .flat_map(|p| p.vases.values().flatten().copied())
+            .flat_map(|p| p.vases.values().filter_map(|f| f.pdb))
             .collect();
 
         // Free the victim client root (destroys its whole namespace).
@@ -387,7 +403,10 @@ proptest! {
         }
         // Its PDBs no longer route.
         for pdb in &victim_pdbs {
-            prop_assert!(!after.by_pdb.contains_key(pdb), "freed VAS's PDB still routes");
+            prop_assert!(
+                !after.by_pdb.contains_key(&(GpuId::ZERO, *pdb)),
+                "freed VAS's PDB still routes"
+            );
         }
         // Invariants still hold after the free.
         assert_boundary_invariants(&g, &arch);

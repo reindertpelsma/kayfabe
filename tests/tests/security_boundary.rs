@@ -39,6 +39,7 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb, VChid};
 use nvkvm_completion::{
     CompletionError, CompletionQueue, OsEventRef, MAX_OUTSTANDING_COMPLETIONS,
@@ -146,6 +147,7 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
                     // vChid is a global HW id (see the doc above), not forged here.
                     userd_flags: MockArch::userd_flags_for(VChid(0x900 + (flags & 0xff) as u16)),
                     mem_phys: (flags & 2 == 0).then_some(0x8000_0000 | u64::from(flags)),
+                    device_instance: None,
                 },
             }
         ),
@@ -239,7 +241,7 @@ proptest! {
         prop_assert_eq!(b_ref, b_now, "B's boundary changed under A's hostility");
 
         // B's address plane is unchanged: its mapped VA resolves to ITS backing.
-        let got = resolve(&gpu, B_PDB, B_MAP_VA).map(|(bind, _)| bind.phys);
+        let got = resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(bind, _)| bind.phys);
         prop_assert_eq!(got, Ok(B_MEM_PHYS), "B's VA no longer resolves to its own backing");
 
         // B's arena is disjoint from every A arena (no shared GPA — #14 isolation).
@@ -249,16 +251,20 @@ proptest! {
             .procs
             .values()
             .find(|p| p.clients.contains(&B_CLIENT))
-            .map(|p| p.arena.range.clone())
+            .map(|p| p.arenas[&GpuId::ZERO].range.clone())
             .expect("B still has an arena");
         for p in gpu.procs.values() {
             if p.clients.contains(&B_CLIENT) {
                 continue;
             }
+            // Arenas materialize lazily per (proc, GPU); a hostile A proc that touched
+            // no target has none. Check every arena it DID materialize.
+            for a in p.arenas.values() {
             prop_assert!(
-                p.arena.range.end <= b_arena.start || b_arena.end <= p.arena.range.start,
+                a.range.end <= b_arena.start || b_arena.end <= a.range.start,
                 "an A proc's arena overlaps B's — cross-process GPA collision"
             );
+            }
         }
     }
 }
@@ -295,7 +301,7 @@ fn b1_projection_collision_is_contained_not_a_device_wedge() {
     for ev in benign_b_events() {
         gpu.apply(ev).expect("B is unaffected by A's projection collision");
     }
-    assert!(resolve(&gpu, B_PDB, B_MAP_VA).is_ok(), "B fully functional after A's collision");
+    assert!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).is_ok(), "B fully functional after A's collision");
 }
 
 /// ★ Mutation-gate kill (`project` `prev != node.key`→`==` on the vChid dedup, and the
@@ -336,7 +342,7 @@ fn b1_vchid_collision_is_a_loud_contained_projection_fault() {
     for ev in benign_b_events() {
         gpu.apply(ev).expect("B unaffected by A's vChid collision");
     }
-    assert!(resolve(&gpu, B_PDB, B_MAP_VA).is_ok(), "B fully functional after A's collision");
+    assert!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).is_ok(), "B fully functional after A's collision");
 }
 
 /// **Boundary 1 (honest scope).** A hostile process forging the *global hardware
@@ -378,11 +384,11 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
     // The squat is refused (B declared B_PDB first) — loud + contained.
     assert!(matches!(squat, Err(GpuError::Projection(_))), "PDB squat must be a loud fault, got {squat:?}");
     // B keeps its PDB and its mapping — the victim is not corrupted.
-    assert_eq!(resolve(&gpu, B_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(B_MEM_PHYS));
-    assert_eq!(gpu.by_pdb.get(&B_PDB).and_then(|pid| gpu.procs.get(pid)).map(|p| p.clients.contains(&B_CLIENT)), Some(true));
+    assert_eq!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(B_MEM_PHYS));
+    assert_eq!(gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).and_then(|pid| gpu.procs.get(pid)).map(|p| p.clients.contains(&B_CLIENT)), Some(true));
     // The INNOCENT third process C is entirely unaffected — the blast radius never
     // reaches beyond the colliding pair.
-    assert!(gpu.by_pdb.contains_key(&C_PDB), "innocent C still routes");
+    assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, C_PDB)), "innocent C still routes");
     // And the device as a whole is still consistent (no wedge, no corruption).
     assert!(project(&gpu.rmgraph, gpu.arch.as_ref()).is_ok());
 }
@@ -438,7 +444,7 @@ proptest! {
         for ev in benign_b_events() {
             gpu.apply(ev).expect("B applies");
         }
-        let pid = *gpu.by_pdb.get(&B_PDB).expect("B routes");
+        let pid = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).expect("B routes");
         let cid = *gpu.procs[&pid].chan_ids.values().next().expect("B has a channel");
         let mut vmm = MockVmm::new();
         // Arbitrary method bytes live in guest RAM; the ring points ranges at them.
@@ -446,7 +452,7 @@ proptest! {
 
         for t in tokens {
             // Arbitrary doorbell token → routes to a channel or a loud fault; never panics.
-            let _ = handle_doorbell(&mut gpu, t, &[]);
+            let _ = handle_doorbell(&mut gpu, GpuId::ZERO, t, &[]);
         }
         // A GPFIFO ring of arbitrary (gpa, bounded-len) entries → arbitrary method
         // decodes over arbitrary bytes, always a bounded parse, never a panic.
@@ -459,7 +465,7 @@ proptest! {
         let _ = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring);
         for v in vas {
             // Arbitrary VA → HIT its backing or a loud MISS; never a wrong-silent-resolve.
-            let _ = resolve(&gpu, B_PDB, GpuVa(v));
+            let _ = resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(v));
         }
         // The device is still consistent after all of it.
         prop_assert!(project(&gpu.rmgraph, gpu.arch.as_ref()).is_ok());
@@ -609,7 +615,7 @@ fn b2_pushbuffer_length_flood_is_bounded() {
     for ev in benign_b_events() {
         gpu.apply(ev).expect("B applies");
     }
-    let pid = *gpu.by_pdb.get(&B_PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
     let mut vmm = MockVmm::new();
 
@@ -638,16 +644,16 @@ fn b4_miss_is_fault_never_silent_wrong_resolve() {
         gpu.apply(ev).expect("B applies");
     }
     // In-range: resolves to B's backing.
-    assert_eq!(resolve(&gpu, B_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(B_MEM_PHYS));
+    assert_eq!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(B_MEM_PHYS));
     // Just past the mapping: LOUD miss, not a wrap-around into the next range.
     assert!(matches!(
-        resolve(&gpu, B_PDB, GpuVa(B_MAP_VA.0 + B_MAP_LEN)),
+        resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(B_MAP_VA.0 + B_MAP_LEN)),
         Err(FwdFault::Address(_))
     ));
     // A wild VA: LOUD miss.
-    assert!(matches!(resolve(&gpu, B_PDB, GpuVa(0xdead_beef_0000)), Err(FwdFault::Address(_))));
+    assert!(matches!(resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(0xdead_beef_0000)), Err(FwdFault::Address(_))));
     // An unknown PDB: LOUD routing miss (no VAS to fall through to).
-    assert!(matches!(resolve(&gpu, Pdb(0xF00D), B_MAP_VA), Err(FwdFault::UnknownPdb(_))));
+    assert!(matches!(resolve(&gpu, GpuId::ZERO, Pdb(0xF00D), B_MAP_VA), Err(FwdFault::UnknownPdb { .. })));
 }
 
 /// **Boundary 1 (the #14 cross-context leak, made impossible).** Two processes map
@@ -675,8 +681,8 @@ fn b4_identical_va_distinct_pdb_never_cross_leaks() {
     }
 
     // Each PDB resolves the identical VA to its OWN backing — never crossed.
-    assert_eq!(resolve(&gpu, B_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(B_MEM_PHYS));
-    assert_eq!(resolve(&gpu, A_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(A_MEM_PHYS));
+    assert_eq!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(B_MEM_PHYS));
+    assert_eq!(resolve(&gpu, GpuId::ZERO, A_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(A_MEM_PHYS));
     assert_ne!(B_MEM_PHYS, A_MEM_PHYS, "the two backings are genuinely distinct");
 }
 
@@ -712,7 +718,7 @@ fn b5_channel_naming_non_vaspace_handle_does_not_bind() {
 
     let bounds = project(&g, &arch).expect("projects");
     // The bait PDB does NOT route (a MEMORY object is not a VASpace).
-    assert!(!bounds.by_pdb.contains_key(&Pdb(0x9999)), "a non-VASpace's bait PDB must not route");
+    assert!(!bounds.by_pdb.contains_key(&(GpuId::ZERO, Pdb(0x9999))), "a non-VASpace's bait PDB must not route");
     // The channel resolved to NO VAS (loud-miss at use), never the memory's PDB.
     let proc = &bounds.procs[0];
     let chan = proc.channels.values().next().expect("the channel");
@@ -753,7 +759,7 @@ fn b5_channel_cannot_bind_another_clients_vaspace_handle() {
     let chan = a_proc.channels.values().next().expect("A's channel");
     assert_eq!(chan.vas_pdb, None, "A's channel must not cross-bind B's page directory");
     // And B still solely owns B_PDB.
-    assert_eq!(bounds.by_pdb.get(&B_PDB).map(|(_, k)| k.client), Some(B_CLIENT));
+    assert_eq!(bounds.by_pdb.get(&(GpuId::ZERO, B_PDB)).map(|(_, k)| k.client), Some(B_CLIENT));
 }
 
 /// **Boundary 1.** A `Dup` naming a source that is NEVER allocated is INERT, never a
@@ -791,7 +797,7 @@ fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
         "a dangling dup must not conjure a resource-less phantom proc"
     );
     // B is undisturbed.
-    assert!(resolve(&gpu, B_PDB, B_MAP_VA).is_ok(), "B undisturbed by a dangling dup");
+    assert!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).is_ok(), "B undisturbed by a dangling dup");
 
     // Free of a never-seen handle → loud FreeUnknown.
     let bad_free = gpu.apply(RmEvent::Free { client: HClient(0x1234), handle: HObject(0x5678) });
@@ -817,26 +823,44 @@ fn b6_gpa_window_exhaustion_is_graceful() {
     let gpa = GpaSpace::new(0x1_0000_0000..0x4_0000_0000, 0x1_0000_0000); // 3 arenas total
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("realizes (system takes 1)");
 
-    // Spawn processes until the window exhausts.
+    // Spawn ROUTABLE processes (each carves a per-(proc, GpuId::ZERO) arena on its
+    // first materialized target) until the window exhausts. Arenas are lazy per
+    // (proc, GPU), so a proc consumes a slot once it declares a routable VAS.
     let mut spawned: Vec<HClient> = Vec::new();
     let mut exhausted = false;
-    for i in 0..16u32 {
+    'outer: for i in 0..16u32 {
         let c = HClient(0xE000 + i);
-        match gpu.apply(RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(c.0), class: mc::CLIENT, facts: AllocFacts::default() }) {
-            Ok(()) => spawned.push(c),
-            Err(GpuError::Gpa(_)) => {
-                exhausted = true;
-                break;
+        let root = HObject(c.0);
+        let dev = HObject(0x100);
+        let vas = HObject(0x110);
+        let steps = [
+            RmEvent::Alloc { client: c, parent: root, handle: root, class: mc::CLIENT, facts: AllocFacts::default() },
+            RmEvent::Alloc { client: c, parent: root, handle: dev, class: mc::DEVICE, facts: AllocFacts::default() },
+            RmEvent::Alloc { client: c, parent: dev, handle: vas, class: mc::VASPACE, facts: AllocFacts::default() },
+            RmEvent::SetPageDir { client: c, vaspace: vas, pdb: Pdb(0x1000 * u64::from(i + 1)) },
+        ];
+        for ev in steps {
+            match gpu.apply(ev) {
+                Ok(()) => {}
+                Err(GpuError::Gpa(_)) => {
+                    exhausted = true;
+                    break 'outer;
+                }
+                Err(e) => panic!("window exhaustion must be a loud GpaError, got {e:?}"),
             }
-            Err(e) => panic!("window exhaustion must be a loud GpaError, got {e:?}"),
         }
+        spawned.push(c);
     }
     assert!(exhausted, "the window must exhaust loudly, not grow forever");
     assert!(!spawned.is_empty(), "at least one process fit before exhaustion");
 
     // Every process that DID fit is intact and its arena is disjoint from the rest —
     // exhaustion did not corrupt or cross-wire the survivors.
-    let ranges: Vec<_> = gpu.procs.values().map(|p| p.arena.range.clone()).collect();
+    let ranges: Vec<_> = gpu
+        .procs
+        .values()
+        .flat_map(|p| p.arenas.values().map(|a| a.range.clone()))
+        .collect();
     for i in 0..ranges.len() {
         for j in (i + 1)..ranges.len() {
             assert!(

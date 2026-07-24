@@ -47,6 +47,20 @@ impl Scenario {
         pdb: Pdb,
         h: ProcessHandles,
     ) -> NodeKey {
+        self.compute_process_on_gpu(client, pdb, h, None)
+    }
+
+    /// Like [`Scenario::compute_process`] but declares the `Device`'s physical-GPU
+    /// index (`deviceInstance`) — `None` = single-GPU default (routes to `GpuId::ZERO`);
+    /// `Some(i)` = the multi-GPU target `GpuId(i)`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn compute_process_on_gpu(
+        &mut self,
+        client: HClient,
+        pdb: Pdb,
+        h: ProcessHandles,
+        device_instance: Option<u32>,
+    ) -> NodeKey {
         let dev = h.device;
         let vas = h.vaspace;
         self.push(RmEvent::Alloc {
@@ -61,7 +75,7 @@ impl Scenario {
             parent: h.client_root,
             handle: dev,
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts { device_instance, ..Default::default() },
         });
         self.push(RmEvent::Alloc {
             client,

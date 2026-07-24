@@ -9,6 +9,7 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
+use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{HClient, HObject, Pdb, VChid};
 use nvkvm_core::project::project;
 use nvkvm_core::rmgraph::RmGraph;
@@ -119,15 +120,15 @@ fn multi_vaspace_per_process_keys_address_ops_on_vas_not_proc() {
         .iter()
         .find(|p| p.clients.contains(&HClient(0xAA)))
         .expect("proc A present");
-    let pdbs: Vec<Pdb> = proc_a.vases.values().flatten().copied().collect();
+    let pdbs: Vec<Pdb> = proc_a.vases.values().filter_map(|f| f.pdb).collect();
     assert!(pdbs.contains(&Pdb(0x3401_000)), "compute VAS present");
     assert!(pdbs.contains(&Pdb(0x2efa_6c000)), "UVM VAS present");
     assert_eq!(pdbs.len(), 2, "exactly two VASes under one Proc");
 
-    // by_pdb keys on the VAS (PDB), and each PDB routes to A — address ops key on
-    // Vas/PDB, never on Proc (the multi-VAS-per-proc rule, decision #14).
-    assert_eq!(b.by_pdb.get(&Pdb(0x3401_000)).map(|x| x.0), Some(proc_a.anchor));
-    assert_eq!(b.by_pdb.get(&Pdb(0x2efa_6c000)).map(|x| x.0), Some(proc_a.anchor));
+    // by_pdb keys on (target, PDB), and each PDB routes to A on GpuId::ZERO — address
+    // ops key on Vas/PDB, never on Proc (the multi-VAS-per-proc rule, decision #14).
+    assert_eq!(b.by_pdb.get(&(GpuId::ZERO, Pdb(0x3401_000))).map(|x| x.0), Some(proc_a.anchor));
+    assert_eq!(b.by_pdb.get(&(GpuId::ZERO, Pdb(0x2efa_6c000))).map(|x| x.0), Some(proc_a.anchor));
 }
 
 /// ★ Mutation-gate kill (`ClientUnion::union` `ra < rb`→`ra == rb`): the process
@@ -154,9 +155,9 @@ fn proc_anchor_is_the_minimum_client_in_its_component() {
             "the anchor must be the SMALLEST client handle in the component (deterministic identity)",
         );
         // The routing maps must agree with that same minimum-anchor for this proc's PDBs.
-        for pdb in p.vases.values().flatten() {
+        for pdb in p.vases.values().filter_map(|f| f.pdb) {
             assert_eq!(
-                b.by_pdb.get(pdb).map(|x| x.0),
+                b.by_pdb.get(&(GpuId::ZERO, pdb)).map(|x| x.0),
                 Some(p.anchor),
                 "by_pdb routes to the minimum-client anchor",
             );
@@ -178,8 +179,8 @@ fn identical_handles_across_procs_do_not_collide() {
 
     // Both procs used GR channel handle 0x5c000019 — but they are distinct nodes
     // keyed by (client, handle), so the two GR channels route to distinct vChids.
-    let gr_a = b.by_vchid.get(&VChid(0x10)).expect("A's GR vchid");
-    let gr_b = b.by_vchid.get(&VChid(0x20)).expect("B's GR vchid");
+    let gr_a = b.by_vchid.get(&(GpuId::ZERO, VChid(0x10))).expect("A's GR vchid");
+    let gr_b = b.by_vchid.get(&(GpuId::ZERO, VChid(0x20))).expect("B's GR vchid");
     assert_ne!(gr_a.0, gr_b.0, "identical handles, distinct procs");
     // Four distinct channels total (2 per proc), zero vChid collisions.
     assert_eq!(b.by_vchid.len(), 4);

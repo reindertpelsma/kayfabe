@@ -14,6 +14,7 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{GpuVa, HClient, Pdb, VChid};
 use nvkvm_core::gpu::Gpu;
 use nvkvm_core::gpa::GpaSpace;
@@ -68,7 +69,7 @@ fn one_proc_gpu() -> (Gpu, MockVmm) {
 #[test]
 fn scripted_pushbuffer_populates_table_and_observes_completion() {
     let (mut gpu, mut vmm) = one_proc_gpu();
-    let pid = *gpu.by_pdb.get(&A_PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
 
     let pt_page: u64 = 0x1_2340_0000; // physical PT page the CE writes
@@ -89,7 +90,7 @@ fn scripted_pushbuffer_populates_table_and_observes_completion() {
 
     // CE-PT-write capture: exactly the physical dst page, aligned.
     assert_eq!(out.pt_writes, vec![pt_page], "physical CE dst captured as a PT page");
-    assert!(gpu.procs[&pid].vases[&A_PDB].pt_pages.contains(&pt_page), "recorded in Vas.pt_pages");
+    assert!(gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)].pt_pages.contains(&pt_page), "recorded in Vas.pt_pages");
     // The virtual CE dst was NOT captured as a PT write.
     assert_eq!(out.pt_writes.len(), 1, "virtual CE dst is a data copy, not a PT-write");
     // SemRelease observed.
@@ -101,7 +102,7 @@ fn scripted_pushbuffer_populates_table_and_observes_completion() {
     assert_eq!(out.opaque, 1);
 
     // The captured PT-write leaf is now resolvable in the table (co-populate source).
-    assert!(nvkvm_fwd::resolve(&gpu, A_PDB, GpuVa(pt_page + 0x40)).is_ok());
+    assert!(nvkvm_fwd::resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(pt_page + 0x40)).is_ok());
 }
 
 /// A hostile / truncated ring never panics and never desyncs the parser into an
@@ -109,7 +110,7 @@ fn scripted_pushbuffer_populates_table_and_observes_completion() {
 #[test]
 fn hostile_ring_never_panics() {
     let (mut gpu, mut vmm) = one_proc_gpu();
-    let pid = *gpu.by_pdb.get(&A_PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
 
     // A ring with a bogus GPFIFO entry pointing at empty RAM + a truncated tail.
@@ -148,8 +149,8 @@ fn two_proc_gpu() -> (Gpu, MockVmm, SharedRecorder) {
 #[test]
 fn t14_per_vas_publication_gates_the_ring() {
     let (mut gpu, _vmm, rec) = two_proc_gpu();
-    let pid_a = *gpu.by_pdb.get(&A_PDB).unwrap();
-    let pid_b = *gpu.by_pdb.get(&B_PDB).unwrap();
+    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid_b = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
     let cid_a = *gpu.procs[&pid_a].chan_ids.values().next().unwrap();
     let a_token = MockArch::token_for(VChid(0x10));
     let b_token = MockArch::token_for(VChid(0x20));
@@ -158,11 +159,11 @@ fn t14_per_vas_publication_gates_the_ring() {
     // LOUD fault for BOTH — the exact #14 EXECUTION fault, refused by the ONE ring
     // path itself (there is no ungated sibling to reach the host through).
     assert!(matches!(
-        handle_doorbell(&mut gpu, a_token, &[SHARED_VA]),
+        handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]),
         Err(FwdFault::Address(_))
     ));
     assert!(matches!(
-        handle_doorbell(&mut gpu, b_token, &[SHARED_VA]),
+        handle_doorbell(&mut gpu, GpuId::ZERO, b_token, &[SHARED_VA]),
         Err(FwdFault::Address(_))
     ));
     // The refused rings did NOTHING host-side: no channel, no schedule, no doorbell.
@@ -172,14 +173,14 @@ fn t14_per_vas_publication_gates_the_ring() {
 
     // Publish the SAME guest VA in each proc's OWN Vas (distinct host VASes).
     let pub_a =
-        publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, SHARED_VA, 0x10000).unwrap();
+        publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), GpuId::ZERO, A_PDB, SHARED_VA, 0x10000).unwrap();
     let pub_b =
-        publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, SHARED_VA, 0x10000).unwrap();
+        publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), GpuId::ZERO, B_PDB, SHARED_VA, 0x10000).unwrap();
     assert_ne!(pub_a.host_va, pub_b.host_va, "identical guest VA → distinct host VA");
 
     // Now the SAME ring path passes for BOTH — each resolves in its OWN host VAS.
-    let out_a = handle_doorbell(&mut gpu, a_token, &[SHARED_VA]).expect("A rings after publish");
-    let out_b = handle_doorbell(&mut gpu, b_token, &[SHARED_VA]).expect("B rings after publish");
+    let out_a = handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]).expect("A rings after publish");
+    let out_b = handle_doorbell(&mut gpu, GpuId::ZERO, b_token, &[SHARED_VA]).expect("B rings after publish");
     assert_ne!(
         out_a.host_token, out_b.host_token,
         "each proc rang its OWN host token — no cross-proc content-pick"
@@ -195,7 +196,7 @@ fn t14_per_vas_publication_gates_the_ring() {
 #[test]
 fn t14_ring_gate_is_structural_no_ungated_door() {
     let (mut gpu, _vmm, rec) = two_proc_gpu();
-    let pid_a = *gpu.by_pdb.get(&A_PDB).unwrap();
+    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let a_token = MockArch::token_for(VChid(0x10));
     const MEM: nvkvm_arch::ids::HObject = nvkvm_arch::ids::HObject(0x5c00_0100);
 
@@ -213,7 +214,7 @@ fn t14_ring_gate_is_structural_no_ungated_door() {
     // ops (not even channel materialization). There is no ungated door to try instead.
     let before = rec.lock().unwrap().log.len();
     assert!(matches!(
-        handle_doorbell(&mut gpu, a_token, &[SHARED_VA]),
+        handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]),
         Err(FwdFault::Address(_))
     ));
     assert_eq!(rec.lock().unwrap().log.len(), before, "a gated-out ring did no host op");
@@ -226,8 +227,8 @@ fn t14_ring_gate_is_structural_no_ungated_door() {
         va: SHARED_VA,
     })
     .expect("unmap applies");
-    publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, SHARED_VA, 0x10000).unwrap();
-    handle_doorbell(&mut gpu, a_token, &[SHARED_VA]).expect("published set rings");
+    publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), GpuId::ZERO, A_PDB, SHARED_VA, 0x10000).unwrap();
+    handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]).expect("published set rings");
     assert!(
         rec.lock().unwrap().log.iter().any(|(_, v)| matches!(v, RmVerb::RingDoorbell { .. })),
         "the successful ring reached the host doorbell"
@@ -239,9 +240,9 @@ fn t14_ring_gate_is_structural_no_ungated_door() {
 #[test]
 fn t14_unpublished_va_is_a_loud_fault() {
     let (mut gpu, _vmm, _rec) = two_proc_gpu();
-    let pid_a = *gpu.by_pdb.get(&A_PDB).unwrap();
+    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid_a = *gpu.procs[&pid_a].chan_ids.values().next().unwrap();
-    publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, SHARED_VA, 0x10000).unwrap();
+    publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), GpuId::ZERO, A_PDB, SHARED_VA, 0x10000).unwrap();
 
     // A VA that was never published: loud MISS.
     assert!(matches!(
@@ -256,7 +257,7 @@ fn t14_unpublished_va_is_a_loud_fault() {
 #[test]
 fn soak_submit_complete_loop_loses_no_completion() {
     let (mut gpu, mut vmm) = one_proc_gpu();
-    let pid = *gpu.by_pdb.get(&A_PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
 
     let mut expected_completions = 0usize;
@@ -271,13 +272,13 @@ fn soak_submit_complete_loop_loses_no_completion() {
 
         // Drain the proc's queue each iter (post + drain + ack) — no completion lost.
         assert!(gpu.procs[&pid].completion.has_outstanding());
-        let batch = gpu.pump_completions().expect("posts");
+        let batch = gpu.pump_completions(GpuId::ZERO).expect("posts");
         assert!(!batch.events.is_empty());
-        gpu.completions_drained();
+        gpu.completions_drained(GpuId::ZERO);
     }
     assert_eq!(expected_completions, 64, "every iteration's completion was observed");
     // The address table has no unbounded growth from sema releases (they observe, not bind).
-    assert_eq!(gpu.procs[&pid].vases[&A_PDB].table.iter().count(), 0, "sema releases do not bind");
+    assert_eq!(gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)].table.iter().count(), 0, "sema releases do not bind");
 }
 
 // ---------------------------------------------------------------------------------
@@ -287,6 +288,7 @@ fn soak_submit_complete_loop_loses_no_completion() {
 // ---------------------------------------------------------------------------------
 
 mod fuzz {
+    use nvkvm_arch::ids::GpuId;
     use nvkvm_fwd::parse_pushbuffer;
     use nvkvm_vmm::Vmm;
     use proptest::collection::vec;
@@ -304,7 +306,7 @@ mod fuzz {
             region in vec(any::<u8>(), 0..256),
         ) {
             let (mut gpu, mut vmm) = super::one_proc_gpu();
-            let pid = *gpu.by_pdb.get(&super::A_PDB).unwrap();
+            let pid = *gpu.by_pdb.get(&(GpuId::ZERO, super::A_PDB)).unwrap();
             let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
             // Back the region GPFIFO entries might point at (0x5000_0000 window).
             vmm.gpa_write(0x5000_0000, &region).unwrap();
@@ -313,7 +315,7 @@ mod fuzz {
             let _ = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring);
 
             // Whatever got bound resolves cleanly (no torn/partial binding).
-            let vas = &gpu.procs[&pid].vases[&super::A_PDB];
+            let vas = &gpu.procs[&pid].vases[&(GpuId::ZERO, super::A_PDB)];
             for (va, _len, b) in vas.table.iter() {
                 prop_assert_eq!(
                     vas.table.resolve(super::A_PDB, nvkvm_arch::ids::GpuVa(va)).map(|(x, _)| x.phys),

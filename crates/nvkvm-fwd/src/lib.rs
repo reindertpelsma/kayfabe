@@ -41,7 +41,7 @@
 //! `Gpu::procs`, no shared lock).
 
 use nvkvm_arch::Aperture;
-use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
+use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
 use nvkvm_completion::{CompletionError, OsEventRef, PostBatch};
 use nvkvm_mmu::AddressTable;
 use nvkvm_core::gpu::{Channel, Gpu, Proc, Vas};
@@ -63,9 +63,13 @@ pub enum FwdFault {
         /// The raw token.
         token: u64,
     },
-    /// The decoded vChid has no registered channel — forward-population never saw
-    /// its channel-alloc. MISS=FAULT (the C's `bar1_wpg` MRU fallback is designed out).
+    /// The decoded vChid has no registered channel **on this target GPU** — forward-
+    /// population never saw its channel-alloc. MISS=FAULT (the C's `bar1_wpg` MRU
+    /// fallback is designed out). Carries its target: a `VChid` is a per-GPU namespace,
+    /// so the miss is scoped to the GPU whose doorbell trapped (MG-3).
     UnknownVchid {
+        /// The target GPU the doorbell addressed.
+        gpu: GpuId,
         /// The decoded vChid.
         vchid: VChid,
     },
@@ -75,8 +79,23 @@ pub enum FwdFault {
     /// The channel is not bound to any declared VAS and system routing does not
     /// apply — refusing to guess an address space.
     NoVas(ChanId),
-    /// The target proc has no `Vas` for this PDB (data-plane routing miss).
-    UnknownPdb(Pdb),
+    /// The target proc has no `Vas` for this `(GpuId, PDB)` (data-plane routing miss).
+    /// Carries its target: a `Pdb` is a per-GPU namespace (MG-3).
+    UnknownPdb {
+        /// The target GPU.
+        gpu: GpuId,
+        /// The PDB that missed on that target.
+        pdb: Pdb,
+    },
+    /// A per-`(Proc, GpuId)` host isolate/arena was not materialized for an op's
+    /// target GPU (an internal inconsistency — the derivation ensures one per touched
+    /// target). Loud, never a silent cross-GPU reach.
+    NoTarget {
+        /// The proc.
+        proc: ProcId,
+        /// The target GPU with no materialized isolate/arena.
+        gpu: GpuId,
+    },
     /// The address table refused (miss/overlap).
     Address(AddressFault),
     /// The proc's GPA arena is exhausted.
@@ -143,15 +162,18 @@ pub struct Published {
     pub host_va: u64,
 }
 
-/// Back `[va, va+len)` in the `Vas` identified by `pdb` inside `proc`:
-/// carve GPA from the proc's arena, allocate host memory + map it into the Vas's
-/// own host VAS via the proc's isolate, and forward-populate the address table.
+/// Back `[va, va+len)` in the `Vas` identified by `(gpu, pdb)` inside `proc`:
+/// carve GPA from the proc's **per-target** arena, allocate host memory + map it into
+/// the Vas's own host VAS via the proc's **per-target** isolate, and forward-populate
+/// the address table.
 ///
-/// Keying discipline (decision #14): the caller routes here via `Gpu::by_pdb` —
-/// this function takes the `Proc` only because the `Proc` *owns* the arena and
-/// isolate; the address op itself keys on the `Vas`.
+/// Keying discipline (decision #14 + MG-3/MG-5): the caller routes here via
+/// `Gpu::by_pdb[(gpu, pdb)]`; a `Pdb` is a per-GPU namespace, so the target GPU is
+/// part of the address op's identity. The `Proc` owns one arena + isolate PER target
+/// (a bug on GPU0 cannot reach GPU1's host handles).
 pub fn publish_backing(
     proc: &mut Proc,
+    gpu: GpuId,
     pdb: Pdb,
     va: GpuVa,
     len: u64,
@@ -159,9 +181,11 @@ pub fn publish_backing(
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(proc.id));
     }
-    let Proc { vases, arena, isolate, .. } = proc;
-    let vas = vases.get_mut(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
-    let rm = isolate.rm();
+    let pid = proc.id;
+    let Proc { vases, arenas, isolates, .. } = proc;
+    let vas = vases.get_mut(&(gpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu, pdb })?;
+    let arena = arenas.get_mut(&gpu).ok_or(FwdFault::NoTarget { proc: pid, gpu })?;
+    let rm = isolates.get_mut(&gpu).ok_or(FwdFault::NoTarget { proc: pid, gpu })?.rm();
 
     let gpa = arena.alloc(len, 0x1000).map_err(|_| FwdFault::Arena)?;
     let hvas = ensure_host_vas(vas, rm)?;
@@ -177,11 +201,11 @@ pub fn publish_backing(
     Ok(Published { gpa: gpa.0, host_va })
 }
 
-/// Resolve `va` in the `Vas` identified by `pdb`. Pure lookup; MISS=FAULT.
-pub fn resolve(gpu: &Gpu, pdb: Pdb, va: GpuVa) -> Result<(Binding, u64), FwdFault> {
-    let pid = *gpu.by_pdb.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+/// Resolve `va` in the `Vas` identified by `(gpu, pdb)`. Pure lookup; MISS=FAULT.
+pub fn resolve(gpu: &Gpu, target: GpuId, pdb: Pdb, va: GpuVa) -> Result<(Binding, u64), FwdFault> {
+    let pid = *gpu.by_pdb.get(&(target, pdb)).ok_or(FwdFault::UnknownPdb { gpu: target, pdb })?;
     let proc = gpu.procs.get(&pid).ok_or(FwdFault::RetiredProc(pid))?;
-    let vas = proc.vases.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+    let vas = proc.vases.get(&(target, pdb)).ok_or(FwdFault::UnknownPdb { gpu: target, pdb })?;
     Ok(vas.table.resolve(pdb, va)?)
 }
 
@@ -241,6 +265,7 @@ fn gate_vas(
 /// proc's channel off-runlist (#12's CTX2 bug, crack ⚠4).
 pub fn handle_doorbell(
     gpu: &mut Gpu,
+    target_gpu: GpuId,
     token: u64,
     working_set: &[GpuVa],
 ) -> Result<DoorbellOutcome, FwdFault> {
@@ -248,25 +273,30 @@ pub fn handle_doorbell(
         .arch
         .decode_doorbell(token)
         .ok_or(FwdFault::MalformedToken { token })?;
+    // ★ MG-3: the vChid demux is keyed on `(target GPU, vChid)` — the doorbell's
+    // target names WHICH GPU (the BAR that trapped); a vChid is a per-GPU runlist
+    // index, so identical vChids on two GPUs route to their own channels.
     let (pid, cid) = *gpu
         .by_vchid
-        .get(&target.vchid)
-        .ok_or(FwdFault::UnknownVchid { vchid: target.vchid })?;
+        .get(&(target_gpu, target.vchid))
+        .ok_or(FwdFault::UnknownVchid { gpu: target_gpu, vchid: target.vchid })?;
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));
     }
 
-    let Proc { vases, channels, exec, isolate, poll, .. } = proc;
+    let Proc { vases, channels, exec, isolates, poll, .. } = proc;
     let chan: &mut Channel = channels.get_mut(&cid).ok_or(FwdFault::UnknownVchid {
+        gpu: target_gpu,
         vchid: target.vchid,
     })?;
-    let rm = isolate.rm();
+    let cgpu = chan.gpu;
+    let rm = isolates.get_mut(&cgpu).ok_or(FwdFault::NoTarget { proc: pid, gpu: cgpu })?.rm();
 
     // ---- The #14 ring-gate, BEFORE any host op (the ONE ring path always runs it). ----
     match chan.vas {
         Some(pdb) => {
-            let vas = vases.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+            let vas = vases.get(&(cgpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
             gate_vas(&vas.table, pdb, working_set.iter().copied())?;
         }
         // No declared VAS (GSP-managed, system-routed): there is no address space to
@@ -280,7 +310,7 @@ pub fn handle_doorbell(
     // `dma_copy_class_alloc_params` engineType=0 → 401 class, designed out).
     if chan.host_channel.is_none() {
         let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
-        let vas = vases.get_mut(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+        let vas = vases.get_mut(&(cgpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
         let hvas = ensure_host_vas(vas, rm)?;
         let (hchan, htok) = rm.alloc_channel(hvas, chan.engine)?;
         chan.host_channel = Some(hchan);
@@ -299,20 +329,26 @@ pub fn handle_doorbell(
     Ok(DoorbellOutcome { proc: pid, chan: cid, host_token, scheduled_now })
 }
 
-/// Post any composable completion batch and raise the SWGEN0 edge. Returns the
-/// posted batch, if any. (Queue *encoding* is `nvkvm-gsp`'s job once it ports.)
-pub fn deliver_completions(gpu: &mut Gpu, vmm: &mut dyn Vmm) -> Option<PostBatch> {
-    let batch = gpu.pump_completions()?;
+/// Post any composable completion batch for target `gpu_target` and raise the SWGEN0
+/// edge (MG-6: per-target GSP queue). Returns the posted batch, if any. (Queue
+/// *encoding* is `nvkvm-gsp`'s job once it ports.)
+pub fn deliver_completions(gpu: &mut Gpu, vmm: &mut dyn Vmm, gpu_target: GpuId) -> Option<PostBatch> {
+    let batch = gpu.pump_completions(gpu_target)?;
     vmm.raise_irq(COMPLETION_VECTOR).ok()?;
     Some(batch)
 }
 
-/// A proc's completion-poll RPC arrived (`MC_SERVICE_INTERRUPTS`-shaped): re-post
-/// its un-acked completions off its OWN poll and raise the edge — the #14 round-8
-/// starvation is impossible by construction (§4.3.2).
-pub fn poll_completions(gpu: &mut Gpu, vmm: &mut dyn Vmm, pid: ProcId) -> Option<PostBatch> {
+/// A proc's completion-poll RPC arrived (`MC_SERVICE_INTERRUPTS`-shaped) on target
+/// `gpu_target`: re-post its un-acked completions off its OWN poll and raise the edge
+/// — the #14 round-8 starvation is impossible by construction (§4.3.2), per target.
+pub fn poll_completions(
+    gpu: &mut Gpu,
+    vmm: &mut dyn Vmm,
+    gpu_target: GpuId,
+    pid: ProcId,
+) -> Option<PostBatch> {
     let now = vmm.now();
-    let batch = gpu.completion_poll(pid, now)?;
+    let batch = gpu.completion_poll(gpu_target, pid, now)?;
     vmm.raise_irq(COMPLETION_VECTOR).ok()?;
     Some(batch)
 }
@@ -372,6 +408,7 @@ pub struct EngineObjectForwarded {
 /// already covers for alloc/DUP, extended to the host-forward plane).
 pub fn forward_engine_object(
     gpu: &mut Gpu,
+    target_gpu: GpuId,
     vchid: VChid,
     class: ClassId,
     params: &[u8],
@@ -379,23 +416,24 @@ pub fn forward_engine_object(
     let engine = gpu.arch.engine_of_object(class).ok_or(FwdFault::NotAnEngine(class))?;
     let (pid, cid) = *gpu
         .by_vchid
-        .get(&vchid)
-        .ok_or(FwdFault::UnknownVchid { vchid })?;
+        .get(&(target_gpu, vchid))
+        .ok_or(FwdFault::UnknownVchid { gpu: target_gpu, vchid })?;
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));
     }
 
-    let Proc { vases, channels, isolate, .. } = proc;
-    let chan = channels.get_mut(&cid).ok_or(FwdFault::UnknownVchid { vchid })?;
-    let rm = isolate.rm();
+    let Proc { vases, channels, isolates, .. } = proc;
+    let chan = channels.get_mut(&cid).ok_or(FwdFault::UnknownVchid { gpu: target_gpu, vchid })?;
+    let cgpu = chan.gpu;
+    let rm = isolates.get_mut(&cgpu).ok_or(FwdFault::NoTarget { proc: pid, gpu: cgpu })?.rm();
 
     // Lazily materialize the host channel (first-touch, per-proc) so the engine object
     // has a channel to be allocated on — the host builds its GR ctx against it.
     let materialized_channel = chan.host_channel.is_none();
     if materialized_channel {
         let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
-        let vas = vases.get_mut(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+        let vas = vases.get_mut(&(cgpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
         let hvas = ensure_host_vas(vas, rm)?;
         // The channel's graph-derived `EngineKind` rides the alloc (GR-1, wrong-runlist
         // class): the adapter cannot invent the runlist, so the core declares it.
@@ -422,6 +460,7 @@ pub fn forward_engine_object(
 /// Case-2 set and its class table — never a new host verb, never a new routing path.
 pub fn route_control(
     gpu: &mut Gpu,
+    target_gpu: GpuId,
     pid: ProcId,
     obj: HostHandle,
     cmd: ControlCmd,
@@ -436,7 +475,14 @@ pub fn route_control(
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));
     }
-    proc.isolate.rm().control(obj, cmd, payload)?;
+    // Forward on the op's TARGET GPU's isolate (MG-5): the control object `obj` is a
+    // handle in that isolate's namespace; routing it elsewhere is unrepresentable.
+    let rm = proc
+        .isolates
+        .get_mut(&target_gpu)
+        .ok_or(FwdFault::NoTarget { proc: pid, gpu: target_gpu })?
+        .rm();
+    rm.control(obj, cmd, payload)?;
     Ok(ControlRoute::Forwarded)
 }
 
@@ -555,6 +601,7 @@ pub fn parse_pushbuffer(
     }
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
     let chan_pdb = chan.vas;
+    let cgpu = chan.gpu;
 
     let mut out = PushbufferOutcome::default();
     for (header, args) in methods {
@@ -568,7 +615,8 @@ pub fn parse_pushbuffer(
                 // forward-populate the same per-`Vas` table (co-equal RPC source).
                 if !dst_is_virtual {
                     let pdb = chan_pdb.ok_or(FwdFault::NoVas(cid))?;
-                    let vas = proc.vases.get_mut(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+                    let vas =
+                        proc.vases.get_mut(&(cgpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
                     let page = dst.0 & !0xfffu64;
                     vas.pt_pages.insert(page);
                     out.pt_writes.push(page);
@@ -634,7 +682,8 @@ pub fn gate_working_set(
     let proc = gpu.procs.get(&pid).ok_or(FwdFault::RetiredProc(pid))?;
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
     let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
-    let vas = proc.vases.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+    let vas =
+        proc.vases.get(&(chan.gpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: chan.gpu, pdb })?;
     gate_vas(&vas.table, pdb, working_set.iter().copied())
 }
 
@@ -702,8 +751,9 @@ pub fn arm_fence(
     if completion_arm(chan.engine) != CompletionArm::MappedFence {
         return Err(FwdFault::WrongArm { chan: cid, engine: chan.engine });
     }
+    let cgpu = chan.gpu;
     let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
-    let vas = proc.vases.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+    let vas = proc.vases.get(&(cgpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
     // The fence must be a mapped, host-published address in this channel's OWN Vas.
     gate_vas(&vas.table, pdb, [addr])?;
     Ok(proc.fences.arm((pdb.0, addr.0), current, target, event)?)
@@ -715,11 +765,15 @@ pub fn arm_fence(
 /// under the #12 jump guard. A value on an un-armed fence is inert (`Ok(None)`).
 pub fn fence_observed(
     gpu: &mut Gpu,
+    target_gpu: GpuId,
     pdb: Pdb,
     addr: GpuVa,
     value: u32,
 ) -> Result<Option<OsEventRef>, FwdFault> {
-    let pid = *gpu.by_pdb.get(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+    let pid = *gpu
+        .by_pdb
+        .get(&(target_gpu, pdb))
+        .ok_or(FwdFault::UnknownPdb { gpu: target_gpu, pdb })?;
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));

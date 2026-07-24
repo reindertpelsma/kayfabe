@@ -9,6 +9,7 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{ClassId, EngineKind, GpuVa, HClient, HObject, Pdb, VChid};
 use nvkvm_arch::Arch;
 use nvkvm_completion::{CompletionError, MAX_FENCE_JUMP, OsEventRef};
@@ -59,7 +60,7 @@ fn engine_of_object_classifies_all_kinds() {
 fn case1_forwards_engine_object_on_own_isolate() {
     let (mut gpu, recorder) = compute_gpu();
 
-    let out = forward_engine_object(&mut gpu, GR_VCHID, mc::COMPUTE, &[])
+    let out = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[])
         .expect("GR compute object forwards");
     assert_eq!(out.engine, EngineKind::GrCompute);
     assert!(out.materialized_channel, "first forward materializes the host channel");
@@ -87,9 +88,9 @@ fn case1_forwards_engine_object_on_own_isolate() {
 #[test]
 fn case1_second_forward_reuses_channel() {
     let (mut gpu, _rec) = compute_gpu();
-    let first = forward_engine_object(&mut gpu, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+    let first = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
     assert!(first.materialized_channel);
-    let second = forward_engine_object(&mut gpu, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+    let second = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
     assert!(!second.materialized_channel, "host channel already materialized");
 }
 
@@ -103,10 +104,10 @@ fn case1_second_forward_reuses_channel() {
 fn replayed_engine_object_alloc_forwards_exactly_one_host_object() {
     let (mut gpu, recorder) = compute_gpu();
 
-    let first = forward_engine_object(&mut gpu, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+    let first = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
     assert!(!first.reused, "first forward is the real alloc");
     for _ in 0..3 {
-        let replay = forward_engine_object(&mut gpu, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+        let replay = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
         assert!(replay.reused, "replay resolves from the idempotency table");
         assert_eq!(replay.host_object, first.host_object, "the ORIGINAL host object");
         assert_eq!(replay.engine, EngineKind::GrCompute);
@@ -123,7 +124,7 @@ fn replayed_engine_object_alloc_forwards_exactly_one_host_object() {
 
     // A DIFFERENT class on the same channel is a genuinely new object, not a replay.
     drop(log);
-    let ce = forward_engine_object(&mut gpu, GR_VCHID, mc::DMA_COPY, &[]).unwrap();
+    let ce = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::DMA_COPY, &[]).unwrap();
     assert!(!ce.reused);
     assert_ne!(ce.host_object, first.host_object);
 }
@@ -137,7 +138,7 @@ fn replayed_engine_object_alloc_forwards_exactly_one_host_object() {
 fn engine_kind_lands_on_the_channel_via_the_graph() {
     let (mut gpu, _rec) = compute_gpu();
     let kind_of = |gpu: &Gpu, vchid: VChid| {
-        let (pid, cid) = gpu.by_vchid[&vchid];
+        let (pid, cid) = gpu.by_vchid[&(GpuId::ZERO, vchid)];
         gpu.procs[&pid].channels[&cid].engine
     };
 
@@ -177,18 +178,18 @@ fn engine_kind_lands_on_the_channel_via_the_graph() {
 #[test]
 fn case2_controls_are_ack_only_never_forwarded() {
     let (mut gpu, recorder) = compute_gpu();
-    let pid = *gpu.by_pdb.get(&PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
 
     // First materialize a host object to issue a Case-1 control against.
-    let out = forward_engine_object(&mut gpu, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+    let out = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
     let mut payload = [0u8; 8];
 
     // Case-2: PROMOTE_CTX — ack-only, no host op.
-    let route = route_control(&mut gpu, pid, out.host_object, mock_ctrl::PROMOTE_CTX, &mut payload)
+    let route = route_control(&mut gpu, GpuId::ZERO, pid, out.host_object, mock_ctrl::PROMOTE_CTX, &mut payload)
         .expect("promote_ctx routes");
     assert_eq!(route, ControlRoute::AckOnly);
     // Case-2: GET_CTX_BUFFER_INFO — ack-only.
-    let route = route_control(&mut gpu, pid, out.host_object, mock_ctrl::GET_CTX_BUFFER_INFO, &mut payload)
+    let route = route_control(&mut gpu, GpuId::ZERO, pid, out.host_object, mock_ctrl::GET_CTX_BUFFER_INFO, &mut payload)
         .expect("get_ctx_buffer_info routes");
     assert_eq!(route, ControlRoute::AckOnly);
 
@@ -202,7 +203,7 @@ fn case2_controls_are_ack_only_never_forwarded() {
     }
 
     // Case-1: a forwardable control DOES reach the host.
-    let route = route_control(&mut gpu, pid, out.host_object, mock_ctrl::FORWARDABLE, &mut payload)
+    let route = route_control(&mut gpu, GpuId::ZERO, pid, out.host_object, mock_ctrl::FORWARDABLE, &mut payload)
         .expect("forwardable control routes");
     assert_eq!(route, ControlRoute::Forwarded);
     let log = recorder.lock().unwrap();
@@ -218,7 +219,7 @@ fn case2_controls_are_ack_only_never_forwarded() {
 fn forwarding_a_non_engine_class_is_a_loud_fault() {
     let (mut gpu, _rec) = compute_gpu();
     assert!(matches!(
-        forward_engine_object(&mut gpu, GR_VCHID, mc::MEMORY, &[]),
+        forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::MEMORY, &[]),
         Err(FwdFault::NotAnEngine(_))
     ));
 }
@@ -258,7 +259,7 @@ fn host_verb_surface_does_not_grow_per_engine() {
     let mut reference: Option<std::collections::BTreeSet<&'static str>> = None;
     for (class, kind) in engines {
         let (mut gpu, recorder) = compute_gpu();
-        let out = forward_engine_object(&mut gpu, GR_VCHID, class, &[])
+        let out = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, class, &[])
             .unwrap_or_else(|_| panic!("{kind:?} forwards"));
         assert_eq!(out.engine, kind);
 
@@ -319,7 +320,7 @@ fn channel_materialization_declares_its_engine_to_the_backend() {
             facts: AllocFacts::default(),
         })
         .expect("engine object refines the channel");
-        forward_engine_object(&mut gpu, GR_VCHID, class, &[])
+        forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, class, &[])
             .unwrap_or_else(|_| panic!("{kind:?} forwards"));
         assert_eq!(
             recorded_engine(&recorder),
@@ -331,7 +332,7 @@ fn channel_materialization_declares_its_engine_to_the_backend() {
     // Site 2 (`handle_doorbell` lazy materialization): the CE channel's first ring
     // materializes it as Ce — not the GR/compute default.
     let (mut gpu, recorder) = compute_gpu();
-    handle_doorbell(&mut gpu, MockArch::token_for(CE_VCHID), &[])
+    handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CE_VCHID), &[])
         .expect("CE doorbell materializes + rings");
     assert_eq!(
         recorded_engine(&recorder),
@@ -360,9 +361,9 @@ fn nvenc_gpu() -> (Gpu, nvkvm_core::ProcId, nvkvm_core::ChanId) {
         facts: AllocFacts::default(),
     })
     .expect("NVENC session allocs on the channel");
-    let (pid, cid) = gpu.by_vchid[&GR_VCHID];
+    let (pid, cid) = gpu.by_vchid[&(GpuId::ZERO, GR_VCHID)];
     assert_eq!(gpu.procs[&pid].channels[&cid].engine, EngineKind::NvEnc);
-    publish_backing(gpu.procs.get_mut(&pid).unwrap(), PDB, FENCE_VA, 0x1000)
+    publish_backing(gpu.procs.get_mut(&pid).unwrap(), GpuId::ZERO, PDB, FENCE_VA, 0x1000)
         .expect("fence page publishes into the channel's own host VAS");
     (gpu, pid, cid)
 }
@@ -380,16 +381,16 @@ fn nvenc_mapped_fence_arms_and_fires_distinct_from_event_delivery() {
     assert_eq!(arm_fence(&mut gpu, pid, cid, FENCE_VA, 7, 9, OsEventRef(0xF0)), Ok(None));
 
     // Below target: not fired. At target: fired, exactly once.
-    assert_eq!(fence_observed(&mut gpu, PDB, FENCE_VA, 8), Ok(None));
-    assert_eq!(fence_observed(&mut gpu, PDB, FENCE_VA, 9), Ok(Some(OsEventRef(0xF0))));
-    assert_eq!(fence_observed(&mut gpu, PDB, FENCE_VA, 10), Ok(None), "fired exactly once");
+    assert_eq!(fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 8), Ok(None));
+    assert_eq!(fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 9), Ok(Some(OsEventRef(0xF0))));
+    assert_eq!(fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 10), Ok(None), "fired exactly once");
 
     // Distinct from the event path: the queue observed NOTHING, nothing to post.
     assert!(
         !gpu.procs[&pid].completion.has_outstanding(),
         "a fired fence never enters the completion queue (fence-not-event)"
     );
-    assert!(gpu.pump_completions().is_none(), "nothing rides the GSP/SWGEN0 path");
+    assert!(gpu.pump_completions(GpuId::ZERO).is_none(), "nothing rides the GSP/SWGEN0 path");
 }
 
 /// The #12 wrap guard on the arm: a fence sequence crossing the u32 boundary fires
@@ -407,7 +408,7 @@ fn nvenc_fence_wrap_guard_fires_across_wrap_and_refuses_backwards_jumps() {
     // A stale/backwards value (a huge forward step under wrap arithmetic) is LOUD.
     let stale = u32::MAX - 1 - (MAX_FENCE_JUMP as u32 + 1);
     assert_eq!(
-        fence_observed(&mut gpu, PDB, FENCE_VA, stale),
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, stale),
         Err(FwdFault::Completion(CompletionError::FenceJump {
             last: u32::MAX - 1,
             value: stale
@@ -415,8 +416,8 @@ fn nvenc_fence_wrap_guard_fires_across_wrap_and_refuses_backwards_jumps() {
         "the #12 backwards-jump class is refused, never treated as completion"
     );
     // The genuine advance across the wrap still fires.
-    assert_eq!(fence_observed(&mut gpu, PDB, FENCE_VA, 1), Ok(None), "before target");
-    assert_eq!(fence_observed(&mut gpu, PDB, FENCE_VA, 2), Ok(Some(OsEventRef(0xF1))));
+    assert_eq!(fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 1), Ok(None), "before target");
+    assert_eq!(fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 2), Ok(Some(OsEventRef(0xF1))));
 }
 
 /// Arm selection is exact AT the channel: a GR-compute or CE channel (shared-sema
@@ -433,8 +434,8 @@ fn fence_arm_selection_is_exact_at_the_channel() {
 
     // A compute-shaped channel refuses the fence arm loudly.
     let (mut gpu, _rec) = compute_gpu();
-    let (pid, cid) = gpu.by_vchid[&GR_VCHID];
-    publish_backing(gpu.procs.get_mut(&pid).unwrap(), PDB, FENCE_VA, 0x1000).unwrap();
+    let (pid, cid) = gpu.by_vchid[&(GpuId::ZERO, GR_VCHID)];
+    publish_backing(gpu.procs.get_mut(&pid).unwrap(), GpuId::ZERO, PDB, FENCE_VA, 0x1000).unwrap();
     assert!(
         matches!(
             arm_fence(&mut gpu, pid, cid, FENCE_VA, 0, 1, OsEventRef(0xF2)),

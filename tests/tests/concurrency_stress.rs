@@ -62,6 +62,7 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
+use nvkvm_arch::ids::GpuId;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Barrier, Mutex, RwLock};
@@ -242,8 +243,8 @@ fn assert_verb_in_namespace(iso: u32, verb: &RmVerb) {
 /// state must be disjoint. Called under exclusive access at checkpoints + at the end.
 fn assert_device_consistent(gpu: &Gpu) {
     // Arenas pairwise disjoint (system included) — the #14 collision class.
-    let mut ranges: Vec<_> = gpu.procs.values().map(|p| p.arena.range.clone()).collect();
-    ranges.push(gpu.system.arena.range.clone());
+    let mut ranges: Vec<_> = gpu.procs.values().map(|p| p.arenas[&GpuId::ZERO].range.clone()).collect();
+    ranges.push(gpu.system.arenas[&GpuId::ZERO].range.clone());
     for (i, a) in ranges.iter().enumerate() {
         for b in ranges.iter().skip(i + 1) {
             assert!(
@@ -253,14 +254,14 @@ fn assert_device_consistent(gpu: &Gpu) {
         }
     }
     // Routing maps agree with the procs they point at.
-    for (&pdb, &pid) in &gpu.by_pdb {
+    for (&(gpu_t, pdb), &pid) in &gpu.by_pdb {
         let p = gpu.procs.get(&pid).expect("by_pdb points at a live proc");
         assert!(
-            p.vases.contains_key(&pdb),
+            p.vases.contains_key(&(gpu_t, pdb)),
             "by_pdb[{pdb:?}] → proc without that Vas"
         );
     }
-    for (&vchid, &(pid, cid)) in &gpu.by_vchid {
+    for (&(_gpu_t, vchid), &(pid, cid)) in &gpu.by_vchid {
         let p = gpu.procs.get(&pid).expect("by_vchid points at a live proc");
         let c = p
             .channels
@@ -280,20 +281,21 @@ fn assert_device_consistent(gpu: &Gpu) {
             );
         }
         // Isolate session == ProcId by construction.
-        assert_eq!(p.isolate.id().0, p.id.0, "isolate session != ProcId");
-        for (&pdb, vas) in &p.vases {
+        assert_eq!(p.isolates[&GpuId::ZERO].id().0, p.id.0, "isolate session != ProcId");
+        for (&(gpu_t, pdb), vas) in &p.vases {
             assert_eq!(vas.pdb, pdb);
+            assert_eq!(vas.gpu, gpu_t);
             // Host-published bindings landed in THIS proc's arena; every RPC-bound
             // VA is genuinely in the table.
             for (va, len, b) in vas.table.iter() {
                 assert!(len > 0);
                 if b.host_va.is_some() {
                     assert!(
-                        p.arena.range.contains(&b.phys),
+                        p.arenas[&GpuId::ZERO].range.contains(&b.phys),
                         "published phys {:#x} outside {:?}'s arena {:?}",
                         b.phys,
                         p.id,
-                        p.arena.range
+                        p.arenas[&GpuId::ZERO].range
                     );
                 }
                 let _ = va;
@@ -358,17 +360,17 @@ fn stress_multi_vcpu_interleaved_ops() {
                         0..=34 => {
                             let g = gpu.read().unwrap();
                             if let Some((va, gpa, host_va)) = last_pub[i] {
-                                let (b, off) = resolve(&g, pdb, GpuVa(va.0 + 0x40))
+                                let (b, off) = resolve(&g, GpuId::ZERO, pdb, GpuVa(va.0 + 0x40))
                                     .expect("published VA resolves");
                                 assert_eq!(off, 0x40);
                                 assert_eq!(b.phys, gpa, "resolve returned another proc's backing");
                                 assert_eq!(b.host_va, Some(host_va));
-                                gate_working_set(&g, pid, g.by_vchid[&gr_vchid(i)].1, &[va])
+                                gate_working_set(&g, pid, g.by_vchid[&(GpuId::ZERO, gr_vchid(i))].1, &[va])
                                     .expect("published working set passes the ring-gate");
                             } else {
                                 // Routing reads are always available.
-                                assert_eq!(g.by_pdb[&pdb], pid);
-                                assert_eq!(g.by_vchid[&gr_vchid(i)].0, pid);
+                                assert_eq!(g.by_pdb[&(GpuId::ZERO, pdb)], pid);
+                                assert_eq!(g.by_vchid[&(GpuId::ZERO, gr_vchid(i))].0, pid);
                             }
                         }
                         // ---- doorbells (exec-plane demux) -------------------------
@@ -379,7 +381,7 @@ fn stress_multi_vcpu_interleaved_ops() {
                                 ce_vchid(i)
                             };
                             let mut g = gpu.write().unwrap();
-                            let out = handle_doorbell(&mut g, MockArch::token_for(vchid), &[])
+                            let out = handle_doorbell(&mut g, GpuId::ZERO, MockArch::token_for(vchid), &[])
                                 .expect("doorbell routes");
                             assert_eq!(out.proc, pid, "doorbell demuxed to the wrong proc");
                             assert_eq!(
@@ -397,9 +399,9 @@ fn stress_multi_vcpu_interleaved_ops() {
                             );
                             let mut g = gpu.write().unwrap();
                             let p = g.procs.get_mut(&pid).expect("live proc");
-                            let out = publish_backing(p, pdb, va, 0x1000).expect("publish");
+                            let out = publish_backing(p, GpuId::ZERO, pdb, va, 0x1000).expect("publish");
                             assert!(
-                                p.arena.range.contains(&out.gpa),
+                                p.arenas[&GpuId::ZERO].range.contains(&out.gpa),
                                 "GPA {:#x} escaped {pid:?}'s arena",
                                 out.gpa
                             );
@@ -416,11 +418,11 @@ fn stress_multi_vcpu_interleaved_ops() {
                             g.procs.get_mut(&pid).unwrap().completion.observe(ev).unwrap();
                             local_observed.insert(ev);
                             let batch = match rng.next() % 3 {
-                                0 => g.pump_completions(),
-                                1 => g.completion_poll(pid, Instant(op as u64)),
+                                0 => g.pump_completions(GpuId::ZERO),
+                                1 => g.completion_poll(GpuId::ZERO, pid, Instant(op as u64)),
                                 _ => {
-                                    g.completions_drained();
-                                    g.pump_completions()
+                                    g.completions_drained(GpuId::ZERO);
+                                    g.pump_completions(GpuId::ZERO)
                                 }
                             };
                             if let Some(b) = batch {
@@ -486,8 +488,8 @@ fn stress_multi_vcpu_interleaved_ops() {
     // Bounded: each iteration drains what the previous one posted; `pending` only
     // shrinks once the workers are joined, so this exits within two passes.
     loop {
-        gpu.completions_drained();
-        match gpu.pump_completions() {
+        gpu.completions_drained(GpuId::ZERO);
+        match gpu.pump_completions(GpuId::ZERO) {
             Some(b) => delivered.extend(b.events),
             None => break,
         }
@@ -546,13 +548,13 @@ fn per_proc_parallelism_two_procs_no_shared_lock() {
     let pb: &mut Proc = procs.next().expect("proc B");
 
     let work = |p: &mut Proc, barrier: &Barrier| {
-        let pdb = *p.vases.keys().next().expect("compute Vas");
+        let (gpu_t, pdb) = *p.vases.keys().next().expect("compute Vas");
         barrier.wait(); // start together
         let mut published = Vec::with_capacity(PUBLISHES as usize);
         for k in 0..PUBLISHES {
             // IDENTICAL guest VAs in both procs — the #14 shape, in parallel.
             let va = GpuVa(0x2_0020_0000 + k * 0x1000);
-            let out = publish_backing(p, pdb, va, 0x1000).expect("publish");
+            let out = publish_backing(p, gpu_t, pdb, va, 0x1000).expect("publish");
             published.push(out);
             if k == PUBLISHES / 2 {
                 // Both threads must be mid-mutation for anyone to pass this point.
@@ -609,8 +611,8 @@ fn same_proc_interleaving_is_exact() {
         .procs
         .remove(&pid)
         .expect("take the proc out for direct sharding");
-    let pdb = *proc.vases.keys().next().unwrap();
-    let arena_start = proc.arena.range.start;
+    let (gpu_t, pdb) = *proc.vases.keys().next().unwrap();
+    let arena_start = proc.arenas[&GpuId::ZERO].range.start;
     let shared = Mutex::new(proc);
 
     thread::scope(|s| {
@@ -620,15 +622,15 @@ fn same_proc_interleaving_is_exact() {
                 for k in 0..PER_THREAD {
                     let va = GpuVa(0x40_0000_0000 + tid * 0x1_0000_0000 + k * 0x1000);
                     let mut p = shared.lock().unwrap();
-                    let out = publish_backing(&mut p, pdb, va, 0x1000).expect("publish");
-                    assert!(p.arena.range.contains(&out.gpa));
+                    let out = publish_backing(&mut p, gpu_t, pdb, va, 0x1000).expect("publish");
+                    assert!(p.arenas[&GpuId::ZERO].range.contains(&out.gpa));
                 }
             });
         }
     });
 
     let p = shared.into_inner().unwrap();
-    let vas = &p.vases[&pdb];
+    let vas = &p.vases[&(GpuId::ZERO, pdb)];
     let total = THREADS * PER_THREAD;
     // The bump allocator is exact: every alloc distinct, cursor advanced exactly.
     let gpas: BTreeSet<u64> = vas.table.iter().map(|(_, _, b)| b.phys).collect();
@@ -673,7 +675,7 @@ fn lock_free_concurrent_reads_share_the_gpu() {
         for k in 0..64u64 {
             let va = 0x2_0020_0000 + k * 0x1000;
             let p = gpu.procs.get_mut(&pid).unwrap();
-            let out = publish_backing(p, pdb_of(i), GpuVa(va), 0x1000).expect("publish");
+            let out = publish_backing(p, GpuId::ZERO, pdb_of(i), GpuVa(va), 0x1000).expect("publish");
             truth.insert((i, va), (out.gpa, out.host_va));
         }
     }
@@ -695,13 +697,13 @@ fn lock_free_concurrent_reads_share_the_gpu() {
                     let k = rng.next() % 64;
                     let va = 0x2_0020_0000 + k * 0x1000;
                     let (gpa, host_va) = truth[&(i, va)];
-                    let (b, off) = resolve(gpu_ref, pdb_of(i), GpuVa(va + 0x10)).expect("hit");
+                    let (b, off) = resolve(gpu_ref, GpuId::ZERO, pdb_of(i), GpuVa(va + 0x10)).expect("hit");
                     assert_eq!((b.phys, b.host_va, off), (gpa, Some(host_va), 0x10));
-                    let (pid, cid) = gpu_ref.by_vchid[&gr_vchid(i)];
+                    let (pid, cid) = gpu_ref.by_vchid[&(GpuId::ZERO, gr_vchid(i))];
                     assert_eq!(pid, pids[i]);
                     gate_working_set(gpu_ref, pid, cid, &[GpuVa(va)]).expect("gate passes");
                     // A miss is still a loud fault under concurrency, never a guess.
-                    assert!(resolve(gpu_ref, pdb_of(i), GpuVa(0xdead_0000_0000)).is_err());
+                    assert!(resolve(gpu_ref, GpuId::ZERO, pdb_of(i), GpuVa(0xdead_0000_0000)).is_err());
                 }
             });
         }

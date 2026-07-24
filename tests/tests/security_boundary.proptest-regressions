@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc c5b5c7af8efc5bf74997b0125c9afdc2f299f7de2e9fddb85dc4c4301737d5b1 # shrinks to a_events = [Alloc { client: HClient(40960), parent: HObject(1543503872), handle: HObject(1543503872), class: ClassId(61441), facts: AllocFacts { h_vaspace: Some(HObject(1543503872)), h_ctx_share: None, userd_flags: 294917, mem_phys: Some(2147483648), device_instance: None } }], weave = []

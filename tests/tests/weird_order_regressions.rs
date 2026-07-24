@@ -11,6 +11,7 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
+use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
 use nvkvm_completion::OsEventRef;
 use nvkvm_core::gpa::GpaSpace;
@@ -63,15 +64,15 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
     s1.compute_process(CLIENT, PDB, identical_handles(0x10, 0x11));
     apply_all(&mut gpu, s1.events);
 
-    let pid1 = *gpu.by_pdb.get(&PDB).expect("CTX1 routed by PDB");
-    publish_backing(gpu.procs.get_mut(&pid1).unwrap(), PDB, VA, 0x10000).expect("CTX1 backs VA");
-    let out1 = handle_doorbell(&mut gpu, gr_token, &[]).expect("CTX1 doorbell");
+    let pid1 = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).expect("CTX1 routed by PDB");
+    publish_backing(gpu.procs.get_mut(&pid1).unwrap(), GpuId::ZERO, PDB, VA, 0x10000).expect("CTX1 backs VA");
+    let out1 = handle_doorbell(&mut gpu, GpuId::ZERO, gr_token, &[]).expect("CTX1 doorbell");
     assert!(out1.scheduled_now, "CTX1's channel scheduled on first submit");
 
     // ---- CTX1 teardown: free the client root (destroys the whole namespace) ----
     gpu.apply(RmEvent::Free { client: CLIENT, handle: HObject(0x5c00_0000) }).expect("free CTX1");
-    assert!(!gpu.by_pdb.contains_key(&PDB), "CTX1's PDB no longer routes after teardown");
-    assert!(!gpu.by_vchid.contains_key(&VChid(0x10)), "CTX1's vChid retired");
+    assert!(!gpu.by_pdb.contains_key(&(GpuId::ZERO, PDB)), "CTX1's PDB no longer routes after teardown");
+    assert!(!gpu.by_vchid.contains_key(&(GpuId::ZERO, VChid(0x10))), "CTX1's vChid retired");
     // The old Proc is retired (staged reap), not live — cross-teardown use is refused.
     assert!(gpu.procs.values().all(|p| !p.clients.contains(&CLIENT)), "CTX1 Proc gone from live set");
 
@@ -80,18 +81,18 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
     s2.compute_process(CLIENT, PDB, identical_handles(0x10, 0x11));
     apply_all(&mut gpu, s2.events);
 
-    let pid2 = *gpu.by_pdb.get(&PDB).expect("CTX2 routed by its (reused) PDB");
+    let pid2 = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).expect("CTX2 routed by its (reused) PDB");
     // A FRESH Proc: a new isolate session was spawned for CTX2 (no stale reuse).
-    let pub2 = publish_backing(gpu.procs.get_mut(&pid2).unwrap(), PDB, VA, 0x10000)
+    let pub2 = publish_backing(gpu.procs.get_mut(&pid2).unwrap(), GpuId::ZERO, PDB, VA, 0x10000)
         .expect("CTX2 backs the IDENTICAL VA cleanly — no ALREADY-MAPPED residue");
     // CTX2 resolves its OWN fresh backing at the identical VA.
-    let (bind2, off) = resolve(&gpu, PDB, GpuVa(VA.0 + 0x100)).unwrap();
+    let (bind2, off) = resolve(&gpu, GpuId::ZERO, PDB, GpuVa(VA.0 + 0x100)).unwrap();
     assert_eq!(off, 0x100);
     assert_eq!(bind2.host_va, Some(pub2.host_va), "CTX2 resolves its own backing");
 
     // CTX2's doorbell schedules CTX2's OWN channel — the sticky-one-shot #12 bug
     // would have left it off-runlist (scheduled_now == false).
-    let out2 = handle_doorbell(&mut gpu, gr_token, &[]).expect("CTX2 doorbell");
+    let out2 = handle_doorbell(&mut gpu, GpuId::ZERO, gr_token, &[]).expect("CTX2 doorbell");
     assert!(out2.scheduled_now, "CTX2's fresh channel is scheduled (no CTX1 one-shot residue)");
 
     // Two distinct isolate sessions were spawned across the two contexts.
@@ -121,7 +122,7 @@ fn wo_13_multiiter_realloc_same_va_new_backing_each_iter() {
     let mut s = Scenario::new();
     s.compute_process(CLIENT, PDB, identical_handles(0x10, 0x11));
     apply_all(&mut gpu, s.events);
-    let pid = *gpu.by_pdb.get(&PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
 
     let mut last_gpa = None;
     for iter in 0..5u64 {
@@ -129,24 +130,24 @@ fn wo_13_multiiter_realloc_same_va_new_backing_each_iter() {
 
         // Overlap discipline: rebinding the live VA without unbind first is LOUD.
         if last_gpa.is_some() {
-            let overlap = publish_backing(p, PDB, VA, 0x10000);
+            let overlap = publish_backing(p, GpuId::ZERO, PDB, VA, 0x10000);
             assert!(
                 matches!(overlap, Err(FwdFault::Address(_))),
                 "iter {iter}: re-back over a live mapping must be a loud overlap fault"
             );
             // Eager unmap (unmap eager, map lazy, reclaim deferred).
-            p.vases.get_mut(&PDB).unwrap().table.unbind(VA).expect("eager unbind");
+            p.vases.get_mut(&(GpuId::ZERO, PDB)).unwrap().table.unbind(VA).expect("eager unbind");
         }
 
         // Realloc the SAME VA at a fresh backing.
-        let published = publish_backing(p, PDB, VA, 0x10000)
+        let published = publish_backing(p, GpuId::ZERO, PDB, VA, 0x10000)
             .unwrap_or_else(|e| panic!("iter {iter}: realloc same VA must succeed: {e:?}"));
         // Each iteration's backing is at a NEW GPA (bump allocator never reuses).
         if let Some(prev) = last_gpa {
             assert_ne!(published.gpa, prev, "iter {iter}: realloc lands at a NEW backing");
         }
         // Resolution returns THIS iteration's current backing, not a stale one.
-        let (bind, _) = resolve(&gpu, PDB, VA).unwrap();
+        let (bind, _) = resolve(&gpu, GpuId::ZERO, PDB, VA).unwrap();
         assert_eq!(bind.phys, published.gpa, "iter {iter}: resolves its own current backing");
         last_gpa = Some(published.gpa);
     }
@@ -190,13 +191,13 @@ fn wo_14_two_proc_identical_va_interleaved_events_disjoint_backing() {
 
     // Two disjoint Procs despite interleaving and identical handles.
     assert_eq!(gpu.procs.len(), 2, "interleaved build still yields two disjoint Procs");
-    let pid_a = *gpu.by_pdb.get(&A_PDB).unwrap();
-    let pid_b = *gpu.by_pdb.get(&B_PDB).unwrap();
+    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid_b = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
     assert_ne!(pid_a, pid_b);
 
     // Identical guest VA in each → disjoint GPA and disjoint host VA.
-    let pa = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), A_PDB, VA, 0x10000).unwrap();
-    let pb = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), B_PDB, VA, 0x10000).unwrap();
+    let pa = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), GpuId::ZERO, A_PDB, VA, 0x10000).unwrap();
+    let pb = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), GpuId::ZERO, B_PDB, VA, 0x10000).unwrap();
     assert_ne!(pa.gpa, pb.gpa, "identical VA, interleaved order → disjoint GPA");
     assert_ne!(pa.host_va, pb.host_va, "identical VA, interleaved order → disjoint host VA");
 }
@@ -221,9 +222,9 @@ fn wo_teardown_during_active_inflight_completion_is_clean() {
     s.compute_process(CLIENT, PDB, identical_handles(0x10, 0x11));
     apply_all(&mut gpu, s.events);
 
-    let pid = *gpu.by_pdb.get(&PDB).unwrap();
-    publish_backing(gpu.procs.get_mut(&pid).unwrap(), PDB, GpuVa(0x2_0020_0000), 0x10000).unwrap();
-    handle_doorbell(&mut gpu, gr_token, &[]).expect("channel rung");
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    publish_backing(gpu.procs.get_mut(&pid).unwrap(), GpuId::ZERO, PDB, GpuVa(0x2_0020_0000), 0x10000).unwrap();
+    handle_doorbell(&mut gpu, GpuId::ZERO, gr_token, &[]).expect("channel rung");
     // An in-flight completion is pending for this proc.
     gpu.procs.get_mut(&pid).unwrap().completion.observe(OsEventRef(0xDEAD)).unwrap();
     assert!(gpu.procs.get(&pid).unwrap().completion.has_outstanding());
@@ -233,11 +234,11 @@ fn wo_teardown_during_active_inflight_completion_is_clean() {
 
     // Clean reap: the proc is out of the live set, its routing is gone.
     assert!(!gpu.procs.contains_key(&pid), "torn-down proc left the live set");
-    assert!(!gpu.by_pdb.contains_key(&PDB) && !gpu.by_vchid.contains_key(&VChid(0x10)));
+    assert!(!gpu.by_pdb.contains_key(&(GpuId::ZERO, PDB)) && !gpu.by_vchid.contains_key(&(GpuId::ZERO, VChid(0x10))));
     // The retired proc was staged for deferred reap (L10), not dropped mid-flight.
     assert!(gpu.retired.iter().any(|p| p.is_retired()), "proc staged for deferred reap");
     // A doorbell to the now-retired channel is a loud MISS, never a stale consume.
-    assert!(matches!(handle_doorbell(&mut gpu, gr_token, &[]), Err(FwdFault::UnknownVchid { .. })));
+    assert!(matches!(handle_doorbell(&mut gpu, GpuId::ZERO, gr_token, &[]), Err(FwdFault::UnknownVchid { .. })));
 }
 
 // =================================================================================
@@ -282,7 +283,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
         let g = build();
         let before = project(&g, &arch).unwrap();
         assert_eq!(before.procs.len(), 1, "dup joins compute+UVM into one proc");
-        assert_eq!(before.by_pdb.get(&PDB).map(|x| x.1), Some(compute_vas), "PDB routes to the VAS");
+        assert_eq!(before.by_pdb.get(&(GpuId::ZERO, PDB)).map(|x| x.1), Some(compute_vas), "PDB routes to the VAS");
     }
 
     // ---- (A) free the SOURCE client: the resource SURVIVES via UVM's dst ref. ----
@@ -300,7 +301,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
             after.procs.iter().any(|p| p.clients.contains(&UVM)),
             "UVM's client still projects after the source client's free"
         );
-        assert!(after.by_pdb.contains_key(&PDB), "the dup'd VAS's PDB still routes via the dst ref");
+        assert!(after.by_pdb.contains_key(&(GpuId::ZERO, PDB)), "the dup'd VAS's PDB still routes via the dst ref");
         // The compute client's OTHER nodes (device root) are gone — only the dup'd
         // resource, kept alive by UVM's reference, survives.
         assert!(g.node(NodeKey::new(COMPUTE, HObject(0x5c00_0001))).is_none(), "non-dup'd source nodes are freed");
@@ -314,7 +315,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
         assert!(g.origin_of(compute_vas).is_some(), "source VAS survives the dst client's free");
         assert!(g.origin_of(alias).is_none(), "the freed dst alias no longer resolves");
         let after = project(&g, &arch).unwrap();
-        assert!(after.by_pdb.contains_key(&PDB), "source VAS's PDB still routes");
+        assert!(after.by_pdb.contains_key(&(GpuId::ZERO, PDB)), "source VAS's PDB still routes");
         // With the dup edge gone, compute stands alone as its own proc.
         assert!(after.procs.iter().all(|p| !p.clients.contains(&UVM)), "freed UVM client gone");
     }
@@ -331,7 +332,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
         assert_eq!(g.nodes().count(), 0, "no leaked resources after both refs freed");
         let after = project(&g, &arch).unwrap();
         assert!(after.procs.is_empty(), "no procs remain after full teardown");
-        assert!(!after.by_pdb.contains_key(&PDB), "PDB no longer routes after the resource is destroyed");
+        assert!(!after.by_pdb.contains_key(&(GpuId::ZERO, PDB)), "PDB no longer routes after the resource is destroyed");
     }
 }
 

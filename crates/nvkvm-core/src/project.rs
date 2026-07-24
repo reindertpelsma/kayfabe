@@ -16,17 +16,33 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nvkvm_arch::ids::{EngineKind, HClient, HObject, Pdb, VChid};
+use nvkvm_arch::ids::{EngineKind, GpuId, HClient, HObject, Pdb, VChid};
 use nvkvm_arch::{Arch, ObjectKind};
 
 use crate::ProcAnchor;
 use crate::rmgraph::{NodeKey, RmGraph, RmNode};
+
+/// Declared facts of one VASpace origin, resolved against the graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct VasFacts {
+    /// The owning GPU target, derived via the VASpace's `Device` ancestor
+    /// ([`RmGraph::gpu_of`]). `None` = not yet resolvable (no Device ancestor / no
+    /// declared instance): the VAS is not routable until the fact lands — MISS at
+    /// use, never a default-GPU0 guess.
+    pub gpu: Option<GpuId>,
+    /// The declared PDB, once `SET_PAGE_DIRECTORY` arrives.
+    pub pdb: Option<Pdb>,
+}
 
 /// Declared facts of one channel, fully resolved against the graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChannelFacts {
     /// The exec-plane identity, recovered by the arch from declared flags.
     pub vchid: VChid,
+    /// The channel's own GPU target, derived via its `Device` ancestor
+    /// ([`RmGraph::gpu_of`]). `None` = not routable (yet): the channel enters no
+    /// routing map and materializes no runtime state until the fact resolves.
+    pub gpu: Option<GpuId>,
     /// Origin VASpace node this channel is bound to (dup-aliases resolved), if any
     /// declared path exists. `None` = GSP-managed with no declared VAS (routed to
     /// the system/minted VAS by higher layers — out of scope this milestone).
@@ -50,32 +66,49 @@ pub struct ProcBoundary {
     pub anchor: ProcAnchor,
     /// All clients in the component.
     pub clients: BTreeSet<HClient>,
-    /// VASpace **origin** nodes owned by this component → declared PDB (if any).
-    /// A process may own several (compute + UVM) — one `Proc`, many `Vas`.
-    pub vases: BTreeMap<NodeKey, Option<Pdb>>,
+    /// VASpace **origin** nodes owned by this component → resolved facts (target GPU
+    /// and declared PDB). A process may own several (compute + UVM) — one `Proc`,
+    /// many `Vas`.
+    pub vases: BTreeMap<NodeKey, VasFacts>,
     /// Channel nodes owned by this component → resolved facts.
     pub channels: BTreeMap<NodeKey, ChannelFacts>,
 }
 
 /// The full derived routing picture. Pure data; `PartialEq` so the
 /// order-independence property is directly assertable.
+///
+/// ★ Routing keys are `(GpuId, Pdb)` / `(GpuId, VChid)` — `Pdb`/`VChid` are
+/// **per-GPU namespaces** (two GPUs legally present identical values), so the target
+/// is part of the key by construction (the #14 lesson lifted onto the GPU axis).
+/// Only objects whose GPU target resolves enter routing; an unresolvable target is a
+/// deferred/unroutable object (loud MISS at use), never a guessed GPU0 entry.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Boundaries {
     /// Process boundaries, ascending anchor order.
     pub procs: Vec<ProcBoundary>,
-    /// Data-plane routing: PDB → (owning component, VASpace origin node).
-    pub by_pdb: BTreeMap<Pdb, (ProcAnchor, NodeKey)>,
-    /// Exec-plane routing: vChid → (owning component, channel node).
-    pub by_vchid: BTreeMap<VChid, (ProcAnchor, NodeKey)>,
+    /// Data-plane routing: (target, PDB) → (owning component, VASpace origin node).
+    pub by_pdb: BTreeMap<(GpuId, Pdb), (ProcAnchor, NodeKey)>,
+    /// Exec-plane routing: (target, vChid) → (owning component, channel node).
+    pub by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, NodeKey)>,
 }
 
 /// Projection failures. All loud: each is a real protocol violation or a graph
 /// inconsistency that must never be silently resolved (MISS=FAULT posture).
+///
+/// ★ Collisions are scoped **per GPU target** (the F1 guard, decision #18C, under
+/// the multi-GPU axis): identical `Pdb`/`VChid` values on *different* GPUs are
+/// LEGAL (per-GPU namespaces — refusing them would be a false-positive DoS at N=2),
+/// while two claimants on the SAME target are still the hostile ambiguity the guard
+/// exists for. `gpu: None` is the not-yet-resolvable scope (objects whose Device
+/// target is unknown collide among themselves — the conservative pre-multi-GPU
+/// behavior, never silently dropped).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProjectionError {
-    /// Two live channels decode to the same vChid (E0 says this cannot happen on a
-    /// sane guest; if it does, demux would be ambiguous — refuse loudly).
+    /// Two live channels on ONE target decode to the same vChid (E0 says this cannot
+    /// happen on a sane guest; if it does, demux would be ambiguous — refuse loudly).
     VchidCollision {
+        /// The target GPU scope of the collision (`None` = unresolved-target scope).
+        gpu: Option<GpuId>,
         /// The colliding vChid.
         vchid: VChid,
         /// First claimant.
@@ -83,8 +116,10 @@ pub enum ProjectionError {
         /// Second claimant.
         b: NodeKey,
     },
-    /// Two distinct VASpace origins declare the same PDB.
+    /// Two distinct VASpace origins on ONE target declare the same PDB.
     PdbCollision {
+        /// The target GPU scope of the collision (`None` = unresolved-target scope).
+        gpu: Option<GpuId>,
         /// The colliding PDB.
         pdb: Pdb,
         /// First claimant.
@@ -221,8 +256,13 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
             .insert(c);
     }
 
-    let mut by_pdb: BTreeMap<Pdb, (ProcAnchor, NodeKey)> = BTreeMap::new();
-    let mut by_vchid: BTreeMap<VChid, (ProcAnchor, NodeKey)> = BTreeMap::new();
+    let mut by_pdb: BTreeMap<(GpuId, Pdb), (ProcAnchor, NodeKey)> = BTreeMap::new();
+    let mut by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, NodeKey)> = BTreeMap::new();
+    // ★ The F1 collision guard's scope tables, keyed on `(Option<GpuId>, id)`: the
+    // guard still bites within one target (and within the unresolved-`None` scope),
+    // while identical ids on DIFFERENT targets are legal and never collide.
+    let mut pdb_claims: BTreeMap<(Option<GpuId>, Pdb), NodeKey> = BTreeMap::new();
+    let mut vchid_claims: BTreeMap<(Option<GpuId>, VChid), NodeKey> = BTreeMap::new();
 
     // Pre-pass: the engine-object refinement (channel origin → EngineKind). An
     // engine object's parent is its channel (same namespace, dup-aliases resolved).
@@ -249,33 +289,57 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
         match node.kind {
             ObjectKind::VaSpace => {
                 let pdb = g.pdb_of(node.key);
+                let gpu = g.gpu_of(node.key);
                 let boundary = procs.get_mut(&anchor).expect("component exists");
-                boundary.vases.insert(node.key, pdb);
+                boundary.vases.insert(node.key, VasFacts { gpu, pdb });
                 if let Some(pdb) = pdb {
-                    if let Some(&(_, prev)) = by_pdb.get(&pdb)
+                    // The F1 guard, scoped per target: same-scope duplicate = loud
+                    // refusal; identical PDB on a different GPU never collides.
+                    if let Some(&prev) = pdb_claims.get(&(gpu, pdb))
                         && prev != node.key
                     {
-                        return Err(ProjectionError::PdbCollision { pdb, a: prev, b: node.key });
+                        return Err(ProjectionError::PdbCollision {
+                            gpu,
+                            pdb,
+                            a: prev,
+                            b: node.key,
+                        });
                     }
-                    by_pdb.insert(pdb, (anchor, node.key));
+                    pdb_claims.insert((gpu, pdb), node.key);
+                    // Only a resolved target routes; an unresolved one defers (MISS
+                    // at use) until its Device fact lands.
+                    if let Some(gpu) = gpu {
+                        by_pdb.insert((gpu, pdb), (anchor, node.key));
+                    }
                 }
             }
             ObjectKind::Channel { engine } => {
                 let vchid = arch.vchid_from_userd_flags(node.facts.userd_flags);
+                let gpu = g.gpu_of(node.key);
                 let vas = resolve_channel_vas(g, node);
                 let facts = ChannelFacts {
                     vchid,
+                    gpu,
                     vas_origin: vas.map(|v| v.key),
                     vas_pdb: vas.and_then(|v| g.pdb_of(v.key)),
                     // The engine-object refinement wins over the channel-class default.
                     engine: engine_refine.get(&node.key).copied().unwrap_or(engine),
                 };
-                if let Some(&(_, prev)) = by_vchid.get(&vchid)
+                // The F1 guard, scoped per target (see the PDB arm above).
+                if let Some(&prev) = vchid_claims.get(&(gpu, vchid))
                     && prev != node.key
                 {
-                    return Err(ProjectionError::VchidCollision { vchid, a: prev, b: node.key });
+                    return Err(ProjectionError::VchidCollision {
+                        gpu,
+                        vchid,
+                        a: prev,
+                        b: node.key,
+                    });
                 }
-                by_vchid.insert(vchid, (anchor, node.key));
+                vchid_claims.insert((gpu, vchid), node.key);
+                if let Some(gpu) = gpu {
+                    by_vchid.insert((gpu, vchid), (anchor, node.key));
+                }
                 procs
                     .get_mut(&anchor)
                     .expect("component exists")
