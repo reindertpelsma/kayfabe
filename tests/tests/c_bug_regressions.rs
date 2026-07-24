@@ -231,6 +231,73 @@ fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
 }
 
 // =================================================================================
+// FUZZ-FOUND — the pushbuffer decoder's boundary-1 posture over HOSTILE guest bytes
+// (found by the coverage-guided `fuzz/fuzz_targets/parse_pushbuffer.rs` cargo-fuzz
+// target; both minimized here as deterministic regressions so the fuzzer never has to
+// re-find them). Class: attacker-controlled address arithmetic reaching an unchecked
+// `+`/`checked_add().expect()` — a hostile byte string could PANIC the core.
+// =================================================================================
+
+/// **Fuzz-found #1** — a hostile CE `LAUNCH_DMA` with a *physical* destination near
+/// `u64::MAX` panicked the core: the #13 capture path binds `[dst, dst + len.max(4K))`
+/// into the address table, and `IntervalMap::insert` did `start.checked_add(len)
+/// .expect("range wraps u64")` — a guest-controlled `dst` made that wrap and abort.
+///
+/// Fix: `IntervalMap::insert` now returns `IntervalError::Wraps` (and `::Empty` for a
+/// zero-length range) instead of panicking, which `AddressTable::bind` maps to the
+/// loud `AddressFault::Malformed`. A malformed range from hostile bytes is a clean
+/// `Err`, never a panic (boundary-1). The SAME container also backs the RPC-map bind
+/// path (`sync_rpc_mappings`), so that untrusted entry is closed by the same fix.
+#[test]
+fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let mut vmm = MockVmm::new();
+    let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+
+    // The minimized crash: one physical CE dst whose page + len wraps u64.
+    let ring = script_pushbuffer(&mut vmm, 0x5000_0000, &[
+        MockPushbuffer::ce_launch_dma(0xFFFF_FFFF_FFFF_F800, 0x1000, false),
+    ]);
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring);
+    // Loud fault (address-table refusal), NOT a panic and NOT a silent accept.
+    assert!(
+        matches!(out, Err(FwdFault::Address(_))),
+        "a u64-wrapping CE dst must be a loud fault, got {out:?}"
+    );
+    // No torn state: nothing was left half-bound.
+    assert_eq!(
+        gpu.procs[&pid].vases[&A_PDB].table.iter().count(),
+        0,
+        "a refused malformed bind leaves the table empty (no torn partial state)"
+    );
+}
+
+/// **Fuzz-found #2** — a hostile GPFIFO entry naming a range base near `u64::MAX`
+/// panicked the guest-memory adapter: the parser caps the per-range read to multiple
+/// pages (bounded work, correct) and forwards the attacker-controlled `gpa` to
+/// `Vmm::gpa_read`, whose contract is to return a `Result` — but the mock adapter did
+/// `gpa + i` and overflowed. The core is correct (it handles a `gpa_read` `Err` via
+/// `map_err`); the adapter must not panic. Fix: the mock now addresses guest RAM with
+/// `checked_add` (an un-formable address is simply absent → reads 0, exactly a real
+/// adapter's unbacked-page behavior). Pins that a top-of-space range never panics.
+#[test]
+fn cbfuzz_gpfifo_range_gpa_near_umax_never_panics() {
+    let (mut gpu, _rec) = fresh_gpu();
+    let mut vmm = MockVmm::new();
+    let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+
+    // A GPFIFO ring with one entry: base near the top of the 64-bit space, a
+    // multi-page declared length (the parser caps it, then reads across the wrap).
+    let mut ring = Vec::new();
+    ring.extend_from_slice(&0xFFFF_FFFF_FFFF_F000u64.to_le_bytes());
+    ring.extend_from_slice(&0x20_0000u64.to_le_bytes()); // 2 MiB declared
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring)
+        .expect("a top-of-space range reads sparse zeros, never panics");
+    // Zeroed method words decode to nothing actionable.
+    assert!(out.sem_releases.is_empty() && out.pt_writes.is_empty() && out.invalidates.is_empty());
+}
+
+// =================================================================================
 // #14 — the arming-window class: there is no "multiproc mode" to arm too late.
 // =================================================================================
 

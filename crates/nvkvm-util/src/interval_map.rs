@@ -15,13 +15,26 @@
 
 use std::collections::BTreeMap;
 
-/// Error returned when an inserted range overlaps an existing one.
+/// Error returned when a range cannot be inserted.
+///
+/// Every variant is LOUD (never a silent merge/drop): the container refuses to lose
+/// information. `Overlap` is the bind-time collision class; `Empty`/`Wraps` reject a
+/// malformed *hostile* range (guest-controlled `start`/`len` reach this container via
+/// the address table — a zero-length or `u64`-wrapping range is refused as a clean
+/// error, never a panic, boundary-1 posture).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OverlapError {
-    /// Start of the existing range that overlaps the attempted insert.
-    pub existing_start: u64,
-    /// Length of the existing range that overlaps the attempted insert.
-    pub existing_len: u64,
+pub enum IntervalError {
+    /// The inserted range overlaps an existing one.
+    Overlap {
+        /// Start of the existing range that overlaps the attempted insert.
+        existing_start: u64,
+        /// Length of the existing range that overlaps the attempted insert.
+        existing_len: u64,
+    },
+    /// The range had zero length (nothing to map).
+    Empty,
+    /// `start + len` overflows `u64` (the range wraps the address space).
+    Wraps,
 }
 
 /// A map from non-overlapping `[start, start+len)` ranges to values.
@@ -60,23 +73,28 @@ impl<V> IntervalMap<V> {
         self.ranges.is_empty()
     }
 
-    /// Insert `[start, start+len)` -> `value`. `len` must be non-zero and the
-    /// range must not wrap. Fails loudly on any overlap with an existing range.
-    pub fn insert(&mut self, start: u64, len: u64, value: V) -> Result<(), OverlapError> {
-        assert!(len > 0, "zero-length range");
-        let end = start.checked_add(len).expect("range wraps u64");
+    /// Insert `[start, start+len)` -> `value`. Fails loudly (never panics) on any of:
+    /// a zero-length range ([`IntervalError::Empty`]), a range that wraps `u64`
+    /// ([`IntervalError::Wraps`]), or an overlap with an existing range
+    /// ([`IntervalError::Overlap`]). `start`/`len` are guest-controlled at the address
+    /// table, so a malformed range is a clean `Err`, not an abort (boundary-1 posture).
+    pub fn insert(&mut self, start: u64, len: u64, value: V) -> Result<(), IntervalError> {
+        if len == 0 {
+            return Err(IntervalError::Empty);
+        }
+        let end = start.checked_add(len).ok_or(IntervalError::Wraps)?;
         // Predecessor may overlap from the left.
         if let Some((&ps, &(plen, _))) = self.ranges.range(..=start).next_back()
             && let (ps, Some(pe)) = (ps, ps.checked_add(plen))
             && pe > start
         {
-            return Err(OverlapError { existing_start: ps, existing_len: plen });
+            return Err(IntervalError::Overlap { existing_start: ps, existing_len: plen });
         }
         // Successor may overlap from the right.
         if let Some((&ns, &(nlen, _))) = self.ranges.range(start..).next()
             && ns < end
         {
-            return Err(OverlapError { existing_start: ns, existing_len: nlen });
+            return Err(IntervalError::Overlap { existing_start: ns, existing_len: nlen });
         }
         self.ranges.insert(start, (len, value));
         Ok(())
@@ -129,12 +147,29 @@ mod tests {
         for (s, l) in [(0x800, 0x900), (0x1fff, 0x10), (0x0, 0x10000), (0x1400, 0x100)] {
             assert_eq!(
                 m.insert(s, l, ()),
-                Err(OverlapError { existing_start: 0x1000, existing_len: 0x1000 }),
+                Err(IntervalError::Overlap { existing_start: 0x1000, existing_len: 0x1000 }),
                 "overlap ({s:#x},{l:#x}) must be refused"
             );
         }
         // Exactly adjacent is fine.
         m.insert(0x0, 0x1000, ()).unwrap();
         m.insert(0x2000, 0x1000, ()).unwrap();
+    }
+
+    /// A hostile, malformed range is a clean `Err`, never a panic: a zero-length
+    /// range and a `u64`-wrapping range (guest-controlled `start`/`len` reach here
+    /// through the address table) are both refused loudly.
+    #[test]
+    fn malformed_range_is_a_loud_error_never_a_panic() {
+        let mut m: IntervalMap<()> = IntervalMap::new();
+        assert_eq!(m.insert(0x1000, 0, ()), Err(IntervalError::Empty), "zero-len refused");
+        assert_eq!(
+            m.insert(u64::MAX - 0x100, 0x1000, ()),
+            Err(IntervalError::Wraps),
+            "a range wrapping u64 is refused, not a panic"
+        );
+        assert_eq!(m.insert(u64::MAX, 1, ()), Err(IntervalError::Wraps), "last-byte wrap refused");
+        // The maximal non-wrapping range (ending exactly at u64::MAX) is accepted.
+        m.insert(u64::MAX - 0x1000, 0x1000, ()).unwrap();
     }
 }

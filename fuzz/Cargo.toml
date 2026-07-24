@@ -1,0 +1,38 @@
+# Coverage-guided fuzz crate for the untrusted-input decoders in the Mode-2 core.
+#
+# DELIBERATELY OUTSIDE the main workspace (its own `[workspace]` table below): the
+# libfuzzer harness needs `unsafe` (the `#[no_main]` entry + libfuzzer FFI), which must
+# NEVER live in a core crate — every core crate stays `#![forbid(unsafe_code)]`. All
+# unsafe is confined here; the core is depended on as a plain library. Fuzz-only deps
+# (libfuzzer-sys, arbitrary) live ONLY here, never in the core dependency graph.
+[package]
+name = "nvkvm-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+nvkvm-arch = { path = "../crates/nvkvm-arch" }
+nvkvm-core = { path = "../crates/nvkvm-core" }
+nvkvm-fwd = { path = "../crates/nvkvm-fwd" }
+nvkvm-mocks = { path = "../crates/nvkvm-mocks" }
+nvkvm-vmm = { path = "../crates/nvkvm-vmm" }
+nvkvm-tests = { path = "../tests" }
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "parse_pushbuffer"
+path = "fuzz_targets/parse_pushbuffer.rs"
+test = false
+doc = false
+bench = false

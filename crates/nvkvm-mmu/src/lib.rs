@@ -63,6 +63,16 @@ pub enum AddressFault {
         /// Start of the attempted range.
         va: GpuVa,
     },
+    /// A bind named a malformed range — zero length, or `va + len` wraps `u64`. The
+    /// `va`/`len` are guest-controlled (a hostile `MapMemoryDma` or a hostile CE
+    /// PT-write dst), so this is a clean loud fault, never an arithmetic panic
+    /// (boundary-1 posture; regression-banked).
+    Malformed {
+        /// The PDB whose table refused the bind.
+        pdb: Pdb,
+        /// Start of the attempted (malformed) range.
+        va: GpuVa,
+    },
 }
 
 /// The forward-populated VA→backing table of ONE VAS (identified by its PDB).
@@ -93,9 +103,13 @@ impl AddressTable {
         len: u64,
         binding: Binding,
     ) -> Result<(), AddressFault> {
-        self.map
-            .insert(va.0, len, binding)
-            .map_err(|_| AddressFault::Overlap { pdb, va })
+        self.map.insert(va.0, len, binding).map_err(|e| match e {
+            nvkvm_util::IntervalError::Overlap { .. } => AddressFault::Overlap { pdb, va },
+            // Zero-length / u64-wrapping range from hostile guest input: loud, not a panic.
+            nvkvm_util::IntervalError::Empty | nvkvm_util::IntervalError::Wraps => {
+                AddressFault::Malformed { pdb, va }
+            }
+        })
     }
 
     /// Eagerly drop the binding starting at `va`. Returns the dropped binding so the

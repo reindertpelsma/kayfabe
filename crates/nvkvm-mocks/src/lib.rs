@@ -423,15 +423,23 @@ impl MockVmm {
 
 impl Vmm for MockVmm {
     fn gpa_read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), VmmError> {
+        // Checked addressing: a hostile GPFIFO entry can name a gpa near u64::MAX, and
+        // the core caps the read to multiple pages — so `gpa + i` can exceed the 64-bit
+        // space. A byte at an un-formable address is simply absent in this sparse RAM
+        // (reads as 0), exactly as a real adapter treats an unbacked page. Never a panic.
         for (i, b) in buf.iter_mut().enumerate() {
-            *b = *self.ram.get(&(gpa + i as u64)).unwrap_or(&0);
+            *b = gpa.checked_add(i as u64).and_then(|a| self.ram.get(&a)).copied().unwrap_or(0);
         }
         Ok(())
     }
 
     fn gpa_write(&mut self, gpa: u64, buf: &[u8]) -> Result<(), VmmError> {
         for (i, &b) in buf.iter().enumerate() {
-            self.ram.insert(gpa + i as u64, b);
+            // A byte past the representable address space cannot be stored (sparse
+            // map) — skip it rather than overflow (a real adapter would fault it).
+            if let Some(a) = gpa.checked_add(i as u64) {
+                self.ram.insert(a, b);
+            }
         }
         Ok(())
     }

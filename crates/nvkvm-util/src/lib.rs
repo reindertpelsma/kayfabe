@@ -18,7 +18,7 @@
 pub mod interval_map;
 pub mod time;
 
-pub use interval_map::{IntervalMap, OverlapError};
+pub use interval_map::{IntervalError, IntervalMap};
 pub use time::Instant;
 /// Re-export of the pure, OS-free duration type (from `core::time`).
 pub use core::time::Duration;
@@ -58,4 +58,4 @@ macro_rules! assert_send {
 }
 
 // The contract applies to this crate's own types first.
-crate::assert_send_sync!(Instant, IntervalMap<()>, OverlapError);
+crate::assert_send_sync!(Instant, IntervalMap<()>, IntervalError);
