@@ -1,0 +1,15 @@
+[package]
+name = "nvkvm-mocks"
+description = "Deterministic in-process mock adapters for every port (MockVmm, MockArch, MockRmBackend, MockIsolate) — the GPU-free test harness of mode2_rust_testing_strategy.md §4. Test-only; never a production dependency."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nvkvm-util.workspace = true
+nvkvm-arch.workspace = true
+nvkvm-vmm.workspace = true
+nvkvm-isolate.workspace = true
+
+[lints]
+workspace = true

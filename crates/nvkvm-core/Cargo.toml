@@ -1,0 +1,19 @@
+[package]
+name = "nvkvm-core"
+description = "The composition root of the Mode-2 logic core: the RmGraph source of truth, its pure projections (by_pdb / by_vchid / Proc grouping), and the Gpu/Proc/Vas/Channel ownership spine. Pure state machine over guest-supplied bytes — no OS, no VMM, no NVIDIA layouts."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nvkvm-util.workspace = true
+nvkvm-arch.workspace = true
+nvkvm-mmu.workspace = true
+nvkvm-completion.workspace = true
+nvkvm-isolate.workspace = true
+
+[dev-dependencies]
+nvkvm-mocks.workspace = true
+
+[lints]
+workspace = true

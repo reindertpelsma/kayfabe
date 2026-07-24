@@ -1,0 +1,81 @@
+//! Domain identity newtypes — the vocabulary every logic crate shares.
+//!
+//! Rule L7 (`mode2_rust_rewrite_architecture.md` Part 2): *key every table by the
+//! identity the hardware uses* — PDB for address spaces, vChid for channels — never by
+//! a driver-visible handle that can be reused, shared, or absent. The newtypes below
+//! make "which identity keys this table" a compile-time property: a `HashMap<Pdb, _>`
+//! cannot be accidentally indexed by a client handle.
+//!
+//! All values are abstract `u32`/`u64` wrappers; nothing here encodes an NVIDIA
+//! layout or constant.
+
+macro_rules! id_newtype {
+    ($(#[$doc:meta])* $name:ident($inner:ty)) => {
+        $(#[$doc])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $name(pub $inner);
+
+        impl core::fmt::Display for $name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, concat!(stringify!($name), "({:#x})"), self.0)
+            }
+        }
+    };
+}
+
+id_newtype!(
+    /// An RM client handle (`hClient`): a **handle namespace + access rights**.
+    /// Explicitly NOT a process key — values are reused across guest processes and a
+    /// process holds several clients (compute + UVM). Grouping into a `Proc` is a
+    /// projection of the RM graph's DUP edges, never of this value.
+    HClient(u32)
+);
+
+id_newtype!(
+    /// An RM object handle, scoped to one client's namespace. Two processes routinely
+    /// present *identical* `HObject` values (#14 round 1: both GR channels were
+    /// `0x5c000019`), so an `HObject` is meaningless without its owning [`HClient`] —
+    /// see `nvkvm_core`'s `NodeKey`.
+    HObject(u32)
+);
+
+id_newtype!(
+    /// A page-directory base — "the GPU's CR3". THE data-plane identity: the GMMU keys
+    /// page tables by PDB, so the address table keys by PDB (per-`Vas`), and #14's
+    /// identical-VA collision is impossible across distinct PDBs by construction.
+    Pdb(u64)
+);
+
+id_newtype!(
+    /// A virtual channel ID, recovered from channel-alloc flags / doorbell tokens.
+    /// THE exec-plane identity (experiment E0: one vChid per channel, zero collisions).
+    VChid(u16)
+);
+
+id_newtype!(
+    /// An RM class ID. The *values* are per-generation/per-version (Axis A, codegen'd
+    /// in `nvkvm-abi`); the core only ever passes them to `Arch::classify`.
+    ClassId(u32)
+);
+
+id_newtype!(
+    /// A guest GPU virtual address. Kept distinct from guest-physical ([`Gpa`]) and
+    /// host addresses so a translation step can never be skipped silently.
+    GpuVa(u64)
+);
+
+id_newtype!(
+    /// A guest-physical address (GPA).
+    Gpa(u64)
+);
+
+/// Engine class of a channel or engine object, in core terms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EngineClass {
+    /// Graphics/compute engine (GR).
+    Gr,
+    /// Copy engine (CE).
+    Ce,
+    /// Any other engine the core routes but does not interpret.
+    Other,
+}

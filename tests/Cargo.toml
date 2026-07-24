@@ -1,0 +1,23 @@
+[package]
+name = "nvkvm-tests"
+description = "The VMM-agnostic conformance suite: RmGraph order-independence units + the #14 two-process simulation, driven entirely through the mock harness (no GPU, no OS)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+nvkvm-arch.workspace = true
+nvkvm-core.workspace = true
+nvkvm-fwd.workspace = true
+nvkvm-mmu.workspace = true
+nvkvm-completion.workspace = true
+nvkvm-isolate.workspace = true
+nvkvm-vmm.workspace = true
+nvkvm-mocks.workspace = true
+
+[lints]
+workspace = true

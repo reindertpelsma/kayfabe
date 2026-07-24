@@ -1,0 +1,9 @@
+[package]
+name = "nvkvm-completion"
+description = "Per-process completion engine (arch doc §4.3.2): pending sets, drain-gated batching over the shared GSP queue, poll-driven re-delivery. Pure policy; transport (seqNums, the actual GSP queue) lives in nvkvm-gsp."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true

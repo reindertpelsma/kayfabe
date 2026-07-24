@@ -1,0 +1,12 @@
+[package]
+name = "nvkvm-gsp"
+description = "SKELETON — the faked GSP: falcon boot FSM (WPR2/FWSEC/SEC2-booter latches, suspend/reload), message queues with the seqNum-ring discipline, RPC decode/encode. Resettable in-process (lesson L12). Ports second (arch doc §4.5 step 2), oracle = trace replay vs the C emulator."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nvkvm-util.workspace = true
+
+[lints]
+workspace = true
