@@ -480,14 +480,55 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
     assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
 }
 
-// NOTE (mutation-gate triage): the two `handle_doorbell` match-guard mutants at
-// `None if working_set.is_empty()` (→`true` / →`false`) are EQUIVALENT, not real gaps.
-// A channel with no declared VAS (`chan.vas == None`) can never materialize a host
-// channel — the lazy materialization does `chan.vas.ok_or(NoVas)?` — so EVERY
-// combination of the guard and the working-set emptiness returns the SAME
-// `FwdFault::NoVas(cid)` with zero host ops; the guard only chooses WHICH line emits
-// the identical fault. Documented in `docs/design/core_mutation_gate.md`, not chased
-// with a brittle test (decision #15).
+/// ★ Mutation-gate kill (`handle_doorbell` ring-gate match guard
+/// `None if working_set.is_empty()` → `true` / → `false`): the no-VAS arm of the #14
+/// ring-gate is REACHABLE with a live host channel — a guest can `Free` its VASpace
+/// handle AFTER the channel materialized (re-projection nulls `chan.vas`; the host
+/// channel persists). In that state the guard is load-bearing on both sides:
+///
+/// - a NON-EMPTY working set has no address space to have published it → loud
+///   `NoVas`, ZERO host ops (the →`true` mutant would skip the gate and ring the
+///   host doorbell UNGATED — exactly the #14 cross-VAS class);
+/// - an EMPTY working set touches no tracked VA → nothing to fault on, the ring
+///   proceeds (the →`false` mutant would refuse the legitimate GSP-managed-shaped
+///   ring).
+///
+/// (An earlier triage called these mutants equivalent by assuming `vas == None` ⇒
+/// `host_channel == None`; the free-after-materialize sequence disproves that.)
+#[test]
+fn cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty() {
+    let (mut gpu, rec) = fresh_gpu();
+    let (_pid, _cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let token = MockArch::token_for(VChid(0x10));
+
+    // Materialize + schedule the GR channel with an empty (trivially gated) ring.
+    let first = handle_doorbell(&mut gpu, token, &[]).expect("first ring materializes");
+    assert!(first.scheduled_now);
+
+    // The guest frees its VASpace HANDLE: re-projection nulls the channel's declared
+    // VAS while the materialized host channel survives.
+    gpu.apply(RmEvent::Free { client: HClient(0xAA), handle: HObject(0x5c00_0010) })
+        .expect("freeing the VASpace handle applies");
+
+    // Non-empty working set on the VAS-less channel: loud NoVas, zero host ops.
+    let ops_before = rec.lock().unwrap().log.len();
+    let refused = handle_doorbell(&mut gpu, token, &[VA]);
+    assert!(
+        matches!(refused, Err(FwdFault::NoVas(_))),
+        "a non-empty submission with no declared VAS is refused loudly: {refused:?}"
+    );
+    assert_eq!(
+        rec.lock().unwrap().log.len(),
+        ops_before,
+        "the refused ring performed ZERO host ops (no ungated doorbell)",
+    );
+
+    // Empty working set: nothing to gate — the ring on the still-materialized host
+    // channel proceeds (and needs no re-materialization/re-schedule).
+    let ok = handle_doorbell(&mut gpu, token, &[])
+        .expect("an empty submission has nothing to gate and rings");
+    assert!(!ok.scheduled_now, "already scheduled — no re-materialization");
+}
 
 // =================================================================================
 // ★ The device teardown→restart lifecycle (decision #18B's known-gap probe).

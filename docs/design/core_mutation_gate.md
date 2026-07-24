@@ -4,8 +4,18 @@
 determinism differential). Tool: `cargo-mutants 27.1.0`, stable toolchain, `-j 2`,
 `--baseline skip` (suite confirmed green first), `--timeout 240`, full-workspace test
 harness per mutant. Survivor-killing tests added on top; the workspace suite is green at
-**131 tests** (was 113) with `cargo clippy --workspace --all-targets` clean and the core
+**132 tests** (was 113) with `cargo clippy --workspace --all-targets` clean and the core
 still `#![forbid(unsafe_code)]` with no new runtime deps.
+
+**2026-07-25 addendum (triage audit):** a re-audit of the residual survivors found the two
+`handle_doorbell` guard mutants previously called *equivalent* are in fact **real gaps** —
+the state their equivalence proof assumed unreachable (`chan.vas == None` with a live host
+channel) IS reachable by freeing the VASpace handle after materialization. Both are now
+killed (§fwd below). Every gap-killing test in this doc was **verified per-mutant** by
+hand-applying the exact `cargo-mutants` mutation to the source and confirming the named
+test flips from pass → fail (and the fwd/mmu numbers come from a full scoped re-run of
+those two crates *with the new tests in place*). Final score: **245/247 = 99.2% killed**,
+residual = 1 proven-equivalent + 1 documented-acceptable.
 
 ## Why a number, not an opinion
 
@@ -50,23 +60,25 @@ arch/completion/core, Pass 2 for fwd/mmu).
 | `nvkvm-completion` | 41 | 0 | 8→**0**¹ | 5 | 49 | 49 | **100%** |
 | `nvkvm-core` | 124 | 2 | 21→**1**² | 32 | 147 | 146 | **99.3%** |
 | `nvkvm-mmu` | 6 | 0 | 0 | 8 | 6 | 6 | **100%** |
-| `nvkvm-fwd` | 40 | 0 | **3**³ | 16 | 43 | 40 | **93.0%** |
-| **total** | **213** | **2** | **4** | **62** | **247** | **243** | **98.4%** |
+| `nvkvm-fwd` | 40 | 0 | 3→**1**³ | 16 | 43 | 42 | **97.7%** |
+| **total** | **213** | **2** | **2** | **62** | **247** | **245** | **99.2%** |
 
 ¹ All 8 completion survivors were **real gaps**, now killed (verified per-row). ² Of 21
 core survivors, **20 were real gaps** (now killed); the 1 residual is the **equivalent**
-`ClientUnion::union` `< → <=` (proved below). ³ The 3 fwd survivors are all
-**non-real**: 2 provably-**equivalent** `handle_doorbell` VAS-less guard mutants + 1
+`ClientUnion::union` `< → <=` (proved below). ³ Of 3 fwd survivors, **2 were real gaps**
+(the `handle_doorbell` VAS-freed-channel guard pair — an initial "equivalent" call was
+disproved by the free-after-materialize sequence and killed); the 1 residual is the
 **acceptable** `parse_pushbuffer` cap-tightness mutant whose load-bearing sibling holds the
-boundary (both explained below).
+boundary (explained below).
 
-**Bottom line:** across the mutated core, **all 4 residual survivors are
-equivalent-or-acceptable** — every one of the **23 real gaps** the gate found is closed
+**Bottom line:** across the mutated core, **both residual survivors are
+equivalent-or-acceptable** — every one of the **24 real gaps** the gate found is closed
 with an observable-behavior test. The 113-test suite was already strong (213 mutants caught
-outright, first try); the gate's value was the **23 gaps breadth alone missed**. So: the
-tests are meaningful to a mutation score of **98.4% killed / 100% of real gaps closed**;
-the residual 4 survivors are equivalent/acceptable for the documented reasons, not untested
-logic.
+outright, first try); the gate's value was the **24 gaps breadth alone missed** (and one
+model correction: a guard first mis-judged equivalent was proved load-bearing). So: the
+tests are meaningful to a mutation score of **99.2% killed / 100% of real gaps closed**;
+the residual 2 survivors (`union` `<→<=`, `parse_pushbuffer` cap-tightness) are
+equivalent/acceptable for the documented reasons, not untested logic.
 
 ## The interesting finding
 
@@ -151,12 +163,12 @@ disagreement-sensitivity a mutation gate exposes that an end-to-end test does no
 **timeouts**: the mutation makes the fixpoint loop non-terminating, which the per-mutant
 `--timeout 240` detects = killed.)
 
-### `nvkvm-fwd` (3 survivors → 2 equivalent, 1 acceptable)
+### `nvkvm-fwd` (3 survivors → 2 real gaps killed, 1 acceptable)
 
-| Mutant | Class | Why not a real gap |
+| Mutant | Class | Killed by / why not |
 |---|---|---|
-| `handle_doorbell` guard `working_set.is_empty() → true` (274) | **equivalent** | A channel with no declared VAS (`chan.vas == None`) can never materialize a host channel — lazy materialization does `chan.vas.ok_or(NoVas)?`. So for a VAS-less channel EVERY combination of the guard and working-set emptiness returns the same `FwdFault::NoVas(cid)` with zero host ops; the guard only chooses WHICH line emits the identical fault. Verified by tracing all four cases (an early attempt to test it failed on the *unmutated* code, proving the premise wrong). A test would have to assert an internal branch, not an observable — documenting, not pinning (decision #15). |
-| `handle_doorbell` guard `working_set.is_empty() → false` (274) | **equivalent** | Same reasoning — the outcome is `NoVas` regardless. |
+| `handle_doorbell` guard `working_set.is_empty() → true` (274) | real | `cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty` — the no-VAS ring-gate arm IS reachable with a **live** host channel: a guest can `Free` its VASpace handle AFTER the channel materialized (re-projection nulls `chan.vas`; the host channel persists, so lazy materialization is skipped and `chan.vas.ok_or(NoVas)` is never reached). In that state a NON-empty working set must be a loud `NoVas` with ZERO host ops — the `→true` mutant skips the gate and rings the host doorbell UNGATED (the #14 cross-VAS class). |
+| `handle_doorbell` guard `working_set.is_empty() → false` (274) | real | same test — an EMPTY working set on the VAS-freed channel must still ring (nothing to gate); the `→false` mutant refuses it. (An earlier triage wrongly called these equivalent by assuming `vas == None` ⇒ `host_channel == None`; the free-after-materialize sequence disproves that — a good example of the gate forcing a sharper model.) |
 | `parse_pushbuffer` `MAX_PUSH_TOTAL_BYTES - total → + total` (541) | **acceptable** | This term trims the FINAL range so `total` lands exactly on the 8 MB budget instead of overshooting. Its mutation loosens that trim — but the **load-bearing** aggregate bound is the independent `if total >= MAX_PUSH_TOTAL_BYTES { break }` one line above (537), which is untouched. Under the mutant the total read is still bounded (overshoot ≤ one `MAX_PUSH_RANGE_BYTES` = 1 MB, so ≤ ~9 MB, never unbounded) — the boundary-1 *guarantee* (no unbounded read from hostile input) holds. Killing it would need an ~8 MB, 12+-range guest ring to observe a ~400 KB overshoot: brittle theater against a preserved invariant. Accepted; the security property is asserted structurally by the `break`. |
 
 ## Reproduce
