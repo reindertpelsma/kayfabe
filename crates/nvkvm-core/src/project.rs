@@ -16,7 +16,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nvkvm_arch::ids::{EngineClass, HClient, Pdb, VChid};
+use nvkvm_arch::ids::{EngineClass, HClient, HObject, Pdb, VChid};
 use nvkvm_arch::{Arch, ObjectKind};
 
 use crate::ProcAnchor;
@@ -124,25 +124,42 @@ impl ClientUnion {
     }
 }
 
+/// Resolve `(ns, handle)` to its origin **only if that origin is a VASpace**.
+///
+/// A channel/TSG/CtxShare's `hVASpace` is a *declared protocol fact* that names a
+/// `FERMI_VASPACE_A`; a hostile or buggy guest may instead name a TSG, a memory
+/// object, or a dangling handle (possibly one that happens to carry a `SetPageDir`
+/// PDB). Binding a channel to a non-VASpace's PDB would make the channel's
+/// `vas_pdb` disagree with `by_pdb` (which only routes real VASpaces) — a
+/// confused-deputy inconsistency the fuzz property caught. So resolution to a
+/// non-VASpace returns `None`: the channel is treated as having no declared VAS
+/// (a loud MISS at use time), never silently bound to an unrelated object's PDB.
+fn resolve_vaspace_handle(g: &RmGraph, ns: HClient, handle: HObject) -> Option<&RmNode> {
+    let node = g.origin_of(NodeKey::new(ns, handle))?;
+    matches!(node.kind, ObjectKind::VaSpace).then_some(node)
+}
+
 /// Resolve a channel node's VASpace origin per the declared-facts precedence:
-/// own `hVASpace` → CtxShare's → parent TSG's.
+/// own `hVASpace` → CtxShare's → parent TSG's. Every hop must land on an actual
+/// VASpace (see [`resolve_vaspace_handle`]).
 fn resolve_channel_vas<'g>(g: &'g RmGraph, chan: &RmNode) -> Option<&'g RmNode> {
     let ns = chan.key.client;
     if let Some(hv) = chan.facts.h_vaspace {
-        return g.origin_of(NodeKey::new(ns, hv));
+        return resolve_vaspace_handle(g, ns, hv);
     }
     if let Some(hcs) = chan.facts.h_ctx_share
         && let Some(cs) = g.origin_of(NodeKey::new(ns, hcs))
+        && matches!(cs.kind, ObjectKind::CtxShare)
         && let Some(hv) = cs.facts.h_vaspace
     {
-        return g.origin_of(NodeKey::new(cs.key.client, hv));
+        return resolve_vaspace_handle(g, cs.key.client, hv);
     }
     // Parent may be a TSG that declares the VAS.
     if let Some(parent) = g.origin_of(NodeKey::new(ns, chan.parent))
         && matches!(parent.kind, ObjectKind::Tsg)
         && let Some(hv) = parent.facts.h_vaspace
     {
-        return g.origin_of(NodeKey::new(parent.key.client, hv));
+        return resolve_vaspace_handle(g, parent.key.client, hv);
     }
     None
 }

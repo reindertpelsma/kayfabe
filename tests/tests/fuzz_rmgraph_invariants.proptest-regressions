@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ce5aee7ca5e8179845da78fdd43732fc3501763ae2e98a9c805d1561ae1e3333 # shrinks to stream = [Dup { src: NodeKey { client: HClient(49155), handle: HObject(1543503875) }, dst: NodeKey { client: HClient(49154), handle: HObject(1543503872) } }, Alloc { client: HClient(49154), parent: HObject(1543503872), handle: HObject(1543503873), class: ClassId(61488), facts: AllocFacts { h_vaspace: Some(HObject(1543503872)), h_ctx_share: None, userd_flags: 0 } }, Alloc { client: HClient(49152), parent: HObject(1543503872), handle: HObject(1543503872), class: ClassId(61441), facts: AllocFacts { h_vaspace: Some(HObject(1543503872)), h_ctx_share: None, userd_flags: 0 } }, Alloc { client: HClient(49152), parent: HObject(1543503872), handle: HObject(1543503872), class: ClassId(61441), facts: AllocFacts { h_vaspace: Some(HObject(1543503872)), h_ctx_share: None, userd_flags: 0 } }, Alloc { client: HClient(49155), parent: HObject(1543503872), handle: HObject(1543503875), class: ClassId(61441), facts: AllocFacts { h_vaspace: Some(HObject(1543503872)), h_ctx_share: None, userd_flags: 0 } }, SetPageDir { client: HClient(49155), vaspace: HObject(1543503875), pdb: Pdb(54525952) }]

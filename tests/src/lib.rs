@@ -190,3 +190,16 @@ pub fn identical_handles(gr_vchid: u16, ce_vchid: u16) -> ProcessHandles {
 
 /// The compute class id in the mock arch (re-export for tests).
 pub const COMPUTE_CLASS: ClassId = mc::COMPUTE;
+
+/// A minimal client-root alloc event (parent == handle, class = CLIENT). Used by
+/// the fuzz + weird-order tests that build graphs object-by-object.
+#[must_use]
+pub fn client_root(client: HClient) -> RmEvent {
+    RmEvent::Alloc {
+        client,
+        parent: HObject(client.0),
+        handle: HObject(client.0),
+        class: mc::CLIENT,
+        facts: AllocFacts::default(),
+    }
+}

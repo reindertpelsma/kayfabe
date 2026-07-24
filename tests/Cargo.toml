@@ -19,5 +19,10 @@ nvkvm-isolate.workspace = true
 nvkvm-vmm.workspace = true
 nvkvm-mocks.workspace = true
 
+[dev-dependencies]
+# Property-based / fuzz testing — DEV-ONLY (never a core dependency). Generates
+# arbitrary + adversarial RM event streams to fuzz the guest→core attack surface.
+proptest = "1.11"
+
 [lints]
 workspace = true
