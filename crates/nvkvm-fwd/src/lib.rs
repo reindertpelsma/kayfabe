@@ -28,11 +28,11 @@
 //! (testing strategy §2).
 
 use nvkvm_arch::Aperture;
-use nvkvm_arch::ids::{GpuVa, Pdb, VChid};
-use nvkvm_completion::PostBatch;
+use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
+use nvkvm_completion::{OsEventRef, PostBatch};
 use nvkvm_core::gpu::{Channel, Gpu, Proc, Vas};
 use nvkvm_core::{ChanId, ProcId};
-use nvkvm_isolate::RmError;
+use nvkvm_isolate::{HostHandle, RmError};
 use nvkvm_mmu::{AddressFault, Binding};
 use nvkvm_vmm::{IrqSpec, Vmm};
 
@@ -69,6 +69,9 @@ pub enum FwdFault {
     Arena,
     /// The isolate's RM backend refused the op.
     Rm(RmError),
+    /// A class the guest tried to alloc as an engine object is not one this arch
+    /// recognizes as an engine — MISS=FAULT (never guessed into a GR/CE object).
+    NotAnEngine(ClassId),
 }
 
 impl From<AddressFault> for FwdFault {
@@ -227,4 +230,120 @@ pub fn poll_completions(gpu: &mut Gpu, vmm: &mut dyn Vmm, pid: ProcId) -> Option
     let batch = gpu.completion_poll(pid, now)?;
     vmm.raise_irq(COMPLETION_VECTOR).ok()?;
     Some(batch)
+}
+
+// =================================================================================
+// GR/CE context lifecycle — the Case-1 forward / Case-2 ack-only split
+// (`execution_plane.md` §2.2 / §2.5). The core is routing-only: it forwards the
+// Case-1 allocs so the HOST kernel-RM builds + self-promotes its OWN context (golden
+// ctx on real silicon), and ACKs the Case-2 GSP-internal controls the guest still
+// issues (their effect is already achieved host-side). Zero new identity — the GR/CE
+// context IS the `(Channel, Vas)` pair the graph already derives.
+// =================================================================================
+
+/// How a control routed through the Case-1/Case-2 split.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlRoute {
+    /// **Case 1** — forwarded ~1:1 to the host through the owning proc's isolate
+    /// (the RPC *is* the userspace op).
+    Forwarded,
+    /// **Case 2** — GSP-internal / ROUTE_TO_PHYSICAL with no unprivileged equivalent
+    /// (`PROMOTE_CTX`, `GET_CTX_BUFFER_INFO`, …). ACKed to the guest, nothing done on
+    /// the host — its effect is already achieved by the Case-1 forwarding. Replaying
+    /// it on an unprivileged isolate would be a "wrong layer" error, never done.
+    AckOnly,
+}
+
+/// The outcome of a Case-1 engine-object forward.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EngineObjectForwarded {
+    /// The engine kind the object made this channel's context (routing tag).
+    pub engine: EngineKind,
+    /// The host engine-object handle the forward returned.
+    pub host_object: HostHandle,
+    /// True if this forward materialized the host channel first (idempotent re-sends
+    /// do not re-materialize).
+    pub materialized_channel: bool,
+}
+
+/// **Case 1**: forward an engine-object alloc (compute / graphics / CE / NVENC) on the
+/// channel identified by `vchid`, so the host kernel-RM builds and self-promotes its
+/// OWN context. Materializes the host channel lazily (same per-proc discipline as
+/// `handle_doorbell`), then allocs the engine object on it via the proc's own isolate.
+///
+/// `class` is the guest's engine-object class; the arch maps it to an [`EngineKind`]
+/// (a class the arch does not recognize as an engine object is a loud `NotAnEngine`).
+/// `params` is the ABI-lowered alloc blob (Axis A). MISS=FAULT throughout.
+pub fn forward_engine_object(
+    gpu: &mut Gpu,
+    vchid: VChid,
+    class: ClassId,
+    params: &[u8],
+) -> Result<EngineObjectForwarded, FwdFault> {
+    let engine = gpu.arch.engine_of_object(class).ok_or(FwdFault::NotAnEngine(class))?;
+    let (pid, cid) = *gpu
+        .by_vchid
+        .get(&vchid)
+        .ok_or(FwdFault::UnknownVchid { vchid })?;
+    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(pid));
+    }
+
+    let Proc { vases, channels, isolate, .. } = proc;
+    let chan = channels.get_mut(&cid).ok_or(FwdFault::UnknownVchid { vchid })?;
+    let rm = isolate.rm();
+
+    // Lazily materialize the host channel (first-touch, per-proc) so the engine object
+    // has a channel to be allocated on — the host builds its GR ctx against it.
+    let materialized_channel = chan.host_channel.is_none();
+    if materialized_channel {
+        let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
+        let vas = vases.get_mut(&pdb).ok_or(FwdFault::UnknownPdb(pdb))?;
+        let hvas = ensure_host_vas(vas, rm)?;
+        let (hchan, htok) = rm.alloc_channel(hvas)?;
+        chan.host_channel = Some(hchan);
+        chan.host_token = Some(htok);
+    }
+    let hchan = chan.host_channel.expect("materialized above");
+    let host_object = rm.alloc_engine_object(hchan, class, params)?;
+    Ok(EngineObjectForwarded { engine, host_object, materialized_channel })
+}
+
+/// Route a `GSP_RM_CONTROL` through the Case-1/Case-2 split. A **Case-2** control is
+/// ACKed and NOT forwarded (its host effect is already achieved); a **Case-1** control
+/// is forwarded to the host on `obj` through the owning proc's isolate.
+///
+/// This is the anti-bolt-on payoff in code: adding an engine adds *rows* to the arch's
+/// Case-2 set and its class table — never a new host verb, never a new routing path.
+pub fn route_control(
+    gpu: &mut Gpu,
+    pid: ProcId,
+    obj: HostHandle,
+    cmd: ControlCmd,
+    payload: &mut [u8],
+) -> Result<ControlRoute, FwdFault> {
+    if gpu.arch.is_case2_control(cmd) {
+        // Case 2: ack-only. The host already did it (Case-1). Do NOT replay — an
+        // unprivileged replay returns InsufficientPermissions ("wrong layer").
+        return Ok(ControlRoute::AckOnly);
+    }
+    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(pid));
+    }
+    proc.isolate.rm().control(obj, cmd, payload)?;
+    Ok(ControlRoute::Forwarded)
+}
+
+/// The guest is waiting on the GR golden-capture completion (a GSP-event the host's
+/// in-kernel FECS capture satisfies). Route it to the **system** proc — it is
+/// kernel-internal and content-irrelevant (the guest only needs the *completion* its
+/// 4-second poll waits on). Returns the observed os-event ref for assertions.
+///
+/// Typed to the system proc by construction (lesson L5 / the #12 finishPayload rule):
+/// forging a completion for a userspace proc is unrepresentable here.
+pub fn signal_golden_capture(gpu: &mut Gpu, event: OsEventRef) -> OsEventRef {
+    gpu.system.completion.observe(event);
+    event
 }

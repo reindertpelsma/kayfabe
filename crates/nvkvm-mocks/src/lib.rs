@@ -24,14 +24,12 @@ use std::ops::Range;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use nvkvm_arch::ids::{ClassId, EngineClass, VChid};
+use nvkvm_arch::ids::{ClassId, ControlCmd, EngineClass, EngineKind, GpuVa, Pdb, VChid};
 use nvkvm_arch::{
     Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, ObjectKind, PageSize, PteDecode,
-    UserdModel,
+    PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
-use nvkvm_isolate::{
-    ControlCmd, HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError,
-};
+use nvkvm_isolate::{HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError};
 use nvkvm_util::Instant;
 use nvkvm_vmm::{
     BarId, CoreEvent, CoreEventKind, HostRegion, IrqSpec, Prot, RamHandle, SlotId, TrapMode, Vmm,
@@ -63,10 +61,14 @@ pub mod mock_classes {
     pub const CHANNEL_GR: ClassId = ClassId(0xF030);
     /// CE GPFIFO channel.
     pub const CHANNEL_CE: ClassId = ClassId(0xF031);
-    /// Compute engine object.
+    /// Compute engine object (GR-compute context).
     pub const COMPUTE: ClassId = ClassId(0xF040);
     /// Copy-engine object.
     pub const DMA_COPY: ClassId = ClassId(0xF041);
+    /// Graphics engine object (GR-graphics context; routes scanout to `Present`).
+    pub const GRAPHICS: ClassId = ClassId(0xF042);
+    /// NVENC encoder object / session.
+    pub const NVENC: ClassId = ClassId(0xF043);
     /// Plain memory object (`NV01_MEMORY_*` / `NV_MEMORY_VIRTUAL` shaped).
     pub const MEMORY: ClassId = ClassId(0xF050);
     /// Os-event / notifier object (`NV01_EVENT` shaped).
@@ -78,6 +80,7 @@ pub mod mock_classes {
 pub struct MockArch {
     mmu: MockGmmuFmt,
     userd: MockUserd,
+    pushbuffer: MockPushbuffer,
 }
 
 impl MockArch {
@@ -144,6 +147,137 @@ impl Arch for MockArch {
 
     fn userd(&self) -> &dyn UserdModel {
         &self.userd
+    }
+
+    fn engine_of_object(&self, class: ClassId) -> Option<EngineKind> {
+        use mock_classes as c;
+        match class {
+            c::COMPUTE => Some(EngineKind::GrCompute),
+            c::GRAPHICS => Some(EngineKind::GrGraphics),
+            c::DMA_COPY => Some(EngineKind::Ce),
+            c::NVENC => Some(EngineKind::NvEnc),
+            _ => None,
+        }
+    }
+
+    fn is_case2_control(&self, cmd: ControlCmd) -> bool {
+        // Mockingbird's Case-2 (GSP-internal, ack-only) control set.
+        matches!(cmd, mock_ctrl::PROMOTE_CTX | mock_ctrl::GET_CTX_BUFFER_INFO)
+    }
+
+    fn pushbuffer(&self) -> &dyn PushbufferAbi {
+        &self.pushbuffer
+    }
+}
+
+/// Mockingbird Case-2 (GSP-internal, ack-only) control commands. Deliberately-fake
+/// values; a real arch sources these from its Axis-A tables.
+pub mod mock_ctrl {
+    use nvkvm_arch::ids::ControlCmd;
+
+    /// `PROMOTE_CTX`-shaped: the host already promoted its own GR ctx (Case-1).
+    pub const PROMOTE_CTX: ControlCmd = ControlCmd(0x2080_012b);
+    /// `GET_CTX_BUFFER_INFO`-shaped: re-derived host-side, ack-only.
+    pub const GET_CTX_BUFFER_INFO: ControlCmd = ControlCmd(0x2080_1219);
+    /// A forwardable (Case-1) control — NOT ack-only (used to prove the split).
+    pub const FORWARDABLE: ControlCmd = ControlCmd(0x0000_1234);
+}
+
+/// The Mockingbird pushbuffer/method ABI. Fake, self-consistent encodings so the ONE
+/// core parser can be driven without a GPU. A "method word" is a `(header, args)`
+/// pair: the header's high byte is the opcode; args carry addresses/payloads.
+#[derive(Debug, Default)]
+pub struct MockPushbuffer;
+
+/// Mockingbird method opcodes (high byte of the header word). Fake values.
+pub mod mock_method {
+    /// `SET_OBJECT`: arg[0] = engine-object class id.
+    pub const SET_OBJECT: u8 = 0xA0;
+    /// CE `LAUNCH_DMA`: args = [dst_lo, dst_hi, len, flags(bit0 = dst_is_virtual)].
+    pub const CE_LAUNCH_DMA: u8 = 0xB0;
+    /// `SEM_RELEASE`: args = [addr_lo, addr_hi, payload_lo, payload_hi].
+    pub const SEM_RELEASE: u8 = 0xC0;
+    /// `MMU_TLB_INVALIDATE`: args = [pdb_lo, pdb_hi, membar(bit0)].
+    pub const TLB_INVALIDATE: u8 = 0xD0;
+}
+
+impl MockPushbuffer {
+    /// Build one method word: `(header, args)`. Test helper to script pushbuffers.
+    #[must_use]
+    pub fn method(opcode: u8, args: &[u32]) -> (u32, Vec<u32>) {
+        ((u32::from(opcode) << 24) | args.len() as u32, args.to_vec())
+    }
+
+    /// Encode a `SET_OBJECT` for `class`.
+    #[must_use]
+    pub fn set_object(class: ClassId) -> (u32, Vec<u32>) {
+        Self::method(mock_method::SET_OBJECT, &[class.0])
+    }
+
+    /// Encode a CE `LAUNCH_DMA` to `dst` for `len` bytes.
+    #[must_use]
+    pub fn ce_launch_dma(dst: u64, len: u64, dst_is_virtual: bool) -> (u32, Vec<u32>) {
+        Self::method(mock_method::CE_LAUNCH_DMA, &[
+            dst as u32,
+            (dst >> 32) as u32,
+            len as u32,
+            u32::from(dst_is_virtual),
+        ])
+    }
+
+    /// Encode a `SEM_RELEASE` of `addr` to `payload`.
+    #[must_use]
+    pub fn sem_release(addr: u64, payload: u64) -> (u32, Vec<u32>) {
+        Self::method(mock_method::SEM_RELEASE, &[
+            addr as u32,
+            (addr >> 32) as u32,
+            payload as u32,
+            (payload >> 32) as u32,
+        ])
+    }
+
+    /// Encode an `MMU_TLB_INVALIDATE` of `pdb`.
+    #[must_use]
+    pub fn tlb_invalidate(pdb: u64, membar: bool) -> (u32, Vec<u32>) {
+        Self::method(mock_method::TLB_INVALIDATE, &[
+            pdb as u32,
+            (pdb >> 32) as u32,
+            u32::from(membar),
+        ])
+    }
+}
+
+impl PushbufferAbi for MockPushbuffer {
+    fn decode_method(&self, header: u32, args: &[u32]) -> PushMethod {
+        let lo64 = |i: usize| u64::from(*args.get(i).unwrap_or(&0));
+        let pair = |i: usize| lo64(i) | (lo64(i + 1) << 32);
+        match (header >> 24) as u8 {
+            mock_method::SET_OBJECT => PushMethod::SetObject { class: ClassId(args.first().copied().unwrap_or(0)) },
+            mock_method::CE_LAUNCH_DMA => PushMethod::CeLaunchDma {
+                dst: GpuVa(pair(0)),
+                len: lo64(2),
+                dst_is_virtual: lo64(3) & 1 != 0,
+            },
+            mock_method::SEM_RELEASE => PushMethod::SemRelease { addr: GpuVa(pair(0)), payload: pair(2) },
+            mock_method::TLB_INVALIDATE => PushMethod::TlbInvalidate {
+                pdb: Pdb(pair(0)),
+                membar: lo64(2) & 1 != 0,
+            },
+            // Anything else is opaque — passed through, acted on by no core code.
+            _ => PushMethod::Opaque,
+        }
+    }
+
+    fn gpfifo_entries(&self, ring: &[u8]) -> Vec<PushRange> {
+        // Fake GPFIFO: 16-byte entries, each [gpa: u64 LE, len: u64 LE]. A truncated
+        // tail is ignored (a hostile ring must never panic — decode is total).
+        ring.chunks_exact(16)
+            .map(|e| {
+                let gpa = u64::from_le_bytes(e[0..8].try_into().expect("8 bytes"));
+                let len = u64::from_le_bytes(e[8..16].try_into().expect("8 bytes"));
+                PushRange { gpa, len }
+            })
+            .collect()
     }
 }
 
@@ -400,6 +534,15 @@ pub enum RmVerb {
         /// Returned handle.
         handle: HostHandle,
     },
+    /// Intent: an engine object allocated on a host channel (the Case-1 forward).
+    AllocEngineObject {
+        /// The host channel it was allocated on.
+        chan: HostHandle,
+        /// The engine-object class.
+        class: ClassId,
+        /// Returned handle.
+        handle: HostHandle,
+    },
     /// Intent: host VAS allocated.
     AllocVaSpace {
         /// Returned handle.
@@ -571,6 +714,19 @@ impl RmBackend for MockRmBackend {
         self.next_token += 1;
         self.record(RmVerb::AllocChannel { vas, handle, token });
         Ok((handle, token))
+    }
+
+    fn alloc_engine_object(
+        &mut self,
+        chan: HostHandle,
+        class: ClassId,
+        _params: &[u8],
+    ) -> Result<HostHandle, RmError> {
+        self.gate()?;
+        self.check(chan)?;
+        let handle = self.mint();
+        self.record(RmVerb::AllocEngineObject { chan, class, handle });
+        Ok(handle)
     }
 
     fn schedule(&mut self, chan: HostHandle) -> Result<(), RmError> {

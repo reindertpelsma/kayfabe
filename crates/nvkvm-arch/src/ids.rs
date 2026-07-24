@@ -69,6 +69,14 @@ id_newtype!(
     Gpa(u64)
 );
 
+id_newtype!(
+    /// An RM control-command identifier (`GSP_RM_CONTROL` cmd). Values are per-version
+    /// (Axis A, codegen'd in `nvkvm-abi`); the core only ever passes them to
+    /// [`crate::Arch::is_case2_control`] and the host backend. Lives here (not in
+    /// `nvkvm-isolate`) so the `Arch` seam can name it without a dependency cycle.
+    ControlCmd(u32)
+);
+
 /// Engine class of a channel or engine object, in core terms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EngineClass {
@@ -77,5 +85,31 @@ pub enum EngineClass {
     /// Copy engine (CE).
     Ce,
     /// Any other engine the core routes but does not interpret.
+    Other,
+}
+
+/// The execution-plane routing tag for an engine object (`execution_plane.md` §2.1).
+///
+/// A **routing tag, not a `dyn Engine`**: the engines do not have divergent *core*
+/// behavior — each gets a Case-1 alloc forwarded, its pushbuffer decoded by the same
+/// loop, and signals via a sema. Their differences are entirely *encodings* (class
+/// IDs, method IDs, sema offsets), which live behind the [`crate::Arch`] seams. So the
+/// core programs against this small enum; a new engine for an existing arch is a new
+/// arm + the arch's class-ID/method rows, **zero core edits**. (`EngineClass{Gr,Ce,
+/// Other}` is too coarse for graphics-vs-compute and NVENC; this is the refinement.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EngineKind {
+    /// GR engine running a compute context (the CUDA/LLM/PyTorch path, incl. the
+    /// Tensor-Core path — a path *within* GR, not a separate engine).
+    GrCompute,
+    /// GR engine running a graphics context (raster; its scanout routes to `Present`).
+    GrGraphics,
+    /// Copy engine (CE) — the copy IS the workload; also the #13 PT-write data plane.
+    Ce,
+    /// Video encode engine + session (NVENC).
+    NvEnc,
+    /// Video decode engine (NVDEC) — an honest gap, unproven; named for completeness.
+    NvDec,
+    /// An engine the core routes but does not interpret.
     Other,
 }

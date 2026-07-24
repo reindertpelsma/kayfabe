@@ -18,6 +18,7 @@
 //! an OS. `nvkvm-mocks::{MockRmBackend, MockIsolate}` are the test impls.
 
 use nvkvm_arch::ids::ClassId;
+pub use nvkvm_arch::ids::ControlCmd;
 
 /// A host-side RM object handle, scoped to ONE isolate's handle namespace.
 ///
@@ -25,11 +26,6 @@ use nvkvm_arch::ids::ClassId;
 /// enforces this in tests (boundary-2 blast-radius assertion).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HostHandle(pub u64);
-
-/// An opaque RM control command identifier. Values are Axis-A (versioned, codegen'd
-/// in `nvkvm-abi`); the core routes them, the backend interprets them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ControlCmd(pub u32);
 
 /// Errors an RM verb can return, in core terms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +84,20 @@ pub trait RmBackend {
     /// Intent verb: allocate a host GPU channel bound to host VAS `vas`.
     /// Returns `(channel_handle, host_work_submit_token)`.
     fn alloc_channel(&mut self, vas: HostHandle) -> Result<(HostHandle, u64), RmError>;
+
+    /// Intent verb: allocate an **engine object** (compute / graphics / CE / NVENC)
+    /// of `class` on host channel `chan` — the Case-1 forward that makes the host
+    /// kernel-RM build and self-promote its OWN context (golden ctx included, on real
+    /// silicon). `params` is the ABI-lowered alloc blob (Axis A: `IS_EXTERNALLY_OWNED`
+    /// already stripped, etc.). NOTE the anti-bolt-on property: this is *almost* the
+    /// generic [`RmBackend::alloc`] with `parent = chan`; it is named only to state
+    /// the intent — the host verb surface does NOT grow to add an engine.
+    fn alloc_engine_object(
+        &mut self,
+        chan: HostHandle,
+        class: ClassId,
+        params: &[u8],
+    ) -> Result<HostHandle, RmError>;
 
     /// Intent verb: make `chan` runnable (the GPFIFO_SCHEDULE intent). Per-proc,
     /// never a one-shot: #12's CTX2 rang off-runlist because scheduling was a

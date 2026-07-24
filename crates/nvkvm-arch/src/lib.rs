@@ -33,7 +33,7 @@
 
 pub mod ids;
 
-use ids::{ClassId, EngineClass, VChid};
+use ids::{ClassId, ControlCmd, EngineClass, EngineKind, GpuVa, Pdb, VChid};
 
 /// What kind of RM object a class ID denotes, as far as the *core* needs to know.
 ///
@@ -186,6 +186,77 @@ pub trait UserdModel {
     fn gp_put_offset(&self) -> u64;
 }
 
+/// A pushbuffer method, decoded into **core terms** (no raw bits). The ONE parser
+/// (`nvkvm-fwd`) dispatches on this; the [`PushbufferAbi`] produces it. Mirrors
+/// [`PteDecode`]'s "no raw bits in the core" discipline (`execution_plane.md` §2.3):
+/// the parser decodes *just* these four fact kinds — everything else is
+/// [`PushMethod::Opaque`] and passes through untouched (the anti-emulation boundary).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PushMethod {
+    /// `SET_OBJECT`: the subsequent methods target this engine-object class — used to
+    /// confirm the channel's [`EngineKind`] (routing only).
+    SetObject {
+        /// The engine-object class the channel is now bound to.
+        class: ClassId,
+    },
+    /// CE `LAUNCH_DMA` / `MEMSET` / `COPY`: a copy whose destination the address plane
+    /// must capture — #13's CE-PT-write capture input when `dst_is_virtual` is false
+    /// (a physical PT-page write) or a data copy otherwise.
+    CeLaunchDma {
+        /// Destination address (a GPU VA when `dst_is_virtual`, else a physical addr).
+        dst: GpuVa,
+        /// Length in bytes.
+        len: u64,
+        /// Whether the destination is a virtual (VAS) address vs a physical FB address.
+        dst_is_virtual: bool,
+    },
+    /// `SEM_RELEASE` / `SET_SEMAPHORE_A/B` + payload / finishPayload: the completion —
+    /// a semaphore address in a VAS advanced to `payload`. Extracted for the
+    /// completion plane's observe (`execution_plane.md` §2.4).
+    SemRelease {
+        /// The semaphore address (in the channel's VAS).
+        addr: GpuVa,
+        /// The payload the semaphore is released to.
+        payload: u64,
+    },
+    /// `MEM_OP_A/C/D` with `OPERATION = MMU_TLB_INVALIDATE`: the invalidate transport —
+    /// carries the invalidated PDB and whether a membar (hard barrier) is required.
+    TlbInvalidate {
+        /// The page-directory base whose TLB is invalidated.
+        pdb: Pdb,
+        /// True if a membar must be honored before the parser advances.
+        membar: bool,
+    },
+    /// Any method this arch does not model — passed through verbatim, acted on by no
+    /// core code (trap-min, decision #6). NEVER guessed into one of the above.
+    Opaque,
+}
+
+/// One pushbuffer range to walk: a contiguous run of method words a GPFIFO entry
+/// points at. The core walks these; the arch iterates the GPFIFO to produce them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PushRange {
+    /// Guest-physical (or shared) address of the method words.
+    pub gpa: u64,
+    /// Length of the range in bytes.
+    pub len: u64,
+}
+
+/// Axis-B seam: the pushbuffer / method + engine encodings for one GPU generation
+/// (`execution_plane.md` §3.1). The *decode logic* (walk GPFIFO → walk methods →
+/// dispatch on [`PushMethod`]) is **core**; this trait supplies only the per-arch
+/// *encodings* (how a raw method word decodes, which method ID is `SEM_RELEASE`, the
+/// GPFIFO entry stride/format).
+pub trait PushbufferAbi {
+    /// Decode one method word (`header` + its trailing `args`) into core terms.
+    /// Anything this arch does not model → [`PushMethod::Opaque`] (never guessed).
+    fn decode_method(&self, header: u32, args: &[u32]) -> PushMethod;
+
+    /// The GPFIFO entries of a pushbuffer `ring` (entry stride/format per arch),
+    /// each pointing at a [`PushRange`] of method words to walk.
+    fn gpfifo_entries(&self, ring: &[u8]) -> Vec<PushRange>;
+}
+
 /// # The Axis-B architecture trait — one impl per GPU generation
 ///
 /// Everything a GPU generation *behaves like*, in terms the core understands
@@ -226,4 +297,20 @@ pub trait Arch {
 
     /// The USERD geometry for this generation (B5).
     fn userd(&self) -> &dyn UserdModel;
+
+    /// Which engine (if any) an *object* class denotes — the §2.1 [`EngineKind`]
+    /// mapping (a compute/graphics/CE/NVENC object makes its channel that kind of
+    /// context). `None` for a class that is not an engine object. A real `impl` fills
+    /// this from the Axis-A class-ID tables; the core never names a class value.
+    fn engine_of_object(&self, class: ClassId) -> Option<EngineKind>;
+
+    /// Is this control a **Case-2** GSP-internal / ROUTE_TO_PHYSICAL control with no
+    /// unprivileged userspace equivalent (`PROMOTE_CTX`, `GET_CTX_BUFFER_INFO`, …)?
+    /// Its effect is already achieved by Case-1 forwarding, so the core ACKs it and
+    /// does nothing on the host (`execution_plane.md` §2.5). Replaying one on an
+    /// unprivileged isolate is a "wrong layer" error, never a privilege gain.
+    fn is_case2_control(&self, cmd: ControlCmd) -> bool;
+
+    /// The pushbuffer / method ABI for this generation (the ONE parser's encodings).
+    fn pushbuffer(&self) -> &dyn PushbufferAbi;
 }
