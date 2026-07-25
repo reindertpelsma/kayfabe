@@ -31,6 +31,17 @@
 //!   slot: a checked-out worker cannot be checked out again, and concurrency comes
 //!   from channel COUNT (§11 B6) — there is no shared in-flight slot table to grow.
 //!
+//! Section 9 (`commit_*_proc_guard[s]_refuse_on_either_term_alone`,
+//! `plan_publish_refuses_when_either_half_of_the_target_is_missing`,
+//! `a_refused_commit_releases_its_orphans_on_the_single_threaded_path`,
+//! `a_refused_op_returns_its_worker_to_the_pool`,
+//! `the_shell_ring_gate_refuses_an_unpublished_working_set`,
+//! `worker_death_kills_its_own_pool_slot_not_merely_the_proc`) splits the same R5 /
+//! disposition machinery **term by term**, driving the plan/commit pair directly so
+//! exactly one clause of each guard is true per case. Every one of them closes a
+//! survivor of the first L1 mutation campaign — see `core_mutation_gate.md`
+//! §L1 baseline, and the per-test doc comments, which name the mutant they kill.
+//!
 //! Every test arms a [`watchdog`] (the `concurrency_stress.rs` bounded-termination
 //! rule) and joins every thread it spawns.
 
@@ -39,7 +50,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant as WallInstant};
 
-use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_arch::ids::{ControlCmd, GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
@@ -47,8 +58,12 @@ use kayfabe_core::reactor::SourceKind;
 use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
 use kayfabe_core::{ProcAnchor, ProcId};
 use kayfabe_fwd::{FwdFault, Stale};
-use kayfabe_isolate::{DEFAULT_POOL_WORKERS, IsolateFactory, IsolateId, VerbPlan, WorkerId};
-use kayfabe_mocks::{HoldSpec, MockArch, MockIsolateFactory, SharedRecorder, VerbHold, VerbKind};
+use kayfabe_isolate::{
+    DEFAULT_POOL_WORKERS, HostHandle, IsolateFactory, IsolateId, VerbPlan, WorkerId,
+};
+use kayfabe_mocks::{
+    HoldSpec, MockArch, MockIsolateFactory, RmVerb, SharedRecorder, VerbHold, VerbKind,
+};
 use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
 use kayfabe_rt::executor::{Effect, Executor};
 use kayfabe_rt::inbox::{CoreEvent, inbox};
@@ -469,6 +484,46 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
         }),
         "no resurrected channel, no half-written host state"
     );
+    // ★ R5's DISPOSITION half (`Orphans`): the refusal above happened *after* the
+    // execute phase had already allocated a host channel (and the VAS under it), so
+    // those objects are orphaned — the commit adopted nothing. They must be released
+    // on the same worker, still lock-free, before it is checked back in. Counted as
+    // host `free` verbs, because "we refused" and "we refused and leaked" are
+    // otherwise indistinguishable from the outside: the whole `Orphans::is_empty`
+    // gate can be short-circuited to "nothing to do" without a single other
+    // assertion in this file changing colour (the campaign found exactly that).
+    let frees: Vec<_> = rec
+        .lock()
+        .expect("recorder")
+        .verbs_of(IsolateId(pid.0))
+        .into_iter()
+        .filter_map(|v| match v {
+            RmVerb::Free { obj } => Some(obj),
+            _ => None,
+        })
+        .collect();
+    let allocated: Vec<_> = rec
+        .lock()
+        .expect("recorder")
+        .verbs_of(IsolateId(pid.0))
+        .into_iter()
+        .filter_map(|v| match v {
+            RmVerb::AllocChannel { handle, .. } | RmVerb::AllocVaSpace { handle } => Some(handle),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        !allocated.is_empty(),
+        "non-vacuity: the held verb DID allocate host state to orphan"
+    );
+    // Released in REVERSE allocation order — child (the channel) before the parent
+    // (the VAS it was allocated on), which is the only order an RM namespace accepts.
+    let expected: Vec<_> = allocated.iter().rev().copied().collect();
+    assert_eq!(
+        frees, expected,
+        "every host object the refused commit orphaned was released — exactly once, \
+         child before parent, and nothing else was freed"
+    );
     assert_eq!(pid, pids[0]);
 }
 
@@ -784,4 +839,541 @@ fn idempotent_replay_emits_no_verbs_and_takes_no_worker() {
 
     held.release();
     t.join().expect("joins").expect("publishes");
+}
+
+// ---------------------------------------------------------------------------------
+// 9 — ★ THE R5 GUARDS, TERM BY TERM (§11 B5, §12.10)
+// ---------------------------------------------------------------------------------
+//
+// Section 4's canaries drive the R5 sites through the *whole* device, which proves
+// the guards are wired up but exercises each `A || B` staleness test with BOTH terms
+// true at once. §11 B5's warning is that a forgotten re-validation is "quieter than
+// the deadlock it replaced", and the first L1 mutation campaign made the consequence
+// concrete: `commit_engine_object`/`commit_control`'s `proc.is_retired() || proc.id
+// != plan.proc` survived being narrowed to `&&` (mutants `lib.rs:1285:26` and
+// `lib.rs:1468:26`), as did `plan_publish`'s two-target check (`lib.rs:485:40`).
+//
+// These tests split each guard into its independent terms and drive the plan/commit
+// pair DIRECTLY, so exactly one term is true per case. Every assertion names the
+// exact fault variant, never `is_err()` — §12.10's lesson, learned here once already.
+
+/// The plain `Gpu` behind a freshly built device — the single-threaded shape the
+/// term-by-term guard tests need (they hand a commit a `&mut Proc` that is
+/// deliberately the WRONG one, which no threaded entry point can express).
+fn plain_gpu(procs: usize) -> (Gpu, Vec<ProcId>) {
+    let (device, pids, _rec) = device_with(procs, DEFAULT_POOL_WORKERS, LockMode::Degenerate);
+    let gpu = Arc::into_inner(device)
+        .expect("the device is not shared yet")
+        .into_gpu();
+    (gpu, pids)
+}
+
+/// ★ `commit_engine_object`'s proc guard is a **disjunction**, and each term refuses
+/// **alone**: (a) the plan's own proc retired in the gap, (b) the plan is committed
+/// against a *live* proc that is not the one it was planned for.
+///
+/// (b) is the term no whole-device canary can reach — the shell always re-locks the
+/// plan's own `ProcId` — yet it is the term that matters if `commit_phase` is ever
+/// re-keyed. Committing proc A's plan into live proc B must name `Stale::Proc(A)`
+/// and adopt NOTHING into B, or a narrowed guard would fall through to the route
+/// check (which still resolves, because the route is A's and unchanged) and only
+/// then trip on a channel miss — a *different*, much quieter fault.
+#[test]
+fn commit_engine_object_proc_guard_refuses_on_either_term_alone() {
+    let _wd = watchdog("commit_engine_object_proc_guard", Duration::from_secs(30));
+
+    // (b) wrong-but-live proc. A replay plan is used so the commit needs no reply and
+    // allocates nothing — the guard is the ONLY thing under test.
+    let (mut gpu, pids) = plain_gpu(2);
+    let (a, b) = (pids[0], pids[1]);
+    kayfabe_fwd::forward_engine_object(&mut gpu, GPU, GR, kayfabe_tests::COMPUTE_CLASS, &[])
+        .expect("proc A materializes its channel + engine object");
+    let route = kayfabe_fwd::route_engine_object(&gpu.spine, GPU, GR, kayfabe_tests::COMPUTE_CLASS)
+        .expect("A's GR channel routes");
+    assert_eq!(route.proc, a, "the scenario's first proc owns GR");
+    let planned =
+        kayfabe_fwd::plan_engine_object(&gpu.procs[&a], &route, kayfabe_tests::COMPUTE_CLASS, &[])
+            .expect("the re-send plans");
+    assert!(
+        planned.plan.replay.is_some() && planned.verbs.is_none(),
+        "the re-send must resolve as a replay, so this test isolates the guard"
+    );
+
+    let Gpu { spine, procs, .. } = &mut gpu;
+    let refusal = kayfabe_fwd::commit_engine_object(
+        spine,
+        procs.get_mut(&b).expect("proc B is live"),
+        &planned.plan,
+        None,
+    )
+    .expect_err("A's plan must not commit into B");
+    assert_eq!(
+        refusal.fault,
+        FwdFault::Stale(Stale::Proc(a)),
+        "a plan committed against the wrong proc is STALENESS naming the plan's proc \
+         — not a channel miss, not a route miss"
+    );
+    assert!(
+        !refusal.retry,
+        "a divergent identity mismatch is not re-plannable"
+    );
+    assert!(
+        procs[&b].channels.values().all(|c| !c
+            .host_engine_objects
+            .contains_key(&kayfabe_tests::COMPUTE_CLASS)),
+        "nothing of A's was adopted into B"
+    );
+
+    // (a) the plan's OWN proc, retired in the gap. Same plan, same commit, the other
+    // term of the disjunction.
+    let (mut gpu, pids) = plain_gpu(1);
+    let a = pids[0];
+    kayfabe_fwd::forward_engine_object(&mut gpu, GPU, GR, kayfabe_tests::COMPUTE_CLASS, &[])
+        .expect("materializes");
+    let route = kayfabe_fwd::route_engine_object(&gpu.spine, GPU, GR, kayfabe_tests::COMPUTE_CLASS)
+        .expect("routes");
+    let planned =
+        kayfabe_fwd::plan_engine_object(&gpu.procs[&a], &route, kayfabe_tests::COMPUTE_CLASS, &[])
+            .expect("plans");
+    let Gpu { spine, procs, .. } = &mut gpu;
+    let proc = procs.get_mut(&a).expect("live");
+    proc.retire(); // ← the world moves inside the lock-free gap
+    assert_eq!(
+        proc.id, planned.plan.proc,
+        "ONLY the retired term is true now"
+    );
+    let refusal = kayfabe_fwd::commit_engine_object(spine, proc, &planned.plan, None)
+        .expect_err("a retired proc's commit must refuse");
+    assert_eq!(
+        refusal.fault,
+        FwdFault::Stale(Stale::Proc(a)),
+        "a retired proc refuses AS staleness (§12.10's polarity)"
+    );
+}
+
+/// ★ The same disjunction in `commit_control`, with the write-back as the witness.
+///
+/// The control's host effect has already happened when the commit runs, so the only
+/// thing this commit owns is copying the host's reply into the guest's buffer. A
+/// narrowed guard therefore does not merely mis-report — it writes another proc's
+/// host reply into a buffer on behalf of a proc the plan was never made for. The
+/// buffer is asserted UNTOUCHED, which is the observable a bare `is_err()` would miss.
+#[test]
+fn commit_control_proc_guard_refuses_on_either_term_alone() {
+    let _wd = watchdog("commit_control_proc_guard", Duration::from_secs(30));
+    const CMD: ControlCmd = ControlCmd(0x2080_0110);
+    const OBJ: HostHandle = HostHandle(0x0BEE_F000);
+
+    let (mut gpu, pids) = plain_gpu(2);
+    let (a, b) = (pids[0], pids[1]);
+    let planned = kayfabe_fwd::plan_control(&gpu.procs[&a], GPU, OBJ, CMD, &[0; 4])
+        .expect("A's control plans");
+
+    // (b) wrong-but-live proc: B has an isolate on GPU, so a narrowed guard sails
+    // past the target check and performs the write-back.
+    let mut buf = [0u8; 4];
+    let refusal = kayfabe_fwd::commit_control(
+        gpu.procs.get_mut(&b).expect("proc B is live"),
+        &planned.plan,
+        Some(kayfabe_isolate::VerbReply::Control {
+            payload: vec![0xAB; 4],
+        }),
+        &mut buf,
+    )
+    .expect_err("A's control must not write back through B");
+    assert_eq!(
+        refusal.fault,
+        FwdFault::Stale(Stale::Proc(a)),
+        "the refusal names the plan's proc"
+    );
+    assert_eq!(
+        buf, [0u8; 4],
+        "a refused control writes NOTHING back — the answer has nowhere to go"
+    );
+
+    // (a) the plan's own proc, retired in the gap.
+    let proc = gpu.procs.get_mut(&a).expect("live");
+    proc.retire();
+    let refusal = kayfabe_fwd::commit_control(
+        proc,
+        &planned.plan,
+        Some(kayfabe_isolate::VerbReply::Control {
+            payload: vec![0xCD; 4],
+        }),
+        &mut buf,
+    )
+    .expect_err("a retired proc's control must refuse");
+    assert_eq!(refusal.fault, FwdFault::Stale(Stale::Proc(a)));
+    assert_eq!(buf, [0u8; 4], "still nothing written back");
+}
+
+/// ★ `plan_publish`'s target check is a disjunction over the proc's TWO per-target
+/// containers (MG-5: an arena AND an isolate per `GpuId`), and **either half missing
+/// alone** must refuse — before any host verb runs.
+///
+/// That ordering is the whole point of the check: finding the miss after the allocs
+/// would mean allocating host state for a target we then refuse. So each half is
+/// removed on its own and the plan must still be `NoTarget`; with both present the
+/// same call plans successfully, which is what stops this test passing vacuously.
+#[test]
+fn plan_publish_refuses_when_either_half_of_the_target_is_missing() {
+    let _wd = watchdog("plan_publish_target_halves", Duration::from_secs(30));
+    let (mut gpu, pids) = plain_gpu(1);
+    let pid = pids[0];
+    // Materialize the target (arena + isolate) the way production does.
+    let proc = gpu.procs.get_mut(&pid).expect("live");
+    kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000).expect("A publishes");
+    let expected = FwdFault::NoTarget {
+        proc: pid,
+        gpu: GPU,
+    };
+
+    let arena = proc
+        .arenas
+        .remove(&GPU)
+        .expect("the target's arena existed");
+    assert!(
+        proc.isolates.contains_key(&GPU),
+        "ONLY the arena half is missing"
+    );
+    assert_eq!(
+        kayfabe_fwd::plan_publish(proc, GPU, PDB, GpuVa(VA.0 + 0x1000), 0x1000).map(|p| p.plan),
+        Err(expected),
+        "no arena for the target ⇒ NoTarget, with no host verb emitted"
+    );
+    proc.arenas.insert(GPU, arena);
+
+    let iso = proc
+        .isolates
+        .remove(&GPU)
+        .expect("the target's isolate existed");
+    assert!(
+        proc.arenas.contains_key(&GPU),
+        "ONLY the isolate half is missing"
+    );
+    assert_eq!(
+        kayfabe_fwd::plan_publish(proc, GPU, PDB, GpuVa(VA.0 + 0x1000), 0x1000).map(|p| p.plan),
+        Err(expected),
+        "no isolate for the target ⇒ NoTarget, with no host verb emitted"
+    );
+    proc.isolates.insert(GPU, iso);
+
+    // Non-vacuity: with both halves back, the identical call plans.
+    assert!(
+        kayfabe_fwd::plan_publish(proc, GPU, PDB, GpuVa(VA.0 + 0x1000), 0x1000).is_ok(),
+        "the refusals above were about the missing halves, not about the call"
+    );
+}
+
+/// ★ A worker HUP kills **its own pool slot** — and the kill is observable, because
+/// `retire_proc` parks the proc (isolates and all) in `spine.retired` rather than
+/// dropping it.
+///
+/// `worker_death_retires_the_proc_loudly_and_never_resurrects` asserts everything
+/// *around* this — the typed dispatch, the condemnation, the reap — but nothing that
+/// distinguishes "the slot was retired, then the proc was" from "only the proc was",
+/// which is why the campaign found `device.rs:868 replace SharedDevice::kill_worker
+/// _slot with ()` surviving. The two steps are separate critical sections on purpose
+/// (§7.3: retiring is a spine WRITE, so it cannot run under the dispatch guard), and
+/// in that gap a sibling thread of the same proc can still reach the pool — so the
+/// slot must already be dead when the gap opens, not merely dead by implication once
+/// the proc goes. Pinned by slot count: the dead slot is gone from the pool, its
+/// SIBLINGS are not.
+#[test]
+fn worker_death_kills_its_own_pool_slot_not_merely_the_proc() {
+    let _wd = watchdog("worker_death_kills_its_slot", Duration::from_secs(30));
+    const POOL: usize = 3;
+    const DEAD: WorkerId = WorkerId(1);
+    let (device, pids, _rec) = device_with(1, POOL, LockMode::Sharded);
+    let pid = pids[0];
+    device
+        .publish_backing(GPU, PDB, VA, 0x1000)
+        .expect("materializes the proc's isolate for GPU");
+
+    let hup = device.register_source(SourceKind::Worker {
+        proc: pid,
+        gpu: GPU,
+        worker: DEAD,
+    });
+    assert_eq!(
+        device.signal_source(hup),
+        SignalOutcome::WorkerDied {
+            proc: pid,
+            gpu: GPU,
+            worker: DEAD
+        },
+        "the HUP dispatched as a typed worker death"
+    );
+
+    let gpu = Arc::into_inner(device)
+        .expect("the device is not shared")
+        .into_gpu();
+    let retired = gpu
+        .spine
+        .retired
+        .iter()
+        .find(|p| p.id == pid)
+        .expect("the retired proc is parked, not dropped (reaped only on demand)");
+    let iso = retired
+        .isolates
+        .get(&GPU)
+        .expect("the retired proc still carries its target isolate");
+    assert_eq!(iso.pool_size(), POOL, "the pool was not resized");
+    assert_eq!(
+        iso.idle_workers(),
+        POOL - 1,
+        "the HUP'd slot is DEAD — never a respawn, and never a slot that stays \
+         checkout-able for the window between the kill and the retire"
+    );
+}
+
+/// ★ The SAME disjunction at the other two commit sites — `commit_publish` (the
+/// data-plane materialization) and `commit_doorbell` (the ring path).
+///
+/// All four R5 commit guards are textually identical (`proc.is_retired() || proc.id
+/// != plan.proc`), and the first ICE-free L1 campaign found the pair here surviving
+/// narrowing to `&&` for the same reason as the other two: the whole-device canaries
+/// only ever make BOTH terms true at once. Kept in one test because the property is
+/// one property — a commit belongs to exactly one proc, and it re-checks that by
+/// IDENTITY, never merely by liveness.
+///
+/// These two sites are the ones that hold host state at refusal time, so each case
+/// also asserts the refusal hands back the orphans it could not adopt: refusing
+/// *and* leaking is not refusing.
+#[test]
+fn commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone() {
+    let _wd = watchdog("commit_publish_doorbell_guards", Duration::from_secs(30));
+    const MEMORY: HostHandle = HostHandle(0x0D01_0001);
+    const HOST_VA: u64 = 0x7000_0000;
+
+    // ---- commit_publish, term (b): the plan is A's, the proc is a live B.
+    let (mut gpu, pids) = plain_gpu(2);
+    let (a, b) = (pids[0], pids[1]);
+    {
+        let proc_a = gpu.procs.get_mut(&a).expect("live");
+        kayfabe_fwd::publish_backing(proc_a, GPU, PDB, VA, 0x1000).expect("A materializes");
+    }
+    let planned = kayfabe_fwd::plan_publish(&gpu.procs[&a], GPU, PDB, GpuVa(VA.0 + 0x1000), 0x1000)
+        .expect("A plans a second publication");
+    let refusal = kayfabe_fwd::commit_publish(
+        gpu.procs.get_mut(&b).expect("proc B is live"),
+        &planned.plan,
+        Some(kayfabe_isolate::VerbReply::Published {
+            host_vas: None,
+            memory: MEMORY,
+            host_va: HOST_VA,
+        }),
+    )
+    .expect_err("A's publish must not commit into B");
+    assert_eq!(
+        refusal.fault,
+        FwdFault::Stale(Stale::Proc(a)),
+        "a publish committed against the wrong proc is STALENESS naming the plan's proc"
+    );
+    assert!(
+        refusal.orphans.free.contains(&MEMORY),
+        "the host memory the execute phase allocated is handed back, not leaked: {:?}",
+        refusal.orphans
+    );
+    assert!(
+        !gpu.procs[&b].vases.values().any(|v| v
+            .table
+            .iter()
+            .any(|(_, _, bind)| bind.host_va == Some(HOST_VA))),
+        "nothing of A's was bound into B's address plane"
+    );
+
+    // ---- commit_publish, term (a): A's own plan, A retired in the gap.
+    let proc_a = gpu.procs.get_mut(&a).expect("live");
+    proc_a.retire();
+    let refusal = kayfabe_fwd::commit_publish(
+        proc_a,
+        &planned.plan,
+        Some(kayfabe_isolate::VerbReply::Published {
+            host_vas: None,
+            memory: MEMORY,
+            host_va: HOST_VA,
+        }),
+    )
+    .expect_err("a retired proc's publish must refuse");
+    assert_eq!(refusal.fault, FwdFault::Stale(Stale::Proc(a)));
+    assert!(refusal.orphans.free.contains(&MEMORY));
+
+    // ---- commit_doorbell, both terms. The plan is taken AFTER a real ring, so the
+    // channel is materialized and the commit needs no fresh handles.
+    let (mut gpu, pids) = plain_gpu(2);
+    let (a, b) = (pids[0], pids[1]);
+    kayfabe_fwd::handle_doorbell(&mut gpu, GPU, MockArch::token_for(GR), &[])
+        .expect("A rings once, materializing its channel");
+    let route = kayfabe_fwd::route_doorbell(&gpu.spine, GPU, MockArch::token_for(GR))
+        .expect("A's GR channel routes");
+    assert_eq!(route.proc, a);
+    let planned = kayfabe_fwd::plan_doorbell(&gpu.procs[&a], &route, &[]).expect("A plans a ring");
+    let reply = || {
+        Some(kayfabe_isolate::VerbReply::Doorbell {
+            host_vas: None,
+            channel: None,
+            scheduled: false,
+        })
+    };
+
+    let Gpu { spine, procs, .. } = &mut gpu;
+    let refusal = kayfabe_fwd::commit_doorbell(
+        spine,
+        procs.get_mut(&b).expect("proc B is live"),
+        &planned.plan,
+        reply(),
+    )
+    .expect_err("A's ring must not commit into B");
+    assert_eq!(
+        refusal.fault,
+        FwdFault::Stale(Stale::Proc(a)),
+        "a ring committed against the wrong proc is STALENESS naming the plan's proc \
+         — NOT the route miss a narrowed guard would fall through to"
+    );
+
+    let proc_a = procs.get_mut(&a).expect("live");
+    proc_a.retire();
+    let refusal = kayfabe_fwd::commit_doorbell(spine, proc_a, &planned.plan, reply())
+        .expect_err("a retired proc's ring must refuse");
+    assert_eq!(refusal.fault, FwdFault::Stale(Stale::Proc(a)));
+}
+
+/// ★ R5's disposition rule on the **single-threaded** composition too: a commit that
+/// refuses releases what its execute phase already allocated, on the same worker,
+/// before checking it back in.
+///
+/// `r5_canary_channel_torn_down_in_the_gap_refuses_loudly` pins this for the threaded
+/// shell (`SharedDevice::verb_op`); `round_trip` is the other, textually separate
+/// call site, and the campaign found `lib.rs:403:16 delete !` surviving there — i.e.
+/// "release only when there is nothing to release", the exact leak the rule exists to
+/// prevent.
+///
+/// Driven through a **re-publication of a VA that is already bound**: the plan phase
+/// legitimately cannot know the bind will collide (a sibling could have unbound it),
+/// so the sysmem alloc and the host map both run first and only the commit refuses —
+/// a refusal that owns host state, reached with no threads at all.
+#[test]
+fn a_refused_commit_releases_its_orphans_on_the_single_threaded_path() {
+    let _wd = watchdog("round_trip_orphan_release", Duration::from_secs(30));
+    let (device, pids, rec) = device_with(1, DEFAULT_POOL_WORKERS, LockMode::Degenerate);
+    let pid = pids[0];
+    let mut gpu = Arc::into_inner(device).expect("not shared").into_gpu();
+    let proc = gpu.procs.get_mut(&pid).expect("live");
+
+    kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000).expect("the first publication binds");
+    assert_eq!(
+        kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000),
+        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Overlap {
+            pdb: PDB,
+            va: VA
+        })),
+        "re-publishing a bound VA is a loud overlap — never a silent rebind"
+    );
+
+    let verbs = rec.lock().expect("recorder").verbs_of(IsolateId(pid.0));
+    let allocated: Vec<_> = verbs
+        .iter()
+        .filter_map(|v| match v {
+            RmVerb::AllocSysmem { handle, .. } => Some(*handle),
+            _ => None,
+        })
+        .collect();
+    let freed: Vec<_> = verbs
+        .iter()
+        .filter_map(|v| match v {
+            RmVerb::Free { obj } => Some(*obj),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        allocated.len(),
+        2,
+        "non-vacuity: BOTH publications allocated host memory before their commits"
+    );
+    assert_eq!(
+        freed,
+        vec![allocated[1]],
+        "the refused commit released exactly the memory IT orphaned — and left the \
+         first publication's, which is live, alone"
+    );
+    assert_eq!(
+        verbs
+            .iter()
+            .filter(|v| matches!(v, RmVerb::UnmapGpuVa { .. }))
+            .count(),
+        1,
+        "…unmapped from the host VAS first (unmap before free), exactly once"
+    );
+}
+
+/// ★ A **refused** op returns its worker to the pool. The refusal path is the one
+/// that returns the worker outside the commit critical section
+/// (`SharedDevice::return_worker`), and the campaign found that whole function
+/// deletable (`device.rs:541`) with the suite still green — a pool slot leaked per
+/// refusal, which on a pool of one is a permanent wedge of that proc.
+///
+/// Driven on a pool of ONE so the leak is a hang rather than a statistic; the
+/// watchdog turns that hang into a bounded failure.
+#[test]
+fn a_refused_op_returns_its_worker_to_the_pool() {
+    let _wd = watchdog("refusal_returns_worker", Duration::from_secs(60));
+    let (device, _pids, _rec) = device_with(1, 1, LockMode::Sharded); // pool of ONE
+    device
+        .publish_backing(GPU, PDB, VA, 0x1000)
+        .expect("the first publication binds");
+    assert_eq!(
+        device.publish_backing(GPU, PDB, VA, 0x1000),
+        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Overlap {
+            pdb: PDB,
+            va: VA
+        })),
+        "the re-publication refuses in the COMMIT, i.e. with a worker checked out"
+    );
+    // If the refusal path had swallowed the worker, this blocks forever on an empty
+    // pool and the watchdog aborts.
+    device
+        .publish_backing(GPU, PDB, GpuVa(VA.0 + 0x1000), 0x1000)
+        .expect("the pool's ONLY worker is available again after the refusal");
+}
+
+/// ★ The #14 ring-gate as the **shell** exposes it: `SharedDevice::gate_working_set`
+/// must refuse a working set that is not host-published in the channel's own VAS.
+///
+/// `pushbuffer_parser.rs` pins the gate on the core function (`&Gpu`); the shell's
+/// wrapper is a separate route+lock composition, and the campaign found it replaceable
+/// with `Ok(())` — a ring gate that says "published" for everything, which is exactly
+/// the ungated cross-VAS ring #14 is about. Asserted in BOTH lock modes: the two take
+/// different lock paths to the same answer.
+#[test]
+fn the_shell_ring_gate_refuses_an_unpublished_working_set() {
+    let _wd = watchdog("shell_ring_gate", Duration::from_secs(30));
+    for mode in [LockMode::Degenerate, LockMode::Sharded] {
+        let (device, pids, _rec) = device_with(1, DEFAULT_POOL_WORKERS, mode);
+        let pid = pids[0];
+        let gpu = Arc::into_inner(device).expect("not shared").into_gpu();
+        let (_, cid) = gpu.spine.by_vchid[&(GPU, GR)];
+        let device = SharedDevice::new(gpu, mode);
+
+        let unpublished = GpuVa(VA.0 + 0x10_0000);
+        assert_eq!(
+            device.gate_working_set(pid, cid, &[unpublished]),
+            Err(FwdFault::Address(kayfabe_mmu::AddressFault::Miss {
+                pdb: PDB,
+                va: unpublished
+            })),
+            "({mode:?}) an unpublished VA in the working set is a loud MISS — the gate \
+             never answers 'published' by default"
+        );
+        // Non-vacuity: once published, the SAME query passes.
+        device
+            .publish_backing(GPU, PDB, unpublished, 0x1000)
+            .expect("publishes");
+        assert_eq!(
+            device.gate_working_set(pid, cid, &[unpublished]),
+            Ok(()),
+            "({mode:?}) and a published VA passes, so the refusal above was about \
+             publication, not about the call"
+        );
+    }
 }

@@ -9,6 +9,13 @@
 //!   into their OWN host VAS, so `gate_working_set` passes for BOTH (the #14 fix); an
 //!   unpublished VA at ring time is a loud fault (the proven EXECUTION-fault root).
 //! - A soak variant: a sustained submit/complete loop loses no completion.
+//! - **The hostile-input boundary, measured** (`core_mutation_gate.md` §L1 baseline):
+//!   `total_read_budget_clamps_a_straddling_range_to_what_is_left` puts the
+//!   `MAX_PUSH_TOTAL_BYTES` edge *inside* a GPFIFO range so the remaining-budget clamp
+//!   is observable at all, and
+//!   `sem_release_completion_identities_mix_both_operands_and_never_collide` pins that
+//!   a `SemRelease`'s completion identity mixes BOTH operands, so two guest fences can
+//!   never fold onto one queue entry. Both close campaign survivors.
 //!
 //! Invariant/contract tests (decision #15), mock-driven, GPU-free.
 
@@ -16,6 +23,7 @@
 
 use kayfabe_arch::ids::GpuId;
 use kayfabe_arch::ids::{GpuVa, HClient, Pdb, VChid};
+use kayfabe_completion::{BatchId, OsEventRef};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_fwd::{FwdFault, gate_working_set, handle_doorbell, parse_pushbuffer, publish_backing};
@@ -418,4 +426,121 @@ mod fuzz {
             }
         );
     }
+}
+
+/// ★ **boundary-1's TOTAL budget binds on the LAST range too** — the clamp is
+/// `remaining budget`, not `this range's own length`.
+///
+/// `read_pushbuffer` walks a guest-controlled GPFIFO and reads each range's method
+/// bytes. Two caps make that bounded: `MAX_PUSH_RANGE_BYTES` per range, and
+/// `MAX_PUSH_TOTAL_BYTES` across the whole ring. The per-range cap is trivially
+/// exercised by any oversized range; the TOTAL cap is only *visible* when a range
+/// straddles the budget's edge — i.e. when what is left is smaller than both the
+/// range and the per-range cap. Every other test in this file uses ranges far under
+/// budget, so the `MAX_PUSH_TOTAL_BYTES - total` term was never observed at all, and
+/// the first L1 mutation campaign duly found `lib.rs:1606:39 replace - with +`
+/// surviving: with `+`, the third clamp becomes vacuous and the straddling range is
+/// read WHOLE, past the budget the boundary exists to enforce.
+///
+/// The ring below is sized so the budget edge lands strictly INSIDE a range:
+/// 768 KiB × 10 = 7.5 MiB, leaving 512 KiB of an 8 MiB budget for range 11 — which
+/// wants 768 KiB. Content is unwritten guest RAM (reads as zero), and the mock arch
+/// decodes a zero header as a zero-argument method, so one decoded method == one
+/// 32-bit word read: the method count IS the byte count, and the assertion is exact
+/// rather than a bound.
+#[test]
+fn total_read_budget_clamps_a_straddling_range_to_what_is_left() {
+    /// Per-range length, deliberately not a divisor of the total budget.
+    const RANGE: u64 = 768 << 10;
+    /// `kayfabe-fwd`'s `MAX_PUSH_TOTAL_BYTES` (private; mirrored here so a change to
+    /// it fails this test loudly instead of silently weakening the assertion).
+    const TOTAL_BUDGET: u64 = 8 << 20;
+
+    let (gpu, mut vmm) = one_proc_gpu();
+    // 12 ranges — enough that the budget is spent before the ring is, so the "ranges
+    // past the budget are skipped" arm runs too. Each range sits in its own 4 GiB
+    // window so no two ranges can alias.
+    let mut ring = Vec::new();
+    for i in 0..12u64 {
+        ring.extend_from_slice(&(0x8000_0000 + i * 0x1_0000_0000).to_le_bytes());
+        ring.extend_from_slice(&RANGE.to_le_bytes());
+    }
+
+    let methods = kayfabe_fwd::read_pushbuffer(&gpu.spine, &mut vmm, &ring)
+        .expect("unwritten guest RAM reads as zeros, never a fault");
+
+    // 10 full ranges (7.5 MiB) + a final 512 KiB slice == exactly the budget. With the
+    // remaining-budget term removed, the 11th range contributes its whole 768 KiB and
+    // this count is 65_536 words higher.
+    assert_eq!(
+        methods.len() as u64,
+        TOTAL_BUDGET / 4,
+        "the ring's total method bytes must be clamped to EXACTLY the budget — the \
+         straddling range is cut to what is left, not read whole"
+    );
+    assert!(
+        methods.iter().all(|(h, args)| *h == 0 && args.is_empty()),
+        "sanity: every decoded method came from unwritten (zero) guest RAM"
+    );
+}
+
+/// ★ A `SemRelease`'s **completion identity mixes BOTH of its operands**, so two
+/// distinct releases can never land on one completion.
+///
+/// `apply_pushbuffer` observes `OsEventRef(addr ^ payload)`. Every existing test
+/// asserts only that *a* completion was observed (`has_outstanding`), never *which* —
+/// so the mix was free to degrade, and the first ICE-free L1 campaign found both
+/// `lib.rs:1676:59 replace ^ with |` and `… with &` surviving. Either turns the mix
+/// into a lossy fold, and a lossy fold is a completion COLLISION: two guest fences
+/// that must be distinguishable become one queue entry, which is a lost completion —
+/// the F2 species, arriving through the untrusted pushbuffer.
+///
+/// The three releases below are chosen so the property is about collisions, not about
+/// a magic constant: under `|` the first two fold to the same value, under `&` the
+/// first and third do, and under `^` all three are distinct. The exact values are
+/// asserted too, so a *different* lossy mix cannot pass by accident.
+#[test]
+fn sem_release_completion_identities_mix_both_operands_and_never_collide() {
+    // (addr, payload) triples: ^ ⇒ {0x1000, 0x1100, 0x0000}, all distinct;
+    //                          | ⇒ {0x1100, 0x1100, …}  — first two COLLIDE;
+    //                          & ⇒ {0x0100, 0x0000, 0x0100} — first and third COLLIDE.
+    const RELEASES: [(u64, u64); 3] = [(0x1100, 0x0100), (0x1000, 0x0100), (0x0100, 0x0100)];
+
+    let (mut gpu, mut vmm) = one_proc_gpu();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).expect("routed");
+    let cid = *gpu.procs[&pid]
+        .chan_ids
+        .values()
+        .next()
+        .expect("the scenario's channel");
+    let methods: Vec<(u32, Vec<u32>)> = RELEASES
+        .iter()
+        .map(|&(addr, payload)| MockPushbuffer::sem_release(addr, payload))
+        .collect();
+    let ring = script_pushbuffer(&mut vmm, 0x4_0000_0000, &methods);
+    let out =
+        parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("the scripted ring parses");
+    assert_eq!(out.sem_releases.len(), 3, "all three releases were decoded");
+
+    let observed = gpu
+        .procs
+        .get_mut(&pid)
+        .expect("live")
+        .completion
+        .compose_into(BatchId(1));
+    let expected: Vec<OsEventRef> = RELEASES
+        .iter()
+        .map(|&(addr, payload)| OsEventRef(addr ^ payload))
+        .collect();
+    assert_eq!(
+        observed, expected,
+        "each release's completion identity mixes addr AND payload, in order"
+    );
+    let distinct: std::collections::BTreeSet<_> = observed.iter().collect();
+    assert_eq!(
+        distinct.len(),
+        3,
+        "…and three distinct releases stay three distinct completions — a lossy \
+         fold collides them and loses one"
+    );
 }

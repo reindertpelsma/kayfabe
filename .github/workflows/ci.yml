@@ -31,7 +31,11 @@
 #   the §8.2 race ceiling (l1_concurrency.md §12.15 records the first run: 28
 #   tests, 0 races).
 # - mutants (weekly + dispatch): cargo-mutants over the L1 surface — the
-#   core_mutation_gate.md standing gate.
+#   core_mutation_gate.md standing gate. Runs with KAYFABE_SLOW=1 (the gated
+#   pushbuffer fuzz is the only coverage of the hostile-input decoder, and gating
+#   it hollowed out a security gate), CARGO_INCREMENTAL=0 (incremental ICEs get
+#   mis-scored as "unviable" and inflate the number), and a HARD threshold read
+#   off the measured baseline — see the job's own comments for each.
 
 name: CI
 
@@ -61,7 +65,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --workspace
-      - name: Test (the 151-test suite + doctests)
+      # (Deliberately not naming a test count here — it rots on every PR.)
+      - name: Test (the fast suite + doctests)
         run: cargo test --workspace
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -167,11 +172,36 @@ jobs:
     # Weekly cron + manual dispatch — a mutation campaign is hours, not minutes.
     if: github.event.schedule == '43 4 * * 6' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # TODO(threshold): continue-on-error until the first L1 campaign (running
-    # now) lands a measured baseline in core_mutation_gate.md — then replace this
-    # with a hard `--minimum-test-timeout`-style pass bar set FROM that number,
-    # not pulled from the air. The L0 core's bar is 99.2% (245/247).
-    continue-on-error: true
+    # No `continue-on-error`: the threshold below IS the gate (see
+    # core_mutation_gate.md §L1 baseline for the measurement it is derived from).
+    timeout-minutes: 600
+    env:
+      # ★ KAYFABE_SLOW=1 — a slow-test gate silently weakened a SECURITY gate.
+      #
+      # This job used to run with KAYFABE_SLOW unset "because the fast path is what
+      # makes mutants × suite tractable". Measured consequence: the 73 s pushbuffer
+      # proptest fuzz is the ONLY coverage of the untrusted, guest-controlled
+      # pushbuffer decoder, and skipping it let decoder mutants survive that the
+      # fuzz kills (verified on the decoder scope: 2 missed → 1 with the flag set).
+      # So the flag that was introduced to keep the *push* gate fast had, as a side
+      # effect, hollowed out the mutation gate exactly where the input is hostile.
+      # Cost, honestly: the two gated soaks add ~90 s per mutant, roughly doubling
+      # this job's wall clock. It is a weekly cron; correctness of the gate wins.
+      KAYFABE_SLOW: '1'
+      # ★ CARGO_INCREMENTAL=0 — incremental compilation ICEs inside the mutants
+      # temp tree, and cargo-mutants scores a build failure as "unviable".
+      #
+      # cargo-mutants rewrites one source file per mutant inside a copied tree that
+      # reuses one `target/` (and therefore one incremental dep-graph cache). That
+      # cache does not survive the churn: rustc aborts with
+      # `on_disk_cache.rs: assertion left == right failed`. cargo-mutants cannot
+      # tell a compiler crash from a type error, so every ICE'd mutant is filed
+      # "unviable" and DROPPED FROM THE DENOMINATOR — silently inflating the score.
+      # Measured on the first L1 campaign: 136 of 293 mutant builds ICE'd, and
+      # `SourceRegistry::is_empty -> true` was reported unviable while the sibling
+      # `-> false` was caught. Turning incremental off removed every ICE.
+      # NEVER remove this without re-checking the ICE guard step below.
+      CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -185,9 +215,10 @@ jobs:
       # (core_mutation_gate.md §Reproduce), except the baseline is NOT skipped:
       # in CI nothing has pre-verified the tree is green, and a broken baseline
       # must fail the campaign rather than poison every mutant's result.
-      # KAYFABE_SLOW stays unset: each mutant re-runs the whole suite, and the
-      # fast path is what makes mutants × suite tractable — the two gated slow
-      # tests would add ~90 s/mutant for marginal kill-power.
+      #
+      # `cargo mutants` exits non-zero if ANY mutant survives, which is not the
+      # bar this gate holds (see the scoring step) — hence `|| true` here and a
+      # threshold check on the recorded outcome files afterwards.
       - name: cargo mutants over the L1 surface
         run: |
           cargo mutants --test-workspace true -j 2 \
@@ -195,4 +226,49 @@ jobs:
             -f 'crates/kayfabe-rt/**/*.rs' \
             -f 'crates/kayfabe-core/src/reactor.rs' \
             -f 'crates/kayfabe-fwd/src/lib.rs' \
-            -f 'crates/kayfabe-isolate/src/lib.rs'
+            -f 'crates/kayfabe-isolate/src/lib.rs' || true
+      # ★ The anti-inflation guard. "Unviable" is supposed to mean "the mutant does
+      # not typecheck" (a tool artifact). If it ever again means "rustc crashed",
+      # the denominator is fiction and so is the score — so a single ICE in any
+      # mutant's build log fails the job outright, BEFORE the threshold is read.
+      - name: Guard — no compiler ICE may be scored as "unviable"
+        run: |
+          if grep -rlq "thread 'rustc'" mutants.out/log/; then
+            echo "★ A mutant build ICE'd. cargo-mutants files that as 'unviable',"
+            echo "which removes the mutant from the denominator and INFLATES the"
+            echo "score. Do not trust this campaign's number. Offending logs:"
+            grep -rl "thread 'rustc'" mutants.out/log/ | head -20
+            exit 1
+          fi
+      # ★ The threshold, derived from the measured L1 baseline — not aspirational.
+      # score = (caught + timeout) / (caught + timeout + missed); `unviable` is
+      # excluded because it is a tool artifact, exactly as in the L0 table.
+      # See core_mutation_gate.md §L1 baseline for why the bar sits here and not
+      # at L0's 99.2%: this surface is measured, and a gate set above reality is
+      # theatre that gets muted after the first red night.
+      - name: Score the campaign against the measured L1 threshold
+        run: |
+          THRESHOLD=${MUTATION_THRESHOLD_PCT}
+          n() { if [ -f "mutants.out/$1.txt" ]; then wc -l < "mutants.out/$1.txt"; else echo 0; fi; }
+          caught=$(n caught); missed=$(n missed); to=$(n timeout); unviable=$(n unviable)
+          killed=$((caught + to)); viable=$((killed + missed))
+          if [ "$viable" -eq 0 ]; then
+            echo "★ Zero viable mutants — the campaign tested nothing. Failing."
+            echo "(The usual cause is a lost --test-workspace: kayfabe-fwd and"
+            echo " kayfabe-rt have no unit tests of their own, so without it the"
+            echo " harness runs an empty suite and reports everything MISSED.)"
+            exit 1
+          fi
+          score=$((killed * 1000 / viable))
+          echo "caught=$caught timeout=$to missed=$missed unviable=$unviable"
+          echo "score = $killed/$viable = $((score / 10)).$((score % 10))% (bar: ${THRESHOLD}.0%)"
+          if [ "$score" -lt $((THRESHOLD * 10)) ]; then
+            echo "★ MUTATION SCORE REGRESSION — below the measured L1 baseline."
+            echo "Survivors:"; cat mutants.out/missed.txt
+            exit 1
+          fi
+        env:
+          # The bar. Raise it when a campaign measures higher and the new number
+          # holds across a run; never lower it to make a red night go away —
+          # a survivor is a test gap, and this file is where that gets argued.
+          MUTATION_THRESHOLD_PCT: '91'

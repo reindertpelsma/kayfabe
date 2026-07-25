@@ -432,6 +432,10 @@ mod tests {
     const GPU1: GpuId = GpuId(1);
     const PA: ProcId = ProcId(1);
     const PB: ProcId = ProcId(2);
+    /// A third proc, so a cross-isolate seam can exist that names NEITHER of the two
+    /// procs a retire test retires (the bystander that makes `belongs_to`'s two
+    /// sub-terms separable).
+    const PC: ProcId = ProcId(3);
 
     /// ★ Handles are minted from a monotonic counter and **never reused**, so a
     /// handle outliving its registration can never alias a fresh source: the
@@ -544,6 +548,66 @@ mod tests {
         );
     }
 
+    /// ★ [`SourceKind::owner`] names the ONE end a signal *routes to*, and
+    /// [`SourceKind::Notify`] owns nothing — the two halves of "never a
+    /// default-to-proc-0 guess".
+    ///
+    /// Pinned as its own test because `owner` is a **projection, not a predicate**:
+    /// nothing else in the port asserts it end to end (`deregister_proc` goes through
+    /// [`SourceKind::belongs_to`], which is deliberately a *different* function — see
+    /// its doc). A `owner() -> None` regression is therefore invisible to every other
+    /// test in this module, which is exactly the shape the first L1 mutation campaign
+    /// found surviving (`core_mutation_gate.md` §L1 baseline, mutant
+    /// `reactor.rs:153:9 replace SourceKind::owner -> Option<ProcId> with None`).
+    ///
+    /// The cross-isolate arm is asserted **asymmetrically on purpose**: a seam routes
+    /// to its `from` end, so `owner` must be `Some(from)` and never `Some(to)` — the
+    /// two are distinct procs here so a field shuffle cannot pass.
+    #[test]
+    fn owner_names_the_routing_end_and_notify_owns_no_proc() {
+        assert_eq!(
+            SourceKind::OsEvent {
+                proc: PA,
+                gpu: GPU1,
+                ev: OsEventRef(0x21),
+            }
+            .owner(),
+            Some(PA),
+            "an os-event routes to the proc it was armed for"
+        );
+        assert_eq!(
+            SourceKind::Worker {
+                proc: PB,
+                gpu: GPU0,
+                worker: WorkerId(2),
+            }
+            .owner(),
+            Some(PB),
+            "a worker HUP routes to the proc whose isolate lost it"
+        );
+        assert_eq!(
+            SourceKind::CrossIsolate { from: PA, to: PB }.owner(),
+            Some(PA),
+            "a seam routes to its ORIGIN end (never `to`, never a guess)"
+        );
+        assert_eq!(
+            SourceKind::Notify.owner(),
+            None,
+            "the notifiable source is device-global: it must never name a proc"
+        );
+
+        // ★ And `owner` is NOT `belongs_to` in disguise: the seam belongs to BOTH
+        // ends (retiring either makes it unroutable) but is OWNED by exactly one.
+        // Collapsing the two would reintroduce the half-registered dangling seam.
+        let seam = SourceKind::CrossIsolate { from: PA, to: PB };
+        assert!(seam.belongs_to(PB), "retiring `to` must clear the seam");
+        assert_ne!(
+            seam.owner(),
+            Some(PB),
+            "…but the seam does not ROUTE to `to`; owner and belongs_to must not merge"
+        );
+    }
+
     /// MISS = FAULT: never-registered and already-deregistered handles both fault,
     /// and the fault names the offending handle — never a guess, never a silent
     /// success, never a fallback onto proc 0 / `GpuId::ZERO`.
@@ -599,6 +663,14 @@ mod tests {
     /// holding sources with the SAME numeric worker/event ids on the other GPU is
     /// untouched — the routing key is the whole `(proc, gpu, …)` tuple, never a
     /// numeric coincidence.
+    ///
+    /// ★ Seams are registered in **both directions** and a third proc's seam is
+    /// present as a bystander. That is not decoration: with only a `from: PB, to: PA`
+    /// seam, a `belongs_to` that checked *only* the `to` end still passed every
+    /// assertion here, and the first L1 mutation campaign duly found
+    /// `reactor.rs:169:59 replace == with !=` (the `from == proc` half) surviving.
+    /// One seam per direction plus a spared one pins all three sub-terms of
+    /// `from == proc || to == proc` independently.
     #[test]
     fn deregister_proc_spans_all_gpus_and_spares_other_procs() {
         let mut reg = SourceRegistry::new();
@@ -641,28 +713,53 @@ mod tests {
             gpu: GPU1,
             worker: WorkerId(2),
         });
-        // The seam: BOTH ends must go when EITHER end retires.
-        let seam = reg_of(SourceKind::CrossIsolate { from: PB, to: PA });
+        // The seams: BOTH ends must go when EITHER end retires, so PA appears once as
+        // a seam's `to` and once as a seam's `from`. Each pins ITS sub-term of
+        // `from == proc || to == proc`; neither alone does.
+        let seam_to_a = reg_of(SourceKind::CrossIsolate { from: PB, to: PA });
+        let seam_from_a = reg_of(SourceKind::CrossIsolate { from: PA, to: PC });
+        // A seam between two OTHER procs: retiring PA must not touch it. Without this,
+        // a `belongs_to` that answered `true` for every seam would still pass.
+        let seam_bc = reg_of(SourceKind::CrossIsolate { from: PB, to: PC });
         // And a device-global source that belongs to no proc.
         let notify = reg_of(SourceKind::Notify);
 
-        assert_eq!(reg.len(), 8);
+        assert_eq!(reg.len(), 10);
         reg.deregister_proc(PA).latched();
 
-        for gone in [a0, a1, aw1, seam] {
+        for gone in [a0, a1, aw1, seam_to_a, seam_from_a] {
             assert_eq!(
                 reg.dispatch(gone),
                 Err(SourceFault { source: gone }),
-                "{gone:?} belonged to the retired proc (or its seam)"
+                "{gone:?} belonged to the retired proc (or its seam, at EITHER end)"
             );
         }
-        for kept in [b0, b1, bw1, notify] {
+        for kept in [b0, b1, bw1, seam_bc, notify] {
             assert!(
                 reg.dispatch(kept).is_ok(),
                 "{kept:?} belongs to another proc / to the device"
             );
         }
-        assert_eq!(reg.len(), 4);
+        assert_eq!(reg.len(), 5);
+        assert!(
+            !reg.is_empty(),
+            "a partial retire empties nothing — `is_empty` tracks the SET, not the op"
+        );
+        // ★ The survivors are enumerable, and `iter` yields exactly the set `len`
+        // counts. Asserted positively (a count AND the content) because every other
+        // `iter` assertion in this module is an `all(…)` predicate, which an empty
+        // iterator satisfies vacuously.
+        let survivors: Vec<SourceKind> = reg.iter().map(|(_, k)| k).collect();
+        assert_eq!(
+            survivors.len(),
+            reg.len(),
+            "`iter` must enumerate the whole set, never a truncated view"
+        );
+        assert!(
+            survivors.contains(&SourceKind::Notify)
+                && survivors.contains(&SourceKind::CrossIsolate { from: PB, to: PC }),
+            "the spared sources are still THERE, not merely un-dispatched: {survivors:?}"
+        );
         // Nothing in the survivors names the retired proc.
         assert!(
             reg.iter().all(|(_, k)| !k.belongs_to(PA)),
@@ -670,7 +767,7 @@ mod tests {
         );
         // Retiring a proc with no sources left is legal and idempotent.
         reg.deregister_proc(PA).latched();
-        assert_eq!(reg.len(), 4);
+        assert_eq!(reg.len(), 5);
     }
 
     /// Protocol-not-order (decision #27): the registry's OBSERVABLE routing is a
