@@ -1,9 +1,15 @@
 # CI green-gate (decision #33; the standing decision #15 follow-up).
 #
-# Two jobs, matching how the repo is actually built:
+# Three jobs, matching how the repo is actually built:
 # - stable: the main workspace — build, the full 143-test suite, clippy
 #   -D warnings, and rustfmt --check (both workspaces; the fuzz crate is its own
 #   workspace so it needs its own fmt pass).
+# - aarch64: cross-`cargo check` the whole workspace for arm64 (decision #36).
+#   The pure logic core must carry NO x86/CPU-arch assumption, so arm64 (later:
+#   Grace-Hopper / Jetson) can be added as an adapter, never a core bolt-on.
+#   `cargo check` type-checks without linking, so no cross-toolchain/QEMU is
+#   needed — an x86-ism that ever creeps into the core fails THIS gate on the push
+#   that introduces it. See docs/design/portability_arm64.md.
 # - nightly: the fuzz crate (libfuzzer needs nightly) — a plain `cargo build` in
 #   fuzz/ so the one raw-guest-bytes harness KEEPS COMPILING as the core evolves
 #   (it is a separate workspace, so nothing else rebuilds it). Actually *running*
@@ -44,6 +50,18 @@ jobs:
       - name: Format check (fuzz workspace)
         run: cargo fmt --all --check
         working-directory: fuzz
+
+  aarch64:
+    name: aarch64 — core cross-checks (no x86 assumptions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+      - name: Cross-check the workspace for aarch64 (arch-portability gate; no linker needed)
+        run: cargo check --workspace --target aarch64-unknown-linux-gnu
 
   nightly-fuzz:
     name: nightly — fuzz harness compiles
