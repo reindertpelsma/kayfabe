@@ -1259,3 +1259,66 @@ verb-output-to-verb-input; every core-derived value (engine kind, class, params,
 the already-materialized handles) is known at plan time. The chain executes with zero
 core access, which is what makes the seam a short typed struct rather than a
 continuation machine.
+
+### 12.13 ★★ THE MEAN TEST'S FINDING — an out-of-band retire is undone by the next refresh
+
+**Stage 4's mean test (§8.4) found the design's "no resurrect" promise is not
+implemented.** §7.3 says worker death out of band ends in "retire the proc loudly …
+either way MISS=FAULT posture, **no resurrect**", and the `SignalOutcome::WorkerDied`
+contract says the slot is "permanently dead (**never a respawn** — a worker that died
+mid-verb may have left host state the core cannot reason about)". Both hold for
+exactly as long as nothing else happens.
+
+`Spine::retire_proc` removes the proc from the live set and pushes it to `retired`. But
+the *guest* has not freed anything — its client root is still in the RmGraph — so the
+**next `Gpu::apply` of any event, from any client**, runs `refresh`, which matches
+boundaries to live procs by client intersection, finds no match for that component, and
+takes the `None` arm: a fresh `ProcId` from the monotonic mint, a fresh `Proc`, a
+**newly spawned isolate** (new sandbox, new handle namespace — the respawn §7.3
+forbids), a fresh GPA arena, and `by_pdb`/`by_vchid` rebuilt onto it. Measured, not
+argued: after a HUP the guest's very next publish and doorbell both succeed, on host
+handles minted in a brand-new isolate lane. Only the dead *worker slot* stayed dead;
+the isolate came back around it.
+
+Two consequences worth stating separately:
+
+- **Security/robustness.** A guest that can crash its isolate worker gets a clean new
+  isolate on its next RM event. The hazard §7.3 names — host state the core cannot
+  reason about, left behind by a worker that died mid-verb — is precisely what gets
+  papered over, and the "loud retire" the design counts on lasts microseconds.
+- **Why the existing suite missed it.** `l1_verb_seam.rs`'s
+  `worker_death_retires_the_proc_loudly_and_never_resurrects` is green because it never
+  issues an `apply` after the HUP. The composed run found it because §8.4's script puts
+  a worker HUP and an alloc/map-heavy `apply` workload *in the same run* — which is the
+  argument for composing the mean scripts instead of isolating them, in one example.
+
+**Not fixed here, deliberately: the fix is a design change.** Making the retire stick
+needs (a) a *condemned-component* state carried through the projection→proc derivation,
+so an out-of-band-retired boundary stays dead until the guest itself frees its client
+root, and (b) a decision about what an op against a condemned component returns —
+`RetiredProc(ProcId)` no longer works, because there is no `Proc` left to name. That is
+the same design question §12.11 raised from the other side ("whether a host-side
+failure should retroactively edit the guest's routing truth"), now with teeth: §12.11
+is about routing *pointing at* a dead proc; this is about the dead proc *coming back*.
+
+Pinned in two places, on purpose: `l1_mean.rs`'s
+`out_of_band_retire_must_not_resurrect_the_isolate` asserts the DESIGN'S invariant and
+is `#[ignore]`d with the defect named (the assert is right; the code is wrong), and the
+mean run's conservation sweep asserts TODAY'S behavior loudly, so whoever fixes this
+trips both and has to move the doc with them.
+
+### 12.14 Two smaller contacts from stage 4
+
+- **A held latch must be released on unwind, or a failed mean assert reads as a hang.**
+  The first composed run panicked inside the window; the panic was real and correct, but
+  the scoped threads parked in the mock backend were never released, so `thread::scope`'s
+  join-all waited forever and the failure *presented* as a wedge with its message
+  swallowed. The latches are now a drop guard (`Latches`), so an unwind releases every
+  one of them first. This is the same species as §12.9's lesson — "note the *shape* of
+  that failure: the first symptom of getting this wrong was a hang, not an assertion" —
+  and it applies to the harness as much as to the design.
+- **The progress-under-pending assertion has teeth, verified by falsification.**
+  Shrinking the isolate pool to one worker (decision #34's original shape) makes the mean
+  test SIGABRT on its watchdog instead of passing slowly, and removing any one of the
+  three staleness mutations makes its canary fail. Both were run. The assertion is
+  structural, so neither result depends on how fast the box is.
