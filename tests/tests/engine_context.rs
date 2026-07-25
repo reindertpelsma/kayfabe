@@ -9,18 +9,20 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use nvkvm_arch::Arch;
 use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{ClassId, EngineKind, GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_arch::Arch;
 use nvkvm_completion::{CompletionError, MAX_FENCE_JUMP, OsEventRef};
-use nvkvm_core::gpu::Gpu;
 use nvkvm_core::gpa::GpaSpace;
+use nvkvm_core::gpu::Gpu;
 use nvkvm_core::rmgraph::{AllocFacts, RmEvent};
 use nvkvm_fwd::{
     CompletionArm, ControlRoute, FwdFault, arm_fence, completion_arm, fence_observed,
     forward_engine_object, handle_doorbell, publish_backing, route_control,
 };
-use nvkvm_mocks::{MockArch, MockIsolateFactory, RmVerb, SharedRecorder, mock_classes as mc, mock_ctrl};
+use nvkvm_mocks::{
+    MockArch, MockIsolateFactory, RmVerb, SharedRecorder, mock_classes as mc, mock_ctrl,
+};
 use nvkvm_tests::{Scenario, identical_handles};
 
 const CLIENT: HClient = HClient(0xAA);
@@ -46,12 +48,26 @@ fn compute_gpu() -> (Gpu, SharedRecorder) {
 #[test]
 fn engine_of_object_classifies_all_kinds() {
     let arch = MockArch::new();
-    assert_eq!(arch.engine_of_object(mc::COMPUTE), Some(EngineKind::GrCompute));
-    assert_eq!(arch.engine_of_object(mc::GRAPHICS), Some(EngineKind::GrGraphics));
+    assert_eq!(
+        arch.engine_of_object(mc::COMPUTE),
+        Some(EngineKind::GrCompute)
+    );
+    assert_eq!(
+        arch.engine_of_object(mc::GRAPHICS),
+        Some(EngineKind::GrGraphics)
+    );
     assert_eq!(arch.engine_of_object(mc::DMA_COPY), Some(EngineKind::Ce));
     assert_eq!(arch.engine_of_object(mc::NVENC), Some(EngineKind::NvEnc));
-    assert_eq!(arch.engine_of_object(mc::MEMORY), None, "memory is not an engine object");
-    assert_eq!(arch.engine_of_object(ClassId(0xdead)), None, "unknown class → None, no guess");
+    assert_eq!(
+        arch.engine_of_object(mc::MEMORY),
+        None,
+        "memory is not an engine object"
+    );
+    assert_eq!(
+        arch.engine_of_object(ClassId(0xdead)),
+        None,
+        "unknown class → None, no guess"
+    );
 }
 
 /// Case-1 forward: the engine-object alloc materializes the host channel and allocs
@@ -63,7 +79,10 @@ fn case1_forwards_engine_object_on_own_isolate() {
     let out = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[])
         .expect("GR compute object forwards");
     assert_eq!(out.engine, EngineKind::GrCompute);
-    assert!(out.materialized_channel, "first forward materializes the host channel");
+    assert!(
+        out.materialized_channel,
+        "first forward materializes the host channel"
+    );
 
     // The host saw: a channel alloc THEN an engine-object alloc on that channel, both
     // on ONE isolate (the owning proc's).
@@ -78,9 +97,15 @@ fn case1_forwards_engine_object_on_own_isolate() {
         _ => None,
     });
     let (obj_iso, obj_chan, obj_class) = obj.expect("engine object allocated");
-    assert_eq!(obj_chan, chan_h, "engine object allocated ON the host channel");
+    assert_eq!(
+        obj_chan, chan_h,
+        "engine object allocated ON the host channel"
+    );
     assert_eq!(obj_class, mc::COMPUTE);
-    assert_eq!(obj_iso, chan_iso, "channel + object forwarded on the SAME isolate");
+    assert_eq!(
+        obj_iso, chan_iso,
+        "channel + object forwarded on the SAME isolate"
+    );
 }
 
 /// A second forward on the same channel does not re-materialize it (idempotent
@@ -91,7 +116,10 @@ fn case1_second_forward_reuses_channel() {
     let first = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
     assert!(first.materialized_channel);
     let second = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
-    assert!(!second.materialized_channel, "host channel already materialized");
+    assert!(
+        !second.materialized_channel,
+        "host channel already materialized"
+    );
 }
 
 /// ★ Engine-object forward idempotency (§2.2: "re-sends are idempotent"): a REPLAYED
@@ -107,9 +135,13 @@ fn replayed_engine_object_alloc_forwards_exactly_one_host_object() {
     let first = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
     assert!(!first.reused, "first forward is the real alloc");
     for _ in 0..3 {
-        let replay = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
+        let replay =
+            forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
         assert!(replay.reused, "replay resolves from the idempotency table");
-        assert_eq!(replay.host_object, first.host_object, "the ORIGINAL host object");
+        assert_eq!(
+            replay.host_object, first.host_object,
+            "the ORIGINAL host object"
+        );
         assert_eq!(replay.engine, EngineKind::GrCompute);
     }
 
@@ -120,7 +152,10 @@ fn replayed_engine_object_alloc_forwards_exactly_one_host_object() {
         .iter()
         .filter(|(_, v)| matches!(v, RmVerb::AllocEngineObject { .. }))
         .count();
-    assert_eq!(engine_allocs, 1, "a replayed alloc must NOT create a duplicate host object");
+    assert_eq!(
+        engine_allocs, 1,
+        "a replayed alloc must NOT create a duplicate host object"
+    );
 
     // A DIFFERENT class on the same channel is a genuinely new object, not a replay.
     drop(log);
@@ -156,21 +191,38 @@ fn engine_kind_lands_on_the_channel_via_the_graph() {
         facts: AllocFacts::default(),
     };
     gpu.apply(nvenc_alloc).expect("engine-object alloc applies");
-    assert_eq!(kind_of(&gpu, GR_VCHID), EngineKind::NvEnc, "engine object refined the channel");
-    assert_eq!(kind_of(&gpu, CE_VCHID), EngineKind::Ce, "the other channel is untouched");
+    assert_eq!(
+        kind_of(&gpu, GR_VCHID),
+        EngineKind::NvEnc,
+        "engine object refined the channel"
+    );
+    assert_eq!(
+        kind_of(&gpu, CE_VCHID),
+        EngineKind::Ce,
+        "the other channel is untouched"
+    );
 
     // Replay tolerance: the identical alloc re-sent changes nothing.
-    gpu.apply(nvenc_alloc).expect("replayed alloc is idempotent");
+    gpu.apply(nvenc_alloc)
+        .expect("replayed alloc is idempotent");
     assert_eq!(kind_of(&gpu, GR_VCHID), EngineKind::NvEnc);
 
     // The refinement is graph-derived, so it SURVIVES unrelated re-derivations
     // (any later apply re-syncs channels from the projection).
     let mut s2 = Scenario::new();
-    s2.compute_process(HClient(0xBB), Pdb(0x3405_000), identical_handles(0x20, 0x21));
+    s2.compute_process(
+        HClient(0xBB),
+        Pdb(0x3405_000),
+        identical_handles(0x20, 0x21),
+    );
     for ev in s2.events {
         gpu.apply(ev).expect("second proc applies");
     }
-    assert_eq!(kind_of(&gpu, GR_VCHID), EngineKind::NvEnc, "refinement survives re-derivation");
+    assert_eq!(
+        kind_of(&gpu, GR_VCHID),
+        EngineKind::NvEnc,
+        "refinement survives re-derivation"
+    );
 }
 
 /// Case-2 controls are ACK-ONLY: never reach the host backend (replaying an
@@ -185,30 +237,55 @@ fn case2_controls_are_ack_only_never_forwarded() {
     let mut payload = [0u8; 8];
 
     // Case-2: PROMOTE_CTX — ack-only, no host op.
-    let route = route_control(&mut gpu, GpuId::ZERO, pid, out.host_object, mock_ctrl::PROMOTE_CTX, &mut payload)
-        .expect("promote_ctx routes");
+    let route = route_control(
+        &mut gpu,
+        GpuId::ZERO,
+        pid,
+        out.host_object,
+        mock_ctrl::PROMOTE_CTX,
+        &mut payload,
+    )
+    .expect("promote_ctx routes");
     assert_eq!(route, ControlRoute::AckOnly);
     // Case-2: GET_CTX_BUFFER_INFO — ack-only.
-    let route = route_control(&mut gpu, GpuId::ZERO, pid, out.host_object, mock_ctrl::GET_CTX_BUFFER_INFO, &mut payload)
-        .expect("get_ctx_buffer_info routes");
+    let route = route_control(
+        &mut gpu,
+        GpuId::ZERO,
+        pid,
+        out.host_object,
+        mock_ctrl::GET_CTX_BUFFER_INFO,
+        &mut payload,
+    )
+    .expect("get_ctx_buffer_info routes");
     assert_eq!(route, ControlRoute::AckOnly);
 
     // No Control verb reached the backend for the two Case-2 controls.
     {
         let log = recorder.lock().unwrap();
         assert!(
-            !log.log.iter().any(|(_, v)| matches!(v, RmVerb::Control { .. })),
+            !log.log
+                .iter()
+                .any(|(_, v)| matches!(v, RmVerb::Control { .. })),
             "Case-2 controls must NEVER reach the host backend"
         );
     }
 
     // Case-1: a forwardable control DOES reach the host.
-    let route = route_control(&mut gpu, GpuId::ZERO, pid, out.host_object, mock_ctrl::FORWARDABLE, &mut payload)
-        .expect("forwardable control routes");
+    let route = route_control(
+        &mut gpu,
+        GpuId::ZERO,
+        pid,
+        out.host_object,
+        mock_ctrl::FORWARDABLE,
+        &mut payload,
+    )
+    .expect("forwardable control routes");
     assert_eq!(route, ControlRoute::Forwarded);
     let log = recorder.lock().unwrap();
     assert!(
-        log.log.iter().any(|(_, v)| matches!(v, RmVerb::Control { cmd, .. } if *cmd == mock_ctrl::FORWARDABLE)),
+        log.log.iter().any(
+            |(_, v)| matches!(v, RmVerb::Control { cmd, .. } if *cmd == mock_ctrl::FORWARDABLE)
+        ),
         "a Case-1 control forwards to the host"
     );
 }
@@ -263,8 +340,13 @@ fn host_verb_surface_does_not_grow_per_engine() {
             .unwrap_or_else(|_| panic!("{kind:?} forwards"));
         assert_eq!(out.engine, kind);
 
-        let used: std::collections::BTreeSet<&'static str> =
-            recorder.lock().unwrap().log.iter().map(|(_, v)| verb_kind(v)).collect();
+        let used: std::collections::BTreeSet<&'static str> = recorder
+            .lock()
+            .unwrap()
+            .log
+            .iter()
+            .map(|(_, v)| verb_kind(v))
+            .collect();
         match &reference {
             None => reference = Some(used),
             Some(r) => assert_eq!(
@@ -275,8 +357,14 @@ fn host_verb_surface_does_not_grow_per_engine() {
     }
     // And the verb set is exactly the intent verbs, including the one engine verb.
     let r = reference.unwrap();
-    assert!(r.contains("AllocEngineObject"), "every engine forwards via the one engine verb");
-    assert!(!r.contains("Alloc"), "no engine falls back to a generic raw alloc");
+    assert!(
+        r.contains("AllocEngineObject"),
+        "every engine forwards via the one engine verb"
+    );
+    assert!(
+        !r.contains("Alloc"),
+        "no engine falls back to a generic raw alloc"
+    );
 }
 
 /// ★ GR-1 — the C's `dma_copy_class_alloc_params` wrong-runlist class, pinned at the
@@ -363,8 +451,14 @@ fn nvenc_gpu() -> (Gpu, nvkvm_core::ProcId, nvkvm_core::ChanId) {
     .expect("NVENC session allocs on the channel");
     let (pid, cid) = gpu.by_vchid[&(GpuId::ZERO, GR_VCHID)];
     assert_eq!(gpu.procs[&pid].channels[&cid].engine, EngineKind::NvEnc);
-    publish_backing(gpu.procs.get_mut(&pid).unwrap(), GpuId::ZERO, PDB, FENCE_VA, 0x1000)
-        .expect("fence page publishes into the channel's own host VAS");
+    publish_backing(
+        gpu.procs.get_mut(&pid).unwrap(),
+        GpuId::ZERO,
+        PDB,
+        FENCE_VA,
+        0x1000,
+    )
+    .expect("fence page publishes into the channel's own host VAS");
     (gpu, pid, cid)
 }
 
@@ -378,19 +472,35 @@ fn nvenc_mapped_fence_arms_and_fires_distinct_from_event_delivery() {
     let (mut gpu, pid, cid) = nvenc_gpu();
 
     // Arm at current=7, target=9 (the encoder will advance the fence to 9).
-    assert_eq!(arm_fence(&mut gpu, pid, cid, FENCE_VA, 7, 9, OsEventRef(0xF0)), Ok(None));
+    assert_eq!(
+        arm_fence(&mut gpu, pid, cid, FENCE_VA, 7, 9, OsEventRef(0xF0)),
+        Ok(None)
+    );
 
     // Below target: not fired. At target: fired, exactly once.
-    assert_eq!(fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 8), Ok(None));
-    assert_eq!(fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 9), Ok(Some(OsEventRef(0xF0))));
-    assert_eq!(fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 10), Ok(None), "fired exactly once");
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 8),
+        Ok(None)
+    );
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 9),
+        Ok(Some(OsEventRef(0xF0)))
+    );
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 10),
+        Ok(None),
+        "fired exactly once"
+    );
 
     // Distinct from the event path: the queue observed NOTHING, nothing to post.
     assert!(
         !gpu.procs[&pid].completion.has_outstanding(),
         "a fired fence never enters the completion queue (fence-not-event)"
     );
-    assert!(gpu.pump_completions(GpuId::ZERO).is_none(), "nothing rides the GSP/SWGEN0 path");
+    assert!(
+        gpu.pump_completions(GpuId::ZERO).is_none(),
+        "nothing rides the GSP/SWGEN0 path"
+    );
 }
 
 /// The #12 wrap guard on the arm: a fence sequence crossing the u32 boundary fires
@@ -402,7 +512,15 @@ fn nvenc_fence_wrap_guard_fires_across_wrap_and_refuses_backwards_jumps() {
 
     // Arm just below the u32 boundary; the target is past the wrap.
     assert_eq!(
-        arm_fence(&mut gpu, pid, cid, FENCE_VA, u32::MAX - 1, 2, OsEventRef(0xF1)),
+        arm_fence(
+            &mut gpu,
+            pid,
+            cid,
+            FENCE_VA,
+            u32::MAX - 1,
+            2,
+            OsEventRef(0xF1)
+        ),
         Ok(None)
     );
     // A stale/backwards value (a huge forward step under wrap arithmetic) is LOUD.
@@ -416,8 +534,15 @@ fn nvenc_fence_wrap_guard_fires_across_wrap_and_refuses_backwards_jumps() {
         "the #12 backwards-jump class is refused, never treated as completion"
     );
     // The genuine advance across the wrap still fires.
-    assert_eq!(fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 1), Ok(None), "before target");
-    assert_eq!(fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 2), Ok(Some(OsEventRef(0xF1))));
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 1),
+        Ok(None),
+        "before target"
+    );
+    assert_eq!(
+        fence_observed(&mut gpu, GpuId::ZERO, PDB, FENCE_VA, 2),
+        Ok(Some(OsEventRef(0xF1)))
+    );
 }
 
 /// Arm selection is exact AT the channel: a GR-compute or CE channel (shared-sema
@@ -427,19 +552,41 @@ fn nvenc_fence_wrap_guard_fires_across_wrap_and_refuses_backwards_jumps() {
 #[test]
 fn fence_arm_selection_is_exact_at_the_channel() {
     // Selection table: only NVENC rides the fence arm (NVDEC = honest gap, sema).
-    assert_eq!(completion_arm(EngineKind::NvEnc), CompletionArm::MappedFence);
-    for k in [EngineKind::GrCompute, EngineKind::GrGraphics, EngineKind::Ce, EngineKind::NvDec] {
-        assert_eq!(completion_arm(k), CompletionArm::SharedSema, "{k:?} is not fence-signalled");
+    assert_eq!(
+        completion_arm(EngineKind::NvEnc),
+        CompletionArm::MappedFence
+    );
+    for k in [
+        EngineKind::GrCompute,
+        EngineKind::GrGraphics,
+        EngineKind::Ce,
+        EngineKind::NvDec,
+    ] {
+        assert_eq!(
+            completion_arm(k),
+            CompletionArm::SharedSema,
+            "{k:?} is not fence-signalled"
+        );
     }
 
     // A compute-shaped channel refuses the fence arm loudly.
     let (mut gpu, _rec) = compute_gpu();
     let (pid, cid) = gpu.by_vchid[&(GpuId::ZERO, GR_VCHID)];
-    publish_backing(gpu.procs.get_mut(&pid).unwrap(), GpuId::ZERO, PDB, FENCE_VA, 0x1000).unwrap();
+    publish_backing(
+        gpu.procs.get_mut(&pid).unwrap(),
+        GpuId::ZERO,
+        PDB,
+        FENCE_VA,
+        0x1000,
+    )
+    .unwrap();
     assert!(
         matches!(
             arm_fence(&mut gpu, pid, cid, FENCE_VA, 0, 1, OsEventRef(0xF2)),
-            Err(FwdFault::WrongArm { engine: EngineKind::GrCompute, .. })
+            Err(FwdFault::WrongArm {
+                engine: EngineKind::GrCompute,
+                ..
+            })
         ),
         "arming a fence on a sema-signalled channel is a WrongArm fault"
     );
@@ -447,7 +594,15 @@ fn fence_arm_selection_is_exact_at_the_channel() {
     // An NVENC channel with an UNMAPPED fence address is a loud MISS (never armed).
     let (mut gpu, pid, cid) = nvenc_gpu();
     assert!(matches!(
-        arm_fence(&mut gpu, pid, cid, GpuVa(0xdead_0000), 0, 1, OsEventRef(0xF3)),
+        arm_fence(
+            &mut gpu,
+            pid,
+            cid,
+            GpuVa(0xdead_0000),
+            0,
+            1,
+            OsEventRef(0xF3)
+        ),
         Err(FwdFault::Address(_))
     ));
 }

@@ -41,12 +41,7 @@ impl Scenario {
     /// (the #14 shape) — the graph keys nodes by `(client, handle)`, so identical
     /// handles across clients are correctly distinct.
     #[allow(clippy::too_many_arguments)]
-    pub fn compute_process(
-        &mut self,
-        client: HClient,
-        pdb: Pdb,
-        h: ProcessHandles,
-    ) -> NodeKey {
+    pub fn compute_process(&mut self, client: HClient, pdb: Pdb, h: ProcessHandles) -> NodeKey {
         self.compute_process_on_gpu(client, pdb, h, None)
     }
 
@@ -75,7 +70,10 @@ impl Scenario {
             parent: h.client_root,
             handle: dev,
             class: mc::DEVICE,
-            facts: AllocFacts { device_instance, ..Default::default() },
+            facts: AllocFacts {
+                device_instance,
+                ..Default::default()
+            },
         });
         self.push(RmEvent::Alloc {
             client,
@@ -84,13 +82,20 @@ impl Scenario {
             class: mc::VASPACE,
             facts: AllocFacts::default(),
         });
-        self.push(RmEvent::SetPageDir { client, vaspace: vas, pdb });
+        self.push(RmEvent::SetPageDir {
+            client,
+            vaspace: vas,
+            pdb,
+        });
         self.push(RmEvent::Alloc {
             client,
             parent: dev,
             handle: h.tsg,
             class: mc::TSG,
-            facts: AllocFacts { h_vaspace: Some(vas), ..Default::default() },
+            facts: AllocFacts {
+                h_vaspace: Some(vas),
+                ..Default::default()
+            },
         });
         self.push(RmEvent::Alloc {
             client,
@@ -130,7 +135,10 @@ impl Scenario {
             parent,
             handle,
             class: mc::MEMORY,
-            facts: AllocFacts { mem_phys: Some(phys), ..Default::default() },
+            facts: AllocFacts {
+                mem_phys: Some(phys),
+                ..Default::default()
+            },
         })
     }
 
@@ -154,7 +162,14 @@ impl Scenario {
         va: GpuVa,
         len: u64,
     ) -> &mut Self {
-        self.push(RmEvent::MapMemoryDma { client, vaspace, memory, va, offset: 0, len })
+        self.push(RmEvent::MapMemoryDma {
+            client,
+            vaspace,
+            memory,
+            va,
+            offset: 0,
+            len,
+        })
     }
 
     /// Model UVM aliasing a compute VASpace into its own client via `DUP_OBJECT`,
@@ -192,7 +207,11 @@ impl Scenario {
             class: mc::VASPACE,
             facts: AllocFacts::default(),
         });
-        self.push(RmEvent::SetPageDir { client: uvm_client, vaspace: uvm_vas, pdb: uvm_pdb });
+        self.push(RmEvent::SetPageDir {
+            client: uvm_client,
+            vaspace: uvm_vas,
+            pdb: uvm_pdb,
+        });
         // The cross-client transfer edge: alias the compute VASpace into UVM's client.
         self.push(RmEvent::Dup {
             src: compute_vas,

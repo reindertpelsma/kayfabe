@@ -20,7 +20,10 @@ impl Instant {
     /// Saturating advance by `d`.
     #[must_use]
     pub fn advanced(self, d: Duration) -> Instant {
-        Instant(self.0.saturating_add(d.as_nanos().min(u64::MAX as u128) as u64))
+        Instant(
+            self.0
+                .saturating_add(d.as_nanos().min(u64::MAX as u128) as u64),
+        )
     }
 
     /// Duration elapsed since `earlier` (zero if `earlier` is later).

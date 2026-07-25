@@ -29,8 +29,8 @@
 //! never exists — requiring `Sync` would constrain real impls (socket buffers to the
 //! sandboxed worker) for a capability no call path can use.
 
-use nvkvm_arch::ids::{ClassId, EngineKind, GpuId};
 pub use nvkvm_arch::ids::ControlCmd;
+use nvkvm_arch::ids::{ClassId, EngineKind, GpuId};
 use nvkvm_vmm::SurfaceHandle;
 
 /// A host-side RM object handle, scoped to ONE isolate's handle namespace.
@@ -145,12 +145,8 @@ pub trait RmBackend: Send {
     /// returning the host GPU VA. The isolate picks/owns the actual placement —
     /// per-Vas host-VAS separation is what makes two guest processes' identical
     /// guest VAs land in disjoint host mappings (#14's proven fix).
-    fn map_gpu_va(
-        &mut self,
-        vas: HostHandle,
-        memory: HostHandle,
-        len: u64,
-    ) -> Result<u64, RmError>;
+    fn map_gpu_va(&mut self, vas: HostHandle, memory: HostHandle, len: u64)
+    -> Result<u64, RmError>;
 
     /// Unmap a previous [`RmBackend::map_gpu_va`].
     fn unmap_gpu_va(&mut self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError>;
@@ -213,5 +209,11 @@ pub trait IsolateFactory: Send + Sync {
 
 // The concurrency contract, compile-time-asserted (decision #17). `dyn RmBackend`
 // is the one documented Send-only exception (crate docs).
-nvkvm_util::assert_send_sync!(HostHandle, RmError, IsolateId, dyn Isolate, dyn IsolateFactory);
+nvkvm_util::assert_send_sync!(
+    HostHandle,
+    RmError,
+    IsolateId,
+    dyn Isolate,
+    dyn IsolateFactory
+);
 nvkvm_util::assert_send!(dyn RmBackend);

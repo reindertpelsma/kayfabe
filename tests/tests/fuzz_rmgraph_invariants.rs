@@ -88,7 +88,14 @@ fn any_userd_flags() -> impl Strategy<Value = u32> {
 fn any_event() -> impl Strategy<Value = RmEvent> {
     prop_oneof![
         // Alloc: parent may dangle, class may be junk, handle may already exist.
-        (any_client(), any_handle(), any_handle(), any_class(), any_userd_flags(), any_pdb())
+        (
+            any_client(),
+            any_handle(),
+            any_handle(),
+            any_class(),
+            any_userd_flags(),
+            any_pdb()
+        )
             .prop_map(|(client, parent, handle, class, flags, vpdb)| {
                 RmEvent::Alloc {
                     client,
@@ -112,23 +119,37 @@ fn any_event() -> impl Strategy<Value = RmEvent> {
                 }
             }),
         // MapMemoryDma: vaspace/memory may dangle, not be a VAS/memory, or double-map.
-        (any_client(), any_handle(), any_handle(), any_va())
-            .prop_map(|(client, vaspace, memory, va)| RmEvent::MapMemoryDma {
-                client, vaspace, memory, va, offset: 0, len: 0x10000,
-            }),
+        (any_client(), any_handle(), any_handle(), any_va()).prop_map(
+            |(client, vaspace, memory, va)| RmEvent::MapMemoryDma {
+                client,
+                vaspace,
+                memory,
+                va,
+                offset: 0,
+                len: 0x10000,
+            }
+        ),
         // Unmap: of any (vaspace, va) — mapped, never-mapped, or already-unmapped.
-        (any_client(), any_handle(), any_va())
-            .prop_map(|(client, vaspace, va)| RmEvent::Unmap { client, vaspace, va }),
+        (any_client(), any_handle(), any_va()).prop_map(|(client, vaspace, va)| RmEvent::Unmap {
+            client,
+            vaspace,
+            va
+        }),
         // Dup: src/dst may dangle, form cycles, or alias a freed object.
-        (any_client(), any_handle(), any_client(), any_handle()).prop_map(
-            |(sc, sh, dc, dh)| RmEvent::Dup {
+        (any_client(), any_handle(), any_client(), any_handle()).prop_map(|(sc, sh, dc, dh)| {
+            RmEvent::Dup {
                 src: NodeKey::new(sc, sh),
                 dst: NodeKey::new(dc, dh),
             }
-        ),
+        }),
         // SetPageDir: on any (client, handle), possibly not a VAS, possibly colliding PDB.
-        (any_client(), any_handle(), any_pdb())
-            .prop_map(|(client, vaspace, pdb)| RmEvent::SetPageDir { client, vaspace, pdb }),
+        (any_client(), any_handle(), any_pdb()).prop_map(|(client, vaspace, pdb)| {
+            RmEvent::SetPageDir {
+                client,
+                vaspace,
+                pdb,
+            }
+        }),
         // Free: of anything — allocated, dup'd, already-freed, or never-seen.
         (any_client(), any_handle()).prop_map(|(client, handle)| RmEvent::Free { client, handle }),
     ]
@@ -170,7 +191,9 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
     for p in &bounds.procs {
         for facts in p.channels.values() {
             assert!(
-                vchid_owner.insert((facts.gpu, facts.vchid), p.anchor).is_none(),
+                vchid_owner
+                    .insert((facts.gpu, facts.vchid), p.anchor)
+                    .is_none(),
                 "two Procs share (target, vChid {:?}) — exec boundary broken",
                 facts.vchid
             );
@@ -199,10 +222,16 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
     // INV4: by_pdb / by_vchid routing anchors are all real proc anchors.
     let anchors: BTreeSet<_> = bounds.procs.iter().map(|p| p.anchor).collect();
     for (anchor, _) in bounds.by_pdb.values() {
-        assert!(anchors.contains(anchor), "by_pdb routes to a non-existent Proc");
+        assert!(
+            anchors.contains(anchor),
+            "by_pdb routes to a non-existent Proc"
+        );
     }
     for (anchor, _) in bounds.by_vchid.values() {
-        assert!(anchors.contains(anchor), "by_vchid routes to a non-existent Proc");
+        assert!(
+            anchors.contains(anchor),
+            "by_vchid routes to a non-existent Proc"
+        );
     }
 
     // INV5: every proc's client set is dup-connected (a single component). Verified
@@ -217,9 +246,13 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
     for (dst, src) in g.dups() {
         // Only edges whose origin resolves participate in grouping.
         if g.origin_of(dst).is_some()
-            && let (Some(&da), Some(&sa)) = (client_proc.get(&dst.client), client_proc.get(&src.client))
+            && let (Some(&da), Some(&sa)) =
+                (client_proc.get(&dst.client), client_proc.get(&src.client))
         {
-            assert_eq!(da, sa, "a dup edge joins two DIFFERENT procs — grouping is inconsistent");
+            assert_eq!(
+                da, sa,
+                "a dup edge joins two DIFFERENT procs — grouping is inconsistent"
+            );
         }
     }
 }
@@ -306,17 +339,71 @@ fn valid_fact_stream() -> impl Strategy<Value = Vec<RmEvent>> {
             let pdb = Pdb(0x3400_000 + u64::from(i as u32) * 0x1000);
             let gr_vchid = nvkvm_arch::ids::VChid(0x100 + i as u16 * 2);
             let ce_vchid = nvkvm_arch::ids::VChid(0x101 + i as u16 * 2);
-            events.push(RmEvent::Alloc { client, parent: root, handle: root, class: mc::CLIENT, facts: AllocFacts::default() });
-            events.push(RmEvent::Alloc { client, parent: root, handle: dev, class: mc::DEVICE, facts: AllocFacts::default() });
-            events.push(RmEvent::Alloc { client, parent: dev, handle: vas, class: mc::VASPACE, facts: AllocFacts::default() });
-            events.push(RmEvent::SetPageDir { client, vaspace: vas, pdb });
-            events.push(RmEvent::Alloc { client, parent: dev, handle: tsg, class: mc::TSG, facts: AllocFacts { h_vaspace: Some(vas), ..Default::default() } });
-            events.push(RmEvent::Alloc { client, parent: tsg, handle: grc, class: mc::CHANNEL_GR, facts: AllocFacts { h_vaspace: Some(vas), userd_flags: MockArch::userd_flags_for(gr_vchid), ..Default::default() } });
-            events.push(RmEvent::Alloc { client, parent: tsg, handle: cec, class: mc::CHANNEL_CE, facts: AllocFacts { h_vaspace: Some(vas), userd_flags: MockArch::userd_flags_for(ce_vchid), ..Default::default() } });
+            events.push(RmEvent::Alloc {
+                client,
+                parent: root,
+                handle: root,
+                class: mc::CLIENT,
+                facts: AllocFacts::default(),
+            });
+            events.push(RmEvent::Alloc {
+                client,
+                parent: root,
+                handle: dev,
+                class: mc::DEVICE,
+                facts: AllocFacts::default(),
+            });
+            events.push(RmEvent::Alloc {
+                client,
+                parent: dev,
+                handle: vas,
+                class: mc::VASPACE,
+                facts: AllocFacts::default(),
+            });
+            events.push(RmEvent::SetPageDir {
+                client,
+                vaspace: vas,
+                pdb,
+            });
+            events.push(RmEvent::Alloc {
+                client,
+                parent: dev,
+                handle: tsg,
+                class: mc::TSG,
+                facts: AllocFacts {
+                    h_vaspace: Some(vas),
+                    ..Default::default()
+                },
+            });
+            events.push(RmEvent::Alloc {
+                client,
+                parent: tsg,
+                handle: grc,
+                class: mc::CHANNEL_GR,
+                facts: AllocFacts {
+                    h_vaspace: Some(vas),
+                    userd_flags: MockArch::userd_flags_for(gr_vchid),
+                    ..Default::default()
+                },
+            });
+            events.push(RmEvent::Alloc {
+                client,
+                parent: tsg,
+                handle: cec,
+                class: mc::CHANNEL_CE,
+                facts: AllocFacts {
+                    h_vaspace: Some(vas),
+                    userd_flags: MockArch::userd_flags_for(ce_vchid),
+                    ..Default::default()
+                },
+            });
         }
         // Shuffle indices deterministically inside the strategy via a permutation seed.
         let len = events.len();
-        (Just(events), proptest::sample::subsequence((0..len).collect::<Vec<_>>(), len))
+        (
+            Just(events),
+            proptest::sample::subsequence((0..len).collect::<Vec<_>>(), len),
+        )
             .prop_map(|(events, perm)| perm.into_iter().map(|i| events[i]).collect())
     })
 }
@@ -452,14 +539,31 @@ fn refcount_stream() -> impl Strategy<Value = Vec<(bool, RmEvent)>> {
                     next += 1;
                     // A fresh top-level object; parent = itself makes it a root of its
                     // own tiny tree (Client roots free their namespace, others are leaves).
-                    (true, RmEvent::Alloc {
-                        client, parent: handle, handle, class, facts: AllocFacts::default(),
-                    })
+                    (
+                        true,
+                        RmEvent::Alloc {
+                            client,
+                            parent: handle,
+                            handle,
+                            class,
+                            facts: AllocFacts::default(),
+                        },
+                    )
                 }
-                Choice::Dup(sc, sh, dc, dh) => (false, RmEvent::Dup {
-                    src: NodeKey::new(sc, sh), dst: NodeKey::new(dc, dh),
-                }),
-                Choice::Free(c, h) => (false, RmEvent::Free { client: c, handle: h }),
+                Choice::Dup(sc, sh, dc, dh) => (
+                    false,
+                    RmEvent::Dup {
+                        src: NodeKey::new(sc, sh),
+                        dst: NodeKey::new(dc, dh),
+                    },
+                ),
+                Choice::Free(c, h) => (
+                    false,
+                    RmEvent::Free {
+                        client: c,
+                        handle: h,
+                    },
+                ),
             })
             .collect()
     })
@@ -498,7 +602,12 @@ impl RefTracker {
 
     fn apply(&mut self, arch: &dyn Arch, ev: RmEvent) {
         match ev {
-            RmEvent::Alloc { client, handle, class, .. } => {
+            RmEvent::Alloc {
+                client,
+                handle,
+                class,
+                ..
+            } => {
                 let k = (client, handle);
                 // Mirror the graph: an alloc onto an already-bound handle (e.g. one a
                 // dup aliased) is a loud ConflictingAlloc — rejected, changes nothing.
@@ -536,9 +645,7 @@ impl RefTracker {
                     }
                 }
             }
-            RmEvent::SetPageDir { .. }
-            | RmEvent::MapMemoryDma { .. }
-            | RmEvent::Unmap { .. } => {}
+            RmEvent::SetPageDir { .. } | RmEvent::MapMemoryDma { .. } | RmEvent::Unmap { .. } => {}
             RmEvent::Free { client, handle } => {
                 let key = (client, handle);
                 let is_root = self.client_roots.contains(&key);
@@ -552,7 +659,11 @@ impl RefTracker {
                 // All generated non-client objects are self-parented leaves, so the only
                 // subtree free is a Client root freeing every handle in its namespace.
                 let doomed: BTreeSet<(HClient, HObject)> = if is_root {
-                    self.handle_to_origin.keys().filter(|k| k.0 == client).copied().collect()
+                    self.handle_to_origin
+                        .keys()
+                        .filter(|k| k.0 == client)
+                        .copied()
+                        .collect()
                 } else {
                     BTreeSet::from([key])
                 };
@@ -560,7 +671,8 @@ impl RefTracker {
                     self.handle_to_origin.remove(k);
                     self.client_roots.remove(k);
                 }
-                self.pending.retain(|d, s| !doomed.contains(d) && !doomed.contains(s));
+                self.pending
+                    .retain(|d, s| !doomed.contains(d) && !doomed.contains(s));
             }
         }
     }

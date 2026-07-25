@@ -263,7 +263,15 @@ impl FenceArms {
         if self.armed.len() >= MAX_ARMED_FENCES {
             return Err(CompletionError::FenceTableFull);
         }
-        self.armed.insert(key, FenceArm { to_go, last: current, target, event });
+        self.armed.insert(
+            key,
+            FenceArm {
+                to_go,
+                last: current,
+                target,
+                event,
+            },
+        );
         Ok(None)
     }
 
@@ -287,7 +295,10 @@ impl FenceArms {
         };
         let step = u64::from(value.wrapping_sub(arm.last));
         if step > MAX_FENCE_JUMP {
-            return Err(CompletionError::FenceJump { last: arm.last, value });
+            return Err(CompletionError::FenceJump {
+                last: arm.last,
+                value,
+            });
         }
         arm.last = value;
         arm.to_go = arm.to_go.saturating_sub(step);
@@ -411,7 +422,9 @@ mod tests {
 
         // B submits and completes; a batch containing B's event posts and drains.
         qb.observe(OsEventRef(0xb0)).unwrap();
-        let post = plane.try_post([&mut qa, &mut qb]).expect("B's completion posts");
+        let post = plane
+            .try_post([&mut qa, &mut qb])
+            .expect("B's completion posts");
         assert_eq!(post.events, vec![OsEventRef(0xb0)]);
         plane.drained([&mut qa, &mut qb]);
         qb.ack(OsEventRef(0xb0));
@@ -419,13 +432,17 @@ mod tests {
         // A's completion is observed... but composed into a batch that the guest
         // drains WITHOUT A's waiter waking (the lost-wakeup window).
         qa.observe(OsEventRef(0xa0)).unwrap();
-        let post = plane.try_post([&mut qa, &mut qb]).expect("A's completion posts");
+        let post = plane
+            .try_post([&mut qa, &mut qb])
+            .expect("A's completion posts");
         assert_eq!(post.events, vec![OsEventRef(0xa0)]);
         plane.drained([&mut qa, &mut qb]);
         // No ack from A. B rings no more doorbells — in the C, delivery is dead here.
 
         // A polls: its un-acked event is re-posted off its OWN poll.
-        let repost = plane.on_poll(&mut qa, [&mut qb]).expect("poll re-posts A's event");
+        let repost = plane
+            .on_poll(&mut qa, [&mut qb])
+            .expect("poll re-posts A's event");
         assert_eq!(repost.events, vec![OsEventRef(0xa0)]);
         plane.drained([&mut qa, &mut qb]);
         qa.ack(OsEventRef(0xa0));
@@ -445,7 +462,11 @@ mod tests {
 
         // Below target: no fire. Unrelated key: no fire, no error.
         assert_eq!(f.observe(key, 12), Ok(None));
-        assert_eq!(f.observe((0x9999, 0x1000), 14), Ok(None), "un-armed key is inert");
+        assert_eq!(
+            f.observe((0x9999, 0x1000), 14),
+            Ok(None),
+            "un-armed key is inert"
+        );
         // Past target (skipped exactly-14 — "at/after"): fires, consumed.
         assert_eq!(f.observe(key, 15), Ok(Some(OsEventRef(0xE))));
         assert_eq!(f.armed_len(), 0);
@@ -463,9 +484,16 @@ mod tests {
         // current near u32::MAX, target wrapped past 0.
         assert_eq!(f.arm(key, u32::MAX - 2, 3, OsEventRef(0x77)), Ok(None));
         assert_eq!(f.observe(key, u32::MAX), Ok(None), "still before the wrap");
-        assert_eq!(f.observe(key, 3), Ok(Some(OsEventRef(0x77))), "wrapped past target");
+        assert_eq!(
+            f.observe(key, 3),
+            Ok(Some(OsEventRef(0x77))),
+            "wrapped past target"
+        );
         // Arm at-target: complete immediately, nothing left armed.
-        assert_eq!(f.arm((5, 5), 42, 42, OsEventRef(0x88)), Ok(Some(OsEventRef(0x88))));
+        assert_eq!(
+            f.arm((5, 5), 42, 42, OsEventRef(0x88)),
+            Ok(Some(OsEventRef(0x88)))
+        );
         assert_eq!(f.armed_len(), 0);
     }
 
@@ -480,7 +508,10 @@ mod tests {
         // A stale value from before the arm: wrapping step ≈ 2^32 - 60 > MAX_FENCE_JUMP.
         assert_eq!(
             f.observe(key, 40),
-            Err(CompletionError::FenceJump { last: 100, value: 40 })
+            Err(CompletionError::FenceJump {
+                last: 100,
+                value: 40
+            })
         );
         // The refusal changed nothing: the arm still fires at its target.
         assert_eq!(f.observe(key, 200), Ok(Some(OsEventRef(0x9))));
@@ -493,7 +524,11 @@ mod tests {
         let mut f = FenceArms::new();
         let key = (1, 2);
         f.arm(key, 0, 10, OsEventRef(0x1)).unwrap();
-        assert_eq!(f.arm(key, 0, 10, OsEventRef(0x1)), Ok(None), "identical re-send OK");
+        assert_eq!(
+            f.arm(key, 0, 10, OsEventRef(0x1)),
+            Ok(None),
+            "identical re-send OK"
+        );
         assert_eq!(f.armed_len(), 1, "no duplicate arm");
         assert_eq!(
             f.arm(key, 0, 99, OsEventRef(0x1)),
@@ -513,10 +548,17 @@ mod tests {
         qa.observe(OsEventRef(1)).unwrap();
         qb.observe(OsEventRef(2)).unwrap();
         let post = plane.try_post([&mut qa, &mut qb]).unwrap();
-        assert_eq!(post.events, vec![OsEventRef(1), OsEventRef(2)], "one batch, both procs");
+        assert_eq!(
+            post.events,
+            vec![OsEventRef(1), OsEventRef(2)],
+            "one batch, both procs"
+        );
         // Gate closed while outstanding.
         qa.observe(OsEventRef(3)).unwrap();
-        assert!(plane.try_post([&mut qa, &mut qb]).is_none(), "gate closed until drain");
+        assert!(
+            plane.try_post([&mut qa, &mut qb]).is_none(),
+            "gate closed until drain"
+        );
         plane.drained([&mut qa, &mut qb]);
         let post = plane.try_post([&mut qa, &mut qb]).unwrap();
         assert_eq!(post.events, vec![OsEventRef(3)]);
@@ -545,7 +587,11 @@ mod tests {
         let posted = q.compose_into(BatchId(7)); // in_flight = {1,2,3}, pending = {}
         assert_eq!(posted.len(), 3);
         q.observe(OsEventRef(4)).unwrap(); // pending = {4}, in_flight = {1,2,3}
-        assert_eq!(q.outstanding_len(), 4, "pending(1) + in_flight(3) must SUM, not multiply");
+        assert_eq!(
+            q.outstanding_len(),
+            4,
+            "pending(1) + in_flight(3) must SUM, not multiply"
+        );
         assert!(q.has_outstanding());
 
         // Drain the batch: its events go to awaiting_ack; the freshly-observed 4 stays
@@ -595,7 +641,11 @@ mod tests {
 
         // Ack 0xA while it is still in_flight (waiter woke pre-drain).
         q.ack(OsEventRef(0xA));
-        assert_eq!(q.outstanding_len(), 1, "exactly the acked in-flight event is removed");
+        assert_eq!(
+            q.outstanding_len(),
+            1,
+            "exactly the acked in-flight event is removed"
+        );
         assert!(q.has_outstanding(), "0xB is still in flight");
 
         // Draining the batch must carry 0xB (the survivor) to awaiting_ack — and NOT
@@ -622,7 +672,11 @@ mod tests {
         f.arm(key, 0, 100_000, OsEventRef(0xF)).unwrap();
         // A 1500-step advance is legitimate (< 2048) — it must be accepted, not faulted.
         // Under the `2 + 1024 = 1026` mutant this loud-faults as a spurious jump.
-        assert_eq!(f.observe(key, 1500), Ok(None), "a <2048 step is legitimate progress");
+        assert_eq!(
+            f.observe(key, 1500),
+            Ok(None),
+            "a <2048 step is legitimate progress"
+        );
         // A step of EXACTLY MAX_FENCE_JUMP (1500 -> 1500+2048 = 3548) is at the bound and
         // must be ACCEPTED (`step > MAX_FENCE_JUMP` is false at equality). The `>`→`>=`
         // mutant rejects this exactly-at-bound step — this is its kill.
@@ -651,16 +705,25 @@ mod tests {
         let mut plane = DeliveryPlane::new();
         let mut q = CompletionQueue::new();
         // Fresh plane: nothing posted, gate OPEN.
-        assert!(!plane.batch_outstanding(), "a fresh plane has no batch outstanding");
+        assert!(
+            !plane.batch_outstanding(),
+            "a fresh plane has no batch outstanding"
+        );
 
         q.observe(OsEventRef(1)).unwrap();
         plane.try_post([&mut q]).expect("posts the pending event");
         // A batch is now outstanding: gate CLOSED.
-        assert!(plane.batch_outstanding(), "after a post a batch is outstanding");
+        assert!(
+            plane.batch_outstanding(),
+            "after a post a batch is outstanding"
+        );
 
         plane.drained([&mut q]);
         // Drained: gate OPEN again.
-        assert!(!plane.batch_outstanding(), "after the drain the gate is open again");
+        assert!(
+            !plane.batch_outstanding(),
+            "after the drain the gate is open again"
+        );
     }
 
     /// ★ Mutation-gate kill (`DeliveryPlane::try_post` `next_batch += 1`→`*= 1`): each
@@ -685,6 +748,9 @@ mod tests {
             first.batch, second.batch,
             "successive batches must carry distinct ids (the drain key must not collide)",
         );
-        assert!(second.batch.0 > first.batch.0, "batch ids advance monotonically");
+        assert!(
+            second.batch.0 > first.batch.0,
+            "batch ids advance monotonically"
+        );
     }
 }

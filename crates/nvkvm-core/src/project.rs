@@ -136,7 +136,9 @@ struct ClientUnion {
 
 impl ClientUnion {
     fn new(clients: impl IntoIterator<Item = HClient>) -> Self {
-        ClientUnion { parent: clients.into_iter().map(|c| (c, c)).collect() }
+        ClientUnion {
+            parent: clients.into_iter().map(|c| (c, c)).collect(),
+        }
     }
 
     fn find(&mut self, c: HClient) -> HClient {
@@ -277,7 +279,9 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
         if let ObjectKind::EngineObject { engine } = node.kind
             && let Some(chan) = g.origin_of_kind(
                 NodeKey::new(node.key.client, node.parent),
-                ObjectKind::Channel { engine: EngineKind::GrCompute },
+                ObjectKind::Channel {
+                    engine: EngineKind::GrCompute,
+                },
             )
         {
             engine_refine.entry(chan.key).or_insert(engine);
@@ -350,5 +354,9 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
         }
     }
 
-    Ok(Boundaries { procs: procs.into_values().collect(), by_pdb, by_vchid })
+    Ok(Boundaries {
+        procs: procs.into_values().collect(),
+        by_pdb,
+        by_vchid,
+    })
 }

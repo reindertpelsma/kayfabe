@@ -44,17 +44,17 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use nvkvm_arch::ObjectKind;
 use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_arch::ObjectKind;
-use nvkvm_completion::{CompletionError, FenceArms, OsEventRef, MAX_FENCE_JUMP};
+use nvkvm_completion::{CompletionError, FenceArms, MAX_FENCE_JUMP, OsEventRef};
 use nvkvm_core::gpa::GpaSpace;
 use nvkvm_core::gpu::{Gpu, GpuError};
 use nvkvm_core::project::project;
 use nvkvm_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
 use nvkvm_fwd::resolve;
-use nvkvm_mocks::{mock_classes as mc, MockArch, MockIsolateFactory};
-use nvkvm_tests::{identical_handles, Scenario};
+use nvkvm_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
+use nvkvm_tests::{Scenario, identical_handles};
 use proptest::prelude::*;
 
 // =================================================================================
@@ -147,7 +147,10 @@ fn i1_junk_event() -> impl Strategy<Value = RmEvent> {
             parent,
             handle,
             class,
-            facts: AllocFacts { mem_phys: Some(0x9_0000_0000), ..Default::default() },
+            facts: AllocFacts {
+                mem_phys: Some(0x9_0000_0000),
+                ..Default::default()
+            },
         }),
         (jc(), jh(), jc(), jh()).prop_map(|(sc, sh, dc, dh)| RmEvent::Dup {
             src: NodeKey::new(sc, sh),
@@ -246,7 +249,14 @@ impl RefFence {
     fn arm(current: u32, target: u32) -> (Self, bool) {
         let to_go = u64::from(target.wrapping_sub(current));
         // At-target arms fire immediately and nothing is left armed.
-        (RefFence { to_go, last: current, fired: to_go == 0 }, to_go == 0)
+        (
+            RefFence {
+                to_go,
+                last: current,
+                fired: to_go == 0,
+            },
+            to_go == 0,
+        )
     }
     fn observe(&mut self, value: u32) -> Result<bool, ()> {
         if self.fired {
@@ -557,11 +567,30 @@ fn i4_hostile_event() -> impl Strategy<Value = RmEvent> {
         ]
     };
     prop_oneof![
-        (ac(), ah(), ah(), aclass(), aflags()).prop_map(|(client, parent, handle, class, userd_flags)| {
-            RmEvent::Alloc { client, parent, handle, class, facts: AllocFacts { userd_flags, mem_phys: Some(0xDEAD_0000), ..Default::default() } }
+        (ac(), ah(), ah(), aclass(), aflags()).prop_map(
+            |(client, parent, handle, class, userd_flags)| {
+                RmEvent::Alloc {
+                    client,
+                    parent,
+                    handle,
+                    class,
+                    facts: AllocFacts {
+                        userd_flags,
+                        mem_phys: Some(0xDEAD_0000),
+                        ..Default::default()
+                    },
+                }
+            }
+        ),
+        (ac(), ah(), apdb()).prop_map(|(client, vaspace, pdb)| RmEvent::SetPageDir {
+            client,
+            vaspace,
+            pdb
         }),
-        (ac(), ah(), apdb()).prop_map(|(client, vaspace, pdb)| RmEvent::SetPageDir { client, vaspace, pdb }),
-        (ac(), ah(), ac(), ah()).prop_map(|(sc, sh, dc, dh)| RmEvent::Dup { src: NodeKey::new(sc, sh), dst: NodeKey::new(dc, dh) }),
+        (ac(), ah(), ac(), ah()).prop_map(|(sc, sh, dc, dh)| RmEvent::Dup {
+            src: NodeKey::new(sc, sh),
+            dst: NodeKey::new(dc, dh)
+        }),
         (ac(), ah()).prop_map(|(client, handle)| RmEvent::Free { client, handle }),
     ]
 }
@@ -633,7 +662,16 @@ proptest! {
 /// Build a graph with exactly one object of each kind under a client, returning their
 /// keys so every typed-resolution site can be probed with the WRONG kind.
 #[allow(clippy::type_complexity)]
-fn one_of_each_kind() -> (RmGraph, MockArch, NodeKey, NodeKey, NodeKey, NodeKey, NodeKey, NodeKey) {
+fn one_of_each_kind() -> (
+    RmGraph,
+    MockArch,
+    NodeKey,
+    NodeKey,
+    NodeKey,
+    NodeKey,
+    NodeKey,
+    NodeKey,
+) {
     let arch = MockArch::new();
     let mut g = RmGraph::new();
     let c = HClient(0x1);
@@ -645,7 +683,13 @@ fn one_of_each_kind() -> (RmGraph, MockArch, NodeKey, NodeKey, NodeKey, NodeKey,
     let chan = HObject(0x130);
     let mem = HObject(0x140);
     let ev = HObject(0x150);
-    let al = |client, parent, handle, class, facts| RmEvent::Alloc { client, parent, handle, class, facts };
+    let al = |client, parent, handle, class, facts| RmEvent::Alloc {
+        client,
+        parent,
+        handle,
+        class,
+        facts,
+    };
     for e in [
         al(c, root, root, mc::CLIENT, AllocFacts::default()),
         al(c, root, dev, mc::DEVICE, AllocFacts::default()),
@@ -653,13 +697,23 @@ fn one_of_each_kind() -> (RmGraph, MockArch, NodeKey, NodeKey, NodeKey, NodeKey,
         al(c, dev, tsg, mc::TSG, AllocFacts::default()),
         al(c, tsg, cs, mc::CTXSHARE, AllocFacts::default()),
         al(c, tsg, chan, mc::CHANNEL_GR, AllocFacts::default()),
-        al(c, dev, mem, mc::MEMORY, AllocFacts { mem_phys: Some(0x5000), ..Default::default() }),
+        al(
+            c,
+            dev,
+            mem,
+            mc::MEMORY,
+            AllocFacts {
+                mem_phys: Some(0x5000),
+                ..Default::default()
+            },
+        ),
         al(c, dev, ev, mc::EVENT, AllocFacts::default()),
     ] {
         g.apply(&arch, e).unwrap();
     }
     (
-        g, arch,
+        g,
+        arch,
         NodeKey::new(c, vas),
         NodeKey::new(c, tsg),
         NodeKey::new(c, cs),
@@ -680,13 +734,21 @@ fn p3_origin_of_kind_rejects_every_cross_kind_pairing() {
         (vas, ObjectKind::VaSpace),
         (tsg, ObjectKind::Tsg),
         (cs, ObjectKind::CtxShare),
-        (chan, ObjectKind::Channel { engine: nvkvm_arch::ids::EngineKind::GrCompute }),
+        (
+            chan,
+            ObjectKind::Channel {
+                engine: nvkvm_arch::ids::EngineKind::GrCompute,
+            },
+        ),
         (mem, ObjectKind::Memory),
         (ev, ObjectKind::Event),
     ];
     for &(key, correct) in &sites {
         // The ONE primitive resolves for the true kind…
-        assert!(g.origin_of_kind(key, correct).is_some(), "true-kind resolution failed for {correct:?}");
+        assert!(
+            g.origin_of_kind(key, correct).is_some(),
+            "true-kind resolution failed for {correct:?}"
+        );
         // …and rejects every other kind (the confused-deputy, centrally refused).
         for &(_, other) in &sites {
             if core::mem::discriminant(&other) != core::mem::discriminant(&correct) {
@@ -701,7 +763,11 @@ fn p3_origin_of_kind_rejects_every_cross_kind_pairing() {
     // object ever yields a backing (even the VASpace, TSG, etc. above have no backing).
     assert_eq!(g.backing_of(mem), Some(0x5000));
     for non_mem in [vas, tsg, cs, chan, ev] {
-        assert_eq!(g.backing_of(non_mem), None, "a non-Memory object yielded a backing");
+        assert_eq!(
+            g.backing_of(non_mem),
+            None,
+            "a non-Memory object yielded a backing"
+        );
     }
 }
 
@@ -721,26 +787,72 @@ fn p3_channel_vas_resolution_type_checks_every_hop() {
     let chan = HObject(0x720);
     let bait_pdb = Pdb(0x0BAD_0000);
     for e in [
-        RmEvent::Alloc { client: c, parent: root, handle: root, class: mc::CLIENT, facts: AllocFacts::default() },
-        RmEvent::Alloc { client: c, parent: root, handle: dev, class: mc::DEVICE, facts: AllocFacts::default() },
-        RmEvent::Alloc { client: c, parent: dev, handle: mem, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(0x1000), ..Default::default() } },
+        RmEvent::Alloc {
+            client: c,
+            parent: root,
+            handle: root,
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: c,
+            parent: root,
+            handle: dev,
+            class: mc::DEVICE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: c,
+            parent: dev,
+            handle: mem,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x1000),
+                ..Default::default()
+            },
+        },
         // A SetPageDir aimed at the MEMORY handle (a hostile bait) — it is NOT a VASpace,
         // so this parks harmlessly and never makes `mem` route as an address space.
-        RmEvent::SetPageDir { client: c, vaspace: mem, pdb: bait_pdb },
+        RmEvent::SetPageDir {
+            client: c,
+            vaspace: mem,
+            pdb: bait_pdb,
+        },
         RmEvent::Alloc {
-            client: c, parent: dev, handle: chan, class: mc::CHANNEL_GR,
-            facts: AllocFacts { h_vaspace: Some(mem), userd_flags: MockArch::userd_flags_for(VChid(0x33)), ..Default::default() },
+            client: c,
+            parent: dev,
+            handle: chan,
+            class: mc::CHANNEL_GR,
+            facts: AllocFacts {
+                h_vaspace: Some(mem),
+                userd_flags: MockArch::userd_flags_for(VChid(0x33)),
+                ..Default::default()
+            },
         },
     ] {
         g.apply(&arch, e).unwrap();
     }
     let bounds = project(&g, &arch).expect("projects");
     // The channel resolved to NO VAS (its hVASpace named a non-VASpace).
-    let chan_facts = bounds.procs.iter().flat_map(|p| p.channels.values()).next().expect("a channel");
-    assert_eq!(chan_facts.vas_pdb, None, "channel bound to a non-VASpace's baited PDB");
-    assert_eq!(chan_facts.vas_origin, None, "channel resolved a VAS origin it should not have");
+    let chan_facts = bounds
+        .procs
+        .iter()
+        .flat_map(|p| p.channels.values())
+        .next()
+        .expect("a channel");
+    assert_eq!(
+        chan_facts.vas_pdb, None,
+        "channel bound to a non-VASpace's baited PDB"
+    );
+    assert_eq!(
+        chan_facts.vas_origin, None,
+        "channel resolved a VAS origin it should not have"
+    );
     // The baited PDB never routes (it was never a real VASpace's PDB).
-    assert!(!bounds.by_pdb.contains_key(&(GpuId::ZERO, bait_pdb)), "a baited non-VASpace PDB entered routing");
+    assert!(
+        !bounds.by_pdb.contains_key(&(GpuId::ZERO, bait_pdb)),
+        "a baited non-VASpace PDB entered routing"
+    );
 }
 
 // =================================================================================
@@ -771,18 +883,56 @@ fn p4_map_naming_a_non_memory_object_is_a_loud_unbacked_fault_not_a_silent_bind(
     let va = GpuVa(0x3_0000_0000);
 
     for e in [
-        RmEvent::Alloc { client: c, parent: root, handle: root, class: mc::CLIENT, facts: AllocFacts::default() },
-        RmEvent::Alloc { client: c, parent: root, handle: dev, class: mc::DEVICE, facts: AllocFacts::default() },
-        RmEvent::Alloc { client: c, parent: dev, handle: real_vas, class: mc::VASPACE, facts: AllocFacts::default() },
-        RmEvent::SetPageDir { client: c, vaspace: real_vas, pdb },
+        RmEvent::Alloc {
+            client: c,
+            parent: root,
+            handle: root,
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: c,
+            parent: root,
+            handle: dev,
+            class: mc::DEVICE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: c,
+            parent: dev,
+            handle: real_vas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: c,
+            vaspace: real_vas,
+            pdb,
+        },
         // The bait: a VASpace carrying an attacker-declared mem_phys in its alloc facts.
-        RmEvent::Alloc { client: c, parent: dev, handle: evil_vas, class: mc::VASPACE, facts: AllocFacts { mem_phys: Some(evil_phys), ..Default::default() } },
+        RmEvent::Alloc {
+            client: c,
+            parent: dev,
+            handle: evil_vas,
+            class: mc::VASPACE,
+            facts: AllocFacts {
+                mem_phys: Some(evil_phys),
+                ..Default::default()
+            },
+        },
     ] {
         gpu.apply(e).expect("setup applies");
     }
 
     // Map the bait VASpace as if it were a memory object into the real VAS.
-    let attack = gpu.apply(RmEvent::MapMemoryDma { client: c, vaspace: real_vas, memory: evil_vas, va, offset: 0, len: 0x1000 });
+    let attack = gpu.apply(RmEvent::MapMemoryDma {
+        client: c,
+        vaspace: real_vas,
+        memory: evil_vas,
+        va,
+        offset: 0,
+        len: 0x1000,
+    });
 
     // It is a LOUD unbacked fault (rolled back atomically), NOT a silent bind.
     assert!(
@@ -790,14 +940,39 @@ fn p4_map_naming_a_non_memory_object_is_a_loud_unbacked_fault_not_a_silent_bind(
         "mapping a non-Memory object as backing must be a loud UnbackedMapping fault, got {attack:?}"
     );
     // The VA never resolved to the attacker's phys — the confused-deputy is closed.
-    assert!(resolve(&gpu, GpuId::ZERO, pdb, va).is_err(), "the VA silently bound to a non-Memory backing");
+    assert!(
+        resolve(&gpu, GpuId::ZERO, pdb, va).is_err(),
+        "the VA silently bound to a non-Memory backing"
+    );
 
     // Sanity: a REAL memory object with the same phys DOES map cleanly (the fix does not
     // over-reject legitimate mappings — only the type-confused ones).
     let real_mem = HObject(0x920);
-    gpu.apply(RmEvent::Alloc { client: c, parent: dev, handle: real_mem, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(evil_phys), ..Default::default() } }).unwrap();
-    gpu.apply(RmEvent::MapMemoryDma { client: c, vaspace: real_vas, memory: real_mem, va, offset: 0, len: 0x1000 }).expect("a real memory maps cleanly");
-    assert_eq!(resolve(&gpu, GpuId::ZERO, pdb, va).map(|(b, _)| b.phys), Ok(evil_phys), "a legitimate memory mapping must resolve");
+    gpu.apply(RmEvent::Alloc {
+        client: c,
+        parent: dev,
+        handle: real_mem,
+        class: mc::MEMORY,
+        facts: AllocFacts {
+            mem_phys: Some(evil_phys),
+            ..Default::default()
+        },
+    })
+    .unwrap();
+    gpu.apply(RmEvent::MapMemoryDma {
+        client: c,
+        vaspace: real_vas,
+        memory: real_mem,
+        va,
+        offset: 0,
+        len: 0x1000,
+    })
+    .expect("a real memory maps cleanly");
+    assert_eq!(
+        resolve(&gpu, GpuId::ZERO, pdb, va).map(|(b, _)| b.phys),
+        Ok(evil_phys),
+        "a legitimate memory mapping must resolve"
+    );
 }
 
 /// **Phase 4 regression — the PARKED-PDB WEDGE (found by `i4`).** A hostile process
@@ -822,15 +997,50 @@ fn p4_parked_setpagedir_via_dup_alias_cannot_wedge_the_device() {
     let h1 = HObject(0x5c00_0000); // not yet owned when the SetPageDir is parked
     let h2 = HObject(0x5c00_0004);
     let a_pdb = Pdb(0x00A0_0000);
-    gpu.apply(RmEvent::Alloc { client: a, parent: root, handle: root, class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::Alloc { client: a, parent: root, handle: dev, class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: a,
+        parent: root,
+        handle: root,
+        class: mc::CLIENT,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: a,
+        parent: root,
+        handle: dev,
+        class: mc::DEVICE,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
     // 1. Park a SetPageDir on the (unowned) h1, aimed at the VICTIM's PDB.
-    gpu.apply(RmEvent::SetPageDir { client: a, vaspace: h1, pdb: BY_PDB }).unwrap();
+    gpu.apply(RmEvent::SetPageDir {
+        client: a,
+        vaspace: h1,
+        pdb: BY_PDB,
+    })
+    .unwrap();
     // 2/3. Alloc h2 as the attacker's own VASpace and give it its OWN pdb.
-    gpu.apply(RmEvent::Alloc { client: a, parent: dev, handle: h2, class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::SetPageDir { client: a, vaspace: h2, pdb: a_pdb }).unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: a,
+        parent: dev,
+        handle: h2,
+        class: mc::VASPACE,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::SetPageDir {
+        client: a,
+        vaspace: h2,
+        pdb: a_pdb,
+    })
+    .unwrap();
     // 4. Dup h2 onto h1 — the stale parked SetPageDir now resolves onto h2's resource.
-    gpu.apply(RmEvent::Dup { src: NodeKey::new(a, h2), dst: NodeKey::new(a, h1) }).unwrap();
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(a, h2),
+        dst: NodeKey::new(a, h1),
+    })
+    .unwrap();
 
     // NO WEDGE: a fresh benign process still allocates cleanly (the landmine would make
     // its client-root Alloc trigger resolve_pending_pdbs → collision → rollback).
@@ -839,12 +1049,23 @@ fn p4_parked_setpagedir_via_dup_alias_cannot_wedge_the_device() {
     let mut sl = Scenario::new();
     sl.compute_process(LATE, LATE_PDB, identical_handles(0x62, 0x63));
     for ev in sl.events {
-        gpu.apply(ev).expect("device wedged: fresh benign proc refused after the parked-PDB attack");
+        gpu.apply(ev)
+            .expect("device wedged: fresh benign proc refused after the parked-PDB attack");
     }
     // The victim keeps its PDB + backing; the attacker kept ITS own PDB (never the victim's).
-    assert_eq!(resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys), Ok(BY_PHYS), "victim corrupted");
-    assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, a_pdb)), "attacker VAS lost its own PDB (stale parked one clobbered it)");
-    assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)), "fresh proc did not route");
+    assert_eq!(
+        resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys),
+        Ok(BY_PHYS),
+        "victim corrupted"
+    );
+    assert!(
+        gpu.by_pdb.contains_key(&(GpuId::ZERO, a_pdb)),
+        "attacker VAS lost its own PDB (stale parked one clobbered it)"
+    );
+    assert!(
+        gpu.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)),
+        "fresh proc did not route"
+    );
 }
 
 /// **Phase 4 regression — the PARKED-MAP WEDGE (the parked-PDB wedge's twin).** A
@@ -871,18 +1092,58 @@ fn p4_parked_unbacked_map_via_dup_alias_cannot_wedge_the_device() {
     let alias = HObject(0xB21); // will dup-alias mbad after the map is parked
     let va = GpuVa(0x4_0000_0000);
     for e in [
-        RmEvent::Alloc { client: a, parent: root, handle: root, class: mc::CLIENT, facts: AllocFacts::default() },
-        RmEvent::Alloc { client: a, parent: root, handle: dev, class: mc::DEVICE, facts: AllocFacts::default() },
-        RmEvent::Alloc { client: a, parent: dev, handle: vas, class: mc::VASPACE, facts: AllocFacts::default() },
-        RmEvent::SetPageDir { client: a, vaspace: vas, pdb: a_pdb },
-        RmEvent::Alloc { client: a, parent: dev, handle: mbad, class: mc::MEMORY, facts: AllocFacts::default() },
+        RmEvent::Alloc {
+            client: a,
+            parent: root,
+            handle: root,
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: a,
+            parent: root,
+            handle: dev,
+            class: mc::DEVICE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: a,
+            parent: dev,
+            handle: vas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: a,
+            vaspace: vas,
+            pdb: a_pdb,
+        },
+        RmEvent::Alloc {
+            client: a,
+            parent: dev,
+            handle: mbad,
+            class: mc::MEMORY,
+            facts: AllocFacts::default(),
+        },
     ] {
         gpu.apply(e).expect("attacker setup applies");
     }
     // Park a map naming the (unowned) `alias` as its memory, into the PDB-bound VAS.
-    gpu.apply(RmEvent::MapMemoryDma { client: a, vaspace: vas, memory: alias, va, offset: 0, len: 0x1000 }).expect("map parks");
+    gpu.apply(RmEvent::MapMemoryDma {
+        client: a,
+        vaspace: vas,
+        memory: alias,
+        va,
+        offset: 0,
+        len: 0x1000,
+    })
+    .expect("map parks");
     // Dup the unbacked memory onto `alias` — the parked map now resolves to no backing.
-    gpu.apply(RmEvent::Dup { src: NodeKey::new(a, mbad), dst: NodeKey::new(a, alias) }).expect("dup applies");
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(a, mbad),
+        dst: NodeKey::new(a, alias),
+    })
+    .expect("dup applies");
 
     // NO WEDGE: a fresh benign process still allocates cleanly (the landmine would make
     // its client-root Alloc trigger resolve_pending_maps → UnbackedMapping → rollback).
@@ -891,10 +1152,21 @@ fn p4_parked_unbacked_map_via_dup_alias_cannot_wedge_the_device() {
     let mut sl = Scenario::new();
     sl.compute_process(LATE, LATE_PDB, identical_handles(0x64, 0x65));
     for ev in sl.events {
-        gpu.apply(ev).expect("device wedged: fresh benign proc refused after the parked-map attack");
+        gpu.apply(ev)
+            .expect("device wedged: fresh benign proc refused after the parked-map attack");
     }
-    assert_eq!(resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys), Ok(BY_PHYS), "victim corrupted");
-    assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)), "fresh proc did not route");
+    assert_eq!(
+        resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys),
+        Ok(BY_PHYS),
+        "victim corrupted"
+    );
+    assert!(
+        gpu.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)),
+        "fresh proc did not route"
+    );
     // The unbacked VA never populated — a loud MISS at use, contained (never a wedge).
-    assert!(resolve(&gpu, GpuId::ZERO, a_pdb, va).is_err(), "an unbacked VA must MISS at use");
+    assert!(
+        resolve(&gpu, GpuId::ZERO, a_pdb, va).is_err(),
+        "an unbacked VA must MISS at use"
+    );
 }

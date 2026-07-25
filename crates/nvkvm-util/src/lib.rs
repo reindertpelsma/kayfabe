@@ -18,10 +18,10 @@
 pub mod interval_map;
 pub mod time;
 
-pub use interval_map::{IntervalError, IntervalMap};
-pub use time::Instant;
 /// Re-export of the pure, OS-free duration type (from `core::time`).
 pub use core::time::Duration;
+pub use interval_map::{IntervalError, IntervalMap};
+pub use time::Instant;
 
 /// Compile-time assertion that each listed type is [`Send`]`+`[`Sync`] — **the
 /// concurrency contract, enforced by the build** (design decision #17).

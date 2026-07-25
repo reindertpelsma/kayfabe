@@ -41,19 +41,17 @@
 
 use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_completion::{
-    CompletionError, CompletionQueue, OsEventRef, MAX_OUTSTANDING_COMPLETIONS,
-};
+use nvkvm_completion::{CompletionError, CompletionQueue, MAX_OUTSTANDING_COMPLETIONS, OsEventRef};
 use nvkvm_core::gpa::GpaSpace;
 use nvkvm_core::gpu::{Gpu, GpuError};
-use nvkvm_core::project::{project, Boundaries, ProcBoundary};
+use nvkvm_core::project::{Boundaries, ProcBoundary, project};
 use nvkvm_core::rmgraph::{
-    AllocFacts, Capacity, NodeKey, RmEvent, RmGraph, RmGraphError, MAX_LIVE_HANDLES,
-    MAX_LIVE_MAPPINGS, MAX_PARKED,
+    AllocFacts, Capacity, MAX_LIVE_HANDLES, MAX_LIVE_MAPPINGS, MAX_PARKED, NodeKey, RmEvent,
+    RmGraph, RmGraphError,
 };
-use nvkvm_fwd::{handle_doorbell, parse_pushbuffer, resolve, FwdFault};
-use nvkvm_mocks::{mock_classes as mc, MockArch, MockIsolateFactory, MockVmm};
-use nvkvm_tests::{identical_handles, Scenario};
+use nvkvm_fwd::{FwdFault, handle_doorbell, parse_pushbuffer, resolve};
+use nvkvm_mocks::{MockArch, MockIsolateFactory, MockVmm, mock_classes as mc};
+use nvkvm_tests::{Scenario, identical_handles};
 use nvkvm_vmm::Vmm;
 use proptest::prelude::*;
 
@@ -93,7 +91,10 @@ fn benign_b_events() -> Vec<RmEvent> {
 
 /// The `ProcBoundary` of the process that owns `client`, or `None` if absent.
 fn boundary_of(b: &Boundaries, client: HClient) -> Option<ProcBoundary> {
-    b.procs.iter().find(|p| p.clients.contains(&client)).cloned()
+    b.procs
+        .iter()
+        .find(|p| p.clients.contains(&client))
+        .cloned()
 }
 
 // =================================================================================
@@ -132,10 +133,21 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
     // A's OWN PDBs / vChids (disjoint from B's B_PDB and B's vChids 0x40/0x41).
     let a_pdb = || (0u32..4).prop_map(|n| Pdb(0x000A_0000 + u64::from(n)));
     // Collide with B's VA on purpose (the per-VAS identity that MUST stay isolated).
-    let a_va = || prop_oneof![Just(B_MAP_VA), (0u32..4).prop_map(|n| GpuVa(0x2_0020_0000 + u64::from(n) * 0x1000))];
+    let a_va = || {
+        prop_oneof![
+            Just(B_MAP_VA),
+            (0u32..4).prop_map(|n| GpuVa(0x2_0020_0000 + u64::from(n) * 0x1000))
+        ]
+    };
     prop_oneof![
-        (a_client(), a_handle(), a_handle(), any_class(), 0u32..0x20000).prop_map(
-            |(client, parent, handle, class, flags)| RmEvent::Alloc {
+        (
+            a_client(),
+            a_handle(),
+            a_handle(),
+            any_class(),
+            0u32..0x20000
+        )
+            .prop_map(|(client, parent, handle, class, flags)| RmEvent::Alloc {
                 client,
                 parent,
                 handle,
@@ -149,18 +161,33 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
                     mem_phys: (flags & 2 == 0).then_some(0x8000_0000 | u64::from(flags)),
                     device_instance: None,
                 },
-            }
-        ),
+            }),
         (a_client(), a_handle(), a_handle(), a_va()).prop_map(|(client, vaspace, memory, va)| {
-            RmEvent::MapMemoryDma { client, vaspace, memory, va, offset: 0, len: 0x10000 }
+            RmEvent::MapMemoryDma {
+                client,
+                vaspace,
+                memory,
+                va,
+                offset: 0,
+                len: 0x10000,
+            }
         }),
-        (a_client(), a_handle(), a_va())
-            .prop_map(|(client, vaspace, va)| RmEvent::Unmap { client, vaspace, va }),
+        (a_client(), a_handle(), a_va()).prop_map(|(client, vaspace, va)| RmEvent::Unmap {
+            client,
+            vaspace,
+            va
+        }),
         (a_client(), a_handle(), a_client(), a_handle()).prop_map(|(sc, sh, dc, dh)| {
-            RmEvent::Dup { src: NodeKey::new(sc, sh), dst: NodeKey::new(dc, dh) }
+            RmEvent::Dup {
+                src: NodeKey::new(sc, sh),
+                dst: NodeKey::new(dc, dh),
+            }
         }),
-        (a_client(), a_handle(), a_pdb())
-            .prop_map(|(client, vaspace, pdb)| RmEvent::SetPageDir { client, vaspace, pdb }),
+        (a_client(), a_handle(), a_pdb()).prop_map(|(client, vaspace, pdb)| RmEvent::SetPageDir {
+            client,
+            vaspace,
+            pdb
+        }),
         (a_client(), a_handle()).prop_map(|(client, handle)| RmEvent::Free { client, handle }),
     ]
 }
@@ -285,13 +312,43 @@ fn b1_projection_collision_is_contained_not_a_device_wedge() {
         facts: AllocFacts::default(),
     };
     gpu.apply(root(a)).unwrap();
-    gpu.apply(RmEvent::Alloc { client: a, parent: HObject(a.0), handle: HObject(1), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::Alloc { client: a, parent: HObject(1), handle: HObject(2), class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::Alloc { client: a, parent: HObject(1), handle: HObject(3), class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::SetPageDir { client: a, vaspace: HObject(2), pdb: Pdb(0xBAD) }).unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: a,
+        parent: HObject(a.0),
+        handle: HObject(1),
+        class: mc::DEVICE,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: a,
+        parent: HObject(1),
+        handle: HObject(2),
+        class: mc::VASPACE,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: a,
+        parent: HObject(1),
+        handle: HObject(3),
+        class: mc::VASPACE,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::SetPageDir {
+        client: a,
+        vaspace: HObject(2),
+        pdb: Pdb(0xBAD),
+    })
+    .unwrap();
 
     // The colliding second bind is a LOUD, contained refusal…
-    let collide = gpu.apply(RmEvent::SetPageDir { client: a, vaspace: HObject(3), pdb: Pdb(0xBAD) });
+    let collide = gpu.apply(RmEvent::SetPageDir {
+        client: a,
+        vaspace: HObject(3),
+        pdb: Pdb(0xBAD),
+    });
     assert!(
         matches!(collide, Err(GpuError::Projection(_))),
         "PDB collision must be a loud projection fault, got {collide:?}"
@@ -299,9 +356,13 @@ fn b1_projection_collision_is_contained_not_a_device_wedge() {
 
     // …and the device is NOT wedged: a wholly-separate process B proceeds normally.
     for ev in benign_b_events() {
-        gpu.apply(ev).expect("B is unaffected by A's projection collision");
+        gpu.apply(ev)
+            .expect("B is unaffected by A's projection collision");
     }
-    assert!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).is_ok(), "B fully functional after A's collision");
+    assert!(
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).is_ok(),
+        "B fully functional after A's collision"
+    );
 }
 
 /// ★ Mutation-gate kill (`project` `prev != node.key`→`==` on the vChid dedup, and the
@@ -319,19 +380,60 @@ fn b1_vchid_collision_is_a_loud_contained_projection_fault() {
     // Two channels in A's namespace whose userd flags decode to the SAME vChid.
     let dup_vchid = VChid(0x33);
     let flags = MockArch::userd_flags_for(dup_vchid);
-    gpu.apply(RmEvent::Alloc { client: a, parent: HObject(a.0), handle: HObject(a.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::Alloc { client: a, parent: HObject(a.0), handle: HObject(1), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::Alloc { client: a, parent: HObject(1), handle: HObject(2), class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::SetPageDir { client: a, vaspace: HObject(2), pdb: Pdb(0xA11) }).unwrap();
     gpu.apply(RmEvent::Alloc {
-        client: a, parent: HObject(1), handle: HObject(0x10), class: mc::CHANNEL_GR,
-        facts: AllocFacts { h_vaspace: Some(HObject(2)), userd_flags: flags, ..Default::default() },
-    }).unwrap();
+        client: a,
+        parent: HObject(a.0),
+        handle: HObject(a.0),
+        class: mc::CLIENT,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: a,
+        parent: HObject(a.0),
+        handle: HObject(1),
+        class: mc::DEVICE,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: a,
+        parent: HObject(1),
+        handle: HObject(2),
+        class: mc::VASPACE,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::SetPageDir {
+        client: a,
+        vaspace: HObject(2),
+        pdb: Pdb(0xA11),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: a,
+        parent: HObject(1),
+        handle: HObject(0x10),
+        class: mc::CHANNEL_GR,
+        facts: AllocFacts {
+            h_vaspace: Some(HObject(2)),
+            userd_flags: flags,
+            ..Default::default()
+        },
+    })
+    .unwrap();
 
     // The SECOND channel claiming the same vChid is a LOUD, contained refusal.
     let collide = gpu.apply(RmEvent::Alloc {
-        client: a, parent: HObject(1), handle: HObject(0x11), class: mc::CHANNEL_CE,
-        facts: AllocFacts { h_vaspace: Some(HObject(2)), userd_flags: flags, ..Default::default() },
+        client: a,
+        parent: HObject(1),
+        handle: HObject(0x11),
+        class: mc::CHANNEL_CE,
+        facts: AllocFacts {
+            h_vaspace: Some(HObject(2)),
+            userd_flags: flags,
+            ..Default::default()
+        },
     });
     assert!(
         matches!(collide, Err(GpuError::Projection(_))),
@@ -342,7 +444,10 @@ fn b1_vchid_collision_is_a_loud_contained_projection_fault() {
     for ev in benign_b_events() {
         gpu.apply(ev).expect("B unaffected by A's vChid collision");
     }
-    assert!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).is_ok(), "B fully functional after A's collision");
+    assert!(
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).is_ok(),
+        "B fully functional after A's collision"
+    );
 }
 
 /// **Boundary 1 (honest scope).** A hostile process forging the *global hardware
@@ -376,19 +481,59 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
     let a_root = HObject(0xA1);
     let a_dev = HObject(0xA2);
     let a_vas = HObject(0xA3);
-    gpu.apply(RmEvent::Alloc { client: A_CLIENT, parent: a_root, handle: a_root, class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::Alloc { client: A_CLIENT, parent: a_root, handle: a_dev, class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::Alloc { client: A_CLIENT, parent: a_dev, handle: a_vas, class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    let squat = gpu.apply(RmEvent::SetPageDir { client: A_CLIENT, vaspace: a_vas, pdb: B_PDB });
+    gpu.apply(RmEvent::Alloc {
+        client: A_CLIENT,
+        parent: a_root,
+        handle: a_root,
+        class: mc::CLIENT,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: A_CLIENT,
+        parent: a_root,
+        handle: a_dev,
+        class: mc::DEVICE,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: A_CLIENT,
+        parent: a_dev,
+        handle: a_vas,
+        class: mc::VASPACE,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    let squat = gpu.apply(RmEvent::SetPageDir {
+        client: A_CLIENT,
+        vaspace: a_vas,
+        pdb: B_PDB,
+    });
 
     // The squat is refused (B declared B_PDB first) — loud + contained.
-    assert!(matches!(squat, Err(GpuError::Projection(_))), "PDB squat must be a loud fault, got {squat:?}");
+    assert!(
+        matches!(squat, Err(GpuError::Projection(_))),
+        "PDB squat must be a loud fault, got {squat:?}"
+    );
     // B keeps its PDB and its mapping — the victim is not corrupted.
-    assert_eq!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(B_MEM_PHYS));
-    assert_eq!(gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).and_then(|pid| gpu.procs.get(pid)).map(|p| p.clients.contains(&B_CLIENT)), Some(true));
+    assert_eq!(
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys),
+        Ok(B_MEM_PHYS)
+    );
+    assert_eq!(
+        gpu.by_pdb
+            .get(&(GpuId::ZERO, B_PDB))
+            .and_then(|pid| gpu.procs.get(pid))
+            .map(|p| p.clients.contains(&B_CLIENT)),
+        Some(true)
+    );
     // The INNOCENT third process C is entirely unaffected — the blast radius never
     // reaches beyond the colliding pair.
-    assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, C_PDB)), "innocent C still routes");
+    assert!(
+        gpu.by_pdb.contains_key(&(GpuId::ZERO, C_PDB)),
+        "innocent C still routes"
+    );
     // And the device as a whole is still consistent (no wedge, no corruption).
     assert!(project(&gpu.rmgraph, gpu.arch.as_ref()).is_ok());
 }
@@ -525,7 +670,10 @@ fn b2_pending_dup_flood_is_capped_loud() {
             break;
         }
     }
-    assert!(faulted, "parked-dup table must loud-fault at the cap, not grow unbounded");
+    assert!(
+        faulted,
+        "parked-dup table must loud-fault at the cap, not grow unbounded"
+    );
 }
 
 /// **Boundary 2.** A parked-map flood (orphan `MapMemoryDma`s that never resolve) is
@@ -550,7 +698,10 @@ fn b2_pending_map_flood_is_capped_loud() {
             break;
         }
     }
-    assert!(faulted, "parked-map table must loud-fault at the cap, not grow unbounded");
+    assert!(
+        faulted,
+        "parked-map table must loud-fault at the cap, not grow unbounded"
+    );
 }
 
 /// **Boundary 2.** A live-mapping flood (one VAS + one memory, mapped at unbounded
@@ -561,11 +712,62 @@ fn b2_mapping_flood_is_capped_loud() {
     let mut g = RmGraph::new();
     let c = HClient(0xC002);
     // One client → device → vaspace(+pdb) → memory(+backing).
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(c.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(1), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: HObject(2), class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::SetPageDir { client: c, vaspace: HObject(2), pdb: Pdb(0x5000) }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: HObject(3), class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(0x8000_0000), ..Default::default() } }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(c.0),
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(1),
+            class: mc::DEVICE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: HObject(2),
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: c,
+            vaspace: HObject(2),
+            pdb: Pdb(0x5000),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: HObject(3),
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x8000_0000),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
 
     let mut faulted = false;
     for i in 0..=MAX_LIVE_MAPPINGS as u64 {
@@ -582,7 +784,10 @@ fn b2_mapping_flood_is_capped_loud() {
             break;
         }
     }
-    assert!(faulted, "live-mapping table must loud-fault at the cap, not grow unbounded");
+    assert!(
+        faulted,
+        "live-mapping table must loud-fault at the cap, not grow unbounded"
+    );
 }
 
 /// **Boundary 2.** A completion flood (a hostile guest triggering completions faster
@@ -627,7 +832,10 @@ fn b2_pushbuffer_length_flood_is_bounded() {
     }
     // Bounded work, no panic, no OOM: returns a normal (empty-ish) outcome.
     let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("bounded parse");
-    assert!(out.sem_releases.is_empty(), "empty guest RAM decodes to nothing actionable");
+    assert!(
+        out.sem_releases.is_empty(),
+        "empty guest RAM decodes to nothing actionable"
+    );
 }
 
 // =================================================================================
@@ -644,16 +852,25 @@ fn b4_miss_is_fault_never_silent_wrong_resolve() {
         gpu.apply(ev).expect("B applies");
     }
     // In-range: resolves to B's backing.
-    assert_eq!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(B_MEM_PHYS));
+    assert_eq!(
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys),
+        Ok(B_MEM_PHYS)
+    );
     // Just past the mapping: LOUD miss, not a wrap-around into the next range.
     assert!(matches!(
         resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(B_MAP_VA.0 + B_MAP_LEN)),
         Err(FwdFault::Address(_))
     ));
     // A wild VA: LOUD miss.
-    assert!(matches!(resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(0xdead_beef_0000)), Err(FwdFault::Address(_))));
+    assert!(matches!(
+        resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(0xdead_beef_0000)),
+        Err(FwdFault::Address(_))
+    ));
     // An unknown PDB: LOUD routing miss (no VAS to fall through to).
-    assert!(matches!(resolve(&gpu, GpuId::ZERO, Pdb(0xF00D), B_MAP_VA), Err(FwdFault::UnknownPdb { .. })));
+    assert!(matches!(
+        resolve(&gpu, GpuId::ZERO, Pdb(0xF00D), B_MAP_VA),
+        Err(FwdFault::UnknownPdb { .. })
+    ));
 }
 
 /// **Boundary 1 (the #14 cross-context leak, made impossible).** Two processes map
@@ -681,9 +898,18 @@ fn b4_identical_va_distinct_pdb_never_cross_leaks() {
     }
 
     // Each PDB resolves the identical VA to its OWN backing — never crossed.
-    assert_eq!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(B_MEM_PHYS));
-    assert_eq!(resolve(&gpu, GpuId::ZERO, A_PDB, B_MAP_VA).map(|(b, _)| b.phys), Ok(A_MEM_PHYS));
-    assert_ne!(B_MEM_PHYS, A_MEM_PHYS, "the two backings are genuinely distinct");
+    assert_eq!(
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys),
+        Ok(B_MEM_PHYS)
+    );
+    assert_eq!(
+        resolve(&gpu, GpuId::ZERO, A_PDB, B_MAP_VA).map(|(b, _)| b.phys),
+        Ok(A_MEM_PHYS)
+    );
+    assert_ne!(
+        B_MEM_PHYS, A_MEM_PHYS,
+        "the two backings are genuinely distinct"
+    );
 }
 
 // =================================================================================
@@ -701,28 +927,83 @@ fn b5_channel_naming_non_vaspace_handle_does_not_bind() {
     let mut g = RmGraph::new();
     let c = HClient(0xCC);
     // client → device → memory(+backing, given a PDB-shaped SetPageDir to bait a bind).
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(c.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(1), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(c.0),
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(1),
+            class: mc::DEVICE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
     let fake_vas = HObject(2);
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: fake_vas, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(0x8000_0000), ..Default::default() } }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: fake_vas,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x8000_0000),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
     // Bait: attach a PDB to the MEMORY handle (a hostile SetPageDir on a non-VASpace).
-    g.apply(&arch, RmEvent::SetPageDir { client: c, vaspace: fake_vas, pdb: Pdb(0x9999) }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: c,
+            vaspace: fake_vas,
+            pdb: Pdb(0x9999),
+        },
+    )
+    .unwrap();
     // A channel that names the memory handle as its VASpace.
-    g.apply(&arch, RmEvent::Alloc {
-        client: c,
-        parent: HObject(1),
-        handle: HObject(3),
-        class: mc::CHANNEL_GR,
-        facts: AllocFacts { h_vaspace: Some(fake_vas), userd_flags: MockArch::userd_flags_for(VChid(0x7)), ..Default::default() },
-    }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: HObject(3),
+            class: mc::CHANNEL_GR,
+            facts: AllocFacts {
+                h_vaspace: Some(fake_vas),
+                userd_flags: MockArch::userd_flags_for(VChid(0x7)),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
 
     let bounds = project(&g, &arch).expect("projects");
     // The bait PDB does NOT route (a MEMORY object is not a VASpace).
-    assert!(!bounds.by_pdb.contains_key(&(GpuId::ZERO, Pdb(0x9999))), "a non-VASpace's bait PDB must not route");
+    assert!(
+        !bounds.by_pdb.contains_key(&(GpuId::ZERO, Pdb(0x9999))),
+        "a non-VASpace's bait PDB must not route"
+    );
     // The channel resolved to NO VAS (loud-miss at use), never the memory's PDB.
     let proc = &bounds.procs[0];
     let chan = proc.channels.values().next().expect("the channel");
-    assert_eq!(chan.vas_pdb, None, "channel must not be confused-deputy bound to a non-VASpace");
+    assert_eq!(
+        chan.vas_pdb, None,
+        "channel must not be confused-deputy bound to a non-VASpace"
+    );
 }
 
 /// **Boundary 1.** A channel in client A naming an `hVASpace` whose handle VALUE
@@ -743,23 +1024,51 @@ fn b5_channel_cannot_bind_another_clients_vaspace_handle() {
     const A_CLIENT: HClient = HClient(0xA000);
     let a_root = HObject(0xA1);
     let a_dev = HObject(0xA2);
-    gpu.apply(RmEvent::Alloc { client: A_CLIENT, parent: a_root, handle: a_root, class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    gpu.apply(RmEvent::Alloc { client: A_CLIENT, parent: a_root, handle: a_dev, class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: A_CLIENT,
+        parent: a_root,
+        handle: a_root,
+        class: mc::CLIENT,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Alloc {
+        client: A_CLIENT,
+        parent: a_root,
+        handle: a_dev,
+        class: mc::DEVICE,
+        facts: AllocFacts::default(),
+    })
+    .unwrap();
     gpu.apply(RmEvent::Alloc {
         client: A_CLIENT,
         parent: a_dev,
         handle: HObject(0xA3),
         class: mc::CHANNEL_GR,
-        facts: AllocFacts { h_vaspace: Some(hb.vaspace), userd_flags: MockArch::userd_flags_for(VChid(0x333)), ..Default::default() },
-    }).unwrap();
+        facts: AllocFacts {
+            h_vaspace: Some(hb.vaspace),
+            userd_flags: MockArch::userd_flags_for(VChid(0x333)),
+            ..Default::default()
+        },
+    })
+    .unwrap();
 
     let bounds = project(&gpu.rmgraph, gpu.arch.as_ref()).expect("projects");
     // A's channel resolved to NO VAS — it never reached across into B's VASpace/PDB.
     let a_proc = boundary_of(&bounds, A_CLIENT).expect("A exists");
     let chan = a_proc.channels.values().next().expect("A's channel");
-    assert_eq!(chan.vas_pdb, None, "A's channel must not cross-bind B's page directory");
+    assert_eq!(
+        chan.vas_pdb, None,
+        "A's channel must not cross-bind B's page directory"
+    );
     // And B still solely owns B_PDB.
-    assert_eq!(bounds.by_pdb.get(&(GpuId::ZERO, B_PDB)).map(|(_, k)| k.client), Some(B_CLIENT));
+    assert_eq!(
+        bounds
+            .by_pdb
+            .get(&(GpuId::ZERO, B_PDB))
+            .map(|(_, k)| k.client),
+        Some(B_CLIENT)
+    );
 }
 
 /// **Boundary 1.** A `Dup` naming a source that is NEVER allocated is INERT, never a
@@ -782,10 +1091,15 @@ fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
         src: NodeKey::new(HClient(0xDEAD), HObject(0xDEAD)),
         dst: NodeKey::new(HClient(0xBEEF), HObject(0xBEEF)),
     });
-    assert!(inert_dup.is_ok(), "an unresolved dup parks (order tolerance), got {inert_dup:?}");
+    assert!(
+        inert_dup.is_ok(),
+        "an unresolved dup parks (order tolerance), got {inert_dup:?}"
+    );
     // No cross-object binding: the dst alias resolves to nothing (no silent reach).
     assert!(
-        gpu.rmgraph.origin_of(NodeKey::new(HClient(0xBEEF), HObject(0xBEEF))).is_none(),
+        gpu.rmgraph
+            .origin_of(NodeKey::new(HClient(0xBEEF), HObject(0xBEEF)))
+            .is_none(),
         "a parked dup must not bind its dst to any object"
     );
     // No phantom proc: the never-allocated clients group into nothing.
@@ -797,10 +1111,16 @@ fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
         "a dangling dup must not conjure a resource-less phantom proc"
     );
     // B is undisturbed.
-    assert!(resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).is_ok(), "B undisturbed by a dangling dup");
+    assert!(
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).is_ok(),
+        "B undisturbed by a dangling dup"
+    );
 
     // Free of a never-seen handle → loud FreeUnknown.
-    let bad_free = gpu.apply(RmEvent::Free { client: HClient(0x1234), handle: HObject(0x5678) });
+    let bad_free = gpu.apply(RmEvent::Free {
+        client: HClient(0x1234),
+        handle: HObject(0x5678),
+    });
     assert!(
         matches!(bad_free, Err(GpuError::Graph(RmGraphError::FreeUnknown(_)))),
         "unknown free must be loud, got {bad_free:?}"
@@ -834,10 +1154,32 @@ fn b6_gpa_window_exhaustion_is_graceful() {
         let dev = HObject(0x100);
         let vas = HObject(0x110);
         let steps = [
-            RmEvent::Alloc { client: c, parent: root, handle: root, class: mc::CLIENT, facts: AllocFacts::default() },
-            RmEvent::Alloc { client: c, parent: root, handle: dev, class: mc::DEVICE, facts: AllocFacts::default() },
-            RmEvent::Alloc { client: c, parent: dev, handle: vas, class: mc::VASPACE, facts: AllocFacts::default() },
-            RmEvent::SetPageDir { client: c, vaspace: vas, pdb: Pdb(0x1000 * u64::from(i + 1)) },
+            RmEvent::Alloc {
+                client: c,
+                parent: root,
+                handle: root,
+                class: mc::CLIENT,
+                facts: AllocFacts::default(),
+            },
+            RmEvent::Alloc {
+                client: c,
+                parent: root,
+                handle: dev,
+                class: mc::DEVICE,
+                facts: AllocFacts::default(),
+            },
+            RmEvent::Alloc {
+                client: c,
+                parent: dev,
+                handle: vas,
+                class: mc::VASPACE,
+                facts: AllocFacts::default(),
+            },
+            RmEvent::SetPageDir {
+                client: c,
+                vaspace: vas,
+                pdb: Pdb(0x1000 * u64::from(i + 1)),
+            },
         ];
         for ev in steps {
             match gpu.apply(ev) {
@@ -851,8 +1193,14 @@ fn b6_gpa_window_exhaustion_is_graceful() {
         }
         spawned.push(c);
     }
-    assert!(exhausted, "the window must exhaust loudly, not grow forever");
-    assert!(!spawned.is_empty(), "at least one process fit before exhaustion");
+    assert!(
+        exhausted,
+        "the window must exhaust loudly, not grow forever"
+    );
+    assert!(
+        !spawned.is_empty(),
+        "at least one process fit before exhaustion"
+    );
 
     // Every process that DID fit is intact and its arena is disjoint from the rest —
     // exhaustion did not corrupt or cross-wire the survivors.
@@ -880,7 +1228,17 @@ fn b6_graph_usable_after_capacity_refusal() {
     let mut g = RmGraph::new();
     // A real object that must survive a subsequent flood refusal.
     let keep = HClient(0x1);
-    g.apply(&arch, RmEvent::Alloc { client: keep, parent: HObject(keep.0), handle: HObject(keep.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: keep,
+            parent: HObject(keep.0),
+            handle: HObject(keep.0),
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
 
     // A parked-dup flood to the cap → loud refusal.
     let mut refused = false;
@@ -895,7 +1253,20 @@ fn b6_graph_usable_after_capacity_refusal() {
     assert!(refused, "flood refused at the cap");
 
     // The kept object survives, resolves, and can be freed cleanly.
-    assert!(g.node(NodeKey::new(keep, HObject(keep.0))).is_some(), "pre-flood object intact");
-    g.apply(&arch, RmEvent::Free { client: keep, handle: HObject(keep.0) }).expect("free still works");
-    assert!(g.node(NodeKey::new(keep, HObject(keep.0))).is_none(), "freed cleanly after a flood");
+    assert!(
+        g.node(NodeKey::new(keep, HObject(keep.0))).is_some(),
+        "pre-flood object intact"
+    );
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: keep,
+            handle: HObject(keep.0),
+        },
+    )
+    .expect("free still works");
+    assert!(
+        g.node(NodeKey::new(keep, HObject(keep.0))).is_none(),
+        "freed cleanly after a flood"
+    );
 }

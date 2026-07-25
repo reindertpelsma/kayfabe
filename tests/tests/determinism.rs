@@ -275,7 +275,14 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
 
         let mut ch = BTreeMap::new();
         for c in p.channels.values() {
-            ch.insert(c.key, ChannelObs { vchid: c.vchid, vas_pdb: c.vas_pdb, engine: c.engine });
+            ch.insert(
+                c.key,
+                ChannelObs {
+                    vchid: c.vchid,
+                    vas_pdb: c.vas_pdb,
+                    engine: c.engine,
+                },
+            );
         }
         channels.insert(anchor, ch);
 
@@ -291,7 +298,13 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
     let mut by_vchid = BTreeMap::new();
     for (vchid, (pid, cid)) in &gpu.by_vchid {
         let p = gpu.procs.get(pid).expect("routed proc lives");
-        by_vchid.insert(*vchid, (p.anchor, p.channels.get(cid).expect("routed chan lives").key));
+        by_vchid.insert(
+            *vchid,
+            (
+                p.anchor,
+                p.channels.get(cid).expect("routed chan lives").key,
+            ),
+        );
     }
 
     let mut refs = BTreeMap::new();
@@ -328,7 +341,8 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
 fn apply_and_snapshot(events: &[RmEvent]) -> CoreSnapshot {
     let mut gpu = new_gpu();
     for ev in events {
-        gpu.apply(*ev).expect("a valid declared fact applies in any order");
+        gpu.apply(*ev)
+            .expect("a valid declared fact applies in any order");
     }
     snapshot(&gpu)
 }
@@ -454,8 +468,13 @@ fn materialize(gpu: &mut Gpu) -> DataPlaneProjection {
 
     let mut published = BTreeMap::new();
     for (pid, (gpu_t, pdb), anchor) in &vases {
-        let r =
-            publish_backing(gpu.procs.get_mut(pid).expect("live"), *gpu_t, *pdb, VA_PUB, 0x1000);
+        let r = publish_backing(
+            gpu.procs.get_mut(pid).expect("live"),
+            *gpu_t,
+            *pdb,
+            VA_PUB,
+            0x1000,
+        );
         published.insert((*anchor, *gpu_t, *pdb), r.is_ok());
     }
     let mut pub_resolves = BTreeMap::new();
@@ -485,7 +504,12 @@ fn materialize(gpu: &mut Gpu) -> DataPlaneProjection {
         armed_counts.insert(p.anchor, p.fences.armed_len());
     }
 
-    DataPlaneProjection { published, pub_resolves, arms, armed_counts }
+    DataPlaneProjection {
+        published,
+        pub_resolves,
+        arms,
+        armed_counts,
+    }
 }
 
 /// Apply a fact list, then run the deterministic data-plane pass, returning its
@@ -493,7 +517,8 @@ fn materialize(gpu: &mut Gpu) -> DataPlaneProjection {
 fn apply_and_materialize(events: &[RmEvent]) -> DataPlaneProjection {
     let mut gpu = new_gpu();
     for ev in events {
-        gpu.apply(*ev).expect("a valid declared fact applies in any order");
+        gpu.apply(*ev)
+            .expect("a valid declared fact applies in any order");
     }
     materialize(&mut gpu)
 }
@@ -550,5 +575,8 @@ fn determinism_reference_world_three_orders_agree() {
     // And the snapshot is non-trivial: it actually captured routed procs + resolutions.
     assert_eq!(scripted.procs.len(), 2, "two procs projected");
     assert!(!scripted.by_pdb.is_empty(), "PDBs routed");
-    assert!(!scripted.resolutions.is_empty(), "address bindings captured");
+    assert!(
+        !scripted.resolutions.is_empty(),
+        "address bindings captured"
+    );
 }

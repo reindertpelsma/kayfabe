@@ -16,11 +16,13 @@
 use nvkvm_arch::ids::GpuId;
 use nvkvm_arch::ids::{HClient, Pdb};
 use nvkvm_completion::OsEventRef;
-use nvkvm_core::gpu::Gpu;
 use nvkvm_core::gpa::GpaSpace;
+use nvkvm_core::gpu::Gpu;
 use nvkvm_fwd::{FwdFault, present_scanout};
 use nvkvm_isolate::{HostHandle, RmError};
-use nvkvm_mocks::{MockArch, MockIsolateFactory, MockPresent, RmVerb, SharedRecorder, mock_classes as mc};
+use nvkvm_mocks::{
+    MockArch, MockIsolateFactory, MockPresent, RmVerb, SharedRecorder, mock_classes as mc,
+};
 use nvkvm_tests::{Scenario, identical_handles};
 use nvkvm_vmm::{FbMeta, PresentError, SurfaceHandle};
 
@@ -42,7 +44,12 @@ fn graphics_gpu() -> (Gpu, SharedRecorder) {
 fn fb() -> (SurfaceHandle, FbMeta) {
     (
         SurfaceHandle(0x1234),
-        FbMeta { width: 1920, height: 1080, stride: 1920 * 4, format: 0 },
+        FbMeta {
+            width: 1920,
+            height: 1080,
+            stride: 1920 * 4,
+            format: 0,
+        },
     )
 }
 
@@ -55,14 +62,20 @@ fn scanout_routes_to_present_and_feeds_vblank() {
     let mut present = MockPresent::new();
     let (buffer, meta) = fb();
 
-    let seq = present_scanout(&mut gpu, pid, &mut present, buffer, meta)
-        .expect("scanout presents");
+    let seq = present_scanout(&mut gpu, pid, &mut present, buffer, meta).expect("scanout presents");
 
     // The surface reached the sink with its geometry (host-agnostic — the mock is a
     // stand-in for QEMU/PRIME).
-    assert_eq!(present.presented, vec![(buffer, meta)], "scanout surface routed to Present");
+    assert_eq!(
+        present.presented,
+        vec![(buffer, meta)],
+        "scanout surface routed to Present"
+    );
     // The present-complete is a synthetic vblank on the OWNING proc's queue.
-    assert!(gpu.procs[&pid].completion.has_outstanding(), "vblank observed as completion");
+    assert!(
+        gpu.procs[&pid].completion.has_outstanding(),
+        "vblank observed as completion"
+    );
     // A second present advances the vblank sequence (monotonic frames).
     let (b2, m2) = fb();
     let seq2 = present_scanout(&mut gpu, pid, &mut present, b2, m2).unwrap();
@@ -82,9 +95,20 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
 
     // Producer: a host render-target memory object, exported by the OWNING proc's
     // OWN isolate to a presentable surface.
-    let rm = gpu.procs.get_mut(&pid).expect("proc").isolates.get_mut(&GpuId::ZERO).unwrap().rm();
-    let target = rm.alloc(HostHandle(0), mc::MEMORY, &[]).expect("render-target memory allocs");
-    let surface = rm.export_surface(target).expect("render target exports to a surface");
+    let rm = gpu
+        .procs
+        .get_mut(&pid)
+        .expect("proc")
+        .isolates
+        .get_mut(&GpuId::ZERO)
+        .unwrap()
+        .rm();
+    let target = rm
+        .alloc(HostHandle(0), mc::MEMORY, &[])
+        .expect("render-target memory allocs");
+    let surface = rm
+        .export_surface(target)
+        .expect("render target exports to a surface");
     {
         let log = recorder.lock().unwrap();
         assert!(
@@ -98,13 +122,29 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
 
     // Consumer: present that surface; the vblank rides the OWNER's completion queue.
     let mut present = MockPresent::new();
-    let meta = FbMeta { width: 640, height: 480, stride: 640 * 4, format: 0 };
+    let meta = FbMeta {
+        width: 640,
+        height: 480,
+        stride: 640 * 4,
+        format: 0,
+    };
     let seq = present_scanout(&mut gpu, pid, &mut present, surface, meta)
         .expect("exported surface presents");
-    assert_eq!(present.presented, vec![(surface, meta)], "the EXPORTED surface was presented");
-    assert!(gpu.procs[&pid].completion.has_outstanding(), "present-complete = vblank observed");
+    assert_eq!(
+        present.presented,
+        vec![(surface, meta)],
+        "the EXPORTED surface was presented"
+    );
+    assert!(
+        gpu.procs[&pid].completion.has_outstanding(),
+        "present-complete = vblank observed"
+    );
     let batch = gpu.pump_completions(GpuId::ZERO).expect("vblank posts");
-    assert_eq!(batch.events, vec![OsEventRef(seq)], "the vblank rides the owner's batch");
+    assert_eq!(
+        batch.events,
+        vec![OsEventRef(seq)],
+        "the vblank rides the owner's batch"
+    );
 }
 
 /// Exporting an unknown/foreign memory object is a LOUD `BadHandle` — a surface is
@@ -113,7 +153,14 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
 fn exporting_an_unknown_render_target_is_a_loud_fault() {
     let (mut gpu, _rec) = graphics_gpu();
     let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
-    let rm = gpu.procs.get_mut(&pid).expect("proc").isolates.get_mut(&GpuId::ZERO).unwrap().rm();
+    let rm = gpu
+        .procs
+        .get_mut(&pid)
+        .expect("proc")
+        .isolates
+        .get_mut(&GpuId::ZERO)
+        .unwrap()
+        .rm();
     let bogus = HostHandle(0xdead_beef);
     assert_eq!(rm.export_surface(bogus), Err(RmError::BadHandle(bogus)));
 }
@@ -129,7 +176,11 @@ fn vblank_flows_through_the_completion_plane() {
 
     let seq = present_scanout(&mut gpu, pid, &mut present, buffer, meta).unwrap();
     let batch = gpu.pump_completions(GpuId::ZERO).expect("vblank posts");
-    assert_eq!(batch.events, vec![OsEventRef(seq)], "the vblank rides the normal completion batch");
+    assert_eq!(
+        batch.events,
+        vec![OsEventRef(seq)],
+        "the vblank rides the normal completion batch"
+    );
     gpu.completions_drained(GpuId::ZERO);
 }
 
@@ -147,5 +198,8 @@ fn present_failure_is_a_loud_fault() {
         Err(FwdFault::Present(PresentError::Unsupported(_)))
     ));
     // Nothing was observed on the completion queue for the failed present.
-    assert!(!gpu.procs[&pid].completion.has_outstanding(), "no vblank on a failed present");
+    assert!(
+        !gpu.procs[&pid].completion.has_outstanding(),
+        "no vblank on a failed present"
+    );
 }

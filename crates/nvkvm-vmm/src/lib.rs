@@ -246,8 +246,7 @@ pub trait Vmm: Send {
     /// Register a trapped MMIO range on `bar`. The VMM dispatches trapped accesses
     /// back into the core via [`Device::mmio_read`]/[`Device::mmio_write`]; the
     /// adapter only routes.
-    fn set_trap(&mut self, bar: BarId, range: Range<u64>, mode: TrapMode)
-    -> Result<(), VmmError>;
+    fn set_trap(&mut self, bar: BarId, range: Range<u64>, mode: TrapMode) -> Result<(), VmmError>;
 
     // --- 4. Interrupt injection ---------------------------------------------------
 
@@ -317,7 +316,19 @@ pub trait Device {
 // crossing the seam is `Send + Sync`; `dyn Vmm` is `Send` by supertrait (the
 // threading contract in the crate docs explains why `Sync` is not required).
 nvkvm_util::assert_send_sync!(
-    VmmError, SlotId, BarId, HostRegion, Prot, TrapMode, IrqSpec, RamHandle, SurfaceHandle,
-    FbMeta, Vblank, PresentError, CoreEventKind, CoreEvent,
+    VmmError,
+    SlotId,
+    BarId,
+    HostRegion,
+    Prot,
+    TrapMode,
+    IrqSpec,
+    RamHandle,
+    SurfaceHandle,
+    FbMeta,
+    Vblank,
+    PresentError,
+    CoreEventKind,
+    CoreEvent,
 );
 nvkvm_util::assert_send!(dyn Vmm);

@@ -52,7 +52,8 @@ fn map_populates_the_address_table() {
     let (gpu, _vas) = compute_with_mapping();
 
     // Resolve inside the mapping: MISS=FAULT elsewhere, hit here with the memory's phys.
-    let (bind, off) = resolve(&gpu, GpuId::ZERO, PDB, GpuVa(MAP_VA.0 + 0x40)).expect("mapped VA resolves");
+    let (bind, off) =
+        resolve(&gpu, GpuId::ZERO, PDB, GpuVa(MAP_VA.0 + 0x40)).expect("mapped VA resolves");
     assert_eq!(off, 0x40, "offset within the mapping");
     assert_eq!(
         bind.phys, MEM_PHYS,
@@ -85,14 +86,79 @@ fn map_at_offset_forward_populates_base_plus_offset() {
     let base = 0x8000_0000u64;
     let offset = 0x3000u64;
 
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(c.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(1), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: vas, class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::SetPageDir { client: c, vaspace: vas, pdb: PDB }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: mem, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(base), ..Default::default() } }).unwrap();
-    g.apply(&arch, RmEvent::MapMemoryDma { client: c, vaspace: vas, memory: mem, va: MAP_VA, offset, len: MAP_LEN }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(c.0),
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(1),
+            class: mc::DEVICE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: vas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: c,
+            vaspace: vas,
+            pdb: PDB,
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: mem,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(base),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::MapMemoryDma {
+            client: c,
+            vaspace: vas,
+            memory: mem,
+            va: MAP_VA,
+            offset,
+            len: MAP_LEN,
+        },
+    )
+    .unwrap();
 
-    let mapping = g.mappings().find(|m| m.va == MAP_VA).expect("mapping is live");
+    let mapping = g
+        .mappings()
+        .find(|m| m.va == MAP_VA)
+        .expect("mapping is live");
     assert_eq!(
         mapping.mem_phys,
         Some(base + offset),
@@ -104,7 +170,10 @@ fn map_at_offset_forward_populates_base_plus_offset() {
 #[test]
 fn unmap_depopulates_eagerly() {
     let (mut gpu, vas) = compute_with_mapping();
-    assert!(resolve(&gpu, GpuId::ZERO, PDB, MAP_VA).is_ok(), "mapped before unmap");
+    assert!(
+        resolve(&gpu, GpuId::ZERO, PDB, MAP_VA).is_ok(),
+        "mapped before unmap"
+    );
 
     gpu.apply(RmEvent::Unmap {
         client: CLIENT,
@@ -114,7 +183,10 @@ fn unmap_depopulates_eagerly() {
     .expect("unmap applies");
 
     assert!(
-        matches!(resolve(&gpu, GpuId::ZERO, PDB, MAP_VA), Err(FwdFault::Address(_))),
+        matches!(
+            resolve(&gpu, GpuId::ZERO, PDB, MAP_VA),
+            Err(FwdFault::Address(_))
+        ),
         "unmapped VA faults immediately (unmap eager)"
     );
 }
@@ -190,18 +262,87 @@ fn parked_map_unmap_drops_only_the_named_map() {
 
     // Park TWO maps on the SAME (not-yet-allocated) vaspace handle, different VAs.
     for va in [va_a, va_b] {
-        g.apply(&arch, RmEvent::MapMemoryDma { client, vaspace, memory, va, offset: 0, len: MAP_LEN })
-            .expect("parks (vaspace unresolved)");
+        g.apply(
+            &arch,
+            RmEvent::MapMemoryDma {
+                client,
+                vaspace,
+                memory,
+                va,
+                offset: 0,
+                len: MAP_LEN,
+            },
+        )
+        .expect("parks (vaspace unresolved)");
     }
     // Unmap the FIRST one while the vaspace is still unresolved — parked-map cleanup.
-    g.apply(&arch, RmEvent::Unmap { client, vaspace, va: va_a }).expect("parked unmap is idempotent");
+    g.apply(
+        &arch,
+        RmEvent::Unmap {
+            client,
+            vaspace,
+            va: va_a,
+        },
+    )
+    .expect("parked unmap is idempotent");
 
     // Now resolve the vaspace + memory so the surviving parked map replays.
-    g.apply(&arch, RmEvent::Alloc { client, parent: HObject(client.0), handle: HObject(client.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client, parent: HObject(client.0), handle: HObject(1), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client, parent: HObject(1), handle: vaspace, class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::SetPageDir { client, vaspace, pdb: PDB }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client, parent: HObject(1), handle: memory, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(MEM_PHYS), ..Default::default() } }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client,
+            parent: HObject(client.0),
+            handle: HObject(client.0),
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client,
+            parent: HObject(client.0),
+            handle: HObject(1),
+            class: mc::DEVICE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client,
+            parent: HObject(1),
+            handle: vaspace,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client,
+            vaspace,
+            pdb: PDB,
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client,
+            parent: HObject(1),
+            handle: memory,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(MEM_PHYS),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
 
     let live_vas: Vec<GpuVa> = g.mappings().map(|m| m.va).collect();
     assert_eq!(
@@ -230,24 +371,76 @@ fn free_subtree_cascade_is_namespace_confined() {
     let dev = HObject(0x100);
     let mem = HObject(0x200);
     let build = |g: &mut RmGraph, c: HClient| {
-        g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(c.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-        g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: dev, class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
+        g.apply(
+            &arch,
+            RmEvent::Alloc {
+                client: c,
+                parent: HObject(c.0),
+                handle: HObject(c.0),
+                class: mc::CLIENT,
+                facts: AllocFacts::default(),
+            },
+        )
+        .unwrap();
+        g.apply(
+            &arch,
+            RmEvent::Alloc {
+                client: c,
+                parent: HObject(c.0),
+                handle: dev,
+                class: mc::DEVICE,
+                facts: AllocFacts::default(),
+            },
+        )
+        .unwrap();
         // A child MEMORY parented on the device (so freeing the device must cascade to it).
-        g.apply(&arch, RmEvent::Alloc { client: c, parent: dev, handle: mem, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(0x8000_0000), ..Default::default() } }).unwrap();
+        g.apply(
+            &arch,
+            RmEvent::Alloc {
+                client: c,
+                parent: dev,
+                handle: mem,
+                class: mc::MEMORY,
+                facts: AllocFacts {
+                    mem_phys: Some(0x8000_0000),
+                    ..Default::default()
+                },
+            },
+        )
+        .unwrap();
     };
     let (a, b) = (HClient(0xAA), HClient(0xBB));
     build(&mut g, a);
     build(&mut g, b);
 
     // Free A's DEVICE — a non-root parent handle. Its subtree (A's memory) must cascade.
-    g.apply(&arch, RmEvent::Free { client: a, handle: dev }).expect("free applies");
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: a,
+            handle: dev,
+        },
+    )
+    .expect("free applies");
 
     // A's child memory is gone (cascade reached it, confined to A's namespace)…
-    assert!(g.backing_of(NodeKey::new(a, mem)).is_none(), "A's child memory dies with its parent device");
-    assert!(g.node(NodeKey::new(a, dev)).is_none(), "A's device handle is freed");
+    assert!(
+        g.backing_of(NodeKey::new(a, mem)).is_none(),
+        "A's child memory dies with its parent device"
+    );
+    assert!(
+        g.node(NodeKey::new(a, dev)).is_none(),
+        "A's device handle is freed"
+    );
     // …while B's identically-handled objects are entirely untouched (namespace-confined).
-    assert!(g.backing_of(NodeKey::new(b, mem)).is_some(), "B's identically-handled memory survives");
-    assert!(g.node(NodeKey::new(b, dev)).is_some(), "B's device (same handle value) survives");
+    assert!(
+        g.backing_of(NodeKey::new(b, mem)).is_some(),
+        "B's identically-handled memory survives"
+    );
+    assert!(
+        g.node(NodeKey::new(b, dev)).is_some(),
+        "B's device (same handle value) survives"
+    );
 }
 
 /// ★ Mutation-gate kill (`RmGraph::free_subtree` dead-VAS mapping cleanup `&&`→`||`):
@@ -270,21 +463,111 @@ fn free_subtree_keeps_mappings_of_a_dup_kept_alive_vaspace() {
     let vas_alias = HObject(0x9000_0010);
     let mem = HObject(0x5c00_0100);
 
-    g.apply(&arch, RmEvent::Alloc { client: owner, parent: HObject(owner.0), handle: HObject(owner.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: owner, parent: HObject(owner.0), handle: HObject(1), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: owner, parent: HObject(1), handle: vas, class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::SetPageDir { client: owner, vaspace: vas, pdb: PDB }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: owner, parent: HObject(1), handle: mem, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(MEM_PHYS), ..Default::default() } }).unwrap();
-    g.apply(&arch, RmEvent::MapMemoryDma { client: owner, vaspace: vas, memory: mem, va: MAP_VA, offset: 0, len: MAP_LEN }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: owner,
+            parent: HObject(owner.0),
+            handle: HObject(owner.0),
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: owner,
+            parent: HObject(owner.0),
+            handle: HObject(1),
+            class: mc::DEVICE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: owner,
+            parent: HObject(1),
+            handle: vas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: owner,
+            vaspace: vas,
+            pdb: PDB,
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: owner,
+            parent: HObject(1),
+            handle: mem,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(MEM_PHYS),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::MapMemoryDma {
+            client: owner,
+            vaspace: vas,
+            memory: mem,
+            va: MAP_VA,
+            offset: 0,
+            len: MAP_LEN,
+        },
+    )
+    .unwrap();
     // A UVM-style client dup-aliases the VASpace, so the VAS resource outlives the origin.
-    g.apply(&arch, RmEvent::Alloc { client: aliaser, parent: HObject(aliaser.0), handle: HObject(aliaser.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Dup { src: NodeKey::new(owner, vas), dst: NodeKey::new(aliaser, vas_alias) }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: aliaser,
+            parent: HObject(aliaser.0),
+            handle: HObject(aliaser.0),
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: NodeKey::new(owner, vas),
+            dst: NodeKey::new(aliaser, vas_alias),
+        },
+    )
+    .unwrap();
 
-    assert_eq!(g.mappings().count(), 1, "the mapping is live before the free");
+    assert_eq!(
+        g.mappings().count(),
+        1,
+        "the mapping is live before the free"
+    );
 
     // Free the OWNER's VASpace ORIGIN handle. The dup keeps the VAS resource alive, so
     // its mapping must NOT be torn down (touched-but-not-dead).
-    g.apply(&arch, RmEvent::Free { client: owner, handle: vas }).expect("free applies");
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: owner,
+            handle: vas,
+        },
+    )
+    .expect("free applies");
 
     assert_eq!(
         g.mappings().map(|m| m.va).collect::<Vec<_>>(),
@@ -311,24 +594,110 @@ fn free_subtree_prunes_a_parked_map_when_its_memory_is_freed() {
     let vas = HObject(0x5c00_0010);
     let mem = HObject(0x5c00_0100);
 
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(c.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(1), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(c.0),
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(1),
+            class: mc::DEVICE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
     // Memory exists; VASpace does NOT yet — so the map parks (one endpoint unresolved).
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: mem, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(MEM_PHYS), ..Default::default() } }).unwrap();
-    g.apply(&arch, RmEvent::MapMemoryDma { client: c, vaspace: vas, memory: mem, va: MAP_VA, offset: 0, len: MAP_LEN }).unwrap();
-    assert_eq!(g.mappings().count(), 0, "the map is parked (vaspace unresolved), not live yet");
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: mem,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(MEM_PHYS),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::MapMemoryDma {
+            client: c,
+            vaspace: vas,
+            memory: mem,
+            va: MAP_VA,
+            offset: 0,
+            len: MAP_LEN,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        g.mappings().count(),
+        0,
+        "the map is parked (vaspace unresolved), not live yet"
+    );
 
     // Free the MEMORY handle — the parked map's memory endpoint is now doomed, so the
     // parked map must be pruned (it can never legitimately resolve).
-    g.apply(&arch, RmEvent::Free { client: c, handle: mem }).expect("free applies");
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: c,
+            handle: mem,
+        },
+    )
+    .expect("free applies");
 
     // Now allocate the VASpace AND re-allocate a FRESH memory at the same handle value.
     // If the parked map was correctly pruned on the memory's free, it does NOT replay —
     // the stale map must not resurrect against the unrelated fresh memory. The `||`
     // mutant kept the parked entry, so it would wrongly replay a mapping here.
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: vas, class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::SetPageDir { client: c, vaspace: vas, pdb: PDB }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: mem, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(0xDEAD_0000), ..Default::default() } }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: vas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: c,
+            vaspace: vas,
+            pdb: PDB,
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: mem,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0xDEAD_0000),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
     assert_eq!(
         g.mappings().count(),
         0,
@@ -355,27 +724,130 @@ fn conflicting_map_at_same_va_is_loud_identical_is_idempotent() {
     let mem_a = HObject(0x5c00_0100);
     let mem_b = HObject(0x5c00_0101);
 
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(c.0), class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(c.0), handle: HObject(1), class: mc::DEVICE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: vas, class: mc::VASPACE, facts: AllocFacts::default() }).unwrap();
-    g.apply(&arch, RmEvent::SetPageDir { client: c, vaspace: vas, pdb: PDB }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: mem_a, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(0x8000_0000), ..Default::default() } }).unwrap();
-    g.apply(&arch, RmEvent::Alloc { client: c, parent: HObject(1), handle: mem_b, class: mc::MEMORY, facts: AllocFacts { mem_phys: Some(0x9000_0000), ..Default::default() } }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(c.0),
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(1),
+            class: mc::DEVICE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: vas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: c,
+            vaspace: vas,
+            pdb: PDB,
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: mem_a,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x8000_0000),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(1),
+            handle: mem_b,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x9000_0000),
+                ..Default::default()
+            },
+        },
+    )
+    .unwrap();
 
     // First map: (vas, MAP_VA) → mem_a.
-    g.apply(&arch, RmEvent::MapMemoryDma { client: c, vaspace: vas, memory: mem_a, va: MAP_VA, offset: 0, len: MAP_LEN }).unwrap();
+    g.apply(
+        &arch,
+        RmEvent::MapMemoryDma {
+            client: c,
+            vaspace: vas,
+            memory: mem_a,
+            va: MAP_VA,
+            offset: 0,
+            len: MAP_LEN,
+        },
+    )
+    .unwrap();
     // Identical re-send is idempotent (Ok, no error).
-    g.apply(&arch, RmEvent::MapMemoryDma { client: c, vaspace: vas, memory: mem_a, va: MAP_VA, offset: 0, len: MAP_LEN }).expect("identical re-send is idempotent");
+    g.apply(
+        &arch,
+        RmEvent::MapMemoryDma {
+            client: c,
+            vaspace: vas,
+            memory: mem_a,
+            va: MAP_VA,
+            offset: 0,
+            len: MAP_LEN,
+        },
+    )
+    .expect("identical re-send is idempotent");
 
     // A CONFLICTING map at the SAME (vas, va) but DIFFERENT memory is a loud fault.
-    let conflict = g.apply(&arch, RmEvent::MapMemoryDma { client: c, vaspace: vas, memory: mem_b, va: MAP_VA, offset: 0, len: MAP_LEN });
+    let conflict = g.apply(
+        &arch,
+        RmEvent::MapMemoryDma {
+            client: c,
+            vaspace: vas,
+            memory: mem_b,
+            va: MAP_VA,
+            offset: 0,
+            len: MAP_LEN,
+        },
+    );
     assert!(
         matches!(conflict, Err(RmGraphError::ConflictingMap { .. })),
         "a different mapping at a live (vaspace, va) is a loud ConflictingMap, never a silent overwrite: {conflict:?}",
     );
     // The original mapping is intact (the conflict did not overwrite it).
-    let m = g.mappings().find(|m| m.va == MAP_VA).expect("original mapping intact");
-    assert_eq!(m.mem_phys, Some(0x8000_0000), "the FIRST declarer keeps the (vas, va)");
+    let m = g
+        .mappings()
+        .find(|m| m.va == MAP_VA)
+        .expect("original mapping intact");
+    assert_eq!(
+        m.mem_phys,
+        Some(0x8000_0000),
+        "the FIRST declarer keeps the (vas, va)"
+    );
 }
 
 /// EVENT objects are first-class graph nodes owned by their client — completion
@@ -504,7 +976,8 @@ fn map_before_backing_and_pdb_resolves() {
     })
     .expect("setpagedir applies");
 
-    let (bind, _off) = resolve(&gpu, GpuId::ZERO, PDB, MAP_VA).expect("map resolves once facts land");
+    let (bind, _off) =
+        resolve(&gpu, GpuId::ZERO, PDB, MAP_VA).expect("map resolves once facts land");
     assert_eq!(
         bind.phys, MEM_PHYS,
         "forward-populated from the late-arriving facts"

@@ -99,6 +99,10 @@ fuzz_target!(|input: Input| {
     let vas = &gpu.procs[&pid].vases[&A_PDB];
     for (va, _len, b) in vas.table.iter() {
         let got = vas.table.resolve(A_PDB, GpuVa(va)).map(|(x, _)| x.phys);
-        assert_eq!(got, Ok(b.phys), "a bound VA must resolve to its own binding");
+        assert_eq!(
+            got,
+            Ok(b.phys),
+            "a bound VA must resolve to its own binding"
+        );
     }
 });

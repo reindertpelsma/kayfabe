@@ -121,12 +121,24 @@ impl Arch for MockArch {
             c::CTXSHARE => ObjectKind::CtxShare,
             // A GR-class channel is GrCompute until an engine object refines it
             // (graphics/NVENC arrive as engine objects on a GR channel).
-            c::CHANNEL_GR => ObjectKind::Channel { engine: EngineKind::GrCompute },
-            c::CHANNEL_CE => ObjectKind::Channel { engine: EngineKind::Ce },
-            c::COMPUTE => ObjectKind::EngineObject { engine: EngineKind::GrCompute },
-            c::DMA_COPY => ObjectKind::EngineObject { engine: EngineKind::Ce },
-            c::GRAPHICS => ObjectKind::EngineObject { engine: EngineKind::GrGraphics },
-            c::NVENC => ObjectKind::EngineObject { engine: EngineKind::NvEnc },
+            c::CHANNEL_GR => ObjectKind::Channel {
+                engine: EngineKind::GrCompute,
+            },
+            c::CHANNEL_CE => ObjectKind::Channel {
+                engine: EngineKind::Ce,
+            },
+            c::COMPUTE => ObjectKind::EngineObject {
+                engine: EngineKind::GrCompute,
+            },
+            c::DMA_COPY => ObjectKind::EngineObject {
+                engine: EngineKind::Ce,
+            },
+            c::GRAPHICS => ObjectKind::EngineObject {
+                engine: EngineKind::GrGraphics,
+            },
+            c::NVENC => ObjectKind::EngineObject {
+                engine: EngineKind::NvEnc,
+            },
             c::MEMORY => ObjectKind::Memory,
             c::EVENT => ObjectKind::Event,
             _ => ObjectKind::Unknown,
@@ -142,7 +154,9 @@ impl Arch for MockArch {
         if token >> 56 != 0xD0 {
             return None;
         }
-        Some(DoorbellTarget { vchid: VChid(((token >> 9) & 0xfff) as u16) })
+        Some(DoorbellTarget {
+            vchid: VChid(((token >> 9) & 0xfff) as u16),
+        })
     }
 
     fn mmu(&self) -> &dyn GmmuFmt {
@@ -213,33 +227,38 @@ impl MockPushbuffer {
     /// Encode a CE `LAUNCH_DMA` to `dst` for `len` bytes.
     #[must_use]
     pub fn ce_launch_dma(dst: u64, len: u64, dst_is_virtual: bool) -> (u32, Vec<u32>) {
-        Self::method(mock_method::CE_LAUNCH_DMA, &[
-            dst as u32,
-            (dst >> 32) as u32,
-            len as u32,
-            u32::from(dst_is_virtual),
-        ])
+        Self::method(
+            mock_method::CE_LAUNCH_DMA,
+            &[
+                dst as u32,
+                (dst >> 32) as u32,
+                len as u32,
+                u32::from(dst_is_virtual),
+            ],
+        )
     }
 
     /// Encode a `SEM_RELEASE` of `addr` to `payload`.
     #[must_use]
     pub fn sem_release(addr: u64, payload: u64) -> (u32, Vec<u32>) {
-        Self::method(mock_method::SEM_RELEASE, &[
-            addr as u32,
-            (addr >> 32) as u32,
-            payload as u32,
-            (payload >> 32) as u32,
-        ])
+        Self::method(
+            mock_method::SEM_RELEASE,
+            &[
+                addr as u32,
+                (addr >> 32) as u32,
+                payload as u32,
+                (payload >> 32) as u32,
+            ],
+        )
     }
 
     /// Encode an `MMU_TLB_INVALIDATE` of `pdb`.
     #[must_use]
     pub fn tlb_invalidate(pdb: u64, membar: bool) -> (u32, Vec<u32>) {
-        Self::method(mock_method::TLB_INVALIDATE, &[
-            pdb as u32,
-            (pdb >> 32) as u32,
-            u32::from(membar),
-        ])
+        Self::method(
+            mock_method::TLB_INVALIDATE,
+            &[pdb as u32, (pdb >> 32) as u32, u32::from(membar)],
+        )
     }
 }
 
@@ -254,13 +273,18 @@ impl PushbufferAbi for MockPushbuffer {
         let lo64 = |i: usize| u64::from(*args.get(i).unwrap_or(&0));
         let pair = |i: usize| lo64(i) | (lo64(i + 1) << 32);
         match (header >> 24) as u8 {
-            mock_method::SET_OBJECT => PushMethod::SetObject { class: ClassId(args.first().copied().unwrap_or(0)) },
+            mock_method::SET_OBJECT => PushMethod::SetObject {
+                class: ClassId(args.first().copied().unwrap_or(0)),
+            },
             mock_method::CE_LAUNCH_DMA => PushMethod::CeLaunchDma {
                 dst: GpuVa(pair(0)),
                 len: lo64(2),
                 dst_is_virtual: lo64(3) & 1 != 0,
             },
-            mock_method::SEM_RELEASE => PushMethod::SemRelease { addr: GpuVa(pair(0)), payload: pair(2) },
+            mock_method::SEM_RELEASE => PushMethod::SemRelease {
+                addr: GpuVa(pair(0)),
+                payload: pair(2),
+            },
             mock_method::TLB_INVALIDATE => PushMethod::TlbInvalidate {
                 pdb: Pdb(pair(0)),
                 membar: lo64(2) & 1 != 0,
@@ -290,8 +314,12 @@ pub struct MockGmmuFmt;
 
 /// Mockingbird leaf sizes (includes a huge leaf so the #13 "every real page size"
 /// discipline is exercised by construction).
-pub const MOCK_PAGE_SIZES: [PageSize; 4] =
-    [PageSize(0x1000), PageSize(0x10000), PageSize(0x200000), PageSize(0x2000_0000)];
+pub const MOCK_PAGE_SIZES: [PageSize; 4] = [
+    PageSize(0x1000),
+    PageSize(0x10000),
+    PageSize(0x200000),
+    PageSize(0x2000_0000),
+];
 
 impl MockGmmuFmt {
     /// Encode a fake leaf entry (test helper; inverse of `decode_entry`).
@@ -320,14 +348,25 @@ impl GmmuFmt for MockGmmuFmt {
             return PteDecode::Invalid;
         }
         let phys = raw & 0x000f_ffff_ffff_f000;
-        let aperture =
-            if raw & 0b100 != 0 { Aperture::SysmemCoherent } else { Aperture::Vidmem };
+        let aperture = if raw & 0b100 != 0 {
+            Aperture::SysmemCoherent
+        } else {
+            Aperture::Vidmem
+        };
         if raw & 0b10 != 0 {
             // Fake rule: leaf size depends on the level it appears at.
             let size = MOCK_PAGE_SIZES[usize::from(4u8.saturating_sub(level).min(3))];
-            PteDecode::Leaf { phys, aperture, size, read_only: false }
+            PteDecode::Leaf {
+                phys,
+                aperture,
+                size,
+                read_only: false,
+            }
         } else {
-            PteDecode::Pde { next: phys, aperture }
+            PteDecode::Pde {
+                next: phys,
+                aperture,
+            }
         }
     }
 }
@@ -417,7 +456,9 @@ impl MockVmm {
     /// Test helper: read back guest RAM (missing bytes read as 0).
     #[must_use]
     pub fn ram_read(&self, gpa: u64, len: usize) -> Vec<u8> {
-        (0..len as u64).map(|i| *self.ram.get(&(gpa + i)).unwrap_or(&0)).collect()
+        (0..len as u64)
+            .map(|i| *self.ram.get(&(gpa + i)).unwrap_or(&0))
+            .collect()
     }
 }
 
@@ -428,7 +469,11 @@ impl Vmm for MockVmm {
         // space. A byte at an un-formable address is simply absent in this sparse RAM
         // (reads as 0), exactly as a real adapter treats an unbacked page. Never a panic.
         for (i, b) in buf.iter_mut().enumerate() {
-            *b = gpa.checked_add(i as u64).and_then(|a| self.ram.get(&a)).copied().unwrap_or(0);
+            *b = gpa
+                .checked_add(i as u64)
+                .and_then(|a| self.ram.get(&a))
+                .copied()
+                .unwrap_or(0);
         }
         Ok(())
     }
@@ -453,13 +498,25 @@ impl Vmm for MockVmm {
     ) -> Result<SlotId, VmmError> {
         let id = SlotId(self.next_slot);
         self.next_slot += 1;
-        self.slots
-            .insert(id, SlotRecord { gpa, len, backing, prot, read_native: false, locked: None });
+        self.slots.insert(
+            id,
+            SlotRecord {
+                gpa,
+                len,
+                backing,
+                prot,
+                read_native: false,
+                locked: None,
+            },
+        );
         Ok(id)
     }
 
     fn unmap_guest(&mut self, slot: SlotId) -> Result<(), VmmError> {
-        self.slots.remove(&slot).map(|_| ()).ok_or(VmmError::BadSlot(slot))
+        self.slots
+            .remove(&slot)
+            .map(|_| ())
+            .ok_or(VmmError::BadSlot(slot))
     }
 
     fn set_trap(&mut self, bar: BarId, range: Range<u64>, mode: TrapMode) -> Result<(), VmmError> {
@@ -474,7 +531,10 @@ impl Vmm for MockVmm {
 
     fn export_ram(&mut self, slice: Option<Range<u64>>) -> Result<RamHandle, VmmError> {
         self.exports.push(slice.clone());
-        Ok(RamHandle { token: self.exports.len() as u64, covers: slice })
+        Ok(RamHandle {
+            token: self.exports.len() as u64,
+            covers: slice,
+        })
     }
 
     fn defer(&mut self, after: Duration, event: CoreEvent) {
@@ -499,7 +559,14 @@ impl Vmm for MockVmm {
         self.next_slot += 1;
         self.slots.insert(
             id,
-            SlotRecord { gpa, len, backing, prot: Prot::ReadOnly, read_native: true, locked: None },
+            SlotRecord {
+                gpa,
+                len,
+                backing,
+                prot: Prot::ReadOnly,
+                read_native: true,
+                locked: None,
+            },
         );
         if let Some(r) = write_trap {
             self.traps.push((BarId::Bar0, r, TrapMode::WriteOnly));
@@ -704,11 +771,19 @@ impl MockRmBackend {
     }
 
     fn check(&self, h: HostHandle) -> Result<(), RmError> {
-        if self.handles.contains(&h) { Ok(()) } else { Err(RmError::BadHandle(h)) }
+        if self.handles.contains(&h) {
+            Ok(())
+        } else {
+            Err(RmError::BadHandle(h))
+        }
     }
 
     fn record(&self, verb: RmVerb) {
-        self.recorder.lock().expect("recorder").log.push((self.id, verb));
+        self.recorder
+            .lock()
+            .expect("recorder")
+            .log
+            .push((self.id, verb));
     }
 }
 
@@ -724,7 +799,11 @@ impl RmBackend for MockRmBackend {
             self.check(parent)?;
         }
         let handle = self.mint();
-        self.record(RmVerb::Alloc { parent, class, handle });
+        self.record(RmVerb::Alloc {
+            parent,
+            class,
+            handle,
+        });
         Ok(handle)
     }
 
@@ -752,7 +831,12 @@ impl RmBackend for MockRmBackend {
         let handle = self.mint();
         let token = self.next_token;
         self.next_token += 1;
-        self.record(RmVerb::AllocChannel { vas, engine, handle, token });
+        self.record(RmVerb::AllocChannel {
+            vas,
+            engine,
+            handle,
+            token,
+        });
         Ok((handle, token))
     }
 
@@ -765,7 +849,11 @@ impl RmBackend for MockRmBackend {
         self.gate()?;
         self.check(chan)?;
         let handle = self.mint();
-        self.record(RmVerb::AllocEngineObject { chan, class, handle });
+        self.record(RmVerb::AllocEngineObject {
+            chan,
+            class,
+            handle,
+        });
         Ok(handle)
     }
 
@@ -824,7 +912,12 @@ impl RmBackend for MockRmBackend {
             + ((vas.0 & 0xff) << 32)
             + (self.next_map_page << 12);
         self.next_map_page += len.next_multiple_of(0x1000) >> 12;
-        self.record(RmVerb::MapGpuVa { vas, memory, len, va });
+        self.record(RmVerb::MapGpuVa {
+            vas,
+            memory,
+            len,
+            va,
+        });
         Ok(va)
     }
 
@@ -893,7 +986,13 @@ impl MockIsolateFactory {
     #[must_use]
     pub fn new() -> (Self, SharedRecorder) {
         let recorder: SharedRecorder = Arc::default();
-        (MockIsolateFactory { recorder: Arc::clone(&recorder), spawned: Vec::new() }, recorder)
+        (
+            MockIsolateFactory {
+                recorder: Arc::clone(&recorder),
+                spawned: Vec::new(),
+            },
+            recorder,
+        )
     }
 }
 
@@ -972,20 +1071,33 @@ mod tests {
     fn mock_arch_token_roundtrip_and_malformed_rejected() {
         let a = MockArch::new();
         let v = VChid(0x2a);
-        assert_eq!(a.decode_doorbell(MockArch::token_for(v)), Some(DoorbellTarget { vchid: v }));
+        assert_eq!(
+            a.decode_doorbell(MockArch::token_for(v)),
+            Some(DoorbellTarget { vchid: v })
+        );
         assert_eq!(a.vchid_from_userd_flags(MockArch::userd_flags_for(v)), v);
-        assert_eq!(a.decode_doorbell(0x1234), None, "hostile token must not decode");
+        assert_eq!(
+            a.decode_doorbell(0x1234),
+            None,
+            "hostile token must not decode"
+        );
     }
 
     #[test]
     fn mock_vmm_virtual_clock_orders_deferred_events() {
         let mut vmm = MockVmm::new();
-        vmm.defer(Duration::from_millis(2), CoreEvent::Deferred(CoreEventKind::DeferredReap));
+        vmm.defer(
+            Duration::from_millis(2),
+            CoreEvent::Deferred(CoreEventKind::DeferredReap),
+        );
         vmm.defer(
             Duration::from_millis(1),
             CoreEvent::Deferred(CoreEventKind::CompletionRedeliver),
         );
-        assert!(vmm.advance(Duration::from_micros(500)).is_empty(), "nothing due yet");
+        assert!(
+            vmm.advance(Duration::from_micros(500)).is_empty(),
+            "nothing due yet"
+        );
         let due = vmm.advance(Duration::from_millis(2));
         assert_eq!(
             due,

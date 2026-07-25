@@ -409,10 +409,21 @@ impl RmGraph {
     /// (order tolerance for the multi-GPU axis) without an O(n) scan per event.
     pub fn apply(&mut self, arch: &dyn Arch, ev: RmEvent) -> Result<(), RmGraphError> {
         match ev {
-            RmEvent::Alloc { client, parent, handle, class, facts } => {
+            RmEvent::Alloc {
+                client,
+                parent,
+                handle,
+                class,
+                facts,
+            } => {
                 let key = NodeKey::new(client, handle);
-                let node =
-                    RmNode { key, parent, class, kind: arch.classify(class), facts };
+                let node = RmNode {
+                    key,
+                    parent,
+                    class,
+                    kind: arch.classify(class),
+                    facts,
+                };
                 // A handle names EITHER an allocated resource OR a dup alias, never
                 // both — so an alloc onto a handle already claimed by a (parked) dup is
                 // a loud conflict, symmetric with the dup-onto-alloc rejection.
@@ -434,8 +445,16 @@ impl RmGraph {
                         let id = ResId(self.next_res_id);
                         self.next_res_id += 1;
                         self.handles.insert(key, id);
-                        self.resources
-                            .insert(id, Resource { node, refs: BTreeSet::from([key]), pdb: None, gpu: None, map_refs: 0 });
+                        self.resources.insert(
+                            id,
+                            Resource {
+                                node,
+                                refs: BTreeSet::from([key]),
+                                pdb: None,
+                                gpu: None,
+                                map_refs: 0,
+                            },
+                        );
                         // A dup / SetPageDir that arrived BEFORE this alloc parked
                         // itself; now that its target exists, promote each parked fact
                         // so the resource is refcounted and PDB-tagged correctly (and so
@@ -507,7 +526,11 @@ impl RmGraph {
                 }
                 Ok(())
             }
-            RmEvent::SetPageDir { client, vaspace, pdb } => {
+            RmEvent::SetPageDir {
+                client,
+                vaspace,
+                pdb,
+            } => {
                 // Re-binding a VASpace to a new PDB is protocol-legal
                 // (UNSET/SET_PAGE_DIRECTORY); last declaration wins. The PDB belongs to
                 // the RESOURCE (survives the origin handle's free); a declaration on an
@@ -537,14 +560,36 @@ impl RmGraph {
                 }
                 Ok(())
             }
-            RmEvent::MapMemoryDma { client, vaspace, memory, va, offset, len } => {
-                self.apply_map(PendingMap { client, vaspace, memory, va, offset, len }, false)
-            }
-            RmEvent::Unmap { client, vaspace, va } => {
+            RmEvent::MapMemoryDma {
+                client,
+                vaspace,
+                memory,
+                va,
+                offset,
+                len,
+            } => self.apply_map(
+                PendingMap {
+                    client,
+                    vaspace,
+                    memory,
+                    va,
+                    offset,
+                    len,
+                },
+                false,
+            ),
+            RmEvent::Unmap {
+                client,
+                vaspace,
+                va,
+            } => {
                 let vas_key = NodeKey::new(client, vaspace);
                 match self.resource_of(vas_key) {
                     Some(vas_id) => {
-                        self.drop_mapping(MapKey { vaspace: vas_id, va });
+                        self.drop_mapping(MapKey {
+                            vaspace: vas_id,
+                            va,
+                        });
                         Ok(())
                     }
                     // Unmap of a VAS we never saw: drop any parked map for it (idempotent
@@ -560,8 +605,7 @@ impl RmGraph {
             RmEvent::Free { client, handle } => {
                 let key = NodeKey::new(client, handle);
                 // Known iff the handle references a live resource or names a parked dup.
-                let known =
-                    self.handles.contains_key(&key) || self.pending_dups.contains_key(&key);
+                let known = self.handles.contains_key(&key) || self.pending_dups.contains_key(&key);
                 if !known {
                     return Err(RmGraphError::FreeUnknown(key));
                 }
@@ -580,7 +624,11 @@ impl RmGraph {
         // The set of HANDLES (not resources) this free removes, all within one client
         // namespace: the target plus its transitive same-namespace children.
         let doomed: BTreeSet<NodeKey> = if self.is_client_root(key) {
-            self.handles.keys().filter(|k| k.client == key.client).copied().collect()
+            self.handles
+                .keys()
+                .filter(|k| k.client == key.client)
+                .copied()
+                .collect()
         } else {
             let mut doomed = BTreeSet::from([key]);
             let mut changed = true;
@@ -593,7 +641,9 @@ impl RmGraph {
                     if hkey.client != key.client || doomed.contains(&hkey) {
                         continue;
                     }
-                    let Some(res) = self.resources.get(&id) else { continue };
+                    let Some(res) = self.resources.get(&id) else {
+                        continue;
+                    };
                     // Only follow the parent edge from the resource's origin handle.
                     if res.node.key != hkey {
                         continue;
@@ -611,8 +661,10 @@ impl RmGraph {
         // Resource ids referenced by the doomed handles, captured BEFORE dropping so we
         // can tell afterwards which resources actually died (last reference gone) — a
         // VASpace resource that dies takes its mappings with it (releasing memory refs).
-        let touched_ids: BTreeSet<ResId> =
-            doomed.iter().filter_map(|k| self.handles.get(k).copied()).collect();
+        let touched_ids: BTreeSet<ResId> = doomed
+            .iter()
+            .filter_map(|k| self.handles.get(k).copied())
+            .collect();
 
         for k in &doomed {
             self.drop_handle(*k);
@@ -623,7 +675,9 @@ impl RmGraph {
         let dead_vas: Vec<MapKey> = self
             .mappings
             .keys()
-            .filter(|mk| touched_ids.contains(&mk.vaspace) && !self.resources.contains_key(&mk.vaspace))
+            .filter(|mk| {
+                touched_ids.contains(&mk.vaspace) && !self.resources.contains_key(&mk.vaspace)
+            })
             .copied()
             .collect();
         for mk in dead_vas {
@@ -634,7 +688,8 @@ impl RmGraph {
         self.pending_dups
             .retain(|dst, src| !doomed.contains(dst) && !doomed.contains(src));
         // Likewise a parked PDB declared on a now-freed handle.
-        self.pending_pdbs.retain(|target, _| !doomed.contains(target));
+        self.pending_pdbs
+            .retain(|target, _| !doomed.contains(target));
         // And a parked map naming a now-freed VASpace or memory handle.
         self.pending_maps.retain(|m| {
             !doomed.contains(&NodeKey::new(m.client, m.vaspace))
@@ -728,7 +783,10 @@ impl RmGraph {
         };
         let vas_origin = self.origin_of(vas_key).expect("resource_of => live").key;
         let mem_node = *self.origin_of(mem_key).expect("resource_of => live");
-        let key = MapKey { vaspace: vas_id, va: m.va };
+        let key = MapKey {
+            vaspace: vas_id,
+            va: m.va,
+        };
         let mapping = Mapping {
             vaspace: vas_origin,
             pdb: self.resource_pdb(vas_id),
@@ -763,7 +821,10 @@ impl RmGraph {
         }
         match self.mappings.get(&key) {
             Some(existing) if *existing == mapping => Ok(()), // idempotent retry
-            Some(_) => Err(RmGraphError::ConflictingMap { vaspace: vas_origin, va: m.va }),
+            Some(_) => Err(RmGraphError::ConflictingMap {
+                vaspace: vas_origin,
+                va: m.va,
+            }),
             None => {
                 // A new live mapping grows the mapping table (boundary-1).
                 if self.mappings.len() >= MAX_LIVE_MAPPINGS {
@@ -788,7 +849,8 @@ impl RmGraph {
             .pending_maps
             .iter()
             .find(|m| {
-                self.resource_of(NodeKey::new(m.client, m.vaspace)).is_some()
+                self.resource_of(NodeKey::new(m.client, m.vaspace))
+                    .is_some()
                     && self.resource_of(NodeKey::new(m.client, m.memory)).is_some()
             })
             .copied()
@@ -838,7 +900,9 @@ impl RmGraph {
     /// origin handle while a dup still references the resource keeps BOTH the resource
     /// and its declared PDB alive.
     fn drop_handle(&mut self, key: NodeKey) {
-        let Some(id) = self.handles.remove(&key) else { return };
+        let Some(id) = self.handles.remove(&key) else {
+            return;
+        };
         if let Some(res) = self.resources.get_mut(&id) {
             res.refs.remove(&key);
             // A resource stays alive while any handle OR any live mapping references it
@@ -899,7 +963,11 @@ impl RmGraph {
     /// by [`Self::nodes`]), so it stays correct even after the origin *handle* itself
     /// has been freed while a dup keeps the resource alive. Empty if no such resource.
     pub fn references(&self, origin_key: NodeKey) -> impl Iterator<Item = NodeKey> + '_ {
-        let refs = self.resources.values().find(|r| r.node.key == origin_key).map(|r| &r.refs);
+        let refs = self
+            .resources
+            .values()
+            .find(|r| r.node.key == origin_key)
+            .map(|r| &r.refs);
         refs.into_iter().flat_map(|set| set.iter().copied())
     }
 
@@ -943,10 +1011,15 @@ impl RmGraph {
     pub fn backing_of(&self, memory_key: NodeKey) -> Option<u64> {
         // Resolve by handle when possible; else fall back to the resource's stable
         // origin key (a memory kept alive ONLY by a live mapping has no live handle).
-        let node = self
-            .origin_of(memory_key)
-            .or_else(|| self.resources.values().map(|r| &r.node).find(|n| n.key == memory_key))?;
-        matches!(node.kind, ObjectKind::Memory).then(|| node.facts.mem_phys).flatten()
+        let node = self.origin_of(memory_key).or_else(|| {
+            self.resources
+                .values()
+                .map(|r| &r.node)
+                .find(|n| n.key == memory_key)
+        })?;
+        matches!(node.kind, ObjectKind::Memory)
+            .then(|| node.facts.mem_phys)
+            .flatten()
     }
 
     /// Number of live mappings referencing the resource whose origin is `origin_key`
@@ -954,7 +1027,10 @@ impl RmGraph {
     /// handles). Zero if no such resource.
     #[must_use]
     pub fn map_ref_count(&self, origin_key: NodeKey) -> usize {
-        self.resources.values().find(|r| r.node.key == origin_key).map_or(0, |r| r.map_refs)
+        self.resources
+            .values()
+            .find(|r| r.node.key == origin_key)
+            .map_or(0, |r| r.map_refs)
     }
 
     /// All live EVENT (os-event / notifier) nodes owned by `client` — completion
@@ -973,7 +1049,10 @@ impl RmGraph {
     pub fn dups(&self) -> impl Iterator<Item = (NodeKey, NodeKey)> {
         let resolved = self.resources.values().flat_map(|r| {
             let origin = r.node.key;
-            r.refs.iter().filter(move |h| **h != origin).map(move |h| (*h, origin))
+            r.refs
+                .iter()
+                .filter(move |h| **h != origin)
+                .map(move |h| (*h, origin))
         });
         let parked = self.pending_dups.iter().map(|(d, s)| (*d, *s));
         // Deterministic order: collect into a BTreeMap by dst, then iterate.
@@ -1018,6 +1097,9 @@ impl RmGraph {
         // The origin handle was freed but a dup keeps the resource alive: read the
         // cached target off the resource by its stable origin key (mirrors `pdb_of` —
         // the target, like the PDB, is a resource property that survives the free).
-        self.resources.values().find(|r| r.node.key == key).and_then(|r| r.gpu)
+        self.resources
+            .values()
+            .find(|r| r.node.key == key)
+            .and_then(|r| r.gpu)
     }
 }

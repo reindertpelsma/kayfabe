@@ -299,10 +299,9 @@ impl Proc {
         // has materialized no target yet has empty `arenas` → vacuously untouched.)
         self.arenas.values().all(GpaArena::is_untouched)
             && self.channels.values().all(|c| c.host_channel.is_none())
-            && self
-                .vases
-                .values()
-                .all(|v| v.host_vas.is_none() && v.table.iter().all(|(_, _, b)| b.host_va.is_none()))
+            && self.vases.values().all(|v| {
+                v.host_vas.is_none() && v.table.iter().all(|(_, _, b)| b.host_va.is_none())
+            })
     }
 }
 
@@ -396,7 +395,11 @@ impl Gpu {
         let mut targets = BTreeMap::new();
         targets.insert(
             GpuId::ZERO,
-            GpuTarget { gpa, delivery: DeliveryPlane::new(), arch_name },
+            GpuTarget {
+                gpa,
+                delivery: DeliveryPlane::new(),
+                arch_name,
+            },
         );
         let mut gpu = Gpu {
             arch,
@@ -535,11 +538,17 @@ impl Gpu {
                 // No resolvable target (no Device ancestor) — deferred, never guessed.
                 continue;
             };
-            let phys = m.mem_phys.ok_or(GpuError::UnbackedMapping { pdb, va: m.va.0 })?;
+            let phys = m
+                .mem_phys
+                .ok_or(GpuError::UnbackedMapping { pdb, va: m.va.0 })?;
             desired.insert((gpu, pdb.0, m.va.0), (m.len, phys));
         }
 
-        for proc in self.procs.values_mut().chain(core::iter::once(&mut self.system)) {
+        for proc in self
+            .procs
+            .values_mut()
+            .chain(core::iter::once(&mut self.system))
+        {
             for (&(gpu, pdb), vas) in proc.vases.iter_mut() {
                 // Unbind stale RPC bindings (mapping gone), leaving host-backed
                 // publish_backing entries (host_va = Some) alone.
@@ -563,7 +572,11 @@ impl Gpu {
                             pdb,
                             GpuVa(va),
                             len,
-                            Binding { phys, aperture: Aperture::SysmemCoherent, host_va: None },
+                            Binding {
+                                phys,
+                                aperture: Aperture::SysmemCoherent,
+                                host_va: None,
+                            },
                         )
                         .map_err(GpuError::Address)?;
                     vas.rpc_bound.insert(va);
@@ -595,7 +608,10 @@ impl Gpu {
                     for &absorbed in &matching[1..] {
                         let p = self.procs.get(&absorbed).expect("matched proc exists");
                         if !p.is_untouched() {
-                            return Err(GpuError::LateMerge { kept: keep, absorbed });
+                            return Err(GpuError::LateMerge {
+                                kept: keep,
+                                absorbed,
+                            });
                         }
                         let mut dead = self.procs.remove(&absorbed).expect("exists");
                         dead.retire();
@@ -628,7 +644,9 @@ impl Gpu {
                 .collect();
             for (&origin, facts) in &b.vases {
                 if let (Some(gpu), Some(pdb)) = (facts.gpu, facts.pdb) {
-                    p.vases.entry((gpu, pdb)).or_insert_with(|| Vas::new(gpu, pdb, origin));
+                    p.vases
+                        .entry((gpu, pdb))
+                        .or_insert_with(|| Vas::new(gpu, pdb, origin));
                 }
             }
             p.vases.retain(|key, _| live_keys.contains(key));
@@ -671,7 +689,12 @@ impl Gpu {
         }
 
         // 3. Retire procs whose component vanished (client root freed).
-        let dead: Vec<ProcId> = self.procs.keys().filter(|id| !live.contains(id)).copied().collect();
+        let dead: Vec<ProcId> = self
+            .procs
+            .keys()
+            .filter(|id| !live.contains(id))
+            .copied()
+            .collect();
         for id in dead {
             let mut p = self.procs.remove(&id).expect("exists");
             p.retire();
@@ -754,7 +777,12 @@ impl Gpu {
     /// another's post. The caller encodes it on that target's GSP queue and raises
     /// SWGEN0 via `Vmm::raise_irq`.
     pub fn pump_completions(&mut self, gpu: GpuId) -> Option<PostBatch> {
-        let Self { targets, procs, system, .. } = self;
+        let Self {
+            targets,
+            procs,
+            system,
+            ..
+        } = self;
         let target = targets.get_mut(&gpu)?;
         let mut queues: Vec<&mut CompletionQueue> = Vec::new();
         if system.targets.contains(&gpu) {
@@ -777,7 +805,12 @@ impl Gpu {
         let mut poller = self.procs.remove(&pid)?;
         poller.poll.last_poll = Some(now);
         let batch = {
-            let Self { targets, procs, system, .. } = self;
+            let Self {
+                targets,
+                procs,
+                system,
+                ..
+            } = self;
             let target = targets.get_mut(&gpu).expect("checked above");
             let mut others: Vec<&mut CompletionQueue> = Vec::new();
             if system.targets.contains(&gpu) {
@@ -794,8 +827,15 @@ impl Gpu {
 
     /// The guest drained target `gpu`'s outstanding batch (IRQSCLR observed).
     pub fn completions_drained(&mut self, gpu: GpuId) {
-        let Self { targets, procs, system, .. } = self;
-        let Some(target) = targets.get_mut(&gpu) else { return };
+        let Self {
+            targets,
+            procs,
+            system,
+            ..
+        } = self;
+        let Some(target) = targets.get_mut(&gpu) else {
+            return;
+        };
         let mut queues: Vec<&mut CompletionQueue> = Vec::new();
         if system.targets.contains(&gpu) {
             queues.push(&mut system.completion);

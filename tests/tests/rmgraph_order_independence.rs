@@ -36,7 +36,11 @@ fn permutations(n: usize) -> Vec<Vec<usize>> {
 fn scenario() -> Scenario {
     let mut s = Scenario::new();
     // Process A: compute client + UVM client dup'ing A's compute VASpace.
-    let a_vas = s.compute_process(HClient(0xAA), Pdb(0x3401_000), identical_handles(0x10, 0x11));
+    let a_vas = s.compute_process(
+        HClient(0xAA),
+        Pdb(0x3401_000),
+        identical_handles(0x10, 0x11),
+    );
     s.uvm_dup(
         HClient(0xA1),
         HObject(0x9000_0000),
@@ -48,7 +52,11 @@ fn scenario() -> Scenario {
     );
     // Process B: IDENTICAL guest handles, IDENTICAL guest VAs would follow, DISTINCT
     // PDB, distinct vChids (E0).
-    let b_vas = s.compute_process(HClient(0xBB), Pdb(0x3405_000), identical_handles(0x20, 0x21));
+    let b_vas = s.compute_process(
+        HClient(0xBB),
+        Pdb(0x3405_000),
+        identical_handles(0x20, 0x21),
+    );
     s.uvm_dup(
         HClient(0xB1),
         HObject(0x8000_0000),
@@ -79,7 +87,8 @@ fn by_pdb_by_vchid_and_proc_grouping_are_order_independent() {
     for perm in permutations(events.len()) {
         let mut g = RmGraph::new();
         for &i in &perm {
-            g.apply(&arch, events[i]).expect("same events, any order, still valid");
+            g.apply(&arch, events[i])
+                .expect("same events, any order, still valid");
         }
         let derived = project(&g, &arch).expect("projects cleanly in any order");
         assert_eq!(
@@ -101,7 +110,11 @@ fn dup_edge_groups_uvm_and_compute_into_one_proc() {
     // Exactly two processes (A+its UVM, B+its UVM) despite four clients.
     assert_eq!(b.procs.len(), 2, "two dup-connected components");
     for p in &b.procs {
-        assert_eq!(p.clients.len(), 2, "each proc = compute client + UVM client (dup-joined)");
+        assert_eq!(
+            p.clients.len(),
+            2,
+            "each proc = compute client + UVM client (dup-joined)"
+        );
     }
 }
 
@@ -127,8 +140,14 @@ fn multi_vaspace_per_process_keys_address_ops_on_vas_not_proc() {
 
     // by_pdb keys on (target, PDB), and each PDB routes to A on GpuId::ZERO — address
     // ops key on Vas/PDB, never on Proc (the multi-VAS-per-proc rule, decision #14).
-    assert_eq!(b.by_pdb.get(&(GpuId::ZERO, Pdb(0x3401_000))).map(|x| x.0), Some(proc_a.anchor));
-    assert_eq!(b.by_pdb.get(&(GpuId::ZERO, Pdb(0x2efa_6c000))).map(|x| x.0), Some(proc_a.anchor));
+    assert_eq!(
+        b.by_pdb.get(&(GpuId::ZERO, Pdb(0x3401_000))).map(|x| x.0),
+        Some(proc_a.anchor)
+    );
+    assert_eq!(
+        b.by_pdb.get(&(GpuId::ZERO, Pdb(0x2efa_6c000))).map(|x| x.0),
+        Some(proc_a.anchor)
+    );
 }
 
 /// ★ Mutation-gate kill (`ClientUnion::union` `ra < rb`→`ra == rb`): the process
@@ -149,7 +168,12 @@ fn proc_anchor_is_the_minimum_client_in_its_component() {
     let b = project(&g, &arch).unwrap();
     assert_eq!(b.procs.len(), 2);
     for p in &b.procs {
-        let min_client = p.clients.iter().min().copied().expect("component non-empty");
+        let min_client = p
+            .clients
+            .iter()
+            .min()
+            .copied()
+            .expect("component non-empty");
         assert_eq!(
             p.anchor.0, min_client,
             "the anchor must be the SMALLEST client handle in the component (deterministic identity)",
@@ -164,8 +188,16 @@ fn proc_anchor_is_the_minimum_client_in_its_component() {
         }
     }
     // Concretely: proc A's clients are {0xA1, 0xAA}; its anchor is 0xA1 (the smaller).
-    let proc_a = b.procs.iter().find(|p| p.clients.contains(&HClient(0xAA))).unwrap();
-    assert_eq!(proc_a.anchor.0, HClient(0xA1), "0xA1 < 0xAA, so 0xA1 anchors proc A");
+    let proc_a = b
+        .procs
+        .iter()
+        .find(|p| p.clients.contains(&HClient(0xAA)))
+        .unwrap();
+    assert_eq!(
+        proc_a.anchor.0,
+        HClient(0xA1),
+        "0xA1 < 0xAA, so 0xA1 anchors proc A"
+    );
 }
 
 #[test]
@@ -179,8 +211,14 @@ fn identical_handles_across_procs_do_not_collide() {
 
     // Both procs used GR channel handle 0x5c000019 — but they are distinct nodes
     // keyed by (client, handle), so the two GR channels route to distinct vChids.
-    let gr_a = b.by_vchid.get(&(GpuId::ZERO, VChid(0x10))).expect("A's GR vchid");
-    let gr_b = b.by_vchid.get(&(GpuId::ZERO, VChid(0x20))).expect("B's GR vchid");
+    let gr_a = b
+        .by_vchid
+        .get(&(GpuId::ZERO, VChid(0x10)))
+        .expect("A's GR vchid");
+    let gr_b = b
+        .by_vchid
+        .get(&(GpuId::ZERO, VChid(0x20)))
+        .expect("B's GR vchid");
     assert_ne!(gr_a.0, gr_b.0, "identical handles, distinct procs");
     // Four distinct channels total (2 per proc), zero vChid collisions.
     assert_eq!(b.by_vchid.len(), 4);

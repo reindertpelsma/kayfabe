@@ -50,7 +50,9 @@ pub struct IntervalMap<V> {
 // Manual `Default` so `V: Default` is NOT required (an empty map needs no value).
 impl<V> Default for IntervalMap<V> {
     fn default() -> Self {
-        IntervalMap { ranges: BTreeMap::new() }
+        IntervalMap {
+            ranges: BTreeMap::new(),
+        }
     }
 }
 
@@ -58,7 +60,9 @@ impl<V> IntervalMap<V> {
     /// An empty map.
     #[must_use]
     pub fn new() -> Self {
-        IntervalMap { ranges: BTreeMap::new() }
+        IntervalMap {
+            ranges: BTreeMap::new(),
+        }
     }
 
     /// Number of ranges.
@@ -88,13 +92,19 @@ impl<V> IntervalMap<V> {
             && let (ps, Some(pe)) = (ps, ps.checked_add(plen))
             && pe > start
         {
-            return Err(IntervalError::Overlap { existing_start: ps, existing_len: plen });
+            return Err(IntervalError::Overlap {
+                existing_start: ps,
+                existing_len: plen,
+            });
         }
         // Successor may overlap from the right.
         if let Some((&ns, &(nlen, _))) = self.ranges.range(start..).next()
             && ns < end
         {
-            return Err(IntervalError::Overlap { existing_start: ns, existing_len: nlen });
+            return Err(IntervalError::Overlap {
+                existing_start: ns,
+                existing_len: nlen,
+            });
         }
         self.ranges.insert(start, (len, value));
         Ok(())
@@ -107,7 +117,11 @@ impl<V> IntervalMap<V> {
     #[must_use]
     pub fn lookup(&self, point: u64) -> Option<(u64, u64, &V)> {
         let (&start, &(len, ref v)) = self.ranges.range(..=point).next_back()?;
-        if point < start.checked_add(len)? { Some((start, len, v)) } else { None }
+        if point < start.checked_add(len)? {
+            Some((start, len, v))
+        } else {
+            None
+        }
     }
 
     /// Remove the range that starts exactly at `start` (the eager-unmap path).
@@ -136,7 +150,11 @@ mod tests {
         assert_eq!(m.lookup(0x2000), None, "gap between ranges is a MISS");
         assert_eq!(m.lookup(0x37ff), Some((0x3000, 0x800, &"b")));
         assert_eq!(m.remove_at(0x1000), Some((0x1000, "a")));
-        assert_eq!(m.lookup(0x1000), None, "removed range is a MISS (unmap eager)");
+        assert_eq!(
+            m.lookup(0x1000),
+            None,
+            "removed range is a MISS (unmap eager)"
+        );
     }
 
     #[test]
@@ -144,10 +162,18 @@ mod tests {
         let mut m = IntervalMap::new();
         m.insert(0x1000, 0x1000, ()).unwrap();
         // Left, right, containing, contained: all must refuse.
-        for (s, l) in [(0x800, 0x900), (0x1fff, 0x10), (0x0, 0x10000), (0x1400, 0x100)] {
+        for (s, l) in [
+            (0x800, 0x900),
+            (0x1fff, 0x10),
+            (0x0, 0x10000),
+            (0x1400, 0x100),
+        ] {
             assert_eq!(
                 m.insert(s, l, ()),
-                Err(IntervalError::Overlap { existing_start: 0x1000, existing_len: 0x1000 }),
+                Err(IntervalError::Overlap {
+                    existing_start: 0x1000,
+                    existing_len: 0x1000
+                }),
                 "overlap ({s:#x},{l:#x}) must be refused"
             );
         }
@@ -162,13 +188,21 @@ mod tests {
     #[test]
     fn malformed_range_is_a_loud_error_never_a_panic() {
         let mut m: IntervalMap<()> = IntervalMap::new();
-        assert_eq!(m.insert(0x1000, 0, ()), Err(IntervalError::Empty), "zero-len refused");
+        assert_eq!(
+            m.insert(0x1000, 0, ()),
+            Err(IntervalError::Empty),
+            "zero-len refused"
+        );
         assert_eq!(
             m.insert(u64::MAX - 0x100, 0x1000, ()),
             Err(IntervalError::Wraps),
             "a range wrapping u64 is refused, not a panic"
         );
-        assert_eq!(m.insert(u64::MAX, 1, ()), Err(IntervalError::Wraps), "last-byte wrap refused");
+        assert_eq!(
+            m.insert(u64::MAX, 1, ()),
+            Err(IntervalError::Wraps),
+            "last-byte wrap refused"
+        );
         // The maximal non-wrapping range (ending exactly at u64::MAX) is accepted.
         m.insert(u64::MAX - 0x1000, 0x1000, ()).unwrap();
     }

@@ -24,8 +24,8 @@ use std::time::Duration;
 
 use nvkvm_arch::ids::{GpuVa, HClient, Pdb, VChid};
 use nvkvm_completion::OsEventRef;
-use nvkvm_core::gpu::Gpu;
 use nvkvm_core::gpa::GpaSpace;
+use nvkvm_core::gpu::Gpu;
 use nvkvm_fwd::{handle_doorbell, poll_completions, publish_backing, resolve};
 use nvkvm_mocks::{MockArch, MockIsolateFactory, MockVmm};
 use nvkvm_tests::{Scenario, identical_handles};
@@ -88,17 +88,28 @@ fn build(n: u64) -> (Gpu, MockVmm, Vec<Inference>, Vec<nvkvm_core::ProcId>) {
     for ev in s.events {
         gpu.apply(ev).expect("fixture applies");
     }
-    let pids: Vec<_> = infs.iter().map(|inf| *gpu.by_pdb.get(&(GpuId::ZERO, inf.pdb)).unwrap()).collect();
+    let pids: Vec<_> = infs
+        .iter()
+        .map(|inf| *gpu.by_pdb.get(&(GpuId::ZERO, inf.pdb)).unwrap())
+        .collect();
     (gpu, MockVmm::new(), infs, pids)
 }
 
 /// Assert the cross-cutting invariants that must hold on EVERY iteration.
 fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[nvkvm_core::ProcId], n: u64) {
     // (1) Boundaries stay consistent: exactly `n` live procs, each still routed.
-    assert_eq!(gpu.procs.len() as u64, n, "proc count stays bounded (no leak/dup)");
+    assert_eq!(
+        gpu.procs.len() as u64,
+        n,
+        "proc count stays bounded (no leak/dup)"
+    );
 
     // (2) No arena collision: all live arenas pairwise disjoint.
-    let ranges: Vec<_> = gpu.procs.values().map(|p| p.arenas[&GpuId::ZERO].range.clone()).collect();
+    let ranges: Vec<_> = gpu
+        .procs
+        .values()
+        .map(|p| p.arenas[&GpuId::ZERO].range.clone())
+        .collect();
     for i in 0..ranges.len() {
         for j in (i + 1)..ranges.len() {
             assert!(
@@ -115,9 +126,15 @@ fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[nvkvm_core::Pro
     let mut seen_hva: BTreeSet<u64> = BTreeSet::new();
     for inf in infs {
         if let Ok((bind, _)) = resolve(gpu, GpuId::ZERO, inf.pdb, shared) {
-            assert!(seen_phys.insert(bind.phys), "two procs' identical VA share a GPA backing");
+            assert!(
+                seen_phys.insert(bind.phys),
+                "two procs' identical VA share a GPA backing"
+            );
             if let Some(hva) = bind.host_va {
-                assert!(seen_hva.insert(hva), "two procs' identical VA share a host VA");
+                assert!(
+                    seen_hva.insert(hva),
+                    "two procs' identical VA share a host VA"
+                );
             }
         }
     }
@@ -125,7 +142,11 @@ fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[nvkvm_core::Pro
     // (4) RmGraph does NOT leak: node count is exactly the fixture's (7 nodes/proc:
     // client, device, vaspace, tsg, gr-chan, ce-chan — SetPageDir isn't a node).
     let node_count = gpu.rmgraph.nodes().count() as u64;
-    assert_eq!(node_count, n * 6, "RmGraph node count bounded — no unbounded growth");
+    assert_eq!(
+        node_count,
+        n * 6,
+        "RmGraph node count bounded — no unbounded growth"
+    );
     let _ = pids;
 }
 
@@ -134,7 +155,10 @@ fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[nvkvm_core::Pro
 fn run_soak(iters: u64, n: u64) -> Vec<u64> {
     let (mut gpu, mut vmm, mut infs, pids) = build(n);
     // A well-formed doorbell token per proc's GR channel.
-    let tokens: Vec<u64> = infs.iter().map(|inf| MockArch::token_for(inf.gr_vchid)).collect();
+    let tokens: Vec<u64> = infs
+        .iter()
+        .map(|inf| MockArch::token_for(inf.gr_vchid))
+        .collect();
 
     for it in 0..iters {
         // Interleave all procs each iteration (concurrent load).
@@ -150,8 +174,18 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
             // (unmap eager, map lazy) — never a silent stale reuse.
             {
                 let p = gpu.procs.get_mut(&pid).unwrap();
-                if p.vases.get(&(GpuId::ZERO, infs[idx].pdb)).unwrap().table.resolve(infs[idx].pdb, va).is_ok() {
-                    p.vases.get_mut(&(GpuId::ZERO, infs[idx].pdb)).unwrap().table.unbind(va);
+                if p.vases
+                    .get(&(GpuId::ZERO, infs[idx].pdb))
+                    .unwrap()
+                    .table
+                    .resolve(infs[idx].pdb, va)
+                    .is_ok()
+                {
+                    p.vases
+                        .get_mut(&(GpuId::ZERO, infs[idx].pdb))
+                        .unwrap()
+                        .table
+                        .unbind(va);
                 }
             }
             let p = gpu.procs.get_mut(&pid).unwrap();
@@ -163,15 +197,25 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
             if infs[idx].live_kv.len() > KV_RING {
                 let old = infs[idx].live_kv.remove(0);
                 let p = gpu.procs.get_mut(&pid).unwrap();
-                p.vases.get_mut(&(GpuId::ZERO, infs[idx].pdb)).unwrap().table.unbind(old);
+                p.vases
+                    .get_mut(&(GpuId::ZERO, infs[idx].pdb))
+                    .unwrap()
+                    .table
+                    .unbind(old);
             }
 
             // --- launch: ring this proc's GR doorbell (its own channel/isolate) ---
-            let out = handle_doorbell(&mut gpu, GpuId::ZERO, tokens[idx], &[]).expect("launch routes");
+            let out =
+                handle_doorbell(&mut gpu, GpuId::ZERO, tokens[idx], &[]).expect("launch routes");
             assert_eq!(out.proc, pid, "doorbell routes to the owning proc");
 
             // --- completion observed for this proc (host sema advance) ---
-            gpu.procs.get_mut(&pid).unwrap().completion.observe(OsEventRef(it * 100 + idx as u64)).unwrap();
+            gpu.procs
+                .get_mut(&pid)
+                .unwrap()
+                .completion
+                .observe(OsEventRef(it * 100 + idx as u64))
+                .unwrap();
         }
 
         // --- sync: each proc polls (MC_SERVICE_INTERRUPTS) and its completions are
@@ -201,8 +245,14 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
     // proc made forward progress every iteration (no starvation over thousands).
     for (idx, inf) in infs.iter().enumerate() {
         let q = &gpu.procs.get(&pids[idx]).unwrap().completion;
-        assert!(!q.has_outstanding(), "proc {idx}: completion queue drained at end (no leak)");
-        assert_eq!(inf.delivered, iters, "proc {idx}: got a completion EVERY iter (no starvation)");
+        assert!(
+            !q.has_outstanding(),
+            "proc {idx}: completion queue drained at end (no leak)"
+        );
+        assert_eq!(
+            inf.delivered, iters,
+            "proc {idx}: got a completion EVERY iter (no starvation)"
+        );
     }
     infs.iter().map(|i| i.delivered).collect()
 }
@@ -213,7 +263,11 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
 #[test]
 fn soak_1000_tokens_3_concurrent_infer_procs() {
     let delivered = run_soak(1000, 3);
-    assert_eq!(delivered, vec![1000, 1000, 1000], "all three procs generated 1000 tokens");
+    assert_eq!(
+        delivered,
+        vec![1000, 1000, 1000],
+        "all three procs generated 1000 tokens"
+    );
 }
 
 /// A single sustained process (N=1 is the same code path as N≥2) over 1000 tokens —

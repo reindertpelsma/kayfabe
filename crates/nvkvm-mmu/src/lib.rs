@@ -151,7 +151,11 @@ mod tests {
             PDB,
             GpuVa(0x2_0020_0000),
             0x10000,
-            Binding { phys: 0x8000_0000, aperture: Aperture::SysmemCoherent, host_va: None },
+            Binding {
+                phys: 0x8000_0000,
+                aperture: Aperture::SysmemCoherent,
+                host_va: None,
+            },
         )
         .unwrap();
         // In range: resolves with offset.
@@ -160,7 +164,10 @@ mod tests {
         // Out of range: FAULT, carrying the identity needed for a loud diagnostic.
         assert_eq!(
             t.resolve(PDB, GpuVa(0x2_0030_0000)),
-            Err(AddressFault::Miss { pdb: PDB, va: GpuVa(0x2_0030_0000) })
+            Err(AddressFault::Miss {
+                pdb: PDB,
+                va: GpuVa(0x2_0030_0000)
+            })
         );
     }
 
@@ -169,11 +176,18 @@ mod tests {
     #[test]
     fn taddr_unmap_eager_and_overlap_loud() {
         let mut t = AddressTable::new();
-        let bind = Binding { phys: 0x1000, aperture: Aperture::Vidmem, host_va: None };
+        let bind = Binding {
+            phys: 0x1000,
+            aperture: Aperture::Vidmem,
+            host_va: None,
+        };
         t.bind(PDB, GpuVa(0x1000), 0x1000, bind).unwrap();
         assert_eq!(
             t.bind(PDB, GpuVa(0x1800), 0x1000, bind),
-            Err(AddressFault::Overlap { pdb: PDB, va: GpuVa(0x1800) }),
+            Err(AddressFault::Overlap {
+                pdb: PDB,
+                va: GpuVa(0x1800)
+            }),
             "re-point without unbind must be loud"
         );
         assert!(t.unbind(GpuVa(0x1000)).is_some());

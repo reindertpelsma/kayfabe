@@ -43,12 +43,18 @@ const SHARED_VA: GpuVa = GpuVa(0x2_0020_0000);
 const GR_VCHID: u16 = 0x10;
 const CE_VCHID: u16 = 0x11;
 
-fn new_gpu() -> (Gpu, std::sync::Arc<std::sync::Mutex<nvkvm_mocks::RmRecorder>>) {
+fn new_gpu() -> (
+    Gpu,
+    std::sync::Arc<std::sync::Mutex<nvkvm_mocks::RmRecorder>>,
+) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     // A window sized so each target's disjoint sub-window comfortably fits several arenas.
     let gpa = GpaSpace::new(0x1_0000_0000..0x11_0000_0000, 0x1_0000_0000);
-    (Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"), rec)
+    (
+        Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+        rec,
+    )
 }
 
 /// Events for one compute proc on physical GPU `instance`, reusing the SAME guest PDB,
@@ -59,7 +65,12 @@ fn proc_on_gpu(client: HClient, instance: u32) -> Vec<RmEvent> {
     let h = identical_handles(GR_VCHID, CE_VCHID);
     s.compute_process_on_gpu(client, SHARED_PDB, h, Some(instance));
     // A backed memory object mapped at the SHARED guest VA (identical on every GPU).
-    s.memory(client, h.device, HObject(0x5c00_0100), 0x9_0000_0000 + u64::from(instance) * 0x1_0000_0000);
+    s.memory(
+        client,
+        h.device,
+        HObject(0x5c00_0100),
+        0x9_0000_0000 + u64::from(instance) * 0x1_0000_0000,
+    );
     s.map(client, h.vaspace, HObject(0x5c00_0100), SHARED_VA, 0x10000);
     s.events
 }
@@ -79,8 +90,14 @@ fn two_gpu_world() -> (
     for ev in proc_on_gpu(HClient(0xB0), 1) {
         gpu.apply(ev).expect("GPU1 proc applies");
     }
-    let pid_a = *gpu.by_pdb.get(&(GpuId(0), SHARED_PDB)).expect("GPU0 PDB routes");
-    let pid_b = *gpu.by_pdb.get(&(GpuId(1), SHARED_PDB)).expect("GPU1 PDB routes");
+    let pid_a = *gpu
+        .by_pdb
+        .get(&(GpuId(0), SHARED_PDB))
+        .expect("GPU0 PDB routes");
+    let pid_b = *gpu
+        .by_pdb
+        .get(&(GpuId(1), SHARED_PDB))
+        .expect("GPU1 PDB routes");
     (gpu, rec, pid_a, pid_b)
 }
 
@@ -100,7 +117,10 @@ fn correct_gpu_routing() {
     let out1 = handle_doorbell(&mut gpu, GpuId(1), token, &[]).expect("GPU1 doorbell routes");
     assert_eq!(out0.proc, pid_a, "GPU0 token routed to GPU0's proc");
     assert_eq!(out1.proc, pid_b, "GPU1 token routed to GPU1's proc");
-    assert_ne!(out0.host_token, out1.host_token, "distinct host channels per GPU");
+    assert_ne!(
+        out0.host_token, out1.host_token,
+        "distinct host channels per GPU"
+    );
 
     // Address resolution is likewise per target: the SAME PDB+VA resolves to each
     // GPU's OWN backing (declared distinct per instance), never the other's.
@@ -119,12 +139,22 @@ fn cross_gpu_isolation() {
     let (mut gpu, rec, pid_a, pid_b) = two_gpu_world();
 
     // Publish a host backing in each proc on ITS OWN target.
-    let pub_a =
-        publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), GpuId(0), SHARED_PDB, GpuVa(0x5_0000_0000), 0x1000)
-            .expect("GPU0 publish");
-    let pub_b =
-        publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), GpuId(1), SHARED_PDB, GpuVa(0x5_0000_0000), 0x1000)
-            .expect("GPU1 publish");
+    let pub_a = publish_backing(
+        gpu.procs.get_mut(&pid_a).unwrap(),
+        GpuId(0),
+        SHARED_PDB,
+        GpuVa(0x5_0000_0000),
+        0x1000,
+    )
+    .expect("GPU0 publish");
+    let pub_b = publish_backing(
+        gpu.procs.get_mut(&pid_b).unwrap(),
+        GpuId(1),
+        SHARED_PDB,
+        GpuVa(0x5_0000_0000),
+        0x1000,
+    )
+    .expect("GPU1 publish");
 
     // Disjoint GPA arenas AND disjoint host VAs — each proc's per-(proc, GPU) isolate
     // + arena are separate by construction.
@@ -134,9 +164,18 @@ fn cross_gpu_isolation() {
     // A proc materialized ONLY its own target's isolate/arena — never the other GPU's.
     let a = gpu.procs.get(&pid_a).unwrap();
     let b = gpu.procs.get(&pid_b).unwrap();
-    assert!(a.arenas.contains_key(&GpuId(0)) && !a.arenas.contains_key(&GpuId(1)), "GPU0 proc has no GPU1 arena");
-    assert!(b.arenas.contains_key(&GpuId(1)) && !b.arenas.contains_key(&GpuId(0)), "GPU1 proc has no GPU0 arena");
-    assert!(a.isolates.contains_key(&GpuId(0)) && !a.isolates.contains_key(&GpuId(1)), "GPU0 proc has no GPU1 isolate");
+    assert!(
+        a.arenas.contains_key(&GpuId(0)) && !a.arenas.contains_key(&GpuId(1)),
+        "GPU0 proc has no GPU1 arena"
+    );
+    assert!(
+        b.arenas.contains_key(&GpuId(1)) && !b.arenas.contains_key(&GpuId(0)),
+        "GPU1 proc has no GPU0 arena"
+    );
+    assert!(
+        a.isolates.contains_key(&GpuId(0)) && !a.isolates.contains_key(&GpuId(1)),
+        "GPU0 proc has no GPU1 isolate"
+    );
 
     // An op for GPU0 never lands on GPU1's backend: the doorbell/PDB for GPU0 resolves
     // GPU0's proc, and GPU1's identical identities resolve GPU1's proc — a GPU0 op can
@@ -151,7 +190,10 @@ fn cross_gpu_isolation() {
         })
         .collect();
     // Both GPU lanes (0 and 1) appear — the two procs mapped on distinct target isolates.
-    assert!(sessions_gpu0.contains(&0) && sessions_gpu0.contains(&1), "each proc mapped on its own GPU's isolate");
+    assert!(
+        sessions_gpu0.contains(&0) && sessions_gpu0.contains(&1),
+        "each proc mapped on its own GPU's isolate"
+    );
 
     // Cross-target routing is a clean MISS, never a silent reach into the other GPU:
     // GPU0 has no proc holding GPU1's-only identities beyond its own.
@@ -169,10 +211,30 @@ fn hash14_across_gpu() {
     // An IDENTICAL fresh guest VA (distinct from the RPC-mapped SHARED_VA), published
     // in each proc on its own GPU — the #14-across-GPU shape.
     let ident_va = GpuVa(0x6_0000_0000);
-    let pa = publish_backing(gpu.procs.get_mut(&pid_a).unwrap(), GpuId(0), SHARED_PDB, ident_va, 0x10000).expect("A");
-    let pb = publish_backing(gpu.procs.get_mut(&pid_b).unwrap(), GpuId(1), SHARED_PDB, ident_va, 0x10000).expect("B");
-    assert_ne!(pa.gpa, pb.gpa, "identical VAs across GPUs must land at disjoint GPAs");
-    assert_ne!(pa.host_va, pb.host_va, "identical VAs across GPUs must land in disjoint host VASes");
+    let pa = publish_backing(
+        gpu.procs.get_mut(&pid_a).unwrap(),
+        GpuId(0),
+        SHARED_PDB,
+        ident_va,
+        0x10000,
+    )
+    .expect("A");
+    let pb = publish_backing(
+        gpu.procs.get_mut(&pid_b).unwrap(),
+        GpuId(1),
+        SHARED_PDB,
+        ident_va,
+        0x10000,
+    )
+    .expect("B");
+    assert_ne!(
+        pa.gpa, pb.gpa,
+        "identical VAs across GPUs must land at disjoint GPAs"
+    );
+    assert_ne!(
+        pa.host_va, pb.host_va,
+        "identical VAs across GPUs must land in disjoint host VASes"
+    );
     // Each still resolves to ITS OWN host publication, never the other's.
     let (ba, _) = resolve(&gpu, GpuId(0), SHARED_PDB, ident_va).unwrap();
     let (bb, _) = resolve(&gpu, GpuId(1), SHARED_PDB, ident_va).unwrap();
@@ -192,11 +254,22 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
     // ---- Direction 1: cross-GPU identical PDB is ALLOWED (two targets, no collision). ----
     let (gpu, _rec, pid_a, pid_b) = two_gpu_world();
     assert_ne!(pid_a, pid_b);
-    assert_eq!(gpu.by_pdb.get(&(GpuId(0), SHARED_PDB)), Some(&pid_a), "GPU0's PDB routes to A");
-    assert_eq!(gpu.by_pdb.get(&(GpuId(1), SHARED_PDB)), Some(&pid_b), "identical PDB on GPU1 routes to B — NOT a collision");
+    assert_eq!(
+        gpu.by_pdb.get(&(GpuId(0), SHARED_PDB)),
+        Some(&pid_a),
+        "GPU0's PDB routes to A"
+    );
+    assert_eq!(
+        gpu.by_pdb.get(&(GpuId(1), SHARED_PDB)),
+        Some(&pid_b),
+        "identical PDB on GPU1 routes to B — NOT a collision"
+    );
     // The old device-global guard would have refused GPU1's identical PDB as a
     // PdbCollision; under the (GpuId, Pdb) key it is legal traffic.
-    assert!(project(&gpu.rmgraph, gpu.arch.as_ref()).is_ok(), "the two-GPU world projects cleanly");
+    assert!(
+        project(&gpu.rmgraph, gpu.arch.as_ref()).is_ok(),
+        "the two-GPU world projects cleanly"
+    );
 
     // ---- Direction 2: SAME-GPU duplicate PDB is STILL a loud collision. ----
     let (mut gpu2, _rec2) = new_gpu();
@@ -206,23 +279,67 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
     let vas1 = HObject(0xC010);
     let vas2 = HObject(0xC011);
     for ev in [
-        RmEvent::Alloc { client: c, parent: root, handle: root, class: mc::CLIENT, facts: AllocFacts::default() },
+        RmEvent::Alloc {
+            client: c,
+            parent: root,
+            handle: root,
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
         // ONE device (GPU0), TWO VASpaces that will claim the SAME PDB.
-        RmEvent::Alloc { client: c, parent: root, handle: dev, class: mc::DEVICE, facts: AllocFacts { device_instance: Some(0), ..Default::default() } },
-        RmEvent::Alloc { client: c, parent: dev, handle: vas1, class: mc::VASPACE, facts: AllocFacts::default() },
-        RmEvent::SetPageDir { client: c, vaspace: vas1, pdb: SHARED_PDB },
-        RmEvent::Alloc { client: c, parent: dev, handle: vas2, class: mc::VASPACE, facts: AllocFacts::default() },
+        RmEvent::Alloc {
+            client: c,
+            parent: root,
+            handle: dev,
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: c,
+            parent: dev,
+            handle: vas1,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: c,
+            vaspace: vas1,
+            pdb: SHARED_PDB,
+        },
+        RmEvent::Alloc {
+            client: c,
+            parent: dev,
+            handle: vas2,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
     ] {
         gpu2.apply(ev).expect("setup applies");
     }
     // The second VAS claiming the SAME (GPU0) PDB is the hostile duplicate → loud.
-    let dup = gpu2.apply(RmEvent::SetPageDir { client: c, vaspace: vas2, pdb: SHARED_PDB });
+    let dup = gpu2.apply(RmEvent::SetPageDir {
+        client: c,
+        vaspace: vas2,
+        pdb: SHARED_PDB,
+    });
     assert!(
-        matches!(dup, Err(GpuError::Projection(ProjectionError::PdbCollision { gpu: Some(GpuId(0)), .. }))),
+        matches!(
+            dup,
+            Err(GpuError::Projection(ProjectionError::PdbCollision {
+                gpu: Some(GpuId(0)),
+                ..
+            }))
+        ),
         "a same-GPU PDB duplicate must STILL be a loud PdbCollision, got {dup:?}"
     );
     // Atomic: the collision was rolled back; the first VAS still routes (device usable).
-    assert!(gpu2.by_pdb.contains_key(&(GpuId(0), SHARED_PDB)), "first claimant survives the refusal");
+    assert!(
+        gpu2.by_pdb.contains_key(&(GpuId(0), SHARED_PDB)),
+        "first claimant survives the refusal"
+    );
 
     // ---- Direction 2b: SAME-GPU duplicate vChid is STILL a loud collision. ----
     let (mut gpu3, _rec3) = new_gpu();
@@ -232,21 +349,69 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
     let dvas = HObject(0xD010);
     let flags = MockArch::userd_flags_for(VChid(GR_VCHID));
     for ev in [
-        RmEvent::Alloc { client: d, parent: droot, handle: droot, class: mc::CLIENT, facts: AllocFacts::default() },
-        RmEvent::Alloc { client: d, parent: droot, handle: ddev, class: mc::DEVICE, facts: AllocFacts { device_instance: Some(0), ..Default::default() } },
-        RmEvent::Alloc { client: d, parent: ddev, handle: dvas, class: mc::VASPACE, facts: AllocFacts::default() },
-        RmEvent::SetPageDir { client: d, vaspace: dvas, pdb: SHARED_PDB },
-        RmEvent::Alloc { client: d, parent: ddev, handle: HObject(0xD020), class: mc::CHANNEL_GR, facts: AllocFacts { h_vaspace: Some(dvas), userd_flags: flags, ..Default::default() } },
+        RmEvent::Alloc {
+            client: d,
+            parent: droot,
+            handle: droot,
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: d,
+            parent: droot,
+            handle: ddev,
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: d,
+            parent: ddev,
+            handle: dvas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: d,
+            vaspace: dvas,
+            pdb: SHARED_PDB,
+        },
+        RmEvent::Alloc {
+            client: d,
+            parent: ddev,
+            handle: HObject(0xD020),
+            class: mc::CHANNEL_GR,
+            facts: AllocFacts {
+                h_vaspace: Some(dvas),
+                userd_flags: flags,
+                ..Default::default()
+            },
+        },
     ] {
         gpu3.apply(ev).expect("channel-1 setup applies");
     }
     // A SECOND channel on the SAME GPU decoding to the SAME vChid → loud collision.
     let dup_v = gpu3.apply(RmEvent::Alloc {
-        client: d, parent: ddev, handle: HObject(0xD021), class: mc::CHANNEL_GR,
-        facts: AllocFacts { h_vaspace: Some(dvas), userd_flags: flags, ..Default::default() },
+        client: d,
+        parent: ddev,
+        handle: HObject(0xD021),
+        class: mc::CHANNEL_GR,
+        facts: AllocFacts {
+            h_vaspace: Some(dvas),
+            userd_flags: flags,
+            ..Default::default()
+        },
     });
     assert!(
-        matches!(dup_v, Err(GpuError::Projection(ProjectionError::VchidCollision { gpu: Some(GpuId(0)), .. }))),
+        matches!(
+            dup_v,
+            Err(GpuError::Projection(ProjectionError::VchidCollision {
+                gpu: Some(GpuId(0)),
+                ..
+            }))
+        ),
         "a same-GPU vChid duplicate must STILL be a loud VchidCollision, got {dup_v:?}"
     );
 }
@@ -266,7 +431,8 @@ fn determinism_holds_under_gpu_axis() {
     let derive = |evs: &[RmEvent]| {
         let (mut gpu, _rec) = new_gpu();
         for ev in evs {
-            gpu.apply(*ev).expect("valid multi-GPU fact applies in any order");
+            gpu.apply(*ev)
+                .expect("valid multi-GPU fact applies in any order");
         }
         project(&gpu.rmgraph, gpu.arch.as_ref()).expect("projects")
     };
@@ -275,18 +441,34 @@ fn determinism_holds_under_gpu_axis() {
 
     let mut reversed = events.clone();
     reversed.reverse();
-    assert_eq!(derive(&reversed), reference, "reversed order diverged under the GPU axis");
+    assert_eq!(
+        derive(&reversed),
+        reference,
+        "reversed order diverged under the GPU axis"
+    );
 
     // Even/odd interleave of the two GPUs' facts.
     let mut woven: Vec<RmEvent> = events.iter().step_by(2).copied().collect();
     woven.extend(events.iter().skip(1).step_by(2).copied());
-    assert_eq!(derive(&woven), reference, "interleave diverged under the GPU axis");
+    assert_eq!(
+        derive(&woven),
+        reference,
+        "interleave diverged under the GPU axis"
+    );
 
     // Non-trivial: the routing picture carries BOTH targets' identical PDB/vChid.
     assert!(reference.by_pdb.contains_key(&(GpuId(0), SHARED_PDB)));
     assert!(reference.by_pdb.contains_key(&(GpuId(1), SHARED_PDB)));
-    assert!(reference.by_vchid.contains_key(&(GpuId(0), VChid(GR_VCHID))));
-    assert!(reference.by_vchid.contains_key(&(GpuId(1), VChid(GR_VCHID))));
+    assert!(
+        reference
+            .by_vchid
+            .contains_key(&(GpuId(0), VChid(GR_VCHID)))
+    );
+    assert!(
+        reference
+            .by_vchid
+            .contains_key(&(GpuId(1), VChid(GR_VCHID)))
+    );
 }
 
 // =================================================================================
@@ -297,17 +479,36 @@ fn determinism_holds_under_gpu_axis() {
 fn per_gpu_completion_no_cross_serialization() {
     let (mut gpu, _rec, pid_a, pid_b) = two_gpu_world();
     // Each proc observes a completion on its own target.
-    gpu.procs.get_mut(&pid_a).unwrap().completion.observe(nvkvm_completion::OsEventRef(0xA)).unwrap();
-    gpu.procs.get_mut(&pid_b).unwrap().completion.observe(nvkvm_completion::OsEventRef(0xB)).unwrap();
+    gpu.procs
+        .get_mut(&pid_a)
+        .unwrap()
+        .completion
+        .observe(nvkvm_completion::OsEventRef(0xA))
+        .unwrap();
+    gpu.procs
+        .get_mut(&pid_b)
+        .unwrap()
+        .completion
+        .observe(nvkvm_completion::OsEventRef(0xB))
+        .unwrap();
 
     // Post on GPU0 and LEAVE its batch outstanding (do NOT drain).
     let b0 = gpu.pump_completions(GpuId(0)).expect("GPU0 posts");
     assert_eq!(b0.events, vec![nvkvm_completion::OsEventRef(0xA)]);
     // GPU0's gate is closed; a re-post on GPU0 yields nothing.
-    assert!(gpu.pump_completions(GpuId(0)).is_none(), "GPU0 gate closed while outstanding");
+    assert!(
+        gpu.pump_completions(GpuId(0)).is_none(),
+        "GPU0 gate closed while outstanding"
+    );
     // ★ GPU1's post is NOT gated by GPU0's outstanding batch (its own drain gate).
-    let b1 = gpu.pump_completions(GpuId(1)).expect("GPU1 posts despite GPU0 outstanding");
-    assert_eq!(b1.events, vec![nvkvm_completion::OsEventRef(0xB)], "no cross-GPU serialization");
+    let b1 = gpu
+        .pump_completions(GpuId(1))
+        .expect("GPU1 posts despite GPU0 outstanding");
+    assert_eq!(
+        b1.events,
+        vec![nvkvm_completion::OsEventRef(0xB)],
+        "no cross-GPU serialization"
+    );
 }
 
 // =================================================================================
@@ -319,11 +520,22 @@ fn per_gpu_arena_recycle() {
     let (mut gpu, _rec, pid_a, pid_b) = two_gpu_world();
     let arena_a = gpu.procs[&pid_a].arenas[&GpuId(0)].range.clone();
     let arena_b = gpu.procs[&pid_b].arenas[&GpuId(1)].range.clone();
-    assert!(arena_a.end <= arena_b.start || arena_b.end <= arena_a.start, "targets' windows disjoint");
+    assert!(
+        arena_a.end <= arena_b.start || arena_b.end <= arena_a.start,
+        "targets' windows disjoint"
+    );
 
     // Tear both down + reap.
-    gpu.apply(RmEvent::Free { client: HClient(0xA0), handle: HObject(0x5c00_0000) }).unwrap();
-    gpu.apply(RmEvent::Free { client: HClient(0xB0), handle: HObject(0x5c00_0000) }).unwrap();
+    gpu.apply(RmEvent::Free {
+        client: HClient(0xA0),
+        handle: HObject(0x5c00_0000),
+    })
+    .unwrap();
+    gpu.apply(RmEvent::Free {
+        client: HClient(0xB0),
+        handle: HObject(0x5c00_0000),
+    })
+    .unwrap();
     assert_eq!(gpu.reap_retired(), 2, "both procs reaped");
 
     // Rebuild identical procs; each target's arena is RECYCLED from its own window.
@@ -335,8 +547,16 @@ fn per_gpu_arena_recycle() {
     }
     let pid_a2 = *gpu.by_pdb.get(&(GpuId(0), SHARED_PDB)).unwrap();
     let pid_b2 = *gpu.by_pdb.get(&(GpuId(1), SHARED_PDB)).unwrap();
-    assert_eq!(gpu.procs[&pid_a2].arenas[&GpuId(0)].range, arena_a, "GPU0 arena recycled from its own window");
-    assert_eq!(gpu.procs[&pid_b2].arenas[&GpuId(1)].range, arena_b, "GPU1 arena recycled from its own window");
+    assert_eq!(
+        gpu.procs[&pid_a2].arenas[&GpuId(0)].range,
+        arena_a,
+        "GPU0 arena recycled from its own window"
+    );
+    assert_eq!(
+        gpu.procs[&pid_b2].arenas[&GpuId(1)].range,
+        arena_b,
+        "GPU1 arena recycled from its own window"
+    );
 }
 
 // =================================================================================
@@ -354,6 +574,9 @@ fn homogeneous_arch_all_targets_share_the_device_arch() {
     // The FwdFault surface is unchanged by the axis (a compile-level check that the
     // per-target routing faults carry their GpuId).
     let miss = resolve(&gpu, GpuId(9), SHARED_PDB, SHARED_VA);
-    assert!(matches!(miss, Err(FwdFault::UnknownPdb { gpu: GpuId(9), .. })), "an unrouted target is a loud, target-carrying MISS");
+    assert!(
+        matches!(miss, Err(FwdFault::UnknownPdb { gpu: GpuId(9), .. })),
+        "an unrouted target is a loud, target-carrying MISS"
+    );
     let _ = name;
 }

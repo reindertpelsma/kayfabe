@@ -38,7 +38,12 @@ impl GpaSpace {
     pub fn new(window: Range<u64>, arena_len: u64) -> Self {
         assert!(arena_len > 0 && window.start < window.end);
         let next = window.start;
-        GpaSpace { window, arena_len, next, free: Vec::new() }
+        GpaSpace {
+            window,
+            arena_len,
+            next,
+            free: Vec::new(),
+        }
     }
 
     /// Carve a disjoint arena: recycle a released one first, else cut fresh from
@@ -47,15 +52,23 @@ impl GpaSpace {
     /// exhausted the shared window (`teardown_hardening_done`).
     pub fn carve(&mut self) -> Result<GpaArena, GpaError> {
         if let Some(range) = self.free.pop() {
-            return Ok(GpaArena { cursor: range.start, range });
+            return Ok(GpaArena {
+                cursor: range.start,
+                range,
+            });
         }
         let start = self.next;
-        let end = start.checked_add(self.arena_len).ok_or(GpaError::WindowExhausted)?;
+        let end = start
+            .checked_add(self.arena_len)
+            .ok_or(GpaError::WindowExhausted)?;
         if end > self.window.end {
             return Err(GpaError::WindowExhausted);
         }
         self.next = end;
-        Ok(GpaArena { range: start..end, cursor: start })
+        Ok(GpaArena {
+            range: start..end,
+            cursor: start,
+        })
     }
 
     /// This window's guest-physical range (used to mint a fresh, disjoint per-target
@@ -102,7 +115,9 @@ impl GpaArena {
             .checked_add(align - 1)
             .map(|c| c & !(align - 1))
             .ok_or(GpaError::ArenaExhausted { len })?;
-        let end = start.checked_add(len).ok_or(GpaError::ArenaExhausted { len })?;
+        let end = start
+            .checked_add(len)
+            .ok_or(GpaError::ArenaExhausted { len })?;
         if end > self.range.end {
             return Err(GpaError::ArenaExhausted { len });
         }
@@ -152,7 +167,9 @@ mod tests {
         let mut a = space.carve().unwrap();
         let len = a.range.end - a.range.start; // exactly the whole arena
         // Exact fill: end == range.end must SUCCEED (kills `>`→`>=`).
-        let g = a.alloc(len, 0x1000).expect("an exact-fill allocation is legal");
+        let g = a
+            .alloc(len, 0x1000)
+            .expect("an exact-fill allocation is legal");
         assert_eq!(g, Gpa(a.range.start));
         // Now the arena is full; a further byte over-runs and must FAIL loudly
         // (kills `>`→`==`, which would accept a one-past-end allocation).
@@ -183,8 +200,14 @@ mod tests {
     fn is_untouched_flips_on_first_allocation() {
         let mut space = GpaSpace::new(0..0x10000, 0x10000);
         let mut a = space.carve().unwrap();
-        assert!(a.is_untouched(), "a freshly carved arena has allocated nothing");
+        assert!(
+            a.is_untouched(),
+            "a freshly carved arena has allocated nothing"
+        );
         a.alloc(0x1000, 0x1000).unwrap();
-        assert!(!a.is_untouched(), "after one allocation the arena is touched");
+        assert!(
+            !a.is_untouched(),
+            "after one allocation the arena is touched"
+        );
     }
 }
