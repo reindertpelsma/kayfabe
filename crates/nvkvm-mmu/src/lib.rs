@@ -127,21 +127,6 @@ impl AddressTable {
         }
     }
 
-    /// Set the materialized host GPU VA on the binding starting at `va`
-    /// (the fwd plane calls this after `RmBackend::map_gpu_va`).
-    pub fn set_host_va(&mut self, va: GpuVa, host_va: u64) -> Result<(), AddressFault> {
-        // Re-insert with the host VA recorded (IntervalMap values are plain data).
-        if let Some((len, mut b)) = self.map.remove_at(va.0) {
-            b.host_va = Some(host_va);
-            self.map
-                .insert(va.0, len, b)
-                .expect("re-inserting a just-removed range cannot overlap");
-            Ok(())
-        } else {
-            Err(AddressFault::Miss { pdb: Pdb(0), va })
-        }
-    }
-
     /// Iterate bindings as `(va, len, &binding)` in ascending VA order.
     pub fn iter(&self) -> impl Iterator<Item = (u64, u64, &Binding)> {
         self.map.iter()

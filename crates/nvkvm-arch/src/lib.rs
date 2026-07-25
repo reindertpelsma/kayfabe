@@ -93,8 +93,9 @@ pub enum ObjectKind {
     Event,
     /// Semaphore / context-DMA / anything else the graph tracks as a plain node.
     Other,
-    /// Not a class this architecture knows. The graph records it as [`ObjectKind::Other`]
-    /// but callers on stricter paths must treat it as a loud fault, never guess.
+    /// Not a class this architecture knows. The graph records it as-is (`Unknown` —
+    /// a plain node, never re-labelled); callers on stricter paths treat it as a
+    /// loud fault, never a guess.
     Unknown,
 }
 

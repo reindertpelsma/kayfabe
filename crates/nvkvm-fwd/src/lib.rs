@@ -659,8 +659,9 @@ pub fn parse_pushbuffer(
 // a cross-proc content-pick (the exact confused-deputy designed out).
 //
 // The gate is STRUCTURAL: [`handle_doorbell`] is the ONE ring path (nothing else in
-// the workspace reaches `RmBackend::ring_doorbell`) and it gates the channel's sticky
-// `Vas::working_set` on every ring — there is no ungated sibling to bypass (the C's
+// the workspace reaches `RmBackend::ring_doorbell`) and it gates the caller-recovered
+// working set against the channel's `Vas` table on every ring — there is no ungated
+// sibling to bypass (the C's
 // "one exec path" refactor-debt lesson, closed by construction). `gate_working_set`
 // below is the read-only QUERY form of the same predicate; it cannot ring anything.
 // =================================================================================

@@ -1,81 +1,129 @@
-# nvkvm-rs architecture — crate map
+# kayfabe architecture — the hexagonal core and its ports
 
-Maps each workspace crate to its authoritative design section. All references are to
-`../nvidia-gpu-passthrough/docs/design/` unless noted. This file is a map; the design
-docs are the spec.
+A navigational map of the workspace as it **actually is** after the L0 consolidation
+(decision #32). Design authority stays with the docs referenced per-row; the reviewed
+per-crate state + the L1 hand-off contract live in
+`docs/design/core_state_and_consolidation.md`.
 
-## Layering (bottom → top)
+## The hexagonal model
+
+One pure logic core; every effect crosses a **port** (a trait). Today every port has
+exactly one implementation — its mock. The adapter layers descend in order:
+**L1** Linux OS (isolates, mmap, traps, threading), **L2** QEMU/VMM, **L3** per-arch
+NVIDIA (Axis-A codegen + a real `Arch` impl).
 
 ```
-nvkvm-util        generic containers + virtual clock (NO GPU concepts)
-   ▲
-nvkvm-arch        domain newtypes (HClient/Pdb/VChid/…) + the Axis-B `Arch` trait set
-   ▲                                                    │
-nvkvm-abi ────────Axis-A codegen (DriverAbi) [skeleton]│
-nvkvm-vmm         the `Vmm` + `Device` adapter traits   │
-nvkvm-isolate     `RmBackend` + `Isolate` traits        │
-nvkvm-mmu         address table (MISS=FAULT) + walker ◄──┘ (against GmmuFmt)
-nvkvm-completion  per-proc CompletionQueue + DeliveryPlane
-   ▲
-nvkvm-core        RmGraph (source of truth) → projections → Gpu/Proc/Vas/Channel
-   ▲
-nvkvm-fwd         intent → host ops: doorbell demux, per-Vas backing, completions
-nvkvm-gsp         faked GSP boot FSM + seqNum queue [skeleton]
-nvkvm-trace       structured trace / replay format [skeleton]
-   ▲
-nvkvm-mocks       MockVmm / MockArch / MockRmBackend / MockIsolate (test-only)
-tests/            RmGraph order-independence + the #14 two-process simulation
+                 ┌────────────────────────────────────────────┐
+   Vmm/Device ──►│               THE PURE CORE                │◄── Arch (+ GmmuFmt,
+   Present    ──►│  nvkvm-core   RmGraph → project → Gpu      │    UserdModel,
+   (nvkvm-vmm)   │  nvkvm-mmu    per-Vas AddressTable         │    PushbufferAbi)
+                 │  nvkvm-fwd    demux / gate / parse / route │    (nvkvm-arch)
+   Isolate    ──►│  nvkvm-completion  queues / delivery /     │◄── DriverAbi
+   RmBackend     │                    fence arms              │    (nvkvm-abi, stub)
+   (nvkvm-isolate)└────────────────────────────────────────────┘
+                        ▲ the only impls today: nvkvm-mocks
 ```
 
-## Crate → design section
+Ports and their standing:
+
+| Port | Crate | Real adapter | Status |
+|---|---|---|---|
+| `Vmm` (8 capability groups), `Device`, `Present` | `nvkvm-vmm` | L1/L2 (QEMU, cloud-hypervisor) | **trait-only** (mock-implemented) |
+| `Isolate`, `IsolateFactory`, `RmBackend` | `nvkvm-isolate` | L1 (sandboxed Linux worker) | **trait-only** (mock-implemented) |
+| `Arch`, `GmmuFmt`, `UserdModel`, `PushbufferAbi` | `nvkvm-arch` | L3 (`impl Arch for <Gen>`) | **trait-only** (MockArch = "Mockingbird") |
+| `DriverAbi` (Axis A) | `nvkvm-abi` | L3 codegen from ogkm | **stub** (shape only) |
+| `TraceSink` | `nvkvm-trace` | adapter log/file | **stub** |
+| `FbRead` (walker's PT source) | `nvkvm-mmu::walker` | FB shadow | **skeleton** |
+
+Note: `Gpu` does **not** yet implement `nvkvm_vmm::Device` — that needs the register +
+GSP models (`nvkvm-gsp`), which port at the L2 step. The core's current entry surface
+is the event-level API (`Gpu::apply` + the `nvkvm-fwd` free functions).
+
+## Crate → responsibility
 
 | Crate | Role | Design source | State |
 |---|---|---|---|
-| `nvkvm-util` | `IntervalMap` (the address table's data structure), virtual `Instant` | decision #2; `mode2_address_table.md`; testing §4 (virtual clock) | **full** |
-| `nvkvm-arch` | domain newtypes + `Arch`/`GmmuFmt`/`UserdModel` (Axis-B seams) | `mode2_abi_agnostic_layer.md` §4.2; arch §4.3.1a (arch-invariance) | **full** |
-| `nvkvm-abi` | Axis-A codegen'd `DriverAbi`; the ONLY home of `#[repr(C)]` NVIDIA structs | `mode2_abi_agnostic_layer.md` §2/§4.1; arch §4.2 | skeleton |
-| `nvkvm-vmm` | `Vmm` (8 caps) + `Device` — the hypervisor-agnostic boundary | arch §4.1; decision #6 (caps 7/8) | **full (traits)** |
-| `nvkvm-isolate` | `RmBackend` (RM verbs, not ioctls) + `Isolate`/`IsolateFactory` | arch §4.2/§4.3.4; decisions #8/#9 (boundaries) | **full (traits)** |
-| `nvkvm-mmu` | per-VAS `AddressTable` (forward-populate, MISS=FAULT) + walker skeleton | `mode2_address_table.md`; arch §4.3.1; lessons L1/L3 | **full (table)** |
-| `nvkvm-completion` | per-proc `CompletionQueue` + global `DeliveryPlane` (poll-driven re-delivery) | arch §4.3.2; decision #7; #14 round 8 | **full** |
-| `nvkvm-core` | `RmGraph` source of truth + projections + `Gpu`/`Proc`/`Vas`/`Channel` + GPA arenas | arch §4.3.1/§4.3.1a/§4.3.3; decision #14 | **full** |
-| `nvkvm-fwd` | intent recovery → unprivileged host ops; doorbell demux; per-Vas publish | arch §4.2; lessons L2/L4/L7 | **full (core slice)** |
-| `nvkvm-gsp` | faked GSP boot FSM + seqNum queue (resettable) | arch §4.2/§4.5 step 2; lessons L12/L13 | skeleton |
-| `nvkvm-trace` | structured trace + replay format | lesson L6 | skeleton |
-| `nvkvm-mocks` | deterministic in-process fakes for every seam | testing §4 | **full (test-only)** |
-| `tests/` | order-independence + #14 simulation | testing §2.3/§3 | **full** |
+| `nvkvm-util` | `IntervalMap` (the address table's container), virtual `Instant`, the `assert_send_sync!` build gate | decision #2; testing §4 | **full** |
+| `nvkvm-arch` | identity newtypes (`HClient`/`HObject`/`Pdb`/`VChid`/`GpuId`/`EngineKind`/…) + Axis-B seams | `mode2_abi_agnostic_layer.md` §4.2 | **full** (traits) |
+| `nvkvm-core` | ★ `RmGraph` (refcounted source of truth) → `project()` (pure boundaries + routing) → `Gpu`/`Proc`/`Vas`/`Channel` runtime + per-proc GPA arenas | arch §4.3; decisions #14/#17/#18 | **full** |
+| `nvkvm-mmu` | per-VAS `AddressTable`: forward-populate only, MISS=FAULT, unmap-eager | `mode2_address_table.md` | **full** (table); walker **skeleton** |
+| `nvkvm-completion` | per-proc `CompletionQueue` + device/target `DeliveryPlane` (drain-gated, poll-driven re-post) + `FenceArms` (pattern e, #12 jump guard) | arch §4.3.2; `execution_plane.md` §1.2/§2.4 | **full** |
+| `nvkvm-fwd` | intent → host ops: `handle_doorbell` (the ONE ring path), `publish_backing`, `parse_pushbuffer` (the ONE parser), `forward_engine_object`/`route_control` (Case-1/Case-2), fence arm/observe, `present_scanout` | arch §4.2; `execution_plane.md` §2 | **full** (core slice) |
+| `nvkvm-vmm` | the hypervisor/display ports | arch §4.1 | traits only |
+| `nvkvm-isolate` | the sandbox/host-RM ports (RM **verbs**, not ioctls) | arch §4.2/§4.3.4 | traits only |
+| `nvkvm-abi` | Axis-A: generated per-driver-version wire tables; the ONLY future home of `#[repr(C)]` | `mode2_abi_agnostic_layer.md` §2 | **stub** |
+| `nvkvm-gsp` | faked GSP boot FSM + seqNum queue transport (resettable) | arch §4.2/§4.5 step 2 | **stub** |
+| `nvkvm-trace` | trace/replay vocabulary | lesson L6 | **stub** |
+| `nvkvm-mocks` | one deterministic fake per port + shared verb recorder | testing §4 | **full** (test-only) |
+| `tests/` | the conformance suite (14 files, ~120 integration tests) + the `Scenario` DSL | testing §2/§3 | **full** |
 
-## The four planes, all per-`Proc` (arch §4.3)
+## The data-plane spine
 
-`nvkvm-core::gpu::Proc` owns all four planes, keyed on the identity **hardware** uses
-(lesson L7) — never a reusable driver handle:
+```
+RmEvent (abstract protocol fact; Axis-A will decode wire → this)
+  └─► RmGraph::apply         facts in, refcounted resources, parked-fact order tolerance
+        └─► project()        PURE: Proc grouping (dup-connected components),
+                             by_pdb (GpuId,Pdb)→Vas, by_vchid (GpuId,VChid)→Channel
+              └─► Gpu::apply TRANSACTIONAL: graph mutate → re-project → sync runtime
+                             (rollback on any derivation fault — hostile events earn
+                             only their own refusal) → sync_rpc_mappings (forward-
+                             populate address tables from live MapMemoryDma facts)
+Proc (per guest process)     owns ALL FOUR planes:
+  • address    — Vas per (GpuId,Pdb): AddressTable + its OWN host VAS   (#14 fix)
+  • execution  — Channel per vChid + per-proc ExecPlane scheduling      (#12 fix)
+  • completion — CompletionQueue + FenceArms                            (starvation fix)
+  • isolate+arena — per (Proc,GpuId) sandbox + disjoint GPA arena       (blast radius)
+nvkvm-fwd                    the entry points adapters call:
+  handle_doorbell → decode → (GpuId,VChid) route → #14 ring-gate → lazy materialize
+                    (engine-aware alloc_channel) → schedule → ring   [the ONE ring path]
+  publish_backing → arena carve + host map into the Vas's OWN host VAS → table bind
+  parse_pushbuffer → CE-PT-write capture / SemRelease observe / TlbInvalidate / opaque
+  forward_engine_object / route_control → Case-1 forward vs Case-2 ack-only
+  pump/poll/drained + arm_fence/fence_observed + present_scanout
+```
 
-1. **Address** — per `Vas` (keyed by **PDB**). Each `Vas` has its own `AddressTable`
-   and its own host VAS → identical guest VAs in two procs get disjoint backing (#14
-   proven fix, decision #14). Address ops key on `Vas`, never on `Proc` (a proc holds
-   several VASes: compute + UVM).
-2. **Execution** — per `Channel` (keyed by **vChid**, experiment E0). The doorbell
-   demuxes vChid → `(Proc, Channel)`; `ExecPlane` scheduling state is per-proc,
-   nothing scalar or one-shot (kills crack ⚠4 / the #12 CTX2 off-runlist bug).
-3. **Completion** — per-proc `CompletionQueue`; the global `DeliveryPlane` re-posts a
-   proc's completions off **its own** poll (kills the #14 round-8 starvation).
-4. **Isolate + GPA arena** — per-proc, disjoint by construction (blast-radius
-   containment + the `ALREADY-MAPPED` collision, impossible).
+## The invariant catalog (proven in pure logic; L1 must preserve them)
 
-## The RmGraph spine (decision #14)
+1. **Order-independence / whole-core determinism** — everything derived is a pure
+   function of declared protocol facts, never of arrival order (permutation +
+   interleave + dup proptests over the whole observable `Gpu` end-state).
+2. **MISS = FAULT** — forward-populated tables only; no reverse resolve, no heuristic
+   pick, no MRU fallback exists anywhere. A miss is a loud typed fault.
+3. **Per-`(GpuId, ·)` keying** — `Pdb`/`VChid` are per-GPU namespaces; every routing
+   table, fault, and collision guard carries the target. Cross-GPU identical ids are
+   legal; same-target duplicates are loud collisions (the F1 guard, scoped).
+4. **Per-`Proc` isolation (#14, I1)** — identical guest VAs/handles in two procs reach
+   disjoint GPA arenas, disjoint host VASes, disjoint isolates, by construction.
+5. **One structurally-gated ring path** — `handle_doorbell` is the only caller of
+   `RmBackend::ring_doorbell` and always gates first; no ungated sibling exists.
+6. **Completion integrity (I2)** — per-proc queues; re-delivery off the owner's OWN
+   poll; the system-forge path can never reach a user proc's queue; fence observations
+   respect the #12 `MAX_FENCE_JUMP` backwards guard.
+7. **Refcount soundness (I3)** — a resource is alive ⟺ it has a live handle or map
+   reference; dup survival, no leak, no premature destroy (proptest-drained).
+8. **DoS containment (I4)** — `Gpu::apply` is transactional (rollback + re-derive);
+   every guest-growable table is capacity-bounded (loud `CapacityExceeded`, never OOM);
+   no O(n²) path on hostile floods.
+9. **Lifecycle: retire eager, reap deferred (L10)** — teardown retires immediately
+   (ops refused), heavy reap + GPA-arena recycling happens at `Gpu::reap_retired`, the
+   adapter-declared quiesce point (#80's leak, designed out — `GpaSpace::release`
+   takes the arena by value, so releasing a live proc's arena is unrepresentable).
+10. **Concurrency contract (#17)** — every core type `Send + Sync`
+    (compile-time-asserted); no interior mutability; all mutation `&mut self`; reads
+    `&self` lock-free. Per-proc entry points take `&mut Proc`, so distinct procs
+    parallelize with no shared lock; only graph apply / routing refresh / the delivery
+    gate need device-wide exclusivity. The one documented relaxation: `dyn RmBackend`
+    is `Send`-only (reachable exclusively via `Isolate::rm(&mut self)`).
+11. **Purity + `forbid(unsafe_code)`** — logic crates have zero OS/time/net deps and
+    zero unsafe; unsafe-needing fuzz tooling is quarantined in the separate `fuzz/`
+    workspace.
 
-There is no GPU "process" — it is a libcuda fiction. `nvkvm-core::rmgraph::RmGraph` is
-the source of truth: clients → devices → VASpaces/TSGs/CtxShares/Channels + DUP edges,
-built from abstract `RmEvent`s (which the Axis-A adapter will decode from real NVOS
-structs). `by_pdb`, `by_vchid`, and `Proc` grouping are **pure projections**
-(`nvkvm-core::project`) — so a reordered/retried guest yields identical boundaries.
-That order-independence is the protocol-not-observed-order guarantee, asserted directly
-by the shuffle test.
+## Verification & migration order
 
-## Migration order (arch §4.5, later milestones)
-
-1. `nvkvm-abi` codegen (no GPU) → diff vs the C's hand tables.
-2. `nvkvm-gsp` + register model (no GPU) → trace-replay oracle vs the C.
-3. `nvkvm-mmu` walker (property-test vs ogkm formats; #13 traces).
-4. `nvkvm-fwd` + isolate + completion on the serialized bench: the cup2 → cupctx2_min →
-   cup8 → cup8_iter → 2×/3×/4× concurrent ladder.
+143 tests + 1 ignored soak; clippy clean; 99.2% mutation score
+(`docs/design/core_mutation_gate.md`); 15 real core bugs found pre-hardware by the
+adversarial suites. Next: **L1 Linux OS layer, concurrency design doc first** (the
+highest-risk seam), then isolates/mmap/traps → L2 QEMU (qtest-style mock-max) →
+L3 per-arch codegen + real-app validation on the bench. The GSP/register model
+(`nvkvm-gsp`) ports with L2; the GMMU walker with the mmu arch port; graphics
+pipeline + MIG stay deferred (seams ready — `SurfaceHandle`/`Present`, `GpuId`).
