@@ -1090,7 +1090,7 @@ impl MockRmBackend {
 
     fn mint(&mut self) -> HostHandle {
         let mut ns = self.ns.lock().expect("ns");
-        let h = HostHandle(self.handle_hi() | ns.next);
+        let h = HostHandle::new(self.id, self.handle_hi() | ns.next);
         ns.next += 1;
         ns.handles.insert(h);
         h
@@ -1121,7 +1121,7 @@ impl RmBackend for MockRmBackend {
         _params: &[u8],
     ) -> Result<HostHandle, RmError> {
         self.gate(VerbKind::Alloc)?;
-        if parent != HostHandle(0) {
+        if parent != HostHandle::NULL {
             self.check(parent)?;
         }
         let handle = self.mint();
@@ -1246,7 +1246,7 @@ impl RmBackend for MockRmBackend {
         let va = 0x4000_0000_0000
             + (self.idlane << 40)
             + (u64::from(self.gpu.0) << 47)
-            + ((vas.0 & 0xff) << 32)
+            + ((vas.raw() & 0xff) << 32)
             + (page << 12);
         self.record(RmVerb::MapGpuVa {
             vas,
@@ -1427,6 +1427,7 @@ impl IsolateFactory for MockIsolateFactory {
             .map(|i| {
                 let w = WorkerId(i as u32);
                 Slot::Idle(Worker::new(
+                    id,
                     w,
                     Box::new(MockRmBackend::new(
                         id,

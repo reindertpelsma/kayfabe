@@ -123,7 +123,7 @@ does not settle it, this doc says **OPEN QUESTION (bench experiment)** rather th
 | SEC2 Booter Load raises WPR2 and Booter Unload lowers it; a post-teardown STARTCPU must be disambiguated from a genuine re-boot or the 2nd context hangs forever waiting for a `GSP_INIT_DONE` that never comes | `C: nvkvm_gpu_emul.c:4208–4262`, citing `kernel_gsp_booter_tu102.c` / `osinit.c:2363` |
 | host-side reclaim (#80): a per-VM sparse-window **free list, first-fit + tail/adjacent coalesce**, freed from `MUNMAP_ON_ISOLATE` *and* from the kill reaper; plus a session destroy that force-closes host fds and releases RM objects | `C: src/qemu/nvkvm_mmap_host.c:172`, `nvkvm_isolate_handlers.c:1954/2009/2054/2431/2439`, `C: teardown_hardening_done` |
 | a guest that goes silent without `KILL_ISOLATE` was the C's **residual** — bounded to its own per-VM QEMU and fully reclaimed at VM stop (process exit) | `C: teardown_hardening_done` ("Residual") |
-| signal-interruptible forwarded ioctls (#73): no-`SA_RESTART` handler, per-txn tid safeguard, **never abandon the reply buffer**, ~3.4–3.5 s bounded EINTR-unwind measured on RTX 3060 | `C: docs/design/signal_interrupt_delivery.md`, `C: signal_interrupt_delivery_done` |
+| signal-interruptible forwarded ioctls (#73): no-`SA_RESTART` handler, per-txn tid safeguard, **never abandon the reply buffer**; the C's "~3.4–3.5 s bounded EINTR-unwind measured on RTX 3060" is **re-read by `l1_concurrency.md` §12.26 as RM's own 4 s RPC timeout elapsing**, not an unwind — RM's waits are uninterruptible (`ogkm: .../gpu/gsp/kernel_gsp.c:2963-3060`, `.../resserv/src/rs_server.c:3164-3168`) | `C: docs/design/signal_interrupt_delivery.md`, `C: signal_interrupt_delivery_done`, `ogkm: .../os/os.c:2136-2139` |
 | the os-event relay must extend the stub's existing wait set and must **not** re-notify until the guest re-polls (busy-spin hazard) | `C: docs/design/mode1_poll_relay_plan.md` |
 
 **What the audit confirms is sound, and this doc builds on rather than re-litigates:**
@@ -974,8 +974,16 @@ stuck. §11 B3 already accepts a residual here; this makes it bounded.
    (Bounded by construction: armed only while a verb is outstanding, disarmed at check-in —
    F1's "never periodic-forever" satisfied.)
 2. **First expiry** (executor): fire the cancel. The overwhelmingly common case is that the
-   verb was merely slow and the interrupt lands; the C measured ~3.5 s worst-case unwind on
-   real hardware, so `VERB_BUDGET` must be generous and the second budget much longer.
+   verb was merely slow and the interrupt lands.
+   ★ **`VERB_BUDGET` is sized against RM's OWN timeouts, not against a measured unwind**
+   (`l1_concurrency.md` §12.26): a GSP RPC times out at **6 s** (4 s `defaultus`,
+   `ogkm: .../os/os.c:2136-2139`, x 1.5 at `.../gpu/gsp/kernel_gsp.c:2927`), and that wait
+   can itself be queued behind *another client's* hold of the global API lock. So the budget
+   must exceed 6 s plus queueing, and the second budget much more. Sizing it against the C's
+   "~3.5 s unwind" would have made every ordinary GSP-RPC timeout look like a wedge — the
+   number was RM's 4 s timeout, and RM's waits are uninterruptible
+   (`.../gpu/gsp/kernel_gsp.c:2963-3060`), which also means **an interrupted alloc probably
+   completed** (the G4 open question, still owed a bench measurement).
 3. **Second expiry:** declare the worker **wedged**. Then, in one act:
    - `worker_died(slot)` — the slot is permanently dead, never respawned (existing);
    - **condemn the component** — the §12.13 mechanism, keyed on the client set, already
@@ -1380,7 +1388,7 @@ Stated so we never claim more than we verify:
 | Claim | Why the mock cannot settle it | The L3 measurement |
 |---|---|---|
 | the **host driver** actually released the objects | our ledger records our own verbs, not RM's accounting | RM memory/handle accounting deltas across a full lifecycle run on real hardware; must return to baseline |
-| a real RM ioctl is actually interruptible | the mock's `EINTR` is instant and total; real ones are **mixed** (`C:` "some RM/UVM waits are interruptible, some are not") | the C's own test shape: block in a long op, signal, measure death latency (the C measured 3.4–3.5 s, bounded and consistent) |
+| a real RM ioctl is actually interruptible | the mock's `EINTR` is instant and total. ★ §12.26: the source says **mostly not** — the API lock is a `down_write`, the GSP RPC busy-polls with no signal check, the client drain is a bare refcount spin. The C's "3.4–3.5 s, bounded and consistent" is the signature of a **timeout**, not of an unwind | block in a long op, signal, and measure: if the latency tracks RM's 4 s `defaultus` rather than the signal, it is a timeout — then check whether the object was created anyway (the G4 question) |
 | the D-state escape behaves as designed | you cannot mock uninterruptible sleep | induce a genuinely wedged ioctl; assert bounded loud failure and a healthy device afterwards |
 | a real 16/64 KiB host page size works | forced runs test our geometry, not the kernel | run the suite on Grace-Hopper / Jetson (§5.3) |
 | memslot/BQL interaction | `MockVmm` has neither | the QEMU adapter at L2, under the nested-virt bench |

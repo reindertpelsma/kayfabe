@@ -758,7 +758,7 @@ fn g4_verb_fault_maps_only_interrupted_to_cancelled() {
     for e in [
         RmError::NoMemory,
         RmError::InsufficientPermissions,
-        RmError::BadHandle(HostHandle(1)),
+        RmError::BadHandle(HostHandle::new(kayfabe_isolate::IsolateId(0), 1)),
         RmError::Other(3),
     ] {
         assert_eq!(kayfabe_fwd::verb_fault(p, e), FwdFault::Rm(e), "{e:?}");

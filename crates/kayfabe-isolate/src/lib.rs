@@ -64,12 +64,87 @@ pub use kayfabe_arch::ids::ControlCmd;
 use kayfabe_arch::ids::{ClassId, EngineKind, GpuId};
 use kayfabe_vmm::SurfaceHandle;
 
-/// A host-side RM object handle, scoped to ONE isolate's handle namespace.
+/// A host-side RM object handle — **a raw value plus the isolate whose RM client
+/// namespace it lives in** (`l1_concurrency.md` §12.26).
 ///
-/// Handles from different isolates must never be interchangeable — the mock backend
-/// enforces this in tests (boundary-2 blast-radius assertion).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct HostHandle(pub u64);
+/// ## Why the isolate travels with the handle
+///
+/// A handle value alone is not an identity: RM mints client-scoped handles from one
+/// shared base (`ogkm: src/nvidia/generated/g_resserv_nvoc.h:173` —
+/// `RS_CLIENT_HANDLE_BASE`, one `serverSetClientHandleBase` for the whole driver,
+/// `.../rmapi.c:105`), so isolate A's handle `0x…07` and isolate B's handle `0x…07`
+/// are *both live and unrelated*. Using one on the other's connection therefore does
+/// **not** fault — it names a different, live object. A free would destroy a bystander;
+/// an unmap would tear down a bystander's mapping. That is the cross-namespace reach
+/// [`kayfabe_mocks::HostLedger::free_of_unknown`] was added to detect, and the mock
+/// can only detect it because the mock namespaces its fake handle *values*. A real host
+/// does not, which is exactly why the fact has to live in the type rather than in the
+/// backend's luck.
+///
+/// This is the same discipline [`kayfabe_core::gpa::GpaBlock`] already uses one plane
+/// over — *"a block names the exact `ArenaId` it came from, so freeing it into a
+/// different proc's arena is a loud refusal, not a silent double-issue"* (§12.20) —
+/// applied to the object plane. It is the recorded-fact shape of §12.25, not a
+/// branded-lifetime scheme: the fact is written exactly once, by the only party that
+/// can know it (the backend that minted the handle), and [`Worker::execute`] is the one
+/// consumer that must read it.
+///
+/// The raw value is deliberately still `u64` and still opaque: it is the host's, and
+/// nothing in the core interprets it.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HostHandle {
+    /// The isolate whose RM client namespace this handle lives in. Ordered first so
+    /// a `BTreeSet<HostHandle>` groups by namespace.
+    isolate: IsolateId,
+    raw: u64,
+}
+
+impl HostHandle {
+    /// RM's `NV01_NULL_OBJECT` — the namespace-free "no parent / no object" value.
+    /// Belongs to no isolate, so the [`Worker::execute`] foreign-handle gate exempts
+    /// it (a null parent is legal on every connection).
+    pub const NULL: HostHandle = HostHandle {
+        isolate: IsolateId(u32::MAX),
+        raw: 0,
+    };
+
+    /// Stamp `raw` as belonging to `isolate`'s namespace. **Backends only** — this is
+    /// the mint, and calling it anywhere else fabricates a provenance claim.
+    #[must_use]
+    pub const fn new(isolate: IsolateId, raw: u64) -> Self {
+        HostHandle { isolate, raw }
+    }
+
+    /// The isolate whose namespace this handle lives in.
+    #[must_use]
+    pub const fn isolate(self) -> IsolateId {
+        self.isolate
+    }
+
+    /// The host's opaque handle value.
+    #[must_use]
+    pub const fn raw(self) -> u64 {
+        self.raw
+    }
+
+    /// Is this handle usable on `isolate`'s connection? [`Self::NULL`] is usable
+    /// everywhere; every other handle belongs to exactly one namespace.
+    #[must_use]
+    pub const fn belongs_to(self, isolate: IsolateId) -> bool {
+        self.raw == 0 && self.isolate.0 == u32::MAX || self.isolate.0 == isolate.0
+    }
+}
+
+impl core::fmt::Debug for HostHandle {
+    /// Compact and namespace-first, because every assertion that involves a handle is
+    /// really an assertion about *which* namespace it came from.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if *self == HostHandle::NULL {
+            return f.write_str("HostHandle(NULL)");
+        }
+        write!(f, "HostHandle(iso{}:{:#x})", self.isolate.0, self.raw)
+    }
+}
 
 /// Errors an RM verb can return, in core terms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,6 +190,21 @@ pub enum RmError {
     /// `FwdFault::Cancelled`, never as an RM failure (that conflation is §12.10 one
     /// layer over).
     Interrupted,
+    /// ★ **The plan named a handle from ANOTHER isolate's namespace** — refused
+    /// before a single verb ran (`l1_concurrency.md` §12.26).
+    ///
+    /// Not a host failure and not a guest fault: it is *our* invariant breaking. A
+    /// [`HostHandle`] belongs to exactly one isolate's RM client namespace, and the
+    /// same raw value is live-and-different in every other one, so issuing this verb
+    /// would have operated on a **bystander object** — the cross-namespace reach
+    /// boundary 2 exists to forbid. The gate runs first, so nothing was allocated and
+    /// the accompanying [`VerbFailure::orphans`] is empty by construction.
+    ForeignHandle {
+        /// The offending handle, carrying the namespace it actually belongs to.
+        handle: HostHandle,
+        /// The isolate this worker would have issued the verb on.
+        worker_isolate: IsolateId,
+    },
     /// Any other backend-reported failure (opaque status for diagnostics).
     Other(u32),
 }
@@ -254,8 +344,19 @@ pub struct WorkerId(pub u32);
 /// **A tuning constant, not a design question.** The design is explicit that the pool
 /// is *statically* sized first and grows dynamically only when a measured workload
 /// proves the bound hurts — a spawn/reap policy, thundering-herd wakeups and
-/// worker-lifetime races are all cost with no demonstrated benefit. Order of the vCPU
-/// count; four is a small commodity guest.
+/// worker-lifetime races are all cost with no demonstrated benefit.
+///
+/// ★ **Deliberately 2–4, and deliberately NOT scaled to the vCPU count** (§12.26). The
+/// old rationale here read "order of the vCPU count", which implies the pool buys wire
+/// concurrency. It does not: RM serializes **every** ioctl-reachable path on the
+/// per-client WRITE lock (`ogkm: src/nvidia/src/libraries/resserv/src/rs_server.c:778`
+/// and seven siblings, asserted at `:786-788`) and takes the **global** API lock in
+/// WRITE for every alloc/free (`.../rmapi/rmapi.c:53-58`, `:535`;
+/// `.../rmapi/alloc_free.c:1714-1718`), held across the GSP RPC. What the pool actually
+/// buys is **liveness/latency isolation** — a six-second verb must not make a sibling
+/// guest thread's independent verb *appear* to hang — which is the §3.5 invariant, and
+/// which saturates at a handful of workers. Past that, each extra worker is one more
+/// host thread parked in D state on the same uninterruptible `down_write`.
 pub const DEFAULT_POOL_WORKERS: usize = 4;
 
 // =================================================================================
@@ -337,6 +438,38 @@ pub enum VerbPlan {
         /// Objects to free, in the given order.
         free: Vec<HostHandle>,
     },
+}
+
+impl VerbPlan {
+    /// Every [`HostHandle`] this plan would issue a verb *against* — the input side
+    /// only (handles the chain will mint do not exist yet, and are this isolate's by
+    /// construction).
+    ///
+    /// This exists so the foreign-handle gate is ONE central enumeration rather than a
+    /// `matches!` each new variant could forget: adding a variant that carries a handle
+    /// and not listing it here is the mistake, and it is a mistake in exactly one file.
+    #[must_use]
+    pub fn handles(&self) -> Vec<HostHandle> {
+        match self {
+            VerbPlan::Publish { host_vas, .. } => host_vas.iter().copied().collect(),
+            VerbPlan::Doorbell {
+                host_vas, channel, ..
+            }
+            | VerbPlan::EngineObject {
+                host_vas, channel, ..
+            } => host_vas
+                .iter()
+                .copied()
+                .chain(channel.map(|(h, _)| h))
+                .collect(),
+            VerbPlan::Control { obj, .. } => vec![*obj],
+            VerbPlan::Release { unmap, free } => unmap
+                .iter()
+                .map(|&(vas, _)| vas)
+                .chain(free.iter().copied())
+                .collect(),
+        }
+    }
 }
 
 /// What one [`VerbPlan`] produced — the typed reply a commit phase re-enters with.
@@ -508,27 +641,43 @@ impl From<RmError> for VerbFailure {
 /// `Send`, not `Sync` — it migrates to whichever thread checked it out, but a shared
 /// reference to one is unrepresentable.
 pub struct Worker {
+    isolate: IsolateId,
     id: WorkerId,
     backend: Box<dyn RmBackend>,
 }
 
 impl core::fmt::Debug for Worker {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Worker").field("id", &self.id).finish()
+        f.debug_struct("Worker")
+            .field("isolate", &self.isolate)
+            .field("id", &self.id)
+            .finish()
     }
 }
 
 impl Worker {
-    /// Wrap a backend as pool slot `id` (isolate implementations only).
+    /// Wrap a backend as pool slot `id` of `isolate` (isolate implementations only).
+    /// The `isolate` argument is what makes the foreign-handle gate in
+    /// [`Worker::execute`] possible — a worker must know whose namespace it speaks.
     #[must_use]
-    pub fn new(id: WorkerId, backend: Box<dyn RmBackend>) -> Self {
-        Worker { id, backend }
+    pub fn new(isolate: IsolateId, id: WorkerId, backend: Box<dyn RmBackend>) -> Self {
+        Worker {
+            isolate,
+            id,
+            backend,
+        }
     }
 
     /// This worker's slot in its isolate's pool.
     #[must_use]
     pub fn id(&self) -> WorkerId {
         self.id
+    }
+
+    /// The isolate whose RM client namespace this worker speaks for.
+    #[must_use]
+    pub fn isolate(&self) -> IsolateId {
+        self.isolate
     }
 
     /// ★ Run `plan`'s verb chain. **Asserts R1 first** — invoking a host verb with
@@ -541,10 +690,24 @@ impl Worker {
     /// instead of asserted: when the residue is empty it held; when it is not, the
     /// caller has the list rather than a swallowed `let _ =`.
     ///
+    /// ★ **The foreign-handle gate runs FIRST** (`l1_concurrency.md` §12.26): a plan
+    /// naming a handle from another isolate's namespace is refused with
+    /// [`RmError::ForeignHandle`] before any verb runs, so nothing is allocated and the
+    /// returned [`VerbFailure::orphans`] is empty. This is the ONE place the
+    /// `(Proc, GpuId)`-scoped-handle rule is enforced, and it covers every plan shape
+    /// including [`VerbPlan::Release`] — the disposal path, which is where a
+    /// cross-namespace handle would otherwise `free` a **bystander** object.
+    ///
     /// # Panics
     /// If this thread holds any ranked lock (R1).
     pub fn execute(&mut self, plan: &VerbPlan) -> Result<VerbReply, VerbFailure> {
         kayfabe_util::lockwitness::assert_lock_free("issuing a host RM verb");
+        if let Some(&handle) = plan.handles().iter().find(|h| !h.belongs_to(self.isolate)) {
+            return Err(VerbFailure::bare(RmError::ForeignHandle {
+                handle,
+                worker_isolate: self.isolate,
+            }));
+        }
         let rm = &mut *self.backend;
         match plan {
             VerbPlan::Publish { host_vas, len } => {

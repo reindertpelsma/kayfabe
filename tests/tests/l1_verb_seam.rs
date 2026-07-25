@@ -963,7 +963,7 @@ fn commit_engine_object_proc_guard_refuses_on_either_term_alone() {
 fn commit_control_proc_guard_refuses_on_either_term_alone() {
     let _wd = watchdog("commit_control_proc_guard", Duration::from_secs(30));
     const CMD: ControlCmd = ControlCmd(0x2080_0110);
-    const OBJ: HostHandle = HostHandle(0x0BEE_F000);
+    const OBJ: HostHandle = HostHandle::new(kayfabe_isolate::IsolateId(0), 0x0BEE_F000);
 
     let (mut gpu, pids) = plain_gpu(2);
     let (a, b) = (pids[0], pids[1]);
@@ -1144,7 +1144,7 @@ fn worker_death_kills_its_own_pool_slot_not_merely_the_proc() {
 #[test]
 fn commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone() {
     let _wd = watchdog("commit_publish_doorbell_guards", Duration::from_secs(30));
-    const MEMORY: HostHandle = HostHandle(0x0D01_0001);
+    const MEMORY: HostHandle = HostHandle::new(kayfabe_isolate::IsolateId(0), 0x0D01_0001);
     const HOST_VA: u64 = 0x7000_0000;
 
     // ---- commit_publish, term (b): the plan is A's, the proc is a live B.

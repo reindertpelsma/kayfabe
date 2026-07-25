@@ -192,6 +192,36 @@ pub enum SignalOutcome {
         /// The dead worker slot.
         worker: WorkerId,
     },
+    /// ★ **A worker of the SYSTEM isolate died — this is DEVICE-FATAL, not a
+    /// condemnation** (`l1_concurrency.md` §12.26).
+    ///
+    /// [`SignalOutcome::WorkerDied`]'s consequence is "retire the proc, condemn its
+    /// component, recover by re-initialising with a fresh RM client". None of that is
+    /// available here: the system component's clients are the **guest kernel's**, held
+    /// for the lifetime of the loaded module, so condemning it would kill the guest's
+    /// driver permanently — the recovery path requires the guest kernel to mint fresh
+    /// clients, and the guest kernel is what was condemned.
+    ///
+    /// Before this variant existed the outcome was reported as `WorkerDied` and the
+    /// consequence **silently did nothing**: `Spine::retire_proc` reached the system proc
+    /// through a `ProcSet` that does not contain it, missed, and answered `false` that
+    /// nobody read. The device carried on with a permanently dead system worker slot and
+    /// no fault anywhere.
+    ///
+    /// The slot is still killed (never a respawn, §7.3) — what does **not** happen is the
+    /// retire and the condemnation. RM's own answer to an unrecoverable kernel-side
+    /// failure has the same shape and the same level: `gpuMarkDeviceForReset` +
+    /// `NV2080_NOTIFIERS_GPU_UNAVAILABLE`
+    /// (`ogkm: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:2779-2789`) — **device** scope,
+    /// never client scope. Escalating this to a guest-visible device-unavailable
+    /// notification is L1-M2's (T4/T7); the core's obligation is to make it
+    /// distinguishable and loud, which is what this variant is.
+    DeviceFatal {
+        /// The system isolate's GPU target.
+        gpu: GpuId,
+        /// The dead worker slot.
+        worker: WorkerId,
+    },
     /// The cross-process reflection seam fired (future source class; surfaced,
     /// unwired).
     CrossSignal {
@@ -926,6 +956,15 @@ impl SharedDevice {
         // if a guest teardown won the race.
         if let SignalOutcome::WorkerDied { proc, gpu, worker } = outcome {
             self.kill_worker_slot(proc, gpu, worker);
+            // ★ §12.26 — the system component is UNCONDEMNABLE. The slot still dies
+            // (never a respawn), but the retire/condemn consequence is refused and the
+            // outcome is re-typed to the device-scoped fault it actually is. Previously
+            // this called `retire_proc(SYSTEM_PROC)`, which missed the `ProcSet` and
+            // answered `false` into a discarded result: the loudest rule in the design,
+            // silently absent for the one proc that cannot recover from it.
+            if proc == Gpu::SYSTEM_PROC {
+                return SignalOutcome::DeviceFatal { gpu, worker };
+            }
             self.retire_proc(proc);
         }
         outcome

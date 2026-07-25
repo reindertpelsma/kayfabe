@@ -1506,7 +1506,28 @@ impl Spine {
     /// or exit and let the guest kernel free the clients. Returns `false` if `pid` was
     /// already gone — idempotent, because a worker HUP and a guest teardown can
     /// legitimately race.
+    ///
+    /// ★ **The SYSTEM proc is UNCONDEMNABLE, and that is refused here rather than
+    /// happening by accident** (`l1_concurrency.md` §12.26). [`Gpu::system`] is not in
+    /// the [`ProcSet`], so this used to answer `false` through a **map miss** — the
+    /// "retire it loudly, never resurrect" consequence silently evaporating for the one
+    /// proc where it matters most. It is refused explicitly now, because the *reason* is
+    /// not "it is not in the map": the system component's clients are the **guest
+    /// kernel's**, held for the module's lifetime, so condemning it would leave the guest
+    /// driver itself with no `Proc`, no isolate, no arena and no route — and §7.3's
+    /// recovery story ("a fresh RM client is a different component") requires the guest
+    /// kernel to mint clients, which is exactly what would be condemned. Condemning the
+    /// system component is therefore **device-fatal by definition**, and a device-fatal
+    /// condition must be surfaced as one, not filed as a per-client condemnation entry.
+    /// RM's own analogue is the same shape: an unrecoverable kernel-side failure escalates
+    /// to `gpuMarkDeviceForReset` + `NV2080_NOTIFIERS_GPU_UNAVAILABLE`
+    /// (`ogkm: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:2779-2789`), at **device** level,
+    /// never at client level. The adapter half is `SharedDevice::signal_source`'s
+    /// `SignalOutcome::DeviceFatal`.
     pub fn retire_proc(&mut self, procs: &mut impl ProcSet, pid: ProcId) -> bool {
+        if pid == Gpu::SYSTEM_PROC {
+            return false;
+        }
         let Some(mut p) = procs.remove(pid) else {
             return false;
         };

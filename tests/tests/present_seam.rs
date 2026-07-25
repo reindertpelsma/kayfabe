@@ -106,7 +106,7 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
         .expect("the isolate's pool has an idle worker");
     let (target, surface) = worker.with_rm(|rm| {
         let target = rm
-            .alloc(HostHandle(0), mc::MEMORY, &[])
+            .alloc(HostHandle::NULL, mc::MEMORY, &[])
             .expect("render-target memory allocs");
         let surface = rm
             .export_surface(target)
@@ -166,7 +166,7 @@ fn exporting_an_unknown_render_target_is_a_loud_fault() {
         .unwrap()
         .checkout()
         .expect("the isolate's pool has an idle worker");
-    let bogus = HostHandle(0xdead_beef);
+    let bogus = HostHandle::new(kayfabe_isolate::IsolateId(0), 0xdead_beef);
     assert_eq!(
         worker.with_rm(|rm| rm.export_surface(bogus)),
         Err(RmError::BadHandle(bogus))

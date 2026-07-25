@@ -929,8 +929,10 @@ it had both a guest task that could not die while blocked in a forwarded operati
 use-after-free in the naive fix. Every request carries a transaction id; the worker installs a
 non-restarting signal handler; an interrupt makes the blocked operation return early; the
 worker replies on the normal path; and **the requester never abandons the reply buffer** — it
-blocks (holding no lock, bounded by the unwind, measured at roughly 3.5 s worst case in C) for
-the reply, then surfaces the refusal.
+blocks (holding no lock) for the reply, then surfaces the refusal. The C measured roughly
+3.5 s worst case here and read it as an unwind; `l1_concurrency.md` §12.26 re-reads it as
+RM's own 4 s RPC timeout elapsing — RM's waits are uninterruptible — which is what the verb
+budget must be sized against, and which implies an interrupted allocation probably completed.
 
 The project states the test status plainly:
 

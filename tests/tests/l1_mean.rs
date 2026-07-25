@@ -545,7 +545,7 @@ fn ctl_workload(device: &SharedDevice, pids: &[ProcId], i: usize) -> usize {
             }
             host_object = Some(f.host_object);
             assert_eq!(
-                handle_lane(f.host_object.0),
+                handle_lane(f.host_object.raw()),
                 (pid.0 + 1, gpu.0),
                 "an engine object was minted in another proc's / another GPU's namespace"
             );
@@ -1291,12 +1291,12 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
         for (&(g, _pdb), vas) in &p.vases {
             if let Some(h) = vas.host_vas {
                 assert_eq!(
-                    handle_lane(h.0),
+                    handle_lane(h.raw()),
                     (lane, g.0),
                     "({mode:?}) {pid:?} holds a host VAS from another (proc, GPU)"
                 );
                 assert_eq!(
-                    owner_of.insert(h.0, pid),
+                    owner_of.insert(h.raw(), pid),
                     None,
                     "({mode:?}) one host handle is observed by two procs"
                 );
@@ -1323,12 +1323,12 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
         for c in p.channels.values() {
             if let Some(h) = c.host_channel {
                 assert_eq!(
-                    handle_lane(h.0),
+                    handle_lane(h.raw()),
                     (lane, c.gpu.0),
                     "({mode:?}) {pid:?} holds a host channel from another (proc, GPU)"
                 );
                 assert_eq!(
-                    owner_of.insert(h.0, pid),
+                    owner_of.insert(h.raw(), pid),
                     None,
                     "({mode:?}) one host handle is observed by two procs"
                 );
@@ -1342,12 +1342,12 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
             }
             for h in c.host_engine_objects.values() {
                 assert_eq!(
-                    handle_lane(h.0),
+                    handle_lane(h.raw()),
                     (lane, c.gpu.0),
                     "({mode:?}) {pid:?} holds an engine object from another (proc, GPU)"
                 );
                 assert_eq!(
-                    owner_of.insert(h.0, pid),
+                    owner_of.insert(h.raw(), pid),
                     None,
                     "({mode:?}) one host handle is observed by two procs"
                 );
@@ -2083,14 +2083,14 @@ fn reinit(gpu: &mut Gpu, client: HClient, pdb: Pdb, gr: VChid, ce: VChid, target
 fn host_identities(p: &kayfabe_core::gpu::Proc) -> BTreeSet<u64> {
     let mut out = BTreeSet::new();
     for vas in p.vases.values() {
-        out.extend(vas.host_vas.map(|h| h.0));
+        out.extend(vas.host_vas.map(|h| h.raw()));
         for (_va, _len, b) in vas.table.iter() {
-            out.extend(b.host_memory().map(|h| h.0));
+            out.extend(b.host_memory().map(|h| h.raw()));
         }
     }
     for c in p.channels.values() {
-        out.extend(c.host_channel.map(|h| h.0));
-        out.extend(c.host_engine_objects.values().map(|h| h.0));
+        out.extend(c.host_channel.map(|h| h.raw()));
+        out.extend(c.host_engine_objects.values().map(|h| h.raw()));
     }
     out
 }

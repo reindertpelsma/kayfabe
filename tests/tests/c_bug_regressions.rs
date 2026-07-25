@@ -571,7 +571,10 @@ fn cb14_host_channel_touch_alone_blocks_a_late_merge() {
         .channels
         .get_mut(&cid_b)
         .unwrap()
-        .host_channel = Some(kayfabe_isolate::HostHandle(0xC0FFEE));
+        .host_channel = Some(kayfabe_isolate::HostHandle::new(
+        kayfabe_isolate::IsolateId(0),
+        0xC0FFEE,
+    ));
 
     let late_dup = RmEvent::Dup {
         src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
@@ -609,7 +612,10 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
         .vases
         .get_mut(&(GpuId::ZERO, B_PDB))
         .unwrap();
-    vas.host_vas = Some(kayfabe_isolate::HostHandle(0xBADA55));
+    vas.host_vas = Some(kayfabe_isolate::HostHandle::new(
+        kayfabe_isolate::IsolateId(0),
+        0xBADA55,
+    ));
 
     let late_dup = RmEvent::Dup {
         src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),

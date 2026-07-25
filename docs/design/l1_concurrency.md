@@ -285,8 +285,8 @@ intra-process guarantee: one coherent spec, not two separate fixes.
     `IsolateComplete{session, cookie}` seam the original design held open as an
     emergency exit; #37 wires it as the *standard* shape for blocking verbs (B1
     revised — §11).
-  - *How it would bite without it:* review P1, verbatim — proc A's 5.4 ms alloc (or
-    its 3.5 s worst-case interrupt unwind) holds the device read lock; the completion
+  - *How it would bite without it:* review P1, verbatim — proc A's 5.4 ms alloc (or,
+    at RM's timeout, a multi-second one — §12.26) holds the device read lock; the completion
     pump is a writer; every proc's completion delivery and all control-plane progress
     queue behind A's slowest verb. That is F5's de-facto serialization, rebuilt at
     the lock layer — and intra-proc, it is sibling thread B stalled behind A's verb,
@@ -573,10 +573,17 @@ The #73 design, ported to the isolate wire protocol (F4):
   control pipe, or `SIGUSR1` via the worker's pidfd) makes the blocked ioctl return
   `EINTR`; the worker then replies `Interrupted{txn}` on the normal reply path.
 - **The requester never abandons the reply buffer** (the C's UAF lesson, verbatim):
-  on interrupt it still blocks (uninterruptibly, bounded by the worker's EINTR-unwind
-  — the C measured ~3.5 s worst case) for the `Interrupted` reply, then surfaces the
-  refusal. Per R1 it holds NO lock while waiting (revised in #37 — the original text
-  held the proc lock throughout; under R1 that 3.5 s hold would stall every sibling
+  on interrupt it still blocks for the `Interrupted` reply, then surfaces the refusal.
+  ★ **What bounds that wait, corrected (§12.26):** *not* an EINTR unwind. RM's waits
+  are uninterruptible (`ogkm: .../gpu/gsp/kernel_gsp.c:2963-3060` — busy-poll, no signal
+  check; `.../resserv/src/rs_server.c:3164-3168` — bare refcount spin), so what the C
+  measured as a "~3.4-3.5 s bounded EINTR unwind" was almost certainly RM's own **4 s**
+  RPC timeout (`.../os/os.c:2136-2139`) elapsing. The wait is bounded by RM's timeouts
+  (6 s for a GSP RPC — 4 s x 1.5, `.../gpu/gsp/kernel_gsp.c:2927`), which is what
+  `VERB_BUDGET` must be sized against, and it carries the corollary that **an
+  interrupted alloc probably completed** (§12.16's G4 open question, now with a prior).
+  Per R1 the requester holds NO lock while waiting (revised in #37 — the original text
+  held the proc lock throughout; under R1 a multi-second hold would stall every sibling
   thread of the dying process, a #37 violation on the teardown path of all places).
   The commit phase then re-acquires and re-validates (R5) — which in the retire case
   means: surface the refusal, hand the worker to the retiring pool, touch nothing
@@ -724,23 +731,55 @@ multiplexing.**
 sandbox, the RM client, and the handle namespace are per-process identities and must
 stay singular. Workers are threads inside that process, each servicing exactly its
 own channel end to end (recv → real RM ioctl → reply, plus the #73 signal handler);
-the only state they share is the RM fd, which is kernel-mediated — concurrent ioctls
-on one RM client are ordinary host behavior (multithreaded libcuda does it all day).
-On the QEMU side the pool is N `&mut`-owned worker handles; checkout (§7.3) transfers
-one to the calling thread. Honest note: this re-admits threads into the worker
-process that #34 deleted — see §11 B6 for why the deleted *bug class* stays deleted.
+the only state they share is the RM fd, which is kernel-mediated.
 
-**Calibration (owner-directed, explicit).** Design the *interface* for N-in-flight
-from day one — checkout/return, per-worker channels, per-worker interrupt, per-worker
-reactor sources — but implement a **BOUNDED, statically-sized pool first** (small, on
-the order of the vCPU count; the exact default is an L1-M1 tuning constant, not a
-design question). Make the pool *dynamically* scaling only when a measured workload
-shows the bound hurts. Premature dynamic scaling is a complexity trap: a spawn/reap
-policy, thundering-herd wakeups on growth, worker-lifetime races — all cost, no
-demonstrated benefit. Pool exhaustion is meanwhile well-behaved backpressure: the
-guest thread waits (lock-free, R1) for a worker, exactly as it would wait for the
-host ioctl itself — and the poll/completion path needs no worker at all (§3.5), so
-sync progress never queues behind the pool.
+**★ CORRECTED (§12.26): what the shared RM fd actually buys, and it is not
+parallelism.** This paragraph used to end *"concurrent ioctls on one RM client are
+ordinary host behavior (multithreaded libcuda does it all day)"*. **Legal and ordinary
+— but not concurrent.** Source-verified in `ogkm`:
+
+- **Every** resource-server entry point reachable from an ioctl takes the per-client
+  lock in `LOCK_ACCESS_WRITE` (`src/nvidia/src/libraries/resserv/src/rs_server.c:778`,
+  `:1143`, `:1503`, `:1923`, `:2009`, `:2131`, `:2218`, `:2546`), and alloc *asserts*
+  it (`:786-788`). The **only** client-READ site in the driver is kernel-internal, not
+  reachable from an ioctl at all: `nvGpuOpsGetExternalAllocPtes`
+  (`.../rmapi/nv_gpu_ops.c:4674-4676`, UVM). NVIDIA special-cased exactly one hot path
+  to get same-client concurrency, which is strong evidence about the general case.
+- **Alloc and free additionally take the GLOBAL API lock in WRITE.** There is one
+  `g_RmApiLock` (`.../rmapi/rmapi.c:53-58`, `:535`); the default `apiLockMask` is
+  `NVBIT(RS_API_CTRL)` only (`.../core/system.c:423`), so
+  `serverAllocResourceLookupLockFlags` / the free equivalent override read-only back to
+  WRITE (`.../rmapi/alloc_free.c:1714-1718`, `:1746-1748`). Only
+  `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` escapes. The API lock is held **across** the GSP
+  RPC (`.../gpu/gsp/kernel_gsp.c:398`, `:2954`).
+- gVisor corroborates from production, under real CUDA: a per-client exclusive mutex
+  held across the host ioctl (`gvisor: pkg/sentry/devices/nvproxy/frontend_unsafe.go:367-381`).
+
+**Therefore the pool buys ~nothing on the wire**, and the honest justification is the
+other one — the one §3.5 actually asks for: **liveness and latency isolation.** A verb
+that takes six seconds (a GSP RPC at its timeout, below) must not make a *sibling*
+thread's independent verb appear to hang, trip a guest-side watchdog, or serialize an
+unrelated `Vas`'s first touch behind it. That is a property about *observability of
+progress*, not about throughput, and it is the property the §3.5 invariant states. The
+pool is how a slow verb stays one thread's problem.
+
+**Calibration (owner-directed, explicit; recalibrated by §12.26).** Design the
+*interface* for N-in-flight from day one — checkout/return, per-worker channels,
+per-worker interrupt, per-worker reactor sources — but implement a **BOUNDED,
+statically-sized pool first**, of **2–4 workers, deliberately NOT scaled to the vCPU
+count** (`DEFAULT_POOL_WORKERS = 4`). The old "on the order of the vCPU count" phrasing
+implied a scaling relationship that the locking evidence above says does not exist:
+past the point where one slow verb cannot hide a fast one, extra workers are extra
+host threads queued in **D state** on the same uninterruptible `down_write`, which
+costs teardown latency and cancellation complexity and buys no wire concurrency.
+
+Make the pool *dynamically* scaling only when a measured workload shows the bound
+hurts. Premature dynamic scaling is a complexity trap: a spawn/reap policy,
+thundering-herd wakeups on growth, worker-lifetime races — all cost, no demonstrated
+benefit. Pool exhaustion is meanwhile well-behaved backpressure: the guest thread waits
+(lock-free, R1) for a worker, exactly as it would wait for the host ioctl itself — and
+the poll/completion path needs no worker at all (§3.5), so sync progress never queues
+behind the pool.
 
 ### 7.3 Checkout/commit — mapping the pool to the shard
 
@@ -1028,20 +1067,51 @@ cited section, not only here. Two items remain genuinely open.
   the same nested-virt bench where vmexit costs dominate everything — perf conclusions
   from the bench must be read through that filter (the C's rom-device lesson: a
   correct trap-elimination showed zero exit-count win under nested virt).
-- **B3 (improved by #37, still the honest residual): the system proc is special and
-  that's acceptable.** Kernel/CeUtils traffic routes to `gpu.system`, whose isolate
-  is as stall-prone as any. A D-state host ioctl on a *user* proc's isolate stalls
-  that proc's calling thread (contained, by design). On the **system** proc, the #34
-  shape stalled effectively the whole device (the stalled verb held the device read
-  lock; every apply/pump queued behind it). Under R1 that coupling is gone: the
-  stalled system verb holds NO lock, sibling system verbs proceed on other pool
-  workers (§7.2), and apply/pump proceed freely — what stalls is only the specific
-  system-proc op whose worker is wedged. Mitigation for that remainder: the #73
-  interrupt + a watchdog deadline (`Vmm::defer`) that interrupts and retires a verb
-  exceeding its budget, surfacing a loud fault instead of a silent stall. That
-  converts an unbounded stall into a bounded failure, which is the best available —
-  a D-state host thread is un-killable by anyone; the C wedged the whole GPU on these
-  (F5); we wedge one op's requester and *say so*. Flagged as owner decision §10.6.
+- **B3 (RESTATED by §12.26 — it is a PLATFORM LIMIT, not a weakness of this design,
+  and not something we solve).** The old text claimed R1 had bought device-level
+  independence: *"the stalled system verb holds NO lock … apply/pump proceed freely —
+  what stalls is only the specific system-proc op whose worker is wedged."* The first
+  clause is true of **our** locks and irrelevant to the outcome, because the host kernel
+  does not participate in our lock discipline.
+
+  **What actually happens.** A wedged host ioctl holds the host **RM global API lock**
+  — an uninterruptible `down_write` (`ogkm: kernel-open/nvidia/nv-linux.h` /
+  `.../os-interface.c:330-338`) — **across** the GSP RPC (`.../gpu/gsp/kernel_gsp.c:398`,
+  `:2954`), and every alloc/free of every client takes that same lock in WRITE
+  (`.../rmapi/rmapi.c:53-58`, `:535`; `.../rmapi/alloc_free.c:1714-1718`, `:1746-1748`).
+  So a wedged verb blocks **every other isolate's** RM calls, in D state, including
+  every *user* proc's. No amount of lock-freedom in our bookkeeping changes that.
+
+  **And that is not ours to fix, which is the honest and the important half.** This is a
+  property of the platform shared by every GPU consumer on the box — containers, Mode-1,
+  bare-metal CUDA, a second VM with passthrough. It is *bounded* by RM's own timeouts
+  rather than unbounded: the GSP RPC timeout is 4 s (`.../os/os.c:2136-2139`,
+  `defaultus`) × 1.5 = **6 s** (`.../gpu/gsp/kernel_gsp.c:2927`), and RM's own answer at
+  expiry is to soldier on (*"Today, we will soldier on if GSP times out"*, `:2999-3002`)
+  and escalate to `gpuMarkDeviceForReset` + Xid (`:2772-2792`). We claim neither to
+  prevent it nor to be worse than the platform at it; the C's own whole-device wedge was
+  a different bug (an untimed blocking isolate ioctl issued **under the BQL** from the
+  doorbell trap, `C: nvkvm_gpu_emul.c:3504→3713→8644`, `C: nvkvm_isolate.c:1838-1840`),
+  and that one *is* ours to not repeat — R1 is what forbids it.
+
+  **What we do own**, and it is real but modest: the specific op is made **bounded and
+  loud** rather than silently pending, via the #73 interrupt plus a watchdog deadline
+  (`Vmm::defer`) that surfaces a fault. Two constraints on that, both from §12.26:
+  - **`VERB_BUDGET` must be sized against RM's timeouts, not against a measured
+    unwind** — ≥ 6 s of GSP RPC plus API-lock queueing behind other clients, so a merely
+    slow verb is never mistaken for a wedged one.
+  - **The "~3.4–3.5 s bounded EINTR unwind" the C measured was almost certainly RM's
+    4 s timeout, not an unwind.** RM's waits are not interruptible: the API lock is a
+    `down_write`, the GSP RPC is a busy-poll with no signal check
+    (`.../gpu/gsp/kernel_gsp.c:2963-3060`), and the client drain is a bare
+    `while (refCount > 1)` spin (`.../resserv/src/rs_server.c:3164-3168`). The
+    consequence is a correctness statement, not a performance one: **an interrupted
+    `NV_ESC_RM_ALLOC` almost certainly COMPLETED**, because RM had no interruptible
+    point at which to abandon it. That is the same open question §12.16/G4 named, now
+    with a strong prior and still owed a bench measurement.
+
+  Still flagged as owner decision §10.6 — but the decision is now "accept a documented
+  platform limit", not "accept a residual weakness".
 - **B4: scripted-order T1 testing is a faithful proxy for real interleavings.** This
   rests entirely on the core's order-independence (inherited law 1) plus the thin-waist
   rule (§8.1). It is a *good* bet — the determinism differential suite is exactly this
@@ -1060,13 +1130,21 @@ cited section, not only here. Two items remain genuinely open.
   route products + forced graph re-resolution (inherited law I3) make re-validation
   the path of least resistance, so the per-site burden stays mechanical instead of
   becoming this design's own bug ledger.
-- **B6 (new, #37): N workers re-admit — deliberately and boundedly — the concurrency
-  the original design deleted.** The C stub's thread-pool bugs came from a shared
-  in-flight slot table and txn demultiplexing over shared channels; the pool keeps
-  per-worker 1-deep channels and per-worker `&mut` ownership, so that bug class has
-  no home to return to. The bet is that channel-COUNT concurrency is categorically
-  safer than channel-MULTIPLEXED concurrency — believed strongly, argued from the
-  type system, proven only by the mean test.
+- **B6 (new, #37; premise CORRECTED by §12.26): N workers re-admit — deliberately and
+  boundedly — the concurrency the original design deleted.** The C stub's thread-pool
+  bugs came from a shared in-flight slot table and txn demultiplexing over shared
+  channels; the pool keeps per-worker 1-deep channels and per-worker `&mut` ownership,
+  so that bug class has no home to return to. The bet is that channel-COUNT concurrency
+  is categorically safer than channel-MULTIPLEXED concurrency — believed strongly,
+  argued from the type system, proven only by the mean test.
+  ★ **What the bet is NOT.** It is not a bet on throughput. RM serializes every
+  ioctl-reachable path on the per-client WRITE lock and takes the global API lock in
+  WRITE for every alloc/free (§7.2, cited), so N workers on one isolate produce N
+  *queued* host threads, not N concurrent RM operations. The pool's value is entirely
+  **liveness/latency isolation** — a slow verb must not make a sibling's independent
+  verb appear to hang — which is why the bound is small (2–4) and explicitly not tied
+  to the vCPU count. Widening it is therefore not a performance lever, and any future
+  argument that it is should be treated as a sign the real bottleneck was misdiagnosed.
 
 **The single biggest risk, stated plainly:** the design now commits to a core
 ownership refactor, a lock discipline, a re-entrant verb shape, AND an N-worker
@@ -2424,3 +2502,251 @@ API boundary and expose the opaque `ResId` as the resource identity (`nodes()` y
 `project.rs`, `gpu.rs` and much of the suite — a refactor, not a patch, and out of scope
 here for the same reason (b) was. Pre-existing, unchanged by §12.25 (the state is reached by
 free-then-realloc, which this fix does not touch); recorded so it can be scheduled.
+
+### 12.26 ★★ THE CROSS-`Proc` LIFETIME QUESTION — answered (c), and the answer needed the SYSTEM plane pinned down first
+
+**The question, as posed.** RM's kernel-internal clients take **refcounted references into
+a user client's memory** — `memCopyConstruct_IMPL` shares the source's memdesc and HW
+resource and then refcounts both (`ogkm: src/nvidia/src/kernel/mem_mgr/mem.c:986`, `:993`,
+`:1027-1031` — `pHwResource->refCount++`, `memdescAddRef`, `DupCount++`, plus the circular
+`dupListItem` list at `:1036-1039`). The C **measured** the corresponding failure on the
+bench, 2026-06-18: releasing a user client's overlays at its free *"yanks the backing out
+from under the still-polling scrub"* owned by a different client
+(`C: src/qemu/nvkvm_gpu_emul.c:2055-2065`). Its fix was not per-proc reclamation but a
+**global** quiesce point (`C: :2074-2128`, consumed at the GSP re-handshake, `C: :3458`).
+Our model has neither a refcount nor a global quiesce: `publish_backing` allocates host
+memory owned by the *user proc's* isolate RM client, and the isolate **process** boundary
+is the garbage collector (`l1_os_shell.md` §7.0). So: does a system-proc verb ever
+reference user-proc-owned host memory?
+
+#### ★ Step 1 first, because it nearly dissolves the problem: FORGE, and the scope
+
+The C forges kernel-CeUtils completions deliberately and scopes it precisely — *"The scrub
+is a no-op on our sparse/pre-zeroed backing … SCOPE: kernel CeUtils only — user-CE and GR
+channels are excluded (the host executes + releases those for real)"*
+(`C: nvkvm_gpu_emul.c:4032-4058`). **That reasoning holds here, and its weakest premise is
+our strongest one.** The C's argument rested on a claim about the *content* of one flat
+emulated-FB overlay space ("pre-zeroed"). Ours rests on the isolation boundary instead:
+
+1. **Cross-process, residue is unreachable by construction.** Host memory is allocated by
+   `RmBackend::alloc_sysmem` inside the owning proc's **own** isolate process, GPAs come
+   from that proc's **own** disjoint arena, and the memory dies with that process. Another
+   guest process's isolate is a different host process; the host kernel does not hand one
+   process's freed pages to another un-zeroed. What the guest kernel's scrub exists to
+   guarantee is therefore already guaranteed, by the same boundary #14 was fixed with.
+2. **Intra-process, the residue is the guest process's own data** — which is precisely
+   what a scrub-before-reuse inside one process is entitled to see.
+3. **Scope, stated as a rule and not as a habit:** forge **only** completions whose work
+   is provably a no-op against our backing model — the kernel CeUtils scrub, the GR golden
+   capture. User-CE and GR channels are excluded exactly as in the C: the host executes
+   and releases those for real. `Traffic::System` is the type that says so, and
+   `signal_golden_capture` is typed to `Gpu::system` by name so a user-proc forge is
+   unrepresentable rather than merely forbidden.
+4. **The one scope condition worth writing down**, because it is a premise and not a
+   theorem: if a future backing class is ever host **vidmem** rather than sysmem, RM's own
+   scrubber owns that memory's hygiene and this argument must be re-derived, not assumed.
+
+**But forging is not what makes the hazard absent, and it would have been wrong to stop
+there.** It removes one class of forwarded system work. The load-bearing fact is stronger
+and more general, and it is stated as a rule below.
+
+#### ★★ The answer: (c) — and the rule that makes it a theorem rather than an accident
+
+> **THE SYSTEM PLANE RULE. The system proc has no data plane.** It publishes no backing,
+> owns no host memory, and forwards no verb that names guest memory. Every real byte the
+> guest kernel moves on a user process's behalf is forwarded through **that user proc's
+> own** isolate — which is also the isolate whose death reclaims it. Kernel-internal
+> completions are forged (Step 1).
+
+With that rule, a cross-`Proc` host reference has no way to exist in either direction: the
+system proc owns nothing for a user proc to reference, and it mints nothing, so it never
+holds a handle a user isolate owns. Enforced at the one site that mints host memory —
+`plan_publish` refuses `Gpu::system` with `FwdFault::SystemDataPlane`, **before** any host
+verb exists, so there is nothing to orphan. It is a loud refusal rather than a silent
+impossibility on purpose: the day someone needs the system proc to publish, this lifetime
+question must be re-opened deliberately, with a refcount or a global quiesce point, rather
+than discovered afterwards.
+
+**Why (a) and (b) were rejected, on the merits and not on effort.**
+
+- **(a) a refcount/hold from the referencing proc onto the referenced backing** — RM's own
+  answer, and the wrong one *here*. A refcount is the right mechanism when the two parties
+  share one allocator and one namespace; ours deliberately do not. The hold would have to
+  outlive the owner's isolate **process**, and the thing it is holding is host memory the
+  host kernel frees when that process exits — so the refcount could keep our *bookkeeping*
+  alive over memory that is already gone, which is a UAF wearing a safety belt. To make it
+  real we would have to stop the isolate process boundary from being the collector, i.e.
+  give up §7.0, i.e. give up the property that makes "reclaim everything on every path"
+  achievable rather than aspirational. And per the house rule: *a hold that can be
+  forgotten is not a hold* — this one could not even be *kept*.
+- **(b) quiesce-gated deferred reclamation** — the C's answer, and it is genuinely the
+  right answer *for the C's model*, which had one isolate, one flat GPGA overlay space, and
+  no per-owner identity on a backing at all; a global barrier was the only tool available.
+  We already have its per-isolate half where it belongs (`reap_retired` + `is_quiesced`,
+  §12.16/G3). Extending it to a **device-global** barrier would (i) couple every proc's
+  reclamation to every other proc's activity, re-creating exactly the F5-shaped
+  serialization the design deletes, (ii) leave the hazardous interval merely *short*
+  instead of *empty*, and (iii) still say nothing about a reference taken across the
+  barrier. It converts a correctness question into a timing question, and this project's
+  whole posture is to refuse that trade (MISS = FAULT, not MISS = usually fine).
+- **(c) a structural proof** — chosen, and *made* structural rather than assumed. It was
+  the core's unstated assumption before this round; now it rests on three facts, two of
+  which already existed and one of which had to be built.
+
+#### ★ The fact that had to be built: a handle now carries its namespace
+
+`HostHandle` was `HostHandle(pub u64)` with the ownership rule in **prose** — its own
+rustdoc said "scoped to ONE isolate's handle namespace", and `HostBacking::memory`'s said
+"a handle from another isolate is a different object, boundary 2". Nothing read either
+sentence. It is now `{ isolate: IsolateId, raw: u64 }`, minted by the backend that knows
+the answer, and `Worker::execute` refuses — **before running the first verb** — any
+`VerbPlan` naming a handle from another namespace (`RmError::ForeignHandle`, empty
+`Orphans` by construction). One central enumeration, `VerbPlan::handles()`, so a new plan
+variant that carries a handle is a mistake in exactly one file.
+
+**Why this is not ceremony, which is the part worth being precise about.** The mock
+namespaces its fake handle *values* (`(id+1) << 32 | n`), so a cross-namespace use there is
+provably invalid and comes back `BadHandle`. **A real host does not.** RM mints
+client-scoped handles from one shared base — `RS_CLIENT_HANDLE_BASE`
+(`ogkm: src/nvidia/generated/g_resserv_nvoc.h:173`), one `serverSetClientHandleBase` for the
+whole driver (`.../rmapi/rmapi.c:105`) — so the same raw value is **live and different** in
+every other client. A foreign `free` on real hardware does not fault; it destroys a
+bystander's object. A foreign unmap tears down a bystander's mapping. The mock's answer is
+survivable and the host's answer is the C's bug, and **only the stamp distinguishes them** —
+which is why the fact belongs in the type and not in the backend's luck. This is the
+recorded-fact shape of §12.25 (not a branded-lifetime scheme), and the object-plane twin of
+`GpaBlock`'s `ArenaId` (§12.20): *a block names the arena that cut it.*
+
+The three facts together:
+
+1. **A handle names its isolate**, and using one elsewhere is refused centrally (new).
+2. **GPA arenas are per-`(Proc, GpuId)` and disjoint** (#14/MG-5), so two components cannot
+   alias physically even if the guest declares it. A guest-declared RPC mapping into a
+   system `Vas` naming a user proc's GPA binds with `host: None`, and the #14 ring gate
+   refuses to execute against an unpublished binding — the guest can *declare* the alias
+   and can never *use* it.
+3. **The system proc has no data plane** (new), so it is neither end of a shared pair.
+
+#### ★ The second finding: the system component is UNCONDEMNABLE, and that was a silent no-op
+
+Falls out of the same analysis. `SignalOutcome::WorkerDied`'s consequence is retire +
+condemn, whose recovery story is *"a fresh RM client is a different component"* (§7.3). The
+system component's clients are the **guest kernel's**, held for the lifetime of the loaded
+module — so that recovery requires the guest kernel to mint clients, which is exactly what
+would have been condemned. **Condemning the system component is device-fatal by
+definition.**
+
+What was actually happening: `SharedDevice::signal_source` called
+`Spine::retire_proc(SYSTEM_PROC)`, which reached for the system proc in a `ProcSet` that
+does not contain it (`Gpu::system` is a field, not a map entry — §12.4), missed, and
+returned `false` into a discarded result. The device carried on with a permanently dead
+system worker slot and **no fault anywhere**: the loudest rule in the design, silently
+absent for the one proc that cannot survive it.
+
+Fixed on both sides, because a fix on either alone is undone by the other:
+
+- `Spine::retire_proc` refuses `SYSTEM_PROC` **by rule**. Note honestly that this has no
+  observable effect *today* — the map miss produces the same `false` — so the regression
+  test constructs the future mistake (a `Proc` at the `SYSTEM_PROC` key of a real
+  `ProcSet`) and asserts the refusal holds anyway. The asymmetry that makes this a real
+  hazard rather than a hypothetical: `SharedDevice::proc_cell` **does** resolve the system
+  proc while `ExclusiveProcs` does not, and "let's make these consistent" is an ordinary
+  thing for a later change to do.
+- `SharedDevice::signal_source` re-types the outcome to `SignalOutcome::DeviceFatal`. The
+  slot still dies (never a respawn); what does not happen is the retire and the
+  condemnation. RM's own analogue is the same shape at the same scope:
+  `gpuMarkDeviceForReset` + `NV2080_NOTIFIERS_GPU_UNAVAILABLE`
+  (`ogkm: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:2779-2789`) — **device** level, never
+  client level. Escalating it into a guest-visible device-unavailable notification is
+  L1-M2's (T4/T7); the core's obligation is to make it distinguishable and loud.
+
+#### Tests — `tests/tests/cross_proc_lifetime.rs` (10), all bite-checked
+
+The C's disproof is ported as the thing it is: a system-proc verb naming a user proc's
+backing, asserted refused **before it runs**, with the owner then dying **both ways** —
+cleanly (per-object reclaim → client-root free → retire → reap) and by condemnation
+(out-of-band worker death, isolate gone) — and the reference re-attempted afterwards. The
+second attempt is the point: a rule that refuses before the owner dies and permits after is
+not a rule. It refuses identically, because a handle's namespace is a property of the
+*value*, so there is nothing to have gone stale. Conservation
+(`kayfabe_mocks::HostLedger`) is asserted across four teardown orderings — owner first,
+referencer first, both-before-reap, and a reach taken *between* retire and reap — with each
+proc's isolate attempting the C's cross-namespace disposal in **both** directions first, so
+the ledger proves that a script actively trying to reach across the boundary changes
+nothing about the accounting. Where per-object reclamation is possible the ledger must
+`is_balanced()`; for a condemned owner it must instead show **no** `free_of_unknown` /
+`unmap_of_unknown` / `double_free` and outstanding objects **only** on the dead isolate —
+namespace death is a real disposition, and saying otherwise would be a lie about what was
+proven.
+
+Bite-check (each fix reverted individually, everything else in place):
+
+| reverted | what fails, and how |
+|---|---|
+| the `Worker::execute` foreign-handle gate | **7 of 10** fail. The refusal degrades to `BadHandle` **with a foreign handle in `orphans`** — i.e. the disposal was really attempted on the system connection and the residue is a handle the caller will now try to dispose of again: `left: Err(VerbFailure { err: BadHandle(HostHandle(iso1:0x200000002)), orphans: Orphans { free: [HostHandle(iso1:0x200000002)] } })` vs `right: … ForeignHandle { handle: …, worker_isolate: IsolateId(0) }, orphans: {}`. On real hardware the `BadHandle` does not happen at all — the free succeeds, on a bystander. |
+| `VerbPlan::handles()`'s `unmap` half only | exactly 1 fails — `a_foreign_unmap_is_refused_as_loudly_as_a_foreign_free`, with the foreign VAS reaching the backend. A gate that scanned only `free` passes every other test in the file. |
+| `plan_publish`'s `SystemDataPlane` refusal | `the_system_proc_has_no_data_plane` fails `left: Err(UnknownPdb { … })` vs `right: Err(SystemDataPlane)` — the right outcome for entirely the wrong reason, which would start succeeding the moment anything gave the system proc a `Vas`. |
+| `signal_source`'s `DeviceFatal` branch | `a_system_worker_death_is_device_fatal_not_a_silent_no_op` fails `left: WorkerDied { proc: ProcId(0), … }` vs `right: DeviceFatal { … }` — i.e. reverts precisely to the silent no-op. |
+| `Spine::retire_proc`'s `SYSTEM_PROC` guard | `the_spine_refuses_to_retire_the_system_proc_even_when_it_is_in_the_proc_set` fails on *"the system proc is unconditionable — by rule, not by lookup failure"*, and the component is condemned. |
+
+Suite: **247 → 257**, 0 skipped, 0 ignored.
+
+#### ★★ WHAT THIS ROUND DID **NOT** SETTLE — an owner decision, and it is bigger than this brief
+
+The research done to answer Step 1 turned up a foundational problem that this round
+deliberately does not touch, because it changes what a `Proc` **is** (decision #14's
+grouping rule).
+
+`project()` groups clients into `Proc`s by **dup-connected component**, and the suite
+encodes the assumption that UVM's gpu-ops client is *per guest process*
+(`rmgraph_order_independence.rs::dup_edge_groups_uvm_and_compute_into_one_proc` — "A+its
+UVM, B+its UVM"; the C's own comment says "typically UVM's *per-process* gpu-ops client",
+`C: nvkvm_gpu_emul.c:2571`). **The source says otherwise.** UVM creates exactly **one** RM
+client for the whole module: `nvUvmInterfaceSessionCreate` is called once from
+`uvm_global_init` (`ogkm: kernel-open/nvidia-uvm/uvm_global.c:117`, reached from
+`module_init`, `uvm.c:1159-1165`), stored in the singleton `g_uvm_global`
+(`uvm_global.h:52`, `:253-255`). Every dup lands in *that* client:
+`nvGpuOpsDupAddressSpace` (`.../rmapi/nv_gpu_ops.c:2753-2760`) and `nvGpuOpsDupMemory`
+(`:8444-8450`) both pass `session->handle` as the destination, with the **user's** client as
+the source; `nvGpuOpsDeviceCreate` allocates device/subdevice under that same client
+(`:2265`, `:2283-2286`) and its only callers pass `uvm_global_session_handle()`
+(`uvm_gpu.c:1455`, `:1566`). There is no per-`uvm_va_space` client anywhere. The C's own
+bench corroborates: *"UVM's RM client (0xc1d00001)"*, singular
+(`C: memory/cuctxcreate_800_pinned.md:46,49`).
+
+**Consequence, if the grouping rule is left as-is:** every guest CUDA process is
+dup-connected to the one UVM client, so union-find collapses **all of them plus the guest
+kernel into a single `Proc`** — one isolate, one arena, one host VAS — which is #14
+un-fixed. And the second process would not even get that far: its UVM dup merges a
+component that has already touched its data plane, which is `GpuError::LateMerge`, a hard
+refusal. Neither is a hypothetical; both are direct consequences of the two cited facts.
+
+**The candidate fix, and why it is not made here.** Type clients as User vs Kernel from a
+**declared protocol fact** and let a dup *into* a kernel client be a reference rather than a
+merge. The fact exists and is observable on the wire we already parse: RM creates the client
+on GSP lazily at first-device alloc via `NV_RM_RPC_ALLOC_SHARE_DEVICE_FWCLIENT`, stamping
+`root_alloc_params.processID = KERNEL_PID` (`0xFFFFFFFF`) when
+`privLevel >= RS_PRIV_LEVEL_KERNEL` and the real `pClient->ProcID` otherwise
+(`ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:68-88`, driven from
+`.../gpu/device.c:179-186`), and channel allocs carry `ProcessID` + privilege too
+(`.../gpu/fifo/kernel_channel.c:2701-2712`). So the discriminator is declared, not inferred
+— which is the only kind this project accepts.
+
+**But making that change flips this round's answer**, and that is exactly why it is an owner
+call rather than a guess: with kernel clients no longer merging, the UVM client's dup of a
+user proc's memory becomes a genuine **cross-`Proc` reference**, and the question posed at
+the top of this entry becomes live in a way it is not today. The good news, and the reason
+the work above is not wasted under either rule: the system-plane rule and the handle stamp
+hold in **both** worlds — the reference would be a reference to a *guest* memory object,
+and as long as the system proc mints no host memory and no handle can be used off its own
+isolate, no *host* allocation is ever shared. What a kernel-client split would newly raise
+is a **coherence** question (two procs materializing two host backings for one guest
+buffer), not a use-after-free — and forging the kernel's data movement instead of forwarding
+it is precisely what keeps that question closed too.
+
+**Recommended next round, for the owner to accept or redirect:** (i) confirm the
+one-global-UVM-client fact on the bench by logging distinct `DUP_OBJECT` dst clients across
+two concurrent CUDA processes; (ii) decide the grouping rule; (iii) only then design the
+kernel-client boundary. Until (ii) is decided, `dup_edge_groups_uvm_and_compute_into_one_proc`
+and the `LateMerge` guard encode an assumption the source contradicts, and that is recorded
+here rather than quietly patched.

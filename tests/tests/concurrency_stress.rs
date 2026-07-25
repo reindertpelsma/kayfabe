@@ -202,14 +202,14 @@ fn assert_verb_in_namespace(iso: u32, verb: &RmVerb) {
     let ns = u64::from(iso) + 1;
     let own = |h: kayfabe_isolate::HostHandle| {
         assert_eq!(
-            h.0 >> 32,
+            h.raw() >> 32,
             ns,
             "handle {h:?} leaked across isolates (ns {ns})"
         );
     };
     match *verb {
         RmVerb::Alloc { parent, handle, .. } => {
-            if parent.0 != 0 {
+            if parent != kayfabe_isolate::HostHandle::NULL {
                 own(parent);
             }
             own(handle);
@@ -621,7 +621,7 @@ fn per_proc_parallelism_two_procs_no_shared_lock() {
         let vas = p.vases.values().next().unwrap();
         let hvas = vas.host_vas.expect("materialized");
         assert_eq!(
-            hvas.0 >> 32,
+            hvas.raw() >> 32,
             u64::from(p.id.0) + 1,
             "host VAS from a foreign isolate"
         );

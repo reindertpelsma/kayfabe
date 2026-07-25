@@ -210,6 +210,23 @@ pub enum FwdFault {
     /// started" against a world that no longer contains its target
     /// (`l1_concurrency.md` §3.3 R5, §11 B5).
     Stale(Stale),
+    /// ★ **The SYSTEM proc has no data plane** (`l1_concurrency.md` §12.26): something
+    /// asked [`publish_backing`] to allocate host memory on `Gpu::system`.
+    ///
+    /// This is the rule that keeps a cross-`Proc` host reference *unrepresentable*
+    /// rather than merely absent. Guest-kernel work that would need a backing —
+    /// the CeUtils scrub, the GR golden capture — is **forged** to the system proc's
+    /// completion queue, never forwarded, so the system proc never mints host memory
+    /// and can therefore never hold a handle a *user* proc's isolate owns. Every real
+    /// byte the guest kernel moves on a user process's behalf is forwarded through
+    /// **that user proc's own** isolate, which is also the isolate whose death
+    /// reclaims it.
+    ///
+    /// Loud rather than silent because the day someone needs the system proc to
+    /// publish, the lifetime question this rule answers has to be re-opened
+    /// deliberately — with a refcount or a global quiesce point — not discovered
+    /// afterwards.
+    SystemDataPlane,
 }
 
 /// Which re-validation a commit phase failed (`FwdFault::Stale`). Each variant is a
@@ -558,6 +575,13 @@ pub fn plan_publish(
 ) -> Result<Planned<PublishPlan>, FwdFault> {
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(proc.id));
+    }
+    // ★ §12.26 — the system-plane rule, enforced at the ONE site that mints host
+    // memory, and BEFORE any host verb exists (so there is nothing to orphan).
+    // ★ §12.26 — the system-plane rule, enforced at the ONE site that mints host
+    // memory, and BEFORE any host verb exists (so there is nothing to orphan).
+    if proc.id == Gpu::SYSTEM_PROC {
+        return Err(FwdFault::SystemDataPlane);
     }
     let pid = proc.id;
     let vas = proc
