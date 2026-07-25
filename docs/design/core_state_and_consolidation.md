@@ -257,6 +257,25 @@ mock encodings never leaked into logic crates.
    wire `fmt --check` into the CI green-gate (the standing decision #15 follow-up).
    Not done here: a 390-hunk diff under a consolidation commit would bury the review.
 
+> **Status (decision #33, executed as the pre-L1 tidy):**
+> 1. **Done** — `FwdFault::GpaRead { gpa }` added; `parse_pushbuffer`'s guest-read
+>    failure no longer overloads `Arena`.
+> 2. **Done** — `Channel.vas` renamed to `vas_pdb` (mechanical; matches
+>    `ChannelFacts.vas_pdb`).
+> 3. **Done** — via the deferral option (matching the `Vas` pattern): a channel whose
+>    GPU target has not resolved is no longer materialized at all (its stable `ChanId`
+>    is still minted), so the `GpuId::ZERO` default-tag is gone. `Channel.gpu` stays a
+>    plain `GpuId` with the invariant "always a resolved target"; the `Option<GpuId>`
+>    alternative was not needed. The inert claim was verified: an unroutable channel
+>    never entered `by_vchid` before or after.
+> 4. **Kept, documented** — `Traffic` stays as a deliberate vocabulary seam: the design
+>    ledger cites `Traffic::System` by name (threat model, matrix rows 7/11), and the
+>    thread-vs-fold decision belongs to L1 when the real GSP queue ports. Its
+>    doc-comment now states this status explicitly (honesty over premature deletion —
+>    still open as an L1 decision).
+> 5. **Done** — rustfmt applied as its own mechanical commit; `fmt --check` wired into
+>    the CI green-gate alongside build/test/clippy.
+
 None of these is load-bearing; all are hygiene. The single most important *finding* of
 the review is a non-finding worth stating: **the multi-GPU retrofit (MG-1..7) did not
 fork any concept** — `(GpuId, ·)` keying is applied uniformly across projection,

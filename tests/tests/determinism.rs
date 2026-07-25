@@ -275,7 +275,7 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
 
         let mut ch = BTreeMap::new();
         for c in p.channels.values() {
-            ch.insert(c.key, ChannelObs { vchid: c.vchid, vas_pdb: c.vas, engine: c.engine });
+            ch.insert(c.key, ChannelObs { vchid: c.vchid, vas_pdb: c.vas_pdb, engine: c.engine });
         }
         channels.insert(anchor, ch);
 

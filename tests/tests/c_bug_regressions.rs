@@ -484,7 +484,7 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
 /// ★ Mutation-gate kill (`handle_doorbell` ring-gate match guard
 /// `None if working_set.is_empty()` → `true` / → `false`): the no-VAS arm of the #14
 /// ring-gate is REACHABLE with a live host channel — a guest can `Free` its VASpace
-/// handle AFTER the channel materialized (re-projection nulls `chan.vas`; the host
+/// handle AFTER the channel materialized (re-projection nulls `chan.vas_pdb`; the host
 /// channel persists). In that state the guard is load-bearing on both sides:
 ///
 /// - a NON-EMPTY working set has no address space to have published it → loud

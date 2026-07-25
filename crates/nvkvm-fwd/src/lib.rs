@@ -100,6 +100,13 @@ pub enum FwdFault {
     Address(AddressFault),
     /// The proc's GPA arena is exhausted.
     Arena,
+    /// Reading guest memory failed while parsing a pushbuffer (`Vmm::gpa_read`
+    /// refused a GPFIFO range). Distinct from [`FwdFault::Arena`] by design: this is
+    /// a guest-side read failure, not a host arena-exhaustion condition.
+    GpaRead {
+        /// The guest-physical address the refused read started at.
+        gpa: u64,
+    },
     /// The isolate's RM backend refused the op.
     Rm(RmError),
     /// A class the guest tried to alloc as an engine object is not one this arch
@@ -294,7 +301,7 @@ pub fn handle_doorbell(
     let rm = isolates.get_mut(&cgpu).ok_or(FwdFault::NoTarget { proc: pid, gpu: cgpu })?.rm();
 
     // ---- The #14 ring-gate, BEFORE any host op (the ONE ring path always runs it). ----
-    match chan.vas {
+    match chan.vas_pdb {
         Some(pdb) => {
             let vas = vases.get(&(cgpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
             gate_vas(&vas.table, pdb, working_set.iter().copied())?;
@@ -309,7 +316,7 @@ pub fn handle_doorbell(
     // the alloc so the adapter lands it on the RIGHT runlist (GR-1: the C's
     // `dma_copy_class_alloc_params` engineType=0 → 401 class, designed out).
     if chan.host_channel.is_none() {
-        let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
+        let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
         let vas = vases.get_mut(&(cgpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
         let hvas = ensure_host_vas(vas, rm)?;
         let (hchan, htok) = rm.alloc_channel(hvas, chan.engine)?;
@@ -432,7 +439,7 @@ pub fn forward_engine_object(
     // has a channel to be allocated on — the host builds its GR ctx against it.
     let materialized_channel = chan.host_channel.is_none();
     if materialized_channel {
-        let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
+        let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
         let vas = vases.get_mut(&(cgpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
         let hvas = ensure_host_vas(vas, rm)?;
         // The channel's graph-derived `EngineKind` rides the alloc (GR-1, wrong-runlist
@@ -590,7 +597,7 @@ pub fn parse_pushbuffer(
         let len =
             (r.len as usize).min(MAX_PUSH_RANGE_BYTES).min(MAX_PUSH_TOTAL_BYTES - total);
         let mut buf = vec![0u8; len];
-        vmm.gpa_read(r.gpa, &mut buf).map_err(|_| FwdFault::Arena)?;
+        vmm.gpa_read(r.gpa, &mut buf).map_err(|_| FwdFault::GpaRead { gpa: r.gpa })?;
         methods.extend(decode_methods(gpu.arch.as_ref(), &buf));
         total += len;
     }
@@ -600,7 +607,7 @@ pub fn parse_pushbuffer(
         return Err(FwdFault::RetiredProc(pid));
     }
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
-    let chan_pdb = chan.vas;
+    let chan_pdb = chan.vas_pdb;
     let cgpu = chan.gpu;
 
     let mut out = PushbufferOutcome::default();
@@ -682,7 +689,7 @@ pub fn gate_working_set(
 ) -> Result<(), FwdFault> {
     let proc = gpu.procs.get(&pid).ok_or(FwdFault::RetiredProc(pid))?;
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
-    let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
+    let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
     let vas =
         proc.vases.get(&(chan.gpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: chan.gpu, pdb })?;
     gate_vas(&vas.table, pdb, working_set.iter().copied())
@@ -753,7 +760,7 @@ pub fn arm_fence(
         return Err(FwdFault::WrongArm { chan: cid, engine: chan.engine });
     }
     let cgpu = chan.gpu;
-    let pdb = chan.vas.ok_or(FwdFault::NoVas(cid))?;
+    let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
     let vas = proc.vases.get(&(cgpu, pdb)).ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
     // The fence must be a mapped, host-published address in this channel's OWN Vas.
     gate_vas(&vas.table, pdb, [addr])?;

@@ -140,12 +140,17 @@ pub struct Channel {
     /// ★ MG-4: the GPU target this channel lives on (graph-derived from its `Device`
     /// ancestor). `VChid` is a per-GPU runlist index, so the exec-plane routing map is
     /// keyed `(GpuId, VChid)` and this tag names which GPU the doorbell demuxes on.
+    /// Always a RESOLVED target by construction: a channel whose target has not
+    /// resolved yet is never materialized (deferred in `Gpu::refresh`, matching the
+    /// `Vas` pattern) — never tagged with a default-GPU0 guess.
     pub gpu: GpuId,
     /// The exec-plane identity the doorbell demuxes on (unique only WITHIN [`Self::gpu`]).
     pub vchid: VChid,
     /// The PDB of the VAS this channel is declared against (None = GSP-managed
-    /// with no declared VAS — system-routed). Keyed under [`Self::gpu`] in the Vas map.
-    pub vas: Option<Pdb>,
+    /// with no declared VAS — system-routed). Keyed under [`Self::gpu`] in the Vas
+    /// map. Named for what it IS — a [`Pdb`] — matching the projection's
+    /// [`crate::project::ChannelFacts::vas_pdb`] (one concept, one name).
+    pub vas_pdb: Option<Pdb>,
     /// ★ The fine [`EngineKind`] of this channel's context (`execution_plane.md`
     /// §2.2 "what the core tracks"): graph-synced from the projection — the channel
     /// class's declared kind, refined by the engine object allocated on it. NVENC
@@ -627,20 +632,27 @@ impl Gpu {
                 }
             }
             p.vases.retain(|key, _| live_keys.contains(key));
-            // Channels: stable ChanId per node key.
+            // Channels: stable ChanId per node key. A channel whose GPU target does
+            // not resolve is NOT materialized (the same deferral as the Vas pattern
+            // above): it enters no routing map, so a runtime `Channel` would be inert
+            // — and tagging it `GpuId::ZERO` would be a default-target guess (the
+            // no-GPU0-guess doctrine). Its ChanId is still minted, so its slot is
+            // stable for when the Device fact lands and it materializes.
             for (&key, facts) in &b.channels {
                 let cid = *p.chan_ids.entry(key).or_insert_with(|| {
                     let c = ChanId(p.next_chan);
                     p.next_chan += 1;
                     c
                 });
-                let gpu = facts.gpu.unwrap_or(GpuId::ZERO);
+                let Some(gpu) = facts.gpu else {
+                    continue; // Unroutable (yet) — deferred, never guessed onto GPU0.
+                };
                 let entry = p.channels.entry(cid).or_insert_with(|| Channel {
                     id: cid,
                     key,
                     gpu,
                     vchid: facts.vchid,
-                    vas: facts.vas_pdb,
+                    vas_pdb: facts.vas_pdb,
                     engine: facts.engine,
                     host_channel: None,
                     host_token: None,
@@ -648,7 +660,7 @@ impl Gpu {
                 });
                 entry.gpu = gpu;
                 entry.vchid = facts.vchid;
-                entry.vas = facts.vas_pdb;
+                entry.vas_pdb = facts.vas_pdb;
                 entry.engine = facts.engine;
             }
             let live_chans: BTreeSet<NodeKey> = b.channels.keys().copied().collect();

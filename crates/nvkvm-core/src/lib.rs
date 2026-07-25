@@ -131,6 +131,15 @@ pub struct ChanId(pub u32);
 /// (arch doc §4.3.1): forging a completion for [`Traffic::Proc`] traffic is
 /// unrepresentable in the forge path, which is typed to [`Traffic::System`]
 /// (lesson L5 / the #12 finishPayload rule).
+///
+/// **Status: deliberate seam, vocabulary-only today** (consolidation review §5.2
+/// item 4, decision #33). No current signature consumes it — the forge path's
+/// enforcement is structural (`nvkvm-fwd::signal_golden_capture` writes to
+/// `Gpu::system` directly, so a user-proc forge is unrepresentable without the
+/// type). It is kept as the named rule the design ledger cites (threat model,
+/// regression-matrix rows 7/11) and as the L1 seam: when the real GSP queue's
+/// traffic classification ports, L1 decides whether to thread `Traffic` through
+/// the observe/forge signatures or fold it — deferred there, not guessed here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Traffic {
     /// Guest-kernel / scrubber / CeUtils traffic — routed to the system `Proc`.
