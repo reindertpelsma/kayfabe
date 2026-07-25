@@ -91,12 +91,22 @@ pub enum FwdFault {
     /// lesson L10).
     RetiredProc(ProcId),
     /// ★ The op's routing key belongs to a **CONDEMNED component**
-    /// (`l1_concurrency.md` §7.3 / §12.13): one of this guest process's isolate
-    /// workers died **out of band**, so it may have left host state the core cannot
-    /// reason about, and §7.3's "no resurrect" / `WorkerDied`'s "never a respawn"
+    /// (`l1_concurrency.md` §7.3 / §12.13): one of this guest process's isolate workers
+    /// died **out of band**, so §7.3's "no resurrect" / `WorkerDied`'s "never a respawn"
     /// make the whole component permanently dead — it has no `Proc`, no isolate, no
     /// GPA arena and no route, and it will get none until the *guest itself* frees
     /// its client root.
+    ///
+    /// **Why this is a refusal and not a transparent re-materialization.** The isolate
+    /// is a process, so the host kernel already reclaimed everything it held; rebuilding
+    /// the component's host objects would be *almost* clean. It is wrong anyway, because
+    /// **the guest's data died with the isolate** — a published backing is host memory
+    /// (`RmBackend::alloc_sysmem`) owned by that isolate's RM client, so a rebuild hands
+    /// the guest a **zeroed** backing for a VA it believes still holds its data. Silent
+    /// corruption is strictly worse than this fault, which is the semantic real hardware
+    /// already has: **sticky-fatal**, like an Xid. It is not a brick — a re-initialising
+    /// application (fresh RM client ⇒ different component ⇒ not condemned) is served
+    /// normally, and a dying one has its clients freed by the guest kernel.
     ///
     /// Distinct from [`FwdFault::RetiredProc`] because there is no `ProcId` left to
     /// name (the proc was removed and reaped; ids are never reused), and distinct

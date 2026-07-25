@@ -1209,12 +1209,15 @@ story has four gaps to close here:
   the whole-proc sledgehammer. Add the identity now; it is a field, and later it is a
   migration.
 - the isolate **process** may still be alive with N−1 workers. ★ **The design answer is to
-  escalate worker death to isolate death**: `SIGKILL` the isolate, because §7.3 of
-  `l1_concurrency.md` already says a worker that died mid-verb "may have left host state the
-  core cannot reason about" — and per §7.0, killing the process is precisely how you reclaim
-  state you cannot reason about. Attempting per-object cleanup of a dead worker's
-  allocations through a sibling worker would be reasoning about exactly the state we just
-  said we cannot reason about.
+  escalate worker death to isolate death**: `SIGKILL` the isolate. A worker that died
+  mid-chain left allocations that are in no `Orphans` and in no core state (G4 above), so
+  no path can enumerate them; per §7.0, killing the process is precisely how you reclaim
+  state you cannot enumerate — the kernel closes the RM connection and frees the lot.
+  Attempting per-object cleanup through a sibling worker would mean reasoning about
+  exactly the set we just said is unenumerable. Note this is a *reclamation* argument and
+  it stands on its own; it is **not** the reason the component is never resurrected —
+  that reason is that the guest's data died with the isolate's RM client
+  (`l1_concurrency.md` §7.3, "Why a condemned component is never resurrected").
 - the component stays condemned until the guest frees its client root (existing, tested).
 
 **T6 — Isolate garbage collection.** Triggered by T2's reap, T4, T5, or T7.

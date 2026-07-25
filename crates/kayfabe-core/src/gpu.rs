@@ -494,6 +494,16 @@ pub struct Spine {
     /// **out of band** ([`Spine::retire_proc`]) and which must therefore never be
     /// re-derived into a live [`Proc`] again.
     ///
+    /// **Why never re-derived.** Not because the dead worker left host state the core
+    /// cannot reason about — the isolate is a *process*, and the host kernel reclaims
+    /// what it held. It is because **the guest's data died with it**: a published
+    /// backing is host memory (`RmBackend::alloc_sysmem`) owned by that isolate's RM
+    /// client, so re-materialising would hand the guest a **zeroed** backing for a VA it
+    /// believes still holds its data — silent corruption, strictly worse than the
+    /// resurrect it would be fixing. Refusing gives the guest what real hardware gives
+    /// it: **sticky-fatal**, like an Xid, and recoverable exactly as an Xid is (see the
+    /// key discussion below — a fresh RM client is a *different* component).
+    ///
     /// **Why a client SET and not a [`ProcId`] or a [`ProcAnchor`].** A `ProcId` is
     /// minted per derivation and dies with the proc — the very thing that failed was
     /// that the *next* derivation minted a fresh one, so it cannot be the key. A
@@ -503,6 +513,15 @@ pub struct Spine {
     /// boundaries on (intersection), so keying on it makes condemnation survive every
     /// re-derivation the guest can provoke, including component splits (both halves
     /// intersect, both stay condemned) and re-labels.
+    ///
+    /// ★ **The same key is what makes RECOVERY possible**, which is the half a user
+    /// actually experiences. An application that re-initialises allocates a **new** RM
+    /// client; its boundary has no dup edge to any condemned set, so it is a different
+    /// component, is not condemned, and gets a live `Proc` with its own isolate and
+    /// arena. And an application that simply dies needs no cooperation at all: the guest
+    /// kernel frees its clients on its behalf, no boundary intersects the entry any
+    /// more, and it is dropped. "Sticky-fatal, not bricked" is therefore a property of
+    /// this field's type, not a promise made elsewhere.
     ///
     /// Entries are **canonical**: pairwise disjoint, sorted (determinism, decision
     /// #27), and monotonically *grown* by any boundary that intersects them — a
@@ -526,6 +545,15 @@ pub struct Spine {
 /// graph and not of call order (decision #27). Keeping the entries pairwise disjoint is
 /// what makes "does this boundary intersect a condemned component" a single scan with
 /// no transitive follow-up.
+///
+/// **Absorb, never widen.** The fixpoint grows an entry only through clients that are
+/// genuinely dup-connected to it — i.e. that shared its blast radius. It must never
+/// reach a client that did not, because condemnation's whole defensibility is that it
+/// is **sticky-fatal rather than bricked**: a component is dead because the guest's data
+/// in *that* isolate's host memory is gone (`RmBackend::alloc_sysmem`, freed with the
+/// process), and an unrelated or freshly-minted client's data is not. Widening here
+/// would turn a recoverable Xid-shaped fault into a device that refuses everything after
+/// one worker crash.
 fn absorb_condemned(list: &mut Vec<BTreeSet<HClient>>, mut set: BTreeSet<HClient>) {
     loop {
         let mut rest = Vec::with_capacity(list.len());
@@ -1044,8 +1072,9 @@ impl Spine {
     ///
     /// The graph-driven retirements inside [`Spine::refresh`] happen because the
     /// guest freed a client root. This one happens because the *host side* failed: an
-    /// isolate worker died, so the proc's host state is no longer something the core
-    /// can reason about. Same obligations, in the same order, deliberately
+    /// isolate worker died, and with it went the host memory its RM client owned — which
+    /// is where the guest's published data lived. Same obligations, in the same order,
+    /// deliberately
     /// sharing this one implementation rather than being open-coded in the adapter:
     /// remove it from the live set, `Proc::retire` it (its isolates stop, new ops
     /// refuse), deregister **every** completion source it owns (or a signal still in
@@ -1072,8 +1101,14 @@ impl Spine {
     /// it, for no reason the guest could observe or cause.
     ///
     /// **Never a resurrect** (§7.3): there is no path back from here, and it now holds
-    /// past the next refresh. Returns `false` if `pid` was already gone — idempotent,
-    /// because a worker HUP and a guest teardown can legitimately race.
+    /// past the next refresh — because a resurrect would re-materialize the guest's
+    /// backings **zeroed** (the isolate's `alloc_sysmem` memory died with its process),
+    /// which is silent corruption where this is an honest, Xid-shaped refusal. There is
+    /// a path back for the *application*, and it is the one CUDA already takes: build a
+    /// new context (a new RM client is a different component, see [`Spine::condemned`]),
+    /// or exit and let the guest kernel free the clients. Returns `false` if `pid` was
+    /// already gone — idempotent, because a worker HUP and a guest teardown can
+    /// legitimately race.
     pub fn retire_proc(&mut self, procs: &mut impl ProcSet, pid: ProcId) -> bool {
         let Some(mut p) = procs.remove(pid) else {
             return false;

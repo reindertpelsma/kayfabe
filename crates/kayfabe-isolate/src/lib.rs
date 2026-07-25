@@ -776,9 +776,12 @@ pub trait Isolate: Send + Sync {
     fn checkin(&mut self, worker: Worker);
 
     /// A worker died out of band (its reactor source signalled HUP, §7.3). Retires
-    /// the slot permanently — **never a respawn**: a worker that died mid-verb may
-    /// have left host state the core cannot reason about. Returns `true` if the slot
-    /// was known and is now dead.
+    /// the slot permanently — **never a respawn**. Respawning the slot would be
+    /// pointless anyway: the whole component is condemned by the same event
+    /// (`l1_concurrency.md` §12.13), because the guest's published data lived in host
+    /// memory owned by this isolate's RM client and died with it, so there is nothing
+    /// for a fresh worker to serve except zeroes. Returns `true` if the slot was known
+    /// and is now dead.
     fn worker_died(&mut self, worker: WorkerId) -> bool;
 
     /// ★ How many of this isolate's workers are **checked OUT right now**

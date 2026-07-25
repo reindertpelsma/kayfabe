@@ -643,9 +643,10 @@ fn pool_full_is_backpressure_not_a_hang() {
 // ---------------------------------------------------------------------------------
 
 /// A worker HUP dispatches through the reactor to **retire the proc loudly**: the
-/// slot is dead forever (never respawned — a worker that died mid-verb may have left
-/// host state the core cannot reason about), the proc leaves the live set, its
-/// completion sources stop routing, and its completions die with it.
+/// slot is dead forever (never respawned — the guest's published data lived in host
+/// memory owned by the dead isolate's RM client, so a resurrect would serve zeroes),
+/// the proc leaves the live set, its completion sources stop routing, and its
+/// completions die with it.
 #[test]
 fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
     let _wd = watchdog("worker_death_retires", Duration::from_secs(60));

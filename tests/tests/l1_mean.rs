@@ -1469,9 +1469,11 @@ fn mean_multiproc_multithread_multigpu_multiworkload() {
 ///
 /// §7.3: *"Worker death out-of-band (crash) is a reactor source firing HUP → dispatch →
 /// retire the proc loudly … either way MISS=FAULT posture, **no resurrect**."*
-/// [`SignalOutcome::WorkerDied`]: *"the slot is permanently dead (**never a respawn** —
-/// a worker that died mid-verb may have left host state the core cannot reason
-/// about)"*.
+/// [`SignalOutcome::WorkerDied`]: *"the slot is permanently dead (**never a respawn**)"*
+/// — because the guest's published data lived in host memory owned by that isolate's RM
+/// client and died with it, so a resurrect would serve **zeroes** for a VA the guest
+/// believes still holds its data (§7.3, "Why a condemned component is never
+/// resurrected"; the recovery half is pinned by the tests at the end of this file).
 ///
 /// What used to happen: `Spine::retire_proc` removed the proc from the live set, but
 /// the guest's client root is untouched in the RM graph, so the **next `Gpu::apply`**
@@ -2008,4 +2010,498 @@ fn a_dup_into_a_condemned_component_is_refused_atomically() {
         }),
         "★ and the condemned component is still condemned"
     );
+}
+
+// =================================================================================
+// ★★ §12.13 — RECOVERY: the other half of the contract, and the half a user lives in
+//
+// Everything above pins that condemnation STICKS. That is the half that protects the
+// host. The half the *guest* experiences — that an application can come back — was an
+// assumed claim until these tests, and the whole justification for never resurrecting
+// rests on it:
+//
+//   - refusing to resurrect is only defensible if it is **sticky-fatal**, not
+//     **permanently bricked**. Real hardware faults a channel and makes the context
+//     sticky-fatal until the application tears it down and builds a new one; every CUDA
+//     application already handles that path, because Xids exist.
+//   - condemnation is keyed on the **client set**, so a re-initialising application —
+//     a fresh CUDA context allocates a NEW RM client — forms a boundary with no dup edge
+//     to the condemned set, is therefore a *different* component, is therefore not
+//     condemned, and simply works. That is a claim about the key, and it is testable.
+//   - and if the process dies instead, the **guest kernel** frees its clients on its
+//     behalf, so the entry clears with no cooperation from the application at all
+//     (measured on real GA106, 2026-07-25: a killed guest process produces 178 `fn=10`
+//     RM FREE RPCs followed by fn-47, with the host stub still alive).
+//
+// If any of these failed, the design would owe the guest a resurrect — and a resurrect
+// hands it a **zeroed** backing for a VA it believes still holds its data, because
+// `publish_backing`'s host memory (`RmBackend::alloc_sysmem`) belonged to the dead
+// isolate's RM client and the host kernel freed it. That is silent data corruption, and
+// it is why the answer must be recovery rather than re-materialization.
+// =================================================================================
+
+/// The re-initialising application's fresh RM client — a genuinely NEW client handle,
+/// with no `DUP_OBJECT` edge to anything condemned. This is the shape of `cuInit` +
+/// `cuCtxCreate` after an Xid killed the previous context.
+const R_CLIENT: HClient = HClient(0xB0);
+/// The second fresh client, for the multi-GPU recovery (dup-joined to [`R_CLIENT`], so
+/// the recovered component spans both targets exactly as the dead one did).
+const R_CLIENT2: HClient = HClient(0xB1);
+/// The fresh context's page-directory base (a new VASpace ⇒ a new PDB).
+const R_PDB: Pdb = Pdb(0x3a00_0000);
+/// The second fresh context's PDB.
+const R_PDB2: Pdb = Pdb(0x3b00_0000);
+/// The fresh context's GR vChid (E0: fresh per channel-create, no collisions).
+const R_GR: VChid = VChid(0x140);
+/// The fresh context's CE vChid.
+const R_CE: VChid = VChid(0x240);
+/// The second fresh context's GR vChid.
+const R_GR2: VChid = VChid(0x141);
+/// The second fresh context's CE vChid.
+const R_CE2: VChid = VChid(0x241);
+/// The dup handle the multi-GPU recovery aliases its sibling's VASpace under.
+const R_ALIAS: HObject = HObject(0x7300_00a0);
+
+/// Apply one fresh CUDA-context-shaped subgraph on `target` — the guest half of a
+/// recovery. Deliberately the SAME builder the world itself is made of: a recovering
+/// application is not a special case, it is just another process.
+fn reinit(gpu: &mut Gpu, client: HClient, pdb: Pdb, gr: VChid, ce: VChid, target: GpuId) {
+    let mut s = Scenario::new();
+    let instance = if target == GPU0 { None } else { Some(target.0) };
+    s.compute_process_on_gpu(client, pdb, identical_handles(gr.0, ce.0), instance);
+    for ev in s.events {
+        gpu.apply(ev)
+            .expect("★ the re-initialising process's RM events apply");
+    }
+}
+
+/// Every host object identity a `Proc` currently holds — host VASes, published backing
+/// memory, host channels, engine objects. The set a recovered component must share
+/// **nothing** with.
+fn host_identities(p: &kayfabe_core::gpu::Proc) -> BTreeSet<u64> {
+    let mut out = BTreeSet::new();
+    for vas in p.vases.values() {
+        out.extend(vas.host_vas.map(|h| h.0));
+        for (_va, _len, b) in vas.table.iter() {
+            out.extend(b.host_memory().map(|h| h.0));
+        }
+    }
+    for c in p.channels.values() {
+        out.extend(c.host_channel.map(|h| h.0));
+        out.extend(c.host_engine_objects.values().map(|h| h.0));
+    }
+    out
+}
+
+/// Publish one page and ring the channel that gates on it, end to end, on a recovered
+/// component — the smallest thing that proves it is genuinely SERVED and not merely
+/// present in a map. The ring passes the published VA as its working set, so the #14
+/// ring-gate is actually exercised rather than trivially satisfied by an empty set.
+fn publish_and_ring(gpu: &mut Gpu, target: GpuId, pdb: Pdb, gr: VChid, va: u64) -> DoorbellOutcome {
+    core_publish(gpu, target, pdb, va).expect("★ the recovered component publishes");
+    kayfabe_fwd::handle_doorbell(gpu, target, MockArch::token_for(gr), &[GpuVa(va)])
+        .expect("★ the recovered component rings")
+}
+
+/// ★★ **THE HEADLINE OF §12.13's JUSTIFICATION: an application RECOVERS by
+/// re-initialising, while its condemned predecessor stays dead.**
+///
+/// "Never resurrect" is only defensible because it is sticky-**fatal**, not
+/// sticky-**bricked**: a GPU that faults a channel does not silently hand back a fresh
+/// context either, it makes the context fatal until the application builds a new one.
+/// The mechanism that makes this true here is the choice of identity key — condemnation
+/// is keyed on the **client set**, so a fresh CUDA context (a new RM client, no dup edge
+/// to the condemned set) derives a boundary that does not intersect any condemned entry,
+/// and is therefore a different component, and is therefore simply served.
+///
+/// This test is the executable form of that sentence: after a worker death condemns the
+/// component, a new client gets a live `Proc` with a **real isolate** and its **own GPA
+/// arena**, and publishes + rings end to end — while the condemned key still answers the
+/// EXACT [`FwdFault::Condemned`] (never `is_err()`; §12.10's lesson, where a canary
+/// passed for the wrong reason).
+#[test]
+fn a_fresh_client_recovers_from_its_condemned_predecessor() {
+    let _wd = watchdog("recovery_fresh_client", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
+    let condemned = FwdFault::Condemned {
+        anchor: ProcAnchor(client_of(P_HUP)),
+    };
+
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the victim publishes while alive");
+    assert!(core_retire_out_of_band(&mut gpu, victim));
+    churn(&mut gpu, client_of(P_WITNESS), 0);
+    assert_eq!(
+        core_publish(&mut gpu, GPU1, lane.pdb, VA_HELD),
+        Err(condemned),
+        "the predecessor is condemned before the recovery starts"
+    );
+
+    // ---- ★ The application re-initialises: a fresh RM client, same GPU, same process.
+    reinit(&mut gpu, R_CLIENT, R_PDB, R_GR, R_CE, GPU1);
+
+    // (a) It is a DIFFERENT COMPONENT. Nothing about the fresh client reaches the
+    // condemned client set, so the condemnation pass does not even consider it.
+    assert!(
+        !gpu.spine.is_condemned(R_CLIENT),
+        "★★ the fresh client was condemned by association — the identity key is wrong \
+         and §12.13's justification does not hold"
+    );
+    let pid = gpu.spine.by_pdb[&(GPU1, R_PDB)];
+    assert_ne!(pid, victim, "ProcIds are never reused");
+    let p = &gpu.procs[&pid];
+    assert!(p.clients.contains(&R_CLIENT));
+    assert!(
+        !p.clients.contains(&client_of(P_HUP)),
+        "★ the recovery absorbed the condemned client — that IS a resurrect"
+    );
+
+    // (b) It got the real thing: a live isolate and its own arena on its own target
+    // (not a stub, not a shared lane — `ensure_proc_target`'s MG-5 materialization).
+    assert!(
+        p.isolates.contains_key(&GPU1),
+        "★ the recovered component has no isolate"
+    );
+    let arena = p.arenas[&GPU1].range.clone();
+    assert!(!arena.is_empty());
+    assert_eq!(p.targets, BTreeSet::from([GPU1]));
+
+    // (c) And it is genuinely SERVED: publish + ring, end to end, through the ring-gate.
+    let rung = publish_and_ring(&mut gpu, GPU1, R_PDB, R_GR, VA_CTL);
+    assert_eq!(rung.proc, pid, "the ring routed to the recovered proc");
+    assert!(
+        rung.scheduled_now,
+        "the recovered channel was made runnable on its first submission"
+    );
+    assert_eq!(
+        token_lane(rung.host_token),
+        (pid.0 + 1, GPU1.0),
+        "★ the recovered component rang a host token minted in its OWN isolate lane"
+    );
+    let published = gpu.procs[&pid].vases[&(GPU1, R_PDB)]
+        .table
+        .resolve(R_PDB, GpuVa(VA_CTL))
+        .expect("the recovered publication resolves")
+        .0;
+    assert!(
+        arena.contains(&published.phys),
+        "the recovered publication came from its own arena"
+    );
+
+    // (d) ★ MEANWHILE: the condemned component is untouched by any of it.
+    assert_eq!(
+        core_publish(&mut gpu, GPU1, lane.pdb, VA_HELD),
+        Err(condemned),
+        "★★ a successful recovery must NOT clear its predecessor's condemnation"
+    );
+    assert!(gpu.spine.is_condemned(client_of(P_HUP)));
+    assert_eq!(gpu.spine.condemned_len(), 1);
+}
+
+/// ★ **No number of recoveries clears the condemned entry** — the recovery path is
+/// additive, never a side-channel that launders the predecessor back to life.
+///
+/// The blunt version of the previous test's part (d): eight successive fresh clients,
+/// each of which recovers fully, with the condemned key required to answer the EXACT
+/// same [`FwdFault::Condemned`] value after every single one. A fix that dropped the
+/// entry when a boundary stopped needing it, or that re-labelled the component when a
+/// new proc was minted, would drift here and not in a single-shot test.
+#[test]
+fn no_amount_of_recovery_clears_the_condemned_entry() {
+    let _wd = watchdog("recovery_never_clears", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
+    let condemned = FwdFault::Condemned {
+        anchor: ProcAnchor(client_of(P_HUP)),
+    };
+
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the victim publishes while alive");
+    assert!(core_retire_out_of_band(&mut gpu, victim));
+
+    for k in 0..8u32 {
+        // Each round is one more re-initialisation of the same application.
+        let client = HClient(0xB8 + k);
+        let pdb = Pdb(0x3c00_0000 + u64::from(k) * 0x10_0000);
+        let gr = VChid(0x150 + k as u16);
+        let ce = VChid(0x250 + k as u16);
+        reinit(&mut gpu, client, pdb, gr, ce, GPU1);
+        let rung = publish_and_ring(&mut gpu, GPU1, pdb, gr, VA_CTL + u64::from(k) * 0x1000);
+        assert!(
+            !gpu.spine.is_condemned(client),
+            "recovery #{k} was condemned"
+        );
+
+        // ★ The exact fault, every round — never `is_err()` (§12.10).
+        assert_eq!(
+            core_publish(&mut gpu, GPU1, lane.pdb, VA_HELD + u64::from(k) * 0x1000),
+            Err(condemned),
+            "★★ recovery #{k} cleared its predecessor's condemnation"
+        );
+        assert_eq!(
+            kayfabe_fwd::handle_doorbell(&mut gpu, GPU1, MockArch::token_for(lane.gr), &[]),
+            Err(condemned),
+            "★★ recovery #{k} revived the condemned component's exec plane"
+        );
+        assert_eq!(
+            gpu.spine.condemned_len(),
+            1,
+            "recovery #{k} split or duplicated the condemned entry"
+        );
+        assert!(gpu.spine.is_condemned(client_of(P_HUP)));
+        assert!(
+            gpu.procs
+                .values()
+                .all(|p| !p.clients.contains(&client_of(P_HUP))),
+            "recovery #{k} minted a `Proc` holding the condemned client"
+        );
+        // …and the recovery is a real one, not a routing accident.
+        assert_ne!(rung.proc, victim);
+    }
+}
+
+/// ★ **Process death clears the condemnation with NO cooperation from the application**
+/// — and the guest's own identity becomes reusable afterwards.
+///
+/// This is the second escape hatch, and it is the one that needs no application changes
+/// at all: in Mode-2 the **guest kernel** is the garbage collector at one boundary (it
+/// frees a dead process's RM clients on its behalf) and the host kernel is the garbage
+/// collector at the other; condemnation only has to refuse to paper over the gap between
+/// them. Measured on real GA106, 2026-07-25: killing a guest process produces **178
+/// `fn=10` (RM FREE) RPCs** followed by fn-47, with the host stub still alive — i.e. the
+/// client-root free below is not a synthetic event, it is what a `SIGKILL` looks like
+/// from the core's side.
+///
+/// Distinct from [`a_fresh_client_recovers_from_its_condemned_predecessor`]: there the
+/// entry REMAINS and a new identity is served alongside it; here the entry is GONE and
+/// the *same* client handle and the *same* PDB — which a guest kernel will hand out
+/// again — are served. Neither implies the other.
+#[test]
+fn process_death_clears_the_condemnation_with_no_application_cooperation() {
+    let _wd = watchdog("recovery_process_death", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
+    let h = identical_handles(lane.gr.0, lane.ce.0);
+
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the victim publishes while alive");
+    assert!(core_retire_out_of_band(&mut gpu, victim));
+    assert!(gpu.spine.is_condemned(client_of(P_HUP)));
+
+    // ---- The guest process is killed. The GUEST KERNEL frees its client root; the
+    // application does nothing, knows nothing, and is not asked.
+    gpu.apply(RmEvent::Free {
+        client: client_of(P_HUP),
+        handle: h.client_root,
+    })
+    .expect("the guest kernel's client-root free applies");
+
+    assert!(
+        !gpu.spine.is_condemned(client_of(P_HUP)),
+        "★★ the condemnation outlived the process that earned it — an application that \
+         cannot even recover by DYING is bricked, not sticky-fatal"
+    );
+    assert_eq!(gpu.spine.condemned_len(), 0);
+
+    // ---- ★ The identity is reusable: the SAME client handle and the SAME PDB the
+    // guest kernel will hand out again are served normally. Condemnation was the death
+    // of one component, never the poisoning of a value.
+    reinit(&mut gpu, client_of(P_HUP), lane.pdb, lane.gr, lane.ce, GPU1);
+    let pid = gpu.spine.by_pdb[&(GPU1, lane.pdb)];
+    assert_ne!(pid, victim, "ProcIds are never reused");
+    assert!(!gpu.spine.is_condemned(client_of(P_HUP)));
+    let rung = publish_and_ring(&mut gpu, GPU1, lane.pdb, lane.gr, VA_CTL);
+    assert_eq!(rung.proc, pid);
+    assert_eq!(gpu.spine.condemned_len(), 0);
+}
+
+/// ★ **A recovered component shares NOTHING host-side with the one it replaced** — not
+/// an arena, not a single host handle.
+///
+/// Recovery must be a new blast radius, not the old one with a new label. The mock
+/// namespaces every host identity by `(isolate, GPU)` (see [`handle_lane`]), so "no host
+/// handle of the condemned component is ever observed by the recovered one" is a direct
+/// assertion here rather than a hope.
+///
+/// The GPA arena is asserted **disjoint while the condemned proc is still unreaped**,
+/// which is the only window where the claim is unconditional: after the deferred reap
+/// the released range is deliberately recycled by the #80 free-list, and handing that
+/// range to a genuinely new process is correct (that is
+/// [`a_condemned_components_arena_is_released_once_and_never_recycled_to_an_impostor`]).
+/// The host-handle disjointness holds in BOTH windows, and is asserted across the reap.
+#[test]
+fn a_recovered_component_shares_no_arena_or_host_handle_with_the_condemned_one() {
+    let _wd = watchdog("recovery_isolation", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
+
+    // Warm the victim's host state so it has handles worth confusing: a publication, a
+    // host VAS, and a materialized+scheduled host channel.
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the victim publishes while alive");
+    kayfabe_fwd::handle_doorbell(
+        &mut gpu,
+        GPU1,
+        MockArch::token_for(lane.gr),
+        &[GpuVa(VA_WARM)],
+    )
+    .expect("the victim rings while alive");
+    let dead_handles = host_identities(&gpu.procs[&victim]);
+    let dead_arena = gpu.procs[&victim].arenas[&GPU1].range.clone();
+    assert!(
+        dead_handles.len() >= 3,
+        "the victim must actually hold host state for this test to mean anything"
+    );
+
+    assert!(core_retire_out_of_band(&mut gpu, victim));
+    reinit(&mut gpu, R_CLIENT, R_PDB, R_GR, R_CE, GPU1);
+    publish_and_ring(&mut gpu, GPU1, R_PDB, R_GR, VA_CTL);
+    let pid = gpu.spine.by_pdb[&(GPU1, R_PDB)];
+
+    // ---- (a) A different GPA arena, while the dead one still holds its range.
+    let live_arena = gpu.procs[&pid].arenas[&GPU1].range.clone();
+    assert!(
+        live_arena.end <= dead_arena.start || dead_arena.end <= live_arena.start,
+        "★★ the recovered component was carved into the condemned component's arena \
+         {dead_arena:?} (got {live_arena:?}) — the #14 collision class, back"
+    );
+
+    // ---- (b) Not one host handle in common, and every one of the recovered
+    // component's own handles is in ITS lane — so the disjointness is structural, not
+    // an accident of which values happened to be minted.
+    let live_handles = host_identities(&gpu.procs[&pid]);
+    assert!(!live_handles.is_empty());
+    for h in &live_handles {
+        assert!(
+            !dead_handles.contains(h),
+            "★★ host handle {h:#x} of the CONDEMNED component is observed by the \
+             recovered one — recovery is reusing the dead isolate's namespace"
+        );
+        assert_eq!(
+            handle_lane(*h),
+            (pid.0 + 1, GPU1.0),
+            "★ the recovered component holds a host handle from another (proc, GPU)"
+        );
+    }
+    for h in &dead_handles {
+        assert_ne!(
+            handle_lane(*h).0,
+            pid.0 + 1,
+            "★ the condemned component's handle {h:#x} is in the recovered proc's lane"
+        );
+    }
+
+    // ---- (c) Across the reap the recovered component is unmoved: reclaiming the dead
+    // isolate's host state must not touch the live one's (the recycle is a GPA-range
+    // fact, never a host-handle fact).
+    assert_eq!(gpu.reap_retired().len(), 1, "reaped exactly once");
+    assert_eq!(
+        host_identities(&gpu.procs[&pid]),
+        live_handles,
+        "★ the reap of the condemned component disturbed the recovered one's host state"
+    );
+    publish_and_ring(&mut gpu, GPU1, R_PDB, R_GR, VA_CTL + 0x1000);
+}
+
+/// ★ **MG: recovery after a multi-GPU condemnation works on BOTH targets, and the
+/// bystanders on byte-identical numeric lanes never notice.**
+///
+/// The mirror image of
+/// [`condemnation_spans_a_procs_gpus_and_spares_identical_ids_on_other_gpus`]: there a
+/// component spanning GPU0+GPU1 loses its **GPU1** worker and dies on both planes; here
+/// the application re-initialises into a component that likewise spans both targets
+/// (two fresh clients joined by the same UVM-shaped `DUP_OBJECT`), and must be served on
+/// both. If condemnation were keyed on anything numeric, the recovery's own `Pdb`/`VChid`
+/// values — or the four bystanders' identical ones — would collide with the corpse.
+#[test]
+fn recovery_after_a_multi_gpu_condemnation_serves_both_targets() {
+    let _wd = watchdog("recovery_multi_gpu", Duration::from_secs(60));
+    let (mut gpu, _pids, _rec) = mean_gpu();
+
+    // One component over two targets, exactly as the multi-GPU condemnation test builds
+    // it, then killed through its GPU1 worker.
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_TEARDOWN), H_VASPACE),
+        dst: NodeKey::new(client_of(P_CHANFREE), HObject(0x7100_00a0)),
+    })
+    .expect("the cross-GPU dup applies");
+    let spanning = gpu.spine.by_pdb[&(GPU0, lane_of(P_TEARDOWN).pdb)];
+    core_publish(&mut gpu, GPU0, lane_of(P_TEARDOWN).pdb, VA_WARM).expect("its GPU0 plane works");
+    core_publish(&mut gpu, GPU1, lane_of(P_CHANFREE).pdb, VA_WARM).expect("its GPU1 plane works");
+    assert!(core_retire_out_of_band(&mut gpu, spanning));
+
+    // ---- ★ The application re-initialises across both GPUs.
+    reinit(&mut gpu, R_CLIENT, R_PDB, R_GR, R_CE, GPU0);
+    reinit(&mut gpu, R_CLIENT2, R_PDB2, R_GR2, R_CE2, GPU1);
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(R_CLIENT, H_VASPACE),
+        dst: NodeKey::new(R_CLIENT2, R_ALIAS),
+    })
+    .expect("★ the recovery's own cross-GPU dup applies — it touches nothing condemned");
+
+    for c in [R_CLIENT, R_CLIENT2] {
+        assert!(
+            !gpu.spine.is_condemned(c),
+            "★★ the recovering client {c:?} was condemned by association with the \
+             component it is replacing"
+        );
+    }
+    let recovered = gpu
+        .spine
+        .by_pdb
+        .get(&(GPU0, R_PDB))
+        .copied()
+        .expect("★★ the recovered component was never materialized on GPU0");
+    assert_eq!(
+        gpu.spine
+            .by_pdb
+            .get(&(GPU1, R_PDB2))
+            .copied()
+            .expect("★★ the recovered component was never materialized on GPU1"),
+        recovered,
+        "the recovery is ONE component over two targets, like the one it replaces"
+    );
+    assert_ne!(recovered, spanning, "ProcIds are never reused");
+    assert_eq!(
+        gpu.procs[&recovered].targets,
+        BTreeSet::from([GPU0, GPU1]),
+        "one proc, two per-target isolates (MG-5)"
+    );
+
+    // Served on BOTH planes, end to end.
+    for (g, pdb, gr) in [(GPU0, R_PDB, R_GR), (GPU1, R_PDB2, R_GR2)] {
+        let rung = publish_and_ring(&mut gpu, g, pdb, gr, VA_CTL);
+        assert_eq!(rung.proc, recovered);
+        assert_eq!(
+            token_lane(rung.host_token),
+            (recovered.0 + 1, g.0),
+            "★ the recovered {g:?} plane rang a token from its OWN (proc, GPU) isolate"
+        );
+    }
+
+    // ---- …the condemned component is still condemned, on both of ITS planes…
+    for (g, i) in [(GPU0, P_TEARDOWN), (GPU1, P_CHANFREE)] {
+        assert_eq!(
+            core_publish(&mut gpu, g, lane_of(i).pdb, VA_HELD),
+            Err(FwdFault::Condemned {
+                anchor: ProcAnchor(client_of(P_TEARDOWN)),
+            }),
+            "★★ recovering on {g:?} revived the condemned component's {g:?} plane"
+        );
+        assert!(gpu.spine.is_condemned(client_of(i)));
+    }
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        1,
+        "ONE component, not one per GPU"
+    );
+
+    // ---- …and the four bystanders, carrying byte-identical `Pdb`/`VChid` VALUES on
+    // both GPUs, are untouched by the death AND by the recovery.
+    for i in [P_WITNESS, P_PEER, P_REROUTE, P_HUP] {
+        assert!(!gpu.spine.is_condemned(client_of(i)));
+        core_publish(&mut gpu, gpu_of(i), lane_of(i).pdb, VA_CTL)
+            .unwrap_or_else(|e| panic!("bystander proc {i} was disturbed by the recovery: {e:?}"));
+        kayfabe_fwd::handle_doorbell(&mut gpu, gpu_of(i), MockArch::token_for(lane_of(i).gr), &[])
+            .unwrap_or_else(|e| {
+                panic!("bystander proc {i}'s exec plane was disturbed by the recovery: {e:?}")
+            });
+    }
 }

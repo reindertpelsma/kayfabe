@@ -168,10 +168,22 @@ pub enum SignalOutcome {
         ev: OsEventRef,
     },
     /// ★ A worker of `proc`'s `gpu` isolate died, and the §7.3 consequence has been
-    /// applied: the slot is permanently dead (**never a respawn** — a worker that
-    /// died mid-verb may have left host state the core cannot reason about) and the
-    /// owning proc has been **retired loudly**, deregistering every completion source
-    /// it owned. Its completions die with it; nothing is resurrected.
+    /// applied: the slot is permanently dead (**never a respawn**) and the owning proc
+    /// has been **retired loudly**, deregistering every completion source it owned. Its
+    /// completions die with it; nothing is resurrected, and its component is
+    /// **condemned** (`l1_concurrency.md` §12.13).
+    ///
+    /// **Why never a respawn.** Not because the dead worker left host state the core
+    /// cannot reason about — the isolate is a *process*, so the host kernel reclaims
+    /// what it held (fds close, RM tears down its client objects, its mmaps go). It is
+    /// because **the guest's data died with it**: a published backing is host memory
+    /// (`RmBackend::alloc_sysmem`) owned by that isolate's RM client, so re-materialising
+    /// would hand the guest a fresh, **zeroed** backing for a VA it believes still holds
+    /// its data — silent corruption, strictly worse than the resurrect it would be
+    /// fixing. The refusal instead gives the guest the semantic real hardware already
+    /// has: **sticky-fatal**, exactly like an Xid, recoverable by re-initialising
+    /// (a fresh RM client is a different component and is not condemned) or by dying
+    /// (the guest kernel frees the clients and the entry clears).
     WorkerDied {
         /// The owning proc.
         proc: ProcId,

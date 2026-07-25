@@ -775,6 +775,42 @@ sync progress never queues behind the pool.
   it. The retire additionally **condemns the component** (its client set); §12.13
   is the finding, the mechanism and the fault surface.
 
+★ **Why a condemned component is never resurrected.** Stated here because the
+mechanism is only as durable as its reason, and the obvious reason is the wrong one.
+It is *not* "the dead worker left host state the core cannot reason about": the
+isolate is a **process**, so when it dies the host kernel reasons about it for us —
+its fds close, RM tears down its client objects and everything they own, its mmaps
+go. Clearing our now-stale bindings (`host_channel`, `host_engine_objects`,
+`host_vas`, each `Binding.host`) and re-materialising through the lazy first-touch
+paths that already exist would be *almost* clean.
+
+It is wrong anyway, because **the guest's DATA died with the isolate.**
+`publish_backing` allocates host memory (`RmBackend::alloc_sysmem`) owned by that
+isolate's RM client, and the host kernel frees it with the process. Re-materialising
+hands the guest a fresh, **zeroed** backing for a VA it believes still holds its data.
+That is not recovery, it is **silent data corruption** — strictly worse than the
+resurrection bug it would be "fixing", which at least failed visibly at the next real
+operation. So: fail loudly, and fail with the semantic real hardware already has. A
+GPU that faults a channel does not silently hand back a fresh context; it makes the
+context **sticky-fatal** until the application tears it down and builds a new one.
+Every CUDA application already handles that path, because Xids exist.
+
+★ **Sticky-fatal, not bricked — recovery does not require the process to die.**
+Condemnation is keyed on the **client set**, so an application that re-initialises (a
+fresh CUDA context allocates a new RM client) forms a component with no dup edge to
+the condemned set, is therefore a *different* component, is therefore not condemned,
+and simply works. And if the process *does* die, the guest kernel frees its clients on
+its behalf, so the entry clears with no cooperation from the application at all. In
+Mode-2 the guest kernel is the garbage collector at one boundary and the host kernel
+is the garbage collector at the other; condemnation only has to refuse to paper over
+the gap between them. Both halves are executable, not assumed — §12.17.
+
+**Carve-out, to be stated per backing class.** Where a backing is **guest RAM**
+double-mmapped into the isolate rather than host-allocated, the data lives in *guest*
+RAM and survives the isolate's death, and transparent re-materialisation would be
+legitimate there. No such backing class exists today (§12.17 checked it). Any future
+path claiming the exemption must say so explicitly and prove its backing class.
+
 ---
 
 ## 8. Decision 6 — deterministic testability (non-negotiable)
@@ -1270,11 +1306,15 @@ continuation machine.
 **Stage 4's mean test (§8.4) found the design's "no resurrect" promise was not
 implemented.** §7.3 says worker death out of band ends in "retire the proc loudly …
 either way MISS=FAULT posture, **no resurrect**", and the `SignalOutcome::WorkerDied`
-contract says the slot is "permanently dead (**never a respawn** — a worker that died
-mid-verb may have left host state the core cannot reason about)". Both held for
+contract says the slot is "permanently dead (**never a respawn**)". Both held for
 exactly as long as nothing else happened. The finding stands as written below; the
 **FIXED** subsection at the end records the mechanism, the identity key it turns on,
 and the answer it gives §12.11.
+
+*(Both promises were originally justified by "a worker that died mid-verb may have left
+host state the core cannot reason about". That justification is wrong and has been
+replaced — §7.3, and "Why never a resurrect" below. The **rule** is unchanged; only the
+reason it rests on, which matters because a rule with a bad reason gets optimised away.)*
 
 `Spine::retire_proc` removes the proc from the live set and pushes it to `retired`. But
 the *guest* has not freed anything — its client root is still in the RmGraph — so the
@@ -1289,10 +1329,12 @@ the isolate came back around it.
 
 Two consequences worth stating separately:
 
-- **Security/robustness.** A guest that can crash its isolate worker gets a clean new
-  isolate on its next RM event. The hazard §7.3 names — host state the core cannot
-  reason about, left behind by a worker that died mid-verb — is precisely what gets
-  papered over, and the "loud retire" the design counts on lasts microseconds.
+- **Correctness, and only then security.** A guest that can crash its isolate worker
+  gets a clean new isolate on its next RM event — and, worse, gets it **silently**. The
+  respawned isolate's `alloc_sysmem` backings are fresh and **zeroed**, so the guest
+  resumes reading a VA it believes still holds its data and finds nothing there, with no
+  fault anywhere. Data corruption first; the "loud retire" the design counts on lasting
+  microseconds is the second-order problem.
 - **Why the existing suite missed it.** `l1_verb_seam.rs`'s
   `worker_death_retires_the_proc_loudly_and_never_resurrects` is green because it never
   issues an `apply` after the HUP. The composed run found it because §8.4's script puts
@@ -1391,6 +1433,44 @@ across intervening applies, clearing on client-root free, no dispatchable source
 arena-released-once, the graph-driven paths never condemning, component-wide
 condemnation across a proc's GPUs sparing identical numeric ids on other targets, and
 the refused merge).
+
+#### ★★ Why never a resurrect — the reason, corrected
+
+The mechanism above is right. The reason originally given for it was not, and a rule
+whose stated reason does not survive scrutiny gets optimised away by whoever reads it
+next. The reason was *"a worker that died mid-verb may have left host state the core
+cannot reason about."* That is weak: the isolate is a **process**, so the host kernel
+reasons about it for us the moment it dies — fds close, RM tears down its client objects
+and everything they own, its mmaps go. Clearing our stale bindings (`host_channel`,
+`host_engine_objects`, `host_vas`, each `Binding.host`) and letting the existing lazy
+first-touch paths rebuild would be *almost* clean, which is exactly why someone would
+try it.
+
+**The real reason: the guest's DATA died with the isolate.** `publish_backing` allocates
+host memory through `RmBackend::alloc_sysmem`, owned by that isolate's RM client, and the
+host kernel frees it with the process. Re-materialising therefore hands the guest a
+fresh, **zeroed** backing for a VA it believes still holds its data — not recovery,
+**silent data corruption**, and strictly worse than the resurrection bug it would be
+"fixing", which at least failed visibly at the next real operation. The correct posture is
+the one real hardware already has: a GPU that faults a channel does not silently hand back
+a fresh context, it makes the context **sticky-fatal** until the application tears it down
+and builds a new one. Every CUDA application already handles that, because Xids exist.
+
+★ **What makes "sticky-fatal" not "bricked" is the identity key.** Condemnation is keyed
+on the **client set**, so a re-initialising application — a fresh CUDA context allocates a
+new RM client — derives a boundary with no dup edge to the condemned set, is a *different*
+component, is not condemned, and is simply served. And a process that dies instead needs
+no cooperation at all: the guest kernel frees its clients on its behalf and the entry
+clears. So the client-set choice is not only what makes condemnation *survive*
+re-derivation (the argument above); it is also, and by the same property, what makes
+**recovery** possible. Both readings of the key are now executable — §12.17.
+
+**Carve-out, stated per backing class.** Where a backing is **guest RAM** double-mmapped
+into the isolate rather than host-allocated, the data lives in *guest* RAM, survives the
+isolate's death, and transparent re-materialisation would be legitimate. No backing class
+in the core is of that kind today; `Vmm::export_ram` is the port one would be built on and
+nothing in the core calls it (§12.17 records the check). Any future path claiming the
+exemption must say so explicitly and prove its backing class — never by analogy.
 
 ### 12.14 Two smaller contacts from stage 4
 
@@ -1643,3 +1723,92 @@ Pinned by `tests/teardown_reclaim.rs` (14 tests), every one of which was bite-ch
 reverting its fix and confirming the failure named the right thing — including the one
 that matters most, where re-introducing the in-guard reap produces the R1 panic verbatim
 rather than a silent block.
+
+### 12.17 ★★ The "no resurrect" JUSTIFICATION was wrong, and the RECOVERY half had never been tested
+
+Two corrections to §12.13, neither of which changes the mechanism: the condemned
+component is **exactly as built** (commit `1719dd8`). What changed is the reason it rests
+on, and what the suite actually proves.
+
+**(a) The justification.** Every site that justified "never a resurrect" said *"a worker
+that died mid-verb may have left host state the core cannot reason about."* That does not
+survive scrutiny — the isolate is a **process**, so when it dies the host kernel reasons
+about it for us (fds close, RM tears down its client objects and everything they own, its
+mmaps go), and clearing our stale bindings (`host_channel`, `host_engine_objects`,
+`host_vas`, each `Binding.host`) to re-materialise through the existing lazy first-touch
+paths would be *almost* clean. A rule defended by an argument that weak gets optimised
+away by the next reader. The real reason is much stronger and is now stated at §7.3,
+§12.13 ("Why never a resurrect — the reason, corrected"), `SignalOutcome::WorkerDied`,
+`FwdFault::Condemned`, `Spine::condemned` / `absorb_condemned` / `retire_proc`,
+`Isolate::worker_died` and the two tests that quote the contract: **the guest's DATA died
+with the isolate** (`publish_backing` → `RmBackend::alloc_sysmem`, owned by that isolate's
+RM client), so re-materialising serves a **zeroed** backing for a VA the guest believes
+still holds its data — silent corruption, strictly worse than the resurrect it would be
+fixing. The refusal is instead the semantic real hardware has: **sticky-fatal**, like an
+Xid. `l1_os_shell.md` T5's `SIGKILL`-the-isolate argument was re-derived on its own terms
+(unenumerable mid-chain allocations, G4) rather than left citing the retired phrase.
+
+**Backing classes, checked rather than assumed** (the carve-out must never be granted by
+analogy). Exactly one path gives a `Binding` a `host`: `VerbPlan::Publish` →
+`RmBackend::alloc_sysmem` + map, committed in `commit_publish`. That is **host** memory,
+owned by the isolate's RM client, so it is on the corrupting side of the line — and note
+that `Binding::phys` is a GPA carved from the proc's own arena (a synthetic window), not
+guest RAM, so the GPA is no evidence of survivability either. Bindings with `host: None`
+(declared by the RPC `MapMemoryDma` source or the CE-PT-write capture feed) hold no host
+state at all, but they are not an exemption either: publishing one later goes through the
+same `alloc_sysmem`. Host VASes, channels and engine objects are pure host-side
+materialization and would be re-derivable — which is precisely why the sysmem argument,
+not the "unreasonable state" one, is the load-bearing half. **No guest-RAM backing class
+exists today**: `Vmm::export_ram` is the port one would be built on (Mode-1's double-mmap
+share) and nothing in the core calls it. `l1_os_shell.md` T6 already schedules "tear down
+every double-mmap of guest RAM into it", so the class is *planned*; when it lands it must
+claim the exemption explicitly and name its backing class, per §7.3.
+
+**(b) ★ The recovery half is now tested, and it WORKS.** The suite pinned that
+condemnation *sticks*; that an application can *come back* — the half a user actually
+experiences, and the load-bearing claim of the corrected justification — was an assumed
+claim. Five tests in `l1_mean.rs` pin it, all green on their first run (no adjustment was
+made to any of them):
+
+- `a_fresh_client_recovers_from_its_condemned_predecessor` — ★ the headline. A fresh RM
+  client (no dup edge to the condemned set) derives a different component, gets a live
+  `Proc`, a real isolate and its own GPA arena, and publishes + rings end to end through
+  the #14 ring-gate, with its host token in its **own** isolate lane — while the condemned
+  key still answers the EXACT `FwdFault::Condemned { anchor }`.
+- `no_amount_of_recovery_clears_the_condemned_entry` — eight successive recoveries; the
+  condemned key answers the same exact fault after every one, `condemned_len()` stays 1,
+  and no `Proc` ever holds the condemned client.
+- `process_death_clears_the_condemnation_with_no_application_cooperation` — the guest
+  kernel's client-root free (measured on real GA106, 2026-07-25: a killed guest process
+  emits **178 `fn=10` RM FREE RPCs** then fn-47, host stub still alive) clears the entry,
+  after which the **same** client handle and the **same** PDB are served again. Distinct
+  from the first test: there the entry remains and a new identity is served alongside it.
+- `a_recovered_component_shares_no_arena_or_host_handle_with_the_condemned_one` — a
+  disjoint GPA arena while the corpse still holds its range, not one host handle in
+  common, every recovered handle in its own `(proc, GPU)` lane, and none of it disturbed
+  by the corpse's reap. (After the reap the range itself may legitimately recycle — that
+  is the #80 free-list, and it goes to a genuinely new process, which
+  `a_condemned_components_arena_is_released_once_and_never_recycled_to_an_impostor`
+  already pins.)
+- `recovery_after_a_multi_gpu_condemnation_serves_both_targets` — a component spanning
+  GPU0+GPU1 killed through its **GPU1** worker; the replacement likewise spans both
+  targets (two fresh clients joined by a dup) and is served on both, the corpse stays
+  condemned on both of ITS planes, and the four bystanders on byte-identical
+  `Pdb`/`VChid` values are untouched by the death *and* by the recovery.
+
+Every one bite-checked, house standard, by reverting the mechanism and confirming the
+failure named the right thing: condemning any brand-new boundary while a corpse exists
+(the "bricked" over-correction) fires *"the fresh client was condemned by association —
+the identity key is wrong and §12.13's justification does not hold"*; dropping the
+carry-forward (`self.condemned = carried`) makes the condemned component answer
+`Ok(Published { .. })` where `Err(Condemned { .. })` is required — §12.13's original
+defect, verbatim; making condemnation permanent fires *"the condemnation outlived the
+process that earned it — an application that cannot even recover by DYING is bricked, not
+sticky-fatal"*; releasing the arena at `retire_proc` instead of at the reap puts the
+recovery inside the corpse's range; and collapsing the mock's per-isolate handle
+namespace fires the cross-namespace assertion by handle value.
+
+**What this settles.** The corrected justification is not merely more defensible, it is
+*checked*: "sticky-fatal, not bricked" is now a property of the client-set key with tests
+behind it, so the argument and the mechanism stand or fall together. Nothing was found
+that contradicts it.

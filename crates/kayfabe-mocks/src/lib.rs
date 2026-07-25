@@ -1296,8 +1296,9 @@ enum Slot {
     Idle(Worker),
     /// Checked out — its handle is `&mut`-owned by some thread right now.
     Busy,
-    /// Died out of band. **Never resurrected** (§7.3): a worker that died mid-verb
-    /// may have left host state the core cannot reason about.
+    /// Died out of band. **Never resurrected** (§7.3): its component is condemned by
+    /// the same event, because the guest's published data lived in host memory owned
+    /// by this isolate's RM client and died with it.
     Dead,
 }
 
