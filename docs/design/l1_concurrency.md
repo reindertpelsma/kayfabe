@@ -1136,3 +1136,126 @@ so running that edge without a `Vmm` would wedge the delivery plane *by design*.
 2's executor therefore **observes only**; the pump edge lands with the `Vmm` seam in
 stage 3. §5.2 implicitly assumes the `Vmm` is reachable at every completion edge — it
 is not, and the doc should not have assumed it.
+
+### 12.8 ★ §12.6 CLOSED — R1 now guards the verb, and the counter had to move down
+
+Stage 3's job was to make the R1 assert cover a host verb rather than a wrapper.
+Two things had to be true at once, and they pull in opposite directions:
+
+- the **assert** must fire at the `RmBackend` call itself, which lives behind the
+  `nvkvm-isolate` port;
+- the **counter** is maintained by the L1 guard wrappers, which live in `nvkvm-rt`,
+  an adapter that `nvkvm-isolate` may not depend on.
+
+Resolution: the per-thread held-rank mask moved to `nvkvm_util::lockwitness`, the
+bottom of the dependency graph. `nvkvm-rt`'s ranked guards *maintain* it;
+`nvkvm_isolate::Worker::execute` — the one door to a verb — *asserts* it. §3.3 says
+"a thread-local lock-depth counter, maintained by the L1 guard wrappers, asserted
+zero at every blocking-verb entry" without noticing those are two crates. They are.
+
+The ownership half went further than the doc asked. `Isolate::rm()` is **gone**: a
+backend is not reachable from an isolate by reference at all. It lives in a pool slot,
+and `checkout` MOVES a `Worker` out. So a locked core phase has nothing to call — the
+old shape is not merely asserted against, it no longer type-checks. Reverting the fix
+therefore fails at compile time in the core, and at runtime (a named R1 panic) for
+anything that reconstructs the shape by hand. Pinned by
+`r1_is_asserted_at_the_host_verb_itself_not_at_a_wrapper`.
+
+`BlockingSection` survives with a smaller job: the pool-full condvar wait, and any
+future non-verb blocking thing. It is no longer the teeth for verbs.
+
+### 12.9 ★ The R5 gap turns first-touch materialization into a compare-and-swap
+
+**The doc's R5 is only half the rule, and the missing half is the dangerous one.**
+§3.3 says a commit that finds its target gone "surfaces a refusal — it does not
+finish what it started". Written that way, every staleness is a refusal. Building it
+that way immediately broke the existing multi-thread smoke test, and the reason is
+worth stating precisely:
+
+Lazy materialization (host VAS, host channel, engine object) reads "is it there?"
+under the plan lock and writes "here it is" under the commit lock, with a lock-free
+verb in between. That is a **compare-and-swap**, and two sibling threads of ONE proc
+racing it is the *ordinary* case for a multi-threaded guest process — precisely the
+workload §3.5 exists to serve. Refusing the loser turns a legal concurrent
+submission into a spurious guest-visible fault: a worse bug than the use-after-retire
+R5 was written to prevent, and one that only appears under concurrency.
+
+So `Refusal` carries a `retry` flag, and staleness has two shapes:
+
+| shape | example | resolution |
+|---|---|---|
+| **converging** | a sibling materialized the same host VAS / channel / engine object first | release the duplicate, **re-plan from the top** against the winner's state |
+| **divergent** | proc retired, channel torn down, route rewritten, target gone | **refuse loudly** — MISS = FAULT |
+
+The retry is bounded (`MAX_COMMIT_RETRIES`), because each pass observes a strictly
+more materialized world: one pass is the expected worst case, and the bound exists so
+a bug cannot turn a race into a spin. §3.3's R5 text should read "re-resolve **or**
+refuse" — the doc's own §8.4 canary wording already said "re-resolves or refuses"
+while R5's normative text said only refuse. The canary wording was right.
+
+Found by: `threads_smoke_hammers_both_lock_modes_bounded` hanging (a worker thread
+panicked on a `Stale::Rebound` its `expect` did not tolerate, poisoning the device
+lock and leaving the executor thread spinning). Note the *shape* of that failure —
+the first symptom of getting this wrong was a hang, not an assertion.
+
+### 12.10 R5 applies to the FAILURE path, not just the reply path
+
+`Proc::retire` retires the isolate, so a verb held in flight across a retire returns
+an **RM refusal** rather than reaching the commit at all. Loud and mutation-free — the
+invariant holds — but the fault the guest sees says `Rm(Other)`, i.e. "the host
+failed", when the truth is "your process was torn down". A canary that only asserted
+"it refused" would pass for the wrong reason.
+
+The driver therefore re-validates on the verb-error path too: if the proc is no longer
+live, the surfaced fault is `Stale::Proc`. §3.3 frames re-validation entirely around
+"applying the reply"; it applies to *not* applying one as well.
+
+### 12.11 Two smaller contacts
+
+- **The §7.2 pool forces `RmBackend: Sync`.** The crate carried a documented
+  `Send`-only exception ("reachable exclusively through `&mut`"). That was sound only
+  while no `Box<dyn RmBackend>` was ever *stored* in core state. A pool stores N of
+  them inside a `Proc` inside the `Sync` `Gpu`, so the bound is now structural. Cost to
+  real impls: no `Rc`/`Cell` in a backend's private state.
+- **An out-of-band retire does not rebuild the routing maps.** `Spine::retire_proc`
+  (the worker-death path) removes the proc from the live set but leaves `by_pdb` /
+  `by_vchid` naming it, because the *guest* has not freed anything — only a graph
+  `refresh` rebuilds those. So a post-retire op resolves its route and then misses on
+  the live-set lookup: `RetiredProc`, not `UnknownVchid`. Loud and mutation-free
+  either way, but the fault surfaces one step later than on the graph-driven path, and
+  the two teardown routes are therefore not fault-identical. Recorded rather than
+  papered over; unifying them means deciding whether a host-side failure should
+  retroactively edit the guest's routing truth, which is a design question, not a fix.
+- **Cost of the split, measured in locks.** A verb-issuing op now takes each rank
+  **twice** (plan + checkout; commit + check-in), where the stage-2 in-lock verb took
+  it once. That number is pinned by `spine_ops_acquire_no_proc_lock_via_get_mut` —
+  collapsing it back to one is exactly the regression R1 exists to prevent, so the
+  test asserts the count, not just the absence of a panic.
+
+### 12.12 The doorbell hot path DOES need the split (checked, not assumed)
+
+The staging plan for stage 3 flagged `exec_doorbell` as the site that "per §3.5 should
+not need to block at all", and asked for the answer either way. The answer is **it
+needs the split**, for a reason the doc's framing obscures: §7.1 puts the isolate in a
+*separate sandboxed process*, so `RmBackend::ring_doorbell` is not an MMIO store from
+the QEMU process — it is an IPC round trip to the worker that owns the mapped doorbell
+page. A steady-state doorbell therefore still issues exactly one host verb, and
+holding the proc lock across it would be a live R1 violation on the hottest path
+there is.
+
+What IS true, and worth keeping: the steady-state plan is a single-verb chain
+(`schedule = false`, channel already materialized), its commit only records
+`poll.last_token`, and — because the plan phase resolves everything from core state —
+a re-send that needs no host work at all (the idempotent engine-object replay) emits
+`verbs: None` and **never touches the pool**. So the cost of the split on the hot path
+is two µs-scale locked phases around one round trip, not a second round trip.
+
+Also checked, per site, and this is the claim the whole "typed verb chain instead of a
+resumable continuation" simplification rests on: **no site needs to consult core state
+between two verbs.** `ensure_host_vas → alloc_sysmem → map_gpu_va`,
+`alloc_vaspace → alloc_channel → schedule → ring`, and
+`alloc_vaspace → alloc_channel → alloc_engine_object` are each purely
+verb-output-to-verb-input; every core-derived value (engine kind, class, params, len,
+the already-materialized handles) is known at plan time. The chain executes with zero
+core access, which is what makes the seam a short typed struct rather than a
+continuation machine.

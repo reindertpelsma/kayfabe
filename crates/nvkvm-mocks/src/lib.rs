@@ -29,7 +29,9 @@ use nvkvm_arch::{
     Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, ObjectKind, PageSize, PteDecode,
     PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
-use nvkvm_isolate::{HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError};
+use nvkvm_isolate::{
+    HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Worker, WorkerId,
+};
 use nvkvm_util::Instant;
 use nvkvm_vmm::{
     BarId, CoreEvent, CoreEventKind, FbMeta, HostRegion, IrqSpec, Present, PresentError, Prot,
@@ -694,32 +696,192 @@ pub enum RmVerb {
     },
 }
 
+/// Which verb a [`HoldSpec`] selects. Coarser than [`RmVerb`] (no payload), because
+/// a hold is armed *before* the verb runs and can only match on identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum VerbKind {
+    /// [`RmBackend::alloc`].
+    Alloc,
+    /// [`RmBackend::alloc_vaspace`].
+    AllocVaSpace,
+    /// [`RmBackend::alloc_sysmem`].
+    AllocSysmem,
+    /// [`RmBackend::alloc_channel`].
+    AllocChannel,
+    /// [`RmBackend::alloc_engine_object`].
+    AllocEngineObject,
+    /// [`RmBackend::schedule`].
+    Schedule,
+    /// [`RmBackend::free`].
+    Free,
+    /// [`RmBackend::control`].
+    Control,
+    /// [`RmBackend::map_gpu_va`].
+    MapGpuVa,
+    /// [`RmBackend::unmap_gpu_va`].
+    UnmapGpuVa,
+    /// [`RmBackend::ring_doorbell`].
+    RingDoorbell,
+    /// [`RmBackend::export_surface`].
+    ExportSurface,
+}
+
+/// Which verb occurrence a hold latches onto. Every field is optional; `None`
+/// matches anything, so a test can hold "verb X of proc A's worker 0" precisely, or
+/// "the next map on any isolate" loosely.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct HoldSpec {
+    /// Restrict to this isolate session.
+    pub isolate: Option<IsolateId>,
+    /// Restrict to this GPU target.
+    pub gpu: Option<GpuId>,
+    /// Restrict to this pool worker slot.
+    pub worker: Option<WorkerId>,
+    /// Restrict to this verb kind.
+    pub verb: Option<VerbKind>,
+}
+
+impl HoldSpec {
+    /// Hold `verb` on `(isolate, gpu, worker)` — the precise form stage 4's mean test
+    /// is built on ("hold verb X of proc A's worker 0, let everything else run").
+    #[must_use]
+    pub fn exact(isolate: IsolateId, gpu: GpuId, worker: WorkerId, verb: VerbKind) -> Self {
+        HoldSpec {
+            isolate: Some(isolate),
+            gpu: Some(gpu),
+            worker: Some(worker),
+            verb: Some(verb),
+        }
+    }
+
+    /// Hold the next `verb` on `isolate`, whichever worker takes it.
+    #[must_use]
+    pub fn on_isolate(isolate: IsolateId, verb: VerbKind) -> Self {
+        HoldSpec {
+            isolate: Some(isolate),
+            verb: Some(verb),
+            ..Self::default()
+        }
+    }
+
+    fn matches(&self, id: IsolateId, gpu: GpuId, worker: WorkerId, verb: VerbKind) -> bool {
+        self.isolate.is_none_or(|x| x == id)
+            && self.gpu.is_none_or(|x| x == gpu)
+            && self.worker.is_none_or(|x| x == worker)
+            && self.verb.is_none_or(|x| x == verb)
+    }
+}
+
+/// ★ A scripted **holdable verb**: the latch a test uses to hold one verb *pending*
+/// and release it explicitly — no sleeps, no timing, progress-only assertions.
+///
+/// This is the mechanism the #37 intra-proc invariant is proven with: hold thread A's
+/// verb, prove thread B of the SAME proc completes an independent op end to end while
+/// it is held, then release and check A's commit. Everything about it is edge-driven
+/// ([`VerbHold::wait_until_pending`] blocks until the verb genuinely entered the
+/// backend), so a test never has to guess how long "concurrently" takes.
+#[derive(Debug)]
+pub struct VerbHold {
+    state: Mutex<HoldState>,
+    cv: std::sync::Condvar,
+}
+
+#[derive(Debug, Default)]
+struct HoldState {
+    entered: bool,
+    released: bool,
+}
+
+impl VerbHold {
+    /// A fresh, un-entered, un-released hold.
+    #[must_use]
+    pub fn new() -> Arc<Self> {
+        Arc::new(VerbHold {
+            state: Mutex::new(HoldState::default()),
+            cv: std::sync::Condvar::new(),
+        })
+    }
+
+    /// True once a verb has actually entered this hold and is parked in it.
+    #[must_use]
+    pub fn is_pending(&self) -> bool {
+        let g = self.state.lock().expect("hold");
+        g.entered && !g.released
+    }
+
+    /// Block **this** (test) thread until the held verb has entered the backend —
+    /// the progress edge that replaces a sleep.
+    pub fn wait_until_pending(&self) {
+        let mut g = self.state.lock().expect("hold");
+        while !g.entered {
+            g = self.cv.wait(g).expect("hold");
+        }
+    }
+
+    /// Release the held verb. Idempotent.
+    pub fn release(&self) {
+        let mut g = self.state.lock().expect("hold");
+        g.released = true;
+        self.cv.notify_all();
+    }
+
+    /// The backend side: mark entered, wake any waiter, and park until released.
+    fn enter_and_park(&self) {
+        let mut g = self.state.lock().expect("hold");
+        g.entered = true;
+        self.cv.notify_all();
+        while !g.released {
+            g = self.cv.wait(g).expect("hold");
+        }
+    }
+}
+
 /// Shared recorder: `(isolate, verb)` in global order, so tests can assert both
-/// per-isolate behavior and cross-isolate separation. Plus a scriptable failure.
+/// per-isolate behavior and cross-isolate separation. Plus a scriptable failure and
+/// the armed [`VerbHold`]s.
 #[derive(Debug, Default)]
 pub struct RmRecorder {
     /// The global verb log.
     pub log: Vec<(IsolateId, RmVerb)>,
     /// If set, the next verb on ANY isolate fails with this error (then clears).
     pub fail_next: Option<RmError>,
+    /// Armed holds, matched newest-spec-first and consumed one-shot.
+    holds: Vec<(HoldSpec, Arc<VerbHold>)>,
+}
+
+impl RmRecorder {
+    /// Arm a one-shot hold: the first verb matching `spec` parks inside the backend
+    /// until the returned [`VerbHold`] is released.
+    pub fn hold(&mut self, spec: HoldSpec) -> Arc<VerbHold> {
+        let h = VerbHold::new();
+        self.holds.push((spec, Arc::clone(&h)));
+        h
+    }
+
+    /// Every verb this isolate issued, in order (assertion helper).
+    #[must_use]
+    pub fn verbs_of(&self, id: IsolateId) -> Vec<RmVerb> {
+        self.log
+            .iter()
+            .filter(|(i, _)| *i == id)
+            .map(|(_, v)| v.clone())
+            .collect()
+    }
 }
 
 /// Handle to the shared recorder, held by the test.
 pub type SharedRecorder = Arc<Mutex<RmRecorder>>;
 
-/// A fake host RM connection with a private handle namespace.
+/// The handle namespace ONE isolate's whole worker pool shares.
 ///
-/// Handle values are namespaced by isolate id (`(id+1) << 32 | n`) so any
-/// cross-isolate handle use is *visible* in assertions; validity is still
-/// enforced per-backend ([`RmError::BadHandle`]) — the blast-radius property.
+/// §7.2: the isolate is one sandboxed process per `(Proc, GpuId)` — the RM client and
+/// its handle namespace are per-process identities and stay singular. Workers are
+/// slots inside it sharing exactly one thing, the RM connection, which is
+/// kernel-mediated. So a handle minted on worker 0 must be valid on worker 1, and
+/// this `Mutex` is the mock's stand-in for that kernel mediation. It is a plain
+/// `std::sync::Mutex`, deliberately outside the rank system: it is not an L1 lock.
 #[derive(Debug)]
-pub struct MockRmBackend {
-    id: IsolateId,
-    gpu: GpuId,
-    /// `id + 1` — the isolate's primary namespace lane (unchanged, so the high bits of
-    /// every minted handle/token/VA still read back as the session's ProcId+1).
-    idlane: u64,
-    recorder: SharedRecorder,
+struct RmNamespace {
     handles: BTreeSet<HostHandle>,
     next: u64,
     next_token: u64,
@@ -727,14 +889,27 @@ pub struct MockRmBackend {
     retired: bool,
 }
 
+/// A fake host RM connection into one isolate's shared namespace, from ONE pool
+/// worker.
+///
+/// Handle values are namespaced by isolate id (`(id+1) << 32 | n`) so any
+/// cross-isolate handle use is *visible* in assertions; validity is still
+/// enforced per-isolate ([`RmError::BadHandle`]) — the blast-radius property.
+#[derive(Debug)]
+pub struct MockRmBackend {
+    id: IsolateId,
+    gpu: GpuId,
+    worker: WorkerId,
+    /// `id + 1` — the isolate's primary namespace lane (unchanged, so the high bits of
+    /// every minted handle/token/VA still read back as the session's ProcId+1).
+    idlane: u64,
+    recorder: SharedRecorder,
+    ns: Arc<Mutex<RmNamespace>>,
+}
+
 impl MockRmBackend {
-    fn new(id: IsolateId, gpu: GpuId, recorder: SharedRecorder) -> Self {
-        let idlane = u64::from(id.0) + 1;
-        MockRmBackend {
-            id,
-            gpu,
-            idlane,
-            recorder,
+    fn namespace(idlane: u64, gpu: GpuId) -> Arc<Mutex<RmNamespace>> {
+        Arc::new(Mutex::new(RmNamespace {
             handles: BTreeSet::new(),
             next: 1,
             // Namespaced fake host tokens: primary lane = idlane (so `>>20` still reads
@@ -743,6 +918,23 @@ impl MockRmBackend {
             next_token: (idlane << 20) | (u64::from(gpu.0) << 8),
             next_map_page: 0,
             retired: false,
+        }))
+    }
+
+    fn new(
+        id: IsolateId,
+        gpu: GpuId,
+        worker: WorkerId,
+        recorder: SharedRecorder,
+        ns: Arc<Mutex<RmNamespace>>,
+    ) -> Self {
+        MockRmBackend {
+            id,
+            gpu,
+            worker,
+            idlane: u64::from(id.0) + 1,
+            recorder,
+            ns,
         }
     }
 
@@ -753,8 +945,25 @@ impl MockRmBackend {
         (self.idlane << 32) | (u64::from(self.gpu.0) << 24)
     }
 
-    fn gate(&mut self) -> Result<(), RmError> {
-        if self.retired {
+    /// Pre-verb gate: park in any armed [`VerbHold`] matching this
+    /// `(isolate, gpu, worker, verb)`, then apply `fail_next` / the retired refusal.
+    ///
+    /// The hold is looked up and REMOVED under the recorder lock, then parked in with
+    /// the recorder lock released — otherwise a held verb would freeze every other
+    /// isolate's recording and the "everything else keeps running" property the mean
+    /// test asserts would be a lie about the mock, not about the design.
+    fn gate(&mut self, verb: VerbKind) -> Result<(), RmError> {
+        let hold = {
+            let mut r = self.recorder.lock().expect("recorder");
+            r.holds
+                .iter()
+                .position(|(s, _)| s.matches(self.id, self.gpu, self.worker, verb))
+                .map(|i| r.holds.remove(i).1)
+        };
+        if let Some(h) = hold {
+            h.enter_and_park();
+        }
+        if self.ns.lock().expect("ns").retired {
             return Err(RmError::Other(0xdead));
         }
         if let Some(e) = self.recorder.lock().expect("recorder").fail_next.take() {
@@ -764,14 +973,15 @@ impl MockRmBackend {
     }
 
     fn mint(&mut self) -> HostHandle {
-        let h = HostHandle(self.handle_hi() | self.next);
-        self.next += 1;
-        self.handles.insert(h);
+        let mut ns = self.ns.lock().expect("ns");
+        let h = HostHandle(self.handle_hi() | ns.next);
+        ns.next += 1;
+        ns.handles.insert(h);
         h
     }
 
     fn check(&self, h: HostHandle) -> Result<(), RmError> {
-        if self.handles.contains(&h) {
+        if self.ns.lock().expect("ns").handles.contains(&h) {
             Ok(())
         } else {
             Err(RmError::BadHandle(h))
@@ -794,7 +1004,7 @@ impl RmBackend for MockRmBackend {
         class: ClassId,
         _params: &[u8],
     ) -> Result<HostHandle, RmError> {
-        self.gate()?;
+        self.gate(VerbKind::Alloc)?;
         if parent != HostHandle(0) {
             self.check(parent)?;
         }
@@ -808,14 +1018,14 @@ impl RmBackend for MockRmBackend {
     }
 
     fn alloc_vaspace(&mut self) -> Result<HostHandle, RmError> {
-        self.gate()?;
+        self.gate(VerbKind::AllocVaSpace)?;
         let handle = self.mint();
         self.record(RmVerb::AllocVaSpace { handle });
         Ok(handle)
     }
 
     fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
-        self.gate()?;
+        self.gate(VerbKind::AllocSysmem)?;
         let handle = self.mint();
         self.record(RmVerb::AllocSysmem { handle, len });
         Ok(handle)
@@ -826,11 +1036,15 @@ impl RmBackend for MockRmBackend {
         vas: HostHandle,
         engine: EngineKind,
     ) -> Result<(HostHandle, u64), RmError> {
-        self.gate()?;
+        self.gate(VerbKind::AllocChannel)?;
         self.check(vas)?;
         let handle = self.mint();
-        let token = self.next_token;
-        self.next_token += 1;
+        let token = {
+            let mut ns = self.ns.lock().expect("ns");
+            let t = ns.next_token;
+            ns.next_token += 1;
+            t
+        };
         self.record(RmVerb::AllocChannel {
             vas,
             engine,
@@ -846,7 +1060,7 @@ impl RmBackend for MockRmBackend {
         class: ClassId,
         _params: &[u8],
     ) -> Result<HostHandle, RmError> {
-        self.gate()?;
+        self.gate(VerbKind::AllocEngineObject)?;
         self.check(chan)?;
         let handle = self.mint();
         self.record(RmVerb::AllocEngineObject {
@@ -858,16 +1072,16 @@ impl RmBackend for MockRmBackend {
     }
 
     fn schedule(&mut self, chan: HostHandle) -> Result<(), RmError> {
-        self.gate()?;
+        self.gate(VerbKind::Schedule)?;
         self.check(chan)?;
         self.record(RmVerb::Schedule { chan });
         Ok(())
     }
 
     fn free(&mut self, obj: HostHandle) -> Result<(), RmError> {
-        self.gate()?;
+        self.gate(VerbKind::Free)?;
         self.check(obj)?;
-        self.handles.remove(&obj);
+        self.ns.lock().expect("ns").handles.remove(&obj);
         self.record(RmVerb::Free { obj });
         Ok(())
     }
@@ -878,7 +1092,7 @@ impl RmBackend for MockRmBackend {
         cmd: ControlCmd,
         _payload: &mut [u8],
     ) -> Result<(), RmError> {
-        self.gate()?;
+        self.gate(VerbKind::Control)?;
         self.check(obj)?;
         self.record(RmVerb::Control { obj, cmd });
         Ok(())
@@ -890,28 +1104,34 @@ impl RmBackend for MockRmBackend {
         memory: HostHandle,
         len: u64,
     ) -> Result<u64, RmError> {
-        self.gate()?;
+        self.gate(VerbKind::MapGpuVa)?;
         self.check(vas)?;
         self.check(memory)?;
         // Fake placement with strictly disjoint fields, so every minted VA is
         // distinct by construction and its provenance is readable off the bits:
         //   [46..] base | [40..46) isolate lane | [32..40) VAS lane | [12..32) page
-        // The page counter is shared per backend (monotonic), capped LOUDLY before
-        // it could bleed into the VAS lane. (The old scheme OR-ed the lane at bit
-        // 28 over a bump counter, which wrapped into duplicates after 2^16 pages —
-        // caught by the M4b concurrency stress.)
-        assert!(
-            self.next_map_page < 1 << 20,
-            "MockRmBackend VA lane exhausted (2^20 pages mapped on isolate {:?} gpu {:?})",
-            self.id,
-            self.gpu
-        );
+        // The page counter is shared per ISOLATE (all its workers mint from one
+        // namespace, exactly as one RM client would), capped LOUDLY before it could
+        // bleed into the VAS lane. (The old scheme OR-ed the lane at bit 28 over a
+        // bump counter, which wrapped into duplicates after 2^16 pages — caught by
+        // the M4b concurrency stress.)
+        let page = {
+            let mut ns = self.ns.lock().expect("ns");
+            assert!(
+                ns.next_map_page < 1 << 20,
+                "MockRmBackend VA lane exhausted (2^20 pages mapped on isolate {:?} gpu {:?})",
+                self.id,
+                self.gpu
+            );
+            let p = ns.next_map_page;
+            ns.next_map_page += len.next_multiple_of(0x1000) >> 12;
+            p
+        };
         let va = 0x4000_0000_0000
             + (self.idlane << 40)
             + (u64::from(self.gpu.0) << 47)
             + ((vas.0 & 0xff) << 32)
-            + (self.next_map_page << 12);
-        self.next_map_page += len.next_multiple_of(0x1000) >> 12;
+            + (page << 12);
         self.record(RmVerb::MapGpuVa {
             vas,
             memory,
@@ -922,37 +1142,56 @@ impl RmBackend for MockRmBackend {
     }
 
     fn unmap_gpu_va(&mut self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError> {
-        self.gate()?;
+        self.gate(VerbKind::UnmapGpuVa)?;
         self.check(vas)?;
         self.record(RmVerb::UnmapGpuVa { vas, va: gpu_va });
         Ok(())
     }
 
     fn ring_doorbell(&mut self, host_token: u64) -> Result<(), RmError> {
-        self.gate()?;
+        self.gate(VerbKind::RingDoorbell)?;
         self.record(RmVerb::RingDoorbell { token: host_token });
         Ok(())
     }
 
     fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {
-        self.gate()?;
+        self.gate(VerbKind::ExportSurface)?;
         // An unknown memory object is a LOUD BadHandle — never a silently minted
         // surface (and cross-isolate render targets are refused by the same check).
         self.check(memory)?;
         // Namespaced like host handles (handle_hi | n) so cross-(isolate, GPU)
         // surface use is visible in assertions.
-        let surface = SurfaceHandle(self.handle_hi() | self.next);
-        self.next += 1;
+        let n = {
+            let mut ns = self.ns.lock().expect("ns");
+            let n = ns.next;
+            ns.next += 1;
+            n
+        };
+        let surface = SurfaceHandle(self.handle_hi() | n);
         self.record(RmVerb::ExportSurface { memory, surface });
         Ok(surface)
     }
 }
 
-/// A fake per-process isolate wrapping one [`MockRmBackend`].
+/// One pool slot's state (`l1_concurrency.md` §7.2/§7.3).
+#[derive(Debug)]
+enum Slot {
+    /// Checked in and available.
+    Idle(Worker),
+    /// Checked out — its handle is `&mut`-owned by some thread right now.
+    Busy,
+    /// Died out of band. **Never resurrected** (§7.3): a worker that died mid-verb
+    /// may have left host state the core cannot reason about.
+    Dead,
+}
+
+/// A fake per-process isolate holding a **bounded pool** of [`Worker`]s over one
+/// shared handle namespace (§7.2).
 #[derive(Debug)]
 pub struct MockIsolate {
     id: IsolateId,
-    rm: MockRmBackend,
+    slots: Vec<Slot>,
+    ns: Arc<Mutex<RmNamespace>>,
     retired: bool,
 }
 
@@ -960,12 +1199,45 @@ impl Isolate for MockIsolate {
     fn id(&self) -> IsolateId {
         self.id
     }
-    fn rm(&mut self) -> &mut dyn RmBackend {
-        &mut self.rm
+    fn pool_size(&self) -> usize {
+        self.slots.len()
+    }
+    fn idle_workers(&self) -> usize {
+        self.slots
+            .iter()
+            .filter(|s| matches!(s, Slot::Idle(_)))
+            .count()
+    }
+    fn checkout(&mut self) -> Option<Worker> {
+        if self.retired {
+            return None; // a retiring isolate refuses NEW checkouts (§5.4)
+        }
+        let i = self.slots.iter().position(|s| matches!(s, Slot::Idle(_)))?;
+        match std::mem::replace(&mut self.slots[i], Slot::Busy) {
+            Slot::Idle(w) => Some(w),
+            _ => unreachable!("position() selected an Idle slot"),
+        }
+    }
+    fn checkin(&mut self, worker: Worker) {
+        let i = worker.id().0 as usize;
+        match self.slots.get(i) {
+            // The slot died while its worker was out: the worker handle dies with it.
+            Some(Slot::Dead) | None => drop(worker),
+            _ => self.slots[i] = Slot::Idle(worker),
+        }
+    }
+    fn worker_died(&mut self, worker: WorkerId) -> bool {
+        match self.slots.get_mut(worker.0 as usize) {
+            Some(slot) => {
+                *slot = Slot::Dead;
+                true
+            }
+            None => false,
+        }
     }
     fn retire(&mut self) {
         self.retired = true;
-        self.rm.retired = true;
+        self.ns.lock().expect("ns").retired = true;
     }
     fn is_retired(&self) -> bool {
         self.retired
@@ -973,22 +1245,38 @@ impl Isolate for MockIsolate {
 }
 
 /// Spawns [`MockIsolate`]s that all record into one [`SharedRecorder`].
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MockIsolateFactory {
     recorder: SharedRecorder,
+    pool_size: usize,
     /// Every spawned `(session id, target GPU)`, in order (assert isolate-per-`(proc,
     /// GPU)`).
     pub spawned: Vec<(IsolateId, GpuId)>,
 }
 
 impl MockIsolateFactory {
-    /// Create a factory + the recorder handle the test keeps.
+    /// Create a factory + the recorder handle the test keeps. Pools are
+    /// [`nvkvm_isolate::DEFAULT_POOL_WORKERS`] wide.
     #[must_use]
     pub fn new() -> (Self, SharedRecorder) {
+        Self::with_pool_size(nvkvm_isolate::DEFAULT_POOL_WORKERS)
+    }
+
+    /// As [`MockIsolateFactory::new`], with an explicit pool width — the knob the
+    /// saturation/backpressure tests turn (a pool of 1 is the degenerate
+    /// single-in-flight isolate decision #34 originally shipped).
+    ///
+    /// # Panics
+    /// If `pool_size` is zero: an isolate that can never issue a verb is a
+    /// configuration error, not a runtime condition.
+    #[must_use]
+    pub fn with_pool_size(pool_size: usize) -> (Self, SharedRecorder) {
+        assert!(pool_size > 0, "an isolate pool needs at least one worker");
         let recorder: SharedRecorder = Arc::default();
         (
             MockIsolateFactory {
                 recorder: Arc::clone(&recorder),
+                pool_size,
                 spawned: Vec::new(),
             },
             recorder,
@@ -996,12 +1284,35 @@ impl MockIsolateFactory {
     }
 }
 
+impl Default for MockIsolateFactory {
+    fn default() -> Self {
+        Self::new().0
+    }
+}
+
 impl IsolateFactory for MockIsolateFactory {
     fn spawn(&mut self, id: IsolateId, gpu: GpuId) -> Box<dyn Isolate> {
         self.spawned.push((id, gpu));
+        let ns = MockRmBackend::namespace(u64::from(id.0) + 1, gpu);
+        let slots = (0..self.pool_size)
+            .map(|i| {
+                let w = WorkerId(i as u32);
+                Slot::Idle(Worker::new(
+                    w,
+                    Box::new(MockRmBackend::new(
+                        id,
+                        gpu,
+                        w,
+                        Arc::clone(&self.recorder),
+                        Arc::clone(&ns),
+                    )),
+                ))
+            })
+            .collect();
         Box::new(MockIsolate {
             id,
-            rm: MockRmBackend::new(id, gpu, Arc::clone(&self.recorder)),
+            slots,
+            ns,
             retired: false,
         })
     }
@@ -1059,6 +1370,9 @@ nvkvm_util::assert_send_sync!(
     MockPresent,
     RmRecorder,
     SharedRecorder,
+    VerbHold,
+    VerbKind,
+    HoldSpec,
     SlotRecord,
     RmVerb,
 );
@@ -1117,16 +1431,18 @@ mod tests {
     fn mock_rm_map_gpu_va_stays_distinct_past_65536_pages() {
         let (mut f, _rec) = MockIsolateFactory::new();
         let mut iso = f.spawn(IsolateId(1), GpuId::ZERO);
-        let rm = iso.rm();
-        let vas_a = rm.alloc_vaspace().unwrap();
-        let vas_b = rm.alloc_vaspace().unwrap();
-        let mem = rm.alloc_sysmem(0x1000).unwrap();
-        let mut seen = std::collections::BTreeSet::new();
-        for k in 0..70_000u64 {
-            let vas = if k % 2 == 0 { vas_a } else { vas_b };
-            let va = rm.map_gpu_va(vas, mem, 0x1000).unwrap();
-            assert!(seen.insert(va), "duplicate host VA {va:#x} at map #{k}");
-        }
+        let mut w = iso.checkout().expect("fresh pool has an idle worker");
+        w.with_rm(|rm| {
+            let vas_a = rm.alloc_vaspace().unwrap();
+            let vas_b = rm.alloc_vaspace().unwrap();
+            let mem = rm.alloc_sysmem(0x1000).unwrap();
+            let mut seen = std::collections::BTreeSet::new();
+            for k in 0..70_000u64 {
+                let vas = if k % 2 == 0 { vas_a } else { vas_b };
+                let va = rm.map_gpu_va(vas, mem, 0x1000).unwrap();
+                assert!(seen.insert(va), "duplicate host VA {va:#x} at map #{k}");
+            }
+        });
     }
 
     #[test]
@@ -1134,8 +1450,16 @@ mod tests {
         let (mut f, _rec) = MockIsolateFactory::new();
         let mut a = f.spawn(IsolateId(1), GpuId::ZERO);
         let mut b = f.spawn(IsolateId(2), GpuId::ZERO);
-        let ha = a.rm().alloc_vaspace().unwrap();
+        let ha = a
+            .checkout()
+            .expect("idle worker")
+            .with_rm(|rm| rm.alloc_vaspace().unwrap());
         // Using isolate A's handle on isolate B is refused: blast-radius containment.
-        assert_eq!(b.rm().schedule(ha), Err(RmError::BadHandle(ha)));
+        assert_eq!(
+            b.checkout()
+                .expect("idle worker")
+                .with_rm(|rm| rm.schedule(ha)),
+            Err(RmError::BadHandle(ha))
+        );
     }
 }

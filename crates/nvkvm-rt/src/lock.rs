@@ -39,10 +39,11 @@
 //! it. A poisoned device is a device whose invariants can no longer be trusted —
 //! MISS=FAULT applies to lock state too.
 
-use std::cell::Cell;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+
+use nvkvm_util::lockwitness;
 
 /// The total, one-way lock order of L1 (`l1_concurrency.md` §2): **device (0) →
 /// proc (1) → leaf (2)**. Every lock declares its rank at construction; a thread
@@ -61,28 +62,25 @@ pub enum LockRank {
 
 impl LockRank {
     /// This rank's bit in the per-thread held mask.
-    fn bit(self) -> u8 {
-        1 << (self as u8)
+    #[must_use]
+    pub fn bit(self) -> u8 {
+        lockwitness::bit(self as u8)
     }
 }
 
-thread_local! {
-    /// Bit `r` set ⇔ this thread currently holds a lock of rank `r`. At most one
-    /// lock per rank (R3), so a bit — not a counter — is the correct shape: a
-    /// second acquisition at a held rank is a violation, not a recursion depth.
-    static HELD: Cell<u8> = const { Cell::new(0) };
-    /// Cumulative per-rank acquisition counts for THIS thread — test
-    /// instrumentation ([`acquisitions`]) proving e.g. that a spine op entered
-    /// rank 1 exactly zero times (the `Mutex::get_mut` mechanic, `device.rs`).
-    static ACQUIRED: Cell<[u64; 3]> = const { Cell::new([0; 3]) };
-}
+// ★ The per-thread held mask itself lives in `nvkvm_util::lockwitness`, NOT here.
+// The guard wrappers below MAINTAIN it; `nvkvm_isolate::Worker::execute` — the one
+// door to a host RM verb — ASSERTS it. Those are two crates, and `nvkvm-isolate`
+// cannot depend on this adapter, so the counter sits at the bottom of the graph
+// where both can see it. That is what makes R1 guard the verb instead of a wrapper
+// (§12.6's gap, closed in stage 3).
 
 /// R3 legality check, run BEFORE the OS-level acquire — so an inverted order
 /// panics deterministically instead of sometimes deadlocking first (the panic must
 /// beat the OS lock to be diagnosable). Panics name R3, the ranks involved, and
 /// the design doc, per the invariant's spec.
 fn check_acquire(rank: LockRank) {
-    let mask = HELD.with(Cell::get);
+    let mask = lockwitness::held_mask();
     if mask >> (rank as u8) != 0 {
         panic!(
             "R3 lock-rank violation (l1_concurrency.md §3.3): acquiring a rank-{} \
@@ -99,18 +97,13 @@ fn check_acquire(rank: LockRank) {
 /// Mark `rank` held (called only after the OS-level acquire succeeded, so a poison
 /// panic never leaks a phantom held bit).
 fn note_acquired(rank: LockRank) {
-    HELD.with(|h| h.set(h.get() | rank.bit()));
-    ACQUIRED.with(|c| {
-        let mut a = c.get();
-        a[rank as usize] += 1;
-        c.set(a);
-    });
+    lockwitness::note_acquired(rank as u8);
 }
 
 /// Clear `rank` from the held mask (guard `Drop` — runs on unwind too, so a panic
 /// under a lock leaves the thread-local consistent for `#[should_panic]` tests).
 fn note_released(rank: LockRank) {
-    HELD.with(|h| h.set(h.get() & !rank.bit()));
+    lockwitness::note_released(rank as u8);
 }
 
 /// Decode a held mask into the ranks it names (diagnostics).
@@ -126,7 +119,7 @@ fn held_ranks_in(mask: u8) -> Vec<LockRank> {
 /// consult it.
 #[must_use]
 pub fn held_rank_mask() -> u8 {
-    HELD.with(Cell::get)
+    lockwitness::held_mask()
 }
 
 /// How many ranked locks THIS thread currently holds (0..=3). A leaked guard —
@@ -135,7 +128,7 @@ pub fn held_rank_mask() -> u8 {
 /// against explicitly.
 #[must_use]
 pub fn held_depth() -> u32 {
-    HELD.with(Cell::get).count_ones()
+    lockwitness::held_depth()
 }
 
 /// Cumulative acquisitions of `rank` by THIS thread since it started. Monotonic;
@@ -143,7 +136,7 @@ pub fn held_depth() -> u32 {
 /// the `Mutex::get_mut` mechanic in `device.rs`).
 #[must_use]
 pub fn acquisitions(rank: LockRank) -> u64 {
-    ACQUIRED.with(Cell::get)[rank as usize]
+    lockwitness::acquisitions(rank as u8)
 }
 
 /// Loud poison message: MISS=FAULT applies to lock state (module docs).
@@ -343,9 +336,11 @@ impl<T> Drop for RankedMutexGuard<'_, T> {
 /// against *this thread's* lock state, so the capability must not migrate to a
 /// thread whose state was never checked.
 ///
-/// Stage 2 provides the type and proves the assert fires; stage 3's blocking verb
-/// path takes `&mut BlockingSection` in its signature so that "verb call with a
-/// guard alive" cannot be written naturally.
+/// **Stage-3 status.** This type is no longer where R1's teeth live for host verbs:
+/// `nvkvm_isolate::Worker::execute` asserts the same witness at the verb itself
+/// (§12.6's gap, closed). `BlockingSection` remains the general marker for any OTHER
+/// potentially-blocking thing the shell does — notably the pool-full condvar wait —
+/// and its two asserts (construction and every `run`) are unchanged.
 #[derive(Debug)]
 pub struct BlockingSection {
     /// Pins the section to its constructing thread (`!Send`/`!Sync`).
@@ -372,18 +367,10 @@ impl BlockingSection {
         f()
     }
 
-    /// The R1 assert, with the message the invariant's spec asks for.
+    /// The R1 assert — the SAME function `nvkvm_isolate::Worker::execute` calls, so
+    /// a section and a bare verb cannot drift into two different notions of "held".
     fn assert_lock_free(what: &str) {
-        let mask = HELD.with(Cell::get);
-        if mask != 0 {
-            panic!(
-                "R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): {what} \
-                 while holding rank(s) {held:?} — a blocking call may only be made with \
-                 ZERO ranked locks held; drop every guard, round-trip on the checked-out \
-                 worker, then re-acquire and RE-VALIDATE (R5).",
-                held = held_ranks_in(mask),
-            );
-        }
+        lockwitness::assert_lock_free(what);
     }
 }
 

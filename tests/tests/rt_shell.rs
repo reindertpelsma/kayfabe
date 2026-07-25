@@ -494,14 +494,27 @@ fn spine_ops_acquire_no_proc_lock_via_get_mut() {
         "each spine op took the device lock exactly once"
     );
 
-    // Control: a per-proc op DOES enter rank 1 exactly once (the counter counts).
+    // ★ Control: a per-proc VERB op enters rank 1 exactly TWICE — the stage-3
+    // plan/execute/commit shape (`l1_concurrency.md` §7.3): one locked phase to plan
+    // + check a worker OUT, the lock-free verb round trip, then one locked phase to
+    // re-validate (R5), commit, and check the worker back IN. Pinning the number is
+    // what makes reverting the split a test failure: the old in-lock verb call took
+    // rank 1 exactly ONCE, and any future "optimization" that collapses the two
+    // phases back into one is holding the proc lock across a host verb.
+    let dev_mid = lock::acquisitions(LockRank::Device);
     device
         .doorbell(gpu_of(0), MockArch::token_for(gr_vchid(0)), &[])
         .expect("doorbell");
     assert_eq!(
         lock::acquisitions(LockRank::Proc) - proc_before,
-        1,
-        "the sharded doorbell act phase takes exactly its owning proc's lock"
+        2,
+        "the sharded doorbell takes its owning proc's lock once to plan+checkout and \
+         once to commit+checkin — never across the verb"
+    );
+    assert_eq!(
+        lock::acquisitions(LockRank::Device) - dev_mid,
+        2,
+        "and the device read lock brackets exactly those two phases"
     );
     assert_eq!(lock::held_depth(), 0, "nothing leaked");
 }

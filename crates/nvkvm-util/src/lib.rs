@@ -14,8 +14,14 @@
 //!   (`mode2_rust_testing_strategy.md` §4: "the virtual clock is load-bearing").
 //! - [`assert_send_sync!`] / [`assert_send!`] — the compile-time concurrency
 //!   assertions every logic crate applies to its public types (decision #17).
+//! - [`lockwitness`] — the per-thread lock witness invariant **R1** is asserted with
+//!   (`l1_concurrency.md` §3.3). It lives at the bottom of the graph because the
+//!   counter is *maintained* by the L1 guard wrappers but *asserted* at the isolate
+//!   port's host-verb door — two crates, one thread-local. Purely generic: small
+//!   integer ranks, no notion of what a device or a proc is.
 
 pub mod interval_map;
+pub mod lockwitness;
 pub mod time;
 
 /// Re-export of the pure, OS-free duration type (from `core::time`).

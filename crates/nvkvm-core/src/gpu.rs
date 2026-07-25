@@ -810,6 +810,32 @@ impl Spine {
         Ok(())
     }
 
+    /// ★ Retire proc `pid` **out of band** — the teardown edge that does NOT come
+    /// from the RM protocol (`l1_concurrency.md` §7.3, the worker-death path).
+    ///
+    /// The graph-driven retirements inside [`Spine::refresh`] happen because the
+    /// guest freed a client root. This one happens because the *host side* failed: an
+    /// isolate worker died, so the proc's host state is no longer something the core
+    /// can reason about. Same three obligations, in the same order, deliberately
+    /// sharing this one implementation rather than being open-coded in the adapter:
+    /// remove it from the live set, `Proc::retire` it (its isolates stop, new ops
+    /// refuse), deregister **every** completion source it owns (or a signal still in
+    /// flight resolves onto a dead proc — the C's F4 species), and park it on the
+    /// retired list for the deferred reap.
+    ///
+    /// **Never a resurrect** (§7.3): there is no path back from here. Returns `false`
+    /// if `pid` was already gone — idempotent, because a worker HUP and a guest
+    /// teardown can legitimately race.
+    pub fn retire_proc(&mut self, procs: &mut impl ProcSet, pid: ProcId) -> bool {
+        let Some(mut p) = procs.remove(pid) else {
+            return false;
+        };
+        p.retire();
+        self.sources.deregister_proc(pid).latched();
+        self.retired.push(p);
+        true
+    }
+
     /// ★ The deferred-reap quiesce point (lesson L10 — the C's P0 fix: reaping the
     /// heavy tables AT the client-root free hung the dying context's residual
     /// polls, so it reaps at the GSP queue re-handshake instead). The core keeps

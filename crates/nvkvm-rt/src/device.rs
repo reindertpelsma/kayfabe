@@ -60,19 +60,22 @@
 //! splits the verb out from under these locks per R1.
 
 use std::collections::BTreeMap;
+use std::sync::{Condvar, Mutex};
 
-use nvkvm_arch::ids::{GpuId, GpuVa, Pdb};
+use nvkvm_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa, Pdb, VChid};
 use nvkvm_completion::{CompletionError, OsEventRef, PostBatch};
 use nvkvm_core::gpu::{Gpu, GpuError, Proc, ProcSet, Spine};
 use nvkvm_core::reactor::{CompletionSource, Dispatch, SourceFault, SourceKind};
 use nvkvm_core::rmgraph::RmEvent;
 use nvkvm_core::{ChanId, ProcId};
-use nvkvm_fwd::{DoorbellOutcome, FwdFault, Published};
-use nvkvm_isolate::WorkerId;
+use nvkvm_fwd::{
+    ControlRoute, DoorbellOutcome, EngineObjectForwarded, FwdFault, Planned, Published, Refusal,
+};
+use nvkvm_isolate::{HostHandle, VerbPlan, VerbReply, Worker, WorkerId};
 use nvkvm_mmu::Binding;
 use nvkvm_util::Instant;
 
-use crate::lock::{LockRank, RankedMutex, RankedRwLock};
+use crate::lock::{BlockingSection, LockRank, RankedMutex, RankedRwLock};
 
 /// Which lock configuration a [`SharedDevice`] runs (§8.2 / P5: BOTH are tested
 /// from day one; the mode must never be observable through the API).
@@ -164,9 +167,11 @@ pub enum SignalOutcome {
         /// The observed event.
         ev: OsEventRef,
     },
-    /// A worker of `proc`'s `gpu` isolate died. Stage 2 surfaces the typed fact;
-    /// the §5.4 teardown consequence (interrupt in-flight, retire) is stage 3's —
-    /// never a silent respawn.
+    /// ★ A worker of `proc`'s `gpu` isolate died, and the §7.3 consequence has been
+    /// applied: the slot is permanently dead (**never a respawn** — a worker that
+    /// died mid-verb may have left host state the core cannot reason about) and the
+    /// owning proc has been **retired loudly**, deregistering every completion source
+    /// it owned. Its completions die with it; nothing is resurrected.
     WorkerDied {
         /// The owning proc.
         proc: ProcId,
@@ -208,6 +213,93 @@ pub enum SignalOutcome {
 pub struct SharedDevice {
     mode: LockMode,
     state: RankedRwLock<DeviceState>,
+    pool: PoolGate,
+}
+
+/// ★ The pool-full waiting point (`l1_concurrency.md` §7.2/§7.3): "pool exhaustion is
+/// well-behaved backpressure — the guest thread waits (lock-free, R1) for a worker".
+///
+/// A generation counter plus its condvar. A thread that finds every worker in flight
+/// releases **all** ranked locks, waits here, and re-enters the op **from the top**
+/// with full R5 re-validation — the proc may have retired while it waited.
+///
+/// Its mutex is deliberately NOT a [`RankedMutex`]: it is the condvar's own mutex,
+/// which R1 explicitly exempts ("a condvar wait that atomically releases its own
+/// mutex is lock-free with respect to THAT mutex, but the waiter must hold no *other*
+/// lock"). Keeping it out of the rank system is what lets the R1 assert stay true
+/// while the waiter is parked; the [`BlockingSection`] the waiter opens first is what
+/// proves the "no *other* lock" half.
+///
+/// Lost-wakeup freedom: the waiter samples the generation **before** it takes any
+/// lock to attempt the checkout, so a return that lands in the gap bumps the
+/// generation and the wait predicate is already false.
+#[derive(Debug, Default)]
+struct PoolGate {
+    generation: Mutex<u64>,
+    returned: Condvar,
+}
+
+impl PoolGate {
+    /// Sample the generation before an attempt (no ranked lock may be held yet).
+    fn sample(&self) -> u64 {
+        *self.generation.lock().expect("pool gate")
+    }
+
+    /// A worker came back: wake every waiter (they re-enter from the top and
+    /// re-race for it — bounded, and correct under any number of waiters).
+    fn signal_return(&self) {
+        *self.generation.lock().expect("pool gate") += 1;
+        self.returned.notify_all();
+    }
+
+    /// Wait until the generation moves past `seen`. **Panics (R1) unless the caller
+    /// holds zero ranked locks** — the whole point of the exercise.
+    fn wait_for_return(&self, seen: u64) {
+        let mut section = BlockingSection::enter();
+        section.run(|| {
+            let mut g = self.generation.lock().expect("pool gate");
+            while *g == seen {
+                g = self.returned.wait(g).expect("pool gate");
+            }
+        });
+    }
+}
+
+/// How many times a converging-staleness commit re-plans before surfacing its fault
+/// (see [`SharedDevice::verb_op`]). Each retry observes a strictly more materialized
+/// world, so one pass is the expected worst case; the bound exists so a bug cannot
+/// turn a race into a spin.
+const MAX_COMMIT_RETRIES: u32 = 8;
+
+/// What one locked plan phase staged for the lock-free execute phase: the plan's
+/// ID-shaped hints, the verb chain, and the checked-out worker that will run it.
+///
+/// `worker: None` **with** `verbs: Some` is the pool-full signal — backpressure, not
+/// failure (§7.2). `verbs: None` means the site needed no host work at all.
+struct Staged<P> {
+    proc: ProcId,
+    gpu: GpuId,
+    plan: P,
+    verbs: Option<VerbPlan>,
+    worker: Option<Worker>,
+}
+
+impl<P> Staged<P> {
+    /// Finish a plan phase by checking a worker out of `proc`'s `gpu` isolate — the
+    /// last thing that happens under the lock, per §7.3.
+    fn check_out(proc: &mut Proc, gpu: GpuId, planned: Planned<P>) -> Result<Self, FwdFault> {
+        let worker = match planned.verbs {
+            Some(_) => nvkvm_fwd::checkout(proc, gpu)?,
+            None => None,
+        };
+        Ok(Staged {
+            proc: proc.id,
+            gpu,
+            plan: planned.plan,
+            verbs: planned.verbs,
+            worker,
+        })
+    }
 }
 
 impl SharedDevice {
@@ -222,6 +314,7 @@ impl SharedDevice {
         } = gpu;
         SharedDevice {
             mode,
+            pool: PoolGate::default(),
             state: RankedRwLock::new(
                 LockRank::Device,
                 DeviceState {
@@ -247,11 +340,12 @@ impl SharedDevice {
     /// acquisition.
     #[must_use]
     pub fn into_gpu(self) -> Gpu {
+        let SharedDevice { state, .. } = self;
         let DeviceState {
             spine,
             system,
             procs,
-        } = self.state.into_inner();
+        } = state.into_inner();
         Gpu {
             spine,
             system: system.into_inner(),
@@ -344,44 +438,243 @@ impl SharedDevice {
 
     // ---- Per-proc ops: route under device READ, act under that proc's lock ------
 
-    /// ★ THE one gated ring path (inherited law 7), route/act split per R4.
+    // ---- ★ The plan / execute / commit driver (R1 + R5, `l1_concurrency.md` §3.3) --
+
+    /// One locked phase: resolve the target proc from the spine, then act on **that
+    /// proc only**. Sharded = device read (rank 0) + that proc's mutex (rank 1);
+    /// Degenerate = one device write guard reaching the proc via `get_mut`. The mode
+    /// never leaks into the caller.
+    fn route_act<T, R>(
+        &self,
+        route: impl FnOnce(&Spine) -> Result<(ProcId, T), FwdFault>,
+        act: impl FnOnce(&Spine, &mut Proc, T) -> R,
+    ) -> Result<R, FwdFault> {
+        match self.mode {
+            LockMode::Sharded => {
+                let st = self.state.read();
+                let (pid, t) = route(&st.spine)?;
+                let cell = st.proc_cell(pid).ok_or(FwdFault::RetiredProc(pid))?;
+                let mut p = cell.lock();
+                Ok(act(&st.spine, &mut p, t))
+            }
+            LockMode::Degenerate => {
+                let mut g = self.state.write();
+                let DeviceState {
+                    spine,
+                    system,
+                    procs,
+                } = &mut *g;
+                let (pid, t) = route(spine)?;
+                let p = if pid == Gpu::SYSTEM_PROC {
+                    system.get_mut()
+                } else {
+                    procs
+                        .get_mut(&pid)
+                        .map(RankedMutex::get_mut)
+                        .ok_or(FwdFault::RetiredProc(pid))?
+                };
+                Ok(act(spine, p, t))
+            }
+        }
+    }
+
+    /// The COMMIT locked phase: re-acquire, then let the core re-validate (R5) and
+    /// apply. Keyed on the plan's `ProcId` — a proc that vanished in the gap is
+    /// itself the loudest staleness answer, and reaching it through the routing
+    /// tables again would only re-derive the same fact more slowly.
+    fn commit_phase<P, T>(
+        &self,
+        pid: ProcId,
+        plan: &P,
+        reply: Option<VerbReply>,
+        commit: impl FnOnce(&Spine, &mut Proc, &P, Option<VerbReply>) -> Result<T, Refusal>,
+    ) -> Result<T, Refusal> {
+        // Divergent staleness: the proc vanished in the gap. Never retried — MISS
+        // = FAULT applies to staleness too (§3.3 R5).
+        let gone = || Refusal {
+            fault: FwdFault::Stale(nvkvm_fwd::Stale::Proc(pid)),
+            orphans: nvkvm_fwd::Orphans::default(),
+            retry: false,
+        };
+        match self.mode {
+            LockMode::Sharded => {
+                let st = self.state.read();
+                let Some(cell) = st.proc_cell(pid) else {
+                    return Err(gone());
+                };
+                let mut p = cell.lock();
+                commit(&st.spine, &mut p, plan, reply)
+            }
+            LockMode::Degenerate => {
+                let mut g = self.state.write();
+                let DeviceState {
+                    spine,
+                    system,
+                    procs,
+                } = &mut *g;
+                let p = if pid == Gpu::SYSTEM_PROC {
+                    system.get_mut()
+                } else {
+                    match procs.get_mut(&pid) {
+                        Some(c) => c.get_mut(),
+                        None => return Err(gone()),
+                    }
+                };
+                commit(spine, p, plan, reply)
+            }
+        }
+    }
+
+    /// Is `pid` still in the live set? A device-read-only probe used to tell a
+    /// genuine host failure apart from "the world moved" on the verb-error path.
+    fn proc_is_live(&self, pid: ProcId) -> bool {
+        match self.mode {
+            LockMode::Sharded => self.state.read().proc_cell(pid).is_some(),
+            LockMode::Degenerate => self.state.write().proc_cell(pid).is_some(),
+        }
+    }
+
+    /// Return a checked-out worker to its pool slot (locked bookkeeping), then wake
+    /// anyone waiting on pool-full backpressure. If the proc is gone the worker dies
+    /// with its isolate — the retire path owns that disposition (§7.3).
+    fn return_worker(&self, pid: ProcId, gpu: GpuId, worker: Worker) {
+        let _ = self.route_act(
+            |_| Ok((pid, ())),
+            |_, proc, ()| nvkvm_fwd::checkin(proc, gpu, worker),
+        );
+        self.pool.signal_return();
+    }
+
+    /// ★ The driver every verb-issuing op runs: **plan+checkout (locked) → execute
+    /// (NO locks) → commit+check-in (re-locked, R5)**. Two locked phases per op, the
+    /// shape §7.3 describes; the worker returns inside the same critical section that
+    /// commits, so the common path takes each rank exactly twice.
     ///
-    /// **Sharded:** ROUTE under the device *read* guard (`route_doorbell` — pure
-    /// spine read), then ACT under the owning proc's rank-1 lock
-    /// (`exec_doorbell`: ring-gate → lazy materialize/schedule → ring).
-    /// **Degenerate:** the same two phases under one device write guard.
+    /// Two things send it back to the top, both holding **zero** locks:
+    ///
+    /// - **Pool full** — `stage` returned no worker. The thread parks on
+    ///   [`PoolGate::wait_for_return`] and re-enters from the very top: re-routing,
+    ///   re-planning, re-gating, because the proc may have retired while it waited
+    ///   (R5). Backpressure, never a hang, never a spin.
+    /// - **Converging staleness** — the commit refused with `retry` (a sibling
+    ///   materialized the same host VAS / channel / engine object first). The loser
+    ///   releases its duplicate and re-plans against the winner's state. Bounded by
+    ///   [`MAX_COMMIT_RETRIES`]: each retry sees a *more* materialized world, so one
+    ///   pass normally suffices; exhausting the bound surfaces the fault rather than
+    ///   looping, because an unbounded retry is just a spin with extra steps.
+    fn verb_op<P, T>(
+        &self,
+        stage: impl Fn() -> Result<Staged<P>, FwdFault>,
+        commit: impl Fn(&Spine, &mut Proc, &P, Option<VerbReply>) -> Result<T, Refusal>,
+    ) -> Result<T, FwdFault> {
+        let mut retries = 0u32;
+        loop {
+            // Sampled BEFORE any lock is taken, so a return landing in the gap
+            // cannot be missed (see `PoolGate`).
+            let seen = self.pool.sample();
+            let staged = stage()?;
+            let Some(verbs) = staged.verbs else {
+                // No host work at all (an idempotent replay): commit straight
+                // through — the pool is never touched, so no worker to return.
+                return self
+                    .commit_phase(staged.proc, &staged.plan, None, commit)
+                    .map_err(|r| r.fault);
+            };
+            let Some(mut worker) = staged.worker else {
+                self.pool.wait_for_return(seen);
+                continue;
+            };
+            // ---- EXECUTE: no lock held. `Worker::execute` asserts exactly that. ----
+            let executed = worker.execute(&verbs);
+            let gpu = staged.gpu;
+            let Ok(reply) = executed else {
+                let e = executed.expect_err("matched Err");
+                self.return_worker(staged.proc, gpu, worker);
+                // ★ R5 applies to the FAILURE path too (a stage-3 finding, §12.10).
+                // `Proc::retire` retires the isolate, so a verb held in flight across
+                // a retire comes back as an RM refusal — which is loud and
+                // mutation-free, but names the wrong cause. Re-validate before
+                // surfacing: if the proc vanished, the honest fault is staleness.
+                return Err(if self.proc_is_live(staged.proc) {
+                    FwdFault::Rm(e)
+                } else {
+                    FwdFault::Stale(nvkvm_fwd::Stale::Proc(staged.proc))
+                });
+            };
+            // ---- COMMIT + CHECK-IN, one critical section (§7.3) ----
+            let mut hold = Some(worker);
+            let committed =
+                self.commit_phase(staged.proc, &staged.plan, Some(reply), |sp, pr, pl, rp| {
+                    let r = commit(sp, pr, pl, rp);
+                    if r.is_ok()
+                        && let Some(w) = hold.take()
+                    {
+                        nvkvm_fwd::checkin(pr, gpu, w);
+                    }
+                    r
+                });
+            match committed {
+                Ok(v) => {
+                    // The worker went back inside the commit section; wake anyone
+                    // waiting on pool-full backpressure.
+                    self.pool.signal_return();
+                    return Ok(v);
+                }
+                Err(refusal) => {
+                    let mut w = hold
+                        .take()
+                        .expect("a refused commit never checks the worker in");
+                    // R5's disposition rule: a refused commit must not leak what it
+                    // already allocated. Same worker, still lock-free.
+                    if !refusal.orphans.is_empty() {
+                        let _ = w.execute(&refusal.orphans.release_plan());
+                    }
+                    self.return_worker(staged.proc, gpu, w);
+                    retries += 1;
+                    if refusal.retry && retries < MAX_COMMIT_RETRIES {
+                        continue;
+                    }
+                    return Err(refusal.fault);
+                }
+            }
+        }
+    }
+
+    /// ★ THE one gated ring path (inherited law 7), route/act split per R4 and
+    /// plan/execute/commit per R1.
+    ///
+    /// **Plan** (device read → proc lock): `route_doorbell` + `plan_doorbell` — the
+    /// #14 ring-gate runs HERE, against the same locked snapshot the plan is derived
+    /// from, before any host op exists. **Execute** (no locks): materialize /
+    /// schedule / ring on a checked-out worker. **Commit** (re-locked): re-resolve
+    /// the route and the channel, adopt the host handles, record the submission.
     pub fn doorbell(
         &self,
         target_gpu: GpuId,
         token: u64,
         working_set: &[GpuVa],
     ) -> Result<DoorbellOutcome, FwdFault> {
-        match self.mode {
-            LockMode::Sharded => {
-                let st = self.state.read();
-                let route = nvkvm_fwd::route_doorbell(&st.spine, target_gpu, token)?;
-                let cell = st
-                    .proc_cell(route.proc)
-                    .ok_or(FwdFault::RetiredProc(route.proc))?;
-                let mut proc = cell.lock();
-                nvkvm_fwd::exec_doorbell(&mut proc, &route, working_set)
-            }
-            LockMode::Degenerate => {
-                let mut g = self.state.write();
-                let st = &mut *g;
-                let route = nvkvm_fwd::route_doorbell(&st.spine, target_gpu, token)?;
-                let proc = st
-                    .proc_mut(route.proc)
-                    .ok_or(FwdFault::RetiredProc(route.proc))?;
-                nvkvm_fwd::exec_doorbell(proc, &route, working_set)
-            }
-        }
+        self.verb_op(
+            || {
+                self.route_act(
+                    |spine| {
+                        let r = nvkvm_fwd::route_doorbell(spine, target_gpu, token)?;
+                        Ok((r.proc, r))
+                    },
+                    |_spine, proc, route| {
+                        let planned = nvkvm_fwd::plan_doorbell(proc, &route, working_set)?;
+                        Staged::check_out(proc, planned.plan.cgpu, planned)
+                    },
+                )?
+            },
+            nvkvm_fwd::commit_doorbell,
+        )
     }
 
-    /// Back `[va, va+len)` in the `(gpu, pdb)` VAS: route via `by_pdb` (device
-    /// read), act via `publish_backing` under the owning proc's lock (carve arena,
-    /// host alloc+map, forward-populate). Degenerate: both phases under the write
-    /// guard.
+    /// Back `[va, va+len)` in the `(gpu, pdb)` VAS. **Plan**: route via `by_pdb`,
+    /// read the Vas's host VAS. **Execute**: host VAS (first touch) + sysmem alloc +
+    /// map, lock-free. **Commit**: re-resolve the Vas, adopt the host VAS, carve the
+    /// GPA from the proc's own arena, forward-populate the address table.
     pub fn publish_backing(
         &self,
         gpu: GpuId,
@@ -389,22 +682,97 @@ impl SharedDevice {
         va: GpuVa,
         len: u64,
     ) -> Result<Published, FwdFault> {
-        match self.mode {
-            LockMode::Sharded => {
-                let st = self.state.read();
-                let pid = nvkvm_fwd::route_pdb(&st.spine, gpu, pdb)?;
-                let cell = st.proc_cell(pid).ok_or(FwdFault::RetiredProc(pid))?;
-                let mut proc = cell.lock();
-                nvkvm_fwd::publish_backing(&mut proc, gpu, pdb, va, len)
-            }
-            LockMode::Degenerate => {
-                let mut g = self.state.write();
-                let st = &mut *g;
-                let pid = nvkvm_fwd::route_pdb(&st.spine, gpu, pdb)?;
-                let proc = st.proc_mut(pid).ok_or(FwdFault::RetiredProc(pid))?;
-                nvkvm_fwd::publish_backing(proc, gpu, pdb, va, len)
+        self.verb_op(
+            || {
+                self.route_act(
+                    |spine| Ok((nvkvm_fwd::route_pdb(spine, gpu, pdb)?, ())),
+                    |_spine, proc, ()| {
+                        let planned = nvkvm_fwd::plan_publish(proc, gpu, pdb, va, len)?;
+                        Staged::check_out(proc, gpu, planned)
+                    },
+                )?
+            },
+            |_spine, proc, plan, reply| nvkvm_fwd::commit_publish(proc, plan, reply),
+        )
+    }
+
+    /// **Case 1**: forward an engine-object alloc on the channel identified by
+    /// `vchid`, same three phases. An idempotent re-send resolves entirely in the
+    /// plan phase and issues **no verbs and no checkout at all**.
+    pub fn forward_engine_object(
+        &self,
+        target_gpu: GpuId,
+        vchid: VChid,
+        class: ClassId,
+        params: &[u8],
+    ) -> Result<EngineObjectForwarded, FwdFault> {
+        self.verb_op(
+            || {
+                self.route_act(
+                    |spine| {
+                        let r = nvkvm_fwd::route_engine_object(spine, target_gpu, vchid, class)?;
+                        Ok((r.proc, r))
+                    },
+                    |_spine, proc, route| {
+                        let planned = nvkvm_fwd::plan_engine_object(proc, &route, class, params)?;
+                        Staged::check_out(proc, planned.plan.cgpu, planned)
+                    },
+                )?
+            },
+            nvkvm_fwd::commit_engine_object,
+        )
+    }
+
+    /// Route a `GSP_RM_CONTROL` through the Case-1/Case-2 split. Case 2 is ACKed
+    /// under the device read lock and never leaves the process; Case 1 runs the same
+    /// three phases, with `payload` written back in the commit.
+    pub fn route_control(
+        &self,
+        target_gpu: GpuId,
+        pid: ProcId,
+        obj: HostHandle,
+        cmd: ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<ControlRoute, FwdFault> {
+        {
+            let ack = match self.mode {
+                LockMode::Sharded => nvkvm_fwd::classify_control(&self.state.read().spine, cmd),
+                LockMode::Degenerate => nvkvm_fwd::classify_control(&self.state.write().spine, cmd),
+            };
+            if let ControlRoute::AckOnly = ack {
+                return Ok(ControlRoute::AckOnly);
             }
         }
+        // The commit writes the host's answer back into the caller's buffer, so the
+        // payload rides the plan by value and returns by value — a plan may not
+        // borrow across the lock gap (R5's "IDs, never held references").
+        let out: Vec<u8> = self.verb_op(
+            || {
+                self.route_act(
+                    |_| Ok((pid, ())),
+                    |_spine, proc, ()| {
+                        let planned = nvkvm_fwd::plan_control(proc, target_gpu, obj, cmd, payload)?;
+                        Staged::check_out(proc, target_gpu, planned)
+                    },
+                )?
+            },
+            |_spine, proc, plan, reply| {
+                let mut buf = vec![0u8; payload.len()];
+                nvkvm_fwd::commit_control(proc, plan, reply, &mut buf)?;
+                Ok(buf)
+            },
+        )?;
+        payload.copy_from_slice(&out);
+        Ok(ControlRoute::Forwarded)
+    }
+
+    /// ★ Retire proc `pid` out of band — the §7.3 worker-death consequence, and the
+    /// staleness canaries' lever. **Spine op** (write guard). `true` if it was live.
+    pub fn retire_proc(&self, pid: ProcId) -> bool {
+        let mut g = self.state.write();
+        let st = &mut *g;
+        st.spine
+            .retire_proc(&mut ExclusiveProcs(&mut st.procs), pid)
     }
 
     /// Resolve `va` in the `(target, pdb)` VAS — read-only (route + `resolve_in`).
@@ -476,6 +844,36 @@ impl SharedDevice {
     /// observation is complete in itself and the owner's own poll
     /// ([`SharedDevice::completion_poll`]) re-posts regardless (the F2 fix).
     pub fn signal_source(&self, source: CompletionSource) -> SignalOutcome {
+        let outcome = self.dispatch_source(source);
+        // ★ The §7.3 worker-death consequence, applied OUTSIDE the dispatch critical
+        // section: retiring a proc is a spine WRITE, and taking the write lock while
+        // the dispatch guard is alive would be an R3 panic (rank 0 twice) — and a
+        // deadlock in any `RwLock` that does not upgrade. So the dispatch decides, the
+        // guards drop, and the consequence runs from rank-clean state. The gap is an
+        // R5 site like any other: both steps are idempotent and simply find nothing
+        // if a guest teardown won the race.
+        if let SignalOutcome::WorkerDied { proc, gpu, worker } = outcome {
+            self.kill_worker_slot(proc, gpu, worker);
+            self.retire_proc(proc);
+        }
+        outcome
+    }
+
+    /// Mark one pool slot permanently dead so it is never checked out again
+    /// (§7.3) — **never a respawn**.
+    fn kill_worker_slot(&self, pid: ProcId, gpu: GpuId, worker: WorkerId) {
+        let _ = self.route_act(
+            |_| Ok((pid, ())),
+            |_, proc, ()| {
+                if let Some(iso) = proc.isolates.get_mut(&gpu) {
+                    iso.worker_died(worker);
+                }
+            },
+        );
+    }
+
+    /// The dispatch critical section itself (see [`SharedDevice::signal_source`]).
+    fn dispatch_source(&self, source: CompletionSource) -> SignalOutcome {
         match self.mode {
             LockMode::Sharded => {
                 let st = self.state.read();

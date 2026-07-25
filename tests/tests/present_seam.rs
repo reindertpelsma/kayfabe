@@ -95,20 +95,24 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
 
     // Producer: a host render-target memory object, exported by the OWNING proc's
     // OWN isolate to a presentable surface.
-    let rm = gpu
+    let mut worker = gpu
         .procs
         .get_mut(&pid)
         .expect("proc")
         .isolates
         .get_mut(&GpuId::ZERO)
         .unwrap()
-        .rm();
-    let target = rm
-        .alloc(HostHandle(0), mc::MEMORY, &[])
-        .expect("render-target memory allocs");
-    let surface = rm
-        .export_surface(target)
-        .expect("render target exports to a surface");
+        .checkout()
+        .expect("the isolate's pool has an idle worker");
+    let (target, surface) = worker.with_rm(|rm| {
+        let target = rm
+            .alloc(HostHandle(0), mc::MEMORY, &[])
+            .expect("render-target memory allocs");
+        let surface = rm
+            .export_surface(target)
+            .expect("render target exports to a surface");
+        (target, surface)
+    });
     {
         let log = recorder.lock().unwrap();
         assert!(
@@ -153,16 +157,20 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
 fn exporting_an_unknown_render_target_is_a_loud_fault() {
     let (mut gpu, _rec) = graphics_gpu();
     let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
-    let rm = gpu
+    let mut worker = gpu
         .procs
         .get_mut(&pid)
         .expect("proc")
         .isolates
         .get_mut(&GpuId::ZERO)
         .unwrap()
-        .rm();
+        .checkout()
+        .expect("the isolate's pool has an idle worker");
     let bogus = HostHandle(0xdead_beef);
-    assert_eq!(rm.export_surface(bogus), Err(RmError::BadHandle(bogus)));
+    assert_eq!(
+        worker.with_rm(|rm| rm.export_surface(bogus)),
+        Err(RmError::BadHandle(bogus))
+    );
 }
 
 /// The synthetic vblank flows through the existing completion plane (post + drain):

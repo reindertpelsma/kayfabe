@@ -41,8 +41,10 @@
 //!   decode, `by_vchid`/`by_pdb` lookup, arch tables). Runs under L1's device
 //!   *read* lock; touches no proc.
 //! - **act** — the mutation of exactly the routed target (`&mut Proc`, plus
-//!   `&Spine` where the act needs arch tables). Runs under that proc's `Mutex`;
-//!   the `RmBackend` verbs live here (the one sanctioned blocking site).
+//!   `&Spine` where the act needs routing tables). Runs under that proc's `Mutex`.
+//!   ★ Since stage 3 the act phase itself splits into **plan / execute / commit**
+//!   (R1): the locked phases only read/decide and re-validate; every `RmBackend`
+//!   verb runs between them, lock-free, on a checked-out [`nvkvm_isolate::Worker`].
 //! - The original `&mut Gpu` entry points remain as **split-borrow compositions**
 //!   of route+act — the single-threaded / degenerate-one-lock shape the tests and
 //!   L1-M1 drive.
@@ -55,9 +57,9 @@
 use nvkvm_arch::Aperture;
 use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
 use nvkvm_completion::{CompletionError, OsEventRef, PostBatch};
-use nvkvm_core::gpu::{Channel, Gpu, Proc, Spine, Vas};
+use nvkvm_core::gpu::{Channel, Gpu, Proc, Spine};
 use nvkvm_core::{ChanId, ProcId};
-use nvkvm_isolate::{HostHandle, RmError};
+use nvkvm_isolate::{ChannelHandles, HostHandle, RmError, VerbPlan, VerbReply, Worker};
 use nvkvm_mmu::AddressTable;
 use nvkvm_mmu::{AddressFault, Binding};
 use nvkvm_vmm::{FbMeta, IrqSpec, Present, PresentError, SurfaceHandle, Vmm};
@@ -139,6 +141,61 @@ pub enum FwdFault {
     /// The owning proc's completion queue is full — a hostile guest triggered more
     /// completions than it drained. Loud-fault, never unbounded growth (boundary-1).
     Completion(CompletionError),
+    /// Every worker in the `(proc, gpu)` isolate's **bounded pool** is in flight
+    /// (`l1_concurrency.md` §7.2). This is **backpressure, not failure**: an L1
+    /// caller that can wait releases ALL its locks, waits for a return, and re-enters
+    /// from the top with full R5 re-validation. It surfaces as a fault only to
+    /// callers that chose not to wait (the single-threaded composed entry points).
+    PoolSaturated {
+        /// The proc whose pool is saturated.
+        proc: ProcId,
+        /// The target GPU whose isolate pool is saturated.
+        gpu: GpuId,
+    },
+    /// ★ **R5**: the world moved while a verb was in flight lock-free, so the commit
+    /// phase's target is no longer what the plan named. MISS=FAULT extends to
+    /// staleness — the op surfaces this refusal and does **not** "finish what it
+    /// started" against a world that no longer contains its target
+    /// (`l1_concurrency.md` §3.3 R5, §11 B5).
+    Stale(Stale),
+}
+
+/// Which re-validation a commit phase failed (`FwdFault::Stale`). Each variant is a
+/// distinct way the world can move across the lock-free verb gap; naming them apart
+/// is what makes the §8.4 staleness canaries assert something specific instead of
+/// "an error happened".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stale {
+    /// The proc retired (or was reaped) while its verb was in flight.
+    Proc(ProcId),
+    /// The channel the plan targeted was torn down.
+    Channel(ChanId),
+    /// The `Vas` the plan targeted is gone.
+    Vas {
+        /// Its target GPU.
+        gpu: GpuId,
+        /// Its PDB.
+        pdb: Pdb,
+    },
+    /// An `apply`/refresh rewrote routing: `(gpu, vchid)` no longer resolves to the
+    /// `(proc, chan)` the plan was made against.
+    Route {
+        /// The target GPU.
+        gpu: GpuId,
+        /// The vChid whose route moved.
+        vchid: VChid,
+    },
+    /// The commit's target adopted DIFFERENT host state while this verb was in
+    /// flight (a sibling thread's commit won the race). Adopting ours on top would
+    /// silently orphan theirs, so the loser refuses and releases what it allocated.
+    Rebound,
+    /// The `(proc, gpu)` isolate/arena the plan named is gone.
+    Target {
+        /// The proc.
+        proc: ProcId,
+        /// The target GPU.
+        gpu: GpuId,
+    },
 }
 
 impl From<CompletionError> for FwdFault {
@@ -158,18 +215,181 @@ impl From<RmError> for FwdFault {
     }
 }
 
-/// Ensure `vas` has its own host VAS object, materializing it through the OWNING
-/// proc's isolate on first touch. Per-Vas host separation is the proven #14 fix.
-fn ensure_host_vas(
-    vas: &mut Vas,
-    rm: &mut dyn nvkvm_isolate::RmBackend,
-) -> Result<nvkvm_isolate::HostHandle, FwdFault> {
-    if let Some(h) = vas.host_vas {
-        return Ok(h);
+// =================================================================================
+// ★ THE PLAN / EXECUTE / COMMIT SEAM (`l1_concurrency.md` §3.3, R1's "consequence
+// for the core shape"; stage 3 closing the §12.6 gap).
+//
+// A verb-issuing act phase runs under the owning proc's lock, so it can no longer
+// call a blocking `RmBackend` verb in line. Every such site is split in three:
+//
+//   plan    — under device-read + proc lock: read core state, decide, and EMIT a
+//             typed `VerbPlan` plus the ID-shaped hints the commit will need.
+//             Emits; does not call. Takes `&Proc` (a pure read) wherever it can.
+//   execute — NO locks held: `Worker::execute` runs the chain on a checked-out
+//             worker, chaining its own intermediate results (host VAS handle →
+//             memory handle → mapped VA) with zero core access. That door asserts
+//             R1, so this phase cannot be run under a lock even by accident.
+//   commit  — locks re-acquired: RE-VALIDATE (R5) by re-resolving through IDs, then
+//             apply the reply to core state — or refuse loudly and hand back the
+//             host objects it could not adopt.
+//
+// Plan products are IDs, never held references (R5's enforcement note), so a commit
+// physically cannot dereference something the gap freed. The composed `&mut Proc` /
+// `&mut Gpu` entry points below remain, now as *compositions* of the three phases
+// that run the round trip on a checked-out worker with no lock held — which is why
+// calling one under a lock is an immediate R1 panic instead of a silent violation.
+// =================================================================================
+
+/// A locked plan phase's product: the ID-shaped hints its commit needs, plus the
+/// verb chain to run lock-free. `verbs = None` means **no host work at all** — the
+/// site resolved entirely from core state (an idempotent engine-object replay), so
+/// no worker is checked out and the pool is never touched.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Planned<P> {
+    /// The ID-shaped plan the commit re-validates against.
+    pub plan: P,
+    /// The verb chain, or `None` when the site needs no host work.
+    pub verbs: Option<VerbPlan>,
+}
+
+/// Host objects a **refused commit** could not adopt.
+///
+/// R5's disposition rule made explicit: a commit that refuses must not silently leak
+/// what its execute phase already allocated. The caller runs
+/// [`Orphans::release_plan`] on the SAME worker, still lock-free, before checking it
+/// back in. (The one case with no such caller is a proc that vanished entirely — then
+/// the whole isolate is retired and its handle namespace dies with it, which is the
+/// retire path owning the disposition instead. Both dispositions are decided, neither
+/// is a leak.)
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Orphans {
+    /// `(host VAS, host GPU VA)` mappings to undo first.
+    pub unmap: Vec<(HostHandle, u64)>,
+    /// Objects to free.
+    pub free: Vec<HostHandle>,
+}
+
+impl Orphans {
+    /// True if there is nothing to dispose of.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.unmap.is_empty() && self.free.is_empty()
     }
-    let h = rm.alloc_vaspace()?;
-    vas.host_vas = Some(h);
-    Ok(h)
+
+    /// The verb chain that disposes of these orphans.
+    #[must_use]
+    pub fn release_plan(&self) -> VerbPlan {
+        VerbPlan::Release {
+            unmap: self.unmap.clone(),
+            free: self.free.clone(),
+        }
+    }
+}
+
+/// A commit phase's loud refusal: why, what it could not adopt, and whether the op
+/// should be re-planned from the top.
+///
+/// ★ **The two shapes of "the world moved" (a stage-3 finding, `l1_concurrency.md`
+/// §12.9).** R5 says a commit whose target vanished must refuse. But not every
+/// staleness is a vanishing: first-touch materialization (host VAS, host channel,
+/// engine object) is a **compare-and-swap** across the lock-free gap, and two sibling
+/// threads of ONE proc racing it is the ordinary case, not an error. The loser has
+/// nothing wrong with its request — someone else simply did the work it wanted —
+/// so it must **re-resolve**: release its duplicate and re-plan against the winner's
+/// state. Refusing there would turn a legal concurrent submission into a spurious
+/// guest-visible fault, which is a worse bug than the one R5 prevents.
+///
+/// So: `retry = true` ⇒ *converging* staleness (re-plan, bounded); `retry = false` ⇒
+/// *divergent* staleness (the target is gone — MISS=FAULT, surface it).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refusal {
+    /// The fault to surface to the guest (if this is not retried).
+    pub fault: FwdFault,
+    /// Host objects the caller must release (see [`Orphans`]).
+    pub orphans: Orphans,
+    /// True if re-planning from the top is the correct resolution (see above).
+    pub retry: bool,
+}
+
+impl Refusal {
+    /// A divergent refusal with nothing to dispose of: the target is gone.
+    fn bare(fault: FwdFault) -> Self {
+        Refusal {
+            fault,
+            orphans: Orphans::default(),
+            retry: false,
+        }
+    }
+}
+
+/// The reply shape did not match the plan that produced it — an internal wiring
+/// error (the adapter handed a commit someone else's reply), never guest-reachable.
+fn wrong_reply<T>(what: &str) -> Result<T, Refusal> {
+    panic!("commit phase received a {what} reply that does not match its plan")
+}
+
+/// ★ Check a worker OUT of `proc`'s isolate for `gpu` — pool bookkeeping, run under
+/// the proc lock (`l1_concurrency.md` §7.3). Moves the worker's handle out to the
+/// calling thread; the round trip then runs with no lock held.
+///
+/// `Ok(None)` is **backpressure**: every worker is in flight (or the isolate is
+/// retiring and refuses new checkouts). The caller releases all locks, waits, and
+/// re-enters from the top — never spins, never waits under a lock.
+pub fn checkout(proc: &mut Proc, gpu: GpuId) -> Result<Option<Worker>, FwdFault> {
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(proc.id));
+    }
+    let pid = proc.id;
+    Ok(proc
+        .isolates
+        .get_mut(&gpu)
+        .ok_or(FwdFault::NoTarget { proc: pid, gpu })?
+        .checkout())
+}
+
+/// Return a checked-out worker to its pool slot (proc lock; §7.3). If the target
+/// isolate is gone the worker is dropped with it — a retired isolate's slots are not
+/// resurrected.
+pub fn checkin(proc: &mut Proc, gpu: GpuId, worker: Worker) {
+    if let Some(iso) = proc.isolates.get_mut(&gpu) {
+        iso.checkin(worker);
+    }
+}
+
+/// The single-threaded composition of the three phases, used by the `&mut Proc`
+/// entry points: check a worker out, run the chain **with no lock held**, commit,
+/// dispose of any orphans, check the worker back in.
+///
+/// L1's `SharedDevice` deliberately does NOT call this — it interleaves the same
+/// three phases with lock acquire/release and a pool-full wait. This form exists for
+/// callers that already hold exclusive `&mut Proc` (tests, bring-up, the degenerate
+/// single-threaded shape), and it inherits R1's teeth for free: it reaches the
+/// backend through [`Worker::execute`], which panics if any lock is held.
+fn round_trip<T>(
+    proc: &mut Proc,
+    gpu: GpuId,
+    planned_verbs: Option<VerbPlan>,
+    commit: impl FnOnce(&mut Proc, Option<VerbReply>) -> Result<T, Refusal>,
+) -> Result<T, FwdFault> {
+    let Some(verbs) = planned_verbs else {
+        return commit(proc, None).map_err(|r| r.fault);
+    };
+    let pid = proc.id;
+    let Some(mut worker) = checkout(proc, gpu)? else {
+        return Err(FwdFault::PoolSaturated { proc: pid, gpu });
+    };
+    let executed = worker.execute(&verbs);
+    let out = match executed {
+        Ok(reply) => commit(proc, Some(reply)).map_err(|r| {
+            if !r.orphans.is_empty() {
+                let _ = worker.execute(&r.orphans.release_plan());
+            }
+            r.fault
+        }),
+        Err(e) => Err(FwdFault::Rm(e)),
+    };
+    checkin(proc, gpu, worker);
+    out
 }
 
 /// Result of one backing publication.
@@ -197,42 +417,175 @@ pub fn publish_backing(
     va: GpuVa,
     len: u64,
 ) -> Result<Published, FwdFault> {
+    let planned = plan_publish(proc, gpu, pdb, va, len)?;
+    round_trip(proc, gpu, planned.verbs, |proc, reply| {
+        commit_publish(proc, &planned.plan, reply)
+    })
+}
+
+/// The ID-shaped hints [`commit_publish`] re-validates against. Identities only —
+/// never a held reference into core state (R5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublishPlan {
+    /// The owning proc.
+    pub proc: ProcId,
+    /// The target GPU (isolate + arena key).
+    pub gpu: GpuId,
+    /// The `Vas`'s PDB.
+    pub pdb: Pdb,
+    /// The guest VA being backed.
+    pub va: GpuVa,
+    /// Length.
+    pub len: u64,
+    /// The `Vas`'s host VAS **as observed at plan time** — `None` means the chain
+    /// allocates one, and the commit must refuse if someone else materialized one in
+    /// the gap (Stale::Rebound) rather than orphaning theirs.
+    pub host_vas: Option<HostHandle>,
+}
+
+/// PLAN (R1): decide `publish_backing`'s host work from core state and emit it.
+/// A pure `&Proc` read — nothing is mutated until the commit.
+pub fn plan_publish(
+    proc: &Proc,
+    gpu: GpuId,
+    pdb: Pdb,
+    va: GpuVa,
+    len: u64,
+) -> Result<Planned<PublishPlan>, FwdFault> {
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(proc.id));
     }
     let pid = proc.id;
-    let Proc {
-        vases,
-        arenas,
-        isolates,
-        ..
-    } = proc;
-    let vas = vases
-        .get_mut(&(gpu, pdb))
+    let vas = proc
+        .vases
+        .get(&(gpu, pdb))
         .ok_or(FwdFault::UnknownPdb { gpu, pdb })?;
-    let arena = arenas
-        .get_mut(&gpu)
-        .ok_or(FwdFault::NoTarget { proc: pid, gpu })?;
-    let rm = isolates
-        .get_mut(&gpu)
-        .ok_or(FwdFault::NoTarget { proc: pid, gpu })?
-        .rm();
-
-    let gpa = arena.alloc(len, 0x1000).map_err(|_| FwdFault::Arena)?;
-    let hvas = ensure_host_vas(vas, rm)?;
-    let mem = rm.alloc_sysmem(len)?;
-    let host_va = rm.map_gpu_va(hvas, mem, len)?;
-
-    vas.table.bind(
-        pdb,
-        va,
-        len,
-        Binding {
-            phys: gpa.0,
-            aperture: Aperture::SysmemCoherent,
-            host_va: Some(host_va),
+    // The arena and the isolate must both exist BEFORE any host verb runs: a target
+    // miss is an internal inconsistency, and finding it after the allocs would mean
+    // allocating host state for a target we then refuse.
+    if !proc.arenas.contains_key(&gpu) || !proc.isolates.contains_key(&gpu) {
+        return Err(FwdFault::NoTarget { proc: pid, gpu });
+    }
+    let host_vas = vas.host_vas;
+    Ok(Planned {
+        plan: PublishPlan {
+            proc: pid,
+            gpu,
+            pdb,
+            va,
+            len,
+            host_vas,
         },
-    )?;
+        verbs: Some(VerbPlan::Publish { host_vas, len }),
+    })
+}
+
+/// COMMIT (R5): re-resolve everything through IDs and apply the reply — carve the
+/// GPA from the proc's own arena and forward-populate the address table — or refuse
+/// loudly and hand back what could not be adopted.
+///
+/// # Panics
+/// If `reply` is not the [`VerbReply::Published`] its plan asked for (an adapter
+/// wiring error, never guest-reachable).
+pub fn commit_publish(
+    proc: &mut Proc,
+    plan: &PublishPlan,
+    reply: Option<VerbReply>,
+) -> Result<Published, Refusal> {
+    let Some(VerbReply::Published {
+        host_vas: fresh_vas,
+        memory,
+        host_va,
+    }) = reply
+    else {
+        return wrong_reply("publish");
+    };
+    // Everything this commit could fail to adopt, in release order.
+    let orphans = |vas_used: HostHandle, with_vas: Option<HostHandle>| Orphans {
+        unmap: vec![(vas_used, host_va)],
+        free: with_vas.into_iter().chain([memory]).collect(),
+    };
+    let vas_used = fresh_vas
+        .or(plan.host_vas)
+        .expect("chain produced a host VAS");
+
+    if proc.is_retired() || proc.id != plan.proc {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Proc(plan.proc)),
+            orphans: orphans(vas_used, fresh_vas),
+            retry: false,
+        });
+    }
+    let pid = proc.id;
+    let Proc { vases, arenas, .. } = proc;
+    let Some(vas) = vases.get_mut(&(plan.gpu, plan.pdb)) else {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Vas {
+                gpu: plan.gpu,
+                pdb: plan.pdb,
+            }),
+            orphans: orphans(vas_used, fresh_vas),
+            retry: false,
+        });
+    };
+    // R5 on the host VAS itself: the plan decided whether to allocate one by reading
+    // `vas.host_vas`; if that answer changed in the gap, a sibling thread won and our
+    // fresh VAS (plus everything mapped into it) is an orphan.
+    match (plan.host_vas, fresh_vas) {
+        (None, Some(fresh)) => {
+            if vas.host_vas.is_some() {
+                // Converging: a sibling materialized this Vas's host VAS first. Free
+                // ours and re-plan — the retry maps into the winner's VAS.
+                return Err(Refusal {
+                    fault: FwdFault::Stale(Stale::Rebound),
+                    orphans: orphans(fresh, Some(fresh)),
+                    retry: true,
+                });
+            }
+            vas.host_vas = Some(fresh);
+        }
+        (Some(known), None) => {
+            if vas.host_vas != Some(known) {
+                return Err(Refusal {
+                    fault: FwdFault::Stale(Stale::Rebound),
+                    orphans: orphans(known, None),
+                    retry: true,
+                });
+            }
+        }
+        _ => unreachable!("the publish chain allocates a host VAS iff the plan had none"),
+    }
+    let Some(arena) = arenas.get_mut(&plan.gpu) else {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Target {
+                proc: pid,
+                gpu: plan.gpu,
+            }),
+            orphans: orphans(vas_used, None),
+            retry: false,
+        });
+    };
+    let gpa = arena.alloc(plan.len, 0x1000).map_err(|_| Refusal {
+        fault: FwdFault::Arena,
+        orphans: orphans(vas_used, None),
+        retry: false,
+    })?;
+    vas.table
+        .bind(
+            plan.pdb,
+            plan.va,
+            plan.len,
+            Binding {
+                phys: gpa.0,
+                aperture: Aperture::SysmemCoherent,
+                host_va: Some(host_va),
+            },
+        )
+        .map_err(|e| Refusal {
+            fault: FwdFault::Address(e),
+            orphans: orphans(vas_used, None),
+            retry: false,
+        })?;
     Ok(Published {
         gpa: gpa.0,
         host_va,
@@ -355,9 +708,13 @@ pub fn route_doorbell(
 }
 
 /// ACT (R4): run the routed doorbell against **its owning proc only** —
-/// `&mut Proc`, never `&mut Gpu` (in L1: that proc's `Mutex`, under the device
-/// *read* lock). Ring-gate → lazy materialization/schedule → ring; the `RmBackend`
-/// verbs (the sanctioned blocking site) live here.
+/// `&mut Proc`, never `&mut Gpu`. Ring-gate → lazy materialization/schedule → ring.
+///
+/// ★ **The single-threaded composition of [`plan_doorbell`] / `Worker::execute` /
+/// [`commit_doorbell`]** (R1). It reaches the backend through the worker door, which
+/// asserts R1 — so calling THIS under a proc lock is an immediate named panic, not a
+/// silent convoy. L1's `SharedDevice` drives the three phases itself, interleaved
+/// with its lock acquire/release and its pool-full wait.
 ///
 /// `working_set` is the set of VAs this submission's work touches, as recovered by
 /// the caller (launch descriptors / submit parse). A declared VA that is unbound or
@@ -374,41 +731,75 @@ pub fn route_doorbell(
 /// [`nvkvm_core::gpu::ExecPlane`] — there is no global one-shot to leave a second
 /// proc's channel off-runlist (#12's CTX2 bug, crack ⚠4).
 pub fn exec_doorbell(
+    spine: &Spine,
     proc: &mut Proc,
     route: &DoorbellRoute,
     working_set: &[GpuVa],
 ) -> Result<DoorbellOutcome, FwdFault> {
+    let planned = plan_doorbell(proc, route, working_set)?;
+    let gpu = planned.plan.cgpu;
+    round_trip(proc, gpu, planned.verbs, |proc, reply| {
+        commit_doorbell(spine, proc, &planned.plan, reply)
+    })
+}
+
+/// The ID-shaped hints [`commit_doorbell`] re-validates against (R5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DoorbellPlan {
+    /// Owning proc.
+    pub proc: ProcId,
+    /// The channel.
+    pub chan: ChanId,
+    /// The GPU the doorbell trapped on (routing key with `vchid`).
+    pub gpu: GpuId,
+    /// The channel's OWN target GPU (its isolate/arena key).
+    pub cgpu: GpuId,
+    /// The decoded vChid.
+    pub vchid: VChid,
+    /// The raw token (recorded per-proc for poll-kick replay).
+    pub token: u64,
+    /// The channel's declared VAS, if any.
+    pub vas_pdb: Option<Pdb>,
+    /// The channel's host handles **as observed at plan time** (`None` = the chain
+    /// materializes them).
+    pub channel: Option<ChannelHandles>,
+    /// Whether this submission must schedule the channel first.
+    pub schedule: bool,
+}
+
+/// PLAN (R1) for the ONE ring path. Runs the #14 ring-gate **before any host op**
+/// exactly as before — the gate now lives in the phase that holds the lock, which is
+/// strictly stronger: it is checked against the same consistent snapshot the plan is
+/// derived from.
+///
+/// A pure `&Proc` read; nothing is mutated until the commit.
+pub fn plan_doorbell(
+    proc: &Proc,
+    route: &DoorbellRoute,
+    working_set: &[GpuVa],
+) -> Result<Planned<DoorbellPlan>, FwdFault> {
     let pid = route.proc;
     let cid = route.chan;
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));
     }
-
-    let Proc {
-        vases,
-        channels,
-        exec,
-        isolates,
-        poll,
-        ..
-    } = proc;
-    let chan: &mut Channel = channels.get_mut(&cid).ok_or(FwdFault::UnknownVchid {
+    let chan: &Channel = proc.channels.get(&cid).ok_or(FwdFault::UnknownVchid {
         gpu: route.gpu,
         vchid: route.vchid,
     })?;
     let cgpu = chan.gpu;
-    let rm = isolates
-        .get_mut(&cgpu)
-        .ok_or(FwdFault::NoTarget {
+    if !proc.isolates.contains_key(&cgpu) {
+        return Err(FwdFault::NoTarget {
             proc: pid,
             gpu: cgpu,
-        })?
-        .rm();
+        });
+    }
 
     // ---- The #14 ring-gate, BEFORE any host op (the ONE ring path always runs it). ----
     match chan.vas_pdb {
         Some(pdb) => {
-            let vas = vases
+            let vas = proc
+                .vases
                 .get(&(cgpu, pdb))
                 .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
             gate_vas(&vas.table, pdb, working_set.iter().copied())?;
@@ -419,34 +810,143 @@ pub fn exec_doorbell(
         None => return Err(FwdFault::NoVas(cid)),
     }
 
-    // Lazy per-proc materialization. The channel's graph-derived `EngineKind` rides
+    let channel = chan.host_channel.zip(chan.host_token);
+    // Lazy per-proc materialization: the channel's graph-derived `EngineKind` rides
     // the alloc so the adapter lands it on the RIGHT runlist (GR-1: the C's
     // `dma_copy_class_alloc_params` engineType=0 → 401 class, designed out).
-    if chan.host_channel.is_none() {
+    let host_vas = if channel.is_none() {
         let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
-        let vas = vases
-            .get_mut(&(cgpu, pdb))
-            .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
-        let hvas = ensure_host_vas(vas, rm)?;
-        let (hchan, htok) = rm.alloc_channel(hvas, chan.engine)?;
-        chan.host_channel = Some(hchan);
-        chan.host_token = Some(htok);
-    }
-    let mut scheduled_now = false;
-    if !exec.scheduled.contains(&cid) {
-        rm.schedule(chan.host_channel.expect("materialized above"))?;
-        exec.scheduled.insert(cid);
-        scheduled_now = true;
-    }
+        proc.vases
+            .get(&(cgpu, pdb))
+            .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
+            .host_vas
+    } else {
+        None
+    };
+    let schedule = !proc.exec.scheduled.contains(&cid);
+    Ok(Planned {
+        plan: DoorbellPlan {
+            proc: pid,
+            chan: cid,
+            gpu: route.gpu,
+            cgpu,
+            vchid: route.vchid,
+            token: route.token,
+            vas_pdb: chan.vas_pdb,
+            channel,
+            schedule,
+        },
+        verbs: Some(VerbPlan::Doorbell {
+            host_vas,
+            channel,
+            engine: chan.engine,
+            schedule,
+        }),
+    })
+}
 
-    poll.last_token = Some(route.token);
+/// COMMIT (R5) for the ring path: re-resolve the route through the spine and the
+/// channel through its `ChanId`, then adopt the materialized host handles and record
+/// the submission. Refuses — releasing whatever it allocated — if the route moved,
+/// the channel was torn down, or a sibling commit rebound the same channel/VAS.
+///
+/// # Panics
+/// If `reply` is not the [`VerbReply::Doorbell`] its plan asked for.
+pub fn commit_doorbell(
+    spine: &Spine,
+    proc: &mut Proc,
+    plan: &DoorbellPlan,
+    reply: Option<VerbReply>,
+) -> Result<DoorbellOutcome, Refusal> {
+    let Some(VerbReply::Doorbell {
+        host_vas: fresh_vas,
+        channel: fresh_chan,
+        scheduled,
+    }) = reply
+    else {
+        return wrong_reply("doorbell");
+    };
+    let orphans = || Orphans {
+        unmap: Vec::new(),
+        free: fresh_chan
+            .map(|(h, _)| h)
+            .into_iter()
+            .chain(fresh_vas)
+            .collect(),
+    };
+    // Converging staleness (someone else materialized what we were materializing)
+    // re-plans; divergent staleness (the target is gone) is a loud refusal.
+    let refuse = |what: Stale| {
+        Err(Refusal {
+            fault: FwdFault::Stale(what),
+            orphans: orphans(),
+            retry: matches!(what, Stale::Rebound),
+        })
+    };
+    if proc.is_retired() || proc.id != plan.proc {
+        return refuse(Stale::Proc(plan.proc));
+    }
+    // R5 on the ROUTE: an `apply`/refresh may have rewritten `by_vchid` in the gap.
+    // The plan was made for `(gpu, vchid) → (proc, chan)`; if that is no longer the
+    // routing truth, this submission belongs to a world that no longer exists.
+    if spine.by_vchid.get(&(plan.gpu, plan.vchid)) != Some(&(plan.proc, plan.chan)) {
+        return refuse(Stale::Route {
+            gpu: plan.gpu,
+            vchid: plan.vchid,
+        });
+    }
+    let Proc {
+        vases,
+        channels,
+        exec,
+        poll,
+        ..
+    } = proc;
+    let Some(chan) = channels.get_mut(&plan.chan) else {
+        return refuse(Stale::Channel(plan.chan));
+    };
+    if let Some(fresh) = fresh_vas {
+        let pdb = plan
+            .vas_pdb
+            .expect("materialization requires a declared VAS");
+        let Some(vas) = vases.get_mut(&(plan.cgpu, pdb)) else {
+            return refuse(Stale::Vas {
+                gpu: plan.cgpu,
+                pdb,
+            });
+        };
+        if vas.host_vas.is_some() {
+            return refuse(Stale::Rebound);
+        }
+        vas.host_vas = Some(fresh);
+    }
+    match fresh_chan {
+        // We materialized: nobody else may have, or one of the two host channels is
+        // instantly orphaned (and the guest's vChid would ring the wrong one).
+        Some((hchan, htok)) => {
+            if chan.host_channel.is_some() {
+                return refuse(Stale::Rebound);
+            }
+            chan.host_channel = Some(hchan);
+            chan.host_token = Some(htok);
+        }
+        // We reused what the plan read: it must still be what the channel holds.
+        None => {
+            if chan.host_channel.zip(chan.host_token) != plan.channel {
+                return refuse(Stale::Rebound);
+            }
+        }
+    }
+    if scheduled {
+        exec.scheduled.insert(plan.chan);
+    }
+    poll.last_token = Some(plan.token);
     let host_token = chan.host_token.expect("materialized above");
-    rm.ring_doorbell(host_token)?;
     Ok(DoorbellOutcome {
-        proc: pid,
-        chan: cid,
+        proc: plan.proc,
+        chan: plan.chan,
         host_token,
-        scheduled_now,
+        scheduled_now: scheduled,
     })
 }
 
@@ -468,12 +968,12 @@ pub fn handle_doorbell(
     token: u64,
     working_set: &[GpuVa],
 ) -> Result<DoorbellOutcome, FwdFault> {
-    let route = route_doorbell(&gpu.spine, target_gpu, token)?;
-    let proc = gpu
-        .procs
+    let Gpu { spine, procs, .. } = gpu;
+    let route = route_doorbell(spine, target_gpu, token)?;
+    let proc = procs
         .get_mut(&route.proc)
         .ok_or(FwdFault::RetiredProc(route.proc))?;
-    exec_doorbell(proc, &route, working_set)
+    exec_doorbell(spine, proc, &route, working_set)
 }
 
 /// Post any composable completion batch for target `gpu_target` and raise the SWGEN0
@@ -593,75 +1093,224 @@ pub fn route_engine_object(
 /// (`&mut Proc`): lazily materialize the host channel (same per-proc discipline as
 /// the doorbell act), then alloc the engine object via the proc's own isolate.
 ///
+/// The single-threaded composition of [`plan_engine_object`] / `Worker::execute` /
+/// [`commit_engine_object`] — same R1 shape as [`exec_doorbell`].
+///
 /// **Idempotent under replay** (§2.2; the protocol is order-/repeat-independent): a
 /// re-sent alloc for a class already forwarded on this channel resolves from
 /// [`Channel::host_engine_objects`] and returns the ORIGINAL host object — the host
 /// never sees a duplicate engine-object alloc (the guest-retry hazard the graph
 /// already covers for alloc/DUP, extended to the host-forward plane).
 pub fn exec_engine_object(
+    spine: &Spine,
     proc: &mut Proc,
     route: &EngineObjectRoute,
     class: ClassId,
     params: &[u8],
 ) -> Result<EngineObjectForwarded, FwdFault> {
+    let planned = plan_engine_object(proc, route, class, params)?;
+    let gpu = planned.plan.cgpu;
+    round_trip(proc, gpu, planned.verbs, |proc, reply| {
+        commit_engine_object(spine, proc, &planned.plan, reply)
+    })
+}
+
+/// The ID-shaped hints [`commit_engine_object`] re-validates against (R5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EngineObjectPlan {
+    /// Owning proc.
+    pub proc: ProcId,
+    /// The channel the object allocs on.
+    pub chan: ChanId,
+    /// The GPU the alloc addressed (routing key with `vchid`).
+    pub gpu: GpuId,
+    /// The channel's own target GPU (isolate key).
+    pub cgpu: GpuId,
+    /// The channel's vChid.
+    pub vchid: VChid,
+    /// The engine kind the arch mapped `class` to.
+    pub engine: EngineKind,
+    /// The engine-object class.
+    pub class: ClassId,
+    /// The channel's declared VAS, if any.
+    pub vas_pdb: Option<Pdb>,
+    /// The channel's host handles as observed at plan time.
+    pub channel: Option<ChannelHandles>,
+    /// Set when the alloc resolved from the channel's idempotency table — no host
+    /// work at all, so no worker is checked out (`verbs = None`).
+    pub replay: Option<HostHandle>,
+}
+
+/// PLAN (R1) for the Case-1 engine-object forward.
+///
+/// **Idempotent under replay** (§2.2): a re-sent alloc for a class already forwarded
+/// on this channel resolves here, from core state, and emits **no verbs at all** —
+/// the host never sees a duplicate, and the replay never touches the worker pool.
+pub fn plan_engine_object(
+    proc: &Proc,
+    route: &EngineObjectRoute,
+    class: ClassId,
+    params: &[u8],
+) -> Result<Planned<EngineObjectPlan>, FwdFault> {
     let pid = route.proc;
     let cid = route.chan;
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));
     }
-
-    let Proc {
-        vases,
-        channels,
-        isolates,
-        ..
-    } = proc;
-    let chan = channels.get_mut(&cid).ok_or(FwdFault::UnknownVchid {
+    let chan = proc.channels.get(&cid).ok_or(FwdFault::UnknownVchid {
         gpu: route.gpu,
         vchid: route.vchid,
     })?;
     let cgpu = chan.gpu;
-    let rm = isolates
-        .get_mut(&cgpu)
-        .ok_or(FwdFault::NoTarget {
+    if !proc.isolates.contains_key(&cgpu) {
+        return Err(FwdFault::NoTarget {
             proc: pid,
             gpu: cgpu,
-        })?
-        .rm();
-
-    // Lazily materialize the host channel (first-touch, per-proc) so the engine object
-    // has a channel to be allocated on — the host builds its GR ctx against it.
-    let materialized_channel = chan.host_channel.is_none();
-    if materialized_channel {
-        let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
-        let vas = vases
-            .get_mut(&(cgpu, pdb))
-            .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
-        let hvas = ensure_host_vas(vas, rm)?;
-        // The channel's graph-derived `EngineKind` rides the alloc (GR-1, wrong-runlist
-        // class): the adapter cannot invent the runlist, so the core declares it.
-        let (hchan, htok) = rm.alloc_channel(hvas, chan.engine)?;
-        chan.host_channel = Some(hchan);
-        chan.host_token = Some(htok);
-    }
-    let hchan = chan.host_channel.expect("materialized above");
-    // Replay resolves from the idempotency table — exactly one host object per
-    // declared (channel, class), no matter how often the guest re-sends.
-    if let Some(&host_object) = chan.host_engine_objects.get(&class) {
-        return Ok(EngineObjectForwarded {
-            engine: route.engine,
-            host_object,
-            materialized_channel,
-            reused: true,
         });
     }
-    let host_object = rm.alloc_engine_object(hchan, class, params)?;
-    chan.host_engine_objects.insert(class, host_object);
-    Ok(EngineObjectForwarded {
+    let channel = chan.host_channel.zip(chan.host_token);
+    // A replay is only representable once the channel materialized (the idempotency
+    // table is populated by a forward, which requires a host channel).
+    let replay = channel
+        .is_some()
+        .then(|| chan.host_engine_objects.get(&class).copied())
+        .flatten();
+    let host_vas = if channel.is_none() {
+        let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
+        proc.vases
+            .get(&(cgpu, pdb))
+            .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
+            .host_vas
+    } else {
+        None
+    };
+    let plan = EngineObjectPlan {
+        proc: pid,
+        chan: cid,
+        gpu: route.gpu,
+        cgpu,
+        vchid: route.vchid,
         engine: route.engine,
-        host_object,
-        materialized_channel,
-        reused: false,
+        class,
+        vas_pdb: chan.vas_pdb,
+        channel,
+        replay,
+    };
+    let verbs = if replay.is_some() {
+        None
+    } else {
+        Some(VerbPlan::EngineObject {
+            host_vas,
+            channel,
+            engine: chan.engine,
+            class,
+            params: params.to_vec(),
+        })
+    };
+    Ok(Planned { plan, verbs })
+}
+
+/// COMMIT (R5) for the Case-1 forward: same route/channel re-resolution as the
+/// doorbell, then adopt the host engine object into the channel's idempotency table.
+///
+/// # Panics
+/// If `reply` is not the [`VerbReply::EngineObject`] its plan asked for.
+pub fn commit_engine_object(
+    spine: &Spine,
+    proc: &mut Proc,
+    plan: &EngineObjectPlan,
+    reply: Option<VerbReply>,
+) -> Result<EngineObjectForwarded, Refusal> {
+    let (fresh_vas, fresh_chan, object) = match (plan.replay, reply) {
+        // Replay: nothing ran, nothing to adopt — but the target must still exist.
+        (Some(original), None) => (None, None, Some(original)),
+        (
+            None,
+            Some(VerbReply::EngineObject {
+                host_vas,
+                channel,
+                object,
+            }),
+        ) => (host_vas, channel, Some(object)),
+        _ => return wrong_reply("engine-object"),
+    };
+    let object = object.expect("both arms produce a host object");
+    let orphans = || Orphans {
+        unmap: Vec::new(),
+        free: (plan.replay.is_none())
+            .then_some(object)
+            .into_iter()
+            .chain(fresh_chan.map(|(h, _)| h))
+            .chain(fresh_vas)
+            .collect(),
+    };
+    // Converging staleness (someone else materialized what we were materializing)
+    // re-plans; divergent staleness (the target is gone) is a loud refusal.
+    let refuse = |what: Stale| {
+        Err(Refusal {
+            fault: FwdFault::Stale(what),
+            orphans: orphans(),
+            retry: matches!(what, Stale::Rebound),
+        })
+    };
+    if proc.is_retired() || proc.id != plan.proc {
+        return refuse(Stale::Proc(plan.proc));
+    }
+    if spine.by_vchid.get(&(plan.gpu, plan.vchid)) != Some(&(plan.proc, plan.chan)) {
+        return refuse(Stale::Route {
+            gpu: plan.gpu,
+            vchid: plan.vchid,
+        });
+    }
+    let Proc {
+        vases, channels, ..
+    } = proc;
+    let Some(chan) = channels.get_mut(&plan.chan) else {
+        return refuse(Stale::Channel(plan.chan));
+    };
+    if let Some(fresh) = fresh_vas {
+        let pdb = plan
+            .vas_pdb
+            .expect("materialization requires a declared VAS");
+        let Some(vas) = vases.get_mut(&(plan.cgpu, pdb)) else {
+            return refuse(Stale::Vas {
+                gpu: plan.cgpu,
+                pdb,
+            });
+        };
+        if vas.host_vas.is_some() {
+            return refuse(Stale::Rebound);
+        }
+        vas.host_vas = Some(fresh);
+    }
+    match fresh_chan {
+        Some((hchan, htok)) => {
+            if chan.host_channel.is_some() {
+                return refuse(Stale::Rebound);
+            }
+            chan.host_channel = Some(hchan);
+            chan.host_token = Some(htok);
+        }
+        None => {
+            if chan.host_channel.zip(chan.host_token) != plan.channel {
+                return refuse(Stale::Rebound);
+            }
+        }
+    }
+    if plan.replay.is_none() {
+        // A sibling thread may have forwarded the SAME class in the gap; the table is
+        // the idempotency authority, so the loser refuses and frees its duplicate
+        // rather than overwriting (which would orphan the winner's object silently).
+        if chan.host_engine_objects.contains_key(&plan.class) {
+            return refuse(Stale::Rebound);
+        }
+        chan.host_engine_objects.insert(plan.class, object);
+    }
+    Ok(EngineObjectForwarded {
+        engine: plan.engine,
+        host_object: object,
+        materialized_channel: fresh_chan.is_some(),
+        reused: plan.replay.is_some(),
     })
 }
 
@@ -679,12 +1328,12 @@ pub fn forward_engine_object(
     class: ClassId,
     params: &[u8],
 ) -> Result<EngineObjectForwarded, FwdFault> {
-    let route = route_engine_object(&gpu.spine, target_gpu, vchid, class)?;
-    let proc = gpu
-        .procs
+    let Gpu { spine, procs, .. } = gpu;
+    let route = route_engine_object(spine, target_gpu, vchid, class)?;
+    let proc = procs
         .get_mut(&route.proc)
         .ok_or(FwdFault::RetiredProc(route.proc))?;
-    exec_engine_object(proc, &route, class, params)
+    exec_engine_object(spine, proc, &route, class, params)
 }
 
 /// ROUTE: classify a `GSP_RM_CONTROL` through the Case-1/Case-2 split — a pure
@@ -703,6 +1352,9 @@ pub fn classify_control(spine: &Spine, cmd: ControlCmd) -> ControlRoute {
 /// ACT: forward a Case-1 control on **its owning proc only** (`&mut Proc`), on the
 /// op's TARGET GPU's isolate (MG-5): the control object `obj` is a handle in that
 /// isolate's namespace; routing it elsewhere is unrepresentable.
+///
+/// The single-threaded composition of [`plan_control`] / `Worker::execute` /
+/// [`commit_control`] — same R1 shape as [`exec_doorbell`].
 pub fn forward_control(
     proc: &mut Proc,
     target_gpu: GpuId,
@@ -710,19 +1362,91 @@ pub fn forward_control(
     cmd: ControlCmd,
     payload: &mut [u8],
 ) -> Result<(), FwdFault> {
+    let planned = plan_control(proc, target_gpu, obj, cmd, payload)?;
+    round_trip(proc, target_gpu, planned.verbs, |proc, reply| {
+        commit_control(proc, &planned.plan, reply, payload)
+    })
+}
+
+/// The ID-shaped hints [`commit_control`] re-validates against (R5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ControlPlan {
+    /// Owning proc.
+    pub proc: ProcId,
+    /// The op's TARGET GPU (MG-5: `obj` is a handle in THAT isolate's namespace).
+    pub gpu: GpuId,
+    /// The control object.
+    pub obj: HostHandle,
+    /// The command.
+    pub cmd: ControlCmd,
+}
+
+/// PLAN (R1) for a Case-1 control forward. The payload is copied into the plan by
+/// value: a plan outlives the lock scope that made it, so it may not borrow.
+pub fn plan_control(
+    proc: &Proc,
+    target_gpu: GpuId,
+    obj: HostHandle,
+    cmd: ControlCmd,
+    payload: &[u8],
+) -> Result<Planned<ControlPlan>, FwdFault> {
     let pid = proc.id;
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));
     }
-    let rm = proc
-        .isolates
-        .get_mut(&target_gpu)
-        .ok_or(FwdFault::NoTarget {
+    if !proc.isolates.contains_key(&target_gpu) {
+        return Err(FwdFault::NoTarget {
             proc: pid,
             gpu: target_gpu,
-        })?
-        .rm();
-    rm.control(obj, cmd, payload)?;
+        });
+    }
+    Ok(Planned {
+        plan: ControlPlan {
+            proc: pid,
+            gpu: target_gpu,
+            obj,
+            cmd,
+        },
+        verbs: Some(VerbPlan::Control {
+            obj,
+            cmd,
+            payload: payload.to_vec(),
+        }),
+    })
+}
+
+/// COMMIT (R5) for a control forward: re-validate that the proc and its target
+/// isolate still exist, then write the host's reply back into the guest's buffer.
+///
+/// **Honest note on this site's staleness shape.** The control's host effect has
+/// already happened by the time the commit runs; the only thing the commit *owns* is
+/// the write-back. So a refusal here means "the answer has nowhere to go", not "the
+/// op was undone" — and there is no orphan to release, because the object the
+/// control ran on was the guest's, not something this op allocated. That is a real
+/// asymmetry with the alloc-shaped sites, stated rather than papered over.
+///
+/// # Panics
+/// If `reply` is not the [`VerbReply::Control`] its plan asked for.
+pub fn commit_control(
+    proc: &mut Proc,
+    plan: &ControlPlan,
+    reply: Option<VerbReply>,
+    payload: &mut [u8],
+) -> Result<(), Refusal> {
+    let Some(VerbReply::Control { payload: out }) = reply else {
+        return wrong_reply("control");
+    };
+    if proc.is_retired() || proc.id != plan.proc {
+        return Err(Refusal::bare(FwdFault::Stale(Stale::Proc(plan.proc))));
+    }
+    if !proc.isolates.contains_key(&plan.gpu) {
+        return Err(Refusal::bare(FwdFault::Stale(Stale::Target {
+            proc: plan.proc,
+            gpu: plan.gpu,
+        })));
+    }
+    let n = payload.len().min(out.len());
+    payload[..n].copy_from_slice(&out[..n]);
     Ok(())
 }
 
@@ -1181,4 +1905,12 @@ nvkvm_util::assert_send_sync!(
     EngineObjectForwarded,
     EngineObjectRoute,
     PushbufferOutcome,
+    Stale,
+    Orphans,
+    Refusal,
+    PublishPlan,
+    DoorbellPlan,
+    EngineObjectPlan,
+    ControlPlan,
+    Planned<PublishPlan>,
 );
