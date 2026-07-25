@@ -5,3 +5,7 @@ Cargo.lock.orig
 /mutants.out.old
 /mutants_fwdmmu
 /mutants_triage
+
+# Generated review artifacts (regenerable from their .md/.py sources)
+docs/design/*.pdf
+docs/design/*.png
