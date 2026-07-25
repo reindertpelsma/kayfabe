@@ -58,7 +58,7 @@ fn fb() -> (SurfaceHandle, FbMeta) {
 #[test]
 fn scanout_routes_to_present_and_feeds_vblank() {
     let (mut gpu, _rec) = graphics_gpu();
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
     let mut present = MockPresent::new();
     let (buffer, meta) = fb();
 
@@ -91,7 +91,7 @@ fn scanout_routes_to_present_and_feeds_vblank() {
 #[test]
 fn render_target_exports_to_surface_presents_and_vblanks() {
     let (mut gpu, recorder) = graphics_gpu();
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
 
     // Producer: a host render-target memory object, exported by the OWNING proc's
     // OWN isolate to a presentable surface.
@@ -152,7 +152,7 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
 #[test]
 fn exporting_an_unknown_render_target_is_a_loud_fault() {
     let (mut gpu, _rec) = graphics_gpu();
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
     let rm = gpu
         .procs
         .get_mut(&pid)
@@ -170,7 +170,7 @@ fn exporting_an_unknown_render_target_is_a_loud_fault() {
 #[test]
 fn vblank_flows_through_the_completion_plane() {
     let (mut gpu, _rec) = graphics_gpu();
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
     let mut present = MockPresent::new();
     let (buffer, meta) = fb();
 
@@ -188,7 +188,7 @@ fn vblank_flows_through_the_completion_plane() {
 #[test]
 fn present_failure_is_a_loud_fault() {
     let (mut gpu, _rec) = graphics_gpu();
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
     let mut present = MockPresent::new();
     present.fail_next = Some(PresentError::Unsupported("no display"));
     let (buffer, meta) = fb();

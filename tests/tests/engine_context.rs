@@ -173,7 +173,7 @@ fn replayed_engine_object_alloc_forwards_exactly_one_host_object() {
 fn engine_kind_lands_on_the_channel_via_the_graph() {
     let (mut gpu, _rec) = compute_gpu();
     let kind_of = |gpu: &Gpu, vchid: VChid| {
-        let (pid, cid) = gpu.by_vchid[&(GpuId::ZERO, vchid)];
+        let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, vchid)];
         gpu.procs[&pid].channels[&cid].engine
     };
 
@@ -230,7 +230,7 @@ fn engine_kind_lands_on_the_channel_via_the_graph() {
 #[test]
 fn case2_controls_are_ack_only_never_forwarded() {
     let (mut gpu, recorder) = compute_gpu();
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
 
     // First materialize a host object to issue a Case-1 control against.
     let out = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[]).unwrap();
@@ -449,7 +449,7 @@ fn nvenc_gpu() -> (Gpu, nvkvm_core::ProcId, nvkvm_core::ChanId) {
         facts: AllocFacts::default(),
     })
     .expect("NVENC session allocs on the channel");
-    let (pid, cid) = gpu.by_vchid[&(GpuId::ZERO, GR_VCHID)];
+    let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, GR_VCHID)];
     assert_eq!(gpu.procs[&pid].channels[&cid].engine, EngineKind::NvEnc);
     publish_backing(
         gpu.procs.get_mut(&pid).unwrap(),
@@ -571,7 +571,7 @@ fn fence_arm_selection_is_exact_at_the_channel() {
 
     // A compute-shaped channel refuses the fence arm loudly.
     let (mut gpu, _rec) = compute_gpu();
-    let (pid, cid) = gpu.by_vchid[&(GpuId::ZERO, GR_VCHID)];
+    let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, GR_VCHID)];
     publish_backing(
         gpu.procs.get_mut(&pid).unwrap(),
         GpuId::ZERO,

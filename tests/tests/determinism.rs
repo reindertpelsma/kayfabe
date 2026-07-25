@@ -243,7 +243,7 @@ struct CoreSnapshot {
 
 /// Project a [`Gpu`] to its canonical observable end-state.
 fn snapshot(gpu: &Gpu) -> CoreSnapshot {
-    let g = &gpu.rmgraph;
+    let g = &gpu.spine.rmgraph;
 
     let mut procs = BTreeMap::new();
     let mut vases = BTreeMap::new();
@@ -292,11 +292,11 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
 
     // Canonicalize routing off the minted ProcId onto the stable anchor.
     let mut by_pdb = BTreeMap::new();
-    for (pdb, pid) in &gpu.by_pdb {
+    for (pdb, pid) in &gpu.spine.by_pdb {
         by_pdb.insert(*pdb, gpu.procs.get(pid).expect("routed proc lives").anchor);
     }
     let mut by_vchid = BTreeMap::new();
-    for (vchid, (pid, cid)) in &gpu.by_vchid {
+    for (vchid, (pid, cid)) in &gpu.spine.by_vchid {
         let p = gpu.procs.get(pid).expect("routed proc lives");
         by_vchid.insert(
             *vchid,
@@ -484,7 +484,7 @@ fn materialize(gpu: &mut Gpu) -> DataPlaneProjection {
     }
 
     let chans: Vec<(nvkvm_core::ProcId, nvkvm_core::ChanId)> =
-        gpu.by_vchid.values().copied().collect();
+        gpu.spine.by_vchid.values().copied().collect();
     let mut arms = BTreeMap::new();
     for (pid, cid) in &chans {
         let (anchor, key, is_nvenc) = {

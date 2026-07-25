@@ -305,30 +305,68 @@ impl Proc {
     }
 }
 
-/// The device: composition root of the logic core.
+/// ★ Mutable access to the per-proc containers, abstracted so the L1 adapter can
+/// own each [`Proc`] inside its own lock cell (e.g. `Mutex<Proc>`) while the core's
+/// spine ops still drive the whole set under the device write lock
+/// (`l1_concurrency.md` §3.4: "the L1 wrapper owning `Proc`s and the core's
+/// cross-proc ops taking iterator/visitor arguments").
 ///
-/// Will additionally implement `nvkvm_vmm::Device` once the register/GSP models
-/// port (`nvkvm-regs`-equivalent + `nvkvm-gsp`); this milestone exposes the
-/// event-level API the adapters and tests drive.
+/// Contract (normative):
+/// - All access is `&mut`-based — a spine op runs under whole-device exclusivity
+///   (L1's device *write* lock), so `Mutex::get_mut`-style lock-free access is
+///   sufficient; the trait deliberately has **no shared-read accessor** (one would
+///   be unimplementable for a lock cell).
+/// - [`ProcSet::iter_mut`] yields procs in **ascending `ProcId` order** — derived
+///   state must stay a deterministic function of the graph, never of iteration
+///   order (decision #27).
+pub trait ProcSet {
+    /// The proc with id `id`, if live.
+    fn get_mut(&mut self, id: ProcId) -> Option<&mut Proc>;
+    /// Insert a newly-derived proc.
+    fn insert(&mut self, id: ProcId, proc: Proc);
+    /// Remove (and return) a proc — retirement, or the poll split-borrow.
+    fn remove(&mut self, id: ProcId) -> Option<Proc>;
+    /// All live procs, ascending by `ProcId` (determinism contract above).
+    fn iter_mut(&mut self) -> impl Iterator<Item = (ProcId, &mut Proc)>;
+}
+
+impl ProcSet for BTreeMap<ProcId, Proc> {
+    fn get_mut(&mut self, id: ProcId) -> Option<&mut Proc> {
+        BTreeMap::get_mut(self, &id)
+    }
+    fn insert(&mut self, id: ProcId, proc: Proc) {
+        BTreeMap::insert(self, id, proc);
+    }
+    fn remove(&mut self, id: ProcId) -> Option<Proc> {
+        BTreeMap::remove(self, &id)
+    }
+    fn iter_mut(&mut self) -> impl Iterator<Item = (ProcId, &mut Proc)> {
+        BTreeMap::iter_mut(self).map(|(&id, p)| (id, p))
+    }
+}
+
+/// ★ The device-global SPINE (`l1_concurrency.md` §3.4 — the `Gpu` ownership
+/// split): everything a per-proc op only *reads* (graph, routing maps, targets)
+/// plus the spine-mutating machinery (factory, window geometry, the retired list).
+/// Separately borrowable from [`Gpu::procs`]/[`Gpu::system`], so the L1 adapter
+/// can put THIS under the device `RwLock` and each [`Proc`] under its own `Mutex`
+/// as a **lock swap, not a rewrite**:
 ///
-/// `Send + Sync` (compile-time-asserted; concurrency contract, crate docs): share
-/// `&Gpu` across vCPU threads for lock-free reads (`nvkvm-fwd::resolve`,
-/// `gate_working_set`, routing lookups); mutation (`apply`, doorbells, completion
-/// pumping) takes `&mut self` under caller-provided exclusivity. Device-global
-/// state here (the graph, routing maps, the delivery gate) is exactly the state
-/// that needs a device-wide lock; everything per-process lives in [`Proc`] and
-/// parallelizes per-proc.
-pub struct Gpu {
+/// - **per-proc op** = device *read* lock (`&Spine`) + that proc's `Mutex`
+///   (`&mut Proc`) — `nvkvm-fwd`'s route/act split and `publish_backing`;
+/// - **spine op** = device *write* lock (`&mut Spine` + exclusive access to every
+///   proc, expressed as the [`ProcSet`] argument) — [`Spine::apply`], the
+///   completion pump/poll/drain, [`Spine::reap_retired`].
+///
+/// Still pure L0: no lock lives here; the split only shapes ownership so the locks
+/// drop in cleanly later (rules R1–R4 of the L1 design).
+pub struct Spine {
     /// The Axis-B behavior this device was realized with. The core only ever
     /// calls trait methods on it — never names a generation. **One arch for all
     /// targets** (MG-6: V1 multi-GPU is homogeneous-arch).
     pub arch: Box<dyn Arch>,
     /// ★ Source of truth (decision #14).
     pub rmgraph: RmGraph,
-    /// Derived per-process containers.
-    pub procs: BTreeMap<ProcId, Proc>,
-    /// The system proc: kernel RM / scrubber / CeUtils traffic ([`crate::Traffic`]).
-    pub system: Proc,
     /// ★ Data-plane routing (derived): `(GpuId, PDB)` → owning proc (MG-3). Keyed on
     /// the target because a `Pdb` is a per-GPU namespace. The `Vas` lives in
     /// `procs[pid].vases[(gpu, pdb)]`.
@@ -345,6 +383,33 @@ pub struct Gpu {
     next_proc: u32,
     /// Procs retired but not yet reaped (awaiting the quiesce point).
     pub retired: Vec<Proc>,
+}
+
+/// The device: composition root of the logic core.
+///
+/// Will additionally implement `nvkvm_vmm::Device` once the register/GSP models
+/// port (`nvkvm-regs`-equivalent + `nvkvm-gsp`); this milestone exposes the
+/// event-level API the adapters and tests drive.
+///
+/// `Send + Sync` (compile-time-asserted; concurrency contract, crate docs): share
+/// `&Gpu` across vCPU threads for lock-free reads (`nvkvm-fwd::resolve`,
+/// `gate_working_set`, routing lookups); mutation (`apply`, doorbells, completion
+/// pumping) takes `&mut self` under caller-provided exclusivity.
+///
+/// **The core-shape sharding split (`l1_concurrency.md` §3.4):** this type is now
+/// just the L0 bundle of the three separately-lockable parts — the device-global
+/// [`Spine`] (device-write-lock state), the [`Gpu::system`] proc, and the user
+/// [`Gpu::procs`]. Its `&mut self` methods are thin split-borrow wrappers over the
+/// [`Spine`] ops, for single-threaded callers (tests, the degenerate one-lock L1
+/// configuration); the sharded L1 owns the parts itself and calls the `Spine` /
+/// per-`Proc` entry points directly.
+pub struct Gpu {
+    /// The device-global spine (see [`Spine`]).
+    pub spine: Spine,
+    /// The system proc: kernel RM / scrubber / CeUtils traffic ([`crate::Traffic`]).
+    pub system: Proc,
+    /// Derived per-process containers.
+    pub procs: BTreeMap<ProcId, Proc>,
 }
 
 /// Per-target device state (MG-6): each routable GPU has its OWN guest-physical
@@ -373,52 +438,7 @@ struct TargetGeom {
     next_base: u64,
 }
 
-impl Gpu {
-    /// System proc's reserved id.
-    pub const SYSTEM_PROC: ProcId = ProcId(0);
-
-    /// Realize a device: pick the arch (once), the isolate factory, and the
-    /// `GpuId::ZERO` target's GPA window geometry. Materializes the system proc's
-    /// `GpuId::ZERO` isolate + arena eagerly (the N=1 single-target case).
-    pub fn new(
-        arch: Box<dyn Arch>,
-        isolates: Box<dyn IsolateFactory>,
-        gpa: GpaSpace,
-    ) -> Result<Self, GpuError> {
-        let window = gpa.window();
-        let arch_name = arch.name();
-        let geom = TargetGeom {
-            window_len: window.end - window.start,
-            arena_len: gpa.arena_len(),
-            next_base: window.end,
-        };
-        let mut targets = BTreeMap::new();
-        targets.insert(
-            GpuId::ZERO,
-            GpuTarget {
-                gpa,
-                delivery: DeliveryPlane::new(),
-                arch_name,
-            },
-        );
-        let mut gpu = Gpu {
-            arch,
-            rmgraph: RmGraph::new(),
-            procs: BTreeMap::new(),
-            system: Proc::new(Self::SYSTEM_PROC, ProcAnchor(HClient(0))),
-            by_pdb: BTreeMap::new(),
-            by_vchid: BTreeMap::new(),
-            targets,
-            isolates,
-            geom,
-            next_proc: 1,
-            retired: Vec::new(),
-        };
-        // The system proc always touches the default target (kernel/scrubber traffic).
-        gpu.ensure_proc_target(Self::SYSTEM_PROC, GpuId::ZERO)?;
-        Ok(gpu)
-    }
-
+impl Spine {
     /// Ensure target `gpu` exists (minting its disjoint window + drain gate on first
     /// touch, MG-6), enforcing the homogeneous-arch invariant loudly.
     fn ensure_target(&mut self, gpu: GpuId) -> Result<(), GpuError> {
@@ -448,19 +468,17 @@ impl Gpu {
         Ok(())
     }
 
-    /// Ensure proc `pid` has a materialized isolate + GPA arena for target `gpu`
-    /// (MG-5: per-`(Proc, GpuId)`). Idempotent; disjoint by construction.
-    fn ensure_proc_target(&mut self, pid: ProcId, gpu: GpuId) -> Result<(), GpuError> {
+    /// Ensure `proc` has a materialized isolate + GPA arena for target `gpu`
+    /// (MG-5: per-`(Proc, GpuId)`). Idempotent; disjoint by construction. The caller
+    /// resolves which proc (a user proc or the system proc) — the spine never
+    /// reaches into the proc set itself here.
+    fn ensure_proc_target(&mut self, proc: &mut Proc, gpu: GpuId) -> Result<(), GpuError> {
         self.ensure_target(gpu)?;
-        // Disjoint field borrows: the factory, the target, and the proc are separate
-        // fields (system is its own field, distinct from `procs`).
+        // Disjoint field borrows: the factory and the target are separate spine
+        // fields; the proc is a caller-provided borrow.
         let isolates = &mut self.isolates;
         let target = self.targets.get_mut(&gpu).expect("ensured above");
-        let proc = if pid == Self::SYSTEM_PROC {
-            &mut self.system
-        } else {
-            self.procs.get_mut(&pid).expect("live proc")
-        };
+        let pid = proc.id;
         proc.isolates
             .entry(gpu)
             .or_insert_with(|| isolates.spawn(IsolateId(pid.0), gpu));
@@ -483,20 +501,29 @@ impl Gpu {
     /// re-derived from its last-good graph, so the offending event is refused
     /// atomically and no other `Proc`'s state is disturbed. A hostile stream can only
     /// ever earn its own loud refusal.
-    pub fn apply(&mut self, ev: RmEvent) -> Result<(), GpuError> {
+    ///
+    /// **Concurrency shape (L1):** a spine op — runs under the device *write* lock,
+    /// with exclusive access to every proc (`system` + the [`ProcSet`]).
+    pub fn apply(
+        &mut self,
+        system: &mut Proc,
+        procs: &mut impl ProcSet,
+        ev: RmEvent,
+    ) -> Result<(), GpuError> {
         // Snapshot the last-good graph so a faulting derivation can be undone. (Apply
         // is the control plane — RM alloc/free/map — not the doorbell/pushbuffer hot
         // path, so a clone here is off the performance-critical path.)
         let snapshot = self.rmgraph.clone();
-        match self.apply_inner(ev) {
+        match self.apply_inner(system, procs, ev) {
             Ok(()) => Ok(()),
             Err(e) => {
                 // Undo: restore the last-good graph and re-derive from it. That graph
                 // projected cleanly before this event (every prior apply upheld the
                 // same invariant, inductively), so re-derivation cannot fault.
                 self.rmgraph = snapshot;
-                self.refresh().expect("last-good graph re-projects");
-                self.sync_rpc_mappings().expect("last-good graph re-syncs");
+                self.refresh(procs).expect("last-good graph re-projects");
+                self.sync_rpc_mappings(system, procs)
+                    .expect("last-good graph re-syncs");
                 Err(e)
             }
         }
@@ -505,13 +532,18 @@ impl Gpu {
     /// The non-atomic apply body: mutate the graph, re-derive, forward-populate. Any
     /// error here leaves derived state possibly half-updated — [`Self::apply`] wraps it
     /// to guarantee all-or-nothing.
-    fn apply_inner(&mut self, ev: RmEvent) -> Result<(), GpuError> {
+    fn apply_inner(
+        &mut self,
+        system: &mut Proc,
+        procs: &mut impl ProcSet,
+        ev: RmEvent,
+    ) -> Result<(), GpuError> {
         self.rmgraph.apply(self.arch.as_ref(), ev)?;
-        self.refresh()?;
+        self.refresh(procs)?;
         // Forward-populate the address table from the RPC map source (co-equal with
         // the CE-PT-write capture source — `mode2_address_table.md`). Bindings track
         // the graph's live mappings; unmap eagerly depopulates.
-        self.sync_rpc_mappings()?;
+        self.sync_rpc_mappings(system, procs)?;
         Ok(())
     }
 
@@ -519,10 +551,11 @@ impl Gpu {
     /// populate source). Idempotent: binds mappings not yet in the table, unbinds
     /// table entries whose mapping is gone. MISS=FAULT is preserved — a mapping with
     /// no resolvable PDB or backing is a loud fault, never a silent skip.
-    fn sync_rpc_mappings(&mut self) -> Result<(), GpuError> {
-        use nvkvm_arch::Aperture;
-        use nvkvm_mmu::Binding;
-
+    fn sync_rpc_mappings(
+        &self,
+        system: &mut Proc,
+        procs: &mut impl ProcSet,
+    ) -> Result<(), GpuError> {
         // Desired: (GpuId, pdb, va) -> (len, phys) for every live mapping with a
         // resolved target + PDB. The target is derived from the mapping's VAS `Device`
         // ancestor — a `Pdb` is per-GPU, so the binding must be keyed by target too.
@@ -544,60 +577,69 @@ impl Gpu {
             desired.insert((gpu, pdb.0, m.va.0), (m.len, phys));
         }
 
-        for proc in self
-            .procs
-            .values_mut()
-            .chain(core::iter::once(&mut self.system))
-        {
-            for (&(gpu, pdb), vas) in proc.vases.iter_mut() {
-                // Unbind stale RPC bindings (mapping gone), leaving host-backed
-                // publish_backing entries (host_va = Some) alone.
-                let stale: Vec<u64> = vas
-                    .rpc_bound
-                    .iter()
-                    .filter(|&&va| !desired.contains_key(&(gpu, pdb.0, va)))
-                    .copied()
-                    .collect();
-                for va in stale {
-                    vas.table.unbind(GpuVa(va));
-                    vas.rpc_bound.remove(&va);
+        for (_, proc) in procs.iter_mut() {
+            Self::sync_proc_rpc_bindings(&desired, proc)?;
+        }
+        Self::sync_proc_rpc_bindings(&desired, system)?;
+        Ok(())
+    }
+
+    /// Sync ONE proc's `Vas` tables to the desired RPC-mapping set (the per-proc
+    /// half of [`Self::sync_rpc_mappings`]).
+    fn sync_proc_rpc_bindings(
+        desired: &BTreeMap<(GpuId, u64, u64), (u64, u64)>,
+        proc: &mut Proc,
+    ) -> Result<(), GpuError> {
+        use nvkvm_arch::Aperture;
+        use nvkvm_mmu::Binding;
+
+        for (&(gpu, pdb), vas) in proc.vases.iter_mut() {
+            // Unbind stale RPC bindings (mapping gone), leaving host-backed
+            // publish_backing entries (host_va = Some) alone.
+            let stale: Vec<u64> = vas
+                .rpc_bound
+                .iter()
+                .filter(|&&va| !desired.contains_key(&(gpu, pdb.0, va)))
+                .copied()
+                .collect();
+            for va in stale {
+                vas.table.unbind(GpuVa(va));
+                vas.rpc_bound.remove(&va);
+            }
+            // Bind newly-declared mappings for this (target, PDB).
+            for (&(mgpu, mpdb, va), &(len, phys)) in desired.iter() {
+                if mgpu != gpu || mpdb != pdb.0 || vas.rpc_bound.contains(&va) {
+                    continue;
                 }
-                // Bind newly-declared mappings for this (target, PDB).
-                for (&(mgpu, mpdb, va), &(len, phys)) in desired.iter() {
-                    if mgpu != gpu || mpdb != pdb.0 || vas.rpc_bound.contains(&va) {
-                        continue;
-                    }
-                    vas.table
-                        .bind(
-                            pdb,
-                            GpuVa(va),
-                            len,
-                            Binding {
-                                phys,
-                                aperture: Aperture::SysmemCoherent,
-                                host_va: None,
-                            },
-                        )
-                        .map_err(GpuError::Address)?;
-                    vas.rpc_bound.insert(va);
-                }
+                vas.table
+                    .bind(
+                        pdb,
+                        GpuVa(va),
+                        len,
+                        Binding {
+                            phys,
+                            aperture: Aperture::SysmemCoherent,
+                            host_va: None,
+                        },
+                    )
+                    .map_err(GpuError::Address)?;
+                vas.rpc_bound.insert(va);
             }
         }
         Ok(())
     }
 
     /// Re-derive boundaries and sync `procs`/`by_pdb`/`by_vchid` to them.
-    fn refresh(&mut self) -> Result<(), GpuError> {
+    fn refresh(&mut self, procs: &mut impl ProcSet) -> Result<(), GpuError> {
         let bounds: Boundaries = project(&self.rmgraph, self.arch.as_ref())?;
 
         // 1. Match each boundary to existing procs by client intersection.
         let mut live: BTreeSet<ProcId> = BTreeSet::new();
         for b in &bounds.procs {
-            let mut matching: Vec<ProcId> = self
-                .procs
-                .iter()
+            let mut matching: Vec<ProcId> = procs
+                .iter_mut()
                 .filter(|(_, p)| !p.clients.is_disjoint(&b.clients))
-                .map(|(&id, _)| id)
+                .map(|(id, _)| id)
                 .collect();
             matching.sort_unstable();
 
@@ -606,14 +648,14 @@ impl Gpu {
                     // A merge: every other matching proc must still be untouched
                     // (the early-arm discipline).
                     for &absorbed in &matching[1..] {
-                        let p = self.procs.get(&absorbed).expect("matched proc exists");
+                        let p = procs.get_mut(absorbed).expect("matched proc exists");
                         if !p.is_untouched() {
                             return Err(GpuError::LateMerge {
                                 kept: keep,
                                 absorbed,
                             });
                         }
-                        let mut dead = self.procs.remove(&absorbed).expect("exists");
+                        let mut dead = procs.remove(absorbed).expect("exists");
                         dead.retire();
                         self.retired.push(dead);
                     }
@@ -624,14 +666,14 @@ impl Gpu {
                     self.next_proc += 1;
                     // Per-(Proc, GpuId) isolates/arenas are materialized lazily below,
                     // once the proc's target set is derived (MG-5).
-                    self.procs.insert(id, Proc::new(id, b.anchor));
+                    procs.insert(id, Proc::new(id, b.anchor));
                     id
                 }
             };
             live.insert(pid);
 
             // 2. Sync the proc's derived fields to the boundary.
-            let p = self.procs.get_mut(&pid).expect("live proc exists");
+            let p = procs.get_mut(pid).expect("live proc exists");
             p.anchor = b.anchor;
             p.clients = b.clients.clone();
             // Vases: create for newly-declared (GpuId, PDB); drop ones no longer
@@ -689,14 +731,13 @@ impl Gpu {
         }
 
         // 3. Retire procs whose component vanished (client root freed).
-        let dead: Vec<ProcId> = self
-            .procs
-            .keys()
+        let dead: Vec<ProcId> = procs
+            .iter_mut()
+            .map(|(id, _)| id)
             .filter(|id| !live.contains(id))
-            .copied()
             .collect();
         for id in dead {
-            let mut p = self.procs.remove(&id).expect("exists");
+            let mut p = procs.remove(id).expect("exists");
             p.retire();
             self.retired.push(p);
         }
@@ -706,7 +747,7 @@ impl Gpu {
         // a per-target window (MG-6) happens here too. Collected first to avoid holding
         // a proc borrow across the `&mut self` ensure call.
         let mut needed: BTreeSet<(ProcId, GpuId)> = BTreeSet::new();
-        for (&pid, p) in &self.procs {
+        for (pid, p) in procs.iter_mut() {
             for &(gpu, _pdb) in p.vases.keys() {
                 needed.insert((pid, gpu));
             }
@@ -718,7 +759,8 @@ impl Gpu {
             }
         }
         for (pid, gpu) in needed {
-            self.ensure_proc_target(pid, gpu)?;
+            let p = procs.get_mut(pid).expect("live proc exists");
+            self.ensure_proc_target(p, gpu)?;
         }
 
         // 4. Rebuild routing maps from the projection (never accreted). Keyed on the
@@ -726,7 +768,7 @@ impl Gpu {
         self.by_pdb.clear();
         self.by_vchid.clear();
         let anchor_to_pid: BTreeMap<ProcAnchor, ProcId> =
-            self.procs.iter().map(|(&id, p)| (p.anchor, id)).collect();
+            procs.iter_mut().map(|(id, p)| (p.anchor, id)).collect();
         for (&(gpu, pdb), &(anchor, _)) in &bounds.by_pdb {
             if let Some(&pid) = anchor_to_pid.get(&anchor) {
                 self.by_pdb.insert((gpu, pdb), pid);
@@ -734,7 +776,11 @@ impl Gpu {
         }
         for (&(gpu, vchid), &(anchor, key)) in &bounds.by_vchid {
             if let Some(&pid) = anchor_to_pid.get(&anchor)
-                && let Some(&cid) = self.procs[&pid].chan_ids.get(&key)
+                && let Some(&cid) = procs
+                    .get_mut(pid)
+                    .expect("anchored proc lives")
+                    .chan_ids
+                    .get(&key)
             {
                 self.by_vchid.insert((gpu, vchid), (pid, cid));
             }
@@ -776,19 +822,21 @@ impl Gpu {
     /// target (+ the system proc) — a batch outstanding on one GPU never gates
     /// another's post. The caller encodes it on that target's GSP queue and raises
     /// SWGEN0 via `Vmm::raise_irq`.
-    pub fn pump_completions(&mut self, gpu: GpuId) -> Option<PostBatch> {
-        let Self {
-            targets,
-            procs,
-            system,
-            ..
-        } = self;
-        let target = targets.get_mut(&gpu)?;
+    ///
+    /// A spine op (device-write-lock section in L1 — it composes across procs'
+    /// queues and consults the per-target drain gate; pure + microseconds, R1-safe).
+    pub fn pump_completions(
+        &mut self,
+        system: &mut Proc,
+        procs: &mut impl ProcSet,
+        gpu: GpuId,
+    ) -> Option<PostBatch> {
+        let target = self.targets.get_mut(&gpu)?;
         let mut queues: Vec<&mut CompletionQueue> = Vec::new();
         if system.targets.contains(&gpu) {
             queues.push(&mut system.completion);
         }
-        for p in procs.values_mut().filter(|p| p.targets.contains(&gpu)) {
+        for (_, p) in procs.iter_mut().filter(|(_, p)| p.targets.contains(&gpu)) {
             queues.push(&mut p.completion);
         }
         target.delivery.try_post(queues)
@@ -797,52 +845,128 @@ impl Gpu {
     /// ★ The starvation fix's entry point, per target (MG-6): proc `pid` issued a
     /// completion-poll RPC on target `gpu`. Its un-acked completions are re-posted off
     /// its OWN poll, regardless of any other proc's doorbell activity.
-    pub fn completion_poll(&mut self, gpu: GpuId, pid: ProcId, now: Instant) -> Option<PostBatch> {
+    pub fn completion_poll(
+        &mut self,
+        system: &mut Proc,
+        procs: &mut impl ProcSet,
+        gpu: GpuId,
+        pid: ProcId,
+        now: Instant,
+    ) -> Option<PostBatch> {
         if !self.targets.contains_key(&gpu) {
             return None;
         }
         // Split borrows: take the poller out, poll against the rest, put it back.
-        let mut poller = self.procs.remove(&pid)?;
+        let mut poller = procs.remove(pid)?;
         poller.poll.last_poll = Some(now);
         let batch = {
-            let Self {
-                targets,
-                procs,
-                system,
-                ..
-            } = self;
-            let target = targets.get_mut(&gpu).expect("checked above");
+            let target = self.targets.get_mut(&gpu).expect("checked above");
             let mut others: Vec<&mut CompletionQueue> = Vec::new();
             if system.targets.contains(&gpu) {
                 others.push(&mut system.completion);
             }
-            for p in procs.values_mut().filter(|p| p.targets.contains(&gpu)) {
+            for (_, p) in procs.iter_mut().filter(|(_, p)| p.targets.contains(&gpu)) {
                 others.push(&mut p.completion);
             }
             target.delivery.on_poll(&mut poller.completion, others)
         };
-        self.procs.insert(pid, poller);
+        procs.insert(pid, poller);
         batch
     }
 
     /// The guest drained target `gpu`'s outstanding batch (IRQSCLR observed).
-    pub fn completions_drained(&mut self, gpu: GpuId) {
-        let Self {
-            targets,
-            procs,
-            system,
-            ..
-        } = self;
-        let Some(target) = targets.get_mut(&gpu) else {
+    pub fn completions_drained(&mut self, system: &mut Proc, procs: &mut impl ProcSet, gpu: GpuId) {
+        let Some(target) = self.targets.get_mut(&gpu) else {
             return;
         };
         let mut queues: Vec<&mut CompletionQueue> = Vec::new();
         if system.targets.contains(&gpu) {
             queues.push(&mut system.completion);
         }
-        for p in procs.values_mut().filter(|p| p.targets.contains(&gpu)) {
+        for (_, p) in procs.iter_mut().filter(|(_, p)| p.targets.contains(&gpu)) {
             queues.push(&mut p.completion);
         }
         target.delivery.drained(queues);
+    }
+}
+
+impl Gpu {
+    /// System proc's reserved id.
+    pub const SYSTEM_PROC: ProcId = ProcId(0);
+
+    /// Realize a device: pick the arch (once), the isolate factory, and the
+    /// `GpuId::ZERO` target's GPA window geometry. Materializes the system proc's
+    /// `GpuId::ZERO` isolate + arena eagerly (the N=1 single-target case).
+    pub fn new(
+        arch: Box<dyn Arch>,
+        isolates: Box<dyn IsolateFactory>,
+        gpa: GpaSpace,
+    ) -> Result<Self, GpuError> {
+        let window = gpa.window();
+        let arch_name = arch.name();
+        let geom = TargetGeom {
+            window_len: window.end - window.start,
+            arena_len: gpa.arena_len(),
+            next_base: window.end,
+        };
+        let mut targets = BTreeMap::new();
+        targets.insert(
+            GpuId::ZERO,
+            GpuTarget {
+                gpa,
+                delivery: DeliveryPlane::new(),
+                arch_name,
+            },
+        );
+        let mut spine = Spine {
+            arch,
+            rmgraph: RmGraph::new(),
+            by_pdb: BTreeMap::new(),
+            by_vchid: BTreeMap::new(),
+            targets,
+            isolates,
+            geom,
+            next_proc: 1,
+            retired: Vec::new(),
+        };
+        let mut system = Proc::new(Self::SYSTEM_PROC, ProcAnchor(HClient(0)));
+        // The system proc always touches the default target (kernel/scrubber traffic).
+        spine.ensure_proc_target(&mut system, GpuId::ZERO)?;
+        Ok(Gpu {
+            spine,
+            system,
+            procs: BTreeMap::new(),
+        })
+    }
+
+    // ---- Split-borrow wrappers over the spine ops (the single-threaded/one-lock
+    // shape; the sharded L1 calls the `Spine` entry points directly). -------------
+
+    /// Apply one RM protocol event (see [`Spine::apply`]).
+    pub fn apply(&mut self, ev: RmEvent) -> Result<(), GpuError> {
+        self.spine.apply(&mut self.system, &mut self.procs, ev)
+    }
+
+    /// Reap retired procs at the quiesce point (see [`Spine::reap_retired`]).
+    pub fn reap_retired(&mut self) -> usize {
+        self.spine.reap_retired()
+    }
+
+    /// Compose+post one completion batch (see [`Spine::pump_completions`]).
+    pub fn pump_completions(&mut self, gpu: GpuId) -> Option<PostBatch> {
+        self.spine
+            .pump_completions(&mut self.system, &mut self.procs, gpu)
+    }
+
+    /// A proc's own completion poll (see [`Spine::completion_poll`]).
+    pub fn completion_poll(&mut self, gpu: GpuId, pid: ProcId, now: Instant) -> Option<PostBatch> {
+        self.spine
+            .completion_poll(&mut self.system, &mut self.procs, gpu, pid, now)
+    }
+
+    /// The guest drained target `gpu`'s batch (see [`Spine::completions_drained`]).
+    pub fn completions_drained(&mut self, gpu: GpuId) {
+        self.spine
+            .completions_drained(&mut self.system, &mut self.procs, gpu);
     }
 }

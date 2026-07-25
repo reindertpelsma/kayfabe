@@ -90,7 +90,7 @@ fn build(n: u64) -> (Gpu, MockVmm, Vec<Inference>, Vec<nvkvm_core::ProcId>) {
     }
     let pids: Vec<_> = infs
         .iter()
-        .map(|inf| *gpu.by_pdb.get(&(GpuId::ZERO, inf.pdb)).unwrap())
+        .map(|inf| *gpu.spine.by_pdb.get(&(GpuId::ZERO, inf.pdb)).unwrap())
         .collect();
     (gpu, MockVmm::new(), infs, pids)
 }
@@ -141,7 +141,7 @@ fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[nvkvm_core::Pro
 
     // (4) RmGraph does NOT leak: node count is exactly the fixture's (7 nodes/proc:
     // client, device, vaspace, tsg, gr-chan, ce-chan — SetPageDir isn't a node).
-    let node_count = gpu.rmgraph.nodes().count() as u64;
+    let node_count = gpu.spine.rmgraph.nodes().count() as u64;
     assert_eq!(
         node_count,
         n * 6,

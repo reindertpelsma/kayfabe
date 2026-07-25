@@ -30,20 +30,32 @@
 //! feed (#13), channel/TSG lifecycle. Each arrives with its regression tests
 //! (testing strategy §2).
 //!
-//! ## Concurrency (decision #17)
+//! ## Concurrency (decision #17) — the route/act split (L1 cardinal rule R4)
 //!
 //! This crate is stateless — free functions over the core's types, so the
 //! concurrency contract is inherited verbatim from `nvkvm-core` (see its crate
-//! docs): functions taking `&Gpu` ([`resolve`], [`gate_working_set`]) are
-//! concurrent-safe under a shared borrow; functions taking `&mut Gpu` or
-//! `&mut Proc` require caller-provided exclusivity — and the `&mut Proc` ones
-//! ([`publish_backing`]) parallelize per-proc (disjoint borrows out of
-//! `Gpu::procs`, no shared lock).
+//! docs). Every mixed entry point is factored into the shape the L1 sharding
+//! design requires (`l1_concurrency.md` §3.4):
+//!
+//! - **route** — a pure read of the device-global [`Spine`] (`&Spine`: token
+//!   decode, `by_vchid`/`by_pdb` lookup, arch tables). Runs under L1's device
+//!   *read* lock; touches no proc.
+//! - **act** — the mutation of exactly the routed target (`&mut Proc`, plus
+//!   `&Spine` where the act needs arch tables). Runs under that proc's `Mutex`;
+//!   the `RmBackend` verbs live here (the one sanctioned blocking site).
+//! - The original `&mut Gpu` entry points remain as **split-borrow compositions**
+//!   of route+act — the single-threaded / degenerate-one-lock shape the tests and
+//!   L1-M1 drive.
+//!
+//! Functions taking `&Gpu`/`&Spine`/`&Proc` are concurrent-safe under shared
+//! borrows; functions taking `&mut` require caller-provided exclusivity — and the
+//! `&mut Proc` ones ([`publish_backing`], the act phases) parallelize per-proc
+//! (disjoint borrows, no shared lock).
 
 use nvkvm_arch::Aperture;
 use nvkvm_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
 use nvkvm_completion::{CompletionError, OsEventRef, PostBatch};
-use nvkvm_core::gpu::{Channel, Gpu, Proc, Vas};
+use nvkvm_core::gpu::{Channel, Gpu, Proc, Spine, Vas};
 use nvkvm_core::{ChanId, ProcId};
 use nvkvm_isolate::{HostHandle, RmError};
 use nvkvm_mmu::AddressTable;
@@ -227,18 +239,38 @@ pub fn publish_backing(
     })
 }
 
-/// Resolve `va` in the `Vas` identified by `(gpu, pdb)`. Pure lookup; MISS=FAULT.
-pub fn resolve(gpu: &Gpu, target: GpuId, pdb: Pdb, va: GpuVa) -> Result<(Binding, u64), FwdFault> {
-    let pid = *gpu
+/// ROUTE: which proc owns `(target, pdb)`? A pure spine read (`by_pdb`) — the
+/// data-plane routing half of the route/act split. MISS=FAULT.
+pub fn route_pdb(spine: &Spine, target: GpuId, pdb: Pdb) -> Result<ProcId, FwdFault> {
+    spine
         .by_pdb
         .get(&(target, pdb))
-        .ok_or(FwdFault::UnknownPdb { gpu: target, pdb })?;
-    let proc = gpu.procs.get(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+        .copied()
+        .ok_or(FwdFault::UnknownPdb { gpu: target, pdb })
+}
+
+/// Resolve `va` in `proc`'s `Vas` identified by `(target, pdb)` — the per-proc
+/// read half of [`resolve`] (L1: device read lock + that proc's lock). Pure
+/// lookup; MISS=FAULT.
+pub fn resolve_in(
+    proc: &Proc,
+    target: GpuId,
+    pdb: Pdb,
+    va: GpuVa,
+) -> Result<(Binding, u64), FwdFault> {
     let vas = proc
         .vases
         .get(&(target, pdb))
         .ok_or(FwdFault::UnknownPdb { gpu: target, pdb })?;
     Ok(vas.table.resolve(pdb, va)?)
+}
+
+/// Resolve `va` in the `Vas` identified by `(gpu, pdb)`. Pure lookup; MISS=FAULT.
+/// Composition of [`route_pdb`] + [`resolve_in`].
+pub fn resolve(gpu: &Gpu, target: GpuId, pdb: Pdb, va: GpuVa) -> Result<(Binding, u64), FwdFault> {
+    let pid = route_pdb(&gpu.spine, target, pdb)?;
+    let proc = gpu.procs.get(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    resolve_in(proc, target, pdb, va)
 }
 
 /// Outcome of a doorbell dispatch, for assertions and tracing.
@@ -272,22 +304,68 @@ fn gate_vas(
     Ok(())
 }
 
-/// ★ THE ONE ring path — the exec-plane demux, **structurally gated** (#14,
-/// `execution_plane.md` §2.4; the C's "one exec path" refactor-debt lesson): one
-/// guest doorbell write → gate → the owning proc's channel rung on the owning
-/// proc's isolate. No ungated sibling exists; nothing else in the workspace calls
-/// `RmBackend::ring_doorbell`.
+/// A routed doorbell: everything the act phase needs, resolved by a pure spine
+/// read (the ROUTE half of L1 cardinal rule R4). Carries the routing identities so
+/// act-phase faults name the same `(GpuId, VChid)` the trap addressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DoorbellRoute {
+    /// The owning proc the token routed to.
+    pub proc: ProcId,
+    /// The channel it routed to.
+    pub chan: ChanId,
+    /// The target GPU the doorbell addressed (the BAR that trapped).
+    pub gpu: GpuId,
+    /// The decoded vChid (per-GPU runlist index).
+    pub vchid: VChid,
+    /// The raw token (recorded per-proc for poll-kick replay).
+    pub token: u64,
+}
+
+/// ROUTE (R4): decode a doorbell token and demux it to its owning `(Proc, Channel)`
+/// — a **pure read of the spine** (`Arch::decode_doorbell` + `by_vchid`), no proc
+/// touched, no `&mut` anywhere. In L1 this runs under the device *read* lock only.
+///
+/// ★ MG-3: the vChid demux is keyed on `(target GPU, vChid)` — the doorbell's
+/// target names WHICH GPU (the BAR that trapped); a vChid is a per-GPU runlist
+/// index, so identical vChids on two GPUs route to their own channels.
+pub fn route_doorbell(
+    spine: &Spine,
+    target_gpu: GpuId,
+    token: u64,
+) -> Result<DoorbellRoute, FwdFault> {
+    let target = spine
+        .arch
+        .decode_doorbell(token)
+        .ok_or(FwdFault::MalformedToken { token })?;
+    let (pid, cid) =
+        *spine
+            .by_vchid
+            .get(&(target_gpu, target.vchid))
+            .ok_or(FwdFault::UnknownVchid {
+                gpu: target_gpu,
+                vchid: target.vchid,
+            })?;
+    Ok(DoorbellRoute {
+        proc: pid,
+        chan: cid,
+        gpu: target_gpu,
+        vchid: target.vchid,
+        token,
+    })
+}
+
+/// ACT (R4): run the routed doorbell against **its owning proc only** —
+/// `&mut Proc`, never `&mut Gpu` (in L1: that proc's `Mutex`, under the device
+/// *read* lock). Ring-gate → lazy materialization/schedule → ring; the `RmBackend`
+/// verbs (the sanctioned blocking site) live here.
 ///
 /// `working_set` is the set of VAs this submission's work touches, as recovered by
-/// the caller (launch descriptors / submit parse). The gate is **structural, not
-/// caller discipline**: this is the ONLY function that reaches
-/// `RmBackend::ring_doorbell`, and it ALWAYS runs the gate before any host op — a
-/// caller cannot choose an ungated door because none exists (the removed `ring_gated`
-/// sibling was the debt). A declared VA that is unbound or bound-but-unpublished
-/// (`host_va = None` — the emulator's shadow had it, the channel's OWN host VAS did
-/// not) is a loud fault BEFORE the channel is even materialized, never a cross-proc
-/// content-pick. (An empty `working_set` is an honest "this submission touches no
-/// tracked VA" — there is nothing to fault on, and no host state is at risk.)
+/// the caller (launch descriptors / submit parse). A declared VA that is unbound or
+/// bound-but-unpublished (`host_va = None` — the emulator's shadow had it, the
+/// channel's OWN host VAS did not) is a loud fault BEFORE the channel is even
+/// materialized, never a cross-proc content-pick. (An empty `working_set` is an
+/// honest "this submission touches no tracked VA" — there is nothing to fault on,
+/// and no host state is at risk.)
 ///
 /// Materialization is lazy and **per-proc**: the first doorbell on a channel
 /// allocates + schedules its host channel in its Vas's host VAS through its own
@@ -295,27 +373,13 @@ fn gate_vas(
 /// immediate_doorbell`), and the "already scheduled" state lives on the proc's
 /// [`nvkvm_core::gpu::ExecPlane`] — there is no global one-shot to leave a second
 /// proc's channel off-runlist (#12's CTX2 bug, crack ⚠4).
-pub fn handle_doorbell(
-    gpu: &mut Gpu,
-    target_gpu: GpuId,
-    token: u64,
+pub fn exec_doorbell(
+    proc: &mut Proc,
+    route: &DoorbellRoute,
     working_set: &[GpuVa],
 ) -> Result<DoorbellOutcome, FwdFault> {
-    let target = gpu
-        .arch
-        .decode_doorbell(token)
-        .ok_or(FwdFault::MalformedToken { token })?;
-    // ★ MG-3: the vChid demux is keyed on `(target GPU, vChid)` — the doorbell's
-    // target names WHICH GPU (the BAR that trapped); a vChid is a per-GPU runlist
-    // index, so identical vChids on two GPUs route to their own channels.
-    let (pid, cid) =
-        *gpu.by_vchid
-            .get(&(target_gpu, target.vchid))
-            .ok_or(FwdFault::UnknownVchid {
-                gpu: target_gpu,
-                vchid: target.vchid,
-            })?;
-    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    let pid = route.proc;
+    let cid = route.chan;
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));
     }
@@ -329,8 +393,8 @@ pub fn handle_doorbell(
         ..
     } = proc;
     let chan: &mut Channel = channels.get_mut(&cid).ok_or(FwdFault::UnknownVchid {
-        gpu: target_gpu,
-        vchid: target.vchid,
+        gpu: route.gpu,
+        vchid: route.vchid,
     })?;
     let cgpu = chan.gpu;
     let rm = isolates
@@ -375,7 +439,7 @@ pub fn handle_doorbell(
         scheduled_now = true;
     }
 
-    poll.last_token = Some(token);
+    poll.last_token = Some(route.token);
     let host_token = chan.host_token.expect("materialized above");
     rm.ring_doorbell(host_token)?;
     Ok(DoorbellOutcome {
@@ -384,6 +448,32 @@ pub fn handle_doorbell(
         host_token,
         scheduled_now,
     })
+}
+
+/// ★ THE ONE ring path — the exec-plane demux, **structurally gated** (#14,
+/// `execution_plane.md` §2.4; the C's "one exec path" refactor-debt lesson): one
+/// guest doorbell write → gate → the owning proc's channel rung on the owning
+/// proc's isolate. No ungated sibling exists; nothing else in the workspace calls
+/// `RmBackend::ring_doorbell`.
+///
+/// The **split-borrow composition** of [`route_doorbell`] (pure spine read) +
+/// [`exec_doorbell`] (owning-proc act) — L1 cardinal rule R4 factored in the core.
+/// The gate is **structural, not caller discipline**: [`exec_doorbell`] is the ONLY
+/// function that reaches `RmBackend::ring_doorbell`, and it ALWAYS runs the gate
+/// before any host op — a caller cannot choose an ungated door because none exists
+/// (the removed `ring_gated` sibling was the debt).
+pub fn handle_doorbell(
+    gpu: &mut Gpu,
+    target_gpu: GpuId,
+    token: u64,
+    working_set: &[GpuVa],
+) -> Result<DoorbellOutcome, FwdFault> {
+    let route = route_doorbell(&gpu.spine, target_gpu, token)?;
+    let proc = gpu
+        .procs
+        .get_mut(&route.proc)
+        .ok_or(FwdFault::RetiredProc(route.proc))?;
+    exec_doorbell(proc, &route, working_set)
 }
 
 /// Post any composable completion batch for target `gpu_target` and raise the SWGEN0
@@ -453,39 +543,69 @@ pub struct EngineObjectForwarded {
     pub reused: bool,
 }
 
-/// **Case 1**: forward an engine-object alloc (compute / graphics / CE / NVENC) on the
-/// channel identified by `vchid`, so the host kernel-RM builds and self-promotes its
-/// OWN context. Materializes the host channel lazily (same per-proc discipline as
-/// `handle_doorbell`), then allocs the engine object on it via the proc's own isolate.
-///
-/// `class` is the guest's engine-object class; the arch maps it to an [`EngineKind`]
-/// (a class the arch does not recognize as an engine object is a loud `NotAnEngine`).
-/// `params` is the ABI-lowered alloc blob (Axis A). MISS=FAULT throughout.
-///
-/// **Idempotent under replay** (§2.2; the protocol is order-/repeat-independent): a
-/// re-sent alloc for a class already forwarded on this channel resolves from
-/// [`Channel::host_engine_objects`] and returns the ORIGINAL host object — the host
-/// never sees a duplicate engine-object alloc (the guest-retry hazard the graph
-/// already covers for alloc/DUP, extended to the host-forward plane).
-pub fn forward_engine_object(
-    gpu: &mut Gpu,
+/// A routed Case-1 engine-object alloc (the ROUTE half — same split as
+/// [`DoorbellRoute`]): the arch resolved the class to an [`EngineKind`] and
+/// `by_vchid` resolved the owning `(Proc, Channel)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EngineObjectRoute {
+    /// The owning proc.
+    pub proc: ProcId,
+    /// The channel the object allocs on.
+    pub chan: ChanId,
+    /// The target GPU the alloc addressed.
+    pub gpu: GpuId,
+    /// The channel's vChid (per-GPU), for act-phase fault naming.
+    pub vchid: VChid,
+    /// The engine kind the arch mapped `class` to.
+    pub engine: EngineKind,
+}
+
+/// ROUTE: resolve a Case-1 engine-object alloc to its owning `(Proc, Channel)` —
+/// a pure spine read (`Arch::engine_of_object` + `by_vchid`). A class the arch
+/// does not recognize as an engine object is a loud `NotAnEngine` (MISS=FAULT).
+pub fn route_engine_object(
+    spine: &Spine,
     target_gpu: GpuId,
     vchid: VChid,
     class: ClassId,
-    params: &[u8],
-) -> Result<EngineObjectForwarded, FwdFault> {
-    let engine = gpu
+) -> Result<EngineObjectRoute, FwdFault> {
+    let engine = spine
         .arch
         .engine_of_object(class)
         .ok_or(FwdFault::NotAnEngine(class))?;
-    let (pid, cid) = *gpu
+    let (pid, cid) = *spine
         .by_vchid
         .get(&(target_gpu, vchid))
         .ok_or(FwdFault::UnknownVchid {
             gpu: target_gpu,
             vchid,
         })?;
-    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    Ok(EngineObjectRoute {
+        proc: pid,
+        chan: cid,
+        gpu: target_gpu,
+        vchid,
+        engine,
+    })
+}
+
+/// ACT: forward the routed engine-object alloc on **its owning proc only**
+/// (`&mut Proc`): lazily materialize the host channel (same per-proc discipline as
+/// the doorbell act), then alloc the engine object via the proc's own isolate.
+///
+/// **Idempotent under replay** (§2.2; the protocol is order-/repeat-independent): a
+/// re-sent alloc for a class already forwarded on this channel resolves from
+/// [`Channel::host_engine_objects`] and returns the ORIGINAL host object — the host
+/// never sees a duplicate engine-object alloc (the guest-retry hazard the graph
+/// already covers for alloc/DUP, extended to the host-forward plane).
+pub fn exec_engine_object(
+    proc: &mut Proc,
+    route: &EngineObjectRoute,
+    class: ClassId,
+    params: &[u8],
+) -> Result<EngineObjectForwarded, FwdFault> {
+    let pid = route.proc;
+    let cid = route.chan;
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));
     }
@@ -497,8 +617,8 @@ pub fn forward_engine_object(
         ..
     } = proc;
     let chan = channels.get_mut(&cid).ok_or(FwdFault::UnknownVchid {
-        gpu: target_gpu,
-        vchid,
+        gpu: route.gpu,
+        vchid: route.vchid,
     })?;
     let cgpu = chan.gpu;
     let rm = isolates
@@ -529,7 +649,7 @@ pub fn forward_engine_object(
     // declared (channel, class), no matter how often the guest re-sends.
     if let Some(&host_object) = chan.host_engine_objects.get(&class) {
         return Ok(EngineObjectForwarded {
-            engine,
+            engine: route.engine,
             host_object,
             materialized_channel,
             reused: true,
@@ -538,16 +658,78 @@ pub fn forward_engine_object(
     let host_object = rm.alloc_engine_object(hchan, class, params)?;
     chan.host_engine_objects.insert(class, host_object);
     Ok(EngineObjectForwarded {
-        engine,
+        engine: route.engine,
         host_object,
         materialized_channel,
         reused: false,
     })
 }
 
+/// **Case 1**: forward an engine-object alloc (compute / graphics / CE / NVENC) on the
+/// channel identified by `vchid`, so the host kernel-RM builds and self-promotes its
+/// OWN context. The **split-borrow composition** of [`route_engine_object`] +
+/// [`exec_engine_object`] (same route/act discipline as the doorbell).
+///
+/// `class` is the guest's engine-object class; `params` is the ABI-lowered alloc
+/// blob (Axis A). MISS=FAULT throughout.
+pub fn forward_engine_object(
+    gpu: &mut Gpu,
+    target_gpu: GpuId,
+    vchid: VChid,
+    class: ClassId,
+    params: &[u8],
+) -> Result<EngineObjectForwarded, FwdFault> {
+    let route = route_engine_object(&gpu.spine, target_gpu, vchid, class)?;
+    let proc = gpu
+        .procs
+        .get_mut(&route.proc)
+        .ok_or(FwdFault::RetiredProc(route.proc))?;
+    exec_engine_object(proc, &route, class, params)
+}
+
+/// ROUTE: classify a `GSP_RM_CONTROL` through the Case-1/Case-2 split — a pure
+/// spine read (`Arch::is_case2_control`), no proc touched.
+#[must_use]
+pub fn classify_control(spine: &Spine, cmd: ControlCmd) -> ControlRoute {
+    if spine.arch.is_case2_control(cmd) {
+        // Case 2: ack-only. The host already did it (Case-1). Do NOT replay — an
+        // unprivileged replay returns InsufficientPermissions ("wrong layer").
+        ControlRoute::AckOnly
+    } else {
+        ControlRoute::Forwarded
+    }
+}
+
+/// ACT: forward a Case-1 control on **its owning proc only** (`&mut Proc`), on the
+/// op's TARGET GPU's isolate (MG-5): the control object `obj` is a handle in that
+/// isolate's namespace; routing it elsewhere is unrepresentable.
+pub fn forward_control(
+    proc: &mut Proc,
+    target_gpu: GpuId,
+    obj: HostHandle,
+    cmd: ControlCmd,
+    payload: &mut [u8],
+) -> Result<(), FwdFault> {
+    let pid = proc.id;
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(pid));
+    }
+    let rm = proc
+        .isolates
+        .get_mut(&target_gpu)
+        .ok_or(FwdFault::NoTarget {
+            proc: pid,
+            gpu: target_gpu,
+        })?
+        .rm();
+    rm.control(obj, cmd, payload)?;
+    Ok(())
+}
+
 /// Route a `GSP_RM_CONTROL` through the Case-1/Case-2 split. A **Case-2** control is
 /// ACKed and NOT forwarded (its host effect is already achieved); a **Case-1** control
-/// is forwarded to the host on `obj` through the owning proc's isolate.
+/// is forwarded to the host on `obj` through the owning proc's isolate. The
+/// **split-borrow composition** of [`classify_control`] + [`forward_control`].
 ///
 /// This is the anti-bolt-on payoff in code: adding an engine adds *rows* to the arch's
 /// Case-2 set and its class table — never a new host verb, never a new routing path.
@@ -559,26 +741,11 @@ pub fn route_control(
     cmd: ControlCmd,
     payload: &mut [u8],
 ) -> Result<ControlRoute, FwdFault> {
-    if gpu.arch.is_case2_control(cmd) {
-        // Case 2: ack-only. The host already did it (Case-1). Do NOT replay — an
-        // unprivileged replay returns InsufficientPermissions ("wrong layer").
+    if let ControlRoute::AckOnly = classify_control(&gpu.spine, cmd) {
         return Ok(ControlRoute::AckOnly);
     }
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
-    if proc.is_retired() {
-        return Err(FwdFault::RetiredProc(pid));
-    }
-    // Forward on the op's TARGET GPU's isolate (MG-5): the control object `obj` is a
-    // handle in that isolate's namespace; routing it elsewhere is unrepresentable.
-    let rm = proc
-        .isolates
-        .get_mut(&target_gpu)
-        .ok_or(FwdFault::NoTarget {
-            proc: pid,
-            gpu: target_gpu,
-        })?
-        .rm();
-    rm.control(obj, cmd, payload)?;
+    forward_control(proc, target_gpu, obj, cmd, payload)?;
     Ok(ControlRoute::Forwarded)
 }
 
@@ -589,6 +756,11 @@ pub fn route_control(
 ///
 /// Typed to the system proc by construction (lesson L5 / the #12 finishPayload rule):
 /// forging a completion for a userspace proc is unrepresentable here.
+///
+/// **Deliberately NOT route/act-split** (the one `&mut Gpu` per-proc-shaped entry
+/// left): a `&mut Proc` form would let a caller hand it a *user* proc, dissolving
+/// the structural L5 guarantee. It targets `Gpu::system` by name, is a rare
+/// bring-up event (once per device), and L1 runs it under the device write lock.
 pub fn signal_golden_capture(gpu: &mut Gpu, event: OsEventRef) -> Result<OsEventRef, FwdFault> {
     gpu.system.completion.observe(event)?;
     Ok(event)
@@ -657,26 +829,19 @@ fn decode_methods(arch: &dyn nvkvm_arch::Arch, bytes: &[u8]) -> Vec<(u32, Vec<u3
     out
 }
 
-/// Parse the pushbuffer `ring` submitted on channel `cid` of proc `pid`, reading its
-/// method words from guest memory via `vmm`. Feeds: CE-PT-write capture → the
-/// channel's `Vas.pt_pages` + address table; `SemRelease` → the proc's
-/// `CompletionQueue`; honors `TlbInvalidate` membars; passes opaque methods through.
-///
-/// **Only runs where the core is already the mediator** (kernel/CeUtils/scrubber
-/// channels + the CE-PT-write point). A userspace ring never carries a fact the core
-/// must extract (verified safe, address_table.md §opaque-fast-path) — callers pass it
-/// through as shared pages, no per-submit parse.
-pub fn parse_pushbuffer(
-    gpu: &mut Gpu,
+/// ROUTE/read phase of the pushbuffer parse: walk `ring`'s GPFIFO entries (arch
+/// format, a pure spine read) and read each range's method words from guest memory
+/// via `vmm`, bounded (boundary-1: per-range and total caps). Touches no proc — in
+/// L1 this runs under the device *read* lock, before the owning proc's lock.
+pub fn read_pushbuffer(
+    spine: &Spine,
     vmm: &mut dyn Vmm,
-    pid: ProcId,
-    cid: ChanId,
     ring: &[u8],
-) -> Result<PushbufferOutcome, FwdFault> {
+) -> Result<Vec<(u32, Vec<u32>)>, FwdFault> {
     // Walk the GPFIFO entries (arch format), reading each range's method bytes. A
     // hostile GPFIFO entry can name any length; cap the per-range read so a bogus
     // length is a bounded read, never an arbitrary allocation (boundary-1 posture).
-    let ranges = gpu.arch.pushbuffer().gpfifo_entries(ring);
+    let ranges = spine.arch.pushbuffer().gpfifo_entries(ring);
     let mut methods = Vec::new();
     let mut total = 0usize;
     for r in ranges {
@@ -689,13 +854,25 @@ pub fn parse_pushbuffer(
         let mut buf = vec![0u8; len];
         vmm.gpa_read(r.gpa, &mut buf)
             .map_err(|_| FwdFault::GpaRead { gpa: r.gpa })?;
-        methods.extend(decode_methods(gpu.arch.as_ref(), &buf));
+        methods.extend(decode_methods(spine.arch.as_ref(), &buf));
         total += len;
     }
+    Ok(methods)
+}
 
-    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+/// ACT phase of the pushbuffer parse: apply the decoded `methods` of channel `cid`
+/// to **its owning proc only** (`&mut Proc` + the read-only spine for the arch's
+/// method decoder). Feeds: CE-PT-write capture → the channel's `Vas.pt_pages` +
+/// address table; `SemRelease` → the proc's `CompletionQueue`; honors
+/// `TlbInvalidate` membars; passes opaque methods through.
+pub fn apply_pushbuffer(
+    spine: &Spine,
+    proc: &mut Proc,
+    cid: ChanId,
+    methods: Vec<(u32, Vec<u32>)>,
+) -> Result<PushbufferOutcome, FwdFault> {
     if proc.is_retired() {
-        return Err(FwdFault::RetiredProc(pid));
+        return Err(FwdFault::RetiredProc(proc.id));
     }
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
     let chan_pdb = chan.vas_pdb;
@@ -703,7 +880,7 @@ pub fn parse_pushbuffer(
 
     let mut out = PushbufferOutcome::default();
     for (header, args) in methods {
-        match gpu.arch.pushbuffer().decode_method(header, &args) {
+        match spine.arch.pushbuffer().decode_method(header, &args) {
             nvkvm_arch::PushMethod::SetObject { .. } => {
                 // Routing confirmation only — no address/completion state changes.
             }
@@ -757,6 +934,27 @@ pub fn parse_pushbuffer(
     Ok(out)
 }
 
+/// Parse the pushbuffer `ring` submitted on channel `cid` of proc `pid`, reading its
+/// method words from guest memory via `vmm`. The **split-borrow composition** of
+/// [`read_pushbuffer`] (spine read + guest-memory read) + [`apply_pushbuffer`]
+/// (owning-proc act).
+///
+/// **Only runs where the core is already the mediator** (kernel/CeUtils/scrubber
+/// channels + the CE-PT-write point). A userspace ring never carries a fact the core
+/// must extract (verified safe, address_table.md §opaque-fast-path) — callers pass it
+/// through as shared pages, no per-submit parse.
+pub fn parse_pushbuffer(
+    gpu: &mut Gpu,
+    vmm: &mut dyn Vmm,
+    pid: ProcId,
+    cid: ChanId,
+    ring: &[u8],
+) -> Result<PushbufferOutcome, FwdFault> {
+    let methods = read_pushbuffer(&gpu.spine, vmm, ring)?;
+    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    apply_pushbuffer(&gpu.spine, proc, cid, methods)
+}
+
 // =================================================================================
 // Per-`Proc` working-set publication + ring-gate — THE #14 fix in code
 // (`execution_plane.md` §2.4, decision #7, C: 6de85e7). The proven #14 root cause was
@@ -789,6 +987,16 @@ pub fn gate_working_set(
     working_set: &[GpuVa],
 ) -> Result<(), FwdFault> {
     let proc = gpu.procs.get(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    gate_working_set_in(proc, cid, working_set)
+}
+
+/// The per-proc form of [`gate_working_set`] (`&Proc` only — in L1: under that
+/// proc's lock, no device-wide access needed). Same predicate, same loud faults.
+pub fn gate_working_set_in(
+    proc: &Proc,
+    cid: ChanId,
+    working_set: &[GpuVa],
+) -> Result<(), FwdFault> {
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
     let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
     let vas = proc
@@ -855,8 +1063,21 @@ pub fn arm_fence(
     event: OsEventRef,
 ) -> Result<Option<OsEventRef>, FwdFault> {
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    arm_fence_in(proc, cid, addr, current, target, event)
+}
+
+/// The per-proc ACT form of [`arm_fence`] (`&mut Proc` only — a fence arm touches
+/// nothing device-global; in L1 it runs under that proc's lock).
+pub fn arm_fence_in(
+    proc: &mut Proc,
+    cid: ChanId,
+    addr: GpuVa,
+    current: u32,
+    target: u32,
+    event: OsEventRef,
+) -> Result<Option<OsEventRef>, FwdFault> {
     if proc.is_retired() {
-        return Err(FwdFault::RetiredProc(pid));
+        return Err(FwdFault::RetiredProc(proc.id));
     }
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
     if completion_arm(chan.engine) != CompletionArm::MappedFence {
@@ -887,16 +1108,21 @@ pub fn fence_observed(
     addr: GpuVa,
     value: u32,
 ) -> Result<Option<OsEventRef>, FwdFault> {
-    let pid = *gpu
-        .by_pdb
-        .get(&(target_gpu, pdb))
-        .ok_or(FwdFault::UnknownPdb {
-            gpu: target_gpu,
-            pdb,
-        })?;
+    let pid = route_pdb(&gpu.spine, target_gpu, pdb)?;
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    fence_observed_in(proc, pdb, addr, value)
+}
+
+/// The per-proc ACT form of [`fence_observed`] (`&mut Proc` only; the caller
+/// routed by PDB via [`route_pdb`] — in L1: device read lock + that proc's lock).
+pub fn fence_observed_in(
+    proc: &mut Proc,
+    pdb: Pdb,
+    addr: GpuVa,
+    value: u32,
+) -> Result<Option<OsEventRef>, FwdFault> {
     if proc.is_retired() {
-        return Err(FwdFault::RetiredProc(pid));
+        return Err(FwdFault::RetiredProc(proc.id));
     }
     Ok(proc.fences.observe((pdb.0, addr.0), value)?)
 }
@@ -924,8 +1150,19 @@ pub fn present_scanout(
     meta: FbMeta,
 ) -> Result<u64, FwdFault> {
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    present_scanout_in(proc, present, buffer, meta)
+}
+
+/// The per-proc ACT form of [`present_scanout`] (`&mut Proc` + the caller-owned
+/// [`Present`] sink — nothing device-global; in L1: that proc's lock).
+pub fn present_scanout_in(
+    proc: &mut Proc,
+    present: &mut dyn Present,
+    buffer: SurfaceHandle,
+    meta: FbMeta,
+) -> Result<u64, FwdFault> {
     if proc.is_retired() {
-        return Err(FwdFault::RetiredProc(pid));
+        return Err(FwdFault::RetiredProc(proc.id));
     }
     let vblank = present.present(buffer, meta).map_err(FwdFault::Present)?;
     // Synthetic vblank → the proc's completion queue (the graphics completion arm).
@@ -938,8 +1175,10 @@ nvkvm_util::assert_send_sync!(
     FwdFault,
     Published,
     DoorbellOutcome,
+    DoorbellRoute,
     ControlRoute,
     CompletionArm,
     EngineObjectForwarded,
+    EngineObjectRoute,
     PushbufferOutcome,
 );

@@ -71,6 +71,7 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
     apply_all(&mut gpu, s1.events);
 
     let pid1 = *gpu
+        .spine
         .by_pdb
         .get(&(GpuId::ZERO, PDB))
         .expect("CTX1 routed by PDB");
@@ -95,11 +96,11 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
     })
     .expect("free CTX1");
     assert!(
-        !gpu.by_pdb.contains_key(&(GpuId::ZERO, PDB)),
+        !gpu.spine.by_pdb.contains_key(&(GpuId::ZERO, PDB)),
         "CTX1's PDB no longer routes after teardown"
     );
     assert!(
-        !gpu.by_vchid.contains_key(&(GpuId::ZERO, VChid(0x10))),
+        !gpu.spine.by_vchid.contains_key(&(GpuId::ZERO, VChid(0x10))),
         "CTX1's vChid retired"
     );
     // The old Proc is retired (staged reap), not live — cross-teardown use is refused.
@@ -114,6 +115,7 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
     apply_all(&mut gpu, s2.events);
 
     let pid2 = *gpu
+        .spine
         .by_pdb
         .get(&(GpuId::ZERO, PDB))
         .expect("CTX2 routed by its (reused) PDB");
@@ -179,7 +181,7 @@ fn wo_13_multiiter_realloc_same_va_new_backing_each_iter() {
     let mut s = Scenario::new();
     s.compute_process(CLIENT, PDB, identical_handles(0x10, 0x11));
     apply_all(&mut gpu, s.events);
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
 
     let mut last_gpa = None;
     for iter in 0..5u64 {
@@ -263,8 +265,8 @@ fn wo_14_two_proc_identical_va_interleaved_events_disjoint_backing() {
         2,
         "interleaved build still yields two disjoint Procs"
     );
-    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
-    let pid_b = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
+    let pid_a = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid_b = *gpu.spine.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
     assert_ne!(pid_a, pid_b);
 
     // Identical guest VA in each → disjoint GPA and disjoint host VA.
@@ -314,7 +316,7 @@ fn wo_teardown_during_active_inflight_completion_is_clean() {
     s.compute_process(CLIENT, PDB, identical_handles(0x10, 0x11));
     apply_all(&mut gpu, s.events);
 
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
     publish_backing(
         gpu.procs.get_mut(&pid).unwrap(),
         GpuId::ZERO,
@@ -346,12 +348,12 @@ fn wo_teardown_during_active_inflight_completion_is_clean() {
         "torn-down proc left the live set"
     );
     assert!(
-        !gpu.by_pdb.contains_key(&(GpuId::ZERO, PDB))
-            && !gpu.by_vchid.contains_key(&(GpuId::ZERO, VChid(0x10)))
+        !gpu.spine.by_pdb.contains_key(&(GpuId::ZERO, PDB))
+            && !gpu.spine.by_vchid.contains_key(&(GpuId::ZERO, VChid(0x10)))
     );
     // The retired proc was staged for deferred reap (L10), not dropped mid-flight.
     assert!(
-        gpu.retired.iter().any(|p| p.is_retired()),
+        gpu.spine.retired.iter().any(|p| p.is_retired()),
         "proc staged for deferred reap"
     );
     // A doorbell to the now-retired channel is a loud MISS, never a stale consume.
@@ -607,14 +609,14 @@ fn wo_retried_duplicate_events_are_idempotent() {
     // Deliver every event, then deliver every event AGAIN (a full retry storm).
     apply_all(&mut gpu, events.clone());
     let after_first: usize = gpu.procs.len();
-    let bounds_first = project(&gpu.rmgraph, gpu.arch.as_ref()).unwrap();
+    let bounds_first = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).unwrap();
 
     // The retried delivery must be accepted idempotently (no ConflictingAlloc).
     for ev in &events {
         gpu.apply(*ev)
             .expect("retried event is idempotent, not a conflict");
     }
-    let bounds_second = project(&gpu.rmgraph, gpu.arch.as_ref()).unwrap();
+    let bounds_second = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).unwrap();
 
     assert_eq!(
         gpu.procs.len(),

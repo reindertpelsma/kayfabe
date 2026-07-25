@@ -91,6 +91,7 @@ fn t14_identical_va_disjoint_backing() {
     // Route by PDB (data-plane identity) to each proc, then publish the SAME guest
     // VA in each. This is exactly the collision #14 hit in the C's shared arena.
     let pid_a = *gpu
+        .spine
         .by_pdb
         .get(&(GpuId::ZERO, A_PDB))
         .expect("A routed by its PDB");
@@ -104,6 +105,7 @@ fn t14_identical_va_disjoint_backing() {
     .expect("A publishes");
 
     let pid_b = *gpu
+        .spine
         .by_pdb
         .get(&(GpuId::ZERO, B_PDB))
         .expect("B routed by its PDB");
@@ -204,8 +206,8 @@ fn t14_malformed_and_unknown_tokens_fault_loudly() {
 #[test]
 fn t14_polling_proc_is_not_starved() {
     let (mut gpu, mut vmm, _rec) = two_process_gpu();
-    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
-    let pid_b = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
+    let pid_a = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid_b = *gpu.spine.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
 
     // B completes work; its completion is observed, posted, drained, acked.
     gpu.procs

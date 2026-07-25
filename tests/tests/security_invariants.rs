@@ -212,7 +212,7 @@ proptest! {
         }
 
         // Device still projects (hostile junk left it consistent).
-        prop_assert!(project(&gpu.rmgraph, gpu.arch.as_ref()).is_ok());
+        prop_assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).is_ok());
 
         // THE property: each PDB resolves the shared VA to ITS OWN phys, never another's.
         for &(pdb, phys) in &oracle {
@@ -624,14 +624,14 @@ proptest! {
             let _ = gpu.apply(ev);
             // No global wedge at ANY point: the device always still projects.
             prop_assert!(
-                project(&gpu.rmgraph, gpu.arch.as_ref()).is_ok(),
+                project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).is_ok(),
                 "a hostile event left the device unprojectable (a global wedge)"
             );
         }
 
         // The bystander is intact: routing + resolution unchanged (a squat on BY_PDB
         // was refused — first-declarer-wins — never honored over the bystander).
-        prop_assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, BY_PDB)), "bystander PDB stopped routing");
+        prop_assert!(gpu.spine.by_pdb.contains_key(&(GpuId::ZERO, BY_PDB)), "bystander PDB stopped routing");
         prop_assert_eq!(
             resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys),
             Ok(BY_PHYS),
@@ -648,7 +648,7 @@ proptest! {
             let r = gpu.apply(ev);
             prop_assert!(r.is_ok(), "device unusable after storm: fresh benign op refused: {r:?} on {ev:?}");
         }
-        prop_assert!(gpu.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)), "post-storm fresh proc did not route");
+        prop_assert!(gpu.spine.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)), "post-storm fresh proc did not route");
     }
 }
 
@@ -1059,11 +1059,11 @@ fn p4_parked_setpagedir_via_dup_alias_cannot_wedge_the_device() {
         "victim corrupted"
     );
     assert!(
-        gpu.by_pdb.contains_key(&(GpuId::ZERO, a_pdb)),
+        gpu.spine.by_pdb.contains_key(&(GpuId::ZERO, a_pdb)),
         "attacker VAS lost its own PDB (stale parked one clobbered it)"
     );
     assert!(
-        gpu.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)),
+        gpu.spine.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)),
         "fresh proc did not route"
     );
 }
@@ -1161,7 +1161,7 @@ fn p4_parked_unbacked_map_via_dup_alias_cannot_wedge_the_device() {
         "victim corrupted"
     );
     assert!(
-        gpu.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)),
+        gpu.spine.by_pdb.contains_key(&(GpuId::ZERO, LATE_PDB)),
         "fresh proc did not route"
     );
     // The unbacked VA never populated — a loud MISS at use, contained (never a wedge).

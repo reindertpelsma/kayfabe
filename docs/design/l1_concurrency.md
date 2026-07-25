@@ -211,6 +211,22 @@ Rationale, in order of weight:
 
 ### 3.4 The honest cost: a core-shape change, requested by design discussion
 
+> **Status (decision #35, owner-confirmed refactor-NOW): LANDED, behavior-preserving,
+> 143/143 green.** `Gpu` = `{ spine: Spine, system: Proc, procs }` — the device-global
+> `Spine` (arch/rmgraph/`by_pdb`/`by_vchid`/targets/factory/retired) is separately
+> borrowable from the proc set. Spine ops (`Spine::apply`, pump/poll/drained,
+> `reap_retired`) take `&mut Spine + &mut Proc(system) + &mut impl ProcSet` — the
+> `ProcSet` trait is the "L1 wrapper owns the `Proc`s" visitor seam (item 2 below), so
+> L1 can store `Mutex<Proc>` cells and still drive the write-lock sections. Per-proc
+> ops are route/act split per R4: `route_doorbell(&Spine)`/`exec_doorbell(&mut Proc)`,
+> `route_engine_object`/`exec_engine_object`, `classify_control`/`forward_control`,
+> `read_pushbuffer`/`apply_pushbuffer`, `route_pdb` + `*_in` forms of
+> resolve/gate/arm_fence/fence_observed/present_scanout. The old `&mut Gpu` entry
+> points remain as split-borrow compositions (the degenerate one-lock shape). The one
+> deliberate exception: `signal_golden_capture` stays `&mut Gpu` (a `&mut Proc` form
+> would dissolve the L5 system-typed-forge guarantee; it is a rare bring-up event —
+> run it under the write lock).
+
 Today `nvkvm_fwd::handle_doorbell` takes `&mut Gpu`, and `Gpu` owns its `Proc`s as
 plain values in `procs: BTreeMap<ProcId, Proc>` — correct for the pure core (no
 interior mutability, decision #17), but it means L1 cannot hand two threads two procs

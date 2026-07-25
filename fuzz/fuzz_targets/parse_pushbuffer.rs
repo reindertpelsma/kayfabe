@@ -78,7 +78,7 @@ fn build_ring(entries: &[(u8, u64)]) -> Vec<u8> {
 
 fuzz_target!(|input: Input| {
     let (mut gpu, mut vmm) = one_proc_gpu();
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
 
     // Back the method region the GPFIFO ranges resolve to.

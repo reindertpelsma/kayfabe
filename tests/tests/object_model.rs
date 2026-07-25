@@ -200,12 +200,12 @@ fn mapping_refcount_keeps_memory_alive() {
     let mem_key = NodeKey::new(CLIENT, MEM);
 
     assert_eq!(
-        gpu.rmgraph.map_ref_count(mem_key),
+        gpu.spine.rmgraph.map_ref_count(mem_key),
         1,
         "one live mapping references the memory"
     );
     assert!(
-        gpu.rmgraph.backing_of(mem_key).is_some(),
+        gpu.spine.rmgraph.backing_of(mem_key).is_some(),
         "memory resource is live"
     );
 
@@ -216,7 +216,7 @@ fn mapping_refcount_keeps_memory_alive() {
     })
     .expect("free applies");
     assert!(
-        gpu.rmgraph.backing_of(mem_key).is_some(),
+        gpu.spine.rmgraph.backing_of(mem_key).is_some(),
         "memory resource survives its handle's free while a mapping references it"
     );
     assert!(
@@ -231,9 +231,9 @@ fn mapping_refcount_keeps_memory_alive() {
         va: MAP_VA,
     })
     .expect("unmap applies");
-    assert_eq!(gpu.rmgraph.map_ref_count(mem_key), 0);
+    assert_eq!(gpu.spine.rmgraph.map_ref_count(mem_key), 0);
     assert!(
-        gpu.rmgraph.backing_of(mem_key).is_none(),
+        gpu.spine.rmgraph.backing_of(mem_key).is_none(),
         "last reference gone → memory resource destroyed (no leak)"
     );
 }
@@ -867,6 +867,7 @@ fn event_objects_are_graph_derived() {
     }
 
     let events: Vec<_> = gpu
+        .spine
         .rmgraph
         .events_of(CLIENT)
         .map(|n| n.key.handle)
@@ -878,7 +879,7 @@ fn event_objects_are_graph_derived() {
     );
 
     // A different client owns none of them (routing is per-client, graph-derived).
-    assert_eq!(gpu.rmgraph.events_of(HClient(0xEE)).count(), 0);
+    assert_eq!(gpu.spine.rmgraph.events_of(HClient(0xEE)).count(), 0);
 }
 
 /// A `MAP_MEMORY_DMA` against a memory object with NO declared backing is a loud
@@ -1075,9 +1076,9 @@ mod fuzz {
 
                 // Every live mapping keeps its memory resource ALIVE (map-ref-count ≥ 1),
                 // regardless of whether that memory declared a backing.
-                for m in gpu.rmgraph.mappings() {
+                for m in gpu.spine.rmgraph.mappings() {
                     prop_assert!(
-                        gpu.rmgraph.map_ref_count(m.memory) >= 1,
+                        gpu.spine.rmgraph.map_ref_count(m.memory) >= 1,
                         "a mapped memory has map-ref-count ≥ 1 (refcount keeps it alive)"
                     );
                 }
@@ -1086,11 +1087,11 @@ mod fuzz {
                 for c in 0..3u32 {
                     for h in 0..6u32 {
                         let k = NodeKey::new(HClient(0xD000 + c), HObject(0x9000_0000 + h));
-                        if gpu.rmgraph.origin_of(k).is_none()
-                            && gpu.rmgraph.map_ref_count(k) == 0
+                        if gpu.spine.rmgraph.origin_of(k).is_none()
+                            && gpu.spine.rmgraph.map_ref_count(k) == 0
                         {
                             prop_assert!(
-                                gpu.rmgraph.backing_of(k).is_none(),
+                                gpu.spine.rmgraph.backing_of(k).is_none(),
                                 "a resource with no handle and no mapping must be destroyed (no leak)"
                             );
                         }

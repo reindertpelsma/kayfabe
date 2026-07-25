@@ -90,6 +90,7 @@ nvkvm_util::assert_send_sync!(
     Traffic,
     ProcAnchor,
     gpu::Gpu,
+    gpu::Spine,
     gpu::Proc,
     gpu::Vas,
     gpu::Channel,

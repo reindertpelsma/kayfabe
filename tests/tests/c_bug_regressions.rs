@@ -70,7 +70,11 @@ fn build_proc(
     let mut s = Scenario::new();
     s.compute_process(client, pdb, identical_handles(vchids.0, vchids.1));
     apply_all(gpu, s.events);
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, pdb)).expect("routed by PDB");
+    let pid = *gpu
+        .spine
+        .by_pdb
+        .get(&(GpuId::ZERO, pdb))
+        .expect("routed by PDB");
     let cid = *gpu.procs[&pid]
         .chan_ids
         .values()
@@ -737,18 +741,21 @@ fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
     .unwrap();
     assert!(gpu.procs.is_empty(), "all procs retired");
     assert!(
-        gpu.by_pdb.is_empty() && gpu.by_vchid.is_empty(),
+        gpu.spine.by_pdb.is_empty() && gpu.spine.by_vchid.is_empty(),
         "no routing residue"
     );
     assert_eq!(
-        gpu.retired.len(),
+        gpu.spine.retired.len(),
         2,
         "both staged for the deferred reap (L10)"
     );
 
     // ---- The quiesce point: reap + recycle. ----
     assert_eq!(gpu.reap_retired(), 2);
-    assert!(gpu.retired.is_empty(), "reap drained the staging area");
+    assert!(
+        gpu.spine.retired.is_empty(),
+        "reap drained the staging area"
+    );
 
     // ---- Generation 2: IDENTICAL handles, PDBs, VAs. ----
     let (pid_a2, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
@@ -858,7 +865,7 @@ fn cb_lifecycle_process_churn_never_exhausts_the_window() {
         assert_eq!(gpu.reap_retired(), 1, "generation {generation}: reaped");
     }
     assert!(
-        gpu.retired.is_empty(),
+        gpu.spine.retired.is_empty(),
         "no unbounded staging growth across churn"
     );
     assert!(gpu.procs.is_empty());

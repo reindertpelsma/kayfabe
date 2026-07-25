@@ -247,7 +247,7 @@ proptest! {
         for ev in &b_events {
             ref_gpu.apply(*ev).expect("benign B applies cleanly on its own");
         }
-        let ref_bounds = project(&ref_gpu.rmgraph, ref_gpu.arch.as_ref()).expect("B projects");
+        let ref_bounds = project(&ref_gpu.spine.rmgraph, ref_gpu.spine.arch.as_ref()).expect("B projects");
         let b_ref = boundary_of(&ref_bounds, B_CLIENT).expect("B has a boundary");
 
         // Adversarial world: A interleaved with B.
@@ -262,7 +262,7 @@ proptest! {
         }
 
         // The device still projects (a hostile A left it in a consistent state).
-        let bounds = project(&gpu.rmgraph, gpu.arch.as_ref())
+        let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref())
             .expect("device still projects after hostile A");
         let b_now = boundary_of(&bounds, B_CLIENT).expect("B still has a boundary");
         prop_assert_eq!(b_ref, b_now, "B's boundary changed under A's hostility");
@@ -522,7 +522,8 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
         Ok(B_MEM_PHYS)
     );
     assert_eq!(
-        gpu.by_pdb
+        gpu.spine
+            .by_pdb
             .get(&(GpuId::ZERO, B_PDB))
             .and_then(|pid| gpu.procs.get(pid))
             .map(|p| p.clients.contains(&B_CLIENT)),
@@ -531,11 +532,11 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
     // The INNOCENT third process C is entirely unaffected — the blast radius never
     // reaches beyond the colliding pair.
     assert!(
-        gpu.by_pdb.contains_key(&(GpuId::ZERO, C_PDB)),
+        gpu.spine.by_pdb.contains_key(&(GpuId::ZERO, C_PDB)),
         "innocent C still routes"
     );
     // And the device as a whole is still consistent (no wedge, no corruption).
-    assert!(project(&gpu.rmgraph, gpu.arch.as_ref()).is_ok());
+    assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).is_ok());
 }
 
 /// **Boundary 1.** The per-`Proc` completion plane is private: a hostile process
@@ -589,7 +590,7 @@ proptest! {
         for ev in benign_b_events() {
             gpu.apply(ev).expect("B applies");
         }
-        let pid = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).expect("B routes");
+        let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, B_PDB)).expect("B routes");
         let cid = *gpu.procs[&pid].chan_ids.values().next().expect("B has a channel");
         let mut vmm = MockVmm::new();
         // Arbitrary method bytes live in guest RAM; the ring points ranges at them.
@@ -613,7 +614,7 @@ proptest! {
             let _ = resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(v));
         }
         // The device is still consistent after all of it.
-        prop_assert!(project(&gpu.rmgraph, gpu.arch.as_ref()).is_ok());
+        prop_assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).is_ok());
     }
 }
 
@@ -820,7 +821,7 @@ fn b2_pushbuffer_length_flood_is_bounded() {
     for ev in benign_b_events() {
         gpu.apply(ev).expect("B applies");
     }
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
     let mut vmm = MockVmm::new();
 
@@ -1053,7 +1054,7 @@ fn b5_channel_cannot_bind_another_clients_vaspace_handle() {
     })
     .unwrap();
 
-    let bounds = project(&gpu.rmgraph, gpu.arch.as_ref()).expect("projects");
+    let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).expect("projects");
     // A's channel resolved to NO VAS — it never reached across into B's VASpace/PDB.
     let a_proc = boundary_of(&bounds, A_CLIENT).expect("A exists");
     let chan = a_proc.channels.values().next().expect("A's channel");
@@ -1097,13 +1098,14 @@ fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
     );
     // No cross-object binding: the dst alias resolves to nothing (no silent reach).
     assert!(
-        gpu.rmgraph
+        gpu.spine
+            .rmgraph
             .origin_of(NodeKey::new(HClient(0xBEEF), HObject(0xBEEF)))
             .is_none(),
         "a parked dup must not bind its dst to any object"
     );
     // No phantom proc: the never-allocated clients group into nothing.
-    let bounds = project(&gpu.rmgraph, gpu.arch.as_ref()).expect("projects");
+    let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).expect("projects");
     assert!(
         bounds.procs.iter().all(|p| {
             !p.clients.contains(&HClient(0xBEEF)) && !p.clients.contains(&HClient(0xDEAD))

@@ -91,10 +91,12 @@ fn two_gpu_world() -> (
         gpu.apply(ev).expect("GPU1 proc applies");
     }
     let pid_a = *gpu
+        .spine
         .by_pdb
         .get(&(GpuId(0), SHARED_PDB))
         .expect("GPU0 PDB routes");
     let pid_b = *gpu
+        .spine
         .by_pdb
         .get(&(GpuId(1), SHARED_PDB))
         .expect("GPU1 PDB routes");
@@ -197,8 +199,8 @@ fn cross_gpu_isolation() {
 
     // Cross-target routing is a clean MISS, never a silent reach into the other GPU:
     // GPU0 has no proc holding GPU1's-only identities beyond its own.
-    assert_eq!(gpu.by_pdb.get(&(GpuId(0), SHARED_PDB)), Some(&pid_a));
-    assert_eq!(gpu.by_pdb.get(&(GpuId(1), SHARED_PDB)), Some(&pid_b));
+    assert_eq!(gpu.spine.by_pdb.get(&(GpuId(0), SHARED_PDB)), Some(&pid_a));
+    assert_eq!(gpu.spine.by_pdb.get(&(GpuId(1), SHARED_PDB)), Some(&pid_b));
 }
 
 // =================================================================================
@@ -255,19 +257,19 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
     let (gpu, _rec, pid_a, pid_b) = two_gpu_world();
     assert_ne!(pid_a, pid_b);
     assert_eq!(
-        gpu.by_pdb.get(&(GpuId(0), SHARED_PDB)),
+        gpu.spine.by_pdb.get(&(GpuId(0), SHARED_PDB)),
         Some(&pid_a),
         "GPU0's PDB routes to A"
     );
     assert_eq!(
-        gpu.by_pdb.get(&(GpuId(1), SHARED_PDB)),
+        gpu.spine.by_pdb.get(&(GpuId(1), SHARED_PDB)),
         Some(&pid_b),
         "identical PDB on GPU1 routes to B — NOT a collision"
     );
     // The old device-global guard would have refused GPU1's identical PDB as a
     // PdbCollision; under the (GpuId, Pdb) key it is legal traffic.
     assert!(
-        project(&gpu.rmgraph, gpu.arch.as_ref()).is_ok(),
+        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).is_ok(),
         "the two-GPU world projects cleanly"
     );
 
@@ -337,7 +339,7 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
     );
     // Atomic: the collision was rolled back; the first VAS still routes (device usable).
     assert!(
-        gpu2.by_pdb.contains_key(&(GpuId(0), SHARED_PDB)),
+        gpu2.spine.by_pdb.contains_key(&(GpuId(0), SHARED_PDB)),
         "first claimant survives the refusal"
     );
 
@@ -434,7 +436,7 @@ fn determinism_holds_under_gpu_axis() {
             gpu.apply(*ev)
                 .expect("valid multi-GPU fact applies in any order");
         }
-        project(&gpu.rmgraph, gpu.arch.as_ref()).expect("projects")
+        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).expect("projects")
     };
 
     let reference = derive(&events);
@@ -545,8 +547,8 @@ fn per_gpu_arena_recycle() {
     for ev in proc_on_gpu(HClient(0xB0), 1) {
         gpu.apply(ev).expect("gen-2 GPU1 applies");
     }
-    let pid_a2 = *gpu.by_pdb.get(&(GpuId(0), SHARED_PDB)).unwrap();
-    let pid_b2 = *gpu.by_pdb.get(&(GpuId(1), SHARED_PDB)).unwrap();
+    let pid_a2 = *gpu.spine.by_pdb.get(&(GpuId(0), SHARED_PDB)).unwrap();
+    let pid_b2 = *gpu.spine.by_pdb.get(&(GpuId(1), SHARED_PDB)).unwrap();
     assert_eq!(
         gpu.procs[&pid_a2].arenas[&GpuId(0)].range,
         arena_a,
@@ -569,8 +571,8 @@ fn homogeneous_arch_all_targets_share_the_device_arch() {
     // Both targets were realized under the ONE device arch (V1 homogeneous). A
     // heterogeneous config would be a loud GpuError::HeterogeneousArch at realize; here
     // we assert the invariant holds — every target shares the device's arch identity.
-    assert!(gpu.targets.len() >= 2, "two GPU targets exist");
-    let name = gpu.arch.name();
+    assert!(gpu.spine.targets.len() >= 2, "two GPU targets exist");
+    let name = gpu.spine.arch.name();
     // The FwdFault surface is unchanged by the axis (a compile-level check that the
     // per-target routing faults carry their GpuId).
     let miss = resolve(&gpu, GpuId(9), SHARED_PDB, SHARED_VA);

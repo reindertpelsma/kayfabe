@@ -263,14 +263,14 @@ fn assert_device_consistent(gpu: &Gpu) {
         }
     }
     // Routing maps agree with the procs they point at.
-    for (&(gpu_t, pdb), &pid) in &gpu.by_pdb {
+    for (&(gpu_t, pdb), &pid) in &gpu.spine.by_pdb {
         let p = gpu.procs.get(&pid).expect("by_pdb points at a live proc");
         assert!(
             p.vases.contains_key(&(gpu_t, pdb)),
             "by_pdb[{pdb:?}] → proc without that Vas"
         );
     }
-    for (&(_gpu_t, vchid), &(pid, cid)) in &gpu.by_vchid {
+    for (&(_gpu_t, vchid), &(pid, cid)) in &gpu.spine.by_vchid {
         let p = gpu.procs.get(&pid).expect("by_vchid points at a live proc");
         let c = p
             .channels
@@ -381,14 +381,14 @@ fn stress_multi_vcpu_interleaved_ops() {
                                 gate_working_set(
                                     &g,
                                     pid,
-                                    g.by_vchid[&(GpuId::ZERO, gr_vchid(i))].1,
+                                    g.spine.by_vchid[&(GpuId::ZERO, gr_vchid(i))].1,
                                     &[va],
                                 )
                                 .expect("published working set passes the ring-gate");
                             } else {
                                 // Routing reads are always available.
-                                assert_eq!(g.by_pdb[&(GpuId::ZERO, pdb)], pid);
-                                assert_eq!(g.by_vchid[&(GpuId::ZERO, gr_vchid(i))].0, pid);
+                                assert_eq!(g.spine.by_pdb[&(GpuId::ZERO, pdb)], pid);
+                                assert_eq!(g.spine.by_vchid[&(GpuId::ZERO, gr_vchid(i))].0, pid);
                             }
                         }
                         // ---- doorbells (exec-plane demux) -------------------------
@@ -730,7 +730,7 @@ fn lock_free_concurrent_reads_share_the_gpu() {
                     let (b, off) =
                         resolve(gpu_ref, GpuId::ZERO, pdb_of(i), GpuVa(va + 0x10)).expect("hit");
                     assert_eq!((b.phys, b.host_va, off), (gpa, Some(host_va), 0x10));
-                    let (pid, cid) = gpu_ref.by_vchid[&(GpuId::ZERO, gr_vchid(i))];
+                    let (pid, cid) = gpu_ref.spine.by_vchid[&(GpuId::ZERO, gr_vchid(i))];
                     assert_eq!(pid, pids[i]);
                     gate_working_set(gpu_ref, pid, cid, &[GpuVa(va)]).expect("gate passes");
                     // A miss is still a loud fault under concurrency, never a guess.

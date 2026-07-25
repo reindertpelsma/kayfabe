@@ -70,7 +70,7 @@ fn one_proc_gpu() -> (Gpu, MockVmm) {
 #[test]
 fn scripted_pushbuffer_populates_table_and_observes_completion() {
     let (mut gpu, mut vmm) = one_proc_gpu();
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
 
     let pt_page: u64 = 0x1_2340_0000; // physical PT page the CE writes
@@ -131,7 +131,7 @@ fn scripted_pushbuffer_populates_table_and_observes_completion() {
 #[test]
 fn hostile_ring_never_panics() {
     let (mut gpu, mut vmm) = one_proc_gpu();
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
 
     // A ring with a bogus GPFIFO entry pointing at empty RAM + a truncated tail.
@@ -170,8 +170,8 @@ fn two_proc_gpu() -> (Gpu, MockVmm, SharedRecorder) {
 #[test]
 fn t14_per_vas_publication_gates_the_ring() {
     let (mut gpu, _vmm, rec) = two_proc_gpu();
-    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
-    let pid_b = *gpu.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
+    let pid_a = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid_b = *gpu.spine.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
     let cid_a = *gpu.procs[&pid_a].chan_ids.values().next().unwrap();
     let a_token = MockArch::token_for(VChid(0x10));
     let b_token = MockArch::token_for(VChid(0x20));
@@ -237,7 +237,7 @@ fn t14_per_vas_publication_gates_the_ring() {
 #[test]
 fn t14_ring_gate_is_structural_no_ungated_door() {
     let (mut gpu, _vmm, rec) = two_proc_gpu();
-    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid_a = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let a_token = MockArch::token_for(VChid(0x10));
     const MEM: nvkvm_arch::ids::HObject = nvkvm_arch::ids::HObject(0x5c00_0100);
 
@@ -307,7 +307,7 @@ fn t14_ring_gate_is_structural_no_ungated_door() {
 #[test]
 fn t14_unpublished_va_is_a_loud_fault() {
     let (mut gpu, _vmm, _rec) = two_proc_gpu();
-    let pid_a = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid_a = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid_a = *gpu.procs[&pid_a].chan_ids.values().next().unwrap();
     publish_backing(
         gpu.procs.get_mut(&pid_a).unwrap(),
@@ -331,7 +331,7 @@ fn t14_unpublished_va_is_a_loud_fault() {
 #[test]
 fn soak_submit_complete_loop_loses_no_completion() {
     let (mut gpu, mut vmm) = one_proc_gpu();
-    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
 
     let mut expected_completions = 0usize;
@@ -392,7 +392,7 @@ mod fuzz {
             region in vec(any::<u8>(), 0..256),
         ) {
             let (mut gpu, mut vmm) = super::one_proc_gpu();
-            let pid = *gpu.by_pdb.get(&(GpuId::ZERO, super::A_PDB)).unwrap();
+            let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, super::A_PDB)).unwrap();
             let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
             // Back the region GPFIFO entries might point at (0x5000_0000 window).
             vmm.gpa_write(0x5000_0000, &region).unwrap();
