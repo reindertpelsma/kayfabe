@@ -24,8 +24,9 @@
 //!   requester wait (holding zero locks — `BlockingSection` inside the wait asserts
 //!   it) and complete after a release.
 //! - **`worker_death_retires_the_proc_loudly_and_never_resurrects`** — a worker HUP
-//!   dispatches through the reactor, kills the slot, retires the proc; its
-//!   completions die with it.
+//!   dispatches through the reactor, kills the slot, retires the proc and CONDEMNS its
+//!   component (§12.13); its completions die with it, and a later `refresh` does not
+//!   bring it back.
 //! - **`single_in_flight_per_worker_is_structural`** — one `&mut`-owned handle per
 //!   slot: a checked-out worker cannot be checked out again, and concurrency comes
 //!   from channel COUNT (§11 B6) — there is no shared in-flight slot table to grow.
@@ -40,11 +41,11 @@ use std::time::{Duration, Instant as WallInstant};
 
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
-use kayfabe_core::ProcId;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::reactor::SourceKind;
 use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
+use kayfabe_core::{ProcAnchor, ProcId};
 use kayfabe_fwd::{FwdFault, Stale};
 use kayfabe_isolate::{DEFAULT_POOL_WORKERS, IsolateFactory, IsolateId, VerbPlan, WorkerId};
 use kayfabe_mocks::{HoldSpec, MockArch, MockIsolateFactory, SharedRecorder, VerbHold, VerbKind};
@@ -405,10 +406,15 @@ fn r5_canary_proc_retired_in_the_gap_refuses_loudly() {
         "a commit whose proc vanished must refuse, not finish what it started"
     );
     // Nothing was written anywhere: the proc is off the live set entirely, so even
-    // the read path refuses.
+    // the read path refuses. ★ `retire_proc` is the OUT-OF-BAND edge, so the refusal
+    // is `Condemned` (§12.13): the component is dead for good, not merely absent from
+    // the live set for the moment. See `worker_death_retires_the_proc_loudly_and_never
+    // _resurrects` for the full statement of that rule.
     assert_eq!(
         device.resolve(GPU, PDB, VA),
-        Err(FwdFault::RetiredProc(pid)),
+        Err(FwdFault::Condemned {
+            anchor: ProcAnchor(CLIENT)
+        }),
         "the retired proc is off the live set; no binding was created for it"
     );
 }
@@ -612,21 +618,30 @@ fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
             "({mode:?}) the HUP dispatched as a typed worker death"
         );
 
-        // The proc is retired: every op on it refuses, loudly.
+        // The proc is retired and its component CONDEMNED: every op on it refuses,
+        // loudly, with the fault that says so (§12.13).
+        let condemned = FwdFault::Condemned {
+            anchor: ProcAnchor(CLIENT),
+        };
         assert_eq!(
             device.publish_backing(GPU, PDB, GpuVa(VA.0 + 0x1000), 0x1000),
-            Err(FwdFault::RetiredProc(victim)),
+            Err(condemned),
             "({mode:?}) the retired proc refuses every op, loudly"
         );
-        // NOTE (finding, `l1_concurrency.md` §12.11): an out-of-band retire does not
-        // rebuild `by_pdb`/`by_vchid` — only a graph `refresh` does — so routing still
-        // NAMES the dead proc and the miss surfaces one step later, at the live-set
-        // lookup. Loud and mutation-free either way; the fault just says
-        // `RetiredProc` rather than `UnknownVchid`.
+        // RESOLVED (`l1_concurrency.md` §12.11 → §12.13): §12.11 recorded that an
+        // out-of-band retire left `by_pdb`/`by_vchid` NAMING the dead proc until the
+        // next graph `refresh`, so the two teardown routes were not fault-identical,
+        // and asked whether a host-side failure should retroactively edit the guest's
+        // routing truth. It should not — and does not: the guest's truth (the RM graph
+        // and its projection) is untouched. What `retire_proc` edits is the host-side
+        // *materialization*, moving this proc's routing into the condemned maps at the
+        // instant of the failure. So the fault is the same one here as after any number
+        // of later refreshes, which is what `out_of_band_retire_must_not_resurrect_the
+        // _isolate` (l1_mean.rs) pins from the other end.
         assert_eq!(
             device.doorbell(GPU, MockArch::token_for(GR), &[]),
-            Err(FwdFault::RetiredProc(victim)),
-            "({mode:?}) and its channels reach a proc that is no longer live"
+            Err(condemned),
+            "({mode:?}) and its channels are condemned with it"
         );
         // Its completions die with it — the os-event source no longer resolves.
         tx.send(CoreEvent::SourceSignal(os));
@@ -637,6 +652,25 @@ fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
         // No resurrect: it reaps once and is gone.
         assert_eq!(device.reap_retired(), 1, "({mode:?}) reaped exactly once");
         assert_eq!(device.reap_retired(), 0, "({mode:?}) and never comes back");
+        // ★ …and it stays gone across a `refresh` driven by ANOTHER client. This test
+        // used to stop one line above, which is exactly why it stayed green through
+        // §12.13's defect while the composed mean run caught it: the resurrection needed
+        // an `apply` to happen, and this script never issued one. It does now.
+        device
+            .apply(RmEvent::MapMemoryDma {
+                client: CLIENT2,
+                vaspace: identical_handles(GR2.0, CE2.0).vaspace,
+                memory: MEM,
+                va: GpuVa(0x80_0000_0000),
+                offset: 0,
+                len: 0x1000,
+            })
+            .expect("an unrelated map applies");
+        assert_eq!(
+            device.publish_backing(GPU, PDB, GpuVa(VA.0 + 0x2000), 0x1000),
+            Err(condemned),
+            "({mode:?}) ★ a refresh must not resurrect an out-of-band-retired proc"
+        );
 
         // The BYSTANDER proc is untouched — blast-radius containment.
         device

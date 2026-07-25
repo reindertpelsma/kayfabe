@@ -58,7 +58,7 @@ use kayfabe_arch::Aperture;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
 use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Channel, Gpu, Proc, Spine};
-use kayfabe_core::{ChanId, ProcId};
+use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_isolate::{ChannelHandles, HostHandle, RmError, VerbPlan, VerbReply, Worker};
 use kayfabe_mmu::AddressTable;
 use kayfabe_mmu::{AddressFault, Binding};
@@ -90,6 +90,25 @@ pub enum FwdFault {
     /// The routed proc exists but is retired (cross-teardown consumption refused —
     /// lesson L10).
     RetiredProc(ProcId),
+    /// ★ The op's routing key belongs to a **CONDEMNED component**
+    /// (`l1_concurrency.md` §7.3 / §12.13): one of this guest process's isolate
+    /// workers died **out of band**, so it may have left host state the core cannot
+    /// reason about, and §7.3's "no resurrect" / `WorkerDied`'s "never a respawn"
+    /// make the whole component permanently dead — it has no `Proc`, no isolate, no
+    /// GPA arena and no route, and it will get none until the *guest itself* frees
+    /// its client root.
+    ///
+    /// Distinct from [`FwdFault::RetiredProc`] because there is no `ProcId` left to
+    /// name (the proc was removed and reaped; ids are never reused), and distinct
+    /// from [`FwdFault::UnknownPdb`]/[`FwdFault::UnknownVchid`] because the key is
+    /// not unknown — it is *forbidden*. The label comes out of the same forward
+    /// projection that fills the live routing maps, so naming it costs no reverse
+    /// resolution (the `RmGraph::gpu_of` / address-table doctrine).
+    Condemned {
+        /// The condemned component's deterministic label (its smallest client
+        /// handle) — the guest's own identity for the process that lost its worker.
+        anchor: ProcAnchor,
+    },
     /// The channel is not bound to any declared VAS and system routing does not
     /// apply — refusing to guess an address space.
     NoVas(ChanId),
@@ -594,12 +613,19 @@ pub fn commit_publish(
 
 /// ROUTE: which proc owns `(target, pdb)`? A pure spine read (`by_pdb`) — the
 /// data-plane routing half of the route/act split. MISS=FAULT.
+///
+/// ★ §12.13: a miss is checked against the condemned map before it is reported, so a
+/// key whose component lost a worker out of band gets [`FwdFault::Condemned`] — the
+/// *specific* refusal — instead of an anonymous `UnknownPdb`. Both are misses; only
+/// one of them is a security-relevant fact.
 pub fn route_pdb(spine: &Spine, target: GpuId, pdb: Pdb) -> Result<ProcId, FwdFault> {
-    spine
-        .by_pdb
-        .get(&(target, pdb))
-        .copied()
-        .ok_or(FwdFault::UnknownPdb { gpu: target, pdb })
+    if let Some(&pid) = spine.by_pdb.get(&(target, pdb)) {
+        return Ok(pid);
+    }
+    if let Some(anchor) = spine.condemned_pdb(target, pdb) {
+        return Err(FwdFault::Condemned { anchor });
+    }
+    Err(FwdFault::UnknownPdb { gpu: target, pdb })
 }
 
 /// Resolve `va` in `proc`'s `Vas` identified by `(target, pdb)` — the per-proc
@@ -674,6 +700,16 @@ pub struct DoorbellRoute {
     pub token: u64,
 }
 
+/// Which exec-plane miss is this? ★ §12.13: a `(gpu, vchid)` that misses `by_vchid`
+/// is either genuinely unknown or the exec plane of a **condemned** component; the
+/// condemned map answers that forward, out of the same projection.
+fn vchid_miss(spine: &Spine, gpu: GpuId, vchid: VChid) -> FwdFault {
+    match spine.condemned_vchid(gpu, vchid) {
+        Some(anchor) => FwdFault::Condemned { anchor },
+        None => FwdFault::UnknownVchid { gpu, vchid },
+    }
+}
+
 /// ROUTE (R4): decode a doorbell token and demux it to its owning `(Proc, Channel)`
 /// — a **pure read of the spine** (`Arch::decode_doorbell` + `by_vchid`), no proc
 /// touched, no `&mut` anywhere. In L1 this runs under the device *read* lock only.
@@ -690,14 +726,10 @@ pub fn route_doorbell(
         .arch
         .decode_doorbell(token)
         .ok_or(FwdFault::MalformedToken { token })?;
-    let (pid, cid) =
-        *spine
-            .by_vchid
-            .get(&(target_gpu, target.vchid))
-            .ok_or(FwdFault::UnknownVchid {
-                gpu: target_gpu,
-                vchid: target.vchid,
-            })?;
+    let (pid, cid) = *spine
+        .by_vchid
+        .get(&(target_gpu, target.vchid))
+        .ok_or_else(|| vchid_miss(spine, target_gpu, target.vchid))?;
     Ok(DoorbellRoute {
         proc: pid,
         chan: cid,
@@ -1076,10 +1108,7 @@ pub fn route_engine_object(
     let (pid, cid) = *spine
         .by_vchid
         .get(&(target_gpu, vchid))
-        .ok_or(FwdFault::UnknownVchid {
-            gpu: target_gpu,
-            vchid,
-        })?;
+        .ok_or_else(|| vchid_miss(spine, target_gpu, vchid))?;
     Ok(EngineObjectRoute {
         proc: pid,
         chan: cid,

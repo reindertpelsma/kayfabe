@@ -770,6 +770,10 @@ sync progress never queues behind the pool.
   Worker death out-of-band (crash) is a reactor source firing HUP (§6.1) →
   dispatch → retire the proc loudly (its completions die with it — the guest tore
   down or the sandbox failed; either way MISS=FAULT posture, no resurrect).
+  **"No resurrect" is not free** — removing the proc is not enough, because the
+  guest's client root is still in the graph and the next `refresh` would re-derive
+  it. The retire additionally **condemns the component** (its client set); §12.13
+  is the finding, the mechanism and the fault surface.
 
 ---
 
@@ -1217,7 +1221,8 @@ live, the surfaced fault is `Stale::Proc`. §3.3 frames re-validation entirely a
   while no `Box<dyn RmBackend>` was ever *stored* in core state. A pool stores N of
   them inside a `Proc` inside the `Sync` `Gpu`, so the bound is now structural. Cost to
   real impls: no `Rc`/`Cell` in a backend's private state.
-- **An out-of-band retire does not rebuild the routing maps.** `Spine::retire_proc`
+- **An out-of-band retire does not rebuild the routing maps.** *(RESOLVED by §12.13 —
+  see the ANSWER at the end of that entry.)* `Spine::retire_proc`
   (the worker-death path) removes the proc from the live set but leaves `by_pdb` /
   `by_vchid` naming it, because the *guest* has not freed anything — only a graph
   `refresh` rebuilds those. So a post-retire op resolves its route and then misses on
@@ -1260,14 +1265,16 @@ the already-materialized handles) is known at plan time. The chain executes with
 core access, which is what makes the seam a short typed struct rather than a
 continuation machine.
 
-### 12.13 ★★ THE MEAN TEST'S FINDING — an out-of-band retire is undone by the next refresh
+### 12.13 ★★ THE MEAN TEST'S FINDING — an out-of-band retire is undone by the next refresh (**FIXED**)
 
-**Stage 4's mean test (§8.4) found the design's "no resurrect" promise is not
+**Stage 4's mean test (§8.4) found the design's "no resurrect" promise was not
 implemented.** §7.3 says worker death out of band ends in "retire the proc loudly …
 either way MISS=FAULT posture, **no resurrect**", and the `SignalOutcome::WorkerDied`
 contract says the slot is "permanently dead (**never a respawn** — a worker that died
-mid-verb may have left host state the core cannot reason about)". Both hold for
-exactly as long as nothing else happens.
+mid-verb may have left host state the core cannot reason about)". Both held for
+exactly as long as nothing else happened. The finding stands as written below; the
+**FIXED** subsection at the end records the mechanism, the identity key it turns on,
+and the answer it gives §12.11.
 
 `Spine::retire_proc` removes the proc from the live set and pushes it to `retired`. But
 the *guest* has not freed anything — its client root is still in the RmGraph — so the
@@ -1291,21 +1298,99 @@ Two consequences worth stating separately:
   issues an `apply` after the HUP. The composed run found it because §8.4's script puts
   a worker HUP and an alloc/map-heavy `apply` workload *in the same run* — which is the
   argument for composing the mean scripts instead of isolating them, in one example.
+  (That hole is now closed on both ends: the verb-seam test issues an unrelated
+  `apply` after the HUP and re-asserts, so it would have caught this on its own.)
 
-**Not fixed here, deliberately: the fix is a design change.** Making the retire stick
-needs (a) a *condemned-component* state carried through the projection→proc derivation,
-so an out-of-band-retired boundary stays dead until the guest itself frees its client
-root, and (b) a decision about what an op against a condemned component returns —
-`RetiredProc(ProcId)` no longer works, because there is no `Proc` left to name. That is
-the same design question §12.11 raised from the other side ("whether a host-side
-failure should retroactively edit the guest's routing truth"), now with teeth: §12.11
-is about routing *pointing at* a dead proc; this is about the dead proc *coming back*.
+#### ★★ FIXED — the condemned component
 
-Pinned in two places, on purpose: `l1_mean.rs`'s
-`out_of_band_retire_must_not_resurrect_the_isolate` asserts the DESIGN'S invariant and
-is `#[ignore]`d with the defect named (the assert is right; the code is wrong), and the
-mean run's conservation sweep asserts TODAY'S behavior loudly, so whoever fixes this
-trips both and has to move the doc with them.
+The mechanism is the one this entry named, built as described. `Spine` carries a set of
+**condemned components**, and `Spine::retire_proc` — the ONE out-of-band retire path,
+which is why condemnation lives there and not in the adapter — records one on every
+call, in addition to its existing three obligations.
+
+**The identity key is the component's CLIENT SET, and that choice is load-bearing.**
+Three candidates were on the table and two of them are wrong:
+
+- `ProcId` — minted per derivation and dead with the proc. The *whole defect* was that
+  the next derivation minted a fresh one. It cannot be the key of the thing that must
+  survive re-derivation.
+- `ProcAnchor` — only the *smallest* client handle of the component. A guest that frees
+  that one client while keeping the rest silently re-labels the component and slips the
+  condemnation. It is a fine thing to *report*, and a bad thing to key on.
+- **Client set** — exactly what `refresh` already matches boundaries on (intersection),
+  so condemnation and proc-matching agree by construction and survive every
+  re-derivation the guest can provoke: re-labels, growth, and **splits** (freeing the
+  dup edge splits the component; both halves intersect, so both stay condemned — they
+  shared the blast radius).
+
+Entries are canonical (pairwise disjoint, sorted — determinism, decision #27) and
+**monotone**: a boundary that intersects an entry grows it with its own clients, so a
+component that absorbs new clients keeps the radius it earned; the escape hatch of
+"dup a fresh client in, then free the old one" is closed. An entry is dropped when NO
+boundary intersects it — i.e. exactly when the **guest itself** freed the client root.
+
+`refresh` runs the condemnation pass *before* it can mint anything. A condemned boundary
+gets **no `Proc`, no isolate spawn, no GPA arena, no live routing entry** — it simply
+`continue`s. Nothing else in the derivation changed, which is the point: the
+graph-driven retire (step 3) and the `LateMerge` absorb arm are untouched and condemn
+nothing, so no host failure of one process can DoS another, and no guest teardown can
+DoS itself. `the_graph_driven_retire_paths_never_condemn` pins both.
+
+**What a growing component does — the `DUP_OBJECT` question, answered.** Dup-connected
+clients are ONE proc by construction: one isolate, one arena, one blast radius. So a dup
+that joins a live proc to a condemned component has no honest completion — absorbing the
+condemned clients resurrects them around a working isolate, and condemning the live proc
+lets a guest kill a healthy process by dupping into a corpse. The answer is to refuse the
+**event**: `GpuError::CondemnedMerge`. `Spine::apply` is transactional, so the offending
+dup rolls back atomically, the live proc keeps serving and the condemned component stays
+condemned. (A dup between a condemned component and a *brand-new* client — no live proc
+on either side — is not a merge of blast radii; the new client simply joins the dead
+component and is condemned with it. That is the monotone-growth rule above.)
+
+**(b) What an op against a condemned component returns: `FwdFault::Condemned { anchor }`
+— a real named fault, with no reverse lookup.** The entry was right that
+`RetiredProc(ProcId)` is unrepresentable here. It is also unavailable *by policy*: the
+only way to produce it would be to leave routing pointing at a dead `ProcId`, and the
+mean run's own conservation sweep forbids that ("routing names a proc that is not
+live"). Routing therefore misses — MISS=FAULT working as designed — and the miss is
+*named* by two extra maps, `condemned_by_pdb` / `condemned_by_vchid`, rebuilt in
+`refresh` step 4 from the **same projection** that fills `by_pdb`/`by_vchid`, keyed the
+same way (`(GpuId, Pdb)` / `(GpuId, VChid)` — MG-3), and filled from the boundary that
+was condemned. The guest's own key is looked up **forward**; it just resolves to
+"condemned" instead of to a proc. No backwards resolve was invented to make a prettier
+error, and the `RmGraph::gpu_of` / address-table doctrine is untouched. `Spine` also
+exposes `is_condemned(HClient)` and `condemned_len()` for diagnostics and for the tests
+to assert the *state* rather than infer it from refusals.
+
+**★ ANSWER to §12.11 ("should a host-side failure retroactively edit the guest's
+routing truth?"). No — and it does not.** The guest's truth is the RM graph and its
+projection, and neither is touched by a worker death: the boundary still exists, still
+has its clients, still declares its PDB and vChids. What a host-side failure edits is
+the host-side **materialization** — whether that boundary gets a proc, an isolate, an
+arena and a live route. `retire_proc` moves its routing into the condemned maps *at the
+instant of the failure* rather than at the next unrelated event, which is what makes the
+two teardown routes fault-identical: the same op answers `Condemned` immediately after
+the HUP and after any number of later refreshes. §12.11's asymmetry is gone, and the
+answer needed no edit to the guest's truth to get there.
+
+**Residual, stated plainly.** `FwdFault::Condemned` names the component's *current*
+anchor, so if a condemned component grows a new client with a smaller handle the
+reported label moves with the component (it is a derived label, by definition). And a
+condemned component's arena is released exactly once at the reap and recycled by the
+normal #80 free-list — a genuinely NEW guest process can and should be handed that
+range; what must never happen (and is pinned) is a re-derivation of the *condemned*
+component receiving one.
+
+Pinned where it was found: `l1_mean.rs`'s
+`out_of_band_retire_must_not_resurrect_the_isolate` is the design's own invariant, no
+longer `#[ignore]`d (its two post-refresh expectations moved from `RetiredProc(victim)`
+to `Condemned{anchor}` for the reason above — a strengthening, documented at the test);
+the mean run's conservation sweep now pins the FIXED behavior and the absence of false
+condemnation; and six focused tests pin the properties the fix introduces (survival
+across intervening applies, clearing on client-root free, no dispatchable sources,
+arena-released-once, the graph-driven paths never condemning, component-wide
+condemnation across a proc's GPUs sparing identical numeric ids on other targets, and
+the refused merge).
 
 ### 12.14 Two smaller contacts from stage 4
 

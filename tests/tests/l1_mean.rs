@@ -10,20 +10,28 @@
 //! reach. It runs under **both** lock configurations (§8.2 / review P5: a late
 //! granularity flip must never be the untested mode).
 //!
-//! ## ★★ WHAT THIS TEST FOUND — decision needed (`l1_concurrency.md` §12.13)
+//! ## ★★ WHAT THIS TEST FOUND, AND WHAT FIXED IT (`l1_concurrency.md` §12.13 — FIXED)
 //!
-//! **An out-of-band retire is undone by the very next `Gpu::apply`.** §7.3 requires a
+//! **An out-of-band retire was undone by the very next `Gpu::apply`.** §7.3 requires a
 //! worker HUP to "retire the proc loudly … no resurrect", and
 //! `SignalOutcome::WorkerDied` promises "**never a respawn**". But `Spine::retire_proc`
-//! only removes the proc from the live set; the guest's client root is still in the
-//! graph, so the next `refresh` finds a boundary with no matching live proc, mints a
-//! **fresh `ProcId`**, spawns a **brand-new isolate** (a respawned sandboxed worker,
-//! new handle namespace) and a fresh GPA arena, rebuilds routing onto it, and the guest
-//! resumes full service. See [`out_of_band_retire_must_not_resurrect_the_isolate`],
-//! which asserts the design's invariant and is `#[ignore]`d because the fix is a design
-//! change (a condemned-component state in the projection→proc derivation, plus the
-//! fault surface an op against one should get), not a local edit. The sweep below pins
-//! **today's** behavior loudly so that fixing it trips this test too.
+//! only removed the proc from the live set; the guest's client root is still in the
+//! graph, so the next `refresh` found a boundary with no matching live proc, minted a
+//! **fresh `ProcId`**, spawned a **brand-new isolate** (a respawned sandboxed worker,
+//! new handle namespace) and a fresh GPA arena, rebuilt routing onto it, and the guest
+//! resumed full service — a guest that could crash its isolate worker got a clean new
+//! isolate on its next RM event.
+//!
+//! The fix is a **condemned component** on the `Spine`, keyed on the component's
+//! **client set** (exactly what `refresh` matches boundaries on, so it survives every
+//! re-derivation, re-label and split the guest can provoke). A boundary that intersects
+//! a condemned set gets no `Proc`, no isolate, no arena and no live route; its keys are
+//! filed in the condemned routing maps instead, so its ops get the *named*
+//! `FwdFault::Condemned` rather than an anonymous miss. It clears only when the guest
+//! itself frees the client root. [`out_of_band_retire_must_not_resurrect_the_isolate`]
+//! is the design's own invariant, no longer ignored; the sweep below pins the fixed
+//! behavior, and the properties the fix introduces are pinned by the
+//! `condemned_*` tests at the bottom of this file.
 //!
 //! ## The world (§8.4 "several guest procs, each multi-threaded, across ≥2 mock GPUs")
 //!
@@ -102,10 +110,10 @@ use std::time::{Duration, Instant as WallInstant};
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
-use kayfabe_core::gpu::Gpu;
+use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::reactor::SourceKind;
-use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
-use kayfabe_core::{ChanId, ProcId};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
+use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_fwd::{ControlRoute, DoorbellOutcome, FwdFault, Published, Stale};
 use kayfabe_isolate::{HostHandle, IsolateId, RmError, WorkerId};
 use kayfabe_mmu::AddressFault;
@@ -346,6 +354,15 @@ const EV: [OsEventRef; 4] = [
 /// shipping default ([`kayfabe_isolate::DEFAULT_POOL_WORKERS`]) — the mean test must
 /// run the configuration production runs.
 fn mean_world(mode: LockMode) -> (Arc<SharedDevice>, Vec<ProcId>, SharedRecorder) {
+    let (gpu, pids, recorder) = mean_gpu();
+    (Arc::new(SharedDevice::new(gpu, mode)), pids, recorder)
+}
+
+/// The same six-proc, two-GPU world as a **bare [`Gpu`]**, for the §12.13 property
+/// tests below: condemnation is a fact of the pure core, so the tests that pin it read
+/// core state directly (arenas, client sets, the source registry) instead of through the
+/// lock shell. Deterministic logic-core testing, §8.2's T1 tier.
+fn mean_gpu() -> (Gpu, Vec<ProcId>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
@@ -380,7 +397,7 @@ fn mean_world(mode: LockMode) -> (Arc<SharedDevice>, Vec<ProcId>, SharedRecorder
     let pids: Vec<ProcId> = (0..N_PROCS)
         .map(|i| gpu.spine.by_pdb[&(gpu_of(i), lane_of(i).pdb)])
         .collect();
-    (Arc::new(SharedDevice::new(gpu, mode)), pids, recorder)
+    (gpu, pids, recorder)
 }
 
 /// Arm a one-shot hold on `verb` of `(proc, gpu, worker)`'s isolate — the scripted
@@ -983,8 +1000,9 @@ fn mean_run(mode: LockMode) -> MeanReport {
          once per verb); only {verbs} verbs were issued"
     );
 
-    // ---- Phase 9: ONE deterministic refresh, so the §12.13 finding the sweep pins is a
-    // fact of every run rather than a race with the workload threads' own churn.
+    // ---- Phase 9: ONE deterministic refresh, so the §12.13 property the sweep pins —
+    // that a refresh does NOT resurrect an out-of-band-retired component — is a fact of
+    // every run rather than a race with the workload threads' own churn.
     dev.apply(RmEvent::MapMemoryDma {
         client: client_of(P_WITNESS),
         vaspace: H_VASPACE,
@@ -1039,33 +1057,100 @@ fn mean_run(mode: LockMode) -> MeanReport {
 // The end-of-run conservation sweep
 // =================================================================================
 
+/// What a routing key resolves to — the THREE answers the device can give after
+/// §12.13, made a value so the sweep can `assert_eq!` on the exact one instead of
+/// `contains_key`-ing around it.
+#[derive(Debug, PartialEq, Eq)]
+enum Owner {
+    /// A live proc owns it.
+    Live(ProcId),
+    /// It belongs to a **condemned** component: an out-of-band worker death killed the
+    /// component for good, so there is no proc to name — only its label (§12.13).
+    Condemned(ProcAnchor),
+    /// Nothing declared it (or the guest freed it).
+    Absent,
+}
+
+/// The owner of `(gpu, pdb)` on the data plane.
+fn owner_pdb(g: &Gpu, target: GpuId, pdb: Pdb) -> Owner {
+    match g.spine.by_pdb.get(&(target, pdb)) {
+        Some(&pid) => Owner::Live(pid),
+        None => match g.spine.condemned_pdb(target, pdb) {
+            Some(a) => Owner::Condemned(a),
+            None => Owner::Absent,
+        },
+    }
+}
+
+/// The owner of `(gpu, vchid)` on the exec plane.
+fn owner_vchid(g: &Gpu, target: GpuId, vchid: VChid) -> Owner {
+    match g.spine.by_vchid.get(&(target, vchid)) {
+        Some(&(pid, _)) => Owner::Live(pid),
+        None => match g.spine.condemned_vchid(target, vchid) {
+            Some(a) => Owner::Condemned(a),
+            None => Owner::Absent,
+        },
+    }
+}
+
+/// The owner proc `i`'s keys MUST have at the end of a run: condemned for the two procs
+/// the script killed out of band, live for the four it did not. Each proc is its own
+/// one-client component, so its anchor is its client.
+fn expected_owner(pids: &[ProcId], i: usize) -> Owner {
+    if i == P_TEARDOWN || i == P_HUP {
+        Owner::Condemned(ProcAnchor(client_of(i)))
+    } else {
+        Owner::Live(pids[i])
+    }
+}
+
 /// The facts that must hold globally, no matter how the threads interleaved. Each is a
 /// property the design *claims*; asserting them here is what makes the claim falsifiable
 /// by a harsh run instead of by inspection.
 fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
     // ---- (1) ★ Per-`(GpuId, ·)` routing NEVER collapses. Each lane's PDB and CE vChid
-    // exist IDENTICALLY on both GPUs and must resolve to two DIFFERENT procs.
+    // exist IDENTICALLY on both GPUs and must resolve to two DIFFERENT owners — where
+    // "owner" now has three possible answers ([`Owner`]), because two of this run's six
+    // procs were retired out of band and are CONDEMNED (§12.13).
+    //
+    // ★ That makes this a sharper multi-GPU probe than it was: lanes B and C each have
+    // one condemned member and one healthy member, on OPPOSITE GPUs, carrying identical
+    // `Pdb`/`VChid` VALUES. If condemnation were keyed on anything that dropped the
+    // `GpuId` — or on a numeric identity rather than on the component's client set —
+    // condemning proc 2 on GPU0 would take proc 3 down on GPU1, and condemning proc 5 on
+    // GPU1 would take proc 4 down on GPU0. Both are asserted below, per lane.
     for (l, lane) in LANES.iter().enumerate() {
         let (a, b) = (
-            gpu.spine.by_pdb[&(GPU0, lane.pdb)],
-            gpu.spine.by_pdb[&(GPU1, lane.pdb)],
+            owner_pdb(gpu, GPU0, lane.pdb),
+            owner_pdb(gpu, GPU1, lane.pdb),
         );
         assert_ne!(
             a, b,
-            "({mode:?}) identical PDBs on two GPUs collapsed onto one proc"
+            "({mode:?}) identical PDBs on two GPUs collapsed onto one owner"
         );
-        let (ca, _) = gpu.spine.by_vchid[&(GPU0, lane.ce)];
-        let (cb, _) = gpu.spine.by_vchid[&(GPU1, lane.ce)];
+        let (ca, cb) = (
+            owner_vchid(gpu, GPU0, lane.ce),
+            owner_vchid(gpu, GPU1, lane.ce),
+        );
         assert_ne!(
             ca, cb,
-            "({mode:?}) identical vChids on two GPUs collapsed onto one proc"
+            "({mode:?}) identical vChids on two GPUs collapsed onto one owner"
         );
         assert_eq!((ca, cb), (a, b), "({mode:?}) by_pdb and by_vchid disagree");
-        // Lane A (the two multi-threaded procs) is never retired, so its routing must
-        // still name the ORIGINAL procs — the resurrection below must not have touched
-        // procs that were never retired.
-        if l == 0 {
-            assert_eq!((a, b), (pids[P_WITNESS], pids[P_PEER]));
+        // …and each half is EXACTLY the owner its script earned: live for the four procs
+        // nothing happened to, condemned for the two the run killed out of band.
+        for (g, i) in [(GPU0, 2 * l), (GPU1, 2 * l + 1)] {
+            let want = expected_owner(pids, i);
+            assert_eq!(
+                owner_pdb(gpu, g, lane.pdb),
+                want,
+                "({mode:?}) proc {i}'s {g:?} PDB resolves to the wrong owner"
+            );
+            assert_eq!(
+                owner_vchid(gpu, g, lane.ce),
+                want,
+                "({mode:?}) proc {i}'s {g:?} CE vChid resolves to the wrong owner"
+            );
         }
     }
 
@@ -1084,35 +1169,63 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
         "({mode:?}) the re-allocated channel must route again"
     );
 
-    // ---- (3) ★★ DEFECT PINNED (`l1_concurrency.md` §12.13, and the `#[ignore]`d
-    // `out_of_band_retire_must_not_resurrect_the_isolate` below).
+    // ---- (3) ★★ NO RESURRECT (`l1_concurrency.md` §12.13 — FIXED; the un-ignored
+    // `out_of_band_retire_must_not_resurrect_the_isolate` below is the focused proof).
     //
-    // §7.3 says an out-of-band retire has "no resurrect" and `WorkerDied` says "never a
-    // respawn". What actually happens: the retired proc leaves the live set, but its
-    // client root is still in the guest's graph, so the NEXT `refresh` finds a boundary
-    // with no matching live proc and mints a brand-new `ProcId` with a brand-new isolate
-    // (a respawned sandboxed worker) and a fresh arena. The two procs this run killed
-    // out of band are therefore BACK, under new identities, before the sweep runs.
+    // This block used to pin the DEFECT: an out-of-band-retired proc left the live set,
+    // but its client root was still in the guest's graph, so the next `refresh` found a
+    // boundary with no matching live proc and minted a brand-new `ProcId` with a
+    // brand-new isolate (a respawned sandboxed worker) and a fresh arena. Both victims
+    // were BACK, under new identities, before the sweep ran. It was pinned deliberately
+    // so that fixing it would trip this test — and it did: the fix panicked here first.
     //
-    // This assertion pins TODAY'S behavior deliberately, so that fixing the defect trips
-    // this test and forces the doc, the ignored test and this sweep to move together.
-    // It is NOT an endorsement.
+    // What it pins now is the fixed behavior, at the end of a run that put the two
+    // out-of-band retires and thousands of `apply`s from OTHER clients in the same
+    // window. The condemned components must be dead, and dead *as components* — not one
+    // proc's worth of state left behind by accident.
     for &i in &[P_TEARDOWN, P_HUP] {
         assert!(
             !gpu.procs.contains_key(&pids[i]),
             "({mode:?}) the retired proc's ORIGINAL identity is gone (it was reaped)"
         );
-        let now = gpu.spine.by_pdb[&(gpu_of(i), lane_of(i).pdb)];
-        assert_ne!(
-            now, pids[i],
-            "({mode:?}) §12.13: routing was rebuilt onto a fresh proc identity"
+        assert!(
+            gpu.spine.is_condemned(client_of(i)),
+            "★★ ({mode:?}) §12.13: proc {i} was retired out of band, so its component \
+             must still be condemned after the run's applies"
+        );
+        // No proc, under ANY identity, holds this component's client — the resurrection
+        // this run used to produce would be visible right here as a fresh `ProcId`.
+        assert!(
+            gpu.procs
+                .values()
+                .all(|p| !p.clients.contains(&client_of(i))),
+            "★★ ({mode:?}) §12.13: an out-of-band-retired proc was RESURRECTED under a \
+             fresh identity — §7.3 promises 'no resurrect' and `WorkerDied` promises \
+             'never a respawn'"
+        );
+    }
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        2,
+        "({mode:?}) exactly the two out-of-band retires condemned a component"
+    );
+    // ★ No FALSE condemnation: the four procs the run did not kill out of band are all
+    // still live and none of them is condemned. A fix that condemned too eagerly (say,
+    // on the graph-driven retire of `P_CHANFREE`'s channel, or on the `LateMerge` absorb
+    // path) would be a self-inflicted denial of service, and it would show up here.
+    assert_eq!(
+        gpu.procs.len(),
+        4,
+        "({mode:?}) exactly the four untouched procs are live"
+    );
+    for i in [P_WITNESS, P_PEER, P_CHANFREE, P_REROUTE] {
+        assert!(
+            gpu.procs.contains_key(&pids[i]),
+            "({mode:?}) proc {i} was never retired and must still be live"
         );
         assert!(
-            gpu.procs.contains_key(&now),
-            "★★ ({mode:?}) §12.13 DEFECT: an out-of-band-retired proc was RESURRECTED as \
-             {now:?} with a fresh isolate — §7.3 promises 'no resurrect'. If this assert \
-             now FAILS, the defect was fixed: update §12.13, un-ignore \
-             `out_of_band_retire_must_not_resurrect_the_isolate`, and delete this block."
+            !gpu.spine.is_condemned(client_of(i)),
+            "({mode:?}) proc {i} was condemned by a host failure that was not its own"
         );
     }
     assert!(
@@ -1351,8 +1464,8 @@ fn mean_multiproc_multithread_multigpu_multiworkload() {
     );
 }
 
-/// ★★ **DEFECT — `l1_concurrency.md` §12.13. IGNORED BECAUSE THE FIX IS A DESIGN
-/// CHANGE, NOT BECAUSE THE ASSERT IS WRONG.**
+/// ★★ **`l1_concurrency.md` §12.13 — THE DESIGN'S OWN INVARIANT. Was `#[ignore]`d with
+/// the defect named; the condemned-component fix makes it pass on its own terms.**
 ///
 /// §7.3: *"Worker death out-of-band (crash) is a reactor source firing HUP → dispatch →
 /// retire the proc loudly … either way MISS=FAULT posture, **no resurrect**."*
@@ -1360,29 +1473,30 @@ fn mean_multiproc_multithread_multigpu_multiworkload() {
 /// a worker that died mid-verb may have left host state the core cannot reason
 /// about)"*.
 ///
-/// What actually happens, proven below: `Spine::retire_proc` removes the proc from the
-/// live set, but the guest's client root is untouched in the RM graph, so the **next
-/// `Gpu::apply`** re-derives that boundary, finds no matching live proc, mints a fresh
-/// `ProcId`, spawns a **brand-new isolate** (new sandbox, new handle namespace — the
-/// respawn §7.3 forbids), carves a fresh GPA arena, and rebuilds `by_pdb`/`by_vchid`
-/// onto it. The guest then publishes and rings again with no refusal whatsoever. Only
-/// the dead *worker slot* stayed dead; the isolate came back around it.
+/// What used to happen: `Spine::retire_proc` removed the proc from the live set, but
+/// the guest's client root is untouched in the RM graph, so the **next `Gpu::apply`**
+/// re-derived that boundary, found no matching live proc, minted a fresh `ProcId`,
+/// spawned a **brand-new isolate** (new sandbox, new handle namespace — the respawn
+/// §7.3 forbids), carved a fresh GPA arena, and rebuilt `by_pdb`/`by_vchid` onto it.
+/// The guest then published and rang again with no refusal whatsoever. Only the dead
+/// *worker slot* stayed dead; the isolate came back around it.
 ///
-/// Why this is not a local fix: making it stick requires the derivation to carry a
-/// **condemned-component** state (an out-of-band-retired boundary must stay dead until
-/// the guest itself frees its client root) *and* a decision about what an op against a
-/// condemned component returns — there is no `Proc` left to name in a `RetiredProc`
-/// fault. §12.11 already flagged the neighbouring half of this ("unifying the two
-/// teardown routes means deciding whether a host-side failure should retroactively edit
-/// the guest's routing truth, which is a design question, not a fix"). This is that
-/// question, with teeth.
-///
-/// Un-ignore this test when §12.13 is decided; [`sweep_conservation`] step (3) pins the
-/// current behavior and will fail at the same moment, by design.
+/// ★ **The one assert that changed, and why — read this before trusting the test.**
+/// The two post-refresh expectations were written as `RetiredProc(victim)`, and that
+/// exact value is now *unrepresentable by construction*: §12.13's own analysis said so
+/// ("there is no `Proc` left to name in a `RetiredProc` fault"), and any fix that could
+/// still produce it would have to keep routing pointing at a dead `ProcId` — which the
+/// mean run's own conservation sweep, step (7), forbids ("routing names a proc that is
+/// not live"). So the expectation is now [`FwdFault::Condemned`], carrying the
+/// component's `ProcAnchor`. That is a **strengthening**, not a weakening: the old value
+/// said only "the proc you named is not live" (which a *reaped* proc and a *condemned*
+/// one both satisfy); the new one says "this component is condemned and will not be
+/// served again", and it is derived FORWARD out of the same projection that fills
+/// `by_pdb`/`by_vchid` — no reverse resolve was invented to make a prettier error. The
+/// property under test — *the guest gets a refusal, not service* — is untouched, and
+/// the pre-refresh assert is now the same fault as the post-refresh one, which is
+/// §12.11's "the two teardown routes are not fault-identical" being paid off.
 #[test]
-#[ignore = "★★ KNOWN DEFECT l1_concurrency.md §12.13 — an out-of-band retire is undone \
-            by the next refresh (the isolate is respawned). The fix is a design change; \
-            this assert is the design's own invariant and must NOT be weakened."]
 fn out_of_band_retire_must_not_resurrect_the_isolate() {
     let _wd = watchdog(
         "out_of_band_retire_must_not_resurrect",
@@ -1390,6 +1504,9 @@ fn out_of_band_retire_must_not_resurrect_the_isolate() {
     );
     let (device, pids, _rec) = mean_world(LockMode::Sharded);
     let victim = pids[P_HUP];
+    let condemned = FwdFault::Condemned {
+        anchor: ProcAnchor(client_of(P_HUP)),
+    };
 
     // The victim has live host state, then its worker dies out of band.
     device
@@ -1410,7 +1527,7 @@ fn out_of_band_retire_must_not_resurrect_the_isolate() {
     );
     assert_eq!(
         device.publish_backing(GPU1, lane_of(P_HUP).pdb, GpuVa(VA_HELD), 0x1000),
-        Err(FwdFault::RetiredProc(victim)),
+        Err(condemned),
         "immediately after the HUP the proc refuses, loudly"
     );
 
@@ -1426,16 +1543,469 @@ fn out_of_band_retire_must_not_resurrect_the_isolate() {
         })
         .expect("an unrelated map applies");
 
-    // THE INVARIANT (§7.3): the condemned component must stay dead. It does not.
+    // ★★ THE INVARIANT (§7.3): the condemned component stays dead across the refresh.
     assert_eq!(
         device.publish_backing(GPU1, lane_of(P_HUP).pdb, GpuVa(VA_HELD), 0x1000),
-        Err(FwdFault::RetiredProc(victim)),
+        Err(condemned),
         "★★ §12.13: a refresh RESURRECTED an out-of-band-retired proc on a fresh isolate \
          — §7.3 promises no resurrect and WorkerDied promises never a respawn"
     );
     assert_eq!(
         device.doorbell(GPU1, MockArch::token_for(lane_of(P_HUP).gr), &[]),
-        Err(FwdFault::RetiredProc(victim)),
+        Err(condemned),
         "★★ §12.13: and its channels serve the guest again"
+    );
+    // The refusal is not the whole claim: nothing was MATERIALIZED for it either. No
+    // proc holds its client, so there is no isolate and no arena behind that refusal.
+    let gpu = Arc::try_unwrap(device)
+        .unwrap_or_else(|_| panic!("every device handle was released"))
+        .into_gpu();
+    assert!(
+        gpu.procs
+            .values()
+            .all(|p| !p.clients.contains(&client_of(P_HUP))),
+        "★★ §12.13: no `Proc` — under any identity — may hold a condemned client"
+    );
+    assert!(gpu.spine.is_condemned(client_of(P_HUP)));
+}
+
+// =================================================================================
+// ★ §12.13 — the properties the condemned-component fix INTRODUCES
+//
+// Deliberately driven against a bare `Gpu` (`mean_gpu`) rather than through the lock
+// shell: condemnation is a fact of the pure core, so these read core state directly —
+// client sets, arenas, the source registry — instead of inferring it from refusals.
+// `SharedDevice::retire_proc` is a thin wrapper over `Spine::retire_proc`, which is
+// the ONE out-of-band retire path and therefore the one place condemnation is recorded.
+// =================================================================================
+
+/// Publish one page through the composed core path, routing the way a guest does
+/// (`by_pdb` → owning proc). Returns the routing refusal verbatim.
+fn core_publish(gpu: &mut Gpu, target: GpuId, pdb: Pdb, va: u64) -> Result<Published, FwdFault> {
+    let pid = kayfabe_fwd::route_pdb(&gpu.spine, target, pdb)?;
+    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    kayfabe_fwd::publish_backing(proc, target, pdb, GpuVa(va), 0x1000)
+}
+
+/// Retire proc `pid` **out of band** on the bare core — the worker-death edge
+/// (`Spine::retire_proc`), which is what condemns the component.
+fn core_retire_out_of_band(gpu: &mut Gpu, pid: ProcId) -> bool {
+    let Gpu { spine, procs, .. } = gpu;
+    spine.retire_proc(procs, pid)
+}
+
+/// Churn one RM map/unmap through `apply` from `client` — a full `refresh`, driven by
+/// a client that has nothing to do with the condemned component.
+fn churn(gpu: &mut Gpu, client: HClient, k: usize) {
+    let ev = if k.is_multiple_of(2) {
+        RmEvent::MapMemoryDma {
+            client,
+            vaspace: H_VASPACE,
+            memory: MEM,
+            va: GpuVa(VA_CHURN),
+            offset: 0,
+            len: 0x1000,
+        }
+    } else {
+        RmEvent::Unmap {
+            client,
+            vaspace: H_VASPACE,
+            va: GpuVa(VA_CHURN),
+        }
+    };
+    gpu.apply(ev).expect("the churn applies");
+}
+
+/// ★ **Condemnation survives an arbitrary number of intervening `apply`s from other
+/// clients, and clears ONLY when the guest frees the condemned client root** — after
+/// which a genuinely new process is served normally.
+///
+/// The defect was precisely that ONE unrelated `apply` undid the retire, so the number
+/// of intervening refreshes is the load-bearing variable: this drives 64 of them, from
+/// a *different* client, and requires the refusal to be identical every time. The
+/// clearing half is the other side of the same rule — condemnation is not a permanent
+/// poisoning of a `Pdb` value, it is the death of one component, and it ends when the
+/// guest itself lets go of it (§12.13 rule 3).
+#[test]
+fn condemnation_survives_intervening_applies_and_clears_on_client_root_free() {
+    let _wd = watchdog("condemnation_survives", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
+    let condemned = FwdFault::Condemned {
+        anchor: ProcAnchor(client_of(P_HUP)),
+    };
+
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the victim publishes while alive");
+    assert!(core_retire_out_of_band(&mut gpu, victim));
+
+    for k in 0..64 {
+        churn(&mut gpu, client_of(P_WITNESS), k);
+        assert_eq!(
+            core_publish(&mut gpu, GPU1, lane.pdb, VA_HELD + (k as u64) * 0x1000),
+            Err(condemned),
+            "★ refresh #{k} resurrected the condemned component"
+        );
+        assert_eq!(
+            kayfabe_fwd::handle_doorbell(&mut gpu, GPU1, MockArch::token_for(lane.gr), &[]),
+            Err(condemned),
+            "★ refresh #{k} resurrected the condemned component's exec plane"
+        );
+        assert!(gpu.spine.is_condemned(client_of(P_HUP)));
+        assert_eq!(gpu.spine.condemned_len(), 1);
+        assert!(
+            gpu.procs
+                .values()
+                .all(|p| !p.clients.contains(&client_of(P_HUP))),
+            "★ refresh #{k} minted a `Proc` for the condemned component"
+        );
+    }
+
+    // ---- The guest frees the client root: condemnation ends WITH the component.
+    let h = identical_handles(lane.gr.0, lane.ce.0);
+    gpu.apply(RmEvent::Free {
+        client: client_of(P_HUP),
+        handle: h.client_root,
+    })
+    .expect("the client-root free applies");
+    assert!(
+        !gpu.spine.is_condemned(client_of(P_HUP)),
+        "condemnation must be dropped once no boundary holds the condemned clients"
+    );
+    assert_eq!(gpu.spine.condemned_len(), 0);
+    assert_eq!(
+        core_publish(&mut gpu, GPU1, lane.pdb, VA_HELD),
+        Err(FwdFault::UnknownPdb {
+            gpu: GPU1,
+            pdb: lane.pdb
+        }),
+        "with the component gone the key is simply unknown — not condemned"
+    );
+
+    // ---- …and a genuinely NEW process (fresh client, same recycled PDB value) is
+    // served normally. Condemnation must never have poisoned the VALUE.
+    let fresh = HClient(0xC0);
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(
+        fresh,
+        lane.pdb,
+        identical_handles(lane.gr.0, lane.ce.0),
+        Some(1),
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("the new process applies");
+    }
+    let p = core_publish(&mut gpu, GPU1, lane.pdb, VA_CTL).expect("a NEW process is served");
+    let pid = gpu.spine.by_pdb[&(GPU1, lane.pdb)];
+    assert!(gpu.procs[&pid].clients.contains(&fresh));
+    assert_ne!(pid, victim, "ProcIds are never reused");
+    assert!(p.host_va != 0);
+}
+
+/// ★ **A condemned component leaves NO dispatchable completion source** — and none
+/// appears later.
+///
+/// `Spine::retire_proc` already deregisters every source of the dying proc (the C's F4
+/// use-after-retire, designed out). What the fix adds is that this stays true: with no
+/// `Proc` ever minted for the component again, there is nothing left to register a
+/// source ON, so the registry cannot re-acquire one across any number of refreshes.
+#[test]
+fn a_condemned_component_leaves_no_dispatchable_completion_source() {
+    let _wd = watchdog("condemned_no_sources", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let victim = pids[P_HUP];
+
+    let os = gpu.spine.sources.register(SourceKind::OsEvent {
+        proc: victim,
+        gpu: GPU1,
+        ev: EV[0],
+    });
+    let worker = gpu.spine.sources.register(SourceKind::Worker {
+        proc: victim,
+        gpu: GPU1,
+        worker: WorkerId(0),
+    });
+    let bystander = gpu.spine.sources.register(SourceKind::OsEvent {
+        proc: pids[P_PEER],
+        gpu: GPU1,
+        ev: EV[1],
+    });
+    assert!(gpu.spine.sources.dispatch(os.0).is_ok());
+
+    assert!(core_retire_out_of_band(&mut gpu, victim));
+    for k in 0..8 {
+        churn(&mut gpu, client_of(P_WITNESS), k);
+        assert!(
+            gpu.spine.sources.dispatch(os.0).is_err(),
+            "a condemned component's os-event source dispatched after refresh #{k}"
+        );
+        assert!(
+            gpu.spine.sources.dispatch(worker.0).is_err(),
+            "a condemned component's worker source dispatched after refresh #{k}"
+        );
+        assert!(
+            gpu.spine
+                .sources
+                .iter()
+                .all(|(_, kind)| kind.owner() != Some(victim)),
+            "the registry still names the condemned proc after refresh #{k}"
+        );
+        // Blast-radius containment: the untouched peer's source is unaffected.
+        assert!(gpu.spine.sources.dispatch(bystander.0).is_ok());
+    }
+}
+
+/// ★ **A condemned component's GPA arena is released EXACTLY once, and is never handed
+/// back to a resurrected impostor.**
+///
+/// The #80 recycle (`Spine::reap_retired` → `GpaSpace::release`) is what makes sequential
+/// process churn sustainable, and it must keep working for an out-of-band retire — but
+/// the recycled range must go to a genuinely NEW guest process, never to a re-derivation
+/// of the component that lost its worker. This pins both halves: reaped once (never
+/// again), and the exact released range reappears under a *different client's* proc while
+/// the condemned component still holds no arena at all.
+#[test]
+fn a_condemned_components_arena_is_released_once_and_never_recycled_to_an_impostor() {
+    let _wd = watchdog("condemned_arena", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
+
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the victim publishes while alive");
+    let arena = gpu.procs[&victim].arenas[&GPU1].range.clone();
+
+    assert!(core_retire_out_of_band(&mut gpu, victim));
+    assert_eq!(gpu.reap_retired(), 1, "reaped exactly once");
+    assert_eq!(gpu.reap_retired(), 0, "and never again");
+
+    // No refresh may carve an arena for the condemned component — there is no proc to
+    // carve one for, which is the point.
+    for k in 0..16 {
+        churn(&mut gpu, client_of(P_WITNESS), k);
+        assert!(
+            gpu.procs
+                .values()
+                .all(|p| !p.clients.contains(&client_of(P_HUP))),
+            "refresh #{k} gave the condemned component a proc (and therefore an arena)"
+        );
+    }
+
+    // The released range is recycled — to a NEW guest process, on its own fresh client.
+    let fresh = HClient(0xC1);
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(
+        fresh,
+        Pdb(0x3700_0000),
+        identical_handles(0x180, 0x280),
+        Some(1),
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("the new process applies");
+    }
+    core_publish(&mut gpu, GPU1, Pdb(0x3700_0000), VA_CTL).expect("the new process is served");
+    let new_pid = gpu.spine.by_pdb[&(GPU1, Pdb(0x3700_0000))];
+    assert_eq!(
+        gpu.procs[&new_pid].arenas[&GPU1].range, arena,
+        "the condemned proc's arena must be recycled (the #80 fix) — to a NEW process"
+    );
+    assert!(
+        !gpu.procs[&new_pid].clients.contains(&client_of(P_HUP)),
+        "the recycled arena went to an impostor of the condemned component"
+    );
+    // Still globally disjoint: exactly one live proc holds that range.
+    assert_eq!(
+        gpu.procs
+            .values()
+            .filter(|p| p.arenas.values().any(|a| a.range == arena))
+            .count(),
+        1,
+        "the released arena was handed out twice"
+    );
+}
+
+/// ★ **The ordinary, graph-driven retire path condemns NOTHING** — a false condemnation
+/// would be a self-inflicted denial of service.
+///
+/// Two shapes, both of which retire a `Proc` without any host-side failure: (a) the
+/// guest frees its client root (`refresh` step 3), and (b) a `DUP_OBJECT` merges two
+/// untouched components, so the absorbed `Proc` is retired into the survivor
+/// (`refresh`'s merge arm). Neither may leave a condemned entry behind, and in (a) the
+/// guest must be able to run the very same process again.
+#[test]
+fn the_graph_driven_retire_paths_never_condemn() {
+    let _wd = watchdog("graph_retire_never_condemns", Duration::from_secs(60));
+
+    // ---- (a) the guest frees its client root, then starts the same process again.
+    let (mut gpu, _pids, _rec) = mean_gpu();
+    let lane = lane_of(P_TEARDOWN);
+    let h = identical_handles(lane.gr.0, lane.ce.0);
+    core_publish(&mut gpu, GPU0, lane.pdb, VA_WARM).expect("publishes while alive");
+    gpu.apply(RmEvent::Free {
+        client: client_of(P_TEARDOWN),
+        handle: h.client_root,
+    })
+    .expect("the client-root free applies");
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        0,
+        "★ a guest-driven teardown must NEVER condemn — that would be a self-inflicted DoS"
+    );
+    assert!(!gpu.spine.is_condemned(client_of(P_TEARDOWN)));
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(client_of(P_TEARDOWN), lane.pdb, h, None);
+    for ev in s.events {
+        gpu.apply(ev).expect("the same process starts again");
+    }
+    core_publish(&mut gpu, GPU0, lane.pdb, VA_CTL)
+        .expect("★ a guest that tore itself down must be served again");
+
+    // ---- (b) the LateMerge-absorb arm: a UVM dup folds an untouched proc into another.
+    let (mut gpu, _pids, _rec) = mean_gpu();
+    let compute_vas = NodeKey::new(client_of(P_WITNESS), H_VASPACE);
+    let uvm = HClient(0xD0);
+    let mut s = Scenario::new();
+    s.uvm_dup(
+        uvm,
+        HObject(0x7000_0000),
+        HObject(0x7000_0001),
+        HObject(0x7000_0010),
+        Pdb(0x3800_0000),
+        HObject(0x7000_00a0),
+        compute_vas,
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("the UVM dup applies");
+    }
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        0,
+        "★ the merge-absorb retire must NEVER condemn"
+    );
+    let merged = gpu.spine.by_pdb[&(GPU0, lane_of(P_WITNESS).pdb)];
+    assert!(gpu.procs[&merged].clients.contains(&uvm));
+    core_publish(&mut gpu, GPU0, lane_of(P_WITNESS).pdb, VA_CTL)
+        .expect("★ the merged proc keeps serving");
+}
+
+/// ★ **MG: condemnation is a COMPONENT-wide fact, and it is keyed on the component —
+/// not on a number that another GPU's proc happens to share.**
+///
+/// The victim here spans BOTH GPUs (a UVM-style dup joins a GPU0 client and a GPU1
+/// client into one dup-connected component = one `Proc` with one isolate *per target*,
+/// MG-5). Killing a worker of its **GPU1** isolate must condemn the whole component,
+/// GPU0 plane included — the blast radius is the proc, not the target. Meanwhile the
+/// four bystander procs carrying byte-identical `Pdb`/`VChid` VALUES on both GPUs must
+/// be untouched: if the condemned key had lost its `GpuId`, or if condemnation were
+/// keyed on anything numeric rather than on the client set, they would die with it.
+#[test]
+fn condemnation_spans_a_procs_gpus_and_spares_identical_ids_on_other_gpus() {
+    let _wd = watchdog("condemnation_multi_gpu", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+
+    // Join P_TEARDOWN (GPU0, lane B) and P_CHANFREE (GPU1, lane B) into ONE proc, so a
+    // single component spans two targets with two isolates.
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_TEARDOWN), H_VASPACE),
+        dst: NodeKey::new(client_of(P_CHANFREE), HObject(0x7100_00a0)),
+    })
+    .expect("the cross-GPU dup applies");
+    let spanning = gpu.spine.by_pdb[&(GPU0, lane_of(P_TEARDOWN).pdb)];
+    assert_eq!(
+        gpu.spine.by_pdb[&(GPU1, lane_of(P_CHANFREE).pdb)],
+        spanning,
+        "the dup made one proc out of the two clients"
+    );
+    core_publish(&mut gpu, GPU0, lane_of(P_TEARDOWN).pdb, VA_WARM).expect("its GPU0 plane works");
+    core_publish(&mut gpu, GPU1, lane_of(P_CHANFREE).pdb, VA_WARM).expect("its GPU1 plane works");
+    assert_eq!(
+        gpu.procs[&spanning].targets,
+        BTreeSet::from([GPU0, GPU1]),
+        "one proc, two per-target isolates (MG-5)"
+    );
+
+    // ★ Its GPU1 worker dies. The COMPONENT is condemned — both of its GPU planes.
+    assert!(core_retire_out_of_band(&mut gpu, spanning));
+    churn(&mut gpu, client_of(P_WITNESS), 0);
+    for (g, i) in [(GPU0, P_TEARDOWN), (GPU1, P_CHANFREE)] {
+        assert_eq!(
+            core_publish(&mut gpu, g, lane_of(i).pdb, VA_HELD),
+            Err(FwdFault::Condemned {
+                anchor: ProcAnchor(client_of(P_TEARDOWN)),
+            }),
+            "★ the condemned component's {g:?} plane still serves the guest"
+        );
+        assert!(gpu.spine.is_condemned(client_of(i)));
+    }
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        1,
+        "ONE component, not one per GPU"
+    );
+
+    // ★ …and the bystanders — identical numeric lanes, other procs — are untouched.
+    for i in [P_WITNESS, P_PEER, P_REROUTE, P_HUP] {
+        assert!(!gpu.spine.is_condemned(client_of(i)));
+        core_publish(&mut gpu, gpu_of(i), lane_of(i).pdb, VA_CTL)
+            .unwrap_or_else(|e| panic!("bystander proc {i} was condemned with the victim: {e:?}"));
+        kayfabe_fwd::handle_doorbell(&mut gpu, gpu_of(i), MockArch::token_for(lane_of(i).gr), &[])
+            .unwrap_or_else(|e| {
+                panic!("bystander proc {i}'s exec plane died with the victim: {e:?}")
+            });
+    }
+    // Lane C's PDB value lives on BOTH GPUs; lane B's now names a condemned component on
+    // one GPU and nothing else anywhere. No key collapsed.
+    assert_ne!(pids[P_REROUTE], pids[P_HUP]);
+}
+
+/// ★ **A `DUP_OBJECT` that would merge a LIVE proc into a condemned component is
+/// refused ATOMICALLY** (`GpuError::CondemnedMerge`).
+///
+/// Dup-connected clients are one `Proc` by construction — one isolate, one arena, one
+/// blast radius — so there is no honest way to honour this dup: absorbing the condemned
+/// clients into the live proc resurrects them around a working isolate, and condemning
+/// the live proc lets a guest kill a healthy process by dupping into a corpse. The third
+/// answer is to refuse the *event*; `Spine::apply` is transactional, so the live proc
+/// keeps serving and the condemned component stays condemned — nothing moves.
+#[test]
+fn a_dup_into_a_condemned_component_is_refused_atomically() {
+    let _wd = watchdog("condemned_merge_refused", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let victim = pids[P_HUP];
+
+    core_publish(&mut gpu, GPU1, lane_of(P_HUP).pdb, VA_WARM).expect("publishes while alive");
+    assert!(core_retire_out_of_band(&mut gpu, victim));
+
+    let before = gpu.procs.len();
+    assert_eq!(
+        gpu.apply(RmEvent::Dup {
+            src: NodeKey::new(client_of(P_HUP), H_VASPACE),
+            dst: NodeKey::new(client_of(P_PEER), HObject(0x7200_00a0)),
+        }),
+        Err(GpuError::CondemnedMerge {
+            live: pids[P_PEER],
+            condemned: ProcAnchor(client_of(P_HUP)),
+        }),
+        "★ dupping a condemned component into a live proc must be refused, loudly"
+    );
+
+    // ATOMIC: the live proc is untouched and still serving, the condemned one is still
+    // condemned, and nothing was minted or merged.
+    assert_eq!(
+        gpu.procs.len(),
+        before,
+        "the refusal minted or dropped a proc"
+    );
+    assert!(!gpu.spine.is_condemned(client_of(P_PEER)));
+    assert_eq!(gpu.spine.condemned_len(), 1);
+    assert!(
+        !gpu.procs[&pids[P_PEER]].clients.contains(&client_of(P_HUP)),
+        "the rolled-back dup left the condemned client inside a live proc"
+    );
+    core_publish(&mut gpu, GPU1, lane_of(P_PEER).pdb, VA_CTL)
+        .expect("★ the live proc keeps serving after the refusal");
+    assert_eq!(
+        core_publish(&mut gpu, GPU1, lane_of(P_HUP).pdb, VA_HELD),
+        Err(FwdFault::Condemned {
+            anchor: ProcAnchor(client_of(P_HUP)),
+        }),
+        "★ and the condemned component is still condemned"
     );
 }

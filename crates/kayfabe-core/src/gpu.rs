@@ -71,6 +71,24 @@ pub enum GpuError {
         /// The arch the target was presented under.
         got: &'static str,
     },
+    /// ★ §12.13: a dup edge would have joined a **live** proc's component to a
+    /// **condemned** one (a component whose isolate worker died out of band, see
+    /// [`Spine::retire_proc`]).
+    ///
+    /// Dup-connected clients are ONE proc by construction — one isolate, one arena,
+    /// one blast radius — so honouring the dup would mean either resurrecting the
+    /// condemned component around the live proc's isolate, or condemning a healthy
+    /// proc that had nothing to do with the dead worker (a self-inflicted DoS). The
+    /// third answer is the only honest one: refuse the *event*. [`Spine::apply`] is
+    /// transactional, so the offending `DUP_OBJECT` is rolled back atomically and
+    /// **nothing** is disturbed — the live proc keeps serving, the condemned
+    /// component stays dead. MISS=FAULT applied to a merge.
+    CondemnedMerge {
+        /// The live proc the dup would have folded into the condemned component.
+        live: ProcId,
+        /// The condemned component's label (its smallest client handle).
+        condemned: ProcAnchor,
+    },
 }
 
 impl From<RmGraphError> for GpuError {
@@ -396,6 +414,61 @@ pub struct Spine {
     next_proc: u32,
     /// Procs retired but not yet reaped (awaiting the quiesce point).
     pub retired: Vec<Proc>,
+    /// ★ §12.13 — the **condemned components**: client sets whose proc was retired
+    /// **out of band** ([`Spine::retire_proc`]) and which must therefore never be
+    /// re-derived into a live [`Proc`] again.
+    ///
+    /// **Why a client SET and not a [`ProcId`] or a [`ProcAnchor`].** A `ProcId` is
+    /// minted per derivation and dies with the proc — the very thing that failed was
+    /// that the *next* derivation minted a fresh one, so it cannot be the key. A
+    /// `ProcAnchor` is only the *smallest* client of the component, so freeing that one
+    /// client while keeping the rest would silently re-label the component and slip the
+    /// condemnation. The client set is exactly what [`Spine::refresh`] already matches
+    /// boundaries on (intersection), so keying on it makes condemnation survive every
+    /// re-derivation the guest can provoke, including component splits (both halves
+    /// intersect, both stay condemned) and re-labels.
+    ///
+    /// Entries are **canonical**: pairwise disjoint, sorted (determinism, decision
+    /// #27), and monotonically *grown* by any boundary that intersects them — a
+    /// component that absorbs new clients keeps the blast radius it earned. An entry is
+    /// dropped only when NO boundary intersects it any more, i.e. when the **guest
+    /// itself** freed the client root.
+    condemned: Vec<BTreeSet<HClient>>,
+    /// ★ §12.13 — data-plane routing for condemned components: `(GpuId, Pdb)` → the
+    /// condemned component's label. Derived exactly like [`Self::by_pdb`], from the
+    /// same projection, so naming the fault costs **no reverse resolution** (the
+    /// doctrine `RmGraph::gpu_of` and the address table are held to): the guest's key
+    /// is looked up forward, it just resolves to "condemned" instead of to a proc.
+    condemned_by_pdb: BTreeMap<(GpuId, Pdb), ProcAnchor>,
+    /// ★ §12.13 — exec-plane routing for condemned components: `(GpuId, VChid)` → the
+    /// condemned component's label. See [`Self::condemned_by_pdb`].
+    condemned_by_vchid: BTreeMap<(GpuId, VChid), ProcAnchor>,
+}
+
+/// Insert `set` into the canonical condemned list, absorbing (to a fixpoint) every
+/// entry it overlaps, then re-sorting so the list is a deterministic function of the
+/// graph and not of call order (decision #27). Keeping the entries pairwise disjoint is
+/// what makes "does this boundary intersect a condemned component" a single scan with
+/// no transitive follow-up.
+fn absorb_condemned(list: &mut Vec<BTreeSet<HClient>>, mut set: BTreeSet<HClient>) {
+    loop {
+        let mut rest = Vec::with_capacity(list.len());
+        let mut grew = false;
+        for c in list.drain(..) {
+            if c.is_disjoint(&set) {
+                rest.push(c);
+            } else {
+                set.extend(c);
+                grew = true;
+            }
+        }
+        *list = rest;
+        if !grew {
+            break;
+        }
+    }
+    list.push(set);
+    list.sort();
 }
 
 /// The device: composition root of the logic core.
@@ -646,15 +719,79 @@ impl Spine {
     fn refresh(&mut self, procs: &mut impl ProcSet) -> Result<(), GpuError> {
         let bounds: Boundaries = project(&self.rmgraph, self.arch.as_ref())?;
 
+        // 0. ★ THE CONDEMNATION PASS (§12.13) — re-derive the condemned client sets
+        //    against the NEW boundaries, BEFORE step 1 can mint anything. This is the
+        //    whole fix: without it, an out-of-band-retired component reaches step 1's
+        //    `None` arm and is handed a fresh `ProcId`, a freshly spawned isolate and a
+        //    fresh arena — the respawn §7.3 forbids.
+        //
+        //    A boundary is condemned iff it INTERSECTS a condemned client set — the same
+        //    predicate step 1 matches live procs on, so the two agree by construction.
+        //    Intersecting boundaries also *grow* their entry (the component keeps the
+        //    blast radius it earned), and an entry no boundary intersects is dropped:
+        //    condemnation ends only when the guest itself frees the client root.
+        //
+        //    `condemned_bound[i]` carries the CONDEMNED side's own label (the smallest
+        //    client of the intersecting entries, *before* the boundary's own clients are
+        //    folded in), so a refused merge can name the corpse rather than the merged
+        //    boundary's anchor — which, in exactly the interesting case, is the LIVE
+        //    proc's client.
+        let mut carried: Vec<BTreeSet<HClient>> = Vec::new();
+        let mut condemned_bound: Vec<Option<ProcAnchor>> = Vec::with_capacity(bounds.procs.len());
+        for b in &bounds.procs {
+            let mut merged: Option<BTreeSet<HClient>> = None;
+            for c in &self.condemned {
+                if !c.is_disjoint(&b.clients) {
+                    merged
+                        .get_or_insert_with(BTreeSet::new)
+                        .extend(c.iter().copied());
+                }
+            }
+            condemned_bound.push(
+                merged
+                    .as_ref()
+                    .and_then(|m| m.iter().next().copied().map(ProcAnchor)),
+            );
+            if let Some(mut m) = merged {
+                m.extend(b.clients.iter().copied());
+                absorb_condemned(&mut carried, m);
+            }
+        }
+        let condemned_anchors: BTreeSet<ProcAnchor> = bounds
+            .procs
+            .iter()
+            .zip(&condemned_bound)
+            .filter_map(|(b, dead)| dead.map(|_| b.anchor))
+            .collect();
+
         // 1. Match each boundary to existing procs by client intersection.
         let mut live: BTreeSet<ProcId> = BTreeSet::new();
-        for b in &bounds.procs {
+        for (b, &is_condemned) in bounds.procs.iter().zip(&condemned_bound) {
             let mut matching: Vec<ProcId> = procs
                 .iter_mut()
                 .filter(|(_, p)| !p.clients.is_disjoint(&b.clients))
                 .map(|(id, _)| id)
                 .collect();
             matching.sort_unstable();
+
+            if let Some(condemned_label) = is_condemned {
+                // ★ A condemned component gets NOTHING: no `Proc`, no isolate spawn, no
+                // arena, no routing entry (step 4 files its keys under the condemned
+                // maps instead). Its ops therefore miss — MISS=FAULT working as designed,
+                // named exactly (`FwdFault::Condemned`) rather than guessed at.
+                if let Some(&live_pid) = matching.first() {
+                    // A live proc's clients can only reach a condemned set through a NEW
+                    // dup edge (procs partition the graph's clients, and condemnation
+                    // starts from one whole component). Dup-connected ⇒ one proc ⇒ one
+                    // blast radius, so there is no answer that keeps both promises;
+                    // refuse the event and let `apply` roll it back.
+                    return Err(GpuError::CondemnedMerge {
+                        live: live_pid,
+                        condemned: condemned_label,
+                    });
+                }
+                continue;
+            }
 
             let pid = match matching.first() {
                 Some(&keep) => {
@@ -786,27 +923,43 @@ impl Spine {
         }
 
         // 4. Rebuild routing maps from the projection (never accreted). Keyed on the
-        // target (MG-3): a `Pdb`/`VChid` is a per-GPU namespace.
+        // target (MG-3): a `Pdb`/`VChid` is a per-GPU namespace. ★ §12.13: a key whose
+        // owning component is CONDEMNED is filed under the condemned maps instead of
+        // being dropped, so the guest's own key still resolves — forward, from the same
+        // projection — to a named refusal rather than to an anonymous miss.
         self.by_pdb.clear();
         self.by_vchid.clear();
+        self.condemned_by_pdb.clear();
+        self.condemned_by_vchid.clear();
         let anchor_to_pid: BTreeMap<ProcAnchor, ProcId> =
             procs.iter_mut().map(|(id, p)| (p.anchor, id)).collect();
         for (&(gpu, pdb), &(anchor, _)) in &bounds.by_pdb {
             if let Some(&pid) = anchor_to_pid.get(&anchor) {
                 self.by_pdb.insert((gpu, pdb), pid);
+            } else if condemned_anchors.contains(&anchor) {
+                self.condemned_by_pdb.insert((gpu, pdb), anchor);
             }
         }
         for (&(gpu, vchid), &(anchor, key)) in &bounds.by_vchid {
-            if let Some(&pid) = anchor_to_pid.get(&anchor)
-                && let Some(&cid) = procs
+            if let Some(&pid) = anchor_to_pid.get(&anchor) {
+                if let Some(&cid) = procs
                     .get_mut(pid)
                     .expect("anchored proc lives")
                     .chan_ids
                     .get(&key)
-            {
-                self.by_vchid.insert((gpu, vchid), (pid, cid));
+                {
+                    self.by_vchid.insert((gpu, vchid), (pid, cid));
+                }
+            } else if condemned_anchors.contains(&anchor) {
+                self.condemned_by_vchid.insert((gpu, vchid), anchor);
             }
         }
+
+        // 5. ★ Commit the re-derived condemnation LAST: every early return above is a
+        // faulting derivation that `Spine::apply` rolls back, and a rolled-back apply
+        // must find the condemned state exactly as it was (the re-derivation from the
+        // last-good graph runs this same pass again).
+        self.condemned = carried;
         Ok(())
     }
 
@@ -816,24 +969,104 @@ impl Spine {
     /// The graph-driven retirements inside [`Spine::refresh`] happen because the
     /// guest freed a client root. This one happens because the *host side* failed: an
     /// isolate worker died, so the proc's host state is no longer something the core
-    /// can reason about. Same three obligations, in the same order, deliberately
+    /// can reason about. Same obligations, in the same order, deliberately
     /// sharing this one implementation rather than being open-coded in the adapter:
     /// remove it from the live set, `Proc::retire` it (its isolates stop, new ops
     /// refuse), deregister **every** completion source it owns (or a signal still in
     /// flight resolves onto a dead proc — the C's F4 species), and park it on the
     /// retired list for the deferred reap.
     ///
-    /// **Never a resurrect** (§7.3): there is no path back from here. Returns `false`
-    /// if `pid` was already gone — idempotent, because a worker HUP and a guest
-    /// teardown can legitimately race.
+    /// ★ **And CONDEMN its component (§12.13 — this is what makes "never a resurrect"
+    /// true).** Removing the proc is not enough: the *guest's* client root is untouched
+    /// in the graph, so the next [`Spine::refresh`] — triggered by any event from any
+    /// client — re-derives that boundary, matches no live proc, and used to mint a fresh
+    /// `ProcId` with a **freshly spawned isolate** (new sandbox, new handle namespace)
+    /// and a fresh GPA arena. Recording the component's client set as condemned makes
+    /// the derivation skip it for good; see [`Spine::condemned_pdb`] for what its ops
+    /// get instead.
+    ///
+    /// Condemnation **immediately** moves this proc's `by_pdb`/`by_vchid` entries into
+    /// the condemned maps rather than waiting for the next refresh, which settles the
+    /// §12.11 question ("should a host-side failure retroactively edit the guest's
+    /// routing truth?") in the only way that keeps the two teardown routes
+    /// fault-identical: the guest's *truth* — the RM graph and its projection — is never
+    /// touched; what changes is the host-side **materialization**, and it changes at the
+    /// instant of the failure rather than at the next unrelated event. Without this the
+    /// same op would answer `RetiredProc` before the next `apply` and `Condemned` after
+    /// it, for no reason the guest could observe or cause.
+    ///
+    /// **Never a resurrect** (§7.3): there is no path back from here, and it now holds
+    /// past the next refresh. Returns `false` if `pid` was already gone — idempotent,
+    /// because a worker HUP and a guest teardown can legitimately race.
     pub fn retire_proc(&mut self, procs: &mut impl ProcSet, pid: ProcId) -> bool {
         let Some(mut p) = procs.remove(pid) else {
             return false;
         };
         p.retire();
         self.sources.deregister_proc(pid).latched();
+        let anchor = p.anchor;
+        absorb_condemned(&mut self.condemned, p.clients.clone());
+        // Move (never guess) this proc's derived routing into the condemned maps: the
+        // keys are filtered by the VALUE they already name, which is a forward read of a
+        // derived table — not a reverse resolve of an address to an owner.
+        let pdbs: Vec<(GpuId, Pdb)> = self
+            .by_pdb
+            .iter()
+            .filter(|&(_, &owner)| owner == pid)
+            .map(|(&k, _)| k)
+            .collect();
+        for k in pdbs {
+            self.by_pdb.remove(&k);
+            self.condemned_by_pdb.insert(k, anchor);
+        }
+        let vchids: Vec<(GpuId, VChid)> = self
+            .by_vchid
+            .iter()
+            .filter(|&(_, &(owner, _))| owner == pid)
+            .map(|(&k, _)| k)
+            .collect();
+        for k in vchids {
+            self.by_vchid.remove(&k);
+            self.condemned_by_vchid.insert(k, anchor);
+        }
         self.retired.push(p);
         true
+    }
+
+    /// ★ §12.13 — is `client` part of a condemned component? The diagnostic half of
+    /// the condemned state (the routing half is [`Spine::condemned_pdb`] /
+    /// [`Spine::condemned_vchid`]). `true` means: an isolate worker of this client's
+    /// dup-connected component died out of band, so the component is dead until the
+    /// guest frees its client root — no `Proc`, no isolate, no arena, no route.
+    #[must_use]
+    pub fn is_condemned(&self, client: HClient) -> bool {
+        self.condemned.iter().any(|c| c.contains(&client))
+    }
+
+    /// ★ §12.13 — how many distinct condemned components the device is carrying
+    /// (entries are canonical: pairwise disjoint). Diagnostics, and the executable
+    /// statement that condemnation *clears*: this returns to 0 once the guest has freed
+    /// every condemned client root.
+    #[must_use]
+    pub fn condemned_len(&self) -> usize {
+        self.condemned.len()
+    }
+
+    /// ★ §12.13 — does `(gpu, pdb)` name a **condemned** component's address plane?
+    /// Returns its label. The data-plane routing miss that
+    /// [`Spine::by_pdb`] takes is MISS=FAULT working as designed; this says *which*
+    /// miss it is, resolved **forward** out of the same projection that fills `by_pdb`,
+    /// so the fwd plane can name the refusal without a single backwards lookup.
+    #[must_use]
+    pub fn condemned_pdb(&self, gpu: GpuId, pdb: Pdb) -> Option<ProcAnchor> {
+        self.condemned_by_pdb.get(&(gpu, pdb)).copied()
+    }
+
+    /// ★ §12.13 — does `(gpu, vchid)` name a **condemned** component's exec plane?
+    /// The doorbell/engine-object half of [`Spine::condemned_pdb`].
+    #[must_use]
+    pub fn condemned_vchid(&self, gpu: GpuId, vchid: VChid) -> Option<ProcAnchor> {
+        self.condemned_by_vchid.get(&(gpu, vchid)).copied()
     }
 
     /// ★ The deferred-reap quiesce point (lesson L10 — the C's P0 fix: reaping the
@@ -977,6 +1210,9 @@ impl Gpu {
             geom,
             next_proc: 1,
             retired: Vec::new(),
+            condemned: Vec::new(),
+            condemned_by_pdb: BTreeMap::new(),
+            condemned_by_vchid: BTreeMap::new(),
         };
         let mut system = Proc::new(Self::SYSTEM_PROC, ProcAnchor(HClient(0)));
         // The system proc always touches the default target (kernel/scrubber traffic).
