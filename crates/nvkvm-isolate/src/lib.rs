@@ -169,6 +169,22 @@ pub trait RmBackend: Send {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IsolateId(pub u32);
 
+/// One worker slot inside an isolate's **bounded pool** (`l1_concurrency.md` §7.2,
+/// decision #37).
+///
+/// The pool exists because a single-in-flight worker per isolate serializes a guest
+/// process's *own* threads behind each other (the #37 intra-proc blocking gap); N
+/// workers per `(Proc, GpuId)` isolate let sibling guest threads have verbs in flight
+/// concurrently, while each individual worker stays strictly single-in-flight (a
+/// property the type system gives for free: a worker is reached only by `&mut`).
+///
+/// Dense and **scoped to its owning isolate** — `WorkerId(0)` of proc A's GPU0 isolate
+/// and `WorkerId(0)` of proc B's GPU1 isolate are unrelated identities, exactly like
+/// [`HostHandle`]. Anything keyed on a worker must carry the `(ProcId, GpuId)` pair
+/// alongside it (see `nvkvm_core::reactor::SourceKind::Worker`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct WorkerId(pub u32);
+
 /// # One per-process sandboxed host worker
 ///
 /// Owns a private host-RM connection ([`RmBackend`]) with its own handle namespace,
@@ -213,6 +229,7 @@ nvkvm_util::assert_send_sync!(
     HostHandle,
     RmError,
     IsolateId,
+    WorkerId,
     dyn Isolate,
     dyn IsolateFactory
 );

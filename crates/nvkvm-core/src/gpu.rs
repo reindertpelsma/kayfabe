@@ -24,6 +24,7 @@ use nvkvm_util::Instant;
 
 use crate::gpa::{GpaArena, GpaError, GpaSpace};
 use crate::project::{Boundaries, ProjectionError, project};
+use crate::reactor::SourceRegistry;
 use crate::rmgraph::{NodeKey, RmEvent, RmGraph, RmGraphError};
 use crate::{ChanId, ProcAnchor, ProcId};
 
@@ -377,6 +378,18 @@ pub struct Spine {
     /// window + GSP-queue drain gate) per routable GPU. `GpuId::ZERO` is realized at
     /// [`Gpu::new`]; further targets are minted lazily as their Devices are derived.
     pub targets: BTreeMap<GpuId, GpuTarget>,
+    /// ★ The completion-source registry (`l1_concurrency.md` §6, decision #37).
+    ///
+    /// Device-global, and deliberately **here** rather than on [`Proc`]: dispatch must
+    /// resolve a source whose proc may have just retired, so the routing table has to
+    /// outlive — and be keyed independently of — the proc it names. It sits at rank 0
+    /// of the L1 lock order with the rest of the spine.
+    ///
+    /// Its retire wiring is in [`Spine::refresh`]: BOTH proc-retirement paths call
+    /// [`SourceRegistry::deregister_proc`], which is what turns "a source signalled
+    /// after its proc retired" into a loud `SourceFault` instead of the C's F4
+    /// use-after-retire.
+    pub sources: SourceRegistry,
     isolates: Box<dyn IsolateFactory>,
     /// Geometry template for minting a fresh disjoint per-target window.
     geom: TargetGeom,
@@ -657,6 +670,10 @@ impl Spine {
                         }
                         let mut dead = procs.remove(absorbed).expect("exists");
                         dead.retire();
+                        // Retire is also a REACTOR event (§6): the absorbed proc's
+                        // completion sources must stop routing the instant it stops
+                        // existing, or a late signal resolves onto a dead proc (F4).
+                        self.sources.deregister_proc(absorbed).latched();
                         self.retired.push(dead);
                     }
                     keep
@@ -739,6 +756,11 @@ impl Spine {
         for id in dead {
             let mut p = procs.remove(id).expect("exists");
             p.retire();
+            // Same reactor law as the merge-absorb path above: deregister every source
+            // of the retiring proc, across every GPU target, BEFORE it leaves the live
+            // set. Handles are never reused, so any signal still in flight for it now
+            // resolves to nothing — a loud `SourceFault`, never a use-after-retire.
+            self.sources.deregister_proc(id).latched();
             self.retired.push(p);
         }
 
@@ -924,6 +946,7 @@ impl Gpu {
             by_pdb: BTreeMap::new(),
             by_vchid: BTreeMap::new(),
             targets,
+            sources: SourceRegistry::new(),
             isolates,
             geom,
             next_proc: 1,

@@ -1,9 +1,11 @@
 # CI green-gate (decision #33; the standing decision #15 follow-up).
 #
 # Three jobs, matching how the repo is actually built:
-# - stable: the main workspace — build, the full 143-test suite, clippy
-#   -D warnings, and rustfmt --check (both workspaces; the fuzz crate is its own
-#   workspace so it needs its own fmt pass).
+# - stable: the main workspace — build, the full 151-test suite (+3 doctests),
+#   clippy -D warnings, rustfmt --check (both workspaces; the fuzz crate is its own
+#   workspace so it needs its own fmt pass), and the §6.2 hexagonal boundary grep
+#   (decision #37): the pure logic crates must name NO OS readiness primitive, in
+#   code or in comments.
 # - aarch64: cross-`cargo check` the whole workspace for arm64 (decision #36).
 #   The pure logic core must carry NO x86/CPU-arch assumption, so arm64 (later:
 #   Grace-Hopper / Jetson) can be added as an adapter, never a core bolt-on.
@@ -31,7 +33,7 @@ env:
 
 jobs:
   stable:
-    name: stable — build, test, clippy, fmt
+    name: stable — build, test, clippy, fmt, boundary
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,12 +43,36 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --workspace
-      - name: Test (the 143-test suite)
+      - name: Test (the 151-test suite + doctests)
         run: cargo test --workspace
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Format check
         run: cargo fmt --all --check
+      # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The
+      # completion-source reactor's MODEL is core-owned and PURE: the core says
+      # "notifiable source" and "completion source", full stop. The OS half — the
+      # source→host-primitive table, the real wait loop, the real wake — is L1's
+      # adapter, and adapters do not live in these crates. A logic-crate diff that
+      # names an OS readiness primitive has breached the boundary, in code OR in a
+      # comment, so this greps both. Exit-code polarity: `grep -r` returns 0 on a
+      # HIT (= boundary breach = fail) and 1 on no match (= the success case), hence
+      # the `if`, never a bare `grep` under `set -e`.
+      - name: Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
+        run: |
+          pure="crates/nvkvm-core crates/nvkvm-completion crates/nvkvm-fwd \
+                crates/nvkvm-mmu crates/nvkvm-gsp crates/nvkvm-arch crates/nvkvm-abi \
+                crates/nvkvm-util crates/nvkvm-trace crates/nvkvm-isolate crates/nvkvm-vmm"
+          if grep -rniE 'eventfd|epoll|timerfd|rawfd|libc|O_NONBLOCK' $pure; then
+            echo ""
+            echo "★ BOUNDARY BREACH — l1_concurrency.md §6.2."
+            echo "The pure logic crates own the completion-source MODEL, never the OS"
+            echo "readiness machinery: no host descriptor types, no syscall names, not"
+            echo "even in comments. The lines above name one. Move it into the L1"
+            echo "adapter and refer to it from the core as a 'notifiable source' /"
+            echo "'completion source'. Reword the comment; never weaken this gate."
+            exit 1
+          fi
       - name: Format check (fuzz workspace)
         run: cargo fmt --all --check
         working-directory: fuzz

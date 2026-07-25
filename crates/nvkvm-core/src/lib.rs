@@ -19,6 +19,10 @@
 //!   exec = per-[`gpu::Channel`]/[`gpu::ExecPlane`], completion, isolate + GPA arena).
 //! - [`gpa`] — the guest-physical window and its **per-process arenas** (§4.3.3):
 //!   disjoint by construction, so the `ALREADY-MAPPED` collision class cannot occur.
+//! - [`reactor`] — ★ the **completion-source reactor port** (`l1_concurrency.md` §6,
+//!   decision #37): an opaque-handle source registry plus the routing knowledge
+//!   *"source S signalled → which proc → what to do"*. PURE — no host descriptors, no
+//!   syscalls, ever (§6.2, CI-gated); the OS half is L1's adapter.
 //!
 //! ## The anti-C-duplication property
 //!
@@ -77,6 +81,7 @@
 pub mod gpa;
 pub mod gpu;
 pub mod project;
+pub mod reactor;
 pub mod rmgraph;
 
 use nvkvm_arch::ids::HClient;
@@ -113,6 +118,12 @@ nvkvm_util::assert_send_sync!(
     project::ChannelFacts,
     project::VasFacts,
     project::ProjectionError,
+    reactor::CompletionSource,
+    reactor::SourceKind,
+    reactor::Dispatch,
+    reactor::SourceFault,
+    reactor::SourceRegistry,
+    reactor::WakeRequest,
 );
 
 /// A derived guest-process identity. NOT a hardware concept ("there is no GPU
