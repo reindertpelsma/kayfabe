@@ -22,6 +22,12 @@ use std::sync::OnceLock;
 /// only two gated. (The formerly-`#[ignore]`d 20k-token soak measured ~0.6 s
 /// and now simply always runs.)
 ///
+/// ★ Two more joined them with G10 (`l1_concurrency.md` §12.22): the
+/// `g10_*_is_capped_*` pair drives a device-global list to
+/// `MAX_CONDEMNED_COMPONENTS` / `MAX_RETIRED_PROCS`, which is ~2 s each and is
+/// exactly the "walk a guest-reachable bound to its cap" shape this gate exists
+/// for. Measured 2026-07-25: they were 3.7 s of the fast path's 23.5 s.
+///
 /// ```sh
 /// cargo test --workspace                    # fast path: slow tests skip, loudly
 /// KAYFABE_SLOW=1 cargo test --workspace     # everything runs
@@ -98,8 +104,15 @@ impl Scenario {
     }
 
     /// Like [`Scenario::compute_process`] but declares the `Device`'s physical-GPU
-    /// index (`deviceInstance`) — `None` = single-GPU default (routes to `GpuId::ZERO`);
-    /// `Some(i)` = the multi-GPU target `GpuId(i)`.
+    /// index (`deviceInstance`) — `None` = the single-GPU default, which still **declares
+    /// instance 0**; `Some(i)` = the multi-GPU target `GpuId(i)`.
+    ///
+    /// ★ G9 (`l1_concurrency.md` §12.21): the helper never emits a `Device` with an
+    /// *undeclared* instance, because a real one cannot exist — `deviceId` is a required
+    /// field of `NV0080_ALLOC_PARAMETERS`, so the ABI layer always observes it. A Device
+    /// with no declared instance is now **unroutable** in the core (it used to silently
+    /// become GPU 0), so modelling one here would be modelling a shape the protocol does
+    /// not produce.
     #[allow(clippy::too_many_arguments)]
     pub fn compute_process_on_gpu(
         &mut self,
@@ -123,7 +136,7 @@ impl Scenario {
             handle: dev,
             class: mc::DEVICE,
             facts: AllocFacts {
-                device_instance,
+                device_instance: Some(device_instance.unwrap_or(0)),
                 ..Default::default()
             },
         });
@@ -250,7 +263,10 @@ impl Scenario {
             parent: uvm_root,
             handle: uvm_dev,
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         });
         self.push(RmEvent::Alloc {
             client: uvm_client,

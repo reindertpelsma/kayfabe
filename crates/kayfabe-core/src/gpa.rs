@@ -8,7 +8,9 @@
 //! demand-faults), so per-proc cost is address space, not RAM.
 
 use core::ops::Range;
-use kayfabe_arch::ids::Gpa;
+use std::collections::BTreeMap;
+
+use kayfabe_arch::ids::{Gpa, GpuId};
 
 /// Errors from the GPA window/arena allocators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,28 +24,67 @@ pub enum GpaError {
     },
 }
 
+/// ★ G7 — a release refused because the arena is **not this window's** (`l1_concurrency.md`
+/// §12.19). Carries the arena back unchanged: a refused release must never be the thing
+/// that loses the range, or the loud check would trade a collision for a leak.
+#[derive(Debug)]
+pub struct ForeignArena {
+    /// The arena, returned untouched, so the caller can route it home or report it.
+    pub arena: GpaArena,
+    /// The target whose window refused it.
+    pub refused_by: GpuId,
+}
+
 /// The device's guest-physical window; hands out per-proc arenas.
 #[derive(Debug)]
 pub struct GpaSpace {
+    /// ★ G7: the target this window belongs to. Every arena it carves is stamped with
+    /// it, so an arena **names its own window** and a release cannot be misrouted by a
+    /// caller that got a map key wrong (`Spine::reap_retired` no longer takes one).
+    owner: GpuId,
     window: Range<u64>,
     arena_len: u64,
     next: u64,
     /// Arenas released at a reap point, ready for recycling (LIFO).
     free: Vec<Range<u64>>,
+    /// ★ G6: monotonic **generation**, bumped on every carve. It is what makes a
+    /// recycled range a *different* arena: a [`GpaBlock`] minted by the range's previous
+    /// occupant carries the old generation and is refused by the new one, so the
+    /// free-a-stale-block-into-the-arena-that-replaced-it ABA cannot be constructed.
+    /// Never reused (the same law as `ResId`).
+    next_gen: u64,
 }
 
 impl GpaSpace {
-    /// A window carving fixed-size arenas of `arena_len` bytes.
+    /// A window carving fixed-size arenas of `arena_len` bytes, owned by
+    /// [`GpuId::ZERO`] (the realize-time target; further targets use
+    /// [`GpaSpace::owned_by`]).
     #[must_use]
     pub fn new(window: Range<u64>, arena_len: u64) -> Self {
         assert!(arena_len > 0 && window.start < window.end);
         let next = window.start;
         GpaSpace {
+            owner: GpuId::ZERO,
             window,
             arena_len,
             next,
             free: Vec::new(),
+            next_gen: 0,
         }
+    }
+
+    /// Stamp this window (and everything it carves) with its owning target — MG-6's
+    /// per-target windows. Called at the two places the core mints one.
+    #[must_use]
+    pub fn owned_by(mut self, owner: GpuId) -> Self {
+        self.owner = owner;
+        self
+    }
+
+    /// The target this window belongs to.
+    #[must_use]
+    pub fn owner(&self) -> GpuId {
+        self.owner
     }
 
     /// Carve a disjoint arena: recycle a released one first, else cut fresh from
@@ -51,10 +92,19 @@ impl GpaSpace {
     /// C paid for this with #80's GPA free-list after sequential process churn
     /// exhausted the shared window (`teardown_hardening_done`).
     pub fn carve(&mut self) -> Result<GpaArena, GpaError> {
+        let generation = self.next_gen;
+        self.next_gen += 1;
         if let Some(range) = self.free.pop() {
             return Ok(GpaArena {
+                id: ArenaId {
+                    owner: self.owner,
+                    base: range.start,
+                    generation,
+                },
+                owner: self.owner,
                 cursor: range.start,
                 range,
+                free: BTreeMap::new(),
             });
         }
         let start = self.next;
@@ -66,8 +116,15 @@ impl GpaSpace {
         }
         self.next = end;
         Ok(GpaArena {
+            id: ArenaId {
+                owner: self.owner,
+                base: start,
+                generation,
+            },
+            owner: self.owner,
             range: start..end,
             cursor: start,
+            free: BTreeMap::new(),
         })
     }
 
@@ -117,46 +174,289 @@ impl GpaSpace {
     /// With those three separated, the C's stale-backing / `ALREADY-MAPPED`-on-reuse
     /// class (#12 cont.29) still has nothing to be stale — but for stated reasons, one
     /// of which is somebody else's to keep.
-    pub fn release(&mut self, arena: GpaArena) {
+    ///
+    /// ## ★ G7 — the WINDOW half, which used to be a `debug_assert` (§12.19)
+    ///
+    /// By-value made *double* release unrepresentable; it said nothing about *which*
+    /// window. Releasing target A's arena into target B's window was expressible in safe
+    /// code and was checked only by a `debug_assert!` — **compiled out in release**. The
+    /// recipient window then hands a range it does not own to the next proc that asks:
+    /// with the core's disjoint per-target windows that is a permanent leak from A plus
+    /// a proc holding GPAs inside another target's aperture, and the moment two windows
+    /// are not disjoint (a nested/MIG-shaped geometry, which this type permits) it is a
+    /// straight **double-issue of one range to two live procs** — the #14 collision class
+    /// arriving through the recycling path the per-process design exists to make
+    /// impossible.
+    ///
+    /// It is now a loud [`Result`], and the arena comes back in the error so a refusal
+    /// cannot itself lose the range. A *type-level* fix — an arena that cannot even be
+    /// passed to the wrong window — would need an invariant "brand" lifetime per window;
+    /// the windows live in a runtime-keyed `BTreeMap<GpuId, GpuTarget>`, so every entry
+    /// would share one lifetime parameter and brands could not tell target A from target
+    /// B. Per-entry brands need existential lifetimes (`generativity`-style), which is
+    /// not available in safe stable Rust here. So the structural half was put where the
+    /// mistake actually happens instead: the arena is **stamped with its owning target**
+    /// at carve time, and `Spine::reap_retired` routes it home by *its own* owner rather
+    /// than by a map key the caller supplies — there is no longer a key to get wrong.
+    ///
+    /// # Errors
+    /// [`ForeignArena`] if the arena was not carved by this window.
+    pub fn release(&mut self, arena: GpaArena) -> Result<(), ForeignArena> {
+        // Owner catches the misrouted release; containment catches the same-owner
+        // impostor (two windows stamped alike) that owner alone would wave through.
+        if arena.owner != self.owner
+            || arena.range.start < self.window.start
+            || arena.range.end > self.window.end
+        {
+            return Err(ForeignArena {
+                arena,
+                refused_by: self.owner,
+            });
+        }
         debug_assert_eq!(arena.range.end - arena.range.start, self.arena_len);
-        debug_assert!(arena.range.start >= self.window.start && arena.range.end <= self.next);
+        debug_assert!(arena.range.end <= self.next, "never issued by this window");
         self.free.push(arena.range);
+        Ok(())
     }
 }
 
+/// The identity of one *carve* of a range — window owner + base + **generation**.
+///
+/// The generation is what distinguishes a recycled range from the range it replaced, so
+/// a [`GpaBlock`] cut by a dead proc can never be freed into the arena a later proc was
+/// handed at the same address (§12.20's ABA).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ArenaId {
+    /// The target whose window carved it.
+    pub owner: GpuId,
+    /// The arena's base GPA.
+    pub base: u64,
+    /// Monotonic per-window carve counter; never reused.
+    pub generation: u64,
+}
+
+/// ★ G6 — a live allocation inside one [`GpaArena`], and the **only** way to give it
+/// back (`l1_concurrency.md` §12.20).
+///
+/// Deliberately neither `Copy` nor `Clone`: [`GpaArena::free`] takes it **by value**, so
+/// a double free is not a runtime check that can be forgotten, it is a value that no
+/// longer exists — the same discipline `GpaSpace::release(arena)` uses one level up. A
+/// block also names the exact [`ArenaId`] it came from, so freeing it into a *different*
+/// proc's arena — or into the arena that merely inherited its address — is a loud
+/// refusal, not a silent double-issue.
+#[derive(Debug, PartialEq, Eq)]
+#[must_use = "a GpaBlock is a live GPA reservation; drop it and the range leaks until \
+              the whole arena is reaped — free it through GpaArena::free"]
+pub struct GpaBlock {
+    /// The allocation's guest-physical base.
+    pub gpa: Gpa,
+    /// Its length in bytes.
+    pub len: u64,
+    arena: ArenaId,
+}
+
+impl GpaBlock {
+    /// The arena this block was cut from.
+    #[must_use]
+    pub fn arena(&self) -> ArenaId {
+        self.arena
+    }
+}
+
+/// A [`GpaArena::free`] refused because the block is not this arena's. Carries the block
+/// back, for the same reason [`ForeignArena`] carries its arena back.
+#[derive(Debug)]
+pub struct ForeignBlock {
+    /// The block, returned untouched.
+    pub block: GpaBlock,
+    /// The arena that refused it.
+    pub refused_by: ArenaId,
+}
+
 /// One process's private slice of the guest-physical window.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Deliberately **not `Clone`** (§12.19): the by-value [`GpaSpace::release`] is what
+/// makes a double release unrepresentable, and a `Clone` would hand that back — two
+/// copies of one arena are two releases of one range, i.e. the same range issued to two
+/// live procs.
+///
+/// ★ **Reclaimable since G6** (§12.20). It used to be bump-only — `alloc` and no `free`
+/// — so reclamation existed only at whole-arena granularity, at proc reap. A long-lived
+/// process that maps and unmaps repeatedly (the exact process this project exists for)
+/// walked its cursor to the end and took a permanent `FwdFault::Arena` with no way back:
+/// the C's #80 leak (`teardown_hardening_done`: *"Even a well-behaved guest leaked the
+/// GPA window (no-free bump allocator) until all GPU mmaps failed"*), reproduced one
+/// level down after being fixed one level up.
+///
+/// It is a **free list, not a collector**. The `RmGraph` already models DUP_OBJECT
+/// refcounting from declared protocol facts, so liveness is *known*, not inferred, and
+/// cross-`Proc` references cannot exist (a dup between two clients makes them one
+/// `Proc`). A tracing GC would re-derive what the graph states and would make
+/// reclamation non-deterministic, breaking the `CoreSnapshot` differential property.
+#[derive(Debug, PartialEq, Eq)]
 pub struct GpaArena {
     /// The arena's disjoint GPA range.
     pub range: Range<u64>,
+    /// ★ G7: the target whose window carved this arena — its ticket home.
+    owner: GpuId,
+    /// ★ G6: this carve's identity; every block it cuts names it.
+    id: ArenaId,
     cursor: u64,
+    /// ★ G6: freed sub-ranges available for reuse, `start -> len`, kept **coalesced**
+    /// with their neighbours. Coalescing is not an optimization here: without it a
+    /// map/unmap loop at varying sizes fragments the arena into unusable slivers and
+    /// exhausts it anyway, which is the same bug wearing a free list.
+    free: BTreeMap<u64, u64>,
 }
 
 impl GpaArena {
-    /// Bump-allocate `len` bytes at `align` (power of two).
-    pub fn alloc(&mut self, len: u64, align: u64) -> Result<Gpa, GpaError> {
+    /// The target whose window carved this arena. A release routes on THIS, never on a
+    /// key the caller remembered separately.
+    #[must_use]
+    pub fn owner(&self) -> GpuId {
+        self.owner
+    }
+
+    /// This carve's identity — what a [`GpaBlock`] must match to be freed here.
+    #[must_use]
+    pub fn id(&self) -> ArenaId {
+        self.id
+    }
+
+    /// Allocate `len` bytes at `align` (power of two): **reuse first**, then bump.
+    ///
+    /// Reuse is first-fit over the coalesced free list in ascending GPA order — a pure
+    /// function of the arena's state, so the same request stream always yields the same
+    /// addresses (decision #27; the differential property depends on it).
+    ///
+    /// # Errors
+    /// [`GpaError::ArenaExhausted`] when neither a free range nor the bump cursor can
+    /// satisfy the request.
+    pub fn alloc(&mut self, len: u64, align: u64) -> Result<GpaBlock, GpaError> {
         assert!(align.is_power_of_two() && len > 0);
+        let exhausted = GpaError::ArenaExhausted { len };
+
+        // 1. Reuse: the lowest free range that can hold an aligned `len`.
+        let fit = self.free.iter().find_map(|(&start, &flen)| {
+            let a = start.checked_add(align - 1)? & !(align - 1);
+            let e = a.checked_add(len)?;
+            (e <= start.checked_add(flen)?).then_some((start, flen, a, e))
+        });
+        if let Some((start, flen, a, e)) = fit {
+            self.free.remove(&start);
+            if a > start {
+                self.free.insert(start, a - start); // alignment head
+            }
+            if start + flen > e {
+                self.free.insert(e, start + flen - e); // tail
+            }
+            return Ok(GpaBlock {
+                gpa: Gpa(a),
+                len,
+                arena: self.id,
+            });
+        }
+
+        // 2. Bump.
         let start = self
             .cursor
             .checked_add(align - 1)
             .map(|c| c & !(align - 1))
-            .ok_or(GpaError::ArenaExhausted { len })?;
-        let end = start
-            .checked_add(len)
-            .ok_or(GpaError::ArenaExhausted { len })?;
+            .ok_or(exhausted)?;
+        let end = start.checked_add(len).ok_or(exhausted)?;
         if end > self.range.end {
-            return Err(GpaError::ArenaExhausted { len });
+            return Err(exhausted);
+        }
+        // The alignment gap the bump skipped is real space; give it to the free list
+        // rather than losing it (a 4K-aligned stream after an odd one would otherwise
+        // shed a sliver per allocation).
+        if start > self.cursor {
+            self.insert_free(self.cursor, start - self.cursor);
         }
         self.cursor = end;
-        Ok(Gpa(start))
+        Ok(GpaBlock {
+            gpa: Gpa(start),
+            len,
+            arena: self.id,
+        })
+    }
+
+    /// ★ G6 — return one allocation to this arena. Takes the block **by value**, so a
+    /// double free is unrepresentable rather than merely detected:
+    ///
+    /// ```compile_fail
+    /// # use kayfabe_core::gpa::GpaSpace;
+    /// let mut space = GpaSpace::new(0..0x10000, 0x10000);
+    /// let mut arena = space.carve().unwrap();
+    /// let block = arena.alloc(0x1000, 0x1000).unwrap();
+    /// arena.free(block).unwrap();
+    /// arena.free(block).unwrap(); // ← the block was MOVED; this does not compile
+    /// ```
+    ///
+    /// # Errors
+    /// [`ForeignBlock`] if the block was cut by a different arena — including the
+    /// **previous occupant of this very range** (generations, [`ArenaId`]), which is the
+    /// ABA a range-only check would wave through.
+    pub fn free(&mut self, block: GpaBlock) -> Result<(), ForeignBlock> {
+        if block.arena != self.id {
+            return Err(ForeignBlock {
+                refused_by: self.id,
+                block,
+            });
+        }
+        debug_assert!(block.gpa.0 >= self.range.start && block.gpa.0 + block.len <= self.range.end);
+        self.insert_free(block.gpa.0, block.len);
+        Ok(())
+    }
+
+    /// Insert `[start, start+len)` into the free list, coalescing with the ranges either
+    /// side of it (and swallowing the bump cursor back if the range ends at it).
+    fn insert_free(&mut self, start: u64, len: u64) {
+        let mut lo = start;
+        let mut hi = start + len;
+        // Merge the predecessor if it abuts.
+        if let Some((&ps, &pl)) = self.free.range(..lo).next_back()
+            && ps + pl == lo
+        {
+            self.free.remove(&ps);
+            lo = ps;
+        }
+        // Merge the successor if it abuts.
+        if let Some((&ns, &nl)) = self.free.range(hi..).next()
+            && ns == hi
+        {
+            self.free.remove(&ns);
+            hi = ns + nl;
+        }
+        // A free range that runs up to the bump cursor is better given back to the
+        // cursor: it keeps the free list short and makes a full drain restore the arena
+        // to exactly its pristine shape.
+        if hi == self.cursor {
+            self.cursor = lo;
+            return;
+        }
+        self.free.insert(lo, hi - lo);
+    }
+
+    /// Bytes still handed out (allocated and not freed) — diagnostics, and the executable
+    /// statement that a drain actually drains.
+    #[must_use]
+    pub fn live_bytes(&self) -> u64 {
+        (self.cursor - self.range.start) - self.free.values().sum::<u64>()
     }
 
     /// True if nothing was ever allocated (used to enforce the early-arm merge
     /// discipline: merging two `Proc`s is only legal while the absorbed one is
     /// untouched — lesson L9).
+    ///
+    /// Deliberately still "has the cursor ever moved", **not** "is anything live": an
+    /// absorbed proc that allocated and then freed has published host state and is not
+    /// a candidate for an early merge. A fully-drained arena does restore
+    /// `cursor == range.start` (see [`GpaArena::insert_free`]) — which is honest, because
+    /// at that point the arena is genuinely pristine again.
     #[must_use]
     pub fn is_untouched(&self) -> bool {
-        self.cursor == self.range.start
+        self.cursor == self.range.start && self.free.is_empty()
     }
 }
 
@@ -196,7 +496,7 @@ mod tests {
         let g = a
             .alloc(len, 0x1000)
             .expect("an exact-fill allocation is legal");
-        assert_eq!(g, Gpa(a.range.start));
+        assert_eq!(g.gpa, Gpa(a.range.start));
         // Now the arena is full; a further byte over-runs and must FAIL loudly
         // (kills `>`→`==`, which would accept a one-past-end allocation).
         assert!(
@@ -216,6 +516,251 @@ mod tests {
         );
     }
 
+    // ==========================================================================
+    // ★ G7 — the WRONG-WINDOW release (`l1_concurrency.md` §12.19)
+    // ==========================================================================
+
+    /// ★ **The owner's exact ask: do the cross recycle.** Release an arena belonging to
+    /// GPU 0's window into GPU 1's window, with the geometry the core actually mints
+    /// (disjoint per-target windows, MG-6), and then allocate from GPU 1.
+    ///
+    /// The property is deliberately **not** "the release was refused" — that would pass
+    /// for the wrong reason the moment the refusal moved. It is the consequence:
+    /// **a window only ever hands out ranges it owns.** So the misroute is attempted
+    /// tolerantly and the assertions are on what GPU 1 subsequently gives to procs. With
+    /// the guard gone, GPU 1's free list swallows the foreign range and hands it to the
+    /// very next proc that asks — a proc whose GPAs live inside *another target's*
+    /// aperture — while GPU 0 loses that range from its window for good.
+    #[test]
+    fn g7_a_window_only_ever_hands_out_ranges_it_owns() {
+        let w0 = 0x1_0000_0000..0x3_0000_0000;
+        let w1 = 0x3_0000_0000..0x5_0000_0000;
+        let mut gpu0 = GpaSpace::new(w0.clone(), 0x1_0000_0000).owned_by(GpuId::ZERO);
+        let mut gpu1 = GpaSpace::new(w1.clone(), 0x1_0000_0000).owned_by(GpuId(1));
+
+        // A reaped proc's GPU-0 arena, misrouted into GPU 1's window.
+        let stolen = gpu0.carve().expect("GPU0 carves");
+        let stolen_range = stolen.range.clone();
+        assert_eq!(stolen.owner(), GpuId::ZERO);
+        let sent_home = gpu1.release(stolen);
+
+        // ★ The property: everything GPU 1 hands out is inside GPU 1's window, and in
+        // particular is never the range GPU 0 owns.
+        for _ in 0..2 {
+            let a = gpu1.carve().expect("GPU1 carves");
+            assert!(
+                a.range.start >= w1.start && a.range.end <= w1.end,
+                "GPU1 handed a proc {:?}, which is NOT inside its own window {w1:?} — \
+                 that is GPU0's cross-recycled arena {stolen_range:?}",
+                a.range,
+            );
+            assert_eq!(
+                a.owner(),
+                GpuId(1),
+                "and it is stamped with its real window"
+            );
+        }
+
+        // The refusal handed the arena BACK, so routing it home is the next line — a
+        // loud check that lost the range would trade a collision for a leak.
+        let refused = sent_home.expect_err("GPU0's arena is not GPU1's to recycle");
+        assert_eq!(refused.refused_by, GpuId(1), "the refusal names the window");
+        assert_eq!(
+            (refused.arena.range.clone(), refused.arena.owner()),
+            (stolen_range.clone(), GpuId::ZERO),
+            "the refused arena comes back unchanged, still owned by GPU0",
+        );
+        gpu0.release(refused.arena)
+            .expect("its own window recycles it");
+        assert_eq!(
+            gpu0.carve().expect("GPU0 carves").range,
+            stolen_range,
+            "the #80 free list still works"
+        );
+    }
+
+    /// ★ **The collision itself, and the exact geometry it needs.**
+    ///
+    /// Under the core's *disjoint* per-target windows a misrouted release cannot produce
+    /// two live procs holding one range — the donor's cursor has already passed the
+    /// range, so it is leaked rather than re-issued. The moment the two windows are
+    /// **not** disjoint it is a straight double issue: the recipient hands the donated
+    /// range out of its free list, then hands the *same* range out again as a fresh cut,
+    /// because its own cursor never moved past it. Two live procs, byte-identical GPA
+    /// ranges — the #14 collision class arriving through the recycling path.
+    ///
+    /// This is written down rather than argued because it is exactly why the check
+    /// cannot lean on "the core mints disjoint windows": that is a property of one call
+    /// site today, and `GpaSpace` is a public type whose next geometry (a MIG instance's
+    /// window carved inside its parent GPU's — `multi_gpu_and_mig.md`) is precisely the
+    /// nested shape.
+    #[test]
+    fn g7_a_cross_recycled_arena_would_be_one_range_in_two_live_hands() {
+        // Two targets over the SAME range — a nested/mis-configured geometry the type
+        // permits and the check must survive.
+        let shared = 0x1_0000_0000..0x3_0000_0000;
+        let mut gpu0 = GpaSpace::new(shared.clone(), 0x1_0000_0000).owned_by(GpuId::ZERO);
+        let mut gpu1 = GpaSpace::new(shared.clone(), 0x1_0000_0000).owned_by(GpuId(1));
+
+        let p1 = gpu0.carve().expect("proc P1's arena, on GPU0");
+        let p1_range = p1.range.clone();
+        let sent_home = gpu1.release(p1);
+
+        // GPU1 now serves two procs.
+        let p2 = gpu1.carve().expect("proc P2");
+        let p3 = gpu1.carve().expect("proc P3");
+        assert!(
+            p2.range.end <= p3.range.start || p3.range.end <= p2.range.start,
+            "two LIVE procs were handed OVERLAPPING GPA ranges: P2 {:?} vs P3 {:?} \
+             (the cross-recycled arena was {p1_range:?})",
+            p2.range,
+            p3.range,
+        );
+
+        let refused = sent_home.expect_err("a foreign arena must not enter GPU1's list");
+        assert_eq!(refused.refused_by, GpuId(1));
+        assert_eq!(refused.arena.owner(), GpuId::ZERO);
+    }
+
+    // ==========================================================================
+    // ★ G6 — the arena had `alloc` and no `free` (`l1_concurrency.md` §12.20)
+    // ==========================================================================
+
+    /// ★ **The reclamation property itself.** An arena of 64 KiB serves 4096 allocations
+    /// of 4 KiB — 16 MiB, 256× its own size — because each is given back. Bump-only, the
+    /// 17th request would already have been a permanent `ArenaExhausted`.
+    ///
+    /// The second half is the one a free list usually fails: **fragmentation**. The same
+    /// arena then services a mixed-size stream with interleaved frees (so ranges are
+    /// returned out of order and out of adjacency), which a non-coalescing free list
+    /// shreds into unusable slivers — the same bug wearing a free list. A full drain must
+    /// restore the arena to genuinely pristine, not merely "has some space left".
+    #[test]
+    fn g6_an_arena_serves_far_more_than_its_size_across_alloc_free_cycles() {
+        let mut space = GpaSpace::new(0..0x1_0000, 0x1_0000);
+        let mut a = space.carve().expect("carves");
+
+        for i in 0..4096u64 {
+            let b = a
+                .alloc(0x1000, 0x1000)
+                .unwrap_or_else(|e| panic!("cycle {i} exhausted a reclaimed arena: {e:?}"));
+            a.free(b).expect("its own block");
+        }
+        assert_eq!(a.live_bytes(), 0);
+        assert!(a.is_untouched(), "a fully drained arena is pristine again");
+
+        // Mixed sizes, freed out of order — the fragmentation shape.
+        for round in 0..64u64 {
+            let mut held = Vec::new();
+            for k in 0..4u64 {
+                let len = 0x1000 * (1 + (k + round) % 3);
+                held.push(
+                    a.alloc(len, 0x1000)
+                        .unwrap_or_else(|e| panic!("round {round} alloc {k}: {e:?}")),
+                );
+            }
+            // Free the odd ones first, then the even ones: adjacency is only recoverable
+            // by coalescing.
+            let (odd, even): (Vec<_>, Vec<_>) =
+                held.into_iter().enumerate().partition(|(i, _)| i % 2 == 1);
+            for (_, b) in odd.into_iter().chain(even) {
+                a.free(b).expect("its own block");
+            }
+        }
+        assert_eq!(a.live_bytes(), 0, "every byte came back");
+        assert!(
+            a.is_untouched(),
+            "and the arena is pristine, not merely non-empty"
+        );
+    }
+
+    /// ★ **The ABA the owner asked for, scripted by ORDER rather than by timing.**
+    ///
+    /// A block outlives the arena it was cut from: the proc is reaped, its arena goes
+    /// back to the window, and the window hands the **same range** to the next proc
+    /// (LIFO — that is the #80 recycle working as designed). A range-only check would
+    /// see a block that fits perfectly inside the new arena and take it, silently
+    /// donating a live proc's range to a dead proc's bookkeeping. The [`ArenaId`]
+    /// generation makes the recycled range a *different* arena, so the stale free is a
+    /// loud refusal — and the new arena's own allocations are unaffected.
+    #[test]
+    fn g6_a_stale_block_cannot_be_freed_into_the_arena_that_replaced_its_range() {
+        let mut space = GpaSpace::new(0..0x1_0000, 0x1_0000);
+        let mut dead = space.carve().expect("proc A's arena");
+        let stale = dead.alloc(0x1000, 0x1000).expect("proc A allocates");
+        let stale_gpa = stale.gpa;
+        let dead_id = dead.id();
+        space.release(dead).expect("A is reaped");
+
+        let mut live = space.carve().expect("proc B's arena");
+        assert_eq!(live.range, 0..0x1_0000, "B was handed A's recycled range");
+
+        // The stale free is attempted tolerantly, because the property is the
+        // CONSEQUENCE, not the refusal: if the block gets in, B's free list holds a range
+        // its bump cursor has not passed, so B hands that one range out TWICE.
+        let refused = live.free(stale);
+        let b1 = live.alloc(0x1000, 0x1000).expect("B allocates");
+        let b2 = live.alloc(0x1000, 0x1000).expect("B allocates again");
+        assert_ne!(
+            b1.gpa, b2.gpa,
+            "the stale free re-armed a range: B handed {:?} to two live allocations",
+            b1.gpa
+        );
+        assert_eq!(
+            live.live_bytes(),
+            0x2000,
+            "exactly what B asked for is live"
+        );
+
+        let refused = refused.expect_err("a dead proc's block is not a live proc's to reclaim");
+        assert_eq!(refused.refused_by, live.id());
+        assert_ne!(
+            live.id(),
+            dead_id,
+            "the recycled range is a DIFFERENT arena"
+        );
+        assert_eq!(
+            refused.block.arena(),
+            dead_id,
+            "the block still names its own arena"
+        );
+        assert_eq!(refused.block.gpa, stale_gpa);
+    }
+
+    /// ★ **A block belongs to ONE arena, so it cannot be freed into another proc's.**
+    /// The #14 boundary applied to reclamation: without it, proc A returning a range into
+    /// proc B's arena hands B a range inside A's — the G7 collision one level down.
+    #[test]
+    fn g6_a_block_cannot_be_freed_into_another_procs_arena() {
+        let mut space = GpaSpace::new(0..0x2_0000, 0x1_0000);
+        let mut a = space.carve().expect("proc A");
+        let mut b = space.carve().expect("proc B");
+        let block = a.alloc(0x1000, 0x1000).expect("A allocates");
+        let gpa = block.gpa;
+
+        // Tolerant again: the property is that B never issues A's range, not that the
+        // call returned `Err`.
+        let refused = b.free(block);
+
+        // B never issues A's range…
+        for _ in 0..4 {
+            let x = b.alloc(0x1000, 0x1000).expect("B allocates");
+            assert_ne!(x.gpa, gpa, "B handed out proc A's live range {gpa:?}");
+            assert!(
+                x.gpa.0 >= b.range.start && x.gpa.0 < b.range.end,
+                "B handed out {:?}, outside its own arena {:?}",
+                x.gpa,
+                b.range
+            );
+        }
+        // …and A can still reclaim it itself, because the refusal handed it back.
+        let refused = refused.expect_err("A's range is not B's to reclaim");
+        assert_eq!(refused.refused_by, b.id());
+        assert_eq!(refused.block.arena(), a.id());
+        a.free(refused.block).expect("its own arena takes it");
+        assert_eq!(a.live_bytes(), 0);
+    }
+
     /// ★ Mutation-gate kill (`GpaArena::is_untouched`→`true`): the early-arm merge
     /// discipline (lesson L9) depends on this predicate distinguishing a pristine arena
     /// from one that has carved even a single allocation — merging is legal ONLY while
@@ -230,7 +775,7 @@ mod tests {
             a.is_untouched(),
             "a freshly carved arena has allocated nothing"
         );
-        a.alloc(0x1000, 0x1000).unwrap();
+        let _held = a.alloc(0x1000, 0x1000).unwrap();
         assert!(
             !a.is_untouched(),
             "after one allocation the arena is touched"

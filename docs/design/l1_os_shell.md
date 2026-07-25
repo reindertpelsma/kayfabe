@@ -90,11 +90,11 @@ the rest as first-class lifecycle work.
 | **G3** | "Quiesce" is undefined and unchecked: the reap can legally run while a `Box<dyn RmBackend>` is checked out on a foreign thread with all locks released ⇒ the isolate is torn down under a live connection and the orphan disposal runs against a dead sandbox. | **Precondition.** `Isolate::is_quiesced()`; a non-quiesced proc goes *back* on the retired list. §7.6 T3's predicate is built on it. |
 | **G2** | `refresh` drops **live** host state with no release: `p.vases.retain(…)` and `p.channels.retain(…)` discard `host_vas` / bound `host_va`s / `host_channel` / `host_engine_objects` while **the proc is still alive**. Guest-reachable. | **★ A first-class lifecycle trigger this doc did not have.** It is the one path where §7.0's "the process boundary is the garbage collector" backstop **does not apply** — nothing dies. New trigger **T0** (§7.6). |
 | **G5** | There is no device reset: no reset event, no `Spine::reset`. On `rmmod`/`modprobe`, guest panic, or VM reset the graph, live `Proc`s, `condemned`, `retired`, `sources`, routing maps and mints all survive into the new driver life, and the new life derives a second set of components beside the corpses. The C's WPR2 limitation is **inherited by omission**. | **Promotes T4 from "wire the trigger" to "build the mechanism".** `Spine::device_reset(...) -> Vec<Proc>` (G3b's shape), clearing graph + condemned while **keeping the mints monotone** — which is exactly the property §7.7 leans on. |
-| **G6** | `GpaArena` is bump-only: no intra-proc free. A long-lived map/unmap process exhausts its arena. | The C's #80 leak reproduced at intra-proc granularity — i.e. *precisely* the "clean cleanup on the GPU going idle" case for a long-running process. Tracked in the ledger (§7.8 R6) and named as an owner-facing gap. |
-| **G7** | `GpaSpace::release` only `debug_assert!`s the range (compiled out in release) and silently drops the arena if the target is missing ⇒ releasing an arena into the **wrong window** is representable. | Symptom is overlapping recycled arenas = the #14 collision class returning. Becomes ledger check **L7** and a recommended hard fault. |
+| **G6** | ★ **FIXED** (`l1_concurrency.md` §12.20). `GpaArena` was bump-only: no intra-proc free, so a long-lived map/unmap process exhausted its arena (measured: cycle 128 on 512 KiB). | Now a coalescing free list plus a move-only `GpaBlock` token (`free` by value ⇒ a double free does not compile) and `kayfabe_fwd::unpublish_backing`, which returns the GPA *with* the host `Orphans`. A free list driven by declared graph facts, not a collector. The residual case — a `Vas` dropped by `refresh` — is named and deferred with the host-side reclaim it must travel with. |
+| **G7** | ★ **FIXED** (§12.19). The window check was a `debug_assert!` (compiled out in release) and a missing target silently dropped the arena. | Now a loud `Result<(), ForeignArena>` that hands the arena back; arenas carry their owning target, so `reap_retired` routes home by the arena's **own** owner and there is no key to get wrong; `GpaArena` lost `Clone`; the unroutable arena is reported on `Reclaimed::orphaned()`. Under disjoint windows the symptom is a leak + cross-aperture GPAs; the two-live-procs overlap needs a non-disjoint (MIG-shaped) geometry, and the guard is now independent of the geometry. |
 | **G8** | `SourceKind::OsEvent` carries no channel/`Vas` identity, so per-channel deregistration cannot be written. | Bites T0 and T5 (a freed channel's sources must go without retiring the proc). Free now, a migration later — recommend now (§3.8). |
-| **G9** | `GpuId` is derived from a **guest-supplied** `device_instance`; `ensure_target` mints a fresh window + `DeliveryPlane` on first touch with no cap, no validation against the realized roster, and `targets` is never pruned. | Unbounded guest-driven device-global growth. A new resource class in the ledger (**R10**) and a cap in the same family as §3.8's. |
-| **G10** | `condemned` and `retired` are unbounded, and `condemned` is scanned O(\|boundaries\|×\|condemned\|) on every apply; it clears only if the guest frees its client root — which a guest that just crashed its worker has no incentive to do. | Condemnation is a *retention* mechanism, so it is also a leak class (**R11**), and its cost is guest-amplifiable. |
+| **G9** | ★ **FIXED** (§12.21). `GpuId` derived from a **guest-supplied** `device_instance` and first touch minted a window + `DeliveryPlane`, uncapped and unvalidated. | Capped to the **entitlement** (`Gpu::realize`'s roster), refused at the `Device` alloc as `RmGraphError::InvalidDeviceInstance` — RM's `NV_ERR_INVALID_CLASS`. Deliberately not `NV_MAX_DEVICES`: RM already bounds the field to `< 32`, so that cap is theatre. The `unwrap_or(0)` default-to-GPU-0 guess went with it. |
+| **G10** | ★ **FIXED** (§12.22), and worse than reported: the *carry-forward* was O(n² log n) per apply (55 s at the cap), not merely the scan. | Named caps on both lists; the scan is an index and the carry-forward is union-find (55 s → 3.8 s). The refusal lands on deriving a **new `Proc`** — never on the condemnation, which would un-condemn a component whose isolate is already dead. |
 
 **Doc contradictions the audit surfaced that this doc must not repeat:**
 `core_state_and_consolidation.md` §4's "eager host-side reclaim is fine for correctness,
@@ -415,21 +415,21 @@ worst behaviour lived.
 **★ And it has two siblings the audit found, in the same family and with the same fix
 shape:**
 
-- **G9 — `targets` is guest-driven and uncapped.** `GpuId` derives from a **guest-supplied**
-  `device_instance`, and `ensure_target` mints a fresh GPA window and `DeliveryPlane` on
-  first touch with no cap, no validation against the realized GPU roster, and no pruning.
-  That is unbounded device-global growth from guest input on a path where every neighbour
-  has a named cap. Fix in the same shape: validate against the realized roster (a target
-  that names no real GPU is a loud refusal, not a mint), cap the count, prune at device
-  reset (T4).
-- **G10 — `condemned` and `retired` are unbounded**, and `condemned` is scanned
-  O(|boundaries| × |condemned|) on **every** apply, clearing only when the guest frees its
-  client root — which a guest that just crashed its worker has no incentive to do. So a
-  hostile guest can both grow the set and pay us the scan cost, repeatedly. Condemnation is
-  a *retention* mechanism and therefore also a leak class (**R11**); it needs a bound and a
-  cheaper index, and the bound's overflow behaviour needs deciding (refuse the guest's next
-  derivation? condemn device-wide?) — **open, and it is a security question, not a
-  performance one.**
+- **G9 — `targets` is guest-driven and uncapped.** ★ **CLOSED** (`l1_concurrency.md`
+  §12.21). Validated against the realized roster exactly as recommended — a `Device` naming
+  an instance the device does not have is a loud refusal at the alloc, not a mint. Two
+  refinements the bench findings forced: the cap is the **entitlement**, *not*
+  `NV_MAX_DEVICES` (RM already enforces `< 32`, so that bound would still permit 31 windows
+  on a single-GPU box), and the refusal mirrors RM's `NV_ERR_INVALID_CLASS` so a guest
+  cannot fingerprint us by probing. Pruning at device reset stays part of T4.
+- **G10 — `condemned` and `retired` are unbounded.** ★ **CLOSED** (§12.22). Both bounded, the
+  scan replaced by an index, and — the part the audit had not seen — the **carry-forward**,
+  which was O(n² log n) per apply and dominated everything (55 s at the cap), replaced by
+  union-find over entry indices. **The overflow question is answered: refuse the guest's next
+  derivation.** Refusing the condemnation would un-condemn a component whose isolate is
+  already dead (silently serving a zeroed backing, §12.13's corruption path); condemning
+  device-wide would be a self-inflicted brick. Refusing new `Proc` derivation leaves every
+  live proc serving and lets the guest recover by freeing the dead client roots.
 
 ### 3.9 Shutdown
 

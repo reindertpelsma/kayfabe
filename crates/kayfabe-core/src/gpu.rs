@@ -22,11 +22,37 @@ use kayfabe_isolate::{HostHandle, Isolate, IsolateBox, IsolateFactory, IsolateId
 use kayfabe_mmu::{AddressFault, AddressTable};
 use kayfabe_util::Instant;
 
-use crate::gpa::{GpaArena, GpaError, GpaSpace};
+use crate::gpa::{GpaArena, GpaBlock, GpaError, GpaSpace};
 use crate::project::{Boundaries, ProjectionError, project};
 use crate::reactor::SourceRegistry;
 use crate::rmgraph::{NodeKey, RmEvent, RmGraph, RmGraphError};
 use crate::{ChanId, ProcAnchor, ProcId};
+
+/// ★ G10 (`l1_concurrency.md` §12.22) — the largest number of distinct **condemned
+/// components** the device carries before it refuses to derive new processes.
+///
+/// A condemned entry is only dropped when the guest frees its client root, which a guest
+/// that just crashed its own worker has no incentive to do; the list was unbounded and
+/// was rescanned on **every** apply. Sized far above any real workload (a machine with
+/// this many *simultaneously crashed, unreaped* GPU processes has a different problem)
+/// and far below `MAX_LIVE_HANDLES`, so it never trips a benign guest.
+pub const MAX_CONDEMNED_COMPONENTS: usize = 1024;
+
+/// ★ G10 — the largest number of **retired-but-unreaped** procs the device carries before
+/// it refuses to derive new processes. Reaping is the adapter's call (the L10 quiesce
+/// edge), so an adapter that never reaches one, or a guest that keeps a proc non-quiesced,
+/// would otherwise grow this list without limit — each entry holding an isolate and a GPA
+/// arena.
+pub const MAX_RETIRED_PROCS: usize = 1024;
+
+/// Which device-global list hit its cap ([`GpuError::SpineCapacity`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpineCapacity {
+    /// [`MAX_CONDEMNED_COMPONENTS`].
+    CondemnedComponents,
+    /// [`MAX_RETIRED_PROCS`].
+    RetiredProcs,
+}
 
 /// Errors surfaced by [`Gpu::apply`]. All loud.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,6 +115,28 @@ pub enum GpuError {
         /// The condemned component's label (its smallest client handle).
         condemned: ProcAnchor,
     },
+    /// ★ G10 (§12.22) — a device-global, guest-reachable list is at its cap, so the
+    /// device refuses to derive a **new** `Proc`.
+    ///
+    /// **Why the refusal is here and not at the growth site.** The two lists grow at
+    /// `Spine::retire_proc` (a worker died) and at the graph-driven retire — and refusing
+    /// *there* would be worse than useless. Refusing a condemnation **un-condemns** a
+    /// component whose isolate is already dead, turning a bounded resource problem into a
+    /// use-after-death and a silent-corruption path (§12.13's whole argument). Refusing a
+    /// retirement leaves a proc live whose worker is gone. Dropping corpses instead would
+    /// leak the isolates and GPA arenas they hold.
+    ///
+    /// So the refusal lands on the only guest-reachable action that *consumes* the
+    /// resource: deriving a new process. Every existing proc keeps serving, nothing is
+    /// un-condemned, nothing is dropped, and the guest recovers exactly as it does from a
+    /// single condemnation — by freeing the dead components' client roots, which prunes
+    /// the entries and clears the condition. Backpressure, not a brick.
+    SpineCapacity {
+        /// Which list.
+        what: SpineCapacity,
+        /// Its cap.
+        cap: usize,
+    },
 }
 
 impl From<RmGraphError> for GpuError {
@@ -130,6 +178,13 @@ pub struct Vas {
     /// Captured page-table pages of this VAS (#13's per-PDB `m2_cpt` equivalent;
     /// populated by the CE-PT-write capture feed once the mmu port lands).
     pub pt_pages: BTreeSet<u64>,
+    /// ★ G6 (§12.20): the live [`GpaBlock`] behind each **host-published** VA — the
+    /// token that lets that GPA range be given BACK to the proc's arena instead of
+    /// leaking until the whole proc is reaped. Keyed by VA, exactly like the binding it
+    /// accompanies; `Binding` is `Copy` and a free token must not be (that is what makes
+    /// the double free unrepresentable), so the two live side by side — the same split
+    /// G1 made between the placement and the allocation.
+    pub blocks: BTreeMap<u64, GpaBlock>,
     /// VAs currently bound into `table` by the **RPC map source** (`MapMemoryDma`),
     /// so the sync can idempotently add/remove them without disturbing bindings from
     /// other populate sources (`publish_backing`, CE-PT-write capture).
@@ -145,6 +200,7 @@ impl Vas {
             table: AddressTable::new(),
             host_vas: None,
             pt_pages: BTreeSet::new(),
+            blocks: BTreeMap::new(),
             rpc_bound: BTreeSet::new(),
         }
     }
@@ -366,6 +422,7 @@ impl Proc {
 pub struct Reclaimed {
     procs: Vec<Proc>,
     deferred: usize,
+    orphaned: Vec<(GpuId, core::ops::Range<u64>)>,
 }
 
 impl Reclaimed {
@@ -389,6 +446,17 @@ impl Reclaimed {
     pub fn deferred(&self) -> usize {
         self.deferred
     }
+
+    /// ★ G7 (§12.19) — GPA ranges the reap **could not route home**: their target no
+    /// longer exists, or its window refused them as foreign. Empty on every path the
+    /// core can currently reach, and that is the point — this used to be an
+    /// `if let Some(t) = …` whose `else` silently dropped the arena, permanently losing
+    /// that range from the device's guest-physical space with nothing said anywhere.
+    /// A leak the caller can see is a leak somebody can fix.
+    #[must_use]
+    pub fn orphaned(&self) -> &[(GpuId, core::ops::Range<u64>)] {
+        &self.orphaned
+    }
 }
 
 impl core::fmt::Debug for Reclaimed {
@@ -396,6 +464,7 @@ impl core::fmt::Debug for Reclaimed {
         f.debug_struct("Reclaimed")
             .field("reaped", &self.procs.len())
             .field("deferred", &self.deferred)
+            .field("orphaned", &self.orphaned)
             .finish()
     }
 }
@@ -554,6 +623,15 @@ pub struct Spine {
 /// process), and an unrelated or freshly-minted client's data is not. Widening here
 /// would turn a recoverable Xid-shaped fault into a device that refuses everything after
 /// one worker crash.
+/// Union-find root with path halving, over condemned-entry indices (§12.22).
+fn uf_find(parent: &mut [usize], mut x: usize) -> usize {
+    while parent[x] != x {
+        parent[x] = parent[parent[x]];
+        x = parent[x];
+    }
+    x
+}
+
 fn absorb_condemned(list: &mut Vec<BTreeSet<HClient>>, mut set: BTreeSet<HClient>) {
     loop {
         let mut rest = Vec::with_capacity(list.len());
@@ -628,6 +706,24 @@ struct TargetGeom {
     next_base: u64,
 }
 
+/// ★ What one [`Spine::refresh`] has already decided (and already carved) before it
+/// mutates anything — see [`Spine::plan_refresh`] for why this type exists at all.
+/// Every field is index-aligned with [`Boundaries::procs`].
+struct RefreshPlan {
+    /// `None` = a condemned boundary (it gets nothing). `Some(v)` = the live procs
+    /// whose clients intersect it, ascending: `v[0]` survives a merge, `v[1..]` are
+    /// absorbed, empty = mint a fresh proc.
+    matches: Vec<Option<Vec<ProcId>>>,
+    /// Every GPU target that boundary's proc spans.
+    spans: Vec<BTreeSet<GpuId>>,
+    /// Arenas carved for the spanned targets its proc does not already hold.
+    arenas: Vec<BTreeMap<GpuId, GpaArena>>,
+    /// Targets minted for this refresh (already carved from), ready to install.
+    new_targets: BTreeMap<GpuId, GpuTarget>,
+    /// `geom.next_base` once they are installed.
+    next_base: u64,
+}
+
 impl Spine {
     /// Ensure target `gpu` exists (minting its disjoint window + drain gate on first
     /// touch, MG-6), enforcing the homogeneous-arch invariant loudly.
@@ -650,7 +746,7 @@ impl Spine {
         self.targets.insert(
             gpu,
             GpuTarget {
-                gpa: GpaSpace::new(base..end, self.geom.arena_len),
+                gpa: GpaSpace::new(base..end, self.geom.arena_len).owned_by(gpu),
                 delivery: DeliveryPlane::new(),
                 arch_name: self.arch.name(),
             },
@@ -692,6 +788,30 @@ impl Spine {
     /// atomically and no other `Proc`'s state is disturbed. A hostile stream can only
     /// ever earn its own loud refusal.
     ///
+    /// ★ **How that is actually held, corrected (`l1_concurrency.md` §12.18).** The
+    /// sentence above used to be a claim this function did not keep: the snapshot is of
+    /// `self.rmgraph` **only**, while [`Spine::refresh`] also retires and removes
+    /// `Proc`s, deregisters completion sources, pushes to [`Spine::retired`], advances
+    /// [`Spine::next_proc`], mints [`Spine::targets`] and carves GPA arenas — none of
+    /// which the restore undid. A fault raised after an earlier victim was already
+    /// retired left it dead, and the re-derivation minted it afresh (new [`ProcId`],
+    /// newly spawned isolate, newly carved arena); when the fault was arena exhaustion
+    /// the re-derivation could not even *get* an arena back and the rollback's own
+    /// `expect` **panicked**, taking the device down. The two mutators are now separated
+    /// and each holds the property for a stated reason:
+    ///
+    /// - **[`Spine::refresh`] — atomic by construction, not by undo.** Every refusal is
+    ///   hoisted into [`Spine::plan_refresh`], which decides (and pre-carves) before any
+    ///   proc is touched; the mutation pass that follows has no failure path left.
+    /// - **[`Spine::sync_rpc_mappings`] — atomic by RE-RUN, which is weaker and is why
+    ///   it is said out loud.** It has no plan: a fault can leave the *offending* proc's
+    ///   own `Vas` carrying bindings the failed pass already installed. What removes them
+    ///   is the re-run below, whose stale-unbind pass drops every `rpc_bound` VA the
+    ///   last-good graph no longer desires and re-binds every one it does. The restored
+    ///   table is therefore equal in content, and the residue is confined to the proc
+    ///   whose event it was — a bystander's table is never reached, because one event
+    ///   changes the mapping set of one `(GpuId, Pdb)`.
+    ///
     /// **Concurrency shape (L1):** a spine op — runs under the device *write* lock,
     /// with exclusive access to every proc (`system` + the [`ProcSet`]).
     pub fn apply(
@@ -700,9 +820,23 @@ impl Spine {
         procs: &mut impl ProcSet,
         ev: RmEvent,
     ) -> Result<(), GpuError> {
-        // Snapshot the last-good graph so a faulting derivation can be undone. (Apply
-        // is the control plane — RM alloc/free/map — not the doorbell/pushbuffer hot
-        // path, so a clone here is off the performance-critical path.)
+        // Snapshot the last-good graph so a faulting derivation can be undone.
+        //
+        // ★ §12.23 — this clone was evaluated for deletion after §12.18 made `refresh`
+        // infallible, and it **stays**, for a specific reason: three faults are raised
+        // AFTER `RmGraph::apply` has already mutated the graph, and none is pre-computable
+        // without the post-event graph — `project`'s `PdbCollision`/`VchidCollision`,
+        // `plan_refresh`'s `LateMerge`/`CondemnedMerge`, and `sync_rpc_mappings`'
+        // `UnbackedMapping`/`Address`. A single `Alloc` can promote arbitrarily many
+        // parked facts, so the post-state is not a local function of the event. Without
+        // the rollback the offending fact stays and EVERY subsequent apply re-faults — a
+        // permanent control-plane wedge for every other process.
+        //
+        // The old note here said a clone is "off the performance-critical path". Measured
+        // (§12.23): it is ~24% of a control plane that is O(live objects) **per event**
+        // end to end — `project` and `sync_rpc_mappings` are the other two O(graph)
+        // passes — so N events cost O(N²). That quadratic is a named, deferred finding;
+        // the clone is not what causes it.
         let snapshot = self.rmgraph.clone();
         match self.apply_inner(system, procs, ev) {
             Ok(()) => Ok(()),
@@ -819,7 +953,228 @@ impl Spine {
         Ok(())
     }
 
+    /// ★ **The decision half of [`Spine::refresh`]** — everything the mutation pass
+    /// could have refused, settled from `bounds` + current state BEFORE a single
+    /// `Proc` is touched (`l1_concurrency.md` §12.18).
+    ///
+    /// This exists because [`Spine::apply`]'s rollback only ever restored the
+    /// [`RmGraph`]. Every *other* thing `refresh` mutates — procs retired and removed,
+    /// [`Spine::retired`], [`Spine::sources`] deregistration, [`Spine::next_proc`],
+    /// [`Spine::targets`], [`Spine::geom`] — had no undo, so a fault on a *later*
+    /// boundary kept an *earlier* boundary's retirement, and the rollback's
+    /// re-derivation minted that proc afresh: new [`ProcId`], newly spawned isolate,
+    /// newly carved arena. That is one process's malformed event visibly disturbing
+    /// another process's state — precisely the boundary-1/#14 isolation guarantee.
+    ///
+    /// Snapshotting the proc set is not the fix (a `Proc` owns isolates; it is neither
+    /// cloneable nor cheap). Hoisting the refusals is: `project` is already pure and
+    /// already runs first, so *all four* fault conditions are decidable up front —
+    /// [`GpuError::LateMerge`], [`GpuError::CondemnedMerge`],
+    /// [`GpuError::HeterogeneousArch`], and GPA exhaustion. With them hoisted the
+    /// mutation pass has no `?` left in it and atomicity is **structural, not claimed**.
+    ///
+    /// The last step is the only one that touches live state: it *carves* the arenas
+    /// the mutation pass will hand out, because exhaustion is a property of the
+    /// windows, not an arithmetic prediction about them. A failure there releases
+    /// everything it carved — [`GpaSpace::release`] is exactly [`GpaSpace::carve`]'s
+    /// inverse, so the windows' capacity and their set of ranges are restored (only
+    /// the free list's LIFO order differs, which no invariant names).
+    fn plan_refresh(
+        &mut self,
+        procs: &mut impl ProcSet,
+        bounds: &Boundaries,
+        condemned_bound: &[Option<ProcAnchor>],
+    ) -> Result<RefreshPlan, GpuError> {
+        let n = bounds.procs.len();
+
+        // (a) Merge legality, in boundary order — the two refusals that used to fire
+        //     mid-mutation.
+        let mut matches: Vec<Option<Vec<ProcId>>> = Vec::with_capacity(n);
+        for (b, &condemned) in bounds.procs.iter().zip(condemned_bound) {
+            let mut matching: Vec<ProcId> = procs
+                .iter_mut()
+                .filter(|(_, p)| !p.clients.is_disjoint(&b.clients))
+                .map(|(id, _)| id)
+                .collect();
+            matching.sort_unstable();
+            if let Some(condemned_label) = condemned {
+                if let Some(&live) = matching.first() {
+                    return Err(GpuError::CondemnedMerge {
+                        live,
+                        condemned: condemned_label,
+                    });
+                }
+                matches.push(None);
+                continue;
+            }
+            if let Some((&keep, absorbed)) = matching.split_first() {
+                for &absorbed in absorbed {
+                    if !procs
+                        .get_mut(absorbed)
+                        .expect("matched proc exists")
+                        .is_untouched()
+                    {
+                        return Err(GpuError::LateMerge {
+                            kept: keep,
+                            absorbed,
+                        });
+                    }
+                }
+            } else {
+                // ★ G10 (§12.22): this boundary would mint a NEW `Proc`. That is the only
+                // guest-reachable action that consumes the two device-global lists, so it
+                // is where the caps are enforced — refusing at the growth sites would
+                // un-condemn a dead component or leave a worker-less proc live, both
+                // strictly worse than backpressure. Recovery is the guest's own: free the
+                // dead components' client roots and the entries prune.
+                if self.condemned.len() >= MAX_CONDEMNED_COMPONENTS {
+                    return Err(GpuError::SpineCapacity {
+                        what: SpineCapacity::CondemnedComponents,
+                        cap: MAX_CONDEMNED_COMPONENTS,
+                    });
+                }
+                if self.retired.len() >= MAX_RETIRED_PROCS {
+                    return Err(GpuError::SpineCapacity {
+                        what: SpineCapacity::RetiredProcs,
+                        cap: MAX_RETIRED_PROCS,
+                    });
+                }
+            }
+            matches.push(Some(matching));
+        }
+
+        // (b) Which targets each boundary's proc will span, and which of those its
+        //     surviving proc does not already hold an arena for. Derived from the
+        //     projection (the same facts step 3b read off the synced procs), so it is
+        //     a function of the graph and not of what a previous refresh accreted.
+        let mut spans: Vec<BTreeSet<GpuId>> = Vec::with_capacity(n);
+        let mut held: Vec<BTreeSet<GpuId>> = Vec::with_capacity(n);
+        for (b, m) in bounds.procs.iter().zip(&matches) {
+            let mut s: BTreeSet<GpuId> = BTreeSet::new();
+            if m.is_some() {
+                for f in b.vases.values() {
+                    if let (Some(gpu), Some(_pdb)) = (f.gpu, f.pdb) {
+                        s.insert(gpu);
+                    }
+                }
+                for f in b.channels.values() {
+                    if let Some(gpu) = f.gpu
+                        && bounds.by_vchid.contains_key(&(gpu, f.vchid))
+                    {
+                        s.insert(gpu);
+                    }
+                }
+            }
+            let h: BTreeSet<GpuId> = m
+                .as_ref()
+                .and_then(|v| v.first())
+                .map(|&pid| {
+                    procs
+                        .get_mut(pid)
+                        .expect("matched proc exists")
+                        .arenas
+                        .keys()
+                        .copied()
+                        .collect()
+                })
+                .unwrap_or_default();
+            spans.push(s);
+            held.push(h);
+        }
+
+        // (c) MG-6 homogeneity, over every target that will be touched. (A target
+        //     minted below carries the device's own arch by construction, so only
+        //     pre-existing ones can disagree.)
+        let arch_name = self.arch.name();
+        let wanted: BTreeSet<GpuId> = spans.iter().flatten().copied().collect();
+        let mut fresh: BTreeSet<GpuId> = BTreeSet::new();
+        for gpu in wanted {
+            match self.targets.get(&gpu) {
+                Some(t) if t.arch_name != arch_name => {
+                    return Err(GpuError::HeterogeneousArch {
+                        gpu,
+                        expected: arch_name,
+                        got: t.arch_name,
+                    });
+                }
+                Some(_) => {}
+                None => {
+                    fresh.insert(gpu);
+                }
+            }
+        }
+
+        // (d) Mint the new targets into staging. `geom.next_base` advances only in the
+        //     plan's copy — the spine's own geometry moves when the plan is installed.
+        let mut next_base = self.geom.next_base;
+        let mut new_targets: BTreeMap<GpuId, GpuTarget> = BTreeMap::new();
+        for gpu in fresh {
+            let base = next_base;
+            let end = base
+                .checked_add(self.geom.window_len)
+                .ok_or(GpuError::Gpa(GpaError::WindowExhausted))?;
+            next_base = end;
+            new_targets.insert(
+                gpu,
+                GpuTarget {
+                    gpa: GpaSpace::new(base..end, self.geom.arena_len).owned_by(gpu),
+                    delivery: DeliveryPlane::new(),
+                    arch_name,
+                },
+            );
+        }
+
+        // (e) Carve every arena the mutation pass will hand out.
+        let mut arenas: Vec<BTreeMap<GpuId, GpaArena>> = (0..n).map(|_| BTreeMap::new()).collect();
+        let mut failed: Option<GpaError> = None;
+        'carve: for i in 0..n {
+            for &gpu in &spans[i] {
+                if held[i].contains(&gpu) {
+                    continue;
+                }
+                let space = match new_targets.get_mut(&gpu) {
+                    Some(t) => &mut t.gpa,
+                    None => &mut self.targets.get_mut(&gpu).expect("checked in (c)").gpa,
+                };
+                match space.carve() {
+                    Ok(a) => {
+                        arenas[i].insert(gpu, a);
+                    }
+                    Err(e) => {
+                        failed = Some(e);
+                        break 'carve;
+                    }
+                }
+            }
+        }
+        if let Some(e) = failed {
+            // Give back what was taken from a PRE-EXISTING window; the staged windows
+            // die whole with `new_targets`.
+            for m in arenas {
+                for (gpu, a) in m {
+                    if let Some(t) = self.targets.get_mut(&gpu) {
+                        t.gpa
+                            .release(a)
+                            .expect("released into the window that carved it");
+                    }
+                }
+            }
+            return Err(GpuError::Gpa(e));
+        }
+
+        Ok(RefreshPlan {
+            matches,
+            spans,
+            arenas,
+            new_targets,
+            next_base,
+        })
+    }
+
     /// Re-derive boundaries and sync `procs`/`by_pdb`/`by_vchid` to them.
+    ///
+    /// ★ **Every refusal is hoisted into [`Spine::plan_refresh`]** (§12.18): after the
+    /// plan is taken, nothing below can fail, so a refused event disturbs no `Proc`.
     fn refresh(&mut self, procs: &mut impl ProcSet) -> Result<(), GpuError> {
         let bounds: Boundaries = project(&self.rmgraph, self.arch.as_ref())?;
 
@@ -840,27 +1195,80 @@ impl Spine {
         //    folded in), so a refused merge can name the corpse rather than the merged
         //    boundary's anchor — which, in exactly the interesting case, is the LIVE
         //    proc's client.
-        let mut carried: Vec<BTreeSet<HClient>> = Vec::new();
-        let mut condemned_bound: Vec<Option<ProcAnchor>> = Vec::with_capacity(bounds.procs.len());
-        for b in &bounds.procs {
-            let mut merged: Option<BTreeSet<HClient>> = None;
-            for c in &self.condemned {
-                if !c.is_disjoint(&b.clients) {
-                    merged
-                        .get_or_insert_with(BTreeSet::new)
-                        .extend(c.iter().copied());
-                }
-            }
-            condemned_bound.push(
-                merged
-                    .as_ref()
-                    .and_then(|m| m.iter().next().copied().map(ProcAnchor)),
-            );
-            if let Some(mut m) = merged {
-                m.extend(b.clients.iter().copied());
-                absorb_condemned(&mut carried, m);
+        //
+        //    ★ G10 (§12.22): the "does this boundary intersect a condemned component"
+        //    question used to be a nested scan — O(|boundaries| × |condemned|) on EVERY
+        //    apply, both factors guest-driven, which is a complexity DoS of the same
+        //    species the graph's parked-map set was already hardened against. The entries
+        //    are pairwise disjoint, so client → entry is a *function*: build it once and
+        //    the pass becomes O(total clients · log n).
+        let mut owner_of: BTreeMap<HClient, usize> = BTreeMap::new();
+        for (i, c) in self.condemned.iter().enumerate() {
+            for &client in c {
+                owner_of.insert(client, i);
             }
         }
+        //
+        //    ★ G10, the second half: the CARRY-FORWARD was worse than the scan. Each
+        //    intersecting boundary called `absorb_condemned`, which drains and re-sorts
+        //    the whole carried list — O(n² log n) per apply, with n guest-driven. Measured
+        //    at the cap it dominated everything (a 1024-component test took 55 s).
+        //
+        //    The same answer, computed instead of searched: boundaries are pairwise
+        //    disjoint and so are the entries, so two boundaries' merged sets can overlap
+        //    ONLY by hitting a common entry. Union-find over entry indices, keyed by
+        //    boundary, therefore yields exactly the fixpoint the repeated absorb was
+        //    grinding out — in near-linear time, and with the identical result.
+        let mut parent: Vec<usize> = (0..self.condemned.len()).collect();
+        let mut condemned_bound: Vec<Option<ProcAnchor>> = Vec::with_capacity(bounds.procs.len());
+        let mut boundary_hit: Vec<Option<usize>> = Vec::with_capacity(bounds.procs.len());
+        for b in &bounds.procs {
+            let hits: BTreeSet<usize> = b
+                .clients
+                .iter()
+                .filter_map(|c| owner_of.get(c).copied())
+                .collect();
+            // The CONDEMNED side's own label: the smallest client of the entries this
+            // boundary hits, before the boundary's own clients are folded in.
+            condemned_bound.push(
+                hits.iter()
+                    .filter_map(|&i| self.condemned[i].iter().next().copied())
+                    .min()
+                    .map(ProcAnchor),
+            );
+            let mut it = hits.into_iter();
+            let first = it.next();
+            if let Some(first) = first {
+                let root = uf_find(&mut parent, first);
+                for i in it {
+                    let r = uf_find(&mut parent, i);
+                    if r != root {
+                        parent[r] = root;
+                    }
+                }
+            }
+            boundary_hit.push(first);
+        }
+        // The surviving components: an entry no boundary intersects is DROPPED —
+        // condemnation ends only when the guest itself frees the client root.
+        let mut carried_by_root: BTreeMap<usize, BTreeSet<HClient>> = BTreeMap::new();
+        for (b, hit) in bounds.procs.iter().zip(&boundary_hit) {
+            if let Some(i) = *hit {
+                let root = uf_find(&mut parent, i);
+                carried_by_root
+                    .entry(root)
+                    .or_default()
+                    .extend(b.clients.iter().copied());
+            }
+        }
+        for i in 0..self.condemned.len() {
+            let root = uf_find(&mut parent, i);
+            if let Some(set) = carried_by_root.get_mut(&root) {
+                set.extend(self.condemned[i].iter().copied());
+            }
+        }
+        let mut carried: Vec<BTreeSet<HClient>> = carried_by_root.into_values().collect();
+        carried.sort();
         let condemned_anchors: BTreeSet<ProcAnchor> = bounds
             .procs
             .iter()
@@ -868,47 +1276,29 @@ impl Spine {
             .filter_map(|(b, dead)| dead.map(|_| b.anchor))
             .collect();
 
-        // 1. Match each boundary to existing procs by client intersection.
-        let mut live: BTreeSet<ProcId> = BTreeSet::new();
-        for (b, &is_condemned) in bounds.procs.iter().zip(&condemned_bound) {
-            let mut matching: Vec<ProcId> = procs
-                .iter_mut()
-                .filter(|(_, p)| !p.clients.is_disjoint(&b.clients))
-                .map(|(id, _)| id)
-                .collect();
-            matching.sort_unstable();
+        // 0b. ★ §12.18 — DECIDE EVERYTHING REFUSABLE FIRST. From here down there is no
+        //     `?` and no early return: the mutation below cannot fail, so a refused
+        //     event leaves every other `Proc` byte-for-byte as it was.
+        let mut plan = self.plan_refresh(procs, &bounds, &condemned_bound)?;
 
-            if let Some(condemned_label) = is_condemned {
-                // ★ A condemned component gets NOTHING: no `Proc`, no isolate spawn, no
-                // arena, no routing entry (step 4 files its keys under the condemned
-                // maps instead). Its ops therefore miss — MISS=FAULT working as designed,
-                // named exactly (`FwdFault::Condemned`) rather than guessed at.
-                if let Some(&live_pid) = matching.first() {
-                    // A live proc's clients can only reach a condemned set through a NEW
-                    // dup edge (procs partition the graph's clients, and condemnation
-                    // starts from one whole component). Dup-connected ⇒ one proc ⇒ one
-                    // blast radius, so there is no answer that keeps both promises;
-                    // refuse the event and let `apply` roll it back.
-                    return Err(GpuError::CondemnedMerge {
-                        live: live_pid,
-                        condemned: condemned_label,
-                    });
-                }
+        // 1. Match each boundary to existing procs by client intersection (decided in
+        //    the plan — a condemned boundary is `None` and gets NOTHING: no `Proc`, no
+        //    isolate spawn, no arena, no routing entry, since step 4 files its keys
+        //    under the condemned maps instead. Its ops therefore miss — MISS=FAULT
+        //    working as designed, named exactly (`FwdFault::Condemned`)).
+        let mut live: BTreeSet<ProcId> = BTreeSet::new();
+        let mut boundary_pid: Vec<Option<ProcId>> = Vec::with_capacity(bounds.procs.len());
+        for (i, b) in bounds.procs.iter().enumerate() {
+            let Some(matching) = plan.matches[i].take() else {
+                boundary_pid.push(None);
                 continue;
-            }
+            };
 
             let pid = match matching.first() {
                 Some(&keep) => {
-                    // A merge: every other matching proc must still be untouched
-                    // (the early-arm discipline).
+                    // A merge: every other matching proc was checked untouched by the
+                    // plan (the early-arm discipline).
                     for &absorbed in &matching[1..] {
-                        let p = procs.get_mut(absorbed).expect("matched proc exists");
-                        if !p.is_untouched() {
-                            return Err(GpuError::LateMerge {
-                                kept: keep,
-                                absorbed,
-                            });
-                        }
                         let mut dead = procs.remove(absorbed).expect("exists");
                         dead.retire();
                         // Retire is also a REACTOR event (§6): the absorbed proc's
@@ -929,6 +1319,7 @@ impl Spine {
                 }
             };
             live.insert(pid);
+            boundary_pid.push(Some(pid));
 
             // 2. Sync the proc's derived fields to the boundary.
             let p = procs.get_mut(pid).expect("live proc exists");
@@ -1005,25 +1396,31 @@ impl Spine {
             self.retired.push(p);
         }
 
-        // 3b. ★ MG-5: materialize each live proc's per-(Proc, GpuId) isolate + arena
-        // for every target it now spans (its vases' + routable channels' GPUs). Minting
-        // a per-target window (MG-6) happens here too. Collected first to avoid holding
-        // a proc borrow across the `&mut self` ensure call.
-        let mut needed: BTreeSet<(ProcId, GpuId)> = BTreeSet::new();
-        for (pid, p) in procs.iter_mut() {
-            for &(gpu, _pdb) in p.vases.keys() {
-                needed.insert((pid, gpu));
-            }
-            for c in p.channels.values() {
-                // Only channels that actually route (resolvable target) need a host isolate.
-                if bounds.by_vchid.contains_key(&(c.gpu, c.vchid)) {
-                    needed.insert((pid, c.gpu));
-                }
-            }
-        }
-        for (pid, gpu) in needed {
+        // 3b. ★ MG-5: install each live proc's per-(Proc, GpuId) isolate + arena for
+        // every target it now spans (its vases' + routable channels' GPUs), and the
+        // per-target windows (MG-6) minted for them. **Infallible by construction**
+        // (§12.18): every window and every arena in the plan was already carved before
+        // step 1 touched a proc, and `IsolateFactory::spawn` cannot fail.
+        self.targets.append(&mut plan.new_targets);
+        self.geom.next_base = plan.next_base;
+        for (i, &pid) in boundary_pid.iter().enumerate() {
+            let Some(pid) = pid else { continue };
+            let mut carved = core::mem::take(&mut plan.arenas[i]);
+            let isolates = &mut self.isolates;
             let p = procs.get_mut(pid).expect("live proc exists");
-            self.ensure_proc_target(p, gpu)?;
+            for &gpu in &plan.spans[i] {
+                p.isolates
+                    .entry(gpu)
+                    .or_insert_with(|| IsolateBox::new(isolates.spawn(IsolateId(pid.0), gpu)));
+                if let Some(arena) = carved.remove(&gpu) {
+                    let prev = p.arenas.insert(gpu, arena);
+                    debug_assert!(
+                        prev.is_none(),
+                        "the plan carves only for targets the proc does not hold"
+                    );
+                }
+                p.targets.insert(gpu);
+            }
         }
 
         // 4. Rebuild routing maps from the projection (never accreted). Keyed on the
@@ -1218,6 +1615,7 @@ impl Spine {
     pub fn reap_retired(&mut self) -> Reclaimed {
         let mut procs = Vec::new();
         let mut deferred = Vec::new();
+        let mut orphaned: Vec<(GpuId, core::ops::Range<u64>)> = Vec::new();
         // Order-preserving partition: `retired` is a deterministic sequence and a
         // deferred proc keeps its place in it (decision #27).
         for mut p in core::mem::take(&mut self.retired) {
@@ -1228,9 +1626,21 @@ impl Spine {
             // Release EACH target's arena back to ITS target window (MG-5: per-GPU
             // arena recycle — the #80 class per target). Taken out of the proc so the
             // proc itself can travel to the caller for its lock-free drop.
-            for (gpu, arena) in core::mem::take(&mut p.arenas) {
-                if let Some(t) = self.targets.get_mut(&gpu) {
-                    t.gpa.release(arena);
+            //
+            // ★ G7 (§12.19): routed by the arena's OWN owner, not by the map key — the
+            // arena names its window, so there is no key here to get wrong. An arena
+            // that cannot be routed home (no such target, or the window refuses it) is
+            // recorded on [`Reclaimed::orphaned`]; the previous `if let Some(_)` DROPPED
+            // it, permanently losing that GPA range with nothing said.
+            for (_key, arena) in core::mem::take(&mut p.arenas) {
+                debug_assert_eq!(_key, arena.owner(), "an arena is filed under its target");
+                let (owner, range) = (arena.owner(), arena.range.clone());
+                let home = match self.targets.get_mut(&owner) {
+                    Some(t) => t.gpa.release(arena).is_ok(),
+                    None => false,
+                };
+                if !home {
+                    orphaned.push((owner, range));
                 }
             }
             procs.push(p);
@@ -1240,6 +1650,7 @@ impl Spine {
         Reclaimed {
             procs,
             deferred: deferred_count,
+            orphaned,
         }
     }
 
@@ -1366,14 +1777,44 @@ impl Gpu {
     /// System proc's reserved id.
     pub const SYSTEM_PROC: ProcId = ProcId(0);
 
-    /// Realize a device: pick the arch (once), the isolate factory, and the
-    /// `GpuId::ZERO` target's GPA window geometry. Materializes the system proc's
-    /// `GpuId::ZERO` isolate + arena eagerly (the N=1 single-target case).
+    /// Realize a **single-GPU** device — the N=1 case of [`Gpu::realize`].
+    ///
+    /// # Errors
+    /// See [`Gpu::realize`].
     pub fn new(
         arch: Box<dyn Arch>,
         isolates: Box<dyn IsolateFactory>,
         gpa: GpaSpace,
     ) -> Result<Self, GpuError> {
+        Self::realize(arch, isolates, gpa, &[GpuId::ZERO])
+    }
+
+    /// Realize a device: pick the arch (once), the isolate factory, the
+    /// `GpuId::ZERO` target's GPA window geometry, and — ★ G9 (`l1_concurrency.md`
+    /// §12.21) — the **entitlement**: the roster of physical GPUs this device actually
+    /// has. Materializes the system proc's `GpuId::ZERO` isolate + arena eagerly.
+    ///
+    /// The roster is the only thing standing between a guest-supplied `deviceInstance`
+    /// and an unbounded supply of [`GpuTarget`]s (each one a guest-physical window and a
+    /// delivery plane, never pruned). It is enforced in [`RmGraph`], at the `Device`
+    /// alloc, because that is where RM enforces it.
+    ///
+    /// # Errors
+    /// [`GpuError::Gpa`] if the realize-time window cannot supply the system proc's arena.
+    ///
+    /// # Panics
+    /// If `gpus` is empty, does not contain [`GpuId::ZERO`], or exceeds
+    /// [`crate::rmgraph::MAX_GPUS`] — realize-time configuration, never guest input.
+    pub fn realize(
+        arch: Box<dyn Arch>,
+        isolates: Box<dyn IsolateFactory>,
+        gpa: GpaSpace,
+        gpus: &[GpuId],
+    ) -> Result<Self, GpuError> {
+        assert!(
+            gpus.contains(&GpuId::ZERO),
+            "the realize-time target GpuId::ZERO is always part of the roster"
+        );
         let window = gpa.window();
         let arch_name = arch.name();
         let geom = TargetGeom {
@@ -1385,14 +1826,16 @@ impl Gpu {
         targets.insert(
             GpuId::ZERO,
             GpuTarget {
-                gpa,
+                gpa: gpa.owned_by(GpuId::ZERO),
                 delivery: DeliveryPlane::new(),
                 arch_name,
             },
         );
+        let mut rmgraph = RmGraph::new();
+        rmgraph.entitle(gpus.iter().map(|g| g.0));
         let mut spine = Spine {
             arch,
-            rmgraph: RmGraph::new(),
+            rmgraph,
             by_pdb: BTreeMap::new(),
             by_vchid: BTreeMap::new(),
             targets,

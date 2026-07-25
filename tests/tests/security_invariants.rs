@@ -799,7 +799,10 @@ fn p3_channel_vas_resolution_type_checks_every_hop() {
             parent: root,
             handle: dev,
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
         RmEvent::Alloc {
             client: c,
@@ -895,7 +898,10 @@ fn p4_map_naming_a_non_memory_object_is_a_loud_unbacked_fault_not_a_silent_bind(
             parent: root,
             handle: dev,
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
         RmEvent::Alloc {
             client: c,
@@ -1010,7 +1016,10 @@ fn p4_parked_setpagedir_via_dup_alias_cannot_wedge_the_device() {
         parent: root,
         handle: dev,
         class: mc::DEVICE,
-        facts: AllocFacts::default(),
+        facts: AllocFacts {
+            device_instance: Some(0),
+            ..Default::default()
+        },
     })
     .unwrap();
     // 1. Park a SetPageDir on the (unowned) h1, aimed at the VICTIM's PDB.
@@ -1104,7 +1113,10 @@ fn p4_parked_unbacked_map_via_dup_alias_cannot_wedge_the_device() {
             parent: root,
             handle: dev,
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
         RmEvent::Alloc {
             client: a,

@@ -409,7 +409,10 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
                 parent: HObject(0x5c00_0000),
                 handle: HObject(0x5c00_0001),
                 class: mc::DEVICE,
-                facts: AllocFacts::default(),
+                facts: AllocFacts {
+                    device_instance: Some(0),
+                    ..Default::default()
+                },
             },
         )
         .unwrap();

@@ -669,35 +669,101 @@ pub fn commit_publish(
             retry: false,
         });
     };
-    let gpa = arena.alloc(plan.len, 0x1000).map_err(|_| Refusal {
+    let block = arena.alloc(plan.len, 0x1000).map_err(|_| Refusal {
         fault: FwdFault::Arena,
         orphans: orphans(vas_used, None),
         retry: false,
     })?;
-    vas.table
-        .bind(
-            plan.pdb,
-            plan.va,
-            plan.len,
-            Binding {
-                phys: gpa.0,
-                aperture: Aperture::SysmemCoherent,
-                // ★ G1 (§12.16): the ALLOCATION travels with the PLACEMENT. Storing
-                // only `host_va` here is what made the host memory object
-                // unreachable from core state — a bound range no reclaim path could
-                // ever free. `HostBacking` makes that omission untypeable.
-                host: Some(kayfabe_mmu::HostBacking { memory, host_va }),
-            },
-        )
-        .map_err(|e| Refusal {
+    let gpa = block.gpa;
+    if let Err(e) = vas.table.bind(
+        plan.pdb,
+        plan.va,
+        plan.len,
+        Binding {
+            phys: gpa.0,
+            aperture: Aperture::SysmemCoherent,
+            // ★ G1 (§12.16): the ALLOCATION travels with the PLACEMENT. Storing
+            // only `host_va` here is what made the host memory object
+            // unreachable from core state — a bound range no reclaim path could
+            // ever free. `HostBacking` makes that omission untypeable.
+            host: Some(kayfabe_mmu::HostBacking { memory, host_va }),
+        },
+    ) {
+        // ★ G6: the bind refused, so the GPA is owed straight back. Before the arena
+        // had a `free` this range simply leaked for the life of the proc.
+        let returned = arena.free(block).is_ok();
+        debug_assert!(returned, "a block returns to the arena that cut it");
+        return Err(Refusal {
             fault: FwdFault::Address(e),
             orphans: orphans(vas_used, None),
             retry: false,
-        })?;
+        });
+    }
+    // ★ G6: keep the token beside the binding, so the range is reclaimable by name.
+    vas.blocks.insert(plan.va.0, block);
     Ok(Published {
         gpa: gpa.0,
         host_va,
     })
+}
+
+/// ★ G6 — reclaim ONE published backing (`l1_concurrency.md` §12.20): unbind the range,
+/// return its GPA to **this proc's own** arena, and hand back the host objects the caller
+/// must release.
+///
+/// This is the intra-proc counterpart of `Spine::reap_retired`, and it exists because
+/// `GpaArena` used to have no `free` at all: reclamation was whole-arena-at-proc-death
+/// only, so a long-lived process that maps and unmaps repeatedly walked its cursor to the
+/// end and took a permanent [`FwdFault::Arena`]. That is the C's #80 leak
+/// (`teardown_hardening_done`) reproduced one level down after being fixed one level up.
+///
+/// Like G1's reclaim, this is the *mechanism*; **when** to call it is the caller's,
+/// driven by declared graph facts (the `RmGraph` refcounts DUP_OBJECT from the protocol,
+/// so liveness is known rather than inferred — there is deliberately no collector here).
+/// The host half travels with it in the returned [`Orphans`] for the same reason the two
+/// must not drift apart: a GPA recycled while its host memory is still mapped is the
+/// `ALREADY-MAPPED` class, so the pair is one call.
+///
+/// # Errors
+/// - [`FwdFault::NoTarget`] — the proc has no arena for this GPU.
+/// - [`FwdFault::UnknownPdb`] — the `Vas` is gone (its VASpace was freed by the guest).
+/// - [`FwdFault::Address`] with [`AddressFault::Miss`] — **nothing is owed at this VA**:
+///   it was never host-published here, or it was already reclaimed. The arena must never
+///   accept a range it does not owe, so this is refused before anything is mutated.
+pub fn unpublish_backing(
+    proc: &mut Proc,
+    gpu: GpuId,
+    pdb: Pdb,
+    va: GpuVa,
+) -> Result<Orphans, FwdFault> {
+    let pid = proc.id;
+    if !proc.arenas.contains_key(&gpu) {
+        return Err(FwdFault::NoTarget { proc: pid, gpu });
+    }
+    let Proc { vases, arenas, .. } = proc;
+    let vas = vases
+        .get_mut(&(gpu, pdb))
+        .ok_or(FwdFault::UnknownPdb { gpu, pdb })?;
+    // The token FIRST, and only *read* first: a VA this Vas owes nothing at is refused
+    // with the table still untouched, so a double free changes nothing at all.
+    if !vas.blocks.contains_key(&va.0) {
+        return Err(FwdFault::Address(AddressFault::Miss { pdb, va }));
+    }
+    let block = vas.blocks.remove(&va.0).expect("checked above");
+    let host_vas = vas.host_vas;
+    let backing = vas.table.unbind(va).and_then(|(_len, b)| b.host);
+    let arena = arenas.get_mut(&gpu).expect("checked above");
+    if arena.free(block).is_err() {
+        // Unreachable while a live proc keeps its arena: the block names the arena that
+        // cut it. Loud rather than a panic, and the range stays out of circulation.
+        return Err(FwdFault::Stale(Stale::Target { proc: pid, gpu }));
+    }
+    let mut out = Orphans::default();
+    if let (Some(host_vas), Some(h)) = (host_vas, backing) {
+        out.unmap.push((host_vas, h.host_va));
+        out.free.push(h.memory);
+    }
+    Ok(out)
 }
 
 /// ROUTE: which proc owns `(target, pdb)`? A pure spine read (`by_pdb`) — the

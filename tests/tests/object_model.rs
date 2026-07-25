@@ -104,7 +104,10 @@ fn map_at_offset_forward_populates_base_plus_offset() {
             parent: HObject(c.0),
             handle: HObject(1),
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
     )
     .unwrap();
@@ -305,7 +308,10 @@ fn parked_map_unmap_drops_only_the_named_map() {
             parent: HObject(client.0),
             handle: HObject(1),
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
     )
     .unwrap();
@@ -389,7 +395,10 @@ fn free_subtree_cascade_is_namespace_confined() {
                 parent: HObject(c.0),
                 handle: dev,
                 class: mc::DEVICE,
-                facts: AllocFacts::default(),
+                facts: AllocFacts {
+                    device_instance: Some(0),
+                    ..Default::default()
+                },
             },
         )
         .unwrap();
@@ -443,6 +452,383 @@ fn free_subtree_cascade_is_namespace_confined() {
     );
 }
 
+// ---------------------------------------------------------------------------------
+// §12.25 — a handle's PROVENANCE (`RM_ALLOC` vs `DUP_OBJECT`) is a declared fact, and
+// "is this handle the original allocation?" must READ it, never re-derive it from
+// handle equality. Handle values are reusable, so a dup can land on the exact key a
+// freed origin used to hold; from that moment `handle == resource.origin` is a lie.
+// The three tests below pin the three predicates that used to tell that lie. Each is
+// the direct, human-readable form of a case the `a4_dup_object_is_reference_counted`
+// refcount fuzz found (persisted seed `07c3b0b3…`).
+// ---------------------------------------------------------------------------------
+
+/// ★ §12.25, THE bug: freeing a dup **alias** that re-occupies its own resource's freed
+/// origin handle value must drop exactly that alias — never tear down the namespace.
+///
+/// Six events, in order:
+///  1. `A` allocs a **Client**-classed object at handle `H`;
+///  2. `B` dups it (the resource now has two references);
+///  3. `A` frees `H` (the dup keeps the resource alive; `A`'s namespace is empty);
+///  4. `B` dups it **back into `A`, at the same handle `H`** — legal: `H` is free again,
+///     and this is an ALIAS, not an allocation;
+///  5. `A` allocs an unrelated object `X`;
+///  6. `A` frees `H`.
+///
+/// Step 6 must drop the alias and nothing else. `is_client_root` used to ask
+/// `node.key == key && kind == Client`, which step 4 made TRUE for an alias — so the
+/// free took the whole-namespace-teardown branch and destroyed `X`, an object it was
+/// never asked to touch (a guest-triggerable destroy-arbitrary-live-object). Asserted as
+/// the EXACT live set, so neither a leak nor an over-free can hide behind a count.
+#[test]
+fn freeing_a_dup_alias_on_a_reused_client_handle_never_tears_down_the_namespace() {
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
+    use std::collections::BTreeSet;
+
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    let (a, b) = (HClient(0xAA), HClient(0xBB));
+    let h = HObject(0x100); // the reused handle value
+    let alias_in_b = HObject(0x900);
+    let x = HObject(0x200); // the innocent bystander
+
+    // 1. A allocs a Client-classed object at H (a client root of A's namespace).
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: a,
+            parent: h,
+            handle: h,
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+    )
+    .expect("client root allocs");
+    // 2. B dups it.
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: NodeKey::new(a, h),
+            dst: NodeKey::new(b, alias_in_b),
+        },
+    )
+    .expect("dup applies");
+    // 3. A frees H — the dup keeps the resource alive, so H is a free handle VALUE again.
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: a,
+            handle: h,
+        },
+    )
+    .expect("free applies");
+    assert!(
+        g.node(NodeKey::new(a, h)).is_none(),
+        "A's origin handle is gone"
+    );
+    assert_eq!(
+        g.references(NodeKey::new(a, h)).collect::<Vec<_>>(),
+        vec![NodeKey::new(b, alias_in_b)],
+        "the resource survives on B's alias alone"
+    );
+    // 4. B dups it BACK into A, at the very same handle value. An ALIAS, not an alloc.
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: NodeKey::new(b, alias_in_b),
+            dst: NodeKey::new(a, h),
+        },
+    )
+    .expect("dup back into the origin's namespace applies");
+    // 5. A allocs an unrelated object.
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: a,
+            parent: x,
+            handle: x,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x8000_0000),
+                ..Default::default()
+            },
+        },
+    )
+    .expect("unrelated alloc applies");
+    // 6. Free H — an ALIAS free. Exactly one reference goes.
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: a,
+            handle: h,
+        },
+    )
+    .expect("free of the alias applies");
+
+    // The EXACT surviving set: the aliased resource (still held by B) and X. Before the
+    // fix this was `{the aliased resource}` — X was destroyed by A's namespace teardown.
+    let live: BTreeSet<NodeKey> = g.nodes().map(|n| n.key).collect();
+    assert_eq!(
+        live,
+        BTreeSet::from([NodeKey::new(a, h), NodeKey::new(a, x)]),
+        "freeing the alias destroys NOTHING else — X must survive"
+    );
+    assert!(
+        g.backing_of(NodeKey::new(a, x)).is_some(),
+        "X's payload is intact (it was never part of this free)"
+    );
+    // And the alias it WAS asked to drop is gone: exactly B's reference remains.
+    assert!(
+        g.node(NodeKey::new(a, h)).is_none(),
+        "the freed alias no longer resolves in A's namespace"
+    );
+    assert_eq!(
+        g.references(NodeKey::new(a, h)).collect::<Vec<_>>(),
+        vec![NodeKey::new(b, alias_in_b)],
+        "exactly the dropped alias left the refcount set"
+    );
+}
+
+/// ★ §12.25, the same discarded fact in `free_subtree`'s parent descent: a dup alias is a
+/// LEAF reference, so an unrelated subtree free must never drag it in through the
+/// *origin's* declared parent edge.
+///
+/// `A` allocs memory `M` under device `D`; `B` dups `M`; `A` frees `M`'s origin handle;
+/// `B` dups it back onto that same handle value; then `A` frees the **device**. The
+/// alias declared no parent (a `DUP_OBJECT` never does), so the device's teardown must
+/// not reach it. The descent used to identify the origin as `res.node.key == hkey`,
+/// which the re-occupied handle makes true for the alias — so it read the ORIGIN's
+/// declared parent (`D`), found it doomed, and destroyed a reference the free never
+/// named.
+#[test]
+fn a_dup_alias_on_a_reused_handle_is_not_dragged_into_its_origins_parent_free() {
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
+    use std::collections::BTreeSet;
+
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    let (a, b) = (HClient(0xAA), HClient(0xBB));
+    let (root, dev, m) = (HObject(0x10), HObject(0x20), HObject(0x100));
+    let alias_in_b = HObject(0x900);
+
+    for ev in [
+        RmEvent::Alloc {
+            client: a,
+            parent: root,
+            handle: root,
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: a,
+            parent: root,
+            handle: dev,
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        // M is a real child of the device — the parent edge the descent follows.
+        RmEvent::Alloc {
+            client: a,
+            parent: dev,
+            handle: m,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x8000_0000),
+                ..Default::default()
+            },
+        },
+        RmEvent::Dup {
+            src: NodeKey::new(a, m),
+            dst: NodeKey::new(b, alias_in_b),
+        },
+        RmEvent::Free {
+            client: a,
+            handle: m,
+        },
+        // …and back onto the freed origin's own handle value, as an ALIAS.
+        RmEvent::Dup {
+            src: NodeKey::new(b, alias_in_b),
+            dst: NodeKey::new(a, m),
+        },
+    ] {
+        g.apply(&arch, ev).expect("setup applies");
+    }
+
+    // Free the DEVICE. Its declared children die; the alias is not one of them.
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: a,
+            handle: dev,
+        },
+    )
+    .expect("device free applies");
+
+    assert!(
+        g.node(NodeKey::new(a, dev)).is_none(),
+        "the device itself is freed"
+    );
+    assert_eq!(
+        g.references(NodeKey::new(a, m)).collect::<BTreeSet<_>>(),
+        BTreeSet::from([NodeKey::new(a, m), NodeKey::new(b, alias_in_b)]),
+        "the alias survives its origin's parent free — a dup declares no parent"
+    );
+    assert!(
+        g.backing_of(NodeKey::new(a, m)).is_some(),
+        "and it still resolves to its resource"
+    );
+}
+
+/// ★ §12.25, the provenance of a **promoted parked** dup: an edge that arrived before its
+/// source's `Alloc` is still a `DUP_OBJECT` declaration, so promoting it must record an
+/// ALIAS — never an origin. If the promotion path recorded "origin", every alias of a
+/// `Client`-classed object would become a client root in the ALIASING namespace, and
+/// freeing that one alias would tear down the aliaser's entire namespace. (This is the
+/// order-tolerant twin of the direct-dup case above; no handle reuse needed to see it.)
+#[test]
+fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
+    use std::collections::BTreeSet;
+
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    let (a, b) = (HClient(0xAA), HClient(0xBB));
+    let (a_root, b_root, b_mem) = (HObject(0x10), HObject(0x11), HObject(0x300));
+    let alias = HObject(0x900);
+
+    for ev in [
+        // The dup arrives FIRST (parked — order tolerance, decision #4).
+        RmEvent::Dup {
+            src: NodeKey::new(a, a_root),
+            dst: NodeKey::new(b, alias),
+        },
+        // …then the source alloc promotes it.
+        RmEvent::Alloc {
+            client: a,
+            parent: a_root,
+            handle: a_root,
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+        // B has a namespace of its own that must be untouched by an alias free.
+        RmEvent::Alloc {
+            client: b,
+            parent: b_root,
+            handle: b_root,
+            class: mc::CLIENT,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: b,
+            parent: b_root,
+            handle: b_mem,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x8000_0000),
+                ..Default::default()
+            },
+        },
+    ] {
+        g.apply(&arch, ev).expect("setup applies");
+    }
+    assert!(
+        g.origin_of(NodeKey::new(b, alias)).is_some(),
+        "the parked dup was promoted"
+    );
+
+    // Free B's ALIAS of A's client root. One reference goes; B's namespace stands.
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: b,
+            handle: alias,
+        },
+    )
+    .expect("free of the alias applies");
+
+    let live: BTreeSet<NodeKey> = g.nodes().map(|n| n.key).collect();
+    assert_eq!(
+        live,
+        BTreeSet::from([
+            NodeKey::new(a, a_root),
+            NodeKey::new(b, b_root),
+            NodeKey::new(b, b_mem),
+        ]),
+        "freeing an alias of a client root never tears down the ALIASER's namespace"
+    );
+    assert_eq!(
+        g.references(NodeKey::new(a, a_root)).collect::<Vec<_>>(),
+        vec![NodeKey::new(a, a_root)],
+        "A keeps its own client root; only B's alias was dropped"
+    );
+}
+
+/// ★ §12.25, the third site: `RM_ALLOC` onto a handle currently held by a dup **alias**
+/// is a loud conflict, even when the alias references a resource whose payload is
+/// byte-identical to the incoming alloc (which is exactly the case after the alias
+/// re-occupies its own origin's handle — the payload IS that origin's).
+///
+/// The retried-RPC idempotency branch compared payloads only, so it silently answered
+/// "already done" and left an ALIAS standing where the guest asked for an ALLOCATION —
+/// the same discarded declared fact. Real RM refuses a handle already in use.
+#[test]
+fn alloc_over_a_dup_alias_is_loud_even_when_the_payload_matches() {
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph, RmGraphError};
+    use kayfabe_mocks::mock_classes as mc;
+
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    let (a, b) = (HClient(0xAA), HClient(0xBB));
+    let h = HObject(0x100);
+    let alias_in_b = HObject(0x900);
+    let the_alloc = RmEvent::Alloc {
+        client: a,
+        parent: h,
+        handle: h,
+        class: mc::CLIENT,
+        facts: AllocFacts::default(),
+    };
+
+    g.apply(&arch, the_alloc).expect("client root allocs");
+    // An identical re-send while A still OWNS the handle is an idempotent retry.
+    g.apply(&arch, the_alloc)
+        .expect("retried RPC is idempotent");
+    for ev in [
+        RmEvent::Dup {
+            src: NodeKey::new(a, h),
+            dst: NodeKey::new(b, alias_in_b),
+        },
+        RmEvent::Free {
+            client: a,
+            handle: h,
+        },
+        RmEvent::Dup {
+            src: NodeKey::new(b, alias_in_b),
+            dst: NodeKey::new(a, h),
+        },
+    ] {
+        g.apply(&arch, ev).expect("setup applies");
+    }
+
+    // Now H is an ALIAS whose resource payload equals `the_alloc`'s node exactly.
+    assert_eq!(
+        g.apply(&arch, the_alloc),
+        Err(RmGraphError::ConflictingAlloc(NodeKey::new(a, h))),
+        "allocating over a live dup alias is loud, never a silent idempotent no-op"
+    );
+    // And the refusal changed nothing: the alias still stands, unpromoted.
+    assert_eq!(
+        g.references(NodeKey::new(a, h)).collect::<Vec<_>>(),
+        vec![NodeKey::new(a, h), NodeKey::new(b, alias_in_b)],
+        "the refused alloc left the refcount set untouched"
+    );
+}
+
 /// ★ Mutation-gate kill (`RmGraph::free_subtree` dead-VAS mapping cleanup `&&`→`||`):
 /// a mapping is torn down ONLY when its VASpace was touched by the free AND that VASpace
 /// resource actually died (`touched && dead`). If a DUP alias keeps the VASpace alive
@@ -481,7 +867,10 @@ fn free_subtree_keeps_mappings_of_a_dup_kept_alive_vaspace() {
             parent: HObject(owner.0),
             handle: HObject(1),
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
     )
     .unwrap();
@@ -612,7 +1001,10 @@ fn free_subtree_prunes_a_parked_map_when_its_memory_is_freed() {
             parent: HObject(c.0),
             handle: HObject(1),
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
     )
     .unwrap();
@@ -742,7 +1134,10 @@ fn conflicting_map_at_same_va_is_loud_identical_is_idempotent() {
             parent: HObject(c.0),
             handle: HObject(1),
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
     )
     .unwrap();
@@ -931,7 +1326,13 @@ fn map_before_backing_and_pdb_resolves() {
             parent: HObject(CLIENT.0),
             handle: h.device,
             class: kayfabe_mocks::mock_classes::DEVICE,
-            facts: Default::default(),
+            // ★ G9 (§12.21): a Device DECLARES its instance. This test used to leave it
+            // undeclared and rely on the `unwrap_or(0)` default-to-GPU-0 guess; with the
+            // guess gone, an undeclared Device leaves its whole subtree unroutable.
+            facts: kayfabe_core::rmgraph::AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
         RmEvent::Alloc {
             client: CLIENT,

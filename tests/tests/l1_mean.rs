@@ -366,7 +366,9 @@ fn mean_gpu() -> (Gpu, Vec<ProcId>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
+    // ★ G9 (§12.21): realized with two physical GPUs — the entitlement.
+    let mut gpu = Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)])
+        .expect("device realizes");
 
     let mut s = Scenario::new();
     for i in 0..N_PROCS {

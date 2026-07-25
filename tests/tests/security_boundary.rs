@@ -319,7 +319,10 @@ fn b1_projection_collision_is_contained_not_a_device_wedge() {
         parent: HObject(a.0),
         handle: HObject(1),
         class: mc::DEVICE,
-        facts: AllocFacts::default(),
+        facts: AllocFacts {
+            device_instance: Some(0),
+            ..Default::default()
+        },
     })
     .unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -395,7 +398,10 @@ fn b1_vchid_collision_is_a_loud_contained_projection_fault() {
         parent: HObject(a.0),
         handle: HObject(1),
         class: mc::DEVICE,
-        facts: AllocFacts::default(),
+        facts: AllocFacts {
+            device_instance: Some(0),
+            ..Default::default()
+        },
     })
     .unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -496,7 +502,10 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
         parent: a_root,
         handle: a_dev,
         class: mc::DEVICE,
-        facts: AllocFacts::default(),
+        facts: AllocFacts {
+            device_instance: Some(0),
+            ..Default::default()
+        },
     })
     .unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -733,7 +742,10 @@ fn b2_mapping_flood_is_capped_loud() {
             parent: HObject(c.0),
             handle: HObject(1),
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
     )
     .unwrap();
@@ -948,7 +960,10 @@ fn b5_channel_naming_non_vaspace_handle_does_not_bind() {
             parent: HObject(c.0),
             handle: HObject(1),
             class: mc::DEVICE,
-            facts: AllocFacts::default(),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
         },
     )
     .unwrap();
@@ -1040,7 +1055,10 @@ fn b5_channel_cannot_bind_another_clients_vaspace_handle() {
         parent: a_root,
         handle: a_dev,
         class: mc::DEVICE,
-        facts: AllocFacts::default(),
+        facts: AllocFacts {
+            device_instance: Some(0),
+            ..Default::default()
+        },
     })
     .unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -1170,7 +1188,10 @@ fn b6_gpa_window_exhaustion_is_graceful() {
                 parent: root,
                 handle: dev,
                 class: mc::DEVICE,
-                facts: AllocFacts::default(),
+                facts: AllocFacts {
+                    device_instance: Some(0),
+                    ..Default::default()
+                },
             },
             RmEvent::Alloc {
                 client: c,
@@ -1273,4 +1294,912 @@ fn b6_graph_usable_after_capacity_refusal() {
         g.node(NodeKey::new(keep, HObject(keep.0))).is_none(),
         "freed cleanly after a flood"
     );
+}
+
+// =================================================================================
+// ★ APPLY IS ATOMIC — a refused event disturbs no OTHER process (boundary-1, #14)
+//
+// `Spine::apply` snapshots the `RmGraph` and restores it on any derivation fault. That
+// covered the graph and nothing else: `refresh` also retires and REMOVES procs,
+// deregisters completion sources, pushes to the retired list, mints `ProcId`s, mints
+// GPU targets and carves GPA arenas. So a fault raised after an earlier victim had
+// already been retired left that victim dead, and the rollback's re-derivation minted
+// it afresh — new `ProcId`, newly spawned isolate, newly carved arena. One process's
+// malformed event visibly destroying another process's state is exactly what
+// boundary-1 exists to forbid, and the function's own doc asserted the opposite
+// ("no other `Proc`'s state is disturbed").
+//
+// The fix (`l1_concurrency.md` §12.18) hoists every refusal into `Spine::plan_refresh`,
+// which runs before a single proc is touched. These two tests are the executable
+// statement of that: one for each pass a fault used to be able to land in.
+// =================================================================================
+
+/// A bystander's complete observable identity — everything a hostile event must not be
+/// able to change. `ProcId` and the isolate's `IsolateId` catch a respawn; the arena
+/// ranges catch a re-carve; the client set catches a silent re-grouping.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProcFingerprint {
+    id: kayfabe_core::ProcId,
+    arenas: Vec<(GpuId, std::ops::Range<u64>)>,
+    isolates: Vec<(GpuId, kayfabe_isolate::IsolateId)>,
+    clients: Vec<HClient>,
+    vases: Vec<(GpuId, Pdb)>,
+}
+
+fn proc_fingerprint(gpu: &Gpu, pid: kayfabe_core::ProcId) -> ProcFingerprint {
+    let p = gpu.procs.get(&pid).expect("bystander is still live");
+    ProcFingerprint {
+        id: p.id,
+        arenas: p
+            .arenas
+            .iter()
+            .map(|(g, a)| (*g, a.range.clone()))
+            .collect(),
+        isolates: p.isolates.iter().map(|(g, i)| (*g, i.id())).collect(),
+        clients: p.clients.iter().copied().collect(),
+        vases: p.vases.keys().copied().collect(),
+    }
+}
+
+/// Handles for one compute process, based at `base` so several devices can live in one
+/// client namespace (the client root stays the client's own handle).
+fn handles_at(client: HClient, base: u32, gr: u16, ce: u16) -> kayfabe_tests::ProcessHandles {
+    kayfabe_tests::ProcessHandles {
+        client_root: HObject(client.0),
+        device: HObject(base),
+        vaspace: HObject(base + 1),
+        tsg: HObject(base + 2),
+        gr_channel: HObject(base + 3),
+        gr_vchid: VChid(gr),
+        ce_channel: HObject(base + 4),
+        ce_vchid: VChid(ce),
+    }
+}
+
+/// ★ **Boundary-1: a refused merge must not consume the victims it reached first.**
+///
+/// Three independent procs; one hostile `Alloc` resolves two parked dups at once, so a
+/// single boundary matches all three. The merge absorbs them in ascending `ProcId`
+/// order: the middle proc is untouched and legally absorbed (retired, removed,
+/// sources deregistered), and only THEN does the third — which has published a backing
+/// — earn the `LateMerge` refusal. The middle proc had nothing to do with the event.
+///
+/// Before §12.18 it was retired anyway and the rollback's re-derivation handed its
+/// client a **fresh** `ProcId`, a **freshly spawned** isolate and a **freshly carved**
+/// arena: the guest kept its handles and PDB but every host identity behind them had
+/// silently changed, and its published backing was gone. That is the #14 blast radius
+/// crossing a process boundary through a *refused* event.
+#[test]
+fn a_refused_merge_leaves_the_victim_it_reached_first_bit_identical() {
+    let (factory, _rec) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
+    let mut gpu =
+        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("device realizes");
+
+    const C1: HClient = HClient(0x10);
+    const C2: HClient = HClient(0x20);
+    const C3: HClient = HClient(0x30);
+    const PDB1: Pdb = Pdb(0x1_0000);
+    const PDB2: Pdb = Pdb(0x2_0000);
+    const PDB3: Pdb = Pdb(0x3_0000);
+    const GPU0: GpuId = GpuId::ZERO;
+
+    let h1 = handles_at(C1, 0x100, 0x10, 0x11);
+    let h2 = handles_at(C2, 0x200, 0x20, 0x21);
+    let h3 = handles_at(C3, 0x300, 0x30, 0x31);
+    let mut s = Scenario::new();
+    s.compute_process(C1, PDB1, h1);
+    s.compute_process(C2, PDB2, h2);
+    s.compute_process(C3, PDB3, h3);
+    for ev in s.events {
+        gpu.apply(ev).expect("three independent procs");
+    }
+    let (p1, p2, p3) = (
+        gpu.spine.by_pdb[&(GPU0, PDB1)],
+        gpu.spine.by_pdb[&(GPU0, PDB2)],
+        gpu.spine.by_pdb[&(GPU0, PDB3)],
+    );
+    assert!(p1 < p2 && p2 < p3, "victims are absorbed in ProcId order");
+
+    // P3 touches its data plane, so absorbing it is the illegal late merge.
+    let published = kayfabe_fwd::publish_backing(
+        gpu.procs.get_mut(&p3).expect("p3"),
+        GPU0,
+        PDB3,
+        GpuVa(0x2_0000_0000),
+        0x1000,
+    )
+    .expect("p3 publishes");
+
+    let before2 = proc_fingerprint(&gpu, p2);
+    let before1 = proc_fingerprint(&gpu, p1);
+    let retired_before = gpu.spine.retired_len();
+
+    // Two dup edges parked on a handle C1 has not allocated yet…
+    let future = HObject(0x9999_0000);
+    for (dst_client, alias) in [(C2, HObject(0x7777_0002)), (C3, HObject(0x7777_0003))] {
+        gpu.apply(RmEvent::Dup {
+            src: NodeKey::new(C1, future),
+            dst: NodeKey::new(dst_client, alias),
+        })
+        .expect("a parked dup is not yet a grouping edge");
+    }
+    // …and ONE alloc that resolves both, folding all three procs into one boundary.
+    let fault = gpu
+        .apply(RmEvent::Alloc {
+            client: C1,
+            parent: HObject(C1.0),
+            handle: future,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x8_0000_0000),
+                ..Default::default()
+            },
+        })
+        .expect_err("absorbing a proc that has published is a LateMerge");
+    assert_eq!(
+        fault,
+        GpuError::LateMerge {
+            kept: p1,
+            absorbed: p3
+        },
+        "the refusal must name the exact merge it refused"
+    );
+
+    // ★ The property: the FIRST victim is untouched. Nothing was retired…
+    assert_eq!(
+        gpu.spine.retired_len(),
+        retired_before,
+        "a refused event must retire NOBODY — the middle proc was absorbed before the \
+         fault and its retirement was never rolled back"
+    );
+    // …and every identity behind its handles is the same object it was.
+    assert_eq!(
+        proc_fingerprint(&gpu, p2),
+        before2,
+        "the bystander's ProcId / isolate / GPA arena / clients / vases must be identical"
+    );
+    assert_eq!(proc_fingerprint(&gpu, p1), before1, "the keeper too");
+    assert_eq!(
+        gpu.spine.by_pdb.get(&(GPU0, PDB2)),
+        Some(&p2),
+        "the bystander still owns its own PDB route"
+    );
+    assert_eq!(gpu.spine.condemned_len(), 0, "nothing was condemned");
+    // And the touched proc's host state survived its own refusal.
+    let (binding, _) = resolve(&gpu, GPU0, PDB3, GpuVa(0x2_0000_0000)).expect("p3 still resolves");
+    assert_eq!(
+        binding.host.expect("still published").host_va,
+        published.host_va,
+        "the refused event must not disturb the backing that earned the refusal either"
+    );
+}
+
+/// ★ **The same property one pass later: a GPA-window exhaustion.**
+///
+/// The merge itself is legal — the absorbed proc is untouched — so step 1 retires and
+/// removes it, and the fault lands afterwards, when the surviving proc turns out to
+/// need an arena on a target whose window is full. Before §12.18 the absorbed proc was
+/// simply gone.
+///
+/// This also pins the plan's **undo**: the merged boundary needs arenas on two targets,
+/// and the first carve succeeds before the second fails. Its range must go back to the
+/// window, which the test proves by requiring the *last* free arena on that target to
+/// still be available afterwards.
+#[test]
+fn a_refused_arena_carve_returns_every_arena_it_took_and_loses_no_proc() {
+    let (factory, _rec) = MockIsolateFactory::new();
+    // 3 arenas per target window, for every target (the geometry is cloned).
+    let gpa = GpaSpace::new(0x1_0000_0000..0x4_0000_0000, 0x1_0000_0000);
+    // ★ G9 (§12.21): realized with three physical GPUs — the entitlement this test's
+    // `deviceInstance`s are checked against.
+    let mut gpu = Gpu::realize(
+        Box::new(MockArch::new()),
+        Box::new(factory),
+        gpa,
+        &[GpuId::ZERO, GpuId(1), GpuId(2)],
+    )
+    .expect("device realizes");
+
+    const GPU0: GpuId = GpuId::ZERO;
+    const GPU1: GpuId = GpuId(1);
+    const GPU2: GpuId = GpuId(2);
+    const C1: HClient = HClient(0x10); // GPU0 only — the merge's keeper
+    const C3: HClient = HClient(0x30); // GPU1 + GPU2 — the absorbed proc
+    const C4: HClient = HClient(0x40); // GPU2 filler
+    const C5: HClient = HClient(0x50); // GPU2 filler (window now FULL)
+    const C6: HClient = HClient(0x60); // GPU1 filler (one arena left)
+    const C7: HClient = HClient(0x70); // the prover: claims that last GPU1 arena
+
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(C1, Pdb(0x1_0000), handles_at(C1, 0x100, 0x10, 0x11), None);
+    s.compute_process_on_gpu(
+        C3,
+        Pdb(0x3_0000),
+        handles_at(C3, 0x300, 0x30, 0x31),
+        Some(1),
+    );
+    s.compute_process_on_gpu(
+        C3,
+        Pdb(0x3_1000),
+        handles_at(C3, 0x310, 0x32, 0x33),
+        Some(2),
+    );
+    s.compute_process_on_gpu(
+        C4,
+        Pdb(0x4_0000),
+        handles_at(C4, 0x400, 0x40, 0x41),
+        Some(2),
+    );
+    s.compute_process_on_gpu(
+        C5,
+        Pdb(0x5_0000),
+        handles_at(C5, 0x500, 0x50, 0x51),
+        Some(2),
+    );
+    s.compute_process_on_gpu(
+        C6,
+        Pdb(0x6_0000),
+        handles_at(C6, 0x600, 0x60, 0x61),
+        Some(1),
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("scenario applies");
+    }
+    let p1 = gpu.spine.by_pdb[&(GPU0, Pdb(0x1_0000))];
+    let p3 = gpu.spine.by_pdb[&(GPU1, Pdb(0x3_0000))];
+    assert!(p1 < p3, "the keeper is the smaller ProcId");
+    assert_eq!(
+        gpu.procs[&p3].arenas.len(),
+        2,
+        "the absorbed proc spans GPU1 and GPU2"
+    );
+    let before3 = proc_fingerprint(&gpu, p3);
+    let retired_before = gpu.spine.retired_len();
+
+    // Merge C1's proc (GPU0) with C3's (GPU1 + GPU2). The keeper must carve a GPU1
+    // arena (one left → succeeds) and then a GPU2 arena (window full → refused).
+    let fault = gpu
+        .apply(RmEvent::Dup {
+            src: NodeKey::new(C1, HObject(0x100 + 1)),
+            dst: NodeKey::new(C3, HObject(0x7777_0003)),
+        })
+        .expect_err("the merged proc cannot be given a GPU2 arena");
+    assert_eq!(
+        fault,
+        GpuError::Gpa(kayfabe_core::gpa::GpaError::WindowExhausted),
+        "exhaustion is loud and exact"
+    );
+
+    // ★ The absorbed proc was already retired when the fault landed — and must not be.
+    assert_eq!(
+        gpu.spine.retired_len(),
+        retired_before,
+        "the absorbed proc must not have been retired by a refused event"
+    );
+    assert_eq!(
+        proc_fingerprint(&gpu, p3),
+        before3,
+        "the absorbed proc keeps its ProcId, isolates and both GPA arenas"
+    );
+    assert_eq!(gpu.spine.by_pdb.get(&(GPU1, Pdb(0x3_0000))), Some(&p3));
+    assert_eq!(gpu.spine.by_pdb.get(&(GPU2, Pdb(0x3_1000))), Some(&p3));
+
+    // ★ The undo: the GPU1 arena carved before the failing carve went BACK to the
+    // window. If it had leaked, GPU1 would now be full and this proc could not exist.
+    let mut s7 = Scenario::new();
+    s7.compute_process_on_gpu(
+        C7,
+        Pdb(0x7_0000),
+        handles_at(C7, 0x700, 0x70, 0x71),
+        Some(1),
+    );
+    for ev in s7.events {
+        gpu.apply(ev)
+            .expect("the released GPU1 arena is available again");
+    }
+    let p7 = gpu.spine.by_pdb[&(GPU1, Pdb(0x7_0000))];
+    assert_eq!(
+        gpu.procs[&p7].arenas.len(),
+        1,
+        "the recovered arena went to a real proc"
+    );
+}
+
+/// ★ **The third mutator `apply` wraps: `sync_rpc_mappings`.**
+///
+/// `refresh` is now atomic by construction (§12.18), but the RPC-map forward-populate
+/// runs *after* it and mutates address tables, and it CAN fault (`UnbackedMapping`, and
+/// an `Overlap` from the bind). It has no plan/undo of its own — it is restored by the
+/// rollback's re-run, and this test is the executable statement of that rather than an
+/// assumed one, because the claim is subtle: the re-run's stale-unbind pass is what
+/// removes a binding the failed run had already installed.
+///
+/// The residue case is reachable in one event: two `MapMemoryDma`s park on a memory
+/// handle that does not exist yet, at **overlapping** VAs; the alloc that resolves them
+/// promotes both, so the sync binds the first and then faults on the second.
+#[test]
+fn a_refused_map_sync_restores_the_binding_it_had_already_installed() {
+    let mut gpu = fresh_gpu();
+    const CA: HClient = HClient(0xA0);
+    const CB: HClient = HClient(0xB0);
+    const PDBA: Pdb = Pdb(0xA_0000);
+    const PDBB: Pdb = Pdb(0xB_0000);
+    const GPU0: GpuId = GpuId::ZERO;
+    const MEM0: HObject = HObject(0x6000_0000);
+    const LATE: HObject = HObject(0x6000_0001);
+    const VA0: GpuVa = GpuVa(0x1_0000_0000);
+    const VA1: GpuVa = GpuVa(0x2_0000_0000);
+    const VA2: GpuVa = GpuVa(0x2_0000_1000); // overlaps VA1's 64K range
+
+    let ha = handles_at(CA, 0x100, 0x10, 0x11);
+    let hb = handles_at(CB, 0x200, 0x20, 0x21);
+    let mut s = Scenario::new();
+    s.compute_process(CA, PDBA, ha);
+    s.memory(CA, ha.device, MEM0, 0x8_0000_0000);
+    s.map(CA, ha.vaspace, MEM0, VA0, 0x10000);
+    s.compute_process(CB, PDBB, hb);
+    s.memory(CB, hb.device, MEM0, 0x9_0000_0000);
+    s.map(CB, hb.vaspace, MEM0, VA0, 0x10000);
+    for ev in s.events {
+        gpu.apply(ev).expect("two mapped procs");
+    }
+    let pa = gpu.spine.by_pdb[&(GPU0, PDBA)];
+    let pb = gpu.spine.by_pdb[&(GPU0, PDBB)];
+
+    let snap = |gpu: &Gpu, pid, pdb| -> Vec<(u64, u64, kayfabe_mmu::Binding)> {
+        gpu.procs[&pid].vases[&(GPU0, pdb)]
+            .table
+            .iter()
+            .map(|(va, len, b)| (va, len, *b))
+            .collect()
+    };
+    let before_a = snap(&gpu, pa, PDBA);
+    let before_b = snap(&gpu, pb, PDBB);
+    assert_eq!(before_a.len(), 1, "A starts with exactly its one mapping");
+
+    // Two maps parked on a handle CA has not allocated yet, at overlapping VAs.
+    for va in [VA1, VA2] {
+        gpu.apply(RmEvent::MapMemoryDma {
+            client: CA,
+            vaspace: ha.vaspace,
+            memory: LATE,
+            va,
+            offset: 0,
+            len: 0x10000,
+        })
+        .expect("a map on an unobserved memory handle parks");
+    }
+    // The alloc that promotes BOTH: the sync binds VA1, then refuses VA2.
+    let fault = gpu
+        .apply(RmEvent::Alloc {
+            client: CA,
+            parent: ha.device,
+            handle: LATE,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x7_0000_0000),
+                ..Default::default()
+            },
+        })
+        .expect_err("two overlapping mappings cannot both bind");
+    assert_eq!(
+        fault,
+        GpuError::Address(kayfabe_mmu::AddressFault::Overlap { pdb: PDBA, va: VA2 }),
+        "the refusal names the exact overlapping range"
+    );
+
+    assert_eq!(
+        snap(&gpu, pa, PDBA),
+        before_a,
+        "the half-installed binding must be gone — the offending proc's own table is \
+         back to its last-good contents"
+    );
+    assert_eq!(
+        snap(&gpu, pb, PDBB),
+        before_b,
+        "the bystander's address table is untouched"
+    );
+    assert_eq!(gpu.spine.retired_len(), 0);
+    // And the device still works for both of them afterwards.
+    resolve(&gpu, GPU0, PDBA, VA0).expect("A still resolves its own mapping");
+    resolve(&gpu, GPU0, PDBB, VA0).expect("B still resolves its own mapping");
+}
+
+// =================================================================================
+// ★ G9 — `deviceInstance` is guest-supplied, and it used to mint GPU targets forever
+// (`l1_concurrency.md` §12.21). Boundary-2 (unbounded allocation) + the no-GPU0-guess
+// doctrine.
+// =================================================================================
+
+/// ★ **An instance the device was not realized with is refused, at the alloc, exactly
+/// as RM refuses it.**
+///
+/// `GpuId` is derived from `AllocFacts::device_instance` — a raw guest `u32` off
+/// `NV0080_ALLOC_PARAMETERS` — and `ensure_target` minted a fresh `GpuTarget` (its own
+/// guest-physical window + `DeliveryPlane`) on first touch, with no cap and no validation
+/// against the GPUs the device actually has; `targets` is never pruned. Every neighbouring
+/// guest-reachable surface has a named cap (`MAX_OUTSTANDING_COMPLETIONS`,
+/// `MAX_ARMED_FENCES`, `MAX_PUSH_TOTAL_BYTES`, `MAX_LIVE_HANDLES`) — this one did not.
+///
+/// The cap is the **entitlement**, not `NV_MAX_DEVICES`: RM already bounds the field to
+/// `< 32` in three places, so a `< 32` check here would still let a guest mint 31 windows
+/// and 31 delivery planes on a single-GPU box. And it is trivially reachable — ~20 lines
+/// of raw `NV_ESC_RM_ALLOC` on `/dev/nvidiactl`, no patched guest kernel; stock userspace
+/// never emits one.
+#[test]
+fn g9_an_unentitled_device_instance_is_refused_and_mints_no_target() {
+    let mut gpu = fresh_gpu(); // realized with ONE GPU
+    const C: HClient = HClient(0x9000);
+    let targets_before = gpu.spine.targets.len();
+    assert_eq!(targets_before, 1, "a single-GPU device has one target");
+
+    gpu.apply(kayfabe_tests::client_root(C))
+        .expect("client root");
+    let refused = gpu
+        .apply(RmEvent::Alloc {
+            client: C,
+            parent: HObject(C.0),
+            handle: HObject(0x100),
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(7),
+                ..Default::default()
+            },
+        })
+        .expect_err("GPU 7 does not exist on this device");
+    assert_eq!(
+        refused,
+        GpuError::Graph(RmGraphError::InvalidDeviceInstance { instance: 7 }),
+        "the refusal must name the instance, mirroring RM's NV_ERR_INVALID_CLASS"
+    );
+    assert_eq!(
+        gpu.spine.targets.len(),
+        targets_before,
+        "a refused Device must mint no GpuTarget"
+    );
+    assert!(
+        gpu.spine
+            .rmgraph
+            .node(NodeKey::new(C, HObject(0x100)))
+            .is_none(),
+        "and no node survives the refusal"
+    );
+
+    // The entitled instance still works, from the same client, right after.
+    gpu.apply(RmEvent::Alloc {
+        client: C,
+        parent: HObject(C.0),
+        handle: HObject(0x101),
+        class: mc::DEVICE,
+        facts: AllocFacts {
+            device_instance: Some(0),
+            ..Default::default()
+        },
+    })
+    .expect("GPU 0 is entitled");
+}
+
+/// ★ **Boundary-2: the flood mints nothing.** 4096 distinct instances, every one refused,
+/// and the device still has exactly its realized targets — no windows, no delivery planes,
+/// no `targets` growth. Before the fix each of these was a fresh `GpuTarget` with its own
+/// guest-physical window, kept forever.
+#[test]
+fn g9_a_device_instance_flood_grows_no_device_state() {
+    let mut gpu = fresh_gpu();
+    const C: HClient = HClient(0x9100);
+    gpu.apply(kayfabe_tests::client_root(C))
+        .expect("client root");
+
+    // Tolerant on each call: the property is that the DEVICE does not grow, not that a
+    // particular call returned `Err` — a test that only checked the return value could
+    // never show the resource it was protecting.
+    let mut outcomes = Vec::new();
+    for i in 1..4096u32 {
+        outcomes.push((
+            i,
+            gpu.apply(RmEvent::Alloc {
+                client: C,
+                parent: HObject(C.0),
+                handle: HObject(0x1000 + i),
+                class: mc::DEVICE,
+                facts: AllocFacts {
+                    device_instance: Some(i),
+                    ..Default::default()
+                },
+            }),
+        ));
+    }
+    assert_eq!(
+        gpu.spine.targets.len(),
+        1,
+        "the flood minted {} extra GpuTargets — each one a guest-physical window and a \
+         delivery plane, and `targets` is never pruned",
+        gpu.spine.targets.len() - 1
+    );
+    for (i, outcome) in outcomes {
+        assert_eq!(
+            outcome,
+            Err(GpuError::Graph(RmGraphError::InvalidDeviceInstance {
+                instance: i
+            })),
+            "instance {i} is not this device's"
+        );
+    }
+}
+
+/// ★ **The no-GPU0-guess doctrine, applied to our own code.** `walk_gpu` read
+/// `device_instance.unwrap_or(0)` — a default-to-GPU-0 guess, in the one resolver whose
+/// whole discipline is MISS=None-never-a-guess. A Device with no declared instance now
+/// leaves its subtree **unroutable**: no `by_pdb` entry, no arena, no isolate, and a loud
+/// `UnknownPdb` at use — never a silent bind onto GPU 0's plane.
+///
+/// (A real Device cannot be in this state — `deviceId` is a required field of
+/// `NV0080_ALLOC_PARAMETERS` — which is exactly why guessing for it was indefensible.)
+#[test]
+fn g9_an_undeclared_device_instance_is_unroutable_not_gpu_zero() {
+    let mut gpu = fresh_gpu();
+    const C: HClient = HClient(0x9200);
+    const P: Pdb = Pdb(0x9200_0000);
+    let dev = HObject(0x100);
+    let vas = HObject(0x110);
+    for ev in [
+        kayfabe_tests::client_root(C),
+        RmEvent::Alloc {
+            client: C,
+            parent: HObject(C.0),
+            handle: dev,
+            class: mc::DEVICE,
+            facts: AllocFacts::default(), // ← no declared instance
+        },
+        RmEvent::Alloc {
+            client: C,
+            parent: dev,
+            handle: vas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: C,
+            vaspace: vas,
+            pdb: P,
+        },
+    ] {
+        gpu.apply(ev)
+            .expect("an undeclared Device is not a protocol error");
+    }
+    assert_eq!(
+        gpu.spine.by_pdb.get(&(GpuId::ZERO, P)),
+        None,
+        "an undeclared instance must NOT route onto GPU 0"
+    );
+    assert_eq!(
+        resolve(&gpu, GpuId::ZERO, P, GpuVa(0x1000)),
+        Err(FwdFault::UnknownPdb {
+            gpu: GpuId::ZERO,
+            pdb: P
+        }),
+        "it is a loud miss at use, exactly like every other unresolved target"
+    );
+    // …and it consumed no device resources at all.
+    assert_eq!(gpu.spine.targets.len(), 1);
+    assert!(
+        gpu.procs.values().all(|p| p.arenas.is_empty()),
+        "an unroutable proc materializes no arena"
+    );
+}
+
+/// ★ **Verified against the open kmod, and easy to get wrong while fixing G9:** the SAME
+/// `deviceInstance` twice under ONE client is **legal on bare metal**
+/// (`ogkm src/nvidia/src/kernel/gpu/device.c:368-380` rejects it only under `IS_VIRTUAL`).
+/// Device-per-client is not 1:1, so the entitlement check is a *membership* test and must
+/// never become a uniqueness test.
+#[test]
+fn g9_the_same_device_instance_twice_under_one_client_is_legal() {
+    let mut gpu = fresh_gpu();
+    const C: HClient = HClient(0x9300);
+    gpu.apply(kayfabe_tests::client_root(C))
+        .expect("client root");
+    for handle in [HObject(0x100), HObject(0x101)] {
+        gpu.apply(RmEvent::Alloc {
+            client: C,
+            parent: HObject(C.0),
+            handle,
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        })
+        .expect("two Devices on one GPU under one client is bare-metal legal");
+    }
+    assert_eq!(gpu.spine.targets.len(), 1, "and they share the one target");
+}
+
+// =================================================================================
+// ★ G10 — `Spine::condemned` and `Spine::retired` were unbounded (§12.22)
+// =================================================================================
+
+/// ★ **The condemned list is capped, and the refusal lands where it does no harm.**
+///
+/// A condemned entry clears only when the guest frees its client root — which a guest
+/// that just crashed its own worker has no incentive to do — and the list was rescanned
+/// on **every** apply. Every neighbouring guest-reachable surface has a named cap; this
+/// one had none.
+///
+/// The interesting half is *what* gets refused. Refusing a **condemnation** would be
+/// worse than useless: it would leave a component whose isolate is dead un-condemned, so
+/// the next refresh would re-derive it with a fresh isolate and serve the guest a
+/// **zeroed** backing for a VA it believes still holds its data — §12.13's silent
+/// corruption, reintroduced by a memory cap. So the refusal lands on the only
+/// guest-reachable action that *consumes* the list: deriving a **new** `Proc`. Everything
+/// already condemned stays condemned, every live proc keeps serving, and the guest
+/// recovers exactly as it does from one condemnation — by letting the dead processes'
+/// client roots be freed.
+#[test]
+fn g10_condemnation_is_capped_and_refuses_new_procs_never_the_condemnation() {
+    kayfabe_tests::skip_slow!(
+        "g10_condemnation_is_capped_and_refuses_new_procs_never_the_condemnation"
+    );
+    let mut gpu = fresh_gpu();
+    let cap = kayfabe_core::gpu::MAX_CONDEMNED_COMPONENTS;
+
+    // A live bystander that must keep working throughout.
+    let victim = HClient(0xB000);
+    for ev in benign_b_events() {
+        gpu.apply(ev).expect("the bystander applies");
+    }
+    let _ = victim;
+
+    // The hostile pattern: spawn a worker, kill it, repeat. Retiring out of band keeps
+    // the LIVE proc set small while the condemned list grows — which is exactly why the
+    // list needed its own bound rather than inheriting the proc set's.
+    let mut condemned_clients = Vec::new();
+    for i in 0..cap {
+        let c = HClient(0x10_0000 + i as u32);
+        gpu.apply(kayfabe_tests::client_root(c))
+            .expect("a fresh client derives a proc");
+        let pid = *gpu
+            .procs
+            .iter()
+            .find(|(_, p)| p.clients.contains(&c))
+            .expect("its proc")
+            .0;
+        assert!(gpu.spine.retire_proc(&mut gpu.procs, pid), "worker died");
+        drop(gpu.reap_retired()); // keep the OTHER cap out of this test's way
+        condemned_clients.push(c);
+    }
+    assert_eq!(gpu.spine.condemned_len(), cap);
+
+    // ★ A new process is refused — loudly, exactly, and without touching anything.
+    let fresh = HClient(0x20_0000);
+    assert_eq!(
+        gpu.apply(kayfabe_tests::client_root(fresh)),
+        Err(GpuError::SpineCapacity {
+            what: kayfabe_core::gpu::SpineCapacity::CondemnedComponents,
+            cap,
+        }),
+        "the cap must be a named, loud refusal"
+    );
+    // Nothing was un-condemned to make room.
+    assert_eq!(gpu.spine.condemned_len(), cap);
+    assert!(
+        condemned_clients.iter().all(|c| gpu.spine.is_condemned(*c)),
+        "every condemnation is still in force"
+    );
+    // The bystander is untouched and still serves.
+    assert_eq!(
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys),
+        Ok(B_MEM_PHYS)
+    );
+
+    // ★ Recovery is the guest's own, and needs no cooperation from the dead: the guest
+    // kernel frees a dead process's client root, the entry prunes, and the device serves
+    // new processes again.
+    let freed = condemned_clients[0];
+    gpu.apply(RmEvent::Free {
+        client: freed,
+        handle: HObject(freed.0),
+    })
+    .expect("the guest kernel frees a dead process's client root");
+    assert_eq!(gpu.spine.condemned_len(), cap - 1);
+    assert!(!gpu.spine.is_condemned(freed));
+    gpu.apply(kayfabe_tests::client_root(fresh))
+        .expect("the device serves new processes again — backpressure, not a brick");
+}
+
+/// ★ **The retired list is capped too, and reaping is what clears it.**
+///
+/// `Spine::retired` holds an isolate and a GPA arena per entry and is drained only when
+/// the *adapter* declares a quiesce point (lesson L10). An adapter that never reaches
+/// one — or a guest that keeps churning processes faster than they are reaped — grew it
+/// without limit. Same refusal shape as the condemned cap, and for the same reason:
+/// refusing a *retirement* would leave a proc live whose worker is gone, and dropping
+/// corpses would leak exactly the isolates and arenas the list exists to reclaim.
+#[test]
+fn g10_the_retired_list_is_capped_and_a_reap_clears_it() {
+    kayfabe_tests::skip_slow!("g10_the_retired_list_is_capped_and_a_reap_clears_it");
+    let mut gpu = fresh_gpu();
+    let cap = kayfabe_core::gpu::MAX_RETIRED_PROCS;
+
+    // Churn: create a process, let the guest free its root, never reap.
+    for i in 0..cap {
+        let c = HClient(0x30_0000 + i as u32);
+        gpu.apply(kayfabe_tests::client_root(c)).expect("derives");
+        gpu.apply(RmEvent::Free {
+            client: c,
+            handle: HObject(c.0),
+        })
+        .expect("the guest tears it down");
+    }
+    assert_eq!(gpu.spine.retired_len(), cap);
+
+    let fresh = HClient(0x40_0000);
+    assert_eq!(
+        gpu.apply(kayfabe_tests::client_root(fresh)),
+        Err(GpuError::SpineCapacity {
+            what: kayfabe_core::gpu::SpineCapacity::RetiredProcs,
+            cap,
+        }),
+        "unreaped corpses are a named, loud bound"
+    );
+    assert_eq!(
+        gpu.spine.retired_len(),
+        cap,
+        "and the refusal drops no corpse — the isolates and arenas they hold are the \
+         whole reason the list exists"
+    );
+
+    // The adapter reaches its quiesce point; the device serves again.
+    let reclaimed = gpu.reap_retired();
+    assert_eq!(reclaimed.len(), cap);
+    assert!(reclaimed.orphaned().is_empty());
+    drop(reclaimed);
+    assert_eq!(gpu.spine.retired_len(), 0);
+    gpu.apply(kayfabe_tests::client_root(fresh))
+        .expect("a reap is what clears it");
+}
+
+/// ★ **`RmGraph::apply` is atomic on failure — and that is the load-bearing precondition
+/// for ever deleting `Spine::apply`'s per-event graph clone** (`l1_concurrency.md`
+/// §12.23). Checked here rather than argued, because the argument ("every error return
+/// precedes the mutation") is exactly the kind that decays as handlers are edited.
+///
+/// Every refusable protocol event, applied to a live graph, must leave the graph's nodes,
+/// dup edges and mappings **byte-identical** — and answer with its exact variant.
+#[test]
+fn rmgraph_apply_is_atomic_on_failure() {
+    use kayfabe_core::rmgraph::{Mapping, RmNode};
+
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    const C: HClient = HClient(0xA0);
+    const OTHER: HClient = HClient(0xB0);
+    let root = HObject(C.0);
+    let dev = HObject(0x100);
+    let vas = HObject(0x110);
+    let mem = HObject(0x120);
+    let facts_dev = AllocFacts {
+        device_instance: Some(0),
+        ..Default::default()
+    };
+    for ev in [
+        kayfabe_tests::client_root(C),
+        RmEvent::Alloc {
+            client: C,
+            parent: root,
+            handle: dev,
+            class: mc::DEVICE,
+            facts: facts_dev,
+        },
+        RmEvent::Alloc {
+            client: C,
+            parent: dev,
+            handle: vas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: C,
+            parent: dev,
+            handle: mem,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x9_0000_0000),
+                ..Default::default()
+            },
+        },
+        RmEvent::MapMemoryDma {
+            client: C,
+            vaspace: vas,
+            memory: mem,
+            va: GpuVa(0x2_0000_0000),
+            offset: 0,
+            len: 0x10000,
+        },
+        RmEvent::Dup {
+            src: NodeKey::new(C, vas),
+            dst: NodeKey::new(OTHER, HObject(0x200)),
+        },
+    ] {
+        g.apply(&arch, ev).expect("the good graph builds");
+    }
+
+    let fingerprint = |g: &RmGraph| -> (Vec<RmNode>, Vec<(NodeKey, NodeKey)>, Vec<Mapping>) {
+        (
+            g.nodes().copied().collect(),
+            g.dups().collect(),
+            g.mappings().copied().collect(),
+        )
+    };
+    let before = fingerprint(&g);
+
+    let refusals: Vec<(RmEvent, RmGraphError)> = vec![
+        // A different alloc onto a live handle.
+        (
+            RmEvent::Alloc {
+                client: C,
+                parent: dev,
+                handle: vas,
+                class: mc::MEMORY,
+                facts: AllocFacts::default(),
+            },
+            RmGraphError::ConflictingAlloc(NodeKey::new(C, vas)),
+        ),
+        // A Device naming an instance this device was not realized with (G9).
+        (
+            RmEvent::Alloc {
+                client: C,
+                parent: root,
+                handle: HObject(0x130),
+                class: mc::DEVICE,
+                facts: AllocFacts {
+                    device_instance: Some(5),
+                    ..Default::default()
+                },
+            },
+            RmGraphError::InvalidDeviceInstance { instance: 5 },
+        ),
+        // A second, different dup onto a taken alias handle.
+        (
+            RmEvent::Dup {
+                src: NodeKey::new(C, mem),
+                dst: NodeKey::new(OTHER, HObject(0x200)),
+            },
+            RmGraphError::ConflictingDup(NodeKey::new(OTHER, HObject(0x200))),
+        ),
+        // A different mapping at a live (vaspace, va).
+        (
+            RmEvent::MapMemoryDma {
+                client: C,
+                vaspace: vas,
+                memory: mem,
+                va: GpuVa(0x2_0000_0000),
+                offset: 0x1000,
+                len: 0x10000,
+            },
+            RmGraphError::ConflictingMap {
+                vaspace: NodeKey::new(C, vas),
+                va: GpuVa(0x2_0000_0000),
+            },
+        ),
+        // A free of a handle nobody owns.
+        (
+            RmEvent::Free {
+                client: C,
+                handle: HObject(0xDEAD),
+            },
+            RmGraphError::FreeUnknown(NodeKey::new(C, HObject(0xDEAD))),
+        ),
+    ];
+
+    for (ev, expected) in refusals {
+        let got = g.apply(&arch, ev).expect_err("this event is refusable");
+        assert_eq!(got, expected, "the refusal must name itself exactly");
+        assert_eq!(
+            fingerprint(&g),
+            before,
+            "a refused event must leave the graph byte-identical — {got:?}"
+        );
+    }
 }

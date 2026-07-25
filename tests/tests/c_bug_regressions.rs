@@ -524,7 +524,8 @@ fn cb14_arena_touch_alone_blocks_a_late_merge() {
 
     // Touch ONLY proc B's arena — carve a GPA directly, materializing NO host channel
     // and NO host VAS (so the arena clause of `is_untouched` is the only false one).
-    gpu.procs
+    let _touch = gpu
+        .procs
         .get_mut(&pid_b)
         .unwrap()
         .arenas

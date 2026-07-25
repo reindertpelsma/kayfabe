@@ -775,3 +775,455 @@ fn teardown_suite_is_bounded() {
     assert!(t.elapsed() < Duration::from_secs(10));
     let _ = ProcAnchor(CLIENT);
 }
+
+// =================================================================================
+// ★ G7 — the reap routes every arena home, and SAYS SO when it cannot
+// (`l1_concurrency.md` §12.19)
+// =================================================================================
+
+/// ★ **The positive polarity: a multi-target proc's arenas all reach their own window.**
+///
+/// The reap used to look each arena's window up by the `BTreeMap` key it was filed
+/// under, which is a key the caller could get wrong; it now routes by the arena's own
+/// `owner()` stamp, so there is no key to get wrong. This pins the consequence: a proc
+/// spanning two GPUs is reaped, nothing is orphaned, and **both** ranges are back in
+/// **their own** windows — proved by re-carving each and getting that exact range back
+/// (a free list is LIFO, so the recycled range is the one just released).
+#[test]
+fn g7_the_reap_routes_each_arena_home_and_orphans_nothing() {
+    let (factory, _rec) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x10_0000_0000..0x40_0000_0000, 0x10_0000_0000);
+    // ★ G9 (§12.21): realized with two physical GPUs — the entitlement.
+    const GPU1: GpuId = GpuId(1);
+    let mut gpu = Gpu::realize(
+        Box::new(MockArch::new()),
+        Box::new(factory),
+        gpa,
+        &[GpuId::ZERO, GPU1],
+    )
+    .expect("realizes");
+    let root = HObject(CLIENT.0);
+
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(CLIENT, PDB, identical_handles(GR.0, CE.0), Some(0));
+    s.compute_process_on_gpu(
+        CLIENT,
+        Pdb(PDB.0 + 1),
+        kayfabe_tests::ProcessHandles {
+            client_root: root,
+            device: HObject(0x5d00_0001),
+            vaspace: HObject(0x5d00_0010),
+            tsg: HObject(0x5d00_0012),
+            gr_channel: HObject(0x5d00_0019),
+            gr_vchid: VChid(GR.0 + 1),
+            ce_channel: HObject(0x5d00_001a),
+            ce_vchid: VChid(CE.0 + 1),
+        },
+        Some(1),
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("a proc spanning GPU0 and GPU1");
+    }
+    let pid = gpu.spine.by_pdb[&(GPU, PDB)];
+    assert_eq!(gpu.procs[&pid].arenas.len(), 2, "one arena per target");
+    let ranges: Vec<(GpuId, std::ops::Range<u64>)> = gpu.procs[&pid]
+        .arenas
+        .iter()
+        .map(|(g, a)| (*g, a.range.clone()))
+        .collect();
+    for (g, a) in &gpu.procs[&pid].arenas {
+        assert_eq!(
+            a.owner(),
+            *g,
+            "an arena is stamped with the window that carved it"
+        );
+    }
+
+    gpu.apply(RmEvent::Free {
+        client: CLIENT,
+        handle: root,
+    })
+    .expect("teardown applies");
+    let reaped = gpu.reap_retired();
+    assert_eq!((reaped.len(), reaped.deferred()), (1, 0));
+    assert_eq!(
+        reaped.orphaned(),
+        &[] as &[(GpuId, std::ops::Range<u64>)],
+        "every arena found its own window"
+    );
+    drop(reaped);
+
+    // Each window got ITS range back — recycled, not leaked, and not swapped.
+    for (g, range) in ranges {
+        let recycled = gpu
+            .spine
+            .targets
+            .get_mut(&g)
+            .expect("target")
+            .gpa
+            .carve()
+            .expect("carves");
+        assert_eq!(
+            (recycled.range.clone(), recycled.owner()),
+            (range, g),
+            "target {g:?} must recycle its OWN released arena"
+        );
+    }
+    let _ = GPU1;
+}
+
+/// ★ **The negative polarity: an arena the reap cannot route home is REPORTED.**
+///
+/// `reap_retired`'s release was `if let Some(t) = self.targets.get_mut(&gpu) { … }` — the
+/// `else` arm **silently dropped the arena**, permanently losing that GPA range from the
+/// device's guest-physical space with nothing said anywhere. Targets are never removed
+/// today, so the arm is unreachable; that is precisely the argument that lets a silent
+/// drop survive a review, and it is why the arm now records on `Reclaimed::orphaned()`
+/// instead of swallowing. The condition is driven directly (the target map is public
+/// state) because the point is what happens *when* it holds, not whether the core can
+/// currently reach it.
+#[test]
+fn g7_an_arena_the_reap_cannot_route_home_is_reported_not_dropped() {
+    let (mut gpu, pid, _rec) = one_proc_gpu();
+    let range = gpu.procs[&pid].arenas[&GPU].range.clone();
+
+    gpu.apply(RmEvent::Free {
+        client: CLIENT,
+        handle: identical_handles(GR.0, CE.0).client_root,
+    })
+    .expect("teardown applies");
+
+    // The arena's window is gone by the time the reap runs.
+    gpu.spine
+        .targets
+        .remove(&GPU)
+        .expect("GPU0's target existed");
+
+    let reaped = gpu.reap_retired();
+    assert_eq!(reaped.len(), 1, "the proc is still reaped");
+    assert_eq!(
+        reaped.orphaned(),
+        &[(GPU, range)],
+        "the range it could not return must be NAMED, not silently dropped"
+    );
+    drop(reaped);
+}
+
+// =================================================================================
+// ★ G6 — the per-process arena was bump-only (`l1_concurrency.md` §12.20)
+// =================================================================================
+
+/// One guest compute process on GPU0 with a **deliberately small** arena, plus the
+/// recorder. 512 KiB of GPA per proc: big enough for real work, small enough that a
+/// bump-only allocator dies within a few dozen map/unmap cycles.
+fn one_proc_small_arena() -> (Gpu, ProcId, SharedRecorder) {
+    let (factory, recorder) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x1_0000_0000..0x1_0010_0000, 0x0008_0000);
+    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(CLIENT, PDB, identical_handles(GR.0, CE.0), None);
+    s.memory(CLIENT, HObject(0x5c00_0001), MEM, 0x9_0000_0000);
+    for ev in s.events {
+        gpu.apply(ev).expect("scenario applies");
+    }
+    let pid = gpu.spine.by_pdb[&(GPU, PDB)];
+    (gpu, pid, recorder)
+}
+
+/// ★ **The headline: a long-lived process that maps and unmaps forever keeps working.**
+///
+/// 512 KiB of arena, 4096 publish/reclaim cycles of 4 KiB — 16 MiB, 32× the arena. With
+/// `alloc` and no `free` the 128th cycle took a permanent `FwdFault::Arena` and the
+/// process was finished: "clean cleanup when the GPU goes idle" was impossible for
+/// exactly the long-running process this project exists for, which is the C's #80 leak
+/// (`teardown_hardening_done`) reproduced at intra-proc granularity after being fixed at
+/// window and proc granularity.
+///
+/// The host ledger is checked at the end too, because a GPA free list that let host
+/// memory leak instead would be trading one unbounded resource for another — the two
+/// halves travel together in `unpublish_backing`'s returned `Orphans` for that reason.
+#[test]
+fn g6_a_long_lived_process_that_maps_and_unmaps_never_exhausts_its_arena() {
+    let (mut gpu, pid, rec) = one_proc_small_arena();
+    let proc = gpu.procs.get_mut(&pid).expect("proc");
+    let arena_len = proc.arenas[&GPU].range.end - proc.arenas[&GPU].range.start;
+
+    let mut total = 0u64;
+    for i in 0..4096u64 {
+        // Rotate the VA so this is a real map/unmap stream, not one range reused.
+        let va = GpuVa(0x2_0000_0000 + (i % 64) * 0x1_0000);
+        kayfabe_fwd::publish_backing(proc, GPU, PDB, va, 0x1000)
+            .unwrap_or_else(|e| panic!("cycle {i} could not publish: {e:?}"));
+        let orphans = kayfabe_fwd::unpublish_backing(proc, GPU, PDB, va)
+            .unwrap_or_else(|e| panic!("cycle {i} could not reclaim: {e:?}"));
+        assert_eq!(
+            orphans.free.len(),
+            1,
+            "the host memory travels with the GPA"
+        );
+        run_release(proc, GPU, &orphans);
+        total += 0x1000;
+    }
+    assert!(
+        total > arena_len * 8,
+        "the test must actually exceed the arena many times over ({total:#x} vs {arena_len:#x})"
+    );
+    assert_eq!(
+        gpu.procs[&pid].arenas[&GPU].live_bytes(),
+        0,
+        "every GPA byte came back"
+    );
+    // The host side balances too, to exactly ONE outstanding object: the `Vas`'s own
+    // host VAS, which is allocated once and lives as long as the Vas does. Every one of
+    // the 4096 backings and every one of their mappings is gone.
+    let host_vas = gpu.procs[&pid].vases[&(GPU, PDB)]
+        .host_vas
+        .expect("the Vas materialized its host VAS");
+    let led = rec.lock().expect("recorder").ledger();
+    assert_eq!(
+        led.leaked.values().flatten().copied().collect::<Vec<_>>(),
+        vec![host_vas],
+        "the ONLY outstanding host object is the Vas's own host VAS: {led:?}"
+    );
+    assert!(
+        led.leaked_maps
+            .values()
+            .all(std::collections::BTreeSet::is_empty),
+        "every published mapping was unmapped: {led:?}"
+    );
+    assert!(led.double_free.is_empty() && led.free_of_unknown.is_empty());
+}
+
+/// ★ **The owner's exact ask: call free on an object that is missing, and see if
+/// anything races.** Nothing does — the refusal happens before the table is touched.
+///
+/// Three flavours of "gone", each asserting the EXACT fault:
+/// 1. a VA that was never published here;
+/// 2. a VA that was published and already reclaimed (the double free, at the API level —
+///    at the token level it does not compile, see `GpaArena::free`'s doctest);
+/// 3. a VA whose whole `Vas` died **through the real graph path** (the guest freed the
+///    VASpace), so the backing is genuinely gone rather than merely forgotten.
+///
+/// After all three the arena must be *intact*: still able to serve, and never handing the
+/// same range to two live publications.
+#[test]
+fn g6_reclaiming_a_backing_that_is_gone_is_loud_and_leaves_the_arena_intact() {
+    let (mut gpu, pid, _rec) = one_proc_small_arena();
+    let proc = gpu.procs.get_mut(&pid).expect("proc");
+
+    // 1. Never published.
+    assert_eq!(
+        kayfabe_fwd::unpublish_backing(proc, GPU, PDB, VA),
+        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Miss {
+            pdb: PDB,
+            va: VA
+        })),
+        "an unpublished VA owes the arena nothing"
+    );
+
+    // 2. Published, reclaimed, reclaimed again.
+    let first = kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000).expect("publish");
+    let live_after_publish = proc.arenas[&GPU].live_bytes();
+    assert_eq!(live_after_publish, 0x1000);
+    let reclaimed = kayfabe_fwd::unpublish_backing(proc, GPU, PDB, VA).expect("first reclaim");
+    run_release(proc, GPU, &reclaimed);
+    assert_eq!(proc.arenas[&GPU].live_bytes(), 0);
+    assert_eq!(
+        kayfabe_fwd::unpublish_backing(proc, GPU, PDB, VA),
+        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Miss {
+            pdb: PDB,
+            va: VA
+        })),
+        "the second reclaim must be refused, not silently accepted"
+    );
+    assert_eq!(
+        proc.arenas[&GPU].live_bytes(),
+        0,
+        "and it must not have corrupted the arena's accounting"
+    );
+
+    // The arena still works, and never issues one range to two live publications.
+    let a = kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000).expect("republish");
+    let b = kayfabe_fwd::publish_backing(proc, GPU, PDB, VA2, 0x1000).expect("publish 2");
+    assert_eq!(
+        a.gpa, first.gpa,
+        "the reclaimed range is reused, deterministically"
+    );
+    assert_ne!(a.gpa, b.gpa, "two LIVE publications never share a GPA");
+    assert_eq!(proc.arenas[&GPU].live_bytes(), 0x2000);
+
+    // 3. The backing goes genuinely away through the graph: the guest frees the VASpace.
+    gpu.apply(RmEvent::Free {
+        client: CLIENT,
+        handle: identical_handles(GR.0, CE.0).vaspace,
+    })
+    .expect("the guest frees its VASpace");
+    let proc = gpu.procs.get_mut(&pid).expect("proc still lives");
+    assert_eq!(
+        kayfabe_fwd::unpublish_backing(proc, GPU, PDB, VA),
+        Err(FwdFault::UnknownPdb { gpu: GPU, pdb: PDB }),
+        "a Vas the guest destroyed is a loud miss, not a free into a stale arena"
+    );
+}
+
+/// ★ **The invariant Stage 2's safety argument rests on, and it had never been pinned:**
+/// no live binding anywhere in the device points into an arena that is not its own
+/// proc's — so nothing can be pointing into an arena that was released.
+///
+/// The reason is structural rather than enforced: `commit_publish` allocates from
+/// `proc.arenas[gpu]` and only ever binds into a `Vas` of that same `Proc`, and a
+/// cross-process reference cannot arise because a `DUP_OBJECT` between two clients makes
+/// them **one** `Proc` (one arena, one blast radius). The test states both halves: a
+/// dup-joined pair publishes from ONE arena, two unjoined procs publish from disjoint
+/// ones, and after one is reaped and its range recycled to a *new* proc, the survivor's
+/// bindings are still entirely inside its own arena.
+#[test]
+fn g6_no_live_binding_ever_points_outside_its_own_procs_arena() {
+    /// Every published binding must lie inside its own proc's arena for that GPU.
+    fn sweep(gpu: &Gpu) {
+        for (pid, p) in &gpu.procs {
+            for ((g, _pdb), vas) in &p.vases {
+                for (va, len, b) in vas.table.iter() {
+                    let Some(_) = b.host else { continue }; // RPC bindings are not arena GPAs
+                    let arena = p
+                        .arenas
+                        .get(g)
+                        .unwrap_or_else(|| panic!("{pid:?} published on {g:?} with no arena"));
+                    assert!(
+                        b.phys >= arena.range.start && b.phys + len <= arena.range.end,
+                        "{pid:?} VA {va:#x} is backed at GPA {:#x}, OUTSIDE its own arena {:?}",
+                        b.phys,
+                        arena.range,
+                    );
+                }
+            }
+        }
+    }
+
+    let (factory, _rec) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x1_0000_0000..0x5_0000_0000, 0x1_0000_0000);
+    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    const CB: HClient = HClient(0xB0);
+    const PDB_B: Pdb = Pdb(0x3500_0000);
+    const UVM: HClient = HClient(0xC0);
+    const UVM_PDB: Pdb = Pdb(0x3600_0000);
+
+    let ha = identical_handles(GR.0, CE.0);
+    let mut s = Scenario::new();
+    let a_vas = s.compute_process_on_gpu(CLIENT, PDB, ha, None);
+    // ★ The dup arrives BEFORE either side touches its data plane (the early-arm
+    // discipline, L9), so A and the UVM client are ONE proc with ONE arena.
+    s.uvm_dup(
+        UVM,
+        HObject(UVM.0),
+        HObject(0x6c00_0001),
+        HObject(0x6c00_0010),
+        UVM_PDB,
+        HObject(0x6c00_0099),
+        a_vas,
+    );
+    s.compute_process_on_gpu(
+        CB,
+        PDB_B,
+        kayfabe_tests::ProcessHandles {
+            client_root: HObject(CB.0),
+            device: HObject(0x5e00_0001),
+            vaspace: HObject(0x5e00_0010),
+            tsg: HObject(0x5e00_0012),
+            gr_channel: HObject(0x5e00_0019),
+            gr_vchid: VChid(GR.0 + 1),
+            ce_channel: HObject(0x5e00_001a),
+            ce_vchid: VChid(CE.0 + 1),
+        },
+        None,
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("scenario applies");
+    }
+    // The dup absorbed the UVM client's own (untouched) proc; reap that corpse now so
+    // the reap below is unambiguously about A.
+    drop(gpu.reap_retired());
+    let pa = gpu.spine.by_pdb[&(GPU, PDB)];
+    let pb = gpu.spine.by_pdb[&(GPU, PDB_B)];
+    assert_eq!(
+        gpu.spine.by_pdb[&(GPU, UVM_PDB)],
+        pa,
+        "a dup makes the two clients ONE proc — the reason cross-proc refs cannot exist"
+    );
+
+    // Both of A's Vases publish, and B publishes.
+    {
+        let a = gpu.procs.get_mut(&pa).expect("A");
+        kayfabe_fwd::publish_backing(a, GPU, PDB, VA, 0x1000).expect("A compute publishes");
+        kayfabe_fwd::publish_backing(a, GPU, UVM_PDB, VA, 0x1000).expect("A's UVM Vas too");
+        assert_eq!(a.arenas.len(), 1, "…out of ONE arena");
+    }
+    let b_range = gpu.procs[&pb].arenas[&GPU].range.clone();
+    kayfabe_fwd::publish_backing(gpu.procs.get_mut(&pb).expect("B"), GPU, PDB_B, VA, 0x1000)
+        .expect("B publishes");
+    sweep(&gpu);
+    let a_range = gpu.procs[&pa].arenas[&GPU].range.clone();
+    assert!(
+        a_range.end <= b_range.start || b_range.end <= a_range.start,
+        "two unjoined procs hold disjoint arenas"
+    );
+
+    // A dies; its arena goes back to the window and is recycled to a NEW proc.
+    gpu.apply(RmEvent::Free {
+        client: CLIENT,
+        handle: ha.client_root,
+    })
+    .expect("A's client root is freed");
+    gpu.apply(RmEvent::Free {
+        client: UVM,
+        handle: HObject(UVM.0),
+    })
+    .expect("and its UVM client with it");
+    let reaped = gpu.reap_retired();
+    assert_eq!(reaped.len(), 1, "A is reaped as ONE proc");
+    assert!(reaped.orphaned().is_empty());
+    drop(reaped);
+
+    const CC: HClient = HClient(0xD0);
+    const PDB_C: Pdb = Pdb(0x3700_0000);
+    let mut s2 = Scenario::new();
+    s2.compute_process_on_gpu(
+        CC,
+        PDB_C,
+        kayfabe_tests::ProcessHandles {
+            client_root: HObject(CC.0),
+            device: HObject(0x5f00_0001),
+            vaspace: HObject(0x5f00_0010),
+            tsg: HObject(0x5f00_0012),
+            gr_channel: HObject(0x5f00_0019),
+            gr_vchid: VChid(GR.0 + 2),
+            ce_channel: HObject(0x5f00_001a),
+            ce_vchid: VChid(CE.0 + 2),
+        },
+        None,
+    );
+    for ev in s2.events {
+        gpu.apply(ev).expect("a new process arrives");
+    }
+    let pc = gpu.spine.by_pdb[&(GPU, PDB_C)];
+    assert_eq!(
+        gpu.procs[&pc].arenas[&GPU].range, a_range,
+        "the new proc recycled the dead one's range (#80)"
+    );
+    kayfabe_fwd::publish_backing(gpu.procs.get_mut(&pc).expect("C"), GPU, PDB_C, VA, 0x1000)
+        .expect("C publishes into the recycled range");
+
+    // ★ The property: nothing anywhere points outside its own arena — in particular B,
+    // the survivor, has nothing inside the range C now owns.
+    sweep(&gpu);
+    for vas in gpu.procs[&pb].vases.values() {
+        for (_va, len, b) in vas.table.iter() {
+            if b.host.is_some() {
+                assert!(
+                    b.phys + len <= a_range.start || b.phys >= a_range.end,
+                    "the survivor holds a binding inside the RELEASED arena {a_range:?}"
+                );
+            }
+        }
+    }
+}

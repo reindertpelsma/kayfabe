@@ -52,7 +52,10 @@ fn new_gpu() -> (
     // A window sized so each target's disjoint sub-window comfortably fits several arenas.
     let gpa = GpaSpace::new(0x1_0000_0000..0x11_0000_0000, 0x1_0000_0000);
     (
-        Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+        // ★ G9 (§12.21): the device is REALIZED with two physical GPUs — the
+        // entitlement a guest's `deviceInstance` is now checked against.
+        Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)])
+            .expect("device realizes"),
         rec,
     )
 }

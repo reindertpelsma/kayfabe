@@ -716,30 +716,39 @@ reclaimed.** The C artifact's known limitation — that its emulated firmware st
 on a full restart of the emulator — is inherited here **by omission** rather than by decision,
 which is worse, because nothing names it.
 
-**G6 — the per-process arena is bump-only.** There is no intra-process free. This is
-structurally the same leak the predecessor hit at process granularity, fixed at that
-granularity by the by-value arena release of section 2.6, and reproduced at the *intra*-process
-granularity: a long-lived process that maps and unmaps repeatedly exhausts its own arena.
-`kayfabe-core/src/gpa.rs:109-135`.
+**G6 — the per-process arena is bump-only.** ★ **FIXED** (`l1_concurrency.md` §12.20).
+There was no intra-process free: structurally the same leak the predecessor hit at process
+granularity, reproduced at the *intra*-process granularity, so a long-lived process that
+mapped and unmapped repeatedly exhausted its own arena (measured: dead at map/unmap cycle
+128 on a 512 KiB arena). `GpaArena` now has a coalescing free list and a move-only
+`GpaBlock` token — `free` takes it by value, so a double free does not compile — and
+`kayfabe_fwd::unpublish_backing` returns the GPA to the proc's own arena together with the
+host `Orphans`. Deliberately a free list driven by declared graph facts, **not** a
+collector.
 
-**G7 — arena release only checks its range in debug builds.** The window check is a debug
-assertion, compiled out in release, so releasing an arena into the *wrong* window is
-representable. The symptom would be overlapping recycled arenas — that is, the cross-process
-collision class the whole per-process design exists to make impossible, returning through the
-recycling path.
+**G7 — arena release only checks its range in debug builds.** ★ **FIXED** (§12.19). The
+window check was a `debug_assert!`, compiled out in release, so releasing an arena into the
+*wrong* window was representable. It is now a loud `Result<(), ForeignArena>` that hands the
+arena back, arenas are stamped with their owning target at carve time, and
+`Spine::reap_retired` routes each one home **by its own owner** rather than by a map key a
+caller supplies. `GpaArena` also lost its `Clone` (a clone is two releases of one range), and
+the reap's silently-dropped arena is now reported on `Reclaimed::orphaned()`.
 
-**G9 (security) — unbounded, guest-driven device-global growth.** The GPU target id derives
-from a **guest-supplied 32-bit value** in the allocation facts, and first touch of a new value
-mints a fresh guest-physical window and delivery plane, with no cap and no validation against
-the actual realized GPU roster. The target map is never pruned. Every neighbouring surface in
-this core is capacity-bounded with a named refusal; this one is not.
-`kayfabe-core/src/rmgraph.rs:394`.
+**G9 (security) — unbounded, guest-driven device-global growth.** ★ **FIXED** (§12.21). The
+GPU target id derived from a **guest-supplied 32-bit value** and first touch minted a fresh
+window and delivery plane, uncapped and unvalidated. The cap is now the **entitlement** — the
+roster the device was realized with (`Gpu::realize`) — enforced at the `Device` alloc where RM
+enforces it, with `RmGraphError::InvalidDeviceInstance` standing in for `NV_ERR_INVALID_CLASS`.
+Deliberately *not* `NV_MAX_DEVICES`: RM already bounds the field to `< 32`, so that cap would
+still allow 31 windows on a single-GPU box. Our own `unwrap_or(0)` default-to-GPU-0 guess is
+gone with it — an undeclared instance is unroutable, never GPU 0.
 
 **G10 (security) — the condemned set and the retired list are unbounded**, and the condemned
-set is scanned as (boundaries × condemned) on every apply. An entry clears only when the guest
-frees its client root — which a guest that has just deliberately crashed its own sandbox worker
-has no incentive to do. So the mechanism that section 2.8 added to close a real hole is itself
-a growth surface with a quadratic scan, driven by the same adversary.
+set is scanned as (boundaries × condemned) on every apply. ★ **FIXED** (§12.22), and the scan
+was worse than reported: the *carry-forward* was O(n² log n) per apply (measured 55 s at the
+cap), now near-linear via union-find over entry indices. Both lists have named caps, and the
+refusal lands on **deriving a new `Proc`** — never on the condemnation itself, because
+refusing that would un-condemn a component whose isolate is already dead.
 
 ### ★ The methodological finding, which is worth more than any individual gap
 

@@ -62,6 +62,50 @@ impl NodeKey {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct ResId(u64);
 
+/// ★ How a live handle came to reference its resource — the **declared protocol fact**
+/// `RM_ALLOC` vs `DUP_OBJECT`, recorded at the event that declared it (decision #14,
+/// protocol-not-trace).
+///
+/// This exists because "is this handle the resource's origin allocation?" is a fact the
+/// guest TOLD us, and it must never be re-derived from incidental structure. The obvious
+/// re-derivation — `handle == resource.node.key` — is **wrong**, because handle values
+/// are reusable by design: free the origin handle while a dup keeps the resource alive,
+/// then dup it BACK into the origin's namespace at the very same handle value, and the
+/// alias becomes literally indistinguishable from the origin allocation. Every predicate
+/// built on that equality then mis-fires; for a `Client`-classed resource the mis-fire is
+/// catastrophic ([`RmGraph::is_client_root`] took the whole-namespace-teardown branch and
+/// destroyed every unrelated object the client had allocated). Recording the declaration
+/// makes the question a *read*, not a guess (`l1_concurrency.md` §12.25).
+///
+/// By construction there is exactly one [`HandleRef::Origin`] entry per resource — only
+/// the `Alloc` arm mints one, and it mints a fresh [`ResId`] with it — while every
+/// `DUP_OBJECT` (direct or promoted from the parked table) inserts an
+/// [`HandleRef::Alias`]. So "origin" is a property of the *handle table entry*, never of
+/// the handle VALUE.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HandleRef {
+    /// The handle this resource's origin `RM_ALLOC` created (`key == node.key`, and it
+    /// is THE allocation — freeing it is the lifecycle event that ends the object).
+    Origin(ResId),
+    /// A `DUP_OBJECT` alias: a leaf reference to someone else's allocation. It has no
+    /// children of its own, and freeing it drops only this one reference.
+    Alias(ResId),
+}
+
+impl HandleRef {
+    /// The resource this handle references (whichever way it was declared).
+    fn res(self) -> ResId {
+        match self {
+            HandleRef::Origin(id) | HandleRef::Alias(id) => id,
+        }
+    }
+
+    /// Was this handle declared by `RM_ALLOC` (as opposed to `DUP_OBJECT`)?
+    fn is_origin(self) -> bool {
+        matches!(self, HandleRef::Origin(_))
+    }
+}
+
 /// Declared, abstract alloc parameters — ONLY the protocol facts the graph needs.
 /// The Axis-A adapter decodes real wire structs into this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -276,6 +320,11 @@ pub const MAX_LIVE_MAPPINGS: usize = 1 << 18;
 /// endpoints that never arrive, so each parked table is bounded too (dangling-`Dup`,
 /// orphan-`SetPageDir`, orphan-`MapMemoryDma` floods). See [`MAX_LIVE_HANDLES`].
 pub const MAX_PARKED: usize = 1 << 18;
+/// ★ G9 — the largest roster a device can be **realized** with (`NV_MAX_DEVICES`, the
+/// bound RM itself enforces on `deviceInstance`: `ogkm src/nvidia/src/kernel/gpu/device.c`).
+/// A realize-time configuration bound, never a guest-input bound — guest input is checked
+/// against the actual roster ([`RmGraph::entitle`]), which is stricter and is the point.
+pub const MAX_GPUS: usize = 32;
 
 /// Errors from [`RmGraph::apply`]. All loud; the caller decides whether a guest
 /// protocol violation is fatal or logged-and-refused.
@@ -286,6 +335,22 @@ pub enum RmGraphError {
     ConflictingAlloc(NodeKey),
     /// A second, *different* dup for an existing dst key.
     ConflictingDup(NodeKey),
+    /// ★ G9 (§12.21) — a `Device` alloc named a physical-GPU instance this device was
+    /// **not realized with**. The guest-supplied `deviceInstance` is the sole selector
+    /// for which GPU a whole object subtree lands on, and it used to be accepted
+    /// unbounded and unvalidated: every fresh value minted a `GpuTarget` with its own
+    /// guest-physical window and delivery plane, and `targets` is never pruned.
+    ///
+    /// The refusal deliberately mirrors RM's: real RM rejects an out-of-range instance
+    /// with `NV_ERR_INVALID_CLASS` (`ogkm src/nvidia/src/kernel/gpu/device.c:118-129`)
+    /// and, for an in-range-but-unpopulated one, resolves through
+    /// `gpumgrGetPrimaryForDevice`, which **fails open to GPU 0**
+    /// (`gpu_mgr.c:688-691`). We refuse both, so a guest cannot distinguish us from a
+    /// real single-GPU box by probing instances.
+    InvalidDeviceInstance {
+        /// The instance the guest named.
+        instance: u32,
+    },
     /// A second, *different* `MAP_MEMORY_DMA` at a `(vaspace, va)` already mapped
     /// (an identical re-send is idempotent). Overlapping/replacing a live mapping
     /// without an eager unmap is a loud fault (the `ALREADY-MAPPED` collision class).
@@ -307,13 +372,15 @@ pub enum RmGraphError {
 ///
 /// Resources are refcounted by their live-handle set; the handle table maps every
 /// live `(client, handle)` to the resource it references (origin alloc or dup alias).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct RmGraph {
     /// Live resources, keyed by their stable origin id.
     resources: BTreeMap<ResId, Resource>,
-    /// Every live handle → the resource it references. The origin handle and each
-    /// dup alias both appear here; freeing a handle removes exactly its entry.
-    handles: BTreeMap<NodeKey, ResId>,
+    /// Every live handle → the resource it references **and how it was declared**
+    /// ([`HandleRef`]). The origin handle and each dup alias both appear here; freeing a
+    /// handle removes exactly its entry. The `Origin`/`Alias` discriminator is the
+    /// recorded protocol fact every "is this the allocation?" question reads.
+    handles: BTreeMap<NodeKey, HandleRef>,
     /// Dup edges whose source resource is not observed *yet* (order tolerance): a
     /// `Dup` may arrive before its `src`'s `Alloc`. Kept as `dst → src` and resolved
     /// lazily by [`Self::resource_of`]. When `src` becomes known and `dst` is used,
@@ -339,6 +406,10 @@ pub struct RmGraph {
     /// Monotonic resource-id counter — never reused, so a re-allocated handle value
     /// mints a fresh resource distinct from a survivor a dup still holds.
     next_res_id: u64,
+    /// ★ G9 (§12.21) — the **entitlement**: the physical-GPU instances this device was
+    /// realized with. A `Device` alloc naming anything else is refused at alloc time.
+    /// Defaults to `{0}` (the single-GPU realize); [`RmGraph::entitle`] sets it.
+    gpus: BTreeSet<u32>,
 }
 
 /// A parked `MAP_MEMORY_DMA` awaiting its VASpace/memory handles (order tolerance).
@@ -353,11 +424,62 @@ struct PendingMap {
     len: u64,
 }
 
+impl Default for RmGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RmGraph {
-    /// Empty graph.
+    /// Empty graph, entitled to the **single-GPU** roster `{0}` (the realize-time
+    /// target). [`RmGraph::entitle`] widens it for a multi-GPU device.
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        RmGraph {
+            resources: BTreeMap::new(),
+            handles: BTreeMap::new(),
+            pending_dups: BTreeMap::new(),
+            pending_pdbs: BTreeMap::new(),
+            mappings: BTreeMap::new(),
+            map_mem_res: BTreeMap::new(),
+            pending_maps: BTreeSet::new(),
+            next_res_id: 0,
+            gpus: BTreeSet::from([0]),
+        }
+    }
+
+    /// ★ G9 (§12.21) — declare the device's **entitlement**: the physical-GPU instances
+    /// it was realized with. Set once, at realize.
+    ///
+    /// This is the cap that matters, and it is deliberately *not* `NV_MAX_DEVICES`. RM
+    /// already enforces `deviceInstance < 32` in three places (`ogkm alloc_free.c:1372`,
+    /// `device.c:118-129` → `NV_ERR_INVALID_CLASS`, `device.c:357`), so a `< 32` bound
+    /// here would be security theatre: it would still let a guest mint 31 `GpuTarget`s —
+    /// 31 guest-physical windows and 31 delivery planes — on a single-GPU box, from ~20
+    /// lines of raw `NV_ESC_RM_ALLOC` on `/dev/nvidiactl` with **no patched guest kernel**
+    /// (stock userspace never emits one). The real check in RM is `osIsGpuAccessible` →
+    /// `nv_is_gpu_accessible` (`kernel-open/nvidia/nv.c:5904-5910`), which scans the host
+    /// process's fd table; device allocs go through `/dev/nvidiactl`, which carries **no
+    /// GPU identity**, so `deviceInstance` is the sole selector — and
+    /// `gpumgrGetPrimaryForDevice` **fails open to GPU 0** for an in-range-but-unpopulated
+    /// instance (`gpu_mgr.c:688-691`). Our entitlement is the equivalent of RM's fd-table
+    /// scan: the roster this device was actually realized with, nothing more.
+    ///
+    /// # Panics
+    /// If the roster is empty, or larger than [`MAX_GPUS`] — a realize-time configuration
+    /// error, never guest input.
+    pub fn entitle(&mut self, gpus: impl IntoIterator<Item = u32>) {
+        let gpus: BTreeSet<u32> = gpus.into_iter().collect();
+        assert!(
+            !gpus.is_empty() && gpus.len() <= MAX_GPUS,
+            "a device is realized with 1..={MAX_GPUS} GPUs"
+        );
+        self.gpus = gpus;
+    }
+
+    /// The physical-GPU instances this device was realized with (G9's entitlement).
+    pub fn entitled(&self) -> impl Iterator<Item = u32> + '_ {
+        self.gpus.iter().copied()
     }
 
     /// Populate the sticky GPU-target cache for any resource that can now resolve its
@@ -391,7 +513,13 @@ impl RmGraph {
         let mut node = self.origin_of(key)?;
         for _ in 0..64 {
             if matches!(node.kind, kayfabe_arch::ObjectKind::Device) {
-                return Some(GpuId(node.facts.device_instance.unwrap_or(0)));
+                // ★ G9 (§12.21): MISS = None, never a guess. A `Device` that declared no
+                // instance leaves its descendants **unroutable** (deferred; a loud miss at
+                // use) — it used to silently become GPU 0, which is a default-target guess
+                // of exactly the kind `gpu_of` refuses everywhere else. A real Device
+                // cannot be in this state: `deviceId` is a required field of
+                // `NV0080_ALLOC_PARAMETERS`, so the fact is always observed.
+                return node.facts.device_instance.map(GpuId);
             }
             let parent = NodeKey::new(node.key.client, node.parent);
             if parent == node.key {
@@ -424,6 +552,23 @@ impl RmGraph {
                     kind: arch.classify(class),
                     facts,
                 };
+                // ★ G9 (§12.21): a `Device` may only name a physical GPU this device was
+                // REALIZED with. Checked here, at the alloc, because that is where RM
+                // checks it (`ogkm device.c:118-129`, → `NV_ERR_INVALID_CLASS`) — so a
+                // guest cannot tell us from a real single-GPU box. Note the same instance
+                // twice under one client is LEGAL on bare metal (`device.c:368-380`
+                // rejects it only under `IS_VIRTUAL`), so this is a membership test and
+                // never a uniqueness one.
+                if matches!(node.kind, kayfabe_arch::ObjectKind::Device)
+                    && !node
+                        .facts
+                        .device_instance
+                        .is_none_or(|i| self.gpus.contains(&i))
+                {
+                    return Err(RmGraphError::InvalidDeviceInstance {
+                        instance: node.facts.device_instance.unwrap_or_default(),
+                    });
+                }
                 // A handle names EITHER an allocated resource OR a dup alias, never
                 // both — so an alloc onto a handle already claimed by a (parked) dup is
                 // a loud conflict, symmetric with the dup-onto-alloc rejection.
@@ -431,8 +576,21 @@ impl RmGraph {
                     return Err(RmGraphError::ConflictingAlloc(key));
                 }
                 match self.handles.get(&key) {
-                    // Idempotent retry: the same origin alloc re-sent.
-                    Some(res) if self.resources.get(res).map(|r| r.node) == Some(node) => Ok(()),
+                    // Idempotent retry: the same origin alloc re-sent. The handle must
+                    // itself be the ORIGIN (a recorded fact) — a dup ALIAS that merely
+                    // happens to reference an identically-shaped payload is a DIFFERENT
+                    // declaration, and allocating over it is a loud conflict, exactly as
+                    // real RM refuses a handle already in use
+                    // (`NV_ERR_INSERT_DUPLICATE_OBJECT`). Comparing payloads alone would
+                    // silently accept the alias as "the allocation" once a dup re-created
+                    // a freed origin's key — the same discarded-fact defect as
+                    // `is_client_root`'s (§12.25).
+                    Some(h)
+                        if h.is_origin()
+                            && self.resources.get(&h.res()).map(|r| r.node) == Some(node) =>
+                    {
+                        Ok(())
+                    }
                     // The key is already taken (by a different alloc, or by a resolved dup) — loud.
                     Some(_) => Err(RmGraphError::ConflictingAlloc(key)),
                     None => {
@@ -444,7 +602,8 @@ impl RmGraph {
                         }
                         let id = ResId(self.next_res_id);
                         self.next_res_id += 1;
-                        self.handles.insert(key, id);
+                        // Declared by `RM_ALLOC` → THE origin handle of this resource.
+                        self.handles.insert(key, HandleRef::Origin(id));
                         self.resources.insert(
                             id,
                             Resource {
@@ -486,7 +645,7 @@ impl RmGraph {
                 // (`pending_dups`). Either way an identical re-send is idempotent and a
                 // conflicting one is loud — dst must never end up doubly-bound.
                 if let Some(existing) = self.handles.get(&dst) {
-                    return if Some(*existing) == self.resource_of(src) {
+                    return if Some(existing.res()) == self.resource_of(src) {
                         Ok(()) // retry: dst already references THIS same resource
                     } else {
                         Err(RmGraphError::ConflictingDup(dst))
@@ -506,7 +665,9 @@ impl RmGraph {
                         if self.handles.len() >= MAX_LIVE_HANDLES {
                             return Err(RmGraphError::CapacityExceeded(Capacity::Handles));
                         }
-                        self.handles.insert(dst, id);
+                        // Declared by `DUP_OBJECT` → an ALIAS, whatever handle VALUE it
+                        // lands on (it may be the value a freed origin used to hold).
+                        self.handles.insert(dst, HandleRef::Alias(id));
                         self.resources
                             .get_mut(&id)
                             .expect("resource_of returned a live id")
@@ -634,18 +795,22 @@ impl RmGraph {
             let mut changed = true;
             while changed {
                 changed = false;
-                for (&hkey, &id) in &self.handles {
+                for (&hkey, &href) in &self.handles {
                     // A handle's parent is same-namespace; read it from the resource's
                     // payload (only the ORIGIN handle carries a parent — a dup alias is
                     // a leaf reference with no children of its own).
                     if hkey.client != key.client || doomed.contains(&hkey) {
                         continue;
                     }
-                    let Some(res) = self.resources.get(&id) else {
+                    let Some(res) = self.resources.get(&href.res()) else {
                         continue;
                     };
-                    // Only follow the parent edge from the resource's origin handle.
-                    if res.node.key != hkey {
+                    // Only follow the parent edge from the handle DECLARED BY `RM_ALLOC`
+                    // (§12.25). Asking `res.node.key != hkey` instead would treat a dup
+                    // alias that re-occupies its own resource's freed origin handle value
+                    // as an origin, and drag that resource's declared children into an
+                    // alias's free — a parent edge the alias never declared.
+                    if !href.is_origin() {
                         continue;
                     }
                     let parent_key = NodeKey::new(hkey.client, res.node.parent);
@@ -663,7 +828,7 @@ impl RmGraph {
         // VASpace resource that dies takes its mappings with it (releasing memory refs).
         let touched_ids: BTreeSet<ResId> = doomed
             .iter()
-            .filter_map(|k| self.handles.get(k).copied())
+            .filter_map(|k| self.handles.get(k).map(|h| h.res()))
             .collect();
 
         for k in &doomed {
@@ -712,7 +877,8 @@ impl RmGraph {
                 });
             let Some((dst, id)) = ready else { break };
             self.pending_dups.remove(&dst);
-            self.handles.insert(dst, id);
+            // A promoted parked edge is still a `DUP_OBJECT` declaration → an ALIAS.
+            self.handles.insert(dst, HandleRef::Alias(id));
             self.resources
                 .get_mut(&id)
                 .expect("resource_of returned a live id")
@@ -886,13 +1052,24 @@ impl RmGraph {
         self.resources.get(&id).and_then(|r| r.pdb)
     }
 
-    /// Is `key` the client root of its OWN namespace? True only when `key` is a
-    /// resource's origin handle AND that resource is a [`ObjectKind::Client`]. A dup
-    /// *alias* that happens to reference a Client resource is NOT a root — freeing it
-    /// drops only that alias's reference, never the aliasing client's whole namespace.
+    /// Is `key` the client root of its OWN namespace? True only when `key` was
+    /// **declared by `RM_ALLOC`** ([`HandleRef::Origin`] — the recorded fact, §12.25) AND
+    /// the resource it allocated is a [`ObjectKind::Client`]. A dup *alias* that
+    /// references a Client resource is NOT a root — freeing it drops only that alias's
+    /// reference, never the aliasing client's whole namespace.
+    ///
+    /// The predicate used to ask `n.key == key`, which means the same thing ONLY until a
+    /// `Dup` re-creates a freed origin's key; from that moment an alias was
+    /// indistinguishable from the allocation and freeing it tore down an entire live
+    /// namespace. Handle values are reusable, so identity can never be the handle alone.
     fn is_client_root(&self, key: NodeKey) -> bool {
-        self.node(key)
-            .is_some_and(|n| n.key == key && matches!(n.kind, ObjectKind::Client))
+        self.handles.get(&key).is_some_and(|h| {
+            h.is_origin()
+                && self
+                    .resources
+                    .get(&h.res())
+                    .is_some_and(|r| matches!(r.node.kind, ObjectKind::Client))
+        })
     }
 
     /// Drop ONE handle's reference to its resource; remove the resource (and its
@@ -900,7 +1077,7 @@ impl RmGraph {
     /// origin handle while a dup still references the resource keeps BOTH the resource
     /// and its declared PDB alive.
     fn drop_handle(&mut self, key: NodeKey) {
-        let Some(id) = self.handles.remove(&key) else {
+        let Some(id) = self.handles.remove(&key).map(|h| h.res()) else {
             return;
         };
         if let Some(res) = self.resources.get_mut(&id) {
@@ -920,8 +1097,8 @@ impl RmGraph {
         let mut k = key;
         // Bounded: dup chains are tiny; guard against a (protocol-invalid) cycle.
         for _ in 0..64 {
-            if let Some(id) = self.handles.get(&k) {
-                return Some(*id);
+            if let Some(href) = self.handles.get(&k) {
+                return Some(href.res());
             }
             k = *self.pending_dups.get(&k)?;
         }
@@ -1064,8 +1241,8 @@ impl RmGraph {
     /// resolution beyond the one-hop handle-table lookup).
     #[must_use]
     pub fn node(&self, key: NodeKey) -> Option<&RmNode> {
-        let id = self.handles.get(&key)?;
-        self.resources.get(id).map(|r| &r.node)
+        let id = self.handles.get(&key)?.res();
+        self.resources.get(&id).map(|r| &r.node)
     }
 
     /// ★ The Device→[`GpuId`] derivation (`multi_gpu_and_mig.md` item 1): resolve

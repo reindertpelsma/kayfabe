@@ -351,7 +351,10 @@ fn valid_fact_stream() -> impl Strategy<Value = Vec<RmEvent>> {
                 parent: root,
                 handle: dev,
                 class: mc::DEVICE,
-                facts: AllocFacts::default(),
+                facts: AllocFacts {
+                    device_instance: Some(0),
+                    ..Default::default()
+                },
             });
             events.push(RmEvent::Alloc {
                 client,

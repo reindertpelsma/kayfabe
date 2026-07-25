@@ -35,7 +35,8 @@ fn fresh_gpu() -> Gpu {
     let arch = Box::new(MockArch::new());
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x11_0000_0000, 0x1_0000_0000);
-    Gpu::new(arch, Box::new(factory), gpa).expect("device realizes")
+    // ★ G9 (§12.21): realized with two physical GPUs — the entitlement.
+    Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)]).expect("device realizes")
 }
 
 /// Build one compute proc on physical GPU `instance` and return its `ProcId`.

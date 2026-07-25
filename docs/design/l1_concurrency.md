@@ -1812,3 +1812,615 @@ namespace fires the cross-namespace assertion by handle value.
 *checked*: "sticky-fatal, not bricked" is now a property of the client-set key with tests
 behind it, so the argument and the mechanism stand or fall together. Nothing was found
 that contradicts it.
+
+### 12.18 ★★ `Spine::apply` was NOT atomic — its rollback restored one field of seven
+
+`Spine::apply` snapshots `self.rmgraph` and, on any derivation fault, restores it and
+re-derives. Its own doc said the consequence out loud: *"the offending event is refused
+atomically and no other `Proc`'s state is disturbed. A hostile stream can only ever earn
+its own loud refusal."* That was false. `refresh` — the thing being rolled back — also
+retires and **removes** `Proc`s, deregisters their completion sources, pushes them onto
+`retired`, advances `next_proc`, mints `targets`, moves `geom.next_base` and carves GPA
+arenas. The snapshot covered **none** of it.
+
+So a fault raised after an earlier victim had already been absorbed left that victim
+dead, and the rollback's re-derivation minted its client afresh: **new `ProcId`, newly
+spawned isolate, newly carved arena**. The guest kept its handles and its PDB while every
+host identity behind them silently changed, and anything it had published was gone. One
+process's malformed event destroying another process's state is exactly the boundary-1 /
+#14 guarantee the per-`Proc` design exists to provide — so this was security-relevant,
+not merely untidy.
+
+**And it was worse than a lost proc.** Bite-checking the arena case found a
+**guest-reachable panic**: when the fault is `Gpa(WindowExhausted)`, the failed refresh
+has already consumed arenas that the re-derivation needs, so re-deriving the *last-good*
+graph fails too and `refresh(procs).expect("last-good graph re-projects")` fires —
+`panicked at gpu.rs:714: last-good graph re-projects: Gpa(WindowExhausted)`. A hostile
+guest could take the whole device down with a legal-looking `DUP_OBJECT`. That is
+boundary-1 item 3 (never panic the core), reached through the *rollback*, which is the
+one path nobody thinks to fuzz.
+
+**The fix is validate-then-mutate, not a bigger snapshot.** Snapshotting the proc set is
+not available: a `Proc` owns its isolates, so it is neither cloneable nor cheap, and a
+deep copy would be wrong as well as expensive. But `project()` is already pure and
+already runs first, so every refusal is decidable up front. `Spine::plan_refresh` now
+computes, from `bounds` + current state, before a single proc is touched:
+
+- the per-boundary `matching` set, and with it **`CondemnedMerge`** and **`LateMerge`**;
+- the target set each boundary's proc will span (derived from the projection, not read
+  back off the previously-synced procs), and with it **`HeterogeneousArch`**;
+- the new per-target windows, and with them the `geom` overflow;
+- and finally it **carves** the arenas the mutation pass will hand out, because
+  exhaustion is a property of the windows, not an arithmetic prediction about them. A
+  failed carve releases everything it took; `GpaSpace::release` is exactly `carve`'s
+  inverse, so capacity and the set of ranges are restored (only the free list's LIFO
+  order differs, which no invariant names).
+
+The mutation pass that follows has **no `?` in it**. Atomicity is now structural rather
+than claimed — the type of the thing being asserted changed, which is the only kind of
+fix worth making here.
+
+**`sync_rpc_mappings` is a different, weaker story, and the doc now says so.** It runs
+after `refresh`, mutates address tables, and can fault (`UnbackedMapping`; `Overlap` out
+of the bind). It has no plan. What restores it is the rollback's **re-run**: the
+re-sync's stale-unbind pass drops every `rpc_bound` VA the last-good graph no longer
+desires and re-binds every one it does, so the table comes back equal in content. The
+residue is confined to the proc whose event it was, because a single event changes the
+mapping set of one `(GpuId, Pdb)`. A correct narrow claim replaced a false broad one, on
+`Spine::apply` itself.
+
+**Three tests, in `security_boundary.rs`** — each pins one of the passes a fault could
+land in, and each asserts the exact fault variant, never `is_err()`:
+
+- `a_refused_merge_leaves_the_victim_it_reached_first_bit_identical` — ★ the headline,
+  and the multi-victim ordering case that is the actual bug. Three independent procs; one
+  hostile `Alloc` resolves two dups parked on the same not-yet-allocated source, so a
+  single boundary matches all three. The middle proc is untouched and legally absorbed
+  *first*; only then does the third — which has published a backing — earn
+  `LateMerge { kept, absorbed }`. The bystander's `ProcId`, per-GPU `IsolateId`s, GPA
+  arena ranges, client set, vas keys and PDB route must all be identical, and
+  `retired_len()` must not have moved. **Bite-check:** with the fix reverted,
+  *"a refused event must retire NOBODY — the middle proc was absorbed before the fault
+  and its retirement was never rolled back — left: 1, right: 0"*.
+- `a_refused_arena_carve_returns_every_arena_it_took_and_loses_no_proc` — the fault one
+  pass later. A legal merge retires the absorbed proc, and *then* the surviving proc turns
+  out to need an arena on a full window. Also pins the undo: the merged boundary needs
+  arenas on two targets, the first carve succeeds, the second fails, and the test proves
+  the first went back by requiring the last free arena on that target to still be
+  claimable afterwards. **Bite-check:** with the fix reverted this does not fail an
+  assertion, it **panics inside the rollback** (`gpu.rs:714`), which is how the
+  guest-reachable panic above was found.
+- `a_refused_map_sync_restores_the_binding_it_had_already_installed` — the
+  `sync_rpc_mappings` half, built on the one shape that genuinely leaves residue: two
+  `MapMemoryDma`s park on a memory handle that does not exist yet at **overlapping** VAs,
+  and the alloc that promotes both makes the sync bind the first and refuse the second
+  with the exact `Address(Overlap { pdb, va })`. The offending proc's table must be back
+  to its last-good contents and the bystander's untouched. **Bite-check:** deleting the
+  re-sync's stale-unbind pass leaves the half-installed binding in place —
+  *"the half-installed binding must be gone"*, `left` carrying two ranges where `right`
+  has one.
+
+**What this settles.** Boundary-1's headline promise — a hostile stream earns only its own
+refusal — is now a property of the control flow rather than of a snapshot that covered
+one field out of seven, and the rollback path itself is no longer a panic surface.
+
+### 12.19 ★ G7 — the wrong-window arena release was a `debug_assert`, i.e. nothing
+
+`GpaSpace::release` takes its arena **by value**, and that was the whole safety story:
+double release unrepresentable, a live `Proc`'s arena unreachable. It said nothing about
+*which* window. Releasing target A's arena into target B's window was expressible in safe
+code and checked only by `debug_assert!(arena.range.start >= self.window.start && …)` —
+**compiled out in release**, which is where the device runs.
+
+**What it actually costs, stated exactly** (the vague version of this claim is how the
+`debug_assert` survived two passes). Under the geometry the core mints — one disjoint
+window per target, MG-6 — a misroute produces two things, and *not* a third:
+
+- target A **permanently loses** that range: A's cursor has already passed it and B now
+  holds it, so it is never issued by A again — the #80 leak class, per target;
+- a proc on target B is handed GPAs **inside target A's aperture** — a window only ever
+  handing out ranges it owns is the entire content of "per-target window", and it is
+  broken;
+- but **not** two live procs on one range. That needs the recipient's *un-issued* region
+  to contain the donated range, which disjoint windows rule out. It is one call site's
+  property, not the type's, and `GpaSpace` is public — the next geometry on the roadmap
+  (a MIG instance's window carved inside its parent GPU's, `multi_gpu_and_mig.md`) is
+  precisely the nested shape that makes it a straight **double issue**: B hands the
+  donated range out of its free list and then hands the *same* range out again as a fresh
+  cut. That is the #14 collision class arriving through the recycling path.
+
+**The fix, and why not a type-level one.** A brand — an arena that cannot even be *passed*
+to the wrong window — needs an invariant lifetime per window. The windows live in a
+runtime-keyed `BTreeMap<GpuId, GpuTarget>`, so every entry shares one lifetime parameter
+and brands cannot tell target A from target B; per-entry brands need existential
+lifetimes (`generativity`-style), which is not available in safe stable Rust here. So the
+structural half went where the mistake actually happens: **an arena is stamped with its
+owning target at carve time** (`GpaSpace::owned_by` / `GpaArena::owner`), and
+`Spine::reap_retired` routes it home by *its own* owner instead of by the map key it was
+filed under — there is no longer a key for a caller to get wrong. The window check itself
+is a loud `Result<(), ForeignArena>`, and the error **carries the arena back**, because a
+refusal that consumed the range would have traded a collision for a leak.
+
+Two smaller hardenings came with it: `GpaArena` is **no longer `Clone`** (a clone is two
+releases of one range, which is exactly the double-issue the by-value signature exists to
+forbid — the derive had quietly handed it back), and `reap_retired`'s
+`if let Some(t) = self.targets.get_mut(&gpu)` no longer **silently drops** an arena whose
+target is missing: the range is recorded on `Reclaimed::orphaned()`. That arm is
+unreachable today, which is precisely the argument that lets a silent drop survive a
+review.
+
+**Four tests.** The two allocator-level ones are written so the assertion is on the
+**consequence**, not on the refusal — a test that only asserted `Err` would pass for the
+wrong reason the moment the refusal moved, and could never show the collision:
+
+- `g7_a_window_only_ever_hands_out_ranges_it_owns` (`gpa.rs`) — ★ the owner's exact ask,
+  with the core's real disjoint geometry: GPU 0's arena is released into GPU 1's window,
+  tolerantly, and then GPU 1 serves procs. Every range it hands out must lie inside GPU
+  1's own window. The refusal's exact `ForeignArena { refused_by, arena }` is asserted
+  afterwards, including that the arena came back unchanged and still routes home.
+- `g7_a_cross_recycled_arena_would_be_one_range_in_two_live_hands` (`gpa.rs`) — the
+  collision, with the geometry it needs (two targets over one range), asserting that two
+  procs served by GPU 1 get **disjoint** ranges.
+- `g7_the_reap_routes_each_arena_home_and_orphans_nothing` (`teardown_reclaim.rs`) — a
+  proc spanning GPU0+GPU1 is reaped; nothing is orphaned and each window recycles **its
+  own** range (re-carved and compared, LIFO).
+- `g7_an_arena_the_reap_cannot_route_home_is_reported_not_dropped` — the `else` arm.
+
+**Bite-checks.** Deleting the guard *and* the `debug_assert`s — i.e. reproducing the
+pre-fix code as it behaves in a **release build** — fails both allocator tests naming the
+exact ranges: *"two LIVE procs were handed OVERLAPPING GPA ranges: P2 4294967296..8589934592
+vs P3 4294967296..8589934592 (the cross-recycled arena was 4294967296..8589934592)"*, and
+*"GPU1 handed a proc 4294967296..8589934592, which is NOT inside its own window
+12884901888..21474836480"*. (Removing only the `Result` leaves the `debug_assert`s to fire
+in a *debug* build, which is why the bite-check has to take them too — that asymmetry is
+the bug.) Re-introducing the silent drop gives *"the range it could not return must be
+NAMED, not silently dropped — left: [], right: [(GpuId(0), 137438953472..206158430208)]"*;
+routing the reap's release to `GpuId::ZERO` instead of the arena's owner turns the GPU1
+arena into a reported orphan — the guard converting a silent cross-recycle into a visible
+one.
+
+### 12.20 ★ G6 — the per-process arena had `alloc` and no `free`
+
+`GpaArena` was a bump allocator with `alloc`, `is_untouched`, and no way back.
+Reclamation therefore existed only at **whole-arena granularity, at proc reap**. A
+long-lived process that maps and unmaps repeatedly — the exact process this project
+exists for — walked its cursor to the end and took a permanent `FwdFault::Arena` with no
+recovery. That is the C's #80 leak (`teardown_hardening_done`: *"Even a well-behaved
+guest leaked the GPA window (no-free bump allocator) until all GPU mmaps failed"*),
+reproduced at **intra-proc** granularity after being fixed at window granularity and then
+at proc granularity. Measured: with a 512 KiB arena the process died at map/unmap **cycle
+128**, and "clean cleanup when the GPU goes idle" was unreachable by construction.
+
+**A free list, not a collector** (settled, and worth restating because the temptation is
+real). The `RmGraph` already models DUP_OBJECT refcounting from declared protocol facts,
+so liveness is *known exactly* rather than inferred; and cross-`Proc` references cannot
+exist, because a `Proc` **is** a dup-connected component — a dup between two clients makes
+them the same `Proc`. A tracing GC would re-derive what the graph states and would make
+reclamation non-deterministic, breaking the `CoreSnapshot` differential property the core
+is built on. So: a coalescing free list on `GpaArena`, and a move-only token.
+
+**What landed.**
+
+- `GpaArena::alloc` returns a **`GpaBlock`** — the allocation's `Gpa`, its length, and the
+  `ArenaId` that cut it. Neither `Copy` nor `Clone`, and `#[must_use]`.
+- `GpaArena::free(block)` takes it **by value**, mirroring `GpaSpace::release(arena)` one
+  level up, so a double free is not a runtime check that can be forgotten — it is a value
+  that no longer exists. A `compile_fail` doctest on `free` is the proof; deriving `Copy`
+  on `GpaBlock` makes that doctest fail with *"Test compiled successfully, but it's marked
+  `compile_fail`"*, which is the bite-check.
+- **`ArenaId` carries a generation**, bumped per carve. Without it a block cut by a dead
+  proc fits perfectly inside the arena the window later handed to a *live* proc at the
+  same address (LIFO recycle — #80 working as designed), and a range-only check would take
+  it. That is the ABA, and the generation closes it structurally rather than by timing.
+- The free list **coalesces** with both neighbours and gives a range that runs up to the
+  bump cursor back to the cursor. Not an optimization: a non-coalescing list shreds a
+  mixed-size map/unmap stream into unusable slivers and exhausts the arena anyway — the
+  same bug wearing a free list. A fully drained arena returns to genuinely pristine
+  (`is_untouched()` again).
+- Wiring: `commit_publish` keeps the token beside the binding in `Vas::blocks` (the same
+  split G1 made between placement and allocation — `Binding` is `Copy` and a free token
+  must not be), and returns the GPA immediately if the bind refuses. A new
+  `kayfabe_fwd::unpublish_backing` is the intra-proc counterpart of `reap_retired`: it
+  unbinds, returns the GPA to **this proc's own** arena, and hands back the host `Orphans`.
+  The two halves are one call deliberately — a GPA recycled while its host memory is still
+  mapped is the `ALREADY-MAPPED` class.
+
+**Deferred, named rather than half-done.** When `Spine::refresh` drops a `Vas` whose
+VASpace the guest freed, that Vas's blocks go with it and the GPAs are not returned to the
+arena. Returning them there would recycle a GPA whose host memory is still allocated and
+possibly still mapped, which is precisely what `unpublish_backing` pairs to avoid; the
+host-side half of that teardown is L1-M2's reclamation policy (the same bucket as G1's
+`reclaim_plan`), and the GPA half must land with it, not before it. Until then the
+residue is bounded by the proc's own arena and released whole at reap.
+
+**Six tests + the compile-fail doctest.** Both allocator-level ones assert the
+**consequence**, not the refusal — a test that only asserted `Err` could never show the
+collision, and would pass for the wrong reason if the refusal moved:
+
+- `g6_an_arena_serves_far_more_than_its_size_across_alloc_free_cycles` (`gpa.rs`) — a
+  64 KiB arena serves 16 MiB, then a mixed-size stream freed out of order, then must be
+  **pristine** again. **Bite-check** (make `free` a no-op): *"cycle 16 exhausted a
+  reclaimed arena: ArenaExhausted { len: 4096 }"*.
+- `g6_a_stale_block_cannot_be_freed_into_the_arena_that_replaced_its_range` — ★ the ABA
+  the owner asked for, scripted by **order** rather than timing. **Bite-check** (pin the
+  generation to 0): *"the stale free re-armed a range: B handed Gpa(0) to two live
+  allocations"* — the double issue, named.
+- `g6_a_block_cannot_be_freed_into_another_procs_arena` — the #14 boundary applied to
+  reclamation. **Bite-check** (drop the `ArenaId` check): the range escapes into B.
+- `g6_a_long_lived_process_that_maps_and_unmaps_never_exhausts_its_arena`
+  (`teardown_reclaim.rs`) — ★ the headline, through the real publish path: 4096 cycles on
+  a 512 KiB arena (32× over), then `live_bytes() == 0` and a host ledger whose **only**
+  outstanding object is the Vas's own host VAS. **Bite-check:** *"cycle 128 could not
+  publish: Arena"* — the exact predicted death.
+- `g6_reclaiming_a_backing_that_is_gone_is_loud_and_leaves_the_arena_intact` — ★ the
+  owner's "call free on an object that's missing — see if nothing races". Three flavours
+  of gone (never published; already reclaimed; **VASpace destroyed through the real graph
+  path**), each asserting the exact fault (`Address(Miss { pdb, va })`, `UnknownPdb`), and
+  nothing races because the refusal happens before the table is touched. The arena is then
+  shown intact: the reclaimed range is reused deterministically and two live publications
+  never share a GPA.
+- `g6_no_live_binding_ever_points_outside_its_own_procs_arena` — ★ **the invariant Stage
+  2's safety argument rests on, which had never been pinned.** It holds, and structurally:
+  `commit_publish` allocates from `proc.arenas[gpu]` and binds only into a `Vas` of that
+  same `Proc`, and a cross-process reference cannot arise because a `DUP_OBJECT` makes the
+  two clients **one** `Proc`. The test states both halves — a dup-joined pair publishing
+  from ONE arena, two unjoined procs on disjoint ones — then reaps one, lets a **new** proc
+  recycle its range, and sweeps every binding in the device. Nothing points into the
+  released range. No finding here; the argument survived being made executable.
+
+### 12.21 ★ G9 — `deviceInstance` is a raw guest `u32`, and it minted GPU targets forever
+
+`GpuId` comes from `node.facts.device_instance.unwrap_or(0)` (`rmgraph.rs`, `walk_gpu`),
+and `ensure_target` minted a fresh `GpuTarget` — its own guest-physical window and its own
+`DeliveryPlane` — on first touch, with no cap, no validation, and no pruning. Every
+neighbouring guest-reachable surface has a named cap (`MAX_OUTSTANDING_COMPLETIONS`,
+`MAX_ARMED_FENCES`, `MAX_PUSH_TOTAL_BYTES`, `MAX_LIVE_HANDLES`); this one had none.
+
+**Bench + open-kmod findings that decided the shape of the fix** (measured 2026-07-25):
+
+- RM already enforces `deviceInstance < NV_MAX_DEVICES (32)` in **three** places
+  (`ogkm alloc_free.c:1372-1390`; `device.c:118-129` → **`NV_ERR_INVALID_CLASS`**;
+  `device.c:357-368`). **So a `< 32` cap is not where the risk lives** — it would still
+  let a guest mint 31 windows and 31 delivery planes on a single-GPU box. Security theatre.
+- The real check in RM is `osIsGpuAccessible` → `nv_is_gpu_accessible`
+  (`kernel-open/nvidia/nv.c:5904-5910`), which scans the **host process's fd table**.
+  Device allocs go through `/dev/nvidiactl`, which carries **no GPU identity**, so
+  `deviceInstance` is the *sole* selector.
+- `gpumgrGetPrimaryForDevice` **fails open to GPU 0** for an in-range-but-unpopulated
+  instance (`gpu_mgr.c:688-691`).
+- Trivially attacker-controlled: ~20 lines of raw `NV_ESC_RM_ALLOC` on `/dev/nvidiactl`,
+  **no patched guest kernel**. Stock userspace never emits one.
+
+⇒ The cap is the **ENTITLEMENT**: the roster of GPUs this device was actually realized
+with. `Gpu::realize(arch, isolates, gpa, gpus)` declares it (`Gpu::new` is its N=1 case),
+`RmGraph::entitle` holds it, and the refusal happens at the **`Device` alloc**, where RM
+refuses it, with `RmGraphError::InvalidDeviceInstance` standing in for
+`NV_ERR_INVALID_CLASS` — so a guest cannot distinguish us from a real single-GPU box by
+probing instances.
+
+Two more, both load-bearing:
+
+- **Our own `unwrap_or(0)` is gone.** A `Device` with no declared instance was silently
+  becoming GPU 0 — a default-target guess inside the one resolver whose entire discipline
+  is MISS=None-never-a-guess. It now leaves its subtree **unroutable** (no route, no arena,
+  no isolate, a loud `UnknownPdb` at use). A real Device cannot be in that state —
+  `deviceId` is a required field of `NV0080_ALLOC_PARAMETERS` — which is exactly why
+  guessing for it was indefensible. One existing test (`map_before_backing_and_pdb_resolves`)
+  was silently relying on the guess; the test harness now declares instance 0, as a real
+  Device does.
+- **The same `deviceInstance` twice under one client is LEGAL on bare metal**
+  (`device.c:368-380` rejects it only under `IS_VIRTUAL`). Device-per-client is not 1:1, so
+  the entitlement check is a *membership* test and must never drift into a uniqueness one.
+  Pinned by a test.
+
+**Four tests** (`security_boundary.rs`), each asserting exact variants:
+`g9_an_unentitled_device_instance_is_refused_and_mints_no_target`,
+`g9_a_device_instance_flood_grows_no_device_state` (4096 instances; asserts the
+**resource** — `targets.len()` — before the return values, so it can show what it protects),
+`g9_an_undeclared_device_instance_is_unroutable_not_gpu_zero`,
+`g9_the_same_device_instance_twice_under_one_client_is_legal`.
+**Bite-check** (restore `unwrap_or(0)` and drop the entitlement check): the flood is
+accepted (*"left: Ok(()), right: Err(Graph(InvalidDeviceInstance { instance: 1 }))"*) and
+the undeclared Device routes onto GPU 0 (*"an undeclared instance must NOT route onto
+GPU 0 — left: Some(ProcId(1)), right: None"*).
+
+### 12.22 ★ G10 — two unbounded device-global lists, and a carry-forward that was O(n² log n)
+
+`Spine::condemned` and `Spine::retired` were unbounded, and the condemned list was
+rescanned on **every** apply. Three separate problems, and the third turned out to be the
+big one.
+
+**(a) The caps.** `MAX_CONDEMNED_COMPONENTS` and `MAX_RETIRED_PROCS`, both 1024. The
+interesting question is what to refuse. Refusing a **condemnation** would be worse than
+useless — it un-condemns a component whose isolate is already dead, so the next refresh
+re-derives it with a fresh isolate and serves the guest a **zeroed** backing for a VA it
+believes still holds its data: §12.13's silent corruption, reintroduced by a memory cap.
+Refusing a **retirement** leaves a proc live whose worker is gone. Dropping corpses leaks
+exactly the isolates and GPA arenas the retired list exists to reclaim. So the refusal
+lands on the only guest-reachable action that *consumes* the resource: deriving a **new**
+`Proc` (`GpuError::SpineCapacity { what, cap }`, raised in `plan_refresh`, hence atomic per
+§12.18). Everything already condemned stays condemned, every live proc keeps serving, and
+recovery is the guest's own — free the dead client roots and the entries prune. Backpressure,
+not a brick.
+
+**(b) The scan.** "Does this boundary intersect a condemned component" was a nested scan,
+O(|boundaries| × |condemned|), both factors guest-driven. The entries are pairwise
+disjoint, so client → entry is a *function*: build the index once and the pass is
+O(total clients · log n).
+
+**(c) ★ The carry-forward, which was much worse and was not in the brief.** Every
+intersecting boundary called `absorb_condemned`, which drains and re-sorts the whole
+carried list — **O(n² log n) per apply**. Measured: the 1024-component test took **55 s**.
+The fix is the same answer computed instead of searched: boundaries are pairwise disjoint
+and so are the entries, so two boundaries' merged sets can overlap ONLY by hitting a common
+entry. Union-find over entry indices, keyed by boundary, yields exactly the fixpoint the
+repeated absorb was grinding out — near-linear, identical result. **55 s → 3.8 s**, and
+every existing §12.13 condemnation test stayed green unchanged, which is the evidence that
+the two computations agree.
+
+**Two tests** (`security_boundary.rs`, gated `KAYFABE_SLOW` — they walk a bound to its cap,
+which is exactly what that gate is for; measured 3.7 s of the fast path's 23.5 s):
+`g10_condemnation_is_capped_and_refuses_new_procs_never_the_condemnation` — drives the
+hostile pattern (spawn a worker, kill it, repeat), asserts the exact `SpineCapacity`
+refusal, that **nothing was un-condemned to make room**, that a bystander still resolves,
+and that freeing one dead client root restores service; and
+`g10_the_retired_list_is_capped_and_a_reap_clears_it` — same shape, plus "the refusal drops
+no corpse".
+
+### 12.23 ★ The per-event graph CLONE: kept, and here is exactly what forces it
+
+`Spine::apply` does `let snapshot = self.rmgraph.clone()` on **every** RM event. §12.18's
+validate-then-mutate raises the obvious question: if `refresh` is now infallible, is the
+clone still needed? It was evaluated properly rather than left unexamined.
+
+**`RmGraph::apply` IS atomic on failure** — every error return precedes every mutation, on
+all six arms (`Alloc`, `Dup`, `SetPageDir`, `MapMemoryDma`, `Unmap`, `Free`, plus
+`apply_map`'s park/capacity paths). That was an argument; it is now a test,
+`rmgraph_apply_is_atomic_on_failure`, which fingerprints nodes + dup edges + mappings and
+requires byte-identity after each of five refusable events, each asserted by exact variant.
+**Bite-check:** making the `ConflictingMap` arm mutate before returning fires *"a refused
+event must leave the graph byte-identical"*. This is the precondition for ever deleting the
+clone, so it is worth having on its own.
+
+**But the clone cannot go**, and the reason is specific: **three faults are raised AFTER
+`RmGraph::apply` has already mutated the graph, and none is pre-computable without the
+post-event graph** —
+
+1. `project()` → `ProjectionError::PdbCollision` / `VchidCollision`. A `SetPageDir` that
+   duplicates a live PDB on one target is accepted by the graph and refused by the
+   projection.
+2. `plan_refresh` → `LateMerge` / `CondemnedMerge` (a dup edge the graph accepts).
+3. `sync_rpc_mappings` → `UnbackedMapping` / `Address(Overlap)`.
+
+Each is a function of the post-event graph, and a single `Alloc` can promote arbitrarily
+many parked dups / page-dirs / maps, so the post-state is not a local function of the
+event. Without the rollback the offending fact stays in the graph and **every subsequent
+apply re-derives and re-faults** — a permanent control-plane wedge for every other process.
+That is the exact global-DoS class `apply_map`'s parked-map wedge guard already names. The
+clone is load-bearing.
+
+**★ And the measurement says it is not the problem anyway.** Control-plane cost, debug
+build, alloc+map pairs against a growing graph:
+
+| events | with clone | without clone |
+|---|---|---|
+| 1000 | 0.85 s | 0.64 s |
+| 2000 | 3.35 s | 2.50 s |
+| 4000 | 13.5 s | 10.1 s |
+| 8000 | 54.8 s | 41.6 s |
+
+Deleting the clone saves **24%** — and leaves the curve **still quadratic** (4× events →
+~4.1× time at every step). The clone is one of *three* O(graph) passes per event; `project()`
+re-derives every boundary and `sync_rpc_mappings` rebuilds the whole desired-mapping set,
+both from scratch, on every single control-plane event. `Spine::apply`'s own doc claim —
+*"a clone here is off the performance-critical path"* — is wrong about the wrong thing: the
+clone is a quarter of a control plane that is O(live objects) per event end to end.
+
+**★ This is a finding, not just a performance note.** With `MAX_LIVE_HANDLES = 2^18`, a
+guest can make each control-plane event cost O(live objects), so N events cost O(N²) —
+a guest-reachable complexity DoS (boundary-2) of the same species as the parked-map linear
+scan that was already hardened. PyTorch startup allocates thousands of RM objects, so it is
+reachable benignly too. **Deferred deliberately, with the two candidate fixes named rather
+than guessed at:**
+
+- **incremental derivation** — `project`/`sync` recompute only what the event touched. This
+  is the fix that actually removes the quadratic, and it is a redesign of the "derived state
+  is a pure function of the graph, never accreted" rule (decision #27) that the whole
+  determinism/differential property rests on. Needs an owner decision, not an afternoon.
+- **an undo journal in `RmGraph::apply`**, which would let the clone go (O(changes) instead
+  of O(graph)) — worth ~24%, and it is ~200 lines in the most safety-critical file in the
+  repo, where getting it wrong reintroduces exactly the non-atomicity §12.18 just removed.
+
+Doing either blind, in a security round, to buy a constant factor off a curve that stays
+quadratic, would be the wrong trade. The clone stays, the reason is written down, and the
+quadratic is now a named, measured item instead of an assumption.
+
+### 12.24 ★★ OUT-OF-BRIEF FINDING — a dup alias at a freed origin's key wipes the namespace
+
+Running the `KAYFABE_SLOW` gate for this round's green check made the `RmGraph` refcount
+fuzz property (`a4_dup_object_is_reference_counted`) draw a case it had never drawn before,
+and it fails. **It is pre-existing**: the same case fails with every one of this round's
+core changes stashed, i.e. at `934829a`. The seed is persisted in
+`tests/tests/fuzz_rmgraph_invariants.proptest-regressions`, so it now reproduces
+deterministically. It is **not fixed here** — see below.
+
+**Reduced to six events.** Client A allocates a `Client`-classed object at handle `H`;
+client B dups it (so the resource outlives A's handle); A frees `H`; B dups it **back into
+A at the same handle `H`**; A allocates an unrelated object `X`; A frees `H`.
+
+Observed: freeing `H` — which is now a **dup alias**, not the origin allocation —
+**destroys `X`**, and does not even drop the alias it was asked to drop.
+
+```
+BEFORE [NodeKey { client: A, handle: 0x100 }, NodeKey { client: A, handle: 0x300 }]
+AFTER  [NodeKey { client: A, handle: 0x100 }]
+```
+
+**Root cause.** `free_subtree` asks `is_client_root(key)`, which is
+`self.node(key).is_some_and(|n| n.key == key && matches!(n.kind, ObjectKind::Client))`. That
+test *intends* "this handle is the origin allocation of a Client resource", and it is
+correct for an ordinary alias (whose origin key differs). But once the origin handle has
+been freed and a later `Dup` re-creates **exactly** the origin's `(client, handle)` key as
+an alias, the resource's immutable `node.key` still equals it — so an alias is
+indistinguishable from the allocation, and the free takes the whole-namespace branch. The
+same conflation sits in the non-client branch's `res.node.key != hkey` parent-walk guard.
+The graph therefore violates its own stated rule, written two lines above the bug: *"a dup
+alias is a leaf reference with no children of its own."*
+
+**Impact.** A wrong-**destroy**: objects the guest never asked to free are removed from the
+graph, which is the authority every derived plane syncs to — so their `Vas`es, channels and
+routes vanish with them. It is guest-self-inflicted as modelled (the free is issued in the
+namespace being wiped), but two things make it worth more than that: dup-connected clients
+are **one `Proc`**, so an alias-free in one client can take out objects the *other* client
+in the same component owns; and the core has no client-existence check at all — it happily
+allocs and dups into a namespace whose client root is already freed, which real RM refuses
+with `NV_ERR_INVALID_CLIENT`. That missing check is plausibly the more faithful place for
+the fix, and it is a second finding in its own right.
+
+**Why it is reported and not fixed.** Both candidate fixes are changes to the refcount
+model in the most safety-critical file in the repo, and this round's brief is four other
+items:
+
+- *(a)* distinguish "origin allocation" from "alias at the origin key" — a per-`Resource`
+  `origin_live` flag, cleared when `node.key` is freed and never re-set by a `Dup`. ~6
+  lines, but it changes what `is_client_root` and the parent walk mean.
+- *(b)* refuse `Alloc`/`Dup` into a namespace whose client root is gone
+  (`NV_ERR_INVALID_CLIENT`), which makes the state unreachable rather than handled.
+
+They are not equivalent — (b) is the faithful one and also forbids other unmodelled states,
+(a) is the local one — and picking between them is an owner decision, not a guess to make
+inside a security pass. **Consequence to be explicit about: the `KAYFABE_SLOW` gate is RED
+on this one test.** The fast gate (243 tests) is green, and every other slow test is green.
+
+**Status: FIXED in §12.25** (variant (a), generalized: the *declaration* is recorded, not an
+`origin_live` flag). Variant (b) — the client-existence check — is CONFIRMED as a separate,
+still-open gap; §12.25 has the evidence and the scope.
+
+### 12.25 ★★ §12.24 FIXED — the graph was DISCARDING a declared fact (`Alloc` vs `Dup`)
+
+§12.24's bug, restated as the defect it actually is: `RmGraph` recorded *that* a handle
+references a resource and threw away *how the guest said it got there*. `RM_ALLOC` and
+`DUP_OBJECT` are two different declarations with two different lifecycle meanings — one
+creates the object, the other takes a leaf reference to someone else's — and the graph
+stored both as the same `NodeKey → ResId` edge. Every predicate that later needed "is this
+handle the original allocation?" had no recorded fact to read, so it re-derived the answer
+from incidental structure: `handle == resource.node.key`. That is decision #14 violated in
+the file decision #14 is about. Handle values are **reusable by design**, so the derivation
+is not merely fragile — it is false the moment a `Dup` lands on a freed origin's key, and a
+guest can arrange that in four events.
+
+**The fix.** The handle table now stores the declaration:
+
+```rust
+enum HandleRef { Origin(ResId), Alias(ResId) }   // Alloc said Origin; Dup said Alias
+handles: BTreeMap<NodeKey, HandleRef>
+```
+
+`Origin` is minted only by the `Alloc` arm (which also mints the fresh `ResId`, so exactly
+one `Origin` exists per resource by construction); every `DUP_OBJECT` — direct or promoted
+out of `pending_dups` — inserts `Alias`, whatever handle **value** it lands on. Nothing
+else about the refcount model changes: `refs` is still the liveness set, `ResId` is still
+the identity, teardown is still last-reference-wins.
+
+Honest about the shape, per the house preference for unrepresentable-over-checked: this is
+**a recorded discriminator plus corrected predicates**, not a type that makes the bad state
+impossible to write down. What it does buy is that the fact now exists exactly once, at the
+only place that can know it (the event handler), and every consumer *reads* it. The
+stronger form — splitting `Resource::refs` into `origin: Option<NodeKey>` + `aliases` —
+duplicates state the handle table already holds and would need its own agreement invariant,
+which is a worse trade.
+
+**Three predicates asked the discarded question; all three were wrong, only one was known.**
+
+| site | asked | now asks | symptom of the old form |
+|---|---|---|---|
+| `is_client_root` | `n.key == key && kind == Client` | `Origin` + kind | §12.24: freeing an alias wipes the namespace |
+| `free_subtree` parent descent | `res.node.key != hkey → skip` | `!is_origin() → skip` | an unrelated parent's free drags the alias in through a parent edge the alias never declared |
+| `apply`'s `Alloc` idempotency | payload equality alone | `Origin` + payload equality | `RM_ALLOC` over a live alias silently answered "already done", leaving an alias where the guest asked for an allocation (real RM: handle in use) |
+
+The second and third were **not** covered by the refcount fuzz — it generates only
+self-parented objects (no parent edges to descend) and never re-sends an alloc — so each
+got a named regression test. All four new tests live in `tests/tests/object_model.rs`
+beside the existing free-subtree/refcount ones.
+
+**The symptom, measured, with one correction to §12.24.** Six events, `H = 0x100`,
+`X = 0x300`, B's alias `0x900`:
+
+```
+BEFORE nodes = [A:0x100, A:0x300]      refs(A,H) = [A:0x100, B:0x900]
+AFTER (buggy) nodes = [A:0x100]        refs(A,H) = [B:0x900]   (A,X) live? false
+AFTER (fixed) nodes = [A:0x100, A:0x300] refs(A,H) = [B:0x900]  (A,X) live? true
+```
+
+The correction: §12.24 read the surviving `A:0x100` in the AFTER line as "the alias was not
+dropped". It was dropped — that line is the `nodes()` list, i.e. **resources**, and the
+resource survives on B's reference, which is correct in both versions. The bug is exactly
+one thing, and it is the bad one: **`X` is destroyed.** A wrong-destroy of an object the
+guest never named, in the authority every derived plane syncs to.
+
+**Bite-check** (each predicate reverted individually, everything else fixed):
+
+- `is_client_root` reverted → the persisted seed `07c3b0b3…` fails again with
+  `left {(A,0x7000_0005)}` vs `right {(A,0x7000_0005), (A,0x7000_0006)}`, and
+  `freeing_a_dup_alias_on_a_reused_client_handle_never_tears_down_the_namespace` fails with
+  the same shape. **The fuzz does not catch the other two.**
+- parent-descent guard reverted → fuzz GREEN,
+  `a_dup_alias_on_a_reused_handle_is_not_dragged_into_its_origins_parent_free` fails: the
+  alias is gone from `refs` after an unrelated device free.
+- `Alloc` idempotency guard reverted → fuzz GREEN,
+  `alloc_over_a_dup_alias_is_loud_even_when_the_payload_matches` fails `Ok(())` vs
+  `Err(ConflictingAlloc)`.
+
+**Mutation.** `rmgraph.rs` is the file the L0 99.2% was measured on, so every branch the fix
+adds was hand-mutated (a full `cargo mutants` campaign was skipped for disk headroom, ~7 GB
+free against a 4.9 GB `target/`): `is_origin → true` (4 tests fail), `is_origin → false` (a
+dozen), `is_client_root`'s `&&` → `||` (3), the `Alloc` guard → `true` (3, incl.
+`wo_retried_duplicate_events_are_idempotent`) and → `false` (3), the `Alloc` arm recording
+`Alias` (2), the direct-`Dup` arm recording `Origin` (4), the promotion path recording
+`Origin` (2). `HandleRef::res → Default::default()` is unviable (`ResId: !Default`). No new
+branch survives.
+
+**Deferred finding 1 — the client-existence check (§12.24 variant (b)) is CONFIRMED.**
+Measured on the fixed tree:
+
+```
+alloc into a namespace whose client root was freed => Ok(()), node live
+alloc into a client that NEVER had a root         => Ok(())
+dup  into a namespace whose client root was freed => Ok(()), alias live
+```
+
+Real RM refuses all three with `NV_ERR_INVALID_CLIENT` (`ogkm`'s `serverAllocResource` →
+`clientGetResource`; there is no path that allocates under a client handle that does not
+resolve). The core has **no client-existence check anywhere** — `Alloc` validates only
+handle collision and (for a `Device`) the GPU entitlement; the declared `parent` is never
+required to exist. The fix would be: on `Alloc` (except the client root itself) and on the
+`dst` of a `Dup`, require the namespace's client root to be live, and refuse with a new
+`RmGraphError::InvalidClient`. It is **not entangled** with §12.25 — the identity fix is
+sound on its own, because it makes the free do exactly what the declarations say regardless
+of whether the namespace has a root. It is deferred deliberately: it changes the *accept*
+surface (which streams the graph admits at all) rather than the *teardown* semantics, so it
+wants its own round, its own order-tolerance argument (a `Dup` may legally precede its
+source's `Alloc` — does a parked edge need a live root at park time or at promotion time?),
+and its own look at every test that builds a namespace without a root.
+
+**Deferred finding 2 — `RmNode.key` is not a unique identity, and `nodes()` can report two
+live resources with the SAME origin key.** Same disease (a handle value is not an identity),
+different organ. `Alloc (A,H) → Dup to B → Free (A,H) → Alloc (A,H)` leaves the ghost alive
+on B's alias while the re-alloc mints a second resource whose origin key is *also* `(A,H)`.
+Measured:
+
+```
+live nodes (key, mem_phys) = [(A:0x100, None), (A:0x100, Some(0xdead0000))]
+pdb_of(A:0x100)            = Some(0x1111000)   ← the GHOST's PDB; the live VAS declared 0x2222000
+references(A:0x100)        = [B:0x900]         ← the ghost's ref set, not the live resource's
+```
+
+Every by-origin-key lookup (`pdb_of`, `references`, `map_ref_count`, `gpu_of`'s post-free
+fallback, `backing_of`'s fallback) resolves to whichever resource sorts first by `ResId` —
+the ghost — and `project()` keys `vases`/`channels` on `node.key`, so the two collapse into
+one entry carrying the wrong PDB. The honest fix is to stop passing origin keys across the
+API boundary and expose the opaque `ResId` as the resource identity (`nodes()` yields
+`(ResourceId, &RmNode)`, the by-origin lookups take a `ResourceId`), which touches
+`project.rs`, `gpu.rs` and much of the suite — a refactor, not a patch, and out of scope
+here for the same reason (b) was. Pre-existing, unchanged by §12.25 (the state is reached by
+free-then-realloc, which this fix does not touch); recorded so it can be scheduled.
