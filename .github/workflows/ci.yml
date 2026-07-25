@@ -1,0 +1,60 @@
+# CI green-gate (decision #33; the standing decision #15 follow-up).
+#
+# Two jobs, matching how the repo is actually built:
+# - stable: the main workspace — build, the full 143-test suite, clippy
+#   -D warnings, and rustfmt --check (both workspaces; the fuzz crate is its own
+#   workspace so it needs its own fmt pass).
+# - nightly: the fuzz crate (libfuzzer needs nightly) — a plain `cargo build` in
+#   fuzz/ so the one raw-guest-bytes harness KEEPS COMPILING as the core evolves
+#   (it is a separate workspace, so nothing else rebuilds it). Actually *running*
+#   the fuzzer stays a manual/local gate (`cargo +nightly fuzz run`, see README);
+#   CI only pins compilation.
+#
+# The long soak stays #[ignore]d and the mutation gate stays a manual campaign
+# (core_mutation_gate.md) — CI gates every push on the fast, deterministic suite.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  stable:
+    name: stable — build, test, clippy, fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace
+      - name: Test (the 143-test suite)
+        run: cargo test --workspace
+      - name: Clippy (-D warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Format check
+        run: cargo fmt --all --check
+      - name: Format check (fuzz workspace)
+        run: cargo fmt --all --check
+        working-directory: fuzz
+
+  nightly-fuzz:
+    name: nightly — fuzz harness compiles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Sets RUSTUP_TOOLCHAIN, overriding the repo's stable rust-toolchain.toml.
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - name: Build fuzz harness (compile gate only; running it is manual)
+        run: cargo build
+        working-directory: fuzz

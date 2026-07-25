@@ -16,7 +16,7 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 
-use nvkvm_arch::ids::{GpuVa, HClient, Pdb};
+use nvkvm_arch::ids::{GpuId, GpuVa, HClient, Pdb};
 use nvkvm_core::gpa::GpaSpace;
 use nvkvm_core::gpu::Gpu;
 use nvkvm_fwd::parse_pushbuffer;
@@ -78,7 +78,7 @@ fn build_ring(entries: &[(u8, u64)]) -> Vec<u8> {
 
 fuzz_target!(|input: Input| {
     let (mut gpu, mut vmm) = one_proc_gpu();
-    let pid = *gpu.by_pdb.get(&A_PDB).unwrap();
+    let pid = *gpu.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
 
     // Back the method region the GPFIFO ranges resolve to.
@@ -96,7 +96,7 @@ fuzz_target!(|input: Input| {
     let _ = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring);
 
     // (c) No torn state: every bound VA resolves back to its OWN binding.
-    let vas = &gpu.procs[&pid].vases[&A_PDB];
+    let vas = &gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)];
     for (va, _len, b) in vas.table.iter() {
         let got = vas.table.resolve(A_PDB, GpuVa(va)).map(|(x, _)| x.phys);
         assert_eq!(
