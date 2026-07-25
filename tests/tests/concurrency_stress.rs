@@ -51,10 +51,13 @@
 //! under ThreadSanitizer on nightly (requires `rust-src`):
 //!
 //! ```text
-//! KAYFABE_STRESS_WATCHDOG_SECS=900 RUSTFLAGS="-Zsanitizer=thread" \
+//! KAYFABE_SLOW=1 KAYFABE_STRESS_WATCHDOG_SECS=900 RUSTFLAGS="-Zsanitizer=thread" \
 //!     cargo +nightly test -p kayfabe-tests --test concurrency_stress \
 //!     -Zbuild-std --target x86_64-unknown-linux-gnu -- --test-threads=1
 //! ```
+//!
+//! (`KAYFABE_SLOW=1` because the big soak is gated — a TSan run must include it.
+//! CI runs this nightly: the `tsan` job in `.github/workflows/ci.yml`.)
 //!
 //! Expected result: zero TSan reports (the core has no atomics, no lock-free paths,
 //! no interior mutability — hence no `loom` tests either; if a lock-free path is
@@ -332,6 +335,11 @@ fn assert_device_consistent(gpu: &Gpu) {
 /// (consistency + completion conservation).
 #[test]
 fn stress_multi_vcpu_interleaved_ops() {
+    // The one long test in this file (measured ≈20 s debug; the other three are
+    // ≈1 s each) — gated so the every-push fast path stays fast. The nightly
+    // `slow` CI job and every TSan run set KAYFABE_SLOW=1 (a TSan pass that
+    // skipped THIS test would be the race ceiling in name only).
+    kayfabe_tests::skip_slow!("stress_multi_vcpu_interleaved_ops");
     let _wd = watchdog(
         "stress_multi_vcpu_interleaved_ops",
         Duration::from_secs(120),

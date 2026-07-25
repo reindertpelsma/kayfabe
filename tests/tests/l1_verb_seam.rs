@@ -63,8 +63,16 @@ use kayfabe_util::Instant;
 /// Abort the process loudly if the guard is not dropped within `limit` — bounded
 /// termination, so a regression that wedges this suite fails fast instead of eating
 /// the CI timeout.
+///
+/// `KAYFABE_STRESS_WATCHDOG_SECS` overrides `limit`, as in `rt_shell`/`l1_mean`: under
+/// ThreadSanitizer (§8.2's race ceiling) everything runs 10-20x slower, so the normal
+/// limits would abort on the sanitizer's overhead rather than on a real wedge.
 #[must_use]
 fn watchdog(test: &'static str, limit: Duration) -> WatchdogGuard {
+    let limit = match std::env::var("KAYFABE_STRESS_WATCHDOG_SECS") {
+        Ok(s) => Duration::from_secs(s.parse().expect("KAYFABE_STRESS_WATCHDOG_SECS: seconds")),
+        Err(_) => limit,
+    };
     let done = Arc::new(AtomicBool::new(false));
     let flag = Arc::clone(&done);
     thread::spawn(move || {

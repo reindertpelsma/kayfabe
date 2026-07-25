@@ -1,8 +1,11 @@
 # CI green-gate (decision #33; the standing decision #15 follow-up).
 #
-# Three jobs, matching how the repo is actually built:
-# - stable: the main workspace — build, the full 151-test suite (+3 doctests),
-#   clippy -D warnings, rustfmt --check (both workspaces; the fuzz crate is its own
+# Two tiers, matching how the repo is actually built:
+#
+# Every-push gates (fast, deterministic — these stay the bar for landing anything):
+# - stable: the main workspace — build, the full fast suite (KAYFABE_SLOW unset:
+#   the two measured-slow tests skip loudly, everything else runs), clippy -D
+#   warnings, rustfmt --check (both workspaces; the fuzz crate is its own
 #   workspace so it needs its own fmt pass), and the §6.2 hexagonal boundary grep
 #   (decision #37): the pure logic crates must name NO OS readiness primitive, in
 #   code or in comments.
@@ -18,8 +21,17 @@
 #   the fuzzer stays a manual/local gate (`cargo +nightly fuzz run`, see README);
 #   CI only pins compilation.
 #
-# The long soak stays #[ignore]d and the mutation gate stays a manual campaign
-# (core_mutation_gate.md) — CI gates every push on the fast, deterministic suite.
+# Standing scheduled gates (slow, so not per-push — but STANDING, not
+# remembered-by-a-human; that is how 9k lines of L1 once reached master with
+# neither TSan nor a mutation run):
+# - slow (nightly + dispatch): the whole suite with KAYFABE_SLOW=1 — the
+#   pushbuffer proptest fuzz (73 s) and the 16-thread stress soak (≈20 s), the
+#   two tests measurement showed dominate the wall clock, actually run.
+# - tsan (nightly + dispatch): ThreadSanitizer over the four threaded suites —
+#   the §8.2 race ceiling (l1_concurrency.md §12.15 records the first run: 28
+#   tests, 0 races).
+# - mutants (weekly + dispatch): cargo-mutants over the L1 surface — the
+#   core_mutation_gate.md standing gate.
 
 name: CI
 
@@ -27,6 +39,12 @@ on:
   push:
   pull_request:
     branches: [master]
+  schedule:
+    # Nightly (slow + tsan) and weekly (mutants) — the job `if:`s key off the
+    # exact cron string, so keep these in sync with them.
+    - cron: '43 2 * * *'
+    - cron: '43 4 * * 6'
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -102,3 +120,79 @@ jobs:
       - name: Build fuzz harness (compile gate only; running it is manual)
         run: cargo build
         working-directory: fuzz
+
+  slow:
+    name: slow — full suite with the soaks (KAYFABE_SLOW=1)
+    # Nightly cron + manual dispatch only — never the push path (the push gate's
+    # job is to stay fast; this job's job is to make sure the soaks still run
+    # WITHOUT a human remembering them).
+    if: github.event.schedule == '43 2 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test with the slow gate open (pushbuffer proptest fuzz + 16-thread stress soak)
+        run: KAYFABE_SLOW=1 cargo test --workspace
+
+  tsan:
+    name: tsan — race ceiling over the threaded suites
+    if: github.event.schedule == '43 2 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TSan needs nightly (-Zsanitizer) + rust-src (-Zbuild-std rebuilds std
+      # instrumented — without it, std's own synchronization is invisible to TSan
+      # and every lock handoff reads as a race).
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - uses: Swatinem/rust-cache@v2
+      # The exact first-campaign invocation (l1_concurrency.md §12.15: 28 tests,
+      # 0 races), plus KAYFABE_SLOW=1 so the gated stress soak — the whole reason
+      # this job exists — actually runs under the sanitizer. TSan inflates
+      # runtimes ~20× (measured: concurrency_stress 290 s, rt_shell 69 s,
+      # l1_mean 20 s), which is why the watchdog override exists: without it the
+      # suites' own wedge-watchdogs would abort on instrumentation tax, not on a
+      # real hang.
+      - name: ThreadSanitizer (concurrency_stress, rt_shell, l1_verb_seam, l1_mean)
+        run: |
+          KAYFABE_SLOW=1 KAYFABE_STRESS_WATCHDOG_SECS=1800 RUSTFLAGS="-Zsanitizer=thread" \
+            cargo +nightly test -p kayfabe-tests \
+            --test concurrency_stress --test rt_shell --test l1_verb_seam --test l1_mean \
+            -Zbuild-std --target x86_64-unknown-linux-gnu -- --test-threads=1
+
+  mutants:
+    name: mutants — L1-surface mutation gate
+    # Weekly cron + manual dispatch — a mutation campaign is hours, not minutes.
+    if: github.event.schedule == '43 4 * * 6' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # TODO(threshold): continue-on-error until the first L1 campaign (running
+    # now) lands a measured baseline in core_mutation_gate.md — then replace this
+    # with a hard `--minimum-test-timeout`-style pass bar set FROM that number,
+    # not pulled from the air. The L0 core's bar is 99.2% (245/247).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-mutants
+        run: cargo install --locked cargo-mutants
+      # Scope = the L1 surface: kayfabe-rt (the threaded shell's logic), the
+      # core's completion-source reactor, and the plan/execute/commit + isolate
+      # pool/condemnation code (kayfabe-fwd and kayfabe-isolate are single-file
+      # crates, so file scope == crate scope). Same knobs as the L0 campaign
+      # (core_mutation_gate.md §Reproduce), except the baseline is NOT skipped:
+      # in CI nothing has pre-verified the tree is green, and a broken baseline
+      # must fail the campaign rather than poison every mutant's result.
+      # KAYFABE_SLOW stays unset: each mutant re-runs the whole suite, and the
+      # fast path is what makes mutants × suite tractable — the two gated slow
+      # tests would add ~90 s/mutant for marginal kill-power.
+      - name: cargo mutants over the L1 surface
+        run: |
+          cargo mutants --test-workspace true -j 2 \
+            --timeout 240 --build-timeout 900 \
+            -f 'crates/kayfabe-rt/**/*.rs' \
+            -f 'crates/kayfabe-core/src/reactor.rs' \
+            -f 'crates/kayfabe-fwd/src/lib.rs' \
+            -f 'crates/kayfabe-isolate/src/lib.rs'

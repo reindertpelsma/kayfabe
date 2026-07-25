@@ -7,6 +7,18 @@ harness per mutant. Survivor-killing tests added on top; the workspace suite is 
 **132 tests** (was 113) with `cargo clippy --workspace --all-targets` clean and the core
 still `#![forbid(unsafe_code)]` with no new runtime deps.
 
+**2026-07-25 addendum (standing gate, not a manual campaign):** this gate is now CI's,
+not a human's memory — the weekly `mutants` job in `.github/workflows/ci.yml`
+(`schedule:` + `workflow_dispatch:`) runs `cargo mutants` over the **L1 surface**:
+`kayfabe-rt`, `kayfabe-core/src/reactor.rs`, and the plan/execute/commit + isolate
+pool/condemnation code in `kayfabe-fwd`/`kayfabe-isolate`. The prior framing — "run a
+campaign when it feels due" — is exactly what let ~9,100 lines of L1 land on `master`
+with no mutation run at all; a gate that is remembered is not standing. The first L1
+campaign is being measured now; until its baseline lands here, the CI job is
+`continue-on-error` (a hard threshold before a measurement would be a number pulled
+from the air — the job's TODO says the threshold gets set from that first result).
+The L0 numbers below are the settled baseline for the pure core.
+
 **2026-07-25 addendum (triage audit):** a re-audit of the residual survivors found the two
 `handle_doorbell` guard mutants previously called *equivalent* are in fact **real gaps** —
 the state their equivalence proof assumed unreachable (`chan.vas == None` with a live host

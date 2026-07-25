@@ -1407,3 +1407,23 @@ the refused merge).
   test SIGABRT on its watchdog instead of passing slowly, and removing any one of the
   three staleness mutations makes its canary fail. Both were run. The assertion is
   structural, so neither result depends on how fast the box is.
+
+### 12.15 §8.2's "race ceiling" has now actually been RUN — and it is a standing gate
+
+§8.2 named TSan the T2 race ceiling; until 2026-07-25 it had never been executed
+against the built L1. First run: **28 tests across the 4 threaded targets
+(`concurrency_stress`, `rt_shell`, `l1_verb_seam`, `l1_mean`), 0 races, exit 0**, via
+
+```text
+KAYFABE_STRESS_WATCHDOG_SECS=1800 RUSTFLAGS="-Zsanitizer=thread" \
+  cargo +nightly test -p kayfabe-tests \
+  --test concurrency_stress --test rt_shell --test l1_verb_seam --test l1_mean \
+  -Zbuild-std --target x86_64-unknown-linux-gnu -- --test-threads=1
+```
+
+Measured inflation ~20× (`concurrency_stress` 290 s, `rt_shell` 69 s, `l1_mean` 20 s)
+— which is what the `KAYFABE_STRESS_WATCHDOG_SECS` override exists for: the suites'
+wedge-watchdogs must measure wedging, not instrumentation tax. And per the standing
+lesson (a gate a human remembers is not a gate), this run is now the nightly `tsan`
+job in `.github/workflows/ci.yml`, which adds `KAYFABE_SLOW=1` so the gated
+16-thread stress soak is always part of the ceiling.

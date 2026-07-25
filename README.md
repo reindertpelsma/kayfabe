@@ -69,8 +69,9 @@ What is **not** built (stubs / skeletons, documented in their `lib.rs`): `kayfab
 `kayfabe-trace` (a one-method trait), the GMMU walker (`kayfabe-mmu::walker` — trait +
 result type only). Nothing pretends otherwise.
 
-**Verification:** 143 tests green (unit + integration + proptest fuzz + concurrency
-stress + soak; 1 long soak `#[ignore]`d), clippy `-D warnings` clean, **99.2% mutation
+**Verification:** 192 tests green (unit + integration + proptest fuzz + concurrency
+stress + soak; the two measured-slow tests gated on `KAYFABE_SLOW=1`, skipped loudly
+otherwise), clippy `-D warnings` clean, **99.2% mutation
 score** (245/247 viable mutants killed; the 2 residual survivors are proven
 equivalent/acceptable — `docs/design/core_mutation_gate.md`). Fifteen real core bugs
 were found and fixed **pre-hardware** by the adversarial suites (fuzz, security
@@ -80,12 +81,19 @@ invariants I1–I4, determinism differential, mutation gate).
 
 ```sh
 cargo build                      # workspace, forbid(unsafe_code)
-cargo test  --workspace          # 143 tests — no GPU, no OS, virtual clock
+cargo test  --workspace          # fast suite (~20 s) — no GPU, no OS, virtual clock
+KAYFABE_SLOW=1 cargo test --workspace  # + the two measured-slow tests: the pushbuffer
+                                 # proptest fuzz (73 s) and the 16-thread stress
+                                 # soak (≈20 s). Nightly CI runs this (`slow` job).
 cargo clippy --all-targets       # clean (-D warnings in CI intent)
-cargo test -- --ignored          # + the long LLM-shaped soak
 cargo +nightly fuzz build        # coverage fuzz lives in fuzz/ (own workspace; the
                                  # ONLY place unsafe deps are allowed)
 ```
+
+`KAYFABE_SLOW` is the ONE slow-test switch (doc: `tests/src/lib.rs`). It is env-only
+because Rust's libtest takes no custom CLI flags; with it unset the two gated tests
+print a `SKIPPED (slow): … set KAYFABE_SLOW=1` line rather than silently vanishing —
+nothing in the suite is `#[ignore]`d.
 
 ## Crate map (details: `ARCHITECTURE.md`)
 

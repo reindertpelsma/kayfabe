@@ -11,6 +11,58 @@
 use kayfabe_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb};
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
 use kayfabe_mocks::{MockArch, mock_classes as mc};
+use std::sync::OnceLock;
+
+/// # Slow-test gate — `KAYFABE_SLOW=1`
+///
+/// ONE environment variable gates the suite's slow tests. Membership was
+/// *measured*, not guessed (2026-07-25, debug, 16-way box): the pushbuffer
+/// proptest fuzz (73 s) and the 16-thread stress soak (≈20 s) were the only
+/// tests over ~3 s — together ~85% of the suite's wall clock — so they are the
+/// only two gated. (The formerly-`#[ignore]`d 20k-token soak measured ~0.6 s
+/// and now simply always runs.)
+///
+/// ```sh
+/// cargo test --workspace                    # fast path: slow tests skip, loudly
+/// KAYFABE_SLOW=1 cargo test --workspace     # everything runs
+/// ```
+///
+/// Resolution: `KAYFABE_SLOW` set to anything non-empty except `0` = enabled;
+/// unset/empty/`0` = disabled. Resolved once per process ([`OnceLock`]), so a
+/// mid-run `set_var` cannot make half a binary's tests disagree about the policy.
+///
+/// This is env-only by design: Rust's libtest cannot take custom CLI flags the
+/// way Go's `go test -args` can (unknown flags are a hard error), so an env var
+/// is the only channel that reaches every test binary uniformly. A gated test
+/// uses [`skip_slow!`], which returns early AND prints the exact variable to
+/// set — a skipped test must tell the reader how to run it, which is the whole
+/// advantage over an invisible `#[ignore]`.
+#[must_use]
+pub fn slow_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("KAYFABE_SLOW").is_ok_and(|v| !v.is_empty() && v != "0"))
+}
+
+/// Skip the enclosing `#[test]` unless [`slow_enabled`] — `skip_slow!("test_name")`.
+///
+/// Prints the skip line straight to stderr (deliberately bypassing libtest's
+/// output capture, which would otherwise swallow it on the passing path) so the
+/// gated test is visibly skipped, with the exact command to run it, instead of
+/// silently reporting `ok` having done nothing.
+#[macro_export]
+macro_rules! skip_slow {
+    ($name:expr) => {
+        if !$crate::slow_enabled() {
+            use ::std::io::Write as _;
+            let _ = writeln!(
+                ::std::io::stderr(),
+                "SKIPPED (slow): {} — set KAYFABE_SLOW=1 to run it (KAYFABE_SLOW=1 cargo test --workspace)",
+                $name
+            );
+            return;
+        }
+    };
+}
 
 /// A scripted sequence of RM protocol events, plus the identities it introduced —
 /// enough to drive `Gpu::apply` and then assert on derived boundaries.

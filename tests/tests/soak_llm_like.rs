@@ -278,13 +278,18 @@ fn soak_1000_tokens_single_proc_baseline() {
     assert_eq!(delivered, vec![1000]);
 }
 
-/// The longer CI-soak variant (`#[ignore]` by default; run with `--ignored`):
-/// 20_000 tokens × 3 procs. Proves the graph/arena/completion state stays bounded
-/// over a genuinely long run — the R5 never-reaped-table leak class would surface
-/// here as an arena exhaustion or an unbounded node count.
+/// The longer soak variant: 20_000 tokens × 3 procs. Proves the
+/// graph/arena/completion state stays bounded over a genuinely long run — the R5
+/// never-reaped-table leak class would surface here as an arena exhaustion or an
+/// unbounded node count.
+///
+/// Formerly `#[ignore]`d as "long" — but measured it is ~0.6 s debug (the pure
+/// core really is that fast), so it now just runs, always. `#[ignore]` had made
+/// it invisible: nothing ran it unless someone knew to pass `--ignored`. The
+/// suite's actually-slow tests are gated on `KAYFABE_SLOW=1` instead
+/// (`kayfabe_tests::skip_slow!`), which skips *loudly*.
 #[test]
-#[ignore = "long soak — run explicitly with `cargo test -- --ignored`"]
-fn soak_20000_tokens_3_procs_ci_variant() {
+fn soak_20000_tokens_3_procs() {
     let delivered = run_soak(20_000, 3);
     assert_eq!(delivered, vec![20_000, 20_000, 20_000]);
 }

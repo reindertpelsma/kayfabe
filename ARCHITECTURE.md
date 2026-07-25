@@ -120,7 +120,8 @@ kayfabe-fwd                    the entry points adapters call:
 
 ## Verification & migration order
 
-143 tests + 1 ignored soak; clippy clean; 99.2% mutation score
+192 tests (nothing `#[ignore]`d; the two measured-slow tests gate on
+`KAYFABE_SLOW=1` — see README); clippy clean; 99.2% mutation score
 (`docs/design/core_mutation_gate.md`); 15 real core bugs found pre-hardware by the
 adversarial suites. Next: **L1 Linux OS layer, concurrency design doc first** (the
 highest-risk seam), then isolates/mmap/traps → L2 QEMU (qtest-style mock-max) →

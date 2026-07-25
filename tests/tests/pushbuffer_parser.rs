@@ -380,35 +380,42 @@ mod fuzz {
     use proptest::collection::vec;
     use proptest::prelude::*;
 
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(128))]
+    /// Any GPFIFO ring bytes + any method-region bytes: the parser returns a
+    /// `Result`, never panics, and any bound table entry is consistent (resolve
+    /// of a bound VA succeeds — no torn state).
+    ///
+    /// Gated on `KAYFABE_SLOW=1` — measured 73 s debug, the single largest test
+    /// in the workspace (the whole rest of the suite is ~20 s). The cost is not
+    /// the parser: hostile GPFIFO entries make it read ~1 MB ranges through
+    /// `MockVmm`'s byte-per-node `BTreeMap` RAM, ×128 cases. The nightly `slow`
+    /// CI job runs it; the parser's boundary is still covered every push by the
+    /// deterministic tests above and the libfuzzer harness (`fuzz/`) stays the
+    /// deep-fuzz tier.
+    #[test]
+    fn arbitrary_pushbuffer_bytes_never_panic() {
+        kayfabe_tests::skip_slow!("arbitrary_pushbuffer_bytes_never_panic");
+        proptest!(
+            ProptestConfig::with_cases(128),
+            |(ring in vec(any::<u8>(), 0..80), region in vec(any::<u8>(), 0..256))| {
+                let (mut gpu, mut vmm) = super::one_proc_gpu();
+                let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, super::A_PDB)).unwrap();
+                let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
+                // Back the region GPFIFO entries might point at (0x5000_0000 window).
+                vmm.gpa_write(0x5000_0000, &region).unwrap();
 
-        /// Any GPFIFO ring bytes + any method-region bytes: the parser returns a
-        /// `Result`, never panics, and any bound table entry is consistent (resolve
-        /// of a bound VA succeeds — no torn state).
-        #[test]
-        fn arbitrary_pushbuffer_bytes_never_panic(
-            ring in vec(any::<u8>(), 0..80),
-            region in vec(any::<u8>(), 0..256),
-        ) {
-            let (mut gpu, mut vmm) = super::one_proc_gpu();
-            let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, super::A_PDB)).unwrap();
-            let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
-            // Back the region GPFIFO entries might point at (0x5000_0000 window).
-            vmm.gpa_write(0x5000_0000, &region).unwrap();
+                // Never panics — a Result at worst a loud fault.
+                let _ = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring);
 
-            // Never panics — a Result at worst a loud fault.
-            let _ = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring);
-
-            // Whatever got bound resolves cleanly (no torn/partial binding).
-            let vas = &gpu.procs[&pid].vases[&(GpuId::ZERO, super::A_PDB)];
-            for (va, _len, b) in vas.table.iter() {
-                prop_assert_eq!(
-                    vas.table.resolve(super::A_PDB, kayfabe_arch::ids::GpuVa(va)).map(|(x, _)| x.phys),
-                    Ok(b.phys),
-                    "a bound VA must resolve to its own binding (no torn state)"
-                );
+                // Whatever got bound resolves cleanly (no torn/partial binding).
+                let vas = &gpu.procs[&pid].vases[&(GpuId::ZERO, super::A_PDB)];
+                for (va, _len, b) in vas.table.iter() {
+                    prop_assert_eq!(
+                        vas.table.resolve(super::A_PDB, kayfabe_arch::ids::GpuVa(va)).map(|(x, _)| x.phys),
+                        Ok(b.phys),
+                        "a bound VA must resolve to its own binding (no torn state)"
+                    );
+                }
             }
-        }
+        );
     }
 }
