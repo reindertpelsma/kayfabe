@@ -29,7 +29,37 @@ pub mod walker;
 
 use kayfabe_arch::Aperture;
 use kayfabe_arch::ids::{GpuVa, Pdb};
+use kayfabe_isolate::HostHandle;
 use kayfabe_util::IntervalMap;
+
+/// ★ **The host materialization of one binding — allocation and placement, together**
+/// (`l1_concurrency.md` §12.16, gap G1).
+///
+/// A published range is backed by TWO host facts: an allocated host memory object
+/// (`memory`) and the GPU VA it is mapped at inside the owning `Vas`'s own host VAS
+/// (`host_va`). Reclaiming it needs BOTH — `unmap_gpu_va(vas, host_va)` then
+/// `free(memory)` — so they are ONE value, not two fields.
+///
+/// **Why a struct rather than a second `Option` on [`Binding`].** With
+/// `memory: Option<HostHandle>` beside `host_va: Option<u64>`, the state
+/// *"mapped somewhere, owning nothing freeable"* is representable — and that state
+/// was precisely the G1 defect: `commit_publish` stored the mapped VA and dropped the
+/// `HostHandle` on the floor, so the majority of allocated host bytes existed in no
+/// core state and no reclaim path could ever name them. Folding the pair into one
+/// `Option<HostBacking>` makes **bound-but-unfreeable unrepresentable**: you cannot
+/// write a host VA into a binding without also writing the handle that frees it.
+/// (House pattern — `GpaSpace::release(arena)`-by-value: prefer the type over the
+/// runtime check.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostBacking {
+    /// The host memory object this range was allocated from, in the OWNING isolate's
+    /// handle namespace (`(Proc, GpuId)`-scoped — a handle from another isolate is a
+    /// different object, boundary 2).
+    pub memory: HostHandle,
+    /// The host GPU VA it is mapped at, inside the owning `Vas`'s own host VAS.
+    /// Per-Vas host placement is #14's proven fix — see `kayfabe-fwd`.
+    pub host_va: u64,
+}
 
 /// Where a bound VA range points, in core terms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,10 +69,27 @@ pub struct Binding {
     pub phys: u64,
     /// Aperture of the backing.
     pub aperture: Aperture,
-    /// Host GPU VA this range is published at in the owning Vas's host address
-    /// space, once materialized (`None` until the fwd plane maps it). Per-Vas
-    /// host placement is #14's proven fix — see `kayfabe-fwd`.
-    pub host_va: Option<u64>,
+    /// The host materialization, once the fwd plane has published this range
+    /// (`None` = declared by the RPC/CE-capture source only — nothing host-side
+    /// exists yet, and nothing host-side needs reclaiming). See [`HostBacking`] for
+    /// why this is one `Option` over a pair and not a pair of `Option`s.
+    pub host: Option<HostBacking>,
+}
+
+impl Binding {
+    /// The host GPU VA this range is published at, if it is published at all.
+    /// (Convenience over [`Binding::host`]; the #14 gate's predicate.)
+    #[must_use]
+    pub fn host_va(&self) -> Option<u64> {
+        self.host.map(|h| h.host_va)
+    }
+
+    /// The host memory object backing this range, if it is published at all — the
+    /// handle a reclaim path must `free`. Its existence is G1's whole point.
+    #[must_use]
+    pub fn host_memory(&self) -> Option<HostHandle> {
+        self.host.map(|h| h.memory)
+    }
 }
 
 /// A resolution failure. Every variant is LOUD: callers propagate, they never guess.
@@ -114,6 +161,10 @@ impl AddressTable {
 
     /// Eagerly drop the binding starting at `va`. Returns the dropped binding so the
     /// caller can retire its host backing (reclaim deferred).
+    ///
+    /// ★ G1 (§12.16): the returned [`Binding::host`] is what makes "retire its host
+    /// backing" an executable sentence rather than an aspiration — it names both the
+    /// mapping to undo and the object to free.
     pub fn unbind(&mut self, va: GpuVa) -> Option<(u64, Binding)> {
         self.map.remove_at(va.0)
     }
@@ -134,7 +185,13 @@ impl AddressTable {
 }
 
 // The concurrency contract, compile-time-asserted (decision #17).
-kayfabe_util::assert_send_sync!(AddressTable, Binding, AddressFault, walker::WalkResult);
+kayfabe_util::assert_send_sync!(
+    AddressTable,
+    Binding,
+    HostBacking,
+    AddressFault,
+    walker::WalkResult
+);
 
 #[cfg(test)]
 mod tests {
@@ -154,7 +211,7 @@ mod tests {
             Binding {
                 phys: 0x8000_0000,
                 aperture: Aperture::SysmemCoherent,
-                host_va: None,
+                host: None,
             },
         )
         .unwrap();
@@ -179,7 +236,7 @@ mod tests {
         let bind = Binding {
             phys: 0x1000,
             aperture: Aperture::Vidmem,
-            host_va: None,
+            host: None,
         };
         t.bind(PDB, GpuVa(0x1000), 0x1000, bind).unwrap();
         assert_eq!(

@@ -132,7 +132,7 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
     let (bind2, off) = resolve(&gpu, GpuId::ZERO, PDB, GpuVa(VA.0 + 0x100)).unwrap();
     assert_eq!(off, 0x100);
     assert_eq!(
-        bind2.host_va,
+        bind2.host_va(),
         Some(pub2.host_va),
         "CTX2 resolves its own backing"
     );

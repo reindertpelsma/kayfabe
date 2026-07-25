@@ -31,6 +31,12 @@
 //! - **Runtime assert.** [`Worker::execute`] (and the [`Worker::with_rm`] escape
 //!   hatch) call [`kayfabe_util::lockwitness::assert_lock_free`] before touching the
 //!   backend. Holding any ranked lock at a verb is an immediate panic naming R1.
+//! - **★ The other blocking thing, and it is not a verb** (`l1_concurrency.md`
+//!   §12.16, gap G3b): an isolate's `Drop` is `waitpid` + namespace teardown, run by
+//!   the compiler at a point no call site names, and the verb assert cannot see it.
+//!   [`IsolateBox`] — the only way core state owns an [`Isolate`] — asserts the same
+//!   invariant on the drop side. `Spine::reap_retired` was performing exactly that
+//!   drop under the device write lock, and nothing could notice.
 //!
 //! Full compile-time enforcement of "no guard is alive on this thread" is not
 //! expressible in safe Rust; the ownership shape makes violations contortions
@@ -39,7 +45,7 @@
 //! ## Concurrency (decision #17)
 //!
 //! [`Isolate`] and [`IsolateFactory`] are **`Send + Sync` supertraits**: the core
-//! *stores* them (each `Proc` owns its `Box<dyn Isolate>`, the `Gpu` owns the
+//! *stores* them (each `Proc` owns its isolates inside [`IsolateBox`], the `Gpu` owns the
 //! factory), so they inherit the core's shareability requirement. Their `&self`
 //! surface is pure reads (`id`/`is_retired`); every mutation takes `&mut self`, so
 //! exclusivity comes from the caller's borrow, as everywhere in the core.
@@ -77,6 +83,38 @@ pub enum RmError {
     BadHandle(HostHandle),
     /// Host resource exhaustion.
     NoMemory,
+    /// ★ **The verb was CANCELLED — it did not fail** (`l1_concurrency.md` §5.4 and
+    /// §12.16, gap G4).
+    ///
+    /// The archetypal cause is the one §5.4 designs for: a guest thread blocked in a
+    /// forwarded op dies or takes a signal, so the requester interrupts the in-flight
+    /// verb rather than wedging until the host ioctl finishes on its own.
+    ///
+    /// **Measured in the C, not invented here** (issue #73). The host stub installs a
+    /// SIGUSR1 handler *without* `SA_RESTART` precisely so a blocked
+    /// `ioctl()` on `/dev/nvidia*` returns `-EINTR` rather than auto-restarting
+    /// (`C: src/stub/nvkvm_stub.c:699-708`, `:2669-2678`); the interrupt itself
+    /// arrives out of band as a command (`ISOLATE_CMD_INTERRUPT`,
+    /// `C: src/common/nvkvm_isolate_proto.h:53,122-131`) and the worker then answers
+    /// **on the ordinary reply path** carrying `retval = -EINTR`. There is no separate
+    /// "interrupted" reply message in the C's wire protocol, which is exactly why this
+    /// is an [`RmError`] variant and not a new [`VerbReply`]: at this port an
+    /// interrupted verb *is* a verb that came back, with a distinguishable status.
+    ///
+    /// **The worker survives it.** The C's stub clears its in-flight txn and loops
+    /// (`C: src/stub/nvkvm_stub.c:1276-1281`), and its framing treats `-EINTR` as
+    /// resumable (`:569-571`). So the unwind CAN still run on this worker — which is
+    /// what makes [`VerbFailure::orphans`] meaningful here, and what distinguishes
+    /// cancellation from worker *death* ([`Isolate::worker_died`], §7.3), where the
+    /// verb never returns at all.
+    ///
+    /// **Never retry it as if it were transient.** A cancellation is a fact about the
+    /// requester, not about the host: retrying re-issues work whose requester is
+    /// gone. It is §12.9's *third* staleness shape — non-retryable and
+    /// orphan-carrying — and the fwd plane surfaces it as
+    /// `FwdFault::Cancelled`, never as an RM failure (that conflation is §12.10 one
+    /// layer over).
+    Interrupted,
     /// Any other backend-reported failure (opaque status for diagnostics).
     Other(u32),
 }
@@ -344,6 +382,121 @@ pub enum VerbReply {
     Released,
 }
 
+/// ★ Host objects that exist and that the core could not adopt — **the record a
+/// failed or refused operation leaves behind** (`l1_concurrency.md` §12.16, gap G4).
+///
+/// Two producers, both of which used to lose it:
+///
+/// - a **refused commit** (R5) whose execute phase already allocated — the caller
+///   runs [`Orphans::release_plan`] on the SAME worker, still lock-free, before
+///   checking it back in;
+/// - a **mid-chain verb failure** — [`VerbFailure::orphans`], which carries whatever
+///   the worker's own unwind could not dispose of.
+///
+/// ★ **`#[must_use]`, and it earns it.** Dropping an `Orphans` on the floor silently
+/// leaks every host object it names — the exact defect this type exists to record —
+/// and the compiler is the only thing that reliably notices. (Same reasoning that
+/// gave `kayfabe_core::reactor::WakeRequest` its teeth.)
+///
+/// **Order is unmap-then-free, and that is RM's rule, not our preference.** RM frees
+/// children and dependents ahead of parents (`ogkm:
+/// src/nvidia/src/libraries/resserv/src/rs_server.c:963-981`,
+/// `.../rs_client.c:1086-1122`) and auto-unmaps a resource's inter-mappings inside
+/// `clientFreeResource_IMPL` *before* `objDelete` (`.../rs_client.c:830-849`). So RM
+/// itself leaks nothing if we free a mapped object — but any **external mirror** of
+/// that mapping (ours: the address table's `HostBacking` entries, gap G1) goes stale,
+/// which is why the plan states the unmaps first and means it. The map/unmap ABI pair
+/// is `NVOS46`/`NVOS47` respectively (`gvisor: pkg/sentry/devices/nvproxy/version.go:176-177`).
+#[must_use = "an Orphans that is neither released nor recorded is a silent host-object \
+              leak — that is the whole defect this type exists to make impossible. \
+              Run `release_plan()` on a checked-out worker, or hand it onward."]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Orphans {
+    /// `(host VAS, host GPU VA)` mappings to undo first.
+    pub unmap: Vec<(HostHandle, u64)>,
+    /// Objects to free.
+    pub free: Vec<HostHandle>,
+}
+
+impl Orphans {
+    /// True if there is nothing to dispose of.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.unmap.is_empty() && self.free.is_empty()
+    }
+
+    /// The verb chain that disposes of these orphans.
+    #[must_use]
+    pub fn release_plan(&self) -> VerbPlan {
+        VerbPlan::Release {
+            unmap: self.unmap.clone(),
+            free: self.free.clone(),
+        }
+    }
+}
+
+/// ★ What a [`Worker::execute`] failure actually leaves behind: **why it failed, and
+/// what still exists because of it** (`l1_concurrency.md` §12.16, gap G4).
+///
+/// `execute` used to return a bare [`RmError`] and promise all-or-nothing by unwinding
+/// internally. The promise was overstated in two ways, and both are now expressible:
+///
+/// 1. The unwind's own `free`s were `let _ = …` — a failure to dispose of a partially
+///    built chain was swallowed with no record anywhere. Now every object the unwind
+///    could not free lands in [`VerbFailure::orphans`].
+/// 2. Cancellation ([`RmError::Interrupted`]) is the entire premise of §5.4, and a
+///    cancelled chain is precisely a chain whose all-or-nothing cannot be assumed.
+///
+/// ## ★ What `orphans` does and does not enumerate — a named unknown, not a guess
+///
+/// It enumerates every host object **whose handle this execution received** and could
+/// not dispose of. It cannot enumerate an object the host may have created for a verb
+/// whose reply never arrived — an interrupted alloc.
+///
+/// The C never settled that, and it is honest to say so rather than assert an answer:
+/// its stub records nothing on a non-zero return
+/// (`C: src/qemu/nvkvm_isolate_handlers.c:1444-1445`, `:1497-1501` — bookkeeping gated
+/// on `ret == 0 && nvstatus == 0`), its guest discards the reply entirely on the
+/// interrupt path (`C: src/guest/nvkvm_virtio.c:461-471`), and there is no
+/// reconciliation code anywhere in the C for an alloc that may have landed. Compounding
+/// it, most RM waits are *not* interruptible in the first place (`ogkm:
+/// kernel-open/nvidia/nv.c` carries only a handful of `*_interruptible` waits), so a
+/// cancelled alloc plausibly completed. The C's only disposition for such an object is
+/// bulk: the #80 session reaper force-closing the isolate's host fds
+/// (`C: src/qemu/virtio_nvgpu.c:100-118`).
+///
+/// **OPEN QUESTION, needs a bench experiment, must not be reasoned about:** does an
+/// interrupted `NV_ESC_RM_ALLOC` leave the object created, partially created, or
+/// absent? Until that is measured, the design must keep isolate-session death as the
+/// backstop disposition and must not claim per-object completeness.
+#[must_use = "a VerbFailure names host objects that still exist — dropping it \
+              without releasing or recording its `orphans` is a leak."]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerbFailure {
+    /// Why the chain stopped.
+    pub err: RmError,
+    /// Host objects this execution allocated and could not dispose of (see above for
+    /// exactly what this can and cannot cover).
+    pub orphans: Orphans,
+}
+
+impl VerbFailure {
+    /// A failure that left nothing behind (the chain failed on its first verb, or the
+    /// unwind disposed of everything).
+    pub fn bare(err: RmError) -> Self {
+        VerbFailure {
+            err,
+            orphans: Orphans::default(),
+        }
+    }
+}
+
+impl From<RmError> for VerbFailure {
+    fn from(err: RmError) -> Self {
+        VerbFailure::bare(err)
+    }
+}
+
 /// ★ A checked-out pool worker: **the one door to a host RM verb**.
 ///
 /// Obtained only from [`Isolate::checkout`], which moves it OUT of the isolate's pool
@@ -382,13 +535,15 @@ impl Worker {
     /// any ranked lock held panics naming R1 (crate docs).
     ///
     /// Chains its own intermediate results with **zero core access**. On a mid-chain
-    /// failure it releases what it already allocated on this same worker and then
-    /// returns the error, so a partial chain never leaks a host object — the caller
-    /// sees an all-or-nothing verb round trip.
+    /// failure it releases what it already allocated on this same worker, then returns
+    /// a [`VerbFailure`] carrying both the error and **whatever the release could not
+    /// dispose of** (§12.16, G4). The all-or-nothing promise is thereby made checkable
+    /// instead of asserted: when the residue is empty it held; when it is not, the
+    /// caller has the list rather than a swallowed `let _ =`.
     ///
     /// # Panics
     /// If this thread holds any ranked lock (R1).
-    pub fn execute(&mut self, plan: &VerbPlan) -> Result<VerbReply, RmError> {
+    pub fn execute(&mut self, plan: &VerbPlan) -> Result<VerbReply, VerbFailure> {
         kayfabe_util::lockwitness::assert_lock_free("issuing a host RM verb");
         let rm = &mut *self.backend;
         match plan {
@@ -509,16 +664,36 @@ impl Worker {
                 Ok(VerbReply::Control { payload })
             }
             VerbPlan::Release { unmap, free } => {
-                // Best-effort by design: this IS the failure path. A refusal here
-                // would have nowhere to go, and the isolate's own teardown is the
-                // backstop (its whole handle namespace dies with it).
+                // ★ G4 (§12.16): still best-effort — this IS the failure path and a
+                // refusal must not abort the rest of the disposal — but no longer
+                // SILENT. Every unmap/free that fails is carried out in the returned
+                // `VerbFailure::orphans`, so "we could not dispose of this" becomes a
+                // value the caller holds instead of a `let _ =` nobody can audit.
+                // Unmaps first, then frees: RM auto-unmaps a resource's inter-mappings
+                // inside `clientFreeResource_IMPL` before `objDelete` (`ogkm:
+                // src/nvidia/src/libraries/resserv/src/rs_client.c:830-849`), so the
+                // order does not protect RM — it protects OUR mirror of the mapping.
+                let mut residue = Orphans::default();
+                let mut first: Option<RmError> = None;
                 for &(vas, va) in unmap {
-                    let _ = rm.unmap_gpu_va(vas, va);
+                    if let Err(e) = rm.unmap_gpu_va(vas, va) {
+                        first.get_or_insert(e);
+                        residue.unmap.push((vas, va));
+                    }
                 }
                 for &obj in free {
-                    let _ = rm.free(obj);
+                    if let Err(e) = rm.free(obj) {
+                        first.get_or_insert(e);
+                        residue.free.push(obj);
+                    }
                 }
-                Ok(VerbReply::Released)
+                match first {
+                    None => Ok(VerbReply::Released),
+                    Some(err) => Err(VerbFailure {
+                        err,
+                        orphans: residue,
+                    }),
+                }
             }
         }
     }
@@ -539,12 +714,25 @@ impl Worker {
 }
 
 /// Release `orphans` (newest first) after a mid-chain verb failure, then surface the
-/// ORIGINAL error — the cleanup's own failures are noise on an already-failing path.
-fn unwind(rm: &mut dyn RmBackend, orphans: Vec<HostHandle>, err: RmError) -> RmError {
+/// ORIGINAL error — the cleanup's own failures never *replace* the cause.
+///
+/// ★ G4 (§12.16): they are no longer *discarded* either. An object the unwind could
+/// not free is exactly the thing that was previously "in no `Orphans`, in no core
+/// state, enumerable from nothing", so it comes back in [`VerbFailure::orphans`]. On a
+/// [`RmError::Interrupted`] chain the unwind still runs — the C's stub survives its own
+/// `-EINTR` and keeps serving (`C: src/stub/nvkvm_stub.c:1276-1281`) — and any verb
+/// that fails during it lands in the residue.
+fn unwind(rm: &mut dyn RmBackend, orphans: Vec<HostHandle>, err: RmError) -> VerbFailure {
+    let mut residue = Orphans::default();
     for obj in orphans {
-        let _ = rm.free(obj);
+        if rm.free(obj).is_err() {
+            residue.free.push(obj);
+        }
     }
-    err
+    VerbFailure {
+        err,
+        orphans: residue,
+    }
 }
 
 /// # One per-process sandboxed host worker pool
@@ -593,12 +781,149 @@ pub trait Isolate: Send + Sync {
     /// was known and is now dead.
     fn worker_died(&mut self, worker: WorkerId) -> bool;
 
+    /// ★ How many of this isolate's workers are **checked OUT right now**
+    /// (`l1_concurrency.md` §12.16, gap G3) — the quantity [`Isolate::is_quiesced`]
+    /// is defined on, and the one the core must ASK for rather than derive.
+    ///
+    /// **Why the trait must answer this and the core must not compute it.**
+    /// `pool_size() - idle_workers()` looks like the same number and is not: a slot
+    /// that died out of band (§7.3) is neither idle nor checked out, and it can never
+    /// become either — "no resurrect". Deriving in-flight by subtraction would count
+    /// every dead slot as a live round trip, so an isolate that lost one worker would
+    /// report itself busy forever, defer its reap forever, and leak its GPA arena
+    /// forever (the #80 class the reap exists to prevent). The implementation knows
+    /// which slots are `Dead`; the core does not, and must not have to.
+    fn in_flight(&self) -> usize;
+
+    /// ★ **QUIESCED — the per-isolate SAFETY PRECONDITION for reaping** (§12.16, G3).
+    ///
+    /// Defined exactly, and narrowly: *no worker of this isolate is checked out.*
+    /// Equivalently, every slot is idle or permanently dead, so no thread anywhere
+    /// holds a [`Worker`] whose backend is this isolate's RM connection, and no verb
+    /// of this isolate can still be in flight or still land. Dropping it therefore
+    /// cannot tear a sandbox down underneath a live connection.
+    ///
+    /// ## ★ This is NOT "the device is quiescent" — do not conflate them
+    ///
+    /// The device-level quiesce point is a **protocol event the guest sends**, not
+    /// anything inferable from worker counts and emphatically not a timer. The C
+    /// measured it: `UNLOADING_GUEST_DRIVER` (GSP RPC fn=47) is emitted on **both** a
+    /// real driver unload *and* a GPU-idle release when the last context exits
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:2450-2462`), and the reap runs at the
+    /// **re-handshake** that follows it — the status-queue tx-header write — which the
+    /// C names in so many words: *"the re-handshake = the quiesced point (GPU was
+    /// idle-released; next context boots). Purge dead-client resolution/backing state
+    /// now — never at the free."* (`C: src/qemu/nvkvm_gpu_emul.c:3458-3461`, the #14
+    /// P0 fix; reaping at the client-root free instead hung the dying context's
+    /// residual polls — lesson L10).
+    ///
+    /// So there are two distinct questions and this predicate answers only the second:
+    ///
+    /// - **When may the reap be attempted?** The adapter's lifecycle decision, driven
+    ///   by fn-47 / the re-handshake. Belongs to L1-M2, not here, not to the core.
+    /// - **Is attempting it safe for THIS isolate right now?** This predicate. The
+    ///   core checks it because the adapter's edge is device-wide while the hazard is
+    ///   per-`(Proc, GpuId)`: a guest process can have a verb in flight across another
+    ///   process's idle-release.
+    ///
+    /// ## Two more things it deliberately does not mean
+    ///
+    /// - Not "the sandbox has exited". The adapter's `waitpid` + namespace teardown
+    ///   happens **in `Drop`**, after this predicate opens the gate.
+    /// - Not "every host object has been reclaimed". Reclamation is a separate
+    ///   obligation with a separate ledger (G1/G2); a quiesced isolate can still own
+    ///   host objects, and dropping it is what disposes of them via the session's
+    ///   namespace death — the C's only backstop too (`C: src/qemu/virtio_nvgpu.c:100-118`,
+    ///   the #80 session reaper force-closing the session's host fds).
+    ///
+    /// Getting the gate wrong is asymmetric, which is why the core **checks** rather
+    /// than trusting a declaration: reaping too early tears the sandbox down under a
+    /// live connection (a use-after-free); reaping too late leaks until the next
+    /// quiesce point — which is the residual the C also carried and named
+    /// (`C: docs/design/mode2_multiprocess_refactor_plan.md:539-541`, "mid-life
+    /// multi-proc churn … keeps the pre-P0 leak-until-idle behavior"). Default:
+    /// `in_flight() == 0`.
+    fn is_quiesced(&self) -> bool {
+        self.in_flight() == 0
+    }
+
     /// Stage 1 of teardown: stop accepting new ops, begin quiescing in-flight work.
     /// Heavy state is reaped at the proven quiesce point, not here (lesson L10).
     fn retire(&mut self);
 
     /// True once `retire()` has been called (a retired isolate must refuse ops).
     fn is_retired(&self) -> bool;
+}
+
+/// ★ **The only way core state owns an [`Isolate`] — and the door R1 is asserted at
+/// on the DROP side** (`l1_concurrency.md` §12.16, gap G3b).
+///
+/// `Worker::execute` gave R1 teeth for *verbs* (§12.8). It gave none for the other
+/// blocking thing an isolate does, and that thing is not a verb: a real isolate's
+/// `Drop` is `waitpid` + namespace teardown + fd close — a blocking syscall, run by
+/// the compiler at a point no call site names. `Spine::reap_retired` used to perform
+/// exactly that drop **inside the device write guard**, and nothing anywhere could
+/// notice. That is §12.6's shape verbatim ("an assert guarding a wrapper rather than
+/// the thing"), one layer over.
+///
+/// So every isolate the core stores lives in this newtype, and its `Drop` asserts
+/// lock-freedom the same way a verb does. It is not decoration: it is the *only*
+/// mechanism, because `Drop` cannot be implemented on the `dyn Isolate` trait itself
+/// and an adapter's own `Drop` cannot be relied on to exist (a mock has none, and the
+/// mock is what the core is tested against).
+///
+/// **Why it is sound to panic here.** A panic in `Drop` during an unwind aborts the
+/// process, which would replace a real failure's message with a bare abort. The
+/// assert is therefore skipped while this thread is already panicking
+/// (`std::thread::panicking`) — the standard guard-in-`Drop` discipline. The cost is
+/// exact and small: an isolate dropped under a lock *on an unwinding path* is not
+/// caught. The unwinding path is not where reclamation is designed, and every
+/// non-unwinding drop — which is all of production's and all of the suite's green
+/// path — is.
+pub struct IsolateBox(Box<dyn Isolate>);
+
+impl IsolateBox {
+    /// Take ownership of a freshly spawned isolate.
+    #[must_use]
+    pub fn new(isolate: Box<dyn Isolate>) -> Self {
+        IsolateBox(isolate)
+    }
+}
+
+impl core::fmt::Debug for IsolateBox {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("IsolateBox")
+            .field("id", &self.0.id())
+            .field("retired", &self.0.is_retired())
+            .field("in_flight", &self.0.in_flight())
+            .finish()
+    }
+}
+
+impl core::ops::Deref for IsolateBox {
+    type Target = dyn Isolate;
+    fn deref(&self) -> &(dyn Isolate + 'static) {
+        &*self.0
+    }
+}
+
+impl core::ops::DerefMut for IsolateBox {
+    fn deref_mut(&mut self) -> &mut (dyn Isolate + 'static) {
+        &mut *self.0
+    }
+}
+
+impl Drop for IsolateBox {
+    /// # Panics
+    /// If this thread holds any ranked lock (R1) — see the type docs.
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            return;
+        }
+        kayfabe_util::lockwitness::assert_lock_free(
+            "dropping an isolate (sandbox teardown: waitpid + namespace unwind + fd close)",
+        );
+    }
 }
 
 /// Spawns isolates. The composition root holds one; per-`(Proc, GpuId)` isolates are
@@ -623,8 +948,11 @@ kayfabe_util::assert_send_sync!(
     WorkerId,
     VerbPlan,
     VerbReply,
+    Orphans,
+    VerbFailure,
     dyn Isolate,
-    dyn IsolateFactory
+    dyn IsolateFactory,
+    IsolateBox
 );
 // The backend and the `Worker` that owns one: `Send + Sync` because pool slots live
 // inside the `Sync` core (crate docs), even though no call path ever shares one.

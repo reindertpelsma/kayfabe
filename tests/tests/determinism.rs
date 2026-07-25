@@ -260,7 +260,7 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
         for (&(gpu, pdb), vas) in &p.vases {
             vs.insert((gpu, pdb), vas.origin);
             for (va, _len, b) in vas.table.iter() {
-                let host_published = b.host_va.is_some();
+                let host_published = b.host_va().is_some();
                 resolutions.insert(
                     (gpu, pdb, GpuVa(va)),
                     ResolvedObs {
@@ -479,7 +479,7 @@ fn materialize(gpu: &mut Gpu) -> DataPlaneProjection {
     }
     let mut pub_resolves = BTreeMap::new();
     for (_pid, (gpu_t, pdb), anchor) in &vases {
-        let ok = matches!(resolve(gpu, *gpu_t, *pdb, VA_PUB), Ok((b, _)) if b.host_va.is_some());
+        let ok = matches!(resolve(gpu, *gpu_t, *pdb, VA_PUB), Ok((b, _)) if b.host_va().is_some());
         pub_resolves.insert((*anchor, *gpu_t, *pdb), ok);
     }
 

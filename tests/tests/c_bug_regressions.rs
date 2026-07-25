@@ -157,7 +157,7 @@ fn cb11_ce_write_never_clobbers_live_binding() {
         "live binding's phys survives the CE write"
     );
     assert_eq!(
-        b.host_va,
+        b.host_va(),
         Some(live.host_va),
         "live host publication survives the CE write"
     );
@@ -751,7 +751,7 @@ fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
     );
 
     // ---- The quiesce point: reap + recycle. ----
-    assert_eq!(gpu.reap_retired(), 2);
+    assert_eq!(gpu.reap_retired().len(), 2);
     assert!(
         gpu.spine.retired.is_empty(),
         "reap drained the staging area"
@@ -862,7 +862,11 @@ fn cb_lifecycle_process_churn_never_exhausts_the_window() {
             handle: HObject(0x5c00_0000),
         })
         .unwrap();
-        assert_eq!(gpu.reap_retired(), 1, "generation {generation}: reaped");
+        assert_eq!(
+            gpu.reap_retired().len(),
+            1,
+            "generation {generation}: reaped"
+        );
     }
     assert!(
         gpu.spine.retired.is_empty(),

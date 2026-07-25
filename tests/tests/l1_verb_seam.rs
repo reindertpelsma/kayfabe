@@ -305,7 +305,7 @@ fn progress_under_pending_verb_intra_proc() {
             .resolve(GPU, PDB, GpuVa(VA.0 + 0x40))
             .expect("A's VA resolves after its commit");
         assert_eq!(
-            (binding.phys, binding.host_va, off),
+            (binding.phys, binding.host_va(), off),
             (a_pub.gpa, Some(a_pub.host_va), 0x40),
             "({mode:?}) A's commit wrote the binding it computed, not B's"
         );
@@ -1179,7 +1179,7 @@ fn commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone() {
         !gpu.procs[&b].vases.values().any(|v| v
             .table
             .iter()
-            .any(|(_, _, bind)| bind.host_va == Some(HOST_VA))),
+            .any(|(_, _, bind)| bind.host_va() == Some(HOST_VA))),
         "nothing of A's was bound into B's address plane"
     );
 

@@ -305,7 +305,7 @@ fn assert_device_consistent(gpu: &Gpu) {
             // VA is genuinely in the table.
             for (va, len, b) in vas.table.iter() {
                 assert!(len > 0);
-                if b.host_va.is_some() {
+                if b.host_va().is_some() {
                     assert!(
                         p.arenas[&GpuId::ZERO].range.contains(&b.phys),
                         "published phys {:#x} outside {:?}'s arena {:?}",
@@ -385,7 +385,7 @@ fn stress_multi_vcpu_interleaved_ops() {
                                     .expect("published VA resolves");
                                 assert_eq!(off, 0x40);
                                 assert_eq!(b.phys, gpa, "resolve returned another proc's backing");
-                                assert_eq!(b.host_va, Some(host_va));
+                                assert_eq!(b.host_va(), Some(host_va));
                                 gate_working_set(
                                     &g,
                                     pid,
@@ -683,7 +683,11 @@ fn same_proc_interleaving_is_exact() {
         "a binding per publish"
     );
     // Every host VA is distinct and from THIS proc's isolate.
-    let hvas: BTreeSet<u64> = vas.table.iter().filter_map(|(_, _, b)| b.host_va).collect();
+    let hvas: BTreeSet<u64> = vas
+        .table
+        .iter()
+        .filter_map(|(_, _, b)| b.host_va())
+        .collect();
     assert_eq!(
         hvas.len() as u64,
         total,
@@ -737,7 +741,7 @@ fn lock_free_concurrent_reads_share_the_gpu() {
                     let (gpa, host_va) = truth[&(i, va)];
                     let (b, off) =
                         resolve(gpu_ref, GpuId::ZERO, pdb_of(i), GpuVa(va + 0x10)).expect("hit");
-                    assert_eq!((b.phys, b.host_va, off), (gpa, Some(host_va), 0x10));
+                    assert_eq!((b.phys, b.host_va(), off), (gpa, Some(host_va), 0x10));
                     let (pid, cid) = gpu_ref.spine.by_vchid[&(GpuId::ZERO, gr_vchid(i))];
                     assert_eq!(pid, pids[i]);
                     gate_working_set(gpu_ref, pid, cid, &[GpuVa(va)]).expect("gate passes");

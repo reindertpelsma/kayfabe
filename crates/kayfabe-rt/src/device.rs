@@ -71,7 +71,7 @@ use kayfabe_core::{ChanId, ProcId};
 use kayfabe_fwd::{
     ControlRoute, DoorbellOutcome, EngineObjectForwarded, FwdFault, Planned, Published, Refusal,
 };
-use kayfabe_isolate::{HostHandle, VerbPlan, VerbReply, Worker, WorkerId};
+use kayfabe_isolate::{HostHandle, RmError, VerbPlan, VerbReply, Worker, WorkerId};
 use kayfabe_mmu::Binding;
 use kayfabe_util::Instant;
 
@@ -408,8 +408,33 @@ impl SharedDevice {
 
     /// Reap retired procs at the adapter-declared quiesce point (inherited law 8,
     /// L10). **Spine op** (write guard). Returns the number reaped.
+    ///
+    /// ★ **G3b (§12.16): the drop happens OUTSIDE the guard, and that is the point of
+    /// the signature change.** `Spine::reap_retired` used to drop each retired `Proc`
+    /// in place — including its [`kayfabe_isolate::IsolateBox`]es, whose real `Drop`
+    /// is `waitpid` + namespace teardown. Under this write guard that is a blocking
+    /// syscall under a rank-0 lock: a live R1 violation that no assert covered,
+    /// because `Worker::execute`'s `assert_lock_free` guards *verbs*, not drops. The
+    /// reap now hands the corpses back, the guard is released, and only then does the
+    /// value fall. `IsolateBox`'s own `Drop` asserts lock-freedom, so re-introducing
+    /// the old shape panics naming R1 instead of blocking silently.
     pub fn reap_retired(&self) -> usize {
-        self.state.write().spine.reap_retired()
+        let reclaimed = {
+            let mut g = self.state.write();
+            g.spine.reap_retired()
+            // ↑ the write guard dies at this brace, BEFORE the drop below.
+        };
+        let n = reclaimed.len();
+        drop(reclaimed); // ← the blocking teardown, with zero ranked locks held.
+        n
+    }
+
+    /// How many retired procs are still awaiting a reap — including any a previous
+    /// [`SharedDevice::reap_retired`] **deferred** for not being quiesced (§12.16,
+    /// G3). **Spine op** (read guard); diagnostics and test assertions.
+    #[must_use]
+    pub fn retired_len(&self) -> usize {
+        self.state.read().spine.retired_len()
     }
 
     /// Register a completion source (spine mutation — write guard). The
@@ -535,13 +560,36 @@ impl SharedDevice {
     }
 
     /// Return a checked-out worker to its pool slot (locked bookkeeping), then wake
-    /// anyone waiting on pool-full backpressure. If the proc is gone the worker dies
-    /// with its isolate — the retire path owns that disposition (§7.3).
+    /// anyone waiting on pool-full backpressure.
+    ///
+    /// ★ **G3 (§12.16): a proc that retired in the lock-free gap still gets its worker
+    /// back.** The old code dropped the handle when the live-map lookup missed and
+    /// called that "the retire path owns the disposition". It does own the *host
+    /// objects*; it does not own the *pool slot*, which stays marked checked-out with
+    /// nobody holding it. Harmless while the reap trusted the caller — fatal now that
+    /// it checks: the isolate would never report itself quiesced, so the proc would be
+    /// deferred at every quiesce point for the life of the device and its GPA arena
+    /// would never recycle (#80). Found by the §8.4 mean test, which reaped 1 of 2.
+    ///
+    /// Two-step by necessity: the fast path is device-read + proc lock; the fallback
+    /// needs the device **write** lock to reach `Spine::retired`. They run
+    /// sequentially, never nested — `route_act` has released both guards before the
+    /// fallback takes one (R3: at most one lock per rank, and rank 0 is not held
+    /// twice).
     fn return_worker(&self, pid: ProcId, gpu: GpuId, worker: Worker) {
+        let mut hold = Some(worker);
         let _ = self.route_act(
             |_| Ok((pid, ())),
-            |_, proc, ()| kayfabe_fwd::checkin(proc, gpu, worker),
+            |_, proc, ()| {
+                if let Some(w) = hold.take() {
+                    kayfabe_fwd::checkin(proc, gpu, w);
+                }
+            },
         );
+        if let Some(w) = hold.take() {
+            let mut g = self.state.write();
+            g.spine.checkin_retired(pid, gpu, w);
+        }
         self.pool.signal_return();
     }
 
@@ -588,17 +636,28 @@ impl SharedDevice {
             let executed = worker.execute(&verbs);
             let gpu = staged.gpu;
             let Ok(reply) = executed else {
-                let e = executed.expect_err("matched Err");
+                let failure = executed.expect_err("matched Err");
+                let err = failure.err;
+                // ★ G4 (§12.16): dispose of the failure's orphans on the SAME worker,
+                // still lock-free, BEFORE returning it. The residue is a named value —
+                // its core-side ledger is L1-M2's (see `kayfabe_fwd::dispose_on`).
+                let _undisposed = kayfabe_fwd::dispose_on(&mut worker, failure.orphans);
                 self.return_worker(staged.proc, gpu, worker);
                 // ★ R5 applies to the FAILURE path too (a stage-3 finding, §12.10).
                 // `Proc::retire` retires the isolate, so a verb held in flight across
                 // a retire comes back as an RM refusal — which is loud and
                 // mutation-free, but names the wrong cause. Re-validate before
                 // surfacing: if the proc vanished, the honest fault is staleness.
-                return Err(if self.proc_is_live(staged.proc) {
-                    FwdFault::Rm(e)
-                } else {
-                    FwdFault::Stale(kayfabe_fwd::Stale::Proc(staged.proc))
+                //
+                // ★ G4 (§12.16) — and CANCELLATION is tested FIRST, because it is the
+                // one case where the proc is typically still live and the old order
+                // therefore resolved it to `Rm(Other(..))`: §12.10's wrong-reason
+                // conflation, one layer over. A cancelled verb is a fact about the
+                // requester, not about the host and not about the proc's existence.
+                return Err(match err {
+                    RmError::Interrupted => FwdFault::Cancelled { proc: staged.proc },
+                    e if self.proc_is_live(staged.proc) => FwdFault::Rm(e),
+                    _ => FwdFault::Stale(kayfabe_fwd::Stale::Proc(staged.proc)),
                 });
             };
             // ---- COMMIT + CHECK-IN, one critical section (§7.3) ----
@@ -626,9 +685,7 @@ impl SharedDevice {
                         .expect("a refused commit never checks the worker in");
                     // R5's disposition rule: a refused commit must not leak what it
                     // already allocated. Same worker, still lock-free.
-                    if !refusal.orphans.is_empty() {
-                        let _ = w.execute(&refusal.orphans.release_plan());
-                    }
+                    let _undisposed = kayfabe_fwd::dispose_on(&mut w, refusal.orphans);
                     self.return_worker(staged.proc, gpu, w);
                     retries += 1;
                     if refusal.retry && retries < MAX_COMMIT_RETRIES {

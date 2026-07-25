@@ -240,8 +240,8 @@ fn hash14_across_gpu() {
     // Each still resolves to ITS OWN host publication, never the other's.
     let (ba, _) = resolve(&gpu, GpuId(0), SHARED_PDB, ident_va).unwrap();
     let (bb, _) = resolve(&gpu, GpuId(1), SHARED_PDB, ident_va).unwrap();
-    assert_eq!(ba.host_va, Some(pa.host_va));
-    assert_eq!(bb.host_va, Some(pb.host_va));
+    assert_eq!(ba.host_va(), Some(pa.host_va));
+    assert_eq!(bb.host_va(), Some(pb.host_va));
     assert_ne!(ba.phys, bb.phys, "disjoint backing across the GPU axis");
 }
 
@@ -538,7 +538,7 @@ fn per_gpu_arena_recycle() {
         handle: HObject(0x5c00_0000),
     })
     .unwrap();
-    assert_eq!(gpu.reap_retired(), 2, "both procs reaped");
+    assert_eq!(gpu.reap_retired().len(), 2, "both procs reaped");
 
     // Rebuild identical procs; each target's arena is RECYCLED from its own window.
     for ev in proc_on_gpu(HClient(0xA0), 0) {

@@ -180,7 +180,7 @@ fn reactor_sources_of_a_retired_proc_fault_never_use_after_retire() {
     );
 
     // The deferred reap (L10) changes nothing about the routing: retire already did it.
-    assert_eq!(gpu.reap_retired(), 1);
+    assert_eq!(gpu.reap_retired().len(), 1);
     assert_eq!(gpu.spine.sources.len(), 3);
     assert_eq!(
         gpu.spine.sources.dispatch(a_ev0),
@@ -208,7 +208,7 @@ fn reactor_stale_source_survives_a_full_teardown_rebuild_cycle() {
         handle: CLIENT_ROOT,
     })
     .expect("teardown applies");
-    assert_eq!(gpu.reap_retired(), 1);
+    assert_eq!(gpu.reap_retired().len(), 1);
 
     // Rebuild with IDENTICAL client, PDB and handles.
     let pid_a2 = build_proc(&mut gpu, HClient(0xAA), A_PDB, 0);

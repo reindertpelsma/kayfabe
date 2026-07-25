@@ -86,11 +86,37 @@ impl GpaSpace {
 
     /// Return a carved arena to the window for recycling. Takes the arena **by
     /// value**: releasing an arena a live `Proc` still owns is unrepresentable —
-    /// only a reaped proc's arena (moved out of the dropped `Proc` at the quiesce
-    /// point, `Gpu::reap_retired`) can arrive here. Recycled GPAs are safe by
-    /// construction: the dead proc's host mappings died with its isolate session,
-    /// and its address tables died with its `Vas`es — the C's stale-backing /
-    /// `ALREADY-MAPPED`-on-reuse class (#12 cont.29) has nothing to be stale.
+    /// only a reaped proc's arena (moved out of the `Proc` at the quiesce point,
+    /// `Spine::reap_retired`) can arrive here.
+    ///
+    /// ## ★ What "safe" rests on, corrected (`l1_concurrency.md` §12.16)
+    ///
+    /// This doc used to say recycled GPAs are *"safe by construction: the dead proc's
+    /// host mappings died with its isolate session, and its address tables died with
+    /// its `Vas`es."* One clause of that was a construction and one was a claim about
+    /// somebody else's `Drop` that the core neither performed nor checked. Separated:
+    ///
+    /// - **By construction (true, and still the reason for the by-value signature):**
+    ///   the arena is unreachable from any live `Proc` by the time it arrives here, and
+    ///   the dead proc's `Vas`es — hence its address tables — go with it. Nothing in
+    ///   the core can resolve into the recycled range.
+    /// - **Checked, since G3 (was assumed):** the reap only takes a proc whose every
+    ///   isolate is **quiesced** (`Isolate::is_quiesced` — no worker checked out), so
+    ///   no verb of that isolate can still be in flight, or still land, when the range
+    ///   goes back on the free list. Before that check the reap could run inside
+    ///   `verb_op`'s lock-free execute gap and recycle a range whose host mapping was
+    ///   being written at that moment.
+    /// - **An adapter OBLIGATION (not a core guarantee, and never was):** that the
+    ///   isolate's own `Drop` actually tears the session down and releases its host
+    ///   handles and GPU mappings. The core cannot verify it — the port is a trait, the
+    ///   mock has no such `Drop`, and G1's `HostBacking` exists precisely so a reclaimer
+    ///   can do it *explicitly* rather than rely on it happening. See the `Isolate` port
+    ///   docs; the C relied on the same bulk backstop (`C: src/qemu/virtio_nvgpu.c:100-118`,
+    ///   the #80 session reaper force-closing the session's host fds).
+    ///
+    /// With those three separated, the C's stale-backing / `ALREADY-MAPPED`-on-reuse
+    /// class (#12 cont.29) still has nothing to be stale — but for stated reasons, one
+    /// of which is somebody else's to keep.
     pub fn release(&mut self, arena: GpaArena) {
         debug_assert_eq!(arena.range.end - arena.range.start, self.arena_len);
         debug_assert!(arena.range.start >= self.window.start && arena.range.end <= self.next);

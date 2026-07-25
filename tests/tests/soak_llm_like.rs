@@ -130,7 +130,7 @@ fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[kayfabe_core::P
                 seen_phys.insert(bind.phys),
                 "two procs' identical VA share a GPA backing"
             );
-            if let Some(hva) = bind.host_va {
+            if let Some(hva) = bind.host_va() {
                 assert!(
                     seen_hva.insert(hva),
                     "two procs' identical VA share a host VA"

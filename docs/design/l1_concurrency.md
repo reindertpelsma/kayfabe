@@ -1427,3 +1427,219 @@ wedge-watchdogs must measure wedging, not instrumentation tax. And per the stand
 lesson (a gate a human remembers is not a gate), this run is now the nightly `tsan`
 job in `.github/workflows/ci.yml`, which adds `KAYFABE_SLOW=1` so the gated
 16-thread stress soak is always part of the ceiling.
+
+### 12.16 ★★ THE TEARDOWN AUDIT — four gaps that made leak-free reclamation a retrofit (**FIXED**)
+
+A read-only audit of the core's teardown/reclamation completeness, run before L1-M2
+designs the OS shell, found ten gaps. Four of them sit in signatures that every
+reclamation call site must route through, so deferring them would have made leak-free
+teardown exactly the retrofit this project refuses. They are recorded together because
+they are one finding wearing four hats: **the core could enter every teardown state and
+leave almost none of them.**
+
+The owner's bar for the fix, verbatim: *"clean cleanup on gpu getting idle, restart
+driver, process killed, isolate can be gc collected, etc etc. no leaks, safe."* So each
+gap landed with a test that asserts the reclamation **happens**, not that the API now
+permits it — `tests/teardown_reclaim.rs`, plus an acquire/release ledger
+(`kayfabe_mocks::HostLedger`) replayed from the mock's own verb log, which is the
+invariant that generalises all four: *every host object acquired is released exactly
+once, every mapping unmapped exactly once, nothing released that was never acquired.*
+
+#### G1 — a published backing's host memory handle existed nowhere in core state
+
+`commit_publish` received `VerbReply::Published { host_vas, memory, host_va }` and, on
+the **success** path, stored only `host_va`. `memory` appeared solely inside the
+*refusal* path's orphan closure. So after a successful publish — the ordinary case, and
+the majority of allocated host bytes — the `HostHandle` of the sysmem object was
+unrecoverable. A reclaim could `unmap_gpu_va(vas, host_va)` and could never `free(memory)`.
+
+The fix is a type, not a field: `Binding.host: Option<HostBacking>` where
+`HostBacking { memory, host_va }`. Two separate `Option`s would have left *"mapped
+somewhere, owning nothing freeable"* representable, and that state **was the defect**.
+One `Option` over the pair makes bound-but-unfreeable untypeable — the house
+`GpaSpace::release(arena)`-by-value pattern applied to the address plane. Cost: an
+`kayfabe-mmu` → `kayfabe-isolate` crate edge (the address plane now names the handle
+type), and `Binding::host_va` became an accessor at ~20 call sites.
+
+Order in the release chain is unmap-then-free, and that is RM's rule rather than our
+preference: RM frees children and dependents ahead of parents (`ogkm:
+src/nvidia/src/libraries/resserv/src/rs_server.c:963-981`, `.../rs_client.c:1086-1122`)
+and auto-unmaps a resource's inter-mappings inside `clientFreeResource_IMPL` *before*
+`objDelete` (`.../rs_client.c:830-849`). So the ordering does not protect RM — it keeps
+**our** mirror of the mapping honest, which is exactly what `HostBacking` is.
+
+#### G3b — `reap_retired`'s signature made the correct reap unwritable
+
+`Spine::reap_retired(&mut self) -> usize` dropped every retired `Proc` **in place**, and
+`SharedDevice::reap_retired` called it under the device write guard. A real `Isolate`'s
+`Drop` is `waitpid` + namespace teardown + fd close: **a blocking syscall under a rank-0
+lock**, with no assert anywhere, because `Worker::execute`'s `assert_lock_free` guards
+verbs and cannot see a drop. That is §12.6's shape verbatim — *an assert guarding a
+wrapper rather than the thing* — one layer over, and stage 3 had already paid for it once.
+
+Two changes, and the second is the one that matters:
+
+- `reap_retired` returns `Reclaimed`, an opaque `#[must_use]` carrier of the corpses.
+  The shell binds it *outside* the guard and lets it fall there. There is no accessor
+  handing out a `&Proc`: a reaped proc is not a thing to consult.
+- ★ **The drop is now a door with an assert on it.** `IsolateBox` is the only way core
+  state owns an `Isolate`, and its `Drop` calls `assert_lock_free` exactly as a verb
+  does. This had to be a newtype: `Drop` cannot be implemented on `dyn Isolate`, and an
+  adapter's own `Drop` cannot be relied on to exist — the mock has none, and the mock is
+  what the core is tested against. Re-introducing the old shape now **panics naming
+  R1** (measured; the bite-check output is the R1 message with `rank(s) [0]`), where
+  before it blocked silently.
+
+  Honest limit, stated rather than hidden: the assert is skipped while the thread is
+  already panicking, because a panic in `Drop` during an unwind aborts and would replace
+  a real failure's message with a bare abort. So an isolate dropped under a lock *on an
+  unwinding path* is not caught. Every non-unwinding drop is.
+
+#### G3 — "quiesce" was never defined and never checked
+
+`reap_retired` dropped every retired proc unconditionally. Meanwhile `verb_op` checks a
+worker out, releases every lock, and runs the chain with a `Box<dyn RmBackend>` live on a
+foreign thread's stack; the executor may legally run the reap in that gap. So the isolate
+could be torn down while a live connection into it was outstanding, and the op's own
+orphan disposal would then run `release_plan` against a sandbox that was gone. **A
+deferred reap that runs too early is a use-after-free; too late is a leak.** The
+information already existed (`pool_size` / `idle_workers`) and the core never consulted it.
+
+`Isolate::in_flight()` + `is_quiesced()` now define it precisely: *no worker of this
+isolate is checked out.* `reap_retired` **returns a non-quiesced proc to the retired
+list** instead of dropping it — the core checks rather than trusts.
+
+Two things the build settled that the brief left open:
+
+- **`in_flight` must be asked for, never derived.** `pool_size() - idle_workers()` looks
+  like the same number and is not: a slot that died out of band is neither idle nor
+  checked out and can never become either (§7.3, "no resurrect"), so the subtraction
+  reports a lost worker as a live round trip **forever** — an isolate that never
+  quiesces, a proc that never reaps, an arena that never recycles. The implementation
+  knows which slots are `Dead`; the core does not and must not have to.
+- **★ This is not "the device is quiescent", and the doc must not let the two blur.**
+  The device-level quiesce point is a *protocol event the guest sends*: fn=47
+  `UNLOADING_GUEST_DRIVER`, emitted on **both** a real driver unload and a GPU-idle
+  release when the last context exits (`C: src/qemu/nvkvm_gpu_emul.c:2450-2462`), with
+  the reap running at the **re-handshake** that follows — which the C names in so many
+  words: *"the re-handshake = the quiesced point (GPU was idle-released; next context
+  boots). Purge dead-client resolution/backing state now — never at the free."*
+  (`C: src/qemu/nvkvm_gpu_emul.c:3458-3461`, the #14 P0 fix; reaping at the client-root
+  free instead hung the dying context's residual polls — lesson L10). That trigger is
+  the adapter's and L1-M2's. `is_quiesced()` answers the *other* question — is
+  attempting it safe for **this** `(Proc, GpuId)` right now — because the adapter's edge
+  is device-wide while the hazard is per-isolate: a guest process can have a verb in
+  flight across another process's idle-release.
+
+#### ★ The gap the audit missed: G3's check creates a permanent-leak hazard, and closing it was mandatory
+
+The audit did not see this and it is the most interesting thing the build found.
+`SharedDevice::return_worker` resolved the proc through the **live** map and dropped the
+handle on a miss, with a comment saying the retire path owned that disposition. It owns
+the host *objects*; it does not own the *pool slot*, which stayed marked checked-out with
+nobody holding it. Harmless while the reap trusted the caller — **fatal the moment it
+checks**: the isolate never reports itself quiesced, the proc is deferred at every
+quiesce point for the life of the device, and its GPA arena never returns to the window
+(#80, exactly the leak the reap exists to prevent). A leak is not an acceptable price for
+closing a use-after-free.
+
+Found by §8.4's mean test, which went from green to `reaped (1, 0), expected (2, 0)` on
+the commit that added the check — the proc whose verb was in flight when a teardown
+retired it. Fixed by `Spine::checkin_retired`: **a retired proc still accepts worker
+returns.** It accepts nothing else — it refuses new checkouts (§5.4), it is in no routing
+map, and no op can reach it.
+
+Worth noting where this lands historically: the C had no interlock here at all. Its
+session reaper *argued* rather than checked — `C: src/qemu/virtio_nvgpu.c:113-118`, "a
+pooled IOCTL worker may still be unwinding after `nvkvm_isolate_kill` (which joins the
+isolate's reader thread, **not** the pool workers) … so freeing the session struct here
+cannot UAF it." That is an argument about what the worker touches, not a guarantee that
+it is done. `in_flight()` plus this return path is that missing interlock.
+
+#### G4 — no cancellation vocabulary, and a mid-chain failure's orphans were unrecoverable
+
+**The vocabulary half.** `RmError` had no `Interrupted`, despite §5.4 specifying an
+interrupted reply on the wire. So a cancelled verb arrived as `RmError::Other(n)`, and
+`verb_op`'s failure-path re-validation resolved it to `FwdFault::Rm(e)` **whenever the
+proc was still live** — which is the *normal* cancellation case: a guest thread dies, its
+process runs on. That is §12.10's wrong-reason conflation one layer over, and it would
+have made every cancellation canary pass while reporting "the host refused" about a host
+that did exactly what it was asked. `RmError::Interrupted` + `FwdFault::Cancelled { proc }`,
+with the `Interrupted` arm tested **first** on the failure path, before proc-liveness.
+
+Shape taken from the C's #73, not invented: the stub installs a SIGUSR1 handler *without*
+`SA_RESTART` so a blocked `ioctl()` returns `-EINTR` (`C: src/stub/nvkvm_stub.c:699-708`,
+`:2669-2678`); the interrupt arrives out of band as a **command**
+(`ISOLATE_CMD_INTERRUPT`, `C: src/common/nvkvm_isolate_proto.h:53,122-131`) and the
+worker answers **on the ordinary reply path** with `retval = -EINTR`. There is no separate
+"interrupted" reply message in the C's protocol — which is why this is an `RmError`
+variant and not a new `VerbReply`. And the worker *survives* it (`C:
+src/stub/nvkvm_stub.c:1276-1281`), which is what distinguishes cancellation from worker
+death (§7.3) and what makes the unwind meaningful in the cancelled case.
+
+Cancellation slots into §12.9's table as a **third shape**, not a redesign of `Refusal`:
+
+| shape | example | resolution |
+|---|---|---|
+| **converging** | a sibling materialized the same host VAS / channel / engine object first | release the duplicate, re-plan from the top |
+| **divergent** | proc retired, channel torn down, route rewritten, target gone | refuse loudly — MISS = FAULT |
+| **★ cancelled** | the requester interrupted its own in-flight verb (§5.4) | **non-retryable, orphan-carrying** — surface `Cancelled`, dispose of the residue |
+
+**The mid-chain half.** `Worker::execute` promised all-or-nothing by unwinding internally
+and returned a bare `Err(RmError)`; the unwind's own `free`s were `let _ = …`, as was
+`VerbPlan::Release`'s whole body. So a chain that failed *and could not clean up* left
+host objects in no `Orphans`, in no core state, enumerable from nothing. `execute` now
+returns `Result<VerbReply, VerbFailure>` with `VerbFailure { err, orphans }`, and both
+best-effort paths **record** what they could not dispose of instead of swallowing it.
+`Orphans` moved down to `kayfabe-isolate` (the worker cannot depend on `kayfabe-fwd`) and
+is re-exported. `Refusal` and `Orphans` are now `#[must_use]` — dropping either silently
+leaks host objects, and the compiler is the only thing that reliably notices; verified by
+falsification (all three sites warn, and warnings are `-D`).
+
+★ **A named unknown, deliberately not reasoned about.** `VerbFailure::orphans` enumerates
+every object **whose handle this execution received**. It cannot enumerate an object the
+host may have created for a verb whose reply never arrived — an interrupted alloc. **The C
+never settled this and has no reconciliation code**: its bookkeeping is gated on
+`ret == 0 && nvstatus == 0` (`C: src/qemu/nvkvm_isolate_handlers.c:1444-1445`, `:1497-1501`),
+its guest discards the reply entirely on the interrupt path
+(`C: src/guest/nvkvm_virtio.c:461-471`), and most RM waits are not interruptible in the
+first place (`ogkm: kernel-open/nvidia/nv.c` carries only a handful of `*_interruptible`
+waits) — so a cancelled alloc plausibly *completed*. **OPEN QUESTION requiring a bench
+experiment: does an interrupted `NV_ESC_RM_ALLOC` leave the object created, partially
+created, or absent?** Until that is measured, isolate-session death stays the backstop
+disposition and no per-object completeness may be claimed.
+
+#### Also corrected: three doc claims the audit found false
+
+- **`Orphans`' own rustdoc** said the only case with no releasing caller is a vanished
+  proc, "then the whole isolate is retired and its handle namespace dies with it … Both
+  dispositions are decided, neither is a leak." Both halves were wrong. The namespace
+  dies at the **reap**, not at `retire()` — and since G3, only once quiesced — so between
+  those moments the objects are *held*, which is a deferred disposition and a different
+  thing from what the sentence claimed. And there is an unnamed **third** disposition: a
+  worker that dies mid-chain, where nothing unwinds and the reply never returns.
+- **`core_state_and_consolidation.md` §4**, "Eager host-side reclaim … Today reclaim =
+  isolate-session teardown; fine for correctness, wired for footprint later." Neither
+  clause held. Reclaim was not session teardown, it was *nothing* — G1 meant no path
+  could name the object. And it was therefore not fine for correctness. Rewritten in place.
+- **`gpa.rs`'s "safe by construction"** conflated a real construction with a claim about
+  an adapter `Drop` the core neither performs nor checks. Now split three ways in the
+  rustdoc: by construction (the arena is unreachable from any live proc), **checked**
+  since G3 (the owning isolate is quiesced before the range recycles), and an explicit
+  **adapter obligation** (that `Drop` really does tear the session down).
+
+#### What remains — explicitly L1-M2's, and now an addition rather than a retrofit
+
+The **reclamation policy** and its ledger: when to run a reclaim, and where undisposed
+residue is recorded across a proc's lifetime. `kayfabe_fwd::dispose_on` returns that
+residue as a `#[must_use]` value at both call sites precisely so the sink can be added
+without reshaping anything. G2 (`refresh`'s silent drop of live host state) and G5
+(device reset) were left untouched by design; nothing here forecloses the C's measured
+two-phase reset ordering (`C: src/qemu/nvkvm_gpu_emul.c:2450-2478`, `:3462-3487` — reset
+boot-gating state at fn-47, write position at the re-handshake, **preserve the seqNums**,
+or it is an Xid 119 / the #12 hang).
+
+Pinned by `tests/teardown_reclaim.rs` (14 tests), every one of which was bite-checked by
+reverting its fix and confirming the failure named the right thing — including the one
+that matters most, where re-introducing the in-guard reap produces the R1 panic verbatim
+rather than a silent block.

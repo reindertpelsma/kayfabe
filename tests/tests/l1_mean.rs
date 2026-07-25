@@ -520,7 +520,7 @@ fn ctl_workload(device: &SharedDevice, pids: &[ProcId], i: usize) -> usize {
             .resolve(gpu, lane.pdb, GpuVa(va.0 + 0x40))
             .expect("a just-published VA resolves");
         assert_eq!(
-            (binding.phys, binding.host_va, off),
+            (binding.phys, binding.host_va(), off),
             (p.gpa, Some(p.host_va), 0x40),
             "another thread's commit landed in this thread's binding"
         );
@@ -938,7 +938,7 @@ fn mean_run(mode: LockMode) -> MeanReport {
             .resolve(GPU0, lane_of(P_WITNESS).pdb, GpuVa(va + 0x40))
             .expect("the released verb's VA resolves");
         witness_committed_exactly &=
-            (binding.phys, binding.host_va, off) == (p.gpa, Some(p.host_va), 0x40);
+            (binding.phys, binding.host_va(), off) == (p.gpa, Some(p.host_va), 0x40);
     }
     assert!(
         witness_committed_exactly,
@@ -1300,7 +1300,7 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
                 );
             }
             for (_va, _len, b) in vas.table.iter() {
-                let Some(hv) = b.host_va else { continue };
+                let Some(hv) = b.host_va() else { continue };
                 assert_eq!(
                     host_va_lane(hv),
                     (lane, g.0),
@@ -1773,8 +1773,8 @@ fn a_condemned_components_arena_is_released_once_and_never_recycled_to_an_impost
     let arena = gpu.procs[&victim].arenas[&GPU1].range.clone();
 
     assert!(core_retire_out_of_band(&mut gpu, victim));
-    assert_eq!(gpu.reap_retired(), 1, "reaped exactly once");
-    assert_eq!(gpu.reap_retired(), 0, "and never again");
+    assert_eq!(gpu.reap_retired().len(), 1, "reaped exactly once");
+    assert_eq!(gpu.reap_retired().len(), 0, "and never again");
 
     // No refresh may carve an arena for the condemned component — there is no proc to
     // carve one for, which is the point.

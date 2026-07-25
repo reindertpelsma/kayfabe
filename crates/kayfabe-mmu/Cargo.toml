@@ -8,6 +8,11 @@ license.workspace = true
 [dependencies]
 kayfabe-util.workspace = true
 kayfabe-arch.workspace = true
+# G1 (`l1_concurrency.md` §12.16): a `Binding`'s host publication carries the
+# isolate-namespace-scoped `HostHandle` of its backing, so the address plane names
+# the isolate port's handle type. A pure-crate → pure-crate edge; `kayfabe-isolate`
+# does not (and must not) depend back on the mmu.
+kayfabe-isolate.workspace = true
 
 [lints]
 workspace = true

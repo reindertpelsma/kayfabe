@@ -131,8 +131,8 @@ fn t14_identical_va_disjoint_backing() {
     let (bind_a, off_a) = resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(SHARED_VA.0 + 0x40)).unwrap();
     let (bind_b, _off_b) = resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(SHARED_VA.0 + 0x40)).unwrap();
     assert_eq!(off_a, 0x40);
-    assert_eq!(bind_a.host_va, Some(pub_a.host_va));
-    assert_eq!(bind_b.host_va, Some(pub_b.host_va));
+    assert_eq!(bind_a.host_va(), Some(pub_a.host_va));
+    assert_eq!(bind_b.host_va(), Some(pub_b.host_va));
     assert_ne!(bind_a.phys, bind_b.phys);
 
     // The two host VASes were allocated on DIFFERENT isolates (blast-radius).

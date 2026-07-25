@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use kayfabe_arch::Arch;
 use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa, HClient, Pdb, VChid};
 use kayfabe_completion::{CompletionQueue, DeliveryPlane, FenceArms, PostBatch};
-use kayfabe_isolate::{HostHandle, Isolate, IsolateFactory, IsolateId};
+use kayfabe_isolate::{HostHandle, Isolate, IsolateBox, IsolateFactory, IsolateId, Worker};
 use kayfabe_mmu::{AddressFault, AddressTable};
 use kayfabe_util::Instant;
 
@@ -247,7 +247,11 @@ pub struct Proc {
     /// per GPU). A bug forwarding this proc's GPU0 traffic cannot reach its GPU1 host
     /// handles: the #14 blast-radius boundary lifted onto the GPU axis. Materialized
     /// lazily by [`Gpu`] as the proc's targets are derived.
-    pub isolates: BTreeMap<GpuId, Box<dyn Isolate>>,
+    ///
+    /// Held in [`IsolateBox`] rather than bare `Box<dyn Isolate>` so that **dropping
+    /// one under a lock is loud** (`l1_concurrency.md` §12.16, gap G3b): a real
+    /// isolate's `Drop` is a blocking teardown, and reaping a `Proc` is what runs it.
+    pub isolates: BTreeMap<GpuId, IsolateBox>,
     /// ★ MG-5: this proc's per-**target** private GPA arenas (disjoint by
     /// construction, per GPU). Recycled per target at the reap quiesce point (#80).
     pub arenas: BTreeMap<GpuId, GpaArena>,
@@ -285,12 +289,29 @@ impl Proc {
     /// through the isolate of their **op's target GPU** (MG-5).
     #[must_use]
     pub fn isolate(&self, gpu: GpuId) -> Option<&dyn Isolate> {
-        self.isolates.get(&gpu).map(core::convert::AsRef::as_ref)
+        self.isolates.get(&gpu).map(|iso| &**iso)
     }
 
     /// Mutable access to this proc's isolate for GPU `gpu` (materialized by [`Gpu`]).
-    pub fn isolate_mut(&mut self, gpu: GpuId) -> Option<&mut Box<dyn Isolate>> {
+    pub fn isolate_mut(&mut self, gpu: GpuId) -> Option<&mut IsolateBox> {
         self.isolates.get_mut(&gpu)
+    }
+
+    /// ★ Is every one of this proc's per-target isolates **quiesced** — no worker
+    /// checked out anywhere (`l1_concurrency.md` §12.16, gap G3)?
+    ///
+    /// The reap's precondition, and the reason `Spine::reap_retired` **checks**
+    /// instead of trusting the adapter's declared quiesce point. The adapter picks
+    /// *when* to try (the GSP re-handshake / idle edge, L10); this picks whether it is
+    /// actually safe, per proc, per target. A proc with a verb still in flight on ANY
+    /// of its GPUs is not reapable on any of them: its `Proc` is one value and
+    /// dropping it drops every isolate it owns.
+    ///
+    /// Vacuously true for a proc that materialized no target — there is no sandbox to
+    /// tear down, so there is nothing to wait for.
+    #[must_use]
+    pub fn is_quiesced(&self) -> bool {
+        self.isolates.values().all(|iso| iso.is_quiesced())
     }
 
     /// Stage 1 of teardown (lesson L10): stop every per-target isolate, mark retired.
@@ -313,14 +334,69 @@ impl Proc {
     fn is_untouched(&self) -> bool {
         // "Touched" = host-materialized data-plane state (any target's arena carved,
         // host channel / host VAS allocated, or a binding published into a host VAS).
-        // Pure RPC address-table bookkeeping (host_va = None) is NOT host state — it is
-        // re-derivable from the graph, so it never blocks an early merge. (A proc that
-        // has materialized no target yet has empty `arenas` → vacuously untouched.)
+        // Pure RPC address-table bookkeeping (`Binding::host = None`) is NOT host state
+        // — it is re-derivable from the graph, so it never blocks an early merge. (A
+        // proc that has materialized no target yet has empty `arenas` → vacuously
+        // untouched.)
         self.arenas.values().all(GpaArena::is_untouched)
             && self.channels.values().all(|c| c.host_channel.is_none())
-            && self.vases.values().all(|v| {
-                v.host_vas.is_none() && v.table.iter().all(|(_, _, b)| b.host_va.is_none())
-            })
+            && self
+                .vases
+                .values()
+                .all(|v| v.host_vas.is_none() && v.table.iter().all(|(_, _, b)| b.host.is_none()))
+    }
+}
+
+/// ★ What one [`Spine::reap_retired`] reclaimed — **the corpses, handed to the
+/// caller to drop with ZERO locks held** (`l1_concurrency.md` §12.16, gap G3b).
+///
+/// The reap runs under the device write lock (it is a spine op: it recycles arenas
+/// into the shared per-target windows). Dropping a [`Proc`] there would run every one
+/// of its [`kayfabe_isolate::IsolateBox`]es' `Drop` — `waitpid`, namespace teardown,
+/// fd close — under a rank-0 lock. Returning them instead makes the lock-free drop
+/// the *only* thing the caller can do with the value, and
+/// [`kayfabe_isolate::IsolateBox`]'s `Drop` panics naming R1 if it is not.
+///
+/// Deliberately opaque: there is no accessor that hands out a `&Proc`, because a
+/// reaped proc is not a thing to consult — the only live questions are "how many"
+/// (diagnostics) and "when does it die" (now, here, unlocked).
+#[must_use = "the reaped procs must be DROPPED, and dropped with ZERO ranked locks \
+              held (R1) — a real isolate's Drop is waitpid + namespace teardown. \
+              Bind this value outside every lock scope and let it fall."]
+pub struct Reclaimed {
+    procs: Vec<Proc>,
+    deferred: usize,
+}
+
+impl Reclaimed {
+    /// How many procs this reap took (and this value will destroy).
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.procs.len()
+    }
+
+    /// True if the reap took nothing.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.procs.is_empty()
+    }
+
+    /// How many retired procs the reap **put back** because they were not quiesced
+    /// (§12.16, G3) — a verb was still in flight on one of their isolates. They stay
+    /// on the retired list for the next quiesce point; nothing is lost, and nothing
+    /// was torn down under a live connection.
+    #[must_use]
+    pub fn deferred(&self) -> usize {
+        self.deferred
+    }
+}
+
+impl core::fmt::Debug for Reclaimed {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Reclaimed")
+            .field("reaped", &self.procs.len())
+            .field("deferred", &self.deferred)
+            .finish()
     }
 }
 
@@ -567,7 +643,7 @@ impl Spine {
         let pid = proc.id;
         proc.isolates
             .entry(gpu)
-            .or_insert_with(|| isolates.spawn(IsolateId(pid.0), gpu));
+            .or_insert_with(|| IsolateBox::new(isolates.spawn(IsolateId(pid.0), gpu)));
         if let std::collections::btree_map::Entry::Vacant(e) = proc.arenas.entry(gpu) {
             e.insert(target.gpa.carve()?);
         }
@@ -681,7 +757,7 @@ impl Spine {
 
         for (&(gpu, pdb), vas) in proc.vases.iter_mut() {
             // Unbind stale RPC bindings (mapping gone), leaving host-backed
-            // publish_backing entries (host_va = Some) alone.
+            // publish_backing entries (`Binding::host = Some`) alone.
             let stale: Vec<u64> = vas
                 .rpc_bound
                 .iter()
@@ -705,7 +781,7 @@ impl Spine {
                         Binding {
                             phys,
                             aperture: Aperture::SysmemCoherent,
-                            host_va: None,
+                            host: None,
                         },
                     )
                     .map_err(GpuError::Address)?;
@@ -1077,25 +1153,105 @@ impl Spine {
     /// the quiesce point (its GSP re-handshake / idle-release equivalent) and calls
     /// it.
     ///
-    /// Reaping drops every retired proc and **recycles its GPA arena** into the
-    /// window ([`GpaSpace::release`]) — without this, sequential process churn
+    /// Reaping **recycles each reaped proc's GPA arena** into its target window
+    /// ([`GpaSpace::release`]) — without this, sequential process churn
     /// (create → destroy → create …, the device teardown→restart lifecycle)
     /// exhausts the window, exactly the leak the C paid for in #80
     /// (`teardown_hardening_done`: "host reaper + GPA free-list"). A retired
     /// proc's undelivered completions die with it — the guest tore the context
-    /// down; there is no waiter left to starve. Returns the number reaped.
-    pub fn reap_retired(&mut self) -> usize {
-        let n = self.retired.len();
-        for p in self.retired.drain(..) {
+    /// down; there is no waiter left to starve.
+    ///
+    /// ★ **G3b (§12.16): it RETURNS the corpses; it does not drop them.** A real
+    /// [`kayfabe_isolate::Isolate`]'s `Drop` is `waitpid` + namespace teardown — a
+    /// blocking syscall — and every caller of this function holds the device write
+    /// lock, because reaping is a spine op. Dropping in place was therefore a live R1
+    /// violation that no assert covered (`Worker::execute` guards verbs, not drops).
+    /// The caller now drops the returned [`Reclaimed`] **after** releasing every lock;
+    /// [`kayfabe_isolate::IsolateBox`]'s own `Drop` asserts that it did.
+    ///
+    /// ★ **G3 (§12.16): it CHECKS quiescence; it does not trust it.** A retired proc
+    /// whose isolate still has a worker checked out is put **back** on the retired
+    /// list and reaped at a later quiesce point. The adapter declares *when* to try
+    /// (the L10 quiesce edge); [`Proc::is_quiesced`] decides whether trying is safe.
+    /// Without the check, `SharedDevice::verb_op`'s lock-free execute gap — worker
+    /// checked out, all locks released, a `Box<dyn RmBackend>` live on a foreign
+    /// thread's stack — is a window in which the executor may legally run this reap
+    /// and tear the sandbox down underneath it.
+    ///
+    /// Returns the reaped procs plus a count of those deferred for not being
+    /// quiesced.
+    pub fn reap_retired(&mut self) -> Reclaimed {
+        let mut procs = Vec::new();
+        let mut deferred = Vec::new();
+        // Order-preserving partition: `retired` is a deterministic sequence and a
+        // deferred proc keeps its place in it (decision #27).
+        for mut p in core::mem::take(&mut self.retired) {
+            if !p.is_quiesced() {
+                deferred.push(p);
+                continue;
+            }
             // Release EACH target's arena back to ITS target window (MG-5: per-GPU
-            // arena recycle — the #80 class per target).
-            for (gpu, arena) in p.arenas {
+            // arena recycle — the #80 class per target). Taken out of the proc so the
+            // proc itself can travel to the caller for its lock-free drop.
+            for (gpu, arena) in core::mem::take(&mut p.arenas) {
                 if let Some(t) = self.targets.get_mut(&gpu) {
                     t.gpa.release(arena);
                 }
             }
+            procs.push(p);
         }
-        n
+        let deferred_count = deferred.len();
+        self.retired = deferred;
+        Reclaimed {
+            procs,
+            deferred: deferred_count,
+        }
+    }
+
+    /// ★ Return a checked-out [`Worker`] to a proc that has **already left the live
+    /// set** (`l1_concurrency.md` §12.16, gap G3 — the hazard the quiesce check
+    /// creates and must therefore also close).
+    ///
+    /// The ordinary return path resolves the proc through the live map. But a verb
+    /// executes with every lock released, so its proc can be retired in the gap — by a
+    /// graph-driven teardown, or by a sibling worker's HUP — and then the live-map
+    /// lookup misses and the worker handle is simply dropped. Before G3 that was
+    /// merely untidy; **with** G3 it is a wedge: the abandoned slot stays checked out,
+    /// the isolate never quiesces, the proc is deferred at every quiesce point
+    /// forever, and its GPA arena never returns to the window. A permanent leak is not
+    /// an acceptable price for closing a use-after-free.
+    ///
+    /// So a retired proc still accepts returns. It accepts nothing else — it refuses
+    /// new checkouts (§5.4), it is out of every routing map, and no op can reach it.
+    /// Returns `false` if no retired proc has that id (already reaped, or never
+    /// retired), in which case the worker dies with its isolate, which is correct:
+    /// there is no slot left to un-busy.
+    ///
+    /// C reference: the C had no interlock here at all. Its session reaper argued
+    /// rather than checked — `C: src/qemu/virtio_nvgpu.c:113-118`, "a pooled IOCTL
+    /// worker may still be unwinding after `nvkvm_isolate_kill` (which joins the
+    /// isolate's reader thread, **not** the pool workers) … so freeing the session
+    /// struct here cannot UAF it." That is an argument about what the worker touches,
+    /// not a guarantee that it is done. This pair — [`Isolate::in_flight`] plus this
+    /// return path — is that missing interlock.
+    pub fn checkin_retired(&mut self, pid: ProcId, gpu: GpuId, worker: Worker) -> bool {
+        let Some(p) = self.retired.iter_mut().find(|p| p.id == pid) else {
+            return false;
+        };
+        let Some(iso) = p.isolates.get_mut(&gpu) else {
+            return false;
+        };
+        iso.checkin(worker);
+        true
+    }
+
+    /// How many retired procs are still awaiting a reap — either never reaped yet, or
+    /// deferred by [`Spine::reap_retired`] for not being quiesced (§12.16, G3).
+    /// Diagnostics, and the executable statement that a deferred reap is *deferred*
+    /// rather than lost.
+    #[must_use]
+    pub fn retired_len(&self) -> usize {
+        self.retired.len()
     }
 
     /// Compose+post one completion batch for target `gpu` if ITS drain gate is open
@@ -1233,8 +1389,20 @@ impl Gpu {
     }
 
     /// Reap retired procs at the quiesce point (see [`Spine::reap_retired`]).
-    pub fn reap_retired(&mut self) -> usize {
+    ///
+    /// Returns [`Reclaimed`] rather than a count for the same reason the spine op
+    /// does (§12.16, G3b): the corpses are dropped by whoever binds the value, and the
+    /// caller is the only one who knows whether it is holding a lock. `&mut Gpu` is
+    /// itself an exclusivity proof rather than a lock, so a single-threaded caller may
+    /// simply let it fall.
+    pub fn reap_retired(&mut self) -> Reclaimed {
         self.spine.reap_retired()
+    }
+
+    /// How many retired procs are awaiting a reap (see [`Spine::retired_len`]).
+    #[must_use]
+    pub fn retired_len(&self) -> usize {
+        self.spine.retired_len()
     }
 
     /// Compose+post one completion batch (see [`Spine::pump_completions`]).

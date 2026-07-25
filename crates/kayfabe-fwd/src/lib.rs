@@ -171,6 +171,29 @@ pub enum FwdFault {
         /// The target GPU whose isolate pool is saturated.
         gpu: GpuId,
     },
+    /// ★ **The op was CANCELLED** — its requester interrupted the in-flight verb
+    /// (`l1_concurrency.md` §5.4, §12.16 gap G4). Not a host failure and not
+    /// staleness: the host is fine and the proc is typically still very much alive
+    /// (the ordinary case is one guest *thread* dying while its process runs on).
+    ///
+    /// It exists because without it a cancellation arrives as
+    /// [`RmError::Other`] and the failure-path re-validation resolves it to
+    /// `FwdFault::Rm(..)` whenever the proc is still live — which is the *normal*
+    /// cancellation case. That is §12.10's wrong-reason conflation one layer over: a
+    /// canary asserting "it refused" would pass while the fault said "the host
+    /// failed" about a host that did nothing wrong.
+    ///
+    /// **Non-retryable.** Re-issuing work whose requester is gone is not a resolution.
+    /// It is §12.9's third staleness shape: non-retryable and orphan-carrying (see
+    /// [`kayfabe_isolate::VerbFailure`]).
+    ///
+    /// The mechanism that produces it — the §5.4 interrupt handshake — is L1-M2's;
+    /// this is the vocabulary, landed first so it is not a retrofit.
+    Cancelled {
+        /// The proc whose op was cancelled. Named because the fault must not read as
+        /// "this proc is gone" — it usually is not.
+        proc: ProcId,
+    },
     /// ★ **R5**: the world moved while a verb was in flight lock-free, so the commit
     /// phase's target is no longer what the plan named. MISS=FAULT extends to
     /// staleness — the op surfaces this refusal and does **not** "finish what it
@@ -273,37 +296,35 @@ pub struct Planned<P> {
 
 /// Host objects a **refused commit** could not adopt.
 ///
+/// Re-exported from the isolate port, where it moved when [`kayfabe_isolate::Worker`]
+/// gained the ability to return one (§12.16, G4: a mid-chain verb failure has orphans
+/// too, and the worker cannot depend on this crate).
+///
 /// R5's disposition rule made explicit: a commit that refuses must not silently leak
 /// what its execute phase already allocated. The caller runs
 /// [`Orphans::release_plan`] on the SAME worker, still lock-free, before checking it
-/// back in. (The one case with no such caller is a proc that vanished entirely — then
-/// the whole isolate is retired and its handle namespace dies with it, which is the
-/// retire path owning the disposition instead. Both dispositions are decided, neither
-/// is a leak.)
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Orphans {
-    /// `(host VAS, host GPU VA)` mappings to undo first.
-    pub unmap: Vec<(HostHandle, u64)>,
-    /// Objects to free.
-    pub free: Vec<HostHandle>,
-}
-
-impl Orphans {
-    /// True if there is nothing to dispose of.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.unmap.is_empty() && self.free.is_empty()
-    }
-
-    /// The verb chain that disposes of these orphans.
-    #[must_use]
-    pub fn release_plan(&self) -> VerbPlan {
-        VerbPlan::Release {
-            unmap: self.unmap.clone(),
-            free: self.free.clone(),
-        }
-    }
-}
+/// back in.
+///
+/// ★ **Correction (§12.16, G4).** This doc used to end "*The one case with no such
+/// caller is a proc that vanished entirely — then the whole isolate is retired and its
+/// handle namespace dies with it … Both dispositions are decided, neither is a leak.*"
+/// Both halves of that were wrong:
+///
+/// - **The namespace dies at the REAP, not at `retire()`.** `Proc::retire` stops the
+///   isolate; the sandbox and its handles survive until `Spine::reap_retired` drops the
+///   `Proc` — deferredly, at an adapter-declared quiesce point, and (since G3) only
+///   once the isolate is quiesced. Between those two moments the objects are held, not
+///   disposed of. That is a *deferred* disposition, which is a fine thing to have and
+///   a different thing from what the sentence claimed.
+/// - **There is a third disposition, and it was unnamed:** a worker that dies
+///   mid-chain. Nothing unwinds, the reply never returns, and everything allocated
+///   before the failure point is in no `Orphans`, in no core state, and enumerable from
+///   nothing. Its only backstop is the same bulk one the C had — the session's fds
+///   closing at reap (`C: src/qemu/virtio_nvgpu.c:100-118`, the #80 reaper).
+///
+/// See [`kayfabe_isolate::VerbFailure`] for the precise limits of what can be
+/// enumerated, including the open question about interrupted allocs.
+pub use kayfabe_isolate::Orphans;
 
 /// A commit phase's loud refusal: why, what it could not adopt, and whether the op
 /// should be re-planned from the top.
@@ -320,6 +341,13 @@ impl Orphans {
 ///
 /// So: `retry = true` ⇒ *converging* staleness (re-plan, bounded); `retry = false` ⇒
 /// *divergent* staleness (the target is gone — MISS=FAULT, surface it).
+///
+/// ★ **`#[must_use]` (§12.16, G4):** a dropped `Refusal` silently leaks every host
+/// object in its [`Orphans`] — the disposition rule this type exists to carry, undone
+/// by a missing semicolon's worth of attention. The compiler is the enforcement.
+#[must_use = "a dropped Refusal discards its `orphans` — every host object it names \
+              leaks. Release them on the checked-out worker (`orphans.release_plan()`) \
+              and surface `fault`, or hand the whole Refusal onward."]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Refusal {
     /// The fault to surface to the guest (if this is not retried).
@@ -401,14 +429,61 @@ fn round_trip<T>(
     let out = match executed {
         Ok(reply) => commit(proc, Some(reply)).map_err(|r| {
             if !r.orphans.is_empty() {
+                // Residue of a failed release has no sink in the core yet — see
+                // `dispose_on` and §12.16's "what remains".
                 let _ = worker.execute(&r.orphans.release_plan());
             }
             r.fault
         }),
-        Err(e) => Err(FwdFault::Rm(e)),
+        // ★ G4 (§12.16): cancellation is named apart from host failure here too, and
+        // the failure's own orphans get a disposal attempt on the same worker before
+        // it is checked back in.
+        Err(f) => {
+            let _ = dispose_on(&mut worker, f.orphans);
+            Err(verb_fault(pid, f.err))
+        }
     };
     checkin(proc, gpu, worker);
     out
+}
+
+/// Best-effort disposal of a verb failure's `orphans` on the SAME worker, still
+/// lock-free — and it hands back **what it still could not dispose of**
+/// (`l1_concurrency.md` §12.16, gap G4).
+///
+/// The residue has no core-side sink yet: recording undisposed host objects across a
+/// proc's lifetime is the reclamation ledger, which is L1-M2's to design. Until it
+/// exists the disposition of record is the one the C also relied on — the isolate's
+/// whole handle namespace dying when its session is reaped
+/// (`C: src/qemu/virtio_nvgpu.c:100-118`). This function exists so that the residue is
+/// a **named, returned value** at every call site rather than a swallowed `let _ =`,
+/// which is what makes the ledger an addition later instead of a retrofit.
+#[must_use = "the returned residue is the set of host objects that STILL exist and \
+              could not be disposed of — bind it and say what happens to it."]
+pub fn dispose_on(worker: &mut Worker, orphans: Orphans) -> Orphans {
+    if orphans.is_empty() {
+        return orphans;
+    }
+    match worker.execute(&orphans.release_plan()) {
+        Ok(_) => Orphans::default(),
+        Err(f) => f.orphans,
+    }
+}
+
+/// ★ Surface a lock-free verb failure as a forwarding fault, keeping **cancellation
+/// distinct from host failure** (`l1_concurrency.md` §12.16, gap G4; §12.10 one layer
+/// over).
+///
+/// [`RmError::Interrupted`] is a fact about the *requester* — a guest thread died or
+/// took a signal and its in-flight verb was interrupted (§5.4). Reporting it as
+/// `FwdFault::Rm` would say "the host refused" about a host that did exactly what it
+/// was asked. Every other `RmError` is a genuine host refusal and stays one.
+#[must_use]
+pub fn verb_fault(proc: ProcId, err: RmError) -> FwdFault {
+    match err {
+        RmError::Interrupted => FwdFault::Cancelled { proc },
+        e => FwdFault::Rm(e),
+    }
 }
 
 /// Result of one backing publication.
@@ -597,7 +672,11 @@ pub fn commit_publish(
             Binding {
                 phys: gpa.0,
                 aperture: Aperture::SysmemCoherent,
-                host_va: Some(host_va),
+                // ★ G1 (§12.16): the ALLOCATION travels with the PLACEMENT. Storing
+                // only `host_va` here is what made the host memory object
+                // unreachable from core state — a bound range no reclaim path could
+                // ever free. `HostBacking` makes that omission untypeable.
+                host: Some(kayfabe_mmu::HostBacking { memory, host_va }),
             },
         )
         .map_err(|e| Refusal {
@@ -666,7 +745,7 @@ pub struct DoorbellOutcome {
 }
 
 /// Check every VA in `working_set` resolves **host-published** in `table` — the
-/// #14 gate condition. Bound-but-unpublished (`host_va = None`, the exact #14
+/// #14 gate condition. Bound-but-unpublished (`Binding::host = None`, the exact #14
 /// EXECUTION fault: the shadow had it, the host VAS did not) and unbound are both
 /// loud faults, never a guess (`execution_plane.md` §2.4).
 fn gate_vas(
@@ -676,7 +755,7 @@ fn gate_vas(
 ) -> Result<(), FwdFault> {
     for va in working_set {
         let (binding, _off) = table.resolve(pdb, va)?; // MISS=FAULT
-        if binding.host_va.is_none() {
+        if binding.host.is_none() {
             return Err(FwdFault::Address(AddressFault::Miss { pdb, va }));
         }
     }
@@ -1664,7 +1743,7 @@ pub fn apply_pushbuffer(
                             Binding {
                                 phys: dst.0,
                                 aperture: Aperture::Vidmem,
-                                host_va: None,
+                                host: None,
                             },
                         )?;
                     }
@@ -1727,7 +1806,7 @@ pub fn parse_pushbuffer(
 
 /// Read-only query: would `working_set` pass channel `cid`'s ring-gate right now
 /// (every VA published into that channel's Vas's own host VAS)? A VA with no host
-/// publication (`host_va = None`) is a loud [`FwdFault`], never guessed.
+/// publication (`Binding::host = None`) is a loud [`FwdFault`], never guessed.
 ///
 /// This is the load-bearing per-`Vas` publication check: two procs' identical guest
 /// VAs each resolve in their OWN Vas (keyed by PDB), so the gate passes for both only

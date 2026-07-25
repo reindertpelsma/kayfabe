@@ -845,11 +845,123 @@ pub struct RmRecorder {
     pub log: Vec<(IsolateId, RmVerb)>,
     /// If set, the next verb on ANY isolate fails with this error (then clears).
     pub fail_next: Option<RmError>,
+    /// ★ **Standing** per-kind failure injection: every verb of this kind fails with
+    /// this error until the entry is removed (`l1_concurrency.md` §12.16).
+    ///
+    /// [`RmRecorder::fail_next`] is one-shot, which cannot express the case the G4
+    /// teardown work needs: a chain whose verb fails **and** whose unwind's own `free`
+    /// then fails too — i.e. the only way a `VerbFailure` carries a non-empty
+    /// `orphans`. A failing teardown is not an exotic scenario to script; it is the
+    /// scenario the residue vocabulary exists for.
+    pub fail_kinds: BTreeMap<VerbKind, RmError>,
     /// Armed holds, matched newest-spec-first and consumed one-shot.
     holds: Vec<(HoldSpec, Arc<VerbHold>)>,
 }
 
+/// ★ **The acquire/release ledger** — every host resource the mock handed out, and
+/// whether it came back (`l1_concurrency.md` §12.16).
+///
+/// A pure query over [`RmRecorder::log`], so it costs nothing to keep and cannot drift
+/// from what actually happened. It is the invariant that generalises G1–G4: *every host
+/// object acquired is released exactly once; every GPU mapping made is unmapped exactly
+/// once; nothing is released that was never acquired.* A teardown test asserts this
+/// balances rather than asserting a hand-picked list of verbs, which is what makes it
+/// catch the leak nobody thought to name.
+///
+/// **What "leaked" means here, precisely.** [`HostLedger::leaked`] is per-**object**
+/// leakage: an object whose handle was minted and never individually freed. It is not a
+/// claim that host memory is lost forever — an isolate's whole handle namespace dies
+/// with its session at the reap, which is the bulk backstop the C also relied on
+/// (`C: src/qemu/virtio_nvgpu.c:100-118`, #80). The distinction is the point: bulk
+/// disposal at session death is a real disposition, and it is a *different* one from
+/// per-object reclaim, so a test that wants the latter must say so.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct HostLedger {
+    /// Objects minted and never freed, per isolate — the per-object leak set.
+    pub leaked: BTreeMap<IsolateId, BTreeSet<HostHandle>>,
+    /// `(isolate, handle)` freed more than once.
+    pub double_free: Vec<(IsolateId, HostHandle)>,
+    /// `(isolate, handle)` freed without ever having been minted in that isolate — a
+    /// cross-namespace reach if it ever appears (boundary 2).
+    pub free_of_unknown: Vec<(IsolateId, HostHandle)>,
+    /// `(isolate, host VAS, host GPU VA)` mapped and never unmapped.
+    pub leaked_maps: BTreeMap<IsolateId, BTreeSet<(HostHandle, u64)>>,
+    /// `(isolate, host VAS, host GPU VA)` unmapped without a matching map.
+    pub unmap_of_unknown: Vec<(IsolateId, HostHandle, u64)>,
+}
+
+impl HostLedger {
+    /// True if every acquisition was matched by exactly one release, and nothing was
+    /// released that was never acquired — objects **and** mappings.
+    #[must_use]
+    pub fn is_balanced(&self) -> bool {
+        self.leaked.values().all(BTreeSet::is_empty)
+            && self.leaked_maps.values().all(BTreeSet::is_empty)
+            && self.double_free.is_empty()
+            && self.free_of_unknown.is_empty()
+            && self.unmap_of_unknown.is_empty()
+    }
+
+    /// Objects still outstanding on `isolate` (empty set if it never leaked).
+    #[must_use]
+    pub fn leaked_on(&self, isolate: IsolateId) -> BTreeSet<HostHandle> {
+        self.leaked.get(&isolate).cloned().unwrap_or_default()
+    }
+
+    /// Total outstanding objects across every isolate.
+    #[must_use]
+    pub fn leaked_count(&self) -> usize {
+        self.leaked.values().map(BTreeSet::len).sum()
+    }
+}
+
 impl RmRecorder {
+    /// ★ Replay the verb log into an acquire/release [`HostLedger`].
+    ///
+    /// Handle-minting verbs are acquisitions; [`RmVerb::Free`] is a release;
+    /// [`RmVerb::MapGpuVa`]/[`RmVerb::UnmapGpuVa`] are the mapping pair. Only
+    /// SUCCESSFUL verbs are in the log (the mock records after the backend succeeds),
+    /// which is the right semantics: a failed alloc acquired nothing, and a failed free
+    /// released nothing — the latter being exactly why `VerbFailure::orphans` exists.
+    #[must_use]
+    pub fn ledger(&self) -> HostLedger {
+        let mut l = HostLedger::default();
+        for (iso, verb) in &self.log {
+            let live = l.leaked.entry(*iso).or_default();
+            let minted = match verb {
+                RmVerb::Alloc { handle, .. }
+                | RmVerb::AllocEngineObject { handle, .. }
+                | RmVerb::AllocVaSpace { handle }
+                | RmVerb::AllocSysmem { handle, .. }
+                | RmVerb::AllocChannel { handle, .. } => Some(*handle),
+                _ => None,
+            };
+            if let Some(h) = minted {
+                if !live.insert(h) {
+                    l.double_free.push((*iso, h)); // a re-mint of a live handle
+                }
+                continue;
+            }
+            match verb {
+                RmVerb::Free { obj } => {
+                    if !live.remove(obj) {
+                        l.free_of_unknown.push((*iso, *obj));
+                    }
+                }
+                RmVerb::MapGpuVa { vas, va, .. } => {
+                    l.leaked_maps.entry(*iso).or_default().insert((*vas, *va));
+                }
+                RmVerb::UnmapGpuVa { vas, va }
+                    if !l.leaked_maps.entry(*iso).or_default().remove(&(*vas, *va)) =>
+                {
+                    l.unmap_of_unknown.push((*iso, *vas, *va));
+                }
+                _ => {}
+            }
+        }
+        l
+    }
+
     /// Arm a one-shot hold: the first verb matching `spec` parks inside the backend
     /// until the returned [`VerbHold`] is released.
     pub fn hold(&mut self, spec: HoldSpec) -> Arc<VerbHold> {
@@ -966,7 +1078,11 @@ impl MockRmBackend {
         if self.ns.lock().expect("ns").retired {
             return Err(RmError::Other(0xdead));
         }
-        if let Some(e) = self.recorder.lock().expect("recorder").fail_next.take() {
+        let mut r = self.recorder.lock().expect("recorder");
+        if let Some(&e) = r.fail_kinds.get(&verb) {
+            return Err(e);
+        }
+        if let Some(e) = r.fail_next.take() {
             return Err(e);
         }
         Ok(())
@@ -1234,6 +1350,18 @@ impl Isolate for MockIsolate {
             }
             None => false,
         }
+    }
+    fn in_flight(&self) -> usize {
+        // ★ G3 (§12.16): counted from `Busy` DIRECTLY, never as
+        // `pool_size() - idle_workers()`. A `Dead` slot is neither idle nor in
+        // flight and can never become either (§7.3, "no resurrect"), so the
+        // subtraction would report a lost worker as a live round trip forever — an
+        // isolate that never quiesces, a proc that never reaps, an arena that never
+        // recycles. Exactly the trap the quiesce predicate exists to avoid.
+        self.slots
+            .iter()
+            .filter(|s| matches!(s, Slot::Busy))
+            .count()
     }
     fn retire(&mut self) {
         self.retired = true;
