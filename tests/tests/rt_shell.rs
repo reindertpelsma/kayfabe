@@ -1,4 +1,4 @@
-//! ★ L1-M1 stage 2 — the `nvkvm-rt` threaded shell, integration-tested
+//! ★ L1-M1 stage 2 — the `kayfabe-rt` threaded shell, integration-tested
 //! (`l1_concurrency.md` §3.3 R1/R3, §3.4 the lock swap, §8.2 both lock
 //! configurations from day one).
 //!
@@ -37,22 +37,22 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant as WallInstant};
 
-use nvkvm_arch::ids::{EngineKind, GpuId, GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_completion::OsEventRef;
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_core::reactor::SourceKind;
-use nvkvm_core::rmgraph::RmEvent;
-use nvkvm_core::{ChanId, ProcAnchor, ProcId};
-use nvkvm_isolate::HostHandle;
-use nvkvm_mocks::{MockArch, MockIsolateFactory, SharedRecorder};
-use nvkvm_rt::device::{LockMode, SharedDevice, SignalOutcome};
-use nvkvm_rt::executor::{Effect, Executor};
-use nvkvm_rt::inbox::{CoreEvent, inbox};
-use nvkvm_rt::lock::{self, BlockingSection, LockRank};
-use nvkvm_tests::{Scenario, identical_handles};
-use nvkvm_util::Instant;
-use nvkvm_vmm::CoreEventKind;
+use kayfabe_arch::ids::{EngineKind, GpuId, GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_core::reactor::SourceKind;
+use kayfabe_core::rmgraph::RmEvent;
+use kayfabe_core::{ChanId, ProcAnchor, ProcId};
+use kayfabe_isolate::HostHandle;
+use kayfabe_mocks::{MockArch, MockIsolateFactory, SharedRecorder};
+use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
+use kayfabe_rt::executor::{Effect, Executor};
+use kayfabe_rt::inbox::{CoreEvent, inbox};
+use kayfabe_rt::lock::{self, BlockingSection, LockRank};
+use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_util::Instant;
+use kayfabe_vmm::CoreEventKind;
 
 // ---------------------------------------------------------------------------------
 // Harness helpers (watchdog + scenario), following concurrency_stress.rs
@@ -62,8 +62,8 @@ use nvkvm_vmm::CoreEventKind;
 /// (bounded termination — a future wedge fails fast, never an opaque CI timeout).
 #[must_use]
 fn watchdog(test: &'static str, limit: Duration) -> WatchdogGuard {
-    let limit = match std::env::var("NVKVM_STRESS_WATCHDOG_SECS") {
-        Ok(s) => Duration::from_secs(s.parse().expect("NVKVM_STRESS_WATCHDOG_SECS: seconds")),
+    let limit = match std::env::var("KAYFABE_STRESS_WATCHDOG_SECS") {
+        Ok(s) => Duration::from_secs(s.parse().expect("KAYFABE_STRESS_WATCHDOG_SECS: seconds")),
         Err(_) => limit,
     };
     let done = Arc::new(AtomicBool::new(false));
@@ -179,7 +179,7 @@ struct ProcSnap {
     retired: bool,
 }
 
-fn snap_proc(p: &nvkvm_core::gpu::Proc) -> ProcSnap {
+fn snap_proc(p: &kayfabe_core::gpu::Proc) -> ProcSnap {
     ProcSnap {
         anchor: p.anchor,
         clients: p.clients.clone(),

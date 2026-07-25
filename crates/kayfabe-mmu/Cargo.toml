@@ -1,0 +1,13 @@
+[package]
+name = "kayfabe-mmu"
+description = "The address plane: the per-VAS forward-populated address table (mode2_address_table.md — the table IS the guest's TLB; MISS=FAULT) + the GMMU walk algorithm skeleton written against kayfabe-arch::GmmuFmt."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+
+[lints]
+workspace = true

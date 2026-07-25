@@ -1,4 +1,4 @@
-# CLAUDE.md — nvkvm-rs (Mode-2 Rust rewrite)
+# CLAUDE.md — kayfabe (Mode-2 Rust rewrite)
 
 Navigational map + the non-negotiable rules. Read `README.md` and `ARCHITECTURE.md`
 first; the settled design lives in `../nvidia-gpu-passthrough/docs/design/`
@@ -8,19 +8,19 @@ The design is settled — **implement it, do not re-improvise architecture.**
 
 ## The two rules that define this repo
 
-1. **The core is pure.** `nvkvm-core`, `-mmu`, `-fwd`, `-completion`, `-arch`, `-util`,
+1. **The core is pure.** `kayfabe-core`, `-mmu`, `-fwd`, `-completion`, `-arch`, `-util`,
    `-completion` contain **no** OS calls, no syscalls, no real time, no hypervisor
    types, no `#[repr(C)]` NVIDIA wire structs, and **no concrete GPU-generation or
    driver-version name** (`Ampere`, `V580`, …). `#![forbid(unsafe_code)]` workspace-wide.
    Everything effectful crosses a trait: `Vmm`, `Arch`, `RmBackend`, `Isolate`.
-   - Quarantine: `#[repr(C)]` NVIDIA layouts live ONLY in `nvkvm-abi` (Axis A).
+   - Quarantine: `#[repr(C)]` NVIDIA layouts live ONLY in `kayfabe-abi` (Axis A).
    - Grep gate (CI): no `Ampere|Turing|Hopper|Blackwell|Ada|V5\d\d` in any logic crate.
 
 2. **Arch impls inherit the core without editing it.** Adding a real GPU generation is
    `impl Arch for <Gen>` (+ maybe one `GmmuFmt`) in an adapter crate, with **zero edits
    to any logic crate**. If a change to support an arch/version/hypervisor requires
-   touching `nvkvm-core`/`-mmu`/`-fwd`/`-completion`, the seam is wrong — fix the seam,
-   not the core. `nvkvm-mocks::MockArch` is the standing proof (the whole suite runs the
+   touching `kayfabe-core`/`-mmu`/`-fwd`/`-completion`, the seam is wrong — fix the seam,
+   not the core. `kayfabe-mocks::MockArch` is the standing proof (the whole suite runs the
    real core against a fake arch).
 
 ## Green-gate discipline (inherited from uwgsocks; testing strategy §7)

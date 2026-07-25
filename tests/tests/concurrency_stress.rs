@@ -3,14 +3,14 @@
 //! The core WILL be invoked concurrently from multiple vCPUs — different guest
 //! processes ringing doorbells / allocating / mapping simultaneously. Safe Rust +
 //! `#![forbid(unsafe_code)]` already make a core data race *unrepresentable*
-//! (compile-time-asserted `Send + Sync`, see `nvkvm_util::assert_send_sync!` at the
+//! (compile-time-asserted `Send + Sync`, see `kayfabe_util::assert_send_sync!` at the
 //! bottom of every logic crate); what these tests prove is the other half of the
 //! contract: **under a realistic caller-provided synchronization strategy, the
 //! core's invariants hold across hundreds of thousands of interleaved ops** — no
 //! panic, no corruption, no cross-proc leak, completion conservation, consistent
 //! final state.
 //!
-//! The modeled strategy is the realistic one from the contract (`nvkvm-core` crate
+//! The modeled strategy is the realistic one from the contract (`kayfabe-core` crate
 //! docs): a **device-global `RwLock`** for RmGraph/routing/delivery mutation +
 //! concurrent lock-free reads, and **split per-`Proc` `&mut` borrows** for the
 //! per-proc planes (the #14-isolation-as-parallelism payoff).
@@ -51,8 +51,8 @@
 //! under ThreadSanitizer on nightly (requires `rust-src`):
 //!
 //! ```text
-//! NVKVM_STRESS_WATCHDOG_SECS=900 RUSTFLAGS="-Zsanitizer=thread" \
-//!     cargo +nightly test -p nvkvm-tests --test concurrency_stress \
+//! KAYFABE_STRESS_WATCHDOG_SECS=900 RUSTFLAGS="-Zsanitizer=thread" \
+//!     cargo +nightly test -p kayfabe-tests --test concurrency_stress \
 //!     -Zbuild-std --target x86_64-unknown-linux-gnu -- --test-threads=1
 //! ```
 //!
@@ -62,23 +62,23 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
-use nvkvm_arch::ids::GpuId;
+use kayfabe_arch::ids::GpuId;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Barrier, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant as WallInstant};
 
-use nvkvm_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_completion::OsEventRef;
-use nvkvm_core::ProcId;
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::{Gpu, Proc};
-use nvkvm_core::rmgraph::RmEvent;
-use nvkvm_fwd::{gate_working_set, handle_doorbell, publish_backing, resolve};
-use nvkvm_mocks::{MockArch, MockIsolateFactory, RmVerb, SharedRecorder};
-use nvkvm_tests::{Scenario, identical_handles};
-use nvkvm_util::Instant;
+use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::ProcId;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::{Gpu, Proc};
+use kayfabe_core::rmgraph::RmEvent;
+use kayfabe_fwd::{gate_working_set, handle_doorbell, publish_backing, resolve};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, RmVerb, SharedRecorder};
+use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_util::Instant;
 
 /// Simulated vCPU threads hammering one shared device.
 const N_THREADS: usize = 16;
@@ -94,12 +94,12 @@ const N_PROCS: usize = 8;
 /// failure instead of an opaque CI timeout. The watchdog thread is detached and
 /// exits quietly once the guard drops.
 ///
-/// `NVKVM_STRESS_WATCHDOG_SECS` overrides `limit` — sanitizer runs (TSan ≈5–15×
+/// `KAYFABE_STRESS_WATCHDOG_SECS` overrides `limit` — sanitizer runs (TSan ≈5–15×
 /// slower) must set it so the watchdog measures wedging, not instrumentation tax.
 #[must_use]
 fn watchdog(test: &'static str, limit: Duration) -> WatchdogGuard {
-    let limit = match std::env::var("NVKVM_STRESS_WATCHDOG_SECS") {
-        Ok(s) => Duration::from_secs(s.parse().expect("NVKVM_STRESS_WATCHDOG_SECS: seconds")),
+    let limit = match std::env::var("KAYFABE_STRESS_WATCHDOG_SECS") {
+        Ok(s) => Duration::from_secs(s.parse().expect("KAYFABE_STRESS_WATCHDOG_SECS: seconds")),
         Err(_) => limit,
     };
     let done = Arc::new(AtomicBool::new(false));
@@ -197,7 +197,7 @@ impl Rng {
 /// cross-proc leak through the core would be visible right here).
 fn assert_verb_in_namespace(iso: u32, verb: &RmVerb) {
     let ns = u64::from(iso) + 1;
-    let own = |h: nvkvm_isolate::HostHandle| {
+    let own = |h: kayfabe_isolate::HostHandle| {
         assert_eq!(
             h.0 >> 32,
             ns,
@@ -628,7 +628,7 @@ fn per_proc_parallelism_two_procs_no_shared_lock() {
 ///
 /// (This test caught a real mock bug: `MockRmBackend::map_gpu_va` OR-ed its per-VAS
 /// lane over a bump counter and minted duplicate host VAs after 2^16 pages — see
-/// `mock_rm_map_gpu_va_stays_distinct_past_65536_pages` in `nvkvm-mocks`.)
+/// `mock_rm_map_gpu_va_stays_distinct_past_65536_pages` in `kayfabe-mocks`.)
 #[test]
 fn same_proc_interleaving_is_exact() {
     let _wd = watchdog("same_proc_interleaving_is_exact", Duration::from_secs(60));

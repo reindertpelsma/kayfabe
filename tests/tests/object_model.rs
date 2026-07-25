@@ -9,14 +9,14 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
-use nvkvm_arch::ids::GpuId;
-use nvkvm_arch::ids::{GpuVa, HClient, HObject, Pdb};
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::{Gpu, GpuError};
-use nvkvm_core::rmgraph::{NodeKey, RmEvent};
-use nvkvm_fwd::{FwdFault, resolve};
-use nvkvm_mocks::{MockArch, MockIsolateFactory};
-use nvkvm_tests::{Scenario, identical_handles};
+use kayfabe_arch::ids::GpuId;
+use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb};
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::{Gpu, GpuError};
+use kayfabe_core::rmgraph::{NodeKey, RmEvent};
+use kayfabe_fwd::{FwdFault, resolve};
+use kayfabe_mocks::{MockArch, MockIsolateFactory};
+use kayfabe_tests::{Scenario, identical_handles};
 
 const CLIENT: HClient = HClient(0xAA);
 const PDB: Pdb = Pdb(0x3401_000);
@@ -75,8 +75,8 @@ fn map_populates_the_address_table() {
 /// backing includes it — the address-table value must be the SUM, not the difference.
 #[test]
 fn map_at_offset_forward_populates_base_plus_offset() {
-    use nvkvm_core::rmgraph::{AllocFacts, RmGraph};
-    use nvkvm_mocks::mock_classes as mc;
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
 
     let arch = MockArch::new();
     let mut g = RmGraph::new();
@@ -249,8 +249,8 @@ fn mapping_refcount_keeps_memory_alive() {
 /// OTHER one — and only it — replays into the live mapping table.
 #[test]
 fn parked_map_unmap_drops_only_the_named_map() {
-    use nvkvm_core::rmgraph::{AllocFacts, RmGraph};
-    use nvkvm_mocks::mock_classes as mc;
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
 
     let arch = MockArch::new();
     let mut g = RmGraph::new();
@@ -362,8 +362,8 @@ fn parked_map_unmap_drops_only_the_named_map() {
 /// values, frees A's non-root parent, and asserts A's child dies while B's survives.
 #[test]
 fn free_subtree_cascade_is_namespace_confined() {
-    use nvkvm_core::rmgraph::{AllocFacts, RmGraph};
-    use nvkvm_mocks::mock_classes as mc;
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
 
     let arch = MockArch::new();
     let mut g = RmGraph::new();
@@ -452,8 +452,8 @@ fn free_subtree_cascade_is_namespace_confined() {
 /// the ORIGIN handle (dup keeps the VAS alive), and asserts the mapping still resolves.
 #[test]
 fn free_subtree_keeps_mappings_of_a_dup_kept_alive_vaspace() {
-    use nvkvm_core::rmgraph::{AllocFacts, RmGraph};
-    use nvkvm_mocks::mock_classes as mc;
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
 
     let arch = MockArch::new();
     let mut g = RmGraph::new();
@@ -585,8 +585,8 @@ fn free_subtree_keeps_mappings_of_a_dup_kept_alive_vaspace() {
 /// resolved), frees the MEMORY, then resolves the vaspace and asserts NOTHING replays.
 #[test]
 fn free_subtree_prunes_a_parked_map_when_its_memory_is_freed() {
-    use nvkvm_core::rmgraph::{AllocFacts, RmGraph};
-    use nvkvm_mocks::mock_classes as mc;
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
 
     let arch = MockArch::new();
     let mut g = RmGraph::new();
@@ -714,8 +714,8 @@ fn free_subtree_prunes_a_parked_map_when_its_memory_is_freed() {
 /// sides: identical re-send is Ok; a conflicting remap is loud.
 #[test]
 fn conflicting_map_at_same_va_is_loud_identical_is_idempotent() {
-    use nvkvm_core::rmgraph::{AllocFacts, RmGraph, RmGraphError};
-    use nvkvm_mocks::mock_classes as mc;
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph, RmGraphError};
+    use kayfabe_mocks::mock_classes as mc;
 
     let arch = MockArch::new();
     let mut g = RmGraph::new();
@@ -896,8 +896,8 @@ fn unbacked_mapping_is_a_loud_fault() {
         client: CLIENT,
         parent: h.device,
         handle: unbacked,
-        class: nvkvm_mocks::mock_classes::MEMORY,
-        facts: nvkvm_core::rmgraph::AllocFacts::default(),
+        class: kayfabe_mocks::mock_classes::MEMORY,
+        facts: kayfabe_core::rmgraph::AllocFacts::default(),
     });
     for e in s.events {
         gpu.apply(e).expect("setup applies");
@@ -925,19 +925,19 @@ fn map_before_backing_and_pdb_resolves() {
 
     // Build the client/device/vaspace but withhold the PDB and the memory alloc.
     for e in [
-        nvkvm_tests::client_root(CLIENT),
+        kayfabe_tests::client_root(CLIENT),
         RmEvent::Alloc {
             client: CLIENT,
             parent: HObject(CLIENT.0),
             handle: h.device,
-            class: nvkvm_mocks::mock_classes::DEVICE,
+            class: kayfabe_mocks::mock_classes::DEVICE,
             facts: Default::default(),
         },
         RmEvent::Alloc {
             client: CLIENT,
             parent: h.device,
             handle: h.vaspace,
-            class: nvkvm_mocks::mock_classes::VASPACE,
+            class: kayfabe_mocks::mock_classes::VASPACE,
             facts: Default::default(),
         },
         // Map arrives NOW — memory not yet allocated, PDB not yet set.
@@ -963,8 +963,8 @@ fn map_before_backing_and_pdb_resolves() {
         client: CLIENT,
         parent: h.device,
         handle: MEM,
-        class: nvkvm_mocks::mock_classes::MEMORY,
-        facts: nvkvm_core::rmgraph::AllocFacts {
+        class: kayfabe_mocks::mock_classes::MEMORY,
+        facts: kayfabe_core::rmgraph::AllocFacts {
             mem_phys: Some(MEM_PHYS),
             ..Default::default()
         },
@@ -992,9 +992,9 @@ fn map_before_backing_and_pdb_resolves() {
 // ---------------------------------------------------------------------------------
 
 mod fuzz {
-    use nvkvm_arch::ids::{GpuVa, HClient, HObject, Pdb};
-    use nvkvm_core::rmgraph::{NodeKey, RmEvent};
-    use nvkvm_mocks::mock_classes as mc;
+    use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb};
+    use kayfabe_core::rmgraph::{NodeKey, RmEvent};
+    use kayfabe_mocks::mock_classes as mc;
     use proptest::collection::vec;
     use proptest::prelude::*;
 
@@ -1027,7 +1027,7 @@ mod fuzz {
                     parent: handle,
                     handle,
                     class,
-                    facts: nvkvm_core::rmgraph::AllocFacts {
+                    facts: kayfabe_core::rmgraph::AllocFacts {
                         mem_phys: backed.then_some(0x8000_0000),
                         ..Default::default()
                     },

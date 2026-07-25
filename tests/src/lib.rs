@@ -1,4 +1,4 @@
-//! # nvkvm-tests — conformance harness helpers
+//! # kayfabe-tests — conformance harness helpers
 //!
 //! Shared scenario builders for the integration tests under `tests/`. The whole
 //! suite runs at unit speed with **no GPU, no hypervisor, no OS** — the payoff of
@@ -8,9 +8,9 @@
 //! as abstract `RmEvent`s, with helpers to build the exact shapes the design docs
 //! name (a compute process, a UVM dup, two processes with identical VAs/handles).
 
-use nvkvm_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb};
-use nvkvm_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
-use nvkvm_mocks::{MockArch, mock_classes as mc};
+use kayfabe_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
+use kayfabe_mocks::{MockArch, mock_classes as mc};
 
 /// A scripted sequence of RM protocol events, plus the identities it introduced —
 /// enough to drive `Gpu::apply` and then assert on derived boundaries.
@@ -236,11 +236,11 @@ pub struct ProcessHandles {
     /// GR channel handle.
     pub gr_channel: HObject,
     /// GR channel's vChid.
-    pub gr_vchid: nvkvm_arch::ids::VChid,
+    pub gr_vchid: kayfabe_arch::ids::VChid,
     /// CE channel handle.
     pub ce_channel: HObject,
     /// CE channel's vChid.
-    pub ce_vchid: nvkvm_arch::ids::VChid,
+    pub ce_vchid: kayfabe_arch::ids::VChid,
 }
 
 /// The **#14 shape**: identical guest handle values (both procs' GR channel is
@@ -248,7 +248,7 @@ pub struct ProcessHandles {
 /// distinct PDBs. vChids differ (E0: fresh per channel-create, zero collisions).
 #[must_use]
 pub fn identical_handles(gr_vchid: u16, ce_vchid: u16) -> ProcessHandles {
-    use nvkvm_arch::ids::VChid;
+    use kayfabe_arch::ids::VChid;
     ProcessHandles {
         client_root: HObject(0x5c00_0000),
         device: HObject(0x5c00_0001),

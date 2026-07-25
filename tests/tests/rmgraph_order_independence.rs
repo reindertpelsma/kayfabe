@@ -9,12 +9,12 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
-use nvkvm_arch::ids::GpuId;
-use nvkvm_arch::ids::{HClient, HObject, Pdb, VChid};
-use nvkvm_core::project::project;
-use nvkvm_core::rmgraph::RmGraph;
-use nvkvm_mocks::MockArch;
-use nvkvm_tests::{Scenario, identical_handles};
+use kayfabe_arch::ids::GpuId;
+use kayfabe_arch::ids::{HClient, HObject, Pdb, VChid};
+use kayfabe_core::project::project;
+use kayfabe_core::rmgraph::RmGraph;
+use kayfabe_mocks::MockArch;
+use kayfabe_tests::{Scenario, identical_handles};
 
 /// Deterministic index permutations of `n` items (no RNG — reproducible).
 /// A rotation family plus the reverse: enough distinct orders to catch any

@@ -6,7 +6,7 @@
 # unsafe is confined here; the core is depended on as a plain library. Fuzz-only deps
 # (libfuzzer-sys, arbitrary) live ONLY here, never in the core dependency graph.
 [package]
-name = "nvkvm-fuzz"
+name = "kayfabe-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2024"
@@ -20,12 +20,12 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 
-nvkvm-arch = { path = "../crates/nvkvm-arch" }
-nvkvm-core = { path = "../crates/nvkvm-core" }
-nvkvm-fwd = { path = "../crates/nvkvm-fwd" }
-nvkvm-mocks = { path = "../crates/nvkvm-mocks" }
-nvkvm-vmm = { path = "../crates/nvkvm-vmm" }
-nvkvm-tests = { path = "../tests" }
+kayfabe-arch = { path = "../crates/kayfabe-arch" }
+kayfabe-core = { path = "../crates/kayfabe-core" }
+kayfabe-fwd = { path = "../crates/kayfabe-fwd" }
+kayfabe-mocks = { path = "../crates/kayfabe-mocks" }
+kayfabe-vmm = { path = "../crates/kayfabe-vmm" }
+kayfabe-tests = { path = "../tests" }
 
 [profile.release]
 debug = 1

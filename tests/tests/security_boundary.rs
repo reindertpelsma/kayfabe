@@ -39,20 +39,22 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
-use nvkvm_arch::ids::GpuId;
-use nvkvm_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_completion::{CompletionError, CompletionQueue, MAX_OUTSTANDING_COMPLETIONS, OsEventRef};
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::{Gpu, GpuError};
-use nvkvm_core::project::{Boundaries, ProcBoundary, project};
-use nvkvm_core::rmgraph::{
+use kayfabe_arch::ids::GpuId;
+use kayfabe_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::{
+    CompletionError, CompletionQueue, MAX_OUTSTANDING_COMPLETIONS, OsEventRef,
+};
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::{Gpu, GpuError};
+use kayfabe_core::project::{Boundaries, ProcBoundary, project};
+use kayfabe_core::rmgraph::{
     AllocFacts, Capacity, MAX_LIVE_HANDLES, MAX_LIVE_MAPPINGS, MAX_PARKED, NodeKey, RmEvent,
     RmGraph, RmGraphError,
 };
-use nvkvm_fwd::{FwdFault, handle_doorbell, parse_pushbuffer, resolve};
-use nvkvm_mocks::{MockArch, MockIsolateFactory, MockVmm, mock_classes as mc};
-use nvkvm_tests::{Scenario, identical_handles};
-use nvkvm_vmm::Vmm;
+use kayfabe_fwd::{FwdFault, handle_doorbell, parse_pushbuffer, resolve};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm, mock_classes as mc};
+use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_vmm::Vmm;
 use proptest::prelude::*;
 
 // =================================================================================

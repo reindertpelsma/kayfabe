@@ -68,6 +68,126 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-arch"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-completion"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-core"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-completion",
+ "kayfabe-isolate",
+ "kayfabe-mmu",
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-fuzz"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
+ "kayfabe-arch",
+ "kayfabe-core",
+ "kayfabe-fwd",
+ "kayfabe-mocks",
+ "kayfabe-tests",
+ "kayfabe-vmm",
+ "libfuzzer-sys",
+]
+
+[[package]]
+name = "kayfabe-fwd"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-completion",
+ "kayfabe-core",
+ "kayfabe-isolate",
+ "kayfabe-mmu",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-isolate"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-mmu"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-mocks"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-isolate",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-rt"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-completion",
+ "kayfabe-core",
+ "kayfabe-fwd",
+ "kayfabe-isolate",
+ "kayfabe-mmu",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-tests"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-completion",
+ "kayfabe-core",
+ "kayfabe-fwd",
+ "kayfabe-isolate",
+ "kayfabe-mmu",
+ "kayfabe-mocks",
+ "kayfabe-rt",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-util"
+version = "0.1.0"
+
+[[package]]
+name = "kayfabe-vmm"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-util",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -81,111 +201,6 @@ checksum = "a9fd2f41a1cba099f79a0b6b6c35656cf7c03351a7bae8ff0f28f25270f929d2"
 dependencies = [
  "arbitrary",
  "cc",
-]
-
-[[package]]
-name = "nvkvm-arch"
-version = "0.1.0"
-dependencies = [
- "nvkvm-util",
-]
-
-[[package]]
-name = "nvkvm-completion"
-version = "0.1.0"
-dependencies = [
- "nvkvm-util",
-]
-
-[[package]]
-name = "nvkvm-core"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-completion",
- "nvkvm-isolate",
- "nvkvm-mmu",
- "nvkvm-util",
-]
-
-[[package]]
-name = "nvkvm-fuzz"
-version = "0.0.0"
-dependencies = [
- "arbitrary",
- "libfuzzer-sys",
- "nvkvm-arch",
- "nvkvm-core",
- "nvkvm-fwd",
- "nvkvm-mocks",
- "nvkvm-tests",
- "nvkvm-vmm",
-]
-
-[[package]]
-name = "nvkvm-fwd"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-completion",
- "nvkvm-core",
- "nvkvm-isolate",
- "nvkvm-mmu",
- "nvkvm-util",
- "nvkvm-vmm",
-]
-
-[[package]]
-name = "nvkvm-isolate"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-util",
- "nvkvm-vmm",
-]
-
-[[package]]
-name = "nvkvm-mmu"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-util",
-]
-
-[[package]]
-name = "nvkvm-mocks"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-isolate",
- "nvkvm-util",
- "nvkvm-vmm",
-]
-
-[[package]]
-name = "nvkvm-tests"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-completion",
- "nvkvm-core",
- "nvkvm-fwd",
- "nvkvm-isolate",
- "nvkvm-mmu",
- "nvkvm-mocks",
- "nvkvm-util",
- "nvkvm-vmm",
-]
-
-[[package]]
-name = "nvkvm-util"
-version = "0.1.0"
-
-[[package]]
-name = "nvkvm-vmm"
-version = "0.1.0"
-dependencies = [
- "nvkvm-util",
 ]
 
 [[package]]

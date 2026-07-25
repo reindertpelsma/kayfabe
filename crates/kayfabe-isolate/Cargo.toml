@@ -1,0 +1,14 @@
+[package]
+name = "kayfabe-isolate"
+description = "The per-process sandbox port: `Isolate`/`IsolateFactory` traits + the abstract `RmBackend` RM-verb trait (arch doc §4.2 `kayfabe-rm` folded here for now). No syscalls, no ioctls — real impls live in adapter crates."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-vmm.workspace = true
+
+[lints]
+workspace = true

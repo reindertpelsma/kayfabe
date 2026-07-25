@@ -1,19 +1,19 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/nvkvm-util",
-    "crates/nvkvm-arch",
-    "crates/nvkvm-abi",
-    "crates/nvkvm-mmu",
-    "crates/nvkvm-vmm",
-    "crates/nvkvm-isolate",
-    "crates/nvkvm-completion",
-    "crates/nvkvm-core",
-    "crates/nvkvm-fwd",
-    "crates/nvkvm-gsp",
-    "crates/nvkvm-trace",
-    "crates/nvkvm-mocks",
-    "crates/nvkvm-rt",
+    "crates/kayfabe-util",
+    "crates/kayfabe-arch",
+    "crates/kayfabe-abi",
+    "crates/kayfabe-mmu",
+    "crates/kayfabe-vmm",
+    "crates/kayfabe-isolate",
+    "crates/kayfabe-completion",
+    "crates/kayfabe-core",
+    "crates/kayfabe-fwd",
+    "crates/kayfabe-gsp",
+    "crates/kayfabe-trace",
+    "crates/kayfabe-mocks",
+    "crates/kayfabe-rt",
     "tests",
 ]
 
@@ -21,22 +21,22 @@ members = [
 version = "0.1.0"
 edition = "2024"
 license = "Proprietary"
-authors = ["nvkvm"]
+authors = ["kayfabe"]
 
 [workspace.dependencies]
-nvkvm-util = { path = "crates/nvkvm-util" }
-nvkvm-arch = { path = "crates/nvkvm-arch" }
-nvkvm-abi = { path = "crates/nvkvm-abi" }
-nvkvm-mmu = { path = "crates/nvkvm-mmu" }
-nvkvm-vmm = { path = "crates/nvkvm-vmm" }
-nvkvm-isolate = { path = "crates/nvkvm-isolate" }
-nvkvm-completion = { path = "crates/nvkvm-completion" }
-nvkvm-core = { path = "crates/nvkvm-core" }
-nvkvm-fwd = { path = "crates/nvkvm-fwd" }
-nvkvm-gsp = { path = "crates/nvkvm-gsp" }
-nvkvm-trace = { path = "crates/nvkvm-trace" }
-nvkvm-mocks = { path = "crates/nvkvm-mocks" }
-nvkvm-rt = { path = "crates/nvkvm-rt" }
+kayfabe-util = { path = "crates/kayfabe-util" }
+kayfabe-arch = { path = "crates/kayfabe-arch" }
+kayfabe-abi = { path = "crates/kayfabe-abi" }
+kayfabe-mmu = { path = "crates/kayfabe-mmu" }
+kayfabe-vmm = { path = "crates/kayfabe-vmm" }
+kayfabe-isolate = { path = "crates/kayfabe-isolate" }
+kayfabe-completion = { path = "crates/kayfabe-completion" }
+kayfabe-core = { path = "crates/kayfabe-core" }
+kayfabe-fwd = { path = "crates/kayfabe-fwd" }
+kayfabe-gsp = { path = "crates/kayfabe-gsp" }
+kayfabe-trace = { path = "crates/kayfabe-trace" }
+kayfabe-mocks = { path = "crates/kayfabe-mocks" }
+kayfabe-rt = { path = "crates/kayfabe-rt" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

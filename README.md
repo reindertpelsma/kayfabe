@@ -21,16 +21,16 @@ settled design docs, it does not re-derive architecture.
 syscalls, no hypervisor types, no wall clock, no NVIDIA struct layouts, no
 driver-version or GPU-generation constants. Everything effectful crosses a trait seam:
 
-- `Vmm` / `Device` / `Present` (hypervisor + display adapter) — `crates/nvkvm-vmm`
+- `Vmm` / `Device` / `Present` (hypervisor + display adapter) — `crates/kayfabe-vmm`
 - `Arch` / `GmmuFmt` / `UserdModel` / `PushbufferAbi` (GPU-generation behavior, "Axis B")
-  — `crates/nvkvm-arch`
+  — `crates/kayfabe-arch`
 - `RmBackend` / `Isolate` / `IsolateFactory` (unprivileged host RM + sandbox) —
-  `crates/nvkvm-isolate`
-- `DriverAbi` (driver-version wire layouts, "Axis A") — `crates/nvkvm-abi` (stub)
+  `crates/kayfabe-isolate`
+- `DriverAbi` (driver-version wire layouts, "Axis A") — `crates/kayfabe-abi` (stub)
 
-The logic crates (`nvkvm-core`, `-mmu`, `-fwd`, `-completion`) are written **only**
+The logic crates (`kayfabe-core`, `-mmu`, `-fwd`, `-completion`) are written **only**
 against those traits. Every seam's *only* implementations today are the deterministic
-mocks in `nvkvm-mocks` — **no real adapter (Linux, QEMU, or NVIDIA arch) exists yet**,
+mocks in `kayfabe-mocks` — **no real adapter (Linux, QEMU, or NVIDIA arch) exists yet**,
 by design: the layers below descend next (L1 Linux OS → L2 QEMU → L3 per-arch codegen).
 Bringing up a real GPU generation will be `impl Arch for <Gen>` in an adapter crate with
 zero edits to any logic crate; `MockArch` (deliberately non-NVIDIA encodings) is the
@@ -64,9 +64,9 @@ What is **really built** (mock-tested, mutation-gated):
   everything else opaque), the Case-1 forward / Case-2 ack-only control split, the
   engine-aware channel alloc (GR-1) and the typed `Present`/`SurfaceHandle` seam (GR-2).
 
-What is **not** built (stubs / skeletons, documented in their `lib.rs`): `nvkvm-abi`
-(Axis-A codegen — trait shape only), `nvkvm-gsp` (GSP boot FSM — a placeholder enum),
-`nvkvm-trace` (a one-method trait), the GMMU walker (`nvkvm-mmu::walker` — trait +
+What is **not** built (stubs / skeletons, documented in their `lib.rs`): `kayfabe-abi`
+(Axis-A codegen — trait shape only), `kayfabe-gsp` (GSP boot FSM — a placeholder enum),
+`kayfabe-trace` (a one-method trait), the GMMU walker (`kayfabe-mmu::walker` — trait +
 result type only). Nothing pretends otherwise.
 
 **Verification:** 143 tests green (unit + integration + proptest fuzz + concurrency
@@ -91,18 +91,18 @@ cargo +nightly fuzz build        # coverage fuzz lives in fuzz/ (own workspace; 
 
 | Crate | What it is | State |
 |---|---|---|
-| `nvkvm-util` | `IntervalMap`, virtual `Instant`, `assert_send_sync!` — zero GPU concepts | full |
-| `nvkvm-arch` | domain-identity newtypes + the Axis-B `Arch` trait set | full (traits; no real impl yet) |
-| `nvkvm-core` | ★ `RmGraph` → projections → `Gpu`/`Proc`/`Vas`/`Channel` + GPA arenas | full |
-| `nvkvm-mmu` | the per-VAS address table (MISS=FAULT) | full (table); walker = skeleton |
-| `nvkvm-completion` | per-proc queues + delivery policy + fence arms | full |
-| `nvkvm-fwd` | doorbell demux, publish/gate, pushbuffer parser, control split, present route | full (core slice) |
-| `nvkvm-vmm` | `Vmm`/`Device`/`Present` ports | traits only |
-| `nvkvm-isolate` | `RmBackend`/`Isolate`/`IsolateFactory` ports | traits only |
-| `nvkvm-mocks` | deterministic fakes for every seam (the only impls that exist) | full (test-only) |
-| `nvkvm-abi` | Axis-A codegen'd wire ABI | **stub** |
-| `nvkvm-gsp` | faked GSP boot FSM + seqNum transport | **stub** |
-| `nvkvm-trace` | structured trace/replay | **stub** |
+| `kayfabe-util` | `IntervalMap`, virtual `Instant`, `assert_send_sync!` — zero GPU concepts | full |
+| `kayfabe-arch` | domain-identity newtypes + the Axis-B `Arch` trait set | full (traits; no real impl yet) |
+| `kayfabe-core` | ★ `RmGraph` → projections → `Gpu`/`Proc`/`Vas`/`Channel` + GPA arenas | full |
+| `kayfabe-mmu` | the per-VAS address table (MISS=FAULT) | full (table); walker = skeleton |
+| `kayfabe-completion` | per-proc queues + delivery policy + fence arms | full |
+| `kayfabe-fwd` | doorbell demux, publish/gate, pushbuffer parser, control split, present route | full (core slice) |
+| `kayfabe-vmm` | `Vmm`/`Device`/`Present` ports | traits only |
+| `kayfabe-isolate` | `RmBackend`/`Isolate`/`IsolateFactory` ports | traits only |
+| `kayfabe-mocks` | deterministic fakes for every seam (the only impls that exist) | full (test-only) |
+| `kayfabe-abi` | Axis-A codegen'd wire ABI | **stub** |
+| `kayfabe-gsp` | faked GSP boot FSM + seqNum transport | **stub** |
+| `kayfabe-trace` | structured trace/replay | **stub** |
 | `tests/` | the conformance suite (14 files) + `Scenario` DSL | full |
 
 ## Design sources (settled — implement, don't improvise)

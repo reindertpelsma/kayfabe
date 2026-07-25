@@ -1,9 +1,0 @@
-[package]
-name = "nvkvm-trace"
-description = "SKELETON — structured trace events + budgets (lesson L6: instrument the PROCESS): the replay format the conformance harness consumes, and the per-plane counters carried forward from the C's time-share instrumentation."
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
-[lints]
-workspace = true

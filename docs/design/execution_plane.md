@@ -1,6 +1,6 @@
 # The Mode-2 execution / forwarding plane — designed into the core
 
-**Status:** design, 2026-07-24. Repo `nvkvm-rs`, branch of record for the rewrite.
+**Status:** design, 2026-07-24. Repo `kayfabe`, branch of record for the rewrite.
 Governs how the core runs *actual GPU work* — GR (compute + graphics), CE (copy),
 NVENC/NVDEC video — as an **orchestration** layer that forwards real pushbuffers to a
 real host GPU, never as an emulator of any engine.
@@ -57,23 +57,23 @@ translator and a router, not a compute engine.
 **No — and it is not supposed to be yet.** The current Rust core is the **control /
 object / address / isolation / completion-*delivery* spine**, and it is genuinely
 complete for that spine (RmGraph source-of-truth + order-independent projections
-`crates/nvkvm-core/src/rmgraph.rs`, `project.rs`; per-`Vas` address table
-`crates/nvkvm-mmu`; per-`Proc` GPA arenas + isolates `crates/nvkvm-core/src/gpu.rs`;
-per-`Proc` `CompletionQueue` + `DeliveryPlane` `crates/nvkvm-completion`; the doorbell
-demux + first-touch host-channel materialization `crates/nvkvm-fwd/src/lib.rs`). What it
+`crates/kayfabe-core/src/rmgraph.rs`, `project.rs`; per-`Vas` address table
+`crates/kayfabe-mmu`; per-`Proc` GPA arenas + isolates `crates/kayfabe-core/src/gpu.rs`;
+per-`Proc` `CompletionQueue` + `DeliveryPlane` `crates/kayfabe-completion`; the doorbell
+demux + first-touch host-channel materialization `crates/kayfabe-fwd/src/lib.rs`). What it
 has of the *execution* plane is a **thin routing skeleton**: `EngineClass{Gr,Ce,Other}`
-as a leaf enum (`crates/nvkvm-arch/src/ids.rs:74`), `RmBackend` with raw
-`alloc_channel`/`schedule`/`ring_doorbell` verbs (`crates/nvkvm-isolate/src/lib.rs`), and
+as a leaf enum (`crates/kayfabe-arch/src/ids.rs:74`), `RmBackend` with raw
+`alloc_channel`/`schedule`/`ring_doorbell` verbs (`crates/kayfabe-isolate/src/lib.rs`), and
 a `Channel.host_channel` first-touch materialization in `handle_doorbell`. There is:
 
 - **no `Engine` abstraction** (GR/CE/NVENC as engine instances under a channel);
 - **no GR context lifecycle** (compute/graphics object alloc, PROMOTE_CTX / golden-ctx
   handling, Case-1 forward vs Case-2 ack);
 - **no pushbuffer / method parser** — the "ONE parser" (SEM_EXECUTE / MEM_OP /
-  LAUNCH_DMA) is a *documented skeleton* only (`crates/nvkvm-fwd/src/lib.rs` "Ports here
-  later"; `crates/nvkvm-gsp` is a 31-line `BootPhase` enum);
+  LAUNCH_DMA) is a *documented skeleton* only (`crates/kayfabe-fwd/src/lib.rs` "Ports here
+  later"; `crates/kayfabe-gsp` is a 31-line `BootPhase` enum);
 - **no CE-PT-write capture feed** (the `Vas.pt_pages` field exists,
-  `crates/nvkvm-core/src/gpu.rs`, but nothing populates it — #13's populate source);
+  `crates/kayfabe-core/src/gpu.rs`, but nothing populates it — #13's populate source);
 - **no semaphore/completion *observation*** wiring (the `CompletionQueue.observe` sink
   exists but nothing on the exec path calls it from a real host sema advance);
 - **no engine-object / Case-1 shadow-forward table**, no NVENC session, no
@@ -145,7 +145,7 @@ with zero core edits.
 An **engine instance** is what makes a `Channel` do work: a GR-compute object, a
 GR-graphics object, a CE copy object, or an NVENC session, allocated *on* a channel that
 names its VAS via the RmGraph. In the RmGraph this already appears as
-`ObjectKind::EngineObject { engine }` (`crates/nvkvm-arch/src/lib.rs:66`) and
+`ObjectKind::EngineObject { engine }` (`crates/kayfabe-arch/src/lib.rs:66`) and
 `Channel { engine }` — the graph *shape* already carries it. What is missing is the
 *behavioral* seam: given an engine object on a channel, how the core (a) forwards its
 alloc (Case-1) so the host builds the engine's context, (b) recognizes its pushbuffer
@@ -219,7 +219,7 @@ object" in the core beyond a tag on the channel and the fact that its object-all
 forwarded. (Two proven arch details the *ABI adapter* carries so the host build succeeds,
 NOT the core: strip `IS_EXTERNALLY_OWNED` from the forwarded VASpace alloc params, and
 never set an explicit `hVASpace` on a TSG channel — `C: mode2_compute_forwarding.md:630-639`.
-These are Case-1 param *lowering* details, Axis-A, quarantined to `nvkvm-abi`.)
+These are Case-1 param *lowering* details, Axis-A, quarantined to `kayfabe-abi`.)
 
 ### 2.3 Pushbuffer / method model — the parser IS the address-table populator
 
@@ -233,9 +233,9 @@ kinds — it is emphatically **not** a method interpreter (`C: mode2_address_tab
 | Method (per-arch encoding) | Fact extracted | Consumer |
 |---|---|---|
 | `SET_OBJECT` | which engine object the subsequent methods target | routing (confirm `EngineKind`) |
-| CE `LAUNCH_DMA` / `MEMSET` / `COPY` | destination address(es); whether dst is a PT page | `nvkvm-mmu` CE-PT-write capture (#13) |
-| `SEM_RELEASE` / `SET_SEMAPHORE_A/B` + payload / finishPayload | the completion (sema address in a VAS + target payload) | `nvkvm-completion` observe (§2.4) |
-| `MEM_OP_A/C/D` with `OPERATION = MMU_TLB_INVALIDATE (0x9)` | the invalidated PDB + membar/ack | `nvkvm-mmu` invalidate (address-table §5) |
+| CE `LAUNCH_DMA` / `MEMSET` / `COPY` | destination address(es); whether dst is a PT page | `kayfabe-mmu` CE-PT-write capture (#13) |
+| `SEM_RELEASE` / `SET_SEMAPHORE_A/B` + payload / finishPayload | the completion (sema address in a VAS + target payload) | `kayfabe-completion` observe (§2.4) |
+| `MEM_OP_A/C/D` with `OPERATION = MMU_TLB_INVALIDATE (0x9)` | the invalidated PDB + membar/ack | `kayfabe-mmu` invalidate (address-table §5) |
 
 **Everything else is opaque and passes through.** The two invalidate transports
 (`INVALIDATE_TLB` RPC and the `MEM_OP` pushbuffer method) both carry the PDB and a membar;
@@ -249,9 +249,9 @@ leaf PTEs are published **exclusively through the CE page-table-write data plane
 kernel-RM CeUtils writes COMPUTE-VAS page tables via physical CE copies into PD pages, and
 the address table is forward-populated from the **observed CE PT-write, attributed by
 destination-FB-address → owning PDB, latched at the CE release semaphore** (#13,
-`C: b83d0b4`). So the parser feeds `nvkvm-mmu` from **two** equal sources: bind-time RPC
+`C: b83d0b4`). So the parser feeds `kayfabe-mmu` from **two** equal sources: bind-time RPC
 bindings *and* observed CE PT-writes. The `Vas.pt_pages` set already exists for exactly
-this (`crates/nvkvm-core/src/gpu.rs`).
+this (`crates/kayfabe-core/src/gpu.rs`).
 
 **The opaque-user-ring fast path (ties to trap-min, decision #6).** Userspace channels are
 non-privileged: they cannot issue `MMU_TLB_INVALIDATE` (privileged) and their memory maps
@@ -264,7 +264,7 @@ point. This is what keeps the hot path at parity (`C: mode2_baremetal_32` — ze
 overhead bare-metal).
 
 **Where the decode is Arch vs core:** the loop (walk GPFIFO entries → for each pushbuffer,
-walk methods → dispatch on the decoded method kind) is **core** (`nvkvm-fwd`, one parser).
+walk methods → dispatch on the decoded method kind) is **core** (`kayfabe-fwd`, one parser).
 The method *encodings* (how a raw method word decodes into `{kind, args}`, which method ID
 is `SEM_RELEASE`, the sema-field offsets) are **`Arch::pushbuffer() -> &dyn PushbufferAbi`**.
 The core sees only a `PushMethod` enum (`SetObject | CeLaunchDma{dst,..} | SemRelease{addr,
@@ -272,7 +272,7 @@ payload} | TlbInvalidate{pdb,membar} | Opaque`).
 
 ### 2.4 Semaphore / completion — tying real host completion to the `CompletionQueue`
 
-The completion plane already exists and is per-`Proc` (`crates/nvkvm-completion`,
+The completion plane already exists and is per-`Proc` (`crates/kayfabe-completion`,
 `CompletionQueue::observe → DeliveryPlane::try_post/on_poll`). The execution plane's job is
 to **call `observe` from a real completion**, keyed correctly. There are two shapes,
 reconciled with decision #7's 2026-07-24 resolution:
@@ -288,7 +288,7 @@ reconciled with decision #7's 2026-07-24 resolution:
 2. **Guest kernel waits on an interrupt / os-event** (`MC_SERVICE_INTERRUPTS`, the
    golden-capture wait, blocking sync). Here the core must `observe` the completion and let
    the per-`Proc` `CompletionQueue` + poll-driven re-delivery raise the single SWGEN0 edge
-   (`crates/nvkvm-fwd::deliver_completions`/`poll_completions`, §4.3.2). This is the path
+   (`crates/kayfabe-fwd::deliver_completions`/`poll_completions`, §4.3.2). This is the path
    the per-`Proc` queue fixes structurally.
 
 **★ Reconciliation with the #14 disambiguation (decision #7, RESOLVED 2026-07-24,
@@ -302,7 +302,7 @@ the work faulted. **Consequences for this plane, explicit:**
 - The **load-bearing exec-plane invariant is per-`Vas` host publication**: every VA a
   channel's work touches must be forward-populated into *that channel's Vas's own host
   VAS* before the doorbell rings. The core already keys the address table per-`Vas` by PDB
-  (`crates/nvkvm-mmu`, `crates/nvkvm-fwd::publish_backing` uses the Vas's own `host_vas`) —
+  (`crates/kayfabe-mmu`, `crates/kayfabe-fwd::publish_backing` uses the Vas's own `host_vas`) —
   the exec plane must ensure the channel's **working set** is published there, not merely
   in a shadow. §4 makes this the ring-gate.
 - The `CompletionQueue` is therefore **adequate and can stay simple** — it was never the
@@ -310,7 +310,7 @@ the work faulted. **Consequences for this plane, explicit:**
 - MISS = FAULT is the right posture here too: if a channel's working-set VA is unpublished
   at ring time, that is a loud fault (`FwdFault`), never a content-pick that guesses the
   wrong host VAS (the exact confused-deputy the C's `bar1_wpg` MRU caused — designed out,
-  `crates/nvkvm-fwd::FwdFault::UnknownVchid` comment).
+  `crates/kayfabe-fwd::FwdFault::UnknownVchid` comment).
 
 **One completion detail per engine (the `EngineKind`-arm in the tie-in):** CE/GR signal via
 a sema-release the parser extracts; NVENC signals via a **mapped coherent fence** read
@@ -327,18 +327,18 @@ guest issues:
   VASpace, TSG, ctxshare) and forwardable `GSP_RM_CONTROL`s re-issue ~1:1 on the host
   through the owning `Proc`'s isolate. This is what makes the host build the real channel +
   compute object and self-promote its GR context. Handled by a **Case-1 shadow-forward**
-  path in `nvkvm-fwd` (documented skeleton today).
+  path in `kayfabe-fwd` (documented skeleton today).
 - **Case 2 — GSP-internal / ROUTE_TO_PHYSICAL controls with no userspace equivalent**
   (`PROMOTE_CTX 0x2080012b`, `GET_CTX_BUFFER_INFO 0x20801219`, `GET_SURFACE_PHYS_ATTR`,
   profiler class `0xc076`). Their effect is *already achieved* by Case-1 forwarding.
   Correct handling: **ack the guest, do nothing on the host.** Replaying one on an
   unprivileged isolate returns `0x1b` = **wrong layer** (`RmError::InsufficientPermissions`,
-  `crates/nvkvm-isolate/src/lib.rs` — already typed with exactly this meaning). The core
+  `crates/kayfabe-isolate/src/lib.rs` — already typed with exactly this meaning). The core
   carries a **Case-2 ack-only table** (which controls are ack-only), an Axis-A codegen'd
   set consumed by a core routing decision.
 
 The concrete `RmBackend` verbs the orchestration needs to reproduce GR/CE intent — most
-already exist as intent verbs in `crates/nvkvm-isolate/src/lib.rs`
+already exist as intent verbs in `crates/kayfabe-isolate/src/lib.rs`
 (`alloc_vaspace`/`alloc_channel`/`schedule`/`map_gpu_va`/`ring_doorbell`) plus the generic
 `alloc`/`control`/`free` for Case-1 passthrough. §3.2 lists the small additions.
 
@@ -367,7 +367,7 @@ seams, not new subsystems.
 Adding "GR (or CE, or NVENC) for a new arch" must be new `impl`s with **zero edits to any
 logic crate** (repo rule 2). Here is the exact added surface.
 
-### 3.1 On `Arch` (in `crates/nvkvm-arch`) — encodings only
+### 3.1 On `Arch` (in `crates/kayfabe-arch`) — encodings only
 
 ```rust
 /// A pushbuffer method, decoded into core terms (no raw bits). The core dispatches on
@@ -402,13 +402,13 @@ pub trait Arch {                 // additions to the existing trait
 }
 ```
 
-`EngineKind` is a new core enum in `nvkvm-arch::ids` alongside `EngineClass` (or replaces
+`EngineKind` is a new core enum in `kayfabe-arch::ids` alongside `EngineClass` (or replaces
 it — `EngineClass{Gr,Ce,Other}` is too coarse for NVENC/graphics; `EngineKind{GrCompute,
 GrGraphics,Ce,NvEnc,NvDec,Other}` is the refinement). The `MockArch` "Mockingbird"
 generation implements all of the above with deliberately-fake encodings — the standing
 proof that no core code assumes a real NVIDIA layout.
 
-### 3.2 On `RmBackend` (in `crates/nvkvm-isolate`) — host forwarding verbs
+### 3.2 On `RmBackend` (in `crates/kayfabe-isolate`) — host forwarding verbs
 
 Most verbs exist. The execution plane adds, at most:
 
@@ -467,8 +467,8 @@ enough execution plane to run the CUDA/LLM/PyTorch compute apps single-process, 
    alloc; Case-2 ack-only table; golden-capture completion routed to `system`. Mock
    `RmBackend` records the forwarded allocs; a scripted golden-capture completion asserts
    the guest's wait is satisfied.
-3. **The ONE pushbuffer parser** (§2.3) over `PushbufferAbi`, feeding: `nvkvm-mmu`
-   CE-PT-write capture (into the existing `Vas.pt_pages`) and `nvkvm-completion.observe`
+3. **The ONE pushbuffer parser** (§2.3) over `PushbufferAbi`, feeding: `kayfabe-mmu`
+   CE-PT-write capture (into the existing `Vas.pt_pages`) and `kayfabe-completion.observe`
    (from `SemRelease`), and honoring `TlbInvalidate` membars. Opaque user ring passes
    through. Mock-driven: a scripted pushbuffer → assert the table populated + completion
    observed (§5).
@@ -476,7 +476,7 @@ enough execution plane to run the CUDA/LLM/PyTorch compute apps single-process, 
    `handle_doorbell` rings, the channel's working set is forward-populated into its Vas's
    OWN host VAS; an unpublished VA at ring time is a loud `FwdFault`. This is the proven
    #14 load-bearing fix (decision #7, `C: 6de85e7`), and the structure
-   (`crates/nvkvm-core/src/gpu.rs::ExecPlane`, per-`Vas` `host_vas`) is already in place.
+   (`crates/kayfabe-core/src/gpu.rs::ExecPlane`, per-`Vas` `host_vas`) is already in place.
 
 That set runs the compute/LLM/PyTorch apps and is the first thing a real `impl Arch for
 <GA10x>` fills.
@@ -509,7 +509,7 @@ for output bytes (`C: mode2_rust_rewrite_architecture.md` §4.5 acceptance ladde
 The whole plane is a pure state machine over guest-supplied bytes, so it is
 **deterministically testable without a GPU** — the same property the core is judged on.
 The test shape (matching the existing suite in `tests/tests/` and the mocks in
-`crates/nvkvm-mocks`):
+`crates/kayfabe-mocks`):
 
 - **`MockArch` scripted pushbuffer → assert facts.** Feed a byte-exact fake pushbuffer
   (Mockingbird encodings) through the parser; assert: (a) the address table is

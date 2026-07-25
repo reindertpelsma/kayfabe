@@ -11,21 +11,21 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
-use nvkvm_arch::ids::GpuId;
-use nvkvm_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_completion::OsEventRef;
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_core::project::project;
-use nvkvm_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
-use nvkvm_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
-use nvkvm_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
-use nvkvm_tests::{Scenario, identical_handles};
+use kayfabe_arch::ids::GpuId;
+use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_core::project::project;
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
+use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
+use kayfabe_tests::{Scenario, identical_handles};
 
 /// Build a fresh empty Gpu with a generous 4-GiB-arena window.
 fn fresh_gpu() -> (
     Gpu,
-    std::sync::Arc<std::sync::Mutex<nvkvm_mocks::RmRecorder>>,
+    std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();

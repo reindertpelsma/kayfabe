@@ -28,14 +28,14 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
-use nvkvm_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::{Gpu, GpuError};
-use nvkvm_core::project::{ProjectionError, project};
-use nvkvm_core::rmgraph::{AllocFacts, RmEvent};
-use nvkvm_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
-use nvkvm_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
-use nvkvm_tests::{Scenario, identical_handles};
+use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::{Gpu, GpuError};
+use kayfabe_core::project::{ProjectionError, project};
+use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
+use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
+use kayfabe_tests::{Scenario, identical_handles};
 
 // The IDENTICAL hardware identities both GPUs' procs present (the load-bearing shape).
 const SHARED_PDB: Pdb = Pdb(0x3401_000);
@@ -45,7 +45,7 @@ const CE_VCHID: u16 = 0x11;
 
 fn new_gpu() -> (
     Gpu,
-    std::sync::Arc<std::sync::Mutex<nvkvm_mocks::RmRecorder>>,
+    std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
@@ -79,9 +79,9 @@ fn proc_on_gpu(client: HClient, instance: u32) -> Vec<RmEvent> {
 /// target. Returns (gpu, recorder, pidA, pidB).
 fn two_gpu_world() -> (
     Gpu,
-    std::sync::Arc<std::sync::Mutex<nvkvm_mocks::RmRecorder>>,
-    nvkvm_core::ProcId,
-    nvkvm_core::ProcId,
+    std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
+    kayfabe_core::ProcId,
+    kayfabe_core::ProcId,
 ) {
     let (mut gpu, rec) = new_gpu();
     for ev in proc_on_gpu(HClient(0xA0), 0) {
@@ -187,7 +187,7 @@ fn cross_gpu_isolation() {
         .log
         .iter()
         .filter_map(|(_id, verb)| match verb {
-            nvkvm_mocks::RmVerb::MapGpuVa { va, .. } => Some(va >> 47 & 1), // GPU lane bit
+            kayfabe_mocks::RmVerb::MapGpuVa { va, .. } => Some(va >> 47 & 1), // GPU lane bit
             _ => None,
         })
         .collect();
@@ -485,18 +485,18 @@ fn per_gpu_completion_no_cross_serialization() {
         .get_mut(&pid_a)
         .unwrap()
         .completion
-        .observe(nvkvm_completion::OsEventRef(0xA))
+        .observe(kayfabe_completion::OsEventRef(0xA))
         .unwrap();
     gpu.procs
         .get_mut(&pid_b)
         .unwrap()
         .completion
-        .observe(nvkvm_completion::OsEventRef(0xB))
+        .observe(kayfabe_completion::OsEventRef(0xB))
         .unwrap();
 
     // Post on GPU0 and LEAVE its batch outstanding (do NOT drain).
     let b0 = gpu.pump_completions(GpuId(0)).expect("GPU0 posts");
-    assert_eq!(b0.events, vec![nvkvm_completion::OsEventRef(0xA)]);
+    assert_eq!(b0.events, vec![kayfabe_completion::OsEventRef(0xA)]);
     // GPU0's gate is closed; a re-post on GPU0 yields nothing.
     assert!(
         gpu.pump_completions(GpuId(0)).is_none(),
@@ -508,7 +508,7 @@ fn per_gpu_completion_no_cross_serialization() {
         .expect("GPU1 posts despite GPU0 outstanding");
     assert_eq!(
         b1.events,
-        vec![nvkvm_completion::OsEventRef(0xB)],
+        vec![kayfabe_completion::OsEventRef(0xB)],
         "no cross-GPU serialization"
     );
 }

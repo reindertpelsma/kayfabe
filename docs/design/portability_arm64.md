@@ -21,7 +21,7 @@ features — MIG/vGPU/CC — we deferred). So: worth not-rotting, not worth buil
   (64-bit both), endianness (little-endian both, and the ABI decode is explicit about byte order
   regardless), CPU page size, or any x86 instruction/intrinsic. GPU VA and PDB are *GPU* concepts,
   independent of the host CPU architecture. **This is proven, not asserted** — see the CI gate.
-- **★ L1 (`nvkvm-linux-raw` — the mmap / GPA-window layer) — the one real pressure point.**
+- **★ L1 (`kayfabe-linux-raw` — the mmap / GPA-window layer) — the one real pressure point.**
   arm64 hosts run **16 KiB or 64 KiB base pages** (not x86's 4 KiB). The GPA-window / double-mmap
   machinery aligns and slices by page size. **Binding rule: the host page size is queried at
   runtime (`sysconf(_SC_PAGESIZE)`), NEVER a hardcoded `4096`.** Any alignment, window granularity,
@@ -48,7 +48,7 @@ gates work. Verified green at introduction (whole workspace cross-checks clean f
 ## When arm64 is actually built (the later work)
 
 1. Keep the L0 gate green (free — it already is).
-2. Implement `nvkvm-linux-raw` with the runtime-page-size rule from day one.
+2. Implement `kayfabe-linux-raw` with the runtime-page-size rule from day one.
 3. Run the Axis-A ABI codegen for the arm64 target (should be a no-op layout-wise, but verified).
 4. Validate on real arm64 + NVIDIA hardware (Grace-Hopper / Jetson — the x86 GeForce bench cannot
    exercise it).

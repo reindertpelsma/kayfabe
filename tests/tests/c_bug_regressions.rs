@@ -11,18 +11,18 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
-use nvkvm_arch::ids::GpuId;
-use nvkvm_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_completion::OsEventRef;
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::{Gpu, GpuError};
-use nvkvm_core::rmgraph::{NodeKey, RmEvent};
-use nvkvm_fwd::{
+use kayfabe_arch::ids::GpuId;
+use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::{Gpu, GpuError};
+use kayfabe_core::rmgraph::{NodeKey, RmEvent};
+use kayfabe_fwd::{
     FwdFault, handle_doorbell, parse_pushbuffer, publish_backing, resolve, signal_golden_capture,
 };
-use nvkvm_mocks::{MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, mock_classes as mc};
-use nvkvm_tests::{Scenario, identical_handles};
-use nvkvm_vmm::Vmm;
+use kayfabe_mocks::{MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, mock_classes as mc};
+use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_vmm::Vmm;
 
 const A_PDB: Pdb = Pdb(0x3401_000);
 const B_PDB: Pdb = Pdb(0x3405_000);
@@ -31,7 +31,7 @@ const VA: GpuVa = GpuVa(0x2_0020_0000);
 /// Fresh device with a generous window (default geometry for non-lifecycle tests).
 fn fresh_gpu() -> (
     Gpu,
-    std::sync::Arc<std::sync::Mutex<nvkvm_mocks::RmRecorder>>,
+    std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
     gpu_with_window(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000)
 }
@@ -43,7 +43,7 @@ fn gpu_with_window(
     arena_len: u64,
 ) -> (
     Gpu,
-    std::sync::Arc<std::sync::Mutex<nvkvm_mocks::RmRecorder>>,
+    std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
@@ -66,7 +66,7 @@ fn build_proc(
     client: HClient,
     pdb: Pdb,
     vchids: (u16, u16),
-) -> (nvkvm_core::ProcId, nvkvm_core::ChanId) {
+) -> (kayfabe_core::ProcId, kayfabe_core::ChanId) {
     let mut s = Scenario::new();
     s.compute_process(client, pdb, identical_handles(vchids.0, vchids.1));
     apply_all(gpu, s.events);
@@ -570,7 +570,7 @@ fn cb14_host_channel_touch_alone_blocks_a_late_merge() {
         .channels
         .get_mut(&cid_b)
         .unwrap()
-        .host_channel = Some(nvkvm_isolate::HostHandle(0xC0FFEE));
+        .host_channel = Some(kayfabe_isolate::HostHandle(0xC0FFEE));
 
     let late_dup = RmEvent::Dup {
         src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
@@ -608,7 +608,7 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
         .vases
         .get_mut(&(GpuId::ZERO, B_PDB))
         .unwrap();
-    vas.host_vas = Some(nvkvm_isolate::HostHandle(0xBADA55));
+    vas.host_vas = Some(kayfabe_isolate::HostHandle(0xBADA55));
 
     let late_dup = RmEvent::Dup {
         src: NodeKey::new(HClient(0xAA), HObject(0x5c00_0010)),
@@ -681,7 +681,7 @@ fn cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty() {
 
 // =================================================================================
 // ★ The device teardown→restart lifecycle (decision #18B's known-gap probe).
-// The GSP-reboot FSM half (WPR2/fn-47/seqNum) is NOT MODELED yet (`nvkvm-gsp` is a
+// The GSP-reboot FSM half (WPR2/fn-47/seqNum) is NOT MODELED yet (`kayfabe-gsp` is a
 // skeleton) — that is a named MILESTONE row in the matrix, not faked here. The
 // teardown→recreate half IS core-coverable today: these two tests pin it.
 // =================================================================================

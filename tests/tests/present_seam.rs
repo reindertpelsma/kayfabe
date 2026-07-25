@@ -13,18 +13,18 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
-use nvkvm_arch::ids::GpuId;
-use nvkvm_arch::ids::{HClient, Pdb};
-use nvkvm_completion::OsEventRef;
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_fwd::{FwdFault, present_scanout};
-use nvkvm_isolate::{HostHandle, RmError};
-use nvkvm_mocks::{
+use kayfabe_arch::ids::GpuId;
+use kayfabe_arch::ids::{HClient, Pdb};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_fwd::{FwdFault, present_scanout};
+use kayfabe_isolate::{HostHandle, RmError};
+use kayfabe_mocks::{
     MockArch, MockIsolateFactory, MockPresent, RmVerb, SharedRecorder, mock_classes as mc,
 };
-use nvkvm_tests::{Scenario, identical_handles};
-use nvkvm_vmm::{FbMeta, PresentError, SurfaceHandle};
+use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_vmm::{FbMeta, PresentError, SurfaceHandle};
 
 const PDB: Pdb = Pdb(0x3401_000);
 

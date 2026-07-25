@@ -1,0 +1,12 @@
+[package]
+name = "kayfabe-vmm"
+description = "The hypervisor-adapter port: the `Vmm` capability trait (arch doc §4.1) + the `Device` trait the core presents back. Backends (QEMU shell, cloud-hypervisor) implement `Vmm`; the core never calls the OS or a VMM except through it."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+
+[lints]
+workspace = true

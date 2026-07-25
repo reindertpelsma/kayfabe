@@ -3,7 +3,7 @@
 //!
 //! The unit properties of the model (handle non-reuse, typed dispatch, MISS=FAULT,
 //! proc-scoped deregistration, order-independence, wake requests) are pinned in
-//! `nvkvm-core/src/reactor.rs`'s own tests. What can only be pinned HERE is the
+//! `kayfabe-core/src/reactor.rs`'s own tests. What can only be pinned HERE is the
 //! **integration** one: that the registry is wired into the real proc-retire path,
 //! so a source signalled after its proc died is a loud `SourceFault` rather than a
 //! route onto a dead proc — the C's F4 use-after-retire species.
@@ -17,15 +17,15 @@
 // same convention as the rest of the suite.
 #![allow(clippy::unusual_byte_groupings)]
 
-use nvkvm_arch::ids::{GpuId, HClient, HObject, Pdb};
-use nvkvm_completion::OsEventRef;
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_core::reactor::{Dispatch, SourceFault, SourceKind};
-use nvkvm_core::rmgraph::RmEvent;
-use nvkvm_isolate::WorkerId;
-use nvkvm_mocks::{MockArch, MockIsolateFactory};
-use nvkvm_tests::{Scenario, identical_handles};
+use kayfabe_arch::ids::{GpuId, HClient, HObject, Pdb};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_core::reactor::{Dispatch, SourceFault, SourceKind};
+use kayfabe_core::rmgraph::RmEvent;
+use kayfabe_isolate::WorkerId;
+use kayfabe_mocks::{MockArch, MockIsolateFactory};
+use kayfabe_tests::{Scenario, identical_handles};
 
 const A_PDB: Pdb = Pdb(0x1234_000);
 const B_PDB: Pdb = Pdb(0x5678_000);
@@ -39,7 +39,7 @@ fn fresh_gpu() -> Gpu {
 }
 
 /// Build one compute proc on physical GPU `instance` and return its `ProcId`.
-fn build_proc(gpu: &mut Gpu, client: HClient, pdb: Pdb, instance: u32) -> nvkvm_core::ProcId {
+fn build_proc(gpu: &mut Gpu, client: HClient, pdb: Pdb, instance: u32) -> kayfabe_core::ProcId {
     let mut s = Scenario::new();
     s.compute_process_on_gpu(client, pdb, identical_handles(0x10, 0x11), Some(instance));
     for ev in s.events {

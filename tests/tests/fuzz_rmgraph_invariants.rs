@@ -23,16 +23,16 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
-use nvkvm_arch::ids::GpuId;
+use kayfabe_arch::ids::GpuId;
 use std::collections::{BTreeMap, BTreeSet};
 
-use nvkvm_arch::ids::{ClassId, HClient, HObject, Pdb};
-use nvkvm_arch::{Arch, ObjectKind};
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_core::project::project;
-use nvkvm_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
-use nvkvm_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
+use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb};
+use kayfabe_arch::{Arch, ObjectKind};
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_core::project::project;
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
 use proptest::collection::vec;
 use proptest::prelude::*;
 
@@ -75,8 +75,8 @@ fn any_class() -> impl Strategy<Value = ClassId> {
 
 /// A tiny VA universe (so map/unmap of the same VA — the overlap/eager-unmap paths —
 /// are frequent).
-fn any_va() -> impl Strategy<Value = nvkvm_arch::ids::GpuVa> {
-    (0u32..4).prop_map(|n| nvkvm_arch::ids::GpuVa(0x2_0020_0000 + u64::from(n) * 0x10000))
+fn any_va() -> impl Strategy<Value = kayfabe_arch::ids::GpuVa> {
+    (0u32..4).prop_map(|n| kayfabe_arch::ids::GpuVa(0x2_0020_0000 + u64::from(n) * 0x10000))
 }
 
 /// A doorbell/vchid flags word — arbitrary bits, so vChid collisions are reachable.
@@ -174,7 +174,7 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
 
     // INV1: no two procs share a (target, PDB); by_pdb is 1:1 with a proc's declared
     // (target, PDB). Keyed on the GPU target — a PDB is per-GPU (MG-3).
-    let mut pdb_owner: BTreeMap<(Option<GpuId>, Pdb), nvkvm_core::ProcAnchor> = BTreeMap::new();
+    let mut pdb_owner: BTreeMap<(Option<GpuId>, Pdb), kayfabe_core::ProcAnchor> = BTreeMap::new();
     for p in &bounds.procs {
         for f in p.vases.values() {
             if let Some(pdb) = f.pdb {
@@ -187,7 +187,7 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
     }
 
     // INV2: no two procs share a (target, vChid); by_vchid is 1:1.
-    let mut vchid_owner: BTreeMap<_, nvkvm_core::ProcAnchor> = BTreeMap::new();
+    let mut vchid_owner: BTreeMap<_, kayfabe_core::ProcAnchor> = BTreeMap::new();
     for p in &bounds.procs {
         for facts in p.channels.values() {
             assert!(
@@ -238,7 +238,7 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
     // by checking that no two distinct procs' client sets are joined by a dup edge —
     // if they were, they'd be one proc. (Union-find already did this; we re-check the
     // contrapositive: two clients in DIFFERENT procs share no dup edge.)
-    let client_proc: BTreeMap<HClient, nvkvm_core::ProcAnchor> = bounds
+    let client_proc: BTreeMap<HClient, kayfabe_core::ProcAnchor> = bounds
         .procs
         .iter()
         .flat_map(|p| p.clients.iter().map(move |c| (*c, p.anchor)))
@@ -337,8 +337,8 @@ fn valid_fact_stream() -> impl Strategy<Value = Vec<RmEvent>> {
             let grc = HObject(base + 4);
             let cec = HObject(base + 5);
             let pdb = Pdb(0x3400_000 + u64::from(i as u32) * 0x1000);
-            let gr_vchid = nvkvm_arch::ids::VChid(0x100 + i as u16 * 2);
-            let ce_vchid = nvkvm_arch::ids::VChid(0x101 + i as u16 * 2);
+            let gr_vchid = kayfabe_arch::ids::VChid(0x100 + i as u16 * 2);
+            let ce_vchid = kayfabe_arch::ids::VChid(0x101 + i as u16 * 2);
             events.push(RmEvent::Alloc {
                 client,
                 parent: root,

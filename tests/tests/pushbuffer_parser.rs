@@ -14,17 +14,17 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
-use nvkvm_arch::ids::GpuId;
-use nvkvm_arch::ids::{GpuVa, HClient, Pdb, VChid};
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_fwd::{FwdFault, gate_working_set, handle_doorbell, parse_pushbuffer, publish_backing};
-use nvkvm_mocks::{
+use kayfabe_arch::ids::GpuId;
+use kayfabe_arch::ids::{GpuVa, HClient, Pdb, VChid};
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_fwd::{FwdFault, gate_working_set, handle_doorbell, parse_pushbuffer, publish_backing};
+use kayfabe_mocks::{
     MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, RmVerb, SharedRecorder,
     mock_classes as mc,
 };
-use nvkvm_tests::{Scenario, identical_handles};
-use nvkvm_vmm::Vmm;
+use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_vmm::Vmm;
 
 const A_PDB: Pdb = Pdb(0x3401_000);
 const B_PDB: Pdb = Pdb(0x3405_000);
@@ -123,7 +123,7 @@ fn scripted_pushbuffer_populates_table_and_observes_completion() {
     assert_eq!(out.opaque, 1);
 
     // The captured PT-write leaf is now resolvable in the table (co-populate source).
-    assert!(nvkvm_fwd::resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(pt_page + 0x40)).is_ok());
+    assert!(kayfabe_fwd::resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(pt_page + 0x40)).is_ok());
 }
 
 /// A hostile / truncated ring never panics and never desyncs the parser into an
@@ -239,7 +239,7 @@ fn t14_ring_gate_is_structural_no_ungated_door() {
     let (mut gpu, _vmm, rec) = two_proc_gpu();
     let pid_a = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let a_token = MockArch::token_for(VChid(0x10));
-    const MEM: nvkvm_arch::ids::HObject = nvkvm_arch::ids::HObject(0x5c00_0100);
+    const MEM: kayfabe_arch::ids::HObject = kayfabe_arch::ids::HObject(0x5c00_0100);
 
     // Bind the VA through the RPC source ONLY (declared backing, host_va = None): it
     // resolves in the guest-side table but was never published into the channel's own
@@ -247,13 +247,13 @@ fn t14_ring_gate_is_structural_no_ungated_door() {
     let mut s = Scenario::new();
     s.memory(
         HClient(0xAA),
-        nvkvm_arch::ids::HObject(0x5c00_0001),
+        kayfabe_arch::ids::HObject(0x5c00_0001),
         MEM,
         0x9_0000_0000,
     );
     s.map(
         HClient(0xAA),
-        nvkvm_arch::ids::HObject(0x5c00_0010),
+        kayfabe_arch::ids::HObject(0x5c00_0010),
         MEM,
         SHARED_VA,
         0x10000,
@@ -277,9 +277,9 @@ fn t14_ring_gate_is_structural_no_ungated_door() {
 
     // The guest eager-unmaps the RPC binding, then the VA is published into the
     // channel's OWN host VAS (host_va = Some): the SAME path now rings.
-    gpu.apply(nvkvm_core::rmgraph::RmEvent::Unmap {
+    gpu.apply(kayfabe_core::rmgraph::RmEvent::Unmap {
         client: HClient(0xAA),
-        vaspace: nvkvm_arch::ids::HObject(0x5c00_0010),
+        vaspace: kayfabe_arch::ids::HObject(0x5c00_0010),
         va: SHARED_VA,
     })
     .expect("unmap applies");
@@ -374,9 +374,9 @@ fn soak_submit_complete_loop_loses_no_completion() {
 // ---------------------------------------------------------------------------------
 
 mod fuzz {
-    use nvkvm_arch::ids::GpuId;
-    use nvkvm_fwd::parse_pushbuffer;
-    use nvkvm_vmm::Vmm;
+    use kayfabe_arch::ids::GpuId;
+    use kayfabe_fwd::parse_pushbuffer;
+    use kayfabe_vmm::Vmm;
     use proptest::collection::vec;
     use proptest::prelude::*;
 
@@ -404,7 +404,7 @@ mod fuzz {
             let vas = &gpu.procs[&pid].vases[&(GpuId::ZERO, super::A_PDB)];
             for (va, _len, b) in vas.table.iter() {
                 prop_assert_eq!(
-                    vas.table.resolve(super::A_PDB, nvkvm_arch::ids::GpuVa(va)).map(|(x, _)| x.phys),
+                    vas.table.resolve(super::A_PDB, kayfabe_arch::ids::GpuVa(va)).map(|(x, _)| x.phys),
                     Ok(b.phys),
                     "a bound VA must resolve to its own binding (no torn state)"
                 );

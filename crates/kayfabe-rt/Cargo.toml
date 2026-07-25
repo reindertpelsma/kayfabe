@@ -1,0 +1,22 @@
+[package]
+name = "kayfabe-rt"
+description = "The L1 threaded shell (l1_concurrency.md §2/§3, decision #37): the ranked-lock discipline with the asserted R1/R3 invariants, the SharedDevice lock-swap over the core's sharding shape (device RwLock + per-Proc Mutexes, both lock configurations), and the executor inbox. An ADAPTER crate — deliberately outside the hexagonal-boundary grep — but pure std: no OS waiting primitives live here (those are stage 3 / L2)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-mmu.workspace = true
+kayfabe-completion.workspace = true
+kayfabe-isolate.workspace = true
+kayfabe-vmm.workspace = true
+kayfabe-core.workspace = true
+kayfabe-fwd.workspace = true
+
+[dev-dependencies]
+kayfabe-mocks.workspace = true
+
+[lints]
+workspace = true

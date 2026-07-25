@@ -38,22 +38,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant as WallInstant};
 
-use nvkvm_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_completion::OsEventRef;
-use nvkvm_core::ProcId;
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_core::reactor::SourceKind;
-use nvkvm_core::rmgraph::{AllocFacts, RmEvent};
-use nvkvm_fwd::{FwdFault, Stale};
-use nvkvm_isolate::{DEFAULT_POOL_WORKERS, IsolateFactory, IsolateId, VerbPlan, WorkerId};
-use nvkvm_mocks::{HoldSpec, MockArch, MockIsolateFactory, SharedRecorder, VerbHold, VerbKind};
-use nvkvm_rt::device::{LockMode, SharedDevice, SignalOutcome};
-use nvkvm_rt::executor::{Effect, Executor};
-use nvkvm_rt::inbox::{CoreEvent, inbox};
-use nvkvm_rt::lock::{LockRank, RankedMutex};
-use nvkvm_tests::{Scenario, identical_handles};
-use nvkvm_util::Instant;
+use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::ProcId;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_core::reactor::SourceKind;
+use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
+use kayfabe_fwd::{FwdFault, Stale};
+use kayfabe_isolate::{DEFAULT_POOL_WORKERS, IsolateFactory, IsolateId, VerbPlan, WorkerId};
+use kayfabe_mocks::{HoldSpec, MockArch, MockIsolateFactory, SharedRecorder, VerbHold, VerbKind};
+use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
+use kayfabe_rt::executor::{Effect, Executor};
+use kayfabe_rt::inbox::{CoreEvent, inbox};
+use kayfabe_rt::lock::{LockRank, RankedMutex};
+use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_util::Instant;
 
 // ---------------------------------------------------------------------------------
 // Harness
@@ -178,7 +178,7 @@ fn r1_legal_path_checked_out_worker_with_no_guards_runs() {
     let (mut factory, rec) = MockIsolateFactory::new();
     let mut iso = factory.spawn(IsolateId(1), GPU);
     let mut worker = iso.checkout().expect("fresh pool");
-    assert_eq!(nvkvm_rt::lock::held_depth(), 0, "no guard is alive here");
+    assert_eq!(kayfabe_rt::lock::held_depth(), 0, "no guard is alive here");
 
     let reply = worker
         .execute(&VerbPlan::Publish {
@@ -187,7 +187,7 @@ fn r1_legal_path_checked_out_worker_with_no_guards_runs() {
         })
         .expect("the chain runs");
     match reply {
-        nvkvm_isolate::VerbReply::Published { host_vas, .. } => {
+        kayfabe_isolate::VerbReply::Published { host_vas, .. } => {
             assert!(
                 host_vas.is_some(),
                 "the chain allocated the host VAS itself"
@@ -201,9 +201,9 @@ fn r1_legal_path_checked_out_worker_with_no_guards_runs() {
         .log
         .iter()
         .map(|(_, v)| match v {
-            nvkvm_mocks::RmVerb::AllocVaSpace { .. } => "vas",
-            nvkvm_mocks::RmVerb::AllocSysmem { .. } => "mem",
-            nvkvm_mocks::RmVerb::MapGpuVa { .. } => "map",
+            kayfabe_mocks::RmVerb::AllocVaSpace { .. } => "vas",
+            kayfabe_mocks::RmVerb::AllocSysmem { .. } => "mem",
+            kayfabe_mocks::RmVerb::MapGpuVa { .. } => "map",
             _ => "other",
         })
         .collect();
@@ -369,7 +369,7 @@ fn poll_and_delivery_need_no_worker_at_full_saturation() {
 fn canary(
     mutate: impl FnOnce(&SharedDevice, ProcId),
 ) -> (
-    Result<nvkvm_fwd::Published, FwdFault>,
+    Result<kayfabe_fwd::Published, FwdFault>,
     Arc<SharedDevice>,
     ProcId,
 ) {
@@ -487,7 +487,7 @@ fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
             client: CLIENT,
             parent: h.tsg,
             handle: HObject(0x5c00_00f9),
-            class: nvkvm_mocks::mock_classes::CHANNEL_GR,
+            class: kayfabe_mocks::mock_classes::CHANNEL_GR,
             facts: AllocFacts {
                 h_vaspace: Some(h.vaspace),
                 userd_flags: MockArch::userd_flags_for(GR),
@@ -525,7 +525,7 @@ fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
 /// releases ALL locks, waits, and completes once a worker comes back.
 ///
 /// The "holds no lock while waiting" half is asserted by construction: the waiter
-/// opens a [`nvkvm_rt::lock::BlockingSection`] before parking, which panics unless
+/// opens a [`kayfabe_rt::lock::BlockingSection`] before parking, which panics unless
 /// the thread holds zero ranked locks — so B finishing successfully IS the proof. The
 /// ordering half is progress-based, read off the verb log: B's verbs land strictly
 /// after A's, on the SAME single worker.
@@ -558,7 +558,7 @@ fn pool_full_is_backpressure_not_a_hang() {
         .log
         .iter()
         .filter_map(|(_, v)| match v {
-            nvkvm_mocks::RmVerb::MapGpuVa { va, .. } => Some(*va),
+            kayfabe_mocks::RmVerb::MapGpuVa { va, .. } => Some(*va),
             _ => None,
         })
         .collect();
@@ -723,7 +723,7 @@ fn idempotent_replay_emits_no_verbs_and_takes_no_worker() {
     let (device, pids, rec) = device_with(1, 1, LockMode::Sharded); // pool of ONE
     let pid = pids[0];
     let first = device
-        .forward_engine_object(GPU, GR, nvkvm_tests::COMPUTE_CLASS, &[])
+        .forward_engine_object(GPU, GR, kayfabe_tests::COMPUTE_CLASS, &[])
         .expect("first forward allocs");
     assert!(!first.reused);
 
@@ -735,7 +735,7 @@ fn idempotent_replay_emits_no_verbs_and_takes_no_worker() {
     held.wait_until_pending();
 
     let replay = device
-        .forward_engine_object(GPU, GR, nvkvm_tests::COMPUTE_CLASS, &[])
+        .forward_engine_object(GPU, GR, kayfabe_tests::COMPUTE_CLASS, &[])
         .expect("the replay resolves from core state with the pool saturated");
     assert!(replay.reused, "a re-send is idempotent");
     assert_eq!(replay.host_object, first.host_object, "the ORIGINAL object");

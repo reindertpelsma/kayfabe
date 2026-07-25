@@ -4,7 +4,7 @@ subtitle: |
   Review summary of the PLANNED design — for owner flaw-hunting.
   Sources: `docs/design/l1_concurrency.md` (decision #34) and
   `docs/design/core_state_and_consolidation.md` (#32), grounded against
-  `nvkvm-core/src/gpu.rs` + `nvkvm-fwd/src/lib.rs` at HEAD `488117c`.
+  `kayfabe-core/src/gpu.rs` + `kayfabe-fwd/src/lib.rs` at HEAD `488117c`.
 date: "2026-07-25 · status: DESIGN, pre-code — the route/act core refactor is in flight; no L1 code exists yet"
 geometry: margin=2.1cm
 fontsize: 10pt
@@ -92,7 +92,7 @@ deadline armed only while something is outstanding.
 
 ## 4.1 A doorbell ring (route → act)
 
-Grounded in today's `nvkvm_fwd::handle_doorbell` (the ONE gated ring path — nothing
+Grounded in today's `kayfabe_fwd::handle_doorbell` (the ONE gated ring path — nothing
 else may ever call `RmBackend::ring_doorbell`), refactored per the plan into
 `route_doorbell(&Gpu, token)` + `exec_doorbell(&mut Proc, …)`:
 
@@ -170,7 +170,7 @@ its completions die with it (MISS=FAULT posture, no resurrection).
    (esp. completion delivery); isolate I/O completes via `CoreEvent`s on the executor,
    never re-entrantly; the deterministic single-thread test mode stays viable.
 10. **Purity + `forbid(unsafe_code)`** — OS code in adapter crates; `unsafe` only in
-    one audited raw module (`nvkvm-linux-raw`: mmap, volatile shared-page access, KVM
+    one audited raw module (`kayfabe-linux-raw`: mmap, volatile shared-page access, KVM
     ioctls) whose API review is part of L1's exit gate.
 
 \needspace{8\baselineskip}
@@ -263,8 +263,8 @@ places where the argument is thinnest, offered as a reviewer's aid.)*
 
 Written read-only from `l1_concurrency.md` (§§0–10) and
 `core_state_and_consolidation.md` (§§1–6) at `488117c`, with the doorbell/publish/
-completion entry points verified against `crates/nvkvm-fwd/src/lib.rs` and the
-`Gpu`/`Proc` ownership against `crates/nvkvm-core/src/gpu.rs`. The diagram
+completion entry points verified against `crates/kayfabe-fwd/src/lib.rs` and the
+`Gpu`/`Proc` ownership against `crates/kayfabe-core/src/gpu.rs`. The diagram
 (`l1_architecture_diagram.py` → `.png`, matplotlib) renders `l1_concurrency.md` §2.
 Sections 1–5 and 6.1–6.2 summarize the docs' own claims; §6.3 is this summary's
 analysis and is marked as such. Nothing here amends the design — discrepancies found

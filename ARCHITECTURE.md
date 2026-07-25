@@ -15,46 +15,46 @@ NVIDIA (Axis-A codegen + a real `Arch` impl).
 ```
                  ┌────────────────────────────────────────────┐
    Vmm/Device ──►│               THE PURE CORE                │◄── Arch (+ GmmuFmt,
-   Present    ──►│  nvkvm-core   RmGraph → project → Gpu      │    UserdModel,
-   (nvkvm-vmm)   │  nvkvm-mmu    per-Vas AddressTable         │    PushbufferAbi)
-                 │  nvkvm-fwd    demux / gate / parse / route │    (nvkvm-arch)
-   Isolate    ──►│  nvkvm-completion  queues / delivery /     │◄── DriverAbi
-   RmBackend     │                    fence arms              │    (nvkvm-abi, stub)
-   (nvkvm-isolate)└────────────────────────────────────────────┘
-                        ▲ the only impls today: nvkvm-mocks
+   Present    ──►│  kayfabe-core   RmGraph → project → Gpu      │    UserdModel,
+   (kayfabe-vmm)   │  kayfabe-mmu    per-Vas AddressTable         │    PushbufferAbi)
+                 │  kayfabe-fwd    demux / gate / parse / route │    (kayfabe-arch)
+   Isolate    ──►│  kayfabe-completion  queues / delivery /     │◄── DriverAbi
+   RmBackend     │                    fence arms              │    (kayfabe-abi, stub)
+   (kayfabe-isolate)└────────────────────────────────────────────┘
+                        ▲ the only impls today: kayfabe-mocks
 ```
 
 Ports and their standing:
 
 | Port | Crate | Real adapter | Status |
 |---|---|---|---|
-| `Vmm` (8 capability groups), `Device`, `Present` | `nvkvm-vmm` | L1/L2 (QEMU, cloud-hypervisor) | **trait-only** (mock-implemented) |
-| `Isolate`, `IsolateFactory`, `RmBackend` | `nvkvm-isolate` | L1 (sandboxed Linux worker) | **trait-only** (mock-implemented) |
-| `Arch`, `GmmuFmt`, `UserdModel`, `PushbufferAbi` | `nvkvm-arch` | L3 (`impl Arch for <Gen>`) | **trait-only** (MockArch = "Mockingbird") |
-| `DriverAbi` (Axis A) | `nvkvm-abi` | L3 codegen from ogkm | **stub** (shape only) |
-| `TraceSink` | `nvkvm-trace` | adapter log/file | **stub** |
-| `FbRead` (walker's PT source) | `nvkvm-mmu::walker` | FB shadow | **skeleton** |
+| `Vmm` (8 capability groups), `Device`, `Present` | `kayfabe-vmm` | L1/L2 (QEMU, cloud-hypervisor) | **trait-only** (mock-implemented) |
+| `Isolate`, `IsolateFactory`, `RmBackend` | `kayfabe-isolate` | L1 (sandboxed Linux worker) | **trait-only** (mock-implemented) |
+| `Arch`, `GmmuFmt`, `UserdModel`, `PushbufferAbi` | `kayfabe-arch` | L3 (`impl Arch for <Gen>`) | **trait-only** (MockArch = "Mockingbird") |
+| `DriverAbi` (Axis A) | `kayfabe-abi` | L3 codegen from ogkm | **stub** (shape only) |
+| `TraceSink` | `kayfabe-trace` | adapter log/file | **stub** |
+| `FbRead` (walker's PT source) | `kayfabe-mmu::walker` | FB shadow | **skeleton** |
 
-Note: `Gpu` does **not** yet implement `nvkvm_vmm::Device` — that needs the register +
-GSP models (`nvkvm-gsp`), which port at the L2 step. The core's current entry surface
-is the event-level API (`Gpu::apply` + the `nvkvm-fwd` free functions).
+Note: `Gpu` does **not** yet implement `kayfabe_vmm::Device` — that needs the register +
+GSP models (`kayfabe-gsp`), which port at the L2 step. The core's current entry surface
+is the event-level API (`Gpu::apply` + the `kayfabe-fwd` free functions).
 
 ## Crate → responsibility
 
 | Crate | Role | Design source | State |
 |---|---|---|---|
-| `nvkvm-util` | `IntervalMap` (the address table's container), virtual `Instant`, the `assert_send_sync!` build gate | decision #2; testing §4 | **full** |
-| `nvkvm-arch` | identity newtypes (`HClient`/`HObject`/`Pdb`/`VChid`/`GpuId`/`EngineKind`/…) + Axis-B seams | `mode2_abi_agnostic_layer.md` §4.2 | **full** (traits) |
-| `nvkvm-core` | ★ `RmGraph` (refcounted source of truth) → `project()` (pure boundaries + routing) → `Gpu`/`Proc`/`Vas`/`Channel` runtime + per-proc GPA arenas | arch §4.3; decisions #14/#17/#18 | **full** |
-| `nvkvm-mmu` | per-VAS `AddressTable`: forward-populate only, MISS=FAULT, unmap-eager | `mode2_address_table.md` | **full** (table); walker **skeleton** |
-| `nvkvm-completion` | per-proc `CompletionQueue` + device/target `DeliveryPlane` (drain-gated, poll-driven re-post) + `FenceArms` (pattern e, #12 jump guard) | arch §4.3.2; `execution_plane.md` §1.2/§2.4 | **full** |
-| `nvkvm-fwd` | intent → host ops: `handle_doorbell` (the ONE ring path), `publish_backing`, `parse_pushbuffer` (the ONE parser), `forward_engine_object`/`route_control` (Case-1/Case-2), fence arm/observe, `present_scanout` | arch §4.2; `execution_plane.md` §2 | **full** (core slice) |
-| `nvkvm-vmm` | the hypervisor/display ports | arch §4.1 | traits only |
-| `nvkvm-isolate` | the sandbox/host-RM ports (RM **verbs**, not ioctls) | arch §4.2/§4.3.4 | traits only |
-| `nvkvm-abi` | Axis-A: generated per-driver-version wire tables; the ONLY future home of `#[repr(C)]` | `mode2_abi_agnostic_layer.md` §2 | **stub** |
-| `nvkvm-gsp` | faked GSP boot FSM + seqNum queue transport (resettable) | arch §4.2/§4.5 step 2 | **stub** |
-| `nvkvm-trace` | trace/replay vocabulary | lesson L6 | **stub** |
-| `nvkvm-mocks` | one deterministic fake per port + shared verb recorder | testing §4 | **full** (test-only) |
+| `kayfabe-util` | `IntervalMap` (the address table's container), virtual `Instant`, the `assert_send_sync!` build gate | decision #2; testing §4 | **full** |
+| `kayfabe-arch` | identity newtypes (`HClient`/`HObject`/`Pdb`/`VChid`/`GpuId`/`EngineKind`/…) + Axis-B seams | `mode2_abi_agnostic_layer.md` §4.2 | **full** (traits) |
+| `kayfabe-core` | ★ `RmGraph` (refcounted source of truth) → `project()` (pure boundaries + routing) → `Gpu`/`Proc`/`Vas`/`Channel` runtime + per-proc GPA arenas | arch §4.3; decisions #14/#17/#18 | **full** |
+| `kayfabe-mmu` | per-VAS `AddressTable`: forward-populate only, MISS=FAULT, unmap-eager | `mode2_address_table.md` | **full** (table); walker **skeleton** |
+| `kayfabe-completion` | per-proc `CompletionQueue` + device/target `DeliveryPlane` (drain-gated, poll-driven re-post) + `FenceArms` (pattern e, #12 jump guard) | arch §4.3.2; `execution_plane.md` §1.2/§2.4 | **full** |
+| `kayfabe-fwd` | intent → host ops: `handle_doorbell` (the ONE ring path), `publish_backing`, `parse_pushbuffer` (the ONE parser), `forward_engine_object`/`route_control` (Case-1/Case-2), fence arm/observe, `present_scanout` | arch §4.2; `execution_plane.md` §2 | **full** (core slice) |
+| `kayfabe-vmm` | the hypervisor/display ports | arch §4.1 | traits only |
+| `kayfabe-isolate` | the sandbox/host-RM ports (RM **verbs**, not ioctls) | arch §4.2/§4.3.4 | traits only |
+| `kayfabe-abi` | Axis-A: generated per-driver-version wire tables; the ONLY future home of `#[repr(C)]` | `mode2_abi_agnostic_layer.md` §2 | **stub** |
+| `kayfabe-gsp` | faked GSP boot FSM + seqNum queue transport (resettable) | arch §4.2/§4.5 step 2 | **stub** |
+| `kayfabe-trace` | trace/replay vocabulary | lesson L6 | **stub** |
+| `kayfabe-mocks` | one deterministic fake per port + shared verb recorder | testing §4 | **full** (test-only) |
 | `tests/` | the conformance suite (14 files, ~120 integration tests) + the `Scenario` DSL | testing §2/§3 | **full** |
 
 ## The data-plane spine
@@ -73,7 +73,7 @@ Proc (per guest process)     owns ALL FOUR planes:
   • execution  — Channel per vChid + per-proc ExecPlane scheduling      (#12 fix)
   • completion — CompletionQueue + FenceArms                            (starvation fix)
   • isolate+arena — per (Proc,GpuId) sandbox + disjoint GPA arena       (blast radius)
-nvkvm-fwd                    the entry points adapters call:
+kayfabe-fwd                    the entry points adapters call:
   handle_doorbell → decode → (GpuId,VChid) route → #14 ring-gate → lazy materialize
                     (engine-aware alloc_channel) → schedule → ring   [the ONE ring path]
   publish_backing → arena carve + host map into the Vas's OWN host VAS → table bind
@@ -125,5 +125,5 @@ nvkvm-fwd                    the entry points adapters call:
 adversarial suites. Next: **L1 Linux OS layer, concurrency design doc first** (the
 highest-risk seam), then isolates/mmap/traps → L2 QEMU (qtest-style mock-max) →
 L3 per-arch codegen + real-app validation on the bench. The GSP/register model
-(`nvkvm-gsp`) ports with L2; the GMMU walker with the mmu arch port; graphics
+(`kayfabe-gsp`) ports with L2; the GMMU walker with the mmu arch port; graphics
 pipeline + MIG stay deferred (seams ready — `SurfaceHandle`/`Present`, `GpuId`).

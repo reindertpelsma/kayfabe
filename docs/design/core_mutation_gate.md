@@ -30,16 +30,16 @@ and a triage of every survivor.
 
 ## Scope & method (and the honest caveat)
 
-Mutated the pure-core crates only: `nvkvm-core`, `nvkvm-mmu`, `nvkvm-fwd`,
-`nvkvm-completion`, `nvkvm-arch` (mocks / `fuzz/` / `tests/` harness excluded — mutating
+Mutated the pure-core crates only: `kayfabe-core`, `kayfabe-mmu`, `kayfabe-fwd`,
+`kayfabe-completion`, `kayfabe-arch` (mocks / `fuzz/` / `tests/` harness excluded — mutating
 test/mock code is noise). Each mutant is scored by running the **entire workspace test
 suite** against it (no subset — a mutant killed only by a heavy proptest still counts).
 
 **Sharding (honest):** the workspace suite is ~100s/run and the `pushbuffer_parser`
 proptest alone is ~77s, so mutants × full-suite is long. It was run in two passes:
-**Pass 1** ran all five crates and fully completed `nvkvm-arch`, `nvkvm-completion`, and
-`nvkvm-core` (its `nvkvm-fwd`/`nvkvm-mmu` slice was stopped mid-tail and is superseded).
-**Pass 2** then ran `nvkvm-fwd` + `nvkvm-mmu` to completion **WITH the new
+**Pass 1** ran all five crates and fully completed `kayfabe-arch`, `kayfabe-completion`, and
+`kayfabe-core` (its `kayfabe-fwd`/`kayfabe-mmu` slice was stopped mid-tail and is superseded).
+**Pass 2** then ran `kayfabe-fwd` + `kayfabe-mmu` to completion **WITH the new
 survivor-killing tests already in place**. So every crate is covered end-to-end, and the
 fwd/mmu numbers already reflect the fixes. Every survivor was **triaged**, and every real
 gap was killed and **independently verified** by hand-applying the exact mutation and
@@ -56,11 +56,11 @@ arch/completion/core, Pass 2 for fwd/mmu).
 
 | Crate | caught | timeout (killed) | survived | unviable | **viable** | **killed** | **score** |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `nvkvm-arch` | 2 | 0 | 0 | 1 | 2 | 2 | **100%** |
-| `nvkvm-completion` | 41 | 0 | 8→**0**¹ | 5 | 49 | 49 | **100%** |
-| `nvkvm-core` | 124 | 2 | 21→**1**² | 32 | 147 | 146 | **99.3%** |
-| `nvkvm-mmu` | 6 | 0 | 0 | 8 | 6 | 6 | **100%** |
-| `nvkvm-fwd` | 40 | 0 | 3→**1**³ | 16 | 43 | 42 | **97.7%** |
+| `kayfabe-arch` | 2 | 0 | 0 | 1 | 2 | 2 | **100%** |
+| `kayfabe-completion` | 41 | 0 | 8→**0**¹ | 5 | 49 | 49 | **100%** |
+| `kayfabe-core` | 124 | 2 | 21→**1**² | 32 | 147 | 146 | **99.3%** |
+| `kayfabe-mmu` | 6 | 0 | 0 | 8 | 6 | 6 | **100%** |
+| `kayfabe-fwd` | 40 | 0 | 3→**1**³ | 16 | 43 | 42 | **97.7%** |
 | **total** | **213** | **2** | **2** | **62** | **247** | **245** | **99.2%** |
 
 ¹ All 8 completion survivors were **real gaps**, now killed (verified per-row). ² Of 21
@@ -102,7 +102,7 @@ verified by hand-applying the mutation and seeing the test fail). *Equivalent* �
 distinguishes it from the original; documented, not chased (decision #15: don't add brittle
 internal-state pins).
 
-### `nvkvm-completion` (8 survivors → all real gaps, killed)
+### `kayfabe-completion` (8 survivors → all real gaps, killed)
 
 | Mutant | Class | Killed by |
 |---|---|---|
@@ -114,7 +114,7 @@ internal-state pins).
 | `try_post` `next_batch += 1 → *= 1` (356) | real | `successive_batches_carry_distinct_monotonic_ids` — `*= 1` pins the drain-key BatchId at 0 forever; two posts must get distinct ids. |
 | `MAX_FENCE_JUMP` `2 * 1024 → 2 + 1024` (67) | real | `fence_jump_guard_accepts_a_legitimate_large_step` — a legitimate 1500-step must not fault; `2+1024=1026` wrongly rejects it. |
 
-### `nvkvm-core::gpa` (3 survivors → all real gaps, killed)
+### `kayfabe-core::gpa` (3 survivors → all real gaps, killed)
 
 | Mutant | Class | Killed by |
 |---|---|---|
@@ -122,7 +122,7 @@ internal-state pins).
 | `GpaArena::alloc` `> → >=` (93) | real | same — an EXACT arena fill must SUCCEED (`>=` rejects the perfect fill). |
 | `GpaArena::is_untouched → true` (105) | real | `is_untouched_flips_on_first_allocation` — after one alloc it must be false (early-arm merge discipline, L9). |
 
-### `nvkvm-core::gpu` (3 survivors → all real gaps, killed)
+### `kayfabe-core::gpu` (3 survivors → all real gaps, killed)
 
 | Mutant | Class | Killed by |
 |---|---|---|
@@ -134,7 +134,7 @@ internal-state pins).
 `cb14` couldn't distinguish the `&&`s — each clause needed isolating. This is the
 disagreement-sensitivity a mutation gate exposes that an end-to-end test does not.)
 
-### `nvkvm-core::project` (4 survivors → 3 real gaps killed, 1 equivalent)
+### `kayfabe-core::project` (4 survivors → 3 real gaps killed, 1 equivalent)
 
 | Mutant | Class | Killed by / why equivalent |
 |---|---|---|
@@ -143,7 +143,7 @@ disagreement-sensitivity a mutation gate exposes that an end-to-end test does no
 | `ClientUnion::union` `< → <=` (123) | **equivalent** | The `ra == rb` case returns early one line above (line 120), so at the comparison `ra != rb` always holds; `<` and `<=` are identical for every reachable input. Verified: the anchor test still passes under `<=`. Not chased. |
 | `project` vChid dedup `!= → ==` (274) | real | `b1_vchid_collision_is_a_loud_contained_projection_fault` — two distinct channels decoding to one vChid must be a loud `VchidCollision` (the exec-plane twin of the existing PDB-collision test); `==` silently accepts the collision. |
 
-### `nvkvm-core::rmgraph` (12 survivors → all real gaps, killed)
+### `kayfabe-core::rmgraph` (12 survivors → all real gaps, killed)
 
 | Mutant | Class | Killed by |
 |---|---|---|
@@ -163,7 +163,7 @@ disagreement-sensitivity a mutation gate exposes that an end-to-end test does no
 **timeouts**: the mutation makes the fixpoint loop non-terminating, which the per-mutant
 `--timeout 240` detects = killed.)
 
-### `nvkvm-fwd` (3 survivors → 2 real gaps killed, 1 acceptable)
+### `kayfabe-fwd` (3 survivors → 2 real gaps killed, 1 acceptable)
 
 | Mutant | Class | Killed by / why not |
 |---|---|---|
@@ -176,12 +176,12 @@ disagreement-sensitivity a mutation gate exposes that an end-to-end test does no
 ```
 export PATH="$HOME/.cargo/bin:$PATH"
 cd /workspace/nvkvm-rs
-cargo mutants -p nvkvm-core -p nvkvm-mmu -p nvkvm-fwd -p nvkvm-completion -p nvkvm-arch \
+cargo mutants -p kayfabe-core -p kayfabe-mmu -p kayfabe-fwd -p kayfabe-completion -p kayfabe-arch \
   --test-workspace true -j 2 --baseline skip --timeout 240 --build-timeout 900
 ```
 
-The new survivor-killing tests live in `crates/nvkvm-completion/src/lib.rs` (unit),
-`crates/nvkvm-core/src/gpa.rs` (unit), and the workspace suites
+The new survivor-killing tests live in `crates/kayfabe-completion/src/lib.rs` (unit),
+`crates/kayfabe-core/src/gpa.rs` (unit), and the workspace suites
 `tests/tests/c_bug_regressions.rs`, `tests/tests/object_model.rs`,
 `tests/tests/rmgraph_order_independence.rs`, `tests/tests/security_boundary.rs`. Each is
 tagged `★ Mutation-gate kill` in its doc comment and names the mutant it kills.

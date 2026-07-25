@@ -81,6 +81,134 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-abi"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-arch"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-completion"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-core"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-completion",
+ "kayfabe-isolate",
+ "kayfabe-mmu",
+ "kayfabe-mocks",
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-fwd"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-completion",
+ "kayfabe-core",
+ "kayfabe-isolate",
+ "kayfabe-mmu",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-gsp"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-isolate"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-mmu"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-mocks"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-isolate",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-rt"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-completion",
+ "kayfabe-core",
+ "kayfabe-fwd",
+ "kayfabe-isolate",
+ "kayfabe-mmu",
+ "kayfabe-mocks",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-tests"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-completion",
+ "kayfabe-core",
+ "kayfabe-fwd",
+ "kayfabe-isolate",
+ "kayfabe-mmu",
+ "kayfabe-mocks",
+ "kayfabe-rt",
+ "kayfabe-util",
+ "kayfabe-vmm",
+ "proptest",
+]
+
+[[package]]
+name = "kayfabe-trace"
+version = "0.1.0"
+
+[[package]]
+name = "kayfabe-util"
+version = "0.1.0"
+
+[[package]]
+name = "kayfabe-vmm"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-util",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -99,134 +227,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "nvkvm-abi"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-util",
-]
-
-[[package]]
-name = "nvkvm-arch"
-version = "0.1.0"
-dependencies = [
- "nvkvm-util",
-]
-
-[[package]]
-name = "nvkvm-completion"
-version = "0.1.0"
-dependencies = [
- "nvkvm-util",
-]
-
-[[package]]
-name = "nvkvm-core"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-completion",
- "nvkvm-isolate",
- "nvkvm-mmu",
- "nvkvm-mocks",
- "nvkvm-util",
-]
-
-[[package]]
-name = "nvkvm-fwd"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-completion",
- "nvkvm-core",
- "nvkvm-isolate",
- "nvkvm-mmu",
- "nvkvm-util",
- "nvkvm-vmm",
-]
-
-[[package]]
-name = "nvkvm-gsp"
-version = "0.1.0"
-dependencies = [
- "nvkvm-util",
-]
-
-[[package]]
-name = "nvkvm-isolate"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-util",
- "nvkvm-vmm",
-]
-
-[[package]]
-name = "nvkvm-mmu"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-util",
-]
-
-[[package]]
-name = "nvkvm-mocks"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-isolate",
- "nvkvm-util",
- "nvkvm-vmm",
-]
-
-[[package]]
-name = "nvkvm-rt"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-completion",
- "nvkvm-core",
- "nvkvm-fwd",
- "nvkvm-isolate",
- "nvkvm-mmu",
- "nvkvm-mocks",
- "nvkvm-util",
- "nvkvm-vmm",
-]
-
-[[package]]
-name = "nvkvm-tests"
-version = "0.1.0"
-dependencies = [
- "nvkvm-arch",
- "nvkvm-completion",
- "nvkvm-core",
- "nvkvm-fwd",
- "nvkvm-isolate",
- "nvkvm-mmu",
- "nvkvm-mocks",
- "nvkvm-rt",
- "nvkvm-util",
- "nvkvm-vmm",
- "proptest",
-]
-
-[[package]]
-name = "nvkvm-trace"
-version = "0.1.0"
-
-[[package]]
-name = "nvkvm-util"
-version = "0.1.0"
-
-[[package]]
-name = "nvkvm-vmm"
-version = "0.1.0"
-dependencies = [
- "nvkvm-util",
 ]
 
 [[package]]

@@ -1,0 +1,12 @@
+[package]
+name = "kayfabe-arch"
+description = "Abstract GPU vocabulary (domain newtypes) + the Axis-B `Arch` trait set. One impl per GPU generation; the core never names a concrete architecture."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+
+[lints]
+workspace = true

@@ -27,31 +27,31 @@ this repo at head.
 
 | Core capability | Modeled? | Where | Gap |
 |---|---|---|---|
-| RM object model (client/device/subdevice/VASpace/TSG/ctxshare/channel/engine-obj/**memory**/**event**) | **yes** | `nvkvm-core/src/rmgraph.rs` (`ObjectKind` via `Arch::classify`); `object_model.rs` (`map_populates_the_address_table`, `event_objects_are_graph_derived`) | — |
+| RM object model (client/device/subdevice/VASpace/TSG/ctxshare/channel/engine-obj/**memory**/**event**) | **yes** | `kayfabe-core/src/rmgraph.rs` (`ObjectKind` via `Arch::classify`); `object_model.rs` (`map_populates_the_address_table`, `event_objects_are_graph_derived`) | — |
 | **DUP refcount** (dup survives src free; resource/handle split; alias chains; order tolerance) | **yes** | `rmgraph.rs` `Resource{refs, map_refs}`, `pending_dups`; `wo_dup_then_free_src_keeps_dst_alias_alive`, fuzz `a4_dup_object_is_reference_counted` | — |
 | Order-independent projections (`by_pdb`, `by_vchid`, Proc grouping = dup-connected components) | **yes** | `project.rs`; `rmgraph_order_independence.rs`, fuzz `a2_valid_streams_project_order_independently` | — |
 | Hostile-input containment (atomic apply rollback, capacity caps, collision refusal) | **yes** | `gpu.rs::apply` snapshot/rollback; `security_boundary.rs` `b1_*`/`b2_*`/`b6_*` | — |
-| Case-1 forward / Case-2 ack-only control routing | **yes** | `nvkvm-fwd::route_control` + `Arch::is_case2_control`; `engine_context.rs::case2_controls_are_ack_only_never_forwarded` | Case-2 *set values* (PROMOTE_CTX etc.) are Axis-A rows — L3 codegen, by design |
-| Alloc-param-size class (the L11 bug family: cuCtxCreate-401, 3× Vulkan-enum, NVENC ctx-DMA) | **deferred by design** | `nvkvm-abi::DriverAbi::alloc_param_size` (trait shape only) | Table *content* = L3 codegen + diff-vs-C tests (matrix row 25). Not core logic |
+| Case-1 forward / Case-2 ack-only control routing | **yes** | `kayfabe-fwd::route_control` + `Arch::is_case2_control`; `engine_context.rs::case2_controls_are_ack_only_never_forwarded` | Case-2 *set values* (PROMOTE_CTX etc.) are Axis-A rows — L3 codegen, by design |
+| Alloc-param-size class (the L11 bug family: cuCtxCreate-401, 3× Vulkan-enum, NVENC ctx-DMA) | **deferred by design** | `kayfabe-abi::DriverAbi::alloc_param_size` (trait shape only) | Table *content* = L3 codegen + diff-vs-C tests (matrix row 25). Not core logic |
 
 ### 1.2 Address plane
 
 | Core capability | Modeled? | Where | Gap |
 |---|---|---|---|
-| ONE forward-populated per-`Vas` VA→phys table, PDB-keyed, MISS=FAULT, overlap loud, unmap eager | **yes** | `nvkvm-mmu::AddressTable`; `taddr_*`, `b4_miss_is_fault_never_silent_wrong_resolve`, `b4_identical_va_distinct_pdb_never_cross_leaks` | — |
+| ONE forward-populated per-`Vas` VA→phys table, PDB-keyed, MISS=FAULT, overlap loud, unmap eager | **yes** | `kayfabe-mmu::AddressTable`; `taddr_*`, `b4_miss_is_fault_never_silent_wrong_resolve`, `b4_identical_va_distinct_pdb_never_cross_leaks` | — |
 | RPC populate source (`MapMemoryDma` → `memory→phys` resolution, idempotent sync, unbind-on-unmap) | **yes** | `gpu.rs::sync_rpc_mappings` + `rmgraph::backing_of`; `object_model.rs` (incl. `unbacked_mapping_is_a_loud_fault`, `map_before_backing_and_pdb_resolves`) | — |
 | CE-PT-write capture source, commit-point plumbing (#13) | **partial** | `parse_pushbuffer` CE arm → `Vas.pt_pages` + co-populate; `cb13_pt_write_capture_is_direct_no_root_reachability_needed` | The capture binds `dst→phys=dst` as a stand-in; it does **not decode the written PTE bytes** to recover the published leaf `VA→phys`, and the latch-dirty→decode-at-release-sema ordering (#13 v6, the named "biggest risk") is not modeled. Needs the walker (below) |
-| GMMU walk **algorithm** (decode-dirtied-PT-pages loop over `GmmuFmt`/`FbRead`) | **no** | `nvkvm-mmu/src/walker.rs` — 41-line placeholder | ★ This loop is declared *core* ("regime-independent core logic"). Matrix row 9 = GAP-MILESTONE (arch §4.5 step 3). See verdict §3 |
+| GMMU walk **algorithm** (decode-dirtied-PT-pages loop over `GmmuFmt`/`FbRead`) | **no** | `kayfabe-mmu/src/walker.rs` — 41-line placeholder | ★ This loop is declared *core* ("regime-independent core logic"). Matrix row 9 = GAP-MILESTONE (arch §4.5 step 3). See verdict §3 |
 | 512M-leaf / per-gen leaf-size *formats* (incl. loud-fault on un-enumerated size) | **deferred by design** | `GmmuFmt::page_sizes` contract + `PageSize` doc | Format rows = the GA10x `impl GmmuFmt` (arch port). The *contract* (never silent-drop) is stated but only testable once the loop exists |
-| Per-proc GPA arenas, disjoint by construction, release/recycle | **yes** | `nvkvm-core/src/gpa.rs` (`carve`/`release` by-value); `t14_arena_disjoint_by_construction`, `cb_lifecycle_process_churn_never_exhausts_the_window` (which found + fixed the #80 re-leak) | — |
+| Per-proc GPA arenas, disjoint by construction, release/recycle | **yes** | `kayfabe-core/src/gpa.rs` (`carve`/`release` by-value); `t14_arena_disjoint_by_construction`, `cb_lifecycle_process_churn_never_exhausts_the_window` (which found + fixed the #80 re-leak) | — |
 
 ### 1.3 Execution plane
 
 | Core capability | Modeled? | Where | Gap |
 |---|---|---|---|
-| Doorbell demux (token → vChid → own proc/channel/isolate; malformed/unknown = loud) | **yes** | `nvkvm-fwd::handle_doorbell`; `t14_doorbell_demux_routes_to_own_isolate`, `t14_malformed_and_unknown_tokens_fault_loudly` | — |
+| Doorbell demux (token → vChid → own proc/channel/isolate; malformed/unknown = loud) | **yes** | `kayfabe-fwd::handle_doorbell`; `t14_doorbell_demux_routes_to_own_isolate`, `t14_malformed_and_unknown_tokens_fault_loudly` | — |
 | Per-proc scheduling, nothing one-shot (#12 CTX2 class) | **yes** | `gpu.rs::ExecPlane` per `ChanId`; `wo_12_second_context_recreate…`, matrix rows 2/16 | — |
-| `EngineKind` routing tag + `Arch::engine_of_object` (compute/graphics/CE/NVENC/NVDEC) | **yes** | `nvkvm-arch/src/ids.rs:100`; `engine_context.rs::engine_of_object_classifies_all_kinds` | — |
+| `EngineKind` routing tag + `Arch::engine_of_object` (compute/graphics/CE/NVENC/NVDEC) | **yes** | `kayfabe-arch/src/ids.rs:100`; `engine_context.rs::engine_of_object_classifies_all_kinds` | — |
 | GR/CE context lifecycle: Case-1 engine-object forward → host self-promotes own ctx; golden-capture completion typed to system proc | **partial** | `forward_engine_object`, `signal_golden_capture` (`Traffic::System`-typed); `engine_context.rs`, `cb12_system_forge_never_reaches_a_user_proc_queue`; matrix row 24 | Two §2.2 items absent: **(a)** `Channel` carries only coarse `EngineClass{Gr,Ce,Other}` — the `EngineKind` the design says the core tracks per channel is never recorded (`gpu.rs::Channel` has no field); **(b)** the engine-object forward is **not idempotent** — a re-sent Case-1 alloc re-allocs a *second* host object (`case1_second_forward_reuses_channel` pins channel reuse only). §2.2: "the object's Case-1 alloc has been forwarded (so re-sends are idempotent)" |
 | Anti-bolt-on: host verb surface does not grow per engine | **yes** | `engine_context.rs::host_verb_surface_does_not_grow_per_engine` | — |
 | The ONE pushbuffer parser (4 fact kinds + opaque passthrough; bounded, fuzzed) | **yes** | `parse_pushbuffer` + `PushbufferAbi`; `pushbuffer_parser.rs` (scripted + hostile + proptest), `b2_pushbuffer_length_flood_is_bounded` | Method-encoding *semantics* (xfer_none/remap bits) = real-arch adapter, matrix row 12, by design |
@@ -63,10 +63,10 @@ this repo at head.
 | Pattern | Modeled? | Where | Gap |
 |---|---|---|---|
 | (a) shared-page sema busy-poll (dominant compute path) | **yes** (by passthrough design) | core's whole job = correct per-`Vas` publication so the host write lands where the guest polls: `publish_backing` + ring-gate; the poll itself is deliberately un-mediated (decision #7) | — |
-| (b) GSP finishPayload (system-scoped forge; aperture-carried) | **partial** | `Binding.aperture` (matrix row 4: no second resolver exists to disagree); forge typed to system (`signal_golden_capture`, row 7) | Queue *encoding* (seqNum ring) = `nvkvm-gsp` — see §3 |
+| (b) GSP finishPayload (system-scoped forge; aperture-carried) | **partial** | `Binding.aperture` (matrix row 4: no second resolver exists to disagree); forge typed to system (`signal_golden_capture`, row 7) | Queue *encoding* (seqNum ring) = `kayfabe-gsp` — see §3 |
 | (c) CE-method `SEM_RELEASE` → per-proc observe | **yes** | parser `SemRelease` arm → owning proc's `CompletionQueue`; `cb12_sema_release_routes_to_owner_never_a_foreign_proc`, soak loop | — |
-| (d) interrupt / os-event re-post off the poller's OWN poll (starvation-proof) | **yes** | `nvkvm-completion::DeliveryPlane::on_poll`, `poll_completions`; `t14_per_proc_completion_no_starve`, `t14_polling_proc_is_not_starved` | — |
-| (e) **mapped coherent fence (NVENC)** | **no** | nothing — only a doc comment in `nvkvm-fwd` | The §2.4 "distinct arm that `observe`s when the mapped value advances" does not exist in code. See verdict §2 |
+| (d) interrupt / os-event re-post off the poller's OWN poll (starvation-proof) | **yes** | `kayfabe-completion::DeliveryPlane::on_poll`, `poll_completions`; `t14_per_proc_completion_no_starve`, `t14_polling_proc_is_not_starved` | — |
+| (e) **mapped coherent fence (NVENC)** | **no** | nothing — only a doc comment in `kayfabe-fwd` | The §2.4 "distinct arm that `observe`s when the mapped value advances" does not exist in code. See verdict §2 |
 
 ### 1.5 Per-app behavior union (the 20-app surface)
 
@@ -121,14 +121,14 @@ class cannot silently recur.
    caller discipline. `gate_working_set` remains as the read-only QUERY form (cannot
    ring). Test: `t14_ring_gate_is_structural_no_ungated_door` (+ the existing
    `t14_per_vas_publication_gates_the_ring` updated to the single path).
-3. **The mapped-fence completion arm (pattern e)** — ✅ DONE. `nvkvm-completion`
+3. **The mapped-fence completion arm (pattern e)** — ✅ DONE. `kayfabe-completion`
    gained `FenceArms` — per-`Proc` mapped-fence arms (`arm`/`observe`) that fire when
    the observed value reaches/passes target under 32-bit wrap, with the #12 backwards-
-   jump guard (`MAX_FENCE_JUMP`, mirroring UVM's `2 × GPFIFO`). `nvkvm-fwd` exposes
+   jump guard (`MAX_FENCE_JUMP`, mirroring UVM's `2 × GPFIFO`). `kayfabe-fwd` exposes
    `completion_arm` (engine→arm selection, NVENC=fence, everything else=shared-sema),
    `arm_fence`, `fence_observed`. Distinct from event delivery by construction (never
    enters `CompletionQueue`, never posts, never raises SWGEN0). Tests: four unit tests
-   in `nvkvm-completion` + `nvenc_mapped_fence_arms_and_fires_distinct_from_event_delivery`,
+   in `kayfabe-completion` + `nvenc_mapped_fence_arms_and_fires_distinct_from_event_delivery`,
    `nvenc_fence_wrap_guard_fires_across_wrap_and_refuses_backwards_jumps`,
    `fence_arm_selection_is_exact_at_the_channel`.
 
@@ -141,13 +141,13 @@ pure-logic buildout the project has already accepted as migration steps — so
 "descending is only wiring adapters" is not literally true, it is "wiring adapters
 plus two named pure-logic milestones whose scope is bounded and oracled":
 
-- **The GMMU walker loop** (`nvkvm-mmu::walker`, arch §4.5 step 3; matrix rows 9/10).
+- **The GMMU walker loop** (`kayfabe-mmu::walker`, arch §4.5 step 3; matrix rows 9/10).
   The walk algorithm is core by the repo's own definition; the #13 CE-PT-write
   capture currently stands in for it (binds the PT page itself, no PTE decode, no
   latch-until-release commit ordering). This is also the design's self-declared
   **biggest risk** (`execution_plane.md` §4). Oracle: ogkm formats + #13's banked
   traces.
-- **The GSP boot FSM + seqNum transport** (`nvkvm-gsp`, 31-line skeleton; matrix
+- **The GSP boot FSM + seqNum transport** (`kayfabe-gsp`, 31-line skeleton; matrix
   row 23's honestly-open half). Pure state machine, resettable-in-process by design;
   oracle: trace replay of the C emulator's recorded boots (replays the cont.32
   `gsp_reloaded` misfire directly).
@@ -155,12 +155,12 @@ plus two named pure-logic milestones whose scope is bounded and oracled":
 ### 2.3 Legitimately deferred to layers (NOT core gaps)
 
 - **Axis-A codegen** (real class IDs, control-cmd values, alloc-param sizes,
-  NVOS/RPC layouts, Case-2 set contents) → `nvkvm-abi` L3 codegen, diffed against
+  NVOS/RPC layouts, Case-2 set contents) → `kayfabe-abi` L3 codegen, diffed against
   the C's hand tables (matrix row 25). The core consumes these only through seams.
 - **The real GA10x `Arch` impl** (token/USERD/method encodings, `GmmuFmt` format
   rows incl. the 512M `PageSize` entry, xfer_none/remap method bits — matrix row 12).
 - **Adapters:** Linux isolate (spawn/sandbox/wire), QEMU `Vmm` shell, PRIME/QEMU
-  `Present` impl, the register/BAR model (`nvkvm-regs`-equivalent) and with it the
+  `Present` impl, the register/BAR model (`kayfabe-regs`-equivalent) and with it the
   #11 *content* half (live-USERD byte guard, matrix row 1).
 - **UVM managed-mem passthrough** — the design is "don't model residency; forward
   to host managed alloc" (`mode2_uvm_residency`), i.e. an adapter verb + one routing

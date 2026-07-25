@@ -51,19 +51,19 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
-use nvkvm_arch::ids::GpuId;
+use kayfabe_arch::ids::GpuId;
 use std::collections::{BTreeMap, BTreeSet};
 
-use nvkvm_arch::Aperture;
-use nvkvm_arch::ids::{EngineKind, GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_completion::OsEventRef;
-use nvkvm_core::ProcAnchor;
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
-use nvkvm_fwd::{arm_fence, publish_backing, resolve};
-use nvkvm_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
-use nvkvm_tests::{Scenario, identical_handles};
+use kayfabe_arch::Aperture;
+use kayfabe_arch::ids::{EngineKind, GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::ProcAnchor;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
+use kayfabe_fwd::{arm_fence, publish_backing, resolve};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
+use kayfabe_tests::{Scenario, identical_handles};
 use proptest::prelude::*;
 
 // =================================================================================
@@ -460,7 +460,7 @@ struct DataPlaneProjection {
 fn materialize(gpu: &mut Gpu) -> DataPlaneProjection {
     // (ProcId, (GpuId, Pdb), anchor) for every live Vas — the target is part of the
     // address identity (MG-3).
-    let vases: Vec<(nvkvm_core::ProcId, (GpuId, Pdb), ProcAnchor)> = gpu
+    let vases: Vec<(kayfabe_core::ProcId, (GpuId, Pdb), ProcAnchor)> = gpu
         .procs
         .iter()
         .flat_map(|(pid, p)| p.vases.keys().map(move |k| (*pid, *k, p.anchor)))
@@ -483,7 +483,7 @@ fn materialize(gpu: &mut Gpu) -> DataPlaneProjection {
         pub_resolves.insert((*anchor, *gpu_t, *pdb), ok);
     }
 
-    let chans: Vec<(nvkvm_core::ProcId, nvkvm_core::ChanId)> =
+    let chans: Vec<(kayfabe_core::ProcId, kayfabe_core::ChanId)> =
         gpu.spine.by_vchid.values().copied().collect();
     let mut arms = BTreeMap::new();
     for (pid, cid) in &chans {

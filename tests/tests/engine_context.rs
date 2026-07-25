@@ -9,21 +9,21 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
-use nvkvm_arch::Arch;
-use nvkvm_arch::ids::GpuId;
-use nvkvm_arch::ids::{ClassId, EngineKind, GpuVa, HClient, HObject, Pdb, VChid};
-use nvkvm_completion::{CompletionError, MAX_FENCE_JUMP, OsEventRef};
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_core::rmgraph::{AllocFacts, RmEvent};
-use nvkvm_fwd::{
+use kayfabe_arch::Arch;
+use kayfabe_arch::ids::GpuId;
+use kayfabe_arch::ids::{ClassId, EngineKind, GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_completion::{CompletionError, MAX_FENCE_JUMP, OsEventRef};
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
+use kayfabe_fwd::{
     CompletionArm, ControlRoute, FwdFault, arm_fence, completion_arm, fence_observed,
     forward_engine_object, handle_doorbell, publish_backing, route_control,
 };
-use nvkvm_mocks::{
+use kayfabe_mocks::{
     MockArch, MockIsolateFactory, RmVerb, SharedRecorder, mock_classes as mc, mock_ctrl,
 };
-use nvkvm_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Scenario, identical_handles};
 
 const CLIENT: HClient = HClient(0xAA);
 const PDB: Pdb = Pdb(0x3401_000);
@@ -439,7 +439,7 @@ const FENCE_VA: GpuVa = GpuVa(0x2_0060_0000);
 
 /// Build a compute proc whose GR channel is refined to an NVENC context (session
 /// object on the channel, through the graph) with a published fence page.
-fn nvenc_gpu() -> (Gpu, nvkvm_core::ProcId, nvkvm_core::ChanId) {
+fn nvenc_gpu() -> (Gpu, kayfabe_core::ProcId, kayfabe_core::ChanId) {
     let (mut gpu, _rec) = compute_gpu();
     gpu.apply(RmEvent::Alloc {
         client: CLIENT,

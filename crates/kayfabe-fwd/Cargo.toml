@@ -1,0 +1,18 @@
+[package]
+name = "kayfabe-fwd"
+description = "Intent recovery → unprivileged host ops (arch doc §4.2): doorbell demux by vChid, per-Vas host materialization + backing publication, per-proc exec plane. Pushbuffer parser + Case-1/Case-2 tables port here in the fwd migration step."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-mmu.workspace = true
+kayfabe-isolate.workspace = true
+kayfabe-core.workspace = true
+kayfabe-vmm.workspace = true
+kayfabe-completion.workspace = true
+
+[lints]
+workspace = true

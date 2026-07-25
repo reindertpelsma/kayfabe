@@ -15,16 +15,18 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
-use nvkvm_arch::ids::GpuId;
+use kayfabe_arch::ids::GpuId;
 use std::time::Duration;
 
-use nvkvm_arch::ids::{GpuVa, Pdb};
-use nvkvm_completion::OsEventRef;
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_fwd::{deliver_completions, handle_doorbell, poll_completions, publish_backing, resolve};
-use nvkvm_mocks::{MockArch, MockIsolateFactory, MockVmm, RmVerb};
-use nvkvm_tests::{Scenario, identical_handles};
+use kayfabe_arch::ids::{GpuVa, Pdb};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_fwd::{
+    deliver_completions, handle_doorbell, poll_completions, publish_backing, resolve,
+};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm, RmVerb};
+use kayfabe_tests::{Scenario, identical_handles};
 
 /// The identical guest VA both processes use for their working set (#14 round 1:
 /// working-set base 0x200200000, pushbuffers 0x2024xxxxx — the common case).
@@ -37,7 +39,7 @@ const B_PDB: Pdb = Pdb(0x3405_000);
 fn two_process_gpu() -> (
     Gpu,
     MockVmm,
-    std::sync::Arc<std::sync::Mutex<nvkvm_mocks::RmRecorder>>,
+    std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
@@ -47,12 +49,12 @@ fn two_process_gpu() -> (
 
     let mut s = Scenario::new();
     s.compute_process(
-        nvkvm_arch::ids::HClient(0xAA),
+        kayfabe_arch::ids::HClient(0xAA),
         A_PDB,
         identical_handles(0x10, 0x11),
     );
     s.compute_process(
-        nvkvm_arch::ids::HClient(0xBB),
+        kayfabe_arch::ids::HClient(0xBB),
         B_PDB,
         identical_handles(0x20, 0x21),
     );
@@ -152,8 +154,8 @@ fn t14_doorbell_demux_routes_to_own_isolate() {
     let (mut gpu, _vmm, recorder) = two_process_gpu();
 
     // Ring A's GR channel and B's GR channel via their (distinct) vChid tokens.
-    let a_token = MockArch::token_for(nvkvm_arch::ids::VChid(0x10));
-    let b_token = MockArch::token_for(nvkvm_arch::ids::VChid(0x20));
+    let a_token = MockArch::token_for(kayfabe_arch::ids::VChid(0x10));
+    let b_token = MockArch::token_for(kayfabe_arch::ids::VChid(0x20));
     let out_a = handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[]).expect("A's doorbell routes");
     let out_b = handle_doorbell(&mut gpu, GpuId::ZERO, b_token, &[]).expect("B's doorbell routes");
 
@@ -191,13 +193,13 @@ fn t14_malformed_and_unknown_tokens_fault_loudly() {
     // A token that does not decode (hostile bytes) — MalformedToken, never a guess.
     assert!(matches!(
         handle_doorbell(&mut gpu, GpuId::ZERO, 0xdead_beef, &[]),
-        Err(nvkvm_fwd::FwdFault::MalformedToken { .. })
+        Err(kayfabe_fwd::FwdFault::MalformedToken { .. })
     ));
     // A well-formed token for a vChid no channel registered — UnknownVchid MISS=FAULT.
-    let ghost = MockArch::token_for(nvkvm_arch::ids::VChid(0xfff));
+    let ghost = MockArch::token_for(kayfabe_arch::ids::VChid(0xfff));
     assert!(matches!(
         handle_doorbell(&mut gpu, GpuId::ZERO, ghost, &[]),
-        Err(nvkvm_fwd::FwdFault::UnknownVchid { .. })
+        Err(kayfabe_fwd::FwdFault::UnknownVchid { .. })
     ));
 }
 

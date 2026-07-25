@@ -3,7 +3,7 @@
 **Status:** independent red-team pass (decision #18C). Companion to the boundary
 example-suite (#18A, `tests/tests/security_boundary.rs`) and the C-bug regression matrix
 (#18B, `c_bug_regression_matrix.md`). This document states the isolation invariants of
-the pure logic core (`crates/nvkvm-core`, `-mmu`, `-fwd`, `-completion`) **formally, as
+the pure logic core (`crates/kayfabe-core`, `-mmu`, `-fwd`, `-completion`) **formally, as
 checkable properties**, defines the attacker capability model, and records what this pass
 found. Each invariant maps to the proptest that searches it in
 `tests/tests/security_invariants.rs`.
@@ -84,7 +84,7 @@ sequence S` means "over any sequence the attacker model above can produce."
 Mechanised: `i1_no_proc_va_resolves_to_another_procs_backing` — a K-process world
 (identical VAs, distinct PDBs, distinct backings), arbitrary interleave + junk, checked
 against an **injective PDB→phys oracle**. Structural basis: the address table is
-per-`Vas`, PDB-keyed, forward-populate-only, MISS=FAULT (`nvkvm-mmu`); arenas are
+per-`Vas`, PDB-keyed, forward-populate-only, MISS=FAULT (`kayfabe-mmu`); arenas are
 per-`Proc`, disjoint by construction (`gpa.rs`).
 
 ### I2 — Completion integrity / forgery

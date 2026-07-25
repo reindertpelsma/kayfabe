@@ -18,17 +18,17 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
-use nvkvm_arch::ids::GpuId;
+use kayfabe_arch::ids::GpuId;
 use std::collections::BTreeSet;
 use std::time::Duration;
 
-use nvkvm_arch::ids::{GpuVa, HClient, Pdb, VChid};
-use nvkvm_completion::OsEventRef;
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_fwd::{handle_doorbell, poll_completions, publish_backing, resolve};
-use nvkvm_mocks::{MockArch, MockIsolateFactory, MockVmm};
-use nvkvm_tests::{Scenario, identical_handles};
+use kayfabe_arch::ids::{GpuVa, HClient, Pdb, VChid};
+use kayfabe_completion::OsEventRef;
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_fwd::{handle_doorbell, poll_completions, publish_backing, resolve};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm};
+use kayfabe_tests::{Scenario, identical_handles};
 
 /// One virtual inference process's fixed identity + its rotating KV working set.
 struct Inference {
@@ -60,7 +60,7 @@ impl Inference {
 
 /// Build the soak fixture: `n` inference processes, each a compute process with
 /// IDENTICAL handles + IDENTICAL VA plane, DISTINCT PDBs and vChids.
-fn build(n: u64) -> (Gpu, MockVmm, Vec<Inference>, Vec<nvkvm_core::ProcId>) {
+fn build(n: u64) -> (Gpu, MockVmm, Vec<Inference>, Vec<kayfabe_core::ProcId>) {
     let arch = Box::new(MockArch::new());
     let (factory, _rec) = MockIsolateFactory::new();
     // Big window / 16-GiB arenas: a real soak must not exhaust the bump allocator
@@ -96,7 +96,7 @@ fn build(n: u64) -> (Gpu, MockVmm, Vec<Inference>, Vec<nvkvm_core::ProcId>) {
 }
 
 /// Assert the cross-cutting invariants that must hold on EVERY iteration.
-fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[nvkvm_core::ProcId], n: u64) {
+fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[kayfabe_core::ProcId], n: u64) {
     // (1) Boundaries stay consistent: exactly `n` live procs, each still routed.
     assert_eq!(
         gpu.procs.len() as u64,

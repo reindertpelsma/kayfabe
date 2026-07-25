@@ -1,4 +1,4 @@
-//! Coverage-guided fuzz of the ONE pushbuffer parser (`nvkvm_fwd::parse_pushbuffer`)
+//! Coverage-guided fuzz of the ONE pushbuffer parser (`kayfabe_fwd::parse_pushbuffer`)
 //! — the one place raw, adversarial guest *bytes* reach the Mode-2 core.
 //!
 //! The invariant under fuzz (boundary-1 posture): for ANY input bytes the decoder
@@ -16,13 +16,13 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 
-use nvkvm_arch::ids::{GpuId, GpuVa, HClient, Pdb};
-use nvkvm_core::gpa::GpaSpace;
-use nvkvm_core::gpu::Gpu;
-use nvkvm_fwd::parse_pushbuffer;
-use nvkvm_mocks::{MockArch, MockIsolateFactory, MockVmm};
-use nvkvm_tests::{Scenario, identical_handles};
-use nvkvm_vmm::Vmm;
+use kayfabe_arch::ids::{GpuId, GpuVa, HClient, Pdb};
+use kayfabe_core::gpa::GpaSpace;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_fwd::parse_pushbuffer;
+use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm};
+use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_vmm::Vmm;
 
 const A_PDB: Pdb = Pdb(0x3401_000);
 /// Window the fuzzed GPFIFO entries may point their ranges at (mirrors the tests).

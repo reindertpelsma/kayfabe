@@ -22,7 +22,7 @@ place and in the ledger (§10) — the doc reads as one design, not a changelog.
 invariants — the hand-off contract this doc implements), `execution_plane.md` (§2.4
 completion patterns a–e), `l1_architecture_summary.md` (the independent review whose
 §6.3 pressure points this revision answers), the crate docs of
-`nvkvm-core`/`nvkvm-vmm`/`nvkvm-isolate` (the compile-time-asserted concurrency
+`kayfabe-core`/`kayfabe-vmm`/`kayfabe-isolate` (the compile-time-asserted concurrency
 contract, decision #17), and the C memory ledger cited per-failure below. C-repo cites
 are prefixed `C:`.
 
@@ -362,7 +362,7 @@ in the test tiers (§8.4) — the discipline is enforced, not merely documented.
 > would dissolve the L5 system-typed-forge guarantee; it is a rare bring-up event —
 > run it under the write lock).
 
-Today `nvkvm_fwd::handle_doorbell` takes `&mut Gpu`, and `Gpu` owns its `Proc`s as
+Today `kayfabe_fwd::handle_doorbell` takes `&mut Gpu`, and `Gpu` owns its `Proc`s as
 plain values in `procs: BTreeMap<ProcId, Proc>` — correct for the pure core (no
 interior mutability, decision #17), but it means L1 cannot hand two threads two procs
 without a structural seam. Model (a) therefore requires, before L1 code is written:
@@ -897,7 +897,7 @@ header on the interface when L1 code lands.
 
 - Every L1 logic crate: `#![forbid(unsafe_code)]`, same as the core. The CI grep-gate
   extends to L1.
-- **One audited raw module** (working name `nvkvm-linux-raw`) for the operations that
+- **One audited raw module** (working name `kayfabe-linux-raw`) for the operations that
   cannot be safe Rust: `mmap`/`munmap` of guest-RAM exports and shared pages, volatile
   access to concurrently-GPU-written pages (VolatileSlice-style — semas/USERD are
   written by real hardware; non-volatile access is UB-adjacent tearing), and — for the
@@ -1085,7 +1085,7 @@ production inverts the point. §2 and §3.3 have been corrected in place.
 
 ### 12.3 Sharded mode costs the core's lock-free `&Gpu` reads — a real property change
 
-`nvkvm-core`'s concurrency contract advertises that "any number of threads may share
+`kayfabe-core`'s concurrency contract advertises that "any number of threads may share
 `&Gpu` and resolve/route/inspect in parallel, lock-free". That survives the *spine*
 (routing maps, graph — device read lock, genuinely shared), but once each `Proc` lives
 in a `Mutex` cell, a per-proc **read** (`resolve`, `gate_working_set`) must take that
@@ -1106,7 +1106,7 @@ an `unwrap` in a hurry.
 
 ### 12.5 MG-6 gap: the deferred-redeliver payload carries no `GpuId`
 
-`nvkvm-vmm`'s `CoreEventKind::CompletionRedeliver` (the §5.2 backstop) names no
+`kayfabe-vmm`'s `CoreEventKind::CompletionRedeliver` (the §5.2 backstop) names no
 target, but delivery is **per-target** since MG-6 — every `GpuTarget` has its own GSP
 queue and its own drain gate. A backstop that cannot say *which* GPU to pump is
 under-specified on any 2-GPU device. Stage 2 pumps `GpuId::ZERO` and surfaces the
@@ -1143,13 +1143,13 @@ Stage 3's job was to make the R1 assert cover a host verb rather than a wrapper.
 Two things had to be true at once, and they pull in opposite directions:
 
 - the **assert** must fire at the `RmBackend` call itself, which lives behind the
-  `nvkvm-isolate` port;
-- the **counter** is maintained by the L1 guard wrappers, which live in `nvkvm-rt`,
-  an adapter that `nvkvm-isolate` may not depend on.
+  `kayfabe-isolate` port;
+- the **counter** is maintained by the L1 guard wrappers, which live in `kayfabe-rt`,
+  an adapter that `kayfabe-isolate` may not depend on.
 
-Resolution: the per-thread held-rank mask moved to `nvkvm_util::lockwitness`, the
-bottom of the dependency graph. `nvkvm-rt`'s ranked guards *maintain* it;
-`nvkvm_isolate::Worker::execute` — the one door to a verb — *asserts* it. §3.3 says
+Resolution: the per-thread held-rank mask moved to `kayfabe_util::lockwitness`, the
+bottom of the dependency graph. `kayfabe-rt`'s ranked guards *maintain* it;
+`kayfabe_isolate::Worker::execute` — the one door to a verb — *asserts* it. §3.3 says
 "a thread-local lock-depth counter, maintained by the L1 guard wrappers, asserted
 zero at every blocking-verb entry" without noticing those are two crates. They are.
 

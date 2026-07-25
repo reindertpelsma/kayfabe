@@ -1,5 +1,5 @@
 [package]
-name = "nvkvm-tests"
+name = "kayfabe-tests"
 description = "The VMM-agnostic conformance suite: RmGraph order-independence units + the #14 two-process simulation, driven entirely through the mock harness (no GPU, no OS)."
 version.workspace = true
 edition.workspace = true
@@ -10,16 +10,16 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-nvkvm-util.workspace = true
-nvkvm-arch.workspace = true
-nvkvm-core.workspace = true
-nvkvm-fwd.workspace = true
-nvkvm-mmu.workspace = true
-nvkvm-completion.workspace = true
-nvkvm-isolate.workspace = true
-nvkvm-vmm.workspace = true
-nvkvm-mocks.workspace = true
-nvkvm-rt.workspace = true
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-core.workspace = true
+kayfabe-fwd.workspace = true
+kayfabe-mmu.workspace = true
+kayfabe-completion.workspace = true
+kayfabe-isolate.workspace = true
+kayfabe-vmm.workspace = true
+kayfabe-mocks.workspace = true
+kayfabe-rt.workspace = true
 
 [dev-dependencies]
 # Property-based / fuzz testing — DEV-ONLY (never a core dependency). Generates
