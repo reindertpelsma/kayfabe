@@ -173,7 +173,7 @@ refinement.
   decision; each channel is interruptible (§5.4).
 
 Lock order, total, one-way, and **ranked**: **device (rank 0) → proc (rank 1) → leaf
-(rank 2: executor inbox, recorder)**. Acquiring against rank order is a debug-assert
+(rank 2: executor inbox, recorder)**. Acquiring against rank order is an always-on assert
 panic (invariant R3, §3.3). Never acquire the device lock while holding a proc lock;
 no lock held across a thread join, a barrier, or any blocking call (R1). (The same
 discipline `tests/tests/concurrency_stress.rs` already documents and enforces for the
@@ -304,7 +304,10 @@ intra-process guarantee: one coherent spec, not two separate fixes.
   deadlock-prevention discipline, made mechanical: every L1 lock has a declared
   RANK — **device = 0, proc = 1, leaf (executor inbox, recorder) = 2** — and a
   thread may acquire only in strictly increasing rank, at most one lock per rank.
-  Acquiring against the order is a **debug-assert panic** (per-thread held-rank
+  Acquiring against the order is an **always-on assert panic** (§12.2: `debug_assert`
+  was the #37 wording; the build made it unconditional — one thread-local read is far
+  cheaper than the lock it guards, and a silent production deadlock is the exact
+  failure this exists to prevent) (per-thread held-rank
   watermark in the guard wrappers) — caught in T1/T2/the mean test, never a silent
   production deadlock. Cross-proc ops acquire write-device and need no proc locks
   (R2 guarantees bookkeeping exclusivity). This is the P2 fix: the observe→pump
@@ -1039,3 +1042,97 @@ executor-sharding seam), each as its own reviewed design change — never in a
 debugging session. And since #37, that discipline is no longer enforced by owner
 vigilance alone: the R1/R3/R5 asserts and the §8.4 mean test fail loudly when a
 widening breaks the rules. The design is not trusted; the harness is.
+
+---
+
+## 12. Contact log — what the L1-M1 build changed in this design
+
+> The doc's own stance (§8.4): *"Pass = the design survived contact. Fail = the doc
+> changes, not the assert."* This section is that promise being kept. Each entry is a
+> place where writing the code found the design wrong, silent, or over-stated. Entries
+> are appended as stages land; nothing here is a plan, all of it is a finding.
+
+### 12.1 The `get_mut` mechanic — spine ops acquire ZERO proc locks (stage 2)
+
+The design said a spine op runs "under the device write lock with exclusive access to
+every proc, expressed as the `ProcSet` argument" (§3.4) and left the mechanics as "an
+L1-M1 design-review item". The naive reading — the write-lock holder locks each proc
+cell to build the `ProcSet` — would hold N rank-1 locks at once and violate R3 on the
+first two-proc device.
+
+It doesn't have to, and the resolution is prettier than the problem: under the device
+**write** guard the caller holds `&mut DeviceState`, and `Mutex::get_mut(&mut self) ->
+&mut T` yields `&mut Proc` **without acquiring anything** — sound precisely because
+`&mut` already proves the exclusivity the lock would otherwise establish. So
+`ExclusiveProcs<'_>` implements the core's `ProcSet` over `&mut BTreeMap<ProcId,
+RankedMutex<Proc>>` via `get_mut`/`into_inner`, and a spine op touches every proc with
+**zero lock operations and zero rank interactions**. The write lock *is* the
+exclusivity; the per-proc cells are simply transparent to it.
+
+Pinned by `spine_ops_acquire_no_proc_lock_via_get_mut`, which asserts the thread's
+rank-1 acquisition counter stays flat across apply/pump/drain/poll/reap. Worth keeping:
+injecting a single spurious `cell.lock()` into `apply` does **not** trip R3 (rank 0 →
+rank 1 is legal, increasing order) — that test is the only thing between this design
+and a silently reintroduced convoy.
+
+### 12.2 R1/R3 are ALWAYS-ON asserts, not `debug_assert`
+
+§3.3 twice said "debug-assert panic". The build made both unconditional. A
+thread-local read costs far less than the lock acquisition it guards, and the whole
+argument for these invariants is that their violation is *invisible until the unlucky
+interleaving* — compiling the detector out of the build that actually runs in
+production inverts the point. §2 and §3.3 have been corrected in place.
+
+### 12.3 Sharded mode costs the core's lock-free `&Gpu` reads — a real property change
+
+`nvkvm-core`'s concurrency contract advertises that "any number of threads may share
+`&Gpu` and resolve/route/inspect in parallel, lock-free". That survives the *spine*
+(routing maps, graph — device read lock, genuinely shared), but once each `Proc` lives
+in a `Mutex` cell, a per-proc **read** (`resolve`, `gate_working_set`) must take that
+proc's rank-1 lock. The reads are microseconds and per-proc uncontended in the common
+case, so this is cheap — but it is a property the design never reconciled, and it
+should not be discovered later as a surprise. Named seam if a measured read path ever
+needs it back: per-proc `RwLock` instead of `Mutex` (the `ProcSet` `get_mut` mechanic
+above is unaffected either way). Flagged in the `resolve` rustdoc.
+
+### 12.4 The system proc's lock cell was unspecified
+
+§2's picture shows "per-Proc lock (Mutex, rank 1)" over the proc *map*, but
+`gpu.system` is not in that map, and `Dispatch::Observe` can legally route to it
+(kernel/CeUtils os-events are a real source class). `DeviceState` therefore carries
+`system: RankedMutex<Proc>` as its own rank-1 cell, and proc-cell lookup branches on
+"is this the system proc". Small, but it is exactly the kind of omission that becomes
+an `unwrap` in a hurry.
+
+### 12.5 MG-6 gap: the deferred-redeliver payload carries no `GpuId`
+
+`nvkvm-vmm`'s `CoreEventKind::CompletionRedeliver` (the §5.2 backstop) names no
+target, but delivery is **per-target** since MG-6 — every `GpuTarget` has its own GSP
+queue and its own drain gate. A backstop that cannot say *which* GPU to pump is
+under-specified on any 2-GPU device. Stage 2 pumps `GpuId::ZERO` and surfaces the
+batch; **this must become a target-carrying payload when the defer plumbing lands**
+(stage 3 / L2). Recorded as a real ABI gap, not a nit.
+
+### 12.6 ★ Honest R1 status after stage 2 — the assert does not yet guard the trait
+
+The `BlockingSection` assert fires on *its own* construction. It does not — cannot —
+guard a bare `RmBackend` call, and the core's act phases (`exec_doorbell` and friends)
+still invoke the backend **under the proc lock**, exactly as the core shapes them
+today. That is correct only because stage 2's backends are mocks that never block: with
+a real host verb it would be a live R1 violation **with no assert firing**.
+
+Closing it is stage 3's job and is the substance of the R1 "consequence for the core
+shape" (§3.3): convert the verb-issuing act phases to plan/execute/commit, so the
+locked phase *emits* a verb rather than calling one — and give R1 teeth at the trait
+boundary itself, so the assert covers the thing it names instead of a wrapper someone
+must remember to use. Until then, R1 is enforced for the paths that opt in, which is
+not the same as enforced.
+
+### 12.7 The observe→pump edge needs the `Vmm`, which stage 2 does not have
+
+§5.2 describes the executor observing a completion and then pumping. Pumping opens a
+drain-gated batch that only a real deliverer (GSP encode + `Vmm::raise_irq`) can close,
+so running that edge without a `Vmm` would wedge the delivery plane *by design*. Stage
+2's executor therefore **observes only**; the pump edge lands with the `Vmm` seam in
+stage 3. §5.2 implicitly assumes the `Vmm` is reachable at every completion edge — it
+is not, and the doc should not have assumed it.

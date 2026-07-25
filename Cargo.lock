@@ -183,6 +183,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "nvkvm-rt"
+version = "0.1.0"
+dependencies = [
+ "nvkvm-arch",
+ "nvkvm-completion",
+ "nvkvm-core",
+ "nvkvm-fwd",
+ "nvkvm-isolate",
+ "nvkvm-mmu",
+ "nvkvm-mocks",
+ "nvkvm-util",
+ "nvkvm-vmm",
+]
+
+[[package]]
 name = "nvkvm-tests"
 version = "0.1.0"
 dependencies = [
@@ -193,6 +208,7 @@ dependencies = [
  "nvkvm-isolate",
  "nvkvm-mmu",
  "nvkvm-mocks",
+ "nvkvm-rt",
  "nvkvm-util",
  "nvkvm-vmm",
  "proptest",

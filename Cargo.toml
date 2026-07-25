@@ -13,6 +13,7 @@ members = [
     "crates/nvkvm-gsp",
     "crates/nvkvm-trace",
     "crates/nvkvm-mocks",
+    "crates/nvkvm-rt",
     "tests",
 ]
 
@@ -35,6 +36,7 @@ nvkvm-fwd = { path = "crates/nvkvm-fwd" }
 nvkvm-gsp = { path = "crates/nvkvm-gsp" }
 nvkvm-trace = { path = "crates/nvkvm-trace" }
 nvkvm-mocks = { path = "crates/nvkvm-mocks" }
+nvkvm-rt = { path = "crates/nvkvm-rt" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

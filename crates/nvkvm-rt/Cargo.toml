@@ -1,0 +1,22 @@
+[package]
+name = "nvkvm-rt"
+description = "The L1 threaded shell (l1_concurrency.md §2/§3, decision #37): the ranked-lock discipline with the asserted R1/R3 invariants, the SharedDevice lock-swap over the core's sharding shape (device RwLock + per-Proc Mutexes, both lock configurations), and the executor inbox. An ADAPTER crate — deliberately outside the hexagonal-boundary grep — but pure std: no OS waiting primitives live here (those are stage 3 / L2)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nvkvm-util.workspace = true
+nvkvm-arch.workspace = true
+nvkvm-mmu.workspace = true
+nvkvm-completion.workspace = true
+nvkvm-isolate.workspace = true
+nvkvm-vmm.workspace = true
+nvkvm-core.workspace = true
+nvkvm-fwd.workspace = true
+
+[dev-dependencies]
+nvkvm-mocks.workspace = true
+
+[lints]
+workspace = true

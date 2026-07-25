@@ -19,6 +19,7 @@ nvkvm-completion.workspace = true
 nvkvm-isolate.workspace = true
 nvkvm-vmm.workspace = true
 nvkvm-mocks.workspace = true
+nvkvm-rt.workspace = true
 
 [dev-dependencies]
 # Property-based / fuzz testing — DEV-ONLY (never a core dependency). Generates
