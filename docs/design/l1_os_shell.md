@@ -398,17 +398,27 @@ is core state, which law 9 forbids from the loop thread. So the executor is a se
 thread parked on the inbox. Cost: one futex wake per completion. Accepted — the alternative
 is deleting the one law that keeps the readiness path unable to corrupt anything.
 
-But in QEMU the executor is *not our thread*: it is the main loop / bottom-half context.
+~~But in QEMU the executor is *not our thread*: it is the main loop / bottom-half context.~~
 So the inbox's wake is abstracted **now**, not later:
 
 ```text
     trait ExecutorWaker: Send + Sync { fn wake(&self); }
       · harness impl:  condvar notify
-      · QEMU impl:     schedule a bottom half
+      · QEMU impl:     the same — see the amendment below
 ```
 
 Four lines, and it is the difference between L2 being an adapter and L2 being a re-plumb of
 the inbox. This is the cheapest anti-bolt-on in the doc; take it.
+
+> ★ **AMENDED (2026-07-26, §10.1 item 9) — the QEMU executor is no longer forced to be QEMU's
+> thread, and the example said it was.** Under the ≥ 10.2 floor neither entry path arrives
+> holding a QEMU lock: trapped MMIO dispatches lockless (§6.3.1) and the doorbell's ioeventfd is
+> read by **our** reactor (§10.1 item 2). So the executor can be our own thread on QEMU exactly
+> as in the harness, and `wake()` can be the same primitive on both backends. A bottom half is
+> required for exactly one thing — work that must run **with** the BQL, i.e. §6.7's coarse tier
+> (`memory_region_transaction_commit` asserts `bql_locked()`, `system/memory.c:1148`), which is
+> already §6.3's single acquisition site. **The trait survives the amendment intact**, which is
+> the point of having abstracted it: the argument for it was never that the two impls differ.
 
 ### 3.8 ★ The source cap — where a documented deferral comes due
 
@@ -1334,6 +1344,17 @@ an edge-triggered or value-consuming handler behind one would be a bug.
 > The measured "unaffected by A's block" figure is *B's doorbell write latency*. It is real,
 > and it is **not** evidence that a blocking service behind that doorbell would be harmless.
 > Over-reading it that way is the likely failure mode of this whole finding.
+>
+> ★★ **AMENDED (2026-07-26, §10.1 item 2) — the caveat is real, but it is not a property of
+> ioeventfd.** **[src]** `kvm_mem_ioeventfd_add` passes **only the descriptor** to KVM
+> (`accel/kvm/kvm-all.c:1889-1905`); **QEMU installs no read handler and never reads the
+> `EventNotifier`** — we construct it, and the read side is whoever asks for it. The
+> `bql_locked() = 1` above is therefore a property of *how the spike wired its read side*. Put
+> that descriptor in **our own reactor's epoll set** — it is already a counter-shaped,
+> level-triggered, drainable §3.4 source — and the doorbell frees the vCPU **and** the service,
+> on a thread with no lock, no BQL and no core state. **The obligation is discharged
+> structurally rather than by discipline**, which is the form §6.6 prefers. Everything else in
+> this paragraph and in the two boxes below stands unchanged.
 
 > ### ★★ NORMATIVE — the 1.7× is a *nested* number twice over, and our own C says so
 >
@@ -2772,8 +2793,9 @@ Plus the `HostLedger` itself (§7.8) and `MockIsolate::request_cancel`.
 | **memslot frequency (§6.7)** | push | the mean run's slot-install count grows with publications rather than with arena grants — a per-object memslot, caught structurally and without a clock |
 | **★ VMM vocabulary (§6.0, decision #39)** | push | hypervisor **API** vocabulary (`BQL_LOCK_GUARD`, `memory_region_*`, `qdev_*`, `QEMUBH`, "bottom half", "main loop", …) appears in the 11 pure crates **or `kayfabe-rt`**. Matches identifiers, never the vendor's name, so adapter-crate names never trip it and no allowlist exists |
 | **single VMM-global-lock acquisition site (§6.3)** | push (L2) | the adapter contains more than one acquisition site for **the foreign lock of its backend** — QEMU: `bql_lock`/`qemu_mutex_lock_iothread`/`BQL_LOCK_GUARD`; CH: any `Mutex<Device>`-shaped registration that reintroduces the per-device lock the direct-`BusDeviceSync` escape removes — or that site does not `assert_lock_free`. **Zero sites is a pass**, and is the expected CH result |
-| **★★ lockless-IO PAIRING (§6.3.1)** | push (L2) | a QEMU region is marked lockless (`memory_region_enable_lockless_io`, or any hand-rolled `bql_unlock`/`bql_lock` around a dispatch) **without** `disable_reentrancy_guard` on the same device — or vice versa. The two are one change; splitting them measured **47 % of a vCPU's MMIO reads silently returning `MEMTX_ACCESS_ERROR`**. Grep-shaped and cheap: the adapter must have exactly one helper that does both, and no other site may touch either symbol |
-| **★ QEMU capability probe (§6.3.1)** | realize (runtime), and a build check in CI | the QEMU we are linked into does not provide `memory_region_enable_lockless_io` (stock < 10.2.0 without our backport). **Refuse loudly at realize**, the §4.4.1 / GL9 pattern — a deployment fact no type and no grep can observe. Silent fallback to BQL dispatch is forbidden: it is not a slow mode, it is an I-NOAMP violation that presents as an unrelated latency bug |
+| **★★ lockless-IO, RE-SPECIFIED (§6.3.1, §10.1 item 1)** | push (L2) | ~~a region is marked lockless without `disable_reentrancy_guard` on the same device~~ — **upstream's `memory_region_enable_lockless_io()` sets BOTH in one function** (`system/memory.c:2567-2580`), so there is no pairing left for us to maintain and a second write to either symbol is a divergence. The gate is now three-part: (a) **exactly one** call site for `memory_region_enable_lockless_io`, in one adapter helper; (b) **zero** occurrences of `disable_reentrancy_guard`, `bql_unlock`, or any hand-rolled unlock/lock around a dispatch, tree-wide — that construction is the only way left to reproduce the measured **47 % of a vCPU's MMIO reads silently returning `MEMTX_ACCESS_ERROR`**; (c) ★ **every trapped region of the device is marked, not just the hot one** — the guard *state* is per-**device** but the opt-out is per-**MemoryRegion** (`include/system/memory.h:869`), so an unmarked region keeps both hazards while passing any per-device check |
+| **★ QEMU version assertion (§6.3.1, §10.1)** | realize (runtime), and a build check in CI | ~~the QEMU we are linked into does not provide `memory_region_enable_lockless_io` (stock < 10.2.0 without our backport)~~ — **the backport is cancelled (§10's decision box); this is a version assertion.** Fails when the QEMU we are built into is **< 10.2.0**, i.e. lacks `memory_region_enable_lockless_io`. **Refuse loudly at realize**, the §4.4.1 / GL9 pattern — a deployment fact no type and no grep can observe. Silent fallback to BQL dispatch is forbidden: it is not a slow mode, it is an I-NOAMP violation that presents as an unrelated latency bug |
+| **★ migration/CPR refused (§10.1 item 3)** | realize (runtime) | `migrate_add_blocker()` is not called at device realize. Migration and `cpr-transfer` are lifecycle events §7.6's eight triggers do not cover and that we cannot implement — CPR execs a **new QEMU binary**, discarding the `mm` our reservation, uffd and isolate parenthood live in. **[inferred]** without the blocker it fails *silently* (our `RAM_PREALLOC` window is simply not preserved), which is the worse mode |
 | narrow page-size grep | push | a bare `4096`/`0x1000`/`>>12` in the raw or rt crates |
 | page-size axis | push | the geometry suite fails at 16 KiB or 64 KiB |
 | forced-page-size integration | nightly | the shell suite fails at 64 KiB |
@@ -2986,9 +3008,10 @@ paths arrive with the BQL **held**, so "we take no foreign lock" is not sufficie
    script and a realize-time assertion. Then re-run the §6.3.1 acceptance measurement
    **against our device** on a stock ≥ 10.2 build — not a throwaway device and not a patched
    tree; the spike bounds the *dispatch*, not our handlers.
-   ★ **Open, not answered:** what else the floor buys us. Now that ≥ 10.2 is guaranteed,
-   inventory the facilities we were planning to hand-roll against 9.2 and take the upstream
-   ones instead. Do this **before** writing the adapter, since it changes what gets written.
+   ★ ~~**Open, not answered:** what else the floor buys us.~~ **RUN (2026-07-26) — §10.1 and
+   `../reference/qemu_102_facilities.md`.** Eighteen facilities verified against the `v10.2.0`
+   tag; three "take upstream's" that delete design, two reverse findings, and one hazard that
+   changes what the adapter's `gpa_read`/`gpa_write` may be built out of.
 2. **Pair it with the reentrancy guard, in one helper.** §9.3's pairing gate. Splitting the two
    measured **47 % of a vCPU's MMIO reads silently returning `MEMTX_ACCESS_ERROR`** — a
    correctness failure, not a performance one — and this is the item most likely to be
@@ -3017,12 +3040,144 @@ downstream of that answer, and some of it is *shaped* by it.
 > behind every other. That is the worse failure mode of the two and the reason the probe is
 > mandatory rather than advisory.
 
-**Gate:** the backport carried as a tracked patch with the acceptance measurement re-run
-against our device and recorded (both arms); the pairing gate and the realize-time probe both
+**Gate:** ~~the backport carried as a tracked patch~~ **the ≥ 10.2 floor declared and asserted at
+realize** (the backport is cancelled — decision box above), with the acceptance measurement re-run
+against our device on a **stock** ≥ 10.2 build and recorded (both arms); the pairing gate
+(**as re-specified in §10.1 item 2**) and the realize-time version assertion both
 negative-tested; the R1/R3/R5 re-audit written down as an artifact, not asserted; the
 `rt_shell`/`l1_mean` suites green against the QEMU `Vmm` in both lock modes; the memslot
 frequency gate holding on a real KVM; §7.9's QEMU-conditional rows converted from "expected" to
-"observed", with the BAR1 row either measured or explicitly re-deferred.
+"observed", with the BAR1 row either measured or explicitly re-deferred; **`migrate_add_blocker()`
+called at realize and its refusal exercised** (§10.1 item 8).
+
+### 10.1 ★★ What the ≥ 10.2 floor buys — the inventory, RUN (2026-07-26)
+
+Full write-up, with a `file:line` at the `v10.2.0` tag for every claim:
+**`../reference/qemu_102_facilities.md`**. It is a **source round, not a bench round** — it has no
+`[measured]` tags of its own, and where it contradicts a measurement it does so by showing that the
+measured path is not the path a QEMU adapter takes.
+
+**Eighteen facilities were checked. The five that change what gets written:**
+
+| | Facility | Verdict | What it changes here |
+|---|---|---|---|
+| 1 | `memory_region_enable_lockless_io()` | **take upstream's** | already the decision; §10.1's addition is the *scope* constraint below |
+| 2 | the reentrancy-guard **pairing** | **take upstream's** | **upstream's one function does both** (`system/memory.c:2567-2580`). There is no pairing for us to maintain, and **§9.3's gate as written describes code that would now be wrong** |
+| 3 | **ioeventfd's read side** | **take upstream's** | KVM registration passes *only the fd* (`accel/kvm/kvm-all.c:1889-1905`); QEMU installs **no read handler**. The fd can go straight into **our reactor's epoll set** |
+| 4 | RO-memslot as the region-lock fallback | ★ **REVERSE** | the 1.49 µs flags-only flip **is not reachable through QEMU** |
+| 5 | `gpa_read`/`gpa_write` via `address_space_rw` | ★ **new hazard** | can take the **BQL**, for a **guest-chosen** address |
+
+**The three that delete the most design, in order:**
+
+1. **The pairing is upstream's.** `memory_region_enable_lockless_io()` sets `lockless_io` **and**
+   `disable_reentrancy_guard` in the same function body, with a comment saying why. §9.3's
+   lockless-IO PAIRING gate should therefore become: **exactly one call site** for
+   `memory_region_enable_lockless_io`, and **zero** occurrences of `disable_reentrancy_guard`,
+   `bql_unlock`, or any hand-rolled unlock/lock around a dispatch, anywhere. Simpler than the
+   two-symbol version, and it keeps the 47 %-silent-drop finding load-bearing by forbidding the
+   only construction that can still reproduce it.
+   ★ **But the scope widens, and this is the sharp part.** The guard's *state* (`engaged_in_io`) is
+   per **device**; the opt-out (`disable_reentrancy_guard`) is per **MemoryRegion**
+   (`include/system/memory.h:869`). So **every trapped region of the device must be marked**, not
+   just the hot one: an unmarked region still takes the BQL *and* still returns
+   `MEMTX_ACCESS_ERROR` to a concurrent access, while passing any gate phrased per-device. (Narrowing
+   in the other direction: the guard never applied to RAM-like regions at all —
+   `system/memory.c:545-546` — so a RAM-backed BAR1 aperture was never serialised by it.)
+2. **★ The ioeventfd handler does not have to be QEMU's.** §6.3.1's normative caveat — *"ioeventfd
+   frees the vCPU, not the SERVICE… its handler still runs on the main loop with the BQL held"* —
+   measured a property of **how the spike wired its read side**, not a property of ioeventfd. QEMU
+   hands the descriptor to KVM and never reads it. Register that descriptor in **our own reactor**
+   as one more counter-shaped `CompletionSource` (§3.4) and the doorbell frees the vCPU *and* the
+   service, on a thread with no lock, no BQL and no core state. **That discharges the I-NOAMP
+   obligation structurally instead of by discipline**, and deletes L2-Q task 4's "the handler must
+   hand off, never block" clause along with §6.6 item 2's compensating rule. Everything else in
+   §6.3.1's ioeventfd paragraph — no-datamatch, idempotent level-triggered coalescing, *"quote the
+   availability result, not the speedup"*, and the **open** decision about importing the C's
+   O(live channels) `GP_PUT` scan — survives unchanged.
+3. **`migrate_add_blocker()` closes a gap §7.6 has not opened.** §7.6 enumerates eight teardown
+   triggers; **migration is not one of them, and neither is CPR** (`cpr-transfer`), which in ≥ 10.x
+   is wired into RAM allocation itself (`system/physmem.c:2504-2536`) and execs a *new QEMU binary*
+   over the old one. Our state is live RM clients, isolate processes and a `MAP_FIXED` window into
+   another process's `mm`: CPR is not a trigger we can implement, it is one we must refuse. One call
+   at realize (`include/migration/blocker.h:32`, *"prevent all modes"*) closes migration, CPR **and**
+   the uffd-registration-composition hazard together. **[inferred]** Without it CPR would silently
+   *fail to preserve* our `RAM_PREALLOC` window rather than fail loudly — the worse failure mode.
+
+**The two reverse findings — things ≥ 10.2 / a QEMU adapter makes harder:**
+
+4. **★★ The RO-memslot fallback is not a 1.49 µs flip on QEMU.** §6.7's *"CORRECTION — a FLAGS-ONLY
+   flip is 1.49 µs"* is correct **about KVM** and was measured on the KVM-direct harness. Through
+   QEMU it is unreachable, for two independent reasons: `flatrange_equal` compares `readonly`
+   (`system/memory.c:251-260`), so `memory_region_set_readonly()` emits `region_del` + `region_add`
+   ⇒ a full **DELETE + ADD**; and even the flags path re-issues the ioctl with `memory_size = 0`
+   first (`accel/kvm/kvm-all.c:373-383`), and is reachable only from dirty-logging transitions.
+   **Nothing about decision #37 changes** — the rule is about install/remove *frequency*. What
+   changes is that **`guest_memory_lock.md` §7.3's fallback is materially more expensive than
+   recorded**, and **decision #49 (uffd-WP) gets stronger, not weaker**.
+   ★ *The durable lesson is methodological, and it cuts both ways:* §6.7's correction was flagged
+   because *"the error ran in the direction that wrongly discourages a legitimate design"*; this one
+   runs the **other** way, making a fallback look affordable that is not. Same cause both times —
+   **a KVM-direct measurement is not a QEMU measurement.** Decision #48 (build M2-c against the
+   harness) is still right for the reasons given, *and* every constant the harness produces must be
+   re-derived before it is quoted at an adapter.
+5. **CPR is a ninth lifecycle event** — see item 3. Closed by the blocker, but only if the blocker
+   is taken deliberately.
+
+**The hazard that binds the adapter's shape, and the reason this had to be run before the adapter:**
+
+6. **★★★ `gpa_read`/`gpa_write` can take the BQL for a guest-chosen address.** §6.1 classifies them
+   in-lock **legal** as *"a memcpy into an already-installed mapping"*, and §6.3 makes that legality
+   conditional on the implementation being unable to reach VMM-global API. **The obvious QEMU
+   implementation breaks that condition on demand.** `address_space_write` takes only
+   `RCU_READ_LOCK_GUARD()` (`system/physmem.c:3448`) and the RAM branch is a plain `memcpy`
+   (`:3370-3376`) — **but the same entry point calls `prepare_mmio_access(mr)` (`:3250`, `:3347`)
+   when the address does not land on direct-access memory, and that takes the BQL** (`:3196-3209`).
+   Whether our "memcpy" is a memcpy or a BQL acquisition is decided by **which region the guest's
+   GPA lands on**.
+   > **NORMATIVE (proposed).** The adapter's `gpa_read`/`gpa_write` MUST resolve the GPA to a host
+   > RAM pointer and memcpy — cached at window install — and MUST refuse a GPA that does not resolve
+   > to RAM. It MUST NOT call `address_space_rw`/`_read`/`_write` from an in-lock context.
+   >
+   > Otherwise a guest steers a **rank-1-held** memcpy into a **BQL acquisition beneath our lock** —
+   > §6.3's ABBA, constructed on demand, and **invisible to all four** of §6.3's enforcement layers:
+   > not a "NO" row, not an acquisition site we wrote, and *on* the written list of called functions
+   > unless someone knew to look inside it.
+
+**Four more, recorded so they are not re-asked:**
+
+7. **The window seam is safe and upstream guarantees it.** `memory_region_init_ram_ptr()`
+   (`include/system/memory.h:1531`) sets `RAM_PREALLOC`, and PREALLOC blocks are skipped by
+   `qemu_ram_remap` (`system/physmem.c:2684-2685`) and by `reclaim_ramblock` (`:2589-2591`). §4.4's
+   reserve-first design is unaffected; what is new is the **citation** for an assumption the design
+   made silently — and its corollary, that **teardown of the reservation is entirely ours**, with no
+   VMM-side backstop.
+8. **Reset arrives BQL-held.** `include/hw/resettable.h:50`: *"This whole API must only be used when
+   holding the iothread mutex."* So §7.6 **T4** is not a lock-free context, and lockless IO does not
+   help (the flag suppresses *taking* the BQL, not *having* it). T4 must latch-and-defer to the
+   executor — which §6.6 already prescribes, so this pins the thread rather than changing the
+   design. Use `ResettableClass` three-phase; `device_class_set_legacy_reset` is deprecated in-tree
+   and is a floor-ratchet liability.
+9. **§3.7's *"in QEMU the executor is not our thread… QEMU impl: schedule a bottom half"* is no
+   longer forced.** With lockless dispatch and item 2's reactor-owned ioeventfd, neither entry path
+   arrives holding a QEMU lock, so the executor can be **our** thread on QEMU exactly as in the
+   harness, and `ExecutorWaker::wake` can be the same primitive on both backends. A bottom half is
+   needed for exactly one thing: work that must run **with** the BQL, i.e. the coarse memory-plane
+   tier (`memory_region_transaction_commit` asserts `bql_locked()` — `system/memory.c:1148`), which
+   is already §6.3's single acquisition site. **Keep the trait; correct the example.**
+10. **In-tree Rust bindings exist and we still cannot use them.** v10.2.0 ships a real `rust/`
+    workspace (`bql`, `qom`, `system`, `hw/core`, `migration`, …). Three disqualifiers, the first
+    fatal: they are **in-tree only**, so adopting them means our device lives inside a QEMU
+    checkout — *a fork, the exact shape `c3ec258` deleted*; `BqlCell`/`BqlRefCell` derive their
+    soundness **from the BQL** (`include/qemu/main-loop.h:292-303`), the assumption decision #42 and
+    §6.3 spend this milestone removing; and **`rust/hw` has no PCI**. Worth reading
+    `rust/system/src/memory.rs`'s `MemoryRegionOpsBuilder` as a model for our own ops builder — a
+    design to copy, not a dependency to add.
+
+**Open, with the experiment named:** whether a guest can provoke `ram_block_discard_range()` on a
+GPA inside our window (balloon → zeroed backing under a `MAP_FIXED` placement). `RAM_PREALLOC` guards
+the *remap* path but the discard path has no such check. One-line answer if it bites —
+`ram_block_discard_disable(true)` at realize, as vfio does — and the reason to settle it early is
+that the symptom is a zeroed backing at an arbitrary later time.
 
 ---
 
@@ -3372,8 +3527,37 @@ here so the ledger stays the one place that enumerates every decision.
     model (**a flags-only memslot flip is 1.49 µs**) and `CoreEvent::LockedRegionFault`'s
     rustdoc (resolution never waits on the core).
 
+50. **★★ The ≥ 10.2 facility inventory is RUN, and it binds the adapter's shape before it is written
+    (§10.1 — `../reference/qemu_102_facilities.md`)** — eighteen facilities verified against the
+    `v10.2.0` tag. **Three "take upstream's"**: the reentrancy-guard **pairing is upstream's own
+    function**, so §9.3's gate is re-specified (one call site, zero hand-rolled sites, and **every**
+    trapped region marked — the opt-out is per-region while the guard state is per-device); the
+    **ioeventfd's read side is ours** (KVM gets only the fd, `accel/kvm/kvm-all.c:1889-1905`), so the
+    descriptor goes into **our reactor** and §6.3.1's *"frees the vCPU, not the SERVICE"* caveat is
+    discharged structurally rather than by discipline; and **`migrate_add_blocker()`** closes
+    migration **and CPR** — a ninth lifecycle event ≥ 10.x wires into RAM allocation itself and which
+    we cannot implement, only refuse. **One reverse finding that corrects a price without touching a
+    rule:** the **1.49 µs flags-only memslot flip is unreachable through QEMU** (`flatrange_equal`
+    compares `readonly`, `system/memory.c:251-260` ⇒ DELETE+ADD), so `guest_memory_lock.md` §7.3's
+    RO-memslot fallback is materially dearer than recorded and **decision #49 gets stronger** —
+    the standing lesson being that **a KVM-direct measurement is not a QEMU measurement**, which
+    qualifies every constant decision #48's harness produces. **And one hazard that binds §6.1:**
+    `gpa_read`/`gpa_write` implemented via `address_space_rw` **takes the BQL for a guest-chosen
+    address** (`system/physmem.c:3250,3347` → `:3196-3209`), constructing §6.3's ABBA on demand and
+    invisible to all four of its enforcement layers — so the in-lock-legal accessors must resolve to
+    a cached host RAM pointer and refuse a non-RAM GPA. **Not taken:** QEMU's in-tree Rust workspace
+    (in-tree only ⇒ a fork, the shape `c3ec258` deleted; `BqlCell` is soundness-from-the-BQL; no
+    PCI), and QEMU's `uffd_*` helpers (whose silent syscall fallback is precisely the
+    `USER_MODE_ONLY` case GL9 refuses — upstream's comment nonetheless corroborates GL9's
+    `CAP_SYS_PTRACE` finding independently).
+
 **Genuinely open:**
 
+- **★ Can a guest provoke `ram_block_discard_range()` on a GPA inside our window?** (§10.1's closing
+  note.) `RAM_PREALLOC` short-circuits the *remap* path but the discard path has no such check, so a
+  balloon-reachable GPA in our window would zero a `MAP_FIXED` backing under us. One-line answer if
+  it bites (`ram_block_discard_disable(true)` at realize, as vfio does); the reason to settle it
+  early is that the symptom appears at an arbitrary later time.
 - **§10.6 (B3, the system-proc stall)** — materially improved again by §7.5's watchdog, which
   is the "stronger story" §10.6 asked whether to demand. Owner may now be able to close it.
 - **Decision 25** — an ABI change to `kayfabe-vmm`; trivial today, a migration after L2.
@@ -3916,6 +4100,43 @@ is written to re-run the measurement **against our device** rather than to cite 
    attention because it was the obvious trap; BAR1 writes are the ones that carry data, cannot
    escape to ioeventfd, and — per the C — happen on the page-table publication path, which is
    the one §6.8.1 already forbids locking because of its ~18 kHz write rate.
+
+### 14.7 ★★ Facility-inventory round, 2026-07-26 — the floor was priced, and item 2 above was half wrong
+
+Full write-up `../reference/qemu_102_facilities.md`; the acted-on summary is **§10.1**; the ledger
+entry is **#50**. Run because the owner's ≥ 10.2 floor decision (`c3ec258`) closed with an explicit
+open task: *inventory what the floor buys, before the adapter, since it changes what gets written.*
+
+**What it changed, and the shape of each change.** Eighteen facilities read at the `v10.2.0` tag.
+The interesting result is not the count but the **distribution**: only **one** row was a floor
+benefit we did not already know about (the pairing being upstream's own function), **two** rows were
+things available since long before 9.2 that we had mis-read as unavailable or as costly
+(ioeventfd's read side; irqfd), **two** ran in the *reverse* direction, and **one** was a hazard that
+exists in no version and is purely ours. That distribution is the finding: *raising a floor bought
+much less than re-reading the code did.*
+
+**★ And it corrected this section's own item 2, one round after it was written.** §14.6 predicted
+that *"'ioeventfd frees the vCPU, not the service' will be lost in transmission… if it still
+happens, the answer is an IOThread, not a fourth repetition."* The answer is **neither**. The rule
+was **over-general**: QEMU registers only the descriptor with KVM and never reads it
+(`accel/kvm/kvm-all.c:1889-1905`), so the main-loop/BQL context the spike measured was the spike's
+own wiring. Putting the fd in our reactor removes the failure mode instead of repeating the warning
+about it — and the §14.6 entry had already reached for a *mechanism* (an IOThread) to enforce a
+rule, which is the move this doc keeps cataloguing as the wrong one. **Two rounds is a short
+half-life for a normative box**, and the reason it decayed is worth naming: it generalised from one
+measurement of one wiring, which is exactly what §0.2's tag discipline exists to prevent and what a
+`[measured]` tag does *not* by itself protect against.
+
+**What this round owes the build:**
+
+1. **§10.1 item 6 will be "simplified" into `address_space_rw`.** It is the obvious call, it is the
+   one every QEMU device uses, and it is correct for every device that is not us. The refusal must
+   be in the trait's rustdoc and in the adapter's one memcpy helper, not only here.
+2. **The re-specified pairing gate (§9.3) is now easier to satisfy and easier to satisfy
+   *incompletely*** — part (c), *every* trapped region marked, is the part with no symptom until
+   two vCPUs meet in an unmarked BAR.
+3. **The RO-memslot correction (§10.1 item 4) will be quoted from `guest_memory_lock.md` §7.3
+   without it.** The number there is a harness number; the QEMU number is unmeasured and larger.
 
 ---
 
