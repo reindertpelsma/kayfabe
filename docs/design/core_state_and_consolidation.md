@@ -24,7 +24,7 @@ five small RECOMMEND-class items proposed below but deliberately **not** execute
 | `kayfabe-mmu` | ~230 | `AddressTable`: forward-populate-only `bind`, eager `unbind`, MISS=FAULT `resolve`, malformed-range refusal. `walker`: `FbRead` trait + `WalkResult` shape ONLY | table **complete**; **walker is a 41-line skeleton** — the GMMU walk loop (incl. the #13 512M-leaf discipline) is NOT implemented; it ports with the mmu arch step |
 | `kayfabe-completion` | ~690 | `CompletionQueue` (pending → in-flight → awaiting-ack → ack, re-post source), `DeliveryPlane` (single drain-gated batch per target, poll-driven re-post = the starvation fix), `FenceArms` (pattern e: wrap-correct arm/observe, #12 `MAX_FENCE_JUMP` guard), capacity bounds | **complete** as policy; queue *transport* (seqNum encoding) is `kayfabe-gsp`'s, not here |
 | `kayfabe-fwd` | ~825 | Stateless entry points over the core: `handle_doorbell` (the ONE ring path, structurally #14-gated), `publish_backing`, `resolve`, `gate_working_set`, `parse_pushbuffer` (the ONE parser: CE-PT-write capture, SemRelease→observe, TlbInvalidate, opaque passthrough, double-capped reads), `forward_engine_object` (idempotent Case-1), `route_control` (Case-1/Case-2 split), `arm_fence`/`fence_observed`, `present_scanout`, completion glue (`deliver_completions`/`poll_completions`), `signal_golden_capture` (system-typed forge) | **complete for the core slice**; more Case-1/Case-2 rows and the CE-capture→walker commit arrive with L3/mmu port |
-| `kayfabe-vmm` | ~323 | The `Vmm` port (8 capability groups), `Device` (the core as the adapter sees it), `Present` + the value vocabulary (`SlotId`, `BarId`, `HostRegion`, `TrapMode`, `IrqSpec`, `RamHandle`, `SurfaceHandle`, `FbMeta`, `Vblank`, `CoreEvent`) | **traits complete**; NO real backend. Note honestly: `Gpu` does not implement `Device` yet (needs the register/GSP model, L2) |
+| `kayfabe-vmm` | ~360 | The `Vmm` port (**7** capability groups — group 8, the memory-lock primitive, left the trait: `l1_os_shell.md` §6.8), `Device` (the core as the adapter sees it), `Present` + the value vocabulary (`SlotId`, `BarId`, `HostRegion`, `TrapMode`, `IrqSpec`, `RamHandle`, `SurfaceHandle`, `FbMeta`, `Vblank`, `CoreEvent`) | **traits complete**; NO real backend. Note honestly: nothing implements `Device` yet (it needs the register/GSP model, L2) — and since `Device` now takes **`&self`**, the implementor is the L1 shell (`kayfabe_rt::SharedDevice`, which owns the ranked locks), **not** `Gpu` |
 | `kayfabe-isolate` | ~217 | The `RmBackend` verb surface (intent verbs, unprivileged-only by construction), `Isolate` (two-stage retire), `IsolateFactory` (spawn per `(IsolateId, GpuId)`) | **traits complete**; NO real sandbox |
 | `kayfabe-mocks` | ~1030 | One deterministic fake per port: `MockArch` ("Mockingbird" — deliberately non-NVIDIA encodings), `MockVmm` (sparse RAM, virtual clock, recorded irqs/slots/traps), `MockRmBackend`/`MockIsolate`/`MockIsolateFactory` (per-`(isolate,GPU)`-namespaced handles, shared verb recorder, scriptable failure), `MockPresent` | **complete** (test-only); the reference for what a real adapter must do |
 | `kayfabe-abi` | 53 | `DriverVersion` + the `DriverAbi` trait shape (`alloc_param_size`) | **STUB.** No codegen, no generated tables, no `#[repr(C)]` anything. L3 fills it; until then NO wire decode exists in the repo |
@@ -42,7 +42,7 @@ here, the port grows **by design discussion**, not by a side channel.
 
 ### 2.1 `Vmm` (kayfabe-vmm) — hypervisor capabilities
 
-Eight groups; `Send` (not `Sync` — the adapter owns its synchronization; `Vmm` is only
+**Seven** groups; `Send` (not `Sync` — the adapter owns its synchronization; `Vmm` is only
 ever passed as `&mut dyn`, never stored by the core):
 
 1. `gpa_read` / `gpa_write` — guest-physical access (pushbuffer reads, semaphore
@@ -60,13 +60,23 @@ ever passed as `&mut dyn`, never stored by the core):
    virtual time. *`now` is called* (poll bookkeeping); `defer` awaits the L1 loop.
 7. `map_read_native` — RAM-backed reads + write-subrange trap (the rom-device overlay
    that kills nested-virt poll storms). *No core call site yet* (L2).
-8. `lock_region` / `unlock_region` — revoke → fault-as-`CoreEvent` → update → restore.
-   *No core call site yet* (the memory-trap taxonomy, decision #6, applies at L1).
+~~8. `lock_region` / `unlock_region`~~ — ★ **REMOVED from the trait** (`l1_os_shell.md`
+   §6.8). Once the memslot implementation was struck (§6.7 item 5), the only one left is
+   `UFFDIO_REGISTER` **on our own window VMA**, which needs no hypervisor cooperation on
+   any backend — so leaving it here would have forced every adapter to carry identical
+   userfaultfd code. It is a `kayfabe-linux-raw` capability. Its **fault delivery**
+   (`CoreEvent::LockedRegionFault`, `CoreEventKind::RegionFault`) stays on this seam,
+   because arriving on the core's serialized executor is a property of the core's entry
+   discipline, not of userfaultfd.
 
 The unwired groups are **deliberate**: they are the L1/L2 surface, defined now so the
-adapter shape is settled and mock-tested. L1 must implement all eight faithfully —
-in particular `defer`'s ordering (deadline order, deterministic) and the lock
-primitive's fault-then-unblock semantics, both pinned by `MockVmm`'s behavior.
+adapter shape is settled and mock-tested. L1 must implement all seven faithfully — in
+particular `defer`'s ordering (deadline order, deterministic), pinned by `MockVmm`'s
+behavior.
+
+**Hypervisor-agnosticism is the invariant this seam is judged on**, not the group count —
+`l1_os_shell.md` §6.0 makes it a contract with a CI gate, and §6.8 is the first time the
+count was allowed to move because of it.
 
 ### 2.2 `Device` (kayfabe-vmm) — the core as the adapter drives it
 

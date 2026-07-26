@@ -1884,7 +1884,7 @@ Collected honestly.
 | `kayfabe-isolate` | 631 | the sandbox ports: `RmBackend` verbs, `Worker`, `Isolate`, `IsolateFactory` | traits only |
 | `kayfabe-arch` | 508 | identity newtypes + the per-generation port set | traits only |
 | `kayfabe-util` | 493 | interval map, virtual clock, the send/sync build assertion, and the thread-local lock witness | full |
-| `kayfabe-vmm` | 334 | the hypervisor and display ports (eight capability groups) | traits only |
+| `kayfabe-vmm` | 334 | the hypervisor and display ports (**seven** capability groups since `l1_os_shell.md` §6.8 struck the memory-lock pair; the number is a measurement, never the invariant — that is hypervisor-agnosticism, §6.0) | traits only |
 | `kayfabe-mmu` | 241 | the per-address-space table (miss = fault) + a walker skeleton | table full; **walker is a 41-line skeleton** |
 | `kayfabe-abi` | 53 | per-driver-version wire layouts; the only future home of C-layout structs | **stub** |
 | `kayfabe-gsp` | 34 | the GSP boot state machine | **stub — a placeholder enum** |

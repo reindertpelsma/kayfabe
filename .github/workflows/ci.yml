@@ -96,6 +96,67 @@ jobs:
             echo "'completion source'. Reword the comment; never weaken this gate."
             exit 1
           fi
+      # ★ The VMM-VOCABULARY gate (l1_os_shell.md §6.0, decision #39) — the sibling of
+      # the hexagonal gate, for the OTHER axis of portability.
+      #
+      # The hexagonal gate above keeps OS vocabulary out of the pure crates. Nothing
+      # kept *hypervisor* vocabulary out of anything — and hypervisor-agnosticism is a
+      # founding requirement of this port (`kayfabe-vmm`'s crate docs; arch §4.1's
+      # "count is not the invariant; hypervisor-agnosticism is"). The structural tell
+      # that it had gone unwritten: the word "agnostic" appears ZERO times in
+      # l1_concurrency.md and l1_os_shell.md combined. A requirement restated nowhere
+      # below the architecture doc is one the next adapter quietly breaks.
+      #
+      # Scope = the 11 pure logic crates PLUS `kayfabe-rt`. The shell is an adapter for
+      # *threads and locks*, deliberately outside the hexagonal list — but it is not a
+      # hypervisor adapter, and the concurrency shape it encodes (`SharedDevice`'s
+      # `&self` ranked locking) is precisely what a second backend must be able to reuse.
+      #
+      # ★ It gates API IDENTIFIERS, never the string "QEMU". That is the whole design:
+      # naming the adapter crates (`kayfabe-vmm-qemu`, `kayfabe-vmm-ch`), citing a QEMU
+      # source file, or writing "QEMU's BQL is one instance of the class" must all stay
+      # writable — so the pattern names things that only ever appear when QEMU's API has
+      # leaked inward (`BQL_LOCK_GUARD`, `memory_region_*`, `qdev_*`, `QEMUBH`), plus the
+      # two English phrases that are pure QEMU idiom ("bottom half", "main loop"). No
+      # allowlist exists and none is ever needed: every legitimate mention is rephrasable
+      # in one word ("the VMM's global lock", "the adapter's serialized executor"), and a
+      # gate with an allowlist is a gate with a negotiation.
+      #
+      # The two English idioms carry a LEADING \b, and it is load-bearing rather than
+      # tidiness: without it `main.?loop` matches the ordinary phrase "do-main loop"
+      # (and any word ending in "main" followed by "loop"). A gate that fires on English
+      # is a gate that gets muted, which is the §5.1 lesson applied one section early.
+      # The trailing side needs no anchor — "main-loop", "mainloop" and "main_loop" must
+      # all match, which is exactly what `.?` plus no trailing anchor gives.
+      #
+      # Exit-code polarity, as above: `grep -r` exits 0 on a HIT, and a hit here is the
+      # FAILURE case — hence the `if`, never a bare `grep` under `set -e`. (This polarity
+      # has been got wrong twice in this repo; it is written out at all three gates for
+      # that reason.)
+      - name: VMM-vocabulary gate (no hypervisor API vocabulary in the core or the shell)
+        run: |
+          portable="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
+                    crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch crates/kayfabe-abi \
+                    crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
+                    crates/kayfabe-vmm crates/kayfabe-rt"
+          if grep -rniE '\bBQL\b|bql_lock|qemu_mutex_lock_iothread|BQL_LOCK_GUARD|MemoryRegion|memory_region_|qemu_bh|QEMUBH|aio_bh|qdev_|VMStateDescription|\bbottom.?half|\bmain.?loop|iothread' $portable; then
+            echo ""
+            echo "★ HYPERVISOR-VOCABULARY BREACH — l1_os_shell.md §6.0."
+            echo "The core and the L1 shell must name hypervisor CAPABILITIES, never one"
+            echo "hypervisor's API. The lines above name QEMU's. A CH/rust-vmm port must"
+            echo "cost one adapter crate and zero trait changes; every QEMU-ism that"
+            echo "reaches these crates is a line of that adapter written in the wrong"
+            echo "place. Reword to the capability:"
+            echo "  QEMU's BQL / iothread lock -> 'the VMM's global lock' (§6.3's CLASS:"
+            echo "                                'a lock the VMM owns, that we neither"
+            echo "                                 construct nor rank')"
+            echo "  bottom half / main loop    -> 'the adapter's serialized executor'"
+            echo "  MemoryRegion / qdev_*      -> the Vmm trait method that means it"
+            echo "Naming the adapter crates (kayfabe-vmm-qemu, kayfabe-vmm-ch) never trips"
+            echo "this gate — it matches API identifiers, not the vendor's name. So there"
+            echo "is no allowlist, and there is nothing to argue about in review."
+            exit 1
+          fi
       # ★ The UNSAFE-SURFACE gate — the auditability rule, landed while it is free.
       #
       # The workspace is `unsafe_code = "forbid"` (root `Cargo.toml`,

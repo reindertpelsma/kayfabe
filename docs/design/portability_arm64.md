@@ -28,9 +28,27 @@ features — MIG/vGPU/CC — we deferred). So: worth not-rotting, not worth buil
   or slice size derives from that runtime value. This rule is written down *now* so it is a design
   constraint when L1 mmap is first built — not a painful retrofit after 4 KiB is baked in. (This
   doc is the record until the L1 mmap design exists to carry the rule; it must be honored there.)
+  ★ **The rule now has a mechanism *and* a stated limit** — `l1_os_shell.md` §5: a
+  `HostPageSize` newtype with no literal constructor, pure geometry functions over it, and the
+  page size as a **test axis** (4/16/64 KiB). **But the typed rule stops at the adapter**: the
+  core's geometry constructors (`GpaSpace::new`, `TargetGeom`) take plain `u64` and cannot take
+  a `HostPageSize`, because a pure crate may not depend on `kayfabe-linux-raw`. So a literal
+  `4096` *does* typecheck as an `arena_len`, and the obligation is on the composition root —
+  **validate core-supplied geometry against the queried page size at construction, loudly.**
 - **L2 (QEMU/VMM adapter) — already portable.** QEMU runs on arm64 hosts; the trap/BAR/interrupt
-  surface is via KVM, which QEMU abstracts (GIC vs APIC is QEMU's concern, not the device's —
-  `Vmm::raise_irq` is abstract). No core exposure.
+  surface is via KVM, which the VMM abstracts (GIC vs APIC is the adapter's concern, not the
+  device's — `Vmm::raise_irq` is abstract). No core exposure.
+  ★ **Two places arch and hypervisor intersect, recorded by the portability round
+  (`l1_os_shell.md` §14.4) because each is invisible from either axis alone:**
+  - **`Vmm::map_read_native`'s `write_trap` sub-range is rounded to whole HOST pages.**
+    Read-native vs trapped is a *page* attribute in every hypervisor's mapping machinery, so
+    a caller reasoning in 4 KiB gets more pages trapped than it asked for on a 16/64 KiB
+    host — correct, and quietly slower. The rustdoc says so; derive it from `HostPageSize`.
+  - **`IrqSpec::IntxLevel` is unimplementable on some (VMM, arch) pairs** — a
+    cloud-hypervisor adapter's legacy INTx path is a userspace IOAPIC gated
+    `#[cfg(target_arch = "x86_64")]`, so on CH/aarch64 the variant must return
+    `VmmError::Unsupported`. Harmless in practice (the core only ever emits `Msix(0)`), and
+    written into the trait so the first adapter to meet it treats it as a contract.
 - **L3 (per-arch NVIDIA ABI) — GPU-arch, not CPU-arch.** The RM ioctl structs are explicitly sized
   and cross-platform (the NVIDIA driver is itself cross-platform); the Axis-A codegen from `ogkm`
   headers produces arch-correct layouts per target naturally. GPU *architecture* (Ampere/Ada/Hopper)

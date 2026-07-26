@@ -28,16 +28,19 @@ Ports and their standing:
 
 | Port | Crate | Real adapter | Status |
 |---|---|---|---|
-| `Vmm` (8 capability groups), `Device`, `Present` | `kayfabe-vmm` | L1/L2 (QEMU, cloud-hypervisor) | **trait-only** (mock-implemented) |
+| `Vmm` (7 capability groups), `Device`, `Present` | `kayfabe-vmm` | L1/L2 (QEMU, cloud-hypervisor) | **trait-only** (mock-implemented). ★ A second backend is contracted to cost **one adapter crate, zero trait changes** — `l1_os_shell.md` §6.0, CI-gated |
 | `Isolate`, `IsolateFactory`, `RmBackend` | `kayfabe-isolate` | L1 (sandboxed Linux worker) | **trait-only** (mock-implemented) |
 | `Arch`, `GmmuFmt`, `UserdModel`, `PushbufferAbi` | `kayfabe-arch` | L3 (`impl Arch for <Gen>`) | **trait-only** (MockArch = "Mockingbird") |
 | `DriverAbi` (Axis A) | `kayfabe-abi` | L3 codegen from ogkm | **stub** (shape only) |
 | `TraceSink` | `kayfabe-trace` | adapter log/file | **stub** |
 | `FbRead` (walker's PT source) | `kayfabe-mmu::walker` | FB shadow | **skeleton** |
 
-Note: `Gpu` does **not** yet implement `kayfabe_vmm::Device` — that needs the register +
-GSP models (`kayfabe-gsp`), which port at the L2 step. The core's current entry surface
-is the event-level API (`Gpu::apply` + the `kayfabe-fwd` free functions).
+Note: nothing implements `kayfabe_vmm::Device` yet — that needs the register + GSP models
+(`kayfabe-gsp`), which port at the L2 step. The core's current entry surface is the
+event-level API (`Gpu::apply` + the `kayfabe-fwd` free functions). ★ And when it lands, the
+implementor is the **L1 shell** (`kayfabe_rt::SharedDevice`), not `Gpu`: `Device`'s entry
+points take `&self` so the port admits the core's per-`Proc` sharding (`l1_os_shell.md`
+§6.3, `kayfabe-vmm` rustdoc).
 
 ## Crate → responsibility
 

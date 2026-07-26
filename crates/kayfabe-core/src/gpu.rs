@@ -776,9 +776,11 @@ fn absorb_condemned(list: &mut Vec<BTreeSet<HClient>>, mut set: BTreeSet<HClient
 
 /// The device: composition root of the logic core.
 ///
-/// Will additionally implement `kayfabe_vmm::Device` once the register/GSP models
-/// port (`kayfabe-regs`-equivalent + `kayfabe-gsp`); this milestone exposes the
-/// event-level API the adapters and tests drive.
+/// `kayfabe_vmm::Device` will be implemented once the register/GSP models port
+/// (`kayfabe-regs`-equivalent + `kayfabe-gsp`) — but **by the L1 shell, not by this
+/// type**: `Device`'s entry points take `&self` so the port admits per-`Proc` sharding,
+/// and the type that owns the ranked locks is `kayfabe_rt::SharedDevice`. This
+/// milestone exposes the event-level API the adapters and tests drive.
 ///
 /// `Send + Sync` (compile-time-asserted; concurrency contract, crate docs): share
 /// `&Gpu` across vCPU threads for lock-free reads (`kayfabe-fwd::resolve`,

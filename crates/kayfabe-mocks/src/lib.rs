@@ -34,8 +34,8 @@ use kayfabe_isolate::{
 };
 use kayfabe_util::Instant;
 use kayfabe_vmm::{
-    BarId, CoreEvent, CoreEventKind, FbMeta, HostRegion, IrqSpec, Present, PresentError, Prot,
-    RamHandle, SlotId, SurfaceHandle, TrapMode, Vblank, Vmm, VmmError,
+    BarId, CoreEvent, FbMeta, HostRegion, IrqSpec, Present, PresentError, Prot, RamHandle, SlotId,
+    SurfaceHandle, TrapMode, Vblank, Vmm, VmmError,
 };
 
 // ---------------------------------------------------------------------------------
@@ -406,8 +406,6 @@ pub struct SlotRecord {
     pub prot: Prot,
     /// True if installed via `map_read_native`.
     pub read_native: bool,
-    /// Locked by `lock_region`?
-    pub locked: Option<CoreEventKind>,
 }
 
 /// The scripted hypervisor (testing strategy §4). Guest RAM is a sparse byte map;
@@ -508,7 +506,6 @@ impl Vmm for MockVmm {
                 backing,
                 prot,
                 read_native: false,
-                locked: None,
             },
         );
         Ok(id)
@@ -567,33 +564,12 @@ impl Vmm for MockVmm {
                 backing,
                 prot: Prot::ReadOnly,
                 read_native: true,
-                locked: None,
             },
         );
         if let Some(r) = write_trap {
             self.traps.push((BarId::Bar0, r, TrapMode::WriteOnly));
         }
         Ok(id)
-    }
-
-    fn lock_region(&mut self, slot: SlotId, on_fault: CoreEventKind) -> Result<(), VmmError> {
-        match self.slots.get_mut(&slot) {
-            Some(rec) => {
-                rec.locked = Some(on_fault);
-                Ok(())
-            }
-            None => Err(VmmError::BadSlot(slot)),
-        }
-    }
-
-    fn unlock_region(&mut self, slot: SlotId) -> Result<(), VmmError> {
-        match self.slots.get_mut(&slot) {
-            Some(rec) => {
-                rec.locked = None;
-                Ok(())
-            }
-            None => Err(VmmError::BadSlot(slot)),
-        }
     }
 }
 
@@ -1510,6 +1486,10 @@ kayfabe_util::assert_send_sync!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // `CoreEventKind` is no longer part of the mock's own surface (the memory-lock
+    // primitive left the `Vmm` trait — `l1_os_shell.md` §6.8); it is still the payload
+    // `defer` carries, so the ordering test names it directly.
+    use kayfabe_vmm::CoreEventKind;
 
     #[test]
     fn mock_arch_token_roundtrip_and_malformed_rejected() {

@@ -680,6 +680,38 @@ a mapping you must first own the address space. Belt and braces: the underlying 
 `MAP_FIXED_NOREPLACE` and treats a collision as a loud fault, so even a reservation-
 accounting bug fails loudly rather than clobbering.
 
+### 4.4.1 ★ The precondition the double-mmap has always had, and never stated
+
+The design above assumes a slice of guest RAM can be mapped into a second process. **That
+is not a property of guest RAM; it is a property of how the VM was launched.**
+
+> **Guest RAM belongs to the VMM, and is shareable with an isolate only if the VM was
+> started with a *shareable* memory backing.** On cloud-hypervisor that is
+> `--memory shared=on`; on QEMU it is `memory-backend-file`/`memory-backend-memfd` with
+> `share=on`. With a private backing (the default on both), the region is `MAP_PRIVATE`
+> anonymous memory: `Vmm::export_ram` has nothing to hand out, and any handle it invented
+> would produce copy-on-write pages — an isolate writing a completion the guest never sees.
+
+Three things worth saying about it, and they pull in different directions:
+
+- **It is portability-neutral.** The requirement is *identical* on both backends, and both
+  express it as a launch flag. So this is not a CH-vs-QEMU difference and it does not
+  belong in the adapter comparison; it belongs here, with the design that depends on it.
+- **No code gate can catch it.** It is a deployment fact. There is no type, no lint and no
+  CI grep that can observe how the operator started the VM. That is precisely why it is
+  written into the design rather than left as folklore: the only available mechanism is a
+  **loud refusal at the first export** — `VmmError::Unsupported`, at device realize —
+  rather than a `SIGBUS` or a silently-diverged page at first guest DMA, which is what an
+  unstated precondition buys you.
+- **It is load-bearing for the *whole* isolate memory design**, not one method. The
+  `m2_stub_ram_base` `MAP_FIXED` share, Mode-1's double-mmap, the per-proc GPA arena
+  slices, §11 item 2's least-privilege export scoping — every one of them is downstream of
+  a shareable backing existing at all.
+
+Pinned by `tests/tests/vmm_portability.rs`
+(`export_ram_without_a_shared_backing_refuses_at_the_first_export`): the exact
+`Unsupported` variant, for both the sliced and the whole-RAM export.
+
 ### 4.5 ★ Every raw entry point asserts the lockwitness
 
 The R1 witness already lives at the bottom of the dependency graph
@@ -752,6 +784,27 @@ targeted**, with grep as a narrow backstop only.
    feature-gated. Every alignment, window-granularity, slice-bound and mmap-length API
    takes a `HostPageSize`. **A literal `4096` cannot flow into the alignment path because
    it does not typecheck** — trybuild row 4 pins both polarities.
+
+   > **★ And the exact reach of that sentence, because it is narrower than it reads (added
+   > by the portability round, §14.4).** The typed rule **stops at the adapter**. The core's
+   > geometry constructors take plain integers — `GpaSpace::new(window: Range<u64>,
+   > arena_len: u64)`, `TargetGeom { window_len, arena_len, .. }` — and they *cannot* take a
+   > `HostPageSize`, because that type lives in `kayfabe-linux-raw` and a pure crate may not
+   > depend on it (that is the hexagonal boundary working, not a defect). So a literal `4096`
+   > **does** typecheck as an `arena_len`, and on a 64 KiB host that is a misaligned window.
+   >
+   > The obligation this creates is on the composition root, and it is the only place it can
+   > live: **the adapter validates every core-supplied geometry against `HostPageSize::query()`
+   > at construction and refuses loudly** — a startup fault, in the same spirit as `query()`'s
+   > own power-of-two assert, never a silent round. Say it this way rather than widening the
+   > newtype's claim: "no literal reaches the alignment path" is true of the raw crate and
+   > false of the core, and a rule quoted one crate beyond where it holds is how an untrue
+   > invariant gets believed.
+   >
+   > The same seam appears on the `Vmm` port: `map_read_native`'s `write_trap` sub-range is
+   > rounded to whole **host** pages by the backend, so a caller that reasons in 4 KiB gets
+   > more pages trapped than it asked for on arm64 (correct, quietly slower). That rustdoc
+   > now says so.
 2. **★ Geometry as pure functions of the page size.** Every derived quantity —
    round-up/round-down, window granularity, arena alignment, the double-mmap slice bounds,
    the memslot geometry — lives in a `geometry` submodule that performs **no syscalls** and
@@ -788,9 +841,53 @@ eliminate it.
 
 ## 6. Decision 11 — the real `Vmm`
 
+### 6.0 ★★ The portability contract — a founding requirement that was written down nowhere
+
+**The finding that produced this section is structural rather than technical.** The word
+*"agnostic"* appears **zero times** in this document and zero times in `l1_concurrency.md`.
+Hypervisor-agnosticism is a founding requirement of the `Vmm` port — the architecture doc's
+§4.1 says it in as many words (*"count is not the invariant; hypervisor-agnosticism is"*) —
+and below that one line it is restated in no normative text, guarded by no gate, and tested
+by nothing. A requirement in that state does not survive its first adapter; it decays one
+identifier at a time, and the decay is only visible when someone attempts the second one.
+
+**The contract, stated normatively so it can be cited:**
+
+> **A second hypervisor backend costs exactly one adapter crate: no trait change, no core
+> change.** The core and the L1 shell name hypervisor **capabilities**; only an adapter
+> names a hypervisor's **API**.
+
+**What holds it — three mechanisms, in descending strength:**
+
+1. **★ A CI gate, in the shape of the hexagonal one (decision #39).** The 11 pure crates
+   **plus `kayfabe-rt`** are grepped for hypervisor API vocabulary:
+   `BQL_LOCK_GUARD`, `bql_lock`, `qemu_mutex_lock_iothread`, `MemoryRegion`,
+   `memory_region_`, `QEMUBH`/`qemu_bh`/`aio_bh`, `qdev_`, `VMStateDescription`, `iothread`,
+   and the two English idioms *"bottom half"* and *"main loop"*.
+   ★ **It matches API identifiers, never the vendor's name** — so naming the adapter crates
+   (`kayfabe-vmm-qemu`, `kayfabe-vmm-ch`), citing a QEMU source file, or writing "QEMU's is
+   the whole-machine one" all stay writable. That is what makes it an **allowlist-free**
+   gate, and a gate with an allowlist is a gate with a negotiation. Same exit-code polarity
+   caveat as its two siblings (`grep` exits 0 on a hit; a hit is the failure).
+   *`kayfabe-rt` is in scope even though it is outside the hexagonal list*: it is an adapter
+   for threads and locks, not for a hypervisor, and the `&self`-plus-ranked-locks shape it
+   encodes is exactly what a second backend must be able to reuse.
+2. **The trait names capabilities.** Where a capability genuinely *is* backend-conditional,
+   the trait says so per item rather than pretending uniformity — `IrqSpec::IntxLevel` is
+   the only such item today, and its rustdoc names the refusal.
+3. **The class rule of §6.3**, which is the sharpest instance and gets its own section: a
+   foreign lock is a *class*, not one hypervisor's mechanism.
+
+**What this is NOT.** It is not a claim that a CH port is free — it is a claim about *where*
+the cost lands. The audit that produced this section dry-ran the gate over the tree and
+found exactly **two** violations, both prose in `kayfabe-vmm`'s own rustdoc, both one-word
+rewordings. That is the whole point of landing it now: at zero adapters the gate is a
+rewording, at two adapters it is a migration.
+
 ### 6.1 ★ The classification: which capability groups may be called under a lock
 
-The `Vmm` trait's eight capability groups are not one kind of thing. Some are memcpys into
+The `Vmm` trait's capability groups (eight when this table was written; **seven** since §6.8
+struck the memory-lock pair) are not one kind of thing. Some are memcpys into
 memory we already mapped; some are syscalls that take the kernel's memslot machinery and,
 in QEMU, a global lock. **The trait does not say which, and that is the gap.** It must:
 
@@ -804,7 +901,7 @@ in QEMU, a global lock. **The trait does not say which, and that is the gap.** I
 | `map_read_native` | as above | **NO** |
 | `set_trap` | as above | **NO** |
 | `export_ram` | memfd + mmap syscalls | **NO** |
-| `lock_region` / `unlock_region` | memslot revoke / userfaultfd | **NO** |
+| ~~`lock_region` / `unlock_region`~~ | ~~memslot revoke / userfaultfd~~ | **removed from the trait — §6.8** |
 
 This table becomes rustdoc on every method and, more importantly, becomes an **assert**:
 the real `Vmm` impl calls `assert_lock_free` at the top of every "NO" row, using the same
@@ -864,7 +961,49 @@ a design task. If it is built the obvious way first, the retrofit touches the co
 the lock discipline, and the R5 re-validation sites simultaneously: the shape this project
 keeps refusing.
 
-### 6.3 ★★ The BQL contract — a lock we do not own, an inversion R3 cannot see
+### 6.3 ★★ The foreign-lock contract — a lock we do not own, an inversion R3 cannot see
+
+> **★ Restated as a CLASS by the portability round (§14.4). What follows below was written
+> against QEMU's mechanism; everything it says is retained, and it now sits underneath the
+> portable rule rather than standing in for it.**
+>
+> ## **No lock the VMM owns — one we neither construct nor rank — may be acquired beneath one of our locks; and our entry paths may arrive with one already held.**
+>
+> **The instances, named, so the class is not abstract:**
+>
+> | Backend | The foreign lock | Granularity | Held across |
+> |---|---|---|---|
+> | QEMU | the **BQL** (big QEMU lock) | **whole machine** | trap dispatch, and the serialized-executor context |
+> | cloud-hypervisor | the **per-device `Mutex`** from the `impl<B: BusDevice> BusDeviceSync for Mutex<B>` blanket impl (`vm-device/src/bus.rs:41`) | **one device** | the **entire** MMIO callback — and it *panics* on poisoning |
+>
+> **Why the class matters more than either instance — the concrete cost of having written
+> the mechanism.** The rule as originally phrased — *"nothing beneath one of our locks may
+> take the BQL"* — is **vacuously true on cloud-hypervisor**, which has no BQL. Read
+> literally it says a CH adapter is unconditionally compliant, while saying nothing about
+> the lock CH actually imposes. Same hazard, different granularity, invisible to the rule
+> that was supposed to cover it. That is the general failure mode of writing a mechanism
+> where an invariant belongs, and it is worth noticing that the wrong version was *careful*
+> and correctly scoped to L2: care does not substitute for generality.
+>
+> **★ The CH adapter's escape, recorded now because it is free and will not be obvious
+> later.** CH's foreign lock is imposed by the *blanket impl*, not by the bus: a device
+> registered as `Mutex<B>` is exclusively locked for its whole callback. So —
+>
+> > **Do not register through the `Mutex<B>` blanket impl.** Implement `BusDeviceSync`
+> > **directly** on a thin wrapper over `kayfabe_rt::SharedDevice`, which is already
+> > `Send + Sync`, exposes `&self` methods, and does its own ranked locking.
+>
+> Under that shape **CH imposes zero foreign locks**: every lock on the path is one we
+> constructed and ranked, so R3 sees all of them and the inversion below cannot be
+> constructed at all. Worth stating explicitly that this is the *unusual* path —
+> `PvmemcontrolBusDevice` is the only in-tree device that implements `BusDeviceSync`
+> directly — i.e. it is supported but off the ergonomic road, and the ergonomic road is the
+> one that silently reintroduces a foreign lock. Naming it before someone reaches for
+> `Mutex<Device>` costs one paragraph; discovering it costs an adapter rewrite.
+>
+> This is also why `Device` takes **`&self`** (see the trait's own rustdoc and §14.4 item 2):
+> a `&mut self` port would have forced a CH adapter through a whole-device `Mutex` anyway,
+> reintroducing by our own hand exactly the lock this escape avoids.
 
 This started as a note about `raise_irq`. It is a whole-surface **correctness** contract, and
 it is elevated here because it is one of the few problems in this milestone that
@@ -894,7 +1033,9 @@ involved. R3 is a complete discipline over the locks it can see and is *blind by
 to this one. That is not a gap to be closed by a better assert; it is the boundary of what the
 mechanism is.
 
-**The contract, as a normative rule over the whole `Vmm` surface:**
+**The contract, as a normative rule over the whole `Vmm` surface** (the class rule above,
+instantiated for QEMU — the same sentence holds with "CH's per-device `Mutex`" substituted,
+and holds *emptily* if the adapter takes the direct-`BusDeviceSync` escape):
 
 > **Nothing beneath one of our locks may take the BQL.** Every `Vmm` method classified
 > **in-lock legal** in §6.1 MUST be implementable as a primitive that cannot reach VMM-global
@@ -935,9 +1076,31 @@ than an exception list.
    rule — but it says nothing about the inversion, which happens with the BQL held.
 
 **★ And the finding this contract exposes: in QEMU we are GIVEN the BQL, so "lock-free" is
-not enough.** Both of our entry paths arrive with the BQL already held — a trapped MMIO
-access (QEMU re-takes the BQL after `KVM_RUN` returns, before dispatch) and a bottom half
-(the main-loop context runs under it). Consequences the doc does not currently state:
+not enough.**
+
+> **★★ EVERYTHING IN THIS SUBSECTION IS QEMU-CONDITIONAL** (tagged by the portability round,
+> §14.4 item 3). Every claim below — that our entry paths arrive with a machine-global lock
+> held, that a verb round-trip stalls **every vCPU**, and that I-NOAMP *cannot* be met on the
+> trap path without `memory_region_clear_global_locking()` — is **true for QEMU and false for
+> cloud-hypervisor**, where MMIO dispatch is a synchronous `VmOps` call **on the vCPU thread**
+> with no VM-wide lock. On CH the entry path holds at most the per-device lock of the class
+> table above, and nothing at all under the direct-`BusDeviceSync` escape. Do not read the
+> conclusions here as properties of "a VMM"; read them as properties of *this* VMM, which is
+> exactly what §6.0's gate exists to keep visible.
+>
+> **★ And CH has an affordance aimed at precisely this problem, which QEMU lacks.**
+> `BusDevice::write` returns `Option<Arc<Barrier>>`, and the vCPU blocks on `barrier.wait()`
+> **after the device lock has been released** (`vmm/src/vm.rs:491-495`). That is a clean
+> primitive for parking *one* vCPU across an isolate round-trip **with no lock of anyone's
+> held** — the thing §7.1's backpressure argument wants to be true and which, under a held
+> BQL, is not. It is recorded here rather than designed against, because no adapter exists
+> yet; but it is the strongest single reason to expect the CH answer to this problem to be
+> structurally better than the QEMU one, and it is worth knowing before the first adapter
+> chooses its shape.
+
+Both of our entry paths arrive with the BQL already held — a trapped MMIO
+access (QEMU re-takes the BQL after `KVM_RUN` returns, before dispatch) and a main-loop
+bottom half (that context runs under it). Consequences the doc does not currently state:
 
 - **A verb round-trip issued from either context stalls every vCPU in the VM, with every lock
   of ours correctly dropped.** §7.1 of `l1_concurrency.md` says the calling thread does the
@@ -1169,6 +1332,7 @@ allocator inside it is `GpaArena`, and `GpaArena::alloc`/`free` must never touch
    sharing the window. **`lock_region`/`unlock_region` are userfaultfd-on-the-window,
    per-page; the memslot alternative is struck.** That resolves decision #6's remaining
    ambiguity in the only direction I-NOAMP permits.
+   ★ **And striking the alternative moved the capability off the trait entirely — §6.8.**
 
 **★ The correction to §6.2, stated plainly because it is load-bearing.** §6.2 says:
 *"The moment that publication must become guest-visible, it needs a memslot installed — a
@@ -1304,6 +1468,60 @@ slowly" but "does not grow at all once the windows are installed".
 *What the measurement did **not** supply, so `ARENA_LEN` stays unpinned:* the distribution of
 per-proc peak GPA footprint, and any multi-process arena-churn rate. Those remain the open
 inputs to the window-vs-arena boundary.
+
+### 6.8 ★★ `lock_region`/`unlock_region` leave the trait — a capability wearing a port's clothes
+
+**The chain that removes them is entirely §6.7's, one step further.** §6.7 item 5 struck the
+memslot implementation of decision #6, which leaves exactly one implementation:
+**userfaultfd**. And the region it must be registered on is **our own `mmap`** — the window
+`kayfabe-linux-raw` reserves and places backings inside (§4.4). `UFFDIO_REGISTER` on a VMA in
+our own address space needs **no cooperation from the hypervisor on either backend**.
+
+So the method fails the only test that decides trait membership:
+
+> **A `Vmm` method must name something only the VMM can do.** `lock_region` names something
+> *we* do, to memory *we* own, with a syscall *we* make.
+
+Leaving it on the trait has a concrete price rather than a stylistic one: **every adapter
+would have to contain the identical userfaultfd code**, and the second one would either
+duplicate it or reach across into the first — which is the exact failure mode §6.0's contract
+exists to prevent, arriving from the inside rather than from vocabulary drift.
+
+**A second, independent defect at the same seam, and it is the decisive one.** The signature
+is **slot-granular** — `lock_region(&mut self, slot: SlotId, on_fault: CoreEventKind)` — while
+§6.7 requires **per-page** locking inside a *shared* window. The method as declared therefore
+**cannot express what the design now demands**: the only thing it can say is "lock this whole
+window", which is precisely the device-wide, every-proc revocation §6.7 item 5 struck. This is
+why the choice is not between "move it" and "keep it with a page-range parameter": a corrected
+signature would be a `kayfabe-linux-raw` call spelled through a hypervisor port, i.e. the same
+mistake with better arguments.
+
+**Decision.** ★ **Remove both methods from `Vmm`.** The trait drops from eight capability
+groups to seven; arch §4.1's own *"count is not the invariant; hypervisor-agnosticism is"* is
+the licence, and this is the first time it has been drawn on. The capability is documented as
+`kayfabe-linux-raw`'s remit (the crate does not exist yet, so this is a trait **removal** plus
+a design note, not a move of code).
+
+**What deliberately stays on the `Vmm` seam, and why the split is exactly here:**
+
+| Kept | Removed |
+|---|---|
+| `CoreEvent::LockedRegionFault { slot, gpa }` — the fault **delivery** | `Vmm::lock_region` — the arming |
+| `CoreEventKind::RegionFault` — the tag a deferred re-entry carries | `Vmm::unlock_region` — the release |
+
+The delivery stays because the core must observe the fault **on the same serialized executor
+as every other event** — that is a property of the core's entry discipline, not of
+userfaultfd, and it would be identical if the mechanism changed again. `slot` keeps naming the
+containing **window**, never the granularity; `gpa` names the faulting page. Both rustdocs now
+say so, so the per-page/per-window distinction is not re-lost.
+
+**What this costs in tests:** `MockVmm` loses two method impls and `SlotRecord::locked` (which
+nothing asserted on — the capability had **zero core call sites**, which is also why this was
+free today and would not have been after L2 wired one).
+
+**Residual, stated:** the uffd design itself — registration mode, the fault-handler thread's
+placement, and its interaction with the `assert_lock_free` witness — is **not** designed here.
+It belongs with `kayfabe-linux-raw`, and this section's only claim is where it belongs.
 
 ---
 
@@ -1960,7 +2178,7 @@ Stated so we never claim more than we verify:
 | a real 16/64 KiB host page size works | forced runs test our geometry, not the kernel | run the suite on Grace-Hopper / Jetson (§5.3) |
 | memslot/BQL interaction | `MockVmm` has neither | the QEMU adapter at L2, under the nested-virt bench |
 | descriptor exhaustion under a real `RLIMIT` | mock descriptors are integers | arm past the cap on a real host; assert contained refusal |
-| **★ the trap path really runs without the BQL** (§6.3) | `MockVmm` has no BQL and the harness owns its own threads | at L2: assert `memory_region_clear_global_locking()` exists on the target QEMU and is applied to our BAR regions; then measure whether a parked verb on one vCPU blocks another vCPU's unrelated MMIO. **If it does, that is an L2 blocker, not a tuning item** |
+| **★★ the trap path holds NO FOREIGN LOCK** (§6.3's class rule — stated backend-independently, because the QEMU answer must never be mistaken for the general one) | `MockVmm` owns no lock we did not construct, and the harness owns its own threads — so *no* mock can distinguish "we hold none" from "this backend imposes none" | measure it the same way on either backend: park a verb on one vCPU and assert another vCPU's unrelated MMIO still completes. **Two expected outcomes, and they differ:** **QEMU — conditional pass:** requires `memory_region_clear_global_locking()` to exist on the target version and to be applied to our BAR regions (an API-availability *check*, not an assumption). If it is unavailable, the drop-the-lock rule is necessary but not sufficient and I-NOAMP cannot be met on the trap path — **an L2 blocker, not a tuning item**. **CH — unconditional pass expected:** MMIO dispatch is a synchronous `VmOps` call on the vCPU thread with no VM-wide lock, and with the direct-`BusDeviceSync` registration (§6.3) not even a per-device one. A CH failure here would mean the escape was not taken |
 | **★ the real memslot cost and update rate** (§6.7) | mock `map_guest` is a `BTreeMap` insert | measure `KVM_SET_USER_MEMORY_REGION` latency vs vCPU count, and count updates provoked by a real workload. Tunes the §6.7 constants; the mock-side *frequency* gate already pins the shape |
 | the guest driver really frees its client root on process death | the mock guest is a script | a real guest process killed mid-op; assert full reclamation |
 | tearing on GPU-written pages | no hardware writer | high-rate semaphore observation under real load |
@@ -1981,7 +2199,7 @@ Extending `l1_concurrency.md` §9's normative table; each becomes a rustdoc head
 | `HostPageSize` | `Copy + Send + Sync` | geometry + the syscall layer | constructible only by `query()` (or a test-gated `forced`); every geometry function takes it as a parameter |
 | isolate relay thread | n/a (process boundary) | nobody | blocks in a wait; **never polls**; writes counters only; dies with its process |
 | **memory plane (§6.6/§6.7)** | n/a — no thread of its own | the thread serving the guest's request; the **executor** for work with no caller | guest-requested ops execute on the calling thread with **every lock of ours dropped**; there is no memory-plane thread and no queue. Coarse tier (memslot) at window/arena-grant frequency only; fine tier (`MAP_FIXED` placement) per publish. **Neither is in-lock legal** |
-| **the VMM's global lock (BQL)** | not ours | QEMU takes it *before* entering us, on both entry paths | **nothing beneath one of our locks may take it.** Rank −1: entered, never acquired. In-lock-legal `Vmm` methods must be implementable without reaching VMM-global API; the adapter has exactly one BQL acquisition site and it asserts lock-free (§6.3) |
+| **the VMM's own locks — the FOREIGN-LOCK CLASS** | not ours: neither constructed nor rankable | the VMM takes one *before* entering us. QEMU: the whole-machine BQL, on both entry paths. CH: the per-device `Mutex` of the `BusDeviceSync` blanket impl, across the whole MMIO callback — **avoidable**, by registering a direct `BusDeviceSync` impl over `SharedDevice` (§6.3) | **no lock the VMM owns may be acquired beneath one of ours, and our entry paths may arrive with one already held.** Rank −1: entered, never acquired. In-lock-legal `Vmm` methods must be implementable without reaching VMM-global API; the adapter has **exactly one** VMM-global-lock acquisition site and it asserts lock-free (§6.3) |
 
 ---
 
@@ -2049,7 +2267,8 @@ Plus the `HostLedger` itself (§7.8) and `MockIsolate::request_cancel`.
 | **`unsafe` file naming (gate C, §4.1.1)** | push | `unsafe` appears in a file not named `*_unsafe.rs` — or a host pointer type (`*mut`/`*const`/`NonNull`/`transmute`) appears outside one |
 | `unsafe` ratchet | push | the block count (**per `*_unsafe.rs` file**) exceeds the committed number |
 | **memslot frequency (§6.7)** | push | the mean run's slot-install count grows with publications rather than with arena grants — a per-object memslot, caught structurally and without a clock |
-| **single BQL acquisition site (§6.3)** | push (L2) | the adapter contains more than one `bql_lock`/`qemu_mutex_lock_iothread`/`BQL_LOCK_GUARD` site, or that site does not `assert_lock_free` |
+| **★ VMM vocabulary (§6.0, decision #39)** | push | hypervisor **API** vocabulary (`BQL_LOCK_GUARD`, `memory_region_*`, `qdev_*`, `QEMUBH`, "bottom half", "main loop", …) appears in the 11 pure crates **or `kayfabe-rt`**. Matches identifiers, never the vendor's name, so adapter-crate names never trip it and no allowlist exists |
+| **single VMM-global-lock acquisition site (§6.3)** | push (L2) | the adapter contains more than one acquisition site for **the foreign lock of its backend** — QEMU: `bql_lock`/`qemu_mutex_lock_iothread`/`BQL_LOCK_GUARD`; CH: any `Mutex<Device>`-shaped registration that reintroduces the per-device lock the direct-`BusDeviceSync` escape removes — or that site does not `assert_lock_free`. **Zero sites is a pass**, and is the expected CH result |
 | narrow page-size grep | push | a bare `4096`/`0x1000`/`>>12` in the raw or rt crates |
 | page-size axis | push | the geometry suite fails at 16 KiB or 64 KiB |
 | forced-page-size integration | nightly | the shell suite fails at 64 KiB |
@@ -2172,6 +2391,11 @@ when L1 is."* They are being written now. So the review is part of M2-f's gate.
    own proc's GPA arena; exporting everything should require saying so, loudly, in one
    reviewed place. One-line ABI change, real security value, and only cheap *now* — after
    L2 it is a migration.
+   ★ **And its unstated precondition, now stated (§4.4.1):** an export is only possible at
+   all if the VM was **launched** with a shareable memory backing (`--memory shared=on` /
+   `memory-backend-*,share=on`). Identical on both backends, catchable by no code gate, and
+   load-bearing for the entire double-mmap design — so the review must confirm the adapter
+   **refuses loudly at the first export** rather than discovering it at first guest DMA.
 3. **Write protection.** Pages an isolate only reads are mapped read-only in the isolate.
 4. **Descriptor hygiene.** `O_CLOEXEC` everywhere; the shared memory object sealed against
    shrink/grow (an unsealed shrink under the isolate's feet is a `SIGBUS` on access — a
@@ -2244,14 +2468,18 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     `HostPageSize` with no literal constructor + pure geometry + runs at 4/16/64 KiB, with a
     narrow grep as backstop. *Cost: every geometry function grows a parameter.* **Residual:
     the forced runs test our arithmetic, not a real kernel.**
-12. **The `Vmm`'s eight capability groups are classified in-lock-legal vs not, normatively
+12. **The `Vmm`'s capability groups are classified in-lock-legal vs not, normatively
     and by assert (§6.1)** — the trait currently does not distinguish a memcpy from a
     memslot syscall.
 13. **★★ The `Vmm` memory plane is built in plan/execute/commit from the first line
     (§6.2)** — the alternative reproduces exactly the violation stage 3 spent a milestone
     removing from the verb path.
 14. **`raise_irq` is contractually irqfd-shaped; no VMM-global API under our locks (§6.3)** —
-    the BQL inversion is unrankable and therefore must be designed out, not detected.
+    the foreign-lock inversion is unrankable and therefore must be designed out, not
+    detected. ★ **Generalised by the portability round (§14.4) from QEMU's BQL to the
+    CLASS** — *any* lock the VMM owns, which we neither construct nor rank. QEMU's is
+    whole-machine; CH's is a per-device `Mutex` held across the whole MMIO callback, and is
+    avoidable outright.
 15. **`defer` shares one pure `DeferQueue` with `MockVmm` (§6.4)** — "matches the mock"
     becomes a tautology instead of a claim.
 16. **The completion delivery tail runs lock-free, protected by the drain gate (§6.5)** —
@@ -2315,7 +2543,12 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     makes the audit finite; containment to named files makes it enumerable by `ls` and visible
     in a diff's filenames. CI gate C; the ratchet becomes per-file. Costs nothing, because
     §4.7 and §5.2 already required the same layering for other reasons.
-35. **★★ Nothing beneath one of our locks may take the BQL (§6.3)** — extended from
+35. **★★ Nothing beneath one of our locks may take the BQL (§6.3)** — ★ **superseded in
+    scope by decision #40 (§14.4): the rule is now the CLASS — no lock the VMM owns.**
+    QEMU's BQL is one instance; CH's per-device `Mutex` is another, at a different
+    granularity, and the BQL-shaped phrasing was **vacuously true** on it. Everything below
+    is retained as the QEMU instantiation, and its last paragraph in particular is
+    **QEMU-conditional**: extended from
     `raise_irq` to the whole `Vmm` surface, because the BQL is unrankable (it is QEMU's) and
     R3 is blind to it **by construction**, not by omission. Enforcement is honest and layered:
     classification-plus-assert (indirect), one grep-gated BQL acquisition site that can carry
@@ -2351,6 +2584,41 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     and its cost model does not. Pinned by a mock-only, clock-free frequency gate; the bench
     measurement tunes `ARENA_LEN`, `WINDOW_LEN`, `ARENA_RETENTION` and the window-vs-arena
     boundary, and can move the design only *between two allowed points*.
+
+**★ Portability round, 2026-07-26 (owner-directed) — see §14.4.**
+
+38. **★★ Hypervisor-agnosticism is a contract with a gate, not a sentence in the arch doc
+    (§6.0)** — *"a second backend costs exactly one adapter crate: no trait change, no core
+    change."* The tell that it had gone unwritten is structural: "agnostic" appeared **zero**
+    times in this doc and in `l1_concurrency.md`. *(Numbering note: this is §12's local ledger;
+    the repo-wide CI-gate number for the grep below is #39.)*
+39. **★ A VMM-vocabulary CI gate over the 11 pure crates plus `kayfabe-rt` (§6.0/§9.3)** —
+    the hexagonal gate's sibling for the other portability axis. **Gates API identifiers, not
+    the vendor's name**, so adapter-crate names never trip it and **no allowlist is ever
+    needed**. Dry-run at introduction: exactly two violations, both prose in `kayfabe-vmm`'s
+    own rustdoc, both one-word rewordings — which is the argument for landing it at zero
+    adapters rather than at two.
+40. **★★ The foreign-lock rule is a CLASS, not QEMU's mechanism (§6.3)** — *no lock the VMM
+    owns, which we neither construct nor rank, may be acquired beneath one of ours; and our
+    entry paths may arrive with one already held.* The BQL-shaped phrasing was **vacuously
+    true on CH**, whose `impl<B: BusDevice> BusDeviceSync for Mutex<B>` blanket impl holds a
+    per-device `Mutex` across the entire MMIO callback (and panics on poisoning). **The escape
+    is recorded now because it will not be obvious later:** implement `BusDeviceSync`
+    *directly* on a wrapper over `kayfabe_rt::SharedDevice` — then CH imposes **zero** foreign
+    locks. Supersedes #35's scope; #35's QEMU-only findings are tagged as such.
+41. **★★ `lock_region`/`unlock_region` leave the `Vmm` trait (§6.8)** — with §6.7 item 5
+    striking the memslot alternative, the only implementation is userfaultfd **on our own
+    window VMA**, which needs no VMM cooperation on either backend; and the declared
+    signature is slot-granular where the design requires **per page**, so it cannot express
+    what it is for. Seven capability groups, not eight. Fault *delivery*
+    (`CoreEvent::LockedRegionFault`) stays — that is the core's entry discipline, not
+    userfaultfd. Zero core call sites today; a migration once L2 wires one.
+42. **★ `Device` takes `&self`, and is `Send + Sync` (`kayfabe-vmm` rustdoc, §6.3)** —
+    `&mut self` forces whole-device exclusivity per trapped access and makes the core's
+    per-`Proc` sharding unreachable *through the declared port*, while
+    `kayfabe_rt::SharedDevice` already offers the opposite. The backend that pays is the one
+    with the **better** concurrency story (a `&self` bus callback), not the one that
+    serializes everything anyway. Zero implementors today; free now, a signature break later.
 
 **Genuinely open:**
 
@@ -2446,7 +2714,12 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     *implementations* cannot reach VMM-global API — a requirement on the adapter, not a
     property of the trait — and the `map_guest` row silently covers two operations with
     different costs and frequencies.
-11. **★ "No blocking call under ANY lock" (R1) is not sufficient in QEMU** (§6.3). Both of
+11. **★ "No blocking call under ANY lock" (R1) is not sufficient in QEMU** (§6.3).
+    ★★ **QEMU-CONDITIONAL — tagged by the portability round (§14.4). True on QEMU, FALSE on
+    cloud-hypervisor**, where MMIO dispatch is a synchronous `VmOps` call on the vCPU thread
+    with no VM-wide lock; the worst CH imposes is a per-device `Mutex`, and the direct-
+    `BusDeviceSync` registration removes even that. Read the following as a property of one
+    backend, never of "a VMM". On QEMU: both of
     our entry paths arrive with the BQL held, so a verb round-trip with all of *our* locks
     correctly dropped still stalls every vCPU in the VM. `l1_concurrency.md` §7.1's
     backpressure argument — *"the caller blocks, the guest's RPC stalls, the guest slows
@@ -2454,6 +2727,12 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     that stalls, it is the machine. The argument is *sound for the L1 harness and for a
     BQL-free trap path*, which is exactly why the adapter obligation must be written down
     rather than assumed. Proposed as amendment 6 to `l1_concurrency.md` (§15).
+    ★ **And CH has an affordance aimed at this exact problem that QEMU lacks:**
+    `BusDevice::write -> Option<Arc<Barrier>>`, with the vCPU blocking on `barrier.wait()`
+    **after the device lock is released** (`vmm/src/vm.rs:491-495`) — a clean way to park one
+    vCPU across an isolate round-trip with no lock of anyone's held. So the honest form of
+    this item is not "the design has a problem" but "**this problem is one backend's, and the
+    other backend ships a primitive for it**".
 12. **★ §6.1's `lock_region` docs treat "userfaultfd / memslot revoke-restore" as
     interchangeable.** They are not, once I-NOAMP is named: memslot revoke of a shared window
     is a device-wide two-grace-period DELETE that revokes access for every proc sharing the
@@ -2571,7 +2850,7 @@ Where a directive *contradicted* existing text, the contradiction is recorded in
 | # | Directive | Landed in | Ledger |
 |---|---|---|---|
 | A1 | The `Vmm`/raw seam exposes **bounded objects, never raw pointers** — because guest-address out-of-range is a fault while host-address out-of-range is a VM escape, and because holding a raw pointer is unsafe *even in safe code* | §4.2.1, §4.6 rows 7–10, §11 item 12 | #33 |
-| A2 | The **BQL contract**: nothing beneath one of our locks may take the BQL; R3 cannot see it, so say honestly what does | §6.3 | #35 |
+| A2 | The **BQL contract**: nothing beneath one of our locks may take the BQL; R3 cannot see it, so say honestly what does. ★ **Generalised to the foreign-lock CLASS by the §14.4 round (#40); the assertions it makes about held locks and stalled vCPUs are QEMU-conditional** | §6.3 | #35 → #40 |
 | A3 | Guest-requested memory ops: **drop-the-lock on the calling thread**, no memory-plane thread; background work on the **executor**; name the **I-NOAMP** invariant and its honest baseline | §6.6 | #36 |
 | A4 | **Memslot strategy: coarse regions with an allocator inside**, never per-object; write it so measurement tunes constants, not shape | §6.7, §9.3, §11 item 11 | #37 |
 | A5 | `unsafe` lives only in `*_unsafe.rs`, so an auditor can enumerate the unsafe surface by `ls` | §4.1.1, gate C | #34 |
@@ -2610,6 +2889,15 @@ confirm or refute rather than rediscover:
 3. **I-NOAMP will fail its first honest measurement**, and the cause will be the BQL rather
    than anything in our lock discipline. §6.3 predicts this; the value of predicting it is
    that the fix is then an adapter change rather than a redesign of §3.
+   ★★ **BACKEND-CONDITIONAL (amended by §14.4).** This prediction is about **QEMU**, and it
+   should not be scored against the design as a whole. On cloud-hypervisor there is no
+   VM-wide lock on the MMIO path at all, so the same measurement is expected to **pass
+   unconditionally** — and if it does not, the cause is that the adapter registered through
+   the `Mutex<B>` blanket impl rather than implementing `BusDeviceSync` directly (§6.3).
+   Stated this way the prediction becomes falsifiable per backend instead of globally, which
+   is the only form in which it can teach anything: *"I-NOAMP fails, therefore the lock
+   discipline is wrong"* would be the wrong inference on either backend, and on CH it would
+   also be the wrong diagnosis.
 
 ### 14.3 ★★ Bench round, 2026-07-26 — the memslot measurement landed, and two cited C comments were false
 
@@ -2637,6 +2925,89 @@ strong prior — repeatedly the strongest available — but §0.2's discipline w
 rather than guess", and that is one notch weaker than it reads: **citing a comment is still
 citing a belief.** Where a claim is load-bearing for a mechanism (a reset trigger, a quiesce
 edge), the standard is a *behavioural* check, and §0.2 now says so.
+
+### 14.4 ★★ Portability round, 2026-07-26 — the second-backend audit, acted on while it was free
+
+**Provenance.** Like §14.2 these are **owner directives**, not build findings, arriving from
+a portability audit against **cloud-hypervisor** as the hypothetical second backend. §14's
+rule ("nothing here is ever a plan") is therefore bent the same way and for the same reason,
+and it is logged rather than folded in silently so a reader can tell directed text from
+argued text.
+
+**The audit's headline is a negative result and deserves to be recorded as one:** the
+boundary **holds**. A CH port costs one adapter crate; **no trait change and no core change
+is required** by anything the audit found. Everything below is a sharpening, not a repair —
+and every item is cheap *only* because `Device` has **zero** implementors, `Vmm` has **one**
+(`MockVmm`), and the first real `Vmm` is scheduled against the KVM-direct harness rather than
+a hypervisor. All seven land against an empty adapter layer.
+
+| # | Directive | Landed in | Ledger |
+|---|---|---|---|
+| P1 | A **VMM-vocabulary CI gate** over the 11 pure crates + `kayfabe-rt`, on API identifiers rather than the vendor's name | §6.0, §9.3, `ci.yml` | #38/#39 |
+| P2 | The two QEMU-isms it catches, reworded ("QEMU's BQL" → "a whole-device lock"; "bottom-half equivalent" → "the adapter's serialized executor") | `kayfabe-vmm` rustdoc | — |
+| P3 | **Generalise the foreign-lock rule from a mechanism to a CLASS**; name QEMU's and CH's instances; record CH's escape | §6.3, §8, §9.3 | #40 |
+| P4 | Tag the "every vCPU stalls" finding **QEMU-conditional**; record CH's `Barrier` affordance; one §7.9 row, stated backend-independently, with **two** expected outcomes | §6.3, §7.9, §13 item 11, §14.2 item 3, §15 amendment 6 | #40 |
+| P5 | `lock_region`/`unlock_region` **leave the trait** — a `kayfabe-linux-raw` capability wearing a `Vmm` method's clothes | §6.1, §6.8 | #41 |
+| P6 | `Device` takes **`&self`** (+ `Send + Sync`), reconciling the port with `SharedDevice` | `kayfabe-vmm` rustdoc | #42 |
+| P7 | `write_trap` granularity is the **host page size**; the typed page-size rule **stops at the adapter**; `IrqSpec::IntxLevel` is backend-conditional; `export_ram` presumes a **shareable launch backing** | §5.2, §4.4.1, §11 item 2, `kayfabe-vmm` rustdoc | — |
+
+**★ The most valuable thing in the round, and it is a method rather than an item.** P3's
+defect was not that §6.3 was *wrong* — it was careful, correctly L2-scoped, and every
+sentence in it is true. It was that it stated a **mechanism** where an **invariant** belonged,
+and the cost showed up immediately: on CH the rule is **vacuously satisfied** while CH's
+actual foreign lock goes unmentioned. A rule that is vacuously true on a backend is worse than
+no rule, because it reports compliance. That is worth generalising *as a habit*: when a rule
+names a vendor's noun, ask what class the noun belongs to and whether the class is what we
+meant. §6.0's gate is the same move applied to vocabulary.
+
+**★ Where the round disagreed with the audit, recorded because a negative also counts.**
+
+- **The "agnostic appears zero times" tell survives a challenge, and it is worth knowing
+  why.** A naive `grep -ci agnostic` over the two L1 docs returns **4**, not 0 — because
+  "di**agnostic**" contains it. Word-boundary matching (`grep -ciwE`) returns **0** in both,
+  confirming the audit. Recorded because the *next* person to check will run the naive grep
+  and conclude the finding was wrong. (`tests/Cargo.toml`'s package description does say
+  "VMM-agnostic conformance suite" — one mention, in metadata, which is not where a
+  normative requirement can live.)
+- **P5 was offered as "move it, or give it a page-range parameter".** The second option is
+  rejected outright rather than merely not-chosen: a page-ranged `lock_region` would be a
+  correctly-typed `kayfabe-linux-raw` call spelled through a hypervisor port — the same
+  category error with better arguments. §6.8 states it that way.
+- **P6's `Send + Sync` supertrait is this round's addition, not the audit's.** The audit asked
+  only for `&self`. `&self` alone leaves a `dyn Device` unregisterable in a `Sync` device bus
+  without the *use site* restating the bound, which is exactly the kind of re-derivation an
+  adapter should not have to do; and "entered concurrently from several vCPU threads" *is*
+  `Sync`. It is compile-time asserted (`assert_send_sync!(dyn Device)`) so it cannot be
+  dropped silently.
+
+**★ One finding from actually landing the gate, which is §14's own currency.** The first run
+failed on **the gate's own documentation**: `kayfabe-vmm`'s crate docs enumerated the pattern
+list while explaining it, and the list is (necessarily) made of the very identifiers it
+forbids. This is where the sibling analogy breaks: the unsafe-surface gate is
+**writable-by-construction about itself** (`grep -w` makes the lint name `unsafe_code` and the
+suffix `_unsafe.rs` unmatchable), and **no such trick exists here** — nothing distinguishes
+citing `BQL_LOCK_GUARD` from using it. The fix taken is the one that keeps the no-allowlist
+property: **the pattern has exactly two homes, `ci.yml` and §6.0, and both are outside the
+gate's scope.** Recorded because the alternative — a first allowlist entry, for the docs, on
+day one — is exactly how a gate stops being mechanical, and because it means "reword it" is
+occasionally "move it", which the error text should not be trusted to convey on its own.
+
+**What this round owes the build** — recorded in §14's spirit, i.e. so the log can refute it:
+
+1. **The VMM gate will need one more pattern, and the addition will be a finding.** The
+   current pattern is derived from *QEMU's* API. When the CH adapter lands, the equivalent
+   leak (a `vm-device` type name, a `MutexGuard<Device>` shape) will not match it, and the
+   gate will read green while the same decay happens from the other side. The honest answer
+   then is a second pattern group, not a broader regex — a regex broad enough to catch both
+   would start matching ordinary English.
+2. **The `&self` `Device` will meet a core path that genuinely wants `&mut`,** most likely
+   in the register/GSP model that has not ported yet, and the temptation will be to put a
+   `RefCell` behind it. That is `&mut self` with extra steps and a runtime panic; the answer
+   is `SharedDevice`'s ranked locks, which is why the implementor is the shell and not `Gpu`.
+3. **§7.9's new row will be the first row anyone tries to "simplify" to one outcome,**
+   because two expected outcomes in one cell reads like indecision. It is the opposite: the
+   moment it collapses to the QEMU answer, the QEMU answer becomes the general one again,
+   which is the precise failure P3 was raised to fix.
 
 ---
 
@@ -2680,6 +3051,14 @@ current normative text would send an implementer somewhere wrong.
    (§7.6 T3 here.)
 
 6. **★ §7.1 and §3.3 R1 — "the caller blocks" is not the whole truth under a foreign VMM.**
+   ★★ *Amended by §14.4 before it was ever applied: the amendment must be written as a
+   **backend-conditional qualifier**, not as a flat correction. The failure it describes is
+   QEMU's; on cloud-hypervisor §7.1's sentence is true as originally written (synchronous
+   `VmOps` on the vCPU thread, no VM-wide lock), and CH additionally offers
+   `BusDevice::write -> Option<Arc<Barrier>>` for parking one vCPU with no lock held. So the
+   text to land is "true here, false there, and here is the adapter obligation on the side
+   where it is false" — a flat "this is false" would replace one over-general claim with
+   another.*
    §7.1's backpressure argument (*"the caller blocks (lock-free), the guest's RPC stalls, the
    guest slows down"*) and R1's "no blocking call under ANY lock" are both sound **for the L1
    harness and for a BQL-free trap path**, and both are silently false in QEMU as it dispatches
