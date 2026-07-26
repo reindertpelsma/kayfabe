@@ -42,6 +42,57 @@
 //! additionally *balance*; where it is not (a condemned owner, whose isolate is gone),
 //! the honest assertion is that the only unreleased objects are that isolate's own —
 //! namespace death is a real disposition, and a different one from a leak.
+//!
+//! ## ★★ Section 5 — the reference that OUTLIVES its owner (`l1_concurrency.md` §12.33)
+//!
+//! Sections 1–4 all ask the *refusal* question: may one component reach another's host
+//! objects? (No.) Section 5 asks the **survival** question, which is the other half and
+//! was untested: when a kernel client holds a `DUP_OBJECT` of a user process's resource
+//! and that process is killed, does the resource stay alive, stay *usable*, and
+//! eventually get freed?
+//!
+//! It is the genuine cross-`Proc` reference, and after §12.27 it is the ONLY one: two
+//! *user* clients that share are, by the grouping rule, **the same `Proc`** — user↔user
+//! cross-proc sharing does not exist by construction. Kernel↔user does, because a dup
+//! into a kernel client is a *reference*, never a merge.
+//!
+//! Grounding, so this models RM rather than us:
+//!
+//! - RM keeps a dup'd object alive by refcount — `memCopyConstruct_IMPL` does
+//!   `pHwResource->refCount++` / `memdescAddRef` / `DupCount++`
+//!   (`ogkm: src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`), and
+//!   `clientFreeResource_IMPL` therefore destroys nothing while an alias remains.
+//! - A kernel reference **can** outlive the owning process: `uvm_va_space` is bound to
+//!   the *file*, not the process (`ogkm: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`),
+//!   and `UVM_INIT_FLAGS_MULTI_PROCESS_SHARING_MODE` says resources are freed "when the
+//!   last reference to the file is dropped rather than when this process exits"
+//!   (`ogkm: kernel-open/nvidia-uvm/uvm.h:160-167`).
+//!
+//! Our model matches **because** attribution is by **origin** (`project.rs`: "a user
+//! object dup'd into the UVM session stays in the USER component") and every runtime
+//! component — isolate, arena, host VAS — is derived from *live* resources. So the
+//! surviving dup keeps the owner's boundary alive, and the *last* reference going is
+//! what retires the proc.
+//!
+//! ### ★ What section 5 FOUND (see `l1_concurrency.md` §12.33)
+//!
+//! "It stays alive" and "it is eventually freed" are different claims, and they do not
+//! both hold:
+//!
+//! - **Alive and usable: yes**, and at *object granularity*. The dup'd VASpace survives
+//!   and accepts new host work; the owner's channels — which nothing dup'd — are
+//!   reclaimed **per object**, children before parents, on the owner's own isolate. That
+//!   split is RM's refcount made executable.
+//! - **Freed at refcount 0: NO — not per object.** The last reference dropping retires
+//!   the owner inside the same `Gpu::apply`, and `Spine::refresh` step 3 removes a
+//!   vanished component's `Proc` *without* a `sync_proc_to_boundary`, so
+//!   `stage_dropped_vases` never even queues its host objects. No `Free` verb is ever
+//!   issued for them; their disposition is §7.0 namespace death at the reap. Unlike the
+//!   ordinary teardown (where the adapter can reclaim off core state before the guest's
+//!   own root-free — see [`the_ledger_balances_across_every_teardown_ordering`]), here
+//!   the retiring free arrives through a **foreign client**, so no pre-reclaim window
+//!   exists at all. [`the_last_reference_dropping_retires_the_owner_but_frees_nothing_per_object`]
+//!   asserts that truth rather than the claim we wanted.
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
@@ -1025,4 +1076,625 @@ fn the_ledger_balances_across_every_teardown_ordering() {
             l.leaked_count()
         );
     }
+}
+
+// =================================================================================
+// 5 — ★★ THE KERNEL REFERENCE THAT OUTLIVES ITS OWNER
+//     (`l1_concurrency.md` §12.33; the survival half of §12.26/§12.27)
+// =================================================================================
+
+/// ★ THE one UVM session client, as measured (§12.27: `GSPALLOC hClient=0xc1d00069
+/// processID=0xffffffff`). One per `nvidia_uvm` module load; every guest process dups
+/// into it, and it is always the *destination*, never the source.
+const UVM: HClient = HClient(0xc1d0_0069);
+/// UVM's own device handle.
+const UVM_DEV: HObject = HObject(0x9000_0001);
+/// UVM's own VASpace handle (the session client allocates address spaces of its own).
+const UVM_VAS: HObject = HObject(0x9000_0010);
+/// UVM's PDB — its own, distinct from every guest process's.
+const UVM_PDB: Pdb = Pdb(0x2efa_6c000);
+/// The handle UVM's `DUP_OBJECT` of the owner's VASpace lands on, in UVM's namespace.
+const UVM_ALIAS: HObject = HObject(0x9000_00a7);
+/// A third guest VA, published *after* the owner is dead — the "still usable" probe.
+const VA3: GpuVa = GpuVa(0x2_0040_0000);
+
+/// One guest compute process (`OWNER`) whose VASpace the **kernel/UVM session client**
+/// has dup'd — the only cross-`Proc` reference §12.27 leaves in existence.
+///
+/// Deliberately built with [`Scenario::uvm_dup`] and not [`Scenario::peer_dup`]: the
+/// destination's declared [`kayfabe_arch::ClientKind`] is the *entire* difference
+/// between a reference and a merge (§12.27), and a `peer_dup` here would produce one
+/// `Proc` and test nothing.
+fn uvm_referenced_gpu() -> (Gpu, ProcId, SharedRecorder) {
+    let (factory, recorder) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
+    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+
+    let mut s = Scenario::new();
+    let owner_vas = s.compute_process_on_gpu(
+        OWNER,
+        OWNER_PDB,
+        identical_handles(OWNER_GR.0, OWNER_CE.0),
+        None,
+    );
+    s.memory(OWNER, HObject(0x5c00_0001), MEM, 0x9_0000_0000);
+    s.uvm_dup(
+        UVM,
+        HObject(UVM.0),
+        UVM_DEV,
+        UVM_VAS,
+        UVM_PDB,
+        UVM_ALIAS,
+        owner_vas,
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("scenario applies");
+    }
+    let owner = gpu.spine.by_pdb[&(GPU, OWNER_PDB)];
+    (gpu, owner, recorder)
+}
+
+/// The guest kernel frees the dead process's client root — the clean kill (T2's path).
+fn free_owner_root(gpu: &mut Gpu) {
+    gpu.apply(RmEvent::Free {
+        client: OWNER,
+        handle: identical_handles(OWNER_GR.0, OWNER_CE.0).client_root,
+    })
+    .expect("the owner's client root frees");
+}
+
+/// Run T0's opportunistic drain for `(pid, GPU)` — the raw-`Gpu` stand-in for the L1
+/// shell's `SharedDevice::drain_pending_releases`. Returns how many host objects +
+/// mappings were disposed of. Panics if any residue survives the attempt, because a
+/// residue here would be a *different* finding wearing this one's clothes.
+fn drain_pending(gpu: &mut Gpu, pid: ProcId) -> usize {
+    let proc = gpu.procs.get_mut(&pid).expect("a live proc");
+    let (worker, orphans) = kayfabe_fwd::checkout_and_drain(proc, GPU).expect("live, materialized");
+    let n = orphans.free.len() + orphans.unmap.len();
+    let mut worker = worker.expect("a free worker");
+    let residue = kayfabe_fwd::dispose_on(&mut worker, orphans);
+    assert_eq!(
+        residue,
+        Orphans::default(),
+        "the drain disposed of everything it queued"
+    );
+    kayfabe_fwd::checkin(proc, GPU, worker);
+    n
+}
+
+/// Every `Free` the OWNER's isolate issued, in order — the exact-verb half of the
+/// reclamation claims below (`frees` is device-wide; this is per-namespace and ordered,
+/// because "children before parents" is itself an assertion).
+fn frees_on_owner(rec: &SharedRecorder, owner: ProcId) -> Vec<HostHandle> {
+    frees(rec)
+        .into_iter()
+        .filter(|&(iso, _)| iso == IsolateId(owner.0))
+        .map(|(_, h)| h)
+        .collect()
+}
+
+/// ★★ **Steps 1–4: a kernel dup keeps its owner's object alive AND USABLE after the
+/// owning guest process is cleanly killed** — and the half nothing referenced is
+/// reclaimed per object, in RM's order, right then.
+///
+/// The existing `rmgraph_order_independence.rs` sibling proves the object is still
+/// *present*. Present is not the claim that matters: a reference RM keeps alive is one
+/// UVM will keep *using* (`uvm_va_space` outlives the process because it hangs off the
+/// file — `ogkm: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`). So this test
+/// **exercises** it: after the owner is dead it publishes a brand-new range through the
+/// surviving VASpace and asserts the resulting host verbs really ran, on the owner's own
+/// still-live isolate, into the owner's original host VAS.
+///
+/// The four things it pins, in order:
+///
+/// 1. the reference is genuinely cross-`Proc` — the kernel client is the **system**
+///    component's (§12.27) with its own isolate, and the backing is minted in the
+///    OWNER's namespace ([`HostHandle::isolate`]);
+/// 2. the owner is killed the clean way (its client root freed);
+/// 3. the owner's `Proc`, isolate, arena and `by_pdb` route all survive it — because
+///    attribution is by **origin** and the dup'd resource is still live
+///    (`ogkm: .../mem_mgr/mem.c:1027-1031`);
+/// 4. ★ the surviving reference is **usable**: a fresh `publish_backing` succeeds, and
+///    ★ the *unreferenced* half — the owner's channels, which nothing dup'd — is freed
+///    **per object**, engine object before channel, so the exec plane now faults with
+///    the exact [`FwdFault::UnknownVchid`]. That split is the refcount, executable.
+#[test]
+fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_is_killed() {
+    let _wd = watchdog("kernel_ref_usable", Duration::from_secs(60));
+    let (mut gpu, owner, rec) = uvm_referenced_gpu();
+
+    // ---- 1. The reference is cross-`Proc`, and the backing is the OWNER's. ----
+    assert!(
+        gpu.system.clients.contains(&UVM),
+        "★ the UVM session client is the SYSTEM component's — a dup INTO a kernel \
+         client is a reference, never a merge (§12.27)"
+    );
+    assert!(
+        !gpu.procs[&owner].clients.contains(&UVM),
+        "…so it is emphatically not part of the owner's `Proc`: this is a genuine \
+         cross-`Proc` reference and not a relabelled intra-proc one"
+    );
+    assert_eq!(
+        gpu.system.isolate(GPU).expect("system isolate").id(),
+        SYSTEM_ISOLATE,
+        "the referencing side runs in its own isolate namespace",
+    );
+
+    // A full workload, so BOTH planes are host-materialized before the owner dies.
+    kayfabe_fwd::publish_backing(
+        gpu.procs.get_mut(&owner).expect("owner"),
+        GPU,
+        OWNER_PDB,
+        VA,
+        0x1000,
+    )
+    .expect("the owner publishes");
+    kayfabe_fwd::publish_backing(
+        gpu.procs.get_mut(&owner).expect("owner"),
+        GPU,
+        OWNER_PDB,
+        VA2,
+        0x1000,
+    )
+    .expect("the owner publishes a second range");
+    kayfabe_fwd::handle_doorbell(&mut gpu, GPU, MockArch::token_for(OWNER_GR), &[VA])
+        .expect("the owner rings its GR channel");
+    kayfabe_fwd::forward_engine_object(
+        &mut gpu,
+        GPU,
+        OWNER_GR,
+        kayfabe_mocks::mock_classes::COMPUTE,
+        &[],
+    )
+    .expect("the owner forwards a compute object");
+
+    let backing = backing_of(&gpu, owner, OWNER_PDB, VA);
+    let host_vas = gpu.procs[&owner].vases[&(GPU, OWNER_PDB)]
+        .host_vas
+        .expect("the owner's Vas materialized its host VAS");
+    let arena = gpu.procs[&owner].arenas[&GPU].range.clone();
+    let owner_iso = gpu.procs[&owner].isolates[&GPU].id();
+    assert_eq!(
+        backing.isolate(),
+        owner_iso,
+        "the backing is minted in the OWNER's RM client namespace, and says so"
+    );
+    // The host objects the channels own — the half NOTHING references.
+    let (host_chan, host_engine) = {
+        let ch = gpu.procs[&owner]
+            .channels
+            .values()
+            .find(|c| c.vchid == OWNER_GR)
+            .expect("the GR channel materialized");
+        (
+            ch.host_channel.expect("host channel"),
+            *ch.host_engine_objects
+                .values()
+                .next()
+                .expect("the forwarded compute object"),
+        )
+    };
+    assert!(
+        frees_on_owner(&rec, owner).is_empty(),
+        "precondition: nothing has been freed yet"
+    );
+
+    // ---- 2. The guest process is killed, cleanly. ----
+    free_owner_root(&mut gpu);
+
+    // ---- 3. …and its `Proc` survives, whole. ----
+    assert!(
+        gpu.procs.contains_key(&owner),
+        "★ the owning `Proc` must NOT retire while a kernel dup still references a \
+         resource it allocated — that retire reclaims host memory RM says is live \
+         (`ogkm: .../mem_mgr/mem.c:1027-1031`)",
+    );
+    assert_eq!(
+        gpu.procs[&owner].isolates[&GPU].id(),
+        owner_iso,
+        "same isolate"
+    );
+    assert_eq!(
+        gpu.procs[&owner].arenas[&GPU].range, arena,
+        "same GPA arena"
+    );
+    assert_eq!(
+        gpu.spine.by_pdb.get(&(GPU, OWNER_PDB)),
+        Some(&owner),
+        "the dup-kept VASpace still routes to its ALLOCATOR's proc, not to the \
+         referencer's — attribution is by origin",
+    );
+    assert!(
+        !gpu.procs[&owner].is_retired(),
+        "and it is live, not a retired husk still sitting in the map"
+    );
+
+    // ---- 4a. The unreferenced half is reclaimed PER OBJECT, children first. ----
+    assert!(
+        gpu.procs[&owner].channels.is_empty(),
+        "the owner's channels hung off its client root and nothing dup'd them, so RM's \
+         refcount does not keep them: they are gone"
+    );
+    assert_eq!(
+        gpu.procs[&owner].pending_release_len(),
+        2,
+        "…and T0/G2 staged their host objects for release rather than dropping the \
+         handles on the floor (`l1_os_shell.md` §7.6)"
+    );
+    assert_eq!(drain_pending(&mut gpu, owner), 2, "the drain took both");
+    assert_eq!(
+        frees_on_owner(&rec, owner),
+        vec![host_engine, host_chan],
+        "★ the exact `Free` verbs reached the backend, engine object BEFORE channel — \
+         RM frees children ahead of parents (`ogkm: .../resserv/src/rs_server.c:963-981`)",
+    );
+
+    // The exec plane is genuinely gone, and says which key missed.
+    assert_eq!(
+        kayfabe_fwd::handle_doorbell(&mut gpu, GPU, MockArch::token_for(OWNER_GR), &[VA]),
+        Err(FwdFault::UnknownVchid {
+            gpu: GPU,
+            vchid: OWNER_GR
+        }),
+        "a channel the reference does not cover is unreachable — MISS=FAULT, named",
+    );
+
+    // ---- 4b. ★ The referenced half is not merely present: it is USABLE. ----
+    let (binding, _off) = kayfabe_fwd::resolve(&gpu, GPU, OWNER_PDB, VA)
+        .expect("the published range still resolves through the surviving VASpace");
+    assert_eq!(
+        binding.host.expect("still published").memory,
+        backing,
+        "the published host backing survived the guest client's free"
+    );
+
+    let before = rec.lock().expect("recorder").log.len();
+    let fresh = kayfabe_fwd::publish_backing(
+        gpu.procs.get_mut(&owner).expect("owner"),
+        GPU,
+        OWNER_PDB,
+        VA3,
+        0x1000,
+    )
+    .expect("★ NEW host work through a VASpace whose allocating process is DEAD");
+    let after: Vec<(IsolateId, RmVerb)> = rec.lock().expect("recorder").log[before..].to_vec();
+    let fresh_mem = backing_of(&gpu, owner, OWNER_PDB, VA3);
+    assert_eq!(
+        after,
+        vec![
+            (
+                owner_iso,
+                RmVerb::AllocSysmem {
+                    handle: fresh_mem,
+                    len: 0x1000
+                }
+            ),
+            (
+                owner_iso,
+                RmVerb::MapGpuVa {
+                    vas: host_vas,
+                    memory: fresh_mem,
+                    len: 0x1000,
+                    va: fresh.host_va
+                }
+            ),
+        ],
+        "★★ the surviving reference is EXERCISED, not inspected: the fresh range's \
+         host verbs really ran, on the OWNER's still-live isolate, into the OWNER's \
+         original host VAS — which is what `uvm_va_space` outliving its process means \
+         (`ogkm: .../uvm_va_space_mm.c:75-81`)",
+    );
+    assert_ne!(
+        fresh_mem, backing,
+        "a genuinely new object, not a re-report of the old one"
+    );
+
+    let l = ledger(&rec);
+    assert_eq!(
+        (
+            l.double_free.as_slice(),
+            l.free_of_unknown.as_slice(),
+            l.unmap_of_unknown.as_slice()
+        ),
+        (&[][..], &[][..], &[][..]),
+        "nothing was released twice and nothing was reached across a namespace",
+    );
+}
+
+/// ★★ **Step 5, and the finding: the last reference dropping retires the owner — and
+/// frees NOTHING per object** (`l1_concurrency.md` §12.33).
+///
+/// The claim we wanted to make was "refcount 0 ⇒ the `Free` verb for that exact
+/// [`HostHandle`] reaches the backend, and the ledger balances at quiesce". It does not
+/// hold, and the reason is structural rather than incidental:
+///
+/// - `Spine::refresh` step 3 retires a proc whose component vanished by
+///   `procs.remove(id)` + `Proc::retire()` — **without** a `sync_proc_to_boundary`, so
+///   `stage_dropped_vases` never runs and the host VAS / sysmem objects are not even
+///   *queued* for release. The core keeps no record of them from that moment on.
+/// - Even if they were queued, a retired isolate refuses every verb, disposal included
+///   (`t0_subset_free.rs::a_retired_procs_queue_is_left_to_the_session_death_backstop`),
+///   and the reap runs under the device write lock where R1 forbids one.
+/// - And unlike the ordinary teardown — where
+///   [`the_ledger_balances_across_every_teardown_ordering`] reclaims off core state and
+///   *then* applies the guest's own client-root free — the retiring free here arrives
+///   through a **foreign client** (UVM's), inside a single `Gpu::apply`. There is no
+///   window, at any layer, in which anything can still name those handles.
+///
+/// So the disposition of record is §7.0's: the isolate is a host process, the reap drops
+/// it, and its death frees the whole client tree. That is a real disposition and not a
+/// leak — but it is a *different* one from per-object reclaim, and this test says which,
+/// exactly, so that no later change can quietly assume the other.
+///
+/// What IS conserved, and asserted: nothing double-freed, nothing reached across a
+/// namespace, no orphaned GPA, and the arena back in its window.
+#[test]
+fn the_last_reference_dropping_retires_the_owner_but_frees_nothing_per_object() {
+    let _wd = watchdog("last_reference_drops", Duration::from_secs(60));
+    let (mut gpu, owner, rec) = uvm_referenced_gpu();
+    let owner_iso = IsolateId(owner.0);
+
+    kayfabe_fwd::publish_backing(
+        gpu.procs.get_mut(&owner).expect("owner"),
+        GPU,
+        OWNER_PDB,
+        VA,
+        0x1000,
+    )
+    .expect("the owner publishes");
+    kayfabe_fwd::handle_doorbell(&mut gpu, GPU, MockArch::token_for(OWNER_GR), &[VA])
+        .expect("the owner rings");
+    let backing = backing_of(&gpu, owner, OWNER_PDB, VA);
+    let host_vas = gpu.procs[&owner].vases[&(GPU, OWNER_PDB)]
+        .host_vas
+        .expect("host VAS");
+    let arena = gpu.procs[&owner].arenas[&GPU].range.clone();
+
+    // The owner dies; the kernel reference keeps its `Proc` alive (previous test), and
+    // the channel half is reclaimed per object at the drain.
+    free_owner_root(&mut gpu);
+    let reclaimed_with_owner = drain_pending(&mut gpu, owner);
+    assert_eq!(
+        reclaimed_with_owner, 1,
+        "the GR channel's host object was freed at the owner's death (no engine object \
+         was forwarded here, so it is the only one)"
+    );
+    let freed_before = frees_on_owner(&rec, owner);
+    assert!(
+        !freed_before.contains(&backing) && !freed_before.contains(&host_vas),
+        "★ and NOT the dup-referenced half — freeing that would be the C's 2026-06-18 \
+         bug, a backing yanked out from under a live kernel reference: {freed_before:?}",
+    );
+
+    // ---- The LAST reference goes: UVM releases its dup (`FreeDupedHandle` at
+    // `uvm_va_space_destroy`). Refcount 0. ----
+    gpu.apply(RmEvent::Free {
+        client: UVM,
+        handle: UVM_ALIAS,
+    })
+    .expect("the session frees its dup");
+
+    assert!(
+        !gpu.procs.contains_key(&owner),
+        "the LAST reference going is what retires the proc"
+    );
+    assert_eq!(gpu.retired_len(), 1, "retired, awaiting the quiesce point");
+    assert_eq!(
+        kayfabe_fwd::route_pdb(&gpu.spine, GPU, OWNER_PDB),
+        Err(FwdFault::UnknownPdb {
+            gpu: GPU,
+            pdb: OWNER_PDB
+        }),
+        "and its address plane is unroutable — MISS=FAULT, named. `UnknownPdb` and not \
+         `Condemned`, deliberately: this proc left through `Spine::refresh` step 3 (its \
+         component vanished), which files no condemned entry. A clean death is not a \
+         condemnation, and the two must not report as each other (§12.13).",
+    );
+
+    let reaped = gpu.reap_retired();
+    assert_eq!(
+        reaped.len(),
+        1,
+        "exactly one proc reaped — no phantom churn"
+    );
+    assert!(
+        reaped.orphaned().is_empty(),
+        "★ the GPA half IS conserved: the arena routed home to its own window, never \
+         dropped (§12.19 G7)"
+    );
+    drop(reaped);
+
+    // ---- ★ THE FINDING. ----
+    assert_eq!(
+        frees_on_owner(&rec, owner),
+        freed_before,
+        "★★ NOT ONE further `Free` verb reached the backend. Refcount 0 retires the \
+         proc; it does not free its objects. See this test's doc comment for why the \
+         window does not exist — and `l1_concurrency.md` §12.33.",
+    );
+
+    let l = ledger(&rec);
+    assert_eq!(
+        l.leaked_on(owner_iso),
+        std::collections::BTreeSet::from([host_vas, backing]),
+        "★ the residue is EXACTLY the dup-referenced half — the host VAS and the \
+         backing — and the test names it rather than pretending it was reclaimed. Its \
+         disposition is §7.0 namespace death: the reap dropped the isolate, and a real \
+         one's death closes its fds and frees RM's whole client tree.",
+    );
+    assert_eq!(
+        l.leaked_maps
+            .get(&owner_iso)
+            .map(std::collections::BTreeSet::len),
+        Some(1),
+        "…and that backing's one GPU mapping goes with it",
+    );
+    assert_eq!(
+        (
+            l.double_free.as_slice(),
+            l.free_of_unknown.as_slice(),
+            l.unmap_of_unknown.as_slice()
+        ),
+        (&[][..], &[][..], &[][..]),
+        "no double-free, and no isolate ever reached across a namespace — the two \
+         failure modes that WOULD be bugs rather than dispositions",
+    );
+    assert!(
+        !l.is_balanced(),
+        "stated once more, unambiguously: it does not balance"
+    );
+
+    // The arena really did return: a fresh process gets the range back (#80's class).
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(
+        OTHER,
+        OTHER_PDB,
+        identical_handles(OTHER_GR.0, OTHER_CE.0),
+        None,
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("a fresh process starts");
+    }
+    let next = gpu.spine.by_pdb[&(GPU, OTHER_PDB)];
+    assert_eq!(
+        gpu.procs[&next].arenas[&GPU].range, arena,
+        "the reaped arena was recycled to the very next process — GPA is conserved even \
+         where per-object host reclaim is not",
+    );
+}
+
+/// ★★ **The violent kill: a CONDEMNED owner is not kept usable by its kernel
+/// reference — and does not take the kernel session down with it.**
+///
+/// The clean kill and the condemnation are different paths and must be tested as such.
+/// A condemnation is an out-of-band isolate-worker death (§12.13): the owner's RM client
+/// namespace is *gone*, so "the reference keeps it alive" is exactly the claim that must
+/// NOT hold — there is nothing left to keep. Answering it any other way would be the
+/// resurrect the §12.17 no-resurrect rule refuses.
+///
+/// Four halves, because three of them are what make it a lifetime proof:
+///
+/// 1. the component is condemned even though a live kernel reference exists;
+/// 2. every use of it faults with the exact [`FwdFault::Condemned`], naming the anchor —
+///    not a generic miss, and emphatically not a success;
+/// 3. ★ the **UVM session client is NOT condemned** and the system proc keeps serving:
+///    one dead guest process must never take down the session every *other* guest
+///    process shares (the §12.26 device-fatal argument, from the other side);
+/// 4. ★ condemnation clears only when the guest frees the **owner's** client root —
+///    freeing the referencer's dup does not clear it — which is the documented recovery
+///    (§12.17) and the reason a condemned entry is bounded rather than permanent.
+#[test]
+fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
+    let _wd = watchdog("condemned_owner_kernel_ref", Duration::from_secs(60));
+    let (mut gpu, owner, rec) = uvm_referenced_gpu();
+    let owner_iso = IsolateId(owner.0);
+
+    kayfabe_fwd::publish_backing(
+        gpu.procs.get_mut(&owner).expect("owner"),
+        GPU,
+        OWNER_PDB,
+        VA,
+        0x1000,
+    )
+    .expect("the owner publishes");
+    let backing = backing_of(&gpu, owner, OWNER_PDB, VA);
+    let host_vas = gpu.procs[&owner].vases[&(GPU, OWNER_PDB)]
+        .host_vas
+        .expect("host VAS");
+
+    // ---- 1. Out-of-band worker death: the component is condemned. ----
+    assert!(
+        gpu.spine.retire_proc(&mut gpu.procs, owner),
+        "the owner was live when its worker died"
+    );
+    assert_eq!(gpu.spine.condemned_len(), 1, "one condemned component");
+    assert!(
+        gpu.spine.is_condemned(OWNER),
+        "…and it is the owner's, despite the live kernel reference"
+    );
+
+    // ---- 2. Every use faults, with the exact variant. ----
+    assert_eq!(
+        kayfabe_fwd::route_pdb(&gpu.spine, GPU, OWNER_PDB),
+        Err(FwdFault::Condemned {
+            anchor: ProcAnchor(OWNER)
+        }),
+        "★ a dup does not resurrect a dead namespace: the reference outlives the \
+         process, never the isolate that held the objects (§12.17)",
+    );
+    assert_eq!(
+        kayfabe_fwd::resolve(&gpu, GPU, OWNER_PDB, VA).map(|_| ()),
+        Err(FwdFault::Condemned {
+            anchor: ProcAnchor(OWNER)
+        }),
+        "the data plane says the same thing as the routing plane",
+    );
+
+    // ---- 3. The kernel session is untouched and still serving. ----
+    // Asserted BEFORE the reap on purpose: the claim is about what condemnation did,
+    // and a bite that mis-groups the session must be caught by *this* assertion rather
+    // than by some later count that happens to shift with it.
+    assert!(
+        !gpu.spine.is_condemned(UVM),
+        "★★ the UVM session client is NOT dragged into the condemnation — it is the \
+         system component's, and it is shared by every OTHER guest process",
+    );
+    assert!(
+        gpu.system.clients.contains(&UVM),
+        "…and it is still a member of the live system component"
+    );
+    assert!(
+        gpu.system
+            .isolate(GPU)
+            .expect("the system isolate survives")
+            .idle_workers()
+            > 0,
+        "the system proc keeps serving",
+    );
+    assert_eq!(
+        gpu.reap_retired().len(),
+        1,
+        "exactly ONE corpse reaps — the owner's. The session was never a corpse.",
+    );
+
+    // ---- 4. Recovery: the OWNER's root-free clears it; the referencer's does not. ----
+    gpu.apply(RmEvent::Free {
+        client: UVM,
+        handle: UVM_ALIAS,
+    })
+    .expect("the session releases its dup");
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        1,
+        "★ releasing the REFERENCE does not clear the condemnation — the entry is keyed \
+         on the dead component's clients, and OWNER has not been freed",
+    );
+    assert!(gpu.spine.is_condemned(OWNER));
+
+    free_owner_root(&mut gpu);
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        0,
+        "★ …and the guest freeing the DEAD client's root is what clears it — the \
+         documented recovery (§12.17), which is why condemnation is bounded",
+    );
+    assert!(
+        gpu.procs.is_empty(),
+        "nothing was resurrected on the way out"
+    );
+
+    // The ledger: namespace death is the disposition, and nothing worse happened.
+    let l = ledger(&rec);
+    assert_eq!(
+        l.leaked_on(owner_iso),
+        std::collections::BTreeSet::from([host_vas, backing]),
+        "the condemned isolate's own objects are the §7.0 residue — that is namespace \
+         death, stated rather than papered over",
+    );
+    assert_eq!(
+        l.leaked_on(SYSTEM_ISOLATE),
+        std::collections::BTreeSet::new(),
+        "and the referencing isolate owns nothing at all: the system proc has no data \
+         plane, so a reference can never make it the owner of host memory",
+    );
 }

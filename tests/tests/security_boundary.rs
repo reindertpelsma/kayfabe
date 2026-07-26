@@ -20,7 +20,7 @@
 //! ## ⚠ Explicitly OUT OF SCOPE here (honestly deferred to L1, decisions #16/#16b)
 //!
 //! **Pointer-bounds / host-memory OOB is NOT a core concern and is NOT faked here.**
-//! The pure core has NO host memory, NO raw pointers, and NO `unsafe` — the entire
+//! The pure core has NO host memory, NO raw pointers, and no `unsafe_code` at all — the
 //! memory-safety *breakout* surface is confined OFF the core to the future L1 VMM
 //! adapter (the hexagonal win). The bounded-memory type, its `trybuild` compile-fail
 //! assertions, and fuzz-the-offsets tests live in that L1 layer and are written WHEN

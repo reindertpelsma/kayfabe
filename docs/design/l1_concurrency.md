@@ -3399,3 +3399,162 @@ and the one disposition T0 deliberately does **not** own (a retired isolate refu
 disposal, so its residue is the session's death).
 
 Suite: **274 → 280**, 0 skipped, 0 ignored; fast path ~22.6 s.
+
+---
+
+### 12.33 ★★ THE CROSS-`Proc` REFERENCE, END TO END — alive and usable: YES. Freed at refcount 0: **NO**
+
+§12.26 answered the *refusal* half of the cross-`Proc` lifetime question (may one component
+reach another's host objects? no, and it is a typed refusal with no timing component).
+§12.27 then established that after the grouping rule, **kernel↔user is the only cross-`Proc`
+reference that exists**: two *user* clients that share are one `Proc` by construction, so the
+UVM session client dup'ing a guest process's VASpace is the whole category.
+
+What was never tested is the *survival* half, and it is two separate claims:
+
+> 1. the object outlives its owning process and stays **usable** through the surviving
+>    reference;
+> 2. the last reference dropping ⇒ refcount 0 ⇒ the object is **actually freed**.
+
+`rmgraph_order_independence.rs::a_kernel_dup_keeps_the_owning_procs_isolate_and_backing_alive_past_the_clients_free`
+proved a weaker thing than it read as: the `Proc` is still *present*, and the proc retires
+when the dup goes. Present is not usable, and retire is not free.
+
+**Grounding.** RM keeps a dup'd object alive by refcount — `memCopyConstruct_IMPL`'s
+`pHwResource->refCount++` / `memdescAddRef` / `DupCount++`
+(`ogkm: src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`) — and a kernel reference genuinely
+can outlive the owning process, because `uvm_va_space` hangs off the **file**, not the
+process (`ogkm: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`), with
+`UVM_INIT_FLAGS_MULTI_PROCESS_SHARING_MODE` stating it outright: resources are freed "when
+the last reference to the file is dropped rather than when this process exits"
+(`ogkm: kernel-open/nvidia-uvm/uvm.h:160-167`).
+
+#### Claim 1 — alive and usable: **YES**, and the split is RM's refcount, executable
+
+`cross_proc_lifetime.rs` section 5 builds the measured shape (one user compute proc; the one
+kernel/UVM session client, which belongs to the **system** component, dup'ing its VASpace),
+runs a full workload on both planes, then kills the owner by freeing its client root. What
+happens is exactly right, at *object* granularity:
+
+| the owner's… | dup'd by the session? | disposition at the owner's death |
+|---|---|---|
+| VASpace (+ its host VAS, its published backings) | **yes** | survives — `Proc`, isolate, arena and `by_pdb` route all intact |
+| GR/CE channels (+ host channel, engine objects) | no | **freed per object**, engine object before channel, on the owner's own isolate |
+
+And the survivor is *exercised*, not inspected: after the owner is dead the test publishes a
+brand-new range through the surviving VASpace and asserts the exact verb pair
+(`AllocSysmem` + `MapGpuVa`) ran **on the owner's still-live isolate, into the owner's
+original host VAS**. The exec plane, meanwhile, faults `FwdFault::UnknownVchid` — the
+channels really are gone. That table *is* `memCopyConstruct_IMPL`'s refcount, and nothing in
+the core was written to produce it: it falls out of attribution-by-origin plus
+components-derived-from-live-resources.
+
+The condemnation path answers the same question the opposite way, correctly: a condemned
+owner is **not** kept usable by its kernel reference (`FwdFault::Condemned`, the §12.17
+no-resurrect rule — a dup outlives the *process*, never the *isolate* that held the objects),
+the UVM session is **not** dragged into the condemnation (it is the system component's, and
+every other guest process shares it), and the entry clears only when the guest frees the
+**owner's** client root — releasing the *reference* does not clear it.
+
+#### Claim 2 — freed at refcount 0: **NO**. Not per object, and there is no window in which it could be
+
+The last reference dropping retires the owner and reaps it. **Not one `Free` verb is ever
+issued for its host VAS or its backings.** Measured: 2 objects + 1 mapping outstanding on the
+owner's isolate, `double_free` / `free_of_unknown` / `unmap_of_unknown` all empty, ledger
+`is_balanced() == false`.
+
+It is structural, not an oversight anyone can patch locally:
+
+- `Spine::refresh` step 3 retires a vanished component with `procs.remove(id)` +
+  `Proc::retire()` and **no `sync_proc_to_boundary`** — so `stage_dropped_vases` never runs
+  and the objects are not even *queued*. From that instant the core cannot name them.
+- Even queued, a retired isolate refuses every verb including the disposal
+  (`t0_subset_free.rs::a_retired_procs_queue_is_left_to_the_session_death_backstop`), and the
+  reap runs under the device write lock where R1 forbids one anyway.
+- **The asymmetry that makes this case special.** On the ordinary teardown the adapter
+  reclaims off core state and *then* applies the guest's own client-root free — that is
+  precisely what `the_ledger_balances_across_every_teardown_ordering` scripts, and why it can
+  assert `is_balanced()`. Here the retiring free arrives through a **foreign client**
+  (UVM's), inside a single `Gpu::apply`. There is no pre-reclaim window at any layer, because
+  the owner's teardown path never watches the client that ends its life.
+
+**Is it a leak? No — it is a different disposition, and the distinction is the finding.** The
+isolate is a host process; the reap drops it and its death closes its descriptors, so RM
+frees the whole client tree (§7.0, the C's #80 backstop). GPA is conserved independently and
+is asserted: the arena routes home and the very next process gets the range back. So nothing
+is lost. What is lost is the *property*: on this one path "refcount 0" and "per-object
+`Free`" are not the same event, and any future code that assumes they are — a reclamation
+ledger, a quota, an accounting hook — will be wrong here first.
+`the_last_reference_dropping_retires_the_owner_but_frees_nothing_per_object` asserts the
+truth rather than the claim we wanted, so that the day someone closes it, a test changes.
+
+If it is ever closed, the shape is visible from here: §12.18 already settles every
+retirement in `plan_refresh` **before** a `Proc` is touched, so a "these procs are about to
+retire" edge exists to hang a pre-retire drain on. Not done — it is a reclamation-design
+decision, not a test's to make.
+
+#### Bite-checks (revert, observe, restore)
+
+| reverted | observed |
+|---|---|
+| `RmGraph::drop_handle`'s refcount (`if res.refs.is_empty() && res.map_refs == 0` → unconditional remove) — i.e. the origin free destroys the resource despite the dup | `a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_is_killed` FAILED at *"★ the owning `Proc` must NOT retire while a kernel dup still references a resource it allocated"* — the **premature free**; and `the_last_reference_dropping…` FAILED at `drain_pending`'s `"a live proc"` because the proc was already gone |
+| `Spine::refresh` step 3's `dead` list (never retire a vanished component) | `the_last_reference_dropping_retires_the_owner_but_frees_nothing_per_object` FAILED at *"the LAST reference going is what retires the proc"* — the **leak**: the proc never retires, so its arena never returns and its isolate never dies |
+| §12.27's grouping rule, both halves (the `is_user && is_user` dup predicate **and** the kernel-client → `SYSTEM_ANCHOR` assignment) — i.e. pre-`062ea67` dup-connected components | `a_condemned_owner_is_not_kept_usable_by_its_kernel_reference` FAILED at *"★★ the UVM session client is NOT dragged into the condemnation"* — one dead guest process takes down the session every other guest process shares |
+
+Suite: **280 → 283**, 0 skipped, 0 ignored; fast path ~23 s.
+
+---
+
+### 12.34 ★ The `*_unsafe.rs` naming rule — a CI gate landed while it is free
+
+The workspace is `unsafe_code = "forbid"` (root `Cargo.toml`, `[workspace.lints.rust]`) and
+stays that way; the lint is what *bans* the escape hatch. The L1 OS adapter
+(`kayfabe-linux-raw`) will eventually need one audited relaxation, and the rule that keeps it
+auditable is a naming one:
+
+> **An auditor must be able to enumerate the entire escape-hatch surface with `ls`.** Every
+> `.rs` file that uses the keyword is named `*_unsafe.rs`.
+
+Landed **now**, with zero such files in the tree, because a convention introduced after the
+first exception exists is one nobody can trust retroactively — and because a gate is cheapest
+to get right when it has nothing to find.
+
+CI step: *Unsafe-surface gate*, same house style as the §6.2 hexagonal boundary grep. Three
+decisions it turns on:
+
+1. **Exit-code polarity.** `grep -l` exits 0 on a HIT, and a hit here is a *violation* — the
+   inverse of the usual reading. The verdict is an `if [ -n "$offenders" ]` over captured
+   output, and the pipeline ends in `|| true`. Verified that the `|| true` is load-bearing:
+   without it, `bash -e` (what Actions runs) aborts the step with exit 1 on the **success**
+   case, because `find -exec grep +` returns 1 for "no matches". A gate that fails when it
+   passes gets deleted within a week.
+2. **Prose counts.** A mention in a comment, doc or string is a violation too — not because a
+   comment is dangerous, but because a gate whose verdict depends on reading intent is one
+   that eventually gets mis-read, and the cost is one-sided: prose can always be reworded, a
+   block cannot.
+3. **The one exception is lexical, not editorial.** `grep -w` counts `_` as a word character,
+   so the lint name `unsafe_code`, the lint `unsafe_op_in_unsafe_fn` and the filename suffix
+   `_unsafe.rs` never match, while the keyword forms and prose forms all do. The rule
+   therefore stays *writable by construction* — say `unsafe_code`, or put it in a
+   `*_unsafe.rs` file — which is why there is no allowlist to negotiate and nothing to argue
+   about in review.
+
+`find` walks the whole repo minus build output rather than a list of known directories: a
+gate that enumerates today's crates stops covering the code the moment someone adds one.
+
+**Verified in both polarities**, and in the exception:
+
+| planted | observed |
+|---|---|
+| nothing (tree as-is) | `GATE PASSED`, exit 0 |
+| `crates/kayfabe-util/src/oops.rs` with a real block | exit **1**, printing the offending path and the two legitimate fixes |
+| the same file renamed `oops_unsafe.rs` | `GATE PASSED`, exit 0 — the exception works |
+| `crates/kayfabe-util/src/prose.rs` containing only a comment mentioning it | exit **1** — prose really does count |
+
+Two pre-existing doc comments were reworded to land it (`kayfabe-core`'s "thread-unsafe
+exceptions" → "thread-hostile exceptions"; `security_boundary.rs`'s "NO `unsafe`" → "no
+`unsafe_code` at all"). Both were *describing the absence* of the thing, which is exactly the
+prose the lexical exception is designed to keep writable — and the reword cost two words.
+The convention is documented in `kayfabe-rt`'s crate docs (the adapter neighbourhood the
+relaxation will land in), cross-referenced from `kayfabe-core`'s thread-safety section where
+`forbid(unsafe_code)` is already argued.

@@ -96,6 +96,64 @@ jobs:
             echo "'completion source'. Reword the comment; never weaken this gate."
             exit 1
           fi
+      # ★ The UNSAFE-SURFACE gate — the auditability rule, landed while it is free.
+      #
+      # The workspace is `unsafe_code = "forbid"` (root `Cargo.toml`,
+      # `[workspace.lints.rust]`), so today this gate has nothing to find. That is
+      # precisely why it lands now: the L1 OS adapter (`kayfabe-linux-raw`) will need
+      # ONE audited relaxation, and a naming convention introduced *after* the first
+      # exception exists is a convention nobody can trust retroactively.
+      #
+      # The rule it enforces, in full: **an auditor must be able to enumerate the
+      # entire unsafe surface with `ls`.** So any `.rs` file that uses the keyword
+      # must be named `*_unsafe.rs`. `#![forbid(unsafe_code)]` stays workspace-wide
+      # and is what actually BANS it; this gate is what makes the eventual exception
+      # findable without reading 50 files.
+      #
+      # Three details decide whether a gate like this is real or decorative:
+      #
+      # 1. **Exit-code polarity.** `grep -l` exits 0 on a HIT — and a hit here is a
+      #    VIOLATION, the inverse of the usual reading. So the verdict is an
+      #    `if [ -n "$offenders" ]` over captured output, and the pipeline that
+      #    produces it ends in `|| true`: without that, `find -exec grep +` returning
+      #    1 for "no matches" (the SUCCESS case) would abort the step under `set -e`
+      #    and the gate would pass by crashing.
+      # 2. **Prose counts.** A mention in a comment, doc or string is a violation
+      #    too. Not because a comment is dangerous, but because a gate whose verdict
+      #    depends on reading intent is one that eventually gets mis-read — and the
+      #    cost is asymmetric: prose can always be reworded, a block cannot.
+      # 3. **The one exception is lexical, not editorial.** `grep -w` counts `_` as a
+      #    word character, so the LINT NAME `unsafe_code`, the lint
+      #    `unsafe_op_in_unsafe_fn`, and the filename suffix `_unsafe.rs` never
+      #    match — while `unsafe {`, `unsafe fn`, `unsafe impl`, `` `unsafe` `` and
+      #    `thread-unsafe` all do. So the rule stays writable *by construction*: say
+      #    `unsafe_code`, or put it in a `*_unsafe.rs` file. No allowlist, no
+      #    per-file judgement, nothing to argue about in review.
+      #
+      # `find` walks the whole repo minus build output, rather than a list of known
+      # directories: a gate that enumerates today's crates stops covering the code
+      # the moment someone adds one.
+      - name: Unsafe-surface gate (every unsafe file is named *_unsafe.rs, so `ls` enumerates it)
+        run: |
+          offenders=$(find . -name '*.rs' -not -name '*_unsafe.rs' \
+                        -not -path './target/*' -not -path './*/target/*' \
+                        -not -path './mutants.out/*' \
+                        -exec grep -lw unsafe {} + || true)
+          if [ -n "$offenders" ]; then
+            echo "$offenders"
+            echo ""
+            echo "★ UNSAFE-SURFACE BREACH — the *_unsafe.rs naming rule."
+            echo "An auditor must be able to enumerate the ENTIRE unsafe surface with"
+            echo "\`ls\`: every .rs file that uses the keyword is named *_unsafe.rs, and"
+            echo "the files above are not. Two legitimate fixes, no third:"
+            echo "  - real unsafe code  -> move it into a *_unsafe.rs module, and"
+            echo "    justify the relaxation there (the workspace lint is 'forbid')."
+            echo "  - a comment or doc  -> reword it. Naming the LINT, \`unsafe_code\`,"
+            echo "    never trips this gate, and neither does the suffix _unsafe.rs."
+            echo "Never widen the pattern and never add an allowlist: the moment this"
+            echo "gate needs a judgement call, \`ls\` stops being the audit."
+            exit 1
+          fi
       - name: Format check (fuzz workspace)
         run: cargo fmt --all --check
         working-directory: fuzz

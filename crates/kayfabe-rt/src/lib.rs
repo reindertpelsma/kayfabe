@@ -26,6 +26,27 @@
 //! `tests/tests/concurrency_stress.rs` documents as convention for the mock
 //! harness — the ranks make it mechanical (§2: "the same discipline … the ranks
 //! make it mechanical").
+//!
+//! ## ★ The `*_unsafe.rs` naming rule (workspace-wide; CI-enforced)
+//!
+//! Stated here because this is the adapter side of the hexagon — when the OS shell
+//! grows real syscalls (`kayfabe-linux-raw`), *this* is the neighbourhood the one
+//! audited relaxation will live in.
+//!
+//! The workspace sets `unsafe_code = "forbid"` (root `Cargo.toml`,
+//! `[workspace.lints.rust]`) and **that does not change**: the lint is what bans the
+//! escape hatch. The naming rule is what makes the eventual *exception* auditable:
+//!
+//! > **An auditor must be able to enumerate the entire escape-hatch surface with
+//! > `ls`.** Every `.rs` file that uses the keyword is named `*_unsafe.rs`.
+//!
+//! CI enforces it (`.github/workflows/ci.yml`, the *Unsafe-surface gate*), and it is
+//! deliberately blunt: a mention in a comment, doc or string trips it too. That is not
+//! pedantry — a gate whose verdict depends on reading intent is one that eventually
+//! gets mis-read, and the cost is one-sided (prose can be reworded; a block cannot).
+//! The gate greps whole words, so naming the **lint** (`unsafe_code`) or the **suffix**
+//! (`_unsafe.rs`) never trips it. Writing about the rule therefore stays possible
+//! without an allowlist — which is exactly why there is no allowlist to negotiate.
 
 pub mod device;
 pub mod executor;

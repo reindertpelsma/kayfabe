@@ -84,7 +84,11 @@
 //!   `cargo check`. The workspace-wide `#![forbid(unsafe_code)]` closes the other
 //!   half: safe Rust is data-race-free by construction, so a safe-code data race
 //!   cannot exist in these crates *at all* — only the shape of the caller's
-//!   synchronization is left to decide, never memory safety.
+//!   synchronization is left to decide, never memory safety. (The lint stays
+//!   workspace-wide forever; the companion **`*_unsafe.rs` naming rule** — CI's
+//!   *Unsafe-surface gate* — is what will make the L1 adapter's one audited
+//!   relaxation enumerable with `ls`. Stated in full in `kayfabe-rt`'s crate docs,
+//!   because that is the neighbourhood it will land in.)
 //! - **No interior mutability, anywhere.** Core state is plain owned data
 //!   (`BTreeMap`/`Vec`/newtypes); there is no `Mutex`, `RefCell`, or atomic in any
 //!   logic crate. **All mutation takes `&mut self`** — the borrow checker forbids
@@ -92,7 +96,7 @@
 //!   a per-`Proc` shard, an actor loop — any strategy is sound because the core
 //!   presumes none). **All reads take `&self`** and are concurrent-safe: any number
 //!   of threads may share `&Gpu` and resolve/route/inspect in parallel, lock-free.
-//! - **No thread-unsafe exceptions exist.** The audit for this milestone found
+//! - **No thread-hostile exceptions exist.** The audit for this milestone found
 //!   none to document: no core type needs `!Sync`. The single *relaxation* is
 //!   `dyn RmBackend` (`Send` but not `Sync` — reachable only through
 //!   `Isolate::rm(&mut self)`, so a shared reference to one is unrepresentable;
