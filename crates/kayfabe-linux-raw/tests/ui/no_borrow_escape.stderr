@@ -1,7 +1,7 @@
 error[E0599]: no method named `as_slice` found for struct `MappedRegion` in the current scope
-  --> tests/ui/no_borrow_escape.rs:12:33
+  --> tests/ui/no_borrow_escape.rs:18:33
    |
-12 |     let _direct: &[u8] = region.as_slice();
+18 |     let _direct: &[u8] = region.as_slice();
    |                                 ^^^^^^^^
    |
 help: there is a method `slice` with a similar name, but with different arguments
@@ -11,31 +11,31 @@ help: there is a method `slice` with a similar name, but with different argument
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0599]: no method named `as_ptr` found for struct `MappedRegion` in the current scope
-  --> tests/ui/no_borrow_escape.rs:13:27
+  --> tests/ui/no_borrow_escape.rs:19:27
    |
-13 |     let _pointer = region.as_ptr();
+19 |     let _pointer = region.as_ptr();
    |                           ^^^^^^ method not found in `MappedRegion`
 
 error[E0614]: type `MappedRegion` cannot be dereferenced
-  --> tests/ui/no_borrow_escape.rs:14:26
+  --> tests/ui/no_borrow_escape.rs:20:26
    |
-14 |     let _deref: &[u8] = &*region;
+20 |     let _deref: &[u8] = &*region;
    |                          ^^^^^^^ can't be dereferenced
 
 error[E0599]: no method named `as_ref` found for struct `MappedRegion` in the current scope
-  --> tests/ui/no_borrow_escape.rs:15:33
+  --> tests/ui/no_borrow_escape.rs:21:33
    |
-15 |     let _as_ref: &[u8] = region.as_ref();
+21 |     let _as_ref: &[u8] = region.as_ref();
    |                                 ^^^^^^ method not found in `MappedRegion`
 
 error[E0608]: cannot index into a value of type `MappedRegion`
-  --> tests/ui/no_borrow_escape.rs:16:26
+  --> tests/ui/no_borrow_escape.rs:22:26
    |
-16 |     let _indexed = region[0];
+22 |     let _indexed = region[0];
    |                          ^^^
 
 error[E0608]: cannot index into a value of type `MappedRegion`
-  --> tests/ui/no_borrow_escape.rs:17:26
+  --> tests/ui/no_borrow_escape.rs:23:26
    |
-17 |     let _sliced = &region[0..4];
+23 |     let _sliced = &region[0..4];
    |                          ^^^^^^

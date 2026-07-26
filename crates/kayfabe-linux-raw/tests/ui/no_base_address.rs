@@ -1,12 +1,18 @@
 // §4.2.1 refusal 3 (§4.6 row 8): a region's or reservation's base address is not readable
 // as an integer. An integer host address is a pointer with the checks filed off, and the
 // safe code that receives one does unchecked address math with a clean conscience.
-use kayfabe_linux_raw::{Backing, HostPageSize, HostProt, MappedRegion, Reservation};
+use kayfabe_linux_raw::{Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, Reservation};
 
 fn main() {
     let page = HostPageSize::query();
     let region =
-        MappedRegion::map(Backing::PrivateAnonymous, page.bytes(), HostProt::ReadWrite, page)
+        MappedRegion::map(
+            Backing::PrivateAnonymous,
+            page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
             .unwrap();
     let reservation = Reservation::new(page.bytes(), page).unwrap();
 

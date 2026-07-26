@@ -4,11 +4,16 @@
 // no non-tearing guarantee, and the width bound is structural rather than documented.
 // (The ALIGNMENT bound is a runtime refusal — `RawError::Misaligned` — because an offset
 // is a value, not a type.)
-use kayfabe_linux_raw::{Backing, HostOffset, HostPageSize, VolatileRegion};
+use kayfabe_linux_raw::{Backing, CachePolicy, HostOffset, HostPageSize, VolatileRegion};
 
 fn main() {
     let page = HostPageSize::query();
-    let region = VolatileRegion::map(Backing::PrivateAnonymous, page.bytes(), page).unwrap();
+    let region = VolatileRegion::map(
+        Backing::PrivateAnonymous,
+        page.bytes(),
+        CachePolicy::WriteBack,
+        page,
+    ).unwrap();
 
     let _wide = region.load_u128(HostOffset::ZERO);
     let mut out = [0u8; 16];

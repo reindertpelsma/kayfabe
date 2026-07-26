@@ -1,0 +1,11 @@
+error[E0277]: the trait bound `CachePolicy: Default` is not satisfied
+  --> tests/ui/cache_policy_has_no_default.rs:12:34
+   |
+12 |     let _implicit: CachePolicy = Default::default();
+   |                                  ^^^^^^^^^^^^^^^^^^ the trait `Default` is not implemented for `CachePolicy`
+
+error[E0599]: no variant, associated function, or constant named `default` found for enum `CachePolicy` in the current scope
+  --> tests/ui/cache_policy_has_no_default.rs:13:43
+   |
+13 |     let _also: CachePolicy = CachePolicy::default();
+   |                                           ^^^^^^^ variant, associated function, or constant not found in `CachePolicy`

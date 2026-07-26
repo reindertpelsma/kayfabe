@@ -144,6 +144,29 @@
 //! semaphore), named at the two seams that need it rather than smeared into every access;
 //! neither seam exists yet, so neither fence is written yet.
 //!
+//! ## ★ Cacheability is a required parameter, and an honest non-mechanism
+//!
+//! Every mapping door takes a [`CachePolicy`], never defaulted and never inferred. The
+//! reason it is a *parameter* and not a property of the region type is that the attribute
+//! belongs to **what the pages are**, not to who writes them: a semaphore in sysmem and a
+//! doorbell in a BAR are both [`VolatileRegion`]s and need different attributes, while
+//! everything backed by a `memfd` needs the same one whichever region type wraps it.
+//!
+//! **What this layer can enforce is one thing only: the refusal.** `mmap` has no
+//! cacheability flag — page-cache memory is write-back and a device mapping gets whatever
+//! the driver's own `mmap` handler chose — so a request for an unattainable attribute is
+//! [`RawError::CachePolicyUnattainable`] rather than a silent write-back mapping. That
+//! silent downgrade is exactly the shape of the C's #111, which cost days.
+//!
+//! The three deciders this crate cannot touch — the EPT/NPT type, the guest PTE, and the
+//! `NV_MEMORY_*` attribute of the RM allocation — are named with their owners in
+//! [`cache`], per variant, along with the observable symptom of each mismatch. Read that
+//! module once before choosing a value; the full research is
+//! `docs/reference/memory_cacheability.md`.
+//!
+//! **It is deliberately not reassuring.** An API that *appeared* to set cacheability would
+//! reproduce the original bug: a request that is silently not honoured.
+//!
 //! ## Copy-only on [`MappedRegion`] is a security property, not a style choice
 //!
 //! Anything read from guest RAM — pushbuffer bytes, RPC queue entries, page-table entries —
@@ -205,6 +228,7 @@ compile_error!(
 );
 
 pub mod bounds;
+pub mod cache;
 pub mod error;
 pub mod geometry;
 mod mapping_unsafe;
@@ -213,6 +237,7 @@ mod sysconf_unsafe;
 pub mod view;
 
 pub use bounds::HostOffset;
+pub use cache::CachePolicy;
 pub use error::RawError;
 pub use mapping_unsafe::{
     Backing, HostProt, MappedRegion, PlacementId, Reservation, VolatileRegion,

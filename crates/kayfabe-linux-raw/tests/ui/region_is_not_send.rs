@@ -2,12 +2,18 @@
 // asserts `Send`/`Sync` for them, deliberately — until a caller needs it the compiler
 // holds the thread contract for free, and granting it later is a reviewed relaxation in a
 // `*_unsafe.rs` file that the block ratchet can see.
-use kayfabe_linux_raw::{Backing, HostPageSize, HostProt, MappedRegion};
+use kayfabe_linux_raw::{Backing, CachePolicy, HostPageSize, HostProt, MappedRegion};
 
 fn main() {
     let page = HostPageSize::query();
     let region =
-        MappedRegion::map(Backing::PrivateAnonymous, page.bytes(), HostProt::ReadWrite, page)
+        MappedRegion::map(
+            Backing::PrivateAnonymous,
+            page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
             .unwrap();
 
     std::thread::spawn(move || {

@@ -12,6 +12,11 @@
 //! offset has no unchecked arithmetic, a bounded object cannot outlive its mapping, a
 //! region cannot cross a thread boundary, and there is no address-taking placement call.
 //!
+//! One row is not about addresses at all: `cache_policy_has_no_default.rs` holds the
+//! **no-silent-default** property of `CachePolicy` (see `src/cache.rs`). A default cache
+//! attribute is a blanket policy, and every cacheability bug the C spent days on was a
+//! blanket policy being corrected after the fact.
+//!
 //! It does **not** prove that a future addition will not open one — a compile-fail test is
 //! an assertion about the code as written — and it cannot see a *semantically* unbounded
 //! bounded object (a region whose length field is right but whose backing was mapped

@@ -7,6 +7,7 @@
 //! test doctrine asserts **exact error variants, never `is_err()`** — a bounds test that
 //! passes because the call overflowed somewhere unrelated has tested nothing.
 
+use crate::cache::CachePolicy;
 use core::fmt;
 
 /// A refusal from the raw-OS adapter.
@@ -78,6 +79,24 @@ pub enum RawError {
         /// The id presented.
         id: u64,
     },
+    /// ★ A mapping asked for a cache policy the **backing cannot attain** — the #111
+    /// class, made loud.
+    ///
+    /// Page-cache-backed memory (anonymous, `memfd`, `tmpfs`, a regular file) is mapped
+    /// write-back and there is no `mmap` flag that changes it. A caller that asks for
+    /// write-combining or uncached over such a backing does not get it; without this
+    /// refusal it gets **write-back and no diagnostic**, and the symptom surfaces days
+    /// later as a coherence bug or a 60× bandwidth cliff. See [`CachePolicy`].
+    ///
+    /// [`CachePolicy`]: crate::CachePolicy
+    CachePolicyUnattainable {
+        /// What the call site asked for.
+        requested: CachePolicy,
+        /// The only policy this backing can actually have.
+        attainable: CachePolicy,
+        /// The backing that decides it (`"anonymous memory"`, `"a shared file"`).
+        backing: &'static str,
+    },
     /// A write to a region mapped read-only. Refused *before* the store, because the
     /// alternative is a `SIGSEGV` — and a read-only isolate mapping (§11 item 3) is
     /// precisely a place a caller can get this wrong.
@@ -133,6 +152,15 @@ impl fmt::Display for RawError {
                  {existing_offset:#x}+{existing_len:#x}"
             ),
             RawError::UnknownPlacement { id } => write!(f, "no placement with id {id}"),
+            RawError::CachePolicyUnattainable {
+                requested,
+                attainable,
+                backing,
+            } => write!(
+                f,
+                "{backing} is always {attainable}; a mapping of it cannot be {requested}, \
+                 and asking silently yields {attainable}"
+            ),
             RawError::NotWritable => write!(f, "the region is mapped read-only"),
             RawError::Syscall { call, errno } => match errno {
                 Some(e) => write!(f, "{call} failed (errno {e})"),

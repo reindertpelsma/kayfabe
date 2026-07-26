@@ -1,12 +1,18 @@
 // §4.2.1 refusals 1 and 2 (§4.6 rows 1, 7): no borrow into shared memory escapes, by the
 // direct route OR by a helpful `impl` block. A `&[u8]` into guest-writable memory is the
 // double-fetch (O8) waiting to be written.
-use kayfabe_linux_raw::{Backing, HostOffset, HostPageSize, HostProt, MappedRegion};
+use kayfabe_linux_raw::{Backing, CachePolicy, HostOffset, HostPageSize, HostProt, MappedRegion};
 
 fn main() {
     let page = HostPageSize::query();
     let region =
-        MappedRegion::map(Backing::PrivateAnonymous, page.bytes(), HostProt::ReadWrite, page)
+        MappedRegion::map(
+            Backing::PrivateAnonymous,
+            page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
             .unwrap();
 
     let _direct: &[u8] = region.as_slice();
