@@ -47,7 +47,7 @@ use kayfabe_completion::{
 };
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
-use kayfabe_core::project::{Boundaries, ProcBoundary, project};
+use kayfabe_core::project::{Boundaries, NO_CONDEMNED, ProcBoundary, project};
 use kayfabe_core::rmgraph::{
     AllocFacts, Capacity, MAX_LIVE_HANDLES, MAX_LIVE_MAPPINGS, MAX_PARKED, NodeKey, RmEvent,
     RmGraph, RmGraphError,
@@ -264,7 +264,7 @@ proptest! {
         for ev in &b_events {
             ref_gpu.apply(*ev).expect("benign B applies cleanly on its own");
         }
-        let ref_bounds = project(&ref_gpu.spine.rmgraph, ref_gpu.spine.arch.as_ref()).expect("B projects");
+        let ref_bounds = project(&ref_gpu.spine.rmgraph, ref_gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("B projects");
         let b_ref = boundary_of(&ref_bounds, B_CLIENT).expect("B has a boundary");
 
         // Adversarial world: A interleaved with B.
@@ -279,7 +279,7 @@ proptest! {
         }
 
         // The device still projects (a hostile A left it in a consistent state).
-        let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref())
+        let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED)
             .expect("device still projects after hostile A");
         let b_now = boundary_of(&bounds, B_CLIENT).expect("B still has a boundary");
         prop_assert_eq!(b_ref, b_now, "B's boundary changed under A's hostility");
@@ -562,7 +562,7 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
         "innocent C still routes"
     );
     // And the device as a whole is still consistent (no wedge, no corruption).
-    assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).is_ok());
+    assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).is_ok());
 }
 
 /// **Boundary 1.** The per-`Proc` completion plane is private: a hostile process
@@ -640,7 +640,7 @@ proptest! {
             let _ = resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(v));
         }
         // The device is still consistent after all of it.
-        prop_assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).is_ok());
+        prop_assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).is_ok());
     }
 }
 
@@ -1024,7 +1024,7 @@ fn b5_channel_naming_non_vaspace_handle_does_not_bind() {
     )
     .unwrap();
 
-    let bounds = project(&g, &arch).expect("projects");
+    let bounds = project(&g, &arch, &NO_CONDEMNED).expect("projects");
     // The bait PDB does NOT route (a MEMORY object is not a VASpace).
     assert!(
         !bounds.by_pdb.contains_key(&(GpuId::ZERO, Pdb(0x9999))),
@@ -1089,7 +1089,8 @@ fn b5_channel_cannot_bind_another_clients_vaspace_handle() {
     })
     .unwrap();
 
-    let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).expect("projects");
+    let bounds =
+        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("projects");
     // A's channel resolved to NO VAS — it never reached across into B's VASpace/PDB.
     let a_proc = boundary_of(&bounds, A_CLIENT).expect("A exists");
     let chan = a_proc.channels.values().next().expect("A's channel");
@@ -1140,7 +1141,8 @@ fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
         "a parked dup must not bind its dst to any object"
     );
     // No phantom proc: the never-allocated clients group into nothing.
-    let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).expect("projects");
+    let bounds =
+        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("projects");
     assert!(
         bounds.procs.iter().all(|p| {
             !p.clients.contains(&HClient(0xBEEF)) && !p.clients.contains(&HClient(0xDEAD))

@@ -1,9 +1,11 @@
 //! Pure projections of the [`crate::rmgraph::RmGraph`] — `Proc` grouping, `by_pdb`,
 //! `by_vchid` (arch doc §4.3.1a "Derivation rules").
 //!
-//! These are **deterministic pure functions of the graph**: a reordered or retried
-//! guest yields the same graph, so it yields the same boundaries (the shuffle
-//! property test in this crate is the executable statement of that guarantee).
+//! These are **deterministic pure functions of the graph** (plus, for grouping, the
+//! condemned client set — see the condemnation line below, which is itself independent
+//! of event order): a reordered or retried guest yields the same graph, so it yields the
+//! same boundaries (the shuffle property test in this crate is the executable statement
+//! of that guarantee).
 //! Nothing here is accreted from observed event order, and nothing here mutates —
 //! the runtime ([`crate::gpu::Gpu`]) *syncs* its owned state to these boundaries.
 //!
@@ -43,6 +45,36 @@
 //! A dup into a kernel client is therefore a **reference**, not a merge — which is
 //! exactly what it is on the wire. User↔user dups still merge, because that is genuine
 //! sharing and genuine sharing is one blast radius, which is what #14 is about.
+//!
+//! ## ★★ The second half of the predicate — the CONDEMNATION LINE (§12.37, C1)
+//!
+//! A dup edge additionally merges only when **both endpoints are on the same side of
+//! the condemnation line** ([`Spine::condemned`](crate::gpu::Spine)): both alive, or
+//! both already dead.
+//!
+//! Condemnation is a *completed fact about a set of clients* — their host data is gone,
+//! because the isolate process that owned it died. A live client that later aliases a
+//! condemned client's resource does not thereby acquire the corpse's history; it
+//! acquires exactly one dead resource, which is attributed to its ORIGIN (the condemned
+//! client) and is therefore already refused by name (`FwdFault::Condemned`) wherever it
+//! is reached. Merging instead **transfers the fatality**, and the direction of the
+//! transfer is chosen by whoever issued the `DUP_OBJECT` — which is how a hostile stream
+//! earned a *bystander's* death:
+//!
+//! ```text
+//! A: Alloc(Client cA, User) … A's worker dies       ⇒ cA condemned
+//! A: Dup { src: (cA, obj), dst: (cV, 0x7777) }      ⇒ accepted, inert (cV undeclared)
+//! V: Alloc(Client cV, User)                          ⇒ V's OWN first event
+//!    …used to make the parked edge a grouping edge, on the very apply that first
+//!    creates V's boundary — so V had no live `Proc` yet, the merge was not a loud
+//!    `CondemnedMerge`, and V died SILENTLY, anchored at the attacker's client.
+//! ```
+//!
+//! The predicate is what removes that at the root, rather than making the silent arm
+//! loud: refusing V's own `Alloc` would still be V paying for A's action. With the line
+//! in the predicate every component is **homogeneous** — an allowed edge never has
+//! exactly one condemned end, so a component is either wholly condemned or wholly alive
+//! — which is also why a merge can no longer be a fault at all (`Spine::plan_refresh`).
 //!
 //! Three properties worth naming, because each was a way to get this wrong:
 //! - **The handle VALUE is never consulted.** UVM's session (`0xc1d00069`) sits
@@ -301,9 +333,28 @@ fn resolve_channel_vas<'g>(g: &'g RmGraph, chan: &RmNode) -> Option<&'g RmNode> 
     None
 }
 
-/// Derive the full boundary picture from the graph. Pure; order-independent by
-/// construction (it looks only at the graph's declared facts).
-pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionError> {
+/// ★ The condemnation input of an **un-condemned** device — the value every caller that
+/// is not [`crate::gpu::Spine::refresh`] passes to [`project`].
+///
+/// It is a named constant rather than a defaulted argument so that "this projection
+/// considers no client dead" is a statement the call site makes, not one it omits.
+pub static NO_CONDEMNED: BTreeSet<HClient> = BTreeSet::new();
+
+/// Derive the full boundary picture from the graph.
+///
+/// A deterministic pure function of `(graph, condemned)` — order-independent by
+/// construction, because it looks only at the graph's declared facts and at a client set
+/// that is itself independent of event order.
+///
+/// `condemned` is the flattened [`crate::gpu::Spine::condemned`] client set: the clients
+/// whose component died out of band. It participates in exactly one decision — the
+/// grouping predicate's condemnation line (module docs) — and in nothing else; pass
+/// [`NO_CONDEMNED`] when there is none.
+pub fn project(
+    g: &RmGraph,
+    arch: &dyn Arch,
+    condemned: &BTreeSet<HClient>,
+) -> Result<Boundaries, ProjectionError> {
     // Client universe: explicit resource-owning namespaces + the endpoints of every
     // **resolved** dup (a dst client that only receives an alias and allocates nothing
     // has no origin node of its own, so it must be picked up here to be grouped). A
@@ -372,6 +423,23 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
         // deliberate: a future third [`ClientKind`] is then unmergeable until someone
         // decides what it means, instead of silently defaulting into user grouping.
         if !(is_user(dst.client) && is_user(src.client)) {
+            continue;
+        }
+        // ★★ §12.37 (C1) — THE CONDEMNATION LINE. A merge across it is the ONE way a
+        // guest could make another guest process's component fatal, so it is refused
+        // here, in the predicate, rather than adjudicated later:
+        //
+        //  - both alive   — genuine sharing between two live processes: one blast
+        //    radius, exactly as before.
+        //  - both dead    — the component that died, re-derived (a split-then-rejoined
+        //    corpse); it stays one condemned component.
+        //  - one of each  — a REFERENCE, never a merge. The dead side's resources are
+        //    attributed to their origin and keep answering `FwdFault::Condemned`; the
+        //    live side keeps its `Proc`. Neither direction of the edge moves a client
+        //    across the line, so neither a resurrect (absorbing a corpse around a
+        //    working isolate) nor a bystander death (condemning a healthy proc by
+        //    dupping into a corpse) is representable.
+        if condemned.contains(&dst.client) != condemned.contains(&src.client) {
             continue;
         }
         uf.union(dst.client, src.client);

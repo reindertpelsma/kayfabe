@@ -37,7 +37,7 @@ use kayfabe_arch::ids::GpuId;
 use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
-use kayfabe_core::project::{SYSTEM_ANCHOR, project};
+use kayfabe_core::project::{NO_CONDEMNED, SYSTEM_ANCHOR, project};
 use kayfabe_core::rmgraph::{RmEvent, RmGraph};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing};
 use kayfabe_mocks::{MockArch, MockIsolateFactory};
@@ -175,7 +175,7 @@ fn by_pdb_by_vchid_and_proc_grouping_are_order_independent() {
     let events = scenario().events;
 
     // Reference derivation from the scripted order.
-    let reference = project(&graph_of(&events), &arch).expect("projects cleanly");
+    let reference = project(&graph_of(&events), &arch, &NO_CONDEMNED).expect("projects cleanly");
 
     // Every permutation must yield byte-identical boundaries.
     for perm in permutations(events.len()) {
@@ -184,7 +184,7 @@ fn by_pdb_by_vchid_and_proc_grouping_are_order_independent() {
             g.apply(&arch, events[i])
                 .expect("same events, any order, still valid");
         }
-        let derived = project(&g, &arch).expect("projects cleanly in any order");
+        let derived = project(&g, &arch, &NO_CONDEMNED).expect("projects cleanly in any order");
         assert_eq!(
             derived, reference,
             "derived boundaries must be independent of event order (perm {perm:?})"
@@ -202,7 +202,7 @@ fn by_pdb_by_vchid_and_proc_grouping_are_order_independent() {
 #[test]
 fn one_kernel_client_two_processes_stay_two_procs() {
     let arch = MockArch::new();
-    let b = project(&graph_of(&scenario().events), &arch).unwrap();
+    let b = project(&graph_of(&scenario().events), &arch, &NO_CONDEMNED).unwrap();
 
     assert_eq!(b.procs.len(), 2, "two USER components");
     // The system component holds the UVM session, and ONLY it.
@@ -246,7 +246,7 @@ fn one_kernel_client_two_processes_stay_two_procs() {
 #[test]
 fn a_dupd_vaspace_stays_with_the_client_that_allocated_it() {
     let arch = MockArch::new();
-    let b = project(&graph_of(&scenario().events), &arch).unwrap();
+    let b = project(&graph_of(&scenario().events), &arch, &NO_CONDEMNED).unwrap();
 
     let proc_a = b.procs.iter().find(|p| p.clients.contains(&A)).unwrap();
     let a_pdbs: Vec<Pdb> = proc_a.vases.values().filter_map(|f| f.pdb).collect();
@@ -299,12 +299,12 @@ fn the_kernel_declaration_may_arrive_before_between_or_after() {
     b_half(&mut after);
     uvm_session(&mut after);
 
-    let reference = project(&graph_of(&before.events), &arch).unwrap();
+    let reference = project(&graph_of(&before.events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(reference.procs.len(), 2);
     assert_eq!(reference.system.clients.len(), 1);
     for (name, s) in [("between", between), ("after", after)] {
         assert_eq!(
-            project(&graph_of(&s.events), &arch).unwrap(),
+            project(&graph_of(&s.events), &arch, &NO_CONDEMNED).unwrap(),
             reference,
             "the kernel declaration arriving {name} the user clients changed the grouping",
         );
@@ -324,7 +324,7 @@ fn the_kernel_declaration_may_arrive_before_between_or_after() {
 #[test]
 fn proc_anchor_is_the_minimum_client_in_its_component() {
     let arch = MockArch::new();
-    let b = project(&graph_of(&scenario().events), &arch).unwrap();
+    let b = project(&graph_of(&scenario().events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(b.procs.len(), 2);
     for p in &b.procs {
         let min_client = p
@@ -360,7 +360,7 @@ fn proc_anchor_is_the_minimum_client_in_its_component() {
 #[test]
 fn identical_handles_across_procs_do_not_collide() {
     let arch = MockArch::new();
-    let b = project(&graph_of(&scenario().events), &arch).unwrap();
+    let b = project(&graph_of(&scenario().events), &arch, &NO_CONDEMNED).unwrap();
 
     // Both procs used GR channel handle 0x5c000019 — but they are distinct nodes
     // keyed by (client, handle), so the two GR channels route to distinct vChids.
@@ -809,7 +809,7 @@ fn an_undeclared_client_merges_with_nobody_until_it_declares() {
         src: a_vas,
         dst: kayfabe_core::rmgraph::NodeKey::new(A2, HObject(0x7000_00ff)),
     });
-    let partial = project(&graph_of(&s.events), &arch).unwrap();
+    let partial = project(&graph_of(&s.events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(
         partial.procs.len(),
         1,
@@ -823,7 +823,7 @@ fn an_undeclared_client_merges_with_nobody_until_it_declares() {
     // Now it declares USER: the same dup becomes a grouping edge.
     let mut declared = s.clone();
     declared.push(kayfabe_tests::client_root(A2));
-    let joined = project(&graph_of(&declared.events), &arch).unwrap();
+    let joined = project(&graph_of(&declared.events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(joined.procs.len(), 1, "declared user → the dup merges");
     assert_eq!(
         joined.procs[0].clients,
@@ -833,7 +833,7 @@ fn an_undeclared_client_merges_with_nobody_until_it_declares() {
     // Had it declared KERNEL instead, the very same dup stays a reference.
     let mut kernel = s.clone();
     kernel.push(kayfabe_tests::kernel_client_root(A2));
-    let referenced = project(&graph_of(&kernel.events), &arch).unwrap();
+    let referenced = project(&graph_of(&kernel.events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(referenced.procs.len(), 1, "only A is a user proc");
     assert_eq!(
         referenced.procs[0].clients,

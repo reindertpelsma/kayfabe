@@ -110,7 +110,7 @@ use std::time::{Duration, Instant as WallInstant};
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
-use kayfabe_core::gpu::{Gpu, GpuError};
+use kayfabe_core::gpu::Gpu;
 use kayfabe_core::reactor::SourceKind;
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
@@ -2492,58 +2492,76 @@ fn condemnation_spans_a_procs_gpus_and_spares_identical_ids_on_other_gpus() {
     assert_ne!(pids[P_REROUTE], pids[P_HUP]);
 }
 
-/// ★ **A `DUP_OBJECT` that would merge a LIVE proc into a condemned component is
-/// refused ATOMICALLY** (`GpuError::CondemnedMerge`).
+/// ★★ **A `DUP_OBJECT` across the condemnation line MERGES NOTHING** — it is a
+/// reference, and it moves neither component (`l1_concurrency.md` §12.37).
 ///
-/// Dup-connected clients are one `Proc` by construction — one isolate, one arena, one
-/// blast radius — so there is no honest way to honour this dup: absorbing the condemned
-/// clients into the live proc resurrects them around a working isolate, and condemning
-/// the live proc lets a guest kill a healthy process by dupping into a corpse. The third
-/// answer is to refuse the *event*; `Spine::apply` is transactional, so the live proc
-/// keeps serving and the condemned component stays condemned — nothing moves.
+/// This test used to assert `GpuError::CondemnedMerge`: dup-connected clients are one
+/// `Proc` by construction, so honouring the merge would either resurrect the condemned
+/// clients around the live proc's working isolate or condemn a healthy proc, and
+/// refusing the *event* was the only honest answer left. The answer that was missing is
+/// the fourth one — **do not make it a merge at all** — and it is the one that had to
+/// exist, because the loud refusal was only ever reachable when the dragged-in side
+/// already had a live `Proc`. Planting the identical dup into a namespace that had not
+/// declared yet fired the same merge on the *victim's* own client-root alloc, with no
+/// proc to protect and therefore in silence
+/// ([`a_planted_dup_alias_cannot_condemn_a_client_that_has_not_declared`]).
+///
+/// So the grouping predicate now refuses to merge across the condemnation line, and what
+/// this test pins is that the outcome is *better* than the refusal it replaces: the live
+/// proc is untouched and still serving, the condemned component is still condemned by
+/// name, no `Proc` holds a condemned client, and the aliased resource — attributed to
+/// its ORIGIN, which is condemned — still answers `FwdFault::Condemned` wherever it is
+/// reached. Nothing is resurrected, and no bystander pays.
 #[test]
-fn a_dup_into_a_condemned_component_is_refused_atomically() {
-    let _wd = watchdog("condemned_merge_refused", Duration::from_secs(60));
+fn a_dup_across_the_condemnation_line_merges_nothing() {
+    let _wd = watchdog("condemned_line_no_merge", Duration::from_secs(60));
     let (mut gpu, pids, _rec) = mean_gpu();
     let victim = pids[P_HUP];
+    let condemned = FwdFault::Condemned {
+        anchor: ProcAnchor(client_of(P_HUP)),
+    };
 
     core_publish(&mut gpu, GPU1, lane_of(P_HUP).pdb, VA_WARM).expect("publishes while alive");
     assert!(core_retire_out_of_band(&mut gpu, victim));
 
     let before = gpu.procs.len();
-    assert_eq!(
-        gpu.apply(RmEvent::Dup {
-            src: NodeKey::new(client_of(P_HUP), H_VASPACE),
-            dst: NodeKey::new(client_of(P_PEER), HObject(0x7200_00a0)),
-        }),
-        Err(GpuError::CondemnedMerge {
-            live: pids[P_PEER],
-            condemned: ProcAnchor(client_of(P_HUP)),
-        }),
-        "★ dupping a condemned component into a live proc must be refused, loudly"
-    );
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_HUP), H_VASPACE),
+        dst: NodeKey::new(client_of(P_PEER), HObject(0x7200_00a0)),
+    })
+    .expect("★ the dup applies — RM refcounting is faithful, the alias is just not a merge");
 
-    // ATOMIC: the live proc is untouched and still serving, the condemned one is still
-    // condemned, and nothing was minted or merged.
-    assert_eq!(
-        gpu.procs.len(),
-        before,
-        "the refusal minted or dropped a proc"
+    // NOTHING MOVED: the live proc is untouched and still serving, the condemned one is
+    // still condemned, and nothing was minted, merged or absorbed.
+    assert_eq!(gpu.procs.len(), before, "the dup minted or dropped a proc");
+    assert!(
+        !gpu.spine.is_condemned(client_of(P_PEER)),
+        "★★ a guest killed a healthy process by dupping into a corpse"
     );
-    assert!(!gpu.spine.is_condemned(client_of(P_PEER)));
     assert_eq!(gpu.spine.condemned_len(), 1);
     assert!(
         !gpu.procs[&pids[P_PEER]].clients.contains(&client_of(P_HUP)),
-        "the rolled-back dup left the condemned client inside a live proc"
+        "★ the dup put the condemned client inside a live proc — that IS the resurrect"
+    );
+    assert_eq!(
+        gpu.procs[&pids[P_PEER]].clients,
+        BTreeSet::from([client_of(P_PEER)]),
+        "the live component is exactly what it was"
     );
     core_publish(&mut gpu, GPU1, lane_of(P_PEER).pdb, VA_CTL)
-        .expect("★ the live proc keeps serving after the refusal");
+        .expect("★ the live proc keeps serving");
+
+    // ★ …and the corpse is still a corpse, on both planes — including through the
+    // freshly-minted alias, because attribution is by ORIGIN.
     assert_eq!(
         core_publish(&mut gpu, GPU1, lane_of(P_HUP).pdb, VA_HELD),
-        Err(FwdFault::Condemned {
-            anchor: ProcAnchor(client_of(P_HUP)),
-        }),
-        "★ and the condemned component is still condemned"
+        Err(condemned),
+        "★★ the alias resurrected the condemned component's address plane"
+    );
+    assert_eq!(
+        kayfabe_fwd::handle_doorbell(&mut gpu, GPU1, MockArch::token_for(lane_of(P_HUP).gr), &[]),
+        Err(condemned),
+        "★★ the alias revived the condemned component's exec plane"
     );
 }
 
@@ -3053,4 +3071,520 @@ fn recovery_after_a_multi_gpu_condemnation_serves_both_targets() {
                 panic!("bystander proc {i}'s exec plane was disturbed by the recovery: {e:?}")
             });
     }
+}
+
+// =================================================================================
+// ★★ BOUNDARY-1, C1/C2 — **a hostile stream must only ever earn its OWN refusal**
+//
+// `Spine::apply`'s own contract ("a hostile stream can only ever earn its own loud
+// refusal") and `Spine::condemned`'s ("it must never reach a client that did not
+// [share the blast radius]") were both breakable, by two halves of one defect:
+//
+//  - **C1** — a `DUP_OBJECT` planted into a namespace that has not declared itself is
+//    accepted and parked, and fires the instant the *victim* declares. With no live
+//    proc to protect, the condemnation is SILENT: the victim's own first RM event
+//    returns `Ok(())` and kills it, permanently, anchored at the attacker's client.
+//  - **C2** — a condemned entry retained client handles the guest had since FREED, so
+//    the entry poisoned handle VALUES the guest kernel hands out again. A recycled
+//    value never shared the blast radius.
+//
+// The property both tests state, and the one the fix must hold: **the victim is
+// unaffected, and the attacker's planted edge earns the ATTACKER a refusal or nothing
+// at all.**
+// =================================================================================
+
+/// The never-allocated client namespace the attacker plants an alias into. RM's
+/// `hClient` **is** its root object's handle, so the value a future process will be
+/// handed is predictable — the attack costs one dup per candidate namespace.
+const VICTIM_CLIENT: HClient = HClient(0xC0);
+/// The victim's own PDB, once it declares.
+const VICTIM_PDB: Pdb = Pdb(0x4a00_0000);
+/// The victim's GR vChid.
+const VICTIM_GR: VChid = VChid(0x160);
+/// The victim's CE vChid.
+const VICTIM_CE: VChid = VChid(0x260);
+/// The handle the planted alias squats inside the victim's namespace.
+const PLANTED_ALIAS: HObject = HObject(0x7777_0001);
+
+/// ★★ **C1 — a planted dup alias must not silently condemn a client that has not even
+/// declared itself.**
+///
+/// The composed attack: the attacker's own component is condemned (its worker died),
+/// and it then dups one of its own objects into a namespace **nobody owns yet**. That
+/// dup is inert while the destination is undeclared — and under the defect it fires on
+/// the victim's `Alloc(Client, User)`, i.e. on the *same apply that first creates the
+/// victim's boundary*, so no live proc exists to make it a loud `CondemnedMerge` and
+/// the victim dies silently, anchored at the attacker's client handle.
+///
+/// This is the first shape found in this core that lets a hostile stream earn ANOTHER
+/// process's refusal, which is why it is asserted end to end (declare → publish → ring)
+/// rather than on `is_condemned` alone.
+#[test]
+fn a_planted_dup_alias_cannot_condemn_a_client_that_has_not_declared() {
+    let _wd = watchdog("c1_planted_alias", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (attacker, lane) = (pids[P_HUP], lane_of(P_HUP));
+    let condemned = FwdFault::Condemned {
+        anchor: ProcAnchor(client_of(P_HUP)),
+    };
+
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the attacker publishes while alive");
+    assert!(core_retire_out_of_band(&mut gpu, attacker));
+    assert!(gpu.spine.is_condemned(client_of(P_HUP)));
+
+    // ---- ★ The attack: ONE dup, out of the condemned component, into a namespace
+    // that does not exist. It is accepted (RM refcounting is faithful — the alias
+    // keeps the resource alive) and it changes nothing while the destination is
+    // undeclared.
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_HUP), H_VASPACE),
+        dst: NodeKey::new(VICTIM_CLIENT, PLANTED_ALIAS),
+    })
+    .expect("the planted dup applies");
+    assert!(
+        !gpu.spine.is_condemned(VICTIM_CLIENT),
+        "an undeclared namespace cannot be condemned — there is nothing there yet"
+    );
+    assert_eq!(gpu.spine.condemned_len(), 1);
+
+    // ---- ★★ The victim's OWN first event, and every event of its own bring-up.
+    reinit(
+        &mut gpu,
+        VICTIM_CLIENT,
+        VICTIM_PDB,
+        VICTIM_GR,
+        VICTIM_CE,
+        GPU1,
+    );
+
+    assert!(
+        !gpu.spine.is_condemned(VICTIM_CLIENT),
+        "★★ the victim was condemned by an edge IT never created — a hostile stream \
+         earned another process's refusal, which boundary-1 forbids"
+    );
+    let pid = gpu.spine.by_pdb.get(&(GPU1, VICTIM_PDB)).copied().expect(
+        "★★ the victim's own address plane was never materialized — it was \
+                 condemned on the apply that declared it, and nobody was told",
+    );
+    assert!(gpu.procs[&pid].clients.contains(&VICTIM_CLIENT));
+    assert!(
+        !gpu.procs[&pid].clients.contains(&client_of(P_HUP)),
+        "★ the victim's proc absorbed the condemned client — that IS the resurrect"
+    );
+
+    // Genuinely served, end to end, through the #14 ring-gate.
+    let rung = publish_and_ring(&mut gpu, GPU1, VICTIM_PDB, VICTIM_GR, VA_CTL);
+    assert_eq!(
+        rung.proc, pid,
+        "the victim's ring routed to the victim's proc"
+    );
+    assert_eq!(
+        token_lane(rung.host_token),
+        (pid.0 + 1, GPU1.0),
+        "★ the victim rang a host token minted in its OWN isolate lane"
+    );
+
+    // ---- ★ …and the attacker earned NOTHING. Its own plane is still condemned, by
+    // name, and the resource it aliased is still refused wherever it is reached.
+    assert_eq!(
+        core_publish(&mut gpu, GPU1, lane.pdb, VA_HELD),
+        Err(condemned),
+        "★★ the planted alias resurrected the condemned component's address plane"
+    );
+    assert_eq!(
+        kayfabe_fwd::handle_doorbell(&mut gpu, GPU1, MockArch::token_for(lane.gr), &[]),
+        Err(condemned),
+        "★★ the planted alias revived the condemned component's exec plane"
+    );
+    assert!(gpu.spine.is_condemned(client_of(P_HUP)));
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        1,
+        "one corpse, still exactly one"
+    );
+}
+
+/// The first extra client dup-joined into [`P_HUP`]'s component before it dies — a
+/// handle value the guest then FREES, and which a future process may be handed.
+const JOINED_A: HClient = HClient(0xC8);
+/// The second joined client.
+const JOINED_B: HClient = HClient(0xC9);
+/// [`JOINED_A`]'s PDB while it is part of the doomed component.
+const JOINED_A_PDB: Pdb = Pdb(0x4b00_0000);
+/// [`JOINED_B`]'s PDB while it is part of the doomed component.
+const JOINED_B_PDB: Pdb = Pdb(0x4c00_0000);
+/// The PDB of the LATER, unrelated process that is handed [`JOINED_A`]'s freed value.
+const RECYCLED_PDB: Pdb = Pdb(0x4d00_0000);
+/// The alias handle each joined client holds the shared VASpace under.
+const JOIN_ALIAS: HObject = HObject(0x7800_0001);
+
+/// ★★ **C2 — a condemned entry must not retain client handles the guest has freed.**
+///
+/// Handle reuse is explicit design (`RmGraph`'s resource/handle split exists for it),
+/// and `RmGraph::drop_handle` prunes the `client_roots` entry on free *precisely so*
+/// the namespace can be re-declared. The carry-forward re-added the WHOLE old condemned
+/// entry on every refresh, including handles that by then existed nowhere in the graph
+/// — so an attacker could buy N poisoned namespaces for the price of keeping ONE client
+/// alive, and any later process whose `hClient` landed on a freed value died the moment
+/// it declared.
+///
+/// That contradicts the entry's own invariant one screen above it: *"Absorb, never
+/// widen … it must never reach a client that did not [share the blast radius]."* **A
+/// recycled handle value never shared the blast radius.**
+#[test]
+fn a_condemned_entry_must_not_poison_client_handles_the_guest_has_freed() {
+    let _wd = watchdog("c2_freed_handle_recycle", Duration::from_secs(60));
+    let (mut gpu, _pids, _rec) = mean_gpu();
+    let lane = lane_of(P_HUP);
+    let root = identical_handles(0, 0).client_root;
+    let condemned = FwdFault::Condemned {
+        anchor: ProcAnchor(client_of(P_HUP)),
+    };
+
+    // ---- One component of THREE clients, joined by genuine user↔user shares.
+    reinit(
+        &mut gpu,
+        JOINED_A,
+        JOINED_A_PDB,
+        VChid(0x161),
+        VChid(0x261),
+        GPU1,
+    );
+    reinit(
+        &mut gpu,
+        JOINED_B,
+        JOINED_B_PDB,
+        VChid(0x162),
+        VChid(0x262),
+        GPU1,
+    );
+    for c in [JOINED_A, JOINED_B] {
+        gpu.apply(RmEvent::Dup {
+            src: NodeKey::new(client_of(P_HUP), H_VASPACE),
+            dst: NodeKey::new(c, JOIN_ALIAS),
+        })
+        .expect("the user↔user share applies");
+    }
+    let doomed = gpu.spine.by_pdb[&(GPU1, lane.pdb)];
+    assert_eq!(
+        gpu.procs[&doomed].clients,
+        BTreeSet::from([client_of(P_HUP), JOINED_A, JOINED_B]),
+        "the three clients are ONE component"
+    );
+
+    // ---- Its worker dies: all three clients are condemned, correctly.
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("it publishes while alive");
+    assert!(core_retire_out_of_band(&mut gpu, doomed));
+    for c in [client_of(P_HUP), JOINED_A, JOINED_B] {
+        assert!(gpu.spine.is_condemned(c), "the component that died is dead");
+    }
+
+    // ---- ★ The guest FREES two of the three client roots — their namespaces now
+    // exist nowhere in the graph. The attacker keeps only the anchor alive.
+    for c in [JOINED_A, JOINED_B] {
+        gpu.apply(RmEvent::Free {
+            client: c,
+            handle: root,
+        })
+        .expect("the guest's client-root free applies");
+    }
+    assert!(
+        gpu.spine.is_condemned(client_of(P_HUP)),
+        "the component that actually died must stay dead"
+    );
+    assert_eq!(gpu.spine.condemned_len(), 1);
+    for c in [JOINED_A, JOINED_B] {
+        assert!(
+            !gpu.spine.is_condemned(c),
+            "★★ a client handle the guest FREED is still condemned — the entry is \
+             poisoning a VALUE, and a recycled value never shared the blast radius"
+        );
+    }
+
+    // ---- ★★ A later, unrelated process is handed the recycled `hClient`.
+    reinit(
+        &mut gpu,
+        JOINED_A,
+        RECYCLED_PDB,
+        VChid(0x163),
+        VChid(0x263),
+        GPU1,
+    );
+    assert!(
+        !gpu.spine.is_condemned(JOINED_A),
+        "★★ an unrelated process was condemned on arrival because its hClient landed \
+         on a value a dead component once held"
+    );
+    let pid = gpu
+        .spine
+        .by_pdb
+        .get(&(GPU1, RECYCLED_PDB))
+        .copied()
+        .expect("★★ the recycled namespace's own address plane was never materialized");
+    let rung = publish_and_ring(&mut gpu, GPU1, RECYCLED_PDB, VChid(0x163), VA_CTL);
+    assert_eq!(rung.proc, pid);
+    assert!(!gpu.procs[&pid].clients.contains(&client_of(P_HUP)));
+
+    // ---- …and the corpse the attacker DID earn is still exactly as dead.
+    assert_eq!(
+        core_publish(&mut gpu, GPU1, lane.pdb, VA_HELD),
+        Err(condemned),
+        "★★ pruning the freed handles let the condemned component back to life"
+    );
+    assert_eq!(gpu.spine.condemned_len(), 1);
+}
+
+// =================================================================================
+// ★★ §12.37 — THE THREE EVASIONS the condemned entry's growth exists to stop, re-run
+// against the two fixes above. C1 removed the merge across the condemnation line and
+// C2 made the entry shrink to the clients the graph still knows; neither may hand the
+// guest a way to launder a dead component back to life.
+// =================================================================================
+
+/// The fresh client an attacker allocates to try to *carry* a condemned component's
+/// resource back into a live `Proc`.
+const LAUNDER_CLIENT: HClient = HClient(0xD0);
+/// Its own PDB.
+const LAUNDER_PDB: Pdb = Pdb(0x4e00_0000);
+/// The handle it aliases the condemned VASpace under.
+const LAUNDER_ALIAS: HObject = HObject(0x7900_0001);
+/// A channel of its own, deliberately BOUND to the aliased (condemned) VASpace.
+const LAUNDER_CHANNEL: HObject = HObject(0x5c00_00b0);
+/// That channel's vChid.
+const LAUNDER_VCHID: VChid = VChid(0x370);
+
+/// ★ **Evasion 1 — dup a FRESH client onto the corpse, then free the corpse's root.**
+///
+/// The oldest laundering shape: if the condemned resource could be re-attributed to the
+/// fresh client's live component, the guest would get its dead-backed VASpace served out
+/// of a working isolate — a **zeroed** backing for a VA it believes still holds its data,
+/// which is the silent corruption "never resurrect" exists to prevent.
+///
+/// Attribution is by ORIGIN and the origin is condemned, so neither half works: the dup
+/// does not merge (the condemnation line), and freeing the condemned client's root does
+/// not release the entry while its resource is still alive in the graph on the
+/// attacker's own alias.
+#[test]
+fn evasion_dup_a_fresh_client_then_free_the_old_root_still_fails() {
+    let _wd = watchdog("evasion_launder", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
+    let condemned = FwdFault::Condemned {
+        anchor: ProcAnchor(client_of(P_HUP)),
+    };
+
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("publishes while alive");
+    assert!(core_retire_out_of_band(&mut gpu, victim));
+
+    // A fresh client — live, served, its own everything — aliases the corpse's VASpace.
+    reinit(
+        &mut gpu,
+        LAUNDER_CLIENT,
+        LAUNDER_PDB,
+        VChid(0x170),
+        VChid(0x270),
+        GPU1,
+    );
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_HUP), H_VASPACE),
+        dst: NodeKey::new(LAUNDER_CLIENT, LAUNDER_ALIAS),
+    })
+    .expect("the alias applies");
+    assert!(
+        !gpu.spine.is_condemned(LAUNDER_CLIENT),
+        "the fresh client lives"
+    );
+
+    // ★ …and it goes further than holding the handle: it allocates a channel BOUND to
+    // the aliased (condemned) VASpace. This is the one genuinely new state the
+    // condemnation line creates — a live `Proc` naming an address plane it does not own
+    // — and it must be a named refusal, not a served ring. `gate_working_set_in` looks
+    // the PDB up in the ringing proc's OWN vases, which the condemned VAS is not in.
+    gpu.apply(RmEvent::Alloc {
+        client: LAUNDER_CLIENT,
+        parent: identical_handles(0, 0).tsg,
+        handle: LAUNDER_CHANNEL,
+        class: mock_classes::CHANNEL_GR,
+        facts: AllocFacts {
+            h_vaspace: Some(LAUNDER_ALIAS),
+            userd_flags: MockArch::userd_flags_for(LAUNDER_VCHID),
+            ..Default::default()
+        },
+    })
+    .expect("the cross-line channel applies");
+    assert_eq!(
+        kayfabe_fwd::handle_doorbell(
+            &mut gpu,
+            GPU1,
+            MockArch::token_for(LAUNDER_VCHID),
+            &[GpuVa(VA_WARM)],
+        ),
+        Err(FwdFault::UnknownPdb {
+            gpu: GPU1,
+            pdb: lane.pdb,
+        }),
+        "★★ a live proc rang a channel bound to a CONDEMNED component's address plane"
+    );
+
+    // ---- …and now the corpse's own client root goes, leaving the resource alive on
+    // nothing but the attacker's alias.
+    gpu.apply(RmEvent::Free {
+        client: client_of(P_HUP),
+        handle: identical_handles(lane.gr.0, lane.ce.0).client_root,
+    })
+    .expect("the client-root free applies");
+
+    assert!(
+        gpu.spine.is_condemned(client_of(P_HUP)),
+        "★★ freeing the root while a dup keeps the resource alive laundered the \
+         condemnation away — the dead-backed VASpace is now servable"
+    );
+    assert_eq!(
+        core_publish(&mut gpu, GPU1, lane.pdb, VA_HELD),
+        Err(condemned),
+        "★★ the condemned VASpace was resurrected through a fresh client's alias"
+    );
+    assert_eq!(gpu.spine.condemned_len(), 1);
+    assert!(
+        gpu.procs
+            .values()
+            .all(|p| !p.clients.contains(&client_of(P_HUP))),
+        "★ a live proc absorbed the condemned client"
+    );
+    // The attacker's own fresh component is unaffected either way — it never shared the
+    // blast radius, and it never acquires it.
+    core_publish(&mut gpu, GPU1, LAUNDER_PDB, VA_CTL).expect("the fresh client keeps serving");
+}
+
+/// The second client of the doomed component, for the split / re-label evasions.
+const SPLIT_CLIENT: HClient = HClient(0xD8);
+/// Its PDB.
+const SPLIT_PDB: Pdb = Pdb(0x4f00_0000);
+/// The handle it holds the shared VASpace under.
+const SPLIT_ALIAS: HObject = HObject(0x7a00_0001);
+
+/// ★ **Evasion 2 — SPLIT the condemned component by freeing the edge that joined it.**
+///
+/// A component of two clients dies; the guest then frees the `DUP_OBJECT` that made them
+/// one, so the next projection derives TWO boundaries. Both halves must stay condemned
+/// — the entry is a client SET, so both intersect it — and they must stay **one** entry,
+/// or the caps and the diagnostics start counting corpses that do not exist.
+#[test]
+fn evasion_splitting_the_condemned_component_still_fails() {
+    let _wd = watchdog("evasion_split", Duration::from_secs(60));
+    let (mut gpu, _pids, _rec) = mean_gpu();
+    let lane = lane_of(P_HUP);
+
+    reinit(
+        &mut gpu,
+        SPLIT_CLIENT,
+        SPLIT_PDB,
+        VChid(0x171),
+        VChid(0x271),
+        GPU1,
+    );
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_HUP), H_VASPACE),
+        dst: NodeKey::new(SPLIT_CLIENT, SPLIT_ALIAS),
+    })
+    .expect("the user↔user share applies");
+    let doomed = gpu.spine.by_pdb[&(GPU1, lane.pdb)];
+    assert_eq!(
+        gpu.spine.by_pdb[&(GPU1, SPLIT_PDB)],
+        doomed,
+        "ONE component"
+    );
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("publishes while alive");
+    assert!(core_retire_out_of_band(&mut gpu, doomed));
+
+    // ---- The guest frees the joining edge: two boundaries where there was one.
+    gpu.apply(RmEvent::Free {
+        client: SPLIT_CLIENT,
+        handle: SPLIT_ALIAS,
+    })
+    .expect("the alias frees");
+
+    // Each half is now its own boundary, so each answers under its OWN anchor — but
+    // both answer `Condemned`, which is the property.
+    for (c, pdb) in [(client_of(P_HUP), lane.pdb), (SPLIT_CLIENT, SPLIT_PDB)] {
+        assert!(
+            gpu.spine.is_condemned(c),
+            "★★ splitting the component un-condemned half of it"
+        );
+        assert_eq!(
+            core_publish(&mut gpu, GPU1, pdb, VA_HELD),
+            Err(FwdFault::Condemned {
+                anchor: ProcAnchor(c),
+            }),
+            "★★ a split-off half of a condemned component was served again"
+        );
+    }
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        1,
+        "★ the split duplicated the entry — both halves are still ONE corpse"
+    );
+}
+
+/// ★ **Evasion 3 — RE-LABEL the condemned component by freeing its anchor client.**
+///
+/// The component's `ProcAnchor` is its smallest client handle, so freeing that client
+/// re-labels the survivor. Condemnation is keyed on the client SET, never on the label,
+/// so the survivor stays dead — and, with C2's shrink, the entry now also stops naming
+/// the handle value the guest genuinely gave back.
+#[test]
+fn evasion_relabelling_the_condemned_component_still_fails() {
+    let _wd = watchdog("evasion_relabel", Duration::from_secs(60));
+    let (mut gpu, _pids, _rec) = mean_gpu();
+    let lane = lane_of(P_HUP);
+    assert!(
+        client_of(P_HUP) < SPLIT_CLIENT,
+        "the anchor must be the client we are about to free, or this proves nothing"
+    );
+
+    reinit(
+        &mut gpu,
+        SPLIT_CLIENT,
+        SPLIT_PDB,
+        VChid(0x172),
+        VChid(0x272),
+        GPU1,
+    );
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(SPLIT_CLIENT, H_VASPACE),
+        dst: NodeKey::new(client_of(P_HUP), SPLIT_ALIAS),
+    })
+    .expect("the user↔user share applies");
+    let doomed = gpu.spine.by_pdb[&(GPU1, lane.pdb)];
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("publishes while alive");
+    assert!(core_retire_out_of_band(&mut gpu, doomed));
+    assert!(gpu.spine.is_condemned(SPLIT_CLIENT));
+
+    // ---- The guest frees the ANCHOR client's whole namespace. The component survives
+    // under a new label; it must not survive as anything but a corpse.
+    gpu.apply(RmEvent::Free {
+        client: client_of(P_HUP),
+        handle: identical_handles(lane.gr.0, lane.ce.0).client_root,
+    })
+    .expect("the anchor client's root frees");
+
+    assert!(
+        gpu.spine.is_condemned(SPLIT_CLIENT),
+        "★★ re-labelling the component un-condemned it"
+    );
+    assert_eq!(
+        core_publish(&mut gpu, GPU1, SPLIT_PDB, VA_HELD),
+        Err(FwdFault::Condemned {
+            anchor: ProcAnchor(SPLIT_CLIENT),
+        }),
+        "★★ the re-labelled survivor was served again — and the label it answers under \
+         must be its OWN anchor, not the freed one"
+    );
+    assert_eq!(gpu.spine.condemned_len(), 1);
+    assert!(
+        gpu.procs
+            .values()
+            .all(|p| !p.clients.contains(&SPLIT_CLIENT)),
+        "★ a live proc absorbed the re-labelled corpse"
+    );
 }

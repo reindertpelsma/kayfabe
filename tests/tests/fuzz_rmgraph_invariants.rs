@@ -11,8 +11,8 @@
 //! - **Never panics / never UB** on ANY input: the core either derives consistent
 //!   boundaries or returns a LOUD typed error. `RmGraph::apply` /
 //!   `project` / `Gpu::apply` must return `Result`, never abort.
-//! - **Order-independence as a PROPERTY**: for any *valid* stream, `project()` of any
-//!   permutation == `project()` of the reference order (generalizes the fixed test).
+//! - **Order-independence as a PROPERTY**: for any *valid* stream, `project(, &NO_CONDEMNED)` of any
+//!   permutation == `project(, &NO_CONDEMNED)` of the reference order (generalizes the fixed test).
 //! - **Structural invariants** on any derived `Boundaries`: every channel maps to
 //!   exactly one Vas/PDB; no two Procs share a PDB or vChid; identical guest
 //!   handles/VAs across Procs never collide; a freed object never appears in any
@@ -30,7 +30,7 @@ use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb};
 use kayfabe_arch::{Arch, ClientKind, ObjectKind};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
-use kayfabe_core::project::project;
+use kayfabe_core::project::{NO_CONDEMNED, project};
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
 use proptest::collection::vec;
@@ -176,7 +176,7 @@ fn any_stream() -> impl Strategy<Value = Vec<RmEvent>> {
 /// Assert every structural invariant on a derived `Boundaries` (or catch a loud
 /// error — both are acceptable; a panic or a corrupt projection is not).
 fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
-    let bounds = match project(g, arch) {
+    let bounds = match project(g, arch, &NO_CONDEMNED) {
         Ok(b) => b,
         Err(_) => return, // A loud typed error is a valid outcome (MISS=FAULT posture).
     };
@@ -488,7 +488,7 @@ proptest! {
             for &ev in evs {
                 g.apply(&arch, ev).expect("valid facts apply");
             }
-            project(&g, &arch).expect("valid facts project")
+            project(&g, &arch, &NO_CONDEMNED).expect("valid facts project")
         };
 
         let forward = project_order(&stream);
@@ -535,7 +535,7 @@ proptest! {
         let (victim, victim_root) = roots[victim_idx % roots.len()];
 
         // Snapshot the victim's PDBs/vChids BEFORE the free.
-        let before = project(&g, &arch).expect("projects");
+        let before = project(&g, &arch, &NO_CONDEMNED).expect("projects");
         let victim_pdbs: BTreeSet<Pdb> = before
             .procs
             .iter()
@@ -547,7 +547,7 @@ proptest! {
         g.apply(&arch, RmEvent::Free { client: victim, handle: victim_root })
             .expect("freeing an existing client root is legal");
 
-        let after = project(&g, &arch).expect("projects after free");
+        let after = project(&g, &arch, &NO_CONDEMNED).expect("projects after free");
         // The victim's clients are gone from every proc.
         for p in &after.procs {
             prop_assert!(!p.clients.contains(&victim), "freed client still grouped into a Proc");

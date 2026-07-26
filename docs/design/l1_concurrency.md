@@ -3783,3 +3783,209 @@ structure that orders work *by time*, which is a scheduler's defining property. 
 legal precisely because it owns no thread and its output is an inbox event. The day something
 proposes to give it a drain thread, the count goes to two — and §6.6's table is where that
 argument has to be had.
+
+### 12.37 ★★★ BOUNDARY-1 BROKEN — a planted dup alias silently condemned a **bystander**, and the entry poisoned handle VALUES it had given back
+
+The standing rule (`Spine::apply`'s own doc, decision #9): *"a hostile stream can only ever
+earn its own loud refusal."* Two composing defects broke it — the first time in this core
+that a hostile guest could earn **another process's** refusal.
+
+#### C1 — the planted alias
+
+Four facts composed, each individually reasonable:
+
+1. `RmEvent::Dup` checks that `dst` is a free handle and that the caps hold. It does **not**
+   check that `dst`'s client namespace exists — an alias planted into a never-allocated
+   namespace is accepted and parked.
+2. It is inert while `dst` is undeclared: `project` filters undeclared dup endpoints out of
+   the client universe, and the grouping predicate needs positive evidence about *both* ends.
+3. It fires the instant the victim declares. `Alloc(Client cV, User)` makes `is_user(dst)`
+   true, so the union runs — on the **same apply that first creates the victim's boundary**,
+   so the victim has no live `Proc` yet.
+4. With no live proc to protect, the condemnation was **silent**: `plan_refresh` returned
+   `CondemnedMerge` only `if let Some(&live) = matching.first()`; otherwise it pushed `None`
+   and `apply` returned `Ok(())`.
+
+```text
+A: Alloc(Client cA, User) … A's worker is killed   ⇒ cA condemned
+A: Dup { src: (cA, obj), dst: (cV, 0x7777) }        ⇒ accepted, inert, Ok
+V: Alloc(Client cV, User)                            ⇒ V's OWN first event
+   ⇒ Ok(()). V condemned, permanently, anchor = cA. Nobody is told.
+```
+
+`hClient` is predictable (in RM the `hClient` **is** its root object's handle), so the attack
+costs one dup per candidate namespace, up to the handle budget.
+
+**★ The asymmetry was the defect.** Dragging a *live* proc into a condemned component was a
+loud `CondemnedMerge`; dragging a *not-yet-live* client in was silent. Whether a victim got a
+refusal or a silent death depended only on the arrival order of its own client-root alloc.
+
+**Fix — the CONDEMNATION LINE in the grouping predicate, not a louder refusal.**
+
+> A `DUP_OBJECT` edge is a grouping edge iff both endpoints are declared `User` clients
+> **and both are on the same side of the condemnation line**.
+
+Making the silent arm loud was considered and rejected: refusing the victim's *own* `Alloc`
+is still the victim paying for the attacker's action, so it does not fix boundary-1 at all —
+it only relabels the damage. Removing the merge removes the transfer of fatality itself.
+Condemnation is a completed fact about a set of clients; a live client that aliases a
+condemned client's resource acquires exactly one dead resource, which is attributed to its
+**origin** and already answers `FwdFault::Condemned` wherever it is reached. It does not
+acquire the corpse's history, and nothing the attacker does can make it.
+
+Two consequences, both good:
+
+- **Components are homogeneous.** An allowed edge never has exactly one condemned end, so a
+  component is wholly condemned or wholly alive, and "is this boundary condemned?" has one
+  answer for all its clients. Two always-on `debug_assert`s state it where it is used.
+- **`GpuError::CondemnedMerge` is retired.** The situation it named is now unrepresentable
+  rather than refusable — the merge does not happen, so there is nothing to refuse. This is
+  also the *fourth* answer the old test's doc said did not exist ("absorb, condemn, or refuse
+  the event"): **do not make it a merge**. It is strictly better than the refusal it
+  replaces, because the refusal was only ever reachable in one of the two arrival orders.
+  `a_dup_into_a_condemned_component_is_refused_atomically` became
+  `a_dup_across_the_condemnation_line_merges_nothing`, asserting the same isolation with an
+  additional claim the old one could not make: the corpse's exec plane is still condemned
+  *through the freshly minted alias*.
+
+`project` therefore takes the flattened condemned client set as a third argument. It stays a
+deterministic pure function — of `(graph, condemned)` rather than of the graph alone — and
+the set is itself order-independent. Every caller that is not `Spine::refresh` passes the
+named `NO_CONDEMNED`, so "this projection considers no client dead" is a statement the call
+site makes rather than one it omits.
+
+#### C2 — the entry retained handles the guest had freed
+
+`Spine::refresh`'s carry-forward re-added the **whole** old entry on every refresh, including
+client handles the guest had since freed and which existed nowhere in the graph. An entry
+vanished only wholesale, when *no* boundary intersected it. But handle reuse is explicit
+design (`RmGraph`'s resource/handle split exists for it, §12.25) and `drop_handle` prunes the
+client-root index on free *precisely so* the namespace can be re-declared.
+
+```text
+allocate c1..cN, dup-join them, get one worker killed   ⇒ entry = {c1..cN}
+free c2..cN, keep c1 alive forever                       ⇒ entry STILL {c1..cN}
+… any later, unrelated process whose hClient lands on a freed value
+  is condemned the moment it declares.
+```
+
+That contradicts the invariant written one screen above it (`absorb_condemned`): *"Absorb,
+never widen … it must never reach a client that did not [share the blast radius]."* **A
+recycled handle value never shared the blast radius.**
+
+**Fix:** intersect the carried entry with the clients the projection still sees (every user
+boundary's clients plus the system component's). Growth over *live* clients is preserved; dead
+handle values fall out. The carried set is seeded from the intersecting boundaries' clients —
+all of which are known by construction — so no entry can come out empty.
+
+#### The evasions monotone growth exists to stop: re-verified, all still fail
+
+Three tests, one per shape, added rather than argued:
+
+- `evasion_dup_a_fresh_client_then_free_the_old_root_still_fails` — a fresh live client
+  aliases the corpse's VASpace and then the corpse's root is freed. The resource stays alive
+  on the attacker's alias, so its origin client stays *known*, so the entry does not shrink
+  and the dead-backed VASpace keeps answering `Condemned`. The test goes one step further and
+  gives the fresh client a **channel bound to the aliased VASpace** — the one genuinely new
+  state the condemnation line creates, a live `Proc` naming an address plane it does not own —
+  and pins that ringing it is a named `FwdFault::UnknownPdb`, never a served ring.
+- `evasion_splitting_the_condemned_component_still_fails` — freeing the joining dup yields two
+  boundaries; both stay condemned (each under its own anchor) and they stay **one** entry.
+- `evasion_relabelling_the_condemned_component_still_fails` — freeing the anchor client
+  re-labels the survivor; it stays condemned, now under its own anchor, and the freed handle
+  value stops being named.
+
+#### Bite-checks (house standard: revert, confirm the exact symptom, restore)
+
+- **C1 reverted** (`let _ = condemned;` in place of the line, `debug_assert`s neutered so the
+  original symptom rather than the new invariant reports):
+  `a_planted_dup_alias_cannot_condemn_a_client_that_has_not_declared` fires
+  *"★★ the victim was condemned by an edge IT never created — a hostile stream earned another
+  process's refusal, which boundary-1 forbids"*;
+  `evasion_dup_a_fresh_client_then_free_the_old_root_still_fails` fires *"the fresh client
+  lives"* (the same bystander death, self-inflicted arm); and
+  `a_dup_across_the_condemnation_line_merges_nothing` fires *"the dup minted or dropped a
+  proc"* (4 vs 5 — the merge absorbing a live proc). With the `debug_assert`s **live**, all
+  three instead fire *"a boundary mixed condemned and live clients — the condemnation line
+  leaked out of the grouping predicate"*, which is the structural statement of the same fact.
+- **C2 reverted** (carry-forward re-adding the whole old entry):
+  `a_condemned_entry_must_not_poison_client_handles_the_guest_has_freed` fires *"★★ a client
+  handle the guest FREED is still condemned — the entry is poisoning a VALUE, and a recycled
+  value never shared the blast radius"*, and nothing else in the suite moves.
+
+#### Docs corrected, because both asserted a protection the code lacked
+
+`Spine::condemned` ("monotonically grown … dropped only when NO boundary intersects it"),
+`absorb_condemned` ("Absorb, never widen"), `Spine::apply` ("a hostile stream can only ever
+earn its own loud refusal" — which rollback alone never guaranteed, since it says nothing
+about *whose* event is refused, nor about an event that is accepted and still kills a
+bystander), and `plan_refresh`'s "all four fault conditions".
+
+#### ★★★ What this leaves open — the SAME primitive, doing something WORSE (reported, not fixed)
+
+C1's planted alias has a second effect, and it is worse than the condemnation. **Drop the
+condemnation entirely and the same one event puts an unrelated later process into the
+ATTACKER's live `Proc`** — one isolate, one GPA arena, one host VAS. Reproduced on this head
+(throwaway probe, deleted; attacker `0xE0`, victim `0xE8`):
+
+```text
+A: (a normal compute process, publishes, live)                ⇒ ProcId(1)
+A: Dup { src: (cA, vaspace), dst: (cV, 0x7b000001) }          ⇒ accepted, inert
+V: a normal compute process at hClient = cV                   ⇒ ProcId(1)   ← the ATTACKER's
+   proc.clients = {0xE0, 0xE8}; one isolate; one arena.
+```
+
+That is #14 un-fixed for the chosen pair, reachable with one event and a guessable `hClient`.
+It is **not** a condemnation defect — nothing here is condemned — so the condemnation line
+does not touch it, and it is deliberately not fixed in this change, because every available
+fix trades against a *stated* property:
+
+- **Refuse a `Dup` whose `dst` client namespace has not declared a root** (which is what RM
+  itself does — `hClientDst` is resolved in the client DB, and a non-existent one is
+  `NV_ERR_INVALID_CLIENT`). This is the RM-faithful answer and it makes the planted alias
+  unrepresentable. It also **breaks decision #4's order-independence as currently stated**:
+  `rmgraph_order_independence.rs`'s own reference scenario dups into the UVM session before
+  `uvm_session()` declares it, the permutation and fuzz properties shuffle roots after dups,
+  and `an_undeclared_client_merges_with_nobody_until_it_declares` asserts the accept-then-
+  merge behaviour on purpose.
+- **Park the edge until `dst` declares** — preserves order-independence and fixes nothing:
+  the merge still fires on the victim's own `Alloc`.
+- **Record whether `dst` was declared when the `Dup` arrived, and refuse the merge if not** —
+  fixes it, and is order-dependent by construction. Note the two orders *already* disagreed
+  observably in the condemned case (one was a loud `CondemnedMerge`, the other a silent
+  death), so the property was not as intact as it looked; but making that disagreement the
+  mechanism is a decision about decision #4, not a bug fix.
+
+Two further shapes fall out of the same root cause — **a client-handle VALUE is used as a
+component identity while the value is recyclable** — and both were reproduced:
+
+- **A freed namespace whose resources are still alive stays condemned.** Attribution is by
+  origin (`RmGraph::nodes` reports a resource at its origin key), so an attacker that dups
+  `cX`'s VASpace into a namespace it keeps and then frees `cX`'s root leaves `cX` in the
+  projection's client universe. C2's shrink therefore (correctly, on its own terms) keeps
+  `cX` in the entry — and a later process handed `hClient = cX` is condemned on arrival, no
+  proc, no route. C1's silent death by a different route, at one live handle per namespace.
+- **…and without any condemnation, that same squat merges the later process into the
+  squatter's proc** — the first bullet's breach, reached through a freed-and-recycled
+  namespace instead of a never-declared one.
+
+The honest fixes for these live one level down (attribute components by a never-reused
+resource identity, or refuse to re-declare a namespace that still holds live resources) —
+a change to the graph's **identity** model, not to the condemnation model.
+
+**Provenance, stated honestly:** in Mode-2 these events come from the guest's stock NVIDIA
+kernel driver, whose RM validates `hClientDst` before emitting the dup RPC, so a hostile
+*user* process in the guest cannot produce them — only a compromised guest kernel can. That is
+equally true of C1, and the core's own threat model (decision #9, and the
+`security_boundary.rs` / `security_invariants.rs` fuzz suites) treats the RM event stream as
+hostile input regardless. So it is in scope by the same rule that put C1 in scope.
+
+Two smaller notes from the same read:
+
+- `FwdFault::UnknownPdb` is what a live channel bound across the condemnation line answers,
+  where `FwdFault::Condemned` would be the more precise miss. `gate_working_set_in` takes only
+  `&Proc` by design (R1's plan/act split), and the condemned maps are on the `Spine`, so
+  naming it exactly is a signature change, not a one-liner. Safe either way — both are loud —
+  but the distinction §12.13 drew between "condemned" and "unknown" is lost at this one site.
+- `Spine::sync_proc_to_boundary` sets `p.anchor` and `p.clients` twice in a row (a duplicated
+  pair of lines, harmless). Left alone deliberately: unrelated to this change.

@@ -31,7 +31,7 @@
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
-use kayfabe_core::project::{ProjectionError, project};
+use kayfabe_core::project::{NO_CONDEMNED, ProjectionError, project};
 use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
@@ -276,7 +276,7 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
     // The old device-global guard would have refused GPU1's identical PDB as a
     // PdbCollision; under the (GpuId, Pdb) key it is legal traffic.
     assert!(
-        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).is_ok(),
+        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).is_ok(),
         "the two-GPU world projects cleanly"
     );
 
@@ -443,7 +443,7 @@ fn determinism_holds_under_gpu_axis() {
             gpu.apply(*ev)
                 .expect("valid multi-GPU fact applies in any order");
         }
-        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).expect("projects")
+        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("projects")
     };
 
     let reference = derive(&events);

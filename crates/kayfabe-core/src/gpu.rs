@@ -99,24 +99,6 @@ pub enum GpuError {
         /// The arch the target was presented under.
         got: &'static str,
     },
-    /// ★ §12.13: a dup edge would have joined a **live** proc's component to a
-    /// **condemned** one (a component whose isolate worker died out of band, see
-    /// [`Spine::retire_proc`]).
-    ///
-    /// Dup-connected clients are ONE proc by construction — one isolate, one arena,
-    /// one blast radius — so honouring the dup would mean either resurrecting the
-    /// condemned component around the live proc's isolate, or condemning a healthy
-    /// proc that had nothing to do with the dead worker (a self-inflicted DoS). The
-    /// third answer is the only honest one: refuse the *event*. [`Spine::apply`] is
-    /// transactional, so the offending `DUP_OBJECT` is rolled back atomically and
-    /// **nothing** is disturbed — the live proc keeps serving, the condemned
-    /// component stays dead. MISS=FAULT applied to a merge.
-    CondemnedMerge {
-        /// The live proc the dup would have folded into the condemned component.
-        live: ProcId,
-        /// The condemned component's label (its smallest client handle).
-        condemned: ProcAnchor,
-    },
     /// ★ G10 (§12.22) — a device-global, guest-reachable list is at its cap, so the
     /// device refuses to derive a **new** `Proc`.
     ///
@@ -815,18 +797,34 @@ pub struct Spine {
     ///
     /// ★ **The same key is what makes RECOVERY possible**, which is the half a user
     /// actually experiences. An application that re-initialises allocates a **new** RM
-    /// client; its boundary has no dup edge to any condemned set, so it is a different
-    /// component, is not condemned, and gets a live `Proc` with its own isolate and
-    /// arena. And an application that simply dies needs no cooperation at all: the guest
-    /// kernel frees its clients on its behalf, no boundary intersects the entry any
-    /// more, and it is dropped. "Sticky-fatal, not bricked" is therefore a property of
-    /// this field's type, not a promise made elsewhere.
+    /// client; that client is on the live side of the condemnation line, so no dup edge
+    /// of its can merge it into a condemned component ([`crate::project`]'s grouping
+    /// predicate) — it is a different component, is not condemned, and gets a live
+    /// `Proc` with its own isolate and arena. And an application that simply dies needs
+    /// no cooperation at all: the guest kernel frees its clients on its behalf, the
+    /// entry loses them, and it is dropped. "Sticky-fatal, not bricked" is therefore a
+    /// property of this field's type, not a promise made elsewhere.
     ///
-    /// Entries are **canonical**: pairwise disjoint, sorted (determinism, decision
-    /// #27), and monotonically *grown* by any boundary that intersects them — a
-    /// component that absorbs new clients keeps the blast radius it earned. An entry is
-    /// dropped only when NO boundary intersects it any more, i.e. when the **guest
-    /// itself** freed the client root.
+    /// Entries are **canonical**: pairwise disjoint and sorted (determinism, decision
+    /// #27). They grow over the component that earned the condemnation — a split-then-
+    /// rejoined corpse keeps ONE entry — and they **shrink to the clients the graph
+    /// still knows**; an entry is dropped when the last of them goes, i.e. when the
+    /// **guest itself** freed the client roots.
+    ///
+    /// ★★ §12.37 (C2) — **and the shrink is load-bearing, not housekeeping.** The
+    /// carry-forward used to re-add the *whole* old entry on every refresh, including
+    /// handles the guest had since freed and which by then existed nowhere in the graph.
+    /// Handle reuse is explicit design ([`RmGraph`]'s resource/handle split exists for
+    /// it, and `drop_handle` prunes the client-root index on free precisely so a
+    /// namespace can be re-declared), so a retained dead handle **poisons a VALUE**: an
+    /// attacker joins N clients into one component, gets one worker killed, frees N−1 of
+    /// them and keeps one alive for nothing, and any later, unrelated process whose
+    /// `hClient` lands on a freed value is condemned the moment it declares. That
+    /// contradicts this field's own rule two paragraphs down — *"it must never reach a
+    /// client that did not [share the blast radius]"* — because **a recycled handle value
+    /// never shared the blast radius.** Intersecting the carried entry with the clients
+    /// the projection still sees keeps the growth over *live* clients (so the evasions
+    /// below all still fail) while letting dead handle values fall out.
     condemned: Vec<BTreeSet<HClient>>,
     /// ★ §12.13 — data-plane routing for condemned components: `(GpuId, Pdb)` → the
     /// condemned component's label. Derived exactly like [`Self::by_pdb`], from the
@@ -839,20 +837,6 @@ pub struct Spine {
     condemned_by_vchid: BTreeMap<(GpuId, VChid), ProcAnchor>,
 }
 
-/// Insert `set` into the canonical condemned list, absorbing (to a fixpoint) every
-/// entry it overlaps, then re-sorting so the list is a deterministic function of the
-/// graph and not of call order (decision #27). Keeping the entries pairwise disjoint is
-/// what makes "does this boundary intersect a condemned component" a single scan with
-/// no transitive follow-up.
-///
-/// **Absorb, never widen.** The fixpoint grows an entry only through clients that are
-/// genuinely dup-connected to it — i.e. that shared its blast radius. It must never
-/// reach a client that did not, because condemnation's whole defensibility is that it
-/// is **sticky-fatal rather than bricked**: a component is dead because the guest's data
-/// in *that* isolate's host memory is gone (`RmBackend::alloc_sysmem`, freed with the
-/// process), and an unrelated or freshly-minted client's data is not. Widening here
-/// would turn a recoverable Xid-shaped fault into a device that refuses everything after
-/// one worker crash.
 /// Union-find root with path halving, over condemned-entry indices (§12.22).
 fn uf_find(parent: &mut [usize], mut x: usize) -> usize {
     while parent[x] != x {
@@ -862,6 +846,34 @@ fn uf_find(parent: &mut [usize], mut x: usize) -> usize {
     x
 }
 
+/// Insert `set` into the canonical condemned list, absorbing (to a fixpoint) every
+/// entry it overlaps, then re-sorting so the list is a deterministic function of the
+/// graph and not of call order (decision #27). Keeping the entries pairwise disjoint is
+/// what makes "does this boundary intersect a condemned component" a single scan with
+/// no transitive follow-up.
+///
+/// ## ★ **Absorb, never widen** — and how that is actually held (§12.37)
+///
+/// An entry must never reach a client that did not share the blast radius, because
+/// condemnation's whole defensibility is that it is **sticky-fatal rather than
+/// bricked**: a component is dead because the guest's data in *that* isolate's host
+/// memory is gone (`RmBackend::alloc_sysmem`, freed with the process), and an unrelated
+/// or freshly-minted client's data is not. Widening would turn a recoverable Xid-shaped
+/// fault into a device that refuses everything after one worker crash.
+///
+/// That used to be a claim about this function's fixpoint, and the fixpoint could not
+/// keep it — because *what* it absorbed came from [`Spine::refresh`]'s boundaries, and a
+/// boundary could contain a client that the dead component never shared anything with:
+/// a guest that dupped across the condemnation line dragged a live client in (C1), and
+/// a carried entry retained handle values the guest had freed and which a *future*
+/// process would be handed (C2). It is now held by two structural facts instead:
+///
+/// 1. **[`crate::project`]'s condemnation line** makes every component homogeneous —
+///    a boundary is wholly condemned or wholly live — so the sets that arrive here can
+///    only ever be clients that were already on the dead side.
+/// 2. **The carry-forward intersects with the clients the graph still knows**, so an
+///    entry cannot outlive the identities that earned it. Growth is over *live* clients
+///    only.
 fn absorb_condemned(list: &mut Vec<BTreeSet<HClient>>, mut set: BTreeSet<HClient>) {
     loop {
         let mut rest = Vec::with_capacity(list.len());
@@ -1035,6 +1047,20 @@ impl Spine {
     /// atomically and no other `Proc`'s state is disturbed. A hostile stream can only
     /// ever earn its own loud refusal.
     ///
+    /// ★★ **The "own refusal" half needed a second mechanism, and had not got it
+    /// (§12.37).** Atomicity says a refused event moves nothing; it says nothing about
+    /// *whose* event gets refused, or about an event that is accepted and still kills a
+    /// bystander. A guest could plant a `DUP_OBJECT` into a client namespace that had
+    /// never been allocated; the edge was inert, and it fired on the victim's own
+    /// `Alloc(Client, User)` — the same apply that first creates the victim's boundary,
+    /// so the victim had no live `Proc`, the condemned-merge refusal did not trigger,
+    /// and `apply` returned `Ok(())` having condemned the victim permanently, anchored
+    /// at the attacker's client. Rollback was working perfectly and was beside the
+    /// point. What holds the sentence now is [`crate::project`]'s **condemnation line**:
+    /// a dup never merges across it, so a component's fate is never transferable by
+    /// another component's event, and the attacker's planted edge earns the attacker
+    /// nothing at all.
+    ///
     /// ★ **How that is actually held, corrected (`l1_concurrency.md` §12.18).** The
     /// sentence above used to be a claim this function did not keep: the snapshot is of
     /// `self.rmgraph` **only**, while [`Spine::refresh`] also retires and removes
@@ -1073,7 +1099,7 @@ impl Spine {
         // infallible, and it **stays**, for a specific reason: three faults are raised
         // AFTER `RmGraph::apply` has already mutated the graph, and none is pre-computable
         // without the post-event graph — `project`'s `PdbCollision`/`VchidCollision`,
-        // `plan_refresh`'s `LateMerge`/`CondemnedMerge`, and `sync_rpc_mappings`'
+        // `plan_refresh`'s `LateMerge`, and `sync_rpc_mappings`'
         // `UnbackedMapping`/`Address`. A single `Alloc` can promote arbitrarily many
         // parked facts, so the post-state is not a local function of the event. Without
         // the rollback the offending fact stays and EVERY subsequent apply re-faults — a
@@ -1416,10 +1442,11 @@ impl Spine {
     ///
     /// Snapshotting the proc set is not the fix (a `Proc` owns isolates; it is neither
     /// cloneable nor cheap). Hoisting the refusals is: `project` is already pure and
-    /// already runs first, so *all four* fault conditions are decidable up front —
-    /// [`GpuError::LateMerge`], [`GpuError::CondemnedMerge`],
-    /// [`GpuError::HeterogeneousArch`], and GPA exhaustion. With them hoisted the
-    /// mutation pass has no `?` left in it and atomicity is **structural, not claimed**.
+    /// already runs first, so *all three* fault conditions are decidable up front —
+    /// [`GpuError::LateMerge`], [`GpuError::HeterogeneousArch`], and GPA exhaustion.
+    /// (There were four: `CondemnedMerge` was retired by §12.37, which made the merge it
+    /// named unrepresentable instead of refusable.) With them hoisted the mutation pass
+    /// has no `?` left in it and atomicity is **structural, not claimed**.
     ///
     /// The last step is the only one that touches live state: it *carves* the arenas
     /// the mutation pass will hand out, because exhaustion is a property of the
@@ -1432,11 +1459,11 @@ impl Spine {
         system: &Proc,
         procs: &mut impl ProcSet,
         bounds: &Boundaries,
-        condemned_bound: &[Option<ProcAnchor>],
+        condemned_bound: &[bool],
     ) -> Result<RefreshPlan, GpuError> {
         let n = bounds.procs.len();
 
-        // (a) Merge legality, in boundary order — the two refusals that used to fire
+        // (a) Merge legality, in boundary order — the refusal that used to fire
         //     mid-mutation.
         let mut matches: Vec<Option<Vec<ProcId>>> = Vec::with_capacity(n);
         for (b, &condemned) in bounds.procs.iter().zip(condemned_bound) {
@@ -1446,13 +1473,31 @@ impl Spine {
                 .map(|(id, _)| id)
                 .collect();
             matching.sort_unstable();
-            if let Some(condemned_label) = condemned {
-                if let Some(&live) = matching.first() {
-                    return Err(GpuError::CondemnedMerge {
-                        live,
-                        condemned: condemned_label,
-                    });
-                }
+            if condemned {
+                // ★★ §12.37 — a condemned boundary gets NOTHING, and `matching` is
+                // necessarily empty, which is why this is not a refusal.
+                //
+                // It used to be `GpuError::CondemnedMerge`: a live proc could be dragged
+                // into a condemned component by a `DUP_OBJECT`, and refusing the event
+                // was the only honest answer available once the merge had already
+                // happened in the projection. But the refusal was **only reachable when
+                // the dragged-in side already had a live `Proc`** — plant the same dup
+                // into a namespace that had not declared yet and the merge fired on the
+                // victim's own `Alloc`, with no proc to protect and therefore in
+                // silence. Whether a victim got a refusal or a silent death depended
+                // only on the arrival order of its own client-root alloc.
+                //
+                // `crate::project`'s condemnation line removes the merge itself, so
+                // there is no arm to make loud and no asymmetry left: a cross-line dup
+                // is a *reference*, the corpse's resources keep answering
+                // `FwdFault::Condemned` at their origin, and the live client keeps its
+                // proc. A component is homogeneous, so no live proc can hold a client of
+                // a condemned boundary.
+                debug_assert!(
+                    matching.is_empty(),
+                    "a live proc held a client of a condemned boundary — the \
+                     condemnation line leaked out of the grouping predicate"
+                );
                 matches.push(None);
                 continue;
             }
@@ -1683,8 +1728,6 @@ impl Spine {
     /// ★ **Every refusal is hoisted into [`Spine::plan_refresh`]** (§12.18): after the
     /// plan is taken, nothing below can fail, so a refused event disturbs no `Proc`.
     fn refresh(&mut self, system: &mut Proc, procs: &mut impl ProcSet) -> Result<(), GpuError> {
-        let bounds: Boundaries = project(&self.rmgraph, self.arch.as_ref())?;
-
         // 0. ★ THE CONDEMNATION PASS (§12.13) — re-derive the condemned client sets
         //    against the NEW boundaries, BEFORE step 1 can mint anything. This is the
         //    whole fix: without it, an out-of-band-retired component reaches step 1's
@@ -1695,13 +1738,7 @@ impl Spine {
         //    predicate step 1 matches live procs on, so the two agree by construction.
         //    Intersecting boundaries also *grow* their entry (the component keeps the
         //    blast radius it earned), and an entry no boundary intersects is dropped:
-        //    condemnation ends only when the guest itself frees the client root.
-        //
-        //    `condemned_bound[i]` carries the CONDEMNED side's own label (the smallest
-        //    client of the intersecting entries, *before* the boundary's own clients are
-        //    folded in), so a refused merge can name the corpse rather than the merged
-        //    boundary's anchor — which, in exactly the interesting case, is the LIVE
-        //    proc's client.
+        //    condemnation ends only when the guest itself frees the client roots.
         //
         //    ★ G10 (§12.22): the "does this boundary intersect a condemned component"
         //    question used to be a nested scan — O(|boundaries| × |condemned|) on EVERY
@@ -1715,6 +1752,18 @@ impl Spine {
                 owner_of.insert(client, i);
             }
         }
+
+        // ★★ §12.37 (C1) — the projection is taken AGAINST the condemned client set,
+        // because grouping is where a merge across the condemnation line has to be
+        // refused (`crate::project`, "the condemnation line"). Deriving the boundaries
+        // first and adjudicating the merge afterwards is what let a guest plant a
+        // `DUP_OBJECT` into a namespace that had not declared yet and have it fire —
+        // silently, since there was no live `Proc` to protect — on the victim's own
+        // first RM event. With the line in the predicate every component is homogeneous,
+        // so the question "is this boundary condemned?" has one answer for all its
+        // clients and the merge is not a fault at all.
+        let condemned_clients: BTreeSet<HClient> = owner_of.keys().copied().collect();
+        let bounds: Boundaries = project(&self.rmgraph, self.arch.as_ref(), &condemned_clients)?;
         //
         //    ★ G10, the second half: the CARRY-FORWARD was worse than the scan. Each
         //    intersecting boundary called `absorb_condemned`, which drains and re-sorts
@@ -1727,7 +1776,7 @@ impl Spine {
         //    boundary, therefore yields exactly the fixpoint the repeated absorb was
         //    grinding out — in near-linear time, and with the identical result.
         let mut parent: Vec<usize> = (0..self.condemned.len()).collect();
-        let mut condemned_bound: Vec<Option<ProcAnchor>> = Vec::with_capacity(bounds.procs.len());
+        let mut condemned_bound: Vec<bool> = Vec::with_capacity(bounds.procs.len());
         let mut boundary_hit: Vec<Option<usize>> = Vec::with_capacity(bounds.procs.len());
         for b in &bounds.procs {
             let hits: BTreeSet<usize> = b
@@ -1735,14 +1784,16 @@ impl Spine {
                 .iter()
                 .filter_map(|c| owner_of.get(c).copied())
                 .collect();
-            // The CONDEMNED side's own label: the smallest client of the entries this
-            // boundary hits, before the boundary's own clients are folded in.
-            condemned_bound.push(
-                hits.iter()
-                    .filter_map(|&i| self.condemned[i].iter().next().copied())
-                    .min()
-                    .map(ProcAnchor),
+            // ★ §12.37: with the condemnation line in the grouping predicate a component
+            // is homogeneous, so this is a property of the whole boundary — every client
+            // of it is condemned, or none is. (`debug_assert`ed below, where the clients
+            // are still in scope.)
+            debug_assert!(
+                hits.is_empty() || b.clients.iter().all(|c| condemned_clients.contains(c)),
+                "a boundary mixed condemned and live clients — the condemnation line \
+                 leaked out of the grouping predicate"
             );
+            condemned_bound.push(!hits.is_empty());
             let mut it = hits.into_iter();
             let first = it.next();
             if let Some(first) = first {
@@ -1756,8 +1807,26 @@ impl Spine {
             }
             boundary_hit.push(first);
         }
-        // The surviving components: an entry no boundary intersects is DROPPED —
-        // condemnation ends only when the guest itself frees the client root.
+        // ★★ §12.37 (C2) — **the clients the graph still knows**, i.e. every client the
+        // projection can still see: one that owns a live resource, or has declared a
+        // root, or is a declared endpoint of a resolved dup. A carried entry is
+        // intersected with this below, so a client handle the guest has FREED — which
+        // exists nowhere in the graph, and which the guest kernel is free to hand to an
+        // unrelated process next — falls out of the entry instead of poisoning the
+        // VALUE forever. The system component is included deliberately: never
+        // under-condemn because a namespace re-declared itself as the guest kernel's.
+        let known: BTreeSet<HClient> = bounds
+            .procs
+            .iter()
+            .flat_map(|b| b.clients.iter().copied())
+            .chain(bounds.system.clients.iter().copied())
+            .collect();
+        // The surviving components: an entry with no surviving client is DROPPED —
+        // condemnation ends only when the guest itself frees the client roots.
+        //
+        // Seeded from the intersecting BOUNDARIES' clients (all of which are in `known`
+        // by construction, which is why no entry here can come out empty), then extended
+        // with the old entries' clients that are still known.
         let mut carried_by_root: BTreeMap<usize, BTreeSet<HClient>> = BTreeMap::new();
         for (b, hit) in bounds.procs.iter().zip(&boundary_hit) {
             if let Some(i) = *hit {
@@ -1771,7 +1840,12 @@ impl Spine {
         for i in 0..self.condemned.len() {
             let root = uf_find(&mut parent, i);
             if let Some(set) = carried_by_root.get_mut(&root) {
-                set.extend(self.condemned[i].iter().copied());
+                set.extend(
+                    self.condemned[i]
+                        .iter()
+                        .filter(|c| known.contains(c))
+                        .copied(),
+                );
             }
         }
         let mut carried: Vec<BTreeSet<HClient>> = carried_by_root.into_values().collect();
@@ -1780,7 +1854,8 @@ impl Spine {
             .procs
             .iter()
             .zip(&condemned_bound)
-            .filter_map(|(b, dead)| dead.map(|_| b.anchor))
+            .filter(|&(_, &dead)| dead)
+            .map(|(b, _)| b.anchor)
             .collect();
 
         // 0b. ★ §12.18 — DECIDE EVERYTHING REFUSABLE FIRST. From here down there is no

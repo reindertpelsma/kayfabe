@@ -50,7 +50,7 @@ use kayfabe_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::{CompletionError, FenceArms, MAX_FENCE_JUMP, OsEventRef};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
-use kayfabe_core::project::project;
+use kayfabe_core::project::{NO_CONDEMNED, project};
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
 use kayfabe_fwd::resolve;
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
@@ -216,7 +216,7 @@ proptest! {
         }
 
         // Device still projects (hostile junk left it consistent).
-        prop_assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).is_ok());
+        prop_assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).is_ok());
 
         // THE property: each PDB resolves the shared VA to ITS OWN phys, never another's.
         for &(pdb, phys) in &oracle {
@@ -628,7 +628,7 @@ proptest! {
             let _ = gpu.apply(ev);
             // No global wedge at ANY point: the device always still projects.
             prop_assert!(
-                project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).is_ok(),
+                project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).is_ok(),
                 "a hostile event left the device unprojectable (a global wedge)"
             );
         }
@@ -839,7 +839,7 @@ fn p3_channel_vas_resolution_type_checks_every_hop() {
     ] {
         g.apply(&arch, e).unwrap();
     }
-    let bounds = project(&g, &arch).expect("projects");
+    let bounds = project(&g, &arch, &NO_CONDEMNED).expect("projects");
     // The channel resolved to NO VAS (its hVASpace named a non-VASpace).
     let chan_facts = bounds
         .procs

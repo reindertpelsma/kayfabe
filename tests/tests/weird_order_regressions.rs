@@ -16,7 +16,7 @@ use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
-use kayfabe_core::project::project;
+use kayfabe_core::project::{NO_CONDEMNED, project};
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
@@ -485,7 +485,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
     // ---- Baseline: the dup joins compute+UVM into ONE proc owning the VAS/PDB. ----
     {
         let g = build();
-        let before = project(&g, &arch).unwrap();
+        let before = project(&g, &arch, &NO_CONDEMNED).unwrap();
         assert_eq!(before.procs.len(), 1, "dup joins compute+UVM into one proc");
         assert_eq!(
             before.by_pdb.get(&(GpuId::ZERO, PDB)).map(|x| x.1),
@@ -516,7 +516,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
         );
 
         // ...and the projection keeps the VAS/PDB routed, now grouped under UVM's proc.
-        let after = project(&g, &arch).unwrap();
+        let after = project(&g, &arch, &NO_CONDEMNED).unwrap();
         assert!(
             after.procs.iter().any(|p| p.clients.contains(&UVM)),
             "UVM's client still projects after the source client's free"
@@ -554,7 +554,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
             g.origin_of(alias).is_none(),
             "the freed dst alias no longer resolves"
         );
-        let after = project(&g, &arch).unwrap();
+        let after = project(&g, &arch, &NO_CONDEMNED).unwrap();
         assert!(
             after.by_pdb.contains_key(&(GpuId::ZERO, PDB)),
             "source VAS's PDB still routes"
@@ -603,7 +603,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
             0,
             "no leaked resources after both refs freed"
         );
-        let after = project(&g, &arch).unwrap();
+        let after = project(&g, &arch, &NO_CONDEMNED).unwrap();
         assert!(
             after.procs.is_empty(),
             "no procs remain after full teardown"
@@ -636,14 +636,15 @@ fn wo_retried_duplicate_events_are_idempotent() {
     // Deliver every event, then deliver every event AGAIN (a full retry storm).
     apply_all(&mut gpu, events.clone());
     let after_first: usize = gpu.procs.len();
-    let bounds_first = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).unwrap();
+    let bounds_first = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).unwrap();
 
     // The retried delivery must be accepted idempotently (no ConflictingAlloc).
     for ev in &events {
         gpu.apply(*ev)
             .expect("retried event is idempotent, not a conflict");
     }
-    let bounds_second = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref()).unwrap();
+    let bounds_second =
+        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).unwrap();
 
     assert_eq!(
         gpu.procs.len(),
