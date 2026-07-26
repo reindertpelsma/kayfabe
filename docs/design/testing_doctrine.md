@@ -181,6 +181,54 @@ boundary grep, the unsafe-surface `ls` gate, the mutation threshold, the conserv
 
 ---
 
+## 7. ★★ An optimisation with a correct-but-slow fallback must have the fallback tested as a FIRST-CLASS mode
+
+From the owner, about the passthrough-versus-trap decision, and it generalises far past that
+feature:
+
+> **Any optimisation that has a correct-but-slow fallback must have that fallback tested as a
+> FIRST-CLASS mode, not as a fallback nobody exercises.**
+
+The failure this prevents is specific and it is not "the slow path has a bug". It is that the
+slow path is the path the system takes **when something has already gone wrong** — the fast
+path bailed, a capability was unavailable, a precondition did not hold — and that is the worst
+possible moment to be running code whose only coverage was the day it was written. A fallback
+exercised solely by the fast path declining is a fallback whose test coverage is a function of
+how often the fast path fails, which is exactly the quantity the optimisation exists to drive
+to zero.
+
+**★ And the sharper half: randomised, irregular toggling tests the TRANSITIONS.** Running the
+two modes as two fixed configurations proves each is self-consistent. It does not touch the
+handoff, and the handoff is where slip-through bugs live: a party that acquired its guarantee
+under one mode and acts on it after the switch. §6.8.1 of `l1_os_shell.md` is the worked
+example — the RW-lock variant's reader/writer slip-through happens *only* at the disarm edge,
+and no amount of steady-state running in either mode can produce it. So the stronger test is a
+seeded, irregular flip between modes **while work is in flight**, with the same end-state
+assertions as either fixed run. Irregular rather than periodic, for §2's reason: a regular
+period is a clock, and a test that passes because of a timing coincidence passes for the wrong
+reason.
+
+**The precedent is this repo's own, and citing it is the argument.** `LockMode::{Degenerate,
+Sharded}` ships and is tested in **both** configurations from day one, specifically so that a
+late granularity flip is never the untested mode (review item P5; `l1_architecture_summary.md`,
+*"Both lock modes ship, and are tested, from day one"*; `l1_os_shell.md` §5.2 item 3, which
+argues the page-size axis **from** that precedent). The differential test asserts a
+bit-identical end state and an operation-by-operation identical log across the two. The host
+page size (`[4 KiB, 16 KiB, 64 KiB]`) is the same move on a second axis, and was argued from
+the `LockMode` precedent rather than from first principles.
+
+**The rules.**
+
+1. **Name the fallback as a mode**, with a way to select it that the suite uses — not a code
+   path reachable only by inducing the failure that triggers it.
+2. **Run both, and assert they agree** on everything the optimisation is not allowed to
+   change (end state, refusal variants, the operation log where one exists).
+3. **Then toggle between them, irregularly, under load**, and assert the same things. This is
+   the arm that finds transition bugs, and it is the arm that a two-fixed-modes suite reads as
+   already covering.
+
+---
+
 ## See also
 
 - `core_mutation_gate.md` — does the suite notice when the core lies? Method, score, thresholds.

@@ -3056,6 +3056,11 @@ cleanup ordering and orphan detection structural rather than per-case. The group
 lands first; this is recorded so that when it is designed, it is designed as bookkeeping
 with an honest name — not as a lifetime mechanism it cannot be.
 
+> ★ **DECIDED (2026-07-26): Option A, record-only** — `l1_os_shell.md` §7.8.1, decision #47.
+> The measured basis for refusing the lifetime variant (a dup'd control fd is a **capability**;
+> RM gates on the file and the uid, never the pid) now has a citable home at
+> `../reference/rm_semantics_measured.md` §8 rather than living in this entry's argument.
+
 #### Tests — `rmgraph_order_independence.rs`, rewritten to reality (15), all bite-checked
 
 The file's `scenario()` used to give A and B **two distinct UVM clients**

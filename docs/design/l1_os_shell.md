@@ -639,6 +639,81 @@ impl is checked against the five refusals above, as part of §11's exit gate. Ty
 of the five; the fifth is a human, and pretending otherwise would be the exact failure mode
 this doc keeps cataloguing.
 
+#### 4.2.2 ★★ The bulk copy under concurrent modification — RULING: keep the memcpy
+
+§14.5 F3 named this gap and left it open on purpose. **It is closed here** (decision #43),
+because the thing it was waiting for turned out not to be a measurement.
+
+`MappedRegion::read_into` reads guest RAM with `copy_nonoverlapping` while the guest may be
+writing the same bytes. In the Rust/LLVM abstract machine that is a **data race, therefore
+UB** — §4.3's own argument, applied to bulk reads instead of to single values — and **there is
+no atomic `memcpy`**. The only defined alternative is a word-wise `Relaxed` copy, several times
+slower on the hottest guest-RAM path we have.
+
+> **RULING: keep `copy_nonoverlapping`.**
+
+**Two independent reasons. Both are recorded because either one alone is weaker than the
+pair**, and the pair is what actually covers the surface:
+
+1. **A torn read is indistinguishable from a hostile guest writing exactly those bytes.**
+   Any byte pattern tearing can produce is a pattern the guest could also have written
+   deliberately, in one uninterrupted store, before we looked. We are **already required** to
+   be correct against arbitrary hostile content — that requirement is not aspirational, it is
+   what the decoder fuzzing exists to enforce (`fuzz/`, plus the hostile/proptest arms of the
+   pushbuffer parser and `b2_pushbuffer_length_flood_is_bounded`,
+   `core_completeness_gate.md`). So tearing moves **no input out of the set the parser must
+   already survive**: it introduces no new failure mode.
+2. **The double fetch — the consequence that would actually hurt — is excluded
+   *structurally*, not by discipline.** What a miscompiled race buys an attacker is not a
+   surprising byte; it is a **re-read**: the optimiser rematerialising a load so that the
+   length we validated and the length we then act on are two different reads of a value the
+   guest changed in between. `MappedRegion` exposes no `as_slice`, no `as_ptr`, no `base()`,
+   no `addr()`, no `Deref`/`AsRef`/`Index`, and no public field (§4.2.1 refusals 1–3, trybuild
+   rows 1, 7, 8). **There is no way to re-read the source**, and the compiler cannot
+   rematerialise a load from a pointer our code never holds. The hazard and the API cancel.
+
+**Why it takes both, stated so neither gets dropped in a summary.** Reason 1 covers
+*content* — the bytes may be anything, and that is survivable. It says nothing about
+*consistency between two reads*, which is precisely where the exploitable bug lives. Reason 2
+covers exactly that, and only that. Quote reason 1 alone and you have argued that arbitrary
+bytes are fine while leaving the double fetch open; quote reason 2 alone and you have argued
+that one read is safe without saying why a *torn* one is.
+
+**The rule this leaves — normative, and it is the part to carry forward:**
+
+> - a **single value we make a decision on** — a semaphore, a USERD field, a ring
+>   head/tail pointer — is read with an **atomic/volatile access, always** (`VolatileRegion`,
+>   §4.3). No exceptions, no "it is only a `u32`".
+> - a **bulk payload we validate after copying** — pushbuffer bytes, an RPC queue entry, a
+>   page of PTEs — is **copied once, validated from the copy, and the source is never
+>   re-read.**
+
+**The honest residual, because this is a bet and not a proof.** It remains UB in the abstract
+machine. Three things make it acceptable, and none of them is "it is fine":
+
+- **every production hypervisor takes this same trade at this same seam** — §14.5 F3 records
+  it as "what every Rust VMM does", and it is an *observation about the ecosystem*, not a
+  proof: the defined alternative does not exist at memcpy bandwidth, so nobody pays for it;
+- **the dangerous consequence is excluded by construction** (reason 2), not by review;
+- **the alternative costs real throughput for defined-ness we never cash in** — we would pay
+  a word-wise atomic copy on every guest-RAM read in order to be guaranteed a value we
+  already treat as hostile.
+
+The theoretical residual is *not* "we might read a wrong byte" — that one is priced in by
+reason 1. It is that a racy read licenses the optimiser to do **anything**, and our claim is
+narrower than "nothing bad happens": it is that the only licence with a reachable consequence
+at this shape is the re-read, and the re-read has no expressible spelling. That is a real gap
+between what the model says and what we rely on, and it is stated rather than argued away.
+
+**★ What would change the ruling — the one thing to look for.** Reason 2 is load-bearing and
+it is a property of the *consumers*, not of the region type. So the ruling fails the moment
+**any decision is made on a bulk-read field without re-validating it from the copy** — a
+length, an offset, a count, an index read out of a copied buffer and then trusted against a
+*different* read of the same memory. That is a review question with a concrete answer, so it
+is on §11's checklist (item 7) rather than left as a feeling. If one is found, the answer is
+not "add a comment": it is either to route that field through `VolatileRegion` (it is a single
+value we decide on, so rule one applies) or to make the second read impossible.
+
 ### 4.3 ★ Volatile vs atomic — where the existing wording is wrong
 
 `l1_concurrency.md` §9.1 says the raw module owns *"volatile access to concurrently-
@@ -1581,6 +1656,67 @@ free today and would not have been after L2 wired one).
 **Residual, stated:** the uffd design itself — registration mode, the fault-handler thread's
 placement, and its interaction with the `assert_lock_free` witness — is **not** designed here.
 It belongs with `kayfabe-linux-raw`, and this section's only claim is where it belongs.
+★ **One shape of it is fixed in advance, and only one — §6.8.1**, because the alternative
+carries a race that is far cheaper to refuse now than to debug later.
+
+#### 6.8.1 ★ The per-region access lock is a PLAIN MUTEX — and the RW variant's slip-through is why
+
+The capability §6.8 relocates has a lock: something must serialise a region's **access
+state** — armed/trapped versus write-passthrough — against the parties currently relying on
+it. The obvious refinement is a reader/writer lock, so that several readers can hold one
+region trapped concurrently. **Decision:**
+
+> **A plain `Mutex`, not an `RwLock`, until a measurement shows contention.**
+
+**The rejected alternative, and the hazard recorded so an upgrade inherits the analysis
+instead of rediscovering it.** The RW variant's difficulty is not the acquire; it is the
+**release**. Re-enabling write passthrough is the act that *ends* the guarantee, and it races
+a new reader stacking on: a reader that arrives while the last holder is dropping can take the
+read side successfully — the count is not yet zero, or it is zero and about to be
+re-incremented — and proceed believing writes are still trapped while the disarm is already in
+flight. **That is a reader holding a lock that no longer means anything**, and it is silent:
+the symptom is a stale read at a rate proportional to concurrency, i.e. it looks like a
+hardware flake. Making it sound requires the disarm and the reader count to move in **one
+indivisible transition**, in a structure whose entire appeal was that the counts move without
+one. It is the hardest correctness problem in that design, and it buys concurrency we probably
+do not need: **per-`Proc` sharding already means different guest processes touch different
+regions** (§6.6's I-NOAMP, the core's per-proc planes), so contention requires two threads *of
+the same guest process* on *the same region* at the same time — the one case where the guest
+driver's own locks are already serialising them (`../reference/rm_semantics_measured.md` §1).
+
+**The discipline this follows is the worker pool's, and it is deliberate that it is the same
+one.** `l1_concurrency.md` §7.2 kept the pool small and bounded rather than sizing it to the
+vCPU count — and §1 of the reference sheet later showed that the wider version would have
+bought **"~nothing on the wire"**, because RM serializes per client and the extra workers are
+extra host threads queued in **D state** on the same uninterruptible `down_write`. **Bounded
+and simple first; widen only on a measurement** is the standing rule, and a lock granularity is
+exactly the kind of decision that otherwise gets made on an intuition about contention nobody
+has observed.
+
+**★ The caveat that makes the "probably unnecessary" honest, because §6.7 pulls the other
+way.** The disjointness argument holds at **page/arena** granularity, which is the granularity
+§6.7 and §6.8 already require (per-page uffd inside a window; per-proc arenas). It does **not**
+hold at **window** granularity: a window is deliberately *shared* across procs — that is the
+whole point of the coarse-memslot rule, and §6.7 item 5 struck the memslot implementation
+precisely because revoking a shared window hits every proc in it. So a lock scoped to the
+*window* would be contended across procs by construction, and the mutex ruling would then be
+buying its simplicity with an I-NOAMP violation. **The ruling therefore carries a
+precondition:** the access lock is scoped to the locked *region* (page range), never to the
+containing window. If an implementation finds that inconvenient, the finding is about the
+scope, not about the mutex.
+
+**The acceptance criterion for a future upgrade**, so it is not re-litigated from scratch:
+(a) a measurement showing the mutex is actually contended, on the region, by threads of one
+proc; **and** (b) a design in which the disarm and the last reader's departure are a single
+transition; **and** (c) the randomised-toggling test of §7 of `testing_doctrine.md` running
+over the upgraded shape — because a slip-through is a *transition* bug and no steady-state
+test can see it.
+
+**And the fallback is a first-class mode, not a fallback.** Trap-everything is the
+correct-but-slow half of the passthrough optimisation; per `testing_doctrine.md` §7 it runs as
+a tested configuration in its own right, and the transitions between the two are exercised by
+irregular toggling rather than by two fixed runs. That rule is general and lives there; this
+is the feature that motivated it.
 
 ---
 
@@ -2225,6 +2361,60 @@ twice and confirm L2 fails; skip the arena release and confirm L5 fails. Run all
 record the result in the contact log. A conservation assertion that has never failed is a
 conservation assertion nobody has checked.
 
+### 7.8.1 ★★ The canonical record of a host object — CLOSED as Option A: RECORD-ONLY
+
+§7.8 is the *test-side* instrument. This is its production counterpart, and
+`l1_concurrency.md` §12.27 left it "scoped, not started". **It is decided (decision #47):**
+
+> **Option A — handle VALUES and metadata only, living in the L1 shell (never the pure core),
+> keyed by `IsolateId` and enumerable per proc. It is named as BOOKKEEPING and is explicitly
+> NOT a lifetime mechanism.**
+
+What it buys is real and worth building: **enumeration, cleanup ordering and orphan
+detection** become structural rather than per-case — audit gap G1 (a successful publish's host
+memory handle recorded nowhere, so nothing could ever free it) was exactly this in miniature,
+fixed one binding at a time. What it does **not** buy is lifetime, and the honest name is
+half the decision: a record with a lifetime-sounding name is how the next reader concludes the
+main process can free something.
+
+**The decision is on measured grounds, not on taste — and the ground is what the alternative
+costs.** The only way a central record could buy *lifetime* is the Mode-1 trick: the main
+process holds a real dup'd device fd, so it owns an independent kernel reference. **That is a
+posture change, not a refactor**, because a dup'd `/dev/nvidiactl` fd in the main process is a
+**capability**, not a bookkeeping token:
+
+- every ioctl-reachable RM entry point gates on **`clientValidate`** and nothing pid-shaped;
+  `clientValidate` compares the client's owning **control-device file** (strict, the Linux
+  default) or a **uid** token — and a dup is the *same* `struct file`, so it passes both;
+- therefore the holder can **allocate under another client, free its root** (destroying
+  everything beneath it) **and enumerate its tree** with `GET_HANDLE_INFO`: **two ioctls, no
+  pid gate on the path**.
+
+Full citations, the exact PDB defaults, and the version caveat:
+**`../reference/rm_semantics_measured.md` §8** — cited rather than restated, so a correction
+lands in one place.
+
+**★ The misreading that would make this look safe.** RM *does* have per-process checks — mmap
+contexts, cross-PID dup policy — and they are **CPU-mapping coherence and share policy, not an
+access boundary** (`../reference/rm_semantics_measured.md` §8, §7). Reading them as a security
+boundary is the exact mistake, and it is available to anyone who greps for `ProcID` and finds
+hits. It would collapse the privilege boundary the isolate exists for: **security is tied to
+the CREATOR**, so a central record can never mean central *allocation*
+(`l1_concurrency.md` §12.27).
+
+**The sanctioned escape, if lifetime is ever genuinely required**, is therefore not a device
+fd but an **export-object fd** — NVIDIA structurally bars an export fd from becoming a mapping
+fd (`nvidia_mmap` → `-EINVAL`, `ogkm: kernel-open/nvidia/nv-mmap.c:781-788`), so its
+capability is narrower by construction rather than by our discipline. Documented as the escape;
+not taken now, because §12.27's finding stands: **nothing in the current design needs to
+outlive an isolate**, since origin-attribution already keeps the allocator's isolate, arena and
+backing alive for exactly as long as a surviving reference lives.
+
+**Residual:** the record is a mirror, and a mirror can diverge. The thing that keeps it honest
+is §7.8's ledger discipline applied to production — the record is fed from the same single
+funnel every verb already passes through, or it is a second source of truth, which is the
+failure mode `l1_concurrency.md` §12.35 spent a stage removing from the test side.
+
 ### 7.9 What is **not** mock-testable — and therefore waits for L3
 
 Stated so we never claim more than we verify:
@@ -2397,6 +2587,39 @@ payload.
 asserting no syscall-shaped `Vmm` method is ever invoked with a rank held; **the memslot
 frequency gate** (§6.7 — installs `O(procs)`, not `O(publishes)`); the ledger still balances.
 
+> **★★ M2-c builds against the KVM-direct harness — NOT QEMU.** This is a decision, not an
+> ordering convenience, and it has two justifications that are worth keeping separate.
+>
+> **One variable, not two.** The harness has **no BQL, no main loop and no foreign locks**
+> (§6.3's class rule is *vacuously satisfied* there, and §7.9's row says so explicitly). So
+> M2-c can get the memory plane right — plan/execute/commit, two-tier coarse/fine, the
+> drop-the-lock discipline — **without simultaneously fighting lock ordering imposed by
+> someone else's design**. That matters here specifically because M2-c is the stage the design
+> already predicts is where R1's reckoning repeats (§6.2, §13 item 9): meeting that reckoning
+> with a foreign whole-machine lock in the same diff is how a real finding gets misattributed
+> to an adapter bug, or the reverse.
+>
+> **★ And it is the strongest portability guarantee available to us.** §6.0's contract says a
+> second backend costs one adapter crate. The **first real `Vmm` implementation being
+> non-QEMU** proves the port is VMM-agnostic **by construction** rather than by intention —
+> the failure mode the VMM-vocabulary gate (#39) catches at the level of identifiers, this one
+> catches at the level of *behaviour*. A trait that has only ever been implemented against one
+> hypervisor is a trait shaped by that hypervisor whether or not its vocabulary shows it.
+>
+> **★★ The condition, which matters as much as the decision.** The QEMU adapter is scheduled
+> as **its own milestone (L2-Q below) whose FIRST task is the BQL verification, not its
+> last.** Without that clause, "we will do QEMU later" becomes "QEMU is a surprise" — which is
+> the exact shape of the C-artifact debt this session found: *"currently we hold the QEMU BQL
+> across dispatch for simplicity and will relax this later"* (`C: virtio_nvgpu.c:16-18`),
+> recorded honestly, never paid, and load-bearing for I-NOAMP on the hottest path (§6.3).
+>
+> **The honest cost, stated because it is real:** a harness proves our **logic**, not our
+> **integration**. It does not close the mock-versus-real gap; it **moves** it — from "does
+> the core survive an OS" to "does the shell survive a hypervisor". §7.9's table is where that
+> residue is enumerated, and the BQL/memslot rows are already in it. The direction is
+> therefore to **do both**, so that the design is known to be solid either way: the harness is
+> what makes each finding attributable, not what makes QEMU optional.
+
 **M2-d — the real reactor loop.** The epoll thread keyed on `CompletionSource`; counter,
 timer and exit-descriptor sources; the isolate relay; the executor thread +
 `ExecutorWaker`; registration plumbing and the deregister→close rule; the source cap (core
@@ -2428,6 +2651,23 @@ appendix for the double-mmap boundary; the caps from G9 (targets) and G10 (conde
 growth) with their refusal paths exercised; the ratchets re-measured.
 **Gate:** the review signed off **as part of this milestone, not as later cleanup**, and
 every cap's refusal path exercised by the security suite.
+
+**★★ L2-Q — the QEMU adapter, as its own milestone, BQL verification FIRST.** Not a stage of
+M2 and not a tail task of one: a milestone, because it is where our design meets a lock we do
+not own. **Its first task is the verification, before any device code:** confirm that
+`memory_region_clear_global_locking()` exists on the **target QEMU version**, that it applies
+to our BAR regions, and that a trapped MMIO access is then dispatched **without** the BQL —
+measured the way §7.9's row prescribes (park a verb on one vCPU, assert another vCPU's
+unrelated MMIO still completes). §6.3 already says why: both of our entry paths arrive with
+the BQL **held**, so "we take no foreign lock" is not sufficient on QEMU, and if the API is
+unavailable this is **an L2 blocker, not a tuning item**. Everything else in the milestone —
+`Device` registration, the memslot install path, `raise_irq` as irqfd, the written list of
+in-lock-legal QEMU functions (§6.3 enforcement item 3) — is downstream of that answer, and
+some of it is *shaped* by it.
+**Gate:** the BQL verification recorded as a result (pass, or a named blocker with the version
+it was tested against — not an assumption); the `rt_shell`/`l1_mean` suites green against the
+QEMU `Vmm` in both lock modes; the memslot frequency gate holding on a real KVM; §7.9's
+QEMU-conditional rows converted from "expected" to "observed".
 
 ---
 
@@ -2466,8 +2706,16 @@ when L1 is."* They are being written now. So the review is part of M2-f's gate.
    way a bounded object stops being bounded.
 6. **Access shape on shared pages.** No borrow into guest- or GPU-written memory ever
    escapes (§4.2/§4.3); GPU-written pages accessed only via aligned ≤8-byte atomic views.
-7. **Double-fetch.** Everything parsed from guest memory is copied first, then parsed from
-   the copy. Verify no parser takes a region reference.
+7. **Double-fetch — and it is the falsifier for §4.2.2's ruling, not a hygiene item.**
+   Everything parsed from guest memory is copied first, then parsed from the copy. Verify no
+   parser takes a region reference. ★ **Then ask the sharper question:** is there any place
+   where a decision is made on a **bulk-read field** — a length, an offset, a count, an index —
+   *without* re-validating it from the copy it came out of? §4.2.2 keeps `copy_nonoverlapping`
+   over guest-writable RAM on the explicit grounds that the double fetch is unspellable; a
+   single site that re-reads, or that validates one read and acts on another, is the finding
+   that reopens the ruling. The remedy is to route that field through `VolatileRegion` (rule
+   one: a single value we decide on is always atomic) or to remove the second read — never a
+   comment.
 8. **Lifetime/unmap ordering.** A region cannot be unmapped while a derived reference lives
    (lifetimes); an isolate's mappings are torn down before the backing object's last
    reference drops.
@@ -2678,6 +2926,67 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     `kayfabe_rt::SharedDevice` already offers the opposite. The backend that pays is the one
     with the **better** concurrency story (a `&self` bus callback), not the one that
     serializes everything anyway. Zero implementors today; free now, a signature break later.
+
+**★ Design-conversation rulings, 2026-07-26 (post-M2-b).** Like §14.2/§14.4 these are
+**owner-directed**, arriving from the design conversation around M2-b's findings rather than
+from the build. They are filed at their subjects rather than appended as a log, and listed
+here so the ledger stays the one place that enumerates every decision.
+
+43. **★★ Keep the bulk `copy_nonoverlapping` over guest-writable RAM — and the rule it leaves
+    (§4.2.2)**, closing §14.5 F3. Two independent reasons, both required: **a torn read is
+    indistinguishable from a hostile guest writing exactly those bytes** (a case the decoder
+    fuzzing already obliges us to survive), and **the double fetch is excluded structurally** —
+    `MappedRegion` offers no `as_slice`/`as_ptr`/`base()`/`Deref`, so the source cannot be
+    re-read and the optimiser cannot rematerialise a load from a pointer we never hold.
+    **The rule: a single value we make a decision on → atomic/volatile, always; a bulk payload
+    we validate after copying → copy once, validate the copy, never re-read.** Residual stated
+    (it is still UB in the abstract machine; what makes it acceptable is that the dangerous
+    consequence is unspellable and the defined alternative buys defined-ness against a value
+    we treat as hostile). **Falsifier named:** any decision made on a bulk-read field without
+    re-validating from the copy — §11 item 7.
+44. **★ The per-region access lock is a plain `Mutex`, not an `RwLock`, until a measurement
+    shows contention (§6.8.1)** — the RW variant's **reader/writer slip-through** (re-enabling
+    write passthrough races a new reader stacking on, so a reader can hold a lock that no
+    longer means anything) is the hardest correctness problem in that design, and per-`Proc`
+    sharding already means different guest processes touch different regions, so the
+    concurrency it buys is probably unnecessary. Same discipline as the worker pool:
+    **bounded/simple first, widen only on a measurement.** The hazard is recorded so a future
+    upgrade inherits the analysis instead of rediscovering it, with a three-part acceptance
+    criterion.
+45. **★★ An optimisation with a correct-but-slow fallback must have the fallback tested as a
+    FIRST-CLASS mode** (`testing_doctrine.md` §7) — and **randomised, irregular toggling tests
+    the transitions**, which is strictly stronger than running two fixed modes, because
+    slip-through bugs live at the handoff. Precedent cited rather than invented:
+    `LockMode::{Degenerate, Sharded}` ships both configurations from day one (review item P5)
+    so a late granularity flip is never the untested mode; the host-page-size axis is the same
+    move. Motivating feature: the passthrough-versus-trap decision (§6.8.1).
+46. **★★ The two-layer trust model for guest-shared memory**
+    (`core_security_threat_model.md` §2.1) — *Layer 1 (trap + lock) gives SECURITY against a
+    guest that ignores the protocol; Layer 2 (NVIDIA's own synchronisation points) gives
+    CORRECTNESS for a guest that follows it; shared tables are NEVER authoritative for an
+    immediate decision.* Neither is a weaker form of the other: Layer 1 removes the TOCTOU
+    window a hostile guest would otherwise have between our validation and our action, and
+    **a guest can fake Layer 2**, which is why Layer 1 is not optional; Layer 2 is the only
+    thing that says when a cooperating guest's data is *finished*, which no lock can tell us.
+47. **★ The central registry is closed as Option A: RECORD-ONLY (§7.8.1)** — handle values and
+    metadata in the L1 shell, keyed by `IsolateId`, named as bookkeeping and explicitly not a
+    lifetime mechanism. Decided on measured grounds: the only route to lifetime is a dup'd
+    `/dev/nvidiactl` fd in the main process, and that fd is a **real capability** — RM gates
+    on the control-device **file** and the **uid**, never the pid, so its holder can allocate
+    under another client, free its root and enumerate its tree in **two ioctls with no pid
+    gate** (`../reference/rm_semantics_measured.md` §8). RM's per-process checks are
+    CPU-mapping coherence, **not** an access boundary. Export-object fds remain the documented
+    sanctioned escape (`nv-mmap.c:781-788` bars an export fd from becoming a mapping fd).
+48. **★★ M2-c builds against the KVM-direct harness; the QEMU adapter is its own milestone
+    whose FIRST task is the BQL verification (§10)** — the harness has no BQL, no main loop
+    and no foreign locks, so the memory plane gets one variable instead of two at exactly the
+    stage where R1's reckoning repeats; and **the first real `Vmm` being non-QEMU proves
+    §6.0's portability contract by construction rather than by intention.** The condition is
+    half the decision: `memory_region_clear_global_locking()` is verified against the target
+    QEMU version **first**, or "we will do QEMU later" becomes "QEMU is a surprise" — the exact
+    shape of the C's unpaid debt (`C: virtio_nvgpu.c:16-18`). Honest cost: a harness proves our
+    *logic*, not our *integration*; it **moves** the mock-versus-real gap (§7.9) rather than
+    closing it, so the direction is to do **both**.
 
 **Genuinely open:**
 
@@ -3130,9 +3439,18 @@ Built: `copy_nonoverlapping`, with the gap named on the type rather than claimed
 makes it tolerable *here specifically* is that the copy happens **once** and the source is
 never re-read, so the miscompilation such a race actually produces — an optimiser-inserted
 re-read — is the double-fetch this API exists to prevent; the discipline and the hazard
-cancel. **This is a design question, not an implementation one**, and it is left open on
+cancel. ~~**This is a design question, not an implementation one**, and it is left open on
 purpose: the answer is a measurement (how hot is guest-RAM bulk read?) and a decision, and
-neither belongs in the stage that had no consumer for either.
+neither belongs in the stage that had no consumer for either.~~
+★ **CLOSED the same day, and not by a measurement** (§4.2.2, decision #43): the ruling is
+*keep the memcpy*, on two grounds that need no number — a torn read is indistinguishable from
+a hostile guest writing those bytes (a case we are already required to survive), and the
+double fetch is excluded structurally because the API offers no way to re-read the source.
+The measurement this entry asked for would not have decided anything: it could only have
+priced the alternative, and the alternative buys defined-ness against a value we treat as
+hostile either way. **What the closure adds is the normative split** — a single value we
+decide on is always atomic; a bulk payload is copied once and validated from the copy — and
+a named falsifier (§4.2.2's last paragraph, §11 item 7).
 
 **F4. §4.5's `assert_lock_free` at the `munmap` site must fire *after* the call.** `Drop` is
 the one syscall site an ordinary scope exit reaches with a lock held — so it is the one

@@ -69,6 +69,82 @@ The boundary objects the core reasons about (arch doc §4.3.1a):
 `Proc` membership is a **pure projection** of the RM graph's client-ownership tree +
 `DUP_OBJECT` edges — never inferred from timing.
 
+### 2.1 ★★ The two-layer trust model for guest-shared memory
+
+Everything above says *who* the adversary is. This says **what a page of memory the guest can
+write is worth to us**, and it is the cleanest statement of the trust boundary this project
+has produced. It is normative for every shared table, ring, descriptor and page-table view in
+the system.
+
+> **Layer 1 (trap + lock) gives SECURITY against a guest that ignores the protocol.
+> Layer 2 (NVIDIA's own synchronisation points — the handshakes the real guest kernel uses,
+> e.g. around PDB updates) gives CORRECTNESS for a guest that follows it.
+> Shared tables are NEVER authoritative for an immediate decision.**
+
+**Neither layer is a weaker version of the other**, and that is the whole reason both are
+named:
+
+- **Layer 2 alone is not security.** A cooperating guest reaching a protocol sync point tells
+  us its data is stable; a malicious one simply does not reach it, or reaches it and keeps
+  writing. Worse, a hostile guest can update a shared table **after our validation passed and
+  before we act** — the classic TOCTOU window, and the one that turns "we checked it" into
+  "we checked a value that no longer exists". Layer 1's job is to make that window **not
+  exist**: while the region is trapped/locked, there is no interval in which the guest can
+  move the bytes we decided on. ★ **And a guest can *fake* Layer 2** — emit the handshake, the
+  invalidate, the doorbell, at any moment it likes, including moments the real driver never
+  would. That is precisely why Layer 1 is not optional and cannot be replaced by "we follow
+  the protocol carefully".
+- **Layer 1 alone is not correctness.** A trap tells us the bytes cannot change while we look;
+  it does not tell us the bytes are *finished*. A cooperating guest mid-way through publishing
+  a page-directory update has written something internally inconsistent and entirely stable,
+  and reading it under a perfect lock yields a perfectly-locked wrong answer. **Only the
+  protocol's own synchronisation points say when the data is meant to be read** — which is why
+  we take the guest's own edges (the TLB invalidate, the CE release semaphore, the GSP RPC,
+  the fn-47 idle handshake) rather than inventing a moment of our own.
+
+**The consequence, and it is the sentence that decides designs:** a shared table is evidence,
+never authority. Nothing may key an immediate decision on a value read out of guest-writable
+memory at an arbitrary instant. The core's existing shape is this rule already made
+structural — the address table is **forward-populated** from declared events and never
+reverse-resolved out of guest memory, and **MISS = FAULT** (§3 I1, `kayfabe-mmu`); the
+pushbuffer is parsed from a **copy** and only at the seams where we are the mediator; a
+completion fires only from a genuinely-armed source (§3 I2). Where guest memory *is* read, it
+is read at a Layer-2 edge and treated as a *declaration to be validated*, not as truth.
+
+**This is described, not proposed — Layer 2 already runs.** The C artifact implements the
+Layer-2 handshakes for Mode-2: its address table is populated **only from guest-declared
+edges**, never by walking guest memory whenever we feel like it
+(`C: docs/design/mode2_address_table.md`).
+
+★ **And the C's own measurement sharpens what "the protocol's sync point" means, in a way
+worth carrying:** it is *whichever* edge the protocol actually commits at, not a favourite
+one. On the kernel/UVM/RM paths that edge is the TLB invalidate (both transports carry the PDB
+and the membar bits). On the **GSP-emulated compute path it is not**: round 6 of the #14
+investigation measured **zero** occurrences of both invalidate transports *and* of
+`DMA_FILL_PTE_MEM` there, and the commit point that replaces the absent invalidate is the **CE
+release semaphore** at which the observed CE page-table write is latched and decoded
+(`C: docs/design/mode2_address_table.md` §5, audit S3). So a design that had encoded "read at
+the invalidate" as *the* Layer-2 rule would have had no sync point at all on the path that
+matters most — the general rule survives, one of its instances did not. The rewrite carries
+both edges as first-class facts (`TlbInvalidate` and the CE-write capture,
+`execution_plane.md`).
+
+**What the C does *not* have is Layer 1.** Trap-and-lock over guest-shared memory is named in
+the rewrite architecture as a capability with an explicit *"ASSUMPTION — verify"* attached
+(`C: docs/design/mode2_rust_rewrite_architecture.md`, decision #6: userfaultfd / memslot
+revoke-restore, never host `mprotect`), and it is **built** at L1/L2 here
+(`l1_os_shell.md` §6.8/§6.8.1). That asymmetry is exactly why the two layers are written down
+together in one place rather than each in its own milestone's doc: the working system to date
+has been running on Layer 2 alone, which is correct for a cooperating guest and is not a
+security property.
+
+**Scope note.** §1 defers *memory-safety* to a post-L2 audit and that deferral stands: this is
+a **trust model**, not an out-of-bounds analysis. It is stated in this document because it is
+the rule that decides what the core is allowed to believe about its own inputs, and the core's
+inputs are guest-writable memory. Its bulk-read corollary — *copy once, validate the copy,
+never re-read; a single value we decide on is always atomic* — is `l1_os_shell.md` §4.2.2, and
+is the same principle applied one layer down.
+
 ---
 
 ## 3. The isolation invariants, as checkable properties

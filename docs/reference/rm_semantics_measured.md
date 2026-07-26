@@ -249,6 +249,58 @@ makes "a user↔user dup edge is the sharing edge" a faithful model rather than 
 
 ---
 
+## 8. ★★ A dup'd control fd IS a capability — RM gates on the FILE and the uid, never on the pid
+
+This is the fact the central-registry decision turns on (`../design/l1_os_shell.md` §7.8.1), so
+it is recorded here with its citations rather than in the design doc that consumes it.
+
+**[src] Every ioctl-reachable resource-server entry point runs the same one check on the
+caller — `clientValidate` — and nothing pid-shaped.** `serverAllocResource`
+(`ogkm: .../resserv/src/rs_server.c:824`), `serverFreeResourceTree…` (`:1153`),
+`serverControl` (`:1547`), `serverCopyResource` (dup, `:1695`), `serverShareResourceAccess`
+(`:1933`), `serverMap`/`serverUnmap` (`:2022`, `:2138`), `serverInterMap`/`serverInterUnmap`
+(`:2232`, `:2554`).
+
+**[src] And `clientValidate` is not a process check.** The generic resserv implementation is a
+literal `return NV_OK` (`.../resserv/src/rs_client.c:452-459`); RM's override does the work
+(`.../rmapi/client.c:765-791`), and it has exactly two arms, both enabled by default on Linux
+(`PDB_PROP_SYS_VALIDATE_CLIENT_HANDLE` = `((0)||(1)||(0))` and `…_STRICT` = `((1) && !0)`,
+`generated/g_system_nvoc.c:110-111`):
+
+| arm | what it compares | consequence for a dup'd fd |
+|---|---|---|
+| **strict** (default): `pClient->pOSInfo != pSecInfo->clientOSInfo → NV_ERR_INVALID_CLIENT` | the client's owning **control-device `struct file`** — `secInfo.clientOSInfo = nvfp->ctl_nvfp` (`arch/nvalloc/unix/src/escape.c:379-381`), stamped into the client at creation (`rmapi/client.c:91`) | a **dup** (or an `SCM_RIGHTS` copy) is *the same* `struct file`, so it **passes**. A fresh `open()` of `/dev/nvidiactl` is a different file and does not |
+| non-strict: `_rmclientUserClientSecurityCheck` (`client.c:469-…`) | a **uid** security token (`osGetSecurityToken` → `osValidateClientTokens`), plus a kernel-vs-user privilege check | same uid ⇒ **passes** |
+
+> **★ [inferred] The capability statement.** The gate is the **file** (and the uid), never the
+> calling process. So a dup'd `/dev/nvidiactl` descriptor held by another process is a **real
+> capability over the whole client namespace behind it**: allocate under another client, free
+> its root and destroy everything beneath it, or enumerate its tree with
+> `GET_HANDLE_INFO` — **two ioctls, no pid gate anywhere on the path**. This is consistent
+> with, and sharper than, the already-recorded *"RM client lifetime is keyed to the **file**,
+> not the process"* (`arch/nvalloc/unix/src/osapi.c:552-557`, `../design/l1_concurrency.md`
+> §12.27).
+
+**★ The misreading to avoid, stated because it is the available mistake.** RM *does* have
+per-process checks — an mmap context may only be armed by the process owning the client
+(`osapi.c:2540-2542`, `kernel-open/nvidia/nv-mmap.c:542-549`), and cross-PID `DUP_OBJECT` is
+denied by default (§7). **Those are CPU-mapping coherence and dup policy, not an access
+boundary**, and reading them as one would conclude that holding the fd is harmless. It is not:
+none of them stands between a control fd and Alloc/Control/Free.
+
+**[src] The sanctioned escape, if a lifetime hold is ever genuinely required**, is an
+**export-object fd** rather than a device fd. NVIDIA structurally bars an export fd from
+becoming a mapping fd: `nvidia_mmap` returns `-EINVAL` outright when the file has objects
+exported into it — *"Do not allow mmap operation if this is a fd into which rm objects have
+been exported"* (`kernel-open/nvidia/nv-mmap.c:781-788`). So the capability an export fd
+carries is narrower **by construction**, not by our discipline.
+
+⚠️ Every row here is **[src]** at `ogkm` 610.43.02 — §0's version caveat applies, and the two
+PDB defaults in particular are values, not shapes. Nothing in this section has been confirmed
+by a bench experiment on 580.159.04.
+
+---
+
 ## See also
 
 - `mode2_bench_lifecycle.md` — the *C Mode-2 artifact's* measured lifecycle behaviour

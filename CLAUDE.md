@@ -42,6 +42,27 @@ The design is settled — **implement it, do not re-improvise architecture.**
   (never `is_err()`), composed runs vs isolated cases, and the gates that can be wrong
   *upward*: `docs/design/testing_doctrine.md`. Every rule there is a generalisation of a
   specific incident, cited.
+- **An optimisation with a correct-but-slow fallback ships with that fallback as a
+  FIRST-CLASS tested mode**, and the *transitions* between them are tested by randomised
+  irregular toggling — stronger than two fixed runs, because slip-through bugs live at the
+  handoff (`testing_doctrine.md` §7; the `LockMode::{Degenerate, Sharded}` precedent).
+
+## Standing rulings on guest-shared memory
+
+Two normative rules that every subsystem touching guest-writable memory inherits. Both are
+stated in full where they are argued; they are here because neither is discoverable from the
+file it constrains.
+
+- **The two-layer trust model** (`docs/design/core_security_threat_model.md` §2.1) —
+  **Layer 1 (trap + lock) gives SECURITY against a guest that ignores the protocol; Layer 2
+  (NVIDIA's own synchronisation points) gives CORRECTNESS for a guest that follows it; shared
+  tables are NEVER authoritative for an immediate decision.** A guest can *fake* Layer 2,
+  which is why Layer 1 is not optional; a lock cannot tell us data is *finished*, which is why
+  Layer 2 is not redundant.
+- **The read split** (`docs/design/l1_os_shell.md` §4.2.2, decision #43) — **a single value we
+  make a decision on (semaphore, USERD, ring pointer) → atomic/volatile, always; a bulk payload
+  we validate after copying → copy once, validate the copy, never re-read.** The bulk memcpy
+  over guest RAM is kept deliberately, with its residual and its falsifier written down.
 
 ## Layout
 
@@ -55,7 +76,8 @@ it can be corrected in one place:
 - `rm_semantics_measured.md` — host RM/UVM semantics (per-client WRITE serialization,
   uninterruptible waits ⇒ an interrupted alloc completed, **UVM = one RM client per module
   load**, the `processID` client-kind discriminator, `deviceInstance` fails open to GPU 0,
-  kernel references that outlive their process). ★ Carries the `ogkm` 610.43.02 vs bench
+  kernel references that outlive their process, **a dup'd control fd is a capability — RM
+  gates on the file and the uid, never the pid**). ★ Carries the `ogkm` 610.43.02 vs bench
   580.159.04 version caveat — read §0 before quoting a number.
 - `mode2_bench_lifecycle.md` — the C artifact's measured teardown behaviour (one CUDA process
   per QEMU lifetime; `rmmod` emits **no** fn-47; the driver-restart blocker is the
