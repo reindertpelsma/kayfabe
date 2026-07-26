@@ -301,6 +301,47 @@ by a bench experiment on 580.159.04.
 
 ---
 
+## 9. ★★ RM resolves `hClient` FIRST — "use before exist" is `NV_ERR_INVALID_CLIENT`, not a tolerated ordering
+
+**[src]** Every ioctl-reachable resource-server entry point looks the client handle up in
+the client database **before** it touches a single object handle, and fails if it is not
+there. `ogkm src/nvidia/src/libraries/resserv/src/rs_server.c`:
+
+| operation | entry point | client lookup | then |
+|---|---|---|---|
+| `RM_ALLOC` (non-root) | `serverAllocResource` | `:778` `_serverLockClientWithLockInfo` | `clientValidate` `:824` |
+| `DUP_OBJECT` (**both** ends) | `serverCopyResource` | `:1674` `_serverLockDualClientWithLockInfo` | `clientValidate(dst)` `:1696` |
+| `RM_CONTROL` (e.g. `SET_PAGE_DIRECTORY`) | `serverControl` | `:1503` / `:1519` | `clientValidate` `:1547` |
+| `RM_MAP_MEMORY_DMA` | `serverInterMap` | `:2218` | `clientValidate` `:2232` |
+| `RM_FREE` | `serverFreeResourceTree` | `:1143` | — |
+| map / unmap | `serverMap` / `serverUnmap` | `:2009` / `:2131` | — |
+
+A missing client entry is `NV_ERR_INVALID_OBJECT_HANDLE` inside the lock helper
+(`:3486-3487` for the single-client form, `:3547-3550` for the dual), and `clientValidate`'s
+own refusal one line later is `NV_ERR_INVALID_CLIENT`
+(`ogkm src/nvidia/src/kernel/rmapi/client.c:782`).
+
+**[src]** The **one** exemption is the client-root alloc itself, which *creates* the
+namespace: `serverAllocResource` branches to `serverAllocClient` (`:764`) and never takes
+the client lock.
+
+**[src]** Freeing a client root destroys the whole namespace (children-before-parents,
+`rs_client.c:830-849`), so "a namespace with no root" and "a namespace that never existed"
+are the same state to RM.
+
+> **★ [inferred] The rule this forces on a forwarder.** Order-independence is owed to the
+> orderings the protocol *allows*, not to every ordering a stream can express. **No event
+> may name a client namespace that does not exist** — and the earlier fact here is one we
+> always observe, because a client root is on the GSP wire by construction (§4 is decoded
+> from exactly that RPC). Contrast §3: only 25 of 82 dups reach GSP, so a dup's *source
+> object* may be one RM saw and we did not, which is why THAT absence must stay a deferral.
+> The two are different categories and look identical in code.
+
+Design consequence: `../design/l1_concurrency.md` §12.38 (the corrected MISS criterion, and
+the cross-process isolation break that came from getting it wrong).
+
+---
+
 ## See also
 
 - `mode2_bench_lifecycle.md` — the *C Mode-2 artifact's* measured lifecycle behaviour

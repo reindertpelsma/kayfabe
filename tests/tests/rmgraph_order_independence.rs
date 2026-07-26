@@ -141,10 +141,16 @@ fn uvm_session(s: &mut Scenario) {
 /// ★ The canonical scenario, rewritten to the measurement (§12.27): processes A and B,
 /// ONE shared kernel/UVM client that BOTH dup into, and a second *user* client that
 /// genuinely shares with A (the merging edge).
+///
+/// ★ §12.38 — the session is declared FIRST, which is also what the hardware does:
+/// `nvUvmInterfaceSessionCreate` runs once from `uvm_global_init` at `nvidia_uvm`
+/// **module load**, so the session client exists before any CUDA process has started, let
+/// alone dup'd into it. The scripted order used to dup into the session before declaring
+/// it — an ordering RM refuses (`NV_ERR_INVALID_CLIENT`) and therefore never emits.
 fn scenario() -> Scenario {
     let mut s = Scenario::new();
-    compute_and_uvm_dup(&mut s, A, A_PDB, 0x10, 0x11, HObject(0x9000_00a7));
     uvm_session(&mut s);
+    compute_and_uvm_dup(&mut s, A, A_PDB, 0x10, 0x11, HObject(0x9000_00a7));
     compute_and_uvm_dup(&mut s, B, B_PDB, 0x20, 0x21, HObject(0x9000_00a8));
     // Process A's second USER client: a user↔user dup, which DOES merge.
     s.peer_dup(
@@ -177,17 +183,67 @@ fn by_pdb_by_vchid_and_proc_grouping_are_order_independent() {
     // Reference derivation from the scripted order.
     let reference = project(&graph_of(&events), &arch, &NO_CONDEMNED).expect("projects cleanly");
 
-    // Every permutation must yield byte-identical boundaries.
+    // Every permutation must yield byte-identical boundaries — ★ §12.38: every
+    // permutation the PROTOCOL can produce, i.e. every linear extension of the one
+    // ordering RM imposes (a dup's destination namespace declares before the dup).
     for perm in permutations(events.len()) {
+        let permuted: Vec<RmEvent> = perm.iter().map(|&i| events[i]).collect();
         let mut g = RmGraph::new();
-        for &i in &perm {
-            g.apply(&arch, events[i])
-                .expect("same events, any order, still valid");
+        for ev in kayfabe_tests::legal_order(&permuted) {
+            g.apply(&arch, ev)
+                .expect("same events, any LEGAL order, still valid");
         }
         let derived = project(&g, &arch, &NO_CONDEMNED).expect("projects cleanly in any order");
         assert_eq!(
             derived, reference,
             "derived boundaries must be independent of event order (perm {perm:?})"
+        );
+    }
+}
+
+/// ★★ §12.38 — the other half of the corrected property, and the half that makes the
+/// first half honest: an order the protocol **forbids** is refused, by name, and the
+/// refusal is itself order-independent.
+///
+/// Order-independence is not "every order yields the same boundaries"; it is "every
+/// order of *legal* protocol facts yields the same boundaries". So the illegal orders
+/// need their own statement, or the restriction in
+/// [`by_pdb_by_vchid_and_proc_grouping_are_order_independent`] reads as a weakening.
+/// Here it is: the same dup, presented before its destination namespace declares, is
+/// `UndeclaredDupDst` **wherever** it appears in the stream, and it mutates nothing — so
+/// the graph that follows is exactly the graph of the events that were accepted.
+#[test]
+fn a_dup_into_an_undeclared_namespace_is_refused_in_every_order() {
+    use kayfabe_core::rmgraph::{NodeKey, RmGraphError};
+    let arch = MockArch::new();
+    let events = scenario().events;
+    let planted = RmEvent::Dup {
+        src: kayfabe_core::rmgraph::NodeKey::new(A, identical_handles(0x10, 0x11).vaspace),
+        dst: NodeKey::new(HClient(0xc1d0_00ff), HObject(0x7777_0001)),
+    };
+    let refusal = Err(RmGraphError::UndeclaredClient(HClient(0xc1d0_00ff)));
+
+    // Insert the illegal dup at EVERY position in the reference stream.
+    for at in 0..=events.len() {
+        let mut g = RmGraph::new();
+        for (i, &ev) in events.iter().enumerate() {
+            if i == at {
+                assert_eq!(
+                    g.apply(&arch, planted),
+                    refusal,
+                    "a dup into a never-declared namespace must be refused at position {at}"
+                );
+            }
+            g.apply(&arch, ev).expect("the legal events still apply");
+        }
+        if at == events.len() {
+            assert_eq!(g.apply(&arch, planted), refusal, "…including last");
+        }
+        // The refusals changed nothing: the end state is the reference end state.
+        assert_eq!(
+            project(&g, &arch, &NO_CONDEMNED).expect("projects"),
+            project(&graph_of(&events), &arch, &NO_CONDEMNED).expect("projects"),
+            "a refused event must mutate nothing (insertion point {at})"
         );
     }
 }
@@ -273,31 +329,61 @@ fn a_dupd_vaspace_stays_with_the_client_that_allocated_it() {
 }
 
 /// ★ Order-independence of the RULE, stated directly: the kernel client may declare
-/// itself **before**, **between** or **after** the user clients it is dup'd into by, and
+/// itself **before**, **between** or **after** the user clients that dup into it, and
 /// the grouping is identical. This is decision #14's whole point, and it is the property
 /// that makes classification-at-declaration safe: the fact arrives on the `NV01_ROOT`,
 /// *before* any dup, so no arrival order can make a dup group differently.
+///
+/// ★ §12.38 — "after" now means *after the user clients' own subgraphs*, not after the
+/// dups into it. The session's declaration and the dups into it are the one pair the
+/// protocol genuinely orders (RM resolves `hClientDst` before it copies anything), and
+/// the claim under test was never about that pair: it is that the kernel declaration's
+/// position relative to the **user clients** is immaterial. Stated that way it is
+/// strictly sharper, because all three arrangements are now traces a real driver could
+/// emit.
 #[test]
 fn the_kernel_declaration_may_arrive_before_between_or_after() {
     let arch = MockArch::new();
 
-    let a_half = |s: &mut Scenario| compute_and_uvm_dup(s, A, A_PDB, 0x10, 0x11, HObject(0xa7));
-    let b_half = |s: &mut Scenario| compute_and_uvm_dup(s, B, B_PDB, 0x20, 0x21, HObject(0xa8));
+    let a_proc = |s: &mut Scenario| {
+        s.compute_process(A, A_PDB, identical_handles(0x10, 0x11));
+    };
+    let b_proc = |s: &mut Scenario| {
+        s.compute_process(B, B_PDB, identical_handles(0x20, 0x21));
+    };
+    let a_dup = |s: &mut Scenario| {
+        s.push(RmEvent::Dup {
+            src: kayfabe_core::rmgraph::NodeKey::new(A, identical_handles(0x10, 0x11).vaspace),
+            dst: kayfabe_core::rmgraph::NodeKey::new(UVM, HObject(0xa7)),
+        });
+    };
+    let b_dup = |s: &mut Scenario| {
+        s.push(RmEvent::Dup {
+            src: kayfabe_core::rmgraph::NodeKey::new(B, identical_handles(0x20, 0x21).vaspace),
+            dst: kayfabe_core::rmgraph::NodeKey::new(UVM, HObject(0xa8)),
+        });
+    };
 
     let mut before = Scenario::new();
     uvm_session(&mut before);
-    a_half(&mut before);
-    b_half(&mut before);
+    a_proc(&mut before);
+    a_dup(&mut before);
+    b_proc(&mut before);
+    b_dup(&mut before);
 
     let mut between = Scenario::new();
-    a_half(&mut between);
+    a_proc(&mut between);
     uvm_session(&mut between);
-    b_half(&mut between);
+    a_dup(&mut between);
+    b_proc(&mut between);
+    b_dup(&mut between);
 
     let mut after = Scenario::new();
-    a_half(&mut after);
-    b_half(&mut after);
+    a_proc(&mut after);
+    b_proc(&mut after);
     uvm_session(&mut after);
+    a_dup(&mut after);
+    b_dup(&mut after);
 
     let reference = project(&graph_of(&before.events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(reference.procs.len(), 2);
@@ -470,10 +556,10 @@ fn two_processes_sharing_one_kernel_client_stay_fully_isolated() {
 /// so it applies cleanly and B gets its own everything.
 #[test]
 fn a_second_process_joining_the_shared_kernel_client_is_never_a_late_merge() {
-    // A + the session only.
+    // The session (declared at `nvidia_uvm` module load) + A.
     let mut first = Scenario::new();
-    compute_and_uvm_dup(&mut first, A, A_PDB, 0x10, 0x11, HObject(0xa7));
     uvm_session(&mut first);
+    compute_and_uvm_dup(&mut first, A, A_PDB, 0x10, 0x11, HObject(0xa7));
     let mut gpu = gpu_of(&first.events);
 
     let pid_a = gpu.spine.by_pdb[&(GpuId::ZERO, A_PDB)];
@@ -792,37 +878,69 @@ fn a_root_kept_alive_by_a_dup_no_longer_occupies_its_own_namespace() {
     );
 }
 
-/// ★ The un-guessable middle: a client whose ROOT has not arrived yet groups with
-/// NOBODY, and — owning no resource of its own — conjures no `Proc` at all. Grouping
-/// requires positive evidence about both endpoints, so an undeclared client is never
-/// read as "probably user"; and admitting it as a component would mint a resource-less
-/// proc that is retired the instant the declaration lands. When the declaration does
-/// land, the SAME dup becomes a merge or stays a reference purely on its kind — which is
-/// the whole claim of §12.27.
+/// ★★ **CHANGED BY §12.38, deliberately — this test used to assert the accept-then-merge
+/// behaviour ON PURPOSE, and that behaviour was the vulnerability.**
+///
+/// What it asserted before: a dup into a client whose root has not arrived is *accepted
+/// and parked*, groups with nobody while the destination is undeclared, and then becomes
+/// a merge (or stays a reference) the instant the destination declares its
+/// [`kayfabe_arch::ClientKind`]. Every one of those sentences is true of the code as it
+/// then was, and the last one is the security hole: **the merge fires on the victim's own
+/// `Alloc`.** An attacker that plants one `DUP_OBJECT` into a guessable, never-allocated
+/// `hClient` (in RM the `hClient` **is** its root object's handle) puts the next process
+/// handed that value into the *attacker's* `Proc` — one isolate, one GPA arena, one host
+/// VAS, i.e. #14 un-fixed for a chosen pair (`l1_mean.rs`'s
+/// `a_planted_dup_alias_cannot_squat_a_later_process_into_the_attackers_proc`).
+///
+/// Why the old assertion looked right: it was defending decision #4, and "the same facts
+/// in any order must yield the same end state" genuinely does forbid turning a transient
+/// absence into a refusal. The correction is to the *criterion*, not to the principle —
+/// order-independence holds over **legal protocol facts**, and RM resolves `hClientDst`
+/// in the client DB before it copies anything (`ogkm rs_server.c:1674` →
+/// `NV_ERR_INVALID_OBJECT_HANDLE`; `clientValidate` → `NV_ERR_INVALID_CLIENT`,
+/// `rmapi/client.c:782`). A dup into a nonexistent namespace is therefore not a trace the
+/// guest's RM can emit, so refusing it loses no legal ordering — while modelling an
+/// ordering the hardware forbids was the whole of the breach.
+///
+/// What it asserts now: the **refusal**, by exact variant and mutation-free — and then
+/// the surviving half of the original claim, which is still load-bearing and is what
+/// §12.27 is actually about: once the destination HAS declared, the same dup merges or
+/// stays a reference purely on its declared kind.
 #[test]
 fn an_undeclared_client_merges_with_nobody_until_it_declares() {
+    use kayfabe_core::rmgraph::{NodeKey, RmGraphError};
     let arch = MockArch::new();
     let mut s = Scenario::new();
     let a_vas = s.compute_process(A, A_PDB, identical_handles(0x10, 0x11));
-    // A2 dups A's VAS but has NOT declared a root yet.
-    s.push(RmEvent::Dup {
+    let planted = RmEvent::Dup {
         src: a_vas,
-        dst: kayfabe_core::rmgraph::NodeKey::new(A2, HObject(0x7000_00ff)),
-    });
-    let partial = project(&graph_of(&s.events), &arch, &NO_CONDEMNED).unwrap();
+        dst: NodeKey::new(A2, HObject(0x7000_00ff)),
+    };
+
+    // ---- ★ A2 has NOT declared a root. The dup is refused, and changes nothing.
+    let mut g = graph_of(&s.events);
+    let before = project(&g, &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(
-        partial.procs.len(),
-        1,
-        "an undeclared, resource-less dup endpoint is neither merged on faith nor          conjured into a phantom Proc"
+        g.apply(&arch, planted),
+        Err(RmGraphError::UndeclaredClient(A2)),
+        "★★ a dup into a namespace with no declared client root is a protocol violation \
+         (RM: `NV_ERR_INVALID_CLIENT`), not a fact that has not arrived yet"
     );
     assert_eq!(
-        partial.procs[0].clients,
+        project(&g, &arch, &NO_CONDEMNED).unwrap(),
+        before,
+        "the refusal mutated nothing"
+    );
+    assert_eq!(before.procs.len(), 1);
+    assert_eq!(
+        before.procs[0].clients,
         std::collections::BTreeSet::from([A])
     );
 
-    // Now it declares USER: the same dup becomes a grouping edge.
+    // ---- Declared USER first, THEN the dup: it is a grouping edge.
     let mut declared = s.clone();
     declared.push(kayfabe_tests::client_root(A2));
+    declared.push(planted);
     let joined = project(&graph_of(&declared.events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(joined.procs.len(), 1, "declared user → the dup merges");
     assert_eq!(
@@ -830,9 +948,12 @@ fn an_undeclared_client_merges_with_nobody_until_it_declares() {
         std::collections::BTreeSet::from([A, A2])
     );
 
-    // Had it declared KERNEL instead, the very same dup stays a reference.
+    // ---- Had it declared KERNEL instead, the very same dup stays a reference. This is
+    // the §12.27 claim the old test carried, and it survives intact: the ONLY thing that
+    // decides merge-vs-reference is the destination's declared kind.
     let mut kernel = s.clone();
     kernel.push(kayfabe_tests::kernel_client_root(A2));
+    kernel.push(planted);
     let referenced = project(&graph_of(&kernel.events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(referenced.procs.len(), 1, "only A is a user proc");
     assert_eq!(
@@ -910,8 +1031,8 @@ fn a_user_peer_dup_onto_a_touched_proc_is_still_a_late_merge() {
 #[test]
 fn a_kernel_dup_keeps_the_owning_procs_isolate_and_backing_alive_past_the_clients_free() {
     let mut s = Scenario::new();
-    compute_and_uvm_dup(&mut s, A, A_PDB, 0x10, 0x11, HObject(0x9000_00a7));
     uvm_session(&mut s);
+    compute_and_uvm_dup(&mut s, A, A_PDB, 0x10, 0x11, HObject(0x9000_00a7));
     let mut gpu = gpu_of(&s.events);
 
     let pid_a = gpu.spine.by_pdb[&(GpuId::ZERO, A_PDB)];

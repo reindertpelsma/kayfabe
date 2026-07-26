@@ -32,7 +32,7 @@ use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::project::{NO_CONDEMNED, ProjectionError, project};
-use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
@@ -334,15 +334,18 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
         vaspace: vas2,
         pdb: SHARED_PDB,
     });
-    assert!(
-        matches!(
-            dup,
-            Err(GpuError::Projection(ProjectionError::PdbCollision {
-                gpu: Some(GpuId(0)),
-                ..
-            }))
-        ),
-        "a same-GPU PDB duplicate must STILL be a loud PdbCollision, got {dup:?}"
+    // ★ §12.38 — the EXACT variant, every field. `..` wildcarded the colliding PDB and
+    // BOTH claimants, i.e. everything that says *what* collided; the guard's whole job is
+    // to name the ambiguity it refuses.
+    assert_eq!(
+        dup,
+        Err(GpuError::Projection(ProjectionError::PdbCollision {
+            gpu: Some(GpuId(0)),
+            pdb: SHARED_PDB,
+            a: NodeKey::new(c, vas1),
+            b: NodeKey::new(c, vas2),
+        })),
+        "a same-GPU PDB duplicate must STILL be a loud PdbCollision naming both claimants"
     );
     // Atomic: the collision was rolled back; the first VAS still routes (device usable).
     assert!(
@@ -413,15 +416,16 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
             ..Default::default()
         },
     });
-    assert!(
-        matches!(
-            dup_v,
-            Err(GpuError::Projection(ProjectionError::VchidCollision {
-                gpu: Some(GpuId(0)),
-                ..
-            }))
-        ),
-        "a same-GPU vChid duplicate must STILL be a loud VchidCollision, got {dup_v:?}"
+    // ★ §12.38 — the EXACT variant, every field (see the PDB arm above).
+    assert_eq!(
+        dup_v,
+        Err(GpuError::Projection(ProjectionError::VchidCollision {
+            gpu: Some(GpuId(0)),
+            vchid: VChid(GR_VCHID),
+            a: NodeKey::new(d, HObject(0xD020)),
+            b: NodeKey::new(d, HObject(0xD021)),
+        })),
+        "a same-GPU vChid duplicate must STILL be a loud VchidCollision naming both claimants"
     );
 }
 
@@ -448,10 +452,14 @@ fn determinism_holds_under_gpu_axis() {
 
     let reference = derive(&events);
 
+    // ★ §12.38 — the variant orders are legalized first: a fully reversed stream puts
+    // every event before its own client root's `NV01_ROOT`, which RM refuses
+    // (`NV_ERR_INVALID_CLIENT`) and the guest's RM therefore never emits. The claim is
+    // order-independence over the orderings the PROTOCOL can produce.
     let mut reversed = events.clone();
     reversed.reverse();
     assert_eq!(
-        derive(&reversed),
+        derive(&kayfabe_tests::legal_order(&reversed)),
         reference,
         "reversed order diverged under the GPU axis"
     );
@@ -460,7 +468,7 @@ fn determinism_holds_under_gpu_axis() {
     let mut woven: Vec<RmEvent> = events.iter().step_by(2).copied().collect();
     woven.extend(events.iter().skip(1).step_by(2).copied());
     assert_eq!(
-        derive(&woven),
+        derive(&kayfabe_tests::legal_order(&woven)),
         reference,
         "interleave diverged under the GPU axis"
     );

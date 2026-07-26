@@ -32,7 +32,7 @@
 //! the mock-driven test suite is the standing proof (it runs this exact code against a
 //! fake architecture).
 //!
-//! ## ★★ MISS = FAULT, and the ONE declared exception: **DEFER**
+//! ## ★★ MISS = FAULT, and the ONE declared exception: **DEFER** — in TWO flavours
 //!
 //! `mode2_address_table.md`'s founding rule is *MISS = FAULT*: a lookup that misses is a
 //! loud, typed refusal, never a fallback walk, never a guess, never a default. It stays.
@@ -42,14 +42,30 @@
 //! not faulted, because the guest legitimately maps before it binds a page directory
 //! (`Gpu::sync_rpc_mappings`). Which answer a site gives was, until this audit, decided
 //! site by site by whoever wrote it — and undocumented judgement is what drifts. So the
-//! split is now **declared at every miss site** (`l1_concurrency.md` §12.30):
+//! split is **declared at every miss site**.
 //!
-//! | the fact is… | answer | why |
-//! |---|---|---|
-//! | **not yet knowable** — it may still arrive, and the guest is not wrong to have asked in this order | **DEFER** — skip, park, re-plan, or wait; mutate nothing and record nothing | the protocol is order-tolerant (decision #4); turning a transient absence into a refusal makes the SAME facts in a different order produce a different end state, which is the determinism the whole core is built on |
-//! | **never knowable** — nothing that can arrive will resolve it | **FAULT** (MISS=FAULT proper) — typed, loud, mutation-free | the guest asked for something unresolvable; guessing is the confused-deputy / wrong-phys class the rule exists to prevent |
+//! ★★★ **The criterion was corrected in `l1_concurrency.md` §12.38.** §12.30 asked *"could
+//! this fact still arrive?"*. The right question is *"could this fact still arrive **in a
+//! legal protocol trace**?"* — and asking the first one is how a cross-process isolation
+//! break was classified as a deferral. **Order-independence holds where the NVIDIA
+//! protocol ALLOWS an ordering, not wherever an ordering is merely expressible. If RM
+//! would error on "use before exist", so must we.** There are therefore **three**
+//! categories, and the first pass collapsed two of them:
 //!
-//! Three things about this taxonomy are load-bearing:
+//! | # | the fact is… | answer | why |
+//! |---|---|---|---|
+//! | **1** | **DEFER (protocol)** — the guest may *legally* send this before that | **DEFER** — skip, park, re-plan, or wait; mutate nothing, record nothing | the protocol is order-tolerant here (decision #4); turning a legal transient absence into a refusal makes the SAME facts in a different order produce a different end state |
+//! | **2** | ★ **DEFER (observation)** — the protocol DOES order it, but **we may not have observed the earlier fact** | **DEFER**, and the label is load-bearing | measured, not assumed: only **25 of 82** dups reach GSP (`docs/reference/rm_semantics_measured.md` §3), so a dup's *source object* may genuinely be one RM saw and we did not. Faulting here **hangs a legal guest** |
+//! | **3** | **FAULT** — the protocol forbids the ordering **and** we would have observed the earlier fact | **FAULT** (MISS=FAULT proper) — typed, loud, mutation-free | RM refuses it, so no legal trace is lost; deferring it is the vulnerability shape (a hostile handle staying silently inert instead of refused) |
+//!
+//! The dividing line between **2** and **3** in practice is *which fact is missing*, not
+//! which site is asking: a **client root** (`NV01_ROOT`) is always on the GSP wire — it is
+//! literally where `AllocFacts::client_kind` comes from — so its absence is category 3
+//! (`RmGraphError::UndeclaredClient`). An **object-level** fact (an object's parent, a
+//! VASpace alloc, a dup's source object) may not be, so its absence stays category 2 even
+//! where RM would have ordered it.
+//!
+//! Four things about this taxonomy are load-bearing:
 //!
 //! 1. **The category is a property of the SITE, not of the absence.** The *same* missing
 //!    fact is a DEFER in derivation and a FAULT at use. A channel with no declared VAS
@@ -62,14 +78,20 @@
 //!    re-evaluated from scratch on the next `Gpu::apply` (`project` is pure and
 //!    `sync_rpc_mappings` is idempotent), so "deferred" means *"the answer changes when
 //!    the fact lands"*, never *"silently dropped"*. A deferral with no re-evaluation path
-//!    is a hang, and is a bug.
+//!    is a hang, and is a bug — which is why `tests/miss_taxonomy.rs` proves resolution
+//!    for every deferring site rather than merely proving it does not crash.
 //! 3. **Getting the category wrong is asymmetric, in opposite directions.** A FAULT that
 //!    should be a DEFER is a hung or spuriously-refused guest (§12.9's own lesson: the
 //!    first symptom was a hang, not an assertion). A DEFER that should be a FAULT is a
-//!    *security* question — it is the shape in which a hostile handle stays silently
-//!    inert instead of being refused. That is why the categories are written down at the
-//!    site rather than inferred from the return type: `Option<T>` cannot tell them apart,
-//!    and several resolvers here legitimately return one `None` for both.
+//!    *security* question — §12.38's squat is the worked example. That is why the
+//!    categories are written down at the site rather than inferred from the return type:
+//!    `Option<T>` cannot tell them apart, and several resolvers here legitimately return
+//!    one `None` for both.
+//! 4. **Category 2 must be said out loud.** "This defers because the protocol permits it"
+//!    and "this defers because we might not have seen the earlier fact" look identical in
+//!    the code and are completely different claims — and only the second one survives a
+//!    change to what we observe. §12.30's inventory lacked the distinction, and that is
+//!    precisely why it mis-filed the one site that mattered.
 //!
 //! ## ★ The concurrency contract (decision #17)
 //!

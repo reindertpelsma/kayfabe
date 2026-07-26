@@ -468,7 +468,14 @@ fn valid_fact_stream() -> impl Strategy<Value = Vec<RmEvent>> {
             Just(events),
             proptest::sample::subsequence((0..len).collect::<Vec<_>>(), len),
         )
-            .prop_map(|(events, perm)| perm.into_iter().map(|i| events[i]).collect())
+            .prop_map(|(events, perm)| {
+                // ★ §12.38 — the shuffle is taken over LEGAL protocol orders: no event
+                // may name a client namespace before its `NV01_ROOT` declares it (RM
+                // resolves `hClient` first and answers `NV_ERR_INVALID_CLIENT`). The
+                // legalization is a stable topological pass, so the generated shuffle
+                // survives everywhere it was already legal.
+                kayfabe_tests::legal_order(&perm.into_iter().map(|i| events[i]).collect::<Vec<_>>())
+            })
     })
 }
 
@@ -494,7 +501,7 @@ proptest! {
         let forward = project_order(&stream);
         let mut reversed = stream.clone();
         reversed.reverse();
-        let backward = project_order(&reversed);
+        let backward = project_order(&kayfabe_tests::legal_order(&reversed));
         prop_assert_eq!(forward, backward, "projection must be independent of event order");
     }
 }
@@ -676,12 +683,20 @@ impl RefTracker {
                 ..
             } => {
                 let k = (client, handle);
+                let is_client = matches!(arch.classify(class), ObjectKind::Client);
+                // ★★ §12.38 — mirror the graph's `UndeclaredClient`: only the client-root
+                // alloc may name a namespace that does not exist yet. RM resolves
+                // `hClient` before anything else (`ogkm rs_server.c:778`) and refuses
+                // otherwise, so an object allocated into an undeclared namespace is a
+                // protocol violation, not a fact that has not arrived.
+                if !is_client && !self.client_roots.iter().any(|r| r.0 == client) {
+                    return;
+                }
                 // Mirror the graph: an alloc onto an already-bound handle (e.g. one a
                 // dup aliased) is a loud ConflictingAlloc — rejected, changes nothing.
                 if self.handle_to_origin.contains_key(&k) || self.pending.contains_key(&k) {
                     return;
                 }
-                let is_client = matches!(arch.classify(class), ObjectKind::Client);
                 // ★ §12.27 — mirror the graph's one-root-per-namespace refusal: a second
                 // client root inside one namespace is a `DuplicateClientRoot`, rejected,
                 // changes nothing. (In RM the `hClient` IS its root's handle, so two
@@ -708,6 +723,18 @@ impl RefTracker {
             }
             RmEvent::Dup { src, dst } => {
                 let (src, dst) = ((src.client, src.handle), (dst.client, dst.handle));
+                // ★★ §12.38 — mirror the graph's `UndeclaredClient`: a `DUP_OBJECT`
+                // naming a namespace with no declared client root is a protocol violation
+                // RM itself refuses — `serverCopyResource` resolves BOTH `hClient`s
+                // (`ogkm rs_server.c:1674`) — so it is rejected and changes nothing. Note
+                // the asymmetry that remains: the source *namespace* must exist, but the
+                // source *object* need not (it parks — the observation gap).
+                if [dst.0, src.0]
+                    .iter()
+                    .any(|c| !self.client_roots.iter().any(|r| r.0 == *c))
+                {
+                    return;
+                }
                 if self.handle_to_origin.contains_key(&dst) || self.pending.contains_key(&dst) {
                     return; // dst already bound/parked — graph rejects the conflict.
                 }

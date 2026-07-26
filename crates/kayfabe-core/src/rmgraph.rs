@@ -9,6 +9,30 @@
 //! events arrive in** — the protocol-not-observed-order guarantee (decision #4),
 //! asserted by the shuffle property test.
 //!
+//! ## ★★★ Decision #4, as amended (`l1_concurrency.md` §12.38)
+//!
+//! > **Order-independence holds over any order of *LEGAL PROTOCOL FACTS*** — not over
+//! > every order a stream can express. Where the NVIDIA protocol itself forbids an
+//! > ordering, so do we: **if RM would error on "use before exist", so must we.**
+//!
+//! The amendment is one clause ("of legal protocol facts") and it changes nothing about
+//! the guarantee's purpose: a reordered or retried guest still yields identical
+//! boundaries. What it removes is the pretence that we owe order-independence to traces
+//! the guest's own RM can never emit. Modelling one of those was a **cross-process
+//! isolation break**: a `DUP_OBJECT` planted into a never-declared client namespace was
+//! accepted and parked, and fired the instant an unrelated later process was handed that
+//! `hClient` — putting it in the *planter's* `Proc` (§12.38, and
+//! [`RmGraphError::UndeclaredClient`]).
+//!
+//! Concretely, exactly ONE ordering is now enforced, and it is enforced centrally in
+//! [`RmGraph::undeclared_namespace`]: **a client namespace must be declared (its
+//! `NV01_ROOT` observed) before any event may name it.** Everything else stays as
+//! order-tolerant as before — an object may precede its parent, a `SET_PAGE_DIRECTORY`
+//! its VASpace, a `MAP_MEMORY_DMA` either end, and a `DUP_OBJECT` its **source object**.
+//! Those are *object-level* facts that may never have reached the wire at all (only 25 of
+//! 82 measured dups do), so they are DEFER-for-observation — category 2 of the crate
+//! docs' taxonomy — and faulting them would hang a legal guest.
+//!
 //! Deliberately NOT here: real NVIDIA structs (`NV_CHANNEL_ALLOC_PARAMS` decoding is
 //! the Axis-A adapter's job — it produces these events), and any *policy* (grouping,
 //! routing — those are pure projections in [`crate::project`]).
@@ -402,6 +426,33 @@ pub enum RmGraphError {
         /// The second root that was refused.
         attempted: NodeKey,
     },
+    /// ★★★ §12.38 — an event named a **client namespace that has never declared a root**
+    /// (RM's `NV_ERR_INVALID_CLIENT`). THE use-before-exist refusal; see
+    /// [`RmGraph::undeclared_namespace`] for the rule, its exemptions and its citations.
+    ///
+    /// **A protocol violation, not a missing fact** — and that distinction is the whole
+    /// of §12.38's corrected criterion: order-independence holds where the NVIDIA
+    /// protocol *allows* an ordering, not wherever an ordering is merely expressible.
+    ///
+    /// **What it closes.** The `Dup` arm of this rule is a cross-process isolation break.
+    /// A `DUP_OBJECT` planted into a namespace nobody owned yet used to be accepted and
+    /// parked; the edge then fired the instant an unrelated later process declared that
+    /// `hClient`, merging it into the *planter's* live `Proc` — one isolate, one GPA
+    /// arena, one host VAS, i.e. #14 un-fixed for a chosen pair, at the cost of one dup
+    /// per guessable `hClient` (in RM the `hClient` **is** its root object's handle).
+    /// Refusing at acceptance makes that state unrepresentable rather than detected
+    /// downstream (`l1_mean.rs`'s
+    /// `a_planted_dup_alias_cannot_squat_a_later_process_into_the_attackers_proc`).
+    ///
+    /// The `Alloc`/`SetPageDir`/`MapMemoryDma` arms close the same shape one level down:
+    /// an object allocated into a namespace that had not declared itself used to mint a
+    /// whole user `ProcBoundary` — isolate, GPA arena, routable `Vas` — anchored at a
+    /// client of **unknown [`kayfabe_arch::ClientKind`]**, which is precisely the guess
+    /// §12.27 refuses to make. Declaring the root *afterwards* as `Kernel` then migrated
+    /// those objects to the system component, i.e. the guest kernel could obtain a real
+    /// user data plane (the thing `FwdFault::SystemDataPlane` exists to forbid) simply by
+    /// declaring its client root last.
+    UndeclaredClient(HClient),
     /// Free of a handle that references no resource (never allocated or dup'd).
     FreeUnknown(NodeKey),
     /// A capacity-bounded table was full: a hostile guest tried to grow the graph
@@ -544,10 +595,22 @@ impl RmGraph {
     /// This namespace's ONE client-root handle, if its root has been observed and is
     /// still live (§12.27). O(log n) — an index read, never a scan.
     ///
-    /// **MISS ⇒ DEFER** (crate docs, "MISS = FAULT and the ONE declared exception"): an
-    /// object may legally arrive before its client root (order tolerance, decision #4),
-    /// so absence here means *not yet knowable*. No caller treats it as evidence about
-    /// the client; they simply have no `ClientKind` to group on yet.
+    /// ★★★ **MISS ⇒ FAULT, corrected in §12.38.** This doc used to read *"an object may
+    /// legally arrive before its client root (order tolerance, decision #4), so absence
+    /// here means not yet knowable"*. **That is false about RM**: every ioctl-reachable
+    /// entry point resolves `hClient` in the client database before anything else and
+    /// answers `NV_ERR_INVALID_OBJECT_HANDLE` / `NV_ERR_INVALID_CLIENT` when it is not
+    /// there (`ogkm src/nvidia/src/libraries/resserv/src/rs_server.c:778`, `:1503`,
+    /// `:1674`, `:2218`). And the fact is one we would always have observed — a client
+    /// root is on the GSP wire by construction, since that RPC is where
+    /// [`AllocFacts::client_kind`] comes from. So absence here is **never knowable in a
+    /// legal trace**, and [`RmGraph::undeclared_namespace`] refuses the event.
+    ///
+    /// This predicate is therefore now a *gate*, not a deferral: by the time any arm of
+    /// `apply` runs, every namespace the event names exists. Read-side callers
+    /// ([`Self::client_kinds`], the projection) still treat an absent kind as "groups with
+    /// nobody", which remains right — a namespace can be emptied by a `Free` between the
+    /// event that created an alias and the projection that reads it.
     fn client_root_of(&self, client: HClient) -> Option<NodeKey> {
         let id = self.client_roots.get(&client)?;
         self.resources.get(id).map(|r| r.node.key)
@@ -560,10 +623,13 @@ impl RmGraph {
     /// all of them, and a convenience single-key accessor would invite the
     /// O(clients × clients) call pattern this index exists to avoid.
     ///
-    /// A client absent from this iterator has not declared itself — its root has not
-    /// been observed **yet** (order tolerance: an object may legally arrive before its
-    /// client root). It is NOT "probably a user client": it groups with nobody until the
-    /// fact lands, which is the MISS=FAULT posture rather than a guess.
+    /// A client absent from this iterator has no live root. ★ §12.38 — that is no longer
+    /// the "an object arrived before its client root" case, which is now refused at
+    /// acceptance ([`Self::undeclared_namespace`]); what remains is a namespace whose root
+    /// has been **freed** while a `DUP_OBJECT` alias elsewhere keeps some of its resources
+    /// alive (§12.27's `drop_handle` rule — the namespace is empty and free to
+    /// re-declare). Such a client is NOT "probably a user client": it groups with nobody
+    /// until a fresh root lands, which is the MISS=FAULT posture rather than a guess.
     pub fn client_kinds(&self) -> impl Iterator<Item = (HClient, ClientKind)> + '_ {
         self.client_roots.iter().filter_map(|(&c, id)| {
             self.resources
@@ -584,6 +650,73 @@ impl RmGraph {
             | RmEvent::Unmap { client, .. }
             | RmEvent::Free { client, .. } => [Some(client), None],
             RmEvent::Dup { src, dst } => [Some(src.client), Some(dst.client)],
+        }
+    }
+
+    /// ★★★ §12.38 — **THE NAMESPACE-EXISTENCE RULE: no event may name a client namespace
+    /// that does not exist.** Returns the offending [`HClient`], or `None` if the event is
+    /// legal on this axis.
+    ///
+    /// ## Why this is a FAULT and not a DEFER
+    ///
+    /// Decision #4 (amended, §12.38) is order-independence over **legal protocol facts**,
+    /// not over every order a stream can express. RM resolves `hClient` in the client
+    /// database as the *first* thing every ioctl-reachable entry point does, and answers
+    /// `NV_ERR_INVALID_OBJECT_HANDLE` / `NV_ERR_INVALID_CLIENT` when it is not there:
+    ///
+    /// | our event | RM entry point | `ogkm src/nvidia/src/libraries/resserv/src/rs_server.c` |
+    /// |---|---|---|
+    /// | `Alloc` (non-root) | `serverAllocResource` | `:778` (`_serverLockClientWithLockInfo`), then `clientValidate` `:824` |
+    /// | `Dup` (**both** ends) | `serverCopyResource` | `:1674` (`_serverLockDualClientWithLockInfo`), then `clientValidate(dst)` `:1696` |
+    /// | `SetPageDir` (an RM control) | `serverControl` | `:1503` / `:1519`, then `clientValidate` `:1547` |
+    /// | `MapMemoryDma` | `serverInterMap` | `:2218`, then `clientValidate` `:2232` |
+    ///
+    /// The miss is `NV_ERR_INVALID_OBJECT_HANDLE` inside the lock helper (`:3486-3487`,
+    /// `:3547-3550`); `clientValidate`'s own refusal one line later is
+    /// `NV_ERR_INVALID_CLIENT` (`ogkm src/nvidia/src/kernel/rmapi/client.c:782`). So the
+    /// guest's own RM never emits any of these for a namespace that does not exist —
+    /// **no legal trace is lost by refusing them.**
+    ///
+    /// And the earlier fact is one we *would have observed*: a client root
+    /// (`NV01_ROOT`) is always on the GSP wire — the `GSPALLOC hClient=… processID=…`
+    /// records are literally where [`AllocFacts::client_kind`] comes from
+    /// (`docs/reference/rm_semantics_measured.md` §4). That is what separates this from
+    /// the **DEFER-for-observation** cases: a dup's source *object* may genuinely be
+    /// unobserved (only 25 of 82 measured dups reach GSP, §3), so it parks; a client
+    /// *root* cannot be.
+    ///
+    /// ## The exemptions, and why each is not an inconsistency
+    ///
+    /// - **The client-root `Alloc` itself** — it is the event that *creates* the
+    ///   namespace (`serverAllocClient`, `rs_server.c:764`, which bypasses the client
+    ///   lock for exactly this reason). Its own required fact,
+    ///   [`AllocFacts::client_kind`], is already checked at that arm.
+    /// - **`Free` and `Unmap` — the TEARDOWN verbs.** A namespace with no root is
+    ///   indistinguishable from a namespace whose root was *just freed* (freeing a root
+    ///   drops every handle in it, so nothing is left behind to tell them apart), and a
+    ///   teardown verb arriving after its namespace died is a benign race the guest can
+    ///   legitimately produce — `Unmap`'s unknown-VAS arm is silently `Ok` for precisely
+    ///   that reason, and `Free`'s is the more precise [`RmGraphError::FreeUnknown`].
+    ///   Faulting here would turn a race into a device-level refusal, which is the
+    ///   FAULT-that-should-DEFER direction of the asymmetry. The rule loses nothing:
+    ///   once no *creating* event can name an undeclared namespace, an undeclared
+    ///   namespace holds no handles, so both verbs are already inert by construction.
+    fn undeclared_namespace(&self, arch: &dyn Arch, ev: RmEvent) -> Option<HClient> {
+        let missing = |c: HClient| self.client_root_of(c).is_none().then_some(c);
+        match ev {
+            // The root alloc CREATES the namespace — the one event that may name one
+            // that does not exist yet.
+            RmEvent::Alloc { class, .. } if matches!(arch.classify(class), ObjectKind::Client) => {
+                None
+            }
+            RmEvent::Alloc { client, .. }
+            | RmEvent::SetPageDir { client, .. }
+            | RmEvent::MapMemoryDma { client, .. } => missing(client),
+            // `dst` first: it is the security-relevant end (the squat vector), so it is
+            // the one a refusal names when both are undeclared.
+            RmEvent::Dup { src, dst } => missing(dst.client).or_else(|| missing(src.client)),
+            // Teardown verbs — see the doc above.
+            RmEvent::Unmap { .. } | RmEvent::Free { .. } => None,
         }
     }
 
@@ -649,6 +782,13 @@ impl RmGraph {
             if c == RESERVED_CLIENT {
                 return Err(RmGraphError::ReservedClient(c));
             }
+        }
+        // ★★★ §12.38 — no event may name a namespace that does not exist. Checked here,
+        // centrally and before any arm, because that is where RM checks it (`hClient` is
+        // resolved first by every ioctl-reachable entry point) and because ONE place is
+        // what makes the bad state unrepresentable downstream rather than detected there.
+        if let Some(c) = self.undeclared_namespace(arch, ev) {
+            return Err(RmGraphError::UndeclaredClient(c));
         }
         match ev {
             RmEvent::Alloc {
@@ -785,6 +925,12 @@ impl RmGraph {
                 }
             }
             RmEvent::Dup { src, dst } => {
+                // ★★★ §12.38 — both client namespaces exist by the time we get here (the
+                // central gate above). What remains genuinely unordered is the dup's
+                // SOURCE OBJECT, which parks: only 25 of 82 measured dups reach GSP, so a
+                // source may be an object RM saw and we did not — DEFER-for-observation,
+                // and faulting it would hang a legal guest.
+                //
                 // The dst handle must be FREE. It is already taken if it references a
                 // live resource (`handles`) or names a parked (not-yet-resolved) edge
                 // (`pending_dups`). Either way an identical re-send is idempotent and a

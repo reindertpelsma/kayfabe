@@ -164,6 +164,107 @@ pub fn reachable_maps(
     live
 }
 
+// =================================================================================
+// ★★ §12.38 — LEGAL protocol orderings: the one ordering the guest's RM imposes
+// =================================================================================
+
+/// Does this event **declare a client namespace's root** (`NV01_ROOT` — a `CLIENT`-classed
+/// alloc whose parent is itself)? The single ordering constraint `DUP_OBJECT` is subject
+/// to is stated against this.
+#[must_use]
+pub fn declares_client_root(ev: RmEvent) -> Option<HClient> {
+    match ev {
+        RmEvent::Alloc {
+            client,
+            parent,
+            handle,
+            class,
+            ..
+        } if class == mc::CLIENT && parent == handle => Some(client),
+        _ => None,
+    }
+}
+
+/// Every client namespace `ev` requires to **already exist** — the mirror of
+/// `RmGraph::undeclared_namespace` (`l1_concurrency.md` §12.38). Empty for a client-root
+/// alloc (it creates the namespace) and for the teardown verbs (`Free`/`Unmap`, which
+/// tolerate a namespace that has already died).
+#[must_use]
+pub fn namespaces_required(ev: RmEvent) -> Vec<HClient> {
+    match ev {
+        RmEvent::Alloc { class, .. } if class == mc::CLIENT => Vec::new(),
+        RmEvent::Alloc { client, .. }
+        | RmEvent::SetPageDir { client, .. }
+        | RmEvent::MapMemoryDma { client, .. } => vec![client],
+        RmEvent::Dup { src, dst } => vec![dst.client, src.client],
+        RmEvent::Unmap { .. } | RmEvent::Free { .. } => Vec::new(),
+    }
+}
+
+/// ★★ **Reorder an arbitrary event sequence into the nearest LEGAL protocol order**
+/// (`l1_concurrency.md` §12.38).
+///
+/// Decision #4 is order-independence over **legal protocol facts**, not over every order
+/// a `Vec` can express. RM resolves `hClient` in the client database as the *first* thing
+/// every ioctl-reachable entry point does — alloc (`ogkm
+/// src/nvidia/src/libraries/resserv/src/rs_server.c:778`), dup (`:1674`, **both** ends),
+/// control (`:1503`), inter-map (`:2218`) — answering `NV_ERR_INVALID_OBJECT_HANDLE`
+/// (`:3486-3487`, `:3547-3550`) or, one line later in `clientValidate`,
+/// `NV_ERR_INVALID_CLIENT` (`rmapi/client.c:782`). So an event naming a namespace that has
+/// never declared a root is a request RM refuses — and which the guest's own RM therefore
+/// never emits. Shuffling one into existence and then demanding an identical end state
+/// would be demanding order-independence over a trace that cannot occur; modelling exactly
+/// the ordering the hardware forbids is what the squat vulnerability *was*.
+///
+/// So permutation properties are stated over the **linear extensions** of that one partial
+/// order. This is a *stable* topological pass: it keeps the caller's order wherever it is
+/// already legal and defers only the events that would violate it, so every rotation,
+/// reverse and interleave still produces a genuinely different order — just never an
+/// impossible one. The refusal of an illegal order is a separate, named assertion
+/// (`RmGraphError::UndeclaredClient`), not something this function hides.
+///
+/// Note what it does **not** reorder: an object may still arrive before its parent, a
+/// `SET_PAGE_DIRECTORY` before its VASpace, a `MAP_MEMORY_DMA` before either end, and a
+/// `DUP_OBJECT` before its **source object**. Those are object-level facts that may
+/// genuinely never have reached the wire (only 25 of 82 measured dups do), so they are
+/// DEFER-for-observation and stay unordered here — which is the point of stating the
+/// partial order at the level of the client root, the one fact always observed.
+///
+/// # Panics
+/// If the sequence names a namespace that is *never* declared — that is not a legal trace
+/// and no ordering of it is one, so silently dropping it would be the same class of
+/// mistake this function exists to avoid.
+#[must_use]
+pub fn legal_order(events: &[RmEvent]) -> Vec<RmEvent> {
+    let mut declared: std::collections::BTreeSet<HClient> = std::collections::BTreeSet::new();
+    let mut pending: Vec<RmEvent> = events.to_vec();
+    let mut out: Vec<RmEvent> = Vec::with_capacity(events.len());
+    while !pending.is_empty() {
+        let before = out.len();
+        let mut deferred: Vec<RmEvent> = Vec::new();
+        for &ev in &pending {
+            if namespaces_required(ev)
+                .into_iter()
+                .all(|c| declared.contains(&c))
+            {
+                if let Some(c) = declares_client_root(ev) {
+                    declared.insert(c);
+                }
+                out.push(ev);
+            } else {
+                deferred.push(ev);
+            }
+        }
+        assert!(
+            out.len() > before,
+            "this event set names a client namespace that is never declared — not a legal \
+             protocol trace, so no ordering of it is one either"
+        );
+        pending = deferred;
+    }
+    out
+}
+
 /// A scripted sequence of RM protocol events, plus the identities it introduced —
 /// enough to drive `Gpu::apply` and then assert on derived boundaries.
 #[derive(Debug, Clone, Default)]

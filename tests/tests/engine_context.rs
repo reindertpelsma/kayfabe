@@ -298,10 +298,12 @@ fn case2_controls_are_ack_only_never_forwarded() {
 #[test]
 fn forwarding_a_non_engine_class_is_a_loud_fault() {
     let (mut gpu, _rec) = compute_gpu();
-    assert!(matches!(
+    // ★ §12.38 — the EXACT variant, carrying the class it refused: the `ClassId` is the
+    // whole content of this fault, so wildcarding it asserts almost nothing.
+    assert_eq!(
         forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::MEMORY, &[]),
-        Err(FwdFault::NotAnEngine(_))
-    ));
+        Err(FwdFault::NotAnEngine(mc::MEMORY))
+    );
 }
 
 /// ★ THE anti-bolt-on property: forwarding EACH engine kind (compute, graphics, CE,

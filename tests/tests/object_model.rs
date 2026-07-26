@@ -267,6 +267,10 @@ fn parked_map_unmap_drops_only_the_named_map() {
     let va_a = GpuVa(0x2_0000_0000); // will be unmapped
     let va_b = GpuVa(0x2_0010_0000); // must survive
 
+    // ★ §12.38 — the mapping client's namespace exists (RM resolves `hClient` first);
+    // what is legitimately unobserved here is the VASpace/memory OBJECT.
+    g.apply(&arch, kayfabe_tests::client_root(client))
+        .expect("the mapping client declares itself");
     // Park TWO maps on the SAME (not-yet-allocated) vaspace handle, different VAs.
     for va in [va_a, va_b] {
         g.apply(
@@ -469,20 +473,29 @@ fn free_subtree_cascade_is_namespace_confined() {
 /// ★ §12.25, THE bug: freeing a dup **alias** that re-occupies its own resource's freed
 /// origin handle value must drop exactly that alias — never tear down the namespace.
 ///
-/// Six events, in order:
-///  1. `A` allocs a **Client**-classed object at handle `H`;
+/// The events, in order:
+///  0. `B` declares its own client root (★ §12.38 — a `DUP_OBJECT`'s destination
+///     namespace must exist before anything can be aliased into it, exactly as RM
+///     requires; this is the ordering the protocol imposes, not one we invented);
+///  1. `A` allocs a **Client**-classed object at handle `H` — i.e. `A`'s own root;
 ///  2. `B` dups it (the resource now has two references);
 ///  3. `A` frees `H` (the dup keeps the resource alive; `A`'s namespace is empty);
-///  4. `B` dups it **back into `A`, at the same handle `H`** — legal: `H` is free again,
-///     and this is an ALIAS, not an allocation;
-///  5. `A` allocs an unrelated object `X`;
-///  6. `A` frees `H`.
+///  4. `A` declares a **fresh** root at a different handle — legal, and now required:
+///     an emptied namespace must re-declare before a dup may name it again;
+///  5. `B` dups the old Client resource **back into `A`, at the same handle `H`** —
+///     legal: `H` is free again, and this is an ALIAS, not an allocation;
+///  6. `A` allocs an unrelated object `X`;
+///  7. `A` frees `H`.
 ///
-/// Step 6 must drop the alias and nothing else. `is_client_root` used to ask
+/// Step 7 must drop the alias and nothing else. `is_client_root` used to ask
 /// `node.key == key && kind == Client`, which step 4 made TRUE for an alias — so the
 /// free took the whole-namespace-teardown branch and destroyed `X`, an object it was
 /// never asked to touch (a guest-triggerable destroy-arbitrary-live-object). Asserted as
 /// the EXACT live set, so neither a leak nor an over-free can hide behind a count.
+///
+/// Step 4 makes the bite **larger** than it was: A's namespace now genuinely holds a
+/// root and a bystander at the moment of the alias free, so the teardown branch has
+/// something real to destroy.
 #[test]
 fn freeing_a_dup_alias_on_a_reused_client_handle_never_tears_down_the_namespace() {
     use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
@@ -493,9 +506,13 @@ fn freeing_a_dup_alias_on_a_reused_client_handle_never_tears_down_the_namespace(
     let mut g = RmGraph::new();
     let (a, b) = (HClient(0xAA), HClient(0xBB));
     let h = HObject(0x100); // the reused handle value
+    let a_root2 = HObject(0x110); // A's fresh root after it frees H
     let alias_in_b = HObject(0x900);
     let x = HObject(0x200); // the innocent bystander
 
+    // 0. ★ §12.38 — B's namespace must exist before B can receive an alias.
+    g.apply(&arch, kayfabe_tests::client_root(b))
+        .expect("B's client root allocs");
     // 1. A allocs a Client-classed object at H (a client root of A's namespace).
     g.apply(
         &arch,
@@ -535,6 +552,18 @@ fn freeing_a_dup_alias_on_a_reused_client_handle_never_tears_down_the_namespace(
         vec![NodeKey::new(b, alias_in_b)],
         "the resource survives on B's alias alone"
     );
+    // 3b. ★ §12.38 — the emptied namespace re-declares before it can be named again.
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: a,
+            parent: a_root2,
+            handle: a_root2,
+            class: mc::CLIENT,
+            facts: kayfabe_tests::user_client(a),
+        },
+    )
+    .expect("an emptied namespace may declare a fresh root");
     // 4. B dups it BACK into A, at the very same handle value. An ALIAS, not an alloc.
     g.apply(
         &arch,
@@ -549,7 +578,7 @@ fn freeing_a_dup_alias_on_a_reused_client_handle_never_tears_down_the_namespace(
         &arch,
         RmEvent::Alloc {
             client: a,
-            parent: x,
+            parent: a_root2,
             handle: x,
             class: mc::MEMORY,
             facts: AllocFacts {
@@ -569,13 +598,19 @@ fn freeing_a_dup_alias_on_a_reused_client_handle_never_tears_down_the_namespace(
     )
     .expect("free of the alias applies");
 
-    // The EXACT surviving set: the aliased resource (still held by B) and X. Before the
-    // fix this was `{the aliased resource}` — X was destroyed by A's namespace teardown.
+    // The EXACT surviving set: the aliased resource (still held by B), A's fresh root,
+    // A's bystander X, and B's own root. Before the fix this was `{the aliased
+    // resource, B's root}` — A's whole namespace was destroyed by the teardown branch.
     let live: BTreeSet<NodeKey> = g.nodes().map(|n| n.key).collect();
     assert_eq!(
         live,
-        BTreeSet::from([NodeKey::new(a, h), NodeKey::new(a, x)]),
-        "freeing the alias destroys NOTHING else — X must survive"
+        BTreeSet::from([
+            NodeKey::new(a, h),
+            NodeKey::new(a, a_root2),
+            NodeKey::new(a, x),
+            NodeKey::new(b, HObject(b.0)),
+        ]),
+        "freeing the alias destroys NOTHING else — A's fresh root and X must survive"
     );
     assert!(
         g.backing_of(NodeKey::new(a, x)).is_some(),
@@ -617,6 +652,8 @@ fn a_dup_alias_on_a_reused_handle_is_not_dragged_into_its_origins_parent_free() 
     let alias_in_b = HObject(0x900);
 
     for ev in [
+        // ★ §12.38 — B's namespace must exist before B can receive an alias.
+        kayfabe_tests::client_root(b),
         RmEvent::Alloc {
             client: a,
             parent: root,
@@ -691,11 +728,23 @@ fn a_dup_alias_on_a_reused_handle_is_not_dragged_into_its_origins_parent_free() 
 /// source's `Alloc` is still a `DUP_OBJECT` declaration, so promoting it must record an
 /// ALIAS — never an origin. If the promotion path recorded "origin", every alias of a
 /// `Client`-classed object would become a client root in the ALIASING namespace, and
-/// freeing that one alias would tear down the aliaser's entire namespace. (This is the
-/// order-tolerant twin of the direct-dup case above; no handle reuse needed to see it.)
+/// freeing that one alias would tear down the aliaser's entire namespace.
+///
+/// ★★ §12.38 narrowed the reachable shape, and the test now states both halves:
+///
+/// 1. **A parked dup of a `Client`-classed source is UNREPRESENTABLE.** A namespace holds
+///    exactly one `Client` origin — its root — and a namespace exists iff that root does
+///    (RM resolves `hClientSrc` before it copies anything: `ogkm rs_server.c:1674`). So a
+///    dup naming a client root as its source either resolves immediately or is refused;
+///    it can never park. Asserted directly, because "the dangerous input can no longer be
+///    built" is a stronger claim than "we handle it".
+/// 2. **The promotion path still records an ALIAS**, exercised on the shape that CAN
+///    still park: a non-root source object that has not been observed (the genuine
+///    DEFER-for-observation case — only 25 of 82 measured dups reach GSP), whose alias is
+///    then freed without disturbing the aliaser's namespace.
 #[test]
 fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
-    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph, RmGraphError};
     use kayfabe_mocks::mock_classes as mc;
     use std::collections::BTreeSet;
 
@@ -703,15 +752,36 @@ fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
     let mut g = RmGraph::new();
     let (a, b) = (HClient(0xAA), HClient(0xBB));
     let (a_root, b_root, b_mem) = (HObject(0x10), HObject(0x11), HObject(0x300));
-    let alias = HObject(0x900);
+    let (a_mem, alias) = (HObject(0x200), HObject(0x900));
 
-    for ev in [
-        // The dup arrives FIRST (parked — order tolerance, decision #4).
-        RmEvent::Dup {
-            src: NodeKey::new(a, a_root),
-            dst: NodeKey::new(b, alias),
+    // ---- (1) The Client-classed source cannot park: A's namespace does not exist, so
+    // the dup is a loud protocol refusal, not a parked edge.
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: b,
+            parent: b_root,
+            handle: b_root,
+            class: mc::CLIENT,
+            facts: kayfabe_tests::user_client(b),
         },
-        // …then the source alloc promotes it.
+    )
+    .expect("B declares its namespace");
+    assert_eq!(
+        g.apply(
+            &arch,
+            RmEvent::Dup {
+                src: NodeKey::new(a, a_root),
+                dst: NodeKey::new(b, alias),
+            }
+        ),
+        Err(RmGraphError::UndeclaredClient(a)),
+        "★ a client root cannot be dup'd before it exists — its existence IS its \
+         namespace's, so this edge can never be a parked one"
+    );
+
+    // ---- (2) The shape that CAN still park: a non-root source object, unobserved.
+    for ev in [
         RmEvent::Alloc {
             client: a,
             parent: a_root,
@@ -719,13 +789,21 @@ fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
             class: mc::CLIENT,
             facts: kayfabe_tests::user_client(a),
         },
-        // B has a namespace of its own that must be untouched by an alias free.
+        // The dup arrives BEFORE ITS SOURCE OBJECT (parked — the observation gap).
+        RmEvent::Dup {
+            src: NodeKey::new(a, a_mem),
+            dst: NodeKey::new(b, alias),
+        },
+        // …then the source alloc promotes it.
         RmEvent::Alloc {
-            client: b,
-            parent: b_root,
-            handle: b_root,
-            class: mc::CLIENT,
-            facts: kayfabe_tests::user_client(b),
+            client: a,
+            parent: a_root,
+            handle: a_mem,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x9000_0000),
+                ..Default::default()
+            },
         },
         RmEvent::Alloc {
             client: b,
@@ -745,7 +823,7 @@ fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
         "the parked dup was promoted"
     );
 
-    // Free B's ALIAS of A's client root. One reference goes; B's namespace stands.
+    // Free B's ALIAS of A's object. One reference goes; B's namespace stands.
     g.apply(
         &arch,
         RmEvent::Free {
@@ -760,15 +838,16 @@ fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
         live,
         BTreeSet::from([
             NodeKey::new(a, a_root),
+            NodeKey::new(a, a_mem),
             NodeKey::new(b, b_root),
             NodeKey::new(b, b_mem),
         ]),
-        "freeing an alias of a client root never tears down the ALIASER's namespace"
+        "freeing a promoted alias never tears down the ALIASER's namespace"
     );
     assert_eq!(
-        g.references(NodeKey::new(a, a_root)).collect::<Vec<_>>(),
-        vec![NodeKey::new(a, a_root)],
-        "A keeps its own client root; only B's alias was dropped"
+        g.references(NodeKey::new(a, a_mem)).collect::<Vec<_>>(),
+        vec![NodeKey::new(a, a_mem)],
+        "A keeps its own object; only B's alias was dropped"
     );
 }
 
@@ -780,9 +859,15 @@ fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
 /// The retried-RPC idempotency branch compared payloads only, so it silently answered
 /// "already done" and left an ALIAS standing where the guest asked for an ALLOCATION —
 /// the same discarded declared fact. Real RM refuses a handle already in use.
+///
+/// ★ §12.38 — the aliased resource is a **Memory** rather than a Client here. A Client
+/// object can only ever be its own namespace's root (one root per namespace), and a
+/// namespace whose root is freed no longer exists, so "free the origin, then dup it back
+/// onto its own handle" is only a legal protocol trace for a non-root object. The defect
+/// under test is in the handle table's idempotency branch and is class-independent.
 #[test]
 fn alloc_over_a_dup_alias_is_loud_even_when_the_payload_matches() {
-    use kayfabe_core::rmgraph::{RmGraph, RmGraphError};
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph, RmGraphError};
     use kayfabe_mocks::mock_classes as mc;
 
     let arch = MockArch::new();
@@ -792,13 +877,21 @@ fn alloc_over_a_dup_alias_is_loud_even_when_the_payload_matches() {
     let alias_in_b = HObject(0x900);
     let the_alloc = RmEvent::Alloc {
         client: a,
-        parent: h,
+        parent: HObject(a.0),
         handle: h,
-        class: mc::CLIENT,
-        facts: kayfabe_tests::user_client(a),
+        class: mc::MEMORY,
+        facts: AllocFacts {
+            mem_phys: Some(0x8000_0000),
+            ..Default::default()
+        },
     };
 
-    g.apply(&arch, the_alloc).expect("client root allocs");
+    // Both namespaces declare their roots first (§12.38).
+    g.apply(&arch, kayfabe_tests::client_root(a))
+        .expect("A's client root allocs");
+    g.apply(&arch, kayfabe_tests::client_root(b))
+        .expect("B's client root allocs");
+    g.apply(&arch, the_alloc).expect("the memory object allocs");
     // An identical re-send while A still OWNS the handle is an idempotent retry.
     g.apply(&arch, the_alloc)
         .expect("retried RPC is idempotent");
@@ -1309,9 +1402,16 @@ fn unbacked_mapping_is_a_loud_fault() {
         offset: 0,
         len: MAP_LEN,
     });
-    assert!(
-        matches!(err, Err(GpuError::UnbackedMapping { .. })),
-        "unbacked map faults loudly"
+    // ★ §12.38 — the EXACT variant, both fields. `{ .. }` here would have passed for a
+    // fault at the wrong PDB or the wrong VA, which is §12.10's "canary passed for the
+    // wrong reason" and is precisely what an exact-variant standard exists to stop.
+    assert_eq!(
+        err,
+        Err(GpuError::UnbackedMapping {
+            pdb: PDB,
+            va: MAP_VA.0
+        }),
+        "unbacked map faults loudly, naming the exact PDB and VA"
     );
 }
 

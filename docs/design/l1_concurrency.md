@@ -3989,3 +3989,260 @@ Two smaller notes from the same read:
   but the distinction §12.13 drew between "condemned" and "unknown" is lost at this one site.
 - `Spine::sync_proc_to_boundary` sets `p.anchor` and `p.clients` twice in a row (a duplicated
   pair of lines, harmless). Left alone deliberately: unrelated to this change.
+
+### 12.38 ★★★ THE CRITERION WAS WRONG — "could this fact still arrive?" should have been "…in a LEGAL PROTOCOL TRACE?"
+
+§12.30 inventoried ~28 MISS sites as DEFER (*"not yet knowable"*) or FAULT (*"never
+knowable"*) and concluded **no site needed a behaviour change**. That conclusion was wrong
+for at least one site, and the *criterion* is why. It asked **"could this fact still
+arrive?"** when it should have asked **"could this fact still arrive in a legal protocol
+trace?"**
+
+The owner's ruling, now binding, and the amendment to decision #4:
+
+> **Order-independence holds where the NVIDIA protocol ALLOWS it, NOT wherever an ordering
+> is merely expressible. If RM would error on "use before exist", so must we.**
+>
+> Decision #4 therefore reads: order-independence over **any order of *legal protocol
+> facts***. The clause is the whole change. Nothing is lost — a dup into a nonexistent
+> namespace is not a legal trace, so no legal trace stops being order-independent — and
+> what is removed is the pretence that we owe order-independence to streams the guest's own
+> RM can never emit. **Modelling an ordering the hardware forbids was the vulnerability.**
+
+#### ★ The three categories — the first pass collapsed two of them
+
+| # | name | rule | why it is not the other two |
+|---|---|---|---|
+| **1** | **DEFER (protocol)** | the guest may *legally* send this before that | RM tolerates the order, so refusing it refuses a real guest |
+| **2** | ★ **DEFER (observation)** | the protocol *does* order it, but **we may not have observed the earlier fact** | **measured**: only **25 of 82** dups reach GSP (`../reference/rm_semantics_measured.md` §3). A dup's *source object* can be one RM saw and we did not. Faulting here **hangs a legal guest** |
+| **3** | **FAULT** | the protocol forbids the ordering **and** we would have observed the earlier fact | RM refuses it, so no legal trace is lost; deferring it **is** the vulnerability |
+
+Confusing 2 and 3 is a bug in **both** directions: faulting an observation gap hangs a legal
+guest; deferring a protocol violation is the security hole. §12.30 had no name for
+category 2, which is exactly why it mis-filed the one site that mattered — it saw "the fact
+might still arrive", which is true of both, and stopped there.
+
+**The practical dividing line is *which fact* is missing, not which site is asking.**
+
+- A **client root** (`NV01_ROOT`) is *always* on the GSP wire — it is literally the RPC
+  `AllocFacts::client_kind` is decoded from (`GSPALLOC hClient=… processID=…`,
+  `../reference/rm_semantics_measured.md` §4). Its absence is **category 3**.
+- An **object-level** fact (an object's parent, a VASpace alloc, a dup's source object) may
+  never have reached the wire. Its absence stays **category 2** *even where RM would have
+  ordered it* — which is the honest answer, and the one §12.30 could not express.
+
+#### The proof it matters: `RmEvent::Dup` accepted an alias into a never-declared namespace
+
+Reported open at the end of §12.37 and reproduced on this head. Nothing is condemned; the
+attacker is an ordinary live compute process.
+
+```text
+A: (a normal compute process, publishes, live)                ⇒ ProcId(1)
+A: Dup { src: (cA, vaspace), dst: (cV, 0x7b000001) }          ⇒ accepted, inert
+V: a normal compute process at hClient = cV                   ⇒ ProcId(1)   ← the ATTACKER's
+   proc.clients = {cA, cV}; one isolate; one GPA arena; one host VAS.
+```
+
+That is **#14 un-fixed for a pair the attacker chooses**, at the cost of one event per
+guessable `hClient` — and `hClient` is guessable because in RM the `hClient` **is** its root
+object's handle. Root cause, stated once: **a client-handle VALUE is used as a component
+identity while the value is recyclable.**
+
+Real RM refuses it. `serverCopyResource` resolves **both** client handles in the client
+database before it looks at a single object handle
+(`ogkm src/nvidia/src/libraries/resserv/src/rs_server.c:1674` →
+`_serverLockDualClientWithLockInfo`, `NV_ERR_INVALID_OBJECT_HANDLE` at `:3486-3487` /
+`:3547-3550`), then `clientValidate(pClientDst)` at `:1696`, whose own refusal is
+`NV_ERR_INVALID_CLIENT` (`ogkm src/nvidia/src/kernel/rmapi/client.c:782`).
+
+#### The fix — ONE rule, at event acceptance, refusing what RM refuses
+
+> **`RmGraph::undeclared_namespace` — no event may name a client namespace that does not
+> exist.** The offender gets `RmGraphError::UndeclaredClient(HClient)` (RM's
+> `NV_ERR_INVALID_CLIENT`), the graph is not mutated, and the state is *unrepresentable*
+> downstream rather than detected there.
+
+It is central, not per-arm, because that is what makes it structural: by the time any arm of
+`apply` runs, every namespace the event names exists. RM checks `hClient` first at every
+ioctl-reachable entry point, so the placement is faithful as well as convenient:
+
+| our event | RM entry point | `ogkm .../resserv/src/rs_server.c` |
+|---|---|---|
+| `Alloc` (non-root) | `serverAllocResource` | `:778`, then `clientValidate` `:824` |
+| `Dup` (**both** ends) | `serverCopyResource` | `:1674`, then `clientValidate(dst)` `:1696` |
+| `SetPageDir` (an RM control) | `serverControl` | `:1503` / `:1519`, then `clientValidate` `:1547` |
+| `MapMemoryDma` | `serverInterMap` | `:2218`, then `clientValidate` `:2232` |
+
+**Two exemptions, each argued rather than convenient:**
+
+- **The client-root `Alloc`** — it is the event that *creates* the namespace, and RM
+  bypasses the client lock for exactly it (`serverAllocClient`, `:764`).
+- **`Free` and `Unmap` — the TEARDOWN verbs.** A namespace with no root is
+  indistinguishable from one whose root was *just* freed (freeing a root drops every handle
+  in it, leaving nothing to tell them apart), and a teardown verb arriving after its
+  namespace died is a benign race a real guest produces. `Unmap`'s unknown-VAS arm is
+  already silently `Ok` for that reason and `Free`'s is the more precise `FreeUnknown`.
+  Faulting here would be the FAULT-that-should-DEFER direction. **The rule loses nothing:**
+  once no *creating* event can name an undeclared namespace, an undeclared namespace holds
+  no handles, so both verbs are inert by construction.
+
+#### ★ What the rule closed, beyond the dup — a second, independent finding
+
+`RmGraph`'s `Alloc` arm had the *same* hole one level down, and §12.30's table filed it as
+DEFER on its first row (*"an object may legally precede its client root (order tolerance,
+#4)"* — false about RM, `rs_server.c:778`).
+
+An object allocated into a namespace that had not declared itself used to **mint a whole
+user `ProcBoundary`** — isolate, GPA arena, routable `Vas` — anchored at a client of
+*unknown* `ClientKind`. That is precisely the guess §12.27 refuses to make, reached by
+omission instead of by a default. And it is exploitable in the direction §12.26 cares about:
+declare the objects first, declare the client root **last** as `Kernel`, and for the window
+in between the guest kernel's own VASpaces have a real user data plane — the thing
+`FwdFault::SystemDataPlane` exists to forbid. When the `Kernel` root finally lands the
+objects migrate to the system component and the user proc is retired, so nothing was even
+loud about it.
+
+#### The full re-labelled inventory (§12.30's table, re-derived, not trusted)
+
+★ = category changed. Citations are `ogkm` unless stated.
+
+| site | §12.30 | **now** | why |
+|---|---|---|---|
+| ★ `RmGraph::client_root_of` / `client_kinds` | DEFER | **3 · FAULT** (`UndeclaredClient`) | RM resolves `hClient` first at every entry point (`rs_server.c:778`, `:1503`, `:1674`, `:2218`) and a client root is always on the GSP wire (`rm_semantics_measured.md` §4). The read-side "no live root ⇒ groups with nobody" arm stays — reachable only via a *freed* root an alias outlives |
+| ★ `RmEvent::Dup` — dst / src **namespace** | (unlisted) | **3 · FAULT** (`UndeclaredClient`) | `serverCopyResource` locks BOTH clients (`rs_server.c:1674`) → `NV_ERR_INVALID_CLIENT`. THE squat vector |
+| `RmGraph::resource_of` / `origin_of` — dup **source object** | DEFER | **2 · DEFER (observation)** | RM *does* order it (`clientGetResourceRef(pClientSrc, hResourceSrc)`, `rs_server.c:1700`), but only 25/82 dups reach GSP — the source may be an object RM saw and we did not. **Must stay a deferral** |
+| `RmGraph::origin_of_kind` | fused DEFER + FAULT | **2 + 3, still fused** | unchanged; §12.30 finding B stands (splitting it is a `Result`-shaped resolver through `project`) |
+| `RmGraph::pdb_of` / parked `SetPageDir` | DEFER | **2 · DEFER (observation)** | the *control* requires its VASpace to exist (`serverControl` → `clientGetResourceRef`, `rs_server.c:1560`), so this is not category 1 — but the VASpace alloc is an object-level fact, so the gap is real. Re-labelled, not re-behaved |
+| `RmGraph::walk_gpu` / `gpu_of` — no `Device` ancestor yet | DEFER | **2 · DEFER (observation)** | same shape: `serverAllocResource` requires `hParent` to resolve, so parent-before-child *is* ordered by RM — and the parent alloc is object-level. **A site I could have wrongly faulted; I did not** |
+| `RmGraph::gpu_of` — Device declared no instance | DEFER | **1 · DEFER**, unreachable | `deviceId` is required by `NV0080_ALLOC_PARAMETERS`; the alloc-time membership check (`InvalidDeviceInstance`) already refuses a bad one |
+| `RmGraph::backing_of` | split by caller | **2 (unobserved) / 3 (wrong kind, no backing)** | unchanged behaviour; the "unobserved" half is now named as observation, not protocol |
+| `project::resolve_vaspace_handle` / `resolve_channel_vas` | DEFER here, FAULT at use | **2 here, 3 at use** | inherits `origin_of_kind`; unchanged |
+| `project`: parked dup edge skipped | DEFER | **2 · DEFER (observation)** | now covers *only* the source object — both namespaces are guaranteed declared at acceptance |
+| `project`: `is_user(dst) && is_user(src)` | DEFER on undeclared ends | **1 · DEFER** | reachable only through a freed root; absence is still never read as "user" |
+| `project`: `VasFacts.gpu`/`.pdb`, `ChannelFacts.gpu`/`.vas_origin` | DEFER | **1 / 2 · DEFER** | `.pdb` absent is category 1 (`SET_PAGE_DIRECTORY` genuinely follows the alloc); `.gpu` absent is category 2 (the Device is an object) |
+| `project`: `by_pdb` / `by_vchid` inserted only for a resolved target | DEFER | **unchanged** | an unroutable object enters no routing map; its use faults by name |
+| `project`: `PdbCollision` / `VchidCollision` | FAULT | **3 · FAULT** | not a miss — hostile ambiguity |
+| `Gpu::sync_rpc_mappings`: `m.pdb == None` | DEFER | **1 · DEFER** | ★ THE canonical exception: a guest legitimately maps before it binds a page directory |
+| `Gpu::sync_rpc_mappings`: `gpu_of(vaspace) == None` | DEFER | **2 · DEFER (observation)** | deferring is what keeps GPU 0 from being guessed |
+| `Gpu::sync_rpc_mappings`: `m.mem_phys == None` | FAULT | **3 · FAULT** (`UnbackedMapping`) | a backing is an alloc-time fact; an unbacked memory stays unbacked |
+| `Gpu::sync_proc_to_boundary`: unresolved vas/channel | DEFER | **1 / 2 · DEFER** | materializes nothing, re-evaluated next apply, `ChanId` slot kept stable |
+| `Spine::plan_refresh`: `LateMerge` / arena exhaustion | FAULT | **3 · FAULT** | decided before any proc is touched (§12.18). `CondemnedMerge` retired in §12.37 |
+| `fwd::route_pdb` / `route_doorbell` / `route_engine_object` | FAULT | **3 · FAULT** | *use* sites: the operation is now, so there is no "later" |
+| `fwd::resolve_in` | FAULT ×2 | **3 · FAULT** | unknown `(target, pdb)`; unbound VA |
+| `fwd::gate_working_set_in` | FAULT ×4 | **3 · FAULT** | incl. `chan.vas_pdb == None` — the same absence `sync_proc_to_boundary` DEFERS on. At ring time there is no "later" |
+| `fwd::plan_publish` / `plan_doorbell` / `plan_engine_object` / `plan_control` | FAULT | **3 · FAULT** | `RetiredProc`, `SystemDataPlane`, `UnknownPdb`, `NoVas`, `NoTarget` |
+| `fwd::checkout` → `Ok(None)` | DEFER, caller chooses | **1 · DEFER** | "no worker" *will* change; a caller that can wait parks (counted, §12.29), one that cannot gets `PoolSaturated` |
+| `fwd::commit_*` → `Refusal { retry: true }` | DEFER at the commit seam | **1 · DEFER** | §12.9's converging staleness — bounded, because a defer must terminate |
+| `fwd::commit_*` → `retry: false` | FAULT | **3 · FAULT** | divergent: nothing that can arrive brings the target back |
+| `AddressTable::resolve` | FAULT | **3 · FAULT** | the table IS the guest's TLB; a TLB has no "later" |
+| `AddressTable::unbind` → `None` | FAULT at caller | **3 · FAULT** | the arena must never accept a range it does not owe |
+| `SourceRegistry::dispatch` | FAULT | **3 · FAULT** | handles are never reused, so a miss is never a stale-alias guess |
+
+**Two sites re-labelled 1 → 2 are the ones worth re-reading** (`pdb_of`, `walk_gpu`): RM
+genuinely orders both — a control needs its object, an alloc needs its parent — so under the
+corrected criterion they *look* like category 3. They are not, because the earlier fact is
+object-level and may never have reached the wire. Faulting them would have been the
+hangs-a-legal-guest error, and stating them as category 2 is the whole reason the third
+category exists.
+
+#### Unrepresentable-by-construction vs runtime-checked
+
+- **Runtime-checked**, one place: `RmGraph::undeclared_namespace` → `UndeclaredClient`. It
+  cannot be made a type without giving `RmEvent` a "namespace exists" witness, which would
+  move the check to whoever mints the witness — the same check, further from RM's own.
+- **Unrepresentable downstream, as a consequence:** a parked dup edge into a nonexistent
+  namespace, an object owned by an undeclared client, a `ProcBoundary` anchored at a client
+  of unknown `ClientKind`, and (already, from §12.37) a component with one condemned end.
+- **Newly unrepresentable, and noted at its test:** a *parked* dup whose source is a
+  `Client`-classed object. A namespace holds exactly one `Client` origin — its root — and
+  the namespace exists iff that root does, so such a dup either resolves immediately or is
+  refused. §12.25's worst mis-fire (an alias promoted to "origin" of a client root) has lost
+  its input.
+
+#### Tests
+
+- `l1_mean::a_planted_dup_alias_cannot_squat_a_later_process_into_the_attackers_proc` — the
+  squat, end to end: attacker live and publishing, one planted dup, victim arrives at the
+  squatted `hClient` and must get **its own** `ProcId`, isolate, arena and host handles.
+  The isolation claim is asserted *before* the refusal claim on purpose, so reverting the
+  fix reports the breach rather than "the dup was accepted".
+- `rmgraph_order_independence::a_dup_into_an_undeclared_namespace_is_refused_in_every_order`
+  — the other half of the corrected property: an illegal order is refused **wherever** it
+  appears in the stream, mutation-free.
+- `rmgraph_order_independence::an_undeclared_client_merges_with_nobody_until_it_declares` —
+  **changed on purpose**; it asserted the accept-then-merge behaviour deliberately, and that
+  behaviour was the hole. Its doc now says what it used to claim and why it changed.
+- `security_boundary::b5_dangling_dup_is_inert_and_unknown_free_is_loud` — now states BOTH
+  ends of the taxonomy in one test: unobserved **source object** parks (category 2),
+  undeclared **destination namespace** faults (category 3).
+- `miss_taxonomy.rs` — the new file Part 3 asks for: every FAULT site refused with its
+  **exact** variant, and every DEFER site proved to **resolve when the fact arrives** (a
+  deferral that never resolves is a hang, and nothing previously proved it did not). Each
+  deferral test asserts the ABSENCE first (nothing materialized, nothing routed, the use
+  faults by name) and then the ARRIVAL, so a site that silently *dropped* the fact fails
+  even though it "deferred" correctly.
+- `security_boundary::b2_pending_pdb_flood_is_capped_loud` — the audit's other find:
+  `Capacity::PendingPdbs` was the ONE capacity variant with no test at all. The other four
+  parked/live tables each had one, so the gap was invisible by symmetry. It is genuinely
+  guest-reachable: a parked `SET_PAGE_DIRECTORY` is a legitimate ordering, so the fact must
+  be retained, so the table must be bounded.
+- **Seven pre-existing FAULT assertions tightened from `matches!{ .. }` to `assert_eq!`**,
+  because "assert the exact variant, never `is_err()`" is only half a standard if the
+  fields that carry the meaning are wildcarded: `UnbackedMapping` (both fields, ×2 sites),
+  `PdbCollision`/`VchidCollision` (the colliding id and BOTH claimants — i.e. everything
+  that says *what* collided), `MalformedToken` (the token), `NotAnEngine` (the class — the
+  whole content of that fault), `RetiredProc` (WHICH proc, where `_` would have passed had
+  the core named the survivor), `AddressFault::Malformed` (which was hidden behind
+  `FwdFault::Address(_)`, so a `Miss` would have passed for a `Malformed`), and `NoVas` at
+  the `chan.vas_pdb == None` site — the one absence §12.30 singles out as deferring in
+  derivation and faulting at use, which makes it exactly the variant worth pinning.
+
+#### The permutation/fuzz properties, restated rather than weakened
+
+`kayfabe_tests::legal_order` is a *stable topological pass* over one partial order (a
+namespace declares before it is named). Every rotation, reversal, interleave and random-key
+shuffle in `rmgraph_order_independence`, `determinism`, `multi_gpu`, `security_invariants`
+and `fuzz_rmgraph_invariants` still produces a genuinely different order — just never an
+impossible one — and the orders it *would* have produced get their own named assertion. It
+deliberately reorders **nothing** else: an object may still arrive before its parent, a
+`SET_PAGE_DIRECTORY` before its VASpace, a `MAP_MEMORY_DMA` before either end, and a
+`DUP_OBJECT` before its **source object**.
+
+#### Bite-checks (house standard: revert, confirm the exact symptom, restore)
+
+- **The `Dup` arm reverted** (`undeclared_namespace` returning `None` for `Dup`):
+  `a_planted_dup_alias_cannot_squat_a_later_process_into_the_attackers_proc` fires
+  *"★★ the victim was merged into the ATTACKER's `Proc` by an edge it never created"* with
+  `left: ProcId(1), right: ProcId(1)` — the breach itself, not a missing refusal.
+  Also fires, on the same revert: `a_planted_dup_alias_cannot_condemn_a_client_that_has_not
+  _declared` (*"the hostile stream must earn its OWN loud refusal, on its OWN event"*),
+  `miss_taxonomy::every_event_naming_an_undeclared_namespace_is_refused_by_name` (the
+  squat-vector row), `rmgraph_order_independence::a_dup_into_an_undeclared_namespace_is_
+  refused_in_every_order`, `…::an_undeclared_client_merges_with_nobody_until_it_declares`
+  and `security_boundary::b5_dangling_dup_is_inert_and_unknown_free_is_loud`.
+- **The `Alloc` arm reverted:** `an_object_allocated_into_an_undeclared_namespace_mints_no_
+  boundary` fires on its FIRST assertion — *"★★ a boundary was minted for a client whose
+  `ClientKind` is UNKNOWN"* — because that test, like the squat test, asserts the end state
+  before the mechanism. `every_event_naming_an_undeclared_namespace_is_refused_by_name`
+  fires on its `Alloc` row.
+- **Each deferral bitten at its own mechanism**, and two of the bites corrected the tests:
+  parked `SetPageDir` **dropped** ⇒ *"the parked PDB drained onto the resource"* (neutering
+  the *drain* alone does NOT bite, because `pdb_of` also reads the parked table — worth
+  knowing); parked map dropped ⇒ *"the parked map replayed"*; the dup promotion neutered ⇒
+  the refcount-set assertion; the Device target's back-fill **and** live re-walk both dead
+  ⇒ three tests including `defer_an_rpc_mapping_with_no_gpu_target_populates_when_the_
+  device_lands` (neutering `cache_targets` alone does not bite, because `gpu_of` re-walks —
+  the cache is durability, not the resolution path); a fresh `ChanId` per apply ⇒ *"the
+  ChanId slot is the SAME one"* (`Some(ChanId(1))` vs `Some(ChanId(0))`); the
+  `UnbackedMapping` fault downgraded to a skip ⇒ both exact-variant sites; the `NoVas` ring
+  gate downgraded ⇒ `cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty`;
+  the `PendingPdbs` cap removed ⇒ `faulted_at: None` vs `Some(262144)`.
+
+#### What this does NOT change
+
+Not the condemnation model (§12.37 stands), not attribution-by-origin, and not the two
+shapes §12.37 left open that live one level down in the graph's **identity** model — a freed
+namespace whose resources are still alive stays condemned, and re-declaring such a namespace
+is still possible. Those need a never-reused resource identity for components, or a refusal
+to re-declare a namespace that still holds live resources. §12.38 removes the
+*never-declared* vector completely; the *recycled* one is unchanged and still open.

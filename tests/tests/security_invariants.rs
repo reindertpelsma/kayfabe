@@ -197,13 +197,18 @@ proptest! {
 
         // Permute the legit events (all alloc/setpagedir/map — order-tolerant, so any
         // permutation still applies cleanly): pair with generated keys and sort.
+        // ★ §12.38 — then LEGALIZE: an event may not name a client namespace before its
+        // `NV01_ROOT` declares it (RM: `NV_ERR_INVALID_CLIENT`), so the permutation is
+        // taken over the orderings the protocol can actually produce. The pass is stable,
+        // so the adversarial interleave the random-key sort produces survives intact.
         let mut keyed: Vec<(u64, RmEvent)> = legit
             .iter()
             .enumerate()
             .map(|(i, ev)| (*perm.get(i).unwrap_or(&(i as u64)), *ev))
             .collect();
         keyed.sort_by_key(|(key, _)| *key);
-        let permuted: Vec<RmEvent> = keyed.into_iter().map(|(_, ev)| ev).collect();
+        let permuted: Vec<RmEvent> =
+            kayfabe_tests::legal_order(&keyed.into_iter().map(|(_, ev)| ev).collect::<Vec<_>>());
 
         // Interleave permuted-legit (b) with junk (a) at adversarial timing.
         let mut gpu = new_gpu();
@@ -945,9 +950,13 @@ fn p4_map_naming_a_non_memory_object_is_a_loud_unbacked_fault_not_a_silent_bind(
     });
 
     // It is a LOUD unbacked fault (rolled back atomically), NOT a silent bind.
-    assert!(
-        matches!(attack, Err(GpuError::UnbackedMapping { .. })),
-        "mapping a non-Memory object as backing must be a loud UnbackedMapping fault, got {attack:?}"
+    // ★ §12.38 — exact variant, both fields: the fault must name the VAS being attacked
+    // and the VA the confused deputy would have bound, not merely "something failed".
+    assert_eq!(
+        attack,
+        Err(GpuError::UnbackedMapping { pdb, va: va.0 }),
+        "mapping a non-Memory object as backing must be a loud UnbackedMapping fault \
+         naming the exact PDB and VA"
     );
     // The VA never resolved to the attacker's phys — the confused-deputy is closed.
     assert!(

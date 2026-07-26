@@ -681,14 +681,26 @@ fn b2_handle_flood_is_capped_loud() {
 
 /// **Boundary 2.** A parked-dup flood (dangling-source `Dup`s that never resolve) is
 /// CAPPED at [`MAX_PARKED`] and loud-faults.
+///
+/// ★ §12.38 — the flood targets a namespace the attacker has DECLARED, which is the only
+/// shape that reaches the parked table at all now (a dup into an undeclared namespace is
+/// refused before it can park). That makes this the realistic flood rather than a
+/// cheaper, no-longer-reachable one: the attacker pays for one client root and then
+/// floods parked edges into it.
 #[test]
 fn b2_pending_dup_flood_is_capped_loud() {
     let arch = MockArch::new();
     let mut g = RmGraph::new();
+    // ★ §12.38 — BOTH namespaces exist (RM resolves both `hClient`s); what never
+    // arrives is the source OBJECT, which is the half that legitimately parks.
+    for c in [HClient(0xC000), HClient(0xDEAD)] {
+        g.apply(&arch, kayfabe_tests::client_root(c))
+            .expect("the flood's namespaces declare themselves first");
+    }
     let mut faulted = false;
     for i in 0..=MAX_PARKED as u64 {
         // Distinct dst, source that will never be allocated → parks forever.
-        let dst = NodeKey::new(HClient(0xC000), HObject(i as u32));
+        let dst = NodeKey::new(HClient(0xC000), HObject(0x8000_0000 + i as u32));
         let src = NodeKey::new(HClient(0xDEAD), HObject(0xFFFF_FFFF));
         if let Err(RmGraphError::CapacityExceeded(Capacity::PendingDups)) =
             g.apply(&arch, RmEvent::Dup { src, dst })
@@ -710,6 +722,9 @@ fn b2_pending_dup_flood_is_capped_loud() {
 fn b2_pending_map_flood_is_capped_loud() {
     let arch = MockArch::new();
     let mut g = RmGraph::new();
+    // ★ §12.38 — the flooding namespace exists; the VASpace/memory handles never do.
+    g.apply(&arch, kayfabe_tests::client_root(HClient(0xC001)))
+        .expect("the flooding namespace declares itself first");
     let mut faulted = false;
     for i in 0..=MAX_PARKED as u64 {
         let ev = RmEvent::MapMemoryDma {
@@ -728,6 +743,41 @@ fn b2_pending_map_flood_is_capped_loud() {
     assert!(
         faulted,
         "parked-map table must loud-fault at the cap, not grow unbounded"
+    );
+}
+
+/// **Boundary 2.** A parked-`SET_PAGE_DIRECTORY` flood (PDBs declared on handles that are
+/// never allocated) is CAPPED at [`MAX_PARKED`] and loud-faults.
+///
+/// ★ §12.38's audit found this the ONE `Capacity` variant with no test at all — the other
+/// four parked/live tables each had one, so the gap was invisible by symmetry. It is a
+/// real guest-reachable growth path: `SET_PAGE_DIRECTORY` on an unobserved VASpace handle
+/// is a legitimate ordering (DEFER-for-observation), so the fact must be retained, so the
+/// table must be bounded.
+#[test]
+fn b2_pending_pdb_flood_is_capped_loud() {
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    let c = HClient(0xC003);
+    g.apply(&arch, kayfabe_tests::client_root(c))
+        .expect("the flooding namespace declares itself first");
+    let mut faulted_at = None;
+    for i in 0..=MAX_PARKED as u64 {
+        let ev = RmEvent::SetPageDir {
+            client: c,
+            // A distinct, never-allocated handle each time → parks forever.
+            vaspace: HObject(0x8000_0000 + i as u32),
+            pdb: Pdb(0x3400_0000 + i * 0x1000),
+        };
+        if let Err(RmGraphError::CapacityExceeded(Capacity::PendingPdbs)) = g.apply(&arch, ev) {
+            faulted_at = Some(i);
+            break;
+        }
+    }
+    assert_eq!(
+        faulted_at,
+        Some(MAX_PARKED as u64),
+        "the parked page-directory table must loud-fault EXACTLY at the cap, not OOM"
     );
 }
 
@@ -1116,38 +1166,84 @@ fn b5_channel_cannot_bind_another_clients_vaspace_handle() {
 /// making it a hard fault instead would reject the order-tolerant `Dup`-before-`Alloc`
 /// case and break whole-core determinism (see `tests/determinism.rs`). A `Free` of a
 /// never-seen handle IS a loud `FreeUnknown` (a free is lifecycle-ordered, not parkable).
+///
+/// ★★ §12.38 — the two ends of a dup are now on **opposite sides** of the taxonomy, and
+/// this test states both:
+///
+/// - **source unobserved ⇒ DEFER (observation).** It parks, exactly as before. This is
+///   not merely tolerated, it is *measured*: only 25 of 82 dups reach GSP
+///   (`docs/reference/rm_semantics_measured.md` §3), so a dup's source may genuinely be
+///   an object we never saw even though RM saw it. Faulting here would hang a legal guest.
+/// - **destination namespace undeclared ⇒ FAULT.** A client ROOT alloc is always on the
+///   GSP wire (§4), so its absence is not an observation gap — and RM resolves
+///   `hClientDst` before anything else (`NV_ERR_INVALID_CLIENT`). Parking it was the
+///   squat vulnerability.
 #[test]
 fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
     let mut gpu = fresh_gpu();
     for ev in benign_b_events() {
         gpu.apply(ev).unwrap();
     }
+    // ★ §12.38 — BOTH namespaces exist; the unobserved half is the source OBJECT.
+    for c in [HClient(0xBEEF), HClient(0xDEAD)] {
+        gpu.apply(kayfabe_tests::client_root(c))
+            .expect("the dup's namespaces declare themselves");
+    }
     // Dup with a source that will never exist → parked, inert. Accepted (it may yet
     // resolve), but it binds NOTHING and groups NOTHING until/unless its source arrives.
     let inert_dup = gpu.apply(RmEvent::Dup {
-        src: NodeKey::new(HClient(0xDEAD), HObject(0xDEAD)),
-        dst: NodeKey::new(HClient(0xBEEF), HObject(0xBEEF)),
+        src: NodeKey::new(HClient(0xDEAD), HObject(0x1234_5678)),
+        dst: NodeKey::new(HClient(0xBEEF), HObject(0x9000_0001)),
     });
     assert!(
         inert_dup.is_ok(),
-        "an unresolved dup parks (order tolerance), got {inert_dup:?}"
+        "an unresolved dup SOURCE parks (observation gap), got {inert_dup:?}"
     );
     // No cross-object binding: the dst alias resolves to nothing (no silent reach).
     assert!(
         gpu.spine
             .rmgraph
-            .origin_of(NodeKey::new(HClient(0xBEEF), HObject(0xBEEF)))
+            .origin_of(NodeKey::new(HClient(0xBEEF), HObject(0x9000_0001)))
             .is_none(),
         "a parked dup must not bind its dst to any object"
     );
-    // No phantom proc: the never-allocated clients group into nothing.
+    // No phantom proc: the never-allocated SOURCE client groups into nothing, and the
+    // declared destination is its own component and joins nobody through a parked edge.
     let bounds =
         project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("projects");
     assert!(
-        bounds.procs.iter().all(|p| {
-            !p.clients.contains(&HClient(0xBEEF)) && !p.clients.contains(&HClient(0xDEAD))
-        }),
-        "a dangling dup must not conjure a resource-less phantom proc"
+        bounds
+            .procs
+            .iter()
+            .any(|p| p.clients == std::collections::BTreeSet::from([HClient(0xDEAD)])),
+        "the source namespace is its OWN component — a parked edge groups nothing"
+    );
+    assert!(
+        bounds
+            .procs
+            .iter()
+            .any(|p| p.clients == std::collections::BTreeSet::from([HClient(0xBEEF)])),
+        "the declared aliasing client is its OWN component — a parked edge groups nothing"
+    );
+
+    // ★★ …and the other end: the SAME dup into a namespace that has never declared a
+    // root is a loud, named refusal, and mutates nothing.
+    let undeclared = NodeKey::new(HClient(0xFEED), HObject(0xFEED));
+    let refused = gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(HClient(0xDEAD), HObject(0x1234_5678)),
+        dst: undeclared,
+    });
+    assert_eq!(
+        refused,
+        Err(GpuError::Graph(RmGraphError::UndeclaredClient(
+            undeclared.client
+        ))),
+        "a dup into an UNDECLARED destination namespace is a protocol violation"
+    );
+    assert_eq!(
+        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("projects"),
+        bounds,
+        "the refusal mutated nothing"
     );
     // B is undisturbed.
     assert!(
@@ -2102,6 +2198,8 @@ fn rmgraph_apply_is_atomic_on_failure() {
     };
     for ev in [
         kayfabe_tests::client_root(C),
+        // ★ §12.38 — the dup's destination namespace declares itself first.
+        kayfabe_tests::client_root(OTHER),
         RmEvent::Alloc {
             client: C,
             parent: root,

@@ -195,10 +195,13 @@ fn t14_doorbell_demux_routes_to_own_isolate() {
 fn t14_malformed_and_unknown_tokens_fault_loudly() {
     let (mut gpu, _vmm, _rec) = two_process_gpu();
     // A token that does not decode (hostile bytes) — MalformedToken, never a guess.
-    assert!(matches!(
+    // ★ §12.38 — the EXACT variant, carrying the token it refused: a wildcard would pass
+    // even if the core reported some OTHER token, which is the field that says what was
+    // rejected.
+    assert_eq!(
         handle_doorbell(&mut gpu, GpuId::ZERO, 0xdead_beef, &[]),
-        Err(kayfabe_fwd::FwdFault::MalformedToken { .. })
-    ));
+        Err(kayfabe_fwd::FwdFault::MalformedToken { token: 0xdead_beef })
+    );
     // A well-formed token for a vChid no channel registered — UnknownVchid MISS=FAULT.
     let ghost = MockArch::token_for(kayfabe_arch::ids::VChid(0xfff));
     assert!(matches!(

@@ -166,6 +166,14 @@ fn world_strategy() -> impl Strategy<Value = Vec<RmEvent>> {
 /// each event flagged in `dups` (an identical adjacent re-send — the retried-RPC shape,
 /// which must be idempotent). Frees would break this (lifecycle-ordered); the fact set
 /// has none.
+///
+/// ★ §12.38 — the permutation is then **legalized** ([`kayfabe_tests::legal_order`]): the
+/// property is order-independence over the orderings the NVIDIA protocol can produce, and
+/// the one ordering it fixes is that a `DUP_OBJECT`'s destination namespace declares
+/// before the dup (RM resolves `hClientDst` first and answers `NV_ERR_INVALID_CLIENT`
+/// otherwise). The legalization is a *stable* topological pass, so the arbitrary
+/// cross-proc interleave the random-key sort produces survives it intact — only a dup
+/// that outran its own destination's declaration is moved.
 fn permute_and_duplicate(events: &[RmEvent], keys: &[u64], dups: &[bool]) -> Vec<RmEvent> {
     let mut keyed: Vec<(u64, RmEvent)> = events
         .iter()
@@ -180,7 +188,7 @@ fn permute_and_duplicate(events: &[RmEvent], keys: &[u64], dups: &[bool]) -> Vec
             out.push(*ev); // benign duplicate of an order-independent fact
         }
     }
-    out
+    kayfabe_tests::legal_order(&out)
 }
 
 // =================================================================================
@@ -573,6 +581,12 @@ proptest! {
 /// Two full procs (one with UVM + NVENC), applied in scripted order vs fully reversed
 /// vs an even/odd interleave: all three produce the identical whole-core snapshot. A
 /// human-readable witness of the property the proptests search.
+///
+/// ★ §12.38 — the reversed and interleaved orders are passed through
+/// [`kayfabe_tests::legal_order`] first, because a *fully reversed* stream puts every
+/// `DUP_OBJECT` before its destination namespace's `NV01_ROOT`, which RM refuses
+/// (`NV_ERR_INVALID_CLIENT`) and the guest's RM therefore never emits. Reversal remains
+/// the most adversarial legal order available; it is just no longer an illegal one.
 #[test]
 fn determinism_reference_world_three_orders_agree() {
     let events = world(2, &[true, false], &[true, false]);
@@ -581,11 +595,11 @@ fn determinism_reference_world_three_orders_agree() {
 
     let mut reversed = events.clone();
     reversed.reverse();
-    let backward = apply_and_snapshot(&reversed);
+    let backward = apply_and_snapshot(&kayfabe_tests::legal_order(&reversed));
 
     let mut interleaved: Vec<RmEvent> = events.iter().step_by(2).copied().collect();
     interleaved.extend(events.iter().skip(1).step_by(2).copied());
-    let woven = apply_and_snapshot(&interleaved);
+    let woven = apply_and_snapshot(&kayfabe_tests::legal_order(&interleaved));
 
     assert_eq!(scripted, backward, "reversed order diverged");
     assert_eq!(scripted, woven, "even/odd interleave diverged");

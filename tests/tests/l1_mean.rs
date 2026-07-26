@@ -110,9 +110,9 @@ use std::time::{Duration, Instant as WallInstant};
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
-use kayfabe_core::gpu::Gpu;
+use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::reactor::SourceKind;
-use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraphError};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_fwd::{ControlRoute, DoorbellOutcome, FwdFault, Published, Stale};
 use kayfabe_isolate::{HostHandle, IsolateId, RmError, WorkerId};
@@ -3119,6 +3119,16 @@ const PLANTED_ALIAS: HObject = HObject(0x7777_0001);
 /// This is the first shape found in this core that lets a hostile stream earn ANOTHER
 /// process's refusal, which is why it is asserted end to end (declare → publish → ring)
 /// rather than on `is_condemned` alone.
+///
+/// ★★ **UPDATED by §12.38.** The property is unchanged and still holds; the *mechanism*
+/// moved one layer earlier, and this test now says so. §12.37 removed the transfer of
+/// fatality (the condemnation line in the grouping predicate); §12.38 removes the
+/// planted alias itself — a `DUP_OBJECT` into a namespace with no declared client root
+/// is a protocol violation RM refuses outright, so it never enters the graph. The
+/// attacker therefore earns a **loud refusal on its own event**, which is the strongest
+/// form of boundary-1 available: `Spine::apply`'s contract, satisfied at the event that
+/// violates it. The end-to-end half is kept verbatim, because "the victim is served"
+/// must remain an assertion about the victim's own plane and not about the graph.
 #[test]
 fn a_planted_dup_alias_cannot_condemn_a_client_that_has_not_declared() {
     let _wd = watchdog("c1_planted_alias", Duration::from_secs(60));
@@ -3133,14 +3143,19 @@ fn a_planted_dup_alias_cannot_condemn_a_client_that_has_not_declared() {
     assert!(gpu.spine.is_condemned(client_of(P_HUP)));
 
     // ---- ★ The attack: ONE dup, out of the condemned component, into a namespace
-    // that does not exist. It is accepted (RM refcounting is faithful — the alias
-    // keeps the resource alive) and it changes nothing while the destination is
-    // undeclared.
-    gpu.apply(RmEvent::Dup {
-        src: NodeKey::new(client_of(P_HUP), H_VASPACE),
-        dst: NodeKey::new(VICTIM_CLIENT, PLANTED_ALIAS),
-    })
-    .expect("the planted dup applies");
+    // that does not exist. ★ §12.38 — it is REFUSED on the attacker's own event, by
+    // name, because RM itself resolves `hClientDst` before anything else and refuses a
+    // namespace that has never declared a root. The refusal is mutation-free.
+    assert_eq!(
+        gpu.apply(RmEvent::Dup {
+            src: NodeKey::new(client_of(P_HUP), H_VASPACE),
+            dst: NodeKey::new(VICTIM_CLIENT, PLANTED_ALIAS),
+        }),
+        Err(GpuError::Graph(RmGraphError::UndeclaredClient(
+            VICTIM_CLIENT
+        ))),
+        "★★ the hostile stream must earn its OWN loud refusal, on its OWN event"
+    );
     assert!(
         !gpu.spine.is_condemned(VICTIM_CLIENT),
         "an undeclared namespace cannot be condemned — there is nothing there yet"
@@ -3202,6 +3217,139 @@ fn a_planted_dup_alias_cannot_condemn_a_client_that_has_not_declared() {
         1,
         "one corpse, still exactly one"
     );
+}
+
+/// The victim's PDB in the **squat** variant (a separate value from [`VICTIM_PDB`] so
+/// the two attacks can never share a routing entry through a stale map).
+const SQUAT_VICTIM_PDB: Pdb = Pdb(0x4a10_0000);
+/// The squat victim's GR vChid.
+const SQUAT_VICTIM_GR: VChid = VChid(0x164);
+/// The squat victim's CE vChid.
+const SQUAT_VICTIM_CE: VChid = VChid(0x264);
+
+/// ★★★ **C3 — the SAME planted alias, without any condemnation, MERGES an unrelated
+/// later process into the ATTACKER's live `Proc`** (`l1_concurrency.md` §12.38).
+///
+/// §12.37 fixed the condemnation half of C1 and reported this half open. It is the worse
+/// one: nothing here is condemned, so the condemnation line never applies. The attacker
+/// is an ordinary live compute process; it plants one `DUP_OBJECT` of its own VASpace
+/// into a namespace nobody owns yet; the victim later arrives as an ordinary compute
+/// process at that `hClient`. The parked edge resolves, both ends are declared `User`,
+/// both are alive — so it is a *grouping* edge, and the two become **one `Proc`: one
+/// isolate, one GPA arena, one host VAS**. That is #14 un-fixed for a chosen pair,
+/// reachable with one event and a guessable `hClient` (RM's `hClient` **is** its root
+/// object's handle).
+///
+/// **The fix is at event acceptance, not at projection** — a `Dup` whose destination
+/// namespace has never declared a client root is refused, exactly as RM refuses it
+/// (`ogkm src/nvidia/src/libraries/resserv/src/rs_server.c:1674` →
+/// `_serverLockDualClientWithLockInfo` → `NV_ERR_INVALID_OBJECT_HANDLE` at `:3547-3550`;
+/// `clientValidate`'s `NV_ERR_INVALID_CLIENT`, `rmapi/client.c:782`, is the same refusal
+/// one layer up). No legal protocol trace is lost, because RM would never have emitted
+/// the RPC — see §12.38's corrected criterion.
+///
+/// The order of the assertions is deliberate: the **end-state isolation claim comes
+/// first**, so reverting the fix reports the breach itself ("the victim landed in the
+/// attacker's proc") rather than merely "the dup was accepted".
+#[test]
+fn a_planted_dup_alias_cannot_squat_a_later_process_into_the_attackers_proc() {
+    let _wd = watchdog("c3_squat_into_live_proc", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (attacker, lane) = (pids[P_WITNESS], lane_of(P_WITNESS));
+
+    // The attacker is an ordinary, LIVE, publishing process — no condemnation anywhere.
+    core_publish(&mut gpu, GPU0, lane.pdb, VA_WARM).expect("the attacker publishes while alive");
+    assert_eq!(gpu.spine.condemned_len(), 0, "nothing is condemned here");
+    let attacker_iso = gpu.procs[&attacker].isolates[&GPU0].id();
+    let attacker_arena = gpu.procs[&attacker].arenas[&GPU0].range.clone();
+    let attacker_hosts = host_identities(&gpu.procs[&attacker]);
+
+    // ---- ★ The attack: ONE dup, out of the attacker's live component, into a namespace
+    // that has never declared a client root.
+    let planted = gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_WITNESS), H_VASPACE),
+        dst: NodeKey::new(VICTIM_CLIENT, PLANTED_ALIAS),
+    });
+
+    // ---- The victim arrives: an ordinary compute process that happens to be handed the
+    // squatted `hClient`. Its own first event is its own client-root `Alloc`.
+    reinit(
+        &mut gpu,
+        VICTIM_CLIENT,
+        SQUAT_VICTIM_PDB,
+        SQUAT_VICTIM_GR,
+        SQUAT_VICTIM_CE,
+        GPU0,
+    );
+
+    let victim = gpu
+        .spine
+        .by_pdb
+        .get(&(GPU0, SQUAT_VICTIM_PDB))
+        .copied()
+        .expect("the victim's own address plane materialized");
+    assert_ne!(
+        victim, attacker,
+        "★★ the victim was merged into the ATTACKER's `Proc` by an edge it never \
+         created — one isolate, one GPA arena, one host VAS, i.e. #14 un-fixed for a \
+         pair the attacker chose"
+    );
+    assert_eq!(
+        gpu.procs[&victim].clients,
+        BTreeSet::from([VICTIM_CLIENT]),
+        "★★ the victim's component must contain the victim's client and nothing else"
+    );
+    assert!(
+        !gpu.procs[&attacker].clients.contains(&VICTIM_CLIENT),
+        "★★ the attacker's component absorbed the victim's client"
+    );
+
+    // Its OWN isolate, its OWN arena — disjoint by construction.
+    let victim_iso = gpu.procs[&victim].isolates[&GPU0].id();
+    assert_ne!(victim_iso, attacker_iso, "★★ the two share one isolate");
+    let victim_arena = gpu.procs[&victim].arenas[&GPU0].range.clone();
+    assert!(
+        victim_arena.end <= attacker_arena.start || attacker_arena.end <= victim_arena.start,
+        "★★ the two share one GPA arena: {victim_arena:?} vs {attacker_arena:?}"
+    );
+
+    // …and it is genuinely SERVED, end to end, out of its own isolate lane — sharing
+    // **no** host handle with the attacker.
+    let rung = publish_and_ring(&mut gpu, GPU0, SQUAT_VICTIM_PDB, SQUAT_VICTIM_GR, VA_CTL);
+    assert_eq!(rung.proc, victim, "the victim's ring routed to the victim");
+    assert_eq!(
+        token_lane(rung.host_token),
+        (victim.0 + 1, GPU0.0),
+        "★ the victim rang a host token minted in its OWN isolate lane"
+    );
+    assert!(
+        host_identities(&gpu.procs[&victim]).is_disjoint(&attacker_hosts),
+        "★★ the victim and the attacker share a host object"
+    );
+
+    // ---- ★ And the mechanism that makes all of the above true: the planted dup was
+    // refused, by name, at acceptance — so the bad state is unrepresentable rather than
+    // merely undetected downstream.
+    assert_eq!(
+        planted,
+        Err(GpuError::Graph(RmGraphError::UndeclaredClient(
+            VICTIM_CLIENT
+        ))),
+        "★★ a `DUP_OBJECT` into a namespace with no declared client root must be refused \
+         (RM: `NV_ERR_INVALID_CLIENT`), not parked to fire on the victim's own `Alloc`"
+    );
+    // The refusal is mutation-free: no alias, no phantom client, no parked edge.
+    assert!(
+        !gpu.spine
+            .rmgraph
+            .dups()
+            .any(|(d, _)| d == NodeKey::new(VICTIM_CLIENT, PLANTED_ALIAS)),
+        "★ the refused dup left a parked edge behind — the refusal must mutate nothing"
+    );
+
+    // The attacker itself is undisturbed: its own refusal, and nothing else.
+    assert_eq!(gpu.procs[&attacker].id, attacker);
+    core_publish(&mut gpu, GPU0, lane.pdb, VA_HELD).expect("the attacker keeps working");
 }
 
 /// The first extra client dup-joined into [`P_HUP`]'s component before it dies — a

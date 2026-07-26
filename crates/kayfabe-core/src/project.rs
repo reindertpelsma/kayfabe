@@ -379,11 +379,17 @@ pub fn project(
                 // ★ §12.27 — a dup endpoint that owns NO resource of its own is chained
                 // in only once it has DECLARED itself. It is chained in at all so a
                 // client holding nothing but aliases can still merge with the client it
-                // aliases; but before its root arrives there is no grouping it could
-                // join (the edge predicate needs positive evidence about both ends), so
+                // aliases; but with no declared root there is no grouping it could join
+                // (the edge predicate needs positive evidence about both ends), so
                 // admitting it would mint exactly the resource-less phantom `Proc` the
                 // parked-dup rule below already refuses to conjure — one that is then
-                // minted, matched, and RETIRED the moment the declaration lands.
+                // minted, matched, and RETIRED the moment a declaration lands.
+                //
+                // ★ §12.38 narrowed what this filter can still see: a dup endpoint's
+                // namespace is declared at acceptance time, so the only way to reach here
+                // undeclared is a root that has since been FREED while an alias keeps its
+                // resources alive. The filter is kept — that state is reachable, and
+                // "absence is never read as user" is the rule it encodes.
                 .filter(|c| kinds.contains_key(c)),
         )
         .collect();
@@ -400,6 +406,16 @@ pub fn project(
     // unions the clients — the union happens iff the edge is resolvable, regardless of
     // arrival order. A dup that NEVER resolves stays inert (no grouping, no alias):
     // MISS=FAULT at use, never a silent wrong-grouping.
+    // ★★★ §12.38 — what the `Dup`-before-`Alloc` deferral now covers, exactly. Both
+    // client NAMESPACES are guaranteed declared by the time any dup reaches the graph
+    // (`RmGraph::undeclared_namespace` refuses otherwise — a dup into a namespace that
+    // does not exist is `NV_ERR_INVALID_CLIENT` on real RM, and accepting it let a planted
+    // alias merge an unrelated later process into the planter's `Proc`). What is still
+    // legitimately deferred here is the dup's **source object**, which is
+    // DEFER-for-observation and not a courtesy: only 25 of 82 measured dups reach GSP, so
+    // a source may be an object RM saw and we did not. Faulting it would hang a legal
+    // guest; the deferral resolves the moment the source is observed
+    // (`tests/miss_taxonomy.rs`).
     let mut uf = ClientUnion::new(clients.iter().copied());
     for (dst, src) in g.dups() {
         if g.origin_of(dst).is_none() {

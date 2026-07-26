@@ -216,9 +216,13 @@ fn cb12_sema_release_routes_to_owner_never_a_foreign_proc() {
     })
     .unwrap();
     let replay = parse_pushbuffer(&mut gpu, &mut vmm, pid_a, cid_a, &ring);
-    assert!(
-        matches!(replay, Err(FwdFault::RetiredProc(_))),
-        "a torn-down channel's release is refused, never re-routed: {replay:?}"
+    // ★ §12.38 — the EXACT variant, naming WHICH proc is retired. `RetiredProc(_)` would
+    // have passed had the core named the SURVIVOR, which is the exact confusion this
+    // regression exists to catch.
+    assert_eq!(
+        replay,
+        Err(FwdFault::RetiredProc(pid_a)),
+        "a torn-down channel's release is refused, never re-routed"
     );
     assert!(
         !gpu.procs[&pid_b].completion.has_outstanding(),
@@ -344,9 +348,16 @@ fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
     );
     let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring);
     // Loud fault (address-table refusal), NOT a panic and NOT a silent accept.
-    assert!(
-        matches!(out, Err(FwdFault::Address(_))),
-        "a u64-wrapping CE dst must be a loud fault, got {out:?}"
+    // ★ §12.38 — the EXACT `AddressFault`, not just "some address fault": a wrapping
+    // range must be `Malformed` (the input was never a range), never a `Miss` (which
+    // would say the range was fine and merely unmapped).
+    assert_eq!(
+        out,
+        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Malformed {
+            pdb: A_PDB,
+            va: kayfabe_arch::ids::GpuVa(0xFFFF_FFFF_FFFF_F800),
+        })),
+        "a u64-wrapping CE dst must be a loud MALFORMED fault"
     );
     // No torn state: nothing was left half-bound.
     assert_eq!(
@@ -681,7 +692,7 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
 #[test]
 fn cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty() {
     let (mut gpu, rec) = fresh_gpu();
-    let (_pid, _cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (_pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
     let token = MockArch::token_for(VChid(0x10));
 
     // Materialize + schedule the GR channel with an empty (trivially gated) ring.
@@ -700,9 +711,13 @@ fn cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty() {
     // Non-empty working set on the VAS-less channel: loud NoVas, zero host ops.
     let ops_before = rec.lock().unwrap().log.len();
     let refused = handle_doorbell(&mut gpu, GpuId::ZERO, token, &[VA]);
-    assert!(
-        matches!(refused, Err(FwdFault::NoVas(_))),
-        "a non-empty submission with no declared VAS is refused loudly: {refused:?}"
+    // ★ §12.38 — the EXACT variant, naming the channel. This is THE site the taxonomy is
+    // written around (the same absence `sync_proc_to_boundary` defers on), so its fault
+    // is exactly the one worth pinning to the `ChanId`.
+    assert_eq!(
+        refused,
+        Err(FwdFault::NoVas(cid)),
+        "a non-empty submission with no declared VAS is refused loudly"
     );
     assert_eq!(
         rec.lock().unwrap().log.len(),
