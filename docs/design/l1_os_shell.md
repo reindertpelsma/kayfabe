@@ -2919,15 +2919,53 @@ paths arrive with the BQL **held**, so "we take no foreign lock" is not sufficie
 > and stock 9.2 **fails** the acceptance measurement (A's 5 ms block lands verbatim in an
 > unrelated vCPU's p99; 5.3× throughput loss). It is **not** an L2 blocker, because the
 > capability was reintroduced upstream in 10.2.0 and the backport is ~4 lines that apply
-> cleanly to 9.2.
+> cleanly to 9.2. **⇒ SUPERSEDED by the decision box below: we require ≥ 10.2.0 and carry no
+> backport at all.**
+
+> ### ★★ DECISION (owner, 2026-07-26) — **we require a minimum QEMU; we do NOT carry a backport**
+>
+> The backport is **cancelled**. Minimum supported QEMU becomes **≥ 10.2.0**, declared, and
+> `memory_region_enable_lockless_io()` is then simply *present*.
+>
+> **The reasoning is matrix economics, and it is the owner's.** Our support surface is
+> `QEMU × NVIDIA driver × guest kernel × host arch`. That product is too large to carry, so a
+> line goes somewhere — and **QEMU is the only axis the user can actually move.** The host
+> NVIDIA driver is pinned by their card and distro; the guest kernel is pinned by their distro;
+> the arch is pinned by their machine. QEMU is userspace and installs **rootless**. Cutting
+> legacy QEMU is therefore strictly cheaper for the user than any of: pinning driver versions,
+> demanding a bleeding-edge kernel, or dropping an architecture — all of which we refuse.
+>
+> **[measured] 2026-07-26:** `qemu-system-x86_64 --version` on this workstation reports
+> **10.2.1 (Debian `1:10.2.1+ds-1ubuntu3`)** — i.e. 10.2 has **already reached distro
+> packaging**. The "wait for it to reach distros" caveat in `qemu_bql_spike.md` §7 is
+> discharged: this is not a bet on a future release.
+>
+> **★ It also makes US cheaper, which is the part the spike under-weighted.** Carrying a
+> backport means owning a **patched QEMU fork**: a tracked patch, a rebase every release, a
+> build script that must produce it, and a supply-chain claim we make to every user forever.
+> *Requiring* a version is strictly less work than *patching* one — and it removes the failure
+> mode the probe existed to catch, rather than merely detecting it. The version requirement is
+> a one-line install instruction; the fork was a permanent maintenance obligation.
+>
+> **What this deletes:** the tracked patch, its rebase burden, `build_qemu.sh` provenance for
+> it, and the whole "which QEMU are we built into" ambiguity. **What it keeps:** §9.3's
+> capability probe — now a *version assertion* that refuses loudly at realize rather than a
+> patch-presence check. Silent fallback to BQL dispatch stays forbidden for the same reason as
+> before: it is an I-NOAMP violation that presents as an unrelated latency bug.
+>
+> **What it opens, and is not yet inventoried:** if ≥ 10.2 is a floor rather than a hope, other
+> modern QEMU facilities are available unconditionally and we should stop hand-rolling
+> equivalents. That inventory is **an open task**, not a claim — see the note below.
 
 **The first task becomes, in order:**
 
-1. **Carry and test the backport.** `memory_region_enable_lockless_io()` from QEMU 10.2.0
-   (commit `73c520b08887`) onto our 9.2.0 tree, as a tracked patch in `scripts/build_qemu.sh`'s
-   provenance — not a local edit on the bench host. Re-run the §6.3.1 acceptance measurement
-   **against our device**, not a throwaway one; the spike bounds the dispatch, not our
-   handlers.
+1. **Declare the floor and assert it.** Minimum QEMU **≥ 10.2.0** in the README, the build
+   script and a realize-time assertion. Then re-run the §6.3.1 acceptance measurement
+   **against our device** on a stock ≥ 10.2 build — not a throwaway device and not a patched
+   tree; the spike bounds the *dispatch*, not our handlers.
+   ★ **Open, not answered:** what else the floor buys us. Now that ≥ 10.2 is guaranteed,
+   inventory the facilities we were planning to hand-roll against 9.2 and take the upstream
+   ones instead. Do this **before** writing the adapter, since it changes what gets written.
 2. **Pair it with the reentrancy guard, in one helper.** §9.3's pairing gate. Splitting the two
    measured **47 % of a vCPU's MMIO reads silently returning `MEMTX_ACCESS_ERROR`** — a
    correctness failure, not a performance one — and this is the item most likely to be
