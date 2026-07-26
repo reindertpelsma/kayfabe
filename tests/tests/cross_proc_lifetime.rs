@@ -1758,3 +1758,189 @@ fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
          plane, so a reference can never make it the owner of host memory",
     );
 }
+
+// =================================================================================
+// ★★★ Section 6 — the reference that outlives the guest KERNEL's namespace
+// (`l1_concurrency.md` §12.39, finding 1)
+//
+// Section 5 is the user→kernel direction: a kernel client references a user process's
+// resource, the process dies, and the owning `Proc` must SURVIVE because RM's refcount
+// says the resource is live. This is the mirror, and the mirror is where the
+// classification stops being free: the surviving resource's origin namespace is the
+// guest KERNEL's, and the projection had nothing to read once its root was gone.
+// `anchor_of` answered "not kernel", i.e. **user**, and minted the guest kernel a real
+// user data plane — the exact state `FwdFault::SystemDataPlane` exists to forbid.
+// =================================================================================
+
+/// The user handle the guest process aliases the kernel's VASpace under.
+const KERNEL_ALIAS: HObject = HObject(0x7a00_0001);
+
+/// ★★ **An orphaned resource of the guest KERNEL's namespace stays in the SYSTEM
+/// component** (`l1_concurrency.md` §12.39, finding 1).
+///
+/// The setup is section 5's, reflected: the guest kernel (UVM's session client — a
+/// declared [`kayfabe_arch::ClientKind::Kernel`]) allocates a VASpace and binds a page
+/// directory to it; a **user** process then `DUP_OBJECT`s that VASpace into its own
+/// namespace; and the guest kernel's client root is freed while the alias lives. RM's
+/// refcount keeps the VASpace alive (`ogkm: .../mem_mgr/mem.c:1027-1031`), so it is still
+/// reported at its origin `(UVM, UVM_VAS)` and still mints its component's boundary —
+/// which is correct and is section 5's own claim.
+///
+/// What was not correct is **which side of §12.27's line that component landed on**.
+/// `project`'s `is_kernel` read `RmGraph::client_kinds`, which only knows namespaces with
+/// a **live root**; with the root freed the answer was an absence, `anchor_of` filed the
+/// namespace as *not kernel* — i.e. a **user** component — and the spine handed the guest
+/// kernel's own PDB a live user `Proc`: an isolate, a GPA arena and a routable `Vas` it
+/// can publish host memory into. That is the guest-kernel-obtains-a-user-data-plane shape
+/// this whole file's rule 2 exists to refuse, reached by omission rather than by a
+/// declaration — the same "absence read as user" defect §12.27 removed from the grouping
+/// predicate, still live in the assignment pass.
+///
+/// The fix is a **recorded fact, not a filter**: every resource carries the
+/// [`kayfabe_arch::ClientKind`] its allocating namespace declared
+/// (`RmGraph::client_declarations`), so an orphan is classified by what the guest said
+/// about itself. Filtering the orphan out instead would retire a `Proc` RM says is live —
+/// section 5's finding, in the other direction.
+///
+/// The assertions lead with the **breach** (a user `Proc` for a kernel namespace, and
+/// host memory minted into it), and only then state the mechanism.
+#[test]
+fn an_orphaned_kernel_resource_never_becomes_a_user_data_plane() {
+    let _wd = watchdog("kernel_orphan_no_user_plane", Duration::from_secs(30));
+    let (factory, rec) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
+    let mut gpu = Guarded::new(
+        "cross_proc_lifetime::kernel_orphan",
+        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes"),
+        rec.clone(),
+    );
+
+    // The guest kernel's session client, with a VASpace of its own, and a user process
+    // that aliases it. `uvm_dup` builds exactly this pair — kernel root, kernel device,
+    // kernel VASpace + PDB, then the dup — so the shape is the measured one.
+    let mut s = Scenario::new();
+    let owner_vas = s.compute_process_on_gpu(
+        OWNER,
+        OWNER_PDB,
+        identical_handles(OWNER_GR.0, OWNER_CE.0),
+        None,
+    );
+    s.uvm_dup(
+        UVM,
+        HObject(UVM.0),
+        UVM_DEV,
+        UVM_VAS,
+        UVM_PDB,
+        UVM_ALIAS,
+        owner_vas,
+    );
+    // ★ The mirror edge: the USER process aliases the KERNEL's VASpace. A dup whose src
+    // is a kernel client merges nothing (§12.27), so this is a pure reference — and it is
+    // what keeps the kernel's VASpace alive past its own root's free.
+    s.push(RmEvent::Dup {
+        src: kayfabe_core::rmgraph::NodeKey::new(UVM, UVM_VAS),
+        dst: kayfabe_core::rmgraph::NodeKey::new(OWNER, KERNEL_ALIAS),
+    });
+    for ev in s.events {
+        gpu.apply(ev).expect("scenario applies");
+    }
+    assert!(
+        gpu.system.clients.contains(&UVM),
+        "precondition: while its root is live the session client IS the system component's"
+    );
+    let user_procs_before = gpu.procs.len();
+    let planes_before = live_planes(&gpu);
+
+    // ---- The guest kernel's client root is freed while the user's alias lives.
+    gpu.apply(RmEvent::Free {
+        client: UVM,
+        handle: HObject(UVM.0),
+    })
+    .expect("the session's client root frees");
+    assert!(
+        gpu.spine
+            .rmgraph
+            .origin_of(kayfabe_core::rmgraph::NodeKey::new(OWNER, KERNEL_ALIAS))
+            .is_some(),
+        "precondition: RM's refcount keeps the kernel's VASpace alive through the alias",
+    );
+
+    // ---- ★★ THE BREACH, asserted first.
+    assert_eq!(
+        gpu.procs.len(),
+        user_procs_before,
+        "★★ a USER `Proc` was minted for the guest KERNEL's namespace — the guest kernel \
+         obtained a live user component (isolate + GPA arena + routable `Vas`) simply by \
+         having one of its resources outlive its client root",
+    );
+    assert_eq!(
+        live_planes(&gpu),
+        planes_before,
+        "★★ …and it was handed a data plane of its own: an isolate (a host RM client \
+         namespace) plus a GPA arena, for a namespace the guest kernel has closed",
+    );
+    assert_eq!(
+        gpu.spine.by_pdb.get(&(GPU, UVM_PDB)),
+        Some(&Gpu::SYSTEM_PROC),
+        "★★ the guest kernel's own PDB must route to the SYSTEM proc, which has no data \
+         plane — routing it to a user proc is what makes the plane publishable",
+    );
+    assert!(
+        gpu.system.clients.contains(&UVM),
+        "the orphaned namespace stays on the KERNEL side of §12.27's line: it is a fact \
+         the guest DECLARED about itself, not something the absence of a root revokes",
+    );
+    assert!(
+        gpu.procs.values().all(|p| !p.clients.contains(&UVM)),
+        "★★ no user component may hold the guest kernel's client"
+    );
+
+    // ---- …and host memory genuinely cannot be minted for it, by name.
+    assert_eq!(
+        kayfabe_fwd::publish_backing(&mut gpu.system, GPU, UVM_PDB, VA3, 0x1000),
+        Err(FwdFault::SystemDataPlane),
+        "★★ the surviving kernel VASpace must refuse to mint host memory — `SystemDataPlane`, \
+         not `UnknownPdb`: the refusal is about WHO owns the plane",
+    );
+
+    // ---- The user side is untouched: its own plane still works, in its own lane.
+    let owner = gpu.spine.by_pdb[&(GPU, OWNER_PDB)];
+    kayfabe_fwd::publish_backing(
+        gpu.procs.get_mut(&owner).expect("owner"),
+        GPU,
+        OWNER_PDB,
+        VA,
+        0x1000,
+    )
+    .expect("the user process is undisturbed by the kernel namespace's death");
+    assert!(
+        !gpu.procs[&owner].clients.contains(&UVM),
+        "and it did not absorb the dead kernel namespace"
+    );
+
+    let l = ledger(&rec);
+    assert_eq!(
+        l.leaked_on(SYSTEM_ISOLATE),
+        std::collections::BTreeSet::new(),
+        "the system isolate owns nothing, before or after the orphaning",
+    );
+    // T0: the user proc's own publication is still staged/reachable, so the guard is
+    // satisfied by core state alone — nothing here is a declared residue.
+    kayfabe_tests::unpublish_and_release(
+        gpu.procs.get_mut(&owner).expect("owner"),
+        GPU,
+        OWNER_PDB,
+        VA,
+    )
+    .expect("the user process releases what it published");
+}
+
+/// Every `(Proc, GpuId)` data plane the device currently holds live — one isolate + one
+/// GPA arena per pair (MG-5). The count a phantom component grows.
+fn live_planes(gpu: &Gpu) -> (usize, usize) {
+    let isolates =
+        gpu.system.isolates.len() + gpu.procs.values().map(|p| p.isolates.len()).sum::<usize>();
+    let arenas =
+        gpu.system.arenas.len() + gpu.procs.values().map(|p| p.arenas.len()).sum::<usize>();
+    (isolates, arenas)
+}

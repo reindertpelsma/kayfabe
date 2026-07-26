@@ -4770,3 +4770,278 @@ either repo claims NVIDIA handles are never reused; every "never reused" stateme
 Rust tree is scoped to **our own** mints (`ResId`, `ProcId`, `IsolateId`, `HostHandle`,
 `CompletionSource`) and says so. D3 is the extension of that existing, consistent posture —
 not a new one.
+
+### 12.40 ★★★ §12.39 LANDED — and the design was wrong about its own severest claim
+
+**Status: LANDED.** Three defects, in the order they were fixed, each with the full gate
+between them so a regression is attributable. 349 → **359 tests**; clippy
+`--all-targets -D warnings` clean, `fmt --check` clean, `check --target
+aarch64-unknown-linux-gnu` clean. `ogkm` = `C: research_clones/ogkm`.
+
+The headline is not any of the three fixes. It is that **§12.39's central severity claim —
+that an orphaned resource's surviving `Proc` is a *phantom* and must be filtered out — is
+false, and a landed, cited, end-to-end test already said so.** Implementation found it on
+the first run; the fix that follows from the truth is a different (and smaller) one.
+
+---
+
+#### 1. WHAT §12.39 GOT WRONG — the "phantom `Proc`" is not a phantom
+
+§12.39 §1 (*"Shape B's second face — a resource-amplification DoS"*) and §4 (*"a resource
+whose `owner` is no longer in `resources` is **owned by nobody**: it enters no boundary,
+mints no `Proc`, no isolate, no arena. That kills Shape B *and* its amplification DoS in
+one line"*) both rest on filtering the orphan out of the projection. **That filter was
+written, and it broke two tests immediately** — `cross_proc_lifetime::a_kernel_reference_
+keeps_its_owners_object_alive_and_usable_after_the_owner_is_killed` and
+`…::the_last_reference_dropping_retires_the_owner_and_frees_its_objects_per_object`, whose
+own assertion message is the refutation:
+
+> *"the owning `Proc` must NOT retire while a kernel dup still references a resource it
+> allocated — that retire reclaims host memory RM says is live (`ogkm:
+> src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`)"*
+
+That is §12.33's landed rule, and it is right. `memCopyConstruct_IMPL` refcounts the
+memdesc, so RM keeps the resource alive; `uvm_va_space` is bound to the **file**, not the
+process (`ogkm kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`), so a kernel reference
+genuinely keeps *using* it after the owning process is killed. Our `Proc` is what owns the
+isolate whose host memory backs it. Retiring it frees host memory a live client is still
+reading — the **corruption-over-refusal** direction, which is exactly what §12.39's own
+rejected alternative D4 refuses for the same citation. `[src]`
+
+**So the surviving `Proc` is the design working, not a leak.** The consequences:
+
+- **§12.39's "arena-exhaustion DoS" is withdrawn.** A spray of orphans costs the attacker
+  a live alias per orphan (bounded by `MAX_LIVE_HANDLES`) and is *indistinguishable* from
+  the measured ordinary case — the UVM session holds 82 dup aliases per CUDA process
+  (`docs/reference/rm_semantics_measured.md` §3), so "a dead process's resources aliased
+  into a kernel client" is the steady state, not an attack. Arena exhaustion is already a
+  loud `GpaError`. `[inferred]`
+- **§12.39's D5** (*"filter the client universe by `kinds` on the `nodes()` branch"*),
+  offered as *"rejected as the fix, kept as a consequence"*, is **rejected outright**: it
+  is not a weaker version of the fix, it is the corruption bug.
+- **The exclusion still exists — but its trigger is a RE-DECLARATION, not a free.** That
+  is the rule that landed (§4 below), and it is strictly narrower than what §12.39 wrote.
+
+---
+
+#### 2. BUG 1 — `anchor_of` read an ABSENCE as "user", and the guest kernel got a data plane
+
+**Reported as:** *"the `g.nodes()` branch has no `ClientKind` filter, so a client whose
+root has been freed is filed as a user boundary — Shape B's enabler and an arena DoS."*
+**Found to be:** the *membership* is correct and load-bearing (§1 above); the
+**classification** was the defect, and it is a different and sharper one.
+
+`project`'s `is_kernel` read `RmGraph::client_kinds`, which only knows namespaces with a
+**live root**. Once the root is freed there is nothing to read, `is_kernel` was false *by
+absence*, and `anchor_of` (`project.rs:469-473`) filed the namespace as a **user**
+component. So an orphaned resource of the guest **KERNEL's** own namespace minted a user
+`ProcBoundary` — isolate, GPA arena, routable `Vas`, and `publish_backing` would mint host
+memory into it. That is the guest-kernel-obtains-a-user-data-plane shape
+`FwdFault::SystemDataPlane` exists to forbid, reached by omission.
+
+★ And it directly contradicted a comment three screens up in the same function: the
+grouping predicate's *"either end is undeclared — grouping requires positive evidence
+about BOTH sides; **absence is never read as user**"*. The predicate honoured that rule.
+`anchor_of` did not.
+
+**Fix — a recorded fact, not a filter.** `Resource` gains `owner_kind: ClientKind`,
+recorded at the origin `RM_ALLOC` from the namespace's live root (§12.38's gate guarantees
+one exists). `RmGraph::client_declarations()` answers *"which declaration does this
+namespace project under?"* — the live root if there is one, else the newest declaration
+that still owns a live resource. `is_user` deliberately stays on the **live-root** map:
+grouping still requires positive evidence about a live declaration at both ends (§12.27,
+unchanged).
+
+- **Test:** `cross_proc_lifetime::an_orphaned_kernel_resource_never_becomes_a_user_data_plane`
+  — the mirror of §5's user→kernel case. Breach-first: proc count, plane count, then
+  `by_pdb[(GPU, UVM_PDB)] == SYSTEM_PROC`, then the exact `FwdFault::SystemDataPlane`.
+- **Bite-check:** `is_kernel` reverted to `kinds` ⇒ fires on its FIRST assertion,
+  *"★★ a USER `Proc` was minted for the guest KERNEL's namespace"*, `left: 2, right: 1`.
+- **Doc corrected:** `RmGraphError::UndeclaredClient`'s summary (*"an object allocated
+  into an undeclared namespace mints no boundary"*) now says what it is true of — **alloc
+  time** — and what it was false of: after a root free, which is the only way to reach an
+  undeclared namespace at all now.
+
+---
+
+#### 3. BUG 2 — the component SPLIT, the dual of the merge
+
+Confirmed exactly as reported. `Gpu::plan_refresh` matched boundaries to procs on
+`p.clients ∩ b.clients` with nothing to stop one proc matching several boundaries, so a
+split `P{A,B} → b1={A}, b2={B}` gave `matching(b1) == matching(b2) == [P]`; `survivors`
+took `.first()` of each, so `vanishing` was **empty**; both boundaries took `pid = P`, and
+`sync_proc_to_boundary` ran twice on it, the second overwriting the first. One half lost
+its clients, vases and channels **silently**, its `Pdb` left `by_pdb` entirely (its anchor
+named no live proc), and its isolate and arena stayed live under the other half. The merge
+guard (`matching.len() > 1`) structurally cannot see it: each boundary matches exactly one
+proc.
+
+**Semantics, decided deliberately.** A split is triggered by freeing the dup edge that
+joined two client sets — ordinary, legal guest behaviour, so **refusing it would hang a
+legal guest** (the test asserts the `Free` is accepted). The rule that landed:
+
+> **A live `Proc` is claimed by the FIRST boundary in ascending anchor order that
+> intersects it; every other boundary that would have matched it mints a NEW `Proc`.**
+
+`bounds.procs` is anchor-ordered and an anchor is its component's smallest client, so the
+claimant is the half that still holds the proc's own anchor whenever that client survives —
+the proc keeps its identity rather than having it reassigned by iteration order. Absorbed
+procs are claimed too, so a later boundary cannot adopt a corpse.
+
+**Conservation.** The departing half leaves through the **existing** staged-death path and
+nothing else: `sync_proc_to_boundary(keeper, b_first)` stages every vas/channel that is not
+the keeper's into `pending_release`, exactly as a subset-free does, so each host object is
+reclaimed once. Verified against `HostLedger` (`double_free` / `free_of_unknown` /
+`unmap_of_unknown` all empty) and against `Guarded`'s teardown post-condition.
+
+★ **The honest cost, stated rather than hidden.** Host objects name the RM client namespace
+they live in and **cannot move between isolates**, so the departing half necessarily
+re-materialises: its address table starts EMPTY. That is a real loss, and it is the *safe*
+loss — an unbound VA is a loud `AddressFault::Miss` / `FwdFault::UnknownPdb` at use, never
+a silently zeroed backing. There is no third option: the two clients shared one host RM
+client, and un-sharing that is not expressible. What changed is that the loss is now
+staged, routed and attributable instead of silent.
+
+- **Test:** `l1_mean::a_live_component_that_splits_yields_two_procs` — two user processes
+  join, both publish and ring out of the one isolate, the guest frees the alias. Breach
+  first (`route_pdb` on each half, then `assert_ne!(pid_a, pid_b)` naming *one isolate, one
+  GPA arena, one host VAS*), then: exactly-its-own-clients, the keeper is the anchor half,
+  the new proc's `host_identities` is **empty** (inherits nothing), `pending_release` grew
+  (staged, not dropped), ledger clean, both halves served end to end in their own token
+  lanes.
+- **Bite-check:** `claimed` removed ⇒ fires on the FIRST routing lookup —
+  *"★★ the split DROPPED one half's address plane: Pdb(…) no longer routes (UnknownPdb…)"*.
+  `teardown_reclaim::g6_…` also fires (*"the two halves of the split must be two `Proc`s"*).
+- **Doc corrected:** `Spine::condemned`'s claim that the client-set key handles *"component
+  splits (both halves intersect, both stay condemned)"* is now marked as sound **for the
+  condemned path only** — a condemned boundary gets `None` and touches no proc — and as the
+  live-path defect it was.
+- **`g6_no_live_binding_ever_points_outside_its_own_procs_arena` updated**: it read
+  `reaped.len() == 1` for the *collapse*. Freeing that scenario's client root while a peer
+  holds an alias IS a split; it now asserts two procs, disjoint arenas per half, and that
+  the keeper's routing survives.
+
+---
+
+#### 4. BUG 3 — the recycled namespace, Parts A and B (and neither subsumes the other)
+
+**Part A — teardown completion.** `free_subtree` prunes the parked tables by membership in
+`doomed`, the set of live HANDLES the free removed; a parked fact's key is by definition
+not a live handle, so **every parked fact survived the free of its own namespace's client
+root**. The root arm now additionally drops every `pending_dups` entry whose `dst` **or**
+`src` names that client, every `pending_pdbs` entry whose target does, and every
+`pending_maps` entry whose client does. Faithful: RM destroys the whole namespace
+children-before-parents on a root free (`ogkm .../resserv/src/rs_client.c:830-849`) and
+every subsequent op naming it is `NV_ERR_INVALID_CLIENT` (`rs_server.c:1674` →
+`rmapi/client.c:782`). Nothing legal is lost — the promoted alias could never be legally
+used.
+
+★ **A second reason Part A is load-bearing, not noticed in §12.39:** a parked `dst` also
+**blocks an alloc** at that handle value (`ConflictingAlloc`). Leaving the stale entry
+would refuse the namespace's *next tenant* its own allocation — the
+hangs-a-legal-guest direction. The purge is what makes a recycled namespace **usable**, not
+merely safe. (This is what the A4 refcount fuzz property caught: its independent
+`RefTracker` still modelled the old prune, and the divergence it reported was the graph
+*accepting* an alloc the model refused. The model now mirrors the rule and says why.)
+
+**Part B — identity.** `ClientId` = the client root's `ResId`, never reused; `Resource`
+gains `owner: ClientId` (a plain field, no `Option`, no default — §12.38's gate guarantees
+it resolves). Three consumers, and each one had to change or the vector survives:
+
+| site | rule |
+|---|---|
+| `project`'s client universe + attribution loop | a resource projects under its origin `HClient` **only while its `owner` is the declaration that namespace projects under** |
+| `project`'s grouping predicate | the dup's source identity is read through the **destination** handle (`owner_of(dst)`, live by construction) and compared against `src.client`'s current declaration — the edge's reported `src` key carries the recyclable value |
+| `Spine::plan_refresh` matching + `Spine::condemned` | **`ClientId`, not `HClient`** |
+
+★ **The rule is narrower than §12.39's, and the narrowing is §1's finding:** while a
+namespace has **no** live root its orphan's own declaration is still the one it projects
+under, so its component — isolate, arena, host VAS — survives, per §12.33. The exclusion
+bites at exactly one moment: a **re-declaration**, which mints a new `ClientId` and leaves
+the old declaration's resources owned by a namespace that no longer projects. They belong
+to no boundary, the old component is retired through the ordinary staged-death path, and
+the new one inherits nothing.
+
+★★ **Two things §12.39 did not anticipate, both mandatory:**
+
+1. **`ProcBoundary` must NOT carry `ClientId`.** A `ClientId` is minted from a counter, so
+   its *value* depends on arrival order, and `Boundaries: PartialEq` is the
+   order-independence property. So the identity is compared, never reported: `Proc` gains a
+   private `client_ids` set (runtime state), `ProcBoundary` stays pure `HClient`, and
+   `project`'s signature is unchanged. Stated once: **`clients` LABELS a component,
+   `client_ids` MATCHES one.**
+2. **`Spine::condemned` had to move to `ClientId` after all**, for a hole §12.39 did not
+   name and §12.37's C2 shrink cannot reach. C2 drops a freed client from a condemned entry
+   because it leaves `known` — but an **orphan resource of the dead component keeps its
+   namespace in the projection**, so the freed value never falls out, and the next process
+   handed that `hClient` is condemned on arrival. A bystander death, and the guest cannot
+   recover from it because it did nothing. With `ClientId` the shrink's correctness role
+   does disappear exactly as §12.39 predicted, and it stays for **capacity**
+   (`MAX_CONDEMNED_COMPONENTS`).
+
+**Not done, deliberately:** `ProcAnchor` stays an `HClient` (§12.39 §4's own choice), so
+`condemned_by_pdb` / `condemned_by_vchid` still persist a recyclable label past their
+component's death. Still a named residual.
+
+**Tests + bite-checks.**
+
+| test | bite | symptom |
+|---|---|---|
+| `l1_mean::a_recycled_namespace_cannot_squat_a_later_process_into_the_attackers_proc` (Shape A) | Part A reverted | *"★★ the victim was merged into the ATTACKER's `Proc` by an edge planted in a namespace the attacker had already FREED"*, `left: ProcId(1), right: ProcId(1)` |
+| `l1_mean::a_recycled_namespace_cannot_inherit_the_previous_tenants_address_plane` (Shape B) | `projects` neutered | *"★★ the SUPERSEDED declaration's address plane must belong to nobody"* — `Ok(ProcId(10))` vs `Err(UnknownPdb{…})` |
+| " | grouping owner-conjunct removed | *"★★ the victim was merged into the ATTACKER's `Proc` by a dup edge whose `src` names a namespace the attacker had already freed"*, `left: ProcId(7), right: ProcId(7)` |
+| " | `plan_refresh` matched on `p.clients` | *"★★ the victim INHERITED the previous tenant's `Proc` — its isolate…"*, `left: ProcId(9), right: ProcId(9)` |
+| `l1_mean::a_recycled_namespace_is_a_different_component_and_is_not_condemned` (**the hangs-a-legal-guest gate**) | runtime `ids` keyed on the `HClient` value | *"★★ a process was condemned on arrival because its `hClient` landed on a value a dead component still held"* |
+| `miss_taxonomy::a_parked_{dup_destination,dup_source,page_directory,map}_does_not_survive_its_namespaces_root_free` (one row per parked table) | Part A reverted | all four fire, each naming its own table |
+| `rmgraph_order_independence::a_freed_and_redeclared_namespace_projects_identically_in_every_order` | `projects` neutered | *"★★ the SUPERSEDED declaration's address plane must belong to nobody"* |
+
+★ **Shape A's bite leaves Shape B green and vice versa** — §12.39's claim that neither fix
+subsumes the other, measured rather than argued.
+
+**Not landed from §12.39 §5:** test 3 (`a_resource_whose_namespace_died_belongs_to_no_
+boundary`) asserts the claim §1 refutes and is **not** written; its corrected form (a
+resource of a *superseded* declaration belongs to no boundary) is asserted inside Shape B
+and the order-independence test. Test 5 is folded into the gate test as its first claim,
+with the exact `FwdFault::Condemned`. Test 8's `security_invariants` property is **not**
+written — still open.
+
+---
+
+#### 5. ★ FINDING 4 — an origin key is not unique among live resources, and it was reachable
+
+Found by the gate test, which failed *before* it could reach its own claim. `Alloc (A,H) →
+Dup to B → Free (A,H) → Alloc (A,H)` leaves **two live resources reporting at the same
+`(client, handle)`**, and `pdb_of` / `gpu_of` / `backing_of` / `references` /
+`map_ref_count` all answered with a forward `find`, i.e. the **oldest** — while
+`crate::project` keys `vases`/`channels` on `node.key` and fills them in ascending `ResId`,
+i.e. **newest wins**. The two disagreed.
+
+That is not cosmetic. The current tenant's `Vas` took the **orphan's** declared `Pdb`, so
+`by_pdb` filed a page-directory base the current tenant never declared onto the current
+tenant's `Proc` — and whoever holds an alias to the orphan routes straight to it. Handle
+values are deterministic in practice (every CUDA process presents the same ones — the whole
+#14 shape), so this is the ordinary state of a churned namespace, not an exotic one.
+
+Fixed by making all five origin-key scans **newest-wins** (`rev()`), which is the
+declaration that projects. This removes the ambiguity; it does **not** move the projection
+off `NodeKey` keys — §12.25's deferred finding 2 / §12.39 §6 is still the named refactor,
+and it is now the last place a recyclable value is an identity.
+
+**Bite:** `pdb_of`'s `rev()` removed ⇒ the gate test fires on
+*"★★ the successor's own address plane was never materialized"*.
+
+---
+
+#### 6. Everything else this pass touched or contradicts
+
+- **`RmGraph::client_kinds` vs `client_declarations` are two different questions** and are
+  now documented as such: *"is there a LIVE declared root here?"* (grouping — positive
+  evidence, §12.27) and *"which side of the user/kernel line does this component sit
+  on?"* (assignment — answerable after the root is gone). Conflating them was Bug 1.
+- **`fuzz_rmgraph_invariants::RefTracker`** gained the Part-A prune. Its A4 failure is
+  recorded in the `.proptest-regressions` file and now replays green.
+- **`sync_proc_to_boundary` had `p.anchor` / `p.clients` assigned twice** (a stray
+  duplicate); removed while adding `client_ids`.
+- **Open, unchanged:** `ProcAnchor` as a persisted `HClient` in the condemned routing maps;
+  the projection's `NodeKey` keys (§12.25 finding 2); §12.39 §7's O1–O4 bench questions;
+  §12.39 test 8's fuzz property.

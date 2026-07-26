@@ -1223,18 +1223,55 @@ fn g6_no_live_binding_ever_points_outside_its_own_procs_arena() {
     );
 
     // A dies; its arena goes back to the window and is recycled to a NEW proc.
+    //
+    // ★★★ UPDATED by `l1_concurrency.md` §12.39 finding 3 — **freeing A's client root
+    // SPLITS the component**, and the split is now handled instead of collapsed.
+    //
+    // The peer is a separate live process that merely holds a `DUP_OBJECT` alias into A's
+    // namespace. Once A's root is freed that namespace has no live root, so the edge is
+    // no longer a grouping edge (§12.27: grouping needs positive evidence about a LIVE
+    // declaration at both ends), and the one component becomes two: A's orphaned VASpace,
+    // which RM's refcount keeps alive under the peer's alias, and the peer's own. Before
+    // the split was handled BOTH halves matched this one proc, `sync_proc_to_boundary`
+    // ran twice on it and the second call overwrote the first — so one half lost its
+    // clients, vases and channels silently and `plan.vanishing` came out empty. This test
+    // read `1` for that collapse.
     gpu.apply(RmEvent::Free {
         client: CLIENT,
         handle: ha.client_root,
     })
     .expect("A's client root is freed");
+    let peer = gpu.spine.by_pdb[&(GPU, UVM_PDB)];
+    assert_ne!(
+        peer, pa,
+        "★★ the two halves of the split must be two `Proc`s — sharing one means sharing \
+         one isolate, one GPA arena and one host VAS between a dead namespace and a live \
+         process"
+    );
+    assert_eq!(
+        gpu.spine.by_pdb[&(GPU, PDB)],
+        pa,
+        "★★ and the keeper half kept its OWN routing: the orphaned VASpace's plane must \
+         not vanish from `by_pdb` because the other half was synced over it"
+    );
+    let peer_range = gpu.procs[&peer].arenas[&GPU].range.clone();
+    assert!(
+        peer_range.end <= a_range.start || a_range.end <= peer_range.start,
+        "the split's two halves hold DISJOINT arenas: {peer_range:?} vs {a_range:?}"
+    );
+
     gpu.apply(RmEvent::Free {
         client: UVM,
         handle: HObject(UVM.0),
     })
     .expect("and its UVM client with it");
     let reaped = gpu.reap_retired();
-    assert_eq!(reaped.len(), 1, "A is reaped as ONE proc");
+    assert_eq!(
+        reaped.len(),
+        2,
+        "★ both halves of the split are reaped — each through the ordinary staged-death \
+         path, neither dropped on the floor"
+    );
     assert!(reaped.orphaned().is_empty());
     drop(reaped);
 
@@ -1260,9 +1297,11 @@ fn g6_no_live_binding_ever_points_outside_its_own_procs_arena() {
         gpu.apply(ev).expect("a new process arrives");
     }
     let pc = gpu.spine.by_pdb[&(GPU, PDB_C)];
-    assert_eq!(
-        gpu.procs[&pc].arenas[&GPU].range, a_range,
-        "the new proc recycled the dead one's range (#80)"
+    assert!(
+        [&a_range, &peer_range].contains(&&gpu.procs[&pc].arenas[&GPU].range),
+        "the new proc recycled one of the dead component's ranges (#80): got {:?}, \
+         released {a_range:?} and {peer_range:?}",
+        gpu.procs[&pc].arenas[&GPU].range,
     );
     kayfabe_fwd::publish_backing(gpu.procs.get_mut(&pc).expect("C"), GPU, PDB_C, VA, 0x1000)
         .expect("C publishes into the recycled range");
@@ -1273,10 +1312,12 @@ fn g6_no_live_binding_ever_points_outside_its_own_procs_arena() {
     for vas in gpu.procs[&pb].vases.values() {
         for (_va, len, b) in vas.table.iter() {
             if b.host.is_some() {
-                assert!(
-                    b.phys + len <= a_range.start || b.phys >= a_range.end,
-                    "the survivor holds a binding inside the RELEASED arena {a_range:?}"
-                );
+                for released in [&a_range, &peer_range] {
+                    assert!(
+                        b.phys + len <= released.start || b.phys >= released.end,
+                        "the survivor holds a binding inside the RELEASED arena {released:?}"
+                    );
+                }
             }
         }
     }

@@ -27,7 +27,7 @@ use kayfabe_util::Instant;
 use crate::gpa::{GpaArena, GpaBlock, GpaError, GpaSpace};
 use crate::project::{Boundaries, ProcBoundary, ProjectionError, SYSTEM_ANCHOR, project};
 use crate::reactor::SourceRegistry;
-use crate::rmgraph::{NodeKey, RmEvent, RmGraph, RmGraphError};
+use crate::rmgraph::{ClientId, NodeKey, RmEvent, RmGraph, RmGraphError};
 use crate::{ChanId, ProcAnchor, ProcId};
 
 /// ★ G10 (`l1_concurrency.md` §12.22) — the largest number of distinct **condemned
@@ -266,6 +266,24 @@ pub struct Proc {
     /// clients only, joined by user↔user dups — except on `Gpu::system`, whose set is
     /// every declared **kernel** client, joined by rule rather than by dup).
     pub clients: BTreeSet<HClient>,
+    /// ★★★ §12.39 Part B — the **identities** of those clients' namespaces
+    /// ([`ClientId`], never reused), recorded at the same sync that set
+    /// [`Self::clients`].
+    ///
+    /// The split of labelling from matching, stated once: **[`Self::clients`] LABELS a
+    /// component and this MATCHES one.** An `hClient` is a value the guest recycles (see
+    /// [`ClientId`]), so matching a boundary to a live `Proc` on values alone let a
+    /// re-declared namespace **adopt the previous tenant's proc** — its isolate, its GPA
+    /// arena, its host VAS, its `pending_release` queue. `project` already refuses to
+    /// attribute the old declaration's *resources* to the new one; without this the
+    /// runtime handed over the container anyway, which is the same breach one layer down.
+    ///
+    /// Two names for one namespace is a real cost (§12.39's D1 was rejected partly for
+    /// it), so it is confined: nothing outside the match in [`Spine::plan_refresh`] and
+    /// the condemnation key reads this field, and `ProcAnchor` deliberately stays an
+    /// `HClient` because it is a deterministic *label* of a live component and never an
+    /// identity.
+    client_ids: BTreeSet<ClientId>,
     /// ★ The address plane: one [`Vas`] per declared **`(GpuId, Pdb)`** (MG-4). A proc
     /// holds several (several VASpaces, and — spanning GPUs — per target); address ops
     /// key on `(GpuId, Pdb)` because a `Pdb` is a per-GPU namespace (two GPUs legally
@@ -340,6 +358,7 @@ impl Proc {
             id,
             anchor,
             clients: BTreeSet::new(),
+            client_ids: BTreeSet::new(),
             vases: BTreeMap::new(),
             channels: BTreeMap::new(),
             chan_ids: BTreeMap::new(),
@@ -795,6 +814,18 @@ pub struct Spine {
     /// re-derivation the guest can provoke, including component splits (both halves
     /// intersect, both stay condemned) and re-labels.
     ///
+    /// ★ **NARROWED (§12.39, finding 3): that split argument is sound for the CONDEMNED
+    /// path and covers only it.** A condemned boundary is handed `None` by
+    /// [`Spine::plan_refresh`] and touches no `Proc` at all, so "both halves intersect,
+    /// both stay condemned" is a statement about *this* list and it holds. On the **live**
+    /// path the same shape was a defect: both halves of a split matched the one live proc,
+    /// `survivors` kept it twice, `vanishing` came out empty and
+    /// `sync_proc_to_boundary` ran twice on it — the second call overwriting the first, so
+    /// one half lost its clients, vases and channels in silence while its isolate and
+    /// arena stayed live under the other. Fixed at `plan_refresh`'s claim set (the first
+    /// boundary in anchor order claims the proc; the other half mints a new one), which is
+    /// where the live/condemned asymmetry belongs — not here.
+    ///
     /// ★ **The same key is what makes RECOVERY possible**, which is the half a user
     /// actually experiences. An application that re-initialises allocates a **new** RM
     /// client; that client is on the live side of the condemnation line, so no dup edge
@@ -825,7 +856,7 @@ pub struct Spine {
     /// never shared the blast radius.** Intersecting the carried entry with the clients
     /// the projection still sees keeps the growth over *live* clients (so the evasions
     /// below all still fail) while letting dead handle values fall out.
-    condemned: Vec<BTreeSet<HClient>>,
+    condemned: Vec<BTreeSet<ClientId>>,
     /// ★ §12.13 — data-plane routing for condemned components: `(GpuId, Pdb)` → the
     /// condemned component's label. Derived exactly like [`Self::by_pdb`], from the
     /// same projection, so naming the fault costs **no reverse resolution** (the
@@ -874,7 +905,7 @@ fn uf_find(parent: &mut [usize], mut x: usize) -> usize {
 /// 2. **The carry-forward intersects with the clients the graph still knows**, so an
 ///    entry cannot outlive the identities that earned it. Growth is over *live* clients
 ///    only.
-fn absorb_condemned(list: &mut Vec<BTreeSet<HClient>>, mut set: BTreeSet<HClient>) {
+fn absorb_condemned(list: &mut Vec<BTreeSet<ClientId>>, mut set: BTreeSet<ClientId>) {
     loop {
         let mut rest = Vec::with_capacity(list.len());
         let mut grew = false;
@@ -1254,11 +1285,20 @@ impl Spine {
     /// the system proc (step 2s, §12.27). Extracted rather than duplicated because the
     /// guest kernel's channels must materialize by exactly the same rules as a guest
     /// process's: a second copy is how the two drift.
-    fn sync_proc_to_boundary(p: &mut Proc, b: &ProcBoundary) {
+    fn sync_proc_to_boundary(p: &mut Proc, b: &ProcBoundary, ids: &BTreeMap<HClient, ClientId>) {
         p.anchor = b.anchor;
         p.clients = b.clients.clone();
-        p.anchor = b.anchor;
-        p.clients = b.clients.clone();
+        // ★★★ §12.39 Part B — record the component's namespace IDENTITIES alongside its
+        // labels, from the declarations this very projection was taken against. A client
+        // in a boundary always has a current declaration (that is what put it there), so a
+        // missing id would be an internal inconsistency; it is simply skipped rather than
+        // panicked on, and the effect is that the proc no longer matches that namespace —
+        // the safe direction (a fresh `Proc`, never an inherited one).
+        p.client_ids = b
+            .clients
+            .iter()
+            .filter_map(|c| ids.get(c).copied())
+            .collect();
         // Vases: create for newly-declared (GpuId, PDB); drop ones no longer
         // derived. Only vases with a resolvable target AND a declared PDB become
         // runtime `Vas`es. ★ DEFER (not yet knowable): an unroutable one materializes
@@ -1460,19 +1500,68 @@ impl Spine {
         procs: &mut impl ProcSet,
         bounds: &Boundaries,
         condemned_bound: &[bool],
+        ids: &BTreeMap<HClient, ClientId>,
     ) -> Result<RefreshPlan, GpuError> {
         let n = bounds.procs.len();
 
         // (a) Merge legality, in boundary order — the refusal that used to fire
         //     mid-mutation.
         let mut matches: Vec<Option<Vec<ProcId>>> = Vec::with_capacity(n);
+        // ★★★ §12.39 finding 3 — **THE SPLIT, which is the DUAL of the merge and was
+        // never checked.** A merge is many procs → one boundary; a split is one proc →
+        // many boundaries, and it is reached by ordinary legal guest behaviour: dup-join
+        // two user clients into one component, then free the alias.
+        //
+        // Without this claim set, `matching` is a pure `p.clients ∩ b.clients` test, so
+        // BOTH halves of a split matched the SAME live proc. `survivors` took `.first()`
+        // of each match, so the proc was a survivor twice over and `vanishing` came out
+        // **empty** — nothing staged for death — while step 2 ran `sync_proc_to_boundary`
+        // on it once per half and the second call overwrote the first. One half silently
+        // lost its clients, vases and channels; its `Pdb` left `by_pdb` entirely (its
+        // anchor was no longer any live proc's), and its isolate and arena stayed live
+        // under the other half. A later verb naming the lost half then found no proc and
+        // minted a fresh one — the resurrect-into-a-dead-data-plane shape the no-resurrect
+        // rule forbids. The merge guard (`matching.len() > 1`) structurally cannot see it,
+        // because each boundary matches exactly ONE proc.
+        //
+        // ★ The rule, stated once: **a live `Proc` is claimed by the FIRST boundary (in
+        // ascending anchor order) that intersects it; every other boundary that would
+        // have matched it mints a NEW `Proc`.** `bounds.procs` is anchor-ordered and an
+        // anchor is the component's smallest client, so the claimant is the half that
+        // still holds the proc's own anchor whenever that client survives — the proc
+        // keeps its identity rather than having it reassigned by iteration order. The
+        // departing half's state leaves through the ordinary path and nothing else: step
+        // 2's `sync_proc_to_boundary(keeper, b_first)` stages every vas/channel that is
+        // not the keeper's into `pending_release`, exactly as a subset-free does, so it is
+        // reclaimed **once**; and the new `Proc` starts empty — no isolate, no arena and
+        // no host handle is inherited, because host state belongs to the RM client
+        // namespace of the isolate that minted it and cannot be moved between them.
+        //
+        // ★ Absorbed procs are claimed too, not just keepers: an absorbed proc is on its
+        // way out through `vanishing`, so a later boundary must not be able to adopt a
+        // corpse.
+        let mut claimed: BTreeSet<ProcId> = BTreeSet::new();
         for (b, &condemned) in bounds.procs.iter().zip(condemned_bound) {
+            // ★★★ §12.39 Part B — the match is on namespace IDENTITY, not on the
+            // `HClient` VALUES. An `hClient` is recyclable by RM's own design, so a
+            // boundary belonging to a *re-declared* namespace intersects the previous
+            // tenant's `Proc` on the value alone — and would have adopted it whole: its
+            // isolate (one host RM client namespace), its GPA arena, its host VASes, its
+            // `pending_release` queue. Comparing never-reused `ClientId`s makes the old
+            // proc simply not match, so it leaves through `vanishing` (staged, exactly
+            // once) and the new namespace mints a `Proc` of its own.
+            let b_ids: BTreeSet<ClientId> = b
+                .clients
+                .iter()
+                .filter_map(|c| ids.get(c).copied())
+                .collect();
             let mut matching: Vec<ProcId> = procs
                 .iter_mut()
-                .filter(|(_, p)| !p.clients.is_disjoint(&b.clients))
+                .filter(|(id, p)| !claimed.contains(id) && !p.client_ids.is_disjoint(&b_ids))
                 .map(|(id, _)| id)
                 .collect();
             matching.sort_unstable();
+            claimed.extend(matching.iter().copied());
             if condemned {
                 // ★★ §12.37 — a condemned boundary gets NOTHING, and `matching` is
                 // necessarily empty, which is why this is not a refusal.
@@ -1746,12 +1835,32 @@ impl Spine {
         //    species the graph's parked-map set was already hardened against. The entries
         //    are pairwise disjoint, so client → entry is a *function*: build it once and
         //    the pass becomes O(total clients · log n).
-        let mut owner_of: BTreeMap<HClient, usize> = BTreeMap::new();
+        //
+        //    ★★★ §12.39 Part B: keyed on [`ClientId`], not on `HClient`. A condemned
+        //    entry outlives the component that earned it by design (it clears only when
+        //    the guest frees the roots), so an `HClient` in it is exactly the kind of
+        //    retained recyclable value §12.37's C2 shrink was written to stop poisoning.
+        //    C2 alone could not close it: an orphan resource of the dead component keeps
+        //    its namespace in `known`, so the freed value never fell out — and the next
+        //    process handed that number was condemned on arrival, a bystander death.
+        //    A `ClientId` is never reused, so a retained dead one can never name a future
+        //    namespace, and the shrink below is now purely a **capacity** rule
+        //    ([`MAX_CONDEMNED_COMPONENTS`]) rather than a correctness one.
+        let mut owner_of: BTreeMap<ClientId, usize> = BTreeMap::new();
         for (i, c) in self.condemned.iter().enumerate() {
             for &client in c {
                 owner_of.insert(client, i);
             }
         }
+        // The declaration every namespace currently projects under — the ONE place the
+        // recyclable value is turned into a never-reused identity, read once and handed
+        // to every consumer below so they cannot disagree.
+        let ids: BTreeMap<HClient, ClientId> = self
+            .rmgraph
+            .client_declarations()
+            .into_iter()
+            .map(|(c, (id, _))| (c, id))
+            .collect();
 
         // ★★ §12.37 (C1) — the projection is taken AGAINST the condemned client set,
         // because grouping is where a merge across the condemnation line has to be
@@ -1762,7 +1871,17 @@ impl Spine {
         // first RM event. With the line in the predicate every component is homogeneous,
         // so the question "is this boundary condemned?" has one answer for all its
         // clients and the merge is not a fault at all.
-        let condemned_clients: BTreeSet<HClient> = owner_of.keys().copied().collect();
+        //
+        // `project` takes the condemned set as `HClient`s because its own predicate only
+        // ever asks it about endpoints that have a LIVE declared root (`is_user`), for
+        // which value and identity agree. Translating here rather than widening
+        // `project`'s signature keeps the recyclable value out of the stored key, which is
+        // where it did the damage.
+        let condemned_clients: BTreeSet<HClient> = ids
+            .iter()
+            .filter(|(_, id)| owner_of.contains_key(id))
+            .map(|(&c, _)| c)
+            .collect();
         let bounds: Boundaries = project(&self.rmgraph, self.arch.as_ref(), &condemned_clients)?;
         //
         //    ★ G10, the second half: the CARRY-FORWARD was worse than the scan. Each
@@ -1782,7 +1901,8 @@ impl Spine {
             let hits: BTreeSet<usize> = b
                 .clients
                 .iter()
-                .filter_map(|c| owner_of.get(c).copied())
+                .filter_map(|c| ids.get(c))
+                .filter_map(|id| owner_of.get(id).copied())
                 .collect();
             // ★ §12.37: with the condemnation line in the grouping predicate a component
             // is homogeneous, so this is a property of the whole boundary — every client
@@ -1815,11 +1935,12 @@ impl Spine {
         // unrelated process next — falls out of the entry instead of poisoning the
         // VALUE forever. The system component is included deliberately: never
         // under-condemn because a namespace re-declared itself as the guest kernel's.
-        let known: BTreeSet<HClient> = bounds
+        let known: BTreeSet<ClientId> = bounds
             .procs
             .iter()
-            .flat_map(|b| b.clients.iter().copied())
-            .chain(bounds.system.clients.iter().copied())
+            .flat_map(|b| b.clients.iter())
+            .chain(bounds.system.clients.iter())
+            .filter_map(|c| ids.get(c).copied())
             .collect();
         // The surviving components: an entry with no surviving client is DROPPED —
         // condemnation ends only when the guest itself frees the client roots.
@@ -1827,14 +1948,14 @@ impl Spine {
         // Seeded from the intersecting BOUNDARIES' clients (all of which are in `known`
         // by construction, which is why no entry here can come out empty), then extended
         // with the old entries' clients that are still known.
-        let mut carried_by_root: BTreeMap<usize, BTreeSet<HClient>> = BTreeMap::new();
+        let mut carried_by_root: BTreeMap<usize, BTreeSet<ClientId>> = BTreeMap::new();
         for (b, hit) in bounds.procs.iter().zip(&boundary_hit) {
             if let Some(i) = *hit {
                 let root = uf_find(&mut parent, i);
                 carried_by_root
                     .entry(root)
                     .or_default()
-                    .extend(b.clients.iter().copied());
+                    .extend(b.clients.iter().filter_map(|c| ids.get(c).copied()));
             }
         }
         for i in 0..self.condemned.len() {
@@ -1848,7 +1969,7 @@ impl Spine {
                 );
             }
         }
-        let mut carried: Vec<BTreeSet<HClient>> = carried_by_root.into_values().collect();
+        let mut carried: Vec<BTreeSet<ClientId>> = carried_by_root.into_values().collect();
         carried.sort();
         let condemned_anchors: BTreeSet<ProcAnchor> = bounds
             .procs
@@ -1861,7 +1982,7 @@ impl Spine {
         // 0b. ★ §12.18 — DECIDE EVERYTHING REFUSABLE FIRST. From here down there is no
         //     `?` and no early return: the mutation below cannot fail, so a refused
         //     event leaves every other `Proc` byte-for-byte as it was.
-        let mut plan = self.plan_refresh(system, procs, &bounds, &condemned_bound)?;
+        let mut plan = self.plan_refresh(system, procs, &bounds, &condemned_bound, &ids)?;
 
         // 1. Match each boundary to existing procs by client intersection (decided in
         //    the plan — a condemned boundary is `None` and gets NOTHING: no `Proc`, no
@@ -1899,7 +2020,7 @@ impl Spine {
             boundary_pid.push(Some(pid));
 
             // 2. Sync the proc's derived fields to the boundary.
-            Self::sync_proc_to_boundary(procs.get_mut(pid).expect("live proc exists"), b);
+            Self::sync_proc_to_boundary(procs.get_mut(pid).expect("live proc exists"), b, &ids);
         }
 
         // 2s. ★ §12.27 — sync the SYSTEM proc to the system component (every declared
@@ -1912,7 +2033,7 @@ impl Spine {
         //     is device-fatal by definition). What it DOES get is identical: the same
         //     `sync_proc_to_boundary`, so a guest-kernel channel materializes by exactly
         //     the same rules as a guest process's.
-        Self::sync_proc_to_boundary(system, &bounds.system);
+        Self::sync_proc_to_boundary(system, &bounds.system, &ids);
 
         // 3. ★★ §12.35 — **THE ONE REMOVAL POINT**: every proc that leaves the live set
         //    leaves it here, through `Spine::vacate`, which stages before it removes.
@@ -2115,7 +2236,7 @@ impl Spine {
         p.retire();
         self.sources.deregister_proc(pid).latched();
         let anchor = p.anchor;
-        absorb_condemned(&mut self.condemned, p.clients.clone());
+        absorb_condemned(&mut self.condemned, p.client_ids.clone());
         // Move (never guess) this proc's derived routing into the condemned maps: the
         // keys are filtered by the VALUE they already name, which is a forward read of a
         // derived table — not a reverse resolve of an address to an owner.
@@ -2150,7 +2271,19 @@ impl Spine {
     /// guest frees its client root — no `Proc`, no isolate, no arena, no route.
     #[must_use]
     pub fn is_condemned(&self, client: HClient) -> bool {
-        self.condemned.iter().any(|c| c.contains(&client))
+        // ★★★ §12.39 Part B — resolve the VALUE to the namespace it currently declares
+        // before asking. A recycled `hClient` names a *different* namespace from the one
+        // that was condemned, and answering `true` for it is the bystander death this
+        // key exists to make impossible.
+        let Some(id) = self
+            .rmgraph
+            .client_declarations()
+            .get(&client)
+            .map(|&(id, _)| id)
+        else {
+            return false;
+        };
+        self.condemned.iter().any(|c| c.contains(&id))
     }
 
     /// ★ §12.13 — how many distinct condemned components the device is carrying

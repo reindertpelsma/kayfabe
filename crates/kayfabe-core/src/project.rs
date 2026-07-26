@@ -94,7 +94,7 @@ use kayfabe_arch::ids::{EngineKind, GpuId, HClient, HObject, Pdb, VChid};
 use kayfabe_arch::{Arch, ClientKind, ObjectKind};
 
 use crate::ProcAnchor;
-use crate::rmgraph::{NodeKey, RESERVED_CLIENT, RmGraph, RmNode};
+use crate::rmgraph::{ClientId, NodeKey, RESERVED_CLIENT, RmGraph, RmNode};
 
 /// ★ §12.27 — the reserved anchor of the **system component**: the guest *kernel*'s
 /// clients (UVM's session, RM's internal clients), which are one component by rule.
@@ -367,11 +367,55 @@ pub fn project(
     // itself yet.
     let kinds: BTreeMap<HClient, ClientKind> = g.client_kinds().collect();
     let is_user = |c: HClient| matches!(kinds.get(&c), Some(ClientKind::User { .. }));
-    let is_kernel = |c: HClient| matches!(kinds.get(&c), Some(ClientKind::Kernel));
+    // ★★★ §12.39, finding 1 — the ASSIGNMENT pass asks a different question from the
+    // grouping predicate, and used to answer it with a default.
+    //
+    // A resource **outlives its namespace**: a foreign `DUP_OBJECT` alias keeps it alive
+    // after its origin client's root is freed (faithful RM refcounting), and the owning
+    // `Proc` must survive with it — retiring it would free host memory RM still says is
+    // live, and `cross_proc_lifetime.rs` pins that end to end. So the `g.nodes()` branch
+    // below deliberately admits a namespace with no live root, and `anchor_of` then had
+    // to classify it with **nothing to read**: `is_kernel` was false by absence, so the
+    // orphan was filed as a **user** boundary and the spine minted an isolate, a GPA
+    // arena and a routable `Vas` for it — *including when the dead namespace was the
+    // guest KERNEL's*, which is the guest-kernel-obtains-a-user-data-plane shape
+    // `FwdFault::SystemDataPlane` exists to forbid.
+    //
+    // The fix is not a filter (that would retire a `Proc` RM says is live); it is to stop
+    // reading an absence. [`RmGraph::client_declarations`] carries the kind the namespace
+    // **declared**, recorded on the resource at its alloc, so an orphan is classified by
+    // a fact instead of by a default. `is_user` stays on the LIVE-root map on purpose:
+    // grouping requires positive evidence about a live declaration at both ends, which is
+    // §12.27's rule and is unchanged.
+    let decls: BTreeMap<HClient, (ClientId, ClientKind)> = g.client_declarations();
+    let is_kernel = |c: HClient| matches!(decls.get(&c), Some((_, ClientKind::Kernel)));
+
+    // ★★★ §12.39 Part B — **THE RECYCLED NAMESPACE.** A resource projects under its
+    // origin `HClient` only while its recorded owner ([`ClientId`], never reused) is still
+    // the declaration that namespace projects under. The `HClient` in `node.key` is a
+    // *value*, and RM recycles values by design — caller-supplied roots
+    // (`ogkm rs_server.c:612`, the reject guard compiled out at `:613-616` under
+    // `RS_COMPATABILITY_MODE=1`) and a generator that wraps at 2^20 with no free list and
+    // no epoch (`:3319-3341`). So an orphan resource whose namespace was freed and then
+    // handed to an **unrelated later process** used to re-attach itself to that process:
+    // it entered the victim's boundary, its dup edge became a grouping edge, and the two
+    // became one `Proc` — one isolate, one GPA arena, one host VAS. #14 un-fixed for a
+    // pair the attacker chose.
+    //
+    // Note what this does NOT do: while the namespace has **no** live root the orphan's
+    // own declaration is still the one it projects under, so its component (and its
+    // isolate, arena and host VAS) survives — which is `cross_proc_lifetime.rs`'s rule and
+    // RM's refcount. The exclusion bites at exactly one moment: a **re-declaration**,
+    // which mints a new `ClientId` and leaves the old declaration's resources owned by a
+    // namespace that no longer projects. They belong to no boundary, so the old component
+    // is retired through the ordinary staged-death path and the new one inherits nothing.
+    let projects =
+        |n: &RmNode, owner: ClientId| decls.get(&n.key.client).is_some_and(|&(id, _)| id == owner);
 
     let clients: BTreeSet<HClient> = g
-        .nodes()
-        .map(|n| n.key.client)
+        .nodes_with_owner()
+        .filter(|&(n, owner)| projects(n, owner))
+        .map(|(n, _)| n.key.client)
         .chain(
             g.dups()
                 .filter(|(d, _)| g.origin_of(*d).is_some())
@@ -439,6 +483,24 @@ pub fn project(
         // deliberate: a future third [`ClientKind`] is then unmergeable until someone
         // decides what it means, instead of silently defaulting into user grouping.
         if !(is_user(dst.client) && is_user(src.client)) {
+            continue;
+        }
+        // ★★★ §12.39 Part B — and the SOURCE must still be owned by the namespace the
+        // `src` key names. A dup edge reports its source as the resource's **origin**
+        // `(client, handle)`, and that `HClient` is a recyclable value: an attacker that
+        // allocates a VASpace in a namespace it will hand back, aliases it into a client of
+        // its own, and then frees the namespace's root leaves an edge whose `src.client`
+        // is a *number* the guest kernel is free to give to an unrelated later process.
+        // The instant that process declares, `is_user(src.client)` flips true on ITS root
+        // and the stale edge became a grouping edge — merging the victim into the
+        // attacker's `Proc` on the victim's own first RM event.
+        //
+        // Read through the **destination** handle (live by construction) so the answer is
+        // the resource's recorded owner, and compare it against the declaration `src.client`
+        // currently projects under. Identical for every ordinary dup — a live namespace's
+        // resources are all owned by its current root — and false exactly for the orphan of
+        // a superseded declaration, which is the vector.
+        if g.owner_of(dst) != decls.get(&src.client).map(|&(id, _)| id) {
             continue;
         }
         // ★★ §12.37 (C1) — THE CONDEMNATION LINE. A merge across it is the ONE way a
@@ -516,7 +578,16 @@ pub fn project(
         }
     }
 
-    for node in g.nodes() {
+    for (node, owner) in g.nodes_with_owner() {
+        // ★★★ §12.39 Part B — the same predicate the client universe used, and it MUST be
+        // the same one: admitting a node here that the universe excluded would panic on
+        // the `expect` below, and excluding one the universe admitted would leave an empty
+        // component. A resource of a superseded declaration claims no `Pdb`/`VChid` and
+        // enters no boundary, so its use takes a named MISS instead of resolving onto the
+        // namespace's new tenant.
+        if !projects(node, owner) {
+            continue;
+        }
         // ★ §12.27 — attribution is by the resource's ORIGIN client (`nodes()` reports
         // each resource at the handle that allocated it), so a user object dup'd into
         // the UVM session stays in the USER component. The system component owns only

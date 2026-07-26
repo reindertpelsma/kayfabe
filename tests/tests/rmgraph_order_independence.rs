@@ -1093,3 +1093,135 @@ fn a_kernel_dup_keeps_the_owning_procs_isolate_and_backing_alive_past_the_client
     );
     assert!(reaped.orphaned().is_empty(), "nothing was orphaned");
 }
+
+// =================================================================================
+// ★★★ §12.39 — a namespace that is FREED and RE-DECLARED, inside the shuffle domain
+// =================================================================================
+
+/// The namespace declared, freed, and handed to somebody else.
+const RECYCLED: HClient = HClient(0xc1d0_0080);
+/// A peer that keeps one of the first tenant's resources alive past its root's free.
+const KEEPER: HClient = HClient(0xc1d0_0081);
+/// The first tenant's PDB.
+const FIRST_PDB: Pdb = Pdb(0x3411_000);
+/// The second tenant's PDB.
+const SECOND_PDB: Pdb = Pdb(0x3415_000);
+/// The keeper's own PDB.
+const KEEPER_PDB: Pdb = Pdb(0x3419_000);
+/// The handle the keeper holds the first tenant's VASpace under.
+const KEEP_ALIAS: HObject = HObject(0x7f00_0001);
+
+/// ★★ **A freed-and-re-declared namespace projects identically in every order**
+/// (`l1_concurrency.md` §12.39).
+///
+/// §12.39's identity model gives every namespace a `ClientId` minted from a monotonic
+/// counter, so its *value* depends on the order the events arrived in. That is precisely
+/// why the id never appears in [`kayfabe_core::project::Boundaries`] — it is compared,
+/// never reported — and this test is the executable statement of that: the same facts in
+/// any legal order must still project byte-identical boundaries, even across the one
+/// transition where two declarations of one `hClient` exist in the same run.
+///
+/// **`Free` is not in the shuffle domain**, and never was (`rmgraph` module docs: *"only
+/// `RmEvent::Free` is inherently ordered (lifecycle), which is why the shuffle property is
+/// stated over alloc/dup/bind facts"*). Moving a root-free before the objects it destroys
+/// is a different history, not a different order of one history. So the two *phases* are
+/// shuffled independently with the free pinned between them, which is exactly the domain
+/// the property is stated over.
+#[test]
+fn a_freed_and_redeclared_namespace_projects_identically_in_every_order() {
+    let arch = MockArch::new();
+
+    // Phase 1: the first tenant builds a VASpace; a peer aliases it, so the resource
+    // outlives the namespace's root.
+    let mut p1 = Scenario::new();
+    let first_vas =
+        p1.compute_process_on_gpu(RECYCLED, FIRST_PDB, identical_handles(0x20, 0x21), None);
+    p1.peer_dup(
+        KEEPER,
+        HObject(KEEPER.0),
+        HObject(0x6e00_0001),
+        HObject(0x6e00_0010),
+        KEEPER_PDB,
+        KEEP_ALIAS,
+        first_vas,
+    );
+    let phase1 = p1.events;
+
+    let free_root = RmEvent::Free {
+        client: RECYCLED,
+        handle: identical_handles(0x20, 0x21).client_root,
+    };
+
+    // Phase 2: an unrelated later process is handed the same `hClient`, with handle
+    // values of its own (the object axis is §12.25's deferred finding, not this one).
+    let mut p2 = Scenario::new();
+    p2.compute_process_on_gpu(
+        RECYCLED,
+        SECOND_PDB,
+        kayfabe_tests::ProcessHandles {
+            client_root: HObject(0x6f00_0000),
+            device: HObject(0x6f00_0001),
+            vaspace: HObject(0x6f00_0010),
+            tsg: HObject(0x6f00_0012),
+            gr_channel: HObject(0x6f00_0019),
+            gr_vchid: VChid(0x22),
+            ce_channel: HObject(0x6f00_001a),
+            ce_vchid: VChid(0x23),
+        },
+        None,
+    );
+    let phase2 = p2.events;
+
+    let run = |a: &[RmEvent], b: &[RmEvent]| {
+        let mut g = RmGraph::new();
+        for ev in kayfabe_tests::legal_order(a) {
+            g.apply(&arch, ev)
+                .expect("phase 1 applies in any legal order");
+        }
+        g.apply(&arch, free_root)
+            .expect("the first tenant's root frees");
+        for ev in kayfabe_tests::legal_order(b) {
+            g.apply(&arch, ev).expect(
+                "★ re-declaring a recycled namespace is LEGAL — RM recycles `hClient` \
+                 values by design and refusing would hang a real guest",
+            );
+        }
+        project(&g, &arch, &NO_CONDEMNED).expect("projects cleanly")
+    };
+
+    let reference = run(&phase1, &phase2);
+    // The second tenant is its OWN component, and it is the only one that owns the
+    // recycled handle value.
+    assert!(
+        reference.by_pdb.contains_key(&(GpuId::ZERO, SECOND_PDB)),
+        "the second tenant's address plane is routable"
+    );
+    assert!(
+        !reference.by_pdb.contains_key(&(GpuId::ZERO, FIRST_PDB)),
+        "★★ the SUPERSEDED declaration's address plane must belong to nobody"
+    );
+    let second = reference
+        .procs
+        .iter()
+        .find(|p| p.clients.contains(&RECYCLED))
+        .expect("the second tenant has a component");
+    assert!(
+        !second.clients.contains(&KEEPER),
+        "★★ the keeper's alias to the FIRST tenant's VASpace must not merge it with the \
+         SECOND — the edge's `src` names a recyclable VALUE, not the namespace it was \
+         allocated in"
+    );
+
+    for pa in permutations(phase1.len()) {
+        for pb in permutations(phase2.len()) {
+            let a: Vec<RmEvent> = pa.iter().map(|&i| phase1[i]).collect();
+            let b: Vec<RmEvent> = pb.iter().map(|&i| phase2[i]).collect();
+            assert_eq!(
+                run(&a, &b),
+                reference,
+                "a freed-and-re-declared namespace must project identically in every \
+                 legal order (perms {pa:?} / {pb:?})"
+            );
+        }
+    }
+}

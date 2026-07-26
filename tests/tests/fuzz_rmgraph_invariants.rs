@@ -775,6 +775,21 @@ impl RefTracker {
                 }
                 self.pending
                     .retain(|d, s| !doomed.contains(d) && !doomed.contains(s));
+                // ★★★ §12.39 Part A — mirror the graph's TEARDOWN COMPLETION rule: freeing
+                // a client root destroys the namespace's PARKED facts as well as its
+                // handles. A parked fact's key is by definition not a live handle, so the
+                // `doomed` prune above cannot reach it, and it used to sit in the table
+                // waiting for a handle only a LATER declaration of the same recyclable
+                // `hClient` could create.
+                //
+                // ★ It matters to THIS model for a second reason worth stating: a parked
+                // dst also **blocks an alloc** at that handle value (`ConflictingAlloc`).
+                // Keeping the stale entry would therefore refuse the namespace's next
+                // tenant its own allocation — the hangs-a-legal-guest direction — so the
+                // purge is what makes a recycled namespace usable, not just safe.
+                if is_root {
+                    self.pending.retain(|d, s| d.0 != client && s.0 != client);
+                }
             }
         }
     }

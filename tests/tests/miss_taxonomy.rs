@@ -908,3 +908,193 @@ fn defer_the_whole_bringup_applies_backwards_and_reaches_the_same_end_state() {
         "and the end state is non-trivial: the VAS routes"
     );
 }
+
+// =================================================================================
+// ★★★ §12.39 Part A — TEARDOWN COMPLETION: a parked fact must not outlive the namespace
+// it names.
+//
+// The parked tables are the second of the graph's two references to a namespace that are
+// **not handles** (the first is a resource's recorded owner, Part B's business). Both
+// dangled. `free_subtree` prunes the parked tables by membership in `doomed`, which is the
+// set of live HANDLES the free removed — and a parked fact's key is by definition not a
+// live handle. So every parked fact survived the free of its own namespace's client root
+// and sat there waiting for a handle only a LATER declaration of the same recyclable
+// `hClient` could create.
+//
+// Asserted per TABLE rather than per scenario, so a table someone adds later is visibly
+// missing a row.
+// =================================================================================
+
+/// The namespace the attacker declares, parks a fact in, frees, and waits for.
+const RECYCLED: HClient = HClient(0xC1D0_0070);
+/// The peer namespace that holds the other end of a parked dup.
+const PEER: HClient = HClient(0xC1D0_0071);
+/// The handle a parked dup's destination squats.
+const H_PLANT: HObject = HObject(0x7c00_0001);
+/// A handle that does not exist yet when the parked fact naming it is accepted.
+const H_LATER: HObject = HObject(0x5c00_0f01);
+
+/// Declare `RECYCLED`, run `plant`, free its root, then re-declare it — the recycled
+/// namespace, in the four events §12.39 costs it.
+fn park_free_and_redeclare(arch: &MockArch, g: &mut RmGraph, plant: &[RmEvent]) {
+    g.apply(arch, root_of(RECYCLED))
+        .expect("the attacker declares the namespace");
+    g.apply(arch, device(RECYCLED, HObject(RECYCLED.0), H_DEV))
+        .expect("with a device of its own");
+    for ev in plant {
+        g.apply(arch, *ev)
+            .expect("the parked fact is accepted — it is a legal ordering");
+    }
+    g.apply(
+        arch,
+        RmEvent::Free {
+            client: RECYCLED,
+            handle: HObject(RECYCLED.0),
+        },
+    )
+    .expect("the attacker frees the root it will hand back");
+    // ★ The re-declaration MUST be accepted: RM recycles `hClient` values by design
+    // (caller-supplied roots, `ogkm rs_server.c:612`; a generator that wraps at 2^20 with
+    // no free list, `:3319-3341`; no epoch anywhere in RM). Refusing it is the
+    // hangs-a-legal-guest error.
+    g.apply(arch, root_of(RECYCLED))
+        .expect("★ re-declaring a recycled namespace is LEGAL and must never be refused");
+    g.apply(arch, device(RECYCLED, HObject(RECYCLED.0), H_DEV))
+        .expect("the new tenant builds its own objects");
+}
+
+/// ★★ **A parked `DUP_OBJECT` whose DESTINATION namespace is freed must not fire into the
+/// namespace's next tenant** (`l1_concurrency.md` §12.39, Shape A — the cheapest
+/// cross-process isolation break in the model: four events and no host state).
+#[test]
+fn a_parked_dup_destination_does_not_survive_its_namespaces_root_free() {
+    let (arch, mut g) = fresh_graph();
+    g.apply(&arch, root_of(PEER)).expect("the peer declares");
+    g.apply(&arch, device(PEER, HObject(PEER.0), H_DEV))
+        .expect("peer device");
+
+    park_free_and_redeclare(
+        &arch,
+        &mut g,
+        // The source object does not exist yet, so the edge PARKS (category 2 — a dup's
+        // source object may be one RM saw and we did not).
+        &[RmEvent::Dup {
+            src: NodeKey::new(PEER, H_LATER),
+            dst: NodeKey::new(RECYCLED, H_PLANT),
+        }],
+    );
+
+    // The attacker finally allocates the source — the event that used to promote the
+    // parked edge into a live alias INSIDE the new tenant's namespace.
+    g.apply(&arch, vaspace(PEER, H_DEV, H_LATER))
+        .expect("the source object arrives");
+
+    assert_eq!(
+        g.origin_of(NodeKey::new(RECYCLED, H_PLANT)).map(|n| n.key),
+        None,
+        "★★ a `DUP_OBJECT` parked against a namespace the guest then FREED fired into \
+         that namespace's next tenant — the alias is a grouping edge, so the two become \
+         one `Proc`: one isolate, one GPA arena, one host VAS"
+    );
+    assert!(
+        !g.dups().any(|(d, _)| d == NodeKey::new(RECYCLED, H_PLANT)),
+        "★ and the parked edge itself is gone, not merely unresolvable"
+    );
+}
+
+/// ★★ The **source** end of the same vector. A parked dup whose source lives in the freed
+/// namespace lands its alias in the *attacker's* namespace and aliases a resource the
+/// **next tenant** allocates — which merges exactly as hard, with the roles swapped.
+#[test]
+fn a_parked_dup_source_does_not_survive_its_namespaces_root_free() {
+    let (arch, mut g) = fresh_graph();
+    g.apply(&arch, root_of(PEER)).expect("the peer declares");
+    g.apply(&arch, device(PEER, HObject(PEER.0), H_DEV))
+        .expect("peer device");
+
+    park_free_and_redeclare(
+        &arch,
+        &mut g,
+        &[RmEvent::Dup {
+            src: NodeKey::new(RECYCLED, H_LATER),
+            dst: NodeKey::new(PEER, H_PLANT),
+        }],
+    );
+
+    // The NEW tenant allocates the handle the stale edge names.
+    g.apply(&arch, vaspace(RECYCLED, H_DEV, H_LATER))
+        .expect("the new tenant's own VASpace");
+
+    assert_eq!(
+        g.origin_of(NodeKey::new(PEER, H_PLANT)).map(|n| n.key),
+        None,
+        "★★ a `DUP_OBJECT` parked against a source in a namespace the guest then FREED \
+         aliased the NEXT tenant's object into the attacker's namespace"
+    );
+    assert_eq!(
+        g.references(NodeKey::new(RECYCLED, H_LATER))
+            .collect::<Vec<_>>(),
+        vec![NodeKey::new(RECYCLED, H_LATER)],
+        "★ the new tenant's object is referenced by its own origin handle and NOTHING else"
+    );
+}
+
+/// ★★ A parked `SET_PAGE_DIRECTORY` must not drain onto the next tenant's VASpace. A
+/// forged PDB there is not merely wrong: two VASpace origins declaring one `Pdb` on one
+/// target is a `ProjectionError::PdbCollision`, which faults the projection for **every**
+/// process on the device (the §18A global-DoS shape).
+#[test]
+fn a_parked_page_directory_does_not_survive_its_namespaces_root_free() {
+    let (arch, mut g) = fresh_graph();
+    park_free_and_redeclare(
+        &arch,
+        &mut g,
+        &[RmEvent::SetPageDir {
+            client: RECYCLED,
+            vaspace: H_LATER,
+            pdb: PDB0,
+        }],
+    );
+
+    g.apply(&arch, vaspace(RECYCLED, H_DEV, H_LATER))
+        .expect("the new tenant allocates a VASpace at that handle value");
+
+    assert_eq!(
+        g.pdb_of(NodeKey::new(RECYCLED, H_LATER)),
+        None,
+        "★★ a `SET_PAGE_DIRECTORY` parked by a namespace the guest then FREED drained \
+         onto the next tenant's VASpace — an attacker-chosen page-directory base on a \
+         victim's address plane"
+    );
+}
+
+/// ★★ A parked `MAP_MEMORY_DMA` must not replay into the next tenant's address plane —
+/// an attacker-chosen `va → phys` forward-population in a victim's VASpace.
+#[test]
+fn a_parked_map_does_not_survive_its_namespaces_root_free() {
+    let (arch, mut g) = fresh_graph();
+    park_free_and_redeclare(
+        &arch,
+        &mut g,
+        &[RmEvent::MapMemoryDma {
+            client: RECYCLED,
+            vaspace: H_LATER,
+            memory: H_MEM,
+            va: VA,
+            offset: 0,
+            len: MAP_LEN,
+        }],
+    );
+
+    g.apply(&arch, vaspace(RECYCLED, H_DEV, H_LATER))
+        .expect("the new tenant's VASpace");
+    g.apply(&arch, memory(RECYCLED, H_DEV, H_MEM, MEM_PHYS))
+        .expect("the new tenant's memory object");
+
+    assert_eq!(
+        g.mappings().count(),
+        0,
+        "★★ a `MAP_MEMORY_DMA` parked by a namespace the guest then FREED replayed into \
+         the next tenant's VASpace"
+    );
+}

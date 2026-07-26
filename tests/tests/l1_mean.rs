@@ -3736,3 +3736,747 @@ fn evasion_relabelling_the_condemned_component_still_fails() {
         "★ a live proc absorbed the re-labelled corpse"
     );
 }
+
+// =================================================================================
+// ★★★ §12.39 finding 3 — THE COMPONENT **SPLIT**, the dual of the merge
+//
+// `GpuError::LateMerge` guards many procs collapsing into one boundary. Nothing guarded
+// the mirror: ONE proc matching MANY boundaries, which a legal guest reaches by
+// dup-joining two user clients and then freeing the alias. Both halves matched the same
+// live proc, so `plan_refresh`'s `survivors` kept it twice, `vanishing` came out EMPTY
+// and `sync_proc_to_boundary` ran twice on it — the second call overwriting the first.
+// One half silently lost its clients, vases and channels; its `Pdb` left `by_pdb`
+// altogether; and its isolate and arena stayed live under the other half.
+// =================================================================================
+
+/// The lower-anchored half of the split — the client that keeps the existing `Proc`.
+const SPLIT_A: HClient = HClient(0xD8);
+/// The higher-anchored half — the client that must get a `Proc` of its OWN.
+const SPLIT_B: HClient = HClient(0xD9);
+/// [`SPLIT_A`]'s page-directory base.
+const SPLIT_A_PDB: Pdb = Pdb(0x5100_0000);
+/// [`SPLIT_B`]'s page-directory base.
+const SPLIT_B_PDB: Pdb = Pdb(0x5200_0000);
+/// [`SPLIT_A`]'s GR vChid.
+const SPLIT_A_GR: VChid = VChid(0x180);
+/// [`SPLIT_A`]'s CE vChid.
+const SPLIT_A_CE: VChid = VChid(0x280);
+/// [`SPLIT_B`]'s GR vChid.
+const SPLIT_B_GR: VChid = VChid(0x181);
+/// [`SPLIT_B`]'s CE vChid.
+const SPLIT_B_CE: VChid = VChid(0x281);
+/// The handle [`SPLIT_B`] holds [`SPLIT_A`]'s VASpace under while the two are joined.
+const JOIN_SPLIT_ALIAS: HObject = HObject(0x7b00_0001);
+
+/// ★★★ **A live component that SPLITS must yield TWO `Proc`s** (`l1_concurrency.md`
+/// §12.39, finding 3).
+///
+/// Two ordinary user processes dup-join (genuine user↔user sharing = one blast radius =
+/// one `Proc`, §12.27), both publish and both ring, and then the guest frees the alias
+/// that joined them. Freeing a dup is ordinary, legal guest behaviour — **refusing it
+/// would hang a legal guest**, which is why this test also asserts the `Free` is
+/// accepted — so the component genuinely becomes two, and the runtime has to follow.
+///
+/// What it must do, and what it did instead:
+///
+/// | | required | before the fix |
+/// |---|---|---|
+/// | procs | two, one per half | one — both boundaries matched it |
+/// | staging | the departing half's host state queued **once**, through the ordinary staged-death path | nothing staged; `plan.vanishing` was empty |
+/// | routing | both halves in `by_pdb` | the overwritten half's `Pdb` dropped out entirely |
+/// | host state | the new `Proc` inherits **nothing** | the surviving proc kept the other half's isolate and arena |
+///
+/// The last row is the one that makes it a security property rather than a bookkeeping
+/// one: a later verb naming the lost half found no proc and minted a fresh one — a
+/// resurrect into a data plane whose host objects were still owned by somebody else's
+/// isolate.
+///
+/// **Which half keeps the `Proc` is a rule, not an accident**: the first boundary in
+/// ascending anchor order claims it, and an anchor is its component's smallest client, so
+/// the keeper is the half that still holds the proc's own anchor whenever that client
+/// survives. Host state cannot move between isolates (a [`HostHandle`] names the RM
+/// client namespace it lives in), so the departing half necessarily re-materialises — its
+/// address table starts EMPTY, which makes the loss a loud `AddressFault::Miss` at use
+/// rather than a silently zeroed backing.
+///
+/// Assertions lead with the breach.
+#[test]
+fn a_live_component_that_splits_yields_two_procs() {
+    let _wd = watchdog("component_split", Duration::from_secs(60));
+    let (mut gpu, _pids, rec) = mean_gpu();
+
+    // ---- Two ordinary processes, joined by a genuine user↔user share BEFORE either
+    // touches its data plane (the early-arm discipline — a late merge is a refusal).
+    reinit(&mut gpu, SPLIT_A, SPLIT_A_PDB, SPLIT_A_GR, SPLIT_A_CE, GPU0);
+    reinit(&mut gpu, SPLIT_B, SPLIT_B_PDB, SPLIT_B_GR, SPLIT_B_CE, GPU0);
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(SPLIT_A, H_VASPACE),
+        dst: NodeKey::new(SPLIT_B, JOIN_SPLIT_ALIAS),
+    })
+    .expect("a user↔user share is a grouping edge");
+    let merged = gpu.spine.by_pdb[&(GPU0, SPLIT_A_PDB)];
+    assert_eq!(
+        gpu.spine.by_pdb[&(GPU0, SPLIT_B_PDB)],
+        merged,
+        "precondition: the share made them ONE `Proc`"
+    );
+    assert_eq!(
+        gpu.procs[&merged].clients,
+        BTreeSet::from([SPLIT_A, SPLIT_B])
+    );
+
+    // ---- Both halves touch the data plane, out of the one isolate and one arena.
+    let rung_a = publish_and_ring(&mut gpu, GPU0, SPLIT_A_PDB, SPLIT_A_GR, VA_CTL);
+    let rung_b = publish_and_ring(&mut gpu, GPU0, SPLIT_B_PDB, SPLIT_B_GR, VA_RING);
+    assert_eq!((rung_a.proc, rung_b.proc), (merged, merged));
+    let joined_hosts = host_identities(&gpu.procs[&merged]);
+    let merged_iso = gpu.procs[&merged].isolates[&GPU0].id();
+    let merged_arena = gpu.procs[&merged].arenas[&GPU0].range.clone();
+    let staged_before = gpu.procs[&merged].pending_release_len();
+
+    // ---- ★ THE SPLIT: the guest frees the alias that joined them. Legal, ordinary, and
+    // it must be ACCEPTED — a refusal here hangs a guest doing nothing wrong.
+    gpu.apply(RmEvent::Free {
+        client: SPLIT_B,
+        handle: JOIN_SPLIT_ALIAS,
+    })
+    .expect("★ freeing a dup alias is ordinary guest behaviour and must never be refused");
+
+    // ---- ★★ THE BREACH, asserted first.
+    let pid_a = kayfabe_fwd::route_pdb(&gpu.spine, GPU0, SPLIT_A_PDB).unwrap_or_else(|e| {
+        panic!(
+            "★★ the split DROPPED one half's address plane: {SPLIT_A_PDB:?} no longer \
+             routes ({e:?}). Both halves matched the one proc, so the second \
+             `sync_proc_to_boundary` overwrote the first and this half's anchor stopped \
+             naming any live proc"
+        )
+    });
+    let pid_b = kayfabe_fwd::route_pdb(&gpu.spine, GPU0, SPLIT_B_PDB).unwrap_or_else(|e| {
+        panic!("★★ the split DROPPED one half's address plane: {SPLIT_B_PDB:?} ({e:?})")
+    });
+    assert_ne!(
+        pid_a, pid_b,
+        "★★ the two halves of a split component still share ONE `Proc` — one isolate \
+         (one host RM client namespace), one GPA arena, one host VAS — for two guest \
+         processes that no longer share anything"
+    );
+    assert_eq!(
+        (
+            gpu.procs[&pid_a].clients.clone(),
+            gpu.procs[&pid_b].clients.clone()
+        ),
+        (BTreeSet::from([SPLIT_A]), BTreeSet::from([SPLIT_B])),
+        "★★ each half holds exactly its own client"
+    );
+    assert_eq!(
+        pid_a, merged,
+        "the keeper is the half that still holds the proc's own anchor — identity is a \
+         rule here, not iteration order"
+    );
+
+    // ---- ★ The new `Proc` inherits NOTHING: not the isolate, not the arena, not one
+    // host handle. Host objects name the RM client namespace they live in and cannot be
+    // moved between them, so inheriting one would be a cross-namespace reach.
+    assert_ne!(
+        gpu.procs[&pid_b].isolates[&GPU0].id(),
+        merged_iso,
+        "★★ the departing half kept the keeper's isolate — one host RM client for two \
+         unrelated processes"
+    );
+    let new_arena = gpu.procs[&pid_b].arenas[&GPU0].range.clone();
+    assert!(
+        new_arena.end <= merged_arena.start || merged_arena.end <= new_arena.start,
+        "★★ the departing half kept the keeper's GPA arena: {new_arena:?} vs {merged_arena:?}"
+    );
+    assert!(
+        host_identities(&gpu.procs[&pid_b]).is_empty(),
+        "★★ the new `Proc` came up holding host objects it never minted — a resurrect \
+         into somebody else's data plane"
+    );
+
+    // ---- ★ Conservation: the departing half's host state left through the ORDINARY
+    // staged-death path, once. Nothing was freed ad hoc and nothing was dropped.
+    assert!(
+        gpu.procs[&pid_a].pending_release_len() > staged_before,
+        "★★ the departing half's host VAS, backing and channel were dropped on the floor \
+         — nothing was queued for release, so nothing can ever free them (§12.33's shape)"
+    );
+    let l = rec.lock().expect("recorder").ledger();
+    assert_eq!(
+        (
+            l.double_free.as_slice(),
+            l.free_of_unknown.as_slice(),
+            l.unmap_of_unknown.as_slice()
+        ),
+        (&[][..], &[][..], &[][..]),
+        "★ the split reclaimed nothing twice and reached across no isolate namespace"
+    );
+
+    // ---- …and both halves are genuinely SERVED, end to end, in their own lanes.
+    for (pid, pdb, gr) in [
+        (pid_a, SPLIT_A_PDB, SPLIT_A_GR),
+        (pid_b, SPLIT_B_PDB, SPLIT_B_GR),
+    ] {
+        let rung = publish_and_ring(&mut gpu, GPU0, pdb, gr, VA_HELD);
+        assert_eq!(rung.proc, pid, "each half rings in its own proc");
+        assert_eq!(
+            token_lane(rung.host_token),
+            (pid.0 + 1, GPU0.0),
+            "★ …on a host token minted in its OWN isolate lane"
+        );
+    }
+    assert!(
+        host_identities(&gpu.procs[&pid_b]).is_disjoint(&joined_hosts),
+        "★★ the departing half re-materialised onto host objects the joined component \
+         had already minted — the new plane must be genuinely new"
+    );
+    assert!(
+        host_identities(&gpu.procs[&pid_b]).is_disjoint(&host_identities(&gpu.procs[&pid_a])),
+        "★★ the two halves share a host object"
+    );
+
+    // ---- The rest of the world never noticed.
+    assert_eq!(gpu.spine.condemned_len(), 0, "a split is not a death");
+    core_publish(&mut gpu, GPU0, lane_of(P_WITNESS).pdb, VA_WARM)
+        .expect("an unrelated proc is undisturbed by the split");
+}
+
+// =================================================================================
+// ★★★ §12.39 — THE RECYCLED NAMESPACE, §12.38's surviving sibling
+//
+// §12.38 closed the *never-declared* squat. This is the one it left open, and it is not
+// the weak leftover: in its cheapest shape it costs four events, no host resources and
+// nothing observable until it fires. It needs neither a race, nor a condemnation, nor a
+// compromised guest kernel — and, eventually, no attacker at all, because RM's own client
+// index wraps at 2^20 per driver load with no free list and no epoch
+// (`ogkm src/nvidia/src/libraries/resserv/src/rs_server.c:3319-3341`).
+//
+// Two shapes, two independent fixes, and neither subsumes the other:
+//   Shape A — a PARKED fact outlives the free of its own namespace's root (Part A);
+//   Shape B — an ORPHANED resource's origin key names a namespace that has since been
+//             RE-DECLARED by somebody else (Part B, the `ClientId` identity model).
+// =================================================================================
+
+/// The `hClient` VALUE the attacker declares, plants in, frees — and that the victim is
+/// later handed. Guessable: RM's generator is a sequential index and the shipped driver
+/// honours a caller-supplied `hRoot` verbatim (`rs_server.c:612`, reject guard compiled
+/// out under `RS_COMPATABILITY_MODE=1`).
+const RECYCLED_CLIENT: HClient = HClient(0xDA);
+/// The victim's PDB once it is handed [`RECYCLED_CLIENT`].
+const RECYCLED_VICTIM_PDB: Pdb = Pdb(0x5300_0000);
+/// The victim's GR vChid.
+const RECYCLED_VICTIM_GR: VChid = VChid(0x188);
+/// The victim's CE vChid.
+const RECYCLED_VICTIM_CE: VChid = VChid(0x288);
+/// The handle the attacker's parked alias squats inside the recycled namespace.
+const RECYCLED_PLANT: HObject = HObject(0x7c00_0001);
+/// The attacker's own object, deliberately allocated LAST, whose arrival is what promotes
+/// the parked edge.
+const RECYCLED_LATER: HObject = HObject(0x5c00_0f01);
+
+/// ★★★ **Shape A — a parked `DUP_OBJECT` must not outlive the free of its own namespace's
+/// client root** (`l1_concurrency.md` §12.39, Part A).
+///
+/// `RmGraph::free_subtree` prunes the parked tables by membership in `doomed`, which is
+/// the set of live HANDLES the free removed. A parked dup's `dst` is by definition *not* a
+/// live handle — that is what "parked" means — so it survived the free of its own client
+/// root and sat in the table waiting for a handle only a later declaration of the same
+/// `hClient` could create.
+///
+/// The attack, in four events and no host state:
+///
+/// ```text
+/// A: Alloc(Client cV, User)                      legal — `hRoot` is caller-supplied
+/// A: Dup { src: (cA, H_LATER), dst: (cV, PLANT) } src unobserved ⇒ PARKS (category 2)
+/// A: Free (cV, cV)                                the root dies; the parked edge did NOT
+///    …graph footprint from here: one parked edge. No resource, no client in the
+///      projection's universe, therefore no phantom `Proc`, no isolate, no arena.
+/// V: (an ordinary process handed hClient = cV) declares, builds, publishes
+/// A: Alloc (cA, H_LATER)                          promotes the edge — a live ALIAS
+///                                                 inside the VICTIM's namespace
+/// ⇒ both ends declared `User`, both alive ⇒ a GROUPING edge ⇒ ONE `Proc`.
+/// ```
+///
+/// **§12.38 does not cover this.** Every event above names a namespace that existed at the
+/// moment it was issued, so `undeclared_namespace` is satisfied honestly and completely.
+/// It is not a bypass of that rule; it is a hole the rule never covered.
+///
+/// The isolation claim is asserted **before** the mechanism, so a revert reports the
+/// breach rather than "a parked edge was left behind".
+#[test]
+fn a_recycled_namespace_cannot_squat_a_later_process_into_the_attackers_proc() {
+    let _wd = watchdog("recycled_shape_a", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (attacker, lane) = (pids[P_WITNESS], lane_of(P_WITNESS));
+
+    // The attacker is an ordinary, LIVE, publishing process — nothing is condemned.
+    core_publish(&mut gpu, GPU0, lane.pdb, VA_WARM).expect("the attacker publishes while alive");
+    assert_eq!(gpu.spine.condemned_len(), 0, "nothing is condemned here");
+    let attacker_iso = gpu.procs[&attacker].isolates[&GPU0].id();
+    let attacker_arena = gpu.procs[&attacker].arenas[&GPU0].range.clone();
+    let attacker_hosts = host_identities(&gpu.procs[&attacker]);
+
+    // ---- ★ The plant: declare the namespace, park an edge in it, free the root.
+    gpu.apply(kayfabe_tests::client_root(RECYCLED_CLIENT))
+        .expect("declaring a namespace of one's own is legal");
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_WITNESS), RECYCLED_LATER),
+        dst: NodeKey::new(RECYCLED_CLIENT, RECYCLED_PLANT),
+    })
+    .expect("a dup whose SOURCE OBJECT is unobserved parks — category 2, and it must");
+    gpu.apply(RmEvent::Free {
+        client: RECYCLED_CLIENT,
+        handle: HObject(RECYCLED_CLIENT.0),
+    })
+    .expect("the attacker frees the namespace it will hand back");
+
+    // ---- The victim is handed that `hClient` and comes up as an ordinary process.
+    reinit(
+        &mut gpu,
+        RECYCLED_CLIENT,
+        RECYCLED_VICTIM_PDB,
+        RECYCLED_VICTIM_GR,
+        RECYCLED_VICTIM_CE,
+        GPU0,
+    );
+    // ---- …and the attacker fires: it allocates the source object at last.
+    gpu.apply(RmEvent::Alloc {
+        client: client_of(P_WITNESS),
+        parent: H_DEVICE,
+        handle: RECYCLED_LATER,
+        class: mock_classes::VASPACE,
+        facts: AllocFacts::default(),
+    })
+    .expect("the attacker's own alloc applies");
+
+    // ---- ★★ THE BREACH.
+    let victim = gpu
+        .spine
+        .by_pdb
+        .get(&(GPU0, RECYCLED_VICTIM_PDB))
+        .copied()
+        .expect("the victim's own address plane materialized");
+    assert_ne!(
+        victim, attacker,
+        "★★ the victim was merged into the ATTACKER's `Proc` by an edge planted in a \
+         namespace the attacker had already FREED — one isolate, one GPA arena, one host \
+         VAS, i.e. #14 un-fixed for a pair the attacker chose"
+    );
+    assert_eq!(
+        gpu.procs[&victim].clients,
+        BTreeSet::from([RECYCLED_CLIENT]),
+        "★★ the victim's component must hold the victim's client and nothing else"
+    );
+    assert_ne!(
+        gpu.procs[&victim].isolates[&GPU0].id(),
+        attacker_iso,
+        "★★ the two share one isolate — one host RM client namespace"
+    );
+    let victim_arena = gpu.procs[&victim].arenas[&GPU0].range.clone();
+    assert!(
+        victim_arena.end <= attacker_arena.start || attacker_arena.end <= victim_arena.start,
+        "★★ the two share one GPA arena: {victim_arena:?} vs {attacker_arena:?}"
+    );
+
+    // …and it is genuinely SERVED, end to end, out of its own isolate lane.
+    let rung = publish_and_ring(
+        &mut gpu,
+        GPU0,
+        RECYCLED_VICTIM_PDB,
+        RECYCLED_VICTIM_GR,
+        VA_CTL,
+    );
+    assert_eq!(rung.proc, victim, "the victim's ring routed to the victim");
+    assert_eq!(
+        token_lane(rung.host_token),
+        (victim.0 + 1, GPU0.0),
+        "★ the victim rang a host token minted in its OWN isolate lane"
+    );
+    assert!(
+        host_identities(&gpu.procs[&victim]).is_disjoint(&attacker_hosts),
+        "★★ the victim and the attacker share a host object"
+    );
+
+    // ---- ★ The mechanism, last: the parked edge died with its namespace's root, so the
+    // attacker's alloc promoted nothing.
+    assert!(
+        !gpu.spine
+            .rmgraph
+            .dups()
+            .any(|(d, _)| d == NodeKey::new(RECYCLED_CLIENT, RECYCLED_PLANT)),
+        "★ the parked edge outlived the free of its own namespace's client root"
+    );
+    assert!(
+        gpu.spine
+            .rmgraph
+            .origin_of(NodeKey::new(RECYCLED_CLIENT, RECYCLED_PLANT))
+            .is_none(),
+        "★ …and it must not have resolved into a live alias inside the victim's namespace"
+    );
+
+    // The attacker earned nothing and lost nothing: its own proc still works.
+    core_publish(&mut gpu, GPU0, lane.pdb, VA_HELD).expect("the attacker keeps working");
+}
+
+/// The attacker's own client in the Shape-B script (lower than [`SHAPE_B_RECYCLED`], so
+/// the attacker's half is the one that keeps the joined `Proc` when they split).
+const SHAPE_B_ATTACKER: HClient = HClient(0xDC);
+/// The namespace the attacker allocates a VASpace in and then frees — the one whose
+/// `hClient` the victim is later handed.
+const SHAPE_B_RECYCLED: HClient = HClient(0xDD);
+/// The attacker's PDB.
+const SHAPE_B_ATT_PDB: Pdb = Pdb(0x5400_0000);
+/// The PDB of the VASpace the attacker orphans — the previous tenant's address plane.
+const SHAPE_B_ORPHAN_PDB: Pdb = Pdb(0x5500_0000);
+/// The victim's own PDB once it is handed [`SHAPE_B_RECYCLED`].
+const SHAPE_B_VICTIM_PDB: Pdb = Pdb(0x5600_0000);
+/// The attacker's GR/CE vChids.
+const SHAPE_B_ATT_GR: VChid = VChid(0x18a);
+/// See [`SHAPE_B_ATT_GR`].
+const SHAPE_B_ATT_CE: VChid = VChid(0x28a);
+/// The victim's GR/CE vChids.
+const SHAPE_B_VICTIM_GR: VChid = VChid(0x18b);
+/// See [`SHAPE_B_VICTIM_GR`].
+const SHAPE_B_VICTIM_CE: VChid = VChid(0x28b);
+/// The orphaned namespace's device handle.
+const SHAPE_B_DEV: HObject = HObject(0x6d00_0001);
+/// The orphaned namespace's VASpace handle.
+const SHAPE_B_VAS: HObject = HObject(0x6d00_0010);
+/// The handle the attacker keeps the orphaned VASpace alive under.
+const SHAPE_B_ALIAS: HObject = HObject(0x7d00_0001);
+
+/// ★★★ **Shape B — a recycled namespace must not inherit the previous tenant's address
+/// plane** (`l1_concurrency.md` §12.39, Part B).
+///
+/// A resource survives its origin handle's free while any foreign alias references it
+/// (faithful RM refcounting, `ogkm .../mem_mgr/mem.c:986-1039` — correct, and deliberately
+/// unchanged), but its `RmNode::key` still carries the `HClient` **VALUE** of the
+/// namespace that allocated it. An `hClient` is recyclable *by NVIDIA's design*: the
+/// shipped driver honours a caller-supplied `hRoot` (`rs_server.c:612`, reject guard
+/// compiled out at `:613-616` under `RS_COMPATABILITY_MODE=1`), the RM-chosen values come
+/// from an index that wraps at 2^20 with no free list (`:3319-3341`), and RM carries no
+/// epoch anywhere that could tell two lifetimes apart. So the stale value used to
+/// re-attach the orphan to **whoever holds the number now** — the victim — putting an
+/// attacker-owned VASpace inside the victim's component and making the surviving dup edge
+/// a grouping edge.
+///
+/// **The fix may not be a refusal.** Because RM recycles by design, refusing to re-declare
+/// a namespace that still holds live resources would refuse a stream the guest's own RM
+/// emits — so this test also asserts the victim's `Alloc(Client)` is *accepted* and that
+/// the victim is genuinely served. The identity is minted by us instead: a `ClientId`, the
+/// client root's never-reused `ResId`, recorded on every resource at its alloc.
+///
+/// Composed with §12.39 finding 3 on purpose: freeing the orphaned namespace's root while
+/// the attacker's alias lives **splits** the joined component, so this script exercises
+/// the split path and the identity model in one run.
+#[test]
+fn a_recycled_namespace_cannot_inherit_the_previous_tenants_address_plane() {
+    let _wd = watchdog("recycled_shape_b", Duration::from_secs(60));
+    let (mut gpu, _pids, rec) = mean_gpu();
+
+    // ---- The attacker: an ordinary compute process, plus a SECOND namespace of its own
+    // holding a VASpace with a page directory bound.
+    reinit(
+        &mut gpu,
+        SHAPE_B_ATTACKER,
+        SHAPE_B_ATT_PDB,
+        SHAPE_B_ATT_GR,
+        SHAPE_B_ATT_CE,
+        GPU0,
+    );
+    for ev in [
+        kayfabe_tests::client_root(SHAPE_B_RECYCLED),
+        RmEvent::Alloc {
+            client: SHAPE_B_RECYCLED,
+            parent: HObject(SHAPE_B_RECYCLED.0),
+            handle: SHAPE_B_DEV,
+            class: mock_classes::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: SHAPE_B_RECYCLED,
+            parent: SHAPE_B_DEV,
+            handle: SHAPE_B_VAS,
+            class: mock_classes::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: SHAPE_B_RECYCLED,
+            vaspace: SHAPE_B_VAS,
+            pdb: SHAPE_B_ORPHAN_PDB,
+        },
+        // The alias that will keep the VASpace alive past its namespace's death.
+        RmEvent::Dup {
+            src: NodeKey::new(SHAPE_B_RECYCLED, SHAPE_B_VAS),
+            dst: NodeKey::new(SHAPE_B_ATTACKER, SHAPE_B_ALIAS),
+        },
+    ] {
+        gpu.apply(ev).expect("the attacker's own script applies");
+    }
+    let attacker = gpu.spine.by_pdb[&(GPU0, SHAPE_B_ATT_PDB)];
+    assert_eq!(
+        gpu.spine.by_pdb[&(GPU0, SHAPE_B_ORPHAN_PDB)],
+        attacker,
+        "precondition: a user↔user share makes the two namespaces ONE `Proc`"
+    );
+    // The attacker publishes into the plane it is about to orphan — so the state a
+    // recycled namespace could inherit is real host memory, not an empty shell.
+    core_publish(&mut gpu, GPU0, SHAPE_B_ORPHAN_PDB, VA_WARM).expect("the attacker publishes");
+    let attacker_hosts = host_identities(&gpu.procs[&attacker]);
+
+    // ---- The attacker frees the namespace's root. The VASpace survives on its alias
+    // (RM's refcount), so its component survives with it — a `Proc` of its own, since the
+    // edge is no longer a grouping edge once the source namespace has no live root.
+    gpu.apply(RmEvent::Free {
+        client: SHAPE_B_RECYCLED,
+        handle: HObject(SHAPE_B_RECYCLED.0),
+    })
+    .expect("the attacker frees the root it will hand back");
+    let orphan = kayfabe_fwd::route_pdb(&gpu.spine, GPU0, SHAPE_B_ORPHAN_PDB)
+        .expect("the orphaned VASpace is still alive and still routes — RM's refcount");
+    assert_ne!(orphan, attacker, "freeing the root split the component");
+    let orphan_iso = gpu.procs[&orphan].isolates[&GPU0].id();
+    let orphan_arena = gpu.procs[&orphan].arenas[&GPU0].range.clone();
+
+    // ---- ★ The victim is handed that `hClient`. Its own first event is its client root,
+    // and it MUST be accepted: RM recycles by design, so refusing hangs a legal guest.
+    reinit(
+        &mut gpu,
+        SHAPE_B_RECYCLED,
+        SHAPE_B_VICTIM_PDB,
+        SHAPE_B_VICTIM_GR,
+        SHAPE_B_VICTIM_CE,
+        GPU0,
+    );
+
+    // ---- ★★ THE BREACH.
+    let victim = gpu
+        .spine
+        .by_pdb
+        .get(&(GPU0, SHAPE_B_VICTIM_PDB))
+        .copied()
+        .expect("★★ the victim's own address plane was never materialized");
+    assert_ne!(
+        victim, orphan,
+        "★★ the victim INHERITED the previous tenant's `Proc` — its isolate (one host RM \
+         client namespace), its GPA arena, its host VAS and its `pending_release` queue — \
+         because the two were matched on a recyclable `hClient` VALUE"
+    );
+    assert_ne!(
+        victim, attacker,
+        "★★ the victim was merged into the ATTACKER's `Proc` by a dup edge whose `src` \
+         names a namespace the attacker had already freed"
+    );
+    assert_eq!(
+        gpu.procs[&victim].clients,
+        BTreeSet::from([SHAPE_B_RECYCLED]),
+        "★★ the victim's component must hold the victim's client and nothing else"
+    );
+    assert_eq!(
+        kayfabe_fwd::route_pdb(&gpu.spine, GPU0, SHAPE_B_ORPHAN_PDB),
+        Err(FwdFault::UnknownPdb {
+            gpu: GPU0,
+            pdb: SHAPE_B_ORPHAN_PDB
+        }),
+        "★★ the SUPERSEDED declaration's address plane must belong to nobody — routable \
+         means routable to a `Proc`, and there is no longer one it can honestly name. \
+         `UnknownPdb`, by name, not an anonymous miss"
+    );
+    assert_ne!(
+        gpu.procs[&victim].isolates[&GPU0].id(),
+        orphan_iso,
+        "★★ the victim came up in the previous tenant's isolate"
+    );
+    let victim_arena = gpu.procs[&victim].arenas[&GPU0].range.clone();
+    assert!(
+        victim_arena.end <= orphan_arena.start || orphan_arena.end <= victim_arena.start,
+        "★★ the victim carved into the previous tenant's GPA arena: {victim_arena:?} vs \
+         {orphan_arena:?}"
+    );
+    assert!(
+        host_identities(&gpu.procs[&victim]).is_disjoint(&attacker_hosts),
+        "★★ the victim came up holding a host object the attacker minted"
+    );
+
+    // ---- …and it is genuinely SERVED, end to end, in its own lane.
+    let rung = publish_and_ring(
+        &mut gpu,
+        GPU0,
+        SHAPE_B_VICTIM_PDB,
+        SHAPE_B_VICTIM_GR,
+        VA_CTL,
+    );
+    assert_eq!(rung.proc, victim);
+    assert_eq!(
+        token_lane(rung.host_token),
+        (victim.0 + 1, GPU0.0),
+        "★ the victim rang a host token minted in its OWN isolate lane"
+    );
+
+    // ---- The previous tenant's host state left through the ordinary staged path: nothing
+    // was freed twice and nothing reached across an isolate namespace.
+    let l = rec.lock().expect("recorder").ledger();
+    assert_eq!(
+        (
+            l.double_free.as_slice(),
+            l.free_of_unknown.as_slice(),
+            l.unmap_of_unknown.as_slice()
+        ),
+        (&[][..], &[][..], &[][..]),
+        "★ the supersession reclaimed nothing twice and reached across no namespace"
+    );
+    // The attacker is undisturbed — it earned its own outcome and nobody else's.
+    core_publish(&mut gpu, GPU0, SHAPE_B_ATT_PDB, VA_HELD).expect("the attacker keeps working");
+}
+
+/// The bystander user client that aliases a CONDEMNED component's resource — a
+/// *reference* across the condemnation line, never a merge (§12.37 C1), and the thing
+/// that keeps the corpse's resource alive after the guest frees its root.
+const KEEPALIVE_CLIENT: HClient = HClient(0xDE);
+/// [`KEEPALIVE_CLIENT`]'s own PDB.
+const KEEPALIVE_PDB: Pdb = Pdb(0x5700_0000);
+/// [`KEEPALIVE_CLIENT`]'s GR vChid.
+const KEEPALIVE_GR: VChid = VChid(0x18c);
+/// [`KEEPALIVE_CLIENT`]'s CE vChid.
+const KEEPALIVE_CE: VChid = VChid(0x28c);
+/// The handle it holds the condemned VASpace under.
+const KEEPALIVE_ALIAS: HObject = HObject(0x7e00_0001);
+/// The PDB of the process that is later handed the dead component's `hClient`.
+const REBORN_PDB: Pdb = Pdb(0x5800_0000);
+/// That process's GR vChid.
+const REBORN_GR: VChid = VChid(0x18d);
+/// That process's CE vChid.
+const REBORN_CE: VChid = VChid(0x28d);
+
+/// ★★★ **THE HANGS-A-LEGAL-GUEST GATE: a recycled namespace is a DIFFERENT component and
+/// is NOT condemned** (`l1_concurrency.md` §12.39, and §12.37's C2 one turn further).
+///
+/// This is the test that fails if anyone ever "fixes" the recycled-namespace vector by
+/// refusing to re-declare a namespace that still holds live resources. RM recycles
+/// `hClient` values **by design** — a caller-supplied `hRoot` is honoured verbatim
+/// (`ogkm src/nvidia/src/libraries/resserv/src/rs_server.c:612`, the reject guard compiled
+/// out at `:613-616` under `RS_COMPATABILITY_MODE=1`), the generator wraps at 2^20 per
+/// driver load with no free list (`:3319-3341`), and there is no epoch anywhere in RM's
+/// own structs to tell two lifetimes apart. Refusing the successor's `Alloc(Client)` would
+/// refuse a *victim* for a *predecessor's* state: the bystander-refusal shape §12.37 was
+/// written to remove.
+///
+/// It also closes the hole §12.37's C2 shrink could not reach on its own, and the two
+/// halves are asserted in order:
+///
+/// 1. **the corpse stays dead** — an orphaned resource of a condemned component keeps
+///    answering the exact [`FwdFault::Condemned`] even after its own namespace's root is
+///    freed, because the entry names a `ClientId` that is never reused;
+/// 2. **the successor lives** — the very next process handed that `hClient` value gets its
+///    own live `Proc`, its own isolate, its own arena, and is servable end to end.
+///
+/// Under an `HClient`-keyed condemnation those two are in direct conflict: the orphan
+/// keeps the dead value in the projection, so C2's shrink never drops it, so the entry
+/// still contains the value the guest hands out next — and the successor is condemned on
+/// arrival, silently, on its own first RM event.
+#[test]
+fn a_recycled_namespace_is_a_different_component_and_is_not_condemned() {
+    let _wd = watchdog("recycled_not_condemned", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    let (doomed, lane) = (pids[P_HUP], lane_of(P_HUP));
+    let condemned = FwdFault::Condemned {
+        anchor: ProcAnchor(client_of(P_HUP)),
+    };
+
+    // A bystander that will keep one of the doomed component's resources alive.
+    reinit(
+        &mut gpu,
+        KEEPALIVE_CLIENT,
+        KEEPALIVE_PDB,
+        KEEPALIVE_GR,
+        KEEPALIVE_CE,
+        GPU1,
+    );
+    core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the doomed proc publishes while alive");
+
+    // ---- The worker dies out of band: the component is condemned (§12.13).
+    assert!(core_retire_out_of_band(&mut gpu, doomed));
+    assert!(gpu.spine.is_condemned(client_of(P_HUP)));
+
+    // The bystander aliases one of the corpse's objects. A dup across the condemnation
+    // line is a REFERENCE, never a merge — so the bystander stays live…
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_HUP), H_VASPACE),
+        dst: NodeKey::new(KEEPALIVE_CLIENT, KEEPALIVE_ALIAS),
+    })
+    .expect("a cross-line alias applies");
+    assert!(
+        !gpu.spine.is_condemned(KEEPALIVE_CLIENT),
+        "a live client that aliases a corpse does not inherit its fatality (§12.37 C1)"
+    );
+
+    // ---- The guest frees the dead component's client root. Its VASpace survives on the
+    // bystander's alias (RM's refcount), so the corpse's namespace is still in the
+    // projection — which is exactly what used to keep its freed `hClient` VALUE poisoned.
+    gpu.apply(RmEvent::Free {
+        client: client_of(P_HUP),
+        handle: identical_handles(lane.gr.0, lane.ce.0).client_root,
+    })
+    .expect("the client-root free applies");
+
+    // (1) The corpse stays dead, by name.
+    assert_eq!(
+        core_publish(&mut gpu, GPU1, lane.pdb, VA_HELD),
+        Err(condemned),
+        "★★ an orphaned resource of a condemned component stopped answering `Condemned` \
+         once its own namespace's root was freed — condemnation must not depend on a \
+         handle VALUE still being 'known'"
+    );
+    assert!(gpu.spine.is_condemned(client_of(P_HUP)));
+
+    // ---- ★★ (2) The successor: an ordinary new process, handed the dead component's
+    // `hClient`. Its own first event is its own client root, and it MUST be accepted.
+    reinit(
+        &mut gpu,
+        client_of(P_HUP),
+        REBORN_PDB,
+        REBORN_GR,
+        REBORN_CE,
+        GPU1,
+    );
+    assert!(
+        !gpu.spine.is_condemned(client_of(P_HUP)),
+        "★★ a process was condemned on arrival because its `hClient` landed on a value a \
+         dead component still held — a bystander refusal, and the guest cannot recover \
+         from it because it did nothing"
+    );
+    let reborn = gpu.spine.by_pdb.get(&(GPU1, REBORN_PDB)).copied().expect(
+        "★★ the successor's own address plane was never materialized. Either it was \
+             CONDEMNED on the apply that declared it (a bystander death earned by a \
+             recycled `hClient`), or its VASpace resolved the SUPERSEDED declaration's \
+             `Pdb` because an origin key is not unique among live resources — and nobody \
+             was told either way",
+    );
+    assert_eq!(
+        gpu.procs[&reborn].clients,
+        BTreeSet::from([client_of(P_HUP)]),
+        "★★ the successor's component holds its own client and nothing else"
+    );
+    assert!(
+        gpu.procs[&reborn].isolates.contains_key(&GPU1)
+            && gpu.procs[&reborn].arenas.contains_key(&GPU1),
+        "★★ the successor got no data plane of its own — a live `Proc` needs an isolate \
+         and an arena, or it is a husk"
+    );
+
+    // …and it is genuinely SERVED, end to end, in its own lane.
+    let rung = publish_and_ring(&mut gpu, GPU1, REBORN_PDB, REBORN_GR, VA_CTL);
+    assert_eq!(rung.proc, reborn);
+    assert_eq!(
+        token_lane(rung.host_token),
+        (reborn.0 + 1, GPU1.0),
+        "★ the successor rang a host token minted in its OWN isolate lane"
+    );
+
+    // ---- The bystander was never disturbed by any of it.
+    assert!(!gpu.spine.is_condemned(KEEPALIVE_CLIENT));
+    core_publish(&mut gpu, GPU1, KEEPALIVE_PDB, VA_HELD).expect("the bystander keeps working");
+}
