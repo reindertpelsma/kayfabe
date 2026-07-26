@@ -2940,6 +2940,29 @@ paths arrive with the BQL **held**, so "we take no foreign lock" is not sufficie
 > packaging**. The "wait for it to reach distros" caveat in `qemu_bql_spike.md` §7 is
 > discharged: this is not a bet on a future release.
 >
+> **[src] The API was verified against the `v10.2.0` tag itself, not inherited** — because the
+> whole point of §6.3.1 is that a named API is a claim about a version, and this decision now
+> rests on one:
+> - `void memory_region_enable_lockless_io(MemoryRegion *mr);` — `include/system/memory.h:2354`
+> - `bool lockless_io;` — `:836`
+> - `bool disable_reentrancy_guard;` — `:869`, a field on the **same** struct, so §9.3's
+>   "one helper does both" pairing gate is the natural shape rather than a bolted-on one.
+>
+> **★ Upstream states our own conclusion, independently.** The doc comment reads: *"Enable
+> BQL-free access for devices that are **well prepared to handle locking during I/O
+> themselves**: either by doing fine grained locking or by providing lock-free I/O schemes."*
+> That is R1/R3/R5 becoming load-bearing, in upstream's words. We did not infer that from the
+> 47 % measurement alone; QEMU says it at the door.
+>
+> **Three residuals, named, none blocking.** (1) Users pinned to a *hypervisor stack's* QEMU
+> (Proxmox ships its own; cloud providers pin) cannot freely move the axis — our positioning is
+> the GPU **workstation** (`mode2_graphics_product_angle`), where they can, so this holds for
+> the target user and should be revisited if that positioning changes. (2) **Floor-ratchet
+> discipline:** raising the minimum again must be a deliberate, argued decision, not drift —
+> each raise re-spends the goodwill this one buys. (3) The floor is a **support** decision, not
+> a design one: the VMM-agnostic seam (§6.3's class rule, the CH escape) stays exactly as it is,
+> and no QEMU version may be allowed to leak into the core's vocabulary.
+>
 > **★ It also makes US cheaper, which is the part the spike under-weighted.** Carrying a
 > backport means owning a **patched QEMU fork**: a tracked patch, a rebase every release, a
 > build script that must produce it, and a supply-chain claim we make to every user forever.
