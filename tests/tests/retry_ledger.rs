@@ -49,17 +49,17 @@ use std::thread;
 use std::time::{Duration, Instant as WallInstant};
 
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
+use kayfabe_core::ProcId;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
-use kayfabe_core::{ProcId, gpu::Proc};
 use kayfabe_fwd::{FwdFault, Stale};
-use kayfabe_isolate::{HostHandle, IsolateId};
+use kayfabe_isolate::IsolateId;
 use kayfabe_mocks::{
     HoldSpec, MockArch, MockIsolateFactory, SharedRecorder, VerbHold, VerbKind, mock_classes as mc,
 };
 use kayfabe_rt::device::{LockMode, SharedDevice};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Scenario, identical_handles, reachable_maps, reachable_objects};
 
 // ---------------------------------------------------------------------------------
 // Harness
@@ -147,51 +147,6 @@ fn hold_any(rec: &SharedRecorder, pid: ProcId, verb: VerbKind) -> Arc<VerbHold> 
     rec.lock()
         .expect("recorder")
         .hold(HoldSpec::on_isolate(IsolateId(pid.0), verb))
-}
-
-// ---------------------------------------------------------------------------------
-// The ledger's counterpart: what core state still legitimately OWNS
-// ---------------------------------------------------------------------------------
-
-/// Every host object reachable from one `Proc`'s state — its `Vas`es' host VASes, the
-/// host memory behind every published binding, and its channels' host objects.
-///
-/// This is the other half of the ledger assertion, and the half that makes it a
-/// statement about *correctness* rather than about verb arithmetic: an object the mock
-/// minted is legitimate iff the core can still name it. Anything outstanding that is
-/// **not** in this set is a leak by definition — nothing will ever free it, because
-/// nothing can address it.
-fn reachable_objects(proc: &Proc) -> BTreeSet<HostHandle> {
-    let mut live = BTreeSet::new();
-    for vas in proc.vases.values() {
-        live.extend(vas.host_vas);
-        for (_va, _len, binding) in vas.table.iter() {
-            live.extend(binding.host_memory());
-        }
-    }
-    for chan in proc.channels.values() {
-        live.extend(chan.host_channel);
-        live.extend(chan.host_engine_objects.values().copied());
-    }
-    live
-}
-
-/// Every host GPU mapping reachable from one `Proc`'s state, as the ledger keys them:
-/// `(host VAS, host GPU VA)`. A published binding is mapped in its OWN `Vas`'s host VAS
-/// (the per-`Vas` #14 fix), so the pair is derivable without consulting the verb log.
-fn reachable_maps(proc: &Proc) -> BTreeSet<(HostHandle, u64)> {
-    let mut live = BTreeSet::new();
-    for vas in proc.vases.values() {
-        let Some(host_vas) = vas.host_vas else {
-            continue;
-        };
-        for (_va, _len, binding) in vas.table.iter() {
-            if let Some(host_va) = binding.host_va() {
-                live.insert((host_vas, host_va));
-            }
-        }
-    }
-    live
 }
 
 // ---------------------------------------------------------------------------------
@@ -328,36 +283,36 @@ fn converging_retries_release_every_host_object_they_allocated() {
 /// Runs entirely on the test thread while the publisher is parked lock-free inside its
 /// mapping verb, so it needs no hold of its own.
 ///
-/// Returns **exactly what this round left outstanding**: the host objects and mappings
-/// the winning publish minted. They are never freed — dropping a runtime `Vas` abandons
-/// its host backing (per-object reclamation is L1-M2's; the disposition of record is the
-/// isolate session's death, §12.16). Returning them lets the test state the expected
-/// ledger as a *set built by the script*, so the assertion needs no arithmetic and no
-/// assumption about how many attempts the publisher made.
-fn restale_the_vas(
-    device: &SharedDevice,
-    rec: &SharedRecorder,
-    round: u32,
-    winner_va: GpuVa,
-) -> (BTreeSet<HostHandle>, BTreeSet<(HostHandle, u64)>) {
+/// ★ **The round's verb set is itself an assertion**, and L1-M2 changed it. This used to
+/// say *"they are never freed — dropping a runtime `Vas` abandons its host backing
+/// (per-object reclamation is L1-M2's; the disposition of record is the isolate session's
+/// death)"* — and the first run after the T0/G2 fix landed tripped this function's own
+/// unexpected-verb panic with an `UnmapGpuVa`. Freeing the VASpace now queues the
+/// abandoned `Vas`'s host state on the `Proc` (`l1_os_shell.md` §7.6 T0) and the next
+/// verb-issuing op on an **idle** isolate drains it, so `Free`/`UnmapGpuVa` are now part
+/// of what a round may legally issue. The arm stays strict about everything else: "the
+/// round does exactly this and nothing more" is an assertion, not a hope.
+///
+/// It deliberately does **not** try to predict *which* round drains what. The drain fires
+/// on the first checkout that finds the isolate idle, which — with a publisher parked
+/// across the whole round — is the *loser's own re-plan*, after this window closes. The
+/// residue is therefore asserted where it belongs: as a set equality against core state at
+/// the end of the run.
+fn restale_the_vas(device: &SharedDevice, rec: &SharedRecorder, round: u32, winner_va: GpuVa) {
     let mark = rec.lock().expect("recorder").log.len();
     restale_and_win(device, round, winner_va);
     let rec = rec.lock().expect("recorder");
-    let mut objects = BTreeSet::new();
-    let mut maps = BTreeSet::new();
     for (_iso, verb) in &rec.log[mark..] {
         match verb {
-            kayfabe_mocks::RmVerb::AllocVaSpace { handle }
-            | kayfabe_mocks::RmVerb::AllocSysmem { handle, .. } => {
-                objects.insert(*handle);
-            }
-            kayfabe_mocks::RmVerb::MapGpuVa { vas, va, .. } => {
-                maps.insert((*vas, *va));
-            }
+            kayfabe_mocks::RmVerb::AllocVaSpace { .. }
+            | kayfabe_mocks::RmVerb::AllocSysmem { .. }
+            | kayfabe_mocks::RmVerb::MapGpuVa { .. }
+            // ★ T0's drain, riding out on a checked-out worker.
+            | kayfabe_mocks::RmVerb::Free { .. }
+            | kayfabe_mocks::RmVerb::UnmapGpuVa { .. } => {}
             other => panic!("the re-stale round issued an unexpected verb: {other:?}"),
         }
     }
-    (objects, maps)
 }
 
 /// The mutation half of [`restale_the_vas`].
@@ -409,14 +364,21 @@ fn restale_and_win(device: &SharedDevice, round: u32, winner_va: GpuVa) {
 /// into the next round. After the bound is exhausted the op surfaces `Stale::Rebound` —
 /// the fault, not a hang and not a success.
 ///
-/// **The expected ledger is built by the script, not computed from a formula.** Each
-/// re-stale round returns exactly the host objects and mappings its winning publish left
-/// outstanding (a rebuilt `Vas` abandons the previous one's backing — the declared,
-/// deferred reclamation gap, §12.16). Their union is therefore the *whole* legitimate
-/// residue of the run: if the publisher's final, refused attempt kept anything, the
-/// outstanding set is strictly larger than that union and this assertion names the extra
-/// handle. That is the bound's question — "is the last attempt's allocation released?" —
-/// answered by set equality rather than by counting verbs.
+/// **The expected ledger is the SET EQUALITY, not a script-built union** — which is a
+/// change L1-M2's T0/G2 fix forced, and an improvement. Before it, a rebuilt `Vas`
+/// abandoned the previous one's host backing forever, so the residue was "whatever the
+/// script itself dropped on the floor" and had to be accumulated round by round. Now
+/// freeing the VASpace queues that state on the `Proc` and the next verb-issuing op on an
+/// **idle** isolate drains it (`l1_os_shell.md` §7.6 T0), so the residue is simply: what
+/// core state can still name, plus what is still queued and not yet released. Draining at
+/// the end (`drain_pending_releases`, T0's backstop sweep — the publisher has joined, so
+/// the isolate is genuinely idle) removes the second term, and the assertion becomes the
+/// same one the headline test makes: `Outstanding(ledger) == Reachable(core state)`.
+///
+/// That is a strictly stronger statement of the bound's own question. If the attempt that
+/// exhausted the retry bound had kept its allocation, that handle would be outstanding and
+/// nameable by nothing — which is the definition of a leak and exactly what the equality
+/// reports.
 ///
 /// The round count is read from [`MAX_COMMIT_RETRIES`] rather than copied: one round per
 /// attempt the bound permits. Reading it is what stops this test from silently ceasing to
@@ -433,19 +395,15 @@ fn the_commit_retry_bound_still_releases_the_attempt_that_hits_it() {
     let d = Arc::clone(&device);
     let loser = thread::spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
 
-    let mut expect_objects: BTreeSet<HostHandle> = BTreeSet::new();
-    let mut expect_maps: BTreeSet<(HostHandle, u64)> = BTreeSet::new();
     for round in 0..rounds {
         // The progress EDGE: this attempt has allocated and is inside its mapping verb.
         held.wait_until_pending();
-        let (objects, maps) = restale_the_vas(
+        restale_the_vas(
             &device,
             &rec,
             round,
             GpuVa(VA.0 + 0x100_0000 + u64::from(round) * 0x1_0000),
         );
-        expect_objects.extend(objects);
-        expect_maps.extend(maps);
         // Arm the NEXT round's hold BEFORE releasing this one, so the re-planned attempt
         // parks instead of racing the script.
         let next = hold_any(&rec, pid, VerbKind::MapGpuVa);
@@ -462,13 +420,28 @@ fn the_commit_retry_bound_still_releases_the_attempt_that_hits_it() {
         "the bound surfaces the converging fault rather than spinning on it"
     );
 
+    // ★ T0's backstop sweep, now that the isolate is genuinely idle: whatever the last
+    // round's VASpace free queued is released here rather than waiting for an op that
+    // will never come (the publisher has given up).
+    device.drain_pending_releases();
+
     // ★ The bound's own question, as a set equality.
     let ledger = rec.lock().expect("recorder").ledger();
+    let gpu = Arc::try_unwrap(device)
+        .unwrap_or_else(|_| panic!("every thread joined"))
+        .into_gpu();
+    let proc = &gpu.procs[&pid];
+    assert_eq!(
+        proc.pending_release_len(),
+        0,
+        "the backstop sweep left something queued on an idle isolate"
+    );
     assert_eq!(
         ledger.leaked_on(IsolateId(pid.0)),
-        expect_objects,
-        "the ONLY host objects still outstanding are the ones the re-stale script itself \
-         abandoned — the attempt that exhausted the retry bound released its own"
+        reachable_objects(proc),
+        "every host OBJECT still outstanding is one core state can name — the attempt \
+         that exhausted the retry bound released its own, and every `Vas` the re-stale \
+         script rebuilt gave its predecessor's back"
     );
     assert_eq!(
         ledger
@@ -476,7 +449,7 @@ fn the_commit_retry_bound_still_releases_the_attempt_that_hits_it() {
             .get(&IsolateId(pid.0))
             .cloned()
             .unwrap_or_default(),
-        expect_maps,
+        reachable_maps(proc),
         "likewise for mappings: every attempt unmapped what it mapped, the refused one \
          included"
     );

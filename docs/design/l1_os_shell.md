@@ -1052,10 +1052,23 @@ and its isolate is healthy. Nothing dies, so nothing reclaims. Design:
   `publish_backing` binding is never unbound by *any* path today. The publish path must
   register its bindings where the unbind path can see them, or T0 leaks exactly the
   allocations the data plane makes most of.
-- **Ledger:** this is the trigger the conservation invariant exists for. A long-running
+- **Ledger:** this is the trigger the conservation invariant exists for. ~~A long-running
   process that maps and unmaps in a loop is the mean test's `ctl_workload` — so T0 is
   already being exercised thousands of times per run, and is today silently leaking every
-  time.
+  time.~~ **★ MEASURED AND WRONG (§14.1, `l1_concurrency.md` §12.32).** `ctl_workload`'s
+  churn adds and removes *RPC* bindings, whose `Binding::host` is `None`: they own no host
+  object, so dropping them leaks nothing. The mean run's other two subset-frees target
+  channels the script deliberately leaves virgin. **T0 was not exercised at all**, and the
+  first conservation census over the unmodified script correctly reported zero. Reaching it
+  needed a new phase (`t0_churn`) that materializes host state *before* it frees — which is
+  the general lesson: a reclamation test that does not first allocate proves nothing.
+- **★ And the drain needs a precondition this section did not have.** "At the next
+  verb-issuing op" is not sufficient: freeing a host object underneath a verb that is still
+  *using* it is a use-after-free, and no lock can exclude an in-flight verb because verbs run
+  lock-free by construction. The drain fires only when that `(proc, gpu)` isolate is
+  otherwise **idle** — `Isolate::is_quiesced`, the same predicate T3's reap uses for the same
+  reason. Consequence, named in §14.1: T0 is lazier than this section describes, and a
+  never-idle proc needs the backstop sweep to be armed by a real trigger (M2-f).
 
 **T1 — Verb cancelled mid-flight** (§7.1–§7.5).
 Cancel latched → discharged lock-free → `EINTR` → `Interrupted` → the chain's own unwind
@@ -1829,6 +1842,57 @@ silently — which is why M2-c's gate is an assert about lock state and not a pa
 > 4. **T0's opportunistic drain will be too lazy for some workload**, and the first symptom
 >    will be an arena filling (G6) rather than a leak report — i.e. it will present as
 >    exhaustion, not as an accounting failure, which is the harder thing to read.
+
+### 14.1 M2-a — the ledger, the baseline, and T0/G2
+
+Full account in `l1_concurrency.md` §12.32. What belongs here is the **gate** ("the ledger
+balances in both lock modes, or every imbalance is a named finding") and the residue.
+
+**The baseline, measured before anything was fixed** (per mean run, identical in both lock
+modes): **24 host objects** (6 host VAS + 6 sysmem + 6 channel + 6 engine object), **6 host
+mappings** and **24 576 GPA bytes** outstanding on *live* procs and nameable by nothing —
+exactly 4 objects + 1 mapping + one 4 KiB block per subset-free, linear in the number of
+frees. Zero dangling, zero double-frees, zero cross-namespace frees.
+
+**★ And the first census read zero, which was a true negative.** The mean script's two
+existing subset-frees target channels phase 0 deliberately leaves virgin, so `retain` was
+dropping `Channel`s with no host state. §7.6 T0's claim that *"T0 is already being exercised
+thousands of times per run by `ctl_workload`"* was **wrong**: that workload's RM map churn
+only adds and removes *RPC* bindings (`Binding::host == None`), which own nothing host-side.
+Reaching T0 required a new `t0_churn` phase. Corrected here rather than left to imply
+coverage that did not exist.
+
+**Post-fix the ledger balances: 0 / 0 / 0**, both modes. Three residues are named rather
+than zeroed:
+
+1. **Namespace-death residue — 6 objects, 2 mappings.** The two out-of-band-retired procs'
+   host state. A retired isolate refuses every verb, disposal included, so §7.0's process
+   boundary is the disposition of record. Pinned at its exact value, so it cannot drift
+   silently.
+2. **★ T0's drain is LAZIER than §7.6 T0 describes, and deliberately.** The design says
+   "opportunistically at the next verb-issuing op"; the implementation says "at the next
+   verb-issuing op **that finds the isolate otherwise idle**". Draining unconditionally is a
+   use-after-free — it freed a host VAS underneath a parked mapping verb, measured, §12.32 —
+   and no lock can exclude an in-flight verb, only `is_quiesced` can. **This is prediction 4
+   above, arriving early and for a different reason than predicted:** the laziness is not a
+   tuning choice, it is forced. A continuously-saturated multi-threaded proc holds its queue
+   until an idle moment or a quiesce-edge sweep. Today the sweep is called explicitly
+   (`SharedDevice::drain_pending_releases`); **M2-f owes it a trigger** — the GSP
+   re-handshake / fn-47 idle edge that T3 already uses is the obvious one, and it is the same
+   edge, so this is a wiring debt rather than a design gap. Until then, the exhaustion
+   symptom prediction 4 describes is reachable in principle for a proc that never goes idle.
+3. **R6 beyond the T0 path is untouched.** The GPA census now *measures* intra-arena
+   occupancy that no `Vas::blocks` token can name, and T0 returns its blocks — but nothing
+   else does. A publication never unpublished still holds its block for the life of the proc,
+   which is correct (it is reachable) and is not what G6 warns about.
+
+**Not done in M2-a, from §10's stage description:** the `fail_next` replacement (the mock's
+single global one-shot injection point becoming per-verb targeted) and §7.8's L4–L7 —
+ordering, core-side arena/source/worker accounting, the inbox and the right-window check.
+L4's *mapping never outlives its VAS* half is enforced structurally by the release order and
+observed by `unmap_of_unknown`; the rest need machinery later stages build (R3/R4/R5 have no
+raw seam yet, R7/R8/R10/R11 are core-side counters). None of them is blocked; they were
+simply not this stage's product, which was the instrument and the baseline.
 
 ---
 

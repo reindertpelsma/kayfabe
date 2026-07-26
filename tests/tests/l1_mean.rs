@@ -125,7 +125,7 @@ use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
 use kayfabe_rt::executor::{Effect, Executor};
 use kayfabe_rt::inbox::{CoreEvent, inbox};
 use kayfabe_rt::lock;
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Scenario, identical_handles, reachable_maps, reachable_objects};
 use kayfabe_util::Instant;
 
 // =================================================================================
@@ -339,6 +339,27 @@ const VA_CHURN: u64 = 0x80_0000_0000;
 const VA_NEVER: GpuVa = GpuVa(0x7000_0000_0000);
 /// The publication whose MAP verb is scripted to fail (the mid-chain failure script).
 const VA_FAIL: u64 = 0x30_0000_0000;
+/// ★ T0's lane: the VA the subset-churn publishes into the VASpace it is about to free.
+const VA_T0: u64 = 0x40_0000_0000;
+
+// ---- ★ T0 (`l1_os_shell.md` §7.6 T0 / gap G2): the guest frees a SUBSET of its
+// objects while the process keeps running. Identical values on both GPUs, like the
+// lanes, so a routing collapse would show here too.
+
+/// How many allocate→use→free rounds the T0 churn runs per proc. Three, not one: T0's
+/// claim is about a *steady state* (a training job's map/unmap loop), so the script has
+/// to show the residue ACCUMULATING rather than a single one-shot drop.
+const T0_ROUNDS: u32 = 3;
+/// The page-directory base the T0 churn declares (distinct from every lane's).
+const T0_PDB: Pdb = Pdb(0x3700_0000);
+/// The vChid the T0 churn's throw-away GR channel takes.
+const T0_VCHID: VChid = VChid(0x300);
+/// Handle base for the T0 churn's VASpaces (one per round — a real guest reuses handle
+/// values, but distinct ones keep the graph's alloc-over-a-live-handle refusal out of
+/// the script's way).
+const T0_VAS: HObject = HObject(0x5c00_0200);
+/// Handle base for the T0 churn's channels (one per round).
+const T0_CHAN: HObject = HObject(0x5c00_0300);
 
 /// Os-event refs the script signals through the §6 reactor. Distinct per signal, so
 /// completion conservation is countable (`ack` removes by ref, so a duplicate ref would
@@ -493,6 +514,14 @@ struct MeanReport {
     publications: usize,
     /// Procs reaped at the quiesce point, then again.
     reaped: (usize, usize),
+    /// ★ The conservation ledger's leak set at quiesce, as `(objects, mappings)`:
+    /// outstanding on a **live** proc and unreachable from core state. Mode-independent
+    /// because it is script-driven — the retry paths release what they allocate
+    /// (`retry_ledger.rs`), so nothing here depends on which thread won a race.
+    leaked: (usize, usize),
+    /// The §7.0 namespace-death residue at quiesce, as `(objects, mappings)`: reported,
+    /// not asserted to be zero — a reaped isolate's whole handle namespace dies with it.
+    session_death: (usize, usize),
 }
 
 // =================================================================================
@@ -684,6 +713,106 @@ fn sync_workload(device: &SharedDevice, pids: &[ProcId], i: usize) -> BTreeSet<O
         assert_eq!(lock::held_depth(), 0, "the completion op leaked a guard");
     }
     seen
+}
+
+/// ★★ **T0 — the guest frees a SUBSET of its objects while the process keeps running**
+/// (`l1_os_shell.md` §7.6 T0, gap G2; §7.0's one exception).
+///
+/// Every other teardown path in this file ends with something *dying*: a proc retires, a
+/// worker HUPs, an isolate is reaped — and §7.0's backstop (*"the isolate process
+/// boundary is the garbage collector"*) covers all of them. This is the path where
+/// **nothing dies**. The proc stays live, its isolate stays healthy, and `Spine::refresh`'s
+/// `p.vases.retain(…)` / `p.channels.retain(…)` simply drop the `Vas` and `Channel`
+/// values — with `host_vas`, the bindings' `host`, `host_channel`, `host_token`,
+/// `host_engine_objects` and the `GpaBlock`s still inside them.
+///
+/// So the script has to actually MATERIALIZE host state before it frees, or it proves
+/// nothing: phase 0 deliberately leaves the canary procs' GR channels VIRGIN, and the two
+/// subset-frees the run already performed (`P_CHANFREE`, `P_REROUTE`) therefore dropped
+/// `Channel`s holding `host_channel: None`. Measured: with only those, the conservation
+/// census reported **zero** leaked objects — a true negative that says the script never
+/// reached T0, not that T0 is safe.
+///
+/// Each round, on ONE live proc, does what a training job does in its steady state:
+///
+/// 1. declare a fresh VASpace + PDB, and **publish backing into it** — host VAS, host
+///    memory, a host GPU mapping, and a `GpaBlock` carved from the proc's own arena;
+/// 2. declare a fresh GR channel on the proc's *main* VASpace, **ring it** (host channel
+///    plus host work-submit token) and **forward an engine object** onto it — so the exec
+///    plane's half of the leak is real too, and independent of the address plane's;
+/// 3. **free the channel**, then **free the VASpace** — in that order, because RM frees
+///    children and dependents ahead of parents, and because freeing the VASpace first
+///    would make the channel's own drop a consequence rather than an independent probe.
+///
+/// Run from the main thread inside the composed window (device WRITEs and verb ops, with
+/// five host verbs parked and six workload threads hot), never quiesced beside it: the
+/// §12.13 lesson is that an isolated case tests what you thought of.
+fn t0_churn(device: &SharedDevice, i: usize, round: u32) {
+    let (gpu, client) = (gpu_of(i), client_of(i));
+    let vas = HObject(T0_VAS.0 + round);
+    let chan = HObject(T0_CHAN.0 + round);
+    let handles = identical_handles(0, 0);
+
+    // (1) a fresh VASpace with its own PDB, and a publication into it.
+    device
+        .apply(RmEvent::Alloc {
+            client,
+            parent: H_DEVICE,
+            handle: vas,
+            class: mock_classes::VASPACE,
+            facts: AllocFacts::default(),
+        })
+        .expect("T0: the guest declares a VASpace");
+    device
+        .apply(RmEvent::SetPageDir {
+            client,
+            vaspace: vas,
+            pdb: T0_PDB,
+        })
+        .expect("T0: and binds a page directory to it");
+    device
+        .publish_backing(gpu, T0_PDB, GpuVa(VA_T0), 0x1000)
+        .expect("T0: the guest publishes backing into the VASpace it will free");
+
+    // (2) a fresh GR channel on the proc's MAIN VASpace, rung and given an engine object.
+    device
+        .apply(RmEvent::Alloc {
+            client,
+            parent: handles.tsg,
+            handle: chan,
+            class: mock_classes::CHANNEL_GR,
+            facts: AllocFacts {
+                h_vaspace: Some(handles.vaspace),
+                userd_flags: MockArch::userd_flags_for(T0_VCHID),
+                ..Default::default()
+            },
+        })
+        .expect("T0: the guest declares a channel");
+    let rung = device
+        .doorbell(gpu, MockArch::token_for(T0_VCHID), &[])
+        .expect("T0: the guest rings it, materializing a host channel + token");
+    assert_eq!(
+        token_lane(rung.host_token),
+        (ProcId(rung.proc.0).0 + 1, gpu.0),
+        "T0's channel was materialized in another (proc, GPU)'s isolate"
+    );
+    device
+        .forward_engine_object(gpu, T0_VCHID, kayfabe_tests::COMPUTE_CLASS, &[])
+        .expect("T0: and forwards a Case-1 engine object onto it");
+
+    // (3) the subset free — channel first (children before parents), then the VASpace.
+    device
+        .apply(RmEvent::Free {
+            client,
+            handle: chan,
+        })
+        .expect("T0: the guest frees the channel and keeps running");
+    device
+        .apply(RmEvent::Free {
+            client,
+            handle: vas,
+        })
+        .expect("T0: the guest frees the VASpace and keeps running");
 }
 
 // =================================================================================
@@ -885,6 +1014,17 @@ fn mean_run(mode: LockMode) -> MeanReport {
             );
             observed += 2;
 
+            // (f) ★★ T0 (G2): two LIVE procs, on the two GPUs, each running the
+            // allocate→use→free steady state of a real long-running workload. This is
+            // the one lifecycle path §7.0's process-boundary backstop does not cover,
+            // and it is composed into the same window as everything else — five parked
+            // verbs, six workload threads, and the retires/reroutes above.
+            for round in 0..T0_ROUNDS {
+                for i in [P_WITNESS, P_PEER] {
+                    t0_churn(dev, i, round);
+                }
+            }
+
             // ---- Phase 6: JOIN the workloads. ★★ THE PARALLELISM ASSERTION: these joins
             // returning AT ALL, with five host verbs still parked (two of them on the
             // witness's OWN isolate), IS the #37 invariant. If a verb held any lock, or
@@ -955,6 +1095,13 @@ fn mean_run(mode: LockMode) -> MeanReport {
     // its own intermediate (exactly one host `free`, no leak, no double-free). It also
     // pins §12.10's POLARITY: for a LIVE proc the fault is the RM error itself, and
     // staleness is claimed only when the world actually moved.
+    // ★ T0's backstop drain runs FIRST, at the run's first genuinely quiesced moment
+    // (every workload thread joined, every latch released, so every isolate is idle).
+    // Two reasons, and the second is the one that bit: the queue belongs to the *run*,
+    // not to the phase below, and leaving it would make the free-count assertion measure
+    // two things at once — it read 13 instead of 1 the first time T0 landed, because
+    // three churn rounds' worth of queued releases rode out on the same isolate.
+    dev.drain_pending_releases();
     let frees_before = count_frees(&rec, pids[P_WITNESS]);
     let mid_chain_failure = {
         let h_map = hold(&rec, pids[P_WITNESS], GPU0, 0, VerbKind::MapGpuVa);
@@ -1026,6 +1173,16 @@ fn mean_run(mode: LockMode) -> MeanReport {
         }
         dev.completions_drained(g);
     }
+    // ★ T0's backstop drain (§7.6 T0): the opportunistic path releases a queue on the
+    // proc's next verb-issuing op, which covers a busy proc — this covers the one that
+    // went quiet, and the run's declared quiesce point is exactly where it belongs. It
+    // must be idempotent: the second call has nothing left to do.
+    let drained = (dev.drain_pending_releases(), dev.drain_pending_releases());
+    assert_eq!(
+        drained.1, 0,
+        "({mode:?}) the T0 backstop drain is not idempotent — a second sweep at the same \
+         quiesce point still found work"
+    );
     let reaped = (dev.reap_retired(), dev.reap_retired());
     assert_eq!(
         reaped,
@@ -1041,6 +1198,60 @@ fn mean_run(mode: LockMode) -> MeanReport {
         .into_gpu();
     sweep_conservation(&mut gpu, &pids, mode);
 
+    // ---- Phase 12: ★ the conservation ledger (§7.8), composed into THIS run rather
+    // than asserted beside it. The census runs after the final reap and never in a
+    // `Drop` (§7.8's own rule: an assert inside teardown machinery presents as a wedge).
+    let census = census(&gpu, &rec);
+    report_census(&census, &rec, mode);
+    // ★★ THE CONSERVATION INVARIANT, in its strongest form: `Outstanding(ledger) ==
+    // Reachable(core state)` for every LIVE proc, as a **set equality** and not a count
+    // (`retry_ledger.rs`'s lesson, lifted to the whole composed run). An object that
+    // exists and that no `Vas`, binding or channel can name IS a leak, even if the
+    // totals happen to match — and on the T0 path nothing will ever free it, because
+    // nothing can address it.
+    //
+    // MEASURED BASELINE, before the T0/G2 fix (both lock modes, identical): 24 objects
+    // (6 host VAS + 6 sysmem + 6 channel + 6 engine object), 6 mappings, 24576 GPA
+    // bytes — exactly 4 objects + 1 mapping + one 4 KiB block per [`t0_churn`] round,
+    // i.e. linear in the number of subset-frees, which is what "a training job's steady
+    // state" means.
+    assert_eq!(
+        (
+            census.leaked_object_count(),
+            census.leaked_map_count(),
+            census.leaked_gpa_total()
+        ),
+        (0, 0, 0),
+        "({mode:?}) ★★ §7.8 conservation: host objects/mappings/GPA outstanding on a LIVE \
+         proc that core state can no longer name. This is T0 (G2) — the one lifecycle \
+         path with no process-boundary backstop. Leaked: {:?} / {:?} / {:?}",
+        census.leaked_objects,
+        census.leaked_maps,
+        census.leaked_gpa_bytes
+    );
+    assert_eq!(
+        (
+            census.dangling_objects.is_empty(),
+            census.dangling_maps.is_empty()
+        ),
+        (true, true),
+        "({mode:?}) ★ core state names a host object/mapping the ledger says was already \
+         released — a use-after-free shape, not a leak: {:?} / {:?}",
+        census.dangling_objects,
+        census.dangling_maps
+    );
+    let l = rec.lock().expect("recorder").ledger();
+    assert_eq!(
+        (
+            l.double_free.as_slice(),
+            l.free_of_unknown.as_slice(),
+            l.unmap_of_unknown.as_slice()
+        ),
+        (&[][..], &[][..], &[][..]),
+        "({mode:?}) the composed run released something twice, or released something it \
+         never acquired (a cross-namespace reach — boundary 2)"
+    );
+
     MeanReport {
         witness_committed_exactly,
         canary_teardown,
@@ -1052,6 +1263,11 @@ fn mean_run(mode: LockMode) -> MeanReport {
         delivery_ran_under_pending,
         publications,
         reaped,
+        leaked: (census.leaked_object_count(), census.leaked_map_count()),
+        session_death: (
+            census.session_death_object_count(),
+            census.session_death_map_count(),
+        ),
     }
 }
 
@@ -1234,6 +1450,19 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
         gpu.spine.retired.is_empty(),
         "({mode:?}) the reap left retired procs behind"
     );
+    // ★ T0 (§7.6 T0): at a real quiesce point, no live proc still owes a release. This is
+    // the *queue's* half of the conservation assertion below — an object sitting in
+    // `pending_release` is not leaked (the core can still name it) but it is also not
+    // reclaimed, and a drain that silently never fires would look identical to a fixed
+    // leak if only the ledger were checked.
+    for (&pid, p) in &gpu.procs {
+        assert_eq!(
+            p.pending_release_len(),
+            0,
+            "({mode:?}) {pid:?} still owes a T0 release at the quiesce point — the \
+             opportunistic drain and the backstop sweep both missed it"
+        );
+    }
 
     // ---- (4) Completion conservation: exactly the events each proc OWNED reached it,
     // nothing reached a proc that armed nothing, and the queues empty out on ack.
@@ -1375,6 +1604,242 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
 }
 
 // =================================================================================
+// ★★ (8) THE CONSERVATION LEDGER — composed into the mean run (`l1_os_shell.md` §7.8)
+// =================================================================================
+
+/// What a still-outstanding host object **is**, so a leak can be reported by class
+/// rather than as an anonymous count. Read off the mock's own verb log, which is the
+/// single funnel every host verb passes through (§7.8: *"a verb that is not in the
+/// ledger does not exist"*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum HostClass {
+    /// A host VAS (`AllocVaSpace`) — one per `Vas` that ever published.
+    Vas,
+    /// A host memory object (`AllocSysmem`) — one per published backing.
+    Sysmem,
+    /// A host channel (`AllocChannel`).
+    Channel,
+    /// A host engine object on a channel (`AllocEngineObject`).
+    EngineObject,
+    /// Anything else the mock minted (`Alloc`).
+    Other,
+}
+
+/// Classify every handle the log ever minted. One pass, so the census is O(log) rather
+/// than O(log × leaks).
+fn classify_handles(rec: &SharedRecorder) -> BTreeMap<HostHandle, HostClass> {
+    let mut m = BTreeMap::new();
+    for (_iso, v) in &rec.lock().expect("recorder").log {
+        let (h, c) = match v {
+            RmVerb::AllocVaSpace { handle } => (*handle, HostClass::Vas),
+            RmVerb::AllocSysmem { handle, .. } => (*handle, HostClass::Sysmem),
+            RmVerb::AllocChannel { handle, .. } => (*handle, HostClass::Channel),
+            RmVerb::AllocEngineObject { handle, .. } => (*handle, HostClass::EngineObject),
+            RmVerb::Alloc { handle, .. } => (*handle, HostClass::Other),
+            _ => continue,
+        };
+        m.insert(h, c);
+    }
+    m
+}
+
+/// ★ The end-of-run conservation census: `Outstanding(ledger)` split against
+/// `Reachable(core state)`, per isolate, **objects and mappings**.
+///
+/// The split is the whole point, and it is the distinction `HostLedger`'s own docs
+/// insist on: an outstanding handle is not automatically a defect. §7.0 says *the
+/// isolate process boundary is the garbage collector*, so an object outstanding on an
+/// isolate whose `Proc` was reaped has a real disposition — bulk release at namespace
+/// death. An object outstanding on a **live** proc that the core can no longer *name*
+/// has none: nothing will ever free it, because nothing can address it. That second
+/// set is what §7.8's invariant is about and what this census reports separately.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Census {
+    /// ★ **THE LEAK SET.** Live proc, outstanding, and unreachable from core state.
+    /// No backstop exists for these — §7.0's exception, i.e. G2/T0.
+    leaked_objects: BTreeMap<IsolateId, BTreeSet<HostHandle>>,
+    /// The mapping half of the leak set, keyed `(host VAS, host GPU VA)`.
+    leaked_maps: BTreeMap<IsolateId, BTreeSet<(HostHandle, u64)>>,
+    /// The **opposite** imbalance: core state names a host object the ledger says was
+    /// already released. A use-after-free shape, and a strictly worse finding than a
+    /// leak — the set equality catches it in the same comparison.
+    dangling_objects: BTreeMap<IsolateId, BTreeSet<HostHandle>>,
+    /// The mapping half of the dangling set.
+    dangling_maps: BTreeMap<IsolateId, BTreeSet<(HostHandle, u64)>>,
+    /// Outstanding on an isolate whose `Proc` no longer exists (reaped / condemned):
+    /// the §7.0 namespace-death bulk disposition. Reported, never asserted to be zero
+    /// — the mock does not model namespace death as per-object frees.
+    session_death_objects: BTreeMap<IsolateId, BTreeSet<HostHandle>>,
+    /// The mapping half of the namespace-death residue.
+    session_death_maps: BTreeMap<IsolateId, BTreeSet<(HostHandle, u64)>>,
+    /// ★ R6, the **intra-arena** half (§7.8's G6 row): GPA bytes a live proc's arena
+    /// still has handed out that no `Vas::blocks` entry can name. The same leak as
+    /// [`Census::leaked_objects`] one plane down — and the one that eventually takes a
+    /// permanent `FwdFault::Arena` rather than merely burning host handles (#80).
+    leaked_gpa_bytes: BTreeMap<(ProcId, GpuId), u64>,
+}
+
+impl Census {
+    /// Total handles in the leak set (the headline baseline number).
+    fn leaked_object_count(&self) -> usize {
+        self.leaked_objects.values().map(BTreeSet::len).sum()
+    }
+    /// Total mappings in the leak set.
+    fn leaked_map_count(&self) -> usize {
+        self.leaked_maps.values().map(BTreeSet::len).sum()
+    }
+    /// Total handles left to namespace death.
+    fn session_death_object_count(&self) -> usize {
+        self.session_death_objects.values().map(BTreeSet::len).sum()
+    }
+    /// Total mappings left to namespace death.
+    fn session_death_map_count(&self) -> usize {
+        self.session_death_maps.values().map(BTreeSet::len).sum()
+    }
+    /// Total unnameable GPA bytes across every live proc's arenas.
+    fn leaked_gpa_total(&self) -> u64 {
+        self.leaked_gpa_bytes.values().sum()
+    }
+}
+
+/// Take the census of one finished run: replay the recorder into a [`HostLedger`] and
+/// compare it, per isolate, against what the re-assembled core can still name.
+///
+/// `IsolateId == ProcId` by construction (`Gpu` spawns `IsolateId(pid.0)` per target),
+/// and **one `IsolateId` covers both of a proc's per-GPU isolates** — the mock keys its
+/// log by isolate id and namespaces the handle VALUES by GPU, so per-isolate here means
+/// per-`Proc`, which is exactly the granularity [`reachable_objects`] answers at.
+fn census(gpu: &Gpu, rec: &SharedRecorder) -> Census {
+    let ledger = rec.lock().expect("recorder").ledger();
+    let mut c = Census::default();
+    let mut isolates: BTreeSet<IsolateId> = ledger.leaked.keys().copied().collect();
+    isolates.extend(ledger.leaked_maps.keys().copied());
+    for iso in isolates {
+        let outstanding = ledger.leaked_on(iso);
+        let outstanding_maps = ledger.leaked_maps.get(&iso).cloned().unwrap_or_default();
+        let pid = ProcId(iso.0);
+        let live = if pid == Gpu::SYSTEM_PROC {
+            Some(&gpu.system)
+        } else {
+            gpu.procs.get(&pid)
+        };
+        let Some(proc) = live else {
+            // §7.0: the proc is gone, so its isolate session is gone with it. Whatever
+            // is outstanding was disposed of in bulk by the namespace's death.
+            if !outstanding.is_empty() {
+                c.session_death_objects.insert(iso, outstanding);
+            }
+            if !outstanding_maps.is_empty() {
+                c.session_death_maps.insert(iso, outstanding_maps);
+            }
+            continue;
+        };
+        let reachable = reachable_objects(proc);
+        let reachable_m = reachable_maps(proc);
+        let leaked: BTreeSet<HostHandle> = outstanding.difference(&reachable).copied().collect();
+        let dangling: BTreeSet<HostHandle> = reachable.difference(&outstanding).copied().collect();
+        let leaked_m: BTreeSet<_> = outstanding_maps.difference(&reachable_m).copied().collect();
+        let dangling_m: BTreeSet<_> = reachable_m.difference(&outstanding_maps).copied().collect();
+        if !leaked.is_empty() {
+            c.leaked_objects.insert(iso, leaked);
+        }
+        if !dangling.is_empty() {
+            c.dangling_objects.insert(iso, dangling);
+        }
+        if !leaked_m.is_empty() {
+            c.leaked_maps.insert(iso, leaked_m);
+        }
+        if !dangling_m.is_empty() {
+            c.dangling_maps.insert(iso, dangling_m);
+        }
+    }
+    // ★ R6's intra-arena half, per (proc, target): what the arena still has handed out
+    // versus what the proc's own `Vas::blocks` tokens can still name. `GpaBlock` is
+    // move-only, so a block dropped with its `Vas` is unrecoverable by construction —
+    // which is exactly why the difference is a *leak* and not merely an accounting gap.
+    for (&pid, proc) in gpu
+        .procs
+        .iter()
+        .chain(core::iter::once((&Gpu::SYSTEM_PROC, &gpu.system)))
+    {
+        for (&g, arena) in &proc.arenas {
+            let named: u64 = proc
+                .vases
+                .iter()
+                .filter(|&(&(vg, _), _)| vg == g)
+                .flat_map(|(_, v)| v.blocks.values())
+                .map(|b| b.len)
+                .sum();
+            let live = arena.live_bytes();
+            if live > named {
+                c.leaked_gpa_bytes.insert((pid, g), live - named);
+            }
+        }
+    }
+    c
+}
+
+/// Print the census as NUMBERS — objects and mappings, by isolate and by class. The
+/// stage's product is the honest baseline, so it is reported whether or not it is zero
+/// (`l1_os_shell.md` §10, M2-a: *"that number, whatever it is, is the honest baseline
+/// every later stage is gated against"*). Straight to stderr, bypassing libtest's
+/// capture, for the same reason [`kayfabe_tests::skip_slow`] does.
+fn report_census(c: &Census, rec: &SharedRecorder, mode: LockMode) {
+    use std::io::Write as _;
+    let class = classify_handles(rec);
+    let mut e = std::io::stderr();
+    let _ = writeln!(e, "\n=== CONSERVATION LEDGER — mean run, {mode:?} ===");
+    let by_class = |set: &BTreeMap<IsolateId, BTreeSet<HostHandle>>| {
+        let mut counts: BTreeMap<HostClass, usize> = BTreeMap::new();
+        for h in set.values().flatten() {
+            *counts
+                .entry(class.get(h).copied().unwrap_or(HostClass::Other))
+                .or_default() += 1;
+        }
+        counts
+    };
+    let _ = writeln!(
+        e,
+        "  ★ LEAKED (live proc, outstanding, UNREACHABLE from core state — no backstop):\n\
+               objects {} {:?}\n      mappings {}",
+        c.leaked_object_count(),
+        by_class(&c.leaked_objects),
+        c.leaked_map_count(),
+    );
+    for (iso, set) in &c.leaked_objects {
+        let mut per: BTreeMap<HostClass, usize> = BTreeMap::new();
+        for h in set {
+            *per.entry(class.get(h).copied().unwrap_or(HostClass::Other))
+                .or_default() += 1;
+        }
+        let maps = c.leaked_maps.get(iso).map_or(0, BTreeSet::len);
+        let _ = writeln!(e, "      {iso:?}: {per:?} + {maps} mapping(s)");
+    }
+    let _ = writeln!(
+        e,
+        "  DANGLING (core names it, ledger says freed — use-after-free shape): objects {} mappings {}",
+        c.dangling_objects
+            .values()
+            .map(BTreeSet::len)
+            .sum::<usize>(),
+        c.dangling_maps.values().map(BTreeSet::len).sum::<usize>(),
+    );
+    let _ = writeln!(
+        e,
+        "  namespace-death residue (§7.0 backstop, reaped procs): objects {} {:?} mappings {}",
+        c.session_death_object_count(),
+        by_class(&c.session_death_objects),
+        c.session_death_map_count(),
+    );
+    let _ = writeln!(
+        e,
+        "  ★ LEAKED GPA (live proc, arena bytes no `Vas::blocks` token can name): {} bytes {:?}",
+        c.leaked_gpa_total(),
+        c.leaked_gpa_bytes,
+    );
+}
+
+// =================================================================================
 // The tests
 // =================================================================================
 
@@ -1452,6 +1917,22 @@ fn mean_multiproc_multithread_multigpu_multiworkload() {
              bailed out of its loop"
         );
         assert_eq!(r.reaped, (2, 0), "({name}) reaped once, never again");
+        // ★★ §7.8 — the conservation ledger, as a fact of the composed run and of the
+        // cross-mode differential (the whole report is compared below, so a leak that
+        // appeared in only ONE lock mode would fail there instead).
+        assert_eq!(
+            r.leaked,
+            (0, 0),
+            "({name}) ★★ T0 (G2): host objects/mappings outstanding on a LIVE proc that \
+             core state cannot name. Pre-fix baseline was (24, 6)."
+        );
+        assert_eq!(
+            r.session_death,
+            (6, 2),
+            "({name}) the §7.0 namespace-death residue is the script's own: the two \
+             out-of-band-retired procs' host state, disposed of by their isolate \
+             sessions' death and by nothing else"
+        );
         assert!(
             r.delivery_ran_under_pending,
             "({name}) delivery must have run while host verbs were parked"

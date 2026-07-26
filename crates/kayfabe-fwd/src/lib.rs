@@ -441,6 +441,38 @@ pub fn checkout(proc: &mut Proc, gpu: GpuId) -> Result<Option<Worker>, FwdFault>
         .checkout())
 }
 
+/// ★★ [`checkout`] **plus T0's opportunistic drain** (`l1_os_shell.md` §7.6 T0, gap G2)
+/// — the form every L1 verb-issuing site uses.
+///
+/// A checked-out worker is exactly the opportunity T0 names ("*opportunistically at the
+/// next verb-issuing op for that proc — the worker is checked out anyway, near-zero
+/// marginal cost*"), so the queue rides out of the locked phase with the worker rather
+/// than needing a mechanism of its own. The returned [`Orphans`] is empty unless a
+/// previous `refresh` dropped a `Vas` or a `Channel` of this `(proc, gpu)` while the proc
+/// stayed alive **and** that isolate was otherwise idle — see
+/// [`Proc::checkout_with_pending_release`] for why the idle test is load-bearing and why
+/// the two must be one act.
+///
+/// The refusals are [`checkout`]'s, unchanged and checked first, so a retired proc or an
+/// unmaterialized target never reaches the drain: a retired isolate refuses every verb
+/// including the release, and its disposition of record is the session's death (§7.0).
+///
+/// # Errors
+/// - [`FwdFault::RetiredProc`] — the proc is retired.
+/// - [`FwdFault::NoTarget`] — no isolate for this `(proc, gpu)`.
+pub fn checkout_and_drain(
+    proc: &mut Proc,
+    gpu: GpuId,
+) -> Result<(Option<Worker>, Orphans), FwdFault> {
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(proc.id));
+    }
+    if !proc.isolates.contains_key(&gpu) {
+        return Err(FwdFault::NoTarget { proc: proc.id, gpu });
+    }
+    Ok(proc.checkout_with_pending_release(gpu))
+}
+
 /// Return a checked-out worker to its pool slot (proc lock; §7.3). If the target
 /// isolate is gone the worker is dropped with it — a retired isolate's slots are not
 /// resurrected.

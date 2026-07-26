@@ -3289,3 +3289,113 @@ in `l1_verb_seam.rs`, whose ceiling is stated in one place and whose exhaustion 
 failure rather than a wedge.
 
 Suite: **269 → 274**, 0 skipped, 0 ignored.
+
+### 12.32 ★★ L1-M2 STAGE M2-a — THE LEDGER COMPOSED, T0/G2 MEASURED, AND A BUG THE FIX ITSELF INTRODUCED
+
+`l1_os_shell.md` §10 puts M2-a first on purpose: **build the measuring instrument, take an
+honest baseline, and only then build what fixes it.** This is what that produced.
+
+**The ledger is now part of THE mean test, not beside it.** `kayfabe_mocks::HostLedger`
+existed and was used by two focused suites; it was not part of the composed
+multi-proc × multi-thread × multi-GPU × multi-workload run. It is now: `mean_run` takes a
+census at quiesce and `l1_mean.rs` asserts it in **both** lock modes. The form is the
+strongest one §12.28 proved out — **`Outstanding(ledger) == Reachable(core state)` as a set
+equality, not a count** — because an object that exists and that no `Vas`, binding or
+channel can name *is* a leak even when the totals agree. `reachable_objects` /
+`reachable_maps` moved into `kayfabe-tests` so the two suites share one definition.
+
+The census splits three ways, and the split is the point:
+
+| class | meaning | asserted |
+|---|---|---|
+| **LEAKED** | outstanding on a **live** proc, unreachable from core state | **== 0** — §7.0's backstop does not apply, so nothing will ever free it |
+| **DANGLING** | core state names it, the ledger says it was released | **== 0** — a use-after-free shape, strictly worse than a leak |
+| **namespace-death residue** | outstanding on an isolate whose `Proc` was reaped | reported and pinned at its exact value (6 objects, 2 mappings); disposed of in bulk by the session's death (§7.0) |
+
+Plus R6's intra-arena half, which no ledger of *handles* can see: **GPA bytes a live proc's
+arena still has handed out that no `Vas::blocks` token can name.** That is the class §7.8
+flagged as "unfixable without a core change", and it is measured here rather than argued.
+
+**★ The first baseline read ZERO — and that was a true negative, not a pass.** The mean
+script's two existing subset-frees (`P_CHANFREE`, `P_REROUTE`) target channels phase 0
+deliberately leaves **virgin**, and whose held `AllocChannel` commit refuses and orphans. So
+`retain` was dropping `Channel`s holding `host_channel: None`: nothing to leak. The script
+had never reached T0 at all. Adding `t0_churn` — a live proc declaring a VASpace, publishing
+into it, declaring a channel, ringing it, forwarding an engine object onto it, then freeing
+**both** while it keeps running, three rounds each on two procs across two GPUs, composed
+into the same window as the parked verbs and the workload threads — produced the honest
+baseline:
+
+| baseline (per run, IDENTICAL in both lock modes) | value |
+|---|---|
+| leaked host **objects** | **24** — 6 host VAS + 6 sysmem + 6 channel + 6 engine object |
+| leaked host **mappings** | **6** |
+| leaked **GPA** | **24 576 bytes** (12 288 per proc) |
+| dangling | 0 |
+| double-free / free-of-unknown / unmap-of-unknown | 0 |
+| namespace-death residue | 6 objects, 2 mappings |
+
+Exactly **4 objects + 1 mapping + one 4 KiB block per subset-free** — linear in the number
+of frees, which is what "a training job's steady state" means. `host_token` correctly
+contributes nothing: it is not a handle.
+
+**The fix, in the shape §7.6 T0 names.** A `pending_release: BTreeMap<GpuId, Orphans>` on
+`Proc`, **filled before the `retain`** by `stage_dropped_vases` / `stage_dropped_channels`
+(unmaps first, then memory objects, then the host VAS; engine objects before their channel —
+RM's children-before-parents order, `ogkm: rs_client.c:830-849`, `rs_server.c:963-981`), and
+**drained lock-free** on a checked-out worker via `Orphans::release_plan`. Keyed by `GpuId`
+because a handle only exists inside its own isolate's namespace. Two drain sites, one
+mechanism: `kayfabe_fwd::checkout_and_drain` (opportunistic — the worker is checked out
+anyway) and `SharedDevice::drain_pending_releases` (the backstop sweep for a proc that goes
+quiet). The **GPA half runs under the device write lock and that is correct** — returning a
+`GpaBlock` to a `GpaArena` issues no verb, so R1 does not apply to it; only the host disposal
+has to wait for a worker.
+
+**★★ And the fix introduced a real bug, which a COMPOSED script caught immediately.** The
+first version drained on *every* checkout. `retry_ledger.rs` wedged on its next run, and the
+cause was ours: a publisher parked **inside its mapping verb**, holding a host VAS, when the
+guest freed that VASpace — the drain then freed the VAS underneath the parked verb, which
+came back `RmError::BadHandle`. **Our own reclamation had become a use-after-free**, and it
+surfaced to the guest as an anonymous host error rather than as staleness (§12.10's polarity,
+one layer over).
+
+The guard is the predicate the reap already uses for the identical reason (§12.16 G3):
+`Isolate::is_quiesced`. `Proc::checkout_with_pending_release` reads it **before** its own
+checkout and takes the queue only if the isolate was otherwise idle — one indivisible act,
+because splitting it is how that ordering gets got wrong later. It is *sufficient*, and that
+is a property of the plan/execute/commit shape rather than a hope: a plan checks its worker
+out as the last thing it does under the lock (§7.3), every path that returns a worker
+disposes of its own orphans **before** the check-in, and an op that plans *after* the fill
+cannot name the dropped objects at all because `retain` removed them from core state.
+
+The general rule, worth stating once: **per-object reclamation must never race an in-flight
+verb, and no lock can exclude one — only the isolate's own quiesce predicate can.** Getting
+it wrong is asymmetric exactly as `is_quiesced`'s docs already say: too early is a
+use-after-free, too late leaves the queue for the next op.
+
+**Bite-checks** (revert, observe, restore):
+
+| reverted | observed |
+|---|---|
+| the two `stage_dropped_*` calls (the fill) | `l1_mean` FAILED with `(24, 6, 24576)` vs `(0, 0, 0)`, every leaked handle named; **5 of 6** `t0_subset_free` tests FAILED with exact symptoms — queue length `0` vs `5`, arena `live_bytes` `4096` vs `0`, and the release chain simply absent from the verb log |
+| the `is_quiesced` idle test only (fill intact) | `retry_ledger::the_commit_retry_bound_…` **wedged** (watchdog SIGABRT) and `t0_subset_free::the_drain_never_races_a_verb_in_flight_on_the_same_isolate` FAILED, printing the offending `UnmapGpuVa`+2×`Free` that ran while the verb was parked. The other five T0 tests stayed green — the idle test is an independent claim and the suite says so |
+
+**Post-fix: 0 / 0 / 0**, in both lock modes, with the same non-zero namespace-death residue
+(6 objects, 2 mappings) as before — that number is the §7.0 backstop working, not a leak, and
+it is now pinned rather than assumed. `sweep_conservation` additionally requires **no live
+proc still owes a release** at the quiesce point, so a drain that silently never fired could
+not masquerade as a fixed leak.
+
+**Collateral, and it was predicted in writing.** `retry_ledger.rs`'s re-stale helper carried
+the sentence *"they are never freed — dropping a runtime `Vas` abandons its host backing
+(per-object reclamation is L1-M2's)"*, and its strict unexpected-verb arm tripped on the
+first post-fix run with an `UnmapGpuVa`. Its expectation moved from a script-built union to
+the same set equality the headline test uses — a strictly stronger statement of the bound's
+own question.
+
+`tests/t0_subset_free.rs` is the focused suite (6 tests): the two planes' release order, the
+GPA return *and* its reuse, the quiet proc's backstop sweep, the in-flight regression above,
+and the one disposition T0 deliberately does **not** own (a retired isolate refuses the
+disposal, so its residue is the session's death).
+
+Suite: **274 → 280**, 0 skipped, 0 ignored; fast path ~22.6 s.

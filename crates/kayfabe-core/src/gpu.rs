@@ -18,7 +18,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use kayfabe_arch::Arch;
 use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa, HClient, Pdb, VChid};
 use kayfabe_completion::{CompletionQueue, DeliveryPlane, FenceArms, PostBatch};
-use kayfabe_isolate::{HostHandle, Isolate, IsolateBox, IsolateFactory, IsolateId, Worker};
+use kayfabe_isolate::{
+    HostHandle, Isolate, IsolateBox, IsolateFactory, IsolateId, Orphans, Worker,
+};
 use kayfabe_mmu::{AddressFault, AddressTable};
 use kayfabe_util::Instant;
 
@@ -318,6 +320,34 @@ pub struct Proc {
     pub targets: BTreeSet<GpuId>,
     /// Per-proc poll bookkeeping.
     pub poll: PollState,
+    /// ★★ **T0's queue** (`l1_os_shell.md` §7.6 T0, gap G2): host objects whose core-side
+    /// owner — a [`Vas`] or a [`Channel`] — was dropped by [`Gpu::sync_proc_to_boundary`]'s
+    /// `retain` **while this proc is still alive**, keyed by the target GPU whose isolate
+    /// namespace they belong to.
+    ///
+    /// This is the one lifecycle path §7.0's backstop does not cover. Everywhere else,
+    /// something dies: a proc retires, a worker HUPs, an isolate is reaped, and the
+    /// isolate process boundary frees the whole client tree. Here **nothing dies** — the
+    /// guest freed a *subset* of its objects and kept running, which is not an exotic case
+    /// but the steady state of a training job. So per-object reclamation is not an
+    /// optimisation on this path; it is the only reclamation there is.
+    ///
+    /// **Why a queue and not a call.** `refresh` runs under the device write lock, where
+    /// R1 forbids issuing host verbs. Filling a queue is pure state; draining it is a
+    /// plan-and-execute op like any other, run lock-free on a checked-out worker via
+    /// [`Orphans::release_plan`] — the same disposal vocabulary and the same worker
+    /// discipline the refused-commit path already uses, deliberately *not* a second
+    /// reclamation mechanism.
+    ///
+    /// **Keyed by [`GpuId`] because a handle is only meaningful in its own isolate's
+    /// namespace** (MG-5, boundary 2): a proc holds one isolate per target, so releasing
+    /// a GPU0 handle on the GPU1 connection would be a cross-namespace free — precisely
+    /// what [`kayfabe_mocks::HostLedger::free_of_unknown`] exists to catch.
+    ///
+    /// Private, with [`Proc::take_pending_release`] as the only way out: [`Orphans`] is
+    /// `#[must_use]`, so a queue that leaves this struct cannot be dropped on the floor
+    /// without the compiler saying so.
+    pending_release: BTreeMap<GpuId, Orphans>,
     retired: bool,
     next_chan: u32,
 }
@@ -338,9 +368,92 @@ impl Proc {
             arenas: BTreeMap::new(),
             targets: BTreeSet::new(),
             poll: PollState::default(),
+            pending_release: BTreeMap::new(),
             retired: false,
             next_chan: 0,
         }
+    }
+
+    /// ★★ **T0's drain, and its precondition, as ONE indivisible act**: check a worker
+    /// out of `gpu`'s isolate and take that isolate's pending-release queue **iff the
+    /// isolate was otherwise idle** (`l1_os_shell.md` §7.6 T0).
+    ///
+    /// ## Why the idle test exists — measured, not reasoned
+    ///
+    /// Reclaiming an object is only safe if nothing is still *using* it, and the thing
+    /// that uses host objects is an in-flight verb — which by construction runs with no
+    /// lock held, so no lock can exclude it. The first version of T0 drained on every
+    /// checkout, and `retry_ledger.rs`'s scripted re-stale wedged immediately with
+    /// `RmError::BadHandle`: a publisher was parked *inside its mapping verb*, referring
+    /// to a host VAS, when the guest freed that VASpace; the drain then freed the VAS
+    /// underneath the parked verb. Our own reclamation became a use-after-free, and it
+    /// surfaced to the guest as an anonymous host error rather than as staleness.
+    ///
+    /// The predicate that excludes it is the one the reap already uses for the identical
+    /// reason ([`Isolate::is_quiesced`], `l1_concurrency.md` §12.16 gap G3: *"the reap
+    /// would otherwise tear an isolate down under a live connection held by a foreign
+    /// thread"*). It is **sufficient**, and that is a property of the plan/execute/commit
+    /// shape rather than a hope:
+    ///
+    /// - a plan is made under the proc lock and **checks its worker out as the last thing
+    ///   it does there** (§7.3), so any op that planned *before* the queue was filled
+    ///   holds a worker of this isolate;
+    /// - every path that gives a worker back — commit, refused commit, mid-chain failure —
+    ///   disposes of its own orphans *before* the check-in (`SharedDevice::verb_op`);
+    /// - so "no worker is checked out" ⟹ every op that could still name a dropped `Vas`'s
+    ///   or `Channel`'s host objects has already finished with them;
+    /// - and an op that plans *after* the fill cannot name them at all — `retain` removed
+    ///   them from core state, and a plan is derived from core state.
+    ///
+    /// Getting this gate wrong is asymmetric in exactly the way `is_quiesced`'s own docs
+    /// describe: draining too early is a use-after-free, draining too late leaves the
+    /// queue for the next op or for the backstop sweep. So the test is conservative and
+    /// the queue is simply left in place when it fails.
+    ///
+    /// Indivisible because it must be: the idle test has to be read **before** this
+    /// caller's own checkout makes it false, and both must happen inside the one locked
+    /// phase. Splitting it into two public calls is how that ordering would eventually be
+    /// got wrong. `Orphans` is `#[must_use]`, so the disposal obligation travels with the
+    /// returned value; the caller runs [`Orphans::release_plan`] on the returned worker,
+    /// with no lock held.
+    pub fn checkout_with_pending_release(&mut self, gpu: GpuId) -> (Option<Worker>, Orphans) {
+        let Proc {
+            isolates,
+            pending_release,
+            ..
+        } = self;
+        let Some(iso) = isolates.get_mut(&gpu) else {
+            return (None, Orphans::default());
+        };
+        let idle = iso.is_quiesced();
+        let worker = iso.checkout();
+        let orphans = if worker.is_some() && idle {
+            pending_release.remove(&gpu).unwrap_or_default()
+        } else {
+            Orphans::default()
+        };
+        (worker, orphans)
+    }
+
+    /// The targets with something queued for release (§7.6 T0's "backstop for a proc
+    /// that goes quiet" — the sweep asks this before it checks a worker out).
+    #[must_use]
+    pub fn pending_release_targets(&self) -> Vec<GpuId> {
+        self.pending_release
+            .iter()
+            .filter(|(_, o)| !o.is_empty())
+            .map(|(&g, _)| g)
+            .collect()
+    }
+
+    /// How many host objects + mappings are queued for release across every target —
+    /// diagnostics, and the executable statement that a drain actually drained.
+    #[must_use]
+    pub fn pending_release_len(&self) -> usize {
+        self.pending_release
+            .values()
+            .map(|o| o.free.len() + o.unmap.len())
+            .sum()
     }
 
     /// This proc's isolate for GPU `gpu`, if materialized. Address/exec ops route
@@ -396,7 +509,13 @@ impl Proc {
         // — it is re-derivable from the graph, so it never blocks an early merge. (A
         // proc that has materialized no target yet has empty `arenas` → vacuously
         // untouched.)
-        self.arenas.values().all(GpaArena::is_untouched)
+        // ★ T0: a proc whose subset-frees are still queued HAS host state — it just is
+        // not reachable through a `Vas` or a `Channel` any more. Without this clause a
+        // proc that published and then freed everything could read as untouched again
+        // (G6's intra-arena free rewinds the cursor), which is exactly the early-merge
+        // legality question lesson L9 answers "no" to.
+        self.pending_release.values().all(Orphans::is_empty)
+            && self.arenas.values().all(GpaArena::is_untouched)
             && self.channels.values().all(|c| c.host_channel.is_none())
             && self
                 .vases
@@ -1010,6 +1129,8 @@ impl Spine {
                     .or_insert_with(|| Vas::new(gpu, pdb, origin));
             }
         }
+        // ★★ T0/G2 — FILL BEFORE YOU DROP (`l1_os_shell.md` §7.6 T0).
+        Self::stage_dropped_vases(p, &live_keys);
         p.vases.retain(|key, _| live_keys.contains(key));
         // Channels: stable ChanId per node key. A channel whose GPU target does
         // not resolve is NOT materialized (the same deferral as the Vas pattern
@@ -1048,8 +1169,95 @@ impl Spine {
         let live_chans: BTreeSet<NodeKey> = b.channels.keys().copied().collect();
         p.chan_ids.retain(|key, _| live_chans.contains(key));
         let live_cids: BTreeSet<ChanId> = p.chan_ids.values().copied().collect();
+        // ★★ T0/G2 — the exec plane's half of the same rule.
+        Self::stage_dropped_channels(p, &live_cids);
         p.channels.retain(|cid, _| live_cids.contains(cid));
         p.exec.scheduled.retain(|cid| live_cids.contains(cid));
+    }
+
+    /// ★★ **T0/G2, the address plane** (`l1_os_shell.md` §7.6 T0): move the host
+    /// identities of every [`Vas`] this refresh is about to drop into the proc's
+    /// `pending_release` queue, and return their [`GpaBlock`]s to the proc's own arena —
+    /// **before** `retain` makes both unrecoverable.
+    ///
+    /// Ordering is **unmap-then-free**, and that is RM's rule rather than a preference:
+    /// `clientFreeResource_IMPL` auto-unmaps a resource's inter-mappings before
+    /// `objDelete` (`ogkm: src/nvidia/src/libraries/resserv/src/rs_client.c:830-849`), so
+    /// RM itself leaks nothing — but *our* external mirror of those mappings (the address
+    /// table's [`kayfabe_mmu::HostBacking`]) goes stale, which is why [`Orphans`] states
+    /// the unmaps first and means it. Within `free`, the memory objects mapped into a
+    /// host VAS precede the VAS itself, matching RM's children-before-parents order
+    /// (`.../rs_server.c:963-981`).
+    ///
+    /// **The GPA half runs right here, under the lock, and that is correct**: returning a
+    /// block to `GpaArena` issues no host verb, so R1 does not apply to it — only the
+    /// disposal of the host objects has to wait for a worker. Keeping the two in one
+    /// place is deliberate for the same reason [`kayfabe_fwd::unpublish_backing`] returns
+    /// the GPA *with* its orphans in one call: a GPA recycled while its host memory is
+    /// still mapped is the ALREADY-MAPPED class. Here the mapping is queued for release
+    /// and the GPA is only reusable by **this same proc**, whose next publication will
+    /// map it into a host VAS of its own — so the pair stays consistent.
+    ///
+    /// A block whose arena is gone or has been re-carved is refused by
+    /// [`GpaArena::free`] ([`crate::gpa::ForeignBlock`], keyed on [`crate::gpa::ArenaId`]'s
+    /// generation) and stays out of circulation, which is the safe direction: a stale
+    /// range re-entering a live free list is the #14 collision class.
+    fn stage_dropped_vases(p: &mut Proc, live: &BTreeSet<(GpuId, Pdb)>) {
+        let doomed: Vec<(GpuId, Pdb)> = p
+            .vases
+            .keys()
+            .filter(|k| !live.contains(k))
+            .copied()
+            .collect();
+        for key in doomed {
+            let (gpu, _pdb) = key;
+            let mut vas = p.vases.remove(&key).expect("just enumerated");
+            let host_vas = vas.host_vas;
+            let q = p.pending_release.entry(gpu).or_default();
+            for (_va, _len, binding) in vas.table.iter() {
+                // `Binding::host == None` is an RPC-declared binding: nothing host-side
+                // exists, so nothing host-side needs reclaiming.
+                let Some(h) = binding.host else { continue };
+                // The unmap is conditional on the VAS and the free is not, deliberately:
+                // a published binding implies its `Vas` materialized a host VAS, but if
+                // that ever stopped holding, the memory object must still be freed rather
+                // than silently skipped along with the unmap it has no target for.
+                if let Some(host_vas) = host_vas {
+                    q.unmap.push((host_vas, h.host_va));
+                }
+                q.free.push(h.memory);
+            }
+            // …and the host VAS last: everything mapped into it is freed first.
+            q.free.extend(host_vas);
+            if let Some(arena) = p.arenas.get_mut(&gpu) {
+                for (_va, block) in core::mem::take(&mut vas.blocks) {
+                    // A refusal returns the block; dropping it there is the conservative
+                    // direction (the range simply never comes back).
+                    drop(arena.free(block));
+                }
+            }
+        }
+    }
+
+    /// ★★ **T0/G2, the exec plane** — the [`Channel`] half of [`Self::stage_dropped_vases`].
+    ///
+    /// `host_engine_objects` are freed **before** `host_channel`: an engine object is
+    /// allocated *on* the channel, so it is the child, and RM frees children ahead of
+    /// parents. `host_token` needs no entry — it is not a handle, it is the work-submit
+    /// doorbell token the channel object owns, and it dies with it.
+    fn stage_dropped_channels(p: &mut Proc, live: &BTreeSet<ChanId>) {
+        let doomed: Vec<ChanId> = p
+            .channels
+            .keys()
+            .filter(|c| !live.contains(c))
+            .copied()
+            .collect();
+        for cid in doomed {
+            let ch = p.channels.remove(&cid).expect("just enumerated");
+            let q = p.pending_release.entry(ch.gpu).or_default();
+            q.free.extend(ch.host_engine_objects.into_values());
+            q.free.extend(ch.host_channel);
+        }
     }
 
     /// Which GPU targets one boundary's proc spans: the targets of its routable VASes

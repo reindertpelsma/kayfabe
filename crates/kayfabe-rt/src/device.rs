@@ -69,7 +69,8 @@ use kayfabe_core::reactor::{CompletionSource, Dispatch, SourceFault, SourceKind}
 use kayfabe_core::rmgraph::RmEvent;
 use kayfabe_core::{ChanId, ProcId};
 use kayfabe_fwd::{
-    ControlRoute, DoorbellOutcome, EngineObjectForwarded, FwdFault, Planned, Published, Refusal,
+    ControlRoute, DoorbellOutcome, EngineObjectForwarded, FwdFault, Orphans, Planned, Published,
+    Refusal,
 };
 use kayfabe_isolate::{HostHandle, RmError, VerbPlan, VerbReply, Worker, WorkerId};
 use kayfabe_mmu::Binding;
@@ -400,15 +401,27 @@ struct Staged<P> {
     plan: P,
     verbs: Option<VerbPlan>,
     worker: Option<Worker>,
+    /// ★ T0 (`l1_os_shell.md` §7.6 T0, gap G2): what a previous `refresh` queued for
+    /// release on this `(proc, gpu)` isolate, picked up because a worker is checked out
+    /// anyway. Empty unless the guest freed a subset of its objects since the last op.
+    release: Orphans,
 }
 
 impl<P> Staged<P> {
     /// Finish a plan phase by checking a worker out of `proc`'s `gpu` isolate — the
     /// last thing that happens under the lock, per §7.3.
+    ///
+    /// ★ **And T0's opportunistic drain point** (§7.6 T0, "when to drain"): a checked-out
+    /// worker is exactly the opportunity, so the pending-release queue rides out of the
+    /// locked phase with it at near-zero marginal cost — via
+    /// [`kayfabe_fwd::checkout_and_drain`], which also carries the idle precondition that
+    /// keeps the drain from racing an in-flight verb. The pool-full path re-enters from
+    /// the top and must not have swallowed the queue on its way past, and the no-host-work
+    /// path has no worker to run the release on; both are handled there.
     fn check_out(proc: &mut Proc, gpu: GpuId, planned: Planned<P>) -> Result<Self, FwdFault> {
-        let worker = match planned.verbs {
-            Some(_) => kayfabe_fwd::checkout(proc, gpu)?,
-            None => None,
+        let (worker, release) = match planned.verbs {
+            Some(_) => kayfabe_fwd::checkout_and_drain(proc, gpu)?,
+            None => (None, Orphans::default()),
         };
         Ok(Staged {
             proc: proc.id,
@@ -416,6 +429,7 @@ impl<P> Staged<P> {
             plan: planned.plan,
             verbs: planned.verbs,
             worker,
+            release,
         })
     }
 }
@@ -559,6 +573,89 @@ impl SharedDevice {
         let n = reclaimed.len();
         drop(reclaimed); // ← the blocking teardown, with zero ranked locks held.
         n
+    }
+
+    /// Read one live proc's state under whichever guards the configured mode requires —
+    /// a **diagnostic window**, so a caller can ask a question about a proc without
+    /// reaching into the lock shell or consuming the device. `None` if `pid` is not live.
+    ///
+    /// Deliberately `&Proc` and deliberately a closure: the borrow cannot escape the
+    /// guard, so this cannot become a back door for holding proc state across a lock
+    /// boundary (which is how a "just for a moment" accessor turns into an R5 violation).
+    pub fn with_proc<R>(&self, pid: ProcId, f: impl FnOnce(&Proc) -> R) -> Option<R> {
+        let mut out = None;
+        let _ = self.route_act(
+            |_| Ok((pid, ())),
+            |_, p, ()| {
+                out = Some(f(p));
+            },
+        );
+        out
+    }
+
+    /// ★★ **T0's backstop drain** (`l1_os_shell.md` §7.6 T0, gap G2) — release every
+    /// host object a `refresh` queued for a **live** proc, for procs that have gone
+    /// quiet. Returns how many objects + mappings it disposed of.
+    ///
+    /// The opportunistic path ([`Staged::check_out`]) covers a proc that keeps issuing
+    /// ops: its next verb-issuing op has a worker checked out anyway, so the queue rides
+    /// out with it for free. This is the other half — *"the executor as the backstop for
+    /// a proc that goes quiet"*. A guest process that frees its last VASpace and then
+    /// blocks on a fence would otherwise hold those host objects for as long as it lives,
+    /// which on this path is forever: T0 is the one trigger with no process-boundary
+    /// backstop (§7.0).
+    ///
+    /// **Shape: plan (locked) → execute (no locks) → check in, per `(proc, target)`**,
+    /// exactly like every other verb-issuing op — never a second reclamation mechanism.
+    /// The queue is taken and the worker checked out inside one locked phase; the
+    /// disposal runs with zero ranked locks held (R1, enforced by `Worker::execute`); the
+    /// worker goes back through [`SharedDevice::return_worker`], which handles a proc that
+    /// retired in the gap (G3).
+    ///
+    /// **Pool-full — or an isolate with a verb still in flight — is a SKIP, not a wait.**
+    /// This is a housekeeping sweep, so parking it behind guest traffic would be
+    /// backpressure applied in the wrong direction; and the in-flight case must not be
+    /// waited out either, because releasing an object a live verb still names is the
+    /// use-after-free [`Proc::checkout_with_pending_release`]'s idle test exists to
+    /// prevent. Either way the queue simply stays for the next sweep or the next op,
+    /// which is what makes this safe to call from any edge and idempotent at a real
+    /// quiesce point.
+    pub fn drain_pending_releases(&self) -> usize {
+        let pids: Vec<ProcId> = {
+            let st = self.state.read();
+            core::iter::once(Gpu::SYSTEM_PROC)
+                .chain(st.procs.keys().copied())
+                .collect()
+        };
+        let mut disposed = 0usize;
+        for pid in pids {
+            // Which targets owe anything — a read, so a proc with nothing queued (the
+            // overwhelming majority) costs one lock and no checkout.
+            let targets = self
+                .route_act(|_| Ok((pid, ())), |_, p, ()| p.pending_release_targets())
+                .unwrap_or_default();
+            for gpu in targets {
+                // ---- PLAN: take the queue and a worker of THAT isolate, together.
+                let mut taken: Option<(Orphans, Worker)> = None;
+                let _ = self.route_act(
+                    |_| Ok((pid, ())),
+                    |_, p, ()| {
+                        if let Ok((Some(w), o)) = kayfabe_fwd::checkout_and_drain(p, gpu) {
+                            taken = Some((o, w));
+                        }
+                    },
+                );
+                let Some((orphans, mut worker)) = taken else {
+                    continue; // pool full, or the proc retired — next sweep.
+                };
+                let n = orphans.free.len() + orphans.unmap.len();
+                // ---- EXECUTE: zero locks held.
+                let undisposed = kayfabe_fwd::dispose_on(&mut worker, orphans);
+                disposed += n - (undisposed.free.len() + undisposed.unmap.len());
+                self.return_worker(pid, gpu, worker);
+            }
+        }
+        disposed
     }
 
     /// How many retired procs are still awaiting a reap — including any a previous
@@ -752,7 +849,7 @@ impl SharedDevice {
             // Sampled BEFORE any lock is taken, so a return landing in the gap
             // cannot be missed (see `PoolGate`).
             let seen = self.pool.sample();
-            let staged = stage()?;
+            let mut staged = stage()?;
             let Some(verbs) = staged.verbs else {
                 // No host work at all (an idempotent replay): commit straight
                 // through — the pool is never touched, so no worker to return.
@@ -765,6 +862,17 @@ impl SharedDevice {
                 continue;
             };
             // ---- EXECUTE: no lock held. `Worker::execute` asserts exactly that. ----
+            //
+            // ★ T0's drain goes FIRST (§7.6 T0): the queue is what a previous `refresh`
+            // could not release because it ran under the device write lock, and this
+            // thread is now lock-free with a worker of the right `(proc, gpu)` isolate in
+            // hand. Draining before the op's own chain means a map/unmap loop returns
+            // host handles at least as fast as it consumes them, which is the whole
+            // point — the alternative is a steady state that only ever grows. A failure
+            // here is the isolate's own refusal (a retiring proc), where §7.0's
+            // process-boundary backstop is the disposition of record.
+            let _undisposed =
+                kayfabe_fwd::dispose_on(&mut worker, core::mem::take(&mut staged.release));
             let executed = worker.execute(&verbs);
             let gpu = staged.gpu;
             let Ok(reply) = executed else {

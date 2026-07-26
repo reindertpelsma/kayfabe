@@ -99,6 +99,67 @@ macro_rules! skip_slow {
     };
 }
 
+// =================================================================================
+// ★ The conservation ledger's counterpart: what core state still legitimately OWNS
+// (`l1_os_shell.md` §7.8; L1-M2 stage M2-a)
+// =================================================================================
+
+/// Every host object reachable from one [`kayfabe_core::gpu::Proc`]'s state — its
+/// `Vas`es' host VASes, the host memory behind every published binding, and its
+/// channels' host objects.
+///
+/// This is the other half of the ledger assertion, and the half that makes it a
+/// statement about *correctness* rather than about verb arithmetic: an object the mock
+/// minted is legitimate iff the core can still name it. Anything outstanding that is
+/// **not** in this set is a leak by definition — nothing will ever free it, because
+/// nothing can address it. `l1_os_shell.md` §7.8 states the conservation invariant;
+/// this function is the `Reachable(core state)` side of the `Outstanding(ledger) ==
+/// Reachable(core state)` set equality that `retry_ledger.rs` proved out and that
+/// `l1_mean.rs` now runs over the whole composed run.
+///
+/// Lives here rather than in one test file because two suites now assert against it
+/// (`retry_ledger.rs`, `l1_mean.rs`) and a second copy is how the two drift — the same
+/// reasoning `Gpu::sync_proc_to_boundary` is extracted under.
+#[must_use]
+pub fn reachable_objects(
+    proc: &kayfabe_core::gpu::Proc,
+) -> std::collections::BTreeSet<kayfabe_isolate::HostHandle> {
+    let mut live = std::collections::BTreeSet::new();
+    for vas in proc.vases.values() {
+        live.extend(vas.host_vas);
+        for (_va, _len, binding) in vas.table.iter() {
+            live.extend(binding.host_memory());
+        }
+    }
+    for chan in proc.channels.values() {
+        live.extend(chan.host_channel);
+        live.extend(chan.host_engine_objects.values().copied());
+    }
+    live
+}
+
+/// Every host GPU mapping reachable from one [`kayfabe_core::gpu::Proc`]'s state, as
+/// the ledger keys them: `(host VAS, host GPU VA)`. A published binding is mapped in
+/// its OWN `Vas`'s host VAS (the per-`Vas` #14 fix), so the pair is derivable without
+/// consulting the verb log.
+#[must_use]
+pub fn reachable_maps(
+    proc: &kayfabe_core::gpu::Proc,
+) -> std::collections::BTreeSet<(kayfabe_isolate::HostHandle, u64)> {
+    let mut live = std::collections::BTreeSet::new();
+    for vas in proc.vases.values() {
+        let Some(host_vas) = vas.host_vas else {
+            continue;
+        };
+        for (_va, _len, binding) in vas.table.iter() {
+            if let Some(host_va) = binding.host_va() {
+                live.insert((host_vas, host_va));
+            }
+        }
+    }
+    live
+}
+
 /// A scripted sequence of RM protocol events, plus the identities it introduced —
 /// enough to drive `Gpu::apply` and then assert on derived boundaries.
 #[derive(Debug, Clone, Default)]
