@@ -94,6 +94,38 @@ fired.
 3. **Assert progress as an edge, never a clock.** A wall-clock parallelism assertion passes
    because the box was fast (`l1_concurrency.md` §8.3, §8.4).
 
+### 3.1 ★★ OWNER DIRECTIVE (2026-07-27) — the bar for "done" on every milestone
+
+> *"we need enough testing and integration, especially with new milestones added, that try to
+> simulate real behavior using mocks. and also mean not happy path. Iterate until green."*
+
+This is a **standing requirement per milestone**, not a one-off. Four obligations:
+
+1. **Integration, not unit.** Drive a realistic RM event stream through the mocks **end to end**
+   and assert the observable end-state — the conservation ledger, the projection, the routing. A
+   test that pokes one function directly proves far less than one that replays realistic traffic
+   and then checks what the guest would actually observe. The mocks exist to make realistic
+   multi-process × multi-thread × multi-GPU traffic cheap; use them that way.
+2. **★ MEAN, not happy path.** The happy path is the least interesting thing the code does.
+   Compose the nasty cases deliberately: interleave the case under test with other live procs
+   doing real work; free mid-flight; race a re-declaration against a still-publishing generation;
+   drive two GPUs at once; kill a worker partway; recycle handles under concurrent traffic; run
+   **both** lock modes.
+3. **Wire it into the mean test** (`tests/tests/l1_mean.rs`), not only a fresh isolated file.
+   That test exists precisely because §3's incident showed isolated cases go green for the wrong
+   reason.
+4. **★★ Iterate until green — and NEVER narrow a test to make it pass.** A failing mean test
+   **is** the finding; that is the whole point of writing it mean. Fix the code. If the test's
+   expectation was genuinely wrong, say so explicitly and justify it with a **citation**, rather
+   than quietly relaxing an assertion. Silently weakening a test converts a discovery into a
+   permanent blind spot, and it is indistinguishable from progress in the diff.
+
+**Why this bar, measured rather than asserted.** The 2026-07-26 identity round
+(`l1_concurrency.md` §12.41) landed 7 bite-checks. **None of the 363 pre-existing tests caught
+any of them.** Every real defect that day — the undeclared-namespace squat, the live-path
+component split, the orphan misclassification, the oldest-wins scans — came from a composed run
+or a newly-sharpened criterion. The happy path found nothing, all day.
+
 ---
 
 ## 4. ★★ Per-object reclamation must never race an in-flight verb — and no lock can prevent it
