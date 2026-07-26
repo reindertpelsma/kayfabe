@@ -60,7 +60,7 @@ use kayfabe_isolate::{
 };
 use kayfabe_mocks::{HoldSpec, MockArch, MockIsolateFactory, RmVerb, SharedRecorder, VerbKind};
 use kayfabe_rt::device::{LockMode, SharedDevice};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, ResidueClaim, Scenario, identical_handles};
 
 /// Abort the process loudly if the guard is not dropped within `limit` — the suite's
 /// bounded-termination rule (`concurrency_stress.rs`), so a regression that wedges a
@@ -111,7 +111,7 @@ const VA2: GpuVa = GpuVa(0x2_0030_0000);
 // ---------------------------------------------------------------------------------
 
 /// One guest compute process on GPU0, plus the shared verb recorder.
-fn one_proc_gpu() -> (Gpu, ProcId, SharedRecorder) {
+fn one_proc_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
@@ -122,7 +122,11 @@ fn one_proc_gpu() -> (Gpu, ProcId, SharedRecorder) {
         gpu.apply(ev).expect("scenario applies");
     }
     let pid = gpu.spine.by_pdb[&(GPU, PDB)];
-    (gpu, pid, recorder)
+    (
+        Guarded::new("teardown_reclaim", gpu, recorder.clone()),
+        pid,
+        recorder,
+    )
 }
 
 /// The handle every `AllocSysmem` in the log minted, in order.
@@ -249,6 +253,19 @@ fn g1_a_published_backing_names_the_exact_host_object_that_allocated_it() {
 #[test]
 fn g1_a_published_backing_can_actually_be_freed_at_teardown() {
     let (mut gpu, pid, rec) = one_proc_gpu();
+    // ★ §12.35 — DECLARED RESIDUE (dangling). This test hand-rolls a reclaim chain
+    // (`reclaim_plan` + `run_release`) straight onto a worker, which is its entire point:
+    // it proves the host objects G1 made addressable really CAN be freed. It deliberately
+    // does not touch core state, so afterwards the `Vas`es and `Channel`s still name
+    // handles the ledger has already released — a bypass, declared as one.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            IsolateId(pid.0),
+            "harness bypass: the release chain is run directly on a worker to prove the \
+             backings are freeable, with core state deliberately left naming them",
+        )
+        .dangling(3, 2),
+    );
     let proc = gpu.procs.get_mut(&pid).expect("proc");
     kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000).expect("publish");
     kayfabe_fwd::publish_backing(proc, GPU, PDB, VA2, 0x2000).expect("publish 2");
@@ -292,6 +309,20 @@ fn g1_a_published_backing_can_actually_be_freed_at_teardown() {
 #[test]
 fn g1_a_full_process_lifecycle_leaves_the_host_ledger_balanced() {
     let (mut gpu, pid, rec) = one_proc_gpu();
+    // ★ §12.35 — DECLARED RESIDUE (dangling). This test hand-rolls a reclaim chain
+    // (`reclaim_plan` + `run_release`) straight onto a worker, which is its entire point:
+    // it proves the host objects G1 made addressable really CAN be freed. It deliberately
+    // does not touch core state, so afterwards the `Vas`es and `Channel`s still name
+    // handles the ledger has already released — a bypass, declared as one.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            IsolateId(pid.0),
+            "harness bypass: the teardown is a hand-rolled release chain run directly on \
+             a worker, with core state left standing — the point being that the objects \
+             are addressable, not that the core reclaimed them",
+        )
+        .dangling(5, 2),
+    );
 
     {
         let proc = gpu.procs.get_mut(&pid).expect("proc");
@@ -365,7 +396,7 @@ fn g3b_dropping_an_isolate_with_no_lock_held_is_fine() {
 fn g3b_the_reap_drops_its_procs_with_zero_locks_held() {
     for mode in [LockMode::Degenerate, LockMode::Sharded] {
         let (gpu, pid, _rec) = one_proc_gpu();
-        let device = SharedDevice::new(gpu, mode);
+        let device = gpu.map(|g| SharedDevice::new(g, mode));
         device
             .publish_backing(GPU, PDB, VA, 0x1000)
             .expect("({mode:?}) publish");
@@ -516,7 +547,19 @@ fn g3_a_worker_whose_proc_retired_in_the_gap_still_reaches_its_slot() {
     for mode in [LockMode::Degenerate, LockMode::Sharded] {
         let _wd = watchdog("worker_returns_after_retire", Duration::from_secs(60));
         let (gpu, pid, rec) = one_proc_gpu();
-        let device = Arc::new(SharedDevice::new(gpu, mode));
+        let mut device = gpu.map(|g| Arc::new(SharedDevice::new(g, mode)));
+        // ★ §12.35 — DECLARED RESIDUE: the proc is retired VIOLENTLY mid-verb, so its
+        // isolate is stopped and the host VAS its parked publish had already materialized
+        // cannot be released per object. §7.0 namespace death is the disposition.
+        device.declare_residue(
+            ResidueClaim::on(
+                IsolateId(pid.0),
+                "an out-of-band `retire_proc` fires while a publish is parked in its \
+                 sysmem alloc; the isolate is stopped, so the host VAS it had already \
+                 materialized is left to the session's death (§7.0)",
+            )
+            .objects(kayfabe_mocks::VerbKind::AllocVaSpace, 1),
+        );
 
         // Hold this proc's sysmem alloc pending: the worker is checked OUT and the
         // thread is inside the backend with ZERO locks held (R1) — `verb_op`'s gap.
@@ -578,7 +621,7 @@ fn g3_a_worker_whose_proc_retired_in_the_gap_still_reaches_its_slot() {
 fn g4_a_cancelled_verb_surfaces_cancelled_not_an_rm_failure() {
     for mode in [LockMode::Degenerate, LockMode::Sharded] {
         let (gpu, pid, rec) = one_proc_gpu();
-        let device = SharedDevice::new(gpu, mode);
+        let device = gpu.map(|g| SharedDevice::new(g, mode));
 
         rec.lock().expect("recorder").fail_next = Some(RmError::Interrupted);
         let out = device.publish_backing(GPU, PDB, VA, 0x1000);
@@ -921,7 +964,7 @@ fn g7_an_arena_the_reap_cannot_route_home_is_reported_not_dropped() {
 /// One guest compute process on GPU0 with a **deliberately small** arena, plus the
 /// recorder. 512 KiB of GPA per proc: big enough for real work, small enough that a
 /// bump-only allocator dies within a few dozen map/unmap cycles.
-fn one_proc_small_arena() -> (Gpu, ProcId, SharedRecorder) {
+fn one_proc_small_arena() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x1_0010_0000, 0x0008_0000);
     let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
@@ -932,7 +975,11 @@ fn one_proc_small_arena() -> (Gpu, ProcId, SharedRecorder) {
         gpu.apply(ev).expect("scenario applies");
     }
     let pid = gpu.spine.by_pdb[&(GPU, PDB)];
-    (gpu, pid, recorder)
+    (
+        Guarded::new("teardown_reclaim", gpu, recorder.clone()),
+        pid,
+        recorder,
+    )
 }
 
 /// ★ **The headline: a long-lived process that maps and unmaps forever keeps working.**

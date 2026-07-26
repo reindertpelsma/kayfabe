@@ -63,7 +63,9 @@ use kayfabe_mocks::{
     mock_classes as mc,
 };
 use kayfabe_rt::device::{LockMode, SharedDevice};
-use kayfabe_tests::{Scenario, identical_handles, reachable_maps, reachable_objects};
+use kayfabe_tests::{
+    Guarded, ResidueClaim, Scenario, identical_handles, reachable_maps, reachable_objects,
+};
 
 // ---------------------------------------------------------------------------------
 // Harness
@@ -132,7 +134,10 @@ const VA_SCRATCH: GpuVa = GpuVa(0x40_0000_0000);
 const VA_MAIN: GpuVa = GpuVa(0x50_0000_0000);
 
 /// One guest proc on GPU0 with `pool` workers in its isolate.
-fn device_with(pool: usize, mode: LockMode) -> (Arc<SharedDevice>, ProcId, SharedRecorder) {
+fn device_with(
+    pool: usize,
+    mode: LockMode,
+) -> (Guarded<Arc<SharedDevice>>, ProcId, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::with_pool_size(pool);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
@@ -144,7 +149,15 @@ fn device_with(pool: usize, mode: LockMode) -> (Arc<SharedDevice>, ProcId, Share
         gpu.apply(ev).expect("scenario applies");
     }
     let pid = gpu.spine.by_pdb[&(GPU, PDB)];
-    (Arc::new(SharedDevice::new(gpu, mode)), pid, recorder)
+    (
+        Guarded::new(
+            "t0_subset_free::device_with",
+            Arc::new(SharedDevice::new(gpu, mode)),
+            recorder.clone(),
+        ),
+        pid,
+        recorder,
+    )
 }
 
 /// Declare a VASpace with its own PDB — a `Vas` of its own in the proc.
@@ -211,11 +224,13 @@ fn mark(rec: &SharedRecorder) -> usize {
 /// Assert `Outstanding(ledger) == Reachable(core state)`, objects and mappings, and that
 /// nothing was released twice or released unacquired — the strongest form of the §7.8
 /// conservation invariant, the one `retry_ledger.rs` proved out.
-fn assert_conserved(device: Arc<SharedDevice>, pid: ProcId, rec: &SharedRecorder) {
+fn assert_conserved(device: Guarded<Arc<SharedDevice>>, pid: ProcId, rec: &SharedRecorder) {
     let ledger = rec.lock().expect("recorder").ledger();
-    let gpu = Arc::try_unwrap(device)
-        .unwrap_or_else(|_| panic!("every thread joined"))
-        .into_gpu();
+    let gpu = device.map(|d| {
+        Arc::try_unwrap(d)
+            .unwrap_or_else(|_| panic!("every thread joined"))
+            .into_gpu()
+    });
     let proc = &gpu.procs[&pid];
     assert_eq!(
         ledger.leaked_on(IsolateId(pid.0)),
@@ -665,7 +680,23 @@ fn the_drain_never_races_a_verb_in_flight_on_the_same_isolate() {
 #[test]
 fn a_retired_procs_queue_is_left_to_the_session_death_backstop() {
     let _wd = watchdog("t0_retired", Duration::from_secs(60));
-    let (device, pid, rec) = device_with(2, LockMode::Sharded);
+    let (mut device, pid, rec) = device_with(2, LockMode::Sharded);
+    // ★ §12.35 — DECLARED RESIDUE: this test's entire subject, stated to the guard in the
+    // guard's own vocabulary. `retire_proc` is the VIOLENT death, so `Proc::retire` stops
+    // the isolates and the staged queue can never drain. (The clean death —
+    // `Spine::vacate` — keeps them live and does reclaim; that is
+    // `freeing_a_vaspace_queues_its_host_state_and_the_next_op_releases_it`.)
+    device.declare_residue(
+        ResidueClaim::on(
+            IsolateId(pid.0),
+            "the one disposition T0 deliberately does NOT own: an out-of-band `retire_proc` \
+             stops the isolate, so the queued host VAS + backing are disposed of in bulk \
+             by the session's death (§7.0)",
+        )
+        .objects(VerbKind::AllocVaSpace, 1)
+        .objects(VerbKind::AllocSysmem, 1)
+        .maps(1),
+    );
     declare_vaspace(&device, SCRATCH_VAS, SCRATCH_PDB);
     device
         .publish_backing(GPU, SCRATCH_PDB, VA_SCRATCH, 0x1000)

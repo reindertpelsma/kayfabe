@@ -832,6 +832,11 @@ pub struct RmRecorder {
     pub fail_kinds: BTreeMap<VerbKind, RmError>,
     /// Armed holds, matched newest-spec-first and consumed one-shot.
     holds: Vec<(HoldSpec, Arc<VerbHold>)>,
+    /// ★ Accounting for verbs whose log entries [`RmRecorder::compact`] has already
+    /// handed out (`l1_concurrency.md` §12.35). [`RmRecorder::ledger`] starts from this
+    /// and folds the remaining [`RmRecorder::log`] on top, so draining the log to bound
+    /// memory costs nothing in accounting — which it silently did before.
+    carried: HostLedger,
 }
 
 /// ★ **The acquire/release ledger** — every host resource the mock handed out, and
@@ -901,8 +906,36 @@ impl RmRecorder {
     /// released nothing — the latter being exactly why `VerbFailure::orphans` exists.
     #[must_use]
     pub fn ledger(&self) -> HostLedger {
-        let mut l = HostLedger::default();
-        for (iso, verb) in &self.log {
+        let mut l = self.carried.clone();
+        Self::fold(&mut l, &self.log);
+        l
+    }
+
+    /// ★ **Take the verb log without losing the ledger** (`l1_concurrency.md` §12.35).
+    ///
+    /// A long soak drains the global log periodically to bound memory — 16 threads ×
+    /// 100 000 ops is a lot of `RmVerb`s — and the obvious way to write that,
+    /// `std::mem::take(&mut rec.log)`, **destroys the accounting**: every acquisition in
+    /// the drained prefix disappears, so `ledger()` afterwards reports the whole run's
+    /// live core state as dangling. The teardown post-condition (§12.35) found exactly
+    /// that in `concurrency_stress`, where the drain had been correct-looking and
+    /// unexamined since it was written.
+    ///
+    /// So the drain is a *supported* operation instead of a footgun: fold the prefix into
+    /// [`RmRecorder::carried`] first, then hand it out. The invariant is that
+    /// `ledger()` is the same value whether or not this was ever called.
+    pub fn compact(&mut self) -> Vec<(IsolateId, RmVerb)> {
+        let drained = core::mem::take(&mut self.log);
+        let mut carried = core::mem::take(&mut self.carried);
+        Self::fold(&mut carried, &drained);
+        self.carried = carried;
+        drained
+    }
+
+    /// Fold `entries` into `l` — the shared body of [`RmRecorder::ledger`] and
+    /// [`RmRecorder::compact`], so the two can never disagree.
+    fn fold(l: &mut HostLedger, entries: &[(IsolateId, RmVerb)]) {
+        for (iso, verb) in entries {
             let live = l.leaked.entry(*iso).or_default();
             let minted = match verb {
                 RmVerb::Alloc { handle, .. }
@@ -935,7 +968,6 @@ impl RmRecorder {
                 _ => {}
             }
         }
-        l
     }
 
     /// Arm a one-shot hold: the first verb matching `spec` parks inside the backend
@@ -1553,6 +1585,72 @@ mod tests {
                 assert!(seen.insert(va), "duplicate host VA {va:#x} at map #{k}");
             }
         });
+    }
+
+    /// ★ §12.35 — [`RmRecorder::compact`]'s defining invariant: the ledger is the same
+    /// value whether or not the log was ever drained.
+    ///
+    /// This is the regression `concurrency_stress` was silently carrying. Its 16-thread
+    /// soak drains the global verb log every 4096 ops to bound memory; with a bare
+    /// `mem::take` that deleted every acquisition in the drained prefix, so the whole
+    /// run's live host state read back as dangling. Asserting the equality here, on a
+    /// scripted three-verb log, is what keeps the drain a supported operation instead of
+    /// a footgun that only shows up under a slow-gated stress test.
+    #[test]
+    fn recorder_compact_preserves_the_ledger_exactly() {
+        let (mut f, rec) = MockIsolateFactory::new();
+        let mut iso = f.spawn(IsolateId(1), GpuId::ZERO);
+        let (vas, mem) = iso.checkout().expect("idle worker").with_rm(|rm| {
+            let vas = rm.alloc_vaspace().unwrap();
+            let mem = rm.alloc_sysmem(0x1000).unwrap();
+            let _ = rm.map_gpu_va(vas, mem, 0x1000).unwrap();
+            (vas, mem)
+        });
+
+        let undrained = rec.lock().expect("recorder").ledger();
+        assert_eq!(
+            undrained.leaked_on(IsolateId(1)),
+            BTreeSet::from([vas, mem]),
+            "precondition: both handles are outstanding before any drain"
+        );
+        assert_eq!(
+            undrained.leaked_maps[&IsolateId(1)].len(),
+            1,
+            "precondition: the one mapping is outstanding too"
+        );
+
+        let drained = rec.lock().expect("recorder").compact();
+        assert_eq!(
+            drained.len(),
+            3,
+            "compact hands out exactly the drained prefix"
+        );
+        assert!(
+            rec.lock().expect("recorder").log.is_empty(),
+            "…and the log really is emptied, so the memory bound still holds"
+        );
+        assert_eq!(
+            rec.lock().expect("recorder").ledger(),
+            undrained,
+            "★ the ledger is UNCHANGED by the drain — the whole point"
+        );
+
+        // And a verb issued AFTER the compaction folds onto the carried accounting
+        // rather than replacing it: freeing `mem` must leave exactly `vas` outstanding.
+        iso.checkout()
+            .expect("idle worker")
+            .with_rm(|rm| rm.free(mem))
+            .expect("free");
+        let after = rec.lock().expect("recorder").ledger();
+        assert_eq!(
+            after.leaked_on(IsolateId(1)),
+            BTreeSet::from([vas]),
+            "post-compaction verbs fold ONTO the carried ledger, never over it"
+        );
+        assert!(
+            after.free_of_unknown.is_empty(),
+            "the freed handle was known despite its alloc living only in the carried half"
+        );
     }
 
     #[test]

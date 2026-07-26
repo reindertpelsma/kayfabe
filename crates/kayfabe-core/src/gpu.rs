@@ -446,6 +446,23 @@ impl Proc {
             .collect()
     }
 
+    /// ★ **What is queued for release, per target** — the read-only half of
+    /// [`Proc::pending_release_targets`] (`l1_concurrency.md` §12.35).
+    ///
+    /// Exists so that "this host object was *scheduled* for disposal" is an observable
+    /// fact and not an inference from the absence of a `Free` verb. That distinction is
+    /// the whole of the §12.35 teardown post-condition: an outstanding object whose owner
+    /// the core dropped is a **leak** if nothing ever queued it, and the ordinary
+    /// deferred T0 disposition if something did. A test cannot tell those apart without
+    /// this window, and telling them apart is the point.
+    ///
+    /// `&Orphans` and never `&mut`: [`Proc::checkout_with_pending_release`] stays the
+    /// only way the queue leaves this struct, so the `#[must_use]` disposal obligation
+    /// cannot be sidestepped by reaching in here.
+    pub fn staged_releases(&self) -> impl Iterator<Item = (GpuId, &Orphans)> {
+        self.pending_release.iter().map(|(&g, o)| (g, o))
+    }
+
     /// How many host objects + mappings are queued for release across every target —
     /// diagnostics, and the executable statement that a drain actually drained.
     #[must_use]
@@ -485,10 +502,34 @@ impl Proc {
         self.isolates.values().all(|iso| iso.is_quiesced())
     }
 
+    /// ★★ **VACATE — the clean death** (`l1_concurrency.md` §12.35): this proc's
+    /// component vanished (the guest freed its client root, or it was absorbed by a
+    /// merge). It refuses every new op from this instant, exactly like [`Proc::retire`],
+    /// and it is out of every routing map — but its **isolates stay live**, because its
+    /// staged `pending_release` queue still has to be disposed of and a retired isolate
+    /// refuses every verb, disposal included.
+    ///
+    /// The split from [`Proc::retire`] is the whole of §12.35's second half, and it is a
+    /// statement about *why* the proc died rather than a convenience:
+    ///
+    /// | death | isolate | why |
+    /// |---|---|---|
+    /// | **vacate** — the component vanished cleanly | stays live until the reap | the sandbox is healthy; its handles can and should be freed per object |
+    /// | **retire** — worker HUP, condemnation, out-of-band kill | stopped at once | the sandbox is untrustworthy or already dead (§12.17, no resurrect); the disposition of record is the session's own death (§7.0) |
+    ///
+    /// Both are *removal* from the live set. Only one of them can still clean up, and
+    /// pretending otherwise is what made §12.33's residue unreclaimable.
+    pub fn vacate(&mut self) {
+        self.retired = true;
+    }
+
     /// Stage 1 of teardown (lesson L10): stop every per-target isolate, mark retired.
     /// Heavy data-plane reap happens at the proven quiesce point, then drop.
+    ///
+    /// The **violent** death — see [`Proc::vacate`] for the clean one and for why the
+    /// two must differ.
     pub fn retire(&mut self) {
-        self.retired = true;
+        self.vacate();
         for iso in self.isolates.values_mut() {
             iso.retire();
         }
@@ -521,6 +562,74 @@ impl Proc {
                 .vases
                 .values()
                 .all(|v| v.host_vas.is_none() && v.table.iter().all(|(_, _, b)| b.host.is_none()))
+    }
+}
+
+impl Drop for Proc {
+    /// ★★ **THE DRAIN — the last step of `decide → stage → drain → remove`**
+    /// (`l1_concurrency.md` §12.35).
+    ///
+    /// A `Proc` cannot be destroyed without the host cleanup it already staged being
+    /// *issued*. That is the property §12.33 found missing, and putting it here rather
+    /// than at a call site is the point: "removed before cleaned" stops being
+    /// expressible, in the same way `release(arena)`-by-value stopped double-release
+    /// from being expressible. Every path that destroys a proc — the reap's
+    /// [`Reclaimed`], a test dropping a `Gpu`, the device's own teardown — goes through
+    /// this one.
+    ///
+    /// **Three preconditions, and each is checked rather than assumed.**
+    ///
+    /// 1. **Lock-free (R1).** A verb may not be issued under a ranked lock. This is
+    ///    already law for a `Proc` drop for a *different* reason —
+    ///    [`kayfabe_isolate::IsolateBox`]'s own `Drop` asserts it, because a real
+    ///    isolate's teardown is a blocking syscall (§12.16 G3b) — and
+    ///    [`kayfabe_isolate::Worker::execute`] asserts it again for the verb. So this
+    ///    adds no new obligation; it *relies* on one the design already enforces.
+    /// 2. **Quiesced (M2-a's rule).** Per-object reclamation must never race an
+    ///    in-flight verb, and no lock can exclude one — only the isolate's own quiesce
+    ///    predicate can. `checkout()` returning a worker on an idle isolate is that
+    ///    predicate, the same one [`Proc::checkout_with_pending_release`] uses.
+    /// 3. **Not already panicking.** A panic inside `Drop` during an unwind aborts the
+    ///    process. Same guard, same reason, as `IsolateBox`.
+    ///
+    /// **What happens when it cannot run.** A *retired* isolate refuses the checkout, so
+    /// a violently-killed proc's queue is left exactly where it was — and its disposition
+    /// of record is the one it always had: the session's death frees the whole client
+    /// tree (§7.0, the C's #80 backstop). That is a **different disposition**, not a
+    /// failure, and it is why [`Proc::vacate`] exists to keep the clean path's isolates
+    /// alive.
+    fn drop(&mut self) {
+        if std::thread::panicking() || self.pending_release.is_empty() {
+            return;
+        }
+        let Proc {
+            isolates,
+            pending_release,
+            ..
+        } = self;
+        for (gpu, orphans) in core::mem::take(pending_release) {
+            if orphans.is_empty() {
+                continue;
+            }
+            let Some(iso) = isolates.get_mut(&gpu) else {
+                continue;
+            };
+            // The quiesce test and the checkout as one act, for the reason
+            // `checkout_with_pending_release` states: splitting them is how the ordering
+            // gets got wrong. A retired isolate returns `None` here and keeps its queue's
+            // disposition as §7.0 namespace death.
+            if !iso.is_quiesced() {
+                continue;
+            }
+            let Some(mut worker) = iso.checkout() else {
+                continue;
+            };
+            // Best effort by construction: a refused release leaves objects that the
+            // isolate's imminent death disposes of in bulk anyway. `execute` is what
+            // asserts R1.
+            let _ = worker.execute(&orphans.release_plan());
+            iso.checkin(worker);
+        }
     }
 }
 
@@ -838,6 +947,16 @@ struct RefreshPlan {
     /// absorbed, empty = mint a fresh proc.
     /// One entry per **user** boundary.
     matches: Vec<Option<Vec<ProcId>>>,
+    /// ★★ §12.35 — **every `Proc` this refresh will remove from the live set**, decided
+    /// here (before a single proc is touched) rather than discovered mid-mutation:
+    /// the procs absorbed by a merge, plus the procs whose component vanished. Ascending
+    /// and deduplicated, so the removal pass is deterministic (decision #27).
+    ///
+    /// It exists so that removal can be **one pass in one place**, which is what makes
+    /// `decide → stage → drain → remove` structural. It used to be two: step 1 removed
+    /// the absorbed procs inline, step 3 computed the vanished ones from `live` *after*
+    /// the mutation, and neither staged anything.
+    vanishing: Vec<ProcId>,
     /// Every GPU target that boundary's proc spans. ★ §12.27: length is
     /// `bounds.procs.len() + 1` — the LAST entry is the **system** component, which has
     /// no `matches` entry (it is never matched, merged, minted or condemned) but spans
@@ -1491,13 +1610,72 @@ impl Spine {
             return Err(GpuError::Gpa(e));
         }
 
+        // (f) ★★ §12.35 — WHICH PROCS VANISH, decided here. A proc survives iff some
+        //     boundary matched it *first* (`matching[0]` is the keeper); everything else
+        //     in the live set is either absorbed by a merge or has had its component
+        //     freed out from under it, and the two are the same event as far as removal
+        //     is concerned: it leaves the live set and must be staged on the way out.
+        //
+        //     Derived from `matches`, which (a) already settled, so this adds no new
+        //     refusal and no new failure path — it only *names*, before the mutation
+        //     starts, the set the mutation used to discover halfway through.
+        let survivors: BTreeSet<ProcId> = matches
+            .iter()
+            .filter_map(|m| m.as_ref().and_then(|v| v.first()).copied())
+            .collect();
+        let vanishing: Vec<ProcId> = procs
+            .iter_mut()
+            .map(|(id, _)| id)
+            .filter(|id| !survivors.contains(id))
+            .collect();
+
         Ok(RefreshPlan {
             matches,
+            vanishing,
             spans,
             arenas,
             new_targets,
             next_base,
         })
+    }
+
+    /// ★★ **THE ONE REMOVAL POINT** (`l1_concurrency.md` §12.35) — the only place in
+    /// `refresh` that takes a `Proc` out of the live set, and it **stages first**.
+    ///
+    /// The rule the owner stated, and the reason this is a function rather than a
+    /// convention: *if you do something outside the locks, assume that on re-acquiring
+    /// them the data may have changed underneath — including removal. Do the removal in
+    /// a **central** place, after the real cleanup, and that out-of-order stops being
+    /// possible.* §12.33 is what happens without it: `procs.remove(id)` + `retire()` with
+    /// no `sync_proc_to_boundary`, so `stage_dropped_vases`/`stage_dropped_channels`
+    /// never ran and the host VAS + backings were not even *queued*. From that instant
+    /// the core could not name them, and every downstream door was already shut (a
+    /// retired isolate refuses the disposal; the reap runs under the device write lock
+    /// where R1 forbids a verb).
+    ///
+    /// Staging with **empty** live sets is exactly right and is not a special case: a
+    /// vanished component has no live `(GpuId, Pdb)` and no live `ChanId`, so the general
+    /// "everything the refresh is about to drop" pass drops *everything*. One mechanism,
+    /// not a parallel reclamation path.
+    ///
+    /// Staging is pure bookkeeping (it moves handles into `pending_release` and returns
+    /// `GpaBlock`s to the proc's own arena — no verb, so R1 does not apply), which is why
+    /// it may run here under the device write lock. The **drain** cannot, and does not:
+    /// it happens lock-free at the corpse's [`Proc::drop`], gated on `is_quiesced`.
+    fn vacate(procs: &mut impl ProcSet, id: ProcId) -> Proc {
+        let mut p = procs
+            .remove(id)
+            .expect("a vanishing proc is in the live set");
+        Self::stage_dropped_vases(&mut p, &BTreeSet::new());
+        Self::stage_dropped_channels(&mut p, &BTreeSet::new());
+        p.vases.clear();
+        p.channels.clear();
+        p.chan_ids.clear();
+        p.exec.scheduled.clear();
+        // ★ VACATE, not RETIRE: the isolates stay live so the queue just filled can
+        // actually be disposed of. See `Proc::vacate` for the clean-vs-violent split.
+        p.vacate();
+        p
     }
 
     /// Re-derive boundaries and sync `procs`/`by_pdb`/`by_vchid` to them.
@@ -1625,17 +1803,12 @@ impl Spine {
 
             let pid = match matching.first() {
                 Some(&keep) => {
-                    // A merge: every other matching proc was checked untouched by the
-                    // plan (the early-arm discipline).
-                    for &absorbed in &matching[1..] {
-                        let mut dead = procs.remove(absorbed).expect("exists");
-                        dead.retire();
-                        // Retire is also a REACTOR event (§6): the absorbed proc's
-                        // completion sources must stop routing the instant it stops
-                        // existing, or a late signal resolves onto a dead proc (F4).
-                        self.sources.deregister_proc(absorbed).latched();
-                        self.retired.push(dead);
-                    }
+                    // ★ §12.35: a merge's absorbed procs are NOT removed here any more.
+                    // They are in `plan.vanishing` (they are not survivors), so step 3's
+                    // single removal pass takes them — staged, like every other death.
+                    // The plan already checked each of them untouched (the early-arm
+                    // discipline), so their staging is empty; the point is that there is
+                    // no second removal site to keep in step with the first.
                     keep
                 }
                 None => {
@@ -1666,19 +1839,25 @@ impl Spine {
         //     the same rules as a guest process's.
         Self::sync_proc_to_boundary(system, &bounds.system);
 
-        // 3. Retire procs whose component vanished (client root freed).
-        let dead: Vec<ProcId> = procs
-            .iter_mut()
-            .map(|(id, _)| id)
-            .filter(|id| !live.contains(id))
-            .collect();
-        for id in dead {
-            let mut p = procs.remove(id).expect("exists");
-            p.retire();
-            // Same reactor law as the merge-absorb path above: deregister every source
-            // of the retiring proc, across every GPU target, BEFORE it leaves the live
-            // set. Handles are never reused, so any signal still in flight for it now
-            // resolves to nothing — a loud `SourceFault`, never a use-after-retire.
+        // 3. ★★ §12.35 — **THE ONE REMOVAL POINT**: every proc that leaves the live set
+        //    leaves it here, through `Spine::vacate`, which stages before it removes.
+        //    Absorbed-by-a-merge and component-vanished are the same event to this pass;
+        //    the plan decided the set at (f), before step 1 touched anything.
+        //
+        //    `live` is asserted equal to the plan's survivors rather than recomputed:
+        //    two derivations of "who is still here" is exactly the drift this
+        //    centralisation removes.
+        debug_assert!(
+            plan.vanishing.iter().all(|id| !live.contains(id)),
+            "the plan's vanishing set must be disjoint from the procs step 1 kept"
+        );
+        for id in core::mem::take(&mut plan.vanishing) {
+            let p = Self::vacate(procs, id);
+            // Removal is also a REACTOR event (§6): the dying proc's completion sources
+            // must stop routing the instant it stops existing, or a late signal resolves
+            // onto a dead proc (F4). Handles are never reused, so any signal still in
+            // flight for it now resolves to nothing — a loud `SourceFault`, never a
+            // use-after-retire.
             self.sources.deregister_proc(id).latched();
             self.retired.push(p);
         }
@@ -1847,9 +2026,17 @@ impl Spine {
         if pid == Gpu::SYSTEM_PROC {
             return false;
         }
-        let Some(mut p) = procs.remove(pid) else {
+        if procs.get_mut(pid).is_none() {
             return false;
-        };
+        }
+        // ★ §12.35 — the violent death goes through the SAME central removal, so the
+        // host objects are at least *named* in `pending_release` instead of vanishing
+        // with the `Vas`. What differs is only the isolate's fate: `retire()` stops it,
+        // so the queue's disposition of record stays §7.0 namespace death — an
+        // untrustworthy or already-dead sandbox must not be handed more verbs (§12.17,
+        // no resurrect). Staging it anyway is what makes that a *stated* disposition
+        // rather than an unnameable set.
+        let mut p = Self::vacate(procs, pid);
         p.retire();
         self.sources.deregister_proc(pid).latched();
         let anchor = p.anchor;
@@ -2040,6 +2227,20 @@ impl Spine {
         self.retired.len()
     }
 
+    /// ★ The retired-but-unreaped procs themselves — a **read-only** window, for the
+    /// teardown post-condition audit (`l1_concurrency.md` §12.35).
+    ///
+    /// A vacated proc is out of every routing map and out of [`ProcSet`], but it is not
+    /// *gone*: it still owns its isolates, its arenas and its staged
+    /// [`Proc::staged_releases`] queue until the reap. Any statement of the form "every
+    /// host object is either reachable or queued" is therefore false unless it can see
+    /// this list, which is why the audit needs it and why `retired_len` alone was not
+    /// enough. `&[Proc]` and not `&mut`: nothing outside the spine may mutate a corpse.
+    #[must_use]
+    pub fn retired_procs(&self) -> &[Proc] {
+        &self.retired
+    }
+
     /// Compose+post one completion batch for target `gpu` if ITS drain gate is open
     /// (§4.3.2, MG-6: per-target GSP queue). Composes from the procs that span this
     /// target (+ the system proc) — a batch outstanding on one GPU never gates
@@ -2215,6 +2416,14 @@ impl Gpu {
     /// simply let it fall.
     pub fn reap_retired(&mut self) -> Reclaimed {
         self.spine.reap_retired()
+    }
+
+    /// Retire proc `pid` out of band — the composed form of [`Spine::retire_proc`],
+    /// which needs the spine and the proc set as two disjoint borrows. `&mut Gpu` owns
+    /// both, so the split lives here once instead of at every call site.
+    pub fn retire_proc(&mut self, pid: ProcId) -> bool {
+        let Gpu { spine, procs, .. } = self;
+        spine.retire_proc(procs, pid)
     }
 
     /// How many retired procs are awaiting a reap (see [`Spine::retired_len`]).

@@ -111,7 +111,7 @@ use kayfabe_fwd::{FwdFault, Orphans};
 use kayfabe_isolate::{HostHandle, IsolateId, RmError, VerbFailure, VerbPlan, VerbReply, WorkerId};
 use kayfabe_mocks::{HostLedger, MockArch, MockIsolateFactory, RmVerb, SharedRecorder};
 use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, ResidueClaim, Scenario, identical_handles};
 
 // ---------------------------------------------------------------------------------
 // Harness
@@ -172,7 +172,7 @@ const SYSTEM_ISOLATE: IsolateId = IsolateId(0);
 
 /// Two guest compute processes (`OWNER`, `OTHER`) on GPU0, plus the shared verb
 /// recorder that backs the conservation ledger.
-fn two_proc_gpu() -> (Gpu, ProcId, ProcId, SharedRecorder) {
+fn two_proc_gpu() -> (Guarded<Gpu>, ProcId, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
@@ -197,7 +197,12 @@ fn two_proc_gpu() -> (Gpu, ProcId, ProcId, SharedRecorder) {
     }
     let owner = gpu.spine.by_pdb[&(GPU, OWNER_PDB)];
     let other = gpu.spine.by_pdb[&(GPU, OTHER_PDB)];
-    (gpu, owner, other, recorder)
+    (
+        Guarded::new("cross_proc_lifetime::two_proc_gpu", gpu, recorder.clone()),
+        owner,
+        other,
+        recorder,
+    )
 }
 
 /// Everything `proc` owns on `gpu`, in RM's release order (unmaps first) — the same
@@ -628,6 +633,24 @@ fn the_owner_dying_cleanly_cannot_dangle_a_system_reference() {
 fn a_condemned_owner_cannot_dangle_a_system_reference() {
     let _wd = watchdog("owner_condemned", Duration::from_secs(60));
     let (mut gpu, owner, other, rec) = two_proc_gpu();
+    // ★ §12.35 — DECLARED RESIDUE. This proc dies VIOLENTLY (`retire_proc`: its worker
+    // HUPped, its component is condemned), so `Proc::retire` stops its isolates at once
+    // and the staged release is refused: §12.17's no-resurrect rule outranks per-object
+    // reclaim, because a sandbox that just lost a worker must not be handed more verbs.
+    // The disposition of record is therefore §7.0 namespace death — the reap drops the
+    // isolate and a real one's death frees RM's whole client tree. The clean-death path
+    // (`Spine::vacate`) keeps its isolates live and DOES reclaim; the split is deliberate.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            IsolateId(owner.0),
+            "condemned owner: `retire_proc` stops the isolate before the staged release \
+             can drain (§12.17 no-resurrect), so its host VAS + backing are disposed of \
+             by the session's own death (§7.0)",
+        )
+        .objects(kayfabe_mocks::VerbKind::AllocVaSpace, 1)
+        .objects(kayfabe_mocks::VerbKind::AllocSysmem, 1)
+        .maps(1),
+    );
     kayfabe_fwd::publish_backing(
         gpu.procs.get_mut(&owner).expect("owner"),
         GPU,
@@ -653,7 +676,7 @@ fn a_condemned_owner_cannot_dangle_a_system_reference() {
 
     // Out-of-band death: the owner's component is condemned, its isolate is gone.
     assert!(
-        gpu.spine.retire_proc(&mut gpu.procs, owner),
+        gpu.retire_proc(owner),
         "the owner was live when its worker died"
     );
     assert_eq!(
@@ -832,7 +855,7 @@ fn a_system_worker_death_is_device_fatal_not_a_silent_no_op() {
             .isolate(GPU)
             .expect("system isolate")
             .idle_workers();
-        let device = SharedDevice::new(gpu, mode);
+        let device = gpu.map(|g| SharedDevice::new(g, mode));
 
         let hup = device.register_source(SourceKind::Worker {
             proc: Gpu::SYSTEM_PROC,
@@ -853,7 +876,7 @@ fn a_system_worker_death_is_device_fatal_not_a_silent_no_op() {
             0,
             "({mode:?}) the system proc was NOT retired"
         );
-        let gpu = device.into_gpu();
+        let gpu = device.map(SharedDevice::into_gpu);
         assert_eq!(
             gpu.spine.condemned_len(),
             0,
@@ -921,7 +944,7 @@ fn the_spine_refuses_to_retire_the_system_proc_even_when_it_is_in_the_proc_set()
     assert_eq!(gpu.retired_len(), 0, "and nothing was retired");
 
     // The ordinary path still works — the guard is narrow, not a blanket refusal.
-    assert!(gpu.spine.retire_proc(&mut gpu.procs, other));
+    assert!(gpu.retire_proc(other));
     assert_eq!(gpu.spine.condemned_len(), 1);
 }
 
@@ -1105,7 +1128,7 @@ const VA3: GpuVa = GpuVa(0x2_0040_0000);
 /// destination's declared [`kayfabe_arch::ClientKind`] is the *entire* difference
 /// between a reference and a merge (§12.27), and a `peer_dup` here would produce one
 /// `Proc` and test nothing.
-fn uvm_referenced_gpu() -> (Gpu, ProcId, SharedRecorder) {
+fn uvm_referenced_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
@@ -1131,7 +1154,15 @@ fn uvm_referenced_gpu() -> (Gpu, ProcId, SharedRecorder) {
         gpu.apply(ev).expect("scenario applies");
     }
     let owner = gpu.spine.by_pdb[&(GPU, OWNER_PDB)];
-    (gpu, owner, recorder)
+    (
+        Guarded::new(
+            "cross_proc_lifetime::uvm_referenced_gpu",
+            gpu,
+            recorder.clone(),
+        ),
+        owner,
+        recorder,
+    )
 }
 
 /// The guest kernel frees the dead process's client root — the clean kill (T2's path).
@@ -1401,35 +1432,41 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
     );
 }
 
-/// ★★ **Step 5, and the finding: the last reference dropping retires the owner — and
-/// frees NOTHING per object** (`l1_concurrency.md` §12.33).
+/// ★★ **Step 5: the last reference dropping retires the owner AND frees its objects,
+/// per object** (`l1_concurrency.md` §12.33 → §12.35 — this is the test §12.33 said
+/// would have to change the day someone closed it).
 ///
-/// The claim we wanted to make was "refcount 0 ⇒ the `Free` verb for that exact
-/// [`HostHandle`] reaches the backend, and the ledger balances at quiesce". It does not
-/// hold, and the reason is structural rather than incidental:
+/// §12.33 measured the opposite and said so: 2 objects + 1 mapping outstanding, ledger
+/// `is_balanced() == false`, *"not one `Free` verb ever issued"*. The cause was
+/// structural rather than incidental — `Spine::refresh` step 3 removed a vanished
+/// component's `Proc` with `procs.remove(id)` + `Proc::retire()` and **no**
+/// `sync_proc_to_boundary`, so `stage_dropped_vases` never ran and the host VAS and its
+/// backings were not even *queued*; from that instant the core could not name them, and
+/// both downstream doors were already shut (a retired isolate refuses the disposal; the
+/// reap runs under the device write lock where R1 forbids a verb).
 ///
-/// - `Spine::refresh` step 3 retires a proc whose component vanished by
-///   `procs.remove(id)` + `Proc::retire()` — **without** a `sync_proc_to_boundary`, so
-///   `stage_dropped_vases` never runs and the host VAS / sysmem objects are not even
-///   *queued* for release. The core keeps no record of them from that moment on.
-/// - Even if they were queued, a retired isolate refuses every verb, disposal included
-///   (`t0_subset_free.rs::a_retired_procs_queue_is_left_to_the_session_death_backstop`),
-///   and the reap runs under the device write lock where R1 forbids one.
-/// - And unlike the ordinary teardown — where
-///   [`the_ledger_balances_across_every_teardown_ordering`] reclaims off core state and
-///   *then* applies the guest's own client-root free — the retiring free here arrives
-///   through a **foreign client** (UVM's), inside a single `Gpu::apply`. There is no
-///   window, at any layer, in which anything can still name those handles.
+/// §12.35 closed it exactly where §12.33 predicted (*"§12.18 already settles every
+/// retirement in `plan_refresh` before a `Proc` is touched, so a 'these procs are about
+/// to retire' edge exists to hang a pre-retire drain on"*), by making **removal itself**
+/// the central, final step: `decide → stage → drain → remove`.
 ///
-/// So the disposition of record is §7.0's: the isolate is a host process, the reap drops
-/// it, and its death frees the whole client tree. That is a real disposition and not a
-/// leak — but it is a *different* one from per-object reclaim, and this test says which,
-/// exactly, so that no later change can quietly assume the other.
+/// - **decide** — `plan_refresh` names `RefreshPlan::vanishing` before any proc is
+///   touched;
+/// - **stage** — `Spine::vacate` is the one removal site and it runs the ordinary
+///   `stage_dropped_vases` / `stage_dropped_channels` first (bookkeeping, so it may run
+///   under the lock);
+/// - **drain** — `Proc::drop`, lock-free and `is_quiesced`-gated, on isolates that
+///   `Proc::vacate` deliberately left **live** (a clean death is not a condemnation);
+/// - **remove** — only then does the value fall.
 ///
-/// What IS conserved, and asserted: nothing double-freed, nothing reached across a
-/// namespace, no orphaned GPA, and the arena back in its window.
+/// So this test now asserts the claim §12.33 wanted: refcount 0 ⇒ the `Free` verb for
+/// that exact [`HostHandle`] reaches the backend, and the ledger balances. The asymmetry
+/// §12.33 named is still real and is still what makes the case interesting — the
+/// retiring free arrives through a **foreign client** (UVM's), inside a single
+/// `Gpu::apply`, so there is no pre-reclaim window at any *caller*. There does not need
+/// to be one: the reclamation is not the caller's any more.
 #[test]
-fn the_last_reference_dropping_retires_the_owner_but_frees_nothing_per_object() {
+fn the_last_reference_dropping_retires_the_owner_and_frees_its_objects_per_object() {
     let _wd = watchdog("last_reference_drops", Duration::from_secs(60));
     let (mut gpu, owner, rec) = uvm_referenced_gpu();
     let owner_iso = IsolateId(owner.0);
@@ -1504,30 +1541,35 @@ fn the_last_reference_dropping_retires_the_owner_but_frees_nothing_per_object() 
     );
     drop(reaped);
 
-    // ---- ★ THE FINDING. ----
+    // ---- ★★ §12.35: THE CLOSED FINDING. ----
+    let mut expected = freed_before.clone();
+    expected.extend([backing, host_vas]);
+    expected.sort_unstable();
+    let mut actually_freed = frees_on_owner(&rec, owner);
+    actually_freed.sort_unstable();
     assert_eq!(
-        frees_on_owner(&rec, owner),
-        freed_before,
-        "★★ NOT ONE further `Free` verb reached the backend. Refcount 0 retires the \
-         proc; it does not free its objects. See this test's doc comment for why the \
-         window does not exist — and `l1_concurrency.md` §12.33.",
+        actually_freed, expected,
+        "★★ the dup-referenced half IS freed per object at refcount 0 — the backing and \
+         the host VAS both, on the owner's own isolate. §12.33 measured `freed_before` \
+         here (not one further `Free`); §12.35's `decide → stage → drain → remove` is \
+         what changed it.",
     );
 
     let l = ledger(&rec);
     assert_eq!(
         l.leaked_on(owner_iso),
-        std::collections::BTreeSet::from([host_vas, backing]),
-        "★ the residue is EXACTLY the dup-referenced half — the host VAS and the \
-         backing — and the test names it rather than pretending it was reclaimed. Its \
-         disposition is §7.0 namespace death: the reap dropped the isolate, and a real \
-         one's death closes its fds and frees RM's whole client tree.",
+        std::collections::BTreeSet::new(),
+        "★ nothing is left outstanding on the owner's isolate — the §7.0 namespace-death \
+         backstop is no longer load-bearing on this path",
     );
     assert_eq!(
         l.leaked_maps
             .get(&owner_iso)
-            .map(std::collections::BTreeSet::len),
-        Some(1),
-        "…and that backing's one GPU mapping goes with it",
+            .map(std::collections::BTreeSet::len)
+            .unwrap_or(0),
+        0,
+        "…and the backing's GPU mapping was unmapped before it was freed (RM's own \
+         children-before-parents order, `ogkm: rs_client.c:830-849`)",
     );
     assert_eq!(
         (
@@ -1540,8 +1582,8 @@ fn the_last_reference_dropping_retires_the_owner_but_frees_nothing_per_object() 
          failure modes that WOULD be bugs rather than dispositions",
     );
     assert!(
-        !l.is_balanced(),
-        "stated once more, unambiguously: it does not balance"
+        l.is_balanced(),
+        "stated once more, unambiguously: the ledger balances"
     );
 
     // The arena really did return: a fresh process gets the range back (#80's class).
@@ -1588,6 +1630,24 @@ fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
     let _wd = watchdog("condemned_owner_kernel_ref", Duration::from_secs(60));
     let (mut gpu, owner, rec) = uvm_referenced_gpu();
     let owner_iso = IsolateId(owner.0);
+    // ★ §12.35 — DECLARED RESIDUE. This proc dies VIOLENTLY (`retire_proc`: its worker
+    // HUPped, its component is condemned), so `Proc::retire` stops its isolates at once
+    // and the staged release is refused: §12.17's no-resurrect rule outranks per-object
+    // reclaim, because a sandbox that just lost a worker must not be handed more verbs.
+    // The disposition of record is therefore §7.0 namespace death — the reap drops the
+    // isolate and a real one's death frees RM's whole client tree. The clean-death path
+    // (`Spine::vacate`) keeps its isolates live and DOES reclaim; the split is deliberate.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            IsolateId(owner.0),
+            "condemned owner: `retire_proc` stops the isolate before the staged release \
+             can drain (§12.17 no-resurrect), so its host VAS + backing are disposed of \
+             by the session's own death (§7.0)",
+        )
+        .objects(kayfabe_mocks::VerbKind::AllocVaSpace, 1)
+        .objects(kayfabe_mocks::VerbKind::AllocSysmem, 1)
+        .maps(1),
+    );
 
     kayfabe_fwd::publish_backing(
         gpu.procs.get_mut(&owner).expect("owner"),
@@ -1604,7 +1664,7 @@ fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
 
     // ---- 1. Out-of-band worker death: the component is condemned. ----
     assert!(
-        gpu.spine.retire_proc(&mut gpu.procs, owner),
+        gpu.retire_proc(owner),
         "the owner was live when its worker died"
     );
     assert_eq!(gpu.spine.condemned_len(), 1, "one condemned component");

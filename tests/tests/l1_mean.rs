@@ -125,7 +125,9 @@ use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
 use kayfabe_rt::executor::{Effect, Executor};
 use kayfabe_rt::inbox::{CoreEvent, inbox};
 use kayfabe_rt::lock;
-use kayfabe_tests::{Scenario, identical_handles, reachable_maps, reachable_objects};
+use kayfabe_tests::{
+    Guarded, ResidueClaim, Scenario, identical_handles, reachable_maps, reachable_objects,
+};
 use kayfabe_util::Instant;
 
 // =================================================================================
@@ -374,16 +376,20 @@ const EV: [OsEventRef; 4] = [
 /// Realize the six-proc, two-GPU world and wrap it in `mode`. Pool width is the
 /// shipping default ([`kayfabe_isolate::DEFAULT_POOL_WORKERS`]) — the mean test must
 /// run the configuration production runs.
-fn mean_world(mode: LockMode) -> (Arc<SharedDevice>, Vec<ProcId>, SharedRecorder) {
+fn mean_world(mode: LockMode) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, SharedRecorder) {
     let (gpu, pids, recorder) = mean_gpu();
-    (Arc::new(SharedDevice::new(gpu, mode)), pids, recorder)
+    (
+        gpu.map(|g| Arc::new(SharedDevice::new(g, mode))),
+        pids,
+        recorder,
+    )
 }
 
 /// The same six-proc, two-GPU world as a **bare [`Gpu`]**, for the §12.13 property
 /// tests below: condemnation is a fact of the pure core, so the tests that pin it read
 /// core state directly (arenas, client sets, the source registry) instead of through the
 /// lock shell. Deterministic logic-core testing, §8.2's T1 tier.
-fn mean_gpu() -> (Gpu, Vec<ProcId>, SharedRecorder) {
+fn mean_gpu() -> (Guarded<Gpu>, Vec<ProcId>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
@@ -420,7 +426,11 @@ fn mean_gpu() -> (Gpu, Vec<ProcId>, SharedRecorder) {
     let pids: Vec<ProcId> = (0..N_PROCS)
         .map(|i| gpu.spine.by_pdb[&(gpu_of(i), lane_of(i).pdb)])
         .collect();
-    (gpu, pids, recorder)
+    (
+        Guarded::new("l1_mean::mean_gpu", gpu, recorder.clone()),
+        pids,
+        recorder,
+    )
 }
 
 /// Arm a one-shot hold on `verb` of `(proc, gpu, worker)`'s isolate — the scripted
@@ -822,7 +832,28 @@ fn t0_churn(device: &SharedDevice, i: usize, round: u32) {
 /// One complete mean run under `mode`. Deliberately ONE function read top to bottom:
 /// the phase ORDER is the test, and hiding it behind helpers would hide the script.
 fn mean_run(mode: LockMode) -> MeanReport {
-    let (device, pids, rec) = mean_world(mode);
+    let (mut device, pids, rec) = mean_world(mode);
+    // ★ §12.35 — DECLARED RESIDUE, and it is exactly the number §12.32 pinned as
+    // "namespace-death residue: 6 objects, 2 mappings". Both canary procs die VIOLENTLY
+    // (`retire_proc` — one scripted teardown, one worker HUP), so `Proc::retire` stops
+    // their isolates and the staged release cannot drain: §7.0's process-boundary
+    // backstop is the disposition, per §12.17's no-resurrect rule. Every proc that dies
+    // CLEANLY in this run — a component vanishing through `Spine::vacate` — now reclaims
+    // per object and contributes nothing here, which is the §12.35 delta.
+    for i in [P_TEARDOWN, P_HUP] {
+        device.declare_residue(
+            ResidueClaim::on(
+                IsolateId(pids[i].0),
+                "a canary proc killed out of band (`retire_proc`): its isolate is stopped, \
+                 so its host VAS + backing + channel are the §7.0 namespace-death residue \
+                 §12.32 measured at 6 objects / 2 mappings across the pair",
+            )
+            .objects(VerbKind::AllocVaSpace, 1)
+            .objects(VerbKind::AllocSysmem, 1)
+            .objects(VerbKind::AllocChannel, 1)
+            .maps(1),
+        );
+    }
     let (tx, rx) = inbox();
     let mut ex = Executor::new(Arc::clone(&device), rx);
     let dev: &SharedDevice = &device;
@@ -1193,9 +1224,11 @@ fn mean_run(mode: LockMode) -> MeanReport {
 
     // ---- Phase 11: conservation.
     drop(ex);
-    let mut gpu = Arc::try_unwrap(device)
-        .unwrap_or_else(|_| panic!("every device handle was released"))
-        .into_gpu();
+    let mut gpu = device.map(|d| {
+        Arc::try_unwrap(d)
+            .unwrap_or_else(|_| panic!("every device handle was released"))
+            .into_gpu()
+    });
     sweep_conservation(&mut gpu, &pids, mode);
 
     // ---- Phase 12: ★ the conservation ledger (§7.8), composed into THIS run rather
@@ -2042,9 +2075,11 @@ fn out_of_band_retire_must_not_resurrect_the_isolate() {
     );
     // The refusal is not the whole claim: nothing was MATERIALIZED for it either. No
     // proc holds its client, so there is no isolate and no arena behind that refusal.
-    let gpu = Arc::try_unwrap(device)
-        .unwrap_or_else(|_| panic!("every device handle was released"))
-        .into_gpu();
+    let gpu = device.map(|d| {
+        Arc::try_unwrap(d)
+            .unwrap_or_else(|_| panic!("every device handle was released"))
+            .into_gpu()
+    });
     assert!(
         gpu.procs
             .values()
@@ -2253,6 +2288,20 @@ fn a_condemned_components_arena_is_released_once_and_never_recycled_to_an_impost
     let _wd = watchdog("condemned_arena", Duration::from_secs(60));
     let (mut gpu, pids, _rec) = mean_gpu();
     let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
+    // ★ §12.35 — DECLARED RESIDUE: the victim is condemned out of band, so its isolate is
+    // stopped and its host VAS + backing go to §7.0 namespace death. The GPA half IS
+    // conserved and is what this test is actually about.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            IsolateId(victim.0),
+            "condemned component: `retire_proc` stopped the isolate, so the warmed host \
+             VAS + backing are disposed of by the session's death (§7.0) — the ARENA, \
+             which is this test's subject, is conserved separately and asserted below",
+        )
+        .objects(VerbKind::AllocVaSpace, 1)
+        .objects(VerbKind::AllocSysmem, 1)
+        .maps(1),
+    );
 
     core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the victim publishes while alive");
     let arena = gpu.procs[&victim].arenas[&GPU1].range.clone();
@@ -2818,6 +2867,20 @@ fn a_recovered_component_shares_no_arena_or_host_handle_with_the_condemned_one()
     let _wd = watchdog("recovery_isolation", Duration::from_secs(60));
     let (mut gpu, pids, _rec) = mean_gpu();
     let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
+    // ★ §12.35 — DECLARED RESIDUE: same condemnation shape, one object larger because
+    // this test also materializes the victim's host channel before killing it.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            IsolateId(victim.0),
+            "condemned component: the warmed host VAS + backing + channel are the §7.0 \
+             namespace-death residue of a stopped isolate; the point of the test is that \
+             the RECOVERED component shares none of them",
+        )
+        .objects(VerbKind::AllocVaSpace, 1)
+        .objects(VerbKind::AllocSysmem, 1)
+        .objects(VerbKind::AllocChannel, 1)
+        .maps(1),
+    );
 
     // Warm the victim's host state so it has handles worth confusing: a publication, a
     // host VAS, and a materialized+scheduled host channel.

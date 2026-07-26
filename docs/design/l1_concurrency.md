@@ -3570,3 +3570,211 @@ prose the lexical exception is designed to keep writable — and the reword cost
 The convention is documented in `kayfabe-rt`'s crate docs (the adapter neighbourhood the
 relaxation will land in), cross-referenced from `kayfabe-core`'s thread-safety section where
 `forbid(unsafe_code)` is already argued.
+
+---
+
+### 12.35 ★★★ THE TEARDOWN POST-CONDITION — a leak now fails the test that caused it, and §12.33 is CLOSED
+
+Two changes, landed in this order on purpose (**the instrument before the fix it measures**,
+this project's standing discipline): a universal drop-guard post-condition on every test
+device, and then the reclamation fix whose acceptance test it is.
+
+#### (a) The instrument — `kayfabe_tests::Guarded`, a drop guard on the test device
+
+§7.8's conservation ledger was **opt-in**. Two focused suites went looking for leaks and
+§12.32 composed the census into the mean run; every other test was green because nobody
+asked. The owner's framing:
+
+> *"in the tests hold assertions like the data structure got cleaned but host cleanup didn't
+> happen, even if the test was a success — these after-checks let it fail instead, because
+> it's a leak/violation."*
+
+So: `Guarded<D>` wraps the test's device (`Gpu` or `Arc<SharedDevice>` behind one
+`TeardownView` trait, so the two shapes cannot disagree about what "reachable" means) and
+asserts on `Drop`. **A test that leaks now fails even though its own assertions passed.**
+
+The invariant, per isolate, in §12.28's strong set-equality form:
+
+```text
+  Outstanding(ledger)  ==  Reachable(core state)  ∪  Staged(pending_release)
+```
+
+| difference | class | meaning |
+|---|---|---|
+| `Outstanding − (Reachable ∪ Staged)` | **UNACCOUNTED** | ★ the owner's case exactly: the structure is gone and **nothing was ever queued** to free what it held. Nothing will ever free it, because nothing can address it |
+| `(Reachable ∪ Staged) − Outstanding` | **DANGLING** | core state names something the ledger has no live record of — a use-after-free shape, strictly worse than a leak |
+| `double_free` / `free_of_unknown` / `unmap_of_unknown` | **corruption** | never a disposition, and **not declarable** at all |
+
+**★ Putting `Staged` on the accounted side is the sharp edge, not a softening.** A proc that
+freed a VASpace and then ended the test has left a *queue*, and the T0 drain will take it —
+failing there would make the guard something everybody turns off. The distinction that
+survives is **"queued" versus "never queued"**, which is precisely the distinction §12.33
+proved the core could not make. It needed a new read window to be expressible at all:
+`Proc::staged_releases` (and `Spine::retired_procs`, because a vacated corpse still holds its
+queue until the reap — a walk that missed it would report every correctly-staged proc as a
+leak).
+
+**The opt-out, and the design decision that decides whether this survives.** There is
+deliberately **no `allow_leaks` flag**: a bare skip gets sprinkled around and the guard is
+dead inside a month. The only way out is `ResidueClaim`, which names the *exact* expected
+residue — per isolate, per host class (keyed on the `VerbKind` that minted the handle),
+exact counts — with a **mandatory** `why` in the constructor. Three properties fall out and
+they were the requirement: the declaration **is** the documentation; a residue that grows
+past it still fails; and `grep -rn 'ResidueClaim::on'` enumerates every place we knowingly
+leave state. Comparison is **equality, not a bound**, in both directions — a residue that
+*shrank* fails too, so a fix cannot leave behind a claim that has quietly become a lie.
+
+**On §7.8's "never in a `Drop`".** §7.8 says the mean run's census must never run in a
+`Drop`, citing §12.14 (an unreleased latch turns a failed assert into a hang). That rule is
+about `l1_mean.rs`'s parked verbs and it **still holds there** — the mean run keeps its
+explicit census. It does not generalise: this guard runs after every spawned thread has been
+joined (the device outlives them), and it **skips itself entirely while the thread is already
+panicking** — the same discipline `IsolateBox`'s own `Drop` uses for its R1 assert, and for
+the same reason. The residual cost is exact and small: a test that is already failing is not
+additionally audited.
+
+#### ★★ What the retrofit caught — 26 tests, and three classes nobody was looking for
+
+Retrofitted across the whole suite (25 device-construction sites). **26 tests failed on the
+first run.** Most were §12.33's class at other trigger points, which was expected. Three
+were not, and they are reported here rather than quietly declared:
+
+| ★ finding | where | what it was |
+|---|---|---|
+| **19 992 host memory objects + 19 992 GPU mappings leaked per proc** | `soak_llm_like` (20k-token, 3 procs) — also 992 each in the 1k-token runs | the KV-cache ring rotated slots with a raw `vas.table.unbind(va)`, which drops the `HostBacking` on the floor: the GPA block never returns, the host object is never freed, the mapping is never undone — and the proc **never dies**, so §7.0's process-boundary backstop never fires either. This is the #80 leak shape in the exact workload the project cares most about, and the suite's own assertions (no hang, no GPA exhaustion, routing correct) could not see it. Fixed by routing through `kayfabe_fwd::unpublish_backing` (new shared helper `kayfabe_tests::unpublish_and_release`) |
+| **4 host objects + 4 mappings leaked per run** | `weird_order_regressions::wo_13_multiiter_realloc_same_va_new_backing_each_iter` | the same raw-unbind bypass, in #13's own alloc→use→free→realloc churn loop. Fixed the same way — **and the fix falsified one of the test's assertions**: `assert_ne!(published.gpa, prev)` ("the bump allocator never reuses") was only true because the block was never returned. With proper reclamation the *same* GPA is the correct answer, so the assertion was replaced by the property #13 actually needs — a **fresh host object** each iteration, in this proc's own arena |
+| **the conservation ledger was silently destroyed by a memory bound** | `concurrency_stress::stress_multi_vcpu_interleaved_ops` (`KAYFABE_SLOW=1`) | the 16-thread soak drains the global verb log every 4096 ops to bound memory, with `std::mem::take(&mut rec.log)`. Correct-looking, unexamined since it was written, and it **deletes every acquisition in the drained prefix** — so the whole run's live host state read back as ~4000 DANGLING handles per isolate. Fixed in the mock, not the test: `RmRecorder::compact()` folds the drained prefix into a carried `HostLedger` first, so `ledger()` is the same value whether or not the log was ever drained. The memory bound is unchanged |
+
+Two smaller harness findings, both fixed rather than declared:
+`concurrency_stress::same_proc_interleaving_is_exact` sharded a `Proc` out of `Gpu::procs`
+into a `Mutex` and never put it back (100 001 objects reported unaccounted — the proc was
+simply invisible to the audit); and the `Gpu::retire_proc` convenience was added so the
+five `spine.retire_proc(&mut gpu.procs, …)` split-borrow call sites stopped being written
+out by hand.
+
+#### (b) The fix — **removal itself** is the central, final step
+
+§12.33's finding: `Spine::refresh` step 3 removed a vanished component with
+`procs.remove(id)` + `Proc::retire()` and **no** `sync_proc_to_boundary`, so
+`stage_dropped_vases` / `stage_dropped_channels` never ran and the host objects were not even
+*queued*. The plan had been to stage inside `plan_refresh`. The owner's framing is better and
+is what was built:
+
+> *"if you do something out of the locks, you should assume when re-acquiring the lock the
+> data may have changed underneath, including removal. This is best preventable if you do the
+> removal in a CENTRAL place, usually after a real cleanup, so this out-of-order isn't really
+> possible."*
+
+So the sequence is **decide → stage → drain → remove**, in one place, in that order:
+
+| phase | where | why there |
+|---|---|---|
+| **decide** | `RefreshPlan::vanishing`, computed in `plan_refresh` from `matches` — the complement of the survivors | §12.18 already settles every retirement before a `Proc` is touched, so this adds no refusal and no failure path; it only *names*, up front, the set the mutation used to discover halfway through |
+| **stage** | `Spine::vacate` — the **only** `procs.remove` in `refresh` — runs the ordinary `stage_dropped_*` with empty live sets | staging is pure bookkeeping (handles into `pending_release`, `GpaBlock`s back to the proc's own arena), issues no verb, so R1 permits it under the device write lock |
+| **drain** | `Proc::drop`, lock-free, gated on `is_quiesced` | M2-a's rule: per-object reclamation must never race an in-flight verb, and **no lock can exclude one — only the quiesce predicate can**. A `Proc` drop is *already* required to be lock-free (`IsolateBox::drop` asserts it, §12.16 G3b), so this relies on an obligation the design already enforces rather than adding one |
+| **remove** | the value falls, last | "removed before cleaned" is no longer *expressible*, the same move `release(arena)`-by-value made for double-release |
+
+Two structural consequences worth naming:
+
+- **`Proc::vacate` vs `Proc::retire` — a clean death is not a condemnation.** Both remove the
+  proc from the live set and both refuse every new op. Only `retire` stops the isolates. That
+  split is what makes the drain possible at all: a component that vanished cleanly has a
+  *healthy* sandbox whose handles can and should be freed per object, whereas a worker HUP or
+  a condemnation has an untrustworthy one and §12.17's no-resurrect rule outranks reclaim —
+  its residue stays §7.0 namespace death, now **staged and therefore nameable** instead of
+  unrecoverable.
+- **`Spine::retire_proc` goes through the same `vacate`.** It was the second
+  `procs.remove` + `retire()` site with no staging. Centralising it costs nothing (its queue
+  is refused by its own stopped isolate) and buys the property that there is exactly one
+  place where a `Proc` leaves the live set.
+
+#### The before/after transition on §12.33, stated explicitly
+
+`the_last_reference_dropping_retires_the_owner_but_frees_nothing_per_object` was §12.33's
+honest record of the truth we did not want. It is now
+`…_and_frees_its_objects_per_object`, and the transition is:
+
+| | before (b) | after (b) |
+|---|---|---|
+| guard on `cross_proc_lifetime::uvm_referenced_gpu` | **UNACCOUNTED on IsolateId(1)** — 2 objects (`AllocVaSpace`, `AllocSysmem`) + 1 mapping | clean |
+| `frees_on_owner` after the reap | `[chan]` only | `[chan, backing, host_vas]` |
+| `HostLedger::is_balanced()` | `false` | `true` |
+
+The guard **did** fail beforehand on that exact path, which is the check the brief asked for
+— had it not, the instrument would have been too weak and would have needed fixing first.
+
+#### The declared residue, in full (`grep -rn 'ResidueClaim::on'` — 12 sites)
+
+Every one is the same *class* — **a violently-killed proc's isolate is stopped, so its staged
+release cannot drain and §7.0 namespace death is the disposition** — except the three marked
+as harness bypasses:
+
+| site | isolate | declared |
+|---|---|---|
+| `cross_proc_lifetime::a_condemned_owner_cannot_dangle_a_system_reference` | owner | VaSpace 1, Sysmem 1, maps 1 |
+| `cross_proc_lifetime::a_condemned_owner_is_not_kept_usable_by_its_kernel_reference` | owner | VaSpace 1, Sysmem 1, maps 1 |
+| `l1_mean::mean_run` ×2 (`P_TEARDOWN`, `P_HUP`) | 3, 6 | VaSpace 1, Sysmem 1, Channel 1, maps 1 **each** — i.e. exactly §12.32's pinned "6 objects, 2 mappings" namespace-death residue |
+| `l1_mean::a_condemned_components_arena_is_released_once_…` | victim | VaSpace 1, Sysmem 1, maps 1 |
+| `l1_mean::a_recovered_component_shares_no_arena_or_host_handle_…` | victim | VaSpace 1, Sysmem 1, Channel 1, maps 1 |
+| `l1_verb_seam::r5_canary_proc_retired_in_the_gap_refuses_loudly` | 1 | VaSpace 1 |
+| `l1_verb_seam::worker_death_retires_the_proc_loudly_and_never_resurrects` | victim | VaSpace 1, Sysmem 1, maps 1 |
+| `retry_ledger::a_retry_whose_replan_diverges_refuses_without_leaking_the_attempt` | 1 | Sysmem 1 (the G4 residue the test already asserted by count) |
+| `t0_subset_free::a_retired_procs_queue_is_left_to_the_session_death_backstop` | 1 | VaSpace 1, Sysmem 1, maps 1 — this test's entire subject, now stated in the guard's vocabulary |
+| `teardown_reclaim::g3_a_worker_whose_proc_retired_in_the_gap_still_reaches_its_slot` | 1 | VaSpace 1 |
+| **harness bypass** `teardown_reclaim::g1_a_published_backing_can_actually_be_freed_at_teardown` | 1 | `dangling(3, 2)` — a hand-rolled release chain run straight on a worker, core state deliberately left standing |
+| **harness bypass** `teardown_reclaim::g1_a_full_process_lifecycle_leaves_the_host_ledger_balanced` | 1 | `dangling(5, 2)` — same |
+| **harness bypass** `c_bug_regressions::cb14_host_{vas,channel}_touch_alone_blocks_a_late_merge` ×2 | B | `dangling(1, 0)` — a **fabricated** `HostHandle` written straight into core state, because the "one clause touched and no other" state is not reachable through the protocol |
+| **seam gap** `present_seam::render_target_exports_to_surface_presents_and_vblanks` | 1 | `Alloc 1` — the graphics producer's render target is allocated directly on the isolate because the present seam has **no core-side owner for host scanout memory yet**. The object is real and core state genuinely cannot name it; the claim is the honest statement of where the seam stops |
+
+#### Bite-checks (revert, observe, restore)
+
+| reverted | observed |
+|---|---|
+| `Spine::vacate`'s two `stage_dropped_*` calls | `c_bug_regressions::cb_lifecycle_process_churn_never_exhausts_the_window` FAILED with **24 UNACCOUNTED isolates**, each `{AllocVaSpace: 1, AllocSysmem: 1, AllocChannel: 1}` + 1 mapping; `cb_lifecycle_full_teardown_reap_rebuild_identical` and the `rt_shell` lock-mode differential with it — i.e. §12.33's class, at every clean-death trigger |
+| `Proc::drop`'s drain (early return) | `the_last_reference_dropping_…_and_frees_its_objects_per_object` FAILED with `left: [chan]` vs `right: [chan, backing, host_vas]`. **`t0_subset_free` stayed fully green** — the violent-death path never depended on the drain, which is the split being asserted rather than assumed |
+| a `ResidueClaim` over-declared by one object (`AllocSysmem: 1` → `2`) | `t0_subset_free::a_retired_procs_queue_…` FAILED with **`★ DECLARED RESIDUE MISMATCH`**, printing claim vs actual and *"a residue that GREW is a regression; one that SHRANK means the claim outlived its cause"* — the declaration cannot rot in either direction |
+| `RmRecorder::compact`'s carry-forward (back to a bare `mem::take`) | `stress_multi_vcpu_interleaved_ops` FAILED with **~4000 DANGLING handles on every one of the 8 isolates** — the finding reproduced exactly |
+| `soak_llm_like`'s rotation back to the raw `table.unbind` | `soak_1000_tokens_single_proc_baseline` FAILED with **992 UNACCOUNTED `AllocSysmem` + 992 mappings** — the leak reproduced exactly |
+
+Suite: **287 → 288**, 0 skipped, 0 ignored, both lock modes; fast path ~23.7 s (unchanged),
+`KAYFABE_SLOW=1` green. Exactly **one** test was added — `RmRecorder`'s
+`recorder_compact_preserves_the_ledger_exactly`, pinning the drain/ledger invariance the
+third finding turned on. Nothing else needed one: the guard is a post-condition on the tests
+that already exist, which is the whole point of it.
+
+#### What is deliberately NOT closed
+
+The drain runs at the corpse's `Proc::drop`, i.e. at the reap. A *live* proc's
+`pending_release` is still drained opportunistically or by the executor's backstop sweep
+(§7.6 T0) and the guard counts it as accounted, not as owed — the reading of *"no live proc
+still owes an **unqueued** release"* that the brief's wording admits and that the T0 design
+requires. A stricter "the queue must be empty at quiesce" belongs to the mean run, where
+`sweep_conservation` already asserts it at a point it controls.
+
+---
+
+### 12.36 ★ QUEUE DISCIPLINE — written down normatively, and the count audited
+
+The owner's constraint — *"the isolate/main code should have no more queues than threads, and
+a shared queue system that's maybe abstract for scheduled tasks"* — is now normative in
+`l1_os_shell.md` §6.6 (next to the thread-placement rule it generalises), as the
+**SCHEDULER / ACCUMULATOR** distinction:
+
+> A **SCHEDULER** owns work and needs a thread, because something must decide *when* its
+> contents run. There is exactly ONE: the executor inbox. An **ACCUMULATOR** holds work for
+> whoever next passes through and needs NO thread. **Queues are drained by existing threads,
+> never by new ones; there is one scheduled-task abstraction, not several.** Anything wanting
+> its own thread argues against §7.1's relay-thread rejection first, and says which of its
+> three free properties it is giving up.
+
+**Audited inventory (2026-07-26): 1 scheduler, 1 thread of our own — the rule holds.** The
+full table is in §6.6; the shape of it is: the inbox is the scheduler; `pending_release`,
+`Spine::retired` and `Spine::condemned` are accumulators drained by threads that were already
+there; `CompletionQueue` is the *guest's* mailbox on the far side of the seam; `PoolGate` is
+a condvar, not a queue; an `Orphans` inside a `Refusal` is a `#[must_use]` value in flight.
+
+**The one to watch, named rather than left implicit:** the `DeferQueue` (§6.4) is the only
+structure that orders work *by time*, which is a scheduler's defining property. It stays
+legal precisely because it owns no thread and its output is an inbox event. The day something
+proposes to give it a drain thread, the count goes to two — and §6.6's table is where that
+argument has to be had.

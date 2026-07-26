@@ -593,6 +593,27 @@ impl SharedDevice {
         out
     }
 
+    /// Every proc the device currently holds live, the system proc first. **Spine op**
+    /// (read guard); pairs with [`SharedDevice::with_proc`] so a caller can walk the
+    /// whole live set one rank-1 lock at a time — never two at once, which R3 would
+    /// refuse.
+    #[must_use]
+    pub fn live_pids(&self) -> Vec<ProcId> {
+        let st = self.state.read();
+        core::iter::once(Gpu::SYSTEM_PROC)
+            .chain(st.procs.keys().copied())
+            .collect()
+    }
+
+    /// ★ Read window over the **retired-but-unreaped** procs (`Spine::retired_procs`).
+    /// **Spine op** (read guard), and no proc lock: a vacated proc has left the lock
+    /// cells and is a bare value inside the spine. Needed by the §12.35 teardown audit,
+    /// which cannot state "reachable or queued" without seeing the corpses' queues.
+    pub fn with_retired<R>(&self, f: impl FnOnce(&[Proc]) -> R) -> R {
+        let st = self.state.read();
+        f(st.spine.retired_procs())
+    }
+
     /// ★★ **T0's backstop drain** (`l1_os_shell.md` §7.6 T0, gap G2) — release every
     /// host object a `refresh` queued for a **live** proc, for procs that have gone
     /// quiet. Returns how many objects + mappings it disposed of.

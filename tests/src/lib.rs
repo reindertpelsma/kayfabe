@@ -8,6 +8,10 @@
 //! as abstract `RmEvent`s, with helpers to build the exact shapes the design docs
 //! name (a compute process, a UVM dup, two processes with identical VAs/handles).
 
+pub mod teardown;
+
+pub use teardown::{Guarded, ResidueClaim, TeardownView, audit_teardown, unpublish_and_release};
+
 use kayfabe_arch::ClientKind;
 use kayfabe_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb};
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};

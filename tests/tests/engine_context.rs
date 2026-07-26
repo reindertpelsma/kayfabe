@@ -23,14 +23,14 @@ use kayfabe_fwd::{
 use kayfabe_mocks::{
     MockArch, MockIsolateFactory, RmVerb, SharedRecorder, mock_classes as mc, mock_ctrl,
 };
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 const CLIENT: HClient = HClient(0xAA);
 const PDB: Pdb = Pdb(0x3401_000);
 const GR_VCHID: VChid = VChid(0x10);
 const CE_VCHID: VChid = VChid(0x11);
 
-fn compute_gpu() -> (Gpu, SharedRecorder) {
+fn compute_gpu() -> (Guarded<Gpu>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
@@ -40,7 +40,10 @@ fn compute_gpu() -> (Gpu, SharedRecorder) {
     for ev in s.events {
         gpu.apply(ev).expect("applies");
     }
-    (gpu, recorder)
+    (
+        Guarded::new("engine_context::compute_gpu", gpu, recorder.clone()),
+        recorder,
+    )
 }
 
 /// `Arch::engine_of_object` maps object classes to the `EngineKind` routing tag; a
@@ -439,7 +442,7 @@ const FENCE_VA: GpuVa = GpuVa(0x2_0060_0000);
 
 /// Build a compute proc whose GR channel is refined to an NVENC context (session
 /// object on the channel, through the graph) with a published fence page.
-fn nvenc_gpu() -> (Gpu, kayfabe_core::ProcId, kayfabe_core::ChanId) {
+fn nvenc_gpu() -> (Guarded<Gpu>, kayfabe_core::ProcId, kayfabe_core::ChanId) {
     let (mut gpu, _rec) = compute_gpu();
     gpu.apply(RmEvent::Alloc {
         client: CLIENT,

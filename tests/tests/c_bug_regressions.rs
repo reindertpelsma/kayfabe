@@ -21,7 +21,7 @@ use kayfabe_fwd::{
     FwdFault, handle_doorbell, parse_pushbuffer, publish_backing, resolve, signal_golden_capture,
 };
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, mock_classes as mc};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, ResidueClaim, Scenario, identical_handles};
 use kayfabe_vmm::Vmm;
 
 const A_PDB: Pdb = Pdb(0x3401_000);
@@ -30,7 +30,7 @@ const VA: GpuVa = GpuVa(0x2_0020_0000);
 
 /// Fresh device with a generous window (default geometry for non-lifecycle tests).
 fn fresh_gpu() -> (
-    Gpu,
+    Guarded<Gpu>,
     std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
     gpu_with_window(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000)
@@ -42,14 +42,18 @@ fn gpu_with_window(
     window: core::ops::Range<u64>,
     arena_len: u64,
 ) -> (
-    Gpu,
+    Guarded<Gpu>,
     std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(window, arena_len);
     (
-        Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+        Guarded::new(
+            "c_bug_regressions",
+            Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+            rec.clone(),
+        ),
         rec,
     )
 }
@@ -562,6 +566,21 @@ fn cb14_host_channel_touch_alone_blocks_a_late_merge() {
     let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
     let (pid_b, cid_b) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
     let _ = pid_a;
+    // ★ §12.35 — DECLARED RESIDUE (dangling). This test FABRICATES a `HostHandle` the
+    // mock never minted, because the state it needs — "host-VAS/host-channel touched and
+    // nothing else" — is not reachable through the protocol: materializing one for real
+    // would touch the other clauses too. A fabricated handle is by construction unknown
+    // to the ledger, so it reads as dangling. Declared rather than worked around: a
+    // harness that reaches past the core should have to say so.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            kayfabe_isolate::IsolateId(pid_b.0),
+            "harness bypass: the late-merge clause under test is set by writing a \
+             fabricated HostHandle straight into core state, so the ledger has never \
+             seen it",
+        )
+        .dangling(1, 0),
+    );
 
     // Touch ONLY proc B's host-channel clause: give one channel a host channel object,
     // leaving the arena un-carved and every VAS's host VAS unmaterialized.
@@ -602,6 +621,21 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
     let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
     let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
     let _ = pid_a;
+    // ★ §12.35 — DECLARED RESIDUE (dangling). This test FABRICATES a `HostHandle` the
+    // mock never minted, because the state it needs — "host-VAS/host-channel touched and
+    // nothing else" — is not reachable through the protocol: materializing one for real
+    // would touch the other clauses too. A fabricated handle is by construction unknown
+    // to the ledger, so it reads as dangling. Declared rather than worked around: a
+    // harness that reaches past the core should have to say so.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            kayfabe_isolate::IsolateId(pid_b.0),
+            "harness bypass: the late-merge clause under test is set by writing a \
+             fabricated HostHandle straight into core state, so the ledger has never \
+             seen it",
+        )
+        .dangling(1, 0),
+    );
 
     // Materialize ONLY a host VAS on proc B (no published binding, no host channel,
     // arena un-carved) — the host-VAS sub-condition is the only touched one.

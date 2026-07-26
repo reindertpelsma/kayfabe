@@ -63,7 +63,7 @@ use kayfabe_core::gpu::Gpu;
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
 use kayfabe_fwd::{arm_fence, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 use proptest::prelude::*;
 
 // =================================================================================
@@ -82,12 +82,16 @@ const MEM_HANDLE: HObject = HObject(0x5c00_0100);
 /// The identical NVENC engine-object handle value every process reuses.
 const NVENC_OBJ: HObject = HObject(0x5c00_0200);
 
-fn new_gpu() -> Gpu {
+fn new_gpu() -> Guarded<Gpu> {
     let arch = Box::new(MockArch::new());
-    let (factory, _rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     // A generous window so arena exhaustion is never an accident of this test.
     let gpa = GpaSpace::new(0x1_0000_0000..0x1_0000_0000_0000, 0x1_0000_0000);
-    Gpu::new(arch, Box::new(factory), gpa).expect("device realizes")
+    Guarded::new(
+        "determinism::new_gpu",
+        Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+        rec,
+    )
 }
 
 /// One benign, fully-formed process `k`'s declared facts (all order-independent — no

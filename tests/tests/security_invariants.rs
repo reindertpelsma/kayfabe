@@ -54,19 +54,23 @@ use kayfabe_core::project::project;
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
 use kayfabe_fwd::resolve;
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 use proptest::prelude::*;
 
 // =================================================================================
 // Shared fixtures
 // =================================================================================
 
-fn new_gpu() -> Gpu {
+fn new_gpu() -> Guarded<Gpu> {
     let arch = Box::new(MockArch::new());
-    let (factory, _rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     // A generous window so exhaustion is a deliberate act, not an accident.
     let gpa = GpaSpace::new(0x1_0000_0000..0x1_0000_0000_0000, 0x1_0000_0000);
-    Gpu::new(arch, Box::new(factory), gpa).expect("device realizes")
+    Guarded::new(
+        "security_invariants::new_gpu",
+        Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+        rec,
+    )
 }
 
 /// Take-b-when-true weave of two streams (the #18A `interleave` shape), so a hostile

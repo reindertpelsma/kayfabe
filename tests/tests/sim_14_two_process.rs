@@ -26,7 +26,7 @@ use kayfabe_fwd::{
     deliver_completions, handle_doorbell, poll_completions, publish_backing, resolve,
 };
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm, RmVerb};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 /// The identical guest VA both processes use for their working set (#14 round 1:
 /// working-set base 0x200200000, pushbuffers 0x2024xxxxx — the common case).
@@ -37,7 +37,7 @@ const B_PDB: Pdb = Pdb(0x3405_000);
 /// Build a Gpu with two processes A and B, each a compute process with IDENTICAL
 /// handles and DISTINCT PDBs + vChids.
 fn two_process_gpu() -> (
-    Gpu,
+    Guarded<Gpu>,
     MockVmm,
     std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
@@ -61,7 +61,11 @@ fn two_process_gpu() -> (
     for ev in s.events {
         gpu.apply(ev).expect("scenario applies cleanly");
     }
-    (gpu, MockVmm::new(), recorder)
+    (
+        Guarded::new("sim_14_two_process", gpu, recorder.clone()),
+        MockVmm::new(),
+        recorder,
+    )
 }
 
 #[test]

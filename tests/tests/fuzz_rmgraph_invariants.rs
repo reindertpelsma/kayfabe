@@ -340,9 +340,18 @@ proptest! {
     #[test]
     fn a1b_gpu_spine_never_panics_on_hostile_stream(stream in any_stream()) {
         let arch = Box::new(MockArch::new());
-        let (factory, _rec) = MockIsolateFactory::new();
+        let (factory, rec) = MockIsolateFactory::new();
         let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-        let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
+        // ★ §12.35 — guarded like every other device: a hostile stream that made the core
+        // drop a `Proc`'s host state without staging it would be a leak reachable from
+        // guest input, which is boundary-1's problem and not just a hygiene one. (The
+        // pure-graph stream mints no host objects, so the audit is normally vacuous —
+        // which is exactly the state a regression would break.)
+        let mut gpu = kayfabe_tests::Guarded::new(
+            "fuzz_rmgraph_invariants::a1b",
+            Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+            rec,
+        );
 
         for ev in stream {
             let _ = gpu.apply(ev); // Result — never a panic.

@@ -35,7 +35,7 @@ use kayfabe_core::project::{ProjectionError, project};
 use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 // The IDENTICAL hardware identities both GPUs' procs present (the load-bearing shape).
 const SHARED_PDB: Pdb = Pdb(0x3401_000);
@@ -44,7 +44,7 @@ const GR_VCHID: u16 = 0x10;
 const CE_VCHID: u16 = 0x11;
 
 fn new_gpu() -> (
-    Gpu,
+    Guarded<Gpu>,
     std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
     let arch = Box::new(MockArch::new());
@@ -54,8 +54,12 @@ fn new_gpu() -> (
     (
         // ★ G9 (§12.21): the device is REALIZED with two physical GPUs — the
         // entitlement a guest's `deviceInstance` is now checked against.
-        Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)])
-            .expect("device realizes"),
+        Guarded::new(
+            "multi_gpu",
+            Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)])
+                .expect("device realizes"),
+            rec.clone(),
+        ),
         rec,
     )
 }
@@ -81,7 +85,7 @@ fn proc_on_gpu(client: HClient, instance: u32) -> Vec<RmEvent> {
 /// Build a two-GPU world: proc A on GPU0, proc B on GPU1 — identical everything but the
 /// target. Returns (gpu, recorder, pidA, pidB).
 fn two_gpu_world() -> (
-    Gpu,
+    Guarded<Gpu>,
     std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
     kayfabe_core::ProcId,
     kayfabe_core::ProcId,

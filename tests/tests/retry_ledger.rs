@@ -59,7 +59,9 @@ use kayfabe_mocks::{
     HoldSpec, MockArch, MockIsolateFactory, SharedRecorder, VerbHold, VerbKind, mock_classes as mc,
 };
 use kayfabe_rt::device::{LockMode, SharedDevice};
-use kayfabe_tests::{Scenario, identical_handles, reachable_maps, reachable_objects};
+use kayfabe_tests::{
+    Guarded, ResidueClaim, Scenario, identical_handles, reachable_maps, reachable_objects,
+};
 
 // ---------------------------------------------------------------------------------
 // Harness
@@ -115,7 +117,10 @@ const REPL_VAS: HObject = HObject(0x5c00_0100);
 const VA: GpuVa = GpuVa(0x2_0020_0000);
 
 /// One guest proc on GPU0 with `pool` workers in its isolate.
-fn device_with(pool: usize, mode: LockMode) -> (Arc<SharedDevice>, ProcId, SharedRecorder) {
+fn device_with(
+    pool: usize,
+    mode: LockMode,
+) -> (Guarded<Arc<SharedDevice>>, ProcId, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::with_pool_size(pool);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
@@ -127,7 +132,15 @@ fn device_with(pool: usize, mode: LockMode) -> (Arc<SharedDevice>, ProcId, Share
         gpu.apply(ev).expect("scenario applies");
     }
     let pid = gpu.spine.by_pdb[&(GPU, PDB)];
-    (Arc::new(SharedDevice::new(gpu, mode)), pid, recorder)
+    (
+        Guarded::new(
+            "retry_ledger::device_with",
+            Arc::new(SharedDevice::new(gpu, mode)),
+            recorder.clone(),
+        ),
+        pid,
+        recorder,
+    )
 }
 
 /// Arm a one-shot hold on `verb` of `(pid's isolate, GPU, worker)`.
@@ -234,9 +247,11 @@ fn converging_retries_release_every_host_object_they_allocated() {
         );
 
         // ★ THE ASSERTION: outstanding == reachable, objects and mappings.
-        let gpu = Arc::try_unwrap(device)
-            .unwrap_or_else(|_| panic!("every thread joined"))
-            .into_gpu();
+        let gpu = device.map(|d| {
+            Arc::try_unwrap(d)
+                .unwrap_or_else(|_| panic!("every thread joined"))
+                .into_gpu()
+        });
         let proc = &gpu.procs[&pid];
         assert_eq!(
             ledger.leaked_on(IsolateId(pid.0)),
@@ -427,9 +442,11 @@ fn the_commit_retry_bound_still_releases_the_attempt_that_hits_it() {
 
     // ★ The bound's own question, as a set equality.
     let ledger = rec.lock().expect("recorder").ledger();
-    let gpu = Arc::try_unwrap(device)
-        .unwrap_or_else(|_| panic!("every thread joined"))
-        .into_gpu();
+    let gpu = device.map(|d| {
+        Arc::try_unwrap(d)
+            .unwrap_or_else(|_| panic!("every thread joined"))
+            .into_gpu()
+    });
     let proc = &gpu.procs[&pid];
     assert_eq!(
         proc.pending_release_len(),
@@ -492,7 +509,20 @@ fn the_commit_retry_bound_still_releases_the_attempt_that_hits_it() {
 #[test]
 fn a_retry_whose_replan_diverges_refuses_without_leaking_the_attempt() {
     let _wd = watchdog("retry_replan_diverges", Duration::from_secs(60));
-    let (device, pid, rec) = device_with(2, LockMode::Sharded);
+    let (mut device, pid, rec) = device_with(2, LockMode::Sharded);
+    // ★ §12.35 — DECLARED RESIDUE, and it is the same residue this test already asserts
+    // by count below. The divergent attempt's memory object was allocated lock-free and
+    // its owner retired VIOLENTLY (`retire_proc`) in the gap, so the release is refused
+    // by the stopped isolate (§12.17) and the disposition is §7.0 namespace death.
+    device.declare_residue(
+        ResidueClaim::on(
+            IsolateId(pid.0),
+            "G4 residue: the divergent attempt's host memory object, allocated before \
+             `retire_proc` stopped the isolate — a retired isolate refuses the disposal \
+             too, so the session's death is the disposition of record",
+        )
+        .objects(VerbKind::AllocSysmem, 1),
+    );
 
     let first = hold_any(&rec, pid, VerbKind::MapGpuVa);
     let d = Arc::clone(&device);

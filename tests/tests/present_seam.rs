@@ -23,12 +23,12 @@ use kayfabe_isolate::{HostHandle, RmError};
 use kayfabe_mocks::{
     MockArch, MockIsolateFactory, MockPresent, RmVerb, SharedRecorder, mock_classes as mc,
 };
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, ResidueClaim, Scenario, identical_handles};
 use kayfabe_vmm::{FbMeta, PresentError, SurfaceHandle};
 
 const PDB: Pdb = Pdb(0x3401_000);
 
-fn graphics_gpu() -> (Gpu, SharedRecorder) {
+fn graphics_gpu() -> (Guarded<Gpu>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
@@ -38,7 +38,10 @@ fn graphics_gpu() -> (Gpu, SharedRecorder) {
     for ev in s.events {
         gpu.apply(ev).expect("applies");
     }
-    (gpu, recorder)
+    (
+        Guarded::new("present_seam::graphics_gpu", gpu, recorder.clone()),
+        recorder,
+    )
 }
 
 fn fb() -> (SurfaceHandle, FbMeta) {
@@ -92,6 +95,21 @@ fn scanout_routes_to_present_and_feeds_vblank() {
 fn render_target_exports_to_surface_presents_and_vblanks() {
     let (mut gpu, recorder) = graphics_gpu();
     let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
+    // ★ §12.35 — DECLARED RESIDUE. The render target below is allocated by driving the
+    // isolate's RM surface DIRECTLY (`rm.alloc`), because the present seam's producer
+    // side has no core-side path yet: `Present` names a `SurfaceHandle`, and nothing in
+    // `Proc` owns the host memory it was exported from. So the object is real, and core
+    // state genuinely cannot name it — which is the honest statement of where the seam
+    // stops today rather than a defect in this test.
+    gpu.declare_residue(
+        ResidueClaim::on(
+            kayfabe_isolate::IsolateId(pid.0),
+            "the graphics producer's render target is allocated straight on the isolate \
+             (`rm.alloc`): the present seam has no core-side owner for host scanout \
+             memory yet, so nothing in `Proc` can name it",
+        )
+        .objects(kayfabe_mocks::VerbKind::Alloc, 1),
+    );
 
     // Producer: a host render-target memory object, exported by the OWNING proc's
     // OWN isolate to a presentable surface.

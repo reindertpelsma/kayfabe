@@ -54,7 +54,7 @@ use kayfabe_core::rmgraph::{
 };
 use kayfabe_fwd::{FwdFault, handle_doorbell, parse_pushbuffer, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm, mock_classes as mc};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 use kayfabe_vmm::Vmm;
 use proptest::prelude::*;
 
@@ -62,12 +62,16 @@ use proptest::prelude::*;
 // Shared fixtures
 // =================================================================================
 
-fn fresh_gpu() -> Gpu {
+fn fresh_gpu() -> Guarded<Gpu> {
     let arch = Box::new(MockArch::new());
-    let (factory, _rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     // A generous window so exhaustion is a deliberate act, not an accident.
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
-    Gpu::new(arch, Box::new(factory), gpa).expect("device realizes")
+    Guarded::new(
+        "security_boundary::fresh_gpu",
+        Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+        rec,
+    )
 }
 
 // The BENIGN victim process B — a full compute proc plus a mapped MEMORY object, so
@@ -1976,7 +1980,7 @@ fn g10_condemnation_is_capped_and_refuses_new_procs_never_the_condemnation() {
             .find(|(_, p)| p.clients.contains(&c))
             .expect("its proc")
             .0;
-        assert!(gpu.spine.retire_proc(&mut gpu.procs, pid), "worker died");
+        assert!(gpu.retire_proc(pid), "worker died");
         drop(gpu.reap_retired()); // keep the OTHER cap out of this test's way
         condemned_clients.push(c);
     }

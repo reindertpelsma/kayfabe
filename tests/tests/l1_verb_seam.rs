@@ -73,7 +73,7 @@ use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
 use kayfabe_rt::executor::{Effect, Executor};
 use kayfabe_rt::inbox::{CoreEvent, inbox};
 use kayfabe_rt::lock::{LockRank, RankedMutex};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, ResidueClaim, Scenario, identical_handles};
 use kayfabe_util::Instant;
 
 // ---------------------------------------------------------------------------------
@@ -135,7 +135,7 @@ fn device_with(
     procs: usize,
     pool: usize,
     mode: LockMode,
-) -> (Arc<SharedDevice>, Vec<ProcId>, SharedRecorder) {
+) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::with_pool_size(pool);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
@@ -162,7 +162,15 @@ fn device_with(
     let pids: Vec<ProcId> = (0..procs)
         .map(|i| gpu.spine.by_pdb[&(GPU, if i == 0 { PDB } else { PDB2 })])
         .collect();
-    (Arc::new(SharedDevice::new(gpu, mode)), pids, recorder)
+    (
+        Guarded::new(
+            "l1_verb_seam::device_with",
+            Arc::new(SharedDevice::new(gpu, mode)),
+            recorder.clone(),
+        ),
+        pids,
+        recorder,
+    )
 }
 
 /// Arm a one-shot hold on `verb` of `(proc, worker)`'s isolate.
@@ -399,7 +407,7 @@ fn canary(
     mutate: impl FnOnce(&SharedDevice, ProcId),
 ) -> (
     Result<kayfabe_fwd::Published, FwdFault>,
-    Arc<SharedDevice>,
+    Guarded<Arc<SharedDevice>>,
     ProcId,
 ) {
     let (device, pids, rec) = device_with(1, DEFAULT_POOL_WORKERS, LockMode::Sharded);
@@ -422,12 +430,27 @@ fn canary(
 #[test]
 fn r5_canary_proc_retired_in_the_gap_refuses_loudly() {
     let _wd = watchdog("r5_canary_proc_retired", Duration::from_secs(60));
-    let (out, device, pid) = canary(|device, pid| {
-        assert!(
-            device.retire_proc(pid),
-            "the proc was live when we retired it"
-        );
-    });
+    let (mut device, pid, out) = {
+        let (out, device, pid) = canary(|device, pid| {
+            assert!(
+                device.retire_proc(pid),
+                "the proc was live when we retired it"
+            );
+        });
+        (device, pid, out)
+    };
+    // ★ §12.35 — DECLARED RESIDUE. `retire_proc` is the VIOLENT death: it stops the
+    // isolate, so the host VAS the parked publish had already materialized cannot be
+    // released per object and its disposition is §7.0 namespace death. The clean death
+    // (`Spine::vacate`, a component vanishing) keeps the isolate live and DOES reclaim.
+    device.declare_residue(
+        ResidueClaim::on(
+            kayfabe_isolate::IsolateId(pid.0),
+            "out-of-band `retire_proc` stops the isolate mid-publish, so the host VAS it \
+             had already materialized is left to the session's death (§7.0)",
+        )
+        .objects(VerbKind::AllocVaSpace, 1),
+    );
     assert_eq!(
         out,
         Err(FwdFault::Stale(Stale::Proc(pid))),
@@ -778,8 +801,22 @@ fn an_unsaturated_pool_reports_nothing_at_all() {
 fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
     let _wd = watchdog("worker_death_retires", Duration::from_secs(60));
     for mode in [LockMode::Degenerate, LockMode::Sharded] {
-        let (device, pids, _rec) = device_with(2, DEFAULT_POOL_WORKERS, mode);
+        let (mut device, pids, _rec) = device_with(2, DEFAULT_POOL_WORKERS, mode);
         let (victim, bystander) = (pids[0], pids[1]);
+        // ★ §12.35 — DECLARED RESIDUE: the victim's worker HUPs, so `retire_proc` stops
+        // its isolate and its published backing + host VAS are the §7.0 namespace-death
+        // residue. §12.17's no-resurrect rule is what forbids reclaiming them per object.
+        device.declare_residue(
+            ResidueClaim::on(
+                kayfabe_isolate::IsolateId(victim.0),
+                "worker death condemns the component: the isolate is stopped at once \
+                 (§12.17 no-resurrect), so its host VAS + backing are disposed of by the \
+                 session's own death (§7.0)",
+            )
+            .objects(VerbKind::AllocVaSpace, 1)
+            .objects(VerbKind::AllocSysmem, 1)
+            .maps(1),
+        );
 
         // The victim has live host state and a live completion source.
         device
@@ -988,11 +1025,13 @@ fn idempotent_replay_emits_no_verbs_and_takes_no_worker() {
 /// The plain `Gpu` behind a freshly built device — the single-threaded shape the
 /// term-by-term guard tests need (they hand a commit a `&mut Proc` that is
 /// deliberately the WRONG one, which no threaded entry point can express).
-fn plain_gpu(procs: usize) -> (Gpu, Vec<ProcId>) {
+fn plain_gpu(procs: usize) -> (Guarded<Gpu>, Vec<ProcId>) {
     let (device, pids, _rec) = device_with(procs, DEFAULT_POOL_WORKERS, LockMode::Degenerate);
-    let gpu = Arc::into_inner(device)
-        .expect("the device is not shared yet")
-        .into_gpu();
+    let gpu = device.map(|d| {
+        Arc::into_inner(d)
+            .expect("the device is not shared yet")
+            .into_gpu()
+    });
     (gpu, pids)
 }
 
@@ -1027,7 +1066,7 @@ fn commit_engine_object_proc_guard_refuses_on_either_term_alone() {
         "the re-send must resolve as a replay, so this test isolates the guard"
     );
 
-    let Gpu { spine, procs, .. } = &mut gpu;
+    let Gpu { spine, procs, .. } = &mut *gpu;
     let refusal = kayfabe_fwd::commit_engine_object(
         spine,
         procs.get_mut(&b).expect("proc B is live"),
@@ -1063,7 +1102,7 @@ fn commit_engine_object_proc_guard_refuses_on_either_term_alone() {
     let planned =
         kayfabe_fwd::plan_engine_object(&gpu.procs[&a], &route, kayfabe_tests::COMPUTE_CLASS, &[])
             .expect("plans");
-    let Gpu { spine, procs, .. } = &mut gpu;
+    let Gpu { spine, procs, .. } = &mut *gpu;
     let proc = procs.get_mut(&a).expect("live");
     proc.retire(); // ← the world moves inside the lock-free gap
     assert_eq!(
@@ -1233,9 +1272,11 @@ fn worker_death_kills_its_own_pool_slot_not_merely_the_proc() {
         "the HUP dispatched as a typed worker death"
     );
 
-    let gpu = Arc::into_inner(device)
-        .expect("the device is not shared")
-        .into_gpu();
+    let gpu = device.map(|d| {
+        Arc::into_inner(d)
+            .expect("the device is not shared")
+            .into_gpu()
+    });
     let retired = gpu
         .spine
         .retired
@@ -1345,7 +1386,7 @@ fn commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone() {
         })
     };
 
-    let Gpu { spine, procs, .. } = &mut gpu;
+    let Gpu { spine, procs, .. } = &mut *gpu;
     let refusal = kayfabe_fwd::commit_doorbell(
         spine,
         procs.get_mut(&b).expect("proc B is live"),
@@ -1386,7 +1427,7 @@ fn a_refused_commit_releases_its_orphans_on_the_single_threaded_path() {
     let _wd = watchdog("round_trip_orphan_release", Duration::from_secs(30));
     let (device, pids, rec) = device_with(1, DEFAULT_POOL_WORKERS, LockMode::Degenerate);
     let pid = pids[0];
-    let mut gpu = Arc::into_inner(device).expect("not shared").into_gpu();
+    let mut gpu = device.map(|d| Arc::into_inner(d).expect("not shared").into_gpu());
     let proc = gpu.procs.get_mut(&pid).expect("live");
 
     kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000).expect("the first publication binds");
@@ -1479,9 +1520,9 @@ fn the_shell_ring_gate_refuses_an_unpublished_working_set() {
     for mode in [LockMode::Degenerate, LockMode::Sharded] {
         let (device, pids, _rec) = device_with(1, DEFAULT_POOL_WORKERS, mode);
         let pid = pids[0];
-        let gpu = Arc::into_inner(device).expect("not shared").into_gpu();
+        let gpu = device.map(|d| Arc::into_inner(d).expect("not shared").into_gpu());
         let (_, cid) = gpu.spine.by_vchid[&(GPU, GR)];
-        let device = SharedDevice::new(gpu, mode);
+        let device = gpu.map(|g| SharedDevice::new(g, mode));
 
         let unpublished = GpuVa(VA.0 + 0x10_0000);
         assert_eq!(

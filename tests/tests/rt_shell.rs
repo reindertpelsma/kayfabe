@@ -50,7 +50,7 @@ use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
 use kayfabe_rt::executor::{Effect, Executor};
 use kayfabe_rt::inbox::{CoreEvent, inbox};
 use kayfabe_rt::lock::{self, BlockingSection, LockRank};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 use kayfabe_util::Instant;
 use kayfabe_vmm::CoreEventKind;
 
@@ -113,7 +113,7 @@ const MEM_HANDLE: HObject = HObject(0x6000_0000);
 /// PDBs/vChids, alternating across 2 GPUs, each with a declared memory object for
 /// RM-map churn. Returns the realized device plus `pids[i]` resolved via `by_pdb`
 /// (never by assuming mint order).
-fn rt_gpu(n: usize) -> (Gpu, Vec<ProcId>, SharedRecorder) {
+fn rt_gpu(n: usize) -> (Guarded<Gpu>, Vec<ProcId>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
@@ -147,7 +147,11 @@ fn rt_gpu(n: usize) -> (Gpu, Vec<ProcId>, SharedRecorder) {
     let pids: Vec<ProcId> = (0..n)
         .map(|i| gpu.spine.by_pdb[&(gpu_of(i), pdb_of(i))])
         .collect();
-    (gpu, pids, recorder)
+    (
+        Guarded::new("rt_shell::rt_gpu", gpu, recorder.clone()),
+        pids,
+        recorder,
+    )
 }
 
 // ---------------------------------------------------------------------------------
@@ -269,7 +273,7 @@ fn snapshot(gpu: &Gpu) -> RtSnapshot {
 fn run_script(mode: LockMode) -> (Vec<String>, RtSnapshot) {
     const N: usize = 3;
     let (gpu, pids, _rec) = rt_gpu(N);
-    let device = Arc::new(SharedDevice::new(gpu, mode));
+    let device = gpu.map(|g| Arc::new(SharedDevice::new(g, mode)));
     let (tx, rx) = inbox();
     let mut ex = Executor::new(Arc::clone(&device), rx);
     let mut log: Vec<String> = Vec::new();
@@ -399,9 +403,11 @@ fn run_script(mode: LockMode) -> (Vec<String>, RtSnapshot) {
     log.push(format!("wake-again {}", device.take_pending_wake()));
 
     drop(ex); // drops its Arc so the unwrap below is sound
-    let gpu = Arc::try_unwrap(device)
-        .unwrap_or_else(|_| panic!("all device handles released"))
-        .into_gpu();
+    let gpu = device.map(|d| {
+        Arc::try_unwrap(d)
+            .unwrap_or_else(|_| panic!("all device handles released"))
+            .into_gpu()
+    });
     (log, snapshot(&gpu))
 }
 
@@ -461,7 +467,7 @@ fn spine_ops_acquire_no_proc_lock_via_get_mut() {
         Duration::from_secs(60),
     );
     let (gpu, pids, _rec) = rt_gpu(2);
-    let device = SharedDevice::new(gpu, LockMode::Sharded);
+    let device = gpu.map(|g| SharedDevice::new(g, LockMode::Sharded));
 
     let proc_before = lock::acquisitions(LockRank::Proc);
     let dev_before = lock::acquisitions(LockRank::Device);
@@ -536,7 +542,7 @@ fn executor_source_signal_lands_in_owning_procs_queue_only() {
     );
     for mode in [LockMode::Degenerate, LockMode::Sharded] {
         let (gpu, pids, _rec) = rt_gpu(2);
-        let device = Arc::new(SharedDevice::new(gpu, mode));
+        let device = gpu.map(|g| Arc::new(SharedDevice::new(g, mode)));
         let (tx, rx) = inbox();
         let mut ex = Executor::new(Arc::clone(&device), rx);
 
@@ -559,9 +565,11 @@ fn executor_source_signal_lands_in_owning_procs_queue_only() {
         );
 
         drop(ex);
-        let gpu = Arc::try_unwrap(device)
-            .unwrap_or_else(|_| panic!("all handles released"))
-            .into_gpu();
+        let gpu = device.map(|d| {
+            Arc::try_unwrap(d)
+                .unwrap_or_else(|_| panic!("all handles released"))
+                .into_gpu()
+        });
         assert!(
             gpu.procs[&pids[0]].completion.has_outstanding(),
             "({mode:?}) the owner's queue holds the event"
@@ -589,7 +597,7 @@ fn executor_signal_for_retired_procs_source_faults_and_mutates_nothing() {
     );
     for mode in [LockMode::Degenerate, LockMode::Sharded] {
         let (gpu, pids, _rec) = rt_gpu(2);
-        let device = Arc::new(SharedDevice::new(gpu, mode));
+        let device = gpu.map(|g| Arc::new(SharedDevice::new(g, mode)));
         let (tx, rx) = inbox();
         let mut ex = Executor::new(Arc::clone(&device), rx);
 
@@ -615,9 +623,11 @@ fn executor_signal_for_retired_procs_source_faults_and_mutates_nothing() {
         }
 
         drop(ex);
-        let gpu = Arc::try_unwrap(device)
-            .unwrap_or_else(|_| panic!("all handles released"))
-            .into_gpu();
+        let gpu = device.map(|d| {
+            Arc::try_unwrap(d)
+                .unwrap_or_else(|_| panic!("all handles released"))
+                .into_gpu()
+        });
         // Mutated nothing: no queue anywhere holds anything, the retired proc is
         // still exactly one un-reaped entry, the survivor is untouched.
         assert!(!gpu.procs[&pids[0]].completion.has_outstanding());
@@ -666,7 +676,7 @@ fn threads_smoke_hammers_both_lock_modes_bounded() {
 
     for mode in [LockMode::Degenerate, LockMode::Sharded] {
         let (gpu, pids, _rec) = rt_gpu(N_PROCS);
-        let device = Arc::new(SharedDevice::new(gpu, mode));
+        let device = gpu.map(|g| Arc::new(SharedDevice::new(g, mode)));
         let (tx, rx) = inbox();
 
         // One os-event source per proc, registered up front.
@@ -841,9 +851,11 @@ fn threads_smoke_hammers_both_lock_modes_bounded() {
             }
             device.completions_drained(g);
         }
-        let mut gpu = Arc::try_unwrap(device)
-            .unwrap_or_else(|_| panic!("all handles released"))
-            .into_gpu();
+        let mut gpu = device.map(|d| {
+            Arc::try_unwrap(d)
+                .unwrap_or_else(|_| panic!("all handles released"))
+                .into_gpu()
+        });
         for (i, &pid) in pids.iter().enumerate() {
             let p = gpu.procs.get_mut(&pid).expect("live");
             p.completion.ack(ev_of(i));

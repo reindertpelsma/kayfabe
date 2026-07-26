@@ -1264,6 +1264,65 @@ canary and should be named as one: proc B makes progress while proc A's verb is 
 lock modes, no clock. §6.7 adds its sibling — B makes progress across A's arena grant and
 release.
 
+#### ★★ QUEUE DISCIPLINE — the standing rule, and the distinction that keeps the count down
+
+§6.6 above answers *"which thread runs a memory-plane op"*. The general question behind it
+is *"how many queues may this system have"*, and the answer has to be normative or the count
+only ever goes up: every new asynchronous need arrives looking like it deserves its own
+queue, and each one that lands is individually defensible.
+
+The owner's constraint, and it is the right one:
+
+> *"I am worried that we get too many queues in the codebase for tasks to happen — the
+> isolate/main code should have no more queues than threads, and a shared queue system
+> that's maybe abstract for scheduled tasks."*
+
+The distinction that makes the count enforceable is between two things that look alike and
+are not:
+
+> - **A SCHEDULER owns work and needs a thread.** Something must decide *when* its contents
+>   run, so something must be running to decide. **There is exactly ONE: the executor
+>   inbox** (`kayfabe_rt::inbox`, rank 2, leaf).
+> - **An ACCUMULATOR holds work for whoever next passes through, and needs NO thread.** It
+>   has no schedule of its own; it is drained opportunistically by a thread that was going
+>   to be there anyway. `Proc::pending_release` is the canonical one — taken by whoever next
+>   checks a worker out of that isolate (§7.6 T0).
+>
+> **The rule: queues are drained by EXISTING threads, never by new ones; and there is one
+> scheduled-task abstraction, not several.** Anything that wants a thread of its own must
+> first argue against `l1_concurrency.md` §7.1's rejection of relay threads — *"backpressure
+> is inherent: the caller blocks (lock-free), the guest's RPC stalls, the guest slows down.
+> No queue to size, no overflow policy to invent"* — and must say which of those three
+> properties it is giving up.
+
+**Why the split is not word-play: an accumulator costs nothing that a scheduler costs.** A
+scheduler needs a bound, an overflow policy, a fairness rule and a wake protocol, because it
+stands between the producer and *time*. An accumulator needs none of those: it is drained by
+a thread already committed to doing work for that same owner, so its depth is bounded by the
+owner's own progress and its latency is the owner's own latency. Every one of §6.6's
+arguments against a memory-plane thread is really an argument for preferring the accumulator
+form, and stating it once means the next such case does not have to be re-litigated.
+
+**The inventory, audited (2026-07-26). One scheduler, one thread of our own.**
+
+| # | structure | class | drained by | bound |
+|---|---|---|---|---|
+| 1 | `kayfabe_rt::inbox::Inbox` — `VecDeque<CoreEvent>` | ★ **SCHEDULER** | the **executor** thread (the only long-lived thread we own) | unbounded by design and justified in its own docs: entries are per-source-signal / per-deadline, never per-guest-byte |
+| 2 | `Proc::pending_release` — `BTreeMap<GpuId, Orphans>` | accumulator | whoever next checks a worker out of that isolate (`checkout_and_drain`), the executor's backstop sweep (`SharedDevice::drain_pending_releases`), and the thread that destroys the corpse (`Proc::drop`, §12.35) | bounded by the proc's own live object count |
+| 3 | `Spine::retired` — `Vec<Proc>` | accumulator | whichever thread calls `reap_retired` (in L1: the executor, at the adapter's quiesce point) | `MAX_RETIRED_PROCS` (G10) |
+| 4 | `Spine::condemned` — `Vec<BTreeSet<HClient>>` | retention set, not work | re-derived inside `refresh` on the applying thread; cleared when the guest frees the client root | `MAX_CONDEMNED_COMPONENTS` (G10) |
+| 5 | `DeferQueue` (§6.4) — the deadline heap shared by `MockVmm` and the real `Vmm` | accumulator **with an ordering** | the timer's post-entry drain, whose product is an inbox event — so it feeds #1 rather than competing with it | one entry per outstanding `defer` |
+| 6 | `CompletionQueue` (`pending` / `in_flight` / `drained`) | the **guest's** mailbox, on the far side of the seam | the pump/poll on whichever thread runs it | `MAX_OUTSTANDING_COMPLETIONS`, and refusal is loud |
+| 7 | `PoolGate` waiters | not a queue — a condvar generation + counters | n/a: threads park, nothing is enqueued | pool size |
+| 8 | `Orphans` inside a `Refusal` / `VerbFailure` | a `#[must_use]` **value in flight** | the thread holding it, before its check-in | per-op |
+
+**Verdict: the rule holds today, and #5 is the one to watch.** Rows 2–4 are accumulators,
+rows 6–8 are not ours to count (a guest mailbox, a lock gate, a value). The `DeferQueue` is
+the only structure that *orders work by time*, which is a scheduler's defining property — it
+stays legal precisely because it owns no thread and its output is an inbox event. The day
+something proposes to give it a drain thread of its own, that is the day the count goes to
+two, and this table is where the argument has to be had.
+
 ### 6.7 ★★ Memslot strategy — COARSE REGIONS WITH AN ALLOCATOR INSIDE, never per-object
 
 **The cost, from the source, because the number is the whole argument.** A

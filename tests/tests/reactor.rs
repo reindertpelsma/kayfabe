@@ -25,18 +25,23 @@ use kayfabe_core::reactor::{Dispatch, SourceFault, SourceKind};
 use kayfabe_core::rmgraph::RmEvent;
 use kayfabe_isolate::WorkerId;
 use kayfabe_mocks::{MockArch, MockIsolateFactory};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 const A_PDB: Pdb = Pdb(0x1234_000);
 const B_PDB: Pdb = Pdb(0x5678_000);
 const CLIENT_ROOT: HObject = HObject(0x5c00_0000);
 
-fn fresh_gpu() -> Gpu {
+fn fresh_gpu() -> Guarded<Gpu> {
     let arch = Box::new(MockArch::new());
-    let (factory, _rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x11_0000_0000, 0x1_0000_0000);
     // ★ G9 (§12.21): realized with two physical GPUs — the entitlement.
-    Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)]).expect("device realizes")
+    Guarded::new(
+        "reactor::fresh_gpu",
+        Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)])
+            .expect("device realizes"),
+        rec,
+    )
 }
 
 /// Build one compute proc on physical GPU `instance` and return its `ProcId`.

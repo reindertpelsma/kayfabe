@@ -28,7 +28,7 @@ use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_fwd::{handle_doorbell, poll_completions, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 /// One virtual inference process's fixed identity + its rotating KV working set.
 struct Inference {
@@ -60,9 +60,16 @@ impl Inference {
 
 /// Build the soak fixture: `n` inference processes, each a compute process with
 /// IDENTICAL handles + IDENTICAL VA plane, DISTINCT PDBs and vChids.
-fn build(n: u64) -> (Gpu, MockVmm, Vec<Inference>, Vec<kayfabe_core::ProcId>) {
+fn build(
+    n: u64,
+) -> (
+    Guarded<Gpu>,
+    MockVmm,
+    Vec<Inference>,
+    Vec<kayfabe_core::ProcId>,
+) {
     let arch = Box::new(MockArch::new());
-    let (factory, _rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     // Big window / 16-GiB arenas: a real soak must not exhaust the bump allocator
     // (no recycling yet — gpa.rs). 3 procs × ~1000 iters × 64 KiB ≈ 192 MiB each.
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x4_0000_0000);
@@ -92,7 +99,12 @@ fn build(n: u64) -> (Gpu, MockVmm, Vec<Inference>, Vec<kayfabe_core::ProcId>) {
         .iter()
         .map(|inf| *gpu.spine.by_pdb.get(&(GpuId::ZERO, inf.pdb)).unwrap())
         .collect();
-    (gpu, MockVmm::new(), infs, pids)
+    (
+        Guarded::new("soak_llm_like::build", gpu, rec),
+        MockVmm::new(),
+        infs,
+        pids,
+    )
 }
 
 /// Assert the cross-cutting invariants that must hold on EVERY iteration.
@@ -172,6 +184,13 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
 
             // If this exact VA is still live (ring wrap), eager-unbind first
             // (unmap eager, map lazy) — never a silent stale reuse.
+            //
+            // ★ §12.35: through `unpublish_and_release`, NOT a raw `table.unbind`. The
+            // raw unbind abandoned this slot's host memory object and its GPU mapping
+            // every single iteration — 19 992 of each by the end of the 20k-token soak,
+            // on a proc that never dies, so §7.0's backstop never fires. Nothing was
+            // looking: this suite's assertions are about hangs, GPA exhaustion and
+            // routing.
             {
                 let p = gpu.procs.get_mut(&pid).unwrap();
                 if p.vases
@@ -181,11 +200,8 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
                     .resolve(infs[idx].pdb, va)
                     .is_ok()
                 {
-                    p.vases
-                        .get_mut(&(GpuId::ZERO, infs[idx].pdb))
-                        .unwrap()
-                        .table
-                        .unbind(va);
+                    kayfabe_tests::unpublish_and_release(p, GpuId::ZERO, infs[idx].pdb, va)
+                        .expect("the ring-wrapped slot unpublishes");
                 }
             }
             let p = gpu.procs.get_mut(&pid).unwrap();
@@ -197,11 +213,10 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
             if infs[idx].live_kv.len() > KV_RING {
                 let old = infs[idx].live_kv.remove(0);
                 let p = gpu.procs.get_mut(&pid).unwrap();
-                p.vases
-                    .get_mut(&(GpuId::ZERO, infs[idx].pdb))
-                    .unwrap()
-                    .table
-                    .unbind(old);
+                // ★ §12.35 — the rotation is where the leak actually lived: the oldest KV
+                // buffer left the ring every iteration and took a host object with it.
+                kayfabe_tests::unpublish_and_release(p, GpuId::ZERO, infs[idx].pdb, old)
+                    .expect("the rotated-out KV slot unpublishes");
             }
 
             // --- launch: ring this proc's GR doorbell (its own channel/isolate) ---

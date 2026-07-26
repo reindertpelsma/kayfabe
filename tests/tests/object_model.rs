@@ -16,7 +16,7 @@ use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::rmgraph::{NodeKey, RmEvent};
 use kayfabe_fwd::{FwdFault, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 const CLIENT: HClient = HClient(0xAA);
 const PDB: Pdb = Pdb(0x3401_000);
@@ -25,15 +25,19 @@ const MEM_PHYS: u64 = 0x8000_0000;
 const MAP_VA: GpuVa = GpuVa(0x2_0020_0000);
 const MAP_LEN: u64 = 0x10000;
 
-fn fresh_gpu() -> Gpu {
+fn fresh_gpu() -> Guarded<Gpu> {
     let arch = Box::new(MockArch::new());
-    let (factory, _rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    Gpu::new(arch, Box::new(factory), gpa).expect("device realizes")
+    Guarded::new(
+        "object_model::fresh_gpu",
+        Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+        rec,
+    )
 }
 
 /// A compute process plus a MEMORY object mapped into its VAS. Returns the VAS handle.
-fn compute_with_mapping() -> (Gpu, HObject) {
+fn compute_with_mapping() -> (Guarded<Gpu>, HObject) {
     let mut gpu = fresh_gpu();
     let h = identical_handles(0x10, 0x11);
     let mut s = Scenario::new();

@@ -20,18 +20,22 @@ use kayfabe_core::project::project;
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 /// Build a fresh empty Gpu with a generous 4-GiB-arena window.
 fn fresh_gpu() -> (
-    Gpu,
+    Guarded<Gpu>,
     std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     (
-        Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+        Guarded::new(
+            "weird_order_regressions",
+            Gpu::new(arch, Box::new(factory), gpa).expect("device realizes"),
+            rec.clone(),
+        ),
         rec,
     )
 }
@@ -184,6 +188,7 @@ fn wo_13_multiiter_realloc_same_va_new_backing_each_iter() {
     let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
 
     let mut last_gpa = None;
+    let mut seen_host = std::collections::BTreeSet::new();
     for iter in 0..5u64 {
         let p = gpu.procs.get_mut(&pid).unwrap();
 
@@ -194,25 +199,44 @@ fn wo_13_multiiter_realloc_same_va_new_backing_each_iter() {
                 matches!(overlap, Err(FwdFault::Address(_))),
                 "iter {iter}: re-back over a live mapping must be a loud overlap fault"
             );
-            // Eager unmap (unmap eager, map lazy, reclaim deferred).
-            p.vases
-                .get_mut(&(GpuId::ZERO, PDB))
-                .unwrap()
-                .table
-                .unbind(VA)
-                .expect("eager unbind");
+            // Eager unmap (unmap eager, map lazy) — ★ §12.35: through the reclamation
+            // API, not a raw `table.unbind`. The raw form abandoned each iteration's host
+            // memory object and its GPU mapping, which is #13's own churn shape leaking
+            // one host object per iteration on a proc that never dies.
+            kayfabe_tests::unpublish_and_release(p, GpuId::ZERO, PDB, VA)
+                .expect("eager unbind + release");
         }
 
         // Realloc the SAME VA at a fresh backing.
         let published = publish_backing(p, GpuId::ZERO, PDB, VA, 0x10000)
             .unwrap_or_else(|e| panic!("iter {iter}: realloc same VA must succeed: {e:?}"));
-        // Each iteration's backing is at a NEW GPA (bump allocator never reuses).
-        if let Some(prev) = last_gpa {
-            assert_ne!(
-                published.gpa, prev,
-                "iter {iter}: realloc lands at a NEW backing"
-            );
-        }
+        // ★ §12.35 — this used to assert `published.gpa != prev` ("the bump allocator
+        // never reuses"). That was a statement about the OLD harness, which unbound the
+        // table by hand and therefore never returned the block: the range could not come
+        // back because nothing gave it back. Reclaiming properly (G6's intra-arena free)
+        // makes the SAME GPA the correct answer — the previous iteration's range is free,
+        // and recycling it inside the proc's own arena is the whole point of #80's fix.
+        //
+        // What #13 actually needs, and what is asserted instead, is that the recycled GPA
+        // is backed by a **fresh host object** each iteration and that the mapping is
+        // rebuilt — a stale host backing reused under a new binding is the FAULT_PDE class
+        // this test guards.
+        assert!(
+            p.arenas[&GpuId::ZERO].range.contains(&published.gpa),
+            "iter {iter}: the realloc lands in THIS proc's own arena"
+        );
+        let host = p.vases[&(GpuId::ZERO, PDB)]
+            .table
+            .resolve(PDB, VA)
+            .expect("bound")
+            .0
+            .host_memory()
+            .expect("a published binding names its host memory object");
+        assert!(
+            seen_host.insert(host),
+            "iter {iter}: the realloc must mint a NEW host memory object, never reuse the \
+             freed one"
+        );
         // Resolution returns THIS iteration's current backing, not a stale one.
         let (bind, _) = resolve(&gpu, GpuId::ZERO, PDB, VA).unwrap();
         assert_eq!(

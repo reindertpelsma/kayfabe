@@ -41,7 +41,7 @@ use kayfabe_core::project::{SYSTEM_ANCHOR, project};
 use kayfabe_core::rmgraph::{RmEvent, RmGraph};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing};
 use kayfabe_mocks::{MockArch, MockIsolateFactory};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 // ---------------------------------------------------------------------------------
 // The measured identities. Taken verbatim from the 2026-07-25 RTX 3060 / 580.159.04
@@ -383,15 +383,15 @@ fn identical_handles_across_procs_do_not_collide() {
 // ---------------------------------------------------------------------------------
 
 /// Build a `Gpu` and apply `events`.
-fn gpu_of(events: &[RmEvent]) -> Gpu {
-    let (factory, _rec) = MockIsolateFactory::new();
+fn gpu_of(events: &[RmEvent]) -> Guarded<Gpu> {
+    let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
         Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("device realizes");
     for &ev in events {
         gpu.apply(ev).expect("the scenario applies");
     }
-    gpu
+    Guarded::new("rmgraph_order_independence::gpu_of", gpu, rec)
 }
 
 /// ★★ The isolation the boundaries are *for*: with one shared kernel client, A and B

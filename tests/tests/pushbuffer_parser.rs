@@ -31,7 +31,7 @@ use kayfabe_mocks::{
     MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, RmVerb, SharedRecorder,
     mock_classes as mc,
 };
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 use kayfabe_vmm::Vmm;
 
 const A_PDB: Pdb = Pdb(0x3401_000);
@@ -59,9 +59,9 @@ fn script_pushbuffer(vmm: &mut MockVmm, gpa: u64, methods: &[(u32, Vec<u32>)]) -
     ring
 }
 
-fn one_proc_gpu() -> (Gpu, MockVmm) {
+fn one_proc_gpu() -> (Guarded<Gpu>, MockVmm) {
     let arch = Box::new(MockArch::new());
-    let (factory, _rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
     let mut s = Scenario::new();
@@ -69,7 +69,10 @@ fn one_proc_gpu() -> (Gpu, MockVmm) {
     for ev in s.events {
         gpu.apply(ev).expect("applies");
     }
-    (gpu, MockVmm::new())
+    (
+        Guarded::new("pushbuffer_parser::one_proc_gpu", gpu, rec),
+        MockVmm::new(),
+    )
 }
 
 /// A scripted pushbuffer drives ALL four fact kinds: CE-PT-write capture populates
@@ -156,7 +159,7 @@ fn hostile_ring_never_panics() {
 // ★ The #14 fix through the REAL exec path: per-Vas working-set publication.
 // ---------------------------------------------------------------------------------
 
-fn two_proc_gpu() -> (Gpu, MockVmm, SharedRecorder) {
+fn two_proc_gpu() -> (Guarded<Gpu>, MockVmm, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
@@ -167,7 +170,11 @@ fn two_proc_gpu() -> (Gpu, MockVmm, SharedRecorder) {
     for ev in s.events {
         gpu.apply(ev).expect("applies");
     }
-    (gpu, MockVmm::new(), rec)
+    (
+        Guarded::new("pushbuffer_parser::two_proc_gpu", gpu, rec.clone()),
+        MockVmm::new(),
+        rec,
+    )
 }
 
 /// ★ THE #14 regression through the exec path — now STRUCTURAL: `handle_doorbell` is

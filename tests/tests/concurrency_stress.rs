@@ -80,7 +80,7 @@ use kayfabe_core::gpu::{Gpu, Proc};
 use kayfabe_core::rmgraph::RmEvent;
 use kayfabe_fwd::{gate_working_set, handle_doorbell, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, RmVerb, SharedRecorder};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 use kayfabe_util::Instant;
 
 /// Simulated vCPU threads hammering one shared device.
@@ -153,7 +153,7 @@ const MEM_HANDLES: [HObject; 4] = [
 
 /// Build the shared device: `n` guest processes with IDENTICAL guest handles,
 /// DISTINCT PDBs/vChids, plus per-proc memory objects for RM-map churn.
-fn stress_gpu(n: usize) -> (Gpu, SharedRecorder) {
+fn stress_gpu(n: usize) -> (Guarded<Gpu>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     // Sparse reservations: arenas cost address space, not RAM — be generous.
@@ -178,7 +178,10 @@ fn stress_gpu(n: usize) -> (Gpu, SharedRecorder) {
         gpu.apply(ev).expect("scenario applies cleanly");
     }
     assert_eq!(gpu.procs.len(), n);
-    (gpu, recorder)
+    (
+        Guarded::new("concurrency_stress::stress_gpu", gpu, recorder.clone()),
+        recorder,
+    )
 }
 
 /// Tiny deterministic per-thread RNG (xorshift64*) — reproducible interleavings
@@ -497,10 +500,12 @@ fn stress_multi_vcpu_interleaved_ops() {
                     // before the next acquisition — recorder, then counters, then a
                     // fresh `gpu` read. Never `gpu` under `recorder`.
                     if (op + 1).is_multiple_of(4096) {
-                        let drained = {
-                            let mut rec = recorder.lock().unwrap();
-                            std::mem::take(&mut rec.log)
-                        };
+                        // ★ §12.35 — `compact()`, not `mem::take(&mut rec.log)`. The
+                        // bare take also destroyed the conservation ledger, so the whole
+                        // run's live host state read back as dangling; `compact` folds
+                        // the drained prefix into the recorder's carried accounting
+                        // first, and the memory bound is unchanged.
+                        let drained = recorder.lock().unwrap().compact();
                         for (iso, verb) in &drained {
                             assert_verb_in_namespace(iso.0, verb);
                         }
@@ -552,7 +557,7 @@ fn stress_multi_vcpu_interleaved_ops() {
 
     // Full consistency sweep + the remaining verb-log tail.
     assert_device_consistent(&gpu);
-    let tail = std::mem::take(&mut recorder.lock().unwrap().log);
+    let tail = recorder.lock().unwrap().compact();
     for (iso, verb) in &tail {
         assert_verb_in_namespace(iso.0, verb);
     }
@@ -666,7 +671,13 @@ fn same_proc_interleaving_is_exact() {
         }
     });
 
-    let p = shared.into_inner().unwrap();
+    // ★ §12.35: put the proc BACK before the guard runs. This test shards it out of the
+    // device to get direct `&mut Proc` access; a proc parked outside `Gpu::procs` is
+    // invisible to `reachable_objects`, so leaving it there would report 100 000 correctly
+    // held backings as unaccounted. Restoring it is not a workaround — the sharded proc is
+    // the device's, and the audit's question is about the device.
+    gpu.procs.insert(pid, shared.into_inner().unwrap());
+    let p = &gpu.procs[&pid];
     let vas = &p.vases[&(GpuId::ZERO, pdb)];
     let total = THREADS * PER_THREAD;
     // The bump allocator is exact: every alloc distinct, cursor advanced exactly.
