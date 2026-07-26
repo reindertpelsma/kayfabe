@@ -11,9 +11,20 @@
 //! - **Forward-populate only.** [`AddressTable::bind`] is the only way in — called at
 //!   bind time (RPC populate source) or at a CE-PT-write commit point (#13's populate
 //!   source). There is no exec-time reverse-resolve entry point in this API.
-//! - **MISS = FAULT.** [`AddressTable::resolve`] returns [`AddressFault::Miss`] on a
-//!   miss. There is no fallback walk (a torn multi-level walk = wrong phys =
-//!   cross-context leak — MISS=FAULT is a *security* property, arch doc §4.3.5).
+//! - **MISS = FAULT, with NO deferring case at this layer.** [`AddressTable::resolve`]
+//!   returns [`AddressFault::Miss`] on a miss. There is no fallback walk (a torn
+//!   multi-level walk = wrong phys = cross-context leak — MISS=FAULT is a *security*
+//!   property, arch doc §4.3.5).
+//!
+//!   ★ The core's miss taxonomy (`kayfabe_core` crate docs) allows one other answer —
+//!   DEFER, when the fact is *not yet knowable* — and **no site in this crate qualifies**.
+//!   That is worth stating rather than leaving to inference: this table IS the guest's
+//!   TLB, and a TLB has no "later". A resolve happens because hardware is about to touch
+//!   the address; an unbound VA is a fault on real silicon at that instant, and answering
+//!   "wait, it may be declared soon" would be answering a question nobody asked. The
+//!   deferring belongs one layer up, in DERIVATION (`Gpu::sync_rpc_mappings` defers a
+//!   mapping whose PDB has not been declared) — and deferring there is precisely what
+//!   lets this layer be absolute.
 //! - **Unmap eager**, map lazy, reclaim deferred ([`AddressTable::unbind`]).
 //!
 //! Also here (skeleton this milestone): the GMMU **walk algorithm** — regime-independent

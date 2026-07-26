@@ -366,6 +366,13 @@ pub use kayfabe_isolate::Orphans;
 /// state. Refusing there would turn a legal concurrent submission into a spurious
 /// guest-visible fault, which is a worse bug than the one R5 prevents.
 ///
+/// ★ **This is the miss taxonomy at the commit seam** (`kayfabe_core` crate docs):
+/// converging staleness is a **DEFER** (the world moved *toward* an answer, so re-plan
+/// against it — bounded by `MAX_COMMIT_RETRIES` because a defer must terminate) and
+/// divergent staleness is a **FAULT** (the plan's target is gone; nothing that can arrive
+/// brings it back). The ledger of that defer — every host object a losing attempt
+/// allocated, released exactly once — is pinned by `tests/retry_ledger.rs`.
+///
 /// So: `retry = true` ⇒ *converging* staleness (re-plan, bounded); `retry = false` ⇒
 /// *divergent* staleness (the target is gone — MISS=FAULT, surface it).
 ///
@@ -409,6 +416,19 @@ fn wrong_reply<T>(what: &str) -> Result<T, Refusal> {
 /// `Ok(None)` is **backpressure**: every worker is in flight (or the isolate is
 /// retiring and refuses new checkouts). The caller releases all locks, waits, and
 /// re-enters from the top — never spins, never waits under a lock.
+///
+/// ★ **The miss taxonomy, with the CALLER choosing the category** (`kayfabe_core` crate
+/// docs). "No worker available" is a fact that *will* change — a round trip ends and a
+/// slot returns — so it is **DEFER** for any caller that can wait: `SharedDevice::verb_op`
+/// parks on the pool gate and re-enters with full R5 re-validation, and the wait is
+/// counted so saturation is distinguishable from a hang
+/// (`kayfabe_rt::device::PoolWaits`). For a caller that *cannot* wait (the single-threaded
+/// composed entry points) the same absence surfaces as `FwdFault::PoolSaturated` — a
+/// FAULT. Both are correct because the category is a property of the site: the same fact
+/// is deferrable exactly when the site can be re-run.
+///
+/// The missing-isolate arm below is unconditionally FAULT: a `(proc, gpu)` with no
+/// isolate is an internal inconsistency, not a fact awaiting arrival.
 pub fn checkout(proc: &mut Proc, gpu: GpuId) -> Result<Option<Worker>, FwdFault> {
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(proc.id));
@@ -791,7 +811,13 @@ pub fn unpublish_backing(
 }
 
 /// ROUTE: which proc owns `(target, pdb)`? A pure spine read (`by_pdb`) — the
-/// data-plane routing half of the route/act split. MISS=FAULT.
+/// data-plane routing half of the route/act split.
+///
+/// **MISS ⇒ FAULT** (`kayfabe_core` crate docs, the miss taxonomy). This is a *use* site:
+/// the guest has addressed a VAS, so "the PDB has not been declared yet" is not a fact
+/// that can still arrive **for this operation** — the operation is now. The derivation
+/// layer defers (`Gpu::sync_proc_to_boundary`); routing refuses. That pairing is what
+/// makes the refusal exact instead of merely early.
 ///
 /// ★ §12.13: a miss is checked against the condemned map before it is reported, so a
 /// key whose component lost a worker out of band gets [`FwdFault::Condemned`] — the
@@ -808,8 +834,11 @@ pub fn route_pdb(spine: &Spine, target: GpuId, pdb: Pdb) -> Result<ProcId, FwdFa
 }
 
 /// Resolve `va` in `proc`'s `Vas` identified by `(target, pdb)` — the per-proc
-/// read half of [`resolve`] (L1: device read lock + that proc's lock). Pure
-/// lookup; MISS=FAULT.
+/// read half of [`resolve`] (L1: device read lock + that proc's lock). Pure lookup.
+///
+/// **MISS ⇒ FAULT**, both terms: an unknown `(target, pdb)` is `FwdFault::UnknownPdb`,
+/// and an unbound VA is `AddressFault::Miss`. Nothing defers here — the address table IS
+/// the guest's TLB, and a TLB has no "later" (`kayfabe_mmu` crate docs).
 pub fn resolve_in(
     proc: &Proc,
     target: GpuId,
@@ -1924,6 +1953,12 @@ pub fn gate_working_set(
 
 /// The per-proc form of [`gate_working_set`] (`&Proc` only — in L1: under that
 /// proc's lock, no device-wide access needed). Same predicate, same loud faults.
+///
+/// **Every miss here ⇒ FAULT**, and one of them is the taxonomy's clearest illustration:
+/// `chan.vas_pdb == None` is the *same absence* that `Gpu::sync_proc_to_boundary`
+/// deliberately DEFERS on. At ring time it is never knowable — this submission is being
+/// gated now — so it is `FwdFault::NoVas`, by name. The category belongs to the site, not
+/// to the absence (`kayfabe_core` crate docs).
 pub fn gate_working_set_in(
     proc: &Proc,
     cid: ChanId,

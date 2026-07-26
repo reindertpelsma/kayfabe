@@ -77,10 +77,11 @@ pub const SYSTEM_ANCHOR: ProcAnchor = ProcAnchor(RESERVED_CLIENT);
 pub struct VasFacts {
     /// The owning GPU target, derived via the VASpace's `Device` ancestor
     /// ([`RmGraph::gpu_of`]). `None` = not yet resolvable (no Device ancestor / no
-    /// declared instance): the VAS is not routable until the fact lands — MISS at
-    /// use, never a default-GPU0 guess.
+    /// declared instance): the VAS is not routable until the fact lands — **DEFER** here,
+    /// a loud MISS at use, never a default-GPU0 guess.
     pub gpu: Option<GpuId>,
-    /// The declared PDB, once `SET_PAGE_DIRECTORY` arrives.
+    /// The declared PDB, once `SET_PAGE_DIRECTORY` arrives. `None` ⇒ **DEFER**: the
+    /// guest legitimately allocates a VASpace before binding its page directory.
     pub pdb: Option<Pdb>,
 }
 
@@ -90,8 +91,9 @@ pub struct ChannelFacts {
     /// The exec-plane identity, recovered by the arch from declared flags.
     pub vchid: VChid,
     /// The channel's own GPU target, derived via its `Device` ancestor
-    /// ([`RmGraph::gpu_of`]). `None` = not routable (yet): the channel enters no
-    /// routing map and materializes no runtime state until the fact resolves.
+    /// ([`RmGraph::gpu_of`]). `None` = not routable (yet) ⇒ **DEFER**: the channel enters
+    /// no routing map and materializes no runtime state until the fact resolves. Its
+    /// doorbell then misses `by_vchid` and takes a named `FwdFault::UnknownVchid`.
     pub gpu: Option<GpuId>,
     /// Origin VASpace node this channel is bound to (dup-aliases resolved), if any
     /// declared path exists. `None` = GSP-managed with no declared VAS (routed to
@@ -258,6 +260,11 @@ impl ClientUnion {
 /// confused-deputy inconsistency the fuzz property caught. So resolution to a
 /// non-VASpace returns `None`: the channel is treated as having no declared VAS
 /// (a loud MISS at use time), never silently bound to an unrelated object's PDB.
+///
+/// **MISS ⇒ DEFER here, FAULT at use** (`kayfabe_core` crate docs, the miss taxonomy).
+/// Deferring is right for the not-yet-arrived case; the wrong-kind case is never
+/// knowable and is fused into the same `None` by [`RmGraph::origin_of_kind`] — see that
+/// function for why, and `l1_concurrency.md` §12.30 finding B for the open question.
 fn resolve_vaspace_handle(g: &RmGraph, ns: HClient, handle: HObject) -> Option<&RmNode> {
     // The ONE typed-resolution primitive (decision #18C): resolving a handle to the
     // wrong `ObjectKind` is a single centrally-enforced check, not a per-caller
@@ -270,6 +277,10 @@ fn resolve_vaspace_handle(g: &RmGraph, ns: HClient, handle: HObject) -> Option<&
 /// through [`RmGraph::origin_of_kind`] — an `hVASpace` naming a non-VASpace, an
 /// `hContextShare` naming a non-CtxShare, or a `parent` that is not a TSG each
 /// resolves to `None` (a loud MISS at use time), never a silent cross-object bind.
+///
+/// **MISS ⇒ DEFER** (same category and same caveat as [`resolve_vaspace_handle`]): the
+/// channel materializes with `vas_pdb: None` and rings nothing, because
+/// `kayfabe_fwd::gate_working_set_in` refuses a channel with no VAS by name.
 fn resolve_channel_vas<'g>(g: &'g RmGraph, chan: &RmNode) -> Option<&'g RmNode> {
     let ns = chan.key.client;
     if let Some(hv) = chan.facts.h_vaspace {

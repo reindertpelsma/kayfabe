@@ -32,6 +32,45 @@
 //! the mock-driven test suite is the standing proof (it runs this exact code against a
 //! fake architecture).
 //!
+//! ## ★★ MISS = FAULT, and the ONE declared exception: **DEFER**
+//!
+//! `mode2_address_table.md`'s founding rule is *MISS = FAULT*: a lookup that misses is a
+//! loud, typed refusal, never a fallback walk, never a guess, never a default. It stays.
+//!
+//! But the codebase has always had a second answer, and having it is **correct**: a
+//! `MapMemoryDma` that arrives before its VASpace's `SET_PAGE_DIRECTORY` is *deferred*,
+//! not faulted, because the guest legitimately maps before it binds a page directory
+//! (`Gpu::sync_rpc_mappings`). Which answer a site gives was, until this audit, decided
+//! site by site by whoever wrote it — and undocumented judgement is what drifts. So the
+//! split is now **declared at every miss site** (`l1_concurrency.md` §12.30):
+//!
+//! | the fact is… | answer | why |
+//! |---|---|---|
+//! | **not yet knowable** — it may still arrive, and the guest is not wrong to have asked in this order | **DEFER** — skip, park, re-plan, or wait; mutate nothing and record nothing | the protocol is order-tolerant (decision #4); turning a transient absence into a refusal makes the SAME facts in a different order produce a different end state, which is the determinism the whole core is built on |
+//! | **never knowable** — nothing that can arrive will resolve it | **FAULT** (MISS=FAULT proper) — typed, loud, mutation-free | the guest asked for something unresolvable; guessing is the confused-deputy / wrong-phys class the rule exists to prevent |
+//!
+//! Three things about this taxonomy are load-bearing:
+//!
+//! 1. **The category is a property of the SITE, not of the absence.** The *same* missing
+//!    fact is a DEFER in derivation and a FAULT at use. A channel with no declared VAS
+//!    materializes no `Vas` (`Gpu::sync_proc_to_boundary` — deferred, it may yet be
+//!    declared) and takes `FwdFault::NoVas` the instant a doorbell rings it
+//!    (`kayfabe_fwd::gate_working_set_in` — at ring time there is no "later"). Both are
+//!    right, and neither is a weakening of the other: **deferral in derivation is what
+//!    makes the fault at use exact.**
+//! 2. **A DEFER must be recoverable by a fact arriving.** Every deferring site is
+//!    re-evaluated from scratch on the next `Gpu::apply` (`project` is pure and
+//!    `sync_rpc_mappings` is idempotent), so "deferred" means *"the answer changes when
+//!    the fact lands"*, never *"silently dropped"*. A deferral with no re-evaluation path
+//!    is a hang, and is a bug.
+//! 3. **Getting the category wrong is asymmetric, in opposite directions.** A FAULT that
+//!    should be a DEFER is a hung or spuriously-refused guest (§12.9's own lesson: the
+//!    first symptom was a hang, not an assertion). A DEFER that should be a FAULT is a
+//!    *security* question — it is the shape in which a hostile handle stays silently
+//!    inert instead of being refused. That is why the categories are written down at the
+//!    site rather than inferred from the return type: `Option<T>` cannot tell them apart,
+//!    and several resolvers here legitimately return one `None` for both.
+//!
 //! ## ★ The concurrency contract (decision #17)
 //!
 //! The core WILL be invoked concurrently from multiple vCPUs (different guest

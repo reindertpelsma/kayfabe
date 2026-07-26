@@ -994,10 +994,16 @@ backpressure from *parking* to *spinning*: the waiter returns immediately and re
 the top, which is still correct and still terminates. What changes is CPU burn, and the suite
 asserts backpressure as progress, never as wall clock — deliberately, because timing
 assertions are how concurrency suites become flaky. So the gate cannot see the difference
-between a well-behaved park and a busy-wait. **Given that "never busy-poll anywhere" is one
-of this project's founding rules — its predecessor's worst performance bug was a poll storm —
-having a blind spot exactly there is uncomfortable**, even if each individual decision that
-produced it was right.
+between a well-behaved park and a busy-wait. **That blind spot is the reason the founding
+rule was restated.** It used to read "never busy-poll anywhere"; it now reads *every poll
+must be provably BOUNDED* (`l1_concurrency.md` §4.2). The old form is an **absence**, and
+these three survivors are the proof that an absence cannot be asserted — a mutant that turns
+a park into a spin violates nothing any test can name, so the gate is green and right to be.
+The new form is a **quantity**: count the waits, count the events that caused them, assert
+the relation. The pool gate's saturation counters (§7.2) are the first instance; the
+reactor's wake-count gate (`l1_os_shell.md` §3.4) is the second. Survivors in that cluster
+remain scored by timeout, but they are no longer the *only* thing standing between a park and
+a spin.
 
 The CI threshold is 91%, not 92.44%, because that cluster is scored by timeout and measurably
 moves by about two mutants between identical runs. The reasoning is explicit and good: a bar
@@ -1257,7 +1263,11 @@ completions are outstanding*. A periodic redelivery sweep is forbidden.
 
 **Rationale.** The predecessor's worst performance failure was a poll storm; the forbidden
 thing is specifically *"the harmless safety poll that historically creeps in during a
-debugging session."*
+debugging session."* Note what makes that one forbidden under the restated F1
+(`l1_concurrency.md` §4.2, "every poll must be provably BOUNDED"): a periodic sweep has **no
+bound at all** — its iteration count is a function of uptime, not of outstanding work. A
+deferred backstop armed only while completions are outstanding does have one, which is
+exactly why that form is permitted and the sweep is not.
 
 **Cost.** Every completion pattern must have an edge, and if one is missed the failure mode is
 a lost wakeup rather than a slow one. Two of the four named edges are not yet wired (§7.1).

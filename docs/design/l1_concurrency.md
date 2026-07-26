@@ -41,7 +41,7 @@ make structurally impossible (or explicitly, honestly residual):
 
 | # | C failure (cite) | Mechanism | The L1 rule it produces |
 |---|---|---|---|
-| F1 | **0x110094 poll storm** (`C: mode2_execfwd_layer2`) | guest spin-polls a GSP status reg; every read a nested-virt vmexit; ~40k exits per phase | never busy-poll — on either side. Guest-side: read-native overlays (Vmm cap 7, an L2 fill). **Our side: every L1 wait is event-driven (epoll/condvar/deadline), never a spin loop** |
+| F1 | **0x110094 poll storm** (`C: mode2_execfwd_layer2`) | guest spin-polls a GSP status reg; every read a nested-virt vmexit; ~40k exits per phase | **every poll must be provably BOUNDED** (§4.2 — the rule was long stated as "never busy-poll", which is neither what went wrong nor testable). Guest-side: read-native overlays (Vmm cap 7, an L2 fill). **Our side: every L1 wait is event-driven (epoll/condvar/deadline) or a spin with a stated, asserted bound — never an unbounded one** |
 | F2 | **#14 round-8 completion starvation** (`C: mode2_14_concurrent_apps` round 8) | delivery invoked only from the *doorbell* handler, gated on `any_completed`, one cross-proc SWGEN0 batch → a proc that polls-but-doesn't-submit starves once the other proc goes quiet | completion delivery is per-proc and driven off the **owner's own poll** (the core's `DeliveryPlane::on_poll` already encodes this); L1 must pump it from the right threads and must never re-introduce a cross-proc gate on *observation* |
 | F3 | **Mode-1 blocking-sync hole** (`C: mode1_blocking_sync_gap`) | the os-event *producer* was a no-op TODO (`ISOLATE_CMD_POLL` did nothing) → `CU_CTX_SCHED_BLOCKING_SYNC`/NCCL hang forever; 20 apps passed only because they spin-polled | the os-event producer is a first-class L1 component: an epoll relay from host os-event fds to `CoreEvent`s. It is on the critical path of correctness, not an optimization |
 | F4 | **Signal interruptibility** (`C: signal_interrupt_delivery_done`, #73) | a guest task blocked in a forwarded ioctl couldn't die; and the naive fix (abandon the descriptor on signal) was a UAF | every blocking host op must be interruptible (the tgkill/`SA_RESTART`-less pattern), and the requester must **never abandon a reply buffer** — reclaim, then return |
@@ -151,7 +151,8 @@ refinement.
   threads of the SAME proc (§3.5) — proceed in parallel; a wedged host ioctl stalls
   only its own guest thread (with one honest residual — §11 B3).
 - **The reactor loop** is the L1 shell of the §6 completion-source reactor — and the
-  F3 fix done right: one `epoll_wait` (blocking, zero busy-poll) over the registered
+  F3 fix done right: one `epoll_wait` (blocking; one wake per signal, which is F1's
+  bound — §4.2) over the registered
   completion-source fds (host os-event fds, isolate worker pipes, cross-isolate
   pipes) plus the eventfd-shaped notify that wakes it when the source set changes,
   plus the defer timer. It maps fd → opaque `CompletionSource` (a pure table
@@ -471,10 +472,32 @@ and a poll fires WHILE A's verb is held pending by the mock.
 
 ### 4.2 Recommendation: **(a)**, with two hard rules
 
-- **No busy-polling anywhere in L1 (F1).** Every wait is `epoll_wait`, a condvar, or a
-  deadline. The completion pump is edge-driven (§5.2); there is no periodic "scan
-  everything" thread. If a backstop timer proves necessary it is a `Vmm::defer`
-  deadline, armed only while something is outstanding, cadence bounded — never a spin.
+- **★ Every poll must be provably BOUNDED (F1).** ★ **This supersedes the older wording,
+  "no busy-polling anywhere in L1", which was both wrong and untestable.** It was wrong
+  because a short spin on something that completes in microseconds is fine and routinely
+  beats a syscall — `std::sync`'s own mutexes spin before parking, and forbidding that
+  forbids the fast path along with the bug. It was untestable because "no polling" is an
+  *absence*, and a test cannot observe an absence: the mutation gate's three
+  spin-versus-park survivors (`l1_architecture_summary.md` §mutation) are exactly that
+  blind spot — mutants that turn a park into a spin stay green, because nothing asserts
+  anything a spin would violate.
+
+  What actually went wrong in the C was **unboundedness**: a guest loop with no ceiling on
+  iterations, each one a nested-virt vmexit, ~40k exits per phase. So the rule names the
+  defect: a poll is legal iff its bound is *stated* and the bound is *asserted*.
+
+  The testable consequence: **assert a bound, not an absence.** Count the events a wait
+  can generate and assert the count — the reactor's wake count against the signal count
+  (`l1_os_shell.md` §3.4), the pool gate's wait count against the saturation events that
+  caused it (§7.2, [`SharedDevice::pool_waits`]) — never "and it did not spin", which no
+  test can see. A poll with no such counter is not merely unmeasured; it is the rule's
+  violation, because an unstated bound is an unbounded one.
+
+  In practice, every L1 wait is still `epoll_wait`, a condvar, or a deadline: those are
+  bounded by construction (one wake per signal), which is why they remain the default and
+  a spin needs an argument. The completion pump is edge-driven (§5.2); there is no
+  periodic "scan everything" thread. If a backstop timer proves necessary it is a
+  `Vmm::defer` deadline, armed only while something is outstanding, cadence bounded.
 - **No atomics, no lock-free structures, no hand-rolled synchronization in L1 logic.**
   `std::sync` primitives (`RwLock`, `Mutex`, `Condvar`, `mpsc`) only. This keeps TSan
   as a meaningful ceiling and makes `loom` unnecessary (the stress suite's standing
@@ -3058,3 +3081,211 @@ Bite-check (each guard reverted individually, everything else in place):
 | `SYSTEM_ANCHOR` → `SYSTEM_PROC` routing | `the_system_proc_has_clients_and_a_vas_and_still_no_data_plane`. |
 
 Suite: **257 → 269**, 0 skipped, 0 ignored.
+
+---
+
+### 12.28 ★★ THE RETRY LEDGER — §12.9's re-plan was safe by ASSUMPTION, now by measurement
+
+§12.9 settled the *policy*: converging staleness re-plans (bounded), divergent staleness
+refuses. The owner's warning on it was exactly right — *"the retries are genuinely good,
+but watch out if the action that was performed already had side effects"* — and the
+mechanism does address it: a converging `Refusal` carries `Orphans`, and
+`SharedDevice::verb_op` disposes of them on the same worker, still lock-free, **before**
+the retry.
+
+**What had never been tested is the ledger across N attempts.** `Stale::Rebound` — the one
+variant the retry path exists for — had **zero test coverage anywhere in the workspace**
+before this pass (a grep for it hit only `kayfabe-fwd`'s own source). "Retry is safe" was
+an assumed claim, and this campaign has been a sequence of assumed claims turning out to be
+half-true.
+
+`tests/retry_ledger.rs` (3 tests) makes it measured. Every attempt in it has **already
+allocated real host objects** — a host VAS, a host memory object, a host GPU mapping —
+before it loses its race, and every ordering edge is a `VerbHold` latch (no sleeps, no
+timing).
+
+| test | what it forces | what it asserts |
+|---|---|---|
+| `converging_retries_release_every_host_object_they_allocated` | 4 publishers, every one held inside `map_gpu_va`, so **all four plan against `host_vas == None`** before any commits; 1 wins, 3 converge and re-plan | **Outstanding(ledger) == Reachable(core)**, objects *and* mappings, in both lock modes. Not a verb count — a set equality: an object that exists and that no `Vas`/binding/channel can name *is* the definition of a leak |
+| `the_commit_retry_bound_still_releases_the_attempt_that_hits_it` | the `(GPU, PDB)` `Vas` is torn down and re-won under the parked publisher on **every** round, `MAX_COMMIT_RETRIES` times | the op ends in `Stale::Rebound` (never a spin, never a success), and the outstanding set equals exactly what the *script* abandoned — i.e. the final, refused attempt released its own allocation. The bound changes what the caller is told, not what the host is left holding |
+| `a_retry_whose_replan_diverges_refuses_without_leaking_the_attempt` | attempt 1 converges and re-plans; the proc retires while attempt 2 is lock-free in flight | the fault is `Stale::Proc` **on the exact proc** (not the previous attempt's `Rebound`, not an anonymous `Rm(..)`), and the residue is stated: a retired isolate refuses the disposal too, so the objects are the §12.16 G4 residue whose disposition of record is the isolate session's death |
+
+`MAX_COMMIT_RETRIES` became `pub` for this — the bound-hitting test must drive exactly as
+many rounds as the bound permits (one too few never reaches it; one too many waits on an
+attempt that is never made). It is documented as *not* a knob.
+
+**Bite-check** — the orphan release on the converging path deleted (`dispose_on` → drop),
+everything else in place:
+
+| test | observed |
+|---|---|
+| `converging_retries_release_every_host_object_they_allocated` | FAILED. Outstanding **11**, reachable **5** — exactly **2 extra per losing attempt** (3 losers × {duplicate host VAS, memory object}), each named by handle in the diff |
+| `the_commit_retry_bound_still_releases_the_attempt_that_hits_it` | FAILED. Outstanding **25** vs expected **16** — **9 extra**: the first attempt's duplicate host VAS plus **one memory object per retry**, all 8 of them |
+| `a_retry_whose_replan_diverges_refuses_without_leaking_the_attempt` | still passed, correctly: its disposal is *already* refused by the retired isolate, so removing the disposal changes nothing. The three tests are independent claims, and this one says so |
+
+**No leak was found in the shipped code.** The converging path's ledger balances exactly,
+including at the bound. That is the result the test was written to be *able* to falsify.
+
+### 12.29 ★ POOL SATURATION was correct and INVISIBLE — a saturated pool looked exactly like a hang
+
+The bounded worker pool is right and stays right (§7.2's calibration: RM serialises every
+ioctl-reachable path on the per-client write lock, so the pool buys **liveness isolation**,
+not throughput — which saturates at a handful of workers; the default is 4, re-anchored on
+that and not on the vCPU count). What was missing is *observability*: from outside the
+process, "every worker is in flight and three guest threads are queued" and "the device is
+wedged" present identically — guest threads stop finishing, and nothing anywhere says why.
+
+`PoolGate` now carries per-target `PoolWaits`, surfaced by `SharedDevice::pool_waits()`:
+
+- `saturated` — checkouts that found the pool full (counted even when the wait turns out
+  free: the pool *was* full when the plan phase asked);
+- `parked` — of those, the ones that actually blocked (`saturated - parked` = near misses);
+- `peak_waiters` — **how long the queue got**, the number that says whether the pool is
+  merely touched or genuinely the constraint;
+- `waiting` — depth right now.
+
+Three deliberate choices:
+
+1. **Counted, never timed.** There is no clock in the core (§8.3), and a duration would
+   measure the verb behind the queue rather than the queue.
+2. **Keyed by `GpuId`, not `(ProcId, GpuId)`.** A `ProcId` is monotonic and never reused, so
+   per-proc keying is an unbounded map a guest can grow for free — a boundary-1 hazard
+   inside a *diagnostic*. The target set is bounded by the device's entitlement.
+3. **`pool_waits()` takes only the gate's own mutex**, never the device lock — it has to be
+   callable while every guest thread is blocked, which is the entire situation it exists
+   for.
+
+Tests: `pool_saturation_is_counted_so_it_is_distinguishable_from_a_hang` (one worker, one
+holder, **two** waiters — pins the depth, not just the fact; and pins `waiting` returning to
+0, because a diagnostic that leaks a waiter would report permanent congestion on a healthy
+device) and `an_unsaturated_pool_reports_nothing_at_all` (two publishers against four
+workers cannot saturate even through a converging re-plan, so the map stays empty).
+
+**Bite-check** — the counter updates removed from `wait_for_return`:
+`pool_saturation_is_counted_so_it_is_distinguishable_from_a_hang` FAILED with
+`bounded wait exhausted after 20000 polls: both requesters parked on the pool gate`. The
+other 20 tests in the file stayed green, which is the point: nothing else in the suite can
+see saturation at all.
+
+### 12.30 ★★ THE MISS AUDIT — MISS=FAULT had an undeclared second answer, and it was right
+
+MISS=FAULT is founding and stays. But the codebase has always had a second answer, and
+having it is correct: a `MapMemoryDma` that arrives before its VASpace's
+`SET_PAGE_DIRECTORY` is **deferred**, not faulted, because the guest legitimately maps
+before it binds a page directory. So the real rule is a two-way split that was being decided
+site-by-site by whoever wrote the site — and undocumented judgement is what drifts.
+
+The split is now declared, in `kayfabe-core`'s crate docs and at each site:
+
+- **not yet knowable ⇒ DEFER** — the fact may still arrive, the guest is not wrong;
+- **never knowable ⇒ FAULT** — MISS=FAULT proper.
+
+Three properties are load-bearing and are stated there: (1) **the category belongs to the
+SITE, not to the absence** — the same missing fact defers in derivation and faults at use,
+and the deferral is what makes the fault *exact*; (2) **a DEFER must be recoverable by a
+fact arriving** (every deferring site is re-evaluated on the next `apply`; a deferral with
+no re-evaluation path is a hang); (3) **getting it wrong is asymmetric in opposite
+directions** — a FAULT that should defer is a hung or spuriously-refused guest (§12.9's own
+lesson: the first symptom was a *hang*), a DEFER that should fault is a security question.
+
+**The inventory** (category → why), audited across `rmgraph.rs`, `project.rs`, `gpu.rs`,
+`kayfabe-fwd` and `kayfabe-mmu`:
+
+| site | category | why |
+|---|---|---|
+| `RmGraph::client_root_of` / `client_kinds` | DEFER | an object may legally precede its client root (order tolerance, #4) |
+| `RmGraph::resource_of` / `origin_of` | DEFER | `Dup`-before-`Alloc` is legal; `resolve_pending_dups` promotes later |
+| `RmGraph::origin_of_kind` | **fused** — DEFER + a never-knowable FAULT | see finding **B** |
+| `RmGraph::pdb_of` | DEFER | `SET_PAGE_DIRECTORY` may arrive (or be parked) after the alloc |
+| `RmGraph::walk_gpu` / `gpu_of` | DEFER | no `Device` ancestor *yet*; the instance-less-Device arm is unreachable (`deviceId` is required by `NV0080`) — see finding **A** |
+| `RmGraph::backing_of` | **split by the caller** | "unobserved" defers; "not a Memory" / "no declared backing" are never knowable and surface as `UnbackedMapping` |
+| `project::resolve_vaspace_handle` / `resolve_channel_vas` | DEFER here, FAULT at use | inherits `origin_of_kind`'s fusion |
+| `project`: parked dup edge skipped | DEFER | turning a transient parked dup into a refusal would make the same facts in a different order produce a different end state |
+| `project`: `is_user(dst) && is_user(src)` | DEFER on undeclared ends | grouping needs positive evidence about BOTH sides; absence is never read as "user" |
+| `project`: `VasFacts.gpu` / `.pdb`, `ChannelFacts.gpu` / `.vas_origin` | DEFER | not routable *yet*; never a default-GPU0 guess |
+| `project`: `by_pdb` / `by_vchid` inserted only for a resolved target | DEFER | an unroutable object enters no routing map; its use faults by name |
+| `project`: `PdbCollision` / `VchidCollision` | FAULT | not a miss — an ambiguity, and hostile ambiguity is the F1 guard's whole job |
+| `Gpu::sync_rpc_mappings`: `m.pdb == None` | **DEFER** | ★ THE canonical exception the taxonomy is written around |
+| `Gpu::sync_rpc_mappings`: `gpu_of(vaspace) == None` | DEFER | same, on the multi-GPU axis — deferring is what keeps GPU0 from being guessed |
+| `Gpu::sync_rpc_mappings`: `m.mem_phys == None` | **FAULT** (`UnbackedMapping`) | a backing is an alloc-time fact; an unbacked memory stays unbacked |
+| `Gpu::sync_proc_to_boundary`: vas/channel with unresolved target | DEFER | materializes nothing, re-evaluated next apply, `ChanId` slot kept stable |
+| `Spine::plan_refresh`: `LateMerge` / `CondemnedMerge` / arena exhaustion | FAULT | decided before any proc is touched (§12.18) |
+| `fwd::route_pdb` / `route_doorbell` / `route_engine_object` | **FAULT** | *use* sites: `UnknownPdb` / `UnknownVchid` / `MalformedToken` / `NotAnEngine`, with §12.13's `Condemned` split where it applies |
+| `fwd::resolve_in` | FAULT ×2 | unknown `(target, pdb)`; unbound VA |
+| `fwd::gate_working_set_in` | FAULT ×4 | incl. `chan.vas_pdb == None` — the same absence `sync_proc_to_boundary` **defers** on. At ring time there is no "later" |
+| `fwd::plan_publish` / `plan_doorbell` / `plan_engine_object` / `plan_control` | FAULT | `RetiredProc`, `SystemDataPlane`, `UnknownPdb`, `NoVas`, `NoTarget` |
+| `fwd::checkout` → `Ok(None)` | **DEFER — with the CALLER choosing** | "no worker" *will* change; a caller that can wait parks (and is now counted, §12.29), one that cannot gets `PoolSaturated` |
+| `fwd::commit_*` → `Refusal { retry: true }` | **DEFER at the commit seam** | §12.9's converging staleness — bounded, because a defer must terminate |
+| `fwd::commit_*` → `retry: false` | FAULT | divergent: nothing that can arrive brings the target back |
+| `AddressTable::resolve` | **FAULT, no deferring case exists at this layer** | the table IS the guest's TLB; a TLB has no "later" |
+| `AddressTable::unbind` → `None` | FAULT at the caller | `unpublish_backing` refuses: the arena must never accept a range it does not owe |
+| `SourceRegistry::dispatch` | FAULT (`SourceFault`) | handles are never reused, so a miss is never a stale-alias guess |
+
+**Findings.** No site required a *behaviour* change — every category in the shipped code is
+defensible, which is itself the audit's most useful result. Three **documentation** defects,
+two of them stating the opposite of their own code:
+
+- **A — `RmGraph::gpu_of` documented the pre-G9 behaviour.** Its comment read *"A Device
+  that declared no `deviceInstance` is the single-GPU default selection … routing to
+  `GpuId::ZERO`"*. False since §12.21: `walk_gpu` returns
+  `node.facts.device_instance.map(GpuId)`, i.e. `None`. A public resolver's doc asserting a
+  default-GPU0 guess, inside the one doctrine ("never guess GPU 0") the change existed to
+  enforce. **Fixed** (the comment now states the correction and why it matters).
+- **B — `RmGraph::origin_of_kind` fuses two categories under one `None`.** "The handle does
+  not resolve" is DEFER; "it resolves, to an object of the **wrong kind**" is never knowable
+  — no future event turns a TSG into a VASpace — and is a *hostile-input fact* (a guest
+  naming a TSG as its `hVASpace`). The end state is safe either way (both make the object
+  unroutable and its use faults loudly), so nothing downstream is wrong; what is lost is the
+  **distinction**, and only one of the two is security-relevant. This is the same shape
+  §12.13 decided was worth splitting for condemned-vs-unknown routing misses. Splitting it
+  means a `Result`-shaped resolver threaded through `project` — a design change, not a
+  documentation pass. **Recorded and documented at the site; deliberately not changed.**
+- **C — `Gpu::sync_rpc_mappings`'s doc contradicted its own body.** It claimed *"MISS=FAULT
+  is preserved — a mapping with no resolvable PDB or backing is a loud fault, never a silent
+  skip"*, while the body `continue`s on both an unresolved PDB and an unresolved target
+  (correctly). The body was right and the sentence was wrong — and it was wrong about the
+  single most-cited exception in the codebase. **Fixed**, with the three-way split spelled
+  out.
+
+(Minor, out of scope, noted in passing: `RmRecorder::hold`'s doc says holds are "matched
+newest-spec-first"; the code uses `Vec::position`, i.e. **oldest** first. Mock-only, and the
+new tests rely on the FIFO order the code actually has.)
+
+### 12.31 ★ "NEVER BUSY-POLL" was the wrong rule — the testable one is "every poll must be provably BOUNDED"
+
+F1 was stated as *never busy-poll anywhere*. Two things are wrong with that.
+
+It is **wrong on the merits**: a short spin on something that completes in microseconds is
+fine and routinely beats a syscall — `std::sync`'s own mutexes spin before parking — so the
+rule as written forbids the fast path along with the bug. What actually went wrong in the C
+was **unboundedness**: a guest loop with no ceiling, each iteration a nested-virt vmexit,
+~40k exits per phase.
+
+It is also **untestable**, and the mutation gate already showed exactly where that bites.
+Three survivors in the L1 campaign degrade the pool's backpressure from *parking* to
+*spinning*; every one stays green, because "no polling" is an **absence** and a test cannot
+observe an absence. That blind spot was recorded as "uncomfortable"; it is better read as
+the rule being mis-stated.
+
+Restated, in §4.2 (normative) and cross-referenced from §1's F1 row, `l1_os_shell.md` O4 +
+the gate table, and `l1_architecture_summary.md`'s mutation section and D8:
+
+> **Every poll must be provably BOUNDED.** A poll is legal iff its bound is *stated* and the
+> bound is *asserted*. The testable consequence: **assert a bound, not an absence** — count
+> the events a wait can generate and assert the count (the reactor's wake count against the
+> signal count; the pool gate's wait count against the saturation events that caused it,
+> §12.29). A poll with no such counter is not merely unmeasured: it is the rule's violation,
+> because an unstated bound is an unbounded one.
+
+`epoll_wait`, condvars and deadlines remain the default *because* they are bounded by
+construction (one wake per signal) — a spin now needs an argument rather than being
+forbidden by fiat. D8's forbidden periodic sweep is forbidden for a sharper reason than
+before: its iteration count is a function of uptime, not of outstanding work, so it has no
+bound at all, while a backstop armed only while completions are outstanding does.
+
+No existing test asserted "no polling", so nothing had to be restated; the first assertion
+in the new form is §12.29's saturation counter, and the second is the `await_bounded` helper
+in `l1_verb_seam.rs`, whose ceiling is stated in one place and whose exhaustion is a named
+failure rather than a wedge.
+
+Suite: **269 → 274**, 0 skipped, 0 ignored.

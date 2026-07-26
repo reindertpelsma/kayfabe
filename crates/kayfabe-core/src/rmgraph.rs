@@ -543,6 +543,11 @@ impl RmGraph {
 
     /// This namespace's ONE client-root handle, if its root has been observed and is
     /// still live (§12.27). O(log n) — an index read, never a scan.
+    ///
+    /// **MISS ⇒ DEFER** (crate docs, "MISS = FAULT and the ONE declared exception"): an
+    /// object may legally arrive before its client root (order tolerance, decision #4),
+    /// so absence here means *not yet knowable*. No caller treats it as evidence about
+    /// the client; they simply have no `ClientKind` to group on yet.
     fn client_root_of(&self, client: HClient) -> Option<NodeKey> {
         let id = self.client_roots.get(&client)?;
         self.resources.get(id).map(|r| r.node.key)
@@ -1243,6 +1248,12 @@ impl RmGraph {
 
     /// Resolve a handle to its resource id through dup aliasing, following a parked
     /// (not-yet-alloc'd) chain if needed. `None` if the chain dangles.
+    ///
+    /// **MISS ⇒ DEFER**: a dangling chain is the `Dup`-before-`Alloc` ordering the
+    /// protocol allows — the source alloc may still arrive and
+    /// [`Self::resolve_pending_dups`] promotes the edge when it does. A chain that never
+    /// resolves stays inert and its *use* faults loudly, which is where MISS=FAULT bites
+    /// (crate docs: the category is a property of the site, not of the absence).
     fn resource_of(&self, key: NodeKey) -> Option<ResId> {
         let mut k = key;
         // Bounded: dup chains are tiny; guard against a (protocol-invalid) cycle.
@@ -1258,6 +1269,8 @@ impl RmGraph {
     /// Resolve `key` through dup aliasing to its **origin** node (the resource's
     /// payload). `None` if the chain dangles (fact not yet observed) or the resource
     /// was never allocated / has been fully freed.
+    ///
+    /// **MISS ⇒ DEFER**, as [`Self::resource_of`].
     #[must_use]
     pub fn origin_of(&self, key: NodeKey) -> Option<&RmNode> {
         let id = self.resource_of(key)?;
@@ -1277,6 +1290,27 @@ impl RmGraph {
     /// heuristic resolvers were, and that M2's `resolve_vaspace_handle` fixed
     /// piecemeal). A hostile guest naming an object of the wrong type gets a loud MISS
     /// at use time (`None` here), never a silent bind to an unrelated object.
+    ///
+    /// ## ★ The one `None` that carries TWO categories — a declared, deliberate fusion
+    ///
+    /// Per the crate docs' miss taxonomy this site is genuinely both:
+    ///
+    /// - `key` does not resolve at all ⇒ **DEFER** — the alloc may still arrive.
+    /// - `key` resolves, to an object of the **wrong kind** ⇒ **never knowable**. The
+    ///   resource exists and is definitively not a `want`; no future event turns a TSG
+    ///   into a VASpace. By the taxonomy that is a **FAULT** shape, and the only reason
+    ///   it is not raised *here* is that this is a resolver, not a use site: it is a
+    ///   hostile-input fact — a guest naming a TSG as its `hVASpace` — reported as an
+    ///   absence.
+    ///
+    /// **The end state is safe either way** (both make the object unroutable, and its use
+    /// faults loudly and specifically), so nothing downstream is wrong. What is lost is
+    /// the *distinction*: a type-confusion attempt is indistinguishable here from a fact
+    /// that has not arrived, and only one of the two is a security-relevant event. That is
+    /// the same shape §12.13 decided was worth splitting for condemned-vs-unknown routing
+    /// misses. Splitting it means a `Result`-shaped resolver threaded through `project`,
+    /// which is a design change and not a documentation pass — recorded as an open finding
+    /// (`l1_concurrency.md` §12.30, finding B) rather than done silently.
     #[must_use]
     pub fn origin_of_kind(&self, key: NodeKey, want: ObjectKind) -> Option<&RmNode> {
         let node = self.origin_of(key)?;
@@ -1298,7 +1332,14 @@ impl RmGraph {
         refs.into_iter().flat_map(|set| set.iter().copied())
     }
 
-    /// Declared PDB of the VASpace whose **origin** is `origin_key`, if declared. The
+    /// Declared PDB of the VASpace whose **origin** is `origin_key`, if declared.
+    ///
+    /// **MISS ⇒ DEFER**: `SET_PAGE_DIRECTORY` legally arrives after the VASpace alloc (and
+    /// may be parked before it), so an undeclared PDB is *not yet knowable*. The
+    /// consequence is that the VAS enters no routing map — and an address op against it
+    /// then takes a loud `FwdFault::UnknownPdb` at use.
+    ///
+    /// The
     /// PDB is a property of the resource (declared via the origin OR any alias handle,
     /// possibly before the alloc), so it resolves regardless of which handle carried
     /// the `SET_PAGE_DIRECTORY` and survives the origin handle's free.
@@ -1334,6 +1375,15 @@ impl RmGraph {
     /// `memory_key` (dup-aliases resolved), if declared. This is how a `MapMemoryDma`
     /// resolves `memory → phys` for the address table. `None` if the handle is not a
     /// memory resource, is unobserved, or declared no backing.
+    ///
+    /// **Two categories under one `None`, and the CALLER separates them.** "Unobserved"
+    /// is DEFER; "resolved but not a Memory" and "declared no backing" are *never
+    /// knowable* (a backing is an alloc-time fact — an unbacked memory stays unbacked),
+    /// and `Gpu::sync_rpc_mappings` duly raises `GpuError::UnbackedMapping` — a FAULT — for
+    /// a mapping whose memory resolved. The deferring half is handled one level up, at the
+    /// parked-map guard in `apply_map` (a *replayed* parked map with no backing is dropped
+    /// rather than installed, so it cannot wedge an unrelated apply). See
+    /// [`Self::origin_of_kind`] for the same fusion at the typed-resolution primitive.
     #[must_use]
     pub fn backing_of(&self, memory_key: NodeKey) -> Option<u64> {
         // Resolve by handle when possible; else fall back to the resource's stable
@@ -1403,15 +1453,28 @@ impl RmGraph {
     /// Pure and order-independent — a projection of declared facts, like every other
     /// derivation. `None` (MISS, never a default-GPU0 guess) when: the key does not
     /// resolve, no `Device` ancestor exists on the chain, or the Device declared no
-    /// instance. Callers treat a `None` as "not routable (yet)": routing/materialization
-    /// simply defers until the Device fact arrives, and use faults loudly.
+    /// instance (G9, §12.21 — **not** a silent `GpuId::ZERO`).
+    ///
+    /// **MISS ⇒ DEFER** (crate docs): callers treat `None` as "not routable (yet)" —
+    /// routing and materialization defer until the `Device` fact arrives, and *use* faults
+    /// loudly. The third case above is arguably never-knowable (an alloc-time fact that
+    /// did not arrive can no longer arrive for that Device), but it is unreachable in
+    /// practice — `deviceId` is a required field of `NV0080_ALLOC_PARAMETERS`, so the ABI
+    /// layer always observes it — and deferring it costs nothing: the object routes
+    /// nowhere and its use is refused by name.
     #[must_use]
     pub fn gpu_of(&self, key: NodeKey) -> Option<GpuId> {
         // The sticky per-resource cache first (survives the source Device's free — a
-        // dup-kept VAS keeps its target). A Device that declared no `deviceInstance`
-        // is the single-GPU default selection (NV0080 `deviceInstance` defaults to 0)
-        // — the N=1 case of the axis, routing to `GpuId::ZERO`. Only the absence of a
-        // Device ancestor entirely is a MISS (`None`), never a default-GPU0 guess.
+        // dup-kept VAS keeps its target).
+        //
+        // ★ CORRECTED (`l1_concurrency.md` §12.30, finding A). This comment used to read
+        // "a Device that declared no `deviceInstance` is the single-GPU default selection
+        // … routing to `GpuId::ZERO`". That is the PRE-G9 behaviour and has been false
+        // since §12.21: `walk_gpu` returns `node.facts.device_instance.map(GpuId)`, so an
+        // instance-less Device yields `None` — no default-GPU0 guess anywhere on this
+        // path. The doc on the public resolver stating the opposite of the code, inside
+        // the one doctrine ("never guess GPU 0") the change existed to enforce, is exactly
+        // the drift this audit pass looks for.
         if let Some(id) = self.resource_of(key)
             && let Some(g) = self.resources.get(&id).and_then(|r| r.gpu)
         {

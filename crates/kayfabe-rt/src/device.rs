@@ -258,11 +258,60 @@ pub struct SharedDevice {
     pool: PoolGate,
 }
 
+/// ★ **Pool-saturation counters for ONE GPU target** (`l1_concurrency.md` §7.2, §12.29).
+///
+/// Saturation is *correct* behaviour — bounded pool, well-behaved backpressure — and
+/// from outside the process it is **indistinguishable from a hang**: guest threads stop
+/// making progress and nothing anywhere says why. That is a diagnostic gap, not an
+/// architectural one (the bound is right: RM serialises every ioctl-reachable path on the
+/// per-client write lock, so the pool buys liveness isolation, not throughput). These
+/// counters close it: a stalled device with `parked > 0` and `waiting > 0` is congested;
+/// one with `waiting == 0` is wedged somewhere else, and the two need different answers.
+///
+/// **Counted, never timed.** There is no clock in this crate (§8.3), and a duration would
+/// be the wrong measurement anyway: "how long did a wait take" mixes the queue with the
+/// verb latency behind it. Events and depths are exact, comparable across runs, and
+/// assertable — which is also the testable form of the restated F1 rule (§4.2: *every
+/// poll must be provably bounded* — **assert a bound, not an absence**).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PoolWaits {
+    /// Checkouts that found every worker of the target's isolate in flight and entered
+    /// the gate. **The saturation event itself** — it counts even when the wait turns out
+    /// to be free, because the pool WAS full at the moment the plan phase asked.
+    pub saturated: u64,
+    /// Of those, the ones that actually blocked: a worker returned in the sampling gap
+    /// leaves the predicate already false, and that thread is served without parking.
+    /// `saturated - parked` is therefore the near-miss count.
+    pub parked: u64,
+    /// ★ The largest number of threads parked here at one instant — **how long the queue
+    /// got**. The number that says whether the pool is merely touched or genuinely the
+    /// constraint.
+    pub peak_waiters: u32,
+    /// How many are parked right now. A live-state read, exact at the moment the snapshot
+    /// takes the gate's mutex.
+    pub waiting: u32,
+}
+
+/// The gate's own mutable state: the wakeup generation plus the per-target counters.
+///
+/// Keyed by [`GpuId`] and **deliberately not by `(ProcId, GpuId)`**: a `ProcId` is
+/// monotonic and never reused, so a per-proc map would grow without bound under a guest
+/// that churns processes — a hostile guest could inflate it for free (boundary-1). The
+/// target set is bounded by the device's entitled GPUs, so this map is bounded by
+/// construction. Per-proc attribution, if it is ever wanted, belongs in a trace event
+/// (which is discarded) and not in retained state.
+#[derive(Debug, Default)]
+struct GateState {
+    generation: u64,
+    waits: BTreeMap<GpuId, PoolWaits>,
+}
+
 /// ★ The pool-full waiting point (`l1_concurrency.md` §7.2/§7.3): "pool exhaustion is
 /// well-behaved backpressure — the guest thread waits (lock-free, R1) for a worker".
 ///
-/// A generation counter plus its condvar. A thread that finds every worker in flight
-/// releases **all** ranked locks, waits here, and re-enters the op **from the top**
+/// A generation counter plus its condvar, and the [`PoolWaits`] counters that make the
+/// wait **observable** rather than merely correct. A thread that finds every worker in
+/// flight releases **all** ranked locks, waits here, and re-enters the op **from the top**
 /// with full R5 re-validation — the proc may have retired while it waited.
 ///
 /// Its mutex is deliberately NOT a [`RankedMutex`]: it is the condvar's own mutex,
@@ -277,32 +326,51 @@ pub struct SharedDevice {
 /// generation and the wait predicate is already false.
 #[derive(Debug, Default)]
 struct PoolGate {
-    generation: Mutex<u64>,
+    state: Mutex<GateState>,
     returned: Condvar,
 }
 
 impl PoolGate {
     /// Sample the generation before an attempt (no ranked lock may be held yet).
     fn sample(&self) -> u64 {
-        *self.generation.lock().expect("pool gate")
+        self.state.lock().expect("pool gate").generation
     }
 
     /// A worker came back: wake every waiter (they re-enter from the top and
     /// re-race for it — bounded, and correct under any number of waiters).
     fn signal_return(&self) {
-        *self.generation.lock().expect("pool gate") += 1;
+        self.state.lock().expect("pool gate").generation += 1;
         self.returned.notify_all();
     }
 
-    /// Wait until the generation moves past `seen`. **Panics (R1) unless the caller
-    /// holds zero ranked locks** — the whole point of the exercise.
-    fn wait_for_return(&self, seen: u64) {
+    /// A consistent snapshot of every target's counters.
+    fn snapshot(&self) -> BTreeMap<GpuId, PoolWaits> {
+        self.state.lock().expect("pool gate").waits.clone()
+    }
+
+    /// Wait until the generation moves past `seen`, recording the saturation against
+    /// `gpu`. **Panics (R1) unless the caller holds zero ranked locks** — the whole point
+    /// of the exercise.
+    fn wait_for_return(&self, gpu: GpuId, seen: u64) {
         let mut section = BlockingSection::enter();
         section.run(|| {
-            let mut g = self.generation.lock().expect("pool gate");
-            while *g == seen {
+            let mut g = self.state.lock().expect("pool gate");
+            // The saturation event is recorded whether or not this thread ends up
+            // parking: the pool WAS full when the plan phase asked for a worker.
+            let w = g.waits.entry(gpu).or_default();
+            w.saturated = w.saturated.saturating_add(1);
+            if g.generation != seen {
+                return; // a worker returned in the sampling gap — no park at all
+            }
+            let w = g.waits.entry(gpu).or_default();
+            w.parked = w.parked.saturating_add(1);
+            w.waiting = w.waiting.saturating_add(1);
+            w.peak_waiters = w.peak_waiters.max(w.waiting);
+            while g.generation == seen {
                 g = self.returned.wait(g).expect("pool gate");
             }
+            let w = g.waits.entry(gpu).or_default();
+            w.waiting = w.waiting.saturating_sub(1);
         });
     }
 }
@@ -311,7 +379,15 @@ impl PoolGate {
 /// (see [`SharedDevice::verb_op`]). Each retry observes a strictly more materialized
 /// world, so one pass is the expected worst case; the bound exists so a bug cannot
 /// turn a race into a spin.
-const MAX_COMMIT_RETRIES: u32 = 8;
+///
+/// ★ **Public because the retry LEDGER is tested against it** (`l1_concurrency.md`
+/// §12.28). `retry_ledger.rs` drives a scripted re-stale round per attempt until the
+/// bound is exhausted, and it must drive exactly as many rounds as the bound allows —
+/// one too few and the bound is never hit, one too many and the harness waits on an
+/// attempt that will never be made. Reading the constant instead of copying its value
+/// is what keeps that test honest when the bound moves; it is **not** a tuning knob and
+/// nothing outside the crate should branch on it.
+pub const MAX_COMMIT_RETRIES: u32 = 8;
 
 /// What one locked plan phase staged for the lock-free execute phase: the plan's
 /// ID-shaped hints, the verb chain, and the checked-out worker that will run it.
@@ -375,6 +451,20 @@ impl SharedDevice {
     #[must_use]
     pub fn mode(&self) -> LockMode {
         self.mode
+    }
+
+    /// ★ **Pool saturation, per GPU target — the answer to "is it congested or is it
+    /// wedged?"** (`l1_concurrency.md` §7.2, §12.29; see [`PoolWaits`]).
+    ///
+    /// Takes only the gate's own mutex, so it is safe to call from a diagnostic thread
+    /// while every guest thread is blocked — which is exactly the situation it exists
+    /// for, and would be useless if it needed the device lock the stalled ops hold.
+    ///
+    /// Targets with no saturation ever are simply absent from the map: an empty result
+    /// means the pool has never been the constraint.
+    #[must_use]
+    pub fn pool_waits(&self) -> BTreeMap<GpuId, PoolWaits> {
+        self.pool.snapshot()
     }
 
     /// Consume the device back into a plain [`Gpu`] (tests: the lock-mode
@@ -671,7 +761,7 @@ impl SharedDevice {
                     .map_err(|r| r.fault);
             };
             let Some(mut worker) = staged.worker else {
-                self.pool.wait_for_return(seen);
+                self.pool.wait_for_return(staged.gpu, seen);
                 continue;
             };
             // ---- EXECUTE: no lock held. `Worker::execute` asserts exactly that. ----
@@ -727,6 +817,15 @@ impl SharedDevice {
                         .expect("a refused commit never checks the worker in");
                     // R5's disposition rule: a refused commit must not leak what it
                     // already allocated. Same worker, still lock-free.
+                    //
+                    // ★ The LEDGER of this line is pinned, not assumed
+                    // (`l1_concurrency.md` §12.28): `tests/retry_ledger.rs` proves that
+                    // across N converging re-plans — and across the
+                    // [`MAX_COMMIT_RETRIES`] bound being *hit* — every host object a
+                    // losing attempt allocated is released exactly once. Deleting this
+                    // disposal leaks the attempt's duplicate host VAS, its memory object
+                    // and its mapping, **per attempt**, which is what that test's set
+                    // equality names.
                     let _undisposed = kayfabe_fwd::dispose_on(&mut w, refusal.orphans);
                     self.return_worker(staged.proc, gpu, w);
                     retries += 1;

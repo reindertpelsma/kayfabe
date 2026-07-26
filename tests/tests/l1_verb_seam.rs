@@ -23,6 +23,11 @@
 //! - **`pool_full_is_backpressure_not_a_hang`** — a saturated pool makes the next
 //!   requester wait (holding zero locks — `BlockingSection` inside the wait asserts
 //!   it) and complete after a release.
+//! - **`pool_saturation_is_counted_so_it_is_distinguishable_from_a_hang`** /
+//!   **`an_unsaturated_pool_reports_nothing_at_all`** — §12.29: saturation is correct
+//!   behaviour that looks exactly like a hang from outside, so the gate COUNTS it (waits
+//!   and queue depth, never a clock). The pair pins both polarities: the counters move
+//!   under a saturated pool, and stay empty when the pool is never the constraint.
 //! - **`worker_death_retires_the_proc_loudly_and_never_resurrects`** — a worker HUP
 //!   dispatches through the reactor, kills the slot, retires the proc and CONDEMNS its
 //!   component (§12.13); its completions die with it, and a later `refresh` does not
@@ -635,6 +640,128 @@ fn pool_full_is_backpressure_not_a_hang() {
         maps,
         vec![a_out.host_va, b_out.host_va],
         "the single worker served A then B — serialized on the wire, never deadlocked"
+    );
+}
+
+/// Block until `cond` holds, bounded by an explicit iteration ceiling and **loud** on
+/// exhaustion.
+///
+/// Used only where the observed state has no latch to hang an edge on: a thread parked on
+/// the pool gate is inside `Condvar::wait`, which offers no "someone is now waiting"
+/// callback, and inventing one would be test scaffolding inside production code. This is
+/// the shape F1's restated rule asks for (`l1_concurrency.md` §4.2 — *every poll must be
+/// provably BOUNDED*): the bound is stated here, in one place, and its exhaustion is a
+/// named failure rather than a wedge.
+fn await_bounded(what: &str, mut cond: impl FnMut() -> bool) {
+    const CEILING: u32 = 20_000; // × 200 µs = 4 s, well inside every watchdog here
+    for _ in 0..CEILING {
+        if cond() {
+            return;
+        }
+        thread::sleep(Duration::from_micros(200));
+    }
+    panic!("bounded wait exhausted after {CEILING} polls: {what}");
+}
+
+/// ★ **Saturation is COUNTED, so it can be told apart from a hang** (`l1_concurrency.md`
+/// §7.2, §12.29).
+///
+/// A bounded pool under load and a wedged device look identical from outside the process:
+/// guest threads stop finishing. The difference is entirely in whether anyone is *waiting
+/// for a worker*, and until now nothing recorded that. `SharedDevice::pool_waits` does.
+///
+/// One worker, one holder, **two** waiters — so the test pins the queue *depth*, not just
+/// the fact of a wait. `peak_waiters == 2` is the claim that would be wrong if the counter
+/// merely toggled a flag, and `waiting` returning to 0 is the claim that would be wrong if
+/// the gate leaked a waiter on the wake path (which would make a healthy device look
+/// permanently congested — a diagnostic that lies is worse than none).
+///
+/// Note what is NOT asserted: any duration. There is no clock in the core (§8.3), and a
+/// duration would measure the verb behind the queue rather than the queue.
+#[test]
+fn pool_saturation_is_counted_so_it_is_distinguishable_from_a_hang() {
+    let _wd = watchdog("pool_saturation_counted", Duration::from_secs(60));
+    let (device, pids, rec) = device_with(1, 1, LockMode::Sharded); // pool of ONE
+    let pid = pids[0];
+    assert!(
+        device.pool_waits().is_empty(),
+        "a device that has never run an op has never saturated"
+    );
+
+    let held = hold(&rec, pid, 0, VerbKind::AllocSysmem);
+    let d = Arc::clone(&device);
+    let holder = thread::spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
+    held.wait_until_pending(); // the holder owns the only worker
+
+    let waiters: Vec<_> = (1..=2u64)
+        .map(|k| {
+            let d = Arc::clone(&device);
+            thread::spawn(move || d.publish_backing(GPU, PDB, GpuVa(VA.0 + k * 0x10_0000), 0x1000))
+        })
+        .collect();
+    await_bounded("both requesters parked on the pool gate", || {
+        device
+            .pool_waits()
+            .get(&GPU)
+            .is_some_and(|w| w.waiting == 2)
+    });
+
+    let w = device.pool_waits()[&GPU];
+    assert_eq!(
+        (w.saturated, w.parked, w.peak_waiters, w.waiting),
+        (2, 2, 2, 2),
+        "two checkouts found the pool full, both parked, and the queue reached depth 2"
+    );
+
+    held.release();
+    for t in waiters {
+        t.join()
+            .expect("joins")
+            .expect("a waiter commits once a worker returns");
+    }
+    holder.join().expect("joins").expect("the holder commits");
+
+    let w = device.pool_waits()[&GPU];
+    assert_eq!(
+        w.waiting, 0,
+        "every waiter left the gate — no phantom congestion"
+    );
+    assert_eq!(
+        w.peak_waiters, 2,
+        "the high-water mark is a high-water MARK"
+    );
+    assert!(
+        w.saturated >= 2 && w.parked >= 2,
+        "the totals are monotonic: {w:?}"
+    );
+}
+
+/// The other polarity, and the one that makes the counter mean something: a pool that is
+/// never the constraint reports **nothing at all**.
+///
+/// Two concurrent publishers against a four-worker pool cannot saturate it — not even
+/// through a converging re-plan, which checks a worker out afresh, because two threads can
+/// hold at most two of four slots. So the map stays empty, and a counter that ticked here
+/// would be measuring something other than saturation.
+#[test]
+fn an_unsaturated_pool_reports_nothing_at_all() {
+    let _wd = watchdog("unsaturated_pool_flat", Duration::from_secs(60));
+    let (device, pids, _rec) = device_with(1, DEFAULT_POOL_WORKERS, LockMode::Sharded);
+    let _ = pids;
+    let threads: Vec<_> = (0..2u64)
+        .map(|k| {
+            let d = Arc::clone(&device);
+            thread::spawn(move || d.publish_backing(GPU, PDB, GpuVa(VA.0 + k * 0x10_0000), 0x1000))
+        })
+        .collect();
+    for t in threads {
+        t.join().expect("joins").expect("commits");
+    }
+    assert_eq!(
+        device.pool_waits(),
+        std::collections::BTreeMap::new(),
+        "nobody waited for a worker, so nothing is reported — the counter is not a \
+         general op counter wearing a saturation label"
     );
 }
 

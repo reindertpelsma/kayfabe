@@ -881,8 +881,26 @@ impl Spine {
 
     /// Sync each `Vas`'s address table to the graph's live DMA mappings (the RPC
     /// populate source). Idempotent: binds mappings not yet in the table, unbinds
-    /// table entries whose mapping is gone. MISS=FAULT is preserved — a mapping with
-    /// no resolvable PDB or backing is a loud fault, never a silent skip.
+    /// table entries whose mapping is gone.
+    ///
+    /// ★ **This function is where the miss taxonomy is most visible, and the old doc
+    /// here was simply wrong** (`kayfabe_core` crate docs; `l1_concurrency.md` §12.30).
+    /// It used to claim "MISS=FAULT is preserved — a mapping with no resolvable PDB or
+    /// backing is a loud fault, never a silent skip", while the body deliberately
+    /// `continue`s on both an unresolved PDB and an unresolved target. The body is right
+    /// and the sentence was wrong; the three misses split as:
+    ///
+    /// - **no PDB yet ⇒ DEFER.** The guest legitimately issues `MAP_MEMORY_DMA` before
+    ///   `SET_PAGE_DIRECTORY`; the fact may still arrive, and this sync re-runs when it
+    ///   does. This is the founding exception the whole taxonomy is written around.
+    /// - **no resolvable target (no `Device` ancestor) yet ⇒ DEFER.** Same reasoning, on
+    ///   the multi-GPU axis: deferring is what keeps `GpuId::ZERO` from being guessed.
+    /// - **the memory resolved and has NO backing ⇒ FAULT**
+    ///   ([`GpuError::UnbackedMapping`]). A backing is an alloc-time fact, so an unbacked
+    ///   memory stays unbacked: this one is *never knowable* and is refused by name.
+    ///
+    /// Idempotence is what makes the two deferrals sound: "deferred" means the answer
+    /// changes when the fact lands, never that the mapping was dropped.
     fn sync_rpc_mappings(
         &self,
         system: &mut Proc,
@@ -894,15 +912,19 @@ impl Spine {
         let mut desired: BTreeMap<(GpuId, u64, u64), (u64, u64)> = BTreeMap::new();
         for m in self.rmgraph.mappings() {
             let Some(pdb) = m.pdb else {
-                // A mapping whose VAS has no PDB yet is not routable — deferred until
-                // SET_PAGE_DIRECTORY arrives (which re-runs this sync). Not a fault:
-                // the guest legitimately maps before binding the page directory.
+                // ★ DEFER (not yet knowable). A mapping whose VAS has no PDB yet is not
+                // routable — deferred until SET_PAGE_DIRECTORY arrives (which re-runs
+                // this sync). Not a fault: the guest legitimately maps before binding the
+                // page directory. THE canonical exception to MISS=FAULT.
                 continue;
             };
             let Some(gpu) = self.rmgraph.gpu_of(m.vaspace) else {
-                // No resolvable target (no Device ancestor) — deferred, never guessed.
+                // ★ DEFER (not yet knowable). No resolvable target (no Device ancestor)
+                // — deferred until the Device fact lands, never guessed onto GPU 0.
                 continue;
             };
+            // ★ FAULT (never knowable): the memory resolved and declared no backing, and
+            // a backing is an alloc-time fact — no future event supplies one.
             let phys = m
                 .mem_phys
                 .ok_or(GpuError::UnbackedMapping { pdb, va: m.va.0 })?;
@@ -973,7 +995,9 @@ impl Spine {
         p.clients = b.clients.clone();
         // Vases: create for newly-declared (GpuId, PDB); drop ones no longer
         // derived. Only vases with a resolvable target AND a declared PDB become
-        // runtime `Vas`es (an unroutable one defers — MISS at use, never guessed).
+        // runtime `Vas`es. ★ DEFER (not yet knowable): an unroutable one materializes
+        // nothing and is re-evaluated on the next apply; its USE takes a named
+        // `FwdFault::UnknownPdb`, which is where MISS=FAULT bites.
         let live_keys: BTreeSet<(GpuId, Pdb)> = b
             .vases
             .values()
@@ -1000,7 +1024,10 @@ impl Spine {
                 c
             });
             let Some(gpu) = facts.gpu else {
-                continue; // Unroutable (yet) — deferred, never guessed onto GPU0.
+                // ★ DEFER (not yet knowable) — unroutable until its Device fact lands,
+                // never guessed onto GPU0. Its ChanId is still minted (above), so the
+                // slot is stable for the apply that materializes it.
+                continue;
             };
             let entry = p.channels.entry(cid).or_insert_with(|| Channel {
                 id: cid,
