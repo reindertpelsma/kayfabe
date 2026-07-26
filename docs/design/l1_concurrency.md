@@ -4246,3 +4246,527 @@ namespace whose resources are still alive stays condemned, and re-declaring such
 is still possible. Those need a never-reused resource identity for components, or a refusal
 to re-declare a namespace that still holds live resources. §12.38 removes the
 *never-declared* vector completely; the *recycled* one is unchanged and still open.
+
+### 12.39 ★★★ THE RECYCLED NAMESPACE — §12.38's surviving sibling, and it is the CHEAPER of the two
+
+**Status: DESIGN, not landed.** No `crates/**` or `tests/**` change accompanies this entry.
+Every claim below is marked `[measured]`, `[src]` (with file:line) or `[inferred]`; the
+`[inferred]` ones are reachability arguments read off our own source, and each names the
+test that would settle it. `ogkm` = `C: research_clones/ogkm`, `C:` =
+`/workspace/nvidia-gpu-passthrough`.
+
+§12.38 closed the **never-declared** squat: a `DUP_OBJECT` planted into a namespace nobody
+owned yet, firing on an unrelated later process's own client-root `Alloc`. Its closing note
+filed the sibling as *"a freed namespace whose resources are still alive stays condemned,
+and re-declaring such a namespace is still possible"* and guessed it needed *"a never-reused
+resource identity for components"*. Both halves of that note are right about the *organ* and
+wrong about the *severity*: the surviving vector is **not** the weak leftover of the strong
+one. In its cheapest shape it costs the attacker **four events, no host resources, and
+nothing observable until it fires** — strictly cheaper in footprint than the vector §12.38
+closed, which at least minted a phantom client universe entry.
+
+---
+
+#### 1. THE VECTOR, AS AN ATTACK
+
+**Attacker:** A1 (`core_security_threat_model.md` §2) — a hostile guest *userspace* process
+issuing arbitrary `RmEvent`s with arbitrary handle values. It does **not** need A3 (a
+compromised guest kernel), and it does not need a race: both shapes below are deterministic.
+
+**Victim:** any later guest process that is handed an `hClient` value the attacker
+previously owned and freed.
+
+**What they end up sharing:** one `Proc` ⇒ one isolate (one host RM client), one GPA arena,
+one host VAS, one `pending_release` queue. That is **#14 un-fixed for a pair the attacker
+chose** — the identical payoff as §12.38's vector, reached by a different door.
+
+**What the attacker must guess or control:** only the victim's `hClient` **value**.
+`[measured]` The guest RM's client-handle index is sequential and guessable — the C's PoC
+had *"attacker client landed 12 after victim"* (`C: docs/HARDENING_PLAN.md:183`) — and
+`[src]` the generator is an incrementing index into a wrapping 2^20 space with no
+quarantine (§2 below). The attacker's own side needs no guessing at all: `[src]` the shipped
+Linux driver honours a **caller-supplied** `hRoot` verbatim, so the attacker declares exactly
+the namespace values it wants to squat (§2(a)).
+
+##### Shape A — the PARKED FACT that outlives its namespace (the cheap one)
+
+`[src]` `RmGraph::free_subtree` computes `doomed` as *the live handles in the namespace*
+(`crates/kayfabe-core/src/rmgraph.rs:1078-1082`) and then prunes the parked tables by
+membership in `doomed` (`:1144-1155`). A **parked** dup's `dst` is by definition *not* in
+`handles` — that is what "parked" means — so it is not in `doomed`, so **it survives the
+free of its own namespace's client root.** The same holds for `pending_pdbs` and
+`pending_maps`, whose retains are keyed the same way (`:1147-1155`).
+
+```text
+A: Alloc(Client cV, User)                     ⇒ legal; hRoot is caller-supplied [src §2(a)]
+A: Dup { src: (cA, H_LATER), dst: (cV, H_X) } ⇒ src unobserved ⇒ PARKED (rmgraph.rs:976)
+A: Free (cV, cV)                              ⇒ the root dies; the parked edge does NOT
+                                                 (rmgraph.rs:1144 — dst is not a handle)
+   … graph footprint from here: one parked edge. No resource, no client in the
+     projection's universe (`origin_of(dst) == None` filters it, project.rs:376),
+     therefore NO phantom Proc, NO isolate, NO arena. Invisible.
+
+V: (an ordinary compute process handed hClient = cV) Alloc(Client cV, User)
+A: Alloc (cA, H_LATER) = a VASpace                ⇒ resolve_pending_dups promotes the edge
+                                                     (rmgraph.rs:1161-1176) — minting a live
+                                                     ALIAS **inside the victim's namespace**
+   ⇒ project: is_user(cV) && is_user(cA), neither condemned ⇒ uf.union(cA, cV)
+     (project.rs:441, :458, :461)
+   ⇒ ONE boundary {cA, cV} ⇒ ONE Proc.
+```
+
+**Cost:** 4 attacker events per candidate `hClient`, bounded only by `MAX_PARKED` (2^18,
+`rmgraph.rs:360`). Nothing is minted on the host until the victim arrives. `[inferred]`
+
+**Note what §12.38 does *not* do here.** Every event in that sequence names a namespace that
+existed **at the moment it was issued**. `undeclared_namespace` (`rmgraph.rs:707-724`) is
+satisfied honestly and completely. This is not a bypass of the rule; it is a hole the rule
+never covered.
+
+##### Shape B — the ORPHANED RESOURCE whose origin key names a dead namespace
+
+`[src]` A resource survives its origin handle's free while any foreign alias references it
+(`drop_handle`, `rmgraph.rs:1370-1394` — faithful RM refcounting), but its identity
+`RmNode.key` still carries the **`HClient` value** of the namespace that allocated it, and
+`dups()` reports that stale key as the edge's `src` (`rmgraph.rs:1572-1584`).
+
+```text
+A: Alloc(Client cA, User) ; Alloc(Client cV, User)
+A: Alloc (cV, H_VAS) = VASpace(+PDB, under a Device)
+A: Dup { src: (cV, H_VAS), dst: (cA, H_ALIAS) }   ⇒ resource refs = {(cV,H_VAS),(cA,H_ALIAS)}
+A: Free (cV, cV)                                   ⇒ every handle in cV dies; the RESOURCE
+                                                      lives on A's alias, origin key still
+                                                      (cV, H_VAS); client_roots loses cV
+                                                      (rmgraph.rs:1378-1380)
+V: Alloc(Client cV, User)                          ⇒ is_user(cV) flips true
+   ⇒ the surviving edge ((cA,H_ALIAS) ← (cV,H_VAS)) becomes a grouping edge ⇒ union
+   ⇒ the victim's first RM event puts it in the ATTACKER's Proc.
+```
+
+**Cost:** 5 events, and — unlike Shape A — a **visible** footprint between the free and the
+victim's arrival, because the orphan's origin client re-enters the client universe through
+`g.nodes()` (`project.rs:372-374`), which carries **no `kinds` filter** (the filter at
+`:395` guards only the dup-chained branch). `anchor_of` then treats an unknown-kind client as
+**not kernel**, i.e. as a user boundary (`project.rs:469-473`). `[inferred]`
+
+##### ★ Shape B's second face — a resource-amplification DoS, and an attacker CHOICE
+
+`[inferred]` Each Shape-B plant leaves a **live user `Proc` for a namespace that no longer
+exists**: a boundary is minted (`gpu.rs:1890-1894`), and because the orphan VASpace's GPU
+target and PDB both survive the free (the sticky per-resource target cache,
+`rmgraph.rs:740-743`, `:915-918`), `span_of` is non-empty (`gpu.rs:1412-1428`) so an isolate is spawned and
+a GPA arena is carved (`gpu.rs:1952-1962`). A spray therefore consumes arenas until
+`GpaError` — at which point *a legitimate new process* cannot get one either. That is a
+device-wide DoS earned by one process, i.e. the boundary-1 shape, in the resource dimension.
+
+And it hands the attacker a **choice**. The victim's arrival merges its boundary with the
+phantom's, and `plan_refresh` refuses a merge whose absorbed proc is not `is_untouched()`
+(`gpu.rs:1504-1513`). The orphan `Vas` is routable, so `by_pdb` routes a `publish_backing`
+to it (`kayfabe-fwd/src/lib.rs:859`) and the attacker can mark it touched at will. So:
+
+- leave it untouched ⇒ **the victim is merged into the attacker's `Proc`** (isolation break);
+- touch it ⇒ **`GpuError::LateMerge` on the victim's own client-root `Alloc`** (a bystander
+  refusal — the *other* boundary-1 violation, the one §12.37 was written to remove).
+
+The attacker picks which of the two guarantees to break. That is worth stating plainly: the
+vector is not "an isolation bug OR a DoS", it is both, selectable.
+
+##### Honest severity verdict
+
+- **Shape A is not weaker than the vector §12.38 closed.** Same payoff, 4 events instead of
+  1, and a *smaller* pre-fire footprint (zero host state vs. a client-universe entry). The
+  only extra requirement is that the attacker once owned the namespace — which `[src]`
+  costs it nothing, because `hRoot` is caller-supplied.
+- **Shape B is slightly weaker as an isolation break** (it leaves an arena+isolate per
+  candidate, so a blind spray converts into a DoS long before it covers a wide `hClient`
+  range) and **stronger as a DoS**. Targeted at one predicted value it is equally cheap.
+- **Neither requires a race, a condemnation, or A3.** `[inferred]`
+- **★ And neither requires an attacker at all, eventually.** `[src]` The guest RM's client
+  index wraps at 2^20 per driver load (§2(b)) and never rewinds on free, so on a
+  long-running guest the recycled-namespace state arrives *by itself*. This is a
+  **correctness** defect that happens to be exploitable, not a hardening nicety.
+
+---
+
+#### 2. RM GROUND TRUTH — asked before designing, because the wrong answer here HANGS A LEGAL GUEST
+
+The question that had to be settled first: **does real RM reuse `hClient` values?** If it
+does, any design that *forbids* re-declaring a namespace rejects a stream the guest's own RM
+emits — the FAULT-that-should-DEFER direction, and the failure mode this project cares most
+about avoiding. The answer is unambiguous.
+
+**(a) Guest-chosen or RM-chosen? — BOTH, and the shipped build lets the caller choose.**
+`[src]` `serverAllocClient` takes the caller's value verbatim: `hClient = pParams->hClient;`
+(`ogkm src/nvidia/src/libraries/resserv/src/rs_server.c:612`). The guard that would reject a
+caller-supplied id is `#if !(RS_COMPATABILITY_MODE)` (`:613-616`), and
+`RS_COMPATABILITY_MODE=1` is set for the shipped `nv-kernel.o`
+(`ogkm src/nvidia/Makefile:129`, consumed by `ogkm Makefile:13,34`) — so the reject branch,
+and the handle re-encode at `rs_server.c:3346-3350`, are compiled **out**. `hRoot == 0`
+means "RM, generate one" (`rs_server.c:3319`; the same `0 to generate` convention as
+`hObjectNew`, `ogkm src/common/sdk/nvidia/inc/nvos.h:483`). `[measured]` The C artifact
+depends on this: it remaps every guest client into a `0xdeadNNNN` handle *"the host RM
+accepts"* (`C: src/qemu/nvkvm_gpu_emul.c:438-441`) — a value outside
+`RS_CLIENT_HANDLE_BASE` entirely, which only works because caller-supplied roots are
+honoured. The sole gate is the live-duplicate check (`rs_server.c:3352-3357`,
+`NV_ERR_INSERT_DUPLICATE_NAME`), which the C hit in the wild.
+
+**(b) The generator — monotonic index, WRAPS, no free list, no quarantine.** `[src]`
+`_serverCreateEntryAndLockForNewClient`, `rs_server.c:3319-3341`:
+
+```c
+NvU32 clientHandleIndex = pServer->clientCurrentHandleIndex;      // :3320
+do {
+    hClient = CLIENT_ENCODEHANDLE(handleBase, clientHandleIndex); // :3324
+    clientHandleIndex++;                                          // :3325
+    if (clientHandleIndex > RS_CLIENT_HANDLE_DECODE_MASK)
+        clientHandleIndex = 0;                                    // :3329   <-- WRAP
+} while (_serverFindNextAvailableClientHandleInBucket(...) != NV_OK);
+pServer->clientCurrentHandleIndex = clientHandleIndex;            // :3340
+```
+
+`CLIENT_ENCODEHANDLE(base, index) = base | index` over bits 19:0 (`rs_server.c:303-313`);
+`RS_CLIENT_HANDLE_BASE = 0xC1D00000`, `RS_CLIENT_HANDLE_MAX = 0x100000`
+(`ogkm src/nvidia/generated/g_resserv_nvoc.h:173`, `:190`). So: **monotonic, and it wraps at
+2^20 client allocations per driver load** (`g_resServ` is constructed once per module load —
+`ogkm src/nvidia/src/kernel/rmapi/rmapi.c:97`, torn down at `:144`). Availability is defined
+purely as *absence from the live sorted list* (`_serverFindNextAvailableClientHandleInBucket`,
+`rs_server.c:3220-3255`): **no free list, no reservation, no quarantine.** The same design
+one level down for object handles — `clientGenResourceHandle_IMPL` wraps explicitly with `%`
+at 2^19 per client (`ogkm .../resserv/src/rs_client.c:962-974`,
+`RS_UNIQUE_HANDLE_RANGE 0x00080000` at `g_rs_client_nvoc.h:54-55`).
+
+**(c) Does RM carry a generation/epoch we could mirror? — NO.** `[src]` Searched every
+struct that could hold one: `RsClient` (`ogkm src/nvidia/generated/g_rs_client_nvoc.h:99-130`),
+`RmClient` (`g_client_nvoc.h:176-212`), `CLIENT_ENTRY` (`g_rs_server_nvoc.h:75-89`),
+`RsResourceRef` (`g_rs_resource_nvoc.h:690+`). None has an id, serial, generation or epoch.
+The nearest candidates are `RmClient::ProcID` (`g_client_nvoc.h:195`) — **PIDs recycle too**,
+so it is not a durable identity either — and the server's `activeClientCount` /
+`activeResourceCount` (`rs_server.c:334-335`), which are *populations*, not stamps: they go
+down on free and are never attached to a client. **`hClient` alone cannot distinguish a dead
+client from a later live client that got the same value, and RM offers nothing that can.**
+
+**(d) On free, immediately re-allocatable?** `[src]` Yes. `_serverFreeClient_underlock`
+`objDelete`s the client (`rs_server.c:521`), removes the entry from the sorted list under the
+list lock (`:524-528`) and zeroes+frees the entry (`_serverPutClientEntry`, `:3201-3212`).
+`clientCurrentHandleIndex` is **not** rewound, so the *generator* re-issues only after the
+wrap — but a **caller-supplied** `hRoot` can retake a freed value on the very next alloc.
+
+**(e) What the reference implementations assume.** `[src]` gVisor nvproxy keys a
+process-global `clients map[nvgpu.Handle]*rootClient`
+(`C: gvisor/pkg/sentry/devices/nvproxy/nvproxy.go:211`), inserts on root alloc and **deletes
+on free** (`.../object.go:395-398`) — i.e. it assumes only *live* uniqueness and is therefore
+safe under recycling. A live duplicate is merely `Warningf("nvproxy: client handle %v already
+in use")` and then **overwrites** (`.../frontend.go:1209-1218`). There is no comment about
+handle reuse anywhere in nvproxy; it sidesteps cross-lifetime identity entirely by refusing
+to checkpoint with live clients (`.../save_restore_impl.go:24-30`).
+
+**(f) Our own artifact measured it.** `[measured]` `C: src/qemu/nvkvm_gpu_emul.c:1983-1988`:
+*"on a client-ROOT free, purge the freed client's entries from the never-reaped client-keyed
+tables so process churn cannot leak slots or alias a later process that reuses the same RM
+handle VALUE (**RM reuses client handle values across process lifetimes**)"*. Its own fix was
+a monotonic host-handle mint (`:445-448`, `:2035-2038`) — the same answer this entry reaches.
+
+> **★ THE RULING.** RM recycles `hClient` values by design, has no epoch, and the shipped
+> driver lets a caller name any value it likes. **Therefore: no design may refuse to
+> re-declare a recycled namespace, and no design may treat an `hClient` value as durable.
+> The identity must be minted by US, and it must be minted at DECLARATION.**
+
+---
+
+#### 3. ROOT CAUSE, STATED ONCE
+
+§12.38 already named it — *"a client-handle VALUE is used as a component identity while the
+value is recyclable"* — and left it. Stated at the precision the fix needs:
+
+> **Every live *handle* in the graph implies a live client root in its namespace** — §12.38
+> guarantees no handle is created in an undeclared namespace, and `free_subtree` drops every
+> handle in a namespace when its root dies (`rmgraph.rs:1078-1082`). So handles are
+> **safe**. The graph has exactly **two** references to a client namespace that are *not*
+> handles, and both of them dangle:
+>
+> 1. **`Resource::node.key.client`** — a resource kept alive by a foreign alias outlives the
+>    namespace that allocated it (Shape B).
+> 2. **The parked tables** (`pending_dups`, `pending_pdbs`, `pending_maps`) — keyed on
+>    handles that do not exist yet, therefore never in `doomed` (Shape A).
+>
+> `[src]` `rm_semantics_measured.md` §9 records that for RM *"'a namespace with no root' and
+> 'a namespace that never existed' are the same state"*. **In our graph they are not** — a
+> rootless namespace can still be the origin of live resources and the target of live parked
+> facts. That divergence is the whole bug.
+
+Both shapes need fixing, and — this is the non-obvious part — **neither fix subsumes the
+other.** An identity change alone leaves Shape A open, because a promoted parked dup mints a
+*live alias in the victim's live namespace*, whose identity resolves correctly to the victim
+and merges anyway. A parked-table purge alone leaves Shape B open, because the orphan
+resource is not a parked fact.
+
+---
+
+#### 4. THE DESIGN — two parts, and the small one is not optional
+
+##### Part A — the TEARDOWN COMPLETION rule (small, self-contained, needs no identity change)
+
+> **Freeing a client root destroys the namespace's parked facts as well as its handles.**
+> `free_subtree`'s root arm additionally drops every `pending_dups` entry whose `dst` **or**
+> `src` names that client, every `pending_pdbs` entry whose target does, and every
+> `pending_maps` entry whose `client` does.
+
+**Faithful, not convenient.** `[src]` RM destroys the whole namespace children-before-parents
+on a root free (`ogkm .../resserv/src/rs_client.c:830-849`) and every subsequent op naming it
+is `NV_ERR_INVALID_CLIENT` (`rs_server.c:1674` → `client.c:782`). A parked fact is a fact we
+accepted but could not yet resolve; promoting it after its namespace died would create an
+object in a namespace RM says does not exist. **Nothing legal is lost**: the promoted alias
+could never be legally *used*.
+
+Note this restores the invariant in §3 to something total and `debug_assert`able: *after a
+root free, the graph holds no reference of any kind to that namespace except the origin keys
+of resources a foreign alias keeps alive* — which is exactly what Part B is for.
+
+##### Part B — the IDENTITY MODEL: a namespace IS its client-root resource
+
+Three candidates were considered. All three make the same state unrepresentable; they differ
+in what mints the identity.
+
+| | **D1 — epoch on `HClient`** | **D2 — fresh `ClientUid` at declaration** | **★ D3 — `ClientId := the root's `ResId`** |
+|---|---|---|---|
+| identity | `(HClient, ClientEpoch)` pair; `HClient` stays primary | opaque `ClientUid(u64)` from a new counter; `HClient` demoted to wire form | the `ResId` the client-root `Alloc` already minted |
+| new state | `next_client_epoch: u64`; `client_roots: BTreeMap<HClient, (ResId, Epoch)>`; `origin_epoch` per resource | `next_client_uid: u64`; `BTreeMap<HClient, ClientUid>`; `owner: ClientUid` per resource | **none** — `owner: ResId` per resource; `client_roots` already maps `HClient → ResId` (`rmgraph.rs:515`) |
+| unrepresentable | a stale epoch grouping with a live one | a stale uid naming anything | a dead namespace owning a live boundary |
+| still runtime-checked | "is this epoch current?" at every read | uid lookup misses | `resources.contains_key(owner)` |
+| memory | +16 B/resource, +2 counters | +8 B/resource, +1 counter, +1 live index | **+8 B/resource, 0 counters** |
+| hostile churn | epochs are u64; nothing retained per dead namespace | ditto | ditto; and `ResId` already has this exact doc (`rmgraph.rs:82-88`, *"never reused"*) |
+| honest cost | **two ways to name a namespace** — every site must remember to carry the epoch, and the one that forgets is the next §12.38 | a second never-reused counter beside `next_res_id` doing the same job | **couples namespace identity to the root OBJECT's identity** |
+
+**D3 is recommended**, and the tie-break is faithfulness rather than economy: `[src]` **in RM
+the `hClient` IS its root object's handle** — `serverAllocClient` writes the client handle
+back as the allocated object's handle (`rs_server.c:625`;
+`ogkm src/nvidia/src/kernel/rmapi/client.c:226-227` stamps it into
+`NV0000_ALLOC_PARAMETERS.hClient`), which is why `RmGraphError::DuplicateClientRoot` exists
+at all (`rmgraph.rs:423-430`). So "the namespace is its root resource" is not a modelling
+convenience we impose; it is what RM already means. D3's stated cost — coupling to the root
+object — is therefore not a coupling we introduce.
+
+Two properties fall out that D1/D2 would have to be argued into:
+
+- **`ResId` is already documented as never reused** and already exists precisely because
+  *"a handle value can be freed and re-allocated while a `DUP_OBJECT` alias keeps the
+  ORIGINAL resource alive"* (`rmgraph.rs:82-88`). D3 is the same sentence applied one level
+  up. Adding a *second* never-reused counter to say the same thing is the drift §12.35
+  centralised removal to avoid.
+- **A live alias implies a live root, so the `dst` side needs no snapshot.** Freeing a root
+  drops every handle in the namespace including aliases, so a live alias's namespace root is
+  necessarily the *current* one. `dst` resolves live, `src`/attribution use the stored
+  `owner`. The asymmetry is not a wart — it is the difference between "a handle in a
+  namespace" (dies with it) and "a resource allocated by a namespace" (outlives it).
+
+**What changes, concretely.**
+
+- `Resource` gains `owner: ResId`, resolved at the origin `Alloc` from
+  `client_roots[client]`. §12.38 guarantees it always resolves (every creating event names a
+  declared namespace), so it is a plain `ResId`, **not** an `Option` with a default — the
+  deleted-`unwrap_or(0)` discipline (§12.27).
+- The client root's own `owner` is itself.
+- `project`'s client universe, `is_user`/`is_kernel`, the grouping union, `anchor_of` and
+  the attribution loop key on `ClientId` instead of `HClient`
+  (`project.rs:368-374`, `:441`, `:461`, `:469-473`, `:524`). A resource whose `owner` is no
+  longer in `resources` is **owned by nobody**: it enters no boundary, mints no `Proc`, no
+  isolate, no arena. That kills Shape B *and* its amplification DoS in one line.
+- `ProcAnchor` **stays `HClient`** (`lib.rs:238`). It is a deterministic *label* of a live
+  component, and under D3 every component is a set of live declared namespaces, so anchors
+  remain distinct live values. Not changing it keeps the blast radius of D3 off the spine's
+  public routing types. ★ Residual, stated: anything that *persists* a `ProcAnchor` past its
+  component's death — `Spine::condemned_by_pdb` / `condemned_by_vchid` (`gpu.rs:834-837`) —
+  is still storing a recyclable value, and must be keyed by `ClientId` too or re-derived.
+
+##### How Part B lands on the condemnation machinery — it SIMPLIFIES it
+
+`Spine::condemned: Vec<BTreeSet<HClient>>` (`gpu.rs:828`) becomes
+`Vec<BTreeSet<ClientId>>`. Everything that reads it — `absorb_condemned`, the `owner_of`
+index, the boundary-intersection pass, `plan_refresh`'s `matching`
+(`gpu.rs:1470-1474`) — is already a set-intersection on client identity and changes only its
+element type.
+
+The interesting consequence is at §12.37's **C2 shrink** (`gpu.rs:1818-1830`, the
+`known` intersection). C2 exists because *"a recycled handle value never shared the blast
+radius"* — retaining a freed `HClient` in a condemned entry poisoned a value the guest would
+hand out again. **Under D3 that poisoning is structurally impossible**: a `ClientId` is never
+reused, so a retained dead `ClientId` can never name a future namespace. C2's correctness
+role therefore disappears.
+
+**The shrink must nevertheless stay, for a different and now-stated reason: capacity.**
+`MAX_CONDEMNED_COMPONENTS` (`gpu.rs:33-48`, the const at `:41`) is enforced at the mint site
+(`gpu.rs:1524-1536`), and an entry that never drops means a guest that churns condemned
+components fills the list and earns `GpuError::SpineCapacity` on every *subsequent* proc
+mint — a device-wide DoS. So the rule becomes cleaner than it was: **an entry is dropped when
+no live resource has an `owner` in it** — a precise liveness statement rather than an
+approximation, and one that no longer has to be argued for correctness.
+
+★ And it makes §12.37's evasion story *better*, not worse. An orphaned resource of a
+condemned component keeps answering `FwdFault::Condemned` even after its origin namespace is
+gone, because the condemned entry holds its `owner` `ClientId` and that id is never reused —
+whereas today the same answer depends on a dead `HClient` value still being "known", which is
+exactly the fragility C2 patched.
+
+##### Rejected alternatives, each for a stated reason
+
+- **D0 — refuse to re-declare a namespace that still holds live resources** (the option
+  §12.38's closing note offered). **Rejected: this is the hangs-a-legal-guest error.** §2
+  (b)/(d) show RM recycles by design, and `[measured]` §12.27's own hardware measurement has
+  the UVM session dup-aliasing 82 objects per CUDA process
+  (`docs/reference/rm_semantics_measured.md` §3) — so a dead process's resources aliased into
+  a kernel client are the *ordinary* case, not an attack. Refusing the successor's own
+  `Alloc(Client)` would refuse a victim for a predecessor's state: precisely the
+  bystander-refusal shape §12.37 removed.
+- **D4 — make a root free destroy aliased resources too.** Rejected: it contradicts RM
+  refcounting (`memCopyConstruct_IMPL` shares and refcounts the memdesc,
+  `ogkm src/nvidia/src/kernel/mem_mgr/mem.c:986-1039`, §12.26) and would silently destroy
+  memory a live client is still using — the corruption-over-refusal direction.
+- **D5 — filter the client universe by `kinds` on the `nodes()` branch too** (a one-line
+  patch to `project.rs:372`). Rejected as *the fix*, kept as a consequence: it would stop the
+  phantom `Proc` (Shape B's DoS) but not the merge, because the merge fires only once the
+  victim has re-declared — at which point `kinds` contains the value again. It treats the
+  symptom whose disappearance is the tell.
+
+---
+
+#### 5. THE TESTS THAT WOULD HAVE TO BITE
+
+House standard: the primary test asserts **the isolation breach itself**, so that a revert
+reports the breach rather than a missing refusal (§12.38's bite-check discipline).
+
+1. **★ `a_recycled_namespace_cannot_squat_a_later_process_into_the_attackers_proc`**
+   (`tests/tests/l1_mean.rs`, beside the §12.38 squat test). Shape A end to end. The
+   load-bearing assertion is the same shape as its sibling's —
+   `assert_ne!(victim, attacker, "★★ the victim was merged into the ATTACKER's `Proc` by an
+   edge planted in a namespace the attacker had already freed")` — failing as
+   `left: ProcId(1), right: ProcId(1)`. Then, exactly as §12.38's does: distinct isolate,
+   disjoint arena, a ring served in the victim's own lane, `host_identities` disjoint. The
+   mechanism assertion (the parked edge is gone after the root free) comes **last**.
+2. **`a_recycled_namespace_cannot_inherit_the_previous_tenants_address_plane`** — Shape B.
+   Same breach-first shape, plus: the orphaned VASpace's PDB must **not** appear in
+   `spine.by_pdb` under the victim's `ProcId`.
+3. **`a_resource_whose_namespace_died_belongs_to_no_boundary`**
+   (`tests/tests/object_model.rs`) — the amplification. After `Free(root)` with a surviving
+   foreign alias: no new `Proc`, no isolate, no arena carved. Asserted on counts, so a
+   regression that re-mints the phantom is loud.
+4. **★ `a_recycled_namespace_is_a_DIFFERENT_component_and_is_not_condemned`** — **the
+   hangs-a-legal-guest gate.** Condemn a component, free its roots, re-declare the same
+   `hClient` values as an ordinary new process: it must get its **own live `Proc`**, its own
+   isolate and arena, and must be servable end to end. This is the test that fails if anyone
+   later "fixes" this by refusing re-declaration (D0).
+5. **`an_orphaned_resource_of_a_condemned_component_still_answers_condemned`** — the
+   regression gate on §12.37. Proves D3 does not weaken condemnation stickiness when the
+   corpse's namespace itself is gone (today this holds only because the dead `HClient` is
+   still "known").
+6. **`miss_taxonomy::a_parked_fact_does_not_survive_its_namespaces_root_free`** — one row per
+   parked table (`pending_dups` dst, `pending_dups` src, `pending_pdbs`, `pending_maps`), so
+   Part A is asserted per-table rather than per-scenario.
+7. **`rmgraph_order_independence::a_freed_and_redeclared_namespace_projects_identically_in_
+   every_order`** — re-declaration inside the shuffle domain. `legal_order`
+   (`tests/src/lib.rs:238-263`) needs no change: its partial order is *"a namespace declares
+   before it is named"*, and re-declaration satisfies it.
+8. **`security_invariants`, one new property:** for all legal event streams, two clients whose
+   roots were minted by *different* `Alloc`s share a `Proc` **only if** a resolved user↔user
+   dup edge exists between their *current* declarations. This is the D3 invariant stated
+   directly, and it is the one a fuzzer can search.
+
+**Bite-checks to run before landing** (revert, confirm the exact symptom, restore): Part A
+reverted (`free_subtree`'s new retains removed) ⇒ test 1 fires with the breach message and
+test 6's `pending_dups` rows fire; Part B reverted (`owner` re-derived as
+`client_roots[node.key.client]` at read time) ⇒ tests 2 and 3 fire; the C2 shrink removed
+⇒ test 4 must **still pass** (proving the shrink's role is now capacity, not correctness)
+while a new capacity test fires.
+
+---
+
+#### 6. WHAT THIS DESIGN DOES **NOT** CLOSE
+
+- **§12.25 Deferred finding 2 — object-handle recycling *inside* one namespace.**
+  `Alloc (A,H) → Dup to B → Free (A,H) → Alloc (A,H)` still leaves two live resources with
+  the same origin `NodeKey`, and `project` still keys `vases`/`channels` on `node.key`
+  (`project.rs:534`, `:583`). D3 fixes the **client** axis only. It makes the object axis
+  strictly easier — `owner` proves `ResId` can be threaded through the graph's payloads — but
+  the projection still has to move to `ResId` keys, and that remains the named refactor.
+- **The live-duplicate surface is unchanged.** `ConflictingAlloc` / `ConflictingDup` /
+  `DuplicateClientRoot` are about two live claimants on one value; this entry is only about
+  one *dead* and one *live* claimant, separated in time.
+- **`ProcAnchor` is still an `HClient`**, deliberately (§4). Every site that persists an
+  anchor beyond its component's life — `condemned_by_pdb` / `condemned_by_vchid` — is a
+  residual named above, not something this design closes.
+- **It does not restrict which `hClient` values a guest may use.** `[src]` §2(a) says any
+  value is legal; D3 makes the value *irrelevant to identity*, which is the only defensible
+  posture.
+- **It says nothing about the host side.** `HostHandle`, `IsolateId`, `ProcId`,
+  `CompletionSource` are already monotonic never-reused mints (`l1_os_shell.md` §7.7); this
+  entry brings the *guest-facing* identity model up to that standard, no further.
+- **It does not fix the live component SPLIT** (§7, finding 3 below), which is an independent
+  defect that this design neither causes nor cures.
+
+---
+
+#### 7. OPEN QUESTIONS, AND THINGS FOUND ALONG THE WAY THAT CONTRADICT EXISTING CLAIMS
+
+**Open, each with the experiment that settles it — written as questions rather than guessed:**
+
+- **O1 — does the ordinary CUDA lifecycle produce the orphaned-resource state?** The UVM
+  session holds 82 dup aliases per process (`rm_semantics_measured.md` §3). If `nvidia_uvm`
+  drops them *after* the dying process's client root is freed — even briefly — Shape B's
+  precondition occurs with no attacker at all. **Experiment:** kprobe
+  `rmapiFreeClient`/`serverFreeClient` and the dup-free path on the bench, run one CUDA
+  process to exit, and record the ordering. Serialized bench run, one boot.
+- **O2 — how fast does a real guest wrap the 2^20 client index?** `[src]` bounds it; nothing
+  measures the rate. **Experiment** (the subagent's, cheap and definitive): loop
+  `NV_ESC_RM_ALLOC{NV01_ROOT_CLIENT, hRoot=0}` + `NV_ESC_RM_FREE` ~1.05M times against a
+  driver that has not been reloaded and confirm the returned handle rolls from
+  `0xc1d000000|0xFFFFF` to `|0x00000`. Settles whether recycling is a "long-running guest"
+  event or a "busy guest" event.
+- **O3 — is the attacker's LateMerge choice (§1) actually reachable?** Does a
+  `publish_backing` routed to the orphan `Vas` mark the phantom proc `!is_untouched()`?
+  **Experiment:** a core test, no bench needed — it is a direct consequence of
+  `gpu.rs:1504-1513` and `kayfabe-fwd/src/lib.rs:859`, and asserting it costs one test.
+- **O4 — can a guest reach `serverAllocClient` with a caller-supplied `hRoot` unprivileged?**
+  `[src]` `escape.c:465-489` shows no `hRoot` sanitisation on `/dev/nvidiactl` and the C's
+  `0xdeadNNNN` remap works, but the C's host RM may run at a different privilege.
+  **Experiment:** as a non-root user, `NV_ESC_RM_ALLOC` with `hClass=NV01_ROOT`,
+  `hRoot=0xdead0001`; check the value returned in `NV0000_ALLOC_PARAMETERS.hClient`. Only
+  affects how cheaply the attacker *chooses* its squat values — the vector stands either way,
+  since the generator is sequential and guessable `[measured]`.
+
+**Three existing claims this pass found to be wrong or narrower than written:**
+
+1. **`project.rs`'s undeclared-endpoint note is right about the dup branch and silent about
+   the other one.** The comment at `project.rs:389-397` reasons that after §12.38 *"the only
+   way to reach here undeclared is a root that has since been FREED"* — true, and it duly
+   filters. But the **`g.nodes()` branch** of the same expression (`project.rs:372-374`) has
+   no such filter, so a client with no declared root **does** enter the universe and
+   `anchor_of` files it as a **user** boundary (`:469-473`). §12.38's own summary line — *"an
+   object allocated into an undeclared namespace mints no boundary"* — is therefore true at
+   *alloc* time and **false after a root free**. `[inferred]`
+2. **`Spine::condemned`'s doc claims component splits are handled; the argument only covers
+   the CONDEMNED path.** `gpu.rs:795-796` says the client-set key makes condemnation survive
+   *"component splits (both halves intersect, both stay condemned)"* — correct, because a
+   condemned boundary gets `None` and touches no proc. On the **live** path both halves of a
+   split match the *same* `ProcId` (`plan_refresh` reads the pre-refresh `p.clients`,
+   `gpu.rs:1470-1474`), both are pushed into `boundary_pid`, and `sync_proc_to_boundary` runs
+   twice on that one proc (`gpu.rs:1899-1902`) — the second call overwriting the first, so one
+   half of the split silently loses its clients, vases and channels while `plan.vanishing` is
+   empty. Reachable by a legal guest (dup-join two user clients, then free the alias).
+   `[inferred]` — independent of this entry, and it wants its own round and its own test
+   (`a_live_component_that_splits_yields_two_procs`).
+3. **`RmGraphError::ReservedClient`'s citation is weaker than its conclusion.** Its doc
+   (`rmgraph.rs:407-418`) justifies reserving `HClient(0)` with *"RM mints client handles from
+   `RS_CLIENT_HANDLE_BASE` and can never produce it"*. `[src]` §2(a): with
+   `RS_COMPATABILITY_MODE=1` the base is **not** binding on a caller-supplied `hRoot`, so
+   that sentence is not the operative reason. The refusal itself is still correct and should
+   stand — but on the stronger ground that `0` is `NV01_NULL_OBJECT` and means *"RM, generate
+   one"* on the alloc path (`rs_server.c:3319`), so no live client can ever *hold* it. Same
+   verdict, sound citation. `[src]`
+
+**One claim CONFIRMED rather than corrected, worth recording because the design turns on it:**
+`rm_semantics_measured.md:179-183`'s *"handle values are per-client and reusable … a handle
+is never an identity on its own"* is now backed all the way to the generator
+(`rs_server.c:3319-3341`) and to the absence of any epoch in RM's own structs. Nothing in
+either repo claims NVIDIA handles are never reused; every "never reused" statement in the
+Rust tree is scoped to **our own** mints (`ResId`, `ProcId`, `IsolateId`, `HostHandle`,
+`CompletionSource`) and says so. D3 is the extension of that existing, consistent posture —
+not a new one.
