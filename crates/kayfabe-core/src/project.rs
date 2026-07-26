@@ -12,15 +12,65 @@
 //!   declared facts only: `hVASpace`, else its CtxShare's, else its parent TSG's.
 //! - **`Channel` (vChid) = the exec-plane owner** (E0's demux identity).
 //! - **`Proc` = the grouping node** (isolate + arena + lifecycle only): one
-//!   dup-connected component of clients. Never inferred from timing.
+//!   dup-connected component of **user** clients, plus one reserved **system**
+//!   component holding every kernel client. Never inferred from timing.
+//!
+//! ## ★ The grouping rule, and the measurement that fixed it (§12.27)
+//!
+//! The rule used to be "one dup-connected component of clients", full stop, on the
+//! reading that UVM keeps a *per-process* gpu-ops client. **It does not.**
+//! `nvUvmInterfaceSessionCreate` runs once per `nvidia_uvm` module load and every guest
+//! CUDA process dups into that one client — measured on an RTX 3060 / 580.159.04 with
+//! kprobes on RM's dup funnel: two concurrent processes issued 82 dups each, *every one*
+//! with the same destination (`0xc1d00069`), and a third process run later joined the
+//! same destination. Dups with the session as **source**: 0. Dups with a user client as
+//! **destination**: 0. It is a strict one-directional star into the session client.
+//!
+//! Under the old rule that star collapses **every guest process plus the guest kernel
+//! into a single `Proc`** — one isolate, one arena, one host VAS — which is #14
+//! un-fixed; and the second process would not even reach that, because its UVM dup
+//! merges a component that has already touched its data plane
+//! (`GpuError::LateMerge`).
+//!
+//! So the edge predicate is now typed, on a fact the client *declared about itself*
+//! ([`kayfabe_arch::ClientKind`], from the `processID` on its `NV01_ROOT`):
+//!
+//! > **A `DUP_OBJECT` edge is a GROUPING edge iff BOTH endpoints are declared
+//! > [`ClientKind::User`] clients. Every declared [`ClientKind::Kernel`] client belongs
+//! > to the ONE reserved system component ([`SYSTEM_ANCHOR`]), by rule and never by
+//! > dup. A client that has not (yet) declared merges with nobody.**
+//!
+//! A dup into a kernel client is therefore a **reference**, not a merge — which is
+//! exactly what it is on the wire. User↔user dups still merge, because that is genuine
+//! sharing and genuine sharing is one blast radius, which is what #14 is about.
+//!
+//! Three properties worth naming, because each was a way to get this wrong:
+//! - **The handle VALUE is never consulted.** UVM's session (`0xc1d00069`) sits
+//!   numerically *between* the two user clients that dup into it.
+//! - **The classification cannot depend on the dup graph**, because it is declared at
+//!   client-creation time, before any dup exists. That is what keeps grouping
+//!   order-independent under the new rule as well as the old.
+//! - **Attribution is by ORIGIN.** [`RmGraph::nodes`] reports each resource at the
+//!   handle that *allocated* it, so a user's VASpace dup'd into the UVM session stays in
+//!   the user's `Proc`. The kernel component owns only what the kernel itself allocated
+//!   — so the new cross-`Proc` reference materializes no second `Vas` and no second
+//!   backing (`l1_concurrency.md` §12.27, the coherence re-verification).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_arch::ids::{EngineKind, GpuId, HClient, HObject, Pdb, VChid};
-use kayfabe_arch::{Arch, ObjectKind};
+use kayfabe_arch::{Arch, ClientKind, ObjectKind};
 
 use crate::ProcAnchor;
-use crate::rmgraph::{NodeKey, RmGraph, RmNode};
+use crate::rmgraph::{NodeKey, RESERVED_CLIENT, RmGraph, RmNode};
+
+/// ★ §12.27 — the reserved anchor of the **system component**: the guest *kernel*'s
+/// clients (UVM's session, RM's internal clients), which are one component by rule.
+///
+/// It is [`RESERVED_CLIENT`] (`HClient(0)` = `NV01_NULL_OBJECT`), which
+/// [`RmGraph::apply`] refuses as guest input — so no user component can ever anchor here
+/// and be mistaken for the system proc. The label is a *reservation*, not a coincidence.
+pub const SYSTEM_ANCHOR: ProcAnchor = ProcAnchor(RESERVED_CLIENT);
 
 /// Declared facts of one VASpace origin, resolved against the graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -59,7 +109,9 @@ pub struct ChannelFacts {
     pub engine: EngineKind,
 }
 
-/// One derived process boundary (a dup-connected component of clients).
+/// One derived process boundary: a dup-connected component of **user** clients, or the
+/// single reserved **system** component (every declared kernel client — see
+/// [`SYSTEM_ANCHOR`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcBoundary {
     /// Deterministic label: the smallest client handle in the component.
@@ -82,14 +134,48 @@ pub struct ProcBoundary {
 /// is part of the key by construction (the #14 lesson lifted onto the GPU axis).
 /// Only objects whose GPU target resolves enter routing; an unresolvable target is a
 /// deferred/unroutable object (loud MISS at use), never a guessed GPU0 entry.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Boundaries {
-    /// Process boundaries, ascending anchor order.
+    /// **User** process boundaries, ascending anchor order. Never contains a declared
+    /// kernel client (§12.27) and never carries [`SYSTEM_ANCHOR`].
     pub procs: Vec<ProcBoundary>,
+    /// ★ §12.27 — the **system** component: every declared [`ClientKind::Kernel`]
+    /// client, with the VASpaces and channels those clients themselves allocated.
+    /// Always present (empty before the guest kernel declares a client), always anchored
+    /// at [`SYSTEM_ANCHOR`], and — unlike a user boundary — never minted, merged,
+    /// retired or condemned: its clients are the guest driver's, so condemning it is
+    /// device-fatal by definition (§12.26).
+    pub system: ProcBoundary,
     /// Data-plane routing: (target, PDB) → (owning component, VASpace origin node).
     pub by_pdb: BTreeMap<(GpuId, Pdb), (ProcAnchor, NodeKey)>,
-    /// Exec-plane routing: (target, vChid) → (owning component, channel node).
+    /// Exec-plane routing: (target, vChid) → (owning component, channel node). The
+    /// owning component may be [`SYSTEM_ANCHOR`] (a guest-kernel channel).
     pub by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, NodeKey)>,
+}
+
+impl ProcBoundary {
+    /// An empty boundary for `anchor` (no clients, no vases, no channels).
+    #[must_use]
+    fn empty(anchor: ProcAnchor) -> Self {
+        ProcBoundary {
+            anchor,
+            clients: BTreeSet::new(),
+            vases: BTreeMap::new(),
+            channels: BTreeMap::new(),
+        }
+    }
+}
+
+impl Default for Boundaries {
+    /// The boundaries of an empty graph: no user procs, an empty system component.
+    fn default() -> Self {
+        Boundaries {
+            procs: Vec::new(),
+            system: ProcBoundary::empty(SYSTEM_ANCHOR),
+            by_pdb: BTreeMap::new(),
+            by_vchid: BTreeMap::new(),
+        }
+    }
 }
 
 /// Projection failures. All loud: each is a real protocol violation or a graph
@@ -213,13 +299,30 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
     // still-parked, not-yet-resolvable dup is deliberately NOT chained — it must not
     // conjure a phantom, resource-less proc into the projection (which would make an
     // intermediate `Dup`-before-`Alloc` state differ from the fully-applied one).
+    // ★ §12.27 — the declared privilege of every client whose root has been observed.
+    // Read once, up front, because it gates the client universe, the edge predicate and
+    // the assignment of every node below. A client absent from this map has not declared
+    // itself yet.
+    let kinds: BTreeMap<HClient, ClientKind> = g.client_kinds().collect();
+    let is_user = |c: HClient| matches!(kinds.get(&c), Some(ClientKind::User { .. }));
+    let is_kernel = |c: HClient| matches!(kinds.get(&c), Some(ClientKind::Kernel));
+
     let clients: BTreeSet<HClient> = g
         .nodes()
         .map(|n| n.key.client)
         .chain(
             g.dups()
                 .filter(|(d, _)| g.origin_of(*d).is_some())
-                .flat_map(|(d, s)| [d.client, s.client]),
+                .flat_map(|(d, s)| [d.client, s.client])
+                // ★ §12.27 — a dup endpoint that owns NO resource of its own is chained
+                // in only once it has DECLARED itself. It is chained in at all so a
+                // client holding nothing but aliases can still merge with the client it
+                // aliases; but before its root arrives there is no grouping it could
+                // join (the edge predicate needs positive evidence about both ends), so
+                // admitting it would mint exactly the resource-less phantom `Proc` the
+                // parked-dup rule below already refuses to conjure — one that is then
+                // minted, matched, and RETIRED the moment the declaration lands.
+                .filter(|c| kinds.contains_key(c)),
         )
         .collect();
 
@@ -240,22 +343,52 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
         if g.origin_of(dst).is_none() {
             continue;
         }
+        // ★ §12.27 — THE GROUPING PREDICATE. A dup merges only when BOTH ends are
+        // declared **user** clients: that is genuine sharing between two guest
+        // processes, which is one blast radius by definition. Every other shape is a
+        // *reference* and merges nothing:
+        //
+        //  - dst is a KERNEL client — the measured case. Every guest CUDA process dups
+        //    into the one UVM session client; merging on those edges collapses the whole
+        //    guest into a single `Proc` (#14 un-fixed) and makes process #2 a
+        //    `LateMerge` refusal. The kernel client is the system component's, by rule.
+        //  - src is a kernel client (0 observed) — symmetric, and refusing it means a
+        //    kernel client can never *pull* a user proc into the system component.
+        //  - either end is undeclared (its root has not arrived) — grouping requires
+        //    positive evidence about BOTH sides; absence is never read as "user".
+        //
+        // Requiring positive evidence, rather than excluding the known-bad shapes, is
+        // deliberate: a future third [`ClientKind`] is then unmergeable until someone
+        // decides what it means, instead of silently defaulting into user grouping.
+        if !(is_user(dst.client) && is_user(src.client)) {
+            continue;
+        }
         uf.union(dst.client, src.client);
     }
 
+    // Assignment: every declared kernel client goes to the ONE system component, by
+    // rule; everything else groups by the union above. `ProcAnchor` values from `uf` can
+    // never equal `SYSTEM_ANCHOR`, because `RmGraph::apply` refuses `RESERVED_CLIENT`.
     let mut procs: BTreeMap<ProcAnchor, ProcBoundary> = BTreeMap::new();
+    let mut system = ProcBoundary::empty(SYSTEM_ANCHOR);
+    let anchor_of = |uf: &mut ClientUnion, c: HClient| {
+        if is_kernel(c) {
+            SYSTEM_ANCHOR
+        } else {
+            ProcAnchor(uf.find(c))
+        }
+    };
     for &c in &clients {
-        let anchor = ProcAnchor(uf.find(c));
-        procs
-            .entry(anchor)
-            .or_insert_with(|| ProcBoundary {
-                anchor,
-                clients: BTreeSet::new(),
-                vases: BTreeMap::new(),
-                channels: BTreeMap::new(),
-            })
-            .clients
-            .insert(c);
+        let anchor = anchor_of(&mut uf, c);
+        if anchor == SYSTEM_ANCHOR {
+            system.clients.insert(c);
+        } else {
+            procs
+                .entry(anchor)
+                .or_insert_with(|| ProcBoundary::empty(anchor))
+                .clients
+                .insert(c);
+        }
     }
 
     let mut by_pdb: BTreeMap<(GpuId, Pdb), (ProcAnchor, NodeKey)> = BTreeMap::new();
@@ -289,12 +422,20 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
     }
 
     for node in g.nodes() {
-        let anchor = ProcAnchor(uf.find(node.key.client));
+        // ★ §12.27 — attribution is by the resource's ORIGIN client (`nodes()` reports
+        // each resource at the handle that allocated it), so a user object dup'd into
+        // the UVM session stays in the USER component. The system component owns only
+        // what the guest kernel itself allocated.
+        let anchor = anchor_of(&mut uf, node.key.client);
+        let boundary = if anchor == SYSTEM_ANCHOR {
+            &mut system
+        } else {
+            procs.get_mut(&anchor).expect("component exists")
+        };
         match node.kind {
             ObjectKind::VaSpace => {
                 let pdb = g.pdb_of(node.key);
                 let gpu = g.gpu_of(node.key);
-                let boundary = procs.get_mut(&anchor).expect("component exists");
                 boundary.vases.insert(node.key, VasFacts { gpu, pdb });
                 if let Some(pdb) = pdb {
                     // The F1 guard, scoped per target: same-scope duplicate = loud
@@ -344,11 +485,7 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
                 if let Some(gpu) = gpu {
                     by_vchid.insert((gpu, vchid), (anchor, node.key));
                 }
-                procs
-                    .get_mut(&anchor)
-                    .expect("component exists")
-                    .channels
-                    .insert(node.key, facts);
+                boundary.channels.insert(node.key, facts);
             }
             _ => {}
         }
@@ -356,6 +493,7 @@ pub fn project(g: &RmGraph, arch: &dyn Arch) -> Result<Boundaries, ProjectionErr
 
     Ok(Boundaries {
         procs: procs.into_values().collect(),
+        system,
         by_pdb,
         by_vchid,
     })

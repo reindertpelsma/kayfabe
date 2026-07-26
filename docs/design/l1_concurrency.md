@@ -2072,8 +2072,11 @@ at proc granularity. Measured: with a 512 KiB arena the process died at map/unma
 **A free list, not a collector** (settled, and worth restating because the temptation is
 real). The `RmGraph` already models DUP_OBJECT refcounting from declared protocol facts,
 so liveness is *known exactly* rather than inferred; and cross-`Proc` references cannot
-exist, because a `Proc` **is** a dup-connected component — a dup between two clients makes
-them the same `Proc`. A tracing GC would re-derive what the graph states and would make
+reach another proc's GPA, because a **user↔user** dup between two clients makes them the
+same `Proc` (★ §12.27 corrects the over-broad form of this sentence: a dup into a *kernel*
+client is a reference and does NOT merge — but it also never reaches a GPA, because the
+system component has no data plane, and the referenced resource keeps its ALLOCATOR's
+component alive, so nothing is reclaimed early). A tracing GC would re-derive what the graph states and would make
 reclamation non-deterministic, breaking the `CoreSnapshot` differential property the core
 is built on. So: a coalescing free list on `GpaArena`, and a move-only token.
 
@@ -2750,3 +2753,308 @@ two concurrent CUDA processes; (ii) decide the grouping rule; (iii) only then de
 kernel-client boundary. Until (ii) is decided, `dup_edge_groups_uvm_and_compute_into_one_proc`
 and the `LateMerge` guard encode an assumption the source contradicts, and that is recorded
 here rather than quietly patched.
+
+### 12.27 ★★★ WHAT A `Proc` IS — the grouping rule, corrected against hardware
+
+§12.26 closed with an owner decision it deliberately did not take: *the suite encodes an
+assumption the source contradicts.* The measurement came back, and the source was right.
+This entry is the correction, and it is the most invasive change this core has had —
+decision #14's definition of what a *process* is.
+
+#### The measurement (RTX 3060, driver 580.159.04, 2026-07-25 — not a hypothesis)
+
+kprobes on RM's dup funnel `rmapiDupObjectWithSecInfo` and on `rpcRmApiDupObject_GSP` /
+`rpcRmApiAlloc_GSP`:
+
+- `nvUvmInterfaceSessionCreate` fires **exactly once per `nvidia_uvm` module load** — one
+  RM client for the whole module.
+- Two concurrent CUDA processes issued **82 dups each, every one with the same
+  destination**: `dst=0xc1d00069`, sources `0xc1d00067` (A) and `0xc1d00068` (B).
+- A **third** process run later joined that same destination. The destination changes only
+  across a module reload.
+- Over the whole trace: dups with the UVM session as *source* = **0**; dups with a user
+  client as *destination* = **0**; userspace `NV_ESC_RM_DUP_OBJECT` = **0** (CUDA never
+  issues one). A strict one-directional star into the session client.
+
+**Consequence under the old rule** ("a `Proc` is a dup-connected component of clients"):
+every guest CUDA process dup-connects to the one UVM client, so union-find collapses **all
+of them plus the guest kernel into a single `Proc`** — one isolate, one arena, one host
+VAS. #14 un-fixed. And process #2 would not even get that far: its UVM dup absorbs a
+component that has already touched its data plane, which is `GpuError::LateMerge`, a hard
+refusal. The stale C comment at `C: src/qemu/nvkvm_gpu_emul.c:392` ("UVM's *per-process*
+gpu-ops client") is where the wrong reading came from; the C's own bench note about a
+singular *"UVM's RM client (0xc1d00001)"* was the accurate one. **That comment is in the
+other repo and was not touched.**
+
+#### ★ The discriminator, and the three things it is NOT
+
+`rpcRmApiAlloc_GSP` with `hClass == NV01_ROOT` carries `NV0000_ALLOC_PARAMETERS`:
+
+```
+GSPALLOC hClient=0xc1d00067 parm.processID=0x0000dd13   <- process A's pid
+GSPALLOC hClient=0xc1d00068 parm.processID=0x0000dd14   <- process B's pid
+GSPALLOC hClient=0xc1d00069 parm.processID=0xffffffff   <- UVM session = KERNEL_PID
+GSPALLOC hClient=0xc1e0006a..76 parm.processID=0xffffffff  (other RM-internal clients)
+```
+
+Stamped at `ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` — `privLevel >=
+RS_PRIV_LEVEL_KERNEL → processID = KERNEL_PID (0xFFFFFFFF)`, else the client's `ProcID`.
+This is a **declared protocol fact**, so it is *recorded*, never inferred — the house rule
+whose violation §12.25 was.
+
+1. **The handle VALUE is not a discriminator.** The UVM session `0xc1d00069` sits
+   numerically *between* the two user clients, sharing `RS_CLIENT_HANDLE_BASE`.
+   `RS_CLIENT_INTERNAL_HANDLE_BASE (0xC1E00000)` exists and other kernel clients use it —
+   **UVM's session does not.** Keying on the range mis-files the single most important
+   kernel client in the system. The test file encodes the measured handles verbatim so
+   this stays load-bearing.
+2. **`processName` is empty in every record.** Unusable.
+3. **It cannot be inferred from the dup graph**, which is what it decides about. It arrives
+   at client-creation time, on the `NV01_ROOT`, *before any dup exists* — which is exactly
+   what keeps grouping order-independent under the new rule as well as the old.
+
+#### ★★ THE RULE
+
+> A `DUP_OBJECT` edge is a **grouping** edge iff **both** endpoints are declared
+> `ClientKind::User` clients. Every declared `ClientKind::Kernel` client belongs to the ONE
+> reserved **system** component (`project::SYSTEM_ANCHOR`), by rule and never by dup. A
+> client that has not (yet) declared merges with nobody.
+
+A dup into a kernel client is therefore a **reference**, not a merge — which is what it is
+on the wire. User↔user dups still merge, because that is genuine sharing and genuine
+sharing is one blast radius, which is what #14 is about.
+
+Requiring *positive* evidence about both ends (rather than excluding the known-bad shapes)
+is deliberate: a future third `ClientKind` is unmergeable until someone decides what it
+means, instead of silently defaulting into user grouping.
+
+**Attribution is by ORIGIN.** `RmGraph::nodes()` reports each resource at the handle that
+*allocated* it, so a user's VASpace dup'd into the session stays in the **user's** `Proc`;
+the kernel component owns only what the kernel itself allocated. This is why the new
+cross-`Proc` reference materializes no second `Vas`, and it is the hinge of the coherence
+answer below.
+
+#### What a kernel client belongs to, reconciled with §12.26
+
+The system component **is** `Gpu::system`. It is synced by the same
+`sync_proc_to_boundary` as any user proc (a guest-kernel channel must materialize by
+exactly the same rules), and it is deliberately outside every lifecycle verb of the
+refresh loop: not minted (it exists from realize), not matched or merged (its membership is
+the declared kind, not a client intersection), not retired by the vanish pass, and — §12.26
+— **not condemnable**, because condemning the guest driver's own component is device-fatal
+by definition. `SYSTEM_ANCHOR` resolves to `Gpu::SYSTEM_PROC` by name in the routing
+rebuild, so a guest-kernel PDB routes.
+
+That last point turns §12.26's `plan_publish` refusal from a vacuous guard into a
+load-bearing one: before this change `Gpu::system` owned nothing, so
+`the_system_proc_has_no_data_plane` passed for the wrong reason (`UnknownPdb`). Now the
+system proc has clients, a `Vas`, and a routable PDB — and `FwdFault::SystemDataPlane` is
+what actually refuses. §12.26 anticipated exactly this ("would start succeeding the moment
+anything gave the system proc a `Vas`"); the replacement test asserts the refusal *with*
+the `Vas` present.
+
+**`HClient(0)` is now RESERVED.** `SYSTEM_ANCHOR` is `ProcAnchor(HClient(0))`, and a
+`ProcAnchor` is a client handle, so a guest that declared client 0 could anchor a *user*
+component at the reserved label and have its PDBs and vChids resolve onto the system proc.
+`RmGraph::apply` therefore refuses **every** event naming client 0
+(`RmGraphError::ReservedClient`), enumerated centrally in `clients_named` so a new
+`RmEvent` variant carrying a client is a mistake in one place. This is
+protocol-faithful: `0` is `NV01_NULL_OBJECT`, and RM mints client handles from
+`RS_CLIENT_HANDLE_BASE`. The reservation is a *fact*, not a hope.
+
+#### Missing `processID` — MISS = FAULT at the declaration
+
+A `Client`-class alloc with no declared `ClientKind` is a loud
+`RmGraphError::UndeclaredClientKind`, refused at the declaring event. Both available
+guesses are catastrophic and the doctrine forbids either: "user" folds the guest kernel's
+session into a process's blast radius (and through it every other process — #14 un-fixed);
+"kernel" folds a guest process into the guest kernel's isolate. RM stamps `processID`
+unconditionally, so an absent one means the ABI seam failed to decode it — a defect that
+must be loud where it happens, not papered over with a default (the deleted `unwrap_or(0)`
+disease, one level up).
+
+Two corollaries, both refusals rather than tie-breaks:
+
+- **One root per namespace.** A second `Client`-class origin in one namespace is
+  `RmGraphError::DuplicateClientRoot`. In RM the `hClient` **is** its root object's handle,
+  so this cannot happen on a real driver; allowing it would let a guest declare two roots
+  with *different* kinds and make the classification order-dependent.
+- **The index tracks the root HANDLE, not the resource** — §12.25's lesson one level up. A
+  client root that a dup alias keeps alive in another namespace no longer occupies its own
+  namespace, which is free to declare a fresh root with a fresh kind. Pruning on the
+  resource's death instead leaves the namespace permanently un-declarable, and then prunes
+  the *new* entry when the old alias finally dies. The client-root index (`client_roots`)
+  is an index and not a second source of truth; it exists for **complexity**, not
+  convenience (G10, §12.22: the one-root check and the per-client kind lookup would
+  otherwise be O(clients × resources) with both factors guest-driven).
+
+**An undeclared, resource-less dup endpoint conjures nothing.** It is not admitted to the
+client universe until it declares — otherwise it mints a phantom, resource-less `Proc` that
+is matched and then RETIRED the instant the declaration lands, which is exactly the
+"intermediate state differs from the fully-applied one" the parked-dup rule already
+refuses. A client that owns live resources but has not declared still gets its own
+component (see the lifetime property below); it merges with nobody.
+
+#### ★★ The coherence re-verification — it holds, and it is now non-vacuous
+
+§12.26 argued the new cross-`Proc` reference raises a **coherence** question, not a
+use-after-free, *because* the system proc mints no host memory and forges kernel data
+movement. **That argument survives the rule change, and it got stronger.** Re-derived under
+the new grouping:
+
+1. **The system proc still mints nothing.** `plan_publish` refuses `Gpu::SYSTEM_PROC`
+   before any host verb exists. Now non-vacuous (above).
+2. **A dup'd object materializes no second `Vas`.** Attribution is by origin, so the
+   session client's alias of A's VASpace does not appear in the system component at all.
+   There is one `Vas` per `(GpuId, Pdb)`, owned by the allocator's proc, and `by_pdb` maps
+   a PDB to exactly one proc — a second proc *cannot* publish into it (`UnknownPdb`). The
+   "two host backings for one guest buffer" shape is unrepresentable, not merely avoided.
+3. **A host handle still names its isolate** (§12.26) and is refused off it.
+4. **GPA arenas are still per-`(Proc, GpuId)` and disjoint**; a guest-declared mapping into
+   a system `Vas` naming a user proc's GPA binds `host: None`, and `gate_vas` refuses to
+   execute against an unpublished binding — the guest can *declare* the alias and can never
+   *use* it.
+
+★ **And the property that answers it structurally, which was undocumented:** *any genuine
+cross-process sharing must traverse a **user↔user** dup edge to be usable at all, and that
+edge is exactly the merge.* For process B to execute against A's address space, B's channel
+must name a VASpace **in B's namespace** — i.e. an alias of A's VASpace dup'd into B's
+*user* client — and that dup merges B into A's `Proc`: one isolate, one arena, one backing.
+If no such user↔user dup exists, B cannot reach A's address plane at all and any attempt is
+a loud MISS. So user↔user sharing is correct *by construction*, by the same property that
+made condemnation-by-client-set work.
+
+#### ★ The lifetime question, sharpened — and the answer the model already had
+
+The owner's question was whether reclaiming host RM objects when an isolate dies is
+*faithful* (RM invalidating shared objects when the creator dies) or *divergent*. Checked
+in `ogkm`, the answer is **divergent in principle**: RM does not invalidate on creator
+death, and UVM's `uvm_va_space` is bound to the `/dev/nvidia-uvm` **file**, not to the
+process — `kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81` says so explicitly ("*it's legal
+for the associated process to die then for another process with a reference on the file to
+perform the unregisters*"), `UVM_INIT_FLAGS_MULTI_PROCESS_SHARING_MODE` promises resources
+"*freed when the last reference to the file is dropped rather than when this process
+exits*" (`uvm.h:160-167`), and "zombie" ranges exist precisely for that case
+(`uvm_va_range.h:265-268`, reaped by `UVM_CLEAN_UP_ZOMBIE_RESOURCES`). External allocations
+(`uvm_map_external.c`) and device-P2P dups (`uvm_va_range_device_p2p.c:352-371`) are the
+same shape. So **a kernel client's reference to a user process's object CAN outlive that
+process.**
+
+That would be a use-after-free if a `Proc`'s host lifetime were keyed on its client root.
+**It is not, and this falls out of the origin-attribution rule for free:** a component is
+derived from the resources that are *live*, reported at their allocator's key. So as long
+as any surviving reference — including the session's dup — names a resource client A
+allocated, A's boundary still exists, the same `Proc` survives the match, and its isolate,
+arena and published host backing are untouched. The isolate outlives the guest client for
+exactly as long as RM's own refcount says the object does; the LAST reference going is what
+retires the proc. Asserted end-to-end by
+`a_kernel_dup_keeps_the_owning_procs_isolate_and_backing_alive_past_the_clients_free`.
+
+Note the creation-side bound that keeps this small: `nvGpuOpsDupAddressSpace`/`DupMemory`
+pass `NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE` (`nv_gpu_ops.c:2759`, `:8490`),
+forcing the `RS_SHARE_TYPE_PID` check (`client_resource.c:219-231`), so the memory duped
+into the session always belonged to a client owned by the *calling* process at dup time.
+Nothing forces that same process to drop the last fd reference — which is the residual, and
+it is a *functional* gap (a loud refusal on a shape we do not serve), never corruption.
+
+#### ★ Where NVIDIA declines to define behaviour (recorded, not designed against)
+
+Mode-1 could ignore these because it was a syscall proxy trying to be correct everywhere.
+Mode-2 **reconstructs intent**, so these mark where we should be conservative rather than
+inventive — MISS = FAULT, declare the refusal, never invent a semantic NVIDIA never
+promised. Collected for a later round:
+
+| Where | What it declines |
+|---|---|
+| `ogkm src/nvidia/src/kernel/rmapi/client_resource.c:219-231` + `sharing.c:344-353` | `RS_SHARE_TYPE_PID` is the default `DUP_OBJECT` policy: cross-PID dup denied unless opted out. |
+| `libraries/resserv/src/rs_client.c:537-547`, `sdk/nvidia/inc/nvos.h:2277` | A kernel client dups *unconditionally* unless `REJECT_KERNEL_DUP_PRIVILEGE` is set. |
+| `arch/nvalloc/unix/src/osapi.c:2540-2542`, `kernel-open/nvidia/nv-mmap.c:542-549` | An mmap context may only be armed by the process owning the RM client; an inherited fd carries none. |
+| `arch/nvalloc/unix/src/osapi.c:552-557` | RM client lifetime is keyed to the **file**, not the process. |
+| `arch/nvalloc/unix/src/escape.c:962-994` | `NV_ESC_REGISTER_FD` links are permanent and unshareable. |
+| `kernel-open/nvidia-uvm/uvm.c:93-101`, `:782-788` | Once the UVM fd is shared, the kernel declines to track mm ownership; a second process cannot mmap through it (`-EOPNOTSUPP`). |
+| `kernel-open/nvidia-uvm/uvm.h:2688-2692` | **"undefined behaviour"**, verbatim, for a non-duplicated UVM handle across processes. |
+| `kernel-open/nvidia-uvm/uvm.h:541-551`, `:1145-1148` | `NV_ERR_NOT_SUPPORTED` / `NV_ERR_PAGE_TABLE_NOT_AVAIL` when a GPU VA space was registered by a different process, or that process exited. |
+| `kernel-open/nvidia-uvm/uvm_va_space.c:1557-1559`, `uvm_user_channel.c:132-140`, `uvm_map_external.c:989-993` | `rmCtrlFd` is **explicitly discarded** (`TODO: Bug 1624521`); UVM relies entirely on RM's PID check. |
+
+#### Where the canonical record of a host object should live — SCOPED, not started
+
+The owner's central-registry proposal, evaluated against Mode-1's actual code rather than
+its shape. **The mechanism does not transfer whole, and the part that does is bookkeeping.**
+
+- In Mode-1, the decoupling is **literally true for fd-backed objects**: the stub opens
+  `/dev/nvidia*` and hands QEMU an `SCM_RIGHTS` copy, so QEMU owns an independent kernel
+  reference to the same `struct file` (`C: src/qemu/nvkvm_handle.h:4-7`, `:26`;
+  `nvkvm_isolate_handlers.c:228-256`). QEMU `mmap`s and `ioctl`s it directly (`:1818`,
+  `:1068`), an isolate kill never touches the global table (`ARCHITECTURE.md:93-97`;
+  `nvkvm_isolate_kill` at `nvkvm_isolate.c:1009-1112`), and the RM objects are released
+  only by QEMU's own `close` (`virtio_nvgpu.c:128-129`). This is exactly why the #80
+  **reaper** had to be written: isolate death did *not* free the GPU memory.
+- It is **bookkeeping only for RM handles**. Mode-1's isolate path keeps nothing but a
+  grow-only `uint32_t client_allow[]` reach-gate (`C: virtio_nvgpu.h:297-300`); the rich
+  `nvkvm_client`/`nvkvm_object` graph is reached only from the legacy non-isolate frontend,
+  and the four-table `nvkvm_tables.c` with its `isolate × handle → fd` map is **unwired**
+  (`C: docs/REFACTOR_PLAN.md:203-223`, gaps G3/G5). Cross-isolate work is *re-issued in the
+  owning isolate*, never centrally resolved (`nvkvm_isolate_handlers.c:951-965`,
+  `:1576-1584`). gVisor's `nvproxy` tables are likewise pure bookkeeping — and it has no
+  separate isolate process at all, so the question does not arise there.
+- **Security is tied to the CREATOR.** Moving allocation to the main process would collapse
+  the privilege boundary the isolate exists for. So a central record can never mean central
+  *allocation*, and therefore — in Mode-2, where the host RM object physically lives inside
+  the isolate's RM client — a central record gives **enumeration, ordering and an
+  independent cleanup path, but not lifetime**. The only way to buy lifetime is the Mode-1
+  trick of the main process holding a real dup'd device fd, which puts the raw GPU fd back
+  in the main process; that is a posture change, not a refactor.
+
+**Does this round need it? No — and that is a finding, not a dodge.** Under the rule above,
+the surviving cross-`Proc` reference is to a *guest* RM resource, and the origin-attribution
+rule already keeps the allocator's isolate and backing alive for exactly as long as that
+reference lives. Nothing needs to outlive an isolate, so the tension with the system-plane
+rule does not become real.
+
+**Scoped as its own round (do not start it here):** today the record of a host object is
+distributed across `Binding.host`, `Channel.host_channel`/`host_token`/`host_engine_objects`
+and `Vas.host_vas`, per-proc. Audit gap G1 — a successful publish's host memory handle
+recorded nowhere, so nothing could ever free it — was this in miniature, fixed one binding
+at a time. A central registry **at the layer where OS calls are introduced** (the L1 shell,
+not the pure core), keyed by `IsolateId` and enumerable per proc, would make enumeration,
+cleanup ordering and orphan detection structural rather than per-case. The grouping rule
+lands first; this is recorded so that when it is designed, it is designed as bookkeeping
+with an honest name — not as a lifetime mechanism it cannot be.
+
+#### Tests — `rmgraph_order_independence.rs`, rewritten to reality (15), all bite-checked
+
+The file's `scenario()` used to give A and B **two distinct UVM clients**
+(`HClient(0xA1)`, `HClient(0xB1)`) and `dup_edge_groups_uvm_and_compute_into_one_proc`
+asserted on it. That scenario cannot occur; it is replaced by the measured one — A
+(`0xc1d00067`), B (`0xc1d00068`), ONE kernel session (`0xc1d00069`) both dup into, plus a
+second *user* client of A joined by a genuine sharing dup, which keeps the union-find path
+and its minimum-anchor tie-break under test now that the UVM edge no longer merges.
+
+New/rewritten coverage: two user `Proc`s from one shared kernel client; full runtime
+isolation (own isolate, disjoint arenas, no shared host handle, both publish the identical
+VA and ring their own channel); order-independence of the kernel *declaration*
+(before/between/after — all identical); a third process joining later disturbing neither of
+the first two; **no `LateMerge` for this shape** (and a user↔user peer dup onto a touched
+proc still earning one); `HClient(0)` refused on every event shape; undeclared/duplicate
+client roots refused with exact variants; the dup-kept-alive root freeing its namespace;
+the system proc holding clients + a `Vas` and still refusing its data plane; and the
+lifetime property above. `fuzz_rmgraph_invariants` gained INV6 (the system component is
+**exactly** the declared kernel clients; no user boundary holds one, none takes the system
+anchor) and its generator now emits all three declarations, including a hostile process
+claiming kernel privilege — whose worst outcome is self-denial, since the system component
+has no data plane.
+
+Bite-check (each guard reverted individually, everything else in place):
+
+| reverted | what fails |
+|---|---|
+| the grouping predicate (kernel dups merge again) | **9** fail, incl. `one_kernel_client_two_processes_stay_two_procs`, `two_processes_sharing_one_kernel_client_stay_fully_isolated`, `a_second_process_joining_the_shared_kernel_client_is_never_a_late_merge` — i.e. #14 collapse *and* the round-2 refusal, both reproduced. |
+| the kernel→system assignment (`anchor_of`) | **10** fail across `rmgraph_order_independence` + `determinism`. |
+| `UndeclaredClientKind` | `an_undeclared_or_doubly_declared_client_root_is_a_loud_refusal`, on the exact variant. |
+| `ReservedClient` | `client_handle_zero_is_refused_so_the_system_anchor_cannot_be_squatted`. |
+| `DuplicateClientRoot` | that same test **and** fuzz `a4_dup_object_is_reference_counted` (the independent refcount tracker mirrors the refusal). |
+| client-root index pruned on resource death instead of handle drop | `a_root_kept_alive_by_a_dup_no_longer_occupies_its_own_namespace` + fuzz `a4`. |
+| step 2s (the system proc's boundary sync) | **3**, incl. `the_system_proc_has_clients_and_a_vas_and_still_no_data_plane` and the whole-core determinism snapshot. |
+| `SYSTEM_ANCHOR` → `SYSTEM_PROC` routing | `the_system_proc_has_clients_and_a_vas_and_still_no_data_plane`. |
+
+Suite: **257 → 269**, 0 skipped, 0 ignored.

@@ -33,7 +33,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_arch::ids::{ClassId, GpuId, GpuVa, HClient, HObject, Pdb};
-use kayfabe_arch::{Arch, ObjectKind};
+use kayfabe_arch::{Arch, ClientKind, ObjectKind};
 
 /// Global identity of an RM *handle*: handles are **per-client namespaces** (two
 /// processes routinely present identical `HObject` values — #14 round 1), so a
@@ -131,6 +131,20 @@ pub struct AllocFacts {
     /// Device; an object under an un-instanced Device has no resolvable target —
     /// MISS at use, never a default-GPU0 guess).
     pub device_instance: Option<u32>,
+    /// ★ The privilege a **Client** root declares about itself (`processID` on
+    /// `NV0000_ALLOC_PARAMETERS`, decoded by the ABI seam into a [`ClientKind`]) —
+    /// THE decision-#14 grouping discriminator (`l1_concurrency.md` §12.27).
+    ///
+    /// Declared at client-creation time, *before* any `DUP_OBJECT` exists, so the
+    /// classification is never a function of the dup graph it decides about. Only
+    /// meaningful on an [`ObjectKind::Client`] alloc, where it is **required**:
+    /// `None` there is a loud [`RmGraphError::UndeclaredClientKind`], because both
+    /// available guesses are catastrophic (guess "user" and a kernel client collapses
+    /// every guest process into one `Proc` — #14 un-fixed; guess "kernel" and a guest
+    /// process silently joins the guest kernel's isolate). On any other class the field
+    /// is ignored: privilege is a property of the client root, and a hostile guest
+    /// stamping it on a channel changes nothing.
+    pub client_kind: Option<ClientKind>,
 }
 
 /// One abstract RM protocol event. Produced by the ABI adapter (or a test),
@@ -360,6 +374,34 @@ pub enum RmGraphError {
         /// The colliding VA.
         va: GpuVa,
     },
+    /// ★ §12.27 — a **Client** root alloc that declared no [`ClientKind`]. Refused at
+    /// the declaring event, because both available guesses are catastrophic and
+    /// MISS=FAULT forbids either: "user" folds the guest kernel's UVM session into a
+    /// guest process's blast radius (and, through it, every other process — #14
+    /// un-fixed), "kernel" folds a guest process into the guest kernel's isolate.
+    /// The fact is present on every real `NV01_ROOT` (RM stamps `processID`
+    /// unconditionally, `ogkm rpc.h:67-77`), so an absent one means the ABI seam
+    /// failed to decode it — a defect that must be loud where it happens, not
+    /// papered over with a default (the deleted `unwrap_or(0)` disease).
+    UndeclaredClientKind(NodeKey),
+    /// ★ §12.27 — an event named client handle **0**, which is reserved. `0` is
+    /// `NV01_NULL_OBJECT`: RM mints client handles from `RS_CLIENT_HANDLE_BASE` and can
+    /// never produce it, and the projection reserves it as the **system component's**
+    /// anchor (the guest kernel's `Proc`). Refusing it here is what makes that
+    /// reservation a fact rather than a hope — otherwise a guest could declare client
+    /// `0`, anchor a user component at the reserved label, and have its PDBs and vChids
+    /// resolve onto the system proc.
+    ReservedClient(HClient),
+    /// ★ §12.27 — a second, *different* client root inside one namespace. In RM the
+    /// `hClient` **is** its root object's handle, so this cannot happen on a real
+    /// driver; permitting it would let a guest declare two roots with different
+    /// [`ClientKind`]s and make the whole namespace's classification a tie-break.
+    DuplicateClientRoot {
+        /// The root this namespace already has.
+        existing: NodeKey,
+        /// The second root that was refused.
+        attempted: NodeKey,
+    },
     /// Free of a handle that references no resource (never allocated or dup'd).
     FreeUnknown(NodeKey),
     /// A capacity-bounded table was full: a hostile guest tried to grow the graph
@@ -410,7 +452,23 @@ pub struct RmGraph {
     /// realized with. A `Device` alloc naming anything else is refused at alloc time.
     /// Defaults to `{0}` (the single-GPU realize); [`RmGraph::entitle`] sets it.
     gpus: BTreeSet<u32>,
+    /// ★ §12.27 — client namespace → its ONE root client resource. An **index**, not a
+    /// second source of truth: it is derived from the same `Alloc`/free events as
+    /// `resources` and always points at a live entry there.
+    ///
+    /// It exists for complexity, not convenience (the G10 lesson, §12.22): the
+    /// one-root-per-namespace check and the projection's per-client kind lookup are both
+    /// "find this namespace's root", and a scan would make them O(clients × resources)
+    /// with both factors guest-driven — the same quadratic shape the parked-map set and
+    /// the condemnation pass were already hardened against.
+    client_roots: BTreeMap<HClient, ResId>,
 }
+
+/// ★ §12.27 — the reserved client handle. `0` is `NV01_NULL_OBJECT`, which RM can never
+/// mint as an `hClient` (client handles come from `RS_CLIENT_HANDLE_BASE`), so the
+/// projection claims it as the **system component's** anchor and the graph refuses it as
+/// guest input ([`RmGraphError::ReservedClient`]).
+pub const RESERVED_CLIENT: HClient = HClient(0);
 
 /// A parked `MAP_MEMORY_DMA` awaiting its VASpace/memory handles (order tolerance).
 /// `Ord` so the parked set dedups + caps in O(log n) (see [`RmGraph::pending_maps`]).
@@ -445,6 +503,7 @@ impl RmGraph {
             pending_maps: BTreeSet::new(),
             next_res_id: 0,
             gpus: BTreeSet::from([0]),
+            client_roots: BTreeMap::new(),
         }
     }
 
@@ -480,6 +539,47 @@ impl RmGraph {
     /// The physical-GPU instances this device was realized with (G9's entitlement).
     pub fn entitled(&self) -> impl Iterator<Item = u32> + '_ {
         self.gpus.iter().copied()
+    }
+
+    /// This namespace's ONE client-root handle, if its root has been observed and is
+    /// still live (§12.27). O(log n) — an index read, never a scan.
+    fn client_root_of(&self, client: HClient) -> Option<NodeKey> {
+        let id = self.client_roots.get(&client)?;
+        self.resources.get(id).map(|r| r.node.key)
+    }
+
+    /// ★ §12.27 — every live client namespace's **declared** [`ClientKind`], ascending
+    /// client order (deterministic). THE input to decision #14's grouping rule.
+    ///
+    /// A bulk iterator rather than a per-client lookup on purpose: the projection needs
+    /// all of them, and a convenience single-key accessor would invite the
+    /// O(clients × clients) call pattern this index exists to avoid.
+    ///
+    /// A client absent from this iterator has not declared itself — its root has not
+    /// been observed **yet** (order tolerance: an object may legally arrive before its
+    /// client root). It is NOT "probably a user client": it groups with nobody until the
+    /// fact lands, which is the MISS=FAULT posture rather than a guess.
+    pub fn client_kinds(&self) -> impl Iterator<Item = (HClient, ClientKind)> + '_ {
+        self.client_roots.iter().filter_map(|(&c, id)| {
+            self.resources
+                .get(id)
+                .and_then(|r| r.node.facts.client_kind)
+                .map(|k| (c, k))
+        })
+    }
+
+    /// Every client namespace one event names (one for most events, two for a `Dup`).
+    /// Enumerated centrally so a future `RmEvent` variant carrying a client is a
+    /// mistake in exactly one place — the [`RESERVED_CLIENT`] guard reads this.
+    fn clients_named(ev: RmEvent) -> [Option<HClient>; 2] {
+        match ev {
+            RmEvent::Alloc { client, .. }
+            | RmEvent::SetPageDir { client, .. }
+            | RmEvent::MapMemoryDma { client, .. }
+            | RmEvent::Unmap { client, .. }
+            | RmEvent::Free { client, .. } => [Some(client), None],
+            RmEvent::Dup { src, dst } => [Some(src.client), Some(dst.client)],
+        }
     }
 
     /// Populate the sticky GPU-target cache for any resource that can now resolve its
@@ -536,6 +636,15 @@ impl RmGraph {
     /// newly-arrived `Device` back-fills targets for objects that declared before it
     /// (order tolerance for the multi-GPU axis) without an O(n) scan per event.
     pub fn apply(&mut self, arch: &dyn Arch, ev: RmEvent) -> Result<(), RmGraphError> {
+        // ★ §12.27 — the reserved client handle, checked for EVERY event (an object can
+        // enter a namespace by `Alloc`, by a `Dup`'s dst, or by naming it as a `Dup`'s
+        // src), so `HClient(0)` never appears anywhere in the graph and the projection's
+        // system anchor is unreachable by construction.
+        for c in Self::clients_named(ev).into_iter().flatten() {
+            if c == RESERVED_CLIENT {
+                return Err(RmGraphError::ReservedClient(c));
+            }
+        }
         match ev {
             RmEvent::Alloc {
                 client,
@@ -568,6 +677,33 @@ impl RmGraph {
                     return Err(RmGraphError::InvalidDeviceInstance {
                         instance: node.facts.device_instance.unwrap_or_default(),
                     });
+                }
+                // ★ §12.27 — a Client root MUST declare its [`ClientKind`]. Checked at
+                // the alloc, like the Device instance above and for the same reason:
+                // this is where the fact is declared, so this is where its absence is
+                // decidable. Deferring it would mean carrying an unclassifiable client
+                // in the graph and answering "which `Proc` owns this?" with a guess.
+                if matches!(node.kind, ObjectKind::Client) {
+                    if node.facts.client_kind.is_none() {
+                        return Err(RmGraphError::UndeclaredClientKind(key));
+                    }
+                    // ★ §12.27 — ONE root per namespace, so "what privilege is this
+                    // client?" has exactly one answer. In RM the `hClient` **is** its
+                    // root object's handle, so a second root inside one namespace is a
+                    // protocol impossibility; allowing it would let a guest declare two
+                    // roots with *different* kinds and make the classification
+                    // order-dependent (whichever the projection happened to pick).
+                    // Refused here rather than disambiguated later — ambiguity is a
+                    // fault, never a tie-break (an identical re-send is handled by the
+                    // idempotent arm below and never reaches this).
+                    if let Some(existing) = self.client_root_of(client)
+                        && existing != key
+                    {
+                        return Err(RmGraphError::DuplicateClientRoot {
+                            existing,
+                            attempted: key,
+                        });
+                    }
                 }
                 // A handle names EITHER an allocated resource OR a dup alias, never
                 // both — so an alloc onto a handle already claimed by a (parked) dup is
@@ -614,6 +750,10 @@ impl RmGraph {
                                 map_refs: 0,
                             },
                         );
+                        if matches!(node.kind, ObjectKind::Client) {
+                            // Upheld by the one-root check above: never overwrites.
+                            self.client_roots.insert(client, id);
+                        }
                         // A dup / SetPageDir that arrived BEFORE this alloc parked
                         // itself; now that its target exists, promote each parked fact
                         // so the resource is refcounted and PDB-tagged correctly (and so
@@ -1077,6 +1217,16 @@ impl RmGraph {
     /// origin handle while a dup still references the resource keeps BOTH the resource
     /// and its declared PDB alive.
     fn drop_handle(&mut self, key: NodeKey) {
+        // ★ §12.27 — the client-root index tracks the root HANDLE, not the resource
+        // (§12.25's lesson, one level up). A client root that a `DUP_OBJECT` alias keeps
+        // alive in *another* namespace no longer occupies its OWN namespace: that
+        // namespace is empty and is free to declare a new root, with a freshly declared
+        // `ClientKind`. Pruning on the resource's death instead would leave the
+        // namespace permanently un-declarable — and, once it had declared a new root,
+        // would prune the NEW entry when the old alias finally died.
+        if self.is_client_root(key) {
+            self.client_roots.remove(&key.client);
+        }
         let Some(id) = self.handles.remove(&key).map(|h| h.res()) else {
             return;
         };

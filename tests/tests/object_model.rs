@@ -93,7 +93,7 @@ fn map_at_offset_forward_populates_base_plus_offset() {
             parent: HObject(c.0),
             handle: HObject(c.0),
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(c),
         },
     )
     .unwrap();
@@ -297,7 +297,7 @@ fn parked_map_unmap_drops_only_the_named_map() {
             parent: HObject(client.0),
             handle: HObject(client.0),
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(client),
         },
     )
     .unwrap();
@@ -384,7 +384,7 @@ fn free_subtree_cascade_is_namespace_confined() {
                 parent: HObject(c.0),
                 handle: HObject(c.0),
                 class: mc::CLIENT,
-                facts: AllocFacts::default(),
+                facts: kayfabe_tests::user_client(c),
             },
         )
         .unwrap();
@@ -500,7 +500,7 @@ fn freeing_a_dup_alias_on_a_reused_client_handle_never_tears_down_the_namespace(
             parent: h,
             handle: h,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(a),
         },
     )
     .expect("client root allocs");
@@ -618,7 +618,7 @@ fn a_dup_alias_on_a_reused_handle_is_not_dragged_into_its_origins_parent_free() 
             parent: root,
             handle: root,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(a),
         },
         RmEvent::Alloc {
             client: a,
@@ -713,7 +713,7 @@ fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
             parent: a_root,
             handle: a_root,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(a),
         },
         // B has a namespace of its own that must be untouched by an alias free.
         RmEvent::Alloc {
@@ -721,7 +721,7 @@ fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
             parent: b_root,
             handle: b_root,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(b),
         },
         RmEvent::Alloc {
             client: b,
@@ -778,7 +778,7 @@ fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
 /// the same discarded declared fact. Real RM refuses a handle already in use.
 #[test]
 fn alloc_over_a_dup_alias_is_loud_even_when_the_payload_matches() {
-    use kayfabe_core::rmgraph::{AllocFacts, RmGraph, RmGraphError};
+    use kayfabe_core::rmgraph::{RmGraph, RmGraphError};
     use kayfabe_mocks::mock_classes as mc;
 
     let arch = MockArch::new();
@@ -791,7 +791,7 @@ fn alloc_over_a_dup_alias_is_loud_even_when_the_payload_matches() {
         parent: h,
         handle: h,
         class: mc::CLIENT,
-        facts: AllocFacts::default(),
+        facts: kayfabe_tests::user_client(a),
     };
 
     g.apply(&arch, the_alloc).expect("client root allocs");
@@ -856,7 +856,7 @@ fn free_subtree_keeps_mappings_of_a_dup_kept_alive_vaspace() {
             parent: HObject(owner.0),
             handle: HObject(owner.0),
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(owner),
         },
     )
     .unwrap();
@@ -928,7 +928,7 @@ fn free_subtree_keeps_mappings_of_a_dup_kept_alive_vaspace() {
             parent: HObject(aliaser.0),
             handle: HObject(aliaser.0),
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(aliaser),
         },
     )
     .unwrap();
@@ -990,7 +990,7 @@ fn free_subtree_prunes_a_parked_map_when_its_memory_is_freed() {
             parent: HObject(c.0),
             handle: HObject(c.0),
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(c),
         },
     )
     .unwrap();
@@ -1123,7 +1123,7 @@ fn conflicting_map_at_same_va_is_loud_identical_is_idempotent() {
             parent: HObject(c.0),
             handle: HObject(c.0),
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(c),
         },
     )
     .unwrap();

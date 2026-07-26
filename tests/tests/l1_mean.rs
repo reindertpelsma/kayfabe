@@ -1864,9 +1864,12 @@ fn the_graph_driven_retire_paths_never_condemn() {
     // ---- (b) the LateMerge-absorb arm: a UVM dup folds an untouched proc into another.
     let (mut gpu, _pids, _rec) = mean_gpu();
     let compute_vas = NodeKey::new(client_of(P_WITNESS), H_VASPACE);
+    // ★ §12.27 — a USER peer's dup, which is the shape that actually merges. (A UVM
+    // dup no longer does: the session client is the guest kernel's, so its edge is a
+    // reference. `peer_dup` is the genuine-sharing edge the `LateMerge` guard is for.)
     let uvm = HClient(0xD0);
     let mut s = Scenario::new();
-    s.uvm_dup(
+    s.peer_dup(
         uvm,
         HObject(0x7000_0000),
         HObject(0x7000_0001),
@@ -1876,7 +1879,7 @@ fn the_graph_driven_retire_paths_never_condemn() {
         compute_vas,
     );
     for ev in s.events {
-        gpu.apply(ev).expect("the UVM dup applies");
+        gpu.apply(ev).expect("the peer dup applies");
     }
     assert_eq!(
         gpu.spine.condemned_len(),

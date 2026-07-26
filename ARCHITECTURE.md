@@ -62,7 +62,9 @@ is the event-level API (`Gpu::apply` + the `kayfabe-fwd` free functions).
 ```
 RmEvent (abstract protocol fact; Axis-A will decode wire → this)
   └─► RmGraph::apply         facts in, refcounted resources, parked-fact order tolerance
-        └─► project()        PURE: Proc grouping (dup-connected components),
+        └─► project()        PURE: Proc grouping (dup-connected components of
+                             DECLARED USER clients; every declared kernel client is
+                             the one reserved system component — §12.27),
                              by_pdb (GpuId,Pdb)→Vas, by_vchid (GpuId,VChid)→Channel
               └─► Gpu::apply TRANSACTIONAL: graph mutate → re-project → sync runtime
                              (rollback on any derivation fault — hostile events earn

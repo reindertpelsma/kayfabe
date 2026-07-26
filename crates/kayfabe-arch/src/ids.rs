@@ -26,8 +26,11 @@ macro_rules! id_newtype {
 id_newtype!(
     /// An RM client handle (`hClient`): a **handle namespace + access rights**.
     /// Explicitly NOT a process key — values are reused across guest processes and a
-    /// process holds several clients (compute + UVM). Grouping into a `Proc` is a
-    /// projection of the RM graph's DUP edges, never of this value.
+    /// process may hold several clients. Grouping into a `Proc` is a projection of the
+    /// RM graph's DUP edges **between declared user clients**, never of this value:
+    /// ★ §12.27, measured — the one UVM session client's handle (`0xc1d00069`) sits
+    /// numerically *between* two guest processes' clients (`0xc1d00067`/`0xc1d00068`),
+    /// so no range test and no ordering of this value can tell them apart.
     HClient(u32)
 );
 

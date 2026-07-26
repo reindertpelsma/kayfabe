@@ -320,7 +320,18 @@ handed each other object references are one process, because they share a blast 
 representative label is the minimum client handle in the component, chosen by a union-find
 that unions by minimum so that the representative *is* the label. This matters because the
 NVIDIA driver's client handles are not process keys — values are reused across processes and
-one process holds several.
+one process may hold several.
+
+★ **The edge is typed** (`l1_concurrency.md` §12.27, and it is the most invasive correction
+this core has had). A `DUP_OBJECT` groups **only when both endpoints are declared user
+clients**. The discriminator is the `processID` RM stamps on each client's own `NV01_ROOT`
+(`KERNEL_PID` for a kernel-privileged client), decoded at the ABI seam into a
+`ClientKind` — a declared fact, recorded, never inferred, and never the handle *value*.
+Every declared kernel client belongs to ONE reserved **system** component, which is the
+guest driver's: never minted, never merged, never retired, never condemned. Without this
+the measured shape of a real guest — one `nvidia_uvm` session client that *every* CUDA
+process dups into — collapses the entire guest into a single `Proc`, which is #14
+un-fixed.
 
 **Routing.** Two maps: `(GpuId, Pdb) → address space` and `(GpuId, VChid) → channel`. Note
 the key. Page directory bases and channel ids are *per-GPU* namespaces, so identical values

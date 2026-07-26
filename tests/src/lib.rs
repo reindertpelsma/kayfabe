@@ -8,10 +8,39 @@
 //! as abstract `RmEvent`s, with helpers to build the exact shapes the design docs
 //! name (a compute process, a UVM dup, two processes with identical VAs/handles).
 
+use kayfabe_arch::ClientKind;
 use kayfabe_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb};
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
 use kayfabe_mocks::{MockArch, mock_classes as mc};
 use std::sync::OnceLock;
+
+/// ★ §12.27 — the alloc facts of a **user** client root: it declares a guest process
+/// id, so it groups with other user clients through `DUP_OBJECT` (decision #14).
+///
+/// There is deliberately no `AllocFacts::default()` shortcut for a client root: the
+/// declared [`ClientKind`] is **required** (`RmGraphError::UndeclaredClientKind`), for
+/// the same reason `Scenario::compute_process_on_gpu` never emits an un-instanced
+/// `Device` — a real one cannot exist, so modelling one models a shape the protocol does
+/// not produce. The pid is derived from the client handle only so scripted scenarios get
+/// distinct, stable values; nothing groups on it.
+#[must_use]
+pub fn user_client(client: HClient) -> AllocFacts {
+    AllocFacts {
+        client_kind: Some(ClientKind::User { pid: client.0 }),
+        ..Default::default()
+    }
+}
+
+/// ★ §12.27 — the alloc facts of a **kernel** client root (UVM's one session client,
+/// RM's internal clients): `processID == KERNEL_PID`. A dup INTO one of these is a
+/// reference, never a merge, and the client itself belongs to the system component.
+#[must_use]
+pub fn kernel_client() -> AllocFacts {
+    AllocFacts {
+        client_kind: Some(ClientKind::Kernel),
+        ..Default::default()
+    }
+}
 
 /// # Slow-test gate — `KAYFABE_SLOW=1`
 ///
@@ -128,7 +157,7 @@ impl Scenario {
             parent: h.client_root,
             handle: h.client_root,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: user_client(client),
         });
         self.push(RmEvent::Alloc {
             client,
@@ -237,9 +266,15 @@ impl Scenario {
         })
     }
 
-    /// Model UVM aliasing a compute VASpace into its own client via `DUP_OBJECT`,
-    /// plus a UVM VASpace of its own (the "one Proc, several Vas" case). Returns the
-    /// UVM client's own VASpace node key.
+    /// ★ §12.27 — model **UVM** aliasing a compute VASpace into its session client via
+    /// `DUP_OBJECT`, plus a VASpace of UVM's own. The session client is a **kernel**
+    /// client, which is what it is on real hardware: `nvUvmInterfaceSessionCreate` runs
+    /// once per `nvidia_uvm` module load, so ONE client is the destination of every
+    /// guest process's dups. Returns UVM's own VASpace node key.
+    ///
+    /// This edge is therefore a **reference, not a merge**: calling it for two different
+    /// compute processes leaves them two separate `Proc`s (the measurement's shape). Use
+    /// [`Scenario::peer_dup`] when a test wants the *merging* edge.
     #[allow(clippy::too_many_arguments)]
     pub fn uvm_dup(
         &mut self,
@@ -251,17 +286,74 @@ impl Scenario {
         alias_handle: HObject,
         compute_vas: NodeKey,
     ) -> NodeKey {
+        self.dup_into(
+            kernel_client(),
+            uvm_client,
+            uvm_root,
+            uvm_dev,
+            uvm_vas,
+            uvm_pdb,
+            alias_handle,
+            compute_vas,
+        )
+    }
+
+    /// ★ §12.27 — the **merging** cross-client edge: a second *user* client dups
+    /// another user client's VASpace. That is genuine sharing between two guest
+    /// processes, so it is one blast radius = one `Proc` (decision #14), and it is the
+    /// shape the `LateMerge` guard exists for.
+    ///
+    /// Shape-identical to [`Scenario::uvm_dup`] on purpose: the ONLY difference between
+    /// a reference and a merge is the declared [`ClientKind`] of the destination client,
+    /// which is exactly the claim §12.27 makes.
+    #[allow(clippy::too_many_arguments)]
+    pub fn peer_dup(
+        &mut self,
+        peer_client: HClient,
+        peer_root: HObject,
+        peer_dev: HObject,
+        peer_vas: HObject,
+        peer_pdb: Pdb,
+        alias_handle: HObject,
+        compute_vas: NodeKey,
+    ) -> NodeKey {
+        self.dup_into(
+            user_client(peer_client),
+            peer_client,
+            peer_root,
+            peer_dev,
+            peer_vas,
+            peer_pdb,
+            alias_handle,
+            compute_vas,
+        )
+    }
+
+    /// Shared body of [`Scenario::uvm_dup`] / [`Scenario::peer_dup`]: a client with its
+    /// own device + VASpace + PDB, which then dups `compute_vas` into itself.
+    #[allow(clippy::too_many_arguments)]
+    fn dup_into(
+        &mut self,
+        root_facts: AllocFacts,
+        client: HClient,
+        root: HObject,
+        dev: HObject,
+        vas: HObject,
+        pdb: Pdb,
+        alias_handle: HObject,
+        compute_vas: NodeKey,
+    ) -> NodeKey {
         self.push(RmEvent::Alloc {
-            client: uvm_client,
-            parent: uvm_root,
-            handle: uvm_root,
+            client,
+            parent: root,
+            handle: root,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: root_facts,
         });
         self.push(RmEvent::Alloc {
-            client: uvm_client,
-            parent: uvm_root,
-            handle: uvm_dev,
+            client,
+            parent: root,
+            handle: dev,
             class: mc::DEVICE,
             facts: AllocFacts {
                 device_instance: Some(0),
@@ -269,23 +361,23 @@ impl Scenario {
             },
         });
         self.push(RmEvent::Alloc {
-            client: uvm_client,
-            parent: uvm_dev,
-            handle: uvm_vas,
+            client,
+            parent: dev,
+            handle: vas,
             class: mc::VASPACE,
             facts: AllocFacts::default(),
         });
         self.push(RmEvent::SetPageDir {
-            client: uvm_client,
-            vaspace: uvm_vas,
-            pdb: uvm_pdb,
+            client,
+            vaspace: vas,
+            pdb,
         });
-        // The cross-client transfer edge: alias the compute VASpace into UVM's client.
+        // The cross-client transfer edge: alias the compute VASpace into this client.
         self.push(RmEvent::Dup {
             src: compute_vas,
-            dst: NodeKey::new(uvm_client, alias_handle),
+            dst: NodeKey::new(client, alias_handle),
         });
-        NodeKey::new(uvm_client, uvm_vas)
+        NodeKey::new(client, vas)
     }
 }
 
@@ -341,6 +433,20 @@ pub fn client_root(client: HClient) -> RmEvent {
         parent: HObject(client.0),
         handle: HObject(client.0),
         class: mc::CLIENT,
-        facts: AllocFacts::default(),
+        facts: user_client(client),
+    }
+}
+
+/// A minimal **kernel** client-root alloc event (§12.27) — the UVM-session shape: a
+/// client every guest process dups into, which merges with nobody and belongs to the
+/// system component.
+#[must_use]
+pub fn kernel_client_root(client: HClient) -> RmEvent {
+    RmEvent::Alloc {
+        client,
+        parent: HObject(client.0),
+        handle: HObject(client.0),
+        class: mc::CLIENT,
+        facts: kernel_client(),
     }
 }

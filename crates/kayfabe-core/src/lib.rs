@@ -127,8 +127,10 @@ kayfabe_util::assert_send_sync!(
 );
 
 /// A derived guest-process identity. NOT a hardware concept ("there is no GPU
-/// process" — decision #14): purely the label of one dup-connected component of the
-/// RM graph, used to key the *grouping* planes (isolate, GPA arena, completion,
+/// process" — decision #14): purely the label of one dup-connected component of
+/// **declared user clients** in the RM graph (★ §12.27 — a dup into a *kernel* client
+/// is a reference, not a merge, and every kernel client belongs to the reserved system
+/// component), used to key the *grouping* planes (isolate, GPA arena, completion,
 /// lifecycle). Address ops key on [`kayfabe_arch::ids::Pdb`] (per-`Vas`), exec ops on
 /// [`kayfabe_arch::ids::VChid`] (per-`Channel`) — never on `ProcId`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -163,5 +165,9 @@ pub enum Traffic {
 /// The anchor of a `Proc`: the smallest client handle in its dup-connected
 /// component. A deterministic, order-independent label used to keep `Proc`
 /// state stable across graph re-derivations.
+///
+/// ★ §12.27: `HClient(0)` is RESERVED as the **system** component's anchor
+/// (`kayfabe_core::project::SYSTEM_ANCHOR`) and is refused as guest input by
+/// `RmGraph::apply`, so a user component can never carry it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ProcAnchor(pub HClient);

@@ -27,7 +27,7 @@ use kayfabe_arch::ids::GpuId;
 use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb};
-use kayfabe_arch::{Arch, ObjectKind};
+use kayfabe_arch::{Arch, ClientKind, ObjectKind};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::project::project;
@@ -115,6 +115,15 @@ fn any_event() -> impl Strategy<Value = RmEvent> {
                         mem_phys: (flags & 2 == 0).then_some(0x8000_0000 | u64::from(flags)),
                         // Single-GPU fuzz: Devices default to instance 0 (GpuId::ZERO).
                         device_instance: None,
+                        // ★ §12.27 — all three client declarations are reachable: user,
+                        // kernel (the system component), and undeclared (the
+                        // `UndeclaredClientKind` refusal). The invariants below must hold
+                        // across every mixture, including a graph with no clients at all.
+                        client_kind: match flags & 0x30 {
+                            0x00 => Some(ClientKind::User { pid: client.0 }),
+                            0x10 => Some(ClientKind::Kernel),
+                            _ => None,
+                        },
                     },
                 }
             }),
@@ -219,8 +228,11 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
         }
     }
 
-    // INV4: by_pdb / by_vchid routing anchors are all real proc anchors.
-    let anchors: BTreeSet<_> = bounds.procs.iter().map(|p| p.anchor).collect();
+    // INV4: by_pdb / by_vchid routing anchors are all real proc anchors. ★ §12.27:
+    // the SYSTEM component is a real component (the guest kernel's clients), so its
+    // reserved anchor counts — it just does not live in `bounds.procs`.
+    let mut anchors: BTreeSet<_> = bounds.procs.iter().map(|p| p.anchor).collect();
+    anchors.insert(bounds.system.anchor);
     for (anchor, _) in bounds.by_pdb.values() {
         assert!(
             anchors.contains(anchor),
@@ -242,19 +254,59 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
         .procs
         .iter()
         .flat_map(|p| p.clients.iter().map(move |c| (*c, p.anchor)))
+        .chain(
+            bounds
+                .system
+                .clients
+                .iter()
+                .map(|c| (*c, bounds.system.anchor)),
+        )
         .collect();
+    // ★ §12.27 — the predicate is now typed: a dup GROUPS only when both endpoints are
+    // declared USER clients. A dup into (or out of) a kernel client is a reference, and
+    // the two sides staying in different components is the whole point of the fix.
+    let kinds: BTreeMap<HClient, kayfabe_arch::ClientKind> = g.client_kinds().collect();
+    let is_user = |c: HClient| matches!(kinds.get(&c), Some(kayfabe_arch::ClientKind::User { .. }));
+    // Any shape OTHER than user↔user is a REFERENCE: a kernel endpoint stays in the
+    // system component no matter how many user clients dup into it (that edge is exactly
+    // the one whose merge collapsed the whole guest into one `Proc`), and an undeclared
+    // endpoint groups with nobody. Both are covered by INV6 below.
     for (dst, src) in g.dups() {
         // Only edges whose origin resolves participate in grouping.
         if g.origin_of(dst).is_some()
+            && is_user(dst.client)
+            && is_user(src.client)
             && let (Some(&da), Some(&sa)) =
                 (client_proc.get(&dst.client), client_proc.get(&src.client))
         {
             assert_eq!(
                 da, sa,
-                "a dup edge joins two DIFFERENT procs — grouping is inconsistent"
+                "a user↔user dup edge joins two DIFFERENT procs — grouping is inconsistent"
             );
         }
     }
+
+    // INV6 ★ §12.27: the system component holds exactly the declared KERNEL clients, and
+    // no user boundary holds any of them.
+    let kernel_clients: BTreeSet<HClient> = kinds
+        .iter()
+        .filter(|(_, k)| matches!(k, kayfabe_arch::ClientKind::Kernel))
+        .map(|(c, _)| *c)
+        .collect();
+    for p in &bounds.procs {
+        assert_ne!(
+            p.anchor, bounds.system.anchor,
+            "a user boundary took the system anchor"
+        );
+        assert!(
+            p.clients.is_disjoint(&kernel_clients),
+            "a kernel client leaked into a USER proc — #14 collapse"
+        );
+    }
+    assert_eq!(
+        bounds.system.clients, kernel_clients,
+        "the system component is EXACTLY the declared kernel clients — no more, no less"
+    );
 }
 
 // ---------------------------------------------------------------------------------
@@ -344,7 +396,7 @@ fn valid_fact_stream() -> impl Strategy<Value = Vec<RmEvent>> {
                 parent: root,
                 handle: root,
                 class: mc::CLIENT,
-                facts: AllocFacts::default(),
+                facts: kayfabe_tests::user_client(client),
             });
             events.push(RmEvent::Alloc {
                 client,
@@ -549,7 +601,10 @@ fn refcount_stream() -> impl Strategy<Value = Vec<(bool, RmEvent)>> {
                             parent: handle,
                             handle,
                             class,
-                            facts: AllocFacts::default(),
+                            // ★ §12.27 — a client root must declare its kind; the other
+                            // classes ignore the field, so declaring it unconditionally
+                            // keeps the generator's shape (a fresh object of ANY class).
+                            facts: kayfabe_tests::user_client(client),
                         },
                     )
                 }
@@ -617,9 +672,17 @@ impl RefTracker {
                 if self.handle_to_origin.contains_key(&k) || self.pending.contains_key(&k) {
                     return;
                 }
+                let is_client = matches!(arch.classify(class), ObjectKind::Client);
+                // ★ §12.27 — mirror the graph's one-root-per-namespace refusal: a second
+                // client root inside one namespace is a `DuplicateClientRoot`, rejected,
+                // changes nothing. (In RM the `hClient` IS its root's handle, so two
+                // roots in one namespace cannot exist.)
+                if is_client && self.client_roots.iter().any(|r| r.0 == client) {
+                    return;
+                }
                 // Fresh alloc handle by construction → a fresh resource.
                 self.handle_to_origin.insert(k, k);
-                if matches!(arch.classify(class), ObjectKind::Client) {
+                if is_client {
                     self.client_roots.insert(k);
                 }
                 // Promote any parked dup whose source just appeared (fixpoint).

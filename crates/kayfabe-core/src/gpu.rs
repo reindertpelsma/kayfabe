@@ -23,7 +23,7 @@ use kayfabe_mmu::{AddressFault, AddressTable};
 use kayfabe_util::Instant;
 
 use crate::gpa::{GpaArena, GpaBlock, GpaError, GpaSpace};
-use crate::project::{Boundaries, ProjectionError, project};
+use crate::project::{Boundaries, ProcBoundary, ProjectionError, SYSTEM_ANCHOR, project};
 use crate::reactor::SourceRegistry;
 use crate::rmgraph::{NodeKey, RmEvent, RmGraph, RmGraphError};
 use crate::{ChanId, ProcAnchor, ProcId};
@@ -278,10 +278,12 @@ pub struct Proc {
     pub id: ProcId,
     /// Deterministic component label (smallest client handle).
     pub anchor: ProcAnchor,
-    /// Clients in this proc's dup-connected component.
+    /// Clients in this proc's dup-connected component (★ §12.27: declared **user**
+    /// clients only, joined by user↔user dups — except on `Gpu::system`, whose set is
+    /// every declared **kernel** client, joined by rule rather than by dup).
     pub clients: BTreeSet<HClient>,
     /// ★ The address plane: one [`Vas`] per declared **`(GpuId, Pdb)`** (MG-4). A proc
-    /// holds several (compute + UVM, and — spanning GPUs — per target); address ops
+    /// holds several (several VASpaces, and — spanning GPUs — per target); address ops
     /// key on `(GpuId, Pdb)` because a `Pdb` is a per-GPU namespace (two GPUs legally
     /// present identical PDB values).
     pub vases: BTreeMap<(GpuId, Pdb), Vas>,
@@ -713,10 +715,15 @@ struct RefreshPlan {
     /// `None` = a condemned boundary (it gets nothing). `Some(v)` = the live procs
     /// whose clients intersect it, ascending: `v[0]` survives a merge, `v[1..]` are
     /// absorbed, empty = mint a fresh proc.
+    /// One entry per **user** boundary.
     matches: Vec<Option<Vec<ProcId>>>,
-    /// Every GPU target that boundary's proc spans.
+    /// Every GPU target that boundary's proc spans. ★ §12.27: length is
+    /// `bounds.procs.len() + 1` — the LAST entry is the **system** component, which has
+    /// no `matches` entry (it is never matched, merged, minted or condemned) but spans
+    /// targets and needs arenas exactly like a user proc.
     spans: Vec<BTreeSet<GpuId>>,
-    /// Arenas carved for the spanned targets its proc does not already hold.
+    /// Arenas carved for the spanned targets its proc does not already hold. Same
+    /// length and same last-entry-is-system convention as [`Self::spans`].
     arenas: Vec<BTreeMap<GpuId, GpaArena>>,
     /// Targets minted for this refresh (already carved from), ready to install.
     new_targets: BTreeMap<GpuId, GpuTarget>,
@@ -845,7 +852,8 @@ impl Spine {
                 // projected cleanly before this event (every prior apply upheld the
                 // same invariant, inductively), so re-derivation cannot fault.
                 self.rmgraph = snapshot;
-                self.refresh(procs).expect("last-good graph re-projects");
+                self.refresh(system, procs)
+                    .expect("last-good graph re-projects");
                 self.sync_rpc_mappings(system, procs)
                     .expect("last-good graph re-syncs");
                 Err(e)
@@ -863,7 +871,7 @@ impl Spine {
         ev: RmEvent,
     ) -> Result<(), GpuError> {
         self.rmgraph.apply(self.arch.as_ref(), ev)?;
-        self.refresh(procs)?;
+        self.refresh(system, procs)?;
         // Forward-populate the address table from the RPC map source (co-equal with
         // the CE-PT-write capture source — `mode2_address_table.md`). Bindings track
         // the graph's live mappings; unmap eagerly depopulates.
@@ -953,6 +961,90 @@ impl Spine {
         Ok(())
     }
 
+    /// ★ Sync ONE `Proc`'s derived fields to its boundary — the *only* place a
+    /// projection becomes runtime `Proc` state, shared by the user procs (step 2) and by
+    /// the system proc (step 2s, §12.27). Extracted rather than duplicated because the
+    /// guest kernel's channels must materialize by exactly the same rules as a guest
+    /// process's: a second copy is how the two drift.
+    fn sync_proc_to_boundary(p: &mut Proc, b: &ProcBoundary) {
+        p.anchor = b.anchor;
+        p.clients = b.clients.clone();
+        p.anchor = b.anchor;
+        p.clients = b.clients.clone();
+        // Vases: create for newly-declared (GpuId, PDB); drop ones no longer
+        // derived. Only vases with a resolvable target AND a declared PDB become
+        // runtime `Vas`es (an unroutable one defers — MISS at use, never guessed).
+        let live_keys: BTreeSet<(GpuId, Pdb)> = b
+            .vases
+            .values()
+            .filter_map(|f| Some((f.gpu?, f.pdb?)))
+            .collect();
+        for (&origin, facts) in &b.vases {
+            if let (Some(gpu), Some(pdb)) = (facts.gpu, facts.pdb) {
+                p.vases
+                    .entry((gpu, pdb))
+                    .or_insert_with(|| Vas::new(gpu, pdb, origin));
+            }
+        }
+        p.vases.retain(|key, _| live_keys.contains(key));
+        // Channels: stable ChanId per node key. A channel whose GPU target does
+        // not resolve is NOT materialized (the same deferral as the Vas pattern
+        // above): it enters no routing map, so a runtime `Channel` would be inert
+        // — and tagging it `GpuId::ZERO` would be a default-target guess (the
+        // no-GPU0-guess doctrine). Its ChanId is still minted, so its slot is
+        // stable for when the Device fact lands and it materializes.
+        for (&key, facts) in &b.channels {
+            let cid = *p.chan_ids.entry(key).or_insert_with(|| {
+                let c = ChanId(p.next_chan);
+                p.next_chan += 1;
+                c
+            });
+            let Some(gpu) = facts.gpu else {
+                continue; // Unroutable (yet) — deferred, never guessed onto GPU0.
+            };
+            let entry = p.channels.entry(cid).or_insert_with(|| Channel {
+                id: cid,
+                key,
+                gpu,
+                vchid: facts.vchid,
+                vas_pdb: facts.vas_pdb,
+                engine: facts.engine,
+                host_channel: None,
+                host_token: None,
+                host_engine_objects: BTreeMap::new(),
+            });
+            entry.gpu = gpu;
+            entry.vchid = facts.vchid;
+            entry.vas_pdb = facts.vas_pdb;
+            entry.engine = facts.engine;
+        }
+        let live_chans: BTreeSet<NodeKey> = b.channels.keys().copied().collect();
+        p.chan_ids.retain(|key, _| live_chans.contains(key));
+        let live_cids: BTreeSet<ChanId> = p.chan_ids.values().copied().collect();
+        p.channels.retain(|cid, _| live_cids.contains(cid));
+        p.exec.scheduled.retain(|cid| live_cids.contains(cid));
+    }
+
+    /// Which GPU targets one boundary's proc spans: the targets of its routable VASes
+    /// and of its routable channels. A pure read of the projection (never of what a
+    /// previous refresh accreted), shared by the user boundaries and the system one.
+    fn span_of(b: &ProcBoundary, bounds: &Boundaries) -> BTreeSet<GpuId> {
+        let mut s: BTreeSet<GpuId> = BTreeSet::new();
+        for f in b.vases.values() {
+            if let (Some(gpu), Some(_pdb)) = (f.gpu, f.pdb) {
+                s.insert(gpu);
+            }
+        }
+        for f in b.channels.values() {
+            if let Some(gpu) = f.gpu
+                && bounds.by_vchid.contains_key(&(gpu, f.vchid))
+            {
+                s.insert(gpu);
+            }
+        }
+        s
+    }
+
     /// ★ **The decision half of [`Spine::refresh`]** — everything the mutation pass
     /// could have refused, settled from `bounds` + current state BEFORE a single
     /// `Proc` is touched (`l1_concurrency.md` §12.18).
@@ -981,6 +1073,7 @@ impl Spine {
     /// the free list's LIFO order differs, which no invariant names).
     fn plan_refresh(
         &mut self,
+        system: &Proc,
         procs: &mut impl ProcSet,
         bounds: &Boundaries,
         condemned_bound: &[Option<ProcAnchor>],
@@ -1047,24 +1140,14 @@ impl Spine {
         //     surviving proc does not already hold an arena for. Derived from the
         //     projection (the same facts step 3b read off the synced procs), so it is
         //     a function of the graph and not of what a previous refresh accreted.
-        let mut spans: Vec<BTreeSet<GpuId>> = Vec::with_capacity(n);
-        let mut held: Vec<BTreeSet<GpuId>> = Vec::with_capacity(n);
+        let mut spans: Vec<BTreeSet<GpuId>> = Vec::with_capacity(n + 1);
+        let mut held: Vec<BTreeSet<GpuId>> = Vec::with_capacity(n + 1);
         for (b, m) in bounds.procs.iter().zip(&matches) {
-            let mut s: BTreeSet<GpuId> = BTreeSet::new();
-            if m.is_some() {
-                for f in b.vases.values() {
-                    if let (Some(gpu), Some(_pdb)) = (f.gpu, f.pdb) {
-                        s.insert(gpu);
-                    }
-                }
-                for f in b.channels.values() {
-                    if let Some(gpu) = f.gpu
-                        && bounds.by_vchid.contains_key(&(gpu, f.vchid))
-                    {
-                        s.insert(gpu);
-                    }
-                }
-            }
+            let s = if m.is_some() {
+                Self::span_of(b, bounds)
+            } else {
+                BTreeSet::new()
+            };
             let h: BTreeSet<GpuId> = m
                 .as_ref()
                 .and_then(|v| v.first())
@@ -1081,6 +1164,14 @@ impl Spine {
             spans.push(s);
             held.push(h);
         }
+        // ★ §12.27 — the SYSTEM component rides the same planning, at index `n`. It is
+        // never matched, merged, condemned or minted (it *is* `Gpu::system`), so it has
+        // no `matches` entry — but the guest kernel's own VASpaces and channels give it
+        // a target span exactly like a user proc's, and its arenas must be carved in the
+        // same all-or-nothing pass or a GPA exhaustion on a kernel object would fault
+        // half-way through the mutation (§12.18).
+        spans.push(Self::span_of(&bounds.system, bounds));
+        held.push(system.arenas.keys().copied().collect());
 
         // (c) MG-6 homogeneity, over every target that will be touched. (A target
         //     minted below carries the device's own arch by construction, so only
@@ -1125,9 +1216,10 @@ impl Spine {
         }
 
         // (e) Carve every arena the mutation pass will hand out.
-        let mut arenas: Vec<BTreeMap<GpuId, GpaArena>> = (0..n).map(|_| BTreeMap::new()).collect();
+        let mut arenas: Vec<BTreeMap<GpuId, GpaArena>> =
+            (0..spans.len()).map(|_| BTreeMap::new()).collect();
         let mut failed: Option<GpaError> = None;
-        'carve: for i in 0..n {
+        'carve: for i in 0..spans.len() {
             for &gpu in &spans[i] {
                 if held[i].contains(&gpu) {
                     continue;
@@ -1175,7 +1267,7 @@ impl Spine {
     ///
     /// ★ **Every refusal is hoisted into [`Spine::plan_refresh`]** (§12.18): after the
     /// plan is taken, nothing below can fail, so a refused event disturbs no `Proc`.
-    fn refresh(&mut self, procs: &mut impl ProcSet) -> Result<(), GpuError> {
+    fn refresh(&mut self, system: &mut Proc, procs: &mut impl ProcSet) -> Result<(), GpuError> {
         let bounds: Boundaries = project(&self.rmgraph, self.arch.as_ref())?;
 
         // 0. ★ THE CONDEMNATION PASS (§12.13) — re-derive the condemned client sets
@@ -1279,7 +1371,7 @@ impl Spine {
         // 0b. ★ §12.18 — DECIDE EVERYTHING REFUSABLE FIRST. From here down there is no
         //     `?` and no early return: the mutation below cannot fail, so a refused
         //     event leaves every other `Proc` byte-for-byte as it was.
-        let mut plan = self.plan_refresh(procs, &bounds, &condemned_bound)?;
+        let mut plan = self.plan_refresh(system, procs, &bounds, &condemned_bound)?;
 
         // 1. Match each boundary to existing procs by client intersection (decided in
         //    the plan — a condemned boundary is `None` and gets NOTHING: no `Proc`, no
@@ -1322,62 +1414,20 @@ impl Spine {
             boundary_pid.push(Some(pid));
 
             // 2. Sync the proc's derived fields to the boundary.
-            let p = procs.get_mut(pid).expect("live proc exists");
-            p.anchor = b.anchor;
-            p.clients = b.clients.clone();
-            // Vases: create for newly-declared (GpuId, PDB); drop ones no longer
-            // derived. Only vases with a resolvable target AND a declared PDB become
-            // runtime `Vas`es (an unroutable one defers — MISS at use, never guessed).
-            let live_keys: BTreeSet<(GpuId, Pdb)> = b
-                .vases
-                .values()
-                .filter_map(|f| Some((f.gpu?, f.pdb?)))
-                .collect();
-            for (&origin, facts) in &b.vases {
-                if let (Some(gpu), Some(pdb)) = (facts.gpu, facts.pdb) {
-                    p.vases
-                        .entry((gpu, pdb))
-                        .or_insert_with(|| Vas::new(gpu, pdb, origin));
-                }
-            }
-            p.vases.retain(|key, _| live_keys.contains(key));
-            // Channels: stable ChanId per node key. A channel whose GPU target does
-            // not resolve is NOT materialized (the same deferral as the Vas pattern
-            // above): it enters no routing map, so a runtime `Channel` would be inert
-            // — and tagging it `GpuId::ZERO` would be a default-target guess (the
-            // no-GPU0-guess doctrine). Its ChanId is still minted, so its slot is
-            // stable for when the Device fact lands and it materializes.
-            for (&key, facts) in &b.channels {
-                let cid = *p.chan_ids.entry(key).or_insert_with(|| {
-                    let c = ChanId(p.next_chan);
-                    p.next_chan += 1;
-                    c
-                });
-                let Some(gpu) = facts.gpu else {
-                    continue; // Unroutable (yet) — deferred, never guessed onto GPU0.
-                };
-                let entry = p.channels.entry(cid).or_insert_with(|| Channel {
-                    id: cid,
-                    key,
-                    gpu,
-                    vchid: facts.vchid,
-                    vas_pdb: facts.vas_pdb,
-                    engine: facts.engine,
-                    host_channel: None,
-                    host_token: None,
-                    host_engine_objects: BTreeMap::new(),
-                });
-                entry.gpu = gpu;
-                entry.vchid = facts.vchid;
-                entry.vas_pdb = facts.vas_pdb;
-                entry.engine = facts.engine;
-            }
-            let live_chans: BTreeSet<NodeKey> = b.channels.keys().copied().collect();
-            p.chan_ids.retain(|key, _| live_chans.contains(key));
-            let live_cids: BTreeSet<ChanId> = p.chan_ids.values().copied().collect();
-            p.channels.retain(|cid, _| live_cids.contains(cid));
-            p.exec.scheduled.retain(|cid| live_cids.contains(cid));
+            Self::sync_proc_to_boundary(procs.get_mut(pid).expect("live proc exists"), b);
         }
+
+        // 2s. ★ §12.27 — sync the SYSTEM proc to the system component (every declared
+        //     kernel client: UVM's session, RM's internal clients). Deliberately outside
+        //     the loop above and outside `live`, because every lifecycle verb that loop
+        //     performs is one the system proc must never be subject to: it is not minted
+        //     (it exists from realize), not matched or merged (its membership is the
+        //     declared `ClientKind`, not a client intersection), not retired by step 3,
+        //     and not condemnable (§12.26 — condemning the guest driver's own component
+        //     is device-fatal by definition). What it DOES get is identical: the same
+        //     `sync_proc_to_boundary`, so a guest-kernel channel materializes by exactly
+        //     the same rules as a guest process's.
+        Self::sync_proc_to_boundary(system, &bounds.system);
 
         // 3. Retire procs whose component vanished (client root freed).
         let dead: Vec<ProcId> = procs
@@ -1422,6 +1472,27 @@ impl Spine {
                 p.targets.insert(gpu);
             }
         }
+        // ★ §12.27 — and the system proc's own targets, from the plan's last entry.
+        // Same law (MG-5: one isolate + one arena per (Proc, GpuId)), same infallible
+        // installation — the guest kernel's objects live on real targets too.
+        {
+            let mut carved = core::mem::take(plan.arenas.last_mut().expect("system entry"));
+            let span = plan.spans.last().expect("system entry").clone();
+            let isolates = &mut self.isolates;
+            for gpu in span {
+                system.isolates.entry(gpu).or_insert_with(|| {
+                    IsolateBox::new(isolates.spawn(IsolateId(Gpu::SYSTEM_PROC.0), gpu))
+                });
+                if let Some(arena) = carved.remove(&gpu) {
+                    let prev = system.arenas.insert(gpu, arena);
+                    debug_assert!(
+                        prev.is_none(),
+                        "the plan carves only for targets the proc does not hold"
+                    );
+                }
+                system.targets.insert(gpu);
+            }
+        }
 
         // 4. Rebuild routing maps from the projection (never accreted). Keyed on the
         // target (MG-3): a `Pdb`/`VChid` is a per-GPU namespace. ★ §12.13: a key whose
@@ -1434,15 +1505,26 @@ impl Spine {
         self.condemned_by_vchid.clear();
         let anchor_to_pid: BTreeMap<ProcAnchor, ProcId> =
             procs.iter_mut().map(|(id, p)| (p.anchor, id)).collect();
+        // ★ §12.27: `SYSTEM_ANCHOR` resolves to the system proc *by name*, and it can
+        // never collide with a user component's anchor because `RmGraph::apply` refuses
+        // `RESERVED_CLIENT` as guest input. A guest-kernel PDB therefore routes — to the
+        // proc whose data plane `plan_publish` refuses (§12.26), which is a named
+        // refusal instead of an anonymous `UnknownPdb`.
         for (&(gpu, pdb), &(anchor, _)) in &bounds.by_pdb {
-            if let Some(&pid) = anchor_to_pid.get(&anchor) {
+            if anchor == SYSTEM_ANCHOR {
+                self.by_pdb.insert((gpu, pdb), Gpu::SYSTEM_PROC);
+            } else if let Some(&pid) = anchor_to_pid.get(&anchor) {
                 self.by_pdb.insert((gpu, pdb), pid);
             } else if condemned_anchors.contains(&anchor) {
                 self.condemned_by_pdb.insert((gpu, pdb), anchor);
             }
         }
         for (&(gpu, vchid), &(anchor, key)) in &bounds.by_vchid {
-            if let Some(&pid) = anchor_to_pid.get(&anchor) {
+            if anchor == SYSTEM_ANCHOR {
+                if let Some(&cid) = system.chan_ids.get(&key) {
+                    self.by_vchid.insert((gpu, vchid), (Gpu::SYSTEM_PROC, cid));
+                }
+            } else if let Some(&pid) = anchor_to_pid.get(&anchor) {
                 if let Some(&cid) = procs
                     .get_mut(pid)
                     .expect("anchored proc lives")

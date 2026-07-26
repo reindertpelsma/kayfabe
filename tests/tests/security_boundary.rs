@@ -39,6 +39,7 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use kayfabe_arch::ClientKind;
 use kayfabe_arch::ids::GpuId;
 use kayfabe_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::{
@@ -162,6 +163,16 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
                     userd_flags: MockArch::userd_flags_for(VChid(0x900 + (flags & 0xff) as u16)),
                     mem_phys: (flags & 2 == 0).then_some(0x8000_0000 | u64::from(flags)),
                     device_instance: None,
+                    // ★ §12.27 — A gets to try ALL THREE client declarations, including
+                    // claiming **kernel** privilege (which only a compromised guest
+                    // *kernel* could really do — see the access-model split) and
+                    // declaring nothing at all (the `UndeclaredClientKind` refusal). B's
+                    // isolation must hold against every one of them.
+                    client_kind: match flags & 0x30 {
+                        0x00 => Some(ClientKind::User { pid: client.0 }),
+                        0x10 => Some(ClientKind::Kernel),
+                        _ => None,
+                    },
                 },
             }),
         (a_client(), a_handle(), a_handle(), a_va()).prop_map(|(client, vaspace, memory, va)| {
@@ -311,7 +322,7 @@ fn b1_projection_collision_is_contained_not_a_device_wedge() {
         parent: HObject(c.0),
         handle: HObject(c.0),
         class: mc::CLIENT,
-        facts: AllocFacts::default(),
+        facts: kayfabe_tests::user_client(c),
     };
     gpu.apply(root(a)).unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -390,7 +401,7 @@ fn b1_vchid_collision_is_a_loud_contained_projection_fault() {
         parent: HObject(a.0),
         handle: HObject(a.0),
         class: mc::CLIENT,
-        facts: AllocFacts::default(),
+        facts: kayfabe_tests::user_client(a),
     })
     .unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -494,7 +505,7 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
         parent: a_root,
         handle: a_root,
         class: mc::CLIENT,
-        facts: AllocFacts::default(),
+        facts: kayfabe_tests::user_client(A_CLIENT),
     })
     .unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -650,7 +661,7 @@ fn b2_handle_flood_is_capped_loud() {
             parent: HObject(c.0),
             handle: HObject(c.0),
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(c),
         };
         if let Err(RmGraphError::CapacityExceeded(Capacity::Handles)) = g.apply(&arch, ev) {
             faulted_at = Some(i);
@@ -731,7 +742,7 @@ fn b2_mapping_flood_is_capped_loud() {
             parent: HObject(c.0),
             handle: HObject(c.0),
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(c),
         },
     )
     .unwrap();
@@ -949,7 +960,7 @@ fn b5_channel_naming_non_vaspace_handle_does_not_bind() {
             parent: HObject(c.0),
             handle: HObject(c.0),
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(c),
         },
     )
     .unwrap();
@@ -1047,7 +1058,7 @@ fn b5_channel_cannot_bind_another_clients_vaspace_handle() {
         parent: a_root,
         handle: a_root,
         class: mc::CLIENT,
-        facts: AllocFacts::default(),
+        facts: kayfabe_tests::user_client(A_CLIENT),
     })
     .unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -1181,7 +1192,7 @@ fn b6_gpa_window_exhaustion_is_graceful() {
                 parent: root,
                 handle: root,
                 class: mc::CLIENT,
-                facts: AllocFacts::default(),
+                facts: kayfabe_tests::user_client(c),
             },
             RmEvent::Alloc {
                 client: c,
@@ -1260,7 +1271,7 @@ fn b6_graph_usable_after_capacity_refusal() {
             parent: HObject(keep.0),
             handle: HObject(keep.0),
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(keep),
         },
     )
     .unwrap();

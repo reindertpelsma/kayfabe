@@ -15,7 +15,34 @@
 //! Not implemented this milestone by design: the first milestone is the pure-logic
 //! core, which must be provably independent of everything that will live here.
 
+use kayfabe_arch::ClientKind;
 use kayfabe_arch::ids::ClassId;
+
+/// `KERNEL_PID` — the reserved `processID` RM stamps on a **kernel-privileged** client's
+/// `NV01_ROOT` alloc params (`ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:67-77`:
+/// `privLevel >= RS_PRIV_LEVEL_KERNEL → processID = KERNEL_PID`, else the client's own
+/// `ProcID`).
+///
+/// This is an NVIDIA wire constant, so per the quarantine rule (decision #2) it exists
+/// **only in this crate**; the logic crates speak [`ClientKind`].
+const KERNEL_PID: u32 = 0xFFFF_FFFF;
+
+/// Decode a declared `processID` from `NV0000_ALLOC_PARAMETERS` into the abstract
+/// [`ClientKind`] the core groups on (`l1_concurrency.md` §12.27).
+///
+/// This is the whole wire→domain translation for decision #14's grouping rule, and it is
+/// deliberately one total function of one declared field: no handle-range test, no
+/// `processName` sniffing, no dup-graph inference. Measured shape (RTX 3060 / 580.159.04):
+/// the two concurrent CUDA processes' clients declared their own pids, while the single
+/// UVM session client and every other RM-internal client declared [`KERNEL_PID`].
+#[must_use]
+pub fn client_kind_from_process_id(process_id: u32) -> ClientKind {
+    if process_id == KERNEL_PID {
+        ClientKind::Kernel
+    } else {
+        ClientKind::User { pid: process_id }
+    }
+}
 
 /// A guest driver version, as detected/advertised at device realize.
 /// (Values are data, not code: one generated module per version.)
@@ -51,3 +78,32 @@ pub trait DriverAbi: Send + Sync {
 
 // The concurrency contract, compile-time-asserted (decision #17).
 kayfabe_util::assert_send_sync!(DriverVersion, dyn DriverAbi);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The `KERNEL_PID` sentinel is the ONLY thing that makes a client kernel-privileged,
+    /// and every other value — including the numerically adjacent ones and the handle-like
+    /// values that seeded the old mis-reading — is a user pid. Kills the `==`→`!=`,
+    /// `==`→`>=` and constant mutants in one predicate.
+    #[test]
+    fn only_the_kernel_sentinel_decodes_to_a_kernel_client() {
+        assert_eq!(client_kind_from_process_id(0xFFFF_FFFF), ClientKind::Kernel);
+        for pid in [
+            0u32,
+            1,
+            0x0000_dd13, // process A, measured
+            0x0000_dd14, // process B, measured
+            0xFFFF_FFFE, // adjacent below the sentinel
+            0x7FFF_FFFF, // sign-bit boundary
+            0xc1d0_0069, // ★ the UVM session's HANDLE — not its processID
+        ] {
+            assert_eq!(
+                client_kind_from_process_id(pid),
+                ClientKind::User { pid },
+                "processID {pid:#x} declares a user client",
+            );
+        }
+    }
+}

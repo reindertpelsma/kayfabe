@@ -289,7 +289,7 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
             parent: root,
             handle: root,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(c),
         },
         // ONE device (GPU0), TWO VASpaces that will claim the SAME PDB.
         RmEvent::Alloc {
@@ -359,7 +359,7 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
             parent: droot,
             handle: droot,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(d),
         },
         RmEvent::Alloc {
             client: d,

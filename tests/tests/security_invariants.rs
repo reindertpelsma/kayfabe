@@ -428,8 +428,8 @@ proptest! {
         // Seed each client with its root; handle table tracks (client, handle) nodes.
         let c1_root = HObject(0xC1_0000);
         let c2_root = HObject(0xC2_0000);
-        g.apply(&arch, RmEvent::Alloc { client: C1, parent: c1_root, handle: c1_root, class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
-        g.apply(&arch, RmEvent::Alloc { client: C2, parent: c2_root, handle: c2_root, class: mc::CLIENT, facts: AllocFacts::default() }).unwrap();
+        g.apply(&arch, RmEvent::Alloc { client: C1, parent: c1_root, handle: c1_root, class: mc::CLIENT, facts: kayfabe_tests::user_client(C1) }).unwrap();
+        g.apply(&arch, RmEvent::Alloc { client: C2, parent: c2_root, handle: c2_root, class: mc::CLIENT, facts: kayfabe_tests::user_client(C2) }).unwrap();
         let mut nodes: Vec<NodeKey> = vec![NodeKey::new(C1, c1_root), NodeKey::new(C2, c2_root)];
         let mut next_handle = 1u32;
 
@@ -691,7 +691,7 @@ fn one_of_each_kind() -> (
         facts,
     };
     for e in [
-        al(c, root, root, mc::CLIENT, AllocFacts::default()),
+        al(c, root, root, mc::CLIENT, kayfabe_tests::user_client(c)),
         al(c, root, dev, mc::DEVICE, AllocFacts::default()),
         al(c, dev, vas, mc::VASPACE, AllocFacts::default()),
         al(c, dev, tsg, mc::TSG, AllocFacts::default()),
@@ -792,7 +792,7 @@ fn p3_channel_vas_resolution_type_checks_every_hop() {
             parent: root,
             handle: root,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(c),
         },
         RmEvent::Alloc {
             client: c,
@@ -891,7 +891,7 @@ fn p4_map_naming_a_non_memory_object_is_a_loud_unbacked_fault_not_a_silent_bind(
             parent: root,
             handle: root,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(c),
         },
         RmEvent::Alloc {
             client: c,
@@ -1008,7 +1008,7 @@ fn p4_parked_setpagedir_via_dup_alias_cannot_wedge_the_device() {
         parent: root,
         handle: root,
         class: mc::CLIENT,
-        facts: AllocFacts::default(),
+        facts: kayfabe_tests::user_client(a),
     })
     .unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -1106,7 +1106,7 @@ fn p4_parked_unbacked_map_via_dup_alias_cannot_wedge_the_device() {
             parent: root,
             handle: root,
             class: mc::CLIENT,
-            facts: AllocFacts::default(),
+            facts: kayfabe_tests::user_client(a),
         },
         RmEvent::Alloc {
             client: a,

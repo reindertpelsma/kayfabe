@@ -398,7 +398,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
                 parent: HObject(0x5c00_0000),
                 handle: HObject(0x5c00_0000),
                 class: mc::CLIENT,
-                facts: AllocFacts::default(),
+                facts: kayfabe_tests::user_client(COMPUTE),
             },
         )
         .unwrap();
@@ -443,7 +443,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
                 parent: HObject(0x9000_0000),
                 handle: HObject(0x9000_0000),
                 class: mc::CLIENT,
-                facts: AllocFacts::default(),
+                facts: kayfabe_tests::user_client(UVM),
             },
         )
         .unwrap();

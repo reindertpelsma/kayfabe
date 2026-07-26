@@ -44,6 +44,51 @@ pub mod ids;
 
 use ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
 
+/// ★ **The privilege a client root DECLARES about itself** — the discriminator that
+/// decides whether a client belongs to a guest *process* or to the guest *kernel*
+/// (decision #14's grouping rule; `l1_concurrency.md` §12.27).
+///
+/// RM stamps this on the client's own `NV01_ROOT` alloc, at creation time and before
+/// any `DUP_OBJECT` can happen: the alloc params carry a `processID` which is the
+/// creating client's `ProcID` for a user-privileged client and a reserved
+/// kernel sentinel when `privLevel >= RS_PRIV_LEVEL_KERNEL`
+/// (`ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:67-77`, driven from
+/// `.../gpu/device.c:179-186`). It is therefore a **declared protocol fact**, recorded
+/// here and never re-derived — the house rule that §12.25's bug came from breaking.
+///
+/// ★ The three things this is deliberately NOT (all measured on an RTX 3060 / 580.159.04,
+/// `l1_concurrency.md` §12.27):
+/// - **Not the handle value.** UVM's session client `0xc1d00069` sits numerically
+///   *between* two user clients `0xc1d00067`/`0xc1d00068`, sharing
+///   `RS_CLIENT_HANDLE_BASE`. `RS_CLIENT_INTERNAL_HANDLE_BASE` (`0xC1E00000`) exists and
+///   other kernel clients do use it — UVM's session does not. Keying on the range would
+///   mis-file the single most important kernel client in the system.
+/// - **Not the process name.** `processName` was empty in every observed record.
+/// - **Not an inference from the dup graph.** The dups are what the classification
+///   *decides about*; deriving it from them would be circular (and is exactly the
+///   collapse this type exists to prevent).
+///
+/// The numeric sentinel itself is an NVIDIA constant and lives, per the quarantine rule
+/// (decision #2), only in `kayfabe-abi` (`kayfabe_abi::client_kind_from_process_id`).
+/// Everything above the ABI seam speaks this abstract type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ClientKind {
+    /// A **user**-privileged client: it declared a real guest process id. Two user
+    /// clients are the same `Proc` only if a `DUP_OBJECT` joins them — genuine
+    /// sharing, hence one blast radius (decision #14).
+    User {
+        /// The guest process id the client declared. Recorded because it is the fact
+        /// that was declared; grouping deliberately does **not** key on it (sharing,
+        /// not co-residency, is what makes one blast radius).
+        pid: u32,
+    },
+    /// A **kernel**-privileged client: RM-internal, owned by the guest *driver*, not by
+    /// any one guest process. There is exactly one UVM session client per
+    /// `nvidia_uvm` module load and every CUDA process in the guest dups into it, so a
+    /// dup *into* one of these is a **reference**, never a merge.
+    Kernel,
+}
+
 /// What kind of RM object a class ID denotes, as far as the *core* needs to know.
 ///
 /// This is the output of [`Arch::classify`] — the graph *shape* is core/invariant

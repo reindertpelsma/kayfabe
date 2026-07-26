@@ -802,7 +802,12 @@ fn g7_the_reap_routes_each_arena_home_and_orphans_nothing() {
         &[GpuId::ZERO, GPU1],
     )
     .expect("realizes");
-    let root = HObject(CLIENT.0);
+    // ★ §12.27 — ONE client namespace has exactly ONE root, so the two subgraphs below
+    // (the same client spanning GPU0 and GPU1) must name the SAME client-root handle;
+    // the second `compute_process_on_gpu` then re-sends it idempotently. Naming a second
+    // root handle here is a `DuplicateClientRoot`, which is what a real `hClient` — the
+    // handle of its own root object — makes impossible.
+    let root = identical_handles(GR.0, CE.0).client_root;
 
     let mut s = Scenario::new();
     s.compute_process_on_gpu(CLIENT, PDB, identical_handles(GR.0, CE.0), Some(0));
@@ -1112,8 +1117,10 @@ fn g6_no_live_binding_ever_points_outside_its_own_procs_arena() {
     let mut s = Scenario::new();
     let a_vas = s.compute_process_on_gpu(CLIENT, PDB, ha, None);
     // ★ The dup arrives BEFORE either side touches its data plane (the early-arm
-    // discipline, L9), so A and the UVM client are ONE proc with ONE arena.
-    s.uvm_dup(
+    // discipline, L9), so A and the peer client are ONE proc with ONE arena. ★ §12.27:
+    // this must be a USER↔USER dup — genuine sharing is what merges. A dup into the
+    // guest kernel's UVM session is a reference and would leave two procs.
+    s.peer_dup(
         UVM,
         HObject(UVM.0),
         HObject(0x6c00_0001),

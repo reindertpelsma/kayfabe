@@ -252,7 +252,21 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
     let mut fences_armed = BTreeMap::new();
     let mut completion_outstanding = BTreeMap::new();
 
-    for p in gpu.procs.values() {
+    // ★ §12.27 — the SYSTEM proc is part of the observable end-state now that the
+    // guest *kernel*'s clients (UVM's session) form their own component. It is a field
+    // rather than a `ProcSet` entry, so it has to be chained in explicitly; leaving it
+    // out would let a kernel-owned VAS or channel differ between two orderings unnoticed.
+    let all_procs = || gpu.procs.values().chain(std::iter::once(&gpu.system));
+    // Resolve a routed `ProcId` (which may be `Gpu::SYSTEM_PROC`) to its `Proc`.
+    let proc_of = |pid: &kayfabe_core::ProcId| -> &kayfabe_core::gpu::Proc {
+        if *pid == Gpu::SYSTEM_PROC {
+            &gpu.system
+        } else {
+            gpu.procs.get(pid).expect("routed proc lives")
+        }
+    };
+
+    for p in all_procs() {
         let anchor = p.anchor;
         procs.insert(anchor, p.clients.clone());
 
@@ -293,11 +307,11 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
     // Canonicalize routing off the minted ProcId onto the stable anchor.
     let mut by_pdb = BTreeMap::new();
     for (pdb, pid) in &gpu.spine.by_pdb {
-        by_pdb.insert(*pdb, gpu.procs.get(pid).expect("routed proc lives").anchor);
+        by_pdb.insert(*pdb, proc_of(pid).anchor);
     }
     let mut by_vchid = BTreeMap::new();
     for (vchid, (pid, cid)) in &gpu.spine.by_vchid {
-        let p = gpu.procs.get(pid).expect("routed proc lives");
+        let p = proc_of(pid);
         by_vchid.insert(
             *vchid,
             (
@@ -573,7 +587,25 @@ fn determinism_reference_world_three_orders_agree() {
     assert_eq!(scripted, woven, "even/odd interleave diverged");
 
     // And the snapshot is non-trivial: it actually captured routed procs + resolutions.
-    assert_eq!(scripted.procs.len(), 2, "two procs projected");
+    // ★ §12.27 — TWO user procs plus the system component: proc 0's UVM client is a
+    // KERNEL client, so it no longer merges into proc 0 (it is the guest driver's) and
+    // instead shows up under the reserved system anchor. Before the rule change this
+    // world projected two 2-client procs; the shape it projects now is the measured one.
+    assert_eq!(
+        scripted.procs.len(),
+        3,
+        "two user procs + the system component"
+    );
+    assert_eq!(
+        scripted.procs[&kayfabe_core::project::SYSTEM_ANCHOR],
+        std::collections::BTreeSet::from([HClient(0xD000)]),
+        "the UVM session client is the system component's, not process 0's",
+    );
+    for (anchor, clients) in &scripted.procs {
+        if *anchor != kayfabe_core::project::SYSTEM_ANCHOR {
+            assert_eq!(clients.len(), 1, "a user proc is exactly its own client");
+        }
+    }
     assert!(!scripted.by_pdb.is_empty(), "PDBs routed");
     assert!(
         !scripted.resolutions.is_empty(),
