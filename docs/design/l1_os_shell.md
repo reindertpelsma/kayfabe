@@ -33,9 +33,9 @@ core's teardown/reclamation completeness (2026-07-25) found that reclamation cou
 G3b, G3 — §0.1). Everything below assumes them. Where a design here needs a shape the fixes
 do not provide, it says so explicitly rather than assuming today's signatures.
 
-**★ File ownership.** This doc is the only file this design touches. Three amendments it
-implies for `l1_concurrency.md` are collected — not applied — in **§15**, because that file
-is being appended to concurrently by the implementation work.
+**★ File ownership.** This doc is the only file this design touches. The amendments it
+implies for `l1_concurrency.md` (now **seven**) are collected — not applied — in **§15**,
+because that file is being appended to concurrently by the implementation work.
 
 **How to read this doc:** §0 is the new failure ledger — what a mock structurally cannot
 prove — and §0.1 is the core-side precondition set. §1 restates the inherited law as L1-M2
@@ -43,8 +43,9 @@ obligations. §2 is the architecture in one picture. §3–§7 are the five deci
 recommendation → rationale → alternatives → what's open. §7 is the big one (cancellation +
 lifecycle + the conservation ledger). §8–§9 are contracts and testing. §10 is the staged
 plan. §11 is security. §12 is the ledger of decisions. §13 is the honesty section. §14 is
-the contact log, empty by construction. §15 is the proposed amendments to
-`l1_concurrency.md`.
+the contact log (§14.1 = M2-a's findings; §14.2 = the owner-directed amendment round of
+2026-07-26, which added §4.1.1, §4.2.1, §6.3's whole-surface BQL contract, §6.6 and §6.7).
+§15 is the proposed amendments to `l1_concurrency.md`.
 
 ---
 
@@ -195,12 +196,14 @@ below it is new.
         pending CANCEL → signal the worker(s) named (§7.1)
    ...which is why NO other syscall is ever made under a lock (§6.2).
 
-   kayfabe-linux-raw  — the ONE unsafe crate
+   kayfabe-linux-raw  — the ONE unsafe crate   (unsafe ONLY in *_unsafe.rs — §4.1.1)
    ─────────────────────────────────────────
-   HostPageSize::query()            mmap/munmap, Reservation + map_fixed_in
+   HostPageSize::query()            mmap/munmap, Reservation + map_fixed_in + restore
    geometry(page_size) : pure       MappedRegion  (copy in/out; NO borrow escapes)
    Epoll/EventFd/TimerFd/PidFd      VolatileRegion(aligned ≤8B atomic views only)
    KVM ioctls (harness backend)     every entry asserts the lockwitness (§4.5)
+   ★ NO host CPU address leaves this crate, in any representation (§4.2.1)
+   ★ memslots at WINDOW granularity only; publication = MAP_FIXED inside one (§6.7)
 
    isolate process (1 per (Proc, GpuId))       ★ the reclamation boundary
    ────────────────────────────────────────────────────────────────────
@@ -472,11 +475,48 @@ diagnostic. So the gate is two-sided and both sides are cheap:
   `undocumented_unsafe_blocks = deny` makes every one of them carry its own justification,
   which is what makes the §11 review tractable at all.
 
+### 4.1.1 ★ `unsafe` lives only in files named `*_unsafe.rs`
+
+Containment to one *crate* (gate B) makes the audit finite. Containment to named *files*
+makes it **enumerable by `ls`**, which is a different and stronger property: an auditor who
+has never seen this repo must be able to list the entire unsound surface without reading a
+line of code, and must be able to tell from a diff's **filenames alone** whether a change
+touched it.
+
+> **Standing rule: an `unsafe` block or `unsafe fn` may appear only in a file whose basename
+> ends `_unsafe.rs`. Every other file in the workspace — `kayfabe-linux-raw` included — is
+> safe Rust.**
+
+So the raw crate is itself two-layered: `mmap_unsafe.rs`, `epoll_unsafe.rs`,
+`region_unsafe.rs`, `kvm_unsafe.rs` hold the syscalls and the pointer work;
+`page_size.rs`, `geometry.rs`, `region.rs` hold the newtypes, the arithmetic and the bounds
+checks and are ordinary safe Rust. That split is not cosmetic — §5.2 already requires the
+geometry to be pure and parameterised so the determinism suite can run it at three page
+sizes, and §4.7 already requires the crate to hold no business logic. **The file rule is the
+mechanical form of both**, which is why it costs nothing to adopt: the layering it demands
+was already required for two other reasons.
+
+- **CI gate C (file naming):** `unsafe` appears only in `**/*_unsafe.rs`. (Being built
+  separately; this section is the specification it implements.) Same polarity trick as
+  gates A and B — a `grep` hit is the failure.
+- The §4.1 ratchet counts blocks **per `*_unsafe.rs` file**, so a *new* unsafe file is a
+  visible, reviewed event rather than a line inside a diff.
+- `undocumented_unsafe_blocks = "deny"` still applies, so every block in those files carries
+  its own `// SAFETY:`.
+
+Consequence worth stating: `*_unsafe.rs` files should be **small and boring**. A safety
+argument that needs a paragraph of GPU or guest semantics to hold is a sign a decision leaked
+down a layer — §4.7's rule, arriving from the other direction.
+
 ### 4.2 The bounded-object API (decision #16, applied)
 
-No raw pointer ever escapes. Three region types, distinguished by *who else writes the
-memory* — the distinction is the API, because it is the thing that determines what access
-is sound:
+No raw pointer ever escapes. Decision #16 states that as a general principle; **§4.2.1
+sharpens it into a rule about *which* surface needs it hardest and *why*** — because a
+general principle is exactly the thing that gets traded away at the one seam where it is
+load-bearing.
+
+Three region types, distinguished by *who else writes the memory* — the distinction is the
+API, because it is the thing that determines what access is sound:
 
 | Type | Backing | Other writer | Access surface |
 |---|---|---|---|
@@ -496,6 +536,90 @@ double-fetch: validate a length field, then re-read it — the classic. `read_in
 once; the parser then works on memory the guest cannot touch. The core is already shaped
 for this (its fuzz harness feeds it a `&[u8]` it owns), so the rule costs nothing and
 closes a whole vulnerability class by construction.
+
+#### 4.2.1 ★★ Two kinds of out-of-range — and only one of them is a fault
+
+The design already has bounded objects everywhere it thought to put them. This section says
+where the rule is *not negotiable*, and the reason is that **the same arithmetic mistake has
+two categorically different consequences depending on which address space it happens in.**
+
+- **`Gpa` / BAR offset / GPGA / host-GPU VA are guest- or device-address spaces.**
+  Out-of-range there is a **guest-visible fault**. MISS = FAULT already covers it, the
+  answer is a loud refusal, and the blast radius is the guest's own aperture (or, for a host
+  GPU VA, the *isolate's own* host VAS — which is the #14 boundary doing exactly its job).
+  These may be plain integers with checked arithmetic, and they are.
+- **A host CPU address is different in kind.** Out-of-range there is not a fault; it is a
+  **hypervisor escape**. There is no aperture to be confined to, no MISS to report, and no
+  guest to fault. Different consequence ⇒ different treatment, and the treatment has to be
+  structural because the failure has no detection story of its own.
+
+**And the half that catches people: `#![forbid(unsafe_code)]` does not save us here.**
+Creating a raw pointer, casting it to an integer, and doing arithmetic on it are all *safe*
+operations — only the dereference is `unsafe`. So a boundary that mints a host address
+(a `*mut u8`, a `NonNull`, a `usize`, a `u64` field called `host_va`) and hands it upward has
+already lost: the safe code above does unchecked address math with a clean conscience, the
+`unsafe` block that eventually trusts it is three crates away, and gate B, gate C, the
+ratchet and every `// SAFETY:` comment all still pass. **The unsoundness happened where the
+pointer was minted; everything after it is safe code being wrong.** That is why the rule is
+about *what crosses the seam*, not about who writes `unsafe`.
+
+> **THE RULE. A host CPU address never crosses a crate boundary, in any representation.**
+> Not `*mut u8`, not `*const u8`, not `NonNull`, not `usize`, not a `u64` field. What crosses
+> is a **bounded object** — a region that carries its own length and offers only checked
+> accessors — or an **opaque token** that only the raw layer can resolve. Offsets are
+> domain-typed (`HostOffset`), guest addresses are domain-typed (`Gpa`), and **a length is
+> never passed separately from the base it belongs to.**
+
+**What the API must refuse** (each is a `trybuild` row — §4.6 rows 7–10):
+
+1. any accessor returning `&[u8]`, `&mut [u8]`, `*const T`, `*mut T` or `NonNull<T>` over a
+   region — the direct route;
+2. any `Deref` / `AsRef` / `Borrow` / `Index` impl on a region type — the sideways route to
+   (1), and the one a helpful `impl` block adds by accident;
+3. any public field, constructor or getter exposing a region's or reservation's base address
+   as an integer — an integer host address is a pointer with the checks filed off;
+4. `Gpa` ⇄ `HostOffset` conversion by `From`, `as`, or arithmetic, in either direction —
+   these are different address spaces with different consequences for being wrong, and the
+   compiler should be the one that says so;
+5. an address-taking placement API — `map_fixed_in(offset, len, …)` on `&mut Reservation`
+   exists; `map_fixed(addr, len, …)` does not (§4.4 is this same rule's other half).
+
+**★ The exemption, written down because the naming actively misleads.**
+`RmBackend::map_gpu_va` returns a `u64` that the core stores as `host_va` and that `Binding`
+carries (G1). **That is not a host CPU address.** It is an address in the *host GPU's*
+virtual address space, minted by RM inside the owning isolate; out-of-range there faults the
+GPU MMU inside one isolate's own host VAS. It stays a plain `u64`, and the bounded-object
+rule does not touch it. Both available mistakes are live: an implementer who bans it on a
+name match makes the design worse for nothing, and an implementer who waves through a real
+host pointer because "the other `host_va` was fine" makes it unsound. Hence the distinction
+is stated here rather than left to inference.
+
+**★ Where this binds hardest — and it is not the raw crate.** The raw crate is the one place
+everybody already knows to be careful. The dangerous seam is **the real `Vmm` implementation
+and whatever L1 shell code sits between it and the raw crate**, because the obvious QEMU
+`gpa_read` resolves a GPA to a host pointer once and memcpys, and the obvious next step is to
+cache that pointer and hand it upward "just for the hot path". That step is the entire bug,
+and it is a *performance-motivated* step, which is the kind that gets made during a
+measurement session rather than a design one.
+
+The good news, stated so the rule's real job is clear: **the abstract `Vmm` trait is already
+clean.** `gpa_read`/`gpa_write` take a `&mut [u8]`/`&[u8]` the *caller* owns; `HostRegion` is
+`{ id, offset }` with a backend-scoped opaque id; `RamHandle` is a token plus a guest-physical
+range. Nothing pointer-shaped is on that trait today. So the obligation here is
+**conservation, not construction**: the trait must not *acquire* a pointer-shaped method
+later, and the impl must not grow a pointer-shaped internal helper that anything outside a
+`*_unsafe.rs` file can call. A rule whose job is to prevent a future addition needs to be
+written before the addition is tempting, which is why it lands now and not at M2-c.
+
+**How it is tested, and where the honesty is.** The compile-fail half is trybuild rows 7–10.
+The "someone added a new module" half is subsumed by gate C (§4.1.1): a `*mut`/`*const`/
+`NonNull`/`transmute` outside a `*_unsafe.rs` file is already a gate failure, so this costs
+nothing new. What neither can see is a *semantically* unbounded bounded object — a region
+whose length field is right but whose backing was mapped shorter. That is a **review
+obligation**, named as one: every new public item in `kayfabe-linux-raw` or in the real `Vmm`
+impl is checked against the five refusals above, as part of §11's exit gate. Types close four
+of the five; the fifth is a human, and pretending otherwise would be the exact failure mode
+this doc keeps cataloguing.
 
 ### 4.3 ★ Volatile vs atomic — where the existing wording is wrong
 
@@ -567,6 +691,10 @@ Each row is a dangerous pattern that must **not compile**:
 | 4 | `HostPageSize(4096)` / `HostPageSize::from_bytes(4096)` outside tests | §5 |
 | 5 | a `MappedRegion` read whose result outlives the region | use-after-munmap |
 | 6 | `Worker`/region types crossing a thread boundary they may not | the `Send`/`Sync` contract |
+| **7** | a `Deref`/`AsRef`/`Borrow`/`Index` impl on any region type | §4.2.1(2) — the sideways route to a borrow, added by a helpful `impl` block |
+| **8** | reading a region's or reservation's base address as an integer (`.base()`, `.addr()`, a public field) | §4.2.1(3) — an integer host address is a pointer with the checks filed off |
+| **9** | `Gpa → HostOffset` or `HostOffset → Gpa` by `From`/`as`/arithmetic | §4.2.1(4) — different address spaces, different consequence of being wrong |
+| **10** | a host CPU address (`*mut u8`/`*const u8`/`NonNull`/`usize`-as-address) in the signature of any item reachable from outside `kayfabe-linux-raw` | §4.2.1's crate-boundary rule, in compile-fail form |
 
 ### 4.7 What the crate must **not** contain
 
@@ -665,6 +793,15 @@ the real `Vmm` impl calls `assert_lock_free` at the top of every "NO" row, using
 witness as `Worker::execute`. One witness, three enforcement sites (worker verbs, raw
 syscalls, VMM syscalls), zero drift.
 
+**★ Two amendments to this table, made in §6.3 and §6.7 and flagged here so the table is not
+read alone.** (i) The "yes" rows are legal **only because their implementations cannot reach
+VMM-global API** — that is a binding requirement on the adapter, not a property of the method
+name, and §6.3 makes it the contract. (ii) The `map_guest`/`unmap_guest` row silently covers
+**two operations** with different costs and frequencies (a memslot update vs a `MAP_FIXED`
+placement inside an installed window); §6.7 splits it, and the split is what keeps the data
+plane off the memslot path entirely. Both remain "NO"; what changes is the cost model and the
+frequency, and §6.2's cost estimate is corrected in §6.7.
+
 ### 6.2 ★★ The finding: R1's second reckoning, and the biggest thing L1-M1 will not survive
 
 Turning that assert on will **panic on the existing code**, and the reason is §12.6's
@@ -709,32 +846,114 @@ a design task. If it is built the obvious way first, the retrofit touches the co
 the lock discipline, and the R5 re-validation sites simultaneously: the shape this project
 keeps refusing.
 
-### 6.3 `raise_irq` — irqfd-shaped, or the BQL inverts on us
+### 6.3 ★★ The BQL contract — a lock we do not own, an inversion R3 cannot see
 
-R1 permits `raise_irq` as the one in-lock side effect because it is "an eventfd/irqfd
-write — non-blocking, bounded". That is true **only if the implementation is actually
-irqfd-shaped**. In QEMU the obvious implementation is `msix_notify()`, which requires the
-BQL. And QEMU takes the BQL *before* calling into `Device::mmio_write`, which then takes
-our device lock. A vCPU thread that holds our device lock and then reaches for the BQL is
-the classic inversion — a deadlock invisible until the unlucky interleaving, which is
-exactly the failure R3 exists to prevent and which R3 **cannot** catch, because the BQL is
-not in our rank system and never can be.
+This started as a note about `raise_irq`. It is a whole-surface **correctness** contract, and
+it is elevated here because it is one of the few problems in this milestone that
+**measurement cannot help with**: it is not a slow path, it is a cycle. It is either absent
+or it deadlocks, and how fast the call is has nothing to do with which.
 
-So this is a *contract* item, not an implementation note:
+**The inversion, spelled out.** QEMU takes the BQL *before* dispatching into
+`Device::mmio_write`, which then takes our device lock. So the arrival order on a vCPU thread
+is fixed and not ours to change:
 
-> **`Vmm::raise_irq` MUST be implementable without acquiring any VMM-global lock. The QEMU
-> adapter MUST use an irqfd / event-notifier, never a BQL-taking notify on the calling
-> thread.** More generally: **no call into VMM-global API under our locks** — only
-> primitives whose implementation is a descriptor write.
+```text
+  vCPU thread   : BQL  →  device(rk0)  →  proc(rk1)          [QEMU's order, imposed on us]
+  our thread    : device(rk0)  →  … → BQL                     [ABBA. Deadlock.]
+```
 
-Stated now, in the trait's docs, it costs nothing. Discovered at L2 it is a deadlock in a
-nested-virt bench at 3 a.m.
+Thread 1 (vCPU) holds the BQL and blocks acquiring our device lock; thread 2 (executor or
+reactor) holds our device lock and blocks acquiring the BQL. Neither proceeds. Note what is
+*not* required for this: no slow syscall, no contention, no unlucky timing beyond the
+interleaving itself. **A fast BQL-taking call under our lock is exactly as deadlocked as a
+slow one.**
+
+**Why R3 structurally cannot catch it.** R3 is a per-thread rank watermark maintained by *our*
+guard wrappers. The BQL has no rank because it is not ours: we never construct it, we do not
+control its acquisition sites, and QEMU functions take it *internally* (`msix_notify`,
+`memory_region_add_subregion`, `memory_region_set_enabled`) where no wrapper of ours is
+involved. R3 is a complete discipline over the locks it can see and is *blind by construction*
+to this one. That is not a gap to be closed by a better assert; it is the boundary of what the
+mechanism is.
+
+**The contract, as a normative rule over the whole `Vmm` surface:**
+
+> **Nothing beneath one of our locks may take the BQL.** Every `Vmm` method classified
+> **in-lock legal** in §6.1 MUST be implementable as a primitive that cannot reach VMM-global
+> API: a memcpy into an already-installed mapping, a descriptor write, a clock read, or a push
+> onto a structure we own. `Vmm::raise_irq` in particular MUST be irqfd / event-notifier
+> shaped — **never** a BQL-taking `msix_notify()` on the calling thread. Every method that can
+> reach VMM-global API is classified **NO** and asserts lock-free.
+
+**The resolution already reached, and why it is one fix rather than two.**
+**Drop the lock.** A thread that holds no lock of ours may take the BQL in any order it likes
+and no cycle can form — the BQL is simply the outermost lock on every path, and a total order
+with one lock at the top is not an inversion. The *same* act fixes the stall: a BQL-taking
+op that is slow costs the VM only while it runs, not while a device lock is queued behind it.
+**One rule, two problems**, which is the argument for making it the general rule (§6.6) rather
+than an exception list.
+
+**How a violation is caught — honestly, in descending order of strength.**
+
+1. **Classification + assert (primary, and indirect).** A BQL-taking capability is a "NO" row
+   in §6.1's table, and "NO" rows call `assert_lock_free` at the top. So the assert *does*
+   fire on the dangerous pattern — but it fires because of how the method was **classified**,
+   not because anything detected the BQL. The mechanism is real; its premise is a judgement.
+2. **One acquisition site (mechanical, but only over what we own).** The L2 adapter must have
+   **exactly one** function that takes the BQL, it calls `assert_lock_free` first, and CI
+   greps that `bql_lock|qemu_mutex_lock_iothread|BQL_LOCK_GUARD` appears in the adapter
+   exactly once. Under that shape the BQL *can* be given a rank — **rank −1**, entered but
+   never acquired — and R3's watermark then rejects "rank −1 while holding rank 0" like any
+   other inversion. This is worth doing because it is nearly free, and worth not overselling:
+   it enforces the rule only at the acquisitions we write.
+3. **The residual, which is a review obligation and is named as one.** A QEMU function that
+   takes the BQL *internally* is invisible to (2). So the adapter carries a **written list of
+   the QEMU functions called from each in-lock-legal `Vmm` method**, and that list — not the
+   code — is the review artifact at §11's exit gate. There is no mechanism here. Saying there
+   is one would be the exact failure this doc keeps cataloguing.
+4. **QEMU's own asserts fire the other way.** Many BQL-requiring QEMU functions
+   `assert(bql_locked())`, so calling one from a thread that *lacks* the BQL aborts loudly.
+   That is the failure mode we prefer, and it is a genuine safety net for the drop-the-lock
+   rule — but it says nothing about the inversion, which happens with the BQL held.
+
+**★ And the finding this contract exposes: in QEMU we are GIVEN the BQL, so "lock-free" is
+not enough.** Both of our entry paths arrive with the BQL already held — a trapped MMIO
+access (QEMU re-takes the BQL after `KVM_RUN` returns, before dispatch) and a bottom half
+(the main-loop context runs under it). Consequences the doc does not currently state:
+
+- **A verb round-trip issued from either context stalls every vCPU in the VM, with every lock
+  of ours correctly dropped.** §7.1 of `l1_concurrency.md` says the calling thread does the
+  round-trip itself and that backpressure is inherent because "the caller blocks, the guest's
+  RPC stalls, the guest slows down". Under a held BQL that sentence is false in its most
+  important clause: it is not *the caller* that stalls, it is **the machine**. This is the
+  sharpest violation of I-NOAMP (§6.6) available anywhere in the design, and it is caused by
+  a lock we neither hold deliberately nor can rank.
+- **Therefore the L2 adapter has a named, load-bearing obligation:** our trapped BAR regions
+  must be dispatched **without** the BQL. QEMU provides `memory_region_clear_global_locking()`
+  for exactly this case (VFIO and virtio use it); the adapter must apply it to our MMIO
+  regions and **verify it exists and behaves as expected on the target QEMU version** — this
+  is an API-availability check, not an assumption, and it is listed in §7.9's not-mock-testable
+  table. Correspondingly, any deferred work that can block must not run on the main-loop BH
+  under the BQL.
+- **If that mechanism is unavailable, the drop-the-lock rule is necessary but not
+  sufficient**, and I-NOAMP cannot be met on the trap path at all. That would be an **L2
+  blocker, not a tuning item**, and it should be discovered by a deliberate bench measurement
+  early rather than by a wedge under load.
+- **The C never solved this and said so in writing** — `C: src/qemu/virtio_nvgpu.c:16-18`:
+  *"Currently we hold the QEMU BQL across dispatch for simplicity and will relax this
+  later."* Its Mode-2 doorbell path likewise instrumented wall-vs-thread-CPU time precisely
+  because the trap ran on "the BQL/vCPU thread" (`C: src/qemu/nvkvm_gpu_emul.c:877-878`). So
+  this is not a hypothetical hazard we invented; it is an unpaid debt we are inheriting with
+  its receipt attached.
+
+Stated now, in the trait's docs and the adapter's shape, all of this costs nothing.
+Discovered at L2 it is a deadlock in a nested-virt bench at 3 a.m.
 
 A pleasing consequence of §6.5: on the completion path `raise_irq` ends up **outside** the
-locks anyway, so the exception is unused there. Keep the exception in the contract (a
-future path may want it), but note that the shipping completion path does not rely on it —
-"we have one exception and currently exercise it nowhere" is a much stronger position than
-"we have one exception on the hottest path".
+locks anyway, so the in-lock exception is unused there. Keep it in the contract (a future
+path may want it), but note that the shipping completion path does not rely on it — "we have
+one exception and currently exercise it nowhere" is a much stronger position than "we have one
+exception on the hottest path".
 
 ### 6.4 `defer` — share the queue with the mock, do not re-implement it
 
@@ -787,6 +1006,215 @@ Two obligations fall out and must be honoured:
   delivery is per-target since MG-6. §12.5 says explicitly: *"this must become a
   target-carrying payload when the defer plumbing lands"*. The defer plumbing lands in this
   milestone. Fix it here.
+
+### 6.6 ★ Who RUNS a memory-plane op — the calling thread, with the lock dropped
+
+§6.2 says the memory plane is built in the plan/execute/commit shape. It does not say *which
+thread executes the middle phase*, and the tempting answer — a dedicated memory-plane thread
+fed by a queue — is wrong for the same reason §7.1 of `l1_concurrency.md` already rejected
+relay threads. Rule:
+
+> **A memory-plane instruction requested by the guest executes on the thread that is serving
+> the guest's request, with every lock of ours dropped. There is no memory-plane thread and
+> no memory-plane queue.**
+>
+> **Background work with no caller to bill it to runs on the executor** — the
+> `pending_release` drain (§7.6 T0), the deferred reap (T3), T0's backstop sweep. The
+> executor already owns that role, is already serialized, and is already bounded.
+
+**Rationale — the property a queue would throw away.** §7.1's sentence transfers verbatim:
+*"Backpressure is inherent: the caller blocks (lock-free), the guest's RPC stalls, the guest
+slows down. No queue to size, no overflow policy to invent."* A vCPU thread that blocks in an
+`mmap` is **self-limiting**, and — the part that matters — it limits *precisely the process
+that caused it*. A guest that issues a map storm throttles itself and nobody else. A
+dedicated thread plus a queue converts that free property into unbounded queue growth, and
+then needs three new mechanisms to get back to where it started: a bound, an overflow policy,
+and per-proc fairness. Worse, a queue **reorders**, so R5's re-validation would have to defend
+a gap that no longer has a caller standing in it to be refused.
+
+The one thing a memory-plane thread would buy is decoupling the vCPU from a slow syscall —
+and §6.7 shows the expensive case (a memslot update) costs every vCPU *regardless of which
+thread issues it*. So the thread buys nothing on the exact path that motivated it.
+
+#### ★ I-NOAMP — the intra-VM invariant, named
+
+> **★ No cross-process amplification: process A's activity must never make process B's vCPU
+> wait through anything WE introduced.**
+
+This is #14's twin. #14 is about A's *addresses* colliding with B's; I-NOAMP is about A's
+*latency* landing on B. Both are intra-VM properties, both are free on passthrough hardware,
+and both are things a forwarder can lose without any test noticing.
+
+**What bounds it, and what does not — the honest baseline first.** The guest driver already
+serializes on its own locks across every GSP RPC: `_kgspRpcRecvPoll` runs with the GPU
+(subdevice-group) lock held (`ogkm: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:2848`, the
+`rmGpuGroupLockIsOwner` assert at `:2954`), with the RM API lock above it
+(`ogkm: .../resserv/src/rs_server.c:3164-3168`, §12.26). So on **real hardware**, process A's
+slow RM call already makes process B's RM call wait. **We do not create this property and we
+cannot delete it. We can only amplify it.** Any claim that our design "gives B independent
+progress" would be claiming something the hardware path does not have either — and would fail
+the moment it met a real driver.
+
+So the obligation is two-part and testable rather than a slogan:
+
+- **(a) added latency comparable to hardware's** — a forwarded verb's added cost is the
+  isolate round trip (µs), not a queueing discipline of our own invention;
+- **(b) no amplification we introduced** — no lock, queue or thread of ours may make B wait
+  on A where the guest driver's own locks would not have.
+
+Four concrete consequences, three of them already satisfied:
+
+- **R1/R2 already deliver (b) at the lock layer.** Verbs run lock-free, and a device *writer*
+  excludes bookkeeping but never waits for in-flight verbs — R2, verbatim: *"'write lock' now
+  means 'no torn bookkeeping', deliberately not 'no outstanding host work'."* That is I-NOAMP
+  for locks, written down before it had a name.
+- **The worker pool is per-`(Proc, GpuId)`**, so a pool-full wait is intra-proc by
+  construction: A cannot exhaust B's workers.
+- **The `pending_release` drain and the reap run on the executor and are `is_quiesced`-gated**
+  (§7.6 T0/T3), so background reclamation for A never parks a thread B needs.
+- **The two places we can still amplify are named rather than argued away:** the **BQL**
+  (§6.3 — a lock we do not own, and the reason the trap path must not run under it) and the
+  **memslot** (§6.7 — an SRCU grace period charged to every vCPU no matter who issues it).
+  Neither is fixable by threading. The first is fixed by not holding it; the second only by
+  frequency.
+
+**Test shape.** The mean run's existing progress-under-pending assertion **is** the I-NOAMP
+canary and should be named as one: proc B makes progress while proc A's verb is parked, both
+lock modes, no clock. §6.7 adds its sibling — B makes progress across A's arena grant and
+release.
+
+### 6.7 ★★ Memslot strategy — COARSE REGIONS WITH AN ALLOCATOR INSIDE, never per-object
+
+**The cost, from the source, because the number is the whole argument.** A
+`KVM_SET_USER_MEMORY_REGION` swaps the memslot array and then calls
+`synchronize_srcu_expedited(&kvm->srcu)` (`linux: virt/kvm/kvm_main.c:1599-1633`) — it waits
+for **every** vCPU to leave its SRCU read section, and before that it waits out any in-flight
+MMU-notifier invalidation (`:1614-1622`). A CREATE is one such swap. A **DELETE or MOVE is
+two**: `kvm_invalidate_memslot` swaps, `kvm_arch_flush_shadow_memslot` zaps the slot's shadow
+/ EPT entries with a remote TLB flush across all vCPUs, then `kvm_activate_memslot` swaps
+again (`:1798-1846`, `:1929-1941`). Every update in the VM also serializes on
+`kvm->slots_lock`.
+
+So the cost is **milliseconds, scaling with vCPU count, charged to every vCPU** — and it is
+charged **no matter which of our threads issues the ioctl and no matter what locks that
+thread holds**. Deferring it moves it; threading it moves it; dropping a lock does not touch
+it. **The only lever is frequency.** That makes this the sharpest instance of I-NOAMP in the
+design: a memslot update caused by process A briefly costs process B, we cannot make that cost
+zero, and so the design's entire job is to make it *rare*.
+
+**The rule.**
+
+> **One memslot per window (or per arena grant) — never one per published object.**
+> Making a backing guest-visible is a **`MAP_FIXED` placement inside an already-installed
+> window** and performs **no KVM ioctl at all**. Memslot churn happens at window-install and
+> arena grant/release frequency; it never scales with the data plane.
+
+**This is not a new idea; it is the shape the C converged on after paying for the
+alternative.** A single `cuCtxCreate` performs >1500 tiny 4 KiB device mmaps; with a memslot
+each, the C exhausted its slot allocator and regressed *single-process* matmul
+(`C: multiproc_collision_blocker`, `realize_kvm_slot_regression`). The fix was one
+`MAP_ANONYMOUS|MAP_NORESERVE` window in QEMU's mm (`C: src/qemu/nvkvm_mmap_host.c:143-176`),
+exactly **one** raw memslot install at the BAR-assigned base (`nvkvm_sparse_ensure`,
+`:180-215`), and every GPU mmap becoming a `MAP_FIXED` slice inside it, tagged with a sentinel
+whose whole meaning is *there is no memslot here*: `NVKVM_IN_WINDOW_SLOT = -2`
+(`C: src/qemu/nvkvm_isolate_handlers.c:1730-1738`, used at `:1839`, `:1869`) — "zero per-mmap
+KVM ioctls" (`C: gpa_window_design`).
+
+**And the core already has the geometry.** `GpaSpace` is a per-target window; `GpaArena` is a
+per-proc disjoint sub-range inside it; since `e50f7da` an arena carries a coalescing intra-arena
+free list and a move-only `GpaBlock` token, and `GpaSpace` recycles whole arenas LIFO with a
+never-reused generation. That is *already* "a coarse region with an allocator inside". The
+memslot rule simply says: **the memslot boundary is the window (or the arena grant), the
+allocator inside it is `GpaArena`, and `GpaArena::alloc`/`free` must never touch KVM.**
+
+**What the rule forbids, explicitly:**
+
+1. **No `map_guest` per publication.** `publish_backing`'s commit must not mint a `SlotId`.
+   ★ This contradicts §6.2 as written — corrected below.
+2. **No memslot per host mmap** in the isolate-mapping path. That is the C's exact regression,
+   with a measured failure and a bisect.
+3. **No slot delete/recreate to change a mapping.** A DELETE is two grace periods plus a
+   shadow zap. Re-`MAP_FIXED` the window's backing instead — and an *unmap* inside a window is
+   `mmap(MAP_FIXED|MAP_ANONYMOUS|MAP_NORESERVE)` restoring anonymous backing, **never a plain
+   `munmap`**, which punches a hole in the window's VMA and leaves the live memslot pointing
+   at a gap (`C: nvkvm_isolate_handlers.c:1899-1906`, `:1930-1936`). **This is a raw-crate API
+   shape, not a convention:** `Reservation::restore(offset, len)` exists, and `munmap` of a
+   sub-range of a live reservation does not.
+4. **No per-object protection change via the memslot.** KVM's read-only flag is a *slot*
+   property, so `Prot::ReadOnly` cannot be expressed per object inside a shared read-write
+   window. **Protection is a window property:** partition into an RW window and an RO window
+   and place the object in the right one. Never mint a slot to make one page read-only.
+5. **No per-object `lock_region` via memslot revoke.** §6.1's docs offer "userfaultfd /
+   memslot revoke-restore" as interchangeable implementations of decision #6. Under this rule
+   they are **not** interchangeable: revoking a shared window's slot is a device-wide DELETE
+   (two grace periods) in order to lock one object, and it revokes access for *every* proc
+   sharing the window. **`lock_region`/`unlock_region` are userfaultfd-on-the-window,
+   per-page; the memslot alternative is struck.** That resolves decision #6's remaining
+   ambiguity in the only direction I-NOAMP permits.
+
+**★ The correction to §6.2, stated plainly because it is load-bearing.** §6.2 says:
+*"The moment that publication must become guest-visible, it needs a memslot installed — a
+`map_guest`."* **That sentence is wrong, and deleting it is half of why this amendment
+exists.** Publication needs a *placement inside an installed window*, which is an
+`mmap(MAP_FIXED)`: still a syscall, still forbidden under a lock, so **§6.2's plan/execute/
+commit conclusion survives unchanged** — but it does not take `kvm->slots_lock`, does not
+synchronise SRCU, and does not scale with vCPU count. §6.2's *architecture* was right and its
+*cost model* was wrong by orders of magnitude, in the direction that would eventually invite
+someone to "optimise away" the plan/execute/commit split as overkill for a memcpy-adjacent
+op. Both halves matter: **keep the shape, fix the number.**
+
+Consequently §6.1's table row `map_guest` / `unmap_guest` covers **two operations with
+different costs and frequencies**, and the trait must say so. The memory plane's instruction
+set is two-tier:
+
+| Tier | Op | Cost | Frequency | In-lock legal? |
+|---|---|---|---|---|
+| **coarse** | install / remove a window (or an arena grant, if that is the chosen boundary) | memslot: `slots_lock` + 1–2 SRCU grace periods + shadow zap; QEMU: BQL | per window, or per proc create/destroy | **NO** |
+| **fine** | place / restore a backing inside a window | `mmap(MAP_FIXED)`: `mmap_lock`, no KVM ioctl, no BQL | per publish / unpublish | **NO** (still a syscall — §6.2's shape stands) |
+
+**What a measurement can and cannot change.** A bench agent is separately measuring memslot
+cost and how many updates a real workload provokes. This design is written so that
+measurement can only tune **constants**, never the shape — the shape is fixed by a
+correctness/DoS argument (below), not by a performance one. The constants it can tune:
+
+- **`ARENA_LEN`** — per-proc arena size. Larger = fewer grants for a churning process;
+  smaller = more procs per window. The measurement supplies the distribution of per-proc peak
+  GPA footprint. (Note this only affects memslot traffic if the memslot boundary is the
+  *arena*; if it is the *window*, arena grants are free and `ARENA_LEN` is a pure
+  address-space parameter.)
+- **`WINDOW_LEN` and the window count** — how many arenas fit before a second window (and
+  therefore a second memslot) is required. The C chose 128 GiB `MAP_NORESERVE`; the only
+  thing it costs is virtual address space.
+- **`ARENA_RETENTION`** — how long a released arena stays on `GpaSpace::free` before its
+  window could be considered for teardown. Recycling is already LIFO and already implemented;
+  the measurement decides only whether a window is ever torn down at all. **The honest
+  default is never**, until address space is shown to matter.
+- **The memslot boundary itself — window vs arena grant.** Both satisfy the rule. Window is
+  strictly fewer updates; arena grant is strictly tighter guest-visible exposure (an arena
+  belonging to no live proc is not addressable at all). **This is the one place the
+  measurement can legitimately move the design, and it moves it between two allowed points**,
+  not out of the shape.
+
+**What would have to be true to justify a finer slot** — written down so that a future "let's
+just add a slot here" has to answer it. A per-object memslot is justified only if **all three**
+hold: (a) the object needs a *slot-level* attribute — KVM read-only, dirty logging,
+`KVM_MEM_GUEST_MEMFD` — that cannot be obtained by placing it in a window that already has
+that attribute; **and** (b) its install/remove frequency is bounded by something that is not
+guest-controlled; **and** (c) the worst-case update rate under a *hostile* guest is bounded
+and measured. Absent all three it is a **guest-reachable device-wide DoS**: a guest that can
+provoke a memslot update per operation can stall every vCPU in the VM at will, from an
+unprivileged process, with no ioctl of its own. **That is the security framing, and it is why
+this is a rule rather than a performance note** — it lands on §11's checklist as item 11.
+
+**The structural gate, available today with no OS code.** `MockVmm` already carries a
+monotonic `next_slot` and a public `slots` map, so the *cumulative* install count is directly
+observable — no new instrumentation, no clock, no OS. The mean run asserts the shape:
+**slot installs grow with arena grants, not with publications** — `O(procs)` against
+publications that the existing workloads already drive orders of magnitude higher. A
+per-object regression fails it immediately and structurally, on any machine, in both lock
+modes. It joins §9.3's gate table. *This is the same move as the reactor's wake-count assert
+(§3.4): convert a cost that only real hardware can measure into a **quantity** a mock can
+count.*
 
 ---
 
@@ -1047,7 +1475,11 @@ and its isolate is healthy. Nothing dies, so nothing reclaims. Design:
   the retire path, which is already a bulk-release site.
 - **When to drain.** Opportunistically at the next verb-issuing op for that proc (the
   worker is checked out anyway — near-zero marginal cost), with the executor as the
-  backstop for a proc that goes quiet. Never inline in `refresh`.
+  backstop for a proc that goes quiet. Never inline in `refresh`. **★ §6.6 makes the thread
+  placement a rule rather than a preference:** the opportunistic drain rides a caller who is
+  already there (so it is billed to the proc that created the garbage), and the backstop runs
+  on the **executor** because it has no caller to bill — which is also what keeps it from
+  violating I-NOAMP by parking a thread another proc needs.
 - **The related half:** `sync_proc_rpc_bindings` only unbinds VAs in `vas.rpc_bound`, so a
   `publish_backing` binding is never unbound by *any* path today. The publish path must
   register its bindings where the unbind path can see them, or T0 leaks exactly the
@@ -1406,6 +1838,8 @@ Stated so we never claim more than we verify:
 | a real 16/64 KiB host page size works | forced runs test our geometry, not the kernel | run the suite on Grace-Hopper / Jetson (§5.3) |
 | memslot/BQL interaction | `MockVmm` has neither | the QEMU adapter at L2, under the nested-virt bench |
 | descriptor exhaustion under a real `RLIMIT` | mock descriptors are integers | arm past the cap on a real host; assert contained refusal |
+| **★ the trap path really runs without the BQL** (§6.3) | `MockVmm` has no BQL and the harness owns its own threads | at L2: assert `memory_region_clear_global_locking()` exists on the target QEMU and is applied to our BAR regions; then measure whether a parked verb on one vCPU blocks another vCPU's unrelated MMIO. **If it does, that is an L2 blocker, not a tuning item** |
+| **★ the real memslot cost and update rate** (§6.7) | mock `map_guest` is a `BTreeMap` insert | measure `KVM_SET_USER_MEMORY_REGION` latency vs vCPU count, and count updates provoked by a real workload. Tunes the §6.7 constants; the mock-side *frequency* gate already pins the shape |
 | the guest driver really frees its client root on process death | the mock guest is a script | a real guest process killed mid-op; assert full reclamation |
 | tearing on GPU-written pages | no hardware writer | high-rate semaphore observation under real load |
 
@@ -1424,6 +1858,8 @@ Extending `l1_concurrency.md` §9's normative table; each becomes a rustdoc head
 | `kayfabe-linux-raw` (all) | per-item | adapter crates only | the only `unsafe`; **every syscall entry asserts the lockwitness** except the named `*_under_lock` set; no pointer escapes; all offsets/lengths checked |
 | `HostPageSize` | `Copy + Send + Sync` | geometry + the syscall layer | constructible only by `query()` (or a test-gated `forced`); every geometry function takes it as a parameter |
 | isolate relay thread | n/a (process boundary) | nobody | blocks in a wait; **never polls**; writes counters only; dies with its process |
+| **memory plane (§6.6/§6.7)** | n/a — no thread of its own | the thread serving the guest's request; the **executor** for work with no caller | guest-requested ops execute on the calling thread with **every lock of ours dropped**; there is no memory-plane thread and no queue. Coarse tier (memslot) at window/arena-grant frequency only; fine tier (`MAP_FIXED` placement) per publish. **Neither is in-lock legal** |
+| **the VMM's global lock (BQL)** | not ours | QEMU takes it *before* entering us, on both entry paths | **nothing beneath one of our locks may take it.** Rank −1: entered, never acquired. In-lock-legal `Vmm` methods must be implementable without reaching VMM-global API; the adapter has exactly one BQL acquisition site and it asserts lock-free (§6.3) |
 
 ---
 
@@ -1488,7 +1924,10 @@ Plus the `HostLedger` itself (§7.8) and `MockIsolate::request_cancel`.
 |---|---|---|
 | lint inheritance | push | a crate other than `kayfabe-linux-raw` drops `[lints] workspace = true` |
 | `unsafe` containment | push | `unsafe` appears outside the raw crate |
-| `unsafe` ratchet | push | the block count exceeds the committed number |
+| **`unsafe` file naming (gate C, §4.1.1)** | push | `unsafe` appears in a file not named `*_unsafe.rs` — or a host pointer type (`*mut`/`*const`/`NonNull`/`transmute`) appears outside one |
+| `unsafe` ratchet | push | the block count (**per `*_unsafe.rs` file**) exceeds the committed number |
+| **memslot frequency (§6.7)** | push | the mean run's slot-install count grows with publications rather than with arena grants — a per-object memslot, caught structurally and without a clock |
+| **single BQL acquisition site (§6.3)** | push (L2) | the adapter contains more than one `bql_lock`/`qemu_mutex_lock_iothread`/`BQL_LOCK_GUARD` site, or that site does not `assert_lock_free` |
 | narrow page-size grep | push | a bare `4096`/`0x1000`/`>>12` in the raw or rt crates |
 | page-size axis | push | the geometry suite fails at 16 KiB or 64 KiB |
 | forced-page-size integration | nightly | the shell suite fails at 64 KiB |
@@ -1539,19 +1978,24 @@ against.*
 §14.
 
 **M2-b — `kayfabe-linux-raw`.** The crate, the lint gates, `HostPageSize` + pure geometry,
-the three region types, `Reservation`/`map_fixed_in`, the readiness/timer/exit-descriptor
-wrappers, the KVM ioctls for the harness backend, `assert_lock_free` at every syscall entry,
-the `trybuild` matrix.
-**Gate:** trybuild green (all six rows), geometry green at 4/16/64 KiB, `unsafe` gates
-green, aarch64 cross-check green, existing 203 tests untouched.
+the three region types, `Reservation`/`map_fixed_in`/**`restore`** (§6.7 item 3), the
+readiness/timer/exit-descriptor wrappers, the KVM ioctls for the harness backend,
+`assert_lock_free` at every syscall entry, the `trybuild` matrix, and the **`*_unsafe.rs`
+file layering** (§4.1.1) from the first commit — retrofitting a file split is a rename storm
+across every `// SAFETY:` review.
+**Gate:** trybuild green (**all ten rows** — §4.6), geometry green at 4/16/64 KiB, `unsafe`
+gates A/B/**C** green, aarch64 cross-check green, existing tests untouched.
 
 **M2-c — the real `Vmm` + the in-lock-syscall reckoning.** The shared `DeferQueue`; the
 per-method in-lock classification asserted; the memory plane built **in the
-plan/execute/commit shape from the first line** (§6.2); §12.7's observe→pump→encode→
-write→IRQ edge; §12.5's target-carrying redeliver payload.
+plan/execute/commit shape from the first line** (§6.2) and **two-tier from the first line**
+(§6.7 — coarse window install vs fine `MAP_FIXED` placement, so a publication never touches
+KVM); guest-requested ops on the calling thread with the lock dropped, background work on the
+executor (§6.6); §12.7's observe→pump→encode→write→IRQ edge; §12.5's target-carrying redeliver
+payload.
 **Gate:** `rt_shell` + `l1_mean` green against the real `Vmm` in both lock modes; a test
-asserting no syscall-shaped `Vmm` method is ever invoked with a rank held; the ledger still
-balances.
+asserting no syscall-shaped `Vmm` method is ever invoked with a rank held; **the memslot
+frequency gate** (§6.7 — installs `O(procs)`, not `O(publishes)`); the ledger still balances.
 
 **M2-d — the real reactor loop.** The epoll thread keyed on `CompletionSource`; counter,
 timer and exit-descriptor sources; the isolate relay; the executor thread +
@@ -1627,6 +2071,18 @@ when L1 is."* They are being written now. So the review is part of M2-f's gate.
    write. Nothing else. Review the diff of the allowlist, not the allowlist.
 10. **Resource caps.** The source cap (§3.8) exists, is derived from the real descriptor
     limit, and its refusal path is exercised by the security suite.
+11. **★ No guest-reachable memslot churn (§6.7).** No guest-issued operation causes a
+    `KVM_SET_USER_MEMORY_REGION` on a per-operation basis. A memslot update costs an SRCU
+    grace period charged to **every** vCPU, so a guest that can provoke one per op is a
+    device-wide DoS from an unprivileged process — and, unlike most DoS surfaces, it is
+    *contained by nothing*, because the cost lands outside our own blast-radius boundary.
+    Verify against §6.7's three-part justification test, and verify the two-tier split (a
+    publication takes the fine tier only).
+12. **★ No host CPU address crosses a crate boundary (§4.2.1).** Verify the five refusals by
+    type where types can carry them (trybuild rows 7–10) and by review where they cannot.
+    Note explicitly that `forbid(unsafe_code)` is **not** evidence here: pointer minting and
+    pointer arithmetic are safe operations, so the audit must look at what the boundary
+    *hands out*, not at where `unsafe` is written.
 
 **Threat-model deltas to record** in `core_security_threat_model.md` when M2-f lands:
 boundary 1 (guest ↔ host memory safety) is now *live*, with the raw crate as its entire
@@ -1724,6 +2180,56 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     deregistration (T0, T5) cannot be written and only the whole-proc sledgehammer exists.
     A field now; a migration later.
 
+**★ Owner-directed amendments, 2026-07-26 (pre-M2-b) — see §14.2.**
+
+33. **★★ A host CPU address never crosses a crate boundary, in any representation (§4.2.1)** —
+    because out-of-range in a *guest* address space is a guest-visible fault (MISS = FAULT
+    already covers it) while out-of-range in a *host* address space is a VM escape, and
+    because `forbid(unsafe_code)` does not help: minting and offsetting a pointer are safe
+    operations, so the boundary that hands one out has already lost. Five refusals, four of
+    them compile-fail (trybuild 7–10), the fifth a named review obligation. **Includes the
+    exemption that `host_va` from `map_gpu_va` is a host *GPU* VA, not a host pointer.**
+34. **★ `unsafe` lives only in files named `*_unsafe.rs` (§4.1.1)** — containment to a crate
+    makes the audit finite; containment to named files makes it enumerable by `ls` and visible
+    in a diff's filenames. CI gate C; the ratchet becomes per-file. Costs nothing, because
+    §4.7 and §5.2 already required the same layering for other reasons.
+35. **★★ Nothing beneath one of our locks may take the BQL (§6.3)** — extended from
+    `raise_irq` to the whole `Vmm` surface, because the BQL is unrankable (it is QEMU's) and
+    R3 is blind to it **by construction**, not by omission. Enforcement is honest and layered:
+    classification-plus-assert (indirect), one grep-gated BQL acquisition site that can carry
+    rank −1 (mechanical but only over what we write), and a written list of QEMU functions
+    called from in-lock-legal methods (**a review obligation, not a mechanism**).
+    **Drop-the-lock fixes both the inversion and the stall**, which is why it is the general
+    rule rather than an exception list. *And the finding it exposes:* QEMU **gives** us the
+    BQL on both entry paths, so "lock-free" is not sufficient — the trap path must be
+    dispatched without the BQL (`memory_region_clear_global_locking`, verified at L2) or
+    I-NOAMP fails on the hottest path. The C recorded this as an unpaid debt
+    (`C: virtio_nvgpu.c:16-18`).
+36. **★ Guest-requested memory ops run on the calling thread with the lock dropped; there is
+    no memory-plane thread and no memory-plane queue (§6.6)** — the caller blocking is
+    self-limiting backpressure aimed at exactly the process that caused it; a thread plus a
+    queue replaces one free mechanism with three invented ones (bound, overflow policy,
+    fairness) and adds reordering for R5 to defend. Background work with no caller to bill —
+    the `pending_release` drain, deferred reap, T0's sweep — belongs on the **executor**, which
+    already owns that role and is already bounded. **Names I-NOAMP** (no cross-process
+    amplification) and states its honest baseline: the guest driver already serializes on its
+    own GPU/API locks across every GSP RPC (`ogkm: kernel_gsp.c:2848,2954`), so we do not
+    create that property — we may only fail to amplify it.
+37. **★★ One memslot per window (or per arena grant), never per published object (§6.7)** —
+    a memslot update costs `synchronize_srcu_expedited` over every vCPU
+    (`linux: virt/kvm/kvm_main.c:1599-1633`; a DELETE/MOVE is *two* plus a shadow zap), so
+    process A's update costs process B regardless of thread or lock. **Threading cannot fix
+    it; frequency is the only lever.** The C converged here after >1500 per-mmap slots per
+    `cuCtxCreate` regressed single-process matmul; `GpaSpace`/`GpaArena` already have the
+    shape. Forbids: per-publication `map_guest`, per-mmap slots, delete/recreate to remap
+    (use `Reservation::restore`, never `munmap` inside a live window), per-object `Prot`
+    (protection is a **window** property), and per-object `lock_region` via memslot revoke
+    (**userfaultfd only** — decision #6's ambiguity resolved). **Corrects §6.2's claim that
+    publication needs a memslot**: it needs a `MAP_FIXED` placement, so §6.2's shape survives
+    and its cost model does not. Pinned by a mock-only, clock-free frequency gate; the bench
+    measurement tunes `ARENA_LEN`, `WINDOW_LEN`, `ARENA_RETENTION` and the window-vs-arena
+    boundary, and can move the design only *between two allowed points*.
+
 **Genuinely open:**
 
 - **§10.6 (B3, the system-proc stall)** — materially improved again by §7.5's watchdog, which
@@ -1803,6 +2309,41 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
    correctness, wire later"** is false in both clauses (G1/G2), and it is the sentence that
    most needs deleting, because it is the one that would make a reviewer wave this milestone
    through.
+
+**★ Added 2026-07-26 by the amendment round (§14.2) — four more places this doc had drifted:**
+
+9. **★ §6.2's "publication … needs a memslot installed — a `map_guest`" is wrong** (§6.7).
+   Publication needs a `MAP_FIXED` placement inside an installed window. The conclusion
+   §6.2 drew from it (plan/execute/commit, never call the VMM from a locked commit) is
+   **correct and unchanged**; the cost model behind it was wrong by orders of magnitude, in
+   the direction that invites a later "this is overkill for a memcpy" simplification. This is
+   the most consequential drift found in this round precisely because the *recommendation*
+   was right — a wrong premise supporting a right conclusion is the hardest kind to notice.
+10. **★ §6.1's classification table is read as if method names determined cost.** Two of its
+    rows are amended in place (§6.1's new note): the "yes" rows are legal only because their
+    *implementations* cannot reach VMM-global API — a requirement on the adapter, not a
+    property of the trait — and the `map_guest` row silently covers two operations with
+    different costs and frequencies.
+11. **★ "No blocking call under ANY lock" (R1) is not sufficient in QEMU** (§6.3). Both of
+    our entry paths arrive with the BQL held, so a verb round-trip with all of *our* locks
+    correctly dropped still stalls every vCPU in the VM. `l1_concurrency.md` §7.1's
+    backpressure argument — *"the caller blocks, the guest's RPC stalls, the guest slows
+    down"* — is false in its most important clause under a held BQL: it is not the caller
+    that stalls, it is the machine. The argument is *sound for the L1 harness and for a
+    BQL-free trap path*, which is exactly why the adapter obligation must be written down
+    rather than assumed. Proposed as amendment 6 to `l1_concurrency.md` (§15).
+12. **★ §6.1's `lock_region` docs treat "userfaultfd / memslot revoke-restore" as
+    interchangeable.** They are not, once I-NOAMP is named: memslot revoke of a shared window
+    is a device-wide two-grace-period DELETE that revokes access for every proc sharing the
+    window, in order to lock one object. Struck in §6.7 item 5. Decision #6 said "never host
+    `mprotect`" and left the remaining pair open; this closes it.
+
+**And one thing I checked and found already right, recorded because a negative result is
+also information:** the abstract `Vmm` trait is already pointer-free — `gpa_read`/`gpa_write`
+take caller-owned slices, `HostRegion` is `{ id, offset }` over a backend-scoped opaque id,
+`RamHandle` is a token. §4.2.1's job at this seam is therefore **conservation** — preventing a
+future pointer-shaped method or helper — not repair. The `RamHandle::covers` default
+(decision 25) remains the one genuinely wrong thing on that trait.
 
 **The single biggest risk, stated plainly.** L1-M1's design was validated by a harsh mock
 harness, and the harness's fidelity is exactly the property this milestone destroys: **a
@@ -1894,13 +2435,67 @@ observed by `unmap_of_unknown`; the rest need machinery later stages build (R3/R
 raw seam yet, R7/R8/R10/R11 are core-side counters). None of them is blocked; they were
 simply not this stage's product, which was the instrument and the baseline.
 
+### 14.2 ★ Owner-directed amendment round, 2026-07-26 — before M2-b
+
+**Provenance, stated because this section's discipline requires it.** §14 opens *"nothing
+here is ever a plan, all of it is a finding"*, and these four are **owner directives**, not
+build findings — they arrived from the project owner between M2-a landing and M2-b starting,
+each with its reasoning already established. They are logged here rather than silently folded
+into §4/§6 so that a reader can tell which parts of this doc were argued from the design and
+which were directed, and so the exception to §14's rule is visible instead of quietly taken.
+Where a directive *contradicted* existing text, the contradiction is recorded in §13 items
+9–12, which is the part of this round with the most value.
+
+| # | Directive | Landed in | Ledger |
+|---|---|---|---|
+| A1 | The `Vmm`/raw seam exposes **bounded objects, never raw pointers** — because guest-address out-of-range is a fault while host-address out-of-range is a VM escape, and because holding a raw pointer is unsafe *even in safe code* | §4.2.1, §4.6 rows 7–10, §11 item 12 | #33 |
+| A2 | The **BQL contract**: nothing beneath one of our locks may take the BQL; R3 cannot see it, so say honestly what does | §6.3 | #35 |
+| A3 | Guest-requested memory ops: **drop-the-lock on the calling thread**, no memory-plane thread; background work on the **executor**; name the **I-NOAMP** invariant and its honest baseline | §6.6 | #36 |
+| A4 | **Memslot strategy: coarse regions with an allocator inside**, never per-object; write it so measurement tunes constants, not shape | §6.7, §9.3, §11 item 11 | #37 |
+| A5 | `unsafe` lives only in `*_unsafe.rs`, so an auditor can enumerate the unsafe surface by `ls` | §4.1.1, gate C | #34 |
+
+**What this round changed about the doc's own claims**, beyond §13 items 9–12: §6.2's stage
+M2-c gate grows the memslot-frequency assertion, which is notable because it is a **structural,
+mock-only, clock-free gate for a cost that is otherwise measurable only on real hardware** —
+the same trick as the reactor's wake-count assert (§3.4). The bench measurement of memslot
+cost, running separately, can therefore change constants and the window-vs-arena boundary and
+nothing else. That was an explicit design requirement of A4 and it is the property to check if
+the measurement comes back surprising: if a number would force a *shape* change, the shape
+argument was a DoS-containment argument (§11 item 11) and the number does not reach it.
+
+**Not amended, and worth saying so.** A3 asked whether a dedicated memory-plane thread was
+wanted; the answer is no, and the existing design already had it right — §7.1 of
+`l1_concurrency.md` had rejected the identical shape for relay threads, and this doc's §3.7
+already puts background work on the executor. A3's contribution is therefore the *invariant*
+(I-NOAMP) and its honest baseline, not a structural change. The baseline matters more than it
+looks: without it, "process B never waits on process A" reads as achievable, and it is not —
+the guest driver's own GPU and API locks impose it on real hardware too.
+
+**What this round owes the build.** Nothing here has met contact yet. The three specific
+places I expect these amendments to be wrong, recorded in §14's own spirit so the log can
+confirm or refute rather than rediscover:
+
+1. **The `*_unsafe.rs` split will be awkward somewhere** — most likely `Reservation`, whose
+   safe half (offset arithmetic, occupancy accounting) and unsafe half (`mmap(MAP_FIXED)`,
+   `restore`) want to share a private invariant. The answer is a private safe type the unsafe
+   file consumes, not a relaxation of the rule; if it turns out to be a relaxation, that is a
+   finding and it belongs here.
+2. **The two-tier memory plane will want a third tier** the first time a backing needs a
+   slot-level attribute (§6.7's justification test). I expect this to arrive as dirty logging
+   for live migration and to be genuinely justified — at which point the answer is *another
+   window with that attribute*, not a slot per object, and the test in §6.7 is what forces
+   that answer to be argued.
+3. **I-NOAMP will fail its first honest measurement**, and the cause will be the BQL rather
+   than anything in our lock discipline. §6.3 predicts this; the value of predicting it is
+   that the fix is then an adapter change rather than a redesign of §3.
+
 ---
 
 ## 15. Proposed amendments to `l1_concurrency.md` (NOT applied here)
 
 That file is being appended to concurrently by the implementation work, so this doc does not
-edit it. Five amendments are implied; each is small, and each is a place where the current
-normative text would send an implementer somewhere wrong.
+edit it. **Seven** amendments are implied; each is small, and each is a place where the
+current normative text would send an implementer somewhere wrong.
 
 1. **§6.1 — the reactor's wake.** The text models the source set as a userspace list the
    loop re-reads on a wake ("signal the notifiable source, the loop re-joins"). With an
@@ -1934,6 +2529,28 @@ normative text would send an implementer somewhere wrong.
    (`C: nvkvm_gpu_emul.c:3458`), with `is_quiesced()` as the predicate, a defer deadline as
    the backstop, and a bounded escalation so a wedged verb cannot pin a reap forever.
    (§7.6 T3 here.)
+
+6. **★ §7.1 and §3.3 R1 — "the caller blocks" is not the whole truth under a foreign VMM.**
+   §7.1's backpressure argument (*"the caller blocks (lock-free), the guest's RPC stalls, the
+   guest slows down"*) and R1's "no blocking call under ANY lock" are both sound **for the L1
+   harness and for a BQL-free trap path**, and both are silently false in QEMU as it dispatches
+   today: our entry paths arrive with the BQL held, so a round-trip with every lock of *ours*
+   correctly dropped stalls **every vCPU in the VM**, not just its caller. Amend §7.1 to carry
+   the qualifier and the adapter obligation: **the trap path must be dispatched without the
+   VMM's global lock** (§6.3 here), otherwise the backpressure is device-wide rather than
+   self-limiting. This is the single most consequential thing in this list, because the
+   sentence as written reads as a *proof of containment* and is being relied on as one.
+
+7. **★ §3.3 R1/R2 — name the invariant they already provide.** R2's *"'write lock' now means
+   'no torn bookkeeping', deliberately not 'no outstanding host work'"* is exactly
+   **I-NOAMP** (no cross-process amplification: A's activity must never make B's vCPU wait
+   through anything we introduced) at the lock layer, and R1's lock-free verb is its other
+   half. Name it, so that the mean test's progress-under-pending assertion can be described as
+   *the I-NOAMP canary* rather than as a generic liveness check, and so that the two places we
+   can still amplify — the BQL and the memslot — are recorded as the named exceptions rather
+   than discovered. Include the honest baseline: the guest driver already serializes on its own
+   GPU/API locks across every GSP RPC (`ogkm: .../gpu/gsp/kernel_gsp.c:2848,2954`), so I-NOAMP
+   is about **amplification**, never about independence. (§6.6 here.)
 
 Two further notes for whoever holds those files: `core_state_and_consolidation.md` §4's
 "eager host-side reclaim is fine for correctness, wire later" should be deleted (false in
