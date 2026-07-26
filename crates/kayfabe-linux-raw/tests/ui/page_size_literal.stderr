@@ -1,0 +1,53 @@
+error[E0423]: cannot initialize a tuple struct which contains private fields
+ --> tests/ui/page_size_literal.rs:8:20
+  |
+8 |     let _literal = HostPageSize(4096);
+  |                    ^^^^^^^^^^^^
+  |
+note: constructor is not visible here due to private fields
+ --> src/page_size.rs
+  |
+  | pub struct HostPageSize(u64);
+  |                         ^^^ private field
+help: you might have meant to use the `query` associated function
+  |
+8 -     let _literal = HostPageSize(4096);
+8 +     let _literal = HostPageSize::query();
+  |
+
+error[E0599]: no associated function or constant named `from_bytes` found for struct `HostPageSize` in the current scope
+ --> tests/ui/page_size_literal.rs:9:32
+  |
+9 |     let _named = HostPageSize::from_bytes(4096);
+  |                                ^^^^^^^^^^ associated function or constant not found in `HostPageSize`
+  |
+note: if you're trying to build a new `HostPageSize`, consider using `HostPageSize::query` which returns `HostPageSize`
+ --> src/page_size.rs
+  |
+  |     pub fn query() -> Self {
+  |     ^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `bytes` with a similar name, but with different arguments
+ --> src/page_size.rs
+  |
+  |     pub const fn bytes(self) -> u64 {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0277]: the trait bound `HostPageSize: From<u64>` is not satisfied
+  --> tests/ui/page_size_literal.rs:10:44
+   |
+10 |     let _converted: HostPageSize = 4096u64.into();
+   |                                            ^^^^ the trait `From<u64>` is not implemented for `HostPageSize`
+   |
+   = note: required for `u64` to implement `Into<HostPageSize>`
+
+error[E0599]: no associated function or constant named `forced` found for struct `HostPageSize` in the current scope
+  --> tests/ui/page_size_literal.rs:11:33
+   |
+11 |     let _forced = HostPageSize::forced(65536);
+   |                                 ^^^^^^ associated function or constant not found in `HostPageSize`
+   |
+note: if you're trying to build a new `HostPageSize`, consider using `HostPageSize::query` which returns `HostPageSize`
+  --> src/page_size.rs
+   |
+   |     pub fn query() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^

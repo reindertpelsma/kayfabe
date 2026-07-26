@@ -3068,6 +3068,101 @@ occasionally "move it", which the error text should not be trusted to convey on 
    moment it collapses to the QEMU answer, the QEMU answer becomes the general one again,
    which is the precise failure P3 was raised to fix.
 
+### 14.5 ★★ M2-b — `kayfabe-linux-raw` exists, and three things in §4 were wrong
+
+**Provenance:** build findings, so §14's rule applies without the §14.2/§14.4 exception.
+Shipped: `crates/kayfabe-linux-raw` — `HostPageSize` + pure `geometry`, `HostOffset` +
+`checked_span`, `MappedRegion` / `RegionView` / `VolatileRegion` / `Reservation`, the
+`mmap`/`munmap` primitives, **7** relaxations in **2** `*_unsafe.rs` files, 32 unit tests
+and 8 `trybuild` rows (288 → 321, fast path 23.7 s → 26.3 s). CI gained gates **A**
+(forbid-inheritance), **B** (one crate) and the **block ratchet**, all three negative-tested.
+Deliberately NOT built: `memfd`+sealing, the isolate double-mmap, KVM/`epoll`, `Send`/`Sync`
+for the region types, and the `KAYFABE_FORCE_HOST_PAGE_SIZE` env knob.
+
+**F1. ★★ §4.4's belt-and-braces is unbuildable: `MAP_FIXED_NOREPLACE` and reserving first
+are mutually exclusive.** §4.4 asks for both — *"`map_fixed_in` is a method on
+`&mut Reservation` taking an offset… Belt and braces: the underlying call uses
+`MAP_FIXED_NOREPLACE`"*. `MAP_FIXED_NOREPLACE` fails `EEXIST` if **anything** is mapped in
+the target range, and in the reserve-first design the reservation itself always is, so every
+placement would fail. Punching a hole with `munmap` first and racing to fill it is strictly
+worse — it opens a window in which another thread's allocator can take the range, in a
+process we share with the VMM.
+
+The belt is therefore **relocated, not abandoned**, and it comes out stronger:
+the *reservation* is acquired at a **kernel-chosen** address (no address is ever requested
+by this crate), which cannot displace an existing mapping at all — a guarantee
+`MAP_FIXED_NOREPLACE` merely *detects*; and the *placement* uses plain `MAP_FIXED` inside a
+range we demonstrably own, with the accounting `MAP_FIXED_NOREPLACE` was meant to backstop
+made a loud refusal (`RawError::OverlappingPlacement`). **Consequence for §4.4's text:**
+strike the `MAP_FIXED_NOREPLACE` sentence and replace it with "the reservation is placed by
+the kernel, never requested". `MAP_FIXED_NOREPLACE` now appears nowhere in the codebase, and
+its absence is a decision rather than an omission.
+
+**F2. ★ §14.2 prediction 1 CONFIRMED — but the awkward seam was not `Reservation`, and the
+fix was the opposite of the one predicted.** The prediction was that the split would strain
+where a type's safe half and unsafe half share a private invariant. What actually strained
+was §4.1.1's *own* division of labour: *"`region_unsafe.rs` holds the syscalls and the
+pointer work; `region.rs` holds the newtypes, the arithmetic and the bounds checks."* Taken
+literally that produces a **safe file that validates and a dangerous file that trusts it** —
+i.e. every relaxation acquires a precondition established in another file, which is the
+single hardest shape to audit and exactly the shape §4.2.1 warns about one level up (the
+unsoundness happens where the check is skipped; the block reads clean).
+
+The build inverted it into a house rule, now the crate's headline invariant: **the pure
+arithmetic still lives in the safe files, and the dangerous file *calls it itself*,
+immediately above the block.** No relaxation in this crate has a caller-supplied
+precondition. The cost is that the region *types* live in the dangerous file rather than the
+safe one (2 dangerous files, not 4), which is a worse `ls` and a much better audit — and it
+is a real trade, so it is recorded as one. §4.1.1's split should be reworded from "who holds
+the bounds checks" to "who holds the *pointer*"; the arithmetic being pure and reusable was
+always the point, and being *called from* the safe side was never load-bearing.
+
+**F3. ★ §4.2's "copies only" never said what defines the copy under concurrent
+modification — and §4.3's own argument applies to it.** §4.3 correctly rules that a
+concurrent write by an agent outside the abstract machine is a data race and that atomics,
+not `volatile`, are the defined primitive. A bulk `read_into` out of guest-writable RAM is
+that same race, and there is no atomic `memcpy`. Three options exist: `copy_nonoverlapping`
+(a race in the letter of the model, what every Rust VMM does), per-byte `read_volatile`
+(equally undefined under concurrency, merely un-optimisable), and word-wise `Relaxed` atomic
+copies (**defined**, several times slower).
+
+Built: `copy_nonoverlapping`, with the gap named on the type rather than claimed away. What
+makes it tolerable *here specifically* is that the copy happens **once** and the source is
+never re-read, so the miscompilation such a race actually produces — an optimiser-inserted
+re-read — is the double-fetch this API exists to prevent; the discipline and the hazard
+cancel. **This is a design question, not an implementation one**, and it is left open on
+purpose: the answer is a measurement (how hot is guest-RAM bulk read?) and a decision, and
+neither belongs in the stage that had no consumer for either.
+
+**F4. §4.5's `assert_lock_free` at the `munmap` site must fire *after* the call.** `Drop` is
+the one syscall site an ordinary scope exit reaches with a lock held — so it is the one
+worth asserting — but asserting first panics out of a drop **before the resource is
+released**, trading a rule violation for a real leak. The syscall has already happened
+either way; what the assert is for is making it loud. Pinned by a test in both polarities
+(create-side and drop-side).
+
+**F5. §11 item 3 needed a refusal, not just a `PROT_READ`.** "Pages an isolate only reads
+are mapped read-only in the isolate" is a mapping property; without a matching *API* refusal
+the first `write_from` to such a region is a `SIGSEGV`, i.e. a guest-triggerable crash. The
+region carries its protection and returns `RawError::NotWritable`, and a `RegionView` cannot
+launder a write past it.
+
+**What M2-b owes the build,** in §14's spirit so the log can refute it:
+
+1. **`Send` will be wanted for the region types**, and the temptation will be one blanket
+   `unsafe impl` in the dangerous file. The honest form is per-type and argued: a
+   `MappedRegion` is genuinely sendable, and a `Reservation` handed to a second thread while
+   a first still holds a `&MappedRegion` from it is not — the compiler currently says no to
+   both, which is why nothing was granted at M2-b.
+2. **The `trybuild` rows will go red on a rustc diagnostic reword** and someone will delete a
+   row to make it green. The `.stderr` files are snapshots of *today's* wording, not of the
+   property; the instruction (`TRYBUILD=overwrite`, after confirming the errors are the same
+   errors) is in the suite's own docs for exactly that morning.
+3. **Refusal 5 will be quoted as if the compiler held it.** Four of §4.2.1's five refusals
+   are types; the fifth — a semantically unbounded bounded object — has no mechanism and is a
+   §11 review obligation. The crate docs say so in as many words, and the first time someone
+   cites "the compile-fail suite" as covering it, that is the failure mode.
+
 ---
 
 ## 15. Proposed amendments to `l1_concurrency.md` (NOT applied here)

@@ -1,0 +1,12 @@
+error[E0597]: `region` does not live long enough
+  --> tests/ui/view_outlives_region.rs:13:9
+   |
+ 9 |     let view: RegionView<'_> = {
+   |         ---- borrow later stored here
+10 |         let region =
+   |             ------ binding `region` declared here
+...
+13 |         region.slice(HostOffset::ZERO, 64).unwrap()
+   |         ^^^^^^ borrowed value does not live long enough
+14 |     };
+   |     - `region` dropped here while still borrowed

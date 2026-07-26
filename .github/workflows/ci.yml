@@ -215,6 +215,78 @@ jobs:
             echo "gate needs a judgement call, \`ls\` stops being the audit."
             exit 1
           fi
+      # ★ The UNSAFE-CONTAINMENT gates — A, B and the ratchet (l1_os_shell.md §4.1).
+      #
+      # Landed WITH `kayfabe-linux-raw`, because that crate is what makes them necessary.
+      # `unsafe_code = "forbid"` cannot be relaxed by an `allow` inside a crate — that is
+      # the point of `forbid` — so the one crate that needs the relaxation must OMIT
+      # `[lints] workspace = true` and restate its lints. That creates a silent opt-out for
+      # the whole workspace: any future crate that merely forgets the inheritance block
+      # loses `forbid` with no diagnostic at all. Gate A closes it.
+      #
+      # Gate C (above) already pins the *file naming*; these pin the *containment*:
+      #  A — every package except kayfabe-linux-raw inherits the workspace lints;
+      #  B — the keyword lives in exactly one crate's src/, so gate C's `ls` is an `ls` of
+      #      one directory rather than of the repo;
+      #  ratchet — the block COUNT matches a committed number, so a new relaxation is a
+      #      reviewed commit with an argument, and cannot drift upward inside a debugging
+      #      diff. Raising it is a one-line change that shows up in review; the clippy lint
+      #      `undocumented_unsafe_blocks = deny` (that crate's Cargo.toml) makes each one
+      #      carry its own `// SAFETY:`, which is what makes the §11 review tractable.
+      #
+      # Same exit-code polarity trap as the three gates above: a `grep` HIT is the failure.
+      - name: "Unsafe-containment gates (A: forbid inheritance, B: one crate, ratchet)"
+        run: |
+          # --- Gate A: every package but the ONE inherits `unsafe_code = "forbid"`.
+          missing=""
+          for m in crates/*/Cargo.toml tests/Cargo.toml; do
+            case "$m" in crates/kayfabe-linux-raw/Cargo.toml) continue;; esac
+            grep -q '^\[lints\]' "$m" && grep -q '^workspace = true' "$m" || missing="$missing $m"
+          done
+          if [ -n "$missing" ]; then
+            echo "★ FORBID-INHERITANCE BREACH — l1_os_shell.md §4.1 gate A."
+            echo "These manifests do not inherit the workspace lints, so they are NOT"
+            echo "covered by \`unsafe_code = \"forbid\"\` and nothing would have said so:"
+            for m in $missing; do echo "  $m"; done
+            echo "Add:"
+            echo "  [lints]"
+            echo "  workspace = true"
+            echo "There is exactly ONE crate allowed to omit it (kayfabe-linux-raw), and"
+            echo "adding a second is a design decision, not a manifest edit."
+            exit 1
+          fi
+          # --- Gate B: the surface lives in exactly one crate's src/.
+          outside=$(find . -name '*_unsafe.rs' \
+                      -not -path './crates/kayfabe-linux-raw/src/*' \
+                      -not -path './target/*' -not -path './*/target/*' \
+                      -not -path './mutants.out/*' || true)
+          if [ -n "$outside" ]; then
+            echo "$outside"
+            echo ""
+            echo "★ UNSAFE-CONTAINMENT BREACH — l1_os_shell.md §4.1 gate B."
+            echo "The unsound surface is ONE crate: crates/kayfabe-linux-raw/src/. The"
+            echo "files above are elsewhere. Move the code, or the audit stops being"
+            echo "'read one crate in one sitting', which is its acceptance criterion."
+            exit 1
+          fi
+          # --- The ratchet: the number of relaxations is a reviewed constant.
+          # Counts the syntactic forms only (`unsafe {`, `unsafe fn/impl/trait`), so prose
+          # inside those files — which gate C permits there — cannot inflate it.
+          EXPECTED_UNSAFE_BLOCKS=7
+          actual=$(grep -rhoE 'unsafe (\{|fn |impl |trait )' \
+                     crates/kayfabe-linux-raw/src/*_unsafe.rs | wc -l | tr -d ' ')
+          echo "unsafe blocks: $actual (bar: $EXPECTED_UNSAFE_BLOCKS)"
+          grep -rcoE 'unsafe (\{|fn |impl |trait )' crates/kayfabe-linux-raw/src/*_unsafe.rs || true
+          if [ "$actual" -ne "$EXPECTED_UNSAFE_BLOCKS" ]; then
+            echo ""
+            echo "★ UNSAFE RATCHET MOVED — l1_os_shell.md §4.1."
+            echo "Expected $EXPECTED_UNSAFE_BLOCKS relaxation(s), found $actual."
+            echo "If you ADDED one: change the number here in the same commit, and say in"
+            echo "the message what the new block does and what its SAFETY invariant is."
+            echo "If you REMOVED one: change the number here too — a ratchet that only"
+            echo "catches growth stops being a count of the audit surface."
+            exit 1
+          fi
       - name: Format check (fuzz workspace)
         run: cargo fmt --all --check
         working-directory: fuzz

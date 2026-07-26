@@ -14,6 +14,7 @@ members = [
     "crates/kayfabe-trace",
     "crates/kayfabe-mocks",
     "crates/kayfabe-rt",
+    "crates/kayfabe-linux-raw",
     "tests",
 ]
 
@@ -37,6 +38,7 @@ kayfabe-gsp = { path = "crates/kayfabe-gsp" }
 kayfabe-trace = { path = "crates/kayfabe-trace" }
 kayfabe-mocks = { path = "crates/kayfabe-mocks" }
 kayfabe-rt = { path = "crates/kayfabe-rt" }
+kayfabe-linux-raw = { path = "crates/kayfabe-linux-raw" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
