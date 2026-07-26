@@ -1536,6 +1536,20 @@ before any SRCU synchronisation. Consequence for API shape: an **idempotent "ens
 window is installed" call costs nothing**, so the shell may call it unconditionally rather
 than tracking installed-ness itself. Cheap idempotence beats a cache that can go stale.
 
+**★★ [measured] CORRECTION — a FLAGS-ONLY flip is 1.49 µs, not 230–460 µs.** Everything above
+is about **install / remove / move**. Changing only a slot's *flags* on an otherwise identical
+region — the `KVM_MEM_READONLY` toggle — costs **1.49 µs**; **[inferred]** KVM takes a fast
+path that skips the invalidate-swap and the grace periods (inferred from the timing, *not*
+kprobe-confirmed the way the two-swap DELETE claim is). This corrects the cost model wherever
+this section is cited, and it is corrected loudly because **the error ran in the direction
+that wrongly discourages a legitimate design**: it priced the RO-memslot fallback for the
+region lock (`guest_memory_lock.md` §7.3) as a device-wide stall per lock, when it is a
+microsecond flip. *Nothing about the rule changes* — the rule is about install/remove
+**frequency**, and item 4's "protection is a window property" is untouched: a flags flip on a
+**shared** window still revokes writes for every proc in it, which is an I-NOAMP violation at
+any price. What the correction buys back is that a *dedicated* RO-capable window is an
+affordable fallback rather than an impossible one.
+
 **⚠️ Caveats, stated so the numbers are not over-quoted.**
 
 1. **The bench host is itself a KVM guest.** Absolute numbers are inflated by nested
@@ -1649,14 +1663,33 @@ userfaultfd, and it would be identical if the mechanism changed again. `slot` ke
 containing **window**, never the granularity; `gpa` names the faulting page. Both rustdocs now
 say so, so the per-page/per-window distinction is not re-lost.
 
+★ **One thing in the kept column is now known to be wrong, and it is a meaning rather than a
+signature.** `CoreEvent::LockedRegionFault`'s rustdoc says *"the accessing vCPU is parked
+until the core answers"*. Under `guest_memory_lock.md` GL8 it is not: **fault resolution never
+depends on the core** — the handler resolves (unprotect + wake) and notifies afterwards, so
+the vCPU is parked until the **holder releases**, not until the executor drains. Two
+independent reasons, either sufficient: parking a guest store behind a serialized inbox prices
+one write at the inbox's current depth, and the executor is itself allowed to hold a region
+mutex, so "resolve by asking the core" is a cycle with a parked vCPU at one end. The delivery
+seam does not move; its status changes from **decision point** to **observation**, and it
+becomes per-region opt-in. **Owed edit to `kayfabe-vmm`'s rustdoc.**
+
 **What this costs in tests:** `MockVmm` loses two method impls and `SlotRecord::locked` (which
 nothing asserted on — the capability had **zero core call sites**, which is also why this was
 free today and would not have been after L2 wired one).
 
-**Residual, stated:** the uffd design itself — registration mode, the fault-handler thread's
-placement, and its interaction with the `assert_lock_free` witness — is **not** designed here.
-It belongs with `kayfabe-linux-raw`, and this section's only claim is where it belongs.
-★ **One shape of it is fixed in advance, and only one — §6.8.1**, because the alternative
+~~**Residual, stated:** the uffd design itself — registration mode, the fault-handler thread's
+placement, and its interaction with the `assert_lock_free` witness — is **not** designed here.~~
+★ **CLOSED (2026-07-26): it is designed, and measured — `guest_memory_lock.md`.** All three
+named residuals are answered there: registration is **once per window at install** and is
+**not** arming (only `UFFDIO_WRITEPROTECT` arms — the distinction that otherwise becomes a
+silent no-op); the handler gets **its own thread**, argued against §6.6's queue discipline
+because it can be neither the reactor (which must never block) nor the executor (which may be
+the holder); and the witness interaction is **GL6** — the region mutex is **rank 3, acquired
+only from a lock-free context**, with exactly two `*_under_lock` syscalls beneath it, using
+§4.5's existing greppable escape rather than a new one. It still belongs with
+`kayfabe-linux-raw`, and this section's claim about *where* it belongs is unchanged.
+★ **One shape of it was fixed in advance, and only one — §6.8.1**, because the alternative
 carries a race that is far cheaper to refuse now than to debug later.
 
 #### 6.8.1 ★ The per-region access lock is a PLAIN MUTEX — and the RW variant's slip-through is why
@@ -1717,6 +1750,49 @@ correct-but-slow half of the passthrough optimisation; per `testing_doctrine.md`
 a tested configuration in its own right, and the transitions between the two are exercised by
 irregular toggling rather than by two fixed runs. That rule is general and lives there; this
 is the feature that motivated it.
+
+#### ★★ The measurement (2026-07-26) — the ruling stands, its precondition became a mechanism, and the feature acquired a deployment requirement
+
+The bench round that landed §6.7's memslot numbers also measured this mechanism end to end.
+The full design is `guest_memory_lock.md`; four things belong here, at the ruling they touch.
+
+1. **[measured] The mutex ruling is unchanged and is now cheap on evidence rather than on
+   argument.** An uncontended full lock cycle — acquire → arm → act → disarm → release — is
+   **2.23 µs**, the arm is **1.11 µs** for one page (**≈25 ns/page** marginal), and the TLB
+   shootdown is **flat at +0.6–0.9 µs with 16 contending threads**: a constant, *not* a
+   multiplier. The result that could have forced an RW lock did not appear. The upgrade
+   criteria above are unchanged and still unmet.
+2. **★ The precondition — *"scoped to the locked REGION, never the containing window"* — is
+   now a type rather than a sentence.** A region carries a declared `PageClass`, and an
+   acquire on anything but `PageClass::LockPath` is a **loud fault**, never a silent no-op
+   (`guest_memory_lock.md` GL3/GL4). That closes the I-NOAMP hole this ruling was conditioned
+   on by construction: a window-scoped lock is not expressible, because the lockable unit is a
+   registered page range and the window is not one.
+3. **[measured] uffd-WP beats the struck alternative on cost as well as correctness.**
+   Trapped guest-write round trip **24.8 µs** p50 / 63.6 p99 versus **70.2 µs** for a
+   `KVM_MEM_READONLY` sub-slot trap — **2.8× faster**. §6.7 item 5 was decided on I-NOAMP
+   alone; it happens to be the fast answer too. RO-memslot stays documented as the **fallback**
+   (`guest_memory_lock.md` §7.3), and its one genuine advantage is that it needs **no
+   privilege at all**.
+4. **★★ [measured] The feature has a DEPLOYMENT requirement, and it is the load-bearing
+   finding.** The trap fires only for a **full-mode** uffd — `UFFD_USER_MODE_ONLY` does not
+   trap guest writes, because KVM's page walk is a *kernel*-mode fault — and the syscall form
+   refuses full mode to an unprivileged caller. **`/dev/userfaultfd` (6.1+) plus a udev rule
+   converts a `CAP_SYS_PTRACE` requirement — root-equivalent, and fatal to the
+   unprivileged-host premise — into the same posture we already require for `/dev/kvm`.**
+   It fails *closed* (`KVM_RUN` returns `-EFAULT`), so it is not a silent bypass; it destroys
+   the vCPU run loop instead and will present as an unrelated bug, which is why startup must
+   probe for it with a **kernel-mode write** and refuse loudly (GL9). This is §4.4.1's pattern
+   again: a deployment fact no type and no CI grep can observe, answered by a loud refusal at
+   realize.
+
+**And two boundaries the ruling should be read against, because they bound what any lock here
+can ever mean.** **[measured]** The **isolate is not covered** (different `mm`; its writes land
+unseen) — and **[src]** NVIDIA forbids arming that side anyway, rejecting any range where
+`userfaultfd_armed(vma)` (`ogkm: kernel-open/nvidia-uvm/uvm_hmm.c:577-588`). **[measured]**
+**GPU DMA is not covered**: the same physical page written without walking our page tables
+takes no fault. Hence GL4 — those ranges are refused at registration rather than locked
+uselessly, because *a lock that appears held but protects nothing is worse than no lock.*
 
 ---
 
@@ -2987,6 +3063,28 @@ here so the ledger stays the one place that enumerates every decision.
     shape of the C's unpaid debt (`C: virtio_nvgpu.c:16-18`). Honest cost: a harness proves our
     *logic*, not our *integration*; it **moves** the mock-versus-real gap (§7.9) rather than
     closing it, so the direction is to do **both**.
+
+49. **★★ The guest-memory region lock is designed, measured, and CONFINED (§6.8's residual,
+    closed — `guest_memory_lock.md`)** — a per-region `Mutex` plus `UFFDIO_WRITEPROTECT` on our
+    own window VMA; **[measured]** a guest vCPU write is genuinely trapped (tested in the hard
+    order: write first, then protect, so `mmu_notifier` is exercised), 2.23 µs uncontended
+    cycle, 24.8 µs trapped round trip, **2.8× faster than the struck RO-memslot alternative**.
+    Ten normative rules (GL1–GL10); the four that decide the shape: **copy-once stays
+    primary** and the lock is the exception; the lock/no-lock call is made on the guest's
+    **write RATE** (GSP command queue ~3 kHz = 7 % of a core, page-table pages ~18 kHz = 45 %
+    plus vCPU stalls — so PT pages are forbidden, reproducing the C's C1 vmexit-storm verdict
+    from a cost direction); the **page taxonomy is a refusal**, because a lock that appears
+    held but protects nothing is worse than no lock — the **isolate** (different `mm`; and
+    `ogkm: uvm_hmm.c:577-588` forbids arming) and **GPU DMA** (both **[measured]**) are outside
+    any lock, forever; and **passthrough is never load-bearing** — trap-everything ships as a
+    selectable mode with irregular toggling (`testing_doctrine.md` §7). The core holds an
+    opaque `RegionAccess` guard from a `RegionLock` trait in `kayfabe-util` and never learns
+    the word userfaultfd. **The deployment half is the load-bearing finding:**
+    `/dev/userfaultfd` + a udev rule turns a `CAP_SYS_PTRACE` requirement — root-equivalent,
+    fatal to the unprivileged-host premise — into `/dev/kvm`'s posture, and a `USER_MODE_ONLY`
+    fd is a **startup refusal** proven by a kernel-mode-write probe. Also corrects §6.7's cost
+    model (**a flags-only memslot flip is 1.49 µs**) and `CoreEvent::LockedRegionFault`'s
+    rustdoc (resolution never waits on the core).
 
 **Genuinely open:**
 
