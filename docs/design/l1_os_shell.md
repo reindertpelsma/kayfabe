@@ -1156,7 +1156,7 @@ not enough.**
 > **★★ EVERYTHING IN THIS SUBSECTION IS QEMU-CONDITIONAL** (tagged by the portability round,
 > §14.4 item 3). Every claim below — that our entry paths arrive with a machine-global lock
 > held, that a verb round-trip stalls **every vCPU**, and that I-NOAMP *cannot* be met on the
-> trap path without `memory_region_clear_global_locking()` — is **true for QEMU and false for
+> trap path without lockless MMIO dispatch (§6.3.1) — is **true for QEMU and false for
 > cloud-hypervisor**, where MMIO dispatch is a synchronous `VmOps` call **on the vCPU thread**
 > with no VM-wide lock. On CH the entry path holds at most the per-device lock of the class
 > table above, and nothing at all under the direct-`BusDeviceSync` escape. Do not read the
@@ -1185,16 +1185,18 @@ bottom half (that context runs under it). Consequences the doc does not currentl
   sharpest violation of I-NOAMP (§6.6) available anywhere in the design, and it is caused by
   a lock we neither hold deliberately nor can rank.
 - **Therefore the L2 adapter has a named, load-bearing obligation:** our trapped BAR regions
-  must be dispatched **without** the BQL. QEMU provides `memory_region_clear_global_locking()`
+  must be dispatched **without** the BQL. ~~QEMU provides `memory_region_clear_global_locking()`
   for exactly this case (VFIO and virtio use it); the adapter must apply it to our MMIO
-  regions and **verify it exists and behaves as expected on the target QEMU version** — this
-  is an API-availability check, not an assumption, and it is listed in §7.9's not-mock-testable
-  table. Correspondingly, any deferred work that can block must not run on the main-loop BH
-  under the BQL.
-- **If that mechanism is unavailable, the drop-the-lock rule is necessary but not
+  regions and **verify it exists and behaves as expected on the target QEMU version**~~ —
+  ★ **the verification was run (bench, 2026-07-26) and the named mechanism DOES NOT EXIST.**
+  The obligation stands unchanged; the mechanism is replaced, and the whole answer — including
+  a hazard the design did not anticipate — is **§6.3.1** below. Correspondingly, any deferred
+  work that can block must not run on the main-loop BH under the BQL.
+- **If no such mechanism is available, the drop-the-lock rule is necessary but not
   sufficient**, and I-NOAMP cannot be met on the trap path at all. That would be an **L2
   blocker, not a tuning item**, and it should be discovered by a deliberate bench measurement
-  early rather than by a wedge under load.
+  early rather than by a wedge under load. **[measured] It is not a blocker — but only because
+  a backport is carried; see §6.3.1.**
 - **The C never solved this and said so in writing** — `C: src/qemu/virtio_nvgpu.c:16-18`:
   *"Currently we hold the QEMU BQL across dispatch for simplicity and will relax this
   later."* Its Mode-2 doorbell path likewise instrumented wall-vs-thread-CPU time precisely
@@ -1210,6 +1212,153 @@ locks anyway, so the in-lock exception is unused there. Keep it in the contract 
 path may want it), but note that the shipping completion path does not rely on it — "we have
 one exception and currently exercise it nowhere" is a much stronger position than "we have one
 exception on the hottest path".
+
+#### 6.3.1 ★★ The measurement (2026-07-26) — the named mechanism does not exist; the remedy is a backport, and it comes with a hazard
+
+Full write-up: `../reference/qemu_bql_spike.md`. **The reasoning above is untouched** — the
+ABBA cycle, the unrankable foreign lock, R3's blindness by construction, and the conclusion
+that the trap path must not run under the BQL are all exactly as written. **Only the
+mechanism changed**, and one thing the design did not know about arrived with it.
+
+**★ First, the worked example, because the instruction is what caught this.** §6.3 said:
+*apply `memory_region_clear_global_locking()` and **verify it exists and behaves as expected on
+the target QEMU version** — this is an API-availability check, not an assumption.* The check
+was run. **[src]** The function was **removed in QEMU 5.2.0** (commit `4174495408af`, 2020) **as
+dead code**: its only user, the ACPI PM timer, had been reverted in 2016 for real bugs. It is
+**absent from our target, 9.2.0** (`/opt/qemu-src`, built per `scripts/build_qemu.sh:9`), where
+`prepare_mmio_access()` takes the BQL unconditionally (`system/physmem.c:2713`). The KVM exit
+itself is BQL-free (`accel/kvm/kvm-all.c:3182`, *"Called outside BQL"*) — the lock is re-taken
+**below** it, with no per-region opt-out. Pinning to a version that has it means **QEMU 5.1
+(Aug 2020)**, which is not a trade anyone would take.
+
+> **Keep the general lesson, not the anecdote.** The citation was confident and specific
+> ("VFIO and virtio use it for exactly this case") and had been wrong for four years. A named
+> API in a design doc is a **claim about a version**, and it decays. §6.3's verify-don't-assume
+> clause is the only reason this surfaced at plan time instead of in the L2 adapter's first
+> week — which is the argument for writing such clauses even when the API "obviously" exists.
+
+**The remedy — the 10.2.0 backport.** **[src]** Upstream reintroduced the capability in **QEMU
+10.2.0** as **`memory_region_enable_lockless_io()`** (commit `73c520b08887`, Aug 2025), KVM-path
+only (TCG ignores it). **[measured]** The backport to 9.2.0 is **~4 lines**, `system/physmem.c`
+being the only load-bearing hunk, and it **applies cleanly**. **[measured]** Stock 9.2 reports
+`bql_locked() = 1` in **all three** MMIO handlers of a throwaway PCI device; with the backport,
+**0**. Observed, not inferred.
+
+**[measured] What it buys** — vCPU A blocks 5 ms at 50 % duty; vCPU B hammers an *unrelated*
+MMIO page for 5 s (this is precisely §7.9's prescribed canary):
+
+| arm | B p50 / p99 | B throughput | |
+|---|---|---|---|
+| stock 9.2 | 142 / **5 611 µs** | 13 876 ops | p99 ≈ **exactly A's 5 ms block** — B queued behind A through the BQL; **5.3× degraded** |
+| + backport | **60 / 146 µs** | 72 633 ops | indistinguishable from the A-idle control; A's block **never appears in B's tail** (max 758 µs) |
+
+The conclusive part is the *shape*, not the ratio: stock's p99 is not "high", it **is A's block
+duration transferred onto B**, and with the backport that number is absent from the
+distribution rather than reduced. (Absolute latencies are inflated ≈10× — the bench is itself a
+KVM guest, the nesting effect the C recorded in `mode2_baremetal_32`. **The ratios are the
+signal.**)
+
+> ### ★★★ NORMATIVE — the package deal
+>
+> **BQL-free dispatch and disabling the per-device reentrancy guard are ONE change, not two.
+> Taking the first without the second silently drops guest memory accesses.**
+
+**The evidence, because this is the rule someone will otherwise "simplify" into a bug.** The
+hand-rolled alternative — `bql_unlock()` / `bql_lock()` around the blocking call — looks
+correct on latency and is not correct. **[src]** QEMU's reentrancy guard
+(`system/memory.c:551-561`) rejects an access arriving at a device already inside a dispatch,
+and it is keyed on the **device**, not the region, so **any two vCPUs touching the same device
+collide**. **[measured]** With the manual unlock and the guard in place, **34 825 of 73 394
+(47 %) of vCPU B's MMIO reads returned `MEMTX_ACCESS_ERROR` instead of dispatching**
+(`warning: Blocked re-entrant IO on MemoryRegion`). A `MEMTX_ACCESS_ERROR` on a read is not a
+fault the guest sees as a fault — it is a value the guest reads that we never produced. That is
+why upstream's `memory_region_enable_lockless_io()` **also** sets
+`disable_reentrancy_guard = true`, in the same function.
+
+> ### ★★★ NORMATIVE — and the consequence, which is the larger finding
+>
+> **The reentrancy guard was implicitly serialising our device. Once lockless IO is taken it
+> is gone, and R1 (no blocking under a lock), R3 (lock rank) and R5 (revalidate across a lock
+> gap) become load-bearing for CORRECTNESS, not merely for latency.**
+>
+> Before the change, an R1/R3/R5 violation on the trap path cost a stall. After it, the same
+> violation is a data race with **two real vCPUs inside the same device**. Nothing else
+> serialises them — not QEMU, and not us unless those three rules hold. This upgrades their
+> status in `l1_concurrency.md` from discipline to invariant for every path reachable from a
+> lockless-IO region, and it is the reason the two halves of the package may never be split
+> "temporarily".
+>
+> **[inferred] Honest scope of that upgrade:** the measurement proves the guard *was*
+> serialising and *does* bite; it does **not** show that our code has a race today. The
+> promotion is a consequence, correctly derived, not an observed defect.
+
+**★ [inferred] And §6.3's enforcement item 4 changes sign.** *"Many BQL-requiring QEMU
+functions `assert(bql_locked())`, so calling one from a thread that lacks the BQL aborts
+loudly — that is the failure mode we prefer."* Under lockless IO our handlers **always** lack
+it, so that net is no longer a backstop against a rare mistake: it is the thing that will fire
+the first time the adapter calls any BQL-requiring QEMU helper from a trap. Preferred failure
+mode, still — but it means the **written list of QEMU functions called from in-lock-legal
+methods** (enforcement item 3) stops being a review artifact for the *inversion* and becomes
+the working document for *what the trap path may call at all*. Expect it to be exercised early
+and noisily rather than to sit unused.
+
+**★ ioeventfd is AVAILABLE to the doorbell, and the token is not an obstacle** — which is
+strictly less than "ioeventfd is the doorbell's path". The durable results below are (a) the
+API works on a BAR sub-range in 9.2 and (b) the token is recoverable; (b) is a **source**
+argument about the C, not a measurement. Adopting it is an L2-Q **decision** (task 4), not an
+inheritance. **[src]**
+`memory_region_add_eventfd()` exists in 9.2, works on a sub-range of a PCI BAR MMIO region, and
+with `match_data = false` matches on **address + size alone**, carrying **no payload**. That
+would normally disqualify a doorbell whose written value is a channel token; here it does not,
+**because the C already ignores the value**: `nvkvm_m2_exec_doorbell(s)`
+(`C: src/qemu/nvkvm_gpu_emul.c:8644`) takes **neither offset nor value**, the written value
+feeds only an off-by-default debug log, the code **already re-enters the path with a fabricated
+`0`** (`:3366-3369`), and it re-derives which channel advanced by polling every channel's
+`GP_PUT` (`:8777`) against its shadow `gp_get` (`:8863`). **Register without datamatch** —
+tokens are per-channel and churn, so a datamatch registration would need one eventfd per live
+token, re-registered on every change, to recover information the handler discards.
+**[measured]** doorbell p50 **50 µs trapped → 29 µs ioeventfd**, throughput 79 306 → 143 556 in
+5 s, and **28 µs p50 / 86 µs p99 while A holds its 5 ms block** — unaffected. **[inferred]**
+Event coalescing (~0.1 %) is safe *here* because the handler is **level-triggered over
+`[gp_get, GP_PUT)` and idempotent**; that is a property of this handler, not of ioeventfd, and
+an edge-triggered or value-consuming handler behind one would be a bug.
+
+> ### ★★ NORMATIVE — and the caveat that must always travel with the previous paragraph
+>
+> **ioeventfd frees the vCPU, not the SERVICE.** **[measured]** its handler still runs on the
+> **main loop with the BQL held** (`bql_locked() = 1`). On its own it does not make the work
+> BQL-free — it **relocates** the stall from one vCPU to the main loop, which is worse for
+> everything else in the VM. It is only a win if the service behind it **also** never blocks
+> under the BQL, or runs in an IOThread.
+>
+> The measured "unaffected by A's block" figure is *B's doorbell write latency*. It is real,
+> and it is **not** evidence that a blocking service behind that doorbell would be harmless.
+> Over-reading it that way is the likely failure mode of this whole finding.
+
+> ### ★★ NORMATIVE — the 1.7× is a *nested* number twice over, and our own C says so
+>
+> `C: mode2_execfwd_layer2` root-caused the Mode-2 perf problem to a **nested-only** vmexit
+> storm, and `C: mode2_baremetal_32` measured **zero** overhead bare metal — i.e. bare-metal
+> Mode-2 was *not* doorbell-trap-bound. The spike removed vmexits from a path whose vmexits are
+> ≈10× inflated, on a bench that is itself a KVM guest. **50 → 29 µs is not a bare-metal
+> prediction, and the ratio bare metal is unknown.** Quote the availability result, not the
+> speedup.
+
+> ### ★★ NORMATIVE — token recovery imports a scan F1 is suspicious of. Decide it, don't inherit it
+>
+> The token is recoverable **only because the C polls every channel's `GP_PUT` against its
+> shadow**. That is **O(live channels) per doorbell** — and §3.4 / §9.3's F1 wake-count gate
+> exists precisely to forbid "the loop does work the signals it was given do not account for".
+> Token recoverability is proven **for the C's design**; adopting it means importing a scan our
+> own reactor discipline would flag. **This is an open L2-Q decision (task 4), not a settled
+> one.** The alternatives — a datamatch registration per live token, or keeping the doorbell
+> trapped and paying dispatch — must be weighed against the scan, not assumed away by it.
+
+**★ Named unknown, not settled: data-carrying BAR1 writes.** **[src]** BAR1 aperture writes —
+including the guest's own `GP_PUT` store (`C: nvkvm_gpu_emul.c:4407`) — carry their payload in
+the written value, so they **cannot** use ioeventfd and stay on the vCPU under the BQL.
+**[inferred]** their handlers are fast (a GMMU walk) so they are *probably* fine — which is
+exactly the shape of claim this doc refuses. The experiment is in §7.9's table.
 
 ### 6.4 `defer` — share the queue with the mock, do not re-implement it
 
@@ -1333,6 +1482,34 @@ Four concrete consequences, three of them already satisfied:
   **memslot** (§6.7 — an SRCU grace period charged to every vCPU no matter who issues it).
   Neither is fixable by threading. The first is fixed by not holding it; the second only by
   frequency.
+
+  **★★ [measured, 2026-07-26 — §6.3.1] The first is now measured, and I-NOAMP has a number.**
+  Under stock QEMU 9.2 the amplification is not theoretical and not small: proc A blocking
+  5 ms inside a handler puts **A's exact block duration into B's p99** (5 611 µs) and costs B
+  **5.3× throughput** — an unrelated vCPU touching an unrelated page. That is the sharpest
+  I-NOAMP violation in the design, measured. With the lockless-IO backport it **disappears
+  from B's distribution** (p99 146 µs; A's block never appears in B's tail). So the bullet
+  above is now a *result*: **"fixed by not holding it" is confirmed, and the fix is a QEMU
+  build requirement rather than a coding discipline** (§10 L2-Q).
+
+  **★ And the two corrections this measurement forces on how the rest of §6.6 reads.**
+
+  1. **The amplifier is not only the BQL — it was also QEMU's per-device reentrancy guard**,
+     and removing the BQL removes that too (they are one change, §6.3.1). So *our* R1/R3/R5
+     become the only thing serialising two vCPUs inside our device. I-NOAMP (b) — *"no lock,
+     queue or thread of ours may make B wait on A"* — acquires a twin obligation that is not
+     about waiting at all: **no absence of a lock of ours may let B and A collide.** The two
+     are not in tension (R1's answer is "do the blocking work outside the lock", not "hold the
+     lock longer"), but a reader optimising only for (b) can talk themselves into dropping a
+     lock that is now load-bearing.
+  2. **ioeventfd does not discharge I-NOAMP by itself.** It removes the *vCPU* from the path
+     (measured: the doorbell is untouched by A's block) but its handler runs on the **main
+     loop under the BQL**, so a blocking service behind it amplifies onto every other main-loop
+     consumer instead of onto one vCPU. §6.6's rule is what saves this: *guest-requested work
+     runs on the thread serving the request with our locks dropped, background work on the
+     executor* — an ioeventfd handler is a **notification**, and the rule says it must hand
+     off, never block. **An ioeventfd handler that does a verb round-trip is an I-NOAMP
+     violation wearing a fast benchmark.**
 
 **Test shape.** The mean run's existing progress-under-pending assertion **is** the I-NOAMP
 canary and should be named as one: proc B makes progress while proc A's verb is parked, both
@@ -2503,8 +2680,9 @@ Stated so we never claim more than we verify:
 | a real 16/64 KiB host page size works | forced runs test our geometry, not the kernel | run the suite on Grace-Hopper / Jetson (§5.3) |
 | memslot/BQL interaction | `MockVmm` has neither | the QEMU adapter at L2, under the nested-virt bench |
 | descriptor exhaustion under a real `RLIMIT` | mock descriptors are integers | arm past the cap on a real host; assert contained refusal |
-| **★★ the trap path holds NO FOREIGN LOCK** (§6.3's class rule — stated backend-independently, because the QEMU answer must never be mistaken for the general one) | `MockVmm` owns no lock we did not construct, and the harness owns its own threads — so *no* mock can distinguish "we hold none" from "this backend imposes none" | measure it the same way on either backend: park a verb on one vCPU and assert another vCPU's unrelated MMIO still completes. **Two expected outcomes, and they differ:** **QEMU — conditional pass:** requires `memory_region_clear_global_locking()` to exist on the target version and to be applied to our BAR regions (an API-availability *check*, not an assumption). If it is unavailable, the drop-the-lock rule is necessary but not sufficient and I-NOAMP cannot be met on the trap path — **an L2 blocker, not a tuning item**. **CH — unconditional pass expected:** MMIO dispatch is a synchronous `VmOps` call on the vCPU thread with no VM-wide lock, and with the direct-`BusDeviceSync` registration (§6.3) not even a per-device one. A CH failure here would mean the escape was not taken |
+| **★★ the trap path holds NO FOREIGN LOCK** (§6.3's class rule — stated backend-independently, because the QEMU answer must never be mistaken for the general one) | `MockVmm` owns no lock we did not construct, and the harness owns its own threads — so *no* mock can distinguish "we hold none" from "this backend imposes none" | measure it the same way on either backend: park a verb on one vCPU and assert another vCPU's unrelated MMIO still completes. **★★ QEMU — MEASURED AHEAD OF L2 (2026-07-26, §6.3.1, `../reference/qemu_bql_spike.md`): stock 9.2 FAILS this row** (B's p99 = A's 5 ms block, 5.3× throughput loss), **and passes with the 10.2.0 `memory_region_enable_lockless_io()` backport** (p99 146 µs, A's block absent from B's tail). The originally named `memory_region_clear_global_locking()` **does not exist** — removed in 5.2.0. So this row is no longer "conditional on an API check"; it is conditional on **carrying the backport, paired with `disable_reentrancy_guard`**, which is a build/deployment requirement (§10 L2-Q). What remains genuinely un-settled is whether *our* device passes it, since the spike measured a throwaway one. **CH — unconditional pass expected:** MMIO dispatch is a synchronous `VmOps` call on the vCPU thread with no VM-wide lock, and with the direct-`BusDeviceSync` registration (§6.3) not even a per-device one. A CH failure here would mean the escape was not taken |
 | **★ the real memslot cost and update rate** (§6.7) | mock `map_guest` is a `BTreeMap` insert | measure `KVM_SET_USER_MEMORY_REGION` latency vs vCPU count, and count updates provoked by a real workload. Tunes the §6.7 constants; the mock-side *frequency* gate already pins the shape |
+| **★ data-carrying BAR1 writes under the BQL** (§6.3.1's named unknown) — the doorbell escapes to ioeventfd, but BAR1 aperture writes **carry their payload in the written value** (incl. the guest's `GP_PUT` store, `C: nvkvm_gpu_emul.c:4407`), so they cannot, and stay on the vCPU thread inside a trap. **[inferred]** their handlers are fast (a GMMU walk) so they are *probably* fine — un-measured, and "probably fine" is the shape of claim §0.2 refuses | `MockVmm` has no vCPU, no trap and no BQL; and the spike's handler was a trivial read, so it bounds the *dispatch* cost and says nothing about the handler's | the §6.3.1 A/B harness again, with **B's handler doing page-walk-sized work** and driven at **BAR1 write rates taken from a real Mode-2 workload**; report B's p99 with A blocking, both arms. Settles whether lockless-IO dispatch alone is sufficient for BAR1, or whether the aperture also needs a fast path |
 | the guest driver really frees its client root on process death | the mock guest is a script | a real guest process killed mid-op; assert full reclamation |
 | tearing on GPU-written pages | no hardware writer | high-rate semaphore observation under real load |
 
@@ -2594,6 +2772,8 @@ Plus the `HostLedger` itself (§7.8) and `MockIsolate::request_cancel`.
 | **memslot frequency (§6.7)** | push | the mean run's slot-install count grows with publications rather than with arena grants — a per-object memslot, caught structurally and without a clock |
 | **★ VMM vocabulary (§6.0, decision #39)** | push | hypervisor **API** vocabulary (`BQL_LOCK_GUARD`, `memory_region_*`, `qdev_*`, `QEMUBH`, "bottom half", "main loop", …) appears in the 11 pure crates **or `kayfabe-rt`**. Matches identifiers, never the vendor's name, so adapter-crate names never trip it and no allowlist exists |
 | **single VMM-global-lock acquisition site (§6.3)** | push (L2) | the adapter contains more than one acquisition site for **the foreign lock of its backend** — QEMU: `bql_lock`/`qemu_mutex_lock_iothread`/`BQL_LOCK_GUARD`; CH: any `Mutex<Device>`-shaped registration that reintroduces the per-device lock the direct-`BusDeviceSync` escape removes — or that site does not `assert_lock_free`. **Zero sites is a pass**, and is the expected CH result |
+| **★★ lockless-IO PAIRING (§6.3.1)** | push (L2) | a QEMU region is marked lockless (`memory_region_enable_lockless_io`, or any hand-rolled `bql_unlock`/`bql_lock` around a dispatch) **without** `disable_reentrancy_guard` on the same device — or vice versa. The two are one change; splitting them measured **47 % of a vCPU's MMIO reads silently returning `MEMTX_ACCESS_ERROR`**. Grep-shaped and cheap: the adapter must have exactly one helper that does both, and no other site may touch either symbol |
+| **★ QEMU capability probe (§6.3.1)** | realize (runtime), and a build check in CI | the QEMU we are linked into does not provide `memory_region_enable_lockless_io` (stock < 10.2.0 without our backport). **Refuse loudly at realize**, the §4.4.1 / GL9 pattern — a deployment fact no type and no grep can observe. Silent fallback to BQL dispatch is forbidden: it is not a slow mode, it is an I-NOAMP violation that presents as an unrelated latency bug |
 | narrow page-size grep | push | a bare `4096`/`0x1000`/`>>12` in the raw or rt crates |
 | page-size axis | push | the geometry suite fails at 16 KiB or 64 KiB |
 | forced-page-size integration | nightly | the shell suite fails at 64 KiB |
@@ -2728,22 +2908,60 @@ growth) with their refusal paths exercised; the ratchets re-measured.
 **Gate:** the review signed off **as part of this milestone, not as later cleanup**, and
 every cap's refusal path exercised by the security suite.
 
-**★★ L2-Q — the QEMU adapter, as its own milestone, BQL verification FIRST.** Not a stage of
-M2 and not a tail task of one: a milestone, because it is where our design meets a lock we do
-not own. **Its first task is the verification, before any device code:** confirm that
-`memory_region_clear_global_locking()` exists on the **target QEMU version**, that it applies
-to our BAR regions, and that a trapped MMIO access is then dispatched **without** the BQL —
-measured the way §7.9's row prescribes (park a verb on one vCPU, assert another vCPU's
-unrelated MMIO still completes). §6.3 already says why: both of our entry paths arrive with
-the BQL **held**, so "we take no foreign lock" is not sufficient on QEMU, and if the API is
-unavailable this is **an L2 blocker, not a tuning item**. Everything else in the milestone —
-`Device` registration, the memslot install path, `raise_irq` as irqfd, the written list of
-in-lock-legal QEMU functions (§6.3 enforcement item 3) — is downstream of that answer, and
-some of it is *shaped* by it.
-**Gate:** the BQL verification recorded as a result (pass, or a named blocker with the version
-it was tested against — not an assumption); the `rt_shell`/`l1_mean` suites green against the
-QEMU `Vmm` in both lock modes; the memslot frequency gate holding on a real KVM; §7.9's
-QEMU-conditional rows converted from "expected" to "observed".
+**★★ L2-Q — the QEMU adapter, as its own milestone. The BQL verification is DONE, and it
+came back with a different answer.** Not a stage of M2 and not a tail task of one: a milestone,
+because it is where our design meets a lock we do not own. §6.3 says why: both of our entry
+paths arrive with the BQL **held**, so "we take no foreign lock" is not sufficient on QEMU.
+
+> **★ The first task has been discharged ahead of the milestone** (bench, 2026-07-26 — §6.3.1,
+> `../reference/qemu_bql_spike.md`). It was *"confirm that `memory_region_clear_global_locking()`
+> exists on the target QEMU version"*. **It does not exist** — removed in 5.2.0 as dead code —
+> and stock 9.2 **fails** the acceptance measurement (A's 5 ms block lands verbatim in an
+> unrelated vCPU's p99; 5.3× throughput loss). It is **not** an L2 blocker, because the
+> capability was reintroduced upstream in 10.2.0 and the backport is ~4 lines that apply
+> cleanly to 9.2.
+
+**The first task becomes, in order:**
+
+1. **Carry and test the backport.** `memory_region_enable_lockless_io()` from QEMU 10.2.0
+   (commit `73c520b08887`) onto our 9.2.0 tree, as a tracked patch in `scripts/build_qemu.sh`'s
+   provenance — not a local edit on the bench host. Re-run the §6.3.1 acceptance measurement
+   **against our device**, not a throwaway one; the spike bounds the dispatch, not our
+   handlers.
+2. **Pair it with the reentrancy guard, in one helper.** §9.3's pairing gate. Splitting the two
+   measured **47 % of a vCPU's MMIO reads silently returning `MEMTX_ACCESS_ERROR`** — a
+   correctness failure, not a performance one — and this is the item most likely to be
+   "simplified" by someone who reads only the latency result.
+3. **Re-audit R1/R3/R5 on every path reachable from a lockless-IO region**, because the guard
+   that was implicitly serialising our device is now gone and those three rules are what
+   replace it (§6.3.1's second normative box). This is new work that the pre-measurement plan
+   did not contain.
+4. **The doorbell on ioeventfd** (`memory_region_add_eventfd`, no datamatch — the token is
+   recoverable because the C's handler already discards it, §6.3.1), **with its handler
+   required to hand off rather than block**: it runs on the main loop under the BQL, so it
+   frees the vCPU and not the service.
+5. **Measure the BAR1 unknown** (§7.9's new row) — data-carrying aperture writes cannot use
+   ioeventfd and stay on the vCPU under a trap.
+
+Everything else in the milestone — `Device` registration, the memslot install path, `raise_irq`
+as irqfd, the written list of in-lock-legal QEMU functions (§6.3 enforcement item 3) — is
+downstream of that answer, and some of it is *shaped* by it.
+
+> **★★ And a DEPLOYMENT/BUILD requirement is now on the ledger, in the same class as
+> `/dev/userfaultfd`'s udev rule (§6.8.1 item 4).** Correct operation requires a QEMU that has
+> lockless MMIO IO: **≥ 10.2.0, or our patched 9.2.0**. Like the udev rule, it is a fact about
+> the deployment that no type and no CI grep can observe, so it is answered the same way — a
+> **probe at realize and a loud refusal** (§9.3), never a silent fallback. Unlike the udev rule
+> it fails *quietly* rather than closed: without it we still run, just with every vCPU serialised
+> behind every other. That is the worse failure mode of the two and the reason the probe is
+> mandatory rather than advisory.
+
+**Gate:** the backport carried as a tracked patch with the acceptance measurement re-run
+against our device and recorded (both arms); the pairing gate and the realize-time probe both
+negative-tested; the R1/R3/R5 re-audit written down as an artifact, not asserted; the
+`rt_shell`/`l1_mean` suites green against the QEMU `Vmm` in both lock modes; the memslot
+frequency gate holding on a real KVM; §7.9's QEMU-conditional rows converted from "expected" to
+"observed", with the BAR1 row either measured or explicitly re-deferred.
 
 ---
 
@@ -2940,9 +3158,13 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     **Drop-the-lock fixes both the inversion and the stall**, which is why it is the general
     rule rather than an exception list. *And the finding it exposes:* QEMU **gives** us the
     BQL on both entry paths, so "lock-free" is not sufficient — the trap path must be
-    dispatched without the BQL (`memory_region_clear_global_locking`, verified at L2) or
-    I-NOAMP fails on the hottest path. The C recorded this as an unpaid debt
-    (`C: virtio_nvgpu.c:16-18`).
+    dispatched without the BQL or I-NOAMP fails on the hottest path (**measured**: 5.3×, and
+    A's block verbatim in B's p99). The C recorded this as an unpaid debt
+    (`C: virtio_nvgpu.c:16-18`). ★ **The mechanism named here was `memory_region_clear_global_locking`,
+    "verified at L2"; the verification ran early and it DOES NOT EXIST (removed 5.2.0). The
+    remedy is the 10.2.0 `memory_region_enable_lockless_io()` backport, and it is a PACKAGE
+    DEAL with `disable_reentrancy_guard` — see §6.3.1, which also promotes R1/R3/R5 to
+    correctness requirements on those paths.**
 36. **★ Guest-requested memory ops run on the calling thread with the lock dropped; there is
     no memory-plane thread and no memory-plane queue (§6.6)** — the caller blocking is
     self-limiting backpressure aimed at exactly the process that caused it; a thread plus a
@@ -3058,9 +3280,12 @@ here so the ledger stays the one place that enumerates every decision.
     and no foreign locks, so the memory plane gets one variable instead of two at exactly the
     stage where R1's reckoning repeats; and **the first real `Vmm` being non-QEMU proves
     §6.0's portability contract by construction rather than by intention.** The condition is
-    half the decision: `memory_region_clear_global_locking()` is verified against the target
-    QEMU version **first**, or "we will do QEMU later" becomes "QEMU is a surprise" — the exact
-    shape of the C's unpaid debt (`C: virtio_nvgpu.c:16-18`). Honest cost: a harness proves our
+    half the decision: the BQL question is settled against the target QEMU version **first**,
+    or "we will do QEMU later" becomes "QEMU is a surprise" — the exact
+    shape of the C's unpaid debt (`C: virtio_nvgpu.c:16-18`). ★ **Discharged early (§6.3.1):
+    the named API did not exist, the answer is a backport, and the condition paid for itself —
+    had this waited for L2 it would have been discovered as an adapter surprise, which is the
+    thing the clause was written to prevent.** Honest cost: a harness proves our
     *logic*, not our *integration*; it **moves** the mock-versus-real gap (§7.9) rather than
     closing it, so the direction is to do **both**.
 
@@ -3578,6 +3803,58 @@ launder a write past it.
    are types; the fifth — a semantically unbounded bounded object — has no mechanism and is a
    §11 review obligation. The crate docs say so in as many words, and the first time someone
    cites "the compile-fail suite" as covering it, that is the failure mode.
+
+### 14.6 ★★ BQL round, 2026-07-26 — the L2-Q first task was run early, and the mechanism §6.3 named does not exist
+
+**Provenance:** bench findings, so §14's rule applies without the §14.2/§14.4 exception —
+nothing here is a plan. Measured on the serialized vast.ai bench against **QEMU 9.2.0**
+(`/opt/qemu-src`, `scripts/build_qemu.sh:9`) with a throwaway PCI device, ahead of any adapter
+code. Full write-up: `../reference/qemu_bql_spike.md`.
+
+| finding | effect on this doc |
+|---|---|
+| ★★ **`memory_region_clear_global_locking()` was removed in QEMU 5.2.0** (commit `4174495408af`, 2020) as dead code — its only user, the ACPI PM timer, reverted in 2016. **Absent from 9.2.0**; `prepare_mmio_access()` takes the BQL unconditionally (`system/physmem.c:2713`). Pinning to a version that has it means **5.1 (Aug 2020)** | §6.3's second bullet **struck and replaced** by §6.3.1; §7.9's trap-path row, §10's L2-Q first task, and §12 items 35 and 48 all re-pointed. **The reasoning is untouched** — only the mechanism was wrong |
+| the capability returned upstream in **10.2.0** as **`memory_region_enable_lockless_io()`** (`73c520b08887`, Aug 2025), KVM-only; the backport to 9.2.0 is ~4 lines and applies cleanly | **Not an L2 blocker.** But it makes correct operation depend on **which QEMU we are built into** — a deployment requirement, logged in L2-Q alongside `/dev/userfaultfd`'s udev rule |
+| **[measured]** stock 9.2 holds the BQL in **all three** handlers (`bql_locked()=1`); with the backport, **0**. A blocking on one vCPU puts **its exact 5 ms into an unrelated vCPU's p99** (5 611 µs, 5.3× throughput loss); with the backport that value is **absent from the distribution** (146 µs p99, max 758 µs) | §6.6's I-NOAMP bullet stops being an argument and becomes a **result**; §7.9's row moves from "conditional pass expected" to "measured fail / measured pass with the patch" |
+| ★★★ **the hand-rolled `bql_unlock`/`bql_lock` is a silent-data-loss bug**: QEMU's per-**device** reentrancy guard (`system/memory.c:551-561`) then refuses the concurrent access — **34 825 / 73 394 (47 %) of vCPU B's MMIO reads returned `MEMTX_ACCESS_ERROR` instead of dispatching**. Upstream's function disables the guard in the same breath | **The new normative rule (§6.3.1): the two are a PACKAGE DEAL.** New §9.3 pairing gate. **And the larger consequence — the guard was implicitly serialising our device, so R1/R3/R5 become CORRECTNESS requirements on every lockless-IO path, not latency disciplines.** That is the row that changes what the milestone has to do (L2-Q task 3) |
+| ★ ioeventfd works on a PCI BAR sub-range in 9.2, matches address+size with `match_data=false`, carries no payload — **and the token is recoverable, because the C's handler already discards it** (`C: nvkvm_gpu_emul.c:8644`, re-entered with a fabricated `0` at `:3366-3369`, channel re-derived by polling `GP_PUT` `:8777` vs shadow `gp_get` `:8863`). p50 50 → 29 µs, 79 306 → 143 556 ops/5 s, unaffected by A's block | §6.3.1 records it as the doorbell's path, **without datamatch**. Coalescing (~0.1 %) is safe *because this handler is level-triggered and idempotent* — a property of the handler, stated so it is not inherited by the next one |
+| ★★ **[measured]** the ioeventfd handler still runs on the main loop **with the BQL held** | Stated as prominently as the win, in §6.3.1 and §6.6: **it frees the vCPU, not the service**, and on its own it relocates the stall onto the main loop. An ioeventfd handler that does a verb round-trip is an I-NOAMP violation with a fast benchmark attached |
+| ★ **not settled:** data-carrying BAR1 writes (incl. `GP_PUT`, `C: nvkvm_gpu_emul.c:4407`) cannot use ioeventfd and stay on the vCPU under a trap; handlers are fast (a GMMU walk) but that was **not measured** | New row in §7.9 with the experiment that settles it, and L2-Q task 5 |
+
+**★ The methodological finding, and it is the same one §14.3 reached from the other side.**
+§14.3's lesson was *citing a comment is still citing a belief*. This round's is its sibling:
+**naming an API in a design doc is making a claim about a version, and it decays.** The
+citation here was confident, specific and load-bearing ("VFIO and virtio use it for exactly
+this case") and had been false for four years before it was written down. The only reason it
+surfaced at plan time rather than in the adapter's first week is that §6.3 attached
+*"verify it exists — this is an API-availability check, not an assumption"* to it, and §10
+made that verification L2-Q's **first** task rather than its last. **Both of those clauses
+were written on general principle and both paid out on the same day** — which is the argument
+for keeping them cheap and keeping them numerous, rather than reserving them for APIs that
+look doubtful. This one did not look doubtful.
+
+**★ What this round did NOT establish, recorded against the temptation to over-read it.** The
+spike measured a **throwaway** PCI device with trivial handlers, in a **nested** guest, as a
+microbenchmark — see `../reference/qemu_bql_spike.md` §9. It establishes that the *mechanism*
+exists, works on a PCI BAR in 9.2, and that the BQL is the amplifier it was predicted to be. It
+does **not** establish that our device passes the same measurement, that ioeventfd helps a real
+workload end-to-end, or anything at all about bare metal. Those stay in §7.9, and L2-Q's gate
+is written to re-run the measurement **against our device** rather than to cite this one.
+
+**Three things I expect to be wrong about this round, recorded now:**
+
+1. **The pairing gate will be defeated by a third way of dropping the lock.** It greps for the
+   two symbols we know about; the first `BQL_LOCK_GUARD` used in an inverted sense, or a QEMU
+   helper that drops the lock internally, walks straight past it. The gate is over what we
+   write — §6.3's enforcement item 2, with the same honest ceiling.
+2. **"ioeventfd frees the vCPU, not the service" will be lost in transmission** before L2-Q
+   is built, and something will end up doing a round-trip on the main loop. It is repeated in
+   three places for that reason, and if it still happens, the answer is an IOThread, not a
+   fourth repetition.
+3. **The BAR1 unknown will turn out to matter more than the doorbell.** The doorbell got the
+   attention because it was the obvious trap; BAR1 writes are the ones that carry data, cannot
+   escape to ioeventfd, and — per the C — happen on the page-table publication path, which is
+   the one §6.8.1 already forbids locking because of its ~18 kHz write rate.
 
 ---
 
