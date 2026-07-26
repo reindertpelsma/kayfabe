@@ -209,6 +209,104 @@ impl ResourceKey {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClientId(u64);
 
+/// ★★★ §12.42 — **the identity of one client-namespace DECLARATION in every derived
+/// plane**: its `hClient` value plus which *incarnation* of that value it is.
+///
+/// It is to [`ClientId`] exactly what [`ResourceKey`] is to [`ResId`], and it exists for
+/// the same reason, one level up.
+///
+/// ## Why an `HClient` alone cannot be one
+///
+/// [`ClientId`]'s own docs say why the VALUE is recyclable (caller-supplied roots, a
+/// generator that wraps at 2^20 with no free list, no epoch anywhere in RM). §12.39/§12.40
+/// closed the *grouping* half of that by comparing never-reused [`ClientId`]s. What it
+/// left open is the **component plane**: [`crate::ProcAnchor`] and
+/// [`crate::project::ProcBoundary::clients`] were `HClient`s, so **two generations of one
+/// `hClient` could not be two boundaries**. With only one slot per value, the newer
+/// declaration displaced the older — and the older declaration's resources, which RM keeps
+/// alive by refcount for as long as a foreign alias references them
+/// (`ogkm src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`), belonged to **no boundary at
+/// all**. Their component vanished, `Gpu::vacate` staged it, and
+/// `sync_proc_to_boundary`'s `stage_dropped_vases` released the host VAS and the published
+/// backing **while a live kernel client still referenced the resource** — the
+/// corruption-over-refusal direction §12.40 §1 refuses as D4 and `cross_proc_lifetime`
+/// pins against, reached by walking around the rule instead of through it (§12.41 §4).
+///
+/// ## Why an incarnation ordinal rather than the [`ClientId`]
+///
+/// Verbatim [`ResourceKey`]'s argument. A [`ClientId`] is minted from a counter, so its
+/// value depends on arrival order, and [`crate::project::Boundaries`] is compared whole
+/// across shuffled orders — that IS decision #4. The ordinal has no such dependence:
+/// **declarations at ONE `hClient` value are totally ordered by the protocol** (a second
+/// root `Alloc` while the namespace has a live root is
+/// [`RmGraphError::DuplicateClientRoot`], mirroring RM's own
+/// `NV_ERR_INSERT_DUPLICATE_NAME` at `rs_server.c:3352-3357`; and the `Free` that releases
+/// it must follow the `Alloc` that declared it, because an event naming an undeclared
+/// namespace is refused). So "the smallest ordinal no LIVE declaration at this value
+/// already holds" is a pure function of the declared facts.
+///
+/// It is `0` for every namespace that is not currently sharing its value with an orphaned
+/// predecessor — i.e. essentially always.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ClientKey {
+    /// The `hClient` value this declaration was made at. Ordered first, so a
+    /// `BTreeSet<ClientKey>` still iterates in ascending client order and every
+    /// determinism property stated over that order is unchanged — including
+    /// [`crate::ProcAnchor`]'s *"the smallest client in the component"* rule.
+    pub client: HClient,
+    /// Which live declaration of [`Self::client`] this is. `0` unless a `DUP_OBJECT`
+    /// kept an earlier declaration's resources alive past its root's free and the value
+    /// was then re-declared.
+    pub incarnation: u32,
+}
+
+impl ClientKey {
+    /// The FIRST declaration at `client` — the only one that exists unless the value has
+    /// been recycled while a foreign alias kept the predecessor's resources alive.
+    #[must_use]
+    pub fn first(client: HClient) -> Self {
+        ClientKey {
+            client,
+            incarnation: 0,
+        }
+    }
+
+    /// The upper bound of `client`'s incarnation range (a range bound, never a real
+    /// identity). Public as [`Self::last_for`] for the one cross-module range query
+    /// ([`crate::gpu::Spine::is_condemned`]).
+    #[must_use]
+    pub fn last_for(client: HClient) -> Self {
+        Self::last(client)
+    }
+
+    /// The upper bound of `client`'s incarnation range (a range bound, never a real
+    /// identity).
+    #[must_use]
+    fn last(client: HClient) -> Self {
+        ClientKey {
+            client,
+            incarnation: u32::MAX,
+        }
+    }
+}
+
+/// ★★★ §12.42 — one live client-namespace **declaration**: its never-reused identity,
+/// the privilege it declared, and how many live resources it owns.
+///
+/// The refcount is what makes a declaration's *liveness* a maintained fact rather than a
+/// scan: a declaration is live while it has a live root **or** owns at least one resource
+/// a foreign alias keeps alive. Both are the same statement here, because a live root is
+/// itself a live resource of its own namespace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Declaration {
+    /// The never-reused identity, for MATCHING (`Proc::client_ids`, `Spine::condemned`).
+    id: ClientId,
+    /// The privilege the namespace declared about itself at its root `Alloc`.
+    kind: ClientKind,
+    /// Live resources owned by this declaration. Never 0 for a stored entry.
+    refs: u32,
+}
+
 /// ★ How a live handle came to reference its resource — the **declared protocol fact**
 /// `RM_ALLOC` vs `DUP_OBJECT`, recorded at the event that declared it (decision #14,
 /// protocol-not-trace).
@@ -509,6 +607,23 @@ struct Resource {
     /// **not** an `Option`: §12.38's rule guarantees every creating event names a declared
     /// namespace, so it always resolves — the deleted-`unwrap_or(0)` discipline (§12.27).
     owner: ClientId,
+    /// ★★★ §12.42 — which **incarnation** of `node.key.client` allocated this resource.
+    /// With `node.key.client` it forms the resource's owning [`ClientKey`], which is the
+    /// order-independent *label* [`crate::project`] may report, where [`Self::owner`] is
+    /// the order-dependent identity it may only compare. Recorded at the origin
+    /// `RM_ALLOC` and immutable, exactly like its two siblings above.
+    owner_incarnation: u32,
+}
+
+impl Resource {
+    /// The declaration that allocated this resource — the reportable half of
+    /// [`Self::owner`].
+    fn owner_key(&self) -> ClientKey {
+        ClientKey {
+            client: self.node.key.client,
+            incarnation: self.owner_incarnation,
+        }
+    }
 }
 
 /// Which capacity-bounded table a hostile guest overflowed (see [`RmGraphError::CapacityExceeded`]).
@@ -719,6 +834,23 @@ pub struct RmGraph {
     /// make `rev()`-newest-wins become exact lookups — the projection called two of them
     /// per node, so the old shape was O(resources²) per event as well.
     by_origin: BTreeMap<ResourceKey, ResId>,
+    /// ★★★ §12.42 — every LIVE client-namespace **declaration**, keyed by its
+    /// order-independent [`ClientKey`]. An **index**, not a second source of truth: an
+    /// entry is created by the root `Alloc` that declared it and refcounted by the
+    /// resources that namespace allocates, so it disappears exactly when the declaration
+    /// owns nothing live any more.
+    ///
+    /// It replaces the ascending-`ResId` scan of every resource that
+    /// [`Self::client_declarations`] used to be — which was O(resources) per projection
+    /// *and*, because it wrote one entry per `HClient`, kept only the **newest**
+    /// declaration per value. That newest-wins collapse is §12.41 §4's defect: an older
+    /// declaration whose resources a kernel alias keeps alive stopped projecting the
+    /// instant the value was re-declared, its component was vacated, and its host memory
+    /// was freed while RM still refcounted it.
+    ///
+    /// Bounded by the live resource count (every entry owns at least one), so it is not a
+    /// guest-growable ghost log — the G10 complexity rule (§12.22).
+    decls: BTreeMap<ClientKey, Declaration>,
 }
 
 /// ★ §12.27 — the reserved client handle. `0` is `NV01_NULL_OBJECT`, which RM can never
@@ -762,6 +894,7 @@ impl RmGraph {
             gpus: BTreeSet::from([0]),
             client_roots: BTreeMap::new(),
             by_origin: BTreeMap::new(),
+            decls: BTreeMap::new(),
         }
     }
 
@@ -901,13 +1034,92 @@ impl RmGraph {
     /// alive (§12.27's `drop_handle` rule — the namespace is empty and free to
     /// re-declare). Such a client is NOT "probably a user client": it groups with nobody
     /// until a fresh root lands, which is the MISS=FAULT posture rather than a guess.
-    pub fn client_kinds(&self) -> impl Iterator<Item = (HClient, ClientKind)> + '_ {
+    ///
+    /// ★★★ §12.42 — it yields the [`ClientKey`] of the LIVE-ROOT declaration, not a bare
+    /// `HClient`. One `hClient` value may name several live declarations at once (at most
+    /// one of which has a live root, by [`RmGraphError::DuplicateClientRoot`]), and
+    /// "which one is the guest talking to right now" is precisely the live-root one.
+    pub fn client_kinds(&self) -> impl Iterator<Item = (ClientKey, ClientKind)> + '_ {
         self.client_roots.iter().filter_map(|(&c, id)| {
-            self.resources
-                .get(id)
-                .and_then(|r| r.node.facts.client_kind)
-                .map(|k| (c, k))
+            let r = self.resources.get(id)?;
+            let kind = r.node.facts.client_kind?;
+            Some((
+                ClientKey {
+                    client: c,
+                    incarnation: r.owner_incarnation,
+                },
+                kind,
+            ))
         })
+    }
+
+    /// ★★★ §12.42 — the incarnation ordinal a namespace declared at `client` **now**
+    /// takes: the smallest one no LIVE declaration at that value already holds.
+    ///
+    /// Almost always `0`. It is non-zero exactly when a `DUP_OBJECT` alias is keeping an
+    /// earlier declaration's resources alive past its root's free (RM refcounts them —
+    /// `ogkm src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`) and the guest re-declares the
+    /// value, which RM permits with no quarantine at all (`rs_server.c:612` honours a
+    /// caller-supplied root; `:3319-3341` generates one from a wrapping index with no free
+    /// list).
+    ///
+    /// Reuse of a **dead** declaration's ordinal is deliberate and safe, for the reason
+    /// [`Self::next_incarnation`] states: identity only has to separate things that are
+    /// simultaneously live, and bounding the ordinal by the live set is what keeps
+    /// [`Self::decls`] from being a guest-growable ghost log. Anything that must survive a
+    /// declaration's *death* — [`crate::gpu::Spine::condemned`] — keys on [`ClientId`],
+    /// which is never reused.
+    fn next_client_incarnation(&self, client: HClient) -> u32 {
+        let mut want = 0u32;
+        for k in self
+            .decls
+            .range(ClientKey::first(client)..=ClientKey::last(client))
+            .map(|(k, _)| k.incarnation)
+        {
+            if k != want {
+                break;
+            }
+            want += 1;
+        }
+        want
+    }
+
+    /// ★★★ §12.42 — record one more live resource for `key`'s declaration, minting the
+    /// entry if this is the root `Alloc` that declared it.
+    fn retain_declaration(&mut self, key: ClientKey, id: ClientId, kind: ClientKind) {
+        let d = self
+            .decls
+            .entry(key)
+            .or_insert(Declaration { id, kind, refs: 0 });
+        debug_assert_eq!(
+            d.id, id,
+            "two identities at one live ClientKey — the incarnation ordinal was minted \
+             against a stale live set"
+        );
+        d.refs += 1;
+    }
+
+    /// ★★★ §12.42 — release one live resource of `key`'s declaration; the declaration
+    /// itself dies with its last one. That is the moment its ordinal becomes reusable,
+    /// and it is the same moment [`Self::by_origin`] releases a resource's.
+    fn release_declaration(&mut self, key: ClientKey) {
+        if let Some(d) = self.decls.get_mut(&key) {
+            d.refs -= 1;
+            if d.refs == 0 {
+                self.decls.remove(&key);
+            }
+        }
+    }
+
+    /// ★★★ §12.41/§12.42 — destroy a resource and every index that names it. The ONE
+    /// place a [`Resource`] leaves the graph, so the identity index and the declaration
+    /// refcount can never drift from `resources`.
+    fn destroy_resource(&mut self, id: ResId) {
+        let Some(r) = self.resources.remove(&id) else {
+            return;
+        };
+        self.by_origin.remove(&r.node.id());
+        self.release_declaration(r.owner_key());
     }
 
     /// ★★★ §12.39 — the declaration each client namespace **projects under**: its live
@@ -927,57 +1139,43 @@ impl RmGraph {
     /// not already exist — every key is a namespace that owns a live resource — it only
     /// makes the classification a **read of a declared fact** instead of a default.
     ///
-    /// A live root always wins over an orphan record, and among orphan declarations of
-    /// one namespace the **newest** wins (`resources` iterates in ascending [`ResId`], and
-    /// [`ResId`] is a monotonic mint) — a deterministic tie-break for a state only a
-    /// namespace that was declared, freed and re-declared can reach.
-    ///
-    /// ★★★ §12.39 Part B — each entry carries the declaration's **identity** as well as
-    /// its kind. That is what makes "is this resource still owned by the namespace it was
-    /// allocated in?" a comparison of never-reused ids rather than of a recyclable
-    /// `HClient` value, and it is the whole of the recycled-namespace fix: the moment a
-    /// namespace re-declares, its entry names the NEW [`ClientId`] and every resource of
-    /// the old declaration stops matching.
-    pub fn client_declarations(&self) -> BTreeMap<HClient, (ClientId, ClientKind)> {
-        let mut out: BTreeMap<HClient, (ClientId, ClientKind)> = BTreeMap::new();
-        for r in self.resources.values() {
-            out.insert(r.node.key.client, (r.owner, r.owner_kind));
-        }
-        // A LIVE root always wins over an orphan record.
-        for (&c, id) in &self.client_roots {
-            if let Some(r) = self.resources.get(id)
-                && let Some(kind) = r.node.facts.client_kind
-            {
-                out.insert(c, (ClientId(id.0), kind));
-            }
-        }
-        out
+    /// ★★★ §12.42 — **EVERY live declaration, not one per `hClient` value.** This used to
+    /// return a `BTreeMap<HClient, _>`, i.e. exactly one slot per value with "a live root
+    /// wins, else the newest orphan". That collapse is §12.41 §4's defect: after
+    /// `declare A → alias → free root → re-declare A`, generation 1's still-live resources
+    /// answered to **no** declaration, so they projected into no boundary, their component
+    /// vanished, and `stage_dropped_vases` released the host VAS and published backing of
+    /// a resource RM still refcounts for a live kernel client
+    /// (`ogkm .../mem_mgr/mem.c:1027-1031`) — the corruption direction. Keyed by
+    /// [`ClientKey`], the two generations are two entries and both project.
+    pub fn client_declarations(&self) -> BTreeMap<ClientKey, (ClientId, ClientKind)> {
+        self.decls
+            .iter()
+            .map(|(&k, d)| (k, (d.id, d.kind)))
+            .collect()
     }
 
-    /// ★★★ §12.39 Part B — every live resource with the [`ClientId`] of the namespace
-    /// that **allocated** it. Ascending origin-key order, exactly like [`Self::nodes`].
+    /// ★★★ §12.39 Part B / §12.42 — every live resource with the **declaration** that
+    /// allocated it. Ascending origin-key order, exactly like [`Self::nodes`].
     ///
-    /// Deliberately a separate iterator rather than a field on [`RmNode`]: a `ClientId` is
-    /// minted from a counter, so its VALUE depends on the order the events arrived in,
-    /// while `RmNode` is compared whole across shuffled orders by the order-independence
-    /// properties. The projection only ever *compares* owners against
-    /// [`Self::client_declarations`], never reports one, so keeping the id off the payload
-    /// keeps decision #4's guarantee stated over exactly the same data as before.
-    pub fn nodes_with_owner(&self) -> impl Iterator<Item = (&RmNode, ClientId)> {
-        self.resources.values().map(|r| (&r.node, r.owner))
+    /// Deliberately a separate iterator rather than a field on [`RmNode`]: `RmNode` is
+    /// compared whole across shuffled orders by the order-independence properties, and the
+    /// owner is a derived fact about the namespace rather than about the object.
+    pub fn nodes_with_owner(&self) -> impl Iterator<Item = (&RmNode, ClientKey)> {
+        self.resources.values().map(|r| (&r.node, r.owner_key()))
     }
 
-    /// ★★★ §12.39 Part B — the [`ClientId`] of the namespace that allocated the resource
-    /// `key` references (dup-aliases followed). `None` if the handle resolves to nothing.
+    /// ★★★ §12.39 Part B / §12.42 — the **declaration** that allocated the resource `key`
+    /// references (dup-aliases followed). `None` if the handle resolves to nothing.
     ///
     /// The dup-grouping predicate reads this through the **destination** handle, which is
     /// live by construction, rather than through the edge's reported `src` key — the `src`
     /// a dup edge reports is the resource's origin `(client, handle)`, and that `HClient`
     /// is exactly the recyclable value the identity model exists to stop trusting.
     #[must_use]
-    pub fn owner_of(&self, key: NodeKey) -> Option<ClientId> {
+    pub fn owner_key_of(&self, key: NodeKey) -> Option<ClientKey> {
         let id = self.resource_of(key)?;
-        self.resources.get(&id).map(|r| r.owner)
+        self.resources.get(&id).map(Resource::owner_key)
     }
 
     /// Every client namespace one event names (one for most events, two for a `Dup`).
@@ -1255,13 +1453,24 @@ impl RmGraph {
                         // owns itself (RM: the `hClient` IS its root object's handle,
                         // `rs_server.c:625`); every other object is owned by the root its
                         // namespace currently has, which §12.38's gate guarantees exists.
-                        let owner = if matches!(node.kind, ObjectKind::Client) {
-                            ClientId(id.0)
+                        //
+                        // ★★★ §12.42 — and with it the declaration's order-independent
+                        // ORDINAL. A root `Alloc` mints a fresh one against the live set
+                        // (non-zero exactly when an orphaned predecessor at this value is
+                        // still alive on a foreign alias); every other object inherits the
+                        // ordinal its namespace's live root carries.
+                        let (owner, owner_incarnation) = if matches!(node.kind, ObjectKind::Client)
+                        {
+                            (ClientId(id.0), self.next_client_incarnation(client))
                         } else {
                             match self.client_roots.get(&client) {
-                                Some(root) => ClientId(root.0),
-                                // Unreachable: `undeclared_namespace` refused this event
-                                // already. Loud and contained rather than an `expect`.
+                                Some(root) => {
+                                    let inc =
+                                        self.resources.get(root).map_or(0, |r| r.owner_incarnation);
+                                    (ClientId(root.0), inc)
+                                }
+                                // Unreachable: `undeclared_namespace` refused this
+                                // event already. Loud and contained, not an `expect`.
                                 None => return Err(RmGraphError::UndeclaredClient(client)),
                             }
                         };
@@ -1285,7 +1494,16 @@ impl RmGraph {
                                 map_refs: 0,
                                 owner_kind,
                                 owner,
+                                owner_incarnation,
                             },
+                        );
+                        self.retain_declaration(
+                            ClientKey {
+                                client,
+                                incarnation: owner_incarnation,
+                            },
+                            owner,
+                            owner_kind,
                         );
                         if matches!(node.kind, ObjectKind::Client) {
                             // Upheld by the one-root check above: never overwrites.
@@ -1396,7 +1614,22 @@ impl RmGraph {
                     }
                     None => {
                         // Bound the parked page-dir table (orphan-SetPageDir flood).
-                        if self.pending_pdbs.len() >= MAX_PARKED {
+                        //
+                        // ★ §12.42 (N6) — the gate covers a genuinely NEW entry only.
+                        // Re-binding a VASpace whose handle has not resolved yet is the
+                        // same protocol-legal `UNSET`/`SET_PAGE_DIRECTORY` re-bind the
+                        // resolved arm above allows unconditionally ("last declaration
+                        // wins"), and it REPLACES an entry rather than adding one — so
+                        // refusing it once the table is full would refuse a legal guest op
+                        // that costs nothing, which is the hangs-a-legal-guest direction.
+                        // The two sibling parked tables already have this shape: a
+                        // re-parked `Dup` returns early as idempotent-or-`ConflictingDup`
+                        // before reaching its gate, and `pending_maps` gates behind
+                        // `!contains`. This one did not, and its last-wins was undeclared
+                        // as well as ungated; both are stated here.
+                        if !self.pending_pdbs.contains_key(&target)
+                            && self.pending_pdbs.len() >= MAX_PARKED
+                        {
                             return Err(RmGraphError::CapacityExceeded(Capacity::PendingPdbs));
                         }
                         self.pending_pdbs.insert(target, pdb);
@@ -1776,10 +2009,8 @@ impl RmGraph {
             if res.refs.is_empty() && res.map_refs == 0 {
                 // ★★★ §12.41 — the identity index dies with the resource, and it must:
                 // the ordinal it held is what a later `Alloc` at that handle value is
-                // then free to take.
-                if let Some(r) = self.resources.remove(&mem_id) {
-                    self.by_origin.remove(&r.node.id());
-                }
+                // then free to take. ★★★ §12.42 — and so does its declaration's refcount.
+                self.destroy_resource(mem_id);
             }
         }
     }
@@ -1833,11 +2064,9 @@ impl RmGraph {
             // (a mapped memory object survives its source handle's free — faithful RM
             // refcounting). Destroyed only when the LAST reference of any kind goes.
             if res.refs.is_empty() && res.map_refs == 0 {
-                // ★★★ §12.41 — see the twin site in `unmap`: index and resource go
-                // together, always.
-                if let Some(r) = self.resources.remove(&id) {
-                    self.by_origin.remove(&r.node.id());
-                }
+                // ★★★ §12.41/§12.42 — see the twin site in `unmap`: resource, identity
+                // index and declaration refcount go together, always.
+                self.destroy_resource(id);
             }
         }
     }

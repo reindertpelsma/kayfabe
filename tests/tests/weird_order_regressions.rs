@@ -109,7 +109,9 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
     );
     // The old Proc is retired (staged reap), not live — cross-teardown use is refused.
     assert!(
-        gpu.procs.values().all(|p| !p.clients.contains(&CLIENT)),
+        gpu.procs
+            .values()
+            .all(|p| !p.client_values().contains(&CLIENT)),
         "CTX1 Proc gone from live set"
     );
 
@@ -518,7 +520,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
         // ...and the projection keeps the VAS/PDB routed, now grouped under UVM's proc.
         let after = project(&g, &arch, &NO_CONDEMNED).unwrap();
         assert!(
-            after.procs.iter().any(|p| p.clients.contains(&UVM)),
+            after.procs.iter().any(|p| p.client_values().contains(&UVM)),
             "UVM's client still projects after the source client's free"
         );
         assert!(
@@ -561,7 +563,10 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
         );
         // With the dup edge gone, compute stands alone as its own proc.
         assert!(
-            after.procs.iter().all(|p| !p.clients.contains(&UVM)),
+            after
+                .procs
+                .iter()
+                .all(|p| !p.client_values().contains(&UVM)),
             "freed UVM client gone"
         );
     }

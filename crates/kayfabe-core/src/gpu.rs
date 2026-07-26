@@ -27,7 +27,7 @@ use kayfabe_util::Instant;
 use crate::gpa::{GpaArena, GpaBlock, GpaError, GpaSpace};
 use crate::project::{Boundaries, ProcBoundary, ProjectionError, SYSTEM_ANCHOR, project};
 use crate::reactor::SourceRegistry;
-use crate::rmgraph::{ClientId, ResourceKey, RmEvent, RmGraph, RmGraphError};
+use crate::rmgraph::{ClientId, ClientKey, ResourceKey, RmEvent, RmGraph, RmGraphError};
 use crate::{ChanId, ProcAnchor, ProcId};
 
 /// ★ G10 (`l1_concurrency.md` §12.22) — the largest number of distinct **condemned
@@ -260,12 +260,16 @@ pub struct Proc {
     /// Derived identity (grouping label only — address ops key on [`Vas`],
     /// exec ops on [`Channel`]).
     pub id: ProcId,
-    /// Deterministic component label (smallest client handle).
+    /// Deterministic component label (★★★ §12.42 — the smallest client DECLARATION).
     pub anchor: ProcAnchor,
-    /// Clients in this proc's dup-connected component (★ §12.27: declared **user**
-    /// clients only, joined by user↔user dups — except on `Gpu::system`, whose set is
-    /// every declared **kernel** client, joined by rule rather than by dup).
-    pub clients: BTreeSet<HClient>,
+    /// Client **declarations** in this proc's dup-connected component (★ §12.27:
+    /// declared **user** clients only, joined by user↔user dups — except on `Gpu::system`,
+    /// whose set is every declared **kernel** client, joined by rule rather than by dup).
+    ///
+    /// ★★★ §12.42 — [`ClientKey`], not `HClient`; see
+    /// [`crate::project::ProcBoundary::clients`]. [`Self::client_values`] is the lossy
+    /// by-value view.
+    pub clients: BTreeSet<ClientKey>,
     /// ★★★ §12.39 Part B — the **identities** of those clients' namespaces
     /// ([`ClientId`], never reused), recorded at the same sync that set
     /// [`Self::clients`].
@@ -353,6 +357,14 @@ pub struct Proc {
 }
 
 impl Proc {
+    /// ★★★ §12.42 — the `hClient` VALUES this component's declarations were made at.
+    /// The lossy by-value view of [`Self::clients`]; see
+    /// [`crate::project::ProcBoundary::client_values`].
+    #[must_use]
+    pub fn client_values(&self) -> BTreeSet<HClient> {
+        self.clients.iter().map(|k| k.client).collect()
+    }
+
     fn new(id: ProcId, anchor: ProcAnchor) -> Self {
         Proc {
             id,
@@ -1285,7 +1297,7 @@ impl Spine {
     /// the system proc (step 2s, §12.27). Extracted rather than duplicated because the
     /// guest kernel's channels must materialize by exactly the same rules as a guest
     /// process's: a second copy is how the two drift.
-    fn sync_proc_to_boundary(p: &mut Proc, b: &ProcBoundary, ids: &BTreeMap<HClient, ClientId>) {
+    fn sync_proc_to_boundary(p: &mut Proc, b: &ProcBoundary, ids: &BTreeMap<ClientKey, ClientId>) {
         p.anchor = b.anchor;
         p.clients = b.clients.clone();
         // ★★★ §12.39 Part B — record the component's namespace IDENTITIES alongside its
@@ -1500,7 +1512,7 @@ impl Spine {
         procs: &mut impl ProcSet,
         bounds: &Boundaries,
         condemned_bound: &[bool],
-        ids: &BTreeMap<HClient, ClientId>,
+        ids: &BTreeMap<ClientKey, ClientId>,
     ) -> Result<RefreshPlan, GpuError> {
         let n = bounds.procs.len();
 
@@ -1855,7 +1867,7 @@ impl Spine {
         // The declaration every namespace currently projects under — the ONE place the
         // recyclable value is turned into a never-reused identity, read once and handed
         // to every consumer below so they cannot disagree.
-        let ids: BTreeMap<HClient, ClientId> = self
+        let ids: BTreeMap<ClientKey, ClientId> = self
             .rmgraph
             .client_declarations()
             .into_iter()
@@ -1872,12 +1884,13 @@ impl Spine {
         // so the question "is this boundary condemned?" has one answer for all its
         // clients and the merge is not a fault at all.
         //
-        // `project` takes the condemned set as `HClient`s because its own predicate only
-        // ever asks it about endpoints that have a LIVE declared root (`is_user`), for
-        // which value and identity agree. Translating here rather than widening
-        // `project`'s signature keeps the recyclable value out of the stored key, which is
-        // where it did the damage.
-        let condemned_clients: BTreeSet<HClient> = ids
+        // ★★★ §12.42 — `project` takes the condemned set as [`ClientKey`]s, so the
+        // translation from the stored never-reused [`ClientId`] happens here, once. It used
+        // to hand `project` bare `HClient` VALUES on the argument that its predicate only
+        // ever asked about live-rooted endpoints; with the predicate itself now stated over
+        // declarations, that argument is no longer needed and the recyclable value never
+        // enters the projection at all.
+        let condemned_clients: BTreeSet<ClientKey> = ids
             .iter()
             .filter(|(_, id)| owner_of.contains_key(id))
             .map(|(&c, _)| c)
@@ -2271,19 +2284,36 @@ impl Spine {
     /// guest frees its client root — no `Proc`, no isolate, no arena, no route.
     #[must_use]
     pub fn is_condemned(&self, client: HClient) -> bool {
-        // ★★★ §12.39 Part B — resolve the VALUE to the namespace it currently declares
-        // before asking. A recycled `hClient` names a *different* namespace from the one
-        // that was condemned, and answering `true` for it is the bystander death this
-        // key exists to make impossible.
-        let Some(id) = self
+        // ★★★ §12.39 Part B / §12.42 — resolve the VALUE to the declaration(s) it names
+        // before asking, because a recycled `hClient` names a *different* namespace from
+        // the one that was condemned and answering `true` for it is the bystander death
+        // this key exists to make impossible.
+        //
+        // A value may name several live declarations at once (§12.42), and the two cases
+        // are answered differently on purpose:
+        //
+        //  - it has a **live root** — that is the namespace the guest can still address,
+        //    and it is the ONLY one the answer is about. A fresh tenant of a value whose
+        //    predecessor is condemned is not condemned.
+        //  - it has none — every live declaration here is an orphan whose resources a
+        //    foreign alias keeps alive. The corpse is still dead (§12.37's evasion gate:
+        //    freeing the root must not launder the condemnation away), so `true` if any of
+        //    them is condemned.
+        let decls = self.rmgraph.client_declarations();
+        let live_root = self
             .rmgraph
-            .client_declarations()
-            .get(&client)
-            .map(|&(id, _)| id)
-        else {
-            return false;
-        };
-        self.condemned.iter().any(|c| c.contains(&id))
+            .client_kinds()
+            .find(|(k, _)| k.client == client)
+            .map(|(k, _)| k);
+        let mut ids = decls
+            .range(ClientKey::first(client)..=ClientKey::last_for(client))
+            .map(|(_, &(id, _))| id);
+        match live_root {
+            Some(k) => decls
+                .get(&k)
+                .is_some_and(|&(id, _)| self.condemned.iter().any(|c| c.contains(&id))),
+            None => ids.any(|id| self.condemned.iter().any(|c| c.contains(&id))),
+        }
     }
 
     /// ★ §12.13 — how many distinct condemned components the device is carrying
@@ -2597,7 +2627,7 @@ impl Gpu {
             condemned_by_pdb: BTreeMap::new(),
             condemned_by_vchid: BTreeMap::new(),
         };
-        let mut system = Proc::new(Self::SYSTEM_PROC, ProcAnchor(HClient(0)));
+        let mut system = Proc::new(Self::SYSTEM_PROC, SYSTEM_ANCHOR);
         // The system proc always touches the default target (kernel/scrubber traffic).
         spine.ensure_proc_target(&mut system, GpuId::ZERO)?;
         Ok(Gpu {

@@ -38,7 +38,7 @@ use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::project::{NO_CONDEMNED, SYSTEM_ANCHOR, project};
-use kayfabe_core::rmgraph::{RmEvent, RmGraph};
+use kayfabe_core::rmgraph::{ClientKey, RmEvent, RmGraph};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing};
 use kayfabe_mocks::{MockArch, MockIsolateFactory};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
@@ -263,7 +263,7 @@ fn one_kernel_client_two_processes_stay_two_procs() {
     assert_eq!(b.procs.len(), 2, "two USER components");
     // The system component holds the UVM session, and ONLY it.
     assert_eq!(
-        b.system.clients,
+        b.system.client_values(),
         std::collections::BTreeSet::from([UVM]),
         "the one UVM session client is the guest KERNEL's, not any process's"
     );
@@ -272,24 +272,27 @@ fn one_kernel_client_two_processes_stay_two_procs() {
     let proc_a = b
         .procs
         .iter()
-        .find(|p| p.clients.contains(&A))
+        .find(|p| p.client_values().contains(&A))
         .expect("proc A present");
     let proc_b = b
         .procs
         .iter()
-        .find(|p| p.clients.contains(&B))
+        .find(|p| p.client_values().contains(&B))
         .expect("proc B present");
     // A merged with its second USER client (genuine sharing = one blast radius) and
     // with nothing else. B is alone. Neither contains the kernel client.
     assert_eq!(
-        proc_a.clients,
+        proc_a.client_values(),
         std::collections::BTreeSet::from([A, A2]),
         "a user↔user dup merges; the UVM dup does not"
     );
-    assert_eq!(proc_b.clients, std::collections::BTreeSet::from([B]));
+    assert_eq!(
+        proc_b.client_values(),
+        std::collections::BTreeSet::from([B])
+    );
     for p in &b.procs {
         assert!(
-            !p.clients.contains(&UVM),
+            !p.client_values().contains(&UVM),
             "a kernel client leaked into a Proc"
         );
     }
@@ -304,7 +307,11 @@ fn a_dupd_vaspace_stays_with_the_client_that_allocated_it() {
     let arch = MockArch::new();
     let b = project(&graph_of(&scenario().events), &arch, &NO_CONDEMNED).unwrap();
 
-    let proc_a = b.procs.iter().find(|p| p.clients.contains(&A)).unwrap();
+    let proc_a = b
+        .procs
+        .iter()
+        .find(|p| p.client_values().contains(&A))
+        .unwrap();
     let a_pdbs: Vec<Pdb> = proc_a.vases.values().filter_map(|f| f.pdb).collect();
     assert!(a_pdbs.contains(&A_PDB), "A's own compute VAS is A's");
     assert!(a_pdbs.contains(&A2_PDB), "its merged peer's VAS too");
@@ -387,7 +394,7 @@ fn the_kernel_declaration_may_arrive_before_between_or_after() {
 
     let reference = project(&graph_of(&before.events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(reference.procs.len(), 2);
-    assert_eq!(reference.system.clients.len(), 1);
+    assert_eq!(reference.system.client_values().len(), 1);
     for (name, s) in [("between", between), ("after", after)] {
         assert_eq!(
             project(&graph_of(&s.events), &arch, &NO_CONDEMNED).unwrap(),
@@ -414,13 +421,13 @@ fn proc_anchor_is_the_minimum_client_in_its_component() {
     assert_eq!(b.procs.len(), 2);
     for p in &b.procs {
         let min_client = p
-            .clients
+            .client_values()
             .iter()
             .min()
             .copied()
             .expect("component non-empty");
         assert_eq!(
-            p.anchor.0, min_client,
+            p.anchor.0.client, min_client,
             "the anchor must be the SMALLEST client handle in the component (deterministic identity)",
         );
         // The routing maps must agree with that same minimum-anchor for this proc's PDBs.
@@ -435,8 +442,15 @@ fn proc_anchor_is_the_minimum_client_in_its_component() {
     // Concretely: proc A's clients are {0xc1d00067, 0xc1d0006b}; its anchor is the
     // smaller. Note the UVM session (0xc1d00069) lies BETWEEN them and is still not a
     // member — the anchor is a minimum over the component, never over the handle space.
-    let proc_a = b.procs.iter().find(|p| p.clients.contains(&A)).unwrap();
-    assert_eq!(proc_a.anchor.0, A, "0xc1d00067 < 0xc1d0006b, so A anchors");
+    let proc_a = b
+        .procs
+        .iter()
+        .find(|p| p.client_values().contains(&A))
+        .unwrap();
+    assert_eq!(
+        proc_a.anchor.0.client, A,
+        "0xc1d00067 < 0xc1d0006b, so A anchors"
+    );
     assert!(
         UVM > A && UVM < A2,
         "the measured interleaving is preserved"
@@ -613,7 +627,7 @@ fn a_third_process_joining_later_disturbs_neither_of_the_first_two() {
                 *p,
                 gpu.procs[p].arenas[&GpuId::ZERO].range.clone(),
                 gpu.procs[p].isolates[&GpuId::ZERO].id(),
-                gpu.procs[p].clients.clone(),
+                gpu.procs[p].client_values(),
             )
         })
         .collect();
@@ -644,12 +658,15 @@ fn a_third_process_joining_later_disturbs_neither_of_the_first_two() {
             "an existing proc's arena moved"
         );
         assert_eq!(gpu.procs[pid].isolates[&GpuId::ZERO].id(), *iso);
-        assert_eq!(&gpu.procs[pid].clients, clients);
+        assert_eq!(&gpu.procs[pid].client_values(), clients);
     }
     let pid_c = gpu.spine.by_pdb[&(GpuId::ZERO, C_PDB)];
     assert!(pid_c != pid_a && pid_c != pid_b);
     // The session client still belongs to exactly one component: the system's.
-    assert_eq!(gpu.system.clients, std::collections::BTreeSet::from([UVM]));
+    assert_eq!(
+        gpu.system.client_values(),
+        std::collections::BTreeSet::from([UVM])
+    );
 }
 
 /// ★ §12.26 re-verified under the new grouping (§12.27): the system proc now really has
@@ -664,7 +681,10 @@ fn a_third_process_joining_later_disturbs_neither_of_the_first_two() {
 #[test]
 fn the_system_proc_has_clients_and_a_vas_and_still_no_data_plane() {
     let mut gpu = gpu_of(&scenario().events);
-    assert_eq!(gpu.system.clients, std::collections::BTreeSet::from([UVM]));
+    assert_eq!(
+        gpu.system.client_values(),
+        std::collections::BTreeSet::from([UVM])
+    );
     assert!(
         gpu.system.vases.contains_key(&(GpuId::ZERO, UVM_PDB)),
         "the session's own VAS materialized on the system proc"
@@ -782,7 +802,10 @@ fn an_undeclared_or_doubly_declared_client_root_is_a_loud_refusal() {
     );
     assert_eq!(
         g.client_kinds().collect::<Vec<_>>(),
-        vec![(A, kayfabe_arch::ClientKind::User { pid: A.0 })],
+        vec![(
+            ClientKey::first(A),
+            kayfabe_arch::ClientKind::User { pid: A.0 }
+        )],
         "the namespace kept its ONE declared kind",
     );
 
@@ -799,7 +822,7 @@ fn an_undeclared_or_doubly_declared_client_root_is_a_loud_refusal() {
         .expect("an empty namespace may declare a fresh root");
     assert_eq!(
         g.client_kinds().collect::<Vec<_>>(),
-        vec![(A, kayfabe_arch::ClientKind::Kernel)],
+        vec![(ClientKey::first(A), kayfabe_arch::ClientKind::Kernel)],
     );
 }
 
@@ -849,16 +872,30 @@ fn a_root_kept_alive_by_a_dup_no_longer_occupies_its_own_namespace() {
     );
     // …but B's NAMESPACE is empty, so B may declare a new root — with a NEW kind.
     assert!(
-        !g.client_kinds().any(|(c, _)| c == B),
+        !g.client_kinds().any(|(c, _)| c.client == B),
         "a namespace whose root handle is freed declares nothing",
     );
     g.apply(&arch, kayfabe_tests::kernel_client_root(B))
         .expect("★ the emptied namespace may declare a fresh root");
+    // ★★★ §12.42 — B's fresh root is B's **second** declaration, `incarnation: 1`, and
+    // that is the honest reading rather than a wart: A's alias keeps B's ORIGINAL client
+    // object alive (RM refcounts it), so declaration `{B, 0}` still owns a live resource
+    // and the two are simultaneously live. The ordinal is bounded by the LIVE set, so it
+    // returns to 0 the moment the alias dies — asserted below.
     assert_eq!(
         g.client_kinds().collect::<Vec<_>>(),
         vec![
-            (A, kayfabe_arch::ClientKind::User { pid: A.0 }),
-            (B, kayfabe_arch::ClientKind::Kernel),
+            (
+                ClientKey::first(A),
+                kayfabe_arch::ClientKind::User { pid: A.0 }
+            ),
+            (
+                ClientKey {
+                    client: B,
+                    incarnation: 1
+                },
+                kayfabe_arch::ClientKind::Kernel
+            ),
         ],
     );
 
@@ -872,9 +909,27 @@ fn a_root_kept_alive_by_a_dup_no_longer_occupies_its_own_namespace() {
     )
     .expect("the alias frees");
     assert_eq!(
-        g.client_kinds().find(|(c, _)| *c == B).map(|(_, k)| k),
+        g.client_kinds()
+            .find(|(c, _)| c.client == B)
+            .map(|(_, k)| k),
         Some(kayfabe_arch::ClientKind::Kernel),
         "the dead alias pruned the LIVE root's declaration",
+    );
+    // ★★★ §12.42 — and the superseded declaration is GONE from the graph now that it owns
+    // nothing live, so a THIRD tenant of this value takes ordinal 1 again rather than
+    // accumulating: the ordinal separates simultaneously-live declarations and nothing
+    // else, which is what keeps `RmGraph::decls` from being a guest-growable ghost log.
+    assert_eq!(
+        g.client_declarations()
+            .keys()
+            .filter(|k| k.client == B)
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![ClientKey {
+            client: B,
+            incarnation: 1
+        }],
+        "the orphaned declaration outlived the last resource it owned",
     );
 }
 
@@ -933,7 +988,7 @@ fn an_undeclared_client_merges_with_nobody_until_it_declares() {
     );
     assert_eq!(before.procs.len(), 1);
     assert_eq!(
-        before.procs[0].clients,
+        before.procs[0].client_values(),
         std::collections::BTreeSet::from([A])
     );
 
@@ -944,7 +999,7 @@ fn an_undeclared_client_merges_with_nobody_until_it_declares() {
     let joined = project(&graph_of(&declared.events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(joined.procs.len(), 1, "declared user → the dup merges");
     assert_eq!(
-        joined.procs[0].clients,
+        joined.procs[0].client_values(),
         std::collections::BTreeSet::from([A, A2])
     );
 
@@ -957,11 +1012,11 @@ fn an_undeclared_client_merges_with_nobody_until_it_declares() {
     let referenced = project(&graph_of(&kernel.events), &arch, &NO_CONDEMNED).unwrap();
     assert_eq!(referenced.procs.len(), 1, "only A is a user proc");
     assert_eq!(
-        referenced.procs[0].clients,
+        referenced.procs[0].client_values(),
         std::collections::BTreeSet::from([A])
     );
     assert_eq!(
-        referenced.system.clients,
+        referenced.system.client_values(),
         std::collections::BTreeSet::from([A2])
     );
 }
@@ -1196,20 +1251,49 @@ fn a_freed_and_redeclared_namespace_projects_identically_in_every_order() {
         reference.by_pdb.contains_key(&(GpuId::ZERO, SECOND_PDB)),
         "the second tenant's address plane is routable"
     );
-    assert!(
-        !reference.by_pdb.contains_key(&(GpuId::ZERO, FIRST_PDB)),
-        "★★ the SUPERSEDED declaration's address plane must belong to nobody"
+    // ★★★ §12.42 (N1) — **CORRECTED.** This used to assert that `FIRST_PDB` belonged to
+    // NOBODY. Belonging to nobody is what vacated the first tenant's component and freed
+    // host memory RM still refcounts for the keeper's alias
+    // (`ogkm .../mem_mgr/mem.c:1027-1031`). Both declarations of the value are live, so
+    // both project — into two DIFFERENT components, which is what an `HClient`-keyed
+    // `ProcAnchor` could not express (N2).
+    let gen1 = ClientKey::first(RECYCLED);
+    let gen2 = ClientKey {
+        client: RECYCLED,
+        incarnation: 1,
+    };
+    assert_eq!(
+        reference
+            .by_pdb
+            .get(&(GpuId::ZERO, FIRST_PDB))
+            .map(|&(a, _)| a),
+        Some(kayfabe_core::ProcAnchor(gen1)),
+        "★★ the SUPERSEDED declaration's still-live address plane must stay with the \
+         declaration that allocated it"
+    );
+    assert_ne!(
+        reference
+            .by_pdb
+            .get(&(GpuId::ZERO, FIRST_PDB))
+            .map(|&(a, _)| a),
+        reference
+            .by_pdb
+            .get(&(GpuId::ZERO, SECOND_PDB))
+            .map(|&(a, _)| a),
+        "★★ the successor INHERITED the previous tenant's address plane — one `hClient` \
+         VALUE, two lifetimes, and they must never be one component"
     );
     let second = reference
         .procs
         .iter()
-        .find(|p| p.clients.contains(&RECYCLED))
+        .find(|p| p.clients.contains(&gen2))
         .expect("the second tenant has a component");
-    assert!(
-        !second.clients.contains(&KEEPER),
-        "★★ the keeper's alias to the FIRST tenant's VASpace must not merge it with the \
-         SECOND — the edge's `src` names a recyclable VALUE, not the namespace it was \
-         allocated in"
+    assert_eq!(
+        second.clients,
+        std::collections::BTreeSet::from([gen2]),
+        "★★ the successor's component must hold its OWN declaration and nothing else — \
+         not the keeper (whose alias names a recyclable VALUE, not the namespace it was \
+         allocated in) and not its own predecessor"
     );
 
     for pa in permutations(phase1.len()) {
@@ -1335,7 +1419,7 @@ fn a_recycled_object_handle_projects_identically_in_every_order() {
     let owner = reference
         .procs
         .iter()
-        .find(|p| p.clients.contains(&OBJ_RECYCLED))
+        .find(|p| p.client_values().contains(&OBJ_RECYCLED))
         .expect("the process has a component");
     assert_eq!(
         owner

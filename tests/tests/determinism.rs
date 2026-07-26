@@ -280,7 +280,7 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
 
     for p in all_procs() {
         let anchor = p.anchor;
-        procs.insert(anchor, p.clients.clone());
+        procs.insert(anchor, p.client_values());
 
         let mut vs = BTreeMap::new();
         for (&(gpu, pdb), vas) in &p.vases {

@@ -100,7 +100,7 @@ fn benign_b_events() -> Vec<RmEvent> {
 fn boundary_of(b: &Boundaries, client: HClient) -> Option<ProcBoundary> {
     b.procs
         .iter()
-        .find(|p| p.clients.contains(&client))
+        .find(|p| p.client_values().contains(&client))
         .cloned()
 }
 
@@ -294,11 +294,11 @@ proptest! {
         let b_arena = gpu
             .procs
             .values()
-            .find(|p| p.clients.contains(&B_CLIENT))
+            .find(|p| p.client_values().contains(&B_CLIENT))
             .map(|p| p.arenas[&GpuId::ZERO].range.clone())
             .expect("B still has an arena");
         for p in gpu.procs.values() {
-            if p.clients.contains(&B_CLIENT) {
+            if p.client_values().contains(&B_CLIENT) {
                 continue;
             }
             // Arenas materialize lazily per (proc, GPU); a hostile A proc that touched
@@ -552,7 +552,7 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
             .by_pdb
             .get(&(GpuId::ZERO, B_PDB))
             .and_then(|pid| gpu.procs.get(pid))
-            .map(|p| p.clients.contains(&B_CLIENT)),
+            .map(|p| p.client_values().contains(&B_CLIENT)),
         Some(true)
     );
     // The INNOCENT third process C is entirely unaffected — the blast radius never
@@ -778,6 +778,112 @@ fn b2_pending_pdb_flood_is_capped_loud() {
         faulted_at,
         Some(MAX_PARKED as u64),
         "the parked page-directory table must loud-fault EXACTLY at the cap, not OOM"
+    );
+}
+
+/// ★★ **A parked page-directory RE-BIND is not a growth path, so a full table must not
+/// refuse it** (`l1_concurrency.md` §12.42, N6).
+///
+/// `UNSET`/`SET_PAGE_DIRECTORY` re-binding is protocol-legal, and the resolved arm of
+/// `RmEvent::SetPageDir` allows it unconditionally ("last declaration wins"). The PARKED
+/// arm gated on `pending_pdbs.len() >= MAX_PARKED` *before* looking at whether the key was
+/// already there — so at the cap, a guest re-binding a VASpace it had already parked a PDB
+/// for was refused a `CapacityExceeded` for an event that adds nothing to the table. Its
+/// two sibling parked tables never had that shape (a re-parked `Dup` returns early as
+/// idempotent-or-`ConflictingDup`; `pending_maps` gates behind `!contains`), which is why
+/// the asymmetry survived: §12.38 audited the cap's *presence*, not its arm.
+///
+/// The assertion is the hangs-a-legal-guest one: the re-bind is ACCEPTED and it is the
+/// LAST declaration that lands once the handle finally resolves — and the growth path it
+/// guards is still loud, which the sibling test above pins.
+#[test]
+fn b2_a_parked_page_directory_rebind_is_accepted_at_the_cap() {
+    kayfabe_tests::skip_slow!("b2_a_parked_page_directory_rebind_is_accepted_at_the_cap");
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    let c = HClient(0xC013);
+    g.apply(&arch, kayfabe_tests::client_root(c))
+        .expect("the namespace declares itself first");
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(c.0),
+            handle: HObject(0x7000_0001),
+            class: kayfabe_mocks::mock_classes::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+    )
+    .expect("its device declares");
+
+    // The VASpace whose page directory the guest will re-bind. Its handle is NOT
+    // allocated yet, so every declaration on it PARKS (DEFER-for-observation).
+    let victim = HObject(0x7000_0010);
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: c,
+            vaspace: victim,
+            pdb: Pdb(0x9900_0000),
+        },
+    )
+    .expect("the first parked declaration lands");
+
+    // Fill the parked table to exactly the cap with unrelated, never-allocated handles.
+    let mut faulted_at = None;
+    for i in 0..=MAX_PARKED as u64 {
+        let ev = RmEvent::SetPageDir {
+            client: c,
+            vaspace: HObject(0x8000_0000 + i as u32),
+            pdb: Pdb(0x3400_0000 + i * 0x1000),
+        };
+        if let Err(RmGraphError::CapacityExceeded(Capacity::PendingPdbs)) = g.apply(&arch, ev) {
+            faulted_at = Some(i);
+            break;
+        }
+    }
+    assert_eq!(
+        faulted_at,
+        Some(MAX_PARKED as u64 - 1),
+        "precondition: the table is FULL (the victim's own entry took one slot)"
+    );
+
+    // ★★ THE HANGS-A-LEGAL-GUEST GATE: re-binding the victim replaces an entry, so it
+    // must be accepted even though the table cannot grow.
+    assert_eq!(
+        g.apply(
+            &arch,
+            RmEvent::SetPageDir {
+                client: c,
+                vaspace: victim,
+                pdb: Pdb(0x9911_0000),
+            },
+        ),
+        Ok(()),
+        "★★ a full parked table refused a page-directory RE-BIND, which adds no entry — \
+         a legal `UNSET`/`SET_PAGE_DIRECTORY` sequence the resolved arm allows \
+         unconditionally"
+    );
+
+    // …and last-wins is what actually lands: allocate the handle and read the PDB back.
+    g.apply(
+        &arch,
+        RmEvent::Alloc {
+            client: c,
+            parent: HObject(0x7000_0001),
+            handle: victim,
+            class: kayfabe_mocks::mock_classes::VASPACE,
+            facts: AllocFacts::default(),
+        },
+    )
+    .expect("the VASpace finally arrives and the parked fact promotes");
+    assert_eq!(
+        g.pdb_of(NodeKey::new(c, victim)),
+        Some(Pdb(0x9911_0000)),
+        "★ the parked arm's rule is LAST declaration wins, exactly like the resolved arm"
     );
 }
 
@@ -1215,14 +1321,14 @@ fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
         bounds
             .procs
             .iter()
-            .any(|p| p.clients == std::collections::BTreeSet::from([HClient(0xDEAD)])),
+            .any(|p| p.client_values() == std::collections::BTreeSet::from([HClient(0xDEAD)])),
         "the source namespace is its OWN component — a parked edge groups nothing"
     );
     assert!(
         bounds
             .procs
             .iter()
-            .any(|p| p.clients == std::collections::BTreeSet::from([HClient(0xBEEF)])),
+            .any(|p| p.client_values() == std::collections::BTreeSet::from([HClient(0xBEEF)])),
         "the declared aliasing client is its OWN component — a parked edge groups nothing"
     );
 
@@ -1449,7 +1555,7 @@ fn proc_fingerprint(gpu: &Gpu, pid: kayfabe_core::ProcId) -> ProcFingerprint {
             .map(|(g, a)| (*g, a.range.clone()))
             .collect(),
         isolates: p.isolates.iter().map(|(g, i)| (*g, i.id())).collect(),
-        clients: p.clients.iter().copied().collect(),
+        clients: p.client_values().into_iter().collect(),
         vases: p.vases.keys().copied().collect(),
     }
 }
@@ -2075,7 +2181,7 @@ fn g10_condemnation_is_capped_and_refuses_new_procs_never_the_condemnation() {
         let pid = *gpu
             .procs
             .iter()
-            .find(|(_, p)| p.clients.contains(&c))
+            .find(|(_, p)| p.client_values().contains(&c))
             .expect("its proc")
             .0;
         assert!(gpu.retire_proc(pid), "worker died");

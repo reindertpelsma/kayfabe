@@ -94,7 +94,7 @@ use kayfabe_arch::ids::{EngineKind, GpuId, HClient, HObject, Pdb, VChid};
 use kayfabe_arch::{Arch, ClientKind, ObjectKind};
 
 use crate::ProcAnchor;
-use crate::rmgraph::{ClientId, NodeKey, RESERVED_CLIENT, ResourceKey, RmGraph, RmNode};
+use crate::rmgraph::{ClientId, ClientKey, NodeKey, RESERVED_CLIENT, ResourceKey, RmGraph, RmNode};
 
 /// ★ §12.27 — the reserved anchor of the **system component**: the guest *kernel*'s
 /// clients (UVM's session, RM's internal clients), which are one component by rule.
@@ -102,7 +102,10 @@ use crate::rmgraph::{ClientId, NodeKey, RESERVED_CLIENT, ResourceKey, RmGraph, R
 /// It is [`RESERVED_CLIENT`] (`HClient(0)` = `NV01_NULL_OBJECT`), which
 /// [`RmGraph::apply`] refuses as guest input — so no user component can ever anchor here
 /// and be mistaken for the system proc. The label is a *reservation*, not a coincidence.
-pub const SYSTEM_ANCHOR: ProcAnchor = ProcAnchor(RESERVED_CLIENT);
+pub const SYSTEM_ANCHOR: ProcAnchor = ProcAnchor(ClientKey {
+    client: RESERVED_CLIENT,
+    incarnation: 0,
+});
 
 /// Declared facts of one VASpace origin, resolved against the graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -152,10 +155,19 @@ pub struct ChannelFacts {
 /// [`SYSTEM_ANCHOR`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcBoundary {
-    /// Deterministic label: the smallest client handle in the component.
+    /// Deterministic label: the smallest client DECLARATION in the component (§12.42).
     pub anchor: ProcAnchor,
-    /// All clients in the component.
-    pub clients: BTreeSet<HClient>,
+    /// All client **declarations** in the component.
+    ///
+    /// ★★★ §12.42 — a [`ClientKey`], not an `HClient`. RM recycles `hClient` values by
+    /// design (`ClientKey`'s docs cite the four places), so a value is a *label* of a
+    /// namespace lifetime and not an identity of one. Keyed by the value, two generations
+    /// of one `hClient` were **not expressible as two components**: the newer displaced
+    /// the older, the older's still-live resources belonged to no boundary, its component
+    /// vanished and `stage_dropped_vases` released host memory RM still refcounted for the
+    /// alias holder (§12.41 §4 / N1). Use [`Self::client_values`] where the question really
+    /// is about the value.
+    pub clients: BTreeSet<ClientKey>,
     /// VASpace **resources** owned by this component → resolved facts (target GPU and
     /// declared PDB). A process may own several (compute + UVM) — one `Proc`, many `Vas`.
     ///
@@ -207,6 +219,18 @@ pub struct Boundaries {
 }
 
 impl ProcBoundary {
+    /// The `hClient` VALUES this component's declarations were made at — for the callers
+    /// whose question genuinely is about the value ("is namespace X in this component?"),
+    /// which is most diagnostics and most assertions.
+    ///
+    /// It is a *lossy* view by construction: two generations of one value collapse to one
+    /// entry here, which is precisely the collapse [`Self::clients`] exists to stop making
+    /// silently.
+    #[must_use]
+    pub fn client_values(&self) -> BTreeSet<HClient> {
+        self.clients.iter().map(|k| k.client).collect()
+    }
+
     /// An empty boundary for `anchor` (no clients, no vases, no channels).
     #[must_use]
     fn empty(anchor: ProcAnchor) -> Self {
@@ -271,19 +295,19 @@ pub enum ProjectionError {
     },
 }
 
-/// Tiny deterministic union-find over client handles.
+/// Tiny deterministic union-find over client DECLARATIONS (§12.42).
 struct ClientUnion {
-    parent: BTreeMap<HClient, HClient>,
+    parent: BTreeMap<ClientKey, ClientKey>,
 }
 
 impl ClientUnion {
-    fn new(clients: impl IntoIterator<Item = HClient>) -> Self {
+    fn new(clients: impl IntoIterator<Item = ClientKey>) -> Self {
         ClientUnion {
             parent: clients.into_iter().map(|c| (c, c)).collect(),
         }
     }
 
-    fn find(&mut self, c: HClient) -> HClient {
+    fn find(&mut self, c: ClientKey) -> ClientKey {
         let p = *self.parent.entry(c).or_insert(c);
         if p == c {
             return c;
@@ -293,8 +317,11 @@ impl ClientUnion {
         root
     }
 
-    /// Union by minimum handle so the representative IS the anchor (deterministic).
-    fn union(&mut self, a: HClient, b: HClient) {
+    /// Union by minimum declaration so the representative IS the anchor (deterministic).
+    /// ★★★ §12.42 — [`ClientKey`] orders by `hClient` first, so "the smallest client in
+    /// the component" is unchanged for every component that holds one declaration per
+    /// value, which is every component a guest that does not recycle can build.
+    fn union(&mut self, a: ClientKey, b: ClientKey) {
         let (ra, rb) = (self.find(a), self.find(b));
         if ra == rb {
             return;
@@ -360,7 +387,7 @@ fn resolve_channel_vas<'g>(g: &'g RmGraph, chan: &RmNode) -> Option<&'g RmNode> 
 ///
 /// It is a named constant rather than a defaulted argument so that "this projection
 /// considers no client dead" is a statement the call site makes, not one it omits.
-pub static NO_CONDEMNED: BTreeSet<HClient> = BTreeSet::new();
+pub static NO_CONDEMNED: BTreeSet<ClientKey> = BTreeSet::new();
 
 /// Derive the full boundary picture from the graph.
 ///
@@ -375,20 +402,27 @@ pub static NO_CONDEMNED: BTreeSet<HClient> = BTreeSet::new();
 pub fn project(
     g: &RmGraph,
     arch: &dyn Arch,
-    condemned: &BTreeSet<HClient>,
+    condemned: &BTreeSet<ClientKey>,
 ) -> Result<Boundaries, ProjectionError> {
-    // Client universe: explicit resource-owning namespaces + the endpoints of every
-    // **resolved** dup (a dst client that only receives an alias and allocates nothing
-    // has no origin node of its own, so it must be picked up here to be grouped). A
-    // still-parked, not-yet-resolvable dup is deliberately NOT chained — it must not
-    // conjure a phantom, resource-less proc into the projection (which would make an
-    // intermediate `Dup`-before-`Alloc` state differ from the fully-applied one).
+    // Client universe: every LIVE client-namespace DECLARATION (★★★ §12.42 — see the
+    // block above `clients` below for why it is that and not "the namespaces that own a
+    // resource, plus the endpoints of every resolved dup"). A still-parked dup conjures
+    // nothing into it, which is what keeps an intermediate `Dup`-before-`Alloc` state from
+    // differing from the fully-applied one.
     // ★ §12.27 — the declared privilege of every client whose root has been observed.
     // Read once, up front, because it gates the client universe, the edge predicate and
     // the assignment of every node below. A client absent from this map has not declared
     // itself yet.
-    let kinds: BTreeMap<HClient, ClientKind> = g.client_kinds().collect();
-    let is_user = |c: HClient| matches!(kinds.get(&c), Some(ClientKind::User { .. }));
+    //
+    // ★★★ §12.42 — keyed by the DECLARATION, and it comes with a second index: which
+    // declaration each `hClient` VALUE currently names. One value may name several live
+    // declarations at once (an orphaned predecessor whose resources a foreign alias keeps
+    // alive, plus the tenant that re-declared the value), but at most one of them has a
+    // live root, and the live-rooted one is the only namespace the guest can still name in
+    // an event.
+    let kinds: BTreeMap<ClientKey, ClientKind> = g.client_kinds().collect();
+    let live_root: BTreeMap<HClient, ClientKey> = kinds.keys().map(|&k| (k.client, k)).collect();
+    let is_user = |k: ClientKey| matches!(kinds.get(&k), Some(ClientKind::User { .. }));
     // ★★★ §12.39, finding 1 — the ASSIGNMENT pass asks a different question from the
     // grouping predicate, and used to answer it with a default.
     //
@@ -409,56 +443,35 @@ pub fn project(
     // a fact instead of by a default. `is_user` stays on the LIVE-root map on purpose:
     // grouping requires positive evidence about a live declaration at both ends, which is
     // §12.27's rule and is unchanged.
-    let decls: BTreeMap<HClient, (ClientId, ClientKind)> = g.client_declarations();
-    let is_kernel = |c: HClient| matches!(decls.get(&c), Some((_, ClientKind::Kernel)));
+    let decls: BTreeMap<ClientKey, (ClientId, ClientKind)> = g.client_declarations();
+    let is_kernel = |k: ClientKey| matches!(decls.get(&k), Some((_, ClientKind::Kernel)));
 
-    // ★★★ §12.39 Part B — **THE RECYCLED NAMESPACE.** A resource projects under its
-    // origin `HClient` only while its recorded owner ([`ClientId`], never reused) is still
-    // the declaration that namespace projects under. The `HClient` in `node.key` is a
-    // *value*, and RM recycles values by design — caller-supplied roots
-    // (`ogkm rs_server.c:612`, the reject guard compiled out at `:613-616` under
-    // `RS_COMPATABILITY_MODE=1`) and a generator that wraps at 2^20 with no free list and
-    // no epoch (`:3319-3341`). So an orphan resource whose namespace was freed and then
-    // handed to an **unrelated later process** used to re-attach itself to that process:
-    // it entered the victim's boundary, its dup edge became a grouping edge, and the two
-    // became one `Proc` — one isolate, one GPA arena, one host VAS. #14 un-fixed for a
-    // pair the attacker chose.
+    // ★★★ §12.42 — **THE CLIENT UNIVERSE IS THE SET OF LIVE DECLARATIONS**, and there is
+    // no membership predicate left to get wrong.
     //
-    // Note what this does NOT do: while the namespace has **no** live root the orphan's
-    // own declaration is still the one it projects under, so its component (and its
-    // isolate, arena and host VAS) survives — which is `cross_proc_lifetime.rs`'s rule and
-    // RM's refcount. The exclusion bites at exactly one moment: a **re-declaration**,
-    // which mints a new `ClientId` and leaves the old declaration's resources owned by a
-    // namespace that no longer projects. They belong to no boundary, so the old component
-    // is retired through the ordinary staged-death path and the new one inherits nothing.
-    let projects =
-        |n: &RmNode, owner: ClientId| decls.get(&n.key.client).is_some_and(|&(id, _)| id == owner);
-
-    let clients: BTreeSet<HClient> = g
-        .nodes_with_owner()
-        .filter(|&(n, owner)| projects(n, owner))
-        .map(|(n, _)| n.key.client)
-        .chain(
-            g.dups()
-                .filter(|(d, _)| g.origin_of(*d).is_some())
-                .flat_map(|(d, s)| [d.client, s.client])
-                // ★ §12.27 — a dup endpoint that owns NO resource of its own is chained
-                // in only once it has DECLARED itself. It is chained in at all so a
-                // client holding nothing but aliases can still merge with the client it
-                // aliases; but with no declared root there is no grouping it could join
-                // (the edge predicate needs positive evidence about both ends), so
-                // admitting it would mint exactly the resource-less phantom `Proc` the
-                // parked-dup rule below already refuses to conjure — one that is then
-                // minted, matched, and RETIRED the moment a declaration lands.
-                //
-                // ★ §12.38 narrowed what this filter can still see: a dup endpoint's
-                // namespace is declared at acceptance time, so the only way to reach here
-                // undeclared is a root that has since been FREED while an alias keeps its
-                // resources alive. The filter is kept — that state is reachable, and
-                // "absence is never read as user" is the rule it encodes.
-                .filter(|c| kinds.contains_key(c)),
-        )
-        .collect();
+    // §12.39/§12.40 filtered here: a resource projected only while its recorded owner was
+    // *the* declaration its `HClient` value projected under, because a value had exactly
+    // one slot. That kept the recycled-namespace isolation break closed but paid for it in
+    // the corruption direction — §12.41 §4 measured it. After
+    // `declare A → alias → free root → re-declare A`, generation 1's resources are still
+    // alive (RM refcounts them for the alias holder, `ogkm .../mem_mgr/mem.c:1027-1031`)
+    // and they matched nothing, so they entered no boundary, their component vanished
+    // through `vanishing`, and `stage_dropped_vases` **released the host VAS and the
+    // published backing of a resource a live kernel client still references.** That is
+    // §12.40 §1's own rejected D4, reached by a different door.
+    //
+    // With a [`ClientKey`] the two generations are two declarations, so they are two
+    // components — which is what the `HClient`-keyed `ProcAnchor`/`clients` made
+    // inexpressible (N2). Every live resource now projects, under its own declaration:
+    // isolation is held by the *identity* rather than by an exclusion, and nothing that RM
+    // says is live is dropped on the floor.
+    //
+    // The dup-endpoint chain §12.27 added is gone with it, because it is now provably
+    // redundant rather than merely usually so: a resolved dup's `dst` handle is live, so
+    // §12.38's rule gives its namespace a live root, and a live root IS a live resource of
+    // its own declaration; the `src` side resolves to the declaration that owns the
+    // resource, which is live by the same construction. Both are already here.
+    let clients: BTreeSet<ClientKey> = decls.keys().copied().collect();
 
     // Grouping: dup edges connect client namespaces. A dup whose origin does not yet
     // resolve is a **still-parked** edge (its source `Alloc` has not arrived — the
@@ -483,7 +496,7 @@ pub fn project(
     // guest; the deferral resolves the moment the source is observed
     // (`tests/miss_taxonomy.rs`).
     let mut uf = ClientUnion::new(clients.iter().copied());
-    for (dst, src) in g.dups() {
+    for (dst, _src) in g.dups() {
         if g.origin_of(dst).is_none() {
             continue;
         }
@@ -504,25 +517,41 @@ pub fn project(
         // Requiring positive evidence, rather than excluding the known-bad shapes, is
         // deliberate: a future third [`ClientKind`] is then unmergeable until someone
         // decides what it means, instead of silently defaulting into user grouping.
-        if !(is_user(dst.client) && is_user(src.client)) {
+        //
+        // ★★★ §12.39 Part B / §12.42 — **both ends are named as DECLARATIONS, and neither
+        // is read off the edge's `src` value.** The `dst` end is the live root of the
+        // namespace the destination handle lives in (a live handle implies a live root,
+        // §12.38). The `src` end is the declaration that **allocated the resource**, read
+        // through the destination handle — because the `src` a dup edge reports is the
+        // resource's origin `(client, handle)`, and that `HClient` is exactly the
+        // recyclable value the identity model exists to stop trusting: an attacker that
+        // allocates a VASpace in a namespace it will hand back, aliases it into a client of
+        // its own and frees the root leaves an edge whose `src.client` is a *number* the
+        // guest kernel gives to an unrelated later process.
+        //
+        // The source must additionally still be its value's **live-rooted** declaration:
+        // §12.27's rule is positive evidence about a live declaration at both ends, and an
+        // orphaned predecessor has no root to give it. That conjunct is what refuses the
+        // stale edge on the victim's own first RM event.
+        //
+        // ★ Measured, and stated because it is a testing fact rather than a design one:
+        // that conjunct and `is_user`'s [`ClientKey`] key are now **mutually redundant**.
+        // `kinds` holds only live-rooted declarations and is keyed by the declaration, so
+        // `is_user(src_decl)` is already false for an orphan; and conversely, keying
+        // `is_user` by the VALUE (§12.40's shape) is caught by the conjunct. Biting either
+        // one ALONE leaves the whole suite green — only biting both together fires
+        // (`l1_mean::a_recycled_namespace_cannot_inherit_the_previous_tenants_address_
+        // plane`). Both are kept deliberately: this is the predicate an isolation break
+        // walks through, and defence in depth here is cheaper than the round that finds
+        // the next hole in it.
+        let (Some(&dst_decl), Some(src_decl)) = (live_root.get(&dst.client), g.owner_key_of(dst))
+        else {
+            continue;
+        };
+        if live_root.get(&src_decl.client) != Some(&src_decl) {
             continue;
         }
-        // ★★★ §12.39 Part B — and the SOURCE must still be owned by the namespace the
-        // `src` key names. A dup edge reports its source as the resource's **origin**
-        // `(client, handle)`, and that `HClient` is a recyclable value: an attacker that
-        // allocates a VASpace in a namespace it will hand back, aliases it into a client of
-        // its own, and then frees the namespace's root leaves an edge whose `src.client`
-        // is a *number* the guest kernel is free to give to an unrelated later process.
-        // The instant that process declares, `is_user(src.client)` flips true on ITS root
-        // and the stale edge became a grouping edge — merging the victim into the
-        // attacker's `Proc` on the victim's own first RM event.
-        //
-        // Read through the **destination** handle (live by construction) so the answer is
-        // the resource's recorded owner, and compare it against the declaration `src.client`
-        // currently projects under. Identical for every ordinary dup — a live namespace's
-        // resources are all owned by its current root — and false exactly for the orphan of
-        // a superseded declaration, which is the vector.
-        if g.owner_of(dst) != decls.get(&src.client).map(|&(id, _)| id) {
+        if !(is_user(dst_decl) && is_user(src_decl)) {
             continue;
         }
         // ★★ §12.37 (C1) — THE CONDEMNATION LINE. A merge across it is the ONE way a
@@ -539,10 +568,10 @@ pub fn project(
         //    across the line, so neither a resurrect (absorbing a corpse around a
         //    working isolate) nor a bystander death (condemning a healthy proc by
         //    dupping into a corpse) is representable.
-        if condemned.contains(&dst.client) != condemned.contains(&src.client) {
+        if condemned.contains(&dst_decl) != condemned.contains(&src_decl) {
             continue;
         }
-        uf.union(dst.client, src.client);
+        uf.union(dst_decl, src_decl);
     }
 
     // Assignment: every declared kernel client goes to the ONE system component, by
@@ -550,7 +579,7 @@ pub fn project(
     // never equal `SYSTEM_ANCHOR`, because `RmGraph::apply` refuses `RESERVED_CLIENT`.
     let mut procs: BTreeMap<ProcAnchor, ProcBoundary> = BTreeMap::new();
     let mut system = ProcBoundary::empty(SYSTEM_ANCHOR);
-    let anchor_of = |uf: &mut ClientUnion, c: HClient| {
+    let anchor_of = |uf: &mut ClientUnion, c: ClientKey| {
         if is_kernel(c) {
             SYSTEM_ANCHOR
         } else {
@@ -601,20 +630,17 @@ pub fn project(
     }
 
     for (node, owner) in g.nodes_with_owner() {
-        // ★★★ §12.39 Part B — the same predicate the client universe used, and it MUST be
-        // the same one: admitting a node here that the universe excluded would panic on
-        // the `expect` below, and excluding one the universe admitted would leave an empty
-        // component. A resource of a superseded declaration claims no `Pdb`/`VChid` and
-        // enters no boundary, so its use takes a named MISS instead of resolving onto the
-        // namespace's new tenant.
-        if !projects(node, owner) {
-            continue;
-        }
-        // ★ §12.27 — attribution is by the resource's ORIGIN client (`nodes()` reports
-        // each resource at the handle that allocated it), so a user object dup'd into
-        // the UVM session stays in the USER component. The system component owns only
-        // what the guest kernel itself allocated.
-        let anchor = anchor_of(&mut uf, node.key.client);
+        // ★ §12.27 — attribution is by the resource's ORIGIN, and ★★★ §12.42 the origin is
+        // a **declaration**, not an `hClient` value: a user object dup'd into the UVM
+        // session stays in the USER component, and an orphan of a superseded declaration
+        // stays in that declaration's own component rather than joining whoever now holds
+        // the number (§12.39/§12.40) or — the defect this replaced — belonging to nobody
+        // and being freed out from under a live kernel reference (§12.41 §4).
+        //
+        // There is no membership predicate here any more, and there must not be: the
+        // universe IS `decls`, `owner` is a live declaration by construction (this
+        // resource is what keeps it live), so the `expect` below cannot fire.
+        let anchor = anchor_of(&mut uf, owner);
         let boundary = if anchor == SYSTEM_ANCHOR {
             &mut system
         } else {

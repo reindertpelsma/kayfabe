@@ -112,6 +112,7 @@ use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::reactor::SourceKind;
+use kayfabe_core::rmgraph::ClientKey;
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraphError, RmNode};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_fwd::{ControlRoute, DoorbellOutcome, FwdFault, Published, Stale};
@@ -825,6 +826,115 @@ fn t0_churn(device: &SharedDevice, i: usize, round: u32) {
         .expect("T0: the guest frees the VASpace and keeps running");
 }
 
+/// ★★★ §12.42 — **THE TWO-GENERATION NAMESPACE RECYCLE, INSIDE THE COMPOSED WINDOW.**
+///
+/// The focused proof is
+/// [`a_superseded_declarations_kernel_held_memory_is_never_freed_by_its_successor`]; this
+/// is the same script run while five host verbs are parked, six workload threads are hot
+/// on both GPUs, two procs are being killed out of band and T0's churn is allocating and
+/// freeing underneath — because the defect it guards was only ever visible in a composed
+/// sequence, and the isolated case tests what we thought of.
+///
+/// Returns `(gen1, gen2)`: the superseded declaration's `Proc` (kept alive by the guest
+/// kernel's `DUP_OBJECT`, exactly as §12.33 requires) and the successor's.
+fn generation_recycle(
+    dev: &SharedDevice,
+    rec: &SharedRecorder,
+    mode: LockMode,
+) -> (ProcId, ProcId) {
+    let handles = identical_handles(0, 0);
+
+    // (1) generation 1 on GPU0: a whole CUDA-context-shaped process, published and rung,
+    //     so what the recycle can destroy is REAL host state and not an empty shell.
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(
+        GEN_CLIENT,
+        GEN1_PDB,
+        identical_handles(GEN1_GR.0, GEN1_CE.0),
+        None,
+    );
+    // (2) the guest kernel's UVM session takes a reference to its VASpace — the measured
+    //     shape (one session per module load, every CUDA process dups into it).
+    s.uvm_dup(
+        GEN_UVM,
+        HObject(GEN_UVM.0),
+        GEN_UVM_DEV,
+        GEN_UVM_VAS,
+        GEN_UVM_PDB,
+        GEN1_ALIAS,
+        NodeKey::new(GEN_CLIENT, handles.vaspace),
+    );
+    for ev in s.events {
+        dev.apply(ev)
+            .expect("({mode:?}) the recycle's generation 1 applies");
+    }
+    dev.publish_backing(GPU0, GEN1_PDB, GpuVa(VA_GEN), 0x1000)
+        .expect("({mode:?}) generation 1 publishes");
+    let gen1 = dev
+        .doorbell(GPU0, MockArch::token_for(GEN1_GR), &[GpuVa(VA_GEN)])
+        .expect("({mode:?}) generation 1 rings")
+        .proc;
+
+    // (3) the process exits. Its `Proc` must SURVIVE — RM refcounts the VASpace for the
+    //     session (§12.33), so retiring it here would free host memory a live kernel
+    //     client is still reading.
+    dev.apply(RmEvent::Free {
+        client: GEN_CLIENT,
+        handle: handles.client_root,
+    })
+    .expect("({mode:?}) generation 1's client root frees");
+    let gen1_named = dev
+        .with_proc(gen1, reachable_objects)
+        .expect("({mode:?}) §12.33: the owning `Proc` survives its owner");
+    assert!(
+        gen1_named.len() >= 2,
+        "({mode:?}) the recycle's baseline must be real host state, got {gen1_named:?}"
+    );
+
+    // (4) ★★ THE RECYCLE, on the OTHER GPU. Accepted — RM recycles `hClient` values by
+    //     design and refusing would hang a legal guest.
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(
+        GEN_CLIENT,
+        GEN2_PDB,
+        identical_handles(GEN2_GR.0, GEN2_CE.0),
+        Some(GPU1.0),
+    );
+    for ev in s.events {
+        dev.apply(ev)
+            .expect("({mode:?}) ★ re-declaring a recycled namespace is LEGAL");
+    }
+    dev.publish_backing(GPU1, GEN2_PDB, GpuVa(VA_GEN), 0x1000)
+        .expect("({mode:?}) generation 2 publishes");
+    let gen2 = dev
+        .doorbell(GPU1, MockArch::token_for(GEN2_GR), &[GpuVa(VA_GEN)])
+        .expect("({mode:?}) generation 2 rings")
+        .proc;
+
+    // (5) ★★★ THE BREACH, inside the window.
+    assert_eq!(
+        dev.with_proc(gen1, reachable_objects).unwrap_or_default(),
+        gen1_named,
+        "★★ ({mode:?}) HOST MEMORY RM SAYS IS LIVE WAS TAKEN AWAY — the UVM session still \
+         holds a `DUP_OBJECT` of generation 1's VASpace \
+         (`ogkm .../mem_mgr/mem.c:1027-1031`) and an unrelated later tenant of the same \
+         `hClient` VALUE left its host VAS and its published backing nameable by nothing"
+    );
+    assert!(
+        outstanding_on(rec, gen1).is_superset(&gen1_named),
+        "★★ ({mode:?}) …and a host `Free` verb was issued for one of them"
+    );
+    assert_ne!(
+        gen2, gen1,
+        "★★ ({mode:?}) the successor INHERITED its predecessor's `Proc` — one isolate, one \
+         GPA arena, one host VAS — because the two were matched on a recyclable value"
+    );
+    // …and the predecessor's plane is still USABLE, not merely present in a map.
+    dev.publish_backing(GPU0, GEN1_PDB, GpuVa(VA_GEN + 0x1_0000), 0x1000)
+        .expect("★★ the kernel-referenced plane must still accept host work");
+    (gen1, gen2)
+}
+
 // =================================================================================
 // ★★ THE COMPOSED RUN
 // =================================================================================
@@ -896,6 +1006,8 @@ fn mean_run(mode: LockMode) -> MeanReport {
     let mut signals = 0usize;
     let mut observed = 0usize;
     let mut publications = 0usize;
+    // ★★★ §12.42 — filled by phase 5 (g), inside the window.
+    let mut recycled: Option<(ProcId, ProcId)> = None;
 
     let (witness, canary_teardown, canary_chanfree, canary_reroute, delivery_ran_under_pending) =
         thread::scope(|sc| {
@@ -1055,6 +1167,14 @@ fn mean_run(mode: LockMode) -> MeanReport {
                     t0_churn(dev, i, round);
                 }
             }
+
+            // (g) ★★★ §12.42 (N1/N2): the guest kernel hands one `hClient` value to two
+            // successive processes while the UVM session holds a `DUP_OBJECT` of the
+            // first one's VASpace. Composed here on purpose — the corruption it guards
+            // (host memory RM says is live, freed by the value's next tenant) is a
+            // whole-device lifecycle fact, and the previous round measured that NONE of
+            // the 359 tests then in the suite caught it.
+            recycled = Some(generation_recycle(dev, &rec, mode));
 
             // ---- Phase 6: JOIN the workloads. ★★ THE PARALLELISM ASSERTION: these joins
             // returning AT ALL, with five host verbs still parked (two of them on the
@@ -1229,7 +1349,8 @@ fn mean_run(mode: LockMode) -> MeanReport {
             .unwrap_or_else(|_| panic!("every device handle was released"))
             .into_gpu()
     });
-    sweep_conservation(&mut gpu, &pids, mode);
+    let recycled = recycled.expect("phase 5 (g) ran");
+    sweep_conservation(&mut gpu, &pids, recycled, mode);
 
     // ---- Phase 12: ★ the conservation ledger (§7.8), composed into THIS run rather
     // than asserted beside it. The census runs after the final reap and never in a
@@ -1349,7 +1470,7 @@ fn owner_vchid(g: &Gpu, target: GpuId, vchid: VChid) -> Owner {
 /// one-client component, so its anchor is its client.
 fn expected_owner(pids: &[ProcId], i: usize) -> Owner {
     if i == P_TEARDOWN || i == P_HUP {
-        Owner::Condemned(ProcAnchor(client_of(i)))
+        Owner::Condemned(ProcAnchor(ClientKey::first(client_of(i))))
     } else {
         Owner::Live(pids[i])
     }
@@ -1358,7 +1479,7 @@ fn expected_owner(pids: &[ProcId], i: usize) -> Owner {
 /// The facts that must hold globally, no matter how the threads interleaved. Each is a
 /// property the design *claims*; asserting them here is what makes the claim falsifiable
 /// by a harsh run instead of by inspection.
-fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
+fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], recycled: (ProcId, ProcId), mode: LockMode) {
     // ---- (1) ★ Per-`(GpuId, ·)` routing NEVER collapses. Each lane's PDB and CE vChid
     // exist IDENTICALLY on both GPUs and must resolve to two DIFFERENT owners — where
     // "owner" now has three possible answers ([`Owner`]), because two of this run's six
@@ -1449,7 +1570,7 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
         assert!(
             gpu.procs
                 .values()
-                .all(|p| !p.clients.contains(&client_of(i))),
+                .all(|p| !p.client_values().contains(&client_of(i))),
             "★★ ({mode:?}) §12.13: an out-of-band-retired proc was RESURRECTED under a \
              fresh identity — §7.3 promises 'no resurrect' and `WorkerDied` promises \
              'never a respawn'"
@@ -1466,8 +1587,38 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], mode: LockMode) {
     // path) would be a self-inflicted denial of service, and it would show up here.
     assert_eq!(
         gpu.procs.len(),
-        4,
-        "({mode:?}) exactly the four untouched procs are live"
+        6,
+        "({mode:?}) exactly the four untouched procs plus the recycle's TWO generations \
+         are live"
+    );
+    // ★★★ §12.42 — the recycle's end-of-run facts, after everything else the window did.
+    let (gen1, gen2) = recycled;
+    assert_eq!(
+        (
+            kayfabe_fwd::route_pdb(&gpu.spine, GPU0, GEN1_PDB),
+            kayfabe_fwd::route_pdb(&gpu.spine, GPU1, GEN2_PDB),
+        ),
+        (Ok(gen1), Ok(gen2)),
+        "({mode:?}) ★★ two generations of one `hClient`, two address planes, two `Proc`s \
+         — and the superseded one is the one RM keeps alive on the UVM session's alias"
+    );
+    assert_eq!(
+        (
+            gpu.procs[&gen1].clients.clone(),
+            gpu.procs[&gen2].clients.clone()
+        ),
+        (
+            BTreeSet::from([ClientKey::first(GEN_CLIENT)]),
+            BTreeSet::from([ClientKey {
+                client: GEN_CLIENT,
+                incarnation: 1
+            }])
+        ),
+        "({mode:?}) ★★ the two lifetimes of one `hClient` VALUE must be two components"
+    );
+    assert!(
+        gpu.system.client_values().contains(&GEN_UVM),
+        "({mode:?}) the UVM session stayed the SYSTEM component's throughout"
     );
     for i in [P_WITNESS, P_PEER, P_CHANFREE, P_REROUTE] {
         assert!(
@@ -2023,7 +2174,7 @@ fn out_of_band_retire_must_not_resurrect_the_isolate() {
     let (device, pids, _rec) = mean_world(LockMode::Sharded);
     let victim = pids[P_HUP];
     let condemned = FwdFault::Condemned {
-        anchor: ProcAnchor(client_of(P_HUP)),
+        anchor: ProcAnchor(ClientKey::first(client_of(P_HUP))),
     };
 
     // The victim has live host state, then its worker dies out of band.
@@ -2083,7 +2234,7 @@ fn out_of_band_retire_must_not_resurrect_the_isolate() {
     assert!(
         gpu.procs
             .values()
-            .all(|p| !p.clients.contains(&client_of(P_HUP))),
+            .all(|p| !p.client_values().contains(&client_of(P_HUP))),
         "★★ §12.13: no `Proc` — under any identity — may hold a condemned client"
     );
     assert!(gpu.spine.is_condemned(client_of(P_HUP)));
@@ -2152,7 +2303,7 @@ fn condemnation_survives_intervening_applies_and_clears_on_client_root_free() {
     let (mut gpu, pids, _rec) = mean_gpu();
     let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
     let condemned = FwdFault::Condemned {
-        anchor: ProcAnchor(client_of(P_HUP)),
+        anchor: ProcAnchor(ClientKey::first(client_of(P_HUP))),
     };
 
     core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the victim publishes while alive");
@@ -2175,7 +2326,7 @@ fn condemnation_survives_intervening_applies_and_clears_on_client_root_free() {
         assert!(
             gpu.procs
                 .values()
-                .all(|p| !p.clients.contains(&client_of(P_HUP))),
+                .all(|p| !p.client_values().contains(&client_of(P_HUP))),
             "★ refresh #{k} minted a `Proc` for the condemned component"
         );
     }
@@ -2216,7 +2367,7 @@ fn condemnation_survives_intervening_applies_and_clears_on_client_root_free() {
     }
     let p = core_publish(&mut gpu, GPU1, lane.pdb, VA_CTL).expect("a NEW process is served");
     let pid = gpu.spine.by_pdb[&(GPU1, lane.pdb)];
-    assert!(gpu.procs[&pid].clients.contains(&fresh));
+    assert!(gpu.procs[&pid].client_values().contains(&fresh));
     assert_ne!(pid, victim, "ProcIds are never reused");
     assert!(p.host_va != 0);
 }
@@ -2317,7 +2468,7 @@ fn a_condemned_components_arena_is_released_once_and_never_recycled_to_an_impost
         assert!(
             gpu.procs
                 .values()
-                .all(|p| !p.clients.contains(&client_of(P_HUP))),
+                .all(|p| !p.client_values().contains(&client_of(P_HUP))),
             "refresh #{k} gave the condemned component a proc (and therefore an arena)"
         );
     }
@@ -2341,7 +2492,9 @@ fn a_condemned_components_arena_is_released_once_and_never_recycled_to_an_impost
         "the condemned proc's arena must be recycled (the #80 fix) — to a NEW process"
     );
     assert!(
-        !gpu.procs[&new_pid].clients.contains(&client_of(P_HUP)),
+        !gpu.procs[&new_pid]
+            .client_values()
+            .contains(&client_of(P_HUP)),
         "the recycled arena went to an impostor of the condemned component"
     );
     // Still globally disjoint: exactly one live proc holds that range.
@@ -2417,7 +2570,7 @@ fn the_graph_driven_retire_paths_never_condemn() {
         "★ the merge-absorb retire must NEVER condemn"
     );
     let merged = gpu.spine.by_pdb[&(GPU0, lane_of(P_WITNESS).pdb)];
-    assert!(gpu.procs[&merged].clients.contains(&uvm));
+    assert!(gpu.procs[&merged].client_values().contains(&uvm));
     core_publish(&mut gpu, GPU0, lane_of(P_WITNESS).pdb, VA_CTL)
         .expect("★ the merged proc keeps serving");
 }
@@ -2465,7 +2618,7 @@ fn condemnation_spans_a_procs_gpus_and_spares_identical_ids_on_other_gpus() {
         assert_eq!(
             core_publish(&mut gpu, g, lane_of(i).pdb, VA_HELD),
             Err(FwdFault::Condemned {
-                anchor: ProcAnchor(client_of(P_TEARDOWN)),
+                anchor: ProcAnchor(ClientKey::first(client_of(P_TEARDOWN))),
             }),
             "★ the condemned component's {g:?} plane still serves the guest"
         );
@@ -2518,7 +2671,7 @@ fn a_dup_across_the_condemnation_line_merges_nothing() {
     let (mut gpu, pids, _rec) = mean_gpu();
     let victim = pids[P_HUP];
     let condemned = FwdFault::Condemned {
-        anchor: ProcAnchor(client_of(P_HUP)),
+        anchor: ProcAnchor(ClientKey::first(client_of(P_HUP))),
     };
 
     core_publish(&mut gpu, GPU1, lane_of(P_HUP).pdb, VA_WARM).expect("publishes while alive");
@@ -2540,11 +2693,13 @@ fn a_dup_across_the_condemnation_line_merges_nothing() {
     );
     assert_eq!(gpu.spine.condemned_len(), 1);
     assert!(
-        !gpu.procs[&pids[P_PEER]].clients.contains(&client_of(P_HUP)),
+        !gpu.procs[&pids[P_PEER]]
+            .client_values()
+            .contains(&client_of(P_HUP)),
         "★ the dup put the condemned client inside a live proc — that IS the resurrect"
     );
     assert_eq!(
-        gpu.procs[&pids[P_PEER]].clients,
+        gpu.procs[&pids[P_PEER]].client_values(),
         BTreeSet::from([client_of(P_PEER)]),
         "the live component is exactly what it was"
     );
@@ -2678,7 +2833,7 @@ fn a_fresh_client_recovers_from_its_condemned_predecessor() {
     let (mut gpu, pids, _rec) = mean_gpu();
     let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
     let condemned = FwdFault::Condemned {
-        anchor: ProcAnchor(client_of(P_HUP)),
+        anchor: ProcAnchor(ClientKey::first(client_of(P_HUP))),
     };
 
     core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the victim publishes while alive");
@@ -2703,9 +2858,9 @@ fn a_fresh_client_recovers_from_its_condemned_predecessor() {
     let pid = gpu.spine.by_pdb[&(GPU1, R_PDB)];
     assert_ne!(pid, victim, "ProcIds are never reused");
     let p = &gpu.procs[&pid];
-    assert!(p.clients.contains(&R_CLIENT));
+    assert!(p.client_values().contains(&R_CLIENT));
     assert!(
-        !p.clients.contains(&client_of(P_HUP)),
+        !p.client_values().contains(&client_of(P_HUP)),
         "★ the recovery absorbed the condemned client — that IS a resurrect"
     );
 
@@ -2765,7 +2920,7 @@ fn no_amount_of_recovery_clears_the_condemned_entry() {
     let (mut gpu, pids, _rec) = mean_gpu();
     let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
     let condemned = FwdFault::Condemned {
-        anchor: ProcAnchor(client_of(P_HUP)),
+        anchor: ProcAnchor(ClientKey::first(client_of(P_HUP))),
     };
 
     core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the victim publishes while alive");
@@ -2804,7 +2959,7 @@ fn no_amount_of_recovery_clears_the_condemned_entry() {
         assert!(
             gpu.procs
                 .values()
-                .all(|p| !p.clients.contains(&client_of(P_HUP))),
+                .all(|p| !p.client_values().contains(&client_of(P_HUP))),
             "recovery #{k} minted a `Proc` holding the condemned client"
         );
         // …and the recovery is a real one, not a routing accident.
@@ -3048,7 +3203,7 @@ fn recovery_after_a_multi_gpu_condemnation_serves_both_targets() {
         assert_eq!(
             core_publish(&mut gpu, g, lane_of(i).pdb, VA_HELD),
             Err(FwdFault::Condemned {
-                anchor: ProcAnchor(client_of(P_TEARDOWN)),
+                anchor: ProcAnchor(ClientKey::first(client_of(P_TEARDOWN))),
             }),
             "★★ recovering on {g:?} revived the condemned component's {g:?} plane"
         );
@@ -3135,7 +3290,7 @@ fn a_planted_dup_alias_cannot_condemn_a_client_that_has_not_declared() {
     let (mut gpu, pids, _rec) = mean_gpu();
     let (attacker, lane) = (pids[P_HUP], lane_of(P_HUP));
     let condemned = FwdFault::Condemned {
-        anchor: ProcAnchor(client_of(P_HUP)),
+        anchor: ProcAnchor(ClientKey::first(client_of(P_HUP))),
     };
 
     core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("the attacker publishes while alive");
@@ -3181,9 +3336,9 @@ fn a_planted_dup_alias_cannot_condemn_a_client_that_has_not_declared() {
         "★★ the victim's own address plane was never materialized — it was \
                  condemned on the apply that declared it, and nobody was told",
     );
-    assert!(gpu.procs[&pid].clients.contains(&VICTIM_CLIENT));
+    assert!(gpu.procs[&pid].client_values().contains(&VICTIM_CLIENT));
     assert!(
-        !gpu.procs[&pid].clients.contains(&client_of(P_HUP)),
+        !gpu.procs[&pid].client_values().contains(&client_of(P_HUP)),
         "★ the victim's proc absorbed the condemned client — that IS the resurrect"
     );
 
@@ -3295,12 +3450,14 @@ fn a_planted_dup_alias_cannot_squat_a_later_process_into_the_attackers_proc() {
          pair the attacker chose"
     );
     assert_eq!(
-        gpu.procs[&victim].clients,
+        gpu.procs[&victim].client_values(),
         BTreeSet::from([VICTIM_CLIENT]),
         "★★ the victim's component must contain the victim's client and nothing else"
     );
     assert!(
-        !gpu.procs[&attacker].clients.contains(&VICTIM_CLIENT),
+        !gpu.procs[&attacker]
+            .client_values()
+            .contains(&VICTIM_CLIENT),
         "★★ the attacker's component absorbed the victim's client"
     );
 
@@ -3386,7 +3543,7 @@ fn a_condemned_entry_must_not_poison_client_handles_the_guest_has_freed() {
     let lane = lane_of(P_HUP);
     let root = identical_handles(0, 0).client_root;
     let condemned = FwdFault::Condemned {
-        anchor: ProcAnchor(client_of(P_HUP)),
+        anchor: ProcAnchor(ClientKey::first(client_of(P_HUP))),
     };
 
     // ---- One component of THREE clients, joined by genuine user↔user shares.
@@ -3415,7 +3572,7 @@ fn a_condemned_entry_must_not_poison_client_handles_the_guest_has_freed() {
     }
     let doomed = gpu.spine.by_pdb[&(GPU1, lane.pdb)];
     assert_eq!(
-        gpu.procs[&doomed].clients,
+        gpu.procs[&doomed].client_values(),
         BTreeSet::from([client_of(P_HUP), JOINED_A, JOINED_B]),
         "the three clients are ONE component"
     );
@@ -3471,7 +3628,7 @@ fn a_condemned_entry_must_not_poison_client_handles_the_guest_has_freed() {
         .expect("★★ the recycled namespace's own address plane was never materialized");
     let rung = publish_and_ring(&mut gpu, GPU1, RECYCLED_PDB, VChid(0x163), VA_CTL);
     assert_eq!(rung.proc, pid);
-    assert!(!gpu.procs[&pid].clients.contains(&client_of(P_HUP)));
+    assert!(!gpu.procs[&pid].client_values().contains(&client_of(P_HUP)));
 
     // ---- …and the corpse the attacker DID earn is still exactly as dead.
     assert_eq!(
@@ -3518,7 +3675,7 @@ fn evasion_dup_a_fresh_client_then_free_the_old_root_still_fails() {
     let (mut gpu, pids, _rec) = mean_gpu();
     let (victim, lane) = (pids[P_HUP], lane_of(P_HUP));
     let condemned = FwdFault::Condemned {
-        anchor: ProcAnchor(client_of(P_HUP)),
+        anchor: ProcAnchor(ClientKey::first(client_of(P_HUP))),
     };
 
     core_publish(&mut gpu, GPU1, lane.pdb, VA_WARM).expect("publishes while alive");
@@ -3596,7 +3753,7 @@ fn evasion_dup_a_fresh_client_then_free_the_old_root_still_fails() {
     assert!(
         gpu.procs
             .values()
-            .all(|p| !p.clients.contains(&client_of(P_HUP))),
+            .all(|p| !p.client_values().contains(&client_of(P_HUP))),
         "★ a live proc absorbed the condemned client"
     );
     // The attacker's own fresh component is unaffected either way — it never shared the
@@ -3662,7 +3819,7 @@ fn evasion_splitting_the_condemned_component_still_fails() {
         assert_eq!(
             core_publish(&mut gpu, GPU1, pdb, VA_HELD),
             Err(FwdFault::Condemned {
-                anchor: ProcAnchor(c),
+                anchor: ProcAnchor(ClientKey::first(c)),
             }),
             "★★ a split-off half of a condemned component was served again"
         );
@@ -3723,7 +3880,7 @@ fn evasion_relabelling_the_condemned_component_still_fails() {
     assert_eq!(
         core_publish(&mut gpu, GPU1, SPLIT_PDB, VA_HELD),
         Err(FwdFault::Condemned {
-            anchor: ProcAnchor(SPLIT_CLIENT),
+            anchor: ProcAnchor(ClientKey::first(SPLIT_CLIENT)),
         }),
         "★★ the re-labelled survivor was served again — and the label it answers under \
          must be its OWN anchor, not the freed one"
@@ -3732,7 +3889,7 @@ fn evasion_relabelling_the_condemned_component_still_fails() {
     assert!(
         gpu.procs
             .values()
-            .all(|p| !p.clients.contains(&SPLIT_CLIENT)),
+            .all(|p| !p.client_values().contains(&SPLIT_CLIENT)),
         "★ a live proc absorbed the re-labelled corpse"
     );
 }
@@ -3821,7 +3978,7 @@ fn a_live_component_that_splits_yields_two_procs() {
         "precondition: the share made them ONE `Proc`"
     );
     assert_eq!(
-        gpu.procs[&merged].clients,
+        gpu.procs[&merged].client_values(),
         BTreeSet::from([SPLIT_A, SPLIT_B])
     );
 
@@ -3862,8 +4019,8 @@ fn a_live_component_that_splits_yields_two_procs() {
     );
     assert_eq!(
         (
-            gpu.procs[&pid_a].clients.clone(),
-            gpu.procs[&pid_b].clients.clone()
+            gpu.procs[&pid_a].client_values(),
+            gpu.procs[&pid_b].client_values()
         ),
         (BTreeSet::from([SPLIT_A]), BTreeSet::from([SPLIT_B])),
         "★★ each half holds exactly its own client"
@@ -4063,7 +4220,7 @@ fn a_recycled_namespace_cannot_squat_a_later_process_into_the_attackers_proc() {
          VAS, i.e. #14 un-fixed for a pair the attacker chose"
     );
     assert_eq!(
-        gpu.procs[&victim].clients,
+        gpu.procs[&victim].client_values(),
         BTreeSet::from([RECYCLED_CLIENT]),
         "★★ the victim's component must hold the victim's client and nothing else"
     );
@@ -4271,19 +4428,24 @@ fn a_recycled_namespace_cannot_inherit_the_previous_tenants_address_plane() {
          names a namespace the attacker had already freed"
     );
     assert_eq!(
-        gpu.procs[&victim].clients,
+        gpu.procs[&victim].client_values(),
         BTreeSet::from([SHAPE_B_RECYCLED]),
         "★★ the victim's component must hold the victim's client and nothing else"
     );
+    // ★★★ §12.42 (N1) — **CORRECTED, and the correction is the whole of N1.** This used to
+    // assert `Err(UnknownPdb)`: *"the superseded declaration's address plane must belong to
+    // nobody"*. Belonging to nobody is exactly what let `Gpu::vacate` +
+    // `stage_dropped_vases` release the orphan's host VAS and its published backing while
+    // RM still refcounts the resource for the alias holder
+    // (`ogkm src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`) — the corruption-over-refusal
+    // direction §12.40 §1 rejects as D4. Isolation is held by the declaration IDENTITY
+    // (`assert_ne!(victim, orphan)` above), never by dropping a live resource on the floor.
     assert_eq!(
         kayfabe_fwd::route_pdb(&gpu.spine, GPU0, SHAPE_B_ORPHAN_PDB),
-        Err(FwdFault::UnknownPdb {
-            gpu: GPU0,
-            pdb: SHAPE_B_ORPHAN_PDB
-        }),
-        "★★ the SUPERSEDED declaration's address plane must belong to nobody — routable \
-         means routable to a `Proc`, and there is no longer one it can honestly name. \
-         `UnknownPdb`, by name, not an anonymous miss"
+        Ok(orphan),
+        "★★ the SUPERSEDED declaration's still-live address plane was taken away from it \
+         by a LATER tenant of its `hClient` value — the plane RM keeps alive on the \
+         attacker's alias must stay with the declaration that allocated it"
     );
     assert_ne!(
         gpu.procs[&victim].isolates[&GPU0].id(),
@@ -4383,7 +4545,7 @@ fn a_recycled_namespace_is_a_different_component_and_is_not_condemned() {
     let (mut gpu, pids, _rec) = mean_gpu();
     let (doomed, lane) = (pids[P_HUP], lane_of(P_HUP));
     let condemned = FwdFault::Condemned {
-        anchor: ProcAnchor(client_of(P_HUP)),
+        anchor: ProcAnchor(ClientKey::first(client_of(P_HUP))),
     };
 
     // A bystander that will keep one of the doomed component's resources alive.
@@ -4456,7 +4618,7 @@ fn a_recycled_namespace_is_a_different_component_and_is_not_condemned() {
              was told either way",
     );
     assert_eq!(
-        gpu.procs[&reborn].clients,
+        gpu.procs[&reborn].client_values(),
         BTreeSet::from([client_of(P_HUP)]),
         "★★ the successor's component holds its own client and nothing else"
     );
@@ -4830,4 +4992,410 @@ fn a_recycled_channel_handle_never_shares_the_ghosts_host_channel() {
         2,
         "★★ the two live channels share ONE host channel object"
     );
+}
+
+// =================================================================================
+// ★★★ §12.42 (N1/N2) — TWO GENERATIONS OF ONE `hClient`, AND THE HOST MEMORY RM SAYS
+// IS LIVE
+//
+// §12.39/§12.40 closed the recycled namespace in the *isolation* direction: a later
+// tenant of an `hClient` value must not inherit the previous tenant's `Proc`. It bought
+// that with an EXCLUSION — a resource projected only while its recorded owner was *the*
+// declaration its value projected under, and a value had exactly one slot
+// (`ProcAnchor` and `ProcBoundary::clients` were `HClient`s, so two generations were not
+// expressible as two components).
+//
+// §12.41 §4 measured what the exclusion costs. The instant the value is re-declared, the
+// PREVIOUS declaration's still-live resources answer to nobody: no boundary, so the
+// component vanishes, so `Gpu::vacate` + `stage_dropped_vases` release its host VAS and
+// its published backing — **while a live kernel client still references the resource RM
+// refcounts** (`ogkm src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`). That is the
+// corruption-over-refusal direction §12.40 §1 refuses as D4 and `cross_proc_lifetime`
+// pins against, reached by walking around the rule rather than through it.
+//
+// §12.42's fix is the identity, not another exclusion: a component is labelled by a
+// `ClientKey` = (`hClient`, incarnation), so the two generations ARE two components and
+// every live resource keeps projecting under the declaration that allocated it.
+// =================================================================================
+
+/// The `hClient` the guest kernel hands out twice — the recycled namespace value.
+const GEN_CLIENT: HClient = HClient(0xC0);
+/// Generation 1's page-directory base (allocated on GPU0).
+const GEN1_PDB: Pdb = Pdb(0x3c00_0000);
+/// Generation 1's GR vChid.
+const GEN1_GR: VChid = VChid(0x1a0);
+/// Generation 1's CE vChid.
+const GEN1_CE: VChid = VChid(0x2a0);
+/// Generation 2's page-directory base (allocated on GPU1 — the multi-GPU axis: the two
+/// lifetimes of one value need not even share a target).
+const GEN2_PDB: Pdb = Pdb(0x3d00_0000);
+/// Generation 2's GR vChid.
+const GEN2_GR: VChid = VChid(0x1a1);
+/// Generation 2's CE vChid.
+const GEN2_CE: VChid = VChid(0x2a1);
+/// Generation 3's page-directory base (back on GPU0).
+const GEN3_PDB: Pdb = Pdb(0x3e00_0000);
+/// Generation 3's GR vChid.
+const GEN3_GR: VChid = VChid(0x1a2);
+/// Generation 3's CE vChid.
+const GEN3_CE: VChid = VChid(0x2a2);
+/// The guest kernel's UVM session client — the measured `nvUvmInterfaceSessionCreate`
+/// shape: one per `nvidia_uvm` module load, every CUDA process dups into it.
+const GEN_UVM: HClient = HClient(0xC1D0_0069);
+/// The session's own device handle.
+const GEN_UVM_DEV: HObject = HObject(0x7b00_0001);
+/// The session's own VASpace handle.
+const GEN_UVM_VAS: HObject = HObject(0x7b00_0010);
+/// The session's own PDB.
+const GEN_UVM_PDB: Pdb = Pdb(0x3f00_0000);
+/// The handle the session holds generation 1's VASpace under.
+const GEN1_ALIAS: HObject = HObject(0x7b00_0100);
+/// …generation 2's.
+const GEN2_ALIAS: HObject = HObject(0x7b00_0101);
+/// A VA lane of this test's own, so it never collides with the world's publications.
+const VA_GEN: u64 = 0x50_0000_0000;
+
+/// Every host object still outstanding on `pid`'s isolate, read off the ledger.
+fn outstanding_on(rec: &SharedRecorder, pid: ProcId) -> BTreeSet<HostHandle> {
+    rec.lock()
+        .expect("recorder")
+        .ledger()
+        .leaked_on(IsolateId(pid.0))
+}
+
+/// The host objects `pid`'s live core state can still NAME. Empty when its `Proc` is
+/// gone — which, for a resource RM still refcounts, is the corruption this file's N1 test
+/// is about: nothing can address it, so `Spine::vacate` has staged it for release.
+fn reachable_of(gpu: &Gpu, pid: ProcId) -> BTreeSet<HostHandle> {
+    gpu.procs
+        .get(&pid)
+        .map(reachable_objects)
+        .unwrap_or_default()
+}
+
+/// Assert the three corruption classes are empty — never a disposition, never
+/// declarable (`tests/src/teardown.rs`).
+fn assert_no_corruption(rec: &SharedRecorder, when: &str) {
+    let l = rec.lock().expect("recorder").ledger();
+    assert_eq!(
+        (
+            l.double_free.as_slice(),
+            l.free_of_unknown.as_slice(),
+            l.unmap_of_unknown.as_slice()
+        ),
+        (&[][..], &[][..], &[][..]),
+        "★ {when}: a host object was released twice, or through an isolate that never \
+         minted it"
+    );
+}
+
+/// Build one generation of [`GEN_CLIENT`] on `target` and drive it end to end: publish
+/// real backing into its plane and ring its GR channel. Returns `(ProcId, VASpace key)`.
+fn gen_up(gpu: &mut Gpu, pdb: Pdb, gr: VChid, ce: VChid, target: GpuId, va: u64) -> ProcId {
+    reinit(gpu, GEN_CLIENT, pdb, gr, ce, target);
+    let rung = publish_and_ring(gpu, target, pdb, gr, va);
+    rung.proc
+}
+
+/// ★★★ **N1 — A SUPERSEDED DECLARATION'S KERNEL-HELD HOST MEMORY IS NEVER FREED BY ITS
+/// SUCCESSOR** (`l1_concurrency.md` §12.42; the defect §12.41 §4 measured and did not
+/// land).
+///
+/// The script is §12.41 §4's, verbatim, driven through the whole device against a live
+/// six-proc two-GPU world:
+///
+/// ```text
+/// declare GEN_CLIENT (gen1) on GPU0, publish + ring, UVM session dups its VASpace
+/// free GEN_CLIENT's root      ⇒ gen1's `Proc` SURVIVES (§12.33 — RM refcounts the
+///                                resource for the session, so retiring the owner would
+///                                free host memory a live kernel client is still reading)
+/// re-declare GEN_CLIENT (gen2) on GPU1, publish + ring, UVM dups that VASpace too
+/// free GEN_CLIENT's root again
+/// re-declare GEN_CLIENT (gen3) on GPU0
+/// ```
+///
+/// **The breach, asserted first:** the host objects outstanding on generation 1's isolate
+/// at the moment its root was freed must still be outstanding after the value is
+/// re-declared. Under the `HClient`-keyed component plane they were not: gen1's
+/// declaration was displaced by gen2's, its resources belonged to no boundary, its
+/// component vanished and `stage_dropped_vases` freed its host VAS and its backing while
+/// the UVM session still held a `DUP_OBJECT` of the VASpace. Measured on the
+/// conservation ledger ([`kayfabe_mocks::HostLedger`]), so a revert reports *"we freed
+/// something RM says is live"* rather than *"a count differed"*.
+///
+/// **The hangs-a-legal-guest gates, asserted beside it:** every re-declaration is
+/// ACCEPTED (RM recycles `hClient` values by design — a caller-supplied `hRoot` is
+/// honoured verbatim, `ogkm rs_server.c:612` with the reject guard compiled out at
+/// `:613-616`, and RM's own generator wraps at 2^20 with no free list, `:3319-3341`), and
+/// **every** generation stays usable end to end: each publishes and rings in its own
+/// isolate lane, on its own target, out of its own arena.
+#[test]
+fn a_superseded_declarations_kernel_held_memory_is_never_freed_by_its_successor() {
+    let _wd = watchdog("generation_recycle_n1", Duration::from_secs(60));
+    let (mut gpu, pids, rec) = mean_gpu();
+
+    // ---- Generation 1, on GPU0, with the guest kernel's session holding a reference.
+    let gen1 = gen_up(&mut gpu, GEN1_PDB, GEN1_GR, GEN1_CE, GPU0, VA_GEN);
+    let gen1_vas = NodeKey::new(GEN_CLIENT, identical_handles(0, 0).vaspace);
+    let mut s = Scenario::new();
+    s.uvm_dup(
+        GEN_UVM,
+        HObject(GEN_UVM.0),
+        GEN_UVM_DEV,
+        GEN_UVM_VAS,
+        GEN_UVM_PDB,
+        GEN1_ALIAS,
+        gen1_vas,
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("the UVM session's script applies");
+    }
+    assert!(
+        gpu.system.client_values().contains(&GEN_UVM),
+        "precondition: the session client is the SYSTEM component's (§12.27)"
+    );
+    assert_ne!(
+        kayfabe_fwd::route_pdb(&gpu.spine, GPU0, GEN1_PDB),
+        Ok(Gpu::SYSTEM_PROC),
+        "precondition: a kernel dup is a REFERENCE, never a merge — gen1 keeps its own \
+         `Proc`"
+    );
+    let gen1_hosts = host_identities(&gpu.procs[&gen1]);
+    let gen1_arena = gpu.procs[&gen1].arenas[&GPU0].range.clone();
+
+    // ---- The process exits: its client root is freed while the session's alias lives.
+    gpu.apply(RmEvent::Free {
+        client: GEN_CLIENT,
+        handle: identical_handles(0, 0).client_root,
+    })
+    .expect("gen1's client root frees");
+    // §12.33's landed rule, re-asserted here as the regression gate this test builds on:
+    // the owning `Proc` must survive its owner, because RM's refcount says the resource
+    // is live.
+    assert_eq!(
+        kayfabe_fwd::route_pdb(&gpu.spine, GPU0, GEN1_PDB),
+        Ok(gen1),
+        "★ §12.33: a kernel reference keeps its owner's `Proc` — and its host memory — \
+         alive after the owner is gone"
+    );
+    // ★ THE BASELINE, in the teardown post-condition's own two-part vocabulary
+    // (`tests/src/teardown.rs`): what gen1's core state can still NAME, and what the host
+    // still holds for its isolate (a superset — the channels its root free dropped are
+    // staged, not yet drained). Non-empty by construction (it published and rang), which
+    // the assertion states rather than assumes.
+    let gen1_named = reachable_of(&gpu, gen1);
+    let gen1_held = outstanding_on(&rec, gen1);
+    assert!(
+        gen1_named.len() >= 2 && gen1_held.is_superset(&gen1_named),
+        "★ the baseline must be REAL host state the core can name — a host VAS and its \
+         backing at least: named {gen1_named:?}, held {gen1_held:?}"
+    );
+    assert_no_corruption(&rec, "after gen1's root free");
+
+    // ---- ★★ THE RECYCLE. A later process is handed the same `hClient`. It must be
+    // ACCEPTED (D0 is the hangs-a-legal-guest error), and it lands on the OTHER GPU.
+    let gen2 = gen_up(&mut gpu, GEN2_PDB, GEN2_GR, GEN2_CE, GPU1, VA_GEN);
+
+    // ---- ★★★ THE BREACH, in two halves, and the FIRST is the corruption.
+    assert_eq!(
+        reachable_of(&gpu, gen1),
+        gen1_named,
+        "★★ HOST MEMORY RM SAYS IS LIVE WAS TAKEN AWAY FROM ITS OWNER. The guest kernel's \
+         UVM session still holds a `DUP_OBJECT` of gen1's VASpace — RM refcounts it \
+         (`ogkm .../mem_mgr/mem.c:1027-1031`) — and an unrelated later process being \
+         handed the same `hClient` VALUE left gen1's host VAS and its published backing \
+         nameable by NOTHING in core state, which is `Spine::vacate` staging them for \
+         release. That is `corruption over refusal`, which §12.40 §1 rejects as D4"
+    );
+    // …and it is not merely un-nameable: drive the reclamation the core has SCHEDULED.
+    // Under the defect gen1's `Proc` is on the retired list and this reap issues the host
+    // `Free` verbs for a live kernel client's memory; under the rule it is a no-op.
+    let _ = gpu.reap_retired();
+    assert_eq!(
+        outstanding_on(&rec, gen1)
+            .intersection(&gen1_named)
+            .copied()
+            .collect::<BTreeSet<_>>(),
+        gen1_named,
+        "★★ …and the scheduled reclamation RAN: host `Free` verbs were issued for a \
+         VASpace and a backing the guest kernel is still legally reading"
+    );
+    assert_eq!(
+        kayfabe_fwd::route_pdb(&gpu.spine, GPU0, GEN1_PDB),
+        Ok(gen1),
+        "★★ the superseded declaration's still-live address plane stopped routing — a \
+         VA the session can still legally use became an anonymous miss"
+    );
+    // …and it is USABLE, not merely present in a map: the session's reference can still
+    // be published into (§12.33's "alive AND usable").
+    core_publish(&mut gpu, GPU0, GEN1_PDB, VA_GEN + 0x1_0000)
+        .expect("★★ the kernel-referenced plane must still accept host work");
+    // …which mints exactly one more nameable host object, so the baseline moves FORWARD.
+    // Re-taken rather than relaxed: the property is "nothing that was live was released",
+    // and a growing EXACT set keeps it an equality at every later step instead of a
+    // `contains` that a wholesale reclamation could still satisfy.
+    let gen1_named_after_use = reachable_of(&gpu, gen1);
+    assert_eq!(
+        gen1_named_after_use.len(),
+        gen1_named.len() + 1,
+        "★ the usability probe must ADD exactly its own backing and release nothing: \
+         {gen1_named:?} -> {gen1_named_after_use:?}"
+    );
+    let gen1_named = gen1_named_after_use;
+
+    // ---- …while the successor is a genuinely DIFFERENT component, sharing nothing.
+    assert_ne!(
+        gen2, gen1,
+        "★★ the successor INHERITED the previous tenant's `Proc` — its isolate (one host \
+         RM client namespace), its GPA arena, its host VASes and its `pending_release` \
+         queue — because the two were matched on a recyclable `hClient` VALUE"
+    );
+    assert_eq!(
+        gpu.procs[&gen2].clients,
+        BTreeSet::from([ClientKey {
+            client: GEN_CLIENT,
+            incarnation: 1
+        }]),
+        "★★ the successor's component holds its OWN declaration and nothing else"
+    );
+    assert_eq!(
+        gpu.procs[&gen1].clients,
+        BTreeSet::from([ClientKey::first(GEN_CLIENT)]),
+        "★★ …and the predecessor keeps its own — two lifetimes of one value, two \
+         components, which an `HClient`-keyed `ProcAnchor` could not express (N2)"
+    );
+    assert!(
+        host_identities(&gpu.procs[&gen2]).is_disjoint(&gen1_hosts),
+        "★★ the successor came up holding a host object its predecessor minted"
+    );
+    let gen2_arena = gpu.procs[&gen2].arenas[&GPU1].range.clone();
+    assert!(
+        gen2_arena.end <= gen1_arena.start || gen1_arena.end <= gen2_arena.start,
+        "★★ the successor carved into its predecessor's GPA arena: {gen2_arena:?} vs \
+         {gen1_arena:?}"
+    );
+    assert_no_corruption(&rec, "after the first recycle");
+
+    // ---- ★ A THIRD generation, so the property is about a SEQUENCE and not about one
+    // pair — the ordinary state of a long-running guest, whose client index wraps at
+    // 2^20 with no free list. The session aliases gen2 as well, then gen2's root goes.
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(GEN_CLIENT, identical_handles(0, 0).vaspace),
+        dst: NodeKey::new(GEN_UVM, GEN2_ALIAS),
+    })
+    .expect("the session aliases generation 2's VASpace too");
+    gpu.apply(RmEvent::Free {
+        client: GEN_CLIENT,
+        handle: identical_handles(0, 0).client_root,
+    })
+    .expect("gen2's client root frees");
+    let gen2_named = reachable_of(&gpu, gen2);
+    let gen3 = gen_up(&mut gpu, GEN3_PDB, GEN3_GR, GEN3_CE, GPU0, VA_GEN);
+
+    assert_eq!(
+        (reachable_of(&gpu, gen1), reachable_of(&gpu, gen2)),
+        (gen1_named.clone(), gen2_named),
+        "★★ a third tenant of the value took an EARLIER generation's kernel-held host \
+         memory away — the defect is about the number of live declarations, not about two"
+    );
+    let planes: BTreeMap<Pdb, Result<ProcId, FwdFault>> = [
+        (GEN1_PDB, kayfabe_fwd::route_pdb(&gpu.spine, GPU0, GEN1_PDB)),
+        (GEN2_PDB, kayfabe_fwd::route_pdb(&gpu.spine, GPU1, GEN2_PDB)),
+        (GEN3_PDB, kayfabe_fwd::route_pdb(&gpu.spine, GPU0, GEN3_PDB)),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(
+        planes,
+        BTreeMap::from([
+            (GEN1_PDB, Ok(gen1)),
+            (GEN2_PDB, Ok(gen2)),
+            (GEN3_PDB, Ok(gen3)),
+        ]),
+        "★★ three live declarations of one `hClient`, three address planes, three `Proc`s \
+         — every one of them still routing to the component that allocated it"
+    );
+    assert_eq!(
+        BTreeSet::from([gen1, gen2, gen3]).len(),
+        3,
+        "★★ two generations of one value collapsed onto one `Proc`"
+    );
+
+    // ---- ★ THE OTHER HALF OF THE BOUND: this is a DEFERRAL, not a leak. When the guest
+    // kernel finally drops its alias, gen1's declaration owns nothing live, its component
+    // goes, and its host state leaves through `Spine::vacate` — which STAGES before it
+    // removes (§12.35's one removal point). Reclaimed when RM says it is dead, and not one
+    // event sooner.
+    gpu.apply(RmEvent::Free {
+        client: GEN_UVM,
+        handle: GEN1_ALIAS,
+    })
+    .expect("the session drops its reference to generation 1");
+    assert_eq!(
+        kayfabe_fwd::route_pdb(&gpu.spine, GPU0, GEN1_PDB),
+        Err(FwdFault::UnknownPdb {
+            gpu: GPU0,
+            pdb: GEN1_PDB
+        }),
+        "★ with its last reference gone the superseded declaration owns nothing, so its \
+         plane is a named MISS — the exclusion happens at refcount 0, which is where RM \
+         puts it"
+    );
+    assert!(
+        !gpu.procs.contains_key(&gen1),
+        "★ …and its `Proc` left with it"
+    );
+    assert!(
+        outstanding_on(&rec, gen1).is_superset(&gen1_named),
+        "★ its host state is STAGED at this instant, not yet drained — reclamation is a \
+         scheduled fact of `pending_release`, and the teardown post-condition proves it \
+         completes (this test declares no residue)"
+    );
+    assert_no_corruption(&rec, "after the reference finally drops");
+
+    // ---- The world the recycle ran inside is undisturbed: all six original procs still
+    // publish and ring in their own lanes, and generations 2 and 3 still serve.
+    for (i, &pid) in pids.iter().enumerate() {
+        let rung = publish_and_ring(
+            &mut gpu,
+            gpu_of(i),
+            lane_of(i).pdb,
+            lane_of(i).gr,
+            VA_GEN + 0x2_0000,
+        );
+        assert_eq!(rung.proc, pid, "proc {i} was disturbed by the recycle");
+        assert_eq!(
+            token_lane(rung.host_token),
+            (pid.0 + 1, gpu_of(i).0),
+            "proc {i} rang out of another (proc, GPU)'s isolate"
+        );
+    }
+    // Generation 3 is a live process: it publishes AND rings. Generation 2 is an orphan
+    // like generation 1 was — its channels died with its root, so the honest probe is
+    // that its kernel-referenced address plane still accepts host work.
+    let rung = publish_and_ring(&mut gpu, GPU0, GEN3_PDB, GEN3_GR, VA_GEN + 0x3_0000);
+    assert_eq!(rung.proc, gen3);
+    assert_eq!(
+        token_lane(rung.host_token),
+        (gen3.0 + 1, GPU0.0),
+        "★ the newest generation rang out of another isolate's lane"
+    );
+    core_publish(&mut gpu, GPU1, GEN2_PDB, VA_GEN + 0x3_0000)
+        .expect("★ generation 2's kernel-referenced plane is still usable too");
+    assert_eq!(
+        kayfabe_fwd::handle_doorbell(&mut gpu, GPU1, MockArch::token_for(GEN2_GR), &[]),
+        Err(FwdFault::UnknownVchid {
+            gpu: GPU1,
+            vchid: GEN2_GR
+        }),
+        "★ …but its EXEC plane died with its root: nothing dup'd its channels, so they \
+         were reclaimed per object and their vChid is a named MISS"
+    );
+
+    // ★ AND THE RECLAMATION IS COMPLETE. Generation 1's `Proc` left through
+    // `Spine::vacate`, which STAGES before it removes (§12.35's one removal point), so its
+    // host VAS, its two backings and its channel are queued on its own isolate and
+    // reclaimed per object — there is no residue to declare here, which is why this test
+    // carries no `ResidueClaim`. The teardown post-condition
+    // (`tests/src/teardown.rs`) asserts that for us when the guard drops.
 }

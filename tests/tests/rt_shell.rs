@@ -188,7 +188,7 @@ struct ProcSnap {
 fn snap_proc(p: &kayfabe_core::gpu::Proc) -> ProcSnap {
     ProcSnap {
         anchor: p.anchor,
-        clients: p.clients.clone(),
+        clients: p.client_values(),
         vases: p
             .vases
             .iter()

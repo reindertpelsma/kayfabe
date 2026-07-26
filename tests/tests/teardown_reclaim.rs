@@ -51,6 +51,7 @@ use std::time::{Duration, Instant as WallInstant};
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, Proc};
+use kayfabe_core::rmgraph::ClientKey;
 use kayfabe_core::rmgraph::RmEvent;
 use kayfabe_core::{ProcAnchor, ProcId};
 use kayfabe_fwd::{FwdFault, Orphans, Stale};
@@ -816,7 +817,7 @@ fn teardown_suite_is_bounded() {
     kayfabe_fwd::publish_backing(gpu.procs.get_mut(&pid).expect("proc"), GPU, PDB, VA, 0x1000)
         .expect("publish");
     assert!(t.elapsed() < Duration::from_secs(10));
-    let _ = ProcAnchor(CLIENT);
+    let _ = ProcAnchor(ClientKey::first(CLIENT));
 }
 
 // =================================================================================

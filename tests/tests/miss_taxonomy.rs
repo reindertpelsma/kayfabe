@@ -206,7 +206,7 @@ fn every_event_naming_an_undeclared_namespace_is_refused_by_name() {
         );
     }
     assert!(
-        !g.client_kinds().any(|(c, _)| c == GHOST),
+        !g.client_kinds().any(|(c, _)| c.client == GHOST),
         "the ghost namespace never entered the graph at all"
     );
 }
@@ -309,7 +309,7 @@ fn an_object_allocated_into_an_undeclared_namespace_mints_no_boundary() {
     // ---- The end state that must not exist.
     let b = project(&g, &arch, &NO_CONDEMNED).expect("projects");
     assert!(
-        b.procs.iter().all(|p| !p.clients.contains(&GHOST)),
+        b.procs.iter().all(|p| !p.client_values().contains(&GHOST)),
         "★★ a boundary was minted for a client whose `ClientKind` is UNKNOWN — the \
          grouping guess §12.27 exists to refuse, reached by omission instead of a default"
     );
@@ -322,7 +322,7 @@ fn an_object_allocated_into_an_undeclared_namespace_mints_no_boundary() {
         1,
         "exactly one component — C's, and nothing the ghost tried to build"
     );
-    assert_eq!(b.procs[0].clients, BTreeSet::from([C]));
+    assert_eq!(b.procs[0].client_values(), BTreeSet::from([C]));
     assert!(
         b.procs[0].vases.is_empty(),
         "the ghost's VAS was never accepted"
@@ -411,7 +411,7 @@ fn defer_a_dup_source_object_parks_and_resolves_when_the_source_arrives() {
         "★★ …and the SAME edge is now a grouping edge — user↔user sharing, one blast \
          radius. The deferral resolved in the projection too, not only in the graph"
     );
-    assert_eq!(promoted.procs[0].clients, BTreeSet::from([C, peer]));
+    assert_eq!(promoted.procs[0].client_values(), BTreeSet::from([C, peer]));
 }
 
 /// ★★ A `SET_PAGE_DIRECTORY` whose VASpace has not been observed parks, and drains onto

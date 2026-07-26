@@ -105,6 +105,7 @@ use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, Proc};
 use kayfabe_core::reactor::SourceKind;
+use kayfabe_core::rmgraph::ClientKey;
 use kayfabe_core::rmgraph::RmEvent;
 use kayfabe_core::{ProcAnchor, ProcId};
 use kayfabe_fwd::{FwdFault, Orphans};
@@ -682,7 +683,7 @@ fn a_condemned_owner_cannot_dangle_a_system_reference() {
     assert_eq!(
         kayfabe_fwd::route_pdb(&gpu.spine, GPU, OWNER_PDB),
         Err(FwdFault::Condemned {
-            anchor: ProcAnchor(OWNER)
+            anchor: ProcAnchor(ClientKey::first(OWNER))
         }),
         "the owner's component is condemned"
     );
@@ -1236,12 +1237,12 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
 
     // ---- 1. The reference is cross-`Proc`, and the backing is the OWNER's. ----
     assert!(
-        gpu.system.clients.contains(&UVM),
+        gpu.system.client_values().contains(&UVM),
         "★ the UVM session client is the SYSTEM component's — a dup INTO a kernel \
          client is a reference, never a merge (§12.27)"
     );
     assert!(
-        !gpu.procs[&owner].clients.contains(&UVM),
+        !gpu.procs[&owner].client_values().contains(&UVM),
         "…so it is emphatically not part of the owner's `Proc`: this is a genuine \
          cross-`Proc` reference and not a relabelled intra-proc one"
     );
@@ -1677,7 +1678,7 @@ fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
     assert_eq!(
         kayfabe_fwd::route_pdb(&gpu.spine, GPU, OWNER_PDB),
         Err(FwdFault::Condemned {
-            anchor: ProcAnchor(OWNER)
+            anchor: ProcAnchor(ClientKey::first(OWNER))
         }),
         "★ a dup does not resurrect a dead namespace: the reference outlives the \
          process, never the isolate that held the objects (§12.17)",
@@ -1685,7 +1686,7 @@ fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
     assert_eq!(
         kayfabe_fwd::resolve(&gpu, GPU, OWNER_PDB, VA).map(|_| ()),
         Err(FwdFault::Condemned {
-            anchor: ProcAnchor(OWNER)
+            anchor: ProcAnchor(ClientKey::first(OWNER))
         }),
         "the data plane says the same thing as the routing plane",
     );
@@ -1700,7 +1701,7 @@ fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
          system component's, and it is shared by every OTHER guest process",
     );
     assert!(
-        gpu.system.clients.contains(&UVM),
+        gpu.system.client_values().contains(&UVM),
         "…and it is still a member of the live system component"
     );
     assert!(
@@ -1845,7 +1846,7 @@ fn an_orphaned_kernel_resource_never_becomes_a_user_data_plane() {
         gpu.apply(ev).expect("scenario applies");
     }
     assert!(
-        gpu.system.clients.contains(&UVM),
+        gpu.system.client_values().contains(&UVM),
         "precondition: while its root is live the session client IS the system component's"
     );
     let user_procs_before = gpu.procs.len();
@@ -1886,12 +1887,14 @@ fn an_orphaned_kernel_resource_never_becomes_a_user_data_plane() {
          plane — routing it to a user proc is what makes the plane publishable",
     );
     assert!(
-        gpu.system.clients.contains(&UVM),
+        gpu.system.client_values().contains(&UVM),
         "the orphaned namespace stays on the KERNEL side of §12.27's line: it is a fact \
          the guest DECLARED about itself, not something the absence of a root revokes",
     );
     assert!(
-        gpu.procs.values().all(|p| !p.clients.contains(&UVM)),
+        gpu.procs
+            .values()
+            .all(|p| !p.client_values().contains(&UVM)),
         "★★ no user component may hold the guest kernel's client"
     );
 
@@ -1914,7 +1917,7 @@ fn an_orphaned_kernel_resource_never_becomes_a_user_data_plane() {
     )
     .expect("the user process is undisturbed by the kernel namespace's death");
     assert!(
-        !gpu.procs[&owner].clients.contains(&UVM),
+        !gpu.procs[&owner].client_values().contains(&UVM),
         "and it did not absorb the dead kernel namespace"
     );
 

@@ -60,6 +60,7 @@ use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::reactor::SourceKind;
+use kayfabe_core::rmgraph::ClientKey;
 use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
 use kayfabe_core::{ProcAnchor, ProcId};
 use kayfabe_fwd::{FwdFault, Stale};
@@ -464,7 +465,7 @@ fn r5_canary_proc_retired_in_the_gap_refuses_loudly() {
     assert_eq!(
         device.resolve(GPU, PDB, VA),
         Err(FwdFault::Condemned {
-            anchor: ProcAnchor(CLIENT)
+            anchor: ProcAnchor(ClientKey::first(CLIENT))
         }),
         "the retired proc is off the live set; no binding was created for it"
     );
@@ -849,7 +850,7 @@ fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
         // The proc is retired and its component CONDEMNED: every op on it refuses,
         // loudly, with the fault that says so (§12.13).
         let condemned = FwdFault::Condemned {
-            anchor: ProcAnchor(CLIENT),
+            anchor: ProcAnchor(ClientKey::first(CLIENT)),
         };
         assert_eq!(
             device.publish_backing(GPU, PDB, GpuVa(VA.0 + 0x1000), 0x1000),

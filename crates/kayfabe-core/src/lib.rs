@@ -149,8 +149,6 @@ pub mod project;
 pub mod reactor;
 pub mod rmgraph;
 
-use kayfabe_arch::ids::HClient;
-
 // The concurrency contract, compile-time-asserted (decision #17): every public
 // type of the core — including `Gpu` itself, whose `Box<dyn Arch>`/`Box<dyn
 // Isolate>` fields are exactly where a missing bound would hide.
@@ -176,6 +174,7 @@ kayfabe_util::assert_send_sync!(
     rmgraph::RmGraphError,
     rmgraph::NodeKey,
     rmgraph::ResourceKey,
+    rmgraph::ClientKey,
     rmgraph::AllocFacts,
     rmgraph::Mapping,
     rmgraph::RmNode,
@@ -228,12 +227,23 @@ pub enum Traffic {
     Proc(ProcId),
 }
 
-/// The anchor of a `Proc`: the smallest client handle in its dup-connected
+/// The anchor of a `Proc`: the smallest client **declaration** in its dup-connected
 /// component. A deterministic, order-independent label used to keep `Proc`
 /// state stable across graph re-derivations.
 ///
 /// ★ §12.27: `HClient(0)` is RESERVED as the **system** component's anchor
 /// (`kayfabe_core::project::SYSTEM_ANCHOR`) and is refused as guest input by
 /// `RmGraph::apply`, so a user component can never carry it.
+///
+/// ★★★ §12.42 — it wraps a [`rmgraph::ClientKey`], not an `HClient`. An `hClient` VALUE
+/// is recyclable by RM's own design, so as a component label it could name only ONE
+/// lifetime of that value at a time — which made "two generations of one `hClient` are two
+/// components" *inexpressible*, and left the older generation's still-live resources
+/// belonging to no component at all (§12.41 §4). The ordinal is order-independent
+/// (declarations at one value are totally ordered by the protocol), so it is legal to
+/// report inside [`project::Boundaries`], which `PartialEq` compares whole across shuffled
+/// event orders — decision #4. `ClientKey` orders by `hClient` first, so "the smallest
+/// client in the component" is the same label it always was for any component that holds
+/// one declaration per value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ProcAnchor(pub HClient);
+pub struct ProcAnchor(pub rmgraph::ClientKey);

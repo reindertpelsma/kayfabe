@@ -253,11 +253,11 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
     let client_proc: BTreeMap<HClient, kayfabe_core::ProcAnchor> = bounds
         .procs
         .iter()
-        .flat_map(|p| p.clients.iter().map(move |c| (*c, p.anchor)))
+        .flat_map(|p| p.client_values().into_iter().map(move |c| (c, p.anchor)))
         .chain(
             bounds
                 .system
-                .clients
+                .client_values()
                 .iter()
                 .map(|c| (*c, bounds.system.anchor)),
         )
@@ -265,7 +265,8 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
     // ★ §12.27 — the predicate is now typed: a dup GROUPS only when both endpoints are
     // declared USER clients. A dup into (or out of) a kernel client is a reference, and
     // the two sides staying in different components is the whole point of the fix.
-    let kinds: BTreeMap<HClient, kayfabe_arch::ClientKind> = g.client_kinds().collect();
+    let kinds: BTreeMap<HClient, kayfabe_arch::ClientKind> =
+        g.client_kinds().map(|(k, v)| (k.client, v)).collect();
     let is_user = |c: HClient| matches!(kinds.get(&c), Some(kayfabe_arch::ClientKind::User { .. }));
     // Any shape OTHER than user↔user is a REFERENCE: a kernel endpoint stays in the
     // system component no matter how many user clients dup into it (that edge is exactly
@@ -299,12 +300,13 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
             "a user boundary took the system anchor"
         );
         assert!(
-            p.clients.is_disjoint(&kernel_clients),
+            p.client_values().is_disjoint(&kernel_clients),
             "a kernel client leaked into a USER proc — #14 collapse"
         );
     }
     assert_eq!(
-        bounds.system.clients, kernel_clients,
+        bounds.system.client_values(),
+        kernel_clients,
         "the system component is EXACTLY the declared kernel clients — no more, no less"
     );
 }
@@ -546,7 +548,7 @@ proptest! {
         let victim_pdbs: BTreeSet<Pdb> = before
             .procs
             .iter()
-            .filter(|p| p.clients.contains(&victim))
+            .filter(|p| p.client_values().contains(&victim))
             .flat_map(|p| p.vases.values().filter_map(|f| f.pdb))
             .collect();
 
@@ -557,7 +559,7 @@ proptest! {
         let after = project(&g, &arch, &NO_CONDEMNED).expect("projects after free");
         // The victim's clients are gone from every proc.
         for p in &after.procs {
-            prop_assert!(!p.clients.contains(&victim), "freed client still grouped into a Proc");
+            prop_assert!(!p.client_values().contains(&victim), "freed client still grouped into a Proc");
         }
         // Its PDBs no longer route.
         for pdb in &victim_pdbs {

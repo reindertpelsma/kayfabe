@@ -5335,3 +5335,171 @@ it wants its own order-independence argument — a round, not a patch. Filed as 
 - `ResourceKey` is re-exported from `kayfabe_core`'s prelude beside `NodeKey`.
 - **Open, unchanged:** N1–N6 and O5 above; §12.39 §7's O1–O4 bench questions; §12.39 test
   8's `security_invariants` fuzz property.
+
+### 12.42 ★★★ N2 LANDED, AND N1 WITH IT — a component is labelled by a DECLARATION, not by an `hClient` value
+
+**Status: LANDED.** 363 → **365 tests** — two new `#[test]`s; the third piece of coverage
+is a new PHASE inside the existing mean run, which is where it belongs. Gate clean
+(`KAYFABE_SLOW=1 cargo test --workspace`, `clippy --all-targets -D warnings`,
+`fmt --check`, `check --target aarch64-unknown-linux-gnu`).
+`ogkm` = `C: research_clones/ogkm`.
+
+§12.41 §4 measured a corruption and deliberately did not land it: after
+`declare A → alias → free root → re-declare A`, generation 1's still-live resources
+belonged to **no** boundary, so their component vanished and `stage_dropped_vases`
+released host memory a live kernel client still references
+(`ogkm .../mem_mgr/mem.c:1027-1031`). §12.41 also named why it could not be patched:
+`ProcAnchor` and `ProcBoundary::clients` were `HClient`s, so **two generations of one
+`hClient` were not expressible as two components**. This entry closes both.
+
+---
+
+#### 1. THE CHANGE — `ClientKey`, and it is `ResourceKey` one level up
+
+`ClientKey { client: HClient, incarnation: u32 }` is the identity of one client-namespace
+**declaration**. It is minted at the root `Alloc` as *the smallest ordinal no LIVE
+declaration at that value already holds* — verbatim `ResourceKey`'s rule, and legal to
+**report** for verbatim `ResourceKey`'s reason: the ordinal is order-independent because
+declarations at one `hClient` value are **totally ordered by the protocol** (a second root
+`Alloc` while the value has a live root is `DuplicateClientRoot`, mirroring RM's
+`NV_ERR_INSERT_DUPLICATE_NAME` at `rs_server.c:3352-3357`; and the `Free` that releases a
+declaration must follow the `Alloc` that made it, because an event naming an undeclared
+namespace is refused). A `ClientId` — minted from a counter — still cannot be reported, and
+still is not: `Boundaries: PartialEq` **is** decision #4.
+
+| plane | before | after |
+|---|---|---|
+| `ProcAnchor` | `HClient` | `ClientKey` |
+| `ProcBoundary::clients` / `Proc::clients` | `BTreeSet<HClient>` | `BTreeSet<ClientKey>` (+ `client_values()`, the lossy by-value view for diagnostics) |
+| `RmGraph::client_declarations` | `BTreeMap<HClient, _>` — **one slot per value**, live root wins else newest orphan | `BTreeMap<ClientKey, _>` — **every live declaration** |
+| `RmGraph::client_kinds` | `(HClient, ClientKind)` | `(ClientKey, ClientKind)` — the live-ROOTED declaration |
+| `RmGraph::nodes_with_owner` / `owner_of` | `ClientId` | `ClientKey` (`owner_key_of`) |
+| `Spine::condemned`, `Proc::client_ids` | `ClientId` | **unchanged** — `ClientKey` ordinals are reused after death, `ClientId`s never are. `clients` LABELS, `client_ids` MATCHES (§12.40's rule, still exact) |
+
+`RmGraph` gains one index, `decls: BTreeMap<ClientKey, Declaration>`, refcounted by the
+resources each declaration owns. A declaration is live iff it has a live root **or** owns a
+resource a foreign alias keeps alive — the same statement, because a live root *is* a live
+resource of its own namespace. It is bounded by the live resource count (G10, §12.22), it
+made `client_declarations` O(declarations) instead of O(all resources), and its refcount
+reaching zero is exactly when an ordinal becomes reusable.
+
+★ **`project`'s membership predicate is GONE, and that is the fix.** The client universe
+*is* the set of live declarations, and every live resource projects under the declaration
+that allocated it. §12.39/§12.40 held isolation with an **exclusion**; §12.42 holds it with
+the **identity**, so nothing RM says is live is dropped on the floor. The dup-endpoint chain
+§12.27 added went with it, now provably redundant rather than merely usually so: a resolved
+dup's `dst` handle is live ⇒ its namespace has a live root (§12.38) ⇒ that root is a live
+resource; and the `src` side resolves to the declaration that owns the resource.
+
+★ **The grouping predicate reads the edge's `src` VALUE nowhere at all now.** Both ends are
+declarations: `dst` is the live root of the destination handle's namespace, `src` is
+`owner_key_of(dst)` — the declaration that allocated the resource, read through the
+destination handle, which is live by construction.
+
+---
+
+#### 2. WHAT WAS WRONG IN THE BRIEF, AND IN §12.40
+
+- **§12.40's "the exclusion bites at exactly one moment: a re-declaration … the old
+  component is retired through the ordinary staged-death path and the new one inherits
+  nothing"** is the defect, written down as the rule. Retiring that component *is*
+  releasing host memory RM refcounts. The corrected sentence: a re-declaration mints a new
+  declaration and changes **nothing** about the old one, which keeps its component, its
+  isolate, its arena and its host VAS until its last resource dies.
+- **Two landed assertions had to be inverted**, and they were the ones stating the defect:
+  `l1_mean::a_recycled_namespace_cannot_inherit_the_previous_tenants_address_plane` and
+  `rmgraph_order_independence::a_freed_and_redeclared_namespace_projects_identically_in_
+  every_order` both asserted *"the SUPERSEDED declaration's address plane must belong to
+  nobody"*. Belonging to nobody is the corruption. They now assert that it belongs to a
+  **different component** — which is the isolation property they were actually written for,
+  stated without the collateral damage.
+- **The brief's framing that the N1 test could be written on the conservation ledger alone
+  is not quite right, and the first draft of the test was wrong because of it.** `vacate`
+  **stages** before it removes (§12.35), so at the instant the successor declares, the
+  ledger still shows the victim's objects outstanding — the `Free` verbs have not run yet.
+  A ledger-only assertion **passed under the bite**. The test now asserts the pair the
+  teardown post-condition itself uses — `Reachable(core state)` first, then the ledger after
+  a `reap_retired()` that drives the scheduled reclamation — so the report is *"we released
+  something RM says is live"* and not *"a count differed"*.
+- **`is_condemned(client)` needed a two-armed answer**, not the one-armed one the naive port
+  gave it. A value with a live root is answered about that declaration only (a fresh tenant
+  of a condemned predecessor's value is **not** condemned); a value with none is answered
+  about its orphans (§12.37's evasion gate: freeing the root must not launder the
+  condemnation away). The one-armed version broke
+  `evasion_dup_a_fresh_client_then_free_the_old_root_still_fails` immediately.
+- **`a_root_kept_alive_by_a_dup_no_longer_occupies_its_own_namespace` changed answer**, and
+  the new answer is the honest one: a fresh root at a value whose ORIGINAL client object a
+  foreign alias still keeps alive is `incarnation: 1`, because both declarations are
+  simultaneously live. The ordinal returns to 0 once the alias dies, which the test now also
+  pins.
+
+---
+
+#### 3. THE TESTS, AND EVERY BITE — INCLUDING THE TWO THAT DID NOT BITE
+
+New: `l1_mean::a_superseded_declarations_kernel_held_memory_is_never_freed_by_its_
+successor` (integration: the whole device, the six-proc two-GPU world, three generations of
+one `hClient`, the UVM session holding references, the conservation ledger);
+`generation_recycle` wired into **`mean_run` phase 5 (g)** so the same script runs inside
+the composed window (five parked host verbs, six workload threads, two out-of-band retires,
+T0 churn) under **both** lock modes; and
+`security_boundary::b2_a_parked_page_directory_rebind_is_accepted_at_the_cap` (N6).
+
+| bite | what fired |
+|---|---|
+| **A** — restore §12.40's one-slot-per-`HClient` exclusion (the N1 fix reverted) | 4 tests. The N1 test fires on its FIRST assertion — *"★★ HOST MEMORY RM SAYS IS LIVE WAS TAKEN AWAY FROM ITS OWNER"*, `left: {}` vs `right: {iso7:0x800000001, iso7:0x800000002}`. Also the mean run, `a_recycled_namespace_cannot_inherit_…`, and `a_freed_and_redeclared_namespace_projects_identically_in_every_order` |
+| **B** — collapse the incarnation in the component label (`ProcAnchor`/`clients` are `HClient`s again — the N2 fix reverted) | 5 tests. Same first assertion, opposite shape: `left` is a strict SUPERSET containing generation 2's host handles (`iso7:0x801…`) — the two lifetimes collapsed into one `Proc`, one isolate, one arena. The hangs-a-legal-guest gate `a_recycled_namespace_is_a_different_component_and_is_not_condemned` fires too |
+| **C** — `next_client_incarnation ≡ 0` | 8 tests, across 5 files, including the hostile-stream fuzz property `a1b_gpu_spine_never_panics_on_hostile_stream` and `c_bug_regressions::freeing_a_dup_alias_on_a_reused_client_handle_never_tears_down_the_namespace`. The N1 test fires on the internal `debug_assert` in `retain_declaration` — *"two identities at one live ClientKey"*, `ClientId(42)` vs `ClientId(51)` |
+| **D** — `release_declaration` no-op (declarations never die) | 20+ tests across 8 files. The new order-independence assertion fires by name: *"the orphaned declaration outlived the last resource it owned"*, `[{B,0}, {B,1}]` vs `[{B,1}]` |
+| **E** — N6 reverted (the parked-PDB capacity gate ignores the key again) | `b2_a_parked_page_directory_rebind_is_accepted_at_the_cap`, `left: Err(CapacityExceeded(PendingPdbs))` vs `right: Ok(())` |
+| **F** — `client_kinds` reports `ClientKey::first` instead of the root's real ordinal | 3 tests (`a_recycled_namespace_cannot_inherit_…`, the hangs-a-legal-guest gate, `a_root_kept_alive_by_a_dup_…`). ★ **Did NOT reach the new N1 test or the mean run** — neither depends on the live-root map's ordinal, because neither needs a dup to group |
+| **G** — remove the grouping predicate's live-rooted-source conjunct | ★★ **DID NOT BITE. Whole suite green.** |
+| **H** — key `is_user`'s source check by the `HClient` VALUE (§12.40's shape) | ★★ **DID NOT BITE. Whole suite green.** |
+| **G + H together** | `a_recycled_namespace_cannot_inherit_the_previous_tenants_address_plane`: the orphan merges into the attacker's proc, `left: Ok(ProcId(7))` vs `right: Ok(ProcId(9))` |
+
+★ **G and H are the finding.** The two guards are **mutually redundant** under §12.42:
+`kinds` holds only live-rooted declarations and is keyed by the *declaration*, so
+`is_user(src_decl)` already refuses an orphan; and conversely the conjunct already refuses
+what a value-keyed `is_user` would let through. Neither is individually falsifiable by the
+suite. Both are kept — this is the predicate an isolation break walks through — and the
+redundancy is now stated in the code rather than being an accident waiting to be
+"simplified".
+
+---
+
+#### 4. N6 — a real, small, hangs-a-legal-guest defect, not the doc gap §12.41 guessed
+
+§12.41 filed N6 as *"`pending_pdbs.insert` has no idempotency/conflict arm … probably
+consistent, but the silence is undeclared"*. The last-wins semantics **are** consistent with
+the resolved arm. The actual defect is one line earlier: the `MAX_PARKED` gate fired
+*before* looking at whether the key was already parked, so at the cap a guest re-binding a
+VASpace it had already parked a PDB for was refused `CapacityExceeded` for an event that
+**adds nothing to the table** — the hangs-a-legal-guest direction. Its two sibling parked
+tables never had that shape (a re-parked `Dup` returns early as
+idempotent-or-`ConflictingDup`; `pending_maps` gates behind `!contains`), which is why the
+asymmetry survived §12.38's audit: that audit checked the cap's *presence*, not its arm.
+Fixed and tested.
+
+---
+
+#### 5. DEFERRED, WITH REASONS
+
+- **N3 — `IsolateId` does not carry the `GpuId`.** Deferred. It is a different axis
+  (host-object namespacing, not component identity), ~142 references with ~70 test sites
+  pinning `IsolateId == ProcId` as a documented property, and it changes what the leak
+  ledger measures — including the helper this round's N1 test reads
+  (`HostLedger::leaked_on`). ★ Observation for whoever takes it: the N1 test is *slightly*
+  weaker than it looks because of N3 — `outstanding_on(gen1)` merges a proc's per-GPU
+  isolates. It does not affect the result here (generation 1 spans only GPU0), but a
+  two-GPU generation would need the split first.
+- **N4 — `BatchId` minted per target, consumed per proc.** Deferred. It is the same
+  *family* (a value used as an identity outside the scope it is unique in) but a different
+  *organ*: the completion plane, not the component plane. It needs its own decision (key
+  `in_flight` by `(GpuId, BatchId)` vs mint device-globally), its own two-GPU
+  progress-under-pending test, and it shares nothing with the RM-graph identity model.
+- **N5 — `OsEventRef` is guest-minted.** Deferred, unchanged: contained by the per-proc
+  container, and the settling question §12.41 poses ("does any path let one proc's ack
+  reach another's queue?") is a read of the completion crate, not of this one.
+- **O5** — GSP-side PDB uniqueness. Unchanged, still an experiment.
+- **Open, unchanged:** §12.39 §7's O1–O4 bench questions; §12.39 test 8's
+  `security_invariants` fuzz property (still not written).
