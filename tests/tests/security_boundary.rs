@@ -49,8 +49,8 @@ use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::project::{Boundaries, NO_CONDEMNED, ProcBoundary, project};
 use kayfabe_core::rmgraph::{
-    AllocFacts, Capacity, MAX_LIVE_HANDLES, MAX_LIVE_MAPPINGS, MAX_PARKED, NodeKey, RmEvent,
-    RmGraph, RmGraphError,
+    AllocFacts, Capacity, MAX_LIVE_HANDLES, MAX_LIVE_MAPPINGS, MAX_PARKED, NodeKey, ResourceKey,
+    RmEvent, RmGraph, RmGraphError,
 };
 use kayfabe_fwd::{FwdFault, handle_doorbell, parse_pushbuffer, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm, mock_classes as mc};
@@ -1153,7 +1153,7 @@ fn b5_channel_cannot_bind_another_clients_vaspace_handle() {
         bounds
             .by_pdb
             .get(&(GpuId::ZERO, B_PDB))
-            .map(|(_, k)| k.client),
+            .map(|(_, k)| k.origin.client),
         Some(B_CLIENT)
     );
 }
@@ -2294,7 +2294,7 @@ fn rmgraph_apply_is_atomic_on_failure() {
                 len: 0x10000,
             },
             RmGraphError::ConflictingMap {
-                vaspace: NodeKey::new(C, vas),
+                vaspace: ResourceKey::first(NodeKey::new(C, vas)),
                 va: GpuVa(0x2_0000_0000),
             },
         ),

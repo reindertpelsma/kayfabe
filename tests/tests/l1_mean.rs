@@ -112,7 +112,7 @@ use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::reactor::SourceKind;
-use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraphError};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraphError, RmNode};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_fwd::{ControlRoute, DoorbellOutcome, FwdFault, Published, Stale};
 use kayfabe_isolate::{HostHandle, IsolateId, RmError, WorkerId};
@@ -4479,4 +4479,355 @@ fn a_recycled_namespace_is_a_different_component_and_is_not_condemned() {
     // ---- The bystander was never disturbed by any of it.
     assert!(!gpu.spine.is_condemned(KEEPALIVE_CLIENT));
     core_publish(&mut gpu, GPU1, KEEPALIVE_PDB, VA_HELD).expect("the bystander keeps working");
+}
+
+// =================================================================================
+// ★★★ §12.41 — a RECYCLED OBJECT HANDLE
+// =================================================================================
+
+/// The process that recycles one of its own object handle values.
+const RECYC_OBJ_CLIENT: HClient = HClient(0xE1);
+/// The kernel (UVM-shaped) client that keeps the first incarnation alive.
+const RECYC_OBJ_KERNEL: HClient = HClient(0xE2);
+/// The first incarnation's page-directory base — the GHOST's address plane.
+const RECYC_OBJ_PDB1: Pdb = Pdb(0x6100_0000);
+/// The second incarnation's PDB — the SUCCESSOR's address plane, at the same handle.
+const RECYC_OBJ_PDB2: Pdb = Pdb(0x6200_0000);
+/// The kernel client's own PDB.
+const RECYC_OBJ_KPDB: Pdb = Pdb(0x6300_0000);
+/// The process's GR/CE vChids.
+const RECYC_OBJ_GR: VChid = VChid(0x19a);
+/// See [`RECYC_OBJ_GR`].
+const RECYC_OBJ_CE: VChid = VChid(0x29a);
+/// The kernel client's handles.
+const RECYC_OBJ_KROOT: HObject = HObject(0x6e00_0000);
+/// See [`RECYC_OBJ_KROOT`].
+const RECYC_OBJ_KDEV: HObject = HObject(0x6e00_0001);
+/// See [`RECYC_OBJ_KROOT`].
+const RECYC_OBJ_KVAS: HObject = HObject(0x6e00_0010);
+/// The handle the kernel client holds the ghost VASpace under.
+const RECYC_OBJ_ALIAS: HObject = HObject(0x7e00_0001);
+
+/// The VASpace handle both incarnations are allocated at (the `identical_handles`
+/// process shape's own VASpace handle — i.e. the value a real CUDA process presents).
+const RECYC_OBJ_VAS: HObject = HObject(0x5c00_0010);
+/// The device handle both incarnations are parented on.
+const RECYC_OBJ_DEV: HObject = HObject(0x5c00_0001);
+
+/// ★★★ **A RECYCLED OBJECT HANDLE MUST NOT STEAL THE GHOST'S ADDRESS PLANE**
+/// (`l1_concurrency.md` §12.41 — §12.25's deferred finding 2, closed).
+///
+/// The last place a value NVIDIA recycles was used as an identity. `RmNode::key` is the
+/// handle a resource's `RM_ALLOC` created it at, and object-handle values are reusable
+/// **by NVIDIA's design and with no quarantine**: a caller supplies `hObjectNew` verbatim
+/// (`0` means "generate", `ogkm src/common/sdk/nvidia/inc/nvos.h:483`;
+/// `clientAssignResourceHandle` branches on exactly that,
+/// `ogkm .../resserv/src/rs_client.c:998-1005`), the only validation is that the value is
+/// not *currently live* (`clientValidateNewResourceHandle_IMPL`, `rs_client.c:1446-1470`,
+/// `NV_ERR_INSERT_DUPLICATE_NAME`), and freeing just `mapRemove`s it from the live map
+/// (`rs_client.c:1137`) with no free list and no deferred release.
+///
+/// So `Alloc (A,H) → Dup to K → Free (A,H) → Alloc (A,H)` — five ordinary events, each one
+/// legal — leaves **two live VASpace resources reporting at one `(client, handle)`**: the
+/// ghost RM keeps alive on K's alias (`ogkm .../mem_mgr/mem.c:1027-1031`) and the current
+/// allocation. `ProcBoundary::vases` was keyed on that handle, so the second `insert`
+/// **silently overwrote the first**: the ghost left `by_pdb` entirely, its runtime `Vas`
+/// was staged for release, and every address op naming the page directory K legitimately
+/// holds took `FwdFault::UnknownPdb`. §12.33's landed rule — *a kernel reference keeps its
+/// owner's object alive **and usable*** — was false for the one shape that reaches it.
+///
+/// **The fix may not be a refusal**, exactly as in §12.39: RM recycles by design, so
+/// refusing the second `Alloc` would hang a legal guest. The test therefore asserts the
+/// re-allocation is *accepted* and that BOTH planes are genuinely served, end to end, out
+/// of the one proc's own isolate lane. The identity is minted by us instead —
+/// `ResourceKey` = origin handle + live incarnation ordinal, which is order-independent
+/// (allocations at one handle value are totally ordered by `ConflictingAlloc`) and so may
+/// appear in `Boundaries`, which a counter-minted id may not (§12.40's `ClientId` lesson).
+#[test]
+fn a_recycled_object_handle_never_steals_the_ghosts_address_plane() {
+    let _wd = watchdog("recycled_object_handle_data", Duration::from_secs(60));
+    let (mut gpu, _pids, _rec) = mean_gpu();
+
+    // ---- An ordinary compute process, and the guest KERNEL aliasing its VASpace (the
+    // measured UVM shape: one session client, every process dups into it).
+    reinit(
+        &mut gpu,
+        RECYC_OBJ_CLIENT,
+        RECYC_OBJ_PDB1,
+        RECYC_OBJ_GR,
+        RECYC_OBJ_CE,
+        GPU0,
+    );
+    let mut s = Scenario::new();
+    s.uvm_dup(
+        RECYC_OBJ_KERNEL,
+        RECYC_OBJ_KROOT,
+        RECYC_OBJ_KDEV,
+        RECYC_OBJ_KVAS,
+        RECYC_OBJ_KPDB,
+        RECYC_OBJ_ALIAS,
+        NodeKey::new(RECYC_OBJ_CLIENT, RECYC_OBJ_VAS),
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("the kernel client's dup applies");
+    }
+    let owner = gpu
+        .spine
+        .by_pdb
+        .get(&(GPU0, RECYC_OBJ_PDB1))
+        .copied()
+        .expect("the process's first VASpace routes");
+
+    // ---- The recycle: free the VASpace HANDLE (not the namespace — the process lives
+    // on), then allocate a DIFFERENT VASpace at the very same handle value.
+    gpu.apply(RmEvent::Free {
+        client: RECYC_OBJ_CLIENT,
+        handle: RECYC_OBJ_VAS,
+    })
+    .expect("freeing one object handle is ordinary");
+    for ev in [
+        RmEvent::Alloc {
+            client: RECYC_OBJ_CLIENT,
+            parent: RECYC_OBJ_DEV,
+            handle: RECYC_OBJ_VAS,
+            class: mock_classes::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: RECYC_OBJ_CLIENT,
+            vaspace: RECYC_OBJ_VAS,
+            pdb: RECYC_OBJ_PDB2,
+        },
+    ] {
+        gpu.apply(ev).expect(
+            "★ re-allocating a FREED object handle is LEGAL — RM validates a \
+             caller-supplied handle only against the LIVE map (`rs_client.c:1446-1470`) \
+             and quarantines nothing on free (`:1137`); refusing would hang a real guest",
+        );
+    }
+
+    // ---- ★★ THE BREACH, first and in the form the guest sees it: the dup-kept ghost's
+    // address plane must still SERVE. (`core_publish` routes through `by_pdb` and then
+    // materializes into the owning `Proc`'s own `Vas`, so it fails on either half of the
+    // collapse — a lost route or a `Vas` staged for release.)
+    assert_eq!(
+        core_publish(&mut gpu, GPU0, RECYC_OBJ_PDB1, VA_CTL).map(|_| owner),
+        Ok(owner),
+        "★★ the dup-kept GHOST VASpace lost its ADDRESS PLANE: a resource RM says is \
+         live (the kernel's alias refcounts it, `ogkm mem.c:1027-1031`) can no longer be \
+         published into, because the guest re-used its origin handle VALUE and the \
+         projection keyed on that value"
+    );
+    assert_eq!(
+        gpu.spine.by_pdb.get(&(GPU0, RECYC_OBJ_PDB1)).copied(),
+        Some(owner),
+        "★★ the dup-kept GHOST VASpace lost its ADDRESS PLANE: a resource RM says is \
+         live (the kernel's alias refcounts it, `ogkm mem.c:1027-1031`) stopped routing \
+         because the guest re-used its origin handle VALUE — every op naming the page \
+         directory the kernel legitimately holds now takes `UnknownPdb`"
+    );
+    // …and the successor's plane is its OWN, not the ghost's.
+    assert_eq!(
+        gpu.spine.by_pdb.get(&(GPU0, RECYC_OBJ_PDB2)).copied(),
+        Some(owner),
+        "★★ the successor's own address plane was never materialized"
+    );
+    let vases = &gpu.procs[&owner].vases;
+    assert_eq!(
+        vases
+            .keys()
+            .filter(|(g, _)| *g == GPU0)
+            .copied()
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([(GPU0, RECYC_OBJ_PDB1), (GPU0, RECYC_OBJ_PDB2)]),
+        "★★ two live VASpace resources ⇒ two runtime `Vas`es; a collapse leaves one"
+    );
+    // The two `Vas`es are DIFFERENT resources, not one resource reported twice — the
+    // whole point of the identity. Their origin HANDLE is deliberately identical.
+    let (g1, g2) = (
+        vases[&(GPU0, RECYC_OBJ_PDB1)].origin,
+        vases[&(GPU0, RECYC_OBJ_PDB2)].origin,
+    );
+    assert_eq!(
+        g1.origin, g2.origin,
+        "the two incarnations share their origin HANDLE — that is the premise"
+    );
+    assert_ne!(
+        g1.incarnation, g2.incarnation,
+        "★★ …and they must NOT share an identity"
+    );
+
+    // ---- …and the successor is genuinely SERVED too, end to end, in the proc's own lane.
+    core_publish(&mut gpu, GPU0, RECYC_OBJ_PDB2, VA_CTL)
+        .expect("★ the successor publishes host backing into the owning `Proc`");
+    let rung = publish_and_ring(&mut gpu, GPU0, RECYC_OBJ_PDB2, RECYC_OBJ_GR, VA_HELD);
+    assert_eq!(rung.proc, owner);
+    assert_eq!(
+        token_lane(rung.host_token),
+        (owner.0 + 1, GPU0.0),
+        "★ the process rang a host token minted in its OWN isolate lane"
+    );
+
+    // ---- ★ The mechanism, last: the graph reports two resources at one handle value,
+    // and each answers with ITS OWN declared PDB.
+    let both: Vec<_> = gpu
+        .spine
+        .rmgraph
+        .nodes()
+        .filter(|n| n.key == NodeKey::new(RECYC_OBJ_CLIENT, RECYC_OBJ_VAS))
+        .map(|n| (n.id(), gpu.spine.rmgraph.pdb_of_resource(n.id())))
+        .collect();
+    assert_eq!(
+        both.iter().map(|(_, p)| *p).collect::<Vec<_>>(),
+        vec![Some(RECYC_OBJ_PDB1), Some(RECYC_OBJ_PDB2)],
+        "★ each incarnation must answer with the page directory IT declared"
+    );
+    // The kernel's alias still resolves to the GHOST, not to the successor.
+    assert_eq!(
+        gpu.spine
+            .rmgraph
+            .origin_of(NodeKey::new(RECYC_OBJ_KERNEL, RECYC_OBJ_ALIAS))
+            .map(RmNode::id),
+        Some(both[0].0),
+        "★ the kernel's dup alias must keep resolving to the resource it aliased"
+    );
+}
+
+/// The process that recycles a CHANNEL handle value.
+const RECYC_CH_CLIENT: HClient = HClient(0xE5);
+/// The kernel client that keeps the first channel alive through a dup.
+const RECYC_CH_KERNEL: HClient = HClient(0xE6);
+/// Its PDB.
+const RECYC_CH_PDB: Pdb = Pdb(0x6500_0000);
+/// The kernel client's PDB.
+const RECYC_CH_KPDB: Pdb = Pdb(0x6600_0000);
+/// The first incarnation's GR vChid — the GHOST channel's exec plane.
+const RECYC_CH_GR1: VChid = VChid(0x19c);
+/// The CE vChid (untouched by the recycle).
+const RECYC_CH_CE: VChid = VChid(0x29c);
+/// The SECOND incarnation's vChid, at the same channel handle value.
+const RECYC_CH_GR2: VChid = VChid(0x19d);
+/// The GR channel handle both incarnations are allocated at.
+const RECYC_CH_HANDLE: HObject = HObject(0x5c00_0019);
+/// The TSG both incarnations are parented on.
+const RECYC_CH_TSG: HObject = HObject(0x5c00_0012);
+/// The kernel client's handles.
+const RECYC_CH_KROOT: HObject = HObject(0x6f00_0000);
+/// See [`RECYC_CH_KROOT`].
+const RECYC_CH_KDEV: HObject = HObject(0x6f00_0001);
+/// See [`RECYC_CH_KROOT`].
+const RECYC_CH_KVAS: HObject = HObject(0x6f00_0010);
+/// The handle the kernel client holds the ghost channel under.
+const RECYC_CH_ALIAS: HObject = HObject(0x7f00_0002);
+
+/// ★★★ **A RECYCLED CHANNEL HANDLE MUST NOT SHARE THE GHOST'S HOST CHANNEL**
+/// (`l1_concurrency.md` §12.41) — the exec-plane half, and the sharper one.
+///
+/// `Gpu::sync_proc_to_boundary` mints a **stable `ChanId` per key**
+/// (`chan_ids.entry(key).or_insert_with(mint)`), so when two live channel resources
+/// reported at one recycled handle value they were handed ONE `ChanId` — one runtime
+/// `Channel`, one `host_channel`, one `host_token` — while step 4 of `Spine::refresh`
+/// filed **both** their `(GpuId, VChid)` entries onto it. A doorbell on the ghost's vChid
+/// therefore rang the successor's host channel: a guest-visible mis-submission, not merely
+/// a lost route.
+#[test]
+fn a_recycled_channel_handle_never_shares_the_ghosts_host_channel() {
+    let _wd = watchdog("recycled_object_handle_exec", Duration::from_secs(60));
+    let (mut gpu, _pids, _rec) = mean_gpu();
+
+    reinit(
+        &mut gpu,
+        RECYC_CH_CLIENT,
+        RECYC_CH_PDB,
+        RECYC_CH_GR1,
+        RECYC_CH_CE,
+        GPU0,
+    );
+    let mut s = Scenario::new();
+    s.uvm_dup(
+        RECYC_CH_KERNEL,
+        RECYC_CH_KROOT,
+        RECYC_CH_KDEV,
+        RECYC_CH_KVAS,
+        RECYC_CH_KPDB,
+        RECYC_CH_ALIAS,
+        NodeKey::new(RECYC_CH_CLIENT, RECYC_CH_HANDLE),
+    );
+    for ev in s.events {
+        gpu.apply(ev)
+            .expect("the kernel client's channel dup applies");
+    }
+    let owner = gpu
+        .spine
+        .by_pdb
+        .get(&(GPU0, RECYC_CH_PDB))
+        .copied()
+        .expect("the process routes");
+    let ghost_cid = gpu.spine.by_vchid[&(GPU0, RECYC_CH_GR1)].1;
+
+    // The recycle: free the channel handle, allocate a DIFFERENT channel at that value.
+    gpu.apply(RmEvent::Free {
+        client: RECYC_CH_CLIENT,
+        handle: RECYC_CH_HANDLE,
+    })
+    .expect("freeing one channel handle is ordinary");
+    gpu.apply(RmEvent::Alloc {
+        client: RECYC_CH_CLIENT,
+        parent: RECYC_CH_TSG,
+        handle: RECYC_CH_HANDLE,
+        class: mock_classes::CHANNEL_GR,
+        facts: AllocFacts {
+            h_vaspace: Some(RECYC_OBJ_VAS),
+            userd_flags: MockArch::userd_flags_for(RECYC_CH_GR2),
+            ..Default::default()
+        },
+    })
+    .expect("★ re-allocating a freed channel handle is LEGAL (see the data-plane test)");
+
+    // ---- ★★ THE BREACH, first: BOTH live channels must have an exec plane of their own.
+    let route = |gpu: &Gpu, v: VChid| gpu.spine.by_vchid.get(&(GPU0, v)).copied();
+    let (r1, r2) = (route(&gpu, RECYC_CH_GR1), route(&gpu, RECYC_CH_GR2));
+    assert_eq!(
+        (r1.map(|(p, _)| p), r2.map(|(p, _)| p)),
+        (Some(owner), Some(owner)),
+        "★★ a live channel lost its EXEC PLANE to a recycled handle value: the ghost (the \
+         kernel's dup keeps it alive) and its successor report at one `(client, handle)`, \
+         and the projection keyed `channels`/`chan_ids` on that value — so only one of \
+         the two ever reaches `by_vchid` and its doorbell"
+    );
+    let (c1, c2) = (r1.expect("routed").1, r2.expect("routed").1);
+    assert_ne!(
+        c1, c2,
+        "★★ the ghost and its successor were handed ONE `ChanId` — one runtime `Channel`, \
+         one host channel and one host token — so a doorbell on the ghost's vChid rings \
+         the SUCCESSOR's channel"
+    );
+    assert_eq!(
+        c1, ghost_cid,
+        "★ the ghost KEPT its ChanId (identity is stable)"
+    );
+
+    // Ring both. Each must reach its own host channel, and the two host channels must
+    // be distinct host objects.
+    let mut tokens = BTreeSet::new();
+    for vchid in [RECYC_CH_GR1, RECYC_CH_GR2] {
+        let rung = kayfabe_fwd::handle_doorbell(&mut gpu, GPU0, MockArch::token_for(vchid), &[])
+            .expect("★ both live channels ring");
+        assert_eq!(rung.proc, owner);
+        tokens.insert(rung.host_token);
+    }
+    assert_eq!(
+        tokens.len(),
+        2,
+        "★★ the two live channels rang ONE host token — the exec planes are aliased"
+    );
+    let hosts: BTreeSet<u64> = [c1, c2]
+        .iter()
+        .filter_map(|c| gpu.procs[&owner].channels[c].host_channel.map(|h| h.raw()))
+        .collect();
+    assert_eq!(
+        hosts.len(),
+        2,
+        "★★ the two live channels share ONE host channel object"
+    );
 }

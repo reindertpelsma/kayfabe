@@ -17,7 +17,7 @@ use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::project::{NO_CONDEMNED, project};
-use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, ResourceKey, RmEvent, RmGraph};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
@@ -489,7 +489,7 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
         assert_eq!(before.procs.len(), 1, "dup joins compute+UVM into one proc");
         assert_eq!(
             before.by_pdb.get(&(GpuId::ZERO, PDB)).map(|x| x.1),
-            Some(compute_vas),
+            Some(ResourceKey::first(compute_vas)),
             "PDB routes to the VAS"
         );
     }

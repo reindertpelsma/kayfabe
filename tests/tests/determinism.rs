@@ -22,7 +22,7 @@
 //!
 //! [`CoreSnapshot`] is the deterministic, order-insensitive projection of everything an
 //! adapter can observe off a [`Gpu`], **canonicalized on stable hardware/graph
-//! identities** (`ProcAnchor`, `Pdb`, `VChid`, `NodeKey`) — never on the minted
+//! identities** (`ProcAnchor`, `Pdb`, `VChid`, `ResourceKey`) — never on the minted
 //! `ProcId`/`ChanId` counters (which ARE order-dependent by design and would leak
 //! arrival order into the comparison), and never through a `HashMap` (BTree/BTreeSet
 //! throughout, so no iteration-order artifact makes the *test* flaky rather than the
@@ -60,7 +60,7 @@ use kayfabe_completion::OsEventRef;
 use kayfabe_core::ProcAnchor;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
-use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, ResourceKey, RmEvent};
 use kayfabe_fwd::{arm_fence, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
@@ -195,7 +195,7 @@ fn permute_and_duplicate(events: &[RmEvent], keys: &[u64], dups: &[bool]) -> Vec
 // The observable end-state snapshot — canonicalized on STABLE identities only.
 // =================================================================================
 
-/// Per-channel routing facts, keyed by the channel's stable [`NodeKey`].
+/// Per-channel routing facts, keyed by the channel's stable [`ResourceKey`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ChannelObs {
     vchid: VChid,
@@ -219,7 +219,7 @@ struct ResolvedObs {
 struct MappingObs {
     pdb: Option<Pdb>,
     va: GpuVa,
-    memory: NodeKey,
+    memory: ResourceKey,
     mem_phys: Option<u64>,
 }
 
@@ -235,11 +235,11 @@ struct CoreSnapshot {
     /// end-state and cannot leak arrival order.
     by_pdb: BTreeMap<(GpuId, Pdb), ProcAnchor>,
     /// Exec-plane routing: (target, vChid) → (owning anchor, channel node).
-    by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, NodeKey)>,
+    by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, ResourceKey)>,
     /// Address plane: anchor → ((target, PDB) → VASpace origin node).
-    vases: BTreeMap<ProcAnchor, BTreeMap<(GpuId, Pdb), NodeKey>>,
+    vases: BTreeMap<ProcAnchor, BTreeMap<(GpuId, Pdb), ResourceKey>>,
     /// Engine routing: anchor → (channel node → its routing facts).
-    channels: BTreeMap<ProcAnchor, BTreeMap<NodeKey, ChannelObs>>,
+    channels: BTreeMap<ProcAnchor, BTreeMap<ResourceKey, ChannelObs>>,
     /// Address resolutions / backing state: every bound (target, PDB, VA) → what it
     /// resolves to.
     resolutions: BTreeMap<(GpuId, Pdb, GpuVa), ResolvedObs>,
@@ -473,7 +473,7 @@ struct DataPlaneProjection {
     /// (anchor, target, PDB) → the published VA resolves AND is host-published.
     pub_resolves: BTreeMap<(ProcAnchor, GpuId, Pdb), bool>,
     /// (anchor, channel node) → an NVENC channel armed its mapped fence successfully.
-    arms: BTreeMap<(ProcAnchor, NodeKey), bool>,
+    arms: BTreeMap<(ProcAnchor, ResourceKey), bool>,
     /// anchor → number of mapped fences left armed.
     armed_counts: BTreeMap<ProcAnchor, usize>,
 }
@@ -519,7 +519,7 @@ fn materialize(gpu: &mut Gpu) -> DataPlaneProjection {
             (p.anchor, c.key, c.engine == EngineKind::NvEnc)
         };
         if is_nvenc {
-            let ev = OsEventRef(0xF00 + u64::from(key.handle.0));
+            let ev = OsEventRef(0xF00 + u64::from(key.origin.handle.0));
             let r = arm_fence(gpu, *pid, *cid, VA_PUB, 0, 0x100, ev);
             arms.insert((anchor, key), r.is_ok());
         }

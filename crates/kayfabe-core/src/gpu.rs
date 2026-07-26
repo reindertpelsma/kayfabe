@@ -27,7 +27,7 @@ use kayfabe_util::Instant;
 use crate::gpa::{GpaArena, GpaBlock, GpaError, GpaSpace};
 use crate::project::{Boundaries, ProcBoundary, ProjectionError, SYSTEM_ANCHOR, project};
 use crate::reactor::SourceRegistry;
-use crate::rmgraph::{ClientId, NodeKey, RmEvent, RmGraph, RmGraphError};
+use crate::rmgraph::{ClientId, ResourceKey, RmEvent, RmGraph, RmGraphError};
 use crate::{ChanId, ProcAnchor, ProcId};
 
 /// ★ G10 (`l1_concurrency.md` §12.22) — the largest number of distinct **condemned
@@ -154,7 +154,7 @@ pub struct Vas {
     /// The hardware identity (the GPU's CR3), unique only WITHIN [`Self::gpu`].
     pub pdb: Pdb,
     /// The VASpace origin node in the RM graph.
-    pub origin: NodeKey,
+    pub origin: ResourceKey,
     /// The forward-populated VA→backing table (MISS=FAULT).
     pub table: AddressTable,
     /// This Vas's own host VAS object, once materialized by the fwd plane.
@@ -176,7 +176,7 @@ pub struct Vas {
 }
 
 impl Vas {
-    fn new(gpu: GpuId, pdb: Pdb, origin: NodeKey) -> Self {
+    fn new(gpu: GpuId, pdb: Pdb, origin: ResourceKey) -> Self {
         Vas {
             gpu,
             pdb,
@@ -195,7 +195,7 @@ pub struct Channel {
     /// Core-assigned per-proc slot.
     pub id: ChanId,
     /// The channel node in the RM graph.
-    pub key: NodeKey,
+    pub key: ResourceKey,
     /// ★ MG-4: the GPU target this channel lives on (graph-derived from its `Device`
     /// ancestor). `VChid` is a per-GPU runlist index, so the exec-plane routing map is
     /// keyed `(GpuId, VChid)` and this tag names which GPU the doorbell demuxes on.
@@ -292,7 +292,7 @@ pub struct Proc {
     /// The exec plane's channels.
     pub channels: BTreeMap<ChanId, Channel>,
     /// Channel node → slot (stable across graph re-derivations).
-    pub chan_ids: BTreeMap<NodeKey, ChanId>,
+    pub chan_ids: BTreeMap<ResourceKey, ChanId>,
     /// Per-proc execution plane state.
     pub exec: ExecPlane,
     /// Per-proc completion queue (§4.3.2 — the starvation fix's per-proc half).
@@ -1215,7 +1215,7 @@ impl Spine {
                 // page directory. THE canonical exception to MISS=FAULT.
                 continue;
             };
-            let Some(gpu) = self.rmgraph.gpu_of(m.vaspace) else {
+            let Some(gpu) = self.rmgraph.gpu_of_resource(m.vaspace) else {
                 // ★ DEFER (not yet knowable). No resolvable target (no Device ancestor)
                 // — deferred until the Device fact lands, never guessed onto GPU 0.
                 continue;
@@ -1353,7 +1353,7 @@ impl Spine {
             entry.vas_pdb = facts.vas_pdb;
             entry.engine = facts.engine;
         }
-        let live_chans: BTreeSet<NodeKey> = b.channels.keys().copied().collect();
+        let live_chans: BTreeSet<ResourceKey> = b.channels.keys().copied().collect();
         p.chan_ids.retain(|key, _| live_chans.contains(key));
         let live_cids: BTreeSet<ChanId> = p.chan_ids.values().copied().collect();
         // ★★ T0/G2 — the exec plane's half of the same rule.

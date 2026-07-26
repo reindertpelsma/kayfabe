@@ -175,6 +175,7 @@ kayfabe_util::assert_send_sync!(
     rmgraph::RmEvent,
     rmgraph::RmGraphError,
     rmgraph::NodeKey,
+    rmgraph::ResourceKey,
     rmgraph::AllocFacts,
     rmgraph::Mapping,
     rmgraph::RmNode,

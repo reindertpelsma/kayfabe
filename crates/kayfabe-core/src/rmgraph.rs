@@ -86,6 +86,88 @@ impl NodeKey {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct ResId(u64);
 
+/// ★★★ §12.41 — **the identity of a live RM resource in every derived plane**: its
+/// origin handle plus which *incarnation* of that handle value it is.
+///
+/// ## Why a [`NodeKey`] alone cannot be one
+///
+/// [`RmNode::key`] is the handle the resource's `RM_ALLOC` created it at — a **label**,
+/// not an identity, because RM recycles object-handle values by design and the recycling
+/// is not even lazy:
+///
+/// - `[src]` a caller supplies `hObjectNew` verbatim; `0` means "RM, generate one"
+///   (`ogkm src/common/sdk/nvidia/inc/nvos.h:483` — *"new object handle, 0 to
+///   generate"*), and `clientAssignResourceHandle` branches on exactly that
+///   (`ogkm src/nvidia/src/libraries/resserv/src/rs_client.c:998-1005`).
+/// - `[src]` the ONLY validation of a caller-supplied handle is that it is not
+///   *currently live*: `clientValidateNewResourceHandle_IMPL` rejects `0`, the client's
+///   own `hClient`, an out-of-restrict-range value, and a value `clientGetResourceRef`
+///   already resolves — nothing else (`rs_client.c:1446-1470`,
+///   `NV_ERR_INSERT_DUPLICATE_NAME`).
+/// - `[src]` freeing removes the ref from the live map with **no quarantine and no free
+///   list** (`clientDestructResourceRef_IMPL`, `rs_client.c:1137` —
+///   `mapRemove(&pClient->resourceMap, pResourceRef)`), so the value passes that
+///   validation again on the very next ioctl. RM's own generator is a monotonic index
+///   taken `% RS_UNIQUE_HANDLE_RANGE` (`0x0008_0000` = 2^19,
+///   `ogkm src/nvidia/generated/g_rs_client_nvoc.h:54-55`) that re-probes the live map
+///   and wraps (`clientGenResourceHandle_IMPL`, `rs_client.c:962-974`).
+/// - `[measured]` and our own C artifact says the same in its own words:
+///   *"handle values are reused across contexts and process lifetimes"*
+///   (`C: src/qemu/nvkvm_gpu_emul.c:670-674`, `:1926-1928`, `:1940-1942`).
+///
+/// So `Alloc (A,H) → Dup to B → Free (A,H) → Alloc (A,H)` leaves **two live resources
+/// reporting at one `(client, handle)`**: the orphan B's alias keeps alive (RM refcounts
+/// it, `mem.c:1027-1031`) and the current allocation. Keying a derived plane on the
+/// `NodeKey` collapsed the two — the orphan lost its `Pdb`/`VChid` routing entirely, its
+/// F1 collision claim was overwritten, and (exec plane) both incarnations were handed one
+/// `ChanId`, i.e. one host channel.
+///
+/// ## Why an incarnation ordinal rather than the raw [`ResId`]
+///
+/// [`ResId`] is already the never-reused identity and would be the obvious key — but its
+/// *value* is minted from a counter, so it depends on the order the events arrived in,
+/// and [`crate::project::Boundaries`] is compared whole across shuffled orders (that IS
+/// decision #4). The same objection that kept [`ClientId`] out of `ProcBoundary` (§12.40)
+/// applies here. The incarnation ordinal has no such dependence: allocations at ONE
+/// handle value are **totally ordered by the protocol** (an `Alloc` onto a live handle is
+/// [`RmGraphError::ConflictingAlloc`], mirroring RM's `NV_ERR_INSERT_DUPLICATE_NAME`), so
+/// "the smallest ordinal not held by a live resource at this key" is a pure function of
+/// the declared facts. It is `0` for every resource whose handle value is not currently
+/// shared with a ghost — i.e. essentially always.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ResourceKey {
+    /// The handle this resource's origin `RM_ALLOC` created it at. Ordered first, so a
+    /// `BTreeMap<ResourceKey, _>` still iterates in ascending origin-key order and every
+    /// determinism property stated over that order is unchanged.
+    pub origin: NodeKey,
+    /// Which live incarnation of `origin` this is. `0` unless a `DUP_OBJECT` kept an
+    /// earlier resource alive past its origin handle's free and the value was re-used.
+    pub incarnation: u32,
+}
+
+impl ResourceKey {
+    /// The identity of the FIRST incarnation at `origin` — the only one that exists
+    /// unless the handle value has been recycled while a dup kept a ghost alive.
+    #[must_use]
+    pub fn first(origin: NodeKey) -> Self {
+        ResourceKey {
+            origin,
+            incarnation: 0,
+        }
+    }
+
+    /// The upper bound of `origin`'s incarnation range — the inclusive end of the
+    /// `first(origin)..=last(origin)` slice that is exactly the live incarnations of one
+    /// handle value (never a real identity; a range bound).
+    #[must_use]
+    fn last(origin: NodeKey) -> Self {
+        ResourceKey {
+            origin,
+            incarnation: u32::MAX,
+        }
+    }
+}
+
 /// ★★★ §12.39 — the identity of a client **NAMESPACE**: the [`ResId`] of its client-root
 /// resource, minted at the root `Alloc` and **never reused**.
 ///
@@ -300,12 +382,15 @@ pub enum RmEvent {
 /// RPC populate source needs (`va → memory-phys + offset`, resolved by the runtime).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Mapping {
-    /// The VASpace resource's origin key (stable identity).
-    pub vaspace: NodeKey,
+    /// ★★★ §12.41 — the VASpace RESOURCE this mapping lives in, by identity. It was an
+    /// origin `NodeKey`, and `Gpu::sync_rpc_mappings` resolved that key back through the
+    /// live handle table to get the target GPU — so a mapping into a dup-kept ghost VAS
+    /// was attributed to whatever the guest had since re-allocated at that handle value.
+    pub vaspace: ResourceKey,
     /// The declared PDB of that VASpace at map time, if known (the address-table key).
     pub pdb: Option<Pdb>,
-    /// The mapped memory resource's origin key.
-    pub memory: NodeKey,
+    /// ★★★ §12.41 — the mapped memory RESOURCE, by identity (see [`Self::vaspace`]).
+    pub memory: ResourceKey,
     /// Guest VA the mapping starts at.
     pub va: GpuVa,
     /// Byte offset into the memory resource.
@@ -328,9 +413,16 @@ struct MapKey {
 /// stable origin key. (The set of handles that reference it lives on [`Resource`].)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RmNode {
-    /// Identity: the resource's ORIGIN handle (its first allocator). Stable across
-    /// dups and across the origin client's free, as long as any reference survives.
+    /// The resource's ORIGIN handle (its first allocator). Stable across dups and across
+    /// the origin client's free, as long as any reference survives.
+    ///
+    /// ★★★ §12.41 — a **label, not an identity**: RM recycles object-handle values, so
+    /// two live resources can report the same `key`. Everything that keys, indexes or
+    /// dedups on a resource must use [`Self::id`]; `key` is for naming it.
     pub key: NodeKey,
+    /// ★★★ §12.41 — which live incarnation of [`Self::key`] this resource is. See
+    /// [`ResourceKey`] for why the disambiguator exists and why it is an ordinal.
+    pub incarnation: u32,
     /// Declared parent handle (same namespace). For a client root, equals `key.handle`.
     pub parent: HObject,
     /// Raw class id as declared.
@@ -339,6 +431,18 @@ pub struct RmNode {
     pub kind: ObjectKind,
     /// Declared alloc facts.
     pub facts: AllocFacts,
+}
+
+impl RmNode {
+    /// ★★★ §12.41 — this resource's IDENTITY: unique among live resources, and the only
+    /// thing a derived plane may key on. See [`ResourceKey`].
+    #[must_use]
+    pub fn id(&self) -> ResourceKey {
+        ResourceKey {
+            origin: self.key,
+            incarnation: self.incarnation,
+        }
+    }
 }
 
 /// An underlying RM resource: its payload plus the set of handles referencing it.
@@ -470,8 +574,9 @@ pub enum RmGraphError {
     /// (an identical re-send is idempotent). Overlapping/replacing a live mapping
     /// without an eager unmap is a loud fault (the `ALREADY-MAPPED` collision class).
     ConflictingMap {
-        /// The VASpace origin whose VA is doubly-mapped.
-        vaspace: NodeKey,
+        /// The VASpace RESOURCE whose VA is doubly-mapped (★ §12.41 — by identity, not
+        /// by origin handle: two live VASpaces can report at one recycled handle value).
+        vaspace: ResourceKey,
         /// The colliding VA.
         va: GpuVa,
     },
@@ -602,6 +707,18 @@ pub struct RmGraph {
     /// with both factors guest-driven — the same quadratic shape the parked-map set and
     /// the condemnation pass were already hardened against.
     client_roots: BTreeMap<HClient, ResId>,
+    /// ★★★ §12.41 — resource IDENTITY → resource. An **index**, not a second source of
+    /// truth: every entry is inserted and removed with its [`Resource`] in `resources`.
+    ///
+    /// It exists for two jobs that are the same job. (1) It makes
+    /// [`Self::next_incarnation`] a range query over the (tiny) set of live incarnations
+    /// at one handle value instead of a scan of every resource — the G10 complexity rule
+    /// (§12.22): an O(n) probe per `Alloc` is O(n²) on a guest-driven alloc flood, i.e. a
+    /// complexity DoS. (2) It resolves a [`ResourceKey`] to its resource in O(log n),
+    /// which is what let the five by-origin-key **linear scans** §12.40 finding 4 had to
+    /// make `rev()`-newest-wins become exact lookups — the projection called two of them
+    /// per node, so the old shape was O(resources²) per event as well.
+    by_origin: BTreeMap<ResourceKey, ResId>,
 }
 
 /// ★ §12.27 — the reserved client handle. `0` is `NV01_NULL_OBJECT`, which RM can never
@@ -644,6 +761,7 @@ impl RmGraph {
             next_res_id: 0,
             gpus: BTreeSet::from([0]),
             client_roots: BTreeMap::new(),
+            by_origin: BTreeMap::new(),
         }
     }
 
@@ -700,6 +818,70 @@ impl RmGraph {
     /// ([`Self::client_kinds`], the projection) still treat an absent kind as "groups with
     /// nobody", which remains right — a namespace can be emptied by a `Free` between the
     /// event that created an alias and the projection that reads it.
+    /// ★★★ §12.41 — the incarnation ordinal a resource allocated at `key` **now** takes:
+    /// the smallest one no LIVE resource at that key already holds.
+    ///
+    /// Almost always `0`. It is non-zero exactly when a `DUP_OBJECT` alias is keeping an
+    /// earlier resource alive past its origin handle's free (RM refcounts it —
+    /// `ogkm src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`) and the guest re-allocates
+    /// that handle value, which RM permits with no quarantine
+    /// (`rs_client.c:1137` free, `:1446-1470` the live-only validation).
+    ///
+    /// Reuse of a **dead** incarnation's ordinal is deliberate and safe: identity only has
+    /// to separate things that are simultaneously live, and bounding the ordinal by the
+    /// live set is what keeps this table from being a guest-growable ghost log.
+    fn next_incarnation(&self, key: NodeKey) -> u32 {
+        // The live incarnations at one handle value, ascending. Bounded by how many
+        // dup-kept ghosts the guest has parked there, and each one costs it a live alias
+        // (so `MAX_LIVE_HANDLES` bounds it).
+        let mut want = 0u32;
+        for k in self
+            .by_origin
+            .range(ResourceKey::first(key)..=ResourceKey::last(key))
+            .map(|(k, _)| k.incarnation)
+        {
+            if k != want {
+                break;
+            }
+            want += 1;
+        }
+        want
+    }
+
+    /// ★★★ §12.41 — the resource whose identity is `id`, or `None` if it is not live.
+    /// The ONE `ResourceKey` → resource resolution, in O(log n) through
+    /// [`Self::by_origin`].
+    fn resource_at(&self, id: ResourceKey) -> Option<&Resource> {
+        let rid = self.by_origin.get(&id)?;
+        self.resources.get(rid)
+    }
+
+    /// ★★★ §12.41 — the resource a bare origin `NodeKey` names, when the caller has no
+    /// identity to offer: **the incarnation currently declared there**.
+    ///
+    /// "Currently declared" is a recorded fact, not a tie-break: the resource whose
+    /// ORIGIN handle is live at `key` (there is at most one — the handle table is keyed
+    /// by handle) is the current tenant. Only when no origin handle is live there — every
+    /// incarnation is a dup-kept ghost — does this fall back to the newest, which is
+    /// §12.40 finding 4's `rev()` rule preserved exactly, now as an O(k) max over the
+    /// key's own incarnations rather than a reverse scan of every resource.
+    ///
+    /// Callers that DO have an identity must use [`Self::resource_at`]; this exists for
+    /// the handle-shaped public API ([`Self::pdb_of`], [`Self::references`], …), whose
+    /// question genuinely is "what is at this handle value now?".
+    fn current_at(&self, key: NodeKey) -> Option<&Resource> {
+        if let Some(h) = self.handles.get(&key)
+            && h.is_origin()
+        {
+            return self.resources.get(&h.res());
+        }
+        self.by_origin
+            .range(ResourceKey::first(key)..=ResourceKey::last(key))
+            .map(|(_, &rid)| rid)
+            .max()
+            .and_then(|rid| self.resources.get(&rid))
+    }
+
     fn client_root_of(&self, client: HClient) -> Option<NodeKey> {
         let id = self.client_roots.get(&client)?;
         self.resources.get(id).map(|r| r.node.key)
@@ -958,8 +1140,13 @@ impl RmGraph {
                 facts,
             } => {
                 let key = NodeKey::new(client, handle);
+                // ★★★ §12.41 — the DECLARATION, incarnation-free. The ordinal is a
+                // property of the graph's live state, not of the event, so it is minted
+                // only on the arm that creates a resource (below); the idempotent-retry
+                // arm compares against this shape so a re-sent alloc never mints one.
                 let node = RmNode {
                     key,
+                    incarnation: 0,
                     parent,
                     class,
                     kind: arch.classify(class),
@@ -1027,7 +1214,10 @@ impl RmGraph {
                     // `is_client_root`'s (§12.25).
                     Some(h)
                         if h.is_origin()
-                            && self.resources.get(&h.res()).map(|r| r.node) == Some(node) =>
+                            && self.resources.get(&h.res()).map(|r| RmNode {
+                                incarnation: 0,
+                                ..r.node
+                            }) == Some(node) =>
                     {
                         Ok(())
                     }
@@ -1075,8 +1265,16 @@ impl RmGraph {
                                 None => return Err(RmGraphError::UndeclaredClient(client)),
                             }
                         };
+                        // ★★★ §12.41 — stamp the incarnation NOW, from the live set, and
+                        // index the resource by its identity. A `Dup`-kept ghost at this
+                        // very handle value is what makes the ordinal non-zero.
+                        let node = RmNode {
+                            incarnation: self.next_incarnation(key),
+                            ..node
+                        };
                         // Declared by `RM_ALLOC` → THE origin handle of this resource.
                         self.handles.insert(key, HandleRef::Origin(id));
+                        self.by_origin.insert(node.id(), id);
                         self.resources.insert(
                             id,
                             Resource {
@@ -1481,7 +1679,7 @@ impl RmGraph {
             }
             return Ok(());
         };
-        let vas_origin = self.origin_of(vas_key).expect("resource_of => live").key;
+        let vas_origin = self.origin_of(vas_key).expect("resource_of => live").id();
         let mem_node = *self.origin_of(mem_key).expect("resource_of => live");
         let key = MapKey {
             vaspace: vas_id,
@@ -1490,7 +1688,7 @@ impl RmGraph {
         let mapping = Mapping {
             vaspace: vas_origin,
             pdb: self.resource_pdb(vas_id),
-            memory: mem_node.key,
+            memory: mem_node.id(),
             va: m.va,
             offset: m.offset,
             len: m.len,
@@ -1576,7 +1774,12 @@ impl RmGraph {
         {
             res.map_refs = res.map_refs.saturating_sub(1);
             if res.refs.is_empty() && res.map_refs == 0 {
-                self.resources.remove(&mem_id);
+                // ★★★ §12.41 — the identity index dies with the resource, and it must:
+                // the ordinal it held is what a later `Alloc` at that handle value is
+                // then free to take.
+                if let Some(r) = self.resources.remove(&mem_id) {
+                    self.by_origin.remove(&r.node.id());
+                }
             }
         }
     }
@@ -1630,7 +1833,11 @@ impl RmGraph {
             // (a mapped memory object survives its source handle's free — faithful RM
             // refcounting). Destroyed only when the LAST reference of any kind goes.
             if res.refs.is_empty() && res.map_refs == 0 {
-                self.resources.remove(&id);
+                // ★★★ §12.41 — see the twin site in `unmap`: index and resource go
+                // together, always.
+                if let Some(r) = self.resources.remove(&id) {
+                    self.by_origin.remove(&r.node.id());
+                }
             }
         }
     }
@@ -1737,12 +1944,15 @@ impl RmGraph {
     /// Note the scope: this removes the *ambiguity*, it does not move the projection off
     /// `NodeKey` keys. That refactor (§12.25's deferred finding 2) is still open.
     pub fn references(&self, origin_key: NodeKey) -> impl Iterator<Item = NodeKey> + '_ {
-        let refs = self
-            .resources
-            .values()
-            .rev()
-            .find(|r| r.node.key == origin_key)
-            .map(|r| &r.refs);
+        let refs = self.current_at(origin_key).map(|r| &r.refs);
+        refs.into_iter().flat_map(|set| set.iter().copied())
+    }
+
+    /// ★★★ §12.41 — [`Self::references`] for a resource named by IDENTITY rather than by
+    /// handle value: the ghost's own reference set, which the handle-shaped form cannot
+    /// reach once the current tenant occupies its key.
+    pub fn references_of(&self, id: ResourceKey) -> impl Iterator<Item = NodeKey> + '_ {
+        let refs = self.resource_at(id).map(|r| &r.refs);
         refs.into_iter().flat_map(|set| set.iter().copied())
     }
 
@@ -1759,22 +1969,38 @@ impl RmGraph {
     /// the `SET_PAGE_DIRECTORY` and survives the origin handle's free.
     #[must_use]
     pub fn pdb_of(&self, origin_key: NodeKey) -> Option<Pdb> {
-        // The resource's own attached PDB (identified by its stable origin key —
-        // survives the origin handle's free).
-        if let Some(res) = self
-            .resources
-            .values()
-            .rev()
-            .find(|r| r.node.key == origin_key)
-            && let Some(pdb) = res.pdb
-        {
+        match self.current_at(origin_key).map(|r| r.node.id()) {
+            Some(id) => self.pdb_of_resource(id),
+            // No resource at that key at all — a parked `SetPageDir` may still name it.
+            None => self.parked_pdb(|n| n.key == origin_key),
+        }
+    }
+
+    /// ★★★ §12.41 — [`Self::pdb_of`] for a resource named by IDENTITY. **This is the one
+    /// the projection uses**, and it has to be: the handle-shaped form answers about the
+    /// current tenant of a recycled handle value, so asking it about a dup-kept ghost
+    /// returned the *successor's* page-directory base — the ghost's `Vas` was filed under
+    /// a PDB it never declared, and the ghost's own PDB was claimed by nobody (which also
+    /// silently disarmed the F1 [`crate::project::ProjectionError::PdbCollision`] guard
+    /// for that value).
+    ///
+    /// **MISS ⇒ DEFER**, exactly as [`Self::pdb_of`].
+    #[must_use]
+    pub fn pdb_of_resource(&self, id: ResourceKey) -> Option<Pdb> {
+        if let Some(pdb) = self.resource_at(id).and_then(|r| r.pdb) {
             return Some(pdb);
         }
         // A SetPageDir may still be parked (declared before the target's alloc, via
         // the origin handle or any alias that resolves to this resource).
-        self.pending_pdbs.iter().find_map(|(k, p)| {
-            (self.origin_of(*k).map(|n| n.key) == Some(origin_key)).then_some(*p)
-        })
+        self.parked_pdb(|n| n.id() == id)
+    }
+
+    /// The parked-`SET_PAGE_DIRECTORY` half of [`Self::pdb_of_resource`]: a declaration
+    /// whose target handle resolves to a node satisfying `want`.
+    fn parked_pdb(&self, want: impl Fn(&RmNode) -> bool) -> Option<Pdb> {
+        self.pending_pdbs
+            .iter()
+            .find_map(|(k, p)| self.origin_of(*k).filter(|n| want(n)).map(|_| *p))
     }
 
     /// All live resource payloads, ascending origin-key order (deterministic).
@@ -1806,13 +2032,9 @@ impl RmGraph {
     pub fn backing_of(&self, memory_key: NodeKey) -> Option<u64> {
         // Resolve by handle when possible; else fall back to the resource's stable
         // origin key (a memory kept alive ONLY by a live mapping has no live handle).
-        let node = self.origin_of(memory_key).or_else(|| {
-            self.resources
-                .values()
-                .map(|r| &r.node)
-                .rev()
-                .find(|n| n.key == memory_key)
-        })?;
+        let node = self
+            .origin_of(memory_key)
+            .or_else(|| self.current_at(memory_key).map(|r| &r.node))?;
         matches!(node.kind, ObjectKind::Memory)
             .then(|| node.facts.mem_phys)
             .flatten()
@@ -1823,11 +2045,14 @@ impl RmGraph {
     /// handles). Zero if no such resource.
     #[must_use]
     pub fn map_ref_count(&self, origin_key: NodeKey) -> usize {
-        self.resources
-            .values()
-            .rev()
-            .find(|r| r.node.key == origin_key)
-            .map_or(0, |r| r.map_refs)
+        self.current_at(origin_key).map_or(0, |r| r.map_refs)
+    }
+
+    /// ★★★ §12.41 — [`Self::map_ref_count`] for a resource named by IDENTITY, which is
+    /// what a [`Mapping`]'s own `memory` field now is.
+    #[must_use]
+    pub fn map_ref_count_of(&self, id: ResourceKey) -> usize {
+        self.resource_at(id).map_or(0, |r| r.map_refs)
     }
 
     /// All live EVENT (os-event / notifier) nodes owned by `client` — completion
@@ -1905,12 +2130,23 @@ impl RmGraph {
             return Some(g);
         }
         // The origin handle was freed but a dup keeps the resource alive: read the
-        // cached target off the resource by its stable origin key (mirrors `pdb_of` —
-        // the target, like the PDB, is a resource property that survives the free).
-        self.resources
-            .values()
-            .rev()
-            .find(|r| r.node.key == key)
-            .and_then(|r| r.gpu)
+        // cached target off the resource **currently declared** at that origin key
+        // (mirrors `pdb_of` — the target, like the PDB, is a resource property that
+        // survives the free).
+        self.current_at(key).and_then(|r| r.gpu)
+    }
+
+    /// ★★★ §12.41 — [`Self::gpu_of`] for a resource named by IDENTITY, which is what the
+    /// projection and the RPC-mapping sync must use. The handle-shaped form resolves
+    /// through the live handle table, so on a recycled handle value it answers about the
+    /// successor; a dup-kept ghost would be routed to the successor's target.
+    ///
+    /// **MISS ⇒ DEFER**, exactly as [`Self::gpu_of`]: the sticky per-resource target
+    /// cache is the whole answer here, because a ghost's parent chain is gone by
+    /// construction (its `Device` may have been freed with the rest of its namespace).
+    #[must_use]
+    pub fn gpu_of_resource(&self, id: ResourceKey) -> Option<GpuId> {
+        let res = self.resource_at(id)?;
+        res.gpu.or_else(|| self.walk_gpu(res.node.key))
     }
 }

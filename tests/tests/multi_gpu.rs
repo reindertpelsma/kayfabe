@@ -32,7 +32,7 @@ use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::project::{NO_CONDEMNED, ProjectionError, project};
-use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, ResourceKey, RmEvent};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
@@ -342,8 +342,8 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
         Err(GpuError::Projection(ProjectionError::PdbCollision {
             gpu: Some(GpuId(0)),
             pdb: SHARED_PDB,
-            a: NodeKey::new(c, vas1),
-            b: NodeKey::new(c, vas2),
+            a: ResourceKey::first(NodeKey::new(c, vas1)),
+            b: ResourceKey::first(NodeKey::new(c, vas2)),
         })),
         "a same-GPU PDB duplicate must STILL be a loud PdbCollision naming both claimants"
     );
@@ -422,8 +422,8 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
         Err(GpuError::Projection(ProjectionError::VchidCollision {
             gpu: Some(GpuId(0)),
             vchid: VChid(GR_VCHID),
-            a: NodeKey::new(d, HObject(0xD020)),
-            b: NodeKey::new(d, HObject(0xD021)),
+            a: ResourceKey::first(NodeKey::new(d, HObject(0xD020))),
+            b: ResourceKey::first(NodeKey::new(d, HObject(0xD021))),
         })),
         "a same-GPU vChid duplicate must STILL be a loud VchidCollision naming both claimants"
     );

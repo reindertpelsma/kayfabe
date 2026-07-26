@@ -1583,7 +1583,7 @@ mod fuzz {
                 // regardless of whether that memory declared a backing.
                 for m in gpu.spine.rmgraph.mappings() {
                     prop_assert!(
-                        gpu.spine.rmgraph.map_ref_count(m.memory) >= 1,
+                        gpu.spine.rmgraph.map_ref_count_of(m.memory) >= 1,
                         "a mapped memory has map-ref-count ≥ 1 (refcount keeps it alive)"
                     );
                 }
@@ -1605,4 +1605,105 @@ mod fuzz {
             }
         }
     }
+}
+
+// =================================================================================
+// ★★★ §12.41 — the F1 collision guard, on a RECYCLED object handle
+// =================================================================================
+
+/// ★★★ **The F1 PDB-collision guard must still bite when both claimants report at ONE
+/// recycled origin handle** (`l1_concurrency.md` §12.41).
+///
+/// `project`'s guard skipped when `prev == node.key` — "the same claimant re-declaring".
+/// That reading is only true while an origin `NodeKey` names at most one live resource,
+/// and it does not: `Alloc (A,H) → Dup to B → Free (A,H) → Alloc (A,H)` leaves two, and
+/// RM permits every step (a caller-supplied handle is validated only against the LIVE
+/// map, `ogkm .../resserv/src/rs_client.c:1446-1470`; the free quarantines nothing,
+/// `:1137`). So two genuinely different live VASpaces claiming ONE `(GpuId, Pdb)` — the
+/// ambiguous routing claim the guard is the device's only defence against — read as one
+/// claimant and passed **silently**, and `by_pdb` filed whichever the iteration order
+/// reached last.
+///
+/// The guard now compares resource IDENTITY, so the ambiguity is refused by name and both
+/// claimants are distinguishable in the error.
+///
+/// ★ Scope note, stated because it is a *policy* claim and not an RM one: CPU-RM does not
+/// check PDB-physaddr uniqueness across VASpaces at all
+/// (`deviceCtrlCmdDmaSetPageDirectory_IMPL`, `ogkm .../gpu/mem_mgr/dma.c:426-460`, passes
+/// `physAddress` through to `gvaspaceExternalRootDirCommit`, whose only assertion is that
+/// *this* VAS has no PDB yet, `.../gpu_vaspace.c:2853-2857`). Refusing it is OUR F1
+/// decision (#18C), unchanged here — this test pins that the decision is enforced on the
+/// input shape that used to evade it, not that RM enforces it.
+#[test]
+fn two_live_vaspaces_at_one_recycled_handle_still_collide_on_a_shared_pdb() {
+    use kayfabe_core::project::{NO_CONDEMNED, ProjectionError, project};
+    use kayfabe_core::rmgraph::{AllocFacts, ResourceKey, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
+
+    let arch = MockArch::new();
+    let (a, b) = (HClient(0xC1D0_0301), HClient(0xC1D0_0302));
+    let (dev, vas) = (HObject(0x5c00_0001), HObject(0x5c00_0010));
+    let alias = HObject(0x7000_0001);
+    let shared = Pdb(0x4900_0000);
+
+    let mut g = RmGraph::new();
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(a, shared, identical_handles(0x30, 0x31), None);
+    // A peer that keeps the first VASpace alive past its origin handle's free.
+    s.peer_dup(
+        b,
+        HObject(b.0),
+        HObject(0x6000_0001),
+        HObject(0x6000_0010),
+        Pdb(0x4a00_0000),
+        alias,
+        NodeKey::new(a, vas),
+    );
+    for ev in s.events {
+        g.apply(&arch, ev).expect("the scenario builds");
+    }
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: a,
+            handle: vas,
+        },
+    )
+    .expect("freeing the origin handle is ordinary");
+    // The successor, at the SAME handle value, declaring the SAME page directory.
+    for ev in [
+        RmEvent::Alloc {
+            client: a,
+            parent: dev,
+            handle: vas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: a,
+            vaspace: vas,
+            pdb: shared,
+        },
+    ] {
+        g.apply(&arch, ev).expect("★ the recycle itself is legal");
+    }
+
+    assert_eq!(
+        project(&g, &arch, &NO_CONDEMNED),
+        Err(ProjectionError::PdbCollision {
+            gpu: Some(GpuId::ZERO),
+            pdb: shared,
+            a: ResourceKey {
+                origin: NodeKey::new(a, vas),
+                incarnation: 0,
+            },
+            b: ResourceKey {
+                origin: NodeKey::new(a, vas),
+                incarnation: 1,
+            },
+        }),
+        "★★ two DIFFERENT live VASpaces claiming one (GPU, PDB) passed the F1 guard \
+         because they report at one recycled origin handle — the guard compared a value \
+         RM recycles instead of a resource identity"
+    );
 }

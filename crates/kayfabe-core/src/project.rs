@@ -94,7 +94,7 @@ use kayfabe_arch::ids::{EngineKind, GpuId, HClient, HObject, Pdb, VChid};
 use kayfabe_arch::{Arch, ClientKind, ObjectKind};
 
 use crate::ProcAnchor;
-use crate::rmgraph::{ClientId, NodeKey, RESERVED_CLIENT, RmGraph, RmNode};
+use crate::rmgraph::{ClientId, NodeKey, RESERVED_CLIENT, ResourceKey, RmGraph, RmNode};
 
 /// ★ §12.27 — the reserved anchor of the **system component**: the guest *kernel*'s
 /// clients (UVM's session, RM's internal clients), which are one component by rule.
@@ -127,10 +127,14 @@ pub struct ChannelFacts {
     /// no routing map and materializes no runtime state until the fact resolves. Its
     /// doorbell then misses `by_vchid` and takes a named `FwdFault::UnknownVchid`.
     pub gpu: Option<GpuId>,
-    /// Origin VASpace node this channel is bound to (dup-aliases resolved), if any
+    /// The VASpace RESOURCE this channel is bound to (dup-aliases resolved), if any
     /// declared path exists. `None` = GSP-managed with no declared VAS (routed to
     /// the system/minted VAS by higher layers — out of scope this milestone).
-    pub vas_origin: Option<NodeKey>,
+    ///
+    /// ★★★ §12.41 — a [`ResourceKey`], not an origin handle: a channel legitimately binds
+    /// its `hVASpace` through a `DUP_OBJECT` alias, and the alias may resolve to a
+    /// dup-kept GHOST whose origin handle the guest has since re-allocated.
+    pub vas_origin: Option<ResourceKey>,
     /// The PDB of that VASpace, once declared via `SetPageDir`.
     pub vas_pdb: Option<Pdb>,
     /// ★ The fine [`EngineKind`] of this channel's context (`execution_plane.md`
@@ -152,12 +156,27 @@ pub struct ProcBoundary {
     pub anchor: ProcAnchor,
     /// All clients in the component.
     pub clients: BTreeSet<HClient>,
-    /// VASpace **origin** nodes owned by this component → resolved facts (target GPU
-    /// and declared PDB). A process may own several (compute + UVM) — one `Proc`,
-    /// many `Vas`.
-    pub vases: BTreeMap<NodeKey, VasFacts>,
-    /// Channel nodes owned by this component → resolved facts.
-    pub channels: BTreeMap<NodeKey, ChannelFacts>,
+    /// VASpace **resources** owned by this component → resolved facts (target GPU and
+    /// declared PDB). A process may own several (compute + UVM) — one `Proc`, many `Vas`.
+    ///
+    /// ★★★ §12.41 — keyed by [`ResourceKey`], **not** by origin `NodeKey`. RM recycles
+    /// object-handle values with no quarantine (`ogkm rs_client.c:1137` frees,
+    /// `:1446-1470` validates only against the LIVE map), so
+    /// `Alloc (A,H) → Dup to B → Free (A,H) → Alloc (A,H)` leaves two live VASpace
+    /// resources reporting at one `(client, handle)`. Keyed by handle, the second
+    /// `insert` silently **overwrote** the first: the dup-kept ghost — which RM says is
+    /// alive and which `cross_proc_lifetime.rs` requires to stay usable — vanished from
+    /// the projection, so its `Pdb` left `by_pdb`, its runtime `Vas` was staged for
+    /// release, and the alias holder's every address op took `FwdFault::UnknownPdb`.
+    pub vases: BTreeMap<ResourceKey, VasFacts>,
+    /// Channel **resources** owned by this component → resolved facts.
+    ///
+    /// ★★★ §12.41 — see [`Self::vases`] for why this is a [`ResourceKey`]. The exec
+    /// plane's version of the collapse was the sharper one: `Gpu::sync_proc_to_boundary`
+    /// mints a stable `ChanId` per key, so two live channels at one recycled handle value
+    /// were handed ONE `ChanId` — one runtime `Channel`, one host channel, one host
+    /// token — while `by_vchid` filed BOTH their vChids onto it.
+    pub channels: BTreeMap<ResourceKey, ChannelFacts>,
 }
 
 /// The full derived routing picture. Pure data; `PartialEq` so the
@@ -180,11 +199,11 @@ pub struct Boundaries {
     /// retired or condemned: its clients are the guest driver's, so condemning it is
     /// device-fatal by definition (§12.26).
     pub system: ProcBoundary,
-    /// Data-plane routing: (target, PDB) → (owning component, VASpace origin node).
-    pub by_pdb: BTreeMap<(GpuId, Pdb), (ProcAnchor, NodeKey)>,
-    /// Exec-plane routing: (target, vChid) → (owning component, channel node). The
+    /// Data-plane routing: (target, PDB) → (owning component, VASpace resource).
+    pub by_pdb: BTreeMap<(GpuId, Pdb), (ProcAnchor, ResourceKey)>,
+    /// Exec-plane routing: (target, vChid) → (owning component, channel resource). The
     /// owning component may be [`SYSTEM_ANCHOR`] (a guest-kernel channel).
-    pub by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, NodeKey)>,
+    pub by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, ResourceKey)>,
 }
 
 impl ProcBoundary {
@@ -231,10 +250,12 @@ pub enum ProjectionError {
         gpu: Option<GpuId>,
         /// The colliding vChid.
         vchid: VChid,
-        /// First claimant.
-        a: NodeKey,
+        /// First claimant (★ §12.41 — by resource identity: the guard used to compare
+        /// origin `NodeKey`s, so two DIFFERENT live resources sharing one recycled handle
+        /// value read as "the same claimant re-declaring" and passed).
+        a: ResourceKey,
         /// Second claimant.
-        b: NodeKey,
+        b: ResourceKey,
     },
     /// Two distinct VASpace origins on ONE target declare the same PDB.
     PdbCollision {
@@ -242,10 +263,11 @@ pub enum ProjectionError {
         gpu: Option<GpuId>,
         /// The colliding PDB.
         pdb: Pdb,
-        /// First claimant.
-        a: NodeKey,
+        /// First claimant (★ §12.41 — by resource identity; see
+        /// [`Self::VchidCollision`]).
+        a: ResourceKey,
         /// Second claimant.
-        b: NodeKey,
+        b: ResourceKey,
     },
 }
 
@@ -548,20 +570,20 @@ pub fn project(
         }
     }
 
-    let mut by_pdb: BTreeMap<(GpuId, Pdb), (ProcAnchor, NodeKey)> = BTreeMap::new();
-    let mut by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, NodeKey)> = BTreeMap::new();
+    let mut by_pdb: BTreeMap<(GpuId, Pdb), (ProcAnchor, ResourceKey)> = BTreeMap::new();
+    let mut by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, ResourceKey)> = BTreeMap::new();
     // ★ The F1 collision guard's scope tables, keyed on `(Option<GpuId>, id)`: the
     // guard still bites within one target (and within the unresolved-`None` scope),
     // while identical ids on DIFFERENT targets are legal and never collide.
-    let mut pdb_claims: BTreeMap<(Option<GpuId>, Pdb), NodeKey> = BTreeMap::new();
-    let mut vchid_claims: BTreeMap<(Option<GpuId>, VChid), NodeKey> = BTreeMap::new();
+    let mut pdb_claims: BTreeMap<(Option<GpuId>, Pdb), ResourceKey> = BTreeMap::new();
+    let mut vchid_claims: BTreeMap<(Option<GpuId>, VChid), ResourceKey> = BTreeMap::new();
 
     // Pre-pass: the engine-object refinement (channel origin → EngineKind). An
     // engine object's parent is its channel (same namespace, dup-aliases resolved).
     // `nodes()` iterates ascending origin-key order, so with several engine objects
     // on one channel the smallest-key one wins — deterministic and order-independent
     // (the real protocol allocates one engine object per channel context).
-    let mut engine_refine: BTreeMap<NodeKey, EngineKind> = BTreeMap::new();
+    let mut engine_refine: BTreeMap<ResourceKey, EngineKind> = BTreeMap::new();
     for node in g.nodes() {
         // The engine-object's parent must typed-resolve to a Channel (any engine —
         // discriminant match) before its kind refines that channel; a hostile engine
@@ -574,7 +596,7 @@ pub fn project(
                 },
             )
         {
-            engine_refine.entry(chan.key).or_insert(engine);
+            engine_refine.entry(chan.id()).or_insert(engine);
         }
     }
 
@@ -600,58 +622,64 @@ pub fn project(
         };
         match node.kind {
             ObjectKind::VaSpace => {
-                let pdb = g.pdb_of(node.key);
-                let gpu = g.gpu_of(node.key);
-                boundary.vases.insert(node.key, VasFacts { gpu, pdb });
+                // ★★★ §12.41 — resolved by resource IDENTITY. `pdb_of`/`gpu_of` answer
+                // about whatever incarnation currently holds the handle value, so on a
+                // recycled key a dup-kept ghost was given the SUCCESSOR's page-directory
+                // base and target.
+                let pdb = g.pdb_of_resource(node.id());
+                let gpu = g.gpu_of_resource(node.id());
+                boundary.vases.insert(node.id(), VasFacts { gpu, pdb });
                 if let Some(pdb) = pdb {
                     // The F1 guard, scoped per target: same-scope duplicate = loud
                     // refusal; identical PDB on a different GPU never collides.
                     if let Some(&prev) = pdb_claims.get(&(gpu, pdb))
-                        && prev != node.key
+                        && prev != node.id()
                     {
                         return Err(ProjectionError::PdbCollision {
                             gpu,
                             pdb,
                             a: prev,
-                            b: node.key,
+                            b: node.id(),
                         });
                     }
-                    pdb_claims.insert((gpu, pdb), node.key);
+                    pdb_claims.insert((gpu, pdb), node.id());
                     // Only a resolved target routes; an unresolved one defers (MISS
                     // at use) until its Device fact lands.
                     if let Some(gpu) = gpu {
-                        by_pdb.insert((gpu, pdb), (anchor, node.key));
+                        by_pdb.insert((gpu, pdb), (anchor, node.id()));
                     }
                 }
             }
             ObjectKind::Channel { engine } => {
                 let vchid = arch.vchid_from_userd_flags(node.facts.userd_flags);
-                let gpu = g.gpu_of(node.key);
+                // ★★★ §12.41 — by resource identity, on both the channel and the VASpace
+                // its `hVASpace` resolves to (see the VaSpace arm).
+                let gpu = g.gpu_of_resource(node.id());
                 let vas = resolve_channel_vas(g, node);
                 let facts = ChannelFacts {
                     vchid,
                     gpu,
-                    vas_origin: vas.map(|v| v.key),
-                    vas_pdb: vas.and_then(|v| g.pdb_of(v.key)),
+                    vas_origin: vas.map(RmNode::id),
+                    vas_pdb: vas.and_then(|v| g.pdb_of_resource(v.id())),
                     // The engine-object refinement wins over the channel-class default.
-                    engine: engine_refine.get(&node.key).copied().unwrap_or(engine),
+                    engine: engine_refine.get(&node.id()).copied().unwrap_or(engine),
                 };
                 // The F1 guard, scoped per target (see the PDB arm above).
                 if let Some(&prev) = vchid_claims.get(&(gpu, vchid))
-                    && prev != node.key
+                    && prev != node.id()
                 {
                     return Err(ProjectionError::VchidCollision {
                         gpu,
                         vchid,
                         a: prev,
-                        b: node.key,
+                        b: node.id(),
                     });
                 }
-                vchid_claims.insert((gpu, vchid), node.key);
+                vchid_claims.insert((gpu, vchid), node.id());
                 if let Some(gpu) = gpu {
-                    by_vchid.insert((gpu, vchid), (anchor, node.key));
+                    by_vchid.insert((gpu, vchid), (anchor, node.id()));
                 }
-                boundary.channels.insert(node.key, facts);
+                boundary.channels.insert(node.id(), facts);
             }
             _ => {}
         }

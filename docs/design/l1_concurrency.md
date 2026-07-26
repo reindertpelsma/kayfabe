@@ -5045,3 +5045,293 @@ and it is now the last place a recyclable value is an identity.
 - **Open, unchanged:** `ProcAnchor` as a persisted `HClient` in the condemned routing maps;
   the projection's `NodeKey` keys (§12.25 finding 2); §12.39 §7's O1–O4 bench questions;
   §12.39 test 8's fuzz property.
+
+### 12.41 ★★★ THE FAMILY SWEEP — every value NVIDIA recycles, audited; the last identity-from-a-recyclable-value closed, and one NEW defect found in the same organ
+
+**Status: LANDED (one fix) + a verified, unlanded finding.** 359 → **363 tests**; gate clean
+(`KAYFABE_SLOW=1 cargo test --workspace`, `clippy --all-targets -D warnings`,
+`fmt --check`, `check --target aarch64-unknown-linux-gnu`). `ogkm` =
+`C: research_clones/ogkm`, `C:` = `/workspace/nvidia-gpu-passthrough`.
+
+The brief: §12.38/§12.39/§12.40's four defects are **one mistake repeated** — *we assumed
+an NVIDIA handle or key means more than it does* — so sweep the family rather than the
+bug. What follows is the inventory, the one member closed, and what the sweep found that
+the brief did not predict.
+
+---
+
+#### 1. ★ THREE THINGS IN THE BRIEF THAT TURNED OUT TO BE WRONG
+
+1. **"The `NodeKey`-keyed projection … establish whether this is exploitable."** It is
+   **not** a cross-process isolation break, and cannot be: a `NodeKey` carries its
+   `HClient`, so two colliding resources are always in ONE namespace, hence (attribution
+   is by origin client) one component; and every routing consumer looks the object up in
+   its **own** `Proc` (`proc.vases.get(&(gpu, pdb))`, `kayfabe-fwd/src/lib.rs:1075`,
+   `:1092`, …), which is the isolation backstop. It is a **correctness** defect of the
+   hangs-a-legal-guest kind, plus a disarmed F1 guard. Measured, not argued (§2).
+2. **`rs_client.c:962-974` — the citation is EXACT** (`clientGenResourceHandle_IMPL`,
+   monotonic `handleGenIdx++ % RS_UNIQUE_HANDLE_RANGE`, `0x0008_0000` = 2^19,
+   `ogkm src/nvidia/generated/g_rs_client_nvoc.h:54-55`, no free list — it re-probes the
+   live map and wraps). But it is **not the cheap door**. The cheap door is that a caller
+   supplies `hObjectNew` **verbatim** (`0` = "generate", `ogkm .../inc/nvos.h:483`;
+   `clientAssignResourceHandle` branches on exactly that, `rs_client.c:998-1005`), the
+   only validation is *not currently live* (`clientValidateNewResourceHandle_IMPL`,
+   `rs_client.c:1446-1470`, `NV_ERR_INSERT_DUPLICATE_NAME`), and the free just
+   `mapRemove`s (`rs_client.c:1137`) with **no quarantine**. So a guest re-takes a freed
+   object handle on the very next ioctl — no wrap needed. Object handles are the exact
+   mirror of §12.39's `hClient` finding, one level down.
+3. **§12.40's residual — "`condemned_by_pdb`/`condemned_by_vchid` still persist a
+   recyclable label past their component's death" — is FALSE as written.** Both maps are
+   `clear()`ed and rebuilt whole from the projection on every `Spine::refresh`
+   (`gpu.rs:2116-2117`, `:2130`, `:2149`); `retire_proc`'s direct inserts (`:2251`,
+   `:2261`) survive only until the next refresh, and nothing can recycle a value without
+   an event, i.e. without a refresh. `route_pdb` reads live `by_pdb` first
+   (`kayfabe-fwd/src/lib.rs:859`), so a live entry always shadows. The residual that IS
+   real is `ProcAnchor` being an `HClient` in `Boundaries` — see §5, finding N2.
+
+---
+
+#### 2. THE DEFECT, MEASURED — `Alloc → Dup → Free → Alloc` at ONE object handle
+
+Five ordinary events, each legal on real RM (§1.2's citations):
+
+```text
+A: Alloc (A,H) = VASpace, SET_PAGE_DIRECTORY pdb1
+K: Dup { src: (A,H), dst: (K,alias) }        ⇒ the guest KERNEL (UVM) aliases it
+A: Free (A,H)                                 ⇒ the resource LIVES on K's alias
+                                                 (`ogkm .../mem_mgr/mem.c:1027-1031`)
+A: Alloc (A,H) = a DIFFERENT VASpace, pdb2    ⇒ TWO live resources at one (client,handle)
+```
+
+Measured on the pre-fix tree (probe, `project` + `Gpu`):
+
+```text
+by_pdb            = {(GPU0, pdb2) → A}          ← pdb1 is GONE
+proc.vases        = {(GPU0, pdb2)}              ← the ghost's Vas staged for release
+pdb_of((A,H))     = pdb2                        ← the GHOST answers with the successor's PDB
+references((A,H)) = [(A,H)]                     ← K's alias is invisible to the refcount API
+```
+
+**Four consequences, one cause** (`ProcBoundary::vases`/`channels` and `Proc::chan_ids`
+keyed on `RmNode::key`, a value RM recycles):
+
+| # | consequence | class |
+|---|---|---|
+| 1 | the dup-kept ghost leaves `by_pdb`/`by_vchid` entirely; the alias holder's every op takes `UnknownPdb`/`UnknownVchid` | **correctness** — §12.33's landed rule (*a kernel reference keeps its owner's object alive **and usable***) is false for the one shape that reaches it |
+| 2 | `pdb_of`/`gpu_of`/`references`/`map_ref_count`/`backing_of` answer about the SUCCESSOR when asked about the ghost | **correctness** — a fact reported for one resource is another's |
+| 3 | `chan_ids.entry(key).or_insert_with(mint)` hands both incarnations ONE `ChanId` ⇒ one runtime `Channel`, one `host_channel`, one `host_token`, and step 4 files BOTH vChids onto it | **correctness**, and the sharpest: a doorbell on the ghost's vChid rings the successor's host channel |
+| 4 | the F1 guards skip on `prev == node.key`, so two genuinely different live claimants of one `(GpuId, Pdb)`/`(GpuId, VChid)` read as *"the same claimant re-declaring"* and pass **silently** | the ambiguity guard **disarmed** on the one input shape that defeats it |
+
+★ **Reachability is ordinary, not exotic.** Guest handle values are deterministic (every
+CUDA process presents the same ones — the whole #14 shape), the C artifact records the
+same fact in its own words — *"handle values are reused across contexts and process
+lifetimes"* (`C: src/qemu/nvkvm_gpu_emul.c:670-674`, `:1926-1928`, `:1940-1942`) — and the
+measured UVM session holds **82 dup aliases per CUDA process**, so "a freed object still
+aliased into a kernel client" is the steady state.
+
+---
+
+#### 3. THE FIX — `ResourceKey`, and why NOT the obvious `ResId`
+
+> **A resource's identity is its origin handle plus the *incarnation* of that handle
+> value:** `ResourceKey { origin: NodeKey, incarnation: u32 }`. Minted at the origin
+> `RM_ALLOC` as **the smallest ordinal no LIVE resource at that key holds**, stable for
+> the resource's lifetime, and `0` unless a dup is keeping a ghost alive at that value.
+
+**`ResId` was the obvious key and is unusable.** It is already the never-reused identity —
+but it is minted from a counter, so its *value* depends on arrival order, and
+`Boundaries: PartialEq` compared across shuffled orders **is** decision #4. That is
+verbatim §12.40's reason for keeping `ClientId` out of `ProcBoundary`, one level down. The
+ordinal has no such dependence: allocations at ONE handle value are **totally ordered by
+the protocol** (an `Alloc` onto a live handle is `ConflictingAlloc`, mirroring RM's
+`NV_ERR_INSERT_DUPLICATE_NAME`), so it is a pure function of the declared facts — which is
+what `rmgraph_order_independence::a_recycled_object_handle_projects_identically_in_every_order`
+asserts over every permutation of both phases.
+
+**It is a disambiguator among the LIVE, not a ghost log.** Reusing a dead incarnation's
+ordinal is deliberate: identity only has to separate things that are simultaneously live,
+and bounding the ordinal by the live set is what stops the table growing with guest churn.
+
+**The counter-discipline held.** RM recycles by design, so no fix may *refuse* the
+recycle — `a_recycled_object_handle_never_steals_the_ghosts_address_plane` asserts the
+second `Alloc` is **accepted** and that BOTH planes publish and ring end to end, out of the
+one proc's own isolate lane. (Bite C below is exactly the shape that gets this wrong: it
+turns a legal guest's alloc into a `PdbCollision` refusal.)
+
+**What changed, exactly:**
+
+| site | before | after |
+|---|---|---|
+| `RmNode` | `key: NodeKey` (documented as *"Identity"*) | `key` is a **label**; `+ incarnation`, `+ id() -> ResourceKey` |
+| `ProcBoundary::vases` / `::channels` | `BTreeMap<NodeKey, _>` | `BTreeMap<ResourceKey, _>` |
+| `Boundaries::by_pdb` / `::by_vchid` | value `(ProcAnchor, NodeKey)` | `(ProcAnchor, ResourceKey)` |
+| `ProjectionError::{Pdb,Vchid}Collision` `a`/`b`, `pdb_claims`, `vchid_claims`, `engine_refine` | `NodeKey` | `ResourceKey` |
+| `Proc::chan_ids`, `Channel::key`, `Vas::origin` | `NodeKey` | `ResourceKey` |
+| `Mapping::vaspace` / `::memory`, `RmGraphError::ConflictingMap::vaspace` | `NodeKey` | `ResourceKey` |
+| the five `rev().find(node.key == …)` scans (§12.40 finding 4) | O(resources) linear, newest-by-`ResId` | `current_at` — the resource whose **origin handle is live** there, else newest, via a `by_origin: BTreeMap<ResourceKey, ResId>` index in O(log n) |
+| `project`'s per-node resolution | `pdb_of(node.key)` / `gpu_of(node.key)` | `pdb_of_resource(node.id())` / `gpu_of_resource(node.id())` |
+
+★ **A complexity fix rides along, and it was not optional.** `by_origin` exists because
+`next_incarnation` must not be an O(n) probe per `Alloc` (O(n²) on a guest-driven alloc
+flood — the G10 rule, §12.22). The same index then turned §12.40 finding 4's five linear
+scans into lookups; `project` called two of them **per node**, so the old shape was
+O(resources²) per event.
+
+★ **`current_at` is also strictly more correct than the `rev()` it replaces.** "Newest by
+`ResId`" and "the one whose origin handle is live" diverge as soon as an *older*
+incarnation dies and its ordinal is retaken. The recorded fact — there is at most one live
+origin handle per key — is read first; the newest-ghost rule survives only as the
+genuine-tie fallback, which is what §12.40 finding 4 actually meant.
+
+**Tests + bite-checks** (each fix neutered individually, everything else intact):
+
+| test | bite | symptom |
+|---|---|---|
+| `l1_mean::a_recycled_object_handle_never_steals_the_ghosts_address_plane` | **A** — `vases` keyed on `ResourceKey::first(node.key)` | fires on its FIRST assertion, *"★★ the dup-kept GHOST VASpace lost its ADDRESS PLANE"*, `left: Err(UnknownPdb { gpu: GpuId(0), pdb: Pdb(0x6100_0000) })` vs `right: Ok(ProcId(7))` |
+| " | **C** — `pdb_of(node.key)` instead of `pdb_of_resource(node.id())` | the legal `Alloc` is **REFUSED**: `Projection(PdbCollision{ a: …incarnation 0, b: …incarnation 1 })` — the hangs-a-legal-guest direction, caught by the expect message that says so |
+| " | **E** — `next_incarnation` ≡ 0 | same first assertion, same shape |
+| `l1_mean::a_recycled_channel_handle_never_shares_the_ghosts_host_channel` | **B** — `channels` keyed on the origin handle | *"★★ a live channel lost its EXEC PLANE to a recycled handle value"*, `left: (Some(ProcId(7)), None)` vs `right: (Some(ProcId(7)), Some(ProcId(7)))` |
+| " | **B2** — `chan_ids` keyed on the origin handle | same first assertion (the route never materializes) |
+| " | **B3** — `chan_ids` **and** the `by_vchid` build both on the origin handle (both route, one id) | *"★★ the ghost and its successor were handed ONE `ChanId` …"*, `left: ChanId(0)`, `right: ChanId(0)` |
+| " | **E** | fires at B3's assertion |
+| `object_model::two_live_vaspaces_at_one_recycled_handle_still_collide_on_a_shared_pdb` | **D** — F1 guard compares `prev.origin != node.id().origin` | the ambiguous claim is **accepted**: `Ok(Boundaries{…})` where `by_pdb` files only incarnation 1, vs `Err(PdbCollision{…})` |
+| " | **E** | same |
+| `rmgraph_order_independence::a_recycled_object_handle_projects_identically_in_every_order` | **A** | *"★★ the component must own BOTH incarnations"*, `left: {pdb2, keeper}` vs `right: {pdb1, pdb2, keeper}` |
+| " | **E** | same |
+
+★ **Nothing in the pre-existing 359 caught any of it** — the suite is green under every
+bite above except through the four new tests. That is the honest measure of why this
+survived §12.25, §12.39 and §12.40.
+
+★ **Scope note on the F1 guard, because it is a POLICY claim and not an RM one.** CPU-RM
+performs **no** cross-VASpace uniqueness check on the PDB physical address:
+`deviceCtrlCmdDmaSetPageDirectory_IMPL` (`ogkm .../gpu/mem_mgr/dma.c:426-460`) passes
+`physAddress` through to `gvaspaceExternalRootDirCommit`, whose only assertion is that
+*this* VAS has no PDB yet (`.../gpu_vaspace.c:2853-2857`). Refusing two live VASpaces on
+one PDB is **our** F1 decision (#18C), unchanged here — the test pins that the decision is
+enforced on the input shape that used to evade it, not that RM enforces it. **OPEN
+QUESTION O5:** whether GSP-RM enforces PDB-physaddr uniqueness is not visible in the open
+sources (CPU-RM RPCs the params through, `dma.c:508-516`). Experiment: two live
+externally-owned VASpaces, identical `physAddress`, observe the second's status.
+
+---
+
+#### 4. ★★ NEW DEFECT FOUND BY THE SWEEP, VERIFIED, **NOT LANDED** — two orphan GENERATIONS in one namespace release host memory RM says is live
+
+Same organ as §12.40 Part B, one level up, and it is the **corruption** direction.
+
+`RmGraph::client_declarations` writes `out.insert(r.node.key.client, (r.owner, r.owner_kind))`
+while iterating ascending `ResId` (`rmgraph.rs`), so a rootless namespace keeps only its
+**newest** orphan declaration. `project`'s `projects()` then answers `false` for every
+resource of any **older** declaration. Measured (probe, on the fixed tree):
+
+```text
+declare A(gen1), VAS pdb1, kernel dups it, free A's root   ⇒ by_pdb: {pdb1, kernel}   ✓ (§12.33)
+re-declare A(gen2), VAS pdb2, kernel dups it               ⇒ by_pdb: {pdb2, kernel}   ✓ (§12.40)
+free A's root again                                        ⇒ by_pdb: {pdb2, kernel}
+   …while gen1's VASpace is STILL LIVE in the graph (the kernel's alias refcounts it)
+```
+
+gen1's resource belongs to **no boundary, permanently**. Its component leaves through
+`vanishing`, is vacated, and `stage_dropped_vases` releases its host VAS and its published
+backing memory — **while a live kernel client still references the resource RM refcounts**
+(`ogkm .../mem_mgr/mem.c:1027-1031`). That is precisely what §12.40 §1 refused as D4, and
+what `cross_proc_lifetime`'s landed assertion forbids; the two-generation shape simply
+walks around it.
+
+**Reachability:** two process lifetimes at one recycled `hClient`, each taking a UVM alias
+— i.e. the ordinary state of a long-running guest, given a client index that wraps at 2^20
+with no free list (§12.39 §2(b)) and 82 dup aliases per CUDA process.
+
+**Why it is not landed here:** the honest fix is the residual §12.40 already named —
+**`ProcAnchor` and `ProcBoundary::clients` are `HClient`s**, so two generations at one
+`hClient` are *not expressible* as two boundaries no matter what
+`client_declarations` returns. Making `client_declarations` return a set only moves the
+collapse into the union-find. It is the same shape as this entry's fix (a label promoted
+to an identity) applied to the component plane, it changes `Boundaries`' public shape, and
+it wants its own order-independence argument — a round, not a patch. Filed as **N1**.
+
+---
+
+#### 5. ★ THE INVENTORY — every key the core keys, indexes, caches or compares on
+
+`[src]` = cited to `ogkm`/`gvisor`/the C artifact; `[meas]` = measured on this tree;
+`[code]` = read off our own source.
+
+| value | what the code assumed | what RM actually guarantees | verdict |
+|---|---|---|---|
+| `HClient` | a live namespace, durable | caller-supplied verbatim (`rs_server.c:612`, guard compiled out `:613-616`); generator wraps at 2^20, no free list, **no epoch anywhere** (`:3319-3341`, `:3220-3255`) `[src]` | CLOSED §12.38/§12.39/§12.40 (`ClientId`) |
+| `HObject` / `NodeKey` | a resource identity | caller-supplied verbatim (`nvos.h:483`, `rs_client.c:998-1005`); validated only against the LIVE map (`:1446-1470`); freed with **no quarantine** (`:1137`); generator wraps at 2^19 (`:962-974`) `[src]` | **CLOSED HERE** (`ResourceKey`) |
+| `HClient` as a *component* label (`ProcAnchor`, `ProcBoundary::clients`) | one namespace ⇒ one component | as `HClient` above — two lifetimes are indistinguishable by value | **OPEN — N1/N2** (§4) |
+| `Pdb` | a unique live address plane per target | RM checks **nothing** across VASpaces (`dma.c:426-460` → `gpu_vaspace.c:2853-2857` asserts only *this* VAS is unbound) `[src]` | our F1 policy; guard **repaired** here (was disarmed by the `NodeKey` collapse). O5 open on GSP |
+| `VChid` | one live channel per target | chid is an EHEAP alloc returned on free (`kernel_fifo.c:988`, `:997`); the only quarantine is the opt-in `kfifoChidMgrRetainChid` refcount (`:899-903`, `:940`, `:1051`) `[src]` | `by_vchid` is rebuilt whole per refresh `[code]`; the ghost/successor ambiguity is closed here |
+| `deviceInstance` | a physical GPU | a bounds-checked index into `pGpuGrpTable` (`device.c:97`, `:119-128`; `gpu_mgr.c:636-653`) `[src]` | CLOSED §12.21 (G9 entitlement); attacker-controlled and treated as such |
+| `GpuVa` | — | guest-chosen | keys `Vas::blocks`/`rpc_bound`/`pt_pages`, all per-`Vas`; overlap is a loud `AddressFault::Overlap` `[code]` |
+| `ClassId` (`Channel::host_engine_objects`) | one engine object per class per channel | — | an **idempotency table** by design; two logically distinct objects of one class on one channel are indistinguishable (the second is `Stale::Rebound`). Latent, stated `[code]` |
+| `ResId` / `ClientId` / `ProcId` / `CompletionSource` / `ArenaId::generation` / `SlotId` | never reused | minted from monotonic counters `[code]` | sound |
+| `ChanId`, `WorkerId` | dense, per-owner | minted per `Proc` / per isolate `[code]` | sound **provided** the owner travels with them — `SourceKind::Worker` complies |
+| **`IsolateId`** | *"the isolate whose RM client namespace this handle lives in"* (`HostHandle`'s own doc) | — | ★ **OPEN — N3**, below |
+| `BatchId` | a batch of one proc's completions | minted per `DeliveryPlane`, i.e. **per `GpuTarget`** | ★ **OPEN — N4**, below |
+| `OsEventRef` | a completion identity | minted by the GUEST: `OsEventRef(addr.0 ^ payload)` (`kayfabe-fwd/src/lib.rs:1916`) `[code]` | ★ **OPEN — N5**, below |
+| `HostHandle::raw` | — | client-scoped from one shared base, so A's `0x…07` and B's `0x…07` are both live and unrelated (`g_resserv_nvoc.h:173`) `[src]` | sound — the isolate travels with the handle (§12.26) |
+
+**Named open findings, each with the experiment or the change that settles it:**
+
+- **N1 — two orphan generations release live host memory.** §4. Verified `[meas]`.
+- **N2 — `ProcAnchor` is an `HClient`.** §12.40's own residual, restated with N1's
+  evidence: it is not merely a stale *label*, it is what makes N1 unfixable in place.
+- **N3 — `IsolateId` does not carry the `GpuId`, but there is one isolate per
+  `(Proc, GpuId)`.** `Gpu` spawns every isolate as `IsolateId(pid.0)` (`gpu.rs:1060`,
+  `:2076`, `:2096`) with the `GpuId` only as a separate argument, and
+  `HostHandle::belongs_to` compares **only** `IsolateId`
+  (`kayfabe-isolate/src/lib.rs:133-135`). So `Worker::execute`'s foreign-handle gate
+  (`:705`) — documented as *"the ONE place the `(Proc, GpuId)`-scoped-handle rule is
+  enforced"* — **structurally cannot** distinguish proc P's GPU0 handles from its GPU1
+  handles `[code]`. `plan_control` takes an adapter-supplied `obj: HostHandle` and a
+  caller-chosen `target_gpu` and pairs them unchecked
+  (`kayfabe-fwd/src/lib.rs:1655-1684`), under a comment that *asserts* the pairing
+  (*"MG-5: `obj` is a handle in THAT isolate's namespace"*). Blast radius is one proc's
+  two host RM clients, so it is a **correctness/host-object** hazard, not a cross-process
+  break. ★ **The mock cannot see it**: `MockRmBackend` builds a fresh namespace per
+  `spawn(id, gpu)` and folds the GPU into the raw value
+  (`kayfabe-mocks/src/lib.rs:1031`, `:1065`) — the exact *"the mock namespaces its fake
+  handle values, a real host does not"* case `HostHandle`'s own doc warns about — and
+  `HostLedger::leaked: BTreeMap<IsolateId, _>` merges the two targets' leak accounting, so
+  §12.35's teardown post-condition is weaker than it reads. **Fix shape:** `IsolateId`
+  becomes the `(proc, gpu)` pair it already denotes. Not landed: ~142 references, ~70 of
+  them `IsolateId(pid.0)` in tests that pin `IsolateId == ProcId` as a documented
+  property, and it changes what the leak ledger measures.
+- **N4 — `BatchId` is minted per target and consumed per proc.** Each `GpuTarget` has its
+  own `DeliveryPlane` with `next_batch` from 0 (`gpu.rs:1040`, `:1701`, `:2579`), while a
+  `Proc` has ONE `CompletionQueue` whose `in_flight` spans every target (`gpu.rs:299`).
+  For a proc on two GPUs both post `BatchId(0)`, and `completions_drained(GPU0)` sweeps
+  GPU1's still-outstanding events into `awaiting_ack`
+  (`kayfabe-completion/src/lib.rs:158-168`) `[code]`. MG-6's *gate* still holds; the
+  accounting behind it does not. **Fix shape:** key `in_flight` by `(GpuId, BatchId)`, or
+  mint device-globally. Not verified by a test — settle it with a two-GPU proc, one batch
+  outstanding per target, drain one.
+- **N5 — the guest mints its own completion identity.** `OsEventRef(addr.0 ^ payload)`
+  (`kayfabe-fwd/src/lib.rs:1916`), and `CompletionQueue::ack` removes **every** entry
+  equal to it across three queues (`kayfabe-completion/src/lib.rs:171-175`) `[code]`. A
+  guest choosing a colliding `addr ^ payload` can cancel an unrelated pending completion
+  **of its own proc** — contained by the per-proc container, so latent. Settle: does any
+  path let one proc's ack reach another's queue? (Read says no.)
+- **N6 — `pending_pdbs.insert` has no idempotency/conflict arm** (`rmgraph.rs`, the parked
+  `SetPageDir` arm), so a second parked declaration on one unresolved handle silently
+  replaces the first, while a *direct* redeclaration is documented "last wins". Probably
+  consistent, but the silence is undeclared. `[code]`, unverified.
+- **O5** — GSP-side PDB uniqueness (§3).
+
+---
+
+#### 6. Everything else this pass touched
+
+- `RmNode::key`'s doc now says what it is — *"a **label, not an identity**"* — and points
+  every keyed/indexed/deduped use at `RmNode::id()`.
+- `RmGraph::references_of` / `pdb_of_resource` / `gpu_of_resource` / `map_ref_count_of`
+  are the identity-shaped siblings of the handle-shaped resolvers; the handle-shaped ones
+  are now documented as answering *"what is at this handle value **now**"*, which is a
+  different and legitimate question, not a degraded one.
+- `ResourceKey` is re-exported from `kayfabe_core`'s prelude beside `NodeKey`.
+- **Open, unchanged:** N1–N6 and O5 above; §12.39 §7's O1–O4 bench questions; §12.39 test
+  8's `security_invariants` fuzz property.

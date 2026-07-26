@@ -1225,3 +1225,139 @@ fn a_freed_and_redeclared_namespace_projects_identically_in_every_order() {
         }
     }
 }
+
+// =================================================================================
+// ★★★ §12.41 — a recycled OBJECT handle, inside the shuffle domain
+// =================================================================================
+
+/// The process that recycles one of its own object handle values.
+const OBJ_RECYCLED: HClient = HClient(0xc1d0_0090);
+/// The peer that keeps the first incarnation alive.
+const OBJ_KEEPER: HClient = HClient(0xc1d0_0091);
+/// The first incarnation's PDB.
+const OBJ_FIRST_PDB: Pdb = Pdb(0x3421_000);
+/// The second incarnation's PDB, at the same handle value.
+const OBJ_SECOND_PDB: Pdb = Pdb(0x3425_000);
+/// The keeper's own PDB.
+const OBJ_KEEPER_PDB: Pdb = Pdb(0x3429_000);
+/// The handle the keeper holds the first incarnation under.
+const OBJ_KEEP_ALIAS: HObject = HObject(0x7f00_0011);
+
+/// ★★ **A RECYCLED OBJECT HANDLE PROJECTS IDENTICALLY IN EVERY LEGAL ORDER**
+/// (`l1_concurrency.md` §12.41) — the counter-discipline for the incarnation ordinal.
+///
+/// §12.41 keys the projection on `ResourceKey` = origin handle + **incarnation ordinal**,
+/// and the ordinal is what makes that legal to *report*: a `ResId` (or a `ClientId`) is
+/// minted from a counter, so its value depends on arrival order and it may never appear
+/// inside [`kayfabe_core::project::Boundaries`], which is compared whole across shuffles
+/// (§12.40's finding, restated one level down). The ordinal has no such dependence,
+/// because allocations at ONE handle value are **totally ordered by the protocol** — an
+/// `Alloc` onto a live handle is `ConflictingAlloc`, mirroring RM's own
+/// `NV_ERR_INSERT_DUPLICATE_NAME` (`ogkm .../resserv/src/rs_client.c:1446-1470`).
+///
+/// This test is the executable form of that claim. As in
+/// [`a_freed_and_redeclared_namespace_projects_identically_in_every_order`], **`Free` is
+/// not in the shuffle domain**: the two phases are shuffled independently with the
+/// object free pinned between them, which is exactly the partial order the property is
+/// stated over.
+#[test]
+fn a_recycled_object_handle_projects_identically_in_every_order() {
+    let arch = MockArch::new();
+    let h = identical_handles(0x40, 0x41);
+
+    // Phase 1: the process builds a VASpace; a peer aliases it, so the resource outlives
+    // its origin HANDLE's free.
+    let mut p1 = Scenario::new();
+    let first_vas = p1.compute_process_on_gpu(OBJ_RECYCLED, OBJ_FIRST_PDB, h, None);
+    p1.peer_dup(
+        OBJ_KEEPER,
+        HObject(OBJ_KEEPER.0),
+        HObject(0x6e00_0101),
+        HObject(0x6e00_0110),
+        OBJ_KEEPER_PDB,
+        OBJ_KEEP_ALIAS,
+        first_vas,
+    );
+    let phase1 = p1.events;
+
+    let free_handle = RmEvent::Free {
+        client: OBJ_RECYCLED,
+        handle: h.vaspace,
+    };
+
+    // Phase 2: a DIFFERENT VASpace at the very same handle value.
+    let phase2 = vec![
+        RmEvent::Alloc {
+            client: OBJ_RECYCLED,
+            parent: h.device,
+            handle: h.vaspace,
+            class: kayfabe_mocks::mock_classes::VASPACE,
+            facts: kayfabe_core::rmgraph::AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: OBJ_RECYCLED,
+            vaspace: h.vaspace,
+            pdb: OBJ_SECOND_PDB,
+        },
+    ];
+
+    let run = |a: &[RmEvent], b: &[RmEvent]| {
+        let mut g = RmGraph::new();
+        for ev in kayfabe_tests::legal_order(a) {
+            g.apply(&arch, ev)
+                .expect("phase 1 applies in any legal order");
+        }
+        g.apply(&arch, free_handle)
+            .expect("the origin handle frees");
+        // Applied verbatim, not through `legal_order`: phase 2 declares no client root
+        // (the namespace has been live throughout), and both of its events are
+        // order-tolerant by construction — a `SET_PAGE_DIRECTORY` may legally precede
+        // the VASpace it targets, which is exactly what the permutation exercises.
+        for &ev in b {
+            g.apply(&arch, ev).expect(
+                "★ re-allocating a freed OBJECT handle is LEGAL — RM validates a \
+                 caller-supplied handle only against the LIVE map and quarantines \
+                 nothing on free",
+            );
+        }
+        project(&g, &arch, &NO_CONDEMNED).expect("projects cleanly")
+    };
+
+    let reference = run(&phase1, &phase2);
+    // Both incarnations are live and BOTH route — the ghost is the peer's, and §12.33
+    // says a surviving reference keeps its object alive *and usable*.
+    for pdb in [OBJ_FIRST_PDB, OBJ_SECOND_PDB] {
+        assert!(
+            reference.by_pdb.contains_key(&(GpuId::ZERO, pdb)),
+            "★★ a live VASpace lost its address plane to a recycled handle value ({pdb:?})"
+        );
+    }
+    let owner = reference
+        .procs
+        .iter()
+        .find(|p| p.clients.contains(&OBJ_RECYCLED))
+        .expect("the process has a component");
+    assert_eq!(
+        owner
+            .vases
+            .values()
+            .filter_map(|f| f.pdb)
+            .collect::<std::collections::BTreeSet<_>>(),
+        std::collections::BTreeSet::from([OBJ_FIRST_PDB, OBJ_SECOND_PDB, OBJ_KEEPER_PDB]),
+        "★★ the component must own BOTH incarnations (plus the keeper's own VAS — the \
+         peer dup merges the two user clients into one `Proc` by rule)"
+    );
+
+    for pa in permutations(phase1.len()) {
+        for pb in permutations(phase2.len()) {
+            let a: Vec<RmEvent> = pa.iter().map(|&i| phase1[i]).collect();
+            let b: Vec<RmEvent> = pb.iter().map(|&i| phase2[i]).collect();
+            assert_eq!(
+                run(&a, &b),
+                reference,
+                "a recycled OBJECT handle must project identically in every legal order \
+                 (perms {pa:?} / {pb:?})"
+            );
+        }
+    }
+}

@@ -40,7 +40,7 @@ use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::project::{NO_CONDEMNED, project};
-use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph, RmGraphError};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, ResourceKey, RmEvent, RmGraph, RmGraphError};
 use kayfabe_fwd::{FwdFault, handle_doorbell, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
@@ -548,7 +548,7 @@ fn defer_an_unresolved_gpu_target_resolves_when_the_device_arrives() {
     let b = project(&g, &arch, &NO_CONDEMNED).expect("projects");
     assert_eq!(
         b.by_pdb.get(&(GpuId::ZERO, PDB0)).map(|x| x.1),
-        Some(NodeKey::new(C, H_VAS)),
+        Some(ResourceKey::first(NodeKey::new(C, H_VAS))),
         "…and the VAS now routes"
     );
 }
@@ -675,7 +675,7 @@ fn defer_an_unrouted_channel_keeps_a_stable_chanid_until_its_device_arrives() {
         .expect("C has a proc (it owns objects)");
     let cid_before = *gpu.procs[&pid]
         .chan_ids
-        .get(&key)
+        .get(&ResourceKey::first(key))
         .expect("★ the ChanId slot is minted even while the channel is unroutable");
     assert!(
         !gpu.procs[&pid].channels.contains_key(&cid_before),
@@ -689,7 +689,7 @@ fn defer_an_unrouted_channel_keeps_a_stable_chanid_until_its_device_arrives() {
     gpu.apply(device(C, H_ROOT, H_DEV))
         .expect("★ the Device finally arrives");
     assert_eq!(
-        gpu.procs[&pid].chan_ids.get(&key),
+        gpu.procs[&pid].chan_ids.get(&ResourceKey::first(key)),
         Some(&cid_before),
         "★★ the ChanId slot is the SAME one — the deferral did not churn the identity"
     );
