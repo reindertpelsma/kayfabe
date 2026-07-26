@@ -2145,6 +2145,14 @@ the number is not invariant.
 
 ## 7.11 The README and the architecture map do not know about a whole crate, and their counts are stale
 
+> **★ RESOLVED 2026-07-26 (doc pass).** `README.md` and `ARCHITECTURE.md` now carry
+> `kayfabe-rt`, the current test count (**283**, 23 files), both mutation scores kept
+> separate, and an accurate L0/L1-M1/L1-M2 status — plus, in `ARCHITECTURE.md`, corrections
+> to two invariant claims this review did not reach: the obsolete `Isolate::rm()` relaxation
+> and the reclamation limits found by §12.33. The finding below stands as the record of what
+> was wrong and of the **rate** at which it went wrong; the numbers in it are the ones
+> measured at `3569d46`, which is what this whole document is pinned to. Do not "fix" it.
+
 The README states that *"no real adapter (Linux, QEMU, or NVIDIA arch) exists yet"* and that
 the project is *"paused before descending to L1"*. The L1 shell is 1,783 lines, is a workspace
 member, describes itself as the L1 threaded shell, and appears in neither crate table. Four L1

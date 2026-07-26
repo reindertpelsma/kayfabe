@@ -38,6 +38,10 @@ The design is settled — **implement it, do not re-improvise architecture.**
   subsystem ports or a new C incident lands.
 - **Security is the highest bar** (priority ladder, decision #8): a boundary-1/2/3
   failure or a fuzz crash outranks every other signal.
+- **How to write a test that means something** — non-vacuity, exact-variant assertions
+  (never `is_err()`), composed runs vs isolated cases, and the gates that can be wrong
+  *upward*: `docs/design/testing_doctrine.md`. Every rule there is a generalisation of a
+  specific incident, cited.
 
 ## Layout
 
@@ -45,6 +49,17 @@ The design is settled — **implement it, do not re-improvise architecture.**
 Fully implemented this milestone: `util`, `arch`, `vmm` (traits), `isolate` (traits),
 `mmu`, `completion`, `core`, `fwd` (core slice), `mocks`. Skeletons: `abi`, `gsp`,
 `trace`. `tests/` — the VMM-agnostic conformance suite.
+
+`docs/reference/` — **measured** ground truth, cited per fact, kept out of the design docs so
+it can be corrected in one place:
+- `rm_semantics_measured.md` — host RM/UVM semantics (per-client WRITE serialization,
+  uninterruptible waits ⇒ an interrupted alloc completed, **UVM = one RM client per module
+  load**, the `processID` client-kind discriminator, `deviceInstance` fails open to GPU 0,
+  kernel references that outlive their process). ★ Carries the `ogkm` 610.43.02 vs bench
+  580.159.04 version caveat — read §0 before quoting a number.
+- `mode2_bench_lifecycle.md` — the C artifact's measured teardown behaviour (one CUDA process
+  per QEMU lifetime; `rmmod` emits **no** fn-47; the driver-restart blocker is the
+  latch/stale-queue chain, not WPR2; the guest kernel is a garbage collector).
 
 Queued design (documented, not yet built): `docs/design/multi_gpu_and_mig.md` — the
 first-class routable-GPU-target axis + the honest MIG reality-check (datacenter-only,
@@ -56,6 +71,11 @@ MIG-accommodating so MIG is a later adapter, not a refactor).
 - The C repo (`../nvidia-gpu-passthrough`) is the single-process **differential oracle**
   and stays alive — do not delete or co-mingle. Real-GPU work happens there / on the
   serialized vast.ai bench; this repo's tests are GPU-free by construction.
+  ★ "Single-process" is now **measured, not stylistic**: the C runs exactly one CUDA process
+  per QEMU lifetime (`docs/reference/mode2_bench_lifecycle.md` §1), so it cannot oracle
+  multi-process **Mode-2** behaviour at all. Mode-1 (per-`mm` isolates, 22 real apps at host
+  parity) is the multi-process oracle. And a citation to a C *comment* is a strong prior, not
+  a measurement — two such citations turned out to be false.
 - Commit trailers:
   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` /
   `Claude-Session: https://claude.ai/code/session_01QEL8AzcqQGC8LHA8q156RY`.

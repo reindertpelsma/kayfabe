@@ -39,7 +39,7 @@ standing proof of that seam.
 `#![forbid(unsafe_code)]` is a workspace lint (zero unsafe blocks anywhere); every core
 type is compile-time-asserted `Send + Sync`.
 
-## Status: the L0 pure core is COMPLETE and consolidated
+## Status: L0 complete; L1-M1 built; L1-M2 in progress
 
 Built and hardened over six campaigns (scaffold + concurrency → security red-team +
 fuzz/determinism/mutation gates → C-bug regression matrix → completeness closures →
@@ -69,13 +69,32 @@ What is **not** built (stubs / skeletons, documented in their `lib.rs`): `kayfab
 `kayfabe-trace` (a one-method trait), the GMMU walker (`kayfabe-mmu::walker` — trait +
 result type only). Nothing pretends otherwise.
 
-**Verification:** 192 tests green (unit + integration + proptest fuzz + concurrency
-stress + soak; the two measured-slow tests gated on `KAYFABE_SLOW=1`, skipped loudly
-otherwise), clippy `-D warnings` clean, **99.2% mutation
-score** (245/247 viable mutants killed; the 2 residual survivors are proven
-equivalent/acceptable — `docs/design/core_mutation_gate.md`). Fifteen real core bugs
-were found and fixed **pre-hardware** by the adversarial suites (fuzz, security
-invariants I1–I4, determinism differential, mutation gate).
+On top of it, the **L1 threaded shell** (`kayfabe-rt`) is built and hardened: ranked locks
+with always-on R1/R3 asserts, plan/execute/commit at every verb site, the bounded N-worker
+isolate pool, the completion-source reactor as a pure core port, condemned components, and
+the conservation ledger. **L1-M2 (the real OS shell — reactor, `kayfabe-linux-raw`, the
+`Vmm` seam, the reclamation lifecycle) is designed and part-built**:
+`docs/design/l1_concurrency.md` and `docs/design/l1_os_shell.md` are the live documents, and
+their §12 / §14 contact logs are where the design has been *wrong* — read those before
+trusting any summary, including this one.
+
+**Verification:** **283 tests** green (unit + integration + proptest fuzz + concurrency
+stress + soak; nothing `#[ignore]`d, the two measured-slow tests gated on `KAYFABE_SLOW=1`
+and skipped loudly otherwise), clippy `-D warnings` clean, fmt clean, plus four standing CI
+gates: the hexagonal-boundary grep, the `unsafe`-surface `ls` gate, an aarch64 cross-check,
+and TSan (28 threaded tests, 0 races). **Two** mutation scores, deliberately not merged:
+**99.2%** on the pure L0 core (245/247 viable killed, both residuals proven
+equivalent/acceptable) and **92.44%** on the L1 threaded surface (CI floor 91%; the residual
+untested *logic* is 2 mutants wide and named) — `docs/design/core_mutation_gate.md`. Fifteen
+real core bugs were found and fixed **pre-hardware** by the adversarial suites (fuzz, security
+invariants I1–I4, determinism differential, mutation gate); the L1 suites have since found
+more, including a refcount bug in the source of truth and a use-after-free introduced by a
+leak *fix*.
+
+**What is measured on real hardware lives in `docs/reference/`** — not in the design docs, so
+a wrong fact is corrected once: `rm_semantics_measured.md` (RM/UVM semantics, with the driver
+version caveat) and `mode2_bench_lifecycle.md` (the C artifact's teardown behaviour). The C is
+a **single-process** Mode-2 oracle — measured, §1 of that file.
 
 ## Build & test
 
@@ -111,13 +130,17 @@ nothing in the suite is `#[ignore]`d.
 | `kayfabe-abi` | Axis-A codegen'd wire ABI | **stub** |
 | `kayfabe-gsp` | faked GSP boot FSM + seqNum transport | **stub** |
 | `kayfabe-trace` | structured trace/replay | **stub** |
-| `tests/` | the conformance suite (14 files) + `Scenario` DSL | full |
+| `kayfabe-rt` | the L1 threaded shell: ranked locks (R1/R3 asserted), `SharedDevice`, inbox, executor | full (L1-M1) |
+| `tests/` | the conformance suite (23 files) + `Scenario` DSL | full |
 
 ## Design sources (settled — implement, don't improvise)
 
-In-tree: `docs/design/` (`core_state_and_consolidation.md` ★ start here,
+In-tree: `docs/design/` (`core_state_and_consolidation.md` ★ start here for L0,
+`l1_concurrency.md` + `l1_os_shell.md` ★ for L1 — **read their contact logs**,
 `execution_plane.md`, `core_security_threat_model.md`, `c_bug_regression_matrix.md`,
-`core_completeness_gate.md`, `core_mutation_gate.md`, `multi_gpu_and_mig.md`,
-`gr_multigpu_seam_audit.md`). In the C repo's `docs/design/`:
+`core_completeness_gate.md`, `core_mutation_gate.md`, `testing_doctrine.md`,
+`multi_gpu_and_mig.md`, `gr_multigpu_seam_audit.md`, `portability_arm64.md`) and
+`docs/reference/` (measured ground truth: `rm_semantics_measured.md`,
+`mode2_bench_lifecycle.md`). In the C repo's `docs/design/`:
 `mode2_rust_rewrite_architecture.md` (§4 the spine), `mode2_rust_testing_strategy.md`,
 `mode2_abi_agnostic_layer.md`, `mode2_address_table.md`, `mode2_forwarding_model.md`.

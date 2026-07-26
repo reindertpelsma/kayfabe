@@ -125,6 +125,30 @@ PDB/vChid). Generalises #18A's atomic-apply (`Gpu::apply` snapshot/rollback) and
 capacity caps (`MAX_LIVE_HANDLES`/`MAX_LIVE_MAPPINGS`/`MAX_PARKED`/
 `MAX_OUTSTANDING_COMPLETIONS`/`MAX_ARMED_FENCES`) over generated sequences.
 
+**★ I4's honest gap — a COMPLEXITY DoS that the caps do not cover (open, measured,
+deliberately deferred).** I4 as stated is about *containment*: no wedge, no OOM, no
+bystander corruption, every hostile event earning only its own refusal. It says nothing
+about **cost**, and cost is where the remaining boundary-2 exposure is:
+
+> **The control plane is O(live objects) per event, so N events cost O(N²).** With
+> `MAX_LIVE_HANDLES = 2^18` a guest can drive that curve deliberately — and **PyTorch startup
+> reaches it benignly**, allocating thousands of RM objects. Measured (debug build,
+> alloc+map against a growing graph): 1 000 events **0.85 s**; 8 000 events **54.8 s**.
+> Deleting the per-event `RmGraph` clone saves ~24% and leaves the curve **still quadratic** —
+> the clone is not the cause and cannot be the fix.
+
+Same species as the parked-map linear scan already hardened, and as the O(n² log n)
+condemned-list carry-forward that *was* fixed (union-find, 55 s → 3.8 s). Two candidate fixes
+are named and neither is a small change: incremental derivation (which is a redesign of
+decision #27's "derived state is a pure function of the graph, never accreted", on which the
+whole determinism differential rests), or an undo journal in the most safety-critical file in
+the repo. Full analysis, measurements, and why doing either blind in a security round would be
+the wrong trade: `l1_concurrency.md` §12.23.
+
+**State this as an open item rather than a closed one.** Every other I4 clause is
+property-proven; this one is measured and outstanding, and the caps bound *memory*, not
+*time*.
+
 ---
 
 ## 4. Confused-deputy: made structural (Phase 3)

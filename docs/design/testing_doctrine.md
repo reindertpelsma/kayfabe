@@ -1,0 +1,190 @@
+# Testing doctrine — the rules this suite earned by being wrong
+
+**What this file is.** The handful of rules about *how to write a test here* that this project
+did not know at the start and paid to learn. Each one is a generalisation of a specific
+incident, and each incident is cited so the rule can be attacked rather than obeyed.
+
+**What it is not.** It is not the test *inventory* (that is `core_completeness_gate.md`), not
+the mutation gate's method or numbers (`core_mutation_gate.md`), and not the C-quirk
+regression list (`c_bug_regression_matrix.md`). The green-gate discipline — iterate until
+green, no merge on red, tests must be mean — is in `../../CLAUDE.md` and is unchanged.
+
+The unifying stance, from `l1_concurrency.md` §8.4: **pass = the design survived contact;
+fail = the doc changes, not the assert.**
+
+---
+
+## 1. ★★ A green instrument on an unexercised path is worse than no instrument
+
+It reads as *evidence*. Nobody re-checks a zero.
+
+**The incident.** The conservation ledger's first census over the mean run reported
+**0 leaked objects** — and that was a **true negative**, not a pass. `l1_os_shell.md` §7.6 T0
+claimed `ctl_workload` "exercises T0 thousands of times per run"; the churn it actually drives
+adds and removes *RPC* bindings (`Binding::host == None`), which own nothing host-side, and
+the script's two real subset-frees targeted channels phase 0 deliberately leaves **virgin**.
+**The path had never been reached.** Reaching it took a new `t0_churn` phase. Once reached,
+the honest baseline was 24 objects / 6 mappings / 24 576 GPA bytes leaking — linear in frees.
+(`l1_concurrency.md` §12.32, `l1_os_shell.md` §14.1.)
+
+**The rules.**
+
+1. **A reclamation test that does not first allocate proves nothing.** State what the
+   instrument must have *seen*, and assert that too.
+2. **Every instrument needs a non-vacuity assertion** — a case where it is known to read
+   non-zero. A ledger that can only ever report `0` is a constant function.
+3. **Bite-check the instrument, not only the fix.** Reverting the fix must move the number;
+   if it does not, the number is not measuring the fix.
+
+---
+
+## 2. ★★ Assert the exact thing — never `is_err()`, never an absence
+
+**Two canaries have now passed for the wrong reason**, which is the whole argument:
+
+- The retired-proc R5 canary passed on `Rm(Other)` — an RM error from a verb held across a
+  retire — while the property under test was `Stale::Proc`. The re-validation it existed to
+  guard did not exist, and the canary was green (`l1_concurrency.md` §12.10).
+- `the_system_proc_has_no_data_plane` passed via `UnknownPdb` because the system proc owned
+  nothing at all; the `SystemDataPlane` refusal it named was **vacuous** until the grouping
+  rule gave the system component a `Vas` (`l1_concurrency.md` §12.26 → §12.27).
+
+**The rules.**
+
+1. **Name the variant, including its payload** where the payload is the claim (`Stale::Proc(A)`
+   with the *right* `A`).
+2. **A refusal test needs a non-vacuity arm**: the same call, with the guarded condition
+   removed, must **succeed**. Otherwise the test cannot distinguish "refused for my reason"
+   from "never got there".
+3. Corollary for near-neighbour faults: when two variants could plausibly report the same
+   situation, **assert which, with a comment saying why** — so the day they start reporting as
+   each other, a test changes. (`UnknownPdb` vs `Condemned` on a clean last-reference retire is
+   pinned this way, `l1_concurrency.md` §12.33.)
+4. **★ Assert a BOUND, never an ABSENCE.** An absence is not observable, so a rule phrased as
+   one is untestable *and* invisible to the mutation gate. The rule "never busy-poll" was
+   wrong on the merits (a short spin beats a syscall; `std::sync` mutexes do it) and
+   unfalsifiable — and the gate had already proved it: three spin-versus-park mutants stay
+   green precisely because "no polling" is an absence. Restated as **"every poll must be
+   provably bounded"**, it has a testable consequence, and it sharpens the reasons for
+   forbidding things: a periodic sweep's iteration count is a function of uptime, so it has no
+   bound at all. (`l1_concurrency.md` §12.31.)
+
+---
+
+## 3. ★ Isolated cases test what you thought of; composed runs test what you didn't
+
+**The incident.** `worker_death_retires_the_proc_loudly_and_never_resurrects` was green — and
+green **only because it never issued an `apply` after the HUP**. The composed mean run put a
+worker HUP and an alloc/map-heavy `apply` workload *in the same run*, and found that an
+out-of-band retire is undone by the next refresh: a guest able to crash its isolate worker got
+a **clean new isolate** on its next RM event (`l1_concurrency.md` §12.13).
+
+The same shape recurred: the leak class in §1 above was found by a composed script within one
+run, and the first version of that fix was a **use-after-free of its own making** — visible
+only because the run had a publisher parked inside a mapping verb at the moment the drain
+fired.
+
+**The rules.**
+
+1. **The composed run is the arbiter**, and both are needed: isolated cases localise, composed
+   runs discover. Neither replaces the other.
+2. When a composed run finds a defect, **add the isolated case too** — and check whether the
+   isolated case would have been green. If it would, say so in the test's doc comment; that
+   sentence is the reason the composed run exists.
+3. **Assert progress as an edge, never a clock.** A wall-clock parallelism assertion passes
+   because the box was fast (`l1_concurrency.md` §8.3, §8.4).
+
+---
+
+## 4. ★★ Per-object reclamation must never race an in-flight verb — and no lock can prevent it
+
+Stated here rather than only in the design docs because it is a rule about what a *reclamation
+test* must establish before it can claim anything.
+
+> **Verbs run lock-free by construction (R1), so no lock can exclude one. Only the isolate's
+> own quiesce predicate can.**
+
+**The incident.** The first G2 fix drained the pending-release queue on **every** checkout. It
+freed a host VAS underneath a publisher parked *inside* its mapping verb → `RmError::BadHandle`
+surfaced to the guest as an anonymous host error rather than as staleness. The guard is
+`Isolate::is_quiesced`, read before our own checkout, indivisibly — the same predicate the reap
+uses for the same reason (`l1_concurrency.md` §12.32, §12.16 G3).
+
+**The rules.** Every reclamation trigger inherits this, so every reclamation *test* must
+(a) compose the release against a **parked** verb on the same isolate, and (b) assert the
+absence of the disposal verbs by name, not merely the absence of a crash. The consequence for
+the design — the drain is *lazier* than the doc described, and forced to be —
+is `l1_os_shell.md` §14.1 residue 2.
+
+---
+
+## 5. The mutation gate is a measurement, and it can be wrong upward
+
+Full method, numbers and thresholds: **`core_mutation_gate.md`**. Two operational rules are
+repeated here only because dropping either produces a *plausible-looking* wrong number, which
+is the failure mode this doctrine is about:
+
+- **`CARGO_INCREMENTAL=0`, always.** rustc ICEs on the churned incremental cache; cargo-mutants
+  cannot tell a compiler crash from a type error and files the mutant **unviable**, silently
+  removing it from the denominator. **136 of 293 builds ICE'd**, turning a real **88.95%** into
+  a reported **67%**. Sanity check any campaign with
+  `grep -rl "thread 'rustc'" mutants.out/log/ | wc -l` → must be 0.
+- **`--test-workspace true`, always.** The crates under test have no unit tests of their own;
+  without it cargo-mutants runs an empty suite and reports everything MISSED.
+
+Generalised: **a gate that can be wrong upward is worse than no gate.** CI now fails on any ICE
+in a mutant log and on a zero viable count, *before* the threshold is read — the score is not
+trusted until the measurement is proven to have happened.
+
+Two related rules from the same campaign:
+
+- **A hollow test to move a number is worse than an honest gap.** Survivors that only affect
+  panic-message text or have no production caller are documented as such, not chased
+  (decision #15).
+- **A threshold is set from a measurement and never lowered to clear a red night.** It is set
+  *below* the measurement by the observed run-to-run churn, because a gate that cries wolf gets
+  muted — and being muted is exactly how ~9 100 lines of L1 code reached `master` with no
+  mutation run at all.
+
+---
+
+## 6. ★ Documentation drifts optimistic — treat it as a named risk class
+
+Across three independent passes over this repo, roughly **twenty** instances were found of
+documentation asserting more than the code did, **several stating the literal opposite of
+their own code**. Examples, all real and all fixed in place:
+
+- `RmGraph::gpu_of`'s rustdoc still described a default-to-GPU-0 guess *inside the one resolver
+  whose entire discipline is MISS = no-guess* — false since §12.21.
+- `sync_rpc_mappings` claimed *"MISS=FAULT is preserved — never a silent skip"* while its body
+  correctly `continue`d on both arms. The body was right; the sentence was wrong about the
+  most-cited exception in the codebase.
+- `HostHandle`'s doc said it was "scoped to ONE isolate's handle namespace" — and nothing read
+  that sentence, because it was prose (`l1_concurrency.md` §12.26).
+- §6.2 of `l1_os_shell.md` justified a correct conclusion with a cost model wrong by orders of
+  magnitude. **A wrong premise supporting a right conclusion is the hardest kind to catch.**
+
+**Every one of them was true when written.** That is the point: this is not carelessness, it is
+entropy, and it is why the project's answer is *gates* rather than *intentions* — the CI
+boundary grep, the unsafe-surface `ls` gate, the mutation threshold, the conservation ledger.
+
+**The rules.**
+
+1. **Prefer a mechanism to a sentence.** A rule stated only in prose has no reader. `HostHandle`
+   carrying its `IsolateId` is the same rule with a compiler behind it.
+2. **When a doc claim is load-bearing for a mechanism, it needs a behavioural check** — not a
+   citation to someone else's comment. Two claims cited from the C's own comments were false
+   (`../reference/mode2_bench_lifecycle.md` §2, §3); citing a comment is still citing a belief.
+3. **Correct in place, strike visibly.** The house style is `~~struck~~` plus the correction and
+   its evidence, not a silent rewrite — so a reader who remembers the old claim learns that it
+   was wrong rather than doubting their memory.
+
+---
+
+## See also
+
+- `core_mutation_gate.md` — does the suite notice when the core lies? Method, score, thresholds.
+- `core_completeness_gate.md` — is every claimed behaviour actually exercised?
+- `c_bug_regression_matrix.md` — every C-era bug, classified impossible / tested / deferred.
+- `l1_concurrency.md` §12 and `l1_os_shell.md` §14 — the contact logs these rules were mined from.
+- `../reference/` — measured NVIDIA/RM and bench-lifecycle facts, the sources these tests model.

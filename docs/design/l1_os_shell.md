@@ -114,9 +114,22 @@ CUDA, PyTorch and a 7B LLM on real GA106 at host parity; where this doc asserts 
 guest driver does, the citation is to the C's code or its measured notes, and where the C
 does not settle it, this doc says **OPEN QUESTION (bench experiment)** rather than guessing.
 
+**★ Two limits on that oracle, both measured after this table was first written, both
+load-bearing for how citations here should be read:**
+
+1. **The C is a SINGLE-PROCESS Mode-2 oracle.** It runs exactly one CUDA process per QEMU
+   lifetime; the second fails `cuInit` → 999 regardless of how the first ended
+   (`../reference/mode2_bench_lifecycle.md` §1). The parity results above are unaffected (they
+   are in-process), but **no citation here may be read as "this is what the C does with two
+   Mode-2 processes"** — nobody has observed that. Mode-1, with its per-`mm` isolates and 22
+   real apps at host parity, remains a valid multi-process oracle and is the one to use.
+2. **Several rows below cite the C's *comments*.** Two of them were checked against the C's
+   *behaviour* and turned out to be false. A comment in the C is a strong prior, not a
+   measurement; `../reference/mode2_bench_lifecycle.md` is where the difference gets recorded.
+
 | Claim used below | Source |
 |---|---|
-| the guest emits `UNLOADING_GUEST_DRIVER` (RPC fn 47) on **both** a real driver unload **and** a GPU-idle release when the last client/context exits with the module still loaded | `C: src/qemu/nvkvm_gpu_emul.c:2450–2478` (the comment names both triggers explicitly) |
+| ~~the guest emits `UNLOADING_GUEST_DRIVER` (RPC fn 47) on **both** a real driver unload **and** a GPU-idle release~~ ★ **FALSIFIED (bench, 2026-07-26).** `rmmod` emits **no** fn-47 — the idle release at process exit already consumed it. The C's comment claiming "TWO distinct triggers" is factually wrong, so there is no second RPC to disambiguate and a reset armed only on fn-47 never runs on a true driver restart | comment: `C: src/qemu/nvkvm_gpu_emul.c:2452–2456`; measurement + consequences: `../reference/mode2_bench_lifecycle.md` §2 |
 | **the GSP queue re-handshake IS the quiesce point** — "the re-handshake = the quiesced point (GPU was idle-released; next context boots)" — and the C's deferred reap runs exactly there | `C: nvkvm_gpu_emul.c:3458–3460` (`nvkvm_m2_reap_dead`), `:1988–1994`, `:2123` |
 | reaping resolution/backing state **at** the client-root free hangs the dying context's residual polls (bench-proven, `cupctx2_min` CTX2 destroy) — hence deferral, not eagerness | `C: nvkvm_gpu_emul.c:1988–1993` |
 | what must be reset at fn-47: WPR2 down + `gsp_suspended` + `bootargs_dumped` + `q_ready`; **not** the queue counters | `C: nvkvm_gpu_emul.c:2471–2477`, with the failure mode for each stated in place |
@@ -126,6 +139,11 @@ does not settle it, this doc says **OPEN QUESTION (bench experiment)** rather th
 | a guest that goes silent without `KILL_ISOLATE` was the C's **residual** — bounded to its own per-VM QEMU and fully reclaimed at VM stop (process exit) | `C: teardown_hardening_done` ("Residual") |
 | signal-interruptible forwarded ioctls (#73): no-`SA_RESTART` handler, per-txn tid safeguard, **never abandon the reply buffer**; the C's "~3.4–3.5 s bounded EINTR-unwind measured on RTX 3060" is **re-read by `l1_concurrency.md` §12.26 as RM's own 4 s RPC timeout elapsing**, not an unwind — RM's waits are uninterruptible (`ogkm: .../gpu/gsp/kernel_gsp.c:2963-3060`, `.../resserv/src/rs_server.c:3164-3168`) | `C: docs/design/signal_interrupt_delivery.md`, `C: signal_interrupt_delivery_done`, `ogkm: .../os/os.c:2136-2139` |
 | the os-event relay must extend the stub's existing wait set and must **not** re-notify until the guest re-polls (busy-spin hazard) | `C: docs/design/mode1_poll_relay_plan.md` |
+
+★ **Every `ogkm:` citation above is consolidated, with its driver-version caveat, in
+`../reference/rm_semantics_measured.md`** — cite that file when a design needs the fact, so a
+wrong fact gets corrected in one place instead of five. The C-behaviour rows have the same
+treatment in `../reference/mode2_bench_lifecycle.md`.
 
 **What the audit confirms is sound, and this doc builds on rather than re-litigates:**
 `CompletionSource`'s monotone never-reused mint (§3.2, §7.7); `deregister_proc`/`belongs_to`
@@ -1172,10 +1190,75 @@ set is two-tier:
 | **coarse** | install / remove a window (or an arena grant, if that is the chosen boundary) | memslot: `slots_lock` + 1–2 SRCU grace periods + shadow zap; QEMU: BQL | per window, or per proc create/destroy | **NO** |
 | **fine** | place / restore a backing inside a window | `mmap(MAP_FIXED)`: `mmap_lock`, no KVM ioctl, no BQL | per publish / unpublish | **NO** (still a syscall — §6.2's shape stands) |
 
-**What a measurement can and cannot change.** A bench agent is separately measuring memslot
-cost and how many updates a real workload provokes. This design is written so that
-measurement can only tune **constants**, never the shape — the shape is fixed by a
-correctness/DoS argument (below), not by a performance one. The constants it can tune:
+#### ★★ The measurement (2026-07-26) — the rule was right, and the cost has RELOCATED
+
+The bench measurement this section was written to accommodate has landed. It changes no
+constant and no shape; what it does is turn three of the paragraphs above from *arguments*
+into *evidence*, and it moves the thing to worry about.
+
+**[measured] The per-update cost, with running vCPUs.** `KVM_SET_USER_MEMORY_REGION`
+DELETE/MOVE: **230–460 µs p50, 1–4 ms tail.** The two-swap claim above is confirmed
+mechanically rather than by reading: kprobes on `kvm_swap_active_memslots` count **two** calls
+per DELETE/MOVE against **one** for ADD, **965 of 965 samples**. So `:1798-1846` /
+`:1929-1941` is not a plausible reading of the source, it is the observed behaviour.
+
+**[measured] The cost is charged per vCPU, and the ioctl latency hides it.** Aggregate damage
+is **≈135 µs × nvCPU per update**. Note the shape carefully, because it is exactly the shape
+that makes this easy to under-count: **the ioctl's own latency is flat in vCPU count**, so a
+naive benchmark on a 2-vCPU box reports the same number as a 64-vCPU box while the *cost* is
+32× larger — every vCPU stalls, and only the issuing thread is timed. This is I-NOAMP's
+sharpest instance measured rather than argued.
+
+**[measured] ★ A real workload provokes ZERO memslot updates in steady state.**
+
+| workload | memslot updates |
+|---|---|
+| full C Mode-2 lifetime: guest driver load, `cuInit`, `cuCtxCreate`, 400 kernel launches, 600 alloc/free | **0** |
+| Mode-1 with the real **128 GiB** GPA window: probe | **1** (once, at probe) |
+| Mode-1: a complete CUDA process on top of that window | **0** |
+
+**The C is already at the theoretical floor**, and the rule above is therefore not an
+aspiration to reach but an invariant to *hold*. The mock gate (below) is what holds it.
+
+**★★ [measured] The per-object cost did not vanish — it RELOCATED, to host VMA churn under
+`mmap_lock`.** A CUDA process adds **+32 VMAs**. That is the true price of "publication is a
+`MAP_FIXED` placement": every placement splits or merges a VMA in QEMU's address space, under
+`mmap_lock`. Two things follow, and they point in opposite directions:
+
+- **It is much less bad than a memslot**, and structurally so: `mmap_lock` is **per-`mm`**. It
+  does not stall other vCPUs, so it does not violate I-NOAMP the way a memslot update does.
+- **It is directly relevant to R1**, and more so than the memslot ever was: `mmap_lock` is
+  contended by *every* mapping operation in the same process, including ones issued on behalf
+  of other guest procs sharing that QEMU. A `MAP_FIXED` under one of our locks is a blocking
+  call under a lock whose blocking is now measured, not hypothetical. §6.2's plan/execute/
+  commit conclusion survives its wrong premise (§13 item 9) **for this reason instead**.
+
+**[measured] A no-op re-issue is free (~1.2 µs)** — KVM early-returns on an identical region
+before any SRCU synchronisation. Consequence for API shape: an **idempotent "ensure this
+window is installed" call costs nothing**, so the shell may call it unconditionally rather
+than tracking installed-ness itself. Cheap idempotence beats a cache that can go stale.
+
+**⚠️ Caveats, stated so the numbers are not over-quoted.**
+
+1. **The bench host is itself a KVM guest.** Absolute numbers are inflated by nested
+   virtualisation — **estimated 2–5×, not measured**. The *ratios* (DELETE vs ADD, flat ioctl
+   latency vs linear aggregate cost, zero-in-steady-state) are the trustworthy part; the
+   microsecond figures are an upper bound on real hardware.
+2. **Multi-process is not covered.** Every number above is a single guest process. The
+   interesting adversarial case — many procs churning arenas concurrently — is unmeasured.
+
+**★ The watch item this creates.** `C: docs/design/mode2_bar1_memslot_perf.md` proposes
+memslot-backing host-written read-mostly BAR1 pages. Whatever its merit for BAR1 latency,
+**a per-page or per-object memslot boundary converts the measured zero into a rate** — the
+exact conversion §6.7 exists to forbid, and one that would arrive wearing a performance
+justification. If that idea ports, it must answer the three-part test below (slot-level
+attribute, non-guest-controlled frequency, measured hostile bound) before a slot is minted,
+and the honest answer is more likely "a second window with that attribute".
+
+**What a measurement can and cannot change.** Written before the measurement above landed, and
+left standing because it is what made that measurement cheap to act on: measurement can only
+tune **constants**, never the shape — the shape is fixed by a correctness/DoS argument
+(below), not by a performance one. The constants it can tune:
 
 - **`ARENA_LEN`** — per-proc arena size. Larger = fewer grants for a churning process;
   smaller = more procs per window. The measurement supplies the distribution of per-proc peak
@@ -1214,7 +1297,13 @@ publications that the existing workloads already drive orders of magnitude highe
 per-object regression fails it immediately and structurally, on any machine, in both lock
 modes. It joins §9.3's gate table. *This is the same move as the reactor's wake-count assert
 (§3.4): convert a cost that only real hardware can measure into a **quantity** a mock can
-count.*
+count.* ★ And the measurement gives the gate a **target rather than a trend**: the C's real
+workloads provoke **zero** updates in steady state, so the assertion to hold is not "grows
+slowly" but "does not grow at all once the windows are installed".
+
+*What the measurement did **not** supply, so `ARENA_LEN` stays unpinned:* the distribution of
+per-proc peak GPA footprint, and any multi-process arena-churn rate. Those remain the open
+inputs to the window-vs-arena boundary.
 
 ---
 
@@ -1245,6 +1334,18 @@ the reclamation boundary, and it is why "reclaim everything on every path" is ac
 rather than aspirational. Per-object reclamation is an **optimisation** (return resources
 promptly, keep the host's handle count low); process death is the **correctness backstop**.
 Every path in §7.6 says which of the two it uses.
+
+**★ And in Mode-2 there are TWO collectors, one at each boundary — measured, not assumed.**
+Killing a guest CUDA process makes the *guest kernel* free the guest's client tree with no
+application cooperation: **178 `fn=10` RM-FREE RPCs, then fn-47**, while the host stub stays
+alive and the host GPU returns to its exact baseline in ~11 s
+(`../reference/mode2_bench_lifecycle.md` §5). So the forwarder sits between two working
+garbage collectors and its only obligation is to **refuse to paper over the gap between
+them** — which is exactly what the condemned-component rule does
+(`l1_concurrency.md` §12.17). Two caveats bound this: the host-side observation is a *memory*
+proxy (`nvidia-smi`), not an object count, and the kill was not proven to land strictly inside
+an ioctl — so the G4 case (an alloc whose reply never arrived) is still open, with a strong
+prior that the alloc **completed** (`../reference/rm_semantics_measured.md` §2).
 
 The corollary — stated because it is the load-bearing constraint on everything else: **an
 isolate must never be shared between procs, and its lifetime must never exceed its proc's.**
@@ -1577,8 +1678,15 @@ beside the corpses. The C's WPR2 limitation is inherited by omission.
 `:3462–3487`, `:4208–4262`) — this is the section where invention is most tempting and most
 dangerous, so every rule below is cited:
 
-1. **One RPC, two triggers.** fn-47 is emitted for a real unload *and* for an idle release.
-   The emulator cannot tell them apart from the RPC alone.
+1. ~~**One RPC, two triggers.** fn-47 is emitted for a real unload *and* for an idle release.
+   The emulator cannot tell them apart from the RPC alone.~~
+   ★★ **FALSIFIED ON THE BENCH (2026-07-26) — and the correction is worse than the claim.**
+   `rmmod` emits **no fn-47 at all**: the idle release at process exit already consumed it
+   (`../reference/mode2_bench_lifecycle.md` §2). So the problem is not that two triggers are
+   indistinguishable — it is that **the unload has no trigger**. Anything armed on fn-47 (the
+   quiesce point in T3, a future `Spine::device_reset`) simply does not fire on a real driver
+   restart. A restart-time reset needs its own observable signal; finding one is M2-f work and
+   is not settled here.
 2. **Reset at fn-47 only the boot-gating state:** WPR2 down (`fwsec_ran = false`),
    `gsp_suspended = true`, `bootargs_dumped = false`, `q_ready = false`. Each has a named
    failure mode for omitting it: leaving WPR2 up makes `_kgspBootGspRm` bail
@@ -1611,18 +1719,32 @@ out, and one part is a **named unknown**:
   in-process (lesson L12)" is therefore true *of the GSP FSM* — and false of the `Spine`,
   which has no reset at all (G5). That gap is this milestone's work, and it is the thing
   that would silently re-impose the fresh-boot tax if left.
-- **★ OPEN QUESTION (bench experiment required).** Rule 4 is tuned for the **idle-release**
-  flavour (preserve seqNums). On a **true `rmmod`/`insmod`**, `kgspDestruct` destroys
-  `MESSAGE_QUEUE_INFO`, so the reloaded driver's `rxSeqNum` should restart at 0 — the
-  *opposite* of what rule 4 does. The C contains no code distinguishing the two flavours,
-  and its dev-loop convention was a fresh boot per run, so **the true driver-reload path is
-  plausibly untested in the C.** I will not guess which way it behaves.
-  **Experiment:** on the bench, with the C emulator and `NVKVM_M2TRACE=1`, run
-  `rmmod nvidia; modprobe nvidia` *without* restarting QEMU and observe whether the guest's
-  first post-reload status-queue read expects seqNum 0 or N; then repeat for the
-  idle-release flavour (last `cuCtxDestroy`, module resident) to confirm the divergence.
-  The answer decides whether the Rust `Spine::device_reset` needs a *flavour* parameter and,
-  if so, what observable signal supplies it.
+- **★★ THE EXPERIMENT RAN (2026-07-26), and it moved the blocker.** The question was whether
+  a true `rmmod`/`insmod` restarts `rxSeqNum` at 0 (because `kgspDestruct` destroys
+  `MESSAGE_QUEUE_INFO`) while the idle release preserves it, and therefore whether
+  `Spine::device_reset` needs a *flavour* parameter. **The seqNum question is real but
+  downstream: the run does not survive far enough to reach it.** Full account in
+  `../reference/mode2_bench_lifecycle.md` §3. What was measured:
+  - **WPR2 is correctly lowered.** That half of the C works, and the framing this bullet
+    inherited — "WPR2 is what forces the fresh boot" — is **wrong**.
+  - **The blocker is a latch/stale-queue chain.** The teardown `STARTCPU` arrives with
+    `was_suspended == true`, is misclassified as a **re-acquire**, re-latches
+    `bootargs_dumped` / `q_ready`, and the next driver life is left pointing at the **dead
+    queue's GPA**. The failure is a **`msgqRxLink` timeout** — **not** Xid 119 and **not** the
+    #12 site, which are the failure modes for zeroing the counters at fn-47 (rule 3), a thing
+    the C correctly does not do. Debugging this by hunting Xid 119 goes to the wrong subsystem.
+  - ★ **Design consequence, concrete: a Rust `device_reset` that models only WPR2 would not
+    fix this.** It must also clear the latches, invalidate the queue-GPA binding, and classify
+    the trailing-teardown STARTCPU on something other than `was_suspended`. That is a
+    requirement on `Spine::device_reset` + `kayfabe-gsp`, not a tuning note.
+  - **Still open, and now correctly ordered:** (a) what observable signal marks a true driver
+    restart, given rule 1's falsification — fn-47 is not it; (b) *then* the seqNum flavour
+    question, once a restart gets far enough to ask it.
+  - **And the C's stale state is guest-reachable** — arbitrary guest RAM parsed as GSP RPC and
+    answered `NV_OK` (508 lines per failed bring-up), plus an unguarded `% s->q_msgcount`
+    SIGFPE (`C: nvkvm_gpu_emul.c:1615`). Both are C-only; the shapes they forbid are recorded
+    in `../reference/mode2_bench_lifecycle.md` §4 and belong on §11's checklist as a
+    do-not-reproduce.
 - **Obligations once triggered (device-scoped, G3b's shape):**
   `Spine::device_reset(...) -> Vec<Proc>` — every proc retired and returned for lock-free
   drop; every isolate killed and reaped (T6); every source deregistered (**R7**); every
@@ -2488,6 +2610,33 @@ confirm or refute rather than rediscover:
 3. **I-NOAMP will fail its first honest measurement**, and the cause will be the BQL rather
    than anything in our lock discipline. §6.3 predicts this; the value of predicting it is
    that the fix is then an adapter change rather than a redesign of §3.
+
+### 14.3 ★★ Bench round, 2026-07-26 — the memslot measurement landed, and two cited C comments were false
+
+**Provenance:** measurements on the serialized vast.ai bench, run against the C artifact and
+against KVM directly, while M2-b was being designed. Unlike §14.2 these are findings, not
+directives, so they belong here by §14's own rule. Full write-ups:
+`../reference/mode2_bench_lifecycle.md` (C lifecycle) and
+`../reference/rm_semantics_measured.md` (host RM/UVM semantics).
+
+| finding | effect on this doc |
+|---|---|
+| memslot DELETE/MOVE = 230–460 µs p50, 1–4 ms tail; two `kvm_swap_active_memslots` vs one for ADD (965/965 kprobe samples); **≈135 µs × nvCPU** aggregate, with the ioctl latency **flat** in vCPU count | §6.7 gains its evidence. **No constant and no shape changed** — which was A4's explicit design requirement and is the thing to notice |
+| a real workload provokes **zero** memslot updates in steady state (C Mode-2 full lifetime = 0; Mode-1's real 128 GiB window = 1 at probe, 0 thereafter) | §6.7's mock gate gets a **target** (zero growth) instead of a trend. The C is already at the floor |
+| ★ **the per-object cost relocated to host VMA churn under `mmap_lock`** (+32 VMAs per CUDA process) | §6.7. Less harmful than a memslot (per-`mm`, so I-NOAMP-benign) but **more** relevant to R1 than the memslot ever was. §6.2's conclusion now stands on a *measured* premise, having lost its original one to §13 item 9 |
+| a no-op memslot re-issue is ~1.2 µs (KVM early-returns pre-SRCU) | §6.7. Idempotent "ensure installed" is free; prefer it to shell-side installed-ness tracking |
+| ★★ `rmmod` emits **no** fn-47 — the C's "TWO distinct triggers" comment is false | §0.2 row 1 and §7.6 T4 rule 1 struck. The unload has **no** trigger, so nothing armed on fn-47 fires on a driver restart |
+| ★★ the driver-restart blocker is the **latch/stale-queue chain**, not WPR2; failure is a `msgqRxLink` timeout, not Xid 119 | §7.6 T4's OPEN QUESTION re-scoped and **re-ordered**. A `Spine::device_reset` modelling only WPR2 does not fix it |
+| the C runs **one** CUDA process per QEMU lifetime (`cuInit` → 999 for the second, three boots, either exit mode) | §0.2 preamble. The C is a **single-process** Mode-2 oracle; Mode-1 is the multi-process one. Prior parity/#12/#13/#14 results are on a different axis and stand |
+| the guest kernel frees 178 objects then fn-47 on process death, host stub alive | §7.0 gains its measured basis — two collectors, one at each boundary |
+| RM serializes every ioctl per client; its waits are uninterruptible; **an interrupted alloc almost certainly completed** | already folded into §7.5 / `l1_concurrency.md` §12.26 by the source pass; the reference doc is now the citable home, and it carries the **version caveat** (`ogkm` 610.43.02 vs the bench's 580.159.04) that nothing else recorded |
+
+**★ The methodological finding, worth more than any single row.** Rows 5 and 6 were both
+*cited* in this doc, both from the C's own comments, and both false. The C's comments are a
+strong prior — repeatedly the strongest available — but §0.2's discipline was "cite the C
+rather than guess", and that is one notch weaker than it reads: **citing a comment is still
+citing a belief.** Where a claim is load-bearing for a mechanism (a reset trigger, a quiesce
+edge), the standard is a *behavioural* check, and §0.2 now says so.
 
 ---
 

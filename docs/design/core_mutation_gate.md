@@ -29,6 +29,12 @@ test flips from pass → fail (and the fwd/mmu numbers come from a full scoped r
 those two crates *with the new tests in place*). Final score: **245/247 = 99.2% killed**,
 residual = 1 proven-equivalent + 1 documented-acceptable.
 
+**See also:** `testing_doctrine.md` — the cross-cutting rules for writing a test that means
+something here (non-vacuity, exact-variant assertions, composed-vs-isolated runs, and why a
+gate that can be wrong *upward* is worse than no gate). The two operational rules this file
+proves the hard way — `CARGO_INCREMENTAL=0` and `--test-workspace true` — are summarised there
+with their consequences; the method and the numbers stay here.
+
 ## Why a number, not an opinion
 
 The core already had 113 tests — order-independence, proptest fuzz (A1–A4), the security

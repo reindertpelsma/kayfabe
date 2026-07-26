@@ -1192,6 +1192,13 @@ widening breaks the rules. The design is not trusted; the harness is.
 > changes, not the assert."* This section is that promise being kept. Each entry is a
 > place where writing the code found the design wrong, silent, or over-stated. Entries
 > are appended as stages land; nothing here is a plan, all of it is a finding.
+>
+> **★ Where the NVIDIA facts live now.** Several entries below (§12.21, §12.26, §12.27,
+> §12.33) established RM/UVM behaviour from `ogkm` and from hardware measurement. Those facts
+> are consolidated, with their citations and their **driver-version caveat**, in
+> `../reference/rm_semantics_measured.md` — cite that when a design needs the fact; read the
+> entry here when you need the reasoning, the alternatives rejected, or the bite-check. If the
+> two ever disagree, the reference file is the one to fix.
 
 ### 12.1 The `get_mut` mechanic — spine ops acquire ZERO proc locks (stage 2)
 
@@ -2787,7 +2794,12 @@ decision #14's definition of what a *process* is.
 #### The measurement (RTX 3060, driver 580.159.04, 2026-07-25 — not a hypothesis)
 
 kprobes on RM's dup funnel `rmapiDupObjectWithSecInfo` and on `rpcRmApiDupObject_GSP` /
-`rpcRmApiAlloc_GSP`:
+`rpcRmApiAlloc_GSP`. ★ **The method is reusable and is written up in
+`../reference/rm_semantics_measured.md` §3** — `strace`/`LD_PRELOAD` cannot see these (they
+are in-kernel RM calls, never a userspace ioctl) and **ftrace refuses the RM core**, which is
+compiled `notrace`, so it took a throwaway `register_kprobe` module. Also recorded there:
+only **25 of the 82** dups reach GSP, so a rule keyed on the GSP wire must be correct on that
+subset alone.
 
 - `nvUvmInterfaceSessionCreate` fires **exactly once per `nvidia_uvm` module load** — one
   RM client for the whole module.
