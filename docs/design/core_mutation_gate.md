@@ -363,7 +363,13 @@ not exist — decision #15: no brittle internal-state pins):
 
 ### The threshold, and why it is where it is
 
-CI's `mutants` job now fails below **91%** (see the scoring step in
+> ⚠ **2026-07-27 — 91% is PENDING RE-DERIVATION and must not be quoted.** Everything in
+> this section is the argument for where a bar belongs *given a measurement*, and that
+> argument still stands. The measurement it was derived from does not: it was taken over
+> the retired four-path scope. See the banner at the top of this file, and §Reproduce's
+> *"Before any score may be quoted again"* checklist.
+
+CI's `mutants` job fails below **91%** (see the scoring step in
 `.github/workflows/ci.yml`). The reasoning:
 
 - Measured after this pass: **92.44%** (159/172), up from 88.95% (153/172). The 13
@@ -393,6 +399,52 @@ CI's `mutants` job now fails below **91%** (see the scoring step in
 
 ## Reproduce
 
+### ★ The current invocation (2026-07-27) — every production crate
+
+This is what CI runs, and it is the only scope a *quotable* score can come from. It is
+`.github/workflows/ci.yml`'s `mutants` job verbatim; that file is the source of truth and
+this block is a copy — if they disagree, the workflow wins.
+
+```
+cd /workspace/nvkvm-rs
+CARGO_INCREMENTAL=0 cargo mutants --test-workspace true -j 2 \
+  --timeout 240 --build-timeout 900 \
+  -f 'crates/*/src/**/*.rs'
+```
+
+`--test-workspace true` and `CARGO_INCREMENTAL=0` are both **load-bearing** — see §L1
+baseline for what each one silently does to the score if dropped. `-j 2` because each job
+copies the tree. Test scaffolding (`crates/kayfabe-mocks/**`, `tests/src/**`) is excluded
+in `mutants.toml`, not on the command line: mutating an instrument is a category error.
+
+### ★ Before any score may be quoted again — the checklist
+
+The embargo in the banner at the top of this file is not lifted by running the command
+above once. All four must hold, and the last one is the one that gets skipped:
+
+1. **A full campaign completes under the every-production-crate scope** (the invocation
+   above), with no `-f` narrowing and no package subset.
+2. **The ICE guard is clean:** `grep -rl "thread 'rustc'" mutants.out/log/ | wc -l` must be
+   **0**. A single ICE is filed as "unviable", which removes the mutant from the
+   denominator and *inflates* the score. This is why the first L1 campaign's "67%" was not
+   a number at all (§L1 baseline).
+3. **The number holds across a second run.** The pool-gate cluster is scored by timeout and
+   measurably moves by ~2 mutants between identical runs; a single campaign cannot
+   distinguish a regression from that churn.
+4. **The threshold is re-derived from that measurement and written into
+   `MUTATION_THRESHOLD_PCT`, with the `⚠ PENDING RE-DERIVATION` comment removed in the same
+   commit.** Until that comment is gone, the workflow itself is saying the bar describes a
+   different population — so quoting the score is quoting a number against an unstated
+   scope, which is exactly the failure this whole banner is about.
+
+A score quoted anywhere else (`README.md`, `ARCHITECTURE.md`, the summaries) must cite
+**both** its number and its scope, or it is not a claim, it is a decoration.
+
+### The retired invocations — kept as the record of what was measured
+
+~~These are what produced every number below; they are **no longer what CI runs**~~ (they
+are not wrong, they are narrower — see the banner).
+
 L0 (the pure core):
 
 ```
@@ -402,9 +454,7 @@ cargo mutants -p kayfabe-core -p kayfabe-mmu -p kayfabe-fwd -p kayfabe-completio
   --test-workspace true -j 2 --baseline skip --timeout 240 --build-timeout 900
 ```
 
-L1 (the threaded shell). **`--test-workspace true` and `CARGO_INCREMENTAL=0` are both
-load-bearing** — see §L1 baseline for what each one silently does to the score if
-dropped. `-j 2` because each job copies the tree.
+L1 (the threaded shell) — the four hand-picked paths, retired 2026-07-27 in `0b78102`:
 
 ```
 CARGO_INCREMENTAL=0 cargo mutants -p kayfabe-rt -p kayfabe-core -p kayfabe-fwd -p kayfabe-isolate \

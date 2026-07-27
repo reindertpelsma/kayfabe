@@ -814,8 +814,17 @@ pub trait Vmm: Send {
 
 /// # The core as seen by the adapter
 ///
-/// The L1 shell (`kayfabe_rt::SharedDevice`, which owns the ranked locks) implements
-/// this; a backend routes trapped MMIO and deferred events here.
+/// A backend routes trapped MMIO and deferred events here.
+///
+/// ★ **corrected 2026-07-27** (found by the whitepaper's verification pass). This line
+/// used to read *"The L1 shell (`kayfabe_rt::SharedDevice`, which owns the ranked locks)
+/// implements this"*, in the present tense. **No `impl Device for SharedDevice` exists.**
+/// The only implementors in the workspace are two test types
+/// (`tests/tests/vmm_portability.rs::ShardedDevice`, `tests/src/guest.rs::DoorbellDevice`),
+/// which exercise the port's shared-`&self` shape without being the shell. The shell is
+/// the *intended* implementor — that is the whole reason for the `&self` decision argued
+/// below — but it is an intention, and this doc is not the place to pre-announce it as
+/// done.
 ///
 /// ## ★ Why `&self` and not `&mut self` — decided while it was free
 ///

@@ -27,9 +27,14 @@
 //!   lets this layer be absolute.
 //! - **Unmap eager**, map lazy, reclaim deferred ([`AddressTable::unbind`]).
 //!
-//! Also here (skeleton this milestone): the GMMU **walk algorithm** — regime-independent
-//! core logic written against [`kayfabe_arch::GmmuFmt`], used only at forward-populate
-//! commit points (decode-dirtied-PT-pages, #13), never as a resolve fallback.
+//! ★ **corrected 2026-07-27** (was: *"Also here (skeleton this milestone): the GMMU **walk
+//! algorithm**…"*, which overstated — found by the whitepaper's verification pass). What
+//! [`walker`] actually contains today is **the seam and nothing behind it**: the [`walker::FbRead`]
+//! page-table byte-source trait and the [`walker::WalkResult`] outcome enum. No walk loop, no
+//! constructor, no implementor — 41 lines. The algorithm itself is still to be written, and
+//! [`walker`]'s own module doc states the requirements it must meet: regime-independent core
+//! logic against [`kayfabe_arch::GmmuFmt`], used only at forward-populate commit points
+//! (decode-dirtied-PT-pages, #13), never as a resolve fallback.
 //!
 //! Concurrency (decision #17): plain owned data, no interior mutability;
 //! [`AddressTable::resolve`]/[`AddressTable::iter`] are `&self` (concurrent reads

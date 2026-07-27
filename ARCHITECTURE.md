@@ -19,7 +19,7 @@ NVIDIA (Axis-A codegen + a real `Arch` impl).
    (kayfabe-vmm)   │  kayfabe-mmu    per-Vas AddressTable         │    PushbufferAbi)
                  │  kayfabe-fwd    demux / gate / parse / route │    (kayfabe-arch)
    Isolate    ──►│  kayfabe-completion  queues / delivery /     │◄── DriverAbi
-   RmBackend     │                    fence arms              │    (kayfabe-abi, stub)
+   RmBackend     │                    fence arms              │    (kayfabe-abi)
    (kayfabe-isolate)└────────────────────────────────────────────┘
                         ▲ the only impls today: kayfabe-mocks
 ```
@@ -28,19 +28,29 @@ Ports and their standing:
 
 | Port | Crate | Real adapter | Status |
 |---|---|---|---|
-| `Vmm` (7 capability groups), `Device`, `Present` | `kayfabe-vmm` | L1/L2 (QEMU, cloud-hypervisor) | **trait-only** (mock-implemented). ★ A second backend is contracted to cost **one adapter crate, zero trait changes** — `l1_os_shell.md` §6.0, CI-gated |
+| `Vmm` (7 capability groups), `Device`, `Present` | `kayfabe-vmm` | L1/L2 (QEMU, cloud-hypervisor) | ~~**trait-only** (mock-implemented)~~ **★ corrected 2026-07-27: true of `Device`/`Present`, false of `Vmm`** — `crates/kayfabe-vmm-kvm` is a real KVM adapter with a real memory plane. ★ A second backend is contracted to cost **one adapter crate, zero trait changes** — `l1_os_shell.md` §6.0, CI-gated |
 | `Isolate`, `IsolateFactory`, `RmBackend` | `kayfabe-isolate` | L1 (sandboxed Linux worker) | **trait-only** (mock-implemented) |
 | `Arch`, `GmmuFmt`, `UserdModel`, `PushbufferAbi` | `kayfabe-arch` | L3 (`impl Arch for <Gen>`) | **trait-only** (MockArch = "Mockingbird") |
-| `DriverAbi` (Axis A) | `kayfabe-abi` | L3 codegen from ogkm | **stub** (shape only) |
+| `DriverAbi` (Axis A) | `kayfabe-abi` | L3 codegen from ogkm | ~~**stub** (shape only)~~ **★ corrected 2026-07-27: built** — offline generator (`crates/kayfabe-abi/gen/`), generated `#[repr(C)]` structs (`src/generated/`), version-dispatch decode (`src/versions.rs`, `src/wire.rs`) and oracle tests (`tests/`). Found by the whitepaper's verification pass |
 | `TraceSink` | `kayfabe-trace` | adapter log/file | **built** — typed `TraceEvent` vocabulary, `Recorder` (one counter = one total order), perf-budget counters, projection differential. No adapter sink yet; no `&mut Trace` threaded through the plane signatures |
 | `FbRead` (walker's PT source) | `kayfabe-mmu::walker` | FB shadow | **skeleton** |
 
-Note: nothing implements `kayfabe_vmm::Device` yet — that needs the register + GSP models
-(`kayfabe-gsp`), which port at the L2 step. The core's current entry surface is the
-event-level API (`Gpu::apply` + the `kayfabe-fwd` free functions). ★ And when it lands, the
-implementor is the **L1 shell** (`kayfabe_rt::SharedDevice`), not `Gpu`: `Device`'s entry
-points take `&self` so the port admits the core's per-`Proc` sharding (`l1_os_shell.md`
-§6.3, `kayfabe-vmm` rustdoc).
+Note: nothing in the production crates implements `kayfabe_vmm::Device` yet — that needs the
+register + GSP models (`kayfabe-gsp`), which port at the L2 step. The core's current entry
+surface is the event-level API (`Gpu::apply` + the `kayfabe-fwd` free functions).
+
+> ★ **corrected 2026-07-27 — read this as an intention, not as a fact about the tree.**
+> This paragraph used to continue *"when it lands, the implementor is the **L1 shell**
+> (`kayfabe_rt::SharedDevice`)"*, and the surrounding text reads as though the shell
+> already does it. **There is no `impl Device for SharedDevice` anywhere in the
+> workspace.** The only two implementors are test types —
+> `tests/tests/vmm_portability.rs::ShardedDevice` and `tests/src/guest.rs::DoorbellDevice`
+> — which exercise the port's `&self` shape without being the shell.
+>
+> What survives unchanged is the *design decision* and its reason: `Device`'s entry points
+> take `&self` so the port admits the core's per-`Proc` sharding, which is why the intended
+> implementor is the shell (which owns the ranked locks) rather than `Gpu` — `l1_os_shell.md`
+> §6.3, `kayfabe-vmm` rustdoc. Found by the whitepaper's verification pass.
 
 ## Crate → responsibility
 
@@ -51,15 +61,15 @@ points take `&self` so the port admits the core's per-`Proc` sharding (`l1_os_sh
 | `kayfabe-core` | ★ `RmGraph` (refcounted source of truth) → `project()` (pure boundaries + routing) → `Gpu`/`Proc`/`Vas`/`Channel` runtime + per-proc GPA arenas | arch §4.3; decisions #14/#17/#18 | **full** |
 | `kayfabe-mmu` | per-VAS `AddressTable`: forward-populate only, MISS=FAULT, unmap-eager | `mode2_address_table.md` | **full** (table); walker **skeleton** |
 | `kayfabe-completion` | per-proc `CompletionQueue` + device/target `DeliveryPlane` (drain-gated, poll-driven re-post) + `FenceArms` (pattern e, #12 jump guard) | arch §4.3.2; `execution_plane.md` §1.2/§2.4 | **full** |
-| `kayfabe-fwd` | intent → host ops: `handle_doorbell` (the ONE ring path), `publish_backing`, `parse_pushbuffer` (the ONE parser), `forward_engine_object`/`route_control` (Case-1/Case-2), fence arm/observe, `present_scanout` | arch §4.2; `execution_plane.md` §2 | **full** (core slice) |
+| `kayfabe-fwd` | intent → host ops: `plan_doorbell` (**the ONE gate** every ring path runs; `handle_doorbell` is the single-threaded composition over it), `publish_backing`, `parse_pushbuffer` (the ONE parser), `forward_engine_object`/`route_control` (Case-1/Case-2), fence arm/observe, `present_scanout` | arch §4.2; `execution_plane.md` §2 | **full** (core slice) |
 | `kayfabe-vmm` | the hypervisor/display ports | arch §4.1 | traits only |
 | `kayfabe-isolate` | the sandbox/host-RM ports (RM **verbs**, not ioctls) | arch §4.2/§4.3.4 | traits only |
-| `kayfabe-abi` | Axis-A: generated per-driver-version wire tables; the ONLY future home of `#[repr(C)]` | `mode2_abi_agnostic_layer.md` §2 | **stub** |
-| `kayfabe-gsp` | faked GSP boot FSM + seqNum queue transport (resettable) | arch §4.2/§4.5 step 2 | **stub** |
+| `kayfabe-abi` | Axis-A: generated per-driver-version wire tables; the ONLY home of `#[repr(C)]` | `mode2_abi_agnostic_layer.md` §2 | **built** (generator + generated structs + version dispatch + oracle tests) — ★ corrected 2026-07-27, was "**stub**" |
+| `kayfabe-gsp` | faked GSP boot FSM + seqNum queue transport (resettable) | arch §4.2/§4.5 step 2; `mode2_gsp_port_plan.md` | **stub** — [unverified 2026-07-27: under active construction; read `crates/kayfabe-gsp/src/lib.rs`, not this row] |
 | `kayfabe-trace` | trace/replay vocabulary + budget counters | lesson L6; `mode2_gsp_port_plan.md` §6 | **built** (vocabulary + sink port + differential); plane call sites not yet threaded |
 | `kayfabe-mocks` | one deterministic fake per port + shared verb recorder | testing §4 | **full** (test-only) |
 | `kayfabe-rt` | ★ the L1 threaded shell: `LockRank` + always-on R1/R3 asserts, `SharedDevice` (both `LockMode`s), inbox, executor, isolate pool gate | `l1_concurrency.md` §3/§7 | **full** (L1-M1) |
-| `tests/` | the conformance suite (23 files) + the `Scenario` DSL | testing §2/§3 | **full** |
+| `tests/` | the conformance suite (`tests/tests/`, plus per-crate suites under `crates/*/tests/`) + the `Scenario` DSL | testing §2/§3 | **full** |
 
 ## The data-plane spine
 
@@ -80,8 +90,13 @@ Proc (per guest process)     owns ALL FOUR planes:
   • completion — CompletionQueue + FenceArms                            (starvation fix)
   • isolate+arena — per (Proc,GpuId) sandbox + disjoint GPA arena       (blast radius)
 kayfabe-fwd                    the entry points adapters call:
-  handle_doorbell → decode → (GpuId,VChid) route → #14 ring-gate → lazy materialize
-                    (engine-aware alloc_channel) → schedule → ring   [the ONE ring path]
+  route_doorbell → decode → (GpuId,VChid) route
+    └─► plan_doorbell → #14 ring-gate → the plan            [the ONE gate: every ring
+        └─► Worker::execute (kayfabe-isolate) → materialize  path goes through here]
+            (engine-aware alloc_channel) → schedule → ring_doorbell
+            └─► commit_doorbell → re-validate → adopt
+  (`handle_doorbell` = the single-threaded composition; `kayfabe_rt::SharedDevice::
+   doorbell` = the L1 composition, and it is the one a real guest MMIO write takes)
   publish_backing → arena carve + host map into the Vas's OWN host VAS → table bind
   parse_pushbuffer → CE-PT-write capture / SemRelease observe / TlbInvalidate / opaque
   forward_engine_object / route_control → Case-1 forward vs Case-2 ack-only
@@ -107,10 +122,41 @@ kayfabe-fwd                    the entry points adapters call:
 3. **Per-`(GpuId, ·)` keying** — `Pdb`/`VChid` are per-GPU namespaces; every routing
    table, fault, and collision guard carries the target. Cross-GPU identical ids are
    legal; same-target duplicates are loud collisions (the F1 guard, scoped).
+   ⚠ **`F1` is an overloaded label in this tree — do not grep it expecting one thing**
+   (noted 2026-07-27). Here it means the `PdbCollision`/`VChidCollision` guard whose
+   provenance is the security finding **F1** in `core_security_threat_model.md`
+   (`crates/kayfabe-core/src/project.rs`). Elsewhere `F1` is the *C threading bug* F1 from
+   `l1_concurrency.md` §0, whose descendant is the reactor **wake-count gate**
+   (`l1_os_shell.md` §3.4, `crates/kayfabe-shell/src/reactor.rs`) — unrelated. And the
+   contact logs (`l1_os_shell.md` §14, `l1_concurrency.md` §12) number their *findings*
+   `F1…` per section, so a third, section-local `F1` exists in each. Nothing is being
+   renamed here; the collision is being labelled.
 4. **Per-`Proc` isolation (#14, I1)** — identical guest VAs/handles in two procs reach
    disjoint GPA arenas, disjoint host VASes, disjoint isolates, by construction.
-5. **One structurally-gated ring path** — `handle_doorbell` is the only caller of
-   `RmBackend::ring_doorbell` and always gates first; no ungated sibling exists.
+5. **One structurally-gated ring path** — ~~`handle_doorbell` is the only caller of
+   `RmBackend::ring_doorbell` and always gates first~~ ★ **corrected 2026-07-27: the
+   cardinality was wrong, the safety property is not.** `RmBackend::ring_doorbell` has
+   exactly one call site and it is inside `kayfabe_isolate::Worker::execute`, two hops
+   away; `handle_doorbell` does not call it directly, and the L1 path a real guest MMIO
+   write takes — `kayfabe_rt::SharedDevice::doorbell` — **never enters `handle_doorbell`
+   at all**. Re-anchor the invariant one level down: **`kayfabe_fwd::plan_doorbell` is the
+   sole constructor of `VerbPlan::Doorbell`, and it runs the #14 ring-gate before it
+   returns one.** `Worker::execute` can only ring what a `VerbPlan::Doorbell` asks it to
+   ring, and inside the production crates the only thing that builds one is
+   `plan_doorbell` — so both compositions (`handle_doorbell` for the single-threaded/test
+   path, `SharedDevice::doorbell` for L1) are gated by construction rather than by caller
+   discipline. Found by the whitepaper's verification pass.
+   ⚠ **Residual, noted 2026-07-27 and not fixed here (docs-only pass): "structural" is a
+   statement about the production call graph, not about the type system.**
+   `kayfabe_isolate::VerbPlan` is a public enum with public variant fields and
+   `Worker::execute` is public, so a plan can be built without going through
+   `plan_doorbell` and rung with the #14 gate never having run —
+   `tests/tests/cross_proc_lifetime.rs` already constructs a `VerbPlan::Doorbell`
+   directly. Inside the workspace that is a test affordance; as a *crate boundary* it is
+   an ungated door that the invariant's own wording says does not exist. If the intent is
+   the stronger claim, the enforcement to add is on the constructor
+   (`kayfabe-isolate` owning a `#[non_exhaustive]`/private-field builder), not on the
+   prose. **This is a code question, not a documentation one.**
 6. **Completion integrity (I2)** — per-proc queues; re-delivery off the owner's OWN
    poll; the system-forge path can never reach a user proc's queue; fence observations
    respect the #12 `MAX_FENCE_JUMP` backwards guard.
@@ -153,11 +199,17 @@ kayfabe-fwd                    the entry points adapters call:
 
 ## Verification & migration order
 
-**283 tests** (nothing `#[ignore]`d; the two measured-slow tests gate on
-`KAYFABE_SLOW=1` — see README); clippy clean; two mutation scores kept separate — **99.2%**
-on the pure L0 core, **92.44%** on the L1 threaded surface with a 91% CI floor
-(`docs/design/core_mutation_gate.md`); TSan green across all four threaded targets; 15 real
-core bugs found pre-hardware by the adversarial suites at L0, more since at L1.
+The suite is in the **500s** as of 2026-07-27 (nothing `#[ignore]`d; the measured-slow tests
+gate on `KAYFABE_SLOW=1` — see README; `cargo test --workspace` is the count of record).
+Clippy clean. ★ **Mutation score: not quotable as of 2026-07-27** — the gate's scope changed
+from four hand-picked paths to every production crate and the workflow marks its threshold
+*pending re-derivation*, so the previously-quoted **99.2%** (L0) / **92.44%** with a 91% floor
+(L1) describe a different population; see `docs/design/core_mutation_gate.md`. TSan runs over
+four threaded targets (`concurrency_stress`, `rt_shell`, `l1_verb_seam`, `l1_mean`); the "0
+races" result is the first campaign's and has not been re-run. 15 real core bugs found
+pre-hardware by the adversarial suites at L0, more since at L1.
+(★ corrected 2026-07-27: this paragraph said "283 tests" and quoted both mutation scores as
+settled; found by the whitepaper's verification pass.)
 
 **Where things stand:** L0 complete and consolidated; **L1-M1** (the threaded shell — ranked
 locks with asserted R1/R3, plan/execute/commit, the bounded worker pool, the pure

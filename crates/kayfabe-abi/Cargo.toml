@@ -1,6 +1,6 @@
 [package]
 name = "kayfabe-abi"
-description = "SKELETON — Axis A: the codegen'd declarative ABI (NVOS structs, class IDs, alloc-param sizes, GSP-RPC layouts, register offsets) behind the DriverAbi dispatch trait. The ONLY crate where #[repr(C)] NVIDIA wire structs will ever live."
+description = "Axis A: the codegen'd declarative ABI (NVOS structs, class IDs, alloc-param sizes, GSP-RPC layouts, register offsets) behind the DriverAbi dispatch trait — offline generator in gen/, generated structs in src/generated/, version-keyed decode in src/versions.rs and src/wire.rs, oracle tests in tests/. The ONLY crate where #[repr(C)] NVIDIA wire structs live."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

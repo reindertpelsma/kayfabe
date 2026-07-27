@@ -12,13 +12,27 @@
 //!   #14) with a fresh GPA-arena allocation + a host mapping in *that Vas's own host
 //!   VAS*. This function IS the #14 fix in code: two procs' identical guest VAs run
 //!   through disjoint arenas and disjoint host VASes by construction.
-//! - [`handle_doorbell`] — **the ONE ring path** (there is no other function that
-//!   reaches `RmBackend::ring_doorbell`): `Arch::decode_doorbell` → vChid →
-//!   `by_vchid` → `(Proc, Channel)` → **the #14 ring-gate** (the channel's Vas
-//!   working set must be host-published — structural, not caller discipline) →
-//!   materialize/schedule that channel on **its proc's own** exec plane (nothing
-//!   one-shot, nothing scalar — crack ⚠4) → ring its host token on **its proc's
-//!   own** isolate.
+//! - [`plan_doorbell`] — **the ONE ring gate**: `Arch::decode_doorbell` → vChid →
+//!   `by_vchid` → `(Proc, Channel)` (in [`route_doorbell`]) → **the #14 ring-gate** (the
+//!   channel's Vas working set must be host-published — structural, not caller
+//!   discipline) → a `VerbPlan::Doorbell` that materializes/schedules that channel on
+//!   **its proc's own** exec plane (nothing one-shot, nothing scalar — crack ⚠4) and
+//!   rings its host token on **its proc's own** isolate.
+//!
+//!   ★ **corrected 2026-07-27** — this list used to read *"[`handle_doorbell`] — the ONE
+//!   ring path (there is no other function that reaches `RmBackend::ring_doorbell`)"*.
+//!   That cardinality is false and was found by the whitepaper's verification pass:
+//!   `RmBackend::ring_doorbell` has exactly **one** call site and it is inside
+//!   `kayfabe_isolate::Worker::execute`, which [`handle_doorbell`] reaches only
+//!   indirectly — and the L1 path a real guest MMIO write takes,
+//!   `kayfabe_rt::SharedDevice::doorbell`, **never enters [`handle_doorbell`] at all**.
+//!   The *safety* property is unchanged, one level down: [`plan_doorbell`] is the sole
+//!   constructor of `VerbPlan::Doorbell` in the production crates and it runs the gate
+//!   before returning one, so `Worker::execute` has nothing un-gated it could be asked to
+//!   ring. [`handle_doorbell`] and `SharedDevice::doorbell` are two **compositions** over
+//!   that one gate (single-threaded and L1-sharded); neither is a second door. (See
+//!   [`handle_doorbell`]'s own docs for the residual: `VerbPlan` is a public enum, so the
+//!   guarantee is over the call graph, not enforced by the type system.)
 //! - [`deliver_completions`] / [`poll_completions`] — glue from the core's completion
 //!   policy to `Vmm::raise_irq` (the SWGEN0 edge; transport encoding is `kayfabe-gsp`'s
 //!   job once it ports).
@@ -1314,18 +1328,34 @@ pub fn commit_doorbell(
     })
 }
 
-/// ★ THE ONE ring path — the exec-plane demux, **structurally gated** (#14,
-/// `execution_plane.md` §2.4; the C's "one exec path" refactor-debt lesson): one
-/// guest doorbell write → gate → the owning proc's channel rung on the owning
-/// proc's isolate. No ungated sibling exists; nothing else in the workspace calls
-/// `RmBackend::ring_doorbell`.
+/// ★ The **single-threaded composition** of the one gated ring path — the exec-plane
+/// demux, **structurally gated** (#14, `execution_plane.md` §2.4; the C's "one exec path"
+/// refactor-debt lesson): one guest doorbell write → gate → the owning proc's channel rung
+/// on the owning proc's isolate.
 ///
 /// The **split-borrow composition** of [`route_doorbell`] (pure spine read) +
 /// [`exec_doorbell`] (owning-proc act) — L1 cardinal rule R4 factored in the core.
-/// The gate is **structural, not caller discipline**: [`exec_doorbell`] is the ONLY
-/// function that reaches `RmBackend::ring_doorbell`, and it ALWAYS runs the gate
-/// before any host op — a caller cannot choose an ungated door because none exists
-/// (the removed `ring_gated` sibling was the debt).
+///
+/// ★ **corrected 2026-07-27** (found by the whitepaper's verification pass). This doc used
+/// to claim *"No ungated sibling exists; nothing else in the workspace calls
+/// `RmBackend::ring_doorbell`"* and *"[`exec_doorbell`] is the ONLY function that reaches
+/// `RmBackend::ring_doorbell`"*. Both are false as stated: the sole `ring_doorbell` call
+/// site is inside `kayfabe_isolate::Worker::execute`, and **this function is not on the L1
+/// path at all** — a real guest MMIO write goes through `kayfabe_rt::SharedDevice::doorbell`,
+/// which drives plan/execute/commit itself and never calls `handle_doorbell`.
+///
+/// The gate is still **structural, not caller discipline**, and the argument simply moves
+/// down one level: [`plan_doorbell`] is the sole constructor of `VerbPlan::Doorbell`
+/// *within the production crates*, and it runs the #14 ring-gate before any host op
+/// exists — so neither composition can hand `Worker::execute` an un-gated ring, and the
+/// removed `ring_gated` sibling stays removed.
+///
+/// ⚠ Precisely: "structural" here describes the **call graph**, not the type system.
+/// `kayfabe_isolate::VerbPlan` is a public enum with public fields and
+/// `kayfabe_isolate::Worker::execute` is public, so a `VerbPlan::Doorbell` *can* be built
+/// without this crate — `tests/tests/cross_proc_lifetime.rs` does exactly that. Making the
+/// stronger claim true would mean putting the enforcement on the constructor in
+/// `kayfabe-isolate`; noting it here rather than asserting past it.
 pub fn handle_doorbell(
     gpu: &mut Gpu,
     target_gpu: GpuId,
@@ -2072,10 +2102,17 @@ pub fn parse_pushbuffer(
 // channel's Vas's own host VAS; an unpublished VA at ring time is a LOUD fault, never
 // a cross-proc content-pick (the exact confused-deputy designed out).
 //
-// The gate is STRUCTURAL: [`handle_doorbell`] is the ONE ring path (nothing else in
-// the workspace reaches `RmBackend::ring_doorbell`) and it gates the caller-recovered
-// working set against the channel's `Vas` table on every ring — there is no ungated
-// sibling to bypass (the C's
+// The gate is STRUCTURAL: [`plan_doorbell`] is the ONE ring gate (★ corrected 2026-07-27:
+// this said "[`handle_doorbell`] is the ONE ring path (nothing else in the workspace
+// reaches `RmBackend::ring_doorbell`)" — false as stated; the sole `ring_doorbell` call
+// site is in `kayfabe_isolate::Worker::execute`, and the L1 path goes through
+// `kayfabe_rt::SharedDevice::doorbell`, not through `handle_doorbell`. Found by the
+// whitepaper's verification pass). `plan_doorbell` is the sole constructor of
+// `VerbPlan::Doorbell` in the production crates and it gates the caller-recovered
+// working set against the channel's `Vas` table before returning one — so there is no
+// ungated sibling to bypass and no un-gated plan any production path can hand a worker
+// (`VerbPlan` is a public enum, so this is a call-graph property, not a type-system one
+// — see `handle_doorbell`'s docs) (the C's
 // "one exec path" refactor-debt lesson, closed by construction). `gate_working_set`
 // below is the read-only QUERY form of the same predicate; it cannot ring anything.
 // =================================================================================
@@ -2087,7 +2124,7 @@ pub fn parse_pushbuffer(
 /// This is the load-bearing per-`Vas` publication check: two procs' identical guest
 /// VAs each resolve in their OWN Vas (keyed by PDB), so the gate passes for both only
 /// because each published into its OWN host VAS (distinct `HostHandle`s). The
-/// ENFORCING form lives inside [`handle_doorbell`] — this query cannot ring.
+/// ENFORCING form lives inside [`plan_doorbell`] — this query cannot ring.
 pub fn gate_working_set(
     gpu: &Gpu,
     pid: ProcId,
