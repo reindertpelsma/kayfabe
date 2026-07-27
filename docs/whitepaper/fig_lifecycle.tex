@@ -1,0 +1,113 @@
+% ===========================================================================
+% FIGURE — the lifecycle: the eight teardown triggers and the retire/reap
+% split.  Source: docs/design/l1_os_shell.md §7.6 (T0..T7) and §7.8 (the
+% conservation ledger), cross-checked against kayfabe-core/src/gpu.rs
+% (Proc::retire, Gpu::reap_retired) and kayfabe-isolate (two-stage retire).
+% Status colours are this document's reading of the tree, not the doc's.
+% ===========================================================================
+\begin{tikzpicture}[x=1mm,y=1mm, font=\sffamily\scriptsize]
+\def\tc#1{{\ttfamily\fontsize{5.4}{6}\selectfont #1}}
+
+% --------------------------------------------------------- the central law --
+\node[box, fill=kfcore, draw=kfcoreln, line width=1.1pt,
+      minimum width=176mm, minimum height=11mm] at (0,72)
+  {\textbf{The law every path obeys: RETIRE EAGER, REAP DEFERRED}\\[2pt]
+   \tiny \textbf{Retire} is immediate and cheap: the \tc{Proc} stops accepting operations, its isolates refuse new
+   check-outs. \;\textbf{Reap} is the heavy half — freeing host objects,\\[-0.5pt]
+   \tiny killing isolate processes, recycling the GPA arena — and it runs later, at a quiesce point the adapter
+   declares (\tc{Gpu::reap\_retired}).\\[-0.5pt]
+   \tiny \textbf{Why:} the C artifact proved that reaping at the client-root free \emph{hangs the dying context's own
+   residual polls}. Reaping never is the \#80 leak. Both were paid for on hardware.};
+
+% ---------------------------------------------------------- the eight rows --
+\def\row#1#2#3#4#5{%
+  \node[box, fill=white, draw=kfportln, minimum width=26mm, minimum height=10mm,
+        anchor=west, font=\sffamily\tiny]
+    at (-88,#1) {\textbf{\normalsize #2}\\[1.5pt]#3};
+  \node[anchor=west, align=left, text width=94mm, font=\sffamily\tiny] at (-60,#1) {#4};
+  \node[anchor=west, align=left, text width=42mm, font=\sffamily\tiny] at (38,#1) {#5};
+}
+
+\node[anchor=west, font=\sffamily\bfseries\tiny, color=kfgrey] at (-88,63) {TRIGGER};
+\node[anchor=west, font=\sffamily\bfseries\tiny, color=kfgrey] at (-60,63) {WHAT HAPPENS};
+\node[anchor=west, font=\sffamily\bfseries\tiny, color=kfgrey] at (38,63) {STATUS — read from the tree};
+\draw[kfrule] (-88,61) -- (88,61);
+
+\row{55}{T0}{a guest frees a\\ subset and keeps\\ running}
+  {The most frequent path in a real workload, and \textbf{the one with no
+   backstop} — nothing dies, so nothing reclaims. Dropped host identities move to a
+   \tc{pending\_release} queue on the \tc{Proc} and drain on a checked-out worker.}
+  {\textbf{\color{kfstubln}Built, and lazier than designed.} The drain may fire only when
+   the isolate is otherwise idle (\tc{is\_quiesced}), because no lock can exclude a verb that runs lock-free.}
+
+\row{43}{T1}{a verb is cancelled\\ mid-flight}
+  {The cancel is latched, discharged with no lock held, surfaces as \tc{EINTR} $\rightarrow$
+   \tc{Interrupted} $\rightarrow$ \tc{FwdFault::Cancelled}; the chain's own unwind frees what it had
+   allocated; the worker is checked back in.}
+  {\textbf{\color{kfcoreln}Built and tested} (\tc{tests/tests/cancellation.rs}).}
+
+\row{31}{T2}{a guest process\\ exits — normally,\\ killed, or killed\\ mid-verb}
+  {All three are one path: the guest kernel frees the client root on fd close, so an
+   \tc{RmEvent} arrives, the projection finds no boundary, and the retire is
+   \textbf{graph-driven}. Every checked-out worker is cancelled; fresh handles become
+   \tc{Orphans}; the \tc{Proc} lands on the retired list awaiting T3.}
+  {\textbf{\color{kfcoreln}Built and tested.}}
+
+\row{19}{T3}{the GPU goes idle —\\ THE quiesce point}
+  {The guest \emph{tells} us: its driver emits \tc{UNLOADING\_GUEST\_DRIVER} (RPC fn 47)
+   on an idle release and re-runs the queue handshake. That re-handshake is the quiesce
+   point, and the C already ran its deferred reap there. Same doctrine as the address
+   table: an observed protocol event, never an inference about idleness.}
+  {\textbf{\color{kfhostln}HALF A LAW.} \tc{reap\_retired} exists and
+   \tc{CoreEvent::Deferred(DeferredReap)} exists — \textbf{and nothing arms either}.
+   Reap-deferred with no trigger is indistinguishable from reap-never in a run that never quiesces.}
+
+\row{5}{T4}{the guest driver\\ restarts / the GSP\\ re-handshakes}
+  {On \tc{rmmod}, guest panic or VM reset the guest sends \emph{no} \tc{Free} events, so
+   the graph, every live \tc{Proc}, its isolates, arenas, host handles and routing maps
+   all survive into the next driver life — which then derives a second set of components
+   beside the corpses.}
+  {\textbf{\color{kfhostln}NOT BUILT, and the obvious trigger does not exist.}
+   Bench-measured 2026-07-26: \tc{rmmod} emits \textbf{no fn-47 at all} — the idle release
+   at process exit already consumed it. \textbf{The unload has no observable signal.}}
+
+\row{-9}{T5}{an isolate worker\\ dies}
+  {Routing is settled (the component is condemned, keyed on its client set). Reclamation
+   is not: a worker that died \emph{mid-chain} left allocations that are in no \tc{Orphans}
+   and in no core state. The answer is to escalate to isolate death — \tc{SIGKILL} — because
+   killing the process is how you reclaim state you cannot enumerate.}
+  {\textbf{\color{kfstubln}Partly built.} The design calls this
+   "the single most leak-prone moment"; the carrier type (\tc{VerbFailure\{err, orphans\}}) exists.}
+
+\row{-21}{T6}{isolate garbage\\ collection}
+  {\tc{SIGKILL} $\rightarrow$ the process's \emph{exit descriptor} becomes readable $\rightarrow$
+   reactor $\rightarrow$ \tc{waitpid} (non-blocking) $\rightarrow$ close descriptors, tear down
+   every double-mmap, release arenas, drop worker slots. The kernel already released the host
+   RM objects by closing the connection.}
+  {\textbf{\color{kfstubln}Designed; the OS half is unexercised} — no real isolate process
+   has ever been spawned.}
+
+\row{-33}{T7}{whole-device\\ teardown}
+  {An explicit ordered \tc{shutdown()}, never a \tc{Drop}: stop accepting traps, cancel every
+   worker, wait bounded, retire everything, reap unconditionally, kill every isolate, drain the
+   inbox asserting every remaining event faults rather than mutates, join the threads with no
+   lock held, and \textbf{assert the conservation ledger balances}. \tc{Drop} is a tripwire that
+   logs loudly if \tc{shutdown()} was skipped.}
+  {\textbf{\color{kfstubln}Designed; partly built.}}
+
+% ------------------------------------------------------------- the ledger ---
+\node[box, fill=kfshell!45, draw=kfshellln, minimum width=176mm, minimum height=12mm] at (0,-51)
+  {\textbf{The instrument all eight are measured by — the conservation ledger} \;
+   \tc{HostLedger}, \tc{kayfabe-mocks/src/lib.rs:1241}\\[2pt]
+   \tiny Replays the recorded verb log and demands: every acquisition matched by exactly one release, nothing
+   released that was never acquired — objects \emph{and} mappings.\\[-0.5pt]
+   \tiny A test may declare a \tc{ResidueClaim} for what it knowingly leaves outstanding, and the counts are
+   compared for \textbf{equality, not as a bound}: less residue than declared fails too, so a fix that closes a
+   leak must delete the claim that excused it.\\[-0.5pt]
+   \tiny \textbf{★ Its first census over the mean run reported zero leaks — and that was a true negative, not a
+   pass.} The workload it was measuring only ever added and removed \emph{RPC} bindings, which own nothing
+   host-side.\\[-0.5pt]
+   \tiny Once a phase was written that actually allocates before it frees, the honest baseline was
+   \textbf{24 objects, 6 mappings and 24\,576 GPA bytes leaking, linear in frees.}};
+
+\end{tikzpicture}

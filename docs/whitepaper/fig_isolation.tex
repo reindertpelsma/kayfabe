@@ -1,0 +1,103 @@
+% ===========================================================================
+% FIGURE — the process / isolation model, and the problem it exists to solve.
+% Verified against kayfabe-core/src/gpu.rs (Proc, Vas, Channel, IsolateBox),
+% gpa.rs (GpaSpace/GpaArena), kayfabe-isolate/src/lib.rs (IsolateFactory).
+% ===========================================================================
+\begin{tikzpicture}[x=1mm,y=1mm, font=\sffamily\scriptsize]
+\def\tc#1{{\ttfamily\fontsize{5.4}{6}\selectfont #1}}
+
+% ---------------------------------------------------------------- the guest --
+\node[guestb, minimum width=54mm, minimum height=14mm] (pa) at (-48,89)
+  {\textbf{guest process A} \;(e.g.\ PyTorch)\\[2pt]
+   \tiny \tc{hClient = 0xc1d00001}\\[-0.5pt]
+   \tiny buffer at guest VA \tc{0x7f\_0000\_0000}\\[-0.5pt]
+   \tiny channel handle \tc{0x00000010}};
+\node[guestb, minimum width=54mm, minimum height=14mm] (pb) at (48,89)
+  {\textbf{guest process B} \;(e.g.\ llama.cpp)\\[2pt]
+   \tiny \tc{hClient = 0xc1d00001} \;\textbf{— the same value}\\[-0.5pt]
+   \tiny buffer at guest VA \tc{0x7f\_0000\_0000} \;\textbf{— the same VA}\\[-0.5pt]
+   \tiny channel handle \tc{0x00000010} \;\textbf{— the same handle}};
+\node[align=center, font=\sffamily\tiny, color=kfhostln, text width=32mm] at (0,89)
+  {\textbf{Not a corner case.}\\ Handles and guest VAs are\\ \emph{per-process namespaces};
+   two\\ processes colliding on every\\ value is normal.\\[1.5pt]
+   \textbf{This is bug \#14.}};
+
+\draw[ar, kfguestln] (pa.south) -- ++(0,-4);
+\draw[ar, kfguestln] (pb.south) -- ++(0,-4);
+
+% --------------------------------------------------- what disambiguates them --
+\node[emulb, minimum width=134mm, minimum height=10mm] at (0,74)
+  {\textbf{The only values that are NOT process-chosen are the ones the guest \emph{kernel} assigns from real hardware:}\\[2pt]
+   \tiny \tc{Pdb} — the page-directory base, which the GMMU itself keys page tables by
+     $\Rightarrow$ \textbf{the memory boundary}\\[-0.5pt]
+   \tiny \tc{VChid} — the virtual channel id a doorbell token decodes to
+     $\Rightarrow$ \textbf{the execution boundary}\\[-0.5pt]
+   \tiny Everything is keyed \tc{(GpuId, Pdb)} or \tc{(GpuId, VChid)}. Never on a client handle.
+     Never on host CPU state — no CR3 is read anywhere.};
+
+% ------------------------------------------------------------- the two Procs --
+\foreach \x/\lbl/\pdb/\ch/\ar in {-46/A/0x0a1000/14/{[0x0000\_0000,\;0x1000\_0000)},
+                                   46/B/0x0b7000/15/{[0x1000\_0000,\;0x2000\_0000)}}
+{
+  \draw[draw=kfcoreln, line width=1pt, rounded corners=2pt, fill=kfcore!30]
+    (\x-31,11) rectangle (\x+31,65);
+  \node[anchor=north, font=\sffamily\bfseries\small, color=kfcoreln] at (\x,64)
+    {\tc{Proc} \lbl\; — one guest process};
+  \node[coreb, minimum width=58mm, minimum height=10mm] at (\x,53)
+    {\textbf{address plane}\\[1pt]
+     \tiny \tc{Vas} per \tc{(GpuId, Pdb=\pdb)} — its own \tc{AddressTable}\\[-0.5pt]
+     \tiny \textbf{and its own host address space} (the \#14 fix)};
+  \node[coreb, minimum width=58mm, minimum height=10mm] at (\x,41)
+    {\textbf{execution plane}\\[1pt]
+     \tiny \tc{Channel} per \tc{vChid = \ch} + a per-proc \tc{ExecPlane}\\[-0.5pt]
+     \tiny nothing scheduled is one-shot or device-global (the \#12 fix)};
+  \node[coreb, minimum width=58mm, minimum height=10mm] at (\x,29)
+    {\textbf{completion plane}\\[1pt]
+     \tiny its own \tc{CompletionQueue} + \tc{FenceArms}; re-delivery is\\[-0.5pt]
+     \tiny driven off \emph{this} proc's own poll (the starvation fix)};
+  \node[coreb, minimum width=58mm, minimum height=10mm] at (\x,17)
+    {\textbf{isolate + GPA arena}\\[1pt]
+     \tiny a disjoint slice of the guest-physical window: \tc{\ar}\\[-0.5pt]
+     \tiny \tc{GpaSpace::release} takes the arena \textbf{by value}};
+}
+\draw[arb, kfhostln, dashed, line width=0.8pt] (-16,41) -- (16,41);
+\node[align=center, font=\sffamily\tiny, color=kfhostln, text width=30mm] at (0,35)
+  {\textbf{no shared state}\\ on any of the\\ four planes};
+
+% ------------------------------------------------------------- the isolates --
+\node[portb, fill=white, minimum width=58mm, minimum height=11mm] (ia) at (-48,4)
+  {\textbf{isolate process} for \tc{(Proc A, GPU 0)}\\[1pt]
+   \tiny separate OS process, unprivileged uid, namespaces,\\[-0.5pt]
+   \tiny \tc{pivot\_root}, seccomp, cleared env and fds\\[-0.5pt]
+   \tiny a bounded pool of single-in-flight workers};
+\node[portb, fill=white, minimum width=58mm, minimum height=11mm] (ib) at (48,4)
+  {\textbf{isolate process} for \tc{(Proc B, GPU 0)}\\[1pt]
+   \tiny its own host RM client; handles minted here are\\[-0.5pt]
+   \tiny typed to \emph{this} isolate, so a cross-isolate handle\\[-0.5pt]
+   \tiny does not merely fail — it does not type-check};
+\draw[ar, kfcoreln] (-48,11) -- (ia.north);
+\draw[ar, kfcoreln] ( 48,11) -- (ib.north);
+
+\node[align=center, font=\sffamily\tiny, color=kfhostln, text width=32mm] at (0,4)
+  {\textbf{Blast radius.} A guest process that\\ crashes, wedges or attacks its own\\ isolate loses that isolate
+   and nothing\\ else. The claim is \textbf{process-grade},\\ not VM-grade, isolation between\\ guest processes.};
+
+% -------------------------------------------------------------- the host GPU --
+\node[hostb, minimum width=134mm, minimum height=10mm] (hg) at (0,-13)
+  {\textbf{one real host GPU}, driven by the ordinary NVIDIA driver through ordinary unprivileged \tc{ioctl}s\\[2pt]
+   \tiny the host's own kernel RM keeps the two isolates' address spaces, channels and contexts apart —
+   we are not asking it for anything unusual};
+\draw[ar] (ia.south) -- (ia.south |- hg.north);
+\draw[ar] (ib.south) -- (ib.south |- hg.north);
+
+% ---------------------------------------------------------------- honesty box --
+\node[box, fill=kfhost!30, draw=kfhostln, minimum width=178mm, minimum height=11mm] at (0,-29)
+  {\textbf{\color{kfhostln}What is actually running, as of this document.}\\[2pt]
+   \tiny The per-\tc{Proc} plane ownership above is \textbf{built and heavily tested} in Rust — against
+   \tc{MockIsolateFactory}, in one process, with no OS sandbox.\\[-0.5pt]
+   \tiny \textbf{No real isolate process has ever been spawned by this codebase}: \tc{IsolateFactory} and
+   \tc{RmBackend} have exactly one implementation each, and it is the mock.\\[-0.5pt]
+   \tiny The sandbox posture described above is the \emph{C artifact's} Mode-1 stub, cited as the target.
+   Porting it is L1 work that has not been done.};
+
+\end{tikzpicture}

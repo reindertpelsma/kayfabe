@@ -1,0 +1,105 @@
+% ---------------------------------------------------------------------------
+% kayfabe whitepaper — shared preamble
+% Build: lualatex (vector output, TikZ diagrams, fontspec)
+% ---------------------------------------------------------------------------
+\usepackage{fontspec}
+\setmainfont{TeX Gyre Pagella}
+\setsansfont{TeX Gyre Heros}[Scale=0.92]
+\setmonofont{Inconsolata}[Scale=0.95]
+
+\usepackage[a4paper,margin=2.2cm,top=2.4cm,bottom=2.4cm]{geometry}
+\usepackage{microtype}
+\usepackage[table]{xcolor}
+\usepackage{graphicx}
+\usepackage[export]{adjustbox}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+\usepackage{multirow}
+\usepackage{pdflscape}
+\usepackage{needspace}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric,
+                shapes.misc,decorations.pathreplacing,patterns,shadows.blur}
+\usepackage[hidelinks,colorlinks=true,linkcolor=kfblue,urlcolor=kfblue,
+            citecolor=kfblue]{hyperref}
+
+% ------------------------------------------------------------------ palette --
+\definecolor{kfblue}{HTML}{1D4ED8}
+\definecolor{kfguest}{HTML}{DBEAFE}
+\definecolor{kfguestln}{HTML}{1D4ED8}
+\definecolor{kfemul}{HTML}{EDE9FE}
+\definecolor{kfemulln}{HTML}{6D28D9}
+\definecolor{kfcore}{HTML}{DCFCE7}
+\definecolor{kfcoreln}{HTML}{15803D}
+\definecolor{kfshell}{HTML}{FEF9C3}
+\definecolor{kfshellln}{HTML}{A16207}
+\definecolor{kfhost}{HTML}{FEE2E2}
+\definecolor{kfhostln}{HTML}{B91C1C}
+\definecolor{kfport}{HTML}{F1F5F9}
+\definecolor{kfportln}{HTML}{475569}
+\definecolor{kfgrey}{HTML}{6B7280}
+\definecolor{kfrule}{HTML}{CBD5E1}
+\definecolor{kfstub}{HTML}{FFEDD5}
+\definecolor{kfstubln}{HTML}{C2410C}
+\definecolor{kfbg}{HTML}{FAFAFA}
+
+% ------------------------------------------------------------------ titling --
+\titleformat{\section}{\sffamily\Large\bfseries\color{black}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\sffamily\large\bfseries}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\sffamily\normalsize\bfseries}{\thesubsubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.6ex plus .4ex}{0.9ex}
+\titlespacing*{\subsection}{0pt}{1.3ex plus .3ex}{0.6ex}
+
+\setlist[itemize]{leftmargin=1.3em,itemsep=0.18ex,topsep=0.5ex,parsep=0pt}
+\setlist[enumerate]{leftmargin=1.6em,itemsep=0.18ex,topsep=0.5ex,parsep=0pt}
+\setlength{\parskip}{0.55ex plus 0.2ex}
+\setlength{\parindent}{0pt}
+\renewcommand{\arraystretch}{1.15}
+
+% --------------------------------------------------------------- semantic UI --
+\newtcolorbox{claimbox}[1][]{
+  enhanced, breakable, colback=kfbg, colframe=kfrule, boxrule=0.4pt,
+  left=2mm, right=2mm, top=1.4mm, bottom=1.4mm, arc=1mm, #1}
+
+\newtcolorbox{warnbox}[1][]{
+  enhanced, breakable, colback=kfhost!35, colframe=kfhostln, boxrule=0.6pt,
+  left=2mm, right=2mm, top=1.4mm, bottom=1.4mm, arc=1mm, #1}
+
+\newtcolorbox{notebox}[1][]{
+  enhanced, breakable, colback=kfguest!45, colframe=kfguestln, boxrule=0.6pt,
+  left=2mm, right=2mm, top=1.4mm, bottom=1.4mm, arc=1mm, #1}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\file}[1]{\texttt{\footnotesize #1}}
+\newcommand{\src}[1]{{\footnotesize\color{kfgrey}\textsf{[#1]}}}
+\newcommand{\built}{{\color{kfcoreln}\textbf{\textsf{BUILT}}}}
+\newcommand{\stub}{{\color{kfstubln}\textbf{\textsf{STUB}}}}
+\newcommand{\unbuilt}{{\color{kfhostln}\textbf{\textsf{NOT BUILT}}}}
+\newcommand{\measured}{{\color{kfcoreln}\textsf{[measured]}}}
+\newcommand{\unver}{{\color{kfhostln}\textsf{[unverified]}}}
+
+% ---------------------------------------------------------------- tikz style --
+\tikzset{
+  box/.style     = {rounded corners=1.6pt, draw, line width=0.6pt, align=center,
+                    inner sep=3pt, font=\sffamily\scriptsize},
+  guestb/.style  = {box, fill=kfguest, draw=kfguestln},
+  emulb/.style   = {box, fill=kfemul,  draw=kfemulln},
+  coreb/.style   = {box, fill=kfcore,  draw=kfcoreln},
+  shellb/.style  = {box, fill=kfshell, draw=kfshellln},
+  hostb/.style   = {box, fill=kfhost,  draw=kfhostln},
+  portb/.style   = {box, fill=kfport,  draw=kfportln, dashed},
+  stubb/.style   = {box, fill=kfstub,  draw=kfstubln},
+  lbl/.style     = {font=\sffamily\scriptsize, color=kfgrey, align=center},
+  tiny/.style    = {font=\sffamily\tiny, align=center},
+  ar/.style      = {-{Stealth[length=2mm,width=1.6mm]}, line width=0.6pt},
+  arw/.style     = {-{Stealth[length=2.4mm,width=2mm]}, line width=1.1pt},
+  arb/.style     = {{Stealth[length=2mm,width=1.6mm]}-{Stealth[length=2mm,width=1.6mm]},
+                    line width=0.6pt},
+  dashar/.style  = {ar, dashed},
+}

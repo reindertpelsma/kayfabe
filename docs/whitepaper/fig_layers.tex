@@ -1,0 +1,120 @@
+% ===========================================================================
+% FIGURE 1 — The layer model and the hexagonal ports.
+% Every box label (line count, maturity) verified against the tree; the
+% dependency direction is verified against crates/*/Cargo.toml.
+% ===========================================================================
+\begin{tikzpicture}[x=1mm,y=1mm, font=\sffamily\scriptsize]
+\def\tc#1{{\ttfamily\fontsize{5.4}{6}\selectfont #1}}
+
+% ============================================================== L2 and L3 ==
+\draw[draw=kfhostln, dashed, line width=0.8pt, rounded corners=1.5pt, fill=white]
+  (-87,99) rectangle (-3,117);
+\node[align=center, anchor=north] at (-45,116)
+  {\textbf{L2 — the VMM / device adapter}\;\; \unbuilt};
+\node[align=center, anchor=north, font=\sffamily\tiny, text width=80mm] at (-45,111)
+  {a QEMU device implementing \tc{Vmm} / \tc{Present} / \tc{Device};\\
+   the BAR + register model, and the \textbf{faked GSP} —\\
+   \textbf{kayfabe-gsp is 34 lines today: this is the critical path}};
+
+\draw[draw=kfhostln, dashed, line width=0.8pt, rounded corners=1.5pt, fill=white]
+  (3,99) rectangle (87,117);
+\node[align=center, anchor=north] at (45,116)
+  {\textbf{L3 — the per-generation NVIDIA adapter}\;\; \unbuilt};
+\node[align=center, anchor=north, font=\sffamily\tiny, text width=80mm] at (45,111)
+  {\tc{impl Arch for <Gen>} (+ one \tc{GmmuFmt}) and the\\
+   per-driver-version \tc{DriverAbi} tables.\\
+   \textbf{Contract: zero edits to any L0 crate.}};
+
+\draw[ar, kfhostln, dashed] (-45,99) -- (-45,95.4);
+\draw[ar, kfhostln, dashed] ( 45,99) -- ( 45,95.4);
+
+% ================================================================ L1 band ==
+\draw[draw=kfshellln, line width=1pt, rounded corners=2pt, fill=kfshell!22]
+  (-88,66) rectangle (88,95);
+\node[anchor=north west, font=\sffamily\bfseries\small, color=kfshellln]
+  at (-86.5,93.8) {L1 — THE LINUX OS SHELL};
+\node[anchor=north east, font=\sffamily\tiny, color=kfshellln]
+  at (86.5,93.4) {M1 complete; M2 (real reactor, real \tc{Vmm}, reclamation) part-built};
+
+\node[shellb, minimum width=52mm, minimum height=10mm] at (-58,83)
+  {\textbf{kayfabe-rt} \;2\,556 L\\[1pt]\tiny ranked locks, always-on R1/R3/R5\\[-0.5pt]
+   \tiny \tc{SharedDevice}, executor, worker pool};
+\node[shellb, minimum width=52mm, minimum height=10mm] at (0,83)
+  {\textbf{kayfabe-shell} \;995 L\\[1pt]\tiny the reactor: epoll loop,\\[-0.5pt]
+   \tiny vCPU / MMIO dispatch, the F1 gate};
+\node[shellb, minimum width=52mm, minimum height=10mm] at (58,83)
+  {\textbf{kayfabe-vmm-kvm} \;1\,891 L\\[1pt]\tiny the real KVM memory plane\\[-0.5pt]
+   \tiny \textbf{\color{kfhostln}1 open defect (\#57)}};
+\node[shellb, minimum width=168mm, minimum height=7mm] at (0,72)
+  {\textbf{kayfabe-linux-raw} \;6\,097 L \;— the \emph{only} crate permitted \tc{unsafe}:
+   37 relaxations, every one in a file named \tc{*\_unsafe.rs}};
+
+\draw[arw, kfshellln] (0,66) -- (0,62.6) node[midway, right=1mm, font=\sffamily\tiny, color=kfshellln]{drives};
+
+% ================================================================ L0 band ==
+\draw[draw=kfcoreln, line width=1.1pt, rounded corners=2pt, fill=kfcore!28]
+  (-46,14) rectangle (46,62);
+\node[anchor=north, font=\sffamily\bfseries\small, color=kfcoreln] at (0,60.6)
+  {L0 — THE PURE LOGIC CORE};
+
+\node[coreb, minimum width=88mm, minimum height=8mm] at (0,51)
+  {\textbf{kayfabe-fwd} \;2\,371 L\\[1pt]
+   \tiny doorbell demux $\cdot$ publish backing $\cdot$ the ring-gate $\cdot$ the ONE pushbuffer parser $\cdot$ Case-1/Case-2 control split};
+\node[coreb, minimum width=88mm, minimum height=10mm] at (0,40)
+  {\textbf{kayfabe-core} \;8\,411 L\\[1pt]
+   \tiny \tc{RmGraph} (source of truth) $\rightarrow$ \tc{project()} $\rightarrow$\\[-0.5pt]
+   \tiny \tc{Gpu} / \tc{Proc} / \tc{Vas} / \tc{Channel} + per-proc GPA arenas};
+\node[coreb, minimum width=42mm, minimum height=8mm] at (-22,29)
+  {\textbf{kayfabe-mmu} \;309 L\\[1pt]\tiny per-VAS \tc{AddressTable}\\[-0.5pt]\tiny forward-populate only; MISS = FAULT};
+\node[coreb, minimum width=42mm, minimum height=8mm] at (22,29)
+  {\textbf{kayfabe-completion} \;756 L\\[1pt]\tiny per-proc queues, delivery gate,\\[-0.5pt]\tiny mapped-fence arms};
+\node[align=center, font=\sffamily\tiny, color=kfcoreln!80!black, text width=86mm] at (0,19)
+  {no OS, no syscall, no wall clock, no \tc{\#[repr(C)]}, no GPU-generation or driver-version name\\
+   \tc{unsafe\_code = "forbid"} \;$\cdot$\; every core type compile-time-asserted \tc{Send + Sync}};
+
+% ============================================================ ports, left ==
+\node[portb, minimum width=34mm, minimum height=10mm] at (-70,52)
+  {\textbf{Vmm} $\cdot$ \textbf{Device} $\cdot$ \textbf{Present}\\[1pt]
+   \tiny \textbf{kayfabe-vmm} 881 L\\[-0.5pt]\tiny 7 capability groups, hypervisor-agnostic};
+\node[portb, minimum width=34mm, minimum height=11mm] at (-70,39)
+  {\textbf{Isolate} $\cdot$ \textbf{IsolateFactory}\\ \textbf{RmBackend}\\[1pt]
+   \tiny \textbf{kayfabe-isolate} 1\,617 L\\[-0.5pt]\tiny RM \emph{verbs} — never ioctls; unprivileged-only};
+\node[portb, minimum width=34mm, minimum height=9mm] at (-70,26.5)
+  {\textbf{TraceSink}\\[1pt]\tiny \textbf{kayfabe-trace} 1\,474 L\\[-0.5pt]
+   \tiny vocabulary built; \emph{no plane call sites yet}};
+
+\draw[arb, kfportln] (-53,52) -- (-46,52);
+\draw[arb, kfportln] (-53,39) -- (-46,39);
+\draw[arb, kfportln] (-53,26.5) -- (-46,26.5);
+
+% =========================================================== ports, right ==
+\node[portb, minimum width=34mm, minimum height=11mm] at (70,51)
+  {\textbf{Arch} $\cdot$ \textbf{GmmuFmt}\\ \textbf{UserdModel} $\cdot$ \textbf{PushbufferAbi}\\[1pt]
+   \tiny \textbf{kayfabe-arch} — "Axis B"\\[-0.5pt]\tiny GPU-\emph{generation} behaviour};
+\node[stubb, minimum width=34mm, minimum height=10mm] at (70,38)
+  {\textbf{DriverAbi} — "Axis A"\\[1pt]
+   \tiny \textbf{kayfabe-abi} 7\,455 L, codegen'd\\[-0.5pt]
+   \tiny \textbf{\color{kfstubln}no crate depends on it yet}};
+\node[stubb, minimum width=34mm, minimum height=9mm] at (70,26)
+  {\textbf{FbRead} — the GMMU walker\\[1pt]
+   \tiny \textbf{kayfabe-mmu::walker}\\[-0.5pt]\tiny \textbf{\color{kfstubln}trait + result type only}};
+
+\draw[arb, kfportln] (53,51) -- (46,51);
+\draw[arb, kfportln] (53,38) -- (46,38);
+\draw[arb, kfportln] (53,26) -- (46,26);
+
+% ================================================== shared vocabulary base ==
+\node[coreb, minimum width=46mm, minimum height=7mm] at (-25,6)
+  {\textbf{kayfabe-util} \;665 L\\[1pt]\tiny \tc{IntervalMap}, \emph{virtual} \tc{Instant}, \tc{assert\_send\_sync!}};
+\node[coreb, minimum width=46mm, minimum height=7mm] at (25,6)
+  {\textbf{kayfabe-arch} \;556 L\\[1pt]\tiny \tc{HClient}/\tc{HObject}/\tc{Pdb}/\tc{VChid}/\tc{GpuId} newtypes};
+\draw[ar, kfcoreln] (-25,9.6) -- (-25,14);
+\draw[ar, kfcoreln] ( 25,9.6) -- ( 25,14);
+
+\node[box, fill=white, draw=kfgrey, dotted, minimum width=120mm, minimum height=7mm] at (0,-5)
+  {\textbf{kayfabe-mocks} \;2\,156 L \;— one deterministic fake per port.\\[1pt]
+   \tiny \textbf{Today this is the ONLY implementation any port has.} \tc{MockArch} uses deliberately non-NVIDIA encodings.};
+\draw[dashar, kfgrey] (-60,-1.4) -- (-70,21.4);
+\draw[dashar, kfgrey] ( 60,-1.4) -- ( 70,21.4);
+
+\end{tikzpicture}
