@@ -21,8 +21,8 @@ and the whole-lifecycle reclamation invariant**.
 > | named as existing | reality |
 > |---|---|
 > | `ledger.assert_conserved_at_quiesce()` (§7.8) | no such method; tests use a local `fn assert_conserved`, over `HostLedger::{leaked, free_of_unknown}` |
-> | `Reservation::restore` (§6.7, decision #37) | it is **`GuestWindow::restore`** — `kayfabe-linux-raw/src/window_unsafe.rs:228`. §14.8 F3 already says *"It did not"* exist |
-> | `DeferQueue` in **`kayfabe-util`** (§6.4) | it is in **`kayfabe-vmm`** (`src/lib.rs:623`), as §14.8 states |
+> | `Reservation::restore` (§6.7, decision #37) | it is **`crates/kayfabe-linux-raw/src/window_unsafe.rs::GuestWindow::restore`**. §14.8 F3 already says *"It did not"* exist |
+> | `DeferQueue` in **`kayfabe-util`** (§6.4) | it is in **`kayfabe-vmm`** — `crates/kayfabe-vmm/src/lib.rs::DeferQueue` — as §14.8 states |
 > | `PageClass` / `PageClass::LockPath` — *"now a **type** rather than a sentence"* | **0 occurrences** in `crates/` or `tests/`. It is design vocabulary in `guest_memory_lock.md`, not a type |
 > | `RegionLock` / `RegionAccess` — *"the core **holds** an opaque guard"* | **0 occurrences** in code |
 > | `Spine::device_reset`, `MAX_REAP_DEFERRALS`, `SourceKind::IsolateExit`, `Dispatch::IsolateExited` | **0 occurrences**; correctly still M2-f's unbuilt work, but written in the indicative |
@@ -37,7 +37,8 @@ and the whole-lifecycle reclamation invariant**.
 > **2. A CI gate described as landed is not in `ci.yml`.** §5.2 item 4 and §9.3's table both
 > carry the **narrow page-size grep** (*"a bare `4096`/`0x1000`/`>>12` in the raw or rt
 > crates"*), §5.2 in the past tense. `grep -n` over `.github/workflows/ci.yml` finds no such
-> step. Conversely the **GPA-accessor gate** *is* in CI (`ci.yml:278`) and is absent from
+> step. Conversely the **GPA-accessor gate** *is* in CI (`.github/workflows/ci.yml`, step name
+> *"GPA-accessor gate (exactly one core-side classification site)"*, pinned `:278`) and is absent from
 > §9.3's table, which makes §10.1's *"nothing enforces it yet"* stale in the other direction.
 >
 > **3. Unresolved internal contradictions — reported, NOT resolved, because the code does not
@@ -2728,7 +2729,7 @@ funnels through `MockIsolate`/`MockIsolateFactory` the same way. Nothing is opt-
                      is overlapping recycled arenas = the #14 collision class returning~~
                      ★★ 2026-07-27 doc audit: **G7 IS FIXED — this is the most misleading
                      stale line in the document, because it asserts a LIVE release-build
-                     security hole that does not exist.** `kayfabe-core/src/gpa.rs:204` is
+                     security hole that does not exist.** `crates/kayfabe-core/src/gpa.rs::GpaSpace::release` is
                      `pub fn release(&mut self, arena: GpaArena) -> Result<(), ForeignArena>`
                      — an always-on `Result`, not a `debug_assert!`. §0.2 row G7 has read
                      **FIXED** since §12.19; only this ledger row and decision #31 lagged)
@@ -2736,8 +2737,8 @@ funnels through `MockIsolate`/`MockIsolateFactory` the same way. Nothing is opt-
 
 ~~**★ G6 is the one class the ledger will report as unfixable without a core change.**~~
 **★★ 2026-07-27, doc audit — G6 IS FIXED; the paragraph below describes a tree that no longer
-exists.** `kayfabe-core/src/gpa.rs:400` is `pub fn free(&mut self, block: GpaBlock) ->
-Result<(), ForeignBlock>`, backed by a coalescing free list and a move-only `GpaBlock` token —
+exists.** `crates/kayfabe-core/src/gpa.rs::GpaArena::free` is `pub fn free(&mut self, block: GpaBlock)
+-> Result<(), ForeignBlock>`, backed by a coalescing free list and a move-only `GpaBlock` token —
 exactly decision #30's *"port it from the C, don't invent it"*. §0.2 row G6 has read **FIXED**
 since `l1_concurrency.md` §12.20. ~~There
 is no intra-arena free,~~ so a long-running process's arena monotonically fills; L1 will
@@ -3529,11 +3530,12 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
 30. **G6's intra-arena free should be ported from the C, not invented (§7.8)** — first-fit
     with tail/adjacent coalescing, freed from the unmap path *and* the reaper. ~~**Open:**
     it is a core change, so it is the owner's call whether it rides M2-f or follows.~~
-    **★ CLOSED (verified 2026-07-27): `gpa.rs:400` `free(GpaBlock) -> Result<(), ForeignBlock>`,
+    **★ CLOSED (verified 2026-07-27): `crates/kayfabe-core/src/gpa.rs::GpaArena::free` is
+    `free(GpaBlock) -> Result<(), ForeignBlock>`,
     coalescing, move-only token — ported as directed.**
 31. **G7's window check becomes a hard fault, not a `debug_assert!`** — a release into the
     wrong window is the #14 collision class returning, and ~~it is currently representable in
-    release builds~~ **★ CLOSED (verified 2026-07-27): `gpa.rs:204` returns
+    release builds~~ **★ CLOSED (verified 2026-07-27): `crates/kayfabe-core/src/gpa.rs::GpaSpace::release` returns
     `Result<(), ForeignArena>`; it is NOT representable in release builds. This item and the
     §7.8 L7 ledger row were the last two places still asserting the hole.**
     Ledger check L7 catches it in tests; the fault catches it in production.
@@ -4430,7 +4432,10 @@ simply untested.
 > `AuditReport::window_releases_deferred` (the non-vacuity half: the removal really did land
 > on a window someone was reading) and `window_mappings_released` (the address space came
 > back), and pinned by
-> `crates/kayfabe-vmm-kvm/tests/memory_plane.rs::a_window_removed_under_a_live_reader_is_never_munmapped_by_the_reader`,
+> `crates/kayfabe-vmm-kvm/tests/window_retirement.rs::a_window_removed_under_a_live_reader_is_never_munmapped_by_the_reader`
+> *(★ corrected 2026-07-27, citation pass: the file was cited as `memory_plane.rs`; the test has
+> never been in that file. A symbol pin in the wrong file is the one failure mode symbols share
+> with lines — grep the name, not the path)*,
 > which is **deterministic** — it rendezvouses on `accesses_served`, which is bumped after
 > `resolve` hands over the `Arc` and before the memcpy, so no clock is involved.
 >

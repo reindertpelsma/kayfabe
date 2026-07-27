@@ -13,12 +13,18 @@ a single core invariant.
 > §12.41 still match; essentially none of those written in §12.39/§12.40 do.** Those entries
 > cite a tree predating `061988a` (`ResourceKey`) and `1132ea8` (`ClientKey`), which reshaped
 > `rmgraph.rs`, `gpu.rs`, `project.rs` and `kayfabe-fwd/src/lib.rs` together. Two examples of
-> the flavour: `rmgraph.rs:360` is cited for `MAX_PARKED` (**the constant is real — at `:656`**;
-> `:360` is an unrelated struct field), and `gpu.rs:1040`/`:1701`/`:2579` are cited for
-> `next_batch`, **which is not in `gpu.rs` at all** — it lives in
-> `kayfabe-completion/src/lib.rs:333`. ★ Note the pattern: the *facts* have generally survived
-> and the *anchors* have not, so **re-resolve by symbol name, never by line.** Individual
-> corrections were not made — there are ~40 and they would rot again within the week.
+> the flavour: `rmgraph.rs:360` was cited for `MAX_PARKED` (**the constant is real — it is
+> `crates/kayfabe-core/src/rmgraph.rs::MAX_PARKED`**; `:360` was an unrelated struct field),
+> and `gpu.rs:1040`/`:1701`/`:2579` were cited for `next_batch`, **which is not in `gpu.rs` at
+> all** — it is `crates/kayfabe-completion/src/lib.rs::DeliveryPlane::next_batch`. ★ Note the pattern: the *facts* have generally survived
+> and the *anchors* have not, so **re-resolve by symbol name, never by line.** ★★ **Individual
+> corrections have since been made** (2026-07-27, citation pass): every pin into our own
+> `crates/`/`tests/` in this document is now written as `path::Symbol`, which is the form that
+> does *not* rot. Pinned line numbers are kept in parentheses only where they name a specific
+> line inside a long function. Citations into `ogkm`, `gvisor`, `research_clones` and the C
+> artifact are **left as `file:line` on purpose** — those trees are pinned snapshots we do not
+> edit, so a line number there is stable and is the correct form. Rule and rationale:
+> `testing_doctrine.md` § CITATION CONVENTION.
 >
 > **2. Four normative claims are retracted by later sections of this same document**, and are
 > now marked at their sites: §3.5 mechanism 2 (wire concurrency from N workers), §2's *"stalls
@@ -27,8 +33,8 @@ a single core invariant.
 >
 > **3. `GpuError::CondemnedMerge` is asserted alive in four places and was retired.** §12.37
 > retired it; only §12.38's re-derived table records that. The variant does not exist —
-> `crates/kayfabe-core/src/gpu.rs:1568` reads *"(There were four: `CondemnedMerge` was retired
-> by §12.37 …)"*. Treat every other mention of it in this document as historical.
+> the rustdoc of `crates/kayfabe-core/src/gpu.rs::Spine::plan_refresh` reads *"(There were four:
+> `CondemnedMerge` was retired by §12.37 …)"*. Treat every other mention of it in this document as historical.
 >
 > **4. `[unverified]` — one load-bearing citation names a file that does not exist.**
 > `C: memory/cuctxcreate_800_pinned.md:46,49` is not present anywhere in
@@ -2018,7 +2024,9 @@ not merely untidy.
 **guest-reachable panic**: when the fault is `Gpa(WindowExhausted)`, the failed refresh
 has already consumed arenas that the re-derivation needs, so re-deriving the *last-good*
 graph fails too and `refresh(procs).expect("last-good graph re-projects")` fires —
-`panicked at gpu.rs:714: last-good graph re-projects: Gpa(WindowExhausted)`. A hostile
+`panicked at gpu.rs:714: last-good graph re-projects: Gpa(WindowExhausted)` — the `expect` in
+`crates/kayfabe-core/src/gpu.rs::Spine::apply`'s rollback arm; `:714` is the line it stood on
+when the panic was captured, quoted verbatim because it is a runtime artifact. A hostile
 guest could take the whole device down with a legal-looking `DUP_OBJECT`. That is
 boundary-1 item 3 (never panic the core), reached through the *rollback*, which is the
 one path nobody thinks to fuzz.
@@ -2071,7 +2079,8 @@ land in, and each asserts the exact fault variant, never `is_err()`:
   arenas on two targets, the first carve succeeds, the second fails, and the test proves
   the first went back by requiring the last free arena on that target to still be
   claimable afterwards. **Bite-check:** with the fix reverted this does not fail an
-  assertion, it **panics inside the rollback** (`gpu.rs:714`), which is how the
+  assertion, it **panics inside the rollback** (`crates/kayfabe-core/src/gpu.rs::Spine::apply`, the
+  `expect("last-good graph re-projects")`), which is how the
   guest-reachable panic above was found.
 - `a_refused_map_sync_restores_the_binding_it_had_already_installed` — the
   `sync_rpc_mappings` half, built on the one shape that genuinely leaves residue: two
@@ -4366,44 +4375,44 @@ the namespace values it wants to squat (§2(a)).
 ##### Shape A — the PARKED FACT that outlives its namespace (the cheap one)
 
 `[src]` `RmGraph::free_subtree` computes `doomed` as *the live handles in the namespace*
-(`crates/kayfabe-core/src/rmgraph.rs:1078-1082`) and then prunes the parked tables by
-membership in `doomed` (`:1144-1155`). A **parked** dup's `dst` is by definition *not* in
+(`crates/kayfabe-core/src/rmgraph.rs::RmGraph::free_subtree`) and then prunes the parked tables
+by membership in `doomed` (the three `pending_*.retain(…)` calls in the same fn). A **parked** dup's `dst` is by definition *not* in
 `handles` — that is what "parked" means — so it is not in `doomed`, so **it survives the
 free of its own namespace's client root.** The same holds for `pending_pdbs` and
-`pending_maps`, whose retains are keyed the same way (`:1147-1155`).
+`pending_maps`, whose retains are keyed the same way (same fn).
 
 ```text
 A: Alloc(Client cV, User)                     ⇒ legal; hRoot is caller-supplied [src §2(a)]
-A: Dup { src: (cA, H_LATER), dst: (cV, H_X) } ⇒ src unobserved ⇒ PARKED (rmgraph.rs:976)
+A: Dup { src: (cA, H_LATER), dst: (cV, H_X) } ⇒ src unobserved ⇒ PARKED (RmGraph::apply)
 A: Free (cV, cV)                              ⇒ the root dies; the parked edge does NOT
-                                                 (rmgraph.rs:1144 — dst is not a handle)
+                                                 (free_subtree — dst is not a handle)
    … graph footprint from here: one parked edge. No resource, no client in the
-     projection's universe (`origin_of(dst) == None` filters it, project.rs:376),
+     projection's universe (`origin_of(dst).is_none()` filters it, project::project),
      therefore NO phantom Proc, NO isolate, NO arena. Invisible.
 
 V: (an ordinary compute process handed hClient = cV) Alloc(Client cV, User)
 A: Alloc (cA, H_LATER) = a VASpace                ⇒ resolve_pending_dups promotes the edge
-                                                     (rmgraph.rs:1161-1176) — minting a live
+                                                     (RmGraph::resolve_pending_dups) — minting a live
                                                      ALIAS **inside the victim's namespace**
    ⇒ project: is_user(cV) && is_user(cA), neither condemned ⇒ uf.union(cA, cV)
-     (project.rs:441, :458, :461)
+     (project::project, the dup-grouping pass)
    ⇒ ONE boundary {cA, cV} ⇒ ONE Proc.
 ```
 
 **Cost:** 4 attacker events per candidate `hClient`, bounded only by `MAX_PARKED` (2^18,
-`rmgraph.rs:360`). Nothing is minted on the host until the victim arrives. `[inferred]`
+`crates/kayfabe-core/src/rmgraph.rs::MAX_PARKED`). Nothing is minted on the host until the victim arrives. `[inferred]`
 
 **Note what §12.38 does *not* do here.** Every event in that sequence names a namespace that
-existed **at the moment it was issued**. `undeclared_namespace` (`rmgraph.rs:707-724`) is
+existed **at the moment it was issued**. `crates/kayfabe-core/src/rmgraph.rs::RmGraph::undeclared_namespace` is
 satisfied honestly and completely. This is not a bypass of the rule; it is a hole the rule
 never covered.
 
 ##### Shape B — the ORPHANED RESOURCE whose origin key names a dead namespace
 
 `[src]` A resource survives its origin handle's free while any foreign alias references it
-(`drop_handle`, `rmgraph.rs:1370-1394` — faithful RM refcounting), but its identity
+(`crates/kayfabe-core/src/rmgraph.rs::RmGraph::drop_handle` — faithful RM refcounting), but its identity
 `RmNode.key` still carries the **`HClient` value** of the namespace that allocated it, and
-`dups()` reports that stale key as the edge's `src` (`rmgraph.rs:1572-1584`).
+`crates/kayfabe-core/src/rmgraph.rs::RmGraph::dups` reports that stale key as the edge's `src`.
 
 ```text
 A: Alloc(Client cA, User) ; Alloc(Client cV, User)
@@ -4412,7 +4421,7 @@ A: Dup { src: (cV, H_VAS), dst: (cA, H_ALIAS) }   ⇒ resource refs = {(cV,H_VAS
 A: Free (cV, cV)                                   ⇒ every handle in cV dies; the RESOURCE
                                                       lives on A's alias, origin key still
                                                       (cV, H_VAS); client_roots loses cV
-                                                      (rmgraph.rs:1378-1380)
+                                                      (RmGraph::drop_handle)
 V: Alloc(Client cV, User)                          ⇒ is_user(cV) flips true
    ⇒ the surviving edge ((cA,H_ALIAS) ← (cV,H_VAS)) becomes a grouping edge ⇒ union
    ⇒ the victim's first RM event puts it in the ATTACKER's Proc.
@@ -4420,24 +4429,27 @@ V: Alloc(Client cV, User)                          ⇒ is_user(cV) flips true
 
 **Cost:** 5 events, and — unlike Shape A — a **visible** footprint between the free and the
 victim's arrival, because the orphan's origin client re-enters the client universe through
-`g.nodes()` (`project.rs:372-374`), which carries **no `kinds` filter** (the filter at
-`:395` guards only the dup-chained branch). `anchor_of` then treats an unknown-kind client as
-**not kernel**, i.e. as a user boundary (`project.rs:469-473`). `[inferred]`
+`g.nodes()` (`crates/kayfabe-core/src/project.rs::project`, the node-attribution loop), which
+carries **no `kinds` filter** (the filter guards only the dup-chained branch). `anchor_of` — the
+closure in that same fn — then treats an unknown-kind client as **not kernel**, i.e. as a user
+boundary. `[inferred]`
 
 ##### ★ Shape B's second face — a resource-amplification DoS, and an attacker CHOICE
 
 `[inferred]` Each Shape-B plant leaves a **live user `Proc` for a namespace that no longer
-exists**: a boundary is minted (`gpu.rs:1890-1894`), and because the orphan VASpace's GPU
-target and PDB both survive the free (the sticky per-resource target cache,
-`rmgraph.rs:740-743`, `:915-918`), `span_of` is non-empty (`gpu.rs:1412-1428`) so an isolate is spawned and
-a GPA arena is carved (`gpu.rs:1952-1962`). A spray therefore consumes arenas until
+exists**: a boundary is minted (`crates/kayfabe-core/src/gpu.rs::Spine::refresh`), and because the orphan
+VASpace's GPU target and PDB both survive the free (the sticky per-resource target cache —
+`crates/kayfabe-core/src/rmgraph.rs::RmGraph::gpu_of_resource` /
+`::RmGraph::cache_targets`), `crates/kayfabe-core/src/gpu.rs::Spine::span_of` is non-empty
+so an isolate is spawned and a GPA arena is carved
+(`crates/kayfabe-core/src/gpu.rs::Spine::ensure_proc_target`). A spray therefore consumes arenas until
 `GpaError` — at which point *a legitimate new process* cannot get one either. That is a
 device-wide DoS earned by one process, i.e. the boundary-1 shape, in the resource dimension.
 
 And it hands the attacker a **choice**. The victim's arrival merges its boundary with the
-phantom's, and `plan_refresh` refuses a merge whose absorbed proc is not `is_untouched()`
-(`gpu.rs:1504-1513`). The orphan `Vas` is routable, so `by_pdb` routes a `publish_backing`
-to it (`kayfabe-fwd/src/lib.rs:859`) and the attacker can mark it touched at will. So:
+phantom's, and `crates/kayfabe-core/src/gpu.rs::Spine::plan_refresh` refuses a merge whose absorbed proc is not
+`is_untouched()`. The orphan `Vas` is routable, so `by_pdb` routes a `publish_backing`
+to it (`crates/kayfabe-fwd/src/lib.rs::publish_backing`) and the attacker can mark it touched at will. So:
 
 - leave it untouched ⇒ **the victim is merged into the attacker's `Proc`** (isolation break);
 - touch it ⇒ **`GpuError::LateMerge` on the victim's own client-root `Alloc`** (a bystander
@@ -4555,7 +4567,7 @@ value is recyclable"* — and left it. Stated at the precision the fix needs:
 
 > **Every live *handle* in the graph implies a live client root in its namespace** — §12.38
 > guarantees no handle is created in an undeclared namespace, and `free_subtree` drops every
-> handle in a namespace when its root dies (`rmgraph.rs:1078-1082`). So handles are
+> handle in a namespace when its root dies (`crates/kayfabe-core/src/rmgraph.rs::RmGraph::free_subtree`). So handles are
 > **safe**. The graph has exactly **two** references to a client namespace that are *not*
 > handles, and both of them dangle:
 >
@@ -4605,11 +4617,11 @@ in what mints the identity.
 | | **D1 — epoch on `HClient`** | **D2 — fresh `ClientUid` at declaration** | **★ D3 — `ClientId := the root's `ResId`** |
 |---|---|---|---|
 | identity | `(HClient, ClientEpoch)` pair; `HClient` stays primary | opaque `ClientUid(u64)` from a new counter; `HClient` demoted to wire form | the `ResId` the client-root `Alloc` already minted |
-| new state | `next_client_epoch: u64`; `client_roots: BTreeMap<HClient, (ResId, Epoch)>`; `origin_epoch` per resource | `next_client_uid: u64`; `BTreeMap<HClient, ClientUid>`; `owner: ClientUid` per resource | **none** — `owner: ResId` per resource; `client_roots` already maps `HClient → ResId` (`rmgraph.rs:515`) |
+| new state | `next_client_epoch: u64`; `client_roots: BTreeMap<HClient, (ResId, Epoch)>`; `origin_epoch` per resource | `next_client_uid: u64`; `BTreeMap<HClient, ClientUid>`; `owner: ClientUid` per resource | **none** — `owner: ResId` per resource; `client_roots` already maps `HClient → ResId` (`crates/kayfabe-core/src/rmgraph.rs::RmGraph::client_roots`) |
 | unrepresentable | a stale epoch grouping with a live one | a stale uid naming anything | a dead namespace owning a live boundary |
 | still runtime-checked | "is this epoch current?" at every read | uid lookup misses | `resources.contains_key(owner)` |
 | memory | +16 B/resource, +2 counters | +8 B/resource, +1 counter, +1 live index | **+8 B/resource, 0 counters** |
-| hostile churn | epochs are u64; nothing retained per dead namespace | ditto | ditto; and `ResId` already has this exact doc (`rmgraph.rs:82-88`, *"never reused"*) |
+| hostile churn | epochs are u64; nothing retained per dead namespace | ditto | ditto; and `ResId` already has this exact doc (`crates/kayfabe-core/src/rmgraph.rs::ResId`, *"never reused"*) |
 | honest cost | **two ways to name a namespace** — every site must remember to carry the epoch, and the one that forgets is the next §12.38 | a second never-reused counter beside `next_res_id` doing the same job | **couples namespace identity to the root OBJECT's identity** |
 
 **D3 is recommended**, and the tie-break is faithfulness rather than economy: `[src]` **in RM
@@ -4617,7 +4629,8 @@ the `hClient` IS its root object's handle** — `serverAllocClient` writes the c
 back as the allocated object's handle (`rs_server.c:625`;
 `ogkm src/nvidia/src/kernel/rmapi/client.c:226-227` stamps it into
 `NV0000_ALLOC_PARAMETERS.hClient`), which is why `RmGraphError::DuplicateClientRoot` exists
-at all (`rmgraph.rs:423-430`). So "the namespace is its root resource" is not a modelling
+at all (`crates/kayfabe-core/src/rmgraph.rs::RmGraphError::DuplicateClientRoot`). So "the
+namespace is its root resource" is not a modelling
 convenience we impose; it is what RM already means. D3's stated cost — coupling to the root
 object — is therefore not a coupling we introduce.
 
@@ -4625,7 +4638,7 @@ Two properties fall out that D1/D2 would have to be argued into:
 
 - **`ResId` is already documented as never reused** and already exists precisely because
   *"a handle value can be freed and re-allocated while a `DUP_OBJECT` alias keeps the
-  ORIGINAL resource alive"* (`rmgraph.rs:82-88`). D3 is the same sentence applied one level
+  ORIGINAL resource alive"* (`crates/kayfabe-core/src/rmgraph.rs::ResId`). D3 is the same sentence applied one level
   up. Adding a *second* never-reused counter to say the same thing is the drift §12.35
   centralised removal to avoid.
 - **A live alias implies a live root, so the `dst` side needs no snapshot.** Freeing a root
@@ -4643,34 +4656,53 @@ Two properties fall out that D1/D2 would have to be argued into:
 - The client root's own `owner` is itself.
 - `project`'s client universe, `is_user`/`is_kernel`, the grouping union, `anchor_of` and
   the attribution loop key on `ClientId` instead of `HClient`
-  (`project.rs:368-374`, `:441`, `:461`, `:469-473`, `:524`). A resource whose `owner` is no
+  (`crates/kayfabe-core/src/project.rs::project` — the client universe, the grouping union,
+  the `anchor_of` closure and the attribution loop are all inside that one fn). A resource whose `owner` is no
   longer in `resources` is **owned by nobody**: it enters no boundary, mints no `Proc`, no
   isolate, no arena. That kills Shape B *and* its amplification DoS in one line.
-- `ProcAnchor` **stays `HClient`** (`lib.rs:238`). It is a deterministic *label* of a live
+- `ProcAnchor` **stays `HClient`** (`crates/kayfabe-core/src/lib.rs::ProcAnchor`). It is a deterministic *label* of a live
   component, and under D3 every component is a set of live declared namespaces, so anchors
   remain distinct live values. Not changing it keeps the blast radius of D3 off the spine's
   public routing types. ★ Residual, stated: anything that *persists* a `ProcAnchor` past its
-  component's death — `Spine::condemned_by_pdb` / `condemned_by_vchid` (`gpu.rs:834-837`) —
-  is still storing a recyclable value, and must be keyed by `ClientId` too or re-derived.
+  component's death — `crates/kayfabe-core/src/gpu.rs::Spine::condemned_by_pdb` /
+  `::Spine::condemned_by_vchid` — is still storing a recyclable value, and must be keyed by
+  `ClientId` too or re-derived.
+
+> **★★ SUPERSEDED — corrected 2026-07-27 (citation pass), found by re-resolving
+> `lib.rs:238` by symbol.** *"`ProcAnchor` stays `HClient`"* is **no longer true and was not
+> what shipped.** `crates/kayfabe-core/src/lib.rs::ProcAnchor` is
+> `pub struct ProcAnchor(pub rmgraph::ClientKey)`, changed by **§12.42** for exactly the reason
+> this bullet's own residual note anticipated. Its rustdoc states the argument: an `hClient`
+> VALUE *"could name only ONE lifetime of that value at a time — which made 'two generations of
+> one `hClient` are two components' **inexpressible**, and left the older generation's
+> still-live resources belonging to no component at all (§12.41 §4)."* The residual is
+> therefore closed rather than open: `condemned_by_pdb`/`condemned_by_vchid` store a
+> `ProcAnchor`, which is now a `ClientKey`, not a recyclable value.
+>
+> ★ Worth keeping the bullet as written: D3's *"keeps the blast radius of D3 off the spine's
+> public routing types"* was the reasoning, and the reasoning is what turned out to be the
+> wrong trade. The record of the wrong trade is the useful part.
 
 ##### How Part B lands on the condemnation machinery — it SIMPLIFIES it
 
-`Spine::condemned: Vec<BTreeSet<HClient>>` (`gpu.rs:828`) becomes
+`crates/kayfabe-core/src/gpu.rs::Spine::condemned` (then `Vec<BTreeSet<HClient>>`) becomes
 `Vec<BTreeSet<ClientId>>`. Everything that reads it — `absorb_condemned`, the `owner_of`
-index, the boundary-intersection pass, `plan_refresh`'s `matching`
-(`gpu.rs:1470-1474`) — is already a set-intersection on client identity and changes only its
-element type.
+index, the boundary-intersection pass, `crates/kayfabe-core/src/gpu.rs::Spine::plan_refresh`'s
+`matching` pass — is already a set-intersection on client identity and changes only its
+element type. *(2026-07-27: it landed — the field reads `condemned: Vec<BTreeSet<ClientId>>`,
+and `crates/kayfabe-core/src/gpu.rs::absorb_condemned` is `ClientId`-typed.)*
 
-The interesting consequence is at §12.37's **C2 shrink** (`gpu.rs:1818-1830`, the
-`known` intersection). C2 exists because *"a recycled handle value never shared the blast
+The interesting consequence is at §12.37's **C2 shrink** (`crates/kayfabe-core/src/gpu.rs::Spine::refresh`,
+the `known` intersection; the rule it enforces is documented on the
+`crates/kayfabe-core/src/gpu.rs::Spine::condemned` field itself). C2 exists because *"a recycled handle value never shared the blast
 radius"* — retaining a freed `HClient` in a condemned entry poisoned a value the guest would
 hand out again. **Under D3 that poisoning is structurally impossible**: a `ClientId` is never
 reused, so a retained dead `ClientId` can never name a future namespace. C2's correctness
 role therefore disappears.
 
 **The shrink must nevertheless stay, for a different and now-stated reason: capacity.**
-`MAX_CONDEMNED_COMPONENTS` (`gpu.rs:33-48`, the const at `:41`) is enforced at the mint site
-(`gpu.rs:1524-1536`), and an entry that never drops means a guest that churns condemned
+`crates/kayfabe-core/src/gpu.rs::MAX_CONDEMNED_COMPONENTS` is enforced at the mint site
+(inside `crates/kayfabe-core/src/gpu.rs::Spine::plan_refresh`), and an entry that never drops means a guest that churns condemned
 components fills the list and earns `GpuError::SpineCapacity` on every *subsequent* proc
 mint — a device-wide DoS. So the rule becomes cleaner than it was: **an entry is dropped when
 no live resource has an `owner` in it** — a precise liveness statement rather than an
@@ -4697,7 +4729,7 @@ exactly the fragility C2 patched.
   `ogkm src/nvidia/src/kernel/mem_mgr/mem.c:986-1039`, §12.26) and would silently destroy
   memory a live client is still using — the corruption-over-refusal direction.
 - **D5 — filter the client universe by `kinds` on the `nodes()` branch too** (a one-line
-  patch to `project.rs:372`). Rejected as *the fix*, kept as a consequence: it would stop the
+  patch inside `crates/kayfabe-core/src/project.rs::project`). Rejected as *the fix*, kept as a consequence: it would stop the
   phantom `Proc` (Shape B's DoS) but not the merge, because the merge fires only once the
   victim has re-declared — at which point `kinds` contains the value again. It treats the
   symptom whose disappearance is the tell.
@@ -4738,7 +4770,7 @@ reports the breach rather than a missing refusal (§12.38's bite-check disciplin
    Part A is asserted per-table rather than per-scenario.
 7. **`rmgraph_order_independence::a_freed_and_redeclared_namespace_projects_identically_in_
    every_order`** — re-declaration inside the shuffle domain. `legal_order`
-   (`tests/src/lib.rs:238-263`) needs no change: its partial order is *"a namespace declares
+   (`tests/src/lib.rs::legal_order`) needs no change: its partial order is *"a namespace declares
    before it is named"*, and re-declaration satisfies it.
 8. **`security_invariants`, one new property:** for all legal event streams, two clients whose
    roots were minted by *different* `Alloc`s share a `Proc` **only if** a resolved user↔user
@@ -4759,7 +4791,8 @@ while a new capacity test fires.
 - **§12.25 Deferred finding 2 — object-handle recycling *inside* one namespace.**
   `Alloc (A,H) → Dup to B → Free (A,H) → Alloc (A,H)` still leaves two live resources with
   the same origin `NodeKey`, and `project` still keys `vases`/`channels` on `node.key`
-  (`project.rs:534`, `:583`). D3 fixes the **client** axis only. It makes the object axis
+  (inside `crates/kayfabe-core/src/project.rs::project`, the `vases`/`channels` inserts).
+  D3 fixes the **client** axis only. It makes the object axis
   strictly easier — `owner` proves `ResId` can be threaded through the graph's payloads — but
   the projection still has to move to `ResId` keys, and that remains the named refactor.
 - **The live-duplicate surface is unchanged.** `ConflictingAlloc` / `ConflictingDup` /
@@ -4768,6 +4801,9 @@ while a new capacity test fires.
 - **`ProcAnchor` is still an `HClient`**, deliberately (§4). Every site that persists an
   anchor beyond its component's life — `condemned_by_pdb` / `condemned_by_vchid` — is a
   residual named above, not something this design closes.
+  *(★★ **Superseded 2026-07-27, citation pass:** §12.42 changed it —
+  `crates/kayfabe-core/src/lib.rs::ProcAnchor` wraps a `rmgraph::ClientKey`. The bullet is the
+  record of the decision D3 made; it is not current fact. See the correction under §4.)*
 - **It does not restrict which `hClient` values a guest may use.** `[src]` §2(a) says any
   value is legal; D3 makes the value *irrelevant to identity*, which is the only defensible
   posture.
@@ -4798,7 +4834,8 @@ while a new capacity test fires.
 - **O3 — is the attacker's LateMerge choice (§1) actually reachable?** Does a
   `publish_backing` routed to the orphan `Vas` mark the phantom proc `!is_untouched()`?
   **Experiment:** a core test, no bench needed — it is a direct consequence of
-  `gpu.rs:1504-1513` and `kayfabe-fwd/src/lib.rs:859`, and asserting it costs one test.
+  `crates/kayfabe-core/src/gpu.rs::Spine::plan_refresh` and
+  `crates/kayfabe-fwd/src/lib.rs::route_pdb`, and asserting it costs one test.
 - **O4 — can a guest reach `serverAllocClient` with a caller-supplied `hRoot` unprivileged?**
   `[src]` `escape.c:465-489` shows no `hRoot` sanitisation on `/dev/nvidiactl` and the C's
   `0xdeadNNNN` remap works, but the C's host RM may run at a different privilege.
@@ -4810,26 +4847,28 @@ while a new capacity test fires.
 **Three existing claims this pass found to be wrong or narrower than written:**
 
 1. **`project.rs`'s undeclared-endpoint note is right about the dup branch and silent about
-   the other one.** The comment at `project.rs:389-397` reasons that after §12.38 *"the only
+   the other one.** The comment in `crates/kayfabe-core/src/project.rs::project` (the
+   dup-endpoint branch) reasons that after §12.38 *"the only
    way to reach here undeclared is a root that has since been FREED"* — true, and it duly
-   filters. But the **`g.nodes()` branch** of the same expression (`project.rs:372-374`) has
-   no such filter, so a client with no declared root **does** enter the universe and
-   `anchor_of` files it as a **user** boundary (`:469-473`). §12.38's own summary line — *"an
+   filters. But the **`g.nodes()` branch** of the same expression (same fn) has
+   no such filter, so a client with no declared root **does** enter the universe and the
+   `anchor_of` closure files it as a **user** boundary. §12.38's own summary line — *"an
    object allocated into an undeclared namespace mints no boundary"* — is therefore true at
    *alloc* time and **false after a root free**. `[inferred]`
 2. **`Spine::condemned`'s doc claims component splits are handled; the argument only covers
-   the CONDEMNED path.** `gpu.rs:795-796` says the client-set key makes condemnation survive
+   the CONDEMNED path.** The rustdoc on `crates/kayfabe-core/src/gpu.rs::Spine::condemned`
+   says the client-set key makes condemnation survive
    *"component splits (both halves intersect, both stay condemned)"* — correct, because a
    condemned boundary gets `None` and touches no proc. On the **live** path both halves of a
-   split match the *same* `ProcId` (`plan_refresh` reads the pre-refresh `p.clients`,
-   `gpu.rs:1470-1474`), both are pushed into `boundary_pid`, and `sync_proc_to_boundary` runs
-   twice on that one proc (`gpu.rs:1899-1902`) — the second call overwriting the first, so one
+   split match the *same* `ProcId` (`crates/kayfabe-core/src/gpu.rs::Spine::plan_refresh` reads
+   the pre-refresh `p.clients`), both are pushed into `boundary_pid`, and
+   `crates/kayfabe-core/src/gpu.rs::Spine::sync_proc_to_boundary` runs twice on that one proc — the second call overwriting the first, so one
    half of the split silently loses its clients, vases and channels while `plan.vanishing` is
    empty. Reachable by a legal guest (dup-join two user clients, then free the alias).
    `[inferred]` — independent of this entry, and it wants its own round and its own test
    (`a_live_component_that_splits_yields_two_procs`).
 3. **`RmGraphError::ReservedClient`'s citation is weaker than its conclusion.** Its doc
-   (`rmgraph.rs:407-418`) justifies reserving `HClient(0)` with *"RM mints client handles from
+   (on `crates/kayfabe-core/src/rmgraph.rs::RESERVED_CLIENT`) justifies reserving `HClient(0)` with *"RM mints client handles from
    `RS_CLIENT_HANDLE_BASE` and can never produce it"*. `[src]` §2(a): with
    `RS_COMPATABILITY_MODE=1` the base is **not** binding on a caller-supplied `hRoot`, so
    that sentence is not the operative reason. The refusal itself is still correct and should
@@ -4908,7 +4947,7 @@ root has been freed is filed as a user boundary — Shape B's enabler and an are
 
 `project`'s `is_kernel` read `RmGraph::client_kinds`, which only knows namespaces with a
 **live root**. Once the root is freed there is nothing to read, `is_kernel` was false *by
-absence*, and `anchor_of` (`project.rs:469-473`) filed the namespace as a **user**
+absence*, and the `anchor_of` closure in `crates/kayfabe-core/src/project.rs::project` filed the namespace as a **user**
 component. So an orphaned resource of the guest **KERNEL's** own namespace minted a user
 `ProcBoundary` — isolate, GPA arena, routable `Vas`, and `publish_backing` would mint host
 memory into it. That is the guest-kernel-obtains-a-user-data-plane shape
@@ -5141,8 +5180,8 @@ the brief did not predict.
    **not** a cross-process isolation break, and cannot be: a `NodeKey` carries its
    `HClient`, so two colliding resources are always in ONE namespace, hence (attribution
    is by origin client) one component; and every routing consumer looks the object up in
-   its **own** `Proc` (`proc.vases.get(&(gpu, pdb))`, `kayfabe-fwd/src/lib.rs:1075`,
-   `:1092`, …), which is the isolation backstop. It is a **correctness** defect of the
+   its **own** `Proc` (`proc.vases.get(&(gpu, pdb))` — `crates/kayfabe-fwd/src/lib.rs::resolve_in`
+   and its callers), which is the isolation backstop. It is a **correctness** defect of the
    hangs-a-legal-guest kind, plus a disarmed F1 guard. Measured, not argued (§2).
 2. **`rs_client.c:962-974` — the citation is EXACT** (`clientGenResourceHandle_IMPL`,
    monotonic `handleGenIdx++ % RS_UNIQUE_HANDLE_RANGE`, `0x0008_0000` = 2^19,
@@ -5157,11 +5196,12 @@ the brief did not predict.
    mirror of §12.39's `hClient` finding, one level down.
 3. **§12.40's residual — "`condemned_by_pdb`/`condemned_by_vchid` still persist a
    recyclable label past their component's death" — is FALSE as written.** Both maps are
-   `clear()`ed and rebuilt whole from the projection on every `Spine::refresh`
-   (`gpu.rs:2116-2117`, `:2130`, `:2149`); `retire_proc`'s direct inserts (`:2251`,
-   `:2261`) survive only until the next refresh, and nothing can recycle a value without
-   an event, i.e. without a refresh. `route_pdb` reads live `by_pdb` first
-   (`kayfabe-fwd/src/lib.rs:859`), so a live entry always shadows. The residual that IS
+   `clear()`ed and rebuilt whole from the projection on every
+   `crates/kayfabe-core/src/gpu.rs::Spine::refresh`;
+   `crates/kayfabe-core/src/gpu.rs::Spine::retire_proc`'s direct inserts survive only until the
+   next refresh, and nothing can recycle a value without
+   an event, i.e. without a refresh. `crates/kayfabe-fwd/src/lib.rs::route_pdb` reads live
+   `by_pdb` first, so a live entry always shadows. The residual that IS
    real is `ProcAnchor` being an `HClient` in `Boundaries` — see §5, finding N2.
 
 ---
@@ -5347,7 +5387,7 @@ it wants its own order-independence argument — a round, not a patch. Filed as 
 | `ChanId`, `WorkerId` | dense, per-owner | minted per `Proc` / per isolate `[code]` | sound **provided** the owner travels with them — `SourceKind::Worker` complies |
 | **`IsolateId`** | *"the isolate whose RM client namespace this handle lives in"* (`HostHandle`'s own doc) | — | ★ **OPEN — N3**, below |
 | `BatchId` | a batch of one proc's completions | minted per `DeliveryPlane`, i.e. **per `GpuTarget`** | ★ **OPEN — N4**, below |
-| `OsEventRef` | a completion identity | minted by the GUEST: `OsEventRef(addr.0 ^ payload)` (`kayfabe-fwd/src/lib.rs:1916`) `[code]` | ★ **OPEN — N5**, below |
+| `OsEventRef` | a completion identity | minted by the GUEST: `OsEventRef(addr.0 ^ payload)` (`crates/kayfabe-fwd/src/lib.rs::apply_pushbuffer`, the `SemRelease` arm) `[code]` | ★ **OPEN — N5**, below |
 | `HostHandle::raw` | — | client-scoped from one shared base, so A's `0x…07` and B's `0x…07` are both live and unrelated (`g_resserv_nvoc.h:173`) `[src]` | sound — the isolate travels with the handle (§12.26) |
 
 **Named open findings, each with the experiment or the change that settles it:**
@@ -5355,21 +5395,27 @@ it wants its own order-independence argument — a round, not a patch. Filed as 
 - **N1 — two orphan generations release live host memory.** §4. Verified `[meas]`.
 - **N2 — `ProcAnchor` is an `HClient`.** §12.40's own residual, restated with N1's
   evidence: it is not merely a stale *label*, it is what makes N1 unfixable in place.
+  *(★★ **N2 is CLOSED — verified 2026-07-27, citation pass.**
+  `crates/kayfabe-core/src/lib.rs::ProcAnchor` is `ProcAnchor(pub rmgraph::ClientKey)`, changed
+  by §12.42, whose rustdoc cites this exact finding: an `hClient` VALUE *"could name only ONE
+  lifetime of that value at a time … and left the older generation's still-live resources
+  belonging to no component at all (§12.41 §4)"*.)*
 - **N3 — `IsolateId` does not carry the `GpuId`, but there is one isolate per
-  `(Proc, GpuId)`.** `Gpu` spawns every isolate as `IsolateId(pid.0)` (`gpu.rs:1060`,
-  `:2076`, `:2096`) with the `GpuId` only as a separate argument, and
-  `HostHandle::belongs_to` compares **only** `IsolateId`
-  (`kayfabe-isolate/src/lib.rs:133-135`). So `Worker::execute`'s foreign-handle gate
-  (`:705`) — documented as *"the ONE place the `(Proc, GpuId)`-scoped-handle rule is
+  `(Proc, GpuId)`.** `Gpu` spawns every isolate as `IsolateId(pid.0)`
+  (`crates/kayfabe-core/src/gpu.rs::Spine::ensure_proc_target` and
+  `::Spine::refresh`) with the `GpuId` only as a separate argument, and
+  `crates/kayfabe-isolate/src/lib.rs::HostHandle::belongs_to` compares **only** `IsolateId`.
+  So `crates/kayfabe-isolate/src/lib.rs::Worker::execute`'s foreign-handle gate — documented as *"the ONE place the `(Proc, GpuId)`-scoped-handle rule is
   enforced"* — **structurally cannot** distinguish proc P's GPU0 handles from its GPU1
   handles `[code]`. `plan_control` takes an adapter-supplied `obj: HostHandle` and a
   caller-chosen `target_gpu` and pairs them unchecked
-  (`kayfabe-fwd/src/lib.rs:1655-1684`), under a comment that *asserts* the pairing
+  (`crates/kayfabe-fwd/src/lib.rs::plan_control`), under a comment that *asserts* the pairing
   (*"MG-5: `obj` is a handle in THAT isolate's namespace"*). Blast radius is one proc's
   two host RM clients, so it is a **correctness/host-object** hazard, not a cross-process
   break. ★ **The mock cannot see it**: `MockRmBackend` builds a fresh namespace per
   `spawn(id, gpu)` and folds the GPU into the raw value
-  (`kayfabe-mocks/src/lib.rs:1031`, `:1065`) — the exact *"the mock namespaces its fake
+  (`crates/kayfabe-mocks/src/lib.rs::MockIsolateFactory::spawn` →
+  `crates/kayfabe-mocks/src/lib.rs::MockRmBackend::namespace`) — the exact *"the mock namespaces its fake
   handle values, a real host does not"* case `HostHandle`'s own doc warns about — and
   `HostLedger::leaked: BTreeMap<IsolateId, _>` merges the two targets' leak accounting, so
   §12.35's teardown post-condition is weaker than it reads. **Fix shape:** `IsolateId`
@@ -5377,17 +5423,22 @@ it wants its own order-independence argument — a round, not a patch. Filed as 
   them `IsolateId(pid.0)` in tests that pin `IsolateId == ProcId` as a documented
   property, and it changes what the leak ledger measures.
 - **N4 — `BatchId` is minted per target and consumed per proc.** Each `GpuTarget` has its
-  own `DeliveryPlane` with `next_batch` from 0 (`gpu.rs:1040`, `:1701`, `:2579`), while a
-  `Proc` has ONE `CompletionQueue` whose `in_flight` spans every target (`gpu.rs:299`).
+  own `DeliveryPlane` with `next_batch` from 0
+  (`crates/kayfabe-core/src/gpu.rs::GpuTarget::delivery`, minted at every `GpuTarget`
+  construction site; the counter itself is
+  `crates/kayfabe-completion/src/lib.rs::DeliveryPlane::next_batch`), while a
+  `Proc` has ONE `CompletionQueue` whose `in_flight` spans every target
+  (`crates/kayfabe-core/src/gpu.rs::Proc::completion`).
   For a proc on two GPUs both post `BatchId(0)`, and `completions_drained(GPU0)` sweeps
   GPU1's still-outstanding events into `awaiting_ack`
-  (`kayfabe-completion/src/lib.rs:158-168`) `[code]`. MG-6's *gate* still holds; the
+  (`crates/kayfabe-completion/src/lib.rs::CompletionQueue::drained`) `[code]`. MG-6's *gate* still holds; the
   accounting behind it does not. **Fix shape:** key `in_flight` by `(GpuId, BatchId)`, or
   mint device-globally. Not verified by a test — settle it with a two-GPU proc, one batch
   outstanding per target, drain one.
 - **N5 — the guest mints its own completion identity.** `OsEventRef(addr.0 ^ payload)`
-  (`kayfabe-fwd/src/lib.rs:1916`), and `CompletionQueue::ack` removes **every** entry
-  equal to it across three queues (`kayfabe-completion/src/lib.rs:171-175`) `[code]`. A
+  (`crates/kayfabe-fwd/src/lib.rs::apply_pushbuffer`, the `SemRelease` arm), and
+  `crates/kayfabe-completion/src/lib.rs::CompletionQueue::ack` removes **every** entry
+  equal to it across three queues `[code]`. A
   guest choosing a colliding `addr ^ payload` can cancel an unrelated pending completion
   **of its own proc** — contained by the per-proc container, so latent. Settle: does any
   path let one proc's ack reach another's queue? (Read says no.)

@@ -6,8 +6,9 @@
 > **⚠️ PIN EXPIRED — read before trusting any `file:line` or count in this document
 > (flagged 2026-07-27, doc audit).** Every "WHERE" citation and every test count below is
 > against `1c7ae84`, which is now **79 commits** back. Spot-checks found **three** of them
-> already wrong, in increasing order of severity: `kayfabe-arch/src/ids.rs:100` (§1.3 — now
-> `ControlCmd(u32)`; `enum EngineKind` moved to `:116`); §1.3's GR/CE-lifecycle row, whose two
+> already wrong, in increasing order of severity: §1.3's `kayfabe-arch/src/ids.rs` pin for
+> `EngineKind` (the old `:100` is now `ControlCmd(u32)`; re-pinned by symbol 2026-07-27);
+> §1.3's GR/CE-lifecycle row, whose two
 > named gaps have **both since been closed in code** (see the note on that row); and §1.5's UVM
 > row, which cited **two tests that had since been deleted** (see the withdrawal note under §1.5).
 >
@@ -66,18 +67,38 @@ this repo at head.
 |---|---|---|---|
 | Doorbell demux (token → vChid → own proc/channel/isolate; malformed/unknown = loud) | **yes** | `kayfabe-fwd::handle_doorbell`; `t14_doorbell_demux_routes_to_own_isolate`, `t14_malformed_and_unknown_tokens_fault_loudly` | — |
 | Per-proc scheduling, nothing one-shot (#12 CTX2 class) | **yes** | `gpu.rs::ExecPlane` per `ChanId`; `wo_12_second_context_recreate…`, matrix rows 2/16 | — |
-| `EngineKind` routing tag + `Arch::engine_of_object` (compute/graphics/CE/NVENC/NVDEC) | **yes** | `kayfabe-arch/src/ids.rs:`~~`100`~~`116` *(drifted; corrected 2026-07-27 — `:100` is now `ControlCmd(u32)`)*; `engine_context.rs::engine_of_object_classifies_all_kinds` | — |
+| `EngineKind` routing tag + `Arch::engine_of_object` (compute/graphics/CE/NVENC/NVDEC) | **yes** | `crates/kayfabe-arch/src/ids.rs::EngineKind` *(re-pinned by symbol 2026-07-27; the old `:100` line pin had drifted onto `ControlCmd(u32)`)*; `tests/tests/engine_context.rs::engine_of_object_classifies_all_kinds` | — |
 | GR/CE context lifecycle: Case-1 engine-object forward → host self-promotes own ctx; golden-capture completion typed to system proc | ~~**partial**~~ **★ both named gaps CLOSED — see note** | `forward_engine_object`, `signal_golden_capture` (`Traffic::System`-typed); `engine_context.rs`, `cb12_system_forge_never_reaches_a_user_proc_queue`; matrix row 24 | ~~Two §2.2 items absent: **(a)** `Channel` carries only coarse `EngineClass{Gr,Ce,Other}` — the `EngineKind` the design says the core tracks per channel is never recorded (`gpu.rs::Channel` has no field); **(b)** the engine-object forward is **not idempotent** — a re-sent Case-1 alloc re-allocs a *second* host object (`case1_second_forward_reuses_channel` pins channel reuse only). §2.2: "the object's Case-1 alloc has been forwarded (so re-sends are idempotent)"~~ **★ BOTH CLOSED — verified 2026-07-27, see below** |
 
 > **★ (2026-07-27, doc audit) — the GR/CE row's two gaps are both fixed in code; the "partial" was stale.** Verified directly, not inferred:
 >
-> - **(a) is closed.** `crates/kayfabe-core/src/gpu.rs:219` — `pub engine: EngineKind` is a field on `Channel`, with rustdoc citing `execution_plane.md` §2.2 by name (*"NVENC vs GR-compute is distinguishable HERE"*). **And the type the gap named no longer exists at all:** `EngineClass{Gr,Ce,Other}` was removed; the only surviving mention in the tree is `kayfabe-arch/src/ids.rs:112`, a rustdoc line reading *"(The coarse `EngineClass{Gr,Ce,Other}` this replaced …)"*.
+> - **(a) is closed.** `crates/kayfabe-core/src/gpu.rs::Channel::engine` — `pub engine: EngineKind` is a field on `Channel`, with rustdoc citing `execution_plane.md` §2.2 by name (*"NVENC vs GR-compute is distinguishable HERE"*). **And the type the gap named no longer exists at all:** `EngineClass{Gr,Ce,Other}` was removed; the only surviving mention in the tree is in the rustdoc of `crates/kayfabe-arch/src/ids.rs::EngineKind`, a line reading *"(The coarse `EngineClass{Gr,Ce,Other}` this replaced …)"*.
 > - **(b) is closed, by a test that names the exact §2.2 sentence this gap quoted.** `tests/tests/engine_context.rs` — `replayed_engine_object_alloc_forwards_exactly_one_host_object`, whose rustdoc reads *"a REPLAYED Case-1 engine-object alloc … yields exactly ONE host engine object."* The gap's parenthetical — *"`case1_second_forward_reuses_channel` pins channel reuse only"* — was true when written and is now merely incomplete: that test still exists and still pins only channel reuse, but it is no longer the only one.
 >
 > ★ **Worth noting how this one decayed**, because it is the opposite of the §1.5 failure: nothing here was ever *wrong*, and no citation broke. The row simply kept describing a gap after the gap was filled — which is the cheaper failure to make and the harder one to notice, since every name in it still resolves.
 | Anti-bolt-on: host verb surface does not grow per engine | **yes** | `engine_context.rs::host_verb_surface_does_not_grow_per_engine` | — |
 | The ONE pushbuffer parser (4 fact kinds + opaque passthrough; bounded, fuzzed) | **yes** | `parse_pushbuffer` + `PushbufferAbi`; `pushbuffer_parser.rs` (scripted + hostile + proptest), `b2_pushbuffer_length_flood_is_bounded` | Method-encoding *semantics* (xfer_none/remap bits) = real-arch adapter, matrix row 12, by design |
-| Per-`Vas` working-set publication + **ring-gate** (#14's load-bearing fix) | **partial** | `publish_backing`, `gate_working_set`, `ring_gated`; `t14_per_vas_publication_gates_the_ring`, `t14_unpublished_va_is_a_loud_fault` | **Two ring paths exist**: `handle_doorbell` rings *ungated* (line ~234) while `ring_gated` gates. The #14 invariant "unpublished at ring time = loud fault" holds only if the caller picks the right entry point — it is not structural. The C's "one exec path" refactor-debt lesson (`mode2_gpu_emul_refactor_debt`) applies verbatim |
+| Per-`Vas` working-set publication + **ring-gate** (#14's load-bearing fix) | ~~**partial**~~ **★ CLOSED — see note** | `crates/kayfabe-fwd/src/lib.rs::publish_backing`, `::gate_working_set`, `::handle_doorbell`; `t14_per_vas_publication_gates_the_ring`, `t14_unpublished_va_is_a_loud_fault` | ~~**Two ring paths exist**: `handle_doorbell` rings *ungated* while `ring_gated` gates. The #14 invariant "unpublished at ring time = loud fault" holds only if the caller picks the right entry point — it is not structural. The C's "one exec path" refactor-debt lesson (`mode2_gpu_emul_refactor_debt`) applies verbatim~~ **★ NO LONGER TRUE — verified 2026-07-27, see note** |
+
+> **★★ (2026-07-27, doc audit) — the "two ring paths" gap is fixed in code, and this row was
+> the one the pin-expiry banner most needed re-checked: it described the C's "one exec path"
+> debt as *reproduced*.** It is not.
+>
+> - **`ring_gated` no longer exists.** The ungated sibling was removed; the only surviving
+>   mentions of the name in the workspace are two rustdoc lines saying it *stays* removed
+>   (`crates/kayfabe-fwd/src/lib.rs::handle_doorbell` and `tests/tests/pushbuffer_parser.rs`).
+> - **The gate is structural, not caller discipline.** `crates/kayfabe-fwd/src/lib.rs::plan_doorbell`
+>   is the sole constructor of `VerbPlan::Doorbell` within the production crates and runs the
+>   #14 ring-gate before any host op exists.
+> - ⚠ **With the honest limit that `handle_doorbell`'s own rustdoc states**, and which should
+>   not be sanded off: "structural" describes the **call graph**, not the type system —
+>   `kayfabe_isolate::VerbPlan` is a public enum with public fields and
+>   `kayfabe_isolate::Worker::execute` is public, so a `VerbPlan::Doorbell` *can* be built
+>   outside `kayfabe-fwd` (`tests/tests/cross_proc_lifetime.rs` does exactly that). Making the
+>   stronger claim true means moving enforcement onto the constructor in `kayfabe-isolate`.
+> - ★ Also corrected in that rustdoc on the same day: `handle_doorbell` **is not on the L1
+>   path at all** — a real guest MMIO write goes through `kayfabe_rt::SharedDevice::doorbell`,
+>   which drives plan/execute/commit itself.
 | Multi-process: identical VAs + identical handles, disjoint everything | **yes** | `sim_14_two_process.rs`, `identical_handles_across_procs_do_not_collide`, `cb14_*` (no arming window, atomic LateMerge) | — |
 
 ### 1.4 Completion plane (the five patterns of `execution_plane.md` §1.2)
@@ -113,7 +134,8 @@ this repo at head.
 > `062ea67 mode2-rs: ★★ THE PROC GROUPING RULE — measured on hardware, and it was wrong`.
 >
 > **★ And the deletion was not a rename or a refactor — it was a retraction.** The surviving
-> successor file says so in its own header (`tests/tests/rmgraph_order_independence.rs:11-15`):
+> successor file says so in its own header (`tests/tests/rmgraph_order_independence.rs`, the
+> `//!` module doc, ~:11-15):
 >
 > > *"## ★ What this file used to assert, and why it was fiction … the scenario gave process A
 > > and process B **one UVM client each** … `dup_edge_groups_uvm_and_compute_into_one_proc`

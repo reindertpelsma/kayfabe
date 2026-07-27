@@ -211,6 +211,58 @@ boundary grep, the unsafe-surface `ls` gate, the mutation threshold, the conserv
    its evidence, not a silent rewrite — so a reader who remembers the old claim learns that it
    was wrong rather than doubting their memory.
 
+### 6.1 ★★ CITATION CONVENTION — cite OUR tree by symbol, PINNED trees by `file:line`
+
+A staleness audit (`d379cc0`, 2026-07-27) resolved every `file:line` in the design docs against
+the tree and found **~64 drifted**. Its verdict is the whole reason this section exists:
+
+> *"Essentially none of them had a wrong FACT attached. **The pins were honest and useless,
+> which is the worst combination, because they read as verified.** Symbols are stable; line
+> numbers are not."*
+
+Scale, so the failure is not read as bad luck: `l1_architecture_summary.md` had **24 of 30**
+sampled citations drifted, and `crates/kayfabe-core/src/gpu.rs` grew 1,100 → 2,790 lines in
+about fifty commits, which is enough to move every anchor in a file on its own.
+
+**The rule, in two halves.**
+
+1. **Our own `crates/` and `tests/` — cite by SYMBOL.**
+   `crates/kayfabe-core/src/gpu.rs::Spine::plan_refresh`,
+   `tests/tests/l1_mean.rs::a_published_gpa_is_provably_its_own_procs_ram_under_mean_arena_churn`.
+   A symbol name is `grep`-able and survives every edit that does not delete the thing you meant;
+   a line number survives nothing. Include the crate-relative path so the symbol is unambiguous.
+   For a `//!` module doc or a free-standing macro invocation with no enclosing item, name the
+   file plus the heading or the sentence — those are greppable too.
+
+2. **Pinned external trees — cite by `file:line`, and do NOT "fix" them.** `ogkm`,
+   `research_clones/`, `gvisor/`, the QEMU / cloud-hypervisor / rust-vmm sources, the Linux
+   kernel, and the C artifact (the `C:` prefix). We do not edit those trees, so their line
+   numbers are **stable and are the correct citation form** — the same audit re-resolved **>100**
+   of them and they still landed. Converting them to symbols would lose the precision (a line
+   inside a 900-line C function) and gain nothing.
+
+**Exceptions, both narrow.**
+
+- **A line inside a long function that a symbol cannot name** — keep it, but *anchor it to the
+  symbol as well*, in this shape: `crates/kayfabe-fwd/src/lib.rs::some_fn` (the catch-all `_ =>`
+  arm, ~`:1914`). The symbol is the durable half; the line is the hint, and a reader who finds
+  the line has moved can still find the arm.
+- **A verbatim runtime artifact** — a captured panic message, a log line — is quoted as it was
+  emitted, line number included, because editing it would falsify the quote. Add the symbol
+  beside it.
+
+**What NOT to do about a stale pin.** Do not add a banner saying the pins have expired: a banner
+rots exactly like the pin it warns about, and the reader who follows the citation is not the
+reader who read the banner. **Re-resolve and re-pin by symbol.** Keep the original pinned line in
+a trailing parenthetical wherever it is archaeology worth preserving — that costs nothing and
+destroys no record.
+
+★ **And re-resolving is itself an audit.** Every conversion forces you to open the code the claim
+rests on. That is where the value is: the 2026-07-27 pass found four claims that had gone false
+(two "still-open" findings that were fixed, one superseded type decision, one count) *only*
+because resolving the symbol meant reading what the symbol now says. A drifted pin is cheap; the
+claim hanging off it is not.
+
 ---
 
 ## 7. ★★ An optimisation with a correct-but-slow fallback must have the fallback tested as a FIRST-CLASS mode

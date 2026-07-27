@@ -178,9 +178,10 @@ field's alignment as a hard error rather than emitting a plain `#[repr(C)]` mirr
    cargo workspace (so ogkm is never a build dependency), which also means `cargo fmt --all`,
    `cargo clippy --workspace` and `cargo test --workspace` at the repo root do **not** reach it —
    the same gap the `fuzz` workspace has, and which CI closes for `fuzz` with a second
-   `working-directory` step (~~`.github/workflows/ci.yml:337-339`~~ — **citation drifted; the
-   `working-directory: fuzz` steps are at `:399` and `:425` as of 2026-07-27. `:337-339` is now
-   the `unsafe_code` lints gate, which is a different gate entirely**). The generator needs the
+   `working-directory` step (`.github/workflows/ci.yml` — grep `working-directory: fuzz`;
+   ~~pinned `:337-339`~~ — **citation drifted; it was at `:399` and `:425` as of 2026-07-27,
+   and `:337-339` had become the `unsafe_code` lints gate, a different gate entirely. Cite the
+   step, not the line**). The generator needs the
    same three steps. It is clean today (**20** unit tests — *was written as 21; counted
    2026-07-27: `gen/src/ctype.rs` 7 + `gen/src/parse.rs` 13, `emit.rs` and `main.rs` 0* —
    clippy-clean, rustfmt-clean, verified by hand),

@@ -1408,6 +1408,8 @@ defect it is correcting. The deviations this plan is authorised to make, each wi
 | the version key | ~15 hard-coded offsets and no version key; the element layout genuinely changed in `(570, 610]` | `[src]` D1/D3 |
 | `rpc.length = 36` | header is 32; the same file uses 32 in two other places | `[src]` |
 
+| the sequence-number reset | preserving unconditionally hands a *reloaded* driver a `seqNum` **greater** than its own, and its receive path has no recovery branch for `>` at all — only for `<` | `[src]` `ogkm: message_queue_cpu.c:768-782, 836`; discriminator = the queue region's identity (`kgspDestruct` frees the memdesc, an idle release does not). ★ UNMEASURED — plan item O3, falsified or confirmed at S7 |
+
 **Anything not in that table is ported, not redesigned.** If the build turns up a further defect,
 add a row with its evidence — do not deviate silently, and do not deviate because a different
 shape would be tidier. "It's cleaner" is inadmissible here for the same reason it is inadmissible
@@ -1420,3 +1422,85 @@ The C's bugs are **enumerable** — we found them by measurement and by reading,
 citation. Its correct behaviour is **not** enumerable: it encodes hundreds of quirks nobody wrote
 down, discovered over months against real silicon. Reproducing it and subtracting the known
 defects keeps the quirks. Rewriting from the protocol keeps only what we thought to look for.
+
+---
+
+## 13. BUILD FINDINGS — S0–S5, 2026-07-27
+
+Written by the build, against this plan. Corrections are in this section rather than edited
+into the text above, so a reader who remembers the original claim learns it was wrong.
+
+### 13.1 Errata in this plan
+
+1. **§5's S4 row says `GET_GSP_STATIC_INFO (51)`. It is 65.** `ogkm: rpc_global_enums.h:75`
+   (`X(GSP, GET_GSP_STATIC_INFO, 65)`); the two post-`INIT_DONE` RPCs at
+   `ogkm: kernel_gsp.c:5152, 5159` are `SET_GUEST_SYSTEM_INFO` (1) and this one. §12's
+   citation table is right; §5's parenthetical is not.
+2. **§5's CI note is stale.** *"The mutation job's `-f` scope does not include the crate"*
+   was true when written; `.github/workflows/ci.yml` now scopes `crates/*/src/**/*.rs`
+   ("SCOPE = EVERY PRODUCTION CRATE"), so `kayfabe-gsp` is already in the denominator and
+   S3 has nothing to add.
+3. **§5 says "the generation-name grep gate applies". There is no such gate.** CLAUDE.md
+   rule 1 describes one, and `ci.yml` does not implement it — the boundary, VMM-vocabulary,
+   unsafe-surface, GPA-accessor and unsafe-containment gates exist; a
+   `Ampere|Turing|Hopper|Blackwell|Ada|V5\d\d` grep does not. Worth adding; not added here,
+   because `ci.yml` is not this work's to change.
+4. **§4.2's check list is missing two codes.** `msgqRxLink` also returns **`-11`** (the
+   backend read of the peer header failed) and **`-12`** (the backend write of the zeroed
+   read pointer failed), and there is **no `-4`** (`ogkm: msgq.c:364-378, 436-441`).
+
+### 13.2 Inferred claims this build settled
+
+- **I4 (the mailbox pair) — settled by construction, and it was a real bug.** Keying the
+  publish on `MAILBOX1` is not merely fragile: with the pair latched across a driver life,
+  a new life's *first* mailbox write completes a pair whose other half belongs to the
+  previous life, and the FSM publishes an address assembled from two lives. Found by the
+  three-lifetimes test (two `E6`s, the first at a mixed address). The fix is a register
+  *shadow* (what a read returns) separate from a *trigger* (both halves seen since the last
+  publish or teardown).
+- **I9 (`Running` implies not-inside-a-boot-poll) — no longer inferred.** With
+  `MSGQ_FLAGS_SWAP_RX` the guest publishes its own status-queue consumption into the
+  command queue's rx header, so *"the guest has consumed `GSP_INIT_DONE`"* is directly
+  observable: its read pointer moves off zero after `msgqRxLink` zeroed it. The event gate
+  now rests on that read instead of on the inference.
+- **I1 (E3 idempotency), I8 (the region array's terminator)** — unchanged, still inferred.
+  I8 is now moot in practice: the scan searches by id8 and treats a zero entry as *skip*.
+
+### 13.3 O3 (the seqNum question) has an observable discriminator
+
+O3 asked whether `rxSeqNum` resets on a true `rmmod`/`insmod`. It does — `GspMsgQueueInit`
+zero-initialises it, reached from `kgspConstructEngine` and torn down in `kgspDestruct`,
+i.e. module load and unload — while an idle release keeps `MESSAGE_QUEUE_INFO` alive. The
+two are distinguishable **without** waiting for S7: `kgspDestruct` frees the shared memdesc,
+so a new module load publishes a **different `sharedMemPhysAddr`**, and an idle release
+publishes the same one (the C's own note at `C:3459-3470` records the reuse). The port
+therefore preserves the sequence numbers across a re-acquire and restarts them at 0 when the
+region changes. S7 remains the falsifier; the mechanism is now testable in-process, and is.
+
+### 13.4 Additions to the §3.5 seam, and one subtraction
+
+- Added `GspModel::is_swgen0_clear(value)`: transition E10 needs *"does this write clear the
+  status-queue interrupt edge"*, which is a bit position (bit 6 on GA10x) and therefore
+  cannot live in the logic crate. The plan's sketch omitted it.
+- **Removed `status_queue_irq() -> IrqSpec`.** `IrqSpec` lives in `kayfabe-vmm`, and
+  `kayfabe-arch` does not depend on it; giving it one is a lattice decision, not a side
+  effect of this port. The FSM reports an abstract *"announce the status queue"* instead and
+  the device shell, which already owns the VMM vocabulary, chooses the delivery.
+- `decode_reg` takes a raw `u8` BAR index rather than a newtype: the repo has two
+  (`kayfabe_vmm::BarId`, `kayfabe_trace::Bar`) and unifying them is the same lattice
+  decision. **[open]** — worth settling before a third appears.
+- `Arch::gsp()` returns `Option<&dyn GspModel>` with a provided `None`, so adding the seam
+  required **zero edits** to any existing `impl Arch`. `None` is a loud
+  `GspFault::NoGspModel`, never a defaulted register value.
+
+### 13.5 The fourth axis: guest **OS**
+
+Named by the owner while this was being built, and recorded in `kayfabe-gsp`'s crate docs:
+the guest *operating system* is a separate axis from the guest *driver version*, and today
+it lives nowhere. Almost nothing in the boot path is actually OS-shaped, because
+`ogkm: src/nvidia/` is NVIDIA's OS-independent RM core and the per-OS layer sits above it.
+Exactly three assumptions are ogkm-shaped — one queue pair per init-args struct (r535 also
+declares a lockless pair), the `RMARGS` id8 as the way the init region is found, and the
+falcon mailbox pair as the boot-args channel (already the *architecture* axis). Drift is
+supported only across ogkm-like bootstrap sequences; anything else ends in a named refusal
+(`QueueNotBound` for a guest that never binds, `GeometryRejected` for a different handshake).

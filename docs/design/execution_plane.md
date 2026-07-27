@@ -63,8 +63,8 @@ translator and a router, not a compute engine.
 >
 > **Two of §1.1's specific "missing" claims are verifiably false now:** the `EngineClass{Gr,Ce,
 > Other}` coarse tag it names as the limit no longer exists (replaced by `EngineKind`; the only
-> surviving mention is `kayfabe-arch/src/ids.rs:112`, a rustdoc line describing the
-> replacement), and the engine-object forward is idempotent
+> surviving mention is in the rustdoc of `crates/kayfabe-arch/src/ids.rs::EngineKind`, a line
+> describing the replacement), and the engine-object forward is idempotent
 > (`tests/tests/engine_context.rs::replayed_engine_object_alloc_forwards_exactly_one_host_object`).
 >
 > **The verdict is left standing rather than flipped**, because *"is the core complete?"* is a
@@ -85,7 +85,9 @@ complete for that spine (RmGraph source-of-truth + order-independent projections
 per-`Proc` `CompletionQueue` + `DeliveryPlane` `crates/kayfabe-completion`; the doorbell
 demux + first-touch host-channel materialization `crates/kayfabe-fwd/src/lib.rs`). What it
 has of the *execution* plane is a **thin routing skeleton**: `EngineClass{Gr,Ce,Other}`
-as a leaf enum (`crates/kayfabe-arch/src/ids.rs:74`), `RmBackend` with raw
+as a leaf enum (`crates/kayfabe-arch/src/ids.rs` — [symbol gone: `EngineClass` — was cited
+here as the leaf routing enum; the surviving successor is
+`crates/kayfabe-arch/src/ids.rs::EngineKind`, see the banner above]), `RmBackend` with raw
 `alloc_channel`/`schedule`/`ring_doorbell` verbs (`crates/kayfabe-isolate/src/lib.rs`), and
 a `Channel.host_channel` first-touch materialization in `handle_doorbell`. There is:
 
@@ -168,7 +170,7 @@ with zero core edits.
 An **engine instance** is what makes a `Channel` do work: a GR-compute object, a
 GR-graphics object, a CE copy object, or an NVENC session, allocated *on* a channel that
 names its VAS via the RmGraph. In the RmGraph this already appears as
-`ObjectKind::EngineObject { engine }` (`crates/kayfabe-arch/src/lib.rs:66`) and
+`ObjectKind::EngineObject { engine }` (`crates/kayfabe-arch/src/lib.rs::ObjectKind::EngineObject`) and
 `Channel { engine }` — the graph *shape* already carries it. What is missing is the
 *behavioral* seam: given an engine object on a channel, how the core (a) forwards its
 alloc (Case-1) so the host builds the engine's context, (b) recognizes its pushbuffer

@@ -74,7 +74,8 @@ to confirm, it is marked.
 > > **Three findings are worse than "moved" and are corrected in place below**, because in each
 > > the *claim*, not just the line, is now false: §7.8's `Isolate::rm` report (five cited sites,
 > > **one** occurrence left tree-wide), §3.2 G1's *"there is no field for the memory object's
-> > identity"* (the field exists — `kayfabe-mmu/src/lib.rs:46-47` names the gap it closed), and
+> > identity"* (the field exists — `crates/kayfabe-mmu/src/lib.rs::HostBacking` names the gap it
+> > closed in its own rustdoc), and
 > > §3.4's retry-bound *"that bound is not tested"* (`tests/tests/retry_ledger.rs` drives
 > > `MAX_COMMIT_RETRIES` directly).
 > >
@@ -84,6 +85,31 @@ to confirm, it is marked.
 > > before relying on it. ★ Note also that §7.11 was edited in place on 2026-07-26 while
 > > §7.1–§7.10 were not, so the document is already a mix of pinned and re-pointed references
 > > with nothing marking which is which.
+> >
+> > ### ★★ RE-PINNED BY SYMBOL (2026-07-27, citation pass — the fix, not the flag)
+> >
+> > The banner above is the right diagnosis and the wrong remedy: a banner rots exactly like a
+> > pin. Every citation in this document that points into **our own `crates/` and `tests/`** has
+> > now been resolved against HEAD and rewritten as `path::Symbol`. The pinned `3569d46` line
+> > number is **kept in a trailing parenthetical** wherever it was load-bearing archaeology, so
+> > nothing about what-was-true-when is destroyed — but the *durable* half of every citation is
+> > now a name you can `grep`. Citations into the pinned external trees (`ogkm`, `gvisor`,
+> > `research_clones`, QEMU, the C artifact) are **deliberately left as `file:line`**: those
+> > trees do not move, so a line number there is the correct and stable form. The rule is
+> > written down in `testing_doctrine.md` § CITATION CONVENTION.
+> >
+> > ★★ **Resolving the symbols found four claims that had become false, and they are corrected
+> > in place below** (marked ★★, each with its own dated note): **§7.1** (the atomicity claim —
+> > fixed by §12.18/§12.37), **§7.2** (the reachable panic — the failure was hoisted into
+> > `Spine::plan_refresh`, which pre-carves), **§7.8** (the `Isolate::rm` count), and **§3.2 G2**
+> > (recorded as *"not yet fixed"*; it is fixed).
+> >
+> > ★★★ **And the banner above promised three in-place corrections — §7.8, §3.2 G1 and §3.4 —
+> > and made NONE of them.** All three are now written at their sites. That is the same failure
+> > as the drifted pins, one level up: *the correction was recorded where the reader who needs
+> > it does not arrive.* A note at the top of a 2,300-line document is not an in-place
+> > correction, and describing it as one is worse than leaving it undone, because it reads as
+> > done.
 
 ---
 
@@ -707,7 +733,20 @@ object's identity. The object identity appears only in the *refusal* path's orph
 So any future reclaim path can unmap the address and can **never free the memory** — and this
 is the majority of the host bytes the system allocates. Being fixed by putting the backing
 identity into the binding.
-`kayfabe-fwd/src/lib.rs:514-518`, `:592-607`; `kayfabe-mmu/src/lib.rs:36-46`.
+`crates/kayfabe-fwd/src/lib.rs::commit_publish` (the `VerbReply::Published` destructure that
+dropped `memory`, pinned `:514-518`; the `vas.table.bind(…)` that stored only the address,
+pinned `:592-607`); `crates/kayfabe-mmu/src/lib.rs::Binding` (pinned `:36-46`).
+
+> **★★ CORRECTED 2026-07-27 (citation pass) — FIXED, and the fix is a type, not a field.** The
+> banner at the top of this document named this as a claim gone false and promised the
+> correction in place; making it here. `crates/kayfabe-mmu/src/lib.rs::HostBacking` now exists
+> and `Binding` carries `Option<HostBacking>` — *one* value pairing the host memory object with
+> the host VA, deliberately **not** two `Option`s beside each other. Its rustdoc gives the
+> reason in exactly this finding's terms: with two options *"the state 'mapped somewhere, owning
+> nothing freeable' is representable — and that state was precisely the G1 defect."* Folding the
+> pair makes bound-but-unfreeable unrepresentable. (House pattern —
+> `crates/kayfabe-core/src/gpa.rs::GpaSpace::release`-by-value: prefer the type over the runtime
+> check.) `l1_concurrency.md` §12.16.
 
 **G2 — the refresh silently drops live host state.** When re-deriving, the process's address
 spaces and channels are filtered by retaining the ones the graph still supports. The
@@ -717,7 +756,28 @@ reachable by an ordinary guest freeing one address-space or channel handle. It i
 fixed**, and the reason is a real design tension: the fix needs a deferred-release queue,
 because the no-blocking-under-lock rule forbids issuing host verbs inside the refresh, which
 runs under the device write lock.
-`kayfabe-core/src/gpu.rs:848`, `:883`.
+`crates/kayfabe-core/src/gpu.rs::Spine::sync_proc_to_boundary` — the `p.vases.retain(…)`
+(pinned `:848`) and the `p.channels.retain(…)` (pinned `:883`).
+
+> **★★ CORRECTED 2026-07-27 (citation pass) — FIXED, and by exactly the deferred-release queue
+> this entry predicted.** Found by resolving the two `retain` pins by symbol: each is now
+> immediately **preceded** by a staging call, which is the whole fix.
+>
+> - `crates/kayfabe-core/src/gpu.rs::Spine::stage_dropped_vases` runs before
+>   `p.vases.retain(…)`: it walks each doomed `Vas`'s address table and pushes every
+>   `HostBacking`'s `(host_vas, host_va)` onto `Proc::pending_release[gpu].unmap` and its
+>   `memory` onto `.free`, then the host VAS itself **last** — children before parents, RM's
+>   own order (the rustdoc cites `.../rs_server.c:963-981` for it). The GPA blocks go back to
+>   the proc's own arena in the same pass.
+> - `crates/kayfabe-core/src/gpu.rs::Spine::stage_dropped_channels` is the `Channel` half, and
+>   frees `host_engine_objects` **before** `host_channel` for the same parent/child reason.
+> - ★ The design tension this entry named was resolved the way it guessed: the queue is
+>   drained by a worker outside the lock, while the **GPA** half runs inline under the lock on
+>   the stated ground that returning a block to `GpaArena` issues no host verb, so R1 does not
+>   apply to it.
+>
+> So of §3.2's five "not yet addressed" gaps, this one — filed under "the four being fixed",
+> then marked not-yet — is closed; G5 is the one that survives untouched.
 
 **G3 / G3b — the reap is both unsafe and violates R1.** Reaping retired processes drops them
 *including their sandboxes* in place, and it is called under the device **write** lock. A real
@@ -728,7 +788,16 @@ the contact log recorded at §12.6 and that stage 3 already fixed once, reappear
 the fix did not cover. Separately, the reap can run while a worker is checked out on another
 thread, tearing the sandbox down under a live connection. And the "quiesce point" the design
 promises is **defined nowhere**. Being fixed.
-`kayfabe-core/src/gpu.rs:1087-1099`; `kayfabe-rt/src/device.rs:411-413`.
+`crates/kayfabe-core/src/gpu.rs::Spine::reap_retired` (pinned `:1087-1099`);
+`crates/kayfabe-rt/src/device.rs::SharedDevice::reap_retired` (pinned `:411-413`).
+
+> **★ Re-resolved 2026-07-27 (citation pass) — FIXED, as "being fixed" predicted** (§12.16).
+> `Spine::reap_retired` now returns a `Reclaimed` and **checks quiescence rather than trusting
+> it**: a retired proc whose isolate still has a worker checked out is put *back* on the retired
+> list for a later quiesce point (`Proc::is_quiesced` decides; the adapter only declares *when*
+> to try). The procs travel out to the caller for a **lock-free drop**, which is the R1 half.
+> The "quiesce point defined nowhere" sub-finding is the part to re-check: it is now named as
+> the L10 quiesce edge, and the adapter — not the core — owns it.
 
 **G4 — there is no cancellation vocabulary.** The host error type has no interrupted variant
 despite the design specifying one on the wire, and the forwarding fault type has no cancelled
@@ -911,6 +980,25 @@ cannot turn a race into a spin.
 This is the honest core of the L1 mutation score: the untested *logic* on that surface is two
 mutants wide, and it is the retry bound. Two mutants is not much; a spin under a pathological
 race is not nothing.
+
+> ### ★★ CORRECTED 2026-07-27 (citation pass) — *"that bound is not tested"* is no longer true
+>
+> The third of the three in-place corrections the pin-expiry banner promised and did not make.
+> The machinery the quoted mutation note said would be needed **was built**:
+> `tests/tests/retry_ledger.rs` drives the bound directly, and reads it from the source rather
+> than copying it —
+> `let rounds = kayfabe_rt::device::MAX_COMMIT_RETRIES;` (in
+> `tests/tests/retry_ledger.rs::the_commit_retry_bound_still_releases_the_attempt_that_hits_it`,
+> whose rustdoc states the property: *"Hitting `MAX_COMMIT_RETRIES` changes what the CALLER is
+> told, not what the host holds"*). Two siblings —
+> `tests/tests/retry_ledger.rs::converging_retries_release_every_host_object_they_allocated` and
+> `::a_retry_whose_replan_diverges_refuses_without_leaking_the_attempt` — cover the converging
+> and divergent shapes around it.
+>
+> ★ The residual worth keeping from this section is the *reasoning*, not the status: the note
+> correctly predicted that closing it needed **machinery, not an assertion**, and that is what
+> it cost. Reading the mutation score as "two mutants of untested logic" is what made the
+> machinery worth building.
 
 ## 3.5 The worker pool re-admits concurrency (bet B6)
 
@@ -2045,8 +2133,34 @@ There is a mitigation in the code: absorbed processes must be untouched, so no h
 lost. But identities, registered completion sources and arena identity are, and the claim as
 written is broader than that.
 
-`crates/kayfabe-core/src/gpu.rs:586-590` (the claim), `:608-612` (the rollback),
-`:800-815` and `:893-902` (the retires), `ARCHITECTURE.md:104`.
+`crates/kayfabe-core/src/gpu.rs::Spine::apply` — its rustdoc carries the claim (pinned
+`:586-590`) and its body the rollback (pinned `:608-612`);
+`crates/kayfabe-core/src/gpu.rs::Spine::refresh` — the merge-absorb retire (pinned `:800-815`)
+and the vanished-proc retire (pinned `:893-902`); `ARCHITECTURE.md:104`.
+
+> ### ★★ CORRECTED 2026-07-27 (citation pass) — this finding is FIXED in code, and the fix is narrated at the citation
+>
+> Re-pinning by symbol landed on `Spine::apply`'s rustdoc, which now tells this story as
+> history. Quoting it: *"the sentence above used to be a claim this function did not keep: the
+> snapshot is of `self.rmgraph` **only**, while `Spine::refresh` also retires and removes
+> `Proc`s… none of which the restore undid."* That is this finding, verbatim, in the source.
+>
+> **What holds it now** (`l1_concurrency.md` §12.18) is that the two mutators were separated:
+>
+> - **`crates/kayfabe-core/src/gpu.rs::Spine::refresh` is atomic by construction, not by undo.**
+>   Every refusal is hoisted into `crates/kayfabe-core/src/gpu.rs::Spine::plan_refresh`, which
+>   decides — **and pre-carves the arenas** — before any proc is touched; the mutation pass that
+>   follows has no failure path left.
+> - **`Spine::sync_rpc_mappings` is atomic by RE-RUN**, which is weaker, and the rustdoc says so
+>   out loud rather than claiming parity: a fault can leave the offending proc's own `Vas`
+>   carrying bindings the failed pass installed, and what removes them is the re-run's
+>   stale-unbind pass. The residue is confined to the proc whose event it was.
+>
+> ★ A separate hole in the *same* sentence — the "own refusal" half — was found later and
+> closed by `crate::project`'s **condemnation line** (§12.37): a planted `DUP_OBJECT` could
+> condemn a victim on the victim's own first `Alloc`, with `apply` returning `Ok(())`. Rollback
+> was working perfectly and was beside the point. Worth keeping visible: **atomicity was never
+> the property that sentence needed.**
 
 ## ★ 7.2 A reachable panic on a guest-driven control path
 
@@ -2061,7 +2175,26 @@ That propagates as an error into an `expect` and **panics the device**. It is na
 a near-exhausted guest-physical window — but it is a panic on a guest-driven control path, and
 the project's stated posture everywhere else is "a loud fault, never a panic".
 
-`crates/kayfabe-core/src/gpu.rs:610`, `:922`; `crates/kayfabe-core/src/gpa.rs:64-66`.
+`crates/kayfabe-core/src/gpu.rs::Spine::apply` (the rollback's `expect("last-good graph
+re-projects")`, pinned `:610`); `crates/kayfabe-core/src/gpu.rs::Spine::refresh` (its
+`ensure_proc_target` call, pinned `:922`); `crates/kayfabe-core/src/gpa.rs::GpaSpace::carve`
+(the `WindowExhausted` return, pinned `:64-66`).
+
+> ### ★★ CORRECTED 2026-07-27 (citation pass) — the panic is no longer reachable
+>
+> Same fix as §7.1, and this is the half of it that was load-bearing. The arena carve was
+> hoisted out of the mutation pass: `crates/kayfabe-core/src/gpu.rs::Spine::plan_refresh`
+> **pre-carves every arena the plan needs** before any proc is touched, and hands back what it
+> took from a pre-existing window if any carve fails. `Spine::refresh` is therefore infallible
+> past the point the plan is taken — its own rustdoc states it: *"Every refusal is hoisted into
+> `Spine::plan_refresh` (§12.18): after the plan is taken, nothing below can fail, so a refused
+> event disturbs no `Proc`."*
+>
+> The `expect` **is still there** in `Spine::apply`, and that is deliberate rather than
+> overlooked: it is now an assertion about a property proved elsewhere, not a hope. ⚠ Note the
+> honest residue — `Spine::ensure_proc_target` still carves inline (`target.gpa.carve()?`) and
+> is still reachable from `Gpu::realize`'s setup path; what changed is that the *refresh* path
+> no longer reaches it with a failure that the rollback must survive.
 
 ## ★ 7.3 The two-phase sandbox spawn has no mechanism
 
@@ -2083,8 +2216,12 @@ wrapper or the verb entry point.
 This is the most actionable finding in this section: it is a hole that opens the moment the
 real sandbox lands, and the assertion designed to catch that class does not cover it.
 
-`crates/kayfabe-core/src/gpu.rs:570`; `crates/kayfabe-fwd/src/lib.rs:357-367`;
+`crates/kayfabe-core/src/gpu.rs::Spine::ensure_proc_target` (the `isolates.spawn(…)` in its
+`or_insert_with`, pinned `:570`); `crates/kayfabe-fwd/src/lib.rs::checkout` (pinned `:357-367`);
 `docs/design/l1_concurrency.md:758-765`.
+*(Re-resolved 2026-07-27: **still true.** `ensure_proc_target` still calls
+`isolates.spawn` inline under the device write lock, and `kayfabe_fwd::checkout` still has no
+lazy bring-up hook.)*
 
 ## 7.4 Two of four completion pump edges are unwired, past their stated deadline
 
@@ -2094,8 +2231,11 @@ seam in stage 3."* Stage 3 landed; so did stage 4. It is still absent, and its o
 comment still says so. The drain edge has no implementation either. Of four named edges, the
 shell wires one and a half — the deferred backstop, and the poll edge via the core.
 
-`crates/kayfabe-rt/src/device.rs:843-863`, `:402-407`; `docs/design/l1_concurrency.md:532-542`,
-`:1135-1142`.
+`crates/kayfabe-rt/src/device.rs::SharedDevice::signal_source` (its rustdoc's *"Deliberately
+does NOT run the §5.2 pump edge"* paragraph, pinned `:843-863`);
+`crates/kayfabe-rt/src/device.rs::SharedDevice::completions_drained` (pinned `:402-407`);
+`docs/design/l1_concurrency.md:532-542`, `:1135-1142`.
+*(Re-resolved 2026-07-27: **still true** — the "stage 3" comment is verbatim intact.)*
 
 ## 7.5 The two "pumping without a deliverer wedges the plane" arguments contradict each other
 
@@ -2105,7 +2245,10 @@ the gate, and hands the batch to a caller that may or may not deliver it. Either
 edge could have used the same surface-it-to-the-caller contract, or the backstop shares the
 hazard. One of the two comments is wrong and the design does not distinguish them.
 
-`crates/kayfabe-rt/src/device.rs:845-848` versus `crates/kayfabe-rt/src/executor.rs:88-92`.
+`crates/kayfabe-rt/src/device.rs::SharedDevice::signal_source` (the *"would open a drain-gated
+batch nobody ever drains and wedge the delivery plane"* clause of its rustdoc, pinned
+`:845-848`) versus `crates/kayfabe-rt/src/executor.rs::Executor::drain_one` (the backstop's
+`pump_completions` call, pinned `:88-92`).
 
 ## 7.6 The multi-GPU backstop still pumps a hardcoded GPU zero
 
@@ -2114,8 +2257,13 @@ deferred redelivery event still carries no target, the executor still pumps GPU 
 comment still describes it as "stage 2" and defers the policy to "stage 3" — two stages later.
 On a two-GPU device the backstop cannot reach the second target.
 
-`crates/kayfabe-rt/src/executor.rs:84-92`; `crates/kayfabe-vmm/src/lib.rs:172`;
+`crates/kayfabe-rt/src/executor.rs::Executor::drain_one` (the hardcoded `GpuId::ZERO` and its
+"stage 2 / stage 3" comment, pinned `:84-92`);
+`crates/kayfabe-vmm/src/lib.rs::CoreEventKind::CompletionRedeliver` (pinned `:172`);
 `docs/design/l1_concurrency.md:1111-1118`.
+*(Re-resolved 2026-07-27: **still true**, and independently re-found by the staleness audit —
+`CompletionRedeliver` still carries no `GpuId` though `l1_concurrency.md` §6.5 said "fix it
+here" and M2-c landed without it.)*
 
 ## 7.7 Module documentation that describes a world the same file refutes
 
@@ -2131,7 +2279,11 @@ crate *"not in the code, not in the comments"* — in a sentence containing both
 actual enforced rule is narrower (six specific tokens), so nothing fails; but the module's own
 absolute wording is self-contradicted.
 
-`crates/kayfabe-rt/src/device.rs:53-60`; `crates/kayfabe-core/src/reactor.rs:38`.
+`crates/kayfabe-rt/src/device.rs` — the crate/module `//!` doc, section heading **"R1 status in
+stage 2 (honest)"** (pinned `:53-60`; grep the heading, it has not moved);
+`crates/kayfabe-core/src/reactor.rs` — the module `//!` doc's *"no host descriptors and no
+syscalls anywhere in this crate"* sentence (pinned `:38`).
+*(Re-resolved 2026-07-27: **both still true** — both sentences are verbatim intact.)*
 
 ## 7.8 Stale concurrency-bound documentation naming a method that no longer exists
 
@@ -2142,8 +2294,33 @@ assertion that refutes it. A fourth place gives it as the canonical example in a
 documentation. And the worker type's own documentation says it is not shareable, while the
 same file compile-time asserts that it is.
 
-`crates/kayfabe-isolate/src/lib.rs:617-618`, `:355-356`, `:631`;
-`crates/kayfabe-core/src/lib.rs:56-60`; `crates/kayfabe-util/src/lib.rs:53`.
+`crates/kayfabe-isolate/src/lib.rs` — the *"the one documented Send-only exception (crate
+docs)"* comment immediately above `kayfabe_util::assert_send_sync!` (pinned `:617-618`);
+`crates/kayfabe-isolate/src/lib.rs::Worker` — its rustdoc's *"`Send`, not `Sync`"* sentence
+(pinned `:355-356`); the `kayfabe_util::assert_send_sync!(dyn RmBackend, Worker)` invocation in
+the same file (pinned `:631`); `crates/kayfabe-core/src/lib.rs` — the crate `//!` doc's
+*"single relaxation"* bullet (pinned `:56-60`); `crates/kayfabe-util/src/lib.rs::assert_send`
+— the macro's rustdoc (pinned `:53`).
+
+> ### ★★ CORRECTED 2026-07-27 (citation pass) — the count is wrong; the finding is not
+>
+> The pin-expiry banner at the top of this document promised this correction and **did not
+> make it**. Making it here, resolved by symbol against HEAD:
+>
+> - **"Three places … `Isolate::rm(&mut self)`" is now ONE.** A tree-wide grep for
+>   `Isolate::rm` returns a single hit: `crates/kayfabe-core/src/lib.rs`'s crate `//!` doc. The
+>   isolate-crate and util-crate sites were reworded and no longer name the method. **The
+>   method itself still does not exist** — so the one survivor is still a citation to nothing.
+> - **The underlying contradiction is untouched and still stands at three sites**, which is the
+>   part that matters and which the count was only a proxy for: the comment above
+>   `assert_send_sync!` still calls `dyn RmBackend` *"the one documented Send-only exception"*
+>   twenty-odd lines above `assert_send_sync!(dyn RmBackend, Worker)`, which asserts the
+>   opposite; `Worker`'s own rustdoc still says *"`Send`, not `Sync`"* while that same
+>   assertion covers it; and `crates/kayfabe-util/src/lib.rs::assert_send`'s rustdoc still
+>   offers `dyn RmBackend` as its canonical only-`Send` example.
+> - ★ **The distance between "five sites" and "one site" is itself the lesson.** Nothing was
+>   fixed; the sentences were *edited around*, and the edit made the stale claim harder to find
+>   without making it less stale.
 
 ## 7.9 The core still advertises lock-free shared reads without qualification
 
@@ -2153,7 +2330,12 @@ source**. Under sharding a per-process read takes that process's lock; under the
 mode it takes the device write lock. The advertised property is false in both shipping
 configurations.
 
-`crates/kayfabe-core/src/lib.rs:54-55`; `crates/kayfabe-rt/src/device.rs:782-801`.
+`crates/kayfabe-core/src/lib.rs` — the crate `//!` doc's *"any number of threads may share
+`&Gpu` and resolve/route/inspect in parallel, lock-free"* sentence (pinned `:54-55`);
+`crates/kayfabe-rt/src/device.rs::SharedDevice::resolve` (pinned `:782-801`).
+*(Re-resolved 2026-07-27: **still true** — the unqualified sentence is verbatim intact, and
+`SharedDevice::resolve` still takes the proc lock in `Sharded` and the write guard in
+`Degenerate`.)*
 
 ## 7.10 "Each rank exactly twice" is a success-path-only number
 
@@ -2163,8 +2345,9 @@ retries; and the control path takes rank 0 once more in its classification prolo
 driver ever runs. No correctness violation — everything is in rank order, one per rank — but
 the number is not invariant.
 
-`crates/kayfabe-rt/src/device.rs:565-641`, `:729-770`;
-`docs/design/l1_concurrency.md:1234-1238`.
+`crates/kayfabe-rt/src/device.rs::SharedDevice::verb_op` (pinned `:565-641`);
+`crates/kayfabe-rt/src/device.rs::SharedDevice::route_control` (the rank-0 classification
+prologue, pinned `:729-770`); `docs/design/l1_concurrency.md:1234-1238`.
 
 ## 7.11 The README and the architecture map do not know about a whole crate, and their counts are stale
 
@@ -2195,8 +2378,18 @@ refuses a case the enforcing path accepts, so a caller pre-checking with it gets
 submission the ring path would allow.
 
 `README.md:33-34`, `:72`, `:114`; `ARCHITECTURE.md:58`, `:123`;
-`docs/design/core_state_and_consolidation.md:`~~`290`~~`301` *(re-resolved 2026-07-27: `:290` is now unrelated prose)*; `crates/kayfabe-core/src/rmgraph.rs:223-232`;
-`crates/kayfabe-fwd/src/lib.rs:1725`, `:1748-1760`, `:841`.
+`docs/design/core_state_and_consolidation.md:`~~`290`~~`301` *(re-resolved 2026-07-27: `:290` is now unrelated prose)*; `crates/kayfabe-core/src/rmgraph.rs::Resource`
+(its struct-level rustdoc's *"alive ⟺ `refs` is non-empty"*, pinned `:223-232` — note the
+`Resource::map_refs` field doc three lines below states the correct predicate,
+*"liveness ⟺ (`refs` non-empty OR `map_refs` > 0)"*);
+`crates/kayfabe-fwd/src/lib.rs::gate_working_set` / `::gate_working_set_in` (the *"read-only
+QUERY form of the same predicate"* section comment and the query itself, pinned `:1725`,
+`:1748-1760`) versus `crates/kayfabe-fwd/src/lib.rs::plan_doorbell` (its
+`None if working_set.is_empty() => {}` ring-gate arm — the case the query refuses and the
+enforcing path accepts, pinned `:841`).
+*(Re-resolved 2026-07-27: **both smaller items still true** — `gate_working_set_in` still
+`ok_or(FwdFault::NoVas(cid))`s a channel with no declared VAS, which `plan_doorbell` accepts
+when the working set is empty.)*
 
 ---
 
@@ -2218,7 +2411,11 @@ documentation tests, counted statically and corroborated by `core_mutation_gate.
 path *about 18 seconds*, per the same line; the 122.7 s to 17.1 s improvement is from commit
 `6195b7c` and was measured at 192 tests, before eleven more landed. Mutation: 99.2% (245/247)
 on the pure core and 92.44% (159/172) on the L1 surface, both from `core_mutation_gate.md`;
-threshold 91% from `ci.yml:`~~`274`~~`585` *(re-resolved 2026-07-27)*. **★ And the threshold itself is now marked `⚠ PENDING RE-DERIVATION` in CI** — `ci.yml:579-584` says the 91 was measured against the old four-path scope and *"do not quote the score until it is re-derived"*; see the note in `core_mutation_gate.md`. Race detector: 28 tests, 4 targets, 0 races, from
+threshold 91% from `.github/workflows/ci.yml`, the `MUTATION_THRESHOLD_PCT` env key (pinned
+`:274`, re-resolved 2026-07-27 to `:585` — grep the key, not the line). **★ And the threshold
+itself is now marked `⚠ PENDING RE-DERIVATION` in CI** — the comment block directly above that
+key says the 91 was measured against the old four-path scope and *"do not quote the score until
+it is re-derived"*; see the note in `core_mutation_gate.md`. Race detector: 28 tests, 4 targets, 0 races, from
 `l1_concurrency.md` §12.15 and the commit that made it a standing job. Constants (pool of 4,
 retry bound of 8, the capacity caps, the fence jump guard) read from source.
 
