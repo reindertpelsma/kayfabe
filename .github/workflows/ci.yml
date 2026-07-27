@@ -67,7 +67,34 @@ jobs:
         run: cargo build --workspace
       # (Deliberately not naming a test count here — it rots on every PR.)
       - name: Test (the fast suite + doctests)
-        run: cargo test --workspace
+        run: cargo test --workspace 2>&1 | tee /tmp/kayfabe-test.log; exit "${PIPESTATUS[0]}"
+      # ★★ KVM-gate non-vacuity. GitHub runners do NOT provide /dev/kvm, so the ~33
+      # tests that need a real VM fd SKIP here — and a skip that nobody counts is the
+      # "green instrument on an unexercised path" failure this repo cares most about
+      # (testing_doctrine.md §1). CI therefore asserts the gated tests were REACHED,
+      # not that they ran: RAN + SKIPPED must meet the floor. Each test binary is its
+      # own process, so the counting has to be external to the harness.
+      #
+      # This exists because CI was RED for three commits (1336ce1, 42d850c, 0a6826c)
+      # while the local suite was green on a box that happens to have KVM. The floor
+      # is what stops the reverse failure: all 33 quietly vanishing and CI staying
+      # green.
+      - name: KVM-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          ran=$(grep -c 'KVM-GATE: RAN' /tmp/kayfabe-test.log || true)
+          skipped=$(grep -c 'KVM-GATE: SKIPPED' /tmp/kayfabe-test.log || true)
+          total=$(( ran + skipped ))
+          echo "KVM-gate: ran=$ran skipped=$skipped total=$total (floor 33)"
+          if [ "$total" -lt 33 ]; then
+            echo "::error::KVM-gated tests were not reached: $total < 33." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "A silent skip is worse than a red build."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This runner has /dev/kvm: $ran gated tests actually executed."
+          fi
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Format check
