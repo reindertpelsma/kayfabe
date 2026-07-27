@@ -29,7 +29,7 @@ five small RECOMMEND-class items proposed below but deliberately **not** execute
 | `kayfabe-mocks` | ~1030 | One deterministic fake per port: `MockArch` ("Mockingbird" — deliberately non-NVIDIA encodings), `MockVmm` (sparse RAM, virtual clock, recorded irqs/slots/traps), `MockRmBackend`/`MockIsolate`/`MockIsolateFactory` (per-`(isolate,GPU)`-namespaced handles, shared verb recorder, scriptable failure), `MockPresent` | **complete** (test-only); the reference for what a real adapter must do |
 | `kayfabe-abi` | 53 | `DriverVersion` + the `DriverAbi` trait shape (`alloc_param_size`) | **STUB.** No codegen, no generated tables, no `#[repr(C)]` anything. L3 fills it; until then NO wire decode exists in the repo |
 | `kayfabe-gsp` | 34 | `BootPhase` placeholder enum | **STUB.** No boot FSM, no mailbox latches, no seqNum ring, no RPC decode. The one open *lifecycle* exposure (GSP reboot / suspend-reload) lives here, un-modeled and flagged — never faked |
-| `kayfabe-trace` | 21 | `TraceSink` (one string-emit method) | **STUB.** No event vocabulary, no replay format yet |
+| `kayfabe-trace` | ~900 | `TraceEvent` (15 variants: the device wire plane + the core decision planes), `TraceSink`/`Recorder`/`Trace`, `Counters`, `check_dense_order`/`diff` | **BUILT.** ~~No event vocabulary, no replay format yet~~ — the format is `mode2_gsp_port_plan.md` §6's, carried rather than reinvented. Not yet threaded through the plane signatures |
 | `tests/` | ~7500 | The `Scenario` DSL (compute-process / UVM-dup / #14 shapes) + 14 suites (below) | **complete** for L0 |
 
 ---
@@ -121,8 +121,9 @@ implementation shape: zero core edits required, ever.
 
 `Present::present(SurfaceHandle, FbMeta) -> Vblank` — the display sink (QEMU/PRIME at
 L2/L3; `SurfaceHandle` is minted only by `RmBackend::export_surface`, guest-RAM
-handles do not typecheck). `DriverAbi` and `TraceSink` are stubs; L1 does not depend
-on them.
+handles do not typecheck). `DriverAbi` is a stub; L1 does not depend on it. ~~`TraceSink` is a stub~~ — it is now
+the `kayfabe-trace` vocabulary, which L1 still does not *call*, but which the conformance
+suite drives against the real planes.
 
 ### 2.6 The core entry points L1's loop will call
 

@@ -13,6 +13,9 @@ kayfabe-isolate.workspace = true
 kayfabe-core.workspace = true
 kayfabe-vmm.workspace = true
 kayfabe-completion.workspace = true
+# ★ The trace vocabulary is BELOW this crate, so it cannot name `FwdFault`/`Stale`; the
+# exhaustive `Faulted` bridge lives here instead (src/trace.rs).
+kayfabe-trace.workspace = true
 
 [lints]
 workspace = true

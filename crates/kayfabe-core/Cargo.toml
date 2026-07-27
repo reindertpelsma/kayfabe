@@ -11,6 +11,10 @@ kayfabe-arch.workspace = true
 kayfabe-mmu.workspace = true
 kayfabe-completion.workspace = true
 kayfabe-isolate.workspace = true
+# ★ The trace vocabulary sits BELOW this crate deliberately (kayfabe-trace's crate docs),
+# so the core can hand it the compiler-checked bridges for the types trace cannot name:
+# `RmEvent` -> `RmVerb`, `ProcId` -> `ProcRef`, `RmGraphError` -> `FaultTag` (src/trace.rs).
+kayfabe-trace.workspace = true
 
 [dev-dependencies]
 kayfabe-mocks.workspace = true

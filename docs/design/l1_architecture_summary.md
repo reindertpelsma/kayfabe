@@ -1888,7 +1888,7 @@ Collected honestly.
 | `kayfabe-mmu` | 241 | the per-address-space table (miss = fault) + a walker skeleton | table full; **walker is a 41-line skeleton** |
 | `kayfabe-abi` | 53 | per-driver-version wire layouts; the only future home of C-layout structs | **stub** |
 | `kayfabe-gsp` | 34 | the GSP boot state machine | **stub — a placeholder enum** |
-| `kayfabe-trace` | 21 | a one-method trace sink | **stub — no call sites** |
+| `kayfabe-trace` | ~900 | the typed trace/replay vocabulary, the sink port, one-counter ordering, budget counters, the projection differential | **built — still no PLANE call sites** (driven from the conformance suite's seam observer) |
 
 ## 6.2 Tests — `tests/tests/*.rs`
 

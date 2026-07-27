@@ -1,9 +1,22 @@
 [package]
 name = "kayfabe-trace"
-description = "SKELETON — structured trace events + budgets (lesson L6: instrument the PROCESS): the replay format the conformance harness consumes, and the per-plane counters carried forward from the C's time-share instrumentation."
+description = "Structured trace events + budgets (lesson L6: instrument the PROCESS): the replay format the conformance harness consumes, and the per-plane counters carried forward from the C's time-share instrumentation."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+# ★ The lattice position is the design (see the crate docs). This crate must sit BELOW
+# `kayfabe-core`/`kayfabe-fwd` so every plane can emit into it, so it may depend only on
+# the leaf identity/port crates — and it uses their real types rather than mirroring them,
+# because a mirrored `AddressFault` is a mirror that drifts (testing_doctrine.md §6).
+kayfabe-arch.workspace = true
+kayfabe-completion.workspace = true
+kayfabe-mmu.workspace = true
+kayfabe-isolate.workspace = true
+# ★ For `IrqSpec`: the interrupt-delivery vocabulary already exists here, portably.
+kayfabe-vmm.workspace = true
 
 [lints]
 workspace = true

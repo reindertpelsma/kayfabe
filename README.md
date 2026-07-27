@@ -66,8 +66,12 @@ What is **really built** (mock-tested, mutation-gated):
 
 What is **not** built (stubs / skeletons, documented in their `lib.rs`): `kayfabe-abi`
 (Axis-A codegen — trait shape only), `kayfabe-gsp` (GSP boot FSM — a placeholder enum),
-`kayfabe-trace` (a one-method trait), the GMMU walker (`kayfabe-mmu::walker` — trait +
-result type only). Nothing pretends otherwise.
+the GMMU walker (`kayfabe-mmu::walker` — trait + result type only). Nothing pretends
+otherwise. ~~`kayfabe-trace` (a one-method trait)~~ — **built**: the typed `TraceEvent`
+vocabulary (`mode2_gsp_port_plan.md` §6), the `TraceSink` port, one-counter total ordering,
+perf-budget counters and the projection differential. Its plane call sites are *not* yet
+threaded; it is driven from the conformance suite's seam observer
+(`tests/tests/trace_replay.rs`).
 
 On top of it, the **L1 threaded shell** (`kayfabe-rt`) is built and hardened: ranked locks
 with always-on R1/R3 asserts, plan/execute/commit at every verb site, the bounded N-worker
@@ -129,7 +133,7 @@ nothing in the suite is `#[ignore]`d.
 | `kayfabe-mocks` | deterministic fakes for every seam (the only impls that exist) | full (test-only) |
 | `kayfabe-abi` | Axis-A codegen'd wire ABI | **stub** |
 | `kayfabe-gsp` | faked GSP boot FSM + seqNum transport | **stub** |
-| `kayfabe-trace` | structured trace/replay | **stub** |
+| `kayfabe-trace` | structured trace/replay + budget counters | vocabulary built; no plane call sites |
 | `kayfabe-rt` | the L1 threaded shell: ranked locks (R1/R3 asserted), `SharedDevice`, inbox, executor | full (L1-M1) |
 | `tests/` | the conformance suite (23 files) + `Scenario` DSL | full |
 

@@ -22,7 +22,7 @@ mature. Snapshot at `d65eb75` (496 tests green). Line counts are implementation 
 | `kayfabe-arch` | 556 | **built** | — |
 | `kayfabe-mmu` | 309 | **built** | — |
 | **`kayfabe-gsp`** | **34** | ★ **SKELETON — the critical path** | port plan in flight; then ABI payloads per-message; traces for *validation* only |
-| **`kayfabe-trace`** | **21** | ★ **SKELETON** | **nothing — its dependencies are all mature** |
+| `kayfabe-trace` | ~900 | **built** — vocabulary + sink port + one-counter ordering + budget counters + projection differential; 17 tests, every mechanism bite-checked | — *(incremental: plane call sites are threaded when a plane needs them; the GSP replay harness is its first real consumer)* |
 
 ## ★ The sequencing finding: `kayfabe-trace` is upstream of the GSP oracle
 
@@ -37,6 +37,22 @@ GSP's harness first would either duplicate that vocabulary or hard-code it in th
 decision, address bind/miss, doorbell dispatch, completion post/drain/poll, isolate verb — all
 exist and are tested. So it is startable **now**, and it should land **before** the GSP replay
 harness rather than beside it.
+
+**★ DONE (2026-07-27).** It landed first, as sequenced. Two findings worth carrying forward:
+
+1. **It had to sit BELOW `kayfabe-core`,** not beside it — every plane must be able to emit, so
+   every plane must be able to depend on it. It therefore cannot name `RmEvent`, `ProcId`,
+   `FwdFault` or `RmGraphError`. The bridge is a **trait the owning crate implements with an
+   exhaustive `match`** (`kayfabe_core::trace`, `kayfabe_fwd::trace`), so a new variant upstream
+   fails the build until the trace vocabulary names it.
+2. **`IrqSpec` did not need inventing** — `kayfabe-vmm` already has the portable one
+   (`Msix`/`IntxLevel`). The port plan's §6.1 sketch spells interrupts as the C's raise API;
+   spelling them that way in a gated crate would have been a VMM-vocabulary breach.
+
+Still open, deliberately: **no `&mut Trace` is threaded through any plane signature.** The
+vocabulary is driven from the conformance suite's seam observer, which proves it can express
+what the planes return and that the order is faithful; wiring a plane is a per-plane decision
+with a real churn cost, and the first plane that needs it is the GSP queue.
 
 ## What is deliberately NOT started, and why
 

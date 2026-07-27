@@ -66,6 +66,8 @@ use kayfabe_mmu::AddressTable;
 use kayfabe_mmu::{AddressFault, Binding};
 use kayfabe_vmm::{FbMeta, IrqSpec, Present, PresentError, SurfaceHandle, Vmm, VmmError};
 
+mod trace;
+
 /// The MSI-X vector completions are raised on. Abstract placeholder until the
 /// interrupt-tree model ports (`kayfabe-regs`-equivalent); the mocks assert on it.
 pub const COMPLETION_VECTOR: IrqSpec = IrqSpec::Msix(0);

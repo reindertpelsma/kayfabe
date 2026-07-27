@@ -8437,3 +8437,352 @@ fn a_guest_entered_at_an_address_with_no_memory_faults_by_name_and_is_never_resu
         "the device-wide exit counter agrees — the two instruments cannot drift"
     );
 }
+
+// =================================================================================
+// ★★ THE TRACE ARM (`kayfabe-trace`) — the replay vocabulary under the SAME mean load
+//
+// `testing_doctrine.md` §3.1 obligation 3: the mean test is where a new milestone gets
+// wired, not a fresh isolated file — because §3's incident is that isolated cases go
+// green for the wrong reason. So the trace crate's two load-bearing claims are asserted
+// HERE, against the six-proc / two-GPU world, multi-threaded, with a host verb PARKED:
+//
+//   1. **The order is total across threads when the recorder is shared** — dense from
+//      zero, gapless, exact count. That is the whole basis of a replay differential, and
+//      a per-thread recorder (the shape that looks equally reasonable) provably is not:
+//      `trace_replay.rs::two_recorders_do_not_share_an_order`.
+//   2. **The trace is conserved** — every op each thread performed appears exactly once,
+//      routed to its OWN proc and its OWN GPU. A trace that lost or duplicated events
+//      under contention would make every differential built on it a coin flip.
+//
+// The parked verb is not decoration: it is what makes the run *mean*. The workload
+// threads are joined while the latch is STILL pending, so the recorded event count is a
+// progress edge (§8.3: never a clock), and the trace is being written by six threads
+// while a seventh is blocked inside the mock backend.
+// =================================================================================
+
+mod trace_arm {
+    use super::*;
+    use kayfabe_trace::{
+        CompletionOp, Counters, Dispatched, EventKind, Faulted, Outcome, ProcRef, Recorder,
+        Resolved, RouteKey, Routed, Seq, TraceEvent, TraceLog, check_dense_order,
+    };
+
+    /// Ops per traced workload thread. Small on purpose — this arm is about ORDER and
+    /// CONSERVATION under contention, and the composed run above already carries the
+    /// heavy op counts.
+    const TRACE_OPS: usize = 150;
+    /// Events each op emits: bind, resolve, doorbell, poll.
+    const EVENTS_PER_OP: usize = 4;
+    /// The traced threads' VA lane base (disjoint from every other lane in this file).
+    const VA_TRACE: u64 = 0x100_0000_0000;
+
+    /// One traced workload thread: publish → read back → ring → poll, emitting from the
+    /// REAL return value of each op into the SHARED recorder.
+    fn traced_workload(
+        dev: &SharedDevice,
+        rec: &Mutex<Recorder<TraceLog>>,
+        pids: &[ProcId],
+        i: usize,
+    ) {
+        let (lane, gpu, pid) = (lane_of(i), gpu_of(i), pids[i]);
+        for k in 0..TRACE_OPS {
+            let va = GpuVa(VA_TRACE + (i as u64) * 0x1_0000_0000 + (k as u64) * 0x1000);
+
+            let p = dev
+                .publish_backing(gpu, lane.pdb, va, 0x1000)
+                .expect("the traced thread publishes while a sibling's verb is parked");
+            let (b, off) = dev
+                .resolve(gpu, lane.pdb, GpuVa(va.0 + 0x40))
+                .expect("resolves");
+            let out = dev.doorbell(gpu, MockArch::token_for(lane.gr), &[va]);
+            let batch = dev.completion_poll(gpu, pid, Instant(k as u64));
+            let posted = batch.as_ref().map(|x| x.batch);
+            let outstanding = batch.as_ref().map_or(0, |x| x.events.len());
+            if batch.is_some() {
+                dev.completions_drained(gpu);
+            }
+            assert_eq!(lock::held_depth(), 0, "a traced op leaked a guard");
+
+            // ONE lock acquisition, four events — so the four events of one op are
+            // CONTIGUOUS in the total order. That is the adapter obligation the crate
+            // docs state: the counter orders emissions, so an emitter that wants its own
+            // ops atomic in the stream must emit them under one exclusion.
+            let mut g = rec.lock().expect("recorder");
+            let mut tr = g.trace();
+            tr.emit(|| TraceEvent::Route {
+                gpu,
+                key: RouteKey::Pdb(lane.pdb),
+                outcome: Routed::To(ProcRef(pid.0)),
+            });
+            tr.emit(|| TraceEvent::AddressResolve {
+                gpu,
+                pdb: lane.pdb,
+                va: GpuVa(va.0 + 0x40),
+                outcome: Resolved::Hit {
+                    offset: off,
+                    host: b.host,
+                },
+            });
+            tr.emit(|| TraceEvent::Doorbell {
+                gpu,
+                vchid: lane.gr,
+                token: MockArch::token_for(lane.gr),
+                outcome: match &out {
+                    Ok(o) => Dispatched::Rung {
+                        proc: ProcRef(o.proc.0),
+                        host_token: o.host_token,
+                        scheduled_now: o.scheduled_now,
+                    },
+                    Err(e) => Dispatched::Refused(e.fault_tag()),
+                },
+            });
+            tr.emit(|| TraceEvent::Completion {
+                gpu,
+                proc: ProcRef(pid.0),
+                op: CompletionOp::Polled {
+                    posted,
+                    outstanding,
+                },
+            });
+            drop(g);
+            // The publication itself is a fact the assertions below re-derive, so it is
+            // read here rather than ignored.
+            assert_eq!(b.host_va(), Some(p.host_va));
+        }
+    }
+
+    /// One composed traced run in `mode`. Returns the counters and the recorded stream.
+    fn traced_mean_run(mode: LockMode) -> (Counters, Vec<kayfabe_trace::Record>) {
+        let _w = watchdog("l1_mean::traced_mean_run", Duration::from_secs(180));
+        let (device, pids, rec_verbs) = mean_world(mode);
+        let dev: &SharedDevice = &device;
+        let pid_ref: &[ProcId] = &pids;
+        let trace = Mutex::new(Recorder::new(TraceLog::new()));
+
+        // Warm-up, so a canary's parked verb is the one the script NAMES.
+        for i in 0..N_PROCS {
+            dev.publish_backing(gpu_of(i), lane_of(i).pdb, GpuVa(VA_WARM), 0x1000)
+                .expect("warm-up publish");
+            dev.doorbell(gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
+                .expect("warm-up CE ring");
+        }
+
+        thread::scope(|sc| {
+            // ★ Park ONE host verb on the witness's own isolate, and CONFIRM it parked
+            // before any traced thread starts — so what follows is written while a
+            // seventh thread is genuinely blocked inside the backend.
+            let mut latches = Latches::new();
+            latches.arm(&rec_verbs, pids[P_WITNESS], GPU0, 0, VerbKind::AllocSysmem);
+            let parked = sc.spawn(move || {
+                dev.publish_backing(GPU0, lane_of(P_WITNESS).pdb, GpuVa(VA_HELD), 0x1000)
+            });
+            latches.wait_all_pending();
+
+            let workers: Vec<_> = (0..N_PROCS)
+                .map(|i| {
+                    let t = &trace;
+                    sc.spawn(move || traced_workload(dev, t, pid_ref, i))
+                })
+                .collect();
+            for w in workers {
+                w.join().expect("no traced thread panicked");
+            }
+
+            // ★ THE PROGRESS EDGE (§8.3: never a clock). Every traced thread ran to
+            // completion while the parked verb is STILL parked — so the stream below was
+            // written under contention, not after it drained.
+            assert!(
+                latches.all_pending(),
+                "the parked verb was released before the traced threads finished — the \
+                 whole run happened after the contention, and proves nothing about it"
+            );
+            assert_eq!(
+                trace.lock().expect("recorder").counters().total(),
+                (N_PROCS * TRACE_OPS * EVENTS_PER_OP) as u64,
+                "every traced op was recorded WHILE the verb was parked"
+            );
+
+            latches.release_all();
+            parked.join().expect("the parked thread joins").expect(
+                "the witness's held publish commits once released — a failure here means \
+                 the latch, not the trace, is what this run measured",
+            );
+        });
+
+        let rec = trace.into_inner().expect("recorder");
+        (*rec.counters(), rec.into_sink().records().to_vec())
+    }
+
+    /// ★ The mean arm: one shared recorder, six threads, two GPUs, a parked host verb.
+    #[test]
+    fn the_shared_trace_is_totally_ordered_and_conserved_under_the_mean_load() {
+        let mut per_mode = Vec::new();
+        for mode in [LockMode::Degenerate, LockMode::Sharded] {
+            let (counters, records) = traced_mean_run(mode);
+            let expected = N_PROCS * TRACE_OPS * EVENTS_PER_OP;
+
+            // (1) ★ THE ORDER: dense from zero, strictly increasing, across six emitters.
+            assert_eq!(
+                check_dense_order(&records, Seq(0)),
+                Ok(()),
+                "{mode:?}: a shared recorder must totally order concurrent emitters"
+            );
+            assert_eq!(
+                records.len(),
+                expected,
+                "{mode:?}: nothing lost or duplicated"
+            );
+            assert_eq!(counters.total(), expected as u64);
+
+            // (2) ★ NON-VACUITY, stated exactly: these four planes ran, the other eleven
+            // did not. An unexpected silence is a plane that stopped emitting; an
+            // unexpected noise is an event nobody asked for.
+            assert_eq!(
+                counters.seen_kinds(),
+                vec![
+                    EventKind::Route,
+                    EventKind::AddressResolve,
+                    EventKind::Doorbell,
+                    EventKind::Completion,
+                ],
+                "{mode:?}: exactly the driven planes appear"
+            );
+            for k in counters.seen_kinds() {
+                assert_eq!(
+                    counters.of(k),
+                    (N_PROCS * TRACE_OPS) as u64,
+                    "{mode:?}: every thread emitted {k} once per op"
+                );
+            }
+
+            // (3) ★ CONSERVATION + ROUTING, read out of the projection alone: every
+            // doorbell rang on its OWN proc and its OWN GPU. Byte-identical vChid values
+            // live on both GPUs in this world (MG-3), so a routing map that collapsed
+            // `(GpuId, VChid)` shows up right here.
+            let mut per_proc: BTreeMap<(u32, u32), usize> = BTreeMap::new();
+            for r in &records {
+                match &r.ev {
+                    TraceEvent::Doorbell {
+                        gpu,
+                        vchid,
+                        outcome: Dispatched::Rung { proc, .. },
+                        ..
+                    } => {
+                        *per_proc.entry((proc.0, gpu.0)).or_default() += 1;
+                        // The vChid is the lane's GR channel of exactly one proc.
+                        assert!(
+                            LANES.iter().any(|l| l.gr == *vchid),
+                            "{mode:?}: a doorbell rang a vChid no lane owns"
+                        );
+                    }
+                    TraceEvent::Doorbell {
+                        outcome: Dispatched::Refused(t),
+                        ..
+                    } => panic!("{mode:?}: a traced doorbell was refused: {t}"),
+                    _ => {}
+                }
+            }
+            assert_eq!(
+                per_proc.len(),
+                N_PROCS,
+                "{mode:?}: all six procs are represented, each under its own (proc, gpu)"
+            );
+            assert!(
+                per_proc.values().all(|n| *n == TRACE_OPS),
+                "{mode:?}: each proc's doorbells are conserved exactly: {per_proc:?}"
+            );
+
+            // (4) ★ Every AddressResolve HIT is host-published — the #14 gate's own
+            // predicate, visible in the trace with no core access at all.
+            let unpublished = records
+                .iter()
+                .filter(|r| {
+                    matches!(
+                        &r.ev,
+                        TraceEvent::AddressResolve {
+                            outcome: Resolved::Hit { host: None, .. },
+                            ..
+                        }
+                    )
+                })
+                .count();
+            assert_eq!(
+                unpublished, 0,
+                "{mode:?}: a traced resolve reported a bound-but-UNPUBLISHED range — that \
+                 is the #14 EXECUTION fault's precondition, and the vocabulary is required \
+                 to be able to say it (which is why this counts a named state, not an \
+                 absence)"
+            );
+
+            per_mode.push(counters);
+        }
+
+        // (5) The two lock modes are two configurations of one design (§7 / review P5),
+        // so the trace's plane counts must agree exactly.
+        assert_eq!(
+            per_mode[0], per_mode[1],
+            "the trace's per-plane counts are a mode-INDEPENDENT fact; a disagreement \
+             means one lock mode dropped or duplicated observations"
+        );
+        // ★ Non-vacuity for (5) itself: the thing being compared is not trivially empty.
+        assert!(per_mode[0].total() > 1_000);
+    }
+
+    /// ★ The bite check for the assertions above, run as a test rather than by hand: the
+    /// mean arm's `check_dense_order` claim must FAIL on a stream that lost one record.
+    /// Without this, an ordering checker that always returned `Ok` would leave the mean
+    /// arm green — the exact "green instrument on an unexercised path" shape.
+    #[test]
+    fn the_mean_arms_order_check_would_notice_a_lost_record() {
+        let mut rec = Recorder::new(TraceLog::new());
+        {
+            let mut tr = rec.trace();
+            for i in 0..8u64 {
+                tr.emit(|| TraceEvent::Clock { ns: i });
+            }
+        }
+        let whole = rec.sink().records().to_vec();
+        assert_eq!(check_dense_order(&whole, Seq(0)), Ok(()));
+        let mut lossy = whole.clone();
+        lossy.remove(5);
+        assert_eq!(
+            check_dense_order(&lossy, Seq(0)),
+            Err(kayfabe_trace::OrderingError::Gap {
+                index: 5,
+                expected: Seq(5),
+                seq: Seq(6),
+            }),
+            "the mean arm's order assertion has teeth: one lost record is named, by index"
+        );
+        // And the refusal-carrying arm of the vocabulary is non-vacuous too: an `Outcome`
+        // can actually be refused, so the mean arm's "was any doorbell refused?" panic is
+        // reachable rather than decorative.
+        assert_eq!(
+            TraceEvent::Route {
+                gpu: GPU0,
+                key: RouteKey::Pdb(Pdb(0xbad)),
+                outcome: Routed::Refused(
+                    FwdFault::UnknownPdb {
+                        gpu: GPU0,
+                        pdb: Pdb(0xbad)
+                    }
+                    .fault_tag()
+                ),
+            }
+            .refusal()
+            .map(|t| t.0),
+            Some("FwdFault::UnknownPdb")
+        );
+        assert_eq!(
+            TraceEvent::RmApply {
+                gpu: Some(GPU0),
+                client: client_of(0),
+                handle: H_VASPACE,
+                verb: kayfabe_trace::RmVerb::Free,
+                outcome: Outcome::Ok,
+            }
+            .refusal(),
+            None
+        );
+    }
+}

@@ -32,7 +32,7 @@ Ports and their standing:
 | `Isolate`, `IsolateFactory`, `RmBackend` | `kayfabe-isolate` | L1 (sandboxed Linux worker) | **trait-only** (mock-implemented) |
 | `Arch`, `GmmuFmt`, `UserdModel`, `PushbufferAbi` | `kayfabe-arch` | L3 (`impl Arch for <Gen>`) | **trait-only** (MockArch = "Mockingbird") |
 | `DriverAbi` (Axis A) | `kayfabe-abi` | L3 codegen from ogkm | **stub** (shape only) |
-| `TraceSink` | `kayfabe-trace` | adapter log/file | **stub** |
+| `TraceSink` | `kayfabe-trace` | adapter log/file | **built** — typed `TraceEvent` vocabulary, `Recorder` (one counter = one total order), perf-budget counters, projection differential. No adapter sink yet; no `&mut Trace` threaded through the plane signatures |
 | `FbRead` (walker's PT source) | `kayfabe-mmu::walker` | FB shadow | **skeleton** |
 
 Note: nothing implements `kayfabe_vmm::Device` yet — that needs the register + GSP models
@@ -56,7 +56,7 @@ points take `&self` so the port admits the core's per-`Proc` sharding (`l1_os_sh
 | `kayfabe-isolate` | the sandbox/host-RM ports (RM **verbs**, not ioctls) | arch §4.2/§4.3.4 | traits only |
 | `kayfabe-abi` | Axis-A: generated per-driver-version wire tables; the ONLY future home of `#[repr(C)]` | `mode2_abi_agnostic_layer.md` §2 | **stub** |
 | `kayfabe-gsp` | faked GSP boot FSM + seqNum queue transport (resettable) | arch §4.2/§4.5 step 2 | **stub** |
-| `kayfabe-trace` | trace/replay vocabulary | lesson L6 | **stub** |
+| `kayfabe-trace` | trace/replay vocabulary + budget counters | lesson L6; `mode2_gsp_port_plan.md` §6 | **built** (vocabulary + sink port + differential); plane call sites not yet threaded |
 | `kayfabe-mocks` | one deterministic fake per port + shared verb recorder | testing §4 | **full** (test-only) |
 | `kayfabe-rt` | ★ the L1 threaded shell: `LockRank` + always-on R1/R3 asserts, `SharedDevice` (both `LockMode`s), inbox, executor, isolate pool gate | `l1_concurrency.md` §3/§7 | **full** (L1-M1) |
 | `tests/` | the conformance suite (23 files) + the `Scenario` DSL | testing §2/§3 | **full** |

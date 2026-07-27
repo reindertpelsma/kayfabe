@@ -148,6 +148,7 @@ pub mod gpu;
 pub mod project;
 pub mod reactor;
 pub mod rmgraph;
+mod trace;
 
 // The concurrency contract, compile-time-asserted (decision #17): every public
 // type of the core — including `Gpu` itself, whose `Box<dyn Arch>`/`Box<dyn

@@ -28,6 +28,10 @@ kayfabe-linux-raw.workspace = true
 kayfabe-shell.workspace = true
 kayfabe-mocks.workspace = true
 kayfabe-rt.workspace = true
+# ★ The trace/replay vocabulary (docs/design/mode2_gsp_port_plan.md §6). The conformance
+# suite is where "is this vocabulary usable, ordered and non-vacuous?" gets answered, so
+# the crate's tests live here beside the traffic they observe rather than in a unit file.
+kayfabe-trace.workspace = true
 
 [dev-dependencies]
 # Property-based / fuzz testing — DEV-ONLY (never a core dependency). Generates
