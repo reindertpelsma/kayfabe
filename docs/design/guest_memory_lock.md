@@ -163,6 +163,34 @@ Two constraints come with it, both binding:
 These are not gaps to be closed later. They are the **shape** of the mechanism, and §3 and §7.4
 turn them into refusals rather than caveats.
 
+> ### ★★ 2026-07-27 addendum — row 1 is **not** specific to this mechanism, and it was measured for uffd too
+>
+> Full detail: **`../reference/uffd_isolate_kvm_study.md`**. Three things were asked of the
+> *displaced* mechanism (uffd-WP, §7.3) that this document had never established, and the
+> answers change what may be **claimed**, though not — see below — which mechanism wins.
+>
+> 1. **[measured, `vh` 6.8.0-124]** A uffd-WP registration in the VMM's `mm` does **not** trap,
+>    block, or even observe a write by another process to the same `MAP_SHARED` memfd pages.
+>    The isolate's write completes in ~1 µs and lands; our handler sees zero faults. Measured
+>    with the page simultaneously a **KVM memslot** and armed: *same page, same instant, the
+>    guest is trapped and the isolate is not.* **Row 1 of the table above is therefore a
+>    property of `mm`-scoped protection in general, not of the permanent-RO shape** — it is not
+>    a reason to prefer either candidate, and both must state it identically.
+> 2. **[measured]** uffd-WP **does** trap a guest vCPU write inside a memslot, blocks it for as
+>    long as we hold (500 ms tested, backing word unchanged), **never returns to userspace**
+>    (no `-EFAULT`, no `KVM_EXIT_MEMORY_FAULT`), and the store is **retried** correctly on
+>    resolve. The blocked vCPU is **signal-interruptible** (`-EINTR` / `KVM_EXIT_INTR`) with
+>    the write still not landed — so a hold is always breakable from outside.
+> 3. **[measured]** The C research artifact never blocked a write by any means. Its defence was
+>    **copy-once snapshot**, named as audit item **P2-2** — i.e. `../reference/
+>    region_lock_mechanism_study.md` **row L**, shipped and audited on real hardware. §2 of this
+>    document is therefore not a novel position; it is the C's position, written down.
+>
+> **★ The sentence that has to change wherever it appears.** "While we hold a region, the guest
+> cannot move the bytes we are deciding on" is correct and measured. *"Nobody can move them"* is
+> false for **every** candidate in the study. The lock excludes **vCPUs**. It does not exclude
+> our own isolates, and it does not exclude GPU DMA.
+
 **[inferred] A fourth boundary follows from the mapping type**, worth naming because it looks
 like a tuning question and is not: a **device mapping** — anything whose PTEs came from a
 driver's own `mmap` handler — cannot be a lock-path region, for the same reason it is not
@@ -617,7 +645,9 @@ uffd-WP is a better *mechanism* on two axes and it should not be forgotten:
 | cost per guest write | **55.6 µs**, ceiling 17 973 /s | **0** when unarmed |
 | how it stops the write | **emulate** — arch-dependent, decomposes atomics | **retry** — instruction-agnostic, preserves atomicity |
 | arm64 | **unsound (§7.4)** | works [inferred] |
-| deployment | nothing | **a udev rule** |
+| deployment | nothing | **a sysctl OR a udev rule** — see §7.3.1 |
+| covers the isolate | **no** [measured] | **no** [measured] — §1.4 addendum |
+| vCPU while blocked | parked in **our** handler, on the vCPU thread | parked in `KVM_RUN`, **signal-interruptible** [measured] |
 | mechanism it adds | none | a handler thread, an arm/disarm protocol, two in-lock syscalls, a re-registration obligation (§4.5) |
 
 > **The acceptance criteria for building it, so it is not re-litigated from intuition:**
@@ -630,6 +660,45 @@ uffd-WP is a better *mechanism* on two axes and it should not be forgotten:
 >
 > This is `l1_os_shell.md` §6.8.1's own discipline — *bounded and simple first; widen only on a
 > measurement* — applied to the mechanism rather than to the lock granularity.
+
+#### 7.3.1 ★★ 2026-07-27 — the access matrix, and the one route that looks free and is not
+
+Measured by actually dropping to uid 65534; full table and citations in
+**`../reference/uffd_isolate_kvm_study.md` §4**. The row above previously read *"a udev rule"*;
+that was one of **three** routes, and the correction cuts both ways.
+
+**The good news.** **[measured, `vh` 6.8.0-124]** a kernel-fault-capable uffd is obtainable
+**three** ways, and all three register WP on shmem and trap guest writes: `CAP_SYS_PTRACE`;
+`vm.unprivileged_userfaultfd = 1`; or file permissions on `/dev/userfaultfd`. So the honest
+deployment cost is **"a one-line sysctl OR a udev rule"**, not specifically a udev rule.
+
+**The bad news, and it is the load-bearing half.** The *fourth* route —
+**`userfaultfd(2)` with `UFFD_USER_MODE_ONLY`** — is available to any unprivileged process with
+**no admin action whatsoever** (**[src]** `v7.1.0-rc6 fs/userfaultfd.c:2167-2171`: *"Userspace-only
+page faults are always allowed"*), and it is **useless here**:
+
+- **[measured, KVM-direct]** `UFFDIO_REGISTER(WP)` on the memslot page **succeeds**, arming
+  **succeeds**, a same-process write is still trapped and blocked for the full 300 ms — and a
+  **guest** write delivers **no fault at all**: `KVM_RUN` returns `-1 / errno=14` (**`EFAULT`**).
+- **[src]** `fs/userfaultfd.c:413-414` — `if (!(vmf->flags & FAULT_FLAG_USER) && (ctx->flags &
+  UFFD_USER_MODE_ONLY)) goto out;`. KVM resolves a guest write through `get_user_pages`, a
+  **remote** fault, so `handle_userfault` bails and KVM reports plain `-EFAULT`.
+- **★ That is the exact failure mode row F (`mprotect`) was struck for**, and it is worse than
+  "does not lock": **[src]** QEMU `v10.2.0 accel/kvm/kvm-all.c:3212-3233` treats a
+  non-`MEMORY_FAULT` `-EFAULT` as *"error: kvm run failed"* and **aborts the VM**. On QEMU this
+  route kills the guest on the first protected store.
+
+**And "some distros ship it enabled" should not be assumed.** **[src]** `fs/userfaultfd.c:36` —
+`static int sysctl_unprivileged_userfaultfd __read_mostly;` — **no initialiser, so the upstream
+default is `0`**; a distro shipping `1` deviates from upstream deliberately. **[measured]** both
+hosts available here (`vh` 6.8.0-124, dev box 7.0.0-14) report `0`. Debian/Fedora/RHEL/Arch as
+shipped were **not** checked — do not quote a number for them.
+
+> **[measured] The control that keeps this in proportion**, reconfirming
+> `../reference/region_lock_mechanism_study.md` §8.1: on both hosts the same unprivileged uid is
+> denied **`/dev/kvm`**, for exactly the same reason. A project that already asks an operator to
+> grant `/dev/kvm` is not qualitatively less deployable for asking for one more grant. The
+> defensible cost of uffd is **a second deployment requirement**, not privilege.
 
 ### 7.4 ★★ arm64: the capability is UNAVAILABLE, and is refused at realize
 
@@ -687,8 +756,11 @@ plus Layer 2, which is where the design says the guarantee actually lives.
    is a complete Mode-2 guest-driver lifetime with the real GSP command queue in a trapping
    region, asserting **zero** `KVM_EXIT_INTERNAL_ERROR`.
 5. **arm64 is refused on a source argument, and there are three routes back.** (a) the §7.3
-   uffd accelerator, whose retry semantics are arch-agnostic — but it needs the udev rule and
-   its arm64 behaviour is itself `[inferred]`; (b) our own arm64 store decoder behind
+   uffd accelerator, whose retry semantics are arch-agnostic — **[measured] on x86 the store is
+   indeed retried, not emulated, which is the property that makes route (a) credible on arm64**
+   — but it needs a sysctl or a udev rule (§7.3.1), and its arm64 behaviour is itself
+   `[inferred]`: *that uffd-WP traps a guest vCPU write on arm64 at all* has never been
+   measured; (b) our own arm64 store decoder behind
    `KVM_CAP_ARM_NISV_TO_USER` — the work the kernel declined to do, and it would be ours
    forever; (c) `KVM_MEM_USERFAULT`, which is exactly the right primitive and **[src]** is
    **absent from `linux v7.1.0-rc6`**. Route (c) is the one to watch.
@@ -742,6 +814,12 @@ plus Layer 2, which is where the design says the guarantee actually lives.
 - **`../reference/region_lock_mechanism_study.md`** — the candidate study this revision comes
   from: thirteen mechanisms, the measurements, the acceptance table, and what it does not
   establish. **Normative over this file on questions of fact.**
+- **`../reference/uffd_isolate_kvm_study.md`** — the three questions that study did not cover,
+  answered by experiment: the **isolate boundary** (uffd-WP is `mm`-scoped and does not cross
+  it — §1.4 addendum here), the **KVM interaction** (uffd-WP does trap a guest vCPU write, and
+  the blocked vCPU is signal-interruptible), the **access matrix** (§7.3.1 here), and **what
+  the C artifact actually did** (copy-once, audit P2-2 — never a lock).
+  **Normative over this file on questions of fact.**
 - `core_security_threat_model.md` §2.1 — the two-layer trust model. **Normative over this
   file.** Layer 1 is what this document builds; Layer 2 is why building it is not sufficient.
 - `l1_os_shell.md` §6.7 (memslot strategy — and §1.0 of this file corrects its cost model),
