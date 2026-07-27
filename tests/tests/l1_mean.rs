@@ -107,6 +107,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant as WallInstant};
 
+use kayfabe_arch::GspReg;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
@@ -116,6 +117,7 @@ use kayfabe_core::rmgraph::ClientKey;
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraphError, RmNode};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_fwd::{ControlRoute, DoorbellOutcome, FwdFault, Published, Stale};
+use kayfabe_gsp::{BootPhase, QueueState, Transition};
 use kayfabe_isolate::{CancelReason, HostHandle, IsolateId, RmError, WorkerId};
 use kayfabe_mmu::AddressFault;
 use kayfabe_mocks::{
@@ -126,6 +128,7 @@ use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
 use kayfabe_rt::executor::{Effect, Executor};
 use kayfabe_rt::inbox::{CoreEvent, inbox};
 use kayfabe_rt::lock;
+use kayfabe_tests::gspworld::{GspWorld, MODEL_A, MODEL_B, P580, P610};
 use kayfabe_tests::{
     Guarded, ResidueClaim, Scenario, SharedVmm, gpfifo_ring, identical_handles, reachable_maps,
     reachable_objects, script_ring,
@@ -8785,4 +8788,113 @@ mod trace_arm {
             None
         );
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ★★ The faked GSP, composed into this run (`mode2_gsp_port_plan.md` S3/S4;
+// `testing_doctrine.md` §3.1.3: a milestone is done when it is wired into THIS file, not
+// only into a fresh isolated one).
+// ─────────────────────────────────────────────────────────────────────────────────────
+
+/// The GSP boot/teardown cycle **while the device planes are under real load**.
+///
+/// §3's rule, applied to a new subsystem: isolated cases test what you thought of,
+/// composed runs test what you didn't. The isolated GSP suite (`gsp_boot.rs`) drives the
+/// protocol against an independent guest; this drives the same lifecycle *concurrently
+/// with* the multi-proc, multi-GPU control-plane workload the rest of this file exists
+/// for — three full driver lifetimes interleaved with alloc/map/publish traffic on two
+/// GPUs, all in one process.
+///
+/// What it can find that the isolated suite cannot: that the GSP plane is a **plain
+/// value** with no hidden global — no static, no lazily-initialised singleton, no
+/// process-wide latch. If any of the C's eight scattered latches had survived as a
+/// `static`, a second `GspWorld` in the same process would see the first one's state.
+///
+/// Would the isolated case have been green? Yes — and that sentence is the reason this
+/// one exists.
+#[test]
+fn the_gsp_boot_cycle_composes_with_live_multiproc_traffic() {
+    let _wd = watchdog(
+        "the_gsp_boot_cycle_composes_with_live_multiproc_traffic",
+        Duration::from_secs(120),
+    );
+    let (world, pids, _rec) = mean_world(LockMode::Sharded);
+    let device = Arc::clone(&world);
+
+    // Two independent GSP devices in one process, on the two register models, cycling in
+    // lockstep — the "no hidden global" probe.
+    let mut a = GspWorld::new(P580, MODEL_A);
+    let mut b = GspWorld::new(P610, MODEL_B);
+
+    // ★ Bounded, deliberately. The first version of this test ran its workers *until a
+    // stop flag*, and that is a defect rather than a stronger test: two threads spinning
+    // an unbounded alloc/map workload starved the rest of this file's tests and made two
+    // of them fail intermittently. A flaky green is worse than a red one
+    // (`testing_doctrine.md` §1), and the composition being tested — GSP lifecycle
+    // *concurrent with* device load — needs the two to overlap, not to run forever.
+    let workers: Vec<_> = (0..2)
+        .map(|i| {
+            let device = Arc::clone(&device);
+            let pids = pids.clone();
+            thread::spawn(move || {
+                // ONE pass per proc: `ctl_workload` publishes at fixed VAs, so a second
+                // pass overlaps its own bindings and fails with `Address(Overlap)` — which
+                // is the address plane being right, not the workload being flaky. Found by
+                // running this test twice.
+                ctl_workload(&device, &pids, i)
+            })
+        })
+        .collect();
+
+    let mut cycles = 0usize;
+    for life in 0..3 {
+        for (tag, w) in [("A", &mut a), ("B", &mut b)] {
+            if life > 0 {
+                w.allocate_guest_memory();
+            }
+            assert_eq!(
+                w.boot(),
+                vec![Transition::E1, Transition::E6, Transition::E5],
+                "{tag} life {life}: the boot is unaffected by the device traffic beside it",
+            );
+            let msgs = w.link_and_drain();
+            assert_eq!(msgs.len(), 1, "{tag} life {life}: INIT_DONE");
+            assert_eq!(
+                msgs[0].seq_num, 0,
+                "{tag} life {life}: a new queue instance starts its stream at 0",
+            );
+
+            w.guest
+                .send(&mut w.ram, 76, 900 + life as u32, &[0xC5; 24])
+                .unwrap();
+            w.doorbell().unwrap();
+            assert_eq!(w.guest.recv(&mut w.ram).unwrap().len(), 1, "{tag}: reply");
+            assert_eq!(w.fsm.phase(), BootPhase::Running, "{tag} life {life}");
+
+            w.guest
+                .send(&mut w.ram, 47, 950 + life as u32, &[])
+                .unwrap();
+            w.doorbell().unwrap();
+            assert_eq!(
+                w.guest.recv(&mut w.ram).unwrap().len(),
+                1,
+                "{tag}: fn-47 ack"
+            );
+            let start = w.arch.model().startcpu();
+            w.wr(GspReg::GspFalconCpuctl, start).unwrap();
+            assert_eq!(w.fsm.phase(), BootPhase::Halted, "{tag} life {life}");
+            assert_eq!(*w.fsm.queue(), QueueState::Unbound, "{tag} life {life}");
+            cycles += 1;
+        }
+    }
+    assert_eq!(
+        cycles, 6,
+        "three lifetimes on each of two devices actually ran"
+    );
+
+    let published: usize = workers.into_iter().map(|h| h.join().expect("worker")).sum();
+    assert!(
+        published > 0,
+        "non-vacuity: the device planes really were under load for the whole cycle",
+    );
 }

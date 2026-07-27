@@ -8,6 +8,7 @@
 //! as abstract `RmEvent`s, with helpers to build the exact shapes the design docs
 //! name (a compute process, a UVM dup, two processes with identical VAs/handles).
 
+pub mod gspworld;
 pub mod guest;
 pub mod teardown;
 

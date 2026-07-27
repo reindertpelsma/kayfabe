@@ -40,8 +40,10 @@
 //! itself must be shareable. An `impl` needing interior mutation would be a design
 //! smell (encodings don't change at runtime) and is rejected by the compiler.
 
+pub mod gsp;
 pub mod ids;
 
+pub use gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
 use ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
 
 /// ★ **The privilege a client root DECLARES about itself** — the discriminator that
@@ -396,6 +398,19 @@ pub trait Arch: Send + Sync {
 
     /// The pushbuffer / method ABI for this generation (the ONE parser's encodings).
     fn pushbuffer(&self) -> &dyn PushbufferAbi;
+
+    /// The GSP register model for this generation ([`gsp`], `mode2_gsp_port_plan.md`
+    /// §3.5), or `None` for an architecture that has not modelled one.
+    ///
+    /// ★ **`None` is not a fallback.** The faked-GSP FSM refuses with a named fault when
+    /// it gets one, exactly as `MISS = FAULT` requires — there is no default register
+    /// model to silently serve zeros. The provided `None` exists so that adding this
+    /// seam did not invalidate every existing `impl Arch` (`MockArch` and, later, the
+    /// arch-impl crates that do not drive a GSP at all); an architecture that boots a
+    /// GSP overrides it.
+    fn gsp(&self) -> Option<&dyn GspModel> {
+        None
+    }
 }
 
 // The concurrency contract, compile-time-asserted (decision #17): every public type

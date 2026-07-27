@@ -167,6 +167,9 @@ dependencies = [
 name = "kayfabe-gsp"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-trace",
  "kayfabe-util",
 ]
 
@@ -237,10 +240,12 @@ dependencies = [
 name = "kayfabe-tests"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-abi",
  "kayfabe-arch",
  "kayfabe-completion",
  "kayfabe-core",
  "kayfabe-fwd",
+ "kayfabe-gsp",
  "kayfabe-isolate",
  "kayfabe-linux-raw",
  "kayfabe-mmu",

@@ -32,6 +32,13 @@ kayfabe-rt.workspace = true
 # suite is where "is this vocabulary usable, ordered and non-vacuous?" gets answered, so
 # the crate's tests live here beside the traffic they observe rather than in a unit file.
 kayfabe-trace.workspace = true
+# ★ The faked GSP (docs/design/mode2_gsp_port_plan.md S0-S5). Its oracle is an
+# INDEPENDENT re-implementation of the guest driver's own msgq/RPC receive path
+# (tests/src/gspworld.rs), so the boot exchange is exercised end to end with no GPU,
+# no hypervisor and no OS.
+kayfabe-gsp.workspace = true
+# Axis A: the version-keyed wire tables the GSP path decodes RPC envelopes with.
+kayfabe-abi.workspace = true
 
 [dev-dependencies]
 # Property-based / fuzz testing — DEV-ONLY (never a core dependency). Generates

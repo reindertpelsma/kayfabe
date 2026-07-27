@@ -7,6 +7,14 @@ license.workspace = true
 
 [dependencies]
 kayfabe-util.workspace = true
+# Axis B: the `GspModel` register seam (`Arch::gsp()`). No offset lives in this crate.
+kayfabe-arch.workspace = true
+# Axis A: the RPC envelope's generated layout + the version-keyed table. Every NVIDIA
+# `#[repr(C)]` stays there (decision #2's quarantine); this crate consumes its decoders.
+kayfabe-abi.workspace = true
+# The trace vocabulary sits BELOW this crate deliberately, so the GSP plane can emit into
+# it without a cycle; `impl Faulted for GspFault` is the compiler-checked bridge.
+kayfabe-trace.workspace = true
 
 [lints]
 workspace = true
