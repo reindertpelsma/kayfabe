@@ -10,5 +10,12 @@ kayfabe-util.workspace = true
 kayfabe-arch.workspace = true
 kayfabe-vmm.workspace = true
 
+[dev-dependencies]
+# ★ Its ONLY job is the compile-fail row that makes `ARCHITECTURE.md` invariant 5
+# structural: an ungated `VerbPlan::Doorbell` must fail to COMPILE outside this crate,
+# and an impossibility that is merely asserted in prose is the vacuous-instrument shape
+# `testing_doctrine.md` is about. Same pattern as `kayfabe-linux-raw/tests/ui/`.
+trybuild = "1.0"
+
 [lints]
 workspace = true

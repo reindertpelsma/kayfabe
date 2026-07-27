@@ -50,10 +50,20 @@ macro_rules! assert_send_sync {
 }
 
 /// Compile-time assertion that each listed type is [`Send`] (see
-/// [`assert_send_sync!`]). For the rare seam that is deliberately only `Send`
-/// (e.g. `dyn RmBackend`, reachable exclusively through `&mut`): the exception is
-/// explicit in the source, per the "thread-safe by default, exceptions documented"
-/// rule (decision #17).
+/// [`assert_send_sync!`]). For the rare seam that is deliberately only `Send`: the
+/// exception is explicit in the source, per the "thread-safe by default, exceptions
+/// documented" rule (decision #17).
+///
+/// The two seams that use it are `kayfabe_vmm::Vmm` and `kayfabe_shell::Reactor` — both
+/// ports the core *hands around* rather than *stores*, so their synchronization belongs
+/// to whoever owns them.
+///
+/// ★ **corrected 2026-07-27.** This rustdoc offered `dyn RmBackend` as the canonical
+/// only-`Send` example. It has not been one since `kayfabe-isolate`'s §7.2 worker pool:
+/// the core stores boxed backends in pool slots inside a `Sync` `Proc`, so `RmBackend`
+/// declares `Send + Sync` and `kayfabe-isolate` asserts it with [`assert_send_sync!`].
+/// Citing it here made the workspace's ONE compile-time contract read as though it had
+/// a standing exception that the build itself refutes.
 #[macro_export]
 macro_rules! assert_send {
     ($($t:ty),+ $(,)?) => {

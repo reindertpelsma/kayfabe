@@ -763,14 +763,14 @@ fn deferred_events_come_back_in_deadline_then_insertion_order() {
     );
     v.defer(
         Duration::from_millis(1),
-        CoreEvent::Deferred(CoreEventKind::CompletionRedeliver),
+        CoreEvent::Deferred(CoreEventKind::CompletionRedeliver(kayfabe_vmm::GpuId::ZERO)),
     );
     assert_eq!(m.advance(Duration::from_micros(500)), vec![]);
     assert_eq!(
         m.advance(Duration::from_micros(500)),
         vec![
             CoreEvent::Deferred(CoreEventKind::PollKickBudget),
-            CoreEvent::Deferred(CoreEventKind::CompletionRedeliver),
+            CoreEvent::Deferred(CoreEventKind::CompletionRedeliver(kayfabe_vmm::GpuId::ZERO)),
         ],
         "same deadline: INSERTION order, not the payload's own Ord — otherwise delivery \
          order would depend on the event value, deterministically and wrongly"

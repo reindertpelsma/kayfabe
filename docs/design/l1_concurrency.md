@@ -1342,6 +1342,15 @@ under-specified on any 2-GPU device. Stage 2 pumps `GpuId::ZERO` and surfaces th
 batch; **this must become a target-carrying payload when the defer plumbing lands**
 (stage 3 / L2). Recorded as a real ABI gap, not a nit.
 
+> **★★ CLOSED 2026-07-27, and it was not a nit.** `CoreEventKind::CompletionRedeliver(GpuId)`
+> carries the target and `Executor::drain_one` pumps the one the edge names. The gap outlived
+> its deadline by a milestone: M2-c landed the defer plumbing, `l1_os_shell.md` §6.5 said
+> *"fix it here"*, and §14.8 never mentioned it — so the consumer kept the placeholder
+> `GpuId::ZERO` under a comment reasoning that *"further targets are pumped by their own
+> edges"*, which is circular: that arm **is** the edge. On a two-GPU proc an undelivered
+> second-target batch could therefore never be re-fed — a completion the guest waits on
+> forever, i.e. the F3 hang shape this backstop exists to prevent.
+
 ### 12.6 ★ Honest R1 status after stage 2 — the assert does not yet guard the trait
 
 The `BlockingSection` assert fires on *its own* construction. It does not — cannot —

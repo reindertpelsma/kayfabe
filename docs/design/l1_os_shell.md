@@ -1523,6 +1523,20 @@ Two obligations fall out and must be honoured:
   target-carrying payload when the defer plumbing lands"*. The defer plumbing lands in this
   milestone. Fix it here.
 
+  > **★★ LANDED 2026-07-27, one milestone late — and the delay had teeth.** M2-c shipped the
+  > plumbing and §14.8 never mentioned this, so the payload silently did not arrive: a stage
+  > deliverable not delivered. A consumer must pick a target when the edge cannot name one,
+  > and `kayfabe_rt::Executor` picked `GpuId::ZERO`, under a comment reasoning that *"further
+  > targets are pumped by their own edges"* — but that arm **is** the edge, so a proc on GPU1
+  > had no other edge to be pumped by, and an undelivered GPU1 batch could never be re-fed.
+  > That is the F3 hang shape the backstop exists to prevent, reintroduced by an omitted
+  > field. `CoreEventKind::CompletionRedeliver(GpuId)` now carries it — at the cost of one
+  > dependency edge (`kayfabe-vmm` → `kayfabe-arch::ids`, for the id newtype only; the
+  > sibling port `kayfabe-isolate` already has exactly that edge, and a `pub use` keeps
+  > backend crates from needing it) — and
+  > `rt_shell::a_completion_redeliver_edge_pumps_the_target_it_names` pins it over two procs
+  > on two targets with distinguishable payloads.
+
 ### 6.6 ★ Who RUNS a memory-plane op — the calling thread, with the lock dropped
 
 §6.2 says the memory plane is built in the plan/execute/commit shape. It does not say *which
@@ -4391,6 +4405,16 @@ carries it through — but `_ => FwdFault::GpaRead { gpa }` substitutes the **re
 address. §12.43's straddle test uses a RAM→DEVICE range, i.e. the arm that keeps it, so the
 asymmetry was invisible. Pinned as-is in `l1_mean.rs` (the core runs unmodified at this
 stage); the fix is one line: `VmmError::BadGpa { gpa } => FwdFault::GpaRead { gpa }`.
+
+> **★★ FIXED 2026-07-27.** The named one-liner is in `kayfabe_fwd::guest_read`, above the
+> catch-all rather than folded into it, and the catch-all's own rustdoc now records that
+> nothing reaches it today. Two rows bite it, and both did when the arm was reverted:
+> `l1_mean.rs`'s mock DMA workload gained a **fifth** hostile shape — a range starting in
+> real RAM and straddling into a HOLE, which is the RAM→NOTHING case the suite never had —
+> and the real-KVM `real_dma_workload` row that recorded this very finding now asserts the
+> BOUNDARY (`base + RWIN_PAGES * page`) instead of the request. The tally arithmetic moved
+> from quarters to fifths (3 device-window shapes, 2 hole shapes) at both the per-thread
+> and the port-refusal ledger, so the counts are not merely along for the ride.
 
 **F7. Two things the harness genuinely cannot observe, both needing a vCPU (M2-d).**
 (a) *Where* a memslot points — neutering the sub-range address arithmetic to ignore its

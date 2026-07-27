@@ -58,6 +58,13 @@ use core::cmp::Reverse;
 use core::ops::Range;
 use core::time::Duration;
 use kayfabe_util::Instant;
+
+/// The routable GPU target a per-target seam names — re-exported so a backend crate
+/// (`kayfabe-vmm-kvm`, and every future adapter) can spell
+/// [`CoreEventKind::CompletionRedeliver`]'s payload without depending on
+/// `kayfabe-arch` itself. The identity is defined once, in the workspace's bottom
+/// vocabulary; this is a re-export, never a second type.
+pub use kayfabe_arch::ids::GpuId;
 use std::collections::{BTreeMap, BinaryHeap};
 
 /// Error from a VMM capability call.
@@ -549,12 +556,30 @@ pub trait Present {
     fn present(&mut self, buffer: SurfaceHandle, meta: FbMeta) -> Result<Vblank, PresentError>;
 }
 
-/// Discriminates deferred-work callbacks so `Vmm::defer`/`lock_region` can name
-/// which core path to re-enter without a closure crossing the boundary.
+/// Discriminates deferred-work callbacks so [`Vmm::defer`] can name which core path to
+/// re-enter without a closure crossing the boundary.
+///
+/// ★ **corrected 2026-07-27** — this said *"`Vmm::defer`/`lock_region`"*. `lock_region`
+/// left the trait in `l1_os_shell.md` §6.8 (a `kayfabe-linux-raw` capability wearing a
+/// port method's clothes); this was its last mention in the tree, and it named a method
+/// no reader could find. The *delivery* of a locked-region fault is still here — as
+/// [`CoreEventKind::RegionFault`] and [`CoreEvent::LockedRegionFault`] — because that is
+/// the half that genuinely crosses the seam.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CoreEventKind {
-    /// Completion re-delivery sweep (per-proc, §4.3.2).
-    CompletionRedeliver,
+    /// Completion re-delivery sweep for **one routable target** (per-proc, §4.3.2;
+    /// the bounded backstop of `l1_concurrency.md` §5.2).
+    ///
+    /// ★ **The [`GpuId`] landed 2026-07-27** (`l1_os_shell.md` §6.5 / §12.5: *"this must
+    /// become a target-carrying payload when the defer plumbing lands… Fix it here"* —
+    /// M2-c landed the plumbing and this did not). Completion **delivery** has been
+    /// per-target since MG-6 — one drain gate and one GSP queue per `GpuId` — so a
+    /// backstop edge that cannot name its target is not merely imprecise: the consumer
+    /// has to pick one, and `kayfabe_rt::Executor` picked [`GpuId::ZERO`]. On a proc
+    /// spanning two GPUs, an undelivered batch on any target but zero could then never
+    /// be re-fed, which is a completion the guest waits on forever — the F3 hang shape
+    /// the backstop exists to prevent.
+    CompletionRedeliver(GpuId),
     /// Deferred heavy-state reap at a quiesce point (lesson L10).
     DeferredReap,
     /// Poll-kick budget expiry.
@@ -571,8 +596,20 @@ pub enum CoreEventKind {
 pub enum CoreEvent {
     /// A timer/deferred-work callback scheduled via [`Vmm::defer`].
     Deferred(CoreEventKind),
-    /// A guest access faulted on a **locked page** inside an installed window, and the
-    /// accessing vCPU is parked until the core answers (`l1_os_shell.md` §6.7 item 5).
+    /// A guest access faulted on a **locked page** inside an installed window
+    /// (`l1_os_shell.md` §6.7 item 5).
+    ///
+    /// ★ **corrected 2026-07-27 by `guest_memory_lock.md` GL8** — this used to say *"and
+    /// the accessing vCPU is parked until the core answers"*. It is not: **write
+    /// resolution never depends on the core.** The uffd handler runs on the faulting
+    /// vCPU's own thread, applies the write, and only *then* notifies. The vCPU is
+    /// parked until the **region-mutex holder** releases — never behind this event.
+    /// Parking a guest store behind the serialized executor would price one guest write
+    /// at the inbox's current depth (latency), and the executor is itself allowed to hold
+    /// a region mutex (§6.6 background work), so "resolve by asking the executor" is a
+    /// cycle with a parked vCPU on its other end. This event's meaning is therefore an
+    /// **observation after the fact**, not a decision point — and it is per-region
+    /// opt-in, default off, because it fires on *every* guest write to a locked region.
     ///
     /// The locking itself is a `kayfabe-linux-raw` capability (userfaultfd on the
     /// window's own VMA) and is deliberately **not** a [`Vmm`] method — no VMM

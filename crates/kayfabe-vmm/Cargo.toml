@@ -7,6 +7,13 @@ license.workspace = true
 
 [dependencies]
 kayfabe-util.workspace = true
+# ★ `kayfabe-arch::ids` ONLY, and only for `GpuId` — the routable-target identity a
+# `CoreEventKind::CompletionRedeliver` must carry (`l1_os_shell.md` §6.5, §12.5). `ids`
+# is the workspace's bottom-most shared vocabulary (it is why `ControlCmd` lives there
+# rather than in `kayfabe-isolate`), and the sibling PORT crate `kayfabe-isolate`
+# already depends on it for exactly this reason. This edge does NOT let GPU-architecture
+# semantics into the hypervisor port: the only thing named is an opaque target id.
+kayfabe-arch.workspace = true
 
 [lints]
 workspace = true

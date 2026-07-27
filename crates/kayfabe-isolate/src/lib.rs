@@ -61,7 +61,7 @@
 //! surface never needed anyway.)
 
 pub use kayfabe_arch::ids::ControlCmd;
-use kayfabe_arch::ids::{ClassId, EngineKind, GpuId};
+use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa};
 use kayfabe_vmm::SurfaceHandle;
 
 /// A host-side RM object handle — **a raw value plus the isolate whose RM client
@@ -732,6 +732,23 @@ pub enum VerbPlan {
     },
     /// The doorbell chain: (optionally) host VAS → (optionally) host channel →
     /// (optionally) schedule → ring.
+    ///
+    /// ★★ **`#[non_exhaustive]`, and that is the #14 ring-gate's teeth** (added
+    /// 2026-07-27; `ARCHITECTURE.md` invariant 5). This variant has **no struct
+    /// expression outside this crate** — `VerbPlan::Doorbell { … }` written anywhere else
+    /// is a compile error (E0639), pinned by `tests/ui/ungated_doorbell.rs`. The only
+    /// way to obtain one is [`VerbPlan::gated_doorbell`], **which runs the gate**.
+    ///
+    /// Before this, the invariant was a property of the production *call graph* — true,
+    /// but unenforced: `kayfabe_fwd::plan_doorbell` was the only thing that built one,
+    /// while nothing stopped a caller hand-building the variant and handing it to a
+    /// checked-out [`Worker`], whose own gate is the foreign-handle check and **not** the
+    /// #14 working-set check. That is a reachable door — `tests/tests/cross_proc_lifetime.rs`
+    /// went through it — and a boundary that depends on nobody noticing it is not a
+    /// boundary. It is the only variant with this shape: every other variant's gate is
+    /// [`Worker::execute`]'s central foreign-handle check, which runs whoever built the
+    /// plan.
+    #[non_exhaustive]
     Doorbell {
         /// The Vas's host VAS, or `None` to allocate one (only consulted when
         /// `channel` is `None`).
@@ -780,7 +797,89 @@ pub enum VerbPlan {
     },
 }
 
+/// ★★ The #14 ring-gate's view of **one channel's `Vas`** — the address-plane
+/// abstraction [`VerbPlan::gated_doorbell`] runs the gate over.
+///
+/// This crate cannot name `kayfabe_mmu::AddressTable` (the mmu depends on *this* crate,
+/// not the other way round — see `kayfabe-mmu`'s `Cargo.toml`), and it must not: the
+/// isolate port has no business knowing the shape of a page table. What it *can* insist
+/// on is that a ring plan is never built without an address plane being consulted, and
+/// that is exactly this one predicate.
+///
+/// Implemented in `kayfabe-fwd` over `(&AddressTable, Pdb)` — the channel's own `Vas`,
+/// keyed by PDB, which is what makes two guest processes' *identical* guest VAs resolve
+/// into disjoint host VASes (#14's proven fix). Deliberately **not** `Send + Sync`: it is
+/// an argument borrowed for the duration of one call, never core-stored state.
+pub trait RingWorkingSet {
+    /// Is `va` forward-populated in **this channel's own `Vas`** *and* host-published
+    /// into that `Vas`'s own host VAS?
+    ///
+    /// `false` is the total answer for *both* misses — no mapping at all, and a mapping
+    /// with no host publication. The caller (`kayfabe-fwd`) owns the exact fault
+    /// vocabulary and re-derives which one it was from the offending VA in
+    /// [`UngatedVa`], so this predicate stays a predicate and the two crates cannot
+    /// drift into two classifications of the same miss.
+    fn is_host_published(&self, va: GpuVa) -> bool;
+}
+
+/// The #14 ring-gate's refusal: the **first** working-set VA that is not host-published
+/// in the ringing channel's own `Vas`.
+///
+/// Carries the VA rather than a bare "no", so the caller's fault names the address the
+/// guest actually asked for — MISS = FAULT, loud and exact, never a cross-proc
+/// content-pick (the confused deputy #14 designed out).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct UngatedVa(pub GpuVa);
+
 impl VerbPlan {
+    /// ★★★ **THE ONLY constructor of [`VerbPlan::Doorbell`], and it IS the #14
+    /// ring-gate.** (`ARCHITECTURE.md` invariant 5, `execution_plane.md` §2.4.)
+    ///
+    /// Every `va` in `working_set` must be host-published in `vas` — the ringing
+    /// channel's *own* `Vas` — or this returns [`UngatedVa`] naming the first one that
+    /// is not, and **no plan exists to hand a [`Worker`]**. The gate therefore cannot be
+    /// forgotten, skipped, or reordered after a host op: there is no plan to execute
+    /// until it has passed, and the variant it produces has no struct expression outside
+    /// this crate.
+    ///
+    /// ## What this does and does not prove
+    ///
+    /// It proves the gate **ran**, over whatever address plane the caller supplied, for
+    /// every VA the submission claimed. It cannot prove the address plane is the real
+    /// one — a caller free to implement [`RingWorkingSet`] is equally free to fabricate a
+    /// `Proc`, and Rust's privacy unit is the crate, so "only `kayfabe-fwd` may call
+    /// this" is not expressible in the type system. What changed is the failure *mode*:
+    /// bypassing the gate is no longer *omission* (build the struct, forget the check),
+    /// which is what an ordinary edit looks like, but *commission* (write a lying
+    /// address plane), which is what a review notices.
+    ///
+    /// An **empty** `working_set` passes, and that is correct rather than a hole: the
+    /// working set is what the submission *claims to touch*, a GSP-managed
+    /// system-routed channel legitimately claims nothing, and the same empty set passes
+    /// through `kayfabe_fwd::plan_doorbell` today. The gate's content is *"every claimed
+    /// VA is published in THIS Vas"*, never *"something was claimed"*.
+    ///
+    /// # Errors
+    /// [`UngatedVa`] — the first working-set VA with no host publication in `vas`.
+    pub fn gated_doorbell(
+        vas: &dyn RingWorkingSet,
+        working_set: &[GpuVa],
+        host_vas: Option<HostHandle>,
+        channel: Option<ChannelHandles>,
+        engine: EngineKind,
+        schedule: bool,
+    ) -> Result<VerbPlan, UngatedVa> {
+        if let Some(&va) = working_set.iter().find(|&&va| !vas.is_host_published(va)) {
+            return Err(UngatedVa(va));
+        }
+        Ok(VerbPlan::Doorbell {
+            host_vas,
+            channel,
+            engine,
+            schedule,
+        })
+    }
+
     /// Every [`HostHandle`] this plan would issue a verb *against* — the input side
     /// only (handles the chain will mint do not exist yet, and are this isolate's by
     /// construction).
@@ -978,8 +1077,15 @@ impl From<RmError> for VerbFailure {
 /// and there is no shared in-flight slot table and no txn demux anywhere (§11 B6:
 /// concurrency comes from channel COUNT, never from multiplexing one channel).
 ///
-/// `Send`, not `Sync` — it migrates to whichever thread checked it out, but a shared
-/// reference to one is unrepresentable.
+/// `Send + Sync` — compile-time-asserted at the bottom of this file, with everything
+/// else the core stores (decision #17). ★ **corrected 2026-07-27**: this said *"`Send`,
+/// not `Sync`"*, which the assertion in the same file refuted. The sentence was
+/// describing the *usage* shape, and that part is still true and is the load-bearing
+/// one: a worker is reached **only** by `&mut`, so a shared reference to one never
+/// exists on any path, and single-in-flight-per-worker is the borrow checker's
+/// guarantee rather than a bound's. The `Sync` bound is nonetheless real and not
+/// droppable — an idle worker *sits in* its isolate's pool, inside a `Proc`, inside the
+/// `Sync` `Gpu` — so a backend may hold no `Rc`/`Cell` in its private state.
 pub struct Worker {
     isolate: IsolateId,
     id: WorkerId,
@@ -1591,8 +1697,21 @@ pub trait IsolateFactory: Send + Sync {
     fn spawn(&mut self, id: IsolateId, gpu: GpuId) -> Box<dyn Isolate>;
 }
 
-// The concurrency contract, compile-time-asserted (decision #17). `dyn RmBackend`
-// is the one documented Send-only exception (crate docs).
+// The concurrency contract, compile-time-asserted (decision #17).
+//
+// ★ **corrected 2026-07-27.** This comment said `dyn RmBackend` "is the one documented
+// Send-only exception (crate docs)" — twenty lines above the `assert_send_sync!` that
+// asserts the opposite. It is not an exception and has not been one since the §7.2
+// worker pool: an `Isolate` OWNS N idle `Worker`s, a `Proc` owns the isolate, and the
+// core's `Gpu` is `Sync`, so every boxed backend sitting in a pool slot must be `Sync`
+// for that chain to hold. `RmBackend`'s own supertrait bound (`Send + Sync`, above)
+// has been the truth all along. **This workspace has NO Send-only exception**; the two
+// `assert_send!` sites that exist (`dyn Vmm`, `Reactor`) are ARGUMENT-passed ports the
+// core never stores, which is a different property entirely.
+//
+// `RingWorkingSet` is deliberately absent for that same reason: it is borrowed for the
+// duration of one `VerbPlan::gated_doorbell` call and never stored, so bounding it would
+// price a property nothing needs onto every address plane that wants to be gateable.
 kayfabe_util::assert_send_sync!(
     HostHandle,
     RmError,
@@ -1605,6 +1724,7 @@ kayfabe_util::assert_send_sync!(
     Cancels,
     dyn CancelSink,
     VerbPlan,
+    UngatedVa,
     VerbReply,
     Orphans,
     VerbFailure,

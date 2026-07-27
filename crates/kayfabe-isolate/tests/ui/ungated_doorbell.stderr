@@ -1,0 +1,11 @@
+error[E0639]: cannot create non-exhaustive variant using struct expression
+  --> tests/ui/ungated_doorbell.rs:11:20
+   |
+11 |       let _ungated = VerbPlan::Doorbell {
+   |  ____________________^
+12 | |         host_vas: None,
+13 | |         channel: None,
+14 | |         engine: EngineKind::Ce,
+15 | |         schedule: true,
+16 | |     };
+   | |_____^

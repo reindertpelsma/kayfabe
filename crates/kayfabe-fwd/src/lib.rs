@@ -30,9 +30,13 @@
 //!   constructor of `VerbPlan::Doorbell` in the production crates and it runs the gate
 //!   before returning one, so `Worker::execute` has nothing un-gated it could be asked to
 //!   ring. [`handle_doorbell`] and `SharedDevice::doorbell` are two **compositions** over
-//!   that one gate (single-threaded and L1-sharded); neither is a second door. (See
-//!   [`handle_doorbell`]'s own docs for the residual: `VerbPlan` is a public enum, so the
-//!   guarantee is over the call graph, not enforced by the type system.)
+//!   that one gate (single-threaded and L1-sharded); neither is a second door.
+//!
+//!   ★★ **Closed 2026-07-27**: the residual noted here — *"`VerbPlan` is a public enum,
+//!   so the guarantee is over the call graph, not enforced by the type system"* — is
+//!   gone. `VerbPlan::Doorbell` is `#[non_exhaustive]` and its only constructor,
+//!   [`kayfabe_isolate::VerbPlan::gated_doorbell`], runs the gate; hand-building the
+//!   variant no longer compiles anywhere outside `kayfabe-isolate`.
 //! - [`deliver_completions`] / [`poll_completions`] — glue from the core's completion
 //!   policy to `Vmm::raise_irq` (the SWGEN0 edge; transport encoding is `kayfabe-gsp`'s
 //!   job once it ports).
@@ -1015,18 +1019,64 @@ pub struct DoorbellOutcome {
 /// #14 gate condition. Bound-but-unpublished (`Binding::host = None`, the exact #14
 /// EXECUTION fault: the shadow had it, the host VAS did not) and unbound are both
 /// loud faults, never a guess (`execution_plane.md` §2.4).
+///
+/// ★ This is the **query** form, used by [`gate_working_set`] and the address-probe
+/// sites. The **enforcing** form is [`VasGate`] below, which the same predicate drives
+/// from inside `VerbPlan::gated_doorbell` — one predicate, two callers, no second
+/// definition to drift.
 fn gate_vas(
     table: &AddressTable,
     pdb: Pdb,
     working_set: impl IntoIterator<Item = GpuVa>,
 ) -> Result<(), FwdFault> {
     for va in working_set {
-        let (binding, _off) = table.resolve(pdb, va)?; // MISS=FAULT
-        if binding.host.is_none() {
+        if !host_published(table, pdb, va) {
             return Err(FwdFault::Address(AddressFault::Miss { pdb, va }));
         }
     }
     Ok(())
+}
+
+/// THE gate predicate, in one place: `va` resolves in `table` under `pdb` **and** its
+/// binding carries a host publication.
+///
+/// Both misses collapse to one answer deliberately — `AddressTable::resolve` already
+/// reports an unresolved VA as `AddressFault::Miss { pdb, va }`, which is the same fault
+/// a resolved-but-unpublished VA gets, because they are the same thing to a ring: an
+/// address the host GR VAS cannot translate. (That equality is what lets
+/// [`kayfabe_isolate::RingWorkingSet`] be a bare predicate without the two crates
+/// growing two classifications of one miss.)
+fn host_published(table: &AddressTable, pdb: Pdb, va: GpuVa) -> bool {
+    matches!(table.resolve(pdb, va), Ok((binding, _off)) if binding.host.is_some())
+}
+
+/// ★★ The **enforcing** #14 ring-gate: one channel's `Vas`, handed to
+/// [`kayfabe_isolate::VerbPlan::gated_doorbell`] — the only constructor of a
+/// `VerbPlan::Doorbell` — which runs [`host_published`] over the submission's working
+/// set before a plan exists at all.
+///
+/// Keyed by PDB, which is the whole of #14: two procs' *identical* guest VAs resolve in
+/// their OWN `Vas`, so the gate passes for both only because each published into its own
+/// host VAS (distinct `HostHandle`s).
+struct VasGate<'a>(&'a AddressTable, Pdb);
+
+impl kayfabe_isolate::RingWorkingSet for VasGate<'_> {
+    fn is_host_published(&self, va: GpuVa) -> bool {
+        host_published(self.0, self.1, va)
+    }
+}
+
+/// The `Vas`-less view: a GSP-managed, system-routed channel (`Channel::vas_pdb =
+/// None`) has no address space to have published anything *into*, so nothing is
+/// published and only an **empty** working set is gateable — exactly the pre-existing
+/// `None if working_set.is_empty()` arm, now expressed as the address plane it is
+/// rather than as a special case beside the gate.
+struct NoVasGate;
+
+impl kayfabe_isolate::RingWorkingSet for NoVasGate {
+    fn is_host_published(&self, _va: GpuVa) -> bool {
+        false
+    }
 }
 
 /// A routed doorbell: everything the act phase needs, resolved by a pure spine
@@ -1173,35 +1223,51 @@ pub fn plan_doorbell(
         });
     }
 
-    // ---- The #14 ring-gate, BEFORE any host op (the ONE ring path always runs it). ----
-    match chan.vas_pdb {
-        Some(pdb) => {
-            let vas = proc
-                .vases
+    // ---- The channel's own `Vas`, resolved BEFORE any host op. A declared PDB whose
+    //      `Vas` is absent is a loud refusal here, exactly as before.
+    let vas = match chan.vas_pdb {
+        Some(pdb) => Some(
+            proc.vases
                 .get(&(cgpu, pdb))
-                .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
-            gate_vas(&vas.table, pdb, working_set.iter().copied())?;
-        }
-        // No declared VAS (GSP-managed, system-routed): there is no address space to
-        // have published a working set into — only an empty declaration is gateable.
-        None if working_set.is_empty() => {}
-        None => return Err(FwdFault::NoVas(cid)),
-    }
+                .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?,
+        ),
+        None => None,
+    };
 
     let channel = chan.host_channel.zip(chan.host_token);
     // Lazy per-proc materialization: the channel's graph-derived `EngineKind` rides
     // the alloc so the adapter lands it on the RIGHT runlist (GR-1: the C's
     // `dma_copy_class_alloc_params` engineType=0 → 401 class, designed out).
     let host_vas = if channel.is_none() {
-        let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
-        proc.vases
-            .get(&(cgpu, pdb))
-            .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
-            .host_vas
+        match vas {
+            Some(v) => v.host_vas,
+            None => return Err(FwdFault::NoVas(cid)),
+        }
     } else {
         None
     };
     let schedule = !proc.exec.scheduled.contains(&cid);
+
+    // ---- ★★ The #14 ring-gate, BEFORE any host op — and it now runs **inside the
+    //      constructor**. `VerbPlan::Doorbell` is `#[non_exhaustive]`, so
+    //      `VerbPlan::gated_doorbell` is the only thing in the workspace (or outside it)
+    //      that can produce one, and it refuses before returning a plan. There is
+    //      therefore no plan-shaped object in existence for an ungated working set —
+    //      the invariant is on the type, not on this function remembering to call a
+    //      gate first (`ARCHITECTURE.md` invariant 5, closed 2026-07-27).
+    let vas_gate = vas.zip(chan.vas_pdb).map(|(v, pdb)| VasGate(&v.table, pdb));
+    let no_vas = NoVasGate;
+    let gate: &dyn kayfabe_isolate::RingWorkingSet = match &vas_gate {
+        Some(g) => g,
+        None => &no_vas,
+    };
+    let verbs =
+        VerbPlan::gated_doorbell(gate, working_set, host_vas, channel, chan.engine, schedule)
+            .map_err(|kayfabe_isolate::UngatedVa(va)| match chan.vas_pdb {
+                Some(pdb) => FwdFault::Address(AddressFault::Miss { pdb, va }),
+                None => FwdFault::NoVas(cid),
+            })?;
+
     Ok(Planned {
         plan: DoorbellPlan {
             proc: pid,
@@ -1214,12 +1280,7 @@ pub fn plan_doorbell(
             channel,
             schedule,
         },
-        verbs: Some(VerbPlan::Doorbell {
-            host_vas,
-            channel,
-            engine: chan.engine,
-            schedule,
-        }),
+        verbs: Some(verbs),
     })
 }
 
@@ -1350,12 +1411,18 @@ pub fn commit_doorbell(
 /// exists — so neither composition can hand `Worker::execute` an un-gated ring, and the
 /// removed `ring_gated` sibling stays removed.
 ///
-/// ⚠ Precisely: "structural" here describes the **call graph**, not the type system.
-/// `kayfabe_isolate::VerbPlan` is a public enum with public fields and
-/// `kayfabe_isolate::Worker::execute` is public, so a `VerbPlan::Doorbell` *can* be built
-/// without this crate — `tests/tests/cross_proc_lifetime.rs` does exactly that. Making the
-/// stronger claim true would mean putting the enforcement on the constructor in
-/// `kayfabe-isolate`; noting it here rather than asserting past it.
+/// ★★ **And since 2026-07-27 that is a fact about the TYPES, not only the call graph.**
+/// The ⚠ that used to stand here said "structural" described the call graph while
+/// `VerbPlan` was a public enum with public variant fields and `Worker::execute` was
+/// public — so a `VerbPlan::Doorbell` could be hand-built outside this crate and rung
+/// with the gate never having run, which `tests/tests/cross_proc_lifetime.rs` did.
+/// `VerbPlan::Doorbell` is now `#[non_exhaustive]` (no struct expression exists outside
+/// `kayfabe-isolate` — E0639, pinned by that crate's `tests/ui/ungated_doorbell.rs`) and
+/// its only constructor, [`kayfabe_isolate::VerbPlan::gated_doorbell`], **is** the gate:
+/// it checks every working-set VA host-published in the ringing channel's own `Vas`
+/// before a plan exists. The residual is stated at that constructor and is a different,
+/// smaller one: the address plane it gates over is caller-supplied, because Rust cannot
+/// express "only this crate may call this function".
 pub fn handle_doorbell(
     gpu: &mut Gpu,
     target_gpu: GpuId,
@@ -1932,15 +1999,26 @@ pub struct PushbufferOutcome {
 ///   at a device register window. **Named, never folded**, because this call runs under
 ///   the device read lock and a backend that served it would take the VMM's global lock
 ///   beneath one of our ranked locks (`l1_os_shell.md` §6.3 / §10.1 item 6).
-/// - anything else ⇒ [`FwdFault::GpaRead`] naming the address the *request* started at
-///   (a partial/straddling refusal reports its boundary in the `NonRamGpa` arm; the
-///   generic arm reports the request, which is what a caller can act on).
+/// - [`VmmError::BadGpa`] ⇒ [`FwdFault::GpaRead`] carrying **the port's address, not
+///   ours**. ★ **Fixed 2026-07-27 (`l1_os_shell.md` §14.8 F6).** This arm used to fall
+///   into the catch-all below, which substitutes the *requested* address — so a
+///   straddling descriptor that ran off the end of a window reported where it *started*
+///   while its near neighbour ([`VmmError::NonRamGpa`]) reported the **boundary byte**
+///   [`kayfabe_vmm::GuestRamMap::resolve`] actually named. Two refusals whose payloads
+///   mean different things is the shape `testing_doctrine.md` §2 rule 3 forbids, and it
+///   was invisible because §12.43's straddle test uses a RAM→DEVICE range — i.e. the arm
+///   that already kept it.
+/// - anything else ⇒ [`FwdFault::GpaRead`] naming the address the *request* started at.
+///   Nothing reaches this arm today ([`VmmError`]'s other variants are raised by the
+///   mapping plane, not by `gpa_read`); it exists so a future variant degrades to a loud
+///   refusal rather than to a compile error someone silences.
 ///
 /// A `map_err(|_| …)` at the call site — which is what this replaced — discards the
 /// variant, and with it the only evidence the refusal was the security-relevant one.
 fn guest_read(vmm: &mut dyn Vmm, gpa: u64, buf: &mut [u8]) -> Result<(), FwdFault> {
     vmm.gpa_read(gpa, buf).map_err(|e| match e {
         VmmError::NonRamGpa { gpa } => FwdFault::NonRamGpa { gpa },
+        VmmError::BadGpa { gpa } => FwdFault::GpaRead { gpa },
         _ => FwdFault::GpaRead { gpa },
     })
 }
@@ -2111,10 +2189,15 @@ pub fn parse_pushbuffer(
 // `VerbPlan::Doorbell` in the production crates and it gates the caller-recovered
 // working set against the channel's `Vas` table before returning one — so there is no
 // ungated sibling to bypass and no un-gated plan any production path can hand a worker
-// (`VerbPlan` is a public enum, so this is a call-graph property, not a type-system one
-// — see `handle_doorbell`'s docs) (the C's
-// "one exec path" refactor-debt lesson, closed by construction). `gate_working_set`
-// below is the read-only QUERY form of the same predicate; it cannot ring anything.
+// (the C's "one exec path" refactor-debt lesson, closed by construction).
+//
+// ★★ 2026-07-27: this used to carry a residual — "`VerbPlan` is a public enum, so this
+// is a call-graph property, not a type-system one". It is now BOTH.
+// `kayfabe_isolate::VerbPlan::Doorbell` is `#[non_exhaustive]` (no struct expression
+// outside that crate: E0639, pinned by a trybuild row) and its only constructor,
+// `VerbPlan::gated_doorbell`, RUNS this gate through the abstract `RingWorkingSet` view
+// `VasGate` below implements. `gate_working_set` further down is the read-only QUERY
+// form of the same predicate; it cannot ring anything.
 // =================================================================================
 
 /// Read-only query: would `working_set` pass channel `cid`'s ring-gate right now

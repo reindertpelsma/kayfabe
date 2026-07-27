@@ -28,11 +28,16 @@ pub enum Effect {
     /// A `DeferredReap` deadline ran `reap_retired` at this quiesce point
     /// (inherited law 8); carries the number reaped.
     Reaped(usize),
-    /// A `CompletionRedeliver` sweep ran: the per-target pump edges, in ascending
-    /// target order; carries any batches posted. **The caller owns delivering
-    /// them** (GSP-queue encode + IRQ — the `Vmm` seam, stage 3): an undelivered
-    /// batch must be fed back via `completions_drained`-after-delivery exactly as
-    /// a real drain would, which is why the batches are surfaced, not dropped.
+    /// A `CompletionRedeliver` backstop edge ran for the target it **named**
+    /// (`CoreEventKind::CompletionRedeliver(GpuId)`); carries any batch posted, tagged
+    /// with that target. **The caller owns delivering it** (GSP-queue encode + IRQ —
+    /// the `Vmm` seam, stage 3): an undelivered batch must be fed back via
+    /// `completions_drained`-after-delivery exactly as a real drain would, which is why
+    /// the batches are surfaced, not dropped.
+    ///
+    /// Stays a `Vec` although one edge pumps one target: the caller's delivery loop is
+    /// the same shape whether it is fed one edge or a sweep, and a per-target sweep
+    /// posting several batches is the stage-3 cadence.
     Redelivered(Vec<(GpuId, PostBatch)>),
     /// A deferred kind stage 2 does not wire (`PollKickBudget`, `RegionFault`) —
     /// surfaced untouched so the gap is visible, never guessed at.
@@ -78,17 +83,20 @@ impl Executor {
             CoreEvent::Deferred(CoreEventKind::DeferredReap) => {
                 Effect::Reaped(self.device.reap_retired())
             }
-            CoreEvent::Deferred(CoreEventKind::CompletionRedeliver) => {
-                // The bounded backstop edge (§5.2): pump each realized target
-                // once. Ascending-target iteration order via the snapshot the
-                // device exposes is not needed — GpuId::ZERO is always realized
-                // and further targets are pumped by their own edges; stage 2
-                // pumps the default target (multi-target backstop cadence is a
-                // stage-3 policy decision, taken with the defer plumbing).
+            CoreEvent::Deferred(CoreEventKind::CompletionRedeliver(target)) => {
+                // The bounded backstop edge (§5.2): pump the target the edge NAMES.
+                //
+                // ★ **Fixed 2026-07-27.** This used to read `pump_completions(GpuId::ZERO)`
+                // under a comment arguing that "GpuId::ZERO is always realized and further
+                // targets are pumped by their own edges" — but the edge is what this arm
+                // IS, so on a two-GPU proc there was no other edge to be pumped by, and
+                // GPU1's undelivered batch could never be re-fed. `CoreEventKind` now
+                // carries the target (§6.5's owed payload), so the backstop is per-target
+                // exactly as delivery has been since MG-6, and the arm cannot pick.
                 let batches = self
                     .device
-                    .pump_completions(GpuId::ZERO)
-                    .map(|b| vec![(GpuId::ZERO, b)])
+                    .pump_completions(target)
+                    .map(|b| vec![(target, b)])
                     .unwrap_or_default();
                 Effect::Redelivered(batches)
             }

@@ -166,7 +166,9 @@ mod tests {
         {
             let _d = device.read();
             let _p = proc.lock();
-            tx.send(CoreEvent::Deferred(CoreEventKind::CompletionRedeliver));
+            tx.send(CoreEvent::Deferred(CoreEventKind::CompletionRedeliver(
+                kayfabe_arch::ids::GpuId::ZERO,
+            )));
             assert_eq!(lock::held_depth(), 2, "send left only the caller's locks");
         }
         assert_eq!(lock::held_depth(), 0);

@@ -2031,7 +2031,9 @@ mod tests {
         );
         vmm.defer(
             Duration::from_millis(1),
-            CoreEvent::Deferred(CoreEventKind::CompletionRedeliver),
+            CoreEvent::Deferred(CoreEventKind::CompletionRedeliver(
+                kayfabe_arch::ids::GpuId::ZERO,
+            )),
         );
         assert!(
             vmm.advance(Duration::from_micros(500)).is_empty(),
@@ -2041,7 +2043,9 @@ mod tests {
         assert_eq!(
             due,
             vec![
-                CoreEvent::Deferred(CoreEventKind::CompletionRedeliver),
+                CoreEvent::Deferred(CoreEventKind::CompletionRedeliver(
+                    kayfabe_arch::ids::GpuId::ZERO
+                )),
                 CoreEvent::Deferred(CoreEventKind::DeferredReap),
             ],
             "due in deadline order, deterministically"

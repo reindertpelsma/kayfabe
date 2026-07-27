@@ -91,9 +91,12 @@ Proc (per guest process)     owns ALL FOUR planes:
   • isolate+arena — per (Proc,GpuId) sandbox + disjoint GPA arena       (blast radius)
 kayfabe-fwd                    the entry points adapters call:
   route_doorbell → decode → (GpuId,VChid) route
-    └─► plan_doorbell → #14 ring-gate → the plan            [the ONE gate: every ring
-        └─► Worker::execute (kayfabe-isolate) → materialize  path goes through here]
-            (engine-aware alloc_channel) → schedule → ring_doorbell
+    └─► plan_doorbell → VerbPlan::gated_doorbell        [the ONE gate, and it is
+        = the #14 ring-gate, INSIDE the ONLY            the plan's only constructor:
+        constructor of VerbPlan::Doorbell               an ungated ring does not
+        └─► Worker::execute (kayfabe-isolate)           COMPILE — trybuild row in
+            → materialize (engine-aware alloc_channel)  kayfabe-isolate/tests/ui]
+            → schedule → ring_doorbell
             └─► commit_doorbell → re-validate → adopt
   (`handle_doorbell` = the single-threaded composition; `kayfabe_rt::SharedDevice::
    doorbell` = the L1 composition, and it is the one a real guest MMIO write takes)
@@ -146,17 +149,30 @@ kayfabe-fwd                    the entry points adapters call:
    `plan_doorbell` — so both compositions (`handle_doorbell` for the single-threaded/test
    path, `SharedDevice::doorbell` for L1) are gated by construction rather than by caller
    discipline. Found by the whitepaper's verification pass.
-   ⚠ **Residual, noted 2026-07-27 and not fixed here (docs-only pass): "structural" is a
-   statement about the production call graph, not about the type system.**
-   `kayfabe_isolate::VerbPlan` is a public enum with public variant fields and
-   `Worker::execute` is public, so a plan can be built without going through
-   `plan_doorbell` and rung with the #14 gate never having run —
-   `tests/tests/cross_proc_lifetime.rs` already constructs a `VerbPlan::Doorbell`
-   directly. Inside the workspace that is a test affordance; as a *crate boundary* it is
-   an ungated door that the invariant's own wording says does not exist. If the intent is
-   the stronger claim, the enforcement to add is on the constructor
-   (`kayfabe-isolate` owning a `#[non_exhaustive]`/private-field builder), not on the
-   prose. **This is a code question, not a documentation one.**
+   ★★ **The residual is CLOSED (2026-07-27) — and it was closed in code, not in prose.**
+   The 2026-07-27 correction above left a real hole: "structural" described the
+   production *call graph*, not the *types*. `VerbPlan` was a public enum with public
+   variant fields and `Worker::execute` is public, so any crate could hand-build a
+   `VerbPlan::Doorbell` and hand it to a checked-out worker — which runs the
+   foreign-handle gate but **not** the #14 ring-gate. Reachable, not hypothetical:
+   `tests/tests/cross_proc_lifetime.rs` went through that door.
+   **Now:** `VerbPlan::Doorbell` is `#[non_exhaustive]`, so it has **no struct
+   expression outside `kayfabe-isolate`** — hand-building it is a compile error (E0639),
+   pinned by the compile-fail row `crates/kayfabe-isolate/tests/ui/ungated_doorbell.rs`
+   — and its **only** constructor, `VerbPlan::gated_doorbell`, *runs the gate*: every
+   VA of the submission's working set is checked host-published in the ringing channel's
+   own `Vas` (an abstract `RingWorkingSet` view, because the isolate port cannot name a
+   page table) before a plan exists at all. `plan_doorbell` is the production caller;
+   `l1_verb_seam::an_ungated_working_set_cannot_become_a_ring_plan` pins the runtime
+   half over two procs and one identical guest VA.
+   *Honest limit, stated rather than over-claimed:* Rust's privacy unit is the crate, so
+   *"only `kayfabe-fwd` may call the constructor"* is not expressible, and the address
+   plane the gate runs over is caller-supplied. What changed is the failure mode —
+   bypassing the gate is no longer **omission** (build the struct, forget the check),
+   which is what an ordinary edit looks like, but **commission** (write a lying address
+   plane), which is what a review notices. **`Doorbell` is the only variant with this
+   shape**: every other variant's gate is `Worker::execute`'s central foreign-handle
+   check, which runs whoever built the plan.
 6. **Completion integrity (I2)** — per-proc queues; re-delivery off the owner's OWN
    poll; the system-forge path can never reach a user proc's queue; fence observations
    respect the #12 `MAX_FENCE_JUMP` backwards guard.

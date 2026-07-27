@@ -391,7 +391,9 @@ fn run_script(mode: LockMode) -> (Vec<String>, RtSnapshot) {
 
     // 8. The deferred edges: reap at the quiesce point, then a redeliver backstop.
     tx.send(CoreEvent::Deferred(CoreEventKind::DeferredReap));
-    tx.send(CoreEvent::Deferred(CoreEventKind::CompletionRedeliver));
+    tx.send(CoreEvent::Deferred(CoreEventKind::CompletionRedeliver(
+        GpuId::ZERO,
+    )));
     for eff in ex.drain_all() {
         log.push(format!("deferred {eff:?}"));
     }
@@ -887,5 +889,120 @@ fn threads_smoke_hammers_both_lock_modes_bounded() {
             let c = &gpu.procs[&pid].channels[&cid];
             assert_eq!((c.gpu, c.vchid), (g, vchid), "routing key disagreement");
         }
+    }
+}
+
+/// ★★ Test 7c: **a `CompletionRedeliver` backstop edge pumps the target it NAMES.**
+///
+/// `l1_os_shell.md` §6.5 said, of §12.5's gap: *"`CoreEventKind::CompletionRedeliver`
+/// carries no `GpuId`, and delivery is per-target since MG-6… The defer plumbing lands
+/// in this milestone. **Fix it here**."* M2-c landed the plumbing and the payload did
+/// not, so this arm had to pick a target and picked [`GpuId::ZERO`], under a comment
+/// arguing that *"further targets are pumped by their own edges"* — but this arm **is**
+/// the edge, so for a proc on GPU1 there was no other edge to be pumped by. An
+/// undelivered GPU1 batch could then never be re-fed: a completion the guest waits on
+/// forever, which is the F3 hang shape the backstop exists to prevent.
+///
+/// The script: two procs on two targets, each with a completion of its own, and one
+/// backstop edge per target. The batches carry **different** events, so "the right
+/// target" is observable rather than inferred — the whole failure mode was one target's
+/// batch being served under another's name.
+#[test]
+fn a_completion_redeliver_edge_pumps_the_target_it_names() {
+    let _wd = watchdog(
+        "a_completion_redeliver_edge_pumps_the_target_it_names",
+        Duration::from_secs(60),
+    );
+    for mode in [LockMode::Degenerate, LockMode::Sharded] {
+        let (mut gpu, pids, _rec) = rt_gpu(2);
+        assert_eq!(
+            (gpu_of(0), gpu_of(1)),
+            (GpuId::ZERO, GpuId(1)),
+            "({mode:?}) the fixture really spans two targets — without that this test \
+             is about nothing"
+        );
+        // Each proc observes a completion on ITS OWN target. Distinct events, so a
+        // batch delivered under the wrong target name is visible in the payload.
+        for (i, ev) in [(0usize, OsEventRef(0xA)), (1usize, OsEventRef(0xB))] {
+            gpu.procs
+                .get_mut(&pids[i])
+                .expect("live proc")
+                .completion
+                .observe(ev)
+                .expect("a fresh queue accepts an observation");
+        }
+        let device = gpu.map(|g| Arc::new(SharedDevice::new(g, mode)));
+        let (tx, rx) = inbox();
+        let mut ex = Executor::new(Arc::clone(&device), rx);
+
+        // ---- ★ GPU1's edge FIRST, and it must yield GPU1's batch. This is the bite:
+        //      with the target hard-coded to zero, the first edge answers with GPU0's
+        //      batch under GPU0's name, and this assertion is the one that fails.
+        tx.send(CoreEvent::Deferred(CoreEventKind::CompletionRedeliver(
+            GpuId(1),
+        )));
+        let one = ex.drain_one().expect("the edge ran");
+        let Effect::Redelivered(ref batches) = one else {
+            panic!("({mode:?}) a redeliver edge must surface a Redelivered effect: {one:?}");
+        };
+        assert_eq!(
+            batches.iter().map(|(g, _)| *g).collect::<Vec<_>>(),
+            vec![GpuId(1)],
+            "({mode:?}) the edge named GPU1, so the batch is GPU1's"
+        );
+        assert_eq!(
+            batches[0].1.events,
+            vec![OsEventRef(0xB)],
+            "({mode:?}) ★ and it carries GPU1's proc's completion — not GPU0's, which \
+             is the exact confusion an un-targeted edge produced"
+        );
+
+        // ---- GPU0's edge yields GPU0's, so the payload tracks the edge in BOTH
+        //      directions rather than the test having found the only realized target.
+        tx.send(CoreEvent::Deferred(CoreEventKind::CompletionRedeliver(
+            GpuId::ZERO,
+        )));
+        let two = ex.drain_one().expect("the second edge ran");
+        let Effect::Redelivered(ref batches) = two else {
+            panic!("({mode:?}) expected Redelivered: {two:?}");
+        };
+        assert_eq!(
+            batches.iter().map(|(g, _)| *g).collect::<Vec<_>>(),
+            vec![GpuId::ZERO]
+        );
+        assert_eq!(
+            batches[0].1.events,
+            vec![OsEventRef(0xA)],
+            "({mode:?}) GPU0's edge carries GPU0's proc's completion"
+        );
+
+        // ---- Non-vacuity for "a batch came back at all": a repeat edge on GPU1, whose
+        //      gate is still closed (nothing drained it), yields NOTHING. So the two
+        //      populated results above were the drain gate opening for that target, and
+        //      an empty result is representable — an instrument that always answers
+        //      with a batch would have proved neither.
+        tx.send(CoreEvent::Deferred(CoreEventKind::CompletionRedeliver(
+            GpuId(1),
+        )));
+        assert_eq!(
+            ex.drain_one(),
+            Some(Effect::Redelivered(vec![])),
+            "({mode:?}) GPU1's gate is closed while its batch is outstanding, so its own \
+             backstop edge posts nothing — per-target, exactly as delivery is"
+        );
+
+        // ---- And the guest draining GPU1 reopens GPU1's gate ALONE.
+        device.completions_drained(GpuId(1));
+        device
+            .completion_poll(GpuId(1), pids[1], Instant::ZERO)
+            .expect("the drained target re-posts its owner's undelivered batch");
+
+        drop(ex);
+        let gpu = device.map(|d| {
+            Arc::try_unwrap(d)
+                .unwrap_or_else(|_| panic!("all handles released"))
+                .into_gpu()
+        });
+        drop(gpu);
     }
 }

@@ -449,8 +449,12 @@ asking the executor" is a cycle whose other end is a parked vCPU.
 says *"the accessing vCPU is parked until the core answers"*. Under GL8 that is wrong: the vCPU
 is parked until the **holder** releases, and the core's notification is an **observation after
 the fact**. The delivery seam stays where §6.8 put it, but its meaning changes from *decision
-point* to *observation*. **Owed edit to `kayfabe-vmm`'s rustdoc** (not made here: another agent
-owns `crates/`).
+point* to *observation*. **Owed edit to `kayfabe-vmm`'s rustdoc** — ★ **made 2026-07-27**:
+`CoreEvent::LockedRegionFault`'s docs now state GL8 (the handler runs on the faulting
+vCPU's own thread, applies the write, and only then notifies; the vCPU is parked until the
+region-mutex HOLDER releases, never behind this event), give both reasons (latency, and
+the executor-holds-a-region-mutex cycle), and record that the notification is per-region
+opt-in and default off.
 
 **What the notification is good for, and its own trap.** A write to the GSP command queue is a
 genuine Layer-2-adjacent signal — *the guest just wrote a command* — and could replace a poll.

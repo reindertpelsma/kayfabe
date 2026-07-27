@@ -2265,6 +2265,19 @@ On a two-GPU device the backstop cannot reach the second target.
 `CompletionRedeliver` still carries no `GpuId` though `l1_concurrency.md` §6.5 said "fix it
 here" and M2-c landed without it.)*
 
+> ### ★★ RESOLVED 2026-07-27 — in code
+>
+> `CoreEventKind::CompletionRedeliver(GpuId)` carries the target, and
+> `Executor::drain_one` pumps **the target the edge names**; the hardcoded `GpuId::ZERO`
+> and its "stage 2 / stage 3" comment are gone. The finding as written was exactly right,
+> including the part that made it more than a tidiness item: that arm *is* the backstop
+> edge, so "further targets are pumped by their own edges" was circular, and on a two-GPU
+> device an undelivered second-target batch could never be re-fed — the F3 hang shape.
+> Cost: one dependency edge, `kayfabe-vmm` → `kayfabe-arch::ids` (the id newtype only; the
+> sibling port `kayfabe-isolate` already had it), plus a `pub use` so backend crates do not
+> need it. Pinned by `rt_shell::a_completion_redeliver_edge_pumps_the_target_it_names`,
+> which fails against the old arm.
+
 ## 7.7 Module documentation that describes a world the same file refutes
 
 The shell's device module header still carries a section titled "R1 status in stage 2
@@ -2321,6 +2334,27 @@ the same file (pinned `:631`); `crates/kayfabe-core/src/lib.rs` — the crate `/
 > - ★ **The distance between "five sites" and "one site" is itself the lesson.** Nothing was
 >   fixed; the sentences were *edited around*, and the edit made the stale claim harder to find
 >   without making it less stale.
+
+> ### ★★ RESOLVED 2026-07-27 — the contradiction, not the sentences around it
+>
+> Settled the only way it could be: **by deciding which side is true and making every site
+> say it.** `RmBackend` declares `Send + Sync` on the trait itself and has since the §7.2
+> worker pool — an `Isolate` owns N idle `Worker`s, a `Proc` owns the isolate, and the
+> core's `Gpu` is `Sync`, so every boxed backend sitting in a pool slot *must* be `Sync`
+> for that chain to hold. The `assert_send_sync!` was right; the four prose sites were
+> wrong. All four now say so, and each names what it used to claim:
+>
+> - the comment above `assert_send_sync!` (`kayfabe-isolate`) — and it now states the
+>   stronger fact the audit implies: **this workspace has no `Send`-only exception at all.**
+>   The two `assert_send!` sites that exist (`dyn Vmm`, `Reactor`) are ports the core is
+>   *handed*, never stores, which is a different property, not an exception;
+> - `Worker`'s rustdoc — `Send + Sync`, with the sentence's true half kept: a worker is
+>   reached only by `&mut`, so single-in-flight is the borrow checker's guarantee rather
+>   than a bound's;
+> - `kayfabe_util::assert_send!`'s rustdoc — the `dyn RmBackend` example is replaced by the
+>   two real ones;
+> - `kayfabe-core`'s crate doc — the *"single relaxation … `Isolate::rm(&mut self)"* bullet,
+>   the last surviving citation to a method that does not exist.
 
 ## 7.9 The core still advertises lock-free shared reads without qualification
 

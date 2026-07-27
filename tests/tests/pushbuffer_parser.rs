@@ -243,12 +243,22 @@ fn t14_per_vas_publication_gates_the_ring() {
     );
 }
 
-/// ★ The gate is STRUCTURAL, not caller discipline: `handle_doorbell` is the ONE
-/// ring path (the ungated `ring_gated` sibling is gone), so a doorbell whose working
-/// set is bound-but-unpublished (the #14 EXECUTION-fault state — the shadow had the
-/// VA, the channel's OWN host VAS did not) is refused BEFORE any host op, and there is
-/// no other function to reach the host doorbell through. Once published, the SAME path
-/// rings.
+/// ★ The gate is STRUCTURAL, not caller discipline: a doorbell whose working set is
+/// bound-but-unpublished (the #14 EXECUTION-fault state — the shadow had the VA, the
+/// channel's OWN host VAS did not) is refused BEFORE any host op. Once published, the
+/// SAME path rings.
+///
+/// ★ **corrected 2026-07-27, twice over.** This doc used to say *"`handle_doorbell` is
+/// the ONE ring path (the ungated `ring_gated` sibling is gone)"*, which the
+/// whitepaper's verification pass showed to be false as stated — the L1 path a real
+/// guest MMIO write takes is `kayfabe_rt::SharedDevice::doorbell`, which never enters
+/// `handle_doorbell`. The invariant re-anchored one level down, onto
+/// `kayfabe_fwd::plan_doorbell` as the sole constructor of `VerbPlan::Doorbell`; and it
+/// is now enforced by the **type system** rather than by the call graph
+/// (`kayfabe_isolate::VerbPlan::gated_doorbell` is the only constructor and it runs the
+/// gate — `crates/kayfabe-isolate/tests/ui/ungated_doorbell.rs` pins the compile error,
+/// `l1_verb_seam::an_ungated_working_set_cannot_become_a_ring_plan` the runtime half).
+/// This test is the end-to-end composition of that property through the real path.
 #[test]
 fn t14_ring_gate_is_structural_no_ungated_door() {
     let (mut gpu, _vmm, rec) = two_proc_gpu();
@@ -280,10 +290,16 @@ fn t14_ring_gate_is_structural_no_ungated_door() {
     // The ONE ring path refuses it — bound but not host-published — with ZERO host
     // ops (not even channel materialization). There is no ungated door to try instead.
     let before = rec.lock().unwrap().log.len();
-    assert!(matches!(
+    assert_eq!(
         handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]),
-        Err(FwdFault::Address(_))
-    ));
+        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Miss {
+            pdb: A_PDB,
+            va: SHARED_VA
+        })),
+        "the exact miss, by PDB and VA — `matches!(.., Err(FwdFault::Address(_)))` (what \
+         this asserted until 2026-07-27) passes for a miss on the WRONG proc's PDB, which \
+         is precisely the #14 confusion under test"
+    );
     assert_eq!(
         rec.lock().unwrap().log.len(),
         before,

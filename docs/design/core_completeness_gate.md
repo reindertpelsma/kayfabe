@@ -90,12 +90,20 @@ this repo at head.
 > - **The gate is structural, not caller discipline.** `crates/kayfabe-fwd/src/lib.rs::plan_doorbell`
 >   is the sole constructor of `VerbPlan::Doorbell` within the production crates and runs the
 >   #14 ring-gate before any host op exists.
-> - ⚠ **With the honest limit that `handle_doorbell`'s own rustdoc states**, and which should
->   not be sanded off: "structural" describes the **call graph**, not the type system —
->   `kayfabe_isolate::VerbPlan` is a public enum with public fields and
->   `kayfabe_isolate::Worker::execute` is public, so a `VerbPlan::Doorbell` *can* be built
->   outside `kayfabe-fwd` (`tests/tests/cross_proc_lifetime.rs` does exactly that). Making the
->   stronger claim true means moving enforcement onto the constructor in `kayfabe-isolate`.
+> - ⚠→★★ **That honest limit is now CLOSED (2026-07-27), and closed where it said to close
+>   it: on the constructor.** It read: *"structural" describes the call graph, not the type
+>   system — `VerbPlan` is a public enum with public fields and `Worker::execute` is public,
+>   so a `VerbPlan::Doorbell` can be built outside `kayfabe-fwd`
+>   (`tests/tests/cross_proc_lifetime.rs` does exactly that)*. `VerbPlan::Doorbell` is now
+>   `#[non_exhaustive]` — hand-building it outside `kayfabe-isolate` is a compile error
+>   (E0639), pinned by that crate's `tests/ui/ungated_doorbell.rs` — and its only
+>   constructor, `VerbPlan::gated_doorbell`, RUNS the #14 gate over an abstract
+>   `RingWorkingSet` view of the ringing channel's own `Vas`. `cross_proc_lifetime.rs` was
+>   rewritten to go through it, which is the seam's own usability check.
+>   The residual that replaces it is smaller and is stated at the constructor: Rust's
+>   privacy unit is the crate, so *"only `kayfabe-fwd` may call this"* is inexpressible and
+>   the address plane is caller-supplied. Bypassing the gate went from **omission** (build
+>   the struct, forget the check) to **commission** (write a lying address plane).
 > - ★ Also corrected in that rustdoc on the same day: `handle_doorbell` **is not on the L1
 >   path at all** — a real guest MMIO write goes through `kayfabe_rt::SharedDevice::doorbell`,
 >   which drives plan/execute/commit itself.

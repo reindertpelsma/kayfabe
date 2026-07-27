@@ -271,6 +271,24 @@ fn attempt_on_system(gpu: &mut Gpu, plan: &VerbPlan) -> Result<VerbReply, VerbFa
     out
 }
 
+/// ★ An address plane in which **nothing** is host-published — this file's
+/// [`kayfabe_isolate::RingWorkingSet`] for the one place it must build a ring plan.
+///
+/// It exists because `VerbPlan::gated_doorbell` will not hand out a `VerbPlan::Doorbell`
+/// without an address plane to gate against, and this file's subject is the *foreign
+/// handle* gate, not the #14 one. Paired with an **empty** working set it is the honest
+/// spelling of "this submission claims no addresses": vacuously gated, and therefore a
+/// clean isolation of the second gate. Paired with a non-empty one it refuses
+/// everything — which is what `an_ungated_working_set_cannot_become_a_ring_plan` uses it
+/// for, in `l1_verb_seam.rs`.
+struct NothingPublished;
+
+impl kayfabe_isolate::RingWorkingSet for NothingPublished {
+    fn is_host_published(&self, _va: GpuVa) -> bool {
+        false
+    }
+}
+
 /// The host memory handle backing `va` in `(gpu, pdb)` of `pid`.
 fn backing_of(gpu: &Gpu, pid: ProcId, pdb: Pdb, va: GpuVa) -> HostHandle {
     let (binding, _off) = kayfabe_fwd::resolve_in(&gpu.procs[&pid], GPU, pdb, va)
@@ -506,16 +524,29 @@ fn every_plan_shape_that_names_a_foreign_handle_is_refused() {
         }),
         "controlling another proc's object is refused"
     );
+    // ★ The ring plan can no longer be hand-built: `VerbPlan::Doorbell` is
+    // `#[non_exhaustive]`, so the struct expression this test used to write is a compile
+    // error outside `kayfabe-isolate` (pinned by that crate's `tests/ui/`
+    // compile-fail row), and the #14 ring-gate runs inside the only constructor.
+    //
+    // ★ That makes this assertion STRONGER, not weaker, and it is worth saying why: the
+    // plan below has now passed the #14 gate — vacuously, over an empty working set,
+    // which is what a submission claiming no addresses legitimately gets — and is
+    // *still* refused, by the second, independent gate inside `Worker::execute`. A
+    // ring that is #14-clean and namespace-dirty is exactly the case that must refuse,
+    // and before this rewrite the test could not distinguish it from a plan that had
+    // simply never been gated at all.
+    let doorbell = VerbPlan::gated_doorbell(
+        &NothingPublished,
+        &[],
+        None,
+        Some((owned, 0x1234)),
+        kayfabe_arch::ids::EngineKind::Ce,
+        true,
+    )
+    .expect("an empty working set passes the #14 gate — nothing is claimed");
     assert_eq!(
-        attempt_on_system(
-            &mut gpu,
-            &VerbPlan::Doorbell {
-                host_vas: None,
-                channel: Some((owned, 0x1234)),
-                engine: kayfabe_arch::ids::EngineKind::Ce,
-                schedule: true,
-            },
-        ),
+        attempt_on_system(&mut gpu, &doorbell),
         Err(VerbFailure {
             err: RmError::ForeignHandle {
                 handle: owned,

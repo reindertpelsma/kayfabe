@@ -119,10 +119,16 @@
 //!   presumes none). **All reads take `&self`** and are concurrent-safe: any number
 //!   of threads may share `&Gpu` and resolve/route/inspect in parallel, lock-free.
 //! - **No thread-hostile exceptions exist.** The audit for this milestone found
-//!   none to document: no core type needs `!Sync`. The single *relaxation* is
-//!   `dyn RmBackend` (`Send` but not `Sync` — reachable only through
-//!   `Isolate::rm(&mut self)`, so a shared reference to one is unrepresentable;
-//!   documented in `kayfabe-isolate`).
+//!   none to document: no core type needs `!Sync`, and — ★ **corrected 2026-07-27** —
+//!   *nothing the core stores* is `Send`-only either. This bullet used to name
+//!   `dyn RmBackend` as "the single relaxation … reachable only through
+//!   `Isolate::rm(&mut self)`", citing a method that does not exist anywhere in the
+//!   tree and a bound `kayfabe-isolate` compile-time asserts the opposite of: since
+//!   the §7.2 worker pool the core *stores* boxed backends (pool slot → `Worker` →
+//!   `Isolate` → `Proc` → `Sync` `Gpu`), so `RmBackend: Send + Sync`. The only
+//!   `assert_send!` seams left are ports passed as **arguments** — `Vmm`, the L1
+//!   shell's `Reactor` — which is the next bullet's property, not an exception to
+//!   this one.
 //! - **Ports the core *stores* carry the bound; ports passed as arguments don't.**
 //!   `Arch`, `Isolate`, `IsolateFactory` live inside `Gpu` and are `Send + Sync`
 //!   supertraits. `Vmm` (`Send`), `Present`, `FbRead`, `TraceSink` are only ever

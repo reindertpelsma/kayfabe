@@ -5621,8 +5621,8 @@ fn dma_workload(dev: &SharedDevice, vmm: &SharedVmm, pids: &[ProcId], i: usize) 
         assert_eq!(out.opaque, 1, "the opaque method passed through");
         t.legal_ok += 1;
 
-        // ---- the four HOSTILE shapes, each asserted by exact variant AND payload.
-        let hostile: (Vec<u8>, Result<kayfabe_fwd::PushbufferOutcome, FwdFault>) = match k % 4 {
+        // ---- the five HOSTILE shapes, each asserted by exact variant AND payload.
+        let hostile: (Vec<u8>, Result<kayfabe_fwd::PushbufferOutcome, FwdFault>) = match k % 5 {
             // (a) aimed squarely at ANOTHER device's registers.
             0 => (
                 gpfifo_ring(GPA_PEER_BAR.start, 0x40),
@@ -5644,13 +5644,28 @@ fn dma_workload(dev: &SharedDevice, vmm: &SharedVmm, pids: &[ProcId], i: usize) 
                     gpa: GPA_HOLE.start + 0x10,
                 }),
             ),
-            // (d) STRADDLING: starts in real RAM, runs into the peer BAR. A check that
-            //     looked only at the start address would serve the first bytes and take
-            //     the VMM's global lock on the continuation step.
-            _ => (
+            // (d) STRADDLING into a DEVICE window: starts in real RAM, runs into the
+            //     peer BAR. A check that looked only at the start address would serve
+            //     the first bytes and take the VMM's global lock on the continuation
+            //     step. Reports the BOUNDARY byte, not the requested address.
+            3 => (
                 gpfifo_ring(GPA_PEER_BAR.start - 8, 0x40),
                 Err(FwdFault::NonRamGpa {
                     gpa: GPA_PEER_BAR.start,
+                }),
+            ),
+            // ★ (e) STRADDLING into a HOLE — (d)'s NEAR NEIGHBOUR, and the shape that
+            //     was missing. `l1_os_shell.md` §14.8 **F6**: `kayfabe_fwd::guest_read`
+            //     classified `VmmError::BadGpa` through a catch-all `_ =>` arm that
+            //     substitutes the address the *request* started at, so the boundary the
+            //     port had named was preserved on the `NonRamGpa` arm and DISCARDED on
+            //     this one. Every straddle case the suite had was RAM→DEVICE — i.e. the
+            //     arm that keeps it — so two refusals whose payloads meant different
+            //     things went unnoticed. Fixed 2026-07-27; this row is what bites.
+            _ => (
+                gpfifo_ring(GPA_HOLE.start - 8, 0x40),
+                Err(FwdFault::GpaRead {
+                    gpa: GPA_HOLE.start,
                 }),
             ),
         };
@@ -5726,14 +5741,17 @@ fn a_guest_steering_dma_descriptors_at_device_windows_is_refused_by_name_under_l
             );
             assert_eq!(
                 t.non_ram,
-                DMA_OPS - DMA_OPS / 4,
-                "({name}/{who}) three of the four hostile shapes name a DEVICE window"
+                3 * (DMA_OPS / 5),
+                "({name}/{who}) three of the five hostile shapes name a DEVICE window"
             );
             assert_eq!(
                 t.unbacked,
-                DMA_OPS / 4,
-                "({name}/{who}) and exactly one names a HOLE — the near neighbour, \
-                 counted separately so the two can never silently merge"
+                2 * (DMA_OPS / 5),
+                "({name}/{who}) and exactly two name a HOLE — the near neighbour, \
+                 counted separately so the two can never silently merge. Both a \
+                 wholly-unbacked range and one that STRADDLES out of RAM into the hole \
+                 land here, which is the pair F6 was hiding: they take the same arm and \
+                 must still name different addresses"
             );
         }
         // ---- the mock's own ledger agrees: the refusals happened AT THE PORT, and
@@ -5742,8 +5760,8 @@ fn a_guest_steering_dma_descriptors_at_device_windows_is_refused_by_name_under_l
         assert_eq!(
             r.port_refusals,
             (
-                2 * (DMA_OPS - DMA_OPS / 4),           // NonRamGpa
-                2 * (DMA_OPS / 4) + r.revoke.refusals, // BadGpa
+                2 * (3 * (DMA_OPS / 5)),                     // NonRamGpa
+                2 * (2 * (DMA_OPS / 5)) + r.revoke.refusals, // BadGpa
             ),
             "({name}) the port refused exactly the accesses the core reported — the two \
              DMA threads' hostile shapes PLUS the revoke prober's, and nothing else. \
@@ -6909,23 +6927,24 @@ fn real_dma_workload(
             //     out of a live mapping and then fault, or worse, read whatever the next
             //     mapping happened to be.
             //
-            // ★★ FINDING, pinned here rather than papered over. The **port** names the
-            // BOUNDARY byte for this shape — `GuestRamMap::resolve` returns
+            // ★★ **F6, FOUND HERE AND NOW FIXED** (`l1_os_shell.md` §14.8). The **port**
+            // names the BOUNDARY byte for this shape — `GuestRamMap::resolve` returns
             // `BadGpa { gpa: <end of the window> }`, and the focused test
             // `a_device_region_is_the_absence_of_a_memslot_and_refuses_by_name` in
-            // `kayfabe-vmm-kvm` asserts exactly that. But `kayfabe_fwd::guest_read`
-            // classifies with `_ => FwdFault::GpaRead { gpa }`, taking the **requested**
-            // address from its own argument rather than the one the port reported — so
-            // the boundary is preserved on the `NonRamGpa` arm and DISCARDED on its near
-            // neighbour. That asymmetry was invisible before this run: §12.43's
-            // straddle test uses a RAM→DEVICE range, which takes the arm that keeps it.
-            // The observable end-state is asserted as it IS; the recommendation (one
-            // line: `VmmError::BadGpa { gpa } => FwdFault::GpaRead { gpa }`) is reported
-            // rather than applied, because the core runs unmodified in this stage.
+            // `kayfabe-vmm-kvm` asserts exactly that. `kayfabe_fwd::guest_read` used to
+            // classify it through a catch-all `_ => FwdFault::GpaRead { gpa }`, taking
+            // the **requested** address from its own argument rather than the one the
+            // port reported — so the boundary was preserved on the `NonRamGpa` arm and
+            // discarded on its near neighbour. Invisible until this run, because
+            // §12.43's straddle test uses a RAM→DEVICE range, i.e. the arm that keeps
+            // it. The named one-liner (`VmmError::BadGpa { gpa } => FwdFault::GpaRead
+            // { gpa }`) landed 2026-07-27, and this row now asserts the BOUNDARY — over
+            // a REAL mmap'd window and a real KVM memslot, which is the half the mock
+            // cannot reach.
             _ => (
                 gpfifo_ring(base + RWIN_PAGES * page - 8, 0x40),
                 Err(FwdFault::GpaRead {
-                    gpa: base + RWIN_PAGES * page - 8,
+                    gpa: base + RWIN_PAGES * page,
                 }),
             ),
         };
@@ -7834,7 +7853,7 @@ fn guest_mean_run(mode: LockMode) -> GuestMeanReport {
     // the same `DeferQueue` the mock owns, so "matches the mock" is a tautology).
     vmm.defer(
         Duration::from_millis(10),
-        kayfabe_vmm::CoreEvent::Deferred(kayfabe_vmm::CoreEventKind::CompletionRedeliver),
+        kayfabe_vmm::CoreEvent::Deferred(kayfabe_vmm::CoreEventKind::CompletionRedeliver(GPU0)),
     );
 
     let live_before = dev.live_pids().len();
@@ -8159,7 +8178,7 @@ fn a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_dea
         assert_eq!(
             r.deferred_due,
             vec![kayfabe_vmm::CoreEvent::Deferred(
-                kayfabe_vmm::CoreEventKind::CompletionRedeliver
+                kayfabe_vmm::CoreEventKind::CompletionRedeliver(GPU0)
             )],
             "({name}) ★ a deadline that passes while a window is being torn down still comes \
              due, exactly once, in deadline order — §6.4's shared DeferQueue, which is the \

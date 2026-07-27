@@ -1548,3 +1548,151 @@ fn the_shell_ring_gate_refuses_an_unpublished_working_set() {
         );
     }
 }
+
+// =================================================================================
+// ★★ Section 10 — the #14 ring-gate is STRUCTURAL: it lives in the constructor
+// =================================================================================
+
+/// A **real** address plane, presented to the ring-gate through
+/// [`kayfabe_isolate::RingWorkingSet`]: one `Proc`'s `Vas` for `(gpu, pdb)`, answered by
+/// the same `resolve_in` the forwarding plane uses.
+///
+/// It is deliberately not a stub. The gate's whole content is *"every claimed VA is
+/// host-published in **THIS** channel's `Vas`"*, and a view backed by a hand-written
+/// `true` would test the plumbing while asserting nothing about #14. Two of these — one
+/// per proc, over the SAME guest VA — are what make the refusal below mean something.
+struct ProcVas<'a>(&'a kayfabe_core::gpu::Proc, GpuId, Pdb);
+
+impl kayfabe_isolate::RingWorkingSet for ProcVas<'_> {
+    fn is_host_published(&self, va: GpuVa) -> bool {
+        kayfabe_fwd::resolve_in(self.0, self.1, self.2, va)
+            .is_ok_and(|(binding, _off)| binding.host.is_some())
+    }
+}
+
+/// ★★★ **#14, moved onto the type system**: an ungated working set cannot become a
+/// `VerbPlan::Doorbell`, because [`kayfabe_isolate::VerbPlan::gated_doorbell`] is the
+/// only constructor and it runs the gate.
+///
+/// `ARCHITECTURE.md` invariant 5 used to be a claim about the production **call graph** —
+/// `kayfabe_fwd::plan_doorbell` was the only thing that built a ring plan, and it gated
+/// first. True, and unenforced: the variant was a plain public struct-variant, so any
+/// caller could hand-build one and hand it to a checked-out `Worker`, whose own gate is
+/// the *foreign-handle* check and **not** the #14 working-set check. That door was
+/// reachable rather than hypothetical — `tests/tests/cross_proc_lifetime.rs` used it.
+/// `crates/kayfabe-isolate/tests/ui/ungated_doorbell.rs` now pins the compile error;
+/// this test pins the runtime half.
+///
+/// The script is #14's own shape: **two procs, one guest VA**. Proc A publishes it into
+/// A's own host VAS; proc B never publishes it at all. The identical `GpuVa` value must
+/// produce a plan for A and **no plan whatsoever** for B — no object to execute, no host
+/// op to unwind, and a refusal naming the exact address.
+#[test]
+fn an_ungated_working_set_cannot_become_a_ring_plan() {
+    let _wd = watchdog("ungated_working_set", Duration::from_secs(30));
+    let (device, pids, rec) = device_with(2, DEFAULT_POOL_WORKERS, LockMode::Degenerate);
+    let (a, b) = (pids[0], pids[1]);
+    let mut gpu = device.map(|d| Arc::into_inner(d).expect("not shared").into_gpu());
+
+    // A publishes VA into ITS OWN Vas. B never publishes anything — same VA value,
+    // different `(GpuId, Pdb)` key, which is the whole of #14.
+    kayfabe_fwd::publish_backing(gpu.procs.get_mut(&a).expect("proc A"), GPU, PDB, VA, 0x1000)
+        .expect("A publishes its own working set");
+    let a_chan = gpu.procs[&a]
+        .channels
+        .values()
+        .find_map(|c| c.host_channel.zip(c.host_token));
+
+    // ---- (1) A's plane gates its own VA through: a plan EXISTS.
+    let planned = VerbPlan::gated_doorbell(
+        &ProcVas(&gpu.procs[&a], GPU, PDB),
+        &[VA],
+        None,
+        a_chan,
+        kayfabe_arch::ids::EngineKind::Ce,
+        true,
+    )
+    .expect("A published this VA into its own host VAS, so A's ring is gateable");
+    // Non-vacuity: the thing that came back is really a ring plan, not some other
+    // variant that would make every assertion below true for the wrong reason.
+    assert_eq!(
+        kayfabe_trace::VerbTag::of(&planned),
+        kayfabe_trace::VerbTag::Doorbell,
+        "the gated constructor produced a DOORBELL plan"
+    );
+
+    // ---- (2) ★ B's plane refuses the IDENTICAL VA, by exact variant and payload.
+    //          There is no plan — not an unexecuted one, not an empty one: the
+    //          constructor returned `Err`, so no `VerbPlan::Doorbell` came into
+    //          existence for an address B never published.
+    let before = rec.lock().expect("recorder").log.len();
+    assert_eq!(
+        VerbPlan::gated_doorbell(
+            &ProcVas(&gpu.procs[&b], GPU, PDB2),
+            &[VA],
+            None,
+            a_chan,
+            kayfabe_arch::ids::EngineKind::Ce,
+            true,
+        ),
+        Err(kayfabe_isolate::UngatedVa(VA)),
+        "★ #14: proc B never published this VA into ITS OWN host VAS, so the byte-identical \
+         guest VA that gates for A must be a loud, exact refusal for B — never a \
+         cross-proc content-pick, and never a plan someone could still execute"
+    );
+    assert_eq!(
+        rec.lock().expect("recorder").log.len(),
+        before,
+        "a gated-out ring did ZERO host ops — there was nothing to unwind because there \
+         was never a plan"
+    );
+
+    // ---- (3) The refusal names the FIRST offending VA, not merely 'one of them'.
+    //          Published-then-unpublished and unpublished-then-published must both name
+    //          the unpublished one, so the payload cannot be an artefact of iteration.
+    let unpublished = GpuVa(VA.0 + 0x10_0000);
+    let later = GpuVa(VA.0 + 0x20_0000);
+    for (set, expect) in [
+        (vec![VA, unpublished, later], unpublished),
+        (vec![unpublished, VA], unpublished),
+        (vec![later, unpublished], later),
+    ] {
+        assert_eq!(
+            VerbPlan::gated_doorbell(
+                &ProcVas(&gpu.procs[&a], GPU, PDB),
+                &set,
+                None,
+                a_chan,
+                kayfabe_arch::ids::EngineKind::Ce,
+                false,
+            ),
+            Err(kayfabe_isolate::UngatedVa(expect)),
+            "the gate names the FIRST unpublished VA of {set:?}"
+        );
+    }
+
+    // ---- (4) And it is publication that decides, not the call: publish the offender
+    //          into A's own Vas and the SAME working set gates through.
+    kayfabe_fwd::publish_backing(
+        gpu.procs.get_mut(&a).expect("proc A"),
+        GPU,
+        PDB,
+        unpublished,
+        0x1000,
+    )
+    .expect("A publishes the offender too");
+    assert_eq!(
+        VerbPlan::gated_doorbell(
+            &ProcVas(&gpu.procs[&a], GPU, PDB),
+            &[VA, unpublished],
+            None,
+            a_chan,
+            kayfabe_arch::ids::EngineKind::Ce,
+            false,
+        )
+        .map(|p| kayfabe_trace::VerbTag::of(&p)),
+        Ok(kayfabe_trace::VerbTag::Doorbell),
+        "once published, the SAME working set builds a plan — so (2) and (3) were about \
+         publication, not about the constructor refusing everything"
+    );
+}
