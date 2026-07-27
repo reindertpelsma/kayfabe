@@ -4221,6 +4221,47 @@ before undeclaring the region is indistinguishable here, because the `Arc` keeps
 mapping alive either way. The order is still the correct one and is written down; it is
 simply untested.
 
+> **★★★ 2026-07-27 correction to F7(b) — "the `Arc` keeps the mapping alive either way" is
+> true and is only half of it. The other half was a live R1 violation, shipped.**
+>
+> The `Arc` an accessor holds is a **release** handle as well as a read handle. If the
+> accessor's clone is the last one, the accessor's thread runs the `munmap` — and F2's whole
+> design is that `gpa_read`/`gpa_write` hold that clone *outside* the view lock, while being
+> in-lock **legal**, i.e. entered with one of the core's **ranked** locks held. So a window
+> removed while a thread was parsing a pushbuffer out of it produced exactly this, in
+> `l1_mean.rs`'s composed run, about **1 run in 60–100**:
+>
+> ```text
+> R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): munmap (dropping a
+>   guest-physical window) while holding rank(s) [0]
+>     <- GuestWindow::drop <- Arc<GuestWindow> drop <- KvmVmm::gpa_read
+>     <- kayfabe_fwd::read_pushbuffer <- SharedDevice::parse_pushbuffer
+> ```
+>
+> **Neither witness could have caught it earlier, and F1's two-lock split is not the cause.**
+> The leaf witness is silent and *correct* to be: no adapter lock is held, and no critical
+> section is a byte longer than F1 says. The ranked witness is the one that fires, but only
+> on the interleaving where the accessor happens to lose. The defect is in **ownership**, not
+> in locking — which is a class this section's framing (locks, ranks, critical sections)
+> cannot see at all, and the first one to come from `Arc` rather than from a `Mutex`.
+>
+> **Fixed by retiring rather than dropping.** `remove_window` parks the mapping in the
+> machine (`Plane::retire`); the machine holds one reference no accessor can take away; the
+> release runs in `Plane::collect_retired` at a door already proved lock-free on both halves.
+> An accessor's clone is then never the last — structurally, not by timing. Instrumented with
+> `AuditReport::window_releases_deferred` (the non-vacuity half: the removal really did land
+> on a window someone was reading) and `window_mappings_released` (the address space came
+> back), and pinned by
+> `crates/kayfabe-vmm-kvm/tests/memory_plane.rs::a_window_removed_under_a_live_reader_is_never_munmapped_by_the_reader`,
+> which is **deterministic** — it rendezvouses on `accesses_served`, which is bumped after
+> `resolve` hands over the `Arc` and before the memcpy, so no clock is involved.
+>
+> **★ The general rule this is an instance of, for L2-Q and for every future port:** *R1 is
+> about blocking calls, and a `Drop` is a call site.* Any handle whose destructor performs a
+> syscall — a mapping, a descriptor, a memfd — must not be reachable by a thread that is
+> allowed to hold a ranked lock, or the lock discipline is decided by a refcount race. The
+> two witnesses check the code you wrote; this checks the code the compiler writes for you.
+
 **F8. ★ The R5 commit arm is not deterministically reachable.** `map_guest`'s plan-side
 window lookup catches a removed window first, so neutering the generation re-check bites
 nothing: no test in the suite can distinguish an R5 failure from a plan-side refusal. Both

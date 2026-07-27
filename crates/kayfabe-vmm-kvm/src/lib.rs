@@ -64,6 +64,31 @@
 //! `assert_leaf_free` sits at the top of the execute phase of every op, so *"the syscall
 //! ran with no lock at all"* is a mechanism, not a comment.
 //!
+//! ## ★★ The `Arc` is a *release* handle too — why removed windows are retired, not dropped
+//!
+//! The paragraph above is the whole argument for the copy running outside the view lock,
+//! and it has a second half §14.8 F7(b) never wrote down. The `Arc` an accessor holds keeps
+//! the mapping alive — and it also **owns** it: if that clone is the last one, the accessor
+//! is the thread that runs `munmap`. `gpa_read`/`gpa_write` are in-lock **legal**, entered
+//! with one of the core's *ranked* locks held, so that release is an R1 violation:
+//!
+//! ```text
+//! R1 no-blocking-under-lock violation (l1_concurrency.md §3.3):
+//!   munmap (dropping a guest-physical window) while holding rank(s) [0]
+//! ```
+//!
+//! Neither witness could have predicted it. The ranked one is the one that fires, but only
+//! on the unlucky interleaving; the leaf one sees nothing, correctly, because no adapter
+//! lock is held and no critical section is any longer than it looks. **The defect is in
+//! ownership, not in locking**, so the fix is an ownership one:
+//! [`KvmMachine::remove_window`] hands the mapping to [`Plane::retire`] instead of dropping
+//! it, the machine keeps one reference no accessor can take away, and the release happens
+//! in [`Plane::collect_retired`] at a door that has just been proved lock-free on both
+//! halves. An accessor's clone is then never the last one — structurally, not by timing.
+//! [`AuditReport::window_releases_deferred`] and [`AuditReport::window_mappings_released`]
+//! are the two instruments: the first is the non-vacuity half (the removal really did land
+//! on a window someone was reading), the second says the address space came back.
+//!
 //! ## ★ The two tiers (§6.7), which the trait's one method group covers
 //!
 //! > **One memslot per window (or per arena grant) — never one per published object.**
@@ -235,6 +260,16 @@ pub struct AuditReport {
     pub ram_declared_exits: u64,
     /// The first such address, so a failure names one rather than merely counting.
     pub first_ram_declared_exit: Option<u64>,
+    /// ★★ Window removals that found an accessor **still holding the mapping**, and so
+    /// handed its release to the machine instead of performing it inline
+    /// ([`Plane::retire`]). This is the non-vacuity half of the R1 fix: with no live
+    /// accessor the deferral never happens, and a test that never reaches this state
+    /// proves nothing about who performs the `munmap`.
+    pub window_releases_deferred: u64,
+    /// ★ Retired window mappings actually released — one `munmap` each, always by a
+    /// thread that is lock-free by contract. At quiescence this must equal the number of
+    /// windows removed, or a mapping is parked forever.
+    pub window_mappings_released: u64,
 }
 
 #[derive(Debug, Default)]
@@ -261,6 +296,8 @@ struct Audit {
     guest_exits: AtomicU64,
     ram_declared_exits: AtomicU64,
     first_ram_declared_exit: AtomicU64,
+    window_releases_deferred: AtomicU64,
+    window_mappings_released: AtomicU64,
 }
 
 impl Audit {
@@ -320,6 +357,8 @@ impl Audit {
                 u64::MAX => None,
                 gpa => Some(gpa),
             },
+            window_releases_deferred: g(&self.window_releases_deferred),
+            window_mappings_released: g(&self.window_mappings_released),
         }
     }
 }
@@ -373,6 +412,11 @@ struct Installer {
     next_memslot: u32,
     max_memslots: u32,
     generation: u64,
+    /// ★★ **Removed windows whose mapping has not been released yet** — see
+    /// [`Plane::retire`]. The machine holds one reference to each, so an accessor's clone
+    /// can never be the last one and an accessor can therefore never be the thread that
+    /// `munmap`s.
+    retired: Vec<Arc<GuestWindow>>,
 }
 
 #[derive(Debug)]
@@ -435,6 +479,81 @@ impl Plane {
         // The ranked half is asserted inside `kayfabe-linux-raw` at every syscall
         // (§4.5), so it is deliberately NOT repeated here: one witness, three
         // enforcement sites, zero drift.
+        //
+        // ★ Every door that reaches this line has just been proved lock-free on both
+        // halves, which makes it — and only it — a legal place to `munmap` a window an
+        // accessor was still reading when it was removed. See `retire`.
+        self.collect_retired();
+    }
+
+    /// ★★ **Retire a removed window's mapping: the machine keeps the LAST reference.**
+    ///
+    /// `KvmVmm::resolve` hands an accessor an `Arc<GuestWindow>` precisely so the memcpy
+    /// can run *outside* the view lock (`l1_os_shell.md` §14.8 F2). That `Arc` is a
+    /// **release** handle as well as a read handle, and that is the half §14.8 F7(b) never
+    /// named when it wrote *"the `Arc` keeps the mapping alive either way"*: if the
+    /// accessor's clone is the last one, the `munmap` runs on the **accessor's** thread —
+    /// and `gpa_read`/`gpa_write` are in-lock **legal**, entered with one of the core's
+    /// ranked locks held (§6.1). A blocking syscall under a rank is exactly R1
+    /// (`l1_concurrency.md` §3.3), and it fired in the mean run about one time in six:
+    ///
+    /// ```text
+    /// GuestWindow::drop -> munmap -> lockwitness::assert_lock_free
+    ///   "munmap (dropping a guest-physical window) while holding rank(s) [0]"
+    ///   <- Arc<GuestWindow> drop <- KvmVmm::gpa_read <- SharedDevice::parse_pushbuffer
+    /// ```
+    ///
+    /// Note what does **not** fix it: the leaf witness sees nothing here (the view lock was
+    /// released before the copy, correctly), and no critical section is any longer than it
+    /// was. The defect is in *ownership*, not in locking — so the fix is an ownership one.
+    /// A removed window's mapping is parked here, with one reference the machine holds and
+    /// no accessor can take away, and released by [`Plane::collect_retired`] on a thread
+    /// that is lock-free by contract. The accessor's clone is then never the last, so the
+    /// accessor can no longer be the thread that releases — structurally, not by timing.
+    fn retire(&self, window: Arc<GuestWindow>) {
+        // Every other reference this machine had — the view map's, the installer's, and
+        // one per memslot — is already gone by the time `remove_window` calls this, so a
+        // count above one means an accessor is mid-copy. That is the state the whole
+        // mechanism exists for, and a test that never reaches it proves nothing.
+        if Arc::strong_count(&window) > 1 {
+            self.audit
+                .window_releases_deferred
+                .fetch_add(1, Ordering::SeqCst);
+        }
+        {
+            let (mut ins, _h) = self.installer();
+            ins.retired.push(window);
+        }
+        self.collect_retired();
+    }
+
+    /// Release every retired mapping no accessor still holds, **with every lock dropped**.
+    ///
+    /// `Arc::strong_count(w) == 1` is exact here rather than advisory: a retired window has
+    /// already been removed from the view map *under the view lock*, so `resolve` can never
+    /// mint another clone of it and the count only falls. One means this vector is the sole
+    /// owner, and dropping it is the `munmap`.
+    fn collect_retired(&self) {
+        let dead: Vec<Arc<GuestWindow>> = {
+            let (mut ins, _h) = self.installer();
+            if ins.retired.is_empty() {
+                return;
+            }
+            let (dead, keep): (Vec<_>, Vec<_>) = core::mem::take(&mut ins.retired)
+                .into_iter()
+                .partition(|w| Arc::strong_count(w) == 1);
+            ins.retired = keep;
+            dead
+        };
+        // ★ The `munmap`s themselves: outside the installer lock, outside the view lock,
+        // and — because every caller has just passed `about_to_syscall` — outside every
+        // ranked lock too. This is the line `GuestWindow::drop`'s `assert_lock_free` is
+        // an assertion about.
+        leaf::assert_leaf_free("releasing a retired window's mapping");
+        self.audit
+            .window_mappings_released
+            .fetch_add(dead.len() as u64, Ordering::SeqCst);
+        drop(dead);
     }
 }
 
@@ -527,6 +646,7 @@ impl KvmMachine {
                     next_memslot: 0,
                     max_memslots,
                     generation: 1,
+                    retired: Vec::new(),
                 }),
                 clock: Mutex::new((Instant::ZERO, DeferQueue::new())),
                 audit: Audit::new(),
@@ -692,6 +812,17 @@ impl KvmMachine {
             let (mut ins, _h) = p.installer();
             ins.window_slot.insert(slot_id, region);
             ins.windows.insert(region, installed);
+            // ★ The credits, under the lock that owns the state — the same argument as
+            // `map_guest`'s commit, one tier up: a `remove_window` racing this one debits
+            // `live_windows`/`live_memslots`/`window_bytes` under this lock, so crediting
+            // outside it lets the debit run first and wrap the counter.
+            Audit::bump(&p.audit.live_windows, &p.audit.peak_windows, 1);
+            Audit::bump(
+                &p.audit.live_memslots,
+                &p.audit.peak_memslots,
+                n_slots as i64,
+            );
+            p.audit.window_bytes.fetch_add(len, Ordering::SeqCst);
         }
         {
             let (mut v, _h) = p.view();
@@ -700,13 +831,6 @@ impl KvmMachine {
                 .map_err(|_| VmmError::Unsupported("a window that leaves the 64-bit space"))?;
             v.windows.insert(region, win_handle);
         }
-        Audit::bump(&p.audit.live_windows, &p.audit.peak_windows, 1);
-        Audit::bump(
-            &p.audit.live_memslots,
-            &p.audit.peak_memslots,
-            n_slots as i64,
-        );
-        p.audit.window_bytes.fetch_add(len, Ordering::SeqCst);
         Ok((region, slot_id))
     }
 
@@ -738,6 +862,22 @@ impl KvmMachine {
             ins.generation += 1;
             ins.placement_owner.retain(|_, r| *r != region);
             ins.window_slot.retain(|_, r| *r != region);
+            // ★ The debits, under the same lock that took the state away — see the note
+            // in `map_guest`'s commit. `w.placements` is authoritative only while this
+            // guard is held: the instant it is dropped, a concurrent `map_guest` commit
+            // may add one more.
+            Audit::bump(&p.audit.live_windows, &p.audit.peak_windows, -1);
+            Audit::bump(
+                &p.audit.live_memslots,
+                &p.audit.peak_memslots,
+                -(w.memslots.len() as i64),
+            );
+            Audit::bump(
+                &p.audit.live_placements,
+                &p.audit.peak_placements,
+                -(w.placements.len() as i64),
+            );
+            p.audit.window_bytes.fetch_sub(w.len, Ordering::SeqCst);
             w
         };
         {
@@ -746,21 +886,20 @@ impl KvmMachine {
             v.windows.remove(&region);
         }
 
-        // ---- EXECUTE (every lock dropped): the DELETE and the munmap happen in `drop`.
+        // ---- EXECUTE (every lock dropped): the memslot DELETEs happen in `drop`, here.
+        // The `munmap` does NOT — an accessor may still be copying out of this mapping,
+        // and if its `Arc` were the last one it would perform the release itself, under
+        // the ranked lock `gpa_read` is legally entered with. See `Plane::retire`.
         leaf::assert_leaf_free("dropping a window's memslots and mapping");
-        let n_slots = taken.memslots.len() as i64;
-        let n_places = taken.placements.len() as i64;
-        let bytes = taken.len;
-        drop(taken);
-
-        Audit::bump(&p.audit.live_windows, &p.audit.peak_windows, -1);
-        Audit::bump(&p.audit.live_memslots, &p.audit.peak_memslots, -n_slots);
-        Audit::bump(
-            &p.audit.live_placements,
-            &p.audit.peak_placements,
-            -n_places,
-        );
-        p.audit.window_bytes.fetch_sub(bytes, Ordering::SeqCst);
+        let Window {
+            window,
+            memslots,
+            ram,
+            ..
+        } = taken;
+        drop(memslots);
+        drop(ram);
+        p.retire(window);
         Ok(())
     }
 
@@ -1126,9 +1265,17 @@ impl Vmm for KvmVmm {
             Some(w) if w.generation == generation => {
                 w.placements.insert(slot_id, (offset, len));
                 ins.placement_owner.insert(slot_id, region);
+                // ★ The ledger moves WITH the state it counts, under the lock that owns
+                // the state. Outside it, a concurrent `remove_window` — which subtracts
+                // `w.placements.len()`, i.e. *including this one* — can land its debit
+                // before this credit and drive the counter through zero. That is a real
+                // `attempt to subtract with overflow` in debug and a silent wrap in
+                // release, and it is not a counting bug: it is the ledger and the state
+                // moving under different locks. Three atomic RMWs are not a syscall, so
+                // R1 has nothing to say about doing them here.
+                Audit::bump(&p.audit.live_placements, &p.audit.peak_placements, 1);
                 drop(_h);
                 drop(ins);
-                Audit::bump(&p.audit.live_placements, &p.audit.peak_placements, 1);
                 Ok(slot_id)
             }
             _ => {
@@ -1184,6 +1331,14 @@ impl Vmm for KvmVmm {
                 window
                     .restore(HostOffset::new(off), len)
                     .map_err(|e| host_refused("restoring anonymous backing", &e))?;
+                // ★ This debit deliberately stays OUTSIDE the lock, unlike the three
+                // above, and the asymmetry is the point. It cannot underflow: this slot's
+                // credit landed under the lock before `map_guest` returned it, the plan
+                // phase above already took the placement out of `w.placements`, so a
+                // racing `remove_window` cannot debit it a second time — and only the
+                // pairs that CAN race need to move together. Deferring it past the syscall
+                // is what keeps `live_placements` non-zero when the restore fails, i.e.
+                // what keeps the conservation assertion able to see a real leak.
                 Audit::bump(&p.audit.live_placements, &p.audit.peak_placements, -1);
                 Ok(())
             }

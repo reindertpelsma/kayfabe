@@ -7010,6 +7010,13 @@ struct RevokeChurn {
     /// Placements that succeeded before the window was torn down (must be > 0, or the
     /// race never happened).
     placed: usize,
+    /// Placements this thread restored itself, its window still alive.
+    restored: usize,
+    /// ★ Placements whose **restore** lost the race — the window was removed between the
+    /// placement's commit and its restore, so the slot went with the window. Contract
+    /// item 2, one iteration narrower than `held_slot_after_teardown` below; counted
+    /// rather than tolerated, so `placed` still has to balance.
+    lost_with_the_window: usize,
     /// The first refusal after it, exactly.
     first_refusal: Option<kayfabe_vmm::VmmError>,
     /// Placements that succeeded AFTER the first refusal — must be 0.
@@ -7061,7 +7068,26 @@ fn real_revoke_churn(
                     break;
                 }
                 t.placed += 1;
-                vmm.unmap_guest(slot).expect("restore");
+                match vmm.unmap_guest(slot) {
+                    Ok(()) => t.restored += 1,
+                    // ★ The window was removed in the gap between this placement's COMMIT
+                    // and its restore. That is contract item 2 exactly — the slot goes
+                    // WITH its window — so the only permitted outcome is the NAMED
+                    // `BadSlot` for THIS slot. Asserted by exact variant, never
+                    // `is_err()`, and counted so the identity below still has to balance.
+                    // (An earlier `.expect("restore")` here asserted a postcondition this
+                    // function's own doc comment contradicts, and failed ~1 run in 6.)
+                    Err(e) => {
+                        assert_eq!(
+                            e,
+                            kayfabe_vmm::VmmError::BadSlot(slot),
+                            "a restore that loses its race with the teardown must be the \
+                             named BadSlot for that slot — anything else would be a \
+                             `restore` into address space the adapter no longer owns"
+                        );
+                        t.lost_with_the_window += 1;
+                    }
+                }
             }
             Err(e) => {
                 if t.first_refusal.is_none() {
@@ -7108,6 +7134,8 @@ impl RealMeanReport {
         self.churn_b.placed = 0;
         self.churn_b.restored = 0;
         self.revoke_churn.placed = 0;
+        self.revoke_churn.restored = 0;
+        self.revoke_churn.lost_with_the_window = 0;
         // The slot ID depends on how many slots the racing threads minted first, which is
         // a clock. It is asserted EXACTLY above, against `held_slot_id`.
         self.revoke_churn.held_slot_id = 0;
@@ -7119,6 +7147,11 @@ impl RealMeanReport {
             accesses_served: 0,
             accesses_refused: 0,
             r5_revalidation_failures: 0,
+            // ★ Whether a window's release had to be DEFERRED depends on whether an
+            // accessor happened to be mid-copy when the teardown landed — a clock, and
+            // the sharpest one in this run. It is asserted as a bound below; the
+            // *number* of mappings released is the mode-independent half and stays.
+            window_releases_deferred: 0,
             ..self.audit
         };
         self
@@ -7467,6 +7500,18 @@ fn a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_
             "({name}) ★ NON-VACUITY for the ledger: it really did count three live \
              windows at once. A ledger that was never incremented balances perfectly"
         );
+        assert_eq!(
+            a.window_mappings_released, 3,
+            "({name}) ★★ and the address space was really GIVEN BACK: three windows \
+             removed, three `munmap`s performed — every one of them by a thread the \
+             adapter had already proved lock-free. A removed window whose mapping an \
+             accessor was still reading is parked until nobody holds it (§14.8 F7(b)'s \
+             unnamed half), and the hazard the parking removes is that the accessor's \
+             own `Arc` drop performs the release: `gpa_read` is entered WITH rank 0 held, \
+             so that `munmap` is an R1 violation. `window_bytes == 0` above is \
+             bookkeeping and would be true of a mapping nobody ever released; this is the \
+             syscall"
+        );
         assert!(
             a.peak_placements >= 1,
             "({name}) ★ NON-VACUITY: the churn really did hold a live placement"
@@ -7506,6 +7551,17 @@ fn a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_
         assert_eq!(
             r.revoke_churn.placed_after_refusal, 0,
             "({name}) a removed window accepted a publication again — a resurrected              mapping"
+        );
+        assert_eq!(
+            r.revoke_churn.placed,
+            1 + r.revoke_churn.restored + r.revoke_churn.lost_with_the_window,
+            "({name}) ★ the doomed window's conservation identity: every placement is the \
+             one deliberately HELD across the teardown, or one this thread restored \
+             itself, or one whose slot went with its window ({} restored, {} lost). The \
+             SPLIT is a clock and is normalised away for the cross-mode differential; the \
+             identity is not, and a third outcome would be a MAP_FIXED nobody owns",
+            r.revoke_churn.restored,
+            r.revoke_churn.lost_with_the_window,
         );
         assert_eq!(
             r.revoke_churn.held_slot_after_teardown,
