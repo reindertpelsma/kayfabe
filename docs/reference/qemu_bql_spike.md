@@ -6,7 +6,7 @@ design had left as instructions rather than facts: does the mechanism §6.3 name
 target, what does dispatching without the BQL actually buy, and what does it break. Measured
 **2026-07-26** on the serialized vast.ai bench (KVM + GA106 / RTX 3060, host driver
 580.159.04), against **QEMU 9.2.0** — the version in `/opt/qemu-src`, pinned by
-`scripts/build_qemu.sh:9`.
+`C: scripts/build_qemu.sh:9`.
 
 **Why it is a reference and not a design doc.** §6.3 told the L2 adapter to *"verify it exists
 and behaves as expected on the target QEMU version — this is an API-availability check, not an

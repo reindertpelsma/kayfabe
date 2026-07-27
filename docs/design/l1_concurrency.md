@@ -6,6 +6,45 @@ layer drives the proven L0 core (`core_state_and_consolidation.md` at `1e8d55b`)
 real concurrency — N vCPUs, blocking host ioctls, interrupt delivery — without breaking
 a single core invariant.
 
+> ### ⚠️ READ FIRST — audit findings, 2026-07-27 (doc audit). This document is 5,700 lines and its later sections retract its earlier ones.
+>
+> **1. `crates/` line citations in §12.39–§12.42 are systematically DRIFTED.** A sweep resolved
+> every Rust `file:line` in this document against the working tree: **the ones written in
+> §12.41 still match; essentially none of those written in §12.39/§12.40 do.** Those entries
+> cite a tree predating `061988a` (`ResourceKey`) and `1132ea8` (`ClientKey`), which reshaped
+> `rmgraph.rs`, `gpu.rs`, `project.rs` and `kayfabe-fwd/src/lib.rs` together. Two examples of
+> the flavour: `rmgraph.rs:360` is cited for `MAX_PARKED` (**the constant is real — at `:656`**;
+> `:360` is an unrelated struct field), and `gpu.rs:1040`/`:1701`/`:2579` are cited for
+> `next_batch`, **which is not in `gpu.rs` at all** — it lives in
+> `kayfabe-completion/src/lib.rs:333`. ★ Note the pattern: the *facts* have generally survived
+> and the *anchors* have not, so **re-resolve by symbol name, never by line.** Individual
+> corrections were not made — there are ~40 and they would rot again within the week.
+>
+> **2. Four normative claims are retracted by later sections of this same document**, and are
+> now marked at their sites: §3.5 mechanism 2 (wire concurrency from N workers), §2's *"stalls
+> only its own guest thread"*, §10.6's B3 ledger row, and §3.3's R5 (*refuse* → *re-resolve or
+> refuse*, the edit §12.9 requested and never received).
+>
+> **3. `GpuError::CondemnedMerge` is asserted alive in four places and was retired.** §12.37
+> retired it; only §12.38's re-derived table records that. The variant does not exist —
+> `crates/kayfabe-core/src/gpu.rs:1568` reads *"(There were four: `CondemnedMerge` was retired
+> by §12.37 …)"*. Treat every other mention of it in this document as historical.
+>
+> **4. `[unverified]` — one load-bearing citation names a file that does not exist.**
+> `C: memory/cuctxcreate_800_pinned.md:46,49` is not present anywhere in
+> `/workspace/nvidia-gpu-passthrough`. It is the *sole* corroboration offered for *"the C's own
+> bench corroborates: 'UVM's RM client (0xc1d00001)', singular"* — a fact §12.27 then builds a
+> grouping rule on. **The conclusion is independently safe** (the hardware kprobe measurement in
+> `../reference/rm_semantics_measured.md` §3 establishes it directly), but this particular
+> supporting citation cannot be followed. **What would settle it:** locate the note in the C
+> repo's agent-memory tree and re-cite it by its real path, or drop it and lean on §3.
+>
+> **5. Test counts are a chain (`247→257→…→372`) that ends 100+ behind.** HEAD reports
+> **482 tests** (`42d850c`). The chain is dated per step and is useful *as history*; it is not a
+> current figure. Same for the TSan line (*"28 tests across the 4 threaded targets"*): still
+> exactly 4 targets, but they now hold ~65 tests, and `cancellation.rs` and `reactor_os.rs` are
+> threaded and outside the job.
+
 **Revision #37 (2026-07-25, owner-directed):** this revision folds the review's
 pressure points (`l1_architecture_summary.md` §6.3, P1–P5) and the owner's concurrency
 refinements back into the design of record. In brief: the lock discipline is promoted
@@ -148,8 +187,13 @@ refinement.
   blast-radius boundary reused as the concurrency boundary. Blocking itself is
   confined not by holding a lock but by **ownership**: a pending verb occupies one
   checked-out worker and one blocked guest thread, nothing else. Two procs — and two
-  threads of the SAME proc (§3.5) — proceed in parallel; a wedged host ioctl stalls
-  only its own guest thread (with one honest residual — §11 B3).
+  threads of the SAME proc (§3.5) — proceed in parallel; ~~a wedged host ioctl stalls
+  only its own guest thread (with one honest residual — §11 B3)~~ **★ 2026-07-27, doc audit:
+  this understates §11 B3 by an order of magnitude.** B3 as rewritten says a wedged verb blocks
+  **every other isolate's** RM calls, in D state, *including every user proc's* — a
+  device-wide platform limit, not "one honest residual". See B3, and the `[unverified]` note on
+  the API-lock citation in `../reference/rm_semantics_measured.md` §1, which is what decides
+  whether the blast radius is per-GPU or global.
 - **The reactor loop** is the L1 shell of the §6 completion-source reactor — and the
   F3 fix done right: one `epoll_wait` (blocking; one wake per signal, which is F1's
   bound — §4.2) over the registered
@@ -327,9 +371,19 @@ intra-process guarantee: one coherent spec, not two separate fixes.
   pattern — the verb round-trip gap, a pool-full wait, the observe→pump transition —
   MUST re-resolve its references and re-check its decision on re-acquire; it never
   carries a stale reference or a pre-gap decision across the gap. MISS=FAULT applies
-  to staleness too: if re-validation finds the target gone, the op surfaces a refusal
-  — it does not "finish what it started" against a world that no longer contains its
-  target.
+  to staleness too: if re-validation finds the target gone, the op ~~surfaces a refusal~~
+  **re-resolves OR refuses** — it does not "finish what it started" against a world that no
+  longer contains its target.
+  > **★ CORRECTED 2026-07-27 (doc audit) — applying the edit §12.9 asked for and never got.**
+  > §12.9 records that building R5 as written *"immediately broke the existing multi-thread
+  > smoke test"* and that refusing **every** staleness *"is a worse bug than the use-after-retire
+  > R5 was written to prevent"*. Its conclusion, verbatim: *"§3.3's R5 text should read
+  > 're-resolve **or** refuse' — the doc's own §8.4 canary wording already said 're-resolves or
+  > refuses' while R5's normative text said only refuse. **The canary wording was right.**"*
+  > §12.2 shows the precedent (*"§2 and §3.3 have been corrected in place"* — done for R1 and
+  > R3, skipped for R5), so this is the correction finally landing, not a new decision.
+  > **What is unchanged:** a staleness that cannot be re-resolved is still a refusal, never a
+  > completion against a vanished target.
   - *Enforcement:* route-phase products are typed as pre-validation *hints* — IDs,
     never held references (the core's ID-graph shape and inherited law I3 already
     force re-resolution through the graph) — plus the mean test's staleness canaries
@@ -422,9 +476,19 @@ The mechanism is nothing new — the pieces above, composed:
    regardless of how long A's verb has been pending. Without R1, the proc lock is a
    convoy and the guarantee is unmeetable *by construction*; this is why the lock
    discipline and #37 are one spec, not two.
-2. **N workers per isolate (§7.2)** mean B's own verb does not queue behind A's on
+2. ~~**N workers per isolate (§7.2)** mean B's own verb does not queue behind A's on
    the wire: two single-in-flight workers = two concurrent RM verbs from one
-   process's threads. (At the pool bound, B waits for a worker — bounded
+   process's threads.~~
+   > **★★ RETRACTED (2026-07-27, doc audit) — mechanism 2 is false, and §7.2 itself says so.**
+   > §7.2's own `★ CORRECTED (§12.26)` block concludes *"the pool buys ~nothing on the wire"*,
+   > and §11 B6 states it flatly: *"N workers on one isolate produce N **queued** host threads,
+   > not N concurrent RM operations."* **[src]** RM takes the per-client lock in
+   > `LOCK_ACCESS_WRITE` at every ioctl-reachable entry point
+   > (`../reference/rm_semantics_measured.md` §1). The correction was inserted into §7.2 without
+   > deleting this sentence, and §3.5 — the section the whole revision is named after — was
+   > never revisited. **What survives:** guarantee 3 (the poll path needs no worker) and the
+   > *liveness/latency-isolation* value of the pool. **What does not:** any claim of wire
+   > concurrency between two threads of one proc. (At the pool bound, B waits for a worker — bounded
    backpressure, not a lock convoy; and the poll path needs no worker at all, so
    guarantee 3 holds even at pool size 1.)
 3. **The poll path is STRUCTURALLY independent of the RM-verb path.** A completion
@@ -1051,11 +1115,22 @@ cited section, not only here. Two items remain genuinely open.
    defer-armed backstop while completions are outstanding; a *periodic* redeliver
    sweep stays forbidden (F1) — the "harmless safety poll" that historically creeps
    in during a debugging session.
-6. **The §11 B3 residual (system-proc stall) — still OPEN.** Materially improved by
+6. **The §11 B3 residual (system-proc stall) — still OPEN.** ~~Materially improved by
    #37: a stalled system verb no longer holds the device read lock (R1), so it no
    longer blocks apply/pump behind the write lock, and other system verbs proceed on
    other pool workers; the watchdog still converts unbounded → bounded-and-loud.
-   Owner call remains: accept as residual, or demand a stronger story before L1-M1.
+   Owner call remains: accept as residual, or demand a stronger story before L1-M1.~~
+   > **★★ SUPERSEDED (2026-07-27, doc audit) — this ledger entry still states, verbatim, the
+   > claim §11 B3 was rewritten to retract.** B3 now reads: the R1 clause *"is true of **our**
+   > locks and irrelevant to the outcome."* Three of the four assertions above are dead:
+   > *"no longer blocks apply/pump"* (our locks are not what blocks it), *"other system verbs
+   > proceed on other pool workers"* (they queue in D state on the same uninterruptible
+   > `down_write` — see the §3.5 retraction), and *"the watchdog converts unbounded →
+   > bounded-and-loud"* (B3: it is *already* bounded, by RM's own timeouts — the watchdog does
+   > not do the converting). **The owner call has also already been made** and is recorded in
+   > B3: *"accept a documented **platform limit**"*, not "accept a residual weakness". Left
+   > visible rather than rewritten because the drift here is instructive — B3 was corrected in
+   > place and its own summary line in this ledger was not.
 7. **The reactor boundary (§6) — decided (#37).** Core owns the pure
    source/dispatch/notify model; L1 owns fds/epoll/eventfd. The vocabulary rule —
    "notifiable source" and "completion source" in core, never "eventfd"/"epoll" —
@@ -1628,7 +1703,7 @@ leave almost none of them.**
 The owner's bar for the fix, verbatim: *"clean cleanup on gpu getting idle, restart
 driver, process killed, isolate can be gc collected, etc etc. no leaks, safe."* So each
 gap landed with a test that asserts the reclamation **happens**, not that the API now
-permits it — `tests/teardown_reclaim.rs`, plus an acquire/release ledger
+permits it — `tests/tests/teardown_reclaim.rs`, plus an acquire/release ledger
 (`kayfabe_mocks::HostLedger`) replayed from the mock's own verb log, which is the
 invariant that generalises all four: *every host object acquired is released exactly
 once, every mapping unmapped exactly once, nothing released that was never acquired.*
@@ -1827,7 +1902,7 @@ two-phase reset ordering (`C: src/qemu/nvkvm_gpu_emul.c:2450-2478`, `:3462-3487`
 boot-gating state at fn-47, write position at the re-handshake, **preserve the seqNums**,
 or it is an Xid 119 / the #12 hang).
 
-Pinned by `tests/teardown_reclaim.rs` (14 tests), every one of which was bite-checked by
+Pinned by `tests/tests/teardown_reclaim.rs` (14 tests), every one of which was bite-checked by
 reverting its fix and confirming the failure named the right thing — including the one
 that matters most, where re-introducing the in-guard reap produces the R1 panic verbatim
 rather than a silent block.
@@ -3116,7 +3191,7 @@ before this pass (a grep for it hit only `kayfabe-fwd`'s own source). "Retry is 
 an assumed claim, and this campaign has been a sequence of assumed claims turning out to be
 half-true.
 
-`tests/retry_ledger.rs` (3 tests) makes it measured. Every attempt in it has **already
+`tests/tests/retry_ledger.rs` (3 tests) makes it measured. Every attempt in it has **already
 allocated real host objects** — a host VAS, a host memory object, a host GPU mapping —
 before it loses its race, and every ordering edge is a `VerbHold` latch (no sleeps, no
 timing).
@@ -3410,7 +3485,7 @@ first post-fix run with an `UnmapGpuVa`. Its expectation moved from a script-bui
 the same set equality the headline test uses — a strictly stronger statement of the bound's
 own question.
 
-`tests/t0_subset_free.rs` is the focused suite (6 tests): the two planes' release order, the
+`tests/tests/t0_subset_free.rs` is the focused suite (6 tests): the two planes' release order, the
 GPA return *and* its reuse, the quiet proc's backstop sweep, the in-flight regression above,
 and the one disposition T0 deliberately does **not** own (a retired isolate refuses the
 disposal, so its residue is the session's death).
@@ -5511,7 +5586,7 @@ Fixed and tested.
 **Status: LANDED.** 365 → **372 tests** (six focused port-contract tests + one composed
 mean test; the mean one is in `l1_mean.rs`, where the doctrine says it belongs). Gate
 clean (`KAYFABE_SLOW=1 cargo test --workspace`, `clippy --all-targets -D warnings`,
-`fmt --check`, `check --target aarch64-unknown-linux-gnu`). Uncommitted, for review.
+`fmt --check`, `check --target aarch64-unknown-linux-gnu`). ~~Uncommitted, for review.~~ **★ Committed as `bd1a547 vmm: prove-RAM at the port — closes the guest-steerable BQL inversion (#43)` — i.e. this line was stale in the same commit that introduced it (noted 2026-07-27, doc audit).**
 
 **The brief** (`l1_os_shell.md` §10.1 item 6, from the `qemu_102_facilities.md` inventory):
 `Vmm::gpa_read`/`gpa_write` are classified **in-lock legal** on the grounds that they are
@@ -5591,8 +5666,32 @@ region map is mutated by the coarse memory plane (§6.7 window install/remove �
 and read from an in-lock-legal accessor with rank 0 or 1 held. That needs synchronisation,
 and it must be a **leaf**: ours, ranked below rank 1, acquiring nothing beneath it, with a
 bounded memcpy as its critical section. Closing a foreign-lock hazard by introducing an
-*unranked* lock of our own would trade one invisible inversion for another. The test
-harness models exactly this shape (`kayfabe_tests::SharedVmm`).
+*unranked* lock of our own would trade one invisible inversion for another. ~~The test
+harness models exactly this shape (`kayfabe_tests::SharedVmm`).~~
+
+> **★★★ FALSIFIED BY THE VERY NEXT ADAPTER (2026-07-27, doc audit) — `SharedVmm` is not the
+> model of the correct shape; it is the model of the BUG.** Commit `1336ce1 vmm-kvm: L1-M2
+> stage c — the REAL memory plane. R1 survives real syscalls, but only with TWO adapter locks`
+> says so in as many words:
+>
+> > *"THE ADAPTER NEEDS TWO LOCKS, NOT ONE. The obvious adapter — one mutex around everything,
+> > **which is exactly the shape `SharedVmm` already has** — is a LIVE R1 VIOLATION WITH EVERY
+> > EXISTING ASSERT GREEN. A thread holding rank 0 calls the in-lock-LEGAL `gpa_read`, blocks on
+> > the adapter's mutex, and waits out a peer's memslot ioctl. That is §6.3's ABBA rebuilt out of
+> > our own parts, and `kayfabe_util::lockwitness` is STRUCTURALLY BLIND to it because an
+> > adapter's lock has no rank."*
+>
+> **The paragraph's reasoning is right and its exemplar is wrong** — a one-lock leaf is exactly
+> the unranked-inversion trade the sentence before it warns against. The shipped shape is **two**
+> leaf locks, split by what the critical section *costs*: a **VIEW** lock (BTreeMap probe + `Arc`
+> clone, memcpy outside it) and an **INSTALLER** lock (bookkeeping only, syscall outside it).
+>
+> ★ **And note which part of the sentence did the damage.** "It must be a leaf, ranked, bounded"
+> was correct and remains normative. The failure was the appended *"the harness already models
+> this"* — a claim of existing validation, attached to a rule, that made a satisfied
+> precondition out of an unexamined one. **`1336ce1`'s own headline is that every assert stayed
+> green**, which is `testing_doctrine.md` §1 exactly: the instrument was green on a path it
+> could not see.
 
 #### 4. Interactions, checked rather than assumed
 

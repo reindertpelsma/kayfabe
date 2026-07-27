@@ -61,6 +61,29 @@ to confirm, it is marked.
 > where one has moved by the time you read this, the pin is what makes the citation honest
 > rather than wrong. A separate design for the next L1 milestone's OS shell is also in
 > progress and is referenced by name only.
+>
+> > ### ⚠️ THE PIN HAS EXPIRED — read this before following any citation (2026-07-27, doc audit)
+> >
+> > `3569d46` is now **51 commits** back. A pin makes a citation *honest*; it does not keep it
+> > *useful*, and past some distance the difference stops mattering to a reader who follows the
+> > link and lands on unrelated code. **A sample of 30 `crates/` citations was resolved against
+> > the current tree: 3 still match, 24 point at unrelated code.** `kayfabe-core/src/gpu.rs`
+> > alone grew from ~1,100 lines to **2,790**, so essentially every §3.2 and §7 anchor into it
+> > has moved.
+> >
+> > **Three findings are worse than "moved" and are corrected in place below**, because in each
+> > the *claim*, not just the line, is now false: §7.8's `Isolate::rm` report (five cited sites,
+> > **one** occurrence left tree-wide), §3.2 G1's *"there is no field for the memory object's
+> > identity"* (the field exists — `kayfabe-mmu/src/lib.rs:46-47` names the gap it closed), and
+> > §3.4's retry-bound *"that bound is not tested"* (`tests/tests/retry_ledger.rs` drives
+> > `MAX_COMMIT_RETRIES` directly).
+> >
+> > **The pin is not removed and the document is not re-pointed wholesale** — that would destroy
+> > the record of what was true when the analysis was done, which is most of this document's
+> > value. Treat every `file:line` here as *archaeology*, and re-resolve by **symbol name**
+> > before relying on it. ★ Note also that §7.11 was edited in place on 2026-07-26 while
+> > §7.1–§7.10 were not, so the document is already a mix of pinned and re-pointed references
+> > with nothing marking which is which.
 
 ---
 
@@ -2172,7 +2195,7 @@ refuses a case the enforcing path accepts, so a caller pre-checking with it gets
 submission the ring path would allow.
 
 `README.md:33-34`, `:72`, `:114`; `ARCHITECTURE.md:58`, `:123`;
-`docs/design/core_state_and_consolidation.md:290`; `crates/kayfabe-core/src/rmgraph.rs:223-232`;
+`docs/design/core_state_and_consolidation.md:`~~`290`~~`301` *(re-resolved 2026-07-27: `:290` is now unrelated prose)*; `crates/kayfabe-core/src/rmgraph.rs:223-232`;
 `crates/kayfabe-fwd/src/lib.rs:1725`, `:1748-1760`, `:841`.
 
 ---
@@ -2191,11 +2214,11 @@ and — for sections 1.2 to 1.5 — the C repository's forwarding-model and addr
 the fuzzing workspace.
 
 **Numbers:** 203 tests = 200 test functions (156 integration across 19 files, 44 unit) plus 3
-documentation tests, counted statically and corroborated by `core_mutation_gate.md:239`. Fast
+documentation tests, counted statically and corroborated by `core_mutation_gate.md:`~~`239`~~`245` *(re-resolved 2026-07-27 — and note `:239` had drifted onto the **discredited** ICE-contaminated campaign row, i.e. the citation had come to point at the one table in that file explicitly marked unusable)*. Fast
 path *about 18 seconds*, per the same line; the 122.7 s to 17.1 s improvement is from commit
 `6195b7c` and was measured at 192 tests, before eleven more landed. Mutation: 99.2% (245/247)
 on the pure core and 92.44% (159/172) on the L1 surface, both from `core_mutation_gate.md`;
-threshold 91% from `ci.yml:274`. Race detector: 28 tests, 4 targets, 0 races, from
+threshold 91% from `ci.yml:`~~`274`~~`585` *(re-resolved 2026-07-27)*. **★ And the threshold itself is now marked `⚠ PENDING RE-DERIVATION` in CI** — `ci.yml:579-584` says the 91 was measured against the old four-path scope and *"do not quote the score until it is re-derived"*; see the note in `core_mutation_gate.md`. Race detector: 28 tests, 4 targets, 0 races, from
 `l1_concurrency.md` §12.15 and the commit that made it a standing job. Constants (pool of 4,
 retry bound of 8, the capacity caps, the fence jump guard) read from source.
 

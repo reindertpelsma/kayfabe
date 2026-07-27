@@ -298,6 +298,23 @@ of the six campaigns and it did not materialize.
 
 ## 6. The test story (why a reviewer can trust this foundation)
 
+> **⚠️ COUNTS ARE A 2026-07-25 SNAPSHOT (flagged 2026-07-27, doc audit).** Measured at head
+> today: **≥531 `#[test]` functions**, **28 integration suites** in `tests/tests/`, **212 unit
+> tests** in `crates/**`. So the breakdown below is off by roughly **4×**, and its *shape* has
+> changed too — three crates that did not exist when it was written (`kayfabe-linux-raw`,
+> `kayfabe-vmm-kvm`, `kayfabe-shell`) now carry a large share of the suite.
+>
+> **★ One item is not stale but simply wrong now: there is no `#[ignore]`d soak.** `#[ignore]`
+> has **zero** occurrences tree-wide; the slow tests are gated on `KAYFABE_SLOW=1` via
+> `skip_slow!` instead — and there are **5** of those, not the "two" that `README.md`,
+> `ARCHITECTURE.md` and `l1_architecture_summary.md` all still say.
+>
+> **The numbers are left as written, deliberately.** They are dated and they are the honest
+> record of what this consolidation measured. `l1_architecture_summary.md` §7.11 already
+> identified un-dated counts as this repo's most reliable rot; the fix is to date them, not to
+> refresh them into the next stale value. **Do not cite this section for a current figure** —
+> `l1_architecture_summary.md` §7.11's own "RESOLVED" numbers went stale in one day.
+
 **143 tests green** (+1 `#[ignore]`d long soak), clippy `-D warnings` clean, suite
 ~2:40 (proptest-dominated). Breakdown:
 

@@ -1,11 +1,84 @@
 # L1-M2 — the OS shell: reactor, raw module, VMM seam, and the reclamation lifecycle (decision #38)
 
-**Status:** design for review, 2026-07-25 · Written **before any L1-M2 code**, per the
+**Status:** ~~design for review, 2026-07-25 · Written **before any L1-M2 code**~~ **★ the
+header is stale: this document now carries build findings through M2-e (§14.1–§14.10) and
+corrections dated 2026-07-27** · per the
 standing method (design-first on the highest-risk seam; decision #34 did this for L1-M1
 and §12 of `l1_concurrency.md` is the receipt). Scope: the **OS half** of L1 — the real
 reactor loop under the core's pure completion-source port, the one audited `unsafe`
 module, the real `Vmm`, and — elevated by the owner to a co-equal pillar — **cancellation
 and the whole-lifecycle reclamation invariant**.
+
+> ### ⚠️ AUDIT FINDINGS, 2026-07-27 — read before treating any statement here as current
+>
+> This document is 4,600 lines and **§14's build log routinely retracts §1–§13's design text**.
+> Corrections are marked at their sites; these are the ones that were *not* fixable in place,
+> or that a reader needs up front.
+>
+> **1. Named things that DO NOT EXIST in the tree** (the document uses each in the present
+> tense). Verified by grep, 2026-07-27:
+>
+> | named as existing | reality |
+> |---|---|
+> | `ledger.assert_conserved_at_quiesce()` (§7.8) | no such method; tests use a local `fn assert_conserved`, over `HostLedger::{leaked, free_of_unknown}` |
+> | `Reservation::restore` (§6.7, decision #37) | it is **`GuestWindow::restore`** — `kayfabe-linux-raw/src/window_unsafe.rs:228`. §14.8 F3 already says *"It did not"* exist |
+> | `DeferQueue` in **`kayfabe-util`** (§6.4) | it is in **`kayfabe-vmm`** (`src/lib.rs:623`), as §14.8 states |
+> | `PageClass` / `PageClass::LockPath` — *"now a **type** rather than a sentence"* | **0 occurrences** in `crates/` or `tests/`. It is design vocabulary in `guest_memory_lock.md`, not a type |
+> | `RegionLock` / `RegionAccess` — *"the core **holds** an opaque guard"* | **0 occurrences** in code |
+> | `Spine::device_reset`, `MAX_REAP_DEFERRALS`, `SourceKind::IsolateExit`, `Dispatch::IsolateExited` | **0 occurrences**; correctly still M2-f's unbuilt work, but written in the indicative |
+> | `mmap_unsafe.rs`, `region_unsafe.rs`, `region.rs` (§4.1.1's file split) | three of the seven names never existed; §14.5 F2 records that the split was *inverted* in the build |
+>
+> ★ **The pattern is one thing, not seven:** a design doc naming its own future types is
+> legitimate and this repo does it deliberately — but **nothing here distinguishes a name that
+> is live code from a name that is a proposal**, and several are written as accomplished fact.
+> That is the `memory_region_clear_global_locking()` failure (§6.3.1) with the arrow pointing
+> inward instead of at QEMU.
+>
+> **2. A CI gate described as landed is not in `ci.yml`.** §5.2 item 4 and §9.3's table both
+> carry the **narrow page-size grep** (*"a bare `4096`/`0x1000`/`>>12` in the raw or rt
+> crates"*), §5.2 in the past tense. `grep -n` over `.github/workflows/ci.yml` finds no such
+> step. Conversely the **GPA-accessor gate** *is* in CI (`ci.yml:278`) and is absent from
+> §9.3's table, which makes §10.1's *"nothing enforces it yet"* stale in the other direction.
+>
+> **3. Unresolved internal contradictions — reported, NOT resolved, because the code does not
+> settle them.** Each is a question for the owner:
+> - **The QEMU backport is simultaneously cancelled and required.** §10's decision box says
+>   *"we require a minimum QEMU; we do **NOT** carry a backport … The backport is
+>   **cancelled**"*, and §9.3 agrees. But §7.9's trap-path row, §10's own *"≥ 10.2.0, **or our
+>   patched 9.2.0**"*, and decisions #35 and #48 all still treat the backport as the remedy.
+> - **The reentrancy-guard pairing** is *"upstream's, not ours to maintain"* (§10.1) and still
+>   a task we owe (L2-Q task 2, §9.3's pairing gate, decisions #35/#37).
+> - **ioeventfd's hand-off clause** — §10.1 states it *deletes* L2-Q task 4's
+>   "hand off, never block" rule and §6.6 item 2's compensating rule. Both survive verbatim.
+>
+> **4. Counts inside the document disagree with each other.** Not corrected — they will rot
+> again — but do not quote them: capability groups (*"eight → seven"* vs a 9-row table vs **8**
+> in the trait); §7.9's *"eight rows"* (it has **11**); ledger *"seven properties"* vs *"the six
+> assertions"*; *"seven stages"* vs *"six stages"*; trybuild *"all ten rows"* (**9** files
+> exist, covering 8 of §4.6's 10 — so the M2-b gate was declared green against an incomplete
+> matrix); *"13 of 13 crates"* (there are **16**; 15 opt in); *"§12 has fifteen entries"*
+> (`l1_concurrency.md` §12 now runs to **§12.43**); and §12's *"the word 'agnostic' appears
+> **zero times** in this document"*, which now appears 12 times in this document.
+>
+> **5. `[unverified]` — every QEMU and cloud-hypervisor citation.** There is no QEMU tree and
+> no cloud-hypervisor checkout on this machine, and `/opt/qemu-src` is bench-only. That covers
+> ~40 `file:line` citations in §6.3.1, §10.1 and §14.8, plus `vm-device/src/bus.rs:41`,
+> `VmOps` and `BusDeviceSync` (see the note in §6.3). They are version-pinned, which is the
+> right discipline — but **pinned is not checked**, and §6.3.1 exists because a confidently
+> named QEMU symbol had been dead for five years.
+>
+> **6. Two second-hand `ogkm` citations do not match.** Both are attributed to the C's
+> comments, which §14.3 already established are unreliable: `osinit.c:2363` (cited for *"SEC2
+> Booter Load raises WPR2"* — the line is `gpumgrThreadDisableExpandedGpuVisibility()` in an
+> error path) and `kernel_gsp_tu102.c:570` (cited for `GspStatusQueueInit`/`msgqRxLink` — the
+> line is the Booter Load error branch). The `ogkm` checkout is 610.43.02 against a bench at
+> 580.159.04, which is exactly the drift §14's own version caveat predicts.
+>
+> **7. A newer design doc covers §7.6 T4's territory and is never cited here.**
+> `mode2_gsp_port_plan.md` (created `664df3d`) covers the GSP FSM, `device_reset` and the
+> fn-47/re-handshake question. §7.6 T4, decision #28 and M2-f still present themselves as the
+> design of record for that surface. Likewise the crate inventory does not know `kayfabe-trace`,
+> `kayfabe-shell` or `kayfabe-vmm-kvm` exist.
 
 **Why a separate doc rather than a §13 of `l1_concurrency.md`:** that doc is the design of
 *record for concurrency* — threads, locks, completion flow — and its §12 contact log is
@@ -1169,7 +1242,23 @@ not enough.**
 > trap path without lockless MMIO dispatch (§6.3.1) — is **true for QEMU and false for
 > cloud-hypervisor**, where MMIO dispatch is a synchronous `VmOps` call **on the vCPU thread**
 > with no VM-wide lock. On CH the entry path holds at most the per-device lock of the class
-> table above, and nothing at all under the direct-`BusDeviceSync` escape. Do not read the
+> table above, and nothing at all under the direct-`BusDeviceSync` escape.
+>
+> > **⚠️ `[unverified]` (flagged 2026-07-27, doc audit) — the CH half of this section has never
+> > been checked against cloud-hypervisor's source.** `VmOps`, `BusDeviceSync` and
+> > `vm-device/src/bus.rs:41` are **upstream cloud-hypervisor / rust-vmm** names. CH is **not a
+> > dependency of this workspace and not vendored** (`grep vm-device Cargo.lock` → nothing), so
+> > nothing in this repo can catch it if any of those three drifts or was never right — and
+> > `memory_region_clear_global_locking()` (§6.3.1) is the standing proof that an
+> > authoritatively-named upstream symbol in this document can be five years dead. The
+> > *conclusion* drawn from them is load-bearing: §7.9's trap-path row records **"CH —
+> > unconditional pass expected"** on this basis alone.
+> > **What would settle it:** clone cloud-hypervisor at a named tag, confirm the three symbols
+> > exist with those signatures, and record the tag here the way `qemu_102_facilities.md` §12
+> > requires for QEMU. Until then treat every CH claim in this document as an *argument*, not a
+> > source read — the `[src]` tag is not attached to any of them, and that omission is correct.
+>
+> Do not read the
 > conclusions here as properties of "a VMM"; read them as properties of *this* VMM, which is
 > exactly what §6.0's gate exists to keep visible.
 >
@@ -1235,7 +1324,7 @@ mechanism changed**, and one thing the design did not know about arrived with it
 the target QEMU version** — this is an API-availability check, not an assumption.* The check
 was run. **[src]** The function was **removed in QEMU 5.2.0** (commit `4174495408af`, 2020) **as
 dead code**: its only user, the ACPI PM timer, had been reverted in 2016 for real bugs. It is
-**absent from our target, 9.2.0** (`/opt/qemu-src`, built per `scripts/build_qemu.sh:9`), where
+**absent from our target, 9.2.0** (`/opt/qemu-src`, built per `C: scripts/build_qemu.sh:`~~`9`~~`10` *(off-by-one: `:9` is blank; `QEMU_VERSION="9.2.0"` is `:10`. Corrected 2026-07-27, doc audit)*), where
 `prepare_mmio_access()` takes the BQL unconditionally (`system/physmem.c:2713`). The KVM exit
 itself is BQL-free (`accel/kvm/kvm-all.c:3182`, *"Called outside BQL"*) — the lock is re-taken
 **below** it, with no per-region opt-out. Pinning to a version that has it means **QEMU 5.1
@@ -1734,6 +1823,36 @@ before any SRCU synchronisation. Consequence for API shape: an **idempotent "ens
 window is installed" call costs nothing**, so the shell may call it unconditionally rather
 than tracking installed-ness itself. Cheap idempotence beats a cache that can go stale.
 
+> ## ★★★ RETRACTED (2026-07-27) — the "CORRECTION" immediately below is itself WRONG, in all three of its parts
+>
+> Kept visible, unedited, because *how* it was wrong is more instructive than the fact. Full
+> detail and citations: `../reference/region_lock_mechanism_study.md` §2.1–§2.2; the consuming
+> design doc `guest_memory_lock.md` §1.0 has already been rewritten around the retraction.
+>
+> 1. **The flip does not exist.** **[measured, KVM-direct]** setting `KVM_MEM_READONLY` on a
+>    live memslot returns **`-EINVAL`**. **[src]** `linux v7.1.0-rc6 virt/kvm/kvm_main.c:2075-2082`
+>    rejects any change to that bit on an existing slot; the RO toggle is a DELETE+CREATE and
+>    always has been. QEMU works around it explicitly (`v10.2.0 accel/kvm/kvm-all.c:373-386`).
+> 2. **The experiment cited never toggled `KVM_MEM_READONLY`.** **[src]** the bench binary's
+>    "flags" arm toggles `KVM_MEM_LOG_DIRTY_PAGES` (`kvmslotbench.c:293-294`) — the *only*
+>    flags-only change KVM permits.
+> 3. **"1.49 µs" is not that row.** **[measured]** re-run on the same binary: `flags` p50 =
+>    **72.4 µs**; the ~1.2 µs row is the **`noop` identical re-issue**, which KVM early-returns
+>    (`kvm_main.c:2088-2089`). The figure was the wrong row of the right table.
+>
+> **★ Note what §11.1 of `../reference/qemu_102_facilities.md` and §13 item 4 below both say:**
+> that this correction *"is correct **about KVM**"* and merely unreachable through QEMU. **That
+> concession is also withdrawn** — it is not correct about KVM either. Those two passages carry
+> their own retraction notes as of the same date.
+>
+> **★★ The durable lesson, and the reason this stays on the page.** §6.3.1 learned that *a named
+> API in a design doc is a claim about a version, and it decays.* This is the identical failure
+> applied to a **number**: **a figure is a claim about an experiment, and it decays faster**,
+> because nobody re-reads the harness. Three independent errors — wrong flip measured, wrong row
+> quoted, cited flip nonexistent — composed into one confident `[measured]` sentence that priced
+> a struck design back into the document. **The `[measured]` tag is not a warrant; it is a
+> pointer to an experiment that must still be readable.**
+
 **★★ [measured] CORRECTION — a FLAGS-ONLY flip is 1.49 µs, not 230–460 µs.** Everything above
 is about **install / remove / move**. Changing only a slot's *flags* on an otherwise identical
 region — the `KVM_MEM_READONLY` toggle — costs **1.49 µs**; **[inferred]** KVM takes a fast
@@ -1745,8 +1864,14 @@ region lock (`guest_memory_lock.md` §7.3) as a device-wide stall per lock, when
 microsecond flip. *Nothing about the rule changes* — the rule is about install/remove
 **frequency**, and item 4's "protection is a window property" is untouched: a flags flip on a
 **shared** window still revokes writes for every proc in it, which is an I-NOAMP violation at
-any price. What the correction buys back is that a *dedicated* RO-capable window is an
-affordable fallback rather than an impossible one.
+any price. ~~What the correction buys back is that a *dedicated* RO-capable window is an
+affordable fallback rather than an impossible one.~~
+> **★ (2026-07-27) — this concluding sentence is the one the retraction banner above kills, and
+> it is flagged separately because it is the sentence that did the work.** Nothing is bought
+> back: the flip does not exist, so a dedicated RO-capable window is **not** an affordable
+> fallback. `../reference/region_lock_mechanism_study.md` §5 prices the real thing
+> (a DELETE + ADD per lock) at **124–720 µs, with other vCPUs degraded 2.2–9.1×**, and strikes
+> it — *"not 'kept as an expensive fallback' — struck."*
 
 **⚠️ Caveats, stated so the numbers are not over-quoted.**
 
@@ -2312,13 +2437,37 @@ returns and its commit R5-refuses divergently, handing its fresh handles to `Orp
 
 **T3 — ★ GPU idle / the quiesce point. The guest TELLS us, and the C already listened.**
 
+> ### ★★★ FALSIFIED PREMISE STILL IN THIS TRIGGER (flagged 2026-07-27, doc audit)
+>
+> The block-quoted claim below — *"fn 47 both on a real driver unload AND on a GPU-idle
+> release"* — is the **same sentence** that §0.2 row 1 and §7.6 T4 rule 1 both strike as
+> **FALSIFIED on the bench (2026-07-26)**. §14.3 reports that cleanup as complete
+> (*"§0.2 row 1 and §7.6 T4 rule 1 struck"*); **T3 was missed**, so the falsified version
+> survived here — in the one place where it still reads as the design's *mechanism* rather
+> than as a historical claim. Decision #27 repeats the unstruck framing.
+>
+> **[measured] What is actually true** (`../reference/mode2_bench_lifecycle.md` §2): `rmmod`
+> emits **no fn-47 at all** — the idle release at process exit has already consumed it. There
+> is only ever the **one** trigger, and it is the idle release.
+>
+> **★ T3's design is unharmed, and that is worth stating plainly so this is not over-read.**
+> T3 arms on the *idle release / re-handshake*, which is precisely the trigger that **does**
+> fire; the quiesce point is real and the C really did listen for it. What the falsification
+> destroys is only the "**both**" — and therefore anything that expected to *distinguish*
+> unload from idle-release by this RPC. That distinction is **T4's** problem, and T4 already
+> records that it has no trigger at all.
+>
+> ★ Note the failure shape: a correction was propagated to two of three sites and declared
+> done. The two that were fixed are the two that *quote* the claim; the one that was missed is
+> the one that *uses* it — which is the ordering you would least want.
+
 Law 8 is currently half a law: `reap_retired` exists, `CoreEvent::Deferred(DeferredReap)`
 exists, and **nothing arms it**. But the fix is not primarily a timer — I was designing one,
 and the C's answer is better and is measured:
 
-> **The guest driver emits `UNLOADING_GUEST_DRIVER` (RPC fn 47) both on a real driver
+> ~~**The guest driver emits `UNLOADING_GUEST_DRIVER` (RPC fn 47) both on a real driver
 > unload AND on a GPU-idle release when the last client/context exits with the module still
-> loaded**, and it then re-runs the queue handshake. The C names the resulting moment
+> loaded**~~, and it then re-runs the queue handshake. The C names the resulting moment
 > exactly: *"the re-handshake = the quiesced point (GPU was idle-released; next context
 > boots)"* — and runs its deferred reap there (`C: nvkvm_gpu_emul.c:3458`, `:1988–1994`).
 
@@ -2574,13 +2723,24 @@ funnels through `MockIsolate`/`MockIsolateFactory` the same way. Nothing is opt-
                      once; every source deregistered; workers all accounted
     L6  INBOX        every event still queued resolves to a fault, never a mutation
     L7  RIGHT WINDOW every arena is released into the window it was carved from
-                     (G7: today only a `debug_assert!` — compiled out in release, so
+                     (G7: ~~today only a `debug_assert!` — compiled out in release, so
                      releasing into the WRONG window is representable, and the symptom
-                     is overlapping recycled arenas = the #14 collision class returning)
+                     is overlapping recycled arenas = the #14 collision class returning~~
+                     ★★ 2026-07-27 doc audit: **G7 IS FIXED — this is the most misleading
+                     stale line in the document, because it asserts a LIVE release-build
+                     security hole that does not exist.** `kayfabe-core/src/gpa.rs:204` is
+                     `pub fn release(&mut self, arena: GpaArena) -> Result<(), ForeignArena>`
+                     — an always-on `Result`, not a `debug_assert!`. §0.2 row G7 has read
+                     **FIXED** since §12.19; only this ledger row and decision #31 lagged)
 ```
 
-**★ G6 is the one class the ledger will report as unfixable without a core change.** There
-is no intra-arena free, so a long-running process's arena monotonically fills; L1 will
+~~**★ G6 is the one class the ledger will report as unfixable without a core change.**~~
+**★★ 2026-07-27, doc audit — G6 IS FIXED; the paragraph below describes a tree that no longer
+exists.** `kayfabe-core/src/gpa.rs:400` is `pub fn free(&mut self, block: GpaBlock) ->
+Result<(), ForeignBlock>`, backed by a coalescing free list and a move-only `GpaBlock` token —
+exactly decision #30's *"port it from the C, don't invent it"*. §0.2 row G6 has read **FIXED**
+since `l1_concurrency.md` §12.20. ~~There
+is no intra-arena free,~~ so a long-running process's arena monotonically fills; L1 will
 balance at *proc* granularity and the ledger will still show intra-arena occupancy that
 never returns. That is not a false positive — it is the C's #80 leak reproduced at a finer
 granularity, and it is exactly the "clean cleanup on the GPU going idle" case the owner
@@ -2715,7 +2875,7 @@ Extending `l1_concurrency.md` §9's normative table; each becomes a rustdoc head
 
 | Interface | Send/Sync | Who calls, from where | Contract |
 |---|---|---|---|
-| reactor loop thread | owns its readiness set exclusively | nobody calls it | touches ZERO core state — and now holds **no shared structure at all** (§3.2). Produces inbox events only |
+| reactor loop thread | owns its readiness set exclusively | nobody calls it | touches ZERO core state — and ~~now holds **no shared structure at all** (§3.2)~~ **★ 2026-07-27: FALSE — §14.9 F1 measured it: "The loop HAS a table and a lock." What survived from §3.2 is "no *core* state"; "no shared structure at all" did not** — produces inbox events only |
 | `ExecutorWaker` | `Send + Sync` | the inbox's producers | `wake()` must be non-blocking and safe from any thread, including under locks (it is a descriptor write / BH schedule) |
 | `Vmm` (real) | `Send`, not `Sync` | `&mut dyn` from inside a core entry | **per-method in-lock legality is normative (§6.1)** and asserted; `raise_irq` must be irqfd-shaped (§6.3); `defer` shares the pure `DeferQueue` with the mock (§6.4) |
 | `CancelHandle` | `Send + Sync` | proc-lock holders (retire, watchdog, shutdown) | holds no reference to the `Worker` or backend; arming is per-`txn`; **firing is latched, discharged lock-free** |
@@ -2992,7 +3152,7 @@ paths arrive with the BQL **held**, so "we take no foreign lock" is not sufficie
 > mode the probe existed to catch, rather than merely detecting it. The version requirement is
 > a one-line install instruction; the fork was a permanent maintenance obligation.
 >
-> **What this deletes:** the tracked patch, its rebase burden, `build_qemu.sh` provenance for
+> **What this deletes:** the tracked patch, its rebase burden, `C: scripts/build_qemu.sh` provenance for
 > it, and the whole "which QEMU are we built into" ambiguity. **What it keeps:** §9.3's
 > capability probe — now a *version assertion* that refuses loudly at realize rather than a
 > patch-presence check. Silent fallback to BQL dispatch stays forbidden for the same reason as
@@ -3064,7 +3224,7 @@ measured path is not the path a QEMU adapter takes.
 | 1 | `memory_region_enable_lockless_io()` | **take upstream's** | already the decision; §10.1's addition is the *scope* constraint below |
 | 2 | the reentrancy-guard **pairing** | **take upstream's** | **upstream's one function does both** (`system/memory.c:2567-2580`). There is no pairing for us to maintain, and **§9.3's gate as written describes code that would now be wrong** |
 | 3 | **ioeventfd's read side** | **take upstream's** | KVM registration passes *only the fd* (`accel/kvm/kvm-all.c:1889-1905`); QEMU installs **no read handler**. The fd can go straight into **our reactor's epoll set** |
-| 4 | RO-memslot as the region-lock fallback | ★ **REVERSE** | the 1.49 µs flags-only flip **is not reachable through QEMU** |
+| 4 | RO-memslot as the region-lock fallback | ★ **REVERSE** | the 1.49 µs flags-only flip **is not reachable through QEMU** — **★ 2026-07-27: nor through KVM; the flip does not exist (`-EINVAL`), see §6.7's retraction banner** |
 | 5 | `gpa_read`/`gpa_write` via `address_space_rw` | ★ **new hazard** | can take the **BQL**, for a **guest-chosen** address |
 
 **The three that delete the most design, in order:**
@@ -3105,8 +3265,16 @@ measured path is not the path a QEMU adapter takes.
 
 **The two reverse findings — things ≥ 10.2 / a QEMU adapter makes harder:**
 
-4. **★★ The RO-memslot fallback is not a 1.49 µs flip on QEMU.** §6.7's *"CORRECTION — a FLAGS-ONLY
-   flip is 1.49 µs"* is correct **about KVM** and was measured on the KVM-direct harness. Through
+4. **★★ The RO-memslot fallback is not a 1.49 µs flip on QEMU.**
+   > **★★ SUPERSEDED (2026-07-27):** the concession *"is correct **about KVM**"* below is withdrawn.
+   > It is not correct about KVM either — a flags-only `KVM_MEM_READONLY` change on a live slot
+   > returns **`-EINVAL`** (`../reference/region_lock_mechanism_study.md` §2.1), and the 1.49 µs
+   > figure was the harness's **`noop`** row (§2.2). This item's *conclusions* all survive and in
+   > fact strengthen — the fallback is dearer still, #37 is untouched, #49 gets stronger — but the
+   > premise it argues from is gone. See the retraction banner at §6.7.
+
+   §6.7's *"CORRECTION — a FLAGS-ONLY
+   flip is 1.49 µs"* ~~is correct **about KVM** and was measured on the KVM-direct harness~~. Through
    QEMU it is unreachable, for two independent reasons: `flatrange_equal` compares `readonly`
    (`system/memory.c:251-260`), so `memory_region_set_readonly()` emits `region_del` + `region_add`
    ⇒ a full **DELETE + ADD**; and even the flags path re-issues the ioctl with `memory_size = 0`
@@ -3277,8 +3445,9 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
 ## 12. Decision ledger (#38)
 
 1. **The reactor keys on the `CompletionSource`, never the descriptor (§3.2)** — kills the
-   descriptor-number ABA, and makes law 9 structural (the loop holds no shared state at
-   all). *Cost: a reverse table for teardown only.*
+   descriptor-number ABA, and makes law 9 structural (~~the loop holds no shared state at
+   all~~ **★ 2026-07-27: retracted by §14.9 F1 — the loop holds a table AND a lock; what is
+   structural is that it holds no *core* state**). *Cost: a reverse table for teardown only.*
 2. **Level-triggered over counter-shaped primitives the loop drains (§3.4)** — makes F1
    structural rather than hoped-for; coalescing is sound because one source binds one
    `OsEventRef`. *Cost: a drain per wake; the wake-count assert is the gate.*
@@ -3358,11 +3527,16 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     a `Drop` that blocks under rank 0 is an R1 violation that `assert_lock_free` cannot see,
     because it guards verbs, not destructors.
 30. **G6's intra-arena free should be ported from the C, not invented (§7.8)** — first-fit
-    with tail/adjacent coalescing, freed from the unmap path *and* the reaper. **Open:**
-    it is a core change, so it is the owner's call whether it rides M2-f or follows.
+    with tail/adjacent coalescing, freed from the unmap path *and* the reaper. ~~**Open:**
+    it is a core change, so it is the owner's call whether it rides M2-f or follows.~~
+    **★ CLOSED (verified 2026-07-27): `gpa.rs:400` `free(GpaBlock) -> Result<(), ForeignBlock>`,
+    coalescing, move-only token — ported as directed.**
 31. **G7's window check becomes a hard fault, not a `debug_assert!`** — a release into the
-    wrong window is the #14 collision class returning, and it is currently representable in
-    release builds. Ledger check L7 catches it in tests; the fault catches it in production.
+    wrong window is the #14 collision class returning, and ~~it is currently representable in
+    release builds~~ **★ CLOSED (verified 2026-07-27): `gpa.rs:204` returns
+    `Result<(), ForeignArena>`; it is NOT representable in release builds. This item and the
+    §7.8 L7 ledger row were the last two places still asserting the hole.**
+    Ledger check L7 catches it in tests; the fault catches it in production.
 32. **G8: `SourceKind::OsEvent` gains channel/`Vas` identity now** — without it, per-channel
     deregistration (T0, T5) cannot be written and only the whole-proc sledgehammer exists.
     A field now; a migration later.
@@ -3543,8 +3717,10 @@ here so the ledger stays the one place that enumerates every decision.
     the word userfaultfd. **The deployment half is the load-bearing finding:**
     `/dev/userfaultfd` + a udev rule turns a `CAP_SYS_PTRACE` requirement — root-equivalent,
     fatal to the unprivileged-host premise — into `/dev/kvm`'s posture, and a `USER_MODE_ONLY`
-    fd is a **startup refusal** proven by a kernel-mode-write probe. Also corrects §6.7's cost
-    model (**a flags-only memslot flip is 1.49 µs**) and `CoreEvent::LockedRegionFault`'s
+    fd is a **startup refusal** proven by a kernel-mode-write probe. ~~Also corrects §6.7's cost
+    model (**a flags-only memslot flip is 1.49 µs**)~~ **★ 2026-07-27: that "correction" is itself
+    retracted — there is no flags-only RO flip (`-EINVAL`); see §6.7's banner and
+    `../reference/region_lock_mechanism_study.md` §2** — and `CoreEvent::LockedRegionFault`'s
     rustdoc (resolution never waits on the core).
 
 50. **★★ The ≥ 10.2 facility inventory is RUN, and it binds the adapter's shape before it is written
@@ -3558,7 +3734,9 @@ here so the ledger stays the one place that enumerates every decision.
     migration **and CPR** — a ninth lifecycle event ≥ 10.x wires into RAM allocation itself and which
     we cannot implement, only refuse. **One reverse finding that corrects a price without touching a
     rule:** the **1.49 µs flags-only memslot flip is unreachable through QEMU** (`flatrange_equal`
-    compares `readonly`, `system/memory.c:251-260` ⇒ DELETE+ADD), so `guest_memory_lock.md` §7.3's
+    compares `readonly`, `system/memory.c:251-260` ⇒ DELETE+ADD) — **★ 2026-07-27: and, it turns
+    out, unreachable through KVM too (`-EINVAL`); the flip never existed, so this is no longer "a
+    price corrected" but a mechanism struck (§6.7 banner)** — so `guest_memory_lock.md` §7.3's
     RO-memslot fallback is materially dearer than recorded and **decision #49 gets stronger** —
     the standing lesson being that **a KVM-direct measurement is not a QEMU measurement**, which
     qualifies every constant decision #48's harness produces. **And one hazard that binds §6.1:**
@@ -4073,7 +4251,7 @@ launder a write past it.
 
 **Provenance:** bench findings, so §14's rule applies without the §14.2/§14.4 exception —
 nothing here is a plan. Measured on the serialized vast.ai bench against **QEMU 9.2.0**
-(`/opt/qemu-src`, `scripts/build_qemu.sh:9`) with a throwaway PCI device, ahead of any adapter
+(`/opt/qemu-src`, `C: scripts/build_qemu.sh:`~~`9`~~`10` *(off-by-one: `:9` is blank; `QEMU_VERSION="9.2.0"` is `:10`. Corrected 2026-07-27, doc audit)*) with a throwaway PCI device, ahead of any adapter
 code. Full write-up: `../reference/qemu_bql_spike.md`.
 
 | finding | effect on this doc |

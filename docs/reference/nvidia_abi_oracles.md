@@ -85,14 +85,16 @@ params at all. So the full 120-byte layout (`cl0000.h:47-52`: `hClient`, `proces
 This matters because `processID` is **the decision-#14 grouping discriminator**
 (`l1_concurrency.md` §12.27) — the single field that decides whether a guest client is a user
 process or the guest kernel. The corroboration it *does* have is RM's own writer, which sets the
-two prefix fields by name (`ogkm src/nvidia/inc/kernel/vgpu/rpc.h:55,70,75`):
+two prefix fields by name (`ogkm src/nvidia/inc/kernel/vgpu/rpc.h:55,70,74`):
 
 ```c
 root_alloc_params.hClient = hclient;                       // :55
     ...
     root_alloc_params.processID = KERNEL_PID;              // :70   (privLevel >= RS_PRIV_LEVEL_KERNEL)
     ...
-    root_alloc_params.processID = pClient->ProcID;         // :75
+    root_alloc_params.processID = pClient->ProcID;         // :74   (was cited as :75 — that is
+                                                           //        the NV_ASSERT on the next line;
+                                                           //        corrected 2026-07-27, doc audit)
 ```
 
 **Consequences taken in code, deliberately:**
@@ -176,9 +178,18 @@ field's alignment as a hard error rather than emitting a plain `#[repr(C)]` mirr
    cargo workspace (so ogkm is never a build dependency), which also means `cargo fmt --all`,
    `cargo clippy --workspace` and `cargo test --workspace` at the repo root do **not** reach it —
    the same gap the `fuzz` workspace has, and which CI closes for `fuzz` with a second
-   `working-directory` step (`.github/workflows/ci.yml:337-339`). The generator needs the same
-   three steps. It is clean today (21 unit tests, clippy-clean, rustfmt-clean, verified by hand),
+   `working-directory` step (~~`.github/workflows/ci.yml:337-339`~~ — **citation drifted; the
+   `working-directory: fuzz` steps are at `:399` and `:425` as of 2026-07-27. `:337-339` is now
+   the `unsafe_code` lints gate, which is a different gate entirely**). The generator needs the
+   same three steps. It is clean today (**20** unit tests — *was written as 21; counted
+   2026-07-27: `gen/src/ctype.rs` 7 + `gen/src/parse.rs` 13, `emit.rs` and `main.rs` 0* —
+   clippy-clean, rustfmt-clean, verified by hand),
    but "verified by hand" is exactly what this repo's gate discipline exists to replace.
+
+   > ★ **This item is still open as of 2026-07-27** — `grep -n working-directory
+   > .github/workflows/ci.yml` returns only the two `fuzz` steps; nothing reaches
+   > `crates/kayfabe-abi/gen/`. Note the small irony that the *count* in this very item rotted
+   > by one while the gate that would have caught it stayed unbuilt.
 6. **Wire the ABI into the mean suite.** `testing_doctrine.md` §3.1 item 3 requires each
    milestone's cases to land in `tests/tests/l1_mean.rs`, not only in a fresh isolated file.
    `crates/kayfabe-abi/tests/mean_wire.rs` composes a realistic RM event stream, but it does so in

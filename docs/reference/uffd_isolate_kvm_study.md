@@ -142,8 +142,11 @@ provably does not have:
 ```
 
 A passed uffd is **fully usable** by the receiver — B successfully armed a range — but every
-range it names is resolved in **A's** address space. **[src] `v7.1.0-rc6 fs/userfaultfd.c:2146`**
-`ctx->mm = current->mm` is bound at creation, and register/writeprotect operate on `ctx->mm`.
+range it names is resolved in **A's** address space. **[src] `v7.1.0-rc6 fs/userfaultfd.c:`~~`2146`~~`2151`**
+(*citation corrected 2026-07-27, doc audit: `:2146` is `ctx->flags = flags;`; the line the claim
+rests on, `ctx->mm = current->mm`, is `:2151`. Same function, same fact — but the cited line did
+not say it.*) `ctx->mm = current->mm` is bound at creation, and register/writeprotect operate on
+`ctx->mm`.
 
 > **★ The trap to avoid:** B registering "its own" address can *appear to succeed* when B's
 > address happens to collide with a valid VMA in A — which is exactly what happens when B is a

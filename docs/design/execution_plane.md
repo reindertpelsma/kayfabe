@@ -54,6 +54,29 @@ translator and a router, not a compute engine.
 
 ### 1.1 Verdict
 
+> **★★ SUPERSEDED (flagged 2026-07-27, doc audit) — this "No" predates the M3 batches that
+> then landed, and its companion gate has said so since 2026-07-24 while this file was never
+> amended.** `core_completeness_gate.md`'s rubric note reads: *"`execution_plane.md` §1 (whose
+> §1.1 'No' verdict predates the M3 batches that then landed — commits `6f425d2`..`c5489a1`
+> **built most of what §1.1 listed as missing**)"*. All four `NEXT` items at the end of this
+> section have since landed.
+>
+> **Two of §1.1's specific "missing" claims are verifiably false now:** the `EngineClass{Gr,Ce,
+> Other}` coarse tag it names as the limit no longer exists (replaced by `EngineKind`; the only
+> surviving mention is `kayfabe-arch/src/ids.rs:112`, a rustdoc line describing the
+> replacement), and the engine-object forward is idempotent
+> (`tests/tests/engine_context.rs::replayed_engine_object_alloc_forwards_exactly_one_host_object`).
+>
+> **The verdict is left standing rather than flipped**, because *"is the core complete?"* is a
+> judgement this audit is not entitled to re-take — and because the reasoning below is the
+> record of what the gate was measuring against. But **do not read it as current**: consult
+> `core_completeness_gate.md` (itself pin-expired — see its own banner) and re-resolve any
+> capability claim against the tree.
+>
+> ★ The instructive part is that the correction *was* written down, promptly, in the right
+> place — and in the **other** document. A note that says "the doc I am citing is out of date"
+> repairs the reader's path only if the reader arrives via that doc.
+
 **No — and it is not supposed to be yet.** The current Rust core is the **control /
 object / address / isolation / completion-*delivery* spine**, and it is genuinely
 complete for that spine (RmGraph source-of-truth + order-independent projections

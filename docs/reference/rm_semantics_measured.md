@@ -54,7 +54,32 @@ get same-client concurrency — which is strong evidence about the general case.
 `NVBIT(RS_API_CTRL)` only (`.../core/system.c:423`), so `serverAllocResourceLookupLockFlags`
 and its free equivalent override read-only back to WRITE
 (`.../rmapi/alloc_free.c:1714-1718`, `:1746-1748`). Only `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`
-escapes. **The API lock is held across the GSP RPC** (`.../gpu/gsp/kernel_gsp.c:398`, `:2954`).
+escapes. ~~**The API lock is held across the GSP RPC** (`.../gpu/gsp/kernel_gsp.c:398`, `:2954`).~~
+
+> **⚠️ CITATION WITHDRAWN (2026-07-27, doc audit) — those two lines evidence a DIFFERENT LOCK.**
+> Both `kernel_gsp.c:398` and `:2954` are the same assertion:
+> `NV_ASSERT(rmGpuGroupLockIsOwner(pGpu->gpuInstance, GPU_LOCK_GRP_SUBDEVICE, &gpuMaskUnused));`
+> — that is the **GPU group (subdevice) lock**, not the **API lock**. The API-lock predicate is
+> spelled `rmapiLockIsOwner()`, and in `kernel_gsp.c` it appears only at `:1420`, `:4483`,
+> `:4653` and `:5117` — **none of them on the RPC wait path** these citations were attached to.
+>
+> **`[unverified]` — the claim itself is NOT retracted, only its evidence.** It remains very
+> likely true by a different route: alloc and free take the API lock in WRITE at the `rmapi`
+> layer *before* descending (the `alloc_free.c` citations above, which do hold), and nothing on
+> the path drops it. But that is an argument from call-graph shape, not a source read, and it
+> is exactly the kind of step this file exists to refuse to take silently.
+>
+> **What would settle it:** find the assertion or the acquire/release pair that brackets
+> `_kgspRpcRecvPoll` — or, cheaper and stronger, a bench kprobe showing a second client's
+> `NV_ESC_RM_ALLOC` blocked for the duration of a first client's GSP RPC.
+>
+> **★ Why it matters rather than being pedantry.** This citation is load-bearing twice over:
+> `../design/l1_concurrency.md` §11 B3 concludes *"a wedged verb blocks **every other
+> isolate's** RM calls"* — which needs the **global API** lock, since the GPU **group** lock is
+> per-GPU and would not, on its own, extend the blast radius across GPUs. And §2 below sizes
+> `VERB_BUDGET` on "6 s *plus API-lock queueing behind other clients*". If the lock actually
+> held across the RPC were only the per-GPU group lock, both the blast radius and the queueing
+> term would be narrower than recorded.
 
 **[src, production]** gVisor corroborates independently: `nvproxy` holds a per-client
 exclusive mutex across the host ioctl, under real CUDA
@@ -82,10 +107,55 @@ and §12.26 (where this correction was made).
 | the GSP RPC reply | busy-poll loop with **no signal check** | `ogkm: .../gpu/gsp/kernel_gsp.c:2963-3060` |
 | client drain at free | bare `while (refCount > 1)` spin | `ogkm: .../resserv/src/rs_server.c:3164-3168` |
 
-**[src]** The GSP RPC timeout is 4 s (`defaultus`, `.../os/os.c:2136-2139`) × 1.5 = **6 s**
-(`.../gpu/gsp/kernel_gsp.c:2927`). **RM's own answer at expiry is to keep going** — *"Today,
-we will soldier on if GSP times out"* (`:2999-3002`) — escalating to `gpuMarkDeviceForReset`
+~~**[src]** The GSP RPC timeout is 4 s (`defaultus`, `.../os/os.c:2136-2139`) × 1.5 = **6 s**
+(`.../gpu/gsp/kernel_gsp.c:2927`).~~ **RM's own answer at expiry is to keep going** — *"Today,
+we will soldier on if GSP times out"* (`:3000-3003`) — escalating to `gpuMarkDeviceForReset`
 plus an Xid (`:2772-2792`).
+
+> **★★ [src] CORRECTION (2026-07-27, doc audit) — "6 s" is ONE OF THREE REGIMES, and it is the
+> one that does NOT apply while we are doing our job.** The struck sentence quoted the
+> `NV_GPU_MODE_GRAPHICS_MODE` arm as though it were the only arm. It is not.
+> `osGetTimeoutParams` (**correct path: `ogkm src/nvidia/arch/nvalloc/unix/src/os.c:2116-2155`**
+> — *not* `src/kernel/os/os.c`, which does not exist) switches on `gpuGetMode(pGpu)`:
+>
+> | regime | `defaultus` | × 1.5 (`kernel_gsp.c:2927`) | citation |
+> |---|---|---|---|
+> | vGPU hypervisor (`hypervisorIsVgxHyper()`) — overrides the mode switch entirely | **1.8 s** | **2.7 s** | `os.c:2130` |
+> | `NV_GPU_MODE_GRAPHICS_MODE` | 4 s | **6 s** ← the number this doc carried | `os.c:2138` |
+> | **`NV_GPU_MODE_COMPUTE_MODE`** | **30 s** | **45 s** | `os.c:2142` |
+>
+> (and a fourth, orthogonal: under `IS_VGPU_GSP_PLUGIN_OFFLOAD_ENABLED` the multiplier is
+> replaced by `NV_MAX(3.1 s, defaultus) + defaultus/2` (`kernel_gsp.c:2915-2918`), so a
+> vGPU-GSP host lands at 4.0 s rather than 2.7 s. Out of scope today — the project's posture is
+> bare-metal by default — but it is a *fourth* answer, not a footnote to the first three.)
+>
+> **[src] And the mode is DYNAMIC, not a board property.**
+> `gpuGetMode(pGpu) = pGpu->computeModeRefCount > 0 ? COMPUTE : GRAPHICS`
+> (`ogkm src/nvidia/generated/g_gpu_nvoc.h:5582-5584`). `gpuChangeComputeModeRefCount_IMPL`
+> (`ogkm src/nvidia/src/kernel/gpu/gpu.c:311-345`) logs *"new mode: COMPUTE"* on the 0→1
+> transition and **re-runs `timeoutInitializeGpuDefault`** right there, so `defaultus` flips
+> 4 s → 30 s the moment the **first compute client** appears and flips back when the last one
+> goes.
+>
+> **★ Why this is load-bearing rather than trivia: a CUDA workload IS the 0→1 transition.**
+> Every scenario this project exists to serve runs with `computeModeRefCount > 0`. So the
+> bound that actually applies to a forwarded verb is **45 s, not 6 s** — and the 6 s figure
+> describes the idle GPU we are not interested in. `../design/l1_os_shell.md` §7.5's
+> `VERB_BUDGET` was sized against 6 s "plus API-lock queueing"; against 45 s plus queueing that
+> sizing needs re-deriving. **Not yet propagated into §7.5 — flagged, not fixed, because the
+> budget is a design decision and not mine to take.**
+>
+> **⚠️ [unverified] — which regime the bench GPU is actually in was never observed.** The mode
+> is a *host-driver* property of the RTX 3060, and nothing in this repo has read it back.
+> **What would settle it:** `dmesg | grep "new mode:"` on the bench during a Mode-2 CUDA run,
+> or a kprobe on `gpuChangeComputeModeRefCount_IMPL`. Until then the 45 s row is a **[src]**
+> upper bound, not a measurement, and the 6 s row is not safe to quote as *the* number.
+>
+> Two lesser fixes folded in above: the path (`arch/nvalloc/unix/src/os.c`, not `os/os.c`), and
+> the "soldier on" comment, which is at **`:3000-3003`**, not `:2999-3002`. Also note the ×1.5
+> at `:2927` is itself the *inner* `else` of two conditions — `bSlowGspRpc` (emulation/
+> simulation, which substitutes a wholly different value at `:2908`) and
+> `IS_VGPU_GSP_PLUGIN_OFFLOAD_ENABLED` (`:2915-2918`) — so "×1.5" is bare-metal-non-vGPU only.
 
 > **★ [inferred] The correctness statement, not a performance one: an interrupted
 > `NV_ESC_RM_ALLOC` almost certainly COMPLETED**, because RM had no interruptible point at
@@ -161,10 +231,28 @@ GSPALLOC hClient=0xc1d00069 parm.processID=0xffffffff      <- UVM session = KERN
 GSPALLOC hClient=0xc1e0006a..76 parm.processID=0xffffffff  <- other RM-internal clients
 ```
 
-**[src]** Stamped unconditionally at `ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` —
-`privLevel >= RS_PRIV_LEVEL_KERNEL → processID = KERNEL_PID (0xFFFFFFFF)`, else the client's
-own `ProcID`. It is a **declared protocol fact**, available at client-creation time, *before
-any dup exists*.
+**[src]** Stamped ~~unconditionally~~ **on the discrete-x86 path** at
+`ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` — `privLevel >= RS_PRIV_LEVEL_KERNEL →
+processID = KERNEL_PID (0xFFFFFFFF)`, else the client's own `ProcID` (`:74`). It is a
+**declared protocol fact**, available at client-creation time, *before any dup exists*.
+
+> **⚠️ [src] CORRECTION (2026-07-27, doc audit) — "unconditionally" was wrong, and this doc
+> already contradicted itself on it.** `nvidia_abi_oracles.md` §3's closing note records the
+> same macro accurately; this section did not, and the two sat next to each other saying
+> different things. The assignment has **two escapes**, both visible in the cited range:
+>
+> 1. **`if (!IsT234DorBetter(pGpu))` (`rpc.h:57`)** — the whole block, `hClient` aside, is
+>    skipped on Tegra T234D and later, leaving `processID` at its `{0}` initialiser. It would
+>    decode as `User { pid: 0 }`. Irrelevant to a discrete x86 target; a real hazard if this
+>    project ever targets Tegra.
+> 2. **`if (pClient != NULL)` (`rpc.h:62`, `else NV_ASSERT(0)` at `:79-80`)** — a lookup miss
+>    also leaves it 0, on an assertion path rather than a returned error.
+>
+> **What survives unharmed:** the *discriminator* claim. On the target this project actually
+> serves, `KERNEL_PID` vs `ProcID` is exactly as described, and §4's three non-discriminators
+> are untouched. What does not survive is reading "unconditionally" as licence to treat a
+> `processID` of `0` as impossible — it is reachable, and on the failure paths above it is
+> **indistinguishable from a genuine pid 0**.
 
 Three non-discriminators, each of which looks usable and is not:
 

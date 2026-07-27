@@ -123,11 +123,37 @@ if §2.1 holds, **the lock has no members at all.**
 
 ## 4. Where this leaves the mechanism decision
 
-The owner's decision (task #48) is **uffd on both architectures** — one mechanism, arm64 kept,
+~~The owner's decision (task #48) is **uffd on both architectures** — one mechanism, arm64 kept,
 cost is one sysctl **or** one udev rule (probe both at runtime; refuse loudly only if neither
-works).
+works).~~
 
-That decision stands and should stay, but this file changes its **weight**: if §2.1 survives the
+> ### ★★ CONTRADICTED THE SAME DAY — reported, NOT resolved (2026-07-27, doc audit)
+>
+> Three documents written on 2026-07-27 give **three different standings** for this mechanism,
+> and nothing in the code settles it, because none of it is built:
+>
+> | doc | standing |
+> |---|---|
+> | **this file** (§4) | *"uffd on both architectures — one mechanism, arm64 kept … That decision stands and should stay"* |
+> | `../reference/region_lock_mechanism_study.md` §4 | uffd (row **A**) is *"the **displaced** baseline — best mechanism, second-best deployment"*; the recommendation is row **B**, permanent-RO + blocking handler, **`✘ unsound` on arm64** |
+> | `portability_arm64.md` | describes the standing as *"GL13 … **refuses the capability on arm64**"* |
+>
+> **"arm64 kept" and "the capability is refused on arm64" cannot both hold**, and they turn on
+> which mechanism wins: uffd is retry-based and survives arm64; the recommended permanent-RO row
+> is emulate-based and `region_lock_mechanism_study.md` §7.5 shows arm64 cannot emulate ISV=0
+> stores — QEMU injects a guest abort instead. So the arm64 answer is **downstream of** the
+> mechanism choice, and this section asserts the old choice.
+>
+> **The measured numbers in the paragraph below are row A's** (uffd: 0 unarmed, 6.5 µs/cycle,
+> +27 ns/page). Row B's are different in kind — **0 µs per lock cycle** (the memslot never
+> changes) but **55.6 µs per guest write**, ceiling ~17 973 writes/s. Quoting the uffd figures
+> under the current recommendation would misprice it by orders of magnitude in both directions.
+>
+> **This is an owner decision, not a documentation fix.** ★ Note that §3's conclusion — *"the
+> lock may have no members at all"* — makes it a cheaper call than it looks: if §2.1 survives
+> the GSP build, the mechanism choice governs a capability with no current members.
+
+~~That decision stands and should stay,~~ The rest of this section is retained as written; but this file changes its **weight**: if §2.1 survives the
 GSP build and §3 resolves to BAR2, then the region lock is a **capability we keep for a case we
 have not yet met**, not a load-bearing part of the data plane. That is a good position — the
 mechanism is cheap when unarmed (**[measured]** 0 cost unarmed; 6.5 µs per lock cycle,

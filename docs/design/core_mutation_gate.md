@@ -7,11 +7,46 @@ harness per mutant. Survivor-killing tests added on top; the workspace suite is 
 **132 tests** (was 113) with `cargo clippy --workspace --all-targets` clean and the core
 still `#![forbid(unsafe_code)]` with no new runtime deps.
 
+> ### ★★★ 2026-07-27 — THE SCOPE CHANGED, AND CI NOW SAYS **DO NOT QUOTE THE SCORE**
+>
+> Everything below describes campaigns run over a **four-hand-picked-path** scope. That scope
+> was replaced in `0b78102 ci: mutation scope = EVERY production crate — the gate was measuring
+> 41% of the code`. `.github/workflows/ci.yml:532-534` now runs
+> `cargo mutants … -f 'crates/*/src/**/*.rs'`, and `:522-527` gives the reason in CI's own words:
+>
+> > *"★★ SCOPE = EVERY PRODUCTION CRATE. It used to be four hand-picked paths, which by
+> > 2026-07-27 covered only ~17k of 41.6k implementation lines — so the threshold described the
+> > OLD core while every real defect that week lived in the NEW OS layer … A gate that measures
+> > a shrinking minority reports a number about code nobody is changing."*
+>
+> **★★ And the threshold carries an explicit embargo** (`ci.yml:579-584`):
+>
+> > *"⚠ PENDING RE-DERIVATION (2026-07-27). 91 was measured against the OLD four-path scope … so
+> > this number describes a different population and MUST be re-derived from the first full run
+> > under the new scope before it is trusted as a bar. … **but do not quote the score until it
+> > is re-derived.**"*
+>
+> **What this means for every number in this file, and for the docs that cite them:**
+>
+> | figure | standing as of 2026-07-27 |
+> |---|---|
+> | **L1 92.44%** and the **91% CI floor** | **embargoed by CI itself.** Still cited as settled by `README.md`, `ARCHITECTURE.md`, `l1_architecture_summary.md` §3.9 and §7, and by `core_state_and_consolidation.md`. Those are outside this audit's edit scope and are **reported, not fixed**. |
+> | **L0 99.2% (245/247)** | **not embargoed, but measured at `0ba300b` against a `kayfabe-core` of ~2,500 lines. That crate is now 8,411 lines.** The score is true of the population it was run on and says nothing about the 70% of the crate that did not exist yet. |
+> | the **Scope** and **Reproduce** blocks in §L1 below | describe the retired four-path invocation. Left standing as the record of what was measured; **they are no longer what CI runs.** |
+>
+> ★ **The failure shape here is worth naming, because it is not drift.** No number below was
+> ever wrong and no citation broke. The *population* moved out from under them — and a score is
+> only meaningful relative to a scope, which is exactly the thing docs quote without. This is
+> `testing_doctrine.md` §1's *"a green instrument on an unexercised path"* in its numeric form:
+> a 91% floor over 41% of the code is a green instrument, and it stayed green while the defects
+> that week landed in the other 59%.
+
 **2026-07-25 addendum (standing gate, not a manual campaign):** this gate is now CI's,
 not a human's memory — the weekly `mutants` job in `.github/workflows/ci.yml`
-(`schedule:` + `workflow_dispatch:`) runs `cargo mutants` over the **L1 surface**:
+(`schedule:` + `workflow_dispatch:`) runs `cargo mutants` over the ~~**L1 surface**:
 `kayfabe-rt`, `kayfabe-core/src/reactor.rs`, and the plan/execute/commit + isolate
-pool/condemnation code in `kayfabe-fwd`/`kayfabe-isolate`. The prior framing — "run a
+pool/condemnation code in `kayfabe-fwd`/`kayfabe-isolate`~~ **— superseded 2026-07-27, see
+the banner above: the scope is now every production crate**. The prior framing — "run a
 campaign when it feels due" — is exactly what let ~9,100 lines of L1 land on `master`
 with no mutation run at all; a gate that is remembered is not standing. **The L1
 baseline is now measured and the job carries a hard threshold** — see

@@ -37,7 +37,7 @@ those, **[open]** not settled here and the experiment is named.
 | 4 | **`raise_irq` as irqfd** | contractually irqfd-shaped, never `msix_notify()` | `kvm_irqchip_add_irqfd_notifier_gsi()` `include/system/kvm.h:498`; `msix_set_vector_notifiers()` `include/hw/pci/msix.h:46-49`; `event_notifier_set()` is one `write(2)` — `util/event_notifier-posix.c:107-119` | **take upstream's** — but **not a floor benefit**: `msix.h`'s only 9.2→10.2 delta is `nentries` widening to `uint32_t` |
 | 5 | **The GPA window (coarse memslot)** | our own `MAP_NORESERVE` reservation; `MAP_FIXED` placement inside; never `munmap` a sub-range | `memory_region_init_ram_ptr()` `include/system/memory.h:1531` → `qemu_ram_alloc_from_ptr()` sets **`RAM_PREALLOC`** (`system/physmem.c:2566-2571`), and PREALLOC blocks are **skipped** by `qemu_ram_remap` (`:2684-2685`) and by `reclaim_ramblock` (`:2589-2591`) | **keep ours** for the mmap; **take upstream's** for the seam — §5. Upstream *guarantees* it will not touch our VMA, which the design assumed and never cited |
 | 6 | **One memslot per window** | `kvm_max_slot_size` unset ⇒ one region = one slot | `accel/kvm/kvm-all.c:111` `static hwaddr kvm_max_slot_size = ~0;` (only `kvm_set_max_memslot_size()` `:1466` moves it — no x86/arm64 caller); slot budget `s->nr_slots_max = kvm_check_extension(KVM_CAP_NR_MEMSLOTS)` `:2669` | **keep ours** — the rule holds; upstream supplies no new lever, and none is needed |
-| 7 | **RO-memslot as the region-lock fallback** | priced at **1.49 µs** — *"a flags-only flip"* (§6.7 correction; `guest_memory_lock.md` §7.3) | **that path is unreachable through QEMU.** `flatrange_equal` compares `readonly` (`system/memory.c:251-260`), so `memory_region_set_readonly()` (`:2392-2400`) produces `region_del` + `region_add`; and even the flags path re-issues with `memory_size = 0` first (`accel/kvm/kvm-all.c:373-383`) | **★ REVERSE — upstream makes this HARDER.** §11.1. Strengthens decision #49 (uffd-WP); corrects a price, not a rule |
+| 7 | **RO-memslot as the region-lock fallback** | priced at **1.49 µs** — *"a flags-only flip"* (§6.7 correction; `guest_memory_lock.md` §7.3). **★ 2026-07-27: that price is retracted — see §11.1's amendment; the flip does not exist at either layer** | **that path is unreachable through QEMU.** `flatrange_equal` compares `readonly` (`system/memory.c:251-260`), so `memory_region_set_readonly()` (`:2392-2400`) produces `region_del` + `region_add`; and even the flags path re-issues with `memory_size = 0` first (`accel/kvm/kvm-all.c:373-383`) | **★ REVERSE — upstream makes this HARDER.** §11.1. Strengthens decision #49 (uffd-WP); ~~corrects a price, not a rule~~ **— and as of 2026-07-27 it does not even correct a price: KVM refuses the flip outright (`-EINVAL`)** |
 | 8 | **userfaultfd via `/dev/userfaultfd`** (GL9) | our own open + probe, in `kayfabe-linux-raw`; refuse loudly on a `USER_MODE_ONLY` fd | QEMU has the identical logic: `util/userfaultfd.c:28-59` prefers `/dev/userfaultfd`, *"because it has better permission controls, meanwhile allows kernel faults without any privilege requirement (e.g. SYS_CAP_PTRACE)"* — then **silently falls back to the syscall** at `:56` | **keep ours** — §6. Upstream **corroborates** the finding and **demonstrates the hazard**: its fallback is exactly the silent-`USER_MODE_ONLY` case GL9 refuses |
 | 9 | **The reactor (epoll, our own thread)** | our own epoll loop; `ExecutorWaker` abstracted, *"QEMU impl: schedule a bottom half"* (§3.7) | `IOThread` (`include/system/iothread.h`), `aio_bh_schedule_oneshot` (`include/block/aio.h:402`), `qemu_set_fd_handler` (`include/qemu/main-loop.h:227`) — all long predate 9.2 | **keep ours** — §7. But §3.7's *"in QEMU the executor is not our thread"* is **no longer forced** once dispatch is lockless; a BH is required only for BQL-requiring work |
 | 10 | **io_uring** | B7: deliberately not `io_uring` (lock-free ring + kernel attack surface) | new in 10.2: `aio_add_sqe()` `include/block/aio.h:870`, `CqeHandler` `:66-72`, `aio_has_io_uring()` | **keep ours — B7 unchanged.** Upstream's is inside `AioContext`, which we do not use; its existence changes none of B7's three reasons |
@@ -378,8 +378,22 @@ thing in this file.
 
 ### 11.1 The RO-memslot fallback is **not** a 1.49 µs flip on QEMU
 
-§6.7's *"★★ [measured] CORRECTION — a FLAGS-ONLY flip is 1.49 µs, not 230–460 µs"* is correct
-**about KVM**, and it was measured on the KVM-direct harness. **It is not reachable through QEMU's
+> **★★ AMENDED (2026-07-27) — this section conceded too much.** The sentence below grants that
+> §6.7's correction *"is correct **about KVM**"* and faults only its reachability through QEMU.
+> **[measured, KVM-direct, 2026-07-27]** it is **not correct about KVM either**: a flags-only
+> `KVM_MEM_READONLY` change on a live slot returns **`-EINVAL`** (**[src]**
+> `linux v7.1.0-rc6 virt/kvm/kvm_main.c:2075-2082`), the 1.49 µs figure was read off the
+> **`noop`** row of the harness, and the harness's `flags` arm toggles dirty logging rather than
+> read-only. See `region_lock_mechanism_study.md` §2.1–§2.2 and the retraction banner now at
+> `../design/l1_os_shell.md` §6.7.
+>
+> **This makes §11.1's own conclusion stronger, not weaker.** Both layers refuse the flip, so
+> the *"a KVM-direct measurement is not a QEMU measurement"* lesson below understates the case:
+> here the KVM-direct measurement was not even a **KVM** measurement. The two reasons given
+> below remain independently valid as source reads about QEMU and are left standing.
+
+~~§6.7's *"★★ [measured] CORRECTION — a FLAGS-ONLY flip is 1.49 µs, not 230–460 µs"* is correct
+**about KVM**, and it was measured on the KVM-direct harness.~~ **It is not reachable through QEMU's
 memory API**, for two independent reasons, either sufficient:
 
 1. **[src]** `flatrange_equal` compares `readonly` (`system/memory.c:251-260`). So changing it via
