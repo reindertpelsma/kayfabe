@@ -6,6 +6,35 @@
 > a retrofit through the core. Same pattern as MIG (`multi_gpu_and_mig.md`) and the deferred
 > graphics pipeline: design toward it, gate the seam, build when there's a reason.
 
+## ★★ 2026-07-27 — the suite RAN on arm64. Cross-check upgraded to measurement.
+
+**[measured]** `KAYFABE_SLOW=1 cargo test --workspace` on a **GB10 (Grace-Blackwell, `aarch64`)**
+host, kernel `6.17.0-1021-nvidia`, 20 cores, rustc 1.97.1, tree ≈ `bd1a547`:
+
+> **372 passed · 0 failed · 0 ignored — identical to the x86_64 count.**
+
+This matters because until now the arm64 claim rested on `cargo check --target
+aarch64-unknown-linux-gnu`, which proves *compilation*, not *behaviour*. Nothing had ever
+**executed** on ARM. The core's arch-cleanliness above was argued from construction; it is now
+observed — including the concurrency suites, whose memory-ordering behaviour is exactly what a
+cross-compile check cannot see (aarch64 is weakly ordered; x86 is not, and a missing `Acquire`
+or `Release` is the classic bug that passes on x86 and fails on ARM).
+
+**What it does NOT establish, stated so nobody over-reads it:**
+- **`getconf PAGESIZE` was 4096 on that host**, so the 16/64 KiB page-size rule below is still
+  *unexercised*. The one real pressure point remains untested. The owed run is Grace-Hopper or
+  Jetson configured with 64 KiB pages.
+- The box was a **container**: no `/dev/kvm`, no `/dev/userfaultfd` (bare `userfaultfd()` returns
+  `EPERM` — container root lacks `CAP_SYS_PTRACE`). So **no L1/L2 OS-shell behaviour was
+  exercised on ARM**, and the region-lock question (`../reference/region_lock_mechanism_study.md`
+  GL13, which *refuses the capability on arm64*) is untouched by this result.
+- **[measured] vast.ai has ZERO machines with `cpu_arch=arm64 vms_enabled=true`** — every
+  VM-capable offer is x86. arm64 + KVM must come from elsewhere (Graviton bare-metal, Oracle
+  Ampere, Hetzner ARM). That is what blocks settling GL13 by experiment.
+
+⇒ The honest summary: **the pure core is arm64-clean by measurement; the OS shell on arm64 is
+still entirely unmeasured.**
+
 ## Why arm64 matters (eventually)
 
 arm64 + NVIDIA is a real and growing configuration: **Grace-Hopper / GH200** put an arm64
