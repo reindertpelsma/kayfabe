@@ -722,6 +722,7 @@ mod tests {
     /// would know.
     #[test]
     fn a_completed_mmio_load_is_the_value_the_guest_then_stores() {
+        crate::require_kvm!("a_completed_mmio_load_is_the_value_the_guest_then_stores");
         let page = HostPageSize::query().bytes();
         let (code_gpa, data_gpa, trap_gpa) = (page, 2 * page, 0x8000_0000u64);
         let kvm = kvm();
@@ -758,6 +759,9 @@ mod tests {
     /// A completion wider than the machine can express is refused by name, not truncated.
     #[test]
     fn an_out_of_range_mmio_completion_width_is_refused_by_that_exact_variant() {
+        crate::require_kvm!(
+            "an_out_of_range_mmio_completion_width_is_refused_by_that_exact_variant"
+        );
         let kvm = kvm();
         let vm = Arc::new(kvm.create_vm().expect("vm"));
         let mut vcpu = KvmVcpu::create(&kvm, vm, 0).expect("vcpu");

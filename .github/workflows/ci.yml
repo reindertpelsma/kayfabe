@@ -85,9 +85,9 @@ jobs:
           ran=$(grep -c 'KVM-GATE: RAN' /tmp/kayfabe-test.log || true)
           skipped=$(grep -c 'KVM-GATE: SKIPPED' /tmp/kayfabe-test.log || true)
           total=$(( ran + skipped ))
-          echo "KVM-gate: ran=$ran skipped=$skipped total=$total (floor 33)"
-          if [ "$total" -lt 33 ]; then
-            echo "::error::KVM-gated tests were not reached: $total < 33." \
+          echo "KVM-gate: ran=$ran skipped=$skipped total=$total (floor 35)"
+          if [ "$total" -lt 35 ]; then
+            echo "::error::KVM-gated tests were not reached: $total < 35." \
                  "Either they were deleted, or the gate stopped announcing itself." \
                  "A silent skip is worse than a red build."
             exit 1
