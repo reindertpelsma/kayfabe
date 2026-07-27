@@ -1,19 +1,93 @@
-//! # kayfabe-abi — Axis A: the declarative ABI (SKELETON this milestone)
+//! # kayfabe-abi — Axis A: the declarative ABI
 //!
-//! `mode2_abi_agnostic_layer.md` §2/§4.1. This crate will hold the **generated,
-//! committed** per-driver-version modules produced by `kayfabe-abi-gen` from the
-//! vendored open kernel modules (structs + sizes, class/ctrl/ioctl/RPC IDs,
-//! alloc-param sizes, GMMU format constants, register offsets), plus the runtime
-//! [`DriverAbi`] dispatch selected from the detected guest driver version.
+//! `mode2_abi_agnostic_layer.md` §2/§4.1. This crate holds the **generated,
+//! committed** wire layouts produced by `kayfabe-abi-gen` from the vendored open
+//! kernel modules, the driver-version table that selects between them, and the
+//! version-independent views the logic crates consume.
 //!
 //! **The quarantine rule (decision #2):** `#[repr(C)]` NVIDIA wire structs exist
 //! ONLY here. The logic crates speak abstract domain types (`kayfabe-arch::ids`,
-//! `kayfabe-core::rmgraph::RmEvent`); this crate's decoders translate wire ↔ core at
-//! the boundary. A concrete driver version (`V580`, …) or `#[repr(C)]` layout in
-//! any logic crate fails review + the grep gate (testing strategy §7 Tier 2).
+//! `kayfabe-core::rmgraph::RmEvent`); this crate's decoders translate wire ↔ core
+//! at the boundary. A concrete driver version (`V580`, …) or `#[repr(C)]` layout
+//! in any logic crate fails review + the grep gate (testing strategy §7 Tier 2).
 //!
-//! Not implemented this milestone by design: the first milestone is the pure-logic
-//! core, which must be provably independent of everything that will live here.
+//! ---
+//!
+//! # 1. The generation strategy, and the three it is not
+//!
+//! **Chosen: an offline generator whose output is committed and reviewed.**
+//! `crates/kayfabe-abi/gen/` is a standalone cargo project *outside* the
+//! workspace, with zero third-party dependencies, run by hand against a vendored
+//! open-gpu-kernel-modules checkout:
+//!
+//! ```text
+//! cargo run --manifest-path crates/kayfabe-abi/gen/Cargo.toml -- \
+//!     <ogkm-root> crates/kayfabe-abi/src/generated
+//! ```
+//!
+//! | | build.rs generator | bindgen | offline + committed |
+//! |---|---|---|---|
+//! | ogkm needed to build? | **yes** | **yes**, + a system C front end | **no** |
+//! | diff a human can review? | no (build artifact) | no (mechanical blob) | **yes** |
+//! | layout tied to build host? | some | **yes** (host target rules) | **no** |
+//! | can express version skew? | awkward | **no** | **yes** |
+//! | bad parse caught…| at a user's build | at a user's build | **in review** |
+//!
+//! The decisive constraint is the first row: the open kernel modules must not be
+//! a build dependency of anything downstream. That alone rules out `build.rs`
+//! and bindgen, and `mode2_abi_agnostic_layer.md` §2.3 already recorded the same
+//! ruling ("the generator is a dev tool, not a build dependency, so a bad header
+//! parse is caught in review, not at a customer's boot").
+//!
+//! The second row is why the generator is hand-rolled rather than bindgen-backed
+//! even offline. Reviewability is a correctness property here, not a courtesy:
+//! the entire L11 incident list is *layout* bugs, and a layout you cannot read
+//! is a layout nobody checked. So the emitted code carries a `header:line`
+//! provenance comment per field, a `LAYOUT` table, and a `const` block that
+//! fails the **build** if the generator's layout disagrees with rustc's.
+//!
+//! ## Why arm64 and x86_64 need no separate generation
+//!
+//! Derived, not assumed — see `gen/src/ctype.rs`'s module doc. Every SDK field
+//! is a fixed-width NVIDIA typedef; `NvP64` is 8 bytes on both arms of its own
+//! `#if`; the `NV_ALIGN_BYTES(8)` attributes exist to fix up **ILP32** and are
+//! no-ops on any LP64 target. The generator *enforces* the derivation: an
+//! alignment attribute that would raise a field above its natural alignment is a
+//! hard error rather than a silently-wrong `#[repr(C)]`.
+//!
+//! # 2. How version skew is represented
+//!
+//! [`versions::TABLES`] — nvproxy's inherit-then-mutate registry
+//! (`gvisor/pkg/sentry/devices/nvproxy/version.go:142-162`), keyed on the **full**
+//! `major.minor.patch` because the real boundaries are mid-major (`NVOS46` grew
+//! at 580.65.06, `NVOS47` at 550.54.04). Selection is "newest entry ≤ requested";
+//! below the oldest entry is [`wire::AbiError::NoTableForVersion`], never a
+//! nearest-neighbour fallback.
+//!
+//! # 3. Safety
+//!
+//! `#![forbid(unsafe_code)]` holds. The `#[repr(C)]` mirrors are a layout
+//! *oracle* (`size_of` / `offset_of!`), never a cast target: decoding is
+//! `from_le_bytes` out of a byte slice. There is no `transmute` and no
+//! `bytemuck` anywhere in this crate or its generator.
+//!
+//! # 4. What is deliberately NOT here
+//!
+//! - **The wire → `RmEvent` mapping.** This crate does not depend on
+//!   `kayfabe-core`. [`view`]'s field names mirror `RmEvent`'s payloads so the
+//!   mapping is a rename, but it belongs on the core's side of the seam and the
+//!   core is being reshaped concurrently.
+//! - **The per-class alloc-param table** beyond `NV01_DEVICE_0`, the GSP-RPC
+//!   *payload* structs (213 of them), the UVM ioctls, and the capability
+//!   allowlist. Each needs a consumer first; a broad table with one wrong entry
+//!   is invisible until a guest trips it.
+
+/// The generated wire layouts. Produced by `kayfabe-abi-gen`; do not edit.
+pub mod generated;
+pub mod transcribed;
+pub mod versions;
+pub mod view;
+pub mod wire;
 
 use kayfabe_arch::ClientKind;
 use kayfabe_arch::ids::ClassId;

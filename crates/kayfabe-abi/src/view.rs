@@ -1,0 +1,446 @@
+//! The **version-independent** views: what the logic crates are allowed to see.
+//!
+//! The quarantine rule (decision #2) says `#[repr(C)]` NVIDIA layouts live only
+//! in this crate. That is necessary but not sufficient — if the core took a
+//! `Nvos46Parameters` it would still be pinned to one driver's field set. So the
+//! crate's *public product* is this module: small owned structs carrying the
+//! fields the core actually consumes, produced by [`crate::versions`] from
+//! whichever wire layout the detected driver version uses.
+//!
+//! This is nvproxy's own decomposition. `NVOS21_PARAMETERS` and
+//! `NVOS64_PARAMETERS` are two wire shapes for one verb, and nvproxy normalises
+//! them through `ToOS64`/`FromOS64`
+//! (`gvisor/pkg/abi/nvgpu/frontend.go:335-357, :824-827`) so its handlers see one
+//! shape. [`AllocReq`] is that, generalised: one view per verb, N wire layouts
+//! behind it.
+//!
+//! Field names deliberately mirror `kayfabe_core::rmgraph::RmEvent`'s payloads,
+//! so the wire→event mapping is a rename and nothing else. That mapping is NOT
+//! in this milestone (see the crate docs) — this crate does not depend on
+//! `kayfabe-core`.
+
+use crate::wire::AbiError;
+
+/// `NV_ESC_RM_FREE` — the `RmEvent::Free` facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FreeReq {
+    /// `hRoot` — the owning client namespace.
+    pub client: u32,
+    /// `hObjectParent`.
+    pub parent: u32,
+    /// `hObjectOld` — the handle to free.
+    pub handle: u32,
+}
+
+/// `NV_ESC_RM_ALLOC` — the `RmEvent::Alloc` facts, normalised across the two
+/// wire shapes (`NVOS21` v1 and `NVOS64` v2).
+///
+/// `rights_requested` is `NVOS64`-only and reads as `0` from an `NVOS21`, which
+/// is what nvproxy's `NVOS21_PARAMETERS::GetPRightsRequested` also returns
+/// (`gvisor/pkg/abi/nvgpu/frontend.go:322-324`) — a *declared* absence, not a
+/// lost field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct AllocReq {
+    /// `hRoot` — the owning client namespace.
+    pub client: u32,
+    /// `hObjectParent`.
+    pub parent: u32,
+    /// `hObjectNew` — `0` asks RM to pick a handle.
+    pub handle: u32,
+    /// `hClass`.
+    pub class: u32,
+    /// `pAllocParms` — a guest pointer. **Never dereferenced here**; the caller
+    /// resolves it through the VMM's guest-memory seam.
+    pub params_ptr: u64,
+    /// `pRightsRequested`, or `0` on the v1 shape.
+    pub rights_requested: u64,
+    /// `paramsSize` — guest-declared, so it is an *assertion by the guest*, not
+    /// a fact. Validate it against the class's own size before trusting it.
+    pub params_size: u32,
+    /// The wire shape this came off, kept because the reply must be written back
+    /// in the same shape.
+    pub wire: AllocWire,
+}
+
+/// Which `NV_ESC_RM_ALLOC` wire shape a request arrived in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AllocWire {
+    /// `NVOS21_PARAMETERS` — 32 bytes, no rights mask, no flags.
+    #[default]
+    V1,
+    /// `NVOS64_PARAMETERS` — 48 bytes.
+    V2,
+}
+
+/// `NV_ESC_RM_CONTROL` — the envelope an RM control command arrives in.
+///
+/// The *payload* at `params_ptr` is command-specific; the only one this
+/// milestone decodes is [`SetPageDir`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ControlReq {
+    /// `hClient`.
+    pub client: u32,
+    /// `hObject` — the object the command is issued against.
+    pub object: u32,
+    /// `cmd` — e.g. [`crate::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`].
+    pub cmd: u32,
+    /// `flags`.
+    pub flags: u32,
+    /// `params` — a guest pointer, never dereferenced here.
+    pub params_ptr: u64,
+    /// `paramsSize` — guest-declared.
+    pub params_size: u32,
+}
+
+/// `NV_ESC_RM_DUP_OBJECT` — the `RmEvent::Dup` facts.
+///
+/// The only cross-client transfer edge in the RM object model, and therefore the
+/// protocol-correct source of process grouping (`l1_concurrency.md` §12.27).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DupReq {
+    /// `hClient` — the **destination** client.
+    pub dst_client: u32,
+    /// `hParent` — parent of the new alias.
+    pub dst_parent: u32,
+    /// `hObject` — the new alias handle.
+    pub dst_handle: u32,
+    /// `hClientSrc`.
+    pub src_client: u32,
+    /// `hObjectSrc`.
+    pub src_handle: u32,
+    /// `flags`.
+    pub flags: u32,
+}
+
+/// `NV_ESC_RM_MAP_MEMORY_DMA` — the `RmEvent::MapMemoryDma` facts.
+///
+/// ★ This is the versioned one. `flags2` and `kindOverride` exist only from
+/// driver 580.65.06 and are deliberately **not** on this view: the core has no
+/// use for them, and a field that is present on some versions and absent on
+/// others is exactly the kind of thing that leaks a version name upward.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MapMemoryDma {
+    /// `hClient`.
+    pub client: u32,
+    /// `hDevice`.
+    pub device: u32,
+    /// `hDma` — the VASpace (or context-DMA) handle the mapping lands in.
+    pub dma: u32,
+    /// `hMemory` — the memory resource being mapped.
+    pub memory: u32,
+    /// `offset` into the memory resource.
+    pub offset: u64,
+    /// `length` of the mapping.
+    pub length: u64,
+    /// `flags`.
+    pub flags: u32,
+    /// `dmaOffset` — `[OUT]`, and `[IN]` when the fixed-offset flag is set. This
+    /// is the guest VA the mapping is at.
+    pub dma_offset: u64,
+}
+
+/// `NV_ESC_RM_UNMAP_MEMORY_DMA` — the `RmEvent::Unmap` facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct UnmapMemoryDma {
+    /// `hClient`.
+    pub client: u32,
+    /// `hDevice`.
+    pub device: u32,
+    /// `hDma` — the VASpace handle.
+    pub dma: u32,
+    /// `hMemory`.
+    pub memory: u32,
+    /// `flags`.
+    pub flags: u32,
+    /// `dmaOffset` — the VA to unmap, as returned by the matching map.
+    pub dma_offset: u64,
+    /// `size` — `0` means "the whole mapping".
+    pub size: u64,
+}
+
+/// `NV0000_ALLOC_PARAMETERS` — the two fields the core reads off a client root.
+///
+/// # The prefix contract (deliberate, and narrower than the struct)
+///
+/// This view is decoded from the **first 8 bytes only**, not from the whole
+/// struct. That is not laziness, it is the honest bound on what we know:
+///
+/// - `hClient` @ +0 and `processID` @ +4 are the first two members in every
+///   ogkm tree, and RM's own writer sets exactly them
+///   (`ogkm src/nvidia/inc/kernel/vgpu/rpc.h:55,70,75`).
+/// - The **rest** of the struct — `processName[100]` and `pOsPidInfo` — has
+///   **no second oracle**. gVisor's `nvproxy` does not model
+///   `NV0000_ALLOC_PARAMETERS` at all, and neither does the C artifact
+///   (`grep NV0000_ALLOC_PARAMETERS` finds nothing in either). `pOsPidInfo` in
+///   particular has the shape of a recent addition, so `sizeof` at 575 is
+///   **unverified**.
+///
+/// Requiring 120 bytes here would therefore refuse a legitimate older client
+/// alloc on a guess. Requiring 8 asserts only what three independent readings
+/// agree on. If the tail ever becomes load-bearing, the fix is to vendor a
+/// second ogkm tag — not to widen this contract on faith.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ClientAllocFacts {
+    /// `hClient` — the client handle the guest asks for.
+    pub h_client: u32,
+    /// `processID` — the decision-#14 grouping discriminator. Decode it with
+    /// [`crate::client_kind_from_process_id`].
+    pub process_id: u32,
+}
+
+/// `NV0080_ALLOC_PARAMETERS` — the multi-GPU routing fact a Device declares.
+///
+/// Unlike [`ClientAllocFacts`] this is decoded from the **whole** struct, because
+/// its 56-byte size is confirmed by three independent oracles: ogkm 610.43.02,
+/// `gvisor/pkg/abi/nvgpu/classes.go:198-211`, and the C artifact's
+/// `tests/abi_parity/abi_parity_test.go:120` (`nv0080_alloc_parameters … 56`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DeviceAllocFacts {
+    /// `deviceId` — the physical-GPU index this Device routes to.
+    ///
+    /// ★ NVIDIA spells this field `deviceId`; the project's prose (and
+    /// `AllocFacts::device_instance`) calls it the *device instance*. Same field:
+    /// ogkm's own MIG shim assigns `ws->nv0080Params.deviceId = migDev->deviceInstance`
+    /// (`src/common/src/nv_smg.c:517`), which is the two names meeting.
+    ///
+    /// Guest-declared and therefore attacker-controlled — see
+    /// `docs/reference/mode2_bench_lifecycle.md`.
+    pub device_id: u32,
+    /// `hClientShare`.
+    pub h_client_share: u32,
+    /// `hTargetClient`.
+    pub h_target_client: u32,
+    /// `hTargetDevice`.
+    pub h_target_device: u32,
+    /// `flags`.
+    pub flags: u32,
+    /// `vaSpaceSize`.
+    pub va_space_size: u64,
+    /// `vaMode`.
+    pub va_mode: u32,
+}
+
+/// Where a page directory lives, from `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS_APERTURE`
+/// (`flags[1:0]`, ogkm `ctrl0080dma.h:812-815`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PdbAperture {
+    /// `_VIDMEM` (0) — the root is in framebuffer.
+    Vidmem,
+    /// `_SYSMEM_COH` (1) — coherent system memory, i.e. guest RAM.
+    SysmemCoherent,
+    /// `_SYSMEM_NONCOH` (2) — non-coherent system memory, i.e. guest RAM.
+    SysmemNoncoherent,
+    /// A value NVIDIA has not defined. Kept as a distinct variant rather than
+    /// folded into a default, because folding is how a new aperture silently
+    /// becomes "vidmem" and every walk from that PDB reads the wrong memory.
+    Undefined(u32),
+}
+
+impl PdbAperture {
+    /// Decode from the two-bit aperture field.
+    #[must_use]
+    pub fn from_flags(flags: u32) -> Self {
+        match flags & 0x3 {
+            0 => Self::Vidmem,
+            1 => Self::SysmemCoherent,
+            2 => Self::SysmemNoncoherent,
+            other => Self::Undefined(other),
+        }
+    }
+
+    /// `true` for everything that is **not** the VIDMEM aperture — i.e. exactly
+    /// the C emulator's own predicate, `(flags & 0x3) != 0`
+    /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2534`).
+    ///
+    /// ★ Note the `Undefined` arm is included, and deliberately so. It was
+    /// written as `matches!(self, SysmemCoherent | SysmemNoncoherent)` first and
+    /// the differential test against the C predicate caught the difference at
+    /// `flags == 3`. Two reasons the C is right here:
+    ///
+    /// - the C emulator is this project's differential oracle, and a predicate
+    ///   that silently disagrees with it at one input is worse than one that
+    ///   agrees everywhere;
+    /// - the two failures are not symmetric. Treating an unknown aperture as
+    ///   *sysmem* walks guest RAM, where a wrong root misses and faults loudly;
+    ///   treating it as *vidmem* walks emulated framebuffer, where a wrong root
+    ///   can read whatever happens to be there.
+    ///
+    /// A caller that wants to refuse an unknown aperture outright still can —
+    /// [`PdbAperture::Undefined`] survives as its own variant precisely so this
+    /// `bool` is never the only thing anyone can ask.
+    #[must_use]
+    pub fn is_sysmem(self) -> bool {
+        !matches!(self, Self::Vidmem)
+    }
+}
+
+/// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` payload — the `RmEvent::SetPageDir`
+/// facts. Where a VAS's data-plane identity is born.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetPageDir {
+    /// `physAddress` — the page-directory base.
+    pub phys_address: u64,
+    /// `numEntries`.
+    pub num_entries: u32,
+    /// The decoded aperture (`flags[1:0]`).
+    pub aperture: PdbAperture,
+    /// The raw `flags`, kept because bits above [1:0] carry `PRESERVE_PDES` and
+    /// friends that this milestone does not interpret.
+    pub flags: u32,
+    /// `hVASpace` — the VASpace this page directory belongs to.
+    pub h_vaspace: u32,
+}
+
+/// The GSP-RPC envelope (`rpc_message_header_v03_00`), validated.
+///
+/// `length` is **guest-written** and is used to find the payload, so it is
+/// checked against the buffer before anything else touches it. An RPC whose
+/// declared length exceeds its buffer is [`AbiError::RpcLength`], never a
+/// clamped read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RpcEnvelope {
+    /// `header_version` — `0x0300_0000` is MAJOR 3 / MINOR 0.
+    pub header_version: u32,
+    /// `signature` — see [`RpcEnvelope::SIGNATURE_VALID`].
+    pub signature: u32,
+    /// `length` — total message length **including** this 32-byte header.
+    pub length: u32,
+    /// `function` — an `NV_VGPU_MSG_FUNCTION_*` or `NV_VGPU_MSG_EVENT_*` id.
+    pub function: u32,
+    /// `rpc_result`.
+    pub rpc_result: u32,
+    /// `rpc_result_private`.
+    pub rpc_result_private: u32,
+    /// `sequence`.
+    pub sequence: u32,
+    /// Payload length, i.e. `length - 32`. Derived, and derived *safely*.
+    pub payload_len: usize,
+}
+
+impl RpcEnvelope {
+    /// `NV_VGPU_MSG_SIGNATURE_VALID` — ASCII `"VRPC"` little-endian.
+    ///
+    /// Cross-checked against the C emulator, which writes the same word at the
+    /// same offset (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:1585`,
+    /// `stl_le_p(el + 52, 0x43505256u)` where `el + 48` is the start of the RPC
+    /// header, so this is `signature` at +4).
+    pub const SIGNATURE_VALID: u32 = 0x4350_5256;
+
+    /// The envelope's own size — `sizeof(rpc_message_header_v03_00)`.
+    ///
+    /// ★ This is **32**, and it is worth stating loudly: the C emulator's
+    /// `nvkvm_m3_post_status` writes `rpc.length = 36` for a bare header with the
+    /// comment `/* length = sizeof(rpc_message_header) */`
+    /// (`src/qemu/nvkvm_gpu_emul.c:1586`), while the same file's own offset
+    /// arithmetic uses 32 (`:1637` "32-byte rpc_message_header … el+48+32 =
+    /// el+80", and `:1657` `rpc.length = hdr(32) + body(32)`). 32 is right; the
+    /// 36 is a stale constant that only survives because the message is
+    /// zero-padded and both sides checksum the *declared* length.
+    pub const SIZE: usize = 32;
+}
+
+/// A helper for [`RpcEnvelope`] decoding shared by [`crate::versions`].
+///
+/// # Errors
+///
+/// [`AbiError::RpcLength`] if `declared` is smaller than the envelope or larger
+/// than `available`.
+pub(crate) fn rpc_payload_len(declared: u32, available: usize) -> Result<usize, AbiError> {
+    let declared_usize = declared as usize;
+    if declared_usize < RpcEnvelope::SIZE || declared_usize > available {
+        return Err(AbiError::RpcLength {
+            declared,
+            available,
+        });
+    }
+    Ok(declared_usize - RpcEnvelope::SIZE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every defined aperture decodes to its own variant, and an undefined one
+    /// stays undefined rather than becoming vidmem. Kills the `&`→`|`,
+    /// `0x3`→`0x1`, and match-arm-collapse mutants in one predicate.
+    #[test]
+    fn every_aperture_encoding_decodes_to_its_own_variant() {
+        assert_eq!(PdbAperture::from_flags(0), PdbAperture::Vidmem);
+        assert_eq!(PdbAperture::from_flags(1), PdbAperture::SysmemCoherent);
+        assert_eq!(PdbAperture::from_flags(2), PdbAperture::SysmemNoncoherent);
+        assert_eq!(PdbAperture::from_flags(3), PdbAperture::Undefined(3));
+        // Bits above [1:0] must not leak into the decision: PRESERVE_PDES is
+        // bit 2 and must leave the aperture alone.
+        assert_eq!(PdbAperture::from_flags(0x0000_0004), PdbAperture::Vidmem);
+        assert_eq!(PdbAperture::from_flags(0xFFFF_FFFC), PdbAperture::Vidmem);
+        assert_eq!(
+            PdbAperture::from_flags(0xFFFF_FFFD),
+            PdbAperture::SysmemCoherent
+        );
+        assert_eq!(
+            PdbAperture::from_flags(0xFFFF_FFFF),
+            PdbAperture::Undefined(3)
+        );
+    }
+
+    /// `is_sysmem` agrees with the C emulator's `(flags & 0x3) != 0` predicate on
+    /// every one of the four encodings — including the undefined one, where the C
+    /// would say "sysmem" and we say so too, deliberately, because a walk of an
+    /// unknown-aperture root through guest RAM at least faults loudly.
+    #[test]
+    fn is_sysmem_matches_the_c_emulators_predicate_on_all_four_encodings() {
+        for flags in 0u32..4 {
+            let c_says = (flags & 0x3) != 0;
+            assert_eq!(
+                PdbAperture::from_flags(flags).is_sysmem(),
+                c_says,
+                "flags={flags} disagrees with nvkvm_gpu_emul.c:2534"
+            );
+        }
+        assert!(!PdbAperture::Vidmem.is_sysmem());
+        assert!(PdbAperture::Undefined(3).is_sysmem());
+    }
+
+    /// The payload length is derived by subtraction, and every way that
+    /// subtraction could go wrong is refused first.
+    #[test]
+    fn rpc_payload_len_refuses_every_impossible_declaration() {
+        assert_eq!(
+            rpc_payload_len(32, 32),
+            Ok(0),
+            "a bare header has no payload"
+        );
+        assert_eq!(rpc_payload_len(64, 4096), Ok(32));
+        assert_eq!(rpc_payload_len(4096, 4096), Ok(4064));
+        // Shorter than the header itself — the underflow case.
+        assert_eq!(
+            rpc_payload_len(31, 4096),
+            Err(AbiError::RpcLength {
+                declared: 31,
+                available: 4096
+            })
+        );
+        assert_eq!(
+            rpc_payload_len(0, 4096),
+            Err(AbiError::RpcLength {
+                declared: 0,
+                available: 4096
+            })
+        );
+        // Longer than the buffer — the over-read case.
+        assert_eq!(
+            rpc_payload_len(4097, 4096),
+            Err(AbiError::RpcLength {
+                declared: 4097,
+                available: 4096
+            })
+        );
+        assert_eq!(
+            rpc_payload_len(u32::MAX, 4096),
+            Err(AbiError::RpcLength {
+                declared: u32::MAX,
+                available: 4096
+            })
+        );
+    }
+}
