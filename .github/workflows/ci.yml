@@ -519,12 +519,19 @@ jobs:
       # threshold check on the recorded outcome files afterwards.
       - name: cargo mutants over the L1 surface
         run: |
+          # ★★ SCOPE = EVERY PRODUCTION CRATE. It used to be four hand-picked paths,
+          # which by 2026-07-27 covered only ~17k of 41.6k implementation lines — so the
+          # threshold described the OLD core while every real defect that week lived in
+          # the NEW OS layer (an Arc-ownership R1 violation, a silent-wrap ledger race, an
+          # address-blind arena). A gate that measures a shrinking minority reports a
+          # number about code nobody is changing.
+          #
+          # Test scaffolding is excluded in mutants.toml (crates/kayfabe-mocks/**,
+          # tests/src/**), not here — mutating an instrument is a category error, and 48%
+          # of one run's misses were exactly that.
           cargo mutants --test-workspace true -j 2 \
             --timeout 240 --build-timeout 900 \
-            -f 'crates/kayfabe-rt/**/*.rs' \
-            -f 'crates/kayfabe-core/src/reactor.rs' \
-            -f 'crates/kayfabe-fwd/src/lib.rs' \
-            -f 'crates/kayfabe-isolate/src/lib.rs' || true
+            -f 'crates/*/src/**/*.rs' || true
       # ★ The anti-inflation guard. "Unviable" is supposed to mean "the mutant does
       # not typecheck" (a tool artifact). If it ever again means "rustc crashed",
       # the denominator is fiction and so is the score — so a single ICE in any
@@ -569,4 +576,10 @@ jobs:
           # The bar. Raise it when a campaign measures higher and the new number
           # holds across a run; never lower it to make a red night go away —
           # a survivor is a test gap, and this file is where that gets argued.
+          # ⚠ PENDING RE-DERIVATION (2026-07-27). 91 was measured against the OLD
+          # four-path scope (~17k of 41.6k lines). The scope above is now every
+          # production crate, so this number describes a different population and MUST
+          # be re-derived from the first full run under the new scope before it is
+          # trusted as a bar. This job is weekly/dispatch only, so a temporarily wrong
+          # bar blocks nothing — but do not quote the score until it is re-derived.
           MUTATION_THRESHOLD_PCT: '91'
