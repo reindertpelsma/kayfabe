@@ -24,7 +24,7 @@
 
 use crate::bounds::{self, HostOffset};
 use crate::cache::{self, CachePolicy};
-use crate::error::RawError;
+use crate::error::{RawError, last_syscall_error};
 use crate::geometry;
 use crate::page_size::HostPageSize;
 use crate::view::RegionView;
@@ -267,15 +267,6 @@ impl Drop for Mapping {
             assert!(rc == 0, "munmap failed: {}", last_syscall_error("munmap"));
             lockwitness::assert_lock_free("munmap (dropping a host mapping)");
         }
-    }
-}
-
-/// `errno` for the call that just failed. Read through `std::io`, which needs no
-/// relaxation of its own.
-fn last_syscall_error(call: &'static str) -> RawError {
-    RawError::Syscall {
-        call,
-        errno: std::io::Error::last_os_error().raw_os_error(),
     }
 }
 

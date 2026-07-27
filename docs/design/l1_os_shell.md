@@ -4158,6 +4158,89 @@ measurement of one wiring, which is exactly what §0.2's tag discipline exists t
 3. **The RO-memslot correction (§10.1 item 4) will be quoted from `guest_memory_lock.md` §7.3
    without it.** The number there is a harness number; the QEMU number is unmeasured and larger.
 
+### 14.8 ★★ M2-c — the real `Vmm` exists, R1 SURVIVED, and the invariant it needed was one this doc never named
+
+**Provenance:** build findings against a real `/dev/kvm`, so §14's rule applies. Shipped:
+`crates/kayfabe-vmm-kvm` (the KVM-direct adapter — `KvmMachine`/`KvmVmm`, the two-tier
+memory plane, the `GuestRamMap` fed from real memslots), `kayfabe-linux-raw`'s
+`GuestWindow` / `Kvm`+`KvmVm`+`KvmMemslot` / `SharedRam`+`Notifier` (7 → **25** relaxations,
+5 `*_unsafe.rs` files, ratchet raised with a per-file inventory in the gate), the shared
+`kayfabe_vmm::DeferQueue` (§6.4), `lockwitness::assert_only_ranks` (§4.5's `*_under_lock`
+mechanism), and 40 tests (421 → **461**). Deliberately NOT built: vCPUs, `KVM_RUN`, MMIO
+exit dispatch, an interrupt controller, the isolate side of the export, and a wall clock.
+
+**F1. ★★★ R1 SURVIVES contact with real syscalls — but only because a lock this doc never
+named was split in two.** The plan/execute/commit shape §6.2 prescribes was buildable
+exactly as written, and the assert fires on nothing. What §6.2 does **not** say is that the
+adapter needs **two** locks, and that a one-mutex adapter (the shape `SharedVmm` has, and
+the obvious one) is a live R1 violation with every existing assert green: a thread holding
+rank 0 calls the in-lock-**legal** `gpa_read`, blocks on the adapter's mutex, and waits out
+a peer's memslot ioctl. That is §6.3's inversion rebuilt out of **our own** parts, and
+`lockwitness` cannot see it because an adapter's lock has no rank. §12.43 residual 2 said
+so and called it an L2 review obligation; it is a **build** obligation, and it is closed
+here by a second thread-local witness (`kayfabe_vmm_kvm::leaf`) asserted at every
+syscall-performing entry point alongside the ranked one.
+
+**F2. ★ §12.43 §3's "the leaf lock's critical section is a bounded memcpy" is a
+weaker design than it needs to be.** It does not have to be: resolve returns an
+`Arc<GuestWindow>` and the copy runs **outside** the lock, so the critical section is a
+`BTreeMap` probe. Soundness comes from §6.7 item 3 — because an unmap inside a window is a
+`MAP_FIXED` restore and never a `munmap`, a reader that lost its race reads anonymous
+zeroes rather than faulting. **That rule turns out to be load-bearing for concurrency, not
+just for the memslot**, which §6.7 does not say.
+
+**F3. ★ §6.7 item 3 claims `Reservation::restore(offset, len)` "exists". It did not** —
+M2-b shipped `Reservation`/`map_fixed_in` without it (§10's M2-b line asks for it; §14.5's
+shipped list omits it). The capability landed here on `GuestWindow`, whose whole API is the
+rule: there is no `munmap`-a-sub-range door to reach for.
+
+**F4. ★ `VmmError` had no arm for "the host refused".** Every variant described a request
+that was *wrong*; `Unsupported(&'static str)` cannot carry an `errno`. A real backend's
+`map_guest` fails for operationally different reasons (`EEXIST` an overlap, `EINVAL` a
+ceiling, `ENOMEM` an address space), and a suite that could only assert *"it refused"* would
+pass whichever it got — §12.43's finding one method group over. Added `VmmError::HostRefused
+{ what, errno }`, additively.
+
+**F5. ★ The port does not say whether `map_read_native`'s `write_trap` is absolute or
+relative to `gpa`.** Read as absolute here and refused when it is not inside the range it
+overlays; the trait's rustdoc should say which.
+
+**F6. ★ `kayfabe_fwd::guest_read` DISCARDS the boundary address on the `BadGpa` arm.**
+`GuestRamMap::resolve` names the first byte that does not resolve, and the `NonRamGpa` arm
+carries it through — but `_ => FwdFault::GpaRead { gpa }` substitutes the **requested**
+address. §12.43's straddle test uses a RAM→DEVICE range, i.e. the arm that keeps it, so the
+asymmetry was invisible. Pinned as-is in `l1_mean.rs` (the core runs unmodified at this
+stage); the fix is one line: `VmmError::BadGpa { gpa } => FwdFault::GpaRead { gpa }`.
+
+**F7. Two things the harness genuinely cannot observe, both needing a vCPU (M2-d).**
+(a) *Where* a memslot points — neutering the sub-range address arithmetic to ignore its
+offset broke nothing, because KVM validates nothing at install time and nothing executes.
+Closed mechanically at the raw layer (an address **difference** is asserted; an address is
+not); the end-to-end half is M2-d's. (b) The **order** of teardown — deleting the memslot
+before undeclaring the region is indistinguishable here, because the `Arc` keeps the
+mapping alive either way. The order is still the correct one and is written down; it is
+simply untested.
+
+**F8. ★ The R5 commit arm is not deterministically reachable.** `map_guest`'s plan-side
+window lookup catches a removed window first, so neutering the generation re-check bites
+nothing: no test in the suite can distinguish an R5 failure from a plan-side refusal. Both
+are `BadGpa` and both are counted separately (`AuditReport::r5_revalidation_failures`), but
+the arm's coverage is opportunistic. Either a documented test seam or an accepted residual;
+**not** silently claimed.
+
+**What M2-c owes the build:**
+
+1. **The `leaf` witness will be forgotten by the QEMU adapter.** It lives in
+   `kayfabe-vmm-kvm`, so L2-Q starts without it and re-acquires the blind spot on day one.
+   It belongs beside `lockwitness`, at the bottom of the graph, the first time a second
+   adapter needs it.
+2. **`GuestWindow`'s `Sync` grant will be cited as precedent for the other region types.**
+   It is not one: the argument is specific to an object whose address range is immutable for
+   its life and whose contents change only through the kernel.
+3. **The memslot-frequency gate is an adapter counter, not a CI grep.** §9.3 words it as a
+   push gate; today it is `AuditReport::memslot_installs` asserted in two tests. A second
+   adapter gets it only if it keeps the same ledger.
+
 ---
 
 ## 15. Proposed amendments to `l1_concurrency.md` (NOT applied here)

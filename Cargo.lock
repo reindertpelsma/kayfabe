@@ -230,11 +230,14 @@ dependencies = [
  "kayfabe-core",
  "kayfabe-fwd",
  "kayfabe-isolate",
+ "kayfabe-linux-raw",
  "kayfabe-mmu",
  "kayfabe-mocks",
  "kayfabe-rt",
  "kayfabe-util",
  "kayfabe-vmm",
+ "kayfabe-vmm-kvm",
+ "libc",
  "proptest",
 ]
 
@@ -251,6 +254,16 @@ name = "kayfabe-vmm"
 version = "0.1.0"
 dependencies = [
  "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-vmm-kvm"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-linux-raw",
+ "kayfabe-util",
+ "kayfabe-vmm",
+ "libc",
 ]
 
 [[package]]

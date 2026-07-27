@@ -93,7 +93,8 @@
 //!
 //! ```text
 //! $ ls crates/kayfabe-linux-raw/src/*_unsafe.rs
-//! mapping_unsafe.rs   sysconf_unsafe.rs
+//! host_fd_unsafe.rs   kvm_unsafe.rs   mapping_unsafe.rs
+//! sysconf_unsafe.rs   window_unsafe.rs
 //! ```
 //!
 //! §4.1.1's standing rule: the dangerous keyword may appear **only** in a file whose
@@ -202,17 +203,24 @@
 //!
 //! Named, because an honest absence is a design statement and a `todo!()` is not:
 //!
-//! - **`memfd` creation and sealing.** Arrives with the guest-RAM export (M2-c), which is
-//!   what needs it; §11 item 4's `F_SEAL_SHRINK` requirement belongs to that call, and
-//!   adding it now would be two more blocks with no consumer. Until then [`Backing`] takes
-//!   a `BorrowedFd` the caller owns.
+//! - ~~**`memfd` creation and sealing.**~~ **Landed at M2-c** as [`SharedRam`], with
+//!   §11 item 4's `F_SEAL_SHRINK` and the two seals that go with it.
 //! - **The double-mmap of guest RAM into an isolate.** [`Reservation`] is the mechanism it
-//!   needs; the isolate side is M2-c/M2-d. Its unstated precondition is now stated at
-//!   [`Backing::PrivateAnonymous`].
-//! - **KVM ioctls, `epoll`, `eventfd`, `timerfd`.** The reactor's OS half (M2-e).
-//! - **`Send`/`Sync` for the region types.** Not implemented, deliberately: adding one is a
-//!   reviewed relaxation in a `*_unsafe.rs` file, and until a caller needs it the compiler
-//!   holds the thread contract for free (`tests/ui/region_is_not_send.rs`).
+//!   needs and [`SharedRam::dup_for_export`] is the descriptor half; the isolate side is
+//!   M2-d. Its unstated precondition is stated at [`Backing::PrivateAnonymous`].
+//! - **vCPUs.** [`Kvm`] creates a VM and installs memslots and nothing else — no
+//!   `KVM_CREATE_VCPU`, no `KVM_RUN`, no exit dispatch. M2-c is the **memory plane**; a
+//!   vCPU would put a second unbuilt subsystem in the diff meant to answer one question.
+//! - **`epoll` and `timerfd`.** The reactor's OS half (M2-d). The **notify descriptor**
+//!   ([`Notifier`]) landed at M2-c because `Vmm::raise_irq` needed it, and it is where
+//!   §4.5's one named `*_under_lock` exception lives.
+//! - **`Send`/`Sync` for the region types.** Still not implemented for
+//!   [`MappedRegion`]/[`VolatileRegion`]/[`Reservation`], deliberately — the compiler
+//!   holds the thread contract for free until a caller needs it
+//!   (`tests/ui/region_is_not_send.rs`). ★ [`GuestWindow`] **does** have both, granted
+//!   per type with the argument written above the `impl`s rather than as one blanket
+//!   relaxation: it is the one object a hypervisor's guest memory genuinely is, live to
+//!   every thread at every instant.
 //! - **The `KAYFABE_FORCE_HOST_PAGE_SIZE` env knob** (§5.2 item 3). The *test axis* it
 //!   exists for is delivered — this crate's geometry runs at 4/16/64 KiB — but the knob
 //!   itself is consumed by the integration harness (M2-e), and implementing it now would
@@ -231,16 +239,22 @@ pub mod bounds;
 pub mod cache;
 pub mod error;
 pub mod geometry;
+mod host_fd_unsafe;
+mod kvm_unsafe;
 mod mapping_unsafe;
 pub mod page_size;
 mod sysconf_unsafe;
 pub mod view;
+mod window_unsafe;
 
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
 pub use error::RawError;
+pub use host_fd_unsafe::{Notifier, SharedRam};
+pub use kvm_unsafe::{Kvm, KvmMemslot, KvmVm};
 pub use mapping_unsafe::{
     Backing, HostProt, MappedRegion, PlacementId, Reservation, VolatileRegion,
 };
 pub use page_size::HostPageSize;
 pub use view::RegionView;
+pub use window_unsafe::GuestWindow;

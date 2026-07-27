@@ -1,0 +1,397 @@
+//! Owned host descriptors: adopting one, `memfd`, and the notify descriptor.
+//!
+//! `l1_os_shell.md` §4 — the raw adapter's descriptor half. Three doors, all small and
+//! all boring, which is what §4.7 asks of this crate:
+//!
+//! - [`adopt_fd`] — the one place a raw integer descriptor becomes an `OwnedFd`. It is
+//!   `pub(crate)` and every other `*_unsafe.rs` file in this crate calls it rather than
+//!   repeating the relaxation, so the "a descriptor now has an owner" argument is made
+//!   **once**.
+//! - [`SharedRam`] — a sealed `memfd`. This is §4.4.1's *shareable backing*, made real:
+//!   guest RAM that a second process can map is guest RAM that was **created** shareable,
+//!   and nothing else can be retrofitted into one.
+//! - [`Notifier`] — a counter-shaped edge. Its whole reason to exist here is
+//!   [`Notifier::signal_under_lock`], the **named** exception §4.5 reserves for the
+//!   deliberately non-blocking discharges: `grep -rn _under_lock` enumerates every
+//!   in-lock syscall in the workspace, and the enumeration is the property we want — not
+//!   *"there are none"* but *"there are exactly these, and each was argued"*.
+
+use crate::error::{RawError, last_syscall_error};
+use kayfabe_util::lockwitness;
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
+
+/// Adopt a raw descriptor the kernel just returned, or report the `errno` that came
+/// instead. **The only `from_raw_fd` in this crate.**
+pub(crate) fn adopt_fd(raw: libc::c_int, call: &'static str) -> Result<OwnedFd, RawError> {
+    if raw < 0 {
+        return Err(last_syscall_error(call));
+    }
+    // SAFETY: `raw` is non-negative (checked on the line above) and was returned by the
+    // syscall named in `call`, which returns either a NEW descriptor owned by this
+    // process or a negative error. Every call site is `adopt_fd(libc::…(…), "…")` — the
+    // value is consumed on the same expression that produced it — so this is the unique
+    // owner and the `OwnedFd` will `close` it exactly once.
+    Ok(unsafe { OwnedFd::from_raw_fd(raw) })
+}
+
+// =====================================================================================
+// SharedRam — the shareable backing, which is a property of CREATION, never of use
+// =====================================================================================
+
+/// A sealed `memfd` — memory a **second process** can map.
+///
+/// ## ★ Why this is a type rather than a descriptor parameter
+///
+/// `l1_os_shell.md` §4.4.1 and `Vmm::export_ram`'s rustdoc state the precondition the
+/// whole isolate double-mmap rests on: *guest RAM is shareable with another process only
+/// if the VM was **launched** with a shareable backing.* That is a **deployment fact no
+/// code gate can observe** — on a hypervisor it is a command-line flag. The only
+/// available mechanism is a loud refusal at the first export, and a refusal needs
+/// something to be true or false *about*. This type is that something: an adapter either
+/// holds one or it does not, and [`crate::Backing::PrivateAnonymous`] (the other arm)
+/// documents the failure it prevents — copy-on-write pages, an isolate writing a
+/// completion the guest never sees.
+///
+/// ## The seals, and the one that is load-bearing
+///
+/// `F_SEAL_SHRINK` is §11 item 4's requirement and it is not hygiene: a descriptor we
+/// hand to a **sandboxed** isolate that could `ftruncate` it shorter turns every mapping
+/// of it — ours included — into `SIGBUS` on the truncated pages, from the far side of the
+/// #14 boundary. `F_SEAL_GROW` goes with it because a backing that can grow makes every
+/// length we recorded a lower bound rather than a length, and `F_SEAL_SEAL` stops the
+/// seals themselves being removed later.
+///
+/// **Deliberately NOT `F_SEAL_WRITE`:** the point of this memory is that both sides
+/// write it.
+#[derive(Debug)]
+pub struct SharedRam {
+    fd: OwnedFd,
+    len: u64,
+}
+
+impl SharedRam {
+    /// Create `len` bytes of shareable, sealed backing.
+    ///
+    /// # Errors
+    /// [`RawError::ZeroLength`], [`RawError::TooLargeForHost`], [`RawError::Syscall`]
+    /// (`memfd_create`, `ftruncate` or `fcntl`).
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn create(len: u64) -> Result<Self, RawError> {
+        lockwitness::assert_lock_free("memfd_create (a shareable guest-RAM backing)");
+        if len == 0 {
+            return Err(RawError::ZeroLength {
+                what: "shared-RAM length",
+            });
+        }
+        let size =
+            libc::off_t::try_from(len).map_err(|_| RawError::TooLargeForHost { value: len })?;
+
+        // SAFETY: `memfd_create` reads the NUL-terminated name and dereferences nothing
+        // else; the literal is a `&CStr`, so the terminator is guaranteed by the type
+        // rather than by us. It returns a fresh descriptor or a negative error, and
+        // `adopt_fd` (which checks the sign) is what takes ownership — this block retains
+        // nothing.
+        let raw =
+            unsafe { libc::memfd_create(c"kayfabe-guest-ram".as_ptr(), libc::MFD_ALLOW_SEALING) };
+        let fd = adopt_fd(raw, "memfd_create")?;
+
+        // SAFETY: `fd` is a live descriptor this function owns (adopted on the line
+        // above), `size` is a checked `off_t` conversion of a non-zero length, and
+        // `ftruncate` dereferences no user memory at all.
+        let rc = unsafe { libc::ftruncate(fd.as_raw_fd(), size) };
+        if rc != 0 {
+            return Err(last_syscall_error("ftruncate"));
+        }
+
+        // SAFETY: the same live descriptor; `F_ADD_SEALS` takes an integer bitmask by
+        // value and dereferences no user memory. The seals are applied AFTER `ftruncate`,
+        // which is the only order that works — `F_SEAL_SHRINK`/`F_SEAL_GROW` freeze the
+        // size, so sealing first would freeze it at zero.
+        let rc = unsafe {
+            libc::fcntl(
+                fd.as_raw_fd(),
+                libc::F_ADD_SEALS,
+                libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_SEAL,
+            )
+        };
+        if rc != 0 {
+            return Err(last_syscall_error("fcntl(F_ADD_SEALS)"));
+        }
+        Ok(SharedRam { fd, len })
+    }
+
+    /// The backing's length in bytes — frozen by the seals, so this is a length and not a
+    /// snapshot of one.
+    #[must_use]
+    pub fn len_bytes(&self) -> u64 {
+        self.len
+    }
+
+    /// Borrow the descriptor, for mapping it ([`crate::Backing::SharedFile`]).
+    #[must_use]
+    pub fn as_backing_fd(&self) -> BorrowedFd<'_> {
+        self.fd.as_fd()
+    }
+
+    /// Duplicate the descriptor, for handing to another process.
+    ///
+    /// The duplicate is close-on-exec: a descriptor that leaks across an unrelated `exec`
+    /// is a share nobody declared, which is the same class of mistake as mapping the
+    /// wrong range.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn dup_for_export(&self) -> Result<OwnedFd, RawError> {
+        lockwitness::assert_lock_free("fcntl(F_DUPFD_CLOEXEC) (exporting guest RAM)");
+        // SAFETY: `self.fd` is a live descriptor owned by `self` for the duration of this
+        // borrow; `F_DUPFD_CLOEXEC` takes an integer lower bound by value and
+        // dereferences no user memory. The new descriptor is adopted by `adopt_fd`, which
+        // checks the sign, so ownership is unique on both sides.
+        let raw = unsafe { libc::fcntl(self.fd.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 0) };
+        adopt_fd(raw, "fcntl(F_DUPFD_CLOEXEC)")
+    }
+}
+
+// =====================================================================================
+// Notifier — the ONE syscall this crate permits under a lock, and it is named so
+// =====================================================================================
+
+/// A counter-shaped notify descriptor: a signal that never blocks and never waits.
+#[derive(Debug)]
+pub struct Notifier {
+    fd: OwnedFd,
+}
+
+impl Notifier {
+    /// Create a non-blocking, close-on-exec notify descriptor.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn create() -> Result<Self, RawError> {
+        lockwitness::assert_lock_free("eventfd (creating a notify descriptor)");
+        // SAFETY: this call takes two integers by value and dereferences no user memory.
+        // `EFD_NONBLOCK` is what makes `signal_under_lock` below defensible: with it, the
+        // only way the write can fail is the 64-bit counter saturating, which is a
+        // refusal rather than a wait.
+        let raw = unsafe { libc::eventfd(0, libc::EFD_NONBLOCK | libc::EFD_CLOEXEC) };
+        Ok(Notifier {
+            fd: adopt_fd(raw, "eventfd")?,
+        })
+    }
+
+    /// Borrow the descriptor, for registering it in a readiness set (M2-d).
+    #[must_use]
+    pub fn as_source_fd(&self) -> BorrowedFd<'_> {
+        self.fd.as_fd()
+    }
+
+    /// ★★ **The named in-lock syscall** — `l1_os_shell.md` §4.5's escape hatch, and the
+    /// only member of its set.
+    ///
+    /// §6.1 classifies `Vmm::raise_irq` as in-lock **legal**, on the grounds that it is
+    /// *"one descriptor write on an irqfd"*. That legality is a claim about the
+    /// **implementation**, not about the name, so it is spelled here where the syscall
+    /// actually is: an 8-byte write to a non-blocking counter descriptor, which the
+    /// kernel completes without sleeping, without allocating and without acquiring
+    /// anything a peer thread can hold.
+    ///
+    /// `permitted_ranks` is a **mask of the lock ranks this call site is allowed to be
+    /// holding**, named in the signature exactly as §4.5 requires, and *asserted* rather
+    /// than documented: a caller that drifts into holding a rank it did not declare gets
+    /// the same loud panic as a caller of an ordinary blocking door. Passing `0` makes it
+    /// [`Notifier::signal`].
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] — including `EAGAIN`, which for a non-blocking counter
+    /// descriptor means it saturated, i.e. **nobody has drained this source in 2^64
+    /// signals**. Reported, never retried in a loop: a retry loop is a blocking call
+    /// wearing a non-blocking API.
+    ///
+    /// # Panics
+    /// If this thread holds any rank outside `permitted_ranks`.
+    pub fn signal_under_lock(&self, permitted_ranks: u8) -> Result<(), RawError> {
+        lockwitness::assert_only_ranks(
+            "a notify-descriptor write (the irqfd-shaped completion edge)",
+            permitted_ranks,
+        );
+        let buf = 1u64.to_ne_bytes();
+        // SAFETY: `buf` is a live 8-byte array in this frame and `write` reads exactly
+        // `buf.len()` bytes from it — the length passed is computed here from the array
+        // itself, so no caller supplies it. `self.fd` is live for this borrow. The return
+        // value is checked below.
+        let rc = unsafe {
+            libc::write(
+                self.fd.as_raw_fd(),
+                buf.as_ptr().cast::<libc::c_void>(),
+                buf.len(),
+            )
+        };
+        if rc != buf.len() as isize {
+            return Err(last_syscall_error("write(notify descriptor)"));
+        }
+        Ok(())
+    }
+
+    /// Signal with **no** lock held — the ordinary door.
+    ///
+    /// # Errors
+    /// As [`Notifier::signal_under_lock`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn signal(&self) -> Result<(), RawError> {
+        self.signal_under_lock(0)
+    }
+
+    /// Drain the counter, returning how many signals had accumulated (0 if none).
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] for anything other than "empty", which is `Ok(0)`.
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn drain(&self) -> Result<u64, RawError> {
+        lockwitness::assert_lock_free("a notify-descriptor read (draining a source)");
+        let mut buf = [0u8; 8];
+        // SAFETY: `buf` is a live 8-byte array in this frame and `read` writes at most
+        // `buf.len()` bytes into it — the length is computed here from the array itself.
+        // `self.fd` is live for this borrow.
+        let rc = unsafe {
+            libc::read(
+                self.fd.as_raw_fd(),
+                buf.as_mut_ptr().cast::<libc::c_void>(),
+                buf.len(),
+            )
+        };
+        if rc == buf.len() as isize {
+            return Ok(u64::from_ne_bytes(buf));
+        }
+        match std::io::Error::last_os_error().raw_os_error() {
+            Some(e) if e == libc::EAGAIN => Ok(0),
+            _ => Err(last_syscall_error("read(notify descriptor)")),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Backing, CachePolicy, HostOffset, HostPageSize, HostProt, MappedRegion};
+
+    /// The seal is the point, so it is proven by the KERNEL refusing, not by us
+    /// remembering to ask. `File::set_len` is `ftruncate`, reached through safe std.
+    #[test]
+    fn a_shared_backing_is_sealed_against_shrinking() {
+        let ram = SharedRam::create(2 * 4096).expect("memfd_create is available on Linux");
+        assert_eq!(ram.len_bytes(), 2 * 4096);
+        let f = std::fs::File::from(ram.dup_for_export().expect("dup"));
+        let err = f
+            .set_len(4096)
+            .expect_err("a sealed backing must refuse to shrink");
+        assert_eq!(
+            err.raw_os_error(),
+            Some(libc::EPERM),
+            "F_SEAL_SHRINK must make a shorter ftruncate EPERM — a backing a sandboxed \
+             isolate can shrink turns every mapping of it into SIGBUS from the far side \
+             of the #14 boundary (§11 item 4)"
+        );
+    }
+
+    #[test]
+    fn a_zero_length_shared_backing_is_refused_by_that_exact_variant() {
+        assert_eq!(
+            SharedRam::create(0).unwrap_err(),
+            RawError::ZeroLength {
+                what: "shared-RAM length"
+            }
+        );
+    }
+
+    /// ★ The property §4.4.1 rests on, asserted rather than assumed: a duplicated
+    /// descriptor is the SAME backing, not a copy-on-write snapshot of one.
+    #[test]
+    fn a_duplicate_of_a_shared_backing_maps_the_same_bytes() {
+        let page = HostPageSize::query();
+        let ram = SharedRam::create(page.bytes()).expect("memfd");
+        let dup = ram.dup_for_export().expect("dup");
+        let a = MappedRegion::map(
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
+            page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .expect("map the original");
+        let b = MappedRegion::map(
+            Backing::SharedFile {
+                fd: dup.as_fd(),
+                offset: 0,
+            },
+            page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .expect("map the duplicate");
+        a.write_from(HostOffset::ZERO, &[0xA5; 8])
+            .expect("write through the original");
+        let mut got = [0u8; 8];
+        b.read_into(HostOffset::ZERO, &mut got)
+            .expect("read through the duplicate");
+        assert_eq!(
+            got, [0xA5; 8],
+            "a duplicated shareable backing must be the SAME memory — were it \
+             copy-on-write, an isolate's completions would be invisible to the guest, \
+             which is the exact failure §4.4.1 exists to prevent"
+        );
+    }
+
+    #[test]
+    fn a_notify_signal_is_counted_and_drained_exactly_once() {
+        let n = Notifier::create().expect("a notify descriptor");
+        assert_eq!(n.drain(), Ok(0), "a fresh notifier has nothing pending");
+        n.signal().expect("signal");
+        n.signal().expect("signal");
+        assert_eq!(
+            n.drain(),
+            Ok(2),
+            "the source COALESCES: two signals drain as one edge carrying the count"
+        );
+        assert_eq!(n.drain(), Ok(0), "and the counter is consumed by the drain");
+    }
+
+    /// ★ The escape hatch's polarity, both ways. This is the only syscall in the
+    /// workspace permitted under a lock; a rank it did not declare must still panic, or
+    /// the hatch is a hole.
+    #[test]
+    fn the_named_in_lock_syscall_permits_only_the_ranks_it_declares() {
+        let n = Notifier::create().expect("a notify descriptor");
+        lockwitness::note_acquired(0);
+        let permitted = n.signal_under_lock(lockwitness::bit(0));
+        let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            n.signal_under_lock(lockwitness::bit(1))
+        }));
+        lockwitness::note_released(0);
+        assert_eq!(
+            permitted,
+            Ok(()),
+            "holding EXACTLY the declared rank must be permitted"
+        );
+        assert!(
+            refused.is_err(),
+            "holding rank 0 while declaring only rank 1 must panic — an under-lock \
+             variant that accepts any lock is not an exception, it is an exemption"
+        );
+    }
+}

@@ -18,8 +18,7 @@
 //!
 //! All mocks are pure in-memory state machines: no files, no sockets, no wall clock.
 
-use std::cmp::Reverse;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -462,14 +461,14 @@ pub struct MockVmm {
     pub traps: Vec<(BarId, Range<u64>, TrapMode)>,
     /// Every `export_ram` call.
     pub exports: Vec<Option<Range<u64>>>,
-    deferred: BinaryHeap<Reverse<(Instant, u64, DeferredEntry)>>,
+    /// ★ The SHARED deadline queue (`l1_os_shell.md` §6.4): one implementation in the
+    /// port crate, used verbatim by the mock and by the real backend. A backend that
+    /// re-implemented it could order timers differently from the one every deterministic
+    /// test was written against.
+    deferred: kayfabe_vmm::DeferQueue,
     now: Instant,
     next_slot: u64,
-    next_seq: u64,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct DeferredEntry(CoreEvent);
 
 /// The region id [`MockVmm::new`]'s default all-RAM declaration uses.
 pub const MOCK_RAM_REGION: RamRegionId = RamRegionId(0);
@@ -498,10 +497,9 @@ impl MockVmm {
             irqs: Vec::new(),
             traps: Vec::new(),
             exports: Vec::new(),
-            deferred: BinaryHeap::new(),
+            deferred: kayfabe_vmm::DeferQueue::new(),
             now: Instant::ZERO,
             next_slot: 0,
-            next_seq: 0,
         }
     }
 
@@ -566,15 +564,7 @@ impl MockVmm {
     /// what a real adapter's serialized executor would do.
     pub fn advance(&mut self, d: Duration) -> Vec<CoreEvent> {
         self.now = self.now.advanced(d);
-        let mut due = Vec::new();
-        while let Some(Reverse((t, _, _))) = self.deferred.peek() {
-            if *t > self.now {
-                break;
-            }
-            let Reverse((_, _, DeferredEntry(ev))) = self.deferred.pop().expect("peeked");
-            due.push(ev);
-        }
-        due
+        self.deferred.due(self.now)
     }
 
     /// Test helper: read back guest RAM (missing bytes read as 0).
@@ -662,10 +652,7 @@ impl Vmm for MockVmm {
     }
 
     fn defer(&mut self, after: Duration, event: CoreEvent) {
-        let at = self.now.advanced(after);
-        let seq = self.next_seq;
-        self.next_seq += 1;
-        self.deferred.push(Reverse((at, seq, DeferredEntry(event))));
+        self.deferred.push(self.now, after, event);
     }
 
     fn now(&self) -> Instant {

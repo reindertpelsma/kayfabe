@@ -132,6 +132,37 @@ pub fn assert_lock_free(what: &str) {
     );
 }
 
+/// ★ **The named exception's assert** — `l1_os_shell.md` §4.5.
+///
+/// [`assert_lock_free`] is the rule; this is the *enumerated* set of exceptions. §4.5
+/// permits a deliberately non-blocking discharge (the irqfd-shaped completion edge is the
+/// only one today) to run under a lock, on condition that the entry point is named
+/// `*_under_lock` and **names the rank it permits in its signature**. `permitted` is that
+/// declaration as a rank mask, and this function is what makes it a mechanism rather than
+/// a comment: a call site that drifts into holding a rank it did not declare panics
+/// exactly as an ordinary blocking door would.
+///
+/// `assert_only_ranks(what, 0)` is [`assert_lock_free`] — deliberately, so the ordinary
+/// door and the exception cannot diverge.
+///
+/// # Panics
+/// If this thread holds any rank outside `permitted`.
+pub fn assert_only_ranks(what: &str, permitted: u8) {
+    let held = held_mask();
+    let undeclared = held & !permitted;
+    assert!(
+        undeclared == 0,
+        "R1 no-blocking-under-lock violation (l1_concurrency.md §3.3, \
+         l1_os_shell.md §4.5): {what} while holding UNDECLARED rank(s) {undeclared:?} \
+         (declared: {declared:?}, held: {held_r:?}). An `*_under_lock` door is an \
+         enumerated exception, not an exemption: widen the declared mask only with the \
+         argument for why the call cannot block under that rank.",
+        undeclared = held_ranks(undeclared),
+        declared = held_ranks(permitted),
+        held_r = held_ranks(held),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,6 +188,24 @@ mod tests {
     #[test]
     fn assert_lock_free_passes_when_nothing_is_held() {
         assert_lock_free("a test operation");
+    }
+
+    /// ★ The enumerated exception (§4.5): a declared rank passes, an undeclared one
+    /// panics, and declaring nothing is exactly `assert_lock_free`.
+    #[test]
+    fn assert_only_ranks_permits_exactly_what_it_declares() {
+        assert_only_ranks("a nothing-held call", 0);
+        note_acquired(0);
+        assert_only_ranks("a declared-rank-0 call", bit(0));
+        // Declaring MORE than is held is fine — the declaration is a ceiling.
+        assert_only_ranks("a declared-0-and-1 call", bit(0) | bit(1));
+        let undeclared =
+            std::panic::catch_unwind(|| assert_only_ranks("a rank-1-only call", bit(1)));
+        note_released(0);
+        assert!(
+            undeclared.is_err(),
+            "holding rank 0 while declaring only rank 1 must panic"
+        );
     }
 
     #[test]

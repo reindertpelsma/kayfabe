@@ -18,6 +18,11 @@ kayfabe-mmu.workspace = true
 kayfabe-completion.workspace = true
 kayfabe-isolate.workspace = true
 kayfabe-vmm.workspace = true
+# ★ The REAL Vmm (l1_os_shell.md §10, M2-c). The conformance suite drives the SAME core
+# traffic through the mock harness and through real KVM memslots — which is the
+# portability contract exercised rather than asserted.
+kayfabe-vmm-kvm.workspace = true
+kayfabe-linux-raw.workspace = true
 kayfabe-mocks.workspace = true
 kayfabe-rt.workspace = true
 
@@ -25,6 +30,8 @@ kayfabe-rt.workspace = true
 # Property-based / fuzz testing — DEV-ONLY (never a core dependency). Generates
 # arbitrary + adversarial RM event streams to fuzz the guest→core attack surface.
 proptest = "1.11"
+# Asserting the EXACT errno a real kernel returned (EEXIST vs ENOMEM), never `is_err()`.
+libc = "0.2"
 
 [lints]
 workspace = true

@@ -109,6 +109,21 @@ pub enum RawError {
         /// The raw `errno`, or `None` if the OS reported none.
         errno: Option<i32>,
     },
+    /// ★ The host cannot do this **at all** — a capability refusal, not an argument
+    /// refusal.
+    ///
+    /// Distinct from every variant above because those describe a request that was wrong
+    /// and this describes one that was fine and cannot be served here: a kernel whose KVM
+    /// API version these structs are not written for, a cache attribute the platform does
+    /// not offer. A caller retries a bad argument; a caller of this one must refuse
+    /// **loudly at realize**, which is the §4.4.1 / §9.3 pattern for every deployment fact
+    /// no type and no CI grep can observe.
+    Unsupported {
+        /// What was asked for.
+        what: &'static str,
+        /// Why this host cannot serve it, in operator-readable terms.
+        detail: &'static str,
+    },
     /// `sysconf(_SC_PAGESIZE)` reported something that cannot be a host page size — not a
     /// power of two, or outside [4 KiB, 64 KiB]. A loud startup fault, never a silent
     /// misalignment (§5.2 item 1).
@@ -166,6 +181,9 @@ impl fmt::Display for RawError {
                 Some(e) => write!(f, "{call} failed (errno {e})"),
                 None => write!(f, "{call} failed"),
             },
+            RawError::Unsupported { what, detail } => {
+                write!(f, "this host cannot provide {what}: {detail}")
+            }
             RawError::AbsurdPageSize { reported } => write!(
                 f,
                 "sysconf(_SC_PAGESIZE) reported {reported}, which cannot be a host page \
@@ -176,3 +194,16 @@ impl fmt::Display for RawError {
 }
 
 impl std::error::Error for RawError {}
+
+/// `errno` for the call that just failed, as a [`RawError::Syscall`].
+///
+/// Lives here — in the safe half — rather than beside the syscalls, because it is read
+/// through `std::io::Error::last_os_error()` and needs no relaxation of its own. Every
+/// `*_unsafe.rs` file calls it, so the `errno` capture is written once and cannot drift
+/// into a per-file variant that forgets to read it.
+pub(crate) fn last_syscall_error(call: &'static str) -> RawError {
+    RawError::Syscall {
+        call,
+        errno: std::io::Error::last_os_error().raw_os_error(),
+    }
+}

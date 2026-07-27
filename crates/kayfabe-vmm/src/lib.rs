@@ -54,10 +54,11 @@
 //! core-owned state: it is `Send` (handed between adapter threads) but carries no `Sync`
 //! bound — the adapter owns its synchronization.
 
+use core::cmp::Reverse;
 use core::ops::Range;
 use core::time::Duration;
 use kayfabe_util::Instant;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BinaryHeap};
 
 /// Error from a VMM capability call.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,6 +109,31 @@ pub enum VmmError {
     BadSlot(SlotId),
     /// The backend cannot satisfy the request (resource exhaustion, unsupported mode).
     Unsupported(&'static str),
+    /// ★★ **The host itself refused** — a syscall the backend made came back with an
+    /// error. Added when the first real backend was built (M2-c), because until then no
+    /// implementation of this trait could fail this way.
+    ///
+    /// # Why this is a variant and not an `Unsupported` string
+    ///
+    /// `MockVmm::map_guest` is a `BTreeMap::insert`: it has no failing arm at all, and
+    /// [`VmmError::Unsupported`]'s payload is a `&'static str` that cannot carry an
+    /// `errno`. That combination is the same shape `l1_concurrency.md` §12.43 found on the
+    /// guest-memory path — *"the harness could not express the hazard"* — one method
+    /// group over: a real `map_guest` can be refused by the kernel for **operationally
+    /// different reasons** (the memslot ceiling, an overlapping guest-physical range, a
+    /// window the address space cannot hold), and a suite that could only assert *"it
+    /// refused"* would pass whichever one it got. `testing_doctrine.md` §2 rule 3 requires
+    /// the exact variant; that requires the exact cause to survive the port.
+    ///
+    /// `what` names the operation in operator-readable terms — an operator reading a log
+    /// must be able to tell a deployment fact (an exhausted ceiling) from a bug (an
+    /// overlap we should have known about) without a debugger.
+    HostRefused {
+        /// Which operation the host refused (`"a memslot install"`, `"a window mapping"`).
+        what: &'static str,
+        /// The OS error number, when the host reported one.
+        errno: Option<i32>,
+    },
 }
 
 /// Identifies an installed guest-physical mapping (memslot) for later unmap/lock.
@@ -566,6 +592,84 @@ pub enum CoreEvent {
         /// Opaque per-op cookie the core supplied when issuing the op.
         cookie: u64,
     },
+}
+
+// =================================================================================
+// ★ The deadline queue — ONE implementation, shared by every backend (§6.4)
+// =================================================================================
+
+/// The deadline heap behind [`Vmm::defer`] / [`Vmm::now`].
+///
+/// ## ★ Why this is in the port crate rather than in each backend
+///
+/// `l1_os_shell.md` §6.4 is one line long and it is a rule about **divergence**: *"share
+/// the queue with the mock, do not re-implement it."* A backend that re-implements the
+/// deadline heap is a backend whose timer ordering can differ from the one every
+/// deterministic test was written against — and the difference would surface as a flaky
+/// re-delivery sweep, arbitrarily far from the copy that caused it. The queue is pure
+/// data, it names no OS primitive, and both backends need exactly the same semantics, so
+/// it lives at the port.
+///
+/// ## What it is not
+///
+/// It is an **accumulator**, not a scheduler (§6.6's queue discipline): it owns no thread,
+/// decides nothing about when its contents run, and is drained by whichever thread was
+/// going to be there anyway. The one scheduler in the system is the executor inbox.
+///
+/// The clock is a *parameter* of [`DeferQueue::due`], never a field: a queue that read a
+/// clock would be a queue with a policy, and both of today's backends drive time
+/// explicitly.
+#[derive(Debug, Default)]
+pub struct DeferQueue {
+    heap: BinaryHeap<Reverse<(Instant, u64, CoreEvent)>>,
+    next_seq: u64,
+}
+
+impl DeferQueue {
+    /// An empty queue.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Schedule `event` for `now + after`.
+    ///
+    /// The insertion sequence number is part of the key, below the deadline: two events
+    /// due at the same instant come out in the order they went in. Without it a
+    /// `BinaryHeap` would order them by the event's own `Ord`, which would make delivery
+    /// order depend on the *payload* — deterministic, and deterministically wrong.
+    pub fn push(&mut self, now: Instant, after: Duration, event: CoreEvent) {
+        let at = now.advanced(after);
+        let seq = self.next_seq;
+        self.next_seq += 1;
+        self.heap.push(Reverse((at, seq, event)));
+    }
+
+    /// Every event due at or before `now`, in deadline-then-insertion order.
+    pub fn due(&mut self, now: Instant) -> Vec<CoreEvent> {
+        let mut out = Vec::new();
+        while let Some(Reverse((t, _, _))) = self.heap.peek() {
+            if *t > now {
+                break;
+            }
+            let Reverse((_, _, ev)) = self.heap.pop().expect("peeked");
+            out.push(ev);
+        }
+        out
+    }
+
+    /// How many events are still outstanding (the bound the §6.6 inventory cites: one
+    /// entry per outstanding `defer`).
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.heap.len()
+    }
+
+    /// Is the queue empty?
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.heap.is_empty()
+    }
 }
 
 /// # The hypervisor adapter — everything the Mode-2 core may ask of a VMM

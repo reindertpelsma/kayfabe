@@ -783,6 +783,22 @@ pub fn gpfifo_ring(gpa: u64, len: u64) -> Vec<u8> {
 /// Script `methods` into guest RAM at `gpa` through `vmm` and return the GPFIFO ring
 /// naming them — the legitimate shape.
 pub fn script_ring(vmm: &SharedVmm, gpa: u64, methods: &[(u32, Vec<u32>)]) -> Vec<u8> {
+    script_ring_via(&mut vmm.clone(), gpa, methods)
+}
+
+/// ★ [`script_ring`] over **any** backend — the mock harness's `SharedVmm` or the real
+/// `kayfabe_vmm_kvm::KvmVmm`.
+///
+/// Written as one function over `&mut dyn Vmm` rather than duplicated per backend, and
+/// that is the portability contract being *used* rather than asserted: a workload that
+/// compiles against the port compiles against every implementation of it, so the mean run
+/// can drive real KVM memslots through the same script that drives a `BTreeMap`.
+///
+/// # Panics
+/// If the range is not proven RAM by the backend — a scripting call that lands on a
+/// device window is a bug in the test, and a silent one would make every assertion below
+/// it a fact about an unwritten buffer.
+pub fn script_ring_via(vmm: &mut dyn Vmm, gpa: u64, methods: &[(u32, Vec<u32>)]) -> Vec<u8> {
     let mut bytes = Vec::new();
     for (h, args) in methods {
         bytes.extend_from_slice(&h.to_le_bytes());
@@ -790,12 +806,11 @@ pub fn script_ring(vmm: &SharedVmm, gpa: u64, methods: &[(u32, Vec<u32>)]) -> Ve
             bytes.extend_from_slice(&a.to_le_bytes());
         }
     }
-    // ★ Through the PORT (`Vmm::gpa_write`), not through `with` — scripting guest
-    // memory is a guest-physical access like any other, it is proven RAM like any
-    // other, and it is the one in this harness that runs with NO ranked lock held.
-    // That is what makes `lock_depth_span`'s lower bound a real observation.
-    vmm.clone()
-        .gpa_write(gpa, &bytes)
+    // ★ Through the PORT (`Vmm::gpa_write`), not through a backend-specific back door —
+    // scripting guest memory is a guest-physical access like any other, it is proven RAM
+    // like any other, and it is the one in this harness that runs with NO ranked lock
+    // held. That is what makes every lock-depth span's LOWER bound a real observation.
+    vmm.gpa_write(gpa, &bytes)
         .expect("scripting a legitimate pushbuffer into guest RAM");
     gpfifo_ring(gpa, bytes.len() as u64)
 }

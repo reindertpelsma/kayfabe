@@ -319,7 +319,18 @@ jobs:
           # --- The ratchet: the number of relaxations is a reviewed constant.
           # Counts the syntactic forms only (`unsafe {`, `unsafe fn/impl/trait`), so prose
           # inside those files — which gate C permits there — cannot inflate it.
-          EXPECTED_UNSAFE_BLOCKS=7
+          # ★ 7 -> 25 at M2-c (l1_os_shell.md §10), the stage that gives the raw crate
+          # its first consumers. The new surface, per file, each block carrying its own
+          # `// SAFETY:` (clippy `undocumented_unsafe_blocks = deny`):
+          #   window_unsafe.rs  (7) — the GuestWindow: one mmap, one MAP_FIXED shared by
+          #     place/restore, one munmap in Drop, two copy_nonoverlapping, and the two
+          #     PER-TYPE `Send`/`Sync` grants (§14.5 item 1 asked for exactly this shape,
+          #     argued per type, never one blanket impl).
+          #   host_fd_unsafe.rs (8) — from_raw_fd (the ONE adoption site), memfd_create,
+          #     ftruncate, F_ADD_SEALS, F_DUPFD_CLOEXEC, the notify descriptor's create,
+          #     write and read.
+          #   kvm_unsafe.rs     (3) — open(/dev/kvm), the by-value ioctl, the memslot ioctl.
+          EXPECTED_UNSAFE_BLOCKS=25
           actual=$(grep -rhoE 'unsafe (\{|fn |impl |trait )' \
                      crates/kayfabe-linux-raw/src/*_unsafe.rs | wc -l | tr -d ' ')
           echo "unsafe blocks: $actual (bar: $EXPECTED_UNSAFE_BLOCKS)"

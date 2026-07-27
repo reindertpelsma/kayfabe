@@ -1,0 +1,21 @@
+[package]
+name = "kayfabe-vmm-kvm"
+description = "The KVM-direct harness adapter: a real VM descriptor, real KVM_SET_USER_MEMORY_REGION memslots and real mmap'd backings behind the `kayfabe-vmm` port (l1_os_shell.md §10, M2-c / decision #48). The FIRST real Vmm, and deliberately not a hypervisor's — a trait that has only ever been implemented against one hypervisor is a trait shaped by it."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-vmm.workspace = true
+kayfabe-linux-raw.workspace = true
+
+[dev-dependencies]
+# ★ DEV-ONLY, and its only job is asserting the EXACT errno a real kernel returned
+# (EEXIST vs ENOMEM vs EINVAL). The crate itself names no OS constant: every syscall
+# belongs to `kayfabe-linux-raw`, and a dependency here would be the first step of that
+# rule decaying.
+libc = "0.2"
+
+[lints]
+workspace = true

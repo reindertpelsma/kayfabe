@@ -6673,3 +6673,799 @@ fn a_published_gpa_is_provably_its_own_procs_ram_under_mean_arena_churn() {
         "the lock configuration is observable through the GPA plane",
     );
 }
+
+// =================================================================================
+// ★★★ THE REAL MEMORY PLANE — `l1_os_shell.md` §6.1/§6.2/§6.7, stage M2-c
+//
+// Everything above this line drives `MockVmm`, whose `map_guest` is a
+// `BTreeMap::insert` that CANNOT BLOCK. §6.2 records the consequence as gap **O1**:
+// *"nothing in the suite can distinguish a memcpy from a KVM_SET_USER_MEMORY_REGION."*
+// So R1 — no blocking call under ANY lock — has never actually been tested; it has
+// only ever been true of a harness that had no blocking calls in it.
+//
+// What follows is the same core, unmodified, driven through `kayfabe_vmm_kvm::KvmVmm`:
+// a real /dev/kvm descriptor, real memslots, real mmap'd windows, real MAP_FIXED
+// placements, and real kernel refusals (EEXIST, ENOMEM) happening WHILE the traffic
+// runs. `SharedDevice::parse_pushbuffer` does not know which backend is underneath —
+// which is the portability contract used rather than asserted.
+// =================================================================================
+
+/// Proc-0's guest-RAM window. 64 host pages: the lower half carries scripted
+/// pushbuffers, the upper half is churned with placements, and the two never overlap
+/// (a `MAP_FIXED` over a scripted ring would replace it with zeroes, and the test would
+/// then be about the wrong thing).
+const RGPA_A: u64 = 0x1000_0000;
+/// Proc-1's window, on the other GPU.
+const RGPA_B: u64 = 0x2000_0000;
+/// The window torn down while a thread is parsing out of it.
+const RGPA_REVOKE: u64 = 0x3000_0000;
+/// **Our own trapped BAR0** — declared a device region, which on KVM means it has no
+/// memslot at all and a guest access to it exits instead of landing anywhere.
+const RGPA_BAR0: u64 = 0x7000_0000;
+/// Never declared. On a real backend the region map starts EMPTY, so this is a hole by
+/// construction rather than by declaration — the opposite of the mock's all-RAM default.
+const RGPA_HOLE: u64 = 0x6000_0000;
+/// Window size in pages.
+const RWIN_PAGES: u64 = 64;
+/// Submits per real-DMA thread. Four hostile shapes cycle, so a multiple of four keeps
+/// the arm counts exact rather than approximately balanced.
+const RDMA_OPS: usize = 48;
+/// Publish/unpublish cycles per churn thread.
+const RPUB_OPS: usize = 40;
+/// Bounded budget for the revoke prober (an EDGE loop, never a sleep).
+const RREVOKE_BUDGET: usize = 50_000;
+/// Real host refusals attempted while the traffic runs.
+const RREFUSE_OPS: usize = 30;
+
+fn host_page() -> u64 {
+    kayfabe_linux_raw::HostPageSize::query().bytes()
+}
+
+/// What one real-DMA thread observed. Every field is script-determined, so both lock
+/// modes and both backends must produce identical values.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct RealDmaTally {
+    legal_ok: usize,
+    non_ram: usize,
+    unbacked: usize,
+}
+
+/// What the churn thread observed. `placed`/`restored` are script-determined; the
+/// refusal split is not (it depends on when the main thread's teardown lands), so it is
+/// asserted as a **conservation identity** rather than as a value.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ChurnTally {
+    placed: usize,
+    restored: usize,
+    refused: usize,
+}
+
+/// Realize a machine whose guest-physical layout is the mean run's.
+fn real_machine() -> kayfabe_vmm_kvm::KvmMachine {
+    kayfabe_vmm_kvm::KvmMachine::realize(kayfabe_vmm_kvm::MachineConfig {
+        shareable_ram: true,
+        bars: vec![kayfabe_vmm_kvm::BarPlacement {
+            bar: kayfabe_vmm::BarId::Bar0,
+            base: RGPA_BAR0,
+            len: 0x1_0000,
+        }],
+    })
+    .expect(
+        "/dev/kvm must be present and permitted to run the real-Vmm mean run \
+         (l1_os_shell.md §10, decision #48). This is a deployment fact no code gate can \
+         observe, and a silently-skipped OS test is the green instrument \
+         testing_doctrine.md §1 forbids",
+    )
+}
+
+/// **The real DMA-descriptor workload.** Identical in shape to [`dma_workload`] above,
+/// and deliberately so: the same guest, the same four hostile shapes, the same exact
+/// faults — but every guest-memory access is a copy through a real `mmap`ed window, and
+/// every refusal is the real region map saying that guest-physical address has no
+/// memslot behind it.
+fn real_dma_workload(
+    dev: &SharedDevice,
+    vmm: &kayfabe_vmm_kvm::KvmVmm,
+    pids: &[ProcId],
+    i: usize,
+    base: u64,
+) -> RealDmaTally {
+    let (lane, gpu, pid) = (lane_of(i), gpu_of(i), pids[i]);
+    let mut vmm = vmm.clone();
+    let page = host_page();
+    let cid = dev
+        .doorbell(gpu, MockArch::token_for(lane.ce), &[])
+        .expect("the DMA thread's CE channel rings")
+        .chan;
+    let mut t = RealDmaTally::default();
+
+    for k in 0..RDMA_OPS {
+        // ---- the LEGITIMATE submit, scripted into REAL guest memory.
+        let pt_page = VA_PT + (i as u64) * 0x100_0000 + (k as u64) * 0x1000;
+        let ring = kayfabe_tests::script_ring_via(
+            &mut vmm,
+            base + ((k % 16) as u64) * 0x100,
+            &[
+                MockPushbuffer::set_object(mock_classes::DMA_COPY),
+                MockPushbuffer::ce_launch_dma(pt_page, 0x1000, false),
+                MockPushbuffer::tlb_invalidate(lane.pdb.0, true),
+                MockPushbuffer::method(0xEE, &[1, 2, 3]),
+            ],
+        );
+        let out = dev
+            .parse_pushbuffer(&mut vmm, pid, cid, &ring)
+            .expect("a RAM-backed pushbuffer parses out of a real mmap'd window");
+        assert_eq!(
+            out.pt_writes,
+            vec![pt_page],
+            "the legitimate submit's CE PT-write must be captured — non-vacuity for every \
+             refusal below"
+        );
+        t.legal_ok += 1;
+
+        // ---- the four HOSTILE shapes, each by exact variant AND payload.
+        let (ring, expect) = match k % 4 {
+            // (a) squarely at our own trapped BAR0 — a region with NO MEMSLOT.
+            0 => (
+                gpfifo_ring(RGPA_BAR0, 0x40),
+                Err(FwdFault::NonRamGpa { gpa: RGPA_BAR0 }),
+            ),
+            // (b) deeper into the same device window.
+            1 => (
+                gpfifo_ring(RGPA_BAR0 + 0x800, 8),
+                Err(FwdFault::NonRamGpa {
+                    gpa: RGPA_BAR0 + 0x800,
+                }),
+            ),
+            // (c) a hole — the NEAR NEIGHBOUR, which must report differently.
+            2 => (
+                gpfifo_ring(RGPA_HOLE + 0x10, 0x20),
+                Err(FwdFault::GpaRead {
+                    gpa: RGPA_HOLE + 0x10,
+                }),
+            ),
+            // (d) STRADDLING: starts in real, memslot-backed RAM and runs off the end
+            //     of the window. A start-address-only check would memcpy the first bytes
+            //     out of a live mapping and then fault, or worse, read whatever the next
+            //     mapping happened to be.
+            //
+            // ★★ FINDING, pinned here rather than papered over. The **port** names the
+            // BOUNDARY byte for this shape — `GuestRamMap::resolve` returns
+            // `BadGpa { gpa: <end of the window> }`, and the focused test
+            // `a_device_region_is_the_absence_of_a_memslot_and_refuses_by_name` in
+            // `kayfabe-vmm-kvm` asserts exactly that. But `kayfabe_fwd::guest_read`
+            // classifies with `_ => FwdFault::GpaRead { gpa }`, taking the **requested**
+            // address from its own argument rather than the one the port reported — so
+            // the boundary is preserved on the `NonRamGpa` arm and DISCARDED on its near
+            // neighbour. That asymmetry was invisible before this run: §12.43's
+            // straddle test uses a RAM→DEVICE range, which takes the arm that keeps it.
+            // The observable end-state is asserted as it IS; the recommendation (one
+            // line: `VmmError::BadGpa { gpa } => FwdFault::GpaRead { gpa }`) is reported
+            // rather than applied, because the core runs unmodified in this stage.
+            _ => (
+                gpfifo_ring(base + RWIN_PAGES * page - 8, 0x40),
+                Err(FwdFault::GpaRead {
+                    gpa: base + RWIN_PAGES * page - 8,
+                }),
+            ),
+        };
+        let got = dev.parse_pushbuffer(&mut vmm, pid, cid, &ring);
+        assert_eq!(
+            got, expect,
+            "a guest-steered descriptor must refuse by EXACT name against the REAL \
+             backend too (k={k}, proc={pid:?})"
+        );
+        match expect {
+            Err(FwdFault::NonRamGpa { .. }) => t.non_ram += 1,
+            _ => t.unbacked += 1,
+        }
+        assert_eq!(
+            lock::held_depth(),
+            0,
+            "a refused guest-memory read leaked a ranked guard"
+        );
+    }
+    t
+}
+
+/// **The map/unmap churn**: real `MAP_FIXED` placements into the upper half of a live
+/// window, and real restores back to anonymous — the fine tier, at publication
+/// frequency, while everything else runs.
+fn real_churn_workload(
+    machine: &kayfabe_vmm_kvm::KvmMachine,
+    vmm: &kayfabe_vmm_kvm::KvmVmm,
+    base: u64,
+    backing: kayfabe_vmm::HostRegion,
+) -> ChurnTally {
+    let mut vmm = vmm.clone();
+    let page = host_page();
+    let mut t = ChurnTally::default();
+    let _ = machine;
+    for k in 0..RPUB_OPS {
+        let at = base + (RWIN_PAGES / 2 + (k as u64 % (RWIN_PAGES / 2))) * page;
+        match vmm.map_guest(at, page, backing, kayfabe_vmm::Prot::ReadWrite) {
+            Ok(slot) => {
+                t.placed += 1;
+                // A placement is guest-visible memory: write through it and read it back,
+                // so the test is about a mapping and not about a bookkeeping entry.
+                vmm.gpa_write(at, &(k as u64).to_le_bytes())
+                    .expect("a freshly placed backing is writable");
+                let mut got = [0u8; 8];
+                vmm.gpa_read(at, &mut got).expect("and readable");
+                assert_eq!(
+                    u64::from_le_bytes(got),
+                    k as u64,
+                    "a MAP_FIXED placement must carry its own bytes"
+                );
+                vmm.unmap_guest(slot).expect("restore");
+                t.restored += 1;
+                // ★ §6.7 item 3: a restore is `mmap(MAP_FIXED|MAP_ANONYMOUS)`, NEVER a
+                // `munmap` — so the range must still RESOLVE afterwards, reading zeroes.
+                // A hole here would leave the live memslot pointing at a gap.
+                vmm.gpa_read(at, &mut got)
+                    .expect("a restored range is still backed by the window");
+                assert_eq!(
+                    got, [0u8; 8],
+                    "a restored range reads as anonymous zeroes, not as the object that \
+                     used to be there"
+                );
+            }
+            Err(e) => {
+                t.refused += 1;
+                assert!(
+                    matches!(
+                        e,
+                        kayfabe_vmm::VmmError::BadGpa { .. }
+                            | kayfabe_vmm::VmmError::Unsupported(_)
+                    ),
+                    "a churn refusal must be a named plan/R5 refusal, never a host fault \
+                     the adapter did not expect: {e:?}"
+                );
+            }
+        }
+    }
+    t
+}
+
+/// What the churn thread aimed at the **doomed** window observed.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct RevokeChurn {
+    /// Placements that succeeded before the window was torn down (must be > 0, or the
+    /// race never happened).
+    placed: usize,
+    /// The first refusal after it, exactly.
+    first_refusal: Option<kayfabe_vmm::VmmError>,
+    /// Placements that succeeded AFTER the first refusal — must be 0.
+    placed_after_refusal: usize,
+    /// What `unmap_guest` said about the placement that was still LIVE when its window
+    /// was removed.
+    held_slot_after_teardown: Option<kayfabe_vmm::VmmError>,
+    /// The id of that placement, so the assertion above names the exact slot rather than
+    /// matching any `BadSlot`.
+    held_slot_id: u64,
+}
+
+/// ★★ **A teardown racing a live mapping**, in its sharpest form: this thread publishes
+/// into the window the main thread is about to delete, and deliberately leaves **one
+/// placement live** across the deletion.
+///
+/// Three things have to be true afterwards and none of them is obvious:
+/// 1. a placement into a removed window is refused by a **named** error, never served;
+/// 2. the live placement's slot is gone with its window — `unmap_guest` on it is
+///    [`kayfabe_vmm::VmmError::BadSlot`], not a `restore` into freed address space;
+/// 3. the conservation ledger still balances, i.e. the window's removal accounted for
+///    the placement nobody unmapped.
+fn real_revoke_churn(
+    vmm: &kayfabe_vmm_kvm::KvmVmm,
+    backing: kayfabe_vmm::HostRegion,
+    gate: &StartGate,
+) -> RevokeChurn {
+    let _open = OpenOnDrop(gate);
+    let mut vmm = vmm.clone();
+    let page = host_page();
+    let mut t = RevokeChurn::default();
+    // The placement deliberately left live across the teardown.
+    let held = vmm
+        .map_guest(RGPA_REVOKE, page, backing, kayfabe_vmm::Prot::ReadWrite)
+        .expect("the doomed window is live when the churn starts");
+    t.placed += 1;
+    gate.open();
+
+    for _ in 0..RREVOKE_BUDGET {
+        match vmm.map_guest(
+            RGPA_REVOKE + 2 * page,
+            page,
+            backing,
+            kayfabe_vmm::Prot::ReadWrite,
+        ) {
+            Ok(slot) => {
+                if t.first_refusal.is_some() {
+                    t.placed_after_refusal += 1;
+                    break;
+                }
+                t.placed += 1;
+                vmm.unmap_guest(slot).expect("restore");
+            }
+            Err(e) => {
+                if t.first_refusal.is_none() {
+                    t.first_refusal = Some(e);
+                    continue; // one more round trip, to prove it STAYS refused
+                }
+                break;
+            }
+        }
+    }
+    t.held_slot_id = held.0;
+    t.held_slot_after_teardown = vmm.unmap_guest(held).err();
+    t
+}
+
+/// What the whole real-backend run observed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RealMeanReport {
+    witness: RealDmaTally,
+    peer: RealDmaTally,
+    churn_a: ChurnTally,
+    churn_b: ChurnTally,
+    revoke: RevokeProbe,
+    revoke_churn: RevokeChurn,
+    refusals_eexist: usize,
+    refusals_enomem: usize,
+    audit: kayfabe_vmm_kvm::AuditReport,
+    map_regions_checked: usize,
+}
+
+impl RealMeanReport {
+    /// The report with its genuinely racy fields normalised away, for the cross-mode
+    /// differential. `revoke.served` is a race between two live threads (a clock, which
+    /// §3 rule 3 forbids in an assertion) and the churn refusal split depends on when the
+    /// teardown lands. Both are asserted as **bounds and identities** above; neither may
+    /// appear in an equality.
+    fn mode_independent(mut self) -> Self {
+        self.revoke.served = 0;
+        self.revoke.refusals = 0;
+        self.churn_a.refused = 0;
+        self.churn_b.refused = 0;
+        self.churn_a.placed = 0;
+        self.churn_a.restored = 0;
+        self.churn_b.placed = 0;
+        self.churn_b.restored = 0;
+        self.revoke_churn.placed = 0;
+        // The slot ID depends on how many slots the racing threads minted first, which is
+        // a clock. It is asserted EXACTLY above, against `held_slot_id`.
+        self.revoke_churn.held_slot_id = 0;
+        self.revoke_churn.held_slot_after_teardown = None;
+        self.audit = kayfabe_vmm_kvm::AuditReport {
+            live_placements: 0,
+            peak_placements: 0,
+            placements_made: 0,
+            accesses_served: 0,
+            accesses_refused: 0,
+            r5_revalidation_failures: 0,
+            ..self.audit
+        };
+        self
+    }
+}
+
+fn real_mean_run(mode: LockMode) -> RealMeanReport {
+    let (device, pids, rec) = mean_world(mode);
+    let machine = real_machine();
+    let page = host_page();
+    let vmm = machine.vmm();
+    let dev: &SharedDevice = &device;
+    let pid_ref: &[ProcId] = &pids;
+    let handles = identical_handles(0, 0);
+
+    // ---- realize the guest-physical layout: three RAM windows, one device BAR (already
+    // declared at realize), and a hole that is simply everything we never declared.
+    let win_a = machine
+        .install_ram_window(RGPA_A, RWIN_PAGES * page)
+        .expect("proc-0's window");
+    let win_b = machine
+        .install_ram_window(RGPA_B, RWIN_PAGES * page)
+        .expect("proc-1's window");
+    let win_revoke = machine
+        .install_ram_window(RGPA_REVOKE, 4 * page)
+        .expect("the window that gets torn down mid-flight");
+    let backing_a = machine.register_backing(page).expect("a host backing");
+    let backing_b = machine.register_backing(page).expect("a host backing");
+    let backing_r = machine.register_backing(page).expect("a host backing");
+    assert_eq!(
+        machine.assert_map_matches_the_kernel(),
+        3,
+        "★ every RAM region the map resolves is a LIVE MEMSLOT, and there are three of \
+         them — the consistency the mock cannot express, asserted before the run starts"
+    );
+
+    // Warm-up, exactly as the mock mean run does.
+    for i in 0..N_PROCS {
+        dev.publish_backing(gpu_of(i), lane_of(i).pdb, GpuVa(VA_WARM), 0x1000)
+            .expect("warm-up publish");
+        dev.doorbell(gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
+            .expect("warm-up CE ring");
+    }
+
+    let started = StartGate::default();
+    let churn_started = StartGate::default();
+    let (witness, peer, churn_a, churn_b, revoke, revoke_churn, eexist, enomem) =
+        thread::scope(|sc| {
+            // ---- park host verbs across both GPUs, so every memory-plane op below runs
+            // while real host work is outstanding.
+            let mut latches = Latches::new();
+            latches.arm(&rec, pids[P_WITNESS], GPU0, 0, VerbKind::AllocSysmem);
+            let t_held = sc.spawn(move || {
+                dev.publish_backing(GPU0, lane_of(P_WITNESS).pdb, GpuVa(VA_HELD), 0x1000)
+            });
+            latches.arm(&rec, pids[P_PEER], GPU1, 0, VerbKind::AllocChannel);
+            let t_held2 =
+                sc.spawn(move || dev.doorbell(GPU1, MockArch::token_for(lane_of(P_PEER).gr), &[]));
+            latches.wait_all_pending();
+
+            // ---- the DMA workloads: one per GPU, through the real backend.
+            let vw = &vmm;
+            let t_dma_a = sc.spawn(move || real_dma_workload(dev, vw, pid_ref, P_WITNESS, RGPA_A));
+            let t_dma_b = sc.spawn(move || real_dma_workload(dev, vw, pid_ref, P_PEER, RGPA_B));
+
+            // ---- the churn: real MAP_FIXED placements and restores, both windows at once.
+            let m = &machine;
+            let t_churn_a = sc.spawn(move || real_churn_workload(m, vw, RGPA_A, backing_a));
+            let t_churn_b = sc.spawn(move || real_churn_workload(m, vw, RGPA_B, backing_b));
+            // ★ the churn that RACES the teardown, aimed at the doomed window.
+            let cg = &churn_started;
+            let t_churn_r = sc.spawn(move || real_revoke_churn(vw, backing_r, cg));
+
+            // ---- the peers do real publish/doorbell work the whole time.
+            let mut peers = Vec::new();
+            for i in [P_WITNESS, P_PEER] {
+                peers.push(sc.spawn(move || ctl_workload(dev, pid_ref, i)));
+                peers.push(sc.spawn(move || ring_workload(dev, pid_ref, i)));
+            }
+
+            // ---- REAL HOST REFUSALS, injected while all of the above runs. These are not
+            // scripted failures: the kernel refuses, with its own errno.
+            let t_refuse = sc.spawn(move || {
+                let mut eexist = 0usize;
+                let mut enomem = 0usize;
+                for k in 0..RREFUSE_OPS {
+                    if k % 2 == 0 {
+                        // A window overlapping proc-0's — the guest-physical flat view is the
+                        // KERNEL's, and it says EEXIST.
+                        assert_eq!(
+                            m.install_ram_window(RGPA_A + 8 * page, 4 * page),
+                            Err(kayfabe_vmm::VmmError::HostRefused {
+                                what: "a memslot install",
+                                errno: Some(libc::EEXIST),
+                            }),
+                            "the EXACT errno, never is_err(): EEXIST (an overlap) and EINVAL \
+                         (an exhausted ceiling) are operationally different"
+                        );
+                        eexist += 1;
+                    } else {
+                        // A window the address space cannot hold — the mmap fails BEFORE any
+                        // memslot exists, which is the other partial-failure shape.
+                        assert_eq!(
+                            m.install_ram_window(0x8000_0000, (1u64 << 62) & !(page - 1)),
+                            Err(kayfabe_vmm::VmmError::HostRefused {
+                                what: "a window mapping",
+                                errno: Some(libc::ENOMEM),
+                            })
+                        );
+                        enomem += 1;
+                    }
+                }
+                (eexist, enomem)
+            });
+
+            // ---- the revoke prober: parses out of RGPA_REVOKE until the main thread tears
+            // its window down, then must never be served again.
+            let started_ref = &started;
+            let t_revoke = sc.spawn(move || {
+                let _gate = OpenOnDrop(started_ref);
+                let mut vmm = vw.clone();
+                let cid = dev
+                    .doorbell(GPU0, MockArch::token_for(lane_of(P_WITNESS).ce), &[])
+                    .expect("the prober's CE channel rings")
+                    .chan;
+                let ring = gpfifo_ring(RGPA_REVOKE, 0x40);
+                vmm.gpa_write(RGPA_REVOKE, &[0u8; 0x40])
+                    .expect("the window is real RAM before the teardown");
+                let mut p = RevokeProbe {
+                    served: 0,
+                    first_refusal: None,
+                    refusals: 0,
+                    served_after_refusal: 0,
+                };
+                for _ in 0..RREVOKE_BUDGET {
+                    match dev.parse_pushbuffer(&mut vmm, pid_ref[P_WITNESS], cid, &ring) {
+                        Ok(_) => {
+                            if p.first_refusal.is_some() {
+                                p.served_after_refusal += 1;
+                                break;
+                            }
+                            p.served += 1;
+                            started_ref.open();
+                        }
+                        Err(e) => {
+                            p.refusals += 1;
+                            if p.first_refusal.is_none() {
+                                p.first_refusal = Some(e);
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                }
+                p
+            });
+
+            // ---- the world MOVES: a channel free, and the window teardown racing a live
+            // parser that is copying out of it.
+            dev.apply(RmEvent::Free {
+                client: client_of(P_CHANFREE),
+                handle: handles.gr_channel,
+            })
+            .expect("the channel free applies");
+            started.wait();
+            churn_started.wait();
+            machine
+                .remove_window(win_revoke)
+                .expect("★ a REAL memslot DELETE plus a munmap, while a thread parses out of it");
+
+            let a = t_dma_a.join().expect("the GPU0 DMA thread panicked");
+            let b = t_dma_b.join().expect("the GPU1 DMA thread panicked");
+            let ca = t_churn_a.join().expect("the GPU0 churn thread panicked");
+            let cb = t_churn_b.join().expect("the GPU1 churn thread panicked");
+            let rp = t_revoke.join().expect("the revoke prober panicked");
+            let rc = t_churn_r.join().expect("the revoke churn thread panicked");
+            let (ee, en) = t_refuse.join().expect("the host-refusal thread panicked");
+            for h in peers {
+                h.join().expect("a peer workload thread panicked");
+            }
+            latches.release_all();
+            let _ = t_held.join();
+            let _ = t_held2.join();
+            (a, b, ca, cb, rp, rc, ee, en)
+        });
+
+    // ---- teardown: both remaining windows, so the ledger has somewhere to balance to.
+    let checked = machine.assert_map_matches_the_kernel();
+    machine.remove_window(win_a).expect("remove A");
+    machine.remove_window(win_b).expect("remove B");
+    drop(device);
+
+    RealMeanReport {
+        witness,
+        peer,
+        churn_a,
+        churn_b,
+        revoke,
+        revoke_churn,
+        refusals_eexist: eexist,
+        refusals_enomem: enomem,
+        audit: machine.audit(),
+        map_regions_checked: checked,
+    }
+}
+
+/// ★★★ **THE MEAN COMPOSED RUN AGAINST A REAL `Vmm`** — `l1_os_shell.md` §10 stage M2-c,
+/// and the first test in this project's history that could tell a memcpy from a
+/// `KVM_SET_USER_MEMORY_REGION` (gap **O1**).
+///
+/// In one window, under **both** lock modes: two DMA threads aiming descriptors at a real
+/// device region, a hole and a window boundary while parsing legitimate pushbuffers out
+/// of real `mmap`ed memory; two churn threads doing real `MAP_FIXED` placements and
+/// restores; four peer threads doing real publish/doorbell work; two host verbs parked;
+/// a thread provoking **real kernel refusals** (`EEXIST`, `ENOMEM`) throughout; and a
+/// **real memslot DELETE plus `munmap`** landing on a window while a thread is copying
+/// out of it.
+///
+/// The assertions are the composed ones: the exact refusal for each hostile shape, the
+/// exact counts, R1 on both halves (ranked **and** the adapter's own), the memslot
+/// frequency gate, the conservation ledger, and a bit-identical outcome across the two
+/// lock modes.
+#[test]
+fn a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_load() {
+    let _wd = watchdog(
+        "a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_load",
+        Duration::from_secs(300),
+    );
+    let degenerate = real_mean_run(LockMode::Degenerate);
+    let sharded = real_mean_run(LockMode::Sharded);
+
+    for (name, r) in [("Degenerate", &degenerate), ("Sharded", &sharded)] {
+        let a = r.audit;
+
+        // ---- every hostile shape was REACHED, the exact number of times scripted.
+        for (who, t) in [("witness", r.witness), ("peer", r.peer)] {
+            assert_eq!(
+                t.legal_ok, RDMA_OPS,
+                "({name}/{who}) every memslot-backed submit must still be served — a \
+                 refusal that also breaks the legal path is not a fix"
+            );
+            assert_eq!(
+                t.non_ram,
+                RDMA_OPS / 2,
+                "({name}/{who}) two of the four hostile shapes name our own trapped BAR, \
+                 which on KVM has NO MEMSLOT at all"
+            );
+            assert_eq!(
+                t.unbacked,
+                RDMA_OPS / 2,
+                "({name}/{who}) and two name nothing — the hole and the window boundary. \
+                 Counted separately from the device arm so the two can never silently merge"
+            );
+        }
+
+        // ---- ★ R1, BOTH HALVES. This is what the stage exists to test.
+        assert_eq!(
+            a.syscall_ranked_depth,
+            (0, 0),
+            "({name}) ★ R1: every syscall-shaped Vmm method ran with ZERO ranked locks. \
+             A `min` of u32::MAX would mean no syscall ran at all — which is why the PAIR \
+             is asserted, not the max"
+        );
+        assert_eq!(
+            a.accessor_ranked_depth,
+            (0, 1),
+            "({name}) ★ and the in-lock-legal accessors really were entered WITH a ranked \
+             lock (max 1, the route phase of parse_pushbuffer) AND lock-free (min 0, the \
+             scripting writes). Without both ends this whole run could be green about a \
+             lock-free path"
+        );
+        assert_eq!(
+            a.copy_leaf_depth_max, 0,
+            "({name}) ★★ THE ADAPTER HALF OF R1 (§12.43 residual 2): the guest-memory \
+             memcpy runs OUTSIDE the adapter's own map lock, held alive by an Arc. \
+             `lockwitness` is blind to this lock — it has no rank — so a copy under it \
+             would serialise every guest read in the machine behind every memslot ioctl, \
+             with every existing assert green"
+        );
+        assert!(
+            a.view_leaf_depth_max >= 1,
+            "({name}) ★ NON-VACUITY for the line above: the map lock must actually have \
+             been taken. With no lock at all, `copy_leaf_depth_max == 0` is true and means \
+             nothing"
+        );
+        assert!(
+            a.accesses_served > u64::try_from(RDMA_OPS).expect("fits") && a.accesses_refused > 0,
+            "({name}) ★ NON-VACUITY for both R1 halves: the accessors must have run, and \
+             both outcomes must have occurred ({} served, {} refused). A depth span over \
+             an unexercised path is the shape §12.43's N12 found",
+            a.accesses_served,
+            a.accesses_refused,
+        );
+
+        // ---- ★ the MEMSLOT-FREQUENCY GATE (§9.3 / §6.7).
+        assert_eq!(
+            a.memslot_installs,
+            3,
+            "({name}) ★ installs must scale with WINDOWS (three of them), never with \
+             publications. The failed EEXIST/ENOMEM attempts installed nothing, and the \
+             {placed} successful placements installed nothing — a per-object memslot is \
+             the C artifact's measured regression (>1500 slots for one cuCtxCreate), \
+             caught structurally and without a clock",
+            placed = a.placements_made,
+        );
+        assert!(
+            a.placements_made >= 8,
+            "({name}) ★ NON-VACUITY for the gate: only {} placements happened, so the \
+             ratio it asserts is not being exercised",
+            a.placements_made
+        );
+
+        // ---- ★ real host refusals happened, and left NOTHING behind.
+        assert_eq!(
+            (r.refusals_eexist, r.refusals_enomem),
+            (RREFUSE_OPS / 2, RREFUSE_OPS - RREFUSE_OPS / 2),
+            "({name}) every injected refusal must have been the kernel's, by exact errno"
+        );
+        assert_eq!(
+            a.host_refusals, RREFUSE_OPS as u64,
+            "({name}) ★ and the adapter COUNTED every one — an uncounted refusal is a \
+             refusal the conservation assertions below cannot be about"
+        );
+
+        // ---- ★ the CONSERVATION LEDGER balances after every window is gone.
+        assert_eq!(
+            (
+                a.live_windows,
+                a.live_memslots,
+                a.live_placements,
+                a.window_bytes
+            ),
+            (0, 0, 0, 0),
+            "({name}) ★ nothing leaked: not a window, not a memslot, not a placement, not \
+             a byte of address space — across 2 GPUs, {} placements, {} real host \
+             refusals and a teardown that raced a live parser",
+            a.placements_made,
+            a.host_refusals,
+        );
+        assert_eq!(
+            (a.peak_windows, a.peak_memslots),
+            (3, 3),
+            "({name}) ★ NON-VACUITY for the ledger: it really did count three live \
+             windows at once. A ledger that was never incremented balances perfectly"
+        );
+        assert!(
+            a.peak_placements >= 1,
+            "({name}) ★ NON-VACUITY: the churn really did hold a live placement"
+        );
+
+        // ---- mid-flight window teardown: served, then refused, and never served again.
+        assert!(
+            r.revoke.served > 0,
+            "({name}) the revoke prober never had its window served — it proves nothing"
+        );
+        assert_eq!(
+            r.revoke.first_refusal,
+            Some(FwdFault::GpaRead { gpa: RGPA_REVOKE }),
+            "({name}) ★ a window whose memslot was DELETED and whose mapping was munmapped \
+             under a live parser must refuse as UNBACKED — not as a device window, never \
+             as stale bytes, and never as a SIGSEGV. The reader that had already resolved \
+             holds an Arc on the mapping, so its copy completes against memory that is \
+             still there; the reader that had not gets a named refusal"
+        );
+        assert_eq!(
+            r.revoke.served_after_refusal, 0,
+            "({name}) a torn-down window resolved again after being revoked"
+        );
+
+        // ---- ★★ THE TEARDOWN THAT RACED A LIVE MAPPING.
+        assert!(
+            r.revoke_churn.placed > 0,
+            "({name}) the racing churn never placed anything into the doomed window —              the race it exists to run never happened"
+        );
+        assert_eq!(
+            r.revoke_churn.first_refusal,
+            Some(kayfabe_vmm::VmmError::BadGpa {
+                gpa: RGPA_REVOKE + 2 * host_page()
+            }),
+            "({name}) ★ a publication into a window that has been removed must be refused              by NAME. Either the plan found no window (this arm) or the R5 re-validation              caught the generation change at commit — both are BadGpa, and both are              counted; what must never happen is a MAP_FIXED into address space the              adapter no longer owns"
+        );
+        assert_eq!(
+            r.revoke_churn.placed_after_refusal, 0,
+            "({name}) a removed window accepted a publication again — a resurrected              mapping"
+        );
+        assert_eq!(
+            r.revoke_churn.held_slot_after_teardown,
+            Some(kayfabe_vmm::VmmError::BadSlot(kayfabe_vmm::SlotId(
+                r.revoke_churn.held_slot_id
+            ))),
+            "({name}) ★ the placement that was still LIVE when its window was removed              must have gone WITH the window: unmapping it is a named BadSlot, never a              `restore` into address space the process has already returned to the kernel"
+        );
+
+        // ---- the churn's conservation identity (the split is racy; the identity is not).
+        for (who, c) in [("A", r.churn_a), ("B", r.churn_b)] {
+            assert_eq!(
+                c.placed, c.restored,
+                "({name}/churn {who}) every placement must have been restored — a \
+                 placement without its restore is a live MAP_FIXED nobody owns"
+            );
+            assert_eq!(
+                c.placed + c.refused,
+                RPUB_OPS,
+                "({name}/churn {who}) every attempt is either a placement or a NAMED \
+                 refusal; a third outcome would be an op that silently did nothing"
+            );
+            assert!(
+                c.placed > 0,
+                "({name}/churn {who}) ★ NON-VACUITY: the churn thread placed nothing at \
+                 all, so every assertion about it is about an operation that never ran"
+            );
+        }
+
+        assert_eq!(
+            r.map_regions_checked, 2,
+            "({name}) at the end of the run the map and the kernel still agreed about the \
+             two surviving windows"
+        );
+    }
+
+    assert_eq!(
+        degenerate.mode_independent(),
+        sharded.mode_independent(),
+        "★ the lock configuration is observable through the REAL memory plane — the \
+         script-determined half of the run must be bit-identical in both modes"
+    );
+}
