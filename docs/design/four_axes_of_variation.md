@@ -29,6 +29,23 @@ model are largely OS-independent** — the ioctl/escape layer above them is what
 should later be *another guest-side implementation behind the same seam*, not a rewrite of the
 boot FSM. That only stays true if nothing bakes in "the guest is Linux".
 
+### 1.1 ★★ Windows **guest** is a target. Windows **host** is explicitly NOT.
+
+> **Owner (2026-07-27):** *"windows as guest is way more important than host (since windows host
+> already has hyper-v pv for gpu and target audience is smaller)."*
+
+The two are not symmetric, and conflating them would cost far more than the guest work itself:
+
+| | what it would take | verdict |
+|---|---|---|
+| **Windows GUEST** | another **guest-side** decode/protocol implementation behind the fourth axis. The GSP protocol and RM object model are shared; the escape/ioctl layer differs. Everything below the seam — core, isolates, host edge — is **unchanged**. | ★ **TARGET.** Keep the seam clean; do not implement yet. |
+| **Windows HOST** | the isolate would have to run on Windows and drive the *Windows* RM: no `/dev/nvidiactl`, a different escape mechanism, a different process/handle model, and the whole unprivileged-isolate design re-founded on Windows primitives. That is a **second host port**, not a seam. | **OUT OF SCOPE**, and stays out. Windows hosts already have Hyper-V GPU-PV, and the audience is smaller. |
+
+**The consequence for design work:** when something must be OS-specific, ask *"guest side or host
+side?"* — guest-side OS-specificity goes **behind the fourth-axis seam**; host-side OS-specificity
+may be written **assuming Linux**, freely and without apology. `kayfabe-linux-raw` is named for
+that reason and needs no abstraction for a hypothetical Windows host.
+
 **Do not collapse guest OS into the version key.** Conflating them is the C's major-only version
 key mistake one level up: a single key that silently spans two independent dimensions, so a
 mismatch on one is mis-served by a table chosen for the other.
