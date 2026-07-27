@@ -268,3 +268,54 @@ the `LockMode` precedent rather than from first principles.
 - `c_bug_regression_matrix.md` — every C-era bug, classified impossible / tested / deferred.
 - `l1_concurrency.md` §12 and `l1_os_shell.md` §14 — the contact logs these rules were mined from.
 - `../reference/` — measured NVIDIA/RM and bench-lifecycle facts, the sources these tests model.
+
+---
+
+## 8. ★★ The C's OMISSIONS are evidence, not gaps
+
+**The incident (2026-07-27).** The region-lock design spent a full study evaluating 13 mechanisms
+and recommending one, and the owner asked three separate times whether userfaultfd was really the
+right answer. Nobody had asked the cheaper question first: **what did the C do?**
+
+The answer, when finally measured (`../reference/uffd_isolate_kvm_study.md` Q3): **the C never
+blocked a write at all.** `userfaultfd` has *zero* implementation there — planned four times,
+never built, with `REFACTOR_PLAN.md:303` citing a proof-of-concept file that does not exist. Its
+"demand-fault" path is **dead code** (`src/stub/nvkvm_stub.c:668-686` calls `stub_exit(139)` and
+never returns, so the fault address has been permanently `0` since `3c23db9`). What it actually
+ships is a **copy-once snapshot**, audited twice as item **P2-2**, with the reasoning written out
+in the source (`src/qemu/virtio_nvgpu.c:626-663`):
+
+> *"a second vCPU can flip an allowed value to a denied one in the window between… Snapshot the
+> slot into a worker-private buffer ONCE up front."*
+
+**There is no lock of any kind between QEMU and an isolate** in a system that runs 22 real GPU
+apps at host parity.
+
+### The rule
+
+> **We already treat the C as authoritative for what it DOES. Treat what it DOESN'T do as a
+> signal of equal weight — and find out WHY before building the thing it skipped.**
+
+A working implementation on real hardware that *lacks* a mechanism we are about to build is
+telling us one of three things, and they are all worth knowing **before** the build:
+
+1. **It didn't need it** — the problem dissolves under a different decomposition (here: copy-once
+   makes exclusion unnecessary, because a race the guest wins by supplying different bytes is not
+   a security problem — only re-reading a validated value is).
+2. **It tried and it didn't work** — the most valuable case, and the one most likely to be
+   invisible, because failed attempts leave dead code and stale plans rather than documentation.
+   Both were present here and both read as "planned, presumably done" until someone grepped.
+3. **It has the bug and got away with it** — in which case we know exactly what to fix, and what
+   the exposure looked like in practice.
+
+### Why this is not hindsight
+
+The cost asymmetry is stark: answering "did the C do this, and if not why" is **one grep and one
+afternoon**. Building uffd would have been a mechanism, a runtime probe, a deployment requirement
+(a sysctl or a udev rule), an unresolved arm64 question, and a collision with NVIDIA's own UVM
+(`uvm_hmm.c:577-588` rejects any `userfaultfd_armed(vma)`) — all before discovering the incumbent
+implementation had routed around the whole problem.
+
+**Corollary for reviewers:** when a design doc proposes a mechanism, the first question is not
+"is this the best mechanism?" but **"does the working implementation have one, and what happened
+when it tried?"**
