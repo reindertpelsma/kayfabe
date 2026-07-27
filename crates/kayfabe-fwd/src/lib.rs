@@ -59,7 +59,9 @@ use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChi
 use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Channel, Gpu, Proc, Spine};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
-use kayfabe_isolate::{ChannelHandles, HostHandle, RmError, VerbPlan, VerbReply, Worker};
+use kayfabe_isolate::{
+    CancelReason, ChannelHandles, HostHandle, RmError, VerbPlan, VerbReply, Worker, WorkerId,
+};
 use kayfabe_mmu::AddressTable;
 use kayfabe_mmu::{AddressFault, Binding};
 use kayfabe_vmm::{FbMeta, IrqSpec, Present, PresentError, SurfaceHandle, Vmm, VmmError};
@@ -230,6 +232,38 @@ pub enum FwdFault {
         /// The proc whose op was cancelled. Named because the fault must not read as
         /// "this proc is gone" — it usually is not.
         proc: ProcId,
+        /// ★ **WHY** it was cancelled (`l1_os_shell.md` §7.3): a proc exiting, a device
+        /// reset, the verb watchdog, or the requesting guest thread taking a signal.
+        ///
+        /// Carried because *"a fault must name the truth, not the symptom"*, and because
+        /// the four are operationally different answers for the guest: `ProcExit` means
+        /// the work had no requester left, `Watchdog` means the host was too slow, and a
+        /// canary that could not tell them apart would pass on whichever it got — which
+        /// is the same shape as §14.8 F4's `VmmError` finding one plane over.
+        reason: CancelReason,
+    },
+    /// ★★ **WEDGED** — the host verb never returned and the requester was released
+    /// without a reply (`l1_os_shell.md` §7.5, the two-stage watchdog's second expiry).
+    ///
+    /// Structurally different from [`FwdFault::Cancelled`] in the way that matters: a
+    /// cancellation is a fact about the *requester* and leaves a healthy worker behind;
+    /// this is a fact about a **host thread in uninterruptible sleep**, which no
+    /// user-space design can kill. What the escape converts is an *unbounded silent
+    /// stall* into a *bounded loud failure plus a leak we can name, count and report*.
+    ///
+    /// It is always accompanied — in the same act, never as a reorderable second step —
+    /// by the slot dying permanently and the component being condemned. That pairing is
+    /// what makes abandoning the reply safe here and nowhere else (§7.2: the desync
+    /// hazard is a *future* reader of that channel, and the escape guarantees there is
+    /// none).
+    Wedged {
+        /// The proc whose verb was abandoned. Its component is condemned by the same
+        /// act, so every later op of it faults [`FwdFault::Condemned`].
+        proc: ProcId,
+        /// The target GPU whose isolate wedged.
+        gpu: GpuId,
+        /// The pool slot that is now permanently dead.
+        worker: WorkerId,
     },
     /// ★ **R5**: the world moved while a verb was in flight lock-free, so the commit
     /// phase's target is no longer what the plan named. MISS=FAULT extends to
@@ -545,8 +579,27 @@ fn round_trip<T>(
         // the failure's own orphans get a disposal attempt on the same worker before
         // it is checked back in.
         Err(f) => {
-            let _ = dispose_on(&mut worker, f.orphans);
-            Err(verb_fault(pid, f.err))
+            let reason = worker.cancel_observed();
+            // ★★ §7.5 — a WEDGED worker cannot dispose of anything: it is still inside
+            // the ioctl that wedged it. Asking it to would produce a second wedge, so
+            // the chain's intermediates go straight onto the proc's `pending_release`
+            // queue, where §12.35's audit can NAME them. Every other failure still gets
+            // its disposal attempt on the same live worker first — and what that could
+            // not dispose of is staged as well, closing the `let _ =` §12.16 left here.
+            let residue = if f.err == RmError::Wedged {
+                f.orphans
+            } else {
+                dispose_on(&mut worker, f.orphans)
+            };
+            proc.stage_release(gpu, residue);
+            Err(match f.err {
+                RmError::Wedged => FwdFault::Wedged {
+                    proc: pid,
+                    gpu,
+                    worker: worker.id(),
+                },
+                e => verb_fault(pid, e, reason),
+            })
         }
     };
     checkin(proc, gpu, worker);
@@ -584,10 +637,20 @@ pub fn dispose_on(worker: &mut Worker, orphans: Orphans) -> Orphans {
 /// took a signal and its in-flight verb was interrupted (§5.4). Reporting it as
 /// `FwdFault::Rm` would say "the host refused" about a host that did exactly what it
 /// was asked. Every other `RmError` is a genuine host refusal and stays one.
+///
+/// ★ `reason` is what the worker's own cancel seam **observed**
+/// ([`kayfabe_isolate::Worker::cancel_observed`]), read lock-free by the executing
+/// thread. `None` with an `Interrupted` error means the break signal landed but nobody
+/// recorded why — a backend bug, not a guest condition — so it is surfaced as
+/// [`CancelReason::GuestSignal`], the §5.4 founding case, rather than guessed at or
+/// silently re-typed as a host failure.
 #[must_use]
-pub fn verb_fault(proc: ProcId, err: RmError) -> FwdFault {
+pub fn verb_fault(proc: ProcId, err: RmError, reason: Option<CancelReason>) -> FwdFault {
     match err {
-        RmError::Interrupted => FwdFault::Cancelled { proc },
+        RmError::Interrupted => FwdFault::Cancelled {
+            proc,
+            reason: reason.unwrap_or(CancelReason::GuestSignal),
+        },
         e => FwdFault::Rm(e),
     }
 }

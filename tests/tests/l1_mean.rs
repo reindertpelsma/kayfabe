@@ -116,7 +116,7 @@ use kayfabe_core::rmgraph::ClientKey;
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraphError, RmNode};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_fwd::{ControlRoute, DoorbellOutcome, FwdFault, Published, Stale};
-use kayfabe_isolate::{HostHandle, IsolateId, RmError, WorkerId};
+use kayfabe_isolate::{CancelReason, HostHandle, IsolateId, RmError, WorkerId};
 use kayfabe_mmu::AddressFault;
 use kayfabe_mocks::{
     HoldSpec, MockArch, MockIsolateFactory, MockPushbuffer, RmVerb, SharedRecorder, VerbHold,
@@ -514,6 +514,9 @@ struct MeanReport {
     canary_chanfree: Result<DoorbellOutcome, FwdFault>,
     /// Canary (c): an `apply` rewrote routing inside the gap.
     canary_reroute: Result<DoorbellOutcome, FwdFault>,
+    /// ★★ M2-e canary (d): the requester ABANDONED by §7.5's escape, released inside the
+    /// window by the worker HUP rather than by the latch at phase 7.
+    canary_wedge: Result<Published, FwdFault>,
     /// The scripted mid-chain host failure.
     mid_chain_failure: Result<Published, FwdFault>,
     /// Source signals sent.
@@ -953,20 +956,33 @@ fn mean_run(mode: LockMode) -> MeanReport {
     // backstop is the disposition, per §12.17's no-resurrect rule. Every proc that dies
     // CLEANLY in this run — a component vanishing through `Spine::vacate` — now reclaims
     // per object and contributes nothing here, which is the §12.35 delta.
-    for i in [P_TEARDOWN, P_HUP] {
-        device.declare_residue(
-            ResidueClaim::on(
-                IsolateId(pids[i].0),
-                "a canary proc killed out of band (`retire_proc`): its isolate is stopped, \
-                 so its host VAS + backing + channel are the §7.0 namespace-death residue \
-                 §12.32 measured at 6 objects / 2 mappings across the pair",
-            )
-            .objects(VerbKind::AllocVaSpace, 1)
-            .objects(VerbKind::AllocSysmem, 1)
-            .objects(VerbKind::AllocChannel, 1)
-            .maps(1),
-        );
-    }
+    device.declare_residue(
+        ResidueClaim::on(
+            IsolateId(pids[P_TEARDOWN].0),
+            "a canary proc killed out of band (`retire_proc`): its isolate is stopped, so \
+             its host VAS + backing + channel are the §7.0 namespace-death residue §12.32 \
+             measured at 6 objects / 2 mappings across the pair. ★ M2-e: its HELD verb was \
+             `alloc_sysmem`, so the retire's cancel caught it before it had allocated \
+             anything — the residue is the warm-up's estate and nothing more",
+        )
+        .objects(VerbKind::AllocVaSpace, 1)
+        .objects(VerbKind::AllocSysmem, 1)
+        .objects(VerbKind::AllocChannel, 1)
+        .maps(1),
+    );
+    device.declare_residue(
+        ResidueClaim::on(
+            IsolateId(pids[P_HUP].0),
+            "the same §7.0 namespace-death residue as the teardown canary, PLUS one — ★ \
+             M2-e: this proc's worker is WEDGED (§7.5), and a wedged worker cannot run its \
+             own unwind, so the host memory object its chain had already allocated is \
+             staged rather than freed and dies with the session too",
+        )
+        .objects(VerbKind::AllocVaSpace, 1)
+        .objects(VerbKind::AllocSysmem, 2)
+        .objects(VerbKind::AllocChannel, 1)
+        .maps(1),
+    );
     let (tx, rx) = inbox();
     let mut ex = Executor::new(Arc::clone(&device), rx);
     let dev: &SharedDevice = &device;
@@ -1011,6 +1027,8 @@ fn mean_run(mode: LockMode) -> MeanReport {
     let mut publications = 0usize;
     // ★★★ §12.42 — filled by phase 5 (g), inside the window.
     let mut recycled: Option<(ProcId, ProcId)> = None;
+    // ★★ M2-e — filled by phase 5 (d): what the ABANDONED requester came back with.
+    let mut canary_wedge: Option<Result<Published, FwdFault>> = None;
 
     let (witness, canary_teardown, canary_chanfree, canary_reroute, delivery_ran_under_pending) =
         thread::scope(|sc| {
@@ -1037,6 +1055,13 @@ fn mean_run(mode: LockMode) -> MeanReport {
             latches.arm(&rec, pids[P_TEARDOWN], GPU0, 0, VerbKind::AllocSysmem);
             latches.arm(&rec, pids[P_CHANFREE], GPU1, 0, VerbKind::AllocChannel);
             latches.arm(&rec, pids[P_REROUTE], GPU0, 0, VerbKind::AllocChannel);
+            // ★★ M2-e — the WEDGE canary (§7.5), composed into the same window as
+            // everything else. `MapGpuVa`, not `AllocSysmem`: the chain must be parked
+            // MID-chain, with a host memory object already minted, because a wedged
+            // worker cannot run its own unwind (G4) and the whole question is what
+            // happens to what it had already allocated. This is the verb phase 5 (d)'s
+            // worker HUP abandons.
+            latches.arm(&rec, pids[P_HUP], GPU1, 0, VerbKind::MapGpuVa);
             let t_teardown = sc.spawn(move || {
                 dev.publish_backing(GPU0, lane_of(P_TEARDOWN).pdb, GpuVa(VA_HELD), 0x1000)
             });
@@ -1045,6 +1070,9 @@ fn mean_run(mode: LockMode) -> MeanReport {
             });
             let t_reroute = sc
                 .spawn(move || dev.doorbell(GPU0, MockArch::token_for(lane_of(P_REROUTE).gr), &[]));
+            let t_wedge = sc.spawn(move || {
+                dev.publish_backing(GPU1, lane_of(P_HUP).pdb, GpuVa(VA_HELD), 0x1000)
+            });
 
             latches.wait_all_pending(); // progress EDGES, never sleeps
 
@@ -1131,6 +1159,16 @@ fn mean_run(mode: LockMode) -> MeanReport {
                 })],
                 "({mode:?}) the HUP dispatched as a typed worker death"
             );
+            // ★★ M2-e — and the thread parked in that dead worker's verb is RELEASED,
+            // inside the same window, with every other verb still parked. Before this,
+            // `worker_died` marked the slot dead and NOTHING anywhere told the requester:
+            // it would have sat in the mock's condvar until phase 7 released the latch,
+            // and on a real socket only the HUP itself would have ended it. §7.5's
+            // abandon closes that, and it is safe here for the one reason it is ever
+            // safe — the slot is already dead and the component is condemned by the same
+            // act. That this join RETURNS AT ALL, with five verbs still parked, is the
+            // assertion; its exact value is checked after the scope.
+            canary_wedge = Some(t_wedge.join().expect("the wedge canary's thread joins"));
             // ...and its sources stop routing IMMEDIATELY: a late signal on the same
             // handle resolves to nothing (the C's F4 use-after-retire, designed out).
             tx.send(CoreEvent::SourceSignal(hup));
@@ -1414,6 +1452,7 @@ fn mean_run(mode: LockMode) -> MeanReport {
         canary_teardown,
         canary_chanfree,
         canary_reroute,
+        canary_wedge: canary_wedge.expect("phase 5 (d) ran"),
         mid_chain_failure,
         signals,
         observed,
@@ -2057,11 +2096,40 @@ fn mean_multiproc_multithread_multigpu_multiworkload() {
             r.witness_committed_exactly,
             "({name}) the witness's held publish must commit a correct, re-validated result"
         );
+        // ★★ CHANGED BY M2-e, and the change is the T2 behaviour, not a weakening.
+        // `Proc::retire` now latches a break signal for every verb the proc still has in
+        // flight (`l1_os_shell.md` §7.6 T2, §15 amendment 4), so this verb no longer runs
+        // to completion against a dead proc and no longer reaches its commit — it comes
+        // back INTERRUPTED, and the truth about it is "we cancelled it", not "the world
+        // moved". §7.3's table says exactly that: cancellation is the third staleness
+        // shape, non-retryable and orphan-carrying.
+        //
+        // ★ The `Stale` arm it used to prove is NOT abandoned: it is the case where the
+        // cancel is delivered and the host wait does not break — RM's own answer most of
+        // the time (§7.9) — and it is pinned by
+        // `cancellation.rs::a_cancel_the_host_wait_never_breaks_still_refuses_as_staleness`.
         assert_eq!(
             r.canary_teardown,
-            Err(FwdFault::Stale(Stale::Proc(pids[P_TEARDOWN]))),
-            "({name}) R5 canary (a): a commit whose proc vanished must refuse AS \
-             STALENESS — not as an incidental RM error (the stage-3 house lesson)"
+            Err(FwdFault::Cancelled {
+                proc: pids[P_TEARDOWN],
+                reason: CancelReason::ProcExit
+            }),
+            "({name}) R5 canary (a): a verb in flight across its proc's retire must come \
+             back CANCELLED, naming ProcExit — not as an incidental RM error, and not as \
+             a bare staleness that hides who killed it"
+        );
+        assert_eq!(
+            r.canary_wedge,
+            Err(FwdFault::Wedged {
+                proc: pids[P_HUP],
+                gpu: GPU1,
+                worker: WorkerId(0)
+            }),
+            "({name}) ★★ M2-e canary (d): the requester parked in a worker that DIED must \
+             be released with the truth — WEDGED, naming the exact slot. Never \
+             `Cancelled` (which would claim the host honoured a break signal it never \
+             saw), never an anonymous RM error, and above all never left parked: before \
+             §7.5's abandon, nothing in the design released it at all"
         );
         assert_eq!(
             r.canary_chanfree,
@@ -2115,10 +2183,14 @@ fn mean_multiproc_multithread_multigpu_multiworkload() {
         );
         assert_eq!(
             r.session_death,
-            (6, 2),
+            (7, 2),
             "({name}) the §7.0 namespace-death residue is the script's own: the two \
              out-of-band-retired procs' host state, disposed of by their isolate \
-             sessions' death and by nothing else"
+             sessions' death and by nothing else. ★★ M2-e moved this from 6 to 7, and the \
+             +1 is EXACTLY the wedge canary's intermediate: a wedged worker cannot run \
+             its own unwind (G4), so the host memory object its chain had allocated is \
+             staged and then dies with the session. That number growing by anything OTHER \
+             than one is the regression this line catches"
         );
         assert!(
             r.delivery_ran_under_pending,
@@ -5709,8 +5781,13 @@ fn a_guest_steering_dma_descriptors_at_device_windows_is_refused_by_name_under_l
         );
         assert_eq!(
             r.canary_teardown,
-            Err(FwdFault::Stale(Stale::Proc(r.pid_teardown))),
-            "({name}) the R5 canary still refuses as staleness with DMA traffic composed in"
+            Err(FwdFault::Cancelled {
+                proc: r.pid_teardown,
+                reason: CancelReason::ProcExit
+            }),
+            "({name}) the retire canary still names the truth with DMA traffic composed \
+             in: its verb was CANCELLED by the retire (§7.6 T2), not left to run to \
+             completion against a proc that no longer exists"
         );
         // ★★ THE PREMISE, asserted rather than assumed: the guest-memory reads really
         // did run with one of OUR ranked locks held. If they did not, every refusal
@@ -7266,6 +7343,9 @@ fn real_mean_run(mode: LockMode) -> RealMeanReport {
 /// lock modes.
 #[test]
 fn a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_load() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_load"
+    );
     let _wd = watchdog(
         "a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_load",
         Duration::from_secs(300),
@@ -7850,6 +7930,9 @@ fn guest_mean_run(mode: LockMode) -> GuestMeanReport {
 /// conservation ledger, and a bit-identical script-determined outcome across lock modes.
 #[test]
 fn a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_deadline() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_deadline"
+    );
     let _wd = watchdog(
         "a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_deadline",
         Duration::from_secs(300),
@@ -8052,6 +8135,9 @@ fn a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_dea
 /// flag a teardown sets. The assertion is the exact [`StopReason`], not "it returned".
 #[test]
 fn a_running_guest_is_stopped_by_the_flag_a_teardown_sets_not_by_a_budget() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_running_guest_is_stopped_by_the_flag_a_teardown_sets_not_by_a_budget"
+    );
     use kayfabe_vmm_kvm::vcpu::StopReason;
     let _wd = watchdog(
         "a_running_guest_is_stopped_by_the_flag_a_teardown_sets_not_by_a_budget",
@@ -8137,6 +8223,9 @@ fn a_running_guest_is_stopped_by_the_flag_a_teardown_sets_not_by_a_budget() {
 /// bytes instead, which the cookie makes unmistakable.
 #[test]
 fn a_guest_reading_from_a_read_native_windows_third_span_gets_that_spans_bytes() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_guest_reading_from_a_read_native_windows_third_span_gets_that_spans_bytes"
+    );
     let _wd = watchdog(
         "a_guest_reading_from_a_read_native_windows_third_span_gets_that_spans_bytes",
         Duration::from_secs(120),
@@ -8240,6 +8329,9 @@ fn a_guest_reading_from_a_read_native_windows_third_span_gets_that_spans_bytes()
 /// that has lost its way.
 #[test]
 fn a_guest_entered_at_an_address_with_no_memory_faults_by_name_and_is_never_resumed() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_guest_entered_at_an_address_with_no_memory_faults_by_name_and_is_never_resumed"
+    );
     use kayfabe_vmm_kvm::vcpu::StopReason;
     let _wd = watchdog(
         "a_guest_entered_at_an_address_with_no_memory_faults_by_name_and_is_never_resumed",

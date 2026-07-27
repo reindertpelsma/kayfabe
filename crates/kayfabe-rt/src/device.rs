@@ -508,11 +508,28 @@ impl SharedDevice {
     /// guard for the whole call; every proc reached lock-free through
     /// [`ExclusiveProcs`]. Identical in both modes (a spine op's shape does not
     /// degenerate further).
+    /// ★★ **And it discharges cancels** (`l1_os_shell.md` §7.6 T2). A guest process
+    /// exiting — normally, killed, or killed *while a verb is pending* — arrives here as
+    /// an `RmEvent::Free` of its client root, so `Spine::refresh` vacates its proc and
+    /// latches a break signal for every verb it still has in flight. The latches are
+    /// fired **after the guard drops**: firing one is a syscall, and R1 admits no
+    /// exception for it.
     pub fn apply(&self, ev: RmEvent) -> Result<(), GpuError> {
-        let mut g = self.state.write();
-        let st = &mut *g;
-        st.spine
-            .apply(st.system.get_mut(), &mut ExclusiveProcs(&mut st.procs), ev)
+        // ★ The latches are TAKEN inside the guard this op already holds, never in a
+        // second critical section. Taking a fresh write lock to ask "is anything
+        // latched?" would add a rank-0 acquisition to the hottest spine path — caught by
+        // `rt_shell::spine_ops_acquire_no_proc_lock_via_get_mut`, which counts them.
+        let (out, cancels) = {
+            let mut g = self.state.write();
+            let st = &mut *g;
+            let out = st
+                .spine
+                .apply(st.system.get_mut(), &mut ExclusiveProcs(&mut st.procs), ev);
+            (out, st.spine.take_pending_cancels())
+        };
+        // Guards dropped (R1): firing one is a syscall.
+        cancels.discharge_all();
+        out
     }
 
     /// Compose+post one completion batch for `gpu` if its drain gate is open
@@ -843,6 +860,161 @@ impl SharedDevice {
         self.pool.signal_return();
     }
 
+    /// ★ **Stage a failed disposal's residue on its proc** — the two-step shape
+    /// [`SharedDevice::return_worker`] uses, and for the same reason
+    /// (`l1_os_shell.md` §7.5).
+    ///
+    /// A verb executes with every lock released, so its proc can retire in the gap —
+    /// including *because of* the very escape that produced this residue. The live map
+    /// then misses and the handles would be dropped on the floor: outstanding host
+    /// objects that nothing in core state, and no release queue, can name. That is
+    /// §12.35's UNACCOUNTED class exactly, and it is what the teardown audit fails on.
+    ///
+    /// So the fast path stages on the live proc, and the fallback reaches
+    /// `Spine::retired` under the write lock. Both are pure bookkeeping (no verb), so
+    /// neither violates R1; they run sequentially, never nested (R3).
+    fn stage_orphans(&self, pid: ProcId, gpu: GpuId, orphans: kayfabe_isolate::Orphans) {
+        if orphans.is_empty() {
+            return;
+        }
+        let mut hold = Some(orphans);
+        let _ = self.route_act(
+            |_| Ok((pid, ())),
+            |_, proc, ()| {
+                if let Some(o) = hold.take() {
+                    proc.stage_release(gpu, o);
+                }
+            },
+        );
+        if let Some(o) = hold.take() {
+            let mut g = self.state.write();
+            if let Some(p) = g.spine.retired_mut(pid) {
+                p.stage_release(gpu, o);
+            } else {
+                // Nothing anywhere can name these: the proc was reaped in the gap, so its
+                // isolate died and §7.0's process boundary already freed the lot. That is
+                // a disposition, and saying so here is the difference between a leak and
+                // a stated one.
+                drop(o);
+            }
+        }
+    }
+
+    /// ★ **The cancel capability, handed out** (`l1_os_shell.md` §7.1): slot `worker`'s
+    /// [`CancelHandle`], or `None` if that slot has no transaction in flight.
+    ///
+    /// This is the door the two-stage watchdog holds: a handle armed at checkout, kept
+    /// somewhere the *cancelling* thread can reach, and fired later from a thread that
+    /// has no `&mut Worker` and could not get one. It is `Send + Sync` and holds no
+    /// reference to the worker or the backend, so keeping one across the lock gap is
+    /// safe by construction rather than by discipline — and a request naming a txn that
+    /// has since ended is simply dropped.
+    #[must_use]
+    pub fn cancel_handle(
+        &self,
+        pid: ProcId,
+        gpu: GpuId,
+        worker: WorkerId,
+    ) -> Option<kayfabe_isolate::CancelHandle> {
+        let mut out = None;
+        let _ = self.route_act(
+            |_| Ok((pid, ())),
+            |_, proc, ()| {
+                out = proc.isolate(gpu).and_then(|iso| iso.cancel_handle(worker));
+            },
+        );
+        out
+    }
+
+    /// ★ Cancel ONE in-flight verb (§5.4's founding case, and the watchdog's **first**
+    /// expiry — §7.5 step 2). Latched under the proc lock, discharged after it drops.
+    ///
+    /// `true` means the break signal was delivered to a live transaction. `false` means
+    /// there was nothing to cancel *or* the verb finished first — §7.3's fourth row,
+    /// which is a normal outcome and emphatically not a failure: the reply names host
+    /// objects that now exist and must be committed, never discarded.
+    ///
+    /// Delivering it is **not** the same as the verb observing it: RM's waits are mostly
+    /// uninterruptible (§7.9), so a delivered cancel that the host ignores is the
+    /// expected case, not the exception. That is what the second budget escalates out
+    /// of, via [`SharedDevice::declare_wedged`].
+    pub fn request_cancel(
+        &self,
+        pid: ProcId,
+        gpu: GpuId,
+        worker: WorkerId,
+        reason: kayfabe_isolate::CancelReason,
+    ) -> bool {
+        let mut latched: Option<kayfabe_isolate::CancelRequest> = None;
+        let _ = self.route_act(
+            |_| Ok((pid, ())),
+            |_, proc, ()| {
+                if let Some(iso) = proc.isolates.get_mut(&gpu) {
+                    latched = iso.request_cancel(worker, reason);
+                }
+            },
+        );
+        // Guards dropped (R1): firing it is a syscall.
+        latched.is_some_and(kayfabe_isolate::CancelRequest::discharge)
+    }
+
+    /// ★★ **THE WEDGE ESCAPE — one act, three consequences** (`l1_os_shell.md` §7.5).
+    ///
+    /// The watchdog's second expiry declares slot `worker` of `(pid, gpu)` **wedged**: a
+    /// host thread in uninterruptible sleep that no signal can reach. Then, in ONE
+    /// critical section:
+    ///
+    /// 1. the slot dies permanently ([`Isolate::worker_died`]) — never a respawn;
+    /// 2. the **abandon** is latched for the requester parked on it;
+    /// 3. the component is condemned ([`Spine::retire_proc`]), which is what makes
+    ///    abandoning the reply safe: the desync hazard §7.2 forbids is a *future* reader
+    ///    of that channel, and after this there is none.
+    ///
+    /// ★ **The three must not be reorderable steps**, which is why they share this
+    /// function and this guard rather than being a documented sequence at a call site.
+    /// The safety of the escape is *conditional on the condemnation*; a caller that did
+    /// (2) without (3) would have reintroduced silent cross-transaction corruption, and
+    /// nothing would say so.
+    ///
+    /// The abandon is **discharged after the guard drops** — firing it is a syscall
+    /// (R1), exactly like every other cancel. Returns `false` if there was nothing to
+    /// wedge (no such proc, target or checked-out slot), which is idempotent by design:
+    /// a guest teardown racing the watchdog is an ordinary R5 gap.
+    ///
+    /// **The honest residual, stated where the code is:** the D-state host thread and its
+    /// RM objects leak until the kernel finishes the ioctl — `SIGKILL` does not reap a
+    /// task in uninterruptible sleep. What this converts is an unbounded silent stall
+    /// into a bounded loud failure plus a leak we can name, count and report.
+    pub fn declare_wedged(&self, pid: ProcId, gpu: GpuId, worker: WorkerId) -> bool {
+        let cancels = {
+            let mut g = self.state.write();
+            let st = &mut *g;
+            let Some(proc) = st.proc_mut(pid) else {
+                return false;
+            };
+            let Some(iso) = proc.isolates.get_mut(&gpu) else {
+                return false;
+            };
+            let Some(abandon) = iso.abandon(worker) else {
+                return false;
+            };
+            iso.worker_died(worker);
+            let mut cancels = kayfabe_isolate::Cancels::new();
+            cancels.push(abandon);
+            // (3) — the same act. `retire_proc` refuses the SYSTEM proc (§12.26), and a
+            // wedged system worker is device-fatal rather than condemnable; the slot is
+            // still dead and the requester is still released, which is the containment
+            // this escape owes.
+            st.spine
+                .retire_proc(&mut ExclusiveProcs(&mut st.procs), pid);
+            cancels.absorb(st.spine.take_pending_cancels());
+            cancels
+        };
+        // Guards dropped (R1): now the syscall-shaped part may run.
+        cancels.discharge_all();
+        true
+    }
+
     /// ★ The driver every verb-issuing op runs: **plan+checkout (locked) → execute
     /// (NO locks) → commit+check-in (re-locked, R5)**. Two locked phases per op, the
     /// shape §7.3 describes; the worker returns inside the same critical section that
@@ -899,10 +1071,28 @@ impl SharedDevice {
             let Ok(reply) = executed else {
                 let failure = executed.expect_err("matched Err");
                 let err = failure.err;
+                // ★ What the worker's own cancel seam OBSERVED, read here — lock-free,
+                // on the thread that ran the verb — so `FwdFault::Cancelled` can name
+                // the truth (§7.3) without `RmError::Interrupted` growing a payload the
+                // core has no business carrying.
+                let reason = worker.cancel_observed();
+                let wid = worker.id();
                 // ★ G4 (§12.16): dispose of the failure's orphans on the SAME worker,
-                // still lock-free, BEFORE returning it. The residue is a named value —
-                // its core-side ledger is L1-M2's (see `kayfabe_fwd::dispose_on`).
-                let _undisposed = kayfabe_fwd::dispose_on(&mut worker, failure.orphans);
+                // still lock-free, BEFORE returning it.
+                //
+                // ★★ §7.5 — UNLESS the worker is WEDGED. It cannot free anything: it is
+                // still inside the ioctl that wedged it, so a disposal attempt is a
+                // second wedge, not a cleanup. The chain's intermediates are STAGED on
+                // the proc instead, which is what turns "in no `Orphans` and in no core
+                // state" (G4's exact words) into a set §12.35's audit can name. Their
+                // disposition of record is §7.0: the escape condemns the component and
+                // the isolate's namespace death frees the lot.
+                let residue = if err == RmError::Wedged {
+                    failure.orphans
+                } else {
+                    kayfabe_fwd::dispose_on(&mut worker, failure.orphans)
+                };
+                self.stage_orphans(staged.proc, gpu, residue);
                 self.return_worker(staged.proc, gpu, worker);
                 // ★ R5 applies to the FAILURE path too (a stage-3 finding, §12.10).
                 // `Proc::retire` retires the isolate, so a verb held in flight across
@@ -916,7 +1106,19 @@ impl SharedDevice {
                 // conflation, one layer over. A cancelled verb is a fact about the
                 // requester, not about the host and not about the proc's existence.
                 return Err(match err {
-                    RmError::Interrupted => FwdFault::Cancelled { proc: staged.proc },
+                    RmError::Interrupted => FwdFault::Cancelled {
+                        proc: staged.proc,
+                        reason: reason.unwrap_or(kayfabe_isolate::CancelReason::GuestSignal),
+                    },
+                    // ★★ §7.5 — and the wedge is tested first for the same reason
+                    // cancellation is: the proc is condemned by the escape, so the
+                    // staleness arm below would otherwise re-type "we abandoned this"
+                    // as "the world moved", which is true and useless.
+                    RmError::Wedged => FwdFault::Wedged {
+                        proc: staged.proc,
+                        gpu,
+                        worker: wid,
+                    },
                     e if self.proc_is_live(staged.proc) => FwdFault::Rm(e),
                     _ => FwdFault::Stale(kayfabe_fwd::Stale::Proc(staged.proc)),
                 });
@@ -1134,11 +1336,20 @@ impl SharedDevice {
 
     /// ★ Retire proc `pid` out of band — the §7.3 worker-death consequence, and the
     /// staleness canaries' lever. **Spine op** (write guard). `true` if it was live.
+    /// ★ **And it cancels** (§15 amendment 4): every verb this proc still has in flight
+    /// is work whose requester is gone. Latched under the guard, discharged after it
+    /// drops.
     pub fn retire_proc(&self, pid: ProcId) -> bool {
-        let mut g = self.state.write();
-        let st = &mut *g;
-        st.spine
-            .retire_proc(&mut ExclusiveProcs(&mut st.procs), pid)
+        let (out, cancels) = {
+            let mut g = self.state.write();
+            let st = &mut *g;
+            let out = st
+                .spine
+                .retire_proc(&mut ExclusiveProcs(&mut st.procs), pid);
+            (out, st.spine.take_pending_cancels())
+        };
+        cancels.discharge_all();
+        out
     }
 
     /// Resolve `va` in the `(target, pdb)` VAS — read-only (route + `resolve_in`).
@@ -1220,6 +1431,19 @@ impl SharedDevice {
         // if a guest teardown won the race.
         if let SignalOutcome::WorkerDied { proc, gpu, worker } = outcome {
             self.kill_worker_slot(proc, gpu, worker);
+            // ★★ §7.5's pairing, applied to the HUP flavour of T5 — and it was MISSING.
+            //
+            // `kill_worker_slot` marks the slot dead, which makes it invisible to
+            // `checked_out()`, so the `request_cancel_all` inside the retire below finds
+            // NOTHING to cancel. A thread parked in that worker's verb therefore got no
+            // signal at all: on a real socket the HUP itself ends its read, but nothing
+            // in this design said so, and nothing here would have released it.
+            //
+            // The truth is exactly §7.5's: the reply is never coming, so the requester is
+            // ABANDONED — and that is safe here for the one reason it is ever safe, which
+            // is that the slot is already dead and the component is condemned by the
+            // retire two lines down. The three are one act.
+            self.abandon_worker(proc, gpu, worker);
             // ★ §12.26 — the system component is UNCONDEMNABLE. The slot still dies
             // (never a respawn), but the retire/condemn consequence is refused and the
             // outcome is re-typed to the device-scoped fault it actually is. Previously
@@ -1232,6 +1456,27 @@ impl SharedDevice {
             self.retire_proc(proc);
         }
         outcome
+    }
+
+    /// ★ Release the thread parked in a **dead** slot's verb (§7.5). Latched under the
+    /// proc lock, discharged after it drops — firing it is a syscall (R1).
+    ///
+    /// Ordered AFTER [`SharedDevice::kill_worker_slot`] deliberately: the slot must be
+    /// dead before its requester is released, or a returning worker could be checked in
+    /// as idle and handed to a new op.
+    fn abandon_worker(&self, pid: ProcId, gpu: GpuId, worker: WorkerId) {
+        let mut latched: Option<kayfabe_isolate::CancelRequest> = None;
+        let _ = self.route_act(
+            |_| Ok((pid, ())),
+            |_, proc, ()| {
+                if let Some(iso) = proc.isolates.get_mut(&gpu) {
+                    latched = iso.abandon(worker);
+                }
+            },
+        );
+        if let Some(req) = latched {
+            req.discharge();
+        }
     }
 
     /// Mark one pool slot permanently dead so it is never checked out again

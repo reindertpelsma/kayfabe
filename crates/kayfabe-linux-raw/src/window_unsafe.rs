@@ -552,6 +552,7 @@ mod tests {
     /// checked without a guest; the rest is honestly M2-d's.
     #[test]
     fn a_sub_range_memslot_address_advances_by_exactly_its_offset() {
+        crate::require_kvm!("a_sub_range_memslot_address_advances_by_exactly_its_offset");
         let p = page();
         let w = GuestWindow::create(4 * p.bytes(), p).expect("window");
         let base = w

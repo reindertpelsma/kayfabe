@@ -268,6 +268,7 @@ mod epoll_unsafe;
 pub mod error;
 pub mod geometry;
 mod host_fd_unsafe;
+pub mod kvm_gate;
 mod kvm_unsafe;
 mod mapping_unsafe;
 pub mod page_size;

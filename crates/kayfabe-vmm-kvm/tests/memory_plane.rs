@@ -52,6 +52,9 @@ fn machine() -> KvmMachine {
 /// into one window perform **one** memslot install.
 #[test]
 fn ten_publications_into_one_window_perform_exactly_one_memslot_install() {
+    kayfabe_linux_raw::require_kvm!(
+        "ten_publications_into_one_window_perform_exactly_one_memslot_install"
+    );
     let m = machine();
     let p = page();
     let mut v = m.vmm();
@@ -109,6 +112,7 @@ fn ten_publications_into_one_window_perform_exactly_one_memslot_install() {
 /// port, at an offset deep inside the window.
 #[test]
 fn guest_memory_round_trips_through_a_real_mapping() {
+    kayfabe_linux_raw::require_kvm!("guest_memory_round_trips_through_a_real_mapping");
     let m = machine();
     let p = page();
     let mut v = m.vmm();
@@ -140,6 +144,9 @@ fn guest_memory_round_trips_through_a_real_mapping() {
 /// nowhere to land, and the port refuses it by the name that says so.
 #[test]
 fn a_device_region_is_the_absence_of_a_memslot_and_refuses_by_name() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_device_region_is_the_absence_of_a_memslot_and_refuses_by_name"
+    );
     let m = machine();
     let p = page();
     let mut v = m.vmm();
@@ -187,6 +194,9 @@ fn a_device_region_is_the_absence_of_a_memslot_and_refuses_by_name() {
 /// away, so a reader either resolves and completes or refuses. Never a stale byte.
 #[test]
 fn a_removed_window_refuses_as_unbacked_and_never_as_stale_bytes() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_removed_window_refuses_as_unbacked_and_never_as_stale_bytes"
+    );
     let m = machine();
     let p = page();
     let mut v = m.vmm();
@@ -227,6 +237,9 @@ fn a_removed_window_refuses_as_unbacked_and_never_as_stale_bytes() {
 /// adapter does not know this rule and does not need to — the flat view is the kernel's.
 #[test]
 fn an_overlapping_window_is_the_kernels_eexist_and_leaks_nothing() {
+    kayfabe_linux_raw::require_kvm!(
+        "an_overlapping_window_is_the_kernels_eexist_and_leaks_nothing"
+    );
     let m = machine();
     let p = page();
     let first = m
@@ -284,6 +297,7 @@ fn an_overlapping_window_is_the_kernels_eexist_and_leaks_nothing() {
 /// orders of magnitude above the noise of an allocator warming up.
 #[test]
 fn a_repeated_partial_failure_returns_the_host_address_space() {
+    kayfabe_linux_raw::require_kvm!("a_repeated_partial_failure_returns_the_host_address_space");
     let m = machine();
     let p = page();
     let win = 256 * p.bytes();
@@ -335,6 +349,7 @@ fn vm_size_kib() -> u64 {
 /// **before** any memslot exists, which is the other partial-failure shape.
 #[test]
 fn a_window_the_address_space_cannot_hold_is_the_kernels_enomem() {
+    kayfabe_linux_raw::require_kvm!("a_window_the_address_space_cannot_hold_is_the_kernels_enomem");
     let m = machine();
     let p = page();
     let absurd = (1u64 << 62) & !p.mask();
@@ -359,6 +374,9 @@ fn a_window_the_address_space_cannot_hold_is_the_kernels_enomem() {
 /// by a name that says which resource ran out.
 #[test]
 fn the_memslot_ceiling_is_a_real_number_and_the_refusal_names_it() {
+    kayfabe_linux_raw::require_kvm!(
+        "the_memslot_ceiling_is_a_real_number_and_the_refusal_names_it"
+    );
     let m = machine();
     let ceiling = m.memslot_ceiling();
     assert!(
@@ -394,6 +412,7 @@ fn the_memslot_ceiling_is_a_real_number_and_the_refusal_names_it() {
 /// ★ Alignment and emptiness are refused **before** the syscall, by name.
 #[test]
 fn a_misaligned_or_empty_window_is_refused_before_any_syscall() {
+    kayfabe_linux_raw::require_kvm!("a_misaligned_or_empty_window_is_refused_before_any_syscall");
     let m = machine();
     let p = page();
     let expected = Err(VmmError::Unsupported(
@@ -420,6 +439,7 @@ fn a_misaligned_or_empty_window_is_refused_before_any_syscall() {
 /// Both halves are load-bearing, and the second is the one a naive version omits.
 #[test]
 fn no_syscall_shaped_method_ever_runs_with_a_ranked_lock_held() {
+    kayfabe_linux_raw::require_kvm!("no_syscall_shaped_method_ever_runs_with_a_ranked_lock_held");
     let m = machine();
     let p = page();
     let mut v = m.vmm();
@@ -487,6 +507,7 @@ fn no_syscall_shaped_method_ever_runs_with_a_ranked_lock_held() {
 /// existed.
 #[test]
 fn a_fresh_machine_reports_never_observed_and_not_observed_zero() {
+    kayfabe_linux_raw::require_kvm!("a_fresh_machine_reports_never_observed_and_not_observed_zero");
     let m = machine();
     let a = m.audit();
     assert_eq!(
@@ -508,6 +529,9 @@ fn a_fresh_machine_reports_never_observed_and_not_observed_zero() {
 /// held and `lockwitness` is therefore silent.
 #[test]
 fn a_syscall_under_the_adapters_own_lock_is_loud_even_though_no_rank_is_held() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_syscall_under_the_adapters_own_lock_is_loud_even_though_no_rank_is_held"
+    );
     let m = machine();
     let p = page();
     let held = leaf::Held::enter();
@@ -539,6 +563,9 @@ fn a_syscall_under_the_adapters_own_lock_is_loud_even_though_no_rank_is_held() {
 /// protection inside a shared read-write window is refused rather than approximated.
 #[test]
 fn per_object_read_only_protection_is_refused_because_protection_is_a_window_property() {
+    kayfabe_linux_raw::require_kvm!(
+        "per_object_read_only_protection_is_refused_because_protection_is_a_window_property"
+    );
     let m = machine();
     let p = page();
     let mut v = m.vmm();
@@ -566,6 +593,9 @@ fn per_object_read_only_protection_is_refused_because_protection_is_a_window_pro
 /// emulation of it — and the write-trap sub-range is rounded outward to whole host pages.
 #[test]
 fn a_read_native_overlay_installs_a_read_only_slot_over_the_rounded_write_trap() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_read_native_overlay_installs_a_read_only_slot_over_the_rounded_write_trap"
+    );
     let m = machine();
     let p = page();
     let mut v = m.vmm();
@@ -602,6 +632,7 @@ fn a_read_native_overlay_installs_a_read_only_slot_over_the_rounded_write_trap()
 /// leave the guest, so the trap would exist only in our bookkeeping.
 #[test]
 fn a_read_write_trap_over_a_live_memslot_is_refused() {
+    kayfabe_linux_raw::require_kvm!("a_read_write_trap_over_a_live_memslot_is_refused");
     let m = machine();
     let p = page();
     let mut v = m.vmm();
@@ -638,6 +669,9 @@ fn a_read_write_trap_over_a_live_memslot_is_refused() {
 /// an isolate's completions invisible to the guest.
 #[test]
 fn a_machine_without_a_shareable_backing_refuses_the_first_export() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_machine_without_a_shareable_backing_refuses_the_first_export"
+    );
     let m = KvmMachine::realize(MachineConfig {
         shareable_ram: false,
         bars: Vec::new(),
@@ -683,6 +717,9 @@ fn a_machine_without_a_shareable_backing_refuses_the_first_export() {
 /// real notify descriptor, permitted under the ranks it declares.
 #[test]
 fn raise_irq_is_a_real_descriptor_write_and_is_legal_under_the_ranks_it_declares() {
+    kayfabe_linux_raw::require_kvm!(
+        "raise_irq_is_a_real_descriptor_write_and_is_legal_under_the_ranks_it_declares"
+    );
     let m = machine();
     let mut v = m.vmm();
     lockwitness::note_acquired(1);
@@ -713,6 +750,7 @@ fn raise_irq_is_a_real_descriptor_write_and_is_legal_under_the_ranks_it_declares
 /// cannot drift on timer ordering.
 #[test]
 fn deferred_events_come_back_in_deadline_then_insertion_order() {
+    kayfabe_linux_raw::require_kvm!("deferred_events_come_back_in_deadline_then_insertion_order");
     let m = machine();
     let mut v = m.vmm();
     v.defer(
@@ -751,6 +789,7 @@ fn deferred_events_come_back_in_deadline_then_insertion_order() {
 /// from whatever happened to be at that index.
 #[test]
 fn a_backing_id_this_backend_never_minted_is_refused() {
+    kayfabe_linux_raw::require_kvm!("a_backing_id_this_backend_never_minted_is_refused");
     let m = machine();
     let p = page();
     let mut v = m.vmm();

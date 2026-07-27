@@ -757,7 +757,11 @@ fn a_reference_taken_during_the_owners_teardown_is_refused_too() {
     .expect("the owner publishes");
     let owned = backing_of(&gpu, owner, OWNER_PDB, VA);
 
-    gpu.procs.get_mut(&owner).expect("owner").retire();
+    gpu.procs
+        .get_mut(&owner)
+        .expect("owner")
+        .retire()
+        .discharge_all();
     assert!(
         gpu.procs[&owner].is_retired(),
         "retired, not yet reaped — the isolate is still alive"

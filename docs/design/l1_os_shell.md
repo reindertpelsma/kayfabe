@@ -4323,6 +4323,122 @@ and pinned positively by a guest entered at an address with no memory.
    lands between the loop's drain and its stop check — genuinely racy. Accepted residual, in
    the same class as §14.8 F8.
 
+### 14.10 ★★ M2-e — cancellation exists, and FOUR things §7 assumed were not true of the code
+
+**Provenance:** build findings against the mock harness (no OS, no `/dev/kvm`, no GPU — every
+test in this stage runs on a machine with neither), so §14's rule applies to the *design*
+claims, not to host behaviour. Shipped: `kayfabe-isolate`'s cancel seam
+(`CancelReason`/`Txn`/`CancelSink`/`CancelHandle`/`CancelRequest`/`Cancels`,
+`RmError::Wedged`, the wedge-aware `unwind`), `Isolate::{checked_out, cancel_handle,
+request_cancel, request_cancel_all, abandon}`, `Proc::{vacate, retire} -> Cancels` +
+`Proc::stage_release`, `Spine::{pending_cancels, take_pending_cancels, retired_mut}`,
+`FwdFault::Cancelled { proc, reason }` + `FwdFault::Wedged { proc, gpu, worker }`,
+`SharedDevice::{cancel_handle, request_cancel, declare_wedged, stage_orphans}`, the mock's
+`MockCancelSink` / `never_cancels` / cancel observer, and 11 tests (482 → **493**) plus a
+cancel phase and a wedge phase composed into `mean_run`. Deliberately NOT built: the
+two-stage watchdog's **timer** (the escape's mechanism exists and is driven explicitly;
+arming it on `Vmm::defer` belongs with M2-f's other deadline work), T4's `device_reset`,
+T7's ordered `shutdown()`.
+
+**F1. ★★★ `Proc::retire` double-latched every cancel, and only an exact census could see
+it.** `Spine::retire_proc` is `vacate`-then-`retire` (§12.35's one removal point) and
+`Proc::retire` called `vacate()` again, so **two** break signals were latched for the same
+worker on the same txn. It is not harmless: the second delivery **re-arms a seam the first
+one may already have disarmed** (§7.2 refinement 4), and any accounting over "how many
+cancels did this teardown fire" is a lie. Every fault variant is identical either way. It
+was caught by asserting the exact triple `(fired, delivered, observed)` — which reported
+`(2, 2, 1)` where the design says `(1, 1, 0)` — and by nothing else in the suite.
+
+**F2. ★★★ §7.2 refinement 4 is only half of the rule it needs to be, and the missing half
+is the dangerous one.** The doc says *"once `EINTR` is observed it disarms, so the unwind's
+`free`s are not themselves interrupted"* — keyed on **observation**. But the common case is
+that the signal is delivered into a wait that does not break (§7.9: RM's waits mostly are
+not interruptible), and then the signal is still armed when the verb ends. What runs next,
+on a refused or cancelled op, is **the disposal** — so the cleanup was interrupted and the
+chain's host objects leaked, arriving through the one door refinement 4 exists to shut.
+The rule must be *"armed for exactly one ioctl"* keyed on the **verb ending**, observed or
+not. Measured: the uninterruptible arm reported `observed == 1` where the verb had observed
+nothing; the observation belonged to the `unmap`/`free` two steps later. §7.2 should be
+amended to say so in place.
+
+**F3. ★★ The worker-HUP path (T5) killed the slot and told the requester NOTHING.**
+`SharedDevice::signal_source` does `kill_worker_slot` then `retire_proc`, and
+`kill_worker_slot` marks the slot `Dead` — which makes it invisible to `checked_out()`, so
+the `request_cancel_all` inside the retire finds nothing to cancel. A thread parked in that
+worker's verb received no signal on any path. On a real socket the HUP itself ends its
+read; **nothing in this design said so**, and in the harness nothing released it at all.
+The fix is §7.5's own pairing applied to the HUP flavour — abandon the requester in the
+same act as the slot death and the condemnation — and it means `Isolate::cancel_handle`
+must be keyed on *"is a txn outstanding"* and **not** on the slot being `Busy`. §7.6 T5
+should name the abandon; today it names only the routing and the reclamation.
+
+**F4. ★ §7.3's `FwdFault::Cancelled { reason }` did not exist; the shipped variant was
+`{ proc }`.** M2-0 landed the vocabulary without the field §7.3's own argument rests on
+(*"a fault must name the truth, not the symptom"*). Added additively as
+`{ proc, reason }`, with the reason read from the worker's own seam
+(`Worker::cancel_observed`) **lock-free on the executing thread**, so `RmError::Interrupted`
+still carries no payload — which §7.3 deliberately requires. A cancellation with no recorded
+observation (e.g. `fail_next`-injected) surfaces `GuestSignal` rather than a guess.
+
+**F5. ★★ Cancelling on retire is a REAL semantic change to four existing canaries, and the
+`Stale::Proc` coverage it displaces had to be rebuilt, not dropped.** `r5_canary_proc_
+retired_in_the_gap_refuses_loudly`, `g3_a_worker_whose_proc_retired_in_the_gap_still_
+reaches_its_slot`, `a_retry_whose_replan_diverges_refuses_without_leaking_the_attempt` and
+`mean_run`'s canary (a) all asserted `Stale(Proc)`; with T2's cancel the verb no longer
+reaches its commit at all. Updating them to `Cancelled { ProcExit }` is correct — but it
+silently deletes the R5-commit-guard coverage, so that arm is rebuilt on the path where it
+is still reachable: `never_cancels` + a retire, i.e. **the delivered-but-not-observed case,
+which §7.9 says is RM's usual answer.** The test is
+`cancellation.rs::a_cancel_the_host_wait_never_breaks_still_refuses_as_staleness`.
+
+**F6. ★ Two ResidueClaims are now DELETED rather than loosened, and that is the finding.**
+`retry_ledger`'s and `l1_verb_seam`'s claims excused a host object that a retired isolate
+could not free. It still cannot — but the handle now lands on the corpse's
+`pending_release` queue via `stage_orphans`, so §12.35's audit can NAME it and the
+UNACCOUNTED set is empty. "Outstanding" and "unnameable" are different things, and this is
+the first place the difference deleted a declaration.
+
+**F7. ★ Discharging cancels in a second critical section is a measurable regression, not a
+style question.** The obvious shape — `apply()` … guard drops … `discharge_cancels()` takes
+the write lock again — adds a rank-0 acquisition to the hottest spine path. Caught by
+`rt_shell::spine_ops_acquire_no_proc_lock_via_get_mut`, which counts them (7 where 6 is the
+contract). The latches must be **taken inside the guard the op already holds** and fired
+after it drops.
+
+**What M2-e owes the build:**
+
+1. **The watchdog has no timer.** §7.5's two budgets are the policy; only the mechanism
+   (`request_cancel` for the first expiry, `declare_wedged` for the second) exists, driven
+   explicitly by tests. Arming them on `Vmm::defer` at checkout — and disarming at check-in,
+   so F1's "never periodic-forever" holds — is M2-f work and must not be forgotten, because
+   without it a wedge is only reachable by a caller who already knows.
+2. **`Cancels` is `#[must_use]`; `Vec<CancelRequest>` is not.** The collection wrapper is
+   what makes a dropped batch a compile error, and any future path that returns a bare `Vec`
+   of requests silently reopens the hole.
+3. **The mock's abandon is a condvar; a real one is a socket EOF.** §7.9 gains a row: *the
+   real isolate's HUP releases its requester* is not mock-settleable, and the harness proves
+   only that our side does the right thing when told.
+
+**★★ And one thing M2-e paid off that was not its own: the `/dev/kvm` capability gate.**
+Stages M2-c and M2-d added 33 tests that need a real VM file descriptor, and GitHub's
+`ubuntu-latest` runners do not provide one — so the `stable` CI job had been red since
+`1336ce1` with 33 identical `open` panics. `kayfabe_linux_raw::kvm_gate` is the single
+probe (`kvm_available()`) plus the `require_kvm!` macro every one of them now calls. The
+design constraint is the whole of it: **skip LOUDLY, never silently.** A test that quietly
+does nothing when the capability is missing is `testing_doctrine.md` §1's green-instrument
+failure and is strictly *worse* than the red build it replaces, because red is honest. So
+the gate is never `#[ignore]` (invisible, uncountable); it prints on **both** arms —
+`KVM-GATE: RAN <test>` / `KVM-GATE: SKIPPED <test> — …` — straight to stderr, bypassing
+libtest's capture exactly as `skip_slow!` does, because capture swallows the *passing*
+arm and the passing arm is the one that matters. The non-vacuity defence is that both
+markers are counted externally (one test binary per process, so no in-process counter can
+see across them): on a KVM-capable job `SKIPPED` must be **0** and `RAN` must be at least
+the known floor, so a run in which the real-`Vmm` suite quietly stopped executing shows up
+as a `RAN` count that fell rather than as a green build. Measured both ways on this
+workstation: with `/dev/kvm` present, `RAN 33 / SKIPPED 0` and the suite is green; with the
+probe forced to fail, `RAN 0 / SKIPPED 33` and the workspace is **still green, with 33
+lines saying exactly what did not run**.
+
 ---
 
 ## 15. Proposed amendments to `l1_concurrency.md` (NOT applied here)

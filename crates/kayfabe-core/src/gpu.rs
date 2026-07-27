@@ -19,7 +19,8 @@ use kayfabe_arch::Arch;
 use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa, HClient, Pdb, VChid};
 use kayfabe_completion::{CompletionQueue, DeliveryPlane, FenceArms, PostBatch};
 use kayfabe_isolate::{
-    HostHandle, Isolate, IsolateBox, IsolateFactory, IsolateId, Orphans, Worker,
+    CancelReason, Cancels, HostHandle, Isolate, IsolateBox, IsolateFactory, IsolateId, Orphans,
+    Worker,
 };
 use kayfabe_mmu::{AddressFault, AddressTable};
 use kayfabe_util::Instant;
@@ -515,6 +516,28 @@ impl Proc {
         self.isolates.values().all(|iso| iso.is_quiesced())
     }
 
+    /// ★ **Stage host objects for release** — the only way into `pending_release` from
+    /// outside this module (`l1_os_shell.md` §7.6 T0, and §7.5's wedge).
+    ///
+    /// Two producers, and the second is why this is public. The first is
+    /// [`Spine::stage_dropped_vases`]/`stage_dropped_channels`: the guest freed a subset
+    /// while the process kept running. The second is §7.5's **abandoned chain**: a wedged
+    /// worker's [`kayfabe_isolate::VerbFailure::orphans`] are host objects that exist,
+    /// that the unwind could not run on, and that no `Vas` or `Channel` names — the exact
+    /// UNACCOUNTED shape §12.35's audit reports. Staging them is what makes their
+    /// disposition (§7.0 namespace death) a *stated* one rather than an unnameable set.
+    ///
+    /// Pure bookkeeping — no verb — so it is legal under the device write lock, exactly
+    /// like the T0 staging it shares a queue with.
+    pub fn stage_release(&mut self, gpu: GpuId, orphans: Orphans) {
+        if orphans.is_empty() {
+            return;
+        }
+        let q = self.pending_release.entry(gpu).or_default();
+        q.unmap.extend(orphans.unmap);
+        q.free.extend(orphans.free);
+    }
+
     /// ★★ **VACATE — the clean death** (`l1_concurrency.md` §12.35): this proc's
     /// component vanished (the guest freed its client root, or it was absorbed by a
     /// merge). It refuses every new op from this instant, exactly like [`Proc::retire`],
@@ -532,8 +555,22 @@ impl Proc {
     ///
     /// Both are *removal* from the live set. Only one of them can still clean up, and
     /// pretending otherwise is what made §12.33's residue unreclaimable.
-    pub fn vacate(&mut self) {
+    ///
+    /// ★★ **And it CANCELS** (`l1_os_shell.md` §7.6 T2): the returned [`Cancels`] is one
+    /// latched break signal per verb this proc still has in flight.
+    pub fn vacate(&mut self) -> Cancels {
         self.retired = true;
+        // ★ §7.6 T2 / §15 amendment 4 — the proc is gone, so every verb still in flight
+        // for it is work whose requester no longer exists. Latch a cancel for each; the
+        // shell discharges them after the guards drop (R1: firing one is a syscall).
+        // Before this, a pending verb ran to completion against a dead proc and only its
+        // commit noticed — correct, but it held a pool worker and a host round trip for
+        // an answer nobody was waiting for.
+        let mut cancels = Cancels::new();
+        for iso in self.isolates.values_mut() {
+            cancels.absorb(iso.request_cancel_all(CancelReason::ProcExit));
+        }
+        cancels
     }
 
     /// Stage 1 of teardown (lesson L10): stop every per-target isolate, mark retired.
@@ -541,11 +578,30 @@ impl Proc {
     ///
     /// The **violent** death — see [`Proc::vacate`] for the clean one and for why the
     /// two must differ.
-    pub fn retire(&mut self) {
-        self.vacate();
+    pub fn retire(&mut self) -> Cancels {
+        // Order matters and is not stylistic: latch the cancels BEFORE the isolates are
+        // retired. A retired isolate refuses every new checkout, but the slots that are
+        // already out are exactly the ones that need cancelling — and `vacate` reads them
+        // through `checked_out()`, which stays true either way. Doing it after would still
+        // work today; doing it first states the dependency.
+        //
+        // ★ **Only if it has not already vacated.** `Spine::retire_proc` is
+        // `vacate`-then-`retire` (§12.35's one removal point), so an unguarded second
+        // `vacate()` here latches a SECOND break signal for the same worker on the same
+        // txn. It is not harmless: the delivered count doubles, the second delivery
+        // re-arms a seam the first one may already have disarmed (§7.2 refinement 4), and
+        // any accounting over "how many cancels did this teardown fire" becomes a lie.
+        // Caught by `cancellation.rs`'s exact `(fired, delivered, observed)` census,
+        // which reported (2,2,1) where the design says (1,1,0).
+        let cancels = if self.retired {
+            Cancels::new()
+        } else {
+            self.vacate()
+        };
         for iso in self.isolates.values_mut() {
             iso.retire();
         }
+        cancels
     }
 
     /// True once retired (a retired proc must refuse new ops).
@@ -796,6 +852,19 @@ pub struct Spine {
     /// after its proc retired" into a loud `SourceFault` instead of the C's F4
     /// use-after-retire.
     pub sources: SourceRegistry,
+    /// ★★ **Latched cancels awaiting a lock-free discharge** (`l1_os_shell.md` §7.1).
+    ///
+    /// Every path that removes a proc from the live set runs under the device WRITE
+    /// lock, and every such path must cancel that proc's in-flight verbs — but firing a
+    /// cancel is a syscall and R1 forbids syscalls under locks. So the locked phase
+    /// LATCHES here and the shell drains it after the guards drop, which is exactly the
+    /// two-step `WakeRequest` already uses (§7.1: *"cancel is the third user, which is
+    /// the argument that it is the right mechanism rather than a third one"*).
+    ///
+    /// Private, with [`Spine::take_pending_cancels`] as the only way out, for the same
+    /// reason `pending_release` is: [`Cancels`] is `#[must_use]`, so a batch that leaves
+    /// this struct cannot be dropped on the floor without the compiler saying so.
+    pending_cancels: Cancels,
     isolates: Box<dyn IsolateFactory>,
     /// Geometry template for minting a fresh disjoint per-target window.
     geom: TargetGeom,
@@ -1808,7 +1877,7 @@ impl Spine {
     /// `GpaBlock`s to the proc's own arena — no verb, so R1 does not apply), which is why
     /// it may run here under the device write lock. The **drain** cannot, and does not:
     /// it happens lock-free at the corpse's [`Proc::drop`], gated on `is_quiesced`.
-    fn vacate(procs: &mut impl ProcSet, id: ProcId) -> Proc {
+    fn vacate(&mut self, procs: &mut impl ProcSet, id: ProcId) -> Proc {
         let mut p = procs
             .remove(id)
             .expect("a vanishing proc is in the live set");
@@ -1820,7 +1889,10 @@ impl Spine {
         p.exec.scheduled.clear();
         // ★ VACATE, not RETIRE: the isolates stay live so the queue just filled can
         // actually be disposed of. See `Proc::vacate` for the clean-vs-violent split.
-        p.vacate();
+        // ★★ §7.6 T2 — and it CANCELS: a guest process that exits (normally, killed, or
+        // killed *while a verb is pending*) is all one path here, and the pending verb's
+        // requester is gone. The latches ride out on `pending_cancels`.
+        self.pending_cancels.absorb(p.vacate());
         p
     }
 
@@ -2061,7 +2133,7 @@ impl Spine {
             "the plan's vanishing set must be disjoint from the procs step 1 kept"
         );
         for id in core::mem::take(&mut plan.vanishing) {
-            let p = Self::vacate(procs, id);
+            let p = self.vacate(procs, id);
             // Removal is also a REACTOR event (§6): the dying proc's completion sources
             // must stop routing the instant it stops existing, or a late signal resolves
             // onto a dead proc (F4). Handles are never reused, so any signal still in
@@ -2245,8 +2317,8 @@ impl Spine {
         // untrustworthy or already-dead sandbox must not be handed more verbs (§12.17,
         // no resurrect). Staging it anyway is what makes that a *stated* disposition
         // rather than an unnameable set.
-        let mut p = Self::vacate(procs, pid);
-        p.retire();
+        let mut p = self.vacate(procs, pid);
+        self.pending_cancels.absorb(p.retire());
         self.sources.deregister_proc(pid).latched();
         let anchor = p.anchor;
         absorb_condemned(&mut self.condemned, p.client_ids.clone());
@@ -2456,6 +2528,27 @@ impl Spine {
         true
     }
 
+    /// ★ Mutable access to a **retired-but-unreaped** proc — the fallback half of the
+    /// shell's stage-orphans path (`l1_os_shell.md` §7.5), the exact counterpart of
+    /// [`Spine::checkin_retired`] and there for the same reason: a verb runs lock-free,
+    /// so its proc can leave the live set in the gap, and the handles it left behind must
+    /// still land somewhere nameable rather than being dropped on the floor.
+    pub fn retired_mut(&mut self, pid: ProcId) -> Option<&mut Proc> {
+        self.retired.iter_mut().find(|p| p.id == pid)
+    }
+
+    /// ★★ **Take the latched cancels** for the shell to discharge with no lock held
+    /// (`l1_os_shell.md` §7.1) — the exact counterpart of
+    /// [`crate::reactor::SourceRegistry::take_pending_wake`].
+    ///
+    /// The caller MUST have released every ranked lock before discharging:
+    /// [`kayfabe_isolate::CancelRequest::discharge`] asserts it, because firing a cancel
+    /// is a syscall. Returning them rather than firing them here is what makes that
+    /// assert satisfiable instead of a rule someone has to remember.
+    pub fn take_pending_cancels(&mut self) -> Cancels {
+        core::mem::take(&mut self.pending_cancels)
+    }
+
     /// How many retired procs are still awaiting a reap — either never reaped yet, or
     /// deferred by [`Spine::reap_retired`] for not being quiesced (§12.16, G3).
     /// Diagnostics, and the executable statement that a deferred reap is *deferred*
@@ -2619,6 +2712,7 @@ impl Gpu {
             by_vchid: BTreeMap::new(),
             targets,
             sources: SourceRegistry::new(),
+            pending_cancels: Cancels::new(),
             isolates,
             geom,
             next_proc: 1,
@@ -2643,6 +2737,12 @@ impl Gpu {
     /// Apply one RM protocol event (see [`Spine::apply`]).
     pub fn apply(&mut self, ev: RmEvent) -> Result<(), GpuError> {
         self.spine.apply(&mut self.system, &mut self.procs, ev)
+    }
+
+    /// Take the latched cancels for lock-free discharge (see
+    /// [`Spine::take_pending_cancels`]).
+    pub fn take_pending_cancels(&mut self) -> Cancels {
+        self.spine.take_pending_cancels()
     }
 
     /// Reap retired procs at the quiesce point (see [`Spine::reap_retired`]).

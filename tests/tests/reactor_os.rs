@@ -660,6 +660,9 @@ fn os_the_source_cap_refuses_by_name_and_the_refusal_is_contained() {
 /// than the test's, and `signals_pushed == K` has to hold across every choice it makes.
 #[test]
 fn os_a_real_counter_signal_reaches_the_core_through_real_reactor_and_executor_threads() {
+    kayfabe_linux_raw::require_kvm!(
+        "os_a_real_counter_signal_reaches_the_core_through_real_reactor_and_executor_threads"
+    );
     for mode in [LockMode::Degenerate, LockMode::Sharded] {
         let (device, pids) = world(mode);
         let reg = registrar(64);

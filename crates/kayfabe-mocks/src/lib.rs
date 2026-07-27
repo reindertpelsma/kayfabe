@@ -29,7 +29,8 @@ use kayfabe_arch::{
     PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
 use kayfabe_isolate::{
-    HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Worker, WorkerId,
+    CancelHandle, CancelReason, CancelSink, HostHandle, Isolate, IsolateFactory, IsolateId,
+    RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_util::Instant;
 use kayfabe_vmm::{
@@ -878,6 +879,12 @@ pub struct VerbHold {
 struct HoldState {
     entered: bool,
     released: bool,
+    /// ★ §7.2 — an out-of-band break signal landed on the worker parked here. Lives in
+    /// the HOLD's state, not the cell's, so the park's wait predicate is over exactly one
+    /// mutex and the two structures are never held at once (see [`MockCancelSink`]).
+    cancelled: Option<CancelReason>,
+    /// ★ §7.5 — the requester was abandoned: the reply is never coming.
+    abandoned: bool,
 }
 
 impl VerbHold {
@@ -913,14 +920,239 @@ impl VerbHold {
         self.cv.notify_all();
     }
 
-    /// The backend side: mark entered, wake any waiter, and park until released.
-    fn enter_and_park(&self) {
+    /// The backend side: mark entered, wake any waiter, and park until released **or
+    /// until the worker's out-of-band cancel seam fires** (§7.2/§7.5).
+    ///
+    /// Returns what the park woke on:
+    /// - `Ok(())` — released normally (or the cancel was one the verb ignores).
+    /// - `Err(Interrupted)` — a break signal landed and this verb kind observes it.
+    /// - `Err(Wedged)` — §7.5's abandon: the requester was released with no reply.
+    ///
+    /// ★ **`interruptible` is the modelled fact, not a convenience.** RM's waits are
+    /// mostly *not* interruptible — the API lock is a `down_write`, the GSP RPC busy-polls
+    /// with no signal check (`l1_os_shell.md` §7.9, §12.26) — so a mock in which every
+    /// cancel lands would make the whole D-state escape untestable and would prove a
+    /// property the host does not have.
+    fn enter_and_park(&self, interruptible: bool) -> Result<(), RmError> {
         let mut g = self.state.lock().expect("hold");
         g.entered = true;
         self.cv.notify_all();
-        while !g.released {
+        loop {
+            if g.abandoned {
+                return Err(RmError::Wedged);
+            }
+            if interruptible && g.cancelled.is_some() {
+                return Err(RmError::Interrupted);
+            }
+            if g.released {
+                return Ok(());
+            }
             g = self.cv.wait(g).expect("hold");
         }
+    }
+
+    /// The cancel side: record the break signal and wake the parked verb. Takes only
+    /// this hold's own mutex, and is called with the cell's mutex already **dropped**.
+    fn signal(&self, cancelled: Option<CancelReason>, abandoned: bool) {
+        let mut g = self.state.lock().expect("hold");
+        if let Some(r) = cancelled {
+            g.cancelled = Some(r);
+        }
+        g.abandoned |= abandoned;
+        self.cv.notify_all();
+    }
+}
+
+// ---------------------------------------------------------------------------------
+// ★★ The cancel seam (`l1_os_shell.md` §7.1–§7.5)
+// ---------------------------------------------------------------------------------
+
+/// One recorded cancellation event — the **cancel observer** the mean run asserts on.
+///
+/// Two shapes, deliberately separate, because they answer different questions and
+/// conflating them is how a cancellation test passes for the wrong reason:
+/// *was the signal delivered* (did it name a live txn) versus *did the verb observe it*
+/// (did the host wait actually break).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CancelEvent {
+    /// The isolate whose slot was signalled.
+    pub isolate: IsolateId,
+    /// The pool slot.
+    pub worker: WorkerId,
+    /// The transaction the request named.
+    pub txn: Txn,
+    /// The reason, or `None` for §7.5's abandon.
+    pub reason: Option<CancelReason>,
+    /// Whether the txn was still current. `false` = the verb finished first (§7.3's
+    /// fourth row) and the request was dropped — a normal outcome, never a failure.
+    pub delivered: bool,
+}
+
+/// Per-slot cancel state. One mutex; nothing else is ever held with it.
+#[derive(Debug, Default)]
+struct CancelCell {
+    /// This checkout's txn. Monotonic per slot and never reused.
+    txn: u64,
+    /// True between `checkout` and `checkin` — a cancel outside that window names a
+    /// stale txn by definition.
+    in_flight: bool,
+    /// A delivered-but-not-yet-observed break signal.
+    armed: Option<CancelReason>,
+    /// A delivered abandon (§7.5).
+    abandoned: bool,
+    /// What the verb actually observed this checkout (cleared at the next one).
+    observed: Option<CancelReason>,
+    /// The hold this slot's verb is currently parked in, if any.
+    parked: Option<Arc<VerbHold>>,
+}
+
+/// ★ The mock's [`CancelSink`]: one per pool slot, shared by the slot's
+/// [`kayfabe_isolate::CancelHandle`] and its [`MockRmBackend`].
+///
+/// It is the *whole* of §7.2's out-of-band path in miniature — a control pipe and a
+/// `tgkill` become a flag and a condvar notify — and it deliberately keeps the two
+/// properties the C paid for:
+///
+/// 1. **The stale-txn drop.** `deliver` arms nothing unless the txn is the one currently
+///    in flight, so a cancel that races its own verb's completion cannot land on an
+///    unrelated later operation.
+/// 2. **Armed for exactly ONE ioctl** (§7.2 refinement 4). Observing the signal DISARMS
+///    it, so the unwind's own `free`s are not themselves interrupted — without this a
+///    cancelled chain leaks everything it had allocated, which is the failure the
+///    conservation ledger would report as UNACCOUNTED.
+#[derive(Debug)]
+pub struct MockCancelSink {
+    isolate: IsolateId,
+    worker: WorkerId,
+    st: Mutex<CancelCell>,
+    recorder: SharedRecorder,
+}
+
+impl MockCancelSink {
+    fn new(isolate: IsolateId, worker: WorkerId, recorder: SharedRecorder) -> Arc<Self> {
+        Arc::new(MockCancelSink {
+            isolate,
+            worker,
+            st: Mutex::new(CancelCell::default()),
+            recorder,
+        })
+    }
+
+    /// A fresh checkout: mint the txn, clear every per-checkout fact.
+    fn begin(&self, txn: u64) {
+        let mut g = self.st.lock().expect("cancel cell");
+        g.txn = txn;
+        g.in_flight = true;
+        g.armed = None;
+        g.abandoned = false;
+        g.observed = None;
+        g.parked = None;
+    }
+
+    /// Check-in: the txn is over, so any later request naming it is stale.
+    fn end(&self) {
+        let mut g = self.st.lock().expect("cancel cell");
+        g.in_flight = false;
+        g.armed = None;
+        g.parked = None;
+    }
+
+    /// The txn currently in flight, if any (the handle mint reads this).
+    fn current_txn(&self) -> Option<Txn> {
+        let g = self.st.lock().expect("cancel cell");
+        g.in_flight.then_some(Txn(g.txn))
+    }
+
+    /// Publish the hold a verb is about to park in (if any), and answer whether a signal
+    /// is **already** waiting — `(armed break signal, abandoned)`.
+    ///
+    /// The two happen in one critical section so the signal cannot slip between them:
+    /// a `deliver` that runs before this call is seen in the returned state, and one that
+    /// runs after it finds `parked` published and wakes the hold.
+    fn park_in_and_peek(&self, hold: Option<&Arc<VerbHold>>) -> (Option<CancelReason>, bool) {
+        let mut g = self.st.lock().expect("cancel cell");
+        g.parked = hold.map(Arc::clone);
+        (g.armed, g.abandoned)
+    }
+
+    /// The break signal currently armed, if any.
+    fn armed_reason(&self) -> Option<CancelReason> {
+        self.st.lock().expect("cancel cell").armed
+    }
+
+    /// ★★ **SPEND the signal — "armed for exactly ONE ioctl" (§7.2 refinement 4), for the
+    /// verb that did NOT observe it.**
+    ///
+    /// [`MockCancelSink::observe`] disarms on the interruptible path. This is the other
+    /// path, and forgetting it is worse than forgetting that one: a break signal
+    /// delivered into an *uninterruptible* wait (the common case — RM's waits mostly are)
+    /// would otherwise stay armed past the verb it named and be observed by whatever ran
+    /// next. What runs next, on a refused or cancelled op, is **the disposal** — so the
+    /// cleanup gets interrupted and the chain's host objects leak, which is precisely the
+    /// failure refinement 4 exists to prevent, arriving through the door nobody watched.
+    ///
+    /// Measured by `cancellation.rs`'s census: the uninterruptible arm reported
+    /// `(fired 1, delivered 1, observed 1)` where the design says the verb never observed
+    /// anything — the observation belonged to the `unmap`/`free` two steps later.
+    fn spend(&self) {
+        self.st.lock().expect("cancel cell").armed = None;
+    }
+
+    /// A verb observed the break signal: DISARM (refinement 4) and record what it saw.
+    fn observe(&self, reason: CancelReason) {
+        let mut g = self.st.lock().expect("cancel cell");
+        g.armed = None;
+        g.observed = Some(reason);
+        drop(g);
+        self.recorder
+            .lock()
+            .expect("recorder")
+            .cancels_observed
+            .push((self.isolate, self.worker, reason));
+    }
+
+    /// The shared body of `deliver`/`abandon`: arm under the cell mutex, then — with it
+    /// **dropped** — wake whatever hold the verb is parked in.
+    fn fire(&self, txn: Txn, reason: Option<CancelReason>) -> bool {
+        let (delivered, hold) = {
+            let mut g = self.st.lock().expect("cancel cell");
+            if !g.in_flight || g.txn != txn.0 {
+                (false, None)
+            } else {
+                match reason {
+                    Some(r) => g.armed = Some(r),
+                    None => g.abandoned = true,
+                }
+                (true, g.parked.clone())
+            }
+        };
+        if delivered && let Some(h) = hold {
+            h.signal(reason, reason.is_none());
+        }
+        self.recorder
+            .lock()
+            .expect("recorder")
+            .cancels_delivered
+            .push(CancelEvent {
+                isolate: self.isolate,
+                worker: self.worker,
+                txn,
+                reason,
+                delivered,
+            });
+        delivered
+    }
+}
+
+impl CancelSink for MockCancelSink {
+    fn deliver(&self, txn: Txn, reason: CancelReason) -> bool {
+        self.fire(txn, Some(reason))
+    }
+    fn abandon(&self, txn: Txn) -> bool {
+        self.fire(txn, None)
+    }
+    fn observed(&self) -> Option<CancelReason> {
+        self.st.lock().expect("cancel cell").observed
     }
 }
 
@@ -942,6 +1174,43 @@ pub struct RmRecorder {
     /// `orphans`. A failing teardown is not an exotic scenario to script; it is the
     /// scenario the residue vocabulary exists for.
     pub fail_kinds: BTreeMap<VerbKind, RmError>,
+    /// ★★ **The uninterruptible verbs** (`l1_os_shell.md` §7.9, §12.26): verb kinds whose
+    /// host wait a break signal does NOT break.
+    ///
+    /// This is the modelled half of the fact that makes §7.5 exist at all. RM serialises
+    /// every ioctl-reachable path on a `down_write` and busy-polls the GSP RPC with no
+    /// signal check, so *"a real RM ioctl is actually interruptible"* is a claim the mock
+    /// cannot settle and must therefore be able to **deny**. A cancel aimed at one of
+    /// these arms, is delivered, and is simply never observed — which is precisely the
+    /// D-state shape the two-stage watchdog escalates out of.
+    ///
+    /// Empty by default: the ordinary case is that the interrupt lands.
+    pub never_cancels: BTreeSet<VerbKind>,
+    /// ★ Every cancel/abandon request that was **fired** at a sink, whether or not its
+    /// txn was still current. The stale-txn drop is only observable because the dropped
+    /// ones are recorded too.
+    pub cancels_delivered: Vec<CancelEvent>,
+    /// ★ Every cancel a verb actually **observed** — strictly a subset of the delivered
+    /// ones, and the two are asserted separately on purpose (see [`CancelEvent`]).
+    pub cancels_observed: Vec<(IsolateId, WorkerId, CancelReason)>,
+    /// ★★ Verbs that hit an **abandoned** worker (§7.5) — including the one that
+    /// discovered the abandon, which is why the correct value is `1` and not `0`.
+    ///
+    /// It needs its own counter because the outcome is otherwise invisible: a wedged
+    /// worker answers every verb with [`RmError::Wedged`], so a chain that *attempts*
+    /// its unwind on one leaves byte-identical residue to a chain that correctly does
+    /// not. Deleting `Worker::execute`'s wedge short-circuit changed nothing anywhere in
+    /// the suite until this existed.
+    ///
+    /// ★ And it counts the discovering verb **on purpose**. An `== 0` invariant would be
+    /// equally true of a counter nobody increments — the vacuity this campaign has now
+    /// caught six times. `== 1` fails in both directions: `0` means the instrument is
+    /// dead, `> 1` means an unwind ran on a worker that cannot answer.
+    ///
+    /// It is a real property, not bookkeeping: a real wedged worker's control channel is
+    /// gone and its thread is inside the ioctl, so issuing a verb on it is a write to a
+    /// dead socket, never a harmless no-op.
+    pub verbs_that_hit_an_abandoned_worker: usize,
     /// Armed holds, matched newest-spec-first and consumed one-shot.
     holds: Vec<(HoldSpec, Arc<VerbHold>)>,
     /// ★ Accounting for verbs whose log entries [`RmRecorder::compact`] has already
@@ -1137,6 +1406,9 @@ pub struct MockRmBackend {
     idlane: u64,
     recorder: SharedRecorder,
     ns: Arc<Mutex<RmNamespace>>,
+    /// This slot's out-of-band cancel seam — the same `Arc` its pool slot's
+    /// [`kayfabe_isolate::CancelHandle`] holds (§7.1).
+    cancel: Arc<MockCancelSink>,
 }
 
 impl MockRmBackend {
@@ -1159,6 +1431,7 @@ impl MockRmBackend {
         worker: WorkerId,
         recorder: SharedRecorder,
         ns: Arc<Mutex<RmNamespace>>,
+        cancel: Arc<MockCancelSink>,
     ) -> Self {
         MockRmBackend {
             id,
@@ -1167,6 +1440,7 @@ impl MockRmBackend {
             idlane: u64::from(id.0) + 1,
             recorder,
             ns,
+            cancel,
         }
     }
 
@@ -1185,16 +1459,62 @@ impl MockRmBackend {
     /// isolate's recording and the "everything else keeps running" property the mean
     /// test asserts would be a lie about the mock, not about the design.
     fn gate(&mut self, verb: VerbKind) -> Result<(), RmError> {
-        let hold = {
+        let (hold, interruptible) = {
             let mut r = self.recorder.lock().expect("recorder");
-            r.holds
+            let interruptible = !r.never_cancels.contains(&verb);
+            let hold = r
+                .holds
                 .iter()
                 .position(|(s, _)| s.matches(self.id, self.gpu, self.worker, verb))
-                .map(|i| r.holds.remove(i).1)
+                .map(|i| r.holds.remove(i).1);
+            (hold, interruptible)
         };
-        if let Some(h) = hold {
-            h.enter_and_park();
+        // ★ §7.2 — the break signal is checked BEFORE the verb runs and again while it is
+        // parked. A cancel that arrived while this slot was between verbs must still land
+        // on the next one of the same txn, or "cancellation appears to work and does
+        // nothing" for every chain step that is not the one being held.
+        match self.cancel.park_in_and_peek(hold.as_ref()) {
+            (_, true) => {
+                self.recorder
+                    .lock()
+                    .expect("recorder")
+                    .verbs_that_hit_an_abandoned_worker += 1;
+                return Err(RmError::Wedged);
+            }
+            (Some(r), false) if interruptible => {
+                self.cancel.observe(r);
+                return Err(RmError::Interrupted);
+            }
+            _ => {}
         }
+        if let Some(h) = hold {
+            match h.enter_and_park(interruptible) {
+                Ok(()) => {}
+                Err(RmError::Interrupted) => {
+                    let r = self
+                        .cancel
+                        .armed_reason()
+                        .expect("the park woke on a break signal, so one is armed");
+                    self.cancel.observe(r);
+                    return Err(RmError::Interrupted);
+                }
+                Err(e) => {
+                    if e == RmError::Wedged {
+                        // The verb that DISCOVERED the abandon counts too — see the
+                        // counter's docs for why an `== 0` invariant would be vacuous.
+                        self.recorder
+                            .lock()
+                            .expect("recorder")
+                            .verbs_that_hit_an_abandoned_worker += 1;
+                    }
+                    return Err(e);
+                }
+            }
+        }
+        // ★ §7.2 refinement 4 — this verb is the ONE ioctl the signal was armed for, and
+        // it did not break on it. The signal is spent here rather than left to be
+        // observed by whatever runs next (which, on a failing op, is the disposal).
+        self.cancel.spend();
         if self.ns.lock().expect("ns").retired {
             return Err(RmError::Other(0xdead));
         }
@@ -1428,6 +1748,13 @@ enum Slot {
 pub struct MockIsolate {
     id: IsolateId,
     slots: Vec<Slot>,
+    /// One cancel seam per slot, parallel to `slots` — held here so
+    /// [`Isolate::cancel_handle`] can reach it **without** the [`Worker`], which is the
+    /// whole of §7.1.
+    cancels: Vec<Arc<MockCancelSink>>,
+    /// Monotonic per-isolate txn mint. Never reused, so a stale request can never alias
+    /// a fresh checkout (§7.7(i)).
+    next_txn: u64,
     ns: Arc<Mutex<RmNamespace>>,
     retired: bool,
 }
@@ -1451,17 +1778,54 @@ impl Isolate for MockIsolate {
         }
         let i = self.slots.iter().position(|s| matches!(s, Slot::Idle(_)))?;
         match std::mem::replace(&mut self.slots[i], Slot::Busy) {
-            Slot::Idle(w) => Some(w),
+            Slot::Idle(mut w) => {
+                // ★ §7.1 — one txn per checkout, minted here and stamped on both halves
+                // (the worker that goes out, the cell the CancelHandle reads). A request
+                // naming an earlier one is dropped by the sink.
+                self.next_txn += 1;
+                let txn = self.next_txn;
+                self.cancels[i].begin(txn);
+                w.begin_txn(Txn(txn));
+                Some(w)
+            }
             _ => unreachable!("position() selected an Idle slot"),
         }
     }
     fn checkin(&mut self, worker: Worker) {
         let i = worker.id().0 as usize;
+        if let Some(c) = self.cancels.get(i) {
+            // The txn is over: from here a request naming it is STALE and lands nowhere.
+            c.end();
+        }
         match self.slots.get(i) {
             // The slot died while its worker was out: the worker handle dies with it.
             Some(Slot::Dead) | None => drop(worker),
             _ => self.slots[i] = Slot::Idle(worker),
         }
+    }
+    fn checked_out(&self) -> Vec<WorkerId> {
+        self.slots
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| matches!(s, Slot::Busy))
+            .map(|(i, _)| WorkerId(i as u32))
+            .collect()
+    }
+    fn cancel_handle(&self, worker: WorkerId) -> Option<CancelHandle> {
+        // ★ Keyed on "is a txn outstanding", NOT on `Slot::Busy` — and the difference is
+        // load-bearing. `worker_died` turns a Busy slot into `Dead` while its requester
+        // is still parked inside the verb, and that requester is exactly the one §7.5
+        // must release. Keying on the slot enum would make the abandon a silent no-op on
+        // the one path that needs it most.
+        let i = worker.0 as usize;
+        let cell = self.cancels.get(i)?;
+        let txn = cell.current_txn()?;
+        Some(CancelHandle::new(
+            self.id,
+            worker,
+            txn,
+            Arc::clone(cell) as Arc<dyn CancelSink>,
+        ))
     }
     fn worker_died(&mut self, worker: WorkerId) -> bool {
         match self.slots.get_mut(worker.0 as usize) {
@@ -1543,10 +1907,13 @@ impl IsolateFactory for MockIsolateFactory {
     fn spawn(&mut self, id: IsolateId, gpu: GpuId) -> Box<dyn Isolate> {
         self.spawned.push((id, gpu));
         let ns = MockRmBackend::namespace(u64::from(id.0) + 1, gpu);
+        let cancels: Vec<Arc<MockCancelSink>> = (0..self.pool_size)
+            .map(|i| MockCancelSink::new(id, WorkerId(i as u32), Arc::clone(&self.recorder)))
+            .collect();
         let slots = (0..self.pool_size)
             .map(|i| {
                 let w = WorkerId(i as u32);
-                Slot::Idle(Worker::new(
+                Slot::Idle(Worker::with_cancel(
                     id,
                     w,
                     Box::new(MockRmBackend::new(
@@ -1555,13 +1922,17 @@ impl IsolateFactory for MockIsolateFactory {
                         w,
                         Arc::clone(&self.recorder),
                         Arc::clone(&ns),
+                        Arc::clone(&cancels[i]),
                     )),
+                    Arc::clone(&cancels[i]) as Arc<dyn CancelSink>,
                 ))
             })
             .collect();
         Box::new(MockIsolate {
             id,
             slots,
+            cancels,
+            next_txn: 0,
             ns,
             retired: false,
         })

@@ -664,6 +664,7 @@ mod tests {
     /// and the value it reports is the memslot's placement.
     #[test]
     fn a_guest_reads_the_memslot_we_installed_and_exits_when_it_is_gone() {
+        crate::require_kvm!("a_guest_reads_the_memslot_we_installed_and_exits_when_it_is_gone");
         let page = HostPageSize::query().bytes();
         let (code_gpa, data_gpa, trap_gpa) = (page, 2 * page, 0x8000_0000u64);
         let kvm = kvm();
@@ -827,6 +828,7 @@ mod tests {
     /// two-tier memory plane rests on.
     #[test]
     fn a_guest_executes_out_of_a_file_backed_placement() {
+        crate::require_kvm!("a_guest_executes_out_of_a_file_backed_placement");
         let page = HostPageSize::query();
         let (code_gpa, data_gpa) = (page.bytes(), 2 * page.bytes());
         let kvm = kvm();

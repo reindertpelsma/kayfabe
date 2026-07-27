@@ -56,8 +56,8 @@ use kayfabe_core::rmgraph::RmEvent;
 use kayfabe_core::{ProcAnchor, ProcId};
 use kayfabe_fwd::{FwdFault, Orphans, Stale};
 use kayfabe_isolate::{
-    HostHandle, IsolateBox, IsolateFactory, IsolateId, RmError, VerbPlan, VerbReply, Worker,
-    WorkerId,
+    CancelReason, HostHandle, IsolateBox, IsolateFactory, IsolateId, RmError, VerbPlan, VerbReply,
+    Worker, WorkerId,
 };
 use kayfabe_mocks::{HoldSpec, MockArch, MockIsolateFactory, RmVerb, SharedRecorder, VerbKind};
 use kayfabe_rt::device::{LockMode, SharedDevice};
@@ -562,6 +562,20 @@ fn g3_a_worker_whose_proc_retired_in_the_gap_still_reaches_its_slot() {
             .objects(kayfabe_mocks::VerbKind::AllocVaSpace, 1),
         );
 
+        // ★★ M2-e — this verb's host wait is declared UNINTERRUPTIBLE, which is what RM's
+        // own source says is the usual case (`l1_os_shell.md` §7.9, §12.26: the API lock
+        // is a `down_write`, the GSP RPC busy-polls with no signal check). Without it the
+        // retire below now CANCELS the parked verb, its thread returns the worker
+        // immediately, and the "reap defers because a worker is still checked out"
+        // assertion becomes a race against that thread — which it lost. The G3 interlock
+        // this test exists for is about the worker reaching its slot, not about
+        // cancellation, so the right fix is to keep the worker genuinely checked out
+        // across the retire rather than to weaken the assertion.
+        rec.lock()
+            .expect("recorder")
+            .never_cancels
+            .insert(VerbKind::AllocSysmem);
+
         // Hold this proc's sysmem alloc pending: the worker is checked OUT and the
         // thread is inside the backend with ZERO locks held (R1) — `verb_op`'s gap.
         let held = rec.lock().expect("recorder").hold(HoldSpec::on_isolate(
@@ -586,7 +600,9 @@ fn g3_a_worker_whose_proc_retired_in_the_gap_still_reaches_its_slot() {
         held.release();
         // EXACT variant, never `is_err()` (§12.10's lesson): the commit re-validated
         // and found its proc gone, which is divergent staleness — not an RM failure,
-        // not a cancellation.
+        // not a cancellation. (★★ M2-e: reachable here precisely BECAUSE the wait is
+        // declared uninterruptible above. The cancelled flavour of this same script is
+        // `cancellation.rs::every_checked_out_worker_of_a_dying_proc_is_cancelled`.)
         assert_eq!(
             t.join().expect("the publishing thread joins"),
             Err(FwdFault::Stale(Stale::Proc(pid))),
@@ -628,7 +644,14 @@ fn g4_a_cancelled_verb_surfaces_cancelled_not_an_rm_failure() {
         let out = device.publish_backing(GPU, PDB, VA, 0x1000);
         assert_eq!(
             out,
-            Err(FwdFault::Cancelled { proc: pid }),
+            Err(FwdFault::Cancelled {
+                proc: pid,
+                // `fail_next` injects the error straight into the backend without ever
+                // going through the §7.2 cancel seam, so nothing OBSERVED a reason. The
+                // fallback is `GuestSignal` — §5.4's founding case — never a guess and
+                // never a silent re-type as a host failure.
+                reason: CancelReason::GuestSignal,
+            }),
             "({mode:?}) a cancelled verb is CANCELLED — not Rm(..), not Stale(..)"
         );
 
@@ -796,8 +819,19 @@ fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
 fn g4_verb_fault_maps_only_interrupted_to_cancelled() {
     let p = ProcId(7);
     assert_eq!(
-        kayfabe_fwd::verb_fault(p, RmError::Interrupted),
-        FwdFault::Cancelled { proc: p }
+        kayfabe_fwd::verb_fault(p, RmError::Interrupted, Some(CancelReason::ProcExit)),
+        FwdFault::Cancelled {
+            proc: p,
+            reason: CancelReason::ProcExit
+        }
+    );
+    // …and with nothing observed it still names a reason rather than guessing.
+    assert_eq!(
+        kayfabe_fwd::verb_fault(p, RmError::Interrupted, None),
+        FwdFault::Cancelled {
+            proc: p,
+            reason: CancelReason::GuestSignal
+        }
     );
     for e in [
         RmError::NoMemory,
@@ -805,7 +839,11 @@ fn g4_verb_fault_maps_only_interrupted_to_cancelled() {
         RmError::BadHandle(HostHandle::new(kayfabe_isolate::IsolateId(0), 1)),
         RmError::Other(3),
     ] {
-        assert_eq!(kayfabe_fwd::verb_fault(p, e), FwdFault::Rm(e), "{e:?}");
+        assert_eq!(
+            kayfabe_fwd::verb_fault(p, e, Some(CancelReason::ProcExit)),
+            FwdFault::Rm(e),
+            "{e:?}"
+        );
     }
 }
 

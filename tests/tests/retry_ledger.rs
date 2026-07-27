@@ -54,14 +54,12 @@ use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
 use kayfabe_fwd::{FwdFault, Stale};
-use kayfabe_isolate::IsolateId;
+use kayfabe_isolate::{CancelReason, IsolateId};
 use kayfabe_mocks::{
     HoldSpec, MockArch, MockIsolateFactory, SharedRecorder, VerbHold, VerbKind, mock_classes as mc,
 };
 use kayfabe_rt::device::{LockMode, SharedDevice};
-use kayfabe_tests::{
-    Guarded, ResidueClaim, Scenario, identical_handles, reachable_maps, reachable_objects,
-};
+use kayfabe_tests::{Guarded, Scenario, identical_handles, reachable_maps, reachable_objects};
 
 // ---------------------------------------------------------------------------------
 // Harness
@@ -509,20 +507,15 @@ fn the_commit_retry_bound_still_releases_the_attempt_that_hits_it() {
 #[test]
 fn a_retry_whose_replan_diverges_refuses_without_leaking_the_attempt() {
     let _wd = watchdog("retry_replan_diverges", Duration::from_secs(60));
-    let (mut device, pid, rec) = device_with(2, LockMode::Sharded);
-    // ★ §12.35 — DECLARED RESIDUE, and it is the same residue this test already asserts
-    // by count below. The divergent attempt's memory object was allocated lock-free and
-    // its owner retired VIOLENTLY (`retire_proc`) in the gap, so the release is refused
-    // by the stopped isolate (§12.17) and the disposition is §7.0 namespace death.
-    device.declare_residue(
-        ResidueClaim::on(
-            IsolateId(pid.0),
-            "G4 residue: the divergent attempt's host memory object, allocated before \
-             `retire_proc` stopped the isolate — a retired isolate refuses the disposal \
-             too, so the session's death is the disposition of record",
-        )
-        .objects(VerbKind::AllocSysmem, 1),
-    );
+    let (device, pid, rec) = device_with(2, LockMode::Sharded);
+    // ★★ M2-e — the DECLARED RESIDUE that used to live here is DELETED, and its deletion
+    // is the finding. The divergent attempt's memory object is still outstanding (a
+    // retired isolate refuses the disposal too — §12.17 — so §7.0 namespace death is
+    // still the disposition of record), but it is now STAGED on the corpse's
+    // `pending_release` queue rather than nameable by nothing at all. §12.35's audit
+    // counts staged as accounted, so the UNACCOUNTED set is empty and a claim that
+    // excused it would now be a claim that outlived its cause. Asserted positively
+    // below, because "the audit stopped complaining" is not evidence on its own.
 
     let first = hold_any(&rec, pid, VerbKind::MapGpuVa);
     let d = Arc::clone(&device);
@@ -540,6 +533,21 @@ fn a_retry_whose_replan_diverges_refuses_without_leaking_the_attempt() {
     // host memory object already allocated.
     second.wait_until_pending();
     let before_retire = rec.lock().expect("recorder").ledger().leaked_count();
+    // The host memory object attempt 2 has already allocated — NAMED, not counted. The
+    // retire also stages the proc's whole remaining estate (its host VAS, the sibling's
+    // backing and its mapping), so a count would be satisfied by a run that staged those
+    // and LOST this one, which is the only thing this assertion is about.
+    let attempt2_mem = rec
+        .lock()
+        .expect("recorder")
+        .verbs_of(IsolateId(pid.0))
+        .iter()
+        .rev()
+        .find_map(|v| match v {
+            kayfabe_mocks::RmVerb::AllocSysmem { handle, .. } => Some(*handle),
+            _ => None,
+        })
+        .expect("attempt 2 allocated one before it parked in the mapping verb");
 
     // ★ The world diverges: the proc retires while attempt 2 is lock-free in flight.
     assert!(device.retire_proc(pid), "the proc was live");
@@ -547,14 +555,32 @@ fn a_retry_whose_replan_diverges_refuses_without_leaking_the_attempt() {
 
     assert_eq!(
         loser.join().expect("the publisher joins"),
-        Err(FwdFault::Stale(Stale::Proc(pid))),
-        "a divergent re-validation refuses on ITS OWN cause — never the previous \
-         attempt's Rebound, never an anonymous RM error"
+        Err(FwdFault::Cancelled {
+            proc: pid,
+            reason: CancelReason::ProcExit
+        }),
+        "★★ M2-e: the divergent re-validation still refuses on ITS OWN cause — and the \
+         cause is now one step earlier and more specific. `retire_proc` cancels the \
+         verb the attempt has in flight (§7.6 T2), so attempt 2 never reaches the \
+         commit guard that used to answer `Stale::Proc`: it comes back CANCELLED naming \
+         ProcExit. Never the previous attempt's `Rebound`, never an anonymous RM error"
     );
 
     // The retired isolate refuses the disposal too, so the attempt's own allocation is
     // the declared G4 residue: the memory object it allocated, and nothing else. (It
     // never mapped — the mapping verb was refused by the same retirement.)
+    // ★ The positive control for the deleted claim: the object is outstanding AND it is
+    // named by the corpse's release queue. `== 1` on both halves, so neither an empty
+    // queue nor a disposed-after-all object could pass this.
+    assert!(
+        device.with_retired(|corpses| corpses
+            .iter()
+            .flat_map(|p| p.staged_releases())
+            .any(|(_gpu, o)| o.free.contains(&attempt2_mem))),
+        "the cancelled attempt's undisposable host object ({attempt2_mem:?}) must be \
+         STAGED on its own corpse — the difference between §7.0 namespace death as a \
+         stated disposition and a host object nothing in the system can name"
+    );
     let ledger = rec.lock().expect("recorder").ledger();
     assert_eq!(
         ledger.leaked_count(),

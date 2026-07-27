@@ -452,6 +452,7 @@ mod tests {
 
     #[test]
     fn a_real_vm_reports_a_real_memslot_ceiling() {
+        crate::require_kvm!("a_real_vm_reports_a_real_memslot_ceiling");
         let vm = kvm().create_vm().expect("KVM_CREATE_VM");
         let n = vm.max_memslots().expect("NR_MEMSLOTS");
         assert!(
@@ -463,6 +464,7 @@ mod tests {
 
     #[test]
     fn a_window_installed_as_a_memslot_can_be_read_and_removed() {
+        crate::require_kvm!("a_window_installed_as_a_memslot_can_be_read_and_removed");
         let p = HostPageSize::query();
         let vm = Arc::new(kvm().create_vm().expect("vm"));
         let w = Arc::new(GuestWindow::create(2 * p.bytes(), p).expect("window"));
@@ -495,6 +497,7 @@ mod tests {
     /// class of arm a `BTreeMap::insert` cannot have.
     #[test]
     fn a_misaligned_memslot_is_the_kernels_einval_not_our_opinion() {
+        crate::require_kvm!("a_misaligned_memslot_is_the_kernels_einval_not_our_opinion");
         let p = HostPageSize::query();
         let vm = Arc::new(kvm().create_vm().expect("vm"));
         let w = Arc::new(GuestWindow::create(p.bytes(), p).expect("window"));
@@ -510,6 +513,7 @@ mod tests {
     /// ★ And the other one: a slot index past the kernel's ceiling.
     #[test]
     fn a_slot_index_past_the_ceiling_is_a_real_kernel_refusal() {
+        crate::require_kvm!("a_slot_index_past_the_ceiling_is_a_real_kernel_refusal");
         let p = HostPageSize::query();
         let vm = Arc::new(kvm().create_vm().expect("vm"));
         let ceiling = vm.max_memslots().expect("ceiling");
@@ -529,6 +533,7 @@ mod tests {
     /// Two windows may not claim the same guest-physical range.
     #[test]
     fn overlapping_memslots_are_refused_by_the_kernel() {
+        crate::require_kvm!("overlapping_memslots_are_refused_by_the_kernel");
         let p = HostPageSize::query();
         let vm = Arc::new(kvm().create_vm().expect("vm"));
         let a = Arc::new(GuestWindow::create(2 * p.bytes(), p).expect("window a"));

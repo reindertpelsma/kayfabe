@@ -190,6 +190,36 @@ pub enum RmError {
     /// `FwdFault::Cancelled`, never as an RM failure (that conflation is §12.10 one
     /// layer over).
     Interrupted,
+    /// ★★ **The worker never replied and the requester was RELEASED without one** —
+    /// §7.5's D-state escape (`l1_os_shell.md` §7.5, the two-stage watchdog).
+    ///
+    /// **This is not a reply and no real backend returns it.** A host thread in
+    /// uninterruptible sleep cannot be signalled awake — RM's waits are `down_write`s
+    /// and busy-polls with no signal check (`ogkm: .../gpu/gsp/kernel_gsp.c:2963-3060`),
+    /// which is exactly why [`RmError::Interrupted`] is a *best effort* and this variant
+    /// has to exist beside it. When the watchdog's second budget expires the shell
+    /// declares the worker **wedged** and, in ONE act, kills the slot, condemns the
+    /// component and abandons the reply; this value is what the abandoned requester
+    /// carries out. In the mock, "the socket" is a condvar and the abandon signal is the
+    /// same condvar (§7.5), so the whole path is deterministic with no sleeps.
+    ///
+    /// ## ★ The consequence that makes it different from every other `RmError`
+    ///
+    /// **The unwind CANNOT run.** Every other failure — cancellation included — comes
+    /// back on a worker that is still alive, so [`Worker::execute`] frees what the chain
+    /// already allocated before it returns. A wedged worker cannot issue a `free`: it is
+    /// still inside the host ioctl that wedged it. So the chain's intermediates come out
+    /// **untouched** in [`VerbFailure::orphans`], which is the G4 premise verbatim
+    /// (*"a worker that died mid-chain cannot run the unwind, and the handles it already
+    /// minted are in no `Orphans` and in no core state"*). The caller must **stage** them
+    /// — it must not try to dispose of them on this worker, and it must not drop them.
+    ///
+    /// Their disposition of record is §7.0's process boundary: the escape kills the
+    /// isolate, and the kernel frees the whole RM client tree. That is a **stated**
+    /// disposition, not a leak, and the honest residual §7.5 names is that the D-state
+    /// host thread itself leaks until the kernel finishes its ioctl — *"what we convert
+    /// is unbounded silent stall → bounded loud failure plus a leak we can name."*
+    Wedged,
     /// ★ **The plan named a handle from ANOTHER isolate's namespace** — refused
     /// before a single verb ran (`l1_concurrency.md` §12.26).
     ///
@@ -358,6 +388,316 @@ pub struct WorkerId(pub u32);
 /// which saturates at a handful of workers. Past that, each extra worker is one more
 /// host thread parked in D state on the same uninterruptible `down_write`.
 pub const DEFAULT_POOL_WORKERS: usize = 4;
+
+// =================================================================================
+// ★★ CANCELLATION — the seam (`l1_os_shell.md` §7.1–§7.5, decision 12)
+// =================================================================================
+
+/// ★ **Why** a verb was cancelled — §7.3's *"a fault must name the truth, not the
+/// symptom"* applied to cancellation itself.
+///
+/// It is carried all the way out to `FwdFault::Cancelled` on purpose. A cancelled verb
+/// that surfaced a bare "it refused" would be indistinguishable from a host failure, and
+/// a canary asserting only *"it refused"* would pass for the wrong reason — §12.10's
+/// lesson, one layer over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CancelReason {
+    /// The requesting guest process is going away (§7.6 T2) — it exited, was killed, or
+    /// its client root was freed while a verb was in flight. The overwhelmingly common
+    /// case, and the one the guest kernel drives: on process death it frees the client
+    /// tree itself (measured: 178 `fn=10` RM-FREE RPCs, `mode2_bench_lifecycle.md` §5).
+    ProcExit,
+    /// The whole device is being torn down or reset (§7.6 T4/T7).
+    DeviceReset,
+    /// The two-stage verb watchdog's **first** expiry (§7.5): the verb outlived
+    /// `VERB_BUDGET`, which is sized against RM's own 6 s GSP-RPC timeout and not
+    /// against any measured unwind. The overwhelmingly common outcome is that the verb
+    /// was merely slow and the interrupt lands.
+    Watchdog,
+    /// The guest thread that requested the verb took a signal or died (§5.4's founding
+    /// case — the C's `#73` signal-interruptible forwarded ioctl).
+    GuestSignal,
+}
+
+/// ★ A **per-checkout transaction id**. `l1_concurrency.md` §7.2: *"txn ids exist only
+/// for this"* — and this is the only place they appear.
+///
+/// A [`CancelHandle`] is armed for exactly one txn, and a request naming a stale one is
+/// **dropped**. That is the C's refinement 4 verbatim (*"main thread only signals the
+/// worker if it is still on that txn_id"*), and the C needed it because without it a
+/// cancel races the completion and lands on an unrelated later operation — the sharpest
+/// bug in this whole area, because the damage is done to an innocent op.
+///
+/// Minted by the isolate at [`Isolate::checkout`], monotonic per worker slot and never
+/// reused, so §7.7(i)'s never-recycled-mint argument covers it too.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Txn(pub u64);
+
+/// What a discharged [`CancelRequest`] asks the isolate to do out of band.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Signal {
+    /// Interrupt the in-flight ioctl (§7.2's break signal).
+    Interrupt(CancelReason),
+    /// Abandon the reply (§7.5's escape) — only ever paired with condemnation.
+    Abandon,
+}
+
+/// ★ The **out-of-band delivery seam** (`l1_os_shell.md` §7.2).
+///
+/// Cancellation is *never* delivered on the request/reply channel: that channel is
+/// 1-deep and desynchronising it means the next checkout of the worker reads the
+/// previous transaction's reply as its own — *"ours would be worse than the C's
+/// use-after-free: silent cross-transaction corruption."* So the real adapter writes a
+/// byte on the worker's **control pipe** and the isolate's control thread `tgkill`s the
+/// worker thread, whose handler is installed **without `SA_RESTART`** (with it, the host
+/// kernel silently restarts the ioctl, `EINTR` never surfaces, and *"cancellation appears
+/// to work and does nothing"*).
+///
+/// That is all OS, so it lives behind this port. The core and its tests see only:
+/// *deliver a fact to a txn, and ask what the verb actually observed*.
+pub trait CancelSink: Send + Sync + core::fmt::Debug {
+    /// Deliver a break signal for `txn`. Returns `true` if it was armed — `false` means
+    /// the txn was **stale** (the verb already completed and the worker was checked back
+    /// in), which is not an error: §7.3's fourth row, *"the verb finished first"*.
+    ///
+    /// Must not block. Called with **no lock held** — [`CancelRequest::discharge`]
+    /// asserts exactly that, because firing a cancel is a syscall and §6.2 forbids
+    /// syscalls under locks.
+    fn deliver(&self, txn: Txn, reason: CancelReason) -> bool;
+
+    /// §7.5's escape: release the requester **without a reply**. Same staleness rule and
+    /// same lock-freedom requirement as [`CancelSink::deliver`].
+    ///
+    /// Safe only because the slot is retired in the same act, so no future reader of that
+    /// channel exists (§7.2). An implementation that abandons without the condemnation
+    /// has reintroduced the desync hazard.
+    fn abandon(&self, txn: Txn) -> bool;
+
+    /// What the verb **actually observed**, if anything — read by the executing thread
+    /// itself, lock-free, straight after [`Worker::execute`] returns.
+    ///
+    /// Deliberately *observed* and not *requested*: a cancel that was delivered but that
+    /// the host ioctl never noticed (RM's waits are mostly uninterruptible) is a request
+    /// that lost, and reporting it as the cause of a verb that succeeded would be a lie
+    /// in the one place §7.3 says must carry the truth.
+    fn observed(&self) -> Option<CancelReason>;
+}
+
+/// ★ **The cancel capability, separated from the `&mut Worker`** (`l1_os_shell.md` §7.1).
+///
+/// The thread that could cancel is never the thread that holds the worker — the holder
+/// is blocked inside the verb. So the capability must be reachable *without* a reference
+/// to the worker or its backend, which §12.8 deliberately made unrepresentable.
+///
+/// ```text
+///   Isolate::checkout()  -> Worker         (moves the backend OUT)
+///                        +  CancelHandle   (stays in the pool slot, under the proc lock)
+/// ```
+///
+/// `Send + Sync`, and it holds **no** reference to the [`Worker`] or the [`RmBackend`] —
+/// it identifies `(isolate, worker, txn)` and owns one delivery sink, and nothing else.
+#[derive(Debug, Clone)]
+pub struct CancelHandle {
+    isolate: IsolateId,
+    worker: WorkerId,
+    txn: Txn,
+    sink: std::sync::Arc<dyn CancelSink>,
+}
+
+impl CancelHandle {
+    /// Arm a handle for `txn` on slot `worker` of `isolate` (isolate implementations
+    /// only — minting one elsewhere fabricates a cancellation authority).
+    #[must_use]
+    pub fn new(
+        isolate: IsolateId,
+        worker: WorkerId,
+        txn: Txn,
+        sink: std::sync::Arc<dyn CancelSink>,
+    ) -> Self {
+        CancelHandle {
+            isolate,
+            worker,
+            txn,
+            sink,
+        }
+    }
+
+    /// The isolate whose pool this slot belongs to.
+    #[must_use]
+    pub fn isolate(&self) -> IsolateId {
+        self.isolate
+    }
+
+    /// The pool slot.
+    #[must_use]
+    pub fn worker(&self) -> WorkerId {
+        self.worker
+    }
+
+    /// The transaction this handle is armed for.
+    #[must_use]
+    pub fn txn(&self) -> Txn {
+        self.txn
+    }
+
+    /// **Latch** an interrupt for this txn. Pure bookkeeping — nothing is signalled
+    /// until [`CancelRequest::discharge`], which is what makes this legal under the proc
+    /// lock (§7.1: *"firing a cancel is a syscall, and §6.2 forbids syscalls under
+    /// locks"*).
+    pub fn request(&self, reason: CancelReason) -> CancelRequest {
+        self.at(Signal::Interrupt(reason))
+    }
+
+    /// Latch §7.5's **abandon**. Only legal as half of the wedge escape, whose other
+    /// half — killing the slot and condemning the component — must happen in the *same*
+    /// act; see [`CancelSink::abandon`].
+    pub fn abandon(&self) -> CancelRequest {
+        self.at(Signal::Abandon)
+    }
+
+    fn at(&self, signal: Signal) -> CancelRequest {
+        CancelRequest {
+            isolate: self.isolate,
+            worker: self.worker,
+            txn: self.txn,
+            signal,
+            sink: std::sync::Arc::clone(&self.sink),
+        }
+    }
+}
+
+/// ★ A **latched** cancellation — the same two-step shape as
+/// `kayfabe_core::reactor::WakeRequest`, and for the same reason (§7.1: *"the mechanism
+/// already exists for wake and timer; cancel is the third user, which is the argument
+/// that it is the right mechanism rather than a third one"*).
+///
+/// `#[must_use]`, and it earns it exactly as `Orphans` does: a latched cancel that is
+/// never discharged is **a cancellation that silently did not happen** — the failure mode
+/// §7.2 refinement 1 names in so many words. The compiler is the only thing that
+/// reliably notices.
+#[must_use = "a latched cancel that is never discharged is a cancellation that silently \
+              did not happen — discharge it (with no lock held) or hand it onward."]
+#[derive(Debug, Clone)]
+pub struct CancelRequest {
+    isolate: IsolateId,
+    worker: WorkerId,
+    txn: Txn,
+    signal: Signal,
+    sink: std::sync::Arc<dyn CancelSink>,
+}
+
+impl CancelRequest {
+    /// The isolate this request names.
+    #[must_use]
+    pub fn isolate(&self) -> IsolateId {
+        self.isolate
+    }
+
+    /// The pool slot this request names.
+    #[must_use]
+    pub fn worker(&self) -> WorkerId {
+        self.worker
+    }
+
+    /// The transaction this request is armed for; a delivery naming a stale one is
+    /// dropped by the sink.
+    #[must_use]
+    pub fn txn(&self) -> Txn {
+        self.txn
+    }
+
+    /// The reason, for an interrupt; `None` for §7.5's abandon.
+    #[must_use]
+    pub fn reason(&self) -> Option<CancelReason> {
+        match self.signal {
+            Signal::Interrupt(r) => Some(r),
+            Signal::Abandon => None,
+        }
+    }
+
+    /// True if this is §7.5's abandon rather than an ordinary interrupt.
+    #[must_use]
+    pub fn is_abandon(&self) -> bool {
+        matches!(self.signal, Signal::Abandon)
+    }
+
+    /// ★ **Fire it.** Returns `true` if the txn was still current — `false` means the
+    /// verb finished first (§7.3's fourth row), which is a normal outcome and never a
+    /// failure.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock. Firing a cancel is a syscall (a pipe write
+    /// plus a `tgkill`), and R1 admits no exception for it; this assert is why the
+    /// latch/discharge split is structural rather than advisory.
+    pub fn discharge(self) -> bool {
+        kayfabe_util::lockwitness::assert_lock_free("discharging a cancel request");
+        match self.signal {
+            Signal::Interrupt(reason) => self.sink.deliver(self.txn, reason),
+            Signal::Abandon => self.sink.abandon(self.txn),
+        }
+    }
+}
+
+/// ★ A batch of latched cancels on their way out of a locked phase — `#[must_use]` on
+/// the **collection**, because `Vec<CancelRequest>` is not (dropping the `Vec` drops
+/// every request without a single warning).
+///
+/// This is the shape §15 amendment 4 asks for: *"retire **requests** cancellation for
+/// every checked-out worker (latched, discharged lock-free)"*.
+#[must_use = "latched cancels that are never discharged are cancellations that silently \
+              did not happen — call `discharge_all()` with no lock held, or `absorb` \
+              them into a batch that will be."]
+#[derive(Debug, Clone, Default)]
+pub struct Cancels(Vec<CancelRequest>);
+
+impl Cancels {
+    /// An empty batch.
+    pub fn new() -> Self {
+        Cancels(Vec::new())
+    }
+
+    /// How many requests are latched.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// True if nothing is latched.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Latch one more.
+    pub fn push(&mut self, req: CancelRequest) {
+        self.0.push(req);
+    }
+
+    /// Take `other`'s requests into this batch — the way a locked phase hands its
+    /// latches up to the shell that will discharge them.
+    pub fn absorb(&mut self, other: Cancels) {
+        self.0.extend(other.0);
+    }
+
+    /// Read the latched requests without consuming them (assertions and diagnostics).
+    pub fn requests(&self) -> &[CancelRequest] {
+        &self.0
+    }
+
+    /// ★ Fire every latched request. Returns how many were **delivered** — i.e. how many
+    /// named a txn that was still current; the rest lost the race with their own verb's
+    /// completion, which is §7.3's fourth row and not a failure.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (see [`CancelRequest::discharge`]).
+    pub fn discharge_all(self) -> usize {
+        self.0
+            .into_iter()
+            .map(CancelRequest::discharge)
+            .filter(|&delivered| delivered)
+            .count()
+    }
+}
 
 // =================================================================================
 // The verb PLAN — what a locked core phase emits instead of calling (R1's
@@ -644,6 +984,12 @@ pub struct Worker {
     isolate: IsolateId,
     id: WorkerId,
     backend: Box<dyn RmBackend>,
+    /// The out-of-band cancel seam this worker shares with its pool slot's
+    /// [`CancelHandle`]. `None` for a backend with no cancellation support (bring-up
+    /// probes) — such a worker is simply never interruptible, which is honest and
+    /// visible rather than silently doing nothing.
+    cancel: Option<std::sync::Arc<dyn CancelSink>>,
+    txn: Txn,
 }
 
 impl core::fmt::Debug for Worker {
@@ -651,6 +997,7 @@ impl core::fmt::Debug for Worker {
         f.debug_struct("Worker")
             .field("isolate", &self.isolate)
             .field("id", &self.id)
+            .field("txn", &self.txn)
             .finish()
     }
 }
@@ -659,13 +1006,59 @@ impl Worker {
     /// Wrap a backend as pool slot `id` of `isolate` (isolate implementations only).
     /// The `isolate` argument is what makes the foreign-handle gate in
     /// [`Worker::execute`] possible — a worker must know whose namespace it speaks.
+    ///
+    /// **Not cancellable** — see [`Worker::with_cancel`].
     #[must_use]
     pub fn new(isolate: IsolateId, id: WorkerId, backend: Box<dyn RmBackend>) -> Self {
         Worker {
             isolate,
             id,
             backend,
+            cancel: None,
+            txn: Txn(0),
         }
+    }
+
+    /// As [`Worker::new`], with the out-of-band cancel seam its pool slot's
+    /// [`CancelHandle`] signals through (§7.1).
+    #[must_use]
+    pub fn with_cancel(
+        isolate: IsolateId,
+        id: WorkerId,
+        backend: Box<dyn RmBackend>,
+        cancel: std::sync::Arc<dyn CancelSink>,
+    ) -> Self {
+        Worker {
+            isolate,
+            id,
+            backend,
+            cancel: Some(cancel),
+            txn: Txn(0),
+        }
+    }
+
+    /// Stamp this checkout's transaction id (isolate implementations only — called from
+    /// [`Isolate::checkout`], which mints it). A cancel armed for an earlier txn is
+    /// dropped by the sink, which is the whole point of the id existing.
+    pub fn begin_txn(&mut self, txn: Txn) {
+        self.txn = txn;
+    }
+
+    /// This checkout's transaction id.
+    #[must_use]
+    pub fn txn(&self) -> Txn {
+        self.txn
+    }
+
+    /// ★ What a cancellation actually **did** to the verb that just ran, read lock-free
+    /// by the executing thread itself right after [`Worker::execute`] returns.
+    ///
+    /// This is how `FwdFault::Cancelled` gets its `reason` without the shell re-taking a
+    /// lock to ask the isolate — and without [`RmError::Interrupted`] growing a payload,
+    /// which §7.3 deliberately refuses (*"the txn is L1's business, not the core's"*).
+    #[must_use]
+    pub fn cancel_observed(&self) -> Option<CancelReason> {
+        self.cancel.as_ref().and_then(|c| c.observed())
     }
 
     /// This worker's slot in its isolate's pool.
@@ -836,18 +1229,46 @@ impl Worker {
                 // inside `clientFreeResource_IMPL` before `objDelete` (`ogkm:
                 // src/nvidia/src/libraries/resserv/src/rs_client.c:830-849`), so the
                 // order does not protect RM — it protects OUR mirror of the mapping.
+                //
+                // ★★ §7.5 — one exception to "best effort": [`RmError::Wedged`] stops
+                // the loop. A wedged worker will answer every remaining verb the same
+                // way, so grinding through the list buys nothing and models the wrong
+                // thing (the real worker is not answering at all). The untried remainder
+                // is residue exactly like the tried-and-failed part, so the RESULT is
+                // identical — what differs is that we do not pretend to have asked.
                 let mut residue = Orphans::default();
                 let mut first: Option<RmError> = None;
-                for &(vas, va) in unmap {
-                    if let Err(e) = rm.unmap_gpu_va(vas, va) {
-                        first.get_or_insert(e);
-                        residue.unmap.push((vas, va));
+                for (i, &(vas, va)) in unmap.iter().enumerate() {
+                    match rm.unmap_gpu_va(vas, va) {
+                        Ok(()) => {}
+                        Err(RmError::Wedged) => {
+                            residue.unmap.extend_from_slice(&unmap[i..]);
+                            residue.free.extend_from_slice(free);
+                            return Err(VerbFailure {
+                                err: RmError::Wedged,
+                                orphans: residue,
+                            });
+                        }
+                        Err(e) => {
+                            first.get_or_insert(e);
+                            residue.unmap.push((vas, va));
+                        }
                     }
                 }
-                for &obj in free {
-                    if let Err(e) = rm.free(obj) {
-                        first.get_or_insert(e);
-                        residue.free.push(obj);
+                for (i, &obj) in free.iter().enumerate() {
+                    match rm.free(obj) {
+                        Ok(()) => {}
+                        Err(RmError::Wedged) => {
+                            residue.free.extend_from_slice(&free[i..]);
+                            return Err(VerbFailure {
+                                err: RmError::Wedged,
+                                orphans: residue,
+                            });
+                        }
+                        Err(e) => {
+                            first.get_or_insert(e);
+                            residue.free.push(obj);
+                        }
                     }
                 }
                 match first {
@@ -886,6 +1307,22 @@ impl Worker {
 /// `-EINTR` and keeps serving (`C: src/stub/nvkvm_stub.c:1276-1281`) — and any verb
 /// that fails during it lands in the residue.
 fn unwind(rm: &mut dyn RmBackend, orphans: Vec<HostHandle>, err: RmError) -> VerbFailure {
+    // ★★ §7.5 — a WEDGED worker cannot run its own unwind. It is still inside the host
+    // ioctl that wedged it; issuing a `free` on it would either block forever behind the
+    // same uninterruptible wait or desynchronise a channel whose reply was abandoned.
+    // So the intermediates come out UNTOUCHED, which is G4's premise made a value: the
+    // caller must stage them, and their disposition of record is §7.0's process
+    // boundary. Attempting the frees here is not merely useless — it is the shape that
+    // turns a bounded loud failure into a second wedge.
+    if err == RmError::Wedged {
+        return VerbFailure {
+            err,
+            orphans: Orphans {
+                unmap: Vec::new(),
+                free: orphans,
+            },
+        };
+    }
     let mut residue = Orphans::default();
     for obj in orphans {
         if rm.free(obj).is_err() {
@@ -937,6 +1374,55 @@ pub trait Isolate: Send + Sync {
     /// Return a checked-out worker to its slot. Pool bookkeeping; runs under the
     /// proc lock alongside the commit phase.
     fn checkin(&mut self, worker: Worker);
+
+    /// ★ Which pool slots are **checked out right now**, by id — §7.6 T2's *"for every
+    /// checked-out worker, `request_cancel(ProcExit)`"* needs the list, not the count.
+    ///
+    /// The same argument as [`Isolate::in_flight`] applies: the implementation knows
+    /// which slots are `Dead` and the core does not, so deriving this by subtraction
+    /// from the pool width would name slots that can never answer a cancel.
+    fn checked_out(&self) -> Vec<WorkerId>;
+
+    /// ★ The [`CancelHandle`] of slot `worker`, or `None` if that slot is not checked out
+    /// (there is nothing to cancel) or does not exist.
+    ///
+    /// Reachable through `&self`, under the proc lock, **without touching the
+    /// [`Worker`]** — which is the entire point of §7.1: the thread that could cancel is
+    /// never the thread that holds the worker, because the holder is blocked inside the
+    /// verb.
+    fn cancel_handle(&self, worker: WorkerId) -> Option<CancelHandle>;
+
+    /// **Latch** an interrupt for slot `worker` (§7.1). Nothing is signalled here: the
+    /// returned [`CancelRequest`] is discharged by the shell after the guards drop.
+    ///
+    /// `None` if the slot is not checked out — a cancel with nothing to cancel is a
+    /// no-op, not a failure.
+    fn request_cancel(&mut self, worker: WorkerId, reason: CancelReason) -> Option<CancelRequest> {
+        self.cancel_handle(worker).map(|h| h.request(reason))
+    }
+
+    /// ★ Latch an interrupt for **every** checked-out worker — the door
+    /// `Proc::retire`/`Proc::vacate` use (§7.6 T2, §15 amendment 4).
+    fn request_cancel_all(&mut self, reason: CancelReason) -> Cancels {
+        let slots = self.checked_out();
+        let mut out = Cancels::new();
+        for w in slots {
+            if let Some(h) = self.cancel_handle(w) {
+                out.push(h.request(reason));
+            }
+        }
+        out
+    }
+
+    /// ★ §7.5's escape, latched: release slot `worker`'s requester **without a reply**.
+    ///
+    /// The caller must kill the slot ([`Isolate::worker_died`]) and condemn the component
+    /// in the *same act*; abandoning without that reintroduces the channel-desync hazard
+    /// §7.2 forbids, because a future reader of that channel would misread the stale
+    /// reply. The two must not be reorderable steps.
+    fn abandon(&mut self, worker: WorkerId) -> Option<CancelRequest> {
+        self.cancel_handle(worker).map(|h| h.abandon())
+    }
 
     /// A worker died out of band (its reactor source signalled HUP, §7.3). Retires
     /// the slot permanently — **never a respawn**. Respawning the slot would be
@@ -1112,6 +1598,12 @@ kayfabe_util::assert_send_sync!(
     RmError,
     IsolateId,
     WorkerId,
+    Txn,
+    CancelReason,
+    CancelHandle,
+    CancelRequest,
+    Cancels,
+    dyn CancelSink,
     VerbPlan,
     VerbReply,
     Orphans,

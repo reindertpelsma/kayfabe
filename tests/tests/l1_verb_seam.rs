@@ -65,7 +65,7 @@ use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
 use kayfabe_core::{ProcAnchor, ProcId};
 use kayfabe_fwd::{FwdFault, Stale};
 use kayfabe_isolate::{
-    DEFAULT_POOL_WORKERS, HostHandle, IsolateFactory, IsolateId, VerbPlan, WorkerId,
+    CancelReason, DEFAULT_POOL_WORKERS, HostHandle, IsolateFactory, IsolateId, VerbPlan, WorkerId,
 };
 use kayfabe_mocks::{
     HoldSpec, MockArch, MockIsolateFactory, RmVerb, SharedRecorder, VerbHold, VerbKind,
@@ -431,7 +431,7 @@ fn canary(
 #[test]
 fn r5_canary_proc_retired_in_the_gap_refuses_loudly() {
     let _wd = watchdog("r5_canary_proc_retired", Duration::from_secs(60));
-    let (mut device, pid, out) = {
+    let (device, pid, out) = {
         let (out, device, pid) = canary(|device, pid| {
             assert!(
                 device.retire_proc(pid),
@@ -440,22 +440,23 @@ fn r5_canary_proc_retired_in_the_gap_refuses_loudly() {
         });
         (device, pid, out)
     };
-    // ★ §12.35 — DECLARED RESIDUE. `retire_proc` is the VIOLENT death: it stops the
-    // isolate, so the host VAS the parked publish had already materialized cannot be
-    // released per object and its disposition is §7.0 namespace death. The clean death
-    // (`Spine::vacate`, a component vanishing) keeps the isolate live and DOES reclaim.
-    device.declare_residue(
-        ResidueClaim::on(
-            kayfabe_isolate::IsolateId(pid.0),
-            "out-of-band `retire_proc` stops the isolate mid-publish, so the host VAS it \
-             had already materialized is left to the session's death (§7.0)",
-        )
-        .objects(VerbKind::AllocVaSpace, 1),
-    );
+    // ★★ M2-e — the residue is now STAGED, not unaccounted, and that is the whole
+    // difference the cancel path makes here. `retire_proc` still stops the isolate, so
+    // the host VAS the parked publish had already materialized still cannot be *freed*
+    // (a retired isolate refuses every verb, disposal included — §7.0 namespace death is
+    // its disposition of record). What changed is that the handle now lands on the
+    // proc's `pending_release` queue instead of nowhere, so §12.35's audit can NAME it
+    // and the UNACCOUNTED set is empty. The claim that used to excuse it is therefore
+    // deleted rather than loosened, exactly as `ResidueClaim`'s own doc demands.
     assert_eq!(
         out,
-        Err(FwdFault::Stale(Stale::Proc(pid))),
-        "a commit whose proc vanished must refuse, not finish what it started"
+        Err(FwdFault::Cancelled {
+            proc: pid,
+            reason: CancelReason::ProcExit
+        }),
+        "a verb in flight across its proc's retire must come back CANCELLED naming \
+         ProcExit (§7.6 T2) — it must not run to completion against a proc that no \
+         longer exists"
     );
     // Nothing was written anywhere: the proc is off the live set entirely, so even
     // the read path refuses. ★ `retire_proc` is the OUT-OF-BAND edge, so the refusal
@@ -1105,7 +1106,7 @@ fn commit_engine_object_proc_guard_refuses_on_either_term_alone() {
             .expect("plans");
     let Gpu { spine, procs, .. } = &mut *gpu;
     let proc = procs.get_mut(&a).expect("live");
-    proc.retire(); // ← the world moves inside the lock-free gap
+    proc.retire().discharge_all(); // ← the world moves inside the lock-free gap
     assert_eq!(
         proc.id, planned.plan.proc,
         "ONLY the retired term is true now"
@@ -1161,7 +1162,7 @@ fn commit_control_proc_guard_refuses_on_either_term_alone() {
 
     // (a) the plan's own proc, retired in the gap.
     let proc = gpu.procs.get_mut(&a).expect("live");
-    proc.retire();
+    proc.retire().discharge_all();
     let refusal = kayfabe_fwd::commit_control(
         proc,
         &planned.plan,
@@ -1355,7 +1356,7 @@ fn commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone() {
 
     // ---- commit_publish, term (a): A's own plan, A retired in the gap.
     let proc_a = gpu.procs.get_mut(&a).expect("live");
-    proc_a.retire();
+    proc_a.retire().discharge_all();
     let refusal = kayfabe_fwd::commit_publish(
         proc_a,
         &planned.plan,
@@ -1403,7 +1404,7 @@ fn commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone() {
     );
 
     let proc_a = procs.get_mut(&a).expect("live");
-    proc_a.retire();
+    proc_a.retire().discharge_all();
     let refusal = kayfabe_fwd::commit_doorbell(spine, proc_a, &planned.plan, reply())
         .expect_err("a retired proc's ring must refuse");
     assert_eq!(refusal.fault, FwdFault::Stale(Stale::Proc(a)));
