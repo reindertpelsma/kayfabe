@@ -114,6 +114,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub mod leaf;
+pub mod vcpu;
 
 use core::ops::Range;
 use core::time::Duration;
@@ -222,6 +223,18 @@ pub struct AuditReport {
     /// ★ Memory-plane ops that reached **commit** and were undone by the R5 re-validation
     /// because their window died in the gap.
     pub r5_revalidation_failures: u64,
+    /// ★ MMIO exits a vCPU took, device-wide — the **non-vacuity** half of the two
+    /// counters below. Zero means no guest ran, which is the vacuous case in which
+    /// `ram_declared_exits == 0` means nothing at all.
+    pub guest_exits: u64,
+    /// ★★ **Residual N13's instrument.** Guest accesses that exited to userspace at a
+    /// guest-physical address the region map still calls RAM. On KVM a RAM region *is* a
+    /// live memslot, so this is the map and the kernel disagreeing — the state a teardown
+    /// that deletes the memslot before undeclaring the region passes through. **Must be
+    /// zero**; see [`vcpu::ExitClass::RamDeclared`].
+    pub ram_declared_exits: u64,
+    /// The first such address, so a failure names one rather than merely counting.
+    pub first_ram_declared_exit: Option<u64>,
 }
 
 #[derive(Debug, Default)]
@@ -245,6 +258,9 @@ struct Audit {
     accesses_refused: AtomicU64,
     host_refusals: AtomicU64,
     r5_failures: AtomicU64,
+    guest_exits: AtomicU64,
+    ram_declared_exits: AtomicU64,
+    first_ram_declared_exit: AtomicU64,
 }
 
 impl Audit {
@@ -256,6 +272,9 @@ impl Audit {
         Audit {
             accessor_depth_min: AtomicU32::new(u32::MAX),
             syscall_depth_min: AtomicU32::new(u32::MAX),
+            // Same argument one axis over: `0` is a legitimate guest-physical address, so
+            // "no contradiction was ever seen" needs a value the guest cannot produce.
+            first_ram_declared_exit: AtomicU64::new(u64::MAX),
             ..Audit::default()
         }
     }
@@ -295,6 +314,12 @@ impl Audit {
             accesses_refused: g(&self.accesses_refused),
             host_refusals: g(&self.host_refusals),
             r5_revalidation_failures: g(&self.r5_failures),
+            guest_exits: g(&self.guest_exits),
+            ram_declared_exits: g(&self.ram_declared_exits),
+            first_ram_declared_exit: match g(&self.first_ram_declared_exit) {
+                u64::MAX => None,
+                gpa => Some(gpa),
+            },
         }
     }
 }
@@ -305,8 +330,8 @@ impl Audit {
 
 /// What `gpa_read`/`gpa_write` read, under the **view** lock, for a bounded probe only.
 #[derive(Debug, Default)]
-struct View {
-    regions: GuestRamMap,
+pub(crate) struct View {
+    pub(crate) regions: GuestRamMap,
     windows: BTreeMap<RamRegionId, Arc<GuestWindow>>,
 }
 
@@ -351,7 +376,12 @@ struct Installer {
 }
 
 #[derive(Debug)]
-struct Plane {
+pub(crate) struct Plane {
+    /// ★ The subsystem handle, **kept**. M2-c dropped it at the end of `realize` because
+    /// memslots only need the VM descriptor; a vCPU needs `/dev/kvm` itself (the size of
+    /// the shared run structure is a property of the subsystem, not of the VM), so the
+    /// handle now lives as long as the machine.
+    kvm: Kvm,
     vm: Arc<KvmVm>,
     page: HostPageSize,
     shareable_ram: bool,
@@ -369,7 +399,7 @@ struct Plane {
 
 impl Plane {
     /// Take the view lock, noting the adapter-leaf depth for the R1 witness.
-    fn view(&self) -> (MutexGuard<'_, View>, leaf::Held) {
+    pub(crate) fn view(&self) -> (MutexGuard<'_, View>, leaf::Held) {
         let g = self
             .view
             .lock()
@@ -395,7 +425,7 @@ impl Plane {
 
     /// ★ Every syscall-shaped entry point starts here. Both halves of R1, at the door of
     /// the phase that actually performs the syscall.
-    fn about_to_syscall(&self, what: &str) {
+    pub(crate) fn about_to_syscall(&self, what: &str) {
         Audit::note_ranked(
             &self.audit.syscall_depth_min,
             &self.audit.syscall_depth_max,
@@ -409,7 +439,7 @@ impl Plane {
 }
 
 /// Map a raw-OS refusal onto the port's vocabulary, keeping the `errno`.
-fn host_refused(what: &'static str, e: &RawError) -> VmmError {
+pub(crate) fn host_refused(what: &'static str, e: &RawError) -> VmmError {
     match e {
         RawError::Syscall { errno, .. } => VmmError::HostRefused {
             what,
@@ -476,6 +506,7 @@ impl KvmMachine {
 
         Ok(KvmMachine {
             plane: Arc::new(Plane {
+                kvm,
                 vm: Arc::new(vm),
                 page: HostPageSize::query(),
                 shareable_ram: cfg.shareable_ram,

@@ -4241,6 +4241,88 @@ the arm's coverage is opportunistic. Either a documented test seam or an accepte
    push gate; today it is `AuditReport::memslot_installs` asserted in two tests. A second
    adapter gets it only if it keeps the same ledger.
 
+### 14.9 ★★ M2-d — the reactor and the guest exist, and TWO sections of §3 contradict each other
+
+**Provenance:** build findings against a real `/dev/kvm` and a real readiness set, so §14's
+rule applies. Shipped: `crates/kayfabe-shell` (the reactor loop, the `Registrar`, the source
+budget), `kayfabe-linux-raw`'s `Poller`/`ReadyTokens`/`PollTimeout` and
+`KvmVcpu`/`VcpuExit`/`descriptor_budget` (25 → **37** relaxations, 7 `*_unsafe.rs` files,
+ratchet raised with a per-file inventory), `kayfabe-vmm-kvm::vcpu` (the MMIO exit dispatch and
+the N13 detector), `kayfabe-rt`'s `ExecutorWaker`/`Parker`/`run_until_stopped` (§3.7),
+`kayfabe_util::leafwitness` (M2-c's owed item 1, discharged), `CompletionSource::as_token`,
+and 21 tests (461 → **482**). Deliberately NOT built: `SourceKind::IsolateExit` and the
+process descriptor, the isolate relay thread, a deadline timer, and the **core-side** half of
+the §3.8 cap (`SourceRegistry::register` growing a `Result`).
+
+**F1. ★★★ §3.2 and §3.4(c) cannot both be satisfied. §3.2 is the one that is wrong.**
+§3.2 says the loop *"has no map, no lock … there is nothing shared it could touch"*, and
+that a reverse table *"lives with the registrar … and the loop never sees it."* §3.4(c) says
+every source is a counter *"the loop reads"*. **To read the counter the loop must hold the
+counter**, and a readiness report carries 64 bits of caller-chosen data and no descriptor —
+so handle → counter is exactly the table §3.2 forbids, needed by exactly the thread §3.2
+says will not have it. The alternatives are worse and both are already rejected elsewhere in
+§3 (put the descriptor in the token = O3; let someone else drain = §3.4(b)'s one-shot re-arm,
+or a spin). **The loop has a table and a lock.** What §3.2's argument was really protecting —
+inherited law 9 — survives intact and structurally: the table maps a handle onto a
+*descriptor*, and there is no path from a descriptor to core state. What does not survive is
+"no lock", and the lock has no rank, which is §14.8 F1's hazard one component over.
+
+**F2. ★★ §3.4(c)'s "every source the reactor watches is a counter we own" is contradicted by
+§3.1, two rows up.** `Worker`'s readiness is a **HUP**, and a hung-up channel is readable
+forever with nothing to read: under a drain-everything loop that is an unbounded spin — the
+F1 failure the level-triggered choice exists to prevent, arriving through a source class the
+same section defines. The fix is not to abandon level-triggering but to give readiness a
+**shape**: `Counter` (a quantity a read clears) versus `Terminal` (a fact only deregistration
+clears; fired once, then unwatched). `IsolateExit`, when it lands, is `Terminal` too. Pinned
+at the raw layer (`a_hung_up_channel_is_readable_forever_and_yields_nothing_to_read`) and at
+the loop.
+
+**F3. ★★ N13 is CLOSED, and the bite is not a coin flip.** A guest-physical range with no
+memslot **exits**, so a premature memslot DELETE opens a window in which the guest's access
+arrives while the region map still calls the range RAM. `AuditReport::ram_declared_exits`
+counts it; the invariant is `== 0`. Under the correct order the window is *zero-wide by
+construction* (the undeclare completes under the view lock the exit handler consults);
+swapping the order produced **19 contradictions at the doomed window's exact address**.
+
+**F4. ★★ Putting the adapter-leaf witness in the adapter is not enough, and the reason
+generalises.** §14.8 F1 closed the unranked-lock blind spot with a witness inside
+`kayfabe-vmm-kvm`, asserted once per method at that method's execute phase. A bite-check
+showed that *deleting that one line* is undetectable — there is no second line of defence,
+and the reactor's registrar was written with the same shape and passed the bite silently
+(`epoll_ctl` under the registrar's unranked table lock, every assert in the workspace green).
+The witness now lives at `kayfabe_util::leafwitness` and is asserted **in the raw crate, at
+the syscall, beside the ranked one**, which is what §4.5 always said. An adapter that forgets
+its own assert is now caught by the syscall itself.
+
+**F5. ★ The F1 gate needed to be TWO numbers, not one.** `signals_pushed == signals_sent` is
+an *equality* invariant under every batching the kernel may choose (a counter coalesces; the
+loop pushes the coalesced count). `wakes ≤ signals_sent` is a *bound* an undrained
+level-triggered source blows through without limit. They catch different bugs and neither
+alone is sufficient: the undrainable-source test has `signals_pushed == 0 == 0` — the
+equality passes vacuously and only the wake count sees the spin.
+
+**F6. ★ The exit reason must be asserted, not just the exit count.** A guest that
+triple-faults on its first instruction still satisfies `exits > 0`, `ram_declared_exits == 0`
+and every conservation assertion. `StopReason` is now asserted by variant in the composed run
+and pinned positively by a guest entered at an address with no memory.
+
+**What M2-d owes the build:**
+
+1. **The core-side source cap (§3.8) is still open.** The shell's device-global cap and the
+   `RLIMIT_NOFILE`-derived descriptor budget are real and their refusal is exercised; the
+   per-`(proc, gpu)` bound needs `SourceRegistry::register` to grow a `Result`, and belongs
+   in the same change as the guest-driven arming path it bounds.
+2. **§3.3's deregister-then-close ORDER is still untested, and now we know why.** It is
+   unobservable while the registrar holds the *last* reference to the descriptor, which it
+   always does today — closing it removes it from the readiness set as a side effect. The
+   rule becomes load-bearing exactly when a descriptor is duplicated, i.e. under §3.5(a),
+   which is rejected, or transiently while the loop holds an `Arc` clone. The **consequence**
+   (a report for a retired handle faults rather than re-routing) is tested by constructing
+   the duplicate deliberately; the *order* is not.
+3. **The executor's post-stop final drain is unexercised.** Hitting it requires a push that
+   lands between the loop's drain and its stop check — genuinely racy. Accepted residual, in
+   the same class as §14.8 F8.
+
 ---
 
 ## 15. Proposed amendments to `l1_concurrency.md` (NOT applied here)

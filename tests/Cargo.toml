@@ -23,6 +23,9 @@ kayfabe-vmm.workspace = true
 # portability contract exercised rather than asserted.
 kayfabe-vmm-kvm.workspace = true
 kayfabe-linux-raw.workspace = true
+# ★ The real reactor loop (l1_os_shell.md §3, M2-d): the suite drives real host
+# readiness primitives through the same core the mock harness drives.
+kayfabe-shell.workspace = true
 kayfabe-mocks.workspace = true
 kayfabe-rt.workspace = true
 

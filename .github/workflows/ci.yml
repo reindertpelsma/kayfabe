@@ -320,17 +320,27 @@ jobs:
           # Counts the syntactic forms only (`unsafe {`, `unsafe fn/impl/trait`), so prose
           # inside those files — which gate C permits there — cannot inflate it.
           # ★ 7 -> 25 at M2-c (l1_os_shell.md §10), the stage that gives the raw crate
-          # its first consumers. The new surface, per file, each block carrying its own
-          # `// SAFETY:` (clippy `undocumented_unsafe_blocks = deny`):
+          # its first consumers. ★ 25 -> 37 at M2-d, the stage that gives it a reactor and
+          # a guest. The surface, per file, each block carrying its own `// SAFETY:`
+          # (clippy `undocumented_unsafe_blocks = deny`):
           #   window_unsafe.rs  (7) — the GuestWindow: one mmap, one MAP_FIXED shared by
           #     place/restore, one munmap in Drop, two copy_nonoverlapping, and the two
           #     PER-TYPE `Send`/`Sync` grants (§14.5 item 1 asked for exactly this shape,
           #     argued per type, never one blanket impl).
-          #   host_fd_unsafe.rs (8) — from_raw_fd (the ONE adoption site), memfd_create,
+          #   host_fd_unsafe.rs (9) — from_raw_fd (the ONE adoption site), memfd_create,
           #     ftruncate, F_ADD_SEALS, F_DUPFD_CLOEXEC, the notify descriptor's create,
-          #     write and read.
+          #     write and read, and getrlimit (the §3.8 descriptor budget: the core's
+          #     source cap may not be set optimistically past the process's real limit).
           #   kvm_unsafe.rs     (3) — open(/dev/kvm), the by-value ioctl, the memslot ioctl.
-          EXPECTED_UNSAFE_BLOCKS=25
+          #   epoll_unsafe.rs   (3) — M2-d, the readiness set: create, ctl (shared by
+          #     watch/unwatch), and the wait. Level-triggered, keyed on a caller-chosen
+          #     token that is deliberately NOT the descriptor (§3.2's O3 argument).
+          #   vcpu_unsafe.rs    (8) — M2-d, the guest: KVM_RUN, the mmap of the shared run
+          #     structure and its munmap in Drop, the read of the exit union, the write of
+          #     an MMIO load's completion, the two by-reference register ioctls, and the
+          #     per-type `Send` grant for a vCPU (one runner thread owns one; `Sync` is
+          #     deliberately withheld).
+          EXPECTED_UNSAFE_BLOCKS=37
           actual=$(grep -rhoE 'unsafe (\{|fn |impl |trait )' \
                      crates/kayfabe-linux-raw/src/*_unsafe.rs | wc -l | tr -d ' ')
           echo "unsafe blocks: $actual (bar: $EXPECTED_UNSAFE_BLOCKS)"

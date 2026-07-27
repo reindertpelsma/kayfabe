@@ -37,7 +37,7 @@
 use crate::error::{RawError, last_syscall_error};
 use crate::host_fd_unsafe::adopt_fd;
 use crate::window_unsafe::GuestWindow;
-use kayfabe_util::lockwitness;
+use kayfabe_util::{leafwitness, lockwitness};
 use std::os::fd::{AsRawFd, OwnedFd};
 use std::sync::Arc;
 
@@ -106,6 +106,7 @@ impl Kvm {
     /// If called with any ranked lock held (R1, §4.5).
     pub fn open() -> Result<Self, RawError> {
         lockwitness::assert_lock_free("open(/dev/kvm)");
+        leafwitness::assert_leaf_free("open(/dev/kvm)");
         // SAFETY: `open` reads the NUL-terminated path and dereferences nothing else; the
         // literal is a `&CStr`, so the terminator is guaranteed by the type. The mode
         // argument is absent because `O_CREAT` is not in the flags. The result is adopted
@@ -129,6 +130,17 @@ impl Kvm {
         Ok(kvm)
     }
 
+    /// The subsystem descriptor, for the sibling module that creates vCPUs.
+    ///
+    /// `pub(crate)` and returning the raw number rather than a `BorrowedFd`: the only
+    /// consumer is `vcpu_unsafe`, which passes it straight to `ioctl`. A `BorrowedFd`
+    /// would be a nicer signature and would also be the one shape §4.2's constructive
+    /// rule cares about — but this is a *descriptor*, not a host address, and the
+    /// crate-private visibility is what keeps it from being an API at all.
+    pub(crate) fn as_raw(&self) -> libc::c_int {
+        self.fd.as_raw_fd()
+    }
+
     /// Create a VM. The returned descriptor owns an address space, and nothing else —
     /// no vCPUs, no interrupt controller, no devices.
     ///
@@ -139,6 +151,7 @@ impl Kvm {
     /// If called with any ranked lock held (R1, §4.5).
     pub fn create_vm(&self) -> Result<KvmVm, RawError> {
         lockwitness::assert_lock_free("KVM_CREATE_VM");
+        leafwitness::assert_leaf_free("KVM_CREATE_VM");
         let raw = ioctl_arg(self.fd.as_raw_fd(), KVM_CREATE_VM, 0, "KVM_CREATE_VM")?;
         Ok(KvmVm {
             fd: adopt_fd(raw, "KVM_CREATE_VM")?,
@@ -153,6 +166,30 @@ pub struct KvmVm {
 }
 
 impl KvmVm {
+    /// Ask the kernel whether it implements one capability, by number.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub(crate) fn check_extension(&self, cap: libc::c_ulong) -> Result<libc::c_int, RawError> {
+        lockwitness::assert_lock_free("KVM_CHECK_EXTENSION");
+        leafwitness::assert_leaf_free("KVM_CHECK_EXTENSION");
+        ioctl_arg(
+            self.fd.as_raw_fd(),
+            KVM_CHECK_EXTENSION,
+            cap,
+            "KVM_CHECK_EXTENSION",
+        )
+    }
+
+    /// This VM's descriptor, for the sibling module that creates vCPUs (see
+    /// [`Kvm::as_raw`] for why it is crate-private and raw).
+    pub(crate) fn as_raw(&self) -> libc::c_int {
+        self.fd.as_raw_fd()
+    }
+
     /// How many memslots this VM may hold at once.
     ///
     /// A **hard, kernel-imposed ceiling** — and the reason §6.7's frequency rule is not
@@ -167,6 +204,7 @@ impl KvmVm {
     /// If called with any ranked lock held (R1, §4.5).
     pub fn max_memslots(&self) -> Result<u32, RawError> {
         lockwitness::assert_lock_free("KVM_CHECK_EXTENSION(NR_MEMSLOTS)");
+        leafwitness::assert_leaf_free("KVM_CHECK_EXTENSION(NR_MEMSLOTS)");
         let n = ioctl_arg(
             self.fd.as_raw_fd(),
             KVM_CHECK_EXTENSION,
@@ -219,6 +257,7 @@ impl KvmVm {
         guest_readonly: bool,
     ) -> Result<(), RawError> {
         lockwitness::assert_lock_free("KVM_SET_USER_MEMORY_REGION (installing a memslot)");
+        leafwitness::assert_leaf_free("KVM_SET_USER_MEMORY_REGION (installing a memslot)");
         let region = UserspaceMemoryRegion {
             slot,
             flags: if guest_readonly { KVM_MEM_READONLY } else { 0 },
@@ -238,6 +277,7 @@ impl KvmVm {
     /// If called with any ranked lock held (R1, §4.5).
     pub fn clear_memslot(&self, slot: u32) -> Result<(), RawError> {
         lockwitness::assert_lock_free("KVM_SET_USER_MEMORY_REGION (removing a memslot)");
+        leafwitness::assert_leaf_free("KVM_SET_USER_MEMORY_REGION (removing a memslot)");
         let region = UserspaceMemoryRegion {
             slot,
             ..UserspaceMemoryRegion::default()
@@ -352,7 +392,7 @@ impl KvmVm {
 
 /// `ioctl(fd, request, arg)` for the by-value requests, returning the kernel's
 /// non-negative result.
-fn ioctl_arg(
+pub(crate) fn ioctl_arg(
     fd: libc::c_int,
     request: libc::c_ulong,
     arg: libc::c_ulong,

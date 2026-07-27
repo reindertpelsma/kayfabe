@@ -7469,3 +7469,823 @@ fn a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_
          script-determined half of the run must be bit-identical in both modes"
     );
 }
+
+// =================================================================================
+// ★★★ M2-d — THE GUEST IS REAL: vCPUs, MMIO exit dispatch, the reactor, and the
+// teardown order that only a guest can see (l1_os_shell.md §10 stage M2-d)
+// =================================================================================
+//
+// Everything above this line drives the core through its own entry points. This section
+// drives it through a **guest**: real vCPUs on the real KVM machine, executing real x86
+// instructions, whose stores exit to userspace and are dispatched into the same
+// `SharedDevice` every other test in this file calls directly.
+//
+// Three things become observable here that were not, and §14.8 F7 named two of them:
+//
+//   (a) WHERE a memslot points. The guest reads a cookie we placed in its probe page and
+//       presents it at the doorbell; a wrong offset delivers a different cookie.
+//   (b) ★★ RESIDUAL N13 — the ORDER of a teardown. M2-c's bite-check ("DELETE the memslot
+//       before undeclaring the region") did not bite, because with no vCPU the `Arc` keeps
+//       the mapping alive either way. With a vCPU the orders are physically different: a
+//       range with no memslot EXITS, so a premature DELETE opens a window in which the
+//       guest's access arrives as an MMIO exit while the region map still calls the range
+//       RAM. `AuditReport::ram_declared_exits` counts exactly that, the invariant is `== 0`,
+//       and under the correct order the window is zero-wide by construction (the undeclare
+//       completes under the view lock the exit handler consults).
+//   (c) That a registered trap actually DELIVERS. M2-c registered traps and asserted their
+//       consistency with the memslot map; nothing dispatched one.
+
+/// Guest-physical base of the vCPUs' code window (one page per vCPU).
+///
+/// ★ Below 4 GiB, and that is a **requirement**, not a convention: the guest runs in flat
+/// 32-bit protected mode with paging off, so guest-linear is guest-physical and every
+/// address it can name is 32 bits wide. A window above 4 GiB would be unreachable, which
+/// the `u32::try_from` on the image's immediate turns into a loud failure rather than a
+/// silently-truncated probe address.
+const RGPA_CODE: u64 = 0x1000_0000;
+/// Guest-physical base of the per-vCPU probe windows (one page each, `RGPA_PROBE_STRIDE`
+/// apart so each is its own window and can be torn down alone).
+const RGPA_PROBE: u64 = 0x1100_0000;
+/// Distance between consecutive probe windows.
+const RGPA_PROBE_STRIDE: u64 = 0x10_0000;
+/// How many vCPUs storm the doorbell at once.
+const N_VCPUS: usize = 3;
+/// Which vCPU's probe window is torn down while every vCPU is running.
+const VCPU_DOOMED: usize = N_VCPUS - 1;
+/// MMIO exits each vCPU handles before it stops. A **count**, never a duration.
+const VCPU_EXITS: u64 = 400;
+/// Completion signals the reactor's counter source carries during the run.
+const RSIGNALS: u64 = 150;
+
+/// The cookie vCPU `i` finds in its probe page. Deliberately not `i` and not a small
+/// number: a stale page, a zero-filled one and an off-by-one window all produce values
+/// this pattern cannot be confused with.
+fn vcpu_cookie(i: usize) -> u32 {
+    0x5A5A_0000 | (i as u32 + 1)
+}
+
+/// What one composed M2-d run observed.
+#[derive(Debug, Clone)]
+struct GuestMeanReport {
+    audit: kayfabe_vmm_kvm::AuditReport,
+    reactor: kayfabe_shell::ReactorStats,
+    device: kayfabe_tests::DeviceTally,
+    /// Per-vCPU: (exits, ram-declared exits, unclaimed exits).
+    vcpus: Vec<(u64, u64, u64)>,
+    /// Why each guest stopped. Asserted, because a triple-faulted guest also has
+    /// `exits > 0` and would otherwise pass every count in this run — a bite-check found
+    /// exactly that gap (neutering the stop-flag check did not bite, because the exit
+    /// BUDGET was silently doing the work).
+    stops: Vec<kayfabe_vmm_kvm::vcpu::StopReason>,
+    /// The first address that exited while still declared RAM, if any (N13's witness).
+    first_contradiction: Option<u64>,
+    /// Was the HUP'd proc retired by the reactor's worker-death path?
+    hup_proc_retired: bool,
+    /// Did the deferred deadline that fell during the teardown come due?
+    deferred_due: Vec<kayfabe_vmm::CoreEvent>,
+    /// Effects the executor thread ran.
+    signal_effects: usize,
+    /// Live procs before the worker died, and after — a **difference**, never an absolute,
+    /// because the realized device also carries the system proc and an absolute would be
+    /// asserting the harness's shape rather than the blast radius.
+    live_pids: (usize, usize),
+}
+
+impl GuestMeanReport {
+    /// The script-determined half — must be bit-identical across lock modes.
+    fn mode_independent(&self) -> (u64, u64, u64, u64, bool, (usize, usize)) {
+        (
+            self.audit.ram_declared_exits,
+            self.audit.memslot_installs,
+            self.device.cookie_mismatch,
+            self.reactor.signals_pushed,
+            self.hup_proc_retired,
+            self.live_pids,
+        )
+    }
+}
+
+/// ★★ One composed M2-d run: `N_VCPUS` guests storming a trapped doorbell across two
+/// GPUs, a real reactor draining real counters, a worker channel that HUPs mid-storm, a
+/// window torn down underneath a running guest, and a deferred deadline that falls during
+/// the teardown.
+fn guest_mean_run(mode: LockMode) -> GuestMeanReport {
+    let (device, pids, _rec) = mean_world(mode);
+    let machine = real_machine();
+    let page = host_page();
+    let dev: &SharedDevice = &device;
+
+    // ---- the guest's address space: one code window, N probe windows, one trapped BAR
+    // (declared at realize, i.e. NO memslot at all — which on KVM is what a device region
+    // physically IS).
+    let code_win = machine
+        .install_ram_window(RGPA_CODE, (N_VCPUS as u64) * page)
+        .expect("the code window");
+    let probe_wins: Vec<_> = (0..N_VCPUS)
+        .map(|i| {
+            let gpa = RGPA_PROBE + (i as u64) * RGPA_PROBE_STRIDE;
+            (
+                gpa,
+                machine
+                    .install_ram_window(gpa, page)
+                    .expect("a probe window"),
+            )
+        })
+        .collect();
+
+    // ---- write the images and the cookies through the REAL memory plane.
+    let mut vmm = machine.vmm();
+    for (i, (probe, _)) in probe_wins.iter().enumerate() {
+        let image = kayfabe_tests::probe_loop_image(
+            u32::try_from(*probe).expect("the probe window is below 4 GiB"),
+        );
+        vmm.gpa_write(RGPA_CODE + (i as u64) * page, &image)
+            .expect("the image lands in guest RAM");
+        vmm.gpa_write(*probe, &vcpu_cookie(i).to_le_bytes())
+            .expect("the cookie lands in guest RAM");
+    }
+    assert_eq!(
+        machine.assert_map_matches_the_kernel(),
+        1 + N_VCPUS,
+        "every RAM region the map resolves is a live memslot before the guests start"
+    );
+
+    // ---- ★★ THE N13 DETECTOR'S POSITIVE CONTROL, and it is here because of a bite-check
+    // that did NOT bite: making `classify_exit` unable to answer `RamDeclared` left the
+    // whole run green, since `ram_declared_exits == 0` is equally true of a working
+    // detector and of one that cannot fire. All three answers are asserted against a
+    // layout this function chose, so the invariant below is measured with an instrument
+    // that has been shown to work.
+    use kayfabe_vmm_kvm::vcpu::ExitClass;
+    assert_eq!(
+        machine.classify_guest_exit(probe_wins[0].0, 4),
+        ExitClass::RamDeclared {
+            gpa: probe_wins[0].0
+        },
+        "★ a LIVE RAM window classifies as the contradiction — correctly: the answer means \
+         'an exit here would be the map and the kernel disagreeing', and while the window \
+         is live no exit can happen. This is the arm the invariant is about, and it must \
+         be REACHABLE"
+    );
+    assert_eq!(
+        machine.classify_guest_exit(RGPA_BAR0 + 0x100, 4),
+        ExitClass::Bar {
+            bar: kayfabe_vmm::BarId::Bar0,
+            off: 0x100
+        },
+        "★ and a BAR address classifies to the BAR and the OFFSET WITHIN IT — an offset \
+         that was not base-relative would dispatch every doorbell to the wrong lane"
+    );
+    assert_eq!(
+        machine.classify_guest_exit(RGPA_HOLE, 4),
+        ExitClass::Unclaimed { gpa: RGPA_HOLE },
+        "★ and an address nothing declares is unclaimed — never silently absorbed into \
+         either of the other two"
+    );
+
+    // ---- the device the exits dispatch into: one doorbell lane per vCPU, alternating
+    // GPUs, each with the cookie we just wrote and the CE token it stands for.
+    let doorbell = Arc::new(kayfabe_tests::DoorbellDevice::new(
+        Arc::clone(&device),
+        (0..N_VCPUS)
+            .map(|i| kayfabe_tests::DoorbellLane {
+                gpu: gpu_of(i),
+                cookie: vcpu_cookie(i),
+                token: MockArch::token_for(lane_of(i).ce),
+            })
+            .collect(),
+    ));
+
+    // ---- the reactor, over real host readiness primitives.
+    let poller = Arc::new(kayfabe_linux_raw::Poller::create().expect("a readiness set"));
+    let registrar = Arc::new(kayfabe_shell::Registrar::new(poller).expect("a registrar"));
+    let (tx, rx) = inbox();
+    let parker = Arc::new(kayfabe_rt::executor::Parker::new());
+    let (mut reactor, rhandle) = kayfabe_shell::Reactor::new(
+        Arc::clone(&registrar),
+        tx,
+        Arc::clone(&parker) as Arc<dyn kayfabe_rt::executor::ExecutorWaker>,
+    )
+    .expect("the reactor builds");
+
+    // A hot counter source…
+    let hot = dev.register_source(SourceKind::OsEvent {
+        proc: pids[P_WITNESS],
+        gpu: GPU0,
+        ev: EV[0],
+    });
+    let hot_counter = registrar.arm_counter(hot).expect("arms");
+    // …a source that is NEVER signalled (the wedged one — it must cost exactly zero
+    // wakes, which is the other polarity of the F1 quantity)…
+    let wedged = dev.register_source(SourceKind::OsEvent {
+        proc: pids[P_PEER],
+        gpu: GPU1,
+        ev: EV[1],
+    });
+    let _wedged_counter = registrar.arm_counter(wedged).expect("arms");
+    // …and a worker channel whose HUP retires a proc mid-storm.
+    let hup = dev.register_source(SourceKind::Worker {
+        proc: pids[P_HUP],
+        gpu: gpu_of(P_HUP),
+        worker: WorkerId(0),
+    });
+    let hup_channel = registrar.arm_channel(hup).expect("arms");
+
+    // ---- a deferred deadline that will fall DURING the teardown (§6.4's shared queue —
+    // the same `DeferQueue` the mock owns, so "matches the mock" is a tautology).
+    vmm.defer(
+        Duration::from_millis(10),
+        kayfabe_vmm::CoreEvent::Deferred(kayfabe_vmm::CoreEventKind::CompletionRedeliver),
+    );
+
+    let live_before = dev.live_pids().len();
+    let stop = Arc::new(AtomicBool::new(false));
+    let effects = Arc::new(Mutex::new(Vec::<Effect>::new()));
+    let storm_started = StartGate::default();
+
+    let mut runners: Vec<_> = (0..N_VCPUS)
+        .map(|i| {
+            let r = machine
+                .create_vcpu(
+                    u32::try_from(i).expect("few vCPUs"),
+                    Arc::clone(&doorbell) as _,
+                )
+                .expect("a real vCPU");
+            r.enter_at(
+                RGPA_CODE + (i as u64) * page,
+                kayfabe_tests::DoorbellDevice::lane_gpa(RGPA_BAR0, i),
+            )
+            .expect("flat protected mode");
+            r
+        })
+        .collect();
+
+    let deferred_due = thread::scope(|sc| {
+        // ---- the reactor thread.
+        let t_reactor = sc
+            .spawn(move || reactor.run_with(kayfabe_linux_raw::PollTimeout::Millis(20), 1_000_000));
+        // ---- the executor thread, parked on the ExecutorWaker.
+        let d = Arc::clone(&device);
+        let sink = Arc::clone(&effects);
+        let pk = Arc::clone(&parker);
+        let t_exec = sc.spawn(move || {
+            let mut exec = Executor::new(d, rx);
+            exec.run_until_stopped(&pk, Duration::from_millis(20), |e| {
+                sink.lock().expect("sink").push(e);
+            });
+        });
+
+        // ---- ★ the MMIO storm: N vCPUs at once, each on its own thread.
+        let gate = &storm_started;
+        let stop_ref = &stop;
+        let mut vcpu_threads = Vec::new();
+        for (i, mut runner) in runners.drain(..).enumerate() {
+            vcpu_threads.push(sc.spawn(move || {
+                if i == 0 {
+                    gate.open();
+                }
+                let reason = runner.run_until(stop_ref, VCPU_EXITS).expect("KVM_RUN");
+                (reason, runner.report(), runner.first_ram_declared_exit())
+            }));
+        }
+        gate.wait();
+
+        // ---- a relay writing the hot counter while the guests run.
+        let hc = Arc::clone(&hot_counter);
+        let t_relay = sc.spawn(move || {
+            for _ in 0..RSIGNALS {
+                hc.signal().expect("relay write");
+            }
+        });
+
+        // ---- ★★ THE TEARDOWN, UNDER A RUNNING GUEST. The doomed vCPU is looping on this
+        // window's probe page; removing it must undeclare the region FIRST, so that by the
+        // time the memslot is gone the map has already stopped calling the range RAM.
+        // Every access that lands in the window between the two steps is what
+        // `ram_declared_exits` counts.
+        machine
+            .remove_window(probe_wins[VCPU_DOOMED].1)
+            .expect("the doomed window goes");
+
+        // ---- the worker dies mid-storm (§7.3 through the §6 reactor).
+        drop(hup_channel);
+
+        // ---- and the deferred deadline falls right here, in the middle of the teardown.
+        let due = machine.advance(Duration::from_millis(10));
+
+        t_relay.join().expect("the relay joins");
+        let reports: Vec<_> = vcpu_threads
+            .drain(..)
+            .map(|t| t.join().expect("a vCPU thread joins"))
+            .collect();
+        stop.store(true, Ordering::Release);
+
+        // Wait for the reactor to have carried every signal (a condition, not a sleep).
+        let deadline = WallInstant::now() + Duration::from_secs(60);
+        while rhandle.stats().signals_pushed < RSIGNALS + 1 {
+            assert!(
+                WallInstant::now() < deadline,
+                "({mode:?}) the reactor wedged: {:?}",
+                rhandle.stats()
+            );
+            thread::yield_now();
+        }
+        rhandle.shutdown().expect("shutdown");
+        assert_eq!(
+            t_reactor.join().expect("the reactor thread joins"),
+            Ok(()),
+            "({mode:?}) ★ the loop exited cleanly — an F1 refusal here would mean one of \
+             these real sources could not be drained"
+        );
+        parker.stop();
+        t_exec.join().expect("the executor thread joins");
+
+        // Stash the per-vCPU numbers where the report can reach them.
+        (due, reports)
+    });
+    let (due, vcpu_reports) = deferred_due;
+
+    // ---- tear the rest down; the ledger must balance.
+    for (i, (_, w)) in probe_wins.into_iter().enumerate() {
+        if i != VCPU_DOOMED {
+            machine.remove_window(w).expect("a probe window goes");
+        }
+    }
+    machine
+        .remove_window(code_win)
+        .expect("the code window goes");
+    registrar.disarm_all();
+
+    let first_contradiction = vcpu_reports.iter().find_map(|(_, _, c)| *c);
+    GuestMeanReport {
+        audit: machine.audit(),
+        reactor: rhandle.stats(),
+        device: doorbell.tally(),
+        vcpus: vcpu_reports
+            .iter()
+            .map(|(_, r, _)| (r.exits, r.ram_declared_exits, r.unclaimed_exits))
+            .collect(),
+        stops: vcpu_reports.iter().map(|(s, _, _)| *s).collect(),
+        first_contradiction,
+        hup_proc_retired: !dev.live_pids().contains(&pids[P_HUP]),
+        deferred_due: due,
+        signal_effects: effects.lock().expect("sink").len(),
+        live_pids: (live_before, dev.live_pids().len()),
+    }
+}
+
+/// ★★★ **THE MEAN COMPOSED RUN WITH A REAL GUEST** — `l1_os_shell.md` §10 stage M2-d,
+/// and the test that closes residual **N13**.
+///
+/// In one window, under **both** lock modes: three real vCPUs executing real x86
+/// instructions and storming a trapped doorbell across two GPUs; a real reactor loop
+/// blocking in a real `epoll_wait` over a hot counter source, a never-signalled one and a
+/// worker channel; a real executor thread woken through the `ExecutorWaker`; a **real
+/// memslot DELETE plus `munmap`** landing on a window a guest is looping on; a worker
+/// dying with completions in flight; and a deferred deadline falling in the middle of the
+/// teardown.
+///
+/// The assertions are the composed ones: N13's contradiction count, the cookie round trip,
+/// the F1 wake-count quantity, both halves of R1, the memslot-frequency gate, the
+/// conservation ledger, and a bit-identical script-determined outcome across lock modes.
+#[test]
+fn a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_deadline() {
+    let _wd = watchdog(
+        "a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_deadline",
+        Duration::from_secs(300),
+    );
+    let degenerate = guest_mean_run(LockMode::Degenerate);
+    let sharded = guest_mean_run(LockMode::Sharded);
+
+    for (name, r) in [("Degenerate", &degenerate), ("Sharded", &sharded)] {
+        let a = r.audit;
+
+        // ---- ★★ RESIDUAL N13, CLOSED. The invariant is a count and it is zero.
+        assert_eq!(
+            (a.ram_declared_exits, r.first_contradiction),
+            (0, None),
+            "({name}) ★★ N13: a guest access must NEVER exit to userspace at an address \
+             the region map still calls RAM. That state exists only between a memslot \
+             DELETE and the undeclare that should have preceded it — so a nonzero count \
+             here IS the teardown order being wrong, observed from the guest's side. \
+             (M2-c could not test this: with no vCPU the Arc keeps the mapping alive and \
+             both orders look identical.)"
+        );
+        assert!(
+            a.guest_exits >= (N_VCPUS as u64) * VCPU_EXITS / 2,
+            "({name}) ★ NON-VACUITY for the line above: only {} guest exits were dispatched, \
+             so 'zero contradictions' may just mean 'no guest ever ran'. A window torn down \
+             under a guest that is not executing proves nothing",
+            a.guest_exits
+        );
+        for (i, (exits, contradictions, _)) in r.vcpus.iter().enumerate() {
+            assert_eq!(
+                *contradictions, 0,
+                "({name}/vcpu {i}) and per vCPU, not merely in aggregate"
+            );
+            assert!(
+                *exits > 0,
+                "({name}/vcpu {i}) ★ NON-VACUITY: this vCPU never exited at all, so the \
+                 'MMIO storm from multiple vCPUs at once' is one vCPU wearing a plural"
+            );
+        }
+        // ★ WHY each guest stopped, by exact variant. A guest that triple-faulted, or that
+        // KVM could not emulate, also satisfies `exits > 0` — so without this the whole run
+        // could be green about three guests that died three instructions in.
+        for (i, stop) in r.stops.iter().enumerate() {
+            assert!(
+                matches!(
+                    stop,
+                    kayfabe_vmm_kvm::vcpu::StopReason::BudgetSpent
+                        | kayfabe_vmm_kvm::vcpu::StopReason::Stopped
+                ),
+                "({name}/vcpu {i}) a guest must end because WE ended it — by its exit \
+                 budget or by the stop flag — never by faulting: {stop:?}"
+            );
+        }
+
+        // ---- ★ (a) WHERE the memslot points — the cookie round trip, at the device.
+        assert_eq!(
+            r.device.cookie_mismatch, 0,
+            "({name}) ★ every doorbell write carried EXACTLY the cookie we placed in that \
+             vCPU's probe page. §14.8 F7(a): neutering the sub-range address arithmetic \
+             'broke nothing, because KVM validates nothing at install time and nothing \
+             executes' — something executes now, and this is what it proves"
+        );
+        assert!(
+            r.device.rang > 0,
+            "({name}) ★ NON-VACUITY: not one doorbell write reached the core, so the \
+             cookie assertion above is about writes that never happened"
+        );
+        assert_eq!(
+            r.device.stray_writes, 0,
+            "({name}) every exit was classified to a real doorbell lane — a stray means the \
+             BAR offset arithmetic in the exit dispatch is wrong"
+        );
+        assert!(
+            r.device.unbacked_cookie > 0,
+            "({name}) ★ and the OTHER polarity, which is what keeps the assertion above \
+             honest: the doomed vCPU's probe page really did stop resolving, so its loads \
+             came back as the all-ones 'nobody answered' value. Zero here would mean the \
+             teardown never took effect underneath a running guest — and then \
+             `cookie_mismatch == 0` would be true for the boring reason"
+        );
+
+        // ---- ★ (c) a registered trap DELIVERS. The doomed vCPU's probe window is gone, so
+        // its loads exit unclaimed; every vCPU's stores keep reaching the device.
+        let unclaimed: u64 = r.vcpus.iter().map(|(_, _, u)| u).sum();
+        assert!(
+            unclaimed > 0,
+            "({name}) ★ the torn-down window's guest must have taken UNCLAIMED exits after \
+             the teardown — that is the memslot really being gone, not merely marked gone"
+        );
+
+        // ---- ★ the F1 wake-count gate, over real sources under real load.
+        let s = r.reactor;
+        assert_eq!(
+            s.signals_pushed,
+            RSIGNALS + 1,
+            "({name}) ★ EXACTLY the signals the producers sent: {RSIGNALS} counter writes \
+             plus the one worker HUP. Coalescing moves the wake count, never this. {s:?}"
+        );
+        assert!(
+            s.wakes >= 1 && s.wakes <= RSIGNALS + 1,
+            "({name}) ★ the F1 quantity: {} wakes for {} signals. The upper bound is what \
+             an undrained level-triggered source blows through without limit — and the \
+             never-signalled source in this run contributes ZERO to it, which is the other \
+             polarity. {s:?}",
+            s.wakes,
+            RSIGNALS + 1,
+        );
+        assert_eq!(
+            (s.undrained_reports, s.stale_reports),
+            (0, 0),
+            "({name}) every ready report was drained and named a live source: {s:?}"
+        );
+        assert_eq!(
+            s.terminal_fired, 1,
+            "({name}) ★ the worker HUP fired ONCE — a hung-up channel is readable forever, \
+             so a loop that tried to drain it would still be spinning. {s:?}"
+        );
+
+        // ---- ★ the worker died with events in flight, and the core's consequence ran.
+        assert!(
+            r.hup_proc_retired,
+            "({name}) ★ a worker death must retire its proc (§7.3 — never a silent respawn), \
+             and it must do so while {RSIGNALS} completions for OTHER procs are in flight"
+        );
+        assert_eq!(
+            r.live_pids.1,
+            r.live_pids.0 - 1,
+            "({name}) exactly ONE proc retired — the blast radius of a worker death is its \
+             own proc, not the device"
+        );
+        assert!(
+            r.signal_effects >= (RSIGNALS + 1) as usize,
+            "({name}) the executor thread ran every pushed signal ({} effects)",
+            r.signal_effects
+        );
+
+        // ---- ★ the deferred deadline that fell during the teardown.
+        assert_eq!(
+            r.deferred_due,
+            vec![kayfabe_vmm::CoreEvent::Deferred(
+                kayfabe_vmm::CoreEventKind::CompletionRedeliver
+            )],
+            "({name}) ★ a deadline that passes while a window is being torn down still comes \
+             due, exactly once, in deadline order — §6.4's shared DeferQueue, which is the \
+             SAME code the mock runs, so 'matches the mock' is a tautology rather than a claim"
+        );
+
+        // ---- ★ R1, BOTH HALVES, with three vCPU threads and a reactor thread running.
+        assert_eq!(
+            a.syscall_ranked_depth,
+            (0, 0),
+            "({name}) ★ R1: every syscall-shaped Vmm method ran with ZERO ranked locks — \
+             including the ones a vCPU thread issued from inside an exit dispatch"
+        );
+        assert_eq!(
+            a.copy_leaf_depth_max, 0,
+            "({name}) ★★ the adapter half of R1: the guest-memory memcpy runs OUTSIDE the \
+             adapter's own map lock, which `lockwitness` is structurally blind to"
+        );
+        assert!(
+            a.view_leaf_depth_max >= 1,
+            "({name}) ★ NON-VACUITY for the line above: the map lock was really taken"
+        );
+
+        // ---- ★ the memslot-frequency gate: installs scale with WINDOWS.
+        assert_eq!(
+            a.memslot_installs,
+            1 + N_VCPUS as u64,
+            "({name}) ★ one install per window and not one more — a guest that took \
+             {} exits installed exactly zero memslots",
+            a.guest_exits
+        );
+
+        // ---- ★ the conservation ledger.
+        assert_eq!(
+            (a.live_windows, a.live_memslots, a.window_bytes),
+            (0, 0, 0),
+            "({name}) ★ nothing leaked across three running guests, a mid-storm teardown, a \
+             worker death and a deferred deadline"
+        );
+        assert_eq!(
+            a.peak_windows,
+            1 + N_VCPUS as u64,
+            "({name}) ★ NON-VACUITY for the ledger: it counted every window live at once"
+        );
+    }
+
+    assert_eq!(
+        degenerate.mode_independent(),
+        sharded.mode_independent(),
+        "★ the lock configuration is not observable through a real guest: the \
+         script-determined half of the run must be identical in both modes"
+    );
+}
+
+/// ★ **The stop flag really stops a running guest** — closing a bite-check that did not
+/// bite in the composed run above, where the exit *budget* was silently doing the work.
+///
+/// Here the budget is effectively infinite, so the only thing that can end the guest is the
+/// flag a teardown sets. The assertion is the exact [`StopReason`], not "it returned".
+#[test]
+fn a_running_guest_is_stopped_by_the_flag_a_teardown_sets_not_by_a_budget() {
+    use kayfabe_vmm_kvm::vcpu::StopReason;
+    let _wd = watchdog(
+        "a_running_guest_is_stopped_by_the_flag_a_teardown_sets_not_by_a_budget",
+        Duration::from_secs(120),
+    );
+    let (device, _pids, _rec) = mean_world(LockMode::Sharded);
+    let machine = real_machine();
+    let page = host_page();
+
+    let _code = machine
+        .install_ram_window(RGPA_CODE, page)
+        .expect("the code window");
+    let _probe = machine
+        .install_ram_window(RGPA_PROBE, page)
+        .expect("the probe window");
+    let mut vmm = machine.vmm();
+    vmm.gpa_write(
+        RGPA_CODE,
+        &kayfabe_tests::probe_loop_image(u32::try_from(RGPA_PROBE).expect("below 4 GiB")),
+    )
+    .expect("the image lands");
+    vmm.gpa_write(RGPA_PROBE, &vcpu_cookie(0).to_le_bytes())
+        .expect("the cookie lands");
+
+    let doorbell = Arc::new(kayfabe_tests::DoorbellDevice::new(
+        Arc::clone(&device),
+        vec![kayfabe_tests::DoorbellLane {
+            gpu: GPU0,
+            cookie: vcpu_cookie(0),
+            token: MockArch::token_for(lane_of(0).ce),
+        }],
+    ));
+    let mut runner = machine
+        .create_vcpu(0, Arc::clone(&doorbell) as _)
+        .expect("a real vCPU");
+    runner
+        .enter_at(
+            RGPA_CODE,
+            kayfabe_tests::DoorbellDevice::lane_gpa(RGPA_BAR0, 0),
+        )
+        .expect("flat protected mode");
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let reason = thread::scope(|sc| {
+        let s = Arc::clone(&stop);
+        // ★ u64::MAX exits: the budget CANNOT be what ends this run.
+        let t = sc.spawn(move || runner.run_until(&s, u64::MAX).expect("KVM_RUN"));
+        // Wait until the guest is provably running (a condition on ITS progress, never a
+        // sleep), then stop it — which is what every teardown path does.
+        let deadline = WallInstant::now() + Duration::from_secs(60);
+        while doorbell.tally().rang == 0 {
+            assert!(WallInstant::now() < deadline, "the guest never ran");
+            thread::yield_now();
+        }
+        stop.store(true, Ordering::Release);
+        t.join().expect("the vCPU thread joins")
+    });
+    assert_eq!(
+        reason,
+        StopReason::Stopped,
+        "★ a guest with an unbounded budget must end because the stop flag was set — the \
+         mechanism a teardown actually uses. `BudgetSpent` here would mean the composed \
+         run's stop path was never exercised at all"
+    );
+    assert!(
+        doorbell.tally().rang > 0 && doorbell.tally().cookie_mismatch == 0,
+        "and it was doing real work when it was stopped: {:?}",
+        doorbell.tally()
+    );
+}
+
+/// ★★ **Where a multi-span window's memslots point** — the other half of §14.8 F7(a),
+/// closing a bite-check that did not bite in the composed run because every window there
+/// is a single span.
+///
+/// A read-native overlay (§6.1 group 7) is the one thing that installs **three** memslots
+/// for one window: read-write either side of a page-aligned write-trap sub-range, and
+/// read-only across it. Only the second and third carry a nonzero window offset — so
+/// neutering that offset is invisible to any test whose windows all start at zero.
+///
+/// Here a guest reads out of the **third** span. If the install ignored the span's offset,
+/// that memslot would point at the window's base and the guest would read the first span's
+/// bytes instead, which the cookie makes unmistakable.
+#[test]
+fn a_guest_reading_from_a_read_native_windows_third_span_gets_that_spans_bytes() {
+    let _wd = watchdog(
+        "a_guest_reading_from_a_read_native_windows_third_span_gets_that_spans_bytes",
+        Duration::from_secs(120),
+    );
+    let (device, _pids, _rec) = mean_world(LockMode::Sharded);
+    let machine = real_machine();
+    let page = host_page();
+
+    // The code lives in an ordinary window; the overlay is what is under test.
+    let _code = machine
+        .install_ram_window(RGPA_CODE, page)
+        .expect("the code window");
+    let overlay_gpa = RGPA_PROBE;
+    let third_span = overlay_gpa + 2 * page;
+    let slot = {
+        let mut vmm = machine.vmm();
+        vmm.map_read_native(
+            overlay_gpa,
+            3 * page,
+            // `u64::MAX` is this backend's "fill it from nothing": the overlay's pages are
+            // the window's own anonymous ones, which is all this test needs.
+            kayfabe_vmm::HostRegion {
+                id: u64::MAX,
+                offset: 0,
+            },
+            Some(overlay_gpa + page..overlay_gpa + 2 * page),
+        )
+        .expect("a read-native overlay")
+    };
+    assert_eq!(
+        machine.audit().memslot_installs,
+        1 + 3,
+        "★ the overlay really installed THREE memslots — one per span. With one, the \
+         offset this test is about would not exist"
+    );
+
+    // The first span gets a decoy; the third gets the cookie the guest must present.
+    let mut vmm = machine.vmm();
+    vmm.gpa_write(overlay_gpa, &0xDECA_F000u32.to_le_bytes())
+        .expect("the decoy lands in the FIRST span");
+    vmm.gpa_write(third_span, &vcpu_cookie(1).to_le_bytes())
+        .expect("the cookie lands in the THIRD span");
+    vmm.gpa_write(
+        RGPA_CODE,
+        &kayfabe_tests::probe_loop_image(u32::try_from(third_span).expect("below 4 GiB")),
+    )
+    .expect("the image lands");
+
+    let doorbell = Arc::new(kayfabe_tests::DoorbellDevice::new(
+        Arc::clone(&device),
+        vec![kayfabe_tests::DoorbellLane {
+            gpu: GPU0,
+            cookie: vcpu_cookie(1),
+            token: MockArch::token_for(lane_of(0).ce),
+        }],
+    ));
+    let mut runner = machine
+        .create_vcpu(0, Arc::clone(&doorbell) as _)
+        .expect("a real vCPU");
+    runner
+        .enter_at(
+            RGPA_CODE,
+            kayfabe_tests::DoorbellDevice::lane_gpa(RGPA_BAR0, 0),
+        )
+        .expect("flat protected mode");
+    let stop = AtomicBool::new(false);
+    runner.run_until(&stop, 8).expect("KVM_RUN");
+
+    let t = doorbell.tally();
+    assert_eq!(
+        (t.cookie_mismatch, t.unbacked_cookie),
+        (0, 0),
+        "★ the guest read the THIRD span's bytes. A memslot installed at the window's base \
+         regardless of its span offset would have delivered the first span's decoy — which \
+         is exactly what `cookie_mismatch` counts. {t:?}"
+    );
+    assert!(
+        t.rang >= 1,
+        "★ NON-VACUITY: the guest presented the cookie at least once, so the equality above \
+         is about accesses that happened. {t:?}"
+    );
+    // And the overlay tears down as one window, memslots and all.
+    let mut vmm = machine.vmm();
+    vmm.unmap_guest(slot).expect("the overlay goes");
+    assert_eq!(
+        (machine.audit().live_memslots, machine.audit().live_windows),
+        (1, 1),
+        "removing the overlay removed all THREE of its memslots, leaving only the code \
+         window"
+    );
+}
+
+/// ★ **A wedged guest is LOUD.** Closing a bite-check that did not bite: mislabelling a
+/// faulted guest as "its budget ran out" was invisible, because no guest in the composed
+/// run ever faults — a classification whose input never occurs is a classification nothing
+/// tests.
+///
+/// So one is made to fault, in the way a real one does: entered at a guest-physical address
+/// no memslot covers, i.e. an instruction fetch from nothing. KVM cannot emulate that and
+/// says so, and the runner must carry the reason out by name rather than resuming a guest
+/// that has lost its way.
+#[test]
+fn a_guest_entered_at_an_address_with_no_memory_faults_by_name_and_is_never_resumed() {
+    use kayfabe_vmm_kvm::vcpu::StopReason;
+    let _wd = watchdog(
+        "a_guest_entered_at_an_address_with_no_memory_faults_by_name_and_is_never_resumed",
+        Duration::from_secs(120),
+    );
+    let (device, _pids, _rec) = mean_world(LockMode::Sharded);
+    let machine = real_machine();
+    let doorbell = Arc::new(kayfabe_tests::DoorbellDevice::new(
+        Arc::clone(&device),
+        vec![kayfabe_tests::DoorbellLane {
+            gpu: GPU0,
+            cookie: vcpu_cookie(0),
+            token: MockArch::token_for(lane_of(0).ce),
+        }],
+    ));
+    let mut runner = machine
+        .create_vcpu(0, Arc::clone(&doorbell) as _)
+        .expect("a real vCPU");
+    // Not one memslot exists on this machine: the very first instruction fetch has nowhere
+    // to come from.
+    runner
+        .enter_at(
+            RGPA_CODE,
+            kayfabe_tests::DoorbellDevice::lane_gpa(RGPA_BAR0, 0),
+        )
+        .expect("flat protected mode");
+
+    let stop = AtomicBool::new(false);
+    let reason = runner
+        .run_until(&stop, 64)
+        .expect("KVM_RUN itself succeeds");
+    assert!(
+        matches!(reason, StopReason::GuestFaulted(_)),
+        "★ a guest that cannot execute must be reported as FAULTED, by name. Reporting it \
+         as `BudgetSpent` or `Halted` would let a run where every guest died on its first \
+         instruction satisfy every count in the composed run above: {reason:?}"
+    );
+    assert_eq!(
+        runner.report().exits,
+        0,
+        "★ and it was never dispatched into the device: a guest that has lost its way is \
+         not something to resume, and nothing it 'did' reached the core"
+    );
+    assert_eq!(
+        machine.audit().guest_exits,
+        0,
+        "the device-wide exit counter agrees — the two instruments cannot drift"
+    );
+}

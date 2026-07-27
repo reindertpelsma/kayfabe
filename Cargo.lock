@@ -222,6 +222,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-shell"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-core",
+ "kayfabe-linux-raw",
+ "kayfabe-rt",
+ "kayfabe-util",
+]
+
+[[package]]
 name = "kayfabe-tests"
 version = "0.1.0"
 dependencies = [
@@ -234,6 +244,7 @@ dependencies = [
  "kayfabe-mmu",
  "kayfabe-mocks",
  "kayfabe-rt",
+ "kayfabe-shell",
  "kayfabe-util",
  "kayfabe-vmm",
  "kayfabe-vmm-kvm",

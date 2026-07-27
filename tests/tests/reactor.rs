@@ -12,6 +12,11 @@
 //! machinery of any kind. Signalling a source is `registry.dispatch(source)`. That is
 //! the §6.3 payoff — the completion flow is testable as a scripted order, with zero
 //! timing dependence.
+//!
+//! ★ **The other half lives in `reactor_os.rs`** (M2-d): the same model over real counter
+//! descriptors, a real readiness set, a real `epoll_wait` and real threads. The split is
+//! deliberate and is the §8.2 tier boundary — everything that can be a scripted order stays
+//! here, and only what genuinely needs an OS goes there.
 
 // PDB literals group by the hardware field (page-aligned), not by nibble quartets —
 // same convention as the rest of the suite.

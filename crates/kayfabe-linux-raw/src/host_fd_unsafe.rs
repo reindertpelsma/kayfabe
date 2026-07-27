@@ -17,7 +17,7 @@
 //!   *"there are none"* but *"there are exactly these, and each was argued"*.
 
 use crate::error::{RawError, last_syscall_error};
-use kayfabe_util::lockwitness;
+use kayfabe_util::{leafwitness, lockwitness};
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 
 /// Adopt a raw descriptor the kernel just returned, or report the `errno` that came
@@ -157,6 +157,46 @@ impl SharedRam {
     }
 }
 
+/// ★ How many descriptors this process may hold at once — the **real** soft limit, read
+/// from the kernel at startup.
+///
+/// `l1_os_shell.md` §3.8 requires this and says why: one armed guest os-event costs a
+/// descriptor in *our* process, so *"a hostile guest arming in a loop exhausts
+/// `RLIMIT_NOFILE` in the VMM process — which is not a contained refusal, it is a
+/// device-wide DoS (I4 violated) and quite possibly a VMM-wide one."* The core's cap is a
+/// named constant; **this** is the reality it must not be set optimistically past.
+///
+/// Reports the *soft* limit, because that is the one a descriptor allocation actually
+/// fails against. `RLIM_INFINITY` is reported as [`u64::MAX`] and is a real value on some
+/// containers, so callers must reserve a fraction rather than subtract a constant.
+///
+/// # Errors
+/// [`RawError::Syscall`].
+///
+/// # Panics
+/// If called with any ranked lock held (R1, §4.5).
+pub fn descriptor_budget() -> Result<u64, RawError> {
+    lockwitness::assert_lock_free("getrlimit(RLIMIT_NOFILE)");
+    leafwitness::assert_leaf_free("getrlimit(RLIMIT_NOFILE)");
+    let mut lim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: `lim` is a live `libc::rlimit` in this frame and `getrlimit` writes exactly
+    // that struct through the exclusive borrow taken on this line; the resource argument
+    // is an integer passed by value. The return value is checked below before any field
+    // is read.
+    let rc = unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, core::ptr::from_mut(&mut lim)) };
+    if rc < 0 {
+        return Err(last_syscall_error("getrlimit"));
+    }
+    // `rlim_t` is 64-bit on the targets we build for and 32-bit on some others; the
+    // conversion is therefore an identity here and a widening elsewhere, which is exactly
+    // the case `useless_conversion` cannot see across a `cfg`.
+    #[allow(clippy::useless_conversion)]
+    Ok(u64::try_from(lim.rlim_cur).unwrap_or(u64::MAX))
+}
+
 // =====================================================================================
 // Notifier — the ONE syscall this crate permits under a lock, and it is named so
 // =====================================================================================
@@ -177,6 +217,7 @@ impl Notifier {
     /// If called with any ranked lock held (R1, §4.5).
     pub fn create() -> Result<Self, RawError> {
         lockwitness::assert_lock_free("eventfd (creating a notify descriptor)");
+        leafwitness::assert_leaf_free("eventfd (creating a notify descriptor)");
         // SAFETY: this call takes two integers by value and dereferences no user memory.
         // `EFD_NONBLOCK` is what makes `signal_under_lock` below defensible: with it, the
         // only way the write can fail is the 64-bit counter saturating, which is a
@@ -253,6 +294,9 @@ impl Notifier {
 
     /// Drain the counter, returning how many signals had accumulated (0 if none).
     ///
+    /// ★ This is what makes level-triggered readiness self-clearing (§3.4(c)): the read
+    /// resets the counter, so the source stops being ready. A reactor that skips it spins.
+    ///
     /// # Errors
     /// [`RawError::Syscall`] for anything other than "empty", which is `Ok(0)`.
     ///
@@ -260,6 +304,7 @@ impl Notifier {
     /// If called with any ranked lock held (R1, §4.5).
     pub fn drain(&self) -> Result<u64, RawError> {
         lockwitness::assert_lock_free("a notify-descriptor read (draining a source)");
+        leafwitness::assert_leaf_free("a notify-descriptor read (draining a source)");
         let mut buf = [0u8; 8];
         // SAFETY: `buf` is a live 8-byte array in this frame and `read` writes at most
         // `buf.len()` bytes into it — the length is computed here from the array itself.

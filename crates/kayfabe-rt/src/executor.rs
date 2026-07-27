@@ -108,3 +108,136 @@ impl Executor {
         out
     }
 }
+
+// =====================================================================================
+// ★ §3.7 — the executor is its own thread, and its wake is abstracted NOW
+// =====================================================================================
+
+/// ★ How the executor is told there is work — `l1_os_shell.md` §3.7.
+///
+/// > *"Four lines, and it is the difference between L2 being an adapter and L2 being a
+/// > re-plumb of the inbox. This is the cheapest anti-bolt-on in the doc; take it."*
+///
+/// The §3.7 amendment (2026-07-26) settled that both backends can use the **same**
+/// primitive — under the ≥ 10.2 floor neither QEMU entry path arrives holding a foreign
+/// lock — and then said the trait survives the amendment intact, *"which is the point of
+/// having abstracted it: the argument for it was never that the two impls differ."* So
+/// this stays a trait, with one implementation ([`Parker`]) and a named seam.
+pub trait ExecutorWaker: Send + Sync + core::fmt::Debug {
+    /// Tell the executor there is work. **Must not block and must not fail** — it is
+    /// called from the reactor loop between two readiness reports.
+    fn wake(&self);
+}
+
+/// The harness's [`ExecutorWaker`]: a condition variable and a monotonic wake sequence.
+///
+/// ## ★ Why the sequence number, and not just the condvar
+///
+/// A condvar alone loses the wake that lands between "the executor found the inbox empty"
+/// and "the executor parked" — the classic lost-wakeup, which here presents as a hung
+/// device and an idle CPU, i.e. exactly the F3 class this project exists to prevent. The
+/// sequence is the state the wait predicate is over: [`Parker::park`] takes the sequence
+/// the caller last observed and returns only when it has moved (or the deadline passes,
+/// or shutdown is requested). A wake that arrives early bumps the sequence, so the park
+/// returns immediately rather than waiting for a wake that already happened.
+#[derive(Debug, Default)]
+pub struct Parker {
+    state: std::sync::Mutex<ParkState>,
+    signal: std::sync::Condvar,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct ParkState {
+    seq: u64,
+    stopping: bool,
+}
+
+impl Parker {
+    /// A fresh parker, not stopping.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The current wake sequence — read it *before* draining, pass it to [`Parker::park`]
+    /// after, and no wake can fall in the gap.
+    #[must_use]
+    pub fn sequence(&self) -> u64 {
+        self.state.lock().expect("parker").seq
+    }
+
+    /// Ask the executor to stop and wake it. Idempotent.
+    pub fn stop(&self) {
+        let mut st = self.state.lock().expect("parker");
+        st.stopping = true;
+        st.seq += 1;
+        drop(st);
+        self.signal.notify_all();
+    }
+
+    /// True once [`Parker::stop`] has been called.
+    #[must_use]
+    pub fn is_stopping(&self) -> bool {
+        self.state.lock().expect("parker").stopping
+    }
+
+    /// Park until the wake sequence moves past `observed`, `timeout` elapses, or shutdown
+    /// is requested. Returns the sequence now current.
+    ///
+    /// # Panics
+    /// If called with any ranked lock or any adapter leaf lock held: parking is the
+    /// single most blocking thing the executor does, and R1 admits no exception for it.
+    pub fn park(&self, observed: u64, timeout: core::time::Duration) -> u64 {
+        kayfabe_util::lockwitness::assert_lock_free("parking the executor");
+        kayfabe_util::leafwitness::assert_leaf_free("parking the executor");
+        let st = self.state.lock().expect("parker");
+        let (st, _) = self
+            .signal
+            .wait_timeout_while(st, timeout, |s| s.seq == observed && !s.stopping)
+            .expect("parker");
+        st.seq
+    }
+}
+
+impl ExecutorWaker for Parker {
+    fn wake(&self) {
+        let mut st = self.state.lock().expect("parker");
+        st.seq += 1;
+        drop(st);
+        self.signal.notify_all();
+    }
+}
+
+impl Executor {
+    /// ★ The executor's own loop: drain everything, then park until woken.
+    ///
+    /// The order is the whole lost-wakeup argument and is not an implementation detail:
+    /// **read the sequence, drain, park on the sequence you read.** A wake that arrives
+    /// during the drain has already moved the sequence, so the park returns at once.
+    ///
+    /// `on_effect` is called for every drained event, on this thread, with no lock held —
+    /// which is where the §6.5 delivery tail (encode → `gpa_write` → IRQ) belongs.
+    pub fn run_until_stopped(
+        &mut self,
+        parker: &Parker,
+        poll_interval: core::time::Duration,
+        mut on_effect: impl FnMut(Effect),
+    ) {
+        loop {
+            let seq = parker.sequence();
+            for effect in self.drain_all() {
+                on_effect(effect);
+            }
+            if parker.is_stopping() {
+                // ★ One final drain AFTER observing the stop: an event pushed between the
+                // drain above and the stop flag being read would otherwise be abandoned,
+                // and §7's teardown ledger counts events that name dead procs (R9).
+                for effect in self.drain_all() {
+                    on_effect(effect);
+                }
+                return;
+            }
+            parker.park(seq, poll_interval);
+        }
+    }
+}

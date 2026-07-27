@@ -8,8 +8,10 @@
 //! as abstract `RmEvent`s, with helpers to build the exact shapes the design docs
 //! name (a compute process, a UVM dup, two processes with identical VAs/handles).
 
+pub mod guest;
 pub mod teardown;
 
+pub use guest::{DeviceTally, DoorbellDevice, Lane as DoorbellLane, probe_loop_image};
 pub use teardown::{Guarded, ResidueClaim, TeardownView, audit_teardown, unpublish_and_release};
 
 use kayfabe_arch::ClientKind;

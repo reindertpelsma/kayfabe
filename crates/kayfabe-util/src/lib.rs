@@ -21,6 +21,7 @@
 //!   integer ranks, no notion of what a device or a proc is.
 
 pub mod interval_map;
+pub mod leafwitness;
 pub mod lockwitness;
 pub mod time;
 

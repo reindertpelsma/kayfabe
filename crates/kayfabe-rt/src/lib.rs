@@ -69,4 +69,6 @@ kayfabe_util::assert_send_sync!(
     inbox::Inbox,
     executor::Effect,
     executor::Executor,
+    executor::Parker,
 );
+kayfabe_util::assert_send_sync!(dyn executor::ExecutorWaker);

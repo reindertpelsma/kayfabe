@@ -91,6 +91,29 @@ use crate::ProcId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CompletionSource(u64);
 
+impl CompletionSource {
+    /// ★ The handle's value, for an adapter that must key an **OS readiness registration**
+    /// on it (`l1_os_shell.md` §3.2).
+    ///
+    /// > *"Register the source with `data` = the `CompletionSource`'s value. The loop's
+    /// > 'table lookup' is the identity function."*
+    ///
+    /// The readiness API carries 64 bits of caller-chosen data per registration, and this
+    /// is what the adapter puts there. It is the **whole** reason O3 dies: a descriptor
+    /// number can be recycled by the kernel the instant it is closed, and this value never
+    /// can, so a stale readiness report resolves to a deregistered handle rather than
+    /// re-binding onto whatever was armed next.
+    ///
+    /// **There is deliberately no inverse.** `from_token` would let anything mint a
+    /// handle, and the one property this type has is that only [`SourceRegistry::register`]
+    /// does. An adapter that needs the round trip keeps its own table — which it needs
+    /// anyway, to hold the descriptor.
+    #[must_use]
+    pub fn as_token(self) -> u64 {
+        self.0
+    }
+}
+
 /// What a completion source *is* — the source classes of §6.1, **all of them from
 /// day one** so adding the next one is a list entry, not a redesign.
 ///

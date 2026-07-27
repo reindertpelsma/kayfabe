@@ -123,6 +123,26 @@
 //! documented on the private type that owns it and is established by its two constructors,
 //! both of which are `mmap` return values in this same file.
 //!
+//! ## ★★ Every syscall asserts BOTH witnesses (§4.5, extended at M2-d)
+//!
+//! §4.5 says *"every raw entry point asserts the lockwitness"*, and until M2-d that meant
+//! one witness: `kayfabe_util::lockwitness`, over the core's **ranked** locks. M2-c then
+//! found (§14.8 F1) that an adapter's own lock has no rank and is therefore invisible to
+//! it, and built a second, thread-local witness inside `kayfabe-vmm-kvm`.
+//!
+//! **A bite-check at M2-d showed that placing the second witness in the adapter is not
+//! enough, and the reason generalises:** the KVM adapter asserts it once per method, at its
+//! own execute phase, so *deleting that one line* is undetectable — there is no second line
+//! of defence, and every future adapter starts with the same single point of enforcement.
+//! (The reactor's registrar was written with exactly that shape and the bite passed
+//! silently: `epoll_ctl` under the registrar's unranked table lock, with every assert in
+//! the workspace green.)
+//!
+//! So the second witness moved to [`kayfabe_util::leafwitness`] and is asserted **here**,
+//! at the syscall, beside the ranked one — which is what §4.5 always said and what makes
+//! it structural: an adapter that forgets its own assert is still caught, because the
+//! syscall itself refuses.
+//!
 //! ## Volatile versus atomic (§4.3)
 //!
 //! `l1_concurrency.md` §9.1 called this *"volatile access to concurrently-GPU-written
@@ -208,12 +228,19 @@
 //! - **The double-mmap of guest RAM into an isolate.** [`Reservation`] is the mechanism it
 //!   needs and [`SharedRam::dup_for_export`] is the descriptor half; the isolate side is
 //!   M2-d. Its unstated precondition is stated at [`Backing::PrivateAnonymous`].
-//! - **vCPUs.** [`Kvm`] creates a VM and installs memslots and nothing else — no
-//!   `KVM_CREATE_VCPU`, no `KVM_RUN`, no exit dispatch. M2-c is the **memory plane**; a
-//!   vCPU would put a second unbuilt subsystem in the diff meant to answer one question.
-//! - **`epoll` and `timerfd`.** The reactor's OS half (M2-d). The **notify descriptor**
-//!   ([`Notifier`]) landed at M2-c because `Vmm::raise_irq` needed it, and it is where
-//!   §4.5's one named `*_under_lock` exception lives.
+//! - ~~**vCPUs.**~~ **Landed at M2-d** as [`KvmVcpu`] / [`VcpuExit`]: `KVM_CREATE_VCPU`,
+//!   the shared run structure, `KVM_RUN`, and the MMIO exit in both directions. The
+//!   *dispatch* into a device lives one crate up; this is the plumbing.
+//! - ~~**`epoll`**~~ **Landed at M2-d** as [`Poller`] — level-triggered, keyed on a
+//!   caller-chosen 64-bit token that is deliberately **not** the descriptor (§3.2). The
+//!   **notify descriptor** ([`Notifier`]) landed at M2-c because `Vmm::raise_irq` needed
+//!   it, and it is where §4.5's one named `*_under_lock` exception lives.
+//! - **`timerfd`.** Still absent, and deliberately: both `Vmm` implementations drive
+//!   `defer` off an explicit virtual clock (`kayfabe_vmm::DeferQueue` is *"an
+//!   accumulator, not a scheduler"*), so a real deadline descriptor would buy nothing
+//!   today and would make every suite that composes this backend non-deterministic —
+//!   which §8.3 forbids. It becomes real when something outside a test has to be woken by
+//!   a deadline nobody is waiting on.
 //! - **`Send`/`Sync` for the region types.** Still not implemented for
 //!   [`MappedRegion`]/[`VolatileRegion`]/[`Reservation`], deliberately — the compiler
 //!   holds the thread contract for free until a caller needs it
@@ -237,6 +264,7 @@ compile_error!(
 
 pub mod bounds;
 pub mod cache;
+mod epoll_unsafe;
 pub mod error;
 pub mod geometry;
 mod host_fd_unsafe;
@@ -244,17 +272,20 @@ mod kvm_unsafe;
 mod mapping_unsafe;
 pub mod page_size;
 mod sysconf_unsafe;
+mod vcpu_unsafe;
 pub mod view;
 mod window_unsafe;
 
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
+pub use epoll_unsafe::{MAX_READY_BATCH, PollTimeout, Poller, ReadyTokens};
 pub use error::RawError;
-pub use host_fd_unsafe::{Notifier, SharedRam};
+pub use host_fd_unsafe::{Notifier, SharedRam, descriptor_budget};
 pub use kvm_unsafe::{Kvm, KvmMemslot, KvmVm};
 pub use mapping_unsafe::{
     Backing, HostProt, MappedRegion, PlacementId, Reservation, VolatileRegion,
 };
 pub use page_size::HostPageSize;
+pub use vcpu_unsafe::{KvmVcpu, VcpuExit};
 pub use view::RegionView;
 pub use window_unsafe::GuestWindow;
