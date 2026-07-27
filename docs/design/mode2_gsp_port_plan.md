@@ -1369,3 +1369,54 @@ Spot-checkable index. `ogkm` = `/workspace/nvidia-gpu-passthrough/research_clone
 | GFW_BOOT / PLM register addresses | ogkm | `src/common/inc/swref/published/turing/tu102/dev_gc6_island{,_addendum}.h` |
 | `_kgspBootGspRm` fails early if WPR2 up | ogkm | `kernel_gsp.c:4804-4812` |
 | the two post-INIT_DONE RPCs (`SET_GUEST_SYSTEM_INFO`, `GET_GSP_STATIC_INFO`) | ogkm | `kernel_gsp.c:5153-5165` |
+
+---
+
+## ★★ GOVERNING DIRECTIVE (owner, 2026-07-27) — port what the C proved, fix only what is bugged
+
+> *"use regular traps. build the thing C proved work if it's not bugged."*
+
+This outranks any cleverness in this document. Two halves:
+
+### 1. Regular traps — no exotic memory mechanism
+
+Guest register and mailbox accesses arrive through the **ordinary MMIO trap path**, which is what
+the C does and what `kayfabe-vmm-kvm`'s memory plane already implements. Do **not** reach for
+userfaultfd, `mprotect`, permanently-read-only regions, or any other page-protection scheme for
+the GSP path.
+
+This is now backed by measurement rather than preference
+(`../reference/uffd_isolate_kvm_study.md`): the C **never blocked a write anywhere** — uffd has
+zero implementation there, its "demand-fault" path is dead code, and its actual TOCTOU defence is
+a **copy-once snapshot** (audit item P2-2, `C: src/qemu/virtio_nvgpu.c:626-663`). That design
+ships, is audited twice, and runs 22 real GPU apps at host parity. Combined with
+`gl11_region_arguments.md` and §3.4 above answering **NO** to the lock question for the whole boot
+path, the position is: **traps + copy-once is the proven design; the region lock is a capability
+held for a case we have not met.**
+
+### 2. Port the proven behaviour; deviate only where the C is demonstrably wrong
+
+The C is a **working implementation on real hardware** — that is evidence no amount of reasoning
+replaces. The default is therefore to reproduce its behaviour, and every deviation must name the
+defect it is correcting. The deviations this plan is authorised to make, each with its evidence:
+
+| deviate | because | evidence |
+|---|---|---|
+| the reset/latch chain | four disagreeing reset sites; a teardown STARTCPU misclassified as a re-acquire re-latches `bootargs_dumped`/`q_ready` and wedges the next life | `[measured]` bench, and `msgqRxLink`'s `-7` has exactly one cause (§ above) |
+| RPC element parsing | parses arbitrary guest RAM as RPC elements and echoes `NV_OK`; unguarded `% q_msgcount` is a SIGFPE | `[measured]`, guest-reachable by reloading its own driver |
+| msgq addressing | the region is `NV_MEMORY_NONCONTIGUOUS` and self-describing via a page table in its own first page; the C addresses it **linearly** and works only because the allocation happened to be contiguous | `[src]` |
+| the version key | ~15 hard-coded offsets and no version key; the element layout genuinely changed in `(570, 610]` | `[src]` D1/D3 |
+| `rpc.length = 36` | header is 32; the same file uses 32 in two other places | `[src]` |
+
+**Anything not in that table is ported, not redesigned.** If the build turns up a further defect,
+add a row with its evidence — do not deviate silently, and do not deviate because a different
+shape would be tidier. "It's cleaner" is inadmissible here for the same reason it is inadmissible
+in the MUST-DIFFER ledger (§ trace format): without a guest-visible consequence and an independent
+oracle, a deviation is an untested guess dressed as an improvement.
+
+### Why this ordering is right
+
+The C's bugs are **enumerable** — we found them by measurement and by reading, and each has a
+citation. Its correct behaviour is **not** enumerable: it encodes hundreds of quirks nobody wrote
+down, discovered over months against real silicon. Reproducing it and subtracting the known
+defects keeps the quirks. Rewriting from the protocol keeps only what we thought to look for.
