@@ -1,8 +1,16 @@
 # `kayfabe-gsp` — the faked-GSP port plan
 
-> **Status: DESIGN. No code was written and no bench was touched producing this.**
-> `kayfabe-gsp` is a 34-line skeleton (`crates/kayfabe-gsp/src/lib.rs`); this file is the
-> spec it gets built against.
+> **Status (★ corrected 2026-07-27, was "DESIGN … a 34-line skeleton"): S0–S5 ARE BUILT.**
+> `kayfabe-gsp` is **~3,550 lines across 8 files**; §13 records what landed. This file began
+> as the spec and is now **spec + build log** — read §13 before trusting §1–§12, because the
+> build settled several things the spec had marked `[inferred]`.
+>
+> **S6–S8 remain unbuilt and need the bench.** No bench was touched producing any of this.
+>
+> *(Found by the S6 agent while surveying: the header still advertised a skeleton after the
+> crate was written. Exactly the append-only failure `testing_doctrine.md` §6 describes — the
+> build log at the bottom was right and the header at the top, which is what a reader meets
+> first, was not.)*
 
 ## 0. How to read this file
 
