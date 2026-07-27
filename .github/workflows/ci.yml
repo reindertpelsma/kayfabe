@@ -196,6 +196,93 @@ jobs:
             echo "is no allowlist, and there is nothing to argue about in review."
             exit 1
           fi
+      # ★ The GENERATION-NAME gate (CLAUDE.md rule 1, decision #37's third axis) — the
+      # third vocabulary gate, and the one that was DOCUMENTED BUT ABSENT. CLAUDE.md has
+      # said "Grep gate (CI): no `Ampere|Turing|Hopper|Blackwell|Ada|V5\d\d` in any logic
+      # crate" since the repo was founded; ci.yml never had it, and on 2026-07-27 two
+      # independent agents went looking for it and found nothing. A gate that exists only
+      # in a rulebook is the same green-instrument-on-an-unexercised-path this suite is
+      # about, one level up: nobody was reading it, so nobody could see it was not there.
+      #
+      # The rule it enforces: **a concrete GPU generation or driver version is a fact about
+      # ONE chip, and one chip's facts live in an arch-impl crate.** Rule 2 is that adding
+      # a generation costs `impl Arch for <Gen>` plus maybe one `GmmuFmt`, with ZERO edits
+      # to any logic crate; the moment a logic crate can say the chip's name, that
+      # invariant is enforceable only by review.
+      #
+      # Three scope decisions, each of which had to go the way it did:
+      #
+      # 1. **`kayfabe-abi` is OUT** — the one deliberate difference from the hexagonal
+      #    gate's `pure=` list, which is otherwise copied verbatim so the lists stay in
+      #    sync. Axis A quarantine (CLAUDE.md rule 1) puts the concrete driver version in
+      #    `kayfabe-abi` ON PURPOSE: `kayfabe-abi/src/lib.rs:11` says so in as many words,
+      #    and the crate is built out of `V575`/`NVOS46_PARAMETERS_V580` version tables.
+      #    Running this gate over it would fail on ~15 lines that are the crate's whole
+      #    reason to exist. The GPA-accessor gate below already sets the precedent for a
+      #    documented scope difference; this is the second.
+      # 2. **Comment lines are OUT** — the deliberate departure from the other gates'
+      #    "prose counts" rule, and it is a departure, so here is the evidence. The pure
+      #    crates carry 14 generation-name mentions today and every one is legitimate:
+      #    `kayfabe-arch/src/gsp.rs` cites `ogkm`'s per-generation source files by path
+      #    (`gsp/arch/turing/kernel_gsp_tu102.c`, `falcon/arch/ampere/kernel_falcon_ga102.c`)
+      #    — those citations ARE the ground truth this crate is derived from, and a rule
+      #    that forbade them would mean deriving the traits from an unnameable source;
+      #    and `kayfabe-arch/src/lib.rs:20-24, 349` TEACHES rule 2 by writing out
+      #    `struct Ampere; impl Arch for Ampere` in a doc example, i.e. the prose that
+      #    would trip the gate is the prose that states the gate. Prose counts where prose
+      #    is rephrasable (the hexagonal gate: "eventfd" -> "notifiable source"); a source
+      #    citation is not rephrasable, so here it does not.
+      #    ★ The consequence is stated so nobody has to rediscover it: a chip name hidden
+      #    in a trailing comment on a code line still trips this gate (the filter drops
+      #    whole comment LINES, not trailing ones), and a chip name in a `///` doc line
+      #    does not. If that ever stops being true — if a leak arrives dressed as a doc —
+      #    the fix is a narrower filter, never a wider allowlist.
+      # 3. **Anchors, per name, for the same reason the VMM gate anchors its two English
+      #    idioms.** Most names carry a LEADING \b and no trailing one, so `ampere_pte`,
+      #    `turingFmt` and `HopperGmmu` are all caught — an identifier is exactly how a
+      #    chip fact actually leaks. Three names are the exception and carry BOTH anchors,
+      #    because each is a prefix of ordinary vocabulary this repo uses constantly:
+      #    `Ada` ("adapter", "adaptive"), `Volta` ("voltage"), `Pascal` (`pascal_case`,
+      #    "PascalCase"). A gate that fires on the word "adapter" in a hexagonal-
+      #    architecture codebase is a gate that gets muted within the day.
+      #
+      # Exit-code polarity: `grep -r` exits 0 on a HIT and a hit is the FAILURE case, as at
+      # every gate here. This one needs a second filter stage, so it takes the
+      # unsafe-surface gate's form instead of the `if grep` form — captured output, the
+      # pipeline ending in `|| true` (without it, `grep -v` exiting 1 on "everything was
+      # filtered" — the SUCCESS case — would abort the step under `set -e` and the gate
+      # would pass by crashing), and the verdict as `[ -n "$hits" ]`.
+      - name: Generation-name gate (no concrete chip or driver version in the logic crates)
+        run: |
+          pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
+                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
+                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
+                crates/kayfabe-vmm"
+          hits=$(grep -rniE \
+            '\b(kepler|maxwell|turing|ampere|lovelace|hopper|blackwell|rubin)|\b(ada|pascal|volta)\b|\b(g[kmpvab][0-9]{3}|tu1[0-9]{2}|ad1[0-9]{2}|gh[0-9]{3}|v[56][0-9]{2})\b' \
+            $pure | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|/\*|\*)' || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo ""
+            echo "★ GENERATION-NAME BREACH — CLAUDE.md rule 1."
+            echo "The lines above name a concrete GPU generation, chip or driver version"
+            echo "in a PURE LOGIC crate. That is one chip's fact, and rule 2 is that a"
+            echo "chip's facts cost an adapter and ZERO logic-crate edits. What to do:"
+            echo "  - a value that differs per generation -> put it behind a kayfabe-arch"
+            echo "    TRAIT (Arch / GmmuFmt / UserdModel), and give it a name that says"
+            echo "    what it MEANS, not which chip has it."
+            echo "  - the concrete number itself       -> an arch-impl crate"
+            echo "    (\`impl Arch for <Gen>\`), never a logic crate. kayfabe-mocks::MockArch"
+            echo "    is the standing proof the seam holds without one."
+            echo "  - a concrete DRIVER version        -> kayfabe-abi (Axis A quarantine),"
+            echo "    which is out of scope here precisely because that is its job."
+            echo "  - an \`ogkm\` source citation        -> keep it, on its OWN comment line."
+            echo "    Whole comment lines are out of scope; a trailing comment on a code"
+            echo "    line is not."
+            echo "Never widen the pattern to make a leak fit: the whole value of this gate"
+            echo "is that the answer is always 'move it', never 'allow it here'."
+            exit 1
+          fi
       # ★ The UNSAFE-SURFACE gate — the auditability rule, landed while it is free.
       #
       # The workspace is `unsafe_code = "forbid"` (root `Cargo.toml`,

@@ -8090,14 +8090,41 @@ fn a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_dea
             "({name}) ★ EXACTLY the signals the producers sent: {RSIGNALS} counter writes \
              plus the one worker HUP. Coalescing moves the wake count, never this. {s:?}"
         );
+        // ★ The control channel is an instrument too, and until 2026-07-27 it was the one
+        // instrument in this block nothing asserted — which is exactly how it went missing
+        // from the bound below. `ReactorHandle::shutdown` is the only thing in this harness
+        // that signals it (`wake()` is never called here), and the teardown calls it once.
+        assert_eq!(
+            s.control_reports, 1,
+            "({name}) ★ EXACTLY the one control wake this run performs — the teardown's \
+             `shutdown()`. It is asserted rather than merely added to the bound below, \
+             because an unbounded control term would turn that bound into a free pass. \
+             {s:?}"
+        );
+        // ★★ THE BOUND INCLUDES THE CONTROL WAKES — and it did not until 2026-07-27, when
+        // this assertion was caught flaking at 1-in-20 under CPU contention (`wakes: 152`
+        // against a `RSIGNALS + 1` = 151 ceiling; reproduced on an unmodified tree, so it
+        // predates the change that found it). It was an off-by-one in the TEST, not a
+        // reactor bug: `ReactorStats::wakes`'s own doc says "bounded above by the number of
+        // signals sent **plus the control wakes**", and the hardcoded `RSIGNALS + 1` had
+        // dropped the second term. Under most schedules the shutdown wake coalesces into a
+        // wait that also carried a signal and the count stays under 151; under load it
+        // arrives alone and does not.
+        //
+        // A flake here is not cosmetic: a red test in an UNMUTATED tree aborts
+        // `cargo mutants` outright, which is the same way the fetch-from-nothing test was
+        // blocking the mutation gate on the bench.
         assert!(
-            s.wakes >= 1 && s.wakes <= RSIGNALS + 1,
-            "({name}) ★ the F1 quantity: {} wakes for {} signals. The upper bound is what \
-             an undrained level-triggered source blows through without limit — and the \
-             never-signalled source in this run contributes ZERO to it, which is the other \
-             polarity. {s:?}",
+            s.wakes >= 1 && s.wakes <= s.signals_pushed + s.control_reports,
+            "({name}) ★ the F1 quantity: {} wakes for {} signals plus {} control wakes. \
+             The upper bound is what an undrained level-triggered source blows through \
+             without limit — and the never-signalled source in this run contributes ZERO \
+             to it, which is the other polarity. Both terms are pinned exactly by the two \
+             assertions above, so this stays a real ceiling and not an arithmetic \
+             identity. {s:?}",
             s.wakes,
-            RSIGNALS + 1,
+            s.signals_pushed,
+            s.control_reports,
         );
         assert_eq!(
             (s.undrained_reports, s.stale_reports),
@@ -8386,11 +8413,45 @@ fn a_guest_reading_from_a_read_native_windows_third_span_gets_that_spans_bytes()
 /// no memslot covers, i.e. an instruction fetch from nothing. KVM cannot emulate that and
 /// says so, and the runner must carry the reason out by name rather than resuming a guest
 /// that has lost its way.
+///
+/// ★★ **The assertion is the END-STATE, not the host's mechanism** (2026-07-27). This test
+/// used to assert `KVM_RUN itself succeeds` and then match the stop reason. That is a claim
+/// about *how the host reported the fault*, and it is **host-dependent** — measured on two
+/// boxes:
+///
+/// - **7.0.0-14, AMD/SVM** (dev box): `KVM_RUN` succeeds and the fault arrives as an
+///   ordinary exit, so the runner returns `Ok(StopReason::GuestFaulted(..))`.
+/// - **6.8.0-124** (the GPU bench): `KVM_RUN` is refused outright and the runner returns
+///   `Err(VmmError::HostRefused { what: "entering the guest", .. })`, errno 28.
+///
+/// ★ The two boxes differ in **kernel version AND host CPU vendor**, and which of the two
+/// is the discriminator has NOT been measured — a `KVM_RUN` refusal on a VM with zero user
+/// memslots is the shape of VMX's private rmode/identity-map setup, which has no SVM
+/// counterpart, so "6.8 vs 7.0" is a plausible label for an Intel-vs-AMD fact. Do not
+/// quote it as a kernel-version finding; it is a host-divergence finding with two live
+/// candidates. Either way it is a *mechanism*, which is exactly why the assertion below is
+/// not about one.
+///
+/// Same fact, two reports. The old shape did not merely fail on the bench: because that box
+/// has `/dev/kvm`, this test *ran* there, panicked, and `cargo mutants` aborted with
+/// "cargo test failed in an unmutated tree" — a host detail was blocking the whole
+/// mutation gate.
+///
+/// The durable claim is **"the guest is never resumed"**, and it is asserted *outside* the
+/// match so it holds whichever way the kernel reported. Both arms are still exact
+/// (`testing_doctrine.md` §2 rule 3): neither is `is_err()` and neither is
+/// `matches!(.., _)` — a third outcome (`BudgetSpent`, `Halted`, a refusal of some *other*
+/// operation) still fails. What is deliberately **not** pinned is the `errno` number: that
+/// is one level further into the mechanism than the thing this fix is about, and it is the
+/// only field here that was not measured on the box running the assertion. It is asserted
+/// *present* and printed instead.
 #[test]
 fn a_guest_entered_at_an_address_with_no_memory_faults_by_name_and_is_never_resumed() {
     kayfabe_linux_raw::require_kvm!(
         "a_guest_entered_at_an_address_with_no_memory_faults_by_name_and_is_never_resumed"
     );
+    use kayfabe_linux_raw::VcpuExit;
+    use kayfabe_vmm::VmmError;
     use kayfabe_vmm_kvm::vcpu::StopReason;
     let _wd = watchdog(
         "a_guest_entered_at_an_address_with_no_memory_faults_by_name_and_is_never_resumed",
@@ -8419,25 +8480,97 @@ fn a_guest_entered_at_an_address_with_no_memory_faults_by_name_and_is_never_resu
         .expect("flat protected mode");
 
     let stop = AtomicBool::new(false);
-    let reason = runner
-        .run_until(&stop, 64)
-        .expect("KVM_RUN itself succeeds");
-    assert!(
-        matches!(reason, StopReason::GuestFaulted(_)),
-        "★ a guest that cannot execute must be reported as FAULTED, by name. Reporting it \
-         as `BudgetSpent` or `Halted` would let a run where every guest died on its first \
-         instruction satisfy every count in the composed run above: {reason:?}"
-    );
+    // ★ TWO EXACT ARMS, one per measured host report. Not a disjunction weakened to
+    // "something went wrong": each arm names precisely what it accepts.
+    match runner.run_until(&stop, 64) {
+        Ok(reason) => assert_eq!(
+            reason,
+            StopReason::GuestFaulted(VcpuExit::InternalError),
+            "★ a guest that cannot execute must be reported as FAULTED, by name, carrying \
+             the exit KVM gave. Reporting it as `BudgetSpent` or `Halted` would let a run \
+             where every guest died on its first instruction satisfy every count in the \
+             composed run above. A DIFFERENT `VcpuExit` here is also a finding, not a \
+             nuisance: it means this kernel classifies a fetch-from-nothing some other \
+             way, and the arm should be widened to that measured variant BY NAME — never \
+             to `GuestFaulted(_)`"
+        ),
+        Err(VmmError::HostRefused { what, errno }) => {
+            assert_eq!(
+                what, "entering the guest",
+                "★ the refusal must be the one from `KVM_RUN` itself. A `HostRefused` \
+                 naming some OTHER operation means this test faulted somewhere it did not \
+                 intend to and would be green for the wrong reason"
+            );
+            assert!(
+                errno.is_some(),
+                "★ NON-VACUITY on the refusal: the host's error number survived the port \
+                 into `VmmError` (that is the whole reason `HostRefused` carries one \
+                 rather than being an `Unsupported(&str)`). A refusal that reached us as \
+                 'it failed' with no number would make this arm unfalsifiable"
+            );
+        }
+        other => panic!(
+            "★ a guest entered with NO memory has exactly two measured outcomes — KVM \
+             admits it and reports the fault as an exit (7.0.0-14/AMD), or KVM refuses \
+             the entry (6.8.0-124). This is a third. Measure it, then add a THIRD EXACT \
+             ARM; do not relax the two above: {other:?}"
+        ),
+    }
     assert_eq!(
         runner.report().exits,
         0,
-        "★ and it was never dispatched into the device: a guest that has lost its way is \
-         not something to resume, and nothing it 'did' reached the core"
+        "★ THE CLAIM, and it is asserted outside the match so it holds whichever way the \
+         kernel reported: it was never dispatched into the device. A guest that has lost \
+         its way is not something to resume, and nothing it 'did' reached the core"
     );
     assert_eq!(
         machine.audit().guest_exits,
         0,
         "the device-wide exit counter agrees — the two instruments cannot drift"
+    );
+
+    // ---- ★ NON-VACUITY, in-test: the two zeros above are LIVE INSTRUMENTS.
+    //
+    // Every assertion so far is `== 0`, and a counter that can never be anything else
+    // satisfies all of them. So the same machine, the same audit and a second vCPU are
+    // made to do the thing the first one could not — with memory this time — and both
+    // instruments must move. Without this, a `run_until` that returned before entering the
+    // guest at all, or a `report()` wired to a constant, would be indistinguishable from
+    // the property under test.
+    let page = host_page();
+    let _code = machine
+        .install_ram_window(RGPA_CODE, page)
+        .expect("the code window");
+    let _probe = machine
+        .install_ram_window(RGPA_PROBE, page)
+        .expect("the probe window");
+    {
+        let mut vmm = machine.vmm();
+        vmm.gpa_write(
+            RGPA_CODE,
+            &kayfabe_tests::probe_loop_image(u32::try_from(RGPA_PROBE).expect("below 4 GiB")),
+        )
+        .expect("the image lands");
+        vmm.gpa_write(RGPA_PROBE, &vcpu_cookie(0).to_le_bytes())
+            .expect("the cookie lands");
+    }
+    let mut live = machine
+        .create_vcpu(1, Arc::clone(&doorbell) as _)
+        .expect("a second real vCPU");
+    live.enter_at(
+        RGPA_CODE,
+        kayfabe_tests::DoorbellDevice::lane_gpa(RGPA_BAR0, 0),
+    )
+    .expect("flat protected mode");
+    let go = AtomicBool::new(false);
+    live.run_until(&go, 8).expect("the BACKED guest runs");
+    assert!(
+        live.report().exits > 0 && machine.audit().guest_exits > 0,
+        "★ NON-VACUITY: a vCPU that DOES have memory moved both counters, so the two \
+         `== 0` assertions above are about instruments that can be non-zero — they are \
+         the guest not being resumed, not a counter that never counts. {:?} / {}",
+        live.report(),
+        machine.audit().guest_exits
     );
 }
 
