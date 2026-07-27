@@ -781,4 +781,475 @@ mod tests {
             "after one allocation the arena is touched"
         );
     }
+
+    // ==========================================================================
+    // ★★ ADDRESS OBSERVABILITY — the arena's ARITHMETIC, not merely its ledger
+    //
+    // Measured finding (mutation round 2026-07-27, base `1132ea8`): the first 37
+    // reported outcomes were 37 MISSED / 0 CAUGHT, **every one of them inside this
+    // file's address arithmetic** — `alloc`'s alignment mask (`align - 1`, `&`,
+    // `!(align - 1)`), its free-list fit test (`<=`), its alignment-head test (`>`),
+    // `release`'s window-bounds disjunction (`||`) and `live_bytes`' subtraction (`-`).
+    //
+    // The cause was measured too, not guessed: `GpaSpace` appears at 74 test sites, so
+    // it is heavily exercised — but no test in the repository asserted **which address**
+    // the arena returns. Every assertion was conservation-shaped (the ledger balances,
+    // nothing leaks, nothing double-frees, `Outstanding == Reachable`), and
+    // **conservation is invariant to address arithmetic**: an arena handing out
+    // wrong-but-self-consistent addresses balances perfectly and passes all of it.
+    //
+    // That matters here specifically. In Mode 2 the GPA is what gets published into the
+    // guest's page tables, so a wrong-but-consistent GPA is the guest reading the wrong
+    // memory **while our ledger reports perfect balance** — the silent-corruption class,
+    // under a green instrument (`testing_doctrine.md` §1, §2 "assert the exact thing").
+    //
+    // The tests below pin the four properties the arithmetic actually controls —
+    // ALIGNMENT, CONTAINMENT, NON-OVERLAP and EXACT PLACEMENT ON REUSE — plus
+    // `live_bytes` against a **second, dumber accounting** kept by the test.
+    // ==========================================================================
+
+    /// ★ The auditor: the test's own, independent model of what the arena has handed
+    /// out. Deliberately a second implementation — an accounting function checked
+    /// against itself is not checked at all, and [`GpaArena::live_bytes`] is one of the
+    /// functions under test here.
+    #[derive(Debug, Default)]
+    struct Ledger {
+        /// `gpa -> len` for every block the test still holds.
+        held: BTreeMap<u64, u64>,
+        /// High-water mark of every address ever issued — how the tests below prove the
+        /// **reuse** path was actually taken rather than assuming it (an allocation that
+        /// ends at or below the previous high-water mark came out of the free list).
+        hwm: u64,
+        /// Allocations served from below the high-water mark.
+        reused: usize,
+    }
+
+    impl Ledger {
+        /// Record one allocation, asserting every address property the arena's
+        /// arithmetic controls.
+        fn take(&mut self, arena: &GpaArena, b: &GpaBlock, align: u64, ctx: &str) {
+            let (g, len) = (b.gpa.0, b.len);
+            // ---- ALIGNMENT. A misaligned GPA goes straight into a guest page table.
+            assert_eq!(g % align, 0, "{ctx}: {:?} is not {align:#x}-aligned", b.gpa);
+            // ---- CONTAINMENT inside the arena's declared bounds.
+            let end = g.checked_add(len).expect("a block that does not wrap u64");
+            assert!(
+                g >= arena.range.start && end <= arena.range.end,
+                "{ctx}: block {g:#x}..{end:#x} leaves its arena {:?}",
+                arena.range,
+            );
+            // ---- NON-OVERLAP with every other LIVE block: check the neighbour on each
+            // side, which is sufficient because the set is kept disjoint inductively.
+            if let Some((&ps, &pl)) = self.held.range(..=g).next_back() {
+                assert!(
+                    ps + pl <= g,
+                    "{ctx}: {g:#x}..{end:#x} overlaps the live block {ps:#x}..{:#x}",
+                    ps + pl,
+                );
+            }
+            if let Some((&ns, &nl)) = self.held.range(g..).next() {
+                assert!(
+                    end <= ns,
+                    "{ctx}: {g:#x}..{end:#x} overlaps the live block {ns:#x}..{:#x}",
+                    ns + nl,
+                );
+            }
+            assert_eq!(
+                self.held.insert(g, len),
+                None,
+                "{ctx}: {g:#x} was issued twice while still live",
+            );
+            if end <= self.hwm {
+                self.reused += 1;
+            }
+            self.hwm = self.hwm.max(end);
+            self.audit(arena, ctx);
+        }
+
+        /// Record one free (call *after* [`GpaArena::free`] succeeded).
+        fn give(&mut self, arena: &GpaArena, gpa: u64, ctx: &str) {
+            assert!(
+                self.held.remove(&gpa).is_some(),
+                "{ctx}: freed {gpa:#x}, which the ledger never held",
+            );
+            self.audit(arena, ctx);
+        }
+
+        /// ★ The second accounting: `live_bytes` must equal the summed size of the
+        /// blocks the TEST still holds, computed without touching the arena's cursor or
+        /// its free list.
+        fn audit(&self, arena: &GpaArena, ctx: &str) {
+            assert_eq!(
+                arena.live_bytes(),
+                self.held.values().sum::<u64>(),
+                "{ctx}: live_bytes disagrees with the independently summed live blocks",
+            );
+        }
+    }
+
+    /// ★★ **A freed range is reused at EXACTLY its own address.**
+    ///
+    /// This is the assertion the whole file was missing. `alloc`'s reuse branch computes
+    /// the address as `(start + align - 1) & !(align - 1)` and accepts the range iff
+    /// `a + len <= start + flen`; every arithmetic mutant of those two lines produces
+    /// either a *different in-arena address* or a fall-through to the bump cursor, and
+    /// **both are invisible to a conservation assertion** — the ledger balances either
+    /// way. Pinning the exact address is what makes them visible.
+    ///
+    /// The freed block is deliberately NOT the one adjacent to the cursor: `insert_free`
+    /// gives a cursor-abutting range straight back to the cursor, so freeing the last
+    /// allocation never populates the free list at all and the reuse branch would not be
+    /// reached (the shape every existing churn test in this file has).
+    #[test]
+    fn a_freed_range_is_reused_at_exactly_its_own_address() {
+        // NON-ZERO base throughout: with an arena based at 0, `cursor - range.start` and
+        // `cursor + range.start` are the same number and half of these checks would be
+        // vacuous.
+        const BASE: u64 = 0x4_0000_0000;
+        let mut space = GpaSpace::new(BASE..BASE + 0x10_0000, 0x10_0000);
+        let mut a = space.carve().expect("carves");
+        let mut led = Ledger::default();
+
+        let a0 = a.alloc(0x1000, 0x1000).expect("A");
+        led.take(&a, &a0, 0x1000, "A");
+        let b0 = a.alloc(0x1000, 0x1000).expect("B");
+        led.take(&a, &b0, 0x1000, "B");
+        let c0 = a.alloc(0x1000, 0x1000).expect("C");
+        led.take(&a, &c0, 0x1000, "C");
+        assert_eq!(
+            (a0.gpa, b0.gpa, c0.gpa),
+            (Gpa(BASE), Gpa(BASE + 0x1000), Gpa(BASE + 0x2000)),
+            "a pristine arena bumps from its own base, packed",
+        );
+
+        // Free the MIDDLE one: C still pins the cursor, so B's range genuinely lands on
+        // the free list instead of being swallowed back.
+        let b_gpa = b0.gpa;
+        a.free(b0).expect("its own block");
+        led.give(&a, b_gpa.0, "free B");
+
+        // ★ THE ASSERTION. The next same-shaped request must land on B's exact address.
+        let d = a.alloc(0x1000, 0x1000).expect("D reuses B's hole");
+        assert_eq!(
+            d.gpa, b_gpa,
+            "a first-fit free list must re-issue the freed range ITSELF, not a fresh \
+             bump address and not a shifted one",
+        );
+        led.take(&a, &d, 0x1000, "D");
+
+        // ★ A SPLIT reuse: free a 3-page range in the middle and take one page out of
+        // it, then the rest — the head, then the tail, each at its exact address.
+        let e = a.alloc(0x3000, 0x1000).expect("E");
+        let e_gpa = e.gpa;
+        led.take(&a, &e, 0x1000, "E");
+        let f = a.alloc(0x1000, 0x1000).expect("F pins the cursor past E");
+        led.take(&a, &f, 0x1000, "F");
+        a.free(e).expect("its own block");
+        led.give(&a, e_gpa.0, "free E");
+
+        let g = a.alloc(0x1000, 0x1000).expect("G takes E's head");
+        assert_eq!(g.gpa, e_gpa, "first fit takes the HEAD of the freed range");
+        led.take(&a, &g, 0x1000, "G");
+        let h = a.alloc(0x2000, 0x1000).expect("H takes E's tail");
+        assert_eq!(
+            h.gpa,
+            Gpa(e_gpa.0 + 0x1000),
+            "and the remainder stays on the free list at its own address",
+        );
+        led.take(&a, &h, 0x1000, "H");
+    }
+
+    /// ★★ **A free range that is too small must NOT be handed out** — the other
+    /// direction of the same fit test, and the one that produces an *overlapping* GPA
+    /// rather than a merely-different one.
+    ///
+    /// Inverting `a + len <= start + flen` makes the allocator accept exactly the ranges
+    /// that do not fit. The returned address is then inside the arena, page-aligned, and
+    /// perfectly accounted for — and it runs straight through the live block next door.
+    /// Nothing conservation-shaped can see this: the ledger still balances.
+    #[test]
+    fn a_free_range_too_small_for_the_request_is_never_handed_out() {
+        const BASE: u64 = 0x8_0000_0000;
+        let mut space = GpaSpace::new(BASE..BASE + 0x10_0000, 0x10_0000);
+        let mut a = space.carve().expect("carves");
+        let mut led = Ledger::default();
+
+        // One page hole with a LIVE block immediately after it.
+        let p = a.alloc(0x1000, 0x1000).expect("P");
+        led.take(&a, &p, 0x1000, "P");
+        let q = a.alloc(0x1000, 0x1000).expect("Q — the hole");
+        led.take(&a, &q, 0x1000, "Q");
+        let r = a.alloc(0x1000, 0x1000).expect("R — the victim next door");
+        led.take(&a, &r, 0x1000, "R");
+        let (p_gpa, q_gpa, r_gpa) = (p.gpa, q.gpa, r.gpa);
+        a.free(q).expect("its own block");
+        led.give(&a, q_gpa.0, "free Q");
+
+        // A TWO-page request cannot come out of a one-page hole.
+        let big = a
+            .alloc(0x2000, 0x1000)
+            .expect("the two-page request is served");
+        led.take(&a, &big, 0x1000, "big"); // ← non-overlap assertion bites here
+        assert_ne!(
+            big.gpa, q_gpa,
+            "a 0x2000 request was served out of a 0x1000 hole, so it runs into {r_gpa:?}",
+        );
+        assert!(
+            big.gpa.0 >= r_gpa.0 + 0x1000,
+            "it must come from past the live blocks, not from inside them",
+        );
+        // …and the hole is still there, still exactly one page, still reusable.
+        let small = a.alloc(0x1000, 0x1000).expect("a fitting request");
+        assert_eq!(small.gpa, q_gpa, "the hole survived, at its own address");
+        led.take(&a, &small, 0x1000, "small");
+        assert_eq!(p_gpa, Gpa(BASE), "and nothing moved underneath it");
+    }
+
+    /// ★★ **The alignment head is REAL SPACE and must go back on the free list.**
+    ///
+    /// When a free range's start is not aligned to the request, `alloc` rounds up and
+    /// hands the skipped head back (`if a > start`). Turning that test into `a == start`
+    /// does two things at once, and only one of them is visible to conservation: the
+    /// head is silently leaked (so `live_bytes` over-reports and the arena can never
+    /// return to pristine), and an *aligned* fit inserts a zero-length free entry.
+    ///
+    /// This is also the sharpest `live_bytes` test in the file, because it is the only
+    /// state with a **non-empty free list and a non-zero arena base** at the same time —
+    /// which is what makes both of that function's subtractions non-vacuous.
+    #[test]
+    fn an_alignment_head_is_returned_to_the_free_list_not_leaked() {
+        // BASE is 0x2000-aligned, so BASE + 0x1000 is NOT — the misaligned free-range
+        // start the head path needs.
+        const BASE: u64 = 0x8000_0000;
+        let mut space = GpaSpace::new(BASE..BASE + 0x10_0000, 0x10_0000);
+        let mut a = space.carve().expect("carves");
+        let mut led = Ledger::default();
+
+        let x = a.alloc(0x1000, 0x1000).expect("X");
+        led.take(&a, &x, 0x1000, "X");
+        let y = a
+            .alloc(0x3000, 0x1000)
+            .expect("Y — becomes the misaligned hole");
+        led.take(&a, &y, 0x1000, "Y");
+        let z = a.alloc(0x1000, 0x1000).expect("Z pins the cursor");
+        led.take(&a, &z, 0x1000, "Z");
+        let y_gpa = y.gpa;
+        assert_eq!(
+            y_gpa,
+            Gpa(BASE + 0x1000),
+            "the hole starts 0x2000-MISaligned"
+        );
+        a.free(y).expect("its own block");
+        led.give(&a, y_gpa.0, "free Y");
+
+        // A 0x2000-aligned page must round up INSIDE the hole, leaving a one-page head.
+        let w = a.alloc(0x1000, 0x2000).expect("W");
+        assert_eq!(
+            w.gpa,
+            Gpa(BASE + 0x2000),
+            "the aligned allocation lands at the rounded-up address inside the hole",
+        );
+        // `Ledger::take` audits `live_bytes` here: with the head leaked it reads
+        // 0x4000 against the ledger's 0x3000.
+        led.take(&a, &w, 0x2000, "W");
+
+        // ★ And the head is not merely accounted for, it is USABLE — the next unaligned
+        // request must land on it, at its exact address.
+        let head = a.alloc(0x1000, 0x1000).expect("the head is reusable");
+        assert_eq!(
+            head.gpa, y_gpa,
+            "the skipped alignment head must be handed out again at its own address",
+        );
+        led.take(&a, &head, 0x1000, "head");
+        // …and so must the tail.
+        let tail = a.alloc(0x1000, 0x1000).expect("the tail is reusable");
+        assert_eq!(tail.gpa, Gpa(BASE + 0x3000), "the tail, at its own address");
+        led.take(&a, &tail, 0x1000, "tail");
+
+        // A full drain restores the arena to genuinely pristine — impossible if any
+        // fraction of a byte was leaked or a zero-length entry was left behind.
+        for b in [x, z, w, head, tail] {
+            let g = b.gpa.0;
+            a.free(b).expect("its own block");
+            led.give(&a, g, "drain");
+        }
+        assert_eq!(a.live_bytes(), 0, "every byte came back");
+        assert!(
+            a.is_untouched(),
+            "a fully drained arena is pristine again — a leaked head or a stray \
+             zero-length free entry both show up right here",
+        );
+    }
+
+    /// ★★ **THE MEAN one, at unit granularity**: a long alloc/free churn at mixed sizes
+    /// and mixed alignments, driven to exhaustion and back, with every address property
+    /// asserted on **every** allocation and `live_bytes` audited against an independent
+    /// sum after **every** operation.
+    ///
+    /// Deterministic (a fixed xorshift), so a failure is reproducible and the arena's
+    /// pure-function property (decision #27: the same request stream always yields the
+    /// same addresses) is not quietly given up.
+    ///
+    /// Non-vacuity is asserted, not assumed: the run must actually reach exhaustion, and
+    /// it must actually serve allocations out of the free list (`Ledger::reused`).
+    #[test]
+    fn arena_addresses_stay_aligned_disjoint_and_contained_under_mean_churn() {
+        const BASE: u64 = 0x1_0000_0000 + 0x8000; // non-zero, and not arena-aligned
+        const ARENA: u64 = 0x20_0000; // 2 MiB = 512 pages
+        let mut space = GpaSpace::new(BASE..BASE + 4 * ARENA, ARENA);
+        let mut a = space.carve().expect("carves");
+        let mut led = Ledger::default();
+        let mut held: Vec<GpaBlock> = Vec::new();
+        let mut rng: u64 = 0x243F_6A88_85A3_08D3;
+        let mut roll = move || {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            rng
+        };
+        const ALIGNS: [u64; 4] = [0x1000, 0x2000, 0x4000, 0x8000];
+        let mut exhausted = 0usize;
+        let mut served = 0u64;
+
+        for step in 0..4000u64 {
+            let r = roll();
+            // Bias towards allocating while the arena is empty-ish and towards freeing
+            // once it is full, so the run spends its time near the exhaustion boundary —
+            // the fragmented state, not the easy one.
+            let want_alloc = held.len() < 8 || !r.is_multiple_of(4);
+            if want_alloc {
+                let len = (1 + (r >> 8) % 8) * 0x1000;
+                let align = ALIGNS[((r >> 16) % 4) as usize];
+                match a.alloc(len, align) {
+                    Ok(b) => {
+                        led.take(&a, &b, align, &format!("step {step} alloc"));
+                        served += len;
+                        held.push(b);
+                    }
+                    Err(e) => {
+                        // Exhaustion is LOUD and names the request, exactly.
+                        assert_eq!(
+                            e,
+                            GpaError::ArenaExhausted { len },
+                            "step {step}: exhaustion must name the request it refused",
+                        );
+                        exhausted += 1;
+                        // Make room, so the churn keeps running near the boundary.
+                        for _ in 0..4 {
+                            if held.is_empty() {
+                                break;
+                            }
+                            let i = (roll() as usize) % held.len();
+                            let b = held.swap_remove(i);
+                            let g = b.gpa.0;
+                            a.free(b).expect("its own block");
+                            led.give(&a, g, &format!("step {step} relief"));
+                        }
+                    }
+                }
+            } else if !held.is_empty() {
+                let i = (r as usize) % held.len();
+                let b = held.swap_remove(i);
+                let g = b.gpa.0;
+                a.free(b).expect("its own block");
+                led.give(&a, g, &format!("step {step} free"));
+            }
+        }
+
+        // ---- the run reached the states it claims to test.
+        assert!(
+            exhausted > 0,
+            "the churn never reached exhaustion — it tested the easy path only",
+        );
+        assert!(
+            led.reused > 100,
+            "only {} allocations came out of the free list; the reuse branch this test \
+             exists to cover was barely reached",
+            led.reused,
+        );
+        assert!(
+            served > 8 * ARENA,
+            "the churn served {served:#x} bytes out of a {ARENA:#x} arena — reclamation \
+             was never actually load-bearing",
+        );
+
+        // ---- and it drains to genuinely pristine.
+        while let Some(b) = held.pop() {
+            let g = b.gpa.0;
+            a.free(b).expect("its own block");
+            led.give(&a, g, "final drain");
+        }
+        assert_eq!(a.live_bytes(), 0, "every byte came back");
+        assert!(a.is_untouched(), "the drained arena is pristine again");
+    }
+
+    /// ★★ **A window refuses an arena that leaves it, even from a same-owner impostor.**
+    ///
+    /// [`GpaSpace::release`]'s guard is a three-way disjunction — wrong owner, start
+    /// below the window, end above it — and its own doc comment says the containment
+    /// halves exist to catch *"the same-owner impostor (two windows stamped alike) that
+    /// owner alone would wave through"*. Nothing tested that: both existing G7 tests use
+    /// **different** `GpuId`s, so the owner term alone decides them and either
+    /// containment term can be broken without either test noticing.
+    ///
+    /// Asserted as the CONSEQUENCE, not as the refusal: a window only ever hands out
+    /// ranges inside its own window. With the containment term gone, the recipient's
+    /// free list swallows the foreign range and issues it to the very next proc that
+    /// asks — a proc holding GPAs inside another window's aperture, while the donor
+    /// leaks the range for good.
+    #[test]
+    fn g7_a_same_owner_window_still_refuses_an_arena_from_outside_it() {
+        const LEN: u64 = 0x800_0000;
+        // Two windows, stamped ALIKE (both default to `GpuId::ZERO`) and overlapping —
+        // the nested/MIG-shaped geometry this public type permits.
+        let home_w = 0x1000_0000..0x3000_0000;
+        let recip_w = 0x1800_0000..0x3800_0000;
+        let mut home = GpaSpace::new(home_w.clone(), LEN);
+        let mut recip = GpaSpace::new(recip_w.clone(), LEN);
+        assert_eq!(
+            (home.owner(), recip.owner()),
+            (GpuId::ZERO, GpuId::ZERO),
+            "the impostor's premise: two windows that name the same owner",
+        );
+
+        // The recipient is already in use, so its cursor has moved — the state in which
+        // a swallowed foreign range is issued rather than merely stored.
+        let mine = recip.carve().expect("the recipient's own proc");
+        assert_eq!(mine.range, 0x1800_0000..0x2000_0000);
+
+        // A reaped proc's arena from the OTHER window, whose start is below the
+        // recipient's window (and whose end is inside it — so ONLY the start term can
+        // refuse it).
+        let foreign = home.carve().expect("the donor's proc");
+        let foreign_range = foreign.range.clone();
+        assert_eq!(foreign_range, 0x1000_0000..0x1800_0000);
+        assert!(
+            foreign_range.start < recip_w.start && foreign_range.end <= recip_w.end,
+            "the geometry the test needs: out of the window on exactly ONE side",
+        );
+        let sent = recip.release(foreign);
+
+        // ★ THE PROPERTY: everything the recipient hands out is inside its own window.
+        for _ in 0..3 {
+            let got = recip.carve().expect("the recipient carves");
+            assert!(
+                got.range.start >= recip_w.start && got.range.end <= recip_w.end,
+                "the recipient handed a proc {:?}, which is NOT inside its own window \
+                 {recip_w:?} — that is the donor's cross-recycled arena {foreign_range:?}",
+                got.range,
+            );
+        }
+
+        // …and the refusal handed the arena back, so the donor can still recycle it.
+        let refused = sent.expect_err("an arena from another window is not this one's");
+        assert_eq!(refused.refused_by, GpuId::ZERO);
+        assert_eq!(refused.arena.range, foreign_range);
+        home.release(refused.arena)
+            .expect("its own window recycles it");
+        assert_eq!(
+            home.carve().expect("the donor carves").range,
+            foreign_range,
+            "the #80 free list still works — a loud refusal must not cost the range",
+        );
+    }
 }

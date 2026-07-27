@@ -132,6 +132,7 @@ use kayfabe_tests::{
 };
 use kayfabe_util::Instant;
 use kayfabe_vmm::Vmm as _;
+use kayfabe_vmm::{GuestRamMap, RamRegionId, RamSpan, RegionKind};
 
 // =================================================================================
 // Bounded termination (the `concurrency_stress.rs` M4b lesson, kept): fixed iteration
@@ -5927,4 +5928,748 @@ fn dma_mean_run(mode: LockMode) -> DmaMeanReport {
         pid_teardown: pids[P_TEARDOWN],
         lock_depth_span: vmm.lock_depth_span(),
     }
+}
+
+// =================================================================================
+// ★★★ THE GPA IS AN ADDRESS, NOT JUST A LEDGER ENTRY
+// (`testing_doctrine.md` §1 "a green instrument on an unexercised path is worse than
+// none" / §2 "assert the exact thing"; `mode2_address_table.md`)
+//
+// Measured finding (mutation round 2026-07-27): every mutant of `kayfabe_core::gpa`'s
+// address ARITHMETIC survived the whole suite. `GpaSpace` appears at 74 test sites and
+// the conservation ledger above already checks that GPA arenas are pairwise disjoint
+// and that every published GPA lies inside its own proc's arena — but **conservation
+// is invariant to address arithmetic**. An arena that hands out wrong-but-self-
+// consistent addresses balances perfectly, stays inside its bounds, and passes all of
+// it.
+//
+// In Mode 2 the GPA is the number that gets published into the guest's page tables. A
+// wrong-but-consistent GPA is the guest reading the wrong memory *while our ledger
+// reports perfect balance* — the silent-corruption class this project cares most about.
+//
+// So this run makes the address OBSERVABLE end-to-end: every publication is read back
+// **through the address table**, its `phys` is proven against
+// `kayfabe_vmm::GuestRamMap` — the production prove-RAM port, narrowed here to one
+// declared RAM region **per arena slot** — and a per-publication tag is written into a
+// shadow guest RAM and read back when the range is reclaimed. A GPA that drifts outside
+// its arena FAULTS at the port; one that drifts into another proc's arena resolves to
+// the WRONG REGION; one that aliases a live publication clobbers a tag. None of those
+// three is visible to a conservation assertion.
+//
+// The arena is deliberately TINY (1 MiB) and the churn deliberately exceeds it many
+// times over, so the free list is not merely reached but LOAD-BEARING: a reuse path
+// that silently stopped reusing shows up as `FwdFault::Arena`, not as a slower test.
+// =================================================================================
+
+/// Base of the guest-physical window this run's device is realized with. NON-ZERO on
+/// purpose: with a window based at 0, `cursor - range.start` and `cursor + range.start`
+/// are the same number and half of the arena's arithmetic is untestable.
+const GPA_WIN_BASE: u64 = 0x2_0000_0000;
+/// Per-target window length (MG-6 mints one of these per GPU, back to back).
+const GPA_WINDOW_LEN: u64 = 0x100_0000; // 16 MiB = 16 arena slots
+/// ★ Per-proc arena: 1 MiB = 256 pages. Small enough that the churn below MUST reclaim.
+const GPA_ARENA_LEN: u64 = 0x10_0000;
+/// Publish/reclaim rounds per workload thread.
+const GPA_ROUNDS: u32 = 48;
+/// Publications per round, at mixed lengths (1–3 pages) — the fragmentation shape.
+const GPA_PER_ROUND: u64 = 12;
+/// Guest-VA lane for this run (clear of every other lane in this file).
+const VA_GPA: u64 = 0xA0_0000_0000;
+/// PDB base for the churn's throw-away VASpaces.
+const GPA_PDB_BASE: u64 = 0x3800_0000;
+/// Handle base for the churn's throw-away VASpaces.
+const GPA_VAS_BASE: HObject = HObject(0x5c00_0400);
+/// The client of the ★ post-reap process — the one handed a RECYCLED arena.
+const GPA_HEIR_CLIENT: HClient = HClient(0xB0);
+/// Its PDB / channel identities (distinct from every lane).
+const GPA_HEIR_PDB: Pdb = Pdb(0x3900_0000);
+const GPA_HEIR_GR: VChid = VChid(0x400);
+const GPA_HEIR_CE: VChid = VChid(0x401);
+/// Tag namespace for the heir's publications, clear of every workload thread's.
+const HEIR_TAG: u64 = 0xE1_0000_0000_0000;
+
+/// ★ The prove-RAM instrument: **one declared RAM region per arena slot**, across both
+/// per-target windows, with the region id equal to the slot's own base.
+///
+/// That identity is what turns "the GPA is in the right place" into an EXACT equality
+/// rather than a range test: a publication by proc P on GPU G must resolve to
+/// `RamRegionId(P's own arena base on G)` at offset `gpa - that base`. A GPA that drifts
+/// into the next arena resolves to a different region — it does not merely "still lie
+/// inside the window".
+///
+/// Everything outside the two windows is left undeclared, so a GPA that leaves the
+/// device's guest-physical window at all is `VmmError::BadGpa` — a FAULT, at the same
+/// port `Vmm::gpa_read` proves every guest-steered address through.
+fn arena_regions() -> GuestRamMap {
+    let mut m = GuestRamMap::new();
+    for w in 0..2u64 {
+        for slot in 0..(GPA_WINDOW_LEN / GPA_ARENA_LEN) {
+            let base = GPA_WIN_BASE + w * GPA_WINDOW_LEN + slot * GPA_ARENA_LEN;
+            m.declare(RamRegionId(base), RegionKind::Ram, base, GPA_ARENA_LEN)
+                .expect("an arena slot inside the 64-bit space");
+        }
+    }
+    m
+}
+
+/// ★ The device-wide address auditor, shared by every workload thread.
+///
+/// Deliberately a **second, dumber accounting** than anything in the core: a flat map of
+/// live guest-physical ranges plus a page-granular shadow of guest RAM. The core's own
+/// ledger cannot play this role — it is the thing under test, and it balances whether or
+/// not the addresses are right.
+#[derive(Debug, Default)]
+struct GpaAudit {
+    /// `gpa -> (len, tag)` for every publication live anywhere on the device.
+    live: BTreeMap<u64, (u64, u64)>,
+    /// Shadow guest RAM at page granularity: `page -> the tag that owns it`.
+    ram: BTreeMap<u64, u64>,
+    /// Publications recorded (non-vacuity).
+    issued: usize,
+    /// Publications served from a range that had already been handed out and given back
+    /// — i.e. from the free list. The run asserts this is large: a reuse path that
+    /// silently stopped reusing must not pass as "still correct".
+    recycled: usize,
+    /// Every page ever issued, so `recycled` can be counted.
+    seen: BTreeSet<u64>,
+}
+
+impl GpaAudit {
+    /// Record one publication, asserting it overlaps NOTHING live anywhere on the
+    /// device, and stamp its pages in the shadow RAM.
+    fn publish(&mut self, gpa: u64, len: u64, tag: u64, what: &str) {
+        let end = gpa
+            .checked_add(len)
+            .expect("a publication that does not wrap");
+        if let Some((&ps, &(pl, pt))) = self.live.range(..=gpa).next_back() {
+            assert!(
+                ps + pl <= gpa,
+                "{what}: GPA {gpa:#x}..{end:#x} overlaps the LIVE publication \
+                 {ps:#x}..{:#x} (tag {pt:#x}) — one range issued to two live mappings",
+                ps + pl,
+            );
+        }
+        if let Some((&ns, &(nl, nt))) = self.live.range(gpa..).next() {
+            assert!(
+                end <= ns,
+                "{what}: GPA {gpa:#x}..{end:#x} overlaps the LIVE publication \
+                 {ns:#x}..{:#x} (tag {nt:#x})",
+                ns + nl,
+            );
+        }
+        assert_eq!(
+            self.live.insert(gpa, (len, tag)),
+            None,
+            "{what}: GPA {gpa:#x} was issued twice while still live",
+        );
+        let mut fresh = false;
+        // Only pages this publication owns WHOLLY are stamped: a sub-page length leaves
+        // a tail page two publications legitimately share, and stamping it would make
+        // the auditor report a clobber that never happened.
+        for p in (gpa..(end / 0x1000) * 0x1000).step_by(0x1000) {
+            self.ram.insert(p, tag);
+            fresh |= self.seen.insert(p);
+        }
+        self.issued += 1;
+        if !fresh {
+            self.recycled += 1;
+        }
+    }
+
+    /// Reclaim one publication, asserting every page of it still reads back **this**
+    /// publication's tag. A GPA that aliased somebody else's live range shows up here as
+    /// the clobber it is, at the byte the guest would have read.
+    fn reclaim(&mut self, gpa: u64, len: u64, tag: u64, what: &str) {
+        let end = (gpa + len) / 0x1000 * 0x1000;
+        for p in (gpa..end).step_by(0x1000) {
+            assert_eq!(
+                self.ram.get(&p).copied(),
+                Some(tag),
+                "{what}: guest page {p:#x} of the publication at {gpa:#x} no longer \
+                 holds its own tag {tag:#x} — another publication was handed an \
+                 overlapping GPA and wrote through it",
+            );
+        }
+        assert_eq!(
+            self.live.remove(&gpa),
+            Some((len, tag)),
+            "{what}: reclaiming {gpa:#x}, which the auditor did not hold as live",
+        );
+    }
+}
+
+/// Realize the six-proc, two-GPU world with a **tiny** GPA arena, so the arena's
+/// reclamation is load-bearing rather than incidental. Otherwise identical to
+/// [`mean_gpu`] — same lanes, same identical-handle shape, same two targets.
+fn gpa_world(mode: LockMode) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, SharedRecorder) {
+    let arch = Box::new(MockArch::new());
+    let (factory, recorder) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(GPA_WIN_BASE..GPA_WIN_BASE + GPA_WINDOW_LEN, GPA_ARENA_LEN);
+    let mut gpu = Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)])
+        .expect("device realizes");
+
+    let mut s = Scenario::new();
+    for i in 0..N_PROCS {
+        let lane = lane_of(i);
+        let instance = if gpu_of(i) == GPU0 {
+            None
+        } else {
+            Some(gpu_of(i).0)
+        };
+        s.compute_process_on_gpu(
+            client_of(i),
+            lane.pdb,
+            identical_handles(lane.gr.0, lane.ce.0),
+            instance,
+        );
+    }
+    for ev in s.events {
+        gpu.apply(ev).expect("the scenario applies cleanly");
+    }
+    assert_eq!(gpu.procs.len(), N_PROCS, "six distinct procs were derived");
+    let pids: Vec<ProcId> = (0..N_PROCS)
+        .map(|i| gpu.spine.by_pdb[&(gpu_of(i), lane_of(i).pdb)])
+        .collect();
+    let guarded = Guarded::new("l1_mean::gpa_world", gpu, recorder.clone())
+        .map(|g| Arc::new(SharedDevice::new(g, mode)));
+    (guarded, pids, recorder)
+}
+
+/// One publication as the auditor records it: `(gpa, len, tag)`.
+type Publication = (u64, u64, u64);
+
+/// ★ **The address-churn workload.** One thread; `slot` distinguishes the two threads
+/// that share one `Proc` (and therefore share ONE `GpaArena` — the contention that
+/// matters here).
+///
+/// Each round declares a throw-away VASpace, publishes [`GPA_PER_ROUND`] ranges of
+/// mixed length into it, then frees the **previous** round's VASpace. Freeing one round
+/// behind is what produces genuine fragmentation: the reclaimed ranges are interior
+/// holes between ranges that are still live, so the next round's publications can only
+/// be served by a free list that actually coalesces and actually re-issues.
+///
+/// Every publication is checked four ways, and only the first is conservation-shaped:
+/// it must resolve back through the address table to the `phys` its own commit computed;
+/// it must be page-aligned; it must prove RAM in **its own proc's arena region** at the
+/// exact offset; and it must overlap nothing live anywhere on the device.
+fn gpa_workload(
+    dev: &SharedDevice,
+    ram: &GuestRamMap,
+    audit: &Mutex<GpaAudit>,
+    pids: &[ProcId],
+    i: usize,
+    slot: u32,
+) -> usize {
+    let (gpu, client, pid) = (gpu_of(i), client_of(i), pids[i]);
+    let arena = dev
+        .with_proc(pid, |p| p.arenas[&gpu].range.clone())
+        .expect("a live proc, with its arena materialized by the warm-up");
+    assert_eq!(
+        arena.end - arena.start,
+        GPA_ARENA_LEN,
+        "the world must hand this run the small arena it depends on",
+    );
+    // (vas handle, its publications) — freed one round behind.
+    let mut carry: Option<(HObject, Vec<Publication>)> = None;
+    let mut published = 0usize;
+
+    for round in 0..GPA_ROUNDS {
+        let pdb = Pdb(GPA_PDB_BASE
+            + (i as u64) * 0x1_0000
+            + u64::from(slot) * 0x100
+            + u64::from(round % 2));
+        let vas_h = HObject(GPA_VAS_BASE.0 + (i as u32) * 0x1000 + slot * 0x100 + round);
+        dev.apply(RmEvent::Alloc {
+            client,
+            parent: H_DEVICE,
+            handle: vas_h,
+            class: mock_classes::VASPACE,
+            facts: AllocFacts::default(),
+        })
+        .expect("the guest declares a throw-away VASpace");
+        dev.apply(RmEvent::SetPageDir {
+            client,
+            vaspace: vas_h,
+            pdb,
+        })
+        .expect("…and binds a page directory to it");
+
+        let mut mine = Vec::new();
+        for k in 0..GPA_PER_ROUND {
+            // Mixed lengths: a same-size stream can be served by a free list that never
+            // splits or coalesces anything, which is the easy half of the problem.
+            //
+            // ★ And every fourth one is NOT a page multiple. That is deliberate and it
+            // is the only way this layer reaches `GpaArena::alloc`'s alignment-head
+            // branch at all: `publish_backing` asks for a constant 0x1000 alignment, so
+            // as long as every length is a page multiple every free range starts
+            // page-aligned, the round-up is a no-op and the head branch is dead code
+            // from the fwd plane's point of view. A sub-page length leaves a
+            // MISALIGNED tail on the free list, and the next request has to round up
+            // over it. `plan.len` is guest-supplied, so this is a shape a guest can
+            // produce — and the branch stops being reachable-only-in-a-unit-test the
+            // moment a big-page (64 KiB / 2 MiB) mapping path asks for a coarser align.
+            let len = 0x1000 * (1 + (k + u64::from(round)) % 3)
+                + if k.is_multiple_of(4) { 0x800 } else { 0 };
+            let va = GpuVa(VA_GPA + u64::from(slot) * 0x100_0000 + k * 0x1_0000);
+            let tag = ((i as u64) << 40) | (u64::from(slot) << 36) | (u64::from(round) << 16) | k;
+            let what = format!("proc {i} slot {slot} round {round} k {k}");
+
+            let p = dev
+                .publish_backing(gpu, pdb, va, len)
+                .unwrap_or_else(|e| panic!("{what}: publish refused: {e:?}"));
+
+            // ---- read the publication back THROUGH THE ADDRESS TABLE, at an offset,
+            // so the number under test is the one the guest's TLB would answer with.
+            let (binding, off) = dev
+                .resolve(gpu, pdb, GpuVa(va.0 + 0x40))
+                .unwrap_or_else(|e| panic!("{what}: a just-published VA must resolve: {e:?}"));
+            assert_eq!(
+                (binding.phys, off),
+                (p.gpa, 0x40),
+                "{what}: the address table answers with a different phys than the \
+                 commit computed",
+            );
+            let gpa = binding.phys;
+
+            // ---- ALIGNMENT. `publish_backing` asks the arena for 0x1000; a misaligned
+            // GPA goes straight into a guest page table.
+            assert_eq!(gpa % 0x1000, 0, "{what}: GPA {gpa:#x} is not page-aligned");
+
+            // ---- ★ PROVE-RAM, at the production port, against THIS proc's own region.
+            let span = ram.resolve(gpa, len).unwrap_or_else(|e| {
+                panic!(
+                    "{what}: published GPA {gpa:#x}+{len:#x} is not \
+                     provable guest RAM at all: {e:?}"
+                )
+            });
+            assert_eq!(
+                span,
+                RamSpan {
+                    region: RamRegionId(arena.start),
+                    offset: gpa - arena.start,
+                    len,
+                },
+                "{what}: the published GPA resolves to the wrong place — expected \
+                 offset {:#x} inside this proc's own arena {arena:?}",
+                gpa.wrapping_sub(arena.start),
+            );
+
+            audit
+                .lock()
+                .expect("the address auditor")
+                .publish(gpa, len, tag, &what);
+            mine.push((gpa, len, tag));
+            published += 1;
+        }
+
+        // ---- reclaim the round BEFORE this one, so the holes it leaves are interior.
+        if let Some((prev_h, prev)) = carry.take() {
+            {
+                let mut g = audit.lock().expect("the address auditor");
+                for &(gpa, len, tag) in &prev {
+                    g.reclaim(
+                        gpa,
+                        len,
+                        tag,
+                        &format!("proc {i} slot {slot} round {round} free"),
+                    );
+                }
+            }
+            dev.apply(RmEvent::Free {
+                client,
+                handle: prev_h,
+            })
+            .expect("the guest frees the VASpace and keeps running");
+        }
+        carry = Some((vas_h, mine));
+    }
+
+    // ★ Slot 1 drains; slot 0 deliberately leaves its LAST round's VASpace live, so the
+    // shared arena is still FRAGMENTED when the run quiesces — the previous round's
+    // ranges are holes underneath ranges that are still mapped. That is not tidiness:
+    // `gpa_sweep`'s `live_bytes` check is vacuous on an arena whose free list is empty,
+    // and a fully-drained arena's free list coalesces straight back into the cursor.
+    // Measured — the `live_bytes` mutant survived this run until this line existed.
+    if slot == 1
+        && let Some((h, last)) = carry.take()
+    {
+        {
+            let mut g = audit.lock().expect("the address auditor");
+            for &(gpa, len, tag) in &last {
+                g.reclaim(gpa, len, tag, &format!("proc {i} slot {slot} final free"));
+            }
+        }
+        dev.apply(RmEvent::Free { client, handle: h })
+            .expect("the final VASpace frees");
+    }
+    published
+}
+
+/// What the composed GPA run observed. Every field is script-determined, so both lock
+/// modes must produce identical values.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GpaMeanReport {
+    /// Publications per workload thread, in spawn order.
+    published: Vec<usize>,
+    /// `(issued, recycled)` from the device-wide auditor.
+    audited: (usize, usize),
+    /// Live publications still on the auditor's books when the threads joined.
+    still_live: usize,
+    /// Procs reaped by the mid-run teardown (must be exactly 1).
+    reaped: usize,
+    /// The arena range the reaped proc gave back, and the one its heir was handed.
+    recycled_arena: (Range<u64>, Range<u64>),
+    /// Publications made by the heir through its recycled arena.
+    heir_published: usize,
+    /// Bindings the end-of-run sweep audited, device-wide.
+    swept_bindings: usize,
+    /// Arenas the sweep found still FRAGMENTED — i.e. with a genuinely non-empty free
+    /// list, which is what makes its `live_bytes` check non-vacuous.
+    fragmented_arenas: usize,
+    /// Whether the parked verbs were still parked when the workloads finished.
+    latches_all_pending: bool,
+}
+
+impl GpaMeanReport {
+    /// The report with its one genuinely racy field normalised away, for the
+    /// lock-mode differential — the same discipline [`DmaMeanReport::mode_independent`]
+    /// applies, and for the same reason.
+    ///
+    /// `audited.1` counts publications served from a page that had been handed out
+    /// before. Two threads share one `GpaArena`, so **which** page a request lands on
+    /// depends on the order the two threads reached the allocator — a race, not a
+    /// script. It is asserted as a lower BOUND (the free list must be load-bearing) and
+    /// must never appear in a differential. Found by a bite-check, not by design: three
+    /// mutants "died" here on a mode difference in this number rather than on any
+    /// property, which is a kill for the wrong reason and a latent flake.
+    fn mode_independent(mut self) -> Self {
+        self.audited.1 = 0;
+        self
+    }
+}
+
+/// ★ **The end-of-run sweep: every live binding on the device, audited by address.**
+///
+/// Complements the per-operation checks in [`gpa_workload`] — it covers publications the
+/// workload threads never made (the warm-up, the heir, the held verbs) and it is where
+/// `GpaArena::live_bytes` is checked against a **second accounting**: the summed lengths
+/// of the `GpaBlock` tokens the proc still holds. An accounting function compared only
+/// with itself is not compared at all.
+fn gpa_sweep(dev: &SharedDevice, ram: &GuestRamMap, mode: LockMode) -> (usize, usize) {
+    let mut all: Vec<(ProcId, GpuId, u64, u64)> = Vec::new();
+    let mut fragmented = 0usize;
+    for pid in dev.live_pids() {
+        dev.with_proc(pid, |p| {
+            for (&g, arena) in &p.arenas {
+                // ---- the second accounting: live_bytes vs the tokens actually held.
+                let blocks: Vec<(u64, u64)> = p
+                    .vases
+                    .iter()
+                    .filter(|((vg, _), _)| *vg == g)
+                    .flat_map(|(_, v)| v.blocks.values())
+                    .map(|b| (b.gpa.0, b.len))
+                    .collect();
+                let held: u64 = blocks.iter().map(|&(_, l)| l).sum();
+                assert_eq!(
+                    arena.live_bytes(),
+                    held,
+                    "({mode:?}) {pid:?}/{g:?}: live_bytes disagrees with the summed \
+                     lengths of the GpaBlocks the proc still holds",
+                );
+                // ★ NON-VACUITY for the check immediately above, and it is not
+                // decoration: `live_bytes` is `(cursor - base) - sum(free list)`, so on
+                // an arena whose free list happens to be EMPTY the free-list term is
+                // zero and the whole comparison cannot see it. Measured, not reasoned:
+                // a `- → +` mutant of that subtraction survived this sweep until the
+                // churn was made to leave one arena fragmented on purpose. A hole below
+                // the highest live block IS a free-list entry, so this derives the
+                // free list's non-emptiness from state the test can actually read.
+                if let Some(top) = blocks.iter().map(|&(s, l)| s + l).max()
+                    && top - arena.range.start > held
+                {
+                    fragmented += 1;
+                }
+            }
+            for (&(g, _pdb), vas) in &p.vases {
+                let arena = p
+                    .arenas
+                    .get(&g)
+                    .unwrap_or_else(|| panic!("({mode:?}) a Vas with no arena"))
+                    .range
+                    .clone();
+                for (_va, len, b) in vas.table.iter() {
+                    if b.host.is_none() {
+                        continue; // declared by RPC only — nothing was allocated for it
+                    }
+                    assert_eq!(
+                        ram.resolve(b.phys, len),
+                        Ok(RamSpan {
+                            region: RamRegionId(arena.start),
+                            offset: b.phys - arena.start,
+                            len,
+                        }),
+                        "({mode:?}) {pid:?}/{g:?} holds a binding at {:#x}+{len:#x} that \
+                         does not prove out as RAM inside its OWN arena {arena:?}",
+                        b.phys,
+                    );
+                    all.push((pid, g, b.phys, len));
+                }
+            }
+        });
+    }
+    all.sort_unstable_by_key(|&(_, _, p, _)| p);
+    for w in all.windows(2) {
+        let (pa, ga, sa, la) = w[0];
+        let (pb, gb, sb, _) = w[1];
+        assert!(
+            sa + la <= sb,
+            "({mode:?}) two live bindings overlap: {pa:?}/{ga:?} {sa:#x}+{la:#x} vs \
+             {pb:?}/{gb:?} {sb:#x} — the #14 collision class, inside one window",
+        );
+    }
+    (all.len(), fragmented)
+}
+
+fn gpa_mean_run(mode: LockMode) -> GpaMeanReport {
+    let (mut device, pids, rec) = gpa_world(mode);
+    // The mid-run teardown kills a proc out of band, so its isolate is stopped and its
+    // staged release cannot drain — §7.0's process-boundary backstop, exactly as
+    // `mean_run` declares it.
+    device.declare_residue(
+        ResidueClaim::on(
+            IsolateId(pids[P_TEARDOWN].0),
+            "the proc retired out of band mid-run: its isolate is stopped, so its host \
+             VAS + warm-up backing are the §7.0 namespace-death residue",
+        )
+        .objects(VerbKind::AllocVaSpace, 1)
+        .objects(VerbKind::AllocSysmem, 1)
+        .maps(1),
+    );
+    let ram = arena_regions();
+    let audit = Mutex::new(GpaAudit::default());
+    let dev: &SharedDevice = &device;
+    let pid_ref: &[ProcId] = &pids;
+
+    // ---- Warm-up: every proc materializes its host VAS and one binding, so each
+    // arena exists (the workload reads its base) and a parked verb is the one the
+    // script names rather than an incidental first touch.
+    for i in 0..N_PROCS {
+        dev.publish_backing(gpu_of(i), lane_of(i).pdb, GpuVa(VA_WARM), 0x1000)
+            .expect("warm-up publish");
+    }
+    let doomed_arena = dev
+        .with_proc(pids[P_TEARDOWN], |p| p.arenas[&GPU0].range.clone())
+        .expect("the doomed proc's arena");
+
+    let (published, reaped, heir_arena, heir_published, latches_all_pending) =
+        thread::scope(|sc| {
+            // ---- park two host verbs, on two isolates, on both GPUs. Neither is on a
+            // proc this script retires: a reap requires a quiesced isolate (G3), and
+            // the point here is the RECYCLE, not the deferral.
+            let mut latches = Latches::new();
+            latches.arm(&rec, pids[P_CHANFREE], GPU1, 0, VerbKind::AllocChannel);
+            latches.arm(&rec, pids[P_REROUTE], GPU0, 0, VerbKind::AllocChannel);
+            let t_hold1 = sc.spawn(move || {
+                dev.doorbell(GPU1, MockArch::token_for(lane_of(P_CHANFREE).gr), &[])
+            });
+            let t_hold2 = sc
+                .spawn(move || dev.doorbell(GPU0, MockArch::token_for(lane_of(P_REROUTE).gr), &[]));
+            latches.wait_all_pending(); // a progress EDGE, never a sleep
+
+            // ---- FOUR address-churn threads: two per proc (one arena, two threads) on
+            // two procs (one per GPU).
+            let ra = &ram;
+            let au = &audit;
+            let mut workers = Vec::new();
+            for i in [P_WITNESS, P_PEER] {
+                for slot in 0..2u32 {
+                    workers.push(sc.spawn(move || gpa_workload(dev, ra, au, pid_ref, i, slot)));
+                }
+            }
+
+            // ---- ★ THE WHOLE-ARENA LIFO RECYCLE, while the churn threads allocate.
+            // A proc dies out of band; its arena goes back to its target's window; a
+            // brand-new guest process is then handed that very range.
+            assert!(
+                dev.retire_proc(pids[P_TEARDOWN]),
+                "({mode:?}) the doomed proc was live when the script retired it"
+            );
+            let reaped = dev.reap_retired();
+            let mut s = Scenario::new();
+            s.compute_process_on_gpu(
+                GPA_HEIR_CLIENT,
+                GPA_HEIR_PDB,
+                identical_handles(GPA_HEIR_GR.0, GPA_HEIR_CE.0),
+                None,
+            );
+            for ev in s.events {
+                dev.apply(ev).expect("({mode:?}) the heir process declares");
+            }
+            let heir = dev
+                .with_proc(
+                    dev.live_pids()
+                        .into_iter()
+                        .max()
+                        .expect("the heir is the newest proc"),
+                    |p| (p.id, p.arenas[&GPU0].range.clone()),
+                )
+                .expect("the heir");
+            let mut heir_published = 0usize;
+            for k in 0..16u64 {
+                let va = GpuVa(VA_GPA + 0x8000_0000 + k * 0x1_0000);
+                let p = dev
+                    .publish_backing(GPU0, GPA_HEIR_PDB, va, 0x1000)
+                    .expect("({mode:?}) the heir publishes through its recycled arena");
+                let span = ram.resolve(p.gpa, 0x1000).unwrap_or_else(|e| {
+                    panic!(
+                        "({mode:?}) the heir's GPA {:#x} is not provable RAM: {e:?}",
+                        p.gpa
+                    )
+                });
+                assert_eq!(
+                    span,
+                    RamSpan {
+                        region: RamRegionId(heir.1.start),
+                        offset: p.gpa - heir.1.start,
+                        len: 0x1000,
+                    },
+                    "({mode:?}) the heir published outside its own recycled arena",
+                );
+                audit
+                    .lock()
+                    .expect("auditor")
+                    .publish(p.gpa, 0x1000, HEIR_TAG | k, "heir");
+                heir_published += 1;
+            }
+
+            let published: Vec<usize> = workers
+                .into_iter()
+                .map(|h| h.join().expect("an address-churn thread panicked"))
+                .collect();
+            let all_pending = latches.all_pending();
+            latches.release_all();
+            let _ = t_hold1.join();
+            let _ = t_hold2.join();
+            (published, reaped, heir.1, heir_published, all_pending)
+        });
+
+    // Everything the threads staged for release is disposed of at the real quiesce
+    // point (the T0 drain), so the teardown ledger measures leaks and not backlog.
+    for _ in 0..4 {
+        dev.drain_pending_releases();
+    }
+    let (swept_bindings, fragmented_arenas) = gpa_sweep(dev, &ram, mode);
+    let g = audit.lock().expect("auditor");
+    GpaMeanReport {
+        published,
+        audited: (g.issued, g.recycled),
+        still_live: g.live.len(),
+        reaped,
+        recycled_arena: (doomed_arena, heir_arena),
+        heir_published,
+        swept_bindings,
+        fragmented_arenas,
+        latches_all_pending,
+    }
+}
+
+/// ★★★ **THE COMPOSED ADDRESS-OBSERVABILITY RUN.**
+///
+/// Four address-churn threads (two per `Proc`, so two threads share ONE `GpaArena`) on
+/// two procs on two GPUs, each cycling declare-VASpace → publish → free-VASpace one
+/// round behind so the arena is permanently fragmented; a **1 MiB** arena serving many
+/// times its own size, so the free list is load-bearing and a reuse path that stopped
+/// reusing is a `FwdFault::Arena` and not a slower run; two host verbs parked on two
+/// isolates across both GPUs the whole time; and — in the middle of all of it — a proc
+/// **retired and reaped**, its whole arena recycled LIFO into its target's window, and a
+/// brand-new guest process handed that very range while the churn threads keep
+/// allocating. Under **both** lock configurations.
+///
+/// Every publication is read back through the address table and its `phys` proven at the
+/// production prove-RAM port against its own proc's arena region. The end-of-run sweep
+/// then audits every live binding on the device the same way, and checks
+/// `GpaArena::live_bytes` against the summed lengths of the `GpaBlock` tokens the procs
+/// actually hold.
+#[test]
+fn a_published_gpa_is_provably_its_own_procs_ram_under_mean_arena_churn() {
+    let _wd = watchdog(
+        "a_published_gpa_is_provably_its_own_procs_ram_under_mean_arena_churn",
+        Duration::from_secs(300),
+    );
+    let degenerate = gpa_mean_run(LockMode::Degenerate);
+    let sharded = gpa_mean_run(LockMode::Sharded);
+
+    let per_thread = (GPA_ROUNDS as usize) * (GPA_PER_ROUND as usize);
+    for (name, r) in [("Degenerate", &degenerate), ("Sharded", &sharded)] {
+        // ---- every workload thread ran to completion. With reclamation broken this is
+        // where the run dies: 1 MiB of arena cannot serve this stream by bumping.
+        assert_eq!(
+            r.published,
+            vec![per_thread; 4],
+            "({name}) an address-churn thread did not complete its whole stream",
+        );
+        // ---- the auditor saw every publication, and the arena really did RECYCLE.
+        // Without this bound the whole run would still pass on an allocator that leaked
+        // every freed range and simply bumped — the instrument would be green on a path
+        // it never took (`testing_doctrine.md` §1).
+        assert_eq!(
+            r.audited.0,
+            4 * per_thread + r.heir_published,
+            "({name}) the auditor did not see every publication",
+        );
+        assert!(
+            r.audited.1 > 3 * per_thread,
+            "({name}) only {} of {} publications came out of a recycled page — the free \
+             list this run exists to exercise was barely reached",
+            r.audited.1,
+            r.audited.0,
+        );
+        // ---- nothing was left on the auditor's books: every range the churn published
+        // was reclaimed with its own tag still intact.
+        assert_eq!(
+            r.still_live,
+            r.heir_published + 2 * (GPA_PER_ROUND as usize),
+            "({name}) exactly the heir's publications plus the two slot-0 threads' \
+             deliberately-retained final round must still be live — every other range \
+             the churn published was reclaimed, with its own tag intact",
+        );
+        // ★ the sweep's `live_bytes` check was NOT vacuous: at least the two churn
+        // procs' arenas still had a non-empty free list when it ran.
+        assert!(
+            r.fragmented_arenas >= 2,
+            "({name}) no arena was still fragmented at the sweep, so its `live_bytes` \
+             audit could not see the free-list term at all",
+        );
+        // ---- ★ the whole-arena LIFO recycle really happened, and it is the SAME range.
+        assert_eq!(
+            r.reaped, 1,
+            "({name}) the retired proc was not reaped — the recycle never occurred"
+        );
+        assert_eq!(
+            r.recycled_arena.1, r.recycled_arena.0,
+            "({name}) the heir process was not handed the reaped proc's arena, so the \
+             #80 LIFO recycle was never exercised under load",
+        );
+        assert_eq!(
+            r.heir_published, 16,
+            "({name}) the heir did not publish through its recycled arena",
+        );
+        // ---- and the device-wide sweep audited real state, not an empty set.
+        assert!(
+            r.swept_bindings >= N_PROCS,
+            "({name}) the end-of-run sweep audited only {} bindings",
+            r.swept_bindings,
+        );
+        assert!(
+            r.latches_all_pending,
+            "({name}) the parked verbs were released before the workloads finished — \
+             the churn did not actually run against held host verbs",
+        );
+    }
+    assert_eq!(
+        degenerate.mode_independent(),
+        sharded.mode_independent(),
+        "the lock configuration is observable through the GPA plane",
+    );
 }
