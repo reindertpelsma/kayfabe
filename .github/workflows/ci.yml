@@ -66,8 +66,20 @@ jobs:
       - name: Build
         run: cargo build --workspace
       # (Deliberately not naming a test count here — it rots on every PR.)
-      - name: Test (the fast suite + doctests)
-        run: cargo test --workspace 2>&1 | tee /tmp/kayfabe-test.log; exit "${PIPESTATUS[0]}"
+      #
+      # ★★ KAYFABE_NO_KVM=1 PINS THE OS-FREE CONFIGURATION. GitHub runners have no
+      # /dev/kvm, so this job was *already* running that configuration — but by accident
+      # of what the runner image happens to lack, which would lapse silently the day an
+      # image starts shipping the device. The guarantee it protects is architectural: the
+      # pure logic core must stay testable with NO OS layer, or we lock in Linux/KVM/QEMU/
+      # x86 semantics and only find out when a second VMM or a second architecture is
+      # attempted. `kayfabe-mocks` is the backend for this configuration.
+      #
+      # The with-KVM configuration is covered on developer boxes and the bench; the
+      # reached-count gate below is what stops the gated tests from silently vanishing
+      # from BOTH.
+      - name: Test (OS-free configuration — KVM forced absent)
+        run: KAYFABE_NO_KVM=1 cargo test --workspace 2>&1 | tee /tmp/kayfabe-test.log; exit "${PIPESTATUS[0]}"
       # ★★ KVM-gate non-vacuity. GitHub runners do NOT provide /dev/kvm, so the ~33
       # tests that need a real VM fd SKIP here — and a skip that nobody counts is the
       # "green instrument on an unexercised path" failure this repo cares most about

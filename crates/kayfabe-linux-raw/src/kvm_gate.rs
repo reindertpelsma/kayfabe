@@ -55,10 +55,26 @@ pub const KVM_DEVICE: &str = "/dev/kvm";
 /// Deliberately opens read-write: `/dev/kvm` existing but being unreadable by this user
 /// is the common container/CI shape, and a probe that only checked for the path would
 /// report a capability we do not have.
+/// ★★ `KAYFABE_NO_KVM=1` forces this to report **absent**, so the OS-free configuration is
+/// runnable **on purpose** rather than only by accident of what a machine happens to lack.
+///
+/// The property it exists to protect is load-bearing for the whole architecture: **the pure
+/// logic core must stay testable with no OS layer at all**, or we silently lock in Linux /
+/// KVM / QEMU / x86 semantics and only discover it when a second VMM or a second
+/// architecture is attempted. `MockVmm` and the rest of `kayfabe-mocks` are the backend for
+/// that configuration and are not going anywhere.
+///
+/// Before this existed, that configuration was exercised **only** by CI runners happening to
+/// have no `/dev/kvm` — i.e. the guarantee held by luck, was unreproducible on any developer
+/// machine, and would have silently lapsed the day a runner image started shipping the
+/// device. Now: `KAYFABE_NO_KVM=1 cargo test --workspace` on any box.
 #[must_use]
 pub fn kvm_available() -> bool {
     static AVAILABLE: OnceLock<bool> = OnceLock::new();
     *AVAILABLE.get_or_init(|| {
+        if std::env::var_os("KAYFABE_NO_KVM").is_some_and(|v| v == "1") {
+            return false;
+        }
         std::fs::OpenOptions::new()
             .read(true)
             .write(true)
