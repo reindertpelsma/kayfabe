@@ -311,3 +311,223 @@ fn out_of_range_gpa_faults_with_the_offending_address() {
         Err(VmmError::BadGpa { gpa: u64::MAX })
     );
 }
+
+// ---------------------------------------------------------------------------------
+// 4. ★★ The guest-RAM map — the one central check every backend's `gpa_read` /
+//    `gpa_write` must make (`l1_os_shell.md` §6.1/§6.3/§10.1 item 6).
+// ---------------------------------------------------------------------------------
+
+use kayfabe_vmm::{GuestRamMap, RamRegionId, RamSpan, RegionKind};
+
+const RAM_LO: RamRegionId = RamRegionId(1);
+const RAM_HI: RamRegionId = RamRegionId(2);
+const DEV: RamRegionId = RamRegionId(3);
+
+/// A machine shaped like a real one: RAM below the 4 GiB hole, a device BAR **inside**
+/// that RAM (a guest can and does re-program a BAR over RAM), a genuine hole, and a
+/// second RAM region above 4 GiB.
+///
+/// ```text
+///   0x0000_0000 .. 0x8000_0000   RAM_LO
+///   0x8000_0000 .. 0x8001_0000   DEV      (a BAR mapped over RAM)
+///   0x8001_0000 .. 0xC000_0000   RAM_LO   (the remainder — offsets must survive the punch)
+///   0xC000_0000 .. 1_0000_0000   nothing
+///   1_0000_0000 .. 2_0000_0000   RAM_HI
+/// ```
+fn machine() -> GuestRamMap {
+    let mut m = GuestRamMap::new();
+    m.declare(RAM_LO, RegionKind::Ram, 0, 0xC000_0000).unwrap();
+    m.declare(DEV, RegionKind::Device, 0x8000_0000, 0x1_0000)
+        .unwrap();
+    m.declare(RAM_HI, RegionKind::Ram, 0x1_0000_0000, 0x1_0000_0000)
+        .unwrap();
+    m
+}
+
+/// ★★★ **The refusal that keeps the §6.3 ABBA unconstructible.** A GPA landing on a
+/// device window is [`VmmError::NonRamGpa`] — and its near neighbour, a GPA landing on
+/// nothing at all, is [`VmmError::BadGpa`]. The two must never start reporting as each
+/// other (`testing_doctrine.md` §2 rule 3): only the first one means *the guest tried to
+/// make us take a lock we do not own*.
+///
+/// Non-vacuity arm included per rule 2: the same call, one page lower, **succeeds**.
+#[test]
+fn a_device_gpa_is_refused_by_name_and_an_unbacked_one_is_a_different_name() {
+    let m = machine();
+
+    // Non-vacuity: RAM immediately below the BAR resolves, so the refusals below are
+    // about WHAT is at the address and not about the resolver being broken.
+    assert_eq!(
+        m.resolve(0x7FFF_F000, 0x1000),
+        Ok(RamSpan {
+            region: RAM_LO,
+            offset: 0x7FFF_F000,
+            len: 0x1000
+        })
+    );
+
+    assert_eq!(
+        m.resolve(0x8000_0000, 4),
+        Err(VmmError::NonRamGpa { gpa: 0x8000_0000 }),
+        "a descriptor aimed at a device register window is refused BY NAME — this is \
+         the guest-steerable lock inversion, not an ordinary read miss"
+    );
+    assert_eq!(
+        m.resolve(0x8000_0FFC, 4),
+        Err(VmmError::NonRamGpa { gpa: 0x8000_0FFC }),
+        "…anywhere inside it, not only at its base"
+    );
+    assert_eq!(
+        m.resolve(0xC000_0000, 4),
+        Err(VmmError::BadGpa { gpa: 0xC000_0000 }),
+        "the 4 GiB hole is backed by NOTHING — the near neighbour, and a different name"
+    );
+}
+
+/// ★ A read that **starts in RAM and runs into the device window** is refused, naming
+/// the boundary. This is the case a start-address-only check would serve: on a QEMU
+/// backend `flatview_*_continue` walks region by region, so the second step is the one
+/// that calls `prepare_mmio_access` — the lock is taken *after* the first bytes were
+/// already a legal memcpy. `[src] v10.2.0 system/physmem.c:3289-3315`, `:3250`.
+#[test]
+fn a_read_straddling_ram_into_a_device_window_is_refused_at_the_boundary() {
+    let m = machine();
+
+    assert_eq!(
+        m.resolve(0x7FFF_FFF8, 0x10),
+        Err(VmmError::NonRamGpa { gpa: 0x8000_0000 }),
+        "a straddling range names the FIRST byte that is not RAM, which is the boundary \
+         — the byte a start-only check would never look at"
+    );
+    // And straddling out of RAM into a HOLE is the other name, at its own boundary.
+    assert_eq!(
+        m.resolve(0xBFFF_FFF8, 0x10),
+        Err(VmmError::BadGpa { gpa: 0xC000_0000 })
+    );
+    // Non-vacuity: the same length, one byte lower, fits entirely in RAM and resolves.
+    assert_eq!(
+        m.resolve(0x7FFF_FFF0, 0x10),
+        Ok(RamSpan {
+            region: RAM_LO,
+            offset: 0x7FFF_FFF0,
+            len: 0x10
+        })
+    );
+}
+
+/// ★ Punching a device window out of a larger RAM declaration must carry the remainder's
+/// **offset into its own backing** forward. Get this wrong and a legal read past the BAR
+/// silently returns the wrong bytes — a memcpy from the wrong host page, with no error
+/// anywhere. Asserted as an exact offset, not as "it resolved".
+#[test]
+fn the_remainder_after_a_punched_window_keeps_its_offset_into_its_backing() {
+    let m = machine();
+
+    assert_eq!(
+        m.resolve(0x8001_0000, 0x1000),
+        Ok(RamSpan {
+            region: RAM_LO,
+            offset: 0x8001_0000,
+            len: 0x1000
+        }),
+        "the RAM above the punched-out BAR is still RAM_LO at its ORIGINAL offset"
+    );
+    assert_eq!(
+        m.resolve(0x1_0000_0000, 8),
+        Ok(RamSpan {
+            region: RAM_HI,
+            offset: 0,
+            len: 8
+        }),
+        "a separately declared region starts at offset 0 in its own backing"
+    );
+}
+
+/// ★ The two argued exemptions in [`GuestRamMap::resolve`]'s contract, pinned so they
+/// cannot be widened by accident: a **zero-length** access still names an address, and a
+/// range must lie in **one** region.
+#[test]
+fn the_resolvers_two_exemptions_are_exactly_these_two() {
+    let m = machine();
+
+    assert_eq!(
+        m.resolve(0x8000_0000, 0),
+        Err(VmmError::NonRamGpa { gpa: 0x8000_0000 }),
+        "a zero-length access aimed at a device register is still refused — the rule \
+         'every GPA we touch was proven RAM' is total, with no per-backend exception"
+    );
+    assert_eq!(
+        m.resolve(0x1000, 0),
+        Ok(RamSpan {
+            region: RAM_LO,
+            offset: 0x1000,
+            len: 0
+        }),
+        "…and a zero-length access to RAM is served, with len 0"
+    );
+
+    // One region only: RAM_LO ends at the hole, RAM_HI starts after it. Even if they
+    // were adjacent, one `RamSpan` names one backing.
+    let mut adjacent = GuestRamMap::new();
+    adjacent
+        .declare(RAM_LO, RegionKind::Ram, 0, 0x1000)
+        .unwrap();
+    adjacent
+        .declare(RAM_HI, RegionKind::Ram, 0x1000, 0x1000)
+        .unwrap();
+    assert_eq!(
+        adjacent.resolve(0xFF8, 0x10),
+        Err(VmmError::BadGpa { gpa: 0x1000 }),
+        "a range that leaves its region is not backed AS A UNIT, even when the next \
+         region is RAM and adjacent — one span, one backing"
+    );
+}
+
+/// ★ A range that leaves the 64-bit space is un-formable and is refused as `BadGpa`
+/// (*nothing is there*), never as `NonRamGpa` (*a device is there*) and never as a
+/// wrap-around read. The `all_ram` map is the strongest place to assert it: with the
+/// **entire** space declared RAM there is nothing else the refusal could be about.
+#[test]
+fn an_unformable_range_is_refused_even_when_every_declared_byte_is_ram() {
+    let m = GuestRamMap::all_ram(RAM_LO);
+
+    assert_eq!(
+        m.resolve(0xFFFF_FFFF_FFFF_F000, 0x1000),
+        Ok(RamSpan {
+            region: RAM_LO,
+            offset: 0xFFFF_FFFF_FFFF_F000,
+            len: 0x1000
+        }),
+        "a range ending exactly at 2^64 is formable"
+    );
+    assert_eq!(
+        m.resolve(0xFFFF_FFFF_FFFF_F000, 0x1001),
+        Err(VmmError::BadGpa {
+            gpa: 0xFFFF_FFFF_FFFF_F000
+        }),
+        "one byte more leaves the address space — refused, not wrapped"
+    );
+    assert_eq!(
+        m.resolve(u64::MAX, 2),
+        Err(VmmError::BadGpa { gpa: u64::MAX })
+    );
+}
+
+/// ★ [`GuestRamMap::undeclare`] is the window-teardown side, and it must leave a HOLE
+/// rather than a device window — the two are different refusals and mean different
+/// things to whoever reads the fault.
+#[test]
+fn undeclaring_a_window_leaves_a_hole_not_a_device() {
+    let mut m = machine();
+    assert_eq!(
+        m.resolve(0x1_0000_0000, 8).map(|s| s.region),
+        Ok(RAM_HI),
+        "non-vacuity: it resolved before the teardown"
+    );
+    m.undeclare(0x1_0000_0000, 0x1_0000_0000);
+    assert_eq!(
+        m.resolve(0x1_0000_0000, 8),
+        Err(VmmError::BadGpa { gpa: 0x1_0000_0000 }),
+        "a torn-down window is backed by nothing — never silently still RAM"
+    );
+}

@@ -453,6 +453,37 @@ memory region the guest physical address lands on**.
 > not an acquisition site we wrote (2), and it *is* on the written list of functions the trap path
 > calls (3) unless someone knew to look inside it.
 
+> ### ★★ THREE CORRECTIONS to the box above, from the build that adopted it (2026-07-27)
+>
+> Recorded here because this file's rule is *"where this file and a design doc disagree about
+> what upstream does, this file wins"* — so when the build read more of upstream, this file is
+> where the reading lands. Full write-up: `../design/l1_concurrency.md` §12.43 §5.
+>
+> 1. **The rule is "prove RAM", not "refuse MMIO".** **[src]** `system/physmem.c:3010-3017` —
+>    `io_mem_init` calls `memory_region_enable_lockless_io(&io_mem_unassigned)`, commented
+>    *"Trivially thread-safe since memory accesses are rejected"*. So at v10.2.0 an **unassigned**
+>    GPA does **not** take the BQL, while every ordinary device region does. A deny-list reasoned
+>    from "MMIO is dangerous" is therefore both over-inclusive (unassigned is harmless) and
+>    under-inclusive (it must enumerate every device). Only a positive allow-list is stable.
+> 2. **★ Upstream has a facility that LOOKS like the fix and is not sufficient.**
+>    **[src]** `MemTxAttrs.memory` (`include/exec/memattrs.h:46`, *"bus transactions are restricted
+>    to normal memories… Access to devices will be logged and rejected"*) is honoured by
+>    `flatview_access_allowed` (`system/physmem.c:3222-3238`), and it runs **before**
+>    `prepare_mmio_access` in both continue-steps (`:3243` precedes `:3250`; `:3339` precedes
+>    `:3347`). Setting it would refuse a device access with `MEMTX_ACCESS_ERROR` and take no lock.
+>    **But its RAM test is `memory_region_is_ram(mr)`**, while `memory_access_is_direct` goes
+>    through `memory_region_supports_direct_access`, which **excludes `ram_device`**
+>    (`include/system/memory.h:3136-3151`, *"RAM DEVICE regions can be accessed directly using
+>    memcpy, but it might be MMIO… So we treat this as IO"*). A `ram_device` region — which is
+>    exactly what `memory_region_init_ram_device_ptr` produces for a VFIO-mapped BAR, row 16's
+>    only lever — **passes `attrs.memory` and then takes the BQL**. ROMD regions have the same
+>    shape on the write side. There is also no `MEMTXATTRS_MEMORY` constant at v10.2.0; the bit
+>    would have to be set by hand. **Take the cached-pointer fix; the attrs flag is a trap.**
+> 3. **The straddling case is the one a naive fix misses.** **[src]** `flatview_write_continue`
+>    (`:3289-3315`) walks region by region, so a range that starts in RAM and runs into a device
+>    window is a legal memcpy on step 1 and a `prepare_mmio_access` on step 2. A check on the
+>    start address alone is not a fix.
+
 **[inferred]** This does not say a bug exists today — the core touches `Vmm` in three places and
 `gpa_read` once. It says the constraint must be written into the trait's rustdoc **before** the
 adapter is written, which is the whole premise of doing this inventory early. It is also a second

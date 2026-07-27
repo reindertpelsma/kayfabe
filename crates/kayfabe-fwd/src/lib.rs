@@ -62,7 +62,7 @@ use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_isolate::{ChannelHandles, HostHandle, RmError, VerbPlan, VerbReply, Worker};
 use kayfabe_mmu::AddressTable;
 use kayfabe_mmu::{AddressFault, Binding};
-use kayfabe_vmm::{FbMeta, IrqSpec, Present, PresentError, SurfaceHandle, Vmm};
+use kayfabe_vmm::{FbMeta, IrqSpec, Present, PresentError, SurfaceHandle, Vmm, VmmError};
 
 /// The MSI-X vector completions are raised on. Abstract placeholder until the
 /// interrupt-tree model ports (`kayfabe-regs`-equivalent); the mocks assert on it.
@@ -146,8 +146,35 @@ pub enum FwdFault {
     /// Reading guest memory failed while parsing a pushbuffer (`Vmm::gpa_read`
     /// refused a GPFIFO range). Distinct from [`FwdFault::Arena`] by design: this is
     /// a guest-side read failure, not a host arena-exhaustion condition.
+    ///
+    /// ★ **And distinct from [`FwdFault::NonRamGpa`]** — this one means *nothing is
+    /// there*; that one means *a device is there*. They are near neighbours over the
+    /// same call (`testing_doctrine.md` §2 rule 3), and the day they start reporting as
+    /// each other a test must change.
     GpaRead {
         /// The guest-physical address the refused read started at.
+        gpa: u64,
+    },
+    /// ★★★ **The guest aimed a descriptor at a device register window.** A GPFIFO
+    /// entry (or any other guest-supplied GPA) named an address that resolves to MMIO
+    /// rather than to host RAM, and the port refused to serve it.
+    ///
+    /// # Why this is its own variant and not a `GpaRead`
+    ///
+    /// It is not a read failure, it is a **refused lock inversion**. `Vmm::gpa_read` is
+    /// in-lock legal (`l1_os_shell.md` §6.1) and this call site runs it under the
+    /// device read lock, so an implementation that served a device-aimed GPA would take
+    /// the VMM's global lock beneath one of our ranked locks — §6.3's ABBA, constructed
+    /// on demand by the guest, and invisible to all four of §6.3's enforcement layers.
+    /// `[src] v10.2.0 system/physmem.c:3250` (write) / `:3347` (read) →
+    /// `prepare_mmio_access` `:3196-3209`.
+    ///
+    /// Folding it into [`FwdFault::GpaRead`] would make the one observable signal that
+    /// the refusal happened indistinguishable from an ordinary unbacked-page miss — the
+    /// §12.10 wrong-reason conflation, on the security-relevant arm.
+    NonRamGpa {
+        /// The first guest-physical address in the requested range that resolves to a
+        /// device region.
         gpa: u64,
     },
     /// The isolate's RM backend refused the op.
@@ -1799,6 +1826,30 @@ pub struct PushbufferOutcome {
     pub opaque: usize,
 }
 
+/// ★★★ **THE ONE PLACE the core touches guest-physical memory.**
+///
+/// Every `Vmm::gpa_read` / `Vmm::gpa_write` in the pure crates goes through here, and a
+/// CI gate keeps it that way (`.github/workflows/ci.yml`, the GPA-accessor gate). The
+/// point is not tidiness — it is that the *classification* of a refusal must exist in
+/// exactly one place, for the same reason `RmGraph::undeclared_namespace` does:
+///
+/// - [`VmmError::NonRamGpa`] ⇒ [`FwdFault::NonRamGpa`] — the guest aimed a descriptor
+///   at a device register window. **Named, never folded**, because this call runs under
+///   the device read lock and a backend that served it would take the VMM's global lock
+///   beneath one of our ranked locks (`l1_os_shell.md` §6.3 / §10.1 item 6).
+/// - anything else ⇒ [`FwdFault::GpaRead`] naming the address the *request* started at
+///   (a partial/straddling refusal reports its boundary in the `NonRamGpa` arm; the
+///   generic arm reports the request, which is what a caller can act on).
+///
+/// A `map_err(|_| …)` at the call site — which is what this replaced — discards the
+/// variant, and with it the only evidence the refusal was the security-relevant one.
+fn guest_read(vmm: &mut dyn Vmm, gpa: u64, buf: &mut [u8]) -> Result<(), FwdFault> {
+    vmm.gpa_read(gpa, buf).map_err(|e| match e {
+        VmmError::NonRamGpa { gpa } => FwdFault::NonRamGpa { gpa },
+        _ => FwdFault::GpaRead { gpa },
+    })
+}
+
 /// Decode a byte range of method words into `(header, args)` pairs, arch-driven.
 /// Total on any input (a hostile/truncated range yields fewer methods, never a
 /// panic or an unbounded read).
@@ -1845,8 +1896,7 @@ pub fn read_pushbuffer(
             .min(MAX_PUSH_RANGE_BYTES)
             .min(MAX_PUSH_TOTAL_BYTES - total);
         let mut buf = vec![0u8; len];
-        vmm.gpa_read(r.gpa, &mut buf)
-            .map_err(|_| FwdFault::GpaRead { gpa: r.gpa })?;
+        guest_read(vmm, r.gpa, &mut buf)?;
         methods.extend(decode_methods(spine.arch.as_ref(), &buf));
         total += len;
     }

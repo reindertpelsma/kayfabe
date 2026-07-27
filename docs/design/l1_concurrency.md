@@ -5503,3 +5503,205 @@ Fixed and tested.
 - **O5** — GSP-side PDB uniqueness. Unchanged, still an experiment.
 - **Open, unchanged:** §12.39 §7's O1–O4 bench questions; §12.39 test 8's
   `security_invariants` fuzz property (still not written).
+
+---
+
+### 12.43 ★★★ `gpa_read`/`gpa_write` WERE A GUEST-STEERABLE LOCK INVERSION — and the harness could not express it
+
+**Status: LANDED.** 365 → **372 tests** (six focused port-contract tests + one composed
+mean test; the mean one is in `l1_mean.rs`, where the doctrine says it belongs). Gate
+clean (`KAYFABE_SLOW=1 cargo test --workspace`, `clippy --all-targets -D warnings`,
+`fmt --check`, `check --target aarch64-unknown-linux-gnu`). Uncommitted, for review.
+
+**The brief** (`l1_os_shell.md` §10.1 item 6, from the `qemu_102_facilities.md` inventory):
+`Vmm::gpa_read`/`gpa_write` are classified **in-lock legal** on the grounds that they are
+*"a memcpy into an already-installed mapping"*. On a QEMU backend the obvious
+implementation is `address_space_rw`, which **takes the VMM's global lock when the target
+GPA lands on MMIO**. Verified against the tag, first thing, because the whole §6.3.1
+lesson is that a named API is a claim about a version:
+
+- **[src] `v10.2.0 system/physmem.c:3196-3209`** — `prepare_mmio_access`:
+  `if (!bql_locked() && !mr->lockless_io) bql_lock();`
+- **[src] `:3250`** (`flatview_write_continue_step`) and **`:3347`**
+  (`flatview_read_continue_step`) call it whenever `memory_access_is_direct` is false.
+- **[src] `:3448`** — `address_space_write` itself takes only `RCU_READ_LOCK_GUARD()`.
+
+**All three citations are exact.** A guest that points a GPFIFO entry at a device page
+therefore turns a rank-0-held memcpy into a global-lock acquisition beneath one of our
+ranked locks — §6.3's ABBA, built to order, and invisible to all four of §6.3's
+enforcement layers.
+
+---
+
+#### 1. ★★ The finding that mattered most: the harness could not express the hazard
+
+`MockVmm`'s guest-physical space was a sparse `BTreeMap<u64, u8>` in which **every**
+address is RAM and `gpa_read` had **no failing arm at all** — it returned `Ok(())`
+unconditionally, reading absent bytes as zero. Not "the test would have been weak": the
+test was **unwritable**. Any refusal assertion would have been a green instrument on a
+path the harness could not construct (`testing_doctrine.md` §1).
+
+Worse, the mock's own comment asserted that this *was* real-adapter behaviour — *"an
+un-formable address is simply absent → reads 0, exactly a real adapter's unbacked-page
+behavior"* — while `vmm_portability.rs`'s second backend in the same suite returned
+`VmmError::BadGpa` for exactly that shape and called it *"the contract"*. **Two mock
+backends disagreed about whether a wrapping range is serviceable**, and the sparse one was
+wrong. `c_bug_regressions.rs::cbfuzz_gpfifo_range_gpa_near_umax_never_panics` had encoded
+the wrong one as an expectation; it is strengthened in place, with the reasoning in its
+doc comment (the property it *names* — bounded, never panics — is untouched).
+
+#### 2. The fix — a POSITIVE proof in the port, one classification site in the core
+
+`kayfabe_vmm::GuestRamMap` (new). Declared guest-physical regions of
+`RegionKind::{Ram, Device}`; `resolve(gpa, len)` proves a range lies wholly inside one
+**RAM** region or refuses:
+
+| refusal | means | why it must stay distinct |
+|---|---|---|
+| `VmmError::NonRamGpa { gpa }` | a **device** is there | the guest-steerable inversion — the only signal it happened |
+| `VmmError::BadGpa { gpa }` | **nothing** is there, or the range is un-formable, or it leaves its region | the ordinary miss |
+
+`kayfabe_fwd::guest_read` is the **one** core-side site that touches guest memory and the
+one place the refusal is classified (`NonRamGpa → FwdFault::NonRamGpa`, everything else →
+`FwdFault::GpaRead`). A new CI gate holds it there: zero `.gpa_(read|write)(` in the pure
+crates, exactly one in `kayfabe-fwd`. The code it replaced was `map_err(|_| GpaRead)` —
+i.e. the discarded variant *was* the finding, which is §12.10's wrong-reason conflation on
+the security-relevant arm.
+
+**Where the refusal belongs: the PORT, not the core.** The core cannot know which GPAs are
+RAM — only the VMM does. Putting the check in the port crate rather than in each adapter's
+prose is the `RmGraph::undeclared_namespace` pattern: one central check, two argued
+exemptions (a zero-length access is still checked; a range must lie in one region), the
+`file:line` citations inline.
+
+#### 3. ★ R5: the obligation does NOT arise, and that is a design choice, not luck
+
+The brief asked whether the cached RAM resolution needs re-validating after a re-lock.
+**No — provided nothing resolved crosses the port**, which is why there is deliberately no
+`RamGpa` proof-token type. A token minted by `resolve` and consumed by a later copy would
+be a resolved backing held across a lock gap, and `Vmm::unmap_guest` is a "NO" row that
+runs lock-free on another thread: the token would *create* an R5 obligation and a
+use-after-free surface that the indivisible resolve-then-copy shape simply does not have.
+The core holds only a `u64`, and a `u64` cannot dangle. **The tempting
+"make-it-unrepresentable" move was the wrong one**, and the reason is written into
+`GuestRamMap`'s rustdoc so it is not re-attempted.
+
+**What the fix DOES introduce is a new lock, and it must be ranked.** A real adapter's
+region map is mutated by the coarse memory plane (§6.7 window install/remove — lock-free)
+and read from an in-lock-legal accessor with rank 0 or 1 held. That needs synchronisation,
+and it must be a **leaf**: ours, ranked below rank 1, acquiring nothing beneath it, with a
+bounded memcpy as its critical section. Closing a foreign-lock hazard by introducing an
+*unranked* lock of our own would trade one invisible inversion for another. The test
+harness models exactly this shape (`kayfabe_tests::SharedVmm`).
+
+#### 4. Interactions, checked rather than assumed
+
+- **`guest_memory_lock.md`:** yes, and it is already closed — **by GL4**. The memcpy under
+  the leaf lock could block on a uffd-WP fault if a DMA target were ever armed, which
+  would be an R1 violation created by this fix. GL4 makes DMA-target and isolate-shared
+  ranges **unlockable by construction, refused at registration**, and §3.1 classifies
+  userspace pushbuffers as copy-once/not-lockable. So the hazard is unconstructible.
+  Nothing in either doc said so; it is written down now.
+- **§6.7 memslot/arena:** aligned, and it is what makes the fix cheap. The region map's
+  granularity is the **window**, not the object: a `MAP_FIXED` placement inside an
+  installed window changes no region, so `GpaArena::alloc/free` never touches the map and
+  the leaf lock is contended only at proc create/destroy frequency.
+- **§6.3.1 lockless IO:** unaffected. The flag suppresses *taking* the global lock on
+  **our** regions; every other device's regions are untouched by it, and those are the
+  reachable set.
+
+#### 5. ★★ Three things in the brief / the inventory that were wrong or incomplete
+
+1. **"Refuse a non-RAM GPA" is not quite the right rule — the right rule is "prove RAM".**
+   **[src] `v10.2.0 system/physmem.c:3010-3017`**: `io_mem_init` calls
+   `memory_region_enable_lockless_io(&io_mem_unassigned)`, commented *"Trivially
+   thread-safe since memory accesses are rejected"*. So at ≥ 10.2 an **unassigned** GPA
+   does *not* take the global lock — meaning a deny-list built from "MMIO is dangerous"
+   would be both over- and under-inclusive. A positive allow-list is the only stable rule,
+   and it is what landed.
+2. **Upstream has a facility that looks like the fix and is not sufficient.**
+   `MemTxAttrs.memory` (**[src]** `include/exec/memattrs.h:46`) makes `flatview_access_allowed`
+   (**[src]** `system/physmem.c:3222-3238`) reject non-RAM with `MEMTX_ACCESS_ERROR`
+   **before** `prepare_mmio_access` runs (`:3243` precedes `:3250`, and `:3339` precedes `:3347`). Tempting. But its
+   RAM test is `memory_region_is_ram(mr)`, and **`memory_region_supports_direct_access`
+   excludes `ram_device` regions** (`include/system/memory.h:3136-3151`) — which is exactly
+   what `memory_region_init_ram_device_ptr` produces, i.e. **a VFIO-mapped device BAR
+   passes the `attrs.memory` check and then takes the lock**. ROMD regions have the same
+   shape on the write side. There is no `MEMTXATTRS_MEMORY` constant at v10.2.0 either.
+   **Take the cached-pointer fix, not the attrs flag.**
+3. **The straddling case was not in the brief and is the one a naive fix misses.**
+   QEMU walks region by region (**[src]** `system/physmem.c:3289-3315`, `flatview_write_continue`), so a range that *starts* in RAM
+   and runs into MMIO takes the lock on the **continuation step** — after the first bytes
+   were a legal memcpy. A start-address-only check is therefore not a fix at all. The
+   resolver names the boundary byte, and a dedicated test pins it
+   (`a_read_straddling_ram_into_a_device_window_is_refused_at_the_boundary`, which bites
+   under exactly that neuter and under nothing else).
+
+#### 6. ★ And a fourth: the hazard was NOT REACHABLE through the L1 shell
+
+`read_pushbuffer`'s own rustdoc said *"in L1 this runs under the device read lock"*. **No
+L1 entry point ran it at all** — `SharedDevice` had no pushbuffer path, so the only callers
+were tests holding a bare `&mut Gpu` and no lock. The doc described an intention.
+`SharedDevice::parse_pushbuffer` now exists in exactly the shape the doc claimed (route
+phase = rank 0 + the guest read; act phase = the owning proc's rank-1 lock), which is what
+lets the mean test drive the hazard through the real lock shell in **both** lock modes.
+
+The premise is asserted, not assumed: `SharedVmm` witnesses `lock::held_depth()` at every
+port access and the mean test asserts the span is exactly **`(0, 1)`** — max 1 because the
+pushbuffer reads really did run under rank 0, min 0 because the scripting writes really did
+run lock-free. Without both ends the whole test could be green about a lock-free path.
+
+#### 7. Bite-checks — including the two that did NOT bite
+
+Thirteen neuters. Every one is reported, because two of the informative results are
+failures of *my own instruments*:
+
+| # | neuter | bit |
+|---|---|---|
+| N1 | `resolve` treats `Device` as RAM | 3 tests (mean + 2 focused) |
+| N2 | `resolve` checks only the START address | mean (straddle arm) + 2 focused |
+| N3 | drop the un-formable check | bit, but by **panicking inside the neutered code**, not by an assertion — a weak bite, so re-run as N3b |
+| N3b | un-formable range **clamped and served** (the realistic mistake) | 2 tests, on their assertions |
+| N4 | `punch` drops the split remainder's backing offset | 1 focused test, on an exact offset |
+| N5 | restore `map_err(\|_\| GpaRead)` (the original code) | **mean only** — no focused test can see it, which is the argument for the mean test |
+| N6 | `MockVmm` skips the proof entirely | mean + `cbfuzz`; **none of the six focused resolver tests bit**, because they exercise `GuestRamMap` directly and are blind to whether any backend uses it |
+| N7 | `undeclare` is a no-op | mean + 1 focused |
+| N8 | remove the mean test's mid-flight window teardown | mean (revoke arm), `first_refusal: None` |
+| N9a/b | the CI gate: a second accessor in a pure crate / a second site in `kayfabe-fwd` | both fire |
+| N10 | `resolve` refuses **everything**, RAM included | mean, on the non-vacuity arm |
+| N11 | the route phase reads no guest memory | mean, on the non-vacuity arm (so the depth witness was not isolated by it) |
+| N12 | the depth witness reports a **constant** | ★ **DID NOT BITE** — see below |
+| N13 | the in-lock read is not witnessed | mean, `(0,0)` vs `(0,1)` |
+
+**★ N12 is the finding.** A constant witness passed, because `SharedVmm` derived
+`Default` and `Arc<AtomicU32>::default()` is `0` — so the *minimum* watermark started at
+its own success value and the lower half of the assertion was **vacuous**. Fixed by
+hand-writing `Default` (the same defect the new `MockVmm::default` avoids for the same
+reason: a derived `Default` produced an EMPTY region map, in which every GPA refuses).
+Re-running N12 after the fix surfaced a second one: *every* port access was in-lock,
+because the harness scripted guest memory through `with()` and bypassed the port entirely.
+Scripting now goes through `Vmm::gpa_write`, which is both more realistic and what makes
+the `(0, 1)` span an observation instead of an artifact. **Two real defects, both in the
+instrument, both found only by honestly reporting a non-biting neuter.**
+
+**★ And N10 found a harness HANG.** With the resolver refusing everything, the revoke
+prober panicked before signalling, and the main thread spun forever inside `thread::scope`
+on a flag nobody would set — the failure read as a wedge, not as an assertion. That is
+precisely the shape `Latches`' own `Drop` guard exists for. The spin is now a condvar gate
+that **opens on unwind** (`StartGate` + `OpenOnDrop`). Bite-checking found a hang that no
+amount of green running would have.
+
+#### 8. Residuals, named
+
+1. **No adapter exists**, so nothing here is measured. The QEMU-side claim is a source read
+   at one tag; the *cost* of the leaf lock and of the resolve on the pushbuffer hot path is
+   unmeasured and belongs to L2-Q.
+2. **The leaf lock's rank is documented, not enforced.** There is no ranked-lock type in
+   `kayfabe-vmm` (the port must not depend on the shell), so an adapter that gets it wrong
+   trips no gate. The `lock_depth_span` witness proves the *accessor* runs in-lock; nothing
+   proves the adapter's own map lock is a leaf. That is an L2 review obligation, named here.
+3. **`gpa_write` has no core call site yet**, so its half of the contract is exercised only
+   by the harness. It is written into the trait now, before the first caller, deliberately.
+4. **Multi-region spans are refused, not served.** Argued from §6.7 (coarse windows), not
+   measured against a real guest's descriptors. If a legitimate one ever straddles two
+   windows, the fix is a loop that re-proves each step — never a resolve-once-copy-across.

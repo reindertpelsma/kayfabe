@@ -102,8 +102,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant as WallInstant};
 
@@ -119,17 +119,19 @@ use kayfabe_fwd::{ControlRoute, DoorbellOutcome, FwdFault, Published, Stale};
 use kayfabe_isolate::{HostHandle, IsolateId, RmError, WorkerId};
 use kayfabe_mmu::AddressFault;
 use kayfabe_mocks::{
-    HoldSpec, MockArch, MockIsolateFactory, RmVerb, SharedRecorder, VerbHold, VerbKind,
-    mock_classes, mock_ctrl,
+    HoldSpec, MockArch, MockIsolateFactory, MockPushbuffer, RmVerb, SharedRecorder, VerbHold,
+    VerbKind, VmmErrorKind, mock_classes, mock_ctrl,
 };
 use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
 use kayfabe_rt::executor::{Effect, Executor};
 use kayfabe_rt::inbox::{CoreEvent, inbox};
 use kayfabe_rt::lock;
 use kayfabe_tests::{
-    Guarded, ResidueClaim, Scenario, identical_handles, reachable_maps, reachable_objects,
+    Guarded, ResidueClaim, Scenario, SharedVmm, gpfifo_ring, identical_handles, reachable_maps,
+    reachable_objects, script_ring,
 };
 use kayfabe_util::Instant;
+use kayfabe_vmm::Vmm as _;
 
 // =================================================================================
 // Bounded termination (the `concurrency_stress.rs` M4b lesson, kept): fixed iteration
@@ -5398,4 +5400,531 @@ fn a_superseded_declarations_kernel_held_memory_is_never_freed_by_its_successor(
     // reclaimed per object — there is no residue to declare here, which is why this test
     // carries no `ResidueClaim`. The teardown post-condition
     // (`tests/src/teardown.rs`) asserts that for us when the guard drops.
+}
+
+// =================================================================================
+// ★★★ THE GUEST-STEERABLE GPA HAZARD — `l1_os_shell.md` §10.1 item 6 / §6.1 / §6.3
+//
+// `Vmm::gpa_read` is the ONE in-lock-legal capability that takes a guest-chosen
+// address, and `SharedDevice::parse_pushbuffer` runs it with rank 0 held. On a QEMU
+// backend the obvious implementation decides *at run time, from the guest's number*,
+// whether it is a memcpy or an acquisition of the VMM's global lock
+// (`[src] v10.2.0 system/physmem.c:3250` / `:3347` -> `prepare_mmio_access`
+// `:3196-3209`). That is §6.3's ABBA inversion, constructed on demand, and invisible
+// to all four of §6.3's enforcement layers.
+//
+// The fix is a positive proof — `kayfabe_vmm::GuestRamMap` — and these tests are what
+// makes it more than a sentence. Before them the harness COULD NOT EXPRESS the hazard:
+// `MockVmm`'s guest-physical space was entirely RAM and `gpa_read` had no failing arm
+// at all, so any test of the refusal would have been green on a path that did not
+// exist (`testing_doctrine.md` §1).
+// =================================================================================
+
+/// Guest RAM. Everything outside the windows carved below stays RAM.
+const GPA_PB_BASE: u64 = 0x1000_0000;
+/// **Another emulated device's BAR, mapped INSIDE guest RAM** — the shape a guest
+/// produces by re-programming a PCI BAR, and the one that makes a straddling read
+/// possible at all.
+const GPA_PEER_BAR: Range<u64> = 0x4000_0000..0x4001_0000;
+/// **Our own trapped BAR0.** The nastiest target: serving it would have us DMA into
+/// our own MMIO dispatch from inside a locked section.
+const GPA_OUR_BAR0: Range<u64> = 0x7000_0000..0x7001_0000;
+/// A hole in the flat view — backed by nothing. The near neighbour that must report
+/// under a *different* name.
+const GPA_HOLE: Range<u64> = 0x6000_0000..0x6001_0000;
+/// The window torn down mid-flight while a thread is actively parsing out of it.
+const GPA_REVOKE: u64 = 0x5000_0000;
+/// Physical page base the DMA workload's CE PT-writes name (clear of every VA above).
+const VA_PT: u64 = 0x60_0000_0000;
+/// Submits per DMA thread. Four hostile shapes per legal one, so every arm runs many
+/// times while the peers do real work.
+const DMA_OPS: usize = 200;
+/// Bounded budget for the revoke prober (an EDGE loop, never a sleep).
+const REVOKE_BUDGET: usize = 100_000;
+
+/// ★ The revoke prober's start signal — and it opens on **unwind** as well as on
+/// success.
+///
+/// Found by a bite-check, not by design: neutering the resolver to refuse *everything*
+/// made the prober panic on its very first guest write, so it never signalled, and the
+/// main thread spun forever inside `thread::scope` waiting for a flag nobody would set.
+/// The failure then looked like a **wedge** instead of like the assertion it was — the
+/// exact shape [`Latches`]' own `Drop` guard exists for. A harness that hangs when the
+/// code is wrong is worse than one that fails, because a hang gets re-run.
+#[derive(Default)]
+struct StartGate {
+    open: Mutex<bool>,
+    cv: Condvar,
+}
+
+impl StartGate {
+    fn open(&self) {
+        *self.open.lock().expect("start gate") = true;
+        self.cv.notify_all();
+    }
+    /// Block until the prober has been served once **or has died** — an edge, never a
+    /// sleep and never a spin.
+    fn wait(&self) {
+        let mut g = self.open.lock().expect("start gate");
+        while !*g {
+            g = self.cv.wait(g).expect("start gate");
+        }
+    }
+}
+
+/// Opens its [`StartGate`] on drop, including on unwind.
+struct OpenOnDrop<'a>(&'a StartGate);
+impl Drop for OpenOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.open();
+    }
+}
+
+/// What one DMA thread observed. Every field is script-determined, so both lock modes
+/// must produce identical values.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct DmaTally {
+    /// Legal pushbuffers that parsed and applied.
+    legal_ok: usize,
+    /// Refusals naming a device window (`NonRamGpa`) — the security-relevant arm.
+    non_ram: usize,
+    /// Refusals naming an unbacked address (`GpaRead`) — its near neighbour.
+    unbacked: usize,
+}
+
+/// The scripted guest machine: RAM everywhere, with two device windows and a hole
+/// carved out of it. Written as a narrowing of the mock's all-RAM default so the
+/// declarations that MATTER are the only ones in the test.
+fn dma_machine() -> SharedVmm {
+    let vmm = SharedVmm::default();
+    vmm.with(|v| {
+        v.declare_device_mmio(GPA_PEER_BAR);
+        v.declare_device_mmio(GPA_OUR_BAR0);
+        v.declare_unbacked(GPA_HOLE);
+    });
+    vmm
+}
+
+/// **The DMA-descriptor workload.** Interleaves a legitimate pushbuffer with the four
+/// hostile shapes a guest can build out of one 16-byte GPFIFO entry, and asserts the
+/// EXACT fault for each — including the boundary address of a range that starts in RAM
+/// and runs into a device window, which is the byte a start-address-only check would
+/// never look at.
+fn dma_workload(dev: &SharedDevice, vmm: &SharedVmm, pids: &[ProcId], i: usize) -> DmaTally {
+    let (lane, gpu, pid) = (lane_of(i), gpu_of(i), pids[i]);
+    let mut vmm = vmm.clone();
+    let cid = dev
+        .doorbell(gpu, MockArch::token_for(lane.ce), &[])
+        .expect("the DMA thread's CE channel rings")
+        .chan;
+    let scratch = GPA_PB_BASE + (i as u64) * 0x10_0000;
+    let mut t = DmaTally::default();
+
+    for k in 0..DMA_OPS {
+        // ---- the LEGITIMATE submit: real work, through the same locked path.
+        let pt_page = VA_PT + (i as u64) * 0x100_0000 + (k as u64) * 0x1000;
+        let ring = script_ring(
+            &vmm,
+            scratch + (k as u64) * 0x100,
+            &[
+                MockPushbuffer::set_object(mock_classes::DMA_COPY),
+                MockPushbuffer::ce_launch_dma(pt_page, 0x1000, false),
+                MockPushbuffer::tlb_invalidate(lane.pdb.0, true),
+                MockPushbuffer::method(0xEE, &[1, 2, 3]),
+            ],
+        );
+        let out = dev
+            .parse_pushbuffer(&mut vmm, pid, cid, &ring)
+            .expect("a RAM-backed pushbuffer parses while peers hold verbs and DMA at MMIO");
+        assert_eq!(
+            out.pt_writes,
+            vec![pt_page],
+            "the legitimate submit's CE PT-write must be captured — non-vacuity for \
+             every refusal below (an instrument that only ever refuses proves nothing)"
+        );
+        assert_eq!(out.opaque, 1, "the opaque method passed through");
+        t.legal_ok += 1;
+
+        // ---- the four HOSTILE shapes, each asserted by exact variant AND payload.
+        let hostile: (Vec<u8>, Result<kayfabe_fwd::PushbufferOutcome, FwdFault>) = match k % 4 {
+            // (a) aimed squarely at ANOTHER device's registers.
+            0 => (
+                gpfifo_ring(GPA_PEER_BAR.start, 0x40),
+                Err(FwdFault::NonRamGpa {
+                    gpa: GPA_PEER_BAR.start,
+                }),
+            ),
+            // (b) aimed at OUR OWN trapped BAR0.
+            1 => (
+                gpfifo_ring(GPA_OUR_BAR0.start + 0x800, 8),
+                Err(FwdFault::NonRamGpa {
+                    gpa: GPA_OUR_BAR0.start + 0x800,
+                }),
+            ),
+            // (c) aimed at a hole — the NEAR NEIGHBOUR, which must report differently.
+            2 => (
+                gpfifo_ring(GPA_HOLE.start + 0x10, 0x20),
+                Err(FwdFault::GpaRead {
+                    gpa: GPA_HOLE.start + 0x10,
+                }),
+            ),
+            // (d) STRADDLING: starts in real RAM, runs into the peer BAR. A check that
+            //     looked only at the start address would serve the first bytes and take
+            //     the VMM's global lock on the continuation step.
+            _ => (
+                gpfifo_ring(GPA_PEER_BAR.start - 8, 0x40),
+                Err(FwdFault::NonRamGpa {
+                    gpa: GPA_PEER_BAR.start,
+                }),
+            ),
+        };
+        let (ring, expect) = hostile;
+        let got = dev.parse_pushbuffer(&mut vmm, pid, cid, &ring);
+        assert_eq!(
+            got, expect,
+            "a guest-steered descriptor must refuse by EXACT name (k={k}, proc={pid:?})"
+        );
+        match expect {
+            Err(FwdFault::NonRamGpa { .. }) => t.non_ram += 1,
+            _ => t.unbacked += 1,
+        }
+        assert_eq!(
+            lock::held_depth(),
+            0,
+            "a refused guest-memory read leaked a ranked guard"
+        );
+    }
+    t
+}
+
+/// Result of the mid-flight window teardown probe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RevokeProbe {
+    /// Submits served before the window was torn down (must be > 0, or the probe never
+    /// reached the path it claims to test).
+    served: usize,
+    /// The first refusal, exactly.
+    first_refusal: Option<FwdFault>,
+    /// How many refusals it saw in total. Carried so the port-level refusal census
+    /// below is DERIVED rather than hard-coded — the first version of this test
+    /// hard-coded the DMA threads' count and was off by exactly this number, which is
+    /// the composed run finding an accounting error in its own instrument.
+    refusals: usize,
+    /// Submits served AFTER the first refusal — must be 0. A torn-down window that
+    /// starts resolving again is a resurrected mapping.
+    served_after_refusal: usize,
+}
+
+/// ★★★ **THE MEAN COMPOSED RUN for the guest-steerable GPA hazard.**
+///
+/// Everything in the same window, under **both** lock modes: two DMA threads (one per
+/// GPU) aiming descriptors at two different device windows, a hole and a straddling
+/// boundary, while
+///
+/// - four peer threads (`ctl_workload` + `ring_workload`, one pair per GPU) do real
+///   publish/doorbell work,
+/// - **five** host verbs are parked on four isolates across both GPUs,
+/// - a proc is retired out of band and another's routed channel is freed mid-flight,
+/// - a guest-memory **window is torn down while a thread is parsing out of it**.
+///
+/// The assertions are the composed ones: the exact refusal for each hostile shape, the
+/// exact *counts* (so the instrument is proven reached, `testing_doctrine.md` §1 rule
+/// 2), the peers' full progress, and a bit-identical outcome across the two lock modes.
+#[test]
+fn a_guest_steering_dma_descriptors_at_device_windows_is_refused_by_name_under_load() {
+    let _wd = watchdog(
+        "a_guest_steering_dma_descriptors_at_device_windows_is_refused_by_name_under_load",
+        Duration::from_secs(300),
+    );
+    let degenerate = dma_mean_run(LockMode::Degenerate);
+    let sharded = dma_mean_run(LockMode::Sharded);
+
+    for (name, r) in [("Degenerate", &degenerate), ("Sharded", &sharded)] {
+        let (w, p) = (r.witness, r.peer);
+        // ---- every hostile shape was REACHED, the exact number of times scripted.
+        for (who, t) in [("witness", w), ("peer", p)] {
+            assert_eq!(
+                t.legal_ok, DMA_OPS,
+                "({name}/{who}) every RAM-backed submit must still be served — a \
+                 refusal that also breaks the legal path is not a fix"
+            );
+            assert_eq!(
+                t.non_ram,
+                DMA_OPS - DMA_OPS / 4,
+                "({name}/{who}) three of the four hostile shapes name a DEVICE window"
+            );
+            assert_eq!(
+                t.unbacked,
+                DMA_OPS / 4,
+                "({name}/{who}) and exactly one names a HOLE — the near neighbour, \
+                 counted separately so the two can never silently merge"
+            );
+        }
+        // ---- the mock's own ledger agrees: the refusals happened AT THE PORT, and
+        // every one of them was classified. (The peers' legitimate traffic performs no
+        // refused access at all, so this number is the DMA threads' alone.)
+        assert_eq!(
+            r.port_refusals,
+            (
+                2 * (DMA_OPS - DMA_OPS / 4),           // NonRamGpa
+                2 * (DMA_OPS / 4) + r.revoke.refusals, // BadGpa
+            ),
+            "({name}) the port refused exactly the accesses the core reported — the two \
+             DMA threads' hostile shapes PLUS the revoke prober's, and nothing else. \
+             Every refusal is classified: no third arm, no silent pass-through"
+        );
+        // ---- nothing hostile was ever half-applied.
+        assert_eq!(
+            r.pt_pages,
+            (DMA_OPS, DMA_OPS),
+            "({name}) each proc captured exactly its LEGAL submits' PT pages — a \
+             refused ring must apply nothing at all"
+        );
+        // ---- mid-flight window teardown: served, then refused, and never served again.
+        assert!(
+            r.revoke.served > 0,
+            "({name}) the revoke prober never had its window served — it proves nothing"
+        );
+        assert_eq!(
+            r.revoke.first_refusal,
+            Some(FwdFault::GpaRead { gpa: GPA_REVOKE }),
+            "({name}) a window torn down under a live parser must refuse as UNBACKED — \
+             not as a device window, and never as stale bytes"
+        );
+        assert_eq!(
+            r.revoke.served_after_refusal, 0,
+            "({name}) a torn-down window resolved again after being revoked"
+        );
+        // ---- the peers made full progress the whole time.
+        assert_eq!(
+            r.publications,
+            2 * (CTL_OPS + RING_OPS.div_ceil(8)),
+            "({name}) a peer workload thread bailed — the DMA refusals cost the rest of \
+             the device its progress"
+        );
+        assert!(
+            r.latches_all_pending,
+            "({name}) the workloads only completed after a parked verb was released"
+        );
+        assert_eq!(
+            r.canary_teardown,
+            Err(FwdFault::Stale(Stale::Proc(r.pid_teardown))),
+            "({name}) the R5 canary still refuses as staleness with DMA traffic composed in"
+        );
+        // ★★ THE PREMISE, asserted rather than assumed: the guest-memory reads really
+        // did run with one of OUR ranked locks held. If they did not, every refusal
+        // above is a fact about a lock-free path and the hazard was never exercised at
+        // all — the §1 "green instrument" failure, one level up. Exactly 1: the route
+        // phase holds rank 0 (device read in Sharded, device write in Degenerate) and
+        // nothing else while it reads guest memory.
+        assert_eq!(
+            r.lock_depth_span,
+            (0, 1),
+            "({name}) guest memory was accessed at ranked-lock depths {:?}. BOTH ends \
+             are the claim: max 1 = the pushbuffer reads really ran under rank 0 (device \
+             read in Sharded, device write in Degenerate), so the in-lock hazard was \
+             actually constructed; min 0 = the scripting writes really ran lock-free, so \
+             the witness varies with its caller instead of reporting a constant",
+            r.lock_depth_span
+        );
+    }
+    assert_eq!(
+        degenerate.mode_independent(),
+        sharded.mode_independent(),
+        "the lock configuration is observable through the guest-DMA path"
+    );
+}
+
+/// Everything the composed DMA run observed (mode-independent by construction).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DmaMeanReport {
+    witness: DmaTally,
+    peer: DmaTally,
+    /// `(NonRamGpa, BadGpa)` counted at the PORT, not at the core.
+    port_refusals: (usize, usize),
+    /// `Vas::pt_pages` len for the two DMA procs at the end.
+    pt_pages: (usize, usize),
+    revoke: RevokeProbe,
+    publications: usize,
+    latches_all_pending: bool,
+    canary_teardown: Result<Published, FwdFault>,
+    pid_teardown: ProcId,
+    /// `(min, max)` ranked-lock nesting across every guest-memory access.
+    lock_depth_span: (u32, u32),
+}
+
+impl DmaMeanReport {
+    /// The report with its one genuinely racy field normalised away.
+    ///
+    /// `revoke.served` counts how many submits landed *before* the main thread tore the
+    /// window down — a real race between two live threads, and therefore a **clock**,
+    /// not an edge (`testing_doctrine.md` §3 rule 3). It is asserted as a BOUND above
+    /// (`> 0`, i.e. the path was reached) and must never appear in a differential. The
+    /// first version of this test compared it and failed on the second run with
+    /// `served: 1` vs `served: 3` — which is the doctrine's own rule catching the test
+    /// that violated it.
+    fn mode_independent(mut self) -> Self {
+        self.revoke.served = 0;
+        self
+    }
+}
+
+fn dma_mean_run(mode: LockMode) -> DmaMeanReport {
+    let (device, pids, rec) = mean_world(mode);
+    let vmm = dma_machine();
+    let dev: &SharedDevice = &device;
+    let pid_ref: &[ProcId] = &pids;
+    let handles = identical_handles(0, 0);
+
+    // Warm-up: every proc materializes its host VAS and its CE channel, so a canary's
+    // held verb is the one the script names and not an incidental first touch.
+    for i in 0..N_PROCS {
+        dev.publish_backing(gpu_of(i), lane_of(i).pdb, GpuVa(VA_WARM), 0x1000)
+            .expect("warm-up publish");
+        dev.doorbell(gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
+            .expect("warm-up CE ring");
+    }
+
+    let started = StartGate::default();
+    let (witness, peer, revoke, publications, latches_all_pending, canary_teardown) =
+        thread::scope(|sc| {
+            // ---- park five host verbs across four isolates and both GPUs.
+            let mut latches = Latches::new();
+            latches.arm(&rec, pids[P_WITNESS], GPU0, 0, VerbKind::AllocSysmem);
+            let t_w1 = sc.spawn(move || {
+                dev.publish_backing(GPU0, lane_of(P_WITNESS).pdb, GpuVa(VA_HELD), 0x1000)
+            });
+            latches.wait_all_pending();
+            latches.arm(&rec, pids[P_WITNESS], GPU0, 1, VerbKind::AllocSysmem);
+            let t_w2 = sc.spawn(move || {
+                dev.publish_backing(GPU0, lane_of(P_WITNESS).pdb, GpuVa(VA_HELD2), 0x1000)
+            });
+            latches.arm(&rec, pids[P_TEARDOWN], GPU0, 0, VerbKind::AllocSysmem);
+            latches.arm(&rec, pids[P_CHANFREE], GPU1, 0, VerbKind::AllocChannel);
+            latches.arm(&rec, pids[P_REROUTE], GPU0, 0, VerbKind::AllocChannel);
+            let t_teardown = sc.spawn(move || {
+                dev.publish_backing(GPU0, lane_of(P_TEARDOWN).pdb, GpuVa(VA_HELD), 0x1000)
+            });
+            let t_chanfree = sc.spawn(move || {
+                dev.doorbell(GPU1, MockArch::token_for(lane_of(P_CHANFREE).gr), &[])
+            });
+            let t_reroute = sc
+                .spawn(move || dev.doorbell(GPU0, MockArch::token_for(lane_of(P_REROUTE).gr), &[]));
+            latches.wait_all_pending(); // progress EDGES, never sleeps
+
+            // ---- the mixed concurrent workloads: DMA on both GPUs + the real peers.
+            let vw = &vmm;
+            let t_dma_w = sc.spawn(move || dma_workload(dev, vw, pid_ref, P_WITNESS));
+            let t_dma_p = sc.spawn(move || dma_workload(dev, vw, pid_ref, P_PEER));
+            let mut peers = Vec::new();
+            for i in [P_WITNESS, P_PEER] {
+                peers.push(sc.spawn(move || ctl_workload(dev, pid_ref, i)));
+                peers.push(sc.spawn(move || ring_workload(dev, pid_ref, i)));
+            }
+
+            // ---- the revoke prober: parses out of GPA_REVOKE until its window is torn
+            // down under it, then must never be served again.
+            let started_ref = &started;
+            let t_revoke = sc.spawn(move || {
+                // ★ Opens the gate even if this thread unwinds — see `StartGate`.
+                let _gate = OpenOnDrop(started_ref);
+                let mut vmm = vw.clone();
+                let cid = dev
+                    .doorbell(GPU0, MockArch::token_for(lane_of(P_WITNESS).ce), &[])
+                    .expect("the prober's CE channel rings")
+                    .chan;
+                // The ring bytes are OURS (never guest memory), so the only thing the
+                // teardown can change is whether the RANGE resolves.
+                let ring = gpfifo_ring(GPA_REVOKE, 0x40);
+                vmm.gpa_write(GPA_REVOKE, &[0u8; 0x40])
+                    .expect("the window is RAM before the teardown");
+                let mut p = RevokeProbe {
+                    served: 0,
+                    first_refusal: None,
+                    refusals: 0,
+                    served_after_refusal: 0,
+                };
+                for _ in 0..REVOKE_BUDGET {
+                    match dev.parse_pushbuffer(&mut vmm, pid_ref[P_WITNESS], cid, &ring) {
+                        Ok(_) => {
+                            if p.first_refusal.is_some() {
+                                p.served_after_refusal += 1;
+                                break;
+                            }
+                            p.served += 1;
+                            started_ref.open();
+                        }
+                        Err(e) => {
+                            p.refusals += 1;
+                            if p.first_refusal.is_none() {
+                                p.first_refusal = Some(e);
+                                // One more round trip to prove it STAYS refused.
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                }
+                p
+            });
+
+            // ---- the world MOVES: a retire, a channel free, and the window teardown.
+            assert!(
+                dev.retire_proc(pids[P_TEARDOWN]),
+                "({mode:?}) the teardown proc was live when the script retired it"
+            );
+            dev.apply(RmEvent::Free {
+                client: client_of(P_CHANFREE),
+                handle: handles.gr_channel,
+            })
+            .expect("the channel free applies");
+            // Wait for the prober to have been SERVED at least once (an edge, never a
+            // sleep), then tear its window down from under it.
+            started.wait();
+            vmm.with(|v| v.declare_unbacked(GPA_REVOKE..GPA_REVOKE + 0x1000));
+
+            let dw = t_dma_w.join().expect("the GPU0 DMA thread panicked");
+            let dp = t_dma_p.join().expect("the GPU1 DMA thread panicked");
+            let rp = t_revoke.join().expect("the revoke prober panicked");
+            let mut published = 0usize;
+            for h in peers {
+                published += h.join().expect("a peer workload thread panicked");
+            }
+            let all_pending = latches.all_pending();
+            latches.release_all();
+            let canary = t_teardown.join().expect("the teardown canary panicked");
+            let _ = t_w1.join();
+            let _ = t_w2.join();
+            let _ = t_chanfree.join();
+            let _ = t_reroute.join();
+            (dw, dp, rp, published, all_pending, canary)
+        });
+
+    let port_refusals = vmm.with(|v| {
+        let non_ram = v
+            .refused
+            .iter()
+            .filter(|r| r.err == VmmErrorKind::NonRamGpa)
+            .count();
+        (non_ram, v.refused.len() - non_ram)
+    });
+    let pt_of = |i: usize| {
+        device
+            .with_proc(pids[i], |p| {
+                p.vases[&(gpu_of(i), lane_of(i).pdb)].pt_pages.len()
+            })
+            .expect("a live DMA proc")
+    };
+    DmaMeanReport {
+        witness,
+        peer,
+        port_refusals,
+        pt_pages: (pt_of(P_WITNESS), pt_of(P_PEER)),
+        revoke,
+        publications,
+        latches_all_pending,
+        canary_teardown,
+        pid_teardown: pids[P_TEARDOWN],
+        lock_depth_span: vmm.lock_depth_span(),
+    }
 }

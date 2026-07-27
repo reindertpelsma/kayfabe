@@ -998,6 +998,42 @@ impl SharedDevice {
         )
     }
 
+    /// ★★ Parse the pushbuffer `ring` submitted on channel `cid` of proc `pid`, in the
+    /// **route/act** shape `kayfabe_fwd::read_pushbuffer`'s own docs describe: the
+    /// guest-memory read happens under the device **read** lock (rank 0), before the
+    /// owning proc's lock, and the act phase applies the decoded methods to that proc
+    /// only (rank 1).
+    ///
+    /// # ★★★ This is the ONLY in-lock-legal entry point that takes a guest-chosen address
+    ///
+    /// Every GPFIFO entry in `ring` names a guest-physical address, and `Vmm::gpa_read`
+    /// runs here with a ranked lock held. That combination is legal **only** because the
+    /// port refuses a GPA that does not resolve to host RAM
+    /// (`kayfabe_vmm::GuestRamMap`): a backend that served a device-aimed GPA would take
+    /// the VMM's global lock beneath rank 0, which is `l1_os_shell.md` §6.3's ABBA
+    /// inversion built to order by the guest. The refusal surfaces as
+    /// [`FwdFault::NonRamGpa`].
+    ///
+    /// It is wired here rather than left to callers precisely because it was *not*
+    /// reachable through the shell before: `read_pushbuffer`'s docs claimed *"in L1 this
+    /// runs under the device read lock"* while no L1 entry point ran it at all, so the
+    /// only path that can construct the hazard existed solely in tests holding a bare
+    /// `&mut Gpu` and no lock (`testing_doctrine.md` §1).
+    pub fn parse_pushbuffer(
+        &self,
+        vmm: &mut dyn kayfabe_vmm::Vmm,
+        pid: ProcId,
+        cid: ChanId,
+        ring: &[u8],
+    ) -> Result<kayfabe_fwd::PushbufferOutcome, FwdFault> {
+        self.route_act(
+            // ROUTE phase — rank 0 held. The guest-memory read lives here, exactly as
+            // `read_pushbuffer` documents, and touches no proc.
+            move |spine| kayfabe_fwd::read_pushbuffer(spine, vmm, ring).map(|m| (pid, m)),
+            |spine, proc, methods| kayfabe_fwd::apply_pushbuffer(spine, proc, cid, methods),
+        )?
+    }
+
     /// Back `[va, va+len)` in the `(gpu, pdb)` VAS. **Plan**: route via `by_pdb`,
     /// read the Vas's host VAS. **Execute**: host VAS (first touch) + sysmem alloc +
     /// map, lock-free. **Commit**: re-resolve the Vas, adopt the host VAS, carve the

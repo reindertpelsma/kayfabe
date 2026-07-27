@@ -978,7 +978,7 @@ in QEMU, a global lock. **The trait does not say which, and that is the gap.** I
 
 | `Vmm` method | Real cost | In-lock legal? |
 |---|---|---|
-| `gpa_read` / `gpa_write` | memcpy into an already-installed mapping | **yes** — and it must stay so, because the pushbuffer parse legitimately runs under the proc lock |
+| `gpa_read` / `gpa_write` | memcpy into an already-installed mapping | **yes — CONDITIONALLY, see §10.1 item 6** (★ 2026-07-27: only because the port now REFUSES a GPA it cannot prove is host RAM; the obvious implementation takes the VMM's global lock for a **guest-chosen** address) |
 | `now` | one clock read (vDSO, no syscall) | **yes** |
 | `defer` | push onto a heap + latch the timer | **yes** (the syscall is the post-entry drain's, §3.6) |
 | `raise_irq` | one descriptor write on an irqfd | **yes** — the single named exception (§6.3) |
@@ -3134,9 +3134,29 @@ measured path is not the path a QEMU adapter takes.
    when the address does not land on direct-access memory, and that takes the BQL** (`:3196-3209`).
    Whether our "memcpy" is a memcpy or a BQL acquisition is decided by **which region the guest's
    GPA lands on**.
-   > **NORMATIVE (proposed).** The adapter's `gpa_read`/`gpa_write` MUST resolve the GPA to a host
-   > RAM pointer and memcpy — cached at window install — and MUST refuse a GPA that does not resolve
-   > to RAM. It MUST NOT call `address_space_rw`/`_read`/`_write` from an in-lock context.
+   > **~~NORMATIVE (proposed)~~ → ★★★ NORMATIVE, ADOPTED AND BUILT (2026-07-27,
+   > `l1_concurrency.md` §12.43).** The adapter's `gpa_read`/`gpa_write` MUST resolve the GPA
+   > through a `kayfabe_vmm::GuestRamMap` the adapter maintains from its **own** installs and
+   > memcpy — and MUST refuse what it cannot prove is host RAM: `VmmError::NonRamGpa` for a
+   > device region, `VmmError::BadGpa` for nothing-at-all. It MUST NOT call
+   > `address_space_rw`/`_read`/`_write` from an in-lock context.
+   >
+   > **Three corrections the build made to this box, all `[src]` at `v10.2.0`:**
+   > (i) the rule is **prove RAM**, not *refuse MMIO* — `io_mem_init` marks
+   > `io_mem_unassigned` **lockless** (`system/physmem.c:3010-3017`), so a deny-list reasoned
+   > from "MMIO is dangerous" is both over- and under-inclusive;
+   > (ii) upstream's `MemTxAttrs.memory` / `flatview_access_allowed` (`:3222-3238`) looks like
+   > the fix and is **not sufficient** — it admits `ram_device` regions, i.e. a VFIO-mapped
+   > device BAR, which `memory_region_supports_direct_access` then routes to
+   > `prepare_mmio_access` anyway (`include/system/memory.h:3136-3151`);
+   > (iii) a **straddling** range — starting in RAM, running into a device window — takes the
+   > lock on the *continuation* step (`flatview_write_continue`), so a start-address-only
+   > check is not a fix at all.
+   >
+   > **No `RamGpa` proof token, deliberately.** Nothing resolved crosses the port, so the R5
+   > obligation does not arise and no resolved backing can dangle behind a lock-free
+   > `unmap_guest`. What the fix *does* introduce is an adapter-owned map lock, which MUST be
+   > a **leaf** below rank 1 — see §12.43 §3, and residual 2 there: nothing enforces it yet.
    >
    > Otherwise a guest steers a **rank-1-held** memcpy into a **BQL acquisition beneath our lock** —
    > §6.3's ABBA, constructed on demand, and **invisible to all four** of §6.3's enforcement layers:

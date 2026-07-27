@@ -15,7 +15,10 @@ pub use teardown::{Guarded, ResidueClaim, TeardownView, audit_teardown, unpublis
 use kayfabe_arch::ClientKind;
 use kayfabe_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb};
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
-use kayfabe_mocks::{MockArch, mock_classes as mc};
+use kayfabe_mocks::{MockArch, MockVmm, mock_classes as mc};
+use kayfabe_vmm::{
+    BarId, CoreEvent, HostRegion, IrqSpec, Prot, RamHandle, SlotId, TrapMode, Vmm, VmmError,
+};
 use std::sync::OnceLock;
 
 /// ★ §12.27 — the alloc facts of a **user** client root: it declares a guest process
@@ -615,4 +618,184 @@ pub fn kernel_client_root(client: HClient) -> RmEvent {
         class: mc::CLIENT,
         facts: kernel_client(),
     }
+}
+
+// =================================================================================
+// ★★ `SharedVmm` — one guest memory, many threads, the adapter's OWN leaf lock
+// =================================================================================
+
+/// A [`MockVmm`] behind an [`Arc`] + [`Mutex`], usable as a `Vmm` from many threads at
+/// once over **one** guest memory.
+///
+/// # Why this exists rather than a per-thread `MockVmm`
+///
+/// `Vmm` methods take `&mut self`, so a per-thread mock gives every vCPU thread its own
+/// private guest RAM — which is not a hypervisor, and in particular cannot compose "one
+/// proc aims a descriptor at MMIO" with "another proc reads a legitimate pushbuffer from
+/// the same region map". This wrapper is the realistic shape: guest memory and the
+/// guest-physical region map are shared, and each access takes the adapter's own lock
+/// around them.
+///
+/// # ★ And that lock is the one `kayfabe_vmm::GuestRamMap` says must exist
+///
+/// `gpa_read`/`gpa_write` are **in-lock legal** (`l1_os_shell.md` §6.1), so this mutex is
+/// acquired with rank 0 (and sometimes rank 1) already held. It is therefore a **leaf**:
+/// we construct it, it acquires nothing beneath itself, and its critical section is a
+/// bounded memcpy with no syscall and no wait on a peer. It is deliberately NOT a
+/// [`kayfabe_rt::LockRank`] participant — the rank ladder is the core's, and an adapter's
+/// internal leaf sits below all of it. Closing the foreign-lock hazard by introducing an
+/// *unrankable* lock of our own would have traded one invisible inversion for another;
+/// this one is visible, ours, and terminal.
+///
+/// # ★ It also WITNESSES the ranked-lock depth at each guest-memory access
+///
+/// The whole hazard is *"an in-lock-legal accessor takes a guest-chosen address"*, so a
+/// test of the refusal proves nothing unless the access really did happen with one of
+/// our ranked locks held. Without this witness the suite could be green with the read
+/// running lock-free — a green instrument on an unexercised path, one level up
+/// (`docs/design/testing_doctrine.md` §1).
+#[derive(Debug, Clone)]
+pub struct SharedVmm {
+    inner: std::sync::Arc<std::sync::Mutex<MockVmm>>,
+    /// Max `kayfabe_rt::lock::held_depth()` observed at a `gpa_read`/`gpa_write`.
+    max_depth: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    /// Min of the same, initialised to `u32::MAX` so "never accessed" is detectable.
+    min_depth: std::sync::Arc<std::sync::atomic::AtomicU32>,
+}
+
+// ★ Hand-written, and the bite-check is why. A DERIVED `Default` gives `min_depth = 0`
+// (`Arc<AtomicU32>::default()`), which makes the lower half of `lock_depth_span`
+// vacuously satisfied: a witness reporting a CONSTANT still passes `(0, 1)`. That
+// non-biting neuter (N12) is the finding — `testing_doctrine.md` §1 rule 3, "bite-check
+// the instrument, not only the fix".
+impl Default for SharedVmm {
+    fn default() -> Self {
+        Self::new(MockVmm::new())
+    }
+}
+
+impl SharedVmm {
+    /// Wrap a scripted [`MockVmm`].
+    #[must_use]
+    pub fn new(vmm: MockVmm) -> Self {
+        Self {
+            inner: std::sync::Arc::new(std::sync::Mutex::new(vmm)),
+            max_depth: std::sync::Arc::default(),
+            min_depth: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(u32::MAX)),
+        }
+    }
+
+    /// Run `f` against the underlying mock (scripting and assertions).
+    pub fn with<R>(&self, f: impl FnOnce(&mut MockVmm) -> R) -> R {
+        f(&mut self
+            .inner
+            .lock()
+            .expect("guest-memory leaf lock is never poisoned"))
+    }
+
+    /// `(min, max)` ranked-lock nesting observed across every guest-memory access.
+    ///
+    /// **Both halves are load-bearing.** `max == 0` means every access was lock-free —
+    /// the in-lock hazard was never exercised and any refusal test above it is a fact
+    /// about a different path. `min == u32::MAX` means no access happened at all. And a
+    /// witness that reported a *constant* would fail one of the two, which is what makes
+    /// the pair a causality claim rather than a coincidence.
+    #[must_use]
+    pub fn lock_depth_span(&self) -> (u32, u32) {
+        use std::sync::atomic::Ordering::SeqCst;
+        (self.min_depth.load(SeqCst), self.max_depth.load(SeqCst))
+    }
+
+    /// Record the ranked-lock depth of the calling thread at an access.
+    fn witness_depth(&self) {
+        use std::sync::atomic::Ordering::SeqCst;
+        let d = kayfabe_rt::lock::held_depth();
+        self.max_depth.fetch_max(d, SeqCst);
+        self.min_depth.fetch_min(d, SeqCst);
+    }
+}
+
+impl Vmm for SharedVmm {
+    fn gpa_read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), VmmError> {
+        self.witness_depth();
+        self.with(|v| v.gpa_read(gpa, buf))
+    }
+    fn gpa_write(&mut self, gpa: u64, buf: &[u8]) -> Result<(), VmmError> {
+        self.witness_depth();
+        self.with(|v| v.gpa_write(gpa, buf))
+    }
+    fn map_guest(
+        &mut self,
+        gpa: u64,
+        len: u64,
+        backing: HostRegion,
+        prot: Prot,
+    ) -> Result<SlotId, VmmError> {
+        self.with(|v| v.map_guest(gpa, len, backing, prot))
+    }
+    fn unmap_guest(&mut self, slot: SlotId) -> Result<(), VmmError> {
+        self.with(|v| v.unmap_guest(slot))
+    }
+    fn set_trap(
+        &mut self,
+        bar: BarId,
+        range: core::ops::Range<u64>,
+        mode: TrapMode,
+    ) -> Result<(), VmmError> {
+        self.with(|v| v.set_trap(bar, range, mode))
+    }
+    fn raise_irq(&mut self, irq: IrqSpec) -> Result<(), VmmError> {
+        self.with(|v| v.raise_irq(irq))
+    }
+    fn export_ram(&mut self, slice: Option<core::ops::Range<u64>>) -> Result<RamHandle, VmmError> {
+        self.with(|v| v.export_ram(slice))
+    }
+    fn defer(&mut self, after: core::time::Duration, event: CoreEvent) {
+        self.with(|v| v.defer(after, event));
+    }
+    fn now(&self) -> kayfabe_util::Instant {
+        self.inner
+            .lock()
+            .expect("guest-memory leaf lock is never poisoned")
+            .now()
+    }
+    fn map_read_native(
+        &mut self,
+        gpa: u64,
+        len: u64,
+        backing: HostRegion,
+        write_trap: Option<core::ops::Range<u64>>,
+    ) -> Result<SlotId, VmmError> {
+        self.with(|v| v.map_read_native(gpa, len, backing, write_trap))
+    }
+}
+
+/// Lay out a GPFIFO ring naming one range `[gpa, gpa+len)`, **without** writing anything
+/// into guest memory — the hostile shape: the guest points a descriptor wherever it likes.
+#[must_use]
+pub fn gpfifo_ring(gpa: u64, len: u64) -> Vec<u8> {
+    let mut ring = Vec::new();
+    ring.extend_from_slice(&gpa.to_le_bytes());
+    ring.extend_from_slice(&len.to_le_bytes());
+    ring
+}
+
+/// Script `methods` into guest RAM at `gpa` through `vmm` and return the GPFIFO ring
+/// naming them — the legitimate shape.
+pub fn script_ring(vmm: &SharedVmm, gpa: u64, methods: &[(u32, Vec<u32>)]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for (h, args) in methods {
+        bytes.extend_from_slice(&h.to_le_bytes());
+        for a in args {
+            bytes.extend_from_slice(&a.to_le_bytes());
+        }
+    }
+    // ★ Through the PORT (`Vmm::gpa_write`), not through `with` — scripting guest
+    // memory is a guest-physical access like any other, it is proven RAM like any
+    // other, and it is the one in this harness that runs with NO ranked lock held.
+    // That is what makes `lock_depth_span`'s lower bound a real observation.
+    vmm.clone()
+        .gpa_write(gpa, &bytes)
+        .expect("scripting a legitimate pushbuffer into guest RAM");
+    gpfifo_ring(gpa, bytes.len() as u64)
 }

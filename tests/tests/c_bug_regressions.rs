@@ -375,9 +375,26 @@ fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
 /// pages (bounded work, correct) and forwards the attacker-controlled `gpa` to
 /// `Vmm::gpa_read`, whose contract is to return a `Result` — but the mock adapter did
 /// `gpa + i` and overflowed. The core is correct (it handles a `gpa_read` `Err` via
-/// `map_err`); the adapter must not panic. Fix: the mock now addresses guest RAM with
-/// `checked_add` (an un-formable address is simply absent → reads 0, exactly a real
-/// adapter's unbacked-page behavior). Pins that a top-of-space range never panics.
+/// `map_err`); the adapter must not panic. Fix: the mock addresses guest RAM with
+/// `checked_add`. Pins that a top-of-space range never panics.
+///
+/// ★★ **STRENGTHENED (2026-07-27), and the old expectation was a mock artifact.** This
+/// test used to `.expect(…)` a *successful* parse — *"a top-of-space range reads sparse
+/// zeros"* — on the grounds that an un-formable address is "exactly a real adapter's
+/// unbacked-page behavior". **That sentence was false**, and `vmm_portability.rs`'s
+/// second backend already said so in the same suite: `SecondVmm` returns
+/// `VmmError::BadGpa { gpa: u64::MAX }` for precisely this shape, and its doc calls that
+/// *"the contract"*. Two mock backends disagreed about whether a wrapping range is
+/// serviceable, and the sparse one was wrong: no adapter can memcpy a range that leaves
+/// the 64-bit space, and a real one must never try — `kayfabe_vmm::GuestRamMap::resolve`
+/// refuses it before a byte is touched.
+///
+/// The property this test *names* — a hostile top-of-space range is bounded and never
+/// panics — is unchanged and still asserted. What changed is that the outcome is now the
+/// **exact loud fault** instead of a silently-successful read of fabricated zeros, which
+/// is a strengthening in the direction `testing_doctrine.md` §2 requires (assert the
+/// variant, and pin which of two near neighbours reports it: `GpaRead` — *nothing is
+/// there* — never `NonRamGpa`, which means *a device is there*).
 #[test]
 fn cbfuzz_gpfifo_range_gpa_near_umax_never_panics() {
     let (mut gpu, _rec) = fresh_gpu();
@@ -385,13 +402,25 @@ fn cbfuzz_gpfifo_range_gpa_near_umax_never_panics() {
     let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
 
     // A GPFIFO ring with one entry: base near the top of the 64-bit space, a
-    // multi-page declared length (the parser caps it, then reads across the wrap).
+    // multi-page declared length (the parser caps it to 1 MiB, which still wraps).
     let mut ring = Vec::new();
     ring.extend_from_slice(&0xFFFF_FFFF_FFFF_F000u64.to_le_bytes());
     ring.extend_from_slice(&0x20_0000u64.to_le_bytes()); // 2 MiB declared
-    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring)
-        .expect("a top-of-space range reads sparse zeros, never panics");
-    // Zeroed method words decode to nothing actionable.
+    assert_eq!(
+        parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring),
+        Err(FwdFault::GpaRead {
+            gpa: 0xFFFF_FFFF_FFFF_F000
+        }),
+        "a range that leaves the 64-bit space is UNBACKED (`GpaRead`), not a device \
+         window (`NonRamGpa`) — and never a wrap-around read of fabricated zeros"
+    );
+    // Non-vacuity: the same ring, one page shorter so it stops exactly at the top of
+    // the space, is served — so the refusal above is about the wrap and nothing else.
+    let mut ok_ring = Vec::new();
+    ok_ring.extend_from_slice(&0xFFFF_FFFF_FFFF_F000u64.to_le_bytes());
+    ok_ring.extend_from_slice(&0x1000u64.to_le_bytes());
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ok_ring)
+        .expect("a range ending exactly at the top of the space is formable, so it reads");
     assert!(out.sem_releases.is_empty() && out.pt_writes.is_empty() && out.invalidates.is_empty());
 }
 

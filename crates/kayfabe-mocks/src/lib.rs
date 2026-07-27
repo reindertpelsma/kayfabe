@@ -34,8 +34,8 @@ use kayfabe_isolate::{
 };
 use kayfabe_util::Instant;
 use kayfabe_vmm::{
-    BarId, CoreEvent, FbMeta, HostRegion, IrqSpec, Present, PresentError, Prot, RamHandle, SlotId,
-    SurfaceHandle, TrapMode, Vblank, Vmm, VmmError,
+    BarId, CoreEvent, FbMeta, GuestRamMap, HostRegion, IrqSpec, Present, PresentError, Prot,
+    RamHandle, RamRegionId, RegionKind, SlotId, SurfaceHandle, TrapMode, Vblank, Vmm, VmmError,
 };
 
 // ---------------------------------------------------------------------------------
@@ -408,11 +408,52 @@ pub struct SlotRecord {
     pub read_native: bool,
 }
 
+/// A refused guest-physical access, recorded so a test can assert the instrument was
+/// **reached** rather than merely silent (`testing_doctrine.md` §1 rule 2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RefusedAccess {
+    /// The address the access started at.
+    pub gpa: u64,
+    /// Its length in bytes.
+    pub len: u64,
+    /// `true` for a write, `false` for a read.
+    pub write: bool,
+    /// The exact refusal.
+    pub err: VmmErrorKind,
+}
+
+/// Discriminator for [`RefusedAccess::err`] (a `Copy` shadow of the `VmmError` variants
+/// this path can produce, so a recorded refusal is comparable without cloning payloads
+/// that are already in `gpa`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum VmmErrorKind {
+    /// The range resolved to a device register window.
+    NonRamGpa,
+    /// The range resolved to nothing, or left its region, or was un-formable.
+    BadGpa,
+}
+
 /// The scripted hypervisor (testing strategy §4). Guest RAM is a sparse byte map;
 /// time only moves when the test calls [`MockVmm::advance`].
-#[derive(Debug, Default)]
+///
+/// ## ★ The guest-physical region map (2026-07-27)
+///
+/// Before this existed the mock could not express the hazard `l1_os_shell.md` §10.1
+/// item 6 names at all: **every** GPA was RAM, including addresses that on a real
+/// backend are device registers, and `gpa_read` had no failing arm whatsoever. A test
+/// that "proved" the core refuses a device-aimed descriptor would have been a green
+/// instrument on a path the harness could not construct — `testing_doctrine.md` §1.
+///
+/// So [`MockVmm::new`] starts as [`GuestRamMap::all_ram`] — the *historical* semantics,
+/// spelled out rather than implied — and a test **narrows** it with
+/// [`MockVmm::declare_device_mmio`] / [`MockVmm::declare_unbacked`].
+#[derive(Debug)]
 pub struct MockVmm {
     ram: BTreeMap<u64, u8>,
+    /// The guest-physical region map every `gpa_read`/`gpa_write` is proven against.
+    regions: GuestRamMap,
+    /// Every refused guest-physical access, in order (assert the hazard was reached).
+    pub refused: Vec<RefusedAccess>,
     /// Installed slots by id (public for assertions).
     pub slots: BTreeMap<SlotId, SlotRecord>,
     /// Every `raise_irq` in order (assert completions were delivered).
@@ -430,11 +471,94 @@ pub struct MockVmm {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct DeferredEntry(CoreEvent);
 
+/// The region id [`MockVmm::new`]'s default all-RAM declaration uses.
+pub const MOCK_RAM_REGION: RamRegionId = RamRegionId(0);
+
+// ★ Hand-written rather than derived: a DERIVED `Default` would produce an EMPTY
+// region map, in which every GPA refuses. Two constructors that disagree about whether
+// guest memory exists is exactly the "green instrument" shape this map was added to
+// remove, so `default()` is `new()` and there is no second answer.
+impl Default for MockVmm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockVmm {
-    /// Fresh VMM at virtual time zero.
+    /// Fresh VMM at virtual time zero, with the whole guest-physical space declared
+    /// RAM (the mock's historical semantics — narrow it with
+    /// [`MockVmm::declare_device_mmio`] / [`MockVmm::declare_unbacked`]).
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            ram: BTreeMap::new(),
+            regions: GuestRamMap::all_ram(MOCK_RAM_REGION),
+            refused: Vec::new(),
+            slots: BTreeMap::new(),
+            irqs: Vec::new(),
+            traps: Vec::new(),
+            exports: Vec::new(),
+            deferred: BinaryHeap::new(),
+            now: Instant::ZERO,
+            next_slot: 0,
+            next_seq: 0,
+        }
+    }
+
+    /// ★ Declare `range` to be a **device register window** — another emulated device's
+    /// BAR, the platform's MMIO, one of our own trapped BARs. Every `gpa_read` /
+    /// `gpa_write` touching it refuses with [`VmmError::NonRamGpa`].
+    ///
+    /// This is the only way to model the `l1_os_shell.md` §10.1 item 6 hazard: on a
+    /// QEMU backend the *same* entry point that memcpys RAM takes the VMM's global lock
+    /// for one of these (`[src] v10.2.0 system/physmem.c:3250`, `:3347` →
+    /// `:3196-3209`), which is why the port refuses instead of serving.
+    pub fn declare_device_mmio(&mut self, range: Range<u64>) {
+        self.regions
+            .declare(
+                // A distinct id per declared window, so a test that asserts a resolved
+                // span cannot confuse two of them. The top bit keeps device ids clear
+                // of `MOCK_RAM_REGION`.
+                RamRegionId((1u64 << 63) | range.start),
+                RegionKind::Device,
+                range.start,
+                range.end - range.start,
+            )
+            .expect("a device window inside the 64-bit space");
+    }
+
+    /// Declare `range` to be backed by nothing at all (a hole in the flat view).
+    /// Accesses refuse with [`VmmError::BadGpa`] — the near neighbour of
+    /// [`VmmError::NonRamGpa`] that must never start reporting as it.
+    pub fn declare_unbacked(&mut self, range: Range<u64>) {
+        self.regions.undeclare(range.start, range.end - range.start);
+    }
+
+    /// Read-only view of the region map (for tests that assert the resolver directly).
+    #[must_use]
+    pub fn regions(&self) -> &GuestRamMap {
+        &self.regions
+    }
+
+    /// Prove a guest-physical range is RAM, recording the refusal if it is not — the
+    /// mock's instance of the one central check ([`GuestRamMap::resolve`]).
+    fn prove_ram(&mut self, gpa: u64, len: u64, write: bool) -> Result<(), VmmError> {
+        match self.regions.resolve(gpa, len) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let kind = match e {
+                    VmmError::NonRamGpa { .. } => VmmErrorKind::NonRamGpa,
+                    _ => VmmErrorKind::BadGpa,
+                };
+                self.refused.push(RefusedAccess {
+                    gpa,
+                    len,
+                    write,
+                    err: kind,
+                });
+                Err(e)
+            }
+        }
     }
 
     /// Advance the virtual clock by `d`, returning every deferred [`CoreEvent`]
@@ -464,10 +588,12 @@ impl MockVmm {
 
 impl Vmm for MockVmm {
     fn gpa_read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), VmmError> {
-        // Checked addressing: a hostile GPFIFO entry can name a gpa near u64::MAX, and
-        // the core caps the read to multiple pages — so `gpa + i` can exceed the 64-bit
-        // space. A byte at an un-formable address is simply absent in this sparse RAM
-        // (reads as 0), exactly as a real adapter treats an unbacked page. Never a panic.
+        // ★ PROVE FIRST. A hostile GPFIFO entry names this `gpa`, so the range is
+        // proven to lie in one declared RAM region before a single byte is touched —
+        // the port contract on `Vmm::gpa_read`. This also subsumes the old `checked_add`
+        // guard: a range near `u64::MAX` that would wrap is `BadGpa` rather than a
+        // wrap-around read of sparse zeros (which no real adapter could serve).
+        self.prove_ram(gpa, buf.len() as u64, false)?;
         for (i, b) in buf.iter_mut().enumerate() {
             *b = gpa
                 .checked_add(i as u64)
@@ -479,9 +605,8 @@ impl Vmm for MockVmm {
     }
 
     fn gpa_write(&mut self, gpa: u64, buf: &[u8]) -> Result<(), VmmError> {
+        self.prove_ram(gpa, buf.len() as u64, true)?;
         for (i, &b) in buf.iter().enumerate() {
-            // A byte past the representable address space cannot be stored (sparse
-            // map) — skip it rather than overflow (a real adapter would fault it).
             if let Some(a) = gpa.checked_add(i as u64) {
                 self.ram.insert(a, b);
             }

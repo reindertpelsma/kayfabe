@@ -215,6 +215,53 @@ jobs:
             echo "gate needs a judgement call, \`ls\` stops being the audit."
             exit 1
           fi
+      # ★★★ The GPA-ACCESSOR gate (l1_os_shell.md §6.1/§6.3/§10.1 item 6, the 2026-07-27
+      # contact round). `Vmm::gpa_read`/`gpa_write` are the ONLY in-lock-legal capability
+      # that takes a GUEST-CHOSEN address, and their legality rests entirely on the
+      # implementation being unable to reach VMM-global API. On a real backend that is
+      # decided at run time by which region the guest's number lands on — a lock inversion
+      # the guest constructs on demand, invisible to the type system, to the lock ranks
+      # (a lock we do not take ourselves has no rank), to the written list of VMM
+      # functions an in-lock-legal method may call, and to the other three greps here.
+      #
+      # The defence is a POSITIVE proof (`kayfabe_vmm::GuestRamMap`) plus ONE core-side
+      # classification site (`kayfabe_fwd::guest_read`), because a second call site is a
+      # second place a refusal can be folded into a generic fault — which is exactly what
+      # the code did before (`map_err(|_| FwdFault::GpaRead { .. })`, discarding the
+      # variant that says "the guest aimed at a device").
+      #
+      # Scope = the PURE crates only. `kayfabe-mocks` implements the accessors (that is
+      # its job), `kayfabe-rt` passes a `&mut dyn Vmm` through without calling them, and
+      # the tests drive both sides deliberately.
+      #
+      # Exit-code polarity, as at every gate above: `grep -r` exits 0 on a HIT, and a hit
+      # is the FAILURE case — hence the `if`, never a bare `grep` under `set -e`.
+      - name: GPA-accessor gate (exactly one core-side classification site)
+        run: |
+          pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-mmu \
+                crates/kayfabe-gsp crates/kayfabe-arch crates/kayfabe-abi \
+                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate"
+          if grep -rnE '\.gpa_(read|write)\(' $pure; then
+            echo ""
+            echo "★ GPA-ACCESSOR BREACH — l1_os_shell.md §6.1 / §10.1 item 6."
+            echo "Guest-physical access belongs to ONE core-side site,"
+            echo "kayfabe_fwd::guest_read, which classifies the refusal:"
+            echo "  VmmError::NonRamGpa -> FwdFault::NonRamGpa  (the guest aimed a"
+            echo "                         descriptor at a DEVICE register window; on a"
+            echo "                         real backend serving it takes the VMM's global"
+            echo "                         lock beneath one of our ranked locks)"
+            echo "  anything else       -> FwdFault::GpaRead    (nothing is there)"
+            echo "Route the access through it. Never re-derive the classification, and"
+            echo "never map_err(|_| ..) it away — the discarded variant IS the finding."
+            exit 1
+          fi
+          n=$(grep -cE '\.gpa_(read|write)\(' crates/kayfabe-fwd/src/lib.rs || true)
+          if [ "$n" != "1" ]; then
+            echo ""
+            echo "★ GPA-ACCESSOR BREACH — kayfabe-fwd has $n guest-memory access sites,"
+            echo "expected exactly 1 (kayfabe_fwd::guest_read). See the message above."
+            exit 1
+          fi
       # ★ The UNSAFE-CONTAINMENT gates — A, B and the ratchet (l1_os_shell.md §4.1).
       #
       # Landed WITH `kayfabe-linux-raw`, because that crate is what makes them necessary.

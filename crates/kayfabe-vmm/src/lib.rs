@@ -57,13 +57,51 @@
 use core::ops::Range;
 use core::time::Duration;
 use kayfabe_util::Instant;
+use std::collections::BTreeMap;
 
 /// Error from a VMM capability call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VmmError {
-    /// The GPA range is not backed by guest memory.
+    /// The GPA range is not backed by guest memory **as a unit**: no region covers it,
+    /// the range is un-formable (`gpa + len` leaves the 64-bit space), or it leaves the
+    /// region it started in. Distinct from [`VmmError::NonRamGpa`], which is the case
+    /// where something *is* there and that something is a device.
     BadGpa {
-        /// Offending guest-physical address.
+        /// Offending guest-physical address — the first byte that does not resolve.
+        gpa: u64,
+    },
+    /// ★★★ **The GPA resolves to something that is NOT host RAM** — a device register
+    /// window (another emulated device's BAR, the platform's own MMIO, our own trapped
+    /// BARs). Refused rather than served.
+    ///
+    /// # Why this is a named variant and not a `BadGpa`
+    ///
+    /// [`Vmm::gpa_read`] / [`Vmm::gpa_write`] are the only **in-lock-legal** methods
+    /// that take a *guest-chosen* address (`l1_os_shell.md` §6.1), and their legality
+    /// rests entirely on the implementation being unable to reach VMM-global API
+    /// (§6.3's foreign-lock class). The obvious implementation cannot honour that:
+    ///
+    /// > `[src] v10.2.0 system/physmem.c` — `address_space_write` takes only
+    /// > `RCU_READ_LOCK_GUARD()` (`:3448`) and the direct-access branch is a plain
+    /// > `memcpy` (`:3370-3376`), **but the same entry point calls
+    /// > `prepare_mmio_access(mr)` (`:3250` write, `:3347` read) whenever the target is
+    /// > not direct-access, and that acquires the VMM's global lock** (`:3196-3209`)
+    /// > unless the target region opted out of it.
+    ///
+    /// So whether our "memcpy" is a memcpy or a **global-lock acquisition beneath one of
+    /// our ranked locks** would be decided by which region the *guest's* address lands
+    /// on: §6.3's ABBA inversion, constructed on demand, and invisible to all four of
+    /// §6.3's enforcement layers. This variant is the refusal that keeps it
+    /// unconstructible — see [`GuestRamMap`], which is where every backend must make it.
+    ///
+    /// **Do not "fix" this by relying on unassigned memory being harmless.** It happens
+    /// to be at v10.2.0 — `io_mem_init` marks `io_mem_unassigned` lockless
+    /// (`system/physmem.c:3010-3017`, *"Trivially thread-safe since memory accesses are
+    /// rejected"*) — but every ordinary device region in the machine is **not** marked,
+    /// and that is the reachable set. The rule is positive (*prove RAM*), never a
+    /// deny-list of the regions we happened to think of.
+    NonRamGpa {
+        /// The first byte of the requested range that resolves to a device region.
         gpa: u64,
     },
     /// The slot/region handle is unknown or already removed.
@@ -95,6 +133,289 @@ pub struct HostRegion {
     pub id: u64,
     /// Byte offset into the region.
     pub offset: u64,
+}
+
+// =================================================================================
+// ★★ The guest-RAM map — the ONE place a guest-chosen GPA is proven to be RAM
+// (`l1_os_shell.md` §6.1 / §6.3 / §10.1 item 6; `../reference/qemu_102_facilities.md`
+// row 18 + §11.3)
+// =================================================================================
+
+/// Backend-scoped identity of one declared guest-physical region. Opaque: the
+/// backend maps it to whatever it actually holds (a `Vec` index in the mock, a host
+/// pointer into an installed window in a real adapter).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RamRegionId(pub u64);
+
+/// What a declared guest-physical region is made of.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RegionKind {
+    /// Host RAM. An access is a memcpy into memory we already own, and nothing else —
+    /// which is exactly the property that makes [`Vmm::gpa_read`]/[`Vmm::gpa_write`]
+    /// in-lock legal.
+    Ram,
+    /// A device register window: another emulated device's BAR, the platform's own
+    /// MMIO, or one of **our** trapped BARs. Never memcpy-able, and on a real backend
+    /// an access to one can take a lock we neither own nor rank.
+    Device,
+}
+
+/// A guest-physical range **proven** to lie wholly inside one host-RAM region.
+///
+/// The only way to obtain one is [`GuestRamMap::resolve`]. It deliberately carries no
+/// pointer and does not outlive the call that produced it — see [`GuestRamMap`]'s
+/// "why no `RamGpa` token" note for why handing a resolved pointer across the port
+/// would manufacture an R5 obligation this design does not otherwise have.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RamSpan {
+    /// The region the whole range lies in.
+    pub region: RamRegionId,
+    /// Byte offset of the range's first byte within that region's backing.
+    pub offset: u64,
+    /// Length in bytes (as requested).
+    pub len: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Region {
+    /// Exclusive end, in `u128` so a region may end at exactly 2^64.
+    end: u128,
+    id: RamRegionId,
+    kind: RegionKind,
+    /// Offset within `id`'s backing that this region's first byte corresponds to
+    /// (non-zero only after a hole was punched in a larger declaration).
+    base_off: u64,
+}
+
+/// # ★★★ The guest-physical region map — a **positive** RAM proof, in one place
+///
+/// Every backend's [`Vmm::gpa_read`]/[`Vmm::gpa_write`] MUST resolve through one of
+/// these and MUST refuse what it will not prove. It lives in the **port crate**, not
+/// in each adapter, for the reason `testing_doctrine.md` §6 rule 1 gives: a rule
+/// stated only in an adapter's prose has no reader, and this particular rule is
+/// invisible to all four of `l1_os_shell.md` §6.3's enforcement layers — the type
+/// system, the lock ranks (a lock we do not take ourselves has no rank), the written
+/// list of VMM functions an in-lock-legal method may call, and the CI greps.
+///
+/// It is the same shape as `kayfabe_core::rmgraph::RmGraph::undeclared_namespace`:
+/// **one central check, argued exemptions, the citation inline.** The exemptions here
+/// are exactly two, and both are stated in [`GuestRamMap::resolve`].
+///
+/// ## What it models
+///
+/// A declared region is `[start, start+len)` of one [`RegionKind`]. Declarations
+/// **replace** whatever they overlap, because that is what a guest re-programming a
+/// PCI BAR over a range does on a real backend — the device wins the flat view. So
+/// the map is maintained by *installs we perform* (guest RAM at realize, our own
+/// windows via [`Vmm::map_guest`]/[`Vmm::map_read_native`]) plus whatever topology the
+/// adapter learns; it is never a query issued per access.
+///
+/// ## ★ Why there is no `RamGpa` token type
+///
+/// The tempting "make it unrepresentable" move is a `resolve` that mints a proof token
+/// the caller then passes to a copy. **Do not.** A token that outlives the call is a
+/// resolved backing held across a lock gap, so it would (a) require R5 re-validation
+/// after every re-lock, since [`Vmm::unmap_guest`] runs lock-free on another thread,
+/// and (b) be a use-after-free surface if anybody skipped that. Keeping resolve+copy
+/// **indivisible inside one `Vmm` call** is what makes the R5 obligation not arise at
+/// all: the core holds only a `u64`, and a `u64` cannot dangle. The unrepresentability
+/// this design buys is therefore at the *call* boundary — no resolved backing crosses
+/// the port — not in a token.
+///
+/// ## ★ The lock the fix introduces, named so it is ranked
+///
+/// A real adapter's map is mutated by the coarse memory plane (window install/remove,
+/// `l1_os_shell.md` §6.7 — a "NO" row that runs lock-free) while it is *read* from
+/// in-lock-legal accessors with rank 0 or rank 1 held. That needs synchronisation, and
+/// it must be a **leaf**: a lock we construct and rank, below rank 1, that acquires
+/// nothing beneath it and whose critical section is a bounded memcpy. Closing the
+/// foreign-lock hazard by introducing an *unranked* lock of our own would trade one
+/// invisible inversion for another.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GuestRamMap {
+    regions: BTreeMap<u64, Region>,
+}
+
+impl GuestRamMap {
+    /// An empty map: **every** GPA refuses. The correct starting point — a backend
+    /// declares what it installed.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The whole 64-bit guest-physical space as one RAM region.
+    ///
+    /// Exists because "all of it" is not expressible through [`Self::declare`] (a
+    /// `u64` length cannot name 2^64 bytes) and because it is the honest spelling of
+    /// the historical mock semantics — *every* GPA is RAM — which several tests depend
+    /// on and which a test must be able to *narrow* rather than re-derive.
+    #[must_use]
+    pub fn all_ram(id: RamRegionId) -> Self {
+        let mut m = Self::new();
+        m.regions.insert(
+            0,
+            Region {
+                end: 1u128 << 64,
+                id,
+                kind: RegionKind::Ram,
+                base_off: 0,
+            },
+        );
+        m
+    }
+
+    /// Declare `[start, start+len)` to be `kind`, backed by `id`. **Replaces** any
+    /// overlapping declaration (a device window mapped over RAM wins, as it does in a
+    /// real backend's flat view). A zero-length declaration is a no-op.
+    ///
+    /// Refuses a range that leaves the 64-bit space — a region that wraps is not a
+    /// region, and accepting one would make [`Self::resolve`]'s arithmetic a lie.
+    pub fn declare(
+        &mut self,
+        id: RamRegionId,
+        kind: RegionKind,
+        start: u64,
+        len: u64,
+    ) -> Result<(), VmmError> {
+        let end = u128::from(start) + u128::from(len);
+        if end > (1u128 << 64) {
+            return Err(VmmError::Unsupported(
+                "a guest-physical region that leaves the 64-bit space",
+            ));
+        }
+        if len == 0 {
+            return Ok(());
+        }
+        self.punch(start, end);
+        self.regions.insert(
+            start,
+            Region {
+                end,
+                id,
+                kind,
+                base_off: 0,
+            },
+        );
+        Ok(())
+    }
+
+    /// Remove `[start, start+len)` from the map entirely (the window-teardown side of
+    /// [`Vmm::unmap_guest`]). Afterwards those addresses resolve to nothing at all.
+    pub fn undeclare(&mut self, start: u64, len: u64) {
+        let end = (u128::from(start) + u128::from(len)).min(1u128 << 64);
+        self.punch(start, end);
+    }
+
+    /// Keys of every region overlapping `[start, end)`.
+    fn overlapping(&self, start: u64, end: u128) -> Vec<u64> {
+        let mut out = Vec::new();
+        if let Some((&k, r)) = self.regions.range(..=start).next_back()
+            && r.end > u128::from(start)
+        {
+            out.push(k);
+        }
+        for (&k, _) in self.regions.range((
+            core::ops::Bound::Excluded(start),
+            core::ops::Bound::Unbounded,
+        )) {
+            if u128::from(k) >= end {
+                break;
+            }
+            out.push(k);
+        }
+        out
+    }
+
+    /// Remove `[start, end)`, splitting/trimming whatever it cuts and carrying each
+    /// remainder's offset into its own backing forward.
+    fn punch(&mut self, start: u64, end: u128) {
+        for k in self.overlapping(start, end) {
+            let r = self.regions.remove(&k).expect("listed as overlapping");
+            let (rs, re) = (u128::from(k), r.end);
+            if rs < u128::from(start) {
+                self.regions.insert(
+                    k,
+                    Region {
+                        end: u128::from(start),
+                        ..r
+                    },
+                );
+            }
+            if re > end {
+                // `end <= 2^64` and `re <= 2^64`, so `re > end` implies `end < 2^64`.
+                let new_start = u64::try_from(end).expect("end < 2^64 when re > end");
+                let delta = u64::try_from(end - rs).expect("a region is at most 2^64 long");
+                self.regions.insert(
+                    new_start,
+                    Region {
+                        end: re,
+                        id: r.id,
+                        kind: r.kind,
+                        base_off: r.base_off + delta,
+                    },
+                );
+            }
+        }
+    }
+
+    /// ★★★ **The one check.** Prove that `[gpa, gpa+len)` lies wholly inside a single
+    /// declared **RAM** region, and say where.
+    ///
+    /// Refusals, exact and distinguishable (`testing_doctrine.md` §2 rule 3 — these two
+    /// are near neighbours and must never start reporting as each other):
+    ///
+    /// - [`VmmError::NonRamGpa`] — the first offending byte lands in a
+    ///   [`RegionKind::Device`] region. **This is the guest-steerable lock inversion**;
+    ///   nothing else in the system reports it.
+    /// - [`VmmError::BadGpa`] — the first offending byte is in *no* region, or the
+    ///   range is un-formable (`gpa + len` leaves the 64-bit space), or it leaves the
+    ///   region it started in.
+    ///
+    /// ## The two argued exemptions
+    ///
+    /// 1. **A zero-length access still names an address**, and is checked as if it were
+    ///    one byte. Serving it would be harmless on any backend (a zero-length transfer
+    ///    translates nothing), but the rule this function exists to make total is
+    ///    *"every GPA we touch was proven RAM"*, and an exception whose safety argument
+    ///    is per-backend is exactly the shape §6.3 says not to write down.
+    /// 2. **A range must lie in ONE region.** Not because two RAM regions would be
+    ///    a hazard — two memcpys are still two memcpys — but because a single backing per
+    ///    access is what the §6.7 memslot design already guarantees (coarse windows, an
+    ///    allocator inside), so a straddling descriptor names a shape no legitimate
+    ///    guest produces. An adapter that ever needs to serve one must loop **and
+    ///    re-prove each step**, never resolve once and copy across.
+    pub fn resolve(&self, gpa: u64, len: u64) -> Result<RamSpan, VmmError> {
+        let start = u128::from(gpa);
+        let end = start + u128::from(len.max(1));
+        if end > (1u128 << 64) {
+            // Un-formable: the range leaves the address space. Never a wrap-around read.
+            return Err(VmmError::BadGpa { gpa });
+        }
+        let Some((&k, r)) = self.regions.range(..=gpa).next_back() else {
+            return Err(VmmError::BadGpa { gpa });
+        };
+        if r.end <= start {
+            return Err(VmmError::BadGpa { gpa });
+        }
+        if r.kind == RegionKind::Device {
+            return Err(VmmError::NonRamGpa { gpa });
+        }
+        if r.end < end {
+            // Leaves its region. Name the first byte outside it, so a straddling
+            // descriptor reports the boundary and a wholly-foreign one reports itself.
+            let boundary = u64::try_from(r.end).expect("r.end < end <= 2^64");
+            return match self.regions.get(&boundary).map(|n| n.kind) {
+                Some(RegionKind::Device) => Err(VmmError::NonRamGpa { gpa: boundary }),
+                _ => Err(VmmError::BadGpa { gpa: boundary }),
+            };
+        }
+        Ok(RamSpan {
+            region: r.id,
+            offset: r.base_off + u64::try_from(start - u128::from(k)).expect("within a region"),
+            len,
+        })
+    }
 }
 
 /// Protection for an installed mapping.
@@ -282,9 +603,34 @@ pub trait Vmm: Send {
 
     /// Read guest-physical memory into `buf` (RPC queue, FB shadow, pushbuffer,
     /// page-table reads).
+    ///
+    /// # ★★★ NORMATIVE — this is in-lock legal, and ONLY under this implementation shape
+    ///
+    /// `gpa` is **guest-chosen** on every hot path that uses this (a GPFIFO entry names
+    /// it), and this is the one in-lock-legal method that takes one. §6.1's "yes" is
+    /// therefore conditional in a way the method name cannot express:
+    ///
+    /// > An implementation MUST resolve `[gpa, gpa+buf.len())` through a
+    /// > [`GuestRamMap`] the adapter maintains from its **own** installs, and memcpy
+    /// > into the resolved backing. It MUST refuse a range that does not resolve to
+    /// > host RAM — [`VmmError::NonRamGpa`] for a device region,
+    /// > [`VmmError::BadGpa`] for nothing-at-all — rather than falling through to a
+    /// > generic address-space accessor. It MUST NOT call a VMM's general
+    /// > read/write-anywhere API (on QEMU: `address_space_rw` / `_read` / `_write`,
+    /// > which take the global lock for a non-direct-access target —
+    /// > `[src] v10.2.0 system/physmem.c:3250`, `:3347` → `:3196-3209`).
+    ///
+    /// Resolution and copy MUST be indivisible within the call: nothing resolved may
+    /// cross this port, so no R5 re-validation is owed and no resolved backing can
+    /// dangle behind a concurrent [`Vmm::unmap_guest`]. See [`GuestRamMap`].
     fn gpa_read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), VmmError>;
 
     /// Write `buf` to guest-physical memory (semaphore/status writes into guest RAM).
+    ///
+    /// **The same normative contract as [`Vmm::gpa_read`] applies verbatim**, and the
+    /// write direction is the sharper one: `prepare_mmio_access` is reached from the
+    /// write path at `[src] v10.2.0 system/physmem.c:3250`, and a stray write into a
+    /// device register window is a side effect on hardware, not merely a bad read.
     fn gpa_write(&mut self, gpa: u64, buf: &[u8]) -> Result<(), VmmError>;
 
     // --- 2. Guest-physical mapping management (memslots) -------------------------
@@ -410,6 +756,10 @@ kayfabe_util::assert_send_sync!(
     SlotId,
     BarId,
     HostRegion,
+    RamRegionId,
+    RegionKind,
+    RamSpan,
+    GuestRamMap,
     Prot,
     TrapMode,
     IrqSpec,
