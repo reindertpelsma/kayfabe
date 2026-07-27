@@ -35,7 +35,11 @@
 //! workflow; the counting is deliberately external, because each test binary is its own
 //! process and no in-process counter can see across them.
 //!
-//! Nothing here is `unsafe`: the probe is a plain `File::open`.
+//! This module needs no `unsafe_code` relaxation at all: the probe is a plain
+//! `File::open`. (Phrased via the lint name deliberately — the §9.3 `*_unsafe.rs` naming
+//! gate greps word-wise for the bare keyword in any file not carrying that suffix, so
+//! even prose about it must use the lint name. `unsafe_code` and `*_unsafe.rs` both pass,
+//! because `_` is a word character; a hyphenated form does not.)
 
 use std::sync::OnceLock;
 
