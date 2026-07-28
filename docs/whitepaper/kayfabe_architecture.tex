@@ -16,9 +16,21 @@
 \textbf{Subject.} Two repositories on one machine. \file{/workspace/nvidia-gpu-passthrough} —
 the C research artifact, 739 commits, 44\,031 lines of C, developed 2026-05-24 to 2026-07-24; it
 works on real hardware. \file{/workspace/nvkvm-rs} — \textbf{kayfabe}, a clean-slate Rust rewrite,
-93 commits, 38\,224 lines of implementation and 39\,469 lines of test code, developed
-2026-07-24 to 2026-07-27; it has never touched a GPU. This document is pinned to Rust HEAD
-\code{0b78102} and C HEAD \code{2899a74}.
+107 commits, 42\,320 lines of implementation and 43\,272 lines of test code, developed
+2026-07-24 to 2026-07-28; it has never touched a GPU. This document is pinned to Rust HEAD
+\code{6ce8599} and C HEAD \code{2899a74}.
+
+\smallskip
+\textbf{What moved since the previous pin (\code{0b78102}), and why the pin was updated rather
+than the text patched.} Fourteen commits landed in between. One of them, \code{f2055bf}, built
+\code{kayfabe-gsp} — the crate this paper's previous revision named as its headline risk and
+described as "34 lines". It is now 3\,550 lines across 8 modules. The GSP sections and two of the
+five figures were rewritten rather than decremented, because the \emph{shape} of the risk changed
+and not only its size (\S\ref{sec:gsp}). Three other revisions are folded in: the L2-Q QEMU-adapter
+design (\code{b31487a}, \S\ref{sec:qemu}), the 580-vs-610 driver-version correction
+(\code{7af23cb}), and the ring gate becoming structural rather than a call-graph property
+(\code{634b253}). A pinned document that has been edited past its pin is worse than an unpinned
+one; every number below was re-measured at \code{6ce8599}.
 
 \smallskip
 \textbf{Stance.} Every number here was measured from the tree while writing, not copied from a
@@ -68,9 +80,11 @@ for the claim to fail.
 has ever driven a real GPU.} There is no binary in the workspace: \code{find -name main.rs}
 returns exactly one hit, and it is the offline ABI generator, which lives outside the workspace
 on purpose. The only composition of vCPU threads, reactor, executor and core that exists is in
-the test suite (\file{tests/tests/l1\_mean.rs:7794--7890}). Everything below describes a system
-that is real, tested and internally coherent, and that has not yet met the thing it exists to
-talk to.
+the test suite (\file{tests/tests/l1\_mean.rs}, \code{guest\_mean\_run}). \textbf{This is still
+true at this revision}, and it is true of the newly-built faked GSP too: \code{kayfabe-gsp}
+decodes real \code{msgq} elements and real RPC envelopes, but only ones a test wrote into a
+\code{BTreeMap}. Everything below describes a system that is real, tested and internally
+coherent, and that has not yet met the thing it exists to talk to.
 \end{warnbox}
 
 % ===========================================================================
@@ -279,12 +293,14 @@ anywhere. Everything effectful crosses a trait seam. \code{unsafe\_code = "forbi
 workspace lint; every core type is compile-time-asserted \code{Send + Sync}.
 \end{claimbox}
 
-This is enforced, not intended. Three CI greps run on every push: a \emph{hexagonal boundary}
+This is enforced, not intended. Four CI greps run on every push: a \emph{hexagonal boundary}
 grep that fails if \code{eventfd|epoll|timerfd|rawfd|libc|O\_NONBLOCK} appears in any of the 11
 pure crates; a \emph{VMM-vocabulary} grep that fails if any QEMU concept (\code{BQL},
 \code{MemoryRegion}, \code{qemu\_bh}, \code{iothread}, \dots) appears in those 11 plus
-\code{kayfabe-rt}; and a \emph{GPA-accessor} gate that asserts \code{.gpa\_read(}/\code{.gpa\_write(}
-appears \textbf{exactly once} in the entire forwarding crate.
+\code{kayfabe-rt}; a \emph{generation-name} grep over 10 of them that fails on any concrete chip
+or GPU-generation name outside a comment; and a \emph{GPA-accessor} gate that asserts
+\code{.gpa\_read(}/\code{.gpa\_write(} appears \textbf{exactly once} in the entire forwarding
+crate, and \textbf{nowhere} in the other nine.
 
 The claim that pays for this constraint is the \textbf{adapter contract}: bringing up a new GPU
 generation is \code{impl Arch for <Gen>} in an adapter crate with \emph{zero edits to any logic
@@ -295,10 +311,15 @@ anywhere, the mock would not work.
 \begin{landscape}\begin{figure}[p]
 \centering
 \adjustbox{max width=\linewidth, max totalheight=0.86\textheight}{\input{fig_layers.tex}}
-\caption{The layer model and the hexagonal ports. Line counts are measured
-(\code{crates/*/src/**/*.rs}). Two of the six ports have no real implementation and never have;
-the two adapter layers that would provide them are unbuilt. \code{kayfabe-mocks} is not a
-convenience — it is the only implementation any port has.}
+\caption{The layer model and the hexagonal ports. Line counts are measured at \code{6ce8599}
+(\code{crates/*/src/**/*.rs}; \code{kayfabe-abi}'s figure includes its detached offline
+generator). Implementor census, counted from \code{impl <Trait> for} across the tree:
+\code{FbRead} has \emph{no} implementation of any kind; \code{Device}, \code{Present},
+\code{Arch}, \code{GspModel}, \code{Isolate}, \code{IsolateFactory} and \code{RmBackend} have
+only mocks or test types; \code{Vmm} has one real adapter (\code{KvmVmm}); \code{TraceSink} has
+two in-crate implementations. \code{kayfabe-gsp} joined the L0 band at this revision — it is a
+pure logic crate and is covered by all four CI boundary greps — but the L2 shell that would call
+it does not exist.}
 \label{fig:layers}
 \end{figure}\end{landscape}
 
@@ -309,36 +330,64 @@ against \file{Cargo.lock}; it is not drawn from the design documents. Three find
 straight off it.
 
 \textbf{The external dependency surface is essentially zero.} In the whole workspace there are
-three external crates: \code{libc} (in \code{kayfabe-linux-raw} only), \code{trybuild}
-(dev-only) and \code{proptest} (dev-only). Thirteen of the sixteen crates have no external
-dependency of any kind. Whatever else is true, the supply-chain surface is not a place to look
-for problems.
+three external crates: \code{libc} — a real dependency of \code{kayfabe-linux-raw} only, and a
+\emph{dev}-dependency of \code{kayfabe-vmm-kvm} and \code{tests} for asserting exact errnos —
+plus \code{trybuild} and \code{proptest}, both dev-only. Thirteen of the sixteen crates have no
+external dependency of any kind. Whatever else is true, the supply-chain surface is not a place
+to look for problems.
 
 \textbf{The graph is acyclic, including dev edges}, which the strictly lower-triangular shape of
-the matrix demonstrates directly.
+the matrix demonstrates directly. \emph{The ordering that makes it lower-triangular had to change
+at this revision:} \code{gsp} was a leaf sitting above \code{abi} and \code{trace}, and now
+depends on both, so it moved below them. The re-ordering is the matrix's own record of the crate
+ceasing to be a leaf.
 
 \textbf{But the claimed strata are not disjoint, and the documents imply they are.}
 \code{kayfabe-mmu} — a core crate — depends on the \code{kayfabe-isolate} \emph{port} (it needs
 \code{HostHandle}). \code{kayfabe-core} and \code{kayfabe-fwd} depend on the \code{trace} and
-\code{vmm} ports. "Core" and "port" are one DAG with a purity rule, not two layers. That is a
+\code{vmm} ports. \code{kayfabe-gsp} — also a core crate — depends on the \code{abi} and
+\code{trace} ports. "Core" and "port" are one DAG with a purity rule, not two layers. That is a
 defensible design (the trace crate had to sit \emph{below} core so every plane could emit into
 it), but a reader who takes the hexagon picture literally will be surprised by the manifests.
+
+\begin{claimbox}\small
+\textbf{The previous revision of this paper called \code{kayfabe-abi} and \code{kayfabe-gsp}
+"disconnected islands: nothing in the workspace — not \code{tests}, not \code{fuzz} — depends on
+either". That was true then. Half of it is false now, and the surviving half is sharper.}
+
+\smallskip
+\emph{Re-checked against the manifests and the source, not inherited.} \code{kayfabe-abi} is no
+longer an island: \file{crates/kayfabe-gsp/Cargo.toml} lists it, and five of the eight
+\code{kayfabe-gsp} modules use it (\code{lib}, \code{boot}, \code{element}, \code{fault},
+\code{replay}) — it supplies the RPC envelope view and the version-keyed layout values. So the
+7\,455 lines of oracle-tested wire decoding finally have a consumer, and that consumer is the one
+the crate was written for.
+
+\smallskip
+\code{kayfabe-gsp} \textbf{is still an island in the direction that matters}: the only manifest
+that lists it is \file{tests/Cargo.toml}. No production crate depends on it, nothing constructs
+its inputs outside \code{tests/}, and its output type \code{RpcCommand} has \textbf{zero}
+references anywhere in the tree outside the crate that defines it. It is 3\,550 lines of working
+protocol logic with a test suite and no caller — which is exactly as interesting as the old
+caption said, one level up the stack.
+\end{claimbox}
 
 \begin{landscape}\begin{figure}[p]
 \centering
 \adjustbox{max width=\linewidth, max totalheight=0.86\textheight}{\input{fig_deps.tex}}
-\caption{The crate dependency matrix, derived from the manifests. \code{kayfabe-abi} and
-\code{kayfabe-gsp} are disconnected islands: nothing in the workspace — not \code{tests}, not
-\code{fuzz} — depends on either. For \code{gsp} that is expected (it is a 34-line placeholder).
-For \code{abi} it is the more interesting fact: 7\,455 lines of working, oracle-tested wire
-decoding with no consumer.}
+\caption{The crate dependency matrix, derived from the manifests at \code{6ce8599}.
+\code{kayfabe-abi} is no longer an island — \code{kayfabe-gsp} consumes it, which is what it was
+written for. \code{kayfabe-gsp} still is one: the only manifest that names it is
+\file{tests/Cargo.toml}, so 3\,550 lines of protocol logic have a test suite and \emph{no
+production caller}. Note also that the previous revision's matrix omitted one real edge,
+\code{tests}\,$\rightarrow$\,\code{rt}; it showed 65 dependency edges where the manifests had 66.}
 \label{fig:deps}
 \end{figure}\end{landscape}
 
 \subsection{The data path}
 
 Figure~\ref{fig:datapath} traces one guest GPU operation from a CUDA call to real silicon and
-back, with the file and line of every step. Three things about it are worth stating in prose.
+back, naming the symbol each step lives at. Three things about it are worth stating in prose.
 
 \textbf{The plan/execute/commit shape is the whole concurrency design.} A host RM verb can block
 for a long time — the host RM serializes every ioctl per client, and it waits
@@ -349,25 +398,36 @@ That forces a three-phase shape: \emph{plan} under locks, \emph{execute} with no
 \textbf{R5} requires the commit to re-validate everything the plan assumed. This is not free —
 \S\ref{sec:discussion} covers what it costs.
 
-\textbf{The ring gate is the \#14 fix, and it is structural.} Before any host operation, a
-doorbell submission's entire working set must already be published into \emph{this} \code{Vas}'s
-own host address space. If it is not, the call refuses with \code{NoVas} having issued zero host
-operations. The failure it prevents is exactly the one the C artifact hit on real hardware: the
-losing process's identical guest VAs were never published into its own host GR address space, so
-the host GPU faulted past the shared prefix.
+\textbf{The ring gate is the \#14 fix, and it is now structural in the type system.} Before any
+host operation, a doorbell submission's entire working set must already be published into
+\emph{this} \code{Vas}'s own host address space. If it is not, the call refuses with
+\code{NoVas} having issued zero host operations. The failure it prevents is exactly the one the C
+artifact hit on real hardware: the losing process's identical guest VAs were never published into
+its own host GR address space, so the host GPU faulted past the shared prefix. At the previous pin
+this was a call-graph property — "every path happens to go through \code{plan\_doorbell}". At
+\code{634b253} it stopped being one: \code{VerbPlan::Doorbell} is \code{\#[non\_exhaustive]}, so no
+struct expression for it exists outside \code{kayfabe-isolate}, and the sole constructor
+\code{VerbPlan::gated\_doorbell} \emph{runs} the gate. Constructing an ungated doorbell is now
+compile error E0639, pinned by a \code{trybuild} row (\file{crates/kayfabe-isolate/tests/ui/}).
 
-\textbf{The upper half of the diagram does not exist.} There is no register model, no GSP
-message-queue transport and no RPC decode, so \textbf{nothing in the repository produces an
-\code{RmEvent} from real guest bytes.} The core's control-plane input is synthesised by the test
-suite. This is the single largest gap in the system and it is the critical path
-(\S\ref{sec:gsp}).
+\textbf{The upper half of the diagram is half-built, and the half that is missing moved.} At the
+previous pin there was no register model, no GSP message-queue transport and no RPC decode. All
+three now exist, in \code{kayfabe-gsp}. What still does not exist is (a) any adapter that
+implements \code{GuestRam} or \code{Device} outside \code{tests/}, and (b) the bridge from the
+GSP's decoded output to the core's input — \code{RpcCommand} has zero references anywhere in the
+tree outside the crate that defines it. So the headline sentence survives verbatim:
+\textbf{nothing in the repository produces an \code{RmEvent} from real guest bytes}, and the
+core's control-plane input is still synthesised by the test suite. \S\ref{sec:gsp} is about what
+changed underneath that sentence.
 
 \begin{landscape}\begin{figure}[p]
 \centering
 \adjustbox{max width=\linewidth, max totalheight=0.86\textheight}{\input{fig_datapath.tex}}
-\caption{The data path, verified function by function against the tree at \code{0b78102}.
+\caption{The data path, verified function by function against the tree at \code{6ce8599}.
 Numbered steps are the execution plane; \textbf{C} is the control plane, which populates the
-address table from declared protocol facts. The red dashed lane is unbuilt.}
+address table from declared protocol facts. Boxes name \emph{symbols}, not line numbers: the
+repository converted its own 105 pins to symbols in \code{3fd1455} after they drifted, and six of
+this figure's pins had drifted by this revision. Red text marks what does not exist.}
 \label{fig:datapath}
 \end{figure}\end{landscape}
 
@@ -424,13 +484,13 @@ indistinguishable; it is that the driver unload has \emph{no} observable signal.
 \section{The crates}
 \label{sec:crates}
 
-Sizes are \code{crates/<name>/src/**/*.rs}, measured at \code{0b78102}. "Maturity" is this
+Sizes are \code{crates/<name>/src/**/*.rs}, measured at \code{6ce8599}. "Maturity" is this
 document's reading of the tree, cross-checked against
 \file{docs/design/crate\_maturity\_map.md}.
 
 \newcommand{\crate}[3]{\needspace{3\baselineskip}\subsection{\texttt{#1} \normalfont\small — #2 lines, #3}}
 
-\crate{kayfabe-core}{8\,411}{\built{} and mutation-hardened}
+\crate{kayfabe-core}{8\,475}{\built{} and mutation-hardened}
 Owns the spine. \code{RmGraph} is the source of truth: a refcounted resource/handle split with
 \code{DUP\_OBJECT} aliasing, order-tolerant "parked" facts (a mapping that arrives before its
 target is held, not rejected), mapping refcounts and capacity bounds. \code{project()} is a pure
@@ -457,8 +517,18 @@ artifact — with a \code{file:line} citation per number, and a test whose name 
 \code{nvos46\_the\_three\_oracles\_disagree\_and\_here\_is\_exactly\_how}. That test found that
 the C artifact's \emph{parity test} was weaker than the C code it was supposed to guard.
 
-\emph{Two honest facts.} No crate in the workspace depends on it. And \file{README.md},
-\file{ARCHITECTURE.md} and its own \code{Cargo.toml} description all still call it a stub.
+\emph{Both of the previous revision's "honest facts" about this crate have expired, and in
+opposite directions.} It now has a consumer — \code{kayfabe-gsp} depends on it and five of that
+crate's eight modules use it — so the "7\,455 lines with no consumer" finding is closed. And the
+three places that called it a stub were corrected in \code{e6ba19e}; \file{README.md} and
+\file{ARCHITECTURE.md} now carry struck-through entries recording the correction, which is the
+house style working as intended.
+
+\emph{What has not moved:} \code{DriverAbiTable} still carries only \code{version},
+\code{map\_dma} and \code{note}. There is no key for the GSP element layout, so although the
+tables exist and are version-dispatched, \textbf{no production path selects an element layout}
+— the only callers of \code{ElementLayout::new} are in \code{tests/}. The wire tables are a
+built \emph{capability} that nothing yet asks a question of.
 
 \crate{kayfabe-linux-raw}{6\,097}{\built{} --- the entire \code{unsafe} surface}
 The only crate permitted \code{unsafe}, and the only one that does not inherit the workspace
@@ -471,7 +541,34 @@ carries a \code{trybuild} compile-fail matrix — 9 files that must \emph{not} c
 things like a bare \code{MAP\_FIXED} address, a page-size literal, and a view outliving its
 region.
 
-\crate{kayfabe-rt}{2\,556}{\built{} (L1-M1)}
+\crate{kayfabe-gsp}{3\,550}{\built{} (S0--S5) --- \textbf{and nothing calls it}}
+The faked GSP: the guest driver's entire picture of its GPU arrives through this crate. Eight
+modules. \code{ram} owns the guest-RAM port and walks the shared region's \emph{self-describing
+page table} (the region is allocated \code{NV\_MEMORY\_NONCONTIGUOUS}, so the C artifact's
+\code{base + offset} arithmetic is a latent bug this crate does not reproduce). \code{ring} is
+NVIDIA's \code{msgq} algebra — geometry, cursors, and the \code{msgqRxLink} acceptance predicate
+reproduced code-for-code so "would the guest link this header?" is answerable offline.
+\code{element} is framing, the 64-bit XOR-fold checksum and multi-element split/join.
+\code{boot} is \code{BootPhase}\,$\times$\,\code{QueueState} with transitions E1--E11, and it
+deletes all three of the C's one-shot latches — two by construction, one by making the queue
+GPA exist only inside a \code{Bound} variant. \code{rpc} classifies functions into three
+dispositions (must-reply-synchronously, reply-expected, must-\emph{not}-reply). \code{replay} is
+the differential projection its oracle compares, plus a ledger in which a deliberate divergence
+is admissible only with four things attached, one of them an independent oracle.
+
+\emph{Five things it is deliberately not tied to,} each with a test that pushes on it: a GPU
+architecture (every offset is behind \code{kayfabe\_arch::GspModel}; the suite drives the same FSM
+through two deliberately-different models), a driver version (the element layout is an
+\code{ElementLayout} \emph{value}, not a constant), a hypervisor (the only way in is an abstract
+register access and the \code{GuestRam} port; CI greps for every VMM type name), a single GPU
+lifetime (\code{GspFsm::device\_reset} rebuilds the value and teardown drops the queue binding
+\emph{by value}, so driver-restart works in-process, repeatedly), and a CPU architecture (every
+wire access is explicitly little-endian).
+
+\emph{And it has no caller.} \S\ref{sec:gsp} is about that, and about the two harder problems
+underneath it.
+
+\crate{kayfabe-rt}{2\,566}{\built{} (L1-M1)}
 The threaded shell. \code{LockRank\{Device=0, Proc=1, Leaf=2\}} with an always-on (not
 \code{debug\_assert}) rank check that panics \emph{before} the OS acquire, so an inversion is
 deterministic. \code{SharedDevice} is the plan/execute/commit driver, and it ships \textbf{both}
@@ -479,7 +576,7 @@ lock modes — \code{Sharded} and \code{Degenerate} — from day one, tested as 
 configurations with a differential asserting a bit-identical end state, specifically so a late
 granularity change is never the untested mode.
 
-\crate{kayfabe-fwd}{2\,371}{\built{} --- and never exercised against a GPU}
+\crate{kayfabe-fwd}{2\,491}{\built{} --- and never exercised against a GPU}
 The entry points an adapter calls: \code{handle\_doorbell}, \code{publish\_backing},
 \code{parse\_pushbuffer} (the one parser: CE page-table-write capture, semaphore release,
 TLB invalidate, everything else opaque and passed through), \code{forward\_engine\_object} and
@@ -487,7 +584,7 @@ TLB invalidate, everything else opaque and passed through), \code{forward\_engin
 the crate whose correctness is least established, because its correctness is a claim about
 NVIDIA's behaviour and nothing here has met NVIDIA.
 
-\crate{kayfabe-mocks}{2\,156}{\built{}, test-only}
+\crate{kayfabe-mocks}{2\,160}{\built{}, test-only}
 One deterministic fake per port, plus the shared verb recorder and the conservation ledger.
 Excluded from the mutation denominator on the argument that mutating an instrument is a category
 error — a surviving mock mutant is not a coverage hole. \emph{Strictly}, it is not confined to
@@ -501,7 +598,7 @@ run loops, MMIO exit classification. \textbf{Defect \#57: the R1 assertion trips
 hypervisor adapter on a memory plane with a known lock violation under contention means any
 later hang has two candidate causes instead of one.
 
-\crate{kayfabe-isolate}{1\,617}{\built{} traits; \textbf{no real implementation}}
+\crate{kayfabe-isolate}{1\,737}{\built{} traits; \textbf{no real implementation}}
 The port for the unprivileged host worker: \code{RmBackend} (12 verbs, all of which must be
 issuable unprivileged), \code{Isolate} (two-stage retire, cancellation, quiesce predicate),
 \code{IsolateFactory}. \code{Worker::execute} is the single door to a backend and asserts R1 on
@@ -526,7 +623,7 @@ the restated F1 rule — \emph{assert a bound, never an absence} — as a concre
 than spinning. That restatement came from the mutation gate: three spin-versus-park mutants
 survived precisely because "never busy-poll" is an absence, and an absence is not observable.
 
-\crate{kayfabe-vmm}{881}{\built{} traits only}
+\crate{kayfabe-vmm}{927}{\built{} traits only}
 The hypervisor and display ports: \code{Vmm} (7 capability groups), \code{Device},
 \code{Present}. An eighth group — the memory-lock primitive — was \emph{removed} from the trait
 when it turned out to need no hypervisor cooperation on any backend, which is a good sign about
@@ -538,20 +635,25 @@ Per-process queues (pending $\to$ in-flight $\to$ awaiting-ack $\to$ ack), a dra
 delivery plane whose re-post is driven off \emph{the owner's own poll} (the starvation fix), and
 mapped-fence arms with the \#12 backwards-jump guard. Scored 100\% on the mutation gate.
 
-\crate{kayfabe-util}{665}{\built{}}
+\crate{kayfabe-util}{675}{\built{}}
 \code{IntervalMap} (the address table's container, loud on overlap, empty and wrap), a
 \emph{virtual} \code{Instant} so no wall clock exists anywhere in the core, the
 \code{assert\_send\_sync!} compile-time gate, and the lock witness that invariant R1 asserts
 against. The witness lives here rather than in \code{kayfabe-rt} specifically so that
 \code{kayfabe-isolate}, which cannot depend on \code{rt}, can still assert it.
 
-\crate{kayfabe-arch}{556}{\built{} traits only}
+\crate{kayfabe-arch}{757}{\built{} traits only}
 The identity vocabulary (\code{HClient}, \code{HObject}, \code{Pdb}, \code{VChid},
 \code{ClassId}, \code{GpuVa}, \code{Gpa}, \code{GpuId}, \code{EngineKind}) and the Axis-B port
-set. Zero real implementations; \code{MockArch} is the standing proof that a real one will need
-no core edits.
+set. It grew by 201 lines at this revision, all of it a new \file{gsp.rs}: a \code{GspReg}
+enumeration and a \code{GspModel} trait reached through \code{Arch::gsp()}, which is the seam
+that keeps every register offset out of \code{kayfabe-gsp}. The GSP port plan's own \S3.5 had
+recorded "\code{kayfabe-arch} has no seam for any of this" as a finding; the seam is the finding
+being paid off. Still zero production implementations: the only \code{impl Arch} and
+\code{impl GspModel} in the tree are \code{MockArch}, \code{GspArch} and \code{FakeGspModel}, all
+test types. That remains the standing proof that a real one will need no core edits.
 
-\crate{kayfabe-mmu}{309}{table \built{}; \textbf{walker is 41 lines of nothing}}
+\crate{kayfabe-mmu}{314}{table \built{}; \textbf{walker is 41 lines of nothing}}
 \code{AddressTable} is complete and is the enforcement point for the project's most-cited
 directive: forward-populate only, unbind eagerly, and \textbf{a miss is a fault} — no reverse
 resolve, no heuristic pick, no MRU fallback exists anywhere in the codebase.
@@ -560,15 +662,15 @@ The \code{walker} module is 41 lines containing one trait and one enum, \textbf{
 function of any kind}. \code{WalkResult} is constructed nowhere; \code{FbRead} is implemented
 nowhere. The module's own doc comment says the walk algorithm is "also here". It is not.
 
-\crate{kayfabe-gsp}{34}{\stub{} --- \textbf{and the critical path}}
-A three-variant \code{BootPhase} enum, referenced by nothing. Section~\ref{sec:gsp} is about
-this crate.
-
 \subsection*{\texttt{tests/} --- the conformance suite}
-39\,469 lines of test code against 38\,224 lines of implementation. 28 files in
-\file{tests/tests/}, 5 more under \code{crates/*/tests/}, and a \code{Scenario} DSL in
+43\,272 lines of test code against 42\,320 lines of implementation. 29 files in
+\file{tests/tests/}, 6 more under \code{crates/*/tests/}, and a \code{Scenario} DSL in
 \file{tests/src/}. The suite is a workspace member with a \code{[lib]}, which is why
-\code{kayfabe-mocks} compiles as a normal dependency.
+\code{kayfabe-mocks} compiles as a normal dependency. It gained two files at this revision:
+\file{tests/tests/gsp\_boot.rs} (24 tests) and \file{tests/src/\allowbreak gspworld.rs} — 1\,133 lines of
+\emph{independent} guest model, written against the driver's own receive path rather than as a
+script, so that a replay passing because the transition never fired is distinguishable from a
+replay passing because it did.
 
 % ===========================================================================
 \section{The invariant catalogue}
@@ -619,8 +721,26 @@ Per-\code{Proc} isolation (I1) &
 \addlinespace
 One gated ring path &
   A doorbell can only reach the host after the \#14 working-set gate. &
-  \textbf{See the correction in \S\ref{sec:corrections}} — the property holds, the cardinality
-  claim in four documents does not. \\
+  \textbf{Now structural, not a call-graph claim.} \code{VerbPlan::Doorbell} is
+  \code{\#[non\_exhaustive]}, so its only constructor is \code{VerbPlan::gated\_doorbell}, which
+  runs the gate; an ungated one is compile error E0639, pinned by a \code{trybuild} row. The
+  cardinality claim corrected in \S\ref{sec:corrections} is what this replaced. \\
+\addlinespace
+\textbf{GSP-S1} \newline (new) &
+  \textbf{We may never emit an element run wider than the guest's staging buffer.} At driver 580
+  the guest reads our \code{elemCount} field directly into an unbounded \code{portMemCopy} loop
+  whose staging area is exactly \code{queueElementSizeMax / queueElementSizeMin} elements — 16 on
+  the bench — with the live \code{msgq} metadata as the very next byte. An \code{elemCount} of 17
+  overwrites the metadata the guest is actively using; at the ring's reachable maximum it writes
+  188\,416 bytes past a \code{portMemAllocNonPaged} allocation. This is a \emph{guest kernel heap}
+  corruption reachable from a value we choose. &
+  \textbf{Nothing. It is a design-doc invariant with no code behind it}
+  (\file{mode2\_gsp\_port\_plan.md} \S4.6). The bound holds today only \emph{by derivation} —
+  \code{MsgLen::new} clamps \code{rpc.length}, and one encoder computes both numbers — so any
+  future path that sets the field from anything else breaks it silently. The remediation is
+  specified (\file{gsp\_580\_correction\_brief.md} B2: a named
+  \code{ElementCountOutOfRange} refusal at the write site, and the same check on receive) and
+  \textbf{is not implemented at this revision}: \code{grep} finds the variant nowhere. \\
 \addlinespace
 Completion integrity (I2) &
   A completion fires only from a genuinely-armed source in the \emph{owning} process, at most
@@ -704,6 +824,20 @@ copy-once snapshot instead, and the reasoning is written out in its source. The 
 to date has been running on Layer 2 alone — which is correct for a cooperating guest and is not
 a security property.
 
+\textbf{And the boundary points both ways, which building the GSP made concrete.} Everything
+above is about not trusting the guest. \textbf{GSP-S1} is the mirror: the guest kernel is inside
+the boundary we are defending, and the faked GSP is a device that can corrupt guest kernel memory
+from a width \emph{we} choose. The mechanism is fully traced in
+\file{mode2\_gsp\_port\_plan.md} \S4.6 and reduces to one sentence — at driver 580 the guest reads
+our \code{elemCount} field into a copy loop bounded by nothing but the ring, and the byte after
+its staging area is the \code{msgq} metadata it is actively using, so the corruption is
+immediately self-amplifying. It is the same defect class as the C artifact's unguarded
+\code{\% s->q\_msgcount} \code{SIGFPE}, pointed at the guest instead of at QEMU. The obvious
+objection — "\emph{the guest is the victim, so it is the guest's bug}" — is answered in the plan
+and the answer is that it is both. \textbf{At this revision the invariant is written down and not
+enforced}; that is the most security-relevant thing in this document that is a sentence rather
+than a mechanism, and by the project's own doctrine a rule stated only in prose has no reader.
+
 % ===========================================================================
 \section{What is tested, how, and what that does and does not prove}
 \label{sec:testing}
@@ -711,25 +845,25 @@ a security property.
 \subsection{The shape of the suite}
 
 \begin{center}\small
-\begin{tabular}{@{}lrl@{}}
+\begin{tabularx}{\textwidth}{@{}lr>{\raggedright\arraybackslash}X@{}}
 \toprule
 \textbf{Measurement} & \textbf{Value} & \textbf{How} \\
 \midrule
-Tests reported green & \textbf{515} &
+Tests reported green & \textbf{547} &
   \code{KAYFABE\_NO\_KVM=1 KAYFABE\_SLOW=1 cargo test --workspace}, recorded in commit
-  \code{8533789} \\
-\code{\#[test]} attribute sites & 512 & grep over workspace members (excludes the detached
-  generator) \\
+  \code{e508a8a} — \unver{} here, since no \code{cargo} was run for this revision either \\
+\code{\#[test]} attribute sites & 544 & grep over workspace members; excludes the
+  detached generator and the \code{trybuild} ui fixtures \\
 \code{proptest!} blocks & 16 & each is one test that runs many cases \\
 Checked-in proptest failures & \textbf{0} & \code{find} for \code{proptest-regressions}: nothing
   exists \\
 KVM-gated tests & 36 & CI floor asserts $\geq 35$ were \emph{reached} \\
-TSan targets & 4 files, 65 tests & nightly only \\
+TSan targets & 4 files, 68 tests & nightly only \\
 Fuzz targets & 1 & \code{parse\_pushbuffer}; CI compiles it, does not run it \\
-Implementation lines & 38\,224 & \code{crates/*/src/**/*.rs} \\
-Test lines & 39\,469 & \code{tests/}, \code{crates/*/tests/}, \code{fuzz/} \\
+Implementation lines & 42\,320 & \code{crates/*/src/**/*.rs} \\
+Test lines & 43\,272 & \code{tests/}, \code{crates/*/tests/}, \code{fuzz/} \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{center}
 
 The suite runs in about 20 seconds with no GPU, no OS dependency and no wall clock. That is a
@@ -738,8 +872,10 @@ affordable enough to run on every change.
 
 \subsection{The six CI gates}
 
-There is one workflow file with six jobs. Note the README says "four standing CI gates"; that
-is stale (\S\ref{sec:corrections}).
+There is one workflow file with six jobs, and the \code{stable} job grew from eleven steps to
+twelve at this revision. The README's "four standing CI gates", flagged as stale by the previous
+revision of this paper, has since been removed from the README
+(\S\ref{sec:corrections} row 5).
 
 \begin{center}\small
 \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.4cm}>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}X@{}}
@@ -747,11 +883,15 @@ is stale (\S\ref{sec:corrections}).
 \textbf{Job} & \textbf{When} & \textbf{What it asserts} \\
 \midrule
 \code{stable} & every push + PR &
-  Eleven steps: build; \textbf{test with KVM forced absent}; assert the KVM-gated tests were
+  Twelve steps: build; \textbf{test with KVM forced absent}; assert the KVM-gated tests were
   \emph{reached}; clippy \code{-D warnings}; \code{fmt --check}; the hexagonal-boundary grep;
-  the VMM-vocabulary grep; the \code{unsafe}-surface \code{ls} gate; the GPA-accessor gate
-  (exactly one call site); three unsafe-containment asserts including the ratchet at 37; and
-  \code{fmt --check} for the fuzz workspace. \\
+  the VMM-vocabulary grep; \textbf{the generation-name grep} (no concrete chip or driver version
+  in the ten logic crates — added in \code{a0a5834}, and it is the gate that makes
+  \code{kayfabe-gsp}'s version-agnosticism mechanical rather than aspirational); the
+  \code{unsafe}-surface \code{ls} gate; the GPA-accessor gate (exactly one call site — and
+  \code{kayfabe-gsp} is on its list, which is why that crate has a \code{GuestRam} port of its
+  own instead of touching \code{Vmm}); three unsafe-containment asserts including the ratchet at
+  37; and \code{fmt --check} for the fuzz workspace. \\
 \code{aarch64} & every push + PR & \code{cargo check --workspace --target
   aarch64-unknown-linux-gnu} \\
 \code{nightly-fuzz} & every push + PR & the fuzz harness \emph{compiles} \\
@@ -867,6 +1007,15 @@ The workflow marks it \textbf{PENDING RE-DERIVATION} in its own text. A full-sco
 measured once at \textbf{90.60\%} raw, rising to roughly \textbf{94.9\%} once test scaffolding is
 excluded from the denominator (48\% of that run's misses were mutations of mocks), but neither
 number has been confirmed by a second run.
+
+\smallskip
+\textbf{And a second reason not to quote one at this revision.} The scope is
+\code{-f 'crates/*/src/**/*.rs'}, so it now covers \code{kayfabe-gsp} — 3\,550 lines that did not
+exist when either number was measured, and roughly 8\% of the implementation. \emph{No mutation
+campaign has ever run over them} \unver{}. Conversely, the GSP port plan's own \S5 warns that
+"the mutation job's \code{-f} scope does not include the crate"; that warning was written against
+the pre-\code{0b78102} four-path scope and \textbf{is itself stale} — the scope was widened before
+the crate was written.
 \end{warnbox}
 
 \subsection{The OS-free configuration, and why it exists}
@@ -947,36 +1096,161 @@ often the fast path fails — which is the quantity the optimisation exists to d
 with a test that documents exactly how they disagree, is better than what most projects do, and
 it caught the C artifact's own parity test being weaker than the code it guarded.
 
-\subsection{\texorpdfstring{\texttt{kayfabe-gsp} is unwritten, and it is the critical path}{kayfabe-gsp is unwritten, and it is the critical path}}
+\subsection{\texorpdfstring{\texttt{kayfabe-gsp}: boot is modelled, reboot is not, and one open item has no proposed resolution}{kayfabe-gsp: boot is modelled, reboot is not, and one open item has no proposed resolution}}
 \label{sec:gsp}
 
-34 lines. A \code{BootPhase} enum with three variants, referenced by nothing, in a crate that
-depends only on \code{kayfabe-util}.
+\begin{claimbox}\small
+\textbf{This section replaces one that said "34 lines, and it is the critical path".} That
+sentence was true at the previous pin and is not true now: \code{f2055bf} built stages S0--S5,
+3\,550 lines across 8 modules, with 24 dedicated tests, an independent 1\,133-line guest model,
+and a composed run inside the arbiter suite. The risk did not shrink so much as \emph{change
+shape}, and the new shape is more interesting than the old one. It is also not a victory lap:
+three of the plan's nine stages are unbuilt, one open item has no proposed resolution at all, and the
+plan the crate was built from was written against the wrong driver version.
+\end{claimbox}
 
-Everything the guest driver believes about its GPU comes through this crate. Until it exists
-there is no register model, no message-queue transport, no RPC decode — and therefore
-\textbf{nothing that turns real guest bytes into the \code{RmEvent}s the core consumes}. The core
-is a very well-tested function with no production caller on its main input.
+\subsubsection*{What is built, and what "built" is worth here}
 
-The port plan for it is written (1\,422 lines) and it is careful about what it does and does not
-know. Two facts from it should worry a reviewer:
+The five seams the crate claims — GPU architecture, driver version, hypervisor, GPU lifetime, CPU
+architecture — each have a test that pushes on them, which is the difference between a seam and a
+decoration. Two are worth singling out because they are cheap to fake and were not faked. The
+lifetime seam is exercised by running \emph{repeated} driver lives in one process: the C
+artifact's measured second-life failure (\code{msgqRxLink} timeout, \code{-7}, 71\,064 retries)
+has exactly one cause in the driver's own source, \code{rx.size != size}, and the FSM is shaped so
+that cause cannot arise. The architecture seam is exercised by driving the same FSM through
+\emph{two} deliberately-different register models, which is the same argument as \code{MockArch}
+one layer down.
 
-\begin{enumerate}
-\item \textbf{No available source tree is the bench's driver.} The specification (NVIDIA's open
-  kernel modules) is version 610.43.02. The independent corroboration (nouveau) carries r535 and
-  r570. The bench runs 580.159.04, which sits between r570 and 610 with no vendored source.
-  \textbf{Three of the boot path's structures have three different shapes across the three
-  available trees.} The plan's own \S9 lists nine specific disagreements.
-\item \textbf{The plan found two of its own briefed premises to be false while being written},
-  and says so in the commit message. One of those was a claim about the C's behaviour cited from
-  a C source comment. The doctrine drawn from it: \emph{citing a comment is still citing a
-  belief}.
-\end{enumerate}
+The oracle is the part to be sceptical of, and the crate says so itself. The design called for
+trace replay against the C emulator's recorded boots. \textbf{Those traces do not exist}: the
+capture patch is $\sim$60 lines against a C file this work does not own, and it has not landed. So
+S5 is proven against a \emph{guest model} — an independent implementation of the driver's receive
+path — which is a stronger oracle than a synthetic script for everything except the one thing it
+was supposed to establish. Until the capture lands, \textbf{"byte-equivalent with the C" is
+untested}.
 
-The mitigation is that its oracle is trace replay against the C emulator's recorded boots, and
-the replay vocabulary was deliberately built \emph{first} so the harness would not hard-code the
-format in the wrong crate. That sequencing decision is good. It does not reduce the size of the
-gap.
+\subsubsection*{Boot is modelled. Reboot and resume are not.}
+
+The plan has nine stages. S0--S5 — the six that need no GPU — are the boot and steady-state
+protocol, and they are what \code{f2055bf} built. \textbf{S6, S7 and S8 are the three that need a
+GPU, and none is built}; S6 is additionally blocked, because \code{4a0cb29} records the bench host
+as offline at the provider. Two of the plan's open questions (\textbf{O3}, whether the sequence
+numbers reset across a true \code{rmmod}/\code{insmod}; \textbf{O5}, which boot mode a
+post-teardown re-acquire uses) are answerable \emph{only} by a bench run, and O3 is not even
+reachable before S7. This matters more than the stage count suggests, because the owner's standing
+requirement is that a GPU restart — idle, released, re-acquired — must work \emph{with no
+bolt-on}, and restart is exactly the region S6--S8 covers. Boot is the part that could be modelled
+offline, so boot is the part that got modelled.
+
+\subsubsection*{\texorpdfstring{★ The sharpest open item: at 580 the resume handoff is an RPC \emph{we} would have to send}{The sharpest open item: at 580 the resume handoff is an RPC we would have to send}}
+
+This is \S11-O7a of the port plan, and it is the one item in the whole component with \textbf{no
+proposed resolution}, because the evidence that would settle it is not in any open-source tree.
+
+The mechanism is present at both driver versions and reads identically: a core resume resets into
+RISC-V, re-programs the LibOS boot-args address, starts SEC2 and waits on
+\code{NV\_PGC6\_BSI\_SECURE\_\allowbreak SCRATCH\_14.\_BOOT\_STAGE\_3\_HANDOFF}. What differs
+is \textbf{who initiates it}:
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.6cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+\toprule
+& \textbf{580.159.04 (the bench)} & \textbf{610.43.02 (the vendored spec)} \\
+\midrule
+where the wait lives & inside the CPU sequencer executor, as opcode \code{CORE\_RESUME} &
+  promoted to a first-class HAL, \code{kgspExecuteCoreResume\_TU102} \\
+\addlinespace
+how it is reached & \textbf{only} through \code{\_kgspRpcRunCpuSequencer} — i.e.\ only if
+  \emph{we send} a \code{GSP\_RUN\_CPU\_SEQUENCER} event &
+  locally, from two call sites in the driver. \textbf{Nothing is required of us.} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Three things follow, and none of them is comfortable.
+
+\textbf{It is not a layout difference, so a version table does not absorb it.} Every other
+580-vs-610 divergence the project has found is an offset, a field count or a constant — one row in
+a version-keyed table. This one is a difference in \emph{who initiates}, which means a faked GSP
+that must emit sequencer buffers at 580 and must not at 610 has version-conditional
+\emph{behaviour}. \file{docs/design/four\_axes\_of\_variation.md} \S5 rule 1 forbids exactly that:
+\emph{"No \code{if guest\_version == \dots} in a logic crate. Transitions fire on observed protocol
+facts, never on driver identity."} The two honest options named in the correction brief are a
+version-keyed \emph{capability} on the FSM or a loud refusal, and the brief declines to choose
+between them on the grounds that choosing requires an answer it does not have.
+
+\textbf{The answer cannot be read out of the open source.} What the open tree shows is that the
+path exists and how it is triggered. What it cannot show is whether the firmware ever triggers it
+on a path we must support, because the \emph{contents} of a sequencer buffer come from GSP-RM
+firmware, which is not open. Specifying an emitter now would be guessing, and the plan says so
+rather than shipping a guess.
+
+\textbf{So the requirement is genuinely at risk, and this is the cleanest statement of it in the
+project.} If any restart scenario in scope reaches \code{CORE\_RESUME} at 580, then a faked GSP
+that never emits \code{GSP\_RUN\_CPU\_SEQUENCER} cannot drive it, and "GPU restart must work with
+no bolt-on" is not currently satisfiable by the design as written. \emph{Whether} such a scenario
+exists is unknown \unver{}. The next step is a reading task, not a hardware task — enumerate the
+callers of consequence of the sequencer executor at 580 — and it is recorded as O7a rather than
+resolved.
+
+One further sharpening worth carrying, because it cuts against the project's own instinct: the
+relayed finding that started this said "580 has a resume handoff 610 never reads". \textbf{That
+half was wrong} — 610 has the identical routine reading the identical register. The correction log
+reports it as wrong rather than quietly fixing it, which is the behaviour a reviewer should be
+checking for.
+
+\subsubsection*{\texorpdfstring{★ The plan was written against the wrong driver, and one item was RESOLVED backwards}{The plan was written against the wrong driver, and one item was RESOLVED backwards}}
+
+This is the most instructive thing that happened to this component, and it is not flattering.
+
+The port plan took its NVIDIA citations from the vendored open kernel modules at
+\textbf{610.43.02}. \textbf{The bench runs 580.159.04.} The two do not merely differ in offsets;
+they differ behaviourally, and 3\,550 lines were built against the un-caveated plan before anyone
+vendored the matching tree. Eight claims changed when \code{ogkm-580.159.04} was finally vendored
+(\code{7af23cb}): the element count is \emph{read from a field} at 580 and \emph{derived from a
+length} at 610; MCTP/NVDM transport headers do not exist at all on the 580 GSP path; the layout
+break interval narrowed from \code{(570, 610]} to \code{(595.84, 610.43.02]}; the init RPCs are
+queued \emph{before} bootstrap at 580 rather than inside it; the suspend sentinel is an exact
+equality at 580 and a mask at 610; and the queue geometry is compile-time at 580 rather than
+negotiated, which removes the "the guest declares its own geometry" argument the plan had
+presented as its highest-leverage design choice.
+
+\textbf{The worst instance is \S11-O7, which had been marked RESOLVED with the answer that is
+backwards for our bench.} It said \code{GSP\_RUN\_CPU\_SEQUENCER} "is not implemented, do not emit
+it" — true at 610, where the executor was deleted; at 580 it is fully implemented, dispatched, and
+first on the bootup-window allowlist, so an emitted sequencer buffer would execute register writes
+and falcon resets inside the guest kernel rather than being harmlessly ignored. The RESOLVED
+status has been withdrawn.
+
+\textbf{The class, which is the part worth keeping.} A \emph{versioned} specification was cited as
+if it were \emph{the} specification. The fix is mechanical and now normative: every citation
+carries its tag (\code{ogkm-580:} / \code{ogkm-610:}), an untagged claim is unverified by
+definition, and line numbers \emph{and paths} never cross tags — the whole \code{msgq} library
+moved directories between the two. \textbf{That fix is not applied to the code yet}: the workspace's
+crates carry \textbf{121} bare \code{ogkm:} citations in doc comments, 96 of them in
+\code{kayfabe-gsp} alone, and every one is a 610 path with a 610 line number — several naming
+files that do not exist at 580, since the whole \code{msgq} library moved directories. The CI grep
+that would prevent the recurrence is specified and not written.
+
+The self-critical note in the correction log is the one to read: one claim in the same document
+was marked \code{[inferred]} and turned out to be right, while O7 was marked RESOLVED and turned
+out to be backwards — and the difference was not luck. \emph{The inferred claim knew it was
+second-hand and the resolved one did not.}
+
+\subsubsection*{What this does and does not change about the critical path}
+
+The gap moved up one layer; it did not close. There is still \textbf{no production caller}:
+nothing outside \code{tests/} implements \code{GuestRam} or \code{Device}, and the crate's output
+type \code{RpcCommand} has zero references anywhere else in the tree, so the
+\code{RpcCommand}\,$\rightarrow$\,\code{RmEvent} bridge — which the plan deliberately places in
+\code{kayfabe-fwd} rather than guessing it here — does not exist. Nor does any production selector
+for the wire layout: \code{DriverAbiTable} has no GSP element key, so the version-dispatch
+machinery that makes the crate version-agnostic has, at this revision, nothing production-side
+asking it a question.
+
+\textbf{The critical path is now the L2 QEMU adapter} (\S\ref{sec:qemu}), which is the thing that
+would give \code{kayfabe-gsp} a caller, guest RAM to read, and a BAR to answer from — and which
+has not been started, deliberately, because \code{kayfabe-vmm-kvm} still carries defect \#57.
 
 \subsection{Nothing has ever touched a real GPU}
 
@@ -985,6 +1259,16 @@ the paper. There is no binary. \code{Device} has no production implementor. \cod
 \code{IsolateFactory} have exactly one implementation each and it is the mock. No isolate process
 has ever been spawned. The composition of threads that would constitute a running system exists
 only inside one test file.
+
+\textbf{The faked GSP does not change this and it is worth being explicit, because it is the
+component most likely to be misread as hardware contact.} \code{kayfabe-gsp} parses real
+\code{msgq} headers, real element framing and real RPC envelopes — but every byte it has ever
+parsed was written by a test into a \code{BTreeMap} behind the \code{GuestRam} port. No guest
+driver has ever posted to it. Its own oracle, trace replay against the C emulator's recorded
+boots, is \textbf{not available}: the capture patch has not landed, so the traces do not exist,
+and the crate is proven against an independently-written model of the guest rather than against
+the guest. Two of its remaining open questions (\textbf{O3}, \textbf{O5}) are answerable only by
+a bench run, and the bench host is currently offline at the provider.
 
 What this specifically means for the claims in this document: everything about \emph{structure}
 (the DAG, the purity, the type-level isolation, the lock discipline) is verifiable today and this
@@ -1053,17 +1337,52 @@ requires hardware from somewhere else.
 The honest summary is the project's own: \emph{the pure core is arm64-clean by measurement; the OS
 shell on arm64 is entirely unmeasured}.
 
-\subsection{The QEMU $\geq$ 10.2 floor is a distribution constraint}
+\subsection{The QEMU $\geq$ 10.2 floor buys less than the decision that took it assumed}
+\label{sec:qemu}
 
 The design requires \code{memory\_region\_enable\_lockless\_io()}, which lands in QEMU 10.2. That
 buys a genuinely important thing — MMIO dispatch without the big QEMU lock, which is what makes
 the doorbell path viable — and upstream's helper also sets the reentrancy guard in the same body,
 so a discipline the design planned to maintain is no longer ours.
 
-The cost is that 10.2 is very new. Anyone deploying this needs a QEMU newer than what stable
-distributions ship, and the alternative previously considered — backporting roughly four lines
-onto 9.2 — is a maintenance burden with a hypervisor-integrity failure mode. The floor is the
-right call and it is a real adoption tax.
+The floor decision's second claim was economic: requiring a version rather than patching one
+deletes \emph{"the whole 'which QEMU are we built into' ambiguity"}. \textbf{The L2-Q adapter
+design (\code{b31487a}) checked that claim against QEMU's source and it does not hold.}
+
+\begin{warnbox}\small
+\textbf{QEMU v10.2.0 has no supported out-of-tree device mechanism, so our device must be
+compiled inside a QEMU source tree.} Two mechanisms, both closed:
+\code{module\_load\_qom()} resolves a QOM type name against \code{module\_info}, a table
+\emph{generated at QEMU build time}, so a \code{.so} that is not in that table can never be
+discovered by type name — and \code{QEMU\_MODULE\_DIR} changes only the directory searched, not
+the table. \code{module\_load\_dso()} additionally requires the module to export a per-build
+\code{CONFIG\_STAMP} symbol; upstream's own failure hint is verbatim \emph{"Only modules from the
+same build can be loaded."}
+\hfill \src{v10.2.0 util/module.c, include/qemu/module.h}
+\end{warnbox}
+
+\textbf{State it exactly, without overstating it.} The floor \emph{does} delete a patch we would
+otherwise have had to carry: the cancelled 9.2 backport modified upstream semantics inside
+\code{system/physmem.c}, had to be re-derived every release, and a mis-rebase would silently
+change how \emph{every} device in the machine dispatched. What replaces it is an additive
+overlay — a directory dropped into a stock 10.2.x checkout plus two hunks (one \code{meson.build}
+line, one \code{Kconfig} stanza) — whose only conflict surface is a build failure, never a
+behaviour change. That is a real improvement. \textbf{What it does not buy is "install your
+distro's QEMU and run".} The user builds QEMU once. Three of the four costs the floor decision
+itemised against the backport — a rebase every release, a build script that must reproduce it,
+and a supply-chain claim we make to every user — still apply.
+
+\textbf{There is exactly one path to a genuinely stock QEMU, it is named, and it is not taken for
+v1.} \code{vfio-user} would make our device a separate process speaking a documented socket
+protocol to an unmodified distro-packaged QEMU. It is present at v10.2.0
+(\file{hw/vfio-user/}, two documentation files, a vendored \code{libvfio-user}) and
+\file{MAINTAINERS} lists it \code{S: Supported}. It would delete the QEMU tree, the overlay, and
+the second \code{unsafe} crate the in-tree route needs. It is rejected for v1 on one source read:
+nothing in \file{hw/vfio-user/} calls \code{memory\_region\_enable\_lockless\_io}, so a trapped BAR
+access becomes a socket round trip \emph{taken with the BQL held} — reintroducing and amplifying
+the exact serialisation the floor was taken to remove. The design records the small experiment
+that would change the verdict (measure the round trip both ways, and ask whether marking the
+client's regions lockless is a patch upstream would accept) rather than closing the question.
 
 The facility inventory that priced the floor also \textbf{reversed two of its own design
 assumptions}, which is worth knowing before trusting the rest of it: the read-only-memslot
@@ -1071,6 +1390,15 @@ region-lock fallback, priced in the design at 1.49\,µs as "a flags-only flip", 
 \emph{unreachable through QEMU} — QEMU's flatten pass turns a readonly change into a
 delete-plus-add. And checkpoint-restart (\code{cpr-transfer}) is a lifecycle event the design had
 never considered.
+
+\textbf{One more cost the adapter design surfaces and does not argue away.} A QEMU adapter needs
+\code{extern "C"} entry points, raw \code{MemoryRegion *} handles and adoption of a host pointer
+QEMU owns — all \code{unsafe}. The workspace's CI gate exists to keep the audit surface at
+\emph{one} crate readable in one sitting, and its own failure text says adding a second is "a
+design decision, not a manifest edit". L2-Q takes that decision: \code{kayfabe-qemu-raw} becomes
+the second audited \code{unsafe} crate, and the ratchet moves from a constant to a named
+two-element list. The acceptance criterion the gate protects becomes "read two crates". That is
+the honest price and the design says so in those words.
 
 \subsection{The bench is a single serialised GPU}
 
@@ -1127,12 +1455,24 @@ a compiler behind it. The house style for corrections is \emph{strike visibly} �
 struck, with the correction and its evidence — so a reader who remembers the old claim learns it
 was wrong rather than doubting their memory.
 
-\textbf{And the pattern is live right now, in this document's subject.} Writing this paper found
-a dozen more instances in the Rust repository alone (\S\ref{sec:corrections}). Every single one of them is a claim with \emph{no
-gate behind it}. Every claim that \emph{does} have a gate — the boundary greps, the ratchet at 37,
-the reached-count floor at 35, the "exactly one GPA call site" assertion — is mechanically true
-today. That is either a devastating footnote or the strongest possible evidence for the project's
-own thesis, and it is the latter.
+\textbf{And the pattern is live right now, in this document's subject, and in this document.}
+The first revision of this paper found fourteen instances in the Rust repository
+(\S\ref{sec:corrections} rows 1--14). Four days and fourteen commits later, this revision found
+six more — \textbf{two of them in the first revision's own text and figures}, including a
+dependency matrix that omitted one of the edges it claimed to derive from the manifests. Every
+single one of them, in both passes, is a claim with \emph{no gate behind it}. Every claim that
+\emph{does} have a gate — the boundary greps, the generation-name grep, the ratchet at 37, the
+reached-count floor at 35, the "exactly one GPA call site" assertion, and now the E0639
+compile-fail row that makes the ring gate structural — is mechanically true today. That is either
+a devastating footnote or the strongest possible evidence for the project's own thesis, and it is
+the latter.
+
+\textbf{The strongest single instance is in \S\ref{sec:gsp} and it is worth restating here as a
+pattern rather than a fact about NVIDIA.} A specification was cited as if it were the
+specification, when it was one version of a specification; 3\,550 lines were built against it; and
+one question had been closed with an answer that is exactly backwards for the machine the code will
+first run on. The claim that survived that audit was the one marked \code{[inferred]} — because it
+knew it was second-hand. The claim that did not survive was marked \textbf{RESOLVED}.
 
 \subsection{Risks this document adds}
 
@@ -1142,10 +1482,12 @@ own thesis, and it is the latter.
   NVIDIA written by the same author as the core. \code{MockArch}'s deliberately non-NVIDIA
   encodings mitigate the \emph{encoding} half of that; they do not mitigate the \emph{semantics}
   half. If a belief about RM semantics is wrong, the suite will confirm it consistently.
-\item \textbf{The project is three days old and moves faster than its own documentation.} 93
-  commits in 72 hours, with several design documents rewritten mid-build. That is what produced
-  eight stale claims in a repository that has an explicit doctrine against stale claims. It will
-  produce more.
+\item \textbf{The project is four days old and moves faster than its own documentation.} 107
+  commits in 96 hours, with several design documents rewritten mid-build. That is what produced
+  the stale claims in \S\ref{sec:corrections}, in a repository that has an explicit doctrine
+  against stale claims. It has already produced more: fourteen commits after the first revision
+  of this paper, six further instances existed, two of them in this paper. The rate is not
+  slowing, and no gate covers prose.
 \item \textbf{\code{kayfabe-vmm-kvm} defect \#57 is a lock-invariant violation under race, and it
   is blocking by design.} That is the correct call. It is also the kind of defect that is cheap to
   live with and expensive to leave: an R1 violation that fires 1-in-6 under contention is exactly
@@ -1158,6 +1500,17 @@ own thesis, and it is the latter.
 \item \textbf{The \code{Vmm} port's hypervisor-agnosticism is contracted and CI-gated but has
   exactly one adapter.} "A second backend costs one crate and zero trait changes" is a claim that
   only a second backend can settle.
+\item \textbf{The one guest-facing memory-safety invariant the GSP work produced (GSP-S1) is
+  prose, not code.} An \code{elemCount} we emit above the guest's staging bound corrupts guest
+  kernel heap. The bound holds today only because one encoder happens to compute both the length
+  and the count; nothing checks it at the field. The remediation is specified and unimplemented.
+  This is the project's own "prefer a mechanism to a sentence" rule, unpaid, on the highest-stakes
+  sentence it has.
+\item \textbf{One open item bears directly on a stated product requirement and has no proposed
+  resolution.} \S11-O7a (\S\ref{sec:gsp}) may mean that "GPU restart works with no bolt-on" is not
+  satisfiable at the bench's driver version without version-conditional behaviour that the
+  project's own rules forbid in a logic crate. It cannot be closed from open source. Everything
+  else in this list is a known quantity with a known fix; this one is not yet a known quantity.
 \end{itemize}
 
 % ===========================================================================
@@ -1175,12 +1528,17 @@ the whole system, fastest & \file{README.md}, then \file{ARCHITECTURE.md} — bu
 what a "process" is and why & \file{crates/kayfabe-core/src/project.rs} — the pure derivation \\
 the source of truth & \file{crates/kayfabe-core/src/rmgraph.rs} — the refcounted graph and the
   parked-fact machinery \\
-the transactional apply & \file{crates/kayfabe-core/src/gpu.rs}, \code{Spine::apply} (\code{:1202}) \\
-the forwarding entry points & \file{crates/kayfabe-fwd/src/lib.rs} — start at \code{plan\_doorbell}
-  (\code{:1140}) and read the ring gate at \code{:1162--1175} \\
+the transactional apply & \file{crates/kayfabe-core/src/gpu.rs}, \code{Gpu::apply} $\rightarrow$
+  \code{Spine::apply} \\
+the forwarding entry points & \file{crates/kayfabe-fwd/src/lib.rs} — start at
+  \code{route\_doorbell}, then \code{plan\_doorbell}; the ring gate itself now lives one crate
+  over, at \file{kayfabe-isolate} \code{VerbPlan::gated\_doorbell}, with its compile-fail pin in
+  \file{crates/kayfabe-isolate/tests/ui/} \\
+the faked GSP & \file{crates/kayfabe-gsp/src/lib.rs} (the module map and the five seams), then
+  \file{boot.rs} — \code{BootPhase}$\times$\code{QueueState} is the whole boot protocol; the
+  test-side guest is \file{tests/src/gspworld.rs} \\
 the concurrency design & \file{crates/kayfabe-rt/src/lock.rs} (ranks) then
-  \file{device.rs} \code{verb\_op} (\code{:1035}) — the whole plan/execute/commit shape is one
-  function \\
+  \file{device.rs} \code{verb\_op} — the whole plan/execute/commit shape is one function \\
 the \code{unsafe} surface & \code{ls crates/kayfabe-linux-raw/src/*\_unsafe.rs} — that is the
   complete list, by construction \\
 what a test is supposed to look like & \file{tests/tests/l1\_mean.rs} (the arbiter) and
@@ -1206,6 +1564,7 @@ what a test is supposed to look like & \file{tests/tests/l1\_mean.rs} (the arbit
 \end{itemize}
 
 \subsection{Which design documents to read, in order}
+\label{sec:reading}
 
 \begin{enumerate}
 \item \file{docs/design/testing\_doctrine.md} (321 lines) — read this \emph{first}, even before
@@ -1226,10 +1585,19 @@ what a test is supposed to look like & \file{tests/tests/l1\_mean.rs} (the arbit
 \section{Claims corrected while writing this paper}
 \label{sec:corrections}
 
-Each of these is a repository claim that this paper checked against the tree and found stale or
-wrong. They are listed because the list is more useful than any individual correction: it is a
-measurement of the drift rate described in \S\ref{sec:drift}. None is a defect in the code; all
-are defects in descriptions of the code.
+Each of these is a claim that this paper checked against the tree and found stale or wrong. They
+are listed because the list is more useful than any individual correction: it is a measurement of
+the drift rate described in \S\ref{sec:drift}. None is a defect in the code; all are defects in
+descriptions of the code.
+
+Rows 1--14 are from the first revision, at \code{0b78102}. \textbf{Eleven of the fourteen have
+been fixed or superseded in the four days since}, and each row says which — that is the loop
+working, and it is the single most encouraging measurement in this paper. Row 9 is the instructive
+exception: it was fixed \emph{in one document}, which then recorded four further documents still
+citing the retracted number and declared them out of scope. Rows 15--20 are from this revision, at \code{6ce8599}, four days later.
+\textbf{Two of them are defects in this paper's own previous revision}, which is the point: a
+whitepaper is a description of code and decays at the same rate as any other. The figures decayed
+fastest, because a drawn matrix is exactly as ungated as a sentence.
 
 {\small
 \begin{longtable}{@{}p{0.5cm}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{10.7cm}@{}}
@@ -1245,61 +1613,87 @@ are defects in descriptions of the code.
   \file{ARCHITECTURE.md:112}, \file{core\_completeness\_gate.md:119},
   \file{core\_state\_and\_consolidation.md:174}, \file{fwd/src/lib.rs:15} &
   \textbf{False as stated.} \code{ring\_doorbell} has exactly one call site and it is inside
-  \code{Worker::execute}, two hops away. \code{plan\_doorbell} is the sole constructor of
-  \code{VerbPlan::Doorbell}, and it has \emph{two} callers: \code{handle\_doorbell} and
-  \code{SharedDevice::doorbell} — and the L1 shell path, the one a real guest MMIO write takes,
-  goes through the second and \textbf{never enters \code{handle\_doorbell}}. \emph{The safety
-  property survives} because the gate is inside \code{plan\_doorbell}; the cardinality claim does
-  not. Figure~\ref{fig:datapath} draws the box around \code{plan\_doorbell}. \\
+  \code{Worker::execute}, two hops away. \code{plan\_doorbell} had \emph{two} callers:
+  \code{handle\_doorbell} and \code{SharedDevice::doorbell} — and the L1 shell path, the one a
+  real guest MMIO write takes, goes through the second and \textbf{never enters
+  \code{handle\_doorbell}}. The safety property survived; the cardinality claim did not.
+  \textbf{Superseded at \code{634b253}}: the gate moved into
+  \code{VerbPlan::gated\_doorbell}, the sole constructor of a \code{\#[non\_exhaustive]} variant,
+  so the property no longer rests on a cardinality claim at all — it rests on E0639. \emph{A
+  correction that the code then made unnecessary is the best outcome on this list.} \\
 \addlinespace
-2 & \code{kayfabe-abi} is a \emph{"stub (shape only)"} — \file{README.md:29,67,134},
-  \file{ARCHITECTURE.md:22,34,57}, and its own \code{Cargo.toml} description &
-  \textbf{False.} 7\,455 lines of source, a working offline generator, 11 generated structs, a
-  13-method version-dispatch decode surface, 2\,272 lines of oracle tests. It is one of the most
-  finished crates in the repository. \\
+2 & \code{kayfabe-abi} is a \emph{"stub (shape only)"} — \file{README.md}, \file{ARCHITECTURE.md},
+  and its own \code{Cargo.toml} description &
+  \textbf{False}, and \textbf{FIXED SINCE} (\code{e6ba19e}). 7\,455 lines of source, a working
+  offline generator, 11 generated structs, a 13-method version-dispatch decode surface, 2\,272
+  lines of oracle tests. All three sites now carry struck-through corrections. \emph{Listed here
+  because the correction is the evidence the house style works.} \\
 \addlinespace
 3 & \emph{"the implementor is the L1 shell (\code{kayfabe\_rt::SharedDevice})"} —
   \file{ARCHITECTURE.md:38--43}, \file{kayfabe-vmm/src/lib.rs:816}, \file{core/src/gpu.rs:1012} &
   \textbf{No \code{impl Device for SharedDevice} exists.} The only two implementors are test
-  types that wrap an \code{Arc<SharedDevice>} and forward. \file{ARCHITECTURE.md:38} is honest
-  that nothing implements it "yet"; the surrounding text reads as though the shell already does. \\
+  types that wrap an \code{Arc<SharedDevice>} and forward. \textbf{Still true at
+  \code{6ce8599}}, but \textbf{the descriptions are FIXED}: both \file{ARCHITECTURE.md} and
+  \file{kayfabe-vmm/src/lib.rs} now state the absence in bold rather than implying the shell
+  already does it. \\
 \addlinespace
-4 & \emph{"283 tests"} — \file{README.md:85}, \file{ARCHITECTURE.md:156} &
-  \textbf{515} measured on 2026-07-27. \\
+4 & \emph{"283 tests"} — \file{README.md}, \file{ARCHITECTURE.md} &
+  \textbf{515} measured on 2026-07-27; \textbf{547} at this revision. \textbf{FIXED SINCE}
+  (\code{e6ba19e}) — and fixed in the right way: both files now say "in the \textbf{500s} as of
+  2026-07-27" rather than carrying a fresh exact number that would rot again in a week.
+  \emph{Deleting a number is a legitimate repair.} \\
 \addlinespace
-5 & \emph{"four standing CI gates"} — \file{README.md:87} &
-  \textbf{Six jobs; eleven steps in the \code{stable} job alone.} The list of four omits the
+5 & \emph{"four standing CI gates"} — \file{README.md} &
+  \textbf{Six jobs; twelve steps in the \code{stable} job alone.} The list of four omitted the
   VMM-vocabulary gate, the GPA-accessor gate, three unsafe-containment asserts, the KVM
-  reached-count floor, the fuzz-compile job, the slow job and the mutation job. \\
+  reached-count floor, the fuzz-compile job, the slow job and the mutation job — and, since it
+  was written, the generation-name gate. \textbf{FIXED SINCE}: the phrase no longer appears in
+  \file{README.md}. \\
 \addlinespace
-6 & \emph{"TSan (28 threaded tests, 0 races)"} — \file{README.md:88} &
-  28 was the first campaign. The four TSan targets today contain \textbf{65} \code{\#[test]}
-  functions. The "0 races" half is not disputed here — it was not re-run. \\
+6 & \emph{"TSan (28 threaded tests, 0 races)"} — \file{README.md} &
+  28 was the first campaign. The four TSan targets contain \textbf{68} \code{\#[test]} functions
+  at this revision (65 at the previous one). The "0 races" half is not disputed here — it was not
+  re-run. \textbf{FIXED SINCE}: \file{README.md} now names 28 as "the first campaign" and says it
+  has not been re-run. \\
 \addlinespace
-7 & \emph{"the two measured-slow tests"} — \file{README.md:87,108} &
-  Four to six, depending on how you count; the \code{g10\_*} capped pair joined later. \\
+7 & \emph{"the two measured-slow tests"} — \file{README.md} &
+  Four to six, depending on how you count; the \code{g10\_*} capped pair joined later.
+  \textbf{FIXED SINCE}: the README now says membership "has grown since it was measured" and
+  points at the \code{skip\_slow!} call sites as the authority instead of quoting a count. \\
 \addlinespace
-8 & \emph{"the conformance suite (23 files)"} — \file{ARCHITECTURE.md:62,138} &
-  \textbf{28} files in \file{tests/tests/}, plus 5 under \code{crates/*/tests/}. \\
+8 & \emph{"the conformance suite (23 files)"} — \file{ARCHITECTURE.md} &
+  \textbf{29} files in \file{tests/tests/} at this revision, plus \textbf{6} under
+  \code{crates/*/tests/} (28 + 5 at the previous one). \textbf{FIXED SINCE}: the count was
+  removed rather than updated. \\
 \addlinespace
 9 & \file{core\_mutation\_gate.md}'s 91\% threshold and its \emph{Reproduce} block &
-  Both describe the pre-2026-07-27 four-path scope. The document was last touched 26 hours before
-  the scope change and does not mention it. The workflow itself marks the threshold
-  \textbf{pending re-derivation}. \\
+  Both described the pre-2026-07-27 four-path scope. \textbf{FIXED SINCE} (\code{e6ba19e}): the
+  document now opens with a banner saying so. \emph{But the correction propagated only one hop} —
+  the same document records that the 92.44\% and the 91\% floor are "still cited as settled" by
+  \file{README.md}, \file{ARCHITECTURE.md}, \file{l1\_architecture\_summary.md} and
+  \file{core\_state\_and\_consolidation.md}, and reports them as out of its own edit scope. A
+  correction that names its own unpropagated instances is the honest form; it is still four live
+  instances. \\
 \addlinespace
 10 & \code{kayfabe-mmu::walker}'s own doc: \emph{"Also here (skeleton this milestone): the GMMU
   walk algorithm"} — \file{mmu/src/lib.rs:30} &
-  There is no algorithm: one trait, one enum, 41 lines, zero constructors, zero implementors.
-  \file{ARCHITECTURE.md} correctly says "skeleton"; the crate's own doc overstates. \\
+  There is no algorithm: one trait, one enum, 41 lines, zero constructors, zero implementors —
+  \textbf{unchanged at \code{6ce8599}}. \textbf{The doc is FIXED SINCE}: the module comment now
+  carries a struck-through correction naming what it actually contains. \emph{The code did not
+  move; the claim did.} \\
 \addlinespace
 11 & \code{kayfabe-gsp}'s doc: RPC decode \emph{"against \code{kayfabe-abi}'s generated message
   layouts"} &
-  \code{kayfabe-gsp} does not depend on \code{kayfabe-abi}. Nothing does. \\
+  \textbf{Was false; is now true.} At the previous pin \code{kayfabe-gsp} did not depend on
+  \code{kayfabe-abi} and nothing did. At \code{6ce8599} the manifest lists it and five of the
+  eight modules use it. \emph{A doc claim that was aspirational and became correct is still a
+  drift instance — nothing gated it either way.} \\
 \addlinespace
 12 & \emph{"\code{Isolate}/\code{RmBackend}/\code{Vmm} trait-only (mock-implemented)"} —
   \file{ARCHITECTURE.md:31,56} &
   True for \code{Isolate}/\code{RmBackend}. \textbf{False for \code{Vmm}}:
-  \file{crates/kayfabe-vmm-kvm/src/lib.rs:1142} is a real KVM adapter with a real memory plane. \\
+  \file{crates/kayfabe-vmm-kvm} is a real KVM adapter with a real memory plane.
+  \textbf{FIXED SINCE} — \file{ARCHITECTURE.md:31} now carries the struck-through original. \\
 \addlinespace
 13 & \emph{"\textasciitilde14 months of quirk capture"} in the C's architecture and ABI documents &
   Git: 2026-05-24 to 2026-07-24. \textbf{Two months, 739 commits.} \\
@@ -1308,6 +1702,48 @@ are defects in descriptions of the code.
   63.4 is a Mode-1 A/B endpoint. The audited parity figure is \textbf{0.97$\times$ (66.0 guest vs
   67.8 host)}. The underlying milestone note still records the pre-fix \textbf{20 tok/s} and was
   never updated. All three numbers are real; they are different builds. \\
+\addlinespace
+15 & \code{kayfabe-gsp} is a \textbf{stub} — \file{README.md:161},
+  \file{ARCHITECTURE.md:68}, and its own \code{Cargo.toml} description, which still opens
+  \emph{"SKELETON — the faked GSP\dots"} &
+  \textbf{False.} 3\,550 lines, 8 modules, 24 dedicated tests, an independent 1\,133-line guest
+  model, and a composed run inside the arbiter suite. The two markdown rows at least carry an
+  \code{[unverified]} hedge telling the reader to read \file{lib.rs} instead; the
+  \code{Cargo.toml} description carries none. \emph{This is the same shape as row 2, one crate
+  later, four days after row 2 was written.} \\
+\addlinespace
+16 & \file{mode2\_gsp\_port\_plan.md} \S11-O7 marked \textbf{RESOLVED}: \emph{"\code{GSP\_RUN\_CPU\_SEQUENCER}
+  is not implemented, do not emit it"} &
+  \textbf{Backwards for our bench, and the status has been withdrawn} (\code{7af23cb}). That is
+  610's answer. At 580 it is fully implemented, dispatched, and first on the bootup-window
+  allowlist. The whole plan's citations were taken from 610.43.02 while the bench runs
+  580.159.04; eight claims changed when the matching tree was vendored. See \S\ref{sec:gsp}. \\
+\addlinespace
+17 & The plan's \S1.3: \emph{"the guest declares its own geometry"}, presented as the
+  highest-leverage design choice &
+  \textbf{610 only.} At 580 \code{MESSAGE\_QUEUE\_INIT\_ARGUMENTS} has four fields, not nine, and
+  the queue geometry is compile-time. On the bench nothing is negotiated, so the argument the
+  design leaned on does not apply to the machine it will first run on. \\
+\addlinespace
+18 & \textbf{121} bare \code{ogkm:} citations in the crates' doc comments, 96 of them in
+  \code{kayfabe-gsp} &
+  \textbf{Every one is a 610 path with a 610 line number}, and several name files that do not
+  exist at 580 — the whole \code{msgq} library moved directories between the tags. The
+  version-tagging rule that fixes the class is normative in the plan and \textbf{not applied to
+  the code}; the CI grep that would prevent the recurrence is specified and not written. \\
+\addlinespace
+19 & \textbf{This paper's own previous revision:} \emph{"\code{kayfabe-abi} and \code{kayfabe-gsp}
+  are disconnected islands"} &
+  \textbf{Half false at \code{6ce8599}.} \code{abi} has a consumer now (\code{gsp}); \code{gsp}
+  still has none outside \code{tests/}. Re-checked against the manifests, not inherited from the
+  caption. \\
+\addlinespace
+20 & \textbf{This paper's own previous revision:} Figure~\ref{fig:deps}, \emph{"all 65
+  \code{[dependencies]} edges are shown"} &
+  \textbf{The manifests had 66.} The edge \code{tests}\,$\rightarrow$\,\code{rt} was omitted, in a
+  figure whose stated method is "derived from the manifests". A drawn matrix is exactly as
+  ungated as a sentence. \\
+\addlinespace
 \bottomrule
 \end{longtable}}
 
@@ -1315,9 +1751,21 @@ are defects in descriptions of the code.
 
 \begin{itemize}
 \item \textbf{Any claim requiring a build or a run.} No \code{cargo} command was executed while
-  writing this. Test counts, mutation scores, TSan results, timings and the arm64 run are all
-  read from commit messages, workflow files and design documents, and are attributed as such. The
-  515 figure in particular is a recorded measurement, not one taken here.
+  writing this, at either revision. Test counts, mutation scores, TSan results, timings and the
+  arm64 run are all read from commit messages, workflow files and design documents, and are
+  attributed as such. The 547 figure in particular is a recorded measurement from
+  \code{e508a8a}, not one taken here.
+\item \textbf{Anything about NVIDIA's 580 driver that this paper did not read itself.} The
+  \S\ref{sec:gsp} claims about 580-vs-610 are taken from
+  \file{docs/design/gsp\_580\_correction\_brief.md} and \file{mode2\_gsp\_port\_plan.md} \S14,
+  which state their own limit: only 580.159.04 and 610.43.02 are vendored and were read directly.
+  Seven further driver tags used to narrow the element-layout break interval are \textbf{relayed
+  from another agent's probe and were read by nobody in this chain} \unver{}. The predicate the
+  project derived (\code{major >= 610}) is safe under either reading because the 610 boundary is
+  the directly-verified one; the sentence "580, 590 and 595 are all on the 48-byte side" is not.
+\item \textbf{Whether the 580 resume path is ever taken.} \S11-O7a is open, it is the sharpest
+  risk in \S\ref{sec:gsp}, and the evidence that would settle it — the contents of a sequencer
+  buffer — is in closed GSP-RM firmware. Nothing here narrowed it.
 \item \textbf{"TSan, 0 races."} Not re-run; only the target list and the test count in those
   targets were checked.
 \item \textbf{The relationship between the C's 2026-06-16 bare-metal result and the 2026-07-25
@@ -1335,9 +1783,11 @@ are defects in descriptions of the code.
 \label{sec:method}
 
 Every number in this paper that is not attributed to a document was produced by one of the
-following, run against \file{/workspace/nvkvm-rs} at \code{0b78102} and
+following, run against \file{/workspace/nvkvm-rs} at \code{6ce8599} and
 \file{/workspace/nvidia-gpu-passthrough} at \code{2899a74}. No compilation, no test execution and
-no network access was involved.
+no network access was involved. \emph{The measurements were taken from a clean extraction of the
+pinned commit} (\code{git archive 6ce8599}), not from a working tree, because the working tree
+at the time carried unrelated in-flight edits from concurrent work.
 
 \begin{center}\small
 \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}X@{}}
@@ -1364,15 +1814,23 @@ of the call chains they depict; they are vector, not traced from an image. Figur
 in particular is generated from the manifest edge list rather than from any design document, which
 is why it disagrees with the hexagon picture about which crates are "ports".
 
+\textbf{Two method changes at this revision, both prompted by the figures being where the drift
+was worst.} Figure~\ref{fig:datapath} now names \emph{symbols} rather than \code{file:line} pins:
+six of its pins had drifted in fourteen commits, and the repository had already made the same
+change to its own 105 pins in \code{3fd1455}. And Figure~\ref{fig:deps}'s edge list was re-derived
+from scratch rather than edited, which is how the omitted \code{tests}\,$\rightarrow$\,\code{rt}
+edge was found (\S\ref{sec:corrections} row 20).
+
 \vfill
 \begin{claimbox}\small
 \textbf{One closing note on how to use this paper.} If you are here to find what is wrong with
-kayfabe, the highest-yield reading order is: \S\ref{sec:gsp} (the unbuilt critical path),
-\S\ref{sec:testing}'s final subsection (what the suite cannot prove),
-the two contact logs named in \S9.3, and then the code — starting with
-\code{plan\_doorbell} and \code{Spine::apply}, which between them contain most of the load-bearing
-decisions. Do not start with \file{README.md}; \S\ref{sec:corrections} lists six things wrong with
-it, and it will cost you an hour.
+kayfabe, the highest-yield reading order is: \S\ref{sec:gsp} (the open resume handoff, which has
+no proposed resolution), \S\ref{sec:qemu} (the packaging cost the floor decision did not buy its
+way out of), \S\ref{sec:testing}'s final subsection (what the suite cannot prove), the two contact
+logs named in \S\ref{sec:reading}, and then the code — starting with \code{VerbPlan::gated\_doorbell}
+and \code{Spine::apply}, which between them contain most of the load-bearing decisions. Do not
+start with \file{README.md}; \S\ref{sec:corrections} lists six things wrong with it (one of them
+since fixed), and it will cost you an hour.
 \end{claimbox}
 
 \end{document}

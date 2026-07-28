@@ -65,7 +65,7 @@ surface is the event-level API (`Gpu::apply` + the `kayfabe-fwd` free functions)
 | `kayfabe-vmm` | the hypervisor/display ports | arch §4.1 | traits only |
 | `kayfabe-isolate` | the sandbox/host-RM ports (RM **verbs**, not ioctls) | arch §4.2/§4.3.4 | traits only |
 | `kayfabe-abi` | Axis-A: generated per-driver-version wire tables; the ONLY home of `#[repr(C)]` | `mode2_abi_agnostic_layer.md` §2 | **built** (generator + generated structs + version dispatch + oracle tests) — ★ corrected 2026-07-27, was "**stub**" |
-| `kayfabe-gsp` | faked GSP boot FSM + seqNum queue transport (resettable) | arch §4.2/§4.5 step 2; `mode2_gsp_port_plan.md` | **stub** — [unverified 2026-07-27: under active construction; read `crates/kayfabe-gsp/src/lib.rs`, not this row] |
+| `kayfabe-gsp` | faked GSP boot FSM + seqNum queue transport (resettable) + RPC decode, 8 modules ~3,550 L | arch §4.2/§4.5 step 2; `mode2_gsp_port_plan.md` | ~~**stub**~~ **BUILT (S0–S5)** — ★ corrected 2026-07-28. Reboot/resume (S6–S8) NOT built, hardware-blocked, and carries open item §11-O7a. ★ **No production consumer**: `RpcCommand` has zero references outside the crate, so the `RpcCommand → RmEvent` bridge is the real remaining gap |
 | `kayfabe-trace` | trace/replay vocabulary + budget counters | lesson L6; `mode2_gsp_port_plan.md` §6 | **built** (vocabulary + sink port + differential); plane call sites not yet threaded |
 | `kayfabe-mocks` | one deterministic fake per port + shared verb recorder | testing §4 | **full** (test-only) |
 | `kayfabe-rt` | ★ the L1 threaded shell: `LockRank` + always-on R1/R3 asserts, `SharedDevice` (both `LockMode`s), inbox, executor, isolate pool gate | `l1_concurrency.md` §3/§7 | **full** (L1-M1) |

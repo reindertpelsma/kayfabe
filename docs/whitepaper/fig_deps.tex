@@ -1,9 +1,15 @@
 % ===========================================================================
 % FIGURE — the crate dependency graph, DERIVED from every Cargo.toml in the
 % workspace (root, crates/*/Cargo.toml, crates/kayfabe-abi/gen, tests/, fuzz/)
-% and cross-checked against Cargo.lock. Rows = the depending crate, columns =
-% the crate depended on. Crates are listed in topological order, so the matrix
-% being strictly lower-triangular IS the proof that the graph is acyclic.
+% and cross-checked against Cargo.lock, at 6ce8599. Rows = the depending
+% crate, columns = the crate depended on. Crates are listed in topological
+% order, so the matrix being strictly lower-triangular IS the proof that the
+% graph is acyclic.
+%
+% ★ The ordering CHANGED at this revision. `gsp` used to sit at position 5,
+% above `abi` and `trace`; it now depends on both, so it had to move below
+% them. That re-ordering is the figure's own record of the crate ceasing to be
+% a leaf.
 % ===========================================================================
 \begin{tikzpicture}[x=1mm,y=1mm, font=\sffamily\scriptsize]
 \def\cs{6}        % cell size (mm)
@@ -15,11 +21,11 @@
   2/arch/L0,
   3/vmm/PORT,
   4/completion/L0,
-  5/gsp/STUB,
-  6/abi/PORT,
-  7/isolate/PORT,
-  8/mmu/L0,
-  9/trace/PORT,
+  5/isolate/PORT,
+  6/mmu/L0,
+  7/trace/PORT,
+  8/abi/PORT,
+  9/gsp/L0,
   10/mocks/TEST,
   11/core/L0,
   12/fwd/L0,
@@ -40,6 +46,10 @@
 }
 \draw[kfportln, line width=0.7pt] (0,0) -- (\N*\cs,-\N*\cs);
 
+% -- highlight the gsp row + column ------------------------------------------
+\fill[kfcoreln, opacity=0.09] (0,{-8*\cs}) rectangle ({\N*\cs},{-9*\cs});
+\fill[kfcoreln, opacity=0.09] ({8*\cs},0) rectangle ({9*\cs},{-\N*\cs});
+
 % -- row labels (left) -------------------------------------------------------
 \foreach \i/\n/\g in \crates {
   \node[anchor=east, font=\sffamily\scriptsize] at (-1.2,{-(\i-0.5)*\cs}) {\n};
@@ -58,46 +68,49 @@
    at ({(#2-0.5)*\cs},{-(#1-0.5)*\cs}) {};}
 
 \dep{2}{1}
-\dep{3}{1}
+\dep{3}{1}\dep{3}{2}
 \dep{4}{1}
-\dep{5}{1}
-\dep{6}{1}\dep{6}{2}
-\dep{7}{1}\dep{7}{2}\dep{7}{3}
-\dep{8}{1}\dep{8}{2}\dep{8}{7}
-\dep{9}{1}\dep{9}{2}\dep{9}{3}\dep{9}{4}\dep{9}{7}\dep{9}{8}
-\dep{10}{1}\dep{10}{2}\dep{10}{3}\dep{10}{7}
-\dep{11}{1}\dep{11}{2}\dep{11}{4}\dep{11}{7}\dep{11}{8}\dep{11}{9}\dev{11}{10}
-\dep{12}{1}\dep{12}{2}\dep{12}{3}\dep{12}{4}\dep{12}{7}\dep{12}{8}\dep{12}{9}\dep{12}{11}
+\dep{5}{1}\dep{5}{2}\dep{5}{3}
+\dep{6}{1}\dep{6}{2}\dep{6}{5}
+\dep{7}{1}\dep{7}{2}\dep{7}{3}\dep{7}{4}\dep{7}{5}\dep{7}{6}
+\dep{8}{1}\dep{8}{2}
+\dep{9}{1}\dep{9}{2}\dep{9}{7}\dep{9}{8}
+\dep{10}{1}\dep{10}{2}\dep{10}{3}\dep{10}{5}
+\dep{11}{1}\dep{11}{2}\dep{11}{4}\dep{11}{5}\dep{11}{6}\dep{11}{7}\dev{11}{10}
+\dep{12}{1}\dep{12}{2}\dep{12}{3}\dep{12}{4}\dep{12}{5}\dep{12}{6}\dep{12}{7}\dep{12}{11}
 \dep{13}{1}\dev{13}{2}
 \dep{14}{1}\dep{14}{3}\dep{14}{13}
-\dep{15}{1}\dep{15}{2}\dep{15}{3}\dep{15}{4}\dep{15}{7}\dep{15}{8}\dev{15}{10}\dep{15}{11}\dep{15}{12}
+\dep{15}{1}\dep{15}{2}\dep{15}{3}\dep{15}{4}\dep{15}{5}\dep{15}{6}\dev{15}{10}\dep{15}{11}\dep{15}{12}
 \dep{16}{1}\dep{16}{11}\dep{16}{13}\dep{16}{15}
-\dep{17}{1}\dep{17}{2}\dep{17}{3}\dep{17}{4}\dep{17}{7}\dep{17}{8}\dep{17}{9}\dep{17}{10}
-\dep{17}{11}\dep{17}{12}\dep{17}{13}\dep{17}{14}\dep{17}{16}
+\dep{17}{1}\dep{17}{2}\dep{17}{3}\dep{17}{4}\dep{17}{5}\dep{17}{6}\dep{17}{7}\dep{17}{8}
+\dep{17}{9}\dep{17}{10}\dep{17}{11}\dep{17}{12}\dep{17}{13}\dep{17}{14}\dep{17}{15}\dep{17}{16}
 
 % -- annotations -------------------------------------------------------------
-\draw[ar, kfhostln] ({4.5*\cs},{-\N*\cs-4}) -- ({4.5*\cs},{-\N*\cs+1});
-\node[anchor=north, font=\sffamily\tiny, color=kfhostln, align=center]
-  at ({4.5*\cs},{-\N*\cs-4})
-  {\textbf{gsp} and \textbf{abi} have\\ \textbf{no dependents at all} —\\ not even \code{tests} or \code{fuzz}};
-\draw[ar, kfhostln] ({5.5*\cs},{-\N*\cs-4}) -- ({5.5*\cs},{-\N*\cs+1});
+\draw[ar, kfcoreln] ({8.5*\cs},{-\N*\cs-6}) -- ({8.5*\cs},{-\N*\cs+1});
+\node[anchor=north, font=\sffamily\tiny, color=kfcoreln, align=center]
+  at ({8.5*\cs},{-\N*\cs-6})
+  {\textbf{gsp} now depends on \textbf{abi}\\ and \textbf{trace} — but the only\\
+   crate that depends on \textbf{gsp}\\ is \code{tests}. \textbf{No production}\\
+   \textbf{crate consumes it.}};
 
 \node[anchor=north west, font=\sffamily\scriptsize, align=left]
   at ({\N*\cs+4},{-1*\cs}) {%
   \begin{minipage}{52mm}\raggedright\scriptsize
   \textbf{Reading it.} Row $r$, column $c$ filled $\Rightarrow$ crate $r$ depends on
-  crate $c$. All 65 \code{[dependencies]} edges ({\color{kfcoreln}$\bullet$}) and all
+  crate $c$. All 72 \code{[dependencies]} edges ({\color{kfcoreln}$\bullet$}) and all
   3 \code{[dev-dependencies]} edges ({\color{kfstubln}$\circ$}) are shown; every
   \code{kayfabe-} prefix is dropped.\\[3pt]
   \textbf{Strictly lower-triangular} in this ordering $\Rightarrow$ the graph is a DAG,
   dev edges included.\\[3pt]
-  \textbf{External dependencies, in total:} \code{libc} (in \code{linux-raw} only),
-  \code{trybuild} and \code{proptest} (dev only). Thirteen of the sixteen crates have
-  \emph{no} external dependency of any kind.\\[3pt]
-  \textbf{Two things the claimed strata do not survive:} \code{mmu} (core) depends on
+  \textbf{External dependencies, in total:} \code{libc} — a real dependency of
+  \code{linux-raw} only, and dev-only in \code{vmm-kvm} and \code{tests} — plus
+  \code{trybuild} and \code{proptest}, both dev-only. Thirteen of the sixteen crates
+  have \emph{no} external dependency of any kind.\\[3pt]
+  \textbf{Three things the claimed strata do not survive:} \code{mmu} (core) depends on
   the \code{isolate} \emph{port}; \code{core} and \code{fwd} depend on the
-  \code{trace} and \code{vmm} \emph{ports}. "Core" and "port" are not disjoint layers —
-  they are one DAG with a purity rule.
+  \code{trace} and \code{vmm} \emph{ports}; \code{gsp} (core) depends on the
+  \code{abi} and \code{trace} \emph{ports}. "Core" and "port" are not disjoint
+  layers — they are one DAG with a purity rule.
   \end{minipage}};
 
 \end{tikzpicture}

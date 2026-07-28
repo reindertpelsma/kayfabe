@@ -1,7 +1,8 @@
 % ===========================================================================
 % FIGURE — the data path, verified function-by-function against the tree at
-% 0b78102.  Every box carries the file it lives in.  The dashed red band is
-% the part that does not exist.
+% 6ce8599.  Every box carries the SYMBOL it lives at (not a line number: the
+% repository converted its own pins to symbols in 3fd1455 for this reason).
+% The red text is the part that does not exist.
 % ===========================================================================
 \begin{tikzpicture}[x=1mm,y=1mm, font=\sffamily\scriptsize]
 \def\tc#1{{\ttfamily\fontsize{5.4}{6}\selectfont #1}}
@@ -30,18 +31,21 @@
 \draw[ar] (app) -- (gdrv);
 
 % =============================================== EMULATED DEVICE ===========
-\node[box, fill=white, draw=kfhostln, dashed, line width=0.8pt,
-      minimum width=104mm, minimum height=12mm] (l2) at (-30,77)
-  {\textbf{\color{kfhostln}THIS LANE IS UNBUILT.}\; The BAR/register model, the GSP\\
-   message-queue transport, the RPC decode.\\[1.5pt]
-   \tiny \tc{kayfabe-gsp} = 34 lines (a 3-variant \tc{BootPhase} enum that nothing references).\\[-0.5pt]
-   \tiny \tc{kayfabe-abi} \emph{is} built — 7\,455 lines of codegen'd wire tables — but \textbf{no crate depends on it}.\\[-0.5pt]
-   \tiny \textbf{So nothing here produces an \tc{RmEvent} from real guest bytes yet.}};
+\node[box, fill=white, draw=kfcoreln, line width=0.8pt,
+      minimum width=106mm, minimum height=13.4mm] (l2) at (-30,77)
+  {\textbf{\color{kfcoreln}\tc{kayfabe-gsp} — BUILT, 3\,550 L, 8 modules (S0--S5).}\\[1pt]
+   \tiny falcon boot FSM (\tc{BootPhase}$\times$\tc{QueueState}, E1--E11) $\cdot$ the \tc{msgq} ring algebra
+   $\cdot$ element framing + checksum $\cdot$ RPC decode/dispatch\\[1.5pt]
+   \tiny \textbf{\color{kfhostln}It has no production caller.}\; Nothing implements \tc{GuestRam} or
+   \tc{Device} outside \tc{tests/}, and \tc{RpcCommand} — the crate's output —\\[-0.5pt]
+   \tiny \textbf{\color{kfhostln}has zero consumers anywhere,} so the
+   \tc{RpcCommand}\,$\rightarrow$\,\tc{RmEvent} bridge does not exist.
+   \textbf{\color{kfhostln}Nothing yet turns real guest bytes into an \tc{RmEvent}.}};
 \node[box, fill=white, draw=kfhostln, dashed, minimum width=58mm, minimum height=9mm] (bar) at (52,77)
   {doorbell BAR decode: offset $\rightarrow$ \tc{(GpuId, token)}\\[1pt]
-   \tiny only implementor in the tree is the test device\\[-0.5pt]\fl{tests/src/guest.rs:185}};
+   \tiny only implementor in the tree is the test device\\[-0.5pt]\fl{tests/src/guest.rs \tc{DoorbellDevice}}};
 
-\draw[ar, kfhostln, dashed] (-70,88) -- (-70,83.2)
+\draw[ar, kfhostln, dashed] (-70,88) -- (-70,84.1)
   node[midway, left=0.8mm, align=center, font=\sffamily\tiny, color=kfhostln]{RM ioctls,\\GSP RPC};
 \draw[ar, kfguestln, line width=1pt] (52,88) -- (52,81.6)
   node[midway, right=0.8mm, font=\sffamily\tiny, color=kfguestln]{MMIO store};
@@ -49,15 +53,15 @@
 % =============================================== L1 SHELL ==================
 \node[shellb, minimum width=50mm, minimum height=11mm] (vcpu) at (-58,58)
   {\textbf{1}\; \tc{KvmVcpu::run} $\rightarrow$ \tc{VcpuExit::Mmio}\\[1pt]
-   \fl{linux-raw/src/vcpu\_unsafe.rs:433}\\[2pt]
+   \fl{linux-raw/src/vcpu\_unsafe.rs \tc{KvmVcpu::run}}\\[2pt]
    \textbf{2}\; \tc{VcpuRunner::dispatch} / \tc{classify\_exit}\\[1pt]
-   \fl{vmm-kvm/src/vcpu.rs:266, :329}};
+   \fl{vmm-kvm/src/vcpu.rs \tc{VcpuRunner::dispatch} $\rightarrow$ \tc{Plane::classify\_exit}}};
 \node[shellb, minimum width=44mm, minimum height=11mm] (dev) at (-3,58)
-  {\textbf{3}\; \tc{dyn Device::mmio\_write}\\[1pt]\fl{kayfabe-vmm/src/lib.rs:849}\\[2pt]
+  {\textbf{3}\; \tc{dyn Device::mmio\_write}\\[1pt]\fl{kayfabe-vmm/src/lib.rs \tc{Device::mmio\_write}}\\[2pt]
    {\color{kfhostln}\textbf{no production implementor exists}}};
 \node[shellb, minimum width=52mm, minimum height=11mm] (sd) at (52,58)
   {\textbf{4}\; \tc{SharedDevice::doorbell} $\rightarrow$ \tc{verb\_op}\\[1pt]
-   \fl{kayfabe-rt/src/device.rs:1180, :1035}\\[2pt]
+   \fl{kayfabe-rt/src/device.rs \tc{SharedDevice::doorbell}, \tc{verb\_op}}\\[2pt]
    \tiny ranked locks — rank 0 device \tc{RwLock},\\[-0.5pt]\tiny rank 1 per-\tc{Proc} \tc{Mutex}};
 \draw[ar] (bar.south) -- (52,63.6);
 \draw[ar] (dev) -- (sd);
@@ -66,23 +70,23 @@
 % =============================================== L0 CORE ===================
 \node[coreb, minimum width=76mm, minimum height=13mm] (ctl) at (-45,38)
   {\textbf{C}\; the CONTROL plane — \tc{Gpu::apply(RmEvent)}\\[1pt]
-   \fl{core/src/gpu.rs:2738 $\rightarrow$ Spine::apply :1202 — snapshot, then rollback on any fault}\\[2pt]
+   \fl{core/src/gpu.rs \tc{Gpu::apply} $\rightarrow$ \tc{Spine::apply} — snapshot, then rollback on any fault}\\[2pt]
    \tiny \tc{RmGraph::apply} $\rightarrow$ \tc{project()} $\rightarrow$ \tc{refresh} $\rightarrow$ \tc{sync\_rpc\_mappings}
      $\rightarrow$ \tc{AddressTable::bind}\\[-0.5pt]
    \tiny \textbf{forward-populate only} — the table is written from declared protocol facts\\[-0.5pt]
    \tiny and never reverse-resolved out of guest memory; a lookup miss is a fault};
 \node[coreb, minimum width=88mm, minimum height=9mm] (route) at (44,40)
   {\textbf{5}\; \tc{route\_doorbell} — token $\rightarrow$ \tc{vChid} $\rightarrow$ \tc{(GpuId,VChid)} $\rightarrow$ \tc{(ProcId,ChanId)}\\[1pt]
-   \fl{kayfabe-fwd/src/lib.rs:1052} \;— a pure projection lookup; an unknown token is a loud fault};
+   \fl{kayfabe-fwd/src/lib.rs \tc{route\_doorbell}} \;— a pure projection lookup; an unknown token is a loud fault};
 \node[box, fill=kfcore, draw=kfcoreln, line width=1.3pt,
       minimum width=88mm, minimum height=11mm] (gate) at (44,27)
   {\textbf{6}\; \tc{plan\_doorbell} — \textbf{★ THE \#14 RING GATE}\\[1pt]
-   \fl{kayfabe-fwd/src/lib.rs:1140; the gate itself at :1162--1175}\\[2pt]
+   \fl{kayfabe-fwd \tc{plan\_doorbell} $\rightarrow$ kayfabe-isolate \tc{VerbPlan::gated\_doorbell} — the gate itself}\\[2pt]
    \tiny every VA in the submission's working set must already be published into \emph{this}\\[-0.5pt]
    \tiny \tc{Vas}'s own host address space, or the call refuses \tc{NoVas} having issued zero host operations};
 \node[box, fill=white, draw=kfcoreln, minimum width=76mm, minimum height=11mm] (r5) at (-45,20)
   {\textbf{7b}\; \tc{commit\_phase} — \textbf{★ invariant R5}\\[1pt]
-   \fl{rt/device.rs:777 $\rightarrow$ fwd::commit\_doorbell :1219}\\[2pt]
+   \fl{rt/device.rs \tc{commit\_phase} $\rightarrow$ \tc{kayfabe\_fwd::commit\_doorbell}}\\[2pt]
    \tiny the locks were dropped for step 7, so everything the plan assumed is
    \textbf{re-validated}\\[-0.5pt]
    \tiny before any state changes; a refusal hands back its orphans.
@@ -93,7 +97,7 @@
 % =============================================== ISOLATE ===================
 \node[portb, minimum width=104mm, minimum height=12mm, fill=white] (worker) at (32,1)
   {\textbf{7}\; \tc{Worker::execute(\&VerbPlan)} — \textbf{★ NO LOCK IS HELD HERE (invariant R1)}\\[1pt]
-   \fl{kayfabe-isolate/src/lib.rs:1096; the assertion at :1097}\\[2pt]
+   \fl{kayfabe-isolate/src/lib.rs \tc{Worker::execute}; the assertion is its first statement}\\[2pt]
    \tiny \tc{alloc\_vaspace} $\cdot$ \tc{alloc\_sysmem} $\cdot$ \tc{map\_gpu\_va} $\cdot$ \tc{alloc\_channel(vas,\,engine)}
    $\cdot$ \tc{alloc\_engine\_object}\\[-0.5pt]
    \tiny $\cdot$ \tc{schedule} $\cdot$ \tc{control} $\cdot$ \tc{ring\_doorbell} $\cdot$ \tc{free} $\cdot$ \tc{unmap\_gpu\_va}
@@ -120,13 +124,13 @@
 % =============================================== RETURN PATH ===============
 \node[box, fill=kfshell, draw=kfshellln, minimum width=178mm, minimum height=11mm] at (3,-34)
   {\textbf{The completion path back — different threads, same tree}\\[2pt]
-   \textbf{10} host readiness fd $\rightarrow$ \tc{Poller::wait} \fl{(linux-raw/epoll\_unsafe.rs:189)} $\rightarrow$
-   \tc{Reactor::run\_with} \fl{(shell/reactor.rs:303)} $\rightarrow$ \tc{Registrar::resolve}
+   \textbf{10} host readiness fd $\rightarrow$ \tc{Poller::wait} \fl{(linux-raw \tc{Poller::wait})} $\rightarrow$
+   \tc{Reactor::run\_with} \fl{(shell \tc{Reactor::run\_with})} $\rightarrow$ \tc{Registrar::resolve}
    $\rightarrow$ inbox \tc{CoreEvent::SourceSignal}\\[1.5pt]
-   \textbf{11} \tc{Executor::drain\_one} \fl{(rt/executor.rs:74)} $\rightarrow$
-   \tc{SharedDevice::signal\_source} \fl{(rt/device.rs:1423)} $\rightarrow$
+   \textbf{11} \tc{Executor::drain\_one} \fl{(rt \tc{Executor::drain\_one})} $\rightarrow$
+   \tc{SharedDevice::signal\_source} \fl{(rt \tc{SharedDevice::signal\_source})} $\rightarrow$
    \tc{SourceRegistry::dispatch} $\rightarrow$ \textbf{the owning proc's own} \tc{CompletionQueue}\\[1.5pt]
-   \textbf{12} \tc{deliver\_completions} / \tc{poll\_completions} \fl{(fwd/lib.rs:1346, :1359)}
+   \textbf{12} \tc{deliver\_completions} / \tc{poll\_completions} \fl{(kayfabe\_fwd)}
    $\rightarrow$ \tc{Vmm::raise\_irq(IrqSpec::Msix(0))} $\rightarrow$ the guest's own interrupt handler};
 \draw[ar, kfhostln, line width=1pt] (84,-12) -- (88,-12) -- (88,-28.5);
 

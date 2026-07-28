@@ -71,9 +71,12 @@ structs, a version-dispatch decode surface and its own oracle tests
 (`crates/kayfabe-abi/{gen,src/generated,tests}`) — the "shape only" line was true when
 written and has been false since the codegen landed; found by the whitepaper's
 verification pass. Still genuinely unbuilt: the GMMU walker (`kayfabe-mmu::walker` —
-`FbRead` trait + `WalkResult` enum, no walk loop). And `kayfabe-gsp` (GSP boot FSM)
+`FbRead` trait + `WalkResult` enum, no walk loop). ~~And `kayfabe-gsp` (GSP boot FSM)
 — [unverified 2026-07-27: that crate is under active construction; read its own
-`lib.rs`, not this line]. ~~`kayfabe-trace` (a one-method trait)~~ — **built**: the typed `TraceEvent`
+`lib.rs`, not this line].~~ **★ corrected 2026-07-28: `kayfabe-gsp` is BUILT** (S0–S5,
+8 modules, ~3,550 L). What is genuinely unbuilt there is **reboot/resume** (S6–S8,
+hardware-blocked) and — more importantly — **its bridge to the core**: `RpcCommand` has
+zero references outside the crate, so nothing yet turns a decoded RPC into an `RmEvent`. ~~`kayfabe-trace` (a one-method trait)~~ — **built**: the typed `TraceEvent`
 vocabulary (`mode2_gsp_port_plan.md` §6), the `TraceSink` port, one-counter total ordering,
 perf-budget counters and the projection differential. Its plane call sites are *not* yet
 threaded; it is driven from the conformance suite's seam observer
@@ -158,7 +161,7 @@ list of record. Found by the whitepaper's verification pass.)
 | `kayfabe-isolate` | `RmBackend`/`Isolate`/`IsolateFactory` ports | traits only |
 | `kayfabe-mocks` | deterministic fakes for every seam (the only impls that exist) | full (test-only) |
 | `kayfabe-abi` | Axis-A codegen'd wire ABI: offline generator, generated structs, version-dispatch decode, oracle tests | full (Axis-A slice) — ★ corrected 2026-07-27, was "**stub**" |
-| `kayfabe-gsp` | faked GSP boot FSM + seqNum transport | **stub** — [unverified 2026-07-27: under active construction; read `crates/kayfabe-gsp/src/lib.rs`, not this row] |
+| `kayfabe-gsp` | faked GSP boot FSM + seqNum transport + RPC decode (8 modules, ~3,550 L) | ~~**stub**~~ **BUILT (S0–S5)** — ★ corrected 2026-07-28. Reboot/resume (S6–S8) is NOT built and is hardware-blocked. ★ It has **no production consumer**: `RpcCommand` has zero references outside the crate, so the `RpcCommand → RmEvent` bridge does not exist yet — that bridge, not the crate, is now the critical path |
 | `kayfabe-trace` | structured trace/replay + budget counters | vocabulary built; no plane call sites |
 | `kayfabe-rt` | the L1 threaded shell: ranked locks (R1/R3 asserted), `SharedDevice`, inbox, executor | full (L1-M1) |
 | `tests/` | the conformance suite (`tests/tests/`, plus per-crate suites under `crates/*/tests/`) + `Scenario` DSL | full |
