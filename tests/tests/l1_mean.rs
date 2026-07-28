@@ -112,6 +112,7 @@ use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
+use kayfabe_core::project::{NO_CONDEMNED, project};
 use kayfabe_core::reactor::SourceKind;
 use kayfabe_core::rmgraph::ClientKey;
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraphError, RmNode};
@@ -124,15 +125,18 @@ use kayfabe_mocks::{
     HoldSpec, MockArch, MockIsolateFactory, MockPushbuffer, RmVerb, SharedRecorder, VerbHold,
     VerbKind, VmmErrorKind, mock_classes, mock_ctrl,
 };
+use kayfabe_rmrpc::GraphPolicy;
 use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
 use kayfabe_rt::executor::{Effect, Executor};
 use kayfabe_rt::inbox::{CoreEvent, inbox};
 use kayfabe_rt::lock;
-use kayfabe_tests::gspworld::{GspWorld, MODEL_A, MODEL_B, P580, P610, RingId};
+use kayfabe_tests::gspworld::{GspWorld, MODEL_A, MODEL_B, P580, P610, REAL_QUEUE_SIZE, RingId};
+use kayfabe_tests::rpcwire::{self as w, RpcScript, fn_id};
 use kayfabe_tests::{
     Guarded, ResidueClaim, Scenario, SharedVmm, gpfifo_ring, identical_handles, reachable_maps,
     reachable_objects, script_ring,
 };
+use kayfabe_trace::FaultTag;
 use kayfabe_util::Instant;
 use kayfabe_vmm::Vmm as _;
 use kayfabe_vmm::{GuestRamMap, RamRegionId, RamSpan, RegionKind};
@@ -9943,4 +9947,511 @@ fn n3_d_the_conservation_census_separates_a_procs_two_isolates() {
         "★ nothing outstanding on a live proc is unreachable from its own core state"
     );
     assert_eq!(c.leaked_maps, BTreeMap::new(), "★ …and no mapping either");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ★★ **B5 — the GSP → core BRIDGE's mean test** (`gsp_core_bridge.md` §5.3).
+//
+// `rmrpc_bridge.rs` drives the bridge in isolation, one property per test. §5.3 asks for
+// the other thing, and asks for it here: ONE composed run, mean rather than happy-path,
+// in this file, because *"isolated cases test what you thought of, composed runs test
+// what you didn't"*.
+//
+// What is composed, and why each piece is in the list:
+//
+//  * **two guest processes' RPC streams, interleaved element-by-element in ONE command
+//    queue**, carrying IDENTICAL `hObject` values (the #14 shape) — so the graph's
+//    `(client, handle)` keying and the bridge's namespace attribution are under load at
+//    the same time, from bytes, through a real msgq ring;
+//  * **malformed messages between the valid ones**, including a serialized-params alloc
+//    and an unknown function, each counted by variant — a census, never a total;
+//  * **a handle recycled mid-stream**: the guest kernel's UVM session dups a process's
+//    VASpace, the process exits, and a later process is handed the same `hClient`. That is
+//    the §12.41/§12.42 regression — *"host memory RM says is live was taken away from its
+//    owner"* — driven from **wire bytes** for the first time;
+//  * **real host work between the RPC phases**, under **both lock modes**, so "two
+//    distinct `Proc`s" is proved by two host VASes minted in two isolate namespaces
+//    rather than by two entries in a map;
+//  * **both element layouts**, because the transport under the bridge is version-split;
+//  * and all of it **while the six-proc two-GPU device is under concurrent control-plane
+//    load**, which is what this file is for.
+// ─────────────────────────────────────────────────────────────────────────────────────
+
+/// The bridge world's handles. ★ Every **object** handle is shared by both guest
+/// processes — that is the #14 shape, and it is the reason a bridge that keyed anything
+/// on a handle value would mis-attribute here rather than in a unit test.
+mod rb {
+    /// Guest process 1's client.
+    pub const C1: u32 = 0xc1d0_0069;
+    /// Its pid.
+    pub const PID1: u32 = 0x0000_dd13;
+    /// Guest process 2's client — adjacent, so a confusion still looks plausible.
+    pub const C2: u32 = 0xc1d0_006a;
+    /// Its pid.
+    pub const PID2: u32 = 0x0000_dd14;
+    /// The pid of the process that is later handed process 1's recycled `hClient`.
+    pub const PID3: u32 = 0x0000_dd15;
+    /// The guest kernel's UVM session client.
+    pub const K: u32 = 0xdead_c0de;
+
+    /// ★ The Device handle — the SAME value in both namespaces.
+    pub const DEV: u32 = 0x5c00_0001;
+    /// ★ The VASpace handle — the same value in both namespaces.
+    pub const VAS: u32 = 0x5c00_0010;
+    /// ★ The TSG handle — likewise.
+    pub const TSG: u32 = 0x5c00_0012;
+    /// ★ The GR channel handle — likewise.
+    pub const GR: u32 = 0x5c00_0019;
+    /// ★ The CE channel handle — likewise.
+    pub const CE: u32 = 0x5c00_001a;
+    /// ★ The compute engine object — likewise.
+    pub const GR_OBJ: u32 = 0x5c00_0020;
+    /// ★ The copy engine object — likewise.
+    pub const CE_OBJ: u32 = 0x5c00_0021;
+    /// The UVM session's alias of a process VASpace.
+    pub const KALIAS: u32 = 0x5d00_0031;
+
+    /// Process 1's page directory.
+    pub const PDB1: u64 = 0x0000_0000_0034_1000;
+    /// Process 2's page directory.
+    pub const PDB2: u64 = 0x0000_0000_0035_1000;
+    /// The recycled declaration's page directory.
+    pub const PDB3: u64 = 0x0000_0000_0036_1000;
+}
+
+/// Process 1's channels.
+const RB_GR1: VChid = VChid(0x31);
+/// Process 1's copy channel.
+const RB_CE1: VChid = VChid(0x32);
+/// Process 2's channels — different vChids at the SAME channel handles, which is exactly
+/// what makes the identical-handle world routable at all.
+const RB_GR2: VChid = VChid(0x41);
+/// Process 2's copy channel.
+const RB_CE2: VChid = VChid(0x42);
+
+/// A CUDA-process-shaped RPC stream, as **bytes**. One per guest process, and the two
+/// differ only in `hClient`, `processID`, the page directory and the two USERD words.
+fn rb_process_stream(client: u32, pid: u32, pdb: u64, gr: VChid, ce: VChid) -> RpcScript {
+    let mut s = RpcScript::new();
+    s.client_root(w::NV01_ROOT, client, pid)
+        .device(client, client, rb::DEV, GPU0.0)
+        .vaspace(client, rb::DEV, rb::VAS)
+        .set_page_dir(client, rb::DEV, rb::VAS, pdb, w::PDB_FLAGS_ALL_CHANNELS)
+        .tsg(client, rb::DEV, rb::TSG, rb::VAS)
+        .channel(
+            client,
+            rb::TSG,
+            rb::GR,
+            MockArch::userd_flags_for(gr),
+            0,
+            rb::VAS,
+        )
+        .channel(
+            client,
+            rb::TSG,
+            rb::CE,
+            MockArch::userd_flags_for(ce),
+            0,
+            rb::VAS,
+        )
+        .engine_object(client, rb::GR, rb::GR_OBJ, w::AMPERE_COMPUTE_B)
+        .engine_object(client, rb::CE, rb::CE_OBJ, w::AMPERE_DMA_COPY_B);
+    s
+}
+
+/// The hostile traffic interleaved into the two streams, each with the **exact** tag it
+/// must be counted under. Every one of them names `rb::C1`, which the very first message
+/// of the interleaved run declares, so none of them short-circuits on a namespace that
+/// simply has not arrived yet — a refusal for an accidental reason would count under the
+/// right tag for the wrong reason.
+fn rb_hostile() -> Vec<(w::Step, FaultTag)> {
+    vec![
+        (
+            w::Step {
+                function: 999,
+                body: vec![0u8; 8],
+            },
+            FaultTag("BridgeRefusal::UnknownFunction"),
+        ),
+        (
+            // A serialized-params alloc: otherwise perfect, refused on a DECLARED bit.
+            w::Step {
+                function: fn_id::GSP_RM_ALLOC,
+                body: w::alloc_body(
+                    rb::C1,
+                    0,
+                    0,
+                    w::NV01_ROOT,
+                    8,
+                    w::RMAPI_RPC_FLAGS_SERIALIZED,
+                    &w::client_root_params(rb::C1, rb::PID1),
+                ),
+            },
+            FaultTag("BridgeRefusal::SerializedParams"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_ALLOC,
+                body: w::alloc_body(
+                    rb::C1,
+                    rb::DEV,
+                    0x5c00_0099,
+                    w::NV01_MEMORY_SYSTEM,
+                    8,
+                    0,
+                    &[0u8; 8],
+                ),
+            },
+            FaultTag("BridgeRefusal::UnmappedAllocClass"),
+        ),
+        (
+            w::Step {
+                function: fn_id::FREE,
+                body: vec![0u8; 3],
+            },
+            FaultTag("BridgeRefusal::Abi"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_CONTROL,
+                body: w::control_body(
+                    rb::C1,
+                    rb::DEV,
+                    w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+                    0,
+                    w::RMAPI_RPC_FLAGS_NONE,
+                    &[],
+                ),
+            },
+            FaultTag("BridgeRefusal::PageDirControlNotModelled"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_INIT_DONE,
+                body: vec![0u8; 8],
+            },
+            FaultTag("BridgeRefusal::EventFromGuest"),
+        ),
+        (
+            // ★ B5's own: a dup planted in a namespace nobody has declared. The bridge
+            // translates it — it resolves nothing — and the GRAPH refuses it, which is
+            // the anti-squat rule reached from the wire.
+            w::Step {
+                function: fn_id::DUP_OBJECT,
+                body: w::dup_body(0xfeed_0001, 0, rb::KALIAS, rb::C1, rb::VAS, 0),
+            },
+            FaultTag("RmGraphError::UndeclaredClient"),
+        ),
+        (
+            // The envelope's own client is zero: no namespace to attribute the message
+            // to, refused by the bridge without consulting anything.
+            w::Step {
+                function: fn_id::DUP_OBJECT,
+                body: w::dup_body(0, 0, rb::KALIAS, rb::C1, rb::VAS, 0),
+            },
+            FaultTag("BridgeRefusal::ReservedClient"),
+        ),
+    ]
+}
+
+/// A device for the bridge to declare into: real NVIDIA class ids (`WireClassArch`), one
+/// GPU, mock isolates.
+fn rb_gpu() -> (Guarded<Gpu>, SharedRecorder) {
+    let (factory, rec) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
+    let gpu = Gpu::new(
+        Box::new(kayfabe_mocks::WireClassArch::new()),
+        Box::new(factory),
+        gpa,
+    )
+    .expect("the bridge device realizes");
+    (Guarded::new("l1_mean::rb_gpu", gpu, rec.clone()), rec)
+}
+
+/// Post `steps` through the world's real command ring, service them with a
+/// [`GraphPolicy`] over `gpu`, and let the guest drain. Returns
+/// `(replies' rpc_results, census, applied, inert)`.
+fn rb_post(
+    world: &mut GspWorld,
+    gpu: &mut Gpu,
+    profile: kayfabe_tests::gspworld::Profile,
+    steps: &[w::Step],
+    seq_base: u32,
+) -> (Vec<u32>, BTreeMap<FaultTag, usize>, u64, u64) {
+    let mut policy = GraphPolicy::new(profile.table(), gpu);
+    for (i, s) in steps.iter().enumerate() {
+        world
+            .guest
+            .send(&mut world.ram, s.function, seq_base + i as u32, &s.body)
+            .expect("the ring has room");
+    }
+    world
+        .doorbell_with(&mut policy)
+        .expect("the doorbell services the ring");
+    let replies = world
+        .guest
+        .recv(&mut world.ram)
+        .expect("a clean status stream")
+        .iter()
+        .map(|m| m.rpc_result)
+        .collect();
+    (
+        replies,
+        policy.census().tags().collect(),
+        policy.applied(),
+        policy.inert(),
+    )
+}
+
+/// ★★ **THE BRIDGE'S MEAN RUN.** See the block comment above for what is composed and
+/// why. Runs under both lock modes and both element layouts, with the six-proc two-GPU
+/// world under concurrent control-plane load throughout.
+#[test]
+fn the_rpc_bridge_survives_two_interleaved_guest_streams_under_mean_device_load() {
+    let _wd = watchdog("rmrpc_bridge_mean", Duration::from_secs(180));
+
+    for mode in [LockMode::Sharded, LockMode::Degenerate] {
+        for (profile, model) in [(P580, MODEL_A), (P610, MODEL_B)] {
+            let (world, pids, _rec) = mean_world(mode);
+            let device = Arc::clone(&world);
+            // The rest of this file's device, under load for the whole run — bounded
+            // (one pass per proc), for the starvation reason `the_gsp_boot_cycle…` test
+            // records.
+            let load: Vec<_> = (0..2)
+                .map(|i| {
+                    let device = Arc::clone(&device);
+                    let pids = pids.clone();
+                    thread::spawn(move || ctl_workload(&device, &pids, i))
+                })
+                .collect();
+
+            let (mut bridge, rec) = rb_gpu();
+            let mut gsp = GspWorld::new_sized(profile, model, REAL_QUEUE_SIZE);
+            gsp.boot_with(&mut kayfabe_gsp::EchoOk);
+            assert_eq!(
+                gsp.link_and_drain().len(),
+                1,
+                "{mode:?}/{profile:?}: the bind posts exactly GSP_INIT_DONE",
+            );
+
+            // ---- Phase A: two streams, interleaved element by element, hostile traffic
+            //      between them.
+            let s1 = rb_process_stream(rb::C1, rb::PID1, rb::PDB1, RB_GR1, RB_CE1);
+            let s2 = rb_process_stream(rb::C2, rb::PID2, rb::PDB2, RB_GR2, RB_CE2);
+            let hostile = rb_hostile();
+            let mut interleaved: Vec<w::Step> = Vec::new();
+            // ★ Positional, not a count: which SLOT of the answered stream carries a
+            // failure. A count is satisfied by any eight failures, including eight in
+            // the wrong places with eight valid messages silently refused beside them.
+            let mut want_failed: Vec<bool> = Vec::new();
+            let mut want_tags: BTreeMap<FaultTag, usize> = BTreeMap::new();
+            let mut h = hostile.iter();
+            for (a, b) in s1.steps().iter().zip(s2.steps()) {
+                interleaved.push(a.clone());
+                interleaved.push(b.clone());
+                want_failed.extend([false, false]);
+                if let Some((step, tag)) = h.next() {
+                    interleaved.push(step.clone());
+                    want_failed.push(true);
+                    *want_tags.entry(*tag).or_default() += 1;
+                }
+            }
+            for (step, tag) in h {
+                interleaved.push(step.clone());
+                want_failed.push(true);
+                *want_tags.entry(*tag).or_default() += 1;
+            }
+            assert_eq!(
+                want_tags.values().sum::<usize>(),
+                hostile.len(),
+                "every hostile message was posted",
+            );
+
+            let (replies, census, applied, inert) =
+                rb_post(&mut gsp, &mut bridge, profile, &interleaved, 0x1000);
+            assert_eq!(
+                replies.len(),
+                interleaved.len(),
+                "{mode:?}/{profile:?}: every command answered on (function, sequence)",
+            );
+            assert_eq!(
+                replies.iter().map(|r| *r != 0).collect::<Vec<_>>(),
+                want_failed,
+                "…and exactly the hostile ones, IN THEIR POSITIONS, carry a failure",
+            );
+            assert_eq!(
+                census, want_tags,
+                "{mode:?}/{profile:?}: ★ the refusal census, BY VARIANT",
+            );
+            assert_eq!(
+                (applied, inert),
+                ((s1.steps().len() + s2.steps().len()) as u64, 0),
+                "and every valid message declared a fact",
+            );
+
+            // ---- The two processes are two `Proc`s, despite sharing every object handle.
+            let b = project(
+                &bridge.spine.rmgraph,
+                bridge.spine.arch.as_ref(),
+                &NO_CONDEMNED,
+            )
+            .expect("projects");
+            assert_eq!(
+                b.procs
+                    .iter()
+                    .map(|p| p.client_values())
+                    .collect::<Vec<_>>(),
+                vec![
+                    [HClient(rb::C1)].into_iter().collect(),
+                    [HClient(rb::C2)].into_iter().collect(),
+                ],
+                "{mode:?}/{profile:?}: ★★ identical handles, TWO blast radii",
+            );
+            assert_eq!(
+                b.by_pdb.keys().copied().collect::<Vec<_>>(),
+                vec![(GPU0, Pdb(rb::PDB1)), (GPU0, Pdb(rb::PDB2))],
+            );
+            assert_eq!(
+                b.by_vchid.keys().copied().collect::<Vec<_>>(),
+                vec![
+                    (GPU0, RB_GR1),
+                    (GPU0, RB_CE1),
+                    (GPU0, RB_GR2),
+                    (GPU0, RB_CE2),
+                ],
+                "★ four channels at TWO handle values — the vChid came off the wire",
+            );
+            let p1 = bridge.spine.by_pdb[&(GPU0, Pdb(rb::PDB1))];
+            let p2 = bridge.spine.by_pdb[&(GPU0, Pdb(rb::PDB2))];
+            assert_ne!(p1, p2, "two procs");
+            let (a1, a2) = (
+                bridge.procs[&p1].arenas[&GPU0].range.clone(),
+                bridge.procs[&p2].arenas[&GPU0].range.clone(),
+            );
+            assert!(
+                a1.end <= a2.start || a2.end <= a1.start,
+                "{mode:?}/{profile:?}: ★ two DISJOINT GPA arenas: {a1:?} vs {a2:?}",
+            );
+
+            // ---- Phase B: real host work, under `mode`. Two host VASes, in two isolate
+            //      namespaces — which is what "two distinct procs" actually buys.
+            let shell = bridge.map(|g| Arc::new(SharedDevice::new(g, mode)));
+            let pub1 = shell
+                .publish_backing(GPU0, Pdb(rb::PDB1), GpuVa(0x50_0000_0000), 0x1000)
+                .expect("process 1 publishes");
+            let pub2 = shell
+                .publish_backing(GPU0, Pdb(rb::PDB2), GpuVa(0x50_0000_0000), 0x1000)
+                .expect("process 2 publishes at the SAME guest VA");
+            assert_ne!(
+                host_va_lane(pub1.host_va),
+                host_va_lane(pub2.host_va),
+                "{mode:?}/{profile:?}: ★★ two host VASes, in two isolate namespaces — the \
+                 same guest VA in two procs must never share host state",
+            );
+            assert_ne!(pub1.gpa, pub2.gpa, "and two disjoint arenas backed them");
+            let mut bridge = shell.map(|a| Arc::into_inner(a).expect("sole owner").into_gpu());
+
+            // ---- Phase C: ★ the recycle, from wire bytes. The UVM session dups process
+            //      1's VASpace, process 1 exits, and a LATER process is handed the same
+            //      `hClient` value.
+            let named1 = reachable_of(&bridge, p1);
+            assert!(
+                named1.len() >= 2,
+                "{mode:?}/{profile:?}: the baseline is real host state: {named1:?}",
+            );
+            let mut recycle = RpcScript::new();
+            recycle
+                .client_root(w::NV01_ROOT, rb::K, w::KERNEL_PID)
+                .dup(rb::K, rb::K, rb::KALIAS, rb::C1, rb::VAS)
+                .free(rb::C1, rb::C1)
+                .client_root(w::NV01_ROOT, rb::C1, rb::PID3)
+                .device(rb::C1, rb::C1, rb::DEV, GPU0.0)
+                .vaspace(rb::C1, rb::DEV, rb::VAS)
+                .set_page_dir(
+                    rb::C1,
+                    rb::DEV,
+                    rb::VAS,
+                    rb::PDB3,
+                    w::PDB_FLAGS_ALL_CHANNELS,
+                );
+            let (replies, census, applied, _) =
+                rb_post(&mut gsp, &mut bridge, profile, recycle.steps(), 0x2000);
+            assert!(
+                census.is_empty(),
+                "{mode:?}/{profile:?}: ★ a recycle is LEGAL traffic — refusing it hangs a \
+                 conforming guest: {census:?}",
+            );
+            assert_eq!(replies, vec![0; recycle.steps().len()]);
+            assert_eq!(applied, recycle.steps().len() as u64);
+
+            // §12.33: the kernel alias keeps process 1's `Proc` — and its host memory —
+            // alive after its owner's root is gone.
+            assert_eq!(
+                kayfabe_fwd::route_pdb(&bridge.spine, GPU0, Pdb(rb::PDB1)),
+                Ok(p1),
+                "{mode:?}/{profile:?}: ★ a live kernel reference keeps its owner's proc",
+            );
+            // ★★★ §12.41/§12.42: the successor is a DIFFERENT proc on a DIFFERENT
+            // declaration, and it took nothing away from its predecessor.
+            let p3 = bridge.spine.by_pdb[&(GPU0, Pdb(rb::PDB3))];
+            assert!(
+                p3 != p1 && p3 != p2,
+                "{mode:?}/{profile:?}: the recycled hClient is a NEW proc",
+            );
+            assert_eq!(
+                reachable_of(&bridge, p1),
+                named1,
+                "{mode:?}/{profile:?}: ★★ host memory RM says is live must not be taken \
+                 away from its owner by a successor holding the same hClient VALUE",
+            );
+            let keys1 = bridge.procs[&p1].clients.clone();
+            let keys3 = bridge.procs[&p3].clients.clone();
+            assert_eq!(
+                (
+                    keys1.iter().map(|k| k.client).collect::<BTreeSet<_>>(),
+                    keys3.iter().map(|k| k.client).collect::<BTreeSet<_>>(),
+                ),
+                (
+                    [HClient(rb::C1)].into_iter().collect(),
+                    [HClient(rb::C1)].into_iter().collect(),
+                ),
+                "one hClient VALUE …",
+            );
+            assert!(
+                keys1.is_disjoint(&keys3),
+                "{mode:?}/{profile:?}: ★★ … and TWO ClientKey incarnations of it",
+            );
+            assert!(
+                bridge.system.client_values().contains(&HClient(rb::K)),
+                "the UVM session is the SYSTEM component's, and merged nobody",
+            );
+            let _ = bridge.reap_retired();
+            assert_eq!(
+                reachable_of(&bridge, p1),
+                named1,
+                "{mode:?}/{profile:?}: …and the reclamation the core SCHEDULED frees none \
+                 of it either",
+            );
+            assert_no_corruption(&rec, "after the bridge's recycle");
+
+            // ---- Phase D: the successor is usable end to end, in its OWN isolate.
+            let shell = bridge.map(|g| Arc::new(SharedDevice::new(g, mode)));
+            let pub3 = shell
+                .publish_backing(GPU0, Pdb(rb::PDB3), GpuVa(0x50_0000_0000), 0x1000)
+                .expect("the recycled declaration publishes in its own isolate");
+            assert!(
+                host_va_lane(pub3.host_va) != host_va_lane(pub1.host_va)
+                    && host_va_lane(pub3.host_va) != host_va_lane(pub2.host_va),
+                "{mode:?}/{profile:?}: ★ a re-declared hClient never inherits the previous \
+                 tenant's isolate",
+            );
+            drop(shell);
+
+            let published: usize = load.into_iter().map(|h| h.join().expect("worker")).sum();
+            assert!(
+                published > 0,
+                "non-vacuity: the device planes really were under load throughout",
+            );
+        }
+    }
 }

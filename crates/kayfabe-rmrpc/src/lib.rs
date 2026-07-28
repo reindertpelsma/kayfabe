@@ -92,13 +92,15 @@
 //! lands: the applying half cannot grow a handle cache without going through
 //! [`translate`], which has nowhere to put one.
 //!
-//! ## Scope of this stage (B1 + B2 + B3 + B4)
+//! ## Scope of this stage (B1 + B2 + B3 + B4 + B5)
 //!
-//! `GSP_RM_ALLOC`, `FREE`, and — B4 — the **one modelled control**,
-//! `GSP_RM_CONTROL`/`SET_PAGE_DIRECTORY`, which is where a VASpace acquires the `Pdb` the
-//! data plane routes on. Everything else is a named refusal, including the functions
-//! the design maps but whose arms are not built ([`BridgeRefusal::NotYetTranslated`] —
-//! dup/continuation) and the classes with no entry in the class table
+//! `GSP_RM_ALLOC`, `FREE`, the **one modelled control**,
+//! `GSP_RM_CONTROL`/`SET_PAGE_DIRECTORY` — which is where a VASpace acquires the `Pdb` the
+//! data plane routes on — and, at B5, `DUP_OBJECT`. **That completes the object model's
+//! four verbs**: create, reference, destroy, and the one control that carries a
+//! data-plane identity. Everything else is a named refusal, including the one function
+//! the design maps but whose arm is not built ([`BridgeRefusal::NotYetTranslated`] —
+//! `CONTINUATION_RECORD`, B6) and the classes with no entry in the class table
 //! ([`BridgeRefusal::UnmappedAllocClass`]). Those are deliberately **not**
 //! [`BridgeRefusal::UnknownFunction`]: "known and inert", "known and not yet built" and
 //! "not known at all" are three different states, and collapsing them is how the C ended
@@ -137,7 +139,7 @@ use kayfabe_abi::wire::AbiError;
 use kayfabe_abi::{NV_ERR_NOT_SUPPORTED, client_kind_from_process_id, rpc_params_are_serialized};
 use kayfabe_arch::ids::{ClassId, ControlCmd, HClient, HObject, Pdb};
 use kayfabe_core::gpu::GpuError;
-use kayfabe_core::rmgraph::{AllocFacts, RESERVED_CLIENT, RmEvent};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RESERVED_CLIENT, RmEvent};
 use kayfabe_gsp::{RpcCommand, RpcFunction};
 use kayfabe_trace::{FaultTag, Faulted};
 
@@ -182,8 +184,8 @@ pub enum BridgeRefusal {
         /// The raw wire id.
         code: u32,
     },
-    /// A function the design maps to an `RmEvent` but whose arm is not built yet
-    /// (`GSP_RM_CONTROL` → B4, `DUP_OBJECT` → B5, `CONTINUATION_RECORD` → B6).
+    /// A function the design maps but whose arm is not built yet. After B5 there is
+    /// exactly one left: `CONTINUATION_RECORD` → B6.
     ///
     /// Distinct from [`Self::UnknownFunction`] on purpose: this one is a **staging**
     /// fact about our port, and the day it fires in a real boot it says which stage to
@@ -351,6 +353,16 @@ pub enum BridgeRefusal {
     /// double-free of a client root — is `RmGraphError::FreeUnknown`. That is faithful RM
     /// behaviour and it reaches the guest as a non-zero `rpc_result`.
     ///
+    /// ★★ **B5 widened the surface to the whole namespace rule**, because `DUP_OBJECT` is
+    /// the only verb that names **two** client namespaces. Four graph refusals are now
+    /// reachable from wire bytes that B4 could not construct at all:
+    /// `RmGraphError::ConflictingDup` (a dst handle already bound to a different
+    /// resource), `::UndeclaredClient` for a dup's **dst** *and* — separately — for its
+    /// **src**, and `::ReservedClient` from a `hClientSrc` of zero. The last one is the
+    /// evidence that this arm is doing real work rather than decorating: it is a
+    /// well-formedness question the bridge deliberately does **not** answer locally, and
+    /// the answer still reaches the guest, named.
+    ///
     /// [`GpuError`] is carried whole, and [`Faulted`] **delegates** to it, so the census
     /// records *which protocol rule* was broken (`RmGraphError::FreeUnknown` vs
     /// `::ConflictingAlloc` are different findings) rather than one flat "the graph said
@@ -451,6 +463,7 @@ pub fn translate(abi: &DriverAbiTable, cmd: &RpcCommand) -> Result<Translation, 
         RpcFunction::RmAlloc => translate_alloc(abi, &cmd.payload),
         RpcFunction::Free => translate_free(abi, &cmd.payload),
         RpcFunction::RmControl => translate_control(abi, &cmd.payload),
+        RpcFunction::DupObject => translate_dup(abi, &cmd.payload),
         // Known and inert — three different reasons, collapsed here only because the
         // *answer* is the same. See `Translation::Inert`.
         RpcFunction::SetGuestSystemInfo
@@ -459,9 +472,13 @@ pub fn translate(abi: &DriverAbiTable, cmd: &RpcCommand) -> Result<Translation, 
         | RpcFunction::GspSetSystemInfo
         | RpcFunction::SetRegistry => Ok(Translation::Inert),
         // Known, mapped by the design, arm not built. Never `Inert`: the fact matters.
-        RpcFunction::DupObject | RpcFunction::ContinuationRecord => {
-            Err(BridgeRefusal::NotYetTranslated { code: cmd.code })
-        }
+        //
+        // ★ One id left this arm at B5 and one is still in it. `CONTINUATION_RECORD` is a
+        // *transport* fragment, not a fact — B6 reassembles the head message and
+        // translates the reassembled whole — so the day it fires here it says "a control
+        // exceeded `maxRpcSize`", which is a different sentence from "the guest sent
+        // something strange" and must stay a different variant.
+        RpcFunction::ContinuationRecord => Err(BridgeRefusal::NotYetTranslated { code: cmd.code }),
         // Ours to send, never to receive.
         RpcFunction::InitDone | RpcFunction::PostEvent => {
             Err(BridgeRefusal::EventFromGuest { code: cmd.code })
@@ -744,6 +761,111 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
         client,
         vaspace: HObject(p.h_vaspace),
         pdb: Pdb(p.phys_address),
+    }))
+}
+
+/// `DUP_OBJECT` (fn 21) → [`RmEvent::Dup`].
+///
+/// `rpc_dup_object_v03_00` *is* `NVOS55_PARAMETERS_v03_00` — a bare struct with no
+/// wrapper and no header of its own (`ogkm: g_rpc-structures.h:200-205`,
+/// `ogkm-580: :198-203`), whose seven members are character-for-character identical in
+/// both vendored trees (`ogkm: g_sdk-structures.h:368-377`, `ogkm-580: :366-375`). So the
+/// existing ioctl-side decoder applies **verbatim**, which is what
+/// `gsp_core_bridge.md` §1.4 claims and what
+/// `crates/kayfabe-abi/tests/mean_wire.rs` pins.
+///
+/// ## ★★ The one place a params field legitimately names a namespace
+///
+/// The crate's governing rule is *"the namespace is always the RPC body's own `hClient`,
+/// never a params field"*, and a `DUP_OBJECT` looks like the counter-example: `hClientSrc`
+/// is a client handle sitting in the body, not in the envelope. It is not a
+/// counter-example, and the distinction is the whole reason this event has two
+/// [`NodeKey`]s:
+///
+/// - **attribution** — *which namespace is this message acting in* — is `hClient`, read
+///   once, at the top, exactly as on every other verb. It becomes `dst.client` and
+///   nothing may replace it.
+/// - `hClientSrc` is a **cross-namespace reference**: a second, additional namespace the
+///   message names, not a substitute for the first. `gsp_core_bridge.md` §2.5 says what to
+///   do with one — *"a params field naming a different client … is a different fact and,
+///   if we ever need it, needs its own event"* — and `RmEvent::Dup` **is** that event.
+///   `DUP_OBJECT` is the only cross-client transfer edge in the RM object model
+///   (`RmEvent::Dup`'s own doc), so the fact and the field are the same thing.
+///
+/// The C's `GPU_PROMOTE_CTX` handler is still the anti-pattern, and now visibly a
+/// *different* one: it reads `hChanClient` from `params+12` and **never looks at the
+/// envelope's `hClient` at all** (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2283`)
+/// — a substitution. Here both are carried, in the two slots the core has for them.
+///
+/// ## What is dropped, and why neither drop is this crate's to fix
+///
+/// - **`hParent`** — the destination alias's parent, a genuinely declared fact
+///   (`ogkm-580: mem.c:1116` passes `pDstParentRef->hResource`, a real handle, unlike the
+///   `FREE` path's always-zero `hObjectParent`). [`RmEvent::Dup`] does not take one:
+///   `RmGraph` records a dup as a leaf `HandleRef::Alias`. Adding it is a **core** change,
+///   not a bridge change — `gsp_core_bridge.md` §2.4 records the loss and declines it, and
+///   this arm inherits the decision rather than re-taking it.
+/// - **`flags`** — `NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE` = `0x1`
+///   (`ogkm: nvos.h:2276-2277`, `ogkm-580: nvos.h:2275-2276`) is a *privilege* assertion
+///   about the duping client, and the core models privilege as `ClientKind`, declared once
+///   at the client root. Nowhere to put it, and nothing to do with it.
+///
+/// ## ★ Zero handles are carried VERBATIM here, and that is deliberate
+///
+/// A zero in `hObject`/`hObjectSrc` is **not** treated the way
+/// [`BridgeRefusal::ImplicitVaspace`] treats a zero `hVASpace`, and the asymmetry is the
+/// same one B3 already recorded between an alloc's *edge* fields and its *params* fields:
+/// an edge field is the node the message creates or references, so the guest's zero is
+/// the guest's own choice of key, landing where the guest put it. A params field naming
+/// an object is a *reference to something else*, and NVIDIA documents the zero there as
+/// meaning a different object entirely — which is a fact we do not have, hence the
+/// refusal.
+///
+/// `[src]` RM's own reading of a zero destination handle is *"generate one"*
+/// (`clientAssignResourceHandle` → `clientGenResourceHandle`,
+/// `ogkm-580: src/nvidia/src/libraries/resserv/src/rs_client.c:998-1001`) — but that runs
+/// on the **guest's own CPU-side RM**, at `serverCopyResource`
+/// (`ogkm-580: rs_server.c:1725`), *before* the resource's copy-constructor issues the
+/// RPC with the already-assigned `pDstRef->hResource`
+/// (`ogkm-580: mem.c:1116` through `NV_RM_RPC_DUP_OBJECT`, `rpc.h:393-411`). So a zero
+/// cannot reach this wire from a conforming guest at all, and the identical argument
+/// applies to `GSP_RM_ALLOC`'s `hObject` (`rs_server.c:898`) — which this crate has
+/// carried verbatim since B1. Refusing it on one verb and not the other would be a rule
+/// with no principle behind it.
+///
+/// ## What this arm does NOT check, on purpose
+///
+/// It does not ask whether `src` exists, whether `dst` is free, or whether `hClientSrc`
+/// names a live namespace. Those are lookups, and §3.4 gives all three to
+/// `RmGraph::apply`, which answers them with a three-category taxonomy this crate has no
+/// state to reproduce: an undeclared **namespace** is a FAULT
+/// (`RmGraphError::UndeclaredClient`), an unobserved **source object** is a DEFER (the
+/// edge parks — `[measured]` only 25 of 82 dups reach the GSP wire at all, so a source RM
+/// saw and we did not is *ordinary*), and a dst handle that is already bound is
+/// `RmGraphError::ConflictingDup` unless it is an identical re-send.
+///
+/// ★ That is why `hClientSrc == 0` is **not** refused here while `hClient == 0` is. The
+/// envelope's client is this message's attribution and a message with no namespace is
+/// malformed on its face, which needs no graph state. The source client is a reference,
+/// and a reference into `HClient(0)` is refused by the rule that owns every namespace
+/// question — `RmGraph::apply`'s central `RESERVED_CLIENT` gate, which enumerates *both*
+/// of a dup's clients precisely so this arm does not have to. It arrives as
+/// [`BridgeRefusal::Graph`] and is counted under `RmGraphError::ReservedClient`, which is
+/// a strictly more informative tag than a second local copy would produce.
+fn translate_dup(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation, BridgeRefusal> {
+    let d = abi.decode_dup(payload)?;
+
+    // ── The namespace, read ONCE, from the header. `NVOS55`'s `hClient` IS the envelope
+    // field for this RPC — `rpc_dup_object_v03_00` has no envelope of its own beyond the
+    // 32-byte message header, so the body's first word is the attribution.
+    let client = HClient(d.dst_client);
+    if client == RESERVED_CLIENT {
+        return Err(BridgeRefusal::ReservedClient);
+    }
+
+    Ok(Translation::Event(RmEvent::Dup {
+        src: NodeKey::new(HClient(d.src_client), HObject(d.src_handle)),
+        dst: NodeKey::new(client, HObject(d.dst_handle)),
     }))
 }
 

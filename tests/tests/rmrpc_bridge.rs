@@ -34,7 +34,7 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_abi::versions::{BENCH_DRIVER, DriverAbiTable, table_for};
 use kayfabe_abi::wire::AbiError;
@@ -492,15 +492,29 @@ fn every_function_id_lands_on_its_own_arm() {
         );
     }
 
-    // Known, mapped by the design, arm not built — B5/B6. NOT inert: the fact matters.
-    // ★ `GSP_RM_CONTROL` left this list at B4 and is now a translating arm; the test
-    // below it pins that it did not become `UnknownFunction` on the way out.
-    for code in [fn_id::DUP_OBJECT, fn_id::CONTINUATION_RECORD] {
-        assert_eq!(
-            xlate(&w::message(code, 5, &[0u8; 48])),
-            Err(BridgeRefusal::NotYetTranslated { code }),
-        );
-    }
+    // Known, mapped by the design, arm not built — B6, and after B5 there is exactly ONE
+    // id left in this state. ★ `GSP_RM_CONTROL` left this list at B4 and `DUP_OBJECT` at
+    // B5; both are translating arms now, and the assertions below pin that neither
+    // became `UnknownFunction` on the way out.
+    assert_eq!(
+        xlate(&w::message(fn_id::CONTINUATION_RECORD, 5, &[0u8; 48])),
+        Err(BridgeRefusal::NotYetTranslated {
+            code: fn_id::CONTINUATION_RECORD,
+        }),
+    );
+    // fn 21 is a fact now. A well-formed body translates; the same body with the
+    // *envelope's* client zeroed is the message-level refusal, not a function-level one.
+    assert_eq!(
+        xlate(&w::message(
+            fn_id::DUP_OBJECT,
+            5,
+            &w::dup_body(x::A, x::A, 0x5c00_0031, x::K, 0x5c00_0019, 0),
+        )),
+        Ok(Translation::Event(RmEvent::Dup {
+            src: NodeKey::new(HClient(x::K), HObject(0x5c00_0019)),
+            dst: NodeKey::new(HClient(x::A), HObject(0x5c00_0031)),
+        })),
+    );
     // fn 76 is now dispatched on its `cmd`, so it needs a well-formed body to reach the
     // command table at all. cmd 0 is not a command this port names — and the refusal is
     // about the CONTROL, not about the function.
@@ -562,6 +576,33 @@ fn a_zero_hclient_is_refused_on_every_verb() {
         xlate(&set_page_dir_msg(0, spd::DEV, spd::VAS, spd::PDB, 0)),
         Err(BridgeRefusal::ReservedClient),
         "a control is issued IN a namespace too",
+    );
+    // ★ B5: the dup's *destination* client is this message's namespace. Its **source**
+    // client is not checked here — that is a cross-namespace reference and the rule that
+    // owns it is `RmGraph::apply`'s, which enumerates BOTH of a dup's clients. The arm
+    // below proves the source zero survives translation, and
+    // `a_zero_source_client_is_refused_by_the_rule_that_owns_it` proves it is still
+    // refused, named, one level down.
+    assert_eq!(
+        xlate(&w::message(
+            fn_id::DUP_OBJECT,
+            5,
+            &w::dup_body(0, 0, 0x5c00_0031, x::K, 0x5c00_0019, 0),
+        )),
+        Err(BridgeRefusal::ReservedClient),
+        "a dup is issued IN a namespace too",
+    );
+    assert_eq!(
+        xlate(&w::message(
+            fn_id::DUP_OBJECT,
+            5,
+            &w::dup_body(x::A, 0, 0x5c00_0031, 0, 0x5c00_0019, 0),
+        )),
+        Ok(Translation::Event(RmEvent::Dup {
+            src: NodeKey::new(HClient(0), HObject(0x5c00_0019)),
+            dst: NodeKey::new(HClient(x::A), HObject(0x5c00_0031)),
+        })),
+        "★ a zero SOURCE client is carried, not pre-empted — the graph owns that question",
     );
     // Non-vacuity: 1 is fine. The refusal is about zero, not about small handles.
     assert!(matches!(
@@ -1071,6 +1112,17 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
         BridgeRefusal::Graph(GpuError::Graph(RmGraphError::ConflictingAlloc(
             NodeKey::new(HClient(HEX_CLIENT), HObject(HEX_CLIENT)),
         ))),
+        // ★ B5's, and the third distinct inner error on purpose: `DUP_OBJECT` is the
+        // only verb that names two namespaces, so it is the only one that can reach
+        // these. If `Faulted` were flattened they would collide with the two above.
+        BridgeRefusal::Graph(GpuError::Graph(RmGraphError::ConflictingDup(NodeKey::new(
+            HClient(HEX_CLIENT),
+            HObject(HEX_OBJECT),
+        )))),
+        BridgeRefusal::Graph(GpuError::Graph(RmGraphError::ReservedClient(HClient(0)))),
+        BridgeRefusal::Graph(GpuError::Graph(RmGraphError::UndeclaredClient(HClient(
+            HEX_CLIENT,
+        )))),
     ];
     let tags: std::collections::BTreeSet<FaultTag> = all.iter().map(Faulted::fault_tag).collect();
     assert_eq!(
@@ -1254,8 +1306,23 @@ fn malformed_traffic_between_valid_messages_leaves_the_valid_stream_untouched() 
             FaultTag("BridgeRefusal::UnknownFunction"),
         ),
         (
-            w::message(fn_id::DUP_OBJECT, 1, &[0u8; 48]),
+            // ★ B5 vacated this slot: `DUP_OBJECT` translates now, so the one function
+            // still in the "known, mapped, not built" state is the continuation record —
+            // and the variant must stay in this census, because that state is what tells
+            // a real boot which stage to build next.
+            w::message(fn_id::CONTINUATION_RECORD, 1, &[0u8; 48]),
             FaultTag("BridgeRefusal::NotYetTranslated"),
+        ),
+        (
+            // A dup whose ENVELOPE client is `NV01_NULL_OBJECT`. The message has no
+            // namespace to be attributed to, which is a property of the message and needs
+            // no graph — so it is refused here, on the same rule as every other verb.
+            w::message(
+                fn_id::DUP_OBJECT,
+                1,
+                &w::dup_body(0, 0, 0x5c00_0031, K, 0x5c00_0019, 0),
+            ),
+            FaultTag("BridgeRefusal::ReservedClient"),
         ),
         // ★ B4's five, in the same stream. The point of putting them here rather than
         // only in their own tests is the *interleaving*: each one sits between two valid
@@ -2231,8 +2298,10 @@ fn hostile_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
             FaultTag("BridgeRefusal::UnknownFunction"),
         ),
         (
+            // ★ B5 vacated this slot — see the sibling test. The continuation record is
+            // the one id still in the "known, mapped, not built" state.
             w::Step {
-                function: fn_id::DUP_OBJECT,
+                function: fn_id::CONTINUATION_RECORD,
                 body: vec![0u8; 48],
             },
             FaultTag("BridgeRefusal::NotYetTranslated"),
@@ -2382,6 +2451,40 @@ fn hostile_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
                 body: w::client_root_alloc_body(w::NV01_ROOT, x::B, 0xffff_0000),
             },
             FaultTag("RmGraphError::ConflictingAlloc"),
+        ),
+        // ★★ B5's three, and all three are refusals **only the dup verb can reach**,
+        // because it is the one event that names TWO client namespaces.
+        (
+            // The DESTINATION namespace was never declared. `undeclared_namespace` names
+            // `dst` first on purpose — it is the squat vector — so this is the arm that
+            // fires even though the source is undeclared too.
+            w::Step {
+                function: fn_id::DUP_OBJECT,
+                body: w::dup_body(0xfeed_0001, 0, 0x5c00_0031, 0xfeed_0002, 0x5c00_0019, 0),
+            },
+            FaultTag("RmGraphError::UndeclaredClient"),
+        ),
+        (
+            // ★ `hClientSrc == 0`. The bridge deliberately does NOT check this: the
+            // envelope's client is the message's attribution and the source client is a
+            // *reference*, whose validation belongs to the one rule that owns every
+            // namespace question. It still reaches the guest, named — which is the whole
+            // argument for not making a second local copy of the rule.
+            w::Step {
+                function: fn_id::DUP_OBJECT,
+                body: w::dup_body(x::B, 0, 0x5c00_0031, 0, 0x5c00_0019, 0),
+            },
+            FaultTag("RmGraphError::ReservedClient"),
+        ),
+        (
+            // A destination handle that is already bound to a DIFFERENT resource: B's
+            // own client-root handle, aliased onto the kernel client's root. An identical
+            // re-send would be idempotent; this is not one.
+            w::Step {
+                function: fn_id::DUP_OBJECT,
+                body: w::dup_body(x::B, x::B, x::B, x::K, x::K, 0),
+            },
+            FaultTag("RmGraphError::ConflictingDup"),
         ),
     ];
 
@@ -4470,5 +4573,1222 @@ fn the_whole_compute_process_including_its_page_directory_comes_from_wire_bytes(
         ),
         Err(FwdFault::NoVas(cid)),
         "★★ the exact fault — a channel whose VAS never declared a root defers, forever",
+    );
+}
+
+// =================================================================================
+// ★★ 9. **Stage B5 — `DUP_OBJECT`**: the only cross-client edge in the object model
+//
+// B1–B4 built four one-namespace verbs: allocate, free, and one control, each acting
+// wholly inside the namespace its envelope names. `DUP_OBJECT` is the first that names
+// **two**, and that is the entire reason it is a stage of its own rather than a fifth
+// arm:
+//
+//   * it is the protocol-correct source of **process grouping** — how the guest kernel's
+//     UVM session aliases a CUDA process's VASpace, and how two guest processes that
+//     genuinely share end up in one blast radius (`project`'s §12.27 predicate);
+//   * it makes a whole family of graph refusals reachable from the wire for the first
+//     time (`ConflictingDup`, and `UndeclaredClient`/`ReservedClient` on *either* end);
+//   * and it is the verb where the crate's own namespace-attribution rule looks like it
+//     has an exception and does not. `hClientSrc` is a params field naming a client — but
+//     it is an **additional** namespace, not a substitute for the envelope's, and
+//     `RmEvent::Dup` has a `NodeKey` for each. The C's `GPU_PROMOTE_CTX` handler is the
+//     real counter-example: it substitutes.
+// =================================================================================
+
+/// Handles for the dup fixtures, named apart because a `DUP_OBJECT` carries **five**
+/// handles across **two** namespaces and the whole class of bug this stage can have is
+/// putting one of them where another belongs.
+mod dp {
+    /// The **source** namespace: a user process's client.
+    pub const SRC_C: u32 = 0xc1d0_0071;
+    /// The source client's Device.
+    pub const SRC_DEV: u32 = 0x5c00_0001;
+    /// The object being aliased: the source client's VASpace.
+    pub const SRC_H: u32 = 0x5c00_0010;
+
+    /// The **destination** namespace: the guest kernel's UVM session client.
+    pub const DST_C: u32 = 0xdead_c0de;
+    /// The destination client's Device — and the alias's declared parent, which the
+    /// event **drops**.
+    pub const DST_P: u32 = 0x5d00_0001;
+    /// The alias's handle in the destination namespace. Deliberately unequal to
+    /// [`SRC_H`]: RM assigns it out of the destination client's own generator, so a
+    /// bridge that reflected the source handle would look plausible.
+    pub const DST_H: u32 = 0x5d00_0031;
+}
+
+/// A `DUP_OBJECT` message, built by the independent builder.
+fn dup_msg(
+    dst_client: u32,
+    dst_parent: u32,
+    dst_handle: u32,
+    src_client: u32,
+    src_handle: u32,
+    flags: u32,
+) -> Vec<u8> {
+    w::message(
+        fn_id::DUP_OBJECT,
+        4,
+        &w::dup_body(
+            dst_client, dst_parent, dst_handle, src_client, src_handle, flags,
+        ),
+    )
+}
+
+/// The event a `DUP_OBJECT` must produce — **written by hand**, from
+/// `gsp_core_bridge.md` §2.4's mapping, never derived from the decoder.
+fn expected_dup(dst_client: u32, dst_handle: u32, src_client: u32, src_handle: u32) -> RmEvent {
+    RmEvent::Dup {
+        src: NodeKey::new(HClient(src_client), HObject(src_handle)),
+        dst: NodeKey::new(HClient(dst_client), HObject(dst_handle)),
+    }
+}
+
+// ---------------------------------------------------------------------------------
+// 9.0 Transcription #2 — a dup, written byte by byte
+// ---------------------------------------------------------------------------------
+
+/// A complete `DUP_OBJECT` message: the guest kernel's UVM client aliases the compute
+/// client's VASpace. Written out by hand — the third transcription of the NVOS55 layout,
+/// sharing no code path with the builder or with the decoder.
+///
+/// ```text
+/// ── rpc_message_header_v03_00 (32 B) ──────────────────────────────────────────
+/// +0   header_version      00 00 00 03   -> 0x03000000
+/// +4   signature           56 52 50 43   -> "VRPC" LE
+/// +8   length              3c 00 00 00   -> 60 = 32 envelope + 28 body
+/// +12  function            15 00 00 00   -> 21 = DUP_OBJECT
+/// +16  rpc_result          00 00 00 00
+/// +20  rpc_result_private  00 00 00 00
+/// +24  sequence            04 00 00 00
+/// +28  u                   00 00 00 00
+/// ── rpc_dup_object_v03_00 == NVOS55_PARAMETERS_v03_00 (28 B) ──────────────────
+/// +32  hClient             de c0 ad de   -> 0xdeadc0de  ★ the DESTINATION namespace
+/// +36  hParent             01 00 00 5d   -> 0x5d000001  ── declared, and DROPPED
+/// +40  hObject             31 00 00 5d   -> 0x5d000031  ★ the new alias handle
+/// +44  hClientSrc          71 00 d0 c1   -> 0xc1d00071  ★ the SOURCE namespace
+/// +48  hObjectSrc          10 00 00 5c   -> 0x5c000010  ★ the source object
+/// +52  flags               00 00 00 00   -> NV04_DUP_HANDLE_FLAGS_NONE — DROPPED
+/// +56  status              00 00 00 00   [OUT]
+/// ```
+const HEX_DUP: [u8; 60] = [
+    0x00, 0x00, 0x00, 0x03, 0x56, 0x52, 0x50, 0x43, 0x3c, 0x00, 0x00, 0x00, 0x15, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xde, 0xc0, 0xad, 0xde, 0x01, 0x00, 0x00, 0x5d, 0x31, 0x00, 0x00, 0x5d, 0x71, 0x00, 0xd0, 0xc1,
+    0x10, 0x00, 0x00, 0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
+/// ★ **Transcription #1 vs #2, for the dup.** Two humans, two methods, one byte string.
+#[test]
+fn the_hand_written_hex_dup_and_the_independent_builder_agree_byte_for_byte() {
+    assert_eq!(
+        dup_msg(
+            dp::DST_C,
+            dp::DST_P,
+            dp::DST_H,
+            dp::SRC_C,
+            dp::SRC_H,
+            w::NV04_DUP_HANDLE_FLAGS_NONE
+        ),
+        HEX_DUP.to_vec(),
+    );
+    // And the two flag values are the constants NVIDIA defines, not zero-by-accident.
+    assert_eq!(w::NV04_DUP_HANDLE_FLAGS_NONE, 0);
+    assert_eq!(w::NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE, 1);
+}
+
+/// The hand-written bytes become the hand-written event.
+#[test]
+fn the_hand_hex_dup_becomes_the_declared_event() {
+    assert_eq!(
+        xlate(&HEX_DUP),
+        Ok(Translation::Event(expected_dup(
+            dp::DST_C,
+            dp::DST_H,
+            dp::SRC_C,
+            dp::SRC_H
+        ))),
+    );
+}
+
+// ---------------------------------------------------------------------------------
+// 9.1 The mapping: what moves, what is carried verbatim, and what is dropped
+// ---------------------------------------------------------------------------------
+
+/// ★ One changed field moves **exactly one** field of the event — swept over every one of
+/// the seven members of `NVOS55_PARAMETERS_v03_00`, not witnessed at one.
+///
+/// Three of the seven must move *nothing*: `hParent` and `flags` are declared facts
+/// `RmEvent::Dup` has nowhere to put, and `status` is `[OUT]`. A decoder that read
+/// `hObject` out of `hParent` — the two are adjacent — would pass a single-witness test
+/// and fail here.
+#[test]
+fn one_changed_field_of_the_dup_moves_exactly_one_field_of_the_event() {
+    let base = expected_dup(dp::DST_C, dp::DST_H, dp::SRC_C, dp::SRC_H);
+    assert_eq!(xlate(&HEX_DUP), Ok(Translation::Event(base)));
+
+    const NEW: u32 = 0x1111_2222;
+
+    // hClient @ body+0 -> dst.client, and NOTHING else.
+    assert_eq!(
+        xlate(&dup_msg(NEW, dp::DST_P, dp::DST_H, dp::SRC_C, dp::SRC_H, 0)),
+        Ok(Translation::Event(expected_dup(
+            NEW,
+            dp::DST_H,
+            dp::SRC_C,
+            dp::SRC_H
+        ))),
+    );
+    // hParent @ body+4 -> nothing.
+    assert_eq!(
+        xlate(&dup_msg(dp::DST_C, NEW, dp::DST_H, dp::SRC_C, dp::SRC_H, 0)),
+        Ok(Translation::Event(base)),
+        "★ the alias's declared parent is dropped — `RmEvent::Dup` has nowhere to put it",
+    );
+    // hObject @ body+8 -> dst.handle.
+    assert_eq!(
+        xlate(&dup_msg(dp::DST_C, dp::DST_P, NEW, dp::SRC_C, dp::SRC_H, 0)),
+        Ok(Translation::Event(expected_dup(
+            dp::DST_C,
+            NEW,
+            dp::SRC_C,
+            dp::SRC_H
+        ))),
+    );
+    // hClientSrc @ body+12 -> src.client.
+    assert_eq!(
+        xlate(&dup_msg(dp::DST_C, dp::DST_P, dp::DST_H, NEW, dp::SRC_H, 0)),
+        Ok(Translation::Event(expected_dup(
+            dp::DST_C,
+            dp::DST_H,
+            NEW,
+            dp::SRC_H
+        ))),
+    );
+    // hObjectSrc @ body+16 -> src.handle.
+    assert_eq!(
+        xlate(&dup_msg(dp::DST_C, dp::DST_P, dp::DST_H, dp::SRC_C, NEW, 0)),
+        Ok(Translation::Event(expected_dup(
+            dp::DST_C,
+            dp::DST_H,
+            dp::SRC_C,
+            NEW
+        ))),
+    );
+    // flags @ body+20 -> nothing.
+    assert_eq!(
+        xlate(&dup_msg(
+            dp::DST_C,
+            dp::DST_P,
+            dp::DST_H,
+            dp::SRC_C,
+            dp::SRC_H,
+            NEW
+        )),
+        Ok(Translation::Event(base)),
+    );
+    // status @ body+24 -> nothing. It is [OUT]; the guest sends zero and a guest that
+    // does not is still telling us nothing.
+    let mut poked = HEX_DUP.to_vec();
+    poked[32 + 24..32 + 28].copy_from_slice(&NEW.to_le_bytes());
+    assert_eq!(xlate(&poked), Ok(Translation::Event(base)));
+}
+
+/// ★ The two drops, **swept** rather than witnessed. `hParent` and `flags` are real
+/// declared facts; if either ever acquires a home in `RmEvent`, this is the test that
+/// must change, and it is written so that it cannot pass by accident in the meantime.
+///
+/// `NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE` is in the sweep by name because it
+/// is the one flag NVIDIA defines and it is a **privilege** assertion — the core models
+/// privilege as `ClientKind`, declared once at the client root, so there is genuinely
+/// nowhere for it to go and the drop is a decision rather than an omission.
+#[test]
+fn the_dups_parent_and_flags_are_dropped_and_no_value_of_either_moves_the_event() {
+    let want = Ok(Translation::Event(expected_dup(
+        dp::DST_C,
+        dp::DST_H,
+        dp::SRC_C,
+        dp::SRC_H,
+    )));
+    for parent in [0u32, 1, dp::DST_P, dp::DST_H, dp::SRC_C, 0xffff_ffff] {
+        for flags in [
+            w::NV04_DUP_HANDLE_FLAGS_NONE,
+            w::NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE,
+            0x8000_0000,
+            u32::MAX,
+        ] {
+            assert_eq!(
+                xlate(&dup_msg(
+                    dp::DST_C,
+                    parent,
+                    dp::DST_H,
+                    dp::SRC_C,
+                    dp::SRC_H,
+                    flags
+                )),
+                want,
+                "parent {parent:#x}, flags {flags:#x}",
+            );
+        }
+    }
+}
+
+/// ★★ **The asymmetry between an edge handle and a params handle, stated as a test.**
+///
+/// B3 established that a zero in an alloc's *params* handle field means "nothing is
+/// declared here" and maps to `None` (`declared_handle`), while B4 established that a
+/// zero `hVASpace` in a control's params names the client/device pair's **implicit** VAS
+/// and is a refusal. Neither generalises to a dup's `hObject`/`hObjectSrc`, because those
+/// are **edge** fields — the node the message creates and the node it references — and
+/// the guest's zero is the guest's own choice of key, landing exactly where the guest put
+/// it.
+///
+/// `[src]` RM reads a zero *destination* handle as "generate one"
+/// (`clientAssignResourceHandle` → `clientGenResourceHandle`,
+/// `ogkm-580: rs_client.c:998-1001`), but that runs on the guest's own CPU-side RM at
+/// `serverCopyResource` (`rs_server.c:1725`) **before** the copy-constructor issues the
+/// RPC with the already-assigned handle (`ogkm-580: mem.c:1116`). So a conforming guest
+/// cannot send zero here at all — and the identical argument holds for `GSP_RM_ALLOC`'s
+/// `hObject` (`rs_server.c:898`), which this crate has carried verbatim since B1.
+/// Refusing it on one verb and not the other would be a rule with no principle behind it.
+#[test]
+fn a_dups_handles_are_carried_verbatim_including_zero() {
+    for handle in [0u32, 1, dp::DST_H, 0xffff_ffff] {
+        assert_eq!(
+            xlate(&dup_msg(
+                dp::DST_C,
+                dp::DST_P,
+                handle,
+                dp::SRC_C,
+                dp::SRC_H,
+                0
+            )),
+            Ok(Translation::Event(expected_dup(
+                dp::DST_C,
+                handle,
+                dp::SRC_C,
+                dp::SRC_H
+            ))),
+            "dst handle {handle:#x} is an EDGE, not a declaration",
+        );
+        assert_eq!(
+            xlate(&dup_msg(
+                dp::DST_C,
+                dp::DST_P,
+                dp::DST_H,
+                dp::SRC_C,
+                handle,
+                0
+            )),
+            Ok(Translation::Event(expected_dup(
+                dp::DST_C,
+                dp::DST_H,
+                dp::SRC_C,
+                handle
+            ))),
+            "src handle {handle:#x} likewise",
+        );
+    }
+    // ★ Non-vacuity against the sibling rule: the SAME zero, in a params handle field of
+    // a class that declares one, is `None` and not `HObject(0)`. Two opposite readings of
+    // one byte pattern, and neither may be inferred from the other.
+    assert_eq!(
+        xlate(&w::message(
+            fn_id::GSP_RM_ALLOC,
+            1,
+            &w::alloc_body(
+                dp::SRC_C,
+                dp::SRC_DEV,
+                0x5c00_0012,
+                w::KEPLER_CHANNEL_GROUP_A,
+                20,
+                w::RMAPI_RPC_FLAGS_NONE,
+                &w::tsg_params(0, 0),
+            ),
+        )),
+        Ok(Translation::Event(RmEvent::Alloc {
+            client: HClient(dp::SRC_C),
+            parent: HObject(dp::SRC_DEV),
+            handle: HObject(0x5c00_0012),
+            class: ClassId(w::KEPLER_CHANNEL_GROUP_A),
+            facts: AllocFacts::default(),
+        })),
+        "a TSG declaring hVASpace = 0 declares NOTHING — `h_vaspace: None`",
+    );
+}
+
+/// ★★ The namespace rule, at the one verb that looks like its exception.
+///
+/// The message's **attribution** is the envelope's `hClient` and nothing may replace it;
+/// `hClientSrc` is a *second, additional* namespace the message names, which is a
+/// different fact with its own slot. The test drives that home by making the two clients
+/// differ in every case and asserting which end each lands on — including the case a
+/// substitution bug produces, where both ends carry the same client.
+#[test]
+fn the_source_client_is_a_second_namespace_not_a_substitute_for_the_first() {
+    let t = xlate(&HEX_DUP);
+    let Ok(Translation::Event(RmEvent::Dup { src, dst })) = t else {
+        panic!("the fixture translates: {t:?}");
+    };
+    assert_eq!(
+        dst.client,
+        HClient(dp::DST_C),
+        "attribution = the envelope's"
+    );
+    assert_eq!(
+        src.client,
+        HClient(dp::SRC_C),
+        "the reference = the params'"
+    );
+    assert_ne!(
+        src.client, dst.client,
+        "the fixture is a genuine cross-namespace edge",
+    );
+
+    // ★ The two substitution bugs, each of which would produce a *plausible* event, and
+    // neither of which this fixture can be confused with.
+    assert_ne!(
+        xlate(&HEX_DUP),
+        Ok(Translation::Event(expected_dup(
+            dp::SRC_C,
+            dp::DST_H,
+            dp::SRC_C,
+            dp::SRC_H
+        ))),
+        "the C's GPU_PROMOTE_CTX bug: the params client substituted for the envelope's",
+    );
+    assert_ne!(
+        xlate(&HEX_DUP),
+        Ok(Translation::Event(expected_dup(
+            dp::DST_C,
+            dp::DST_H,
+            dp::DST_C,
+            dp::SRC_H
+        ))),
+        "the inverse: the envelope's client used for the reference too",
+    );
+
+    // A same-namespace dup is legal RM (a client may alias its own object) and must
+    // translate to an event whose two ends genuinely share a client.
+    assert_eq!(
+        xlate(&dup_msg(
+            dp::SRC_C,
+            dp::SRC_DEV,
+            dp::DST_H,
+            dp::SRC_C,
+            dp::SRC_H,
+            0
+        )),
+        Ok(Translation::Event(expected_dup(
+            dp::SRC_C,
+            dp::DST_H,
+            dp::SRC_C,
+            dp::SRC_H
+        ))),
+    );
+}
+
+// ---------------------------------------------------------------------------------
+// 9.2 The dup arm's own refusal surface
+// ---------------------------------------------------------------------------------
+
+/// A short body is refused at **every** length below the struct, with the struct named
+/// and both numbers — never zero-extended into a plausible dup.
+///
+/// ★ And a *longer* payload is accepted: `sizeof(rpc_dup_object_v03_00)` is what the
+/// driver writes into the common header (`ogkm: rpc.c:11093`), but the element the
+/// transport delivers is padded to its own granularity, so refusing on `len != 28` would
+/// refuse a conforming guest.
+#[test]
+fn a_truncated_dup_is_refused_at_every_length_and_a_longer_body_is_not() {
+    let full = w::dup_body(dp::DST_C, dp::DST_P, dp::DST_H, dp::SRC_C, dp::SRC_H, 0);
+    assert_eq!(full.len(), 28, "sizeof(NVOS55_PARAMETERS_v03_00)");
+
+    for got in 0..full.len() {
+        assert_eq!(
+            xlate(&w::message(fn_id::DUP_OBJECT, 4, &full[..got])),
+            Err(BridgeRefusal::Abi(AbiError::Truncated {
+                c_name: "NVOS55_PARAMETERS",
+                need: 28,
+                got,
+            })),
+            "a {got}-byte dup body",
+        );
+    }
+    let want = Ok(Translation::Event(expected_dup(
+        dp::DST_C,
+        dp::DST_H,
+        dp::SRC_C,
+        dp::SRC_H,
+    )));
+    for extra in [0usize, 1, 4, 36] {
+        let mut padded = full.clone();
+        padded.extend(std::iter::repeat_n(0xAAu8, extra));
+        assert_eq!(
+            xlate(&w::message(fn_id::DUP_OBJECT, 4, &padded)),
+            want,
+            "{extra} trailing bytes are not the bridge's business",
+        );
+    }
+}
+
+/// ★ The refusal **order** on the dup arm, peeled one step at a time — written out rather
+/// than asserted as "it is like the other arms", because they are separate functions and
+/// nothing but a test makes them agree.
+///
+/// There are only two steps here, and that is itself the finding: a dup carries no
+/// `paramsSize`, no serialization bit and no class, so the encoding and the namespace are
+/// the whole surface. Everything else about a dup is a *lookup*, and §3.4 gives every
+/// lookup to `RmGraph::apply`.
+#[test]
+fn the_dup_refusal_order_is_encoding_then_namespace() {
+    // Both wrong at once -> the encoding, because a namespace read out of a buffer that
+    // is not there is not a fact about the guest.
+    assert_eq!(
+        xlate(&w::message(fn_id::DUP_OBJECT, 4, &[0u8; 12])),
+        Err(BridgeRefusal::Abi(AbiError::Truncated {
+            c_name: "NVOS55_PARAMETERS",
+            need: 28,
+            got: 12,
+        })),
+    );
+    // Encoding fixed -> the namespace.
+    assert_eq!(
+        xlate(&dup_msg(0, dp::DST_P, dp::DST_H, dp::SRC_C, dp::SRC_H, 0)),
+        Err(BridgeRefusal::ReservedClient),
+    );
+    // Namespace fixed -> the fact.
+    assert_eq!(
+        xlate(&dup_msg(
+            dp::DST_C,
+            dp::DST_P,
+            dp::DST_H,
+            dp::SRC_C,
+            dp::SRC_H,
+            0
+        )),
+        Ok(Translation::Event(expected_dup(
+            dp::DST_C,
+            dp::DST_H,
+            dp::SRC_C,
+            dp::SRC_H
+        ))),
+    );
+}
+
+// ---------------------------------------------------------------------------------
+// 9.3 Through the graph — the refusals only a two-namespace verb can reach
+// ---------------------------------------------------------------------------------
+
+/// Handles for the two-process dup fixtures. Two user processes and one guest-kernel
+/// client, because §12.27's grouping predicate reads **both** ends' `ClientKind` and a
+/// fixture with only one shape would leave half of it unobserved.
+mod tp {
+    /// User process 1's client.
+    pub const C1: u32 = 0xc1d0_0069;
+    /// Its pid.
+    pub const PID1: u32 = 0x0000_dd13;
+    /// Its Device.
+    pub const DEV1: u32 = 0x5c00_0001;
+    /// Its VASpace.
+    pub const VAS1: u32 = 0x5c00_0010;
+    /// Its page-directory base.
+    pub const PDB1: u64 = 0x0000_0000_0034_1000;
+
+    /// User process 2's client — adjacent to process 1's, so a bridge that confused them
+    /// would still produce a plausible graph.
+    pub const C2: u32 = 0xc1d0_006a;
+    /// Its pid.
+    pub const PID2: u32 = 0x0000_dd14;
+    /// Its Device.
+    pub const DEV2: u32 = 0x5e00_0001;
+    /// Its VASpace.
+    pub const VAS2: u32 = 0x5e00_0010;
+    /// Its page-directory base.
+    pub const PDB2: u64 = 0x0000_0000_0035_1000;
+    /// The alias handle process 2 gives to process 1's VASpace.
+    pub const ALIAS2: u32 = 0x5e00_0031;
+
+    /// The guest kernel's own client — UVM's session shape.
+    pub const K: u32 = 0xdead_c0de;
+    /// The kernel client's alias of a user VASpace: the measured case, every guest CUDA
+    /// process dups into this one client.
+    pub const KALIAS: u32 = 0x5d00_0031;
+    /// A second page-directory base for process 1, after its VASpace handle is recycled.
+    pub const PDB1B: u64 = 0x0000_0000_0036_1000;
+}
+
+/// **Transcription #1** of one user process's routable subgraph: bytes.
+fn push_process_bytes(s: &mut RpcScript, client: u32, pid: u32, dev: u32, vas: u32, pdb: u64) {
+    s.client_root(w::NV01_ROOT, client, pid)
+        .device(client, client, dev, cp::DEVICE_INSTANCE)
+        .vaspace(client, dev, vas)
+        .set_page_dir(client, dev, vas, pdb, w::PDB_FLAGS_ALL_CHANNELS);
+}
+
+/// **Transcription #2** of the same subgraph: `RmEvent`s in `mock_classes`, written by
+/// hand, sharing no class number and no offset with the byte side.
+fn push_process_events(s: &mut Scenario, client: u32, pid: u32, dev: u32, vas: u32, pdb: u64) {
+    s.push(RmEvent::Alloc {
+        client: HClient(client),
+        parent: HObject(client),
+        handle: HObject(client),
+        class: mock_classes::CLIENT,
+        facts: AllocFacts {
+            client_kind: Some(ClientKind::User { pid }),
+            ..Default::default()
+        },
+    })
+    .push(RmEvent::Alloc {
+        client: HClient(client),
+        parent: HObject(client),
+        handle: HObject(dev),
+        class: mock_classes::DEVICE,
+        facts: AllocFacts {
+            device_instance: Some(cp::DEVICE_INSTANCE),
+            ..Default::default()
+        },
+    })
+    .push(RmEvent::Alloc {
+        client: HClient(client),
+        parent: HObject(dev),
+        handle: HObject(vas),
+        class: mock_classes::VASPACE,
+        facts: AllocFacts::default(),
+    })
+    .push(RmEvent::SetPageDir {
+        client: HClient(client),
+        vaspace: HObject(vas),
+        pdb: Pdb(pdb),
+    });
+}
+
+/// Drive a whole script through the policy, **keeping** every outcome and the census —
+/// the form the tests below need, because their subject is what gets refused.
+fn deliver_script(
+    gpu: &mut Gpu,
+    script: &RpcScript,
+) -> (Vec<Result<Translation, BridgeRefusal>>, RefusalCensus) {
+    let mut policy = GraphPolicy::new(abi(), gpu);
+    let out = deliver_all(&mut policy, &script.messages());
+    let census = policy.census().clone();
+    (out, census)
+}
+
+/// ★ A dup into a namespace that was never declared is a **FAULT**, not a defer — and
+/// `dst` is named first, because it is the squat vector: an alias planted in a namespace
+/// the guest has not opened is how an unrelated later process gets merged into the
+/// planter's `Proc`.
+///
+/// The bridge does **not** answer this. It emits the declared fact and lets
+/// `RmGraph::apply` decide (§3.4) — so the assertion is layered: `translate` says `Ok`,
+/// and the *policy* says the exact graph refusal.
+#[test]
+fn a_dup_into_an_undeclared_namespace_is_refused_by_the_graph_naming_dst_first() {
+    let mut s = RpcScript::new();
+    push_process_bytes(&mut s, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    let mut gpu = gpu_from_script(&s);
+
+    // The bridge is untroubled: it resolves nothing and asks nothing.
+    let undeclared = dup_msg(tp::C2, 0, tp::ALIAS2, tp::C1, tp::VAS1, 0);
+    assert_eq!(
+        xlate(&undeclared),
+        Ok(Translation::Event(expected_dup(
+            tp::C2,
+            tp::ALIAS2,
+            tp::C1,
+            tp::VAS1
+        ))),
+        "translate never pre-empts the graph's namespace rule",
+    );
+
+    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    assert_eq!(
+        policy.deliver(&command(&undeclared)),
+        Err(BridgeRefusal::Graph(GpuError::Graph(
+            RmGraphError::UndeclaredClient(HClient(tp::C2))
+        ))),
+        "the DESTINATION namespace does not exist",
+    );
+    // ★ Both ends undeclared: still `dst`. Order is a decision, not an accident.
+    assert_eq!(
+        policy.deliver(&command(&dup_msg(
+            tp::C2,
+            0,
+            tp::ALIAS2,
+            tp::K,
+            tp::VAS1,
+            0
+        ))),
+        Err(BridgeRefusal::Graph(GpuError::Graph(
+            RmGraphError::UndeclaredClient(HClient(tp::C2))
+        ))),
+    );
+    // Destination declared, SOURCE not: the other end, named.
+    assert_eq!(
+        policy.deliver(&command(&dup_msg(
+            tp::C1,
+            0,
+            tp::ALIAS2,
+            tp::K,
+            tp::VAS1,
+            0
+        ))),
+        Err(BridgeRefusal::Graph(GpuError::Graph(
+            RmGraphError::UndeclaredClient(HClient(tp::K))
+        ))),
+    );
+    assert_eq!(
+        policy.census().tags().collect::<Vec<_>>(),
+        vec![(FaultTag("RmGraphError::UndeclaredClient"), 3)],
+        "★ by EXACT CONTENT: three refusals and nothing under any other tag. A count \
+         cannot tell 'three of the right kind' from 'two right and one wrong'",
+    );
+    assert_eq!(
+        policy.applied(),
+        0,
+        "not one of them reached the graph state"
+    );
+}
+
+/// ★★ **`hClientSrc == 0`, and the argument for not checking it in the bridge.**
+///
+/// The envelope's client is the message's *attribution*, and a message with no namespace
+/// is malformed on its face — which needs no graph state, so the bridge refuses it. The
+/// source client is a *reference*, and a reference is exactly what §3.4 forbids the
+/// bridge to resolve or pre-validate. `RmGraph::apply`'s central gate enumerates **both**
+/// of a dup's clients (`clients_named`) precisely so this arm does not have to, and the
+/// answer it gives is strictly more informative than a second local copy: the census
+/// records `RmGraphError::ReservedClient`, the rule that was actually broken.
+#[test]
+fn a_zero_source_client_is_refused_by_the_rule_that_owns_it() {
+    let mut s = RpcScript::new();
+    push_process_bytes(&mut s, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    let mut gpu = gpu_from_script(&s);
+
+    let msg = dup_msg(tp::C1, tp::DEV1, tp::ALIAS2, 0, tp::VAS1, 0);
+    assert_eq!(
+        xlate(&msg),
+        Ok(Translation::Event(expected_dup(
+            tp::C1,
+            tp::ALIAS2,
+            0,
+            tp::VAS1
+        ))),
+        "★ the bridge carries it — the zero SOURCE client is not its question",
+    );
+
+    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    assert_eq!(
+        policy.deliver(&command(&msg)),
+        Err(BridgeRefusal::Graph(GpuError::Graph(
+            RmGraphError::ReservedClient(HClient(0))
+        ))),
+    );
+    assert_eq!(
+        policy.census().tags().collect::<Vec<_>>(),
+        vec![(FaultTag("RmGraphError::ReservedClient"), 1)],
+        "★ counted by the rule that was broken, not by 'the graph said no'",
+    );
+    // And the two zeros are DIFFERENT findings: the envelope's is the bridge's.
+    assert_eq!(
+        policy.deliver(&command(&dup_msg(
+            0,
+            tp::DEV1,
+            tp::ALIAS2,
+            tp::C1,
+            tp::VAS1,
+            0
+        ))),
+        Err(BridgeRefusal::ReservedClient),
+    );
+    assert_ne!(
+        FaultTag("BridgeRefusal::ReservedClient"),
+        FaultTag("RmGraphError::ReservedClient"),
+    );
+}
+
+/// A destination handle may be bound once. An **identical** re-send is accepted
+/// idempotently — retried-RPC tolerance, and the property a dedup cache in the bridge
+/// would destroy from the other side — while a *different* source at the same handle is
+/// `ConflictingDup`, by exact variant.
+#[test]
+fn a_conflicting_dup_is_refused_while_an_identical_resend_is_not() {
+    let mut s = RpcScript::new();
+    push_process_bytes(&mut s, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    push_process_bytes(&mut s, tp::C2, tp::PID2, tp::DEV2, tp::VAS2, tp::PDB2);
+    let mut gpu = gpu_from_script(&s);
+
+    let alias_vas1 = dup_msg(tp::C2, tp::DEV2, tp::ALIAS2, tp::C1, tp::VAS1, 0);
+    // The same alias handle, pointing at a DIFFERENT resource.
+    let alias_dev1 = dup_msg(tp::C2, tp::DEV2, tp::ALIAS2, tp::C1, tp::DEV1, 0);
+
+    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    assert_eq!(
+        policy.deliver(&command(&alias_vas1)),
+        Ok(Translation::Event(expected_dup(
+            tp::C2,
+            tp::ALIAS2,
+            tp::C1,
+            tp::VAS1
+        ))),
+    );
+    // ★ Byte-identical re-send: accepted, and it must not double-count.
+    assert_eq!(
+        policy.deliver(&command(&alias_vas1)),
+        Ok(Translation::Event(expected_dup(
+            tp::C2,
+            tp::ALIAS2,
+            tp::C1,
+            tp::VAS1
+        ))),
+        "a retried RPC is the SAME fact — the bridge is stateless, so it maps to the \
+         same event and the graph's idempotence is reachable",
+    );
+    // ★ The same destination, a different source: loud.
+    assert_eq!(
+        policy.deliver(&command(&alias_dev1)),
+        Err(BridgeRefusal::Graph(GpuError::Graph(
+            RmGraphError::ConflictingDup(NodeKey::new(HClient(tp::C2), HObject(tp::ALIAS2)))
+        ))),
+    );
+    assert_eq!(policy.applied(), 2, "both accepted deliveries applied");
+    assert_eq!(
+        policy.census().tags().collect::<Vec<_>>(),
+        vec![(FaultTag("RmGraphError::ConflictingDup"), 1)],
+    );
+}
+
+/// ★ **DEFER, not FAULT: a dup may legitimately precede its source.**
+///
+/// `[measured]` only 25 of 82 observed dups reach the GSP wire, so a dup's source can be
+/// an object RM saw and we did not — faulting it would hang a legal guest. The edge parks
+/// and resolves the moment the source lands, and the two orders must reach the **same**
+/// projection, which is the whole-core determinism property stated for one verb.
+#[test]
+fn a_dup_that_precedes_its_source_parks_and_resolves_when_the_source_lands() {
+    // Both namespaces declared first — that part is NOT deferrable (§12.38).
+    let mut prefix = RpcScript::new();
+    push_process_bytes(&mut prefix, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    prefix.client_root(w::NV01_ROOT, tp::C2, tp::PID2);
+
+    // Order A: the dup names an object of C2 that does not exist yet, then it arrives.
+    let mut early = prefix.clone();
+    early
+        .dup(tp::C1, tp::DEV1, tp::ALIAS2, tp::C2, tp::VAS2)
+        .device(tp::C2, tp::C2, tp::DEV2, cp::DEVICE_INSTANCE)
+        .vaspace(tp::C2, tp::DEV2, tp::VAS2)
+        .set_page_dir(
+            tp::C2,
+            tp::DEV2,
+            tp::VAS2,
+            tp::PDB2,
+            w::PDB_FLAGS_ALL_CHANNELS,
+        );
+
+    // Order B: the same facts, source first.
+    let mut late = prefix.clone();
+    late.device(tp::C2, tp::C2, tp::DEV2, cp::DEVICE_INSTANCE)
+        .vaspace(tp::C2, tp::DEV2, tp::VAS2)
+        .set_page_dir(
+            tp::C2,
+            tp::DEV2,
+            tp::VAS2,
+            tp::PDB2,
+            w::PDB_FLAGS_ALL_CHANNELS,
+        )
+        .dup(tp::C1, tp::DEV1, tp::ALIAS2, tp::C2, tp::VAS2);
+
+    let a = gpu_from_script(&early);
+    let b = gpu_from_script(&late);
+    assert_eq!(
+        boundaries(&a),
+        boundaries(&b),
+        "★ the same facts in either order reach the same object model",
+    );
+
+    // Non-vacuity: the dup is what joins them, and the parked-then-resolved edge really
+    // did resolve — one boundary holding BOTH clients and BOTH page directories.
+    let joined = boundaries(&a);
+    assert_eq!(joined.procs.len(), 1);
+    assert_eq!(
+        joined.procs[0].client_values(),
+        [HClient(tp::C1), HClient(tp::C2)].into_iter().collect(),
+    );
+    assert_eq!(
+        joined.by_pdb.keys().copied().collect::<Vec<_>>(),
+        vec![(GpuId::ZERO, Pdb(tp::PDB1)), (GpuId::ZERO, Pdb(tp::PDB2))],
+    );
+
+    // ★ And while the source is still missing the edge is INERT, never a fault: the
+    // prefix-plus-dup device answers cleanly and groups nothing.
+    let mut parked_only = prefix.clone();
+    parked_only.dup(tp::C1, tp::DEV1, tp::ALIAS2, tp::C2, tp::VAS2);
+    let parked = gpu_from_script(&parked_only);
+    assert_eq!(
+        boundaries(&parked)
+            .procs
+            .iter()
+            .map(|p| p.client_values())
+            .collect::<Vec<_>>(),
+        vec![
+            [HClient(tp::C1)].into_iter().collect(),
+            [HClient(tp::C2)].into_iter().collect(),
+        ],
+        "an unresolved dup groups nothing — MISS is never a silent wrong grouping",
+    );
+}
+
+// ---------------------------------------------------------------------------------
+// 9.4 ★★ What the dup is FOR: grouping, and the lifetime it creates
+// ---------------------------------------------------------------------------------
+
+/// ★★ **The §5.1 oracle, for the verb it was hardest to state.** Two user processes that
+/// genuinely share — one aliases the other's VASpace — are **one** blast radius, and the
+/// projection reached from wire bytes must equal the projection reached from hand-written
+/// `RmEvent`s in mock classes.
+///
+/// The two sides share no class number, no offset and no decoder; what they share is the
+/// meaning, and `Boundaries` is what must not be able to tell them apart.
+#[test]
+fn two_user_processes_joined_by_a_dup_project_the_same_from_bytes_as_from_events() {
+    let mut script = RpcScript::new();
+    push_process_bytes(&mut script, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    push_process_bytes(&mut script, tp::C2, tp::PID2, tp::DEV2, tp::VAS2, tp::PDB2);
+    script.dup(tp::C2, tp::DEV2, tp::ALIAS2, tp::C1, tp::VAS1);
+
+    let mut reference = Scenario::new();
+    push_process_events(
+        &mut reference,
+        tp::C1,
+        tp::PID1,
+        tp::DEV1,
+        tp::VAS1,
+        tp::PDB1,
+    );
+    push_process_events(
+        &mut reference,
+        tp::C2,
+        tp::PID2,
+        tp::DEV2,
+        tp::VAS2,
+        tp::PDB2,
+    );
+    reference.push(RmEvent::Dup {
+        src: NodeKey::new(HClient(tp::C1), HObject(tp::VAS1)),
+        dst: NodeKey::new(HClient(tp::C2), HObject(tp::ALIAS2)),
+    });
+
+    let from_bytes = boundaries(&gpu_from_script(&script));
+    assert_eq!(from_bytes, boundaries_of_scenario(&reference));
+
+    // Non-vacuity, and the claim spelled out: ONE boundary, holding both namespaces and
+    // both page directories.
+    assert_ne!(from_bytes, Boundaries::default());
+    assert_eq!(
+        from_bytes.procs.len(),
+        1,
+        "a shared resource is one blast radius"
+    );
+    assert_eq!(
+        from_bytes.procs[0].client_values(),
+        [HClient(tp::C1), HClient(tp::C2)].into_iter().collect(),
+    );
+    assert_eq!(
+        from_bytes.by_pdb.keys().copied().collect::<Vec<_>>(),
+        vec![(GpuId::ZERO, Pdb(tp::PDB1)), (GpuId::ZERO, Pdb(tp::PDB2))],
+    );
+    let anchors: BTreeSet<_> = from_bytes.by_pdb.values().map(|(a, _)| *a).collect();
+    assert_eq!(anchors.len(), 1, "both VASes route to the one component");
+
+    // ★★ The non-vacuity arm §5.1 demands: strike the dup out of the BYTES and the
+    // projection differs — two boundaries, one per process. So the dup is the thing
+    // doing the grouping, not a message the graph happened to tolerate.
+    let mut without = RpcScript::new();
+    for s in script.steps() {
+        if s.function != fn_id::DUP_OBJECT {
+            without.raw(s.function, s.body.clone());
+        }
+    }
+    let split = boundaries(&gpu_from_script(&without));
+    assert_ne!(from_bytes, split);
+    assert_eq!(
+        split
+            .procs
+            .iter()
+            .map(|p| p.client_values())
+            .collect::<Vec<_>>(),
+        vec![
+            [HClient(tp::C1)].into_iter().collect(),
+            [HClient(tp::C2)].into_iter().collect(),
+        ],
+    );
+}
+
+/// ★★ **The measured case, and it must merge NOTHING.**
+///
+/// Every guest CUDA process dups into the one UVM session client (`[measured]`: two
+/// concurrent processes issued 82 dups each, *every one* into the kernel client). If a
+/// dup into a kernel client merged, the whole guest would collapse into a single `Proc` —
+/// #14 un-fixed — and the second process would be a `LateMerge` refusal.
+///
+/// So the grouping predicate requires **both** ends to be declared *user* clients, and
+/// this is the byte-driven proof: two processes, each aliasing into the kernel client,
+/// stay two boundaries, and the aliases live in the system component.
+#[test]
+fn a_dup_into_the_kernel_client_merges_nothing_and_the_alias_lands_in_the_system_component() {
+    let mut script = RpcScript::new();
+    push_process_bytes(&mut script, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    push_process_bytes(&mut script, tp::C2, tp::PID2, tp::DEV2, tp::VAS2, tp::PDB2);
+    script
+        .client_root(w::NV01_ROOT, tp::K, w::KERNEL_PID)
+        .dup(tp::K, tp::K, tp::KALIAS, tp::C1, tp::VAS1)
+        .dup(tp::K, tp::K, tp::KALIAS + 1, tp::C2, tp::VAS2);
+
+    let b = boundaries(&gpu_from_script(&script));
+    assert_eq!(
+        b.procs
+            .iter()
+            .map(|p| p.client_values())
+            .collect::<Vec<_>>(),
+        vec![
+            [HClient(tp::C1)].into_iter().collect(),
+            [HClient(tp::C2)].into_iter().collect(),
+        ],
+        "★★ 164 dups into one UVM client must still be two processes",
+    );
+    assert_eq!(
+        b.system.client_values(),
+        [HClient(tp::K)].into_iter().collect(),
+    );
+    // The two user VASes still route, each to its OWN component — the aliases are
+    // references, and a reference moves nothing.
+    let owners: Vec<_> = b.by_pdb.iter().map(|(k, (a, _))| (*k, *a)).collect();
+    assert_eq!(
+        owners,
+        vec![
+            ((GpuId::ZERO, Pdb(tp::PDB1)), b.procs[0].anchor),
+            ((GpuId::ZERO, Pdb(tp::PDB2)), b.procs[1].anchor),
+        ],
+    );
+
+    // ★ Non-vacuity for "kernel-ness is what stopped it": declare the SAME client with a
+    // real pid instead of the KERNEL_PID sentinel, and the identical dup stream now
+    // merges all three into one boundary. One `processID` word decides it.
+    let mut as_user = RpcScript::new();
+    push_process_bytes(&mut as_user, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    push_process_bytes(&mut as_user, tp::C2, tp::PID2, tp::DEV2, tp::VAS2, tp::PDB2);
+    as_user
+        .client_root(w::NV01_ROOT, tp::K, 0x0000_dd15)
+        .dup(tp::K, tp::K, tp::KALIAS, tp::C1, tp::VAS1)
+        .dup(tp::K, tp::K, tp::KALIAS + 1, tp::C2, tp::VAS2);
+    // ★ The two scripts differ in EXACTLY ONE message, and inside it in exactly the four
+    // bytes of `NV0000_ALLOC_PARAMETERS.processID`. Asserted rather than assumed, because
+    // "one word decides it" is the whole claim and a second difference would make the
+    // comparison below prove something weaker.
+    assert_eq!(script.steps().len(), as_user.steps().len());
+    assert_eq!(
+        script
+            .steps()
+            .iter()
+            .zip(as_user.steps())
+            .filter(|(a, b)| a != b)
+            .count(),
+        1,
+    );
+    let merged = boundaries(&gpu_from_script(&as_user));
+    assert_eq!(
+        merged
+            .procs
+            .iter()
+            .map(|p| p.client_values())
+            .collect::<Vec<_>>(),
+        vec![
+            [HClient(tp::C1), HClient(tp::C2), HClient(tp::K)]
+                .into_iter()
+                .collect()
+        ],
+    );
+    assert!(merged.system.client_values().is_empty());
+}
+
+/// ★★★ **§12.41, driven from wire bytes for the first time.** A dup keeps a resource
+/// alive past the free of the handle that allocated it, and the *handle value* is then
+/// legally recycled — so one `(client, handle)` names two live resources.
+///
+/// `Alloc (C,V) → Dup to K → Free (C,V) → Alloc (C,V)`. Both VASpaces are live, both
+/// route, and they are **different resources** — which is why the projection is keyed by
+/// `ResourceKey` and not by handle. Keyed by handle the second `insert` silently
+/// overwrote the first, the dup-kept ghost vanished from the projection, its `Pdb` left
+/// `by_pdb`, and the alias holder's every address op took `FwdFault::UnknownPdb`.
+#[test]
+fn an_alias_keeps_a_freed_origins_resource_alive_and_the_recycled_handle_is_a_new_one() {
+    let mut script = RpcScript::new();
+    push_process_bytes(&mut script, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    script.client_root(w::NV01_ROOT, tp::K, w::KERNEL_PID).dup(
+        tp::K,
+        tp::K,
+        tp::KALIAS,
+        tp::C1,
+        tp::VAS1,
+    );
+
+    // Stage 1: the alias exists, one VASpace, one PDB.
+    let staged = boundaries(&gpu_from_script(&script));
+    assert_eq!(
+        staged.by_pdb.keys().copied().collect::<Vec<_>>(),
+        vec![(GpuId::ZERO, Pdb(tp::PDB1))],
+    );
+
+    // Stage 2: the origin handle is freed. The ALIAS still holds the resource, so the
+    // page directory must still route — this is the "never free host memory RM says is
+    // live" direction, observed at the projection.
+    script.free(tp::C1, tp::VAS1);
+    let after_free = boundaries(&gpu_from_script(&script));
+    assert_eq!(
+        after_free.by_pdb.keys().copied().collect::<Vec<_>>(),
+        vec![(GpuId::ZERO, Pdb(tp::PDB1))],
+        "★ a freed origin whose alias is live is STILL a live resource",
+    );
+
+    // Stage 3: the guest recycles the handle VALUE for a brand-new VASpace with its own
+    // page directory. Two live resources, one handle value.
+    script.vaspace(tp::C1, tp::DEV1, tp::VAS1).set_page_dir(
+        tp::C1,
+        tp::DEV1,
+        tp::VAS1,
+        tp::PDB1B,
+        w::PDB_FLAGS_ALL_CHANNELS,
+    );
+    let recycled = boundaries(&gpu_from_script(&script));
+    assert_eq!(
+        recycled.by_pdb.keys().copied().collect::<Vec<_>>(),
+        vec![(GpuId::ZERO, Pdb(tp::PDB1)), (GpuId::ZERO, Pdb(tp::PDB1B)),],
+        "★★ BOTH page directories route — the ghost was not overwritten by its successor",
+    );
+    let vas_keys: BTreeSet<ResourceKey> = recycled.by_pdb.values().map(|(_, r)| *r).collect();
+    assert_eq!(
+        vas_keys.len(),
+        2,
+        "and they are two DIFFERENT resources at one handle value",
+    );
+    assert_eq!(
+        recycled.procs.len(),
+        1,
+        "the kernel alias grouped nothing (§12.27)",
+    );
+    assert_eq!(
+        recycled.procs[0]
+            .vases
+            .keys()
+            .copied()
+            .collect::<BTreeSet<_>>(),
+        vas_keys,
+        "★ both belong to the ONE component that declared them, by exact content",
+    );
+}
+
+/// ★ **The statelessness canary, at the dup.** The same `hObject` value is used as an
+/// alias handle, freed, and used again as an alias of a *different* resource. A
+/// per-handle memo in the bridge would answer the first source for the second message;
+/// a seen-set would refuse the recycle outright. Both hang a conforming guest, because RM
+/// recycles handle values by design.
+#[test]
+fn an_alias_handle_recycled_against_a_different_source_is_translated_afresh() {
+    let mut script = RpcScript::new();
+    push_process_bytes(&mut script, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    push_process_bytes(&mut script, tp::C2, tp::PID2, tp::DEV2, tp::VAS2, tp::PDB2);
+    script
+        .dup(tp::C2, tp::DEV2, tp::ALIAS2, tp::C1, tp::VAS1)
+        .free(tp::C2, tp::ALIAS2)
+        // The same alias handle VALUE, now naming a different source object entirely.
+        .dup(tp::C2, tp::DEV2, tp::ALIAS2, tp::C1, tp::DEV1);
+
+    let mut gpu = fresh_gpu();
+    let (out, census) = deliver_script(&mut gpu, &script);
+    assert!(
+        census.is_empty(),
+        "★ a recycle is legal traffic — refusing it hangs a conforming guest: {census:?}",
+    );
+    assert_eq!(
+        out.last().copied(),
+        Some(Ok(Translation::Event(expected_dup(
+            tp::C2,
+            tp::ALIAS2,
+            tp::C1,
+            tp::DEV1
+        )))),
+        "★ the second dup is translated from its OWN bytes — a memo would have answered \
+         VAS1 here",
+    );
+
+    // ★ No residue: the graph is what a device that saw only the surviving facts would
+    // be. The two processes are still joined (the second dup is also a user↔user share),
+    // and only one alias exists.
+    let b = boundaries(&gpu);
+    assert_eq!(b.procs.len(), 1);
+    assert_eq!(
+        b.procs[0].client_values(),
+        [HClient(tp::C1), HClient(tp::C2)].into_iter().collect(),
+    );
+}
+
+/// The whole dup stream through the **real command ring** and the boot FSM: two
+/// processes, a kernel client, three dups, every command answered `NV_OK` on its own
+/// `(function, sequence)`, and the same object model the direct path reaches.
+#[test]
+fn the_dup_stream_reaches_the_graph_through_the_real_transport() {
+    let mut script = RpcScript::new();
+    push_process_bytes(&mut script, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    push_process_bytes(&mut script, tp::C2, tp::PID2, tp::DEV2, tp::VAS2, tp::PDB2);
+    script
+        .client_root(w::NV01_ROOT, tp::K, w::KERNEL_PID)
+        .dup(tp::K, tp::K, tp::KALIAS, tp::C1, tp::VAS1)
+        .dup(tp::K, tp::K, tp::KALIAS + 1, tp::C2, tp::VAS2)
+        .dup(tp::C2, tp::DEV2, tp::ALIAS2, tp::C1, tp::VAS1);
+
+    let mut gpu = fresh_gpu();
+    let run = run_through_transport(P580, script.steps(), &mut gpu);
+
+    assert!(
+        run.census.is_empty(),
+        "a conforming dup stream refuses nothing: {:?}",
+        run.census,
+    );
+    assert_eq!(run.applied, script.steps().len() as u64);
+    assert_eq!(run.inert, 0);
+    assert!(run.transitions.contains(&Transition::Running));
+    assert_eq!(
+        run.replies
+            .iter()
+            .filter(|m| m.function == fn_id::DUP_OBJECT)
+            .map(|m| (m.sequence, m.rpc_result))
+            .collect::<Vec<_>>(),
+        // Nine messages precede the dups (four per process, then the kernel root), and
+        // `run_through_transport` numbers the stream from 0x1000 — so 0x1009..=0x100b,
+        // written out rather than derived, because a sequence the test computed from the
+        // same list it posted would agree with itself.
+        vec![(0x1009, 0), (0x100a, 0), (0x100b, 0)],
+        "★ each dup answered on its own (function, sequence), with NV_OK",
+    );
+    assert_eq!(
+        boundaries(&gpu),
+        boundaries(&gpu_from_script(&script)),
+        "★ the ring and the direct path reach the same object model",
+    );
+    // The composed claim, by exact content: the two user processes share, the kernel
+    // client does not pull anyone in.
+    let b = boundaries(&gpu);
+    assert_eq!(
+        b.procs
+            .iter()
+            .map(|p| p.client_values())
+            .collect::<Vec<_>>(),
+        vec![[HClient(tp::C1), HClient(tp::C2)].into_iter().collect()],
+    );
+    assert_eq!(
+        b.system.client_values(),
+        [HClient(tp::K)].into_iter().collect(),
     );
 }

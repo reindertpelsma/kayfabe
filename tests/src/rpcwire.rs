@@ -388,6 +388,64 @@ pub fn free_body(h_root: u32, h_object_parent: u32, h_object_old: u32) -> Vec<u8
     b
 }
 
+/// `rpc_dup_object_v03_00` — which, like the free body, *is* the bare SDK struct
+/// `NVOS55_PARAMETERS_v03_00` with no wrapper of its own
+/// (`ogkm: g_rpc-structures.h:200-205`, `ogkm-580: g_rpc-structures.h:198-203`):
+///
+/// ```text
+/// NvHandle hClient;     // +0   ★ the DESTINATION client — the message's own namespace
+/// NvHandle hParent;     // +4   the new alias's parent (a REAL handle on this path)
+/// NvHandle hObject;     // +8   ★ the new alias handle
+/// NvHandle hClientSrc;  // +12  ★ the SOURCE namespace — the cross-client edge
+/// NvHandle hObjectSrc;  // +16  ★ the source object
+/// NvU32    flags;       // +20  NV04_DUP_HANDLE_FLAGS_*
+/// NvU32    status;      // +24  [OUT]
+///                       //      sizeof == 28
+/// ```
+///
+/// `[src]` field order and widths from `ogkm: g_sdk-structures.h:368-377` and
+/// `ogkm-580: g_sdk-structures.h:366-375` — transcribed from **both**, and they are
+/// identical member for member; `ogkm: rpc.c:11098-11103` / `ogkm-580: rpc.c:11291-11296`
+/// for what `rpcRmApiDupObject_GSP` puts in each one.
+///
+/// ★ Note `hParent` is **not** the always-zero the `FREE` path carries: the caller passes
+/// `pDstParentRef->hResource`, a live handle in the destination namespace
+/// (`ogkm-580: src/nvidia/src/kernel/mem_mgr/mem.c:1116`). So a builder that emitted zero
+/// there would make the bridge's *drop* of that field untestable.
+#[must_use]
+pub fn dup_body(
+    h_client: u32,
+    h_parent: u32,
+    h_object: u32,
+    h_client_src: u32,
+    h_object_src: u32,
+    flags: u32,
+) -> Vec<u8> {
+    let mut b = vec![0u8; 28];
+    put32(&mut b, 0, h_client);
+    put32(&mut b, 4, h_parent);
+    put32(&mut b, 8, h_object);
+    put32(&mut b, 12, h_client_src);
+    put32(&mut b, 16, h_object_src);
+    put32(&mut b, 20, flags);
+    put32(&mut b, 24, 0); // status: [OUT]
+    b
+}
+
+/// `NV04_DUP_HANDLE_FLAGS_NONE` (`ogkm: nvos.h:2276`, `ogkm-580: nvos.h:2275`) — what the
+/// memory dup path sends verbatim (`ogkm-580: mem.c:1116-1119` passes a literal `0`).
+pub const NV04_DUP_HANDLE_FLAGS_NONE: u32 = 0;
+
+/// `NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE` (`ogkm: nvos.h:2277`,
+/// `ogkm-580: nvos.h:2276`) — *"prevents an RM kernel client from duping
+/// unconditionally"*.
+///
+/// ★ A **privilege** assertion about the duping client, which the core models as
+/// `ClientKind`, declared once at the client root. `RmEvent::Dup` has nowhere to put it
+/// and the bridge drops it; this constant exists so a test can prove the drop rather than
+/// assume it.
+pub const NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE: u32 = 1;
+
 /// The body `rpcRmApiFree_GSP` actually sends: `hObjectParent` is always
 /// `NV01_NULL_OBJECT` on this path (`ogkm: rpc.c:11148`).
 #[must_use]
@@ -557,6 +615,32 @@ impl RpcScript {
     /// A `FREE` shaped the way `rpcRmApiFree_GSP` shapes one — see [`driver_free_body`].
     pub fn free(&mut self, h_client: u32, h_object: u32) -> &mut RpcScript {
         self.raw(fn_id::FREE, driver_free_body(h_client, h_object))
+    }
+
+    /// A `DUP_OBJECT` aliasing `(src_client, src_handle)` into `dst_client`'s namespace as
+    /// `dst_handle`, parented at `dst_parent`, with `NV04_DUP_HANDLE_FLAGS_NONE` — the
+    /// shape the memory dup path sends (`ogkm-580: mem.c:1116-1119`). A test that wants a
+    /// different `flags` builds the body with [`dup_body`] and posts it through
+    /// [`Self::raw`].
+    pub fn dup(
+        &mut self,
+        dst_client: u32,
+        dst_parent: u32,
+        dst_handle: u32,
+        src_client: u32,
+        src_handle: u32,
+    ) -> &mut RpcScript {
+        self.raw(
+            fn_id::DUP_OBJECT,
+            dup_body(
+                dst_client,
+                dst_parent,
+                dst_handle,
+                src_client,
+                src_handle,
+                NV04_DUP_HANDLE_FLAGS_NONE,
+            ),
+        )
     }
 
     /// A `GSP_RM_ALLOC` of any class, with `paramsSize` taken from the params actually
