@@ -1891,3 +1891,582 @@ fn an_impossible_element_layout_cannot_be_constructed() {
     assert_eq!(P580.layout().hdr_size(), 48);
     assert_eq!(P610.layout().hdr_size(), 16);
 }
+
+// ──────────────────── the region, pinned to concrete guest addresses ────────────────────
+//
+// ★★ Everything below asserts **where a byte lands**, not that a walk happened. The gap
+// these close is that the region was exercised for *shape* — fragmented vs linear, refused
+// vs accepted — over a single witness geometry, so three address/offset operators and a
+// bound could all be wrong for *some* inputs and invisible for the one input tested. The
+// remedy is the sweep: several bases (including 0), several page sizes, several run
+// lengths, the empty range, the exactly-one-page range, and the byte at each end.
+
+/// ★★ `runs` decomposes a range into the **exact** `(gpa, len)` pairs the page table
+/// names — swept over three page sizes and three bases, with both boundaries.
+///
+/// Every expectation here is a literal, computed by hand from the table. A reference
+/// implementation would be the same arithmetic twice and would agree with a wrong answer.
+#[test]
+fn a_region_decomposes_a_range_into_the_exact_gpas_its_table_names() {
+    // ── A. 4 KiB pages, fragmented and out of order.
+    let a = RegionMap::from_pages(4096, vec![0x9000, 0x2000, 0x1_5000]).expect("valid");
+    assert_eq!(a.len(), 12288);
+    assert_eq!(a.runs(0, 0), Ok(vec![]), "an empty range resolves to no runs");
+    assert_eq!(a.runs(0, 1), Ok(vec![(0x9000, 1)]), "the very first byte");
+    assert_eq!(
+        a.runs(0, 4096),
+        Ok(vec![(0x9000, 4096)]),
+        "exactly one page is one run, and it does not spill",
+    );
+    assert_eq!(
+        a.runs(4095, 2),
+        Ok(vec![(0x9FFF, 1), (0x2000, 1)]),
+        "a two-byte read straddling a page boundary is two runs of one byte",
+    );
+    // ★ The killer for a `-`→`+` in the page-remainder: at a non-zero offset *within* a
+    // page, with more than a page still to go, `page_size + within` and
+    // `page_size - within` are both plausible-looking and only one lands on the boundary.
+    assert_eq!(
+        a.runs(100, 12188),
+        Ok(vec![
+            (0x9064, 3996),
+            (0x2000, 4096),
+            (0x1_5000, 4096),
+        ]),
+        "the first run stops at the page boundary, 3996 bytes in, not 4196",
+    );
+    assert_eq!(
+        a.runs(4096, 8192),
+        Ok(vec![(0x2000, 4096), (0x1_5000, 4096)]),
+    );
+    assert_eq!(a.runs(12287, 1), Ok(vec![(0x1_5FFF, 1)]), "the very last byte");
+    assert_eq!(
+        a.runs(12288, 1),
+        Err(GspFault::RegionOutOfRange {
+            offset: 12288,
+            len: 1,
+            region_len: 12288
+        }),
+        "one byte past the end names the range it refused",
+    );
+    assert_eq!(
+        a.runs(0, 12289),
+        Err(GspFault::RegionOutOfRange {
+            offset: 0,
+            len: 12289,
+            region_len: 12288
+        }),
+    );
+    assert_eq!(
+        a.runs(u64::MAX, 2),
+        Err(GspFault::RegionOutOfRange {
+            offset: u64::MAX,
+            len: 2,
+            region_len: 12288
+        }),
+        "an offset+len that overflows is refused, not wrapped",
+    );
+
+    // ── B. 16-byte pages: the same arithmetic at a granularity where an off-by-a-page is
+    // an off-by-16, and a run spans three pages.
+    let b = RegionMap::from_pages(16, vec![0x1_0000, 0x1_0030, 0x1_0010, 0x1_0080])
+        .expect("valid");
+    assert_eq!(b.len(), 64);
+    assert_eq!(
+        b.runs(4, 40),
+        Ok(vec![(0x1_0004, 12), (0x1_0030, 16), (0x1_0010, 12)]),
+        "12 + 16 + 12 = 40, and the middle page is whole",
+    );
+    assert_eq!(
+        b.runs(0, 64),
+        Ok(vec![
+            (0x1_0000, 16),
+            (0x1_0030, 16),
+            (0x1_0010, 16),
+            (0x1_0080, 16),
+        ]),
+        "a contiguous request over a fragmented region is still one run per page",
+    );
+    assert_eq!(b.runs(63, 1), Ok(vec![(0x1_008F, 1)]));
+    assert_eq!(
+        b.runs(0, 65),
+        Err(GspFault::RegionOutOfRange {
+            offset: 0,
+            len: 65,
+            region_len: 64
+        }),
+    );
+
+    // ── C. 256-byte pages, and page 0 lives at guest-physical **zero**. A base of zero is
+    // legal and must resolve like any other; a suite that moved every fixture off zero to
+    // catch address-blindness must keep one that has not.
+    let c = RegionMap::from_pages(256, vec![0, 0x1_0000]).expect("valid");
+    assert_eq!(c.len(), 512);
+    assert_eq!(c.runs(0, 256), Ok(vec![(0, 256)]));
+    assert_eq!(c.runs(1, 300), Ok(vec![(1, 255), (0x1_0000, 45)]));
+    assert_eq!(c.runs(511, 1), Ok(vec![(0x1_00FF, 1)]));
+}
+
+/// ★★ `read`/`write` place **each byte** on the page the table names, and consume the
+/// source buffer in order.
+///
+/// The property a stalled source cursor breaks is not "a write happened" but "the bytes
+/// on page 2 are the bytes that follow the ones on page 1". Asserted against raw guest
+/// memory read back at literal addresses, plus the exact `(gpa, len)` the RAM port saw.
+#[test]
+fn a_region_write_places_each_byte_on_the_page_its_table_names() {
+    let mut ram = FakeRam::default();
+    for gpa in [0x3_0000u64, 0x1_0000, 0x2_0000] {
+        ram.alloc(gpa);
+    }
+    let region = RegionMap::from_pages(4096, vec![0x3_0000, 0x1_0000, 0x2_0000]).expect("valid");
+
+    // A pattern with no period that divides a page, so a mis-sliced copy cannot happen to
+    // land on the right bytes.
+    let data: Vec<u8> = (0..12188u32).map(|i| (i % 251) as u8).collect();
+    ram.writes.clear();
+    ram.reads.clear();
+    region.write(&mut ram, 100, &data).expect("in range");
+
+    assert_eq!(
+        ram.writes,
+        vec![(0x3_0064, 3996), (0x1_0000, 4096), (0x2_0000, 4096)],
+        "three writes, at the three addresses the table names, of the three lengths the \
+         page boundaries impose",
+    );
+
+    let mut back = vec![0u8; 3996];
+    kayfabe_gsp::GuestRam::read(&mut ram, 0x3_0064, &mut back).unwrap();
+    assert_eq!(back, data[..3996], "page 0 holds the first 3996 bytes");
+    let mut back = vec![0u8; 4096];
+    kayfabe_gsp::GuestRam::read(&mut ram, 0x1_0000, &mut back).unwrap();
+    assert_eq!(
+        back,
+        data[3996..8092],
+        "page 1 holds the bytes that FOLLOW page 0's, not the buffer's start again",
+    );
+    let mut back = vec![0u8; 4096];
+    kayfabe_gsp::GuestRam::read(&mut ram, 0x2_0000, &mut back).unwrap();
+    assert_eq!(back, data[8092..12188], "page 2 holds the tail");
+
+    // …and the read path reassembles them in the same order.
+    let mut round = vec![0u8; 12188];
+    ram.reads.clear();
+    region.read(&mut ram, 100, &mut round).expect("in range");
+    assert_eq!(
+        ram.reads,
+        vec![(0x3_0064, 3996), (0x1_0000, 4096), (0x2_0000, 4096)],
+    );
+    assert_eq!(round, data, "round-trip is byte-exact");
+
+    // A `u32` straddling a page boundary is split at the boundary and reassembled.
+    region.write_u32(&mut ram, 4094, 0xAABB_CCDD).expect("in range");
+    let mut lo = [0u8; 2];
+    kayfabe_gsp::GuestRam::read(&mut ram, 0x3_0000 + 4094, &mut lo).unwrap();
+    let mut hi = [0u8; 2];
+    kayfabe_gsp::GuestRam::read(&mut ram, 0x1_0000, &mut hi).unwrap();
+    assert_eq!(lo, [0xDD, 0xCC], "the low half stays on page 0");
+    assert_eq!(hi, [0xBB, 0xAA], "the high half starts page 1");
+    assert_eq!(region.read_u32(&mut ram, 4094), Ok(0xAABB_CCDD));
+
+    // The whole-region bound, on the write side too.
+    assert_eq!(
+        region.write(&mut ram, 12288, &[0u8; 1]),
+        Err(GspFault::RegionOutOfRange {
+            offset: 12288,
+            len: 1,
+            region_len: 12288
+        }),
+    );
+}
+
+/// ★★ `load` walks the guest's **self-describing** table: the page-size and count
+/// predicates are swept, a one-entry table is a legal region, a table that spans several
+/// of its own pages is followed through entries it has already read, and a misaligned
+/// entry is named by its exact index.
+#[test]
+fn loading_a_region_walks_its_own_table_and_names_the_entry_that_is_wrong() {
+    let mut ram = FakeRam::default();
+    ram.alloc_range(0x2_0000, 2);
+
+    // ── The page-size predicate, swept. Zero is one cause; *not a power of two* is the
+    // other, and it is a separate one — a table stride of 24 or 4095 is as unusable as a
+    // stride of 0, and neither may be silently accepted.
+    let one = |ps: u64| RegionMap::load(&mut FakeRam::default(), 0x2_0000, 1, ps, 64);
+    for ps in [0u64, 3, 24, 96, 4095, 12288] {
+        assert_eq!(
+            one(ps),
+            Err(GspFault::RegionMalformed(
+                kayfabe_gsp::RegionError::BadPageSize { page_size: ps }
+            )),
+            "page size {ps} is not a legal table stride",
+        );
+    }
+
+    // ── The count predicates.
+    assert_eq!(
+        RegionMap::load(&mut ram, 0x2_0000, 0, 4096, 64),
+        Err(GspFault::RegionMalformed(
+            kayfabe_gsp::RegionError::NoEntries
+        )),
+    );
+    assert_eq!(
+        RegionMap::load(&mut ram, 0x2_0000, 65, 4096, 64),
+        Err(GspFault::RegionMalformed(
+            kayfabe_gsp::RegionError::TooManyEntries {
+                declared: 65,
+                max: 64
+            }
+        )),
+    );
+
+    // ── ★ The exactly-one-page region. Its table has one entry, which is the page the
+    // table itself starts on, and the walk must **stop** there rather than reach for a
+    // second table page that the region does not have.
+    let mut ram = FakeRam::default();
+    ram.alloc(0x7_F000);
+    kayfabe_gsp::GuestRam::write(&mut ram, 0x7_F000, &0x7_F000u64.to_le_bytes()).unwrap();
+    let solo = RegionMap::load(&mut ram, 0x7_F000, 1, 4096, 64).expect("a one-page region");
+    assert_eq!(solo.len(), 4096);
+    assert_eq!(solo.runs(0, 4096), Ok(vec![(0x7_F000, 4096)]));
+    assert_eq!(
+        solo.runs(0, 4097),
+        Err(GspFault::RegionOutOfRange {
+            offset: 0,
+            len: 4097,
+            region_len: 4096
+        }),
+    );
+
+    // ── A table that spans three of its own pages, fragmented, at a 16-byte stride so the
+    // walk takes two entries per table page and has to follow the table twice.
+    let p: [u64; 5] = [0x5_0000, 0x5_0300, 0x5_0100, 0x5_0080, 0x5_00C0];
+    assert_ne!(p[1], p[0] + 16, "non-vacuity: the table is really fragmented");
+    let mut ram = FakeRam::default();
+    ram.alloc(0x5_0000);
+    let put = |ram: &mut FakeRam, at: u64, vals: &[u64]| {
+        let mut bytes = Vec::new();
+        for v in vals {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+        kayfabe_gsp::GuestRam::write(ram, at, &bytes).unwrap();
+    };
+    put(&mut ram, p[0], &[p[0], p[1]]);
+    put(&mut ram, p[1], &[p[2], p[3]]);
+    put(&mut ram, p[2], &[p[4]]);
+    let walked = RegionMap::load(&mut ram, p[0], 5, 16, 64).expect("a five-page region");
+    assert_eq!(walked.len(), 80);
+    assert_eq!(
+        walked.runs(0, 80),
+        Ok(vec![
+            (p[0], 16),
+            (p[1], 16),
+            (p[2], 16),
+            (p[3], 16),
+            (p[4], 16),
+        ]),
+        "every page of the region is where its own table said, in table order",
+    );
+
+    // ── ★ The reported index of a misaligned entry is that entry's **global** index —
+    // swept over the first entry of the first table page, a later entry of the same page,
+    // and an entry on the *second* table page, because those three are what tell an
+    // index that counts from the batch apart from one that counts twice or multiplies.
+    for (bad_index, entries) in [
+        (0usize, vec![vec![p[0] + 1, p[1]], vec![p[2], p[3]]]),
+        (1, vec![vec![p[0], p[1] + 8], vec![p[2], p[3]]]),
+        (2, vec![vec![p[0], p[1]], vec![p[2] + 4, p[3]]]),
+        (3, vec![vec![p[0], p[1]], vec![p[2], p[3] + 12]]),
+    ] {
+        let mut ram = FakeRam::default();
+        ram.alloc(0x5_0000);
+        put(&mut ram, p[0], &entries[0]);
+        put(&mut ram, p[1], &entries[1]);
+        let value = entries[bad_index / 2][bad_index % 2];
+        assert_eq!(
+            RegionMap::load(&mut ram, p[0], 4, 16, 64),
+            Err(GspFault::RegionMalformed(
+                kayfabe_gsp::RegionError::UnalignedEntry {
+                    index: bad_index,
+                    value
+                }
+            )),
+            "entry {bad_index} is the one that is wrong",
+        );
+    }
+
+    // The same index discipline on the direct constructor.
+    assert_eq!(
+        RegionMap::from_pages(16, vec![p[0], p[1], p[2] + 4, p[3]]),
+        Err(GspFault::RegionMalformed(
+            kayfabe_gsp::RegionError::UnalignedEntry {
+                index: 2,
+                value: p[2] + 4
+            }
+        )),
+    );
+
+    // ── A table the guest declared but did not back is a RAM refusal, not a zero-filled
+    // region.
+    let mut empty = FakeRam::default();
+    assert_eq!(
+        RegionMap::load(&mut empty, 0x9_0000, 1, 4096, 64),
+        Err(GspFault::GuestRam(kayfabe_gsp::RamRefused {
+            gpa: 0x9_0000,
+            len: 8
+        })),
+    );
+}
+
+/// ★ `peek_len` names the exact byte count a short first element denied it — on both
+/// element layouts, whose header sizes differ, so the number cannot be a constant.
+#[test]
+fn peek_len_on_a_short_element_names_the_exact_byte_it_needed() {
+    for p in [P580, P610] {
+        let layout = p.layout();
+        let hdr = layout.hdr_size();
+        // `rpc.length` is the third word of the envelope: hdr + 2*4, and the read needs
+        // four bytes from there.
+        let need = hdr + 12;
+        for have in [0usize, 4, hdr, hdr + 8, need - 1] {
+            assert_eq!(
+                kayfabe_gsp::peek_len(&layout, &vec![0u8; have], 4096, 65536),
+                Err(GspFault::Truncated { need, have }),
+                "{}: {have} bytes is short of {need}",
+                p.name,
+            );
+        }
+
+        // The boundary from the other side: exactly `need` bytes is enough, and the value
+        // read is the one at that offset and no other.
+        let mut first = vec![0u8; need];
+        first[hdr + 8..hdr + 12].copy_from_slice(&96u32.to_le_bytes());
+        let len = kayfabe_gsp::peek_len(&layout, &first, 4096, 65536).expect("exactly enough");
+        assert_eq!(len.rpc_length(), 96, "the declared length, read verbatim");
+        assert_eq!(
+            len.msg_len(),
+            hdr as u32 + 96,
+            "the checksum's coverage is the header plus the declared length",
+        );
+        assert_eq!(len.elements(), 1);
+
+        // …and a length outside the transport's bounds is refused with both bounds.
+        first[hdr + 8..hdr + 12].copy_from_slice(&31u32.to_le_bytes());
+        assert_eq!(
+            kayfabe_gsp::peek_len(&layout, &first, 4096, 65536),
+            Err(GspFault::MsgLenOutOfRange {
+                declared: 31,
+                min: 32,
+                max: 65536 - hdr as u32
+            }),
+        );
+        first[hdr + 8..hdr + 12].copy_from_slice(&(65536 - hdr as u32 + 1).to_le_bytes());
+        assert_eq!(
+            kayfabe_gsp::peek_len(&layout, &first, 4096, 65536),
+            Err(GspFault::MsgLenOutOfRange {
+                declared: 65536 - hdr as u32 + 1,
+                min: 32,
+                max: 65536 - hdr as u32
+            }),
+        );
+    }
+}
+
+/// ★ A run sized **exactly** to its declared message decodes; one byte less is refused.
+///
+/// The transport reads whole elements, so the exact-fit case never arises on the bench —
+/// which is precisely why the bound between "enough" and "one short" was never pinned.
+#[test]
+fn a_run_sized_exactly_to_its_message_decodes_and_one_byte_less_does_not() {
+    for p in [P580, P610] {
+        let layout = p.layout();
+        let hdr = layout.hdr_size();
+        let payload: Vec<u8> = (0..40u32).map(|i| (i * 7 % 251) as u8).collect();
+        let run = kayfabe_gsp::encode_message(
+            &layout,
+            0x0300_0000,
+            4096,
+            65536,
+            9,
+            &OutgoingRpc {
+                function: FN_RM_CONTROL,
+                sequence: 3,
+                rpc_result: 0,
+                rpc_result_private: 0,
+                payload: payload.clone(),
+            },
+        )
+        .expect("one element");
+        assert_eq!(run.len(), 4096, "{}: the wire form is a whole element", p.name);
+
+        let len = kayfabe_gsp::peek_len(&layout, &run, 4096, 65536).expect("declared");
+        let msg_len = hdr + 32 + payload.len();
+        assert_eq!(len.msg_len() as usize, msg_len);
+
+        let decoded = kayfabe_gsp::decode_message(&layout, &run[..msg_len], len, 9, p.table())
+            .expect("a run of exactly msg_len bytes is complete");
+        assert_eq!(decoded.seq_num, 9);
+        assert_eq!(decoded.elements, 1);
+        assert_eq!(decoded.payload, payload);
+        assert_eq!(decoded.envelope.function, FN_RM_CONTROL);
+        assert_eq!(decoded.envelope.sequence, 3);
+        assert_eq!(decoded.envelope.length, 32 + payload.len() as u32);
+        assert_eq!(decoded.envelope.payload_len, payload.len());
+        assert_eq!(
+            decoded,
+            kayfabe_gsp::decode_message(&layout, &run, len, 9, p.table()).expect("padded"),
+            "the padded element and the exact-fit run decode identically",
+        );
+
+        assert_eq!(
+            kayfabe_gsp::decode_message(&layout, &run[..msg_len - 1], len, 9, p.table()),
+            Err(GspFault::Truncated {
+                need: msg_len,
+                have: msg_len - 1
+            }),
+            "{}: one byte short is a named refusal", p.name,
+        );
+    }
+}
+
+/// ★ The two `msgqRxLink` size boundaries, from both sides.
+///
+/// `-3` and `-6` are adjacent predicates over the same three numbers, and the equality
+/// case of each is the one geometry the driver actually produces: a message exactly as
+/// large as its queue, and a queue that holds exactly one message flush to its end.
+#[test]
+fn the_rx_link_size_predicates_are_exact_at_their_boundaries() {
+    let abi = MsgqAbi {
+        version: 0,
+        msg_size_min: 16,
+        swap_rx_flag: 1,
+        region_page_size: 4096,
+    };
+    let good = TxHeader {
+        version: 0,
+        size: 0x8000,
+        msg_size: 4096,
+        msg_count: 7,
+        write_ptr: 0,
+        flags: 1,
+        rx_hdr_off: 32,
+        entry_off: 4096,
+    };
+
+    // `-3` is `msgSize > size`, strictly. At equality the check passes and the *next*
+    // predicate is the one that speaks.
+    assert_eq!(
+        rx_link_check(&good, 32, 4096, 4096, &abi),
+        Err(RxLinkCode::EntryOffTooLarge),
+        "msgSize == size is not yet -3; entryOff is what makes it impossible",
+    );
+    assert_eq!(
+        rx_link_check(&good, 32, 4095, 4096, &abi),
+        Err(RxLinkCode::MsgSizeAboveQueue),
+        "one byte smaller and it is -3",
+    );
+
+    // `-6` is `size < entryOff + msgSize`, strictly. A queue whose elements end exactly at
+    // its last byte is legal — refusing it would reject the tightest legal ring.
+    let tight = TxHeader {
+        size: 8192,
+        msg_count: 1,
+        ..good
+    };
+    assert_eq!(
+        rx_link_check(&tight, 32, 8192, 4096, &abi),
+        Ok(()),
+        "entryOff + msgSize == size exactly: one element, flush to the end",
+    );
+    let over = TxHeader {
+        size: 8191,
+        msg_count: 1,
+        ..good
+    };
+    assert_eq!(
+        rx_link_check(&over, 32, 8191, 4096, &abi),
+        Err(RxLinkCode::EntryOffTooLarge),
+        "one byte less and the element does not fit",
+    );
+}
+
+/// ★★ A binding publishes the status queue at **position zero**, whatever the guest's own
+/// command queue was at — and every offset it derives is a literal this test names.
+///
+/// The published header is the guest's header with `writePtr` reset. Carrying the guest's
+/// value across instead would start our producer mid-ring at a position the peer's
+/// `readPtr` does not agree with, which is silent: every `msgqRxLink` check still passes.
+#[test]
+fn a_binding_publishes_the_status_queue_at_position_zero() {
+    let abi = MsgqAbi {
+        version: 0,
+        msg_size_min: 16,
+        swap_rx_flag: 1,
+        region_page_size: 4096,
+    };
+    // Sixteen pages in descending order: linear addressing would resolve every offset
+    // above the first page to the wrong place.
+    let pages: Vec<u64> = (0..16u64).map(|i| 0x10_0000 + (15 - i) * 4096).collect();
+    let mut ram = FakeRam::default();
+    for &gpa in &pages {
+        ram.alloc(gpa);
+    }
+    let region = RegionMap::from_pages(4096, pages.clone()).expect("valid");
+
+    let guest = TxHeader {
+        version: 0,
+        size: 0x8000,
+        msg_size: 4096,
+        msg_count: 7,
+        write_ptr: 5,
+        flags: 1,
+        rx_hdr_off: 32,
+        entry_off: 4096,
+    };
+    region.write(&mut ram, 0, &guest.encode()).expect("in range");
+    // Non-vacuity: the value we are asserting gets reset is really in guest memory.
+    let mut readback = [0u8; 32];
+    kayfabe_gsp::GuestRam::read(&mut ram, pages[0], &mut readback).unwrap();
+    assert_eq!(TxHeader::decode(&readback), Ok(guest));
+    assert_ne!(guest.write_ptr, 0);
+
+    let geom = kayfabe_gsp::MsgqGeometry::bind(&mut ram, region, 0, 0x8000, &abi)
+        .expect("a legal geometry");
+    assert_eq!(
+        geom.published_header(),
+        TxHeader {
+            write_ptr: 0,
+            ..guest
+        },
+        "writePtr is reset and every other field is the guest's own",
+    );
+    assert_eq!(geom.msg_count().get(), 7);
+    assert_eq!(geom.element_size(), 4096);
+
+    // The four pointer offsets, as literals — and the C's own bug is the last of them:
+    // acknowledging our consumption into the *command* queue's rx header instead of the
+    // status queue's left the guest seeing zero free space.
+    assert_eq!(geom.cmd_write_ptr_off(), 16);
+    assert_eq!(geom.stat_write_ptr_off(), 0x8010);
+    assert_eq!(geom.peer_stat_read_ptr_off(), 32);
+    assert_eq!(geom.cmd_read_ptr_ack_off(), 0x8020);
+    assert_ne!(
+        geom.cmd_read_ptr_ack_off(),
+        geom.peer_stat_read_ptr_off(),
+        "the two read pointers are in different backing stores",
+    );
+    let slot3 = geom.msg_count().slot(3);
+    assert_eq!(geom.cmd_element_off(slot3), 4096 + 3 * 4096);
+    assert_eq!(geom.stat_element_off(slot3), 0x8000 + 4096 + 3 * 4096);
+
+    // …and each of those offsets resolves through the table, not linearly.
+    assert_eq!(
+        geom.region().runs(geom.stat_write_ptr_off(), 4),
+        Ok(vec![(pages[8] + 16, 4)]),
+        "the status queue's writePtr is on page 8 of the region, wherever that is",
+    );
+    assert_eq!(
+        geom.region().runs(geom.cmd_element_off(slot3), 4096),
+        Ok(vec![(pages[4], 4096)]),
+    );
+}

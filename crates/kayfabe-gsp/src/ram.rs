@@ -120,11 +120,15 @@ impl RegionMap {
             let take = per_page.min(want - pages.len());
             let mut buf = vec![0u8; take * 8];
             ram.read(table_page, &mut buf)?;
+            // The global index of this batch's **first** entry, captured before the loop
+            // runs: `pages.len()` advances inside it, so reading it per-iteration would
+            // double-count `i` and misname the offending entry for every `i > 0`.
+            let batch_base = pages.len();
             for (i, chunk) in buf.chunks_exact(8).enumerate() {
                 let raw = u64::from_le_bytes(chunk.try_into().unwrap_or([0; 8]));
                 if raw & (page_size - 1) != 0 {
                     return Err(RegionError::UnalignedEntry {
-                        index: pages.len() + i,
+                        index: batch_base + i,
                         value: raw,
                     }
                     .into());

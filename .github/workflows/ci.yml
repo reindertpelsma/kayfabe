@@ -677,6 +677,14 @@ jobs:
     name: mutants — L1-surface mutation gate
     # Weekly cron + manual dispatch — a mutation campaign is hours, not minutes.
     if: github.event.schedule == '43 4 * * 6' || github.event_name == 'workflow_dispatch'
+    # ★★ MEASURED 2026-07-28 — WITHOUT THIS, A BROKEN SUITE SCORES 100%.
+    # cargo-mutants baselines with `--package=<mutated pkgs>` while the mutants
+    # themselves run `--workspace`. The baseline therefore runs only ~200 tests
+    # across 39 binaries and OMITS `kayfabe-tests` ENTIRELY — the conformance
+    # suite that catches most mutants. A red conformance suite would pass the
+    # baseline and then make EVERY mutant look CAUGHT. `needs: stable` makes the
+    # real suite a precondition of the gate rather than an assumption of it.
+    needs: stable
     runs-on: ubuntu-latest
     # No `continue-on-error`: the threshold below IS the gate (see
     # core_mutation_gate.md §L1 baseline for the measurement it is derived from).
@@ -737,8 +745,17 @@ jobs:
           # Test scaffolding is excluded in mutants.toml (crates/kayfabe-mocks/**,
           # tests/src/**), not here — mutating an instrument is a category error, and 48%
           # of one run's misses were exactly that.
+          # ★★ ABSOLUTE TIMEOUT, AND DELIBERATELY NOT --timeout-multiplier.
+          # Measured 2026-07-28: the workspace suite takes 201 s ALONE on a
+          # 25-core box, so a 4-vCPU runner at -j 2 is slower still — the old
+          # `--timeout 240` sat at or BELOW honest completion. cargo-mutants
+          # counts a TIMEOUT as KILLED, so mass timeouts would report ~100 % and
+          # the gate would never fire: the failure is silent and one-directional.
+          # A multiplier is worse than useless here because it is computed off
+          # cargo-mutants' own baseline, which omits `kayfabe-tests` (see the
+          # `needs: stable` note) and therefore measures ~14 s.
           cargo mutants --test-workspace true -j 2 \
-            --timeout 240 --build-timeout 900 \
+            --timeout 1800 --build-timeout 900 \
             -f 'crates/*/src/**/*.rs' || true
       # ★ The anti-inflation guard. "Unviable" is supposed to mean "the mutant does
       # not typecheck" (a tool artifact). If it ever again means "rustc crashed",
