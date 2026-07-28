@@ -127,6 +127,73 @@ impl RpcAllocReq {
     pub const HEADER: usize = 32;
 }
 
+/// `rpc_gsp_rm_control_v03_00`'s **fixed header** — the GSP-RPC control shape.
+///
+/// # ★ Not [`ControlReq`], and the confusion is silent
+///
+/// [`ControlReq`] is the **ioctl** shape (`NVOS54`), whose `params` is a *guest
+/// pointer*. This one's `params[]` is an inline flexible array the guest already
+/// copied into the command queue, so nothing here is ever dereferenced
+/// (`docs/design/gsp_core_bridge.md` §1.3). The two also disagree about where
+/// `paramsSize` lives, so running the wrong decoder yields a plausible struct
+/// full of wrong numbers rather than an error.
+///
+/// Layout `[src]` `ogkm: src/nvidia/generated/g_rpc-structures.h:1423-1435`, and
+/// `ogkm-580: g_rpc-structures.h:1506-1518` is **character for character the
+/// same list** — this struct does not move across the supported range:
+/// `hClient@0, hObject@4, cmd@8, status@12, paramsSize@16, rmapiRpcFlags@20,
+/// rmctrlFlags@24, rmctrlAccessRight@28, reserved0(NvU64, 8-aligned)@32,
+/// params[]@40`.
+///
+/// ★ Independently confirmed: the C artifact transcribed the same offsets by hand
+/// from a live trace — *"fn=76 (GSP_RM_CONTROL) body: hClient@80, hObject@84,
+/// cmd@88, status@92, paramsSize@96, params@120"*
+/// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2134-2135`, repeated
+/// `:2732-2733`), element-relative with a 48-byte element header and a 32-byte
+/// envelope in front, i.e. **minus 80** they are `0/4/8/12/16/40`. Two humans,
+/// two trees, one answer; `crates/kayfabe-abi/tests/mean_wire.rs` asserts the
+/// subtraction rather than trusting it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RpcControlReq {
+    /// `hClient` @ +0 — **the namespace this control is issued in**, and the only
+    /// place that fact may be read from. The C's `GPU_PROMOTE_CTX` handler is the
+    /// counter-example: it reads a client out of a *params* field and never looks
+    /// at this one (`gsp_core_bridge.md` §3.2).
+    pub client: u32,
+    /// `hObject` @ +4 — the object the command is issued against.
+    pub object: u32,
+    /// `cmd` @ +8 — e.g.
+    /// [`crate::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`].
+    /// Decide what it *means* with [`crate::versions::DriverAbiTable::control_params`].
+    pub cmd: u32,
+    /// `paramsSize` @ +16 — guest-declared, so an *assertion by the guest* and
+    /// never a fact. Validate it against the payload before slicing with it.
+    pub params_size: u32,
+    /// `rmapiRpcFlags` @ +20.
+    ///
+    /// ★ Two bits live here, not one: `RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR` =
+    /// `NVBIT(0)` and `RMAPI_RPC_FLAGS_SERIALIZED` = `NVBIT(1)`
+    /// (`ogkm: src/nvidia/inc/kernel/rmapi/rmapi.h:161-163`), and
+    /// `rpcRmApiControl_GSP` sets them independently (`ogkm: rpc.c:10803-10807`).
+    /// So the serialization question is [`crate::rpc_params_are_serialized`], a
+    /// **bit test** — a `!= 0` on the whole word would refuse every control that
+    /// merely asked for copy-out-on-error.
+    pub rmapi_rpc_flags: u32,
+    /// Byte offset of `params[]` within the RPC payload — the derived constant
+    /// [`RpcControlReq::HEADER`], carried on the view so a caller never has to
+    /// write `40` at a call site.
+    pub params_at: usize,
+}
+
+impl RpcControlReq {
+    /// The C typedef name, for [`AbiError::Truncated`].
+    pub const C_NAME: &'static str = "rpc_gsp_rm_control_v03_00";
+    /// Bytes of fixed header before `params[]`.
+    ///
+    /// 40, not 36: `reserved0` is `NvU64 NV_ALIGN_BYTES(8)` at +32.
+    pub const HEADER: usize = 40;
+}
+
 /// `NV_ESC_RM_CONTROL` — the envelope an RM control command arrives in.
 ///
 /// The *payload* at `params_ptr` is command-specific; the only one this

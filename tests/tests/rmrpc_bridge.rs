@@ -104,6 +104,47 @@ fn free_msg(h_client: u32, h_object: u32) -> Vec<u8> {
     w::message(fn_id::FREE, 2, &w::driver_free_body(h_client, h_object))
 }
 
+/// Handles for the one modelled control. Named apart from the other fixtures because a
+/// `SET_PAGE_DIRECTORY` carries **three** handles in three different places, and the whole
+/// class of bug this stage can have is putting one of them where another belongs.
+mod spd {
+    /// The client the control is issued in — the RPC body's `hClient`.
+    pub const C: u32 = 0xc1d0_0071;
+    /// The Device the control is issued **against** — the RPC body's `hObject`. Dropped:
+    /// `RmEvent::SetPageDir` has nowhere to put it.
+    pub const DEV: u32 = 0x5c00_0001;
+    /// The VASpace the page directory belongs to — a **params** field, not a header one.
+    pub const VAS: u32 = 0x5c00_0010;
+    /// The page-directory base.
+    pub const PDB: u64 = 0x0000_0003_4100_0000;
+}
+
+/// A `GSP_RM_CONTROL`/`SET_PAGE_DIRECTORY` message, built by the independent builder.
+fn set_page_dir_msg(h_client: u32, h_device: u32, h_vaspace: u32, pdb: u64, flags: u32) -> Vec<u8> {
+    w::message(
+        fn_id::GSP_RM_CONTROL,
+        3,
+        &w::control_body(
+            h_client,
+            h_device,
+            w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+            32,
+            w::RMAPI_RPC_FLAGS_NONE,
+            &w::set_page_dir_params(pdb, 512, flags, h_vaspace, 0, 1, 0),
+        ),
+    )
+}
+
+/// The event a `SET_PAGE_DIRECTORY` must produce — **written by hand**, from
+/// `gsp_core_bridge.md` §2.5's mapping, never derived from the decoder.
+fn expected_set_page_dir(client: u32, vaspace: u32, pdb: u64) -> RmEvent {
+    RmEvent::SetPageDir {
+        client: HClient(client),
+        vaspace: HObject(vaspace),
+        pdb: Pdb(pdb),
+    }
+}
+
 /// The event a client-root alloc of `(client, pid)` must produce — **written by hand**,
 /// from `RmEvent::Alloc`'s own doc plus the §2.2a normalisation rule, never derived.
 fn expected_root_event(client: u32, class: u32, kind: ClientKind) -> RmEvent {
@@ -451,17 +492,26 @@ fn every_function_id_lands_on_its_own_arm() {
         );
     }
 
-    // Known, mapped by the design, arm not built — B4/B5/B6. NOT inert: the fact matters.
-    for code in [
-        fn_id::GSP_RM_CONTROL,
-        fn_id::DUP_OBJECT,
-        fn_id::CONTINUATION_RECORD,
-    ] {
+    // Known, mapped by the design, arm not built — B5/B6. NOT inert: the fact matters.
+    // ★ `GSP_RM_CONTROL` left this list at B4 and is now a translating arm; the test
+    // below it pins that it did not become `UnknownFunction` on the way out.
+    for code in [fn_id::DUP_OBJECT, fn_id::CONTINUATION_RECORD] {
         assert_eq!(
             xlate(&w::message(code, 5, &[0u8; 48])),
             Err(BridgeRefusal::NotYetTranslated { code }),
         );
     }
+    // fn 76 is now dispatched on its `cmd`, so it needs a well-formed body to reach the
+    // command table at all. cmd 0 is not a command this port names — and the refusal is
+    // about the CONTROL, not about the function.
+    assert_eq!(
+        xlate(&w::message(
+            fn_id::GSP_RM_CONTROL,
+            5,
+            &w::control_body(spd::C, spd::DEV, 0, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
+        )),
+        Err(BridgeRefusal::UnknownControl { cmd: 0 }),
+    );
 
     // Ours to send, never to receive.
     for code in [fn_id::GSP_INIT_DONE, fn_id::POST_EVENT] {
@@ -496,10 +546,10 @@ fn map_memory_dma_is_an_unknown_function_here_and_that_is_deliberate() {
     }
 }
 
-/// `hClient == 0` is refused on **both** verbs, before anything else about the message is
-/// believed. `NV01_NULL_OBJECT` is not a namespace.
+/// `hClient == 0` is refused on **all three** verbs, before anything else about the
+/// message is believed. `NV01_NULL_OBJECT` is not a namespace.
 #[test]
-fn a_zero_hclient_is_refused_on_both_verbs() {
+fn a_zero_hclient_is_refused_on_every_verb() {
     assert_eq!(
         xlate(&root_alloc_msg(w::NV01_ROOT, 0, HEX_PID)),
         Err(BridgeRefusal::ReservedClient),
@@ -508,9 +558,18 @@ fn a_zero_hclient_is_refused_on_both_verbs() {
         xlate(&free_msg(0, HEX_OBJECT)),
         Err(BridgeRefusal::ReservedClient),
     );
+    assert_eq!(
+        xlate(&set_page_dir_msg(0, spd::DEV, spd::VAS, spd::PDB, 0)),
+        Err(BridgeRefusal::ReservedClient),
+        "a control is issued IN a namespace too",
+    );
     // Non-vacuity: 1 is fine. The refusal is about zero, not about small handles.
     assert!(matches!(
         xlate(&free_msg(1, HEX_OBJECT)),
+        Ok(Translation::Event(_)),
+    ));
+    assert!(matches!(
+        xlate(&set_page_dir_msg(1, spd::DEV, spd::VAS, spd::PDB, 0)),
         Ok(Translation::Event(_)),
     ));
 }
@@ -854,6 +913,112 @@ fn the_refusal_order_is_namespace_then_encoding_then_bounds_then_class() {
     );
 }
 
+/// ★ The **same** order on the control arm, peeled one step at a time. Written out rather
+/// than asserted as "it is like the alloc arm", because the two are separate functions and
+/// nothing but a test makes them agree: an inconsistency here would mean the same hostile
+/// message earns different names on two verbs.
+///
+/// The last two steps are the ones only a control has: the **command table** (unknown vs
+/// known-but-unmodelled) and then the exact params size.
+#[test]
+fn the_control_refusal_order_matches_the_alloc_arms() {
+    let all_wrong = |client: u32, flags: u32, size: u32, cmd: u32| {
+        w::message(
+            fn_id::GSP_RM_CONTROL,
+            3,
+            &w::control_body(
+                client,
+                spd::DEV,
+                cmd,
+                size,
+                flags,
+                &w::set_page_dir_params(spd::PDB, 512, 0, spd::VAS, 0, 1, 0),
+            ),
+        )
+    };
+    let unknown_cmd = 0x0080_1812u32;
+
+    // Everything wrong at once -> the namespace.
+    assert_eq!(
+        xlate(&all_wrong(
+            0,
+            w::RMAPI_RPC_FLAGS_SERIALIZED,
+            999,
+            unknown_cmd
+        )),
+        Err(BridgeRefusal::ReservedClient),
+    );
+    // Namespace fixed -> the encoding.
+    assert_eq!(
+        xlate(&all_wrong(
+            spd::C,
+            w::RMAPI_RPC_FLAGS_SERIALIZED,
+            999,
+            unknown_cmd
+        )),
+        Err(BridgeRefusal::SerializedControlParams { cmd: unknown_cmd }),
+    );
+    // Encoding fixed -> the bounds.
+    assert_eq!(
+        xlate(&all_wrong(
+            spd::C,
+            w::RMAPI_RPC_FLAGS_NONE,
+            999,
+            unknown_cmd
+        )),
+        Err(BridgeRefusal::ParamsSizeExceedsPayload {
+            declared: 999,
+            available: 32,
+        }),
+    );
+    // Bounds fixed -> the command table, and the command is not in it at all.
+    assert_eq!(
+        xlate(&all_wrong(spd::C, w::RMAPI_RPC_FLAGS_NONE, 32, unknown_cmd)),
+        Err(BridgeRefusal::UnknownControl { cmd: unknown_cmd }),
+    );
+    // A command that IS in the table, and is one we cannot express, is a DIFFERENT
+    // refusal at the same step — the whole reason the table has two arms.
+    assert_eq!(
+        xlate(&all_wrong(
+            spd::C,
+            w::RMAPI_RPC_FLAGS_NONE,
+            32,
+            w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES
+        )),
+        Err(BridgeRefusal::PageDirControlNotModelled {
+            cmd: w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+        }),
+    );
+    // Command fixed, size still a lie -> the size.
+    assert_eq!(
+        xlate(&all_wrong(
+            spd::C,
+            w::RMAPI_RPC_FLAGS_NONE,
+            16,
+            w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY
+        )),
+        Err(BridgeRefusal::ControlParamsSizeMismatch {
+            cmd: w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+            declared: 16,
+            expected: 32,
+        }),
+    );
+    // Everything fixed -> the fact.
+    assert_eq!(
+        xlate(&all_wrong(
+            spd::C,
+            w::RMAPI_RPC_FLAGS_NONE,
+            32,
+            w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY
+        )),
+        Ok(Translation::Event(expected_set_page_dir(
+            spd::C,
+            spd::VAS,
+            spd::PDB
+        ))),
+    );
+}
+
 /// Every refusal is **countable** (a typed tag, so an invariant can be a bound rather than
 /// an absence) and **answerable** (a non-zero `rpc_result`, because the guest is blocked
 /// in `_issueRpcAndWait` and a drop hangs it for the whole RPC timeout).
@@ -868,6 +1033,18 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
         BridgeRefusal::EventFromGuest { code: 0x1001 },
         BridgeRefusal::UnmappedAllocClass { class: 0x80 },
         BridgeRefusal::SerializedParams { class: 0 },
+        // ★ B4's five. `SerializedControlParams` sits next to `SerializedParams` on
+        // purpose: they fire on the same bit of two different words, and folding them
+        // would make "which controls serialize" unanswerable from a census.
+        BridgeRefusal::SerializedControlParams { cmd: 0x0080_1813 },
+        BridgeRefusal::UnknownControl { cmd: 0x2080_012b },
+        BridgeRefusal::PageDirControlNotModelled { cmd: 0x90f1_0106 },
+        BridgeRefusal::ControlParamsSizeMismatch {
+            cmd: 0x0080_1813,
+            declared: 16,
+            expected: 32,
+        },
+        BridgeRefusal::ImplicitVaspace,
         BridgeRefusal::ParamsSizeExceedsPayload {
             declared: 9,
             available: 8,
@@ -908,8 +1085,24 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
             "{:?} must not be answered NV_OK — that is the C's echo",
             r.fault_tag(),
         );
-        // B1 sends ONE value and names it (§4.2's `[open]`; B4 revisits).
+        // ★★ B4 settled §4.2's `[open]`: still ONE value, now with the constraint that
+        // decided it. `_issueRpcAndWait` returns an `rpc_result` verbatim only while it
+        // is BELOW the VMIOP base; at or above it, every distinct value collapses to one
+        // indistinguishable `NV_ERR_GENERIC` (`ogkm: rpc.c:2020-2025`). So a status the
+        // guest can actually read is a *property* of the choice, not a preference — and
+        // it is the property that ruled out `NV_VGPU_MSG_RESULT_RPC_API_CONTROL_NOT_SUPPORTED`
+        // (`0xFF100009`), whose translation back to an `NV_STATUS` exists only on the
+        // vGPU `RM_API_CONTROL` path and not on fn 76.
+        assert!(
+            r.rpc_result() < kayfabe_abi::NV_VGPU_MSG_RESULT_VMIOP_BASE,
+            "{:?} would collapse to NV_ERR_GENERIC before the guest could read it",
+            r.fault_tag(),
+        );
         assert_eq!(r.rpc_result(), 0x56, "NV_ERR_NOT_SUPPORTED");
+    }
+    // Non-vacuity for the bound: it is a real constraint, and these two values fail it.
+    for collapsed in [0xFF00_0000u32, 0xFF10_0001] {
+        assert!(collapsed >= kayfabe_abi::NV_VGPU_MSG_RESULT_VMIOP_BASE);
     }
 }
 
@@ -1061,8 +1254,69 @@ fn malformed_traffic_between_valid_messages_leaves_the_valid_stream_untouched() 
             FaultTag("BridgeRefusal::UnknownFunction"),
         ),
         (
-            w::message(fn_id::GSP_RM_CONTROL, 1, &[0u8; 48]),
+            w::message(fn_id::DUP_OBJECT, 1, &[0u8; 48]),
             FaultTag("BridgeRefusal::NotYetTranslated"),
+        ),
+        // ★ B4's five, in the same stream. The point of putting them here rather than
+        // only in their own tests is the *interleaving*: each one sits between two valid
+        // messages, so a control arm that corrupted the run would show up as a broken
+        // projection below rather than as a wrong variant here.
+        (
+            w::message(
+                fn_id::GSP_RM_CONTROL,
+                1,
+                &w::control_body(
+                    A,
+                    spd::DEV,
+                    w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+                    32,
+                    w::RMAPI_RPC_FLAGS_SERIALIZED,
+                    &w::set_page_dir_params(spd::PDB, 512, 0, spd::VAS, 0, 1, 0),
+                ),
+            ),
+            FaultTag("BridgeRefusal::SerializedControlParams"),
+        ),
+        (
+            w::message(
+                fn_id::GSP_RM_CONTROL,
+                1,
+                &w::control_body(A, spd::DEV, 0x2080_012b, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
+            ),
+            FaultTag("BridgeRefusal::UnknownControl"),
+        ),
+        (
+            w::message(
+                fn_id::GSP_RM_CONTROL,
+                1,
+                &w::control_body(
+                    A,
+                    spd::DEV,
+                    w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+                    0,
+                    w::RMAPI_RPC_FLAGS_NONE,
+                    &[],
+                ),
+            ),
+            FaultTag("BridgeRefusal::PageDirControlNotModelled"),
+        ),
+        (
+            w::message(
+                fn_id::GSP_RM_CONTROL,
+                1,
+                &w::control_body(
+                    A,
+                    spd::DEV,
+                    w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+                    16,
+                    w::RMAPI_RPC_FLAGS_NONE,
+                    &w::set_page_dir_params(spd::PDB, 512, 0, spd::VAS, 0, 1, 0),
+                ),
+            ),
+            FaultTag("BridgeRefusal::ControlParamsSizeMismatch"),
+        ),
+        (
+            set_page_dir_msg(A, spd::DEV, 0, spd::PDB, 0),
+            FaultTag("BridgeRefusal::ImplicitVaspace"),
         ),
         (
             w::message(fn_id::GSP_INIT_DONE, 1, &[0u8; 8]),
@@ -1965,8 +2219,9 @@ fn hostile_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
     // The valid stream: the shared fixture.
     let valid = script_x();
 
-    // Nine hostile messages, one per refusal reason this stage can produce — including
-    // the two the GRAPH produces, which B1 had no way to reach.
+    // One hostile message per refusal reason this stage can produce — including the two
+    // the GRAPH produces, which B1 had no way to reach, and B4's five, which arrive
+    // through a real ring for the first time here.
     let hostile: Vec<(w::Step, FaultTag)> = vec![
         (
             w::Step {
@@ -1977,10 +2232,75 @@ fn hostile_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
         ),
         (
             w::Step {
-                function: fn_id::GSP_RM_CONTROL,
+                function: fn_id::DUP_OBJECT,
                 body: vec![0u8; 48],
             },
             FaultTag("BridgeRefusal::NotYetTranslated"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_CONTROL,
+                body: w::control_body(
+                    x::A,
+                    spd::DEV,
+                    w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+                    32,
+                    w::RMAPI_RPC_FLAGS_SERIALIZED,
+                    &w::set_page_dir_params(spd::PDB, 512, 0, spd::VAS, 0, 1, 0),
+                ),
+            },
+            FaultTag("BridgeRefusal::SerializedControlParams"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_CONTROL,
+                body: w::control_body(x::A, spd::DEV, 0x2080_012b, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
+            },
+            FaultTag("BridgeRefusal::UnknownControl"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_CONTROL,
+                body: w::control_body(
+                    x::A,
+                    spd::DEV,
+                    w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+                    0,
+                    w::RMAPI_RPC_FLAGS_NONE,
+                    &[],
+                ),
+            },
+            FaultTag("BridgeRefusal::PageDirControlNotModelled"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_CONTROL,
+                body: w::control_body(
+                    x::A,
+                    spd::DEV,
+                    w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+                    16,
+                    w::RMAPI_RPC_FLAGS_NONE,
+                    &w::set_page_dir_params(spd::PDB, 512, 0, spd::VAS, 0, 1, 0),
+                ),
+            },
+            FaultTag("BridgeRefusal::ControlParamsSizeMismatch"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_CONTROL,
+                body: w::control_body(
+                    x::A,
+                    spd::DEV,
+                    w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+                    32,
+                    w::RMAPI_RPC_FLAGS_NONE,
+                    // hVASpace = 0: the client/device pair's IMPLICIT VAS, which this
+                    // port has no node for.
+                    &w::set_page_dir_params(spd::PDB, 512, 0, 0, 0, 1, 0),
+                ),
+            },
+            FaultTag("BridgeRefusal::ImplicitVaspace"),
         ),
         (
             w::Step {
@@ -2220,7 +2540,12 @@ fn script_compute() -> RpcScript {
         .channel(cp::C, cp::TSG, cp::GR, gr_flags(), 0, cp::VAS)
         .channel(cp::C, cp::TSG, cp::CE, ce_flags(), cp::CTXSHARE, 0)
         .engine_object(cp::C, cp::GR, cp::GR_OBJ, w::AMPERE_COMPUTE_B)
-        .engine_object(cp::C, cp::CE, cp::CE_OBJ, w::AMPERE_DMA_COPY_B);
+        .engine_object(cp::C, cp::CE, cp::CE_OBJ, w::AMPERE_DMA_COPY_B)
+        // ★★ B4. The VASpace acquires its `Pdb` from a real `SET_PAGE_DIRECTORY`, issued
+        // against the **Device** with the VASpace named in a params field — which is how
+        // the driver issues it (`ogkm-580: dma.c:508-518`) and is the shape that makes a
+        // header/params mix-up visible.
+        .set_page_dir(cp::C, cp::DEV, cp::VAS, CP_PDB.0, w::PDB_FLAGS_ALL_CHANNELS);
     s
 }
 
@@ -2328,11 +2653,18 @@ fn root_of_c() -> RmEvent {
     }
 }
 
-/// The PDB the compute VAS gets. Applied as a **raw event on both sides** — translating
-/// `GSP_RM_CONTROL` is B4's, and this stage may not pretend otherwise. Holding it
-/// constant on both sides is what keeps the comparison about the alloc translation.
+/// The PDB the compute VAS gets.
+///
+/// ★★ **B4 moved this to the byte side.** At B3 it was applied as a raw `RmEvent` on both
+/// sides of the oracle, because translating `GSP_RM_CONTROL` was a later stage and B3 was
+/// not entitled to pretend otherwise. It is now a `SET_PAGE_DIRECTORY` message in
+/// [`script_compute`], decoded like everything else — so `set_page_dir` below survives
+/// only as the **hand-written reference**, which is exactly the role it should have.
 const CP_PDB: Pdb = Pdb(0x0034_1000);
 
+/// **Transcription #2** of the PDB declaration: the `RmEvent`, written out by hand from
+/// `gsp_core_bridge.md` §2.5's mapping. The byte side is `script_compute`'s
+/// `.set_page_dir(…)`, and neither is derived from the other.
 fn set_page_dir() -> RmEvent {
     RmEvent::SetPageDir {
         client: HClient(cp::C),
@@ -2341,7 +2673,12 @@ fn set_page_dir() -> RmEvent {
     }
 }
 
-/// Drive a script through the policy onto a fresh device, then bind the PDB.
+/// Drive a script through the policy onto a fresh device.
+///
+/// ★ No raw `gpu.apply` any more: a compute script now carries its own
+/// `SET_PAGE_DIRECTORY`, so every fact in the resulting graph — including the data-plane
+/// identity the whole address plane routes on — arrived as **wire bytes** through the
+/// bridge. That is B4's headline in one function.
 fn gpu_from_script(script: &RpcScript) -> kayfabe_tests::Guarded<Gpu> {
     let mut gpu = fresh_gpu();
     {
@@ -2354,7 +2691,6 @@ fn gpu_from_script(script: &RpcScript) -> kayfabe_tests::Guarded<Gpu> {
         }
         assert!(policy.census().is_empty(), "a clean script refuses nothing");
     }
-    gpu.apply(set_page_dir()).expect("the PDB binds");
     gpu
 }
 
@@ -2860,6 +3196,12 @@ fn one_changed_word_of_the_channel_params_moves_exactly_one_fact() {
 ///
 /// The two sides share no class number, no offset and no decoder. What they share is the
 /// *meaning*, and `Boundaries` is what must not be able to tell them apart.
+///
+/// ★★ **B4 widened it to cover the data-plane identity.** The byte side now declares the
+/// VASpace's PDB with a real `SET_PAGE_DIRECTORY`; the reference side still applies the
+/// hand-written `RmEvent`. So the projection's `pdb` — the value the whole address plane
+/// routes on — is now something the *decoder* has to get right rather than something both
+/// sides were handed.
 #[test]
 fn the_compute_subgraph_from_wire_bytes_equals_the_hand_written_scenario() {
     let mut gpu = gpu_from_script(&script_compute());
@@ -3175,7 +3517,8 @@ fn a_channels_vaspace_resolves_through_all_three_declared_paths() {
             .vaspace(cp::C, cp::DEV, cp::VAS)
             .tsg(cp::C, cp::DEV, cp::TSG, tsg_vas)
             .ctxshare(cp::C, cp::VAS, cp::CTXSHARE, ctxshare_vas)
-            .channel(cp::C, cp::TSG, cp::GR, gr_flags(), chan_ctxshare, chan_vas);
+            .channel(cp::C, cp::TSG, cp::GR, gr_flags(), chan_ctxshare, chan_vas)
+            .set_page_dir(cp::C, cp::DEV, cp::VAS, CP_PDB.0, w::PDB_FLAGS_ALL_CHANNELS);
         let gpu = gpu_from_script(&s);
         let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, CP_GR_VCHID)];
         gpu.procs[&pid].channels[&cid].vas_pdb
@@ -3290,7 +3633,8 @@ fn an_object_handle_recycled_as_a_different_class_is_translated_afresh() {
 }
 
 /// ★ The whole compute subgraph, through the **real command ring** and the boot FSM —
-/// the B2 transport, now carrying B3's traffic. Nine allocs, one doorbell, no refusals.
+/// the B2 transport, now carrying B3's traffic **and B4's control**. Nine allocs plus one
+/// `SET_PAGE_DIRECTORY`, one doorbell, no refusals.
 #[test]
 fn the_compute_subgraph_reaches_the_graph_through_the_real_transport() {
     let script = script_compute();
@@ -3302,7 +3646,10 @@ fn the_compute_subgraph_reaches_the_graph_through_the_real_transport() {
         "a conforming compute stream refuses nothing: {:?}",
         run.census
     );
-    assert_eq!(run.applied, 9, "nine allocs, all applied");
+    assert_eq!(
+        run.applied, 10,
+        "nine allocs and the page-directory declaration, all applied"
+    );
     assert_eq!(run.inert, 0);
     assert!(
         run.transitions.contains(&Transition::Running),
@@ -3313,11 +3660,815 @@ fn the_compute_subgraph_reaches_the_graph_through_the_real_transport() {
         script.steps().len(),
         "every command was answered on (function, sequence)"
     );
+    // ★ Including the control, and with NV_OK. An accepted `GSP_RM_CONTROL` is acked with
+    // the request's own body preserved, and the field the guest actually reads the control
+    // handler's status out of is `rpc_gsp_rm_control_v03_00.status` @ **body+12**, not the
+    // envelope (`ogkm: rpc.c:10868-10875`). The guest sent zero there because
+    // `rpcWriteCommonHeader` zeroes the whole message buffer first
+    // (`ogkm: rpc_common.c:149-152`), so the echo is an `NV_OK` control reply — a fact
+    // about the ack that nothing else in this file observes.
+    let ctrl_reply = run
+        .replies
+        .iter()
+        .find(|m| m.function == fn_id::GSP_RM_CONTROL)
+        .expect("the control was answered");
+    assert_eq!(ctrl_reply.rpc_result, 0, "envelope status NV_OK");
+    assert_eq!(
+        u32::from_le_bytes(ctrl_reply.payload[12..16].try_into().unwrap()),
+        0,
+        "★ the CONTROL BODY's own status word @ +12 is NV_OK too",
+    );
+    assert_eq!(
+        u32::from_le_bytes(ctrl_reply.payload[8..12].try_into().unwrap()),
+        w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+        "and it is the reply to the command we think it is",
+    );
 
-    gpu.apply(set_page_dir()).expect("the PDB binds");
     assert_eq!(
         boundaries(&gpu),
         boundaries(&gpu_from_script(&script)),
         "★ the ring and the direct path reach the same object model",
+    );
+}
+
+// =================================================================================
+// ★★ 8. **Stage B4 — the one modelled control**: where a VASpace gets its `Pdb`
+//
+// B3 could build a compute process's whole object graph from bytes but had to hand it
+// the page-directory base as a raw `RmEvent`, because `GSP_RM_CONTROL` refused as a
+// whole function. B4 translates one `cmd` out of it — `SET_PAGE_DIRECTORY` — and the
+// facts above are now reachable end to end from the wire.
+//
+// ★★ AND IT IS NOT SUFFICIENT, WHICH IS THE STAGE'S REAL FINDING. `gsp_core_bridge.md`
+// §7 item 1 asked which control actually carries the compute VAS's PDB and said to settle
+// it *before* B4. Settled, from both vendored trees, and it went against the design:
+//
+//   - `SET_PAGE_DIRECTORY` reaches the wire only for a SHARED_MANAGEMENT /
+//     IS_EXTERNALLY_OWNED VASpace — i.e. UVM's. `gvaspaceExternalRootDirCommit_IMPL`
+//     asserts on exactly that (`ogkm-580: gpu_vaspace.c:3109`), and its only caller is
+//     the UVM/gpu-ops path (`ogkm-580: nv_gpu_ops.c:8778, 8870`).
+//   - Every ORDINARY RM-managed VASpace declares its root through
+//     `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`0x90f10106`) at construct
+//     time, as `levels[0].physAddress`, on a code path that is on by default for any GSP
+//     client (`ogkm-580: gpu_vaspace.c:598-611, 395, 313, 378, 4039, 5161-5189`;
+//     `gpu_registry.c:171-186`).
+//
+// So this section builds the arm the design specifies AND pins the gap by name, because a
+// dropped page-directory declaration is otherwise completely silent downstream: the VAS
+// simply never routes and every channel in it defers at its first doorbell, forever.
+// =================================================================================
+
+// ---------------------------------------------------------------------------------
+// 8.0 Transcription #3 — a whole SET_PAGE_DIRECTORY message, written byte by byte
+// ---------------------------------------------------------------------------------
+
+/// A complete `GSP_RM_CONTROL` message carrying `SET_PAGE_DIRECTORY`, by hand.
+///
+/// 32-byte envelope + 40-byte control header + 32-byte params = **104**. Unreadable on
+/// purpose: it shares no code path with `rpcwire`'s builder or with the decoder, so an
+/// offset all three agree on has been read out of `ogkm` by three separate acts.
+///
+/// ★ The two easy mistakes are both visible here as *gaps*: `status` @ body+12 is zero
+/// because it is `[OUT]`, and `params[]` starts at body+40 — after `reserved0`'s eight
+/// aligned bytes — not at body+36.
+///
+/// ```text
+///   0..4   header_version 0x03000000
+///   4..8   signature "VRPC" 0x43505256
+///   8..12  length 104
+///  12..16  function 76 (GSP_RM_CONTROL)
+///  16..20  rpc_result 0
+///  20..24  rpc_result_private 0
+///  24..28  sequence 3
+///  28..32  u (union) 0
+///  ── rpc_gsp_rm_control_v03_00 ──                     (body+N shown)
+///  32..36  hClient            0xc1d00071   (+0)
+///  36..40  hObject            0x5c000001   (+4)   the DEVICE, not the VASpace
+///  40..44  cmd                0x00801813   (+8)
+///  44..48  status             0            (+12)  [OUT]
+///  48..52  paramsSize         32           (+16)
+///  52..56  rmapiRpcFlags      0            (+20)
+///  56..60  rmctrlFlags        0            (+24)
+///  60..64  rmctrlAccessRight  0            (+28)
+///  64..72  reserved0          0            (+32)  NvU64, 8-aligned
+///  ── NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS ──     (params+N shown)
+///  72..80  physAddress        0x341000000  (+0)
+///  80..84  numEntries         512          (+8)
+///  84..88  flags              0x9          (+12)  SYSMEM_COH | ALL_CHANNELS
+///  88..92  hVASpace           0x5c000010   (+16)  a PARAMS field
+///  92..96  chId               0            (+20)
+///  96..100 subDeviceId        1            (+24)
+/// 100..104 pasid              0            (+28)
+/// ```
+const HEX_SET_PAGE_DIR: [u8; 104] = [
+    0x00, 0x00, 0x00, 0x03, 0x56, 0x52, 0x50, 0x43, 0x68, 0x00, 0x00, 0x00, 0x4c, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x71, 0x00, 0xd0, 0xc1, 0x01, 0x00, 0x00, 0x5c, 0x13, 0x18, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x41, 0x03, 0x00, 0x00, 0x00,
+    0x00, 0x02, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x5c, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
+/// The `flags` word `HEX_SET_PAGE_DIR` carries: `SYSMEM_COH | ALL_CHANNELS`, which is the
+/// shape UVM actually sends (`ogkm-580: nv_gpu_ops.c:8857-8862`).
+const HEX_SPD_FLAGS: u32 = w::PDB_APERTURE_SYSMEM_COH | w::PDB_FLAGS_ALL_CHANNELS;
+
+/// The hand-written hex and the independent builder agree byte for byte — the third
+/// transcription checked against the second, with the decoder taking no part.
+#[test]
+fn the_hand_written_hex_control_and_the_independent_builder_agree_byte_for_byte() {
+    let built = set_page_dir_msg(spd::C, spd::DEV, spd::VAS, spd::PDB, HEX_SPD_FLAGS);
+    assert_eq!(
+        built.len(),
+        HEX_SET_PAGE_DIR.len(),
+        "32 envelope + 40 control header + 32 params",
+    );
+    assert_eq!(
+        built,
+        HEX_SET_PAGE_DIR.to_vec(),
+        "the hand-written control message and the builder's disagree",
+    );
+}
+
+/// ★ The headline: those bytes become the one fact this control declares.
+#[test]
+fn the_hand_hex_set_page_directory_becomes_the_declared_event() {
+    assert_eq!(
+        xlate(&HEX_SET_PAGE_DIR),
+        Ok(Translation::Event(expected_set_page_dir(
+            spd::C,
+            spd::VAS,
+            spd::PDB
+        ))),
+    );
+}
+
+// ---------------------------------------------------------------------------------
+// 8.1 Which field is which — the three handles, and the two that are dropped
+// ---------------------------------------------------------------------------------
+
+/// ★★ Each field of the control moves **exactly one** field of the event, or none.
+///
+/// The non-vacuity arm §5.2 asks for, and the shape of the only bug this arm can really
+/// have: `hClient`, `hObject` and `hVASpace` are three 32-bit handles in three places, and
+/// picking the wrong one produces a graph that looks entirely plausible.
+#[test]
+fn one_changed_field_of_the_control_moves_exactly_one_field_of_the_event() {
+    let base = expected_set_page_dir(spd::C, spd::VAS, spd::PDB);
+    assert_eq!(xlate(&HEX_SET_PAGE_DIR), Ok(Translation::Event(base)));
+
+    // The namespace comes from the RPC body's own `hClient` — never a params field.
+    assert_eq!(
+        xlate(&set_page_dir_msg(
+            0xc1d0_00ff,
+            spd::DEV,
+            spd::VAS,
+            spd::PDB,
+            HEX_SPD_FLAGS
+        )),
+        Ok(Translation::Event(expected_set_page_dir(
+            0xc1d0_00ff,
+            spd::VAS,
+            spd::PDB
+        ))),
+    );
+    // The VASpace comes from params+16.
+    assert_eq!(
+        xlate(&set_page_dir_msg(
+            spd::C,
+            spd::DEV,
+            0x5c00_00ee,
+            spd::PDB,
+            HEX_SPD_FLAGS
+        )),
+        Ok(Translation::Event(expected_set_page_dir(
+            spd::C,
+            0x5c00_00ee,
+            spd::PDB
+        ))),
+    );
+    // The PDB comes from params+0, and it is 64 bits wide — a 32-bit read would truncate
+    // this value, which is deliberately above 2^32.
+    assert!(spd::PDB > u64::from(u32::MAX));
+    assert_eq!(
+        xlate(&set_page_dir_msg(
+            spd::C,
+            spd::DEV,
+            spd::VAS,
+            0xdead_beef_cafe_0000,
+            HEX_SPD_FLAGS
+        )),
+        Ok(Translation::Event(expected_set_page_dir(
+            spd::C,
+            spd::VAS,
+            0xdead_beef_cafe_0000
+        ))),
+    );
+
+    // ★ And `hObject` — the Device the control is issued AGAINST — moves NOTHING. It is a
+    // declared fact this port drops, because `RmEvent::SetPageDir` has nowhere to put it.
+    // Asserted rather than assumed: a bridge that used it as the VASpace would pass every
+    // test above and fail this one.
+    assert_eq!(
+        xlate(&set_page_dir_msg(
+            spd::C,
+            0xdead_0001,
+            spd::VAS,
+            spd::PDB,
+            HEX_SPD_FLAGS
+        )),
+        Ok(Translation::Event(base)),
+        "hObject is dropped: two controls differing only in it are ONE event",
+    );
+}
+
+/// ★★ The **aperture is dropped**, and here is what that costs, stated as a test rather
+/// than as a comment.
+///
+/// `flags[1:0]` says whether the page directory lives in framebuffer or in guest RAM —
+/// two different address spaces — and `kayfabe_abi::view::PdbAperture` decodes it
+/// perfectly well. `RmEvent::SetPageDir` has nowhere to put it, so all three apertures
+/// (and an undefined fourth) produce **the same event**.
+///
+/// That is safe exactly as long as `Pdb` is only ever a KEY, which today it is: nothing in
+/// the tree dereferences one. The day a walker follows a PDB, this test is the one that
+/// has to change, and it will say so by failing.
+#[test]
+fn the_aperture_is_dropped_so_a_vidmem_and_a_sysmem_root_are_the_same_event() {
+    let want = Ok(Translation::Event(expected_set_page_dir(
+        spd::C,
+        spd::VAS,
+        spd::PDB,
+    )));
+    for flags in [
+        w::PDB_APERTURE_VIDMEM,
+        w::PDB_APERTURE_SYSMEM_COH,
+        w::PDB_APERTURE_SYSMEM_NONCOH,
+        3, // the undefined fourth encoding — `PdbAperture::Undefined(3)`
+        w::PDB_APERTURE_SYSMEM_COH | w::PDB_FLAGS_ALL_CHANNELS,
+        u32::MAX, // every other flag bit set as well
+    ] {
+        assert_eq!(
+            xlate(&set_page_dir_msg(
+                spd::C,
+                spd::DEV,
+                spd::VAS,
+                spd::PDB,
+                flags
+            )),
+            want,
+            "flags {flags:#x} must not change the fact — the aperture has nowhere to go",
+        );
+    }
+}
+
+/// The three tail fields — `chId`, `subDeviceId`, `pasid` — are declared and dropped too,
+/// and nothing hostile in them reaches the event.
+#[test]
+fn nothing_past_hvaspace_in_the_control_params_is_read() {
+    let want = Ok(Translation::Event(expected_set_page_dir(
+        spd::C,
+        spd::VAS,
+        spd::PDB,
+    )));
+    for (ch_id, sub_device_id, pasid) in [
+        (0u32, 1u32, 0u32),
+        (u32::MAX, u32::MAX, u32::MAX),
+        (spd::VAS, spd::DEV, spd::C),
+    ] {
+        let body = w::control_body(
+            spd::C,
+            spd::DEV,
+            w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+            32,
+            w::RMAPI_RPC_FLAGS_NONE,
+            &w::set_page_dir_params(
+                spd::PDB,
+                512,
+                HEX_SPD_FLAGS,
+                spd::VAS,
+                ch_id,
+                sub_device_id,
+                pasid,
+            ),
+        );
+        assert_eq!(
+            xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)),
+            want,
+            "chId={ch_id:#x} subDeviceId={sub_device_id:#x} pasid={pasid:#x}",
+        );
+    }
+    // `numEntries` likewise: declared, and not a fact the object model holds.
+    for entries in [0u32, 1, 512, u32::MAX] {
+        let body = w::control_body(
+            spd::C,
+            spd::DEV,
+            w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+            32,
+            w::RMAPI_RPC_FLAGS_NONE,
+            &w::set_page_dir_params(spd::PDB, entries, HEX_SPD_FLAGS, spd::VAS, 0, 1, 0),
+        );
+        assert_eq!(xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)), want);
+    }
+}
+
+// ---------------------------------------------------------------------------------
+// 8.2 The control refusal surface
+// ---------------------------------------------------------------------------------
+
+/// ★★ `hVASpace == 0` is **not** "unspecified". NVIDIA's own header, in both vendored
+/// trees verbatim: *"If it's 0, it assumes to use the implicit allocated VA space
+/// associated with the client/device pair"* (`ogkm: ctrl0080dma.h:782-785`,
+/// `ogkm-580: ctrl0080dma.h:812-815`).
+///
+/// That VAS is a real object this RPC does not name. `HObject(0)` would attach the PDB to
+/// a node key the guest never declared, where the graph parks it **silently and forever**
+/// — a fact landing in the wrong component. So it is refused by name.
+///
+/// ★ Contrast the alloc arm deliberately: there, a zero handle field means *nothing is
+/// declared* and `declared_handle` maps it to `None`. Same zero, opposite meaning, because
+/// NVIDIA documented them differently — which is exactly why neither may be inferred.
+#[test]
+fn a_zero_hvaspace_names_the_implicit_vas_and_is_refused() {
+    assert_eq!(
+        xlate(&set_page_dir_msg(
+            spd::C,
+            spd::DEV,
+            0,
+            spd::PDB,
+            HEX_SPD_FLAGS
+        )),
+        Err(BridgeRefusal::ImplicitVaspace),
+    );
+    // Non-vacuity: 1 is a fine VASpace handle. The refusal is about zero.
+    assert_eq!(
+        xlate(&set_page_dir_msg(
+            spd::C,
+            spd::DEV,
+            1,
+            spd::PDB,
+            HEX_SPD_FLAGS
+        )),
+        Ok(Translation::Event(expected_set_page_dir(
+            spd::C,
+            1,
+            spd::PDB
+        ))),
+    );
+    // ★ And a zero PDB is NOT refused — it is a legal declaration this port has no
+    // opinion about, and inventing a rule for it would be exactly the guess §4 forbids.
+    assert_eq!(
+        xlate(&set_page_dir_msg(
+            spd::C,
+            spd::DEV,
+            spd::VAS,
+            0,
+            HEX_SPD_FLAGS
+        )),
+        Ok(Translation::Event(expected_set_page_dir(
+            spd::C,
+            spd::VAS,
+            0
+        ))),
+    );
+}
+
+/// ★★ **The §7-item-1 gap, pinned by exact variant.** The three commands that move a
+/// page-directory binding and that this port cannot express are refused *as that*, not as
+/// "unknown control" — because the two say different things to whoever reads the census.
+///
+/// If this ever fires in a real boot it names, precisely, the decoder the address plane is
+/// waiting on.
+#[test]
+fn a_page_dir_bearing_control_is_refused_as_itself_not_as_unknown() {
+    for cmd in [
+        // The construct-time declaration for every ordinary RM-managed VAS.
+        w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+        // The same payload for the GPU-group global VAS, on the bare-metal arm.
+        w::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER,
+        // The revocation — one MORE than the command we model, and the opposite of it.
+        w::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY,
+    ] {
+        let body = w::control_body(spd::C, spd::DEV, cmd, 0, w::RMAPI_RPC_FLAGS_NONE, &[]);
+        assert_eq!(
+            xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)),
+            Err(BridgeRefusal::PageDirControlNotModelled { cmd }),
+            "cmd {cmd:#x}",
+        );
+    }
+    // ★ The adjacency assertion. 0x801813 and 0x801814 differ in one bit and mean
+    // opposite things; a table with an off-by-one would bind a VASpace to a page
+    // directory that was just revoked.
+    assert_eq!(
+        w::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY,
+        w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY + 1,
+    );
+}
+
+/// ★ **§7 item 6's decision, made and pinned.** An unmodelled control is a *refusal*, not
+/// a `Translation::Forward` nobody consumes — and it is a different variant from an
+/// unknown *function*, because "we do not know this RPC" and "we know this RPC and not
+/// this command" are different findings.
+///
+/// `GPU_PROMOTE_CTX` is in the list on purpose: the C artifact treats it as a primary
+/// address source, and it is deliberately not modelled here because it populates the
+/// address table rather than the object model (`gsp_core_bridge.md` §2.7).
+#[test]
+fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
+    for cmd in [
+        0x0000_0000u32,
+        0x0080_1812, // one BELOW the modelled command
+        0x0080_1815,
+        0x0080_180f, // UPDATE_PDE_2 — one PDE, not the root
+        0x2080_012b, // GPU_PROMOTE_CTX
+        0x90f1_0105,
+        u32::MAX,
+    ] {
+        let body = w::control_body(spd::C, spd::DEV, cmd, 0, w::RMAPI_RPC_FLAGS_NONE, &[]);
+        assert_eq!(
+            xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)),
+            Err(BridgeRefusal::UnknownControl { cmd }),
+            "cmd {cmd:#x}",
+        );
+    }
+    // The function itself is emphatically KNOWN — this is not `UnknownFunction`, and the
+    // two carry different numbers (a wire fn id vs an RM command).
+    assert_ne!(
+        FaultTag("BridgeRefusal::UnknownControl"),
+        FaultTag("BridgeRefusal::UnknownFunction"),
+    );
+}
+
+/// ★ The serialization refusal on the control side fires on **one bit**, and its
+/// neighbour must not trip it.
+///
+/// `rmapiRpcFlags` carries `COPYOUT_ON_ERROR` = `NVBIT(0)` and `SERIALIZED` = `NVBIT(1)`,
+/// set independently by `rpcRmApiControl_GSP` (`ogkm: rpc.c:10803-10806`). A `!= 0` test
+/// would refuse every control that merely asked for copy-out-on-error — which is a large
+/// and entirely ordinary class of control.
+#[test]
+fn a_serialized_control_is_refused_but_copyout_on_error_alone_is_not() {
+    let with_flags = |flags: u32| {
+        w::message(
+            fn_id::GSP_RM_CONTROL,
+            3,
+            &w::control_body(
+                spd::C,
+                spd::DEV,
+                w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+                32,
+                flags,
+                &w::set_page_dir_params(spd::PDB, 512, HEX_SPD_FLAGS, spd::VAS, 0, 1, 0),
+            ),
+        )
+    };
+    let want = Ok(Translation::Event(expected_set_page_dir(
+        spd::C,
+        spd::VAS,
+        spd::PDB,
+    )));
+
+    assert_eq!(xlate(&with_flags(w::RMAPI_RPC_FLAGS_NONE)), want);
+    // ★ The neighbour bit alone: ordinary, and it must translate.
+    assert_eq!(
+        xlate(&with_flags(w::RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR)),
+        want
+    );
+    // The serialized bit, alone and with its neighbour: refused both ways.
+    for flags in [
+        w::RMAPI_RPC_FLAGS_SERIALIZED,
+        w::RMAPI_RPC_FLAGS_SERIALIZED | w::RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR,
+        u32::MAX,
+    ] {
+        assert_eq!(
+            xlate(&with_flags(flags)),
+            Err(BridgeRefusal::SerializedControlParams {
+                cmd: w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+            }),
+            "flags {flags:#x}",
+        );
+    }
+}
+
+/// A control's `paramsSize` is checked twice, against two different things, and the two
+/// refusals are distinct: **can it be read** (bounds) and **is it the right struct**
+/// (size).
+///
+/// ★ The exactness is `gsp_core_bridge.md` §4.3's rule and it is `[src]`-backed: the
+/// driver passes `sizeof(NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS)` verbatim
+/// (`ogkm-580: dma.c:508-518`), so 33 is as wrong as 31 — and "take the first 32 bytes"
+/// is `abi_struct_truncation` with extra steps.
+#[test]
+fn a_control_params_size_is_bounded_by_the_payload_and_pinned_to_the_struct() {
+    let params = w::set_page_dir_params(spd::PDB, 512, HEX_SPD_FLAGS, spd::VAS, 0, 1, 0);
+    let declaring = |size: u32, params: &[u8]| {
+        w::message(
+            fn_id::GSP_RM_CONTROL,
+            3,
+            &w::control_body(
+                spd::C,
+                spd::DEV,
+                w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+                size,
+                w::RMAPI_RPC_FLAGS_NONE,
+                params,
+            ),
+        )
+    };
+
+    // Beyond what arrived -> bounds, with BOTH numbers, never clamped to the smaller.
+    for size in [33u32, 64, 4096, u32::MAX] {
+        assert_eq!(
+            xlate(&declaring(size, &params)),
+            Err(BridgeRefusal::ParamsSizeExceedsPayload {
+                declared: size,
+                available: 32,
+            }),
+            "declared {size}",
+        );
+    }
+    // Readable, but not the struct's own size -> the size refusal, with both numbers.
+    for size in [0u32, 1, 16, 31] {
+        assert_eq!(
+            xlate(&declaring(size, &params)),
+            Err(BridgeRefusal::ControlParamsSizeMismatch {
+                cmd: w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+                declared: size,
+                expected: 32,
+            }),
+            "declared {size}",
+        );
+    }
+    // ★ Longer params AND an honest oversize declaration is still a mismatch: 33 bytes of
+    // params is a different struct, not a padded one.
+    let mut long = params.clone();
+    long.push(0xAA);
+    assert_eq!(
+        xlate(&declaring(33, &long)),
+        Err(BridgeRefusal::ControlParamsSizeMismatch {
+            cmd: w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+            declared: 33,
+            expected: 32,
+        }),
+    );
+    // Exactly 32 is the one that translates.
+    assert!(matches!(
+        xlate(&declaring(32, &params)),
+        Ok(Translation::Event(_))
+    ));
+}
+
+/// The control **header** is refused below 40 bytes at every length, naming its own
+/// struct — never zero-extended into a plausible-looking control.
+///
+/// ★ The window that matters is `[36, 40)`: `reserved0` is a `NvU64` at +32, so a reader
+/// who forgot its alignment would accept exactly those four lengths and then slice
+/// `params[]` four bytes early — decoding `physAddress` out of the tail of `reserved0`.
+#[test]
+fn a_truncated_control_body_is_refused_at_every_length() {
+    let full = w::control_body(
+        spd::C,
+        spd::DEV,
+        w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+        32,
+        w::RMAPI_RPC_FLAGS_NONE,
+        &w::set_page_dir_params(spd::PDB, 512, HEX_SPD_FLAGS, spd::VAS, 0, 1, 0),
+    );
+    for len in 0..40usize {
+        assert_eq!(
+            xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &full[..len])),
+            Err(BridgeRefusal::Abi(AbiError::Truncated {
+                c_name: "rpc_gsp_rm_control_v03_00",
+                need: 40,
+                got: len,
+            })),
+            "len {len}",
+        );
+    }
+    // 40..72 decodes the header and then fails on the params window, which is the NEXT
+    // refusal and a different one — so the boundary is observed from both sides.
+    for len in 40..72usize {
+        assert_eq!(
+            xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &full[..len])),
+            Err(BridgeRefusal::ParamsSizeExceedsPayload {
+                declared: 32,
+                available: len - 40,
+            }),
+            "len {len}",
+        );
+    }
+    assert!(matches!(
+        xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &full)),
+        Ok(Translation::Event(_))
+    ));
+}
+
+// ---------------------------------------------------------------------------------
+// 8.3 Statelessness, carried onto the control arm
+// ---------------------------------------------------------------------------------
+
+/// The same control message always translates to the same event — the property a memo, a
+/// seen-set or a dedup cache would break, and the one that makes the graph's
+/// idempotent-retry tolerance reachable.
+#[test]
+fn the_same_control_always_translates_to_the_same_event() {
+    let first = xlate(&HEX_SET_PAGE_DIR);
+    for _ in 0..8 {
+        assert_eq!(xlate(&HEX_SET_PAGE_DIR), first);
+    }
+    // Interleaved with other traffic, so a cache keyed on "the last message" is caught
+    // too — not only one keyed on a handle.
+    for _ in 0..4 {
+        let _ = xlate(&root_alloc_msg(w::NV01_ROOT, spd::C, 0x1234));
+        let _ = xlate(&free_msg(spd::C, spd::VAS));
+        assert_eq!(xlate(&HEX_SET_PAGE_DIR), first);
+    }
+}
+
+/// ★★ **A re-declared PDB is accepted, and the LAST one wins** — which is the exact
+/// opposite of what `gsp_core_bridge.md` §5.2's B4 row asks for, and the design is wrong.
+///
+/// The row demands *"a second, **different** PDB for one VASpace refuses (never a second
+/// candidate)"*. Three things are wrong with it:
+///
+/// 1. **The bridge structurally cannot.** Refusing a second PDB means remembering the
+///    first, and `translate` is a stateless free function by construction. The one rule
+///    the crate is founded on and the one rule this row asks for are incompatible.
+/// 2. **`RmGraph` already decided, and decided the other way.** Its `SetPageDir` arm
+///    documents *"re-binding a VASpace to a new PDB is protocol-legal
+///    (UNSET/SET_PAGE_DIRECTORY); last declaration wins"* — and it is right: the two
+///    commands are documented as symmetric operations in both vendored trees, so
+///    UNSET-then-SET with a different root is a legal guest sequence and refusing it
+///    would hang a conforming guest.
+/// 3. **The concern it came from is already met.** The C's actual defect was keeping
+///    *both* roots as candidates and probing at use (`C:2538-2545`, `C:5070-5133`). The
+///    core keeps exactly ONE. "Never a second candidate" holds; "must be a refusal" was
+///    never the way to get it.
+///
+/// ★ And the research explains the C's own comment. For a SHARED_MANAGEMENT VAS the two
+/// roots genuinely differ: `0x90f10106` carries RM's internal root at construct time and
+/// `0x00801813` carries UVM's external root later, with no re-emission of the first
+/// (`ogkm-580: gpu_vaspace.c:378` is its only call site). Last-declaration-wins is not a
+/// tolerance here — it is the correct rule.
+#[test]
+fn a_second_different_pdb_for_one_vaspace_is_accepted_and_the_last_one_wins() {
+    const PDB_A: u64 = 0x0000_0003_1140_0000;
+    const PDB_B: u64 = 0x0000_0003_4000_0000;
+
+    let mut s = RpcScript::new();
+    s.client_root(w::NV01_ROOT, cp::C, cp::PID)
+        .device(cp::C, cp::C, cp::DEV, cp::DEVICE_INSTANCE)
+        .vaspace(cp::C, cp::DEV, cp::VAS)
+        .tsg(cp::C, cp::DEV, cp::TSG, cp::VAS)
+        .channel(cp::C, cp::TSG, cp::GR, gr_flags(), 0, cp::VAS)
+        .engine_object(cp::C, cp::GR, cp::GR_OBJ, w::AMPERE_COMPUTE_B)
+        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_A, w::PDB_APERTURE_VIDMEM)
+        // The second declaration, with a DIFFERENT root for the SAME VASpace.
+        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_B, w::PDB_APERTURE_SYSMEM_COH);
+
+    let gpu = gpu_from_script(&s);
+    let b = boundaries(&gpu);
+    assert_eq!(
+        b.by_pdb.keys().copied().collect::<Vec<_>>(),
+        vec![(GpuId::ZERO, Pdb(PDB_B))],
+        "★ exactly ONE root, and it is the LAST declared — never two candidates",
+    );
+    assert_eq!(
+        gpu.procs[&gpu.spine.by_vchid[&(GpuId::ZERO, CP_GR_VCHID)].0].channels
+            [&gpu.spine.by_vchid[&(GpuId::ZERO, CP_GR_VCHID)].1]
+            .vas_pdb,
+        Some(Pdb(PDB_B)),
+        "and the channel routes on the new one",
+    );
+
+    // Non-vacuity: an IDENTICAL re-send is also accepted, and changes nothing — which is
+    // what makes the "last wins" above a real observation rather than a tautology.
+    let mut same = RpcScript::new();
+    same.client_root(w::NV01_ROOT, cp::C, cp::PID)
+        .device(cp::C, cp::C, cp::DEV, cp::DEVICE_INSTANCE)
+        .vaspace(cp::C, cp::DEV, cp::VAS)
+        .tsg(cp::C, cp::DEV, cp::TSG, cp::VAS)
+        .channel(cp::C, cp::TSG, cp::GR, gr_flags(), 0, cp::VAS)
+        .engine_object(cp::C, cp::GR, cp::GR_OBJ, w::AMPERE_COMPUTE_B)
+        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_B, w::PDB_APERTURE_SYSMEM_COH)
+        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_B, w::PDB_APERTURE_SYSMEM_COH);
+    assert_eq!(boundaries(&gpu_from_script(&same)), b);
+}
+
+/// ★★ The recycle canary, carried onto the control arm — the statefulness check that has
+/// been load-bearing since B1.
+///
+/// A VASpace handle is declared, given a PDB, **freed**, and then the *same* `hObject`
+/// value is declared again as a fresh VASpace with a different PDB. A bridge holding any
+/// per-handle memory — a memo, a seen-set, a dedup cache — answers the second declaration
+/// with the first one's PDB, or refuses it. Both are wrong, and both hang a legal guest:
+/// RM recycles handles by design, with no free list and no quarantine.
+#[test]
+fn a_recycled_vaspace_handle_gets_a_fresh_page_directory() {
+    const PDB_1: u64 = 0x0000_0002_0000_0000;
+    const PDB_2: u64 = 0x0000_0005_0000_0000;
+
+    let mut s = RpcScript::new();
+    s.client_root(w::NV01_ROOT, cp::C, cp::PID)
+        .device(cp::C, cp::C, cp::DEV, cp::DEVICE_INSTANCE)
+        .vaspace(cp::C, cp::DEV, cp::VAS)
+        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_1, w::PDB_APERTURE_VIDMEM)
+        // The VASpace goes away, and the SAME handle value comes back.
+        .free(cp::C, cp::VAS)
+        .vaspace(cp::C, cp::DEV, cp::VAS)
+        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_2, w::PDB_APERTURE_VIDMEM)
+        .tsg(cp::C, cp::DEV, cp::TSG, cp::VAS)
+        .channel(cp::C, cp::TSG, cp::GR, gr_flags(), 0, cp::VAS)
+        .engine_object(cp::C, cp::GR, cp::GR_OBJ, w::AMPERE_COMPUTE_B);
+
+    let gpu = gpu_from_script(&s);
+    let b = boundaries(&gpu);
+    assert_eq!(
+        b.by_pdb.keys().copied().collect::<Vec<_>>(),
+        vec![(GpuId::ZERO, Pdb(PDB_2))],
+        "★ the second incarnation routes on ITS OWN root, not the dead one's",
+    );
+
+    // And the translation of the second control is byte-identical to what it would be
+    // with no history at all — the statelessness statement, made directly.
+    assert_eq!(
+        xlate(&set_page_dir_msg(
+            cp::C,
+            cp::DEV,
+            cp::VAS,
+            PDB_2,
+            w::PDB_APERTURE_VIDMEM
+        )),
+        Ok(Translation::Event(expected_set_page_dir(
+            cp::C,
+            cp::VAS,
+            PDB_2
+        ))),
+    );
+}
+
+// ---------------------------------------------------------------------------------
+// 8.4 ★★ The composed run — a routable VAS, entirely from bytes
+// ---------------------------------------------------------------------------------
+
+/// ★★ **B4's headline** (`gsp_core_bridge.md` §6): *"a routable `Vas` with a PDB, from
+/// bytes"* — and now literally every fact in that sentence arrived as wire bytes.
+///
+/// The B3 version of this had to hand the graph its PDB as a raw `RmEvent`. This one does
+/// not: the script's last message is a real `SET_PAGE_DIRECTORY`, and the doorbell that
+/// proves the channel routes is resolving a `Pdb` that came off the wire through the
+/// bridge.
+#[test]
+fn the_whole_compute_process_including_its_page_directory_comes_from_wire_bytes() {
+    let script = script_compute();
+    let mut gpu = gpu_from_script(&script);
+    let b = boundaries(&gpu);
+
+    // The control is genuinely in the byte stream, and it is the only one.
+    let controls = script
+        .steps()
+        .iter()
+        .filter(|s| s.function == fn_id::GSP_RM_CONTROL)
+        .count();
+    assert_eq!(controls, 1, "one SET_PAGE_DIRECTORY in the script");
+
+    assert_eq!(
+        b.by_pdb.keys().copied().collect::<Vec<_>>(),
+        vec![(GpuId::ZERO, CP_PDB)],
+        "★ the VAS routes, on a PDB decoded from a control message",
+    );
+    for vchid in [CP_GR_VCHID, CP_CE_VCHID] {
+        assert!(
+            handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(vchid), &[]).is_ok(),
+            "the {vchid:?} channel rings on a wire-declared page directory",
+        );
+    }
+
+    // ★ Non-vacuity, and the strongest form of it: strike the control out of the script
+    // and the SAME doorbell takes the EXACT `NoVas` fault. So the control is not
+    // decoration — it is the thing that makes the exec plane work.
+    let mut without = RpcScript::new();
+    for s in script.steps() {
+        if s.function != fn_id::GSP_RM_CONTROL {
+            without.raw(s.function, s.body.clone());
+        }
+    }
+    let mut stripped = gpu_from_script(&without);
+    assert!(
+        boundaries(&stripped).by_pdb.is_empty(),
+        "with no SET_PAGE_DIRECTORY the VAS has no root at all",
+    );
+    let (pid, cid) = stripped.spine.by_vchid[&(GpuId::ZERO, CP_GR_VCHID)];
+    assert_eq!(stripped.procs[&pid].channels[&cid].vas_pdb, None);
+    assert_eq!(
+        handle_doorbell(
+            &mut stripped,
+            GpuId::ZERO,
+            MockArch::token_for(CP_GR_VCHID),
+            &[]
+        ),
+        Err(FwdFault::NoVas(cid)),
+        "★★ the exact fault — a channel whose VAS never declared a root defers, forever",
     );
 }

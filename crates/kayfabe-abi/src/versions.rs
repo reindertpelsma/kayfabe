@@ -33,12 +33,12 @@ use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::transcribed::Nvos46ParametersPre580;
 use crate::view::{
     AllocReq, AllocWire, ChannelAllocFacts, ClientAllocFacts, ControlReq, CtxShareAllocFacts,
-    DeviceAllocFacts, DupReq, FreeReq, MapMemoryDma, PdbAperture, RpcAllocReq, RpcEnvelope,
-    SetPageDir, TsgAllocFacts, UnmapMemoryDma, rpc_payload_len,
+    DeviceAllocFacts, DupReq, FreeReq, MapMemoryDma, PdbAperture, RpcAllocReq, RpcControlReq,
+    RpcEnvelope, SetPageDir, TsgAllocFacts, UnmapMemoryDma, rpc_payload_len,
 };
 use crate::wire::{AbiError, u32_at};
 use crate::{DriverAbi, DriverVersion};
-use kayfabe_arch::ids::ClassId;
+use kayfabe_arch::ids::{ClassId, ControlCmd};
 
 /// Which `NVOS46_PARAMETERS` shape a driver version uses.
 ///
@@ -721,14 +721,79 @@ impl DriverAbiTable {
         }
     }
 
+    /// Which params shape a **control command** carries — the control table, the
+    /// exact counterpart of [`Self::alloc_params`] and here for the same
+    /// decision-#2 reason: the NVIDIA *cmd numbers* are this crate's, and the
+    /// bridge above speaks a vocabulary.
+    ///
+    /// `None` means *this port does not recognise the command at all*, which is
+    /// deliberately a different statement from
+    /// [`ControlParams::PageDirNotModelled`] — the latter is a command we know
+    /// moves a VASpace's page-directory binding and cannot yet express.
+    #[must_use]
+    pub fn control_params(&self, cmd: ControlCmd) -> Option<ControlParams> {
+        match cmd.0 {
+            ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY => Some(ControlParams::SetPageDir),
+            NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY
+            | NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES
+            | NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER => {
+                Some(ControlParams::PageDirNotModelled)
+            }
+            _ => None,
+        }
+    }
+
+    /// Decode the fixed header of a `GSP_RM_CONTROL` **RPC body** (everything
+    /// after the 32-byte `rpc_message_header`), i.e. `rpc_gsp_rm_control_v03_00`.
+    ///
+    /// Not versioned within the supported range — `ogkm: g_rpc-structures.h:1423-1435`
+    /// and `ogkm-580: g_rpc-structures.h:1506-1518` are the same list, field for
+    /// field. It takes the version table anyway, like every other decoder here.
+    ///
+    /// ★ Header **only**. `paramsSize` is guest-declared, so slicing `params[]`
+    /// with it is a validation the caller owes, and the caller is the one that can
+    /// name the refusal with both numbers.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if fewer than [`RpcControlReq::HEADER`] bytes are
+    /// available — never a zero-extended partial decode.
+    pub fn decode_rpc_control(&self, payload: &[u8]) -> Result<RpcControlReq, AbiError> {
+        if payload.len() < RpcControlReq::HEADER {
+            return Err(AbiError::Truncated {
+                c_name: RpcControlReq::C_NAME,
+                need: RpcControlReq::HEADER,
+                got: payload.len(),
+            });
+        }
+        Ok(RpcControlReq {
+            client: u32_at(payload, 0)?,
+            object: u32_at(payload, 4)?,
+            cmd: u32_at(payload, 8)?,
+            // +12 is `status`, an [OUT] field the guest sends as zero —
+            // `rpcWriteCommonHeader` zeroes the whole message buffer before the
+            // sender fills it (`ogkm: src/nvidia/src/kernel/rmapi/rpc_common.c:149-152`).
+            params_size: u32_at(payload, 16)?,
+            rmapi_rpc_flags: u32_at(payload, 20)?,
+            // +24 `rmctrlFlags`, +28 `rmctrlAccessRight` (both sent as 0 by
+            // `rpcRmApiControl_GSP`, `ogkm: rpc.c:10801-10802`), +32 `reserved0`.
+            params_at: RpcControlReq::HEADER,
+        })
+    }
+
     /// Decode a `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` payload.
     ///
     /// # Errors
     ///
-    /// [`AbiError::Truncated`]. The struct's tail (`chId`, `subDeviceId`,
-    /// `pasid`) is confirmed only by ogkm 610.43.02, so a shorter payload from an
-    /// older driver is refused rather than read past — see the generated module's
-    /// version caveat.
+    /// [`AbiError::Truncated`] below [`ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE`].
+    ///
+    /// ★ **Correction to the generated module's version caveat**, which says the
+    /// tail (`chId`, `subDeviceId`, `pasid`) has ogkm 610.43.02 as its only
+    /// oracle. It does not: `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h:832-840`
+    /// declares the identical seven members in the identical order, so **32 is
+    /// the agreed size across the whole supported range**, not one tree's
+    /// opinion. The caveat cannot be edited where it is written (that file is
+    /// generated); it is superseded here.
     pub fn decode_set_page_dir(&self, bytes: &[u8]) -> Result<SetPageDir, AbiError> {
         let p = ctrl::Nv0080CtrlDmaSetPageDirectoryParams::decode(bytes)?;
         Ok(SetPageDir {
@@ -872,6 +937,102 @@ pub enum AllocParams {
     Channel,
     /// A mapped class whose params declare nothing the object model reads.
     NoDeclaredFacts,
+}
+
+/// `NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY` — the symmetric teardown of
+/// [`ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`], and RPC'd to GSP on the same
+/// `IS_GSP_CLIENT` branch (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:606-608`).
+/// Its params are `{hVASpace, subDeviceId}` and carry no address
+/// (`ogkm-580: ctrl0080dma.h:882-885`), so it *revokes* a page-directory binding
+/// rather than declaring one.
+///
+/// Hand-written rather than generated: the generator's slice emits exactly the
+/// one control struct the port decodes, and these three ids exist to be
+/// **refused by name**, not decoded.
+const NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
+
+/// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h:272`, `ogkm: ctrl90f1.h:272`).
+///
+/// ★★ **The one that matters.** It is issued at VASpace *construct* time for
+/// every split-VAS-eligible VAS on a GSP client — `gvaspaceConstruct__IMPL`
+/// → `gvaspaceReserveSplitVaSpace_IMPL` → `_gvaspaceReserveVaForClientRm`
+/// → `gvaspaceCopyServerRmReservedPdesToServerRm_IMPL`, which issues
+/// `NV_RM_RPC_CONTROL` and so reaches the wire as `GSP_RM_CONTROL`
+/// (`ogkm-580: src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:598-611, 395, 313, 378, 4039, 5161-5189`).
+/// Split-VAS management is **on by default** for any GSP client
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_registry.c:171-186`).
+///
+/// Its `levels[0].physAddress` **is** the VAS's root page directory. So for an
+/// ordinary RM-managed VASpace this — not `SET_PAGE_DIRECTORY` — is the only
+/// message that carries a PDB, and a port that models only `0x00801813` has no
+/// PDB for it at all. That is `gsp_core_bridge.md` §7 item 1, now settled and
+/// settled *against* the design's assumption.
+const NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES: u32 = 0x90f1_0106;
+
+/// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:1903-1908`).
+///
+/// A `ROUTE_TO_PHYSICAL` wrapper whose params are a single-member struct around
+/// the same `NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS` at offset 0
+/// (`ogkm-580: g_subdevice_nvoc.c:3655-3663` gives `flags = 0xc0` = ROUTE_TO_PHYSICAL
+/// | INTERNAL). It is emitted for the GPU-group global VASpace on the
+/// `!IS_VIRTUAL` arm — i.e. on bare metal, which is our target
+/// (`ogkm-580: gpu_vaspace.c:4140-4154`), on `pGpu->hInternalClient`.
+const NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER: u32 = 0x2080_0a9f;
+
+/// Which params shape a control command carries. See
+/// [`DriverAbiTable::control_params`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlParams {
+    /// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` —
+    /// [`DriverAbiTable::decode_set_page_dir`]. The one control this port turns
+    /// into a fact.
+    SetPageDir,
+    /// ★★ **Known to move a VASpace's page-directory binding, and not modelled.**
+    ///
+    /// Three commands, three different reasons, one answer — and the answer is a
+    /// *named* refusal rather than silence, because the absence of a PDB is
+    /// invisible downstream (a channel simply defers at its first doorbell,
+    /// forever):
+    ///
+    /// - `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`0x90f10106`) —
+    ///   carries the root PD as `levels[0].physAddress` for **every ordinary
+    ///   RM-managed VAS**, at construct time. Not decoded here: its params are a
+    ///   184-byte struct ending in a six-element array of 24-byte level records
+    ///   whose size has been *computed*, not read from any layout assertion, so
+    ///   it needs the generator and a `RUSTC_OFFSETS` pin rather than a
+    ///   hand-transcription.
+    /// - `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`
+    ///   (`0x20800a9f`) — the same payload for the GPU-group global VAS.
+    /// - `NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY` (`0x00801814`) — the
+    ///   *revocation*. `RmEvent` has no verb for it, and inventing one is a core
+    ///   change rather than a bridge change.
+    PageDirNotModelled,
+}
+
+impl ControlParams {
+    /// `sizeof` this control's params struct, where the port decodes one.
+    ///
+    /// ★ A control's `paramsSize` is checked against this **exactly**, not as a
+    /// lower bound: `deviceCtrlCmdDmaSetPageDirectory`'s caller passes
+    /// `sizeof(NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS)` verbatim
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:508-518`), so a
+    /// different declared size is a guest that means a different struct.
+    /// `gsp_core_bridge.md` §4.3: *"validate against the payload length **and**
+    /// against the class's own size where the ABI knows it, and refuse the
+    /// mismatch rather than taking the smaller."*
+    ///
+    /// `None` for [`Self::PageDirNotModelled`] — there is no decoder, so there is
+    /// no size to check against and claiming one would be a number with no
+    /// oracle.
+    #[must_use]
+    pub const fn params_size(self) -> Option<usize> {
+        match self {
+            ControlParams::SetPageDir => Some(ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE),
+            ControlParams::PageDirNotModelled => None,
+        }
+    }
 }
 
 impl DriverAbi for DriverAbiTable {

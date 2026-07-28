@@ -159,6 +159,7 @@ fn table_decoders_refuse_short_at_every_length_and_report_the_versions_size() {
         assert_eq!(t580.decode_unmap_memory_dma(&b).is_ok(), len >= 48);
         assert_eq!(t580.decode_device_alloc_facts(&b).is_ok(), len >= 56);
         assert_eq!(t580.decode_set_page_dir(&b).is_ok(), len >= 32);
+        assert_eq!(t580.decode_rpc_control(&b).is_ok(), len >= 40);
         assert_eq!(t580.decode_client_alloc_facts(&b).is_ok(), len >= 8);
 
         // ★ The versioned one: the SAME length is legal under 575 and refused
@@ -1719,6 +1720,146 @@ fn a_short_rpc_alloc_body_is_refused_at_every_length() {
     let ok = t.decode_rpc_alloc(&[0xFFu8; 32]).expect("32 is enough");
     assert_eq!(ok.client, u32::MAX);
     assert_eq!(ok.params_at, 32);
+}
+
+/// ★★ **The C differential, control edition.** The C artifact records the control
+/// body's fields at ELEMENT-relative offsets — *"fn=76 (GSP_RM_CONTROL) body:
+/// hClient@80, hObject@84, cmd@88, status@92, paramsSize@96, params@120"*
+/// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2134-2135`, repeated at
+/// `:2732-2733`) — so every one of them must be exactly `80` more than this
+/// crate's payload-relative offset.
+///
+/// ★ `params@120` is the load-bearing one and the easy thing to get wrong:
+/// `reserved0` is `NvU64 NV_ALIGN_BYTES(8)` at +32, so `params[]` is at **40**,
+/// not 36. Two humans read two trees and both landed on 40.
+#[test]
+fn the_rpc_control_body_offsets_agree_with_the_c_artifacts_independent_transcription() {
+    /// The element-relative base the C's comment is written against.
+    const C_BODY_BASE: usize = 80;
+
+    let mut payload = vec![0u8; 64];
+    for o in (0..64).step_by(4) {
+        payload[o..o + 4].copy_from_slice(&(0xC0DE_0000u32 | o as u32).to_le_bytes());
+    }
+    let got = bench().decode_rpc_control(&payload).expect("64 >= 40");
+
+    let rows: [(usize, u32, &str); 4] = [
+        (80, got.client, "hClient"),
+        (84, got.object, "hObject"),
+        (88, got.cmd, "cmd"),
+        (96, got.params_size, "paramsSize"),
+    ];
+    for (c_off, value, name) in rows {
+        let abi_off = c_off - C_BODY_BASE;
+        assert_eq!(
+            value,
+            0xC0DE_0000 | abi_off as u32,
+            "{name}: the C reads it at element+{c_off}, i.e. payload+{abi_off}",
+        );
+    }
+    assert_eq!(
+        got.params_at,
+        120 - C_BODY_BASE,
+        "params[] is at +40, not +36"
+    );
+
+    // The field the C's comment is silent about — ogkm is its only oracle.
+    assert_eq!(got.rmapi_rpc_flags, 0xC0DE_0014, "rmapiRpcFlags @ +20");
+
+    // `status` @ +12 is an [OUT] field and deliberately not on the view at all.
+    // Proven by exclusion — no decoded field carries +12's value.
+    for (_, v, name) in rows {
+        assert_ne!(v, 0xC0DE_000C, "{name} must not be reading `status` @ +12");
+    }
+    assert_ne!(got.rmapi_rpc_flags, 0xC0DE_000C);
+}
+
+/// The control header is refused below 40 bytes at **every** length, naming the
+/// struct. ★ The interesting window is `[36, 40)`: a reader who forgot
+/// `reserved0`'s 8-byte alignment would accept exactly those four lengths and
+/// then slice `params[]` four bytes early, which decodes into a plausible
+/// `SET_PAGE_DIRECTORY` with every field shifted.
+#[test]
+fn a_short_rpc_control_body_is_refused_at_every_length() {
+    let t = bench();
+    for len in 0..40usize {
+        for fill in [0x00u8, 0xFF] {
+            assert_eq!(
+                t.decode_rpc_control(&vec![fill; len]),
+                Err(AbiError::Truncated {
+                    c_name: "rpc_gsp_rm_control_v03_00",
+                    need: 40,
+                    got: len
+                }),
+                "len {len} fill {fill:#x}",
+            );
+        }
+    }
+    let ok = t.decode_rpc_control(&[0xFFu8; 40]).expect("40 is enough");
+    assert_eq!(ok.client, u32::MAX);
+    assert_eq!(ok.params_at, 40);
+}
+
+/// The **control table** — `gsp_core_bridge.md` §2.5's three arms, by exact cmd.
+///
+/// ★ The adjacency is the point: `SET_PAGE_DIRECTORY` is `0x801813` and
+/// `UNSET_PAGE_DIRECTORY` is `0x801814`, one apart, and they mean opposite
+/// things. A table with an off-by-one, a range test or a `<=` would classify the
+/// teardown as a declaration and bind a VASpace to a page directory that was
+/// just revoked.
+#[test]
+fn the_control_table_names_exactly_the_commands_it_can_argue_for() {
+    use kayfabe_abi::versions::ControlParams;
+    use kayfabe_arch::ids::ControlCmd;
+    let t = bench();
+
+    assert_eq!(
+        t.control_params(ControlCmd(0x0080_1813)),
+        Some(ControlParams::SetPageDir),
+    );
+    assert_eq!(
+        ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+        0x0080_1813,
+        "the generated id and the hand-written one agree",
+    );
+
+    // Known to move a page-directory binding, and not modelled. Three commands,
+    // three different reasons — see `ControlParams::PageDirNotModelled`.
+    for cmd in [0x0080_1814u32, 0x90f1_0106, 0x2080_0a9f] {
+        assert_eq!(
+            t.control_params(ControlCmd(cmd)),
+            Some(ControlParams::PageDirNotModelled),
+            "cmd {cmd:#x}",
+        );
+    }
+
+    // Not in the table at all — including both neighbours of the modelled cmd and
+    // a control the C artifact treats as primary (`GPU_PROMOTE_CTX`), which is
+    // deliberately NOT here: it populates the address table, not the graph.
+    for cmd in [
+        0x0u32,
+        0x0080_1812,
+        0x0080_1815,
+        0x0080_180f, // NV0080_CTRL_CMD_DMA_UPDATE_PDE_2 — one PDE, not the root
+        0x2080_012b, // NV2080_CTRL_CMD_GPU_PROMOTE_CTX
+        0x90f1_0105,
+        0x90f1_0107,
+        u32::MAX,
+    ] {
+        assert_eq!(t.control_params(ControlCmd(cmd)), None, "cmd {cmd:#x}");
+    }
+
+    // Only the modelled one states a size, and it is the struct's own.
+    assert_eq!(
+        ControlParams::SetPageDir.params_size(),
+        Some(ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE),
+    );
+    assert_eq!(ControlParams::SetPageDir.params_size(), Some(32));
+    assert_eq!(
+        ControlParams::PageDirNotModelled.params_size(),
+        None,
+        "no decoder means no size to claim",
+    );
 }
 
 /// ★ **The pinning test `gsp_core_bridge.md` §1.4 asks for**: `rpc_free_v03_00`

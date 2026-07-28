@@ -144,21 +144,63 @@ pub fn rpc_params_are_serialized(flags: u32) -> bool {
     flags & RMAPI_RPC_FLAGS_SERIALIZED != 0
 }
 
+/// The bottom of the **VMIOP/RPC** result range — `NV_VGPU_MSG_RESULT__VMIOP` is
+/// `0xFF00000a:0xFF000000` (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_headers.h:122`), and the
+/// header states the rule directly at `:126`: *"codes below 0xFF000000 must match exactly
+/// the NV_STATUS codes in nvos.h"*.
+///
+/// ★★ **This is the constraint every reply status we invent must satisfy**, and it is a
+/// behaviour of the guest, not a convention. `_issueRpcAndWait` reads our `rpc_result` and
+/// maps it (`ogkm: src/nvidia/src/kernel/vgpu/rpc.c:2012-2026`):
+///
+/// ```text
+/// rpc_result == 0                        -> NV_OK
+/// rpc_result == 0xFF100009               -> returned VERBATIM (the one special case)
+/// rpc_result <  NV_VGPU_MSG_RESULT_VMIOP_BASE -> returned VERBATIM as the NV_STATUS
+/// otherwise                              -> COLLAPSED to NV_ERR_GENERIC
+/// ```
+///
+/// So a status at or above this base is a status the guest **cannot see**: every distinct
+/// value in that range arrives at the RM caller as one indistinguishable `NV_ERR_GENERIC`.
+/// A refusal that wants to say anything at all must pick a value below it.
+pub const NV_VGPU_MSG_RESULT_VMIOP_BASE: u32 = 0xFF00_0000;
+
 /// `NV_ERR_NOT_SUPPORTED` — `NV_STATUS` `0x56`
 /// (`ogkm: src/common/sdk/nvidia/inc/nvstatuscodes.h:115`).
 ///
-/// ★ **Not cosmetic, and not settled.** RM sets `RMAPI_PARAM_COPY_FLAGS_SKIP_COPYOUT` on
-/// this status, i.e. the value changes what the *guest* does with its own params buffer —
-/// which the C artifact learned expensively: faking `NV_OK` for a control the real driver
-/// answers `0x56` copied 1464 bytes of garbage over the CUDA user library's ECC buffer
-/// and produced the `rbp=0` SIGSEGV
+/// ★ **Not cosmetic.** RM sets `RMAPI_PARAM_COPY_FLAGS_SKIP_COPYOUT` on this status, i.e.
+/// the value changes what the *guest* does with its own params buffer — which the C
+/// artifact learned expensively: faking `NV_OK` for a control the real driver answers
+/// `0x56` copied 1464 bytes of garbage over the CUDA user library's ECC buffer and
+/// produced the `rbp=0` SIGSEGV
 /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2883-2894`). It is also the only
 /// NV_STATUS the C ever deliberately fails with.
 ///
-/// It is here as **one named value with one citation** rather than a table, because a
+/// # ★★ B4 settled `gsp_core_bridge.md` §4.2's `[open]`: this value, and one table
+///
+/// The `[open]` asked which `NV_STATUS` a refusal should carry, and treated "the C used
+/// it" as the only argument. There are now three real ones, all `[src]`:
+///
+/// 1. **It reaches the guest at all.** `0x56 < NV_VGPU_MSG_RESULT_VMIOP_BASE`, so
+///    `_issueRpcAndWait` returns it verbatim rather than collapsing it to
+///    `NV_ERR_GENERIC` (`ogkm: rpc.c:2020-2025`). See that constant.
+/// 2. **NVIDIA expects it from a GSP control.** `rpcRmApiControl_GSP`'s own error path
+///    lists `NV_ERR_NOT_SUPPORTED` (with `NV_ERR_OBJECT_NOT_FOUND`) as the statuses to log
+///    *quietly* (`ogkm: rpc.c:10914-10920`) — a refusal carrying it is an outcome the
+///    driver already treats as ordinary, not an anomaly.
+/// 3. **The tempting alternative is wrong on this path.**
+///    `NV_VGPU_MSG_RESULT_RPC_API_CONTROL_NOT_SUPPORTED` (`0xFF100009`) is NVIDIA's own
+///    "recognised but not supported" control status and survives the collapse by explicit
+///    special case (`ogkm: rpc.c:2014-2015`) — but the translation back to a real
+///    `NV_STATUS` lives **only** in `rpcRmApiControl_wrapper`
+///    (`ogkm: rpc.c:5432-5437`), which is the vGPU `RM_API_CONTROL` path.
+///    `rpcRmApiControl_GSP` — fn 76, the one a GSP-client guest actually sends — has no
+///    such arm, so `0xFF100009` would propagate to the RM caller *as* an `NV_STATUS`,
+///    which it is not.
+///
+/// It therefore stays **one named value** rather than becoming a per-refusal table: the
+/// three facts above constrain the choice, and nothing observed constrains a *split*. A
 /// table of 200 status codes with no consumer is the breadth this crate's §4 refuses.
-/// `gsp_core_bridge.md` §4.2's `[open]` is the standing note that B4 must revisit which
-/// status each refusal class deserves.
 pub const NV_ERR_NOT_SUPPORTED: u32 = 0x0000_0056;
 
 /// A guest driver version, as detected/advertised at device realize.

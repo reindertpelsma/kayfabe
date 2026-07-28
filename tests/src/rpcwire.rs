@@ -279,6 +279,93 @@ pub fn channel_params(flags: u32, h_ctx_share: u32, h_vaspace: u32) -> Vec<u8> {
     channel_params_sized(flags, h_ctx_share, h_vaspace, 32)
 }
 
+/// `rpc_gsp_rm_control_v03_00` — the `GSP_RM_CONTROL` body.
+///
+/// `[src]` `ogkm: src/nvidia/generated/g_rpc-structures.h:1423-1435` and
+/// `ogkm-580: g_rpc-structures.h:1506-1518` — transcribed by hand from **both**, because
+/// this file's whole job is to be a second pair of eyes:
+///
+/// ```text
+/// NvHandle hClient;            // +0
+/// NvHandle hObject;            // +4
+/// NvU32    cmd;                // +8
+/// NvU32    status;             // +12  [OUT] — see below, this zero is load-bearing
+/// NvU32    paramsSize;         // +16
+/// NvU32    rmapiRpcFlags;      // +20
+/// NvU32    rmctrlFlags;        // +24
+/// NvU32    rmctrlAccessRight;  // +28
+/// NvU64    reserved0;          // +32  NV_ALIGN_BYTES(8)
+/// NvU8     params[];           // +40  ← not 36
+/// ```
+///
+/// ★ `status` @ +12 is written as zero and that is a *protocol* fact, not tidiness:
+/// `rpcWriteCommonHeader` `portMemSet`s the whole message buffer before the sender fills
+/// it (`ogkm: src/nvidia/src/kernel/rmapi/rpc_common.c:149-152`), and the guest reads
+/// **this field out of the reply** to get the control handler's own status
+/// (`ogkm: rpc.c:10868-10875`). An accepted control is acked with the request body
+/// preserved, so the zero the guest sent is the `NV_OK` it reads back.
+#[must_use]
+pub fn control_body(
+    h_client: u32,
+    h_object: u32,
+    cmd: u32,
+    params_size: u32,
+    rmapi_rpc_flags: u32,
+    params: &[u8],
+) -> Vec<u8> {
+    let mut b = vec![0u8; 40 + params.len()];
+    put32(&mut b, 0, h_client);
+    put32(&mut b, 4, h_object);
+    put32(&mut b, 8, cmd);
+    put32(&mut b, 12, 0); // status: [OUT], the guest sends zero
+    put32(&mut b, 16, params_size);
+    put32(&mut b, 20, rmapi_rpc_flags);
+    put32(&mut b, 24, 0); // rmctrlFlags — `rpcRmApiControl_GSP` sends 0
+    put32(&mut b, 28, 0); // rmctrlAccessRight — likewise
+    // +32 reserved0 (NvU64)
+    b[40..].copy_from_slice(params);
+    b
+}
+
+/// `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS` — 32 bytes.
+///
+/// `[src]` `ogkm: src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h:802-809` and
+/// `ogkm-580: ctrl0080dma.h:832-840`, which are the same seven members in the same order —
+/// so the tail is **not** a 610-only shape, whatever the generated module's caveat says:
+///
+/// ```text
+/// NvU64    physAddress;   // +0   ★ the PDB
+/// NvU32    numEntries;    // +8
+/// NvU32    flags;         // +12  [1:0] aperture, [2:2] PRESERVE_PDES, …
+/// NvHandle hVASpace;      // +16  ★ 0 => the client/device pair's IMPLICIT VAS
+/// NvU32    chId;          // +20
+/// NvU32    subDeviceId;   // +24
+/// NvU32    pasid;         // +28
+/// ```
+///
+/// The three tail fields are settable so a test can prove that moving one of them does
+/// **not** move a fact the bridge reads.
+#[must_use]
+pub fn set_page_dir_params(
+    phys_address: u64,
+    num_entries: u32,
+    flags: u32,
+    h_vaspace: u32,
+    ch_id: u32,
+    sub_device_id: u32,
+    pasid: u32,
+) -> Vec<u8> {
+    let mut p = vec![0u8; 32];
+    put64(&mut p, 0, phys_address);
+    put32(&mut p, 8, num_entries);
+    put32(&mut p, 12, flags);
+    put32(&mut p, 16, h_vaspace);
+    put32(&mut p, 20, ch_id);
+    put32(&mut p, 24, sub_device_id);
+    put32(&mut p, 28, pasid);
+    p
+}
+
 /// `rpc_free_v03_00` — which *is* `NVOS00_PARAMETERS_v03_00`
 /// (`ogkm: g_rpc-structures.h:162-167`), i.e. no wrapper and no header of its own:
 ///
@@ -318,6 +405,53 @@ pub const RMAPI_RPC_FLAGS_NONE: u32 = 0;
 /// SECOND time, deliberately, so a test that builds a serialized alloc does not take the
 /// bit from the same constant the predicate under test reads.
 pub const RMAPI_RPC_FLAGS_SERIALIZED: u32 = 2;
+
+/// `RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR` = `NVBIT(0)` (`ogkm: rmapi.h:162`).
+///
+/// ★ The **neighbour** of the serialized bit, and the reason the serialization question is
+/// a bit test rather than `!= 0`: `rpcRmApiControl_GSP` sets this one whenever the control
+/// carries `RMCTRL_FLAGS_COPYOUT_ON_ERROR` (`ogkm: rpc.c:10803-10804`), entirely
+/// independently. A control with only this bit set is perfectly ordinary and must
+/// translate.
+pub const RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR: u32 = 1;
+
+/// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` (`ogkm: ctrl0080dma.h:798`,
+/// `ogkm-580: ctrl0080dma.h:828`) — the one control this port models.
+pub const NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY: u32 = 0x0080_1813;
+
+/// `NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY` (`ogkm-580: ctrl0080dma.h:878`) — the
+/// symmetric teardown, one **less** than the modelled command. Adjacent on purpose: a
+/// table that got the constant off by one would still look plausible.
+pub const NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
+
+/// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`ogkm-580: ctrl90f1.h:272`).
+///
+/// ★★ The control that carries the root page directory of every **ordinary** RM-managed
+/// VASpace on a GSP client, at construct time, as `levels[0].physAddress`. This port does
+/// not decode it and refuses it by name — which is the whole point of having a name.
+pub const NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES: u32 = 0x90f1_0106;
+
+/// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`
+/// (`ogkm-580: ctrl2080internal.h:1903`) — the same payload for the GPU-group global VAS,
+/// on the `!IS_VIRTUAL` (i.e. bare-metal) arm.
+pub const NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER: u32 =
+    0x2080_0a9f;
+
+/// `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS_APERTURE_VIDMEM`
+/// (`ogkm: ctrl0080dma.h:813`) — `flags[1:0] == 0`, the root is in framebuffer.
+pub const PDB_APERTURE_VIDMEM: u32 = 0;
+
+/// `…_APERTURE_SYSMEM_COH` (`ogkm: ctrl0080dma.h:814`) — the root is in guest RAM.
+pub const PDB_APERTURE_SYSMEM_COH: u32 = 1;
+
+/// `…_APERTURE_SYSMEM_NONCOH` (`ogkm: ctrl0080dma.h:815`).
+pub const PDB_APERTURE_SYSMEM_NONCOH: u32 = 2;
+
+/// `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS_ALL_CHANNELS_TRUE` shifted into `[3:3]`
+/// (`ogkm: ctrl0080dma.h:820-822`). UVM always sets it
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:8857-8862`), so a realistic
+/// fixture carries it — and it also proves the aperture decode masks rather than compares.
+pub const PDB_FLAGS_ALL_CHANNELS: u32 = 1 << 3;
 
 /// `NV01_ROOT` — the client-root class (`ogkm: src/common/sdk/nvidia/inc/class/cl0000.h`).
 /// Transcribed independently of `kayfabe_abi::generated::classes`, same reasoning.
@@ -547,6 +681,51 @@ impl RpcScript {
         h_class: u32,
     ) -> &mut RpcScript {
         self.alloc(h_client, h_channel, h_object, h_class, &[0u8; 8])
+    }
+
+    /// A `GSP_RM_CONTROL` with `paramsSize` taken from the params actually carried — i.e.
+    /// a **conforming** guest, and `rmapiRpcFlags = NONE`. A test that wants the guest to
+    /// lie builds the body with [`control_body`] and posts it through [`Self::raw`].
+    pub fn control(
+        &mut self,
+        h_client: u32,
+        h_object: u32,
+        cmd: u32,
+        params: &[u8],
+    ) -> &mut RpcScript {
+        self.raw(
+            fn_id::GSP_RM_CONTROL,
+            control_body(
+                h_client,
+                h_object,
+                cmd,
+                params.len() as u32,
+                RMAPI_RPC_FLAGS_NONE,
+                params,
+            ),
+        )
+    }
+
+    /// A `SET_PAGE_DIRECTORY` binding `h_vaspace` to `pdb`, issued against the Device.
+    ///
+    /// ★ Note `h_object` is the **Device** handle, not the VASpace: `NV_RM_RPC_CONTROL` is
+    /// called with `hDevice` and the VAS is named by a params field
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:508-518`). The two travel in
+    /// different places on purpose, and the bridge must not confuse them.
+    pub fn set_page_dir(
+        &mut self,
+        h_client: u32,
+        h_device: u32,
+        h_vaspace: u32,
+        pdb: u64,
+        flags: u32,
+    ) -> &mut RpcScript {
+        self.control(
+            h_client,
+            h_device,
+            NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+            &set_page_dir_params(pdb, 512, flags, h_vaspace, 0, 1, 0),
+        )
     }
 
     /// Any function and any body, including a hostile one.

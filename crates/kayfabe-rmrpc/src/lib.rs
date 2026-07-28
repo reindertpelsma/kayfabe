@@ -92,11 +92,13 @@
 //! lands: the applying half cannot grow a handle cache without going through
 //! [`translate`], which has nowhere to put one.
 //!
-//! ## Scope of this stage (B1 + B2 + B3)
+//! ## Scope of this stage (B1 + B2 + B3 + B4)
 //!
-//! `GSP_RM_ALLOC` and `FREE`. Everything else is a named refusal, including the functions
+//! `GSP_RM_ALLOC`, `FREE`, and — B4 — the **one modelled control**,
+//! `GSP_RM_CONTROL`/`SET_PAGE_DIRECTORY`, which is where a VASpace acquires the `Pdb` the
+//! data plane routes on. Everything else is a named refusal, including the functions
 //! the design maps but whose arms are not built ([`BridgeRefusal::NotYetTranslated`] —
-//! control/dup/continuation) and the classes with no entry in the class table
+//! dup/continuation) and the classes with no entry in the class table
 //! ([`BridgeRefusal::UnmappedAllocClass`]). Those are deliberately **not**
 //! [`BridgeRefusal::UnknownFunction`]: "known and inert", "known and not yet built" and
 //! "not known at all" are three different states, and collapsing them is how the C ended
@@ -130,10 +132,10 @@ mod policy;
 
 pub use policy::{GraphPolicy, RefusalCensus};
 
-use kayfabe_abi::versions::{AllocParams, DriverAbiTable};
+use kayfabe_abi::versions::{AllocParams, ControlParams, DriverAbiTable};
 use kayfabe_abi::wire::AbiError;
 use kayfabe_abi::{NV_ERR_NOT_SUPPORTED, client_kind_from_process_id, rpc_params_are_serialized};
-use kayfabe_arch::ids::{ClassId, HClient, HObject};
+use kayfabe_arch::ids::{ClassId, ControlCmd, HClient, HObject, Pdb};
 use kayfabe_core::gpu::GpuError;
 use kayfabe_core::rmgraph::{AllocFacts, RESERVED_CLIENT, RmEvent};
 use kayfabe_gsp::{RpcCommand, RpcFunction};
@@ -218,6 +220,21 @@ pub enum BridgeRefusal {
         /// `hClass`.
         class: u32,
     },
+    /// The same bit on the **control** side: `rmapiRpcFlags & RMAPI_RPC_FLAGS_SERIALIZED`
+    /// (`ogkm: rpc.c:10805-10806`).
+    ///
+    /// A separate variant rather than a reused one, because it carries a different
+    /// number and answers a different open question: `gsp_core_bridge.md` §7 item 3 asks
+    /// which *alloc classes* serialize, and which *controls* do is not the same list.
+    ///
+    /// ★ It fires on `NVBIT(1)` alone. `rmapiRpcFlags` also carries
+    /// `RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR` = `NVBIT(0)`, set independently
+    /// (`ogkm: rpc.c:10803-10804`), so a `!= 0` test on the whole word would refuse
+    /// every control that merely asked for copy-out-on-error.
+    SerializedControlParams {
+        /// `cmd`.
+        cmd: u32,
+    },
     /// The guest declared a `paramsSize` larger than the payload that arrived. Guest-
     /// declared numbers are assertions, not facts: refused with both, never clamped to
     /// the smaller (clamping is how a truncated struct gets zero-extended into a
@@ -239,6 +256,75 @@ pub enum BridgeRefusal {
         /// The alloc params' `hClient`.
         params: u32,
     },
+    /// A `GSP_RM_CONTROL` whose `cmd` this port does not model — **and B4's answer to
+    /// `gsp_core_bridge.md` §7 item 6, which asked for one.**
+    ///
+    /// §1.2 sketches `Translation::Forward { client, object, cmd, params }` for the
+    /// control long tail, to be handed to `kayfabe_fwd::classify_control`. That
+    /// classification table **does not exist**, so today a `Forward` would be a value
+    /// every caller drops — which is the C's `NV_OK` echo with a Rust type on it
+    /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:3214-3226`), and the whole
+    /// point of §4 is that the two failure directions are not symmetric.
+    ///
+    /// So B4 picks **refuse**, on the crate's own consumer-first rule: a variant nothing
+    /// consumes is a variant no test can bite. The choice is deliberately the reversible
+    /// one — when `classify_control` lands, *this arm* is where `Forward` is emitted
+    /// instead, and every control that reaches it is already named in the census.
+    UnknownControl {
+        /// `cmd`.
+        cmd: u32,
+    },
+    /// ★★ **A control that moves a VASpace's page-directory binding, which this port
+    /// cannot express.** Distinct from [`Self::UnknownControl`] because the consequence is
+    /// distinct: an unmodelled control is a fact we do not have, while a *dropped*
+    /// page-directory declaration is a `Vas` that will never route and a channel that
+    /// defers at its first doorbell **forever**, with nothing anywhere saying why.
+    ///
+    /// The three commands and the evidence are on
+    /// [`kayfabe_abi::versions::ControlParams::PageDirNotModelled`]. The headline is
+    /// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`0x90f10106`), which settles
+    /// `gsp_core_bridge.md` §7 item 1 *against* the design's assumption: on a bare-metal
+    /// GSP client it is issued at construct time for every split-VAS-eligible VASpace and
+    /// carries the root page directory as `levels[0].physAddress`, so for an ordinary
+    /// RM-managed VAS it is the **only** message that carries a PDB —
+    /// `SET_PAGE_DIRECTORY` asserts out for anything that is not
+    /// `SHARED_MANAGEMENT`/`IS_EXTERNALLY_OWNED`
+    /// (`ogkm-580: src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:3109`).
+    ///
+    /// This refusal is therefore the stage's most valuable output: it is the named,
+    /// countable record of exactly which control the address plane is still missing.
+    PageDirControlNotModelled {
+        /// `cmd`.
+        cmd: u32,
+    },
+    /// A control declared a `paramsSize` that is not its command's own struct size.
+    ///
+    /// Not "at least": `NV_RM_RPC_CONTROL` is called with `sizeof(…)` verbatim
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:508-518`), so a different
+    /// number is a guest that means a different struct — and taking the first `SIZE`
+    /// bytes of it would be `abi_struct_truncation` with extra steps.
+    ControlParamsSizeMismatch {
+        /// `cmd`.
+        cmd: u32,
+        /// What the guest said.
+        declared: u32,
+        /// What the command's params struct actually measures.
+        expected: usize,
+    },
+    /// ★ A `SET_PAGE_DIRECTORY` naming `hVASpace == 0`.
+    ///
+    /// This is **not** "no VASpace declared". NVIDIA's own header says what it is, in
+    /// both vendored trees verbatim: *"handle for the allocated VA space that this
+    /// control call should operate on. **If it's 0, it assumes to use the implicit
+    /// allocated VA space associated with the client/device pair**"*
+    /// (`ogkm: ctrl0080dma.h:782-785`, `ogkm-580: ctrl0080dma.h:812-815`).
+    ///
+    /// That implicit VAS is a real object the RPC does not name and the graph has no node
+    /// for. Passing `HObject(0)` through would attach the PDB to a node key the guest
+    /// never declared, where it parks silently and forever — a fact landing in the wrong
+    /// component, which is the exact shape this project has already been bitten by twice.
+    /// So it is refused, and the refusal names the gap.
+    ImplicitVaspace,
     /// `hClient == 0`. `NV01_NULL_OBJECT` is not a namespace; the core reserves
     /// `HClient(0)` as its system anchor and would refuse it too. Refused here as a
     /// well-formedness property of the *message* — which needs no graph state, and so is
@@ -281,13 +367,29 @@ impl From<AbiError> for BridgeRefusal {
 impl BridgeRefusal {
     /// The `NV_STATUS` a reply carries when this refusal is what happened.
     ///
-    /// ★ **One value, named, and knowingly provisional** (§4.2's `[open]`). It is
-    /// `NV_ERR_NOT_SUPPORTED` for every variant, which is the status the C uses for the
-    /// two controls it deliberately fails, and RM's reaction to it — setting
-    /// `SKIP_COPYOUT`, so the guest leaves its own params buffer alone — is the behaviour
-    /// that makes a *wrong* choice here a real bug rather than a cosmetic one. Picking a
-    /// per-variant status needs an `NV_STATUS` table that does not exist yet; B4 revisits
-    /// it. Until then the answer is one value with one citation, not a guess per arm.
+    /// ★★ **B4 revisited `gsp_core_bridge.md` §4.2's `[open]` and kept one value — with
+    /// an argument instead of a precedent.** The full evidence is on
+    /// [`kayfabe_abi::NV_ERR_NOT_SUPPORTED`] and
+    /// [`kayfabe_abi::NV_VGPU_MSG_RESULT_VMIOP_BASE`]; the three facts that decided it:
+    ///
+    /// 1. the guest **collapses** every `rpc_result` at or above `0xFF000000` to one
+    ///    indistinguishable `NV_ERR_GENERIC` (`ogkm: rpc.c:2020-2025`), so a status
+    ///    above the base cannot say anything at all — `0x56` is below it and arrives
+    ///    verbatim;
+    /// 2. `rpcRmApiControl_GSP` already lists `NV_ERR_NOT_SUPPORTED` among the statuses
+    ///    it logs *quietly* (`ogkm: rpc.c:10914-10920`) — it is an ordinary outcome to
+    ///    the driver, not an anomaly;
+    /// 3. the obvious alternative, `NV_VGPU_MSG_RESULT_RPC_API_CONTROL_NOT_SUPPORTED`
+    ///    (`0xFF100009`), is translated back to a real `NV_STATUS` only on the vGPU
+    ///    `RM_API_CONTROL` path and **not** on fn 76 (`ogkm: rpc.c:5432-5437` vs
+    ///    `rpcRmApiControl_GSP`), so on our path it would reach the RM caller as a value
+    ///    that is not an `NV_STATUS`.
+    ///
+    /// It stays **one value for every variant** because nothing observed constrains a
+    /// split: the *variant* is what the census records, and inventing a per-refusal
+    /// status table would be a table of guesses in the one place where a wrong entry is
+    /// invisible until a guest trips it. The distinction lives in
+    /// [`Faulted::fault_tag`], which costs the guest nothing.
     #[must_use]
     pub const fn rpc_result(self) -> u32 {
         NV_ERR_NOT_SUPPORTED
@@ -306,6 +408,17 @@ impl Faulted for BridgeRefusal {
                 FaultTag("BridgeRefusal::UnmappedAllocClass")
             }
             BridgeRefusal::SerializedParams { .. } => FaultTag("BridgeRefusal::SerializedParams"),
+            BridgeRefusal::SerializedControlParams { .. } => {
+                FaultTag("BridgeRefusal::SerializedControlParams")
+            }
+            BridgeRefusal::UnknownControl { .. } => FaultTag("BridgeRefusal::UnknownControl"),
+            BridgeRefusal::PageDirControlNotModelled { .. } => {
+                FaultTag("BridgeRefusal::PageDirControlNotModelled")
+            }
+            BridgeRefusal::ControlParamsSizeMismatch { .. } => {
+                FaultTag("BridgeRefusal::ControlParamsSizeMismatch")
+            }
+            BridgeRefusal::ImplicitVaspace => FaultTag("BridgeRefusal::ImplicitVaspace"),
             BridgeRefusal::ParamsSizeExceedsPayload { .. } => {
                 FaultTag("BridgeRefusal::ParamsSizeExceedsPayload")
             }
@@ -337,6 +450,7 @@ pub fn translate(abi: &DriverAbiTable, cmd: &RpcCommand) -> Result<Translation, 
     match cmd.function {
         RpcFunction::RmAlloc => translate_alloc(abi, &cmd.payload),
         RpcFunction::Free => translate_free(abi, &cmd.payload),
+        RpcFunction::RmControl => translate_control(abi, &cmd.payload),
         // Known and inert — three different reasons, collapsed here only because the
         // *answer* is the same. See `Translation::Inert`.
         RpcFunction::SetGuestSystemInfo
@@ -345,7 +459,7 @@ pub fn translate(abi: &DriverAbiTable, cmd: &RpcCommand) -> Result<Translation, 
         | RpcFunction::GspSetSystemInfo
         | RpcFunction::SetRegistry => Ok(Translation::Inert),
         // Known, mapped by the design, arm not built. Never `Inert`: the fact matters.
-        RpcFunction::RmControl | RpcFunction::DupObject | RpcFunction::ContinuationRecord => {
+        RpcFunction::DupObject | RpcFunction::ContinuationRecord => {
             Err(BridgeRefusal::NotYetTranslated { code: cmd.code })
         }
         // Ours to send, never to receive.
@@ -522,6 +636,114 @@ fn translate_alloc(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation, 
         handle: HObject(h.handle),
         class,
         facts,
+    }))
+}
+
+/// `GSP_RM_CONTROL` (fn 76) → [`RmEvent::SetPageDir`], for exactly one `cmd`.
+///
+/// ## Which control, and the hole that is now measured rather than suspected
+///
+/// [`kayfabe_abi::versions::DriverAbiTable::control_params`] is the table; this function
+/// names no command number. It has three outcomes and they are three different
+/// statements:
+///
+/// - `SetPageDir` — `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`, the one control this port
+///   turns into a fact;
+/// - `PageDirNotModelled` — a control **known** to move a VASpace's page-directory
+///   binding, refused by name ([`BridgeRefusal::PageDirControlNotModelled`]);
+/// - not in the table at all — [`BridgeRefusal::UnknownControl`], §7 item 6's decision.
+///
+/// ★★ The middle one is the finding. `gsp_core_bridge.md` §7 item 1 asked *"which control
+/// carries the compute VAS's PDB"* and warned that if the answer is `0x90f10106` then this
+/// design produces no `SetPageDir` for it at all. That is the answer: on a bare-metal GSP
+/// client `SET_PAGE_DIRECTORY` reaches the wire **only** for a `SHARED_MANAGEMENT` /
+/// `IS_EXTERNALLY_OWNED` VASpace — i.e. UVM's — because the handler asserts on exactly
+/// that (`ogkm-580: src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:3109`), while every
+/// ordinary RM-managed VAS declares its root through
+/// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` at construct time. So this arm is
+/// necessary and **not sufficient**, and the refusal is what says so out loud instead of a
+/// channel deferring forever with no record.
+///
+/// ## The namespace, again
+///
+/// `client` is `hdr.hClient`, the RPC body's own field, read once at the top. The C's
+/// counter-example is `GPU_PROMOTE_CTX`, where it reads `hChanClient` out of `params+12`
+/// and never looks at the envelope's (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2283`).
+/// `hObject` — the Device the control is issued *against* — is **dropped**:
+/// [`RmEvent::SetPageDir`] has nowhere to put it, and the VASpace is named by a params
+/// field, not by it.
+///
+/// ## What else is dropped, and the one that will matter
+///
+/// `numEntries`, `chId`, `subDeviceId`, `pasid` — none has a home in `RmEvent`. And
+/// **`aperture`** (`flags[1:0]`), which is the interesting one:
+/// [`kayfabe_abi::view::PdbAperture`] decodes it and `RmEvent::SetPageDir` has nowhere to
+/// put it, so a vidmem-rooted and a sysmem-rooted page directory become *the same event*.
+///
+/// That is safe **exactly as long as `Pdb` is only ever a key**, which today it is:
+/// `kayfabe_mmu::AddressTable` takes a `Pdb` to name a table and to name a fault, and
+/// nothing in the tree dereferences one. The day a walker follows a PDB it must know
+/// whether the address is a framebuffer offset or a guest-physical address — two different
+/// address spaces — and `kayfabe_arch::ids::Pdb`'s own doc currently assumes the first
+/// (*"a per-GPU FB address"*). Recorded here because that is the moment this drop stops
+/// being free.
+fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation, BridgeRefusal> {
+    let h = abi.decode_rpc_control(payload)?;
+
+    // ── The namespace, read ONCE, from the header, before anything else.
+    let client = HClient(h.client);
+    if client == RESERVED_CLIENT {
+        return Err(BridgeRefusal::ReservedClient);
+    }
+
+    // ── Is `params[]` even the shape the offsets below assume? A declared bit, and only
+    // the one bit — the neighbouring `COPYOUT_ON_ERROR` is not our business.
+    if rpc_params_are_serialized(h.rmapi_rpc_flags) {
+        return Err(BridgeRefusal::SerializedControlParams { cmd: h.cmd });
+    }
+
+    // ── The declared params window, bounded by what actually arrived.
+    let declared = h.params_size as usize;
+    let Some(params) = payload
+        .get(h.params_at..)
+        .and_then(|tail| tail.get(..declared))
+    else {
+        return Err(BridgeRefusal::ParamsSizeExceedsPayload {
+            declared: h.params_size,
+            available: payload.len().saturating_sub(h.params_at),
+        });
+    };
+
+    let shape = match abi.control_params(ControlCmd(h.cmd)) {
+        Some(shape) => shape,
+        None => return Err(BridgeRefusal::UnknownControl { cmd: h.cmd }),
+    };
+    if shape == ControlParams::PageDirNotModelled {
+        return Err(BridgeRefusal::PageDirControlNotModelled { cmd: h.cmd });
+    }
+
+    // ── The guest's own size assertion against the struct's actual size. Exact, per
+    // §4.3: the mismatch is refused rather than resolved in either direction.
+    if let Some(expected) = shape.params_size()
+        && declared != expected
+    {
+        return Err(BridgeRefusal::ControlParamsSizeMismatch {
+            cmd: h.cmd,
+            declared: h.params_size,
+            expected,
+        });
+    }
+
+    let p = abi.decode_set_page_dir(params)?;
+    // ★ Zero is not "unspecified" here — it names the client/device pair's *implicit*
+    // VASpace, an object this RPC does not identify. See `BridgeRefusal::ImplicitVaspace`.
+    if p.h_vaspace == 0 {
+        return Err(BridgeRefusal::ImplicitVaspace);
+    }
+    Ok(Translation::Event(RmEvent::SetPageDir {
+        client,
+        vaspace: HObject(p.h_vaspace),
+        pdb: Pdb(p.phys_address),
     }))
 }
 
