@@ -818,12 +818,14 @@ pub enum VerbKind {
 /// Which verb occurrence a hold latches onto. Every field is optional; `None`
 /// matches anything, so a test can hold "verb X of proc A's worker 0" precisely, or
 /// "the next map on any isolate" loosely.
+///
+/// ★ N3: there is no separate `gpu` field. The target rides inside [`IsolateId`], so a
+/// spec that named a proc and a GPU which disagreed with the isolate it was aimed at is
+/// no longer expressible — it used to be, and it silently matched nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct HoldSpec {
-    /// Restrict to this isolate session.
+    /// Restrict to this isolate session — i.e. to one `(proc, GPU)`.
     pub isolate: Option<IsolateId>,
-    /// Restrict to this GPU target.
-    pub gpu: Option<GpuId>,
     /// Restrict to this pool worker slot.
     pub worker: Option<WorkerId>,
     /// Restrict to this verb kind.
@@ -831,13 +833,12 @@ pub struct HoldSpec {
 }
 
 impl HoldSpec {
-    /// Hold `verb` on `(isolate, gpu, worker)` — the precise form stage 4's mean test
+    /// Hold `verb` on `(isolate, worker)` — the precise form stage 4's mean test
     /// is built on ("hold verb X of proc A's worker 0, let everything else run").
     #[must_use]
-    pub fn exact(isolate: IsolateId, gpu: GpuId, worker: WorkerId, verb: VerbKind) -> Self {
+    pub fn exact(isolate: IsolateId, worker: WorkerId, verb: VerbKind) -> Self {
         HoldSpec {
             isolate: Some(isolate),
-            gpu: Some(gpu),
             worker: Some(worker),
             verb: Some(verb),
         }
@@ -853,9 +854,8 @@ impl HoldSpec {
         }
     }
 
-    fn matches(&self, id: IsolateId, gpu: GpuId, worker: WorkerId, verb: VerbKind) -> bool {
+    fn matches(&self, id: IsolateId, worker: WorkerId, verb: VerbKind) -> bool {
         self.isolate.is_none_or(|x| x == id)
-            && self.gpu.is_none_or(|x| x == gpu)
             && self.worker.is_none_or(|x| x == worker)
             && self.verb.is_none_or(|x| x == verb)
     }
@@ -1399,6 +1399,7 @@ struct RmNamespace {
 #[derive(Debug)]
 pub struct MockRmBackend {
     id: IsolateId,
+    /// `id.gpu()`, cached for readability — never an independent fact (N3).
     gpu: GpuId,
     worker: WorkerId,
     /// `id + 1` — the isolate's primary namespace lane (unchanged, so the high bits of
@@ -1427,7 +1428,6 @@ impl MockRmBackend {
 
     fn new(
         id: IsolateId,
-        gpu: GpuId,
         worker: WorkerId,
         recorder: SharedRecorder,
         ns: Arc<Mutex<RmNamespace>>,
@@ -1435,9 +1435,9 @@ impl MockRmBackend {
     ) -> Self {
         MockRmBackend {
             id,
-            gpu,
+            gpu: id.gpu(),
             worker,
-            idlane: u64::from(id.0) + 1,
+            idlane: u64::from(id.proc()) + 1,
             recorder,
             ns,
             cancel,
@@ -1465,7 +1465,7 @@ impl MockRmBackend {
             let hold = r
                 .holds
                 .iter()
-                .position(|(s, _)| s.matches(self.id, self.gpu, self.worker, verb))
+                .position(|(s, _)| s.matches(self.id, self.worker, verb))
                 .map(|i| r.holds.remove(i).1);
             (hold, interruptible)
         };
@@ -1862,9 +1862,9 @@ impl Isolate for MockIsolate {
 pub struct MockIsolateFactory {
     recorder: SharedRecorder,
     pool_size: usize,
-    /// Every spawned `(session id, target GPU)`, in order (assert isolate-per-`(proc,
-    /// GPU)`).
-    pub spawned: Vec<(IsolateId, GpuId)>,
+    /// Every spawned session id, in order — and an [`IsolateId`] IS a `(proc, GPU)`
+    /// pair, so this is still the isolate-per-`(proc, GPU)` witness it always was (N3).
+    pub spawned: Vec<IsolateId>,
 }
 
 impl MockIsolateFactory {
@@ -1904,9 +1904,9 @@ impl Default for MockIsolateFactory {
 }
 
 impl IsolateFactory for MockIsolateFactory {
-    fn spawn(&mut self, id: IsolateId, gpu: GpuId) -> Box<dyn Isolate> {
-        self.spawned.push((id, gpu));
-        let ns = MockRmBackend::namespace(u64::from(id.0) + 1, gpu);
+    fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate> {
+        self.spawned.push(id);
+        let ns = MockRmBackend::namespace(u64::from(id.proc()) + 1, id.gpu());
         let cancels: Vec<Arc<MockCancelSink>> = (0..self.pool_size)
             .map(|i| MockCancelSink::new(id, WorkerId(i as u32), Arc::clone(&self.recorder)))
             .collect();
@@ -1918,7 +1918,6 @@ impl IsolateFactory for MockIsolateFactory {
                     w,
                     Box::new(MockRmBackend::new(
                         id,
-                        gpu,
                         w,
                         Arc::clone(&self.recorder),
                         Arc::clone(&ns),
@@ -2059,7 +2058,7 @@ mod tests {
     #[test]
     fn mock_rm_map_gpu_va_stays_distinct_past_65536_pages() {
         let (mut f, _rec) = MockIsolateFactory::new();
-        let mut iso = f.spawn(IsolateId(1), GpuId::ZERO);
+        let mut iso = f.spawn(IsolateId::new(1, GpuId::ZERO));
         let mut w = iso.checkout().expect("fresh pool has an idle worker");
         w.with_rm(|rm| {
             let vas_a = rm.alloc_vaspace().unwrap();
@@ -2086,7 +2085,7 @@ mod tests {
     #[test]
     fn recorder_compact_preserves_the_ledger_exactly() {
         let (mut f, rec) = MockIsolateFactory::new();
-        let mut iso = f.spawn(IsolateId(1), GpuId::ZERO);
+        let mut iso = f.spawn(IsolateId::new(1, GpuId::ZERO));
         let (vas, mem) = iso.checkout().expect("idle worker").with_rm(|rm| {
             let vas = rm.alloc_vaspace().unwrap();
             let mem = rm.alloc_sysmem(0x1000).unwrap();
@@ -2096,12 +2095,12 @@ mod tests {
 
         let undrained = rec.lock().expect("recorder").ledger();
         assert_eq!(
-            undrained.leaked_on(IsolateId(1)),
+            undrained.leaked_on(IsolateId::new(1, GpuId::ZERO)),
             BTreeSet::from([vas, mem]),
             "precondition: both handles are outstanding before any drain"
         );
         assert_eq!(
-            undrained.leaked_maps[&IsolateId(1)].len(),
+            undrained.leaked_maps[&IsolateId::new(1, GpuId::ZERO)].len(),
             1,
             "precondition: the one mapping is outstanding too"
         );
@@ -2130,7 +2129,7 @@ mod tests {
             .expect("free");
         let after = rec.lock().expect("recorder").ledger();
         assert_eq!(
-            after.leaked_on(IsolateId(1)),
+            after.leaked_on(IsolateId::new(1, GpuId::ZERO)),
             BTreeSet::from([vas]),
             "post-compaction verbs fold ONTO the carried ledger, never over it"
         );
@@ -2143,8 +2142,8 @@ mod tests {
     #[test]
     fn mock_rm_handles_are_isolate_scoped() {
         let (mut f, _rec) = MockIsolateFactory::new();
-        let mut a = f.spawn(IsolateId(1), GpuId::ZERO);
-        let mut b = f.spawn(IsolateId(2), GpuId::ZERO);
+        let mut a = f.spawn(IsolateId::new(1, GpuId::ZERO));
+        let mut b = f.spawn(IsolateId::new(2, GpuId::ZERO));
         let ha = a
             .checkout()
             .expect("idle worker")

@@ -177,8 +177,7 @@ fn device_with(
 /// Arm a one-shot hold on `verb` of `(proc, worker)`'s isolate.
 fn hold(rec: &SharedRecorder, pid: ProcId, worker: u32, verb: VerbKind) -> Arc<VerbHold> {
     rec.lock().expect("recorder").hold(HoldSpec::exact(
-        IsolateId(pid.0),
-        GPU,
+        IsolateId::new(pid.0, GPU),
         WorkerId(worker),
         verb,
     ))
@@ -196,7 +195,7 @@ fn hold(rec: &SharedRecorder, pid: ProcId, worker: u32, verb: VerbKind) -> Arc<V
 #[should_panic(expected = "R1 no-blocking-under-lock violation")]
 fn r1_is_asserted_at_the_host_verb_itself_not_at_a_wrapper() {
     let (mut factory, _rec) = MockIsolateFactory::new();
-    let mut iso = factory.spawn(IsolateId(1), GPU);
+    let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let proc_lock = RankedMutex::new(LockRank::Proc, ());
 
@@ -214,7 +213,7 @@ fn r1_is_asserted_at_the_host_verb_itself_not_at_a_wrapper() {
 fn r1_legal_path_checked_out_worker_with_no_guards_runs() {
     let _wd = watchdog("r1_legal_path", Duration::from_secs(30));
     let (mut factory, rec) = MockIsolateFactory::new();
-    let mut iso = factory.spawn(IsolateId(1), GPU);
+    let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     assert_eq!(kayfabe_rt::lock::held_depth(), 0, "no guard is alive here");
 
@@ -525,7 +524,7 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
     let frees: Vec<_> = rec
         .lock()
         .expect("recorder")
-        .verbs_of(IsolateId(pid.0))
+        .verbs_of(IsolateId::new(pid.0, GPU))
         .into_iter()
         .filter_map(|v| match v {
             RmVerb::Free { obj } => Some(obj),
@@ -535,7 +534,7 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
     let allocated: Vec<_> = rec
         .lock()
         .expect("recorder")
-        .verbs_of(IsolateId(pid.0))
+        .verbs_of(IsolateId::new(pid.0, GPU))
         .into_iter()
         .filter_map(|v| match v {
             RmVerb::AllocChannel { handle, .. } | RmVerb::AllocVaSpace { handle } => Some(handle),
@@ -810,7 +809,7 @@ fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
         // residue. §12.17's no-resurrect rule is what forbids reclaiming them per object.
         device.declare_residue(
             ResidueClaim::on(
-                kayfabe_isolate::IsolateId(victim.0),
+                IsolateId::new(victim.0, GPU),
                 "worker death condemns the component: the isolate is stopped at once \
                  (§12.17 no-resurrect), so its host VAS + backing are disposed of by the \
                  session's own death (§7.0)",
@@ -934,7 +933,7 @@ fn single_in_flight_per_worker_is_structural() {
     let _wd = watchdog("single_in_flight_per_worker", Duration::from_secs(30));
     const POOL: usize = 3;
     let (mut factory, _rec) = MockIsolateFactory::with_pool_size(POOL);
-    let mut iso = factory.spawn(IsolateId(7), GPU);
+    let mut iso = factory.spawn(IsolateId::new(7, GPU));
     assert_eq!(iso.pool_size(), POOL);
     assert_eq!(iso.idle_workers(), POOL);
 
@@ -1131,7 +1130,7 @@ fn commit_engine_object_proc_guard_refuses_on_either_term_alone() {
 fn commit_control_proc_guard_refuses_on_either_term_alone() {
     let _wd = watchdog("commit_control_proc_guard", Duration::from_secs(30));
     const CMD: ControlCmd = ControlCmd(0x2080_0110);
-    const OBJ: HostHandle = HostHandle::new(kayfabe_isolate::IsolateId(0), 0x0BEE_F000);
+    const OBJ: HostHandle = HostHandle::new(IsolateId::new(0, GPU), 0x0BEE_F000);
 
     let (mut gpu, pids) = plain_gpu(2);
     let (a, b) = (pids[0], pids[1]);
@@ -1314,7 +1313,7 @@ fn worker_death_kills_its_own_pool_slot_not_merely_the_proc() {
 #[test]
 fn commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone() {
     let _wd = watchdog("commit_publish_doorbell_guards", Duration::from_secs(30));
-    const MEMORY: HostHandle = HostHandle::new(kayfabe_isolate::IsolateId(0), 0x0D01_0001);
+    const MEMORY: HostHandle = HostHandle::new(IsolateId::new(0, GPU), 0x0D01_0001);
     const HOST_VA: u64 = 0x7000_0000;
 
     // ---- commit_publish, term (b): the plan is A's, the proc is a live B.
@@ -1442,7 +1441,10 @@ fn a_refused_commit_releases_its_orphans_on_the_single_threaded_path() {
         "re-publishing a bound VA is a loud overlap — never a silent rebind"
     );
 
-    let verbs = rec.lock().expect("recorder").verbs_of(IsolateId(pid.0));
+    let verbs = rec
+        .lock()
+        .expect("recorder")
+        .verbs_of(IsolateId::new(pid.0, GPU));
     let allocated: Vec<_> = verbs
         .iter()
         .filter_map(|v| match v {

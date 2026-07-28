@@ -104,7 +104,7 @@ impl HostHandle {
     /// Belongs to no isolate, so the [`Worker::execute`] foreign-handle gate exempts
     /// it (a null parent is legal on every connection).
     pub const NULL: HostHandle = HostHandle {
-        isolate: IsolateId(u32::MAX),
+        isolate: IsolateId::NONE,
         raw: 0,
     };
 
@@ -129,9 +129,21 @@ impl HostHandle {
 
     /// Is this handle usable on `isolate`'s connection? [`Self::NULL`] is usable
     /// everywhere; every other handle belongs to exactly one namespace.
+    ///
+    /// ★ N3: the comparison is on the WHOLE [`IsolateId`], i.e. on `(proc, GPU)`. It
+    /// used to compare the proc half only, which made a handle minted on one of a
+    /// proc's GPUs indistinguishable — *to this function* — from the same value on
+    /// another of its GPUs. See [`IsolateId`] for why that is a bystander hit rather
+    /// than a harmless alias.
     #[must_use]
     pub const fn belongs_to(self, isolate: IsolateId) -> bool {
-        self.raw == 0 && self.isolate.0 == u32::MAX || self.isolate.0 == isolate.0
+        if self.raw == 0
+            && self.isolate.proc == IsolateId::NONE.proc
+            && self.isolate.gpu.0 == IsolateId::NONE.gpu.0
+        {
+            return true;
+        }
+        self.isolate.proc == isolate.proc && self.isolate.gpu.0 == isolate.gpu.0
     }
 }
 
@@ -142,7 +154,7 @@ impl core::fmt::Debug for HostHandle {
         if *self == HostHandle::NULL {
             return f.write_str("HostHandle(NULL)");
         }
-        write!(f, "HostHandle(iso{}:{:#x})", self.isolate.0, self.raw)
+        write!(f, "HostHandle({:?}:{:#x})", self.isolate, self.raw)
     }
 }
 
@@ -348,10 +360,87 @@ pub trait RmBackend: Send + Sync {
     fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError>;
 }
 
-/// Session identity of an isolate. Equals the owning `ProcId` by construction
-/// (arch doc §4.3.4; the isolate infra supports 4096 sessions).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct IsolateId(pub u32);
+/// ★★ Session identity of an isolate — the **`(Proc, GpuId)` pair**, because that is
+/// what an isolate *is* (`mode2_multiprocess_isolate.md`; MG-5, decision #29/#30: one
+/// sandboxed host process per `(Proc, GpuId)`), and an identity must name the thing it
+/// identifies.
+///
+/// ## Why the GPU is part of the identity, and not a field beside it (N3)
+///
+/// It used to be `IsolateId(ProcId)` alone, with the target GPU carried separately —
+/// and a proc that legally spans two GPUs (one guest process with a `Device` on each
+/// `deviceInstance`) then had **two isolates wearing one id**. Two consequences, both
+/// measured before this changed:
+///
+/// 1. [`HostHandle::belongs_to`] answered `true` for a handle minted in the proc's GPU0
+///    isolate presented on its GPU1 connection, so [`Worker::execute`]'s foreign-handle
+///    gate — documented as "the ONE place the `(Proc, GpuId)`-scoped-handle rule is
+///    enforced" — enforced only the `Proc` half. Nothing downstream closes that: the
+///    two isolates are two host processes with two RM clients, and RM mints handles for
+///    every client from ONE base (`ogkm: src/nvidia/generated/g_resserv_nvoc.h:173`), so
+///    the same raw value names a **different live object** in the other one. The verb
+///    would have run on a bystander. (In the mock it is caught by `MockRmBackend`'s
+///    per-namespace validity check — the exact "backend's luck" [`HostHandle`]'s own
+///    docs say a real host does not provide.)
+/// 2. Every per-isolate *account* keyed on this id merged the two: the mock's
+///    `HostLedger`, its cancel census, its verb log queries. An instrument that cannot
+///    separate the two isolates cannot witness a fix to (1) either.
+///
+/// This is the [`crate::HostHandle`] / `GpaBlock` / `ClientKey` discipline applied to
+/// the isolate itself: **derived from observed protocol facts** — a `ProcId` is the
+/// label of a dup-connected component of declared clients, a [`GpuId`] is a `Device`'s
+/// declared `deviceInstance` — never from allocation order (decision #4).
+///
+/// The `proc` field is a bare `u32` rather than `kayfabe_core::ProcId` only because
+/// this crate sits *below* the core in the dependency graph; [`kayfabe_core`] is the
+/// one minting site and it passes `pid.0`.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IsolateId {
+    /// The owning proc's [`kayfabe_core::ProcId`] value. Ordered FIRST so a
+    /// `BTreeMap<IsolateId, _>` groups a proc's targets together.
+    proc: u32,
+    /// The GPU target this isolate is the sandbox for.
+    gpu: GpuId,
+}
+
+impl IsolateId {
+    /// The namespace-free sentinel [`HostHandle::NULL`] wears — belongs to no proc and
+    /// no GPU, so it can never compare equal to a real isolate's id.
+    pub const NONE: IsolateId = IsolateId {
+        proc: u32::MAX,
+        gpu: GpuId(u32::MAX),
+    };
+
+    /// The isolate of `(proc, gpu)`. **The only constructor** — an `IsolateId` that
+    /// names a proc without naming its target is not representable.
+    #[must_use]
+    pub const fn new(proc: u32, gpu: GpuId) -> Self {
+        IsolateId { proc, gpu }
+    }
+
+    /// The owning proc's id value.
+    #[must_use]
+    pub const fn proc(self) -> u32 {
+        self.proc
+    }
+
+    /// The GPU target this isolate serves.
+    #[must_use]
+    pub const fn gpu(self) -> GpuId {
+        self.gpu
+    }
+}
+
+impl core::fmt::Debug for IsolateId {
+    /// `iso1/gpu0` — both halves always, because a diagnostic that prints only the proc
+    /// is how the collapse this type fixed stayed invisible.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if *self == IsolateId::NONE {
+            return f.write_str("iso(NONE)");
+        }
+        write!(f, "iso{}/gpu{}", self.proc, self.gpu.0)
+    }
+}
 
 /// One worker slot inside an isolate's **bounded pool** (`l1_concurrency.md` §7.2,
 /// decision #37).
@@ -1689,12 +1778,18 @@ impl Drop for IsolateBox {
 ///
 /// `Send + Sync`: owned by the shared `Gpu` (crate docs, #17); spawning takes `&mut`.
 pub trait IsolateFactory: Send + Sync {
-    /// Spawn (or lazily reserve) the isolate for session `(id, gpu)` — one sandboxed
-    /// host worker **per guest process per target GPU** (`multi_gpu_and_mig.md` item
-    /// 3: a proc spanning two GPUs gets distinct isolates, so a bug forwarding its
-    /// GPU0 traffic cannot reach its GPU1 host handles — the #14 blast-radius
-    /// boundary lifted onto the GPU axis).
-    fn spawn(&mut self, id: IsolateId, gpu: GpuId) -> Box<dyn Isolate>;
+    /// Spawn (or lazily reserve) the isolate for session `id` — one sandboxed host
+    /// worker **per guest process per target GPU** (`multi_gpu_and_mig.md` item 3: a
+    /// proc spanning two GPUs gets distinct isolates, so a bug forwarding its GPU0
+    /// traffic cannot reach its GPU1 host handles — the #14 blast-radius boundary
+    /// lifted onto the GPU axis).
+    ///
+    /// ★ N3: the target GPU rides **inside** [`IsolateId`] rather than beside it. This
+    /// used to be `spawn(id, gpu)`, which made "the id says one target, the sandbox was
+    /// built for another" a representable state — and the handles the sandbox then
+    /// minted would be stamped with the wrong namespace, which is precisely the fact
+    /// [`Worker::execute`]'s gate reads. One argument, no disagreement possible.
+    fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate>;
 }
 
 // The concurrency contract, compile-time-asserted (decision #17).

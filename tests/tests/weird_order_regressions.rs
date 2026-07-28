@@ -157,7 +157,7 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
         .unwrap()
         .log
         .iter()
-        .map(|(id, _)| id.0)
+        .map(|(id, _)| *id)
         .collect();
     let distinct: std::collections::BTreeSet<_> = sessions.into_iter().collect();
     assert!(

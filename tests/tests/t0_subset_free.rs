@@ -211,7 +211,7 @@ fn guest_free(device: &SharedDevice, handle: HObject) {
 fn verbs_since(rec: &SharedRecorder, pid: ProcId, mark: usize) -> Vec<RmVerb> {
     rec.lock().expect("recorder").log[mark..]
         .iter()
-        .filter(|(i, _)| *i == IsolateId(pid.0))
+        .filter(|(i, _)| *i == IsolateId::new(pid.0, GPU))
         .map(|(_, v)| v.clone())
         .collect()
 }
@@ -233,14 +233,14 @@ fn assert_conserved(device: Guarded<Arc<SharedDevice>>, pid: ProcId, rec: &Share
     });
     let proc = &gpu.procs[&pid];
     assert_eq!(
-        ledger.leaked_on(IsolateId(pid.0)),
+        ledger.leaked_on(IsolateId::new(pid.0, GPU)),
         reachable_objects(proc),
         "every host OBJECT still outstanding must be one core state can name"
     );
     assert_eq!(
         ledger
             .leaked_maps
-            .get(&IsolateId(pid.0))
+            .get(&IsolateId::new(pid.0, GPU))
             .cloned()
             .unwrap_or_default(),
         reachable_maps(proc),
@@ -604,10 +604,10 @@ fn the_drain_never_races_a_verb_in_flight_on_the_same_isolate() {
     device
         .publish_backing(GPU, SCRATCH_PDB, VA_SCRATCH, 0x1000)
         .expect("the scratch Vas materializes a host VAS");
-    let held: Arc<VerbHold> = rec
-        .lock()
-        .expect("recorder")
-        .hold(HoldSpec::on_isolate(IsolateId(pid.0), VerbKind::MapGpuVa));
+    let held: Arc<VerbHold> = rec.lock().expect("recorder").hold(HoldSpec::on_isolate(
+        IsolateId::new(pid.0, GPU),
+        VerbKind::MapGpuVa,
+    ));
     let d = Arc::clone(&device);
     let parked = thread::spawn(move || {
         d.publish_backing(GPU, SCRATCH_PDB, GpuVa(VA_SCRATCH.0 + 0x10_0000), 0x1000)
@@ -688,7 +688,7 @@ fn a_retired_procs_queue_is_left_to_the_session_death_backstop() {
     // `freeing_a_vaspace_queues_its_host_state_and_the_next_op_releases_it`.)
     device.declare_residue(
         ResidueClaim::on(
-            IsolateId(pid.0),
+            IsolateId::new(pid.0, GPU),
             "the one disposition T0 deliberately does NOT own: an out-of-band `retire_proc` \
              stops the isolate, so the queued host VAS + backing are disposed of in bulk \
              by the session's death (§7.0)",
@@ -725,7 +725,7 @@ fn a_retired_procs_queue_is_left_to_the_session_death_backstop() {
     // `HostLedger`'s own docs mean by "bulk disposal at namespace death is a different
     // disposition from per-object reclaim".
     let ledger = rec.lock().expect("recorder").ledger();
-    let outstanding: BTreeSet<HostHandle> = ledger.leaked_on(IsolateId(pid.0));
+    let outstanding: BTreeSet<HostHandle> = ledger.leaked_on(IsolateId::new(pid.0, GPU));
     assert_eq!(
         outstanding.len(),
         2,

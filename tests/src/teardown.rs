@@ -390,17 +390,34 @@ pub fn audit_teardown(
     // ---- (2) Accounted(core) — reachable ∪ staged, over live AND retired procs. ----
     let mut accounted: BTreeMap<IsolateId, Accounted> = BTreeMap::new();
     let mut absorb = |proc: &Proc| {
-        // `Gpu` spawns `IsolateId(pid.0)` per target, and the mock keys its log by
-        // isolate id while namespacing the handle VALUES by GPU — so one `IsolateId`
-        // covers all of a proc's per-GPU isolates, which is exactly the granularity
-        // `reachable_objects` answers at.
-        let iso = IsolateId(proc.id.0);
-        let e = accounted.entry(iso).or_default();
-        e.objects.extend(reachable_objects(proc));
-        e.maps.extend(reachable_maps(proc));
+        // ★ N3 — bucketed by the handle's OWN recorded namespace ([`HostHandle::isolate`],
+        // an `(proc, GPU)` [`IsolateId`]), not by the proc. A proc that spans two GPUs owns
+        // two isolates with two disjoint RM client namespaces, and this audit used to add
+        // both to one bucket — so an object accounted against the *wrong* one of a proc's
+        // isolates balanced perfectly. It no longer can: the ledger keys on the isolate
+        // that ISSUED the verb, this keys on the isolate that MINTED the handle, and the
+        // set equality below is now a statement that those two agree.
+        for h in reachable_objects(proc) {
+            accounted.entry(h.isolate()).or_default().objects.insert(h);
+        }
+        for (vas, va) in reachable_maps(proc) {
+            accounted
+                .entry(vas.isolate())
+                .or_default()
+                .maps
+                .insert((vas, va));
+        }
         let (sobj, smap) = staged(proc);
-        e.objects.extend(sobj);
-        e.maps.extend(smap);
+        for h in sobj {
+            accounted.entry(h.isolate()).or_default().objects.insert(h);
+        }
+        for (vas, va) in smap {
+            accounted
+                .entry(vas.isolate())
+                .or_default()
+                .maps
+                .insert((vas, va));
+        }
     };
     view.for_each_live(&mut |_pid, p| absorb(p));
     view.for_each_retired(&mut |p| absorb(p));

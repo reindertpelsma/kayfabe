@@ -614,7 +614,7 @@ fn cb14_host_channel_touch_alone_blocks_a_late_merge() {
     // harness that reaches past the core should have to say so.
     gpu.declare_residue(
         ResidueClaim::on(
-            kayfabe_isolate::IsolateId(pid_b.0),
+            kayfabe_isolate::IsolateId::new(pid_b.0, GpuId::ZERO),
             "harness bypass: the late-merge clause under test is set by writing a \
              fabricated HostHandle straight into core state, so the ledger has never \
              seen it",
@@ -631,7 +631,11 @@ fn cb14_host_channel_touch_alone_blocks_a_late_merge() {
         .get_mut(&cid_b)
         .unwrap()
         .host_channel = Some(kayfabe_isolate::HostHandle::new(
-        kayfabe_isolate::IsolateId(0),
+        // ★ N3 — stamped with the isolate whose state it is being written into. It used
+        // to name `IsolateId(0)` (the SYSTEM isolate) while sitting in proc B's channel;
+        // that was invisible while the teardown audit bucketed by `Proc`, and the audit
+        // now buckets by the namespace the handle itself records.
+        kayfabe_isolate::IsolateId::new(pid_b.0, GpuId::ZERO),
         0xC0FFEE,
     ));
 
@@ -669,7 +673,7 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
     // harness that reaches past the core should have to say so.
     gpu.declare_residue(
         ResidueClaim::on(
-            kayfabe_isolate::IsolateId(pid_b.0),
+            kayfabe_isolate::IsolateId::new(pid_b.0, GpuId::ZERO),
             "harness bypass: the late-merge clause under test is set by writing a \
              fabricated HostHandle straight into core state, so the ledger has never \
              seen it",
@@ -687,7 +691,8 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
         .get_mut(&(GpuId::ZERO, B_PDB))
         .unwrap();
     vas.host_vas = Some(kayfabe_isolate::HostHandle::new(
-        kayfabe_isolate::IsolateId(0),
+        // ★ N3 — proc B's own isolate, for the reason stated at the host-channel twin.
+        kayfabe_isolate::IsolateId::new(pid_b.0, GpuId::ZERO),
         0xBADA55,
     ));
 
@@ -810,8 +815,8 @@ fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
         .values()
         .map(|p| p.arenas[&GpuId::ZERO].range.clone())
         .collect();
-    let gen1_sessions: std::collections::BTreeSet<u32> =
-        rec.lock().unwrap().log.iter().map(|(id, _)| id.0).collect();
+    let gen1_sessions: std::collections::BTreeSet<kayfabe_isolate::IsolateId> =
+        rec.lock().unwrap().log.iter().map(|(id, _)| *id).collect();
 
     // ---- Full teardown: every client root freed. ----
     gpu.apply(RmEvent::Free {
@@ -894,8 +899,8 @@ fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
     );
 
     // Fresh isolate sessions — gen 2 never ran on a dead proc's host session.
-    let all_sessions: std::collections::BTreeSet<u32> =
-        rec.lock().unwrap().log.iter().map(|(id, _)| id.0).collect();
+    let all_sessions: std::collections::BTreeSet<kayfabe_isolate::IsolateId> =
+        rec.lock().unwrap().log.iter().map(|(id, _)| *id).collect();
     assert!(
         all_sessions.len() > gen1_sessions.len(),
         "gen-2 spawned FRESH isolate sessions (gen1={gen1_sessions:?}, all={all_sessions:?})"

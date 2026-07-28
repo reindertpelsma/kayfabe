@@ -5998,3 +5998,115 @@ fail on it** before anything was changed.
    its VASpace), so it is a design change and is named rather than done silently.
 2. **B2/B3 remain mutually redundant.** Kept as defence in depth for §12.42's stated reason;
    still no single-neuter witness for either.
+
+---
+
+### 12.45 ★★★ N3 — THE ISOLATE ITSELF WAS KEYED ON HALF ITS OWN IDENTITY
+
+`IsolateId` was `IsolateId(pub u32)`, minted as `IsolateId(pid.0)`. The design is **one
+host isolate per `(Proc, GpuId)`** (`mode2_multiprocess_isolate.md`; MG-5, decisions
+#29/#30) — so a guest process holding a `Device` on each `deviceInstance` had **two
+isolates wearing one id**. Same family as §12.41/§12.42: an identity keyed on the
+convenient value rather than the meaningful one.
+
+#### 1. What actually goes wrong — measured, not reasoned
+
+A probe built the shape (one client, two `Device`s, one on each instance) and ran it:
+
+```text
+proc ProcId(1) isolates = [GpuId(0), GpuId(1)]     ← ONE Proc, TWO isolates
+on0 = HostHandle(iso1:0x200000003)                 ← minted on GPU0's isolate
+on1 = HostHandle(iso1:0x201000003)                 ← minted on GPU1's isolate
+isolate ids equal?  true                           ← ★ the collapse
+belongs_to cross  =  true                          ← ★ the GATE ACCEPTS IT
+cross-GPU control on GPU1 with a GPU0 handle => Err(Rm(BadHandle(…)))
+leaked_on(IsolateId(1)) = {…six handles from BOTH isolates…}
+```
+
+So the briefed consequence was **right, and understated**:
+
+1. **The gate does not separate GPUs.** `Worker::execute`'s foreign-handle check —
+   documented as *"the ONE place the `(Proc, GpuId)`-scoped-handle rule is enforced"* —
+   enforced only the `Proc` half. The plan reached the backend.
+2. **Nothing downstream closes it on a real host.** The two isolates are two host
+   processes with two RM clients, and RM mints every client's handles from one
+   `RS_CLIENT_HANDLE_BASE` (`ogkm src/nvidia/generated/g_resserv_nvoc.h:173`), so the
+   same raw value is **live and unrelated** in the other one. The `BadHandle` above is
+   `MockRmBackend` validating against its own per-isolate namespace — precisely the
+   "backend's luck" `HostHandle`'s own docs say a real host does not provide. On silicon
+   the control runs on a **bystander object**; the same gate covers `VerbPlan::Release`,
+   where it would `free` one.
+3. **Worse than briefed: every per-isolate ACCOUNT merged the two** — `HostLedger`
+   (`leaked`/`leaked_maps`/`double_free`/`free_of_unknown`), `verbs_of`, the cancel
+   census, `HoldSpec`, `Event::IsolateVerb`, and the §12.35 teardown post-condition,
+   whose own comment recorded the collapse as a feature (*"one `IsolateId` covers all of
+   a proc's per-GPU isolates"*). An instrument that cannot separate a proc's two isolates
+   cannot witness a fix to (1) either.
+
+**Reachability is not hypothetical.** `SharedDevice::route_control(target_gpu, pid, obj,
+…)` takes the target GPU and the object handle as two independent guest-derived
+arguments, and nothing between it and the gate cross-checks them. Everything *else* in
+the core was found to be correctly keyed — `Proc::isolates`/`arenas`/`pending_release` by
+`GpuId`, `vases` by `(GpuId, Pdb)`, `channels` by their own `chan.gpu`, `by_pdb`/
+`by_vchid` by `(GpuId, ·)` — so the gate was the whole of the exposure, which is exactly
+what a gate is for.
+
+#### 2. The fix
+
+`IsolateId` is now the pair, with `new(proc, gpu)` as its **only** constructor:
+
+```rust
+pub struct IsolateId { proc: u32, gpu: GpuId }
+```
+
+Both halves are **observed protocol facts** (decision #4): a `ProcId` labels a
+dup-connected component of declared clients, a `GpuId` is a `Device`'s declared
+`deviceInstance`. Neither is allocation-ordered, and no recycle is forbidden anywhere.
+
+Three follow-on changes make disagreement untypeable rather than merely unlikely:
+
+- `IsolateFactory::spawn(id, gpu)` → **`spawn(id)`**. "The id says one target, the sandbox
+  was built for another" is no longer a representable state — and it mattered, because the
+  sandbox stamps the namespace onto every handle it mints, which is the fact the gate reads.
+- `HoldSpec` loses its separate `gpu` field for the same reason (a spec whose GPU
+  disagreed with its isolate used to be expressible, and silently matched nothing).
+- The §12.35 teardown audit and `l1_mean`'s `census` now bucket the core side by the
+  namespace **each handle records itself as minted in**, not by its `Proc`. The ledger
+  keys on the isolate that *issued* the verb; the set equality is therefore now also a
+  statement that mint-site and issue-site agree.
+
+#### 3. Tests (all in `l1_mean.rs`, all through the mocks)
+
+`n3_world` — the straddler (one `Proc`, both GPUs, **identical `Pdb`/`VChid` values on
+each**, which is legal) plus one bystander proc per GPU.
+
+| test | what it pins |
+|---|---|
+| `n3_a_cross_gpu_handle_is_refused_by_the_foreign_handle_gate` | exact `RmError::ForeignHandle{handle, worker_isolate}`, **both directions**, both lock modes; the ledger is byte-identical across the refused calls (the gate's "before any verb" promise); the legal same-GPU directions still `Ok(ControlRoute::Forwarded)` (non-vacuity — an always-`false` `belongs_to` would pass everything else); the cross-**Proc** axis still refused |
+| `n3_b_the_two_isolates_of_one_proc_are_separately_accounted` | the two accounts are non-empty and disjoint, and the ledger key, `HostHandle::isolate()` and the mock's independent raw-value lane all agree |
+| `n3_c_…progresses_under_pending_work_on_both_isolates` | ★ THE MEAN ONE: a verb parked on **each** of the straddler's isolates while six threads across three procs and two GPUs run to completion; the gate asserted *inside* that window; a device WRITE completes in it; latches proven still held at the join; the same guest VA on both targets lands in disjoint GPAs |
+| `n3_d_the_conservation_census_separates_a_procs_two_isolates` | the census compares per `(Proc, GpuId)`, not per `Proc` |
+
+#### 4. BITE-CHECKS, INCLUDING THE NON-BITERS
+
+Run with `cargo test --workspace --no-fail-fast`.
+
+| # | neuter | result |
+|---|---|---|
+| B1 | `belongs_to` compares the `proc` half only (the exact pre-N3 gate) | **BITES** — `n3_a`, `n3_c` |
+| B2 | `IsolateId::new` discards the `gpu` (the exact pre-N3 identity) | **BITES** — `n3_a`, `n3_b`, `n3_c`, plus 12 pre-existing tests across `l1_mean`/`multi_gpu`/`vmm_portability` |
+| B3 | teardown audit buckets by `Proc` again | **BITES** — 20+ tests including all three straddler tests |
+| B4 | `census` drops its per-isolate filter | ★ **NON-BITER at first** — the whole suite stayed green. `n3_d` was written for it; it then bites. (The ninth vacuous instrument this protocol has caught.) |
+| B5 | `assert_verb_in_namespace` drops the GPU-lane + provenance asserts | ★ **NON-BITER, and left in place.** `concurrency_stress`'s 16-thread soak is single-GPU, so the sharpened form has nothing to catch there; the property it states is pinned by `n3_b`/`n3_c` instead. Making the soak straddle is a real change to a slow test and is named here rather than done silently |
+
+#### 5. Residuals, named
+
+1. **`MockIsolateFactory::spawned` is written and never read** — `Gpu::realize` consumes
+   the factory, so no test can reach it. Its doc claims to be the isolate-per-`(proc, GPU)`
+   witness; the actual witness is `n3_gpu`'s assertion on `Proc::isolates`' keys, read from
+   real state. The dead field is left, and named, rather than grown machinery for.
+2. **The mock still namespaces its handle VALUES by `(isolate, GPU)`.** That is what made
+   the pre-fix defect present as `BadHandle` instead of as a bystander hit, i.e. it is
+   *more* forgiving than a real host. It is kept deliberately (it is what makes
+   cross-namespace reach visible in an assertion at all), and the type now carries the fact
+   independently, so no test depends on the mock's generosity for the separation.

@@ -167,9 +167,9 @@ const MEM: HObject = HObject(0x6000_0000);
 const VA: GpuVa = GpuVa(0x2_0020_0000);
 const VA2: GpuVa = GpuVa(0x2_0030_0000);
 
-/// The system isolate's id. `Gpu` spawns every isolate as `IsolateId(pid.0)` and the
+/// The system isolate's id. `Gpu` spawns every isolate as `IsolateId::new(pid.0, GPU)` and the
 /// system proc is `ProcId(0)`, so this is a derived fact, not a guess.
-const SYSTEM_ISOLATE: IsolateId = IsolateId(0);
+const SYSTEM_ISOLATE: IsolateId = IsolateId::new(0, GPU);
 
 /// Two guest compute processes (`OWNER`, `OTHER`) on GPU0, plus the shared verb
 /// recorder that backs the conservation ledger.
@@ -372,7 +372,7 @@ fn c_2026_06_18_a_system_verb_on_a_user_procs_backing_is_refused_before_it_runs(
     let owned = backing_of(&gpu, owner, OWNER_PDB, VA);
     assert_eq!(
         owned.isolate(),
-        IsolateId(owner.0),
+        IsolateId::new(owner.0, GPU),
         "the backing is minted in the OWNER's namespace"
     );
 
@@ -459,7 +459,7 @@ fn a_foreign_unmap_is_refused_as_loudly_as_a_foreign_free() {
     let l = ledger(&rec);
     assert_eq!(
         l.leaked_maps
-            .get(&IsolateId(owner.0))
+            .get(&IsolateId::new(owner.0, GPU))
             .map(std::collections::BTreeSet::len),
         Some(1),
         "the owner's mapping is still exactly where it was"
@@ -674,7 +674,7 @@ fn a_condemned_owner_cannot_dangle_a_system_reference() {
     // (`Spine::vacate`) keeps its isolates live and DOES reclaim; the split is deliberate.
     gpu.declare_residue(
         ResidueClaim::on(
-            IsolateId(owner.0),
+            IsolateId::new(owner.0, GPU),
             "condemned owner: `retire_proc` stops the isolate before the staged release \
              can drain (§12.17 no-resurrect), so its host VAS + backing are disposed of \
              by the session's own death (§7.0)",
@@ -749,13 +749,13 @@ fn a_condemned_owner_cannot_dangle_a_system_reference() {
     assert_eq!(binding.host.expect("published").memory, bystander);
 
     let l = ledger(&rec);
-    let condemned_iso = IsolateId(owner.0);
+    let condemned_iso = IsolateId::new(owner.0, GPU);
     for (iso, outstanding) in &l.leaked {
         if outstanding.is_empty() {
             continue;
         }
         assert!(
-            *iso == condemned_iso || *iso == IsolateId(other.0),
+            *iso == condemned_iso || *iso == IsolateId::new(other.0, GPU),
             "only the condemned isolate (namespace death is its disposition) and the \
              still-running bystander may hold outstanding objects; {iso:?} does: \
              {outstanding:?}"
@@ -1235,7 +1235,7 @@ fn drain_pending(gpu: &mut Gpu, pid: ProcId) -> usize {
 fn frees_on_owner(rec: &SharedRecorder, owner: ProcId) -> Vec<HostHandle> {
     frees(rec)
         .into_iter()
-        .filter(|&(iso, _)| iso == IsolateId(owner.0))
+        .filter(|&(iso, _)| iso == IsolateId::new(owner.0, GPU))
         .map(|(_, h)| h)
         .collect()
 }
@@ -1505,7 +1505,7 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
 fn the_last_reference_dropping_retires_the_owner_and_frees_its_objects_per_object() {
     let _wd = watchdog("last_reference_drops", Duration::from_secs(60));
     let (mut gpu, owner, rec) = uvm_referenced_gpu();
-    let owner_iso = IsolateId(owner.0);
+    let owner_iso = IsolateId::new(owner.0, GPU);
 
     kayfabe_fwd::publish_backing(
         gpu.procs.get_mut(&owner).expect("owner"),
@@ -1665,7 +1665,7 @@ fn the_last_reference_dropping_retires_the_owner_and_frees_its_objects_per_objec
 fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
     let _wd = watchdog("condemned_owner_kernel_ref", Duration::from_secs(60));
     let (mut gpu, owner, rec) = uvm_referenced_gpu();
-    let owner_iso = IsolateId(owner.0);
+    let owner_iso = IsolateId::new(owner.0, GPU);
     // ★ §12.35 — DECLARED RESIDUE. This proc dies VIOLENTLY (`retire_proc`: its worker
     // HUPped, its component is condemned), so `Proc::retire` stops its isolates at once
     // and the staged release is refused: §12.17's no-resurrect rule outranks per-object
@@ -1675,7 +1675,7 @@ fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
     // (`Spine::vacate`) keeps its isolates live and DOES reclaim; the split is deliberate.
     gpu.declare_residue(
         ResidueClaim::on(
-            IsolateId(owner.0),
+            IsolateId::new(owner.0, GPU),
             "condemned owner: `retire_proc` stops the isolate before the staged release \
              can drain (§12.17 no-resurrect), so its host VAS + backing are disposed of \
              by the session's own death (§7.0)",

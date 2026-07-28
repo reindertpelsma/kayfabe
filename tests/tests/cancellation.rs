@@ -155,8 +155,7 @@ fn world(pool: usize, mode: LockMode) -> (Guarded<Arc<SharedDevice>>, ProcId, Sh
 /// Arm a one-shot hold on `verb` of `(pid's isolate, GPU, worker)`.
 fn hold(rec: &SharedRecorder, pid: ProcId, worker: u32, verb: VerbKind) -> Arc<VerbHold> {
     rec.lock().expect("recorder").hold(HoldSpec::exact(
-        IsolateId(pid.0),
-        GPU,
+        IsolateId::new(pid.0, GPU),
         WorkerId(worker),
         verb,
     ))
@@ -166,7 +165,7 @@ fn hold(rec: &SharedRecorder, pid: ProcId, worker: u32, verb: VerbKind) -> Arc<V
 fn frees(rec: &SharedRecorder, pid: ProcId) -> usize {
     rec.lock()
         .expect("recorder")
-        .verbs_of(IsolateId(pid.0))
+        .verbs_of(IsolateId::new(pid.0, GPU))
         .iter()
         .filter(|v| matches!(v, RmVerb::Free { .. }))
         .count()
@@ -242,7 +241,7 @@ fn staged_objects(device: &SharedDevice) -> BTreeSet<kayfabe_isolate::HostHandle
 fn last_sysmem(rec: &SharedRecorder, pid: ProcId) -> kayfabe_isolate::HostHandle {
     rec.lock()
         .expect("recorder")
-        .verbs_of(IsolateId(pid.0))
+        .verbs_of(IsolateId::new(pid.0, GPU))
         .iter()
         .rev()
         .find_map(|v| match v {
@@ -289,7 +288,7 @@ fn a_cancel_mid_chain_releases_exactly_what_it_had_allocated() {
             assert!(
                 rec.lock()
                     .expect("recorder")
-                    .verbs_of(IsolateId(pid.0))
+                    .verbs_of(IsolateId::new(pid.0, GPU))
                     .iter()
                     .any(|v| matches!(v, RmVerb::AllocSysmem { .. })),
                 "({mode:?}) the chain must have allocated before it is cancelled, or \
@@ -551,7 +550,7 @@ fn every_checked_out_worker_of_a_dying_proc_is_cancelled() {
             let mem: BTreeSet<_> = rec
                 .lock()
                 .expect("recorder")
-                .verbs_of(IsolateId(pid.0))
+                .verbs_of(IsolateId::new(pid.0, GPU))
                 .iter()
                 .filter_map(|v| match v {
                     RmVerb::AllocSysmem { handle, .. } => Some(*handle),
@@ -877,7 +876,7 @@ fn the_wedge_escape_releases_condemns_and_stages_in_one_act() {
         assert!(
             !rec.lock()
                 .expect("recorder")
-                .verbs_of(IsolateId(pid.0))
+                .verbs_of(IsolateId::new(pid.0, GPU))
                 .iter()
                 .any(|v| matches!(v, RmVerb::Free { obj } if *obj == wedged_mem)),
             "({mode:?}) the wedged worker issued a free — it is inside the ioctl that \
@@ -911,7 +910,7 @@ fn a_deferred_reap_during_teardown_defers_rather_than_reaping_under_a_live_verb(
     // session's to free. Declared exactly, in both directions, per `ResidueClaim`.
     device.declare_residue(
         ResidueClaim::on(
-            IsolateId(pid.0),
+            IsolateId::new(pid.0, GPU),
             "§7.0 namespace death: the corpse was reaped with its isolate already \
              stopped by `retire_proc`, so its staged release could not be issued — the \
              warm-up's host VAS + backing + mapping and the uninterrupted chain's own \

@@ -103,7 +103,7 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
     // stops today rather than a defect in this test.
     gpu.declare_residue(
         ResidueClaim::on(
-            kayfabe_isolate::IsolateId(pid.0),
+            kayfabe_isolate::IsolateId::new(pid.0, GpuId::ZERO),
             "the graphics producer's render target is allocated straight on the isolate \
              (`rm.alloc`): the present seam has no core-side owner for host scanout \
              memory yet, so nothing in `Proc` can name it",
@@ -184,7 +184,7 @@ fn exporting_an_unknown_render_target_is_a_loud_fault() {
         .unwrap()
         .checkout()
         .expect("the isolate's pool has an idle worker");
-    let bogus = HostHandle::new(kayfabe_isolate::IsolateId(0), 0xdead_beef);
+    let bogus = HostHandle::new(kayfabe_isolate::IsolateId::new(0, GpuId::ZERO), 0xdead_beef);
     assert_eq!(
         worker.with_rm(|rm| rm.export_surface(bogus)),
         Err(RmError::BadHandle(bogus))

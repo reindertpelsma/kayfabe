@@ -1138,7 +1138,7 @@ impl Spine {
         let pid = proc.id;
         proc.isolates
             .entry(gpu)
-            .or_insert_with(|| IsolateBox::new(isolates.spawn(IsolateId(pid.0), gpu)));
+            .or_insert_with(|| IsolateBox::new(isolates.spawn(IsolateId::new(pid.0, gpu))));
         if let std::collections::btree_map::Entry::Vacant(e) = proc.arenas.entry(gpu) {
             e.insert(target.gpa.carve()?);
         }
@@ -2158,7 +2158,7 @@ impl Spine {
             for &gpu in &plan.spans[i] {
                 p.isolates
                     .entry(gpu)
-                    .or_insert_with(|| IsolateBox::new(isolates.spawn(IsolateId(pid.0), gpu)));
+                    .or_insert_with(|| IsolateBox::new(isolates.spawn(IsolateId::new(pid.0, gpu))));
                 if let Some(arena) = carved.remove(&gpu) {
                     let prev = p.arenas.insert(gpu, arena);
                     debug_assert!(
@@ -2178,7 +2178,7 @@ impl Spine {
             let isolates = &mut self.isolates;
             for gpu in span {
                 system.isolates.entry(gpu).or_insert_with(|| {
-                    IsolateBox::new(isolates.spawn(IsolateId(Gpu::SYSTEM_PROC.0), gpu))
+                    IsolateBox::new(isolates.spawn(IsolateId::new(Gpu::SYSTEM_PROC.0, gpu)))
                 });
                 if let Some(arena) = carved.remove(&gpu) {
                     let prev = system.arenas.insert(gpu, arena);

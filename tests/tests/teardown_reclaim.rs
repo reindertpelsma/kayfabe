@@ -261,7 +261,7 @@ fn g1_a_published_backing_can_actually_be_freed_at_teardown() {
     // handles the ledger has already released — a bypass, declared as one.
     gpu.declare_residue(
         ResidueClaim::on(
-            IsolateId(pid.0),
+            IsolateId::new(pid.0, GPU),
             "harness bypass: the release chain is run directly on a worker to prove the \
              backings are freeable, with core state deliberately left naming them",
         )
@@ -317,7 +317,7 @@ fn g1_a_full_process_lifecycle_leaves_the_host_ledger_balanced() {
     // handles the ledger has already released — a bypass, declared as one.
     gpu.declare_residue(
         ResidueClaim::on(
-            IsolateId(pid.0),
+            IsolateId::new(pid.0, GPU),
             "harness bypass: the teardown is a hand-rolled release chain run directly on \
              a worker, with core state left standing — the point being that the objects \
              are addressable, not that the core reclaimed them",
@@ -373,7 +373,7 @@ fn g1_a_full_process_lifecycle_leaves_the_host_ledger_balanced() {
 #[should_panic(expected = "R1 no-blocking-under-lock violation")]
 fn g3b_dropping_an_isolate_under_a_lock_panics_naming_r1() {
     let (mut factory, _rec) = MockIsolateFactory::new();
-    let iso = IsolateBox::new(factory.spawn(IsolateId(1), GPU));
+    let iso = IsolateBox::new(factory.spawn(IsolateId::new(1, GPU)));
     kayfabe_util::lockwitness::note_acquired(0); // the device lock, as the reap held it
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(iso)));
     kayfabe_util::lockwitness::note_released(0); // keep the harness thread clean
@@ -385,7 +385,7 @@ fn g3b_dropping_an_isolate_under_a_lock_panics_naming_r1() {
 fn g3b_dropping_an_isolate_with_no_lock_held_is_fine() {
     let (mut factory, _rec) = MockIsolateFactory::new();
     assert_eq!(kayfabe_rt::lock::held_depth(), 0);
-    drop(IsolateBox::new(factory.spawn(IsolateId(1), GPU)));
+    drop(IsolateBox::new(factory.spawn(IsolateId::new(1, GPU))));
 }
 
 /// ★ **The shell path.** `SharedDevice::reap_retired` takes the device **write** lock
@@ -506,7 +506,7 @@ fn g3_the_reap_defers_a_proc_whose_isolate_is_not_quiesced() {
 #[test]
 fn g3_in_flight_is_asked_for_not_derived_from_idle_workers() {
     let (mut factory, _rec) = MockIsolateFactory::with_pool_size(2);
-    let mut iso = factory.spawn(IsolateId(1), GPU);
+    let mut iso = factory.spawn(IsolateId::new(1, GPU));
     assert!(iso.is_quiesced(), "a fresh pool is quiesced");
 
     let w = iso.checkout().expect("worker 0");
@@ -554,7 +554,7 @@ fn g3_a_worker_whose_proc_retired_in_the_gap_still_reaches_its_slot() {
         // cannot be released per object. §7.0 namespace death is the disposition.
         device.declare_residue(
             ResidueClaim::on(
-                IsolateId(pid.0),
+                IsolateId::new(pid.0, GPU),
                 "an out-of-band `retire_proc` fires while a publish is parked in its \
                  sysmem alloc; the isolate is stopped, so the host VAS it had already \
                  materialized is left to the session's death (§7.0)",
@@ -579,7 +579,7 @@ fn g3_a_worker_whose_proc_retired_in_the_gap_still_reaches_its_slot() {
         // Hold this proc's sysmem alloc pending: the worker is checked OUT and the
         // thread is inside the backend with ZERO locks held (R1) — `verb_op`'s gap.
         let held = rec.lock().expect("recorder").hold(HoldSpec::on_isolate(
-            IsolateId(pid.0),
+            IsolateId::new(pid.0, GPU),
             VerbKind::AllocSysmem,
         ));
 
@@ -684,7 +684,7 @@ fn g4_a_cancelled_verb_surfaces_cancelled_not_an_rm_failure() {
 #[test]
 fn g4_a_mid_chain_failure_enumerates_the_orphans_it_could_not_free() {
     let (mut factory, rec) = MockIsolateFactory::new();
-    let mut iso = factory.spawn(IsolateId(1), GPU);
+    let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut w = iso.checkout().expect("fresh pool");
 
     {
@@ -731,7 +731,7 @@ fn g4_a_mid_chain_failure_enumerates_the_orphans_it_could_not_free() {
     // outstanding *namefully* — a reclaimer has the handles.
     let led = rec.lock().expect("recorder").ledger();
     assert_eq!(
-        led.leaked_on(IsolateId(1)),
+        led.leaked_on(IsolateId::new(1, GPU)),
         minted.iter().copied().collect(),
         "the ledger and the VerbFailure must agree about what still exists"
     );
@@ -744,7 +744,7 @@ fn g4_a_mid_chain_failure_enumerates_the_orphans_it_could_not_free() {
 #[test]
 fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
     let (mut factory, rec) = MockIsolateFactory::new();
-    let mut iso = factory.spawn(IsolateId(1), GPU);
+    let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut w = iso.checkout().expect("fresh pool");
 
     let reply = w
@@ -775,7 +775,7 @@ fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
         rec.lock()
             .expect("recorder")
             .ledger()
-            .leaked_on(IsolateId(1))
+            .leaked_on(IsolateId::new(1, GPU))
             == [vas].into_iter().collect(),
         "only the host VAS is left (the test did not free it)"
     );
@@ -836,7 +836,7 @@ fn g4_verb_fault_maps_only_interrupted_to_cancelled() {
     for e in [
         RmError::NoMemory,
         RmError::InsufficientPermissions,
-        RmError::BadHandle(HostHandle::new(kayfabe_isolate::IsolateId(0), 1)),
+        RmError::BadHandle(HostHandle::new(IsolateId::new(0, GPU), 1)),
         RmError::Other(3),
     ] {
         assert_eq!(

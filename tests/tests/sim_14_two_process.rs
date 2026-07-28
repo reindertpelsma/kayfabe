@@ -77,7 +77,7 @@ fn t14_two_procs_own_isolates_and_arenas() {
     let mut sessions = Vec::new();
     let mut ranges = Vec::new();
     for p in gpu.procs.values() {
-        sessions.push(p.isolates[&GpuId::ZERO].id().0);
+        sessions.push(p.isolates[&GpuId::ZERO].id());
         ranges.push(p.arenas[&GpuId::ZERO].range.clone());
     }
     sessions.sort_unstable();

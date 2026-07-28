@@ -144,8 +144,7 @@ fn device_with(
 /// Arm a one-shot hold on `verb` of `(pid's isolate, GPU, worker)`.
 fn hold_worker(rec: &SharedRecorder, pid: ProcId, worker: u32, verb: VerbKind) -> Arc<VerbHold> {
     rec.lock().expect("recorder").hold(HoldSpec::exact(
-        IsolateId(pid.0),
-        GPU,
+        IsolateId::new(pid.0, GPU),
         kayfabe_isolate::WorkerId(worker),
         verb,
     ))
@@ -157,7 +156,7 @@ fn hold_worker(rec: &SharedRecorder, pid: ProcId, worker: u32, verb: VerbKind) -
 fn hold_any(rec: &SharedRecorder, pid: ProcId, verb: VerbKind) -> Arc<VerbHold> {
     rec.lock()
         .expect("recorder")
-        .hold(HoldSpec::on_isolate(IsolateId(pid.0), verb))
+        .hold(HoldSpec::on_isolate(IsolateId::new(pid.0, GPU), verb))
 }
 
 // ---------------------------------------------------------------------------------
@@ -234,7 +233,10 @@ fn converging_retries_release_every_host_object_they_allocated() {
         // visible as N−1 extra host VASes minted and N−1 frees of them. (A count, kept
         // only to prove the SCENARIO — the correctness claim is the set equality below.)
         let ledger = rec.lock().expect("recorder").ledger();
-        let log = rec.lock().expect("recorder").verbs_of(IsolateId(pid.0));
+        let log = rec
+            .lock()
+            .expect("recorder")
+            .verbs_of(IsolateId::new(pid.0, GPU));
         let minted_vas = log
             .iter()
             .filter(|v| matches!(v, kayfabe_mocks::RmVerb::AllocVaSpace { .. }))
@@ -252,7 +254,7 @@ fn converging_retries_release_every_host_object_they_allocated() {
         });
         let proc = &gpu.procs[&pid];
         assert_eq!(
-            ledger.leaked_on(IsolateId(pid.0)),
+            ledger.leaked_on(IsolateId::new(pid.0, GPU)),
             reachable_objects(proc),
             "({mode:?}) every host OBJECT still outstanding is one core state can name — \
              a converging retry released its duplicate"
@@ -260,7 +262,7 @@ fn converging_retries_release_every_host_object_they_allocated() {
         assert_eq!(
             ledger
                 .leaked_maps
-                .get(&IsolateId(pid.0))
+                .get(&IsolateId::new(pid.0, GPU))
                 .cloned()
                 .unwrap_or_default(),
             reachable_maps(proc),
@@ -452,7 +454,7 @@ fn the_commit_retry_bound_still_releases_the_attempt_that_hits_it() {
         "the backstop sweep left something queued on an idle isolate"
     );
     assert_eq!(
-        ledger.leaked_on(IsolateId(pid.0)),
+        ledger.leaked_on(IsolateId::new(pid.0, GPU)),
         reachable_objects(proc),
         "every host OBJECT still outstanding is one core state can name — the attempt \
          that exhausted the retry bound released its own, and every `Vas` the re-stale \
@@ -461,7 +463,7 @@ fn the_commit_retry_bound_still_releases_the_attempt_that_hits_it() {
     assert_eq!(
         ledger
             .leaked_maps
-            .get(&IsolateId(pid.0))
+            .get(&IsolateId::new(pid.0, GPU))
             .cloned()
             .unwrap_or_default(),
         reachable_maps(proc),
@@ -540,7 +542,7 @@ fn a_retry_whose_replan_diverges_refuses_without_leaking_the_attempt() {
     let attempt2_mem = rec
         .lock()
         .expect("recorder")
-        .verbs_of(IsolateId(pid.0))
+        .verbs_of(IsolateId::new(pid.0, GPU))
         .iter()
         .rev()
         .find_map(|v| match v {

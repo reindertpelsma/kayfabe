@@ -201,13 +201,23 @@ impl Rng {
 /// Assert a recorded verb only touches ITS OWN isolate's namespace (the mock mints
 /// handles as `(iso+1) << 32 | n` and channel tokens as `(iso+1) << 20 | n`, so any
 /// cross-proc leak through the core would be visible right here).
-fn assert_verb_in_namespace(iso: u32, verb: &RmVerb) {
-    let ns = u64::from(iso) + 1;
+fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
+    let ns = u64::from(iso.proc()) + 1;
+    // ★ N3 — an isolate is a `(proc, GPU)` pair, so containment is checked on BOTH
+    // halves, and against the handle's own recorded provenance as well as the mock's
+    // value lanes. Checking only `>> 32` (the proc lane) passed for every handle a
+    // proc's OTHER GPU minted.
     let own = |h: kayfabe_isolate::HostHandle| {
         assert_eq!(
-            h.raw() >> 32,
-            ns,
-            "handle {h:?} leaked across isolates (ns {ns})"
+            (h.raw() >> 32, (h.raw() >> 24) & 0xff),
+            (ns, u64::from(iso.gpu().0)),
+            "handle {h:?} leaked across isolates (ns {ns}, {:?})",
+            iso.gpu()
+        );
+        assert_eq!(
+            h.isolate(),
+            iso,
+            "handle {h:?} was recorded on {iso:?}'s log but minted in another namespace"
         );
     };
     match *verb {
@@ -297,9 +307,9 @@ fn assert_device_consistent(gpu: &Gpu) {
         }
         // Isolate session == ProcId by construction.
         assert_eq!(
-            p.isolates[&GpuId::ZERO].id().0,
-            p.id.0,
-            "isolate session != ProcId"
+            p.isolates[&GpuId::ZERO].id(),
+            kayfabe_isolate::IsolateId::new(p.id.0, GpuId::ZERO),
+            "isolate session != (ProcId, GpuId)"
         );
         for (&(gpu_t, pdb), vas) in &p.vases {
             assert_eq!(vas.pdb, pdb);
@@ -507,7 +517,7 @@ fn stress_multi_vcpu_interleaved_ops() {
                         // first, and the memory bound is unchanged.
                         let drained = recorder.lock().unwrap().compact();
                         for (iso, verb) in &drained {
-                            assert_verb_in_namespace(iso.0, verb);
+                            assert_verb_in_namespace(*iso, verb);
                         }
                         *verbs_checked.lock().unwrap() += drained.len();
                         if tid == 0 {
@@ -559,7 +569,7 @@ fn stress_multi_vcpu_interleaved_ops() {
     assert_device_consistent(&gpu);
     let tail = recorder.lock().unwrap().compact();
     for (iso, verb) in &tail {
-        assert_verb_in_namespace(iso.0, verb);
+        assert_verb_in_namespace(*iso, verb);
     }
     let total = *verbs_checked.lock().unwrap() + tail.len();
     // The soak was real: at least half the ops issued a host verb (doorbells ring

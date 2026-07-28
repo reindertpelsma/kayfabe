@@ -204,8 +204,7 @@ impl Latches {
         verb: VerbKind,
     ) -> Arc<VerbHold> {
         let h = rec.lock().expect("recorder").hold(HoldSpec::exact(
-            IsolateId(pid.0),
-            gpu,
+            IsolateId::new(pid.0, gpu),
             WorkerId(worker),
             verb,
         ));
@@ -441,8 +440,9 @@ fn mean_gpu() -> (Guarded<Gpu>, Vec<ProcId>, SharedRecorder) {
 }
 
 /// Arm a one-shot hold on `verb` of `(proc, gpu, worker)`'s isolate — the scripted
-/// latch (§8.4). `IsolateId == ProcId` by construction (`Gpu` spawns `IsolateId(pid.0)`
-/// per target).
+/// latch (§8.4). ★ N3: an [`IsolateId`] IS the `(proc, GPU)` pair, so `(pid, gpu)`
+/// names the isolate exactly — there is no second, separately-supplied GPU that could
+/// disagree with it.
 fn hold(
     rec: &SharedRecorder,
     pid: ProcId,
@@ -451,18 +451,19 @@ fn hold(
     verb: VerbKind,
 ) -> Arc<VerbHold> {
     rec.lock().expect("recorder").hold(HoldSpec::exact(
-        IsolateId(pid.0),
-        gpu,
+        IsolateId::new(pid.0, gpu),
         WorkerId(worker),
         verb,
     ))
 }
 
-/// How many host `free` verbs `pid`'s isolate has issued (the mid-chain leak check).
-fn count_frees(rec: &SharedRecorder, pid: ProcId) -> usize {
+/// How many host `free` verbs `(pid, gpu)`'s isolate has issued (the mid-chain leak
+/// check). ★ N3: per ISOLATE, so a proc that spans two GPUs is counted per target
+/// rather than summed into one number that names neither.
+fn count_frees(rec: &SharedRecorder, pid: ProcId, gpu: GpuId) -> usize {
     rec.lock()
         .expect("recorder")
-        .verbs_of(IsolateId(pid.0))
+        .verbs_of(IsolateId::new(pid.0, gpu))
         .iter()
         .filter(|v| matches!(v, RmVerb::Free { .. }))
         .count()
@@ -930,7 +931,7 @@ fn generation_recycle(
          `hClient` VALUE left its host VAS and its published backing nameable by nothing"
     );
     assert!(
-        outstanding_on(rec, gen1).is_superset(&gen1_named),
+        outstanding_on(rec, gen1, GPU0).is_superset(&gen1_named),
         "★★ ({mode:?}) …and a host `Free` verb was issued for one of them"
     );
     assert_ne!(
@@ -961,7 +962,7 @@ fn mean_run(mode: LockMode) -> MeanReport {
     // per object and contributes nothing here, which is the §12.35 delta.
     device.declare_residue(
         ResidueClaim::on(
-            IsolateId(pids[P_TEARDOWN].0),
+            IsolateId::new(pids[P_TEARDOWN].0, gpu_of(P_TEARDOWN)),
             "a canary proc killed out of band (`retire_proc`): its isolate is stopped, so \
              its host VAS + backing + channel are the §7.0 namespace-death residue §12.32 \
              measured at 6 objects / 2 mappings across the pair. ★ M2-e: its HELD verb was \
@@ -975,7 +976,7 @@ fn mean_run(mode: LockMode) -> MeanReport {
     );
     device.declare_residue(
         ResidueClaim::on(
-            IsolateId(pids[P_HUP].0),
+            IsolateId::new(pids[P_HUP].0, gpu_of(P_HUP)),
             "the same §7.0 namespace-death residue as the teardown canary, PLUS one — ★ \
              M2-e: this proc's worker is WEDGED (§7.5), and a wedged worker cannot run its \
              own unwind, so the host memory object its chain had already allocated is \
@@ -1297,7 +1298,7 @@ fn mean_run(mode: LockMode) -> MeanReport {
     // two things at once — it read 13 instead of 1 the first time T0 landed, because
     // three churn rounds' worth of queued releases rode out on the same isolate.
     dev.drain_pending_releases();
-    let frees_before = count_frees(&rec, pids[P_WITNESS]);
+    let frees_before = count_frees(&rec, pids[P_WITNESS], gpu_of(P_WITNESS));
     let mid_chain_failure = {
         let h_map = hold(&rec, pids[P_WITNESS], GPU0, 0, VerbKind::MapGpuVa);
         let out = thread::scope(|sc| {
@@ -1323,7 +1324,7 @@ fn mean_run(mode: LockMode) -> MeanReport {
             "({mode:?}) the failed publication mutated nothing"
         );
         assert_eq!(
-            count_frees(&rec, pids[P_WITNESS]) - frees_before,
+            count_frees(&rec, pids[P_WITNESS], gpu_of(P_WITNESS)) - frees_before,
             1,
             "({mode:?}) the mid-chain failure must release the sysmem object it had \
              already allocated — exactly one host free"
@@ -1934,10 +1935,12 @@ impl Census {
 /// Take the census of one finished run: replay the recorder into a [`HostLedger`] and
 /// compare it, per isolate, against what the re-assembled core can still name.
 ///
-/// `IsolateId == ProcId` by construction (`Gpu` spawns `IsolateId(pid.0)` per target),
-/// and **one `IsolateId` covers both of a proc's per-GPU isolates** — the mock keys its
-/// log by isolate id and namespaces the handle VALUES by GPU, so per-isolate here means
-/// per-`Proc`, which is exactly the granularity [`reachable_objects`] answers at.
+/// ★ N3 — **per `(Proc, GpuId)`**, which is what an [`IsolateId`] now is. The ledger
+/// keys on the isolate that ISSUED each verb; the core side is filtered by the isolate
+/// each handle records itself as MINTED in ([`HostHandle::isolate`]). The set equality
+/// below is therefore also a statement that those two agree — an object attributed to
+/// the wrong one of a proc's two isolates used to balance perfectly, because both went
+/// into one bucket.
 fn census(gpu: &Gpu, rec: &SharedRecorder) -> Census {
     let ledger = rec.lock().expect("recorder").ledger();
     let mut c = Census::default();
@@ -1946,7 +1949,7 @@ fn census(gpu: &Gpu, rec: &SharedRecorder) -> Census {
     for iso in isolates {
         let outstanding = ledger.leaked_on(iso);
         let outstanding_maps = ledger.leaked_maps.get(&iso).cloned().unwrap_or_default();
-        let pid = ProcId(iso.0);
+        let pid = ProcId(iso.proc());
         let live = if pid == Gpu::SYSTEM_PROC {
             Some(&gpu.system)
         } else {
@@ -1963,8 +1966,14 @@ fn census(gpu: &Gpu, rec: &SharedRecorder) -> Census {
             }
             continue;
         };
-        let reachable = reachable_objects(proc);
-        let reachable_m = reachable_maps(proc);
+        let reachable: BTreeSet<HostHandle> = reachable_objects(proc)
+            .into_iter()
+            .filter(|h| h.isolate() == iso)
+            .collect();
+        let reachable_m: BTreeSet<(HostHandle, u64)> = reachable_maps(proc)
+            .into_iter()
+            .filter(|(vas, _)| vas.isolate() == iso)
+            .collect();
         let leaked: BTreeSet<HostHandle> = outstanding.difference(&reachable).copied().collect();
         let dangling: BTreeSet<HostHandle> = reachable.difference(&outstanding).copied().collect();
         let leaked_m: BTreeSet<_> = outstanding_maps.difference(&reachable_m).copied().collect();
@@ -2522,7 +2531,7 @@ fn a_condemned_components_arena_is_released_once_and_never_recycled_to_an_impost
     // conserved and is what this test is actually about.
     gpu.declare_residue(
         ResidueClaim::on(
-            IsolateId(victim.0),
+            IsolateId::new(victim.0, gpu_of(P_HUP)),
             "condemned component: `retire_proc` stopped the isolate, so the warmed host \
              VAS + backing are disposed of by the session's death (§7.0) — the ARENA, \
              which is this test's subject, is conserved separately and asserted below",
@@ -3122,7 +3131,7 @@ fn a_recovered_component_shares_no_arena_or_host_handle_with_the_condemned_one()
     // this test also materializes the victim's host channel before killing it.
     gpu.declare_residue(
         ResidueClaim::on(
-            IsolateId(victim.0),
+            IsolateId::new(victim.0, gpu_of(P_HUP)),
             "condemned component: the warmed host VAS + backing + channel are the §7.0 \
              namespace-death residue of a stopped isolate; the point of the test is that \
              the RECOVERED component shares none of them",
@@ -5133,12 +5142,12 @@ const GEN2_ALIAS: HObject = HObject(0x7b00_0101);
 /// A VA lane of this test's own, so it never collides with the world's publications.
 const VA_GEN: u64 = 0x50_0000_0000;
 
-/// Every host object still outstanding on `pid`'s isolate, read off the ledger.
-fn outstanding_on(rec: &SharedRecorder, pid: ProcId) -> BTreeSet<HostHandle> {
+/// Every host object still outstanding on `(pid, gpu)`'s isolate, read off the ledger.
+fn outstanding_on(rec: &SharedRecorder, pid: ProcId, gpu: GpuId) -> BTreeSet<HostHandle> {
     rec.lock()
         .expect("recorder")
         .ledger()
-        .leaked_on(IsolateId(pid.0))
+        .leaked_on(IsolateId::new(pid.0, gpu))
 }
 
 /// The host objects `pid`'s live core state can still NAME. Empty when its `Proc` is
@@ -5262,7 +5271,7 @@ fn a_superseded_declarations_kernel_held_memory_is_never_freed_by_its_successor(
     // staged, not yet drained). Non-empty by construction (it published and rang), which
     // the assertion states rather than assumes.
     let gen1_named = reachable_of(&gpu, gen1);
-    let gen1_held = outstanding_on(&rec, gen1);
+    let gen1_held = outstanding_on(&rec, gen1, GPU0);
     assert!(
         gen1_named.len() >= 2 && gen1_held.is_superset(&gen1_named),
         "★ the baseline must be REAL host state the core can name — a host VAS and its \
@@ -5290,7 +5299,7 @@ fn a_superseded_declarations_kernel_held_memory_is_never_freed_by_its_successor(
     // `Free` verbs for a live kernel client's memory; under the rule it is a no-op.
     let _ = gpu.reap_retired();
     assert_eq!(
-        outstanding_on(&rec, gen1)
+        outstanding_on(&rec, gen1, GPU0)
             .intersection(&gen1_named)
             .copied()
             .collect::<BTreeSet<_>>(),
@@ -5424,7 +5433,7 @@ fn a_superseded_declarations_kernel_held_memory_is_never_freed_by_its_successor(
         "★ …and its `Proc` left with it"
     );
     assert!(
-        outstanding_on(&rec, gen1).is_superset(&gen1_named),
+        outstanding_on(&rec, gen1, GPU0).is_superset(&gen1_named),
         "★ its host state is STAGED at this instant, not yet drained — reclamation is a \
          scheduled fact of `pending_release`, and the teardown post-condition proves it \
          completes (this test declares no residue)"
@@ -6536,7 +6545,7 @@ fn gpa_mean_run(mode: LockMode) -> GpaMeanReport {
     // `mean_run` declares it.
     device.declare_residue(
         ResidueClaim::on(
-            IsolateId(pids[P_TEARDOWN].0),
+            IsolateId::new(pids[P_TEARDOWN].0, gpu_of(P_TEARDOWN)),
             "the proc retired out of band mid-run: its isolate is stopped, so its host \
              VAS + warm-up backing are the §7.0 namespace-death residue",
         )
@@ -9049,4 +9058,761 @@ fn the_gsp_boot_cycle_composes_with_live_multiproc_traffic() {
         published > 0,
         "non-vacuity: the device planes really were under load for the whole cycle",
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// ★★ N3 — ONE `Proc`, TWO GPUs: the isolate identity has to separate them
+// ─────────────────────────────────────────────────────────────────────────────────────
+//
+// Every proc in the world above lives on exactly ONE GPU, and that is precisely why the
+// defect these tests pin survived: the shape that breaks it is a **single guest process
+// with a `Device` on each `deviceInstance`** — one dup-component, one `ProcId`, one
+// `Proc`, and (MG-5) TWO isolates. `IsolateId` used to be the `ProcId` alone, so those
+// two isolates wore ONE id, and:
+//
+//   * `HostHandle::belongs_to` answered `true` across them, so `Worker::execute`'s
+//     foreign-handle gate — the ONE place the `(Proc, GpuId)`-scoped-handle rule is
+//     enforced — enforced only the `Proc` half. **Measured**, before the fix: a host
+//     object minted on the proc's GPU0 isolate, presented in a control aimed at its GPU1
+//     isolate, sailed through the gate and reached the backend. It came back
+//     `RmError::BadHandle` only because `MockRmBackend` validates handles against its own
+//     per-isolate namespace — the "backend's luck" `HostHandle`'s own docs say a real
+//     host does NOT provide (RM mints every client's handles from one
+//     `RS_CLIENT_HANDLE_BASE`, so the same raw value is live-and-unrelated in the other
+//     isolate's client, and the verb would have hit a bystander object).
+//   * every per-isolate ACCOUNT keyed on the id merged the two — the `HostLedger`, the
+//     verb log, the cancel census, the teardown post-condition. An instrument that cannot
+//     separate a proc's two isolates cannot witness the first bullet either.
+
+/// The straddler's client — ONE guest process holding a `Device` on each GPU.
+const N3_CLIENT: HClient = HClient(0xC0);
+/// The bystander on GPU0.
+const N3_BY0_CLIENT: HClient = HClient(0xC1);
+/// The bystander on GPU1.
+const N3_BY1_CLIENT: HClient = HClient(0xC2);
+/// The straddler's page-directory base — the **same value on both of its GPUs**, which
+/// is legal (`Pdb` is a per-GPU namespace) and is the shape a `(GpuId, ·)` collapse
+/// mis-routes on.
+const N3_PDB: Pdb = Pdb(0x3B00_0000);
+/// The straddler's GR vChid — likewise identical on both GPUs.
+const N3_GR: VChid = VChid(0x400);
+/// The straddler's CE vChid.
+const N3_CE: VChid = VChid(0x401);
+/// The bystanders' PDB (identical on the two GPUs, distinct from the straddler's).
+const N3_BY_PDB: Pdb = Pdb(0x3B10_0000);
+/// The bystanders' GR vChid.
+const N3_BY_GR: VChid = VChid(0x410);
+/// The bystanders' CE vChid.
+const N3_BY_CE: VChid = VChid(0x411);
+/// The straddler's GPU0 publication lane.
+const VA_N3_G0: u64 = 0x60_0000_0000;
+/// The straddler's GPU1 publication lane.
+const VA_N3_G1: u64 = 0x64_0000_0000;
+/// The bystanders' lane.
+const VA_N3_BY: u64 = 0x68_0000_0000;
+/// The lane the straddler's two ring threads publish into.
+const VA_N3_RING: u64 = 0x6c_0000_0000;
+
+/// The handles of the straddler's SECOND `Device` — distinct within its one client
+/// namespace, because a client's handle namespace is singular even though its devices
+/// are not.
+fn n3_second_device_handles() -> kayfabe_tests::ProcessHandles {
+    kayfabe_tests::ProcessHandles {
+        client_root: HObject(0x5c00_0000),
+        device: HObject(0x5d00_0001),
+        vaspace: HObject(0x5d00_0010),
+        tsg: HObject(0x5d00_0012),
+        gr_channel: HObject(0x5d00_0019),
+        gr_vchid: N3_GR,
+        ce_channel: HObject(0x5d00_001a),
+        ce_vchid: N3_CE,
+    }
+}
+
+/// Script a SECOND `Device` (and its VASpace + TSG + channels) under an **already
+/// declared** client — the straddle. Deliberately not `compute_process_on_gpu`, which
+/// re-emits the client root.
+fn n3_push_second_device(
+    s: &mut Scenario,
+    client: HClient,
+    h: &kayfabe_tests::ProcessHandles,
+    pdb: Pdb,
+    instance: u32,
+) {
+    s.push(RmEvent::Alloc {
+        client,
+        parent: h.client_root,
+        handle: h.device,
+        class: mock_classes::DEVICE,
+        facts: AllocFacts {
+            device_instance: Some(instance),
+            ..Default::default()
+        },
+    });
+    s.push(RmEvent::Alloc {
+        client,
+        parent: h.device,
+        handle: h.vaspace,
+        class: mock_classes::VASPACE,
+        facts: AllocFacts::default(),
+    });
+    s.push(RmEvent::SetPageDir {
+        client,
+        vaspace: h.vaspace,
+        pdb,
+    });
+    s.push(RmEvent::Alloc {
+        client,
+        parent: h.device,
+        handle: h.tsg,
+        class: mock_classes::TSG,
+        facts: AllocFacts {
+            h_vaspace: Some(h.vaspace),
+            ..Default::default()
+        },
+    });
+    s.push(RmEvent::Alloc {
+        client,
+        parent: h.tsg,
+        handle: h.gr_channel,
+        class: mock_classes::CHANNEL_GR,
+        facts: AllocFacts {
+            h_vaspace: Some(h.vaspace),
+            userd_flags: MockArch::userd_flags_for(h.gr_vchid),
+            ..Default::default()
+        },
+    });
+    s.push(RmEvent::Alloc {
+        client,
+        parent: h.tsg,
+        handle: h.ce_channel,
+        class: mock_classes::CHANNEL_CE,
+        facts: AllocFacts {
+            h_vaspace: Some(h.vaspace),
+            userd_flags: MockArch::userd_flags_for(h.ce_vchid),
+            ..Default::default()
+        },
+    });
+}
+
+/// The N3 world: the straddler (one `Proc`, both GPUs) plus a bystander on each GPU, so
+/// every assertion below runs multi-process as well as multi-GPU. Returns
+/// `(device, straddler, bystander0, bystander1, recorder)`.
+fn n3_world(
+    mode: LockMode,
+) -> (
+    Guarded<Arc<SharedDevice>>,
+    ProcId,
+    ProcId,
+    ProcId,
+    SharedRecorder,
+) {
+    let (gpu, s, by0, by1, rec) = n3_gpu();
+    (
+        gpu.map(|g| Arc::new(SharedDevice::new(g, mode))),
+        s,
+        by0,
+        by1,
+        rec,
+    )
+}
+
+/// The same world as a **bare [`Gpu`]**, for the core-level property tests (§8.2's T1
+/// tier): the isolate identity is a fact of the pure core, so the tests that pin its
+/// accounting read core state directly rather than through the lock shell.
+fn n3_gpu() -> (Guarded<Gpu>, ProcId, ProcId, ProcId, SharedRecorder) {
+    let arch = Box::new(MockArch::new());
+    let (factory, recorder) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
+    let mut gpu = Gpu::realize(arch, Box::new(factory), gpa, &[GPU0, GPU1])
+        .expect("the two-GPU device realizes");
+
+    let mut s = Scenario::new();
+    // The straddler: device 0 on GPU0 …
+    s.compute_process_on_gpu(
+        N3_CLIENT,
+        N3_PDB,
+        identical_handles(N3_GR.0, N3_CE.0),
+        Some(GPU0.0),
+    );
+    // … and device 1 on GPU1, under the SAME client root.
+    n3_push_second_device(
+        &mut s,
+        N3_CLIENT,
+        &n3_second_device_handles(),
+        N3_PDB,
+        GPU1.0,
+    );
+    // Two ordinary single-GPU bystanders, one per target, sharing PDB/vChid VALUES.
+    s.compute_process_on_gpu(
+        N3_BY0_CLIENT,
+        N3_BY_PDB,
+        identical_handles(N3_BY_GR.0, N3_BY_CE.0),
+        Some(GPU0.0),
+    );
+    s.compute_process_on_gpu(
+        N3_BY1_CLIENT,
+        N3_BY_PDB,
+        identical_handles(N3_BY_GR.0, N3_BY_CE.0),
+        Some(GPU1.0),
+    );
+    for ev in s.events {
+        gpu.apply(ev).expect("the N3 scenario applies cleanly");
+    }
+
+    let straddler = gpu.spine.by_pdb[&(GPU0, N3_PDB)];
+    assert_eq!(
+        gpu.spine.by_pdb[&(GPU1, N3_PDB)],
+        straddler,
+        "one client with a Device on each GPU is ONE proc — the straddle premise"
+    );
+    let by0 = gpu.spine.by_pdb[&(GPU0, N3_BY_PDB)];
+    let by1 = gpu.spine.by_pdb[&(GPU1, N3_BY_PDB)];
+    assert_eq!(
+        gpu.procs.len(),
+        3,
+        "three guest procs: the straddler and one bystander per GPU"
+    );
+    assert_eq!(
+        gpu.procs[&straddler]
+            .isolates
+            .keys()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![GPU0, GPU1],
+        "★ MG-5: the straddler owns TWO isolates — one per target"
+    );
+    (
+        Guarded::new("l1_mean::n3_world", gpu, recorder.clone()),
+        straddler,
+        by0,
+        by1,
+        recorder,
+    )
+}
+
+/// ★★ **THE BITE.** A host handle minted in a proc's GPU0 isolate, presented on the
+/// SAME proc's GPU1 isolate, must be refused by [`kayfabe_isolate::Worker::execute`]'s
+/// foreign-handle gate — with the EXACT [`RmError::ForeignHandle`], naming the exact
+/// handle and the exact isolate that would have issued the verb.
+///
+/// Before N3 this refusal did not happen at all: `belongs_to` compared the `ProcId` half
+/// only, the plan reached the backend, and what came back was the mock's own
+/// `BadHandle` — an answer produced by the *test double*, not by the design. The three
+/// asserts are therefore layered on purpose: the two isolates are distinct identities,
+/// the gate refuses, and **nothing ran** (the ledger is byte-identical across the
+/// refused call, which is the gate's "before any verb" promise made checkable).
+///
+/// `route_control` is the reachable path, not a synthetic one: it takes the target GPU
+/// and the object handle as two independent guest-derived arguments, and nothing between
+/// it and the gate cross-checks them.
+#[test]
+fn n3_a_cross_gpu_handle_is_refused_by_the_foreign_handle_gate() {
+    let _wd = watchdog("n3_cross_gpu_gate", Duration::from_secs(60));
+    for mode in [LockMode::Sharded, LockMode::Degenerate] {
+        let (world, s, by0, by1, rec) = n3_world(mode);
+        let device = Arc::clone(&world);
+
+        // Materialize a host engine object on EACH of the straddler's two targets.
+        let on0 = device
+            .forward_engine_object(GPU0, N3_GR, kayfabe_tests::COMPUTE_CLASS, &[])
+            .expect("({mode:?}) the straddler's GPU0 engine object forwards");
+        let on1 = device
+            .forward_engine_object(GPU1, N3_GR, kayfabe_tests::COMPUTE_CLASS, &[])
+            .expect("({mode:?}) the straddler's GPU1 engine object forwards");
+
+        // ---- (1) The identity itself: ONE proc, TWO isolate identities.
+        assert_eq!(
+            (on0.host_object.isolate(), on1.host_object.isolate()),
+            (IsolateId::new(s.0, GPU0), IsolateId::new(s.0, GPU1)),
+            "({mode:?}) a handle must record the (Proc, GpuId) namespace it was minted in"
+        );
+        assert_ne!(
+            on0.host_object.isolate(),
+            on1.host_object.isolate(),
+            "★★ ({mode:?}) one Proc on two GPUs is TWO isolates with two RM client \
+             namespaces; an IsolateId that names only the proc collapses them"
+        );
+
+        // ---- (2) The gate, in BOTH directions, with the EXACT variant.
+        let ledger_before = rec.lock().expect("recorder").ledger();
+        let mut payload = [0u8; 4];
+        assert_eq!(
+            device.route_control(
+                GPU1,
+                s,
+                on0.host_object,
+                mock_ctrl::FORWARDABLE,
+                &mut payload
+            ),
+            Err(FwdFault::Rm(RmError::ForeignHandle {
+                handle: on0.host_object,
+                worker_isolate: IsolateId::new(s.0, GPU1),
+            })),
+            "★★ ({mode:?}) a GPU0 handle reached the SAME proc's GPU1 isolate — on a real \
+             host that raw value names a different LIVE object in that isolate's client"
+        );
+        assert_eq!(
+            device.route_control(
+                GPU0,
+                s,
+                on1.host_object,
+                mock_ctrl::FORWARDABLE,
+                &mut payload
+            ),
+            Err(FwdFault::Rm(RmError::ForeignHandle {
+                handle: on1.host_object,
+                worker_isolate: IsolateId::new(s.0, GPU0),
+            })),
+            "★★ ({mode:?}) …and symmetrically in the other direction"
+        );
+
+        // ---- (3) The gate ran BEFORE any verb: nothing was allocated, freed or mapped.
+        assert_eq!(
+            rec.lock().expect("recorder").ledger(),
+            ledger_before,
+            "({mode:?}) the foreign-handle gate must refuse before the chain runs — the \
+             refused calls moved the host ledger"
+        );
+
+        // ---- (4) …and the LEGAL directions are untouched: this is a separation, not a
+        //          blanket refusal (the non-vacuity half — a `belongs_to` that always
+        //          answered `false` would pass every assert above).
+        assert_eq!(
+            device.route_control(
+                GPU0,
+                s,
+                on0.host_object,
+                mock_ctrl::FORWARDABLE,
+                &mut payload
+            ),
+            Ok(ControlRoute::Forwarded),
+            "({mode:?}) a GPU0 handle on the GPU0 isolate is the ordinary case"
+        );
+        assert_eq!(
+            device.route_control(
+                GPU1,
+                s,
+                on1.host_object,
+                mock_ctrl::FORWARDABLE,
+                &mut payload
+            ),
+            Ok(ControlRoute::Forwarded),
+            "({mode:?}) …and so is a GPU1 handle on the GPU1 isolate"
+        );
+
+        // ---- (5) The `Proc` axis the gate always held still holds — cross-PROC is
+        //          refused with the same exact variant, on both GPUs.
+        let by0_obj = device
+            .forward_engine_object(GPU0, N3_BY_GR, kayfabe_tests::COMPUTE_CLASS, &[])
+            .expect("bystander 0 forwards")
+            .host_object;
+        let by1_obj = device
+            .forward_engine_object(GPU1, N3_BY_GR, kayfabe_tests::COMPUTE_CLASS, &[])
+            .expect("bystander 1 forwards")
+            .host_object;
+        assert_eq!(
+            device.route_control(GPU0, s, by0_obj, mock_ctrl::FORWARDABLE, &mut payload),
+            Err(FwdFault::Rm(RmError::ForeignHandle {
+                handle: by0_obj,
+                worker_isolate: IsolateId::new(s.0, GPU0),
+            })),
+            "({mode:?}) another PROC's handle on this proc's isolate stays refused"
+        );
+        assert_eq!(
+            (by0_obj.isolate(), by1_obj.isolate()),
+            (IsolateId::new(by0.0, GPU0), IsolateId::new(by1.0, GPU1)),
+            "({mode:?}) the bystanders' handles are in their own namespaces"
+        );
+    }
+}
+
+/// ★ The **accounting** half: the two isolates of one proc are separately auditable.
+///
+/// The mock's `HostLedger` keys on the isolate that ISSUED each verb, and every handle
+/// independently records the namespace it was MINTED in (in the mock, in disjoint bit
+/// lanes of the raw value). Asserting the two agree, per target, is what makes the
+/// teardown post-condition able to see a cross-isolate misattribution at all — while one
+/// id covered both targets, an object accounted against the *wrong* one of a proc's
+/// isolates balanced perfectly.
+#[test]
+fn n3_b_the_two_isolates_of_one_proc_are_separately_accounted() {
+    let _wd = watchdog("n3_separate_accounts", Duration::from_secs(60));
+    let (world, s, _by0, _by1, rec) = n3_world(LockMode::Sharded);
+    let device = Arc::clone(&world);
+
+    // Real work on BOTH of the straddler's targets: publish, ring, forward.
+    for (gpu, base) in [(GPU0, VA_N3_G0), (GPU1, VA_N3_G1)] {
+        for k in 0..4u64 {
+            device
+                .publish_backing(gpu, N3_PDB, GpuVa(base + k * 0x1000), 0x1000)
+                .expect("the straddler publishes on both of its targets");
+        }
+        device
+            .doorbell(gpu, MockArch::token_for(N3_GR), &[])
+            .expect("the straddler rings on both of its targets");
+        device
+            .forward_engine_object(gpu, N3_GR, kayfabe_tests::COMPUTE_CLASS, &[])
+            .expect("the straddler forwards on both of its targets");
+    }
+
+    let ledger = rec.lock().expect("recorder").ledger();
+    let g0 = ledger.leaked_on(IsolateId::new(s.0, GPU0));
+    let g1 = ledger.leaked_on(IsolateId::new(s.0, GPU1));
+    assert!(
+        !g0.is_empty() && !g1.is_empty(),
+        "non-vacuity: both of the straddler's isolates really did mint host objects \
+         (g0={g0:?}, g1={g1:?})"
+    );
+    assert_eq!(
+        g0.intersection(&g1).count(),
+        0,
+        "★ the two accounts must be disjoint — they are two RM client namespaces"
+    );
+    // ★ The cross-check that makes this non-circular: the ledger's KEY (the isolate that
+    // issued the verb) and the handle's own recorded provenance must agree, and so must
+    // the mock's independent raw-value lane.
+    for (gpu, set) in [(GPU0, &g0), (GPU1, &g1)] {
+        for h in set {
+            assert_eq!(
+                h.isolate(),
+                IsolateId::new(s.0, gpu),
+                "an object on {gpu:?}'s account was minted in another namespace: {h:?}"
+            );
+            assert_eq!(
+                handle_lane(h.raw()),
+                (s.0 + 1, gpu.0),
+                "…and the mock's own value lane disagrees too: {h:?}"
+            );
+        }
+    }
+    // The verb LOG separates them for the same reason: no verb recorded on one target's
+    // isolate may name a handle from the other's.
+    for (gpu, other) in [(GPU0, &g1), (GPU1, &g0)] {
+        let verbs = rec
+            .lock()
+            .expect("recorder")
+            .verbs_of(IsolateId::new(s.0, gpu));
+        assert!(
+            !verbs.is_empty(),
+            "non-vacuity: {gpu:?}'s isolate issued verbs"
+        );
+        for v in &verbs {
+            if let RmVerb::Free { obj } | RmVerb::Schedule { chan: obj } = v {
+                assert!(
+                    !other.contains(obj),
+                    "{gpu:?}'s isolate issued {v:?} naming the OTHER target's handle"
+                );
+            }
+        }
+    }
+}
+
+/// ★★ **The MEAN N3 run**: the straddler's two isolates, both with a verb parked, while
+/// six threads across three procs and two GPUs make full progress — and the cross-GPU
+/// gate is asserted *inside that window*, under contention, rather than on a quiet
+/// device.
+///
+/// Composition is the point (§8.4). What this reaches that
+/// [`n3_a_cross_gpu_handle_is_refused_by_the_foreign_handle_gate`] cannot:
+///
+/// - the two isolates of ONE `Proc` are independent **pools**, so parking a worker in
+///   each does not stop either target — if the two ever collapsed onto one isolate, the
+///   sibling threads would queue behind the parked verbs and the joins would never
+///   return (the watchdog aborts, loudly, rather than the box's speed deciding);
+/// - the refusal is a property of the gate, not of a quiet moment: it is asserted while
+///   both isolates have a verb in flight and four workload threads are hammering them;
+/// - device **WRITE** ops complete in the same window, which proves the parked verbs
+///   hold no lock at all;
+/// - and the per-`(Proc, GpuId)` accounts still separate after tens of thousands of
+///   interleaved verbs.
+///
+/// Progress is required as **termination** — no sleeps, no clock, no wall-time budget.
+#[test]
+fn n3_c_the_mean_two_gpu_straddler_progresses_under_pending_work_on_both_isolates() {
+    let _wd = watchdog("n3_mean_straddler", Duration::from_secs(180));
+    for mode in [LockMode::Sharded, LockMode::Degenerate] {
+        /// Ops per workload thread — sized to well under a second per mode.
+        const N3_OPS: u64 = 200;
+
+        let (world, s, by0, by1, rec) = n3_world(mode);
+        let device: Arc<SharedDevice> = Arc::clone(&world);
+
+        // ---- Arm ONE latch on each of the straddler's two isolates, same worker slot.
+        //      `WorkerId(0)` of its GPU0 isolate and `WorkerId(0)` of its GPU1 isolate are
+        //      unrelated identities — which only became expressible when `IsolateId`
+        //      started naming the target.
+        let mut latches = Latches::new();
+        latches.arm(&rec, s, GPU0, 0, VerbKind::AllocSysmem);
+        latches.arm(&rec, s, GPU1, 0, VerbKind::AllocSysmem);
+        // The mock's isolate lane for the straddler (its handles read back as ProcId+1).
+        let lane = s.0 + 1;
+
+        let parked: Mutex<Vec<(GpuId, Published)>> = Mutex::new(Vec::new());
+        thread::scope(|scope| {
+            // ★ The latches are MOVED into the scope, so an assert that fires anywhere in
+            // here unwinds through `Latches::drop` and releases them BEFORE
+            // `thread::scope` joins — otherwise a real failure presents as a wedge
+            // (this file's own harness lesson, learned again here).
+            let latches = latches;
+            // ---- The two threads that PARK, one per isolate.
+            for gpu in [GPU0, GPU1] {
+                let held_dev = Arc::clone(&device);
+                let parked = &parked;
+                scope.spawn(move || {
+                    let p = held_dev
+                        .publish_backing(gpu, N3_PDB, GpuVa(VA_N3_G0), 0x1000)
+                        .expect("the parked publication completes once released");
+                    parked.lock().expect("parked").push((gpu, p));
+                });
+            }
+            latches.wait_all_pending();
+
+            // ---- Four workload threads on the STRADDLER (two per target) …
+            let mut workers = Vec::new();
+            for gpu in [GPU0, GPU1] {
+                let pub_dev = Arc::clone(&device);
+                workers.push(scope.spawn(move || {
+                    let mut n = 0u64;
+                    for k in 0..N3_OPS {
+                        let va = GpuVa(VA_N3_G1 + k * 0x1000);
+                        let p = pub_dev
+                            .publish_backing(gpu, N3_PDB, va, 0x1000)
+                            .expect("a sibling thread publishes while BOTH isolates park");
+                        // Read back exactly what THIS commit landed, on THIS target.
+                        assert_eq!(
+                            pub_dev
+                                .resolve(gpu, N3_PDB, GpuVa(va.0 + 0x40))
+                                .map(|(b, off)| (b.phys, b.host_va(), off)),
+                            Ok((p.gpa, Some(p.host_va), 0x40)),
+                            "another target's commit landed in this one's binding"
+                        );
+                        assert_eq!(
+                            host_va_lane(p.host_va),
+                            (lane, gpu.0),
+                            "a host VA was minted in the wrong (proc, GPU) isolate"
+                        );
+                        n += 1;
+                        assert_eq!(lock::held_depth(), 0, "the op leaked a guard");
+                    }
+                    n
+                }));
+                let ring_dev = Arc::clone(&device);
+                workers.push(scope.spawn(move || {
+                    let mut n = 0u64;
+                    for k in 0..N3_OPS {
+                        let out = ring_dev
+                            .doorbell(gpu, MockArch::token_for(N3_GR), &[])
+                            .expect("the straddler rings while BOTH isolates park");
+                        assert_eq!(
+                            token_lane(out.host_token),
+                            (lane, gpu.0),
+                            "the rung host token came from the OTHER target's isolate"
+                        );
+                        if k.is_multiple_of(8) {
+                            ring_dev
+                                .publish_backing(
+                                    gpu,
+                                    N3_PDB,
+                                    GpuVa(VA_N3_RING + k * 0x1000),
+                                    0x1000,
+                                )
+                                .expect("the ring thread publishes its own working set");
+                        }
+                        n += 1;
+                        assert_eq!(lock::held_depth(), 0, "the op leaked a guard");
+                    }
+                    n
+                }));
+            }
+            // … and one on each BYSTANDER proc, so the run is multi-process too.
+            for (gpu, pid) in [(GPU0, by0), (GPU1, by1)] {
+                let by_dev = Arc::clone(&device);
+                workers.push(scope.spawn(move || {
+                    let mut n = 0u64;
+                    for k in 0..N3_OPS {
+                        by_dev
+                            .publish_backing(gpu, N3_BY_PDB, GpuVa(VA_N3_BY + k * 0x1000), 0x1000)
+                            .expect("a bystander proc publishes while the straddler parks");
+                        let out = by_dev
+                            .doorbell(gpu, MockArch::token_for(N3_BY_GR), &[])
+                            .expect("a bystander proc rings while the straddler parks");
+                        assert_eq!(out.proc, pid, "the bystander's doorbell mis-demuxed");
+                        n += 1;
+                    }
+                    n
+                }));
+            }
+
+            // ---- ★★ THE ASSERTIONS INSIDE THE WINDOW. Both isolates still parked.
+            let on0 = device
+                .forward_engine_object(GPU0, N3_GR, kayfabe_tests::COMPUTE_CLASS, &[])
+                .expect("the straddler forwards on GPU0 with a verb parked on it")
+                .host_object;
+            let on1 = device
+                .forward_engine_object(GPU1, N3_GR, kayfabe_tests::COMPUTE_CLASS, &[])
+                .expect("the straddler forwards on GPU1 with a verb parked on it")
+                .host_object;
+            let mut payload = [0u8; 4];
+            assert_eq!(
+                device.route_control(GPU1, s, on0, mock_ctrl::FORWARDABLE, &mut payload),
+                Err(FwdFault::Rm(RmError::ForeignHandle {
+                    handle: on0,
+                    worker_isolate: IsolateId::new(s.0, GPU1),
+                })),
+                "★★ ({mode:?}) the cross-GPU gate must hold under contention too"
+            );
+            assert_eq!(
+                device.route_control(GPU0, s, on1, mock_ctrl::FORWARDABLE, &mut payload),
+                Err(FwdFault::Rm(RmError::ForeignHandle {
+                    handle: on1,
+                    worker_isolate: IsolateId::new(s.0, GPU0),
+                })),
+                "★★ ({mode:?}) …in both directions"
+            );
+            assert_eq!(
+                device.route_control(GPU0, s, on0, mock_ctrl::FORWARDABLE, &mut payload),
+                Ok(ControlRoute::Forwarded),
+                "({mode:?}) the legal direction still forwards with a verb parked"
+            );
+
+            // A device **WRITE** in the same window — the sharpest probe that the parked
+            // verbs hold no lock at all.
+            assert_eq!(
+                device.apply(RmEvent::Alloc {
+                    client: N3_BY0_CLIENT,
+                    parent: HObject(0x5c00_0001),
+                    handle: HObject(0x7000_0001),
+                    class: mock_classes::EVENT,
+                    facts: AllocFacts::default(),
+                }),
+                Ok(()),
+                "({mode:?}) a device WRITE completed while two verbs were parked"
+            );
+            assert!(
+                latches.all_pending(),
+                "★ ({mode:?}) the window is a lie if a latch was released early"
+            );
+
+            // ---- Termination: every workload thread finished END TO END while the two
+            //      parked verbs were still parked. THEN release.
+            let done: u64 = workers
+                .into_iter()
+                .map(|w| w.join().expect("workload thread"))
+                .sum();
+            assert_eq!(
+                done,
+                N3_OPS * 6,
+                "({mode:?}) all six workload threads ran to completion under pending work"
+            );
+            assert!(
+                latches.all_pending(),
+                "★★ ({mode:?}) PROGRESS-UNDER-PENDING: the latches must still be held at \
+                 the moment the workloads finished, or the test proved nothing"
+            );
+            latches.release_all();
+        });
+
+        // ---- The two parked publications completed, one per target, each in its OWN
+        //      arena and its OWN host VAS — at the SAME guest VA on both GPUs.
+        let mut parked = parked.into_inner().expect("parked");
+        parked.sort_by_key(|(g, _)| g.0);
+        assert_eq!(
+            parked.len(),
+            2,
+            "({mode:?}) both parked publications returned"
+        );
+        assert_ne!(
+            parked[0].1.gpa, parked[1].1.gpa,
+            "★ ({mode:?}) the same guest VA on the proc's two targets must land in two \
+             DISJOINT GPA ranges — #14 lifted onto the GPU axis"
+        );
+        for (i, (gpu, p)) in parked.iter().enumerate() {
+            assert_eq!(gpu.0, i as u32);
+            assert_eq!(
+                host_va_lane(p.host_va),
+                (s.0 + 1, gpu.0),
+                "({mode:?}) a parked publication's host VA came from the other isolate"
+            );
+        }
+
+        // ---- …and the accounts are still separate after all of that.
+        let ledger = rec.lock().expect("recorder").ledger();
+        let g0 = ledger.leaked_on(IsolateId::new(s.0, GPU0));
+        let g1 = ledger.leaked_on(IsolateId::new(s.0, GPU1));
+        assert!(
+            g0.len() > 10 && g1.len() > 10,
+            "({mode:?}) non-vacuity: both isolates carry a real account (g0={}, g1={})",
+            g0.len(),
+            g1.len()
+        );
+        assert_eq!(
+            g0.intersection(&g1).count(),
+            0,
+            "★ ({mode:?}) the straddler's two isolate accounts must stay disjoint"
+        );
+        for (gpu, set) in [(GPU0, &g0), (GPU1, &g1)] {
+            for h in set {
+                assert_eq!(
+                    (h.isolate(), handle_lane(h.raw())),
+                    (IsolateId::new(s.0, gpu), (s.0 + 1, gpu.0)),
+                    "({mode:?}) {gpu:?}'s account holds a handle from the other target"
+                );
+            }
+        }
+    }
+}
+
+/// ★ The conservation **census** must answer per `(Proc, GpuId)` too.
+///
+/// [`census`] compares, per isolate, what the ledger says is outstanding against what
+/// core state can still name. For a proc that spans two GPUs those are two different
+/// questions with two different answers, and asking one proc-wide question of both
+/// isolates is not a weaker check — it is a **wrong** one: each isolate's outstanding
+/// set gets compared against the union, so every object of the OTHER target reads as
+/// `DANGLING` (or would be silently excused, depending on which way the imbalance
+/// fell). The straddler is the world that makes that visible.
+#[test]
+fn n3_d_the_conservation_census_separates_a_procs_two_isolates() {
+    let _wd = watchdog("n3_census_separation", Duration::from_secs(60));
+    let (mut gpu, s, _by0, _by1, rec) = n3_gpu();
+
+    // Real host state on BOTH of the straddler's targets, at the SAME guest VAs.
+    for target in [GPU0, GPU1] {
+        for k in 0..3u64 {
+            core_publish(&mut gpu, target, N3_PDB, VA_N3_G0 + k * 0x1000)
+                .expect("the straddler publishes on both targets");
+        }
+    }
+    // …and on a bystander, so the census is multi-process as well as multi-GPU.
+    core_publish(&mut gpu, GPU0, N3_BY_PDB, VA_N3_BY).expect("bystander 0 publishes");
+    core_publish(&mut gpu, GPU1, N3_BY_PDB, VA_N3_BY).expect("bystander 1 publishes");
+
+    let c = census(&gpu, &rec);
+    // Non-vacuity FIRST: both of the straddler's isolates must actually be in the
+    // ledger with a real account, or every emptiness assert below is free.
+    let ledger = rec.lock().expect("recorder").ledger();
+    for target in [GPU0, GPU1] {
+        assert!(
+            ledger.leaked_on(IsolateId::new(s.0, target)).len() >= 4,
+            "non-vacuity: the straddler's {target:?} isolate holds a host VAS + 3 backings"
+        );
+    }
+    assert_eq!(
+        c.dangling_objects,
+        BTreeMap::new(),
+        "★★ core state names host objects the ledger has no live record of, per isolate — \
+         the shape a proc-wide census reports for EVERY object of a straddler's other GPU"
+    );
+    assert_eq!(
+        c.dangling_maps,
+        BTreeMap::new(),
+        "★★ …and the mapping half of the same imbalance"
+    );
+    assert_eq!(
+        c.leaked_objects,
+        BTreeMap::new(),
+        "★ nothing outstanding on a live proc is unreachable from its own core state"
+    );
+    assert_eq!(c.leaked_maps, BTreeMap::new(), "★ …and no mapping either");
 }
