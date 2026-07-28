@@ -926,4 +926,19 @@ jobs:
           #   2. proptest seeds accumulate inside job trees, so a couple of rows flip
           #      between runs with no code change.
           #   3. 4 timeouts are scored as kills pending individual adjudication.
-          MUTATION_THRESHOLD_PCT: '83'
+          # ★★ 80, NOT 83 — AND NOT 86. I have now sized this wrong TWICE by fitting
+          # the bar to a measurement instead of leaving slack:
+          #   86 (1afc5ff) failed the run it came from by ONE mutant (integer formula).
+          #   83 (f556d03) passes THIS box, but CI has no /dev/kvm and would pass by
+          #      ONE TENTH of a percent — the same mistake wearing a different number.
+          #
+          # ★ MEASURED: the same crate scores 104 survivors WITHOUT /dev/kvm vs 41 with
+          # (kayfabe-vmm-kvm, probed alone). CI runs on ubuntu-latest, which has none —
+          # kvm_gate.rs's docs say so, and the measuring box logged 36 RAN / 0 SKIPPED.
+          # Projecting that +63 onto the campaign: 1841/2214 = 83.1 %, i.e. exactly at 83.
+          # And that projection is OPTIMISTIC — it assumes the delta is confined to one
+          # crate, while kayfabe-rt and kayfabe-shell also drive the reactor.
+          #
+          # 80 leaves ~3.1 points (~69 survivors) of real slack. Raise it when an actual
+          # CI run MEASURES higher; this number is still a projection, not a CI reading.
+          MUTATION_THRESHOLD_PCT: '80'
