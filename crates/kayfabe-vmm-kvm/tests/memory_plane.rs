@@ -294,10 +294,96 @@ fn an_overlapping_window_is_the_kernels_eexist_and_leaks_nothing() {
 ///
 /// `VmSize` from `/proc/self/status` is the instrument. Each refused install `mmap`s a
 /// 1 MiB window before the kernel refuses the memslot; a hundred of them is 100 MiB, two
-/// orders of magnitude above the noise of an allocator warming up.
+/// orders of magnitude above the noise of an allocator warming up. The open-descriptor
+/// count is the second half of the same property: with `shareable_ram`, every attempt also
+/// creates a `memfd` before the ioctl refuses, and a leaked descriptor moves no counter
+/// either.
+///
+/// ## ★★ Why the measurement runs in a CHILD PROCESS, and why that is not optional
+///
+/// `VmSize` is a property of the **process**, and this file's other eighteen tests share
+/// it. libtest runs them on `available_parallelism()` threads, so on a big box a sibling's
+/// 2 MiB thread stack — or, far worse, a 64 MiB glibc per-thread malloc arena, which is
+/// created on allocator *contention* and is therefore a direct function of how many
+/// siblings overlap — lands between `before` and `after` and is charged here. Measured at
+/// `634b253` on a 25-core box: **26 failures in 30 runs**, with growths quantised to
+/// multiples of 64 MiB (65 580, 131 144, 200 812, 471 208 KiB), and **0 in 30** with
+/// `--test-threads=1`. The same commit was green on a 4-core box. Note that most of those
+/// numbers are *larger than the 100 MiB the leak under test can even produce*: a reading
+/// above the theoretical maximum of the bug is the tell that the instrument is measuring
+/// somebody else.
+///
+/// Three fixes were rejected before this one:
+///
+/// - **`--test-threads=1`.** A test whose correctness depends on how the suite happens to
+///   be invoked breaks the first day somebody runs it normally, and CI runs it normally.
+/// - **A process-local substitute for the reading.** There is none: the address space *is*
+///   process-global. `/proc/self/maps` totals have exactly the same contamination.
+/// - **Naming our own mapping** — record the window's host VA and assert that range is
+///   absent from `/proc/self/maps` afterwards. This races the siblings from the *other*
+///   side: a just-freed hole is precisely what the next `mmap` in any thread reuses, so a
+///   correct release would intermittently read as a leak.
+///
+/// What is left is to give the measurement a process in which it **is** local. The test
+/// re-execs its own binary with `--exact … --test-threads=1` and `KAYFABE_ADDRSPACE_CHILD`
+/// set; the child, where nothing else is running, measures and prints
+/// [`ADDRSPACE_SENTINEL`], and the parent asserts the exact exit code **and** the sentinel
+/// — because a libtest filter that matches nothing also exits 0, which would make this a
+/// green instrument over a measurement nobody took. The result is immune to core count, to
+/// the parent's `--test-threads`, and to every sibling test, by construction rather than by
+/// convention.
 #[test]
 fn a_repeated_partial_failure_returns_the_host_address_space() {
     kayfabe_linux_raw::require_kvm!("a_repeated_partial_failure_returns_the_host_address_space");
+    if std::env::var_os(ADDRSPACE_CHILD).is_some() {
+        measure_the_partial_failure_path_alone();
+        return;
+    }
+    let exe = std::env::current_exe().expect("a test binary knows its own path");
+    let out = std::process::Command::new(&exe)
+        .args([
+            "--exact",
+            "a_repeated_partial_failure_returns_the_host_address_space",
+            "--test-threads=1",
+            "--nocapture",
+        ])
+        .env(ADDRSPACE_CHILD, "1")
+        .output()
+        .unwrap_or_else(|e| panic!("re-exec {} for the lone measurement: {e}", exe.display()));
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "★ the lone-process measurement failed. Its whole output follows, and the \
+         `{ADDRSPACE_SENTINEL}` line carries the numbers:\n{said}"
+    );
+    assert!(
+        said.contains(ADDRSPACE_SENTINEL),
+        "★ NON-VACUITY: the child exited 0 without ever printing `{ADDRSPACE_SENTINEL}`. \
+         A libtest filter that matches NOTHING exits 0 too, so this assertion is the only \
+         thing between a green suite and a measurement that never ran — rename the test \
+         and this is what catches the stale filter:\n{said}"
+    );
+}
+
+/// The environment variable that tells a re-exec of this binary it is the measuring child.
+const ADDRSPACE_CHILD: &str = "KAYFABE_ADDRSPACE_CHILD";
+
+/// The child's proof-of-work line. Its absence is a vacuous pass; see the test above.
+const ADDRSPACE_SENTINEL: &str = "KAYFABE-ADDRSPACE-MEASURED";
+
+/// ★ The measurement, run **alone** in a child process — the reason it is a separate
+/// function is that its two readings (`VmSize`, open descriptors) are process-global and
+/// are only local here.
+fn measure_the_partial_failure_path_alone() {
+    let refused = Err(VmmError::HostRefused {
+        what: "a memslot install",
+        errno: Some(libc::EEXIST),
+    });
     let m = machine();
     let p = page();
     let win = 256 * p.bytes();
@@ -305,20 +391,29 @@ fn a_repeated_partial_failure_returns_the_host_address_space() {
         .expect("the first window");
     // Warm up, so the baseline is not measuring the first refusal's own allocations.
     for _ in 0..4 {
-        assert!(m.install_ram_window(GPA_RAM + 8 * p.bytes(), win).is_err());
+        assert_eq!(
+            m.install_ram_window(GPA_RAM + 8 * p.bytes(), win),
+            refused.clone()
+        );
     }
-    let before = vm_size_kib();
+    let (before, fds_before) = (vm_size_kib(), open_descriptors());
     for _ in 0..100 {
         assert_eq!(
             m.install_ram_window(GPA_RAM + 8 * p.bytes(), win),
-            Err(VmmError::HostRefused {
-                what: "a memslot install",
-                errno: Some(libc::EEXIST),
-            })
+            refused.clone()
         );
     }
-    let after = vm_size_kib();
+    let (after, fds_after) = (vm_size_kib(), open_descriptors());
     let leaked = after.saturating_sub(before);
+    let fds_leaked = fds_after.saturating_sub(fds_before);
+    println!("{ADDRSPACE_SENTINEL} vmsize_growth_kib={leaked} fd_growth={fds_leaked}");
+    // Alone in its own process both readings measure **exactly 0**, over 60 runs including
+    // 20 taken while five copies of the whole binary hammered the box. 8 MiB is
+    // nevertheless the right slack rather than something tighter: the two noise sources
+    // that exist at all are a 2 MiB thread stack and a 64 MiB glibc arena, so any bound
+    // between 2 MiB and 64 MiB is exactly as robust as any other — and 8 MiB is a
+    // twelfth of the leak it is looking for, so it still bites if only eight of the
+    // hundred attempts leak rather than all of them.
     assert!(
         leaked < 8 * 1024,
         "★ a hundred refused installs grew this process's address space by {leaked} KiB. \
@@ -327,6 +422,13 @@ fn a_repeated_partial_failure_returns_the_host_address_space() {
          conservation ledger — which is only incremented on SUCCESS — says nothing at all",
         win_kib = win / 1024,
         expect = 100 * win / 1024,
+    );
+    assert!(
+        fds_leaked < 8,
+        "★ and the DESCRIPTORS too: a hundred refused installs left {fds_leaked} open. \
+         Each attempt creates a shareable-RAM `memfd` before the ioctl refuses, so a \
+         failure path that releases the mapping but not the backing leaks a descriptor \
+         per attempt — invisible to `VmSize` and invisible to the ledger"
     );
     assert_eq!(
         m.audit().host_refusals,
@@ -343,6 +445,11 @@ fn vm_size_kib() -> u64 {
         .and_then(|v| v.split_whitespace().next())
         .and_then(|n| n.parse().ok())
         .expect("VmSize is always present on Linux")
+}
+
+/// How many descriptors this process holds open, from `/proc/self/fd`.
+fn open_descriptors() -> u64 {
+    std::fs::read_dir("/proc/self/fd").expect("procfs").count() as u64
 }
 
 /// ★ `ENOMEM` from the kernel: a window the address space cannot hold. The `mmap` fails
