@@ -528,6 +528,8 @@ impl Faulted for GspFault {
             GspFault::PeerWritePtrOutOfRange { .. } => FaultTag("GspFault::PeerWritePtrOutOfRange"),
             GspFault::QueueFull { .. } => FaultTag("GspFault::QueueFull"),
             GspFault::MsgLenOutOfRange { .. } => FaultTag("GspFault::MsgLenOutOfRange"),
+            GspFault::ElementCountOutOfRange { .. } => FaultTag("GspFault::ElementCountOutOfRange"),
+            GspFault::ElementCountMismatch { .. } => FaultTag("GspFault::ElementCountMismatch"),
             GspFault::ChecksumMismatch { .. } => FaultTag("GspFault::ChecksumMismatch"),
             GspFault::SeqNumGap { .. } => FaultTag("GspFault::SeqNumGap"),
             GspFault::TransportHeaderInvalid { .. } => FaultTag("GspFault::TransportHeaderInvalid"),

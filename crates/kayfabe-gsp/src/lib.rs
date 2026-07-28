@@ -33,9 +33,10 @@
 //! 1. **A GPU architecture.** No offset, no bit position, no generation name lives here;
 //!    they are behind `kayfabe_arch::GspModel`, reached through `Arch::gsp()`. The suite
 //!    drives the same FSM through two deliberately-different models.
-//! 2. **A driver version.** The element layout genuinely changed in **(570, 610]** — 48
-//!    bytes with `elemCount@40` versus 16 with MCTP/NVDM transport headers — so the shape
-//!    is an [`element::ElementLayout`] *value*, and the wire tables are keyed on the full
+//! 2. **A driver version.** The element layout genuinely changed in **(595.84, 610.43.02]**
+//!    — 48 bytes with `elemCount@40` versus 16 with MCTP/NVDM transport headers — so the
+//!    shape is an [`element::ElementLayout`] *value* supplied by
+//!    `kayfabe_abi::versions::GspElementWire`, and the wire tables are keyed on the full
 //!    `major.minor.patch` with a loud [`kayfabe_abi::wire::AbiError::NoTableForVersion`]
 //!    below the floor. ★ Version skew and chip variation are **different axes** and are
 //!    never folded into one enum.
@@ -119,7 +120,7 @@ pub use boot::{
 };
 pub use element::{
     ElementLayout, IncomingRpc, MsgLen, OutgoingRpc, TransportHdr, bytes_to_elements, checksum32,
-    decode_message, encode_message, peek_len,
+    decode_message, encode_message, max_elements, peek_elem_count, peek_len,
 };
 pub use fault::{GspFault, LayoutError, RamRefused, RegionError, RxLinkCode};
 pub use ram::{GuestRam, RegionMap};

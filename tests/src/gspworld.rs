@@ -45,6 +45,24 @@ pub struct FakeRam {
 /// The page granularity of [`FakeRam`], and of the guest's own page table.
 pub const PAGE: u64 = 4096;
 
+/// A deliberately tiny queue — 8 pages, a **7-slot** ring — so wrap and fullness are
+/// reached rather than described. The default for [`Guest::new`].
+pub const SMALL_QUEUE_SIZE: u32 = 0x8000;
+
+/// The queue size three independent trees agree the driver actually uses: `0x40000`, i.e.
+/// a **63-slot** ring (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:88-91`
+/// derived, `nv: r535/gsp.c:1164-1172` verbatim).
+///
+/// ★ Needed for the staging-buffer bound: only at this size can a message declare an
+/// element count above `GSP_MSG_QUEUE_ELEMENT_SIZE_MAX / RM_PAGE_SIZE` **and have that
+/// many elements actually available**, which is the precondition for the overrun.
+pub const REAL_QUEUE_SIZE: u32 = 0x0004_0000;
+
+/// `GSP_MSG_QUEUE_ELEMENT_SIZE_MAX` = `RM_PAGE_SIZE * 16`
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:91-92`) — and, at 580,
+/// also the exact size of the receive **staging buffer** (see [`Guest::staging_bytes`]).
+pub const STAGING_BYTES: u32 = 16 * PAGE as u32;
+
 impl FakeRam {
     /// Allocate one page, zeroed. Idempotent.
     pub fn alloc(&mut self, gpa: u64) {
@@ -103,79 +121,122 @@ impl GuestRam for FakeRam {
 // ──────────────────────────────── the two ABI profiles ────────────────────────────────
 
 /// One driver era's element shape. **Two of these exist, and they are incompatible.**
+///
+/// ★★ B5: this is now a **consumer** of `kayfabe-abi`'s version table, not a second
+/// definition of the same facts. A profile carries only the version key and its own name;
+/// every offset, transport word and init-args geometry is looked up. Before this the
+/// fixtures *were* the only definition of the element layout — `ElementLayout::new` had no
+/// caller outside test code — so no production path selected a layout at all and the
+/// version key was untested.
 #[derive(Debug, Clone, Copy)]
 pub struct Profile {
     /// For failure messages.
     pub name: &'static str,
-    /// `queueElementHdrSize`.
-    pub hdr: usize,
-    /// `checkSum` offset.
-    pub checksum: usize,
-    /// `seqNum` offset.
-    pub seqnum: usize,
-    /// `elemCount` offset, where the version has one.
-    pub elem_count: Option<usize>,
-    /// `(mctp_off, mctp_word, nvdm_off, nvdm_word)`.
-    pub mctp: Option<(usize, u32, usize, u32)>,
-    /// Does the init-args struct declare `queueElementHdrSize`?
-    pub declares_hdr_size: bool,
+    /// The driver version this profile speaks — the **key**, and the only thing that
+    /// distinguishes the two.
+    pub version: kayfabe_abi::DriverVersion,
 }
 
-/// The **580 / r535 / r570** element: 48 bytes, `elemCount@40`, no transport headers.
+/// The **580** element, keyed on the driver the bench actually runs.
 ///
-/// [src] `nv: r535/nvrm/gsp.h:808-816` (`authTagBuffer[16]@0, aadBuffer[16]@16,
-/// checkSum@32, seqNum@36, elemCount@40, rpc@48`), independently `nv: r535/rpc.c:94-102`
-/// (which spells the 44→48 pad explicitly), and the C artifact implements exactly this
-/// (`C: src/qemu/nvkvm_gpu_emul.c:1583-1602`).
+/// [src] `ogkm-580: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:43-51`
+/// (`authTagBuffer[16]@0, aadBuffer[16]@16, checkSum@32, seqNum@36, elemCount@40, rpc@48`),
+/// independently `nv: r535/nvrm/gsp.h:808-816` and `nv: r535/rpc.c:94-102`, and the C
+/// artifact implements exactly this (`C: src/qemu/nvkvm_gpu_emul.c:1583-1602`).
+///
+/// ★ Its **absent** transport headers are correct and must not be "fixed": `ogkm-580` has
+/// no `mctp_format.h`, no `NVDM_TYPE_RM_RPC`, and its only MCTP is FSP/SEC2/NVSwitch.
+/// Bytes @0..@31 are the Confidential-Compute buffers, which a CC-off guest never reads.
 pub const P580: Profile = Profile {
     name: "580 (r535/r570-shaped)",
-    hdr: 48,
-    checksum: 32,
-    seqnum: 36,
-    elem_count: Some(40),
-    mctp: None,
-    declares_hdr_size: false,
+    version: kayfabe_abi::versions::BENCH_DRIVER,
 };
 
 /// The **610** element: 16 bytes, MCTP/NVDM transport headers at 0 and 4, no `elemCount`.
 ///
-/// [src] `ogkm: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:52-67`, validated on
-/// receive at `ogkm: message_queue_cpu.c:737-759`.
-///
-/// ★ The two transport **words** here are placeholders. `mctpCreateTransportHeader(SOM=1,
-/// EOM=1, 0,0,0)` and `mctpCreateNvdmHeader(NVDM_TYPE_RM_RPC)` assemble them from bit
-/// fields in `mctp_format.h`/`nvdm_format.h` that this work did not transcribe, and
-/// inventing them would be exactly the "cite, never invent" failure. What is under test is
-/// the *shape*: that a transport header exists, is emitted, and is validated. The real
-/// words belong in `kayfabe-abi` beside the rest of the version's table.
+/// [src] `ogkm-610: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:52-67`, validated on
+/// receive at `ogkm-610: message_queue_cpu.c:735-762`.
 pub const P610: Profile = Profile {
     name: "610 (MCTP/NVDM)",
-    hdr: 16,
-    checksum: 8,
-    seqnum: 12,
-    elem_count: None,
-    mctp: Some((0, 0x0000_0001, 4, 0x0000_10de)),
-    declares_hdr_size: true,
+    version: kayfabe_abi::DriverVersion {
+        major: 610,
+        minor: 43,
+        patch: 2,
+    },
 };
 
 impl Profile {
-    /// The crate-side element layout this profile describes.
+    /// The version table row this profile keys.
+    #[must_use]
+    pub fn table(&self) -> &'static kayfabe_abi::versions::DriverAbiTable {
+        kayfabe_abi::versions::table_for(self.version).expect("a supported driver version")
+    }
+
+    /// `queueElementHdrSize`.
+    #[must_use]
+    pub fn hdr(&self) -> usize {
+        self.table().gsp_element_wire().hdr_size()
+    }
+
+    /// `checkSum` offset.
+    #[must_use]
+    pub fn checksum(&self) -> usize {
+        self.table().gsp_element_wire().checksum_off()
+    }
+
+    /// `seqNum` offset.
+    #[must_use]
+    pub fn seqnum(&self) -> usize {
+        self.table().gsp_element_wire().seqnum_off()
+    }
+
+    /// `elemCount` offset, where the version has one.
+    #[must_use]
+    pub fn elem_count(&self) -> Option<usize> {
+        self.table().gsp_element_wire().elem_count_off()
+    }
+
+    /// The transport words and the bits of them the guest validates.
+    #[must_use]
+    pub fn mctp(&self) -> Option<kayfabe_abi::versions::GspTransportWords> {
+        self.table().gsp_element_wire().transport()
+    }
+
+    /// Does the init-args struct declare `queueElementHdrSize`?
+    #[must_use]
+    pub fn declares_hdr_size(&self) -> bool {
+        self.table()
+            .gsp_init_args_wire()
+            .element_hdr_size_off()
+            .is_some()
+    }
+
+    /// `queueElementSizeMax` — and, at 580, the receive staging buffer's size.
+    #[must_use]
+    pub fn element_size_max(&self) -> u32 {
+        self.table().gsp_element_size_max()
+    }
+}
+
+impl Profile {
+    /// The crate-side element layout this profile describes — built from the production
+    /// table, so a wrong entry there is a failing test here.
     #[must_use]
     pub fn layout(&self) -> ElementLayout {
-        let transport = match self.mctp {
+        let transport = match self.mctp() {
             None => TransportHdr::None,
-            Some((header_off, header_word, nvdm_off, nvdm_word)) => TransportHdr::Mctp {
-                header_off,
-                header_word,
-                nvdm_off,
-                nvdm_word,
+            Some(t) => TransportHdr::Mctp {
+                header_off: t.header_off,
+                header_word: t.header_word,
+                nvdm_off: t.nvdm_off,
+                nvdm_word: t.nvdm_word,
             },
         };
         ElementLayout::new(
-            self.hdr,
-            self.checksum,
-            self.seqnum,
-            self.elem_count,
+            self.hdr(),
+            self.checksum(),
+            self.seqnum(),
+            self.elem_count(),
             transport,
         )
         .expect("profile describes a real element")
@@ -188,17 +249,14 @@ impl Profile {
     /// derived (`C: src/qemu/nvkvm_gpu_emul.c:3411-3425`).
     #[must_use]
     pub fn init_args(&self) -> InitArgsLayout {
+        let wire = self.table().gsp_init_args_wire();
         InitArgsLayout {
             shared_mem_pa_off: 0,
             pte_count_off: 8,
             cmd_queue_off_off: 16,
             stat_queue_off_off: 24,
-            min_size: if self.declares_hdr_size { 40 } else { 32 },
-            element_hdr_size_off: if self.declares_hdr_size {
-                Some(32)
-            } else {
-                None
-            },
+            min_size: wire.min_size(),
+            element_hdr_size_off: wire.element_hdr_size_off(),
         }
     }
 
@@ -220,11 +278,11 @@ impl Profile {
                 header_version: 0x0300_0000,
                 codes: FUNCTIONS,
             },
-            // queueElementSizeMax = RM_PAGE_SIZE * 16 (`ogkm: message_queue_cpu.c:88-89`).
-            element_size_max: 4096 * 16,
+            // `queueElementSizeMax`, from the version table rather than from a literal
+            // (`ogkm-580: message_queue_priv.h:92`, `ogkm-610: message_queue_cpu.c:88-89`).
+            element_size_max: self.element_size_max(),
             init_args: self.init_args(),
-            driver: *kayfabe_abi::versions::table_for(kayfabe_abi::versions::BENCH_DRIVER)
-                .expect("the bench driver has a table"),
+            driver: *self.table(),
         }
     }
 }
@@ -264,6 +322,9 @@ pub struct FakeGspModel {
     wpr2_hi_up: u64,
     riscv_active_bit: u64,
     suspend_sentinel: u64,
+    /// ★ Deliberately wrong when set: OR the sentinel onto the mailbox shadow instead of
+    /// replacing it. See [`FakeGspModel::with_or_ed_suspend_sentinel`].
+    suspend_ors: bool,
     /// The id8 of the region carrying the init args ("RMARGS", little-endian ASCII —
     /// `C: src/qemu/nvkvm_gpu_emul.c:3408`).
     pub rmargs_id: u64,
@@ -280,6 +341,7 @@ pub const MODEL_A: FakeGspModel = FakeGspModel {
     wpr2_hi_up: 0x0000_1fff,
     riscv_active_bit: 1 << 7,
     suspend_sentinel: 0x8000_0000,
+    suspend_ors: false,
     rmargs_id: 0x0000_524d_4152_4753,
 };
 
@@ -296,6 +358,7 @@ pub const MODEL_B: FakeGspModel = FakeGspModel {
     wpr2_hi_up: 0x00ab_cdef,
     riscv_active_bit: 1 << 3,
     suspend_sentinel: 0x0000_0bad,
+    suspend_ors: false,
     rmargs_id: 0x0000_524d_4152_4753,
 };
 
@@ -329,6 +392,28 @@ impl FakeGspModel {
     #[must_use]
     pub fn suspend_sentinel(&self) -> u64 {
         self.suspend_sentinel
+    }
+
+    /// ★★ The same model with **one deliberate defect**: it OR-s the suspend sentinel
+    /// onto the mailbox shadow instead of replacing it.
+    ///
+    /// That is 610's reading of the register — `#define
+    /// INTERRUPT_PROCESSOR_SUSPENDED_VALUE 0x80000000` and
+    /// `return (mailbox & INTERRUPT_PROCESSOR_SUSPENDED_VALUE) != 0`
+    /// (`ogkm-610: kernel_gsp_tu102.c:333, 348`) — applied to a register **580 tests with
+    /// exact equality**: `return (mailbox == 0x80000000)`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:1226-1238`,
+    /// the constant inlined, no such symbol anywhere in that tree).
+    ///
+    /// So a shadow still holding a boot-args half with bit 31 set reads as *suspended* at
+    /// 610 and hangs the teardown poll **forever** at 580 — and 580 polls it from two
+    /// places: after fn-47 (`ogkm-580: kernel_gsp.c:4310`) and as a bootstrap liveness
+    /// fallback (`ogkm-580: kernel_gsp_tu102.c:551`). This model exists so the pin that
+    /// forbids OR-ing has something to catch; nothing else may use it.
+    #[must_use]
+    pub fn with_or_ed_suspend_sentinel(mut self) -> FakeGspModel {
+        self.suspend_ors = true;
+        self
     }
 
     fn index(&self, reg: GspReg) -> u64 {
@@ -406,7 +491,14 @@ impl GspModel for FakeGspModel {
             GspReg::GspFalconDmatrfcmd | GspReg::Sec2FalconDmatrfcmd => 0, // IDLE
             GspReg::GspFalconMailbox0 => {
                 if obs.suspended {
-                    self.suspend_sentinel
+                    if self.suspend_ors {
+                        // The defect, on purpose — see `with_or_ed_suspend_sentinel`.
+                        u64::from(obs.boot_args_lo) | self.suspend_sentinel
+                    } else {
+                        // Replace the whole value. Never OR: at 580 the guest's poll is
+                        // `mailbox == 0x80000000` exactly.
+                        self.suspend_sentinel
+                    }
                 } else {
                     u64::from(obs.boot_args_lo)
                 }
@@ -623,6 +715,18 @@ pub struct Guest {
     pub rx_seq: u32,
     /// Whether `msgqRxLink` has succeeded.
     pub linked: bool,
+    /// ★ `GSP_MSG_QUEUE_ELEMENT_SIZE_MAX` — the size of the **staging buffer** the
+    /// receive path copies elements into, and the bound this instrument exists to model.
+    ///
+    /// `_gspMsgQueueInit` allocates `(1 << GSP_MSG_QUEUE_ELEMENT_ALIGN) +
+    /// GSP_MSG_QUEUE_ELEMENT_SIZE_MAX + msgqGetMetaSize()` from `portMemAllocNonPaged`,
+    /// carves `pCmdQueueElement = ALIGN_UP(pWorkArea, 4096)` and puts the **live `msgq`
+    /// metadata** immediately after it at `pCmdQueueElement + GSP_MSG_QUEUE_ELEMENT_SIZE_MAX`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:132-134, 143-145`).
+    /// The receive loop then copies `elemCount` elements of 4096 bytes into it with **no
+    /// bound but the ring's availability** (`:628, 648-650`), so an element declaring more
+    /// than `element_size_max / msg_size` elements writes past a kernel allocation.
+    pub staging_bytes: u32,
     rmargs_id: u64,
 }
 
@@ -637,8 +741,26 @@ impl Guest {
     /// `entryAlign = RM_PAGE_SHIFT` (`ogkm: message_queue_cpu.c:88-91`).
     #[must_use]
     pub fn new(p: Profile, pages: Vec<u64>, boot_args_gpa: u64, rmargs_id: u64) -> Guest {
+        // 8 pages per queue: a 7-slot ring, small on purpose.
+        Guest::new_sized(p, pages, boot_args_gpa, rmargs_id, SMALL_QUEUE_SIZE)
+    }
+
+    /// The same guest with a caller-chosen queue size.
+    ///
+    /// ★ Needed because the **real** geometry is what makes the staging-buffer overrun
+    /// reachable: at 63 elements a message may declare up to 62, and 62 × 4096 is
+    /// 253 952 bytes into a 65 536-byte staging buffer. A 7-slot ring can never make a
+    /// count above 16 *available*, so a test written against it would be modelling a
+    /// bound it cannot reach. See [`REAL_QUEUE_SIZE`].
+    #[must_use]
+    pub fn new_sized(
+        p: Profile,
+        pages: Vec<u64>,
+        boot_args_gpa: u64,
+        rmargs_id: u64,
+        size: u32,
+    ) -> Guest {
         let msg_size = PAGE as u32;
-        let size = 0x8000; // 8 pages per queue: a 7-slot ring, small on purpose.
         let rx_hdr_off = align_up(32, 1 << 4);
         let entry_off = align_up(rx_hdr_off + 4, 1 << 12);
         let msg_count = (size - entry_off) / msg_size;
@@ -660,6 +782,7 @@ impl Guest {
             rx_read_ptr: 0,
             rx_seq: 0,
             linked: false,
+            staging_bytes: STAGING_BYTES,
             rmargs_id,
         }
     }
@@ -698,8 +821,8 @@ impl Guest {
         args[8..12].copy_from_slice(&(self.pages.len() as u32).to_le_bytes());
         args[16..24].copy_from_slice(&self.cmd_off.to_le_bytes());
         args[24..32].copy_from_slice(&self.stat_off.to_le_bytes());
-        if self.p.declares_hdr_size {
-            args[32..40].copy_from_slice(&(self.p.hdr as u64).to_le_bytes());
+        if self.p.declares_hdr_size() {
+            args[32..40].copy_from_slice(&(self.p.hdr() as u64).to_le_bytes());
         }
         ram.write(self.rmargs_gpa, &args).expect("rmargs mapped");
 
@@ -814,21 +937,21 @@ impl Guest {
         payload: &[u8],
     ) -> Result<u32, &'static str> {
         let rpc_length = 32 + payload.len() as u32;
-        let msg_len = self.p.hdr as u32 + rpc_length;
+        let msg_len = self.p.hdr() as u32 + rpc_length;
         let n = msg_len.div_ceil(self.msg_size);
         if n > self.free_space(ram) {
             return Err("no free space");
         }
         let mut buf = vec![0u8; (n * self.msg_size) as usize];
-        put32(&mut buf, self.p.seqnum, self.tx_seq);
-        if let Some(o) = self.p.elem_count {
+        put32(&mut buf, self.p.seqnum(), self.tx_seq);
+        if let Some(o) = self.p.elem_count() {
             put32(&mut buf, o, n);
         }
-        if let Some((ho, hw, no, nw)) = self.p.mctp {
-            put32(&mut buf, ho, hw);
-            put32(&mut buf, no, nw);
+        if let Some(t) = self.p.mctp() {
+            put32(&mut buf, t.header_off, t.header_word);
+            put32(&mut buf, t.nvdm_off, t.nvdm_word);
         }
-        let h = self.p.hdr;
+        let h = self.p.hdr();
         put32(&mut buf, h, 0x0300_0000);
         put32(&mut buf, h + 4, 0x4350_5256);
         put32(&mut buf, h + 8, rpc_length);
@@ -836,7 +959,7 @@ impl Guest {
         put32(&mut buf, h + 24, sequence);
         buf[h + 32..h + 32 + payload.len()].copy_from_slice(payload);
         let sum = fold(&buf, msg_len as usize);
-        put32(&mut buf, self.p.checksum, sum);
+        put32(&mut buf, self.p.checksum(), sum);
 
         for i in 0..n {
             let slot = (self.tx_write_ptr + i) % self.msg_count;
@@ -855,9 +978,33 @@ impl Guest {
 
     /// Drain the status queue, as `GspMsgQueueReceiveStatus` does.
     ///
+    /// ## ★★ The element count is **read**, not derived — and only on the versions that
+    /// carry the field
+    ///
+    /// This is the axis on which the two protocols genuinely differ, and modelling it is
+    /// what makes any test of the 580 invariants able to fail before the fix.
+    ///
+    /// | | how many elements the run occupies |
+    /// |---|---|
+    /// | 580 | `nElements = pMQI->pCmdQueueElement->elemCount` — **the field**, read out of element 0 after it has already been copied to staging (`ogkm-580: message_queue_cpu.c:652-658`), and the value `msgqRxMarkConsumed` advances the ring by (`:774`) |
+    /// | 610 | derived from the declared length: `ceil((hdrSize + rpc.length) / elementSizeMin)` (`ogkm-610: message_queue_cpu.c:698-705`, consumed at `:838`) |
+    ///
+    /// 580 never derives the count from `rpc.length`. Its `msgLen` sanity check
+    /// (`ogkm-580: :760-770`) runs *after* the element has been consumed and gates nothing
+    /// — it sets a status the `exit:` path then overwrites the ring position regardless.
+    ///
+    /// The derived value is kept as a separate local so a caller can compare the two;
+    /// this model deliberately does **not** cross-check them, because the driver does not.
+    ///
     /// # Errors
     ///
     /// The driver's own refusal for the first message that fails.
+    ///
+    /// # Panics
+    ///
+    /// If the run the element declares overruns the receive staging buffer — see
+    /// [`Guest::staging_bytes`]. A panic and not a refusal: the driver has **no check
+    /// here**, and modelling one would be modelling a behaviour it does not have.
     pub fn recv(&mut self, ram: &mut FakeRam) -> Result<Vec<GuestMsg>, GuestRefusal> {
         let mut out = Vec::new();
         loop {
@@ -880,16 +1027,51 @@ impl Guest {
                 self.element_off(self.stat_off, self.rx_read_ptr),
                 &mut first,
             );
-            let rpc_length = get32(&first, self.p.hdr + 8);
-            let msg_len = self.p.hdr as u32 + rpc_length;
+            let rpc_length = get32(&first, self.p.hdr() + 8);
+            let msg_len = self.p.hdr() as u32 + rpc_length;
             // The driver's own bound is `msgLen >= queueElementHdrSize`
             // (`ogkm: message_queue_cpu.c:824-833`), which admits `rpc.length == 0`; this
             // model additionally needs the envelope itself to be present, because unlike
             // the driver it slices rather than casting a flexible array.
-            if rpc_length < 32 || msg_len < self.p.hdr as u32 || msg_len > 16 * PAGE as u32 {
+            if rpc_length < 32
+                || msg_len < self.p.hdr() as u32
+                || msg_len > self.p.element_size_max()
+            {
                 return Err(GuestRefusal::BadLength(rpc_length));
             }
-            let n = msg_len.div_ceil(self.msg_size);
+            let derived = msg_len.div_ceil(self.msg_size);
+            let n = match self.p.elem_count() {
+                // 580: the field, straight out of element 0's header.
+                Some(off) => get32(&first, off),
+                // 610: there is no such field; the count comes from the declared length.
+                None => derived,
+            };
+            // A declared count of zero is not a refusal in the driver either: element 0
+            // has already been copied, the loop then exits, and `msgqRxMarkConsumed(0)`
+            // advances the ring by nothing — so the same element is re-read forever
+            // (`ogkm-580: message_queue_cpu.c:628, 774`). Loud here, because an
+            // instrument that reproduces an infinite loop is a hung CI job.
+            assert!(
+                n > 0,
+                "GUEST RECEIVE WEDGE: an element declaring elemCount = 0 consumes nothing \
+                 and is re-read forever (ogkm-580: message_queue_cpu.c:628, 774)",
+            );
+            // ★ The copy loop stops at the first unavailable element
+            // (`msgqRxGetReadBuffer` returns NULL once `n >= available`,
+            // `ogkm-580: src/common/shared/msgq/msgq.c:673-693`), so the number of
+            // elements that actually reach the staging buffer is `min(n, avail)` — and
+            // every one of them advances `pTgt` by `GSP_MSG_QUEUE_ELEMENT_SIZE_MIN` with
+            // nothing checking the destination (`ogkm-580: message_queue_cpu.c:648-650`).
+            let copied = n.min(avail);
+            assert!(
+                u64::from(copied) * u64::from(self.msg_size) <= u64::from(self.staging_bytes),
+                "GUEST KERNEL HEAP CORRUPTION: an element declaring {n} elements copied \
+                 {copied} of them ({} bytes) into a {}-byte staging buffer, overrunning \
+                 portMemAllocNonPaged and hitting the live msgq metadata that sits \
+                 immediately after it (ogkm-580: message_queue_cpu.c:132-145, 648-650)",
+                u64::from(copied) * u64::from(self.msg_size),
+                self.staging_bytes,
+            );
             if n > avail {
                 return Err(GuestRefusal::Incomplete);
             }
@@ -906,19 +1088,29 @@ impl Guest {
             if fold(&run, msg_len as usize) != 0 {
                 return Err(GuestRefusal::BadChecksum);
             }
-            if let Some((ho, hw, no, nw)) = self.p.mctp
-                && (get32(&run, ho) != hw || get32(&run, no) != nw)
+            // ★★ B6 — validate **only what the driver validates**: the MCTP header
+            // version nibble and the NVDM vendor id
+            // (`ogkm-610: message_queue_cpu.c:735-762`). SOM, EOM, the packet sequence
+            // and the NVDM *type* byte are written by the sender and never read, so an
+            // instrument that enforced the whole words would be stricter than the driver
+            // — and a test written against it would assert a behaviour the guest does not
+            // have. Do not tighten this without a citation that says the guest reads more.
+            if let Some(t) = self.p.mctp()
+                && ((get32(&run, t.header_off) & t.header_validated_mask)
+                    != (t.header_word & t.header_validated_mask)
+                    || (get32(&run, t.nvdm_off) & t.nvdm_validated_mask)
+                        != (t.nvdm_word & t.nvdm_validated_mask))
             {
                 return Err(GuestRefusal::MctpViolation);
             }
-            let seq_num = get32(&run, self.p.seqnum);
+            let seq_num = get32(&run, self.p.seqnum());
             if seq_num != self.rx_seq {
                 return Err(GuestRefusal::BadSequence {
                     expected: self.rx_seq,
                     got: seq_num,
                 });
             }
-            let h = self.p.hdr;
+            let h = self.p.hdr();
             out.push(GuestMsg {
                 function: get32(&run, h + 12),
                 sequence: get32(&run, h + 24),
@@ -995,6 +1187,16 @@ fn get32(buf: &[u8], off: usize) -> u32 {
 
 // ───────────────────────────────── the composed world ─────────────────────────────────
 
+/// Which of the two rings an element lives in. Named rather than boolean: a test that
+/// corrupts the wrong queue is a test that passes for the wrong reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RingId {
+    /// The status queue — the ring the faked GSP produces into.
+    Status,
+    /// The command queue — the ring the guest produces into.
+    Command,
+}
+
 /// One device, one guest, one RAM. Everything a boot needs and nothing else — no VMM, no
 /// fd, no clock, no thread.
 pub struct GspWorld {
@@ -1007,19 +1209,28 @@ pub struct GspWorld {
     /// The architecture, carrying one of the two register models.
     pub arch: GspArch,
     profile: Profile,
+    queue_size: u32,
     next_base: u64,
 }
 
 impl GspWorld {
-    /// A cold device with a freshly allocated, fragmented guest region.
+    /// A cold device with a freshly allocated, fragmented guest region and a 7-slot ring.
     #[must_use]
     pub fn new(profile: Profile, model: FakeGspModel) -> GspWorld {
+        GspWorld::new_sized(profile, model, SMALL_QUEUE_SIZE)
+    }
+
+    /// The same, with the guest's queue size chosen — [`REAL_QUEUE_SIZE`] for the 63-slot
+    /// ring the driver actually builds.
+    #[must_use]
+    pub fn new_sized(profile: Profile, model: FakeGspModel, queue_size: u32) -> GspWorld {
         let mut w = GspWorld {
             ram: FakeRam::default(),
-            guest: Guest::new(profile, vec![0], 0, model.rmargs_id),
+            guest: Guest::new_sized(profile, vec![0], 0, model.rmargs_id, queue_size),
             fsm: GspFsm::new(profile.abi()),
             arch: GspArch::new(model),
             profile,
+            queue_size,
             next_base: 0x4000_0000,
         };
         w.allocate_guest_memory();
@@ -1031,7 +1242,9 @@ impl GspWorld {
     /// had them (`ogkm: message_queue_cpu.c:250-256`).
     /// Give the guest a fresh, fragmented region — what a new driver life allocates.
     pub fn allocate_guest_memory(&mut self) {
-        let n = Guest::new(self.profile, vec![0], 0, self.arch.model().rmargs_id).region_pages();
+        let rmargs_id = self.arch.model().rmargs_id;
+        let n =
+            Guest::new_sized(self.profile, vec![0], 0, rmargs_id, self.queue_size).region_pages();
         let base = self.next_base;
         self.next_base += 0x1000_0000;
         // Descending, widely spaced: `base + offset` lands on the WRONG page for every
@@ -1042,8 +1255,72 @@ impl GspWorld {
         }
         let boot_args = base + 0x0F00_0000;
         self.ram.alloc_range(boot_args, 2);
-        self.guest = Guest::new(self.profile, pages, boot_args, self.arch.model().rmargs_id);
+        self.guest = Guest::new_sized(self.profile, pages, boot_args, rmargs_id, self.queue_size);
         self.guest.publish(&mut self.ram);
+    }
+
+    /// Rewrite one word of an element **in the guest's backing store** and repair its
+    /// checksum, so what a test exercises is what the receive path does with the *field*
+    /// rather than whether it noticed the corruption.
+    ///
+    /// The repair is the sender's own order (`ogkm-580: message_queue_cpu.c:483, 519`):
+    /// zero `checkSum`, fold over `hdrSize + rpc.length`, store.
+    ///
+    /// `hdr` and `checksum_off` are passed in rather than read from the profile: a test
+    /// that took them from the same table as the code under test could not catch a wrong
+    /// table entry.
+    ///
+    /// # Panics
+    ///
+    /// If the element is not mapped.
+    pub fn poke_element(
+        &mut self,
+        ring: RingId,
+        slot: u32,
+        hdr: usize,
+        checksum_off: usize,
+        off: usize,
+        val: u32,
+    ) {
+        let gpa = match ring {
+            RingId::Status => self.status_element_gpa(slot),
+            RingId::Command => self.command_element_gpa(slot),
+        };
+        let mut el = vec![0u8; PAGE as usize];
+        GuestRam::read(&mut self.ram, gpa, &mut el).expect("the element is mapped");
+        el[off..off + 4].copy_from_slice(&val.to_le_bytes());
+        el[checksum_off..checksum_off + 4].copy_from_slice(&0u32.to_le_bytes());
+        let rpc_length = get32(&el, hdr + 8);
+        let sum = fold(&el, hdr + rpc_length as usize);
+        el[checksum_off..checksum_off + 4].copy_from_slice(&sum.to_le_bytes());
+        GuestRam::write(&mut self.ram, gpa, &el).expect("the element is mapped");
+    }
+
+    /// The slot the guest's most recent `send` landed in.
+    #[must_use]
+    pub fn last_command_slot(&self) -> u32 {
+        (self.guest.tx_write_ptr + self.guest.msg_count - 1) % self.guest.msg_count
+    }
+    /// The guest-physical address of one element of the **status** queue — the ring we
+    /// produce into. A test that has to corrupt an element in flight needs it, and
+    /// computing it here keeps the ring's geometry in one place.
+    #[must_use]
+    pub fn status_element_gpa(&self, slot: u32) -> u64 {
+        self.guest.gpa_of(
+            self.guest.stat_off
+                + u64::from(self.guest.entry_off)
+                + u64::from(slot) * u64::from(self.guest.msg_size),
+        )
+    }
+
+    /// Likewise for the **command** queue, which the guest produces into.
+    #[must_use]
+    pub fn command_element_gpa(&self, slot: u32) -> u64 {
+        self.guest.gpa_of(
+            self.guest.cmd_off
+                + u64::from(self.guest.entry_off)
+                + u64::from(slot) * u64::from(self.guest.msg_size),
+        )
     }
 
     /// Write a GSP register, by its abstract name — the test never knows an offset.

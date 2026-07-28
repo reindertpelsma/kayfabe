@@ -25,7 +25,7 @@ use kayfabe_gsp::{
 };
 use kayfabe_tests::gspworld::{
     FakeRam, GspArch, GspWorld, Guest, GuestRefusal, MODEL_A, MODEL_B, NoGspArch, P580, P610, PAGE,
-    fold,
+    REAL_QUEUE_SIZE, RingId, STAGING_BYTES, fold,
 };
 
 /// The composed world lives in the shared harness so the mean test can drive the same one
@@ -412,6 +412,34 @@ fn an_idle_release_re_acquire_rebinds_and_preserves_the_sequence_numbers() {
         "★ the re-posted INIT_DONE carries the PRESERVED sequence — at 0 the guest would \
          have filed it as an old package and hung",
     );
+
+    // ★★ …and the COMMAND stream resumes where it stopped, which is the mirror image and
+    // was broken until B4's drain exposed it.
+    //
+    // The status queue's position resets on a rebind and its sequence does not, because
+    // `msgqRxLink` assigns `rxReadPtr = 0` and nothing ever assigns `rxSeqNum`. The
+    // command queue has **no re-link on the producing side**: nothing resets the guest's
+    // tx `writePtr` short of `msgqTxCreate`, which runs only from `_gspMsgQueueInit` at
+    // module load (`ogkm-580: message_queue_cpu.c:155-161`). So the producer is still at 4
+    // here, and a consumer that restarted at 0 would re-read four already-answered
+    // commands and then refuse `SeqNumGap` forever — no recovery branch exists for
+    // `seqNum >` (`ogkm-580: :699-714`).
+    assert_eq!(
+        w.guest.tx_write_ptr, 4,
+        "non-vacuity: the guest's producer really did NOT rewind",
+    );
+    w.guest
+        .send(&mut w.ram, FN_RM_CONTROL, 500, &[2; 8])
+        .unwrap();
+    let r = w
+        .doorbell()
+        .expect("the command ring resumed where it stopped");
+    assert_eq!(
+        r.commands.len(),
+        1,
+        "exactly the ONE new command — not the four this life had already answered",
+    );
+    assert_eq!(r.commands[0].sequence, 500);
 }
 
 /// ★ GSP-D4, as a **negative trace**: the passing condition is that we *differ* from the C.
@@ -420,14 +448,36 @@ fn an_idle_release_re_acquire_rebinds_and_preserves_the_sequence_numbers() {
 /// lines of `cmd fn=1959520414 seq=4055862830 -> echo NV_OK` on the measured run. Here the
 /// same doorbell is one named refusal, zero elements posted, and — the part that makes it
 /// a security property rather than a behaviour — **zero guest-RAM reads**.
+///
+/// ★★ **Narrowed by B4, and the narrowing is legitimate because the test's SUBJECT
+/// changed.** It used to assert `QueueNotBound` for *any* unbound doorbell. That set now
+/// contains a second, entirely healthy member: at 580 the guest queues its two init RPCs
+/// and rings `QUEUE_HEAD(0)` **before bootstrap** (`ogkm-580: kernel_gsp.c:3753-3777` from
+/// `:4141`, before `_kgspBootGspRm` at `:4184`), so a pre-bind doorbell happens on every
+/// boot and classifying it as the stale-binding attack signature would be a false positive
+/// in the ledger. This test keeps the *measured* case — a doorbell after a teardown, which
+/// is the one `docs/reference/mode2_bench_lifecycle.md` §4's 508 log lines came from — and
+/// the pre-bind case gains its own test
+/// ([`the_580_boot_order_rings_the_doorbell_twice_before_the_binding_exists`]), so total
+/// coverage strictly increases. This is **not** "narrow a test to make it pass".
 #[test]
 fn a_doorbell_on_an_unbound_queue_refuses_by_name_and_reads_zero_guest_ram() {
     let mut w = World::new(P580, MODEL_A);
+    w.boot();
+    w.link_and_drain();
+
+    // The measured shape: the guest tears its driver down, and then rings anyway.
+    w.guest.send(&mut w.ram, FN_UNLOADING, 7, &[]).unwrap();
+    w.doorbell().unwrap();
     let m = w.arch.model();
     w.wr(GspReg::GspFalconCpuctl, m.startcpu()).unwrap();
+    assert_eq!(
+        w.fsm.phase(),
+        BootPhase::Halted,
+        "a binding HAS existed, and died"
+    );
+    assert_eq!(*w.fsm.queue(), QueueState::Unbound);
 
-    // Fill the (unbound) guest memory with plausible-looking garbage, as a stale queue
-    // would be full of.
     w.ram.reads.clear();
     let before = w.ram.reads.len();
     let err = w.doorbell().unwrap_err();
@@ -445,6 +495,7 @@ fn a_doorbell_on_an_unbound_queue_refuses_by_name_and_reads_zero_guest_ram() {
 
     // The non-vacuity arm (`testing_doctrine.md` §2.2): the same doorbell, once bound,
     // must SUCCEED and must read.
+    w.allocate_guest_memory();
     w.boot();
     w.link_and_drain();
     w.guest
@@ -781,7 +832,15 @@ fn the_projection_records_what_the_guest_would_observe_and_names_the_refusal() {
 
     // The negative trace: the same doorbell after a teardown is ONE named refusal and
     // ZERO posted elements.
-    w.fsm.device_reset();
+    //
+    // ★ B4: it must be a *teardown*, not a `device_reset`. After a reset the FSM is
+    // `Cold` and has never bound in this device life, which is the healthy pre-bootstrap
+    // case ([`Transition::E12`]) and not the stale-binding one this trace is about.
+    w.guest.send(&mut w.ram, FN_UNLOADING, 55, &[]).unwrap();
+    w.doorbell().unwrap();
+    let m = w.arch.model();
+    w.wr(GspReg::GspFalconCpuctl, m.startcpu()).unwrap();
+    assert_eq!(w.fsm.phase(), BootPhase::Halted);
     let (log, reads) = {
         let mut rec = RecordingRam::new(&mut w.ram).with_projection(projection);
         let (bar, off) = MODEL_A.at(GspReg::GspQueueHead(0));
@@ -803,6 +862,546 @@ fn the_projection_records_what_the_guest_would_observe_and_names_the_refusal() {
         log.unseen_kinds().contains(&"ElementPosted"),
         "the non-vacuity instrument agrees nothing was posted",
     );
+}
+
+// ──────────────────────── the 580 element-count invariants (B1–B4) ────────────────────────
+
+fn event(payload_len: usize) -> OutgoingRpc {
+    OutgoingRpc {
+        function: POST_EVENT,
+        sequence: 0,
+        rpc_result: 0,
+        rpc_result_private: 0,
+        payload: vec![0xE1; payload_len],
+    }
+}
+
+/// ★★ **B1 — the oracle itself.** At 580 the guest consumes by the `elemCount` **field**;
+/// at 610 there is no such field and it derives the count from `rpc.length`.
+///
+/// This is the axis the two protocols actually differ on, and until the instrument models
+/// it no test of any 580 invariant could fail before its fix — it would pass against a
+/// mock that derived the count for both profiles, which is the worst kind of green.
+///
+/// 580: `nElements = pMQI->pCmdQueueElement->elemCount`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:652-658`), and *that* is
+/// what `msgqRxMarkConsumed` advances the ring by (`:774`). Its `msgLen` sanity check at
+/// `:760-770` runs after the element is already consumed and gates nothing.
+/// 610: `ogkm-610: message_queue_cpu.c:698-705`, consumed at `:838`.
+#[test]
+fn a_580_guest_consumes_by_elem_count_not_by_declared_length() {
+    let mut w = World::new(P580, MODEL_A);
+    w.boot();
+    w.guest
+        .rx_link(&mut w.ram)
+        .expect("the published header links");
+    // A second element behind INIT_DONE, so a run of two is genuinely available — the
+    // driver's copy loop stops at the first element the ring does not have
+    // (`ogkm-580: msgq.c:673-693`), so a count with nothing behind it proves nothing.
+    w.fsm
+        .post(&mut w.ram, &event(16))
+        .expect("the ring has room");
+    assert_eq!(w.guest.rx_read_ptr, 0);
+
+    // One word, in the guest's memory only: element 0 now CLAIMS two elements while its
+    // own `rpc.length` still implies one.
+    w.poke_element(RingId::Status, 0, 48, 32, 40, 2);
+
+    let msgs = w
+        .guest
+        .recv(&mut w.ram)
+        .expect("a valid, if dishonest, element");
+    assert_eq!(
+        msgs.len(),
+        1,
+        "★ the second element was swallowed as this message's continuation, because the \
+         FIELD said so — a length-derived guest would have reported two messages",
+    );
+    assert_eq!(msgs[0].function, INIT_DONE);
+    assert_eq!(
+        w.guest.rx_read_ptr, 2,
+        "the ring advanced by elemCount, not by ceil(msgLen / msgSize)",
+    );
+    assert_eq!(
+        w.guest.rx_seq, 1,
+        "…and exactly ONE message's worth of sequence was consumed",
+    );
+
+    // ★ Non-vacuity: the same word, on 610, changes nothing about consumption — offset 40
+    // there is `rpc.sequence` (payload@16 + 24) and carries no count at all
+    // (`ogkm-610: message_queue_priv.h:52-67`).
+    let mut v = World::new(P610, MODEL_A);
+    v.boot();
+    v.guest.rx_link(&mut v.ram).expect("links");
+    v.fsm.post(&mut v.ram, &event(16)).expect("room");
+    v.poke_element(RingId::Status, 0, 16, 8, 40, 2);
+    let msgs = v.guest.recv(&mut v.ram).expect("a valid element");
+    assert_eq!(
+        msgs.len(),
+        2,
+        "610 derives the count from rpc.length, so a 2 at +40 consumes nothing extra",
+    );
+    assert_eq!(
+        msgs[0].sequence, 2,
+        "…and non-vacuity for the poke itself: at 610 that offset really is rpc.sequence, \
+         so the write DID land somewhere the guest reads",
+    );
+    assert_eq!(v.guest.rx_read_ptr, 2, "two messages, two elements");
+}
+
+/// ★★★ **B2 / GSP-S1 — we may not emit an element count the guest's staging buffer
+/// cannot hold.** A memory-safety bound aimed at the *guest's* kernel.
+///
+/// `_gspMsgQueueInit` allocates `4096 + GSP_MSG_QUEUE_ELEMENT_SIZE_MAX + msgqGetMetaSize()`
+/// from `portMemAllocNonPaged` and carves the **live `msgq` metadata immediately after**
+/// the staging area (`ogkm-580: message_queue_cpu.c:132-134, 143-145`); the loop that
+/// fills it copies one element per iteration with no bound but ring availability
+/// (`:628, 648-650`). So an element declaring more than
+/// `queueElementSizeMax / element_size` elements memcpys past a kernel allocation.
+#[test]
+fn an_over_wide_element_count_is_refused_before_it_can_overrun_the_guest_staging_buffer() {
+    const HDR_580: usize = 48;
+    const ENVELOPE: usize = 32;
+    let max_bytes = STAGING_BYTES;
+
+    // The bound is derived from the geometry, never written down.
+    assert_eq!(
+        kayfabe_gsp::max_elements(PAGE as u32, max_bytes),
+        16,
+        "65536 / 4096 — the driver's own carve, computed rather than transcribed",
+    );
+
+    let encode = |profile: &kayfabe_tests::gspworld::Profile, element_size: u32, payload: usize| {
+        kayfabe_gsp::encode_message(
+            &profile.layout(),
+            0x0300_0000,
+            element_size,
+            max_bytes,
+            0,
+            &OutgoingRpc {
+                function: FN_RM_CONTROL,
+                sequence: 1,
+                rpc_result: 0,
+                rpc_result_private: 0,
+                payload: vec![0xA5; payload],
+            },
+        )
+    };
+
+    // Exactly at the bound still encodes, and stamps the count it really occupies.
+    let at_bound = max_bytes as usize - HDR_580 - ENVELOPE;
+    let run = encode(&P580, PAGE as u32, at_bound).expect("16 elements is legal");
+    assert_eq!(run.len(), 16 * PAGE as usize);
+    assert_eq!(
+        u32::from_le_bytes(run[40..44].try_into().unwrap()),
+        16,
+        "elemCount is what the run actually occupies",
+    );
+
+    // One byte more, on the bench's geometry, is caught by the LENGTH bound first —
+    // because there `element_size` divides `element_size_max` and the two coincide. That
+    // coincidence is precisely why the count bound cannot be left implicit.
+    assert_eq!(
+        encode(&P580, PAGE as u32, at_bound + 1),
+        Err(GspFault::MsgLenOutOfRange {
+            declared: 65_489,
+            min: 32,
+            max: 65_488,
+        }),
+    );
+
+    // ★★ The geometry where they genuinely differ, and where the derivation stops
+    // implying the bound. `element_size` is the guest's own published `msgSize`, and
+    // `msgqRxLink` accepts any value at or above `MSGQ_MSG_SIZE_MIN`
+    // (`ogkm-580: src/common/shared/msgq/msgq.c:340-343`) — so a non-dividing element size
+    // is input this crate can be handed, not a hypothetical. The staging buffer then holds
+    // floor(65536 / 5000) = 13 elements while a message of the maximum LEGAL length still
+    // occupies ceil(65536 / 5000) = 14.
+    assert_eq!(kayfabe_gsp::max_elements(5000, max_bytes), 13);
+    assert_eq!(
+        encode(&P580, 5000, at_bound),
+        Err(GspFault::ElementCountOutOfRange { count: 14, max: 13 }),
+        "the exact variant and both fields — the length was in range, the COUNT was not",
+    );
+
+    // ★ And it is not gated on the element layout: the staging buffer exists on every
+    // version, so a bound expressed as `if the layout has an elemCount field` would be a
+    // branch on version identity. 610 has no such field and is refused identically.
+    assert_eq!(
+        encode(&P610, 5000, at_bound),
+        Err(GspFault::ElementCountOutOfRange { count: 14, max: 13 }),
+        "the bound belongs to the geometry, not to the field that happens to carry it",
+    );
+}
+
+/// ★★ The **bite check** for the clamp above (`testing_doctrine.md` §1c): this is what
+/// reaches a guest when nothing refuses.
+///
+/// Built by hand rather than through `encode_message`, because the count under test is one
+/// `encode_message` now refuses to write. Driven on the **real 63-slot ring**, because the
+/// copy loop stops at the first unavailable element — only a ring that can actually hold
+/// 17+ elements makes the overrun reachable, which is exactly the bench's geometry.
+#[test]
+#[should_panic(expected = "staging buffer")]
+fn without_the_clamp_an_over_wide_element_count_overruns_the_guest_staging_buffer() {
+    let mut w = World::new_sized(P580, MODEL_A, REAL_QUEUE_SIZE);
+    w.boot();
+    w.guest.rx_link(&mut w.ram).expect("links");
+    assert_eq!(
+        w.guest.msg_count, 63,
+        "non-vacuity: the ring the driver really builds, not the 7-slot one",
+    );
+
+    // INIT_DONE plus 61 more: 62 elements outstanding, the most a 63-slot ring can hold
+    // (`ogkm-580: msgq.c:490`'s -1).
+    for _ in 0..61 {
+        w.fsm
+            .post(&mut w.ram, &event(16))
+            .expect("the ring has room");
+    }
+    w.poke_element(RingId::Status, 0, 48, 32, 40, 62);
+    let _ = w.guest.recv(&mut w.ram);
+}
+
+/// ★★ **B3 — the ring advances by the producer's number, and a disagreement is refused
+/// with the cursor left where it was.**
+///
+/// The guest writes `pCQE->elemCount = GSP_MSG_QUEUE_BYTES_TO_ELEMENTS(msgLen)` and then
+/// advances its own `writePtr` by **that field**
+/// (`ogkm-580: message_queue_cpu.c:482, 578`). A consumer that advances by a derivation
+/// therefore desynchronises the ring against a producer that disagrees, permanently and
+/// silently: the resulting mismatch is `seqNum >` , for which the driver's recovery branch
+/// does not exist (`ogkm-580: :699-714` handles only `<`).
+#[test]
+fn a_command_whose_elem_count_disagrees_with_its_length_is_refused_and_does_not_move_the_ring() {
+    let read_ptr = |w: &World| match w.fsm.queue() {
+        QueueState::Bound(b) => b.command_cursor().read_ptr,
+        QueueState::Unbound => panic!("bound"),
+    };
+
+    // Arm 1 — the field claims two elements, the length implies one.
+    let mut w = World::new(P580, MODEL_A);
+    w.boot();
+    w.link_and_drain();
+    w.guest
+        .send(&mut w.ram, FN_RM_CONTROL, 9, &[1; 16])
+        .expect("one element");
+    let before = read_ptr(&w);
+    w.poke_element(RingId::Command, 0, 48, 32, 40, 2);
+    assert_eq!(
+        w.doorbell(),
+        Err(GspFault::ElementCountMismatch {
+            declared: 2,
+            derived: 1
+        }),
+    );
+    assert_eq!(
+        read_ptr(&w),
+        before,
+        "a refused message does not advance the cursor — the refusal stays visible",
+    );
+
+    // Arm 2 — the same field, over the STAGING bound. A hard refusal that no amount of
+    // ring filling can turn into a valid message, so it outranks "producer not finished".
+    let mut w = World::new(P580, MODEL_A);
+    w.boot();
+    w.link_and_drain();
+    w.guest
+        .send(&mut w.ram, FN_RM_CONTROL, 9, &[1; 16])
+        .expect("one element");
+    w.poke_element(RingId::Command, 0, 48, 32, 40, 62);
+    assert_eq!(
+        w.doorbell(),
+        Err(GspFault::ElementCountOutOfRange { count: 62, max: 16 }),
+        "GSP-S1 on the receive side, where the count is guest-written rather than derived",
+    );
+
+    // Arm 3 — the mirrored positive: a genuine two-element command, whose field and length
+    // agree, decodes and advances the cursor by exactly two.
+    let mut w = World::new(P580, MODEL_A);
+    w.boot();
+    w.link_and_drain();
+    let payload = vec![0x3C; 4100];
+    let n = w
+        .guest
+        .send(&mut w.ram, FN_RM_CONTROL, 10, &payload)
+        .expect("room");
+    assert_eq!(n, 2, "non-vacuity: this really is a two-element command");
+    let before = read_ptr(&w);
+    let r = w.doorbell().expect("an honest element is served");
+    assert_eq!(r.commands.len(), 1);
+    assert_eq!(r.commands[0].elements, 2);
+    assert_eq!(r.commands[0].payload, payload);
+    assert_eq!(read_ptr(&w), before + 2, "the cursor moved by exactly two");
+
+    // ★ Non-vacuity across the version seam: at 610 there is no field to disagree with, so
+    // the same poke can never produce `ElementCountMismatch`. It lands on `rpc.sequence`
+    // instead, which the guest reads and we report.
+    let mut v = World::new(P610, MODEL_A);
+    v.boot();
+    v.link_and_drain();
+    v.guest
+        .send(&mut v.ram, FN_RM_CONTROL, 9, &[1; 16])
+        .expect("one element");
+    v.poke_element(RingId::Command, 0, 16, 8, 40, 2);
+    let r = v.doorbell().expect("610 has no elemCount to disagree with");
+    assert_eq!(r.commands.len(), 1);
+    assert_eq!(r.commands[0].sequence, 2, "the poke landed on rpc.sequence");
+}
+
+/// ★★ **B4 — 580 queues its init RPCs BEFORE bootstrap, so the doorbell rings twice while
+/// nothing is bound, on every healthy boot.**
+///
+/// `kgspQueueAsyncInitRpcs_IMPL` sends `GSP_SET_SYSTEM_INFO` then `SET_REGISTRY`
+/// (`ogkm-580: kernel_gsp.c:3753-3777`) from `kgspInitRm_IMPL` at `:4141` — **before**
+/// `_kgspBootGspRm` at `:4184`, therefore before FWSEC, Booter Load, RISC-V start and the
+/// status-queue link — and `rpcSendMessage` rings `kgspSetCmdQueueHead_HAL` unconditionally
+/// after every submit (`:425`), with no "is the GSP up" gate in `_kgspRpcSanityCheck`
+/// (`:281-321`). At 610 the same two RPCs are sent from *inside* `kgspBootstrap_TU102`
+/// (`ogkm-610: kernel_gsp_tu102.c:576-585`, `kernel_gsp.c:4686-4709`) and the door never
+/// rings early.
+///
+/// Two things follow, and both are asserted here: the pre-bind doorbell is **not** the
+/// stale-binding signature, and the bind inherits a **non-empty ring** it must drain
+/// itself rather than by waiting for the guest to ring again.
+#[test]
+fn the_580_boot_order_rings_the_doorbell_twice_before_the_binding_exists() {
+    let mut w = World::new(P580, MODEL_A);
+    let m = w.arch.model();
+
+    for (i, (function, payload)) in [
+        (FN_GSP_SET_SYSTEM_INFO, vec![1u8, 2, 3, 4]),
+        (FN_SET_REGISTRY, vec![5u8; 64]),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        w.guest
+            .send(&mut w.ram, function, 10 + i as u32, &payload)
+            .expect("the guest queues before the GSP exists");
+        w.ram.reads.clear();
+        let r = w
+            .doorbell()
+            .expect("a pre-bind doorbell is the healthy 580 order, not a refusal");
+        assert_eq!(
+            r.transitions,
+            vec![Transition::E12],
+            "doorbell {i}: classified as pre-bootstrap, NOT as the stale binding \
+             QueueNotBound describes",
+        );
+        assert!(r.commands.is_empty(), "doorbell {i}: nothing was parsed");
+        assert!(
+            w.ram.reads.is_empty(),
+            "doorbell {i}: ★ zero guest-RAM reads — the classification changed, the \
+             security property did not",
+        );
+    }
+    assert_eq!(w.fsm.phase(), BootPhase::Cold);
+    assert_eq!(*w.fsm.queue(), QueueState::Unbound);
+
+    // Only now does the bootstrap run.
+    w.wr(GspReg::GspFalconCpuctl, m.startcpu()).unwrap();
+    let gpa = w.guest.boot_args_gpa;
+    w.wr(GspReg::GspFalconMailbox0, gpa & 0xFFFF_FFFF).unwrap();
+    let e6 = w.wr(GspReg::GspFalconMailbox1, gpa >> 32).unwrap();
+
+    assert_eq!(e6.transitions, vec![Transition::E6]);
+    assert_eq!(
+        e6.commands.len(),
+        2,
+        "★ the backlog was drained BY THE BIND — before B4 this was empty until the guest \
+         happened to ring the door again, and the port recovered by luck",
+    );
+    assert_eq!(e6.commands[0].code, FN_GSP_SET_SYSTEM_INFO);
+    assert_eq!(e6.commands[1].code, FN_SET_REGISTRY);
+
+    // Booter Load, and then the guest's own acceptance predicate.
+    w.wr(GspReg::Sec2FalconMailbox0, 0).unwrap();
+    w.wr(GspReg::Sec2FalconCpuctl, m.startcpu()).unwrap();
+    let msgs = w.link_and_drain();
+    assert_eq!(
+        msgs.iter().map(|m| m.function).collect::<Vec<_>>(),
+        vec![INIT_DONE],
+        "72 and 73 are _issueRpcAsync, so the drain answered NEITHER — an echo would \
+         surface in the driver as an unexpected event",
+    );
+}
+
+/// ★ **B9 — the suspend sentinel REPLACES the mailbox shadow; it is never OR-ed onto it.**
+///
+/// 580 tests exact equality — `return (mailbox == 0x80000000)`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:1226-1238`,
+/// the constant inlined, no `INTERRUPT_PROCESSOR_SUSPENDED_VALUE` symbol in that tree) —
+/// while 610 tests a **mask** (`ogkm-610: kernel_gsp_tu102.c:333, 348`). So a shadow still
+/// holding a boot-args half with bit 31 set reads as suspended at 610 and hangs the
+/// teardown poll *forever* at 580, which polls it from two places: after fn-47
+/// (`ogkm-580: kernel_gsp.c:4310`) and as a bootstrap liveness fallback (`:551` of
+/// `kernel_gsp_tu102.c`).
+///
+/// ★ This item changes no production behaviour — `GspFsm::observe` exposes `suspended` as
+/// a bool and the encoding lives behind `GspModel`, which is already right. **The pin is
+/// the deliverable**, and the arm that fails today is the bite against a second model that
+/// deliberately OR-s.
+#[test]
+fn the_suspend_sentinel_replaces_the_mailbox_shadow_rather_than_setting_a_bit() {
+    // A legal boot-args low half with bit 31 ALREADY set.
+    const SHADOW: u64 = 0x8000_1234;
+
+    let drive = |model: kayfabe_tests::gspworld::FakeGspModel| -> (u64, u64) {
+        let mut w = World::new(P580, model);
+        w.boot();
+        w.link_and_drain();
+        // A lone MAILBOX0 write: the pair was consumed by the publish, so this updates the
+        // register shadow without re-triggering E6.
+        let r = w.wr(GspReg::GspFalconMailbox0, SHADOW).unwrap();
+        assert!(r.transitions.is_empty(), "half a pair publishes nothing");
+        let awake = w.rd(GspReg::GspFalconMailbox0);
+        w.guest.send(&mut w.ram, FN_UNLOADING, 4, &[]).unwrap();
+        w.doorbell().unwrap();
+        assert_eq!(w.fsm.phase(), BootPhase::Suspending);
+        (awake, w.rd(GspReg::GspFalconMailbox0))
+    };
+
+    let sentinel = MODEL_A.suspend_sentinel();
+    let (awake, suspended) = drive(MODEL_A);
+    assert_eq!(
+        awake, SHADOW,
+        "not suspended: the register reads back verbatim"
+    );
+    assert_ne!(
+        awake, sentinel,
+        "…so the guest's `mailbox == sentinel` poll is FALSE, which is the point",
+    );
+    assert_eq!(
+        suspended, sentinel,
+        "★ suspended: EXACTLY the sentinel, with no bit of the shadow surviving",
+    );
+
+    // ★ The bite: a model that OR-s instead of replacing. At 610 its answer still reads as
+    // suspended; at 580 the equality never holds and `rmmod` hangs on the close poll.
+    let (awake, suspended) = drive(MODEL_A.with_or_ed_suspend_sentinel());
+    assert_eq!(awake, SHADOW);
+    assert_eq!(
+        suspended,
+        SHADOW | sentinel,
+        "non-vacuity: the wrong model really did OR",
+    );
+    assert_ne!(
+        suspended, sentinel,
+        "★ and the pin catches it — a 580-shaped `== sentinel` poll never terminates",
+    );
+    assert_ne!(
+        suspended & sentinel,
+        0,
+        "…while a 610-shaped `& sentinel` poll would be satisfied, which is why the \
+         difference is invisible to anyone testing only the mask",
+    );
+}
+
+/// ★★ **B6 — the 610 transport words come out of `kayfabe-abi`, and only the two bit
+/// fields the driver reads may be asserted on.**
+///
+/// The words used to be `(0x0000_0001, 0x0000_10de)` placeholders. What is *newly*
+/// testable is not that they are different numbers but that the mock stopped being
+/// **stricter than the driver**: 610 validates `REF_VAL(MCTP_HEADER_VERSION, mctpHeader)`
+/// and `REF_VAL(MCTP_MSG_HEADER_VENDOR_ID, nvdmHeader)` and nothing else
+/// (`ogkm-610: message_queue_cpu.c:735-762`).
+#[test]
+fn the_610_transport_words_are_the_drivers_own_and_only_two_fields_are_validated() {
+    let t = P610.mctp().expect("610 carries transport words");
+    assert_eq!(
+        t.header_word, 0xC000_0001,
+        "the assembled MCTP transport header"
+    );
+    assert_eq!(t.nvdm_word, 0x2510_DE7E, "the assembled NVDM header");
+    assert_eq!(
+        P580.mctp(),
+        None,
+        "580 has no MCTP at all — ogkm-580 has no mctp_format.h"
+    );
+
+    // The words really do go on the wire, and a conforming 610 guest accepts them.
+    let mut w = World::new(P610, MODEL_A);
+    w.boot();
+    let el = w.status_element_gpa(0);
+    let mut words = [0u8; 8];
+    kayfabe_gsp::GuestRam::read(&mut w.ram, el, &mut words).unwrap();
+    assert_eq!(
+        u32::from_le_bytes(words[0..4].try_into().unwrap()),
+        0xC000_0001,
+    );
+    assert_eq!(
+        u32::from_le_bytes(words[4..8].try_into().unwrap()),
+        0x2510_DE7E,
+    );
+    assert_eq!(w.link_and_drain().len(), 1, "…and the guest accepts them");
+
+    // A wrong **version nibble** is the driver's own `NV_ERR_INVALID_DATA`.
+    let mut w = World::new(P610, MODEL_A);
+    w.boot();
+    w.guest.rx_link(&mut w.ram).expect("links");
+    w.poke_element(RingId::Status, 0, 16, 8, 0, 0xC000_0002);
+    assert_eq!(
+        w.guest.recv(&mut w.ram),
+        Err(GuestRefusal::MctpViolation),
+        "MCTP_HEADER_VERSION != 1",
+    );
+
+    // …and so is a wrong **vendor id**.
+    let mut w = World::new(P610, MODEL_A);
+    w.boot();
+    w.guest.rx_link(&mut w.ram).expect("links");
+    w.poke_element(RingId::Status, 0, 16, 8, 4, 0x2500_007E);
+    assert_eq!(
+        w.guest.recv(&mut w.ram),
+        Err(GuestRefusal::MctpViolation),
+        "MCTP_MSG_HEADER_VENDOR_ID != 0x10de",
+    );
+}
+
+/// ★★ The other half of B6, and the one that keeps the instrument honest: **the guest does
+/// NOT check SOM, EOM, the packet sequence, or the NVDM type byte.**
+///
+/// Those fields are written by `mctpCreateTransportHeader`/`mctpCreateNvdmHeader` and never
+/// read back — the receiver's whole validation is two `REF_VAL`s
+/// (`ogkm-610: message_queue_cpu.c:735-762`). An oracle that enforced the whole words
+/// would be stricter than the driver, and any later test asserting "the guest rejects a bad
+/// NVDM type" would be asserting a behaviour that does not exist. This is the arm that
+/// stops that drift, and it is the same rule §4.4 already applies to the RPC `signature`.
+#[test]
+fn the_610_guest_does_not_check_som_eom_or_the_nvdm_type() {
+    let t = P610.mctp().expect("610 carries transport words");
+
+    // Clear SOM and EOM (31:31, 30:30) and set a nonzero packet SEQ (29:28); keep the
+    // version nibble. Change the NVDM type byte (31:24); keep the vendor id.
+    let mangled_mctp = (t.header_word & !0xF000_0000) | 0x1000_0000;
+    let mangled_nvdm = (t.nvdm_word & 0x00FF_FFFF) | 0xAB00_0000;
+    assert_ne!(
+        mangled_mctp, t.header_word,
+        "non-vacuity: the word really changed"
+    );
+    assert_ne!(mangled_nvdm, t.nvdm_word);
+    assert_eq!(
+        mangled_mctp & t.header_validated_mask,
+        t.header_word & t.header_validated_mask,
+        "…but the validated field is untouched",
+    );
+    assert_eq!(
+        mangled_nvdm & t.nvdm_validated_mask,
+        t.nvdm_word & t.nvdm_validated_mask,
+    );
+
+    let mut w = World::new(P610, MODEL_A);
+    w.boot();
+    w.guest.rx_link(&mut w.ram).expect("links");
+    w.poke_element(RingId::Status, 0, 16, 8, 0, mangled_mctp);
+    w.poke_element(RingId::Status, 0, 16, 8, 4, mangled_nvdm);
+    let msgs = w
+        .guest
+        .recv(&mut w.ram)
+        .expect("the driver reads neither SOM/EOM/SEQ nor the NVDM type");
+    assert_eq!(msgs.len(), 1);
+    assert_eq!(msgs[0].function, INIT_DONE);
 }
 
 // ─────────────────────────────── the isolated algebra ───────────────────────────────

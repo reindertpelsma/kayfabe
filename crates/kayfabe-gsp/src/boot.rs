@@ -40,7 +40,8 @@
 //! [`BootPhase::Running`], so the gate rests on a read rather than on a belief.
 
 use crate::element::{
-    ElementLayout, IncomingRpc, MsgLen, OutgoingRpc, decode_message, encode_message, peek_len,
+    ElementLayout, IncomingRpc, MsgLen, OutgoingRpc, decode_message, encode_message, max_elements,
+    peek_elem_count, peek_len,
 };
 use crate::fault::GspFault;
 use crate::ram::{GuestRam, RegionMap};
@@ -218,8 +219,27 @@ pub enum Transition {
     E6,
     /// Doorbell while bound → service the command ring.
     E7,
-    /// Doorbell while **unbound** → loud refusal, zero guest-RAM reads.
+    /// Doorbell while unbound **and a binding has already existed in this device life**
+    /// (`phase == Halted`) → loud refusal, zero guest-RAM reads. The stale-binding
+    /// signature the bench measured.
     E8,
+    /// ★ Doorbell while unbound and **no binding has ever existed in this device life** —
+    /// the healthy 580 boot order, not an attack.
+    ///
+    /// At 580 the two init RPCs are queued by `kgspQueueAsyncInitRpcs_IMPL`
+    /// (`ogkm-580: kernel_gsp.c:3753-3777`) from `kgspInitRm_IMPL` (`:4141`) — **before**
+    /// `_kgspBootGspRm` (`:4184`), therefore before FWSEC, Booter Load, RISC-V start and
+    /// the status-queue link — and `rpcSendMessage` rings `kgspSetCmdQueueHead_HAL`
+    /// unconditionally after every submit (`:425`) with no "is the GSP up" gate in
+    /// `_kgspRpcSanityCheck` (`:281-321`). So `QUEUE_HEAD(0)` is written twice while
+    /// nothing is bound on **every healthy 580 boot**. At 610 the same two RPCs are sent
+    /// from inside `kgspBootstrap_TU102` instead (`ogkm-610: kernel_gsp_tu102.c:576-585`,
+    /// `kernel_gsp.c:4686-4709`), so the same door never rings early — which is why this
+    /// must be an observed-order outcome and not a version branch.
+    ///
+    /// Reads **zero** guest RAM, exactly like [`Transition::E8`]; what differs is only the
+    /// classification, and therefore whether a shell may escalate it.
+    E12,
     /// fn-47 serviced → reply first, then `Suspending`.
     E9,
     /// `IRQSCLR` write → the status-queue interrupt edge is cleared.
@@ -314,6 +334,23 @@ pub struct GspFsm {
     stat_seq: u32,
     /// The sequence number the next command must carry.
     cmd_seq: u32,
+    /// ★★ Our position in the **command** ring, kept beside [`GspFsm::cmd_seq`] because
+    /// it is the same instance's state and restarts exactly when that does.
+    ///
+    /// The status queue's positions reset on a rebind and its sequence does not, because
+    /// `msgqRxLink` assigns `rxReadPtr = 0` and never assigns `rxSeqNum`
+    /// (`ogkm-580: src/common/shared/msgq/msgq.c:722-726` vs
+    /// `ogkm-580: message_queue_cpu.c:782`). **The command queue is the mirror image**:
+    /// there is no re-link on the producing side, so nothing resets the guest's tx
+    /// `writePtr` short of `msgqTxCreate`, which only runs from `_gspMsgQueueInit` at
+    /// module load (`ogkm-580: message_queue_cpu.c:155-161`). An idle-release re-acquire
+    /// therefore rebinds against a ring whose producer is at, say, 4 — and a consumer
+    /// that restarted at 0 re-reads four already-answered commands and then refuses
+    /// forever on [`GspFault::SeqNumGap`], because their sequence numbers are behind.
+    ///
+    /// Found by B4's drain-on-publish: before it, the first *doorbell* after a re-acquire
+    /// hit exactly the same wall, but no test rang one.
+    cmd_read_ptr: u32,
     /// `sharedMemPhysAddr` of the region the last bind used, if any — the discriminator
     /// between a re-acquire and a new driver life. See [`GspFsm::publish`].
     region_identity: Option<u64>,
@@ -338,6 +375,7 @@ impl GspFsm {
             init_done_posted: false,
             stat_seq: 0,
             cmd_seq: 0,
+            cmd_read_ptr: 0,
             region_identity: None,
             max_entries: 4096,
         }
@@ -464,8 +502,10 @@ impl GspFsm {
                     // Consumed: the next publish needs a fresh pair, so a single later
                     // write cannot re-trigger against a half that is no longer current.
                     self.boot_args_seen = (false, false);
-                    self.publish(ram, arch, gpa)?;
+                    let mut r = self.publish(ram, arch, policy, gpa)?;
                     report.transitions.push(Transition::E6);
+                    report.transitions.append(&mut r.transitions);
+                    report.commands = r.commands;
                     report.raise_status_irq = true;
                 }
             }
@@ -533,8 +573,9 @@ impl GspFsm {
         &mut self,
         ram: &mut dyn GuestRam,
         arch: &dyn Arch,
+        policy: &mut dyn CommandPolicy,
         boot_args_gpa: u64,
-    ) -> Result<(), GspFault> {
+    ) -> Result<ServiceReport, GspFault> {
         let model = arch.gsp().ok_or(GspFault::NoGspModel)?;
         let layout = model.libos_region_layout();
 
@@ -624,10 +665,16 @@ impl GspFsm {
         // `MESSAGE_QUEUE_INFO` and its allocation alive (the C's own note at `C:3459-3470`
         // records exactly that). Same `sharedMemPhysAddr` ⇒ the same queue instance ⇒
         // preserve. A different one ⇒ a new instance ⇒ start at 0, as the guest did.
+        //
+        // ★ The command ring's POSITION travels with the sequence, for the reason
+        // [`GspFsm::cmd_read_ptr`] gives: the guest's tx `writePtr` is only zeroed by
+        // `msgqTxCreate` at module load, so a same-instance rebind must resume where we
+        // stopped, and a new instance starts at 0 because the guest's producer did.
         let same_instance = self.region_identity == Some(shared_mem_pa);
         if !same_instance {
             self.stat_seq = 0;
             self.cmd_seq = 0;
+            self.cmd_read_ptr = 0;
         }
         self.region_identity = Some(shared_mem_pa);
         let count = geom.msg_count();
@@ -635,7 +682,12 @@ impl GspFsm {
         self.queue = QueueState::Bound(QueueBinding {
             geom,
             stat: TxCursor::fresh(count),
-            cmd: RxCursor { read_ptr: 0 },
+            // `slot` is `% msgCount`, so a carried position can never name a slot the new
+            // geometry does not have. Same-instance implies the same geometry, so in the
+            // reachable case it is the identity.
+            cmd: RxCursor {
+                read_ptr: count.slot(self.cmd_read_ptr).index(),
+            },
             peer_read_at_bind,
         });
         self.init_done_posted = false;
@@ -649,10 +701,23 @@ impl GspFsm {
         };
         self.post(ram, &init_done)?;
         self.init_done_posted = true;
-        Ok(())
+
+        // ★★ B4 — drain the backlog the bind inherited, without waiting for a doorbell.
+        //
+        // At 580 the command ring is **already non-empty** at bind time: the guest's
+        // `writePtr` is 2, because `kgspQueueAsyncInitRpcs_IMPL` queued
+        // `GSP_SET_SYSTEM_INFO` and `SET_REGISTRY` before `_kgspBootGspRm` ever ran
+        // (`ogkm-580: kernel_gsp.c:3753-3777`, called at `:4141`, boot at `:4184`). The
+        // cursor this bind installs starts at 0, so without a drain here those two
+        // commands sit unread until the guest happens to ring the door again — which it
+        // does, with `SET_GUEST_SYSTEM_INFO` right after `INIT_DONE`, so the port
+        // *recovered by luck*. Draining on the bind makes the recovery structural, and on
+        // a guest whose ring is empty (610's order) it reads the write pointer, finds
+        // nothing, and does nothing.
+        self.service_command_queue(ram, policy)
     }
 
-    /// E7 / E8 — a doorbell.
+    /// E7 / E8 / E12 — a doorbell.
     fn doorbell(
         &mut self,
         ram: &mut dyn GuestRam,
@@ -663,8 +728,20 @@ impl GspFsm {
         // (`C:2380-2410`), which a guest reaches by reloading its own driver
         // (`docs/reference/mode2_bench_lifecycle.md` §4: 508 log lines of
         // `cmd fn=1959520414 seq=4055862830 -> echo NV_OK`).
+        //
+        // ★★ …but only when a binding has already existed. `Halted` is reached exactly by
+        // a teardown (E2/E4), so it is precisely the case the bench measured: the guest
+        // dropped its queues and is still ringing. Every other unbound phase — `Cold`
+        // after power-on or a device reset, `FwsecRan` before the mailbox pair — is the
+        // *healthy* 580 pre-bootstrap doorbell (see [`Transition::E12`]), and reporting
+        // that as the stale-binding attack signature would put a false positive in the
+        // ledger on every boot. Both arms read zero guest RAM; only the name differs.
         if matches!(self.queue, QueueState::Unbound) {
-            return Err(GspFault::QueueNotBound);
+            return if self.phase == BootPhase::Halted {
+                Err(GspFault::QueueNotBound)
+            } else {
+                Ok((Transition::E12, ServiceReport::default()))
+            };
         }
         let report = self.service_command_queue(ram, policy)?;
         Ok((Transition::E7, report))
@@ -706,19 +783,53 @@ impl GspFsm {
                 element_size,
                 self.abi.element_size_max,
             )?;
-            if len.elements() > avail {
+            // ★★ B3 — how far the ring moves is the **producer's** number, not ours.
+            //
+            // The guest advanced its `writePtr` by the `elemCount` it wrote
+            // (`ogkm-580: message_queue_cpu.c:482, 578`), so that field is authoritative
+            // for how far our `readPtr` must move. On a layout that has no such field
+            // (610) the derivation is the only number there is and nothing changes.
+            let declared = peek_elem_count(&self.abi.element, &first)?;
+            let run_elements = match declared {
+                Some(declared) => {
+                    // Range first: a count above the staging bound can never become
+                    // valid, however much the ring later fills. GSP-S1, at the one place
+                    // the value is guest-written rather than derived.
+                    let max = max_elements(element_size, self.abi.element_size_max);
+                    if declared > max {
+                        return Err(GspFault::ElementCountOutOfRange {
+                            count: declared,
+                            max,
+                        });
+                    }
+                    // Then the cross-check. Deliberately before the availability test:
+                    // a disagreement is a protocol violation regardless of how much of
+                    // the ring the producer has filled, and deferring it behind
+                    // "not ready" would hide it whenever the two happen to race.
+                    if declared != len.elements() {
+                        return Err(GspFault::ElementCountMismatch {
+                            declared,
+                            derived: len.elements(),
+                        });
+                    }
+                    declared
+                }
+                None => len.elements(),
+            };
+            if run_elements > avail {
                 // The producer has not finished writing this message. The driver's own
                 // receive treats a short read the same way (`NV_ERR_NOT_READY`,
-                // `ogkm: message_queue_cpu.c:660-682`).
+                // `ogkm-580: message_queue_cpu.c:632-644`,
+                // `ogkm-610: message_queue_cpu.c:660-682`).
                 break;
             }
             let run = self.read_run(ram, &geom, read_ptr, len, &first)?;
             let msg = decode_message(&self.abi.element, &run, len, expect_seq, &self.abi.driver)?;
             let cmd = RpcCommand::from_incoming(&self.abi.rpc, &msg);
 
-            read_ptr = count.slot(read_ptr + len.elements()).index();
+            read_ptr = count.slot(read_ptr + run_elements).index();
             expect_seq = expect_seq.wrapping_add(1);
-            avail -= len.elements();
+            avail -= run_elements;
             self.commit_command_cursor(read_ptr, expect_seq);
 
             self.answer(ram, policy, &cmd, &mut report)?;
@@ -926,6 +1037,7 @@ impl GspFsm {
 
     fn commit_command_cursor(&mut self, read_ptr: u32, seq_num: u32) {
         self.cmd_seq = seq_num;
+        self.cmd_read_ptr = read_ptr;
         if let QueueState::Bound(b) = &mut self.queue {
             b.cmd.read_ptr = read_ptr;
         }

@@ -642,3 +642,214 @@ fn every_generated_struct_is_covered_by_an_oracle_assertion() {
         "the coverage list and the generated set have drifted: {generated:?}"
     );
 }
+
+// ───────────────────────── the GSP element wire, keyed on version ─────────────────────────
+
+/// ★★ **B5 — the GSP element boundary is 610, and it is now a `table_for` key.**
+///
+/// Before this there was **no predicate anywhere**: `ElementLayout::new` had exactly two
+/// callers, both in test code, and `(570, 610]` existed only as prose in two doc comments
+/// and two design docs. So no production path selected an element layout at all, and the
+/// device shell had nothing to ask. The break was also stated one interval too wide —
+/// r535 **and** r570 carry the same 48-byte form as 580.
+///
+/// The 48-byte form with `elemCount@40` is read directly at
+/// `ogkm-580: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:43-51`; the 16-byte
+/// MCTP form appears at `ogkm-610: .../message_queue_priv.h:52-67`. Those two endpoints
+/// are the only ones read here — 575.64.05, 580.65.06, 580.173.02, 590.44.01, 590.48.01,
+/// 595.44.02 and 595.84 are relayed evidence (`mode2_gsp_port_plan.md` §14.4) — and a
+/// `>= 610` key is safe under either reading because 610 is the verified end.
+#[test]
+fn the_gsp_element_wire_boundary_is_610_not_570() {
+    use kayfabe_abi::DriverVersion;
+    use kayfabe_abi::versions::{BENCH_DRIVER, GspElementWire, GspInitArgsWire, table_for};
+
+    let at = |major, minor, patch| {
+        table_for(DriverVersion {
+            major,
+            minor,
+            patch,
+        })
+        .expect("in range")
+    };
+
+    for (major, minor, patch) in [
+        (550u16, 54u16, 4u16),
+        (575, 64, 5),
+        (580, 65, 6),
+        (BENCH_DRIVER.major, BENCH_DRIVER.minor, BENCH_DRIVER.patch),
+        (595, 84, 0),
+        // ★ The off-by-one at the boundary, exactly as the NVOS46 test already pins for
+        // 580.65.05 vs 580.65.06: one patch below 610.43.02 is still the 48-byte form.
+        (609, 255, 255),
+        (610, 43, 1),
+    ] {
+        assert_eq!(
+            at(major, minor, patch).gsp_element_wire(),
+            GspElementWire::Pre610,
+            "{major}.{minor}.{patch} is on the 48-byte side",
+        );
+        assert_eq!(
+            at(major, minor, patch).gsp_init_args_wire(),
+            GspInitArgsWire::FourField,
+            "{major}.{minor}.{patch} declares no queue geometry",
+        );
+    }
+
+    for (major, minor, patch) in [(610u16, 43u16, 2u16), (999, 0, 0)] {
+        assert_eq!(
+            at(major, minor, patch).gsp_element_wire(),
+            GspElementWire::From610_43_02,
+            "{major}.{minor}.{patch} is on the 16-byte MCTP side",
+        );
+        assert_eq!(
+            at(major, minor, patch).gsp_init_args_wire(),
+            GspInitArgsWire::NineField,
+        );
+    }
+
+    // The offsets each side implies, so a mis-typed table entry is caught here and not by
+    // a guest that reads its checksum out of the wrong word.
+    let old = GspElementWire::Pre610;
+    assert_eq!(
+        (old.hdr_size(), old.checksum_off(), old.seqnum_off()),
+        (48, 32, 36)
+    );
+    assert_eq!(old.elem_count_off(), Some(40));
+    assert_eq!(
+        old.transport(),
+        None,
+        "580 carries no MCTP: ogkm-580 has no mctp_format.h"
+    );
+
+    let new = GspElementWire::From610_43_02;
+    assert_eq!(
+        (new.hdr_size(), new.checksum_off(), new.seqnum_off()),
+        (16, 8, 12)
+    );
+    assert_eq!(
+        new.elem_count_off(),
+        None,
+        "at 610 offset 40 is rpc.sequence, so writing a count there corrupts the \
+         transaction id",
+    );
+
+    // Below the floor stays a refusal — the GSP key must not have introduced a fallback.
+    assert!(
+        table_for(DriverVersion {
+            major: 535,
+            minor: 0,
+            patch: 0
+        })
+        .is_err(),
+        "MISS = FAULT, still",
+    );
+}
+
+/// ★★ **B6 — the 610 transport words are the driver's own, assembled from its bit fields.**
+///
+/// They used to be `(0x0000_0001, 0x0000_10de)` placeholders whose own doc comment admitted
+/// they were invented. Re-derived here from the definitions rather than transcribed:
+///
+/// - `mctpCreateTransportHeader(som=1, eom=1, seid=0, deid=0, seq=0)`
+///   = `REF_NUM(MCTP_HEADER_VERSION 3:0, 1) | REF_NUM(MCTP_HEADER_EOM 30:30, 1)
+///     | REF_NUM(MCTP_HEADER_SOM 31:31, 1)` = `0xC000_0001`;
+/// - `mctpCreateNvdmHeader(NVDM_TYPE_RM_RPC)`
+///   = `REF_DEF(MCTP_MSG_HEADER_TYPE 6:0, VENDOR_PCI=0x7e)
+///     | REF_DEF(MCTP_MSG_HEADER_VENDOR_ID 23:8, NV=0x10de)
+///     | REF_NUM(MCTP_MSG_HEADER_NVDM_TYPE 31:24, 0x25)` = `0x2510_DE7E`
+///
+/// (`ogkm-610: src/nvidia/arch/nvalloc/common/inc/mctp_format.h:39-58, 79-95, 108-120`,
+/// `.../nvdm_format.h:61`, used at `ogkm-610: message_queue_cpu.c:505-512`).
+#[test]
+fn the_610_transport_words_are_assembled_from_the_drivers_own_bit_fields() {
+    use kayfabe_abi::versions::GspElementWire;
+
+    let t = GspElementWire::From610_43_02
+        .transport()
+        .expect("610 carries transport words");
+    assert_eq!((t.header_off, t.nvdm_off), (0, 4));
+
+    // Assembled from the bit fields, then compared — so the constant and its derivation
+    // are both in the tree and a typo in either one fails.
+    let ref_num = |hi: u32, lo: u32, v: u32| (v & ((1 << (hi - lo + 1)) - 1)) << lo;
+    assert_eq!(
+        t.header_word,
+        ref_num(3, 0, 0x1) | ref_num(30, 30, 1) | ref_num(31, 31, 1),
+        "MCTP: version=1, EOM=1, SOM=1, everything else zero",
+    );
+    assert_eq!(t.header_word, 0xC000_0001);
+    assert_eq!(
+        t.nvdm_word,
+        ref_num(6, 0, 0x7e) | ref_num(23, 8, 0x10de) | ref_num(31, 24, 0x25),
+        "NVDM: type=VENDOR_PCI, vendor=NV, nvdmType=RM_RPC",
+    );
+    assert_eq!(t.nvdm_word, 0x2510_DE7E);
+
+    // ★ And the constraint on what may ever be asserted about them: the receiver reads
+    // **only** these two bit fields (`ogkm-610: message_queue_cpu.c:735-762`).
+    assert_eq!(
+        t.header_validated_mask, 0x0000_000F,
+        "MCTP_HEADER_VERSION is 3:0 — SOM, EOM, SEQ, TAG, TO, SEID and DEID are unread",
+    );
+    assert_eq!(
+        t.nvdm_validated_mask, 0x00FF_FF00,
+        "MCTP_MSG_HEADER_VENDOR_ID is 23:8 — the message TYPE and the NVDM type byte are \
+         unread",
+    );
+    // Non-vacuity for the masks: they must not cover the fields the driver ignores.
+    assert_eq!(
+        t.header_validated_mask & 0xC000_0000,
+        0,
+        "SOM/EOM are not validated"
+    );
+    assert_eq!(
+        t.nvdm_validated_mask & 0xFF00_0000,
+        0,
+        "the NVDM type is not validated"
+    );
+}
+
+/// ★ **B7 — at 580 the guest declares no queue geometry, so the table must supply it.**
+///
+/// `MESSAGE_QUEUE_INIT_ARGUMENTS` has four fields at 580
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_init_args.h:29-34`, populated at
+/// `ogkm-580: kernel_gsp.c:4486-4489`) and nine at 610
+/// (`ogkm-610: gsp_init_args.h:32-45`). The five extra ones are exactly the geometry the
+/// plan's §1.3 treats as negotiated — and on the bench they do not exist.
+#[test]
+fn the_bench_driver_declares_no_queue_geometry_and_the_table_supplies_it() {
+    use kayfabe_abi::versions::{BENCH_DRIVER, GspInitArgsWire, table_for};
+
+    let bench = table_for(BENCH_DRIVER).expect("the bench driver is supported");
+    assert_eq!(bench.gsp_init_args_wire(), GspInitArgsWire::FourField);
+    assert_eq!(
+        bench.gsp_init_args_wire().element_hdr_size_off(),
+        None,
+        "★ nothing to read: on the bench the element header size is the version key's",
+    );
+    assert_eq!(bench.gsp_init_args_wire().min_size(), 32);
+    // …and the fallback is complete, so the absence costs nothing.
+    assert_eq!(bench.gsp_element_wire().hdr_size(), 48);
+    assert_eq!(bench.gsp_element_size_min(), 4096);
+    assert_eq!(
+        bench.gsp_element_size_max(),
+        65536,
+        "GSP_MSG_QUEUE_ELEMENT_SIZE_MIN * 16 — and the receive staging buffer's size",
+    );
+
+    // The mirror: 610 declares it, and at a known offset.
+    let new = table_for(kayfabe_abi::DriverVersion {
+        major: 610,
+        minor: 43,
+        patch: 2,
+    })
+    .expect("supported");
+    assert_eq!(new.gsp_init_args_wire(), GspInitArgsWire::NineField);
+    assert_eq!(new.gsp_init_args_wire().element_hdr_size_off(), Some(32));
+    assert_eq!(
+        new.gsp_init_args_wire().min_size(),
+        40,
+        "32 bytes of the four common fields plus the one geometry field we read",
+    );
+}

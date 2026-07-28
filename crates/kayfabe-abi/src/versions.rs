@@ -54,6 +54,164 @@ pub enum MapDmaWire {
     From580_65_06,
 }
 
+/// Which `GSP_MSG_QUEUE_ELEMENT` shape a driver version speaks.
+///
+/// ★ The break is at **610.43.02**, and it is the whole element header, not a field:
+/// 48 bytes with an `elemCount` becomes 16 bytes with MCTP/NVDM transport words. Read at
+/// both endpoints — `ogkm-580: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:43-51`
+/// and `ogkm-610: .../message_queue_priv.h:52-67`. 575/580/590/595 are all on the 48-byte
+/// side; only the 610 boundary itself was read here, and a `>= 610` key is safe under
+/// either reading of the relayed tags because that is the directly-verified one
+/// (`mode2_gsp_port_plan.md` §14.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GspElementWire {
+    /// 48-byte header: `authTagBuffer[16]@0`, `aadBuffer[16]@16`, `checkSum@32`,
+    /// `seqNum@36`, **`elemCount@40`**, `rpc@48`. No transport headers — bytes @0..@31 are
+    /// the Confidential-Compute buffers, which a CC-off guest never reads.
+    Pre610,
+    /// 16-byte header: `mctpHeader@0`, `nvdmHeader@4`, `checkSum@8`, `seqNum@12`, payload
+    /// at 16. **No `elemCount`** — the receiver derives the run length from `rpc.length`,
+    /// and offset 40 is `rpc.sequence`.
+    From610_43_02,
+}
+
+/// The MCTP/NVDM transport words a 610-era element carries, and the parts of them the
+/// guest actually **validates**.
+///
+/// ★ The validated masks are load-bearing, not decoration. The receiver checks exactly two
+/// bit fields — `REF_VAL(MCTP_HEADER_VERSION, mctpHeader) == 0x1` and
+/// `REF_VAL(MCTP_MSG_HEADER_VENDOR_ID, nvdmHeader) == 0x10de`
+/// (`ogkm-610: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:735-762`). SOM, EOM, the
+/// packet sequence and the NVDM **type** byte are written by the sender and never read, so
+/// no test anywhere may assert that a guest rejects a wrong one — that would assert a
+/// behaviour the driver does not have. Same rule the RPC `signature` already has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GspTransportWords {
+    /// Byte offset of `mctpHeader`.
+    pub header_off: usize,
+    /// The word a conforming sender writes there.
+    pub header_word: u32,
+    /// The bits of it the receiver reads (`MCTP_HEADER_VERSION`, `3:0`).
+    pub header_validated_mask: u32,
+    /// Byte offset of `nvdmHeader`.
+    pub nvdm_off: usize,
+    /// The word a conforming sender writes there.
+    pub nvdm_word: u32,
+    /// The bits of it the receiver reads (`MCTP_MSG_HEADER_VENDOR_ID`, `23:8`).
+    pub nvdm_validated_mask: u32,
+}
+
+impl GspElementWire {
+    /// `queueElementHdrSize` with Confidential Compute **off**.
+    #[must_use]
+    pub fn hdr_size(self) -> usize {
+        match self {
+            GspElementWire::Pre610 => 48,
+            GspElementWire::From610_43_02 => 16,
+        }
+    }
+
+    /// Byte offset of `checkSum`.
+    #[must_use]
+    pub fn checksum_off(self) -> usize {
+        match self {
+            GspElementWire::Pre610 => 32,
+            GspElementWire::From610_43_02 => 8,
+        }
+    }
+
+    /// Byte offset of `seqNum`.
+    #[must_use]
+    pub fn seqnum_off(self) -> usize {
+        match self {
+            GspElementWire::Pre610 => 36,
+            GspElementWire::From610_43_02 => 12,
+        }
+    }
+
+    /// Byte offset of `elemCount`, on the versions that have one.
+    #[must_use]
+    pub fn elem_count_off(self) -> Option<usize> {
+        match self {
+            GspElementWire::Pre610 => Some(40),
+            GspElementWire::From610_43_02 => None,
+        }
+    }
+
+    /// The transport words, on the versions that carry them.
+    ///
+    /// ★ Assembled here from the driver's own bit fields rather than transcribed:
+    /// `mctpCreateTransportHeader(som=1, eom=1, seid=0, deid=0, seq=0)` is
+    /// `REF_NUM(MCTP_HEADER_VERSION 3:0, 1) | REF_NUM(EOM 30:30, 1) | REF_NUM(SOM 31:31, 1)`
+    /// = `0xC000_0001`, and `mctpCreateNvdmHeader(NVDM_TYPE_RM_RPC)` is
+    /// `REF_DEF(TYPE 6:0, VENDOR_PCI=0x7e) | REF_DEF(VENDOR_ID 23:8, NV=0x10de) |
+    /// REF_NUM(NVDM_TYPE 31:24, 0x25)` = `0x2510_DE7E`
+    /// (`ogkm-610: src/nvidia/arch/nvalloc/common/inc/mctp_format.h:39-58, 79-95, 108-120`,
+    /// `.../nvdm_format.h:61`, emitted at
+    /// `ogkm-610: message_queue_cpu.c:505-512`).
+    #[must_use]
+    pub fn transport(self) -> Option<GspTransportWords> {
+        match self {
+            GspElementWire::Pre610 => None,
+            GspElementWire::From610_43_02 => Some(GspTransportWords {
+                header_off: 0,
+                header_word: 0xC000_0001,
+                header_validated_mask: 0x0000_000F,
+                nvdm_off: 4,
+                nvdm_word: 0x2510_DE7E,
+                nvdm_validated_mask: 0x00FF_FF00,
+            }),
+        }
+    }
+}
+
+/// Which `MESSAGE_QUEUE_INIT_ARGUMENTS` shape a driver version publishes.
+///
+/// ★ The plan presented *"the guest declares its own queue geometry"* as the high-leverage
+/// design choice. **That is 610 only.** At 580 the struct has exactly four fields and the
+/// geometry is compile-time (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_init_args.h:29-34`,
+/// populated at `ogkm-580: kernel_gsp.c:4486-4489`; the constants are
+/// `ogkm-580: message_queue_priv.h:91-104`). So on the bench there is nothing to read and
+/// the table below is what supplies it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GspInitArgsWire {
+    /// Four fields: `sharedMemPhysAddr, pageTableEntryCount, cmdQueueOffset,
+    /// statQueueOffset`. Identical to nouveau's r570 form. No geometry is negotiated.
+    FourField,
+    /// Nine: the four above plus `queueElementHdrSize, queueElementSizeMin,
+    /// queueElementSizeMax, queueHeaderAlign, queueElementAlign`
+    /// (`ogkm-610: gsp_init_args.h:32-45`).
+    ///
+    /// ⚠ Because `MESSAGE_QUEUE_INIT_ARGUMENTS` is the **first** member of
+    /// `GSP_ARGUMENTS_CACHED` and grows here, **every subsequent offset in that struct
+    /// differs between the two tags**. Nothing reads them today; the first person who
+    /// needs one must not transcribe a 610 offset for a 580 guest.
+    NineField,
+}
+
+impl GspInitArgsWire {
+    /// Bytes of `MESSAGE_QUEUE_INIT_ARGUMENTS` that must be readable for the fields this
+    /// port consumes. `NvLength` is `size_t`, so there are 4 pad bytes after the `u32`
+    /// at +8 and the first four fields end at 32.
+    #[must_use]
+    pub fn min_size(self) -> usize {
+        match self {
+            GspInitArgsWire::FourField => 32,
+            GspInitArgsWire::NineField => 40,
+        }
+    }
+
+    /// Offset of `queueElementHdrSize`, on the versions that declare it — the **capability**
+    /// that lets the element header size be derived rather than keyed, where it exists.
+    #[must_use]
+    pub fn element_hdr_size_off(self) -> Option<usize> {
+        match self {
+            GspInitArgsWire::FourField => None,
+            GspInitArgsWire::NineField => Some(32),
+        }
+    }
+}
+
 /// One driver version's ABI table.
 ///
 /// nvproxy's `driverABI` is four handler maps
@@ -65,6 +223,8 @@ pub enum MapDmaWire {
 pub struct DriverAbiTable {
     version: DriverVersion,
     map_dma: MapDmaWire,
+    gsp_element: GspElementWire,
+    gsp_init_args: GspInitArgsWire,
     /// Why this entry exists — kept in the data so a reader of the table sees
     /// the boundary's justification without leaving the file.
     pub note: &'static str,
@@ -82,6 +242,8 @@ pub const TABLES: &[DriverAbiTable] = &[
             patch: 4,
         },
         map_dma: MapDmaWire::Pre580_65_06,
+        gsp_element: GspElementWire::Pre610,
+        gsp_init_args: GspInitArgsWire::FourField,
         note: "oldest supported: NVOS47 gained `size` here \
                (gvisor/pkg/abi/nvgpu/frontend.go:707-710, NVOS47_PARAMETERS_V550)",
     },
@@ -92,6 +254,8 @@ pub const TABLES: &[DriverAbiTable] = &[
             patch: 6,
         },
         map_dma: MapDmaWire::From580_65_06,
+        gsp_element: GspElementWire::Pre610,
+        gsp_init_args: GspInitArgsWire::FourField,
         note: "NVOS46 gained flags2+kindOverride \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1059)",
     },
@@ -102,9 +266,14 @@ pub const TABLES: &[DriverAbiTable] = &[
             patch: 2,
         },
         map_dma: MapDmaWire::From580_65_06,
-        note: "the vendored ogkm tag every generated layout in this crate came \
-               from; carries no delta, and exists so the generation source is \
-               visible in the table it produced",
+        gsp_element: GspElementWire::From610_43_02,
+        gsp_init_args: GspInitArgsWire::NineField,
+        note: "★ the GSP element header changes shape here: 48 bytes with an \
+               elemCount become 16 with MCTP/NVDM transport words, and \
+               MESSAGE_QUEUE_INIT_ARGUMENTS grows from 4 fields to 9 \
+               (ogkm-610: message_queue_priv.h:52-67, gsp_init_args.h:32-45 vs \
+               ogkm-580: message_queue_priv.h:43-51, gsp_init_args.h:29-34). Also \
+               the ogkm tag every generated layout in this crate came from",
     },
 ];
 
@@ -141,6 +310,39 @@ pub fn table_for(version: DriverVersion) -> Result<&'static DriverAbiTable, AbiE
 }
 
 impl DriverAbiTable {
+    /// Which `GSP_MSG_QUEUE_ELEMENT` shape this version speaks.
+    #[must_use]
+    pub fn gsp_element_wire(&self) -> GspElementWire {
+        self.gsp_element
+    }
+
+    /// Which `MESSAGE_QUEUE_INIT_ARGUMENTS` shape this version publishes.
+    #[must_use]
+    pub fn gsp_init_args_wire(&self) -> GspInitArgsWire {
+        self.gsp_init_args
+    }
+
+    /// `GSP_MSG_QUEUE_ELEMENT_SIZE_MIN` — `RM_PAGE_SIZE`, the granularity a run is
+    /// counted and copied in (`ogkm-580: message_queue_priv.h:91`,
+    /// `ogkm-610: message_queue_priv.h:112`). A *driver* page size, not the host's.
+    ///
+    /// Identical at both vendored tags; carried here rather than in a logic crate because
+    /// it is a driver constant, and declared per-version so the day it moves it is a data
+    /// edit with a version behind it.
+    #[must_use]
+    pub fn gsp_element_size_min(&self) -> u32 {
+        4096
+    }
+
+    /// `GSP_MSG_QUEUE_ELEMENT_SIZE_MAX` = `SIZE_MIN * 16`, and — at 580 — also the exact
+    /// size of the receive **staging buffer** the guest copies a run into
+    /// (`ogkm-580: message_queue_priv.h:92`, carve at
+    /// `ogkm-580: message_queue_cpu.c:132-134, 143-145`).
+    #[must_use]
+    pub fn gsp_element_size_max(&self) -> u32 {
+        self.gsp_element_size_min() * 16
+    }
+
     /// Which `NVOS46_PARAMETERS` shape this version speaks.
     #[must_use]
     pub fn map_dma_wire(&self) -> MapDmaWire {

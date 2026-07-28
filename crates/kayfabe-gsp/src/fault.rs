@@ -178,6 +178,43 @@ pub enum GspFault {
         /// The upper bound (`queueElementSizeMax - queueElementHdrSize`).
         max: u32,
     },
+    /// ★★ **GSP-S1.** An element count — ours on the way out, or the guest's on the way in
+    /// — that exceeds what the receive **staging buffer** can hold.
+    ///
+    /// This is a memory-safety bound aimed at the *guest's* kernel, not a lint. The
+    /// staging buffer is `queueElementSizeMax` bytes with the live `msgq` metadata carved
+    /// immediately after it (`ogkm-580: message_queue_cpu.c:132-134, 143-145`), and the
+    /// copy loop that fills it is bounded only by ring availability
+    /// (`ogkm-580: :628, 648-650`). At the reachable maximum of 62 elements on a 63-slot
+    /// ring that is `(62 - 16) * 4096 = 188 416` bytes written past a
+    /// `portMemAllocNonPaged` allocation. Same defect class as the C artifact's unguarded
+    /// `% s->q_msgcount` SIGFPE (`C:1615`), pointed at the guest instead of at QEMU.
+    ///
+    /// See [`crate::max_elements`] for the derivation; the bound is never a literal.
+    ElementCountOutOfRange {
+        /// The count that was declared (or would have been emitted).
+        count: u32,
+        /// `queueElementSizeMax / element_size` — what the staging buffer holds.
+        max: u32,
+    },
+    /// The guest's `elemCount` field disagrees with the count its own `rpc.length`
+    /// derives.
+    ///
+    /// For a conforming guest the two are equal by construction: `elemCount` is assigned
+    /// `GSP_MSG_QUEUE_BYTES_TO_ELEMENTS(hdrSize + rpc.length)` unconditionally, outside
+    /// the Confidential-Compute branch (`ogkm-580: message_queue_cpu.c:482`). For a
+    /// non-conforming one they are not, and since the producer advanced its `writePtr` by
+    /// the **field** (`:578`) while a length-derived consumer would advance by the
+    /// derivation, accepting the message desynchronises the ring for the rest of the
+    /// device's life. Refused by name instead, with the cursor left where it was.
+    ///
+    /// Unreachable on layouts with no such field — see [`crate::peek_elem_count`].
+    ElementCountMismatch {
+        /// What the element's `elemCount` field said.
+        declared: u32,
+        /// What `ceil((hdrSize + rpc.length) / elementSize)` derives.
+        derived: u32,
+    },
     /// The element's checksum did not fold to zero.
     ChecksumMismatch {
         /// What the fold produced (zero is the only accepted value).

@@ -2,7 +2,7 @@
 //!
 //! ## ★ The element header is a different structure between 580 and 610
 //!
-//! | | 580 (bench; r535/r570-shaped) | 610 (the vendored ogkm) |
+//! | | 580 (the bench; r535/r570-shaped) | 610 |
 //! |---|---|---|
 //! | @0 | `authTagBuffer[16]` | `mctpHeader` |
 //! | @4 | ↑ | `nvdmHeader` |
@@ -11,20 +11,30 @@
 //! | @16 | `aadBuffer[16]` | **payload begins** |
 //! | @32 | `checkSum` | — |
 //! | @36 | `seqNum` | — |
-//! | @40 | **`elemCount`** | — |
+//! | @40 | **`elemCount`** | `rpc.sequence` (payload + 24) |
 //! | @48 | rpc header | — |
-//! | header size | **48** | **16** (+40 with Confidential Compute) |
+//! | header size | **48** | **16** (+ the CC tag where Confidential Compute is on) |
 //!
-//! [src] 610: `ogkm: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:52-67`,
-//! `ogkm: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:80-86`.
-//! [src] r535 **and** r570, independently: the 48-byte form, byte-identical to the C
-//! artifact's — `nv: r535/nvrm/gsp.h:808-816`, `nv: r535/rpc.c:94-102, 119`.
-//! So the break is bracketed to **(570, 610]**, and the C — whose 580 implementation
-//! matches r535/r570 exactly — is right for its era and wrong as a protocol.
+//! [src] read at both endpoints:
+//! `ogkm-580: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:43-51` and
+//! `ogkm-610: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:52-67`. Independently, the
+//! 48-byte form at r535 and r570 — `nv: r535/nvrm/gsp.h:808-816`,
+//! `nv: r535/rpc.c:94-102, 119`. So the break is **(595.84, 610.43.02]**, i.e. the
+//! predicate is `major >= 610`, and the C — whose 580 implementation matches r535/r570
+//! exactly — is right for its era and wrong as a protocol.
+//!
+//! ★★ The two are not merely differently *shaped*; they differ in **who decides how far
+//! the ring moves.** At 580 the receiver reads `elemCount` out of the element and
+//! `msgqRxMarkConsumed` advances by it (`ogkm-580: message_queue_cpu.c:652-658, 774`); at
+//! 610 there is no such field and the count is derived from `rpc.length`
+//! (`ogkm-610: message_queue_cpu.c:698-705`, consumed at `:838`). See
+//! [`peek_elem_count`] and [`max_elements`] — the second of which is a **memory-safety
+//! bound on what we emit into a guest's kernel**, not a lint.
 //!
 //! The C hard-codes 48/40/32/36 at ~15 sites. Here the shape is an [`ElementLayout`]
-//! **value**, supplied by the ABI layer; this module carries no offset of its own. That
-//! is one of the five authorised deviations ("the version key").
+//! **value**, supplied by the ABI layer (`kayfabe_abi::versions::GspElementWire`); this
+//! module carries no offset of its own. That is one of the five authorised deviations
+//! ("the version key").
 //!
 //! ## Checksum
 //!
@@ -181,7 +191,7 @@ impl ElementLayout {
 }
 
 /// `gspMsgQueueBytesToElements` — `ceil(bytes / elementSizeMin)`
-/// (`ogkm: message_queue_priv.h:117-121`).
+/// (`ogkm-580: message_queue_priv.h:98-99`, `ogkm-610: message_queue_priv.h:117-121`).
 ///
 /// Returns 0 only for `element_size_min == 0`, which a bound geometry cannot have.
 #[must_use]
@@ -190,6 +200,33 @@ pub fn bytes_to_elements(bytes: u32, element_size_min: u32) -> u32 {
         return 0;
     }
     bytes.div_ceil(element_size_min)
+}
+
+/// ★★ **GSP-S1 — the receive staging bound.** How many elements one message may occupy
+/// before the *guest's* receive path writes past its own allocation.
+///
+/// The guest copies each element of a run into a staging buffer of exactly
+/// `queueElementSizeMax` bytes, advancing by one element per copy, with **no bound on the
+/// count**: `_gspMsgQueueInit` allocates
+/// `(1 << GSP_MSG_QUEUE_ELEMENT_ALIGN) + GSP_MSG_QUEUE_ELEMENT_SIZE_MAX + msgqGetMetaSize()`
+/// from `portMemAllocNonPaged` and carves the live `msgq` metadata **immediately after**
+/// the staging area (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:132-134,
+/// 143-145`); the copy loop is `for (i = 0; i < nElements; i++) { portMemCopy(pTgt, …); pTgt += … }`
+/// (`:628, 648-650`) and `nElements` is whatever the element declared. So an over-wide run
+/// overwrites the metadata first and then arbitrary kernel heap.
+///
+/// This is therefore a bound on **what we may emit into a guest's kernel**, not a lint —
+/// and it is checked where the extent is decided rather than inferred from the length,
+/// because the two are only equal when `element_size` divides `element_size_max`.
+///
+/// Derived, never declared: on the bench's geometry it evaluates to `65536 / 4096 = 16`,
+/// but neither number appears here. `element_size` is the guest's own published `msgSize`.
+#[must_use]
+pub fn max_elements(element_size: u32, element_size_max: u32) -> u32 {
+    if element_size == 0 {
+        return 0;
+    }
+    element_size_max / element_size
 }
 
 /// `_checkSum32` — the 64-bit XOR fold, reduced to 32 by `hi ^ lo`.
@@ -341,7 +378,9 @@ fn encode_envelope(out: &mut [u8], header_version: u32, rpc: &OutgoingRpc, lengt
 ///
 /// # Errors
 ///
-/// [`GspFault::MsgLenOutOfRange`] if the payload does not fit the transport.
+/// [`GspFault::MsgLenOutOfRange`] if the payload does not fit the transport, or
+/// [`GspFault::ElementCountOutOfRange`] if the run would overrun the guest's receive
+/// staging buffer ([`max_elements`]).
 pub fn encode_message(
     layout: &ElementLayout,
     header_version: u32,
@@ -358,6 +397,24 @@ pub fn encode_message(
         }
     })?;
     let len = MsgLen::new(rpc_length, layout, element_size, element_size_max)?;
+
+    // ★★ GSP-S1. Checked *before* the run is built, and unconditionally — the guest's
+    // staging buffer exists on every version, so this is a property of the geometry and
+    // not of the element layout, and gating it on `elem_count_off.is_some()` would be a
+    // branch on version identity.
+    //
+    // On the bench's geometry the length bound above already implies this one, and that
+    // coincidence is exactly the hazard: the two are equal only when `element_size`
+    // divides `element_size_max`, and any future path that sets the count from something
+    // other than this `MsgLen` — a continuation record, a CC layout, a replayed trace —
+    // breaks the implication silently.
+    let max = max_elements(element_size, element_size_max);
+    if len.elements() > max {
+        return Err(GspFault::ElementCountOutOfRange {
+            count: len.elements(),
+            max,
+        });
+    }
 
     let total = (len.elements() as usize) * (element_size as usize);
     let mut buf = vec![0u8; total];
@@ -437,6 +494,39 @@ pub fn peek_len(
         element_size,
         element_size_max,
     )
+}
+
+/// Read the **declared** element count out of a message's first element, on the versions
+/// whose layout carries one.
+///
+/// ★★ This is the authority the receive path must use, and it is not the same number as
+/// [`peek_len`]'s derivation. On the command queue the guest is the producer: it writes
+/// `pCQE->elemCount = GSP_MSG_QUEUE_BYTES_TO_ELEMENTS(msgLen)` and then advances its own
+/// `writePtr` by **that field** (`ogkm-580: message_queue_cpu.c:482, 578`
+/// `msgqTxSubmitBuffers(hQueue, pCQE->elemCount)`). So the field, not the length, is how
+/// far the producer moved — and a consumer that advances by a derivation desynchronises
+/// the ring permanently against a producer that disagrees, with nothing downstream to
+/// catch it: the resulting sequence mismatch is `>` , for which the driver's recovery
+/// branch does not exist (`ogkm-580: :699-714` handles only `<`).
+///
+/// `None` where the layout has no such field — at 610 the count is derived from
+/// `rpc.length` and offset 40 is `rpc.sequence`
+/// (`ogkm-610: message_queue_priv.h:52-67`, `message_queue_cpu.c:698-705`).
+///
+/// # Errors
+///
+/// [`GspFault::Truncated`] if the buffer is shorter than the header.
+pub fn peek_elem_count(layout: &ElementLayout, first: &[u8]) -> Result<Option<u32>, GspFault> {
+    let Some(at) = layout.elem_count_off() else {
+        return Ok(None);
+    };
+    let bytes = first.get(at..at + 4).ok_or(GspFault::Truncated {
+        need: at + 4,
+        have: first.len(),
+    })?;
+    let mut b = [0u8; 4];
+    b.copy_from_slice(bytes);
+    Ok(Some(u32::from_le_bytes(b)))
 }
 
 /// Verify and decode a complete element run.

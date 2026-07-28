@@ -2006,3 +2006,92 @@ must support actually goes through `CORE_RESUME` is **§11-O7a**, and it was **n
 established here: nothing in the 580 tree was traced from a resume entry point down to a
 `GSP_SEQ_BUF_OPCODE_CORE_RESUME` buffer, because the buffer's *contents* come from GSP-RM
 firmware, which is not in the open tree. That is a genuine hole and it is named as one.
+
+### 14.7 ★★ EXECUTION LOG — B1–B9 landed, 2026-07-28
+
+`docs/design/gsp_580_correction_brief.md` items **B1–B9** are implemented and green
+(`cargo test --workspace --no-fail-fast` both ways, `scripts/ci_gates.sh --all`). Every new
+invariant was bite-checked by removing the fix and confirming red: **13 bites, 0
+non-biters.** What follows is only what the execution *changed about this log*.
+
+**B1 first, and it mattered exactly as predicted.** `tests/src/gspworld.rs::Guest::recv`
+derived the element count for both profiles, so before it no 580 invariant could
+fail-before-and-pass-after. With the oracle fixed (`elemCount` field at 580, derivation at
+610), all four of B1/B2/B3's tests bite.
+
+**§14.1 row 4 is no longer prose.** The predicate now exists:
+`kayfabe_abi::versions::GspElementWire` (`Pre610` / `From610_43_02`) plus
+`GspInitArgsWire` (`FourField` / `NineField`), selected by the existing `table_for`
+"newest entry `<=` version" mechanism. `tests/src/gspworld.rs`'s `P580`/`P610` are now
+**consumers** of that table rather than a second definition — a `Profile` carries only a
+name and a `DriverVersion`. Before this, `ElementLayout::new` had no caller outside test
+code and *no production path selected a layout at all*.
+
+**§14.2 gains a third consequence, and it is a latent bug the brief did not predict.**
+B4's drain-on-publish surfaced it immediately: `publish` installed
+`cmd: RxCursor { read_ptr: 0 }` on **every** bind. That is right for the status queue —
+`msgqRxLink` assigns `rxReadPtr = 0` — but the command queue is the mirror image: nothing
+resets the guest's tx `writePtr` short of `msgqTxCreate`, which runs only from
+`_gspMsgQueueInit` at module load (`ogkm-580: message_queue_cpu.c:155-161`). So an
+idle-release re-acquire rebound against a producer sitting at 4 and a consumer restarted at
+0, re-read four already-answered commands, and refused `SeqNumGap` forever — the `>` case
+with no recovery branch (`ogkm-580: :699-714`). Fixed by carrying the command ring's
+position beside `cmd_seq`, restarting both exactly when the region identity changes. **One
+rule: the command stream's position and its sequence are the same instance's state.** It was
+invisible before only because no test rang a doorbell after a re-acquire.
+
+**§14.2 item 1 is resolved as `Transition::E12`.** A doorbell while unbound splits on
+`phase == Halted` — the teardown-reached phase, i.e. the measured stale-binding case
+(`docs/reference/mode2_bench_lifecycle.md` §4) — which keeps `GspFault::QueueNotBound`.
+Every other unbound phase is the healthy 580 pre-bootstrap doorbell and returns `Ok(E12)`.
+**Both arms still read zero guest RAM**; only the classification differs, which was the
+whole point. The split is on observed state, not on driver identity.
+
+**B2's bound is real but its reachability is subtler than the brief said.** The brief ranked
+it first while noting it is "currently unreachable through `encode_message`". More precisely:
+`elements = ceil(msgLen / element_size)` and `max = element_size_max / element_size`, so the
+length bound implies the count bound **iff `element_size` divides `element_size_max`** —
+true on the bench (4096 | 65536), false in general. Since `element_size` is the guest's own
+published `msgSize` and `msgqRxLink` accepts any value at or above `MSGQ_MSG_SIZE_MIN`
+(`ogkm-580: msgq.c:340-343`), the non-dividing case is input the crate can be handed, and the
+failing-before test is written on it. Do not "simplify" the check away on the grounds that
+the bench geometry makes it redundant.
+
+**The receive side is where GSP-S1 is unconditionally live**, because there the count is
+guest-written rather than derived: `service_command_queue` range-checks the declared
+`elemCount` against the staging bound, then cross-checks it against the derivation
+(`GspFault::ElementCountMismatch`), then falls through to the existing availability break.
+Range before mismatch before availability — a count above the staging bound can never become
+valid however much the ring later fills, so it outranks "producer not finished".
+
+**§14.4's uncertainty about the MCTP words is closed.** The brief said the decomposition had
+not been re-derived and might not hold. It holds:
+`mctpCreateTransportHeader(som=1, eom=1, 0, 0, 0)` =
+`REF_NUM(MCTP_HEADER_VERSION 3:0, 1) | REF_NUM(EOM 30:30, 1) | REF_NUM(SOM 31:31, 1)` =
+**`0xC000_0001`**, and `mctpCreateNvdmHeader(NVDM_TYPE_RM_RPC)` =
+`REF_DEF(TYPE 6:0, VENDOR_PCI=0x7e) | REF_DEF(VENDOR_ID 23:8, NV=0x10de) |
+REF_NUM(NVDM_TYPE 31:24, 0x25)` = **`0x2510_DE7E`**
+(`ogkm-610: src/nvidia/arch/nvalloc/common/inc/mctp_format.h:39-58, 79-95, 108-120`,
+`.../nvdm_format.h:61`). The table carries the *derivation* as well as the constant.
+
+★ It also carries **validated masks** — `0x0000_000F` on the MCTP word and `0x00FF_FF00` on
+the NVDM word — because the receiver reads only those two bit fields
+(`ogkm-610: message_queue_cpu.c:735-762`). The mock previously compared the whole words,
+i.e. it was **stricter than the driver**, and a test written against it would have asserted a
+rejection the guest does not perform. The masks make that structural rather than a comment.
+
+**B9 changed no production behaviour, as the brief said it would not.** The deliverable is a
+pin plus a deliberately-wrong second register model that OR-s the suspend sentinel onto the
+mailbox shadow; the pin catches it, and the same test shows a 610-shaped `& sentinel` poll
+would be satisfied by the wrong model — which is why the difference is invisible to anyone
+testing only the mask.
+
+**Not reached: B8, B10, B11.** B8 (version-keyed bootup allowlist) needs
+`GSP_RUN_CPU_SEQUENCER`, `UCODE_LIBOS_PRINT`, `GSP_LOCKDOWN_NOTICE`,
+`GSP_POST_NOCAT_RECORD` and `OS_ERROR_LOG` added to `FunctionCodes` — ids nothing currently
+consumes, which is against this crate's own "each needs a consumer first" rule; the
+implementation stays correct-because-narrower (`InitDone` only, a strict subset of both
+tags' lists) meanwhile. B10 is §11-O7a and remains open by design. B11 (retagging the 121
+bare `ogkm:` citations plus a CI grep gate) is untouched except at the sites this work
+edited; it should be raised as its own task, together with the `ci.yml` ownership question
+§13.1 item 3 records.

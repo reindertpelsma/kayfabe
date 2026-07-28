@@ -117,7 +117,7 @@ use kayfabe_core::rmgraph::ClientKey;
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraphError, RmNode};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_fwd::{ControlRoute, DoorbellOutcome, FwdFault, Published, Stale};
-use kayfabe_gsp::{BootPhase, QueueState, Transition};
+use kayfabe_gsp::{BootPhase, GspFault, QueueState, Transition};
 use kayfabe_isolate::{CancelReason, HostHandle, IsolateId, RmError, WorkerId};
 use kayfabe_mmu::AddressFault;
 use kayfabe_mocks::{
@@ -128,7 +128,7 @@ use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
 use kayfabe_rt::executor::{Effect, Executor};
 use kayfabe_rt::inbox::{CoreEvent, inbox};
 use kayfabe_rt::lock;
-use kayfabe_tests::gspworld::{GspWorld, MODEL_A, MODEL_B, P580, P610};
+use kayfabe_tests::gspworld::{GspWorld, MODEL_A, MODEL_B, P580, P610, RingId};
 use kayfabe_tests::{
     Guarded, ResidueClaim, Scenario, SharedVmm, gpfifo_ring, identical_handles, reachable_maps,
     reachable_objects, script_ring,
@@ -9031,6 +9031,37 @@ fn the_gsp_boot_cycle_composes_with_live_multiproc_traffic() {
             w.doorbell().unwrap();
             assert_eq!(w.guest.recv(&mut w.ram).unwrap().len(), 1, "{tag}: reply");
             assert_eq!(w.fsm.phase(), BootPhase::Running, "{tag} life {life}");
+
+            // ★★ GSP-S1, composed: a command declaring more elements than the guest's
+            // 65 536-byte receive staging buffer can hold is refused **by name** while
+            // the device planes are under load, and the device keeps serving afterwards.
+            // Only on the profile that HAS the field — at 610 there is nothing to
+            // corrupt, which is itself the version seam being right.
+            if tag == "A" {
+                w.guest
+                    .send(&mut w.ram, 76, 800 + life as u32, &[0x11; 16])
+                    .unwrap();
+                let slot = w.last_command_slot();
+                // 48/32 are the 580 element's hdr and checkSum offsets, passed
+                // explicitly so this does not read them from the table under test
+                // (`ogkm-580: message_queue_priv.h:43-51`).
+                w.poke_element(RingId::Command, slot, 48, 32, 40, 62);
+                assert_eq!(
+                    w.doorbell(),
+                    Err(GspFault::ElementCountOutOfRange { count: 62, max: 16 }),
+                    "{tag} life {life}: the exact refusal, under concurrent device load",
+                );
+                assert_eq!(
+                    w.fsm.phase(),
+                    BootPhase::Running,
+                    "{tag} life {life}: a refusal is per-MESSAGE — the device never stops",
+                );
+                // …and the ring did not move, so the guest can rewrite the element.
+                w.poke_element(RingId::Command, slot, 48, 32, 40, 1);
+                let r = w.doorbell().expect("the corrected command is served");
+                assert_eq!(r.commands.len(), 1, "{tag} life {life}: recovered");
+                assert_eq!(w.guest.recv(&mut w.ram).unwrap().len(), 1);
+            }
 
             w.guest
                 .send(&mut w.ram, 47, 950 + life as u32, &[])
