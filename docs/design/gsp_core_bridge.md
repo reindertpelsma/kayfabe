@@ -1,12 +1,54 @@
 # The GSP → core bridge — `RpcCommand` becomes `RmEvent`
 
-> **Status:** design only. Nothing described here is built. **Nothing in the Rust stack has ever
-> run against a real GPU**, and this document does not change that.
+> **Status:** ~~design only. Nothing described here is built.~~ **BUILT — B0 through B6 are
+> complete** (`76a0077` B0+B1, `2dac655` B2, `712e370` B3, `3a1704f` B4, `dbf092d` B5,
+> `ca9e4ae` B6), in `crates/kayfabe-rmrpc` and the `kayfabe-abi` decoders beneath it.
+> **Nothing in the Rust stack has ever run against a real GPU**, and this document does not
+> change that — §9 says exactly what that leaves unproven.
 >
 > **Citations** follow `testing_doctrine.md` §6.1: our own tree by **symbol**, pinned trees
 > (`ogkm` = `research_clones/ogkm` @ 610.43.02, `ogkm-580` = `research_clones/ogkm-580.159.04`,
 > `C:` = `/workspace/nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c`) by `file:line`.
 > Claims are tagged `[src]` / `[measured]` / `[inferred]` / `[unverified]`.
+>
+> ★ **Citation-tag rule, added after this document was written.** The `ogkm-version-tag` CI
+> gate now requires every NVIDIA citation to name **which** vendored tree it was read from
+> (`ogkm-580:` or `ogkm-610:`); a bare `ogkm:` is untagged and unverified by definition. The
+> bare citations below are pre-gate debt, held by an exact-equality ratchet in
+> `.github/workflows/ci.yml` — **every citation added by the 2026-07-28 pass carries a tag,
+> and each was re-read at that tag.** A tag is not evidence of a read; do not copy one.
+
+---
+
+## ⊘ RECONCILIATION PASS — 2026-07-28, after B0–B6
+
+This document is the spec the bridge was built from, and **each stage found it wrong**. The
+corrections lived only in commit messages until this pass. The original reasoning is left
+standing — struck through where it did not survive, never deleted, because *why* a claim was
+plausible is the useful part. Superseded text is marked `~~like this~~` and followed by a
+`⊘ SUPERSEDED` note naming the stage that killed it.
+
+**The claims in this file that are known FALSE, and where each is corrected:**
+
+| claim | where | verdict |
+|---|---|---|
+| *"known-and-inert vs unknown, there is no third state"* | §4.3 | **false** — there were four, now three. B1/B6 |
+| *"a second, different PDB … must be a refusal"* | §2.5, §5.2 | **impossible** for a stateless bridge, and the core decided the other way with an argument. B4 |
+| *"`Memory (mem_phys)`"* as a B3 deliverable | §2.2b, §6 | **unbuildable twice over** — `[OUT]` fields, and no consumer. B3 |
+| *"two distinct `Proc`s, two arenas, two host VASes"* at this seam | §5.3 | **not observable here** — `Gpu::apply` issues no host verb. B5 |
+| *"a typed `TraceEvent` per refusal"* | §4.2, §1.1 | **structurally impossible** — `respond` takes no trace and `Trace` is not `Send`. B2 |
+| *"translate when the declared total is complete"* | §2.6 | **there is no declared total on the wire.** B6 |
+| *"`SET_PAGE_DIRECTORY`"* as how a VAS declares its root | §2.5, §7.1 | **necessary, not sufficient** — that path is UVM-only. B4 |
+| *"the namespace is … never a params field"*, unqualified | §3.2 | **needs a scope**: it is about ATTRIBUTION. B5 |
+| `Translation::Forward` for the control long tail | §1.2, §2.1, §2.5b, §6 | **not built, and deliberately not** — refuse instead. B4 |
+| *"the only address-populating RPC"* over-read | §2.7 | true as written, **routinely over-read** — see `gpu_promote_ctx.md` §0 |
+
+**Load-bearing negative results** established by the build and recorded below, so nobody
+re-derives the wrong thing: there is **no** declared total on the wire (§2.6a); **no** large
+path for `GSP_RM_ALLOC` at all (§2.6a); **no** producer for `RmEvent::MapMemoryDma` (§2.7) and
+therefore **no** consumer for `mem_phys` (§2.2b); **no** trace plane at this seam (§4.2);
+**no** host verb inside `Gpu::apply`, hence no host VAS to observe (§5.3); and **no** guest
+driver has ever posted a message to this stack (§9).
 
 ## 0. Why this file exists
 
@@ -15,7 +57,16 @@ They do not touch. `kayfabe_gsp::rpc::RpcCommand` has **zero references outside 
 crate**, and the only manifest naming `kayfabe-gsp` is `tests/Cargo.toml`. So `Gpu::apply`'s
 input is synthesised by `tests/src/lib.rs::Scenario` and by nothing else.
 
-This file specifies the piece between them. It does not build it.
+This file specifies the piece between them. ~~It does not build it.~~
+
+> ⊘ **SUPERSEDED (2026-07-28).** It has since been built, B0–B6, and the paragraph above is
+> now history rather than status: `kayfabe_gsp::rpc::RpcCommand` reaches `Gpu::apply` through
+> `kayfabe_rmrpc::GraphPolicy`, which the boot FSM calls from inside
+> `GspFsm::service_command_queue`. §1.2's *"one-line CI grep and should be added as one"* was
+> also acted on — the **Bridge-exclusivity gate** (`.github/workflows/ci.yml`) enforces that
+> no crate but `kayfabe-rmrpc` names both `RpcCommand` and `RmEvent`. ★ It fired on its first
+> run, on `kayfabe-gsp`'s own stale module doc — the very paragraph quoted two sentences up —
+> which is §8 correction 1 applied to the tree instead of asserted about it.
 
 `mode2_gsp_port_plan.md` §2 item 3 already claims the seam exists — *"RPC decode/encode →
 abstract `RmEvent` … and control intents"* is listed as **owned by `kayfabe-gsp`** — and §5's S4
@@ -40,7 +91,7 @@ One direction only: **guest → us**. There is no reverse flow of core types int
 | in | `kayfabe_abi::versions::DriverAbiTable` | `kayfabe-abi` | the Axis-A wire table, selected once at realize |
 | out | `kayfabe_core::rmgraph::RmEvent` | `kayfabe-core` | six variants: `Alloc`, `Dup`, `SetPageDir`, `MapMemoryDma`, `Unmap`, `Free` |
 | out | `kayfabe_gsp::boot::Reply` | `kayfabe-gsp` | `{ rpc_result: u32, body: Vec<u8> }` — clamped by `RpcCommand::reply` |
-| out | a refusal (§4) | this crate | typed; becomes a non-zero `rpc_result` **and** a trace event |
+| out | a refusal (§4) | this crate | typed; becomes a non-zero `rpc_result` **and** ~~a trace event~~ **a census entry — §4.2** |
 
 `RpcCommand::payload` is **the RPC body after the 32-byte envelope** — `element.rs::decode_message`
 slices `body[RpcEnvelope::SIZE..]`. So for a `GSP_RM_ALLOC` the payload's byte 0 is
@@ -93,8 +144,21 @@ one-line CI grep and should be added as one (the boundary gate already has this 
 `kayfabe-fwd` remains where the *control-command* long tail lives (Case-1 forward / Case-2
 ack-only, `nvidia-gpu-passthrough/docs/design/mode2_forwarding_model.md:37-50`). The split is
 sharp and worth stating: **this bridge produces `RmEvent`s only.** A control that must be
-*forwarded to the host* is not this crate's business — it returns `Translation::Forward{cmd}` and
-the caller hands it to `kayfabe_fwd::classify_control`.
+*forwarded to the host* is not this crate's business — ~~it returns `Translation::Forward{cmd}`
+and the caller hands it to `kayfabe_fwd::classify_control`.~~
+
+> ⊘ **SUPERSEDED at B4 (`3a1704f`), and this is §7 item 6's answer.** There is **no
+> `Translation::Forward` variant** in the built crate; `Translation` is `Event` / `Inert` /
+> `Held`. `kayfabe_fwd::classify_control` **does not exist**, so a `Forward` would be a value
+> every caller drops — which is the C's `NV_OK` echo with a Rust type on it, the exact defect
+> §4 exists to deviate from. B4 therefore **refuses**, as
+> `BridgeRefusal::UnknownControl { cmd }`, on the crate's consumer-first rule: *a variant
+> nothing consumes is a variant no test can bite.*
+>
+> ★ The choice is the reversible one. When `classify_control` lands, **that arm** is where
+> `Forward` gets emitted, and every control that reached it is already named in the refusal
+> census by `cmd`. Nothing is lost by having refused in the meantime; a dropped `Forward`
+> would have lost the record.
 
 ### 1.3 What does **not** cross, and why that is load-bearing
 
@@ -150,6 +214,20 @@ paramsSize@96, …, params@120"* (`C:2132-2135`, repeated `C:6464-6465`, `C:2732
 offsets are element-relative with a 48-byte element header and a 32-byte envelope, so subtract
 80: alloc `0/4/8/12/20/32`, control `0/4/8/12/16/40`. **Both tables agree exactly.** Use that
 subtraction as a unit test (§5).
+
+> ✔ **BUILT (B0, extended B4).** Both halves are in `crates/kayfabe-abi/tests/mean_wire.rs`
+> (`the_rpc_alloc_body_offsets_agree_with_the_c_artifacts_independent_transcription` and
+> `…_control_…`). The differential is written as a **decode of a poisoned buffer** — the `u32`
+> at offset `o` reads back `0xC0DE_0000 | o` — so it tests the decoder rather than restating a
+> table of constants beside itself.
+>
+> ★ **It was SIX fields, not twelve, until B4.** §5.1 asks for *"all twelve fields"*; at B1
+> only the alloc half existed, because `RpcControlReq` had no consumer and `kayfabe-abi`'s own
+> rule is consumer-first. B4 gave it one, and the control half landed in the same commit. Of
+> the C comment's twelve entries, **eleven are asserted by value**; the twelfth — the control
+> body's `status` @ +12 — is asserted **by exclusion** (no decoded field carries that offset's
+> value), because it is an `[OUT]` field deliberately absent from the view. See §4.2's
+> body+12 note for why that field is nonetheless load-bearing.
 
 `FreeReq` and `DupReq` need **nothing new**: `rpc_free_v03_00` *is* `NVOS00_PARAMETERS_v03_00`
 and `rpc_dup_object_v03_00` *is* `NVOS55_PARAMETERS_v03_00` (`ogkm: g_rpc-structures.h:162-167,
@@ -244,10 +322,29 @@ different reasons are collapsed in the table and must not be:
 2. **Owned elsewhere** (47, 71) — the FSM or the transport already handles it, and a second
    handler is a second source of truth.
 3. **Forwarded, not modelled** (most of 76) — the fact *matters*, but it is a host op, not a
-   graph edge. It leaves this crate as `Translation::Forward`.
+   graph edge. ~~It leaves this crate as `Translation::Forward`.~~ ⊘ **B4: it leaves this crate
+   as a named refusal** (`UnknownControl { cmd }` — §1.2's superseded note).
 
 Collapsing 3 into 1 is how the C ended up answering every unmodelled control `NV_OK` with the
 request echoed back (`C:3214-3226`, `C:2839`). §4 refuses that.
+
+#### 2.1a ★ B2's finding: fn 72 and 73 **never reach the bridge at all**
+
+`[src]` `GspFsm::answer` returns on `Disposition::NoReply` **before** it calls
+`policy.respond`, because echoing an `_issueRpcAsync` RPC surfaces in the driver as an
+unexpected event and desyncs the sequence. Both no-reply functions are async by construction:
+`GSP_SET_SYSTEM_INFO` calls `_issueRpcAsync` (`ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:10466`,
+`ogkm-580: :10656`) and `SET_REGISTRY` takes `_issueRpcAsyncLarge` or `_issueRpcAsync`
+depending on whether the packed table fits one message (`ogkm-610: :10533`/`:10538`,
+`ogkm-580: :10728`/`:10733`).
+
+So `translate`'s `Inert` arm for 72/73 is **unreachable through this adapter**, and the row
+above describes a path that does not run. Harmless today — neither carries object-model
+content — and ★ **load-bearing to know: a future `NoReply` function that DID carry a fact
+would be dropped silently, with nothing counting it.** Pinned by
+`the_no_reply_functions_never_reach_the_policy_and_the_answered_one_does`, whose non-vacuity
+arm is `SET_GUEST_SYSTEM_INFO` — equally inert to the object model, but answered, and
+therefore reaching the policy.
 
 ### 2.2 fn 103 — `GSP_RM_ALLOC` → `RmEvent::Alloc`
 
@@ -298,9 +395,35 @@ today's `kayfabe-abi` is thin. `AllocFacts` has six fields; here is the honest s
 | `h_vaspace` | TSG / CtxShare / Channel alloc params | ❌ none | **owed** — B3 |
 | `h_ctx_share` | Channel alloc params | ❌ none | **owed** — B3 |
 | `userd_flags` | Channel alloc params | ❌ none | **owed** — B3 |
-| `mem_phys` | `NV01_MEMORY_*` alloc params | ❌ none | **owed** — B3 |
+| `mem_phys` | `NV01_MEMORY_*` alloc params | ❌ none | ~~**owed** — B3~~ ⊘ **UNBUILDABLE — see below** |
 
-Until a class has a decoder, its `AllocFacts` is `Default` (all `None`). ★ That is **safe but not
+> ⊘ **`mem_phys` was never buildable, and B3 (`712e370`) established it twice over.** Recorded
+> as a **load-bearing negative result**, not as debt, so nobody schedules it again:
+>
+> 1. **The request does not carry it.** `NV_MEMORY_ALLOCATION_PARAMS.offset`/`.address` are
+>    `[OUT]` in the guest→GSP direction — RM picks the address and reports it back — so a
+>    decoder would be reading a field the guest has not been told the value of yet.
+> 2. **Nothing would consume it.** `AllocFacts::mem_phys`'s only reader is
+>    `Gpu::sync_rpc_mappings`, which is driven by `RmEvent::MapMemoryDma` — and §2.7 proves
+>    that event has **no producer on this wire at all**.
+>
+> ⇒ A memory alloc is refused **by name** (`BridgeRefusal::UnmappedAllocClass { class }`), and
+> the refusal is the record. Two other facts are dropped for the same nowhere-to-put-it
+> reason and are listed in §9: a TSG's `engineType` and a CtxShare's `subctxId`.
+
+~~Until a class has a decoder, its `AllocFacts` is `Default` (all `None`).~~
+
+> ⊘ **SUPERSEDED at B1/B3: an unmapped class is a REFUSAL, not a default.**
+> `BridgeRefusal::UnmappedAllocClass { class }`. The paragraph below argues that defaulting is
+> safe, and **the argument is sound for a channel and false for the classes above it**: a
+> Device with no declared `deviceInstance` is unroutable (`RmGraph::gpu_of` refuses rather than
+> defaulting to GPU 0), and a client root with no declared `client_kind` is a hard
+> `RmGraphError::UndeclaredClientKind` by design — which the paragraph itself concedes in its
+> last sentence. A blanket default cannot tell those cases apart, so the default is a refusal
+> and **each class argues its own way out of it**, with a decoder and an offsets assertion
+> behind it. That preserves the incrementality §2.2b wanted without the silent arm.
+
+★ That is **safe but not
 free**, and the split is exactly the core's declared miss taxonomy: a channel with no declared
 `h_vaspace` *materialises no `Vas`* (deferred — `Gpu::sync_proc_to_boundary`) and then takes
 `FwdFault::NoVas` the instant a doorbell rings it (`kayfabe_fwd::gate_working_set_in`). So a
@@ -312,6 +435,28 @@ direction, and is why B3 can be incremental. It is *not* safe for `NV01_ROOT`: a
 consumer first; a broad table with one wrong entry is invisible until a guest trips it"*
 (`crates/kayfabe-abi/src/lib.rs` §4). One class per commit, each with its `RUSTC_OFFSETS`
 assertion.
+
+#### 2.2d ★★ B3's finding: `NV_CHANNEL_ALLOC_PARAMS` diverges **inside** the supported range
+
+The fourth axis (§1.5) bit here, on the class that matters most, and the answer was to build
+**less**, not more.
+
+`[src]` `NV_CHANNEL_ALLOC_PARAMS` is not the same struct at the two vendored tags: 610 inserts
+`hHandleVASpace` at **+32**, where 580 — **which is the bench's own driver, 580.159.04** — has
+`hUserdMemory[0]`. A generated 610 mirror would therefore mis-read **every field from +32
+onward** for the guest we actually run, `engineType` included. So the struct is **deliberately
+not generated**, and only the **32-byte prefix the two trees agree on** is decoded. The
+`crates/kayfabe-abi/src/view.rs` comment carries the field-by-field diff, and
+`crates/kayfabe-abi/tests/oracle_layout.rs::the_channel_alloc_prefix_stops_where_the_two_trees_stop_agreeing`
+asserts the **absence** of the struct, so that nobody later "fixes" the gap.
+
+★★ **And there is exactly ONE channel class.** A CUDA process's GR channel and its CE channel
+are both `AMPERE_CHANNEL_GPFIFO_A`; what separates them is `engineType`, a params fact **past
+the agreed prefix**, and `RmEvent::Alloc` has nowhere to put it anyway. ⇒ `Arch::classify`
+cannot answer the engine from the class id, and a CE channel becomes one only through its
+`AMPERE_DMA_COPY_B` engine object and `kayfabe_core::project`'s refinement pass. That is why
+B3's class table carries the two **engine-object** classes as well: without them the composed
+oracle (§5.1) is not expressible at all.
 
 **2.2c — the serialization flag is an observed protocol fact and must be checked.**
 `[src]` `rpc_params->flags |= RMAPI_RPC_FLAGS_SERIALIZED` when
@@ -386,24 +531,113 @@ transcribed `physAddress@cmd+120, flags@cmd+132, hVASpace@cmd+136` (`C:2532-2535
 the 120-byte control-params base, is `0 / 12 / 16`. **Three oracles, one answer.**
 
 ★ The client comes from **`hdr.hClient`, the RPC envelope's own field** — never from a params
-field. The C got the analogous case wrong on `GPU_PROMOTE_CTX`: it *ignores* the RPC's `hClient`
-and uses `params+12` (`hChanClient`) instead (`C:2283`). Sometimes right, and unprincipled: the
-namespace a control is *issued in* is the envelope's, full stop. A params field naming a
-different client is a **cross-namespace reference**, which is a different fact and, if we ever
-need it, needs its own event — not a silent substitution.
+field. ~~The C got the analogous case wrong on `GPU_PROMOTE_CTX`: it *ignores* the RPC's
+`hClient` and uses `params+12` (`hChanClient`) instead (`C:2283`).~~ Sometimes right, and
+unprincipled: the namespace a control is *issued in* is the envelope's, full stop. A params
+field naming a different client is a **cross-namespace reference**, which is a different fact
+and, if we ever need it, needs its own event — not a silent substitution.
+
+> ⊘ **HALF SUPERSEDED — the framing, not the rule. See §3.2, which is where the scope now
+> lives.** The rule (envelope for attribution; a params client is an *additional* namespace
+> needing its own event) is right and `RmEvent::Dup` **is** that event. But *"the C got the
+> analogous case wrong"* is wrong about the C: `ogkm` sets `hChanClient` **independently of the
+> envelope client, on purpose**, so the C is *right* to read it for a **channel lookup**. What
+> the C does wrong is different and narrower — it reads `hChanClient` and **never looks at the
+> envelope's `hClient` at all** (`C:2283`), which is a *substitution*, not a *use*.
+> ★ **The recurring question is never "envelope or params?" but "ATTRIBUTION or
+> RESOLUTION?"** — `DUP_OBJECT` (B5) was the first instance, `GPU_PROMOTE_CTX` is the second
+> (`gpu_promote_ctx.md` §6.2), and that document predicts a third. Name the pattern; do not
+> re-derive the ban.
+
+★ **`hVASpace == 0` is not "unspecified", and B4 refuses it.** `[src]` NVIDIA's header says
+what it is, verbatim in both trees: *"handle for the allocated VA space that this control call
+should operate on. **If it's 0, it assumes to use the implicit allocated VA space associated
+with the client/device pair.**"* (`ogkm-610: ctrl0080dma.h:782-785`,
+`ogkm-580: ctrl0080dma.h:812-815`). That implicit VAS is a real object this RPC does not name
+and the graph has no node for, so passing `HObject(0)` through would park the PDB on a node key
+the guest never declared — silently, and forever. Refused as `BridgeRefusal::ImplicitVaspace`.
+★ **Note the deliberate asymmetry with the alloc arm**, where a zero handle means "nothing
+declared" and maps to `None`. Same byte pattern, opposite meaning, documented differently by
+NVIDIA — see §4.3a, where all the readings of zero are collected, and none may be inferred from
+another.
 
 `aperture` (`flags[1:0]`) is decoded by `kayfabe_abi::view::PdbAperture` but **`RmEvent::SetPageDir`
 has nowhere to put it.** Recorded as a known drop; the core keys the address plane on `Pdb`
 alone. `[open]` — if the walker needs to know whether the root is in vidmem or sysmem, the field
 has to reach it, and today it cannot.
 
-**(b) any other `cmd`** → **no `RmEvent`**, and `Translation::Forward { client, object, cmd,
-params }` for `kayfabe-fwd` to classify. The Case-1/Case-2 split
+> ★ **B4 sharpened this drop rather than closing it, and named the day it stops being free.**
+> `flags[1:0]` distinguishes a **framebuffer offset** from a **guest-physical address** — two
+> different address spaces — so a vidmem-rooted and a sysmem-rooted page directory produce the
+> *identical* `RmEvent` (tested across all four encodings). That is safe **exactly as long as
+> `Pdb` is only ever a key**, which today it is: nothing in the tree dereferences one. But
+> `kayfabe_arch::ids::Pdb`'s own doc already calls it *"a per-GPU FB address"* — the vidmem
+> assumption, written down. The day a walker follows a PDB, that test is the one that must
+> change. Also dropped on this arm, for the same nowhere-to-put-it reason: `hObject` (the
+> Device the control is issued against), `numEntries`, `chId`, `subDeviceId`, `pasid`.
+
+**(b) any other `cmd`** → **no `RmEvent`**, and ~~`Translation::Forward { client, object, cmd,
+params }` for `kayfabe-fwd` to classify~~ ⊘ **a named refusal — `UnknownControl { cmd }`, B4;
+see §1.2.** The Case-1/Case-2 split
 (`nvidia-gpu-passthrough/docs/design/mode2_forwarding_model.md:37-50`) is *that* crate's table
 and is deliberately not duplicated here.
 
 **(c) `rmapiRpcFlags & RMAPI_RPC_FLAGS_SERIALIZED`** (`ogkm: rpc.c:10805-10806`) → refusal, same
 as §2.2c.
+
+> ★ **B4: `rmapiRpcFlags` carries TWO bits, and only one of them is ours.**
+> `RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR` = `NVBIT(0)` sits beside `SERIALIZED` = `NVBIT(1)` and is
+> set **independently**, from the control's own `RMCTRL_FLAGS_COPYOUT_ON_ERROR`
+> (`ogkm-610: rpc.c:10802-10803`, `ogkm-580: :10997-10998`). ⇒ **a `!= 0` test on the whole
+> word would refuse a large class of ordinary controls.** The built predicate tests `NVBIT(1)`
+> alone, and both directions are tested. This is a one-line mistake nothing downstream would
+> have made visible.
+
+**(d) B4's third outcome, which the design did not have: `PageDirControlNotModelled`.** A
+control **known** to move a VASpace's page-directory binding, but whose params this port cannot
+decode, is refused under its own variant rather than folded into `UnknownControl` — because the
+*consequence* is different. An unmodelled control is a fact we do not have; a **dropped
+page-directory declaration** is a `Vas` that never routes and a channel that defers at its
+first doorbell **forever, with nothing anywhere saying why**. The three commands and the
+evidence are in §2.5a.
+
+**(e) `paramsSize` is checked for EXACT equality against the command's struct size**
+(`ControlParamsSizeMismatch`), not "at least". `NV_RM_RPC_CONTROL` is called with `sizeof(…)`
+verbatim (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:508-518`), so a different number
+is a guest that means a *different struct*, and taking the first `SIZE` bytes of it would be
+`abi_struct_truncation` with extra steps.
+
+#### 2.5a ★★ SETTLED AT B4 — `SET_PAGE_DIRECTORY` is **not** how an ordinary VAS declares its root
+
+This is §7 item 1, and it went **against** the design. `[src]`, both tags read.
+
+On a bare-metal GA106 GSP client, `SET_PAGE_DIRECTORY` reaches the wire **only** for a
+`SHARED_MANAGEMENT` / `IS_EXTERNALLY_OWNED` VASpace — i.e. UVM's. The handler asserts on
+exactly that:
+
+```c
+NV_ASSERT_OR_RETURN((pGVAS->flags & VASPACE_FLAGS_SHARED_MANAGEMENT) ||
+                    vaspaceIsExternallyOwned(pVAS), NV_ERR_NOT_SUPPORTED);
+```
+`ogkm-580: src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:3109`, inside
+`gvaspaceExternalRootDirCommit_IMPL`, whose only callers are the UVM/gpu-ops path
+(`ogkm-580: nv_gpu_ops.c:8778, 8870`).
+
+Every **ordinary RM-managed VAS** declares its root through
+`NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`0x90f10106`) at *construct* time, as
+`levels[0].physAddress`, on a path that is on by default for any GSP client
+(`ogkm-580: gpu_vaspace.c:598-611, 395, 313, 378`). And there is a **third**:
+`NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER` (`0x20800a9f`).
+
+⇒ **§2.5(a)'s arm is NECESSARY AND NOT SUFFICIENT.** All three commands are refused as
+`PageDirControlNotModelled { cmd }`, a variant distinct from `UnknownControl`, so the census
+names **exactly which decoder the address plane is waiting on**.
+
+★ This also explains the C's own puzzled comment at `C:2538-2545` — *"they can differ"*. For a
+`SHARED_MANAGEMENT` VAS the two roots genuinely **do** differ: RM's own at construct time, and
+UVM's later, with no re-emission of the first. The C observed a real thing and drew the wrong
+conclusion from it (keep both and probe); the right conclusion is that they are two different
+VASpaces' worth of fact arriving on two different commands.
 
 ★ **What is deliberately NOT modelled, with the C's own contrary practice named:** the C treats
 `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` (`0x2080012b`, `C:2425`, `C:2280-2311`) and
@@ -417,10 +651,31 @@ That resolver is precisely what `mode2_address_table_of_truth.md` and
 `nvidia-gpu-passthrough/docs/design/mode2_address_table.md:183-196` forbid — *"We explicitly do
 **NOT** do an opportunistic 'walk the PDB one last time' on a miss"* — and the C's own comment
 records it causing a permanent hang for a second process (`C:5092-5099`). `RmEvent::SetPageDir`
-is single-valued by design and a second, different PDB for one VASpace must therefore be a
-**refusal, not a second candidate**. ⚠ **The consequence is named in §7:** if the compute VAS's
+is single-valued by design and ~~a second, different PDB for one VASpace must therefore be a
+**refusal, not a second candidate**~~. ⚠ **The consequence is named in §7:** if the compute VAS's
 real PDB arrives on `0x90f10106` and not on `0x00801813`, this design has no PDB at all for that
-VAS and every channel in it defers forever. That is a bench question and it is not answered.
+VAS and every channel in it defers forever. ~~That is a bench question and it is not answered.~~
+⊘ **§2.5a answers it from source, no bench needed, and the answer is yes.**
+
+> ⊘ **SUPERSEDED at B4 — "a second PDB refuses" is both UNBUILDABLE and WRONG, and the
+> distinction between those two matters.**
+>
+> **Unbuildable:** refusing a *second* PDB means remembering the *first*. That is a handle-keyed
+> memo in a crate whose entire recycle-safety argument (§3.3) is that it holds none. A stateless
+> bridge structurally cannot see "second".
+>
+> **Wrong, independently:** `RmGraph` already decided the other way, **with an argument**.
+> Re-binding a VASpace to a new PDB is protocol-legal — `UNSET`/`SET_PAGE_DIRECTORY` are
+> documented as symmetric in both trees — so **last declaration wins**, in both the resolved and
+> the parked arms (`crates/kayfabe-core/src/rmgraph.rs`, the `RmEvent::SetPageDir` arm of
+> `apply` and its `pending_pdbs` sibling). **Refusing would hang a conforming guest**, which is
+> the failure direction §4 says is not symmetric with over-permissiveness.
+>
+> ★ **And the concern behind the sentence is met anyway.** The C's defect was never "it saw two
+> roots"; it was **keeping both as candidates and probing at use** (`C:5070-5133`) — the
+> opportunistic walk `mode2_address_table_of_truth.md` forbids. The core keeps **exactly one**
+> PDB per VASpace at all times. One value, replaced on re-declaration, never a candidate set:
+> that is the property the rule was reaching for, and it is the one that was built.
 
 ### 2.6 fn 71 — `CONTINUATION_RECORD`: reassembly, not translation
 
@@ -433,7 +688,15 @@ sizeof(rpc_message_header_v)` and a raw payload slice (`ogkm: rpc.c:2074-2143`, 
 `_issuePteDescRpc` (`:2323`).
 
 So the bridge needs a **reassembly buffer**: hold the head message, append each continuation's
-payload, translate when the declared total is complete. Bounds, all mandatory:
+payload, ~~translate when the declared total is complete~~. Bounds, all mandatory:
+
+> ⊘ **SUPERSEDED at B6 (`ca9e4ae`) — this stage's core sentence was UNIMPLEMENTABLE as
+> written, and §2.6a(1) below is the replacement.** *"Translate when the declared total is
+> complete"* needs a declared total, and **there is none on the wire**: the head's `length` is
+> `maxRpcSize` and nothing says how many records follow. The only total is the head's **own
+> body**, `total_size = fixed_param_size + paramsSize` — which is a *per-function* field. ⇒
+> **head-recognition is per function, not generic**, and a head is recognised **only** for
+> `GSP_RM_CONTROL`. Read §2.6a before anything else in this section.
 
 - a **maximum reassembled size**, refusing beyond it (`BridgeRefusal::ContinuationOverflow`);
 - a **maximum continuation count**;
@@ -525,7 +788,23 @@ walker `dmaUpdateVASpace` … **there is no per-map GSP-RPC carrying VA↔phys f
    (`…/mode2_address_table.md:117-129`, the 2026-07-22 correction: *"the address table has **two
    co-equal populate sources, not 'RPC + read-at-invalidate'**"*).
 3. ⇒ **`GPU_PROMOTE_CTX` is not an optional extra — it is the only address-populating RPC there
-   is.** It is nevertheless deferred out of this design, because it does **not** map onto
+   is.**
+   > ★★ **READ `docs/design/gpu_promote_ctx.md` §0 BEFORE ACTING ON THAT SENTENCE.** It is
+   > true, and it has **already been over-read at least once** — into *"promote-ctx is the gap
+   > between the current tree and `cuCtxCreate` → first compute"*, which it is not. The
+   > sentence is a claim about the set of **RPCs**, not about the set of **populate sources**;
+   > there are two co-equal sources and the other one is not an RPC. `gpu_promote_ctx.md` §0
+   > gives three tree facts against the over-reading: the host self-promotes and self-maps the
+   > GR context ranges at the same deterministic VAs (`docs/design/execution_plane.md:209-217`,
+   > and the core stores no host-physical address); for the GR client that actually crashed,
+   > **every** promote entry was NONMAPPED with `va = 0`
+   > (`nvidia-gpu-passthrough/docs/design/mode2_cuctxcreate_resume.md:210-213`); and the compute
+   > working set is published **exclusively** by the CE page-table-write capture, which
+   > `kayfabe-fwd` already has wired. ⇒ promote-ctx is a **MISS=FAULT gap-filler for host-owned
+   > GR context ranges**: necessary, narrow, nowhere near sufficient. **Do not derive a
+   > milestone from §2.7 alone.**
+
+   It is nevertheless deferred out of this design, because it does **not** map onto
    `RmEvent`: it declares a *set* of `(gpuPhysAddr, gpuVirtAddr, size, bufferId)` promote
    entries (`C:2276-2295`), which is an address-table population, not an object-model edge. It
    belongs with the CE-capture feed in `kayfabe-fwd`, against `kayfabe_mmu::AddressTable`, and
@@ -562,6 +841,39 @@ Enforced structurally: the translate function takes the header's `client` once, 
 the per-class params decoders are **not given it**, so a params-derived client cannot be
 substituted without a visible signature change. (The C's `GPU_PROMOTE_CTX` handler is the
 counter-example: `C:2283` reads `hChanClient` from `params+12` and never looks at `cmd+80`.)
+
+#### 3.2a ★★ THE RULE ABOVE IS WRONG AS STATED — it needed a scope it never had (B5, `dbf092d`)
+
+Taken literally, *"never a params field"* **forbids the only cross-client edge in the RM object
+model**. `DUP_OBJECT`'s **source** namespace, `hClientSrc`, *is* a params field, and reading it
+is not a violation — it is the verb.
+
+The rule survives, with the scope:
+
+> **It is about ATTRIBUTION — *which namespace is this message acting in*.** That is
+> `hdr.hClient`, always, read once, at the top, on every verb. A client handle in params is an
+> **additional** namespace the message names, never a **substitute** for the first.
+
+★ **The recurring question is therefore "ATTRIBUTION or RESOLUTION?", not "envelope or
+params?".** It has now recurred twice and the second instance corrects this section's own
+framing of the first:
+
+| # | site | the params client is… | the right answer |
+|---|---|---|---|
+| 1 | `DUP_OBJECT` `hClientSrc` (B5) | a **cross-namespace reference** | carry it — `RmEvent::Dup` has a slot for exactly this, and §2.5's own *"needs its own event"* is satisfied by that event |
+| 2 | `GPU_PROMOTE_CTX` `hChanClient` (`gpu_promote_ctx.md` §6.2) | a **channel-lookup key**, set by `ogkm` independently of the envelope client **on purpose** | use it **for the lookup** — the C is *right* to; its defect is that it never reads the envelope's `hClient` **at all**, which is a substitution |
+
+`gpu_promote_ctx.md` §6.2 predicts a third. When one arrives, ask which of the two it is; do
+not re-derive the ban.
+
+★ And the asymmetry this produces is deliberate and tested: **`hClient == 0` is refused by the
+bridge; `hClientSrc == 0` is not.** The envelope's client is the message's attribution, so a
+message with no namespace is malformed on its face — which needs no graph state and so is not a
+second copy of the graph's category-3 rule. The source client is a *reference*, and §3.4
+forbids the bridge to resolve or pre-validate references: it reaches `RmGraph::apply`'s central
+gate, which enumerates **both** of a dup's clients (`clients_named`) precisely so this arm need
+not, and is counted as `RmGraphError::ReservedClient` — a strictly more informative tag than a
+local copy would produce.
 
 The one place two sources exist is the client root, where `hdr.hClient` and
 `params.hClient` are the same fact twice — and §2.2a **compares them and refuses a
@@ -662,6 +974,35 @@ pub enum BridgeRefusal {
 }
 ```
 
+> ⊘ **The built enum differs, and every difference is a finding rather than a preference.**
+> `crates/kayfabe-rmrpc/src/lib.rs::BridgeRefusal` is the authority. What moved:
+>
+> **Added, because the sketch was short:**
+> - `SerializedControlParams { cmd }` — a *separate* variant from `SerializedParams { class }`.
+>   §7 item 3 asks which **alloc classes** serialize; which **controls** do is not the same
+>   list, and one variant could not answer both.
+> - `PageDirControlNotModelled { cmd }` — §2.5a. The stage's most valuable output.
+> - `ControlParamsSizeMismatch { cmd, declared, expected }` — §2.5(e).
+> - `ImplicitVaspace` — §2.5, and §4.3a's third reading of zero.
+> - `UnmappedAllocClass { class }` — §2.2b, replacing the silent default.
+> - `ContinuationOverrun { have, declared }` — the fragments carried **more** than the head
+>   declared. ★ The sketch had no answer for this that is not `body.truncate(declared)`, which
+>   manufactures a struct the guest did not send — `abi_struct_truncation` with extra steps.
+> - `ContinuationCountExceeded { continuations, max }` — ★ **not implied by the size bound**, and
+>   B6 proved it: a **zero-length** continuation makes no progress toward `max_body`, so without
+>   a count bound a guest holds a head open for an unbounded number of messages. **Bounded
+>   memory is not bounded work.**
+>
+> **Changed:** `ContinuationOverflow` carries `declared` (the head's own number), not an
+> accumulated `total` — it fires **at the head**, before a byte is reserved, because `declared`
+> is a guest-supplied `u32` and testing it after the allocation is a four-gigabyte allocation on
+> demand.
+>
+> **Removed:** `NotYetTranslated`, the B1 staging state. `CONTINUATION_RECORD` was its last
+> member; with B6 built nothing can construct it, and **an unconstructable variant is one no
+> test can bite**. (`Graph(GpuError)` was in exactly that position at B1 and was held *out* of
+> the enum for the same reason until B2's `GraphPolicy` could apply.)
+
 ### 4.2 Where it surfaces — **three places, and all three are mandatory**
 
 1. **On the wire, as a reply.** ★ A refusal **still posts a reply**, with a non-zero
@@ -677,11 +1018,76 @@ pub enum BridgeRefusal {
    note is that RM then sets `SKIP_COPYOUT` — i.e. the status changes the *guest's* copy-out
    behaviour. Picking the wrong one is a real bug and it needs the `NV_STATUS` table in
    `kayfabe-abi`, which does not exist. **B1 sends one value, names it, and B4 revisits it.**
-2. **In the trace.** A typed `TraceEvent` per refusal, so refusals are *countable*. Per
+
+   > ⊘ **B2 changed the BODY, B4 settled the STATUS, and a third fact was found that neither
+   > had.**
+   >
+   > **Body:** ~~`body: <request body>`~~ → **empty**. `RpcCommand::reply` zero-fills to the
+   > request's own length, so the wire length is unchanged. Reflecting the guest's own bytes
+   > back under a *failing* status **is** `memcpy(resp, cmd, 4096)` (`C:2737`) — the defect §4
+   > exists to deviate from — and the status we send is one RM answers with `SKIP_COPYOUT`, so
+   > the guest never reads the body at all.
+   >
+   > **Status:** `0x56` **proven, not inherited from the C's precedent**. Three facts decided
+   > it: (1) the guest **collapses** every `rpc_result` at or above `0xFF000000` to one
+   > indistinguishable `NV_ERR_GENERIC` (`ogkm-610: rpc.c:2023-2026`, `ogkm-580: :2004-2007`;
+   > `_issueRpcLarge` repeats the collapse), so a status above the base cannot say anything —
+   > `0x56` is below it and arrives verbatim; (2) `rpcRmApiControl_GSP` already lists
+   > `NV_ERR_NOT_SUPPORTED` among the statuses it logs *quietly*
+   > (`ogkm-610: rpc.c:10913-10920`, `ogkm-580: :11108-11115`) — an ordinary outcome, not an
+   > anomaly; (3) the tempting `NV_VGPU_MSG_RESULT_RPC_API_CONTROL_NOT_SUPPORTED`
+   > (`0xFF100009`) is translated back to a real `NV_STATUS` **only** on the vGPU
+   > `RM_API_CONTROL` path, not on fn 76, so on our path it would reach the RM caller as a
+   > value that is not an `NV_STATUS`.
+   >
+   > **★★ And the third fact, which nothing in this document had: THE REPLY STATUS DOES NOT
+   > LIVE ONLY IN THE ENVELOPE.** For a control, the guest reads the handler's status from
+   > `rpc_gsp_rm_control_v03_00.status` at **body+12** (`ogkm-580: rpc.c:11063-11070`,
+   > `ogkm-610: :10868-10875` — identical, only relocated), and skips copy-out when it is
+   > non-zero unless `RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR` is set. B2's accepted path answers with
+   > `cmd.ack(0)`, echoing the request body — whose `status` word is zero **only because
+   > `rpcWriteCommonHeader` `portMemSet`s the whole message buffer first**
+   > (`ogkm-580: rpc_common.c:149-152`, `ogkm-610:` idem). ⇒ **the ack is a valid `NV_OK`
+   > control reply BY LUCK, NOT BY DESIGN.** Now pinned as wire bytes, at both offsets. It also
+   > independently confirms the empty refusal body: on an envelope-level failure the guest
+   > never reaches the copy-out block.
+2. **In the trace.** ~~A typed `TraceEvent` per refusal~~, so refusals are *countable*. Per
    `testing_doctrine.md` §2 rule 4, the invariant is a **bound** ("zero refusals over a clean
    boot script"), never an absence.
+
+   > ⊘ **SUPERSEDED at B2 — a typed `TraceEvent` here CANNOT BE BUILT, and the obstruction is
+   > STRUCTURAL rather than effort.** A **load-bearing negative result**: there is no trace
+   > plane at this seam. Three facts, all compile-enforced:
+   > - `CommandPolicy::respond(&mut self, cmd: &RpcCommand) -> Option<Reply>` takes **no trace
+   >   argument**, and §1.3 forbids widening that signature;
+   > - `kayfabe_trace::Trace<'r>` wraps `&'r mut dyn Journal` and is therefore **not `Send`**;
+   > - `CommandPolicy: Send` is **compile-asserted** in `kayfabe_gsp::boot`
+   >   (`assert_send!(dyn CommandPolicy)`).
+   >
+   >   ⇒ a `GraphPolicy` holding a `Trace` would not implement the trait it exists to
+   >   implement. `Gpu::apply` takes no trace either.
+   >
+   > **What was built instead — and it satisfies the actual requirement (countability), not a
+   > weaker one:** `RefusalCensus`, a `BTreeMap<FaultTag, usize>`. ★ Bounded **by
+   > construction**: `fault_tag` is a total function into a *fixed, finite* set of
+   > `&'static str`s, and the map is keyed by **nothing the guest supplies** — no handle, no
+   > client, no sequence number. A per-command refusal log would be neither, and would be a
+   > guest-reachable unbounded allocation of exactly the shape `GpuError::SpineCapacity` exists
+   > to refuse. ★ `Faulted` **delegates** through the `Graph` arm, so a graph refusal is counted
+   > by *which protocol rule it broke* (`FreeUnknown` vs `ConflictingAlloc`) rather than as one
+   > flat "the graph said no". The day `Gpu::apply` grows a trace argument, that is where the
+   > event goes.
 3. **In the return value.** `Translation` is a `Result`; the caller cannot ignore it
    (`#[must_use]`).
+
+   > ★ Built as **two** entry points, because `Option<Reply>` cannot carry a variant.
+   > `GraphPolicy::deliver` is the `Result` form a test asserts an **exact** variant against;
+   > `respond` is a thin wrapper over it. Without the split, every refusal test would be
+   > asserting `0x56 == 0x56` — §9's "one `NV_STATUS` for every refusal" is precisely why.
+   > ★ And the counters are **three, not one** (`applied` / `inert` / `held`): "this RPC
+   > declared a fact", "this RPC carried none" and "this fragment was absorbed" are different
+   > observations, and a single total would let a regression that turned every alloc inert
+   > report the same number.
 
 ### 4.3 The four cases the brief names
 
@@ -694,7 +1100,32 @@ pub enum BridgeRefusal {
   than taking the smaller.
 - **Unknown function** — `RpcFunction::Other(code)` → `UnknownFunction`. Every id in
   `FunctionCodes` that this document maps to "nothing" is *known and inert*, which is a
-  different state and must be a different arm. There is no third state.
+  different state and must be a different arm. ~~There is no third state.~~
+
+  > ⊘ **FALSE, and B1's own function table contradicted it on the first day.** There were
+  > **four** states, not two:
+  >
+  > | state | spelled | why it is not a shade of another |
+  > |---|---|---|
+  > | known and inert | `Translation::Inert` | a complete message concluded to carry nothing |
+  > | known, mapped, arm not built | `BridgeRefusal::NotYetTranslated` | ⊘ **now DELETED** — see below |
+  > | ours to send, never to receive | `BridgeRefusal::EventFromGuest { code }` | `GSP_INIT_DONE`/`POST_EVENT` in the *command* queue is a guest not speaking the protocol — a different accusation from "we do not know this id" |
+  > | not known at all | `BridgeRefusal::UnknownFunction { code }` | the sentence's "third state" |
+  >
+  > ★ **The count then went DOWN, and the mechanism is the interesting part.**
+  > `CONTINUATION_RECORD` was the last id in the staging state, so B6 emptied it and **deleted
+  > the variant** rather than keeping it as a placeholder — *an unconstructable variant is one
+  > no test can bite*. B6 also added a fourth *`Translation`* value in the other direction:
+  > `Held`, a fragment consumed into reassembly, which is not a shade of `Inert` either (an
+  > inert RPC is a complete message carrying nothing; a held fragment is an **incomplete**
+  > message whose meaning is still arriving). ★ `translate` never returns `Held` and
+  > `GraphPolicy` does — pinned by `translate_never_holds`, so the state cannot migrate into
+  > the free function unnoticed.
+  >
+  > **At HEAD:** three `Translation` values (`Event`, `Inert`, `Held`) and, on the refusal side,
+  > `EventFromGuest` and `UnknownFunction` as distinct arms. Which is *still* not two, and the
+  > point of the original sentence — **never collapse "known and inert" into "unknown", because
+  > that is how the C ended up answering everything `NV_OK`** — is preserved by all of them.
 - **Out of order** — **not the bridge's**, twice over. Element-level ordering is already
   `GspFault::SeqNumGap` in `element.rs::decode_message`. Fact-level ordering is
   `RmGraph::apply`'s three-category taxonomy (§3.4). The bridge adds exactly one ordering rule of
@@ -705,6 +1136,26 @@ pub enum BridgeRefusal {
   *"an identical re-send is accepted idempotently — retried-RPC tolerance"*. The bridge is
   stateless and pure, so it maps a replayed message to the identical event, which is precisely
   what makes that tolerance reachable. **A bridge with a dedup cache would break this.**
+
+### 4.3a ★★ ZERO IS NOT ONE FACT — four readings, each separately cited (B3, B4, B5)
+
+A fifth case the brief did not name, and the one most likely to be "tidied" into a single rule
+by a later reader. `NV01_NULL_OBJECT == 0` appears in four places and means **four different
+things**. Each has its own citation; **none may be inferred from another**, and the tests assert
+all of them so that a unifying "fix" fails.
+
+| # | field | reading | evidence |
+|---|---|---|---|
+| 1 | an **edge** field — `GSP_RM_ALLOC`'s `hObject`, `DUP_OBJECT`'s `hObject`/`hObjectSrc` | **carried VERBATIM.** It is the node the message creates or references: the guest's zero is the guest's own choice of key, landing where the guest put it. ★ And **a conforming guest cannot send one**: RM reads a zero destination handle as *"generate one"* (`clientAssignResourceHandle` → `clientGenResourceHandle`), but that runs on the **guest's own CPU-side RM** at `serverCopyResource`, **before** the copy-constructor issues the RPC with the already-assigned `pDstRef->hResource` | `ogkm-580: rs_client.c:998-1001`; `ogkm-580: rs_server.c:1725` and `:898`; `ogkm-580: mem.c:1116` |
+| 2 | a **params** handle field — `h_vaspace`, `h_ctx_share` on TSG / CtxShare / Channel | **`None`** — "nothing is declared here". A `Some(HObject(0))` would be a node key the graph then tries to resolve, and a failed resolve of a handle the guest never declared is a MISS the guest cannot fix: DEFER-forever versus correctly-nothing | `AllocFacts::h_vaspace`: *"`None` models `hVASpace=0` (GSP-managed)"* |
+| 3 | `SET_PAGE_DIRECTORY`'s `hVASpace` | **REFUSED** (`ImplicitVaspace`). NVIDIA documents this zero as naming a *different, real object* — the client/device pair's implicit VAS — which the RPC does not identify and the graph has no node for | `ogkm-610: ctrl0080dma.h:782-785`, `ogkm-580: :812-815` |
+| 4 | `GPU_PROMOTE_CTX`'s `gpuPhysAddr == 0 && size == 0` in a promote-only entry | **"NOT SUPPLIED BY THIS PASS"** — not physical address zero. Promote-ctx is a two-pass protocol writing into one entry slot over a zeroed struct; binding a VA to phys 0 here is exactly the guessed address MISS=FAULT forbids | `gpu_promote_ctx.md` §2.3 |
+
+★ Reading 3 looks like an exact analogue of reading 1 and **is not**, which is why B5 wrote the
+argument down rather than the conclusion: refusing on one verb and not the other would otherwise
+look like a rule with no principle behind it. The principle is **edge vs. reference** — an edge
+field is the key the guest chose; a params field naming an object is a reference to something
+else, and NVIDIA documents what a zero reference means, differently, per field.
 
 ---
 
@@ -751,7 +1202,8 @@ the helper's agreement with itself.
   with.
 - **A differential against the C's independently-transcribed offsets** (§1.4): a table test
   asserting `abi_offset == c_element_offset - 80` for all twelve fields. Two humans read two
-  trees; the test is the agreement.
+  trees; the test is the agreement. ⊘ **Six until B4, eleven-by-value plus one-by-exclusion at
+  HEAD — see §1.4's note for why, and for which field is which.**
 - **`RUSTC_OFFSETS`** already pins `Nv0080CtrlDmaSetPageDirectoryParams` against the compiler.
 - **The end-to-end oracle is `Scenario`, which is *not* replaced.** `tests/src/lib.rs::Scenario`
   stays exactly as it is: the spec-level DSL for the facts the design docs name. The bridge adds
@@ -778,13 +1230,57 @@ the helper's agreement with itself.
 | **B5** dup + the mean test | yes | `l1_mean.rs` | §5.3 |
 | **B6** continuation records | yes | `ogkm: rpc.c:2074-2143` fragment arithmetic | a head with no continuations still translates; a continuation with no head refuses |
 
+> ⊘ **Three rows of this table did not survive contact. Each is corrected at its stage; the
+> corrections are collected here because the table is what a reader plans from.**
+>
+> **B2 — "`gspworld` drives the whole FSM in-process" was not true when B2 needed it.**
+> `GspWorld::wr` hard-coded `&mut EchoOk`, so **every existing GSP test was running the C's
+> echo policy** and no test could supply one. `wr_with`/`boot_with`/`doorbell_with` were added
+> and the old names delegate. ★ The non-vacuity arm in the row is also unbuildable *at B2*:
+> `DUP_OBJECT` is B5 and refused as `NotYetTranslated` at B2, so it never reached the graph.
+> The graph refusals actually reachable from the wire at B2 were **exactly two** —
+> `FreeUnknown` and `ConflictingAlloc` — both pinned by exact variant. ★★ **B5 took that to
+> four**, and `DUP_OBJECT` is why: it is the only verb naming **two** client namespaces, so it
+> alone reaches `ConflictingDup`, `UndeclaredClient` for the **dst** *and* — separately — for
+> the **src**, and `ReservedClient` from a `hClientSrc` of zero. The last is the evidence the
+> arm does real work: a well-formedness question the bridge deliberately does **not** answer
+> locally, whose answer still reaches the guest, named (§3.2a).
+>
+> **B3 — the non-vacuity arm folds two planes together.** A **wholly absent** channel decoder
+> does not reach `FwdFault::NoVas` at all: the decoder also recovers the `userd_flags` the
+> channel routes by, so the doorbell's token resolves to no channel and the fault is
+> `FwdFault::UnknownVchid`, **one plane earlier**. Only stripping the *handle* facts while
+> keeping the routing facts produces `NoVas`. The built test runs three cases and pins all
+> three exact variants — which is what the one-liner was reaching for and could not express.
+>
+> **B4 — the arm is not buildable and not correct.** See §2.5's superseded note: refusing a
+> second PDB requires remembering the first (impossible for a stateless bridge), and `RmGraph`
+> decided last-declaration-wins **with an argument**, because refusing would hang a conforming
+> guest. What B4 asserts instead is that the core keeps **exactly one** PDB per VASpace —
+> never a candidate set — which is the property the row was actually about.
+
 ### 5.3 The mean test (`testing_doctrine.md` §3.1 — the bar for "done")
 
 Not a happy-path boot. The obligation is a composed run, wired into `tests/tests/l1_mean.rs`:
 
 - **two guest processes' RPC streams interleaved element-by-element** in one command queue, with
   identical `hObject` values across them (the #14 shape `identical_handles` already builds),
-  asserting two distinct `Proc`s, two arenas, two host VASes;
+  ~~asserting two distinct `Proc`s, two arenas, two host VASes~~;
+
+  > ⊘ **B5: that assertion is NOT OBSERVABLE AT THIS SEAM, and the reason is a lock invariant,
+  > not an oversight.** `GraphPolicy` holds a `&mut Gpu`; `Gpu::apply` **issues no host verb**;
+  > and **R1 forbids one under the device write lock**, which is where §1.3 says `respond` runs.
+  > ⇒ **a host VAS cannot exist in the bridge's own device**, so no amount of RPC traffic can
+  > make one appear. A **load-bearing negative result**: do not go looking for the seam.
+  >
+  > **What was built instead, and it is stronger:** the mean test **alternates RPC phases with
+  > `SharedDevice` phases**, so the two `Proc`s are proved by **two host VASes minted in two
+  > isolate namespaces** during the host phases, rather than by two entries in a map during the
+  > RPC phases. ★ That alternation is also the only thing that makes *"both lock modes"* mean
+  > anything for a bridge which takes no locks itself — otherwise the row below is decoration.
+  > `tests/tests/l1_mean.rs` §5.3's block runs it under both lock modes × both element layouts,
+  > six procs, two GPUs, with concurrent control-plane load; **eight of B5's twenty mutations
+  > are killed by that test alone.**
 - a **handle recycled mid-stream** — free a client root while a dup keeps one of its resources
   alive, then re-declare the same `hClient` — asserting two `ClientKey` incarnations and that
   the older declaration's resources still belong to a boundary (the §12.42 regression, driven
@@ -807,18 +1303,35 @@ what it cannot prove.
 
 | stage | builds | first-time capability | cannot prove |
 |---|---|---|---|
-| **B0** | `kayfabe-abi`: `view::RpcAllocReq`/`RpcControlReq` + `DriverAbiTable::decode_rpc_alloc`/`decode_rpc_control`; a pinning test that `decode_free`/`decode_dup` apply to RPC bodies | the GSP wire shapes are decodable | that any of it is ever called |
-| **★ B1** | crate `kayfabe-rmrpc`; `translate(&DriverAbiTable, &RpcCommand) -> Result<Translation, BridgeRefusal>` for **fn 103 with `hClass ∈ {NV01_ROOT, NV01_ROOT_CLIENT}`** and **fn 10**; everything else `UnknownFunction`. Plus a `#[test]` that constructs a real `Gpu` (mock arch/isolate) and drives `Gpu::apply` from a hand-hex fixture | ★ **`RpcCommand` reaches `Gpu::apply` for real** — a client namespace is declared and freed from wire bytes | anything about the FSM; anything about channels |
-| **B2** | `GraphPolicy<'a> { gpu: &'a mut Gpu, … }: kayfabe_gsp::CommandPolicy`; `respond` = translate → `Gpu::apply` per event → `Reply`. Wire into `gspworld` so a scripted boot drives the graph | the FSM and the core are connected end to end, in one process, no GPU | that a real guest sends what the script sends |
-| **B3** | per-class `AllocFacts` decoders, **one class per commit**: Device (already), Channel (`h_vaspace`, `h_ctx_share`, `userd_flags`), TSG, CtxShare, Memory (`mem_phys`) | a compute-process-shaped subgraph from wire bytes; `Boundaries(RpcScript) == Boundaries(Scenario)` for `compute_process` | that the `userd_flags`→`VChid` recovery matches real silicon (`Arch`'s job, and unmeasured) |
-| **B4** | fn 76: `SET_PAGE_DIRECTORY` → `RmEvent::SetPageDir`; `Translation::Forward` for every other cmd; the `NV_STATUS` question from §4.2 revisited | a routable `Vas` with a PDB, from bytes | which control actually carries the compute VAS's PDB (§7) |
-| **B5** | fn 21 dup; the §5.3 mean test | two `Proc`s from two interleaved RPC streams | multi-process against a real guest |
+| **B0** ✔ | `kayfabe-abi`: `view::RpcAllocReq`/`RpcControlReq` + `DriverAbiTable::decode_rpc_alloc`/`decode_rpc_control`; a pinning test that `decode_free`/`decode_dup` apply to RPC bodies | the GSP wire shapes are decodable | that any of it is ever called |
+| **★ B1** ✔ | crate `kayfabe-rmrpc`; `translate(&DriverAbiTable, &RpcCommand) -> Result<Translation, BridgeRefusal>` for **fn 103 with `hClass ∈ {NV01_ROOT, NV01_ROOT_CLIENT}`** and **fn 10**; everything else `UnknownFunction`. Plus a `#[test]` that constructs a real `Gpu` (~~mock arch~~/isolate) and drives `Gpu::apply` from a hand-hex fixture | ★ **`RpcCommand` reaches `Gpu::apply` for real** — a client namespace is declared and freed from wire bytes | anything about the FSM; anything about channels |
+| **B2** ✔ | `GraphPolicy<'a> { gpu: &'a mut Gpu, … }: kayfabe_gsp::CommandPolicy`; `respond` = translate → `Gpu::apply` per event → `Reply`. Wire into `gspworld` so a scripted boot drives the graph | the FSM and the core are connected end to end, in one process, no GPU | that a real guest sends what the script sends |
+| **B3** ✔ | per-class `AllocFacts` decoders, **one class per commit**: Device (already), Channel (`h_vaspace`, `h_ctx_share`, `userd_flags`), TSG, CtxShare, ~~Memory (`mem_phys`)~~ ⊘ **unbuildable — §2.2b**; **plus the two engine-object classes — §2.2d** | a compute-process-shaped subgraph from wire bytes; `Boundaries(RpcScript) == Boundaries(Scenario)` for `compute_process` | that the `userd_flags`→`VChid` recovery matches real silicon (`Arch`'s job, and unmeasured) |
+| **B4** ✔ | fn 76: `SET_PAGE_DIRECTORY` → `RmEvent::SetPageDir`; ~~`Translation::Forward`~~ ⊘ **`UnknownControl` refusal** for every other cmd; the `NV_STATUS` question from §4.2 revisited | a routable `Vas` with a PDB, from bytes | ~~which control actually carries the compute VAS's PDB (§7)~~ ⊘ **settled — §2.5a; it is not this one** |
+| **B5** ✔ | fn 21 dup; the §5.3 mean test | two `Proc`s from two interleaved RPC streams | multi-process against a real guest |
 | **B6** ✔ | `Reassembler` (in `kayfabe-rmrpc`, held by `GraphPolicy` — `translate` stays a free function); five refusals; the hostile-length matrix | large controls: an unmodelled one is refused by its **real** `cmd` rather than by a truncated one | that any of it is reachable at production `maxRpcSize` — §2.6a(3): nothing this port *models* fragments at 4096 |
+
+> ⊘ **B1's row is wrong about the mock, and the correction is a seam rather than a nit.**
+> `MockArch` **cannot classify NVIDIA class ids, deliberately** — `NV01_ROOT` is `0x0` and
+> classifies as `Unknown`, which declares no namespace at all — so *"constructs a real `Gpu`
+> (mock arch)"* is unachievable as written. A `WireClassArch` overriding **only** `classify`
+> and falling through to `MockArch` for everything else closes it. It recurred at B2/B3/B5 and
+> was promoted into `kayfabe-mocks` (needing a `kayfabe-mocks` → `kayfabe-abi` dep, because
+> decision #2 forbids transcribing `NV01_ROOT` a fourth time).
+> ★ The argument for promoting it, rather than copying it a third time, is worth keeping:
+> **`classify` is the ONLY `Arch` seam whose argument comes off the GSP wire**, so the
+> fall-through is load-bearing, not tidiness.
+>
+> ★ **B1's table also could not be built as specified for a simpler reason:** `FunctionCodes`
+> had **no `FREE` and no `DUP_OBJECT` id**, so fn 10 classified as `Other(10)` and refused.
+> Both added (`ogkm-610: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:20,31`; `ogkm-580:`
+> byte-identical at the same lines — no version seam, so no profile).
 
 **Deliberately out of scope, and each is a separate piece of work:** `GPU_PROMOTE_CTX` and the CE
 page-table-write capture (§2.7 — they populate `kayfabe_mmu::AddressTable`, not the graph); the
 Case-1/Case-2 control tables (`kayfabe-fwd`); reply *bodies* for `GET_GSP_STATIC_INFO` and the
-init-control corpus (the device data model); and everything downstream of §11-O7a.
+init-control corpus (the device data model); and everything downstream of §11-O7a. **§9 is the
+explicit list of what the built bridge does not do.**
 
 ### 6.1 ⛔ The O7a boundary — where this design stops
 
@@ -845,7 +1358,16 @@ position on it.**
 
 Plainly, and each is a real hole rather than a formality.
 
-1. **★ Which control carries the compute VAS's PDB.** §2.5 models only
+> **Status after B0–B6:** items **1, 4, 5, 6** are **CLOSED**; **2, 3, 7, 8** remain open. Each
+> is marked in place. ★ Item 1 is the one that repaid the instruction to settle it *before* B4.
+
+1. ~~**★ Which control carries the compute VAS's PDB.**~~ **CLOSED at B4 — §2.5a, and the
+   answer is the one this item feared.** `SET_PAGE_DIRECTORY` fires **only** for a
+   `SHARED_MANAGEMENT`/`IS_EXTERNALLY_OWNED` (i.e. UVM) VASpace; an ordinary RM-managed VAS
+   declares its root on `0x90f10106` at construct time, and there is a **third** command,
+   `0x20800a9f`. All three are refused as `PageDirControlNotModelled { cmd }` so the gap is
+   named and counted rather than silent. Settled **from source, no GPU** — exactly as the
+   "settling it" line below predicted. The original text: §2.5 models only
    `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` (`0x00801813`). The C treated
    `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`0x90f10106`) as a **co-equal, and in
    places primary, root source** and kept both as candidates (`C:2492-2545`). We reject
@@ -865,7 +1387,10 @@ Plainly, and each is a real hole rather than a formality.
    reading of some adjacent guard must be wrong. Worth ten minutes before B0.
 3. **Which alloc classes set `RMAPI_RPC_FLAGS_SERIALIZED`.** §2.2c refuses them by name, which
    is safe, but if a *boot-path* class is serialized then B3 hits a wall rather than a long tail.
-   Requires reading the FINN serializer registration (`g_finn_rm_api.h`), not done.
+   Requires reading the FINN serializer registration (`g_finn_rm_api.h`), not done. **STILL
+   OPEN, and B4 split it in two:** which *alloc classes* serialize and which *controls* do are
+   **not the same list**, which is why `SerializedParams { class }` and
+   `SerializedControlParams { cmd }` are separate variants — one could not have answered both.
 4. ~~**Whether a `CONTINUATION_RECORD` earns its own reply** (§2.6).~~ **CLOSED at B6 — see
    §2.6a(4).** The send-side read was right and incomplete: fragments are sent with one wait at
    the end, *and* the bidirectional receive half then polls one reply per record. For fn 76 —
@@ -873,19 +1398,47 @@ Plainly, and each is a real hole rather than a formality.
    and the FSM already posts one on the right `(function, sequence)`. What replaces it as an open
    question is narrower and named there: `SET_REGISTRY`'s continuations inherit the wrong
    `Disposition`, which is `kayfabe-gsp`'s to answer.
-5. **Which `NV_STATUS` a refusal should carry** (§4.2). There is no `NV_STATUS` table in
-   `kayfabe-abi`. The C's only two deliberate failures both use `0x56` (`NV_ERR_NOT_SUPPORTED`)
-   and its comments say the choice changed guest copy-out behaviour — so this is not cosmetic.
-6. **Whether refusing an unknown control (vs. forwarding it) is right.** §2.1 routes unknown
-   controls to `Translation::Forward`, which defers the decision to `kayfabe-fwd`'s
-   classification. That crate's table does not exist yet, so today "forward" means "nothing
-   happens", which is the C's echo by another name. **B4 must pick one and say which.**
+5. ~~**Which `NV_STATUS` a refusal should carry** (§4.2).~~ **CLOSED at B4 — `0x56`, with an
+   argument instead of the C's precedent.** The three deciding facts are in §4.2's note (the
+   `0xFF000000` collapse; `NV_ERR_NOT_SUPPORTED` already logged *quietly* by
+   `rpcRmApiControl_GSP`; `0xFF100009` untranslated on fn 76). ★ It stays **one value for every
+   variant**, deliberately: nothing observed constrains a split, and a per-refusal status table
+   would be a table of guesses in the one place a wrong entry is invisible until a guest trips
+   it. The distinction lives in `FaultTag`, which costs the guest nothing. §9 records this as a
+   thing the bridge does **not** do.
+6. ~~**Whether refusing an unknown control (vs. forwarding it) is right.**~~ **CLOSED at B4 —
+   REFUSE**, as `UnknownControl { cmd }`. The reasoning and its reversibility are in §1.2's
+   superseded note: `classify_control` does not exist, so a `Forward` would be a value every
+   caller drops — the C's `NV_OK` echo with a Rust type on it — and the census would lose the
+   record. When the table lands, that arm is where `Forward` gets emitted.
 7. **The `RmEvent::Dup` `hParent` drop and the `SetPageDir` `aperture` drop** (§2.4, §2.5) — two
    declared facts this design discards because `RmEvent` has nowhere to put them. Neither is
-   known to be needed; neither is known not to be.
+   known to be needed; neither is known not to be. **STILL OPEN, and the list grew** — §9 has
+   the full set. ★ The `aperture` drop acquired a named expiry at B4: it is safe **exactly as
+   long as `Pdb` is only ever a key**, and `kayfabe_arch::ids::Pdb`'s own doc already writes the
+   vidmem assumption down. ★ B5 added a smaller finding of the same kind: `DupReq::dst_parent`
+   and `DupReq::flags` are read by **nothing in the tree** — dead public API on the decoder side,
+   which is a different thing from a drop at the event boundary and worth not confusing with one.
 8. **Everything about real hardware.** No guest driver has ever posted a message to
    `kayfabe-gsp`; every byte it has parsed was written by a test into a `BTreeMap`. Nothing here
-   is validated against a boot.
+   is validated against a boot. **STILL TRUE after B0–B6, and §9 says it again where a reader
+   of the build order will hit it.**
+9. **★ NEW, opened by B6, and it is NOT this crate's to close: `SET_REGISTRY`'s continuations
+   inherit the wrong `Disposition`.** `SET_REGISTRY` (fn 73) is `bWait = NV_FALSE` and its own
+   `Disposition` is correctly `NoReply` — but it fragments through `_issueRpcAsyncLarge`, and
+   its *continuation* records take `ContinuationRecord`'s disposition, which is `Reply`. A
+   registry table over 4064 bytes would therefore draw **spurious status posts** at a guest
+   that awaits none.
+
+   **Why it cannot be fixed from `kayfabe-rmrpc`, stated so nobody tries:** `Disposition` is
+   computed in `GspFsm::answer` **from the arriving function alone**; `CommandPolicy::respond`
+   returns `Option<Reply>` and has **no "post nothing" value**; and making a fragment inherit
+   its head's disposition would put a **second copy of the reassembly state inside the FSM** —
+   two sources of truth for which message is in flight. ⇒ **This is a `kayfabe-gsp` question and
+   it is open.** ★ Note also §2.1a: 72/73 never reach the policy at all, so the bridge cannot
+   even observe the case.
+   `[unverified]` — no registry table over 4064 bytes has been seen; the defect is read from the
+   fragmenting path, not measured.
 
 ---
 
@@ -907,3 +1460,60 @@ edited around.
    away: `MAP_MEMORY_DMA` never reaches the wire on a GSP client (§2.7), so `GPU_PROMOTE_CTX` and
    the CE page-table-write capture are the only populate sources, and both are `kayfabe-fwd`
    work against `kayfabe_mmu::AddressTable`.
+5. **★★ AND THIS FILE'S OWN CORRECTION 4 HAS SINCE BEEN OVER-READ (2026-07-28).** *"The only
+   address-populating RPC there is"* was read as *"promote-ctx is the gap to first compute"*. It
+   is not — it is a **MISS=FAULT gap-filler for host-owned GR context ranges**. The correction
+   is `gpu_promote_ctx.md` §0 and it is cross-referenced at the site in §2.7. ★ The shape of
+   this mistake is worth naming, because it is the same one every entry above is an instance of:
+   **a true sentence about one set was restated as a sentence about a different set.** Every doc
+   error found in this pass was made by restating an adjacent sentence.
+
+---
+
+## 9. ★★ What the bridge does NOT do (2026-07-28, from `ca9e4ae`)
+
+B0–B6 are built and green. This section is the other half of that sentence, in one place,
+because §6's build-order table reads like completeness and is not.
+
+**Not built, deliberately:**
+
+- **No `Translation::Forward`.** The variant does not exist. Every control that is not
+  `SET_PAGE_DIRECTORY` is a **refusal**, not a hand-off, because `kayfabe_fwd::classify_control`
+  does not exist and a value every caller drops is the C's echo with a Rust type on it (§1.2).
+- **No reply bodies.** An accepted or inert command is answered `cmd.ack(0)` — the
+  `(function, sequence)` pair echoed with `NV_OK` and the request's own body preserved. Reply
+  **bodies** are the device data model's job (class C) and are out of scope. ★ And §4.2's
+  body+12 finding means the ack is a valid `NV_OK` *control* reply **by luck** (a `portMemSet`
+  upstream), now pinned rather than relied on.
+- **No per-refusal `NV_STATUS`.** One value — `NV_ERR_NOT_SUPPORTED (0x56)` — for **every**
+  refusal, proven rather than assumed (§7 item 5). The distinction lives in the trace tag, not
+  on the wire.
+- **No trace events.** A bounded census instead; there is **no trace plane at this seam at all**
+  (§4.2).
+- **No state keyed by anything the guest supplies.** No handle table, no seen-set, no memo, no
+  dedup cache. The single stateful value is the reassembler: one partial message, keyed by
+  nothing, dropped the instant the message completes or refuses.
+
+**Declared facts that arrive on the wire and are dropped**, each because `RmEvent`/`AllocFacts`
+has nowhere to put it. Listed together because individually each looks free:
+
+| verb | dropped | consequence known? |
+|---|---|---|
+| `GSP_RM_ALLOC` (channel) | `engineType` | ★ **yes** — it is the only wire fact separating a GR from a CE channel (§2.2d); the engine is recovered downstream by `project`'s engine-object refinement instead |
+| `GSP_RM_ALLOC` (TSG) | `engineType` | no |
+| `GSP_RM_ALLOC` (CtxShare) | `subctxId` | no |
+| `GSP_RM_ALLOC` (memory) | `mem_phys` | ★ **moot** — no producer *and* no consumer (§2.2b) |
+| `GSP_RM_CONTROL` / `SetPageDir` | `aperture` (`flags[1:0]`) | ★ **yes, with a named expiry** — vidmem vs sysmem roots become the same event; safe only while `Pdb` is a pure key (§2.5) |
+| `GSP_RM_CONTROL` / `SetPageDir` | `hObject`, `numEntries`, `chId`, `subDeviceId`, `pasid` | no |
+| `DUP_OBJECT` | `hParent`, `flags` | no — a **core** change, not a bridge change (§2.4) |
+| `FREE` | `hObjectParent` | no — always zero on this path (§2.3) |
+
+**And the fact that outranks all of the above:**
+
+> ★★ **No guest driver has ever posted a message to this stack. Every byte it has parsed was
+> written by a test.** Not one line of `kayfabe-rmrpc`, `kayfabe-gsp` or the decoders beneath
+> them has seen a real `nvidia.ko`. The 698-test suite, the mutation campaigns, the four
+> independent transcriptions and the both-tags citations are all arguments about *what the
+> source says the guest will send* — they are not observations of a guest sending it. §7 item 8
+> has said this since the design; B0–B6 did not change it, and no amount of further green
+> changes it either.
