@@ -1,5 +1,24 @@
 # `kayfabe-gsp` — the faked-GSP port plan
 
+> ## ★★ VERSION CORRECTION (2026-07-28) — read this before anything below
+>
+> Everything in §1–§12 that cites `ogkm:` without a version tag was read from
+> **610.43.02**. The bench runs **580.159.04**, and the matching tree is now vendored at
+> `/workspace/nvidia-gpu-passthrough/research_clones/ogkm-580.159.04/`. **580 and 610
+> disagree materially on the GSP path**, not cosmetically: the element layout, the element
+> *count* semantics, the transport headers, the init-args struct, the bootup event
+> allowlist, the boot-FSM ordering of the init RPCs, and the suspend sentinel's comparison
+> are all different. §14 is the correction log; §0.1 is the citation rule that stops this
+> class of error recurring; `gsp_580_correction_brief.md` is the code-change brief.
+>
+> **Two rows changed status.** §11-O7 is **no longer RESOLVED** — its answer was 610's and
+> is *backwards* for the bench. §11-O4/O8 are now **answered from source**.
+>
+> **This is a recurrence, not a one-off.** "ogkm" was treated as *the* specification when it
+> is a *versioned* specification. A version-split fact is a **seam**, not a defect to paper
+> over: the owner directive is that the GSP layer must not be tied to a driver version, so
+> both answers are recorded side by side and neither is promoted to "the" answer.
+
 > **Status (★ corrected 2026-07-27, was "DESIGN … a 34-line skeleton"): S0–S5 ARE BUILT.**
 > `kayfabe-gsp` is **~3,550 lines across 8 files**; §13 records what landed. This file began
 > as the spec and is now **spec + build log** — read §13 before trusting §1–§12, because the
@@ -23,11 +42,39 @@
 | **[inferred]** | a conclusion drawn from those. **Every one is also listed in §10** with the experiment that settles it. |
 | **[open]** | not determined. §11. |
 
+### 0.1 ★★ STANDING CITATION RULE — every `ogkm` citation carries its version tag
+
+> **`ogkm` is not a tree. It is a *family* of trees, and a claim that does not say which one
+> it came from is UNVERIFIED.**
+
+Two trees are vendored, and they are different specifications:
+
+| tag in a citation | path | NVIDIA version | standing |
+|---|---|---|---|
+| **`ogkm-580:`** | `research_clones/ogkm-580.159.04/` | **580.159.04** (`version.mk:1`) | ★ **the bench's own driver.** A `ogkm-580:` citation says what the guest we actually face requires. This is the tree that governs when the two disagree and only one can be built. |
+| **`ogkm-610:`** | `research_clones/ogkm/` | **610.43.02** (`version.mk:1`) | a *future* driver, and the second point that makes a fact version-split rather than universal. |
+
+Rules, normative for this file and for `kayfabe-gsp`'s doc comments:
+
+1. **Every `ogkm` citation is written `ogkm-580:` or `ogkm-610:`.** A bare `ogkm:` is a
+   defect; treat the claim it supports as unverified until re-read against a tagged tree.
+2. **Line numbers belong to the tagged tree only.** They drift between tags even where the
+   code is byte-identical — `kgspWaitForRmInitDone` is `kernel_gsp.c:5214` at 580 and
+   `:6264` at 610, same function. Never carry a line number across a tag.
+3. **Paths drift too.** The whole `msgq` library moved: `src/nvidia/src/libraries/msgq/` and
+   `src/nvidia/inc/libraries/msgq/` at 610 are `src/common/shared/msgq/` and
+   `src/common/shared/msgq/inc/msgq/` at 580.
+4. **A claim verified at only one tag is `[src@580]` or `[src@610]`, never `[src]`.** `[src]`
+   unqualified means *checked at both and identical*.
+5. **When the tags disagree, both go in the document.** Picking one is how §11-O7 came to be
+   marked RESOLVED with the answer that is wrong for the machine we run on.
+
 **The two source trees have different standing, and the difference is the point.**
 
 | tree | standing | what a citation to it proves |
 |---|---|---|
-| `ogkm` = `/workspace/nvidia-gpu-passthrough/research_clones/ogkm` (**610.43.02**, `version.mk:1`) | **THE SPECIFICATION.** This is the guest's own code. It will not adapt to us. | that the guest driver *requires* something |
+| `ogkm-580` = `.../research_clones/ogkm-580.159.04` (**580.159.04**, `version.mk:1`) | ★ **THE SPECIFICATION WE FACE.** The bench's guest driver, verbatim. | that the driver we boot *requires* something |
+| `ogkm-610` = `/workspace/nvidia-gpu-passthrough/research_clones/ogkm` (**610.43.02**, `version.mk:1`) | **A SECOND SPECIFICATION.** A driver we do not run yet; its disagreements with 580 are where the version seam has to exist. | that the guest driver *requires* something **at 610** |
 | `C` = `/workspace/nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c` (9 614 lines) | **EVIDENCE.** A working implementation on **GA106 / RTX 3060 / driver 580.159.04**. | that something *works on GA106 with 580* — never that it is the protocol |
 | `nv` = `/workspace/nvidia-gpu-passthrough/research_clones/linux/drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/{r535,r570}` | **INDEPENDENT CORROBORATION.** nouveau's clean-room GSP client for **r535 and r570** — a second implementation of the same protocol, written by different people, and the *nearest* trees to the bench's 580. | that a protocol reading is not a misreading of one header, **and** what the protocol looked like *before* 610 |
 
@@ -35,11 +82,12 @@ A `[src]` to `C:` is therefore always implicitly **[measured on GA106+580]**. Wh
 plan claims a C behaviour generalises, it says why, and the strong form of "why" is *ogkm
 does it generation-independently* or *nouveau independently agrees*.
 
-★ **No tree here is the bench's driver.** ogkm is 610.43.02, nouveau carries r535 and r570,
-and the bench runs 580.159.04 (`rs: crates/kayfabe-abi/src/versions.rs:BENCH_DRIVER`) — which
-sits **between** r570 and 610 with no vendored source. §9 D1–D3 and D8 are where that gap is
-load-bearing, and it is much bigger than the brief assumed: **three of the boot path's
-structures have three different shapes across the three available trees.**
+★ **This paragraph used to say "no tree here is the bench's driver". That is no longer
+true, and it was the load-bearing defect in this plan.** `ogkm-580` is now vendored, and it
+settles §9 D1–D3, D8, §10-I6 and §11-O4/O8 from source rather than from transcription. What
+survives is the *shape* of the warning: **three of the boot path's structures have different
+shapes across the available trees**, and now we can see all of them rather than inferring
+the middle one.
 
 ---
 
@@ -76,9 +124,31 @@ and `kernel_gsp.c` are `_IMPL`, not `_HAL`, i.e. one implementation for all chip
 4. **Strictly monotonic per-message `seqNum`**, incremented once per *message* (not per
    element), never reset by a re-link. [src] `ogkm: message_queue_cpu.c:514, 620` (tx),
    `:762-780, 836` (rx).
-5. **Element count derived from declared length**, `ceil((hdrSize + rpc.length) / elementSizeMin)`.
-   [src] `ogkm: message_queue_cpu.c:698-705`; the primitive is
-   `gspMsgQueueBytesToElements` (`ogkm: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:117-121`).
+5. ★★ **NOT INVARIANT — this is version-split, and it was the worst error in this list.**
+   *Where the receiver gets its element count from* differs between the two tags, and the
+   count is what drives the **ring advance**, so getting it wrong desynchronises the ring
+   permanently.
+   - **[src@610]** derived from the declared length,
+     `ceil((hdrSize + rpc.length) / elementSizeMin)` — `ogkm-610: message_queue_cpu.c:698-705`,
+     consumed at `:838`. The primitive is `gspMsgQueueBytesToElements`
+     (`ogkm-610: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:117-121`).
+   - **[src@580] read out of the element**, `nElements = pMQI->pCmdQueueElement->elemCount`
+     at `ogkm-580: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:652-658`. It bounds the
+     copy loop (`:628, 648-650`), the CC checksum span (`:676-677`), the CC decrypt span
+     (`:742-743`), and — the load-bearing one — **`msgqRxMarkConsumed(hQueue, nElements)` at
+     `:774`**, the ring advance. 580 **never** derives the count from `rpc.length`; the
+     `msgLen` check at `:760-770` runs *after* the element has already been consumed and
+     gates nothing.
+
+   ⇒ **Two different version-specific invariants, and each is a real obligation:**
+   - on **580**, the `elemCount` we write must equal how far we advanced `writePtr`, and the
+     `elemCount` the *guest* wrote is authoritative for how far we advance `readPtr`;
+   - on **610**, `rpc.length` must equal how far we advanced `writePtr`, and there is no
+     `elemCount` field to agree with.
+
+   The **shape** that is invariant is only this: *the producer's ring advance and the
+   consumer's ring advance must be computed from the same number, and that number is
+   declared somewhere in the element.* Where it is declared is Axis A.
 6. **Checksum = 64-bit XOR fold, folded to 32, over `hdrSize + rpc.length` rounded up to 8,
    with the `checkSum` field zeroed first, and the whole element must fold to 0.**
    [src] `ogkm: message_queue_priv.h:197-209` (`_checkSum32`),
@@ -96,8 +166,20 @@ and `kernel_gsp.c` are `_IMPL`, not `_HAL`, i.e. one implementation for all chip
    **skip** boot-args programming, init RPCs, and the status-queue link. [src]
    `ogkm: kernel_gsp_tu102.c:544, 561-566, 578-587, 607-611`.
 10. **The bootup-window event allowlist** — during `kgspWaitForRmInitDone`'s poll, without
-    the API lock, only 8 event functions may be delivered; anything else is `NV_ASSERT(0)`.
-    [src] `ogkm: kernel_gsp.c:1419-1440`.
+    the API lock, only an allowlisted event function may be delivered; anything else is
+    `NV_ASSERT(0)`. ★ **The allowlist itself is version-split — the `NV_ASSERT(0)` gate is
+    the invariant, its contents are Axis A:**
+    - **[src@580]** `ogkm-580: kernel_gsp.c:1469-1474` — **six** entries:
+      `GSP_RUN_CPU_SEQUENCER`, `UCODE_LIBOS_PRINT`, `GSP_LOCKDOWN_NOTICE`,
+      `GSP_POST_NOCAT_RECORD`, `GSP_INIT_DONE`, `OS_ERROR_LOG`.
+    - **[src@610]** `ogkm-610: kernel_gsp.c:1424-1431` — **eight**, and they are not a
+      superset: `GSP_RUN_CPU_SEQUENCER` is **gone**, and
+      `PFM_REQ_HNDLR_STATE_SYNC_CALLBACK`, `GSP_LOAD_EXEC_GENERIC_BOOTLOADER`,
+      `GSP_LOAD_EXEC_HS_BINARY` are added.
+
+    Only `UCODE_LIBOS_PRINT`, `GSP_LOCKDOWN_NOTICE`, `GSP_POST_NOCAT_RECORD`,
+    `GSP_INIT_DONE`, `OS_ERROR_LOG` are on **both**; that five-way intersection is the only
+    safe set for a version-agnostic emitter, and `POST_EVENT` (0x1003) is on neither.
 11. **`MSGQ_FLAGS_SWAP_RX` must be set in *our* tx header too.** `rxSwapped` is the **AND**
     of both sides' `flags` [src] `ogkm: msgq.c:411-412`; the guest always sets it
     (`message_queue_cpu.c:180`), and nouveau — an independent implementation — hardcodes
@@ -128,8 +210,21 @@ and `kernel_gsp.c` are `_IMPL`, not `_HAL`, i.e. one implementation for all chip
 - Which mailbox carries the LibOS boot-args GPA: on Turing→Ada it is
   `NV_PGSP_FALCON_MAILBOX0/1` (`ogkm: kernel_gsp_tu102.c:392-403`), and the HAL name says
   so — `kgspProgramLibosBootArgsAddr_TU102`. Other regimes have other implementations.
-- `INTERRUPT_PROCESSOR_SUSPENDED_VALUE = 0x80000000` read from `FALCON_MAILBOX0`
-  (`ogkm: kernel_gsp_tu102.c:333, 346-348`) — a LibOS2/LibOS3 constant, not a protocol one.
+- The suspend sentinel on `FALCON_MAILBOX0` — a LibOS2/LibOS3 constant, not a protocol one.
+  ★ **The comparison is version-split, and the difference decides what we may write:**
+  - **[src@580]** `ogkm-580: kernel_gsp_tu102.c:1226-1238` — `return (mailbox == 0x80000000);`
+    **exact equality**, with the constant inlined (there is no
+    `INTERRUPT_PROCESSOR_SUSPENDED_VALUE` symbol at 580).
+  - **[src@610]** `ogkm-610: kernel_gsp_tu102.c:333, 348` —
+    `#define INTERRUPT_PROCESSOR_SUSPENDED_VALUE 0x80000000` and
+    `return (mailbox & INTERRUPT_PROCESSOR_SUSPENDED_VALUE) != 0;` — a **mask**.
+
+  ⇒ we must **write the whole value, never OR the bit into a shadow**: a mailbox shadow that
+  still holds a boot-args half and gets bit 31 set reads as suspended at 610 and hangs the
+  teardown poll forever at 580. Writing `0x80000000` exactly satisfies both. On 580 this poll
+  is reached from two places: after fn-47 (`ogkm-580: kernel_gsp.c:4310`,
+  `kgspWaitForProcessorSuspend_HAL`) and as a **bootstrap liveness fallback**
+  (`ogkm-580: kernel_gsp_tu102.c:551`, `kflcnIsRiscvActive || _kgspIsProcessorSuspended`).
 - The interrupt vector the status queue is announced on (`SWGEN0` = falcon IRQ bit 6, GSP
   engine stall vector 155 on GA106 — `C: nvkvm_gpu_emul.c:1670`, explicitly derived from a
   captured GA106 interrupt table).
@@ -149,10 +244,18 @@ and `kernel_gsp.c` are `_IMPL`, not `_HAL`, i.e. one implementation for all chip
 - `MSGQ_MSG_SIZE_MIN = 16`, `MSGQ_META_MIN_ALIGN = 3`, `MSGQ_META_MAX_ALIGN = 12`
   [src] `ogkm: src/nvidia/inc/libraries/msgq/msgq.h:31-51` — driver constants used as bounds
   in the acceptance predicate, so they are Axis A, not chip.
-- MCTP/NVDM constants (610+): `MCTP_MSG_HEADER_VENDOR_ID_NV = 0x10de`,
+- MCTP/NVDM constants — **610 only.** `MCTP_MSG_HEADER_VENDOR_ID_NV = 0x10de`,
   `MCTP_MSG_HEADER_TYPE_VENDOR_PCI = 0x7e`, `NVDM_TYPE_RM_RPC = 0x25`
-  [src] `ogkm: src/nvidia/arch/nvalloc/common/inc/mctp_format.h:39-58`,
-  `.../nvdm_format.h:61`.
+  [src@610] `ogkm-610: src/nvidia/arch/nvalloc/common/inc/mctp_format.h:39-58`,
+  `.../nvdm_format.h:61`. Assembled: `mctpHeader = 0xC000_0001`,
+  `nvdmHeader = 0x2510_DE7E` (derivations in `../reference/nvidia_abi_oracles.md` §6).
+  ★ **At 580 there is no MCTP on the GSP path at all.** `mctp_format.h` does not exist;
+  the only MCTP in the 580 tree is FSP / SEC2 / NVSwitch
+  (`fsp_mctp_format.h`, `sec2_mctp_format.h`, `src/common/nvswitch/…`), and
+  `NVDM_TYPE_RM_RPC` **does not appear anywhere in it**. Bytes @0–@7 of a 580 element are
+  `authTagBuffer[0..8]`, which a CC-off guest never reads. ⇒ a 580 profile carries
+  `transport: None` — **not measured placeholder words**, because there is nothing there to
+  measure.
 
 **Axis A (driver version) — behind `kayfabe-abi`:**
 
@@ -188,9 +291,10 @@ command-queue header and copies them into the status-queue header verbatim
 it is what keeps `kayfabe-gsp` free of `RM_PAGE_SIZE`, `0x40000`, `msgCount = 63`, and the
 `0x20` rxHdrOff the C hard-codes at `C:3358`.
 
-★★ **And it goes further than the tx header.** On 610, `MESSAGE_QUEUE_INIT_ARGUMENTS` —
-which the guest writes into the `RMARGS` region for us to read — carries **nine** fields, the
-last five of which are exactly the parameters that would otherwise be constants:
+★★ **And it goes further than the tx header — but ONLY on 610.**
+`MESSAGE_QUEUE_INIT_ARGUMENTS`, which the guest writes into the `RMARGS` region for us to
+read, carries **nine** fields at 610 — the last five being exactly the parameters that would
+otherwise be constants:
 
 ```c
 NvU64    sharedMemPhysAddr;   NvU32 pageTableEntryCount;
@@ -198,14 +302,35 @@ NvLength cmdQueueOffset;      NvLength statQueueOffset;
 NvLength queueElementHdrSize; NvLength queueElementSizeMin; NvLength queueElementSizeMax;
 NvU32    queueHeaderAlign;    NvU32 queueElementAlign;
 ```
-[src] `ogkm: src/nvidia/inc/kernel/gpu/gsp/gsp_init_args.h:32-45`, populated at
-`ogkm: kernel_gsp.c:5481-5490`. ⇒ **on 610 even the element header size is declared by the
-guest**, so `bEncryptionEnabled` need not be inferred either (it is folded into
-`queueElementHdrSize` at `ogkm: message_queue_cpu.c:82-86`).
+[src@610] `ogkm-610: src/nvidia/inc/kernel/gpu/gsp/gsp_init_args.h:32-45`, populated at
+`ogkm-610: kernel_gsp.c:5481-5490`. ⇒ **on 610 even the element header size is declared by
+the guest**, so `bEncryptionEnabled` need not be inferred either (it is folded into
+`queueElementHdrSize` at `ogkm-610: message_queue_cpu.c:82-86`).
 
-The struct is **not** the same on older drivers — §9 D8 — so this is a *capability*, not an
-assumption: read the fields when the version's layout has them, fall back to Axis-A constants
-when it does not.
+★★ **On 580 it is FOUR fields and none of them is geometry** — §11-O8, now answered:
+
+```c
+NvU64 sharedMemPhysAddr;  NvU32 pageTableEntryCount;
+NvLength cmdQueueOffset;  NvLength statQueueOffset;
+```
+[src@580] `ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_init_args.h:29-34`, populated at
+`ogkm-580: kernel_gsp.c:4486-4489`. Identical to nouveau's r570 shape.
+
+⇒ **queue geometry is NOT negotiated at 580.** It is compile-time — `queueElementHdrSize =
+offsetof(GSP_MSG_QUEUE_ELEMENT, rpc) = 48`, `queueElementSizeMin = RM_PAGE_SIZE = 4096`,
+`queueElementSizeMax = 4096*16 = 65536`, `GSP_MSG_QUEUE_HEADER_ALIGN = 4`,
+`GSP_MSG_QUEUE_ELEMENT_ALIGN = RM_PAGE_SHIFT = 12`
+([src@580] `ogkm-580: message_queue_priv.h:91-104`) — so the faked GSP must supply
+48/4096/65536/4/12 from an Axis-A table on the bench, and the "derive, don't declare"
+capability simply is not offered by that driver.
+
+`GSP_ARGUMENTS_CACHED` differs too: 580's has no `rmStateMonitorBufferArgs` and no
+`bindataArgs`, so its **size and every post-`MESSAGE_QUEUE_INIT_ARGUMENTS` offset differ**
+between the tags. Anything that reads past the queue-init block must be version-keyed.
+
+The struct therefore has **three** shapes across the available trees — §9 D8 — so GSP-P1 is a
+*capability*, not an assumption: read the fields when the version's layout has them, fall
+back to Axis-A constants when it does not. **On the bench, the fallback is the only path.**
 
 **Rule GSP-P1 (normative for the port).** `kayfabe-gsp` obtains ring geometry **only** from
 what the guest declares — the tx header and `MESSAGE_QUEUE_INIT_ARGUMENTS` — validates it
@@ -247,10 +372,13 @@ Not owned:
 
 ### 3.1 What the guest actually does (ogkm — the specification)
 
-`kgspBootstrap_TU102` in order [src] `ogkm: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:522-618`:
+`kgspBootstrap_TU102` in order [src@610] `ogkm-610: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:522-618`.
+★ **The 580 function is `ogkm-580: kernel_gsp_tu102.c:493-578` and it is a different
+sequence — see §3.1a. Read that before implementing the FSM.**
 
-Before B0, `_kgspBootGspRm` **fails early if WPR2 is up** [src] `ogkm: kernel_gsp.c:4804-4812`
-— this is the gate a stale emulator trips on a second `insmod`.
+Before B0, `_kgspBootGspRm` **fails early if WPR2 is up** — this is the gate a stale
+emulator trips on a second `insmod`. [src@610] `ogkm-610: kernel_gsp.c:4804-4812`;
+[src@580] `ogkm-580: kernel_gsp.c:3864-3876`, same message, same effect.
 
 | # | step | ogkm line | guest-observable at our boundary |
 |---|---|---|---|
@@ -260,14 +388,66 @@ Before B0, `_kgspBootGspRm` **fails early if WPR2 is up** [src] `ogkm: kernel_gs
 | B3 | `kflcnResetIntoRiscv` | `:559` | GSP falcon reset regs |
 | B4 | **`kgspProgramLibosBootArgsAddr`** — `MAILBOX0 = lo32(addr)`, `MAILBOX1 = hi32(addr)` | `:562`, impl `:392-403` | **two mailbox writes. NORMAL only.** |
 | B5 | `kgspExecuteBooterLoad(WprMeta PA)` | `:566-572` | SEC2 falcon DMA + mailbox args + STARTCPU → **WPR2 comes up** |
-| B6 | **if NORMAL**: `kgspSendInitRpcs` = `GSP_SET_SYSTEM_INFO` (72) then `SET_REGISTRY` (73) | `:576-585`, impl `kernel_gsp.c:4686-4709` | **two commands on the cmd queue + doorbell, BEFORE the status queue exists** |
+| B6 | ★ **610 ONLY.** **if NORMAL**: `kgspSendInitRpcs` = `GSP_SET_SYSTEM_INFO` (72) then `SET_REGISTRY` (73) | `:576-585`, impl `ogkm-610: kernel_gsp.c:4686-4709` | **two commands on the cmd queue + doorbell, BEFORE the status queue exists.** ★ **At 580 this step is not here at all** — the same two RPCs are queued *before the whole bootstrap*, §3.1a A2 |
 | B7 | `FALCON_OS = riscvDesc->appVersion` | `:588-589` | one register write |
 | B8 | liveness gate: `kflcnIsRiscvActive(...) \|\| _kgspIsProcessorSuspended(...)` | `:592-603` | reads RISCV CPUCTL active bit / `FALCON_MAILBOX0 & 0x80000000` |
 | B9 | **if NORMAL**: `GspStatusQueueInit` → `msgqRxLink` retry loop | `:607-611`, impl `message_queue_cpu.c:337-412` | **polls the status-queue tx header until it validates**, 4 s (`NV_U32_MAX` under `IS_EMULATION`), and **calls `kgspHealthCheck_HAL` every iteration** — a queued crashcat report converts the spin into an immediate `NV_ERR_RESET_REQUIRED` (`:398-403`) |
 | B10 | `kgspWaitForRmInitDone` → `rpcRecvPoll(GSP_INIT_DONE, 0)` | `:613`, impl `kernel_gsp.c:6264-6283` | drains the status queue until `(function, sequence) == (0x1001, 0)` |
 
-Teardown, `kgspUnloadRm_IMPL` → `kgspTeardown_TU102` [src] `ogkm: kernel_gsp.c:5213-5231`,
-`kernel_gsp_tu102.c:660-703`:
+### 3.1a ★★ The 580 boot order is NOT the 610 boot order — the init RPCs move
+
+This is a **boot-FSM ordering difference**, so it lands on `crates/kayfabe-gsp/src/boot.rs`
+and not only on a table in a document.
+
+At 610, `kgspSendInitRpcs` is step **B6**, *inside* `kgspBootstrap_TU102`, after Booter Load.
+At 580 **`kgspSendInitRpcs` does not exist**. The same two RPCs, in the same order, are sent
+by `kgspQueueAsyncInitRpcs_IMPL` ([src@580] `ogkm-580: kernel_gsp.c:3753-3777`) — called from
+`kgspInitRm_IMPL` at `ogkm-580: kernel_gsp.c:4141`, which is **before**
+`_kgspBootGspRm` (`:4184`) and therefore before FWSEC, before Booter Load, before RISC-V
+start and before the status-queue link. It is skipped only under SPDM
+(`ogkm-580: kernel_gsp.c:4123-4133`). The comment in the driver says why:
+*"Stuff the message queue with async init messages that will be run before OBJGPU is
+created."*
+
+**And the doorbell rings with them.** `rpcSendMessage` calls `kgspSetCmdQueueHead_HAL`
+unconditionally after every successful submit ([src@580] `ogkm-580: kernel_gsp.c:425`), and
+`_kgspRpcSanityCheck` (`:281-321`) has **no** "is the GSP up yet" gate. So on **every clean
+580 boot**:
+
+| # | 580 order | our boundary sees |
+|---|---|---|
+| A0 | `kgspWaitForGfwBootOk_HAL` (`ogkm-580: kernel_gsp.c:4100`) — hoisted **out** of bootstrap | the GFW/PLM reads (610's B0) |
+| A1 | `kgspSetupLibosInitArgs`, `kgspPopulateGspRmInitArgs` (`:4118, :4121`) | nothing — guest-RAM writes only |
+| A2 | `kgspQueueAsyncInitRpcs` (`:4141`) | **two commands land in the cmd ring and `QUEUE_HEAD(0)` is written TWICE — while our `QueueState` is still `Unbound`** |
+| A3 | `_kgspBootGspRm` (`:4184`) → WPR2-up gate (`:3876`) → `kgspBootstrap_HAL(NORMAL)` (`:3908`) | — |
+| A4 | scrubber, FWSEC, `kflcnResetIntoRiscv` | GSP falcon DMA + STARTCPU |
+| A5 | `kgspProgramLibosBootArgsAddr` (NORMAL only) | the two mailbox writes |
+| A6 | `kgspExecuteBooterLoad` | SEC2 STARTCPU → WPR2 up |
+| A7 | `FALCON_OS = appVersion` | one register write |
+| A8 | liveness: `kflcnIsRiscvActive \|\| _kgspIsProcessorSuspended` (`ogkm-580: kernel_gsp_tu102.c:551`) | RISCV active / MAILBOX0 |
+| A9 | `GspStatusQueueInit` (NORMAL only) | the `msgqRxLink` spin |
+| A10 | `kgspWaitForRmInitDone` (`ogkm-580: kernel_gsp.c:5214`) | drains for `(0x1001, 0)` |
+
+★★ **Two consequences the plan did not have, and both are real:**
+
+1. **E8 is not an attack signature at 580 — it fires twice on a healthy boot.** §3.3-E8 and
+   ledger row GSP-D4 describe "a doorbell while `Unbound`" as *the* guest-reachable defect.
+   At 580 that is also **normal, expected, protocol-correct guest behaviour**, twice, before
+   any mailbox write. The refusal (read no guest RAM) stays right; its **classification** must
+   not be "hostile", it must not escalate, and the negative-trace test's "exactly one
+   `Refused`" arm has to account for the pre-bind pair.
+2. **At bind time the command ring already has a backlog.** The guest's cmd `writePtr` is
+   **2**, not 0, when E6 publishes. A doorbell-only service path never sees those two
+   commands until the guest's *next* doorbell. It happens to recover — the guest sends
+   `SET_GUEST_SYSTEM_INFO` (1) right after `INIT_DONE` and that doorbell drains all three in
+   sequence order — but recovery-by-luck is not a design. **E6 must drain the command queue
+   after publishing**, exactly as it would on a doorbell.
+
+Teardown, `kgspUnloadRm_IMPL` → `kgspTeardown_TU102` [src@610] `ogkm-610: kernel_gsp.c:5213-5231`,
+`kernel_gsp_tu102.c:660-703`. **[src@580]**: `kgspUnloadRm` has the same four callers
+(`ogkm-580: gpu.c:3653`, `gpu.c:3973`, `gpu_suspend.c:121`,
+`subdevice_ctrl_gpu_kernel.c:632` — the plan's §12 line numbers are 610's), fn-47 is emitted
+at `ogkm-580: kernel_gsp.c:4301`, and `kgspWaitForProcessorSuspend_HAL` follows at `:4310`:
 
 | # | step | line | observable |
 |---|---|---|---|
@@ -321,7 +501,7 @@ learn about our state. Each is a pure function of the FSM; nothing else may be s
 | falcon `DMACTL` DMEM/IMEM scrubbing | constant DONE | `kflcnWaitForResetToFinish_TU102`, `ogkm: kernel_falcon_tu102.c:279-320` |
 | **WPR2 ADDR_LO/HI** | `phase >= FwsecRan && phase < Halted` | `kgspIsWpr2Up_TU102:1172-1180`; gate at `kernel_gsp.c:4805` |
 | **RISCV `CPUCTL` active** | same predicate | `kernel_gsp_tu102.c:592` |
-| **`FALCON_MAILBOX0`** | `phase == Suspending` → `0x80000000`, else 0 | `_kgspIsProcessorSuspended:336-349` |
+| **`FALCON_MAILBOX0`** | `phase == Suspending` → **exactly** `0x80000000` (written, never OR-ed onto the boot-args shadow — §1.2), else the shadow | `ogkm-580: kernel_gsp_tu102.c:1226-1238` (`==`); `ogkm-610: :336-349` (`&`) |
 | falcon `IRQSTAT` bit 6 | `swgen0_pending` | `kgspService_TU102:1088` |
 | falcon `IRQMASK`/`IRQDEST` | constant (SWGEN0 enabled) | same |
 | **status-queue tx header in guest RAM** | `QueueState == Bound` | `msgqRxLink` |
@@ -594,7 +774,7 @@ the guest's `MESSAGE_QUEUE_INFO` was itself destroyed, which happens only in `kg
 
 ### 4.3 The element, and the version cliff
 
-**610.43.02** [src] `ogkm: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:52-67`:
+**610.43.02** [src@610] `ogkm-610: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:52-67`:
 
 ```c
 typedef struct GSP_MSG_QUEUE_ELEMENT {
@@ -606,24 +786,39 @@ typedef struct GSP_MSG_QUEUE_ELEMENT {
 } GSP_MSG_QUEUE_ELEMENT;
 ```
 
-`queueElementHdrSize = offsetof(payload) = 16` (+40 if CC) [src] `ogkm: message_queue_cpu.c:82-86`.
+`queueElementHdrSize = offsetof(payload) = 16` (+40 if CC) [src@610] `ogkm-610: message_queue_cpu.c:82-86`.
 
-**580.159.04**, as transcribed by the C's own design doc from the 580 tree
-[src] `C-repo: docs/design/mode2_m3_gsp_rpc.md` "The message element", and as implemented at
-`C: nvkvm_gpu_emul.c:1561-1620`:
+**580.159.04**, now **[src@580] from the driver itself** — this used to be a transcription
+into a C-side design doc, which is exactly the kind of second-hand claim §0.1 exists to
+forbid. `ogkm-580: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:43-51`:
 
 ```c
-authTagBuffer[16] @0 ; aadBuffer[16] @16 ; checkSum @32 ; seqNum @36 ;
-elemCount @40 ; rpc_message_header_v @48
+typedef struct GSP_MSG_QUEUE_ELEMENT {
+    NvU8  authTagBuffer[16];   // @0
+    NvU8  aadBuffer[16];       // @16
+    NvU32 checkSum;            // @32
+    NvU32 seqNum;              // @36
+    NvU32 elemCount;           // @40   ← load-bearing, §4.4 / §4.6
+    NV_DECLARE_ALIGNED(rpc_message_header_v rpc, 8);   // @48
+} GSP_MSG_QUEUE_ELEMENT;
 ```
 
-`queueElementHdrSize = 48`.
+`GSP_MSG_QUEUE_ELEMENT_HDR_SIZE = NV_OFFSETOF(GSP_MSG_QUEUE_ELEMENT, rpc) = 48`
+[src@580] `ogkm-580: message_queue_priv.h:93`. It is **not** shifted by CC at 580: the CC tag
+*is* `authTagBuffer`/`aadBuffer`, already inside the 48, so the 610 "+40 if CC" arithmetic has
+no 580 analogue.
 
 ★ **nouveau independently confirms the 48-byte form for both r535 and r570** — byte-identical
 field list, including `elemCount`, and `msg->elem_count = DIV_ROUND_UP(len, 0x1000)` on send
 [src] `nv: r535/nvrm/gsp.h:808-816`, `nv: r535/rpc.c:93-102, 370`; the r570 tree reuses the
-same `rpc.c`. So the break lands in the interval **(570, 610]** and the C — whose 580
-transcription matches r535/r570 exactly — is right for its era.
+same `rpc.c`.
+
+★★ **The break interval is narrower than this plan said: `(595.84, 610.43.02]`, not
+`(570, 610]`.** Nine release tags were probed; the 48-byte-with-`elemCount` form is present at
+**575.64.05, 580.65.06, 580.159.04, 580.173.02, 590.44.01, 590.48.01, 595.44.02, 595.84**, and
+the 16-byte-with-MCTP form appears only at **610.43.02**. ⇒ the whole 580/590/595 range is on
+the 48-byte side, and **`ElementLayout`'s predicate is `major >= 610`, not `> 570`.** (Only the
+two tags named in §0.1 are vendored here; the other seven are relayed evidence — §14.4.)
 
 **These are different protocols.** §9 D1–D3. The port must therefore treat the element
 header as an Axis-A layout with at least these fields per version:
@@ -631,14 +826,20 @@ header as an Axis-A layout with at least these fields per version:
 ```rust
 // kayfabe-abi
 pub struct ElementLayout {
-    pub hdr_size_plain: usize,     // 48 on 580, 16 on 610
-    pub hdr_size_cc: usize,        // + sizeof(encryption tag)
-    pub checksum_off: usize,       // 32 on 580, 8 on 610
-    pub seqnum_off: usize,         // 36 on 580, 12 on 610
-    pub elem_count_off: Option<usize>,  // Some(40) on 580, None on 610
-    pub transport: TransportHdr,   // None | Mctp { version: u32, vendor: u32 }
+    pub hdr_size_plain: usize,     // 48 below 610, 16 at 610+
+    pub hdr_size_cc: usize,        // 610+: + sizeof(encryption tag). Below 610 the CC
+                                   //   buffers are already inside the 48 — same value.
+    pub checksum_off: usize,       // 32 below 610, 8 at 610+
+    pub seqnum_off: usize,         // 36 below 610, 12 at 610+
+    pub elem_count_off: Option<usize>,  // Some(40) below 610, None at 610+
+    pub transport: TransportHdr,   // None below 610 (no MCTP exists in that tree at all);
+                                   //   Mctp { 0xC000_0001, 0x2510_DE7E } at 610+
 }
 ```
+
+★ **`elem_count_off` is not a decoration — it changes the ring's advance rule**, on both the
+send and the receive side. §4.4 states both rules; §4.6 states the safety bound that comes
+with it.
 
 ### 4.4 The seqNum discipline, exactly
 
@@ -650,14 +851,46 @@ Three counters that are routinely confused. Naming them apart is half the work:
 | **element `seqNum`** — per **message** | the sender, `txSeqNum++` | **no** — a free-running `NvU32` | `message_queue_cpu.c:514, 620` |
 | **`rpc_message_header.sequence`** — the RPC **transaction id** | whoever originated the request | n/a | `kernel_gsp.c:1824-1828` |
 
-The guest's receive validates all three in this order [src] `ogkm: message_queue_cpu.c:660-786`:
+★★ **The guest's receive order is version-split, and the split is at step 1 — the step that
+also decides how far the ring advances.** The plan previously listed only 610's order and
+called step 4 "610 only", which understated it by a lot.
 
-1. read element 0; derive `nElements = ceil((hdrSize + rpc.length) / elementSizeMin)` (`:698-705`);
-2. read the remaining `nElements - 1` **contiguous** elements (`:673-684`);
-3. checksum over `hdrSize + rpc.length` must fold to 0 (`:724-734`);
-4. **610 only:** `MCTP_HEADER_VERSION == 1` and NVDM vendor id == NV (`:737-758`);
-5. `element.seqNum == pMQI->rxSeqNum` (`:762`);
-6. finally `rxSeqNum++` and `msgqRxMarkConsumed(nElements)` (`:836-838`).
+**At 580** [src@580] `ogkm-580: message_queue_cpu.c:608-786` — `GspMsgQueueReceiveStatus`:
+
+| # | step | line |
+|---|---|---|
+| 1 | read element 0, then **`nElements = pCmdQueueElement->elemCount`** — a *field read*, not a derivation. This adjusts the loop bound in place | `:648-658` |
+| 2 | read the remaining `nElements - 1` elements, each `GSP_MSG_QUEUE_ELEMENT_SIZE_MIN` bytes, appended to the staging buffer | `:628, 648-650` |
+| 3 | checksum: CC-off over `HDR_SIZE + rpc.length` (`:680-681`); **CC-on over `nElements * SIZE_MIN`** (`:676-677`) | `:674-690` |
+| 4 | *(no transport-header check exists at 580)* | — |
+| 5 | `seqNum == rxSeqNum`, with recovery only for `<` (`:699-714`) | `:693` |
+| 6 | CC-on decrypt spans `(nElements * SIZE_MIN) - HDR_SIZE` | `:741-743` |
+| 7 | **post-hoc** length sanity: `msgLen = 48 + rpc.length` must be in `[sizeof(GSP_MSG_QUEUE_ELEMENT)=80, 65536]`. **This runs after the element is already committed and gates nothing** | `:760-770` |
+| 8 | `msgqRxMarkConsumed(hQueue, nElements)` — ★ **the ring advance, by `elemCount`** — then `rxSeqNum++` on success | `:774-782` |
+
+**At 610** [src@610] `ogkm-610: message_queue_cpu.c:640-838`:
+
+| # | step | line |
+|---|---|---|
+| 1 | read element 0; **derive** `nElements = ceil((hdrSize + rpc.length) / elementSizeMin)` | `:698-705` |
+| 2 | read the remaining `nElements - 1` **contiguous** elements | `:673-684` |
+| 3 | checksum over `hdrSize + rpc.length` must fold to 0 | `:724-734` |
+| 4 | **`MCTP_HEADER_VERSION == 1` and NVDM vendor id == NV** | `:737-758` |
+| 5 | `element.seqNum == pMQI->rxSeqNum` | `:762` |
+| 6 | length sanity `msgLen ∈ [queueElementHdrSize, queueElementSizeMax]` | `:824-833` |
+| 7 | `msgqRxMarkConsumed(nElements)` then `rxSeqNum++` | `:836-838` |
+
+★ **What 610 checks at step 4 and what it does NOT.** Only the version nibble (`== 1`) and
+the vendor id (`== 0x10de`). SOM, EOM, the sequence field and the NVDM *type* byte are
+**unchecked** — so **no test may assert that the guest rejects a wrong SOM/EOM/SEQ/NVDM-type**.
+That would be asserting a behaviour the driver does not have, which §4.4's `signature`
+paragraph already forbids for the same reason.
+
+★ **The lower length bound is also version-split, in our favour on the bench.** 580 requires
+`48 + rpc.length >= sizeof(GSP_MSG_QUEUE_ELEMENT) = 80`, i.e. `rpc.length >= 32`; 610 requires
+only `>= queueElementHdrSize`, i.e. `rpc.length >= 0`. So the `MsgLen::new` lower bound of
+`sizeof(rpc_message_header_v)` that §7-G3 adds is *enforced by the driver itself* at 580 and
+is our own addition only at 610.
 
 Then the RPC layer matches `(function, sequence)` against what it is polling for
 (`kernel_gsp.c:1824-1828`); anything else is dispatched as an event, and an unrecognised
@@ -739,6 +972,67 @@ with zeros to the next 8-byte alignment"*). The sender zero-pads to 8 before fol
 (`message_queue_cpu.c:498-500`). The C's `(len + 7) & ~7` (`C:1605`) is exactly equivalent.
 Coverage is `hdrSize + rpc.length` in the plain case and the **whole element run**
 (`nElements * elementSizeMin`) when CC is on (`message_queue_cpu.c:519-543` vs `:713-730`).
+Verified identical at both tags; the 580 copy is `ogkm-580: message_queue_priv.h:112-125`.
+
+### 4.6 ★★ SAFETY INVARIANT — `elemCount > 16` corrupts the guest kernel heap
+
+**This is the most important single fact in this document and it had never been written
+down.** It is a bound on **what we are allowed to emit**, not a style rule, and it is the
+only place in the whole GSP path where a value we choose can write outside a guest kernel
+allocation.
+
+The mechanism, entirely [src@580]:
+
+1. The guest's receive staging buffer is allocated **once**, at
+   `ogkm-580: message_queue_cpu.c:132-134`:
+   `workAreaSize = (1 << GSP_MSG_QUEUE_ELEMENT_ALIGN) + GSP_MSG_QUEUE_ELEMENT_SIZE_MAX + msgqGetMetaSize()`
+   = **4096 + 65536 + sizeof(msgqMetadata)**, from `portMemAllocNonPaged` — the kernel heap.
+2. It is carved at `:143-145`:
+   `pCmdQueueElement = ALIGN_UP(pWorkArea, 4096)` and
+   `pMetaData = pCmdQueueElement + GSP_MSG_QUEUE_ELEMENT_SIZE_MAX`.
+   ⇒ the element staging area is **exactly 65536 bytes = 16 elements of 4096**, and
+   `pMetaData` — the live `msgq` handle — is the very next byte.
+3. The copy loop at `:628, 648-650` runs `for (i = 0; i < nElements; i++)` and does
+   `portMemCopy(pTgt, 4096, pNextElement, 4096); pTgt += 4096;` with **no bound on `nElements`
+   other than the ring**. `nElements` came from `elemCount` at `:658` — a field **we write**.
+4. The loop stops only when `msgqRxGetReadBuffer` returns `NULL`, which happens when `i`
+   reaches the elements actually available in the ring
+   (`ogkm-580: src/common/shared/msgq/msgq.c:673-693`). With the default geometry the ring
+   holds `msgCount = 63` elements, so up to **62** copies are reachable.
+
+⇒ **A status element whose `elemCount` exceeds 16 makes the guest kernel memcpy past the end
+of a `portMemAllocNonPaged` allocation.** The first thing it overwrites is `pMetaData`, the
+`msgq` metadata the guest is *actively using* — so the corruption is immediately
+self-amplifying — and at the reachable maximum it writes `(62 − 16) × 4096 = 188 416` bytes
+past the staging area, far beyond `workAreaSize`.
+
+**Invariant GSP-S1 (normative, and it is a safety property, not a correctness one):**
+
+> On any driver whose `ElementLayout` has an `elem_count_off`, the value we write there and
+> the number of elements we advance `writePtr` by **must both be `<= queueElementSizeMax /
+> queueElementSizeMin`** (16 with the bench's geometry, and derived from the geometry, never
+> the literal 16). A message that would need more must be refused before it is encoded, with
+> a named fault — never truncated, never clamped silently.
+
+Three notes on why the obvious objections do not weaken it:
+
+- *"`MsgLen` already bounds `rpc.length` by `element_size_max`, so the count can never exceed
+  16."* True **today, by derivation**, and that is precisely the fragility: at 580 the
+  guest reads the **field**, not the derivation, so the two are only equal because one
+  encoder computes both. Any future path that sets `elemCount` from anything other than the
+  same `MsgLen` — a continuation record, a CC layout change, a replayed trace, a fuzz
+  harness — breaks the coupling silently. The bound must be checked where the field is
+  written.
+- *"The guest is the victim, so this is the guest's bug."* It is, and it is also *our*
+  obligation: the guest kernel is inside the security boundary we are defending
+  (`core_security_threat_model.md`), and a QEMU device that can corrupt guest kernel memory
+  from an unvalidated width is the same defect class as `C:1615`'s SIGFPE, pointed the other
+  way.
+- *"610 has no `elemCount`, so this is 580-only."* The **field** is 580-only. The **bound** is
+  not: 610 derives the count from `rpc.length`, and `rpc.length > queueElementSizeMax -
+  hdrSize` is already refused there (`ogkm-610: message_queue_cpu.c:826-833`). Same ceiling,
+  reached two different ways — which is exactly what makes it an invariant rather than a
+  version quirk.
 
 ---
 
@@ -748,7 +1042,7 @@ Nine stages. **Six need no GPU.** Each names what it *cannot* prove.
 
 | stage | needs GPU? | what it builds | proves | cannot prove |
 |---|---|---|---|---|
-| **S0 — ABI extension** | **no** | `kayfabe-abi`: `msgqTxHeader`/`msgqRxHeader`, `LibosMemoryRegionInitArgument`, **all three shapes of** `MESSAGE_QUEUE_INIT_ARGUMENTS` (D8), `ElementLayout` per version (D1), the remaining `NV_VGPU_MSG_*` ids the boot path uses (1, 51, 65, 70, 71, 72, 73, 76, 0x1001, 0x1003). ★ **First task: vendor a 580.159.04 tree** (§11-O4/O8) | generator-vs-rustc layout agreement; version key refuses below floor; the 610-vs-r535 element split is expressed as data | that the **580** shapes are right, until the 580 tree is vendored |
+| **S0 — ABI extension** | **no** | `kayfabe-abi`: `msgqTxHeader`/`msgqRxHeader`, `LibosMemoryRegionInitArgument`, **all three shapes of** `MESSAGE_QUEUE_INIT_ARGUMENTS` (D8), `ElementLayout` per version (D1), the remaining `NV_VGPU_MSG_*` ids the boot path uses (1, 51, 65, 70, 71, 72, 73, 76, 0x1001, 0x1003). ★ **DONE 2026-07-28: the 580.159.04 tree is vendored** (§0.1), so O4/O8 are answered and the 580 shapes are `[src@580]`, no longer transcribed | generator-vs-rustc layout agreement; version key refuses below floor; the 580-vs-610 element split is expressed as data | — (its "cannot prove" row is discharged) |
 | **S1 — ring algebra** | **no** | `MsgqGeometry` (decode + the 9-check predicate, **carrying the page-table descriptor** per §4.1), `MsgCount(NonZeroU32)`, `Slot`, free/available algebra | the transport maths, against ogkm line-for-line; proptest: slot always `< msgCount`; `free + outstanding + 1 == msgCount`; every `msgqRxLink` rejection code `-1..-10` reproducible; **a fragmented (non-contiguous) region resolves correctly** | that a real guest agrees (S6) |
 | **S2 — element codec** | **no** | encode/decode, checksum, multi-element split/join, MCTP/NVDM on 610, CC-off header arithmetic | round-trip identity; guest-side checksum of our output folds to 0; a 1-bit flip anywhere is detected | nothing about ordering |
 | **S3 — boot FSM** | **no** | `BootPhase`/`QueueState`, transitions E1–E11, `device_reset`, `observe()` | exhaustive transition coverage; **the §3.4 reset chain as a named regression** (`cb23_*`, per `c_bug_regression_matrix.md` row 23) | which real register writes drive which transition (needs S5/S6) |
@@ -1085,39 +1379,71 @@ assumed away.
 | @48 | rpc header | — |
 | header size | **48** | **16** (+40 if CC) |
 
-[src] 580: `C-repo: docs/design/mode2_m3_gsp_rpc.md` "The message element", transcribed from a
-580.159.04 tree, and implemented at `C: nvkvm_gpu_emul.c:1561-1620`.
-[src] 610: `ogkm: message_queue_priv.h:52-67`, `message_queue_cpu.c:82-86`.
-[src] **r535 + r570 (independent): the 48-byte form, byte-identical to the C's**, including
+[src@580] `ogkm-580: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:43-51`, header size at
+`:93` — **read from the driver, 2026-07-28.** (This row previously cited a *transcription* into
+`C-repo: docs/design/mode2_m3_gsp_rpc.md`; the transcription turns out to be correct, but it
+was second-hand and §0.1 now forbids that form.) Implemented at `C: nvkvm_gpu_emul.c:1561-1620`.
+[src@610] `ogkm-610: message_queue_priv.h:52-67`, `message_queue_cpu.c:82-86`.
+[src] **r535 + r570 (independent): the 48-byte form, byte-identical**, including
 `elemCount` — `nv: r535/nvrm/gsp.h:808-816`, `nv: r535/rpc.c:93-102`, and r570 reuses the same
 `rpc.c`.
 
-Neither is wrong; they are different driver versions, and with nouveau as a third source the
-break is bracketed to **(570, 610]**. **The finding is that the C hard-codes 48/40/32/36 at
-~15 sites** (`C:1583-1602, 2406-2419, 2734-2735, 3341-3350`, and every `cmd + N` offset in
-`service_cmdq`), so it is a 580-only implementation with no version key.
-⇒ Axis A, §4.3's `ElementLayout`.
+Neither is wrong; they are different driver versions, and the break is now bracketed to
+**(595.84, 610.43.02]** — 575/580/590/595 are all on the 48-byte side (§4.3). **The finding is
+that the C hard-codes 48/40/32/36 at ~15 sites** (`C:1583-1602, 2406-2419, 2734-2735,
+3341-3350`, and every `cmd + N` offset in `service_cmdq`), so it is a 580-only implementation
+with no version key. ⇒ Axis A, §4.3's `ElementLayout`, with the predicate **`major >= 610`**.
 
 ### D2 ★ 610 validates MCTP/NVDM transport headers; the C writes neither
 
 `GspMsgQueueReceiveStatus` rejects an element whose `MCTP_HEADER_VERSION != 1` or whose NVDM
-vendor id is not NV [src] `ogkm: message_queue_cpu.c:737-758`, and the sender fills them via
-`mctpCreateTransportHeader(SOM=1, EOM=1, 0,0,0)` / `mctpCreateNvdmHeader(NVDM_TYPE_RM_RPC)`
-[src] `:505-512`. The C never writes offsets 0–7 of a status element with anything but zero
-(`C:1583`: `memset(el, 0, …)` then fields from +32 up).
+vendor id is not NV [src@610] `ogkm-610: message_queue_cpu.c:737-758`, and the sender fills
+them via `mctpCreateTransportHeader(SOM=1, EOM=1, 0,0,0)` /
+`mctpCreateNvdmHeader(NVDM_TYPE_RM_RPC)` [src@610] `:505-512`, giving
+`mctpHeader = 0xC000_0001` and `nvdmHeader = 0x2510_DE7E`
+(`../reference/nvidia_abi_oracles.md` §6). The C never writes offsets 0–7 of a status element
+with anything but zero (`C:1583`: `memset(el, 0, …)` then fields from +32 up).
+
+★ **The check validates the version nibble and the vendor id and NOTHING ELSE** — SOM, EOM,
+the sequence field and the NVDM type byte are unread. **No test may assert that the guest
+rejects them.**
 
 ⇒ **A port that ships only the C's encoding would be rejected on 610** with
-`"MCTP protocol violation"`. Whether 580 has the check is **[open] O4** — no 580 tree is
-vendored.
+`"MCTP protocol violation"`.
 
-### D3 ★ `elemCount` is not how 610's guest counts elements
+★★ **O4 is ANSWERED: 580 has no MCTP anywhere near the GSP path.** `mctp_format.h` does not
+exist in the 580 tree; the only MCTP there is FSP (`fsp_mctp_format.h`), SEC2
+(`sec2_mctp_format.h`) and NVSwitch, and `NVDM_TYPE_RM_RPC` does not appear in the tree at
+all. Bytes @0–@7 of a 580 element are `authTagBuffer[0..8]`, which a CC-off guest never reads.
+⇒ **the 580 profile is `transport: None` — not a placeholder word, because there is no word.**
 
-610 derives `nElements` from `hdrSize + rpc.length` [src] `ogkm: message_queue_cpu.c:698-705`;
-there is no `elemCount` field. The C writes one at +40 (`C:1602`). On 610 that offset is
-**inside the RPC header** (payload@16 + 24 = `rpc.sequence`), so replaying the C's encoder
-against 610 would corrupt the transaction id. Corollary: the C's own multi-element split
-(`C:1596-1613`) is already computing `nelems` the 610 way and *also* writing the 580 field —
-so the algorithm is right and only the field placement is version-bound.
+### D3 ★★ `elemCount` — the field 610 removed and 580 *depends on*
+
+610 derives `nElements` from `hdrSize + rpc.length` [src@610] `ogkm-610: message_queue_cpu.c:698-705`;
+there is no `elemCount` field. On 610 offset +40 is **inside the RPC header**
+(payload@16 + 24 = `rpc.sequence`), so replaying the C's encoder against 610 would corrupt the
+transaction id.
+
+★★ **The reverse error is worse, and it is the one the bench would hit.** At 580 `elemCount`
+is not decorative: it is the *only* source of the receiver's element count
+([src@580] `ogkm-580: message_queue_cpu.c:652-658`) and therefore of `msgqRxMarkConsumed`'s
+ring advance (`:774`). Consequences, both directions:
+
+- **Emitting (status queue).** Our `elemCount` and our `writePtr` advance must be the same
+  number, or the guest consumes a different number of slots than we produced and the ring
+  desynchronises permanently. Deriving both from one `MsgLen` satisfies this — but see §4.6
+  for why the bound must still be checked at the write.
+- **Consuming (command queue).** The *guest's* `elemCount` is what its own producer advanced
+  `writePtr` by (`ogkm-580: message_queue_cpu.c:482, 578` — it submits `pCQE->elemCount`
+  buffers). So at 580 **our `readPtr` advance must come from the element's `elemCount` field,
+  not from `ceil(msgLen / elementSizeMin)`.** For a conforming guest the two agree; for a
+  hostile or buggy one they do not, and a derivation-based consumer silently desynchronises
+  the ring in a way that no later check catches. The derivation stays as a *cross-check* that
+  refuses by name when the two disagree — it must not be the source.
+
+Corollary: the C's own multi-element split (`C:1596-1613`) computes `nelems` the 610 way and
+*also* writes the 580 field, so the C is correct only because a conforming guest makes the two
+identical.
 
 ### D4 fn-47's "TWO distinct triggers" — the comment describes one RPC with several callers
 
@@ -1183,7 +1509,8 @@ The briefed premise is wrong as stated; the reset spec it was used to support is
 |---|---|
 | **r535** (`nv: r535/nvrm/gsp.h:578-585`) | `sharedMemPhysAddr, pageTableEntryCount, cmdQueueOffset, statQueueOffset, locklessCmdQueueOffset, locklessStatQueueOffset` — **6** |
 | **r570** (`nv: r570/nvrm/gsp.h:497-502`) | the first **4** only — the lockless pair was *removed* |
-| **ogkm 610** (`ogkm: gsp_init_args.h:32-45`) | the 4, **plus** `queueElementHdrSize, queueElementSizeMin, queueElementSizeMax, queueHeaderAlign, queueElementAlign` — **9** |
+| ★ **ogkm-580** (`ogkm-580: gsp_init_args.h:29-34`, written at `kernel_gsp.c:4486-4489`) | the same **4** as r570. **[src@580] — this is the bench's shape, and O8 is answered: 580 declares NO geometry.** |
+| **ogkm-610** (`ogkm-610: gsp_init_args.h:32-45`) | the 4, **plus** `queueElementHdrSize, queueElementSizeMin, queueElementSizeMax, queueHeaderAlign, queueElementAlign` — **9** |
 
 The C reads exactly 32 bytes and interprets them as the first four fields
 (`C: nvkvm_gpu_emul.c:3411-3425`). That is correct for r570-shaped and 610-shaped structs, and
@@ -1199,6 +1526,16 @@ Two consequences:
    otherwise have to key on driver version (§4.3). That makes GSP-P1 stronger where the field
    exists and is why the port must treat the init-args struct as version-keyed with a
    *capability* check, not as a fixed 32-byte prefix.
+3. ★★ **On the bench that capability is absent**, so the port must ship the fallback path and
+   hardcode 48 / 4096 / 65536 / 4 / 12 from Axis A (§1.3). A port that only implemented the
+   610 "derive it" path would have nothing to read on the machine it runs on.
+4. ★ **`GSP_ARGUMENTS_CACHED` differs beyond the queue block.** 580's has
+   `messageQueueInitArguments, srInitArguments, gpuInstance, bDmemStack, profilerArgs,
+   sysmemHeapArgs` ([src@580] `ogkm-580: gsp_init_args.h:36-64`); 610's adds
+   `rmStateMonitorBufferArgs` and `bindataArgs`. Since `MESSAGE_QUEUE_INIT_ARGUMENTS` is the
+   **first** member and grows by 40 bytes at 610, **every subsequent offset in that struct
+   differs between the tags**. Nothing in the boot path reads them today; anything that starts
+   to must be version-keyed, not offset-transcribed.
 
 ### D9 The C scans 16 LibOS regions; the spec allows 4096
 
@@ -1234,7 +1571,7 @@ Listed here for completeness as GSP-D1.
 | ~~I3~~ | ~~`MSGQ_FLAGS_SWAP_RX` agreement~~ | **RESOLVED to [src]** — `rxSwapped` is the AND of both `flags` (`ogkm: msgq.c:411-412`), the guest always sets it (`message_queue_cpu.c:180`), and nouveau hardcodes `tx.flags = 1` (`nv: r535/gsp.c:1171`). Now §1.1 item 11 | — (keep the S1 assertion anyway; it is cheap and it is the one that deadlocks silently) |
 | **I4** | the boot-args mailbox pair is complete when the **high** half is written | the C keys on MAILBOX1 (`C:4298-4302`) and ogkm writes lo then hi (`kernel_gsp_tu102.c:401-402`) — a write *order*, not a *protocol* guarantee | S5: check every recorded trace for a hi-then-lo ordering. Robust design: treat the pair as complete when both halves have been written since the last reset, not on a specific half |
 | **I5** | preserving `seqNum` across a rebind is right for an idle-release re-acquire but **not** for a true `rmmod`/`insmod` | `MESSAGE_QUEUE_INFO` is destroyed in `kgspDestruct` (module unload) and not on an idle release, so `rxSeqNum` survives one and not the other — but no run has ever got far enough to observe the `insmod` case (`../reference/mode2_bench_lifecycle.md` §3) | S7, after the latch fix. **The seqNum question is downstream of the latch chain and cannot be answered before it** |
-| **I6** | the C's element-header offsets are 580-correct | transcribed into a design doc from a 580 tree that is not vendored; the implementation works on the bench, which is strong but indirect | vendor a 580.159.04 ogkm tag and regenerate (§11-O4) |
+| ~~I6~~ | ~~the C's element-header offsets are 580-correct~~ | **RESOLVED to [src@580], 2026-07-28.** `ogkm-580: message_queue_priv.h:43-51` + `:93` gives `authTag@0, aad@16, checkSum@32, seqNum@36, elemCount@40, rpc@48, HDR_SIZE=48`. The transcription was right — but the *habit* that made it `[inferred]`, citing a doc instead of a tree, is the same habit that left §11-O7 marked RESOLVED with the wrong version's answer. §0.1 | — |
 | **I7** | the proposed `GspModel` seam is sufficient for a second generation | derived from one generation's complete register set plus ogkm's `_TU102` HAL; only one generation has been implemented | S8, or a paper exercise: enumerate `kernel_gsp_gh100.c`'s HAL overrides and check each maps to a `GspModel` method |
 | **I8** | the LibOS region array is zero-terminated | the header defines no terminator (`ogkm: src/common/uproc/os/common/include/libos_init_args.h:31-56`); the C relies on it (`C:3399-3401`) and it works, but the mechanism is "the descriptor was zeroed on allocation", not a declared sentinel | S5: check every recorded trace's region array against `region_size / 32` entries and confirm nothing non-zero follows the first zero. Robust design: bound by the descriptor's declared **size**, treat a zero entry as *skip*, not *stop* |
 | **I9** | `phase == Running` is sufficient to guarantee the guest is not inside a boot-time poll that would trip the recursive-poll assert (`ogkm: kernel_gsp.c:2893`) | `Running` is entered only after `GSP_INIT_DONE` is consumed, which is the last boot poll — but the guest issues synchronous RPCs continuously afterwards, and the assert is about *any* nested poll | S5/S6: the completion plane's post point must be observed never to fire between a command's arrival and its reply. This is really a `kayfabe-completion` obligation and should be recorded as one |
@@ -1248,17 +1585,72 @@ Listed here for completeness as GSP-D1.
 | **O1** | where does the non-GSP register model live? | `kayfabe-gsp` will become the dumping ground by default | a design decision, not an experiment. Proposed boundary: *"does GSP FSM state appear in the answer?"* — §3.2's table, nothing more |
 | ~~**O2**~~ | ~~is the shared region contiguous?~~ | **RESOLVED: it is `NV_MEMORY_NONCONTIGUOUS` and self-describing** (`ogkm: message_queue_cpu.c:254-256, 297-329`). The port **must** walk the table; the C's linear addressing is a latent bug (§4.1) | residual, purely informational: dump the 129-entry array on one bench boot to see how often it is in fact contiguous — that tells us whether the C was lucky or whether contiguity is typical. **Read-only, no GPU work** |
 | **O3** | do `rxSeqNum`/`txSeqNum` reset on a true `rmmod`/`insmod`? | decides whether rebind preserves or zeroes seqNums (I5) | S7. Not reachable until the latch chain is fixed |
-| **O4** | is the 580 element layout as transcribed, and does 580 validate MCTP? | D1/D2 — the bench runs 580, the vendored tree is 610 | vendor `open-gpu-kernel-modules` at 580.159.04 and regenerate `ElementLayout` from it. **No GPU. Should be S0's first task.** |
+| ~~**O4**~~ | ~~is the 580 element layout as transcribed, and does 580 validate MCTP?~~ | **ANSWERED 2026-07-28** by vendoring `ogkm-580`. Layout: yes, exactly as transcribed (§9 D1). MCTP: **no — 580 has no MCTP on the GSP path at all**, `mctp_format.h` does not exist and `NVDM_TYPE_RM_RPC` is absent from the tree (§9 D2). ⇒ 580 profile = `transport: None` | — |
 | **O5** | ★ which boot mode does a post-fn-47 re-acquire use? | D5 — decides whether the FSM rebinds and re-posts `INIT_DONE` on it at all | in-guest `dmesg` at `LEVEL_INFO` during a cuCtxDestroy→cuCtxCreate cycle: `kgspBootstrap` logs distinguishably, and `GspStatusQueueInit` logging *"Status queue linked"* (`message_queue_cpu.c:377`) fires only on NORMAL. **One bench boot** |
 | **O6** | does the guest ever post a *command* larger than one element during boot? | decides whether GSP-D6's multi-element read is on the boot critical path or only the steady state | S5, from a recorded trace: count commands whose `rpc.length > elementSizeMin - hdrSize`. **No GPU** — the trace already exists once §6.2's patch lands |
-| ~~**O7**~~ | ~~`GSP_RUN_CPU_SEQUENCER` (0x1002)~~ | **RESOLVED: not implemented in 610.** The only occurrence in the tree is the enum definition (`ogkm: rpc_global_enums.h:255`); it is absent from `_kgspProcessRpcEvent`'s switch, so it falls to `default:` and is logged-and-ignored. **Do not emit it.** The C is right to omit it | — |
-| **O8** | does the bench's 580 declare `queueElementHdrSize` in `MESSAGE_QUEUE_INIT_ARGUMENTS` (610-shaped) or not (r570-shaped)? | D8 — decides whether the element header size is derivable or must come from an Axis-A constant on the bench | falls out of O4 (vendor a 580 tree). Until then the port must implement **both** paths, which it should anyway |
+| ★★ **O7** | `GSP_RUN_CPU_SEQUENCER` (0x1002) — **RESOLVED STATUS WITHDRAWN 2026-07-28.** It was marked RESOLVED on **610** evidence and the **580** answer is the opposite; see the restatement immediately below this table. | it decides whether the faked GSP can ever drive a CPU-side sequencer — including the SEC2 **CORE_RESUME** path, which bears on "GPU restart must work without a bolt-on" | version-split, both answers now `[src]`. What remains open is narrower and named in O7a |
+| ~~**O8**~~ | ~~does the bench's 580 declare `queueElementHdrSize` in `MESSAGE_QUEUE_INIT_ARGUMENTS`?~~ | **ANSWERED 2026-07-28: NO.** 580's struct has the r570 **4** fields (`ogkm-580: gsp_init_args.h:29-34`, written at `kernel_gsp.c:4486-4489`); 610's has 9. ⇒ **queue geometry is not negotiated at 580** and must come from Axis A: 48 / 4096 / 65536 / 4 / 12 (`ogkm-580: message_queue_priv.h:91-104`). §1.3, §9 D8 | — |
+| **O7a** | at 580, is a `GSP_RUN_CPU_SEQUENCER` event *required* on any path we must support, or merely *accepted*? | if required, the faked GSP must be able to emit sequencer buffers, which is a whole new emitter | read `_kgspRpcRunCpuSequencer`'s callers-of-consequence at 580 and check whether any resume path we support reaches `GSP_SEQ_BUF_OPCODE_CORE_RESUME`. **No GPU.** See §14.6 |
+
+### 11.1 ★★ O7 restated — it is version-split, and 580 is the one that governs
+
+The RESOLVED text above said *"not implemented, do not emit it"*. **That is 610's answer.**
+The bench runs 580, where it is **fully implemented**:
+
+| | 580.159.04 | 610.43.02 |
+|---|---|---|
+| in `_kgspProcessRpcEvent`'s dispatch switch | ★ **YES** — `ogkm-580: kernel_gsp.c:1486-1487`, `case NV_VGPU_MSG_EVENT_GSP_RUN_CPU_SEQUENCER: nvStatus = _kgspRpcRunCpuSequencer(...)` | **no** — falls to `default:`, logged and ignored |
+| on the bootup-window allowlist | ★ **YES**, and it is the **first** entry — `ogkm-580: kernel_gsp.c:1469` | **no** |
+| executor | `kgspExecuteSequencerBuffer_IMPL` (`ogkm-580: kernel_gsp.c:5259-5394`) → `kgspExecuteSequencerCommand_HAL` → `kgspExecuteSequencerCommand_TU102` (`ogkm-580: kernel_gsp_tu102.c:913`) / `_GA102` (`kernel_gsp_ga102.c:136`) | **deleted** — no `ExecuteSequencerBuffer`, no `RunCpuSequencer`, no `GSP_SEQ_BUF_OPCODE` anywhere outside the enum |
+| the enum entry | `ogkm-580: rpc_global_enums.h:254` | `ogkm-610: rpc_global_enums.h:255` — the only surviving trace |
+
+**What governs the bench:** at 580 an emitted `GSP_RUN_CPU_SEQUENCER` is *dispatched*, is
+*allowed during the bootup poll*, and *executes register writes / polls / falcon resets on the
+guest's CPU side*. So:
+
+- The claim *"do not emit it"* is still the right **default** — but for a different reason
+  (we have no sequencer buffer to send), and it is no longer true that emitting it would be
+  harmlessly ignored. At 580 a malformed sequencer buffer runs `GSP_SEQ_BUF_OPCODE_REG_WRITE`
+  and friends inside the guest kernel (`ogkm-580: kernel_gsp.c:5293-5394`).
+- The **allowlist** consequence is the sharper one: §1.1 item 10's list has **six** entries at
+  580 and **eight different** ones at 610, and `GSP_RUN_CPU_SEQUENCER` is on exactly one of
+  them. Any code or test that encodes "the bootup allowlist" as a single set is wrong at one
+  of the two tags.
+- ★ **The resume tie-in.** At 580, `GSP_SEQ_BUF_OPCODE_CORE_RESUME` — reset into RISC-V,
+  re-program the LibOS boot-args address, start SEC2, wait for
+  `NV_PGC6_BSI_SECURE_SCRATCH_14._BOOT_STAGE_3_HANDOFF == _VALUE_DONE`, then check SEC2
+  `FALCON_MAILBOX0 == 0` — lives **inside the sequencer executor**
+  (`ogkm-580: kernel_gsp_tu102.c:913-960`), and the executor is reachable **only** from
+  `_kgspRpcRunCpuSequencer`, i.e. only from an event **we** send. At 610 the same handoff
+  survives but was promoted out of the RPC into a first-class HAL,
+  `kgspExecuteCoreResume_TU102` (`ogkm-610: kernel_gsp_falcon_tu102.c:441-471`, called locally
+  at `:563` and `kernel_gsp_falcon_ga102.c:401`). ⇒ **at 580 a GSP resume is RPC-driven and at
+  610 it is host-driven.** Whether any resume path we must support actually goes through it is
+  **O7a**; §14.6 records what was and was not established.
 
 ---
 
 ## 12. Citation table
 
-Spot-checkable index. `ogkm` = `/workspace/nvidia-gpu-passthrough/research_clones/ogkm` @ 610.43.02;
+> ★★ **EVERY `ogkm` LINE NUMBER IN THIS TABLE IS A 610.43.02 LINE NUMBER**, and the table was
+> written before `ogkm-580` existed. Per §0.1 rule 2, do **not** carry any of them into the
+> 580 tree — paths moved (the whole `msgq` library is under `src/common/shared/msgq/` at 580)
+> and line numbers drift even where the code is byte-identical. The rows corrected by the 580
+> read are listed in §14; a row not listed there has **not** been re-checked at 580.
+>
+> **Re-verified identical at both tags** (so these rows hold verbatim, modulo path/line):
+> the entire `msgq` layer — `msgq.c` differs only in `#include` placement and `msgq.h` /
+> `msgq_priv.h` are byte-identical, so every `msgqRxLink` / `msgqTxGetFreeSpace` / `SWAP_RX` /
+> `-7` claim survives — plus `g_rpc-message-header.h` (still 32 bytes), `libos_init_args.h`,
+> `dev_gsp.h`, `dev_fb.h`'s WPR2 registers (0x1FA824/0x1FA828, `_VAL` 31:4),
+> `kernel_falcon_tu102.c`, `rpc_common.c` (a local-variable refactor only — signature still
+> written on send, still never checked on receive), `_checkSum32`, function numbers
+> 1/47/65/72/73/76 and events 0x1001/0x1003, the `NV_ASSERT(0)` bootup gate, `maxRpcSize`,
+> the recursive-poll prohibition, `kgspWaitForRmInitDone` polling `(GSP_INIT_DONE, 0)`, and
+> the four `kgspUnloadRm` callers.
+
+Spot-checkable index. `ogkm` (untagged, throughout this table) = `/workspace/nvidia-gpu-passthrough/research_clones/ogkm` @ 610.43.02;
+`ogkm-580` = `/workspace/nvidia-gpu-passthrough/research_clones/ogkm-580.159.04` @ 580.159.04;
 `nv` = `/workspace/nvidia-gpu-passthrough/research_clones/linux/drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/`;
 `C` = `/workspace/nvidia-gpu-passthrough/src/qemu/`; `C-repo` = `/workspace/nvidia-gpu-passthrough/`;
 `rs` = `/workspace/nvkvm-rs/`.
@@ -1413,7 +1805,8 @@ defect it is correcting. The deviations this plan is authorised to make, each wi
 | the reset/latch chain | four disagreeing reset sites; a teardown STARTCPU misclassified as a re-acquire re-latches `bootargs_dumped`/`q_ready` and wedges the next life | `[measured]` bench, and `msgqRxLink`'s `-7` has exactly one cause (§ above) |
 | RPC element parsing | parses arbitrary guest RAM as RPC elements and echoes `NV_OK`; unguarded `% q_msgcount` is a SIGFPE | `[measured]`, guest-reachable by reloading its own driver |
 | msgq addressing | the region is `NV_MEMORY_NONCONTIGUOUS` and self-describing via a page table in its own first page; the C addresses it **linearly** and works only because the allocation happened to be contiguous | `[src]` |
-| the version key | ~15 hard-coded offsets and no version key; the element layout genuinely changed in `(570, 610]` | `[src]` D1/D3 |
+| the version key | ~15 hard-coded offsets and no version key; the element layout genuinely changed in **`(595.84, 610.43.02]`** — 575/580/590/595 are all on the 48-byte side | `[src@580]` + `[src@610]` D1/D3 |
+| the `elemCount` bound | at 580 the guest's copy loop is unbounded on a field **we** write, and the staging buffer holds exactly 16 elements — `elemCount > 16` memcpys past a `portMemAllocNonPaged` allocation, hitting the live `msgq` metadata first | `[src@580]` §4.6 — a **safety** deviation, and the only one in this table that is not about correctness |
 | `rpc.length = 36` | header is 32; the same file uses 32 in two other places | `[src]` |
 
 | the sequence-number reset | preserving unconditionally hands a *reloaded* driver a `seqNum` **greater** than its own, and its receive path has no recovery branch for `>` at all — only for `<` | `[src]` `ogkm: message_queue_cpu.c:768-782, 836`; discriminator = the queue region's identity (`kgspDestruct` frees the memdesc, an idle release does not). ★ UNMEASURED — plan item O3, falsified or confirmed at S7 |
@@ -1512,3 +1905,104 @@ declares a lockless pair), the `RMARGS` id8 as the way the init region is found,
 falcon mailbox pair as the boot-args channel (already the *architecture* axis). Drift is
 supported only across ogkm-like bootstrap sequences; anything else ends in a named refusal
 (`QueueNotBound` for a guest that never binds, `GeometryRejected` for a different handshake).
+
+---
+
+## 14. ★★ 580 CORRECTION LOG — 2026-07-28
+
+Written after vendoring `ogkm-580.159.04` (§0.1). Corrections are recorded here **and** at
+their site, because a reader who remembers the old claim needs to learn it was version-bound
+rather than simply find it silently changed. Everything below was re-read in the 580 tree
+directly; where a relayed finding did not survive that re-read, it says so.
+
+### 14.1 What changed, and where
+
+| # | claim as it stood | what 580 says | site |
+|---|---|---|---|
+| 1 | element count derived from `rpc.length` (§1.1 item 5) | **read from `elemCount`@40**, and that read drives `msgqRxMarkConsumed` | §1.1-5, §4.4, §9 D3 |
+| 2 | *(absent)* | ★★ **`elemCount > 16` corrupts the guest kernel heap** | **new §4.6** |
+| 3 | MCTP/NVDM are "610+" constants | **no MCTP exists on the 580 GSP path at all** ⇒ `transport: None` | §1.2, §9 D2, §11-O4 |
+| 4 | break interval `(570, 610]` | **`(595.84, 610.43.02]`** ⇒ predicate `major >= 610` | §4.3, §9 D1 |
+| 5 | init-args may declare geometry | **4 fields at 580; geometry is compile-time** 48/4096/65536/4/12 | §1.3, §9 D8, §11-O8 |
+| 6 | O7 RESOLVED: "not implemented, do not emit" | ★★ **fully implemented at 580**; 6-entry bootup allowlist vs 610's 8 different ones | §1.1-10, **§11.1** |
+| 7 | init RPCs are boot step B6, inside bootstrap | **queued before bootstrap**, doorbell rung, `QueueState` still `Unbound` | **new §3.1a** |
+| 8 | suspend sentinel tested with `&` | **exact equality** at 580 ⇒ write the value, never OR the bit | §1.2, §3.2 |
+| 9 | *(see 14.6 — the relayed claim did not survive)* | | |
+
+### 14.2 ★ Two consequences that are ours, not NVIDIA's
+
+Both fall out of §3.1a and neither was in the plan or in the relayed findings:
+
+1. **E8 fires twice on a healthy 580 boot.** The doorbell-while-`Unbound` refusal is correct
+   as a *behaviour* (read no guest RAM) and wrong as a *classification*: at 580 it is normal
+   protocol traffic, not the stale-binding attack GSP-D4 describes. It must not escalate, and
+   the negative-trace test's exact-count arm has to be restated to distinguish "two expected
+   pre-bind doorbells" from "one stale-binding refusal".
+2. **E6 must drain the command queue after publishing.** At bind the guest's cmd `writePtr` is
+   already **2**. A doorbell-only service path recovers only because the guest happens to send
+   another command right after `INIT_DONE`; that is luck, not design.
+
+### 14.3 What was checked and found UNCHANGED
+
+Listed so the next reader does not re-verify them: the whole `msgq` layer (`msgq.c` differs
+only in `#include` placement; `msgq.h` and `msgq_priv.h` byte-identical), `g_rpc-message-header.h`,
+`libos_init_args.h`, `dev_gsp.h`, `dev_fb.h`'s WPR2 registers, `kernel_falcon_tu102.c`,
+`rpc_common.c` (semantically), `_checkSum32`, function numbers 1/47/65/72/73/76 and events
+0x1001/0x1003, the `NV_ASSERT(0)` bootup gate itself, `maxRpcSize`, the recursive-poll
+prohibition, `kgspWaitForRmInitDone` polling `(GSP_INIT_DONE, 0)`, the four `kgspUnloadRm`
+callers, `NV0000_ALLOC_PARAMETERS` (byte-identical, `NV_PROC_NAME_MAX_LENGTH` still `100U` —
+which does **not** settle 575, so `alloc_param_size` keeps returning `None`).
+★ **Paths and line numbers still drift** — §0.1 rules 2 and 3.
+
+### 14.4 What is relayed, not verified here
+
+The nine-tag probe that narrowed the break interval to `(595.84, 610.43.02]` — 575.64.05,
+580.65.06, 580.173.02, 590.44.01, 590.48.01, 595.44.02, 595.84 — used trees that are **not**
+vendored here. Only 580.159.04 and 610.43.02 were read directly. The two endpoints of the
+interval are therefore firm on one side (580.159.04 is 48-byte, read) and relayed on the
+other (595.84 is 48-byte, not read). A predicate of `major >= 610` is safe under either
+reading, since it is the *610* boundary that is directly verified.
+
+### 14.5 ★ The class fix, not just the instances
+
+The instance was "O7 was answered from the wrong tree". The class is: **a versioned
+specification was cited as if it were the specification.** §0.1 is the fix — every citation
+carries its tag, an untagged claim is unverified, `[src]` unqualified means *checked at both*.
+Two further things follow from it and are worth stating separately:
+
+- The C artifact's design docs are **transcriptions**, and a transcription is not a tree.
+  §9 D1 was `[inferred]` (I6) for exactly this reason and turned out to be right; §11-O7 was
+  marked RESOLVED for the opposite reason and turned out to be backwards. The difference is
+  not luck — it is that I6 *knew* it was second-hand and O7 did not.
+- A version-split fact is a **seam**, and the plan's own premise (owner directive: the GSP
+  layer must not be tied to a driver version) means the correct response is to record both
+  answers, never to pick the one that matches the machine on the desk. Where a split has no
+  clean seam it is named as such rather than smoothed — see the brief's closing section.
+
+### 14.6 ⚠ One relayed finding did NOT survive the re-read — reported, not quietly fixed
+
+The relayed finding said: *"580 has a GSP-resume handoff 610 never reads —
+`NV_PGC6_BSI_SECURE_SCRATCH_14._BOOT_STAGE_3_HANDOFF == _VALUE_DONE` plus SEC2
+`FALCON_MAILBOX0`, in `_kgspIsReloadCompleted`/`CORE_RESUME`."*
+
+**The "610 never reads" half is wrong.** 610 has the identical `_kgspIsReloadCompleted`,
+reading the identical register and field, at
+`ogkm-610: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_falcon_tu102.c:441-452`, used
+at `:471` inside `kgspExecuteCoreResume_TU102`. The mechanism is present at **both** tags.
+
+**What is actually version-split is how it is reached**, and that is a more interesting fact
+than the one claimed:
+
+| | 580.159.04 | 610.43.02 |
+|---|---|---|
+| where the handoff wait lives | `kgspExecuteSequencerCommand_TU102`, `case GSP_SEQ_BUF_OPCODE_CORE_RESUME` (`ogkm-580: kernel_gsp_tu102.c:913-960`) | `kgspExecuteCoreResume_TU102` (`ogkm-610: kernel_gsp_falcon_tu102.c:455-…`) |
+| how it is triggered | ★ **only** via `_kgspRpcRunCpuSequencer` ← `GSP_RUN_CPU_SEQUENCER` — **an event we would have to send** | locally, from `kernel_gsp_falcon_tu102.c:563` and `kernel_gsp_falcon_ga102.c:401` — **no RPC involved** |
+
+⇒ the owner's standing requirement that **GPU restart (idle → back) must work without a
+bolt-on** is affected, but not in the direction the finding stated. The 580 resume path is
+*RPC-driven*, which means a faked GSP that never emits `GSP_RUN_CPU_SEQUENCER` cannot drive
+it — whereas at 610 the same path needs nothing from us. Whether any restart scenario we
+must support actually goes through `CORE_RESUME` is **§11-O7a**, and it was **not**
+established here: nothing in the 580 tree was traced from a resume entry point down to a
+`GSP_SEQ_BUF_OPCODE_CORE_RESUME` buffer, because the buffer's *contents* come from GSP-RM
+firmware, which is not in the open tree. That is a genuine hole and it is named as one.

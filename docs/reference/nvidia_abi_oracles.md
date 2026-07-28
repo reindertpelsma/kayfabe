@@ -11,21 +11,28 @@ two-axis versioning research is `../../../nvidia-gpu-passthrough/docs/design/mod
 
 ---
 
-## 0. The three oracles
+## 0. The oracles
 
 | oracle | what it is | version it speaks for | where |
 |---|---|---|---|
 | **ogkm** | NVIDIA's own FINN-generated headers | **610.43.02**, one snapshot | `../../../nvidia-gpu-passthrough/research_clones/ogkm/` |
+| **ogkm-580** ★ | the same, at the **bench's exact driver** | **580.159.04** | `../../../nvidia-gpu-passthrough/research_clones/ogkm-580.159.04/` |
 | **nvproxy** | gVisor's independent transcription, versioned | 535.104.05 → 590.48.01, 17 entries | `../../../nvidia-gpu-passthrough/gvisor/pkg/abi/nvgpu/`, `.../sentry/devices/nvproxy/version.go` |
 | **the C artifact** | this project's working Mode-1/Mode-2 implementation | 535 / 570≡575 / 580 profiles | `../../../nvidia-gpu-passthrough/src/abi/`, `src/common/nvkvm_abi.h`, `tests/abi_parity/` |
 
 The generated code comes from **ogkm**. nvproxy and the C artifact are the independent checks —
 a generator validated only against its own input proves nothing.
 
-★ **The bench runs 580.159.04** (`rm_semantics_measured.md` §0), which is *newer than every
-nvproxy entry* (newest 580 entry is 580.126.20, `version.go:1085`) and *older than the vendored
-ogkm tag*. So no single oracle speaks for the bench directly; the claim "the bench uses layout
-X" is always an inference from a boundary plus an ordering.
+★ **The bench runs 580.159.04** (`rm_semantics_measured.md` §0). As of 2026-07-28 that version is
+**vendored directly** (`ogkm-580.159.04/version.mk:1`, tag `580.159.04` from
+`github.com/NVIDIA/open-gpu-kernel-modules`, `git clone --depth 1 --branch 580.159.04`), so for
+anything the two trees disagree on the bench claim is now `[src]` rather than an inference from a
+boundary. `research_clones/ogkm/` stays pinned at 610.43.02 — existing `file:line` citations against
+it must keep resolving; **cite the tree you mean by name**.
+
+Between the two, 610.43.02 remains the *forward* oracle (what the driver is becoming) and
+580.159.04 the *bench* oracle (what the bench actually runs). Where they differ, §6 records the
+difference; neither is "the" answer.
 
 ---
 
@@ -109,6 +116,14 @@ root_alloc_params.hClient = hclient;                       // :55
 **The experiment that settles it:** vendor a second ogkm tag in `[550.54.04, 580.65.06)` and
 regenerate. That also deletes `crates/kayfabe-abi/src/transcribed.rs` entirely.
 
+★ **Partial progress, 2026-07-28.** `ogkm-580.159.04` is now vendored (§0) and its
+`src/common/sdk/nvidia/inc/class/cl0000.h` is **byte-identical** to 610's, `NV_PROC_NAME_MAX_LENGTH`
+still `100U` (`ogkm-580: src/common/sdk/nvidia/inc/nvlimits.h:47`). So the 120-byte layout —
+`pOsPidInfo` included — is now confirmed at **two** tags spanning the 580→610 gap, and the "only one
+oracle" hazard is narrowed to *"unknown below 580.159.04"* rather than *"unknown outside 610"*.
+It does **not** settle 575: the target interval `[550.54.04, 580.65.06)` is still unvendored, and
+`alloc_param_size` must keep returning `None`.
+
 ★ A related caveat found in the same macro: the whole `processID` assignment sits inside
 `if (!IsT234DorBetter(pGpu))` (`rpc.h:57`). On Tegra T234D and later, RM does **not** set
 `processID` at all, so it stays 0 and would decode as `User { pid: 0 }`. Irrelevant to a discrete
@@ -162,7 +177,142 @@ field's alignment as a hard error rather than emitting a plain `#[repr(C)]` mirr
 
 ---
 
-## 6. Open items
+## 6. ★★ FINDING — the GSP message-queue element at 580 vs 610 (settles O4, O8, and half of O7)
+
+Cites: `ogkm-580` = `research_clones/ogkm-580.159.04/`, `ogkm` = `research_clones/ogkm/` @610.43.02.
+Paths below are relative to each tree's root. This section is the evidence behind
+`mode2_gsp_port_plan.md` §9 D1–D3, §10 I6, §11 O4/O7/O8.
+
+### 6.1 The element — 580 is the 48-byte form, confirmed first-hand
+
+```c
+// ogkm-580: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:43-51
+typedef struct GSP_MSG_QUEUE_ELEMENT {
+    NvU8  authTagBuffer[16];   // @0
+    NvU8  aadBuffer[16];       // @16
+    NvU32 checkSum;            // @32
+    NvU32 seqNum;              // @36
+    NvU32 elemCount;           // @40
+    NV_DECLARE_ALIGNED(rpc_message_header_v rpc, 8);   // @48
+} GSP_MSG_QUEUE_ELEMENT;
+```
+
+`GSP_MSG_QUEUE_ELEMENT_HDR_SIZE = NV_OFFSETOF(..., rpc) = 48` (`:93`), `SIZE_MIN = RM_PAGE_SIZE`,
+`SIZE_MAX = 16 * SIZE_MIN` (`:91-92`), `HEADER_ALIGN 4` / `ELEMENT_ALIGN RM_PAGE_SHIFT` (`:101-104`).
+Byte-identical to the C's transcription and to nouveau's r535/r570. **I6 is settled: the C is right
+for 580.** There is no CC-only header growth at 580 — the auth tag and AAD are *in* the fixed
+header, so `hdr_size_cc == hdr_size_plain == 48`.
+
+### 6.2 ★ A 580 guest **does** read `elemCount` at +40, on the receive path, three times over
+
+```c
+// ogkm-580: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:652-659
+if (i == 0) { /* Pull out the element count. This adjusts the loop condition. */
+    nElements = pMQI->pCmdQueueElement->elemCount; }
+```
+
+and that value then drives, in the same function:
+
+- the read/copy loop bound (`:628`, `:648-650`);
+- the CC checksum span (`:676-677`) and the CC decrypt span (`:741-743`);
+- **`msgqRxMarkConsumed(pMQI->hQueue, nElements)`** at `:774` — the ring advance.
+
+580 **never derives** the element count from `rpc.length`; the only length check is a post-hoc
+sanity test (`:760-770`) that neither cross-checks `elemCount` nor gates the consume. 610 is the
+mirror image: `nElements` is derived (`ogkm: message_queue_cpu.c:698-701`) and there is no
+`elemCount` field at all.
+
+Two consequences the port must hold, and they are **different invariants per version**:
+
+| version | what MUST agree with how far we advanced `writePtr` |
+|---|---|
+| 580 | `elemCount` — a mismatch desyncs the ring pointer *independently of* `seqNum` |
+| 610 | `rpc.length` (via `ceil((hdrSize+length)/4096)`) |
+
+★ And a hard bound on 580: the staging buffer is `1<<12 + GSP_MSG_QUEUE_ELEMENT_SIZE_MAX +
+msgqGetMetaSize()` = one page + **64 KiB** + meta (`:132-134`, `:143-145`), while the copy loop
+writes `nElements * 4096` into it with **no upper bound on `elemCount`** and a ring holding
+`msgCount = (0x40000 - 4096)/4096 = 63` elements (`ogkm-580: src/common/shared/msgq/msgq.c:237-252`).
+Emitting `elemCount > 16` corrupts the guest kernel heap (it lands on
+`pMetaData` first). `elemCount ∈ [1, 16]` is not a style rule, it is a guest-memory-safety bound.
+
+### 6.3 ★ MCTP/NVDM: **not present at 580 at all**, and the 610 words are these
+
+The 610 header words the port carried as opaque placeholders are, transcribed:
+
+| word | offset (610) | value | derivation |
+|---|---|---|---|
+| `mctpHeader` | @0 | **`0xC000_0001`** | `REF_NUM(VERSION[3:0],1) \| SEID=DEID=SEQ=0 \| EOM[30]=1 \| SOM[31]=1` |
+| `nvdmHeader` | @4 | **`0x2510_DE7E`** | `TYPE[6:0]=_VENDOR_PCI 0x7e \| IC[7]=0 \| VENDOR_ID[23:8]=_NV 0x10de \| NVDM_TYPE[31:24]=NVDM_TYPE_RM_RPC 0x25` |
+
+Field definitions `ogkm: src/nvidia/arch/nvalloc/common/inc/mctp_format.h:39-58`; constructors
+`mctpCreateTransportHeader` `:78-94` and `mctpCreateNvdmHeader` `:108-118`; the SOM/EOM/SEID/DEID/SEQ
+arguments the GSP path passes are literal `1,1,0,0,0` at
+`ogkm: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:505-512`; `NVDM_TYPE_RM_RPC 0x25` at
+`ogkm: .../nvdm_format.h:61`. `REF_NUM`/`REF_DEF`/`REF_VAL` are plain shift-and-mask
+(`ogkm: src/common/sdk/nvidia/inc/nvmisc.h:336-341`). These are **exact**, not placeholders.
+
+610 validates exactly two fields on receive, and nothing else in either word —
+`REF_VAL(MCTP_HEADER_VERSION, mctpHeader) == 0x1` and
+`REF_VAL(MCTP_MSG_HEADER_VENDOR_ID, nvdmHeader) == 0x10de`
+(`ogkm: message_queue_cpu.c:737-758`). SOM/EOM/SEQ/NVDM-type are **not** checked. So the sufficient
+610 emission is any word with nibble0 == 1 and vendor == 0x10de; we emit NVIDIA's own values anyway.
+
+**At 580 these words do not exist.** `mctp_format.h` is not included by the 580 GSP path; the only
+MCTP headers in the 580 tree are FSP/SEC2/NVSwitch
+(`ogkm-580: src/nvidia/arch/nvalloc/common/inc/fsp/fsp_mctp_format.h`, `.../sec2/sec2_mctp_format.h`),
+and `NVDM_TYPE_RM_RPC` is absent from the whole 580 tree. Bytes @0–@7 of a 580 element are
+`authTagBuffer[0..8]`, which a CC-off guest never reads. **A 580 profile must carry
+`transport: None`, not placeholder words** — writing 0xC0000001/0x2510DE7E there is inert (it only
+feeds the checksum we compute anyway), but it encodes a protocol the guest is not speaking.
+
+The bitfield *encoding* is stable across the break: 580's FSP header defines the same
+`MCTP_HEADER_*` / `MCTP_MSG_HEADER_*` bit ranges and the same `0x7e`/`0x10de` constants
+(`ogkm-580: fsp/fsp_mctp_format.h:34-53`). 610 hoisted that header to a common location and made
+GSP a client of it. So the change is **which transport the GSP queue speaks**, not what MCTP means.
+
+### 6.4 The break interval, narrowed to adjacent tags
+
+Probed `src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h` at nine tags via
+`raw.githubusercontent.com` (`mctpHeader` / `elemCount` presence):
+
+| 575.64.05 | 580.65.06 | 580.159.04 | 580.173.02 | 590.44.01 | 590.48.01 | 595.44.02 | 595.84 | 610.43.02 |
+|---|---|---|---|---|---|---|---|---|
+| 48-byte | 48-byte | 48-byte | 48-byte | 48-byte | 48-byte | 48-byte | 48-byte | **16-byte + MCTP** |
+
+`git ls-remote --tags` lists **no tag between 595.84 and 610.43.02**, so the interval is closed as
+far as public tags allow: the break is **(595.84, 610.43.02]** — the whole 580/590/595 range is on
+the 48-byte side. `ElementLayout`'s version predicate should therefore be "`>= 610` ⇒ MCTP form",
+not "`> 570`".
+
+### 6.5 Other 580-vs-610 differences that touch the port plan's citation table
+
+| plan row / claim | 610 | **580** |
+|---|---|---|
+| `MESSAGE_QUEUE_INIT_ARGUMENTS` shape (D8, **O8**) | **9** fields — adds `queueElementHdrSize/SizeMin/SizeMax`, `queueHeaderAlign`, `queueElementAlign` (`gsp_init_args.h:30-45`) | **4** fields: `sharedMemPhysAddr`, `pageTableEntryCount`, `cmdQueueOffset`, `statQueueOffset` (`ogkm-580: gsp_init_args.h:29-34`); written at `ogkm-580: kernel_gsp.c:4486-4489`. **Identical to nouveau r570.** Geometry is *not negotiated* at 580 — it is compile-time in `message_queue_priv.h:91-104` and the faked GSP must hardcode 48/4096/65536/4/12 |
+| `GSP_ARGUMENTS_CACHED` tail | + `rmStateMonitorBufferArgs`, `bindataArgs` | absent (`ogkm-580: gsp_init_args.h:45-64`) — different total size *and* different offsets after `messageQueueInitArguments` |
+| runtime geometry fields on `MESSAGE_QUEUE_INFO` | `queueElementHdrSize` etc. set at `message_queue_cpu.c:82-91` | do not exist (`ogkm-580: message_queue_priv.h:53-73`) |
+| **O7** "`GSP_RUN_CPU_SEQUENCER` is not implemented, do not emit it" | true — enum only (`rpc_global_enums.h:255`) | **false.** Fully implemented: dispatch `ogkm-580: kernel_gsp.c:1486-1487`, and it is one of six entries in the bootup-without-API-lock allowlist (`:1464-1481`, vs eight *different* entries at `ogkm: kernel_gsp.c:1419-1440`). The executor is `kgspExecuteSequencerCommand_TU102` (`ogkm-580: kernel_gsp_tu102.c:913`), **deleted at 610** |
+| init RPCs `SET_SYSTEM_INFO` → `SET_REGISTRY` (plan cites `kgspSendInitRpcs`, `kernel_gsp.c:4686-4709`, called *inside* `kgspBootstrap`) | as cited (`kernel_gsp_tu102.c:571-583`) | **`kgspSendInitRpcs` does not exist at 580.** It is `kgspQueueAsyncInitRpcs_IMPL` (`ogkm-580: kernel_gsp.c:3753-3777`), called **before** `kgspBootstrap_HAL` (`:4141`), i.e. before FWSEC / Booter Load / RISCV start / status-queue link. Same two RPCs, same order — but they are already in the command queue, doorbell rung (`:425`), when the GSP "boots". Skipped only if SPDM is enabled (`:4123-4133`) |
+| `INTERRUPT_PROCESSOR_SUSPENDED_VALUE 0x80000000` on MAILBOX0 (plan: `kernel_gsp_tu102.c:333, 336-357`) | `(mailbox & 0x80000000) != 0` — **masked** | `(mailbox == 0x80000000)` — **exact equality** (`ogkm-580: kernel_gsp_tu102.c:1226-1238`). Polled after fn-47 (`ogkm-580: kernel_gsp.c:4310`) *and* as a fallback in bootstrap (`kernel_gsp_tu102.c:551`). On the bench we must write the value, not OR the bit |
+| GSP resume handoff | none — removed | 580 additionally polls **`NV_PGC6_BSI_SECURE_SCRATCH_14._BOOT_STAGE_3_HANDOFF == _VALUE_DONE`** and SEC2 `FALCON_MAILBOX0` in `_kgspIsReloadCompleted` / `CORE_RESUME` (`ogkm-580: kernel_gsp_tu102.c:319-329, 913-950`). A different register from anything 610 reads |
+| `kgspBootstrap_TU102` ordering | as cited | same shape, different lines: `ogkm-580: kernel_gsp_tu102.c:493-578`; mailbox program `:533` (writer `:363-373`), Booter Load `:537`, RISCV-active-or-suspended `:551`, status-queue link **NORMAL-only** `:568-571`, `kgspWaitForRmInitDone` `:573` |
+
+Rows that were checked and are **unchanged** (byte-identical files, or identical semantics at
+different lines): the whole `msgq` layer — `msgq.c`, `msgq.h`, `msgq_priv.h` are byte-identical
+apart from `#include` placement, so every `msgqRxLink` / `msgqTxGetFreeSpace` / `SWAP_RX` /
+`-7` claim holds verbatim at 580 (note the path moved: `ogkm-580: src/common/shared/msgq/`);
+`g_rpc-message-header.h` (`rpc_message_header_v03_00` still 32 bytes); `libos_init_args.h`;
+`dev_gsp.h` (`NV_PGSP_QUEUE_HEAD`, MAILBOX0/1); `dev_fb.h`'s WPR2 registers (610 only *adds*
+fault-buffer registers); `kernel_falcon_tu102.c`; `rpc_common.c` (cosmetic refactor only —
+signature still written on send, still never checked on receive); `_checkSum32`; function numbers
+`1/47/65/72/73/76`, events `0x1001/0x1003`; the `NV_ASSERT(0)` bootup gate; `maxRpcSize`; the
+recursive-poll prohibition; `kgspWaitForRmInitDone` polling `(GSP_INIT_DONE, 0)`; the four
+`kgspUnloadRm` callers; `cmdQueueOffset`/`statQueueOffset` as byte offsets.
+
+---
+
+## 7. Open items
 
 1. **Vendor a second ogkm tag** in `[550.54.04, 580.65.06)`. Deletes `transcribed.rs`, settles
    `NV0000_ALLOC_PARAMETERS`'s size at 575, and is the "day-not-a-month" drill

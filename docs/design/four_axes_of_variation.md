@@ -67,7 +67,29 @@ honest answer is a refusal, not emulation.
 
 **Known layout breaks** (each costs one table entry, mechanical):
 - `NVOS46` 56 → 64 bytes at **580.65.06** (`docs/reference/nvidia_abi_oracles.md` F1)
-- the GSP queue element 48 → 16 bytes with MCTP/NVDM headers somewhere in **(570, 610]**
+- the GSP queue element 48 → 16 bytes with MCTP/NVDM headers in **(595.84, 610.43.02]**
+  — narrowed 2026-07-28 from the earlier estimate of `(570, 610]`. The 48-byte form with
+  `elemCount@40` is present at 575.64.05, 580.65.06, **580.159.04**, 580.173.02, 590.44.01,
+  590.48.01, 595.44.02 and 595.84; the 16-byte MCTP/NVDM form appears only at **610.43.02**.
+  ⇒ **580, 590 and 595 are all on the 48-byte side**, and the version predicate is
+  `major >= 610`, not `> 570`. Only 580.159.04 and 610.43.02 are vendored here
+  (`research_clones/ogkm-580.159.04/`, `research_clones/ogkm/`) and were read directly; the
+  other seven tags are relayed. See `mode2_gsp_port_plan.md` §4.3 and §14.4.
+
+★ **This break is bigger than a layout entry, which is why it is worth naming here.** It is
+not only field offsets: at 610 the receiver *derives* the element count from `rpc.length`,
+while below 610 it *reads* an `elemCount` field — and that number is what advances the ring.
+So the same "one table entry" carries a **behavioural** difference on both the send and the
+receive side, plus a guest-memory-safety bound (`mode2_gsp_port_plan.md` §4.6). A layout table
+that only carries offsets is not sufficient for this axis.
+
+★ **What is now measurable rather than estimated.** Two of the three items above are read from
+driver source at a named tag, so they are facts about the *guest driver*, not about our stack:
+the `NVOS46` boundary and the GSP element break. **That is all.** They bound where a *layout*
+changes; they say nothing about whether a mismatched pair actually runs, because nothing in
+the Rust stack has touched a GPU. The supported-drift range below therefore stays UNMEASURED —
+knowing where the tables must differ is not the same as knowing that a guest at one version
+boots against a host at another.
 
 **Estimated range, explicitly UNMEASURED:** comfortable within a major (580.x guest / 580.y host),
 plausible one major back (575 guest / 580 host), unlikely forward. Nothing in the Rust stack has
