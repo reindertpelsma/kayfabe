@@ -20,7 +20,7 @@ use kayfabe_abi::{DriverVersion, versions};
 use kayfabe_arch::GspReg;
 use kayfabe_gsp::{
     BootPhase, EchoOk, GspFault, GspFsm, MsgCount, MsgqAbi, Observation, OutgoingRpc, Projection,
-    QueueState, RecordingRam, RegionMap, RxLinkCode, Transition, TransportHdr, TxHeader,
+    QueueId, QueueState, RecordingRam, RegionMap, RxLinkCode, Transition, TransportHdr, TxHeader,
     available_elements, checksum32, free_elements, rx_link_check,
 };
 use kayfabe_tests::gspworld::{
@@ -2508,5 +2508,627 @@ fn a_binding_publishes_the_status_queue_at_position_zero() {
     assert_eq!(
         geom.region().runs(geom.cmd_element_off(slot3), 4096),
         Ok(vec![(pages[4], 4096)]),
+    );
+}
+
+// ─────────────────── the interrupt handshake and the two register gates ───────────────────
+
+/// ★★ **E10 — the status-queue interrupt, both edges and both polarities.**
+///
+/// The guest's ISR reads `IRQSTAT`, writes the SWGEN0 bit to `IRQSCLR`, and only then
+/// drains the queue (`C: src/qemu/nvkvm_gpu_emul.c:4193-4200`). Nothing in this suite
+/// asserted any part of that handshake: `IRQSTAT` was never read, `IRQSCLR` was never
+/// written, [`Transition::E10`] never appeared in an expectation, and
+/// `ServiceReport::raise_status_irq` — the VMM's *whole* instruction to assert the
+/// interrupt — was never looked at. A GSP that never raises it posts into a ring nobody is
+/// told about, and `kgspWaitForRmInitDone` waits for a message it is never woken for.
+///
+/// Driven under **both** register models: which bit means SWGEN0, and which value clears
+/// it, belong to the model and not to this crate.
+#[test]
+fn the_status_queue_interrupt_is_raised_by_a_post_and_lowered_only_by_the_swgen0_clear() {
+    for (name, model) in [("A", MODEL_A), ("B", MODEL_B)] {
+        let mut w = World::new(P580, model);
+        assert_eq!(
+            w.rd(GspReg::GspFalconIrqstat),
+            0,
+            "{name}: a cold device has nothing pending",
+        );
+
+        w.boot();
+        // The bind posts `GSP_INIT_DONE`, so the line comes up with it.
+        assert_eq!(
+            w.rd(GspReg::GspFalconIrqstat),
+            model.irq_clear(),
+            "{name}: the INIT_DONE post asserted SWGEN0",
+        );
+        w.link_and_drain();
+
+        // A write to IRQSCLR that does not carry the SWGEN0 bit is not the ISR's write: it
+        // clears nothing and fires nothing.
+        for spurious in [0u64, !model.irq_clear()] {
+            let r = w.wr(GspReg::GspFalconIrqsclr, spurious).unwrap();
+            assert_eq!(
+                r.transitions,
+                vec![],
+                "{name}: {spurious:#x} does not carry the SWGEN0 bit",
+            );
+            assert_eq!(
+                w.rd(GspReg::GspFalconIrqstat),
+                model.irq_clear(),
+                "{name}: …so the line is still up",
+            );
+        }
+
+        // The ISR's own write is E10, and it lowers the line.
+        let r = w.wr(GspReg::GspFalconIrqsclr, model.irq_clear()).unwrap();
+        assert_eq!(
+            r.transitions,
+            vec![Transition::E10],
+            "{name}: the edge is E10"
+        );
+        assert_eq!(
+            w.rd(GspReg::GspFalconIrqstat),
+            0,
+            "{name}: and it is lowered"
+        );
+
+        // A doorbell that posts a reply asks for it again — and the *report* is where the
+        // VMM learns that, so the report has to say so.
+        w.guest.send(&mut w.ram, FN_RM_CONTROL, 7, &[3; 8]).unwrap();
+        let r = w.doorbell().unwrap();
+        assert!(
+            r.raise_status_irq,
+            "{name}: a posted reply is an interrupt the VMM must deliver",
+        );
+        assert_eq!(
+            w.rd(GspReg::GspFalconIrqstat),
+            model.irq_clear(),
+            "{name}: the line agrees with the report",
+        );
+        assert_eq!(
+            w.guest.recv(&mut w.ram).unwrap().len(),
+            1,
+            "{name}: the reply"
+        );
+        assert_eq!(
+            w.wr(GspReg::GspFalconIrqsclr, model.irq_clear())
+                .unwrap()
+                .transitions,
+            vec![Transition::E10],
+            "{name}: cleared again",
+        );
+
+        // …and a doorbell that posts NOTHING leaves it down. 72 and 73 are
+        // `_issueRpcAsync`: no reply, so nothing to announce.
+        w.guest
+            .send(&mut w.ram, FN_GSP_SET_SYSTEM_INFO, 8, &[1, 2, 3, 4])
+            .unwrap();
+        let r = w.doorbell().unwrap();
+        assert!(
+            !r.raise_status_irq,
+            "{name}: nothing was posted, so nothing is announced",
+        );
+        assert_eq!(w.rd(GspReg::GspFalconIrqstat), 0, "{name}: still down");
+        assert_eq!(w.guest.recv(&mut w.ram).unwrap(), vec![], "{name}: no echo");
+    }
+}
+
+/// ★ A Booter runs on a **SEC2 STARTCPU**, and on nothing else.
+///
+/// `kgspExecuteBooterLoad`/`…Unload` put their argument in `SEC2_FALCON_MAILBOX0` and then
+/// start the falcon: the start is the event, the mailbox only its argument. So a CPUCTL
+/// write that is not a STARTCPU — a halt, an interrupt-enable, a read-modify-write that
+/// happens to touch the register — must run neither. The Unload half is the one that
+/// matters: running it by accident takes WPR2 down under a live driver, which is E4's
+/// whole observable content.
+#[test]
+fn the_booter_runs_only_on_a_sec2_startcpu_and_any_other_poke_is_inert() {
+    for (name, model) in [("A", MODEL_A), ("B", MODEL_B)] {
+        let mut w = World::new(P580, model);
+        w.wr(GspReg::GspFalconCpuctl, model.startcpu()).unwrap();
+        let gpa = w.guest.boot_args_gpa;
+        w.wr(GspReg::GspFalconMailbox0, gpa & 0xFFFF_FFFF).unwrap();
+        w.wr(GspReg::GspFalconMailbox1, gpa >> 32).unwrap();
+        w.wr(GspReg::Sec2FalconMailbox0, 0).unwrap();
+        assert_eq!(w.fsm.phase(), BootPhase::FwsecRan, "{name}: pre-Booter");
+
+        // Booter **Load**.
+        for inert in [0u64, !model.startcpu()] {
+            let r = w.wr(GspReg::Sec2FalconCpuctl, inert).unwrap();
+            assert_eq!(
+                r.transitions,
+                vec![],
+                "{name}: {inert:#x} is not this model's STARTCPU",
+            );
+            assert_eq!(
+                w.fsm.phase(),
+                BootPhase::FwsecRan,
+                "{name}: …so the Booter did not run",
+            );
+        }
+        let r = w.wr(GspReg::Sec2FalconCpuctl, model.startcpu()).unwrap();
+        assert_eq!(
+            r.transitions,
+            vec![Transition::E5],
+            "{name}: E5 on STARTCPU"
+        );
+        assert_eq!(w.fsm.phase(), BootPhase::Booted, "{name}");
+        assert_ne!(w.rd(GspReg::Wpr2AddrHi), 0, "{name}: WPR2 up");
+
+        // Booter **Unload**: the sentinel is latched, and still nothing happens until a
+        // real STARTCPU arrives.
+        w.wr(GspReg::Sec2FalconMailbox0, model.unload_arg())
+            .unwrap();
+        for inert in [0u64, !model.startcpu()] {
+            let r = w.wr(GspReg::Sec2FalconCpuctl, inert).unwrap();
+            assert_eq!(
+                r.transitions,
+                vec![],
+                "{name}: {inert:#x} is not this model's STARTCPU",
+            );
+            assert_eq!(w.fsm.phase(), BootPhase::Booted, "{name}: still live");
+            assert_ne!(
+                w.rd(GspReg::Wpr2AddrHi),
+                0,
+                "{name}: WPR2 must not come down under a running driver",
+            );
+        }
+        let r = w.wr(GspReg::Sec2FalconCpuctl, model.startcpu()).unwrap();
+        assert_eq!(
+            r.transitions,
+            vec![Transition::E4],
+            "{name}: E4 on STARTCPU"
+        );
+        assert_eq!(w.fsm.phase(), BootPhase::Halted, "{name}");
+        assert_eq!(w.rd(GspReg::Wpr2AddrHi), 0, "{name}: WPR2 down");
+    }
+}
+
+// ──────────────────────── the two ring cursors, at their boundaries ────────────────────────
+
+/// ★★ The link edge is a **change**, not a zero.
+///
+/// `maybe_enter_running` decides the guest has consumed `GSP_INIT_DONE` from its published
+/// read pointer — and it may not simply test that pointer against zero, because at a
+/// re-acquire the guest's own backing store still holds the *previous* life's `rxReadPtr`
+/// until `msgqRxLink` zeroes it (`ogkm-610: msgq.c:435-437`, `ogkm-580: :436-438`), which
+/// happens **after** we bind. Every other boot in this file starts from freshly allocated
+/// memory where the inherited value is 0, so the whole `at_bind != 0` half of the edge went
+/// unexercised. A GSP that never reaches `Running` refuses every unsolicited event forever
+/// ([`GspFault::NotRunning`]) — that is the completion path, not a status bit.
+#[test]
+fn a_bind_that_inherits_a_stale_peer_read_pointer_still_reaches_running() {
+    // 1 is deliberately absent: it is where the guest's pointer also lands after draining
+    // INIT_DONE, so it is the one genuinely ambiguous value — covered on its own below.
+    for stale in [0u32, 2, 3, 6] {
+        let mut w = World::new(P580, MODEL_A);
+        // The previous life's `rxReadPtr`, sitting in the guest's own backing store where
+        // `msgqRxLink` will zero it — but not until after we have bound.
+        let at = w
+            .guest
+            .gpa_of(w.guest.cmd_off + u64::from(w.guest.rx_hdr_off));
+        kayfabe_gsp::GuestRam::write(&mut w.ram, at, &stale.to_le_bytes()).unwrap();
+
+        w.boot();
+        assert_eq!(
+            w.link_and_drain()
+                .iter()
+                .map(|m| m.function)
+                .collect::<Vec<_>>(),
+            vec![INIT_DONE],
+            "stale={stale}: the cached free count got INIT_DONE out past the stale pointer",
+        );
+        assert_eq!(
+            w.fsm.phase(),
+            BootPhase::Booted,
+            "stale={stale}: Running is entered on the observed drain, not on the post",
+        );
+        assert_eq!(
+            w.fsm.post_event(&mut w.ram, &event(16)),
+            Err(GspFault::NotRunning),
+            "stale={stale}: …and until then an unsolicited event is refused by name",
+        );
+
+        w.guest.send(&mut w.ram, FN_RM_CONTROL, 1, &[5; 8]).unwrap();
+        let r = w.doorbell().unwrap();
+        assert!(
+            r.transitions.contains(&Transition::Running),
+            "stale={stale}: the pointer MOVED, and only the guest can have moved it",
+        );
+        assert_eq!(w.fsm.phase(), BootPhase::Running, "stale={stale}");
+        assert_eq!(
+            w.fsm.post_event(&mut w.ram, &event(16)),
+            Ok(()),
+            "stale={stale}: events flow once the drain has been observed",
+        );
+    }
+
+    // ★ The one inherited value that is genuinely indistinguishable from the guest's own
+    // position: the edge is conservative there — it waits rather than guessing — and
+    // settles on the next consumption.
+    let mut w = World::new(P580, MODEL_A);
+    let at = w
+        .guest
+        .gpa_of(w.guest.cmd_off + u64::from(w.guest.rx_hdr_off));
+    kayfabe_gsp::GuestRam::write(&mut w.ram, at, &1u32.to_le_bytes()).unwrap();
+    w.boot();
+    w.link_and_drain();
+    w.guest.send(&mut w.ram, FN_RM_CONTROL, 1, &[5; 8]).unwrap();
+    let r = w.doorbell().unwrap();
+    assert!(
+        !r.transitions.contains(&Transition::Running),
+        "a pointer that reads exactly what we inherited has not provably moved",
+    );
+    assert_eq!(w.fsm.phase(), BootPhase::Booted);
+    assert_eq!(
+        w.guest.recv(&mut w.ram).unwrap().len(),
+        1,
+        "the guest consumes the reply, moving its pointer off the ambiguous value",
+    );
+    w.guest.send(&mut w.ram, FN_RM_CONTROL, 2, &[5; 8]).unwrap();
+    let r = w.doorbell().unwrap();
+    assert!(
+        r.transitions.contains(&Transition::Running),
+        "…and the next consumption settles it",
+    );
+    assert_eq!(w.fsm.phase(), BootPhase::Running);
+}
+
+/// ★★ GSP-D2 — the producer's **cached** free count is consulted first, and the peer's
+/// published pointer is read only when the cache is short.
+///
+/// `msgqTxSubmitBuffers` tests the cache and falls through to a live read only on a
+/// shortfall (`ogkm-610: msgq.c:544-547`, `ogkm-580: :545-548`). That order is
+/// load-bearing, not an optimisation: at a rebind the peer's published pointer still holds
+/// the previous life's value, and a post that consulted it would refuse the very
+/// `GSP_INIT_DONE` the guest is spinning for. Asserted in **both** directions, with the
+/// peer pointer poisoned out of range so that a read is loud when it happens — and so that
+/// the arm which does read it is proven live rather than assumed.
+#[test]
+fn a_post_the_cached_free_count_covers_never_reads_the_peers_pointer() {
+    let free_cache = |w: &World| match w.fsm.queue() {
+        QueueState::Bound(b) => b.status_cursor().free_cache,
+        QueueState::Unbound => panic!("bound after boot"),
+    };
+    let mut w = World::new(P580, MODEL_A);
+    w.boot();
+    w.link_and_drain();
+    assert_eq!(
+        free_cache(&w),
+        5,
+        "non-vacuity: msgCount - 1, less the one element INIT_DONE took",
+    );
+
+    // The guest's published read pointer, poisoned out of range.
+    let at = w
+        .guest
+        .gpa_of(w.guest.cmd_off + u64::from(w.guest.rx_hdr_off));
+    kayfabe_gsp::GuestRam::write(&mut w.ram, at, &99u32.to_le_bytes()).unwrap();
+
+    // Exactly the cached count — 48 + 32 + 20000 = 20080 bytes, five 4096-byte elements.
+    // At `elements == free` the cache still covers the request, so nothing is read.
+    assert_eq!(
+        w.fsm.post(&mut w.ram, &event(20_000)),
+        Ok(()),
+        "the cache covers it exactly, so the poisoned pointer is never consulted",
+    );
+    assert_eq!(
+        free_cache(&w),
+        0,
+        "non-vacuity: the request really was the whole cached count",
+    );
+
+    // One element more and the cache no longer covers it, so the peer's pointer IS read —
+    // and the poison surfaces, by name.
+    assert_eq!(
+        w.fsm.post(&mut w.ram, &event(16)),
+        Err(GspFault::PeerReadPtrOutOfRange {
+            value: 99,
+            count: 7
+        }),
+    );
+
+    // Repaired, the same post goes through: the refusal was the pointer, not the ring.
+    kayfabe_gsp::GuestRam::write(&mut w.ram, at, &6u32.to_le_bytes()).unwrap();
+    assert_eq!(w.fsm.post(&mut w.ram, &event(16)), Ok(()));
+}
+
+/// ★★ **GSP-S1 at its exact boundary** — the guest-written element count.
+///
+/// `elemCount` is the one number in the receive path the *guest* writes rather than we
+/// derive, and it bounds a copy into a fixed staging buffer, so its range test is a safety
+/// bound (`docs/design/mode2_gsp_port_plan.md` §4.6). The bound is `> max` and not
+/// `>= max`, and the difference is a whole legal message: `queueElementSizeMax` bytes is
+/// exactly `max` elements, so a message that fills the staging buffer is the **largest
+/// legal** command the driver can send, not an overrun.
+///
+/// The existing over-wide test covers `encode_message`, the outgoing side. This is the
+/// incoming side, where the number is untrusted.
+#[test]
+fn a_command_filling_the_staging_buffer_exactly_is_accepted_and_one_element_more_is_not() {
+    const HDR_580: usize = 48;
+    const CHECKSUM_580: usize = 32;
+    const ELEM_COUNT_580: usize = 40;
+    const ENVELOPE: usize = 32;
+    let max = kayfabe_gsp::max_elements(PAGE as u32, STAGING_BYTES);
+    assert_eq!(max, 16, "65536 / 4096, derived from the geometry");
+
+    // The real 63-slot ring: a 7-slot one can never make sixteen elements *available*, so
+    // a test written against it would be describing a bound it cannot reach.
+    let mut w = World::new_sized(P580, MODEL_A, REAL_QUEUE_SIZE);
+    w.boot();
+    w.link_and_drain();
+    assert_eq!(
+        w.guest.msg_count, 63,
+        "non-vacuity: the ring the driver really builds",
+    );
+
+    let payload: Vec<u8> = (0..(STAGING_BYTES as usize - HDR_580 - ENVELOPE))
+        .map(|i| (i % 251) as u8)
+        .collect();
+    let n = w
+        .guest
+        .send(&mut w.ram, FN_RM_CONTROL, 1, &payload)
+        .expect("the ring has room");
+    assert_eq!(
+        n, max,
+        "non-vacuity: the command occupies the whole staging buffer",
+    );
+
+    let r = w
+        .doorbell()
+        .expect("the largest legal message is not a range violation");
+    assert_eq!(r.commands.len(), 1, "sixteen elements, ONE logical command");
+    assert_eq!(r.commands[0].elements, max);
+    assert_eq!(
+        r.commands[0].payload, payload,
+        "every byte of it, across sixteen elements",
+    );
+
+    // One element more than the buffer holds is refused by name, before anything is read
+    // into it…
+    w.guest.send(&mut w.ram, FN_RM_CONTROL, 2, &[7; 8]).unwrap();
+    let slot = w.last_command_slot();
+    w.poke_element(
+        RingId::Command,
+        slot,
+        HDR_580,
+        CHECKSUM_580,
+        ELEM_COUNT_580,
+        max + 1,
+    );
+    assert_eq!(
+        w.doorbell(),
+        Err(GspFault::ElementCountOutOfRange { count: 17, max: 16 }),
+    );
+
+    // …while `max` itself passes the range test and is judged on its own merits — the
+    // count/length cross-check, a different refusal carrying different fields. A bound
+    // written `>=` answers this one with the range error instead.
+    w.poke_element(
+        RingId::Command,
+        slot,
+        HDR_580,
+        CHECKSUM_580,
+        ELEM_COUNT_580,
+        max,
+    );
+    assert_eq!(
+        w.doorbell(),
+        Err(GspFault::ElementCountMismatch {
+            declared: 16,
+            derived: 1
+        }),
+        "sixteen is IN range; it is the disagreement with the length that refuses it",
+    );
+}
+
+// ─────────────────────── the numbers, and the decoded projection ───────────────────────
+
+/// ★★ Each `msgqRxLink` rejection carries the **number** the guest's own predicate
+/// returns — cross-checked against the independent re-implementation on the other side of
+/// the wire.
+///
+/// [`RxLinkCode::code`] exists so that a bench log's `-7` and a test's `-7` are the same
+/// number. Two of the eleven were pinned; the other nine were only ever named as variants,
+/// so the numbering — whose one non-obvious property is that it **skips -4** — went
+/// unasserted. Here the number comes from `Guest::rx_link`, written from `msgq.c` and
+/// returning the raw `int`, so agreement is between two implementations rather than
+/// between a table and itself.
+#[test]
+fn every_rx_link_rejection_carries_the_number_the_guest_itself_returns() {
+    // The published header's field order, named here rather than read from the code under
+    // test (`ogkm-610: src/nvidia/src/libraries/msgq/msgq.c:329-405`,
+    // `ogkm-580: src/common/shared/msgq/msgq.c:330-406`).
+    const VERSION: u64 = 0;
+    const SIZE: u64 = 4;
+    const MSG_SIZE: u64 = 8;
+    const MSG_COUNT: u64 = 12;
+    const ENTRY_OFF: u64 = 28;
+
+    let corrupt = |off: u64, val: u32, want: RxLinkCode| {
+        let mut w = World::new(P580, MODEL_A);
+        w.boot();
+        let at = w.guest.gpa_of(w.guest.stat_off + off);
+        kayfabe_gsp::GuestRam::write(&mut w.ram, at, &val.to_le_bytes()).unwrap();
+        assert_eq!(
+            w.guest.rx_link(&mut w.ram),
+            Err(want.code()),
+            "the guest's own msgqRxLink returns {} for a header with +{off} = {val:#x}",
+            want.code(),
+        );
+    };
+    corrupt(VERSION, 1, RxLinkCode::VersionMismatch); // -9
+    corrupt(SIZE, 0, RxLinkCode::SizeMismatch); // -7
+    corrupt(MSG_SIZE, 2048, RxLinkCode::MsgSizeMismatch); // -8
+    corrupt(MSG_COUNT, 6, RxLinkCode::DerivedFieldsMismatch); // -10
+    corrupt(ENTRY_OFF, 0x8000, RxLinkCode::EntryOffTooLarge); // -6
+
+    // The two the guest refuses on its OWN geometry, before it reads our header at all.
+    let mut w = World::new(P580, MODEL_A);
+    w.boot();
+    w.guest.msg_size = 8;
+    assert_eq!(
+        w.guest.rx_link(&mut w.ram),
+        Err(RxLinkCode::MsgSizeBelowMin.code()),
+        "msgSize < MSGQ_MSG_SIZE_MIN",
+    );
+    w.guest.msg_size = w.guest.size + 1;
+    assert_eq!(
+        w.guest.rx_link(&mut w.ram),
+        Err(RxLinkCode::MsgSizeAboveQueue.code()),
+        "msgSize > size",
+    );
+
+    // …and the one that needs no corruption at all.
+    let mut w = World::new(P580, MODEL_A);
+    w.boot();
+    assert_eq!(w.guest.rx_link(&mut w.ram), Ok(()), "a clean header links");
+    assert_eq!(
+        w.guest.rx_link(&mut w.ram),
+        Err(RxLinkCode::AlreadyLinked.code()),
+        "the second link is -1",
+    );
+
+    // The three we model but cannot drive from here: a null backing store, and the two
+    // backend-access failures.
+    assert_eq!(RxLinkCode::NullBackingStore.code(), -5);
+    assert_eq!(RxLinkCode::BackendReadFailed.code(), -11);
+    assert_eq!(RxLinkCode::BackendWriteFailed.code(), -12);
+
+    // The whole numbering, as a set: eleven variants, eleven distinct values, and the gap
+    // at -4 that makes "count the variants" the wrong derivation from -5 onwards.
+    let all = [
+        RxLinkCode::AlreadyLinked,
+        RxLinkCode::MsgSizeBelowMin,
+        RxLinkCode::MsgSizeAboveQueue,
+        RxLinkCode::NullBackingStore,
+        RxLinkCode::EntryOffTooLarge,
+        RxLinkCode::SizeMismatch,
+        RxLinkCode::MsgSizeMismatch,
+        RxLinkCode::VersionMismatch,
+        RxLinkCode::DerivedFieldsMismatch,
+        RxLinkCode::BackendReadFailed,
+        RxLinkCode::BackendWriteFailed,
+    ];
+    let codes: std::collections::BTreeSet<i32> = all.iter().map(|c| c.code()).collect();
+    assert_eq!(codes.len(), all.len(), "eleven variants, eleven numbers");
+    assert_eq!(
+        codes.into_iter().collect::<Vec<_>>(),
+        vec![-12, -11, -10, -9, -8, -7, -6, -5, -3, -2, -1],
+        "contiguous from -1 except for the gap the driver leaves at -4",
+    );
+}
+
+/// ★★ S5 — the projection decodes **what it publishes**, at both element layouts.
+///
+/// [`the_projection_records_what_the_guest_would_observe_and_names_the_refusal`] counts the
+/// observations and reads three fields out of one of them. The rest of the decode was
+/// unasserted: the published tx header — a kind
+/// [`kayfabe_gsp::ObservationLog::unseen_kinds`] would have reported as never once
+/// produced — the envelope's `rpc_result`, the slot and element sequence number, and the
+/// body digest, the one field whose entire job is to tell two payloads apart. Both
+/// layouts, because every offset it decodes at is derived from a header size that differs
+/// between them (48 against 16).
+#[test]
+fn the_projection_decodes_the_header_the_envelope_and_the_body_at_both_layouts() {
+    for profile in [P580, P610] {
+        let name = profile.name;
+        let mut w = World::new(profile, MODEL_A);
+        w.boot();
+        w.link_and_drain();
+        let QueueState::Bound(binding) = w.fsm.queue().clone() else {
+            panic!("{name}: bound after boot");
+        };
+        let projection =
+            Projection::new(binding.geometry(), profile.layout()).expect("a bound geometry");
+        let published = binding.geometry().published_header();
+
+        // One posted element, with every envelope field a distinct value, so a decode at
+        // the wrong offset cannot land on the right answer by coincidence.
+        let body: Vec<u8> = (0..64u32).map(|i| (i * 7 + 1) as u8).collect();
+        let rpc = OutgoingRpc {
+            function: 0x1234_5678,
+            sequence: 0x0BAD_F00D,
+            rpc_result: 0x0000_0056,
+            rpc_result_private: 0x0000_0056,
+            payload: body.clone(),
+        };
+        assert_ne!(
+            kayfabe_gsp::digest(&body),
+            kayfabe_gsp::digest(b""),
+            "{name}: non-vacuity — the digest asserted below is over a NON-empty body",
+        );
+        let log = {
+            let mut rec = RecordingRam::new(&mut w.ram).with_projection(projection.clone());
+            w.fsm.post(&mut rec, &rpc).expect("posted");
+            rec.log
+        };
+        assert_eq!(
+            log.items()
+                .iter()
+                .filter(|o| o.kind() == "ElementPosted")
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![Observation::ElementPosted {
+                slot: 1,
+                seq_num: 1,
+                function: 0x1234_5678,
+                sequence: 0x0BAD_F00D,
+                rpc_result: 0x0000_0056,
+                rpc_length: 32 + 64,
+                payload_digest: kayfabe_gsp::digest(&body),
+            }],
+            "{name}: every decoded field, at this layout's own offsets",
+        );
+
+        // The published tx header — the thing `msgqRxLink` spins on. Reached through a
+        // device reset and a fresh bind, which is the only way the header is written
+        // twice for one geometry.
+        assert_eq!(w.fsm.device_reset(), Transition::E11, "{name}");
+        let m = w.arch.model();
+        let gpa = w.guest.boot_args_gpa;
+        let log = {
+            let mut rec = RecordingRam::new(&mut w.ram).with_projection(projection);
+            for (reg, val) in [
+                (GspReg::GspFalconCpuctl, m.startcpu()),
+                (GspReg::GspFalconMailbox0, gpa & 0xFFFF_FFFF),
+                (GspReg::GspFalconMailbox1, gpa >> 32),
+            ] {
+                let (bar, off) = m.at(reg);
+                w.fsm
+                    .mmio_write(&mut rec, &w.arch, &mut EchoOk, bar, off, val)
+                    .expect("served");
+            }
+            rec.log
+        };
+        assert_eq!(
+            log.items()
+                .iter()
+                .filter(|o| o.kind() == "TxHeaderPublished")
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![Observation::TxHeaderPublished {
+                queue: QueueId::Status,
+                hdr: published,
+            }],
+            "{name}: the re-published status header, decoded field for field",
+        );
+    }
+
+    // ★ The digest is a **change detector**, and FNV-1a is a named algorithm with
+    // published vectors — so it is checkable against something other than itself.
+    assert_eq!(
+        kayfabe_gsp::digest(b""),
+        0xcbf2_9ce4_8422_2325,
+        "the FNV-1a-64 offset basis",
+    );
+    assert_eq!(kayfabe_gsp::digest(b"a"), 0xaf63_dc4c_8601_ec8c);
+    assert_eq!(kayfabe_gsp::digest(b"foobar"), 0x8594_4171_f739_67e8);
+    assert_ne!(
+        kayfabe_gsp::digest(&[1, 2, 3]),
+        kayfabe_gsp::digest(&[1, 2, 4]),
+        "a digest that cannot separate two bodies is not a change detector",
     );
 }
