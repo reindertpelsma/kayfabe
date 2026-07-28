@@ -459,6 +459,112 @@ fn defer_a_parked_setpagedir_resolves_when_its_vaspace_arrives() {
     );
 }
 
+/// ★★★ **A `Free` prunes exactly the parked facts IT destroyed — no more, no less.**
+///
+/// `free_subtree` prunes the three parked tables by membership in `doomed` (the live
+/// handles this free removed). That predicate carries two obligations at once and the
+/// suite asserted neither for `pending_pdbs`:
+///
+/// - **It must fire.** A parked `SET_PAGE_DIRECTORY` on a handle the free destroys has to
+///   die with it, or it lingers waiting for a handle only a *later* declaration of the
+///   same value can create — §12.39 Shape A, one table over. The one key a `Free` can
+///   name that a parked fact can also name is a **parked-dup destination**: `apply`
+///   accepts a `Free` on it (`handles ∪ pending_dups`), so `doomed` legitimately holds a
+///   key that was never a live handle.
+/// - **It must not over-fire.** A parked PDB belonging to a handle this free did *not*
+///   touch has to survive, or an unrelated `Free` anywhere in the namespace silently
+///   deletes a legal guest's pending page-directory base — and the deferral that was
+///   supposed to resolve never does. That is a MISS=FAULT on traffic that did nothing
+///   wrong, which is precisely the failure category this file exists to rule out.
+///
+/// Both halves are asserted here, because a predicate is only pinned from both sides:
+/// inverting it (`!doomed.contains` → `doomed.contains`) satisfies each half's *negation*
+/// and a test for either one alone would still pass.
+#[test]
+fn a_free_prunes_its_own_parked_pdb_and_leaves_an_untouched_handles_parked_pdb_alone() {
+    const H_DOOMED: HObject = HObject(0x5c00_0020);
+    const H_SPARE: HObject = HObject(0x5c00_0021);
+    const PDB_DOOMED: Pdb = Pdb(0x7701_000);
+
+    let (arch, mut g) = fresh_graph();
+    g.apply(&arch, root_of(C)).expect("C declares itself");
+    g.apply(&arch, device(C, H_ROOT, H_DEV))
+        .expect("C's device");
+
+    // ---- The fact that must SURVIVE: a PDB parked on `H_VAS`, whose VASpace has not
+    // been allocated yet and which the frees below never name.
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: C,
+            vaspace: H_VAS,
+            pdb: PDB0,
+        },
+    )
+    .expect("a PDB declared on an unobserved handle parks");
+
+    // ---- The fact that must DIE: a dup parked at `H_DOOMED` (its source has never been
+    // observed, so the edge stays parked and the handle stays un-live), plus a PDB parked
+    // on that same handle value.
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: NodeKey::new(C, H_SPARE),
+            dst: NodeKey::new(C, H_DOOMED),
+        },
+    )
+    .expect("a dup of an unobserved source parks");
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: C,
+            vaspace: H_DOOMED,
+            pdb: PDB_DOOMED,
+        },
+    )
+    .expect("and a PDB parks on the same handle value");
+
+    // ---- One `Free`, naming ONLY the parked-dup handle.
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: C,
+            handle: H_DOOMED,
+        },
+    )
+    .expect("a Free of a parked-dup destination is a KNOWN handle");
+
+    // ---- Half 1: the freed handle's parked PDB is gone. The guest re-uses the handle
+    // value for a real VASpace — RM recycles handle values and the guest chooses them —
+    // and that VASpace must come up with NO page-directory base, not the one a fact from
+    // its dead predecessor declared.
+    g.apply(&arch, vaspace(C, H_DEV, H_DOOMED))
+        .expect("the handle value is re-used for a real VASpace");
+    assert_eq!(
+        g.pdb_of(NodeKey::new(C, H_DOOMED)),
+        None,
+        "★ the parked PDB died with the Free that destroyed its handle — a successor at \
+         the same handle value must never inherit its predecessor's page-directory base",
+    );
+
+    // ---- Half 2: the untouched handle's parked PDB is intact, and still resolves. This
+    // is the deferral completing: the fact was parked before its VASpace existed, an
+    // unrelated Free happened in between, and the VASpace still learns its PDB.
+    assert_eq!(
+        g.pdb_of(NodeKey::new(C, H_VAS)),
+        None,
+        "still parked — there is no resource to attribute it to yet",
+    );
+    g.apply(&arch, vaspace(C, H_DEV, H_VAS))
+        .expect("the bystander's VASpace finally arrives");
+    assert_eq!(
+        g.pdb_of(NodeKey::new(C, H_VAS)),
+        Some(PDB0),
+        "★★ an unrelated Free must not delete a bystander's parked PDB — the deferral \
+         still resolves onto the resource when it arrives",
+    );
+}
+
 /// ★★ A `MAP_MEMORY_DMA` whose VASpace *and* memory are both unobserved parks, and
 /// replays into a live mapping the moment both resolve.
 #[test]

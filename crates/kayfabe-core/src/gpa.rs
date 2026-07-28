@@ -1081,6 +1081,179 @@ mod tests {
         );
     }
 
+    /// ★★ **Placement is a function of the OFFSET, never of the arena's base.**
+    ///
+    /// `GpaSpace::new(0..N, …)` is legal and used (`t14`, `g6`, `is_untouched_flips_…`
+    /// all carve from a zero-based window), and a `GpaSpace` carved out of a target's
+    /// guest-physical window can be based anywhere. So the *same* request stream must
+    /// place blocks at the *same offsets* whatever the base — the base is data, not
+    /// control.
+    ///
+    /// ★ **Why this is not covered by the tests already here.** Every address test in
+    /// this file was written with a deliberately NON-zero `BASE`, for a good reason
+    /// (with `base == 0`, `cursor - range.start` and `cursor + range.start` are the same
+    /// number and `live_bytes`' subtraction goes vacuous). But that made the *whole
+    /// file* single-base, and a single base cannot see arithmetic that is only wrong
+    /// for *some* bases: replacing the reuse split's `start + flen > e` with
+    /// `start * flen > e` is invisible at `BASE = 0x4_0000_0000` (the product is
+    /// astronomically larger than `e`, so the branch is taken either way) and drops the
+    /// **entire tail of every split reuse** at `BASE = 0`, where `start` is 0 and the
+    /// product is 0. The fix for one vacuity opened the other; the answer is to run one
+    /// stream at *several* bases and compare, which is what this does.
+    ///
+    /// The stream is chosen so the split-reuse path is load-bearing: a large block at
+    /// the arena base is freed, a smaller one re-uses its head, and the **tail** must
+    /// come back at its own exact address on the next request.
+    #[test]
+    fn arena_placement_is_the_same_function_of_offset_at_every_base() {
+        /// Offsets from `range.start`, in issue order, that the stream below must
+        /// produce — hand-computed, not read back from the arena.
+        const WANT: [u64; 5] = [0x0, 0x4000, 0x0, 0x1000, 0x2000];
+
+        for base in [0u64, 0x1000, 0x8000_0000, 0x4_0000_0000] {
+            let mut space = GpaSpace::new(base..base + 0x10_0000, 0x10_0000);
+            let mut a = space.carve().expect("carves");
+            let mut led = Ledger::default();
+            let mut got = Vec::new();
+
+            // X takes the arena's first 4 pages, Y pins the cursor above it so that
+            // freeing X populates the FREE LIST instead of rewinding the cursor.
+            let x = a.alloc(0x4000, 0x1000).expect("X");
+            led.take(&a, &x, 0x1000, "X");
+            got.push(x.gpa.0 - base);
+            let y = a.alloc(0x1000, 0x1000).expect("Y pins the cursor");
+            led.take(&a, &y, 0x1000, "Y");
+            got.push(y.gpa.0 - base);
+
+            let x_gpa = x.gpa.0;
+            a.free(x).expect("its own block");
+            led.give(&a, x_gpa, "free X");
+
+            // P re-uses the HEAD of the 4-page hole; the remaining 3 pages are a TAIL
+            // that must go back on the free list, at its own address…
+            let p = a.alloc(0x1000, 0x1000).expect("P re-uses the hole's head");
+            led.take(&a, &p, 0x1000, "P");
+            got.push(p.gpa.0 - base);
+            // …which the next two requests must be served from, in ascending order,
+            // rather than from the bump cursor. With the tail dropped these land at
+            // `0x5000` and `0x6000` — past the high-water mark, and `live_bytes` reads
+            // 0x3000 too high because the dropped tail is charged to nobody.
+            let q = a.alloc(0x1000, 0x1000).expect("Q comes out of the tail");
+            led.take(&a, &q, 0x1000, "Q");
+            got.push(q.gpa.0 - base);
+            let r = a.alloc(0x1000, 0x1000).expect("R comes out of the tail");
+            led.take(&a, &r, 0x1000, "R");
+            got.push(r.gpa.0 - base);
+
+            assert_eq!(
+                got.as_slice(),
+                WANT.as_slice(),
+                "base {base:#x}: the arena placed blocks at different offsets than the \
+                 identical stream places them at every other base",
+            );
+            assert_eq!(
+                led.reused, 3,
+                "base {base:#x}: P/Q/R must all be served from the free list — if any \
+                 fell through to the bump cursor this test is measuring the wrong path",
+            );
+            assert_eq!(
+                a.live_bytes(),
+                0x4000,
+                "base {base:#x}: Y+P+Q+R are live and nothing else is",
+            );
+        }
+    }
+
+    /// ★★ **A full drain restores the arena to pristine — in EVERY order, not one.**
+    ///
+    /// [`GpaArena::insert_free`] promises that "a full drain restores the arena to
+    /// exactly its pristine shape", and [`GpaArena::is_untouched`] is the executable
+    /// form of that promise: it is what the early-merge discipline (lesson L9) reads to
+    /// decide whether an absorbed `Proc` has published host state. The promise is
+    /// universally quantified over the order blocks come back in — a guest frees in
+    /// whatever order it likes — but the suite only ever witnessed ONE order.
+    ///
+    /// ★ **The order is what does it.** `insert_free` has two exits: the normal
+    /// `free.insert(lo, hi - lo)`, and an early `return` when the range abuts the bump
+    /// cursor (which rewinds the cursor instead of recording a range). A stale entry is
+    /// swept up by the first exit and *survives* the second. So a top-down drain —
+    /// every free abutting the cursor, every free taking the early exit — is the one
+    /// order in which nothing gets overwritten, and it is exactly the order a stack-like
+    /// guest produces. This walks all of them.
+    ///
+    /// The stream re-allocates at the arena's own base so that any residue lands at
+    /// `range.start`, below every other block: nothing is ever freed underneath it to
+    /// sweep it away.
+    #[test]
+    fn a_full_drain_restores_the_arena_to_pristine_in_every_free_order() {
+        for base in [0u64, 0x4_0000_0000] {
+            for order in [
+                [0, 1, 2],
+                [0, 2, 1],
+                [1, 0, 2],
+                [1, 2, 0],
+                [2, 0, 1],
+                [2, 1, 0],
+            ] {
+                let mut space = GpaSpace::new(base..base + 0x10_0000, 0x10_0000);
+                let mut a = space.carve().expect("carves");
+                let mut led = Ledger::default();
+
+                let x = a.alloc(0x1000, 0x1000).expect("X");
+                led.take(&a, &x, 0x1000, "X");
+                let y = a.alloc(0x1000, 0x1000).expect("Y");
+                led.take(&a, &y, 0x1000, "Y");
+                let z = a.alloc(0x1000, 0x1000).expect("Z");
+                led.take(&a, &z, 0x1000, "Z");
+                assert_eq!(
+                    (x.gpa, y.gpa, z.gpa),
+                    (Gpa(base), Gpa(base + 0x1000), Gpa(base + 0x2000)),
+                    "a pristine arena bumps from its own base, packed",
+                );
+
+                // Free the block AT THE BASE and re-take it, which is what drives the
+                // reuse split's exact-fit arm (`a == start`, `start + flen == e`) — the
+                // arm where a head/tail of length zero is representable at all.
+                let x_gpa = x.gpa.0;
+                a.free(x).expect("its own block");
+                led.give(&a, x_gpa, "free X");
+                let x2 = a
+                    .alloc(0x1000, 0x1000)
+                    .expect("X2 re-takes the hole exactly");
+                led.take(&a, &x2, 0x1000, "X2");
+                assert_eq!(
+                    x2.gpa,
+                    Gpa(base),
+                    "an exact-fit reuse lands at the freed range's own address",
+                );
+
+                // Return everything, in this permutation's order.
+                let mut blocks = [Some(x2), Some(y), Some(z)];
+                for i in order {
+                    let b = blocks[i].take().expect("each block returned once");
+                    let g = b.gpa.0;
+                    a.free(b).expect("its own block");
+                    led.give(&a, g, "drain");
+                }
+
+                let ctx = format!("base {base:#x}, drain order {order:?}");
+                assert_eq!(a.live_bytes(), 0, "{ctx}: every byte came back");
+                assert!(
+                    a.is_untouched(),
+                    "{ctx}: a fully drained arena is pristine — `is_untouched` is FALSE \
+                     here whenever the drain left a zero-length residue on the free list",
+                );
+                // …and pristine means USABLE: the whole arena, in one allocation, at
+                // its own base. A residue that `is_untouched` caught is also a range
+                // the allocator can no longer hand out as one piece.
+                let whole = a
+                    .alloc(a.range.end - a.range.start, 0x1000)
+                    .expect("a pristine arena serves its entire range in one block");
+                assert_eq!(whole.gpa, Gpa(base), "{ctx}: and it starts at the base");
+            }
+        }
+    }
+
     /// ★★ **THE MEAN one, at unit granularity**: a long alloc/free churn at mixed sizes
     /// and mixed alignments, driven to exhaustion and back, with every address property
     /// asserted on **every** allocation and `live_bytes` audited against an independent

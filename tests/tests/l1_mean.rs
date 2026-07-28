@@ -2662,6 +2662,103 @@ fn the_graph_driven_retire_paths_never_condemn() {
         .expect("★ the merged proc keeps serving");
 }
 
+/// ★★★ **§12.37 carry-forward: when ONE boundary spans TWO condemned entries, the two
+/// entries are the SAME entry from then on.**
+///
+/// Condemnation is carried forward per *component*, and components are not stable: a dup
+/// can join two of them and a free can split one. The carry-forward therefore has to be
+/// a union-find over the carried entries, not a per-boundary copy — and the union is the
+/// half nothing asserted. Every condemnation test in this file drives ONE condemned
+/// component, where the union can never fire.
+///
+/// **Why the union is load-bearing and not bookkeeping.** An entry that fails to merge
+/// does not merely count twice: the carried set is rebuilt keyed by union-find *root*, so
+/// a component whose root was never merged is **not carried forward at all** — its
+/// clients drop straight out of the condemned set. The observable is therefore a
+/// condemned client silently coming back to life, which is §12.13 rule 3 fired by
+/// accident: condemnation must end when the *guest* frees the roots, never because two
+/// components happened to touch.
+///
+/// The shape is the smallest one where the union can be seen at all — a boundary that
+/// spans two entries **and** a second boundary that touches only the higher-indexed of
+/// them, which is what makes "merged" and "not merged" produce different *counts*:
+///
+/// 1. `P_PEER` + `P_CHANFREE` share a VASpace → one component; condemn it → entry **B**.
+/// 2. Condemn `P_WITNESS` alone → entry **A** (lower client id ⇒ lower index).
+/// 3. Free the shared alias → `P_PEER` and `P_CHANFREE` are two components again, both
+///    still carried by entry **B**.
+/// 4. A new dup joins `P_WITNESS` and `P_CHANFREE` → that one boundary spans **A** and
+///    **B**, while `P_PEER`'s boundary still touches only **B**.
+#[test]
+fn one_boundary_spanning_two_condemned_entries_merges_them_for_good() {
+    let _wd = watchdog("condemned_entries_merge", Duration::from_secs(60));
+    let (mut gpu, pids, _rec) = mean_gpu();
+    const ALIAS_BC: HObject = HObject(0x7100_00c0);
+    const ALIAS_WC: HObject = HObject(0x7100_00c1);
+
+    // ---- 1. One component out of two procs, then condemned as one entry.
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_PEER), H_VASPACE),
+        dst: NodeKey::new(client_of(P_CHANFREE), ALIAS_BC),
+    })
+    .expect("the sharing dup applies");
+    let shared = gpu.spine.by_pdb[&(gpu_of(P_PEER), lane_of(P_PEER).pdb)];
+    assert_eq!(
+        gpu.spine.by_pdb[&(gpu_of(P_CHANFREE), lane_of(P_CHANFREE).pdb)],
+        shared,
+        "the dup must have made them ONE proc, or there is nothing to condemn jointly",
+    );
+    assert!(core_retire_out_of_band(&mut gpu, shared));
+
+    // ---- 2. A second, disjoint condemned entry.
+    assert!(core_retire_out_of_band(&mut gpu, pids[P_WITNESS]));
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        2,
+        "two condemned components that share no client are two entries",
+    );
+
+    // ---- 3. Split the shared component. Both halves stay condemned, still under the
+    //         one entry that condemned them — a split does not merge anything.
+    gpu.apply(RmEvent::Free {
+        client: client_of(P_CHANFREE),
+        handle: ALIAS_BC,
+    })
+    .expect("the alias free applies");
+    assert_eq!(gpu.spine.condemned_len(), 2, "a split merges nothing");
+    for c in [P_WITNESS, P_PEER, P_CHANFREE] {
+        assert!(
+            gpu.spine.is_condemned(client_of(c)),
+            "proc {c} must still be condemned after the split",
+        );
+    }
+
+    // ---- 4. One boundary now spans BOTH entries.
+    gpu.apply(RmEvent::Dup {
+        src: NodeKey::new(client_of(P_CHANFREE), H_VASPACE),
+        dst: NodeKey::new(client_of(P_WITNESS), ALIAS_WC),
+    })
+    .expect("the cross-entry dup applies");
+
+    assert_eq!(
+        gpu.spine.condemned_len(),
+        1,
+        "★★ a boundary that spans two condemned entries makes them ONE entry — carrying \
+         them separately loses whichever one the rebuild is not keyed on",
+    );
+    for c in [P_WITNESS, P_PEER, P_CHANFREE] {
+        assert!(
+            gpu.spine.is_condemned(client_of(c)),
+            "★★ proc {c} was condemned and NOTHING has freed its client root — a merge \
+             of condemned entries may never resurrect a component",
+        );
+    }
+    // …and the merge is durable: an unrelated client's refresh does not undo it.
+    churn(&mut gpu, client_of(P_REROUTE), 0);
+    assert_eq!(gpu.spine.condemned_len(), 1);
+    assert!(gpu.spine.is_condemned(client_of(P_PEER)));
+}
+
 /// ★ **MG: condemnation is a COMPONENT-wide fact, and it is keyed on the component —
 /// not on a number that another GPU's proc happens to share.**
 ///

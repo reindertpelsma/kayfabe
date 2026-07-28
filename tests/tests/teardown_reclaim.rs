@@ -388,6 +388,102 @@ fn g3b_dropping_an_isolate_with_no_lock_held_is_fine() {
     drop(IsolateBox::new(factory.spawn(IsolateId::new(1, GPU))));
 }
 
+/// A `Gpu` with one live compute proc, **unguarded** — the two tests below drop the
+/// device on purpose (one of them mid-unwind, leaving the ledger deliberately
+/// unbalanced), which is exactly what [`Guarded`]'s own drop-time audit exists to
+/// forbid. Same construction as [`one_proc_gpu`] otherwise.
+fn raw_proc_gpu() -> (Gpu, ProcId, SharedRecorder) {
+    let (factory, recorder) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
+    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut s = Scenario::new();
+    s.compute_process_on_gpu(CLIENT, PDB, identical_handles(GR.0, CE.0), None);
+    s.memory(CLIENT, HObject(0x5c00_0001), MEM, 0x9_0000_0000);
+    for ev in s.events {
+        gpu.apply(ev).expect("scenario applies");
+    }
+    let pid = gpu.spine.by_pdb[&(GPU, PDB)];
+    (gpu, pid, recorder)
+}
+
+/// Publish one backing, then stage this proc's whole reclaim on its `pending_release`
+/// queue — the state a `Proc` drop is supposed to discharge. Returns the handles the
+/// discharge must free, sorted.
+fn stage_a_full_reclaim(gpu: &mut Gpu, pid: ProcId) -> Vec<HostHandle> {
+    let proc = gpu.procs.get_mut(&pid).expect("proc");
+    kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000).expect("publish");
+    let plan = reclaim_plan(proc, GPU);
+    let mut expected = plan.free.clone();
+    expected.sort();
+    assert!(
+        !expected.is_empty(),
+        "the staged reclaim must actually name host objects, or neither polarity below \
+         is measuring anything"
+    );
+    proc.stage_release(GPU, plan);
+    expected
+}
+
+/// ★★★ **Precondition 3 of `Proc`'s drop: a drop that runs DURING AN UNWIND issues no
+/// host verb at all.**
+///
+/// `Proc::drop` discharges the `pending_release` queue by checking a worker out of the
+/// proc's isolate and executing a release chain — a *blocking host call*, and on a real
+/// isolate one that can fail and panic. Running it while a panic is already unwinding is
+/// how a `Drop` turns a test failure into a **process abort**, and it is why the guard
+/// is `panicking() || queue-empty` rather than either term alone.
+///
+/// ★ Both polarities, because either term alone satisfies half of it and a single-sided
+/// test would pass with the disjunction turned into a conjunction:
+///
+/// - **A (the control).** An ordinary drop with a non-empty queue MUST issue the release
+///   — otherwise this test could "pass" by measuring a path that never issues anything,
+///   and §12.33's whole point ("removed before cleaned" must not be expressible) would be
+///   unproven.
+/// - **B (the property).** The identical drop, with a panic in flight, must issue
+///   NOTHING. Not "fewer verbs", not "best effort" — zero.
+#[test]
+fn a_proc_drop_discharges_its_staged_release_but_never_during_an_unwind() {
+    // ---- A: the control. Non-empty queue, no panic in flight → the release is issued.
+    let (mut gpu, pid, rec) = raw_proc_gpu();
+    let expected = stage_a_full_reclaim(&mut gpu, pid);
+    assert_eq!(
+        freed_handles(&rec),
+        Vec::new(),
+        "staging is pure bookkeeping — nothing may be freed until the drop"
+    );
+    drop(gpu);
+    let mut freed = freed_handles(&rec);
+    freed.sort();
+    assert_eq!(
+        freed, expected,
+        "an ordinary Proc drop discharges EXACTLY its staged release queue",
+    );
+
+    // ---- B: the property. Identical state, dropped inside an unwind → nothing at all.
+    let (mut gpu, pid, rec) = raw_proc_gpu();
+    let expected = stage_a_full_reclaim(&mut gpu, pid);
+    assert!(!expected.is_empty());
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {})); // the panic below is the test's instrument
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+        let _dropped_mid_unwind = gpu;
+        panic!("a teardown-time panic, with a full reclaim still staged");
+    }));
+    std::panic::set_hook(hook);
+    assert!(
+        caught.is_err(),
+        "the harness's own panic must have unwound through the drop"
+    );
+    assert_eq!(
+        freed_handles(&rec),
+        Vec::new(),
+        "★★ a Drop running during an unwind must issue ZERO host verbs — the staged \
+         queue's disposition falls back to §7.0 namespace death, which is a different \
+         disposition, not a failure",
+    );
+}
+
 /// ★ **The shell path.** `SharedDevice::reap_retired` takes the device **write** lock
 /// to run the reap, and reaping a proc drops its isolates. Those two facts used to
 /// coexist silently; now the first must finish before the second starts, or the assert
