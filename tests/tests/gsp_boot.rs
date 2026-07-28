@@ -1911,7 +1911,11 @@ fn a_region_decomposes_a_range_into_the_exact_gpas_its_table_names() {
     // ── A. 4 KiB pages, fragmented and out of order.
     let a = RegionMap::from_pages(4096, vec![0x9000, 0x2000, 0x1_5000]).expect("valid");
     assert_eq!(a.len(), 12288);
-    assert_eq!(a.runs(0, 0), Ok(vec![]), "an empty range resolves to no runs");
+    assert_eq!(
+        a.runs(0, 0),
+        Ok(vec![]),
+        "an empty range resolves to no runs"
+    );
     assert_eq!(a.runs(0, 1), Ok(vec![(0x9000, 1)]), "the very first byte");
     assert_eq!(
         a.runs(0, 4096),
@@ -1928,18 +1932,18 @@ fn a_region_decomposes_a_range_into_the_exact_gpas_its_table_names() {
     // `page_size - within` are both plausible-looking and only one lands on the boundary.
     assert_eq!(
         a.runs(100, 12188),
-        Ok(vec![
-            (0x9064, 3996),
-            (0x2000, 4096),
-            (0x1_5000, 4096),
-        ]),
+        Ok(vec![(0x9064, 3996), (0x2000, 4096), (0x1_5000, 4096),]),
         "the first run stops at the page boundary, 3996 bytes in, not 4196",
     );
     assert_eq!(
         a.runs(4096, 8192),
         Ok(vec![(0x2000, 4096), (0x1_5000, 4096)]),
     );
-    assert_eq!(a.runs(12287, 1), Ok(vec![(0x1_5FFF, 1)]), "the very last byte");
+    assert_eq!(
+        a.runs(12287, 1),
+        Ok(vec![(0x1_5FFF, 1)]),
+        "the very last byte"
+    );
     assert_eq!(
         a.runs(12288, 1),
         Err(GspFault::RegionOutOfRange {
@@ -1969,8 +1973,7 @@ fn a_region_decomposes_a_range_into_the_exact_gpas_its_table_names() {
 
     // ── B. 16-byte pages: the same arithmetic at a granularity where an off-by-a-page is
     // an off-by-16, and a run spans three pages.
-    let b = RegionMap::from_pages(16, vec![0x1_0000, 0x1_0030, 0x1_0010, 0x1_0080])
-        .expect("valid");
+    let b = RegionMap::from_pages(16, vec![0x1_0000, 0x1_0030, 0x1_0010, 0x1_0080]).expect("valid");
     assert_eq!(b.len(), 64);
     assert_eq!(
         b.runs(4, 40),
@@ -2060,7 +2063,9 @@ fn a_region_write_places_each_byte_on_the_page_its_table_names() {
     assert_eq!(round, data, "round-trip is byte-exact");
 
     // A `u32` straddling a page boundary is split at the boundary and reassembled.
-    region.write_u32(&mut ram, 4094, 0xAABB_CCDD).expect("in range");
+    region
+        .write_u32(&mut ram, 4094, 0xAABB_CCDD)
+        .expect("in range");
     let mut lo = [0u8; 2];
     kayfabe_gsp::GuestRam::read(&mut ram, 0x3_0000 + 4094, &mut lo).unwrap();
     let mut hi = [0u8; 2];
@@ -2141,7 +2146,11 @@ fn loading_a_region_walks_its_own_table_and_names_the_entry_that_is_wrong() {
     // ── A table that spans three of its own pages, fragmented, at a 16-byte stride so the
     // walk takes two entries per table page and has to follow the table twice.
     let p: [u64; 5] = [0x5_0000, 0x5_0300, 0x5_0100, 0x5_0080, 0x5_00C0];
-    assert_ne!(p[1], p[0] + 16, "non-vacuity: the table is really fragmented");
+    assert_ne!(
+        p[1],
+        p[0] + 16,
+        "non-vacuity: the table is really fragmented"
+    );
     let mut ram = FakeRam::default();
     ram.alloc(0x5_0000);
     let put = |ram: &mut FakeRam, at: u64, vals: &[u64]| {
@@ -2297,7 +2306,12 @@ fn a_run_sized_exactly_to_its_message_decodes_and_one_byte_less_does_not() {
             },
         )
         .expect("one element");
-        assert_eq!(run.len(), 4096, "{}: the wire form is a whole element", p.name);
+        assert_eq!(
+            run.len(),
+            4096,
+            "{}: the wire form is a whole element",
+            p.name
+        );
 
         let len = kayfabe_gsp::peek_len(&layout, &run, 4096, 65536).expect("declared");
         let msg_len = hdr + 32 + payload.len();
@@ -2324,7 +2338,8 @@ fn a_run_sized_exactly_to_its_message_decodes_and_one_byte_less_does_not() {
                 need: msg_len,
                 have: msg_len - 1
             }),
-            "{}: one byte short is a named refusal", p.name,
+            "{}: one byte short is a named refusal",
+            p.name,
         );
     }
 }
@@ -2423,7 +2438,9 @@ fn a_binding_publishes_the_status_queue_at_position_zero() {
         rx_hdr_off: 32,
         entry_off: 4096,
     };
-    region.write(&mut ram, 0, &guest.encode()).expect("in range");
+    region
+        .write(&mut ram, 0, &guest.encode())
+        .expect("in range");
     // Non-vacuity: the value we are asserting gets reset is really in guest memory.
     let mut readback = [0u8; 32];
     kayfabe_gsp::GuestRam::read(&mut ram, pages[0], &mut readback).unwrap();
