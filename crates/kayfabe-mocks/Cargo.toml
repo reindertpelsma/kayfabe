@@ -8,6 +8,11 @@ license.workspace = true
 [dependencies]
 kayfabe-util.workspace = true
 kayfabe-arch.workspace = true
+# ★ For `WireClassArch` ONLY, and only for its class ids. Decision #2's quarantine says
+# every NVIDIA constant lives in `kayfabe-abi`; a mock that needed `NV01_ROOT` would
+# otherwise transcribe `0x0` a fourth time, in the one crate whose whole point is that
+# its encodings are made up. So it consumes the real constants rather than copying them.
+kayfabe-abi.workspace = true
 kayfabe-vmm.workspace = true
 kayfabe-isolate.workspace = true
 

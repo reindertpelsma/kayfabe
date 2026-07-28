@@ -80,7 +80,19 @@
 //! the invariant is a bound like "zero refusals over a clean boot", never an absence), and
 //! the `Result` itself.
 //!
-//! ## Scope of this stage (B1)
+//! ## The two halves, and which is which
+//!
+//! - [`translate`] — B1. A **free function of one message**: bytes in, one declared fact
+//!   or a named refusal out. Stateless, pure, and the subject of everything above.
+//! - [`GraphPolicy`] — B2 ([`policy`]). The `kayfabe_gsp::CommandPolicy` the boot FSM
+//!   calls for every command a guest posts: translate → `Gpu::apply` → a reply. It is the
+//!   only thing here that holds a `&mut Gpu`, and it decodes nothing.
+//!
+//! The split is what keeps the rule above true while a stage that *must* touch state
+//! lands: the applying half cannot grow a handle cache without going through
+//! [`translate`], which has nowhere to put one.
+//!
+//! ## Scope of this stage (B1 + B2)
 //!
 //! `GSP_RM_ALLOC` **of a client root** and `FREE`. Everything else is a named refusal,
 //! including the functions the design maps but whose arms are not built
@@ -96,10 +108,15 @@
 //! independent oracles). The address table's populate sources are `GPU_PROMOTE_CTX` and
 //! the copy-engine page-table-write capture, and both belong to `kayfabe-fwd`.
 
+mod policy;
+
+pub use policy::{GraphPolicy, RefusalCensus};
+
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_abi::wire::AbiError;
 use kayfabe_abi::{NV_ERR_NOT_SUPPORTED, client_kind_from_process_id, rpc_params_are_serialized};
 use kayfabe_arch::ids::{ClassId, HClient, HObject};
+use kayfabe_core::gpu::GpuError;
 use kayfabe_core::rmgraph::{AllocFacts, RESERVED_CLIENT, RmEvent};
 use kayfabe_gsp::{RpcCommand, RpcFunction};
 use kayfabe_trace::{FaultTag, Faulted};
@@ -133,9 +150,10 @@ pub enum Translation {
 /// variant would force `is_err()` assertions, which `testing_doctrine.md` §2 forbids.
 ///
 /// ★ **The enum only carries what this stage can produce.** `gsp_core_bridge.md` §4.1
-/// sketches a wider set — continuation-reassembly refusals (B6) and a `Graph(GpuError)`
-/// wrapper for the apply the B2 adapter performs. Neither is constructible here, and a
-/// variant nothing can construct is a variant no test can bite.
+/// sketches a wider set; the continuation-reassembly refusals are B6's and nothing here
+/// can construct one, and a variant nothing can construct is a variant no test can bite.
+/// [`Self::Graph`] was in that position at B1 and left the enum out for exactly that
+/// reason; B2's [`GraphPolicy`] applies, so it exists now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BridgeRefusal {
     /// An id the function table does not name at all. The **third state**: not inert, not
@@ -211,6 +229,29 @@ pub enum BridgeRefusal {
     /// A layout decoder refused: short buffer, impossible length. Carried whole, because
     /// [`AbiError`] already names the struct and both numbers.
     Abi(AbiError),
+    /// ★★ **The graph refused an otherwise well-formed fact.** B2's variant: nothing in
+    /// B1 applied, so nothing could construct it, and an uncatchable variant is an
+    /// unbiteable test.
+    ///
+    /// This is the arm that keeps §3.4 honest in **both** directions. [`translate`]
+    /// deliberately does not ask whether a referenced object exists — that is a *lookup*,
+    /// and a lookup here would be a second, weaker copy of a rule `RmGraph::apply`
+    /// already owns. But not pre-empting the graph is only half of it: the answer must
+    /// not be swallowed either, and the C's failure was exactly that — it accepted
+    /// everything and replied `NV_OK`
+    /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:3326`).
+    ///
+    /// ★ It is a real surface, not a formality. `RmGraph` does **not** tolerate every
+    /// `Free`: only the *teardown-verb exemption* in `undeclared_namespace` lets a free
+    /// name an undeclared **namespace**, so a free of an undeclared **object** — or a
+    /// double-free of a client root — is `RmGraphError::FreeUnknown`. That is faithful RM
+    /// behaviour and it reaches the guest as a non-zero `rpc_result`.
+    ///
+    /// [`GpuError`] is carried whole, and [`Faulted`] **delegates** to it, so the census
+    /// records *which protocol rule* was broken (`RmGraphError::FreeUnknown` vs
+    /// `::ConflictingAlloc` are different findings) rather than one flat "the graph said
+    /// no" — the same argument `kayfabe_core`'s own `impl Faulted for GpuError` makes.
+    Graph(GpuError),
 }
 
 impl From<AbiError> for BridgeRefusal {
@@ -255,6 +296,12 @@ impl Faulted for BridgeRefusal {
             }
             BridgeRefusal::ReservedClient => FaultTag("BridgeRefusal::ReservedClient"),
             BridgeRefusal::Abi(_) => FaultTag("BridgeRefusal::Abi"),
+            // ★ Delegated, not flattened: `kayfabe_core`'s own `impl Faulted for
+            // GpuError` delegates for the same reason, so a graph refusal is countable
+            // by the rule it broke. The refusal VALUE still says it came through the
+            // bridge; the tag says what actually went wrong, which is what a census is
+            // for.
+            BridgeRefusal::Graph(e) => e.fault_tag(),
         }
     }
 }

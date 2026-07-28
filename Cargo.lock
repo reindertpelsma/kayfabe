@@ -206,6 +206,7 @@ dependencies = [
 name = "kayfabe-mocks"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-abi",
  "kayfabe-arch",
  "kayfabe-isolate",
  "kayfabe-util",

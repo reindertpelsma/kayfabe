@@ -182,6 +182,103 @@ impl Arch for MockArch {
     }
 }
 
+// ---------------------------------------------------------------------------------
+// WireClassArch — MockArch, plus NVIDIA's REAL class ids, for `classify` ONLY
+// ---------------------------------------------------------------------------------
+
+/// [`MockArch`] with one seam replaced: [`Arch::classify`] also answers NVIDIA's real
+/// class ids.
+///
+/// ## Why it has to exist
+///
+/// [`MockArch`]'s class plan is deliberately unlike NVIDIA's — *"any core code that
+/// secretly assumes a real bit layout fails these tests"* — and that is right. But it
+/// makes the mock unusable for a test driven from **wire bytes**: `NV01_ROOT` is `0x0`,
+/// which `MockArch`'s `classify` answers [`ObjectKind::Unknown`] for, so a graph fed from
+/// a real `GSP_RM_ALLOC` would declare no namespace at all. `gsp_core_bridge.md` §6's B1
+/// row says *"constructs a real `Gpu` (mock arch/isolate)"* without noticing the gap.
+///
+/// ## ★ Why overriding **only** `classify` is sound, and not laziness
+///
+/// `classify` is the **only** [`Arch`] seam whose argument comes off the GSP wire on this
+/// path. `RmEvent::Alloc::class` is the one field `kayfabe_rmrpc::translate` copies
+/// verbatim out of `rpc_gsp_rm_alloc_v03_00.hClass`; every other seam
+/// ([`Arch::vchid_from_userd_flags`], [`Arch::decode_doorbell`], [`Arch::mmu`],
+/// [`Arch::userd`], [`Arch::is_case2_control`], [`Arch::pushbuffer`]) consumes a value
+/// that no wire-bytes test supplies in NVIDIA's encoding. Overriding any of them would
+/// import a *real* bit layout into the mock world and retire the standing property above
+/// in exchange for nothing.
+///
+/// ## ★★ The fall-through is load-bearing
+///
+/// An id this shim does not name is answered by [`MockArch`], so a graph built from
+/// `mock_classes` and a graph built from wire class ids classify **identically** under
+/// one arch. That is what makes the bridge's strongest oracle expressible at all:
+/// `Boundaries(RpcScript) == Boundaries(Scenario)`, where the script declares
+/// `ClassId(NV01_ROOT)` and the hand-written reference scenario declares
+/// [`mock_classes::CLIENT`], and the projection must not be able to tell.
+///
+/// The two id spaces do not collide — `mock_classes` is `0xF0xx` and the three ids below
+/// are `0x0`/`0x41`/`0x80` — so this **adds** ids and shadows none. A future class needs
+/// an arm here *and* a `kayfabe-abi` constant; per that crate's consumer-first rule,
+/// neither lands without the other.
+#[derive(Debug, Default)]
+pub struct WireClassArch(MockArch);
+
+impl WireClassArch {
+    /// A shim over a fresh [`MockArch`].
+    #[must_use]
+    pub fn new() -> WireClassArch {
+        WireClassArch(MockArch::new())
+    }
+
+    /// The wrapped mock, for the seams a test drives directly.
+    #[must_use]
+    pub fn mock(&self) -> &MockArch {
+        &self.0
+    }
+}
+
+impl Arch for WireClassArch {
+    fn name(&self) -> &'static str {
+        self.0.name()
+    }
+
+    /// NVIDIA's real client-root and Device ids first, then [`MockArch`]'s plan.
+    ///
+    /// The constants are `kayfabe-abi`'s (decision #2's quarantine: every NVIDIA value
+    /// lives there, once). `NV01_ROOT` and `NV01_ROOT_CLIENT` are **one resource kind** —
+    /// RM's own `is_client_root_class` says so — which is why both map to
+    /// [`ObjectKind::Client`] rather than the newer spelling getting an arm of its own.
+    fn classify(&self, class: ClassId) -> ObjectKind {
+        use kayfabe_abi::generated::classes as nv;
+        match class.0 {
+            nv::NV01_ROOT | nv::NV01_ROOT_CLIENT => ObjectKind::Client,
+            nv::NV01_DEVICE_0 => ObjectKind::Device,
+            _ => self.0.classify(class),
+        }
+    }
+
+    fn vchid_from_userd_flags(&self, flags: u32) -> VChid {
+        self.0.vchid_from_userd_flags(flags)
+    }
+    fn decode_doorbell(&self, token: u64) -> Option<DoorbellTarget> {
+        self.0.decode_doorbell(token)
+    }
+    fn mmu(&self) -> &dyn GmmuFmt {
+        self.0.mmu()
+    }
+    fn userd(&self) -> &dyn UserdModel {
+        self.0.userd()
+    }
+    fn is_case2_control(&self, cmd: ControlCmd) -> bool {
+        self.0.is_case2_control(cmd)
+    }
+    fn pushbuffer(&self) -> &dyn PushbufferAbi {
+        self.0.pushbuffer()
+    }
+}
+
 /// Mockingbird Case-2 (GSP-internal, ack-only) control commands. Deliberately-fake
 /// values; a real arch sources these from its Axis-A tables.
 pub mod mock_ctrl {

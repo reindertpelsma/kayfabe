@@ -38,19 +38,20 @@ use std::collections::BTreeMap;
 
 use kayfabe_abi::versions::{BENCH_DRIVER, DriverAbiTable, table_for};
 use kayfabe_abi::wire::AbiError;
-use kayfabe_arch::ids::{ClassId, ControlCmd, HClient, HObject, VChid};
-use kayfabe_arch::{
-    Arch, ClientKind, DoorbellTarget, GmmuFmt, ObjectKind, PushbufferAbi, UserdModel,
-};
+use kayfabe_arch::ClientKind;
+use kayfabe_arch::ids::{ClassId, HClient, HObject};
 use kayfabe_core::gpa::GpaSpace;
-use kayfabe_core::gpu::Gpu;
+use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::project::{Boundaries, NO_CONDEMNED, project};
-use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
-use kayfabe_gsp::{RpcCommand, RpcFunction};
-use kayfabe_mocks::{MockArch, MockIsolateFactory};
-use kayfabe_rmrpc::{BridgeRefusal, Translation, translate};
-use kayfabe_tests::gspworld::FUNCTIONS;
-use kayfabe_tests::rpcwire::{self as w, fn_id};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraphError};
+use kayfabe_gsp::{RpcCommand, RpcFunction, Transition};
+use kayfabe_mocks::{MockIsolateFactory, WireClassArch, mock_classes};
+use kayfabe_rmrpc::{BridgeRefusal, GraphPolicy, RefusalCensus, Translation, translate};
+use kayfabe_tests::Scenario;
+use kayfabe_tests::gspworld::{
+    FUNCTIONS, GspWorld, GuestMsg, MODEL_A, P580, Profile, REAL_QUEUE_SIZE,
+};
+use kayfabe_tests::rpcwire::{self as w, RpcScript, fn_id};
 use kayfabe_trace::{FaultTag, Faulted};
 
 // =================================================================================
@@ -120,61 +121,22 @@ fn expected_root_event(client: u32, class: u32, kind: ClientKind) -> RmEvent {
 }
 
 // ---------------------------------------------------------------------------------
-// ★ An `Arch` that speaks NVIDIA's real class ids.
+// ★ The `Arch` that speaks NVIDIA's real class ids now lives in `kayfabe-mocks`.
 //
-// `MockArch`'s class plan is deliberately unlike NVIDIA's ("any core code that secretly
-// assumes a real bit layout fails these tests"), which is right — and it means the mock
-// classifies `NV01_ROOT` (0x0) as `Unknown`, so a graph driven from real wire bytes would
-// declare no namespace at all. The design doc's B1 row says "a real `Gpu` (mock arch /
-// isolate)" without noticing that gap.
-//
-// The shim is the smallest thing that closes it: **only `classify` is overridden**, and
-// only for the classes this stage's fixtures carry. Every other seam — MMU, USERD,
-// doorbell, pushbuffer, Case-2 controls — still comes from `MockArch`, so nothing about a
-// real GPU has crept into the test either.
+// It was a test-local shim at B1, with a note that it recurs at B2/B3/B5. It does: this
+// file needs it in six more places, so it is promoted rather than copied a third time.
+// `kayfabe_mocks::WireClassArch` carries the whole argument for why overriding ONLY
+// `classify` is sound, and why the fall-through to `MockArch` is load-bearing — the
+// projection-equality oracle below depends on a wire-class graph and a mock-class graph
+// classifying identically under one arch.
 // ---------------------------------------------------------------------------------
-
-#[derive(Debug, Default)]
-struct WireClassArch(MockArch);
-
-impl Arch for WireClassArch {
-    fn name(&self) -> &'static str {
-        self.0.name()
-    }
-    fn classify(&self, class: ClassId) -> ObjectKind {
-        match class.0 {
-            w::NV01_ROOT | w::NV01_ROOT_CLIENT => ObjectKind::Client,
-            w::NV01_DEVICE_0 => ObjectKind::Device,
-            other => self.0.classify(ClassId(other)),
-        }
-    }
-    fn vchid_from_userd_flags(&self, flags: u32) -> VChid {
-        self.0.vchid_from_userd_flags(flags)
-    }
-    fn decode_doorbell(&self, token: u64) -> Option<DoorbellTarget> {
-        self.0.decode_doorbell(token)
-    }
-    fn mmu(&self) -> &dyn GmmuFmt {
-        self.0.mmu()
-    }
-    fn userd(&self) -> &dyn UserdModel {
-        self.0.userd()
-    }
-    fn is_case2_control(&self, cmd: ControlCmd) -> bool {
-        self.0.is_case2_control(cmd)
-    }
-    fn pushbuffer(&self) -> &dyn PushbufferAbi {
-        self.0.pushbuffer()
-    }
-}
 
 fn fresh_gpu() -> kayfabe_tests::Guarded<Gpu> {
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
     kayfabe_tests::Guarded::new(
         "rmrpc_bridge::fresh_gpu",
-        Gpu::new(Box::new(WireClassArch::default()), Box::new(factory), gpa)
-            .expect("device realizes"),
+        Gpu::new(Box::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes"),
         rec,
     )
 }
@@ -887,6 +849,18 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
             need: 16,
             got: 0,
         }),
+        // ★ B2's arm, and it appears TWICE with different inner errors on purpose: the
+        // `Faulted` impl **delegates**, so a graph refusal is countable by the protocol
+        // rule it broke rather than by one flat "the graph said no". If it were
+        // flattened, these two would collide and the assertion below would fail — which
+        // is the whole reason they are both here.
+        BridgeRefusal::Graph(GpuError::Graph(RmGraphError::FreeUnknown(NodeKey::new(
+            HClient(HEX_CLIENT),
+            HObject(HEX_OBJECT),
+        )))),
+        BridgeRefusal::Graph(GpuError::Graph(RmGraphError::ConflictingAlloc(
+            NodeKey::new(HClient(HEX_CLIENT), HObject(HEX_CLIENT)),
+        ))),
     ];
     let tags: std::collections::BTreeSet<FaultTag> = all.iter().map(Faulted::fault_tag).collect();
     assert_eq!(
@@ -1202,4 +1176,938 @@ fn free_and_dup_object_classify_as_themselves_not_as_unknown() {
     assert_eq!(FUNCTIONS.classify(103), RpcFunction::RmAlloc);
     // And the table is still internally consistent after the two additions.
     assert!(FUNCTIONS.validated().is_ok());
+}
+
+// =================================================================================
+// ★★ 6. Stage B2 — `GraphPolicy`: the bridge on the guest's OWN path
+// =================================================================================
+//
+// B1 joined the two ends **in a test body**: a `#[test]` called `translate`, matched the
+// `Translation` and called `Gpu::apply` itself. That proves the types compose. It does
+// not put the bridge where a guest can reach it.
+//
+// B2 is `kayfabe_rmrpc::GraphPolicy`, the `CommandPolicy` the boot FSM calls from inside
+// `service_command_queue` for every command a guest posts. So from here down the graph is
+// driven by the **transport** — a real msgq ring, a real element run, a real envelope —
+// and the tests below are allowed to say "a guest did this", which nothing before them
+// was.
+
+/// The shared fixture: three namespaces and one exit, expressed **twice**.
+///
+/// Two user processes and the guest kernel declare client roots; process A then exits.
+/// Small enough to write out by hand on both sides, which is the entire requirement.
+mod x {
+    /// Process A's client handle.
+    pub const A: u32 = 0xc1d0_0069;
+    /// Process B's client handle — adjacent to A's, so a bridge that confused them would
+    /// still produce a plausible-looking graph.
+    pub const B: u32 = 0xc1d0_006a;
+    /// The guest kernel's own client (UVM's session shape).
+    pub const K: u32 = 0xdead_c0de;
+    /// Process A's pid. Deliberately unequal to its client handle: the two are different
+    /// facts, and a decoder that read one for the other would pass if they matched.
+    pub const PID_A: u32 = 0x0000_dd13;
+    /// Process B's pid.
+    pub const PID_B: u32 = 0x0000_dd14;
+}
+
+/// **Transcription #1** of the fixture: bytes, from `ogkm`'s struct definitions.
+///
+/// ★ Note the two roots use **different classes** — `NV01_ROOT` and `NV01_ROOT_CLIENT`.
+/// RM treats them as one resource kind, so the projection must not be able to tell, and
+/// making them differ here is what tests that rather than assuming it.
+fn script_x() -> RpcScript {
+    let mut s = RpcScript::new();
+    s.client_root(w::NV01_ROOT, x::A, x::PID_A)
+        .client_root(w::NV01_ROOT_CLIENT, x::B, x::PID_B)
+        .client_root(w::NV01_ROOT, x::K, w::KERNEL_PID)
+        // Process A exits: RM frees its client root, which drops every handle in the
+        // namespace.
+        .free(x::A, x::A);
+    s
+}
+
+/// **Transcription #2** of the same fixture: `RmEvent`s, written out by hand.
+///
+/// ★★ This is the oracle's independent half (`gsp_core_bridge.md` §5.1), and its
+/// independence is deliberate in three ways:
+///
+/// - the class ids are `mock_classes::CLIENT`, **not** NVIDIA's. `Boundaries` carries no
+///   class id, so if the two agree it is because both classified to `ObjectKind::Client`,
+///   not because the same number travelled down two paths;
+/// - the client kind is written as the `ClientKind` the core groups on, never as a
+///   `processID` — so `client_kind_from_process_id`'s sentinel rule is exercised on the
+///   byte side and asserted on the domain side;
+/// - the normalisation (`parent == handle == HObject(client)`) is written out, so the
+///   wire's `hParent = hObject = 0` has to be recovered rather than passed through.
+fn scenario_x() -> Scenario {
+    let root = |client: u32, kind: ClientKind| RmEvent::Alloc {
+        client: HClient(client),
+        parent: HObject(client),
+        handle: HObject(client),
+        class: mock_classes::CLIENT,
+        facts: AllocFacts {
+            client_kind: Some(kind),
+            ..Default::default()
+        },
+    };
+    let mut s = Scenario::new();
+    s.push(root(x::A, ClientKind::User { pid: x::PID_A }))
+        .push(root(x::B, ClientKind::User { pid: x::PID_B }))
+        .push(root(x::K, ClientKind::Kernel))
+        .push(RmEvent::Free {
+            client: HClient(x::A),
+            handle: HObject(x::A),
+        });
+    s
+}
+
+/// Apply a `Scenario`'s events to a fresh device — the reference side of the oracle.
+fn boundaries_of_scenario(s: &Scenario) -> Boundaries {
+    let mut gpu = fresh_gpu();
+    for ev in &s.events {
+        gpu.apply(*ev).expect("the reference scenario is legal");
+    }
+    boundaries(&gpu)
+}
+
+/// Drive whole RPC **messages** through the policy, with no ring and no FSM — the direct
+/// form, for the tests whose subject is the policy rather than the transport.
+fn deliver_all(
+    policy: &mut GraphPolicy<'_>,
+    msgs: &[Vec<u8>],
+) -> Vec<Result<Translation, BridgeRefusal>> {
+    msgs.iter().map(|m| policy.deliver(&command(m))).collect()
+}
+
+// ---------------------------------------------------------------------------------
+// 6.1 The policy itself
+// ---------------------------------------------------------------------------------
+
+/// The headline: the policy translates **and applies**, and its counters say which of
+/// the three outcomes each command took.
+///
+/// ★ The projection is checked **between** the messages, not only at the end. An
+/// end-state-only assertion here is satisfiable by "nothing ever applied" — the graph is
+/// empty before the alloc and empty again after the free — which a mutation that turned
+/// `deliver` into a pure `translate` sailed straight through. Alloc-then-free is exactly
+/// the shape where the end state proves nothing, so the intermediate one is the assertion
+/// that carries the claim.
+#[test]
+fn the_policy_translates_and_applies_and_counts_what_it_did() {
+    let mut gpu = fresh_gpu();
+    let (census, applied, inert, out, midway) = {
+        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        let mut out = vec![
+            policy.deliver(&command(&HEX_ROOT_ALLOC)),
+            policy.deliver(&command(&w::message(
+                fn_id::SET_GUEST_SYSTEM_INFO,
+                7,
+                &[0xab; 16],
+            ))),
+        ];
+        // ★ The namespace exists RIGHT NOW, before the free undoes it.
+        let midway = boundaries(policy.gpu());
+        out.push(policy.deliver(&command(&free_msg(HEX_CLIENT, HEX_CLIENT))));
+        (
+            policy.census().clone(),
+            policy.applied(),
+            policy.inert(),
+            out,
+            midway,
+        )
+    };
+
+    assert_eq!(
+        out,
+        vec![
+            Ok(Translation::Event(expected_root_event(
+                HEX_CLIENT,
+                w::NV01_ROOT,
+                ClientKind::User { pid: HEX_PID },
+            ))),
+            Ok(Translation::Inert),
+            Ok(Translation::Event(RmEvent::Free {
+                client: HClient(HEX_CLIENT),
+                handle: HObject(HEX_CLIENT),
+            })),
+        ],
+    );
+    // ★ Two counters, not one total: a regression that turned every alloc inert would
+    // leave a single total unchanged.
+    assert_eq!(applied, 2, "the alloc and the free declared facts");
+    assert_eq!(inert, 1, "the system-info RPC carried none");
+    assert_eq!(census, RefusalCensus::default(), "nothing was refused");
+
+    // The graph really moved — one user process existed, and then did not.
+    assert_eq!(
+        midway.procs.len(),
+        1,
+        "★ the alloc APPLIED, it did not merely translate"
+    );
+    assert_eq!(
+        midway.procs[0].client_values(),
+        [HClient(HEX_CLIENT)].into_iter().collect(),
+    );
+    assert_eq!(
+        boundaries(&gpu),
+        Boundaries::default(),
+        "and the free applied too"
+    );
+}
+
+/// The policy's answer on the wire: `None` for anything it accepted (the FSM's own
+/// `ack(NV_OK)`), and `Some(Reply)` with a non-zero status for anything it refused.
+#[test]
+fn an_accepted_command_is_acked_by_the_fsm_and_a_refused_one_is_answered_here() {
+    use kayfabe_gsp::{CommandPolicy, Reply};
+
+    let mut gpu = fresh_gpu();
+    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+
+    assert_eq!(
+        policy.respond(&command(&HEX_ROOT_ALLOC)),
+        None,
+        "an accepted fact needs no reply BODY — the FSM acks (function, sequence)",
+    );
+    assert_eq!(
+        policy.respond(&command(&w::message(999, 1, &[0u8; 8]))),
+        Some(Reply {
+            rpc_result: 0x56,
+            body: Vec::new(),
+        }),
+        "★ a refusal is answered, never dropped — the guest blocks in _issueRpcAndWait",
+    );
+    // ★ The body is EMPTY, not the request echoed back. `memcpy(resp, cmd, 4096)` is the
+    // C's behaviour (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2737`) and the
+    // thing this deviation exists to refuse; `RpcCommand::reply` zero-fills to the
+    // request's own length, which is the M9 clamp.
+    assert_eq!(
+        policy.respond(&command(&w::message(999, 1, &[0xff; 64]))),
+        Some(Reply {
+            rpc_result: 0x56,
+            body: Vec::new(),
+        }),
+        "a 64-byte hostile body is not reflected back at its sender",
+    );
+}
+
+// ---------------------------------------------------------------------------------
+// 6.2 ★★ The graph-refusal path — `BridgeRefusal::Graph`, B2's whole new surface
+// ---------------------------------------------------------------------------------
+
+/// ★★ **The arm B1 could not construct.** The bridge resolves nothing and refuses
+/// nothing about a well-formed `FREE`; the graph then refuses it by name; and the policy
+/// must neither pre-empt the first nor swallow the second.
+///
+/// `RmGraph` does **not** tolerate every `Free` — only the teardown-verb exemption in
+/// `undeclared_namespace` lets one name an undeclared *namespace*. A free of an
+/// undeclared **object** inside a live namespace is `FreeUnknown`, which is faithful RM
+/// behaviour and must reach the guest.
+#[test]
+fn a_free_of_an_undeclared_object_is_refused_by_the_graph_and_named_on_the_wire() {
+    use kayfabe_gsp::{CommandPolicy, Reply};
+
+    let mut gpu = fresh_gpu();
+    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let _ = policy
+        .deliver(&command(&root_alloc_msg(w::NV01_ROOT, HEX_CLIENT, HEX_PID)))
+        .expect("the namespace is declared");
+
+    let stray = command(&free_msg(HEX_CLIENT, HEX_OBJECT));
+
+    // (a) The exact variant, all the way down. `Option<Reply>` cannot carry this, which
+    //     is why `deliver` exists beside `respond`.
+    assert_eq!(
+        policy.deliver(&stray),
+        Err(BridgeRefusal::Graph(GpuError::Graph(
+            RmGraphError::FreeUnknown(NodeKey::new(HClient(HEX_CLIENT), HObject(HEX_OBJECT)))
+        ))),
+    );
+
+    // (b) The same refusal, as the guest sees it.
+    assert_eq!(
+        policy.respond(&stray),
+        Some(Reply {
+            rpc_result: 0x56,
+            body: Vec::new(),
+        }),
+    );
+
+    // (c) Countable, and by the rule that was broken — not by a flat "the graph said no".
+    assert_eq!(
+        policy.census().of(FaultTag("RmGraphError::FreeUnknown")),
+        2,
+        "both attempts were counted",
+    );
+    assert_eq!(policy.census().total(), 2, "and nothing else was");
+    assert_eq!(policy.applied(), 1, "only the root ever applied");
+}
+
+/// A **double free of a client root** is the same refusal, and it is the one that says
+/// the exemption is about the *namespace*, not about frees in general: the first free
+/// destroys the namespace, and the second names an object that is gone.
+#[test]
+fn a_double_free_of_a_client_root_is_refused_by_name() {
+    let mut gpu = fresh_gpu();
+    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let _ = policy
+        .deliver(&command(&root_alloc_msg(w::NV01_ROOT, HEX_CLIENT, HEX_PID)))
+        .expect("root");
+    let free = command(&free_msg(HEX_CLIENT, HEX_CLIENT));
+    assert_eq!(
+        policy.deliver(&free),
+        Ok(Translation::Event(RmEvent::Free {
+            client: HClient(HEX_CLIENT),
+            handle: HObject(HEX_CLIENT),
+        })),
+        "the first free is the namespace's teardown",
+    );
+    assert_eq!(
+        policy.deliver(&free),
+        Err(BridgeRefusal::Graph(GpuError::Graph(
+            RmGraphError::FreeUnknown(NodeKey::new(HClient(HEX_CLIENT), HObject(HEX_CLIENT)))
+        ))),
+        "★ the second names a handle that no longer exists",
+    );
+}
+
+/// A **re-declaration** of a live client root with different facts is
+/// `ConflictingAlloc` — and the non-vacuity arm is the one that matters: an *identical*
+/// re-send is still accepted, so this refusal is about the disagreement and not about
+/// having seen the handle before.
+///
+/// ★ That distinction is what a stateful bridge would destroy. A dedup cache would answer
+/// the identical re-send differently the second time and break the graph's retried-RPC
+/// tolerance; a per-handle memo would answer the *conflicting* one from the first
+/// declaration and never reach the graph at all.
+#[test]
+fn a_conflicting_client_root_is_refused_while_an_identical_resend_is_not() {
+    let mut gpu = fresh_gpu();
+    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let first = command(&root_alloc_msg(w::NV01_ROOT, HEX_CLIENT, HEX_PID));
+    let want = Ok(Translation::Event(expected_root_event(
+        HEX_CLIENT,
+        w::NV01_ROOT,
+        ClientKind::User { pid: HEX_PID },
+    )));
+    assert_eq!(policy.deliver(&first), want);
+    assert_eq!(
+        policy.deliver(&first),
+        want,
+        "an identical re-send is legal"
+    );
+    assert_eq!(policy.deliver(&first), want);
+
+    // The same handle, a different declared privilege — an ambiguity, never a tie-break.
+    assert_eq!(
+        policy.deliver(&command(&root_alloc_msg(
+            w::NV01_ROOT,
+            HEX_CLIENT,
+            w::KERNEL_PID
+        ))),
+        Err(BridgeRefusal::Graph(GpuError::Graph(
+            RmGraphError::ConflictingAlloc(NodeKey::new(HClient(HEX_CLIENT), HObject(HEX_CLIENT)))
+        ))),
+    );
+    assert_eq!(
+        policy
+            .census()
+            .of(FaultTag("RmGraphError::ConflictingAlloc")),
+        1,
+    );
+    assert_eq!(
+        policy.applied(),
+        3,
+        "all three re-sends applied idempotently"
+    );
+}
+
+// ---------------------------------------------------------------------------------
+// 6.3 ★★ The oracle — `Boundaries(RpcScript) == Boundaries(Scenario)`
+// ---------------------------------------------------------------------------------
+
+/// ★★ **The strongest oracle available** (`gsp_core_bridge.md` §5.1): a device driven
+/// from wire bytes and a device driven from hand-written `RmEvent`s must reach the
+/// **identical** projection.
+///
+/// `Boundaries` derives `PartialEq` and is already compared whole across shuffled orders
+/// (decision #4), so this is exact rather than a spot check — and it retires "the tests
+/// synthesise `RmEvent`" without deleting the synthesiser: `Scenario` becomes the
+/// reference implementation instead of the only implementation.
+#[test]
+fn the_projection_from_wire_bytes_equals_the_projection_from_hand_written_events() {
+    let mut gpu = fresh_gpu();
+    {
+        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        for out in deliver_all(&mut policy, &script_x().messages()) {
+            let _ = out.expect("every message of the fixture is legal");
+        }
+        assert_eq!(policy.applied(), 4, "three roots and one free");
+        assert!(policy.census().is_empty(), "a clean script refuses nothing");
+    }
+
+    let from_bytes = boundaries(&gpu);
+    assert_eq!(from_bytes, boundaries_of_scenario(&scenario_x()));
+
+    // Non-vacuity for the comparison itself: it is not trivially true, and it is not
+    // trivially true of an EMPTY projection either.
+    assert_ne!(from_bytes, Boundaries::default());
+    assert_eq!(from_bytes.procs.len(), 1, "A exited; B remains");
+    assert_eq!(
+        from_bytes.procs[0].client_values(),
+        [HClient(x::B)].into_iter().collect(),
+    );
+    assert_eq!(
+        from_bytes.system.client_values(),
+        [HClient(x::K)].into_iter().collect(),
+    );
+}
+
+/// ★ **Non-vacuity, per §5.1's rule:** mutate one field of the script's bytes and the
+/// projections must **differ**. Three mutations, each moving a different thing.
+#[test]
+fn one_changed_field_of_the_script_changes_the_projection() {
+    let reference = boundaries_of_scenario(&scenario_x());
+
+    // (a) B's pid becomes the kernel sentinel: B stops being a user process and joins the
+    //     system component. One word, and the whole grouping decision moves.
+    let mut kernelised = RpcScript::new();
+    kernelised
+        .client_root(w::NV01_ROOT, x::A, x::PID_A)
+        .client_root(w::NV01_ROOT_CLIENT, x::B, w::KERNEL_PID)
+        .client_root(w::NV01_ROOT, x::K, w::KERNEL_PID)
+        .free(x::A, x::A);
+
+    // (b) The free names B instead of A: a different namespace survives.
+    let mut other_exit = RpcScript::new();
+    other_exit
+        .client_root(w::NV01_ROOT, x::A, x::PID_A)
+        .client_root(w::NV01_ROOT_CLIENT, x::B, x::PID_B)
+        .client_root(w::NV01_ROOT, x::K, w::KERNEL_PID)
+        .free(x::B, x::B);
+
+    // (c) The free is simply absent.
+    let mut no_exit = RpcScript::new();
+    no_exit
+        .client_root(w::NV01_ROOT, x::A, x::PID_A)
+        .client_root(w::NV01_ROOT_CLIENT, x::B, x::PID_B)
+        .client_root(w::NV01_ROOT, x::K, w::KERNEL_PID);
+
+    for (what, script) in [
+        ("B declared the kernel pid", kernelised),
+        ("B exited instead of A", other_exit),
+        ("nobody exited", no_exit),
+    ] {
+        let mut gpu = fresh_gpu();
+        {
+            let mut policy = GraphPolicy::new(abi(), &mut gpu);
+            for out in deliver_all(&mut policy, &script.messages()) {
+                let _ = out.expect("the mutated script is still legal");
+            }
+        }
+        assert_ne!(
+            boundaries(&gpu),
+            reference,
+            "★ the projection comparison would not notice: {what}",
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------------
+// 6.4 ★★ Through the real transport — a scripted boot that drives the graph
+// ---------------------------------------------------------------------------------
+
+/// What one scripted boot produced.
+struct Run {
+    /// Every status message the guest accepted, after `GSP_INIT_DONE`.
+    replies: Vec<GuestMsg>,
+    /// The FSM transitions that fired.
+    transitions: Vec<Transition>,
+    census: RefusalCensus,
+    applied: u64,
+    inert: u64,
+}
+
+/// Boot a world, post `steps` through the **real command ring**, ring the doorbell, and
+/// let the guest drain — with `gpu`'s object model behind the policy the whole time.
+///
+/// Everything the guest does here is `gspworld::Guest`'s independent re-implementation of
+/// the driver's own msgq path: its own checksum fold, its own acceptance predicate, its
+/// own element counts. So a message that reaches the policy reached it by surviving a
+/// transport we did not write twice.
+fn run_through_transport(profile: Profile, steps: &[w::Step], gpu: &mut Gpu) -> Run {
+    let mut world = GspWorld::new_sized(profile, MODEL_A, REAL_QUEUE_SIZE);
+    let mut policy = GraphPolicy::new(profile.table(), gpu);
+
+    let mut transitions = world.boot_with(&mut policy);
+    // The guest links its status queue and consumes `GSP_INIT_DONE` — which is also what
+    // makes the FSM's `Running` edge observable rather than assumed.
+    let init = world.link_and_drain();
+    assert_eq!(init.len(), 1, "the bind posts exactly GSP_INIT_DONE");
+
+    for (i, s) in steps.iter().enumerate() {
+        world
+            .guest
+            .send(&mut world.ram, s.function, 0x1000 + i as u32, &s.body)
+            .expect("the 63-slot ring has room for this script");
+    }
+    transitions.extend(
+        world
+            .doorbell_with(&mut policy)
+            .expect("the doorbell services the ring")
+            .transitions,
+    );
+    let replies = world
+        .guest
+        .recv(&mut world.ram)
+        .expect("a clean status stream");
+
+    Run {
+        replies,
+        transitions,
+        census: policy.census().clone(),
+        applied: policy.applied(),
+        inert: policy.inert(),
+    }
+}
+
+/// ★★ **B2's headline.** A guest boots, posts its client-root stream through a real
+/// msgq ring, and the RM object model on the other side reaches exactly the projection
+/// the hand-written reference reaches.
+///
+/// No GPU, no hypervisor, no OS — and, for the first time, no test body in the middle:
+/// `Gpu::apply` is called by the FSM, from bytes the guest itself encoded.
+#[test]
+fn a_scripted_boot_drives_the_object_model_end_to_end() {
+    let script = script_x();
+    let mut gpu = fresh_gpu();
+    let run = run_through_transport(P580, script.steps(), &mut gpu);
+
+    // The transport did its job: the FSM reached `Running` by observing the guest's
+    // drain, and every command was answered on `(function, sequence)`.
+    assert!(
+        run.transitions.contains(&Transition::Running),
+        "the guest drained INIT_DONE, so the RPC plane is live: {:?}",
+        run.transitions,
+    );
+    assert_eq!(
+        run.replies
+            .iter()
+            .map(|m| (m.function, m.sequence, m.rpc_result))
+            .collect::<Vec<_>>(),
+        vec![
+            (fn_id::GSP_RM_ALLOC, 0x1000, 0),
+            (fn_id::GSP_RM_ALLOC, 0x1001, 0),
+            (fn_id::GSP_RM_ALLOC, 0x1002, 0),
+            (fn_id::FREE, 0x1003, 0),
+        ],
+        "one NV_OK reply per command, matched on (function, sequence)",
+    );
+
+    // The policy saw all four and refused none.
+    assert_eq!(run.applied, 4);
+    assert_eq!(run.inert, 0);
+    assert!(run.census.is_empty(), "a clean boot script refuses nothing");
+
+    // ★ And the object model is the reference one, byte for byte.
+    assert_eq!(boundaries(&gpu), boundaries_of_scenario(&scenario_x()));
+}
+
+/// ★ The **other** element layout, for free. `gsp_boot.rs` already drives both profiles;
+/// the bridge inherits that, and this pins the inheritance rather than assuming it — the
+/// object model must be reachable through a transport whose element header, checksum
+/// offset and element-count derivation are all different.
+#[test]
+fn the_same_script_reaches_the_same_graph_through_the_other_element_layout() {
+    use kayfabe_tests::gspworld::P610;
+
+    let script = script_x();
+    let mut a = fresh_gpu();
+    let mut b = fresh_gpu();
+    let run_580 = run_through_transport(P580, script.steps(), &mut a);
+    let run_610 = run_through_transport(P610, script.steps(), &mut b);
+
+    assert_eq!(run_580.applied, 4);
+    assert_eq!(run_610.applied, 4);
+    assert_eq!(boundaries(&a), boundaries(&b));
+    assert_eq!(boundaries(&a), boundaries_of_scenario(&scenario_x()));
+}
+
+/// ★ **The pre-bind backlog reaches the policy too**, and this is the 580 boot order
+/// rather than a contrived one.
+///
+/// At 580 the guest queues its init RPCs from `kgspInitRm_IMPL` **before** `_kgspBootGspRm`
+/// ever runs, and `rpcSendMessage` rings `QUEUE_HEAD(0)` after each one — so the command
+/// ring is already non-empty at bind time and the door has already rung twice against an
+/// unbound queue (`Transition::E12`, the healthy arm). `GspFsm::publish` drains that
+/// backlog on the bind instead of waiting for another doorbell.
+///
+/// So a policy passed to `boot_with` must see those commands. Without this test the
+/// `boot_with`/`wr_with` distinction is unobserved on the boot path: every other test here
+/// queues its traffic *after* the bind, and would pass just as well if the boot handed the
+/// FSM an `EchoOk`.
+#[test]
+fn commands_queued_before_the_bind_reach_the_policy_when_it_publishes() {
+    let script = script_x();
+    let mut gpu = fresh_gpu();
+    let mut world = GspWorld::new_sized(P580, MODEL_A, REAL_QUEUE_SIZE);
+
+    // The guest queues its stream and rings the door — all before anything is bound.
+    for (i, s) in script.steps().iter().enumerate() {
+        world
+            .guest
+            .send(&mut world.ram, s.function, 0x2000 + i as u32, &s.body)
+            .expect("ring space");
+    }
+
+    let (transitions, applied, census) = {
+        let mut policy = GraphPolicy::new(P580.table(), &mut gpu);
+        // The pre-bootstrap doorbell: the healthy arm, and it must read no guest RAM and
+        // reach no policy.
+        let early = world
+            .doorbell_with(&mut policy)
+            .expect("an unbound doorbell before any bind has ever existed is not an attack");
+        assert_eq!(early.transitions, vec![Transition::E12]);
+        assert_eq!(policy.applied(), 0, "nothing is serviced while unbound");
+
+        let t = world.boot_with(&mut policy);
+        (t, policy.applied(), policy.census().clone())
+    };
+
+    // ★ The bind drained the backlog: E6 (publish) fired and the four commands applied,
+    // with no second doorbell anywhere in this test.
+    assert!(transitions.contains(&Transition::E6), "{transitions:?}");
+    assert_eq!(applied, 4, "★ the pre-bind backlog reached the policy");
+    assert!(census.is_empty());
+    assert_eq!(boundaries(&gpu), boundaries_of_scenario(&scenario_x()));
+
+    // And the guest gets its replies, all four, once it links.
+    let drained = world.link_and_drain();
+    assert_eq!(
+        drained
+            .iter()
+            .map(|m| (m.function, m.sequence, m.rpc_result))
+            .collect::<Vec<_>>(),
+        vec![
+            (fn_id::GSP_INIT_DONE, 0, 0),
+            (fn_id::GSP_RM_ALLOC, 0x2000, 0),
+            (fn_id::GSP_RM_ALLOC, 0x2001, 0),
+            (fn_id::GSP_RM_ALLOC, 0x2002, 0),
+            (fn_id::FREE, 0x2003, 0),
+        ],
+    );
+}
+
+/// ★★ **The B2 recycle canary**, driven through the transport.
+///
+/// RM recycles `hClient` values by design, so a bridge that grew a handle table, a
+/// seen-set or a dedup cache would refuse, deduplicate or mis-attribute a **legal**
+/// recycle. B1 pinned that against `translate`; this pins it against the whole path —
+/// ring, FSM, policy, graph — because that is where a cache would actually be added for
+/// "performance".
+///
+/// The two declarations are given different privileges on purpose, so "distinct" is
+/// observable in the projection rather than asserted about internals.
+#[test]
+fn a_recycled_hclient_survives_the_whole_transport() {
+    let mut recycled = RpcScript::new();
+    recycled
+        .client_root(w::NV01_ROOT, x::A, x::PID_A)
+        .free(x::A, x::A)
+        // The same handle VALUE, declared again — this time by the guest kernel.
+        .client_root(w::NV01_ROOT, x::A, w::KERNEL_PID);
+
+    let mut gpu = fresh_gpu();
+    let run = run_through_transport(P580, recycled.steps(), &mut gpu);
+    assert!(
+        run.census.is_empty(),
+        "★ a recycle is legal traffic — refusing it hangs a conforming guest: {:?}",
+        run.census.tags().collect::<Vec<_>>(),
+    );
+    assert_eq!(run.applied, 3);
+    assert_eq!(
+        run.replies.iter().map(|m| m.rpc_result).collect::<Vec<_>>(),
+        vec![0, 0, 0],
+        "and every one of them was answered NV_OK",
+    );
+
+    let after = boundaries(&gpu);
+    assert!(
+        after.procs.is_empty(),
+        "the recycled declaration is a kernel client"
+    );
+    assert_eq!(
+        after.system.client_values(),
+        [HClient(x::A)].into_iter().collect(),
+    );
+
+    // ★ No residue: the graph is what a device that saw ONLY the second declaration
+    // would be. A per-handle memo would have answered the third message out of the
+    // first's classification and left this comparison unequal.
+    let mut clean = RpcScript::new();
+    clean.client_root(w::NV01_ROOT, x::A, w::KERNEL_PID);
+    let mut fresh = fresh_gpu();
+    let clean_run = run_through_transport(P580, clean.steps(), &mut fresh);
+    assert_eq!(clean_run.applied, 1);
+    assert_eq!(after, boundaries(&fresh));
+}
+
+/// ★ **A finding, pinned:** the two `Disposition::NoReply` functions never reach the
+/// policy at all.
+///
+/// `GspFsm::answer` returns **before** calling `policy.respond` for 72/73, because
+/// echoing an `_issueRpcAsync` RPC surfaces in the driver as an unexpected event and
+/// desyncs the stream. So the bridge is not on their path: `translate` calls them
+/// `Inert`, and that arm is unreachable through this adapter. Harmless today — they
+/// carry no object-model content — and load-bearing to know, because a future
+/// NoReply function that *did* carry a fact would be dropped silently.
+///
+/// The non-vacuity arm is `SET_GUEST_SYSTEM_INFO`, which is equally inert to the object
+/// model but **is** answered, and therefore does reach the policy.
+#[test]
+fn the_no_reply_functions_never_reach_the_policy_and_the_answered_one_does() {
+    // What `translate` alone says about all three: identical.
+    for code in [
+        fn_id::GSP_SET_SYSTEM_INFO,
+        fn_id::SET_REGISTRY,
+        fn_id::SET_GUEST_SYSTEM_INFO,
+    ] {
+        assert_eq!(
+            xlate(&w::message(code, 5, &[0u8; 16])),
+            Ok(Translation::Inert),
+        );
+    }
+
+    let mut script = RpcScript::new();
+    script
+        .raw(fn_id::GSP_SET_SYSTEM_INFO, vec![0xab; 16])
+        .raw(fn_id::SET_REGISTRY, vec![0xcd; 16])
+        .raw(fn_id::SET_GUEST_SYSTEM_INFO, vec![0xef; 16]);
+
+    let mut gpu = fresh_gpu();
+    let run = run_through_transport(P580, script.steps(), &mut gpu);
+
+    assert_eq!(
+        run.replies
+            .iter()
+            .map(|m| (m.function, m.sequence))
+            .collect::<Vec<_>>(),
+        vec![(fn_id::SET_GUEST_SYSTEM_INFO, 0x1002)],
+        "★ 72 and 73 are answered by nobody — that is Disposition::NoReply",
+    );
+    assert_eq!(
+        run.inert, 1,
+        "★ and only ONE of the three inert RPCs ever reached the policy",
+    );
+    assert_eq!(run.applied, 0);
+    assert!(run.census.is_empty());
+    assert_eq!(boundaries(&gpu), Boundaries::default());
+}
+
+// ---------------------------------------------------------------------------------
+// 6.5 ★★ MEAN — hostile traffic interleaved with a live stream, through the transport
+// ---------------------------------------------------------------------------------
+
+/// ★★ The composed run, and the bar for "done" at this stage.
+///
+/// B1's version of this test drove `translate` directly. This one drives the **whole
+/// path**: a guest encodes hostile and valid messages into one command ring, the FSM
+/// decodes them, the policy translates and applies them, and the guest drains the
+/// replies. Four assertions, and the first two are the load-bearing ones:
+///
+/// 1. **the valid stream is unaffected** — the final projection is identical to the one a
+///    device driven by the valid subset alone reaches. Refusals are inert to the graph,
+///    which is the whole claim of "a refusal is a named answer, not a partial apply";
+/// 2. **every command is answered** — including every refused one, on its own
+///    `(function, sequence)`, because the guest is blocked in `_issueRpcAndWait` and a
+///    drop hangs it for the whole RPC timeout;
+/// 3. **the refusals are counted by variant** — a census, not a total: a total is
+///    satisfied by any N refusals and would not notice one refusing for the wrong reason;
+/// 4. **the transport itself never faulted** — a `GspFault` would mean the ring stopped,
+///    which is a different failure from a policy refusal and must not be confused with
+///    one.
+#[test]
+fn hostile_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
+    // The valid stream: the shared fixture.
+    let valid = script_x();
+
+    // Nine hostile messages, one per refusal reason this stage can produce — including
+    // the two the GRAPH produces, which B1 had no way to reach.
+    let hostile: Vec<(w::Step, FaultTag)> = vec![
+        (
+            w::Step {
+                function: 999,
+                body: vec![0u8; 8],
+            },
+            FaultTag("BridgeRefusal::UnknownFunction"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_CONTROL,
+                body: vec![0u8; 48],
+            },
+            FaultTag("BridgeRefusal::NotYetTranslated"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_INIT_DONE,
+                body: vec![0u8; 8],
+            },
+            FaultTag("BridgeRefusal::EventFromGuest"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_ALLOC,
+                body: w::client_root_alloc_body(w::NV01_ROOT, 0, 1),
+            },
+            FaultTag("BridgeRefusal::ReservedClient"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_ALLOC,
+                body: w::alloc_body(
+                    x::A,
+                    0,
+                    0,
+                    w::NV01_ROOT,
+                    8,
+                    w::RMAPI_RPC_FLAGS_SERIALIZED,
+                    &w::client_root_params(x::A, 1),
+                ),
+            },
+            FaultTag("BridgeRefusal::SerializedParams"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_ALLOC,
+                body: w::alloc_body(
+                    x::A,
+                    0,
+                    0,
+                    w::NV01_ROOT,
+                    4096,
+                    0,
+                    &w::client_root_params(x::A, 1),
+                ),
+            },
+            FaultTag("BridgeRefusal::ParamsSizeExceedsPayload"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_ALLOC,
+                body: w::alloc_body(
+                    x::A,
+                    0,
+                    0,
+                    w::NV01_DEVICE_0,
+                    8,
+                    0,
+                    &w::client_root_params(x::A, 1),
+                ),
+            },
+            FaultTag("BridgeRefusal::UnmappedAllocClass"),
+        ),
+        (
+            w::Step {
+                function: fn_id::FREE,
+                body: vec![0u8; 3],
+            },
+            FaultTag("BridgeRefusal::Abi"),
+        ),
+        // ★ The graph's own refusals, reached from the wire for the first time.
+        (
+            w::Step {
+                function: fn_id::FREE,
+                body: w::driver_free_body(x::B, 0x5c00_0019),
+            },
+            FaultTag("RmGraphError::FreeUnknown"),
+        ),
+        (
+            w::Step {
+                function: fn_id::GSP_RM_ALLOC,
+                body: w::client_root_alloc_body(w::NV01_ROOT, x::B, 0xffff_0000),
+            },
+            FaultTag("RmGraphError::ConflictingAlloc"),
+        ),
+    ];
+
+    // Interleave: one hostile message between every pair of valid ones, leftovers
+    // appended, so no valid message is adjacent only to clean traffic. ★ The two
+    // graph-refusal messages name B, which the SECOND valid message declares — so they
+    // land after it and genuinely reach the graph rather than short-circuiting on an
+    // undeclared namespace.
+    let mut interleaved: Vec<w::Step> = Vec::new();
+    let mut tags: Vec<FaultTag> = Vec::new();
+    let mut h = hostile.iter();
+    for v in valid.steps() {
+        interleaved.push(v.clone());
+        if let Some((step, tag)) = h.next() {
+            interleaved.push(step.clone());
+            tags.push(*tag);
+        }
+    }
+    for (step, tag) in h {
+        interleaved.push(step.clone());
+        tags.push(*tag);
+    }
+    assert_eq!(
+        tags.len(),
+        hostile.len(),
+        "every hostile message was posted"
+    );
+
+    let mut gpu = fresh_gpu();
+    let run = run_through_transport(P580, &interleaved, &mut gpu);
+
+    // (2) Every command answered, in order, on its own (function, sequence) — and the
+    //     status is non-zero for exactly the hostile ones.
+    let want_replies: Vec<(u32, u32, bool)> = interleaved
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let refused = !valid.steps().iter().any(|v| v == s);
+            (s.function, 0x1000 + i as u32, refused)
+        })
+        .collect();
+    assert_eq!(
+        run.replies
+            .iter()
+            .map(|m| (m.function, m.sequence, m.rpc_result != 0))
+            .collect::<Vec<_>>(),
+        want_replies,
+        "★ every command is answered, and only the hostile ones carry a failure",
+    );
+    for m in &run.replies {
+        if m.rpc_result != 0 {
+            assert_eq!(m.rpc_result, 0x56, "NV_ERR_NOT_SUPPORTED (B1's one value)");
+        }
+    }
+
+    // (3) The census, by variant.
+    let want_counts: std::collections::BTreeMap<FaultTag, usize> =
+        tags.iter()
+            .fold(std::collections::BTreeMap::new(), |mut m, t| {
+                *m.entry(*t).or_default() += 1;
+                m
+            });
+    assert_eq!(
+        run.census
+            .tags()
+            .collect::<std::collections::BTreeMap<_, _>>(),
+        want_counts,
+        "refusal census by variant",
+    );
+    assert_eq!(run.applied, 4, "the four valid facts, and only those");
+
+    // (1) ★ The valid stream is untouched.
+    let mut clean = fresh_gpu();
+    let clean_run = run_through_transport(P580, valid.steps(), &mut clean);
+    assert!(clean_run.census.is_empty());
+    assert_eq!(
+        boundaries(&gpu),
+        boundaries(&clean),
+        "★ hostile traffic must be inert to the graph, not partially applied",
+    );
+    assert_eq!(boundaries(&gpu), boundaries_of_scenario(&scenario_x()));
 }

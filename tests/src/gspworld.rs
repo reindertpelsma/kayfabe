@@ -1327,13 +1327,39 @@ impl GspWorld {
 
     /// Write a GSP register, by its abstract name — the test never knows an offset.
     ///
+    /// Answers with [`EchoOk`], the C artifact's own policy. See [`GspWorld::wr_with`]
+    /// for the form that drives a real one.
+    ///
     /// # Errors
     ///
     /// Whatever the transition it triggers refuses with.
     pub fn wr(&mut self, reg: GspReg, val: u64) -> Result<ServiceReport, GspFault> {
+        self.wr_with(&mut EchoOk, reg, val)
+    }
+
+    /// ★★ **B2** — the same write, answered by a **caller-supplied policy**.
+    ///
+    /// This is the seam that lets a scripted boot drive the RM object model: pass a
+    /// `kayfabe_rmrpc::GraphPolicy` and every command the guest posts is translated and
+    /// applied on its way past. The policy is an argument rather than a field because it
+    /// borrows the device mutably — `GraphPolicy<'a>` holds `&'a mut Gpu` — and a world
+    /// that owned one would own the `Gpu` too, which no other test here wants.
+    ///
+    /// # Errors
+    ///
+    /// Whatever the transition it triggers refuses with. ★ A **policy** refusal is not
+    /// one of them: the policy answers it with a non-zero `rpc_result` on the wire, and
+    /// the transport keeps servicing — which is `GspFault`'s per-message refusal rule
+    /// (§7-G8) seen from one level up.
+    pub fn wr_with(
+        &mut self,
+        policy: &mut dyn kayfabe_gsp::CommandPolicy,
+        reg: GspReg,
+        val: u64,
+    ) -> Result<ServiceReport, GspFault> {
         let (bar, off) = self.arch.model().at(reg);
         self.fsm
-            .mmio_write(&mut self.ram, &self.arch, &mut EchoOk, bar, off, val)
+            .mmio_write(&mut self.ram, &self.arch, policy, bar, off, val)
     }
 
     /// Read a GSP register, by its abstract name.
@@ -1359,28 +1385,45 @@ impl GspWorld {
     ///
     /// If any step is refused.
     pub fn boot(&mut self) -> Vec<Transition> {
+        self.boot_with(&mut EchoOk)
+    }
+
+    /// The same boot, answered by a caller-supplied policy — see [`GspWorld::wr_with`].
+    ///
+    /// ★ The policy is reached during the boot itself, not only afterwards: `publish`
+    /// drains whatever the guest queued **before** the bind (580's two async init RPCs),
+    /// so a `GraphPolicy` passed here sees the pre-bootstrap backlog too.
+    ///
+    /// # Panics
+    ///
+    /// If any step is refused.
+    pub fn boot_with(&mut self, policy: &mut dyn kayfabe_gsp::CommandPolicy) -> Vec<Transition> {
         let m = self.arch.model();
         let mut t = Vec::new();
         t.extend(
-            self.wr(GspReg::GspFalconCpuctl, m.startcpu())
+            self.wr_with(policy, GspReg::GspFalconCpuctl, m.startcpu())
                 .unwrap()
                 .transitions,
         );
         let gpa = self.guest.boot_args_gpa;
         t.extend(
-            self.wr(GspReg::GspFalconMailbox0, gpa & 0xFFFF_FFFF)
+            self.wr_with(policy, GspReg::GspFalconMailbox0, gpa & 0xFFFF_FFFF)
                 .unwrap()
                 .transitions,
         );
         t.extend(
-            self.wr(GspReg::GspFalconMailbox1, gpa >> 32)
+            self.wr_with(policy, GspReg::GspFalconMailbox1, gpa >> 32)
                 .unwrap()
                 .transitions,
         );
         // Booter Load: a SEC2 STARTCPU whose argument is not the Unload sentinel.
-        t.extend(self.wr(GspReg::Sec2FalconMailbox0, 0).unwrap().transitions);
         t.extend(
-            self.wr(GspReg::Sec2FalconCpuctl, m.startcpu())
+            self.wr_with(policy, GspReg::Sec2FalconMailbox0, 0)
+                .unwrap()
+                .transitions,
+        );
+        t.extend(
+            self.wr_with(policy, GspReg::Sec2FalconCpuctl, m.startcpu())
                 .unwrap()
                 .transitions,
         );
@@ -1395,6 +1438,19 @@ impl GspWorld {
     /// As [`GspWorld::wr`].
     pub fn doorbell(&mut self) -> Result<ServiceReport, GspFault> {
         self.wr(GspReg::GspQueueHead(0), 1)
+    }
+
+    /// The same doorbell, answered by a caller-supplied policy — see
+    /// [`GspWorld::wr_with`].
+    ///
+    /// # Errors
+    ///
+    /// As [`GspWorld::wr_with`].
+    pub fn doorbell_with(
+        &mut self,
+        policy: &mut dyn kayfabe_gsp::CommandPolicy,
+    ) -> Result<ServiceReport, GspFault> {
+        self.wr_with(policy, GspReg::GspQueueHead(0), 1)
     }
 
     /// The guest links its status queue and drains whatever is waiting.

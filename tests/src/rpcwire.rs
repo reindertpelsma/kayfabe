@@ -211,6 +211,87 @@ pub const NV01_DEVICE_0: u32 = 0x80;
 /// (`ogkm: rpc.h:67-71`).
 pub const KERNEL_PID: u32 = 0xFFFF_FFFF;
 
+// =================================================================================
+// ★★ `RpcScript` — a whole guest's RPC stream, as BYTES
+// =================================================================================
+
+/// One message of a script: the wire function id and the body behind the envelope.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Step {
+    /// `rpc.function`.
+    pub function: u32,
+    /// The RPC body — everything after the 32-byte envelope.
+    pub body: Vec<u8>,
+}
+
+/// ★★ An ordered stream of RPC messages, built from `ogkm`'s struct definitions and
+/// nothing else — the **bytes** half of `gsp_core_bridge.md` §5.1's strongest oracle:
+///
+/// > `Gpu::apply` fed from `RpcScript(X)` produces the **same** `project::Boundaries` as
+/// > `Gpu::apply` fed from `Scenario(X)`.
+///
+/// `Scenario` is not replaced by this; it becomes the **reference implementation**. The
+/// two are written independently — one in `RmEvent`s by hand, one in NVIDIA's wire
+/// layout by hand — and the projection is what must not be able to tell them apart. That
+/// is why this type lives in *this* file, which imports nothing: a script that took its
+/// offsets from the decoder under test would be the round-trip-with-itself trap §5.1
+/// exists to name.
+///
+/// ★ It carries **no sequence numbers**. The transport owns those (`Guest::send` assigns
+/// its own `tx_seq` per element, and the envelope's `rpc.sequence` is the guest's
+/// transaction id), and a script that baked them in would be asserting a transport fact
+/// from the object model's side. [`RpcScript::messages`] numbers them positionally only
+/// for the tests that bypass the ring entirely.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RpcScript {
+    steps: Vec<Step>,
+}
+
+impl RpcScript {
+    /// An empty script.
+    #[must_use]
+    pub fn new() -> RpcScript {
+        RpcScript::default()
+    }
+
+    /// A conforming client-root `GSP_RM_ALLOC` — see [`client_root_alloc_body`].
+    pub fn client_root(&mut self, h_class: u32, h_client: u32, process_id: u32) -> &mut RpcScript {
+        self.raw(
+            fn_id::GSP_RM_ALLOC,
+            client_root_alloc_body(h_class, h_client, process_id),
+        )
+    }
+
+    /// A `FREE` shaped the way `rpcRmApiFree_GSP` shapes one — see [`driver_free_body`].
+    pub fn free(&mut self, h_client: u32, h_object: u32) -> &mut RpcScript {
+        self.raw(fn_id::FREE, driver_free_body(h_client, h_object))
+    }
+
+    /// Any function and any body, including a hostile one.
+    pub fn raw(&mut self, function: u32, body: Vec<u8>) -> &mut RpcScript {
+        self.steps.push(Step { function, body });
+        self
+    }
+
+    /// The script's steps, for a caller that posts them through a real command ring.
+    #[must_use]
+    pub fn steps(&self) -> &[Step] {
+        &self.steps
+    }
+
+    /// The script as whole RPC **messages** (envelope + body), numbered positionally.
+    ///
+    /// For the tests that translate directly, with no ring and no FSM.
+    #[must_use]
+    pub fn messages(&self) -> Vec<Vec<u8>> {
+        self.steps
+            .iter()
+            .enumerate()
+            .map(|(i, s)| message(s.function, i as u32, &s.body))
+            .collect()
+    }
+}
+
 /// The wire ids this module's tests use, from the driver's X-macro table
 /// (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:11, 20, 31, 57, 75, 81, 82, 83,
 /// 86, 113, 254, 256`). Transcribed here rather than taken from `gspworld::FUNCTIONS`,
