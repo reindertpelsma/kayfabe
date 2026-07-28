@@ -6110,3 +6110,124 @@ Run with `cargo test --workspace --no-fail-fast`.
    *more* forgiving than a real host. It is kept deliberately (it is what makes
    cross-namespace reach visible in an assertion at all), and the type now carries the fact
    independently, so no test depends on the mock's generosity for the separation.
+
+### 12.46 ★★★ A `Dup` MINTS A HANDLE, SO IT MUST UNPARK — the refcount and the projection derived one fact two ways
+
+Found by `fuzz_rmgraph_invariants::a1_hostile_stream_never_panics_and_invariants_hold`,
+which failed on a random seed and reproduced on clean HEAD (not a regression). The
+counterexample is pinned as `d007e74d…`; §12.44 wrote INV5 specifically so two
+derivations of "who shares what with whom" have to agree, and this is the round where
+they did not.
+
+The shrunk stream is four events — **a dup of a dup with a parked source**:
+
+```text
+Alloc root A (user)
+Alloc root B (user), handle 0x…876
+Dup src (B, 0x…877) -> dst (A, 0x…873)     # src not observed yet -> PARKS
+Dup src (B, 0x…876) -> dst (B, 0x…877)     # same-client dup — this MINTS the src
+```
+
+#### 1. The divergence, printed
+
+```text
+dups():          dst=(A,0x873) src=(B,0x877)   origin_of(dst) = Some((B,0x876))
+references_of(R(B,0x876)) = [(B,0x876), (B,0x877)]      ← (A,0x873) ABSENT
+project():       ONE Proc, clients {A, B}
+```
+
+`project` groups because `RmGraph::dups()` reports parked edges too and
+`resource_of`/`origin_of` **follow `pending_dups`**, so the chain resolves. `refs` — the
+refcount — knows nothing about it. Both answers are about the same alias.
+
+#### 2. Which one was wrong, and the evidence
+
+**`references_of`.** The guest holds a live, fully-resolvable alias; RM refcounts a
+`DUP_OBJECT` (`ogkm src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031` — `refCount++`,
+`memdescAddRef`, `DupCount++`), and a dup'd handle's lifetime is independent of the
+source handle's. `project` was right, INV5 was right, and grouping two live user clients
+that genuinely share is §12.27's rule working rather than an isolation break.
+
+**Root cause, one line wide.** `resolve_pending_dups()` / `resolve_pending_pdbs()` /
+`resolve_pending_maps()` were called from `RmGraph::apply`'s **`Alloc` arm only** — on the
+reading that a parked fact waits for its target's *allocation*. It waits for its target's
+**handle**, and `Alloc` and `Dup` are the only two events that mint one (`Free`/`Unmap`
+only remove; `SetPageDir`/`MapMemoryDma` mint none). So a dup-of-a-dup whose middle handle
+a `Dup` minted stayed parked *while being resolvable*, and the two derivations parted.
+
+#### 3. Why the undercount is the fatal direction
+
+`RmGraph::free`'s last-reference test is `refs.is_empty() && map_refs == 0 ⇒
+destroy_resource`. An uncounted reference therefore destroys a resource a live alias still
+names → the component vanishes from `project` → `Spine::vacate` removes the `Proc` → the
+reap issues the `Free` verbs. Measured with the drain removed, on a stream with no
+malformed event in it:
+
+```text
+reaped=1  frees=[backing, host VAS]  resolve(owner VAS) = Err
+```
+
+That is §12.41 §4 / N1 verbatim — *"released the host VAS and the published backing of a
+resource a live kernel client still references"* — reached through a different door.
+
+#### 4. The fix, and its two siblings
+
+All three drains now run in the `Dup` arm's resolved branch as well, in the same order as
+`Alloc` (dups first, because promoting one can be what makes a parked PDB or map resolve).
+The sibling faces were latent and would have survived a dups-only fix:
+
+- **PDBs** — a `SET_PAGE_DIRECTORY` parked on a handle a `Dup` mints left `Resource::pdb`
+  unset, so mappings already installed against that VAS never learned the PDB (the
+  `SetPageDir` arm's propagation is the only other door to it). Partly masked on the read
+  path by `pdb_of_resource`'s `parked_pdb` fallback, which is why it needed its own
+  assertion.
+- **maps** — a `MAP_MEMORY_DMA` parked on handles a `Dup` mints never installed, so the
+  address table never got the entry and a **legal** guest took MISS=FAULT at first use.
+
+A parked `dst` can never become occupied (`Dup` returns `ConflictingDup` and `Alloc`
+returns `ConflictingAlloc` on a key in `pending_dups`), so after this change
+`pending_dups` provably holds no resolvable entry, and `resolve_pending_dups`'
+`!handles.contains_key(dst)` guard is belt-and-braces rather than load-bearing.
+
+#### 5. ★ The oracle had the same bug — which is why nothing caught this for a round
+
+`fuzz_rmgraph_invariants`' A4 property (`RefTracker`) is an **independent** refcount model,
+and its promotion fixpoint also lived in its `Alloc` arm only. Model and implementation
+were wrong in the same way, so they agreed, so A4 stayed green over a defect three events
+long. The model now promotes after a `Dup` too. This is a **strengthening**: with the model
+corrected and the graph's drain removed, A4 fails on its own (`57d63c0d…`, now pinned).
+
+That is the ninth-ish instance of the §12.44 lesson and the sharpest: a model written by
+reading the implementation inherits the implementation's assumptions. The one that caught
+it was INV5 — which derives its edges from the *resource* side precisely so it cannot.
+
+#### 6. Tests
+
+| test | what it pins |
+|---|---|
+| `fuzz_rmgraph_invariants::a1_…` seed `d007e74d…` | the found counterexample, permanently |
+| `fuzz_rmgraph_invariants::a4_…` seed `57d63c0d…` | the corrected model's own counterexample |
+| `object_model::a_dup_that_mints_the_middle_handle_drains_every_parked_table` | all three parked tables drain on a `Dup` |
+| `object_model::a_dup_of_a_dup_keeps_its_resource_alive_after_its_owner_frees_both_handles` | the refcount is faithful in BOTH directions (alive on the alias; destroyed when it goes) |
+| `cross_proc_lifetime::a_dup_of_a_dup_reference_stops_the_reaper_from_freeing_its_owners_host_memory` | the teardown consequence, at the **verb**: before drain, after drain, and after reap |
+
+#### 7. Bite-checks, including the non-biters
+
+Run with `cargo test --workspace --no-fail-fast`.
+
+| # | neuter | result |
+|---|---|---|
+| B1 | remove all three drains from the `Dup` arm | **BITES** — `a1_…`, `a4_…`, both `object_model` tests, the `cross_proc_lifetime` reaper test |
+| B2 | remove `resolve_pending_dups()` only | **BITES** — `a1_…`, `a4_…`, both `object_model` tests, the reaper test |
+| B3 | remove `resolve_pending_pdbs()` only | **BITES** — `a_dup_that_mints_the_middle_handle_drains_every_parked_table` only. ★ Named as a *near*-non-biter: `pdb_of_resource`'s `parked_pdb` fallback answers correctly anyway, so the assertion that fires is the **mapping's** `pdb`, not the resource's |
+| B4 | remove `resolve_pending_maps()` only | **BITES** — `a_dup_that_mints_the_middle_handle_drains_every_parked_table` only |
+| B5 | corrected `RefTracker` + graph drain removed | **BITES** — A4 alone finds the graph bug, which is the claim §5 makes |
+
+#### 8. Residual, named
+
+`RmGraph::dups()` still reports **parked** edges, and `project` still resolves them through
+`origin_of` before grouping. After this fix that path is unreachable for a *resolvable*
+parked edge (§4), so the two are consistent — but the grouping predicate is now relying on
+a fact established in `apply` rather than one it checks itself. Left as is deliberately:
+narrowing `dups()` to resolved edges only would change what §12.38's DEFER-for-observation
+deferral means for `project`, which is a core-semantics change and not this round's.

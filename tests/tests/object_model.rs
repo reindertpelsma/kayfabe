@@ -13,7 +13,7 @@ use kayfabe_arch::ids::GpuId;
 use kayfabe_arch::ids::{GpuVa, HClient, HObject, Pdb};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
-use kayfabe_core::rmgraph::{NodeKey, RmEvent};
+use kayfabe_core::rmgraph::{NodeKey, ResourceKey, RmEvent};
 use kayfabe_fwd::{FwdFault, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
@@ -848,6 +848,336 @@ fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
         g.references(NodeKey::new(a, a_mem)).collect::<Vec<_>>(),
         vec![NodeKey::new(a, a_mem)],
         "A keeps its own object; only B's alias was dropped"
+    );
+}
+
+/// ★★★ §12.46 — **A `Dup` MINTS A LIVE HANDLE, so it must drain the parked tables
+/// exactly as an `Alloc` does.**
+///
+/// Found by `fuzz_rmgraph_invariants::a1_hostile_stream_never_panics_and_invariants_hold`
+/// (regression seed `d007e74d…`), on the smallest shape that reaches it — a **dup of a
+/// dup with a parked source**:
+///
+/// ```text
+/// Alloc root A → Alloc root B → Dup (B,MIDDLE) into A → Dup (B,root) onto (B,MIDDLE)
+/// ```
+///
+/// The third event parks, because `(B,MIDDLE)` does not exist yet. The fourth *creates*
+/// it — and `resolve_pending_dups`/`resolve_pending_pdbs`/`resolve_pending_maps` were
+/// called from the `Alloc` arm only, on the reading that a parked fact waits for its
+/// target's **allocation**. It waits for its target's **handle**, and `Alloc` and `Dup`
+/// are the only two events that mint one (`Free`/`Unmap` only remove;
+/// `SetPageDir`/`MapMemoryDma` mint none). So the parked edge stayed parked while being
+/// fully RESOLVABLE, and the graph then answered one question two different ways:
+///
+///  - `resource_of`/`origin_of` follow `pending_dups`, so `project` resolved the chain
+///    and put A and B in ONE boundary;
+///  - `refs` — the refcount — never learned the alias, so `references_of` reported that
+///    the resource was referenced by B alone.
+///
+/// INV5 exists to catch exactly that disagreement, and it did. **`references_of` was the
+/// wrong one**: the guest holds a live, resolvable alias, RM refcounts it
+/// (`ogkm: .../mem_mgr/mem.c:1027-1031`), and the refcount is what decides lifetime — see
+/// [`a_dup_of_a_dup_keeps_its_resource_alive_after_its_owner_frees_both_handles`] for the
+/// consequence.
+///
+/// All three parked tables are asserted here, because the missing drain was one bug with
+/// three faces and fixing only the reported face would leave the other two:
+///
+///  - **dups** — the reported one: the far alias is missing from the refcount.
+///  - **PDBs** — a `SET_PAGE_DIRECTORY` parked on a handle a `Dup` later mints left
+///    `Resource::pdb` unset, so no mapping already installed against that VAS learned the
+///    PDB (`RmGraph::apply`'s `SetPageDir` arm does that propagation, and the parked drain
+///    is the only other door to it).
+///  - **maps** — a `MAP_MEMORY_DMA` parked on handles a `Dup` later mints never
+///    installed, so the address table never got the entry and a *legal* guest took
+///    MISS=FAULT at first use.
+#[test]
+fn a_dup_that_mints_the_middle_handle_drains_every_parked_table() {
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
+    use std::collections::BTreeSet;
+
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    let (a, b) = (HClient(0xAA), HClient(0xBB));
+    let (a_root, b_root) = (HObject(0x10), HObject(0x11));
+    let (b_dev, b_vas, b_mem) = (HObject(0x20), HObject(0x21), HObject(0x22));
+    // The handle a `Dup` mints — every parked fact below names it, and NOTHING allocs it.
+    let middle = HObject(0x900);
+    // A's alias of the object `middle` will come to name (the dup-of-a-dup's far end).
+    let a_alias = HObject(0x901);
+    // A second middle, for the parked-map face (a map names two handles).
+    let middle_mem = HObject(0x902);
+    let pdb = Pdb(0x3409_000);
+    let va = GpuVa(0x2_0090_0000);
+
+    for ev in [
+        RmEvent::Alloc {
+            client: a,
+            parent: a_root,
+            handle: a_root,
+            class: mc::CLIENT,
+            facts: kayfabe_tests::user_client(a),
+        },
+        RmEvent::Alloc {
+            client: b,
+            parent: b_root,
+            handle: b_root,
+            class: mc::CLIENT,
+            facts: kayfabe_tests::user_client(b),
+        },
+        RmEvent::Alloc {
+            client: b,
+            parent: b_root,
+            handle: b_dev,
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: b,
+            parent: b_dev,
+            handle: b_vas,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Alloc {
+            client: b,
+            parent: b_dev,
+            handle: b_mem,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x9000_0000),
+                ..Default::default()
+            },
+        },
+        // ---- The three parked facts. Every one names `middle`/`middle_mem`, which no
+        // `Alloc` in this stream ever creates.
+        // (a) the dup-of-a-dup: A aliases an object it names through B's `middle` handle.
+        RmEvent::Dup {
+            src: NodeKey::new(b, middle),
+            dst: NodeKey::new(a, a_alias),
+        },
+        // (b) a page-directory declaration on `middle`, before `middle` exists.
+        RmEvent::SetPageDir {
+            client: b,
+            vaspace: middle,
+            pdb,
+        },
+        // (c) a map whose BOTH endpoints are handles a `Dup` will mint.
+        RmEvent::MapMemoryDma {
+            client: b,
+            vaspace: middle,
+            memory: middle_mem,
+            va,
+            offset: 0,
+            len: 0x10000,
+        },
+    ] {
+        g.apply(&arch, ev).expect("setup applies");
+    }
+
+    // Precondition: all three are genuinely parked — nothing resolves yet.
+    assert_eq!(
+        g.origin_of(NodeKey::new(a, a_alias)).map(|n| n.key),
+        None,
+        "precondition: the dup-of-a-dup's chain dangles"
+    );
+    assert_eq!(
+        g.mappings().count(),
+        0,
+        "precondition: the map is parked, not installed"
+    );
+
+    // ---- THE TWO DUPS THAT MINT THE MIDDLE HANDLES. No `Alloc` follows them, so if the
+    // drains do not run here they never run at all.
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: NodeKey::new(b, b_mem),
+            dst: NodeKey::new(b, middle_mem),
+        },
+    )
+    .expect("the memory middle is minted by a Dup");
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: NodeKey::new(b, b_vas),
+            dst: NodeKey::new(b, middle),
+        },
+    )
+    .expect("the vaspace middle is minted by a Dup");
+
+    let vas_id = g
+        .origin_of(NodeKey::new(b, b_vas))
+        .expect("B's VASpace is live")
+        .id();
+    let mem_id = g
+        .origin_of(NodeKey::new(b, b_mem))
+        .expect("B's memory is live")
+        .id();
+
+    // ---- (a) the refcount learned about the far alias.
+    assert_eq!(
+        g.references_of(vas_id).collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            NodeKey::new(a, a_alias),
+            NodeKey::new(b, b_vas),
+            NodeKey::new(b, middle),
+        ]),
+        "★ the dup-of-a-dup promoted: A's alias is IN the resource's reference set. \
+         Before §12.46 it was absent while `origin_of` still resolved the chain — the \
+         two derivations INV5 compares, disagreeing"
+    );
+    assert_eq!(
+        g.owner_key_of(NodeKey::new(a, a_alias)),
+        g.owner_key_of(NodeKey::new(b, b_vas)),
+        "…and it is an alias of B's resource, attributed to B — not a resource of A's"
+    );
+
+    // ---- (b) the parked PDB attached to the resource.
+    assert_eq!(
+        g.pdb_of_resource(vas_id),
+        Some(pdb),
+        "★ the parked `SET_PAGE_DIRECTORY` drained onto the VASpace resource the `Dup` \
+         made reachable"
+    );
+
+    // ---- (c) the parked map installed, against both resources by IDENTITY.
+    let maps: Vec<(ResourceKey, ResourceKey, GpuVa, Option<Pdb>)> = g
+        .mappings()
+        .map(|m| (m.vaspace, m.memory, m.va, m.pdb))
+        .collect();
+    assert_eq!(
+        maps,
+        vec![(vas_id, mem_id, va, Some(pdb))],
+        "★ the parked `MAP_MEMORY_DMA` replayed the instant BOTH its handles existed — \
+         and it carries the PDB, so the address table can be keyed on it. Left parked, a \
+         legal guest's first use of this VA is a MISS=FAULT it never earned"
+    );
+    assert_eq!(
+        g.map_ref_count_of(mem_id),
+        1,
+        "…and the installed mapping took its reference on the memory resource"
+    );
+}
+
+/// ★★★ §12.46, **the lifetime consequence — and the reason `references_of` was the
+/// derivation that had to change rather than `project`.**
+///
+/// The refcount is what `RmGraph::free` consults (`refs.is_empty() && map_refs == 0` ⇒
+/// `destroy_resource`), and `project` reads the surviving resources. So an undercounted
+/// reference is not a cosmetic reporting gap: it is the resource being destroyed while a
+/// live alias still names it, which is `stage_dropped_vases` releasing host memory RM
+/// says is live — §12.41 §4 / N1's own failure, reached through a different door and
+/// without a single malformed event.
+///
+/// Every event here is protocol-legal. B allocs a memory object, dups it onto a second
+/// handle of its own, A aliases it through *that* handle (the alias arriving first — the
+/// DEFER-for-observation ordering the model exists to tolerate), and B then frees BOTH of
+/// its own handles. RM keeps the object alive on A's reference
+/// (`ogkm: .../mem_mgr/mem.c:1027-1031`); so must we.
+#[test]
+fn a_dup_of_a_dup_keeps_its_resource_alive_after_its_owner_frees_both_handles() {
+    use kayfabe_core::rmgraph::{AllocFacts, RmGraph};
+    use kayfabe_mocks::mock_classes as mc;
+
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    let (a, b) = (HClient(0xAA), HClient(0xBB));
+    let (a_root, b_root, b_mem) = (HObject(0x10), HObject(0x11), HObject(0x22));
+    let (middle, a_alias) = (HObject(0x900), HObject(0x901));
+
+    for ev in [
+        RmEvent::Alloc {
+            client: a,
+            parent: a_root,
+            handle: a_root,
+            class: mc::CLIENT,
+            facts: kayfabe_tests::user_client(a),
+        },
+        RmEvent::Alloc {
+            client: b,
+            parent: b_root,
+            handle: b_root,
+            class: mc::CLIENT,
+            facts: kayfabe_tests::user_client(b),
+        },
+        RmEvent::Alloc {
+            client: b,
+            parent: b_root,
+            handle: b_mem,
+            class: mc::MEMORY,
+            facts: AllocFacts {
+                mem_phys: Some(0x9000_0000),
+                ..Default::default()
+            },
+        },
+        // A's alias arrives BEFORE the handle it names exists (parked).
+        RmEvent::Dup {
+            src: NodeKey::new(b, middle),
+            dst: NodeKey::new(a, a_alias),
+        },
+        // …and a `Dup` — not an `Alloc` — is what mints it.
+        RmEvent::Dup {
+            src: NodeKey::new(b, b_mem),
+            dst: NodeKey::new(b, middle),
+        },
+    ] {
+        g.apply(&arch, ev).expect("setup applies");
+    }
+
+    let mem_id = g
+        .origin_of(NodeKey::new(b, b_mem))
+        .expect("B's memory is live")
+        .id();
+
+    // B drops both of ITS handles. Nothing of A's is named by either free.
+    for handle in [middle, b_mem] {
+        g.apply(&arch, RmEvent::Free { client: b, handle })
+            .expect("B frees its own handle");
+    }
+
+    assert_eq!(
+        g.references_of(mem_id).collect::<Vec<_>>(),
+        vec![NodeKey::new(a, a_alias)],
+        "★★ the resource is ALIVE on A's reference alone. Before §12.46 that reference \
+         was never counted, so the second free took the refcount to zero and destroyed \
+         an object RM still refcounts — the free-what-is-live direction"
+    );
+    assert_eq!(
+        g.backing_of(NodeKey::new(a, a_alias)),
+        Some(0x9000_0000),
+        "…and it is still USABLE through the surviving alias, not merely present"
+    );
+    assert_eq!(
+        g.origin_of(NodeKey::new(b, b_mem)).map(|n| n.key),
+        None,
+        "…while B's own handles are genuinely gone (this is a refcount, not a leak)"
+    );
+
+    // The LAST reference dropping does destroy it — the refcount is faithful in both
+    // directions, which is what stops this test from being satisfiable by never freeing.
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: a,
+            handle: a_alias,
+        },
+    )
+    .expect("A frees its alias");
+    assert_eq!(
+        g.references_of(mem_id).collect::<Vec<_>>(),
+        vec![],
+        "refcount 0 ⇒ destroyed"
+    );
+    assert_eq!(
+        g.nodes().filter(|n| n.id() == mem_id).count(),
+        0,
+        "…and the resource is gone from the graph, so nothing leaks either"
     );
 }
 

@@ -106,7 +106,7 @@ use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, Proc};
 use kayfabe_core::reactor::SourceKind;
 use kayfabe_core::rmgraph::ClientKey;
-use kayfabe_core::rmgraph::RmEvent;
+use kayfabe_core::rmgraph::{NodeKey, RmEvent};
 use kayfabe_core::{ProcAnchor, ProcId};
 use kayfabe_fwd::{FwdFault, Orphans};
 use kayfabe_isolate::{HostHandle, IsolateId, RmError, VerbFailure, VerbPlan, VerbReply, WorkerId};
@@ -1981,4 +1981,235 @@ fn live_planes(gpu: &Gpu) -> (usize, usize) {
     let arenas =
         gpu.system.arenas.len() + gpu.procs.values().map(|p| p.arenas.len()).sum::<usize>();
     (isolates, arenas)
+}
+
+// =================================================================================
+// 6 — ★★ §12.46: THE REFERENCE THE REAPER COULD NOT SEE
+// =================================================================================
+
+/// The handle in the OWNER's namespace that UVM's `DUP_OBJECT` names as its **source**,
+/// and which no `RM_ALLOC` ever creates — only a later `DUP_OBJECT` mints it.
+const OWNER_MIDDLE: HObject = HObject(0x5c00_00f0);
+
+/// [`uvm_referenced_gpu`], except the kernel reference is a **dup of a dup with a parked
+/// source**: UVM's alias arrives naming a handle in the owner's namespace that does not
+/// exist yet, and the owner then mints that handle with a `DUP_OBJECT` of its own
+/// VASpace — never an `RM_ALLOC`.
+///
+/// Both orderings are protocol-legal (only 25 of 82 measured dups reach GSP, so a source
+/// object may be one RM saw and we did not — the DEFER-for-observation case), and the
+/// end-state is identical to `uvm_referenced_gpu`'s: one kernel alias of the owner's
+/// VASpace. That equivalence is the point — §12.46's defect made the two orderings
+/// produce *different* refcounts.
+fn uvm_referenced_via_parked_chain_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
+    let (factory, recorder) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
+    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+
+    let mut s = Scenario::new();
+    let owner_vas = s.compute_process_on_gpu(
+        OWNER,
+        OWNER_PDB,
+        identical_handles(OWNER_GR.0, OWNER_CE.0),
+        None,
+    );
+    s.memory(OWNER, HObject(0x5c00_0001), MEM, 0x9_0000_0000);
+    // UVM aliases a handle that does not exist yet → the edge PARKS.
+    s.uvm_dup(
+        UVM,
+        HObject(UVM.0),
+        UVM_DEV,
+        UVM_VAS,
+        UVM_PDB,
+        UVM_ALIAS,
+        NodeKey::new(OWNER, OWNER_MIDDLE),
+    );
+    // …and a `Dup` — not an `Alloc` — is what mints it. Nothing allocs afterwards, so if
+    // `Dup` does not drain the parked table, nothing ever does.
+    s.push(RmEvent::Dup {
+        src: owner_vas,
+        dst: NodeKey::new(OWNER, OWNER_MIDDLE),
+    });
+    for ev in s.events {
+        gpu.apply(ev).expect("scenario applies");
+    }
+    let owner = gpu.spine.by_pdb[&(GPU, OWNER_PDB)];
+    (
+        Guarded::new(
+            "cross_proc_lifetime::uvm_referenced_via_parked_chain_gpu",
+            gpu,
+            recorder.clone(),
+        ),
+        owner,
+        recorder,
+    )
+}
+
+/// ★★★ §12.46 — **the reaper must not free a resource a dup-of-a-dup keeps alive.**
+///
+/// This is the teardown consequence of the `references_of` undercount that
+/// `fuzz_rmgraph_invariants`' INV5 caught (seed `d007e74d…`;
+/// `object_model::a_dup_that_mints_the_middle_handle_drains_every_parked_table` is the
+/// graph-level statement). The chain from the missing drain to a host-memory free is
+/// short and entirely mechanical:
+///
+/// 1. `RmGraph::apply` drained the parked tables from its `Alloc` arm only, so a parked
+///    `DUP_OBJECT` whose source handle a *`Dup`* minted stayed parked;
+/// 2. so `Resource::refs` never counted UVM's alias;
+/// 3. so the owner's root-free took the refcount to zero and destroyed the VASpace;
+/// 4. so the owner's component vanished from `project`, and `Spine::vacate` removed the
+///    `Proc` on the very `Gpu::apply` that carried the root free;
+/// 5. so at the next `reap_retired` the **`Free` verbs really went out** — measured,
+///    with the drain removed: `Free(backing)`, `Free(host VAS)`, and
+///    `kayfabe_fwd::resolve` through UVM's surviving alias then answers `Err`.
+///
+/// Step 5 is `l1_concurrency.md` §12.41 §4 / N1 verbatim — *"released the host VAS and
+/// the published backing of a resource a live kernel client still references"* — reached
+/// through a different door, on a stream containing no malformed event at all. RM keeps
+/// the VASpace alive for the alias holder (`ogkm: .../mem_mgr/mem.c:1027-1031`), and UVM
+/// keeps *using* it, because `uvm_va_space` hangs off the file rather than the process
+/// (`ogkm: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`).
+///
+/// The assertion is deliberately about the **verbs**, not about the projection: what
+/// makes this the fatal direction rather than a bookkeeping gap is that a `Free` reaches
+/// the backend for memory RM says is live, and the ledger is what sees that. It is asked
+/// three times — before the drain, after the drain, and after the reap — because the
+/// three disposal doors are different code and only the reap was the one that opened.
+#[test]
+fn a_dup_of_a_dup_reference_stops_the_reaper_from_freeing_its_owners_host_memory() {
+    let _wd = watchdog("dup_of_dup_reaper", Duration::from_secs(60));
+    let (mut gpu, owner, rec) = uvm_referenced_via_parked_chain_gpu();
+
+    // ---- The parked chain resolved into a genuine CROSS-`Proc` kernel reference.
+    assert!(
+        gpu.system.client_values().contains(&UVM),
+        "the UVM session client is the SYSTEM component's — a dup INTO a kernel client \
+         is a reference, never a merge (§12.27), whatever route it took to get there",
+    );
+    assert!(
+        !gpu.procs[&owner].client_values().contains(&UVM),
+        "…so this is a real cross-`Proc` reference and not a relabelled intra-proc one",
+    );
+    let owner_vas_id = gpu
+        .spine
+        .rmgraph
+        .origin_of(NodeKey::new(
+            OWNER,
+            identical_handles(OWNER_GR.0, OWNER_CE.0).vaspace,
+        ))
+        .expect("the owner's VASpace is live")
+        .id();
+    assert_eq!(
+        gpu.spine
+            .rmgraph
+            .references_of(owner_vas_id)
+            .collect::<Vec<_>>(),
+        vec![
+            NodeKey::new(OWNER, identical_handles(OWNER_GR.0, OWNER_CE.0).vaspace),
+            NodeKey::new(OWNER, OWNER_MIDDLE),
+            NodeKey::new(UVM, UVM_ALIAS),
+        ],
+        "★ all three references are counted — the origin, the owner's own middle alias, \
+         and UVM's alias THROUGH it. Before §12.46 the third was missing and everything \
+         below followed from that one absence",
+    );
+
+    // ---- A full data plane, so there is real host memory for a reaper to free.
+    kayfabe_fwd::publish_backing(
+        gpu.procs.get_mut(&owner).expect("owner"),
+        GPU,
+        OWNER_PDB,
+        VA,
+        0x1000,
+    )
+    .expect("the owner publishes");
+    let backing = backing_of(&gpu, owner, OWNER_PDB, VA);
+    let host_vas = gpu.procs[&owner].vases[&(GPU, OWNER_PDB)]
+        .host_vas
+        .expect("the owner's Vas materialized its host VAS");
+
+    // ---- The guest process is killed, cleanly.
+    free_owner_root(&mut gpu);
+
+    // ---- 1. The `Proc` survives, because the resource does.
+    assert!(
+        gpu.procs.contains_key(&owner),
+        "★★ the owning `Proc` must NOT retire while the kernel alias still references \
+         its VASpace — retiring is what runs `stage_dropped_vases` over it",
+    );
+    assert_eq!(
+        gpu.spine.by_pdb.get(&(GPU, OWNER_PDB)),
+        Some(&owner),
+        "…and the VASpace still routes to its ALLOCATOR's proc (attribution by origin)",
+    );
+
+    // ---- 2. ★ THE REAPER FREED NOTHING IT SHOULD NOT HAVE. The owner's channels are
+    // unreferenced and are reclaimed; its VASpace and the backing published into it are
+    // not, and must not appear in a release queue at all — "not yet drained" would be a
+    // reprieve rather than a refusal.
+    let staged = frees_on_owner(&rec, owner);
+    assert_eq!(
+        (staged.contains(&host_vas), staged.contains(&backing)),
+        (false, false),
+        "★★ neither the host VAS nor the published backing was freed — this is the \
+         'never free host memory RM says is live' constraint, measured at the verb",
+    );
+    drain_pending(&mut gpu, owner);
+    let after_drain = frees_on_owner(&rec, owner);
+    assert_eq!(
+        (
+            after_drain.contains(&host_vas),
+            after_drain.contains(&backing)
+        ),
+        (false, false),
+        "…and draining every staged release does not reach them either: they were never \
+         queued, rather than queued-and-not-yet-run",
+    );
+    // ★ The reap is the door that actually opened. With the §12.46 drain removed this
+    // reaps the owner (its component having vanished) and emits `Free(backing)` +
+    // `Free(host VAS)`; with it, there is nothing to reap and nothing to free.
+    assert_eq!(
+        gpu.reap_retired().len(),
+        0,
+        "★★ no `Proc` is waiting to be reaped at all — the owner never left, so \
+         namespace death never gets a turn over its host objects",
+    );
+    let after_reap = frees_on_owner(&rec, owner);
+    assert_eq!(
+        (
+            after_reap.contains(&host_vas),
+            after_reap.contains(&backing)
+        ),
+        (false, false),
+        "★★ and the reap emitted no `Free` for either — the exact two verbs the missing \
+         drain let through (§12.41 §4 / N1)",
+    );
+
+    // ---- 3. The surviving reference is USABLE, not merely present.
+    let (binding, _off) = kayfabe_fwd::resolve(&gpu, GPU, OWNER_PDB, VA)
+        .expect("the published range still resolves through the surviving VASpace");
+    assert_eq!(
+        binding.host.expect("still published").memory,
+        backing,
+        "the published host backing survived the guest client's free",
+    );
+    kayfabe_fwd::publish_backing(
+        gpu.procs.get_mut(&owner).expect("owner"),
+        GPU,
+        OWNER_PDB,
+        VA3,
+        0x1000,
+    )
+    .expect("★ NEW host work through a VASpace whose allocating process is DEAD");
+
+    let l = ledger(&rec);
+    assert_eq!(
+        (
+            l.double_free.as_slice(),
+            l.free_of_unknown.as_slice(),
+            l.unmap_of_unknown.as_slice()
+        ),
+        (&[][..], &[][..], &[][..]),
+        "nothing was released twice and nothing was reached across a namespace",
+    );
 }

@@ -857,6 +857,32 @@ impl RefTracker {
         self.handle_to_origin.values().copied().collect()
     }
 
+    /// ★★★ §12.46 — bind every parked dup whose source now resolves, to fixpoint (a
+    /// chain may unblock in one step).
+    ///
+    /// **This runs after an `Alloc` AND after a `Dup`**, because those are the two
+    /// events that mint a live handle and a parked fact waits for its target's *handle*,
+    /// not for its target's *allocation*. The model used to run it from the `Alloc` arm
+    /// only — mirroring the graph's own defect, which is why the two agreed and this
+    /// property stayed green over the bug. `object_model::
+    /// a_dup_that_mints_the_middle_handle_drains_every_parked_table` is the statement of
+    /// what they were both getting wrong; correcting the model here makes A4 strictly
+    /// STRONGER (it now demands the graph keep an alias it used to be allowed to lose),
+    /// and A4 is the property that would have caught the graph bug had the model been
+    /// right — the shrunk stream is three events long.
+    fn promote_pending(&mut self) {
+        loop {
+            let ready = self.pending.iter().find_map(|(dst, src)| {
+                (!self.handle_to_origin.contains_key(dst))
+                    .then(|| self.origin_of(*src).map(|o| (*dst, o)))
+                    .flatten()
+            });
+            let Some((dst, origin)) = ready else { break };
+            self.pending.remove(&dst);
+            self.handle_to_origin.insert(dst, origin);
+        }
+    }
+
     fn apply(&mut self, arch: &dyn Arch, ev: RmEvent) {
         match ev {
             RmEvent::Alloc {
@@ -893,16 +919,7 @@ impl RefTracker {
                     self.client_roots.insert(k);
                 }
                 // Promote any parked dup whose source just appeared (fixpoint).
-                loop {
-                    let ready = self.pending.iter().find_map(|(dst, src)| {
-                        (!self.handle_to_origin.contains_key(dst))
-                            .then(|| self.origin_of(*src).map(|o| (*dst, o)))
-                            .flatten()
-                    });
-                    let Some((dst, origin)) = ready else { break };
-                    self.pending.remove(&dst);
-                    self.handle_to_origin.insert(dst, origin);
-                }
+                self.promote_pending();
             }
             RmEvent::Dup { src, dst } => {
                 let (src, dst) = ((src.client, src.handle), (dst.client, dst.handle));
@@ -924,6 +941,8 @@ impl RefTracker {
                 match self.origin_of(src) {
                     Some(origin) => {
                         self.handle_to_origin.insert(dst, origin);
+                        // ★★★ §12.46 — a `Dup` mints a handle, so it unparks too.
+                        self.promote_pending();
                     }
                     None => {
                         self.pending.insert(dst, src);

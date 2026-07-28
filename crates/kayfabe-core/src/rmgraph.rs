@@ -1574,6 +1574,38 @@ impl RmGraph {
                             .expect("resource_of returned a live id")
                             .refs
                             .insert(dst);
+                        // ★★★ §12.46 — **A `Dup` CREATES A LIVE HANDLE, so it unblocks
+                        // the parked tables exactly as an `Alloc` does.** These three
+                        // drains used to live only in the `Alloc` arm, on the reading
+                        // that a parked fact waits for its target's *allocation*. It
+                        // waits for its target's **handle**, and `Alloc` and `Dup` are
+                        // the only two events that create one — `Free`/`Unmap` only
+                        // remove, `SetPageDir`/`MapMemoryDma` create none. A dup-of-a-dup
+                        // whose middle handle is minted by this very `Dup` therefore
+                        // stayed parked, and the graph then held a parked edge that was
+                        // fully RESOLVABLE — two derivations of one fact that disagreed:
+                        //
+                        //  - `resource_of`/`origin_of` follow `pending_dups`, so
+                        //    `crate::project` resolved the chain and GROUPED on the edge;
+                        //  - `refs` — the refcount — never learned about the alias, so
+                        //    `references_of` denied it existed.
+                        //
+                        // The refcount is the one that decides lifetime, and an undercount
+                        // is the fatal direction: `free`'s last-reference test
+                        // (`refs.is_empty() && map_refs == 0`) destroyed a resource a live
+                        // foreign alias still referenced — "free host memory RM says is
+                        // live", reached without a single malformed event. The parked
+                        // sibling tables carry the same shape and are drained here for the
+                        // same reason: a parked `SET_PAGE_DIRECTORY` whose VASpace handle
+                        // a `Dup` mints left `Resource::pdb` unset (so no mapping learned
+                        // the PDB), and a parked `MAP_MEMORY_DMA` never installed, which is
+                        // a MISS=FAULT on a legal guest at first use.
+                        //
+                        // Order matters and matches the `Alloc` arm: dups first, because
+                        // promoting one can be what makes a parked PDB or map resolve.
+                        self.resolve_pending_dups();
+                        self.resolve_pending_pdbs();
+                        self.resolve_pending_maps();
                     }
                     // Source not observed yet (order tolerance). Park the edge so a
                     // later Alloc of `src` (or a chain) resolves it.
