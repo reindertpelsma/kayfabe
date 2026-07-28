@@ -1,0 +1,18 @@
+[package]
+name = "kayfabe-vmm-qemu"
+description = "The QEMU adapter's LOGIC half (l2_qemu_adapter.md §2.2, decision Q2): the Vmm impl, the guest-physical region map and its prove-RAM classification, the two leaf locks, plan/execute/commit, the window and topology generations, and retirement. `forbid(unsafe_code)`; every foreign effect crosses the `QemuHost` seam."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-vmm.workspace = true
+# ★ The reservation, the MAP_FIXED placements and the bounded copies are OURS, not the
+# hypervisor's — §5.4's fine tier "performs no QEMU call at all". So the adapter reaches
+# the OS through the same audited crate `kayfabe-vmm-kvm` does, and reaches QEMU only
+# through `QemuHost`. Two raw crates, two seams, no overlap.
+kayfabe-linux-raw.workspace = true
+
+[lints]
+workspace = true

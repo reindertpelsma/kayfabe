@@ -1,0 +1,39 @@
+[package]
+name = "kayfabe-qemu-raw"
+description = "The SECOND audited unsafe crate: the QEMU FFI surface (l2_qemu_adapter.md §2.2, decision Q2). Empty at stage Q0 — it exists so the unsafe-containment gates' two-crate shape is decided and landed BEFORE any adapter code, not discovered by a manifest edit."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# ★ DELIBERATELY NOT `[lints] workspace = true` — the SECOND crate to omit it, and the
+# first one added since the rule was written. `l2_qemu_adapter.md` §2.2 / decision Q2:
+#
+#   "A QEMU adapter needs `extern "C"` entry points, raw `MemoryRegion *` handles, and
+#    adoption of a host pointer QEMU owns. All three are `unsafe`. Putting them in
+#    `kayfabe-linux-raw` would be wrong twice over: QEMU is not Linux, and
+#    `four_axes_of_variation.md` §1.1 licenses host-side *OS* specificity in that crate,
+#    not host-side *hypervisor* specificity."
+#
+# CI gate A's own failure text is what made this a decision rather than an edit:
+# "There is exactly ONE crate allowed to omit it (kayfabe-linux-raw), and adding a
+# second is a design decision, not a manifest edit." It has been made; the price is
+# stated in §2.2 and restated in ci.yml: the audit acceptance criterion moves from
+# "read one crate in one sitting" to "read two".
+#
+# ★★ THE CRATE IS EMPTY AT Q0, AND THE RATCHET SAYS SO — its expected relaxation count
+# is **0**. That is the strongest setting available: the first `unsafe` block ever added
+# here turns CI red until somebody itemises it in ci.yml, which is exactly the review
+# §2.2 asks for. Two other gates keep the hole shut in the meantime: the unsafe-surface
+# gate (any file using the keyword must be named `*_unsafe.rs`) is crate-agnostic, and
+# the host-pointer gate confines `*mut`/`*const`/`NonNull`/`transmute` the same way.
+#
+# ★ If stage Q2 is never built, DELETE this crate rather than leave it. An allow-unsafe
+# crate with nothing in it is a standing exemption nobody is auditing.
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"
+
+[lints.clippy]
+# Same as `kayfabe-linux-raw`: every relaxation carries a `// SAFETY:` naming its
+# invariant and who guarantees it, or the build fails.
+undocumented_unsafe_blocks = "deny"

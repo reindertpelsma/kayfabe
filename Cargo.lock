@@ -214,6 +214,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-qemu-raw"
+version = "0.1.0"
+
+[[package]]
 name = "kayfabe-rmrpc"
 version = "0.1.0"
 dependencies = [
@@ -307,6 +311,15 @@ dependencies = [
  "kayfabe-util",
  "kayfabe-vmm",
  "libc",
+]
+
+[[package]]
+name = "kayfabe-vmm-qemu"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-linux-raw",
+ "kayfabe-util",
+ "kayfabe-vmm",
 ]
 
 [[package]]

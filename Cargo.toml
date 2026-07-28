@@ -7,6 +7,8 @@ members = [
     "crates/kayfabe-mmu",
     "crates/kayfabe-vmm",
     "crates/kayfabe-vmm-kvm",
+    "crates/kayfabe-vmm-qemu",
+    "crates/kayfabe-qemu-raw",
     "crates/kayfabe-isolate",
     "crates/kayfabe-completion",
     "crates/kayfabe-core",
@@ -34,6 +36,8 @@ kayfabe-abi = { path = "crates/kayfabe-abi" }
 kayfabe-mmu = { path = "crates/kayfabe-mmu" }
 kayfabe-vmm = { path = "crates/kayfabe-vmm" }
 kayfabe-vmm-kvm = { path = "crates/kayfabe-vmm-kvm" }
+kayfabe-vmm-qemu = { path = "crates/kayfabe-vmm-qemu" }
+kayfabe-qemu-raw = { path = "crates/kayfabe-qemu-raw" }
 kayfabe-isolate = { path = "crates/kayfabe-isolate" }
 kayfabe-completion = { path = "crates/kayfabe-completion" }
 kayfabe-core = { path = "crates/kayfabe-core" }

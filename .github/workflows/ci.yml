@@ -618,12 +618,44 @@ jobs:
       #      carry its own `// SAFETY:`, which is what makes the §11 review tractable.
       #
       # Same exit-code polarity trap as the three gates above: a `grep` HIT is the failure.
-      - name: "Unsafe-containment gates (A: forbid inheritance, B: one crate, ratchet)"
+      # ★★ AMENDED AT L2-Q STAGE Q0 (l2_qemu_adapter.md §2.2, decision Q2). The three
+      # sub-gates below moved from a **constant** — one crate, one number — to a **named
+      # list with a per-crate expected count**, because the QEMU adapter needs a second
+      # audited raw crate and gate A's own failure text said what that costs:
+      #
+      #   "There is exactly ONE crate allowed to omit it (kayfabe-linux-raw), and adding
+      #    a second is a design decision, not a manifest edit."
+      #
+      # The decision has been made and here is its price, stated rather than argued away:
+      # the acceptance criterion this whole gate exists to protect — "read one crate in
+      # one sitting" — becomes "read two". The reason it is nonetheless the right split is
+      # that QEMU is not Linux: `kayfabe-linux-raw` is licensed to hold host-side *OS*
+      # specificity, not host-side *hypervisor* specificity, and folding an FFI surface
+      # for a hypervisor into it would make the OS crate un-auditable in a different way.
+      #
+      # ★ `kayfabe-qemu-raw` IS EMPTY TODAY and its expected count is 0. That is the
+      # strongest setting available: the first relaxation ever added there turns this step
+      # red until somebody itemises it below, exactly as the 37 are itemised. Two other
+      # gates cover the interim and neither has a crate list at all — the unsafe-surface
+      # gate (a file using the keyword must be named *_unsafe.rs) and the host-pointer
+      # gate. If stage Q2 is abandoned, DELETE the crate rather than leave a standing
+      # exemption over nothing.
+      - name: "Unsafe-containment gates (A: forbid inheritance, B: the named crates, ratchet)"
         run: |
-          # --- Gate A: every package but the ONE inherits `unsafe_code = "forbid"`.
+          # ★ THE ONE LIST. `crate:expected-relaxations`, and all three sub-gates read it.
+          # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
+          # counted by the ratchet if and only if it appears here — so "which crates may
+          # contain the unsound surface?" is answered by reading one line.
+          AUDITED="kayfabe-linux-raw:37 kayfabe-qemu-raw:0"
+
+          # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
           for m in crates/*/Cargo.toml tests/Cargo.toml; do
-            case "$m" in crates/kayfabe-linux-raw/Cargo.toml) continue;; esac
+            exempt=0
+            for entry in $AUDITED; do
+              case "$m" in "crates/${entry%%:*}/Cargo.toml") exempt=1;; esac
+            done
+            [ "$exempt" -eq 1 ] && continue
             grep -q '^\[lints\]' "$m" && grep -q '^workspace = true' "$m" || missing="$missing $m"
           done
           if [ -n "$missing" ]; then
@@ -634,31 +666,46 @@ jobs:
             echo "Add:"
             echo "  [lints]"
             echo "  workspace = true"
-            echo "There is exactly ONE crate allowed to omit it (kayfabe-linux-raw), and"
-            echo "adding a second is a design decision, not a manifest edit."
+            echo "The crates allowed to omit it are EXACTLY these, and adding a third is a"
+            echo "design decision, not a manifest edit:"
+            for entry in $AUDITED; do echo "  ${entry%%:*}"; done
             exit 1
           fi
-          # --- Gate B: the surface lives in exactly one crate's src/.
-          outside=$(find . -name '*_unsafe.rs' \
-                      -not -path './crates/kayfabe-linux-raw/src/*' \
+
+          # --- Gate B: the surface lives in the named crates' src/, and nowhere else.
+          # ★ An ARRAY, not a string. The string form was written first and it made this
+          # gate PASS BY CRASHING: an unquoted `$prune` is word-split AND glob-expanded,
+          # so `./crates/<c>/src/*` became a list of real filenames, `find` died with
+          # "paths must precede expression", and the empty output read as "no offenders".
+          # Exactly the green-instrument-on-an-unexercised-path failure this suite is
+          # about, inside the gate that enforces it.
+          prune=()
+          for entry in $AUDITED; do
+            prune+=( -not -path "./crates/${entry%%:*}/src/*" )
+          done
+          outside=$(find . -name '*_unsafe.rs' "${prune[@]}" \
                       -not -path './target/*' -not -path './*/target/*' \
                       -not -path './mutants.out/*' || true)
           if [ -n "$outside" ]; then
             echo "$outside"
             echo ""
             echo "★ UNSAFE-CONTAINMENT BREACH — l1_os_shell.md §4.1 gate B."
-            echo "The unsound surface is ONE crate: crates/kayfabe-linux-raw/src/. The"
-            echo "files above are elsewhere. Move the code, or the audit stops being"
-            echo "'read one crate in one sitting', which is its acceptance criterion."
+            echo "The unsound surface lives in the audited crates' src/ ONLY:"
+            for entry in $AUDITED; do echo "  crates/${entry%%:*}/src/"; done
+            echo "The files above are elsewhere. Move the code, or the audit stops being"
+            echo "'read the audited crates in one sitting', which is its acceptance"
+            echo "criterion."
             exit 1
           fi
-          # --- The ratchet: the number of relaxations is a reviewed constant.
+
+          # --- The ratchet: the number of relaxations is a reviewed constant PER CRATE.
           # Counts the syntactic forms only (`unsafe {`, `unsafe fn/impl/trait`), so prose
           # inside those files — which gate C permits there — cannot inflate it.
-          # ★ 7 -> 25 at M2-c (l1_os_shell.md §10), the stage that gives the raw crate
-          # its first consumers. ★ 25 -> 37 at M2-d, the stage that gives it a reactor and
-          # a guest. The surface, per file, each block carrying its own `// SAFETY:`
-          # (clippy `undocumented_unsafe_blocks = deny`):
+          #
+          # kayfabe-linux-raw (37). ★ 7 -> 25 at M2-c (l1_os_shell.md §10), the stage that
+          # gives the raw crate its first consumers. ★ 25 -> 37 at M2-d, the stage that
+          # gives it a reactor and a guest. The surface, per file, each block carrying its
+          # own `// SAFETY:` (clippy `undocumented_unsafe_blocks = deny`):
           #   window_unsafe.rs  (7) — the GuestWindow: one mmap, one MAP_FIXED shared by
           #     place/restore, one munmap in Drop, two copy_nonoverlapping, and the two
           #     PER-TYPE `Send`/`Sync` grants (§14.5 item 1 asked for exactly this shape,
@@ -668,6 +715,14 @@ jobs:
           #     write and read, and getrlimit (the §3.8 descriptor budget: the core's
           #     source cap may not be set optimistically past the process's real limit).
           #   kvm_unsafe.rs     (3) — open(/dev/kvm), the by-value ioctl, the memslot ioctl.
+          #   mapping_unsafe.rs (6) — ★ ADDED TO THE ITEMISATION AT Q0, not to the count:
+          #     the list below this line accounted for 30 of the 37 the ratchet has been
+          #     asserting since M2-d, and the two files that make up the other 7 were
+          #     never named. The bounded mapping primitive: the mmap, the munmap in Drop,
+          #     the two MAP_FIXED arms (place / restore), the bounds-checked view
+          #     projection, and the mprotect.
+          #   sysconf_unsafe.rs (1) — the page-size query, the one syscall the geometry
+          #     newtype is derived from.
           #   epoll_unsafe.rs   (3) — M2-d, the readiness set: create, ctl (shared by
           #     watch/unwatch), and the wait. Level-triggered, keyed on a caller-chosen
           #     token that is deliberately NOT the descriptor (§3.2's O3 argument).
@@ -676,19 +731,33 @@ jobs:
           #     an MMIO load's completion, the two by-reference register ioctls, and the
           #     per-type `Send` grant for a vCPU (one runner thread owns one; `Sync` is
           #     deliberately withheld).
-          EXPECTED_UNSAFE_BLOCKS=37
-          actual=$(grep -rhoE 'unsafe (\{|fn |impl |trait )' \
-                     crates/kayfabe-linux-raw/src/*_unsafe.rs | wc -l | tr -d ' ')
-          echo "unsafe blocks: $actual (bar: $EXPECTED_UNSAFE_BLOCKS)"
-          grep -rcoE 'unsafe (\{|fn |impl |trait )' crates/kayfabe-linux-raw/src/*_unsafe.rs || true
-          if [ "$actual" -ne "$EXPECTED_UNSAFE_BLOCKS" ]; then
+          #
+          # kayfabe-qemu-raw (0) — L2-Q stage Q0. Nothing yet, and §2.2's "itemise the
+          # second crate's blocks exactly as the first crate's 37 are" is therefore
+          # DEFERRED to stage Q2, which is when there will be blocks to itemise. Q2 owes
+          # this comment that itemisation in the same commit that moves this 0.
+          fail=0
+          for entry in $AUDITED; do
+            c="${entry%%:*}"; want="${entry##*:}"
+            # `find ... -exec ... +` rather than a glob: a crate with NO *_unsafe.rs files
+            # must count 0, and an unmatched glob would make grep fail the step instead.
+            actual=$(find "crates/$c/src" -maxdepth 1 -name '*_unsafe.rs' \
+                       -exec grep -hoE 'unsafe (\{|fn |impl |trait )' {} + 2>/dev/null \
+                     | wc -l | tr -d ' ')
+            echo "$c: $actual relaxation(s) (bar: $want)"
+            find "crates/$c/src" -maxdepth 1 -name '*_unsafe.rs' \
+              -exec grep -coE 'unsafe (\{|fn |impl |trait )' {} + 2>/dev/null || true
+            [ "$actual" -ne "$want" ] && fail=1
+          done
+          if [ "$fail" -ne 0 ]; then
             echo ""
-            echo "★ UNSAFE RATCHET MOVED — l1_os_shell.md §4.1."
-            echo "Expected $EXPECTED_UNSAFE_BLOCKS relaxation(s), found $actual."
-            echo "If you ADDED one: change the number here in the same commit, and say in"
-            echo "the message what the new block does and what its SAFETY invariant is."
-            echo "If you REMOVED one: change the number here too — a ratchet that only"
-            echo "catches growth stops being a count of the audit surface."
+            echo "★ UNSAFE RATCHET MOVED — l1_os_shell.md §4.1, l2_qemu_adapter.md §2.2."
+            echo "A crate's relaxation count differs from its reviewed bar (above)."
+            echo "If you ADDED one: change the number in AUDITED in the same commit, and"
+            echo "say in the message what the new block does and what its SAFETY"
+            echo "invariant is — and add it to the per-file itemisation."
+            echo "If you REMOVED one: change the number too — a ratchet that only catches"
+            echo "growth stops being a count of the audit surface."
             exit 1
           fi
       - name: Format check (fuzz workspace)
