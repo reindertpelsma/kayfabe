@@ -1516,3 +1516,90 @@ fn dup_owned(fd: std::os::fd::BorrowedFd<'_>) -> Result<std::os::fd::OwnedFd, Ra
 }
 
 kayfabe_util::assert_send_sync!(KvmVmm, KvmMachine, AuditReport);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ★★ **Which spans of a read-native window are registered read-only** — the caller
+    /// half of `KVM_MEM_READONLY`, and the half no other test reaches.
+    ///
+    /// `kayfabe-linux-raw` proves the *mechanism*: a slot installed read-only faults a
+    /// guest store out and keeps the backing intact. Nothing proved that this crate ever
+    /// **asks** for it. `a_read_native_overlay_installs_a_read_only_slot_over_the_rounded_write_trap`
+    /// counts the slots — three, one per span — which is the split, not the protection: it
+    /// passes unchanged if all three spans are registered writable, and a read-native
+    /// overlay whose trapped page is plain RAM is §6.1 group 7's rom-device pattern
+    /// silently not happening.
+    ///
+    /// So this asserts the third element of every span, by exact content, over every shape
+    /// the rounding produces — trap in the middle, at either end, spanning the whole
+    /// window, and straddling a page boundary — plus the structural invariants that make
+    /// the table mean something: the spans **tile** the window with no gap and no overlap,
+    /// and **exactly one** of them is read-only when a trap was asked for.
+    #[test]
+    fn a_read_native_windows_trapped_span_is_the_only_read_only_one() {
+        let p = HostPageSize::query();
+        let b = p.bytes();
+        let gpa = 0x1000_0000_u64;
+        let len = 4 * b;
+
+        for (what, trap, expected) in [
+            ("no write trap at all", None, vec![(0, len, false)]),
+            (
+                "one byte inside the second page",
+                Some(gpa + b + 8..gpa + b + 9),
+                vec![(0, b, false), (b, b, true), (2 * b, 2 * b, false)],
+            ),
+            (
+                "one byte at the very start",
+                Some(gpa..gpa + 1),
+                vec![(0, b, true), (b, 3 * b, false)],
+            ),
+            (
+                "one byte at the very end",
+                Some(gpa + len - 1..gpa + len),
+                vec![(0, 3 * b, false), (3 * b, b, true)],
+            ),
+            (
+                "the whole window",
+                Some(gpa..gpa + len),
+                vec![(0, len, true)],
+            ),
+            (
+                "a range straddling a page boundary",
+                Some(gpa + b - 1..gpa + b + 1),
+                vec![(0, 2 * b, true), (2 * b, 2 * b, false)],
+            ),
+        ] {
+            let spans = memslot_spans(gpa, len, trap.as_ref(), p)
+                .unwrap_or_else(|e| panic!("{what}: the spans must be computable ({e:?})"));
+            assert_eq!(
+                spans, expected,
+                "{what}: the trapped span — and ONLY the trapped span — must be registered \
+                 read-only; a `false` here maps the guest's rom-device range as plain \
+                 writable RAM and every other assertion in this crate still passes"
+            );
+
+            // The table has to be a partition of the window, or "which span is read-only"
+            // is a statement about a span that does not cover what it claims to.
+            let mut at = 0_u64;
+            for (offset, span_len, _) in &spans {
+                assert_eq!(
+                    *offset, at,
+                    "{what}: the spans must tile the window with no gap and no overlap \
+                     ({spans:?})"
+                );
+                at += *span_len;
+            }
+            assert_eq!(at, len, "{what}: the spans must cover the whole window");
+
+            assert_eq!(
+                spans.iter().filter(|(_, _, ro)| *ro).count(),
+                usize::from(trap.is_some()),
+                "{what}: a window with a write trap has EXACTLY one read-only span, and \
+                 one without has none ({spans:?})"
+            );
+        }
+    }
+}

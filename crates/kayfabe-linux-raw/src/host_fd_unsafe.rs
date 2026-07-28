@@ -331,6 +331,132 @@ mod tests {
     use super::*;
     use crate::{Backing, CachePolicy, HostOffset, HostPageSize, HostProt, MappedRegion};
 
+    /// A named failing syscall, re-runnable: the name is for the assertion message, the
+    /// closure re-provokes the failure (and with it the `errno`) at the moment it is
+    /// wanted.
+    type FailingSyscall = (&'static str, Box<dyn Fn() -> std::io::Error>);
+
+    /// Four different kernel `errno`s, each provoked by a **real** failing syscall reached
+    /// through safe std, so the value under test is the kernel's and not one we typed.
+    ///
+    /// Each closure leaves `errno` set to its own value, and nothing between the call and
+    /// [`adopt_fd`] issues another syscall — which is the whole mechanism
+    /// [`last_syscall_error`] relies on in production, exercised here rather than assumed.
+    fn failing_syscalls() -> Vec<FailingSyscall> {
+        let too_long = format!("/{}", "n".repeat(5000));
+        vec![
+            (
+                "a path that is not there",
+                Box::new(|| {
+                    std::fs::File::open("/kayfabe-no-such-path-4a1f").expect_err("must fail")
+                }) as Box<dyn Fn() -> std::io::Error>,
+            ),
+            (
+                "a non-directory in the middle of a path",
+                Box::new(|| std::fs::File::open("/etc/hostname/child").expect_err("must fail")),
+            ),
+            (
+                "a path longer than the kernel accepts",
+                Box::new(move || std::fs::File::open(&too_long).expect_err("must fail")),
+            ),
+            (
+                "opening a directory for writing",
+                Box::new(|| {
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .open("/")
+                        .expect_err("must fail")
+                }),
+            ),
+        ]
+    }
+
+    /// ★★ **The one adoption site's refusal**, swept over every shape a failed syscall's
+    /// return takes and every `errno` four real failures produce.
+    ///
+    /// [`adopt_fd`] guards the only `from_raw_fd` in the crate. A guard that let a
+    /// negative through would hand `OwnedFd` a **negative `errno` as a descriptor** — an
+    /// owned thing that is not a descriptor, closed on drop, and thereafter aliasable by
+    /// whatever integer the next failure produces. Nothing downstream can notice, because
+    /// every caller of this function has already discarded the raw value.
+    ///
+    /// Swept deliberately: `-1` (the C convention), `-errno` (what a raw syscall returns),
+    /// and both ends of the range — a guard tested at one value is a guard tested at one
+    /// value.
+    #[test]
+    fn a_negative_syscall_return_is_refused_by_exact_errno_and_adopts_nothing() {
+        let mut seen = Vec::new();
+        for (what, provoke) in failing_syscalls() {
+            let errno = provoke().raw_os_error();
+            assert!(
+                errno.is_some(),
+                "{what} must have failed with a real errno for this case to test anything"
+            );
+            seen.push(errno);
+            for raw in [
+                -1,
+                -2,
+                -libc::EMFILE,
+                -libc::EBADF,
+                -libc::ENOMEM,
+                libc::c_int::MIN,
+                libc::c_int::MIN + 1,
+            ] {
+                assert_eq!(
+                    adopt_fd(raw, "a swept adoption").unwrap_err(),
+                    RawError::Syscall {
+                        call: "a swept adoption",
+                        errno,
+                    },
+                    "{what}: a return of {raw} must be refused as the errno the kernel \
+                     set, and must NOT become an owned descriptor"
+                );
+            }
+        }
+        // The instrument, checked: four provokers that all landed on the SAME errno would
+        // make the sweep above one case repeated four times and nothing would say so.
+        let distinct = seen.iter().collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            distinct.len(),
+            seen.len(),
+            "the provokers must produce DIFFERENT errnos, or this sweep is one case wearing \
+             four names: {seen:?}"
+        );
+    }
+
+    /// ★ **Zero is a descriptor.** The counterpart to the sweep above, and not a formality:
+    /// a guard written `<= 0` refuses `stdin`, and one written `== 0` refuses only zero
+    /// while adopting every negative — the two mistakes disagree about exactly this value,
+    /// so only a case *at* zero tells them apart.
+    ///
+    /// A stale `errno` is left set on purpose: a valid descriptor must be adopted on the
+    /// strength of its own sign, never on whatever the last failing call left behind.
+    ///
+    /// `into_raw_fd` gives the number back **without closing it** — these are the test
+    /// process's own standard descriptors and integers it does not own; closing them would
+    /// break the harness rather than the code under test.
+    #[test]
+    fn descriptor_zero_and_every_other_non_negative_return_is_adopted_unchanged() {
+        use std::os::fd::IntoRawFd as _;
+
+        let _ = std::fs::File::open("/kayfabe-no-such-path-4a1f").expect_err("must fail");
+        for raw in [0, 1, 2, 3, 42, libc::c_int::MAX] {
+            let adopted = adopt_fd(raw, "a swept adoption").unwrap_or_else(|e| {
+                panic!(
+                    "a return of {raw} is a DESCRIPTOR the kernel just handed us, not a \
+                     failure; refusing it leaks the descriptor forever and turns a \
+                     working call into an error ({e:?})"
+                )
+            });
+            assert_eq!(
+                adopted.as_raw_fd(),
+                raw,
+                "adoption must preserve the number the kernel returned"
+            );
+            assert_eq!(adopted.into_raw_fd(), raw);
+        }
+    }
+
     /// The seal is the point, so it is proven by the KERNEL refusing, not by us
     /// remembering to ask. `File::set_len` is `ftruncate`, reached through safe std.
     #[test]

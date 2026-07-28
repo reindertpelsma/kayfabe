@@ -74,13 +74,33 @@ const KVM_MEM_READONLY: u32 = 1 << 1;
 /// `struct kvm_userspace_memory_region` — `include/uapi/linux/kvm.h`. Field order and
 /// widths are the ABI; the layout is C's.
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct UserspaceMemoryRegion {
     slot: u32,
     flags: u32,
     guest_phys_addr: u64,
     memory_size: u64,
     userspace_addr: u64,
+}
+
+impl UserspaceMemoryRegion {
+    /// The exact uapi record an install hands the kernel.
+    ///
+    /// ★ Split out of [`KvmVm::set_memslot`] so the **`flags` word is observable without
+    /// a kernel**. `guest_readonly` reaches the hardware only as one bit in this word: if
+    /// it were dropped on the way — a constant that evaluated to `0`, an `if` that lost
+    /// its arm — every install would still succeed, every read would still work, and the
+    /// guest's read-only memory would simply be *writable*. That is an isolation property
+    /// with nothing to hold it, so there is a seam here for a test to hold it by.
+    fn install(slot: u32, gpa: u64, userspace_addr: u64, len: u64, guest_readonly: bool) -> Self {
+        UserspaceMemoryRegion {
+            slot,
+            flags: if guest_readonly { KVM_MEM_READONLY } else { 0 },
+            guest_phys_addr: gpa,
+            memory_size: len,
+            userspace_addr,
+        }
+    }
 }
 
 /// The KVM subsystem handle (`/dev/kvm`).
@@ -258,13 +278,13 @@ impl KvmVm {
     ) -> Result<(), RawError> {
         lockwitness::assert_lock_free("KVM_SET_USER_MEMORY_REGION (installing a memslot)");
         leafwitness::assert_leaf_free("KVM_SET_USER_MEMORY_REGION (installing a memslot)");
-        let region = UserspaceMemoryRegion {
+        let region = UserspaceMemoryRegion::install(
             slot,
-            flags: if guest_readonly { KVM_MEM_READONLY } else { 0 },
-            guest_phys_addr: gpa,
-            memory_size: len,
-            userspace_addr: window.userspace_addr_at(window_offset, len)?,
-        };
+            gpa,
+            window.userspace_addr_at(window_offset, len)?,
+            len,
+            guest_readonly,
+        );
         ioctl_ptr(self.fd.as_raw_fd(), &region)
     }
 
@@ -448,6 +468,66 @@ mod tests {
              (l1_os_shell.md §10, decision #48). This is a deployment fact, in the same \
              class as the /dev/userfaultfd udev rule: no code gate can observe it",
         )
+    }
+
+    /// ★★ **The `flags` word an install really hands the kernel**, both polarities and
+    /// swept over every other field.
+    ///
+    /// This is the one assertion on the read-only path that needs **no** `/dev/kvm`, so it
+    /// is the arm that runs on a runner with no device (see [`crate::kvm_gate`] — the
+    /// guest-side proof below it skips there, and a property held only on a developer box
+    /// is half-held). The bit is spelled `0b10` **independently of the constant it is
+    /// checking**, from `include/uapi/linux/kvm.h`'s `#define KVM_MEM_READONLY (1UL <<
+    /// 1)`; writing `KVM_MEM_READONLY` here would assert only that a name equals itself.
+    ///
+    /// The whole record is compared, not just `flags`, because "read-only" arriving on the
+    /// right *slot* and the right *range* is the property — a flag word that is right about
+    /// a region the kernel is wrong about protects nothing.
+    #[test]
+    fn a_read_only_install_carries_the_kernels_read_only_bit_and_a_writable_one_carries_none() {
+        /// `KVM_MEM_READONLY` as the uapi header defines it, retyped rather than imported.
+        const UAPI_READONLY_BIT: u32 = 0b10;
+
+        for (slot, gpa, addr, len) in [
+            (0_u32, 0_u64, 0_u64, 1_u64),
+            (1, 0x1000_0000, 0x7f00_0000_0000, 4096),
+            (37, 0xffff_ffff_ffff_f000, u64::MAX, 2 * 1024 * 1024),
+            (u32::MAX, u64::MAX, 1, u64::MAX),
+        ] {
+            assert_eq!(
+                UserspaceMemoryRegion::install(slot, gpa, addr, len, true),
+                UserspaceMemoryRegion {
+                    slot,
+                    flags: UAPI_READONLY_BIT,
+                    guest_phys_addr: gpa,
+                    memory_size: len,
+                    userspace_addr: addr,
+                },
+                "a region registered read-only must reach the kernel with bit 1 set — \
+                 without it KVM maps the range WRITABLE, every call still succeeds, and \
+                 the guest silently gains write access to memory declared read-only"
+            );
+            assert_eq!(
+                UserspaceMemoryRegion::install(slot, gpa, addr, len, false),
+                UserspaceMemoryRegion {
+                    slot,
+                    flags: 0,
+                    guest_phys_addr: gpa,
+                    memory_size: len,
+                    userspace_addr: addr,
+                },
+                "and a writable region must carry NO flags — an install that always set \
+                 the bit would pass the assertion above while breaking every RAM slot"
+            );
+        }
+
+        // The two polarities must actually differ. Stated separately because a constant
+        // folded to 0 makes both branches above agree, and agreeing is the failure.
+        assert_ne!(
+            UserspaceMemoryRegion::install(0, 0, 0, 1, true).flags,
+            UserspaceMemoryRegion::install(0, 0, 0, 1, false).flags,
+            "`guest_readonly` must change the word the kernel is handed"
+        );
     }
 
     #[test]

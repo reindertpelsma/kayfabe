@@ -938,6 +938,123 @@ mod tests {
         assert_eq!(out, [0], "the refused write must not have happened");
     }
 
+    /// ★ [`RegionView::write_from`]'s own read-only check — the one its doc says exists
+    /// *"so a view cannot smuggle a write past the read-only check"*.
+    ///
+    /// ## What is actually observable, which is narrower than it looks
+    ///
+    /// The region underneath refuses an in-bounds write anyway, so the view's check is
+    /// **defence in depth** and its only visible effect is **precedence**: on a read-only
+    /// region every write is [`RawError::NotWritable`] *before* any bounds arithmetic runs.
+    /// Drop the check and an out-of-range write to a read-only region starts reporting
+    /// `OutOfRange`, a zero-length one `ZeroLength`, an overflowing one `LengthOverflow` —
+    /// each of them a refusal that says the caller got the *range* wrong when what they
+    /// actually did was write to memory they may not write. That is the diagnostic every
+    /// exact-variant assertion in this crate depends on, and it is worth an assertion of
+    /// its own.
+    ///
+    /// The writable half of the table is what stops "always `NotWritable`" from passing:
+    /// the same four calls must produce their own exact bounds variants there.
+    #[test]
+    fn a_view_of_a_read_only_region_refuses_every_write_before_any_bounds_check() {
+        /// Three views per region, including a **view of a view** — composition is the
+        /// route by which a write would be smuggled, so it is the route under test.
+        fn views(r: &MappedRegion) -> Vec<(&'static str, RegionView<'_>)> {
+            let whole = r.slice(HostOffset::ZERO, r.len_bytes()).expect("whole");
+            let tail = r
+                .slice(HostOffset::new(64), r.len_bytes() - 64)
+                .expect("tail");
+            let nested = tail
+                .slice(HostOffset::new(32), 128)
+                .expect("view of a view");
+            vec![
+                ("a view of the whole region", whole),
+                ("a tail view", tail),
+                ("a view of a view", nested),
+            ]
+        }
+
+        let p = page();
+        let ro = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            p.bytes(),
+            HostProt::ReadOnly,
+            CachePolicy::WriteBack,
+            p,
+        )
+        .expect("map read-only");
+        let rw = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            p.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            p,
+        )
+        .expect("map read-write");
+
+        for (what, v) in views(&ro) {
+            let vl = v.len_bytes();
+            for (case, offset, len) in [
+                ("an in-bounds write", 0_u64, 8_u64),
+                ("a write starting past the view's end", vl, 8),
+                ("a write whose offset overflows u64", u64::MAX, 8),
+                ("a zero-length write", 0, 0),
+            ] {
+                let src = vec![0xA5_u8; usize::try_from(len).expect("len")];
+                assert_eq!(
+                    v.write_from(HostOffset::new(offset), &src),
+                    Err(RawError::NotWritable),
+                    "{what}: {case} must be refused as NOT WRITABLE — a read-only region \
+                     reports why the write is forbidden, never how its range was shaped"
+                );
+            }
+        }
+
+        // Nothing above reached the memory. The region is still the kernel's zero fill.
+        let mut untouched = [0xFF_u8; 64];
+        ro.read_into(HostOffset::ZERO, &mut untouched)
+            .expect("read the read-only region back");
+        assert_eq!(
+            untouched, [0_u8; 64],
+            "every refused write must have been refused BEFORE the store"
+        );
+
+        // ---- The discriminating half: the identical calls on a writable region.
+        for (what, v) in views(&rw) {
+            let vl = v.len_bytes();
+            v.write_from(HostOffset::ZERO, &[0xA5; 8])
+                .unwrap_or_else(|e| panic!("{what}: an in-bounds write must land ({e:?})"));
+            let mut back = [0_u8; 8];
+            v.read_into(HostOffset::ZERO, &mut back).expect("read back");
+            assert_eq!(back, [0xA5; 8], "{what}: and land where it said");
+
+            assert_eq!(
+                v.write_from(HostOffset::new(vl), &[0xA5; 8]),
+                Err(RawError::OutOfRange {
+                    offset: vl,
+                    len: 8,
+                    object_len: vl,
+                }),
+                "{what}: past the end of a WRITABLE view is a range refusal"
+            );
+            assert_eq!(
+                v.write_from(HostOffset::new(u64::MAX), &[0xA5; 8]),
+                Err(RawError::LengthOverflow {
+                    offset: u64::MAX,
+                    len: 8,
+                }),
+                "{what}: an overflowing offset is an overflow refusal"
+            );
+            assert_eq!(
+                v.write_from(HostOffset::ZERO, &[]),
+                Err(RawError::ZeroLength {
+                    what: "write length",
+                }),
+                "{what}: a zero-length write is a zero-length refusal"
+            );
+        }
+    }
+
     #[test]
     fn a_mapping_length_must_be_whole_host_pages_and_non_zero() {
         let p = page();

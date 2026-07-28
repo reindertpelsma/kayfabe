@@ -577,7 +577,14 @@ jobs:
             exit 1
           fi
           # --- Gate B: the docs ratchet — a reviewed constant, driven toward zero.
-          EXPECTED_DOC_CITATIONS=160
+          # 160 -> 161: 3987106 (the gsp_core_bridge reconciliation) added one more
+          # line of PROSE ABOUT THE NOTATION -- "a bare `ogkm:` is untagged and
+          # unverified by definition" -- which is the same legitimate use that makes
+          # this a ratchet rather than a hard zero (mode2_gsp_port_plan.md:59 quotes
+          # a bare citation in order to DEFINE the defect, so a zero-gate would fire
+          # on its own charter). Raise this only for that reason, and say which
+          # commit and which line; never raise it to absorb a real untagged citation.
+          EXPECTED_DOC_CITATIONS=161
           actual=$(grep -rho 'ogkm:' docs --include='*.md' | wc -l | tr -d ' ')
           echo "untagged doc citations: $actual (bar: $EXPECTED_DOC_CITATIONS)"
           if [ "$actual" -ne "$EXPECTED_DOC_CITATIONS" ]; then

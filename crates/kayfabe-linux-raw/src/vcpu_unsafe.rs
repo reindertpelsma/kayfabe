@@ -622,6 +622,30 @@ mod tests {
         [0xA1, a[0], a[1], a[2], a[3], 0x89, 0x03, 0xEB, 0xF7]
     }
 
+    /// [`probe_loop`] with a **store into the probe** wedged between the load and the
+    /// trapped store — the instrument for a read-only memslot.
+    ///
+    /// ```text
+    ///   0: A1 <probe>            mov eax, [probe]        ; a LOAD from the slot
+    ///   5: C7 05 <probe> <value> mov dword [probe], value ; a STORE into the slot
+    ///  15: 89 03                 mov [ebx], eax          ; always an MMIO write exit
+    ///  17: EB ED                 jmp -19                 ; back to 0
+    /// ```
+    ///
+    /// The order is the point: the load happens *before* the store, so `eax` carries what
+    /// the slot held **as the guest found it**, and the trapped store reports it after the
+    /// store has had its chance to change it.
+    fn load_store_probe(probe: u32, value: u32) -> [u8; 19] {
+        let a = probe.to_le_bytes();
+        let v = value.to_le_bytes();
+        [
+            0xA1, a[0], a[1], a[2], a[3], // mov eax, [probe]
+            0xC7, 0x05, a[0], a[1], a[2], a[3], v[0], v[1], v[2], v[3], // mov [probe], value
+            0x89, 0x03, // mov [ebx], eax
+            0xEB, 0xED, // jmp -19
+        ]
+    }
+
     fn kvm() -> Kvm {
         Kvm::open().expect(
             "/dev/kvm must be present and permitted to build the KVM-direct harness \
@@ -636,6 +660,22 @@ mod tests {
         gpa: u64,
         fill: &[u8],
     ) -> (Arc<GuestWindow>, KvmMemslot) {
+        one_page_prot(vm, slot, gpa, fill, false)
+    }
+
+    /// As [`one_page`], with the memslot's guest-side protection chosen by the caller.
+    ///
+    /// The host mapping is writable either way — `guest_readonly` is a **slot** property,
+    /// i.e. what the *guest* may do, which is exactly why the pre-fill below still works
+    /// on a read-only slot and is what makes the read-only test's "the backing never took
+    /// the write" check meaningful rather than tautological.
+    fn one_page_prot(
+        vm: &Arc<KvmVm>,
+        slot: u32,
+        gpa: u64,
+        fill: &[u8],
+        guest_readonly: bool,
+    ) -> (Arc<GuestWindow>, KvmMemslot) {
         let page = HostPageSize::query();
         let w = Arc::new(GuestWindow::create(page.bytes(), page).expect("window"));
         if !fill.is_empty() {
@@ -648,9 +688,13 @@ mod tests {
             Arc::clone(&w),
             0,
             page.bytes(),
-            false,
+            guest_readonly,
         )
-        .expect("memslot");
+        .expect(
+            "memslot (a read-only one needs KVM_CAP_READONLY_MEM, which every x86 KVM \
+             has had since 3.7; EINVAL here means the flag never reached the kernel or \
+             the kernel refuses it)",
+        );
         (w, s)
     }
 
@@ -715,6 +759,103 @@ mod tests {
              userspace instead of being served (the exit's `data` is undefined for a \
              load, so it is deliberately not asserted)"
         );
+    }
+
+    /// An MMIO exit's `data` for a 4-byte access: the value, little-endian, in the low
+    /// half of the kernel's fixed 8-byte field.
+    fn le8(value: u32) -> [u8; 8] {
+        let v = value.to_le_bytes();
+        [v[0], v[1], v[2], v[3], 0, 0, 0, 0]
+    }
+
+    /// ★★ **A guest write to a read-only memslot leaves the guest, and the backing never
+    /// takes it** — the isolation property behind `KVM_MEM_READONLY`, asserted where it
+    /// is decided rather than where it is spelled.
+    ///
+    /// Nothing else observes this bit. An install with the flag dropped succeeds, reports
+    /// nothing, and serves every read correctly; the *only* difference is that the guest
+    /// may now write memory that was registered read-only — which is `Vmm::map_read_native`
+    /// (§6.1 group 7, the rom-device pattern) silently becoming plain RAM. So the
+    /// instrument is a real guest issuing a real store, and the assertion is the exit it
+    /// causes plus the bytes it fails to change.
+    ///
+    /// **Both polarities run, in the same shape.** The writable arm is the discriminating
+    /// control: it proves the difference is caused by the flag and not by the image, and
+    /// it fails an implementation that set the bit unconditionally — which "assert the
+    /// read-only case" alone would happily accept.
+    #[test]
+    fn a_guest_store_into_a_read_only_memslot_faults_out_and_never_reaches_the_backing() {
+        crate::require_kvm!(
+            "a_guest_store_into_a_read_only_memslot_faults_out_and_never_reaches_the_backing"
+        );
+        let page = HostPageSize::query().bytes();
+        let (code_gpa, trap_gpa) = (page, 0x8000_0000u64);
+        // Swept over placement and payload: a single witness is exactly how an unasserted
+        // guard survives, and a `data_gpa` that only works at one address would be an
+        // arithmetic bug wearing this test's green.
+        for (data_gpa, held, poison) in [
+            (2 * page, 0xC0FF_EE42_u32, 0xDEAD_BEEF_u32),
+            (4 * page, 0x0000_0001_u32, 0xFFFF_FFFF_u32),
+        ] {
+            for guest_readonly in [true, false] {
+                let kvm = kvm();
+                let vm = Arc::new(kvm.create_vm().expect("vm"));
+                vm.set_tss_addr_if_supported().expect("tss");
+
+                let image = load_store_probe(u32::try_from(data_gpa).expect("below 4 GiB"), poison);
+                let (_cw, _code) = one_page(&vm, 0, code_gpa, &image);
+                let (dw, _data) =
+                    one_page_prot(&vm, 1, data_gpa, &held.to_le_bytes(), guest_readonly);
+
+                let mut vcpu = KvmVcpu::create(&kvm, Arc::clone(&vm), 0).expect("vcpu");
+                vcpu.enter_flat_protected_mode(code_gpa, trap_gpa)
+                    .expect("protected mode");
+
+                if guest_readonly {
+                    assert_eq!(
+                        vcpu.run().expect("run"),
+                        VcpuExit::Mmio {
+                            gpa: data_gpa,
+                            len: 4,
+                            is_write: true,
+                            data: le8(poison),
+                        },
+                        "a guest STORE into a slot installed read-only must EXIT to \
+                         userspace carrying the attempted value; if it does not, the \
+                         range is writable RAM and the read-only registration bought \
+                         nothing (data_gpa {data_gpa:#x})"
+                    );
+                }
+
+                // The load happened before the store, so this reports what the guest
+                // FOUND — which also proves reads of a read-only slot are still served
+                // straight from RAM with no exit at all.
+                assert_eq!(
+                    vcpu.run().expect("run"),
+                    VcpuExit::Mmio {
+                        gpa: trap_gpa,
+                        len: 4,
+                        is_write: true,
+                        data: le8(held),
+                    },
+                    "the guest's LOAD must be served out of the slot's RAM and reach the \
+                     trapped register (guest_readonly = {guest_readonly}, data_gpa \
+                     {data_gpa:#x})"
+                );
+
+                let mut back = [0_u8; 4];
+                dw.read_into(HostOffset::ZERO, &mut back)
+                    .expect("read the backing back");
+                assert_eq!(
+                    u32::from_le_bytes(back),
+                    if guest_readonly { held } else { poison },
+                    "the HOST-side bytes decide it: a read-only slot's backing must be \
+                     exactly as we left it, and the identical writable slot must have \
+                     taken the guest's store — one assertion, both directions \
+                     (guest_readonly = {guest_readonly}, data_gpa {data_gpa:#x})"
+                );
+            }
+        }
     }
 
     /// The load-completion path: a value we supply at the exit is what the guest goes on
