@@ -565,6 +565,264 @@ fn a_free_prunes_its_own_parked_pdb_and_leaves_an_untouched_handles_parked_pdb_a
     );
 }
 
+/// ★★★ **THE SAME PROPERTY, SWEPT OVER EVERY PARKED TABLE AND TWO NAMESPACES: an
+/// ORDINARY (non-root) `Free` prunes exactly the parked facts rooted at the handle it
+/// destroys, and leaves every other parked fact — in this namespace and in any other —
+/// untouched.**
+///
+/// The sibling test above pins `pending_pdbs` with a single witness. That is how the gap
+/// this test closes was made: `free_subtree`'s `pending_dups` predicate has **two**
+/// terms, and only the `dst` one was exercised. The `src` term —
+/// *"a parked dup whose SOURCE handle was just freed is stale"* — was asserted by
+/// nothing, in the highest-risk function in the crate.
+///
+/// **The `src` term is reachable, and reaching it is the whole point.** A parked edge's
+/// endpoints are by definition not live handles, so the only key a `Free` can name that a
+/// parked dup also names is *another parked dup's destination* — `apply` accepts a `Free`
+/// on one (`known` = `handles ∪ pending_dups`). A parked **chain**
+/// (`PEER:alias → C:mid → C:unseen`) therefore puts `C:mid` in `doomed` as both a `dst`
+/// and a `src`, and the two terms prune the two edges independently.
+///
+/// **Both failure directions are live, and they arrive together.** Inverting the `src`
+/// term simultaneously
+///
+/// - **retains** the stale cross-namespace edge whose source this `Free` destroyed — so
+///   when the guest re-uses that handle value (RM recycles, and the guest picks the
+///   values), the edge promotes and a live `DUP_OBJECT` alias appears in `PEER` against
+///   `C`'s **successor** object. That is §12.39 Shape A one table over, and an alias is a
+///   *grouping* edge: the two become one `Proc`, one isolate, one GPA arena, one host VAS
+///   — #14 un-fixed for a pair the attacker chose; and
+/// - **drops** every healthy parked dup that this `Free` did not name, in *either*
+///   namespace — a legal guest's deferral silently deleted, so the alias it is owed never
+///   materializes and its first use is a MISS=FAULT on traffic that did nothing wrong.
+///
+/// **Asserted by exact CONTENT, never by count.** The two directions cancel in a count
+/// (one stale edge kept, healthy ones dropped), so a cardinality check cannot tell this
+/// failure from correctness — the only honest assertion is the whole surviving set.
+#[test]
+fn a_non_root_free_prunes_exactly_the_parked_facts_rooted_at_it_in_every_table() {
+    // C's namespace. `H_MID` is the parked-dup destination the `Free` names.
+    const H_MID: HObject = HObject(0x6c00_0001);
+    const H_UNSEEN: HObject = HObject(0x6c00_0002);
+    const H_BY_C: HObject = HObject(0x6c00_0006);
+    const H_C_SRC: HObject = HObject(0x6c00_0007);
+    // PEER's namespace.
+    const H_ALIAS: HObject = HObject(0x6c00_0003);
+    const H_BY_PEER: HObject = HObject(0x6c00_0004);
+    const H_PEER_SRC: HObject = HObject(0x6c00_0005);
+    const H_PEER_VAS: HObject = HObject(0x6c00_0008);
+    const H_PEER_MEM: HObject = HObject(0x6c00_0009);
+    const PDB_MID: Pdb = Pdb(0x7702_000);
+    const VA_MID: GpuVa = GpuVa(0x2_0040_0000);
+
+    let (arch, mut g) = fresh_graph();
+    g.apply(&arch, root_of(C)).expect("C declares itself");
+    g.apply(&arch, device(C, H_ROOT, H_DEV))
+        .expect("C's device");
+    g.apply(&arch, memory(C, H_DEV, H_MEM, MEM_PHYS))
+        .expect("C's memory object — live, so the map below parks ONLY on its VASpace");
+    g.apply(&arch, root_of(PEER)).expect("PEER declares itself");
+    g.apply(&arch, device(PEER, HObject(PEER.0), H_DEV))
+        .expect("PEER's device");
+
+    let mid = NodeKey::new(C, H_MID);
+    let by_c = (NodeKey::new(C, H_BY_C), NodeKey::new(C, H_C_SRC));
+    let by_peer = (
+        NodeKey::new(PEER, H_BY_PEER),
+        NodeKey::new(PEER, H_PEER_SRC),
+    );
+
+    // ---- The parked CHAIN. `C:H_MID` is a destination (edge 1) and a source (edge 2),
+    // which is what puts one key on both sides of the predicate.
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: NodeKey::new(C, H_UNSEEN),
+            dst: mid,
+        },
+    )
+    .expect("edge 1: a dup of a never-observed source parks (category 2)");
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: mid,
+            dst: NodeKey::new(PEER, H_ALIAS),
+        },
+    )
+    .expect("edge 2: a CROSS-NAMESPACE dup whose source is itself parked also parks");
+
+    // ---- The bystanders that must survive: one in the freed handle's OWN namespace
+    // (so the prune is proved to be per-HANDLE, not per-namespace) and one in PEER's.
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: by_c.1,
+            dst: by_c.0,
+        },
+    )
+    .expect("edge 3: a bystander parked dup inside C");
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: by_peer.1,
+            dst: by_peer.0,
+        },
+    )
+    .expect("edge 4: a bystander parked dup inside PEER");
+
+    // ---- The other two tables, one doomed fact and one bystander each.
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: C,
+            vaspace: H_MID,
+            pdb: PDB_MID,
+        },
+    )
+    .expect("a PDB parked on the doomed handle value");
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: PEER,
+            vaspace: H_PEER_VAS,
+            pdb: PDB0,
+        },
+    )
+    .expect("a bystander PDB parked in PEER");
+    g.apply(
+        &arch,
+        RmEvent::MapMemoryDma {
+            client: C,
+            vaspace: H_MID,
+            memory: H_MEM,
+            va: VA_MID,
+            offset: 0,
+            len: MAP_LEN,
+        },
+    )
+    .expect("a map parked on the doomed handle value as its VASpace");
+    g.apply(
+        &arch,
+        RmEvent::MapMemoryDma {
+            client: PEER,
+            vaspace: H_PEER_VAS,
+            memory: H_PEER_MEM,
+            va: VA,
+            offset: 0,
+            len: MAP_LEN,
+        },
+    )
+    .expect("a bystander map parked in PEER");
+
+    let parked_before: BTreeSet<(NodeKey, NodeKey)> = g.dups().collect();
+    assert_eq!(
+        parked_before,
+        BTreeSet::from([
+            (mid, NodeKey::new(C, H_UNSEEN)),
+            (NodeKey::new(PEER, H_ALIAS), mid),
+            by_c,
+            by_peer,
+        ]),
+        "precondition: all four edges are parked and none has resolved",
+    );
+
+    // ---- ONE ordinary `Free`, naming a parked-dup destination and nothing else.
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: C,
+            handle: H_MID,
+        },
+    )
+    .expect("a Free of a parked-dup destination is a KNOWN handle, never `FreeUnknown`");
+
+    // ★★ THE PROPERTY. Exactly the two edges rooted at `C:H_MID` are gone — the one it
+    // destinates AND the one it sources — and exactly the two bystanders remain.
+    assert_eq!(
+        g.dups().collect::<BTreeSet<_>>(),
+        BTreeSet::from([by_c, by_peer]),
+        "★★★ a Free must prune exactly the parked dups rooted at the handle it destroyed \
+         — the `dst` edge AND the `src` edge — and must leave every other namespace's \
+         parked dups, and its own namespace's untouched handles', completely alone",
+    );
+
+    // ---- The recycle. RM recycles handle values and the guest chooses them, so the same
+    // value comes back as a brand-new resource. Nothing the dead handle was named by may
+    // attach to it.
+    g.apply(&arch, vaspace(C, H_DEV, H_MID))
+        .expect("★ re-using a freed handle value is LEGAL and must never be refused");
+
+    assert_eq!(
+        g.origin_of(NodeKey::new(PEER, H_ALIAS)).map(|n| n.key),
+        None,
+        "★★★ the stale cross-namespace edge fired into C's SUCCESSOR object: a live \
+         `DUP_OBJECT` alias in PEER against a resource PEER never named — a grouping \
+         edge, so the two processes collapse into one isolate/arena/VAS",
+    );
+    assert_eq!(
+        g.node(NodeKey::new(PEER, H_ALIAS)).map(|n| n.key),
+        None,
+        "★ and no handle-table entry was minted for it either",
+    );
+    assert_eq!(
+        g.references(mid).collect::<BTreeSet<_>>(),
+        BTreeSet::from([mid]),
+        "★ the successor resource is referenced by its own origin handle and NOTHING else",
+    );
+    assert_eq!(
+        g.pdb_of(mid),
+        None,
+        "★ the successor must not inherit its dead predecessor's parked page-directory base",
+    );
+    assert_eq!(
+        g.mappings().count(),
+        0,
+        "★ nor replay a map parked against the dead predecessor into its address plane",
+    );
+
+    // ---- And every bystander deferral still COMPLETES. A deferral that resolves to
+    // nothing is a hang, so the surviving facts are proved live, not merely present.
+    g.apply(&arch, vaspace(C, H_DEV, H_C_SRC))
+        .expect("C's bystander source finally arrives");
+    g.apply(&arch, vaspace(PEER, H_DEV, H_PEER_SRC))
+        .expect("PEER's bystander source finally arrives");
+    g.apply(&arch, vaspace(PEER, H_DEV, H_PEER_VAS))
+        .expect("PEER's bystander VASpace finally arrives");
+    g.apply(&arch, memory(PEER, H_DEV, H_PEER_MEM, MEM_PHYS))
+        .expect("PEER's bystander memory finally arrives");
+
+    assert_eq!(
+        g.dups().collect::<BTreeSet<_>>(),
+        BTreeSet::from([by_c, by_peer]),
+        "★★ both bystander edges promoted into real aliases of their own sources — and \
+         still no edge into PEER:H_ALIAS",
+    );
+    assert_eq!(
+        g.references(by_c.1).collect::<BTreeSet<_>>(),
+        BTreeSet::from([by_c.0, by_c.1]),
+        "★ C's bystander alias is refcounted on its source (origin + alias), not merely \
+         resolvable — the refcount is what decides lifetime",
+    );
+    assert_eq!(
+        g.references(by_peer.1).collect::<BTreeSet<_>>(),
+        BTreeSet::from([by_peer.0, by_peer.1]),
+        "★ and so is PEER's",
+    );
+    assert_eq!(
+        g.pdb_of(NodeKey::new(PEER, H_PEER_VAS)),
+        Some(PDB0),
+        "★★ PEER's parked PDB survived C's Free and drained onto its VASpace",
+    );
+    assert_eq!(
+        g.mappings()
+            .map(|m| (m.va, m.len, m.mem_phys, m.pdb))
+            .collect::<Vec<_>>(),
+        vec![(VA, MAP_LEN, Some(MEM_PHYS), Some(PDB0))],
+        "★★ PEER's parked map survived C's Free and replayed — exactly one mapping, \
+         PEER's own, at PEER's VA (the doomed map's VA must appear nowhere)",
+    );
+}
+
 /// ★★ A `MAP_MEMORY_DMA` whose VASpace *and* memory are both unobserved parks, and
 /// replays into a live mapping the moment both resolve.
 #[test]
@@ -1202,5 +1460,199 @@ fn a_parked_map_does_not_survive_its_namespaces_root_free() {
         0,
         "★★ a `MAP_MEMORY_DMA` parked by a namespace the guest then FREED replayed into \
          the next tenant's VASpace"
+    );
+}
+
+/// ★★★ **THE OTHER HALF OF §12.39 PART A: the namespace purge must not OVER-fire.**
+///
+/// The four tests above are single witnesses — one parked fact each, and each asserts only
+/// that it does *not* fire. A purge that deleted the whole parked table on every root free
+/// would pass all four. That is not a hypothetical failure mode: it is the *only* way the
+/// three `retain`s in `free_subtree` can be wrong in the direction that hurts a legal
+/// guest, and the direction that hurts a legal guest is the one nothing was watching.
+///
+/// So this sweeps instead: **both** cross-namespace dup orientations (the dying namespace
+/// as the edge's `dst` and as its `src`), a parked PDB and a parked map in the dying
+/// namespace, and a full bystander set of all three kinds in a namespace that is not being
+/// torn down — through one client-root free and an `hClient` **recycle**, asserted by
+/// exact content on both sides of the line.
+///
+/// The recycle is the load-bearing part and it must be *accepted*: RM recycles `hClient`
+/// values by design (caller-supplied roots, `ogkm rs_server.c:612`; a generator that wraps
+/// at 2^20 with no free list and no epoch, `:3319-3341`). Refusing the re-declaration
+/// would "fix" Shape A by hanging a legal guest.
+#[test]
+fn a_client_root_free_purges_only_its_own_namespaces_parked_facts() {
+    /// The bystander namespace's parked-dup destination and its not-yet-observed source.
+    const H_P_DST: HObject = HObject(0x6d00_0001);
+    const H_P_SRC: HObject = HObject(0x6d00_0002);
+    /// A PEER handle the DYING namespace parks an edge against (the `dst`-side vector).
+    const H_P_LATER: HObject = HObject(0x6d00_0003);
+    const H_P_VAS: HObject = HObject(0x6d00_0004);
+    const H_P_MEM: HObject = HObject(0x6d00_0005);
+    const PDB_DEAD: Pdb = Pdb(0x7703_000);
+    const VA_DEAD: GpuVa = GpuVa(0x2_0060_0000);
+
+    let (arch, mut g) = fresh_graph();
+    g.apply(&arch, root_of(PEER))
+        .expect("the bystander declares");
+    g.apply(&arch, device(PEER, HObject(PEER.0), H_DEV))
+        .expect("the bystander's device");
+    g.apply(&arch, root_of(RECYCLED))
+        .expect("the namespace that will be torn down declares");
+    g.apply(&arch, device(RECYCLED, HObject(RECYCLED.0), H_DEV))
+        .expect("its device");
+
+    let bystander = (NodeKey::new(PEER, H_P_DST), NodeKey::new(PEER, H_P_SRC));
+    // Orientation 1: the alias lands in PEER, the source is the dying namespace's.
+    let src_side = (NodeKey::new(PEER, H_PLANT), NodeKey::new(RECYCLED, H_LATER));
+    // Orientation 2: the alias lands in the dying namespace, the source is PEER's.
+    let dst_side = (
+        NodeKey::new(RECYCLED, H_PLANT),
+        NodeKey::new(PEER, H_P_LATER),
+    );
+
+    for (dst, src) in [bystander, src_side, dst_side] {
+        g.apply(&arch, RmEvent::Dup { src, dst })
+            .expect("a dup of a not-yet-observed source parks (category 2)");
+    }
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: RECYCLED,
+            vaspace: H_LATER,
+            pdb: PDB_DEAD,
+        },
+    )
+    .expect("the dying namespace parks a PDB");
+    g.apply(
+        &arch,
+        RmEvent::SetPageDir {
+            client: PEER,
+            vaspace: H_P_VAS,
+            pdb: PDB0,
+        },
+    )
+    .expect("the bystander parks a PDB");
+    g.apply(
+        &arch,
+        RmEvent::MapMemoryDma {
+            client: RECYCLED,
+            vaspace: H_LATER,
+            memory: H_MEM,
+            va: VA_DEAD,
+            offset: 0,
+            len: MAP_LEN,
+        },
+    )
+    .expect("the dying namespace parks a map");
+    g.apply(
+        &arch,
+        RmEvent::MapMemoryDma {
+            client: PEER,
+            vaspace: H_P_VAS,
+            memory: H_P_MEM,
+            va: VA,
+            offset: 0,
+            len: MAP_LEN,
+        },
+    )
+    .expect("the bystander parks a map");
+
+    assert_eq!(
+        g.dups().collect::<BTreeSet<_>>(),
+        BTreeSet::from([bystander, src_side, dst_side]),
+        "precondition: three parked edges, none resolved",
+    );
+
+    // ---- Teardown and recycle, in the four events §12.39 costs.
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: RECYCLED,
+            handle: HObject(RECYCLED.0),
+        },
+    )
+    .expect("the client root frees");
+    g.apply(&arch, root_of(RECYCLED))
+        .expect("★ re-declaring a recycled `hClient` is LEGAL and must never be refused");
+    g.apply(&arch, device(RECYCLED, HObject(RECYCLED.0), H_DEV))
+        .expect("the new tenant builds its own objects");
+
+    // ★★ THE PROPERTY. Every parked edge naming the dead namespace — in EITHER role — is
+    // gone; the bystander's is untouched.
+    assert_eq!(
+        g.dups().collect::<BTreeSet<_>>(),
+        BTreeSet::from([bystander]),
+        "★★★ a root free must purge every parked edge naming its namespace as `dst` OR \
+         as `src`, and must not touch a parked edge belonging to anyone else",
+    );
+
+    // ---- Now supply every fact the dead parked entries were waiting for. Under a purge
+    // that failed to fire, each of these is the promotion that breaks isolation.
+    g.apply(&arch, vaspace(RECYCLED, H_DEV, H_LATER))
+        .expect("the new tenant allocates the handle value the stale facts named");
+    g.apply(&arch, memory(RECYCLED, H_DEV, H_MEM, MEM_PHYS))
+        .expect("and the memory object the stale map named");
+    g.apply(&arch, vaspace(PEER, H_DEV, H_P_LATER))
+        .expect("the bystander allocates the source the stale `dst`-side edge named");
+
+    assert_eq!(
+        g.origin_of(src_side.0).map(|n| n.key),
+        None,
+        "★★ the `src`-side stale edge aliased the NEW tenant's object into PEER",
+    );
+    assert_eq!(
+        g.origin_of(dst_side.0).map(|n| n.key),
+        None,
+        "★★ the `dst`-side stale edge planted a live alias INSIDE the new tenant",
+    );
+    assert_eq!(
+        g.references(NodeKey::new(RECYCLED, H_LATER))
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([NodeKey::new(RECYCLED, H_LATER)]),
+        "★ the new tenant's VASpace is referenced by its own origin handle and nothing else",
+    );
+    assert_eq!(
+        g.pdb_of(NodeKey::new(RECYCLED, H_LATER)),
+        None,
+        "★ and carries no page-directory base its dead predecessor declared",
+    );
+    assert_eq!(
+        g.mappings().count(),
+        0,
+        "★ and the dead namespace's parked map did not replay into it",
+    );
+
+    // ---- The bystander's three deferrals all still COMPLETE.
+    g.apply(&arch, vaspace(PEER, H_DEV, H_P_SRC))
+        .expect("the bystander's dup source arrives");
+    g.apply(&arch, vaspace(PEER, H_DEV, H_P_VAS))
+        .expect("the bystander's VASpace arrives");
+    g.apply(&arch, memory(PEER, H_DEV, H_P_MEM, MEM_PHYS))
+        .expect("the bystander's memory arrives");
+
+    assert_eq!(
+        g.dups().collect::<BTreeSet<_>>(),
+        BTreeSet::from([bystander]),
+        "★★ the bystander's edge resolved into a real alias, and no stale edge came back",
+    );
+    assert_eq!(
+        g.references(bystander.1).collect::<BTreeSet<_>>(),
+        BTreeSet::from([bystander.0, bystander.1]),
+        "★ and it is refcounted on its source, which is what decides lifetime",
+    );
+    assert_eq!(
+        g.pdb_of(NodeKey::new(PEER, H_P_VAS)),
+        Some(PDB0),
+        "★★ an unrelated namespace's teardown must not delete a bystander's parked PDB",
+    );
+    assert_eq!(
+        g.mappings()
+            .map(|m| (m.va, m.len, m.mem_phys, m.pdb))
+            .collect::<Vec<_>>(),
+        vec![(VA, MAP_LEN, Some(MEM_PHYS), Some(PDB0))],
+        "★★ nor its parked map — exactly one mapping, the bystander's own, and the dead \
+         namespace's VA appears nowhere",
     );
 }
