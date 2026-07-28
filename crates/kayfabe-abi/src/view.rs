@@ -72,6 +72,61 @@ pub enum AllocWire {
     V2,
 }
 
+/// `rpc_gsp_rm_alloc_v03_00`'s **fixed header** — the GSP-RPC alloc shape.
+///
+/// # ★ This is NOT [`AllocReq`], and confusing the two mis-decodes every field
+///
+/// [`AllocReq`] is the **ioctl** shape (`NVOS21`/`NVOS64`): it carries a
+/// `params_ptr`, a guest pointer the caller resolves through the VMM's
+/// guest-memory seam. The GSP-RPC shape is a *different struct* whose params are
+/// an **inline flexible array** — the guest already copied them into the command
+/// queue, so nothing is ever dereferenced (`docs/design/gsp_core_bridge.md`
+/// §1.3). Running `decode_alloc` on an RPC body would read `hClass` out of
+/// `status` and a pointer out of `paramsSize`.
+///
+/// Layout `[src]` `ogkm: src/nvidia/generated/g_rpc-structures.h:1408-1419`:
+/// `hClient@0, hParent@4, hObject@8, hClass@12, status@16, paramsSize@20,
+/// flags@24, reserved[4]@28, params[]@32`.
+///
+/// ★ Independently confirmed: the C artifact transcribed the same offsets by hand
+/// from a live trace — *"fn=103 (GSP_RM_ALLOC) body: hClient@80, hParent@84,
+/// hObject@88, hClass@92, paramsSize@100, params@112"*
+/// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2132-2135`, repeated
+/// `:6464-6465`), which are element-relative with a 48-byte element header and a
+/// 32-byte envelope in front, i.e. **minus 80** they are `0/4/8/12/20/32`. Two
+/// humans, two trees, one answer; `crates/kayfabe-abi/tests/mean_wire.rs` asserts
+/// the subtraction rather than trusting it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RpcAllocReq {
+    /// `hClient` @ +0 — **the namespace this alloc is issued in**, and the only
+    /// place that fact may be read from (`gsp_core_bridge.md` §3.2).
+    pub client: u32,
+    /// `hParent` @ +4. `0` on a client-root alloc — see the bridge's §2.2a
+    /// normalisation, which is a bridge rule and deliberately not applied here.
+    pub parent: u32,
+    /// `hObject` @ +8. Also `0` on a client-root alloc.
+    pub handle: u32,
+    /// `hClass` @ +12.
+    pub class: u32,
+    /// `paramsSize` @ +20 — guest-declared, so an *assertion by the guest* and
+    /// never a fact. Validate it against the payload before slicing with it.
+    pub params_size: u32,
+    /// `flags` @ +24 — carries `RMAPI_RPC_FLAGS_SERIALIZED`; decode it with
+    /// [`crate::rpc_params_are_serialized`].
+    pub params_flags: u32,
+    /// Byte offset of `params[]` within the RPC payload. A *derived* constant
+    /// ([`RpcAllocReq::HEADER`]), carried on the view so a caller never has to
+    /// write `32` at a call site.
+    pub params_at: usize,
+}
+
+impl RpcAllocReq {
+    /// The C typedef name, for [`AbiError::Truncated`].
+    pub const C_NAME: &'static str = "rpc_gsp_rm_alloc_v03_00";
+    /// Bytes of fixed header before `params[]`.
+    pub const HEADER: usize = 32;
+}
+
 /// `NV_ESC_RM_CONTROL` — the envelope an RM control command arrives in.
 ///
 /// The *payload* at `params_ptr` is command-specific; the only one this

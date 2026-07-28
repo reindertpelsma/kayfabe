@@ -1626,3 +1626,168 @@ fn the_stream_runs_under_both_tables_with_the_skew_case_mirrored() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// 7. The GSP-RPC **body** shapes (`docs/design/gsp_core_bridge.md` §1.4).
+//
+// ★ These are a different struct family from §1-§4's ioctl shapes, and the whole
+// point of testing them here is that the confusion is *silent*: `decode_alloc`
+// on an RPC body returns `Ok` with `hClass` read out of `status`.
+//
+// The oracle for every offset below is **two independent human transcriptions** —
+// ogkm's `g_rpc-structures.h` and the C artifact's hand-written comment from a
+// live trace — and the tests assert their agreement rather than restating either.
+// ---------------------------------------------------------------------------
+
+/// ★★ **The C differential.** The C artifact records the alloc body's fields at
+/// ELEMENT-relative offsets (48-byte element header + 32-byte RPC envelope in
+/// front of the body), so every one of them must be exactly `80` more than this
+/// crate's payload-relative offset.
+///
+/// Written as a decode of a buffer whose value at each C offset is unique, so it
+/// tests the DECODER and not a table of constants restated beside itself: if
+/// `decode_rpc_alloc` read `class` at +16 (`status`) the value would come back
+/// `0xC0DE_0016` and the assertion names which field moved.
+///
+/// `[src]` the two transcriptions:
+/// - `ogkm: src/nvidia/generated/g_rpc-structures.h:1408-1419`
+/// - `nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2132-2135` — *"fn=103
+///   (GSP_RM_ALLOC) body: hClient@80, hParent@84, hObject@88, hClass@92,
+///   paramsSize@100, params@112"*, repeated verbatim at `:6464-6465`.
+#[test]
+fn the_rpc_alloc_body_offsets_agree_with_the_c_artifacts_independent_transcription() {
+    /// The element-relative base the C's comment is written against: a 48-byte
+    /// `GSP_MSG_QUEUE_ELEMENT` header plus the 32-byte `rpc_message_header`.
+    const C_BODY_BASE: usize = 80;
+
+    // A payload in which the u32 at offset `o` reads back as `0xC0DE_0000 | o`,
+    // so a decoder reading the wrong field cannot accidentally agree.
+    let mut payload = vec![0u8; 64];
+    for o in (0..64).step_by(4) {
+        payload[o..o + 4].copy_from_slice(&(0xC0DE_0000u32 | o as u32).to_le_bytes());
+    }
+    let got = bench().decode_rpc_alloc(&payload).expect("64 >= 32");
+
+    // (C's element-relative offset, the decoded field, its name)
+    let rows: [(usize, u32, &str); 5] = [
+        (80, got.client, "hClient"),
+        (84, got.parent, "hParent"),
+        (88, got.handle, "hObject"),
+        (92, got.class, "hClass"),
+        (100, got.params_size, "paramsSize"),
+    ];
+    for (c_off, value, name) in rows {
+        let abi_off = c_off - C_BODY_BASE;
+        assert_eq!(
+            value,
+            0xC0DE_0000 | abi_off as u32,
+            "{name}: the C reads it at element+{c_off}, i.e. payload+{abi_off}",
+        );
+    }
+    // `params[]` is the sixth entry in the same comment (element+112).
+    assert_eq!(got.params_at, 112 - C_BODY_BASE);
+
+    // The two fields the C's comment is SILENT about — it never decoded them —
+    // so ogkm is the only oracle and they are pinned against it alone.
+    assert_eq!(got.params_flags, 0xC0DE_0018, "flags @ +24 (ogkm only)");
+    // …and `status` @ +16 is deliberately not on the view at all: it is an [OUT]
+    // field. Proven by exclusion — no decoded field carries +16's value.
+    for (_, v, name) in rows {
+        assert_ne!(v, 0xC0DE_0010, "{name} must not be reading `status` @ +16");
+    }
+}
+
+/// The alloc header is refused below 32 bytes at **every** length, naming the
+/// struct — never zero-extended into a plausible-looking alloc.
+#[test]
+fn a_short_rpc_alloc_body_is_refused_at_every_length() {
+    let t = bench();
+    for len in 0..32usize {
+        for fill in [0x00u8, 0xFF] {
+            assert_eq!(
+                t.decode_rpc_alloc(&vec![fill; len]),
+                Err(AbiError::Truncated {
+                    c_name: "rpc_gsp_rm_alloc_v03_00",
+                    need: 32,
+                    got: len
+                }),
+                "len {len} fill {fill:#x}",
+            );
+        }
+    }
+    // Exactly 32 is the boundary: a header with an empty `params[]` decodes.
+    let ok = t.decode_rpc_alloc(&[0xFFu8; 32]).expect("32 is enough");
+    assert_eq!(ok.client, u32::MAX);
+    assert_eq!(ok.params_at, 32);
+}
+
+/// ★ **The pinning test `gsp_core_bridge.md` §1.4 asks for**: `rpc_free_v03_00`
+/// *is* `NVOS00_PARAMETERS_v03_00` (`ogkm: g_rpc-structures.h:162-167`), so
+/// [`DriverAbiTable::decode_free`] applies to an RPC body **verbatim** — no new
+/// decoder, and no silent 4-byte skew if someone assumes an RPC body has a header
+/// of its own.
+///
+/// The values are the ones `rpcRmApiFree_GSP` writes (`ogkm: rpc.c:11147-11149`):
+/// `hRoot = hClient`, `hObjectParent = NV01_NULL_OBJECT`, `hObjectOld = hObject`.
+#[test]
+fn decode_free_applies_verbatim_to_an_rpc_free_body() {
+    let mut body = vec![0u8; 16];
+    body[0..4].copy_from_slice(&0xc1d0_0069u32.to_le_bytes()); // hRoot
+    body[4..8].copy_from_slice(&0u32.to_le_bytes()); // hObjectParent = NULL
+    body[8..12].copy_from_slice(&0x5c00_0019u32.to_le_bytes()); // hObjectOld
+    body[12..16].copy_from_slice(&0u32.to_le_bytes()); // status [OUT]
+
+    let f = bench()
+        .decode_free(&body)
+        .expect("16 bytes is the whole struct");
+    assert_eq!(f.client, 0xc1d0_0069);
+    assert_eq!(
+        f.parent, 0,
+        "rpcRmApiFree_GSP always sends NV01_NULL_OBJECT"
+    );
+    assert_eq!(f.handle, 0x5c00_0019);
+
+    // Non-vacuity: the three fields are read at three DIFFERENT offsets. Swap two
+    // bytes and exactly one field moves.
+    body[8..12].copy_from_slice(&0xdead_beefu32.to_le_bytes());
+    let g = bench().decode_free(&body).expect("still 16 bytes");
+    assert_eq!(g.client, f.client);
+    assert_eq!(g.handle, 0xdead_beef);
+
+    // 15 bytes is refused, so a body one byte short can never read `status` as
+    // `hObjectOld`'s tail.
+    assert_eq!(
+        bench().decode_free(&body[..15]),
+        Err(AbiError::Truncated {
+            c_name: "NVOS00_PARAMETERS",
+            need: 16,
+            got: 15
+        })
+    );
+}
+
+/// Both client-root classes are recognised, and **nothing else is** — including
+/// the neighbours of each value, because `NV01_ROOT` is `0x0` and an off-by-one
+/// or a `<=` would swallow whole class ranges.
+#[test]
+fn exactly_the_two_client_root_classes_are_client_roots() {
+    use kayfabe_arch::ids::ClassId;
+    let t = bench();
+    assert!(t.is_client_root_class(ClassId(classes::NV01_ROOT)));
+    assert!(t.is_client_root_class(ClassId(classes::NV01_ROOT_CLIENT)));
+    assert_eq!(classes::NV01_ROOT, 0x0);
+    assert_eq!(classes::NV01_ROOT_CLIENT, 0x41);
+    for other in [
+        0x1u32,
+        0x40,
+        0x42,
+        classes::NV01_DEVICE_0,
+        0xc7c0, // AMPERE_COMPUTE_B — a real class, and emphatically not a root
+        u32::MAX,
+    ] {
+        assert!(
+            !t.is_client_root_class(ClassId(other)),
+            "class {other:#x} is not a client root",
+        );
+    }
+}

@@ -123,7 +123,8 @@ jobs:
       - name: Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
         run: |
           pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
-                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch crates/kayfabe-abi \
+                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch \
+                crates/kayfabe-abi \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm"
           if grep -rniE 'eventfd|epoll|timerfd|rawfd|libc|O_NONBLOCK' $pure; then
             echo ""
@@ -175,7 +176,8 @@ jobs:
       - name: VMM-vocabulary gate (no hypervisor API vocabulary in the core or the shell)
         run: |
           portable="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
-                    crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch crates/kayfabe-abi \
+                    crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc \
+                    crates/kayfabe-arch crates/kayfabe-abi \
                     crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
                     crates/kayfabe-vmm crates/kayfabe-rt"
           if grep -rniE '\bBQL\b|bql_lock|qemu_mutex_lock_iothread|BQL_LOCK_GUARD|MemoryRegion|memory_region_|qemu_bh|QEMUBH|aio_bh|qdev_|VMStateDescription|\bbottom.?half|\bmain.?loop|iothread' $portable; then
@@ -255,7 +257,7 @@ jobs:
       - name: Generation-name gate (no concrete chip or driver version in the logic crates)
         run: |
           pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
-                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
+                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
                 crates/kayfabe-vmm"
           hits=$(grep -rniE \
@@ -430,7 +432,7 @@ jobs:
       - name: GPA-accessor gate (exactly one core-side classification site)
         run: |
           pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-mmu \
-                crates/kayfabe-gsp crates/kayfabe-arch crates/kayfabe-abi \
+                crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch crates/kayfabe-abi \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate"
           if grep -rnE '\.gpa_(read|write)\(' $pure; then
             echo ""
@@ -451,6 +453,60 @@ jobs:
             echo ""
             echo "★ GPA-ACCESSOR BREACH — kayfabe-fwd has $n guest-memory access sites,"
             echo "expected exactly 1 (kayfabe_fwd::guest_read). See the message above."
+            exit 1
+          fi
+      # ★ The BRIDGE-EXCLUSIVITY gate (docs/design/gsp_core_bridge.md §1.2, which asks for
+      # it in as many words: "It is the ONLY crate in the tree permitted to name both
+      # `RpcCommand` and `RmEvent`. That is a one-line CI grep and should be added as one").
+      #
+      # What it protects. The lattice has ONE crate where the GSP transport's decoded
+      # command meets the core's object-model vocabulary, and the placement is argued three
+      # ways: `kayfabe-core` may name no NVIDIA struct layout; `kayfabe-abi` may not depend
+      # on the core; and `kayfabe-gsp` must not acquire a core dependency, because a GSP FSM
+      # that can see the RM graph can start firing on graph state — protocol-not-trace
+      # violated one level down, and precisely the shape the C fell into when a control
+      # command's side effect on the object model became a transport-level action
+      # (`C:2835-2837`). None of those three is expressible as a dependency rule alone: a
+      # crate can name both types the moment it happens to depend on both.
+      #
+      # Scope = `crates/*/src` only. The conformance suite composes every crate by
+      # definition — that is its job — so including `tests/` would gate the instrument
+      # rather than the lattice (same reasoning that keeps `kayfabe-mocks` out of the
+      # mutation denominator). A crate's own `tests/` directory is out for the same reason.
+      #
+      # `grep -w` so `RmEventKind` or a `RpcCommands` field never trips it, and prose
+      # counts: naming both types in a comment is how a doc claims a seam it does not have,
+      # which is exactly the drift `gsp_core_bridge.md` §8 had to correct in two places.
+      #
+      # Exit-code polarity, as at every gate here: a HIT is the failure, so the verdict is
+      # `if [ -n ... ]` over captured output and every grep ends in `|| true`.
+      - name: Bridge-exclusivity gate (one crate names both RpcCommand and RmEvent)
+        run: |
+          offenders=""
+          for d in crates/*/src; do
+            crate=$(basename "$(dirname "$d")")
+            case "$crate" in kayfabe-rmrpc) continue;; esac
+            names_cmd=$(grep -rlw RpcCommand "$d" || true)
+            names_ev=$(grep -rlw RmEvent "$d" || true)
+            if [ -n "$names_cmd" ] && [ -n "$names_ev" ]; then
+              offenders="$offenders $crate"
+            fi
+          done
+          if [ -n "$offenders" ]; then
+            for c in $offenders; do
+              echo "=== $c"; grep -rnw -e RpcCommand -e RmEvent "crates/$c/src" || true
+            done
+            echo ""
+            echo "★ BRIDGE-EXCLUSIVITY BREACH — gsp_core_bridge.md §1.2."
+            echo "The crates above name BOTH the GSP transport's decoded command and the"
+            echo "core's object-model event. There is exactly one seam between those two"
+            echo "vocabularies and it is kayfabe-rmrpc. Two fixes, no third:"
+            echo "  - real code -> call kayfabe_rmrpc::translate and pass the RmEvent on."
+            echo "    A second translation site is a second source of truth for namespace"
+            echo "    attribution, which is THE thing this seam gets right."
+            echo "  - a comment -> reword it. Naming one of the two is always fine; a"
+            echo "    doc that names both is usually a doc claiming a seam it does not own"
+            echo "    (§8 corrects two such claims)."
             exit 1
           fi
       # ★ The UNSAFE-CONTAINMENT gates — A, B and the ratchet (l1_os_shell.md §4.1).

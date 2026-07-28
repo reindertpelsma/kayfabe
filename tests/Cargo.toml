@@ -37,6 +37,10 @@ kayfabe-trace.workspace = true
 # (tests/src/gspworld.rs), so the boot exchange is exercised end to end with no GPU,
 # no hypervisor and no OS.
 kayfabe-gsp.workspace = true
+# ★ The GSP -> core bridge (docs/design/gsp_core_bridge.md). The conformance suite is where
+# wire bytes meet `Gpu::apply`, so this is where the bridge's integration tests live: the
+# mocks, the `Guarded` leak audit and the mean composed runs are all already here.
+kayfabe-rmrpc.workspace = true
 # Axis A: the version-keyed wire tables the GSP path decodes RPC envelopes with.
 kayfabe-abi.workspace = true
 

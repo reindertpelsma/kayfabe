@@ -1,0 +1,28 @@
+[package]
+name = "kayfabe-rmrpc"
+description = "The GSP -> core bridge (docs/design/gsp_core_bridge.md): one decoded GSP RPC becomes one declared RmEvent, a known-inert nothing, or a NAMED REFUSAL. Stateless and pure by construction — it mints no identity, keeps no handle table and performs no lookup, which is what makes hClient/hObject recycle-safety structural rather than tested."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+# The abstract ids (`HClient`/`HObject`/`ClassId`) the events are built out of.
+kayfabe-arch.workspace = true
+# Axis A: the GSP-RPC body layouts + the version-keyed table. Every NVIDIA `#[repr(C)]`
+# and every NVIDIA constant stays there (decision #2's quarantine); this crate consumes
+# its decoders and its predicates, and declares no offset and no id of its own.
+kayfabe-abi.workspace = true
+# The transport's decoded command. This dependency is one-directional and must stay so:
+# `kayfabe-gsp` has no `kayfabe-core` dependency, deliberately (a GSP FSM that can see the
+# RM graph starts firing on graph state — `gsp_core_bridge.md` §1.2).
+kayfabe-gsp.workspace = true
+# The destination vocabulary: `RmEvent`. This crate is the ONLY one permitted to name both
+# `RpcCommand` and `RmEvent`, and CI greps for it.
+kayfabe-core.workspace = true
+# `impl Faulted for BridgeRefusal` — the compiler-checked bridge that makes every refusal
+# countable in the trace (`gsp_core_bridge.md` §4.2 item 2).
+kayfabe-trace.workspace = true
+
+[lints]
+workspace = true

@@ -288,10 +288,12 @@ impl Profile {
 }
 
 /// The function ids, all explicit in the driver's X-macro table
-/// (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:11, 57, 75, 81, 82, 83, 86, 113,
-/// 254, 256`).
+/// (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:11, 20, 31, 57, 75, 81, 82, 83,
+/// 86, 113, 254, 256`).
 pub const FUNCTIONS: FunctionCodes = FunctionCodes {
     set_guest_system_info: 1,
+    free: 10,
+    dup_object: 21,
     unloading_guest_driver: 47,
     get_gsp_static_info: 65,
     continuation_record: 71,

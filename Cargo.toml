@@ -12,6 +12,7 @@ members = [
     "crates/kayfabe-core",
     "crates/kayfabe-fwd",
     "crates/kayfabe-gsp",
+    "crates/kayfabe-rmrpc",
     "crates/kayfabe-trace",
     "crates/kayfabe-mocks",
     "crates/kayfabe-rt",
@@ -38,6 +39,7 @@ kayfabe-completion = { path = "crates/kayfabe-completion" }
 kayfabe-core = { path = "crates/kayfabe-core" }
 kayfabe-fwd = { path = "crates/kayfabe-fwd" }
 kayfabe-gsp = { path = "crates/kayfabe-gsp" }
+kayfabe-rmrpc = { path = "crates/kayfabe-rmrpc" }
 kayfabe-trace = { path = "crates/kayfabe-trace" }
 kayfabe-mocks = { path = "crates/kayfabe-mocks" }
 kayfabe-rt = { path = "crates/kayfabe-rt" }

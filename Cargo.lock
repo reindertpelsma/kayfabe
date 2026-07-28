@@ -213,6 +213,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-rmrpc"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-core",
+ "kayfabe-gsp",
+ "kayfabe-trace",
+ "kayfabe-util",
+]
+
+[[package]]
 name = "kayfabe-rt"
 version = "0.1.0"
 dependencies = [
@@ -251,6 +263,7 @@ dependencies = [
  "kayfabe-linux-raw",
  "kayfabe-mmu",
  "kayfabe-mocks",
+ "kayfabe-rmrpc",
  "kayfabe-rt",
  "kayfabe-shell",
  "kayfabe-trace",

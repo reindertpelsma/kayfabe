@@ -33,7 +33,8 @@ use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::transcribed::Nvos46ParametersPre580;
 use crate::view::{
     AllocReq, AllocWire, ClientAllocFacts, ControlReq, DeviceAllocFacts, DupReq, FreeReq,
-    MapMemoryDma, PdbAperture, RpcEnvelope, SetPageDir, UnmapMemoryDma, rpc_payload_len,
+    MapMemoryDma, PdbAperture, RpcAllocReq, RpcEnvelope, SetPageDir, UnmapMemoryDma,
+    rpc_payload_len,
 };
 use crate::wire::{AbiError, u32_at};
 use crate::{DriverAbi, DriverVersion};
@@ -650,6 +651,61 @@ impl DriverAbiTable {
             flags: p.flags,
             h_vaspace: p.h_va_space,
         })
+    }
+
+    /// Decode the fixed header of a `GSP_RM_ALLOC` **RPC body** (everything after
+    /// the 32-byte `rpc_message_header`), i.e. `rpc_gsp_rm_alloc_v03_00`.
+    ///
+    /// Not versioned within the supported range: the struct lives in NVIDIA's
+    /// OS-independent RM core and has carried these seven fields since `_v03_00`
+    /// (`ogkm: g_rpc-structures.h:1408-1419`). It takes the version table anyway,
+    /// like every other decoder here, so the day it *does* move the call sites do
+    /// not change.
+    ///
+    /// ★ It decodes the header **only**. `paramsSize` is guest-declared, so
+    /// slicing `params[]` with it is a validation the caller owes, and the caller
+    /// is the one that can name the refusal with both numbers.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if fewer than [`RpcAllocReq::HEADER`] bytes are
+    /// available — never a zero-extended partial decode.
+    pub fn decode_rpc_alloc(&self, payload: &[u8]) -> Result<RpcAllocReq, AbiError> {
+        if payload.len() < RpcAllocReq::HEADER {
+            return Err(AbiError::Truncated {
+                c_name: RpcAllocReq::C_NAME,
+                need: RpcAllocReq::HEADER,
+                got: payload.len(),
+            });
+        }
+        Ok(RpcAllocReq {
+            client: u32_at(payload, 0)?,
+            parent: u32_at(payload, 4)?,
+            handle: u32_at(payload, 8)?,
+            class: u32_at(payload, 12)?,
+            // +16 is `status`, an [OUT] field the guest sends as zero.
+            params_size: u32_at(payload, 20)?,
+            params_flags: u32_at(payload, 24)?,
+            // +28 is `reserved[4]`.
+            params_at: RpcAllocReq::HEADER,
+        })
+    }
+
+    /// Is this class an **RM client root** — the class whose alloc creates a
+    /// namespace, and whose `hClient` *is* its object handle?
+    ///
+    /// `[src]` `NV01_ROOT` (0x0) and `NV01_ROOT_CLIENT` (0x41) are one resource
+    /// kind to RM (`ogkm: src/common/sdk/nvidia/inc/class/cl0000.h:42`,
+    /// `ogkm: src/nvidia/generated/g_allclasses.h:289`); the generated module's
+    /// own doc on [`classes::NV01_ROOT_CLIENT`] says the same.
+    ///
+    /// Lives here rather than in the bridge for the quarantine reason
+    /// (decision #2): the NVIDIA class *numbers* are this crate's, and the crates
+    /// above it speak a predicate. Same shape as
+    /// [`crate::client_kind_from_process_id`].
+    #[must_use]
+    pub fn is_client_root_class(&self, class: ClassId) -> bool {
+        class.0 == classes::NV01_ROOT || class.0 == classes::NV01_ROOT_CLIENT
     }
 
     /// Decode a GSP-RPC envelope, validating its guest-written `length`.

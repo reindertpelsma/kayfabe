@@ -118,6 +118,49 @@ pub fn client_kind_from_process_id(process_id: u32) -> ClientKind {
     }
 }
 
+/// `RMAPI_RPC_FLAGS_SERIALIZED` = `NVBIT(1)`
+/// (`ogkm: src/nvidia/inc/kernel/rmapi/rmapi.h:163`).
+///
+/// An NVIDIA wire constant, so per the quarantine rule (decision #2) it exists **only in
+/// this crate**; the crates above it speak [`rpc_params_are_serialized`].
+const RMAPI_RPC_FLAGS_SERIALIZED: u32 = 1 << 1;
+
+/// Does this RPC's `flags` word declare that `params[]` is **FINN-serialized**?
+///
+/// `[src]` `rpcRmApiAlloc_GSP` sets the bit when `serverSerializeAllocDown` reports a
+/// serialized payload (`ogkm: src/nvidia/src/kernel/vgpu/rpc.c:11018-11022`); the control
+/// path has the same bit on `rmapiRpcFlags` (`ogkm: rpc.c:10805-10806`).
+///
+/// ★ **Why any caller must ask.** When the bit is set, `params[]` is *not* the flat
+/// `#[repr(C)]` struct, and every per-class offset a decoder would use is wrong. So this
+/// is the predicate a refusal fires on — a **declared bit**, never a length heuristic
+/// (`docs/design/gsp_core_bridge.md` §2.2c). Which classes actually set it is
+/// `[unverified]` (§7 item 3): refusing them by name is safe, and the day a boot-path
+/// class turns out to be serialized, this predicate is where that is discovered.
+///
+/// One total function of one declared field, exactly like [`client_kind_from_process_id`].
+#[must_use]
+pub fn rpc_params_are_serialized(flags: u32) -> bool {
+    flags & RMAPI_RPC_FLAGS_SERIALIZED != 0
+}
+
+/// `NV_ERR_NOT_SUPPORTED` — `NV_STATUS` `0x56`
+/// (`ogkm: src/common/sdk/nvidia/inc/nvstatuscodes.h:115`).
+///
+/// ★ **Not cosmetic, and not settled.** RM sets `RMAPI_PARAM_COPY_FLAGS_SKIP_COPYOUT` on
+/// this status, i.e. the value changes what the *guest* does with its own params buffer —
+/// which the C artifact learned expensively: faking `NV_OK` for a control the real driver
+/// answers `0x56` copied 1464 bytes of garbage over the CUDA user library's ECC buffer
+/// and produced the `rbp=0` SIGSEGV
+/// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2883-2894`). It is also the only
+/// NV_STATUS the C ever deliberately fails with.
+///
+/// It is here as **one named value with one citation** rather than a table, because a
+/// table of 200 status codes with no consumer is the breadth this crate's §4 refuses.
+/// `gsp_core_bridge.md` §4.2's `[open]` is the standing note that B4 must revisit which
+/// status each refusal class deserves.
+pub const NV_ERR_NOT_SUPPORTED: u32 = 0x0000_0056;
+
 /// A guest driver version, as detected/advertised at device realize.
 /// (Values are data, not code: one generated module per version.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -179,5 +222,20 @@ mod tests {
                 "processID {pid:#x} declares a user client",
             );
         }
+    }
+
+    /// `RMAPI_RPC_FLAGS_SERIALIZED` is **bit 1**, so the neighbouring bit must not fire
+    /// the predicate and the bit must be found under any amount of surrounding noise.
+    /// Kills `1<<1`→`1<<0`, `&`→`|`, `!=0`→`==0` and the whole-function stubs.
+    #[test]
+    fn only_bit_one_declares_serialized_params() {
+        // RMAPI_RPC_FLAGS_NONE (0) and COPYOUT_ON_ERROR (NVBIT(0)) are the two other
+        // values `rpc.c` writes into this field — neither means "serialized".
+        assert!(!rpc_params_are_serialized(0x0000_0000));
+        assert!(!rpc_params_are_serialized(0x0000_0001));
+        assert!(!rpc_params_are_serialized(0xFFFF_FFFD));
+        assert!(rpc_params_are_serialized(0x0000_0002));
+        assert!(rpc_params_are_serialized(0x0000_0003));
+        assert!(rpc_params_are_serialized(0xFFFF_FFFF));
     }
 }

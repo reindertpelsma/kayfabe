@@ -10,6 +10,7 @@
 
 pub mod gspworld;
 pub mod guest;
+pub mod rpcwire;
 pub mod teardown;
 
 pub use guest::{DeviceTally, DoorbellDevice, Lane as DoorbellLane, probe_loop_image};

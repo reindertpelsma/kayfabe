@@ -11,6 +11,14 @@
 //! above it" half — [`FunctionCodes`] is the table it consumes, and this crate declares
 //! **no** id of its own.
 //!
+//! ## What the *ids* are for
+//!
+//! [`FunctionCodes`] names an id only where something downstream consumes it — the boot
+//! FSM here, or the object-model bridge in `kayfabe-rmrpc`. An id NOT in the table classifies
+//! as [`RpcFunction::Other`], which the bridge refuses by name; that is the deliberate
+//! third state, and it is why `FREE`/`DUP_OBJECT` are in the table while the other ~200
+//! ids in `rpc_global_enums.h` are not.
+//!
 //! ## The three dispositions, and where each comes from
 //!
 //! | disposition | which functions | source |
@@ -22,11 +30,18 @@
 //! ## What this stage deliberately does not decode
 //!
 //! The *bodies*. `GSP_RM_CONTROL`/`GSP_RM_ALLOC` payload structs are 213 `#[repr(C)]`
-//! layouts that live in `kayfabe-abi` and are not generated yet (that crate's own docs
-//! say why: "each needs a consumer first; a broad table with one wrong entry is invisible
-//! until a guest trips it"). So an [`RpcCommand`] carries the payload as bytes and the
-//! `RmEvent` bridge stays where the plan puts it — `kayfabe-fwd` — rather than being
-//! guessed here.
+//! layouts that live in `kayfabe-abi` and are mostly not generated yet (that crate's own
+//! docs say why: "each needs a consumer first; a broad table with one wrong entry is
+//! invisible until a guest trips it"). So an [`RpcCommand`] carries the payload as bytes,
+//! and turning those bytes into declared object-model facts is **`kayfabe-rmrpc`**'s job.
+//!
+//! ★ This paragraph used to say the bridge lived in `kayfabe-fwd`, and
+//! `mode2_gsp_port_plan.md` §2/§5 place it in *this* crate. Both are superseded by
+//! `docs/design/gsp_core_bridge.md` §1.2, and the reason is not tidiness: this crate has
+//! no `kayfabe-core` dependency and must keep none. A GSP FSM that can see the RM graph
+//! starts firing on graph state, which is protocol-not-trace violated one level down —
+//! exactly the shape the C fell into when a control command's *side effect* on the object
+//! model became a transport-level action.
 
 use crate::element::{IncomingRpc, OutgoingRpc};
 use crate::fault::GspFault;
@@ -34,12 +49,21 @@ use crate::fault::GspFault;
 /// The `NV_VGPU_MSG_*` ids this path needs, supplied by the ABI layer.
 ///
 /// Every field is one explicit enum entry. Values for reference (610.43.02, and stable by
-/// the header's own no-reuse rule): 1, 47, 65, 71, 72, 73, 76, 103, `0x1001`, `0x1003`
-/// (`ogkm: rpc_global_enums.h:11, 57, 75, 81, 82, 83, 86, 113, 254, 256`).
+/// the header's own no-reuse rule): 1, 10, 21, 47, 65, 71, 72, 73, 76, 103, `0x1001`,
+/// `0x1003` (`ogkm: rpc_global_enums.h:11, 20, 31, 57, 75, 81, 82, 83, 86, 113, 254, 256`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FunctionCodes {
     /// `SET_GUEST_SYSTEM_INFO` — the first synchronous RPC after `GSP_INIT_DONE`.
     pub set_guest_system_info: u32,
+    /// `FREE` (0xa) — RM's object teardown stream.
+    ///
+    /// ★ It is **the** teardown signal, and `UNLOADING_GUEST_DRIVER` is not:
+    /// `[measured]` `docs/reference/mode2_bench_lifecycle.md` §2 — *"`rmmod` emits NO
+    /// fn-47"*, the idle release at process exit having already consumed it.
+    pub free: u32,
+    /// `DUP_OBJECT` (0x15) — the only cross-client transfer edge in the object model,
+    /// and therefore the protocol-correct source of process grouping.
+    pub dup_object: u32,
     /// `UNLOADING_GUEST_DRIVER` — the synchronous teardown RPC.
     pub unloading_guest_driver: u32,
     /// `GET_GSP_STATIC_INFO` — the second synchronous RPC after `GSP_INIT_DONE`.
@@ -62,9 +86,11 @@ pub struct FunctionCodes {
 
 impl FunctionCodes {
     /// Every id, for the distinctness check.
-    fn all(&self) -> [u32; 10] {
+    fn all(&self) -> [u32; 12] {
         [
             self.set_guest_system_info,
+            self.free,
+            self.dup_object,
             self.unloading_guest_driver,
             self.get_gsp_static_info,
             self.continuation_record,
@@ -103,6 +129,8 @@ impl FunctionCodes {
     pub fn classify(&self, code: u32) -> RpcFunction {
         match code {
             c if c == self.set_guest_system_info => RpcFunction::SetGuestSystemInfo,
+            c if c == self.free => RpcFunction::Free,
+            c if c == self.dup_object => RpcFunction::DupObject,
             c if c == self.unloading_guest_driver => RpcFunction::UnloadingGuestDriver,
             c if c == self.get_gsp_static_info => RpcFunction::GetGspStaticInfo,
             c if c == self.continuation_record => RpcFunction::ContinuationRecord,
@@ -138,6 +166,10 @@ pub struct RpcAbi {
 pub enum RpcFunction {
     /// `SET_GUEST_SYSTEM_INFO`.
     SetGuestSystemInfo,
+    /// `FREE` — one object (or, when it names a client root, one namespace) goes away.
+    Free,
+    /// `DUP_OBJECT` — alias an object into another client's namespace.
+    DupObject,
     /// `UNLOADING_GUEST_DRIVER` — synchronous; a reply is a liveness obligation.
     UnloadingGuestDriver,
     /// `GET_GSP_STATIC_INFO`.
