@@ -30,8 +30,7 @@
 #![allow(clippy::unusual_byte_groupings)]
 
 use std::os::fd::OwnedFd;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -646,14 +645,119 @@ fn os_the_source_cap_refuses_by_name_and_the_refusal_is_contained() {
 // 6. THE WHOLE CHAIN, ON REAL THREADS — the T2-OS gate
 // =====================================================================================
 
+/// ★★ **The watchdog**: cleanup that survives an unwind.
+///
+/// Every assertion in the scope below runs while two real threads are parked on this
+/// test — the reactor inside a real `epoll_wait`, the executor on the [`Parker`]'s
+/// condvar — and **only** `handle.shutdown()` and `parker.stop()` can ever wake them. A
+/// panicking assert unwinds straight past both, and `thread::scope`'s join-all then waits
+/// forever on threads nobody will ever tell to stop: the panic message is real, but the
+/// process never exits, so libtest never prints a result and cargo never returns. A slow
+/// box thereby converts a loud, readable failure into an indefinite hang — and a hang gets
+/// re-run, not read. (Measured, not theorised: before this guard existed, an induced
+/// `assert_eq!(1, 2)` here left cargo and the test binary alive indefinitely with a
+/// *completely empty* captured log, and three such binaries were found wedged on this box
+/// for 23 hours.)
+///
+/// So the shutdown moves into a `Drop`, and the path is then identical whether the body
+/// returns or panics — the same lesson, in the same shape, as `l1_mean.rs`'s `Latches` and
+/// `OpenOnDrop` drop guards.
+///
+/// ## ★ Why this `Drop` is safe under R1 — *a `Drop` is a call site*
+///
+/// Whatever a `Drop` does is subject to the same rules as ordinary code, and both calls
+/// here are R1-guarded: [`ReactorHandle::shutdown`](kayfabe_shell::ReactorHandle::shutdown)
+/// and [`Parker::stop`] are entered through the witness and refuse a caller holding a
+/// ranked lock. This guard satisfies that on **both** exits:
+///
+/// - **Normal return** — it is a local of the scope closure, so it drops after the closure's
+///   last statement. The test holds no core lock between statements: `with_proc` and
+///   `stats()` take and release theirs inside the call.
+/// - **Unwind** — unwinding drops in reverse creation order, and this guard is created
+///   *before* every assertion below. So any lock guard live at the panic point (the sink's
+///   `MutexGuard`, `with_proc`'s internal one) is a later creation and is dropped strictly
+///   first. The witness therefore reads zero by the time this `Drop` runs.
+///
+/// Neither call blocks, either: `shutdown` is an atomic store plus a non-blocking counter
+/// write, and `stop` takes only the parker's own uncontended state mutex to set a flag and
+/// notify. And the `Result` is **dropped, not unwrapped** — a panic inside a `Drop` that is
+/// itself running on an unwind aborts the process and destroys the very message this guard
+/// exists to let through.
+struct StopOnDrop<'a> {
+    handle: &'a kayfabe_shell::ReactorHandle,
+    parker: &'a Parker,
+}
+
+impl Drop for StopOnDrop<'_> {
+    fn drop(&mut self) {
+        // Both are idempotent, so running on the success path after an explicit shutdown
+        // is a no-op rather than a second meaning.
+        let _ = self.handle.shutdown();
+        self.parker.stop();
+    }
+}
+
+/// ★ The executor thread's sink — and the main thread's **rendezvous** with it.
+///
+/// This replaces a `while … { yield_now() }` spin over the core's completion depth. That
+/// spin was not merely inelegant: it burned a whole core inside the very window in which
+/// the reactor and executor threads had to make progress, so the instrument perturbed what
+/// it measured, and it did so *worst* on the small boxes where there is no slack to absorb
+/// it. Blocking on the real condition costs nothing and cannot starve anybody.
+///
+/// The condition is the end of the chain, so it is strictly stronger than the depth poll it
+/// replaces: an [`Effect`] is only handed to `on_effect` **after** `signal_source` has
+/// already applied the completion into the owning proc's queue under the core's own locks.
+#[derive(Default)]
+struct EffectSink {
+    seen: Mutex<Vec<Effect>>,
+    arrived: Condvar,
+}
+
+impl EffectSink {
+    /// Record one effect and wake the waiter. Called on the executor thread, which the
+    /// `run_until_stopped` contract guarantees holds no lock here.
+    ///
+    /// Poisoning is tolerated rather than re-panicked: if the main thread died holding this
+    /// lock it is already reporting a failure, and a second panic on the executor thread
+    /// would only bury it under `thread::scope`'s propagation.
+    fn push(&self, e: Effect) {
+        self.seen
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(e);
+        self.arrived.notify_all();
+    }
+
+    /// Block until at least `want` effects have arrived; return how many actually did.
+    ///
+    /// `hang_guard` is a **last-resort backstop, never the synchronisation mechanism** —
+    /// the condvar is. It exists only so a genuinely broken chain reports instead of
+    /// hanging, and the count it returns is what lets the caller say *what did not arrive*.
+    fn wait_for(&self, want: usize, hang_guard: Duration) -> usize {
+        let g = self.seen.lock().expect("sink");
+        let (g, _timed_out) = self
+            .arrived
+            .wait_timeout_while(g, hang_guard, |v| v.len() < want)
+            .expect("sink");
+        g.len()
+    }
+
+    /// Everything recorded so far.
+    fn snapshot(&self) -> Vec<Effect> {
+        self.seen.lock().expect("sink").clone()
+    }
+}
+
 /// ★★ **T2-OS** (§10's M2-d gate): *"a real counter fires and a real IRQ descriptor is
 /// observed end to end; the wake-count assert."*
 ///
 /// Everything here is real and nothing is polled by the test: a producer thread writes real
 /// counter descriptors, the reactor thread blocks in a real `epoll_wait`, the executor
 /// thread is parked on the [`ExecutorWaker`] and is woken by the reactor, and the
-/// completions land in the core under its own ranked locks. The test's only synchronisation
-/// is joining the threads.
+/// completions land in the core under its own ranked locks. The test's own synchronisation
+/// is structural too — an [`EffectSink`] condvar signalled by the executor thread, and then
+/// joining the threads. Nothing here polls, sleeps or yields.
 ///
 /// The wake-count gate rides along and is *stronger* here than in test 1, because the
 /// producer runs concurrently with the loop: coalescing is now the kernel's choice rather
@@ -691,10 +795,20 @@ fn os_a_real_counter_signal_reaches_the_core_through_real_reactor_and_executor_t
         let mut vmm = machine.vmm();
 
         const K: u64 = 200;
-        let seen = Arc::new(std::sync::Mutex::new(Vec::<Effect>::new()));
-        let stop_exec = Arc::new(AtomicBool::new(false));
+        /// The backstop on the rendezvous below — **not** how the test waits. Generous,
+        /// because it costs exactly nothing when the chain works: the wait is a condvar,
+        /// so this deadline is only ever reached by a chain that is genuinely broken.
+        const HANG_GUARD: Duration = Duration::from_secs(30);
+        let seen = Arc::new(EffectSink::default());
 
         thread::scope(|sc| {
+            // ★ Armed BEFORE the first assertion, so an unwind from any of them still
+            // stops both threads and lets `thread::scope` join. See `StopOnDrop`.
+            let _stop = StopOnDrop {
+                handle: &handle,
+                parker: &parker,
+            };
+
             // ---- the reactor thread: a real blocking wait, woken by real descriptors.
             let t_reactor = sc.spawn(move || {
                 // A bounded timeout so the loop notices shutdown even if the control
@@ -713,9 +827,7 @@ fn os_a_real_counter_signal_reaches_the_core_through_real_reactor_and_executor_t
                 // would make progress before the deadline below. A short interval would
                 // have turned the §3.7 seam into a poll and hidden it — which a bite-check
                 // duly demonstrated (neutering `wake()` to a no-op did not bite at 50 ms).
-                exec.run_until_stopped(&pk, Duration::from_secs(60), |e| {
-                    sink.lock().expect("sink").push(e);
-                });
+                exec.run_until_stopped(&pk, Duration::from_secs(60), |e| sink.push(e));
             });
 
             // ---- the producer: a relay writing a real counter, K times.
@@ -723,25 +835,42 @@ fn os_a_real_counter_signal_reaches_the_core_through_real_reactor_and_executor_t
                 counter.signal().expect("relay write");
             }
 
-            // Wait for the core to have observed all K — a condition, never a sleep.
-            let deadline = std::time::Instant::now() + Duration::from_secs(30);
-            while device
-                .with_proc(pids[1], |p| p.completion.outstanding_len())
-                .unwrap_or(0)
-                < K as usize
-            {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "({mode:?}) the chain wedged: {:?}",
-                    handle.stats()
-                );
-                std::thread::yield_now();
-            }
+            // ---- ★ THE RENDEZVOUS. The main thread now *blocks* on the far end of the
+            // chain until the executor thread has run all K events — a real condition on a
+            // real condvar, woken by the thread that does the work, so this thread consumes
+            // no CPU and starves nobody. (It used to spin on `yield_now`, which on a
+            // 4-core box competes for a core with the two threads it is waiting on.)
+            let arrived = seen.wait_for(K as usize, HANG_GUARD);
+            assert_eq!(
+                arrived,
+                K as usize,
+                "({mode:?}) ★ THE CHAIN DID NOT COMPLETE. {arrived} of {K} effects reached \
+                 the executor thread within {HANG_GUARD:?}; the missing {} never traversed \
+                 counter → epoll → inbox → ExecutorWaker → executor. reactor stats={:?}; \
+                 proc {:?}'s completion queue holds {:?}; parker seq={} stopping={}. (This \
+                 deadline is a backstop on a condvar wait, NOT how the test synchronises — \
+                 if it fired, something is genuinely wedged, not merely slow.)",
+                K as usize - arrived,
+                handle.stats(),
+                pids[1],
+                device.with_proc(pids[1], |p| p.completion.outstanding_len()),
+                parker.sequence(),
+                parker.is_stopping(),
+            );
+            // ★ …and the same end-state the old spin only ever waited for: the completions
+            // really are in the OWNING proc's queue, asserted as an equality rather than
+            // implied by a loop condition.
+            assert_eq!(
+                device.with_proc(pids[1], |p| p.completion.outstanding_len()),
+                Some(K as usize),
+                "({mode:?}) ★ all K completions sit in proc {:?}'s own queue, put there by \
+                 the core's own dispatch",
+                pids[1],
+            );
 
             handle.shutdown().expect("shutdown");
             let fault = t_reactor.join().expect("the reactor thread joins");
             assert_eq!(fault, Ok(()), "({mode:?}) the loop must exit cleanly");
-            stop_exec.store(true, Ordering::Release);
             parker.stop();
             t_exec.join().expect("the executor thread joins");
         });
@@ -768,7 +897,7 @@ fn os_a_real_counter_signal_reaches_the_core_through_real_reactor_and_executor_t
         );
 
         // ---- ★ the end-state, in the core.
-        let effects = seen.lock().expect("sink").clone();
+        let effects = seen.snapshot();
         assert_eq!(
             effects.len() as u64,
             K,
