@@ -889,4 +889,27 @@ jobs:
           # be re-derived from the first full run under the new scope before it is
           # trusted as a bar. This job is weekly/dispatch only, so a temporarily wrong
           # bar blocks nothing — but do not quote the score until it is re-derived.
-          MUTATION_THRESHOLD_PCT: '91'
+          # ★★ 86 — THE FIRST UNCONTAMINATED MEASUREMENT, 2026-07-28.
+          # Full campaign at b64a3f5 under the CORRECTED config (2667 targets,
+          # scaffolding genuinely excluded for the first time — see
+          # .cargo/mutants.toml's header for why it never was before):
+          #     caught 1900 · missed 310 · timeout 4 · unviable 453
+          #     (1900 + 4) / (1900 + 4 + 310) = 86.0 %
+          #
+          # ★ THIS IS A FLOOR, NOT THE CEILING. Real coverage on current master is
+          # HIGHER: c0ec2fa deleted nine uncalled items and made Spine::arch private,
+          # and e9564d7 added seven tests closing the gsp boot/replay/fault survivors
+          # — both land AFTER the measured tree, so some of those 310 are already
+          # closed. The 4 timeouts are also counted as kills pending individual
+          # adjudication at 3600 s. Raise this when a campaign MEASURES higher; never
+          # lower it to make a red night go away.
+          #
+          # ★★ WHY IT DROPPED FROM 91. The old 91 was set against a different, smaller
+          # scope AND was never measured with the config in effect. The prior run's
+          # 95.4 % is not comparable and should not be quoted: proptest seeds
+          # accumulate monotonically inside cargo-mutants job trees (measured: 7 of 12
+          # trees diverged by T+1h35m), biasing kills UPWARD as a run proceeds, and
+          # two test-adding commits landed in that run's working tree mid-campaign.
+          # Both biases push the same way and neither has a downward counterpart.
+          # A bar above reality is theatre that gets muted after the first red night.
+          MUTATION_THRESHOLD_PCT: '86'
