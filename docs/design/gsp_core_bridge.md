@@ -442,12 +442,53 @@ payload, translate when the declared total is complete. Bounds, all mandatory:
   `[inferred]` the driver issues one large RPC at a time under the GPU lock, so interleaving is
   not a legal trace; refusing it is category 3.
 
-★ Note the FSM already classifies `RpcFunction::ContinuationRecord` and answers it like anything
-else. Whether a continuation earns its **own** reply is `[unverified]`: `_issueRpcLarge` calls
-`rpcSendMessage` per fragment and waits once at the end (`ogkm: rpc.c:2119-2143`). Reading that
-loop suggests fragments are not individually awaited, but the read was not exhaustive. **B6 must
-settle it before it ships**, because a spurious reply desyncs `(function, sequence)` — the exact
-failure `Disposition::NoReply` exists to prevent for 72/73.
+#### 2.6a ★★ SETTLED AT B6 — corrections this section needed
+
+**(1) The "declared total" is fn 76's `paramsSize`, and fn 103 has no large path at all.**
+There is no total-length field on the wire; the head's `length` is `maxRpcSize` and each
+continuation's is its own fragment size. The only total is the head's *own body*:
+`total_size = fixed_param_size + paramsSize` (`ogkm: rpc.c:10785`, `ogkm-580: :10981`), i.e.
+`params_at + paramsSize` in payload coordinates. `[src]` `rpcRmApiAlloc_GSP` **never** calls
+`_issueRpcAndWaitLarge` — it bounds the copy and returns `NV_ERR_BUFFER_TOO_SMALL`
+(`ogkm: rpc.c:11024-11029`, `ogkm-580: :11218-11223`) — so a short fn-103 is malformed, not
+fragmented, and must keep reaching `ParamsSizeExceedsPayload`. **The complete set of fragmenting
+producers is three**, and only one is a function this bridge translates: `rpcRmApiControl_GSP`
+(fn 76, `bBidirectional = NV_TRUE`), `rpcSetRegistry` (fn 73, `_issueRpcAsyncLarge`), and
+`_issuePteDescRpc` (fn `ALLOC_MEMORY`, unidirectional) — the last of which this port classifies
+`Other`.
+
+**(2) A head always carries the control's whole 40-byte fixed header.**
+`rpcRmApiControl_GSP` opens with `message_buffer_remaining = pRpc->maxRpcSize - fixed_param_size`,
+an *unsigned* subtraction over 72 (`ogkm: rpc.c:10678-10679`), and `maxRpcSize = RM_PAGE_SIZE`
+(`:1000`). So the tightest legal split is 72 bytes, a shorter head is category 3, and the
+reassembler refuses it immediately (`Abi(Truncated)`) rather than holding it.
+
+**(3) ⇒ Nothing this port models fragments at production `maxRpcSize`.** `SET_PAGE_DIRECTORY`'s
+body is 40 + 32 = 72 bytes and fits in one 4096-byte message; even at the tightest legal split it
+reaches two records and never more. B6's value today is for the control **long tail** — it is what
+lets an unmodelled large control be refused by its real `cmd` instead of by a truncated one.
+
+**(4) A `CONTINUATION_RECORD` *does* earn its own reply — for fn 76, and it is mandatory.**
+`_issueRpcLarge` posts every fragment and waits **once** at `(expectedFunc, firstSequence)`
+(`ogkm: rpc.c:2156-2158`) — the reading this section guessed. But that is only the *send* half.
+When `bBidirectional && recordCount > 0` the receive half then polls
+`rpcRecvPoll(…, NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD, waitSequence)` per record until the
+reply bytes fill the request's own `bufSize` (`:2186-2226`) — and `rpcRmApiControl_GSP` is
+`_issueRpcAndWaitLarge(…, NV_TRUE)` (`:10856`, `ogkm-580: :11051`). ⇒ **Withholding a per-fragment
+reply hangs the guest.** The FSM already posts one, echoing each fragment's own
+`(function, sequence)` and length, which is exactly what that loop consumes — so B6 changed no
+transport code.
+★ And the driver reads `rpc_result` from the **last** record it received (`:2230-2241`), which is
+the same fragment on which reassembly completes. The status therefore rides the final reply by
+construction; head and intermediates ack `NV_OK`.
+
+⚠ **The one remaining hole, named rather than absorbed.** `SET_REGISTRY` is `bWait = NV_FALSE`
+and `RpcFunction::SetRegistry`'s `Disposition` is correctly `NoReply` — but its *continuations*
+take `ContinuationRecord`'s disposition, which is `Reply`. A registry table over 4064 bytes would
+therefore draw spurious status posts. It is not fixable from `kayfabe-rmrpc`: `Disposition` is
+computed in `GspFsm::answer` from the arriving function alone, `CommandPolicy::respond` has no
+"post nothing" value, and making a fragment inherit its head's disposition would put a second copy
+of the reassembly state inside the FSM. **This is a `kayfabe-gsp` question and it is open.**
 
 ### 2.7 ★★ fn 14 / fn 15 do not exist here — `RmEvent::MapMemoryDma` has **no producer**
 
@@ -772,7 +813,7 @@ what it cannot prove.
 | **B3** | per-class `AllocFacts` decoders, **one class per commit**: Device (already), Channel (`h_vaspace`, `h_ctx_share`, `userd_flags`), TSG, CtxShare, Memory (`mem_phys`) | a compute-process-shaped subgraph from wire bytes; `Boundaries(RpcScript) == Boundaries(Scenario)` for `compute_process` | that the `userd_flags`→`VChid` recovery matches real silicon (`Arch`'s job, and unmeasured) |
 | **B4** | fn 76: `SET_PAGE_DIRECTORY` → `RmEvent::SetPageDir`; `Translation::Forward` for every other cmd; the `NV_STATUS` question from §4.2 revisited | a routable `Vas` with a PDB, from bytes | which control actually carries the compute VAS's PDB (§7) |
 | **B5** | fn 21 dup; the §5.3 mean test | two `Proc`s from two interleaved RPC streams | multi-process against a real guest |
-| **B6** | continuation reassembly + bounds; the hostile-length matrix | large controls | the reply-per-fragment question (§2.6) if it is still `[unverified]` |
+| **B6** ✔ | `Reassembler` (in `kayfabe-rmrpc`, held by `GraphPolicy` — `translate` stays a free function); five refusals; the hostile-length matrix | large controls: an unmodelled one is refused by its **real** `cmd` rather than by a truncated one | that any of it is reachable at production `maxRpcSize` — §2.6a(3): nothing this port *models* fragments at 4096 |
 
 **Deliberately out of scope, and each is a separate piece of work:** `GPU_PROMOTE_CTX` and the CE
 page-table-write capture (§2.7 — they populate `kayfabe_mmu::AddressTable`, not the graph); the
@@ -825,10 +866,13 @@ Plainly, and each is a real hole rather than a formality.
 3. **Which alloc classes set `RMAPI_RPC_FLAGS_SERIALIZED`.** §2.2c refuses them by name, which
    is safe, but if a *boot-path* class is serialized then B3 hits a wall rather than a long tail.
    Requires reading the FINN serializer registration (`g_finn_rm_api.h`), not done.
-4. **Whether a `CONTINUATION_RECORD` earns its own reply** (§2.6). My read of
-   `_issueRpcLarge` (`ogkm: rpc.c:2074-2143`) says fragments are sent with one wait at the end,
-   but the read was not exhaustive and the failure mode (a `(function, sequence)` desync) is
-   severe.
+4. ~~**Whether a `CONTINUATION_RECORD` earns its own reply** (§2.6).~~ **CLOSED at B6 — see
+   §2.6a(4).** The send-side read was right and incomplete: fragments are sent with one wait at
+   the end, *and* the bidirectional receive half then polls one reply per record. For fn 76 —
+   the only fragmenting function this bridge translates — a per-fragment reply is **required**,
+   and the FSM already posts one on the right `(function, sequence)`. What replaces it as an open
+   question is narrower and named there: `SET_REGISTRY`'s continuations inherit the wrong
+   `Disposition`, which is `kayfabe-gsp`'s to answer.
 5. **Which `NV_STATUS` a refusal should carry** (§4.2). There is no `NV_STATUS` table in
    `kayfabe-abi`. The C's only two deliberate failures both use `0x56` (`NV_ERR_NOT_SUPPORTED`)
    and its comments say the choice changed guest copy-out behaviour — so this is not cosmetic.

@@ -84,27 +84,78 @@
 //!
 //! - [`translate`] — B1. A **free function of one message**: bytes in, one declared fact
 //!   or a named refusal out. Stateless, pure, and the subject of everything above.
+//! - [`Reassembler`] — B6 ([`reasm`]). The one stateful value in the crate: it joins a
+//!   run of `CONTINUATION_RECORD` fragments back into the message the guest meant, under
+//!   two mandatory bounds. It decides **nothing** — it concatenates, bounds, and hands
+//!   the whole to [`translate`], which applies every rule exactly once. And it holds no
+//!   handle: a byte buffer plus four numbers, keyed by nothing the guest supplies,
+//!   dropped the instant the message completes or refuses.
 //! - [`GraphPolicy`] — B2 ([`policy`]). The `kayfabe_gsp::CommandPolicy` the boot FSM
-//!   calls for every command a guest posts: translate → `Gpu::apply` → a reply. It is the
-//!   only thing here that holds a `&mut Gpu`, and it decodes nothing.
+//!   calls for every command a guest posts: reassemble → translate → `Gpu::apply` → a
+//!   reply. It is the only thing here that holds a `&mut Gpu`, and it decodes nothing.
 //!
-//! The split is what keeps the rule above true while a stage that *must* touch state
-//! lands: the applying half cannot grow a handle cache without going through
-//! [`translate`], which has nowhere to put one.
+//! The split is what keeps the rule above true while the stage that *must* touch state
+//! lands: [`translate`] still has nowhere to put a handle cache, and the state B6 does add
+//! is the one shape the rule permits — bounded, handle-free, and singular.
 //!
-//! ## Scope of this stage (B1 + B2 + B3 + B4 + B5)
+//! ## Scope of this stage (B1 + B2 + B3 + B4 + B5 + B6 — the build order is complete)
 //!
 //! `GSP_RM_ALLOC`, `FREE`, the **one modelled control**,
 //! `GSP_RM_CONTROL`/`SET_PAGE_DIRECTORY` — which is where a VASpace acquires the `Pdb` the
-//! data plane routes on — and, at B5, `DUP_OBJECT`. **That completes the object model's
-//! four verbs**: create, reference, destroy, and the one control that carries a
-//! data-plane identity. Everything else is a named refusal, including the one function
-//! the design maps but whose arm is not built ([`BridgeRefusal::NotYetTranslated`] —
-//! `CONTINUATION_RECORD`, B6) and the classes with no entry in the class table
-//! ([`BridgeRefusal::UnmappedAllocClass`]). Those are deliberately **not**
-//! [`BridgeRefusal::UnknownFunction`]: "known and inert", "known and not yet built" and
-//! "not known at all" are three different states, and collapsing them is how the C ended
-//! up answering everything `NV_OK`.
+//! data plane routes on — `DUP_OBJECT` at B5, and `CONTINUATION_RECORD` at B6. **That
+//! completes the object model's four verbs** — create, reference, destroy, and the one
+//! control that carries a data-plane identity — **and the transport fragment that carries
+//! any of them when it does not fit.** Everything else is a named refusal, including the
+//! classes with no entry in the class table ([`BridgeRefusal::UnmappedAllocClass`]).
+//!
+//! ★ **The "known, mapped, arm not built" state is now empty**, and its variant is gone
+//! rather than kept as a placeholder: `CONTINUATION_RECORD` was the last id in it. The two
+//! states that remain — "known and inert" ([`Translation::Inert`]) and "not known at all"
+//! ([`BridgeRefusal::UnknownFunction`]) — are still deliberately distinct, because
+//! collapsing them is how the C ended up answering everything `NV_OK`.
+//!
+//! ## ★★ Does a `CONTINUATION_RECORD` earn its own reply? Settled at B6, and it is
+//! **two** questions
+//!
+//! `gsp_core_bridge.md` §2.6/§7 item 4 left this `[unverified]` and required B6 to settle
+//! it before shipping. `_issueRpcLarge` (`ogkm: rpc.c:2074-2224`,
+//! `ogkm-580: :2053-2206` — the same function) answers it in two halves:
+//!
+//! - **Sending**, the guest does *not* await a reply per fragment. It posts every
+//!   fragment (`rpcSendMessage` per fragment, `pRpc->sequence` incrementing —
+//!   `NV_ASSERT(lastSequence == firstSequence + recordCount)`) and then waits **once** at
+//!   `(expectedFunc, firstSequence)`.
+//! - **Receiving**, it does — but only when the head was issued **bidirectionally**. With
+//!   `bBidirectional && recordCount > 0` it then polls
+//!   `rpcRecvPoll(…, NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD, waitSequence)` with
+//!   `waitSequence` incrementing, until the reply bytes fill the request's own
+//!   `bufSize` (`ogkm: rpc.c:2186-2226`).
+//!
+//! ⇒ For the **one** fragmenting function this bridge translates — fn 76, issued
+//! `_issueRpcAndWaitLarge(…, NV_TRUE)` (`ogkm: rpc.c:10856`, `ogkm-580: :11051`) — a reply
+//! per fragment is **required**, and withholding one hangs the guest for the whole RPC
+//! timeout. `GspFsm::answer` already posts one, echoing each fragment's own
+//! `(function, sequence)` and its own length, which is exactly the pair and the arithmetic
+//! that loop consumes. **No transport change was needed and none was made.**
+//!
+//! ★ And the status lands in the right place *by construction*: the driver reads
+//! `rpc_result` from `pVgpuRpcHeader` **after** that loop — i.e. from the **last** fragment
+//! it received (`ogkm: rpc.c:2230-2241`). The last fragment is precisely the one on which
+//! [`Reassembler`] completes and [`translate`] runs, so the head and the intermediate
+//! fragments ack `NV_OK` ([`Translation::Held`]) and the real outcome rides the final
+//! reply.
+//!
+//! ⚠ **The named gap, because the answer is not uniform.** `SET_REGISTRY` fragments
+//! through `_issueRpcAsyncLarge` (`ogkm: rpc.c:10533`, `ogkm-580: :10728`), which is
+//! `bWait = NV_FALSE`: that guest awaits **no** reply, and `RpcFunction::SetRegistry`'s
+//! own `Disposition::NoReply` says so. Its *continuations* nevertheless take
+//! `RpcFunction::ContinuationRecord`'s disposition, which is `Reply` — so a registry table
+//! over 4064 bytes would draw spurious status posts. It is not fixable from this crate:
+//! `Disposition` is computed in `kayfabe_gsp::GspFsm::answer` from the arriving function
+//! alone, `CommandPolicy::respond` returns `Option<Reply>` with no "post nothing" value,
+//! and making a fragment inherit its head's disposition would put a second copy of the
+//! reassembly state inside the FSM. **Recorded as a `kayfabe-gsp` question, not silently
+//! absorbed.**
 //!
 //! ★ **B3 is the class table** ([`kayfabe_abi::versions::DriverAbiTable::alloc_params`]):
 //! client root, Device, VASpace, TSG, CtxShare, channel, and the two engine objects — the
@@ -131,8 +182,10 @@
 //! the copy-engine page-table-write capture, and both belong to `kayfabe-fwd`.
 
 mod policy;
+mod reasm;
 
 pub use policy::{GraphPolicy, RefusalCensus};
+pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassembled, Reassembler};
 
 use kayfabe_abi::versions::{AllocParams, ControlParams, DriverAbiTable};
 use kayfabe_abi::wire::AbiError;
@@ -164,6 +217,21 @@ pub enum Translation {
     /// even a reliable unload signal: `[measured]` `rmmod` emits no fn-47. RM's object
     /// teardown is the `FREE` stream).
     Inert,
+    /// **B6 — a fragment of a larger message, consumed into reassembly.** There is no
+    /// object-model content *yet*, which is a third thing and not a shade of
+    /// [`Self::Inert`]: an inert RPC is a complete message this port has concluded carries
+    /// nothing, while a held fragment is an incomplete message whose meaning is still
+    /// arriving. Collapsing them would make "the guest sent a large control" and "the
+    /// guest sent its registry table" the same observation.
+    ///
+    /// ★★ **[`translate`] never returns this, and [`GraphPolicy`] does.** The asymmetry
+    /// is the crate's whole shape restated: `translate` is a free function of one message
+    /// and cannot know that another message preceded this one, so from its view a
+    /// continuation record is [`BridgeRefusal::ContinuationWithoutHead`]. Only
+    /// [`GraphPolicy`], which owns the one bounded piece of state in the crate, can
+    /// produce a `Held`. `translate_never_holds` pins that so the state cannot migrate
+    /// into the free function unnoticed.
+    Held,
 }
 
 /// Every way [`translate`] can refuse, by name.
@@ -171,11 +239,21 @@ pub enum Translation {
 /// Each variant carries the numbers a reader needs. There is no catch-all: an opaque
 /// variant would force `is_err()` assertions, which `testing_doctrine.md` §2 forbids.
 ///
-/// ★ **The enum only carries what this stage can produce.** `gsp_core_bridge.md` §4.1
-/// sketches a wider set; the continuation-reassembly refusals are B6's and nothing here
-/// can construct one, and a variant nothing can construct is a variant no test can bite.
+/// ★ **The enum only carries what this stage can produce**, and B6 moves that line in
+/// both directions: the five continuation refusals arrive because [`Reassembler`] can now
+/// construct every one of them, and `NotYetTranslated` **leaves** because nothing can
+/// construct it any more. A variant nothing can construct is a variant no test can bite.
 /// [`Self::Graph`] was in that position at B1 and left the enum out for exactly that
 /// reason; B2's [`GraphPolicy`] applies, so it exists now.
+///
+/// ★ Two names differ from `gsp_core_bridge.md` §4.1's sketch and each difference is a
+/// finding rather than a preference: [`Self::ContinuationOverflow`] carries `declared`
+/// (the head's own number) rather than an accumulated `total`, because it fires **at the
+/// head** and there is no accumulation yet; and [`Self::ContinuationOverrun`] and
+/// [`Self::ContinuationCountExceeded`] are not in the sketch at all — the first because
+/// the arithmetic needs an answer for "the fragments carried more than the head declared"
+/// that is not a clamp, the second because §2.6's "a maximum continuation count" is a
+/// bound the size bound provably does not imply (a zero-length fragment).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BridgeRefusal {
     /// An id the function table does not name at all. The **third state**: not inert, not
@@ -184,15 +262,72 @@ pub enum BridgeRefusal {
         /// The raw wire id.
         code: u32,
     },
-    /// A function the design maps but whose arm is not built yet. After B5 there is
-    /// exactly one left: `CONTINUATION_RECORD` → B6.
+    /// ★ A `CONTINUATION_RECORD` with **no head in flight** (§2.6 bound 3).
     ///
-    /// Distinct from [`Self::UnknownFunction`] on purpose: this one is a **staging**
-    /// fact about our port, and the day it fires in a real boot it says which stage to
-    /// build next rather than "the guest sent something strange".
-    NotYetTranslated {
+    /// A continuation carries no function of its own, so it can never *become* a head:
+    /// there is nothing in it to say what the reassembled message would mean. From
+    /// [`translate`]'s stateless view there is never a head, which is why this is also
+    /// what a bare fn-71 refuses with when the free function is called directly — and
+    /// [`Reassembler`] is the only thing in the tree that can answer otherwise.
+    ///
+    /// ★★ This variant **replaced `NotYetTranslated`** at B6, and the replacement is the
+    /// point rather than a rename: `CONTINUATION_RECORD` was the last id in the
+    /// "known, mapped, arm not built" state, so with B6 built nothing can construct that
+    /// variant and an unconstructable variant is one no test can bite. The staging state
+    /// is now empty and the enum says so.
+    ContinuationWithoutHead {
         /// The raw wire id.
         code: u32,
+    },
+    /// A **new head arrived while one was in flight** (§2.6 bound 4).
+    ///
+    /// `[inferred]` `_issueRpcLarge` writes every fragment of one message before it
+    /// returns, under the GPU lock (`ogkm: rpc.c:2074-2143`), so a second message
+    /// beginning mid-run is not a legal trace — category 3, refused rather than
+    /// reconciled.
+    ///
+    /// Carries the **interrupting** message's id, not the abandoned head's: the head is
+    /// gone by construction (every refusal drops it) and the actionable number is the one
+    /// that broke the run.
+    ContinuationInterleaved {
+        /// The raw wire id of the message that interrupted.
+        code: u32,
+    },
+    /// A head declared a total larger than the bridge will ever hold
+    /// ([`ReasmLimits::max_body`]).
+    ///
+    /// Fires **at the head**, before a byte is reserved — `declared` is a guest-supplied
+    /// `u32` plus the fixed header, so testing it after the allocation would be a
+    /// four-gigabyte allocation on demand.
+    ContinuationOverflow {
+        /// The total the head's own body declared.
+        declared: usize,
+        /// The bound.
+        max: usize,
+    },
+    /// More continuation records than [`ReasmLimits::max_continuations`].
+    ///
+    /// ★ Not implied by [`Self::ContinuationOverflow`]: a **zero-length** continuation
+    /// makes no progress towards the size bound, so without a count bound a guest holds a
+    /// head open for an unbounded number of messages. Bounded memory is not bounded work.
+    ContinuationCountExceeded {
+        /// How many the guest had sent when it was refused.
+        continuations: u32,
+        /// The bound.
+        max: u32,
+    },
+    /// The fragments carried **more** bytes than the head declared.
+    ///
+    /// ★ The design sketch (§4.1) did not name this one and the arithmetic requires it:
+    /// the alternative is `body.truncate(declared)`, which manufactures a struct the
+    /// guest did not send — `abi_struct_truncation` with extra steps. A declared number
+    /// and the bytes disagreeing is a refusal here, exactly as it is in
+    /// [`Self::ParamsSizeExceedsPayload`] and [`Self::ControlParamsSizeMismatch`].
+    ContinuationOverrun {
+        /// Bytes that would have been held.
+        have: usize,
+        /// What the head declared.
+        declared: usize,
     },
     /// An **event** id arrived in the guest's *command* queue. `GSP_INIT_DONE` and
     /// `POST_EVENT` are things we send; a guest that posts one is not speaking the
@@ -414,7 +549,21 @@ impl Faulted for BridgeRefusal {
     fn fault_tag(&self) -> FaultTag {
         match self {
             BridgeRefusal::UnknownFunction { .. } => FaultTag("BridgeRefusal::UnknownFunction"),
-            BridgeRefusal::NotYetTranslated { .. } => FaultTag("BridgeRefusal::NotYetTranslated"),
+            BridgeRefusal::ContinuationWithoutHead { .. } => {
+                FaultTag("BridgeRefusal::ContinuationWithoutHead")
+            }
+            BridgeRefusal::ContinuationInterleaved { .. } => {
+                FaultTag("BridgeRefusal::ContinuationInterleaved")
+            }
+            BridgeRefusal::ContinuationOverflow { .. } => {
+                FaultTag("BridgeRefusal::ContinuationOverflow")
+            }
+            BridgeRefusal::ContinuationCountExceeded { .. } => {
+                FaultTag("BridgeRefusal::ContinuationCountExceeded")
+            }
+            BridgeRefusal::ContinuationOverrun { .. } => {
+                FaultTag("BridgeRefusal::ContinuationOverrun")
+            }
             BridgeRefusal::EventFromGuest { .. } => FaultTag("BridgeRefusal::EventFromGuest"),
             BridgeRefusal::UnmappedAllocClass { .. } => {
                 FaultTag("BridgeRefusal::UnmappedAllocClass")
@@ -471,14 +620,19 @@ pub fn translate(abi: &DriverAbiTable, cmd: &RpcCommand) -> Result<Translation, 
         | RpcFunction::UnloadingGuestDriver
         | RpcFunction::GspSetSystemInfo
         | RpcFunction::SetRegistry => Ok(Translation::Inert),
-        // Known, mapped by the design, arm not built. Never `Inert`: the fact matters.
+        // ★★ B6, and the one arm whose answer is a property of this function's
+        // signature. A continuation record is a *transport fragment*: it carries a raw
+        // byte slice and no function of its own, so one message's worth of it cannot be
+        // translated by anything, ever. `translate` is a function of ONE message and from
+        // that view there is never a head in flight — so the honest answer here is the
+        // no-head refusal, and [`Reassembler`] (which holds the head, and is the only
+        // thing in the tree that may) is what turns a *run* of them into a message.
         //
-        // ★ One id left this arm at B5 and one is still in it. `CONTINUATION_RECORD` is a
-        // *transport* fragment, not a fact — B6 reassembles the head message and
-        // translates the reassembled whole — so the day it fires here it says "a control
-        // exceeded `maxRpcSize`", which is a different sentence from "the guest sent
-        // something strange" and must stay a different variant.
-        RpcFunction::ContinuationRecord => Err(BridgeRefusal::NotYetTranslated { code: cmd.code }),
+        // The staging state this arm used to be in — "known, mapped, arm not built" — is
+        // now empty, and `BridgeRefusal::NotYetTranslated` is gone with it.
+        RpcFunction::ContinuationRecord => {
+            Err(BridgeRefusal::ContinuationWithoutHead { code: cmd.code })
+        }
         // Ours to send, never to receive.
         RpcFunction::InitDone | RpcFunction::PostEvent => {
             Err(BridgeRefusal::EventFromGuest { code: cmd.code })

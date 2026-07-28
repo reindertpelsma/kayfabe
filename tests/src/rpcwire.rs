@@ -69,6 +69,85 @@ pub fn with_length(mut msg: Vec<u8>, length: u32) -> Vec<u8> {
     msg
 }
 
+/// `pRpc->maxRpcSize` — `RM_PAGE_SIZE` (`ogkm: rpc.c:1002`, `ogkm-580: :1002`).
+///
+/// The number [`fragment`] splits on. Tests mostly pass something far smaller, because
+/// the split arithmetic is what is under test and 4096-byte fixtures hide off-by-ones in
+/// pages of zeros.
+pub const MAX_RPC_SIZE: usize = 4096;
+
+/// Split one whole RPC message into the fragment run `_issueRpcLarge` would post —
+/// **transcribed from the driver's own loop**, not from our reassembler.
+///
+/// `[src]` `ogkm: src/nvidia/src/kernel/vgpu/rpc.c:2074-2143`, line by line:
+///
+/// ```text
+/// entryLength = NV_MIN(bufSize, pRpc->maxRpcSize);          // :2082
+/// pVgpuRpcHeader->length = entryLength;                     // :2089  <- the HEAD
+/// rpcSendMessage(...)                                       // :2091  sequence++
+/// entryLength = pRpc->maxRpcSize - sizeof(rpc_message_header_v);   // :2108
+/// while (remainingSize != 0) {
+///     if (entryLength > remainingSize) entryLength = remainingSize;  // :2110-2111
+///     portMemCopy(rpcGetVgpuMessageData(pRpc), entryLength, pBuf8, entryLength); // :2119
+///     pVgpuRpcHeader->length   = entryLength + sizeof(rpc_message_header_v);     // :2122
+///     pVgpuRpcHeader->function = NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD;       // :2123
+///     rpcSendMessage(...)                                   // :2125  sequence++
+/// }
+/// ```
+///
+/// ★ Two details a paraphrase loses, and both are asserted by the tests that use this:
+///
+/// - `bufSize` counts the **envelope**, so the head carries `max_rpc_size - 32` bytes of
+///   body while each continuation carries `max_rpc_size - 32` bytes of the *original
+///   buffer* — the fragments are slices of `[envelope ++ body]`, not of `body`;
+/// - the sequence increments **per fragment**
+///   (`NV_ASSERT(lastSequence == firstSequence + recordCount)`, `:2147`), which is what
+///   the receive side polls on.
+///
+/// A `body` that already fits in one message comes back as a single-element `Vec` with no
+/// continuation at all — the *"a head with no continuations still translates"* arm of
+/// `gsp_core_bridge.md` §5.2's B6 row.
+///
+/// # Panics
+/// If `max_rpc_size` is not larger than [`ENVELOPE`], which would make the continuation
+/// stride zero and the loop non-terminating. The driver has the same precondition, as
+/// `NV_ASSERT_OR_RETURN(fixed_param_size <= pRpc->maxRpcSize)` (`ogkm: rpc.c:10562`).
+#[must_use]
+pub fn fragment(
+    function: u32,
+    first_sequence: u32,
+    body: &[u8],
+    max_rpc_size: usize,
+) -> Vec<Vec<u8>> {
+    assert!(max_rpc_size > ENVELOPE, "the stride would be zero");
+    let whole = message(function, first_sequence, body);
+    let head_len = whole.len().min(max_rpc_size);
+    // The head is the first `entryLength` bytes of the buffer, relabelled with its own
+    // (shorter) length — which `message` writes from the body slice it is given.
+    let mut out = vec![message(
+        function,
+        first_sequence,
+        &whole[ENVELOPE..head_len],
+    )];
+    let stride = max_rpc_size - ENVELOPE;
+    let mut at = head_len;
+    while at < whole.len() {
+        let take = stride.min(whole.len() - at);
+        out.push(message(
+            CONTINUATION_RECORD,
+            first_sequence + out.len() as u32,
+            &whole[at..at + take],
+        ));
+        at += take;
+    }
+    out
+}
+
+/// `NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD` = 71, for [`fragment`]'s use before
+/// [`fn_id`] is in scope. Same number, transcribed once more from
+/// `ogkm: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:81`.
+const CONTINUATION_RECORD: u32 = 71;
+
 /// `rpc_gsp_rm_alloc_v03_00` — the `GSP_RM_ALLOC` body.
 ///
 /// `[src]` `ogkm: src/nvidia/generated/g_rpc-structures.h:1408-1419`, transcribed field by

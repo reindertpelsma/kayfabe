@@ -47,7 +47,10 @@ use kayfabe_core::rmgraph::{AllocFacts, NodeKey, ResourceKey, RmEvent, RmGraphEr
 use kayfabe_fwd::{FwdFault, handle_doorbell};
 use kayfabe_gsp::{RpcCommand, RpcFunction, Transition};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, WireClassArch, mock_classes};
-use kayfabe_rmrpc::{BridgeRefusal, GraphPolicy, RefusalCensus, Translation, translate};
+use kayfabe_rmrpc::{
+    BridgeRefusal, GraphPolicy, ReasmLimits, Reassembled, Reassembler, RefusalCensus, Translation,
+    translate,
+};
 use kayfabe_tests::Scenario;
 use kayfabe_tests::gspworld::{
     FUNCTIONS, GspWorld, GuestMsg, MODEL_A, P580, Profile, REAL_QUEUE_SIZE,
@@ -195,6 +198,11 @@ fn drive(gpu: &mut Gpu, msg: &[u8]) -> Result<(), BridgeRefusal> {
             Ok(())
         }
         Translation::Inert => Ok(()),
+        // ★ Unreachable, and asserted rather than swallowed: `drive` goes through the
+        // free function, which holds no state and therefore cannot produce a `Held`.
+        // `translate_never_holds` is the general form of this; a `_ =>` here would let a
+        // regression that moved reassembly into `translate` pass silently.
+        Translation::Held => panic!("`translate` has no state and cannot hold a fragment"),
     }
 }
 
@@ -492,13 +500,16 @@ fn every_function_id_lands_on_its_own_arm() {
         );
     }
 
-    // Known, mapped by the design, arm not built — B6, and after B5 there is exactly ONE
-    // id left in this state. ★ `GSP_RM_CONTROL` left this list at B4 and `DUP_OBJECT` at
-    // B5; both are translating arms now, and the assertions below pin that neither
-    // became `UnknownFunction` on the way out.
+    // ★★ B6 emptied the "known, mapped, arm not built" state, and this is where that is
+    // visible: `GSP_RM_CONTROL` left it at B4, `DUP_OBJECT` at B5, and
+    // `CONTINUATION_RECORD` at B6 — not by becoming a translating arm, but by becoming a
+    // *transport* one. A continuation carries no function of its own, so from
+    // `translate`'s one-message view there is never a head in flight and the answer is
+    // the no-head refusal. It is emphatically **not** `UnknownFunction` (the id is known)
+    // and not `Inert` (the fact matters).
     assert_eq!(
         xlate(&w::message(fn_id::CONTINUATION_RECORD, 5, &[0u8; 48])),
-        Err(BridgeRefusal::NotYetTranslated {
+        Err(BridgeRefusal::ContinuationWithoutHead {
             code: fn_id::CONTINUATION_RECORD,
         }),
     );
@@ -1070,7 +1081,6 @@ fn the_control_refusal_order_matches_the_alloc_arms() {
 fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
     let all = [
         BridgeRefusal::UnknownFunction { code: 7 },
-        BridgeRefusal::NotYetTranslated { code: 76 },
         BridgeRefusal::EventFromGuest { code: 0x1001 },
         BridgeRefusal::UnmappedAllocClass { class: 0x80 },
         BridgeRefusal::SerializedParams { class: 0 },
@@ -1123,6 +1133,26 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
         BridgeRefusal::Graph(GpuError::Graph(RmGraphError::UndeclaredClient(HClient(
             HEX_CLIENT,
         )))),
+        // ★ B6's five, and they are five rather than one because they answer five
+        // different questions about a fragmented message: nothing was in flight; a
+        // *different* message interrupted; the head's own declared total is beyond what
+        // we hold; too many fragments; the fragments carried more than the head declared.
+        // A census that folded them could not tell a hostile guest from a bound that is
+        // set too low, which is the only thing this refusal surface is for.
+        BridgeRefusal::ContinuationWithoutHead { code: 71 },
+        BridgeRefusal::ContinuationInterleaved { code: 103 },
+        BridgeRefusal::ContinuationOverflow {
+            declared: 65_576,
+            max: 65_536,
+        },
+        BridgeRefusal::ContinuationCountExceeded {
+            continuations: 65,
+            max: 64,
+        },
+        BridgeRefusal::ContinuationOverrun {
+            have: 200,
+            declared: 168,
+        },
     ];
     let tags: std::collections::BTreeSet<FaultTag> = all.iter().map(Faulted::fault_tag).collect();
     assert_eq!(
@@ -1306,12 +1336,12 @@ fn malformed_traffic_between_valid_messages_leaves_the_valid_stream_untouched() 
             FaultTag("BridgeRefusal::UnknownFunction"),
         ),
         (
-            // ★ B5 vacated this slot: `DUP_OBJECT` translates now, so the one function
-            // still in the "known, mapped, not built" state is the continuation record —
-            // and the variant must stay in this census, because that state is what tells
-            // a real boot which stage to build next.
+            // ★ B6 vacated this slot in turn. A bare continuation record with nothing in
+            // flight is still hostile traffic — it is simply hostile for a *named*
+            // reason now, and the "known, mapped, not built" state it used to represent
+            // is empty.
             w::message(fn_id::CONTINUATION_RECORD, 1, &[0u8; 48]),
-            FaultTag("BridgeRefusal::NotYetTranslated"),
+            FaultTag("BridgeRefusal::ContinuationWithoutHead"),
         ),
         (
             // A dup whose ENVELOPE client is `NV01_NULL_OBJECT`. The message has no
@@ -1981,6 +2011,10 @@ struct Run {
     census: RefusalCensus,
     applied: u64,
     inert: u64,
+    /// ★ B6's third counter — see `GraphPolicy::held`. The non-vacuity instrument for
+    /// every fragmentation claim: a run that reached the same graph while holding
+    /// nothing never fragmented anything.
+    held: u64,
 }
 
 /// Boot a world, post `steps` through the **real command ring**, ring the doorbell, and
@@ -2023,6 +2057,7 @@ fn run_through_transport(profile: Profile, steps: &[w::Step], gpu: &mut Gpu) -> 
         census: policy.census().clone(),
         applied: policy.applied(),
         inert: policy.inert(),
+        held: policy.held(),
     }
 }
 
@@ -2298,13 +2333,14 @@ fn hostile_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
             FaultTag("BridgeRefusal::UnknownFunction"),
         ),
         (
-            // ★ B5 vacated this slot — see the sibling test. The continuation record is
-            // the one id still in the "known, mapped, not built" state.
+            // ★ B6 vacated this slot — see the sibling test. Through the ring the
+            // refusal is the same one, which is the point: a continuation with no head is
+            // a property of the *stream*, and the stream is what a ring delivers.
             w::Step {
                 function: fn_id::CONTINUATION_RECORD,
                 body: vec![0u8; 48],
             },
-            FaultTag("BridgeRefusal::NotYetTranslated"),
+            FaultTag("BridgeRefusal::ContinuationWithoutHead"),
         ),
         (
             w::Step {
@@ -5790,5 +5826,1273 @@ fn the_dup_stream_reaches_the_graph_through_the_real_transport() {
     assert_eq!(
         b.system.client_values(),
         [HClient(tp::K)].into_iter().collect(),
+    );
+}
+
+// =================================================================================
+// 7. ★★ B6 — continuation records: reassembly, its two bounds, and the reply question
+//
+// `gsp_core_bridge.md` §2.6 / §5.2's B6 row. Everything here is still bytes-in, and the
+// one stateful piece is a value: `Reassembler` holds ONE partial message, keyed by
+// nothing, bounded two ways, dropped on completion and on every refusal.
+//
+// The oracle discipline is unchanged and gains a fourth strand: `rpcwire::fragment` is a
+// hand transcription of `_issueRpcLarge`'s split loop (`ogkm: rpc.c:2074-2143`) in a file
+// that imports nothing, so the bytes the reassembler joins were split by a re-reading of
+// the driver rather than by the reassembler's own inverse.
+// =================================================================================
+
+/// Handles for the fragmented-control fixtures. Deliberately the `spd` set, because the
+/// hand-hex fragments below spell exactly those numbers.
+mod frag {
+    /// ★★ **The smallest `maxRpcSize` a `GSP_RM_CONTROL` can legally be split at**, and it
+    /// is not a fixture convenience — it is the driver's own arithmetic.
+    /// `rpcRmApiControl_GSP` opens with
+    /// `message_buffer_remaining = pRpc->maxRpcSize - fixed_param_size`, an **unsigned**
+    /// subtraction over `fixed_param_size = sizeof(rpc_message_header_v) +
+    /// sizeof(rpc_gsp_rm_control_v03_00)` = 32 + 40 = **72**
+    /// (`ogkm: rpc.c:10678-10679`, `ogkm-580: :10874-10875`). So a head always carries the
+    /// whole 40-byte fixed header; a shorter one could only come from a guest that had
+    /// already underflowed. In practice `maxRpcSize = RM_PAGE_SIZE` = 4096
+    /// (`ogkm: rpc.c:1000`), fifty-six times this.
+    ///
+    /// ★ Splitting *at* 72 is therefore the most hostile **legal** split there is: the
+    /// head declares a `paramsSize` and carries not one byte of it.
+    pub const SPLIT_AT_PARAMS: usize = 72;
+    /// A `maxRpcSize` that splits **inside** `params[]` instead — the case the boundary
+    /// split cannot see, because a reassembler that dropped or duplicated a fragment
+    /// boundary inside a struct still produces a 32-byte params block.
+    pub const SPLIT_MID_PARAMS: usize = 88;
+    /// A split leaving only eight bytes for the tail — the other end of the same sweep.
+    pub const SPLIT_LATE: usize = 96;
+
+    /// ★★ **`SET_PAGE_DIRECTORY` can never be split into more than two fragments**, and
+    /// that is a fact about the modelled surface rather than about these fixtures.
+    ///
+    /// Its body is 40 + 32 = 72 bytes; a legal head carries at least 40 of them
+    /// ([`SPLIT_AT_PARAMS`]) and the continuation stride is `maxRpcSize - 32` >= 40, so at
+    /// most 32 bytes ever remain and they always fit in one record. At the *real*
+    /// `maxRpcSize` of 4096 the whole message fits in one element and **nothing this port
+    /// models fragments at all** — the reassembler exists for the control long tail and
+    /// for the day a modelled control is larger, which is why the multi-record arms below
+    /// are driven with a big-params control instead.
+    pub const BIG_PARAMS: usize = 200;
+}
+
+/// A `GSP_RM_CONTROL` carrying [`frag::BIG_PARAMS`] bytes of params for a command this
+/// port does not model — the only shape that fragments into **many** records under a legal
+/// split. `translate` refuses it as `UnknownControl`, which is the point: reassembly is
+/// what lets that refusal name the right command instead of a truncated one.
+const UNMODELLED_CMD: u32 = 0x2080_0112;
+
+fn big_control_body(params_size: u32, carried: usize) -> Vec<u8> {
+    w::control_body(
+        spd::C,
+        spd::DEV,
+        UNMODELLED_CMD,
+        params_size,
+        w::RMAPI_RPC_FLAGS_NONE,
+        &vec![0x5a; carried],
+    )
+}
+
+/// The whole `SET_PAGE_DIRECTORY` message, unfragmented — the thing every fragment run
+/// below must reassemble back into.
+fn spd_whole(sequence: u32) -> Vec<u8> {
+    w::message(
+        fn_id::GSP_RM_CONTROL,
+        sequence,
+        &w::control_body(
+            spd::C,
+            spd::DEV,
+            w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+            32,
+            w::RMAPI_RPC_FLAGS_NONE,
+            &w::set_page_dir_params(spd::PDB, 512, 0, spd::VAS, 0, 1, 0),
+        ),
+    )
+}
+
+/// **Hand-written hex, transcription #2** — the HEAD of a fragmented `GSP_RM_CONTROL`.
+///
+/// `_issueRpcLarge` sets `pVgpuRpcHeader->length = NV_MIN(bufSize, maxRpcSize)` and leaves
+/// the real function in place (`ogkm: rpc.c:2082-2089`), so a head is an ordinary,
+/// well-formed fn-76 message that happens to be **short of what its own `paramsSize`
+/// declares**. That is the only signal there is, and it is the reason a head is
+/// recognised by arithmetic rather than by a flag.
+///
+/// ```text
+/// ── rpc_message_header_v03_00 (32 B) ──────────────────────────────────────────
+/// +0   header_version      00 00 00 03   -> 0x03000000
+/// +4   signature           56 52 50 43   -> "VRPC"
+/// +8   length              48 00 00 00   -> 72 = maxRpcSize, NOT the total
+/// +12  function            4c 00 00 00   -> 76 = GSP_RM_CONTROL  ★ the real function
+/// +16  rpc_result          00 00 00 00
+/// +20  rpc_result_private  00 00 00 00
+/// +24  sequence            00 11 00 00   -> 0x1100 = firstSequence
+/// +28  u                   00 00 00 00
+/// ── rpc_gsp_rm_control_v03_00 (40 B fixed header, ZERO params bytes present) ───
+/// +32  hClient             71 00 d0 c1   -> 0xc1d00071
+/// +36  hObject             01 00 00 5c   -> 0x5c000001  (the Device)
+/// +40  cmd                 13 18 80 00   -> 0x00801813  NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY
+/// +44  status              00 00 00 00   -> [OUT], the guest sends zero
+/// +48  paramsSize          20 00 00 00   -> 32   ★ declares 32 bytes that are NOT here
+/// +52  rmapiRpcFlags       00 00 00 00
+/// +56  rmctrlFlags         00 00 00 00
+/// +60  rmctrlAccessRight   00 00 00 00
+/// +64  reserved0 (NvU64)   00 …          -> 8 bytes
+/// ```
+#[rustfmt::skip]
+const HEX_FRAG_HEAD: [u8; 72] = [
+    0x00, 0x00, 0x00, 0x03,  0x56, 0x52, 0x50, 0x43,  0x48, 0x00, 0x00, 0x00,  0x4c, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,  0x00, 0x11, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,
+    0x71, 0x00, 0xd0, 0xc1,  0x01, 0x00, 0x00, 0x5c,  0x13, 0x18, 0x80, 0x00,  0x00, 0x00, 0x00, 0x00,
+    0x20, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,
+];
+
+/// **Hand-written hex, transcription #2** — the one CONTINUATION_RECORD that finishes it.
+///
+/// `length = entryLength + sizeof(rpc_message_header_v)` and
+/// `function = NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD` (`ogkm: rpc.c:2122-2123`), with
+/// the sequence one past the head's (`:2147`'s
+/// `NV_ASSERT(lastSequence == firstSequence + recordCount)`).
+///
+/// ```text
+/// +0   header_version      00 00 00 03
+/// +4   signature           56 52 50 43
+/// +8   length              40 00 00 00   -> 64 = 32 payload + 32 envelope
+/// +12  function            47 00 00 00   -> 71 = CONTINUATION_RECORD
+/// +16  rpc_result          00 00 00 00
+/// +20  rpc_result_private  00 00 00 00
+/// +24  sequence            01 11 00 00   -> 0x1101 = firstSequence + 1
+/// +28  u                   00 00 00 00
+/// ── the raw slice: NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS, 32 B ────────────
+/// +32  physAddress lo      00 00 00 41   |
+/// +36  physAddress hi      03 00 00 00   |-> 0x0000000341000000  ★ the PDB
+/// +40  numEntries          00 02 00 00   -> 512
+/// +44  flags               00 00 00 00   -> aperture VIDMEM
+/// +48  hVASpace            10 00 00 5c   -> 0x5c000010  ★ the VASpace, a PARAMS field
+/// +52  chId                00 00 00 00
+/// +56  subDeviceId         01 00 00 00
+/// +60  pasid               00 00 00 00
+/// ```
+#[rustfmt::skip]
+const HEX_FRAG_TAIL: [u8; 64] = [
+    0x00, 0x00, 0x00, 0x03,  0x56, 0x52, 0x50, 0x43,  0x40, 0x00, 0x00, 0x00,  0x47, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,  0x01, 0x11, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x41,  0x03, 0x00, 0x00, 0x00,  0x00, 0x02, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,
+    0x10, 0x00, 0x00, 0x5c,  0x00, 0x00, 0x00, 0x00,  0x01, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,
+];
+
+// ---------------------------------------------------------------------------------
+// 7.1 The splitter itself — transcription #3 of the driver's own loop
+// ---------------------------------------------------------------------------------
+
+/// The independent builder's split **is** `_issueRpcLarge`'s, checked against
+/// hand-computed literals rather than against the reassembler.
+///
+/// ★ This is the strand the oracle rule (§5.1) demands: if `fragment` and `Reassembler`
+/// were inverses of one another written from the same reading, every test below would
+/// assert their agreement with themselves. So the split is pinned here, first, by
+/// numbers computed on paper from the driver's four lines — and the two hand-hex arrays
+/// above are a *fourth* transcription of one instance of it.
+#[test]
+fn the_fragment_builder_splits_the_way_issue_rpc_large_does() {
+    let whole = spd_whole(0x1100);
+    assert_eq!(
+        whole.len(),
+        104,
+        "32 envelope + 40 fixed header + 32 params"
+    );
+
+    // The boundary split: entryLength = NV_MIN(104, 72) = 72, then stride = 72 - 32 = 40,
+    // remaining = 104 - 72 = 32 -> ONE continuation of 32.
+    let at_params = w::fragment(
+        fn_id::GSP_RM_CONTROL,
+        0x1100,
+        &whole[w::ENVELOPE..],
+        frag::SPLIT_AT_PARAMS,
+    );
+    assert_eq!(
+        at_params.iter().map(Vec::len).collect::<Vec<_>>(),
+        vec![72, 64],
+        "head = maxRpcSize; the tail = 32 remaining + a 32-byte envelope",
+    );
+
+    // The mid-struct split: entryLength = NV_MIN(104, 88) = 88, stride = 56,
+    // remaining = 16 -> ONE continuation of 16.
+    let mid = w::fragment(
+        fn_id::GSP_RM_CONTROL,
+        0x1100,
+        &whole[w::ENVELOPE..],
+        frag::SPLIT_MID_PARAMS,
+    );
+    assert_eq!(mid.iter().map(Vec::len).collect::<Vec<_>>(), vec![88, 48]);
+
+    // Many records, at the tightest LEGAL split. A 200-byte params block makes the body
+    // 240 and the message 272; entryLength = NV_MIN(272, 72) = 72, stride = 40,
+    // remaining = 200 -> 40 x 5 = five continuations.
+    let many = w::fragment(
+        fn_id::GSP_RM_CONTROL,
+        0x1100,
+        &big_control_body(frag::BIG_PARAMS as u32, frag::BIG_PARAMS),
+        frag::SPLIT_AT_PARAMS,
+    );
+    assert_eq!(
+        many.iter().map(Vec::len).collect::<Vec<_>>(),
+        vec![72, 72, 72, 72, 72, 72],
+    );
+
+    // ★ The two facts a length list cannot show. For every split:
+    for (what, run) in [
+        ("at the params boundary", &at_params),
+        ("inside params", &mid),
+        ("five continuations", &many),
+    ] {
+        // (a) the function/sequence discipline — the head keeps the REAL function and
+        //     every continuation is fn 71, sequences running firstSequence + i.
+        assert_eq!(
+            run.iter()
+                .map(|m| {
+                    let c = command(m);
+                    (c.code, c.sequence)
+                })
+                .collect::<Vec<_>>(),
+            std::iter::once((fn_id::GSP_RM_CONTROL, 0x1100u32))
+                .chain((1..run.len()).map(|i| (fn_id::CONTINUATION_RECORD, 0x1100 + i as u32)))
+                .collect::<Vec<_>>(),
+            "the fragment run's (function, sequence) pairs, {what}",
+        );
+        // (b) the fragments are slices of `[envelope ++ body]`, and concatenating the
+        //     PAYLOADS reproduces the original body exactly — no byte lost, none doubled.
+        let source = if what == "five continuations" {
+            big_control_body(frag::BIG_PARAMS as u32, frag::BIG_PARAMS)
+        } else {
+            whole[w::ENVELOPE..].to_vec()
+        };
+        let joined: Vec<u8> = run.iter().flat_map(|m| command(m).payload).collect();
+        assert_eq!(joined, source, "the payloads rejoin, {what}");
+    }
+
+    // Non-vacuity: a body that fits produces no continuation at all, which is §5.2's
+    // "a head with no continuations still translates" arm at the byte level.
+    let short = w::fragment(fn_id::FREE, 4, &w::driver_free_body(spd::C, spd::DEV), 4096);
+    assert_eq!(short.len(), 1);
+    assert_eq!(
+        short[0],
+        w::message(fn_id::FREE, 4, &w::driver_free_body(spd::C, spd::DEV))
+    );
+}
+
+/// The hand-hex fragments and the independent builder agree **byte for byte** — the third
+/// and fourth transcriptions meeting.
+#[test]
+fn the_hand_written_hex_fragments_and_the_independent_builder_agree() {
+    let whole = spd_whole(0x1100);
+    let built = w::fragment(
+        fn_id::GSP_RM_CONTROL,
+        0x1100,
+        &whole[w::ENVELOPE..],
+        frag::SPLIT_AT_PARAMS,
+    );
+    assert_eq!(built.len(), 2);
+    assert_eq!(built[0], HEX_FRAG_HEAD, "the head");
+    assert_eq!(built[1], HEX_FRAG_TAIL, "the continuation");
+}
+
+// ---------------------------------------------------------------------------------
+// 7.2 The reassembler, without a `Gpu`
+// ---------------------------------------------------------------------------------
+
+/// Feed a run of messages to a bare reassembler, returning every outcome.
+fn absorb(r: &mut Reassembler, msgs: &[Vec<u8>]) -> Vec<Result<Reassembled, BridgeRefusal>> {
+    msgs.iter().map(|m| r.accept(abi(), &command(m))).collect()
+}
+
+/// ★★ The headline: a fragmented `GSP_RM_CONTROL` reassembles into **exactly** the
+/// message the guest would have sent unfragmented — and the reassembled command carries
+/// the **head's** identity, not the last fragment's.
+///
+/// The expected value is the *unfragmented* message's decoded command, which no code path
+/// under test produced: `spd_whole` is the builder, `fragment` is the splitter, and both
+/// were written from `ogkm` rather than from `Reassembler`.
+#[test]
+fn a_fragmented_control_reassembles_into_the_unfragmented_command() {
+    let whole = command(&spd_whole(0x1100));
+    for (what, split) in [
+        ("at the params boundary", frag::SPLIT_AT_PARAMS),
+        ("inside params", frag::SPLIT_MID_PARAMS),
+        ("eight bytes left over", frag::SPLIT_LATE),
+    ] {
+        let run = w::fragment(
+            fn_id::GSP_RM_CONTROL,
+            0x1100,
+            &command(&spd_whole(0x1100)).payload,
+            split,
+        );
+        let mut r = Reassembler::new();
+        let out = absorb(&mut r, &run);
+        let (last, held) = out.split_last().expect("at least one fragment");
+
+        assert!(
+            held.iter().all(|o| o == &Ok(Reassembled::Held)),
+            "every fragment but the last is held, {what}: {held:?}",
+        );
+        assert_eq!(
+            last,
+            &Ok(Reassembled::Complete(RpcCommand {
+                function: RpcFunction::RmControl,
+                code: fn_id::GSP_RM_CONTROL,
+                sequence: 0x1100,
+                payload: whole.payload.clone(),
+                // One element per fragment: `command` builds each with `elements: 1`, and
+                // the reassembled fact must still measure the transport it cost.
+                elements: run.len() as u32,
+            })),
+            "★ the reassembled command is the head's identity and the whole body, {what}",
+        );
+        assert!(
+            !r.in_flight() && r.held_bytes() == 0,
+            "the head is released on completion, {what}",
+        );
+    }
+}
+
+/// ★ **Many records**, at the tightest legal split — the arm `SET_PAGE_DIRECTORY` cannot
+/// reach (`frag::BIG_PARAMS`'s doc says why).
+///
+/// The contract asserted here is the reassembler's own and nothing else's: the joined
+/// payload is **byte-identical** to the body the guest would have sent unfragmented. That
+/// is checked against the builder's output, which was produced by neither the splitter's
+/// inverse nor the decoder — `big_control_body` writes the struct from `ogkm`'s offsets.
+#[test]
+fn a_control_split_into_many_records_rejoins_byte_for_byte() {
+    for split in [
+        frag::SPLIT_AT_PARAMS,
+        frag::SPLIT_AT_PARAMS + 8,
+        frag::SPLIT_MID_PARAMS,
+        frag::SPLIT_LATE,
+        144,
+    ] {
+        let body = big_control_body(frag::BIG_PARAMS as u32, frag::BIG_PARAMS);
+        let run = w::fragment(fn_id::GSP_RM_CONTROL, 0x2200, &body, split);
+        assert!(
+            run.len() >= 3,
+            "split {split} produced only {} records",
+            run.len()
+        );
+        let mut r = Reassembler::new();
+        let out = absorb(&mut r, &run);
+        let (last, held) = out.split_last().expect("a run");
+        assert!(
+            held.iter().all(|o| o == &Ok(Reassembled::Held)),
+            "split {split}: {held:?}",
+        );
+        assert_eq!(
+            last,
+            &Ok(Reassembled::Complete(RpcCommand {
+                function: RpcFunction::RmControl,
+                code: fn_id::GSP_RM_CONTROL,
+                sequence: 0x2200,
+                payload: body.clone(),
+                elements: run.len() as u32,
+            })),
+            "split {split}",
+        );
+        // ★ And it translates as the WHOLE message: the command it names is the one the
+        // head declared, not a truncated or a mis-offset one. That is the entire value of
+        // reassembly for the control long tail.
+        assert_eq!(
+            translate(
+                abi(),
+                &command(&w::message(fn_id::GSP_RM_CONTROL, 0x2200, &body))
+            ),
+            Err(BridgeRefusal::UnknownControl {
+                cmd: UNMODELLED_CMD
+            }),
+        );
+    }
+}
+
+/// ★★ **A head too short to contain its own fixed header is malformed, not fragmented** —
+/// and that distinction is load-bearing in the safe direction.
+///
+/// A `GSP_RM_CONTROL` body under 40 bytes declares no `paramsSize` at all: there is
+/// nothing in it from which a total could be computed, so it cannot be recognised as a
+/// head. It is refused **immediately** by the ABI decoder rather than held for a
+/// continuation that would complete nothing.
+///
+/// `[src]` A conforming guest cannot produce one: `rpcRmApiControl_GSP`'s
+/// `pRpc->maxRpcSize - fixed_param_size` is an unsigned subtraction over 72
+/// (`ogkm: rpc.c:10678-10679`, `ogkm-580: :10874-10875`) and `maxRpcSize` is 4096
+/// (`ogkm: rpc.c:1000`). This is category 3 — refused because it cannot happen.
+#[test]
+fn a_head_shorter_than_its_own_fixed_header_is_malformed_not_fragmented() {
+    let mut r = Reassembler::new();
+    for len in [0usize, 4, 16, 39] {
+        let msg = w::message(fn_id::GSP_RM_CONTROL, 3, &vec![0xff; len]);
+        assert_eq!(
+            r.accept(abi(), &command(&msg)),
+            Ok(Reassembled::Whole),
+            "a {len}-byte control body is not a head",
+        );
+        assert!(!r.in_flight(), "a {len}-byte control body was held");
+        assert_eq!(
+            xlate(&msg),
+            Err(BridgeRefusal::Abi(AbiError::Truncated {
+                c_name: "rpc_gsp_rm_control_v03_00",
+                need: 40,
+                got: len,
+            })),
+            "and it is refused, not deferred",
+        );
+    }
+    // 40 exactly — the first length that CAN be a head — is one, so the sweep above is
+    // not vacuous.
+    assert_eq!(
+        r.accept(abi(), &command(&head_declaring(32))),
+        Ok(Reassembled::Held),
+    );
+}
+
+/// ★ **A head with no continuations still translates** — §5.2's B6 non-vacuity arm.
+///
+/// The complementary half of the same rule: `needed > payload.len()` is `>`, not `>=`, so
+/// a control whose declared `paramsSize` is exactly satisfied is a whole message. Getting
+/// that boundary wrong would hold **every** conforming control forever, waiting for a
+/// continuation the guest has no reason to send — a hang with no refusal anywhere.
+#[test]
+fn a_control_whose_params_all_arrived_is_never_held() {
+    let mut r = Reassembler::new();
+    // Sweep the declared size across the boundary rather than witnessing one value: the
+    // params block is 32 bytes, so 0..=32 are whole and 33.. are heads.
+    for declared in [0u32, 1, 16, 31, 32] {
+        let msg = w::message(
+            fn_id::GSP_RM_CONTROL,
+            9,
+            &w::control_body(
+                spd::C,
+                spd::DEV,
+                w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+                declared,
+                w::RMAPI_RPC_FLAGS_NONE,
+                &w::set_page_dir_params(spd::PDB, 512, 0, spd::VAS, 0, 1, 0),
+            ),
+        );
+        assert_eq!(
+            r.accept(abi(), &command(&msg)),
+            Ok(Reassembled::Whole),
+            "paramsSize={declared} is satisfied by the 32 bytes present",
+        );
+        assert!(!r.in_flight(), "nothing was held for paramsSize={declared}");
+    }
+    // And one past the boundary is a head — so the sweep above is not vacuously true of
+    // every input.
+    let head = w::message(
+        fn_id::GSP_RM_CONTROL,
+        9,
+        &w::control_body(
+            spd::C,
+            spd::DEV,
+            w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+            33,
+            w::RMAPI_RPC_FLAGS_NONE,
+            &w::set_page_dir_params(spd::PDB, 512, 0, spd::VAS, 0, 1, 0),
+        ),
+    );
+    assert_eq!(r.accept(abi(), &command(&head)), Ok(Reassembled::Held));
+    assert_eq!(r.held_bytes(), 72, "the head's whole body is held");
+}
+
+/// ★★ **`GSP_RM_ALLOC` cannot fragment, and a short one is still malformed.**
+///
+/// `rpcRmApiAlloc_GSP` copies params into the single message buffer under an explicit
+/// remaining-space bound and returns `NV_ERR_BUFFER_TOO_SMALL` rather than calling
+/// `_issueRpcAndWaitLarge` (`ogkm: rpc.c:11024-11029`, `ogkm-580: :11218-11223`). So the
+/// reassembler must **not** treat an over-declared fn-103 as a head: doing so would
+/// convert an immediate, named refusal into a message held forever.
+///
+/// The sweep runs every function the port names, because the recognition rule is
+/// per-function and a single witness cannot see a table with one wrong row.
+#[test]
+fn only_the_control_path_can_be_a_head() {
+    let mut r = Reassembler::new();
+    // A fn-103 that declares far more params than it carries — B1's
+    // `ParamsSizeExceedsPayload` fixture, verbatim.
+    let short_alloc = w::message(
+        fn_id::GSP_RM_ALLOC,
+        1,
+        &w::alloc_body(
+            spd::C,
+            0,
+            0,
+            w::NV01_ROOT,
+            4096,
+            0,
+            &w::client_root_params(spd::C, 1),
+        ),
+    );
+    assert_eq!(
+        r.accept(abi(), &command(&short_alloc)),
+        Ok(Reassembled::Whole)
+    );
+    assert!(!r.in_flight(), "a short alloc is malformed, not fragmented");
+    // ...and reaches the refusal it always did.
+    assert_eq!(
+        xlate(&short_alloc),
+        Err(BridgeRefusal::ParamsSizeExceedsPayload {
+            declared: 4096,
+            available: 8,
+        }),
+    );
+
+    // Every other id the table names: none of them is ever a head, whatever body it
+    // carries. `SET_REGISTRY` is in this list deliberately — it *does* fragment in the
+    // driver (`_issueRpcAsyncLarge`), and this port cannot compute its total, so it must
+    // not pretend to.
+    for code in [
+        fn_id::SET_GUEST_SYSTEM_INFO,
+        fn_id::FREE,
+        fn_id::DUP_OBJECT,
+        fn_id::UNLOADING_GUEST_DRIVER,
+        fn_id::GET_GSP_STATIC_INFO,
+        fn_id::GSP_SET_SYSTEM_INFO,
+        fn_id::SET_REGISTRY,
+        fn_id::GSP_RM_ALLOC,
+        999,
+    ] {
+        for body in [vec![0u8; 0], vec![0xff; 16], vec![0xff; 200]] {
+            assert_eq!(
+                r.accept(abi(), &command(&w::message(code, 2, &body))),
+                Ok(Reassembled::Whole),
+                "fn {code} with a {}-byte body is never a head",
+                body.len(),
+            );
+            assert!(!r.in_flight(), "fn {code} held something");
+        }
+    }
+}
+
+/// A `CONTINUATION_RECORD` with nothing in flight is refused — §5.2's other B6 arm — and
+/// it is refused **identically** by the stateless free function and by the reassembler.
+#[test]
+fn a_continuation_with_no_head_refuses_the_same_way_both_ways() {
+    let bare = w::message(fn_id::CONTINUATION_RECORD, 5, &[0xab; 48]);
+    let refusal = BridgeRefusal::ContinuationWithoutHead {
+        code: fn_id::CONTINUATION_RECORD,
+    };
+    // Written twice with the two return types on purpose: the assertion is that the
+    // stateless function and the stateful one refuse with the SAME variant, not that one
+    // was derived from the other.
+    let want: Result<Reassembled, BridgeRefusal> = Err(refusal);
+    assert_eq!(xlate(&bare), Err(refusal));
+    assert_eq!(Reassembler::new().accept(abi(), &command(&bare)), want);
+
+    // ★ And after a completed run, too: the head is released, so the fragment that
+    // follows a finished message is exactly as headless as one that follows nothing.
+    let run = w::fragment(
+        fn_id::GSP_RM_CONTROL,
+        0x1100,
+        &command(&spd_whole(0x1100)).payload,
+        frag::SPLIT_AT_PARAMS,
+    );
+    let mut r = Reassembler::new();
+    absorb(&mut r, &run);
+    assert_eq!(r.accept(abi(), &command(&bare)), want);
+}
+
+/// ★★ **`translate` never holds.** The statelessness canary for B6.
+///
+/// The whole crate's shape is that the free function cannot remember a previous message.
+/// If reassembly ever migrated into it — the obvious "simplification" — this is what
+/// notices: `translate` is called twice with a head and then a continuation, and the
+/// continuation must still be a no-head refusal, because there is nowhere for the head to
+/// have gone.
+#[test]
+fn translate_never_holds() {
+    let run = w::fragment(
+        fn_id::GSP_RM_CONTROL,
+        0x1100,
+        &big_control_body(frag::BIG_PARAMS as u32, frag::BIG_PARAMS),
+        frag::SPLIT_AT_PARAMS,
+    );
+    assert!(run.len() >= 3, "a run worth checking");
+    // The head, through the free function: to something that cannot know a continuation
+    // is coming, a head is simply a control that declared more params than it carries.
+    assert_eq!(
+        xlate(&run[0]),
+        Err(BridgeRefusal::ParamsSizeExceedsPayload {
+            declared: frag::BIG_PARAMS as u32,
+            available: 0,
+        }),
+        "★ a head is NOT specially recognised by the stateless function",
+    );
+    // Every continuation after it: still headless, in order, repeatedly.
+    for (i, m) in run[1..].iter().enumerate() {
+        assert_eq!(
+            xlate(m),
+            Err(BridgeRefusal::ContinuationWithoutHead {
+                code: fn_id::CONTINUATION_RECORD,
+            }),
+            "continuation {i} was remembered by a stateless function",
+        );
+    }
+    // And no input of any shape makes it produce a `Held`.
+    for code in [
+        fn_id::GSP_RM_CONTROL,
+        fn_id::GSP_RM_ALLOC,
+        fn_id::CONTINUATION_RECORD,
+        fn_id::SET_REGISTRY,
+        fn_id::FREE,
+    ] {
+        for body in [vec![0u8; 0], vec![0u8; 40], vec![0xff; 200]] {
+            assert_ne!(
+                xlate(&w::message(code, 1, &body)),
+                Ok(Translation::Held),
+                "fn {code} made the free function hold",
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------
+// 7.3 ★ The hostile-length matrix — the bounds, each proven load-bearing
+// ---------------------------------------------------------------------------------
+
+/// A `GSP_RM_CONTROL` head declaring `declared` bytes of params but carrying none.
+fn head_declaring(declared: u32) -> Vec<u8> {
+    w::message(
+        fn_id::GSP_RM_CONTROL,
+        0x1100,
+        &w::control_body(
+            spd::C,
+            spd::DEV,
+            w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+            declared,
+            w::RMAPI_RPC_FLAGS_NONE,
+            &[],
+        ),
+    )
+}
+
+/// ★ The size bound refuses **at the head**, before a byte is reserved — swept across it,
+/// not witnessed at one point.
+///
+/// `declared` is a guest-supplied `u32` plus the 40-byte fixed header. A bound tested
+/// after the buffer was reserved would be a four-gigabyte allocation on demand, so the
+/// hostile end of the sweep is `u32::MAX` and the test's *completion* is the assertion.
+#[test]
+fn the_reassembly_size_bound_refuses_at_the_head() {
+    let limits = ReasmLimits {
+        max_body: 200,
+        max_continuations: 64,
+    };
+    // The whole body is `params_at + paramsSize` = 40 + declared, so 160 is the last
+    // accepted declaration and 161 the first refused one.
+    for (declared, accept) in [
+        (41u32, true),
+        (159, true),
+        (160, true),
+        (161, false),
+        (4096, false),
+        (u32::MAX - 40, false),
+        (u32::MAX, false),
+    ] {
+        let mut r = Reassembler::with_limits(limits);
+        let got = r.accept(abi(), &command(&head_declaring(declared)));
+        if accept {
+            assert_eq!(got, Ok(Reassembled::Held), "declared={declared}");
+            assert_eq!(r.held_bytes(), 40, "only the head's own 40 bytes are held");
+        } else {
+            assert_eq!(
+                got,
+                Err(BridgeRefusal::ContinuationOverflow {
+                    declared: 40 + declared as usize,
+                    max: 200,
+                }),
+                "declared={declared}",
+            );
+            assert!(
+                !r.in_flight(),
+                "nothing was reserved for declared={declared}"
+            );
+        }
+    }
+}
+
+/// ★★ **The count bound is not implied by the size bound**, and this is the proof.
+///
+/// A **zero-length** continuation moves the accumulated size not at all, so under a size
+/// bound alone a guest holds one head open across an unbounded number of messages —
+/// bounded memory, unbounded work. `MAX_CONTINUATIONS` is the bound that refuses it, and
+/// the sweep runs right across it rather than at it.
+#[test]
+fn a_head_cannot_be_held_open_by_empty_continuations() {
+    let limits = ReasmLimits {
+        max_body: 4096,
+        max_continuations: 4,
+    };
+    let mut r = Reassembler::with_limits(limits);
+    // A head that needs 32 more bytes than it carries, so no empty fragment can finish it.
+    assert_eq!(
+        r.accept(abi(), &command(&head_declaring(32))),
+        Ok(Reassembled::Held),
+    );
+    let empty = w::message(fn_id::CONTINUATION_RECORD, 0x1101, &[]);
+    for i in 1..=4 {
+        assert_eq!(
+            r.accept(abi(), &command(&empty)),
+            Ok(Reassembled::Held),
+            "empty continuation {i} is within the bound",
+        );
+        assert_eq!(r.held_bytes(), 40, "and moved the size not at all");
+    }
+    assert_eq!(
+        r.accept(abi(), &command(&empty)),
+        Err(BridgeRefusal::ContinuationCountExceeded {
+            continuations: 5,
+            max: 4,
+        }),
+    );
+    assert!(!r.in_flight(), "the refusal dropped the head");
+
+    // ★ Non-vacuity for the claim "the size bound could not have caught this": the same
+    // five messages under a size bound of 40 — the tightest one that admits the head at
+    // all — still never trip it.
+    let mut tight = Reassembler::with_limits(ReasmLimits {
+        max_body: 72,
+        max_continuations: u32::MAX,
+    });
+    assert_eq!(
+        tight.accept(abi(), &command(&head_declaring(32))),
+        Ok(Reassembled::Held),
+    );
+    for _ in 0..64 {
+        assert_eq!(tight.accept(abi(), &command(&empty)), Ok(Reassembled::Held));
+    }
+    assert!(tight.in_flight(), "★ a size bound alone never fires here");
+}
+
+/// ★ Fragments carrying **more** than the head declared are refused, never truncated.
+///
+/// The alternative — `body.truncate(declared)` — manufactures a struct the guest did not
+/// send, which is `abi_struct_truncation` with extra steps. Swept by overshoot amount,
+/// including the exact-fit boundary on both sides.
+#[test]
+fn fragments_that_overrun_the_declared_total_are_refused_not_clamped() {
+    // needed = 40 + 32 = 72; the head carries 40, so 32 bytes are outstanding.
+    for (extra, ok) in [(0usize, true), (1, false), (8, false), (1000, false)] {
+        let mut r = Reassembler::new();
+        assert_eq!(
+            r.accept(abi(), &command(&head_declaring(32))),
+            Ok(Reassembled::Held),
+        );
+        let tail = w::message(fn_id::CONTINUATION_RECORD, 0x1101, &vec![0xcd; 32 + extra]);
+        let got = r.accept(abi(), &command(&tail));
+        if ok {
+            assert!(
+                matches!(got, Ok(Reassembled::Complete(_))),
+                "an exact fit completes: {got:?}",
+            );
+        } else {
+            assert_eq!(
+                got,
+                Err(BridgeRefusal::ContinuationOverrun {
+                    have: 72 + extra,
+                    declared: 72,
+                }),
+                "overshoot by {extra}",
+            );
+            assert!(!r.in_flight(), "the refusal dropped the head");
+        }
+    }
+}
+
+/// ★ A **new head while one is in flight** is refused, the old head is dropped, and the
+/// interrupting message is refused too rather than quietly starting a second run.
+#[test]
+fn a_new_message_mid_run_is_refused_and_the_old_head_is_dropped() {
+    // Every function that could interrupt, including a second head of the same function.
+    for interrupter in [
+        w::message(fn_id::FREE, 7, &w::driver_free_body(spd::C, spd::DEV)),
+        spd_whole(7),
+        head_declaring(32),
+        w::message(fn_id::SET_REGISTRY, 7, &[0xab; 16]),
+        w::message(999, 7, &[0u8; 8]),
+    ] {
+        let mut r = Reassembler::new();
+        assert_eq!(
+            r.accept(abi(), &command(&head_declaring(32))),
+            Ok(Reassembled::Held),
+        );
+        let code = command(&interrupter).code;
+        assert_eq!(
+            r.accept(abi(), &command(&interrupter)),
+            Err(BridgeRefusal::ContinuationInterleaved { code }),
+        );
+        assert!(!r.in_flight(), "fn {code} did not drop the head");
+        // ★ And the *continuation* that would have finished the abandoned head is now
+        // headless — which is what "dropped" has to mean, and what a test asserting only
+        // the refusal above could not tell from "kept".
+        assert_eq!(
+            r.accept(
+                abi(),
+                &command(&w::message(fn_id::CONTINUATION_RECORD, 8, &[0xcd; 32])),
+            ),
+            Err(BridgeRefusal::ContinuationWithoutHead {
+                code: fn_id::CONTINUATION_RECORD,
+            }),
+        );
+    }
+}
+
+/// ★★ **A refused fragment does not wedge the reassembler.** Asserted by exact content on
+/// the *next* message, because the refusal itself cannot distinguish "the head was
+/// dropped" from "the head was kept and happened not to matter".
+///
+/// Every one of the five refusals is driven, and after each the reassembler must accept a
+/// fresh, conforming fragmented control and produce the identical event. A reassembler
+/// that kept a head across any refusal would be permanently wedgeable by one hostile
+/// message.
+#[test]
+fn no_refusal_wedges_the_reassembler() {
+    let whole = command(&spd_whole(0x1100));
+    let clean = w::fragment(
+        fn_id::GSP_RM_CONTROL,
+        0x1100,
+        &whole.payload,
+        frag::SPLIT_AT_PARAMS,
+    );
+    let limits = ReasmLimits {
+        max_body: 200,
+        max_continuations: 2,
+    };
+
+    // (name, the message run that provokes it, the tag it must carry)
+    let provocations: Vec<(&str, Vec<Vec<u8>>, FaultTag)> = vec![
+        (
+            "no head",
+            vec![w::message(fn_id::CONTINUATION_RECORD, 1, &[0u8; 8])],
+            FaultTag("BridgeRefusal::ContinuationWithoutHead"),
+        ),
+        (
+            "interleaved",
+            vec![
+                head_declaring(32),
+                w::message(fn_id::FREE, 2, &w::driver_free_body(spd::C, spd::DEV)),
+            ],
+            FaultTag("BridgeRefusal::ContinuationInterleaved"),
+        ),
+        (
+            "overflow",
+            vec![head_declaring(4096)],
+            FaultTag("BridgeRefusal::ContinuationOverflow"),
+        ),
+        (
+            "count",
+            vec![
+                head_declaring(32),
+                w::message(fn_id::CONTINUATION_RECORD, 2, &[]),
+                w::message(fn_id::CONTINUATION_RECORD, 3, &[]),
+                w::message(fn_id::CONTINUATION_RECORD, 4, &[]),
+            ],
+            FaultTag("BridgeRefusal::ContinuationCountExceeded"),
+        ),
+        (
+            "overrun",
+            vec![
+                head_declaring(32),
+                w::message(fn_id::CONTINUATION_RECORD, 2, &[0xcd; 33]),
+            ],
+            FaultTag("BridgeRefusal::ContinuationOverrun"),
+        ),
+    ];
+
+    for (what, run, tag) in provocations {
+        let mut r = Reassembler::with_limits(limits);
+        let out = absorb(&mut r, &run);
+        let last = out
+            .last()
+            .expect("a provocation posts at least one message");
+        let err = last.clone().expect_err(what);
+        assert_eq!(err.fault_tag(), tag, "{what} refused for the wrong reason");
+        assert_ne!(err.rpc_result(), 0, "{what}: a refusal still owes a reply");
+        assert!(!r.in_flight(), "{what} left a head in flight");
+        assert_eq!(r.held_bytes(), 0, "{what} left bytes held");
+
+        // ★ The recovery, by exact content: the very next conforming run completes, and
+        // completes into the same command a virgin reassembler produces.
+        let after = absorb(&mut r, &clean);
+        assert_eq!(
+            after,
+            vec![
+                Ok(Reassembled::Held),
+                Ok(Reassembled::Complete(RpcCommand {
+                    function: RpcFunction::RmControl,
+                    code: fn_id::GSP_RM_CONTROL,
+                    sequence: 0x1100,
+                    payload: whole.payload.clone(),
+                    elements: 2,
+                })),
+            ],
+            "★ the reassembler is wedged after {what}",
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------------
+// 7.4 Through the policy and the graph
+// ---------------------------------------------------------------------------------
+
+/// The script that must exist before a `SET_PAGE_DIRECTORY` can apply: a client, its
+/// Device, its VASpace.
+fn spd_prerequisites() -> RpcScript {
+    let mut s = RpcScript::new();
+    s.client_root(w::NV01_ROOT, spd::C, 0xdd13)
+        .device(spd::C, spd::C, spd::DEV, cp::DEVICE_INSTANCE)
+        .vaspace(spd::C, spd::DEV, spd::VAS);
+    s
+}
+
+/// ★★ **The B6 headline through the policy**: a `SET_PAGE_DIRECTORY` delivered in
+/// fragments reaches the object model as the identical fact the unfragmented one does —
+/// and the counters say a fragmentation actually happened.
+///
+/// The oracle is `Boundaries` from a device that saw the **unfragmented** stream, which
+/// shares no code with the splitter. The `held` counter is the non-vacuity instrument:
+/// without it, a reassembler that silently ignored fragmentation and a correct one look
+/// identical from the end state.
+#[test]
+fn a_fragmented_control_reaches_the_graph_as_the_unfragmented_one_does() {
+    for (what, split) in [
+        ("at the params boundary", frag::SPLIT_AT_PARAMS),
+        ("inside params", frag::SPLIT_MID_PARAMS),
+        ("eight bytes left over", frag::SPLIT_LATE),
+    ] {
+        let prereq = spd_prerequisites();
+        let body = command(&spd_whole(0x1100)).payload;
+        let run = w::fragment(fn_id::GSP_RM_CONTROL, 0x1100, &body, split);
+
+        let mut gpu = fresh_gpu();
+        let (out, applied, held, census) = {
+            let mut policy = GraphPolicy::new(abi(), &mut gpu);
+            for (i, o) in deliver_all(&mut policy, &prereq.messages())
+                .into_iter()
+                .enumerate()
+            {
+                let _ = o.unwrap_or_else(|e| panic!("prerequisite {i}: {e:?}"));
+            }
+            let out = deliver_all(&mut policy, &run);
+            (
+                out,
+                policy.applied(),
+                policy.held(),
+                policy.census().clone(),
+            )
+        };
+
+        // Every fragment but the last is `Held`; the last is the fact, by exact variant.
+        let (last, rest) = out.split_last().expect("a run");
+        assert!(
+            rest.iter().all(|o| o == &Ok(Translation::Held)),
+            "{what}: {rest:?}",
+        );
+        assert_eq!(
+            last,
+            &Ok(Translation::Event(expected_set_page_dir(
+                spd::C,
+                spd::VAS,
+                spd::PDB
+            ))),
+            "★ {what}: the fact is the head's, recovered from bytes split across messages",
+        );
+        assert!(
+            census.is_empty(),
+            "{what}: a conforming run refuses nothing"
+        );
+        assert_eq!(applied, 4, "{what}: three prerequisites and the control");
+        assert_eq!(
+            held,
+            run.len() as u64 - 1,
+            "★ {what}: the fragmentation really happened",
+        );
+
+        // And the object model is the unfragmented one's, whole.
+        let mut whole_script = spd_prerequisites();
+        whole_script.set_page_dir(spd::C, spd::DEV, spd::VAS, spd::PDB, 0);
+        assert_eq!(
+            boundaries(&gpu),
+            boundaries(&gpu_from_script(&whole_script)),
+            "★ {what}: fragmentation is invisible to the object model",
+        );
+    }
+}
+
+/// ★★ **Two identical fragmented controls produce two identical events.** The
+/// statefulness canary for B6, in the shape §3.3 and §4.3 care about.
+///
+/// A reassembler that grew a memo keyed by anything the guest supplies — the head's
+/// handles, its sequence, its cmd — would answer the second run differently. It must not:
+/// a *replayed* message maps to the *identical* event, which is exactly what makes
+/// `RmGraphError::ConflictingAlloc`'s idempotent-retry tolerance reachable.
+#[test]
+fn two_identical_fragmented_controls_produce_two_identical_events() {
+    let body = command(&spd_whole(0x1100)).payload;
+    let run = w::fragment(fn_id::GSP_RM_CONTROL, 0x1100, &body, frag::SPLIT_AT_PARAMS);
+
+    let mut gpu = fresh_gpu();
+    let (first, second, third, held) = {
+        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        for o in deliver_all(&mut policy, &spd_prerequisites().messages()) {
+            let _ = o.expect("prerequisites");
+        }
+        let first = deliver_all(&mut policy, &run);
+        let second = deliver_all(&mut policy, &run);
+        // ★ And a run whose handles are RECYCLED from the same values but split
+        // differently: the reassembler must not have learned anything from the first two.
+        let third = deliver_all(
+            &mut policy,
+            &w::fragment(fn_id::GSP_RM_CONTROL, 0x2200, &body, frag::SPLIT_MID_PARAMS),
+        );
+        (first, second, third, policy.held())
+    };
+
+    let want = Ok(Translation::Event(expected_set_page_dir(
+        spd::C,
+        spd::VAS,
+        spd::PDB,
+    )));
+    assert_eq!(first, vec![Ok(Translation::Held), want]);
+    assert_eq!(
+        second, first,
+        "★ the second run is byte-identical in outcome"
+    );
+    assert_eq!(
+        third.last(),
+        Some(&want),
+        "★ a different split of the same message is the same fact",
+    );
+    assert_eq!(
+        held,
+        1 + 1 + (third.len() as u64 - 1),
+        "each run held its own fragments and remembered nothing between them",
+    );
+}
+
+/// ★ The reassembler is **per policy**, not global or shared — two policies over two
+/// devices interleaving their fragment runs must not see each other's heads.
+///
+/// This is the multi-process shape at the transport level: `GraphPolicy` is the per-device
+/// object, and a reassembler hoisted into a `static` or a shared table (the obvious
+/// "optimisation") is the #14 identical-handles collision one layer down.
+#[test]
+fn two_policies_interleaving_fragment_runs_do_not_share_a_head() {
+    let body = command(&spd_whole(0x1100)).payload;
+    let run = w::fragment(fn_id::GSP_RM_CONTROL, 0x1100, &body, frag::SPLIT_AT_PARAMS);
+    assert_eq!(run.len(), 2);
+
+    let mut a = fresh_gpu();
+    let mut b = fresh_gpu();
+    let (outs_a, outs_b) = {
+        let mut pa = GraphPolicy::new(abi(), &mut a);
+        let mut pb = GraphPolicy::new(abi(), &mut b);
+        for p in [&mut pa, &mut pb] {
+            for o in deliver_all(p, &spd_prerequisites().messages()) {
+                let _ = o.expect("prerequisites");
+            }
+        }
+        // Element-by-element interleave, which is the hostile order.
+        let mut outs_a = Vec::new();
+        let mut outs_b = Vec::new();
+        for m in &run {
+            outs_a.push(pa.deliver(&command(m)));
+            outs_b.push(pb.deliver(&command(m)));
+        }
+        (outs_a, outs_b)
+    };
+
+    let want = Ok(Translation::Event(expected_set_page_dir(
+        spd::C,
+        spd::VAS,
+        spd::PDB,
+    )));
+    assert_eq!(outs_a.last(), Some(&want));
+    assert_eq!(
+        outs_b, outs_a,
+        "★ neither policy stole the other's fragments"
+    );
+    assert_eq!(boundaries(&a), boundaries(&b));
+}
+
+// ---------------------------------------------------------------------------------
+// 7.5 ★★ Through the real transport — and the reply-per-fragment answer, on the wire
+// ---------------------------------------------------------------------------------
+
+/// ★★ **The settled reply question, asserted as wire bytes.**
+///
+/// `_issueRpcLarge` sends every fragment and then waits ONCE at
+/// `(expectedFunc, firstSequence)`; but `rpcRmApiControl_GSP` issues fn 76 with
+/// `bBidirectional = NV_TRUE` (`ogkm: rpc.c:10856`, `ogkm-580: :11051`), so the receive
+/// side then polls `(CONTINUATION_RECORD, firstSequence + i)` for each record until the
+/// reply bytes fill the request's own `bufSize` (`ogkm: rpc.c:2186-2226`). **A reply per
+/// fragment is therefore required**, and each must echo that fragment's own
+/// `(function, sequence)`.
+///
+/// So this test asserts the exact reply stream, by content: the head answered on fn 76 at
+/// the first sequence, then one fn-71 reply per continuation at successive sequences —
+/// which is precisely what the FSM already posts, and which is why B6 changed no
+/// transport code.
+#[test]
+fn a_fragmented_control_is_answered_once_per_fragment_on_its_own_sequence() {
+    let mut script = spd_prerequisites();
+    let steps_before = script.steps().len();
+    // Post the fragment run as raw steps so the ring carries the real function ids.
+    let body = command(&spd_whole(0)).payload;
+    let run = w::fragment(fn_id::GSP_RM_CONTROL, 0, &body, frag::SPLIT_AT_PARAMS);
+    assert_eq!(
+        run.len(),
+        2,
+        "★ `SET_PAGE_DIRECTORY` cannot make more — see `frag`"
+    );
+    for m in &run {
+        let c = command(m);
+        script.raw(c.code, c.payload);
+    }
+
+    let mut gpu = fresh_gpu();
+    let out = run_through_transport(P580, script.steps(), &mut gpu);
+
+    // `run_through_transport` numbers the stream from 0x1000, so the head is at
+    // 0x1000 + steps_before and each continuation follows it — written out from the
+    // driver's `firstSequence + i` rule rather than read back off the replies.
+    let first = 0x1000 + steps_before as u32;
+    let want: Vec<(u32, u32, u32)> = std::iter::once((fn_id::GSP_RM_CONTROL, first, 0))
+        .chain((1..run.len()).map(|i| (fn_id::CONTINUATION_RECORD, first + i as u32, 0)))
+        .collect();
+    assert_eq!(
+        out.replies
+            .iter()
+            .skip(steps_before)
+            .map(|m| (m.function, m.sequence, m.rpc_result))
+            .collect::<Vec<_>>(),
+        want,
+        "★ one reply per fragment, each on its own (function, sequence), all NV_OK",
+    );
+    assert_eq!(
+        out.applied, 4,
+        "three prerequisites and the reassembled control"
+    );
+    assert_eq!(out.held, run.len() as u64 - 1);
+    assert!(out.census.is_empty());
+
+    // And the fact really landed: the same object model the unfragmented script reaches.
+    let mut whole_script = spd_prerequisites();
+    whole_script.set_page_dir(spd::C, spd::DEV, spd::VAS, spd::PDB, 0);
+    assert_eq!(
+        boundaries(&gpu),
+        boundaries(&gpu_from_script(&whole_script))
+    );
+}
+
+/// ★★ **A refused fragmented control fails on its LAST fragment's reply — which is the
+/// one the driver reads the status from.**
+///
+/// After the continuation loop the driver reads `rpc_result` out of `pVgpuRpcHeader`, i.e.
+/// out of the last record it received (`ogkm: rpc.c:2230-2241`). Reassembly completes on
+/// that same last fragment, so the head and every intermediate one ack `NV_OK` and the
+/// real outcome rides the final reply. The two facts line up without either side
+/// arranging it, which is exactly why it is worth pinning: a change to *either* breaks a
+/// guest silently.
+#[test]
+fn a_refused_fragmented_control_carries_its_status_on_the_last_fragment() {
+    // A fragmented control the port does not model: `UnknownControl` — refused by
+    // `translate`, on the reassembled whole, and therefore not before the last fragment.
+    let body = big_control_body(frag::BIG_PARAMS as u32, frag::BIG_PARAMS);
+    let run = w::fragment(fn_id::GSP_RM_CONTROL, 0, &body, frag::SPLIT_AT_PARAMS);
+    assert_eq!(run.len(), 6, "a head and five records with intermediates");
+
+    let mut script = RpcScript::new();
+    for m in &run {
+        let c = command(m);
+        script.raw(c.code, c.payload);
+    }
+    let mut gpu = fresh_gpu();
+    let out = run_through_transport(P580, script.steps(), &mut gpu);
+
+    let statuses: Vec<u32> = out.replies.iter().map(|m| m.rpc_result).collect();
+    let (last, rest) = statuses.split_last().expect("replies");
+    assert!(
+        rest.iter().all(|&s| s == 0),
+        "★ the head and every intermediate fragment ack NV_OK: {statuses:?}",
+    );
+    assert_eq!(
+        *last,
+        BridgeRefusal::UnknownControl {
+            cmd: UNMODELLED_CMD
+        }
+        .rpc_result(),
+        "★ the outcome rides the fragment the driver reads the status off",
+    );
+    assert_ne!(*last, 0);
+    assert_eq!(
+        out.census.of(FaultTag("BridgeRefusal::UnknownControl")),
+        1,
+        "counted ONCE — the fragments are one message, not three",
+    );
+    assert_eq!(out.census.total(), 1);
+    assert_eq!(out.held, run.len() as u64 - 1);
+    assert_eq!(out.applied, 0);
+}
+
+/// ★ Hostile fragment traffic through the **real ring**, interleaved with a valid stream:
+/// the valid stream is unaffected and each refusal is counted by variant.
+///
+/// The §5.3 shape, narrowed to B6's surface: the point is that a continuation refusal is a
+/// property of the *stream* and a ring is what delivers a stream, so the direct-path
+/// results above must survive a transport that batches, wraps and checksums.
+#[test]
+fn hostile_fragment_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
+    let mut script = spd_prerequisites();
+    // A bare continuation, then a head abandoned by a valid message, then the real thing.
+    let body = command(&spd_whole(0)).payload;
+    let run = w::fragment(fn_id::GSP_RM_CONTROL, 0, &body, frag::SPLIT_AT_PARAMS);
+    let head = command(&run[0]);
+    let tail = command(&run[1]);
+
+    script
+        .raw(fn_id::CONTINUATION_RECORD, vec![0xab; 48])
+        .raw(head.code, head.payload.clone())
+        .free(spd::C, 0xdead_0001)
+        .raw(head.code, head.payload.clone())
+        .raw(tail.code, tail.payload.clone());
+
+    let mut gpu = fresh_gpu();
+    let out = run_through_transport(P580, script.steps(), &mut gpu);
+
+    assert_eq!(
+        out.census.tags().collect::<Vec<_>>(),
+        vec![
+            (FaultTag("BridgeRefusal::ContinuationInterleaved"), 1),
+            (FaultTag("BridgeRefusal::ContinuationWithoutHead"), 1),
+            // ★ The `FREE` that interrupted the head is itself refused as the
+            // interrupter — it never reaches the graph — so there is no `FreeUnknown`
+            // here, and its absence is the assertion.
+        ],
+        "★ by exact tag and exact count",
+    );
+    assert_eq!(
+        out.applied, 4,
+        "three prerequisites and the reassembled control"
+    );
+    assert_eq!(out.held, 2, "the abandoned head and the surviving one");
+
+    // The valid stream is untouched: the same object model as the clean script.
+    let mut clean = spd_prerequisites();
+    clean.set_page_dir(spd::C, spd::DEV, spd::VAS, spd::PDB, 0);
+    assert_eq!(
+        boundaries(&gpu),
+        boundaries(&gpu_from_script(&clean)),
+        "★ hostile fragment traffic is inert to the graph",
     );
 }

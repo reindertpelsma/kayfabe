@@ -45,12 +45,21 @@
 //! The crate doc's rule is that the **bridge** mints nothing and remembers nothing, and
 //! that rule is unweakened: [`translate`](crate::translate) is still a free function of
 //! one message, and this module does not wrap it in a cache. What [`GraphPolicy`] holds
-//! is a `&mut Gpu` (which is the graph's state, not the bridge's) and two **bounded,
-//! handle-free** counters. Neither is keyed by an `hClient` or an `hObject`, so neither
-//! can refuse, deduplicate or mis-attribute a legal recycle — which is the property
-//! [`RefusalCensus`]'s own docs pin, and which
+//! is a `&mut Gpu` (which is the graph's state, not the bridge's), three **bounded,
+//! handle-free** counters, and — from B6 — one [`Reassembler`]. None of them is keyed by
+//! an `hClient` or an `hObject`, so none can refuse, deduplicate or mis-attribute a legal
+//! recycle — which is the property [`RefusalCensus`]'s own docs pin, and which
 //! `tests/tests/rmrpc_bridge.rs::a_recycled_hclient_survives_the_whole_transport` drives
 //! from wire bytes through the FSM.
+//!
+//! ★★ **B6 is where that rule was most at risk, so state exactly what the reassembler is
+//! not.** It is *not* a memo, a seen-set or a dedup cache: it holds **one** partial
+//! message, it is looked up by nothing (there is no key — the head is the head), it is
+//! dropped the instant the message completes or refuses, and two identical fragmented
+//! controls sent back to back produce two identical `RmEvent`s with nothing carried
+//! between them. That last property is what keeps the graph's idempotent-retry tolerance
+//! reachable, and `two_identical_fragmented_controls_produce_two_identical_events` is the
+//! canary for it.
 
 use std::collections::BTreeMap;
 
@@ -60,7 +69,7 @@ use kayfabe_core::gpu::Gpu;
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand};
 use kayfabe_trace::{FaultTag, Faulted};
 
-use crate::{BridgeRefusal, Translation, translate};
+use crate::{BridgeRefusal, ReasmLimits, Reassembled, Reassembler, Translation, translate};
 
 /// How many refusals of each kind happened, by [`FaultTag`].
 ///
@@ -120,22 +129,51 @@ pub struct GraphPolicy<'a> {
     abi: &'a DriverAbiTable,
     /// The object model this policy declares facts into.
     gpu: &'a mut Gpu,
+    /// ★ B6. The crate's one piece of state, and the only thing here that is not either
+    /// the graph's or a counter. Bounded two ways and keyed by nothing the guest supplies
+    /// — see [`Reassembler`].
+    reasm: Reassembler,
     census: RefusalCensus,
     applied: u64,
     inert: u64,
+    held: u64,
 }
 
 impl<'a> GraphPolicy<'a> {
     /// A policy that declares into `gpu`, decoding with `abi`.
     #[must_use]
     pub fn new(abi: &'a DriverAbiTable, gpu: &'a mut Gpu) -> GraphPolicy<'a> {
+        GraphPolicy::with_limits(abi, gpu, ReasmLimits::default())
+    }
+
+    /// A policy with explicit continuation bounds — the hostile-length matrix's
+    /// constructor, so the bound's own arms are reachable without building a 64 KiB
+    /// message for every case.
+    #[must_use]
+    pub fn with_limits(
+        abi: &'a DriverAbiTable,
+        gpu: &'a mut Gpu,
+        limits: ReasmLimits,
+    ) -> GraphPolicy<'a> {
         GraphPolicy {
             abi,
             gpu,
+            reasm: Reassembler::with_limits(limits),
             census: RefusalCensus::default(),
             applied: 0,
             inert: 0,
+            held: 0,
         }
+    }
+
+    /// The reassembler, for a caller that wants to see whether a fragmented message is
+    /// still in flight.
+    ///
+    /// ★ Exposed as a **reference**, not as a `&mut`: a test may observe the held state,
+    /// and nothing outside `deliver` may advance it.
+    #[must_use]
+    pub fn reassembler(&self) -> &Reassembler {
+        &self.reasm
     }
 
     /// The refusal census — see [`RefusalCensus`].
@@ -165,6 +203,19 @@ impl<'a> GraphPolicy<'a> {
         self.inert
     }
 
+    /// How many commands were **fragments consumed into reassembly** ([`Translation::Held`]).
+    ///
+    /// ★ A third counter for the same reason there are two: "this fragment was absorbed"
+    /// is a different observation from "this RPC declared a fact" and from "this RPC
+    /// carried none", and a regression that silently dropped every fragment would leave
+    /// `applied` and `inert` untouched. It is also the non-vacuity instrument for the
+    /// reassembly tests — a run that completed a large control while holding nothing
+    /// never fragmented anything.
+    #[must_use]
+    pub fn held(&self) -> u64 {
+        self.held
+    }
+
     /// The object model, for a caller that wants to project it.
     #[must_use]
     pub fn gpu(&self) -> &Gpu {
@@ -182,19 +233,35 @@ impl<'a> GraphPolicy<'a> {
     /// [`BridgeRefusal`], by variant — including [`BridgeRefusal::Graph`], which is the
     /// arm B1 could not construct because nothing in that stage applied.
     pub fn deliver(&mut self, cmd: &RpcCommand) -> Result<Translation, BridgeRefusal> {
-        let outcome = translate(self.abi, cmd).and_then(|t| match t {
-            // ★ The bridge does not pre-empt the graph's MISS/DEFER/FAULT taxonomy — it
-            // resolves nothing and asks nothing — and it must not swallow the answer
-            // either. `Gpu::apply`'s refusal becomes a named `BridgeRefusal` here, which
-            // is what turns it into a non-zero `rpc_result` on the wire. The C's
-            // behaviour is the opposite: it accepted everything and answered `NV_OK`
-            // (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:3326`).
-            Translation::Event(ev) => self.gpu.apply(ev).map(|()| t).map_err(BridgeRefusal::Graph),
-            Translation::Inert => Ok(t),
-        });
+        // ★ B6 — reassembly runs FIRST and decides nothing. It either hands `translate`
+        // the message that arrived, or the message the guest actually meant, or holds a
+        // fragment. Every rule `translate` owns is then applied exactly ONCE, to the
+        // whole — a reassembler that pre-judged fragments would be a second, weaker copy
+        // of the translator running on partial bytes.
+        let outcome = self
+            .reasm
+            .accept(self.abi, cmd)
+            .and_then(|r| match r {
+                Reassembled::Whole => translate(self.abi, cmd),
+                Reassembled::Held => Ok(Translation::Held),
+                Reassembled::Complete(full) => translate(self.abi, &full),
+            })
+            .and_then(|t| match t {
+                // ★ The bridge does not pre-empt the graph's MISS/DEFER/FAULT taxonomy — it
+                // resolves nothing and asks nothing — and it must not swallow the answer
+                // either. `Gpu::apply`'s refusal becomes a named `BridgeRefusal` here, which
+                // is what turns it into a non-zero `rpc_result` on the wire. The C's
+                // behaviour is the opposite: it accepted everything and answered `NV_OK`
+                // (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:3326`).
+                Translation::Event(ev) => {
+                    self.gpu.apply(ev).map(|()| t).map_err(BridgeRefusal::Graph)
+                }
+                Translation::Inert | Translation::Held => Ok(t),
+            });
         match &outcome {
             Ok(Translation::Event(_)) => self.applied = self.applied.saturating_add(1),
             Ok(Translation::Inert) => self.inert = self.inert.saturating_add(1),
+            Ok(Translation::Held) => self.held = self.held.saturating_add(1),
             Err(r) => self.census.record(r),
         }
         outcome
@@ -210,6 +277,8 @@ impl core::fmt::Debug for GraphPolicy<'_> {
             .field("driver", &self.abi.version())
             .field("applied", &self.applied)
             .field("inert", &self.inert)
+            .field("held", &self.held)
+            .field("in_flight", &self.reasm.in_flight())
             .field("census", &self.census)
             .finish_non_exhaustive()
     }
@@ -218,7 +287,7 @@ impl core::fmt::Debug for GraphPolicy<'_> {
 impl CommandPolicy for GraphPolicy<'_> {
     /// Answer one command.
     ///
-    /// **Accepted or inert → `None`**, which the FSM turns into `cmd.ack(0)`: the
+    /// **Accepted, inert or held → `None`**, which the FSM turns into `cmd.ack(0)`: the
     /// `(function, sequence)` pair echoed with `NV_OK` and the request's own body
     /// preserved. That is deliberate rather than an omission — reply **bodies** are the
     /// device data model's job (`mode2_device_data_model.md` class C) and are named
@@ -234,6 +303,18 @@ impl CommandPolicy for GraphPolicy<'_> {
     /// is the one RM answers with `SKIP_COPYOUT`, so the guest does not read the body at
     /// all. `[open]`, with §4.2's: which `NV_STATUS` each refusal deserves needs an
     /// `NV_STATUS` table that does not exist, and B4 revisits both together.
+    ///
+    /// ★★ **The `Held` arm is load-bearing on the wire, not a convenience.** For a
+    /// fragmented `GSP_RM_CONTROL` the driver awaits one reply per fragment — the head at
+    /// `(expectedFunc, firstSequence)`, then each continuation at
+    /// `(CONTINUATION_RECORD, firstSequence + i)` — and reads `rpc_result` from the
+    /// **last** one it received (`ogkm: rpc.c:2156-2241`). So `None` here is the right
+    /// answer for the head and every intermediate fragment (an `NV_OK` ack, echoing that
+    /// fragment's own body and length, which is what the loop's `entryLength` arithmetic
+    /// consumes), and the reassembly completes on the final fragment — the very one whose
+    /// reply the guest will read the status off. The two facts line up without either
+    /// side arranging it, which is worth saying because it means a change to *either*
+    /// breaks a guest silently.
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         match self.deliver(cmd) {
             Ok(_) => None,
