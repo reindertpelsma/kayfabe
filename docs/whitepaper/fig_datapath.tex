@@ -1,8 +1,12 @@
 % ===========================================================================
 % FIGURE — the data path, verified function-by-function against the tree at
-% 6ce8599.  Every box carries the SYMBOL it lives at (not a line number: the
+% b612a91.  Every box carries the SYMBOL it lives at (not a line number: the
 % repository converted its own pins to symbols in 3fd1455 for this reason).
 % The red text is the part that does not exist.
+%
+% ★ At b612a91 the emulated-device band gained the BRIDGE box (kayfabe-rmrpc),
+% and the control-plane box gained the red note that sync_rpc_mappings has no
+% producer on this wire — MAP_MEMORY_DMA is _STUB on every GSP-client part.
 % ===========================================================================
 \begin{tikzpicture}[x=1mm,y=1mm, font=\sffamily\scriptsize]
 \def\tc#1{{\ttfamily\fontsize{5.4}{6}\selectfont #1}}
@@ -11,7 +15,7 @@
 % ------------------------------------------------------------------ lanes --
 \foreach \t/\b/\c/\n in {
    100/88/kfguest/{GUEST\\(unmodified)},
-    84/70/kfemul/{EMULATED GPU\\+ FAKED GSP},
+    86/68/kfemul/{EMULATED GPU\\+ FAKED GSP\\+ THE BRIDGE},
     66/50/kfshell/{L1 — THE\\OS SHELL},
     46/12/kfcore/{L0 — THE\\PURE CORE},
      8/-6/kfport/{ISOLATE\\(unprivileged)},
@@ -32,20 +36,20 @@
 
 % =============================================== EMULATED DEVICE ===========
 \node[box, fill=white, draw=kfcoreln, line width=0.8pt,
-      minimum width=106mm, minimum height=13.4mm] (l2) at (-30,77)
-  {\textbf{\color{kfcoreln}\tc{kayfabe-gsp} — BUILT, 3\,550 L, 8 modules (S0--S5).}\\[1pt]
+      minimum width=106mm, minimum height=15.6mm] (l2) at (-30,77.6)
+  {\textbf{\color{kfcoreln}\tc{kayfabe-gsp} — BUILT, 3\,828 L, 8 modules (S0--S5)}\;$\rightarrow$\;\tc{RpcCommand}\\[1pt]
    \tiny falcon boot FSM (\tc{BootPhase}$\times$\tc{QueueState}, E1--E11) $\cdot$ the \tc{msgq} ring algebra
-   $\cdot$ element framing + checksum $\cdot$ RPC decode/dispatch\\[1.5pt]
-   \tiny \textbf{\color{kfhostln}It has no production caller.}\; Nothing implements \tc{GuestRam} or
-   \tc{Device} outside \tc{tests/}, and \tc{RpcCommand} — the crate's output —\\[-0.5pt]
-   \tiny \textbf{\color{kfhostln}has zero consumers anywhere,} so the
-   \tc{RpcCommand}\,$\rightarrow$\,\tc{RmEvent} bridge does not exist.
-   \textbf{\color{kfhostln}Nothing yet turns real guest bytes into an \tc{RmEvent}.}};
+   $\cdot$ element framing + checksum $\cdot$ RPC decode/dispatch\\[2.5pt]
+   \textbf{\color{kfcoreln}★ \tc{kayfabe-rmrpc} — BUILT, 1\,033 L (B0--B4)}\;$\rightarrow$\;\tc{RmEvent}\\[1pt]
+   \tiny \tc{translate} (stateless free fn) $\cdot$ \tc{GraphPolicy}: translate $\rightarrow$ \tc{Gpu::apply}
+   $\rightarrow$ reply $\cdot$ 15 named refusals + a bounded census\\[1.5pt]
+   \tiny \textbf{\color{kfhostln}No \tc{GuestRam} and no \tc{Device} implementor outside \tc{tests/},
+   so nothing feeds it a byte a guest wrote.}};
 \node[box, fill=white, draw=kfhostln, dashed, minimum width=58mm, minimum height=9mm] (bar) at (52,77)
   {doorbell BAR decode: offset $\rightarrow$ \tc{(GpuId, token)}\\[1pt]
    \tiny only implementor in the tree is the test device\\[-0.5pt]\fl{tests/src/guest.rs \tc{DoorbellDevice}}};
 
-\draw[ar, kfhostln, dashed] (-70,88) -- (-70,84.1)
+\draw[ar, kfhostln, dashed] (-70,88) -- (-70,86.1)
   node[midway, left=0.8mm, align=center, font=\sffamily\tiny, color=kfhostln]{RM ioctls,\\GSP RPC};
 \draw[ar, kfguestln, line width=1pt] (52,88) -- (52,81.6)
   node[midway, right=0.8mm, font=\sffamily\tiny, color=kfguestln]{MMIO store};
@@ -68,13 +72,17 @@
 \draw[ar] (vcpu) -- (dev);
 
 % =============================================== L0 CORE ===================
-\node[coreb, minimum width=76mm, minimum height=13mm] (ctl) at (-45,38)
+\node[coreb, minimum width=76mm, minimum height=16mm] (ctl) at (-45,37.5)
   {\textbf{C}\; the CONTROL plane — \tc{Gpu::apply(RmEvent)}\\[1pt]
    \fl{core/src/gpu.rs \tc{Gpu::apply} $\rightarrow$ \tc{Spine::apply} — snapshot, then rollback on any fault}\\[2pt]
    \tiny \tc{RmGraph::apply} $\rightarrow$ \tc{project()} $\rightarrow$ \tc{refresh} $\rightarrow$ \tc{sync\_rpc\_mappings}
      $\rightarrow$ \tc{AddressTable::bind}\\[-0.5pt]
    \tiny \textbf{forward-populate only} — the table is written from declared protocol facts\\[-0.5pt]
-   \tiny and never reverse-resolved out of guest memory; a lookup miss is a fault};
+   \tiny and never reverse-resolved out of guest memory; a lookup miss is a fault\\[2pt]
+   \tiny \textbf{\color{kfhostln}★ \tc{sync\_rpc\_mappings} HAS NO PRODUCER HERE —
+   \tc{MAP\_MEMORY\_DMA} is \tc{\_STUB}}\\[-0.5pt]
+   \tiny \textbf{\color{kfhostln}on every GSP-client part; the real sources are
+   \tc{fwd}/\tc{mmu} work and unbuilt.}};
 \node[coreb, minimum width=88mm, minimum height=9mm] (route) at (44,40)
   {\textbf{5}\; \tc{route\_doorbell} — token $\rightarrow$ \tc{vChid} $\rightarrow$ \tc{(GpuId,VChid)} $\rightarrow$ \tc{(ProcId,ChanId)}\\[1pt]
    \fl{kayfabe-fwd/src/lib.rs \tc{route\_doorbell}} \;— a pure projection lookup; an unknown token is a loud fault};
@@ -84,7 +92,7 @@
    \fl{kayfabe-fwd \tc{plan\_doorbell} $\rightarrow$ kayfabe-isolate \tc{VerbPlan::gated\_doorbell} — the gate itself}\\[2pt]
    \tiny every VA in the submission's working set must already be published into \emph{this}\\[-0.5pt]
    \tiny \tc{Vas}'s own host address space, or the call refuses \tc{NoVas} having issued zero host operations};
-\node[box, fill=white, draw=kfcoreln, minimum width=76mm, minimum height=11mm] (r5) at (-45,20)
+\node[box, fill=white, draw=kfcoreln, minimum width=76mm, minimum height=11mm] (r5) at (-45,18.5)
   {\textbf{7b}\; \tc{commit\_phase} — \textbf{★ invariant R5}\\[1pt]
    \fl{rt/device.rs \tc{commit\_phase} $\rightarrow$ \tc{kayfabe\_fwd::commit\_doorbell}}\\[2pt]
    \tiny the locks were dropped for step 7, so everything the plan assumed is

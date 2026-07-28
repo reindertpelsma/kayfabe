@@ -26,8 +26,21 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric,
                 shapes.misc,decorations.pathreplacing,patterns,shadows.blur}
+\usepackage{amssymb}
 \usepackage[hidelinks,colorlinks=true,linkcolor=kfblue,urlcolor=kfblue,
             citecolor=kfblue]{hyperref}
+
+% ------------------------------------------------------------ glyph fallback --
+% ★ (U+2605) and ⚠ (U+26A0) exist in NEITHER TeX Gyre Pagella nor TeX Gyre Heros,
+% and xelatex has no automatic font fallback, so every one of them was being
+% DROPPED SILENTLY from the output — the `Missing character:` log lines are the
+% only trace. They are used as emphasis markers throughout, so a dropped one is a
+% lost signal, not a cosmetic defect. ★ maps to amssymb's \bigstar (a real math
+% glyph that inherits size and colour); ⚠ maps into DejaVu Sans, which has it.
+\usepackage{newunicodechar}
+\newfontfamily\glyphfallback{DejaVu Sans}[Scale=MatchLowercase]
+\newunicodechar{★}{\ensuremath{\bigstar}}
+\newunicodechar{⚠}{{\glyphfallback\char"26A0}}
 
 % ------------------------------------------------------------------ palette --
 \definecolor{kfblue}{HTML}{1D4ED8}
