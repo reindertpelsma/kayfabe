@@ -4,10 +4,16 @@
 > with a **written argument** that the caller cannot be restructured to revalidate instead.
 >
 > This file is that written argument, per region. A region with no entry here **must not be
-> registered `LockPath`**. Status: **DRAFT — the GSP-queue entry is the load-bearing one and
-> it is written against the protocol, not against running code, because `kayfabe-gsp` is
-> still a 34-line skeleton.** Every claim is tagged; re-check the tagged-`[inferred]` ones
-> when the GSP crate exists.
+> registered `LockPath`**.
+>
+> ★★ **Status (2026-07-28): SETTLED, and the lock has NO MEMBERS.** This file used to say
+> *"DRAFT — … written against the protocol, not against running code, because `kayfabe-gsp`
+> is still a 34-line skeleton"*. The crate is now built (~3,550 lines, S0–S5, `f2055bf`),
+> and it implements §2.1's shape **literally** — see §2.2a. Both candidate regions are
+> non-members, no `LockPath` registration exists anywhere in `crates/`, and `lock_region`
+> has already left the `Vmm` trait (decision #41). **The mechanism choice therefore governs
+> an empty set**, which is why the uffd-vs-permanent-RO disagreement in §4 is not urgent and
+> should not be settled by guessing — see §4.
 
 ## 0. The rule this rests on, stated as the owner did
 
@@ -92,9 +98,33 @@ Register `LockPath` **only** if the GSP implementation turns up a command where 
 - that later read cannot be hoisted into the first copy (e.g. its extent is genuinely unknown
   until the host verb returns).
 
-**[inferred]** I do not currently believe such a command exists in the boot path, but
+~~**[inferred]** I do not currently believe such a command exists in the boot path, but
 `kayfabe-gsp` is unwritten, so this is a prediction and not a measurement. **The GSP milestone
-owes this file a yes/no.**
+owes this file a yes/no.**~~
+
+### 2.2a ★★ The GSP milestone's answer: **NO** — and it is structural, not incidental
+
+**[measured, 2026-07-28]** The debt in §2.2 is paid. `kayfabe-gsp` was built after this file was
+written (S0–S5, ~3,550 lines, `f2055bf`) and implements §2.1's four steps literally:
+
+- `boot.rs::GspFsm::service_command_queue` — the producer index is read **once**
+  (`read_u32(cmd_write_ptr_off)`); the first copy is bounded by `geom.element_size()`, i.e. the
+  **boot-time geometry**, never by a length inside the element; `peek_len` derives the extent
+  **from the copy**, bounded by `element_size_max`.
+- `boot.rs::GspFsm::read_run` — the second, separately-bounded copy. Its own doc says the extent
+  comes from the first copy's `rpc.length` and is bounded by `queueElementSizeMax` before any of
+  it is read — *"the shape `gl11_region_arguments.md` §2.1 item 4 permits verbatim"*.
+- `element.rs::decode_message` takes `run: &[u8]` — a **private buffer** — and `.to_vec()`s the
+  payload. Guest RAM is never re-read after validation.
+
+★ **The decisive part is that §2.2's overturning shape is *unrepresentable through the port*,
+not merely absent.** The host-verb seam is
+`boot.rs::CommandPolicy::respond(&mut self, cmd: &RpcCommand) -> Option<Reply>`, and it takes
+**no `GuestRam` parameter at all**. It therefore cannot re-read guest memory even if a future
+command wanted to — the third conjunct of §2.2 cannot be satisfied without changing the port's
+signature, which is a visible, reviewable act rather than a silent regression.
+
+⇒ **§2.1 is confirmed against running code.** `LockPath` is not justified for the command queue.
 
 ### 2.3 The half of the row that is *definitionally* not lockable
 
@@ -126,6 +156,9 @@ if §2.1 holds, **the lock has no members at all.**
 ~~The owner's decision (task #48) is **uffd on both architectures** — one mechanism, arm64 kept,
 cost is one sysctl **or** one udev rule (probe both at runtime; refuse loudly only if neither
 works).~~
+*(Citation correction: that decision is **#49**, not #48. Decision #48 in `l1_os_shell.md` §12
+is "M2-c builds against the KVM-direct harness". The mis-citation is part of why this standing
+looked more contested than it was.)*
 
 > ### ★★ CONTRADICTED THE SAME DAY — reported, NOT resolved (2026-07-27, doc audit)
 >
@@ -152,6 +185,31 @@ works).~~
 > **This is an owner decision, not a documentation fix.** ★ Note that §3's conclusion — *"the
 > lock may have no members at all"* — makes it a cheaper call than it looks: if §2.1 survives
 > the GSP build, the mechanism choice governs a capability with no current members.
+>
+> ### ★★ RESOLVED-AS-EMPTY (2026-07-28) — the decision is DEFERRED, not made
+>
+> §2.1 **did** survive the GSP build (§2.2a, measured against the built crate). Combined with
+> §3, the position is now:
+>
+> | | |
+> |---|---|
+> | `LockPath` registrations anywhere in `crates/` | **zero** (`grep -c 'LockPath\|RegionLock\|RegionAccess\|PageClass'` = 0) |
+> | uffd code anywhere | **none** — there is no `uffd_unsafe.rs` in `kayfabe-linux-raw` |
+> | `lock_region`/`unlock_region` on the `Vmm` trait | **removed** (decision #41); only `CoreEvent::LockedRegionFault` survives, and that is *delivery*, not arming |
+> | §2 command queue | **not a member** — §2.2a |
+> | §3 instance blocks | **not a member** — no argument can be written, and GL11 says that means it must not be registered |
+>
+> ⇒ **The mechanism disagreement is real but not live: it governs an empty set.** The correct
+> action is therefore to *decide nothing yet*. Picking uffd or permanent-RO now would be
+> choosing between two implementations of a capability with no members, using measurements
+> (§4's uffd figures vs row B's 55.6 µs/write) that are not comparable and not currently
+> load-bearing.
+>
+> **What must happen instead:** the day a region genuinely needs `LockPath`, its GL11 argument
+> gets written *first*, and the mechanism is chosen against **that member's** access pattern —
+> at which point the arm64 question (`portability_arm64.md` GL13) also has a concrete cost to
+> weigh rather than a hypothetical one. Until then this section is history, not a standing
+> decision, and **nothing should cite §4 as though a mechanism had been chosen.**
 
 ~~That decision stands and should stay,~~ The rest of this section is retained as written; but this file changes its **weight**: if §2.1 survives the
 GSP build and §3 resolves to BAR2, then the region lock is a **capability we keep for a case we

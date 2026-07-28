@@ -41,7 +41,7 @@ still usually backed by a test of the observable contract.
 | 20 | **#14 MRU ring eviction / RING-DARK** (rounds 5/7, `bar1_wpg`) | Global 64-entry MRU lost the PT-writer's ring page under 2-proc BAR1 traffic → PT-write pushes never executed | **IMPOSSIBLE** | Same property as row 5: no MRU/heuristic ring resolution exists; ring identity is forward-populated from channel-alloc facts, unknown = loud fault. |
 | 21 | **Teardown reap-at-root-free hang** (P0, `mode2_14` refactor: eager reap hung the dying ctx's residual polls) | Heavy-table reap at the root free broke CTX2-destroy; C deferred it to the GSP re-handshake | **TESTED** (+ core API added) | Retire (eager, refuses new ops) vs reap (deferred, adapter-declared quiesce) split: `Proc::retire` + **new** `Gpu::reap_retired`. Tested: `wo_teardown_during_active…` (staging), `cb_lifecycle_*` (reap + recycle). |
 | 22 | **#80 GPA free-list / window exhaustion under churn** (`teardown_hardening_done`) | Sequential process create/destroy exhausted the shared GPA window | **was a LIVE CORE GAP → FIXED + TESTED** | ★ Writing `cb_lifecycle_process_churn_never_exhausts_the_window` **exposed the same leak in this core**: `GpaSpace::carve` never recycled and `Gpu::retired` was never reaped → generation ~4 died `WindowExhausted` (A/B-verified). Fixed: `GpaSpace::release` (by-value: releasing a live arena is unrepresentable) + `Gpu::reap_retired`. |
-| 23 | **★ Device teardown→restart lifecycle** (fn-47 idle-release → GSP reboot; #12 cont.12/16/30-32; #13 signature 2; "fresh boot per GPU run", L12) | The whole down/up cycle: context teardown, WPR2 down/up, seqNum-preserving `GSP_INIT_DONE` re-post, `gsp_reloaded` misfire | **split — see below** | Teardown→recreate half: **GAP→TESTED** (`cb_lifecycle_full_teardown_reap_rebuild_identical` + churn). GSP-reboot FSM half: **GAP-MILESTONE — NOT MODELED** (`kayfabe-gsp` is a ~~~31~~ **34**-line skeleton — *counted 2026-07-27; still a skeleton, so the rating is unchanged*). |
+| 23 | **★ Device teardown→restart lifecycle** (fn-47 idle-release → GSP reboot; #12 cont.12/16/30-32; #13 signature 2; "fresh boot per GPU run", L12) | The whole down/up cycle: context teardown, WPR2 down/up, seqNum-preserving `GSP_INIT_DONE` re-post, `gsp_reloaded` misfire | **split — see below** | Teardown→recreate half: **GAP→TESTED** (`cb_lifecycle_full_teardown_reap_rebuild_identical` + churn). GSP-reboot FSM half: **GAP-MILESTONE — NOT MODELED** (~~`kayfabe-gsp` is a ~~31~~ **34**-line skeleton — *counted 2026-07-27; still a skeleton, so the rating is unchanged*~~ → ★ **the crate is now ~3,550 lines, S0–S5 built**; the rating is unchanged but the cause is not the crate — it is S6/S7/S8's hardware dependency plus open item §11-O7a. See §2 below). |
 | 24 | **Golden-ctx silicon boundary** (`mode2_fakeboot_complete`, `mode2_grctx_privilege_wall`) | GR golden context cannot be fabricated; PROMOTE_CTX/GET_CTX_BUFFER_INFO privileged | **TESTED** | Case-1 forward (host kernel-RM builds + self-promotes its OWN ctx) / Case-2 ack-only (never replayed on an unprivileged isolate): `engine_context.rs` suite + `signal_golden_capture` for the capture-completion wait. |
 | 25 | **ABI/OS-layer bug family** (`nvos64_abi_fix`, `abi_struct_truncation`, `writeback_bug_pattern`, `stub_status_offset_bug`, `vmap_stack_dma_bug`, `ioctl_nr_collision_bug`) | Hand-maintained `#[repr(C)]`/ioctl/DMA mistakes in the C's Mode-1 stack | **out-of-core by construction; GAP-MILESTONE for the adapters** | The pure core holds no `#[repr(C)]`, no ioctls, no DMA (grep-gated). The classes re-arise only in `kayfabe-abi` (Axis-A codegen, diffed against the C's hand tables — kills the field-order/truncation class) and the L1 OS layer (decision #16's bounded-memory + trybuild discipline). Tests land with those ports. |
 
@@ -85,8 +85,16 @@ What the C actually fought there was **two separable things**:
 2. **The GSP-reboot FSM** — fn-47 UNLOADING, WPR2 down/up, FWSEC/SEC2-booter
    mailbox latches (`mbox0==0xff` unload detection), the seqNum-preserving
    `GSP_INIT_DONE` re-post, and the C's `gsp_reloaded`-misfire bug class. **This is
-   NOT MODELED**: `kayfabe-gsp` is a placeholder enum. No test here can honestly
-   guard it — a mock of an unwritten FSM tests the mock. It is the named scope of
+   NOT MODELED** — ★ but as of 2026-07-28 **for a different reason than this file
+   used to give.** `kayfabe-gsp` is no longer a placeholder enum: S0–S5 are built
+   (~3,550 lines across 8 modules, `f2055bf`), so "a mock of an unwritten FSM tests
+   the mock" no longer applies to the crate as a whole. What remains unmodelled is
+   specifically the **reboot/resume** half — S6/S7/S8, which are blocked on hardware
+   — plus the newly-opened `mode2_gsp_port_plan.md` §11-O7a: at 580 the resume
+   handoff is reachable only through `_kgspRpcRunCpuSequencer`, i.e. **an RPC we
+   would have to send**, whereas 610 promoted it to a local HAL needing nothing from
+   us. So the rating is unchanged and the exposure is real, but the cause is now a
+   hardware dependency and an open protocol question, not an unwritten crate. It is the named scope of
    migration step 2 (arch §4.5), whose design already mandates the two properties
    the C's bugs demand: the FSM is **resettable in-process** (kills the
    fresh-boot-per-run tax, lesson L12) and its oracle is **trace replay against the

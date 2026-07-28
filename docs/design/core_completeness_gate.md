@@ -233,7 +233,7 @@ plus two named pure-logic milestones whose scope is bounded and oracled":
   latch-until-release commit ordering). This is also the design's self-declared
   **biggest risk** (`execution_plane.md` §4). Oracle: ogkm formats + #13's banked
   traces.
-- **The GSP boot FSM + seqNum transport** (`kayfabe-gsp`, ~~31~~**34**-line skeleton *(counted 2026-07-27)*; matrix
+- **The GSP boot FSM + seqNum transport** (`kayfabe-gsp`, ~~~~31~~**34**-line skeleton *(counted 2026-07-27)*~~ → ★ **BUILT: ~3,550 lines, S0–S5, `f2055bf`**; what remains is reboot/resume S6/S7/S8, hardware-blocked; matrix
   row 23's honestly-open half). Pure state machine, resettable-in-process by design;
   oracle: trace replay of the C emulator's recorded boots (replays the cont.32
   `gsp_reloaded` misfire directly).

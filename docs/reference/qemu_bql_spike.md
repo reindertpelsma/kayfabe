@@ -6,7 +6,13 @@ design had left as instructions rather than facts: does the mechanism §6.3 name
 target, what does dispatching without the BQL actually buy, and what does it break. Measured
 **2026-07-26** on the serialized vast.ai bench (KVM + GA106 / RTX 3060, host driver
 580.159.04), against **QEMU 9.2.0** — the version in `/opt/qemu-src`, pinned by
-`C: scripts/build_qemu.sh:9`.
+`C: scripts/build_qemu.sh:10` *(was cited as `:9`, which is blank — verified 2026-07-28)*.
+
+> ★ **Two standing caveats on this whole file.** (1) It measured **9.2.0**, and the project
+> now declares a **≥ 10.2 floor**, so every number here is a measurement of a version we no
+> longer target — §§4 and 7 carry specific banners. (2) That bench **no longer exists**: the
+> host died at the provider and was replaced (instance 46062615, same GA106). Re-running any
+> of these measurements needs `C: scripts/build_qemu.sh` bumped off 9.2.0 first.
 
 **Why it is a reference and not a design doc.** §6.3 told the L2 adapter to *"verify it exists
 and behaves as expected on the target QEMU version — this is an API-availability check, not an
@@ -69,6 +75,20 @@ A throwaway PCI device with three MMIO handlers, each asserting `bql_locked()`:
 This is the direct observation, not an inference from latency.
 
 ## 4. ★★★ The silent-data-loss hazard — BQL-free dispatch and the reentrancy guard are a PACKAGE DEAL
+
+> ### ★★ SUPERSEDED AT THE TARGET VERSION (2026-07-28) — read this before citing §4
+>
+> **The hazard below is real; the "PACKAGE DEAL" framing is not, at ≥ 10.2.** Upstream's
+> single function `memory_region_enable_lockless_io()` sets `disable_reentrancy_guard`
+> **itself**, so there is **no pairing for us to maintain** and no second step to forget.
+> `l1_os_shell.md` §9.3 has been re-specified accordingly to a three-part gate; of it, only
+> clause (c) is ours — **every trapped region of the device must be marked**, because the
+> guard *state* is per-**device** while the opt-out is per-**MemoryRegion**.
+>
+> This banner exists because this file **out-ranks design docs** by the repo's own rule
+> (*"where this file and a design doc disagree about what the machine does, this file wins"*),
+> so an un-bannered §4 would silently overrule the correction. §4 remains accurate as a
+> description of **9.2.0**, which is what it measured.
 
 The obvious hand-rolled alternative to the backport is to wrap the blocking call in
 `bql_unlock()` / `bql_lock()`. **On latency it looks correct. It is not correct.**
@@ -152,6 +172,25 @@ handler, not of ioeventfd.* An edge-triggered or value-consuming handler behind 
 would be a bug.
 
 ## 7. ★★ The caveat that must travel with §6: ioeventfd frees the vCPU, not the SERVICE
+
+> ### ★ SCOPE CORRECTION (2026-07-28) — the conclusion stands, the mechanism does not
+>
+> The measurement below is of **this spike's own wiring**, where QEMU installed the read
+> handler. In our actual design the fd is **ours** — registered in `kayfabe-shell`'s reactor —
+> so "runs on the main loop with the BQL held" is **not** a general property of ioeventfd and
+> must not be cited as one (`l1_os_shell.md` §10.1 item 2).
+>
+> ★ **The rule §7 exists to justify survives the correction, with a different reason.** Our
+> reactor is not a place one may block either: it pushes `CoreEvent::SourceSignal` and wakes
+> the executor — a hand-off by construction — and the work then lands on the **serialized
+> executor**, where a blocking verb round-trip stalls every other proc's reclamation. So the
+> stall is *relocated once more*, not removed. The hand-off requirement is now justified by
+> **the shared reactor thread and the serialized executor**, not by the BQL.
+>
+> ★★ **There is no "wait for it to reach distros" caveat in this section, and there never
+> was.** `l1_os_shell.md` §10's decision box and commit `c3ec258` both claim to discharge one
+> here; `git log -S'reach distros'` over this file's entire history returns nothing. That
+> citation is phantom and has been struck at the citing site.
 
 **[measured]** The ioeventfd handler runs on the **main loop with the BQL held**
 (`bql_locked()` = 1). ioeventfd removes the *vCPU* from the critical path; it does **not**

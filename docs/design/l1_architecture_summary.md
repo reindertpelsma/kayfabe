@@ -1152,8 +1152,13 @@ shipping configurations (section 7.9).
 Section 2.9 lists it. Three items deserve individual attention as risks rather than as
 missing work.
 
-**The GSP boot and reboot lifecycle is the largest un-modelled behaviour in the project.**
-The crate is a 34-line placeholder enum. The C artifact fought this hard: firmware unload,
+**The GSP *reboot* lifecycle is the largest un-modelled behaviour in the project.**
+★ **Corrected 2026-07-28:** this section used to say *"the crate is a 34-line placeholder
+enum"*. It is not — S0–S5 are built (~3,550 lines, 8 modules, `f2055bf`), so **boot** is
+modelled. The un-modelled part is **reboot/resume** (S6/S7/S8, blocked on hardware), and it
+carries a newly-opened protocol question: at 580 the resume handoff is reachable only via
+`_kgspRpcRunCpuSequencer` — *an RPC we must send* — where 610 made it a local HAL
+(`mode2_gsp_port_plan.md` §11-O7a). The C artifact fought this hard: firmware unload,
 protected-region teardown and re-establishment, security-processor mailbox latches, a
 sequence-number-preserving initialization re-post, and a genuinely nasty
 reload-detection bug. The regression matrix classifies this as its **one honestly-open
