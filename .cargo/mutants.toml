@@ -1,3 +1,20 @@
+# ★★★ THIS FILE WAS NEVER READ UNTIL 2026-07-28. It lived at the workspace root
+# as `mutants.toml`; cargo-mutants reads **`.cargo/mutants.toml`** (see
+# `cargo mutants --help`: "Read configuration from this file instead of
+# .cargo/mutants.toml"). So every exclusion argued below was INERT, and the
+# "~94.9 % excluding scaffolding" figure was a HAND computation, not something
+# the tool ever did.
+#
+# Proven, not inferred: appending a bogus key to the root file changed nothing;
+# appending it here fails with `Error: parse toml from .cargo/mutants.toml`.
+# `cargo mutants --list` targets: 3760 (root file, i.e. no config) -> 2667 (here).
+# Scaffolding mutants listed: 361 -> 0.
+#
+# ⇒ Every mutation number recorded before this date was measured over a
+# population that INCLUDED the instruments. The 2026-07-28 full run
+# (2898 mutants: 2305 caught / 112 missed / 3 timeout / 478 unviable) counted
+# 341 scaffolding mutants in its denominator for the same reason.
+
 # cargo-mutants configuration.
 #
 # ★ WHY THE EXCLUSIONS EXIST — measured, 2026-07-27.
