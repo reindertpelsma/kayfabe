@@ -110,6 +110,57 @@ impl Drop for WatchdogGuard {
     }
 }
 
+/// ★★ **Release the parked verb on EVERY path out of a `thread::scope` body, including a
+/// panicking one** — the defect class `reactor_os.rs`'s `StopOnDrop` closed, in the file
+/// that had twelve instances of it.
+///
+/// Every test here parks a real thread inside a [`VerbHold`] and lets it out with an
+/// explicit `held.release()` placed *after* the assertions that make the test worth
+/// having. `VerbHold` has no `Drop`, so a failing assertion unwinds straight past that
+/// statement and `thread::scope` then joins, forever, a thread nothing will ever wake.
+/// Measured on this box: 3 threads in `futex_do_wait`, 205 s and climbing, and libtest
+/// printed **nothing at all** — not the assertion message, not a failure, because a
+/// captured panic is flushed only when the test ends. The failure that a hang hides is
+/// precisely the cancellation bug this file exists to find.
+///
+/// Armed as the **first statement inside the closure**, so the release path is identical
+/// whether the body returns or panics.
+///
+/// ## ★ Why this `Drop` is R1-safe (`l1_concurrency.md` §3.3)
+///
+/// A `Drop` is a call site, so it owes the same argument as any other. It calls exactly
+/// one thing, [`VerbHold::release`], which takes the hold's own `std::sync::Mutex`, sets
+/// a bool, and does a `notify_all`. That mutex carries **no rank** — it is not a
+/// `kayfabe_rt::lock::RankedMutex` and never enters the `lockwitness` — so it cannot be
+/// the second acquisition R3 forbids, and `release` performs no blocking call and no
+/// syscall door that would call `assert_lock_free`. It also never waits on the woken
+/// thread: it notifies and returns.
+///
+/// The ordering argument for a panic that unwinds while some `MutexGuard` is live: any
+/// such guard is a **later** creation than this one — a `rec.lock()` temporary inside an
+/// assertion's condition, or the `RankedMutex` guard in
+/// `discharging_a_cancel_under_a_ranked_lock_panics_naming_r1` — and Rust drops
+/// temporaries first and locals in reverse declaration order, so every one of them is
+/// released *before* this guard runs. This `Drop` therefore always executes with zero
+/// ranked locks held, which is exactly what R1 asks for.
+///
+/// Releasing on the success path too is deliberate and inert: `RmRecorder::hold` arms a
+/// **one-shot** hold that `MockRmBackend::gate` removes from the recorder's list the
+/// first time a verb matches it, so a hold that has already been consumed can never be
+/// entered again and a second `release` is a flag store nobody reads. That is what makes
+/// the guard correct even for `the_wedge_escape_releases_condemns_and_stages_in_one_act`,
+/// where the hold is by design *never* released on the success path: there the parked
+/// verb has already left through §7.5's abandon by the time the guard runs, and on the
+/// failure path the release is the only thing that lets the abandoned thread be joined.
+#[must_use]
+struct ReleaseOnDrop<'a>(&'a VerbHold);
+
+impl Drop for ReleaseOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}
+
 const GPU: GpuId = GpuId::ZERO;
 const CLIENT: HClient = HClient(0xA0);
 const PDB: Pdb = Pdb(0x3400_0000);
@@ -279,6 +330,7 @@ fn a_cancel_mid_chain_releases_exactly_what_it_had_allocated() {
         let before = frees(&rec, pid);
 
         let out = thread::scope(|sc| {
+            let _release = ReleaseOnDrop(&held);
             let d: &SharedDevice = &device;
             let t = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
             held.wait_until_pending();
@@ -360,6 +412,7 @@ fn the_unwind_of_a_cancelled_chain_is_not_itself_cancelled() {
     let held = hold(&rec, pid, 0, VerbKind::MapGpuVa);
 
     let out = thread::scope(|sc| {
+        let _release = ReleaseOnDrop(&held);
         let d: &SharedDevice = &device;
         let t = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
         held.wait_until_pending();
@@ -415,6 +468,7 @@ fn a_cancel_that_loses_the_race_commits_normally() {
     // A handle armed for a txn that is genuinely in flight…
     let held = hold(&rec, pid, 0, VerbKind::MapGpuVa);
     let (handle, published) = thread::scope(|sc| {
+        let _release = ReleaseOnDrop(&held);
         let d: &SharedDevice = &device;
         let t = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
         held.wait_until_pending();
@@ -474,6 +528,7 @@ fn a_stale_txn_cancel_lands_on_no_later_operation() {
 
     let first = hold(&rec, pid, 0, VerbKind::MapGpuVa);
     let handle = thread::scope(|sc| {
+        let _release = ReleaseOnDrop(&first);
         let d: &SharedDevice = &device;
         let t = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
         first.wait_until_pending();
@@ -490,6 +545,7 @@ fn a_stale_txn_cancel_lands_on_no_later_operation() {
     // A SECOND op is now in flight on the same slot, under a fresh txn.
     let second = hold(&rec, pid, 0, VerbKind::MapGpuVa);
     let out = thread::scope(|sc| {
+        let _release = ReleaseOnDrop(&second);
         let d: &SharedDevice = &device;
         let t = sc.spawn(move || d.publish_backing(GPU, PDB, VA2, 0x1000));
         second.wait_until_pending();
@@ -537,12 +593,18 @@ fn every_checked_out_worker_of_a_dying_proc_is_cancelled() {
 
         let h0 = hold(&rec, pid, 0, VerbKind::MapGpuVa);
         let out = thread::scope(|sc| {
+            let _release0 = ReleaseOnDrop(&h0);
             let d: &SharedDevice = &device;
             let t0 = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
             // Staged: `checkout` hands out the first idle slot, so waiting for slot 0 to
             // be parked before arming slot 1 makes the slot each latch names a FACT.
             h0.wait_until_pending();
             let h1 = hold(&rec, pid, 1, VerbKind::MapGpuVa);
+            // Armed the instant the second latch exists — before the thread that will park
+            // in it is even spawned, so there is no window in which slot 1 could be parked
+            // with no guard covering it. It drops FIRST (reverse declaration order), and
+            // both releases are needed: leaving either thread parked wedges the join.
+            let _release1 = ReleaseOnDrop(&h1);
             let t1 = sc.spawn(move || d.publish_backing(GPU, PDB, VA2, 0x1000));
             h1.wait_until_pending();
             // Both chains have a host memory object outstanding at this instant; name
@@ -630,6 +692,7 @@ fn a_guest_process_killed_mid_ioctl_cancels_and_reclaims_per_object() {
         let held = hold(&rec, pid, 0, VerbKind::MapGpuVa);
 
         let out = thread::scope(|sc| {
+            let _release = ReleaseOnDrop(&held);
             let d: &SharedDevice = &device;
             let t = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
             held.wait_until_pending();
@@ -709,6 +772,7 @@ fn a_cancel_the_host_wait_never_breaks_still_refuses_as_staleness() {
 
         let held = hold(&rec, pid, 0, VerbKind::MapGpuVa);
         let out = thread::scope(|sc| {
+            let _release = ReleaseOnDrop(&held);
             let d: &SharedDevice = &device;
             let t = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
             held.wait_until_pending();
@@ -781,6 +845,22 @@ fn the_wedge_escape_releases_condemns_and_stages_in_one_act() {
 
         let held = hold(&rec, pid, 0, VerbKind::MapGpuVa);
         let out = thread::scope(|sc| {
+            // ★ The one site where the guard is NOT a mechanical copy. This test's whole
+            // point is that the hold is never released — §7.5's abandon, not a release, is
+            // what frees the requester — so a guard here must not become the mechanism.
+            // It does not: `declare_wedged` has already let the parked verb out through
+            // `RmError::Wedged` before the closure ends, and `gate` removed this one-shot
+            // hold from the recorder the moment the verb matched it, so on the success
+            // path this `release` sets a flag on a latch nothing can ever enter again.
+            // `t.join()` above it still proves the abandon, not the release, is what
+            // returned the requester — a broken escape leaves `join` blocked with the
+            // guard not yet dropped, exactly as before.
+            //
+            // On the FAILURE path it is the only escape there is: an assertion that fires
+            // before `declare_wedged` would otherwise leave a thread parked in a latch
+            // whose release statement no longer runs and whose abandon never happens, and
+            // this test has no watchdog of its own beyond `_wd`'s process abort.
+            let _release = ReleaseOnDrop(&held);
             let d: &SharedDevice = &device;
             let t = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
             held.wait_until_pending();
@@ -929,6 +1009,7 @@ fn a_deferred_reap_during_teardown_defers_rather_than_reaping_under_a_live_verb(
 
     let held = hold(&rec, pid, 0, VerbKind::MapGpuVa);
     let out = thread::scope(|sc| {
+        let _release = ReleaseOnDrop(&held);
         let d: &SharedDevice = &device;
         let t = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
         held.wait_until_pending();
@@ -981,9 +1062,16 @@ fn a_deferred_reap_during_teardown_defers_rather_than_reaping_under_a_live_verb(
 #[test]
 #[should_panic(expected = "R1")]
 fn discharging_a_cancel_under_a_ranked_lock_panics_naming_r1() {
+    // Defence in depth behind `ReleaseOnDrop`: this test parks a real thread and was one
+    // of the two in the file with no bound of its own at all.
+    let _wd = watchdog("discharge_under_lock_r1", Duration::from_secs(60));
     let (device, pid, rec) = world(1, LockMode::Sharded);
     let held = hold(&rec, pid, 0, VerbKind::MapGpuVa);
     thread::scope(|sc| {
+        // ★ Declared FIRST, which is what makes the ranked-lock argument work: `guard`
+        // below is a later local, so on any unwind between its acquisition and its `drop`
+        // Rust releases rank 0 first and this guard's `release` then runs lock-free.
+        let _release = ReleaseOnDrop(&held);
         let d: &SharedDevice = &device;
         let t = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
         held.wait_until_pending();
@@ -1008,12 +1096,21 @@ fn discharging_a_cancel_under_a_ranked_lock_panics_naming_r1() {
 }
 
 /// A guard against this file becoming a place where a cancellation bug hides as a hang.
+///
+/// ★ It was itself the worst instance of exactly that: it parks a thread in a `VerbHold`
+/// released only by a statement *after* the `assert!` above it, and it had no watchdog, so
+/// the test whose stated job is bounding this file hung unbounded and silently. The
+/// `t.elapsed()` assertion below cannot help — it is evaluated only on a run that finished.
+/// The bound is now `ReleaseOnDrop` plus a real watchdog; `t.elapsed()` stays as the
+/// tighter *success*-path claim it always was.
 #[test]
 fn cancellation_suite_is_bounded() {
+    let _wd = watchdog("cancellation_suite_is_bounded", Duration::from_secs(60));
     let t = WallInstant::now();
     let (device, pid, rec) = world(1, LockMode::Sharded);
     let held = hold(&rec, pid, 0, VerbKind::MapGpuVa);
     let out = thread::scope(|sc| {
+        let _release = ReleaseOnDrop(&held);
         let d: &SharedDevice = &device;
         let h = sc.spawn(move || d.publish_backing(GPU, PDB, VA, 0x1000));
         held.wait_until_pending();

@@ -31,7 +31,7 @@
 //!    inverted-order deadlock.
 //! 2. **Every guard is dropped before the next lock in a checkpoint** — drains use
 //!    explicit scopes, no `lock()` temporaries spanning further acquisitions.
-//! 3. **No lock is held across `Barrier::wait` or a thread join.**
+//! 3. **No lock is held across [`BreakableBarrier::wait`] or a thread join.**
 //!
 //! ## Bounded termination (the M4b lesson)
 //!
@@ -68,7 +68,7 @@
 use kayfabe_arch::ids::GpuId;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Barrier, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex, PoisonError, RwLock};
 use std::thread;
 use std::time::{Duration, Instant as WallInstant};
 
@@ -580,6 +580,120 @@ fn stress_multi_vcpu_interleaved_ops() {
     );
 }
 
+/// ★★ **A two-party rendezvous that BREAKS when a party dies** — `std::sync::Barrier`
+/// with the one property it lacks, and the reason `per_proc_parallelism_two_procs_no_
+/// shared_lock` no longer hangs when a thread fails an assertion.
+///
+/// `Barrier::wait` has exactly one way out: everybody arrives. It is not poisoned by a
+/// panic the way a `Mutex` is, so a partner that dies before reaching the rendezvous
+/// leaves the survivor parked in `futex_do_wait` with nothing in the system able to wake
+/// it. Measured with an induced failure in thread A: thread B wedged on the mid-work
+/// barrier, the main thread wedged joining it, 0.4 % CPU, and libtest had printed nothing
+/// but `running 1 test` — the assertion that actually failed was invisible, because a
+/// captured panic is flushed only when the test ends. The 60 s watchdog turns that into a
+/// process `abort()`, which is a crash rather than a red test naming a line.
+///
+/// The rendezvous semantics are **unchanged and unweakened**: `wait` still returns only
+/// once all `parties` have arrived, so the "both threads are mid-mutation" claim the test
+/// rests on is exactly as strong as it was. What is added is a second exit — a *broken*
+/// barrier — which panics instead of blocking, so the survivor unwinds, the scope joins,
+/// and the ORIGINAL failure is the one that gets reported.
+struct BreakableBarrier {
+    st: Mutex<BarrierState>,
+    cv: Condvar,
+    parties: usize,
+}
+
+#[derive(Default)]
+struct BarrierState {
+    /// Parties currently parked in this generation.
+    waiting: usize,
+    /// Bumped when a rendezvous completes — the predicate waiters wake on, so a
+    /// party that arrives late for generation *n* cannot be woken by generation *n+1*.
+    generation: u64,
+    /// Set by [`BreakOnPanic`]: some party is unwinding and will never arrive.
+    broken: bool,
+}
+
+impl BreakableBarrier {
+    fn new(parties: usize) -> Self {
+        BreakableBarrier {
+            st: Mutex::new(BarrierState::default()),
+            cv: Condvar::new(),
+            parties,
+        }
+    }
+
+    /// Rendezvous with the other parties.
+    ///
+    /// # Panics
+    /// If the barrier is broken — i.e. another party died rather than arriving. That is
+    /// never the *first* failure of a run, only the consequence of one, so the message
+    /// says so and points at the partner's own panic.
+    ///
+    /// Poison is tolerated rather than re-panicked throughout: a poisoned state mutex
+    /// means a party already panicked while inside `wait`, which is a failure that is
+    /// already being reported, and a second panic here would only bury it.
+    fn wait(&self) {
+        let mut g = self.st.lock().unwrap_or_else(PoisonError::into_inner);
+        let epoch = g.generation;
+        if !g.broken {
+            g.waiting += 1;
+            if g.waiting == self.parties {
+                g.waiting = 0;
+                g.generation = epoch.wrapping_add(1);
+                self.cv.notify_all();
+                return;
+            }
+            while g.generation == epoch && !g.broken {
+                g = self.cv.wait(g).unwrap_or_else(PoisonError::into_inner);
+            }
+        }
+        // Released BEFORE the assert, so a broken barrier does not also poison itself.
+        let arrived = g.generation != epoch;
+        drop(g);
+        assert!(
+            arrived,
+            "the rendezvous was BROKEN: another party unwound instead of arriving. This \
+             is not the original failure — look above for the partner thread's own panic, \
+             which is the one that matters. Reported here rather than blocking forever, \
+             because a `Barrier` a dead partner never reaches has no other exit"
+        );
+    }
+
+    /// Wake every parked party and refuse all future rendezvous.
+    fn break_now(&self) {
+        let mut g = self.st.lock().unwrap_or_else(PoisonError::into_inner);
+        g.broken = true;
+        self.cv.notify_all();
+    }
+}
+
+/// ★ Break the barrier if — and only if — this thread is leaving by unwinding.
+///
+/// Armed as the **first statement** of each party's body, so the break covers every
+/// assertion after it. Conditional on [`thread::panicking`] rather than unconditional
+/// because "broken" is a *terminal* state here: a party that finished its work normally
+/// has not failed anybody, and a barrier that broke itself on a clean exit would refuse a
+/// later rendezvous that is entitled to succeed.
+///
+/// ★ R1 (`l1_concurrency.md` §3.3): this `Drop` calls only [`BreakableBarrier::break_now`],
+/// which takes the barrier's own **unranked** `std::sync::Mutex`, sets a bool and
+/// notifies — no blocking call, no syscall door, no `lockwitness` rank, and it never
+/// waits on the parties it wakes. This test drives `Proc` directly rather than through
+/// `SharedDevice`, so no ranked lock is taken on these threads at all; and any
+/// `MutexGuard` live at a panic point is created *after* this guard and therefore drops
+/// first, so `break_now` always runs lock-free.
+struct BreakOnPanic<'a>(&'a BreakableBarrier);
+
+impl Drop for BreakOnPanic<'_> {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            self.0.break_now();
+        }
+    }
+}
+
 /// ★ The architectural payoff, proven at the type level AND temporally: two threads
 /// mutate DIFFERENT procs **simultaneously with no shared lock** — disjoint `&mut
 /// Proc` borrows out of `Gpu::procs` (the borrow checker is the proof of soundness;
@@ -593,13 +707,17 @@ fn per_proc_parallelism_two_procs_no_shared_lock() {
     );
     const PUBLISHES: u64 = 20_000;
     let (mut gpu, _rec) = stress_gpu(2);
-    let barrier = Barrier::new(2);
+    let barrier = BreakableBarrier::new(2);
 
     let mut procs = gpu.procs.values_mut();
     let pa: &mut Proc = procs.next().expect("proc A");
     let pb: &mut Proc = procs.next().expect("proc B");
 
-    let work = |p: &mut Proc, barrier: &Barrier| {
+    let work = |p: &mut Proc, barrier: &BreakableBarrier| {
+        // ★ FIRST statement, before either `wait` below: a party that unwinds past a
+        // rendezvous it owed the other one must say so, or the survivor blocks forever
+        // in a `Barrier` nothing can wake. See `BreakOnPanic` for the R1 argument.
+        let _brk = BreakOnPanic(barrier);
         let (gpu_t, pdb) = *p.vases.keys().next().expect("compute Vas");
         barrier.wait(); // start together
         let mut published = Vec::with_capacity(PUBLISHES as usize);

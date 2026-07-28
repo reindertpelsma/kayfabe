@@ -19,6 +19,8 @@
 //! runs integration-test **targets** one at a time, so a separate binary is the isolation.
 //! Anything added here that maps memory at this scale carries the same constraint.
 
+use std::time::{Duration, Instant};
+
 use kayfabe_linux_raw::HostPageSize;
 use kayfabe_util::lockwitness;
 use kayfabe_vmm::{BarId, Vmm};
@@ -27,6 +29,23 @@ use kayfabe_vmm_kvm::{BarPlacement, KvmMachine, MachineConfig};
 const GPA_RAM: u64 = 0x1000_0000;
 const GPA_BAR0: u64 = 0x7000_0000;
 const BAR0_LEN: u64 = 0x1_0000;
+
+/// ★ **A backstop on the rendezvous spin — emphatically NOT the rendezvous.**
+///
+/// The edge this test synchronises on is clock-free and stays clock-free:
+/// `accesses_served != 0`. What this bounds is the case where that edge is never reached
+/// *at all* — the reader panicking inside `resolve`, a `require_kvm` skip landing wrong, a
+/// future refactor that stops bumping the counter. With no bound the main thread spins on
+/// a condition that will never change, at 100 % of a core, forever: measured here at 137 s
+/// and still climbing when it was killed, having outlived the `cargo` process that spawned
+/// it. **And libtest printed nothing** — no panic message, no failure, just `running 1
+/// test` and silence, because the reader's panic goes to a captured buffer that is only
+/// flushed when the test *ends*. A hang tells you nothing; a red test tells you something.
+///
+/// It cannot make the test flaky: the loop it guards exits after one memory access on the
+/// reader thread, which is microseconds after that thread starts. A minute is six orders
+/// of magnitude of slack, and exceeding it is a real defect rather than a slow box.
+const RENDEZVOUS_DEADLINE: Duration = Duration::from_secs(60);
 
 fn page() -> HostPageSize {
     HostPageSize::query()
@@ -70,6 +89,9 @@ fn machine() -> KvmMachine {
 /// removal lands — and `window_releases_deferred` is asserted, so a run in which the reader
 /// finished early **fails** instead of passing vacuously about an interleaving it never
 /// reached.
+///
+/// The spin carries a [`RENDEZVOUS_DEADLINE`] **backstop** — not part of the rendezvous
+/// (see its docs for why the distinction matters and why it cannot make this test flaky).
 #[test]
 fn a_window_removed_under_a_live_reader_is_never_munmapped_by_the_reader() {
     kayfabe_linux_raw::require_kvm!(
@@ -94,7 +116,16 @@ fn a_window_removed_under_a_live_reader_is_never_munmapped_by_the_reader() {
             lockwitness::note_released(0);
             r
         });
+        let deadline = Instant::now() + RENDEZVOUS_DEADLINE;
         while m.audit().accesses_served == 0 {
+            assert!(
+                Instant::now() < deadline,
+                "★ the reader never served an access within {RENDEZVOUS_DEADLINE:?} — it \
+                 died before `resolve` handed it the window, or the counter is no longer \
+                 bumped. FAIL here rather than spin forever: the reader thread's own panic \
+                 message is in libtest's capture buffer and is printed only when this test \
+                 ENDS, so a hang here is silent by construction"
+            );
             core::hint::spin_loop();
         }
         m.remove_window(region)

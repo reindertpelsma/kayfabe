@@ -647,6 +647,22 @@ fn executor_signal_for_retired_procs_source_faults_and_mutates_nothing() {
 // Test 8 — the real-threads smoke (T2 shape), both lock modes
 // ---------------------------------------------------------------------------------
 
+/// ★ Tell the executor thread to stop on **every** path out of the scope body, panicking
+/// or not — see the arming site in `threads_smoke_hammers_both_lock_modes_bounded` for the
+/// measurement and the R1 argument.
+///
+/// Storing on the success path too is deliberate and inert: the explicit
+/// `stop.store(true, Ordering::Release)` that carries the happens-before edge for the
+/// executor's final drain stays exactly where it is, and this second store of the same
+/// value changes nothing an observer can distinguish.
+struct StopOnDrop<'a>(&'a AtomicBool);
+
+impl Drop for StopOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
+}
+
 /// Tiny deterministic per-thread RNG (xorshift64*), as in concurrency_stress.rs.
 struct Rng(u64);
 impl Rng {
@@ -698,6 +714,28 @@ fn threads_smoke_hammers_both_lock_modes_bounded() {
         let observed = Mutex::new(0usize);
 
         thread::scope(|s| {
+            // ★★ Armed as the FIRST statement in the scope body, before the executor
+            // thread it stops even exists — the `StopOnDrop` shape from `reactor_os.rs`.
+            //
+            // The executor below has exactly one exit: it spins `drain_one` /
+            // `yield_now` until it sees `stop`. That store lives at the *bottom* of this
+            // closure, after `w.join().expect("worker clean")` — so a worker that fails
+            // any of its in-loop assertions unwinds straight past it and `thread::scope`
+            // then joins an executor that will never be told to stop. Measured with an
+            // induced worker failure: 47 s and climbing at 102 % of a core, and libtest
+            // had printed nothing but `running 1 test`, because a captured panic is
+            // flushed only when the test ends. The 240 s watchdog would eventually
+            // `abort()` — a process crash, not a red test naming the assertion.
+            //
+            // ★ R1 (`l1_concurrency.md` §3.3): this `Drop` performs one relaxed-ordering
+            // `AtomicBool::store`. It is not a blocking call, takes no lock of any rank,
+            // and enters no `assert_lock_free` door, so it is legal under any held rank —
+            // and in fact none is held: this closure's body asserts `held_depth() == 0`
+            // on every worker op, and the main thread here takes no ranked lock at all.
+            // The two `Mutex`es in play (`observed` and the inbox's) are touched only by
+            // other threads or after this guard is created, so any guard live at a panic
+            // point is a later creation and drops first.
+            let _stop = StopOnDrop(&stop);
             // The executor: drains signals concurrently with the hammering. Only
             // Observed effects may occur (nothing retires in the smoke).
             let ex_device = Arc::clone(&device);
