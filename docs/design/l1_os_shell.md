@@ -34,6 +34,38 @@ and the whole-lifecycle reclamation invariant**.
 > That is the `memory_region_clear_global_locking()` failure (§6.3.1) with the arrow pointing
 > inward instead of at QEMU.
 >
+> ### ✅ RESOLUTION PASS, 2026-07-28 — items 2, 3 and part of 4 have been actioned
+>
+> Read the banner below as the audit's *findings*; this note records what has since been done,
+> so nothing here is quietly re-litigated:
+> - **The QEMU backport contradiction (item 3, bullet 1) is CLOSED in favour of CANCELLED.**
+>   §10's decision box (`c3ec258`) is authoritative: **≥ 10.2.0 declared and asserted, no patch
+>   carried, no fork owned.** The five live sites that said otherwise — §6.3's "only because a
+>   backport is carried", §7.9's trap-path row, §10's *"or our patched 9.2.0"*, decision #35 and
+>   decision #48 — are all struck and corrected at their sites. §6.3.1 and §14.6 keep their text
+>   under **superseded banners**, because they are dated measurements and correct as history.
+>   ★ The one genuine residual is not technical: users on a hypervisor stack's pinned QEMU
+>   (Proxmox, cloud) — §10's residual 1.
+> - **The reentrancy-guard "pairing" (item 3, bullet 2) is CLOSED: it is upstream's.** One
+>   function sets both fields. §9.3's three-part gate stands; **only clause (c), coverage, is
+>   ours**, and `l2_qemu_adapter.md` §3.3/§11 already makes it enumerable (one region table, one
+>   constructor, one registration loop, a realize-time self-check over `mr->lockless_io`) —
+>   *because a grep structurally cannot detect an omission.* L2-Q task 2 reworded accordingly.
+> - **The ioeventfd hand-off clause (item 3, bullet 3) is CLOSED the other way: §10.1
+>   OVER-CLAIMED.** L2-Q task 4 and §6.6 item 2 survive **because they are right** — our reactor
+>   is not a place you may block either. What ioeventfd deletes is the **BQL justification**, not
+>   the rule. Corrected at §10.1 item 2 and at §6.3.1's amendment box; **the two rules themselves
+>   are untouched.**
+> - **The trybuild count (item 4) is CLOSED and the row-10 mystery is solved:** 9 files, §4.6
+>   rows 1–9 plus a cache-policy property; **row 10 never existed and is not expressible in
+>   trybuild.** It is now a **CI gate** — gate C's host-pointer half, which was described in the
+>   present tense here since M2-b and had never been implemented. It landed in `ci.yml` on
+>   2026-07-28 and is negative-tested. That makes item 2 below **half-resolved**: the page-size
+>   grep is still absent from CI.
+> - Item 4's *other* counts (capability groups, §7.9 rows, ledger properties, stages, crate
+>   counts, §12 entries, "agnostic") are **not** touched by this pass and remain as the banner
+>   describes them.
+>
 > **2. A CI gate described as landed is not in `ci.yml`.** §5.2 item 4 and §9.3's table both
 > carry the **narrow page-size grep** (*"a bare `4096`/`0x1000`/`>>12` in the raw or rt
 > crates"*), §5.2 in the past tense. `grep -n` over `.github/workflows/ci.yml` finds no such
@@ -672,7 +704,10 @@ about *what crosses the seam*, not about who writes `unsafe`.
 > domain-typed (`HostOffset`), guest addresses are domain-typed (`Gpa`), and **a length is
 > never passed separately from the base it belongs to.**
 
-**What the API must refuse** (each is a `trybuild` row — §4.6 rows 7–10):
+**What the API must refuse** (each is a `trybuild` row — ~~§4.6 rows 7–10~~ ★ **corrected
+2026-07-28, doc audit: §4.6 rows 1, 3, 7, 8, 9 — refusal 1 is row 1, refusal 5 is row 3, and
+refusals 2/3/4 are rows 7/8/9. Row 10 was never a trybuild row and is now a CI gate; see the
+box in §4.6.**):
 
 1. any accessor returning `&[u8]`, `&mut [u8]`, `*const T`, `*mut T` or `NonNull<T>` over a
    region — the direct route;
@@ -713,9 +748,13 @@ later, and the impl must not grow a pointer-shaped internal helper that anything
 `*_unsafe.rs` file can call. A rule whose job is to prevent a future addition needs to be
 written before the addition is tempting, which is why it lands now and not at M2-c.
 
-**How it is tested, and where the honesty is.** The compile-fail half is trybuild rows 7–10.
+**How it is tested, and where the honesty is.** The compile-fail half is trybuild rows
+~~7–10~~ **1, 3, 7, 8, 9** *(corrected 2026-07-28)*.
 The "someone added a new module" half is subsumed by gate C (§4.1.1): a `*mut`/`*const`/
-`NonNull`/`transmute` outside a `*_unsafe.rs` file is already a gate failure, so this costs
+`NonNull`/`transmute` outside a `*_unsafe.rs` file is ~~already~~ a gate failure — ★ **and
+this sentence was written in the present tense while only gate C's `unsafe`-keyword half was
+implemented. The host-pointer half landed 2026-07-28 (`.github/workflows/ci.yml`,
+negative-tested); the sentence is true now and was aspirational before.** So this costs
 nothing new. What neither can see is a *semantically* unbounded bounded object — a region
 whose length field is right but whose backing was mapped shorter. That is a **review
 obligation**, named as one: every new public item in `kayfabe-linux-raw` or in the real `Vmm`
@@ -903,7 +942,40 @@ Each row is a dangerous pattern that must **not compile**:
 | **7** | a `Deref`/`AsRef`/`Borrow`/`Index` impl on any region type | §4.2.1(2) — the sideways route to a borrow, added by a helpful `impl` block |
 | **8** | reading a region's or reservation's base address as an integer (`.base()`, `.addr()`, a public field) | §4.2.1(3) — an integer host address is a pointer with the checks filed off |
 | **9** | `Gpa → HostOffset` or `HostOffset → Gpa` by `From`/`as`/arithmetic | §4.2.1(4) — different address spaces, different consequence of being wrong |
-| **10** | a host CPU address (`*mut u8`/`*const u8`/`NonNull`/`usize`-as-address) in the signature of any item reachable from outside `kayfabe-linux-raw` | §4.2.1's crate-boundary rule, in compile-fail form |
+| ~~**10**~~ | ~~a host CPU address (`*mut u8`/`*const u8`/`NonNull`/`usize`-as-address) in the signature of any item reachable from outside `kayfabe-linux-raw`~~ | ~~§4.2.1's crate-boundary rule, in compile-fail form~~ — ★ **NOT A TRYBUILD ROW. Renumbered into a CI gate, 2026-07-28 (see below).** |
+| **11** | `CachePolicy` has no `Default` — a mapping's cacheability is a required parameter, never inherited | added by `a91f318`; a property §4.6 did not originally have a row for, and it does have a file (`cache_policy_has_no_default.rs`) |
+
+> ### ★★ Row 10 is a CI gate, not a compile-fail row — and it never was one
+>
+> **[measured] 2026-07-28, doc audit.** `crates/kayfabe-linux-raw/tests/ui/` contains **9**
+> files, covering rows **1–9** (rows 1 and 7 share `no_borrow_escape.rs`) plus
+> `cache_policy_has_no_default.rs` — row 11 above. **There has never been a row-10 file.**
+> `git log --name-status` over that directory shows `5eb2ee1` adding 8 and `a91f318` adding the
+> cache-policy file as a *new property*, not as a backfill. Nothing regressed and nothing was
+> deleted; the row was written and never implementable.
+>
+> **★ Why it is not expressible in trybuild, which is the durable point.** Rows 1–9 and 11 each
+> name **one written snippet** that must fail to compile, and that is exactly what trybuild
+> asserts. Row 10 is **universally quantified over the API surface**: *no* item reachable from
+> outside the crate may mention a host CPU address. A compile-fail test cannot express "no such
+> item exists" — you would have to write the snippet you are trying to prove nobody wrote. Rows
+> **1, 7, 8 and 9** are its constructive instances (borrow escape, the sideways `Deref` route,
+> the base-address-as-integer route, the address-space conversion route) and all four are
+> covered.
+>
+> **⇒ Enforced instead by gate C's host-pointer half** (§9.3): no `*mut`/`*const`/`NonNull`/
+> `transmute` in any `.rs` file not named `*_unsafe.rs`. That was the half of §9.3's gate-C row
+> that had never been implemented; it landed in `.github/workflows/ci.yml` on 2026-07-28 and is
+> negative-tested. Two honest limits, stated at the gate itself and repeated here because they
+> are the reason this is a **ratchet against tomorrow rather than a hole being closed**:
+> - it is per-**file**, not per-**visibility** — a `pub fn` returning `*mut u8` from *inside*
+>   `window_unsafe.rs` passes the gate **and** all nine trybuild rows. **[measured]** the
+>   property does hold in today's tree: every pointer occurrence is inside a `*_unsafe.rs` file
+>   and **none is `pub`** — three private struct fields (`window_unsafe.rs:84`,
+>   `mapping_unsafe.rs:170`, `vcpu_unsafe.rs:267`), one private constructor on a private struct
+>   (`mapping_unsafe.rs:184`, `fn adopt`), and locals. Nothing reachable from outside the crate;
+> - `usize`-as-an-address, the fourth shape decision #33 names, is **not lexically detectable at
+>   all**. Row 8 covers its constructive instance; nothing covers it in general.
 
 ### 4.7 What the crate must **not** contain
 
@@ -1295,8 +1367,14 @@ bottom half (that context runs under it). Consequences the doc does not currentl
 - **If no such mechanism is available, the drop-the-lock rule is necessary but not
   sufficient**, and I-NOAMP cannot be met on the trap path at all. That would be an **L2
   blocker, not a tuning item**, and it should be discovered by a deliberate bench measurement
-  early rather than by a wedge under load. **[measured] It is not a blocker — but only because
-  a backport is carried; see §6.3.1.**
+  early rather than by a wedge under load. **[measured] It is not a blocker** — ~~but only
+  because a backport is carried; see §6.3.1.~~ ★ **CORRECTED (2026-07-28, doc audit): the
+  backport was CANCELLED the same evening it was proposed (§10's decision box, `c3ec258`).**
+  It is not a blocker because we **declare a minimum QEMU of ≥ 10.2.0 and assert it at
+  realize**, where `memory_region_enable_lockless_io()` is simply present upstream. **No patch
+  is carried and no fork is owned.** The one residual is not technical: users pinned to a
+  *hypervisor stack's* QEMU (Proxmox ships its own; cloud providers pin) cannot move the axis
+  freely — §10's residual 1, verified against the `v10.2.0` tag in `c0c6806`.
 - **The C never solved this and said so in writing** — `C: src/qemu/virtio_nvgpu.c:16-18`:
   *"Currently we hold the QEMU BQL across dispatch for simplicity and will relax this
   later."* Its Mode-2 doorbell path likewise instrumented wall-vs-thread-CPU time precisely
@@ -1313,7 +1391,24 @@ path may want it), but note that the shipping completion path does not rely on i
 one exception and currently exercise it nowhere" is a much stronger position than "we have one
 exception on the hottest path".
 
-#### 6.3.1 ★★ The measurement (2026-07-26) — the named mechanism does not exist; the remedy is a backport, and it comes with a hazard
+#### 6.3.1 ★★ The measurement (2026-07-26) — the named mechanism does not exist; ~~the remedy is a backport~~, and it comes with a hazard
+
+> ### ⚠️ SUPERSEDED IN ONE RESPECT (2026-07-26 evening, restated 2026-07-28) — **the backport is CANCELLED**
+>
+> Everything below is a **dated measurement and is correct as history**: it is what was run on
+> the bench on 2026-07-26, and the arm labelled *"+ backport"* really was a patched 9.2. **Do
+> not read its remedy paragraph as the current plan.** Later the same day the owner decided
+> (`c3ec258`, §10's decision box) that we **declare a minimum QEMU of ≥ 10.2.0** and assert it
+> at realize, rather than carry a ~4-line patch onto 9.2 — because a backport means owning a
+> patched QEMU fork forever, and QEMU is the one axis of
+> `QEMU × NVIDIA driver × guest kernel × host arch` the user can actually move.
+>
+> So, reading this section today: **"with the backport" = "on a stock ≥ 10.2 build"**; the
+> capability, the 47 %-silent-drop hazard, the package-deal reasoning and the R1/R3/R5
+> promotion all stand exactly as measured. Only the *delivery mechanism* changed. ★ And the
+> pairing described below turned out to be **upstream's own** — one function sets both fields
+> (§10.1 item 1 / table row 2, §9.3's re-specified three-part gate); what remains ours is
+> **coverage**, clause (c).
 
 Full write-up: `../reference/qemu_bql_spike.md`. **The reasoning above is untouched** — the
 ABBA cycle, the unrankable foreign lock, R3's blindness by construction, and the conclusion
@@ -1445,6 +1540,13 @@ an edge-triggered or value-consuming handler behind one would be a bug.
 > on a thread with no lock, no BQL and no core state. **The obligation is discharged
 > structurally rather than by discipline**, which is the form §6.6 prefers. Everything else in
 > this paragraph and in the two boxes below stands unchanged.
+>
+> ★ **NARROWED (2026-07-28, doc audit) — read "the BQL is discharged", not "the rule is."**
+> §10.1 item 2 pushed this sentence one step too far and its correction applies here verbatim:
+> our reactor is not a place you may block either. The loop pushes a `SourceSignal` and wakes
+> the **serialized executor** (law 9 forbids it from draining the inbox itself), so a blocking
+> verb behind the doorbell still stalls every other proc — the same amplification, relocated.
+> **The hand-off rule survives; only its BQL justification is retired.**
 
 > ### ★★ NORMATIVE — the 1.7× is a *nested* number twice over, and our own C says so
 >
@@ -1612,10 +1714,12 @@ Four concrete consequences, three of them already satisfied:
   Under stock QEMU 9.2 the amplification is not theoretical and not small: proc A blocking
   5 ms inside a handler puts **A's exact block duration into B's p99** (5 611 µs) and costs B
   **5.3× throughput** — an unrelated vCPU touching an unrelated page. That is the sharpest
-  I-NOAMP violation in the design, measured. With the lockless-IO backport it **disappears
+  I-NOAMP violation in the design, measured. With lockless IO ~~the lockless-IO backport~~
+  *(★ 2026-07-28: the measured arm was a patched 9.2; the shipping answer is a **stock ≥ 10.2**
+  build — the backport is cancelled, §10's decision box)* it **disappears
   from B's distribution** (p99 146 µs; A's block never appears in B's tail). So the bullet
   above is now a *result*: **"fixed by not holding it" is confirmed, and the fix is a QEMU
-  build requirement rather than a coding discipline** (§10 L2-Q).
+  *version* requirement rather than a coding discipline** (§10 L2-Q).
 
   **★ And the two corrections this measurement forces on how the rest of §6.6 reads.**
 
@@ -2876,7 +2980,7 @@ Stated so we never claim more than we verify:
 | a real 16/64 KiB host page size works | forced runs test our geometry, not the kernel | run the suite on Grace-Hopper / Jetson (§5.3) |
 | memslot/BQL interaction | `MockVmm` has neither | the QEMU adapter at L2, under the nested-virt bench |
 | descriptor exhaustion under a real `RLIMIT` | mock descriptors are integers | arm past the cap on a real host; assert contained refusal |
-| **★★ the trap path holds NO FOREIGN LOCK** (§6.3's class rule — stated backend-independently, because the QEMU answer must never be mistaken for the general one) | `MockVmm` owns no lock we did not construct, and the harness owns its own threads — so *no* mock can distinguish "we hold none" from "this backend imposes none" | measure it the same way on either backend: park a verb on one vCPU and assert another vCPU's unrelated MMIO still completes. **★★ QEMU — MEASURED AHEAD OF L2 (2026-07-26, §6.3.1, `../reference/qemu_bql_spike.md`): stock 9.2 FAILS this row** (B's p99 = A's 5 ms block, 5.3× throughput loss), **and passes with the 10.2.0 `memory_region_enable_lockless_io()` backport** (p99 146 µs, A's block absent from B's tail). The originally named `memory_region_clear_global_locking()` **does not exist** — removed in 5.2.0. So this row is no longer "conditional on an API check"; it is conditional on **carrying the backport, paired with `disable_reentrancy_guard`**, which is a build/deployment requirement (§10 L2-Q). What remains genuinely un-settled is whether *our* device passes it, since the spike measured a throwaway one. **CH — unconditional pass expected:** MMIO dispatch is a synchronous `VmOps` call on the vCPU thread with no VM-wide lock, and with the direct-`BusDeviceSync` registration (§6.3) not even a per-device one. A CH failure here would mean the escape was not taken |
+| **★★ the trap path holds NO FOREIGN LOCK** (§6.3's class rule — stated backend-independently, because the QEMU answer must never be mistaken for the general one) | `MockVmm` owns no lock we did not construct, and the harness owns its own threads — so *no* mock can distinguish "we hold none" from "this backend imposes none" | measure it the same way on either backend: park a verb on one vCPU and assert another vCPU's unrelated MMIO still completes. **★★ QEMU — MEASURED AHEAD OF L2 (2026-07-26, §6.3.1, `../reference/qemu_bql_spike.md`): stock 9.2 FAILS this row** (B's p99 = A's 5 ms block, 5.3× throughput loss), **and passes with the 10.2.0 `memory_region_enable_lockless_io()` backport** (p99 146 µs, A's block absent from B's tail). The originally named `memory_region_clear_global_locking()` **does not exist** — removed in 5.2.0. So this row is no longer "conditional on an API check"; ~~it is conditional on **carrying the backport, paired with `disable_reentrancy_guard`**, which is a build/deployment requirement (§10 L2-Q)~~ — ★ **CORRECTED (2026-07-28, doc audit), stale twice.** (i) The backport was **cancelled** (§10's decision box, `c3ec258`): the row is conditional on the **≥ 10.2.0 floor**, declared and asserted at realize, which is still a build/deployment requirement (§10 L2-Q) but not a patch. (ii) There is **no pairing for us to maintain** — upstream's single `memory_region_enable_lockless_io()` sets `disable_reentrancy_guard` itself (§10.1 item 1 / table row 2). Our clause is **coverage**: every trapped region marked, §9.3 clause (c). The measured arm labelled *"+ backport"* above was a patched 9.2 and is retained as the historical record of what was run; on a stock ≥ 10.2 build it is the same code path. What remains genuinely un-settled is whether *our* device passes it, since the spike measured a throwaway one. **CH — unconditional pass expected:** MMIO dispatch is a synchronous `VmOps` call on the vCPU thread with no VM-wide lock, and with the direct-`BusDeviceSync` registration (§6.3) not even a per-device one. A CH failure here would mean the escape was not taken |
 | **★ the real memslot cost and update rate** (§6.7) | mock `map_guest` is a `BTreeMap` insert | measure `KVM_SET_USER_MEMORY_REGION` latency vs vCPU count, and count updates provoked by a real workload. Tunes the §6.7 constants; the mock-side *frequency* gate already pins the shape |
 | **★ data-carrying BAR1 writes under the BQL** (§6.3.1's named unknown) — the doorbell escapes to ioeventfd, but BAR1 aperture writes **carry their payload in the written value** (incl. the guest's `GP_PUT` store, `C: nvkvm_gpu_emul.c:4407`), so they cannot, and stay on the vCPU thread inside a trap. **[inferred]** their handlers are fast (a GMMU walk) so they are *probably* fine — un-measured, and "probably fine" is the shape of claim §0.2 refuses | `MockVmm` has no vCPU, no trap and no BQL; and the spike's handler was a trivial read, so it bounds the *dispatch* cost and says nothing about the handler's | the §6.3.1 A/B harness again, with **B's handler doing page-walk-sized work** and driven at **BAR1 write rates taken from a real Mode-2 workload**; report B's p99 with A blocking, both arms. Settles whether lockless-IO dispatch alone is sufficient for BAR1, or whether the aperture also needs a fast path |
 | the guest driver really frees its client root on process death | the mock guest is a script | a real guest process killed mid-op; assert full reclamation |
@@ -2963,12 +3067,12 @@ Plus the `HostLedger` itself (§7.8) and `MockIsolate::request_cancel`.
 |---|---|---|
 | lint inheritance | push | a crate other than `kayfabe-linux-raw` drops `[lints] workspace = true` |
 | `unsafe` containment | push | `unsafe` appears outside the raw crate |
-| **`unsafe` file naming (gate C, §4.1.1)** | push | `unsafe` appears in a file not named `*_unsafe.rs` — or a host pointer type (`*mut`/`*const`/`NonNull`/`transmute`) appears outside one |
+| **`unsafe` file naming (gate C, §4.1.1)** | push | `unsafe` appears in a file not named `*_unsafe.rs` — or a host pointer type (`*mut`/`*const`/`NonNull`/`transmute`) appears outside one. ★ **BOTH HALVES NOW IMPLEMENTED (2026-07-28).** Until then only the `unsafe`-keyword half existed in `.github/workflows/ci.yml`; the pointer half was described here and in §4.2.1 in the present tense and was **not** in CI — the same "a gate described as landed is not in `ci.yml`" pattern the audit banner opens with. The second half is step *"Host-pointer gate"*, negative-tested (violation ⇒ red, removal ⇒ green), and `scripts/ci_gates.sh` picks it up automatically because it **extracts** the `stable` job's steps rather than duplicating them. It is the enforcement of §4.6's ex-row 10; read that box for its two honest limits (per-**file** not per-**visibility**; `usize`-as-address is not lexically detectable) |
 | `unsafe` ratchet | push | the block count (**per `*_unsafe.rs` file**) exceeds the committed number |
 | **memslot frequency (§6.7)** | push | the mean run's slot-install count grows with publications rather than with arena grants — a per-object memslot, caught structurally and without a clock |
 | **★ VMM vocabulary (§6.0, decision #39)** | push | hypervisor **API** vocabulary (`BQL_LOCK_GUARD`, `memory_region_*`, `qdev_*`, `QEMUBH`, "bottom half", "main loop", …) appears in the 11 pure crates **or `kayfabe-rt`**. Matches identifiers, never the vendor's name, so adapter-crate names never trip it and no allowlist exists |
 | **single VMM-global-lock acquisition site (§6.3)** | push (L2) | the adapter contains more than one acquisition site for **the foreign lock of its backend** — QEMU: `bql_lock`/`qemu_mutex_lock_iothread`/`BQL_LOCK_GUARD`; CH: any `Mutex<Device>`-shaped registration that reintroduces the per-device lock the direct-`BusDeviceSync` escape removes — or that site does not `assert_lock_free`. **Zero sites is a pass**, and is the expected CH result |
-| **★★ lockless-IO, RE-SPECIFIED (§6.3.1, §10.1 item 1)** | push (L2) | ~~a region is marked lockless without `disable_reentrancy_guard` on the same device~~ — **upstream's `memory_region_enable_lockless_io()` sets BOTH in one function** (`system/memory.c:2567-2580`), so there is no pairing left for us to maintain and a second write to either symbol is a divergence. The gate is now three-part: (a) **exactly one** call site for `memory_region_enable_lockless_io`, in one adapter helper; (b) **zero** occurrences of `disable_reentrancy_guard`, `bql_unlock`, or any hand-rolled unlock/lock around a dispatch, tree-wide — that construction is the only way left to reproduce the measured **47 % of a vCPU's MMIO reads silently returning `MEMTX_ACCESS_ERROR`**; (c) ★ **every trapped region of the device is marked, not just the hot one** — the guard *state* is per-**device** but the opt-out is per-**MemoryRegion** (`include/system/memory.h:869`), so an unmarked region keeps both hazards while passing any per-device check |
+| **★★ lockless-IO, RE-SPECIFIED (§6.3.1, §10.1 item 1 — *which is table row 2; the numbered prose list and the five-facility table use different indices, and both names point at the same re-specification. Disambiguated 2026-07-28, doc audit*)** | push (L2) | ~~a region is marked lockless without `disable_reentrancy_guard` on the same device~~ — **upstream's `memory_region_enable_lockless_io()` sets BOTH in one function** (`system/memory.c:2567-2580`), so there is no pairing left for us to maintain and a second write to either symbol is a divergence. The gate is now three-part: (a) **exactly one** call site for `memory_region_enable_lockless_io`, in one adapter helper; (b) **zero** occurrences of `disable_reentrancy_guard`, `bql_unlock`, or any hand-rolled unlock/lock around a dispatch, tree-wide — that construction is the only way left to reproduce the measured **47 % of a vCPU's MMIO reads silently returning `MEMTX_ACCESS_ERROR`**; (c) ★ **every trapped region of the device is marked, not just the hot one** — the guard *state* is per-**device** but the opt-out is per-**MemoryRegion** (`include/system/memory.h:869`), so an unmarked region keeps both hazards while passing any per-device check |
 | **★ QEMU version assertion (§6.3.1, §10.1)** | realize (runtime), and a build check in CI | ~~the QEMU we are linked into does not provide `memory_region_enable_lockless_io` (stock < 10.2.0 without our backport)~~ — **the backport is cancelled (§10's decision box); this is a version assertion.** Fails when the QEMU we are built into is **< 10.2.0**, i.e. lacks `memory_region_enable_lockless_io`. **Refuse loudly at realize**, the §4.4.1 / GL9 pattern — a deployment fact no type and no grep can observe. Silent fallback to BQL dispatch is forbidden: it is not a slow mode, it is an I-NOAMP violation that presents as an unrelated latency bug |
 | **★ migration/CPR refused (§10.1 item 3)** | realize (runtime) | `migrate_add_blocker()` is not called at device realize. Migration and `cpr-transfer` are lifecycle events §7.6's eight triggers do not cover and that we cannot implement — CPR execs a **new QEMU binary**, discarding the `mm` our reservation, uffd and isolate parenthood live in. **[inferred]** without the blocker it fails *silently* (our `RAM_PREALLOC` window is simply not preserved), which is the worse mode |
 | narrow page-size grep | push | a bare `4096`/`0x1000`/`>>12` in the raw or rt crates |
@@ -3026,8 +3130,14 @@ readiness/timer/exit-descriptor wrappers, the KVM ioctls for the harness backend
 `assert_lock_free` at every syscall entry, the `trybuild` matrix, and the **`*_unsafe.rs`
 file layering** (§4.1.1) from the first commit — retrofitting a file split is a rename storm
 across every `// SAFETY:` review.
-**Gate:** trybuild green (**all ten rows** — §4.6), geometry green at 4/16/64 KiB, `unsafe`
-gates A/B/**C** green, aarch64 cross-check green, existing tests untouched.
+**Gate:** trybuild green — ~~**all ten rows**~~ ★ **all NINE rows (§4.6 rows 1–9), plus the
+`cache_policy_has_no_default` property** *(corrected 2026-07-28, doc audit: **9** files exist
+in `crates/kayfabe-linux-raw/tests/ui/`, rows 1 and 7 sharing `no_borrow_escape.rs`; the
+cache-policy file is an **11th property**, added by `a91f318` as new work, not as a backfill.
+**Row 10 has never existed and cannot** — see §4.6, where it is now a CI gate. §14.5's contact
+log said "8 trybuild rows", which was right on the day and is one file short today.)*,
+geometry green at 4/16/64 KiB, `unsafe` gates A/B/**C — both halves** green, aarch64
+cross-check green, existing tests untouched.
 
 **M2-c — the real `Vmm` + the in-lock-syscall reckoning.** The shared `DeferQueue`; the
 per-method in-lock classification asserted; the memory plane built **in the
@@ -3134,8 +3244,23 @@ paths arrive with the BQL **held**, so "we take no foreign lock" is not sufficie
 >
 > **[measured] 2026-07-26:** `qemu-system-x86_64 --version` on this workstation reports
 > **10.2.1 (Debian `1:10.2.1+ds-1ubuntu3`)** — i.e. 10.2 has **already reached distro
-> packaging**. The "wait for it to reach distros" caveat in `qemu_bql_spike.md` §7 is
-> discharged: this is not a bet on a future release.
+> packaging**. ~~The "wait for it to reach distros" caveat in `qemu_bql_spike.md` §7 is
+> discharged:~~ **this is not a bet on a future release.**
+>
+> > ★★ **PHANTOM CITATION, STRUCK (2026-07-28, doc audit). That caveat does not exist and
+> > never did.** `qemu_bql_spike.md` §7 is *"The caveat that must travel with §6: ioeventfd
+> > frees the vCPU, not the SERVICE"* — a different subject entirely. `grep -i distro` over
+> > that file finds nothing, and `git log -S'reach distros'` over its whole history returns
+> > nothing. The same sentence appears in commit `c3ec258`'s message, so the error is in the
+> > decision's own provenance, not only in this box. (`qemu_bql_spike.md` already carries a
+> > banner recording this; it is not re-edited here.)
+> >
+> > **What the measurement actually discharges** is the objection the decision had to answer on
+> > its own terms — *"is ≥ 10.2 a floor a user can meet today, or a bet on a future release?"* —
+> > which is raised by the **decision**, not by the spike. It is a real objection and the
+> > `10.2.1` reading is a real answer to it. Only the attribution was invented. ★ The lesson is
+> > §6.3.1's, turned inward one more time: **citing a section of your own repo is still making a
+> > claim, and it decays the same way a QEMU symbol does.**
 >
 > **[src] The API was verified against the `v10.2.0` tag itself, not inherited** — because the
 > whole point of §6.3.1 is that a named API is a claim about a version, and this decision now
@@ -3143,7 +3268,11 @@ paths arrive with the BQL **held**, so "we take no foreign lock" is not sufficie
 > - `void memory_region_enable_lockless_io(MemoryRegion *mr);` — `include/system/memory.h:2354`
 > - `bool lockless_io;` — `:836`
 > - `bool disable_reentrancy_guard;` — `:869`, a field on the **same** struct, so §9.3's
->   "one helper does both" pairing gate is the natural shape rather than a bolted-on one.
+>   ~~"one helper does both" pairing gate is the natural shape rather than a bolted-on one~~
+>   *(★ corrected 2026-07-28: **upstream's one function already does both**, so there is no
+>   pairing for us to maintain at all — §9.3's row is a three-part gate and only clause (c),
+>   per-MemoryRegion **coverage**, is ours. The per-**device** guard state vs the
+>   per-**MemoryRegion** opt-out is exactly what makes coverage the live obligation)*.
 >
 > **★ Upstream states our own conclusion, independently.** The doc comment reads: *"Enable
 > BQL-free access for devices that are **well prepared to handle locking during I/O
@@ -3187,10 +3316,26 @@ paths arrive with the BQL **held**, so "we take no foreign lock" is not sufficie
    `../reference/qemu_102_facilities.md`.** Eighteen facilities verified against the `v10.2.0`
    tag; three "take upstream's" that delete design, two reverse findings, and one hazard that
    changes what the adapter's `gpa_read`/`gpa_write` may be built out of.
-2. **Pair it with the reentrancy guard, in one helper.** §9.3's pairing gate. Splitting the two
-   measured **47 % of a vCPU's MMIO reads silently returning `MEMTX_ACCESS_ERROR`** — a
-   correctness failure, not a performance one — and this is the item most likely to be
-   "simplified" by someone who reads only the latency result.
+2. ~~**Pair it with the reentrancy guard, in one helper.** §9.3's pairing gate.~~
+   ★ **RE-SPECIFIED (2026-07-28, doc audit — there is no pairing left to owe).** Upstream's
+   single `memory_region_enable_lockless_io()` sets `disable_reentrancy_guard` itself
+   (§10.1 item 1 / table row 2), so the task is **§9.3's three-part gate**, and only clause (c)
+   is ours: (a) **exactly one** call site for `memory_region_enable_lockless_io`, in one adapter
+   helper; (b) **zero** occurrences of `disable_reentrancy_guard`, `bql_unlock` or any
+   hand-rolled unlock/lock around a dispatch, tree-wide; (c) ★ **every trapped region of the
+   device is marked, not just the hot one** — the guard *state* is per-**device**, the opt-out
+   is per-**MemoryRegion**. (a) and (b) are greps over what upstream already did for us;
+   **(c) is the real work, and it is coverage, not a pairing.**
+   ★ **And it is already made enumerable by a landed design** — `l2_qemu_adapter.md` §3.3/§11:
+   one region table (`nvkvm_regions[]`), one constructor (`nvkvm_region_init_io`), one
+   registration loop (`nvkvm_bars_realize`), and a **realize-time self-check** over
+   `mr->lockless_io`, negative-tested by adding a row that bypasses the constructor. Read that
+   rather than re-deriving it here; the reason it is structural rather than a grep is that
+   **a missed region is an omission, and an omission has no token to match.**
+   The stakes are unchanged: splitting (a) from (b) measured **47 % of a vCPU's MMIO reads
+   silently returning `MEMTX_ACCESS_ERROR`** — a correctness failure, not a performance one —
+   and this is still the item most likely to be "simplified" by someone who reads only the
+   latency result.
 3. **Re-audit R1/R3/R5 on every path reachable from a lockless-IO region**, because the guard
    that was implicitly serialising our device is now gone and those three rules are what
    replace it (§6.3.1's second normative box). This is new work that the pre-measurement plan
@@ -3208,7 +3353,9 @@ downstream of that answer, and some of it is *shaped* by it.
 
 > **★★ And a DEPLOYMENT/BUILD requirement is now on the ledger, in the same class as
 > `/dev/userfaultfd`'s udev rule (§6.8.1 item 4).** Correct operation requires a QEMU that has
-> lockless MMIO IO: **≥ 10.2.0, or our patched 9.2.0**. Like the udev rule, it is a fact about
+> lockless MMIO IO: **≥ 10.2.0** ~~, or our patched 9.2.0~~ *(★ corrected 2026-07-28, doc
+> audit — the last surviving live "or patched 9.2" in this document; the backport is cancelled
+> per the decision box above, `c3ec258`)*. Like the udev rule, it is a fact about
 > the deployment that no type and no CI grep can observe, so it is answered the same way — a
 > **probe at realize and a loud refusal** (§9.3), never a silent fallback. Unlike the udev rule
 > it fails *quietly* rather than closed: without it we still run, just with every vCPU serialised
@@ -3217,8 +3364,13 @@ downstream of that answer, and some of it is *shaped* by it.
 
 **Gate:** ~~the backport carried as a tracked patch~~ **the ≥ 10.2 floor declared and asserted at
 realize** (the backport is cancelled — decision box above), with the acceptance measurement re-run
-against our device on a **stock** ≥ 10.2 build and recorded (both arms); the pairing gate
-(**as re-specified in §10.1 item 2**) and the realize-time version assertion both
+against our device on a **stock** ≥ 10.2 build and recorded (both arms); ~~the pairing gate~~
+**§9.3's three-part lockless-IO gate — and specifically clause (c), COVERAGE, which is the only
+clause that is ours** *(corrected 2026-07-28: (a) and (b) are greps over what upstream's one
+function already does)*
+(**as re-specified in §10.1 — numbered prose item 1, which is table row 2**; *the two indices
+were cited inconsistently here and in §9.3, off by one. Disambiguated 2026-07-28, doc audit*)
+and the realize-time version assertion both
 negative-tested; the R1/R3/R5 re-audit written down as an artifact, not asserted; the
 `rt_shell`/`l1_mean` suites green against the QEMU `Vmm` in both lock modes; the memslot
 frequency gate holding on a real KVM; §7.9's QEMU-conditional rows converted from "expected" to
@@ -3264,11 +3416,31 @@ measured path is not the path a QEMU adapter takes.
    hands the descriptor to KVM and never reads it. Register that descriptor in **our own reactor**
    as one more counter-shaped `CompletionSource` (§3.4) and the doorbell frees the vCPU *and* the
    service, on a thread with no lock, no BQL and no core state. **That discharges the I-NOAMP
-   obligation structurally instead of by discipline**, and deletes L2-Q task 4's "the handler must
-   hand off, never block" clause along with §6.6 item 2's compensating rule. Everything else in
+   obligation structurally instead of by discipline**, ~~and deletes L2-Q task 4's "the handler must
+   hand off, never block" clause along with §6.6 item 2's compensating rule~~ *(struck — see the
+   box that closes this item)*. Everything else in
    §6.3.1's ioeventfd paragraph — no-datamatch, idempotent level-triggered coalescing, *"quote the
    availability result, not the speedup"*, and the **open** decision about importing the C's
    O(live channels) `GP_PUT` scan — survives unchanged.
+
+   > ★★ **OVER-CLAIM, CORRECTED (2026-07-28, doc audit). The premise is right; the conclusion
+   > does not follow.** QEMU really does install no read handler and the descriptor really is
+   > ours — that part stands, and it is what makes the *BQL* disappear. But **our reactor is
+   > not a place you may block either.** `crates/kayfabe-shell/src/reactor.rs` resolves a ready
+   > token, drains it, pushes `CoreEvent::SourceSignal` and wakes the executor — a **hand-off by
+   > construction** — and §3.7's law 9 forbids the loop thread from draining the inbox at all,
+   > because draining runs `dispatch`/`Device::event`, which is core state. So the work lands on
+   > the **serialized executor**, where a blocking verb round-trip stalls every other proc's
+   > reclamation: **the same I-NOAMP amplification, relocated once more** — off the vCPU, off the
+   > main loop, onto the executor.
+   >
+   > ⇒ What this actually deletes is the **BQL justification** for the rule, not the rule. The
+   > hand-off clause **stands**, now justified by *the shared reactor thread and the serialized
+   > executor* rather than by the BQL. **L2-Q task 4 and §6.6 item 2 are correct as written and
+   > are left untouched**; only §6.6 item 2's stated *reason* ("its handler runs on the main
+   > loop under the BQL") narrows to "its handler runs on a thread shared with every other
+   > source, and hands off to a queue shared with every other proc".
+
 3. **`migrate_add_blocker()` closes a gap §7.6 has not opened.** §7.6 enumerates eight teardown
    triggers; **migration is not one of them, and neither is CPR** (`cpr-transfer`), which in ≥ 10.x
    is wired into RAM allocation itself (`system/physmem.c:2504-2536`) and execs a *new QEMU binary*
@@ -3445,7 +3617,8 @@ when L1 is."* They are being written now. So the review is part of M2-f's gate.
     Verify against §6.7's three-part justification test, and verify the two-tier split (a
     publication takes the fine tier only).
 12. **★ No host CPU address crosses a crate boundary (§4.2.1).** Verify the five refusals by
-    type where types can carry them (trybuild rows 7–10) and by review where they cannot.
+    type where types can carry them (trybuild rows ~~7–10~~ **1, 3, 7, 8, 9** — *corrected
+    2026-07-28; row 10 is a CI gate, §4.6*) and by review where they cannot.
     Note explicitly that `forbid(unsafe_code)` is **not** evidence here: pointer minting and
     pointer arithmetic are safe operations, so the audit must look at what the boundary
     *hands out*, not at where `unsafe` is written.
@@ -3564,7 +3737,16 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     already covers it) while out-of-range in a *host* address space is a VM escape, and
     because `forbid(unsafe_code)` does not help: minting and offsetting a pointer are safe
     operations, so the boundary that hands one out has already lost. Five refusals, four of
-    them compile-fail (trybuild 7–10), the fifth a named review obligation. **Includes the
+    them compile-fail (trybuild ~~7–10~~ **1, 3, 7, 8, 9** — *corrected 2026-07-28; row 10 was
+    never a trybuild row and is now a CI gate, §4.6*), the fifth a named review obligation.
+    ⚠ **UNRESOLVED, flagged not fixed (2026-07-28, doc audit): the "four / the fifth" split does
+    not survive the corrected mapping.** All **five** of §4.2.1's refusals have a trybuild row
+    (1→row 1, 2→row 7, 3→row 8, 4→row 9, 5→row 3). The thing that is genuinely a review
+    obligation is §4.2.1's *sixth* item — a **semantically** unbounded bounded object, whose
+    length field is right but whose backing was mapped shorter — which is not one of the five.
+    Either this sentence should read "five refusals, all five compile-fail, plus a sixth review
+    obligation", or §4.2.1's list is meant to be read differently. **An owner call, not an
+    editorial one.** **Includes the
     exemption that `host_va` from `map_gpu_va` is a host *GPU* VA, not a host pointer.**
 34. **★ `unsafe` lives only in files named `*_unsafe.rs` (§4.1.1)** — containment to a crate
     makes the audit finite; containment to named files makes it enumerable by `ls` and visible
@@ -3588,9 +3770,17 @@ and the DoS surface gains descriptor exhaustion, which is contained by the cap a
     A's block verbatim in B's p99). The C recorded this as an unpaid debt
     (`C: virtio_nvgpu.c:16-18`). ★ **The mechanism named here was `memory_region_clear_global_locking`,
     "verified at L2"; the verification ran early and it DOES NOT EXIST (removed 5.2.0). The
-    remedy is the 10.2.0 `memory_region_enable_lockless_io()` backport, and it is a PACKAGE
-    DEAL with `disable_reentrancy_guard` — see §6.3.1, which also promotes R1/R3/R5 to
+    remedy is** ~~the 10.2.0 `memory_region_enable_lockless_io()` backport, and it is a PACKAGE
+    DEAL with `disable_reentrancy_guard`~~ **— see §6.3.1, which also promotes R1/R3/R5 to
     correctness requirements on those paths.**
+    ★ **CORRECTED (2026-07-28, doc audit) — the struck clause was stale twice.** (i) The
+    remedy is a **declared minimum QEMU of ≥ 10.2.0**, asserted at realize; the backport was
+    **cancelled** hours after it was proposed (§10's decision box, `c3ec258`) because a patch
+    means owning a QEMU fork forever. (ii) It is **not a package deal we assemble**: upstream's
+    single `memory_region_enable_lockless_io()` sets `lockless_io` **and**
+    `disable_reentrancy_guard` in one function body (§10.1 item 1 / table row 2). Our half is
+    **coverage** — every trapped region of the device marked, §9.3 clause (c) — which is real
+    work but is not a pairing. The R1/R3/R5 promotion is unaffected and stands.
 36. **★ Guest-requested memory ops run on the calling thread with the lock dropped; there is
     no memory-plane thread and no memory-plane queue (§6.6)** — the caller blocking is
     self-limiting backpressure aimed at exactly the process that caused it; a thread plus a
@@ -3709,7 +3899,9 @@ here so the ledger stays the one place that enumerates every decision.
     half the decision: the BQL question is settled against the target QEMU version **first**,
     or "we will do QEMU later" becomes "QEMU is a surprise" — the exact
     shape of the C's unpaid debt (`C: virtio_nvgpu.c:16-18`). ★ **Discharged early (§6.3.1):
-    the named API did not exist, the answer is a backport, and the condition paid for itself —
+    the named API did not exist, the answer is** ~~a backport~~ **a declared minimum QEMU of
+    ≥ 10.2.0** *(★ corrected 2026-07-28, doc audit: the backport was cancelled the same day —
+    §10's decision box, `c3ec258`)*, **and the condition paid for itself —
     had this waited for L2 it would have been discovered as an adapter surprise, which is the
     thing the clause was written to prevent.** Honest cost: a harness proves our
     *logic*, not our *integration*; it **moves** the mock-versus-real gap (§7.9) rather than
@@ -3999,7 +4191,7 @@ Where a directive *contradicted* existing text, the contradiction is recorded in
 
 | # | Directive | Landed in | Ledger |
 |---|---|---|---|
-| A1 | The `Vmm`/raw seam exposes **bounded objects, never raw pointers** — because guest-address out-of-range is a fault while host-address out-of-range is a VM escape, and because holding a raw pointer is unsafe *even in safe code* | §4.2.1, §4.6 rows 7–10, §11 item 12 | #33 |
+| A1 | The `Vmm`/raw seam exposes **bounded objects, never raw pointers** — because guest-address out-of-range is a fault while host-address out-of-range is a VM escape, and because holding a raw pointer is unsafe *even in safe code* | §4.2.1, §4.6 rows ~~7–10~~ **1, 3, 7, 8, 9** + gate C's host-pointer half *(corrected 2026-07-28)*, §11 item 12 | #33 |
 | A2 | The **BQL contract**: nothing beneath one of our locks may take the BQL; R3 cannot see it, so say honestly what does. ★ **Generalised to the foreign-lock CLASS by the §14.4 round (#40); the assertions it makes about held locks and stalled vCPUs are QEMU-conditional** | §6.3 | #35 → #40 |
 | A3 | Guest-requested memory ops: **drop-the-lock on the calling thread**, no memory-plane thread; background work on the **executor**; name the **I-NOAMP** invariant and its honest baseline | §6.6 | #36 |
 | A4 | **Memslot strategy: coarse regions with an allocator inside**, never per-object; write it so measurement tunes constants, not shape | §6.7, §9.3, §11 item 11 | #37 |
@@ -4165,7 +4357,10 @@ occasionally "move it", which the error text should not be trusted to convey on 
 Shipped: `crates/kayfabe-linux-raw` — `HostPageSize` + pure `geometry`, `HostOffset` +
 `checked_span`, `MappedRegion` / `RegionView` / `VolatileRegion` / `Reservation`, the
 `mmap`/`munmap` primitives, **7** relaxations in **2** `*_unsafe.rs` files, 32 unit tests
-and 8 `trybuild` rows (288 → 321, fast path 23.7 s → 26.3 s). CI gained gates **A**
+and 8 `trybuild` rows *(★ correct on the day; **9** files today — `a91f318` later added
+`cache_policy_has_no_default.rs` as a new property. **Row 10 was never among them and cannot
+be**: see §4.6's box, where it is now a CI gate. Noted 2026-07-28, doc audit)*
+(288 → 321, fast path 23.7 s → 26.3 s). CI gained gates **A**
 (forbid-inheritance), **B** (one crate) and the **block ratchet**, all three negative-tested.
 Deliberately NOT built: `memfd`+sealing, the isolate double-mmap, KVM/`epoll`, `Send`/`Sync`
 for the region types, and the `KAYFABE_FORCE_HOST_PAGE_SIZE` env knob.
@@ -4264,6 +4459,25 @@ launder a write past it.
    cites "the compile-fail suite" as covering it, that is the failure mode.
 
 ### 14.6 ★★ BQL round, 2026-07-26 — the L2-Q first task was run early, and the mechanism §6.3 named does not exist
+
+> ### ⚠️ SUPERSEDED IN TWO RESPECTS (banner added 2026-07-28) — **read this table as a dated measurement, not as the plan**
+>
+> Everything below is **correct as history** and is deliberately not rewritten: it is the
+> 2026-07-26 bench round, and the arm labelled *"with the backport"* really was a patched 9.2.
+> Two of its "effect on this doc" cells have since been overtaken:
+> - **the backport is CANCELLED.** Hours after this round, the owner decided we **declare a
+>   minimum QEMU of ≥ 10.2.0** and assert it at realize rather than carry a patch (§10's
+>   decision box, `c3ec258`). Read *"with the backport"* as *"on a stock ≥ 10.2 build"*; the
+>   code path is the same one.
+> - **"the two are a PACKAGE DEAL" / "new §9.3 pairing gate" is upstream's, not ours.** A
+>   single `memory_region_enable_lockless_io()` sets `lockless_io` **and**
+>   `disable_reentrancy_guard` in one function body (§10.1 item 1 / table row 2). §9.3's row is
+>   now a **three-part** gate, of which only clause (c) — *every trapped region marked*, since
+>   the guard's state is per-**device** and the opt-out per-**MemoryRegion** — is work we owe.
+>
+> The measurements themselves — 5 611 µs vs 146 µs p99, `bql_locked()` 3-of-3 vs 0, the
+> **47 % `MEMTX_ACCESS_ERROR`** silent-drop, the ioeventfd numbers — are untouched, and the
+> R1/R3/R5 promotion to correctness requirements stands.
 
 **Provenance:** bench findings, so §14's rule applies without the §14.2/§14.4 exception —
 nothing here is a plan. Measured on the serialized vast.ai bench against **QEMU 9.2.0**

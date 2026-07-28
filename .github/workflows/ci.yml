@@ -341,6 +341,71 @@ jobs:
             echo "gate needs a judgement call, \`ls\` stops being the audit."
             exit 1
           fi
+      # ★★ The HOST-POINTER half of gate C (l1_os_shell.md §9.3, §4.1.1, §4.6's ex-row 10,
+      # decision #33). §9.3 has described gate C as two-sided since it was written —
+      # "`unsafe` appears in a file not named *_unsafe.rs, OR a host pointer type
+      # (`*mut`/`*const`/`NonNull`/`transmute`) appears outside one" — and only the
+      # first half was implemented. This is the second half. Added 2026-07-28.
+      #
+      # ★ Honest scope, so nobody over-reads it. Three limits, all deliberate:
+      #
+      # 1. It is per-FILE, not per-VISIBILITY. A `pub fn` returning `*mut u8` from
+      #    INSIDE a *_unsafe.rs file passes this gate and passes every trybuild row
+      #    (a compile-fail test asserts that ONE written snippet fails; the
+      #    crate-boundary rule is universally quantified over the API surface, which
+      #    is why §4.6's row 10 was never expressible as a trybuild row and is a CI
+      #    gate instead). The property holds in today's tree by construction — the
+      #    pointer types occur only in PRIVATE fields inside *_unsafe.rs — so this is
+      #    a ratchet against tomorrow, not a hole being closed.
+      # 2. `usize`-as-an-address, the fourth shape decision #33 names, is not
+      #    lexically detectable at all. `no_base_address.rs` covers its constructive
+      #    instance (`.base()`/`.addr()`/a public field); nothing covers it in general.
+      # 3. Line comments are stripped before matching, unlike the `unsafe` half where
+      #    prose deliberately counts. The reason is the same "the rule must stay
+      #    writable" argument that makes `unsafe_code` a lexical escape there:
+      #    `kayfabe-linux-raw/src/lib.rs` has to be able to NAME the forbidden types
+      #    in order to state the rule (:35, :61, :77 do exactly that). A block comment
+      #    is a known lexical gap; there are none today.
+      #
+      # `PhantomData<…>` is erased before matching. Not an allowlist — a PhantomData
+      # is zero-sized and cannot carry an address by construction, and
+      # `PhantomData<*mut ()>` is the standard !Send marker (kayfabe-rt/src/lock.rs).
+      #
+      # Exit-code polarity: same trap as the gate above. `grep` exits 1 on NO match,
+      # which is the SUCCESS case here, so every grep ends in `|| true` and the
+      # verdict is an `if [ -n … ]` over captured output. Note the loop body uses
+      # `if`/`fi` rather than `[ -n "$hits" ] && …`, because the `&&` form returns 1
+      # on the common (clean) path and would abort the step under `set -e`.
+      - name: Host-pointer gate (no *mut/*const/NonNull/transmute outside *_unsafe.rs)
+        run: |
+          offenders=""
+          while IFS= read -r f; do
+            hits=$(sed -e 's|//.*||' -e 's|PhantomData<[^>]*>||g' "$f" \
+                   | grep -nE '\*mut |\*const |NonNull|transmute' || true)
+            if [ -n "$hits" ]; then
+              offenders="$offenders$(echo "$hits" | sed "s|^|$f:|")
+          "
+            fi
+          done < <(find . -name '*.rs' -not -name '*_unsafe.rs' \
+                     -not -path './target/*' -not -path './*/target/*' \
+                     -not -path './mutants.out/*')
+          if [ -n "$(echo "$offenders" | tr -d '[:space:]')" ]; then
+            echo "$offenders"
+            echo ""
+            echo "★ HOST-POINTER BREACH — gate C's second half (l1_os_shell.md §9.3)."
+            echo "A host CPU address type appears in a file that is not named"
+            echo "*_unsafe.rs. A raw pointer is unsafe to HOLD even in safe code, and"
+            echo "the whole audit claim of decision #33 is that host addresses do not"
+            echo "leave \`kayfabe-linux-raw\`'s *_unsafe.rs files. Two fixes, no third:"
+            echo "  - real pointer code -> move it into a *_unsafe.rs module, behind a"
+            echo "    bounded type (MappedRegion / RegionView / VolatileRegion). It must"
+            echo "    not appear in any signature reachable from outside the crate."
+            echo "  - a comment or doc  -> whole-line comments are already stripped, so"
+            echo "    a hit means it is on a CODE line. Move the prose to its own line."
+            echo "Never widen the pattern and never add an allowlist: the exception is"
+            echo "lexical (PhantomData is a ZST), never editorial."
+            exit 1
+          fi
       # ★★★ The GPA-ACCESSOR gate (l1_os_shell.md §6.1/§6.3/§10.1 item 6, the 2026-07-27
       # contact round). `Vmm::gpa_read`/`gpa_write` are the ONLY in-lock-legal capability
       # that takes a GUEST-CHOSEN address, and their legality rests entirely on the
