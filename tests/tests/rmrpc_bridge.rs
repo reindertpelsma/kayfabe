@@ -14,8 +14,11 @@
 //!
 //! So there are **three independent transcriptions** of every message here:
 //!
-//! 1. `kayfabe_tests::rpcwire` — a builder written from `ogkm: g_rpc-structures.h` in a
-//!    file that imports **nothing**, with each offset a literal beside its header line;
+//! 1. `kayfabe_tests::rpcwire` — a builder written from
+//!    `src/nvidia/generated/g_rpc-structures.h`, transcribed from **both** vendored tags
+//!    (`ogkm-580:` and `ogkm-610:`; the path is the same in each tree, the line numbers
+//!    are not), in a file that imports **nothing**, with each offset a literal beside its
+//!    header line;
 //! 2. the **hand-written hex arrays** below, offset-annotated, unreadable on purpose;
 //! 3. `kayfabe_abi`'s decoders, whose offsets came from the same headers via a different
 //!    human, and which `crates/kayfabe-abi/tests/mean_wire.rs` additionally pins against
@@ -1170,7 +1173,9 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
         // ★★ B4 settled §4.2's `[open]`: still ONE value, now with the constraint that
         // decided it. `_issueRpcAndWait` returns an `rpc_result` verbatim only while it
         // is BELOW the VMIOP base; at or above it, every distinct value collapses to one
-        // indistinguishable `NV_ERR_GENERIC` (`ogkm: rpc.c:2020-2025`). So a status the
+        // indistinguishable `NV_ERR_GENERIC` (the `DRF_BASE(NV_VGPU_MSG_RESULT__VMIOP)`
+        // test and the fall-through, identical at both tags:
+        // `ogkm-580: rpc.c:2004-2007`, `ogkm-610: :2023-2026`). So a status the
         // guest can actually read is a *property* of the choice, not a preference — and
         // it is the property that ruled out `NV_VGPU_MSG_RESULT_RPC_API_CONTROL_NOT_SUPPORTED`
         // (`0xFF100009`), whose translation back to an `NV_STATUS` exists only on the
@@ -3802,10 +3807,11 @@ fn the_compute_subgraph_reaches_the_graph_through_the_real_transport() {
     // ★ Including the control, and with NV_OK. An accepted `GSP_RM_CONTROL` is acked with
     // the request's own body preserved, and the field the guest actually reads the control
     // handler's status out of is `rpc_gsp_rm_control_v03_00.status` @ **body+12**, not the
-    // envelope (`ogkm: rpc.c:10868-10875`). The guest sent zero there because
-    // `rpcWriteCommonHeader` zeroes the whole message buffer first
-    // (`ogkm: rpc_common.c:149-152`), so the echo is an `NV_OK` control reply — a fact
-    // about the ack that nothing else in this file observes.
+    // envelope (`ogkm-580: rpc.c:11063-11070`, `ogkm-610: :10868-10875` — identical, only
+    // relocated). The guest sent zero there because `rpcWriteCommonHeader` zeroes the
+    // whole message buffer first (byte-identical AND at the same lines in both tags:
+    // `ogkm-580: rpc_common.c:149-152`, `ogkm-610:` idem), so the echo is an `NV_OK`
+    // control reply — a fact about the ack that nothing else in this file observes.
     let ctrl_reply = run
         .replies
         .iter()
@@ -4118,7 +4124,7 @@ fn nothing_past_hvaspace_in_the_control_params_is_read() {
 
 /// ★★ `hVASpace == 0` is **not** "unspecified". NVIDIA's own header, in both vendored
 /// trees verbatim: *"If it's 0, it assumes to use the implicit allocated VA space
-/// associated with the client/device pair"* (`ogkm: ctrl0080dma.h:782-785`,
+/// associated with the client/device pair"* (`ogkm-610: ctrl0080dma.h:782-785`,
 /// `ogkm-580: ctrl0080dma.h:812-815`).
 ///
 /// That VAS is a real object this RPC does not name. `HObject(0)` would attach the PDB to
@@ -4243,7 +4249,8 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
 /// neighbour must not trip it.
 ///
 /// `rmapiRpcFlags` carries `COPYOUT_ON_ERROR` = `NVBIT(0)` and `SERIALIZED` = `NVBIT(1)`,
-/// set independently by `rpcRmApiControl_GSP` (`ogkm: rpc.c:10803-10806`). A `!= 0` test
+/// set independently by `rpcRmApiControl_GSP` (identical at both tags:
+/// `ogkm-580: rpc.c:10998-11001`, `ogkm-610: :10803-10806`). A `!= 0` test
 /// would refuse every control that merely asked for copy-out-on-error — which is a large
 /// and entirely ordinary class of control.
 #[test]
@@ -5033,7 +5040,9 @@ fn the_source_client_is_a_second_namespace_not_a_substitute_for_the_first() {
 /// and both numbers — never zero-extended into a plausible dup.
 ///
 /// ★ And a *longer* payload is accepted: `sizeof(rpc_dup_object_v03_00)` is what the
-/// driver writes into the common header (`ogkm: rpc.c:11093`), but the element the
+/// driver writes into the common header (`rpcWriteCommonHeader(.., DUP_OBJECT,
+/// sizeof(rpc_dup_object_v03_00))`, identical at both tags: `ogkm-580: rpc.c:11287`,
+/// `ogkm-610: :11093`), but the element the
 /// transport delivers is padded to its own granularity, so refusing on `len != 28` would
 /// refuse a conforming guest.
 #[test]
@@ -5837,7 +5846,9 @@ fn the_dup_stream_reaches_the_graph_through_the_real_transport() {
 // nothing, bounded two ways, dropped on completion and on every refusal.
 //
 // The oracle discipline is unchanged and gains a fourth strand: `rpcwire::fragment` is a
-// hand transcription of `_issueRpcLarge`'s split loop (`ogkm: rpc.c:2074-2143`) in a file
+// hand transcription of `_issueRpcLarge`'s split loop (`ogkm-580: rpc.c:2053-2122`,
+// `ogkm-610: :2074-2143` — same loop, same arithmetic, 580 reaching the buffer through
+// the `vgpu_rpc_message_header_v` / `rpc_message` macros where 610 uses accessors) in a file
 // that imports nothing, so the bytes the reassembler joins were split by a re-reading of
 // the driver rather than by the reassembler's own inverse.
 // =================================================================================
@@ -5851,10 +5862,11 @@ mod frag {
     /// `message_buffer_remaining = pRpc->maxRpcSize - fixed_param_size`, an **unsigned**
     /// subtraction over `fixed_param_size = sizeof(rpc_message_header_v) +
     /// sizeof(rpc_gsp_rm_control_v03_00)` = 32 + 40 = **72**
-    /// (`ogkm: rpc.c:10678-10679`, `ogkm-580: :10874-10875`). So a head always carries the
-    /// whole 40-byte fixed header; a shorter one could only come from a guest that had
+    /// (`ogkm-610: rpc.c:10678-10679`, `ogkm-580: :10874-10875`). So a head always carries
+    /// the whole 40-byte fixed header; a shorter one could only come from a guest that had
     /// already underflowed. In practice `maxRpcSize = RM_PAGE_SIZE` = 4096
-    /// (`ogkm: rpc.c:1000`), fifty-six times this.
+    /// (`rpcConstruct_IMPL`, `ogkm-580: rpc.c:1000`, `ogkm-610: :1002`), fifty-six times
+    /// this.
     ///
     /// ★ Splitting *at* 72 is therefore the most hostile **legal** split there is: the
     /// head declares a `paramsSize` and carries not one byte of it.
@@ -5916,8 +5928,9 @@ fn spd_whole(sequence: u32) -> Vec<u8> {
 /// **Hand-written hex, transcription #2** — the HEAD of a fragmented `GSP_RM_CONTROL`.
 ///
 /// `_issueRpcLarge` sets `pVgpuRpcHeader->length = NV_MIN(bufSize, maxRpcSize)` and leaves
-/// the real function in place (`ogkm: rpc.c:2082-2089`), so a head is an ordinary,
-/// well-formed fn-76 message that happens to be **short of what its own `paramsSize`
+/// the real function in place (identical at both tags: `ogkm-580: rpc.c:2061-2068`,
+/// `ogkm-610: :2082-2089`), so a head is an ordinary, well-formed fn-76 message that
+/// happens to be **short of what its own `paramsSize`
 /// declares**. That is the only signal there is, and it is the reason a head is
 /// recognised by arithmetic rather than by a flag.
 ///
@@ -5954,8 +5967,9 @@ const HEX_FRAG_HEAD: [u8; 72] = [
 /// **Hand-written hex, transcription #2** — the one CONTINUATION_RECORD that finishes it.
 ///
 /// `length = entryLength + sizeof(rpc_message_header_v)` and
-/// `function = NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD` (`ogkm: rpc.c:2122-2123`), with
-/// the sequence one past the head's (`:2147`'s
+/// `function = NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD` (the two adjacent stores,
+/// identical at both tags: `ogkm-580: rpc.c:2102-2103`, `ogkm-610: :2123-2124`), with
+/// the sequence one past the head's (`ogkm-580: :2126` / `ogkm-610: :2147`,
 /// `NV_ASSERT(lastSequence == firstSequence + recordCount)`).
 ///
 /// ```text
@@ -6225,8 +6239,9 @@ fn a_control_split_into_many_records_rejoins_byte_for_byte() {
 ///
 /// `[src]` A conforming guest cannot produce one: `rpcRmApiControl_GSP`'s
 /// `pRpc->maxRpcSize - fixed_param_size` is an unsigned subtraction over 72
-/// (`ogkm: rpc.c:10678-10679`, `ogkm-580: :10874-10875`) and `maxRpcSize` is 4096
-/// (`ogkm: rpc.c:1000`). This is category 3 — refused because it cannot happen.
+/// (`ogkm-610: rpc.c:10678-10679`, `ogkm-580: :10874-10875`) and `maxRpcSize` is 4096
+/// (`ogkm-580: rpc.c:1000`, `ogkm-610: :1002`). This is category 3 — refused because it
+/// cannot happen.
 #[test]
 fn a_head_shorter_than_its_own_fixed_header_is_malformed_not_fragmented() {
     let mut r = Reassembler::new();
@@ -6309,7 +6324,7 @@ fn a_control_whose_params_all_arrived_is_never_held() {
 ///
 /// `rpcRmApiAlloc_GSP` copies params into the single message buffer under an explicit
 /// remaining-space bound and returns `NV_ERR_BUFFER_TOO_SMALL` rather than calling
-/// `_issueRpcAndWaitLarge` (`ogkm: rpc.c:11024-11029`, `ogkm-580: :11218-11223`). So the
+/// `_issueRpcAndWaitLarge` (`ogkm-610: rpc.c:11024-11029`, `ogkm-580: :11218-11223`). So the
 /// reassembler must **not** treat an over-declared fn-103 as a head: doing so would
 /// convert an immediate, named refusal into a message held forever.
 ///
@@ -6933,9 +6948,10 @@ fn two_policies_interleaving_fragment_runs_do_not_share_a_head() {
 ///
 /// `_issueRpcLarge` sends every fragment and then waits ONCE at
 /// `(expectedFunc, firstSequence)`; but `rpcRmApiControl_GSP` issues fn 76 with
-/// `bBidirectional = NV_TRUE` (`ogkm: rpc.c:10856`, `ogkm-580: :11051`), so the receive
+/// `bBidirectional = NV_TRUE` (`ogkm-610: rpc.c:10856`, `ogkm-580: :11051`), so the receive
 /// side then polls `(CONTINUATION_RECORD, firstSequence + i)` for each record until the
-/// reply bytes fill the request's own `bufSize` (`ogkm: rpc.c:2186-2226`). **A reply per
+/// reply bytes fill the request's own `bufSize` (identical at both tags:
+/// `ogkm-580: rpc.c:2165-2205`, `ogkm-610: :2186-2226`). **A reply per
 /// fragment is therefore required**, and each must echo that fragment's own
 /// `(function, sequence)`.
 ///
@@ -6998,8 +7014,10 @@ fn a_fragmented_control_is_answered_once_per_fragment_on_its_own_sequence() {
 /// ★★ **A refused fragmented control fails on its LAST fragment's reply — which is the
 /// one the driver reads the status from.**
 ///
-/// After the continuation loop the driver reads `rpc_result` out of `pVgpuRpcHeader`, i.e.
-/// out of the last record it received (`ogkm: rpc.c:2230-2241`). Reassembly completes on
+/// After the continuation loop the driver reads `rpc_result` out of the message header,
+/// i.e. out of the last record it received (identical at both tags but for the accessor
+/// name — `pVgpuRpcHeader` at 610, the `vgpu_rpc_message_header_v` macro at 580:
+/// `ogkm-580: rpc.c:2209-2220`, `ogkm-610: :2230-2241`). Reassembly completes on
 /// that same last fragment, so the head and every intermediate one ack `NV_OK` and the
 /// real outcome rides the final reply. The two facts line up without either side
 /// arranging it, which is exactly why it is worth pinning: a change to *either* breaks a

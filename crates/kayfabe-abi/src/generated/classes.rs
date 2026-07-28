@@ -27,8 +27,9 @@
 //! generator limitation. At 610.43.02 the struct carries `hHandleVASpace` at +32,
 //! inserted directly after `hVASpace`; at 580.159.04 — the driver this project's
 //! bench actually runs (`versions::BENCH_DRIVER`) — that field does not exist and
-//! `hUserdMemory[]` starts at +32 instead (`ogkm: alloc_channel.h:296-347` vs
-//! `ogkm-580: alloc_channel.h:288-330`). A generated 610 mirror would therefore
+//! `hUserdMemory[]` starts at +32 instead (`ogkm-610: alloc_channel.h:296-347` vs
+//! `ogkm-580: alloc_channel.h:296-342` — the typedef opens at `:296` in BOTH trees;
+//! only 610's body is one member longer). A generated 610 mirror would therefore
 //! mis-read EVERY field from +32 onward for the guest we run. The three fields
 //! `AllocFacts` needs (`flags` @20, `hContextShare` @24, `hVASpace` @28) are
 //! byte-identical in both trees, so `versions::CHANNEL_ALLOC_PREFIX` decodes exactly

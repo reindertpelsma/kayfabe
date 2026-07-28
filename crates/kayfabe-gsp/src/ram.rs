@@ -14,17 +14,24 @@
 //! The C artifact computes every queue address as `sharedMemPhysAddr + offset`
 //! (`C: src/qemu/nvkvm_gpu_emul.c:3437, 2387, 1610`). That is correct **only while the
 //! guest's 512 KiB sysmem allocation happens to be physically contiguous**. It is not
-//! required to be:
+//! required to be — and every fact below was re-read at **both** vendored tags and holds
+//! identically at both, only the line numbers moved (`ogkm-580`'s `message_queue_cpu.c` is
+//! 59 lines shorter, so its numbers run lower). There is no version seam in the region's
+//! shape, and nothing here should be version-keyed:
 //!
 //! - the backing memory is allocated `NV_MEMORY_NONCONTIGUOUS, ADDR_SYSMEM`
-//!   (`ogkm: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:250-256`);
+//!   (`ogkm-610: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:250-256`,
+//!   `ogkm-580: :228-234`);
 //! - the first pages of the region are **a page table describing the region itself** — an
 //!   array of `RmPhysAddr`, one per 4 KiB page, filled by `memdescGetPhysAddrs`
-//!   (`ogkm: message_queue_cpu.c:295-316`);
-//! - `sharedMemPhysAddr = pPageTbl[0]` (`ogkm: message_queue_cpu.c:328-329`) — i.e. the
-//!   table is self-describing: entry 0 is the page the table itself starts on;
+//!   (`ogkm-610: message_queue_cpu.c:295-316`, `ogkm-580: :273-294`);
+//! - `sharedMemPhysAddr = pPageTbl[0]` (`ogkm-610: message_queue_cpu.c:328-329`,
+//!   `ogkm-580: :306-307`) — i.e. the table is self-describing: entry 0 is the page the
+//!   table itself starts on;
 //! - `cmdQueueOffset`/`statQueueOffset` are **byte offsets into the region**, not
-//!   addresses (`ogkm: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:5483-5484`).
+//!   addresses (`ogkm-610: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:5484-5485`,
+//!   `ogkm-580: :4488-4489`; the previous citation of `:5483-5484` was off by one and
+//!   named `pageTableEntryCount` rather than `statQueueOffset`).
 //!
 //! nouveau's client is the instructive contrast: it allocates one *contiguous* block and
 //! fills its table linearly (`nv: r535/gsp.c:1161-1162`), then passes the block's base

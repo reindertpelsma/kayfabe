@@ -8,7 +8,8 @@
 //! under the still-polling scrub"* — a **kernel** client (CeUtils, `0xc1e00007`) was
 //! reading its ring/finishPayload out of memory owned by a **different** client
 //! (`0xc1d00003`). RM keeps such a reference alive with a refcount
-//! (`ogkm: src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031` — `memCopyConstruct_IMPL`:
+//! (`ogkm-610: src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`, `ogkm-580: :1097-1101` —
+//! `memCopyConstruct_IMPL`, byte-identical at both tags:
 //! `pHwResource->refCount++`, `memdescAddRef`, `DupCount++`). The C's fix was **not**
 //! per-proc reclamation; it was deferring every backing reap to a **global** quiesce
 //! point (`C: :2074-2128`, consumed at the GSP re-handshake, `C: :3458`).
@@ -60,13 +61,16 @@
 //!
 //! - RM keeps a dup'd object alive by refcount — `memCopyConstruct_IMPL` does
 //!   `pHwResource->refCount++` / `memdescAddRef` / `DupCount++`
-//!   (`ogkm: src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`), and
-//!   `clientFreeResource_IMPL` therefore destroys nothing while an alias remains.
+//!   (`ogkm-610: src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`, `ogkm-580: :1097-1101`),
+//!   and `clientFreeResource_IMPL` therefore destroys nothing while an alias remains.
 //! - A kernel reference **can** outlive the owning process: `uvm_va_space` is bound to
-//!   the *file*, not the process (`ogkm: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`),
-//!   and `UVM_INIT_FLAGS_MULTI_PROCESS_SHARING_MODE` says resources are freed "when the
+//!   the *file*, not the process — the comment is verbatim and at the SAME lines in both
+//!   tags (`ogkm-580: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`, `ogkm-610:` idem)
+//!   — and `UVM_INIT_FLAGS_MULTI_PROCESS_SHARING_MODE` says resources are freed "when the
 //!   last reference to the file is dropped rather than when this process exits"
-//!   (`ogkm: kernel-open/nvidia-uvm/uvm.h:160-167`).
+//!   (`ogkm-610: kernel-open/nvidia-uvm/uvm.h:160-167`, `ogkm-580: :152-159`; the 580
+//!   wording differs only in naming `UVM_INIT_FLAGS_DISABLE_HMM` where 610 names
+//!   `UVM_INIT_FLAGS_DISABLE_PAGEABLE_ACCESS`).
 //!
 //! Our model matches **because** attribution is by **origin** (`project.rs`: "a user
 //! object dup'd into the UVM session stays in the USER component") and every runtime
@@ -352,8 +356,9 @@ fn frees(rec: &SharedRecorder) -> Vec<(IsolateId, HostHandle)> {
 /// the gate lives in the type.** `MockRmBackend` namespaces its fake handle *values*
 /// (`(id+1) << 32 | n`), so a foreign handle is provably invalid there and comes back
 /// `BadHandle`. A real host does not: RM mints client-scoped handles from one shared base
-/// (`ogkm: src/nvidia/generated/g_resserv_nvoc.h:173`, one `serverSetClientHandleBase` at
-/// `.../rmapi.c:105`), so the same raw value is **live and different** in every other
+/// (`RS_CLIENT_HANDLE_BASE` = `0xC1D00000`, `ogkm-610: src/nvidia/generated/g_resserv_nvoc.h:173`,
+/// `ogkm-580: :188`; one `serverSetClientHandleBase` at `.../rmapi.c:105` in **both** tags,
+/// same line), so the same raw value is **live and different** in every other
 /// client — the free would succeed, on a bystander. The mock's answer is survivable; the
 /// host's answer is the C's bug. Only the stamp distinguishes them.
 #[test]
@@ -871,8 +876,12 @@ fn the_system_proc_has_no_data_plane() {
 /// **guest kernel's**, held for the module's lifetime, so that recovery requires the guest
 /// kernel to mint clients — exactly what would have been condemned. Condemning it is
 /// device-fatal by definition (RM's analogue: `gpuMarkDeviceForReset` +
-/// `NV2080_NOTIFIERS_GPU_UNAVAILABLE`, `ogkm: .../kernel_gsp.c:2779-2789`, at **device**
-/// level, never client level).
+/// `NV2080_NOTIFIERS_GPU_UNAVAILABLE`, at **device** level, never client level). ★ SEAM
+/// in the *site*, not the fact: 610 has a dedicated `_kgspHandleFatalTimeout` that does
+/// both in one place (`ogkm-610: .../kernel_gsp.c:2779-2789`); 580 has no such function
+/// and does the same two things on the RPC-timeout path — the notify in `_kgspLogXid119`
+/// (`ogkm-580: .../kernel_gsp.c:2169`) and `gpuMarkDeviceForReset` in `_kgspRpcRecvPoll`
+/// (`ogkm-580: :2459`). Both are `gpuNotifySubDeviceEvent`, i.e. subdevice/device scope.
 ///
 /// What actually happened before: `SharedDevice::signal_source` called
 /// `Spine::retire_proc(SYSTEM_PROC)`, which reached for the system proc in a `ProcSet`
@@ -1247,7 +1256,8 @@ fn frees_on_owner(rec: &SharedRecorder, owner: ProcId) -> Vec<HostHandle> {
 /// The existing `rmgraph_order_independence.rs` sibling proves the object is still
 /// *present*. Present is not the claim that matters: a reference RM keeps alive is one
 /// UVM will keep *using* (`uvm_va_space` outlives the process because it hangs off the
-/// file — `ogkm: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`). So this test
+/// file — `ogkm-580: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`, and `ogkm-610:` is
+/// verbatim at the same lines). So this test
 /// **exercises** it: after the owner is dead it publishes a brand-new range through the
 /// surviving VASpace and asserts the resulting host verbs really ran, on the owner's own
 /// still-live isolate, into the owner's original host VAS.
@@ -1260,7 +1270,7 @@ fn frees_on_owner(rec: &SharedRecorder, owner: ProcId) -> Vec<HostHandle> {
 /// 2. the owner is killed the clean way (its client root freed);
 /// 3. the owner's `Proc`, isolate, arena and `by_pdb` route all survive it — because
 ///    attribution is by **origin** and the dup'd resource is still live
-///    (`ogkm: .../mem_mgr/mem.c:1027-1031`);
+///    (`ogkm-610: .../mem_mgr/mem.c:1027-1031`, `ogkm-580: :1097-1101`);
 /// 4. ★ the surviving reference is **usable**: a fresh `publish_backing` succeeds, and
 ///    ★ the *unreferenced* half — the owner's channels, which nothing dup'd — is freed
 ///    **per object**, engine object before channel, so the exec plane now faults with
@@ -1354,7 +1364,7 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
         gpu.procs.contains_key(&owner),
         "★ the owning `Proc` must NOT retire while a kernel dup still references a \
          resource it allocated — that retire reclaims host memory RM says is live \
-         (`ogkm: .../mem_mgr/mem.c:1027-1031`)",
+         (`ogkm-610: .../mem_mgr/mem.c:1027-1031`, `ogkm-580: :1097-1101`)",
     );
     assert_eq!(
         gpu.procs[&owner].isolates[&GPU].id(),
@@ -1393,7 +1403,9 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
         frees_on_owner(&rec, owner),
         vec![host_engine, host_chan],
         "★ the exact `Free` verbs reached the backend, engine object BEFORE channel — \
-         RM frees children ahead of parents (`ogkm: .../resserv/src/rs_server.c:963-981`)",
+         RM frees children ahead of parents (`clientUpdatePendingFreeList_IMPL`, \
+         byte-identical at both tags: `ogkm-580: .../resserv/src/rs_server.c:963-981`, \
+         `ogkm-610:` idem)",
     );
 
     // The exec plane is genuinely gone, and says which key missed.
@@ -1449,7 +1461,7 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
         "★★ the surviving reference is EXERCISED, not inspected: the fresh range's \
          host verbs really ran, on the OWNER's still-live isolate, into the OWNER's \
          original host VAS — which is what `uvm_va_space` outliving its process means \
-         (`ogkm: .../uvm_va_space_mm.c:75-81`)",
+         (`ogkm-580: .../uvm_va_space_mm.c:75-81`, `ogkm-610:` idem)",
     );
     assert_ne!(
         fresh_mem, backing,
@@ -1605,7 +1617,8 @@ fn the_last_reference_dropping_retires_the_owner_and_frees_its_objects_per_objec
             .unwrap_or(0),
         0,
         "…and the backing's GPU mapping was unmapped before it was freed (RM's own \
-         children-before-parents order, `ogkm: rs_client.c:830-849`)",
+         children-before-parents order, `ogkm-580: rs_client.c:830-849`, \
+         `ogkm-610:` byte-identical at the same lines)",
     );
     assert_eq!(
         (
@@ -1818,7 +1831,8 @@ const KERNEL_ALIAS: HObject = HObject(0x7a00_0001);
 /// declared [`kayfabe_arch::ClientKind::Kernel`]) allocates a VASpace and binds a page
 /// directory to it; a **user** process then `DUP_OBJECT`s that VASpace into its own
 /// namespace; and the guest kernel's client root is freed while the alias lives. RM's
-/// refcount keeps the VASpace alive (`ogkm: .../mem_mgr/mem.c:1027-1031`), so it is still
+/// refcount keeps the VASpace alive (`ogkm-610: .../mem_mgr/mem.c:1027-1031`,
+/// `ogkm-580: :1097-1101`), so it is still
 /// reported at its origin `(UVM, UVM_VAS)` and still mints its component's boundary —
 /// which is correct and is section 5's own claim.
 ///
@@ -2066,9 +2080,10 @@ fn uvm_referenced_via_parked_chain_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorde
 /// Step 5 is `l1_concurrency.md` §12.41 §4 / N1 verbatim — *"released the host VAS and
 /// the published backing of a resource a live kernel client still references"* — reached
 /// through a different door, on a stream containing no malformed event at all. RM keeps
-/// the VASpace alive for the alias holder (`ogkm: .../mem_mgr/mem.c:1027-1031`), and UVM
-/// keeps *using* it, because `uvm_va_space` hangs off the file rather than the process
-/// (`ogkm: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`).
+/// the VASpace alive for the alias holder (`ogkm-610: .../mem_mgr/mem.c:1027-1031`,
+/// `ogkm-580: :1097-1101`), and UVM keeps *using* it, because `uvm_va_space` hangs off
+/// the file rather than the process
+/// (`ogkm-580: kernel-open/nvidia-uvm/uvm_va_space_mm.c:75-81`, `ogkm-610:` idem).
 ///
 /// The assertion is deliberately about the **verbs**, not about the projection: what
 /// makes this the fatal direction rather than a bookkeeping gap is that a `Free` reaches

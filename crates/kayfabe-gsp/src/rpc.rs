@@ -3,10 +3,11 @@
 //! ## The numbering is Axis A, so it arrives as a value
 //!
 //! `NV_VGPU_MSG_FUNCTION_*` / `NV_VGPU_MSG_EVENT_*` are driver constants
-//! (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`, an X-macro table where every
-//! id is explicit — *"Deprecated RPC's numbers cannot be reused in order to not break
-//! compatibility"*, `:4`). Per the quarantine rule they belong in `kayfabe-abi`, whose
-//! established shape for exactly this is `client_kind_from_process_id`: the constant in
+//! (`ogkm-580:`/`ogkm-610: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`, an X-macro
+//! table where every id is explicit — *"Deprecated RPC's numbers cannot be reused in
+//! order to not break compatibility"*, `:4` at **both** tags, same path, same line). Per
+//! the quarantine rule they belong in `kayfabe-abi`, whose established shape for exactly
+//! this is `client_kind_from_process_id`: the constant in
 //! the ABI crate, the abstract type everywhere above it. This module is the "everywhere
 //! above it" half — [`FunctionCodes`] is the table it consumes, and this crate declares
 //! **no** id of its own.
@@ -23,9 +24,9 @@
 //!
 //! | disposition | which functions | source |
 //! |---|---|---|
-//! | must reply, synchronously | `UNLOADING_GUEST_DRIVER` (47) | `_issueRpcAndWait` (`ogkm: src/nvidia/src/kernel/vgpu/rpc.c:9146-9170`) — an unanswered fn-47 blocks `rmmod` for the whole RPC timeout |
-//! | reply expected | everything else the guest sends as a command | the reply is matched on `(function, sequence)` (`ogkm: kernel_gsp.c:1824-1828`) |
-//! | **no** reply | `GSP_SET_SYSTEM_INFO` (72), `SET_REGISTRY` (73) | both end in `_issueRpcAsync` (`ogkm: rpc.c:10466`, and `:10507`'s own comment *"SET_REGISTRY is async RPC"*); echoing them shows up in the driver as an unexpected event and desyncs the seqNum (`C: src/qemu/nvkvm_gpu_emul.c:2410-2416`) |
+//! | must reply, synchronously | `UNLOADING_GUEST_DRIVER` (47) | `rpcUnloadingGuestDriver_v1F_07` ends in `_issueRpcAndWait` (`ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:9146-9170`, `ogkm-580: :9168-9192` — same function, both tags, the two differing only in the message-buffer accessor) — an unanswered fn-47 blocks `rmmod` for the whole RPC timeout |
+//! | reply expected | everything else the guest sends as a command | the reply is matched on `(function, sequence)` (`ogkm-610: kernel_gsp.c:1824-1828`, `ogkm-580: :1775-1779` — byte-identical) |
+//! | **no** reply | `GSP_SET_SYSTEM_INFO` (72), `SET_REGISTRY` (73) | both end in `_issueRpcAsync` (`ogkm-610: rpc.c:10466` and `:10503`'s own comment *"SET_REGISTRY is async RPC"*; `ogkm-580: rpc.c:10656` and `:10696` — same two functions, same dispositions); echoing them shows up in the driver as an unexpected event and desyncs the seqNum (`C: src/qemu/nvkvm_gpu_emul.c:2410-2416`) |
 //!
 //! ## What this stage deliberately does not decode
 //!
@@ -48,9 +49,17 @@ use crate::fault::GspFault;
 
 /// The `NV_VGPU_MSG_*` ids this path needs, supplied by the ABI layer.
 ///
-/// Every field is one explicit enum entry. Values for reference (610.43.02, and stable by
-/// the header's own no-reuse rule): 1, 10, 21, 47, 65, 71, 72, 73, 76, 103, `0x1001`,
-/// `0x1003` (`ogkm: rpc_global_enums.h:11, 20, 31, 57, 75, 81, 82, 83, 86, 113, 254, 256`).
+/// Every field is one explicit enum entry. Values for reference — **identical at both
+/// tags**, as the header's own no-reuse rule promises: 1, 10, 21, 47, 65, 71, 72, 73, 76,
+/// 103, `0x1001`, `0x1003`.
+///
+/// The *lines* are not identical, which is the whole point of the tagging rule. The
+/// `X(RM, …)` function block sits at the same lines in both trees
+/// (`ogkm-610:`/`ogkm-580: rpc_global_enums.h:11, 20, 31, 57, 75, 81, 82, 83, 86, 113`),
+/// but the `E(…)` event block is one line earlier at 580: `GSP_INIT_DONE`/`POST_EVENT` are
+/// `ogkm-610: :254, 256` and `ogkm-580: :253, 255`. Reading `:254, 256` against 580 yields
+/// `GSP_RUN_CPU_SEQUENCER` (`0x1002`) and `RC_TRIGGERED` (`0x1004`) — two plausible,
+/// wrong ids, which is exactly the failure the version tag exists to stop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FunctionCodes {
     /// `SET_GUEST_SYSTEM_INFO` — the first synchronous RPC after `GSP_INIT_DONE`.
@@ -149,11 +158,14 @@ impl FunctionCodes {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RpcAbi {
     /// `header_version` — `0x0300_0000` is MAJOR 3 / MINOR 0
-    /// (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_headers.h:56-59`).
+    /// (`ogkm-610:`/`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc_headers.h:56-59`, same path
+    /// and same lines at both tags).
     ///
     /// ★ The guest does **not** check it on receive: `NV_VGPU_MSG_SIGNATURE_VALID`
-    /// appears exactly once in the whole tree, in the *send* path
-    /// (`ogkm: src/nvidia/src/kernel/rmapi/rpc_common.c:154-184`). We emit both anyway,
+    /// appears exactly once in the whole tree, in the *send* path — and that is true of
+    /// **both** trees, so it is a protocol fact and not a 610 accident
+    /// (`ogkm-610: src/nvidia/src/kernel/rmapi/rpc_common.c:154-184`,
+    /// `ogkm-580: :153-183`, both `rpcWriteCommonHeader`). We emit both anyway,
     /// as the C does (`C:1584-1585`), but no test here may assert that a guest rejects a
     /// wrong one — that would assert a behaviour the driver does not have.
     pub header_version: u32,
@@ -189,7 +201,8 @@ pub enum RpcFunction {
     /// The `POST_EVENT` event (we send it).
     PostEvent,
     /// An id this table does not name. The guest logs and ignores unknown *events*
-    /// (`ogkm: kernel_gsp.c:1587-1599`); an unknown *command* still gets a reply, because
+    /// (`ogkm-610: kernel_gsp.c:1587-1599`, `ogkm-580: :1610-1622` — byte-identical
+    /// `default:` arm at both tags); an unknown *command* still gets a reply, because
     /// the guest may be polling `(function, sequence)` for it.
     Other(u32),
 }
@@ -220,10 +233,29 @@ impl RpcFunction {
     /// May this function be posted to the guest as an unsolicited event during its
     /// **bootup poll**?
     ///
-    /// The driver's poll runs without the API lock and hard-asserts on anything outside
-    /// an eight-entry allowlist (`ogkm: kernel_gsp.c:1419-1440`). `GSP_INIT_DONE` is on
-    /// it; `POST_EVENT` is **not**. This is the predicate §7-G7 turns into a state
-    /// requirement — events only once the FSM is `Running`.
+    /// The driver's poll runs without the API lock and hard-asserts (`NV_ASSERT(0)`) on
+    /// any event outside a short allowlist. **The allowlist is a version seam** — it used
+    /// to be written here as a version-independent "eight-entry allowlist", which is the
+    /// 610 shape asserted as if it were the protocol:
+    ///
+    /// - `ogkm-580: kernel_gsp.c:1464-1482`, cases at `:1469-1474` — **six** entries:
+    ///   `GSP_RUN_CPU_SEQUENCER` (first), `UCODE_LIBOS_PRINT`, `GSP_LOCKDOWN_NOTICE`,
+    ///   `GSP_POST_NOCAT_RECORD`, `GSP_INIT_DONE`, `OS_ERROR_LOG`.
+    /// - `ogkm-610: kernel_gsp.c:1419-1439`, cases at `:1424-1431` — **eight** entries,
+    ///   and a different set: `GSP_RUN_CPU_SEQUENCER` is **gone** (610 dropped the CPU
+    ///   sequencer handler entirely), and `PFM_REQ_HNDLR_STATE_SYNC_CALLBACK`,
+    ///   `GSP_LOAD_EXEC_GENERIC_BOOTLOADER`, `GSP_LOAD_EXEC_HS_BINARY` are added.
+    ///
+    /// What survives both tags is a **five-entry intersection** — `UCODE_LIBOS_PRINT`,
+    /// `GSP_LOCKDOWN_NOTICE`, `GSP_POST_NOCAT_RECORD`, `GSP_INIT_DONE`, `OS_ERROR_LOG` —
+    /// and the two facts this predicate actually rests on hold at **both**:
+    /// `GSP_INIT_DONE` is on the list, and `POST_EVENT` is **not**. So this returns
+    /// `true` for `InitDone` alone, which is the intersection-safe answer and needs no
+    /// version key. Should a caller ever need one of the tag-specific entries, it becomes
+    /// a row in an Axis-A profile table — never an `if version ==` in this crate.
+    ///
+    /// This is the predicate §7-G7 turns into a state requirement — events only once the
+    /// FSM is `Running`.
     #[must_use]
     pub fn allowed_in_bootup_window(self) -> bool {
         matches!(self, RpcFunction::InitDone)

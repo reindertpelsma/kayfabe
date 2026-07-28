@@ -5,8 +5,9 @@
 //! `length = maxRpcSize`, and each subsequent element carries
 //! `function = NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD` with
 //! `length = entryLength + sizeof(rpc_message_header_v)` and a raw payload slice
-//! (`ogkm: src/nvidia/src/kernel/vgpu/rpc.c:2074-2143`, notably `:2108`
-//! `entryLength = maxRpcSize - sizeof(rpc_message_header_v)`).
+//! (`ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:2074-2145`, notably `:2108`
+//! `entryLength = maxRpcSize - sizeof(rpc_message_header_v)`; `ogkm-580: rpc.c:2053-2124`,
+//! notably `:2087` — the same statement, and the same fragmenting loop).
 //!
 //! ## ★★ Which functions can actually fragment — measured, and it is **one**
 //!
@@ -15,14 +16,14 @@
 //!
 //! | producer | wrapper | `bBidirectional` / `bWait` | our `RpcFunction` |
 //! |---|---|---|---|
-//! | `rpcRmApiControl_GSP` (`ogkm: rpc.c:10856`, `ogkm-580: :11051`) | `_issueRpcAndWaitLarge` | `NV_TRUE` / wait | **`RmControl`** |
-//! | `rpcSetRegistry` (`ogkm: rpc.c:10533`, `ogkm-580: :10728`) | `_issueRpcAsyncLarge` | `NV_FALSE` / **no wait** | `SetRegistry` |
-//! | `_issuePteDescRpc` (`ogkm: rpc.c:2323`, `ogkm-580: :2302`) | `_issueRpcAndWaitLarge` | `NV_FALSE` / wait | `Other` (fn `ALLOC_MEMORY`) |
+//! | `rpcRmApiControl_GSP` (`ogkm-610: rpc.c:10856`, `ogkm-580: :11051`) | `_issueRpcAndWaitLarge` | `NV_TRUE` / wait | **`RmControl`** |
+//! | `rpcSetRegistry` (`ogkm-610: rpc.c:10533`, `ogkm-580: :10728`) | `_issueRpcAsyncLarge` | `NV_FALSE` / **no wait** | `SetRegistry` |
+//! | `_issuePteDescRpc` (`ogkm-610: rpc.c:2323`, `ogkm-580: :2302`) | `_issueRpcAndWaitLarge` | `NV_FALSE` / wait | `Other` (fn `ALLOC_MEMORY`) |
 //!
 //! ★ **`GSP_RM_ALLOC` is not on that list and cannot be.** `rpcRmApiAlloc_GSP` copies the
 //! params into the single message buffer with an explicit remaining-space bound and
 //! returns `NV_ERR_BUFFER_TOO_SMALL` rather than fragmenting
-//! (`ogkm: rpc.c:11024-11029`, `ogkm-580: :11218-11223` — same code in both trees). So a
+//! (`ogkm-610: rpc.c:11024-11029`, `ogkm-580: :11218-11223` — same code in both trees). So a
 //! fn-103 whose `paramsSize` exceeds its payload is **not** the head of a large RPC; it
 //! stays [`BridgeRefusal::ParamsSizeExceedsPayload`], exactly as B1 wrote it.
 //!
@@ -38,8 +39,11 @@
 //! total that comes from the head's **own body**, and for fn 76 there is exactly one:
 //!
 //! ```text
-//! total_size    = fixed_param_size + paramsSize                 (ogkm: rpc.c:10785)
+//! total_size    = fixed_param_size + paramsSize   (ogkm-610: rpc.c:10785, ogkm-580: :10981)
 //! fixed_param_size = sizeof(rpc_message_header_v) + sizeof(rpc_gsp_rm_control_v03_00)
+//!                                                 (ogkm-610: rpc.c:10678, ogkm-580: :10874,
+//!                                                  which spells the second term
+//!                                                  `sizeof(*rpc_params)` — same value)
 //! ```
 //!
 //! and `RpcCommand::payload` is the body **after** the 32-byte envelope, so the
@@ -70,7 +74,8 @@ use crate::BridgeRefusal;
 ///
 /// ★ A **policy** bound, not a driver constant, and it is named as one because the
 /// driver's own bound is one we cannot see: `rpcSetRegistry` asserts
-/// `totalSize < pRpc->pMessageQueueInfo->commandQueueSize` (`ogkm: rpc.c:10509`), and the
+/// `totalSize < pRpc->pMessageQueueInfo->commandQueueSize`
+/// (`ogkm-610: rpc.c:10510`, `ogkm-580: :10703`), and the
 /// command queue's size lives in `kayfabe-gsp`'s geometry, which
 /// `CommandPolicy::respond` is deliberately not given (§1.3 — the signature must not
 /// widen).
@@ -95,7 +100,8 @@ pub const MAX_REASSEMBLED_BODY: usize = 64 * 1024;
 ///
 /// For a conforming guest the size bound binds first by a wide margin: fragments are
 /// `maxRpcSize - sizeof(rpc_message_header_v)` = 4064 bytes
-/// (`ogkm: rpc.c:1002` `maxRpcSize = RM_PAGE_SIZE`, `:2108`), so 64 of them carry ~254
+/// (`ogkm-610: rpc.c:1002` `maxRpcSize = RM_PAGE_SIZE`, `:2108`; `ogkm-580: rpc.c:1000`,
+/// `:2087`), so 64 of them carry ~254
 /// KiB, four times [`MAX_REASSEMBLED_BODY`].
 pub const MAX_CONTINUATIONS: u32 = 64;
 
@@ -311,8 +317,9 @@ impl Reassembler {
         Ok(Reassembled::Complete(RpcCommand {
             // ★ The head's, all four of them. The reassembled fact belongs to the
             // function the guest actually invoked, at the sequence it invoked it on —
-            // `_issueRpcAndWait`'s `expectedFunc`/`firstSequence` pair
-            // (`ogkm: rpc.c:2156-2158`). The *reply*, by contrast, is posted by the FSM
+            // `_issueRpcLarge`'s `expectedFunc`/`firstSequence` pair — the one it hands
+            // `rpcRecvPoll` for the head (`ogkm-610: rpc.c:2156-2158`,
+            // `ogkm-580: :2135-2137`). The *reply*, by contrast, is posted by the FSM
             // against the fragment that arrived last, which is where the driver reads
             // the status from; see [`crate::GraphPolicy`].
             function: head.function,
@@ -340,7 +347,8 @@ fn declared_total(abi: &DriverAbiTable, cmd: &RpcCommand) -> Option<usize> {
             h.params_at.checked_add(h.params_size as usize)
         }
         // ★ Every other function, including `RmAlloc`. Not an omission — `rpcRmApiAlloc_GSP`
-        // has no large path (`ogkm: rpc.c:11024-11029`), so a short fn-103 is malformed
+        // has no large path (`ogkm-610: rpc.c:11024-11029`, `ogkm-580: :11218-11223`), so
+        // a short fn-103 is malformed
         // rather than fragmented and must keep reaching
         // `BridgeRefusal::ParamsSizeExceedsPayload`.
         _ => None,

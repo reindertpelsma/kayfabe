@@ -308,7 +308,8 @@ impl CommandPolicy for GraphPolicy<'_> {
     /// fragmented `GSP_RM_CONTROL` the driver awaits one reply per fragment — the head at
     /// `(expectedFunc, firstSequence)`, then each continuation at
     /// `(CONTINUATION_RECORD, firstSequence + i)` — and reads `rpc_result` from the
-    /// **last** one it received (`ogkm: rpc.c:2156-2241`). So `None` here is the right
+    /// **last** one it received (`ogkm-610: rpc.c:2156-2241`, `ogkm-580: :2135-2220` —
+    /// the same loop and the same final read). So `None` here is the right
     /// answer for the head and every intermediate fragment (an `NV_OK` ack, echoing that
     /// fragment's own body and length, which is what the loop's `entryLength` arithmetic
     /// consumes), and the reassembly completes on the final fragment — the very one whose

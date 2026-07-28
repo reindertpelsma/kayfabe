@@ -746,9 +746,11 @@ impl DriverAbiTable {
     /// Decode the fixed header of a `GSP_RM_CONTROL` **RPC body** (everything
     /// after the 32-byte `rpc_message_header`), i.e. `rpc_gsp_rm_control_v03_00`.
     ///
-    /// Not versioned within the supported range — `ogkm: g_rpc-structures.h:1423-1435`
-    /// and `ogkm-580: g_rpc-structures.h:1506-1518` are the same list, field for
-    /// field. It takes the version table anyway, like every other decoder here.
+    /// Not versioned within the supported range —
+    /// `ogkm-580: src/nvidia/generated/g_rpc-structures.h:1506-1518` and
+    /// `ogkm-610: src/nvidia/generated/g_rpc-structures.h:1423-1435` are the same
+    /// list, field for field. It takes the version table anyway, like every other
+    /// decoder here.
     ///
     /// ★ Header **only**. `paramsSize` is guest-declared, so slicing `params[]`
     /// with it is a validation the caller owes, and the caller is the one that can
@@ -772,11 +774,14 @@ impl DriverAbiTable {
             cmd: u32_at(payload, 8)?,
             // +12 is `status`, an [OUT] field the guest sends as zero —
             // `rpcWriteCommonHeader` zeroes the whole message buffer before the
-            // sender fills it (`ogkm: src/nvidia/src/kernel/rmapi/rpc_common.c:149-152`).
+            // sender fills it (`ogkm-580: src/nvidia/src/kernel/rmapi/rpc_common.c:149-152`
+            // / `ogkm-610: src/nvidia/src/kernel/rmapi/rpc_common.c:149-152` — same lines
+            // at both).
             params_size: u32_at(payload, 16)?,
             rmapi_rpc_flags: u32_at(payload, 20)?,
             // +24 `rmctrlFlags`, +28 `rmctrlAccessRight` (both sent as 0 by
-            // `rpcRmApiControl_GSP`, `ogkm: rpc.c:10801-10802`), +32 `reserved0`.
+            // `rpcRmApiControl_GSP`, `ogkm-580: rpc.c:10994-10995` /
+            // `ogkm-610: rpc.c:10799-10800`), +32 `reserved0`.
             params_at: RpcControlReq::HEADER,
         })
     }
@@ -810,7 +815,9 @@ impl DriverAbiTable {
     ///
     /// Not versioned within the supported range: the struct lives in NVIDIA's
     /// OS-independent RM core and has carried these seven fields since `_v03_00`
-    /// (`ogkm: g_rpc-structures.h:1408-1419`). It takes the version table anyway,
+    /// (`ogkm-580: src/nvidia/generated/g_rpc-structures.h:1491-1502` /
+    /// `ogkm-610: src/nvidia/generated/g_rpc-structures.h:1408-1419` — the same
+    /// list at both). It takes the version table anyway,
     /// like every other decoder here, so the day it *does* move the call sites do
     /// not change.
     ///
@@ -847,8 +854,10 @@ impl DriverAbiTable {
     /// namespace, and whose `hClient` *is* its object handle?
     ///
     /// `[src]` `NV01_ROOT` (0x0) and `NV01_ROOT_CLIENT` (0x41) are one resource
-    /// kind to RM (`ogkm: src/common/sdk/nvidia/inc/class/cl0000.h:42`,
-    /// `ogkm: src/nvidia/generated/g_allclasses.h:289`); the generated module's
+    /// kind to RM (`ogkm-580: src/common/sdk/nvidia/inc/class/cl0000.h:42` /
+    /// `ogkm-610: src/common/sdk/nvidia/inc/class/cl0000.h:42` — same line at both;
+    /// `ogkm-580: src/nvidia/generated/g_allclasses.h:276` /
+    /// `ogkm-610: src/nvidia/generated/g_allclasses.h:289`); the generated module's
     /// own doc on [`classes::NV01_ROOT_CLIENT`] says the same.
     ///
     /// Lives here rather than in the bridge for the quarantine reason
@@ -913,7 +922,7 @@ pub const CLIENT_ALLOC_PREFIX: usize = 8;
 /// The bytes [`ChannelAllocFacts`] is decoded from — through `hVASpace` @ +28.
 ///
 /// ★ This is a **version-agreement** bound, not a struct size: it is exactly the
-/// region `ogkm` 610.43.02 and `ogkm-580` 580.159.04 spell identically. See
+/// region `ogkm-610` 610.43.02 and `ogkm-580` 580.159.04 spell identically. See
 /// [`ChannelAllocFacts`] for the divergence at +32.
 pub const CHANNEL_ALLOC_PREFIX: usize = 32;
 
@@ -952,7 +961,14 @@ pub enum AllocParams {
 const NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
 
 /// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES`
-/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h:272`, `ogkm: ctrl90f1.h:272`).
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h:268` /
+/// `ogkm-610: src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h:268` — same line at both,
+/// and the id's value `0x90f10106` is byte-identical there).
+///
+/// ★ The line was `:272` in both halves until 2026-07-28; that is the *params*
+/// `typedef` (`NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS`), not the
+/// command id. Carrying a version tag is not evidence the tree was read — this
+/// citation was `ogkm-580:`-tagged and still pointed four lines past the claim.
 ///
 /// ★★ **The one that matters.** It is issued at VASpace *construct* time for
 /// every split-VAS-eligible VAS on a GSP client — `gvaspaceConstruct__IMPL`
@@ -971,7 +987,12 @@ const NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
 const NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES: u32 = 0x90f1_0106;
 
 /// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`
-/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:1903-1908`).
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:1902`,
+/// `ogkm-610: :1905` — the id's value `0x20800a9f` is identical at both; only the
+/// line moved, so this is a **moved citation, not a version seam**).
+///
+/// ★ The 580 half read `:1903-1908` until 2026-07-28. Line 1903 is blank at 580;
+/// the `#define` is `:1902` and the params `typedef` does not start until `:1906`.
 ///
 /// A `ROUTE_TO_PHYSICAL` wrapper whose params are a single-member struct around
 /// the same `NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS` at offset 0

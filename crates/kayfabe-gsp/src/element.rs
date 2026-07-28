@@ -38,12 +38,20 @@
 //!
 //! ## Checksum
 //!
-//! 64-bit XOR fold, reduced to 32 by `hi ^ lo` (`ogkm: message_queue_priv.h:191-209`).
+//! 64-bit XOR fold, reduced to 32 by `hi ^ lo`
+//! (`ogkm-610: message_queue_priv.h:191-209`, `ogkm-580: :106-124`). ★ `_checkSum32` is
+//! **byte-identical** at both tags, comment included — the element around it changed
+//! shape, the fold did not, so there is no version profile to add for the checksum itself.
 //! The routine steps in `NvU64`s `while (p < pEnd)`, i.e. it **reads up to the next
 //! 8-byte boundary past `uLen`** — its own comment licenses exactly that — and the sender
-//! zero-pads to 8 first (`ogkm: message_queue_cpu.c:499-503`). Coverage in the plain case
-//! is `hdrSize + rpc.length` (`ogkm: message_queue_cpu.c:543-546`, and the receiver's
-//! mirror at `:724-734`); the whole element run when CC is on (`:540-541`).
+//! zero-pads to 8 first (`ogkm-610: message_queue_cpu.c:499-501`, `ogkm-580: :477-479`,
+//! likewise identical). Coverage in the plain case is `hdrSize + rpc.length`
+//! (`ogkm-610: message_queue_cpu.c:543-546`, `ogkm-580: :517-520`, and the receiver's
+//! mirror at `ogkm-610: :723-728`, `ogkm-580: :678-683`); the whole element run when CC is
+//! on (`ogkm-610: :540-541`, `ogkm-580: :514-515`). The two tags spell the run differently
+//! — 610 `nElements * queueElementSizeMin`, 580 `pCQE->elemCount *
+//! GSP_MSG_QUEUE_ELEMENT_SIZE_MIN` — which is the same seam as everywhere else in this
+//! file: *who* supplies the element count, not what the checksum covers.
 //!
 //! ★ nouveau folds over the **page-rounded whole element** instead
 //! (`nv: r535/rpc.c:364-375`). Both agree only if the element's tail is zero — so
@@ -61,12 +69,25 @@ pub enum TransportHdr {
     /// authentication/AAD buffers.
     None,
     /// MCTP over NVDM — the 610 form, which the guest **validates** on receive
-    /// (`ogkm: message_queue_cpu.c:737-759`: a wrong `MCTP_HEADER_VERSION` or a wrong
+    /// (`ogkm-610: message_queue_cpu.c:737-759`: a wrong `MCTP_HEADER_VERSION` or a wrong
     /// NVDM vendor id is `NV_ERR_INVALID_DATA`, *"MCTP protocol violation"*).
+    ///
+    /// ★★ **This variant exists only at 610.** 580 has no transport header and no such
+    /// check anywhere in its receive path — bytes @0–@31 of a 580 element are the CC
+    /// `authTagBuffer[16]` and `aadBuffer[16]` (`ogkm-580: message_queue_priv.h:45-46`),
+    /// which a CC-off guest never reads. [`TransportHdr::None`] is therefore *correct* for
+    /// the bench and must not be "fixed" into a placeholder MCTP pair.
+    ///
+    /// ⚠ 610 validates **only** those two fields: `REF_VAL(MCTP_HEADER_VERSION, …) == 1`
+    /// and `REF_VAL(MCTP_MSG_HEADER_VENDOR_ID, …) == 0x10de`. SOM, EOM, SEID/DEID/SEQ and
+    /// the NVDM *type* byte are read by nothing (`ogkm-610: message_queue_cpu.c:739-758`),
+    /// so no test may assert that a guest rejects a wrong SOM/EOM/SEQ/NVDM-type — that
+    /// would pin a behaviour the driver does not have.
     ///
     /// The words are carried whole rather than as bit fields: the guest's encoder builds
     /// them from fixed arguments — `mctpCreateTransportHeader(SOM=1, EOM=1, 0, 0, 0)` and
-    /// `mctpCreateNvdmHeader(NVDM_TYPE_RM_RPC)` (`ogkm: message_queue_cpu.c:505-512`) — so
+    /// `mctpCreateNvdmHeader(NVDM_TYPE_RM_RPC)` (`ogkm-610: message_queue_cpu.c:505-512`;
+    /// neither helper nor `mctp_format.h` exists at 580) — so
     /// every conforming element carries the same two constants, and the ABI layer that
     /// knows the bit positions supplies them already assembled. This crate never encodes
     /// a bit field it has not seen.
@@ -99,10 +120,21 @@ pub struct ElementLayout {
 impl ElementLayout {
     /// Describe an element header.
     ///
-    /// `hdr_size` is the **effective** header size — `queueElementHdrSize`, i.e. with the
-    /// Confidential-Compute tag already folded in where CC is on
-    /// (`ogkm: message_queue_cpu.c:80-86`). It is a computed value at the ABI seam, never
-    /// a constant here, which is what keeps CC from needing a second code path.
+    /// `hdr_size` is the **effective** header size. ★ The two tags reach it differently and
+    /// both readings land here as one value:
+    ///
+    /// - **610** — a runtime `queueElementHdrSize`,
+    ///   `NV_OFFSETOF(GSP_MSG_QUEUE_ELEMENT, payload)` **plus**
+    ///   `sizeof(GSP_MSG_QUEUE_ENCRYPTION_TAG)` where CC is on
+    ///   (`ogkm-610: message_queue_cpu.c:82-86`), and also declared to us in the guest's
+    ///   init args.
+    /// - **580** — a compile-time `NV_OFFSETOF(GSP_MSG_QUEUE_ELEMENT, rpc)` = 48, with the
+    ///   CC `authTagBuffer`/`aadBuffer` *inside* that header rather than appended to it
+    ///   (`ogkm-580: message_queue_priv.h:43-51, 93`), so there is nothing to fold in and
+    ///   the size does not vary with CC at all.
+    ///
+    /// It is a computed value at the ABI seam, never a constant here, which is what keeps
+    /// CC from needing a second code path on the version that does vary.
     ///
     /// # Errors
     ///
@@ -177,7 +209,8 @@ impl ElementLayout {
     /// ★ `None` on 610 — and getting this wrong is not a cosmetic difference: at that
     /// offset 610 has `rpc.sequence` (payload@16 + 24), so an encoder that wrote the
     /// element count there would corrupt the transaction id
-    /// (`ogkm: message_queue_priv.h:52-67`).
+    /// (`ogkm-610: message_queue_priv.h:52-67`, against 580's own element at
+    /// `ogkm-580: :43-51` where `elemCount` really is @40).
     #[must_use]
     pub fn elem_count_off(&self) -> Option<usize> {
         self.elem_count_off
@@ -249,12 +282,24 @@ pub fn checksum32(bytes: &[u8], len: usize) -> u32 {
 
 /// A validated message length: the one bound every extent in the transport derives from.
 ///
-/// ★ The **lower** bound is the RPC envelope's own size, not zero. `rpc.length == 0`
-/// passes the driver's own sanity check (`msgLen == hdrSize`,
-/// `ogkm: message_queue_cpu.c:487-497` and the mirror at `:824-833`) and
-/// `bytesToElements(hdrSize, 4096) == 1`, so a zero-length message silently consumes an
-/// element and then produces garbage upstream. Refusing it is part of the authorised
-/// "RPC element parsing" deviation.
+/// ★ The **lower** bound is the RPC envelope's own size, not zero — and ★★ **the two tags
+/// disagree about whether the driver enforces that itself.** Both sanity-check the same
+/// quantity in the same two places, send and receive, but against different constants:
+///
+/// - **610** bounds `msgLen` below by `queueElementHdrSize`
+///   (`ogkm-610: message_queue_cpu.c:487-497`, mirror at `:824-833`). So `rpc.length == 0`
+///   **passes**, `bytesToElements(hdrSize, 4096) == 1`, and a zero-length message silently
+///   consumes an element and then produces garbage upstream. Refusing it here is the
+///   authorised "RPC element parsing" deviation.
+/// - **580** bounds it by `sizeof(GSP_MSG_QUEUE_ELEMENT)`
+///   (`ogkm-580: message_queue_cpu.c:465-475`, mirror at `:760-770`) — the 48-byte header
+///   **plus** the 32-byte `rpc_message_header_v` it embeds
+///   (`ogkm-580: message_queue_priv.h:43-51`). That is `rpc.length >= 32`, i.e. **the
+///   bench's driver already rejects a zero-length message on its own**, and the rule below
+///   is not a deviation there but a match.
+///
+/// Same code either way: the floor is `RpcEnvelope::SIZE`, which is 580's rule exactly and
+/// a strict tightening of 610's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MsgLen {
     rpc_length: u32,
@@ -328,15 +373,20 @@ pub struct OutgoingRpc {
 }
 
 /// Word index of `length` within the RPC envelope — the third of its eight `u32`s
-/// (`ogkm: src/nvidia/generated/g_rpc-message-header.h:41-52`).
+/// (`ogkm-580: src/nvidia/generated/g_rpc-message-header.h:41-52`, `ogkm-610: :41-52`).
+/// ★ That file is **byte-identical at both tags, at the same lines**: the envelope did not
+/// move when the element around it did, so nothing keyed on a driver version belongs here.
 ///
 /// ★ **OWED TO `kayfabe-abi`**, like [`encode_envelope`]: that crate owns the layout and
 /// exposes a whole-envelope decoder, but a *two-phase* receive needs this one field out of
-/// a buffer that is deliberately too short for the whole message — the driver's own first
-/// step is exactly that (`gspMsgQueueGetRpcMessageLength` on element 0,
-/// `ogkm: message_queue_cpu.c:684-702`). Validating the envelope here instead would refuse
-/// every multi-element message, because the declared length exceeds the one element read
-/// so far.
+/// a buffer that is deliberately too short for the whole message. Both drivers do exactly
+/// that off element 0 — 610 through `gspMsgQueueGetRpcMessageLength`, to *derive the
+/// element count* (`ogkm-610: message_queue_cpu.c:684-702`); 580 by reading
+/// `pCmdQueueElement->rpc.length` directly, for the checksum span and the length sanity
+/// check (`ogkm-580: :680-682`, `:760`), having taken its element count from the
+/// `elemCount` field instead (`ogkm-580: :652-659`). Validating the envelope here instead
+/// would refuse every multi-element message, because the declared length exceeds the one
+/// element read so far.
 const ENVELOPE_LENGTH_WORD: usize = 2;
 
 /// Encode the RPC envelope into `out[..32]`.
@@ -351,8 +401,9 @@ const ENVELOPE_LENGTH_WORD: usize = 2;
 /// `length` is `32 + payload.len()`, i.e. **32** for a bare header. The C writes 36
 /// (`C:1586`) with a comment claiming it is the header's size; the same file uses 32 in
 /// two other places (`C:1637`, `C:1657`) and `sizeof(rpc_message_header_v03_00)` is 32
-/// (`ogkm: src/nvidia/generated/g_rpc-message-header.h:41-52`). That is authorised
-/// deviation **GSP-D1**.
+/// (`ogkm-580: src/nvidia/generated/g_rpc-message-header.h:41-52`, `ogkm-610: :41-52` —
+/// identical file, identical lines, eight `u32`s). That is authorised deviation
+/// **GSP-D1**.
 fn encode_envelope(out: &mut [u8], header_version: u32, rpc: &OutgoingRpc, length: u32) {
     let words = [
         header_version,
@@ -372,9 +423,13 @@ fn encode_envelope(out: &mut [u8], header_version: u32, rpc: &OutgoingRpc, lengt
 /// Build the full element run for one message: `elements * element_size` bytes, zeroed,
 /// with every fixed field and a checksum that folds the whole thing to zero.
 ///
-/// The steps are the driver's own send path (`ogkm: message_queue_cpu.c:487-546`):
-/// bound the length, zero-pad, fill the transport headers, stamp `seqNum`, zero
-/// `checkSum`, fold, store.
+/// The steps are the driver's own send path (`ogkm-610: message_queue_cpu.c:487-546`,
+/// `ogkm-580: :465-520`): bound the length, zero-pad, stamp `seqNum`, zero `checkSum`,
+/// fold, store. ★ The one step that is version-shaped is the third: 610 fills the
+/// **transport headers** there (`ogkm-610: :505-512`) and 580 stamps **`elemCount`**
+/// instead (`ogkm-580: :481-483`). The `if let` over [`TransportHdr`] and the `if let` over
+/// [`ElementLayout::elem_count_off`] below are precisely those two arms, which is why this
+/// one encoder serves both without a version branch.
 ///
 /// # Errors
 ///
@@ -463,12 +518,19 @@ pub struct IncomingRpc {
 
 /// Read the declared length out of a message's **first** element.
 ///
-/// This is step 1 of the driver's own two-phase receive: read element 0, derive
-/// `nElements` from `hdrSize + rpc.length`, then read the rest
-/// (`ogkm: message_queue_cpu.c:684-702`). The extent of the second read therefore comes
-/// from the first copy and is bounded by `queueElementSizeMax` — which is exactly the
-/// shape `gl11_region_arguments.md` §2.1 item 4 permits, and it is why the port can read
-/// continuation elements (which the C skips, `C:3341-3350`) without needing a region lock.
+/// This is step 1 of the driver's own two-phase receive: read element 0, work out how many
+/// elements the record occupies, then read the rest. ★★ **How that count is obtained is
+/// the version seam**, and this function implements only one half of it: deriving
+/// `nElements` from `hdrSize + rpc.length` is **610's** algorithm
+/// (`ogkm-610: message_queue_cpu.c:684-702`, consumed at `:838`). At 580 the count is read
+/// out of the element's own `elemCount` field (`ogkm-580: :652-659`, consumed at `:774`)
+/// and `rpc.length` gates nothing on that path — see [`peek_elem_count`], which is the
+/// authority the receive path must prefer where it exists.
+///
+/// The extent of the second read therefore comes from the first copy and is bounded by
+/// `queueElementSizeMax` — which is exactly the shape `gl11_region_arguments.md` §2.1 item
+/// 4 permits, and it is why the port can read continuation elements (which the C skips,
+/// `C:3341-3350`) without needing a region lock.
 ///
 /// # Errors
 ///
@@ -531,9 +593,12 @@ pub fn peek_elem_count(layout: &ElementLayout, first: &[u8]) -> Result<Option<u3
 
 /// Verify and decode a complete element run.
 ///
-/// The checks are the driver's, in the driver's order
-/// (`ogkm: message_queue_cpu.c:710-788`): checksum folds to zero, then the transport
-/// headers, then `seqNum == rxSeqNum`.
+/// The checks are the driver's, in the driver's order: checksum folds to zero, then the
+/// transport headers, then `seqNum == rxSeqNum` (`ogkm-610: message_queue_cpu.c:710-788`).
+/// ★ At 580 the same two surviving checks run in the same order and the middle one is
+/// simply absent, because 580 has no transport header to validate
+/// (`ogkm-580: :666-719`: checksum at `:666-690`, sequence at `:692-719`). The
+/// [`TransportHdr::None`] arm below is that absence, not a skipped check.
 ///
 /// # Errors
 ///

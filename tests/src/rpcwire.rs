@@ -28,9 +28,14 @@
 
 /// `sizeof(rpc_message_header_v03_00)` — the envelope every RPC body sits behind.
 ///
-/// `[src]` `ogkm: src/nvidia/inc/kernel/vgpu/rpc_headers.h`: `header_version@0`,
-/// `signature@4`, `length@8`, `function@12`, `rpc_result@16`, `rpc_result_private@20`,
-/// `sequence@24`, `u@28`. **32**, not the 36 the C artifact's stale constant says.
+/// `[src]` **checked at both tags, byte-identical, same line numbers** — no version seam
+/// here. ★ And the struct is **not** in `rpc_headers.h`, which carries only
+/// `NV_VGPU_MSG_SIGNATURE_VALID` (`:61`) and the version DRFs (`:56-59`); it is generated:
+/// `ogkm-610: src/nvidia/generated/g_rpc-message-header.h:41-52`,
+/// `ogkm-580: g_rpc-message-header.h:41-52` — `header_version@0`, `signature@4`,
+/// `length@8`, `function@12`, `rpc_result@16`, `rpc_result_private@20`, `sequence@24`,
+/// `u@28` (a 4-byte union, `spare`/`cpuRmGfid`, `:33-37` at both). **32**, not the 36 the
+/// C artifact's stale constant says.
 pub const ENVELOPE: usize = 32;
 
 /// `NV_VGPU_MSG_SIGNATURE_VALID` — ASCII `"VRPC"`, little-endian.
@@ -69,7 +74,8 @@ pub fn with_length(mut msg: Vec<u8>, length: u32) -> Vec<u8> {
     msg
 }
 
-/// `pRpc->maxRpcSize` — `RM_PAGE_SIZE` (`ogkm: rpc.c:1002`, `ogkm-580: :1002`).
+/// `pRpc->maxRpcSize` — `RM_PAGE_SIZE` (`ogkm-610: rpc.c:1002`, `ogkm-580: rpc.c:1000`;
+/// same statement, the line drifted).
 ///
 /// The number [`fragment`] splits on. Tests mostly pass something far smaller, because
 /// the split arithmetic is what is under test and 4096-byte fixtures hide off-by-ones in
@@ -79,19 +85,23 @@ pub const MAX_RPC_SIZE: usize = 4096;
 /// Split one whole RPC message into the fragment run `_issueRpcLarge` would post —
 /// **transcribed from the driver's own loop**, not from our reassembler.
 ///
-/// `[src]` `ogkm: src/nvidia/src/kernel/vgpu/rpc.c:2074-2143`, line by line:
+/// `[src]` `_issueRpcLarge`, **checked at both tags and semantically identical** — only
+/// the spelling of the header pointer differs (610 `pVgpuRpcHeader` / `rpcGetVgpuMessageData(pRpc)`
+/// vs 580's `vgpu_rpc_message_header_v` / `rpc_message` macros), so there is no version
+/// seam in this loop. `ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:2058-2147`,
+/// `ogkm-580: rpc.c:2038-2126`; line by line, **610 number first, 580 second**:
 ///
 /// ```text
-/// entryLength = NV_MIN(bufSize, pRpc->maxRpcSize);          // :2082
-/// pVgpuRpcHeader->length = entryLength;                     // :2089  <- the HEAD
-/// rpcSendMessage(...)                                       // :2091  sequence++
-/// entryLength = pRpc->maxRpcSize - sizeof(rpc_message_header_v);   // :2108
+/// entryLength = NV_MIN(bufSize, pRpc->maxRpcSize);          // :2082 / :2061
+/// hdr->length = entryLength;                                // :2088 / :2067  <- the HEAD
+/// rpcSendMessage(...)                                       // :2090 / :2069  sequence++
+/// entryLength = pRpc->maxRpcSize - sizeof(rpc_message_header_v); // :2108 / :2087
 /// while (remainingSize != 0) {
-///     if (entryLength > remainingSize) entryLength = remainingSize;  // :2110-2111
-///     portMemCopy(rpcGetVgpuMessageData(pRpc), entryLength, pBuf8, entryLength); // :2119
-///     pVgpuRpcHeader->length   = entryLength + sizeof(rpc_message_header_v);     // :2122
-///     pVgpuRpcHeader->function = NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD;       // :2123
-///     rpcSendMessage(...)                                   // :2125  sequence++
+///     if (entryLength > remainingSize) entryLength = remainingSize; // :2111-2112 / :2090-2091
+///     portMemCopy(<message data>, entryLength, pBuf8, entryLength); // :2120 / :2099
+///     hdr->length   = entryLength + sizeof(rpc_message_header_v);   // :2123 / :2102
+///     hdr->function = NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD;     // :2124 / :2103
+///     rpcSendMessage(...)                                   // :2126 / :2105  sequence++
 /// }
 /// ```
 ///
@@ -101,7 +111,8 @@ pub const MAX_RPC_SIZE: usize = 4096;
 ///   body while each continuation carries `max_rpc_size - 32` bytes of the *original
 ///   buffer* — the fragments are slices of `[envelope ++ body]`, not of `body`;
 /// - the sequence increments **per fragment**
-///   (`NV_ASSERT(lastSequence == firstSequence + recordCount)`, `:2147`), which is what
+///   (`NV_ASSERT(lastSequence == firstSequence + recordCount)`,
+///   `ogkm-610: rpc.c:2147` / `ogkm-580: rpc.c:2126`), which is what
 ///   the receive side polls on.
 ///
 /// A `body` that already fits in one message comes back as a single-element `Vec` with no
@@ -111,7 +122,8 @@ pub const MAX_RPC_SIZE: usize = 4096;
 /// # Panics
 /// If `max_rpc_size` is not larger than [`ENVELOPE`], which would make the continuation
 /// stride zero and the loop non-terminating. The driver has the same precondition, as
-/// `NV_ASSERT_OR_RETURN(fixed_param_size <= pRpc->maxRpcSize)` (`ogkm: rpc.c:10562`).
+/// `NV_ASSERT_OR_RETURN(fixed_param_size <= pRpc->maxRpcSize)` (`ogkm-610: rpc.c:10562`,
+/// `ogkm-580: rpc.c:10758` — identical statement, moved).
 #[must_use]
 pub fn fragment(
     function: u32,
@@ -145,13 +157,15 @@ pub fn fragment(
 
 /// `NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD` = 71, for [`fragment`]'s use before
 /// [`fn_id`] is in scope. Same number, transcribed once more from
-/// `ogkm: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:81`.
+/// `ogkm-610: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:81` and
+/// `ogkm-580: rpc_global_enums.h:81` — same line at both, no seam.
 const CONTINUATION_RECORD: u32 = 71;
 
 /// `rpc_gsp_rm_alloc_v03_00` — the `GSP_RM_ALLOC` body.
 ///
-/// `[src]` `ogkm: src/nvidia/generated/g_rpc-structures.h:1408-1419`, transcribed field by
-/// field:
+/// `[src]` `ogkm-610: src/nvidia/generated/g_rpc-structures.h:1408-1419` and
+/// `ogkm-580: g_rpc-structures.h:1491-1502` — member for member identical, only the line
+/// moved. Transcribed field by field:
 ///
 /// ```text
 /// NvHandle hClient;      // +0
@@ -193,9 +207,11 @@ pub fn alloc_body(
 /// The body a **conforming guest** sends for a client root: `hParent` and `hObject` are
 /// both `NV01_NULL_OBJECT`, and `paramsSize` matches the params it carries.
 ///
-/// `[src]` `ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:83-88` — the FWCLIENT macro calls
+/// `[src]` `ogkm-610: src/nvidia/inc/kernel/vgpu/rpc.h:83-88`, `ogkm-580: rpc.h:83-88`
+/// (**identical at both, same lines**) — the FWCLIENT macro calls
 /// `AllocWithHandle(pRmApi, hclient, NV01_NULL_OBJECT, NV01_NULL_OBJECT, NV01_ROOT, …)`,
-/// and `rpcRmApiAlloc_GSP` copies all three through verbatim (`ogkm: rpc.c:11007-11009`).
+/// and `rpcRmApiAlloc_GSP` copies all three through verbatim
+/// (`ogkm-610: rpc.c:11007-11009`, `ogkm-580: rpc.c:11201-11203`).
 /// The `0/0` is the whole reason the bridge normalises.
 #[must_use]
 pub fn client_root_alloc_body(h_class: u32, h_client: u32, process_id: u32) -> Vec<u8> {
@@ -214,9 +230,13 @@ pub fn client_root_alloc_body(h_class: u32, h_client: u32, process_id: u32) -> V
 /// `NV0000_ALLOC_PARAMETERS`, as far as anyone can honestly claim to know it.
 ///
 /// `[src]` `hClient@0` and `processID@4` are the first two members in every ogkm tree and
-/// are the only two RM's own writer sets (`ogkm: rpc.h:55,70,75`). The tail
-/// (`processName[100]`, `pOsPidInfo`) has **no second oracle** — neither nvproxy nor the C
-/// artifact models this struct at all — so this builder emits the prefix followed by
+/// are the only two RM's own writer sets **that this builder can honestly reproduce**
+/// (`ogkm-610: rpc.h:55,70,75`, `ogkm-580: rpc.h:55,70,75` — identical at both, same
+/// lines). ★ Not the only two it writes: `:76` also stores `pOsPidInfo` from
+/// `pClient->pOsPidInfo`, a **kernel pointer** with no wire meaning, on the non-kernel
+/// arm. The tail (`processName[100]`, `pOsPidInfo`) has **no second oracle** — neither
+/// nvproxy nor the C artifact models this struct at all — so this builder emits the
+/// prefix followed by
 /// zeroed filler and lets the caller say how long the whole thing is. A guest sends
 /// `sizeof`; we decode 8 bytes and never look at the rest.
 #[must_use]
@@ -242,7 +262,9 @@ fn put64(buf: &mut [u8], off: usize, v: u64) {
 
 /// `NV0080_ALLOC_PARAMETERS` — the Device class's params, all 56 bytes.
 ///
-/// `[src]` `ogkm: src/common/sdk/nvidia/inc/class/cl0080.h:47-56`, transcribed field by
+/// `[src]` `ogkm-610: src/common/sdk/nvidia/inc/class/cl0080.h:54-64`,
+/// `ogkm-580: cl0080.h:54-64` — **identical at both, same lines**. (The old `:47-56`
+/// pointed at the doc-comment above the typedef, at both tags.) Transcribed field by
 /// field with the `NV_DECLARE_ALIGNED(…, 8)` padding written out:
 ///
 /// ```text
@@ -276,9 +298,9 @@ pub fn device_params(device_id: u32, h_client_share: u32, va_mode: u32) -> Vec<u
 
 /// `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS` — the TSG's params, 20 bytes.
 ///
-/// `[src]` `ogkm: src/common/sdk/nvidia/inc/nvos.h:2899-2906`, and — the point of writing
-/// it out twice — `ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2903-2911` is character for
-/// character the same list:
+/// `[src]` `ogkm-610: src/common/sdk/nvidia/inc/nvos.h:2899-2907`, and — the point of
+/// writing it out twice — `ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2903-2911` is
+/// character for character the same list:
 ///
 /// ```text
 /// NvHandle hObjectError;                  // +0
@@ -303,7 +325,7 @@ pub fn tsg_params(h_vaspace: u32, engine_type: u32) -> Vec<u8> {
 /// and **third** in the TSG. Getting the two the same way round is the bug this layout
 /// invites.
 ///
-/// `[src]` `ogkm: nvos.h:3223-3228`, `ogkm-580: nvos.h:3232-3237` (identical):
+/// `[src]` `ogkm-610: nvos.h:3223-3228`, `ogkm-580: nvos.h:3232-3237` (identical):
 ///
 /// ```text
 /// NvHandle hVASpace;   // +0   ★ the fact
@@ -321,8 +343,10 @@ pub fn ctxshare_params(h_vaspace: u32, flags: u32, subctx_id: u32) -> Vec<u8> {
 
 /// `NV_CHANNEL_ALLOC_PARAMS` — a channel's params, emitted at the **580** length.
 ///
-/// `[src]` `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:288-330`, which is
-/// the tree matching this project's bench driver:
+/// `[src]` `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-342`, which is
+/// the tree matching this project's bench driver. The typedef opens at `:296` in **both**
+/// trees; only the close differs (`ogkm-610: alloc_channel.h:296-347`), because 610 has
+/// one extra member — see the `+32` note below:
 ///
 /// ```text
 /// NvHandle hObjectError;      // +0
@@ -333,8 +357,15 @@ pub fn ctxshare_params(h_vaspace: u32, flags: u32, subctx_id: u32) -> Vec<u8> {
 /// NvU32    flags;             // +20  ★ the opaque USERD/flags word
 /// NvHandle hContextShare;     // +24  ★
 /// NvHandle hVASpace;          // +28  ★
-/// NvHandle hUserdMemory[8];   // +32  ── 610 puts `hHandleVASpace` HERE instead ──
+/// NvHandle hUserdMemory[8];   // +32  ── 610 INSERTS `hHandleVASpace` HERE ──
 /// ```
+///
+/// ★★ **The seam, stated exactly.** `flags@20 / hContextShare@24 / hVASpace@28` are
+/// identical at both tags (`ogkm-580: alloc_channel.h:303-307`,
+/// `ogkm-610: alloc_channel.h:303-309`). At +32, 580 begins `hUserdMemory[NV_MAX_SUBDEVICES]`
+/// (`ogkm-580: :310`) while 610 inserts a *new* `hHandleVASpace` (`ogkm-610: :312`) and
+/// pushes `hUserdMemory` to +36 (`ogkm-610: :315`). Everything past +32 therefore differs
+/// by four bytes of shift, which is why this builder stops there.
 ///
 /// ★★ The builder stops caring at +32 on purpose: everything past it is exactly the
 /// region the two vendored trees disagree about, so a fixture that asserted anything
@@ -360,7 +391,7 @@ pub fn channel_params(flags: u32, h_ctx_share: u32, h_vaspace: u32) -> Vec<u8> {
 
 /// `rpc_gsp_rm_control_v03_00` — the `GSP_RM_CONTROL` body.
 ///
-/// `[src]` `ogkm: src/nvidia/generated/g_rpc-structures.h:1423-1435` and
+/// `[src]` `ogkm-610: src/nvidia/generated/g_rpc-structures.h:1423-1435` and
 /// `ogkm-580: g_rpc-structures.h:1506-1518` — transcribed by hand from **both**, because
 /// this file's whole job is to be a second pair of eyes:
 ///
@@ -379,9 +410,11 @@ pub fn channel_params(flags: u32, h_ctx_share: u32, h_vaspace: u32) -> Vec<u8> {
 ///
 /// ★ `status` @ +12 is written as zero and that is a *protocol* fact, not tidiness:
 /// `rpcWriteCommonHeader` `portMemSet`s the whole message buffer before the sender fills
-/// it (`ogkm: src/nvidia/src/kernel/rmapi/rpc_common.c:149-152`), and the guest reads
+/// it (`ogkm-610: src/nvidia/src/kernel/rmapi/rpc_common.c:149-152`,
+/// `ogkm-580: rpc_common.c:149-152` — identical at both, same lines), and the guest reads
 /// **this field out of the reply** to get the control handler's own status
-/// (`ogkm: rpc.c:10868-10875`). An accepted control is acked with the request body
+/// (`ogkm-610: rpc.c:10868-10875`, `ogkm-580: rpc.c:11063-11070`). An accepted control is
+/// acked with the request body
 /// preserved, so the zero the guest sent is the `NV_OK` it reads back.
 #[must_use]
 pub fn control_body(
@@ -408,7 +441,7 @@ pub fn control_body(
 
 /// `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS` — 32 bytes.
 ///
-/// `[src]` `ogkm: src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h:802-809` and
+/// `[src]` `ogkm-610: src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h:802-810` and
 /// `ogkm-580: ctrl0080dma.h:832-840`, which are the same seven members in the same order —
 /// so the tail is **not** a 610-only shape, whatever the generated module's caveat says:
 ///
@@ -446,7 +479,8 @@ pub fn set_page_dir_params(
 }
 
 /// `rpc_free_v03_00` — which *is* `NVOS00_PARAMETERS_v03_00`
-/// (`ogkm: g_rpc-structures.h:162-167`), i.e. no wrapper and no header of its own:
+/// (`ogkm-610: g_rpc-structures.h:162-167`, `ogkm-580: g_rpc-structures.h:160-165`), i.e.
+/// no wrapper and no header of its own:
 ///
 /// ```text
 /// NvHandle hRoot;          // +0
@@ -455,8 +489,10 @@ pub fn set_page_dir_params(
 /// NvV32    status;         // +12  [OUT]
 /// ```
 ///
-/// `[src]` `ogkm: src/common/sdk/nvidia/inc/nvos.h:164-167` for the field order,
-/// `ogkm: rpc.c:11147-11149` for what the driver puts in each one.
+/// `[src]` `ogkm-610: src/common/sdk/nvidia/inc/nvos.h:164-167` /
+/// `ogkm-580: nvos.h:162-165` for the field order (same four members, moved);
+/// `ogkm-610: rpc.c:11147-11149` / `ogkm-580: rpc.c:11339-11341` for what the driver puts
+/// in each one.
 #[must_use]
 pub fn free_body(h_root: u32, h_object_parent: u32, h_object_old: u32) -> Vec<u8> {
     let mut b = vec![0u8; 16];
@@ -469,7 +505,7 @@ pub fn free_body(h_root: u32, h_object_parent: u32, h_object_old: u32) -> Vec<u8
 
 /// `rpc_dup_object_v03_00` — which, like the free body, *is* the bare SDK struct
 /// `NVOS55_PARAMETERS_v03_00` with no wrapper of its own
-/// (`ogkm: g_rpc-structures.h:200-205`, `ogkm-580: g_rpc-structures.h:198-203`):
+/// (`ogkm-610: g_rpc-structures.h:200-205`, `ogkm-580: g_rpc-structures.h:198-203`):
 ///
 /// ```text
 /// NvHandle hClient;     // +0   ★ the DESTINATION client — the message's own namespace
@@ -482,10 +518,10 @@ pub fn free_body(h_root: u32, h_object_parent: u32, h_object_old: u32) -> Vec<u8
 ///                       //      sizeof == 28
 /// ```
 ///
-/// `[src]` field order and widths from `ogkm: g_sdk-structures.h:368-377` and
+/// `[src]` field order and widths from `ogkm-610: g_sdk-structures.h:368-377` and
 /// `ogkm-580: g_sdk-structures.h:366-375` — transcribed from **both**, and they are
-/// identical member for member; `ogkm: rpc.c:11098-11103` / `ogkm-580: rpc.c:11291-11296`
-/// for what `rpcRmApiDupObject_GSP` puts in each one.
+/// identical member for member; `ogkm-610: rpc.c:11098-11103` /
+/// `ogkm-580: rpc.c:11291-11296` for what `rpcRmApiDupObject_GSP` puts in each one.
 ///
 /// ★ Note `hParent` is **not** the always-zero the `FREE` path carries: the caller passes
 /// `pDstParentRef->hResource`, a live handle in the destination namespace
@@ -511,11 +547,11 @@ pub fn dup_body(
     b
 }
 
-/// `NV04_DUP_HANDLE_FLAGS_NONE` (`ogkm: nvos.h:2276`, `ogkm-580: nvos.h:2275`) — what the
-/// memory dup path sends verbatim (`ogkm-580: mem.c:1116-1119` passes a literal `0`).
+/// `NV04_DUP_HANDLE_FLAGS_NONE` (`ogkm-610: nvos.h:2276`, `ogkm-580: nvos.h:2275`) — what
+/// the memory dup path sends verbatim (`ogkm-580: mem.c:1116-1120` passes a literal `0`).
 pub const NV04_DUP_HANDLE_FLAGS_NONE: u32 = 0;
 
-/// `NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE` (`ogkm: nvos.h:2277`,
+/// `NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE` (`ogkm-610: nvos.h:2277`,
 /// `ogkm-580: nvos.h:2276`) — *"prevents an RM kernel client from duping
 /// unconditionally"*.
 ///
@@ -526,33 +562,43 @@ pub const NV04_DUP_HANDLE_FLAGS_NONE: u32 = 0;
 pub const NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE: u32 = 1;
 
 /// The body `rpcRmApiFree_GSP` actually sends: `hObjectParent` is always
-/// `NV01_NULL_OBJECT` on this path (`ogkm: rpc.c:11148`).
+/// `NV01_NULL_OBJECT` on this path (`ogkm-610: rpc.c:11148`, `ogkm-580: rpc.c:11340`).
 #[must_use]
 pub fn driver_free_body(h_client: u32, h_object: u32) -> Vec<u8> {
     free_body(h_client, NV01_NULL_OBJECT, h_object)
 }
 
-/// `NV01_NULL_OBJECT` (`ogkm: src/common/sdk/nvidia/inc/nvlimits.h` / `cl0000.h`).
+/// `NV01_NULL_OBJECT` (`ogkm-610: src/common/sdk/nvidia/inc/class/cl0000.h:37`,
+/// `ogkm-580: class/cl0000.h:37` — same line at both).
+///
+/// ★ It is **not** in `nvlimits.h`, which this comment used to name: that header defines
+/// only `NV_MAX_DEVICES` (`:37` at both). The only other spelling is the generated alias
+/// `ogkm-610: src/nvidia/generated/g_allclasses.h:275` / `ogkm-580: g_allclasses.h:262`.
 pub const NV01_NULL_OBJECT: u32 = 0;
 
-/// `RMAPI_RPC_FLAGS_NONE` (`ogkm: src/nvidia/inc/kernel/rmapi/rmapi.h:161`).
+/// `RMAPI_RPC_FLAGS_NONE` (`ogkm-610: src/nvidia/inc/kernel/rmapi/rmapi.h:161`,
+/// `ogkm-580: rmapi.h:161` — same line at both; the whole trio `161/162/163` is
+/// unmoved).
 pub const RMAPI_RPC_FLAGS_NONE: u32 = 0;
 
-/// `RMAPI_RPC_FLAGS_SERIALIZED` = `NVBIT(1)` (`ogkm: rmapi.h:163`) — transcribed here a
+/// `RMAPI_RPC_FLAGS_SERIALIZED` = `NVBIT(1)` (`ogkm-610: rmapi.h:163`,
+/// `ogkm-580: rmapi.h:163`) — transcribed here a
 /// SECOND time, deliberately, so a test that builds a serialized alloc does not take the
 /// bit from the same constant the predicate under test reads.
 pub const RMAPI_RPC_FLAGS_SERIALIZED: u32 = 2;
 
-/// `RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR` = `NVBIT(0)` (`ogkm: rmapi.h:162`).
+/// `RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR` = `NVBIT(0)` (`ogkm-610: rmapi.h:162`,
+/// `ogkm-580: rmapi.h:162`).
 ///
 /// ★ The **neighbour** of the serialized bit, and the reason the serialization question is
 /// a bit test rather than `!= 0`: `rpcRmApiControl_GSP` sets this one whenever the control
-/// carries `RMCTRL_FLAGS_COPYOUT_ON_ERROR` (`ogkm: rpc.c:10803-10804`), entirely
+/// carries `RMCTRL_FLAGS_COPYOUT_ON_ERROR` (`ogkm-610: rpc.c:10803`,
+/// `ogkm-580: rpc.c:10998`), entirely
 /// independently. A control with only this bit set is perfectly ordinary and must
 /// translate.
 pub const RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR: u32 = 1;
 
-/// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` (`ogkm: ctrl0080dma.h:798`,
+/// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` (`ogkm-610: ctrl0080dma.h:798`,
 /// `ogkm-580: ctrl0080dma.h:828`) — the one control this port models.
 pub const NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY: u32 = 0x0080_1813;
 
@@ -561,7 +607,9 @@ pub const NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY: u32 = 0x0080_1813;
 /// table that got the constant off by one would still look plausible.
 pub const NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
 
-/// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`ogkm-580: ctrl90f1.h:272`).
+/// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`ogkm-580: ctrl90f1.h:268`,
+/// `ogkm-610: ctrl90f1.h:268` — same line at both; the old `:272` was the *params*
+/// typedef, not the command id).
 ///
 /// ★★ The control that carries the root page directory of every **ordinary** RM-managed
 /// VASpace on a GSP client, at construct time, as `levels[0].physAddress`. This port does
@@ -569,61 +617,75 @@ pub const NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
 pub const NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES: u32 = 0x90f1_0106;
 
 /// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`
-/// (`ogkm-580: ctrl2080internal.h:1903`) — the same payload for the GPU-group global VAS,
+/// (`ogkm-580: ctrl2080internal.h:1902`, `ogkm-610: ctrl2080internal.h:1905`) — the same
+/// payload for the GPU-group global VAS,
 /// on the `!IS_VIRTUAL` (i.e. bare-metal) arm.
 pub const NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER: u32 =
     0x2080_0a9f;
 
 /// `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS_APERTURE_VIDMEM`
-/// (`ogkm: ctrl0080dma.h:813`) — `flags[1:0] == 0`, the root is in framebuffer.
+/// (`ogkm-610: ctrl0080dma.h:813`, `ogkm-580: ctrl0080dma.h:843`) — `flags[1:0] == 0`,
+/// the root is in framebuffer.
 pub const PDB_APERTURE_VIDMEM: u32 = 0;
 
-/// `…_APERTURE_SYSMEM_COH` (`ogkm: ctrl0080dma.h:814`) — the root is in guest RAM.
+/// `…_APERTURE_SYSMEM_COH` (`ogkm-610: ctrl0080dma.h:814`, `ogkm-580: ctrl0080dma.h:844`)
+/// — the root is in guest RAM.
 pub const PDB_APERTURE_SYSMEM_COH: u32 = 1;
 
-/// `…_APERTURE_SYSMEM_NONCOH` (`ogkm: ctrl0080dma.h:815`).
+/// `…_APERTURE_SYSMEM_NONCOH` (`ogkm-610: ctrl0080dma.h:815`,
+/// `ogkm-580: ctrl0080dma.h:845`).
 pub const PDB_APERTURE_SYSMEM_NONCOH: u32 = 2;
 
 /// `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS_ALL_CHANNELS_TRUE` shifted into `[3:3]`
-/// (`ogkm: ctrl0080dma.h:820-822`). UVM always sets it
+/// (`ogkm-610: ctrl0080dma.h:819-821`, `ogkm-580: ctrl0080dma.h:849-851` — the field is
+/// `_ALL_CHANNELS 3:3` with `_FALSE`/`_TRUE` under it; the old `:820-822` ran one line
+/// late and swallowed `_IGNORE_CHANNEL_BUSY`). UVM always sets it
 /// (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:8857-8862`), so a realistic
 /// fixture carries it — and it also proves the aperture decode masks rather than compares.
 pub const PDB_FLAGS_ALL_CHANNELS: u32 = 1 << 3;
 
-/// `NV01_ROOT` — the client-root class (`ogkm: src/common/sdk/nvidia/inc/class/cl0000.h`).
+/// `NV01_ROOT` — the client-root class
+/// (`ogkm-610: src/common/sdk/nvidia/inc/class/cl0000.h:42`, `ogkm-580: cl0000.h:42`).
 /// Transcribed independently of `kayfabe_abi::generated::classes`, same reasoning.
 pub const NV01_ROOT: u32 = 0x0;
 
 /// `NV01_ROOT_CLIENT` — the modern spelling of the same resource kind
-/// (`ogkm: src/nvidia/generated/g_allclasses.h:289`).
+/// (`ogkm-610: src/nvidia/generated/g_allclasses.h:289`, `ogkm-580: g_allclasses.h:276`).
 pub const NV01_ROOT_CLIENT: u32 = 0x41;
 
-/// `NV01_DEVICE_0` — the Device class (`ogkm: cl0080.h:36`).
+/// `NV01_DEVICE_0` — the Device class (`ogkm-610: cl0080.h:36`, `ogkm-580: cl0080.h:36`).
 pub const NV01_DEVICE_0: u32 = 0x80;
 
-/// `FERMI_VASPACE_A` — the VASpace class (`ogkm: cl90f1.h:33`).
+/// `FERMI_VASPACE_A` — the VASpace class (`ogkm-610: cl90f1.h:33`,
+/// `ogkm-580: cl90f1.h:33`).
 pub const FERMI_VASPACE_A: u32 = 0x90f1;
 
-/// `KEPLER_CHANNEL_GROUP_A` — the TSG class (`ogkm: cla06c.h:33`).
+/// `KEPLER_CHANNEL_GROUP_A` — the TSG class (`ogkm-610: cla06c.h:33`,
+/// `ogkm-580: cla06c.h:33`).
 pub const KEPLER_CHANNEL_GROUP_A: u32 = 0xa06c;
 
-/// `FERMI_CONTEXT_SHARE_A` — the subcontext class (`ogkm: cl9067.h:33`).
+/// `FERMI_CONTEXT_SHARE_A` — the subcontext class (`ogkm-610: cl9067.h:33`,
+/// `ogkm-580: cl9067.h:33`).
 pub const FERMI_CONTEXT_SHARE_A: u32 = 0x9067;
 
-/// `AMPERE_CHANNEL_GPFIFO_A` — the GA10x GPFIFO channel class (`ogkm: clc56f.h:43`).
+/// `AMPERE_CHANNEL_GPFIFO_A` — the GA10x GPFIFO channel class
+/// (`ogkm-610: kernel-open/nvidia-uvm/clc56f.h:43`, `ogkm-580: clc56f.h:43`).
 ///
 /// ★ There is only one. A CUDA process's GR channel and its CE channel are both this
 /// `hClass`; `NV_CHANNEL_ALLOC_PARAMS.engineType` is the difference, and it lives past
 /// the prefix the bridge reads and has nowhere to go in `RmEvent` anyway.
 pub const AMPERE_CHANNEL_GPFIFO_A: u32 = 0xc56f;
 
-/// `AMPERE_COMPUTE_B` — the compute engine object (`ogkm: clc7c0.h:32`).
+/// `AMPERE_COMPUTE_B` — the compute engine object (`ogkm-610: clc7c0.h:32`,
+/// `ogkm-580: clc7c0.h:32`).
 pub const AMPERE_COMPUTE_B: u32 = 0xc7c0;
 
-/// `AMPERE_DMA_COPY_B` — the copy-engine object (`ogkm: clc7b5.h:33`).
+/// `AMPERE_DMA_COPY_B` — the copy-engine object
+/// (`ogkm-610: kernel-open/nvidia-uvm/clc7b5.h:33`, `ogkm-580: clc7b5.h:33`).
 pub const AMPERE_DMA_COPY_B: u32 = 0xc7b5;
 
-/// `NV01_MEMORY_SYSTEM` (`ogkm: src/common/sdk/nvidia/inc/class/cl003e.h:33`) — a real
+/// `NV01_MEMORY_SYSTEM` (`ogkm-610: src/common/sdk/nvidia/inc/class/cl003e.h:33`,
+/// `ogkm-580: cl003e.h:33`) — a real
 /// class that this port **does not map**, used wherever a test needs one.
 ///
 /// ★ It is the honest choice rather than an invented id, and the reason is a finding
@@ -636,8 +698,12 @@ pub const AMPERE_DMA_COPY_B: u32 = 0xc7b5;
 /// and that refusal is the record of both facts.
 pub const NV01_MEMORY_SYSTEM: u32 = 0x3e;
 
-/// `KERNEL_PID` — the `processID` a kernel-privileged client declares
-/// (`ogkm: rpc.h:67-71`).
+/// `KERNEL_PID` — the `processID` a kernel-privileged client declares.
+///
+/// `[src]` the **use** site is `ogkm-610: rpc.h:67-71` / `ogkm-580: rpc.h:67-71`
+/// (identical, same lines); the **value** `0xFFFFFFFF` is defined elsewhere and does
+/// move: `ogkm-610: src/nvidia/generated/g_kernel_fifo_nvoc.h:103`,
+/// `ogkm-580: g_kernel_fifo_nvoc.h:113`.
 pub const KERNEL_PID: u32 = 0xFFFF_FFFF;
 
 // =================================================================================
@@ -768,7 +834,8 @@ impl RpcScript {
     ///
     /// `NV_VASPACE_ALLOCATION_PARAMETERS` is 56 bytes of geometry (`index`, `flags`,
     /// `vaSize`, `vaStartInternal`, `vaLimitInternal`, `bigPageSize`, `vaBase`, `pasid` —
-    /// `ogkm: nvos.h:3145-3156`) and **not one field of it** is something the object model
+    /// `ogkm-610: nvos.h:3146-3156`, `ogkm-580: nvos.h:3154-3164` — identical member for
+    /// member) and **not one field of it** is something the object model
     /// models, so the script sends a plausibly-sized params the bridge never reads. The
     /// VAS's data-plane identity arrives later, on `SET_PAGE_DIRECTORY`.
     pub fn vaspace(&mut self, h_client: u32, h_parent: u32, h_object: u32) -> &mut RpcScript {
@@ -917,9 +984,13 @@ impl RpcScript {
 }
 
 /// The wire ids this module's tests use, from the driver's X-macro table
-/// (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:11, 20, 31, 57, 75, 81, 82, 83,
-/// 86, 113, 254, 256`). Transcribed here rather than taken from `gspworld::FUNCTIONS`,
-/// for the same independence reason as everything else in this file.
+/// (`ogkm-610: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:11, 20, 31, 57, 75, 81, 82,
+/// 83, 86, 113, 254, 256`). ★ The ten **X-macro** rows are on the same lines at
+/// `ogkm-580`; the two **E-macro** event rows are not — `GSP_INIT_DONE` is
+/// `ogkm-580: rpc_global_enums.h:253` and `POST_EVENT` is `:255`, because 610 inserts an
+/// `#endif` at `:252` that 580 does not have. The *ids* are identical at both.
+/// Transcribed here rather than taken from `gspworld::FUNCTIONS`, for the same
+/// independence reason as everything else in this file.
 pub mod fn_id {
     /// `SET_GUEST_SYSTEM_INFO`.
     pub const SET_GUEST_SYSTEM_INFO: u32 = 1;

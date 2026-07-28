@@ -70,9 +70,11 @@ use kayfabe_vmm::SurfaceHandle;
 /// ## Why the isolate travels with the handle
 ///
 /// A handle value alone is not an identity: RM mints client-scoped handles from one
-/// shared base (`ogkm: src/nvidia/generated/g_resserv_nvoc.h:173` —
-/// `RS_CLIENT_HANDLE_BASE`, one `serverSetClientHandleBase` for the whole driver,
-/// `.../rmapi.c:105`), so isolate A's handle `0x…07` and isolate B's handle `0x…07`
+/// shared base (`RS_CLIENT_HANDLE_BASE` = `0xC1D00000`:
+/// `ogkm-610: src/nvidia/generated/g_resserv_nvoc.h:173`, `ogkm-580: :188` — the
+/// **value** is identical, only the line moved; one `serverSetClientHandleBase` for the
+/// whole driver, `ogkm-610:`/`ogkm-580: src/nvidia/src/kernel/rmapi/rmapi.c:105`, same
+/// line at both), so isolate A's handle `0x…07` and isolate B's handle `0x…07`
 /// are *both live and unrelated*. Using one on the other's connection therefore does
 /// **not** fault — it names a different, live object. A free would destroy a bystander;
 /// an unmap would tear down a bystander's mapping. That is the cross-namespace reach
@@ -207,7 +209,13 @@ pub enum RmError {
     ///
     /// **This is not a reply and no real backend returns it.** A host thread in
     /// uninterruptible sleep cannot be signalled awake — RM's waits are `down_write`s
-    /// and busy-polls with no signal check (`ogkm: .../gpu/gsp/kernel_gsp.c:2963-3060`),
+    /// and busy-polls with no signal check: `_kgspRpcRecvPoll`'s loop ends in
+    /// `osSpinLoop()` and tests no signal at either tag
+    /// (`ogkm-610: .../gpu/gsp/kernel_gsp.c:2963-3060`, `ogkm-580: :2392-2479`. The two
+    /// differ *inside* the loop — 610 classifies the timeout through
+    /// `_kgspClassifyGspTimeout`/heartbeats where 580 counts three back-to-back timeouts
+    /// and marks the GPU for reset — but neither tag makes the wait interruptible, which
+    /// is the only part this variant rests on),
     /// which is exactly why [`RmError::Interrupted`] is a *best effort* and this variant
     /// has to exist beside it. When the watchdog's second budget expires the shell
     /// declares the worker **wedged** and, in ONE act, kills the slot, condemns the
@@ -377,7 +385,8 @@ pub trait RmBackend: Send + Sync {
 ///    gate — documented as "the ONE place the `(Proc, GpuId)`-scoped-handle rule is
 ///    enforced" — enforced only the `Proc` half. Nothing downstream closes that: the
 ///    two isolates are two host processes with two RM clients, and RM mints handles for
-///    every client from ONE base (`ogkm: src/nvidia/generated/g_resserv_nvoc.h:173`), so
+///    every client from ONE base (`ogkm-610: src/nvidia/generated/g_resserv_nvoc.h:173`,
+///    `ogkm-580: :188` — same `0xC1D00000` at both), so
 ///    the same raw value names a **different live object** in the other one. The verb
 ///    would have run on a bystander. (In the mock it is caught by `MockRmBackend`'s
 ///    per-namespace validity check — the exact "backend's luck" [`HostHandle`]'s own
@@ -468,10 +477,16 @@ pub struct WorkerId(pub u32);
 /// ★ **Deliberately 2–4, and deliberately NOT scaled to the vCPU count** (§12.26). The
 /// old rationale here read "order of the vCPU count", which implies the pool buys wire
 /// concurrency. It does not: RM serializes **every** ioctl-reachable path on the
-/// per-client WRITE lock (`ogkm: src/nvidia/src/libraries/resserv/src/rs_server.c:778`
-/// and seven siblings, asserted at `:786-788`) and takes the **global** API lock in
-/// WRITE for every alloc/free (`.../rmapi/rmapi.c:53-58`, `:535`;
-/// `.../rmapi/alloc_free.c:1714-1718`), held across the GSP RPC. What the pool actually
+/// per-client WRITE lock
+/// (`ogkm-610:`/`ogkm-580: src/nvidia/src/libraries/resserv/src/rs_server.c:778` and
+/// seven siblings, asserted at `:786-788` — eight `_serverLockClientWithLockInfo(…,
+/// LOCK_ACCESS_WRITE, …)` sites at **both** tags, seven of the eight at identical lines;
+/// only the last moved, `ogkm-610: :2546` / `ogkm-580: :2468`) and takes the **global**
+/// API lock in WRITE for every alloc/free
+/// (`ogkm-610:`/`ogkm-580: .../rmapi/rmapi.c:53-58`, `:535`, same lines at both;
+/// `ogkm-610: .../rmapi/alloc_free.c:1714-1718`, `ogkm-580: :1692-1696`), held across
+/// the GSP RPC. There is **no version seam in RM's locking**, which is what makes the
+/// pool-size argument below version-independent. What the pool actually
 /// buys is **liveness/latency isolation** — a six-second verb must not make a sibling
 /// guest thread's independent verb *appear* to hang — which is the §3.5 invariant, and
 /// which saturates at a handful of workers. Past that, each extra worker is one more
@@ -1060,10 +1075,13 @@ pub enum VerbReply {
 /// gave `kayfabe_core::reactor::WakeRequest` its teeth.)
 ///
 /// **Order is unmap-then-free, and that is RM's rule, not our preference.** RM frees
-/// children and dependents ahead of parents (`ogkm:
-/// src/nvidia/src/libraries/resserv/src/rs_server.c:963-981`,
-/// `.../rs_client.c:1086-1122`) and auto-unmaps a resource's inter-mappings inside
-/// `clientFreeResource_IMPL` *before* `objDelete` (`.../rs_client.c:830-849`). So RM
+/// children and dependents ahead of parents
+/// (`ogkm-610:`/`ogkm-580: src/nvidia/src/libraries/resserv/src/rs_server.c:963-981` —
+/// byte-identical, same lines; and `ogkm-610: .../rs_client.c:1086-1122`,
+/// `ogkm-580: :1085-1121`) and auto-unmaps a resource's inter-mappings inside
+/// `clientFreeResource_IMPL` *before* `objDelete`
+/// (`ogkm-610:`/`ogkm-580: .../rs_client.c:830-849` — same lines, byte-identical at both
+/// tags: the unmaps are `:835-837`, `objDelete` is `:849`). So RM
 /// itself leaks nothing if we free a mapped object — but any **external mirror** of
 /// that mapping (ours: the address table's `HostBacking` entries, gap G1) goes stale,
 /// which is why the plan states the unmaps first and means it. The map/unmap ABI pair
@@ -1120,8 +1138,10 @@ impl Orphans {
 /// on `ret == 0 && nvstatus == 0`), its guest discards the reply entirely on the
 /// interrupt path (`C: src/guest/nvkvm_virtio.c:461-471`), and there is no
 /// reconciliation code anywhere in the C for an alloc that may have landed. Compounding
-/// it, most RM waits are *not* interruptible in the first place (`ogkm:
-/// kernel-open/nvidia/nv.c` carries only a handful of `*_interruptible` waits), so a
+/// it, most RM waits are *not* interruptible in the first place
+/// (`ogkm-610:`/`ogkm-580: kernel-open/nvidia/nv.c` carries exactly **six**
+/// `*_interruptible` call sites at each tag, in the same three functions — the PM-lock
+/// read and the open-complete wait — out of 6 533 / 6 312 lines respectively), so a
 /// cancelled alloc plausibly completed. The C's only disposition for such an object is
 /// bulk: the #80 session reaper force-closing the isolate's host fds
 /// (`C: src/qemu/virtio_nvgpu.c:100-118`).
@@ -1421,9 +1441,11 @@ impl Worker {
                 // `VerbFailure::orphans`, so "we could not dispose of this" becomes a
                 // value the caller holds instead of a `let _ =` nobody can audit.
                 // Unmaps first, then frees: RM auto-unmaps a resource's inter-mappings
-                // inside `clientFreeResource_IMPL` before `objDelete` (`ogkm:
-                // src/nvidia/src/libraries/resserv/src/rs_client.c:830-849`), so the
-                // order does not protect RM — it protects OUR mirror of the mapping.
+                // inside `clientFreeResource_IMPL` before `objDelete`
+                // (`ogkm-610:`/`ogkm-580:`
+                // `src/nvidia/src/libraries/resserv/src/rs_client.c:830-849` — same
+                // lines at both tags), so the order does not protect RM — it protects
+                // OUR mirror of the mapping.
                 //
                 // ★★ §7.5 — one exception to "best effort": [`RmError::Wedged`] stops
                 // the loop. A wedged worker will answer every remaining verb the same

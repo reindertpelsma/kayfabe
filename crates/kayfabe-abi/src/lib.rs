@@ -93,7 +93,8 @@ use kayfabe_arch::ClientKind;
 use kayfabe_arch::ids::ClassId;
 
 /// `KERNEL_PID` — the reserved `processID` RM stamps on a **kernel-privileged** client's
-/// `NV01_ROOT` alloc params (`ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:67-77`:
+/// `NV01_ROOT` alloc params (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` /
+/// `ogkm-610: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` — byte-identical, same lines at both:
 /// `privLevel >= RS_PRIV_LEVEL_KERNEL → processID = KERNEL_PID`, else the client's own
 /// `ProcID`).
 ///
@@ -119,7 +120,8 @@ pub fn client_kind_from_process_id(process_id: u32) -> ClientKind {
 }
 
 /// `RMAPI_RPC_FLAGS_SERIALIZED` = `NVBIT(1)`
-/// (`ogkm: src/nvidia/inc/kernel/rmapi/rmapi.h:163`).
+/// (`ogkm-580: src/nvidia/inc/kernel/rmapi/rmapi.h:163` /
+/// `ogkm-610: src/nvidia/inc/kernel/rmapi/rmapi.h:163` — same line at both).
 ///
 /// An NVIDIA wire constant, so per the quarantine rule (decision #2) it exists **only in
 /// this crate**; the crates above it speak [`rpc_params_are_serialized`].
@@ -128,8 +130,10 @@ const RMAPI_RPC_FLAGS_SERIALIZED: u32 = 1 << 1;
 /// Does this RPC's `flags` word declare that `params[]` is **FINN-serialized**?
 ///
 /// `[src]` `rpcRmApiAlloc_GSP` sets the bit when `serverSerializeAllocDown` reports a
-/// serialized payload (`ogkm: src/nvidia/src/kernel/vgpu/rpc.c:11018-11022`); the control
-/// path has the same bit on `rmapiRpcFlags` (`ogkm: rpc.c:10805-10806`).
+/// serialized payload (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11212-11216` /
+/// `ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:11018-11022` — same code, moved); the control
+/// path has the same bit on `rmapiRpcFlags` (`ogkm-580: rpc.c:11000-11001` /
+/// `ogkm-610: rpc.c:10805-10806`).
 ///
 /// ★ **Why any caller must ask.** When the bit is set, `params[]` is *not* the flat
 /// `#[repr(C)]` struct, and every per-class offset a decoder would use is wrong. So this
@@ -145,13 +149,16 @@ pub fn rpc_params_are_serialized(flags: u32) -> bool {
 }
 
 /// The bottom of the **VMIOP/RPC** result range — `NV_VGPU_MSG_RESULT__VMIOP` is
-/// `0xFF00000a:0xFF000000` (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_headers.h:122`), and the
-/// header states the rule directly at `:126`: *"codes below 0xFF000000 must match exactly
-/// the NV_STATUS codes in nvos.h"*.
+/// `0xFF00000a:0xFF000000` (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc_headers.h:121` /
+/// `ogkm-610: src/nvidia/inc/kernel/vgpu/rpc_headers.h:122`), and the header states the rule
+/// directly at `ogkm-580: rpc_headers.h:66` / `ogkm-610: rpc_headers.h:66`: *"codes below
+/// 0xFF000000 must match exactly the NV_STATUS codes in nvos.h"*.
 ///
 /// ★★ **This is the constraint every reply status we invent must satisfy**, and it is a
 /// behaviour of the guest, not a convention. `_issueRpcAndWait` reads our `rpc_result` and
-/// maps it (`ogkm: src/nvidia/src/kernel/vgpu/rpc.c:2012-2026`):
+/// maps it (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:1993-2008` /
+/// `ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:2011-2026` — same five arms; 610 spells the
+/// header access `pVgpuRpcHeader->` where 580 uses the `vgpu_rpc_message_header_v` macro):
 ///
 /// ```text
 /// rpc_result == 0                        -> NV_OK
@@ -166,7 +173,8 @@ pub fn rpc_params_are_serialized(flags: u32) -> bool {
 pub const NV_VGPU_MSG_RESULT_VMIOP_BASE: u32 = 0xFF00_0000;
 
 /// `NV_ERR_NOT_SUPPORTED` — `NV_STATUS` `0x56`
-/// (`ogkm: src/common/sdk/nvidia/inc/nvstatuscodes.h:115`).
+/// (`ogkm-580: src/common/sdk/nvidia/inc/nvstatuscodes.h:115` /
+/// `ogkm-610: src/common/sdk/nvidia/inc/nvstatuscodes.h:115` — same line at both).
 ///
 /// ★ **Not cosmetic.** RM sets `RMAPI_PARAM_COPY_FLAGS_SKIP_COPYOUT` on this status, i.e.
 /// the value changes what the *guest* does with its own params buffer — which the C
@@ -183,17 +191,19 @@ pub const NV_VGPU_MSG_RESULT_VMIOP_BASE: u32 = 0xFF00_0000;
 ///
 /// 1. **It reaches the guest at all.** `0x56 < NV_VGPU_MSG_RESULT_VMIOP_BASE`, so
 ///    `_issueRpcAndWait` returns it verbatim rather than collapsing it to
-///    `NV_ERR_GENERIC` (`ogkm: rpc.c:2020-2025`). See that constant.
+///    `NV_ERR_GENERIC` (`ogkm-580: rpc.c:2004-2005` / `ogkm-610: rpc.c:2023-2024`).
+///    See that constant.
 /// 2. **NVIDIA expects it from a GSP control.** `rpcRmApiControl_GSP`'s own error path
 ///    lists `NV_ERR_NOT_SUPPORTED` (with `NV_ERR_OBJECT_NOT_FOUND`) as the statuses to log
-///    *quietly* (`ogkm: rpc.c:10914-10920`) — a refusal carrying it is an outcome the
-///    driver already treats as ordinary, not an anomaly.
+///    *quietly* (`ogkm-580: rpc.c:11109-11115` / `ogkm-610: rpc.c:10914-10920`) — a refusal
+///    carrying it is an outcome the driver already treats as ordinary, not an anomaly.
 /// 3. **The tempting alternative is wrong on this path.**
 ///    `NV_VGPU_MSG_RESULT_RPC_API_CONTROL_NOT_SUPPORTED` (`0xFF100009`) is NVIDIA's own
 ///    "recognised but not supported" control status and survives the collapse by explicit
-///    special case (`ogkm: rpc.c:2014-2015`) — but the translation back to a real
-///    `NV_STATUS` lives **only** in `rpcRmApiControl_wrapper`
-///    (`ogkm: rpc.c:5432-5437`), which is the vGPU `RM_API_CONTROL` path.
+///    special case (`ogkm-580: rpc.c:1996-1997` / `ogkm-610: rpc.c:2014-2015`) — but the
+///    translation back to a real `NV_STATUS` lives **only** in `rpcRmApiControl_wrapper`
+///    (`ogkm-580: rpc.c:5425-5430` / `ogkm-610: rpc.c:5432-5437`), which is the vGPU
+///    `RM_API_CONTROL` path.
 ///    `rpcRmApiControl_GSP` — fn 76, the one a GSP-client guest actually sends — has no
 ///    such arm, so `0xFF100009` would propagate to the RM caller *as* an `NV_STATUS`,
 ///    which it is not.

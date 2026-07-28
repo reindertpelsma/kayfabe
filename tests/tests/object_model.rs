@@ -877,7 +877,8 @@ fn a_promoted_parked_dup_of_a_client_root_is_an_alias_not_a_root() {
 ///
 /// INV5 exists to catch exactly that disagreement, and it did. **`references_of` was the
 /// wrong one**: the guest holds a live, resolvable alias, RM refcounts it
-/// (`ogkm: .../mem_mgr/mem.c:1027-1031`), and the refcount is what decides lifetime — see
+/// (`ogkm-610: .../mem_mgr/mem.c:1027-1031`, `ogkm-580: :1097-1101` — the same three
+/// increments in `memCopyConstruct_IMPL`), and the refcount is what decides lifetime — see
 /// [`a_dup_of_a_dup_keeps_its_resource_alive_after_its_owner_frees_both_handles`] for the
 /// consequence.
 ///
@@ -1079,7 +1080,7 @@ fn a_dup_that_mints_the_middle_handle_drains_every_parked_table() {
 /// handle of its own, A aliases it through *that* handle (the alias arriving first — the
 /// DEFER-for-observation ordering the model exists to tolerate), and B then frees BOTH of
 /// its own handles. RM keeps the object alive on A's reference
-/// (`ogkm: .../mem_mgr/mem.c:1027-1031`); so must we.
+/// (`ogkm-610: .../mem_mgr/mem.c:1027-1031`, `ogkm-580: :1097-1101`); so must we.
 #[test]
 fn a_dup_of_a_dup_keeps_its_resource_alive_after_its_owner_frees_both_handles() {
     use kayfabe_core::rmgraph::{AllocFacts, RmGraph};

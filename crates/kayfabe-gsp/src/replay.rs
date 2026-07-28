@@ -415,8 +415,10 @@ pub const LEDGER: &[Divergence] = &[
         c_behaviour: "rpc.length = 36 for a bare 32-byte header",
         our_behaviour: "32",
         guest_visible_consequence: "the declared length the peer checksums over, and the element count it derives",
-        independent_oracle: "ogkm: src/nvidia/generated/g_rpc-message-header.h:41-52 (sizeof = 32); \
-                             the same C file uses 32 at :1637 and :1657",
+        independent_oracle: "ogkm-610: src/nvidia/generated/g_rpc-message-header.h:41-52 \
+                             (sizeof = 32); ogkm-580: same path, same lines, byte-identical \
+                             struct — no version seam; the C artifact itself uses 32 at \
+                             C:1637 and C:1655",
     },
     Divergence {
         id: "GSP-D2",
@@ -425,8 +427,10 @@ pub const LEDGER: &[Divergence] = &[
         our_behaviour: "flow-controlled; QueueFull is a retryable refusal",
         guest_visible_consequence: "an over-posted ring overwrites unconsumed elements; the guest then reads a \
              seqNum GREATER than its rxSeqNum, for which there is no recovery branch",
-        independent_oracle: "ogkm: msgq.c:490-496 (free space) and message_queue_cpu.c:768-782 \
-                             (recovery handles only seqNum < rxSeqNum)",
+        independent_oracle: "ogkm-610: msgq.c:490-496 (free space) = ogkm-580: \
+                             src/common/shared/msgq/msgq.c:491-497; and ogkm-610: \
+                             message_queue_cpu.c:768-782 = ogkm-580: :699-713 \
+                             (recovery handles only seqNum < rxSeqNum, identically at both tags)",
     },
     Divergence {
         id: "GSP-D3",
@@ -453,7 +457,8 @@ pub const LEDGER: &[Divergence] = &[
                       bootargs_dumped/q_ready",
         our_behaviour: "E2: Suspending -> Halted, binding dropped by value",
         guest_visible_consequence: "the next driver life's msgqRxLink spins forever on -7 (71 064 retries observed)",
-        independent_oracle: "ogkm: msgq.c:386-389 (-7 has exactly one cause) + \
+        independent_oracle: "ogkm-610: msgq.c:386-389 (-7 has exactly one cause) = \
+                             ogkm-580: src/common/shared/msgq/msgq.c:387-390 + \
                              docs/reference/mode2_bench_lifecycle.md §3 [measured]",
     },
     Divergence {
@@ -462,7 +467,16 @@ pub const LEDGER: &[Divergence] = &[
         c_behaviour: "advances past continuation elements without reading them",
         our_behaviour: "reads nElements, bounded by queueElementSizeMax before the read",
         guest_visible_consequence: "a multi-element command's payload is truncated",
-        independent_oracle: "ogkm: message_queue_cpu.c:684-705",
+        independent_oracle: "★ VERSION SEAM in HOW nElements is obtained, not in whether \
+                             it must be. ogkm-610: message_queue_cpu.c:684-705 derives it \
+                             from the declared message length (gspMsgQueueBytesToElements \
+                             over queueElementHdrSize + rpc.length). ogkm-580: \
+                             message_queue_cpu.c:652-658 instead READS THE FIELD, \
+                             nElements = pCmdQueueElement->elemCount, and \
+                             msgqRxMarkConsumed advances by that (ogkm-580: :774). Both \
+                             are honoured here: the field where the layout has one, the \
+                             derivation where it does not, with a refusal when the two \
+                             disagree (GspFault::ElementCountMismatch)",
     },
     Divergence {
         id: "GSP-D7",
@@ -479,8 +493,9 @@ pub const LEDGER: &[Divergence] = &[
         c_behaviour: "addresses the shared region as sharedMemPhysAddr + offset",
         our_behaviour: "resolves every access through the region's own page table",
         guest_visible_consequence: "a fragmented region has its queues read and written at the wrong pages",
-        independent_oracle: "ogkm: message_queue_cpu.c:250-256 (NV_MEMORY_NONCONTIGUOUS), \
-                             :295-316 (the table), :328-329 (sharedMemPA = pPageTbl[0])",
+        independent_oracle: "ogkm-610: message_queue_cpu.c:250-256 (NV_MEMORY_NONCONTIGUOUS), \
+                             :295-316 (the table), :328-329 (sharedMemPA = pPageTbl[0]); \
+                             ogkm-580: :228-234, :273-294, :306-307 — identical code, no seam",
     },
     Divergence {
         id: "GSP-D9",
@@ -490,8 +505,9 @@ pub const LEDGER: &[Divergence] = &[
                         not treated as a terminator",
         guest_visible_consequence: "a guest with more regions before RMARGS is silently not found, and the queue \
              never binds",
-        independent_oracle: "ogkm: src/common/uproc/os/common/include/libos_init_args.h:31-56 \
-                             (MAX = 4096; no sentinel is declared)",
+        independent_oracle: "src/common/uproc/os/common/include/libos_init_args.h:31-56 \
+                             (MAX = 4096; no sentinel is declared) — same path and same lines at \
+                             ogkm-610 and ogkm-580; the two files are byte-identical, no seam",
     },
     Divergence {
         id: "GSP-D10",
@@ -502,12 +518,21 @@ pub const LEDGER: &[Divergence] = &[
         guest_visible_consequence: "a driver that reloaded its module starts at rxSeqNum 0; a preserved N > 0 \
              then arrives as a sequence number GREATER than the guest expects, which its \
              receive path has no recovery branch for at all",
-        independent_oracle: "ogkm: message_queue_cpu.c:836 (rxSeqNum is only ++'d) with \
-                             GspMsgQueueInit's zero-init reached from kgspConstructEngine \
-                             and torn down in kgspDestruct, i.e. module load/unload; the \
-                             recovery asymmetry is :768-782. ★ UNMEASURED: the C never \
-                             reached a second driver life (mode2_bench_lifecycle.md §1), \
-                             so this is the plan's open item O3 and S7 is its falsifier",
+        independent_oracle: "rxSeqNum is only ++'d, never assigned, at BOTH tags — \
+                             ogkm-610: message_queue_cpu.c:836, ogkm-580: :782 (grep of both \
+                             whole trees finds no other write). Its storage is GspMsgQueuesInit's \
+                             portMemSet-to-0 (ogkm-610: message_queue_cpu.c:235, ogkm-580: :216), \
+                             reached from kgspConstructEngine via \
+                             _kgspInitRpcInfrastructure (ogkm-610: kernel_gsp.c:4355, \
+                             ogkm-580: :3624) and torn down in kgspDestruct \
+                             (ogkm-610: :5323, ogkm-580: :4384), i.e. module load/unload. \
+                             The recovery asymmetry is ogkm-610: message_queue_cpu.c:768-782 = \
+                             ogkm-580: :699-713. ★ ONE SEAM, and it does not change the row: at \
+                             610 the ++ is unconditional at the exit: label; at 580 it is in the \
+                             else arm of msgqRxMarkConsumed, so a failed mark-consumed leaves it \
+                             put. ★ UNMEASURED: the C never reached a second driver life \
+                             (mode2_bench_lifecycle.md §1), so this is the plan's open item O3 \
+                             and S7 is its falsifier",
     },
 ];
 

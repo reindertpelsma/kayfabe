@@ -1,25 +1,43 @@
 //! **S1 — the ring algebra.** Geometry, the acceptance predicate, the cursors.
 //!
-//! Everything here is `msgq`, NVIDIA's chip-agnostic SPSC ring library
-//! (`ogkm: src/nvidia/src/libraries/msgq/msgq.c`, an `_IMPL` with one implementation for
-//! all chips), reproduced so that "would the guest accept this?" is answerable offline.
+//! Everything here is `msgq`, NVIDIA's chip-agnostic SPSC ring library, reproduced so
+//! that "would the guest accept this?" is answerable offline.
+//!
+//! ## ★ Where `msgq` lives, and the `+1` every line number below carries
+//!
+//! **The whole library moved between the two vendored trees.**
+//! `ogkm-610: src/nvidia/src/libraries/msgq/msgq.c` is
+//! `ogkm-580: src/common/shared/msgq/msgq.c`, and its headers moved from
+//! `src/nvidia/inc/libraries/msgq/` to `src/common/shared/msgq/inc/msgq/`.
+//!
+//! The **content** did not move with it. `msgq.c` is byte-identical at the two tags apart
+//! from one extra `#include` line in its 580 prologue, so **every `msgq.c` line cited
+//! below is one higher at 580**; both numbers are given anyway, per the plan's §0.1 rule 2.
+//! `msgq.h` and `msgq_priv.h` are byte-identical *and* line-identical at the two tags —
+//! only their path differs. There is no version seam anywhere in this library, which is
+//! why nothing here is version-keyed.
+//!
+//! The library carries no HAL and no `_IMPL`: every function is `sysSHARED_CODE`, one
+//! implementation for all chips and for the RISC-V side as well, at both tags.
 //!
 //! ## Rule GSP-P1 — derive, don't declare
 //!
 //! **Every ring parameter is read out of the header the guest itself wrote.**
 //! `msgqTxCreate` publishes `version, size, msgSize, msgCount, writePtr, flags, rxHdrOff,
-//! entryOff` (`ogkm: msgq.c:236-251, 284-306`), so `RM_PAGE_SIZE`, `0x40000`,
-//! `msgCount = 63` and the `rxHdrOff = 0x20` the C artifact hard-codes (`C:3358`) are all
-//! **derivable**, and none of them is a constant in this crate. What cannot be derived —
+//! entryOff` (`ogkm-610: msgq.c:236-251, 284-306`, `ogkm-580: :237-252, 285-307`), so
+//! `RM_PAGE_SIZE`, `0x40000`, `msgCount = 63` and the `rxHdrOff = 0x20` the C artifact
+//! hard-codes (`C:3358`) are all **derivable**, and none of them is a constant in this
+//! crate. What cannot be derived —
 //! `MSGQ_VERSION`, `MSGQ_MSG_SIZE_MIN`, the `MSGQ_FLAGS_SWAP_RX` bit — is Axis A and
 //! arrives in a [`MsgqAbi`] value.
 //!
 //! ## The one layout fact this module does assume, and its three witnesses
 //!
 //! [`TxHeader`] is eight little-endian `u32`s in a fixed order. That order is identical
-//! in all three available trees — `ogkm: src/nvidia/inc/libraries/msgq/msgq_priv.h:48-59`
-//! (610), and nouveau's independent client publishes the same fields at the same places
-//! for r535 (`nv: r535/gsp.c:1164-1172`) — so it is treated as *topology*, not as a
+//! in every available tree — `ogkm-610: src/nvidia/inc/libraries/msgq/msgq_priv.h:48-59`
+//! and `ogkm-580: src/common/shared/msgq/inc/msgq/msgq_priv.h:48-59` are the **same file
+//! byte-for-byte**, and nouveau's independent client publishes the same fields at the same
+//! places for r535 (`nv: r535/gsp.c:1164-1172`) — so it is treated as *topology*, not as a
 //! versioned layout. `TxHeader::BYTES` and `RX_HEADER_BYTES` are consequences of that
 //! shape, not transcribed constants.
 
@@ -31,9 +49,11 @@ use core::num::NonZeroU32;
 ///
 /// Three numbers, each from a driver header rather than from a chip:
 /// `MSGQ_VERSION = 0`, `MSGQ_MSG_SIZE_MIN = 16`, `MSGQ_FLAGS_SWAP_RX = 1`
-/// (`ogkm: src/nvidia/inc/libraries/msgq/msgq_priv.h:37-38`,
-/// `ogkm: src/nvidia/inc/libraries/msgq/msgq.h:30-39`). They live in a value the ABI
-/// layer supplies so that this crate carries none of them.
+/// (`ogkm-610: src/nvidia/inc/libraries/msgq/msgq_priv.h:37-38` =
+/// `ogkm-580: src/common/shared/msgq/inc/msgq/msgq_priv.h:37-38`, and
+/// `ogkm-610: .../msgq.h:30-39` = `ogkm-580: .../inc/msgq/msgq.h:30-39` — both headers are
+/// byte-identical at the two tags, same lines, only the path moved). They live in a value
+/// the ABI layer supplies so that this crate carries none of them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MsgqAbi {
     /// The `MSGQ_VERSION` this driver publishes and requires.
@@ -43,13 +63,16 @@ pub struct MsgqAbi {
     /// The `MSGQ_FLAGS_SWAP_RX` bit.
     pub swap_rx_flag: u32,
     /// The stride the shared region's self-describing page table is written in — one
-    /// `RmPhysAddr` per `RM_PAGE_SIZE` page (`ogkm: message_queue_cpu.c:295-316`).
+    /// `RmPhysAddr` per `RM_PAGE_SIZE` page (`ogkm-610: message_queue_cpu.c:295-316`,
+    /// `ogkm-580: :273-294` — the same `memdescGetPhysAddrs` call with the same
+    /// `RM_PAGE_SIZE` stride at both tags).
     ///
     /// ★ **This is `RM_PAGE_SIZE`, a driver constant, and emphatically not the host CPU
-    /// page size** (`ogkm: src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h:38`:
-    /// `#define RM_PAGE_SIZE 4096`). On an arm64 host with 64 KiB pages the guest's table
-    /// is still written in 4 KiB strides, so a port that reached for the host's page size
-    /// here would be wrong on exactly the platform the portability gate exists for. It
+    /// page size** (`src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h:38`:
+    /// `#define RM_PAGE_SIZE 4096` — same path, same line, same text at `ogkm-580` and
+    /// `ogkm-610`). On an arm64 host with 64 KiB pages the guest's table is still written
+    /// in 4 KiB strides, so a port that reached for the host's page size here would be
+    /// wrong on exactly the platform the portability gate exists for. It
     /// arrives as an ABI value for the same reason every other number here does.
     pub region_page_size: u32,
 }
@@ -184,22 +207,25 @@ impl TxHeader {
     }
 }
 
-/// `sizeof(msgqRxHeader)` — one `u32`, `readPtr` (`ogkm: msgq_priv.h:61-65`).
+/// `sizeof(msgqRxHeader)` — one `u32`, `readPtr` (`ogkm-610: msgq_priv.h:61-65`,
+/// `ogkm-580: :61-65` — the header is byte-identical at both tags).
 pub const RX_HEADER_BYTES: u32 = 4;
 
 /// Run the guest's own `msgqRxLink` acceptance predicate against a header we are about
 /// to publish.
 ///
-/// Reproduced check-for-check from `ogkm: msgq.c:329-405`, in the guest's order, with
-/// the guest's return codes. Two of the nine checks are *guest-local state* and cannot be
+/// Reproduced check-for-check from `ogkm-610: msgq.c:329-405` (`ogkm-580: :330-406`), in
+/// the guest's order, with the guest's return codes. The nine checks and their codes are
+/// identical at both tags. Two of the nine checks are *guest-local state* and cannot be
 /// evaluated from here — `-1` (the handle is already linked) and `-5` (a null backing
 /// store) — so they are absent from this function and present in [`RxLinkCode`] only as
 /// vocabulary.
 ///
 /// `peer_tx_rx_hdr_off` is the **command** queue's `rxHdrOff`, not ours: check `-10`'s
 /// middle term reads `pQueue->tx.rxHdrOff`, the local TX side's value, while every other
-/// term reads the header under test (`ogkm: msgq.c:400-405`). Reproduced as-is — it looks
-/// like an upstream `tx`/`rx` typo, but it is what ships and what the guest will run.
+/// term reads the header under test (`ogkm-610: msgq.c:400-405`, `ogkm-580: :401-406`).
+/// Reproduced as-is — it looks like an upstream `tx`/`rx` typo, but it is what ships and
+/// what the guest will run.
 ///
 /// # Errors
 ///
@@ -245,13 +271,15 @@ pub fn rx_link_check(
 /// Free elements in a ring we produce into, exactly as the peer computes it.
 ///
 /// `free = readPtr + msgCount - writePtr - 1`, then one conditional subtraction of
-/// `msgCount` (`ogkm: msgq.c:490-496`). The `-1` is what keeps a full ring distinguishable
-/// from an empty one: `msgqRxGetReadAvailable` reduces modulo `msgCount`, so exactly
-/// `msgCount` outstanding elements read as **0 available** (`ogkm: msgq.c:660-666`).
+/// `msgCount` (`ogkm-610: msgq.c:490-496`, `ogkm-580: :491-497`). The `-1` is what keeps a
+/// full ring distinguishable from an empty one: `msgqRxGetReadAvailable` reduces modulo
+/// `msgCount`, so exactly `msgCount` outstanding elements read as **0 available**
+/// (`ogkm-610: msgq.c:660-666`, `ogkm-580: :661-667`).
 ///
-/// The out-of-range guard mirrors `ogkm: msgq.c:485-488`, which returns "no free space"
-/// for the same case; here it is a **named fault** instead, because `readPtr` lives in
-/// guest-writable memory and §7-G5 requires every guest-supplied scalar to be refused by
+/// The out-of-range guard mirrors `ogkm-610: msgq.c:485-488` (`ogkm-580: :486-489`), which
+/// returns "no free space" for the same case; here it is a **named fault** instead,
+/// because `readPtr` lives in guest-writable memory and §7-G5 requires every
+/// guest-supplied scalar to be refused by
 /// name rather than folded into a benign zero.
 ///
 /// # Errors
@@ -275,8 +303,9 @@ pub fn free_elements(read_ptr: u32, write_ptr: u32, count: MsgCount) -> Result<u
 /// Elements available to consume, exactly as the peer computes it.
 ///
 /// `avail = writePtr + msgCount - readPtr`, one conditional subtraction, **no `-1`**
-/// (`ogkm: msgq.c:660-666`). The guard is on the *peer's* `writePtr`
-/// (`ogkm: msgq.c:655-658`) — hostile input to us in precisely the way ours is to it.
+/// (`ogkm-610: msgq.c:660-666`, `ogkm-580: :661-667`). The guard is on the *peer's*
+/// `writePtr` (`ogkm-610: msgq.c:655-658`, `ogkm-580: :656-659`) — hostile input to us in
+/// precisely the way ours is to it.
 ///
 /// # Errors
 ///
@@ -302,9 +331,14 @@ pub fn available_elements(write_ptr: u32, read_ptr: u32, count: MsgCount) -> Res
 /// type holds only the two that are *binding-scoped* — a ring position is meaningless
 /// without the ring it indexes, so it dies with the binding. The per-message **sequence
 /// number** is deliberately NOT here: it outlives a re-link by protocol
-/// (`msgqRxLink` sets `rxReadPtr = 0` at `ogkm: msgq.c:435` and nothing in the GSP tree
-/// ever assigns `rxSeqNum` — it is only `++`'d, `ogkm: message_queue_cpu.c:836`), so it
-/// lives on the FSM, where survival is the rule rather than an oversight.
+/// (`msgqRxLink` sets `rxReadPtr = 0` at `ogkm-610: msgq.c:435` / `ogkm-580: :436`, and
+/// nothing in either GSP tree ever *assigns* `rxSeqNum` — it is only `++`'d,
+/// `ogkm-610: message_queue_cpu.c:836`, `ogkm-580: :782`), so it lives on the FSM, where
+/// survival is the rule rather than an oversight.
+///
+/// ★ One seam, and it does not change the above: at 610 the `++` is unconditional at the
+/// `exit:` label; at 580 it sits in the `else` arm of `msgqRxMarkConsumed`, so a failed
+/// mark-consumed leaves `rxSeqNum` where it was. Either way it is never reset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TxCursor {
     /// Ring position, always `< msgCount`.
@@ -312,16 +346,18 @@ pub struct TxCursor {
     /// ★ The producer's **cached** free-element count, exactly as `msgq` keeps it.
     ///
     /// `msgqTxCreate` seeds it `msgCount - 1` with the comment *"Allow adding queue
-    /// messages before rx is linked"* (`ogkm: msgq.c:258-261`), and
-    /// `msgqTxSubmitBuffers` consults the cache **first**, falling through to a live read
-    /// of the peer's pointer only when the cache says there is not enough room
-    /// (`ogkm: msgq.c:544-547`), then decrements it by the elements submitted (`:579`).
+    /// messages before rx is linked"* (`ogkm-610: msgq.c:258-261`, `ogkm-580: :259-262`),
+    /// and `msgqTxSubmitBuffers` consults the cache **first**, falling through to a live
+    /// read of the peer's pointer only when the cache says there is not enough room
+    /// (`ogkm-610: msgq.c:544-547`, `ogkm-580: :545-548`), then decrements it by the
+    /// elements submitted (`ogkm-610: :579`, `ogkm-580: :580`).
     ///
     /// This is not an optimisation to be simplified away. At a **rebind** the peer's
     /// published read pointer still holds the *previous* life's value until the guest's
-    /// own `msgqRxLink` zeroes it (`ogkm: msgq.c:435-437`) — and a stale `readPtr` of 1
-    /// computes `free == 0`, which would refuse the very `GSP_INIT_DONE` the guest is
-    /// spinning for. The driver's own cache is what makes the first post after a bind
+    /// own `msgqRxLink` zeroes it (`ogkm-610: msgq.c:435-437`, `ogkm-580: :436-438`) — and
+    /// a stale `readPtr` of 1 computes `free == 0`, which would refuse the very
+    /// `GSP_INIT_DONE` the guest is spinning for. The driver's own cache is what makes the
+    /// first post after a bind
     /// legal, so the port keeps it.
     pub free_cache: u32,
 }
@@ -363,7 +399,12 @@ impl MsgqGeometry {
     /// Read the guest's command-queue header out of the region and validate it.
     ///
     /// `cmd_off`/`stat_off` are the guest's `cmdQueueOffset`/`statQueueOffset` — **byte
-    /// offsets into the region**, not addresses (`ogkm: kernel_gsp.c:5483-5484`).
+    /// offsets into the region**, not addresses (`ogkm-610: kernel_gsp.c:5484-5485`,
+    /// `ogkm-580: :4488-4489`; the previous citation of `:5483-5484` was off by one, it
+    /// named `pageTableEntryCount` and `cmdQueueOffset`). Both tags assign the same two
+    /// values from the same two sources; 610 then assigns five further geometry fields
+    /// (`:5486-5490`) that `MESSAGE_QUEUE_INIT_ARGUMENTS` does not have at 580, which is
+    /// why nothing in this function reads geometry out of the init args.
     ///
     /// # Errors
     ///
@@ -382,8 +423,9 @@ impl MsgqGeometry {
         let header = TxHeader::decode(&buf)?;
 
         // ★ Item 11 of the invariant list. `rxSwapped` is the AND of BOTH sides' flags
-        // (`ogkm: msgq.c:411-412`); the guest always sets it
-        // (`ogkm: message_queue_cpu.c:174-180`) and nouveau hardcodes it
+        // (`ogkm-610: msgq.c:411-412`, `ogkm-580: :412-413`); the guest always sets it in
+        // its `msgqTxCreate` call (`ogkm-610: message_queue_cpu.c:174-180`,
+        // `ogkm-580: :155-161`) and nouveau hardcodes it
         // (`nv: r535/gsp.c:1171`). Without it the read-pointer polarity flips and both
         // sides deadlock **silently, with no error** — so this refusal converts the one
         // failure mode that produces no diagnostic into a named one.
@@ -440,9 +482,15 @@ impl MsgqGeometry {
         self.msg_count
     }
 
-    /// One element's size in bytes — also `queueElementSizeMin`
-    /// (`ogkm: message_queue_cpu.c:88`, `RM_PAGE_SIZE`, and the element stride the ring
-    /// was created with).
+    /// One element's size in bytes — the stride the ring was created with, which is also
+    /// the driver's element-size floor. **★ SEAM in how that floor is spelled, not in its
+    /// value.** At 610 it is a *runtime* field, `pRmQueueInfo->queueElementSizeMin =
+    /// RM_PAGE_SIZE` (`ogkm-610: message_queue_cpu.c:88`), passed to `msgqTxCreate` at
+    /// `:177`. At 580 no such field exists anywhere in the tree; it is the compile-time
+    /// `#define GSP_MSG_QUEUE_ELEMENT_SIZE_MIN RM_PAGE_SIZE`
+    /// (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:91`), passed to
+    /// `msgqTxCreate` at `ogkm-580: message_queue_cpu.c:158`. Both resolve to 4096, and
+    /// this accessor reads neither: it returns the `msgSize` the guest published.
     #[must_use]
     pub fn element_size(&self) -> u32 {
         self.header.msg_size
@@ -469,8 +517,8 @@ impl MsgqGeometry {
     /// Where the guest publishes **its** consumption of the status queue.
     ///
     /// With `MSGQ_FLAGS_SWAP_RX` agreed, each side writes the read pointer into *its own*
-    /// backing store's rx header (`ogkm: msgq.c:416-419`), and the guest's own store is
-    /// the command queue.
+    /// backing store's rx header (`ogkm-610: msgq.c:416-419`, `ogkm-580: :417-420`), and
+    /// the guest's own store is the command queue.
     #[must_use]
     pub fn peer_stat_read_ptr_off(&self) -> u64 {
         self.cmd_off + u64::from(self.header.rx_hdr_off)

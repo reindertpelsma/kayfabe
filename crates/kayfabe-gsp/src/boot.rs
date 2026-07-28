@@ -19,9 +19,16 @@
 //! `GSP_INIT_DONE`, and re-latches `bootargs_dumped`/`q_ready`. The next driver life then
 //! points at the **previous life's queue GPA**, and because `was_suspended` is now false
 //! the re-dump never fires. Observed: `msgqRxLink` timeout, **`-7`**, 71 064 retries —
-//! and `-7` has exactly one cause, `rx.size != size` (`ogkm: msgq.c:386-389`), i.e. *the
-//! guest's new status queue never received a tx header*. Two independent sources, one
-//! mechanism.
+//! and `-7` has exactly one cause, `rx.size != size`
+//! (`ogkm-610: src/nvidia/src/libraries/msgq/msgq.c:386-389`,
+//! `ogkm-580: src/common/shared/msgq/msgq.c:387-390`), i.e. *the guest's new status queue
+//! never received a tx header*. Two independent sources, one mechanism.
+//!
+//! ★ The `msgq` library **moved trees** between the tags — `src/nvidia/src/libraries/msgq/`
+//! at 610, `src/common/shared/msgq/` at 580 — but every routine this crate depends on is
+//! byte-identical across them, off by one or two lines. `-7` is returned from nowhere else
+//! in either tree. Later `msgq.c` citations here give the bare `:line` per tag; the two
+//! paths are the ones spelled out above.
 //!
 //! Here that STARTCPU is [`Transition::E2`]: `Suspending → Halted`, WPR2 stays down, and
 //! **the binding is dropped by value**. The next life's mailbox write rebinds against the
@@ -30,14 +37,21 @@
 //! ## What `Running` means, and why it is observed rather than assumed
 //!
 //! §7-G7 forbids posting a non-allowlisted event during the guest's bootup poll, which
-//! runs without the API lock and hard-asserts on anything outside eight functions
-//! (`ogkm: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:1419-1440`). The plan proposed
+//! runs without the API lock and hard-asserts (`NV_ASSERT(0)`) on anything outside a short
+//! allowlist. ★ **The allowlist is version-split, and the count differs**: **eight**
+//! functions at 610 (`ogkm-610: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:1419-1439`),
+//! **six** at 580 (`ogkm-580: :1464-1482`). 580 admits `GSP_RUN_CPU_SEQUENCER` — and lists
+//! it *first* — while 610 drops it and adds `PFM_REQ_HNDLR_STATE_SYNC_CALLBACK`,
+//! `GSP_LOAD_EXEC_GENERIC_BOOTLOADER` and `GSP_LOAD_EXEC_HS_BINARY`. The five shared
+//! entries are `UCODE_LIBOS_PRINT`, `GSP_LOCKDOWN_NOTICE`, `GSP_POST_NOCAT_RECORD`,
+//! `GSP_INIT_DONE`, `OS_ERROR_LOG`; `POST_EVENT` is on **neither**. The plan proposed
 //! gating on `phase == Running` and listed *"`Running` implies not-inside-a-boot-poll"*
 //! as inferred (I9). It need not be inferred: with `MSGQ_FLAGS_SWAP_RX` the guest
 //! publishes its own consumption of the status queue into the command queue's rx header
-//! (`ogkm: msgq.c:416-419`), so **"the guest has drained `GSP_INIT_DONE`" is directly
-//! observable** — `peer read pointer == our write pointer`. That is the edge into
-//! [`BootPhase::Running`], so the gate rests on a read rather than on a belief.
+//! (`ogkm-610: msgq.c:416-419`, `ogkm-580: :417-420`), so **"the guest has drained
+//! `GSP_INIT_DONE`" is directly observable** — `peer read pointer == our write pointer`.
+//! That is the edge into [`BootPhase::Running`], so the gate rests on a read rather than
+//! on a belief.
 
 use crate::element::{
     ElementLayout, IncomingRpc, MsgLen, OutgoingRpc, decode_message, encode_message, max_elements,
@@ -52,19 +66,32 @@ use kayfabe_arch::{Arch, GspObservation, GspReg};
 
 /// Where the fields of `MESSAGE_QUEUE_INIT_ARGUMENTS` are, for one driver version.
 ///
-/// ★ The struct has **three** shapes across the three available trees, and the C parses
+/// ★ The struct has **three** shapes across the four available trees, and the C parses
 /// one of them: r535 has 6 fields including a lockless queue pair
-/// (`nv: r535/nvrm/gsp.h:578-585`), r570 has the first 4 only
-/// (`nv: r570/nvrm/gsp.h:497-502`), and 610 has the 4 plus five *geometry* fields
-/// (`ogkm: src/nvidia/inc/kernel/gpu/gsp/gsp_init_args.h:32-42`). The C reads 32 bytes as
-/// the first four (`C: src/qemu/nvkvm_gpu_emul.c:3411-3425`) — right for r570 and 610,
-/// right by luck for r535, and right about the padding (`NvLength` is `size_t`, so there
-/// are 4 pad bytes after the `u32` at +8) only because it hard-codes it.
+/// (`nv: r535/nvrm/gsp.h:578-585`); r570 has the first 4 only
+/// (`nv: r570/nvrm/gsp.h:497-502`) and **the bench's 580 is that same 4-field shape
+/// verbatim** (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_init_args.h:29-34`); 610 has
+/// those 4 plus five *geometry* fields (`ogkm-610: :32-42`). The C reads 32 bytes as
+/// the first four (`C: src/qemu/nvkvm_gpu_emul.c:3411-3425`) — right for r570, 580 and
+/// 610, right by luck for r535, and right about the padding (`NvLength` is `size_t`, so
+/// there are 4 pad bytes after the `u32` at +8) only because it hard-codes it.
+///
+/// ⚠ The divergence does not stop at this struct: `MESSAGE_QUEUE_INIT_ARGUMENTS` is the
+/// **first** member of `GSP_ARGUMENTS_CACHED` and grows 40 bytes at 610, so *every*
+/// subsequent offset differs, and 610 additionally appends `rmStateMonitorBufferArgs` and
+/// `bindataArgs` (`ogkm-580: gsp_init_args.h:45-64` vs `ogkm-610: :53-83`). Nothing here
+/// reads them today; the first person who needs one must not transcribe a 610 offset.
 ///
 /// `element_hdr_size_off` is the **capability** the plan asks for, not an assumption: on
-/// 610 the guest hands us `queueElementHdrSize` itself — with the CC tag already folded
-/// in (`ogkm: message_queue_cpu.c:80-86`) — so on that version even the element header
+/// 610 the guest hands us `queueElementHdrSize` itself — declared in its init args
+/// (`ogkm-610: gsp_init_args.h:37`) and computed with the CC tag already folded in
+/// (`ogkm-610: message_queue_cpu.c:82-86`) — so on that version even the element header
 /// size is derived rather than keyed on a version.
+///
+/// ★ **SEAM: at 580 there is no such field on either side, so this is `None` there.** The
+/// header size is the compile-time `NV_OFFSETOF(GSP_MSG_QUEUE_ELEMENT, rpc)` = 48, and the
+/// CC `authTagBuffer`/`aadBuffer` sit *inside* that header rather than being appended to
+/// it, so there is nothing to fold in (`ogkm-580: message_queue_priv.h:43-51, 93`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InitArgsLayout {
     /// Offset of `sharedMemPhysAddr` (`u64`).
@@ -92,9 +119,12 @@ pub struct GspAbi {
     pub element: ElementLayout,
     /// The RPC envelope + function ids.
     pub rpc: RpcAbi,
-    /// `queueElementSizeMax` — `RM_PAGE_SIZE * 16` on 610
-    /// (`ogkm: message_queue_cpu.c:88-89`); also declared by the guest on versions whose
-    /// init-args struct carries it.
+    /// `queueElementSizeMax`. A **runtime field** at 610, set to `RM_PAGE_SIZE * 16`
+    /// (`ogkm-610: message_queue_cpu.c:88-89`) and additionally declared by the guest in
+    /// its init args on that version. At 580 it is a **compile-time constant**,
+    /// `GSP_MSG_QUEUE_ELEMENT_SIZE_MIN * 16` (`ogkm-580: message_queue_priv.h:91-92`),
+    /// declared nowhere on the wire. Both evaluate to 65 536; only the provenance differs,
+    /// which is why this is a field here and not a constant.
     pub element_size_max: u32,
     /// Where the init-args fields are.
     pub init_args: InitArgsLayout,
@@ -128,8 +158,10 @@ pub enum BootPhase {
 
 impl BootPhase {
     /// Is WPR2 up in this phase? `phase >= FwsecRan && phase < Halted`
-    /// (`ogkm: kernel_gsp_tu102.c:1172-1180` is the guest's own test, and
-    /// `ogkm: kernel_gsp.c:4805-4809` is the boot gate that reads it).
+    /// (`ogkm-610: kernel_gsp_tu102.c:1172-1180`, `ogkm-580: :1252-1260` is the guest's own
+    /// test — `kgspIsWpr2Up_TU102`, byte-identical at both tags — and
+    /// `ogkm-610: kernel_gsp.c:4805-4809`, `ogkm-580: :3873-3877` is the boot gate that
+    /// reads it, likewise identical). No version seam here.
     #[must_use]
     pub fn wpr2_up(self) -> bool {
         self >= BootPhase::FwsecRan && self < BootPhase::Halted
@@ -151,7 +183,8 @@ pub struct QueueBinding {
     ///
     /// This is what makes *"the guest has linked to the header we published"* observable
     /// rather than inferred. `msgqRxLink` zeroes the read pointer on success
-    /// (`ogkm: msgq.c:435-437`), so after a rebind the value in guest memory goes
+    /// (`ogkm-610: msgq.c:435-437`, `ogkm-580: :436-438`), so after a rebind the value in
+    /// guest memory goes
     /// `previous life's value → 0 → wherever the guest drains to`. Sampling it once at
     /// bind time gives the discriminator: a later reading that **differs** from this one
     /// can only have come from the guest, so the link happened. A zero at bind time needs
@@ -160,7 +193,9 @@ pub struct QueueBinding {
     /// Without it, a stale value that happened to equal our write pointer would read as
     /// *"the guest drained everything"* — and that is the gate on posting unsolicited
     /// events, which during the guest's boot poll is an `NV_ASSERT(0)` in the guest
-    /// (`ogkm: kernel_gsp.c:1419-1440`).
+    /// (`ogkm-610: kernel_gsp.c:1419-1439`, `ogkm-580: :1464-1482`; the assert itself is
+    /// `ogkm-610: :1436`, `ogkm-580: :1479`). The allowlist it guards has eight entries at
+    /// 610 and six at 580 — see the crate-level note above.
     peer_read_at_bind: u32,
 }
 
@@ -339,8 +374,10 @@ pub struct GspFsm {
     ///
     /// The status queue's positions reset on a rebind and its sequence does not, because
     /// `msgqRxLink` assigns `rxReadPtr = 0` and never assigns `rxSeqNum`
-    /// (`ogkm-580: src/common/shared/msgq/msgq.c:722-726` vs
-    /// `ogkm-580: message_queue_cpu.c:782`). **The command queue is the mirror image**:
+    /// (`ogkm-580: src/common/shared/msgq/msgq.c:436` — the assignment inside `msgqRxLink`
+    /// itself, `ogkm-610: src/nvidia/src/libraries/msgq/msgq.c:435`; `rxSeqNum` is only
+    /// ever `++`'d, `ogkm-580: message_queue_cpu.c:782`, `ogkm-610: :836`).
+    /// **The command queue is the mirror image**:
     /// there is no re-link on the producing side, so nothing resets the guest's tx
     /// `writePtr` short of `msgqTxCreate`, which only runs from `_gspMsgQueueInit` at
     /// module load (`ogkm-580: message_queue_cpu.c:155-161`). An idle-release re-acquire
@@ -472,7 +509,10 @@ impl GspFsm {
             GspReg::Sec2FalconCpuctl if model.is_startcpu(val) => {
                 if model.is_booter_unload(self.sec2_mailbox0) {
                     // E4 — Booter Unload. WPR2 must read down afterwards, and the guest
-                    // asserts exactly that (`ogkm: kernel_gsp_booter_tu102.c:175-187`).
+                    // asserts exactly that
+                    // (`ogkm-610: kernel_gsp_booter_tu102.c:175-187`, `ogkm-580: :179-191`
+                    // — identical code at both tags, including the GC6 arm that requires
+                    // WPR2 to stay *up*).
                     self.enter_halted();
                     report.transitions.push(Transition::E4);
                 } else if self.phase == BootPhase::FwsecRan {
@@ -492,9 +532,10 @@ impl GspFsm {
                 // complete when **both halves have been written since the last reset**,
                 // not when a particular half arrives. The C keys on MAILBOX1
                 // (`C:4298-4302`) and ogkm writes lo then hi
-                // (`ogkm: kernel_gsp_tu102.c:392-403`) — a write *order*, not a protocol
-                // guarantee, so keying on one half would be an assumption where a
-                // conjunction costs nothing.
+                // (`kgspProgramLibosBootArgsAddr_TU102`,
+                // `ogkm-610: kernel_gsp_tu102.c:392-403`, `ogkm-580: :363-374` — identical
+                // at both tags) — a write *order*, not a protocol guarantee, so keying on
+                // one half would be an assumption where a conjunction costs nothing.
                 if self.boot_args_seen == (true, true)
                     && matches!(self.phase, BootPhase::FwsecRan | BootPhase::Booted)
                 {
@@ -582,7 +623,9 @@ impl GspFsm {
         // The region array. Bounded by the descriptor's own declared maximum, and a zero
         // entry is treated as **skip**, not stop: that the array is zero-terminated is
         // [inferred] I8 — the header declares no sentinel
-        // (`ogkm: src/common/uproc/os/common/include/libos_init_args.h:31-56`), the C
+        // (`ogkm-580: src/common/uproc/os/common/include/libos_init_args.h:31-56`,
+        // `ogkm-610: :31-56` — the file is **byte-identical** between the tags, same lines,
+        // so there is no version seam here and no profile to add), the C
         // relies on it (`C:3399-3401`), and the mechanism is only "the descriptor was
         // zeroed on allocation". The C also caps its scan at 16 (`C:3388-3407`), which is
         // a parameter it never wrote down — GSP-D9.
@@ -638,27 +681,32 @@ impl GspFsm {
         let geom = MsgqGeometry::bind(ram, region, cmd_off, stat_off, &self.abi.msgq)?;
 
         // Publish the status-queue tx header. The guest's `msgqRxLink` spins on this and
-        // nothing else (`ogkm: message_queue_cpu.c:368-390`).
+        // nothing else (`GspStatusQueueInit`'s retry loop,
+        // `ogkm-610: message_queue_cpu.c:368-390`, `ogkm-580: :346-368` — identical).
         let hdr = geom.published_header().encode();
         geom.region().write(ram, stat_off, &hdr)?;
 
         // ★★ Position resets, sequence numbers usually do not — and the exception is
         // **observable**, which is what closes `mode2_gsp_port_plan.md`'s open item O3.
         //
-        // `msgqRxLink` sets `rxReadPtr = 0` (`ogkm: msgq.c:435`) and nothing in the GSP
-        // tree ever *assigns* `rxSeqNum` — it is only `++`'d
-        // (`ogkm: message_queue_cpu.c:836`) — so a re-link resets the POSITION and
-        // preserves the SEQUENCE. The C learned this the expensive way (`C:3459-3483`):
+        // `msgqRxLink` sets `rxReadPtr = 0` (`ogkm-610: msgq.c:435`, `ogkm-580: :436`) and
+        // nothing in the GSP tree ever *assigns* `rxSeqNum` — it is only `++`'d
+        // (`ogkm-610: message_queue_cpu.c:836`, `ogkm-580: :782`; grep of both trees finds
+        // no other write) — so a re-link resets the POSITION and preserves the SEQUENCE.
+        // The one difference is immaterial here: 610 increments unconditionally at the exit
+        // label, 580 only when `msgqRxMarkConsumed` succeeded (`ogkm-580: :774-783`).
+        // The C learned this the expensive way (`C:3459-3483`):
         // zeroing the sequence made the re-posted `INIT_DONE` arrive at 0 << N, the guest
-        // filed it as an old package (`ogkm: message_queue_cpu.c:762, 768`) and the second
-        // context hung in `kgspWaitForRmInitDone`.
+        // filed it as an old package (`ogkm-610: message_queue_cpu.c:762, 768`,
+        // `ogkm-580: :693, 699`) and the second context hung in `kgspWaitForRmInitDone`.
         //
         // But `rxSeqNum` **is** zero-initialised once: in `GspMsgQueueInit`, which runs
         // from `kgspConstructEngine` and is torn down only in `kgspDestruct` — module
         // load and module unload. So a true `insmod` starts at 0 while an idle release
         // does not, and preserving unconditionally (the C's behaviour) would hand a fresh
         // guest a sequence number **greater** than its own, for which its receive path has
-        // no recovery branch at all (`:768-782` handles only `<`).
+        // no recovery branch at all (`ogkm-610: :768-782`, `ogkm-580: :699-713` — both
+        // handle only `<`).
         //
         // The discriminator is the **region**: `kgspDestruct` frees the shared memdesc, so
         // a new module load allocates a new one, while an idle release keeps
@@ -890,7 +938,13 @@ impl GspFsm {
     ) -> Result<(), GspFault> {
         let disposition = cmd.function.disposition();
         if disposition == Disposition::NoReply {
-            // 72/73 are `_issueRpcAsync` (`ogkm: rpc.c:10466`, `:10507`). Echoing them
+            // 72/73 are both issued asynchronously and neither is awaited:
+            // `GSP_SET_SYSTEM_INFO` calls `_issueRpcAsync`
+            // (`ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:10466`, `ogkm-580: :10656`) and
+            // `SET_REGISTRY` takes `_issueRpcAsyncLarge` or `_issueRpcAsync` depending on
+            // whether the packed registry table fits one message
+            // (`ogkm-610: :10533`/`:10538`, `ogkm-580: :10728`/`:10733`). Identical shape at
+            // both tags. Echoing them
             // surfaces in the driver as an unexpected event and desyncs the sequence.
             return Ok(());
         }
@@ -903,7 +957,17 @@ impl GspFsm {
         if cmd.function == RpcFunction::UnloadingGuestDriver {
             // ★ E9 — reply first, **then** suspend. `MAILBOX0` must report the suspend
             // sentinel afterwards or the guest's close poll spins
-            // (`ogkm: kernel_gsp_tu102.c:352-357`). Sequence numbers are preserved: the
+            // (`kgspWaitForProcessorSuspend_TU102`, `ogkm-610: kernel_gsp_tu102.c:351-359`,
+            // `ogkm-580: :1241-1249` — the poll itself is identical).
+            //
+            // ★★ SEAM in the *predicate* that poll spins on, and it constrains how the
+            // register model may encode this: 580 tests `mailbox == 0x80000000`, exact
+            // equality with the constant inlined (`ogkm-580: kernel_gsp_tu102.c:1225-1239`),
+            // where 610 tests `mailbox & INTERRUPT_PROCESSOR_SUSPENDED_VALUE`, a mask
+            // (`ogkm-610: :333, 348`). So the sentinel must be written **whole** and never
+            // OR-ed onto a mailbox shadow: a shadow still holding a boot-args low half with
+            // bit 31 set reads as suspended at 610 and hangs the teardown poll forever at
+            // 580. Sequence numbers are preserved: the
             // guest sent this fn-47 at the current sequence and polls for its ack there
             // (`C:2465-2472` records what zeroing them cost).
             self.phase = BootPhase::Suspending;
@@ -922,9 +986,10 @@ impl GspFsm {
     ///
     /// Over-posting has two distinct failures and the proxy only obscures them: the ring
     /// overwrites unconsumed elements, the guest reads a `seqNum` **greater** than its
-    /// `rxSeqNum`, and the recovery branch at `ogkm: message_queue_cpu.c:768-782` handles
-    /// only `seqNum < rxSeqNum` — for `>` there is no recovery, and `rxSeqNum++` still
-    /// happens at `:836`, so the streams stay one apart forever.
+    /// `rxSeqNum`, and the recovery branch (`ogkm-610: message_queue_cpu.c:768-782`,
+    /// `ogkm-580: :699-713`) handles only `seqNum < rxSeqNum` — for `>` there is no
+    /// recovery at either tag, and `rxSeqNum++` still happens
+    /// (`ogkm-610: :836`, `ogkm-580: :782`), so the streams stay one apart forever.
     ///
     /// # Errors
     ///
@@ -950,7 +1015,8 @@ impl GspFsm {
         let elements = (run.len() / element_size as usize) as u32;
 
         // The producer's cached free count first, a live read of the peer's pointer only
-        // if the cache is short — `msgqTxSubmitBuffers`' own order (`ogkm: msgq.c:544-547`).
+        // if the cache is short — `msgqTxSubmitBuffers`' own order
+        // (`ogkm-610: msgq.c:544-547`, `ogkm-580: :545-548` — identical).
         let mut free = cursor.free_cache;
         if elements > free {
             let peer_read = geom.region().read_u32(ram, geom.peer_stat_read_ptr_off())?;
@@ -988,8 +1054,13 @@ impl GspFsm {
     /// Post an unsolicited event.
     ///
     /// ★ §7-G7: only once the guest is past its bootup poll, which asserts on anything
-    /// outside an eight-function allowlist (`ogkm: kernel_gsp.c:1419-1440`) —
-    /// `POST_EVENT` is **not** on it.
+    /// outside a short allowlist — **eight** functions at 610
+    /// (`ogkm-610: kernel_gsp.c:1419-1439`) and **six** at 580 (`ogkm-580: :1464-1482`).
+    /// `POST_EVENT` is **not** on either, so [`RpcFunction::allowed_in_bootup_window`] is
+    /// correct for both tags; the lists differ in `GSP_RUN_CPU_SEQUENCER` (580 only) and in
+    /// `PFM_REQ_HNDLR_STATE_SYNC_CALLBACK` / `GSP_LOAD_EXEC_GENERIC_BOOTLOADER` /
+    /// `GSP_LOAD_EXEC_HS_BINARY` (610 only), so any *widening* of that predicate is
+    /// version-keyed data and must not be written as one set.
     ///
     /// # Errors
     ///
@@ -1022,7 +1093,8 @@ impl GspFsm {
         // a linked one — or it has since changed, which only the guest can have done.
         let linked = b.peer_read_at_bind == 0 || peer_read != b.peer_read_at_bind;
         // `GSP_INIT_DONE` is the first thing posted after a bind, and `msgqRxLink` starts
-        // the guest's read pointer at 0 (`ogkm: msgq.c:435`), so "the pointer has moved off
+        // the guest's read pointer at 0 (`ogkm-610: msgq.c:435`, `ogkm-580: :436`), so
+        // "the pointer has moved off
         // zero" IS "the guest consumed INIT_DONE". Deliberately not "the guest drained
         // everything": a reply posted in this very service pass is not yet drained, and
         // waiting for it would keep the FSM out of `Running` for exactly as long as it

@@ -213,7 +213,15 @@ pub enum SignalOutcome {
     /// retire and the condemnation. RM's own answer to an unrecoverable kernel-side
     /// failure has the same shape and the same level: `gpuMarkDeviceForReset` +
     /// `NV2080_NOTIFIERS_GPU_UNAVAILABLE`
-    /// (`ogkm: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:2779-2789`) — **device** scope,
+    /// (★ a **version seam**, and the shared part is the part this rests on:
+    /// `ogkm-610: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:2771-2792` reaches it from
+    /// `_kgspHandleFatalTimeout`, notifying at `:2789` with the classified `errorNum`, and
+    /// only when TDR is unsupported, with `gpuMarkDeviceForReset` two lines above it at
+    /// `:2779`. At `ogkm-580:` the pair is **split across two functions**: the notify is
+    /// unconditional inside `_kgspLogXid119` (`:2130-2205`, notifying at `:2169` with
+    /// `GSP_RPC_TIMEOUT`), and `gpuMarkDeviceForReset` is the caller's own three-back-to-back
+    /// timeout branch (`:2459`). Different trigger, different payload, different nesting —
+    /// but `gpuNotifySubDeviceEvent` at **both**, so the *scope* claim is tag-independent) — **device** scope,
     /// never client scope. Escalating this to a guest-visible device-unavailable
     /// notification is L1-M2's (T4/T7); the core's obligation is to make it
     /// distinguishable and loud, which is what this variant is.

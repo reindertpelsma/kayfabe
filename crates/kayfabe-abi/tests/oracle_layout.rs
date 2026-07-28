@@ -564,24 +564,61 @@ fn nv_esc_numbers_match_ogkm_and_stay_in_the_byte_range() {
 /// The class ids, against ogkm and nvproxy.
 #[test]
 fn class_ids_match_the_headers() {
-    assert_eq!(classes::NV01_ROOT, 0x0, "ogkm cl0000.h:42");
-    assert_eq!(classes::NV01_ROOT_CLIENT, 0x41, "ogkm nvos.h:185");
-    assert_eq!(classes::NV01_DEVICE_0, 0x80, "ogkm cl0080.h:36");
+    assert_eq!(
+        classes::NV01_ROOT,
+        0x0,
+        "ogkm-580: cl0000.h:42 (= ogkm-610)"
+    );
+    assert_eq!(
+        classes::NV01_ROOT_CLIENT,
+        0x41,
+        "ogkm-580: nvos.h:184 / ogkm-610: nvos.h:186"
+    );
+    assert_eq!(
+        classes::NV01_DEVICE_0,
+        0x80,
+        "ogkm-580: cl0080.h:36 (= ogkm-610)"
+    );
     // ★ B3's classes — the ones a CUDA process's subgraph is made of. Each id is
     // read off its own `cl*.h`, and each appears in `kayfabe_mocks::WireClassArch`
     // and in `DriverAbiTable::alloc_params`; a typo here would classify an object
     // as `Unknown` and declare no namespace at all, which is why they are pinned
     // as literals rather than compared to themselves.
-    assert_eq!(classes::FERMI_CONTEXT_SHARE_A, 0x9067, "ogkm cl9067.h:33");
-    assert_eq!(classes::FERMI_VASPACE_A, 0x90f1, "ogkm cl90f1.h:33");
-    assert_eq!(classes::KEPLER_CHANNEL_GROUP_A, 0xa06c, "ogkm cla06c.h:33");
+    //
+    // ★ Every citation below was read at BOTH vendored tags and is byte-identical
+    // AND at the same line in each, so one line number is honest for both: the
+    // `ogkm-580:` tag is written and `ogkm-610:` agrees exactly.
+    assert_eq!(
+        classes::FERMI_CONTEXT_SHARE_A,
+        0x9067,
+        "ogkm-580: cl9067.h:33 (= ogkm-610)"
+    );
+    assert_eq!(
+        classes::FERMI_VASPACE_A,
+        0x90f1,
+        "ogkm-580: cl90f1.h:33 (= ogkm-610)"
+    );
+    assert_eq!(
+        classes::KEPLER_CHANNEL_GROUP_A,
+        0xa06c,
+        "ogkm-580: cla06c.h:33 (= ogkm-610)"
+    );
     assert_eq!(
         classes::AMPERE_CHANNEL_GPFIFO_A,
         0xc56f,
-        "ogkm clc56f.h:43 — the ONE channel class; GR vs CE is `engineType`, not this"
+        "ogkm-580: clc56f.h:43 (= ogkm-610) — the ONE channel class; GR vs CE is \
+         `engineType`, not this"
     );
-    assert_eq!(classes::AMPERE_COMPUTE_B, 0xc7c0, "ogkm clc7c0.h:32");
-    assert_eq!(classes::AMPERE_DMA_COPY_B, 0xc7b5, "ogkm clc7b5.h:33");
+    assert_eq!(
+        classes::AMPERE_COMPUTE_B,
+        0xc7c0,
+        "ogkm-580: clc7c0.h:32 (= ogkm-610)"
+    );
+    assert_eq!(
+        classes::AMPERE_DMA_COPY_B,
+        0xc7b5,
+        "ogkm-580: clc7b5.h:33 (= ogkm-610)"
+    );
 }
 
 /// `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS` and `NV_CTXSHARE_ALLOCATION_PARAMETERS`
@@ -634,18 +671,21 @@ fn the_tsg_and_ctxshare_params_agree_between_the_two_vendored_trees() {
 /// The two vendored trees **disagree** about it, inside the supported version
 /// range and past the three fields we read:
 ///
-/// | off | `ogkm` 610.43.02 | `ogkm-580` 580.159.04 |
+/// | off | `ogkm-610` 610.43.02 | `ogkm-580` 580.159.04 |
 /// |---|---|---|
 /// | +20 | `flags` | `flags` |
 /// | +24 | `hContextShare` | `hContextShare` |
 /// | +28 | `hVASpace` | `hVASpace` |
 /// | +32 | `hHandleVASpace` | `hUserdMemory[0]` |
 ///
-/// (`ogkm: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-347` versus
-/// `ogkm-580: .../alloc_channel.h:288-330`.) A generated 610 mirror decoded
+/// (`ogkm-610: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-347` versus
+/// `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-342` — the
+/// `typedef` opens at `:296` at both tags; the 610 body is one member longer.)
+/// A generated 610 mirror decoded
 /// against a 580 guest — and 580.159.04 IS [`BENCH_DRIVER`] — would read
 /// `hUserdMemory[0]` as `hHandleVASpace` and every subsequent field one slot
-/// late, including `engineType`. So the prefix stops at the last offset both
+/// late, including `engineType` (`+128` at 580, `+136` at 610). So the prefix
+/// stops at the last offset both
 /// trees spell the same way, and this test pins the number so that widening it
 /// has to argue with a second oracle rather than with a comment.
 #[test]
@@ -687,14 +727,22 @@ fn the_channel_alloc_prefix_stops_where_the_two_trees_stop_agreeing() {
     );
 }
 
-/// `NV0000_ALLOC_PARAMETERS` — the one struct in the slice with a **single**
-/// oracle, asserted as such.
+/// `NV0000_ALLOC_PARAMETERS` — the one struct in the slice with **no oracle
+/// outside ogkm**, asserted as such.
 ///
 /// Neither `gvisor/pkg/abi/nvgpu/` nor `nvidia-gpu-passthrough/src/abi/` defines
-/// it (`grep -r NV0000_ALLOC_PARAMETERS` finds nothing in either tree). So the
-/// full 120-byte layout rests on ogkm 610.43.02 alone, and the only part with
-/// corroboration is the two-field prefix, which RM's own writer sets by name
-/// (`ogkm src/nvidia/inc/kernel/vgpu/rpc.h:55,70,75`:
+/// it (`grep -r NV0000_ALLOC_PARAMETERS` finds nothing in either tree). Inside
+/// ogkm the two vendored tags now agree exactly — the full 120-byte layout is
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/cl0000.h:47-52` /
+/// `ogkm-610: src/common/sdk/nvidia/inc/class/cl0000.h:47-52`, character for
+/// character, with `NV_PROC_NAME_MAX_LENGTH = 100U` at `nvlimits.h:47` in both —
+/// so the tail is no longer 610-only. What is still uncorroborated is the
+/// *bottom* of the supported range: both vendored tags are ≥ 580 and the table
+/// admits 550.54.04, so `pOsPidInfo` remains unverified there. The part with
+/// independent corroboration is the two-field prefix, which RM's own writer
+/// sets by name
+/// (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc.h:55,70,75` /
+/// `ogkm-610: src/nvidia/inc/kernel/vgpu/rpc.h:55,70,75` — same lines at both:
 /// `root_alloc_params.hClient = hclient`, then `…processID = KERNEL_PID` or
 /// `…processID = pClient->ProcID`).
 ///
@@ -707,8 +755,9 @@ fn nv0000_alloc_params_has_only_its_prefix_corroborated() {
     assert_eq!(l.offset_of("h_client"), Some(0));
     assert_eq!(l.offset_of("process_id"), Some(4));
     assert_eq!(kayfabe_abi::versions::CLIENT_ALLOC_PREFIX, 8);
-    // Single-oracle territory beyond here. Pinned so a second oracle that
-    // disagrees changes this test rather than passing unnoticed.
+    // Beyond here both vendored ogkm tags agree (cl0000.h:47-52 at each) but
+    // nothing outside ogkm does, and neither tag is older than 580. Pinned so an
+    // oracle that disagrees changes this test rather than passing unnoticed.
     assert_eq!(
         l.offset_of("process_name"),
         Some(8),

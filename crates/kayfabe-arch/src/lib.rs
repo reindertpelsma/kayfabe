@@ -54,8 +54,11 @@ use ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
 /// any `DUP_OBJECT` can happen: the alloc params carry a `processID` which is the
 /// creating client's `ProcID` for a user-privileged client and a reserved
 /// kernel sentinel when `privLevel >= RS_PRIV_LEVEL_KERNEL`
-/// (`ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:67-77`, driven from
-/// `.../gpu/device.c:179-186`). It is therefore a **declared protocol fact**, recorded
+/// (the `NV_RM_RPC_ALLOC_SHARE_DEVICE` macro body:
+/// `ogkm-610:`/`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` — same path, same
+/// lines, byte-identical at both tags; driven from its one call site,
+/// `ogkm-610: src/nvidia/src/kernel/gpu/device.c:179-186`, `ogkm-580: :180-187`). It is
+/// therefore a **declared protocol fact**, recorded
 /// here and never re-derived — the house rule that §12.25's bug came from breaking.
 ///
 /// ★ The three things this is deliberately NOT (all measured on an RTX 3060 / 580.159.04,

@@ -1450,12 +1450,13 @@ impl Spine {
     ///
     /// Ordering is **unmap-then-free**, and that is RM's rule rather than a preference:
     /// `clientFreeResource_IMPL` auto-unmaps a resource's inter-mappings before
-    /// `objDelete` (`ogkm: src/nvidia/src/libraries/resserv/src/rs_client.c:830-849`), so
-    /// RM itself leaks nothing — but *our* external mirror of those mappings (the address
+    /// `objDelete` (`ogkm-610:`/`ogkm-580:`
+    /// `src/nvidia/src/libraries/resserv/src/rs_client.c:830-849` — same path, same lines,
+    /// byte-identical at both tags), so RM itself leaks nothing — but *our* external mirror of those mappings (the address
     /// table's [`kayfabe_mmu::HostBacking`]) goes stale, which is why [`Orphans`] states
     /// the unmaps first and means it. Within `free`, the memory objects mapped into a
     /// host VAS precede the VAS itself, matching RM's children-before-parents order
-    /// (`.../rs_server.c:963-981`).
+    /// (`ogkm-610:`/`ogkm-580: .../rs_server.c:963-981`, also identical at both).
     ///
     /// **The GPA half runs right here, under the lock, and that is correct**: returning a
     /// block to `GpaArena` issues no host verb, so R1 does not apply to it — only the
@@ -2300,7 +2301,15 @@ impl Spine {
     /// condition must be surfaced as one, not filed as a per-client condemnation entry.
     /// RM's own analogue is the same shape: an unrecoverable kernel-side failure escalates
     /// to `gpuMarkDeviceForReset` + `NV2080_NOTIFIERS_GPU_UNAVAILABLE`
-    /// (`ogkm: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:2779-2789`), at **device** level,
+    /// (★ a **version seam**, and the shared part is the part this rests on:
+    /// `ogkm-610: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:2771-2792` reaches it from
+    /// `_kgspHandleFatalTimeout`, notifying at `:2789` with the classified `errorNum`, and
+    /// only when TDR is unsupported, with `gpuMarkDeviceForReset` two lines above it at
+    /// `:2779`. At `ogkm-580:` the pair is **split across two functions**: the notify is
+    /// unconditional inside `_kgspLogXid119` (`:2130-2205`, notifying at `:2169` with
+    /// `GSP_RPC_TIMEOUT`), and `gpuMarkDeviceForReset` is the caller's own three-back-to-back
+    /// timeout branch (`:2459`). Different trigger, different payload, different nesting —
+    /// but `gpuNotifySubDeviceEvent` at **both**, so the *scope* claim is tag-independent), at **device** level,
     /// never at client level. The adapter half is `SharedDevice::signal_source`'s
     /// `SignalOutcome::DeviceFatal`.
     pub fn retire_proc(&mut self, procs: &mut impl ProcSet, pid: ProcId) -> bool {

@@ -274,8 +274,9 @@ fn assert_conserved(device: Guarded<Arc<SharedDevice>>, pid: ProcId, rec: &Share
 /// The released chain is asserted as an exact sequence: **unmap, then free the memory,
 /// then free the host VAS**. That is RM's own order — `clientFreeResource_IMPL` unmaps a
 /// resource's inter-mappings before `objDelete`
-/// (`ogkm: src/nvidia/src/libraries/resserv/src/rs_client.c:830-849`) and the server frees
-/// children and dependents ahead of parents (`.../rs_server.c:963-981`) — and it is what
+/// (`ogkm-580: src/nvidia/src/libraries/resserv/src/rs_client.c:830-849`; `ogkm-610:` is
+/// byte-identical at the same lines) and the server frees children and dependents ahead
+/// of parents (`ogkm-580: .../rs_server.c:963-981`, `ogkm-610:` idem) — and it is what
 /// keeps our external mirror of those mappings from going stale.
 #[test]
 fn freeing_a_vaspace_queues_its_host_state_and_the_next_op_releases_it() {

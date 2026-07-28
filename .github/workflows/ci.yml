@@ -509,6 +509,88 @@ jobs:
             echo "    (§8 corrects two such claims)."
             exit 1
           fi
+      # ★ The OGKM-VERSION-TAG gate — mode2_gsp_port_plan.md §0.1, correction brief B11.
+      #
+      # `ogkm` is not a tree, it is a FAMILY of trees, and a citation that does not say
+      # which one it came from is unverified by definition. Two are vendored and they are
+      # different specifications: ogkm-580 (580.159.04, the driver the bench actually runs)
+      # and ogkm-610 (610.43.02). They disagree BEHAVIOURALLY on the GSP path, not
+      # cosmetically — the element layout, the element-count semantics, the transport
+      # headers, the init-args struct, the boot-FSM ordering and the suspend sentinel's
+      # comparison all differ, the whole msgq library sits at a different PATH, and
+      # NV_CHANNEL_ALLOC_PARAMS diverges at +32 INSIDE the supported range, which mis-reads
+      # every field beyond it. One plan row was once marked RESOLVED with the answer that is
+      # backwards for the driver we face, which is what this gate exists to stop recurring.
+      #
+      # Gate A is a hard zero: the crates are code, and a citation there is the argument for
+      # what an offset or an ordering IS. Gate B is a ratchet rather than a zero because the
+      # 160 doc citations are debt this gate's own commit did not adjudicate — and pretending
+      # otherwise with a blanket exemption is how a gate becomes permanent decoration.
+      #
+      # ★ Note the docs ratchet is EXACT-equality, same polarity as the unsafe ratchet below:
+      # driving the debt down is the goal, and it must show up as a reviewed constant change
+      # rather than as silent slack a later citation can be added into.
+      #
+      # ★ Scope note: `ogkm-580:` / `ogkm-610:` do not contain the substring `ogkm:`, so the
+      # tagged forms are invisible to this grep and no allowlist is needed. Prose that MENTIONS
+      # the defect (the rule's own text in mode2_gsp_port_plan.md §0.1 writes a bare `ogkm:` to
+      # define it) is counted in the docs baseline rather than special-cased — a
+      # mention-vs-use exception would be a pattern this gate could not keep honest.
+      #
+      # Same exit-code polarity trap as the gates around it: a `grep` HIT is the failure.
+      - name: "ogkm-version-tag gate (every NVIDIA citation names its tree)"
+        run: |
+          # --- Gate A: ZERO bare `ogkm:` citations in ANY Rust source.
+          # ★ `tests/` is in scope, not just `crates/`. The mock guest (tests/src/gspworld.rs)
+          # and the wire helper (tests/src/rpcwire.rs) do not merely describe the driver, they
+          # MODEL it, and every test judges production code against that model. The oracle was
+          # once 610-shaped for BOTH profiles (correction brief B1) — an untagged citation there
+          # is a wrong test, which is worse than a wrong comment because it reports green.
+          hits=$(grep -rn 'ogkm:' crates tests fuzz --include='*.rs' 2>/dev/null || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo ""
+            echo "★ UNTAGGED-CITATION BREACH — mode2_gsp_port_plan.md §0.1."
+            echo "The lines above cite NVIDIA source as plain 'ogkm:', which does not say"
+            echo "WHICH vendored tree the claim was read from. Two are vendored and they"
+            echo "are different specifications:"
+            echo "  ogkm-580: = research_clones/ogkm-580.159.04/  (580.159.04)"
+            echo "              ★ the bench's own driver. Governs when the two disagree."
+            echo "  ogkm-610: = research_clones/ogkm/             (610.43.02)"
+            echo "Re-read the claim against a tree and tag it. Three outcomes, all legitimate:"
+            echo "  - holds at BOTH, identically -> cite both, e.g."
+            echo "        (\`ogkm-610: rpc.c:10856\`, \`ogkm-580: :11051\`)"
+            echo "    This is a load-bearing negative result, not a shrug: it tells the next"
+            echo "    reader there is no version seam here, so nobody adds a version profile"
+            echo "    for a struct that has none."
+            echo "  - DIFFERS between the tags -> that is a SEAM. Tag it with the version it"
+            echo "    describes and say what the other tag does. A version-split fact is a"
+            echo "    profile/table entry, NEVER an \`if version ==\` in a logic crate."
+            echo "  - the path or line MOVED -> correct it, with the tag. The whole msgq"
+            echo "    library is src/common/shared/msgq/ at 580 and"
+            echo "    src/nvidia/src/libraries/msgq/ at 610; path drift is as dangerous as"
+            echo "    content drift and less visible."
+            echo "Line numbers belong to the tagged tree ONLY — never carry one across a tag,"
+            echo "even where the code is byte-identical."
+            echo "If the citation says what it claims at NEITHER tag, do not quietly repoint"
+            echo "it: that is a phantom, and it is the most valuable thing you can find."
+            exit 1
+          fi
+          # --- Gate B: the docs ratchet — a reviewed constant, driven toward zero.
+          EXPECTED_DOC_CITATIONS=160
+          actual=$(grep -rho 'ogkm:' docs --include='*.md' | wc -l | tr -d ' ')
+          echo "untagged doc citations: $actual (bar: $EXPECTED_DOC_CITATIONS)"
+          if [ "$actual" -ne "$EXPECTED_DOC_CITATIONS" ]; then
+            echo ""
+            echo "★ OGKM DOC RATCHET MOVED — mode2_gsp_port_plan.md §0.1."
+            echo "Expected $EXPECTED_DOC_CITATIONS untagged doc citation(s), found $actual."
+            echo "If you ADDED one: don't. Tag it — see the three outcomes above."
+            echo "If you REMOVED one (thank you): change the number here in the same commit."
+            echo "A ratchet that only catches growth leaves slack a later citation can be"
+            echo "added into without anything saying so."
+            grep -rn 'ogkm:' docs --include='*.md' | sed 's/^/  /' || true
+            exit 1
+          fi
       # ★ The UNSAFE-CONTAINMENT gates — A, B and the ratchet (l1_os_shell.md §4.1).
       #
       # Landed WITH `kayfabe-linux-raw`, because that crate is what makes them necessary.

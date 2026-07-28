@@ -53,7 +53,8 @@ fn a_stock_guest_boots_links_the_status_queue_and_drains_init_done() {
     let mut w = World::new(P580, MODEL_A);
 
     // Before anything: WPR2 must read DOWN, or `_kgspBootGspRm` bails with "unexpected
-    // WPR2 already up" (`ogkm: kernel_gsp.c:4805-4809`).
+    // WPR2 already up" (`ogkm-580: kernel_gsp.c:3873-3877`, `ogkm-610: :4805-4809` —
+    // the same `kgspIsWpr2Up_HAL` early-fail, byte-identical, only relocated).
     assert_eq!(w.rd(GspReg::Wpr2AddrHi), 0, "cold device, WPR2 down");
 
     let transitions = w.boot();
@@ -171,7 +172,9 @@ fn the_same_boot_runs_under_both_element_layouts_and_neither_accepts_the_others_
     }
 
     // A 610 guest reading a 580-encoded element: the transport words are absent, so its
-    // MCTP validation refuses (`ogkm: message_queue_cpu.c:737-759`).
+    // MCTP validation refuses (`ogkm-610: message_queue_cpu.c:737-759`). ★ That block is
+    // 610-ONLY: 580 has no MCTP/NVDM header check anywhere in `message_queue_cpu.c`, which
+    // is why the refusal is named against the 610 driver and not against a shared rule.
     let mut w = World::new(P580, MODEL_A);
     w.boot();
     let mut guest_610 = Guest::new(
@@ -323,10 +326,11 @@ fn three_driver_lifetimes_in_one_process_leave_no_latch_and_no_stale_binding() {
 
 /// ★ The boot-args pair completes on **whichever half lands second** ([inferred] I4).
 ///
-/// ogkm writes lo then hi (`ogkm: kernel_gsp_tu102.c:392-403`) and the C keys the whole
-/// handshake on the `MAILBOX1` write (`C:4298-4302`) — but that is a write *order*, not a
-/// protocol guarantee, and a trigger keyed on one half is a trigger that fires with a
-/// stale partner. This drives the halves in the **reverse** order.
+/// ogkm writes lo then hi (`kgspProgramLibosBootArgsAddr_TU102`, byte-identical at both
+/// tags: `ogkm-580: kernel_gsp_tu102.c:363-374`, `ogkm-610: :392-403`) and the C keys the
+/// whole handshake on the `MAILBOX1` write (`C:4298-4302`) — but that is a write *order*,
+/// not a protocol guarantee, and a trigger keyed on one half is a trigger that fires with
+/// a stale partner. This drives the halves in the **reverse** order.
 #[test]
 fn the_boot_args_pair_completes_on_whichever_half_lands_second() {
     let mut w = World::new(P580, MODEL_A);
@@ -357,9 +361,13 @@ fn the_boot_args_pair_completes_on_whichever_half_lands_second() {
 ///
 /// `MESSAGE_QUEUE_INFO` is built in `kgspConstructEngine` and destroyed only in
 /// `kgspDestruct` (module unload), so an idle release keeps the guest's `rxSeqNum` alive.
-/// A re-link resets the *position* (`msgqRxLink` sets `rxReadPtr = 0`, `ogkm: msgq.c:435`)
-/// and nothing anywhere assigns `rxSeqNum` — it is only `++`'d
-/// (`ogkm: message_queue_cpu.c:836`). The C learned this the expensive way: zeroing the
+/// A re-link resets the *position* (`msgqRxLink` sets `rxReadPtr = 0`,
+/// `ogkm-580: src/common/shared/msgq/msgq.c:436`, `ogkm-610: src/nvidia/src/libraries/msgq/msgq.c:435`
+/// — the library moved trees and every line shifted by one, the code is identical)
+/// and nothing anywhere in either tag assigns `rxSeqNum` — it is only `++`'d
+/// (`ogkm-580: message_queue_cpu.c:782`, `ogkm-610: :836`; at 580 the `++` sits in the
+/// `msgqRxMarkConsumed`-succeeded branch, at 610 it is unconditional at `exit:` — either
+/// way there is no assignment). The C learned this the expensive way: zeroing the
 /// sequence made the re-posted `INIT_DONE` arrive at 0 ≪ N, the guest filed it as an old
 /// package and ignored it, and the second context hung (`C:3459-3483`).
 #[test]
@@ -509,9 +517,14 @@ fn a_doorbell_on_an_unbound_queue_refuses_by_name_and_reads_zero_guest_ram() {
 
 /// ★ §7-G8 — the liveness obligations, in order.
 ///
-/// fn-47 is `_issueRpcAndWait` (`ogkm: rpc.c:9146-9170`), so the reply comes **first**;
-/// only then may `MAILBOX0` report the suspend sentinel the close poll is waiting on
-/// (`ogkm: kernel_gsp_tu102.c:352-357`). A fault-and-stop posture on this path hangs the
+/// fn-47 is `_issueRpcAndWait` (`rpcUnloadingGuestDriver_v1F_07`,
+/// `ogkm-580: rpc.c:9168-9192`, `ogkm-610: :9146-9170` — same body, 580 reaches the
+/// payload through the `rpc_message` macro where 610 uses `rpcGetVgpuMessageData`), so
+/// the reply comes **first**; only then may `MAILBOX0` report the suspend sentinel the
+/// close poll is waiting on (`kgspWaitForProcessorSuspend_TU102`,
+/// `ogkm-580: kernel_gsp_tu102.c:1241-1249`, `ogkm-610: :351-359`; and see the
+/// sentinel-shape seam pinned below — 580 tests `mailbox == 0x80000000`, 610 tests a
+/// mask). A fault-and-stop posture on this path hangs the
 /// guest's `rmmod`, which is why no refusal in this crate can stop the register surface.
 #[test]
 fn fn47_is_answered_before_the_suspend_sentinel_appears() {
@@ -544,8 +557,12 @@ fn fn47_is_answered_before_the_suspend_sentinel_appears() {
 /// ★ §7-G7 — an unsolicited event before the guest is out of its bootup poll is a guest
 /// `NV_ASSERT(0)`.
 ///
-/// The poll runs without the API lock and accepts eight functions
-/// (`ogkm: kernel_gsp.c:1419-1440`); `POST_EVENT` is not one of them. The gate here is the
+/// The poll runs without the API lock and accepts a short allowlist — ★ SEAM: **six**
+/// functions at 580 (`ogkm-580: kernel_gsp.c:1464-1482`) and **eight** at 610
+/// (`ogkm-610: :1419-1440`; 610 adds `GSP_LOAD_EXEC_GENERIC_BOOTLOADER` and
+/// `GSP_LOAD_EXEC_HS_BINARY` and drops `GSP_RUN_CPU_SEQUENCER`). `POST_EVENT` is in
+/// **neither** list, so the `NV_ASSERT(0)` this test pins holds at both tags — but the
+/// count does not, and this test runs `P580`. The gate here is the
 /// *observed* drain of `GSP_INIT_DONE`, so this test also pins that the observation, not
 /// the posting, is what opens the window.
 #[test]
@@ -623,8 +640,10 @@ fn a_multi_element_command_is_read_whole_not_truncated() {
 ///
 /// The failure it prevents is not "a message is lost": the guest reads an element whose
 /// `seqNum` is **greater** than its `rxSeqNum`, and the recovery branch at
-/// `ogkm: message_queue_cpu.c:768-782` handles only `<`. There is no recovery for `>`, and
-/// `rxSeqNum++` happens anyway at `:836`, so the two streams stay one apart forever.
+/// `ogkm-580: message_queue_cpu.c:699-714` (`ogkm-610: :768-782`) handles only `<`. There
+/// is no recovery for `>` at either tag, and `rxSeqNum++` happens anyway once the retries
+/// are exhausted (`ogkm-580: :782`, `ogkm-610: :836`), so the two streams stay one apart
+/// forever.
 #[test]
 fn over_posting_is_refused_as_queue_full_and_the_guest_never_sees_a_sequence_gap() {
     let mut w = World::new(P580, MODEL_A);
@@ -637,7 +656,8 @@ fn over_posting_is_refused_as_queue_full_and_the_guest_never_sees_a_sequence_gap
     );
 
     // Post until the ring refuses. At most msgCount - 1 elements may be outstanding, or
-    // full becomes indistinguishable from empty (`ogkm: msgq.c:490`, the `-1`).
+    // full becomes indistinguishable from empty (`ogkm-580: msgq.c:491`,
+    // `ogkm-610: :490` — same `msgqTxGetFreeSpace` line, the `-1`).
     let mut posted = 0u32;
     let mut refusal = None;
     for i in 0..20 {
@@ -664,8 +684,9 @@ fn over_posting_is_refused_as_queue_full_and_the_guest_never_sees_a_sequence_gap
     // ★ This expectation was wrong when first written (it said `count - 2`, on the
     // assumption that INIT_DONE still occupied a slot) and the failing test was the
     // finding: `link_and_drain` above consumes INIT_DONE, so the whole ring is free and
-    // the bound is `msgCount - 1` outstanding — `ogkm: msgq.c:490`'s `-1`, which is what
-    // keeps a full ring distinguishable from an empty one. Corrected rather than relaxed.
+    // the bound is `msgCount - 1` outstanding — the `-1` in `msgqTxGetFreeSpace`
+    // (`ogkm-580: msgq.c:491`, `ogkm-610: :490`), which is what keeps a full ring
+    // distinguishable from an empty one. Corrected rather than relaxed.
     assert_eq!(
         posted,
         count - 1,
@@ -697,7 +718,8 @@ fn over_posting_is_refused_as_queue_full_and_the_guest_never_sees_a_sequence_gap
 /// unswapped location — left the guest computing zero free space and reporting *"buffer
 /// is full"* once ~63 command elements had accumulated (`C:3352-3358`). With
 /// `MSGQ_FLAGS_SWAP_RX` agreed, each side writes the read pointer into **its own** backing
-/// store (`ogkm: msgq.c:416-419`), and ours is the status queue.
+/// store (`msgqRxLink`'s `rxSwapped` arm, identical at both tags:
+/// `ogkm-580: msgq.c:417-420`, `ogkm-610: :416-419`), and ours is the status queue.
 #[test]
 fn the_guest_makes_progress_past_a_full_rings_worth_of_commands() {
     let mut w = World::new(P580, MODEL_A);
@@ -1676,7 +1698,8 @@ fn the_wire_encoding_is_little_endian_on_any_host() {
         Err(GspFault::Truncated { need: 32, have: 31 }),
     );
     // The reference geometry three independent trees agree on
-    // (`ogkm: msgq.c:236-251` derived, `nv: r535/gsp.c:1164-1172` verbatim).
+    // (`msgqTxCreate`'s geometry, identical at both tags: `ogkm-580: msgq.c:237-252`,
+    // `ogkm-610: :236-251` — derived; `nv: r535/gsp.c:1164-1172` verbatim).
     assert_eq!((0x0004_0000u32 - 0x1000) / 0x1000, 63);
 }
 

@@ -72,8 +72,14 @@
 //! cmd, 4096)` (`C:2737`) then `nvkvm_m3_post_status(…, 0 /* NV_OK */)` (`C:3326`) — with
 //! no allowlist, no counter and, outside `-trace`, no log line at all.
 //!
-//! But a refusal is **not a drop**: the guest blocks in `_issueRpcAndWait` polling
-//! `(function, sequence)` (`ogkm: src/nvidia/src/kernel/vgpu/rpc.c:9146-9170`), so an
+//! But a refusal is **not a drop**: the guest blocks in `_issueRpcAndWait`, which calls
+//! `rpcRecvPoll(pGpu, pRpc, expectedFunc, expectedSequence)`
+//! (`ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:1990`, `ogkm-580: :1972`), and on a GSP
+//! client that is `_kgspRpcRecvPoll` — a `for (;;)` that drains the message queue until a
+//! message whose `(function, sequence)` both match arrives, or `gpuCheckTimeout` fires
+//! (`ogkm-610: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:2962-2998`, the pair-match at
+//! `:1825-1826`; `ogkm-580: kernel_gsp.c:2391-2429`, the pair-match at `:1776-1777` —
+//! structurally the same loop in both trees). So an
 //! unanswered command hangs it for the whole RPC timeout. The caller therefore still posts
 //! a reply, carrying [`BridgeRefusal::rpc_result`]. Refusals surface in three places and
 //! all three are mandatory: the reply, the trace ([`Faulted`], so they are *countable* —
@@ -118,8 +124,10 @@
 //! **two** questions
 //!
 //! `gsp_core_bridge.md` §2.6/§7 item 4 left this `[unverified]` and required B6 to settle
-//! it before shipping. `_issueRpcLarge` (`ogkm: rpc.c:2074-2224`,
-//! `ogkm-580: :2053-2206` — the same function) answers it in two halves:
+//! it before shipping. `_issueRpcLarge` (`ogkm-610: rpc.c:2058-2244`,
+//! `ogkm-580: :2038-2223` — the same function, and byte-identical apart from 610's
+//! `rpcGetVgpuMessageHeader(pRpc)` replacing 580's `vgpu_rpc_message_header_v` macro)
+//! answers it in two halves:
 //!
 //! - **Sending**, the guest does *not* await a reply per fragment. It posts every
 //!   fragment (`rpcSendMessage` per fragment, `pRpc->sequence` incrementing —
@@ -129,10 +137,10 @@
 //!   `bBidirectional && recordCount > 0` it then polls
 //!   `rpcRecvPoll(…, NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD, waitSequence)` with
 //!   `waitSequence` incrementing, until the reply bytes fill the request's own
-//!   `bufSize` (`ogkm: rpc.c:2186-2226`).
+//!   `bufSize` (`ogkm-610: rpc.c:2186-2226`, `ogkm-580: :2164-2205`).
 //!
 //! ⇒ For the **one** fragmenting function this bridge translates — fn 76, issued
-//! `_issueRpcAndWaitLarge(…, NV_TRUE)` (`ogkm: rpc.c:10856`, `ogkm-580: :11051`) — a reply
+//! `_issueRpcAndWaitLarge(…, NV_TRUE)` (`ogkm-610: rpc.c:10856`, `ogkm-580: :11051`) — a reply
 //! per fragment is **required**, and withholding one hangs the guest for the whole RPC
 //! timeout. `GspFsm::answer` already posts one, echoing each fragment's own
 //! `(function, sequence)` and its own length, which is exactly the pair and the arithmetic
@@ -140,13 +148,14 @@
 //!
 //! ★ And the status lands in the right place *by construction*: the driver reads
 //! `rpc_result` from `pVgpuRpcHeader` **after** that loop — i.e. from the **last** fragment
-//! it received (`ogkm: rpc.c:2230-2241`). The last fragment is precisely the one on which
+//! it received (`ogkm-610: rpc.c:2230-2241`, `ogkm-580: :2209-2220` — same test, same
+//! collapse). The last fragment is precisely the one on which
 //! [`Reassembler`] completes and [`translate`] runs, so the head and the intermediate
 //! fragments ack `NV_OK` ([`Translation::Held`]) and the real outcome rides the final
 //! reply.
 //!
 //! ⚠ **The named gap, because the answer is not uniform.** `SET_REGISTRY` fragments
-//! through `_issueRpcAsyncLarge` (`ogkm: rpc.c:10533`, `ogkm-580: :10728`), which is
+//! through `_issueRpcAsyncLarge` (`ogkm-610: rpc.c:10533`, `ogkm-580: :10728`), which is
 //! `bWait = NV_FALSE`: that guest awaits **no** reply, and `RpcFunction::SetRegistry`'s
 //! own `Disposition::NoReply` says so. Its *continuations* nevertheless take
 //! `RpcFunction::ContinuationRecord`'s disposition, which is `Reply` — so a registry table
@@ -282,7 +291,8 @@ pub enum BridgeRefusal {
     /// A **new head arrived while one was in flight** (§2.6 bound 4).
     ///
     /// `[inferred]` `_issueRpcLarge` writes every fragment of one message before it
-    /// returns, under the GPU lock (`ogkm: rpc.c:2074-2143`), so a second message
+    /// returns, under the GPU lock (`ogkm-610: rpc.c:2074-2145`,
+    /// `ogkm-580: :2053-2124`), so a second message
     /// beginning mid-run is not a legal trace — category 3, refused rather than
     /// reconciled.
     ///
@@ -350,7 +360,8 @@ pub enum BridgeRefusal {
     /// `flags & RMAPI_RPC_FLAGS_SERIALIZED`: `params[]` is FINN-serialized, so it is not
     /// the flat `#[repr(C)]` struct and **every** per-class offset would be wrong.
     ///
-    /// Fires on a *declared bit* (`ogkm: rpc.c:11018-11022`), never on a length
+    /// Fires on a *declared bit* (`ogkm-610: rpc.c:11018-11022`,
+    /// `ogkm-580: :11212-11216` — same code), never on a length
     /// heuristic. Which classes set it is `[unverified]`; if a boot-path class turns out
     /// to, this refusal is where that is discovered rather than a mis-decode.
     SerializedParams {
@@ -358,7 +369,7 @@ pub enum BridgeRefusal {
         class: u32,
     },
     /// The same bit on the **control** side: `rmapiRpcFlags & RMAPI_RPC_FLAGS_SERIALIZED`
-    /// (`ogkm: rpc.c:10805-10806`).
+    /// (`ogkm-610: rpc.c:10805-10806`, `ogkm-580: :11000-11001`).
     ///
     /// A separate variant rather than a reused one, because it carries a different
     /// number and answers a different open question: `gsp_core_bridge.md` §7 item 3 asks
@@ -366,7 +377,8 @@ pub enum BridgeRefusal {
     ///
     /// ★ It fires on `NVBIT(1)` alone. `rmapiRpcFlags` also carries
     /// `RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR` = `NVBIT(0)`, set independently
-    /// (`ogkm: rpc.c:10803-10804`), so a `!= 0` test on the whole word would refuse
+    /// (`ogkm-610: rpc.c:10802-10803`, `ogkm-580: :10997-10998`), so a `!= 0` test on the
+    /// whole word would refuse
     /// every control that merely asked for copy-out-on-error.
     SerializedControlParams {
         /// `cmd`.
@@ -384,7 +396,9 @@ pub enum BridgeRefusal {
     },
     /// A client-root alloc whose two declarations of its own handle disagree: the RPC
     /// header's `hClient` and `NV0000_ALLOC_PARAMETERS.hClient` are the same fact twice
-    /// (RM stamps the second — `ogkm: src/nvidia/src/kernel/rmapi/client.c:226-227`), so
+    /// (RM stamps the second — `ogkm-610: src/nvidia/src/kernel/rmapi/client.c:225-227`,
+    /// `ogkm-580: client.c:219-221`, which is the same store behind an extra
+    /// `status == NV_OK` guard), so
     /// a disagreement means we have mis-decoded, not that the guest meant something
     /// clever.
     ClientHandleDisagrees {
@@ -454,7 +468,7 @@ pub enum BridgeRefusal {
     /// both vendored trees verbatim: *"handle for the allocated VA space that this
     /// control call should operate on. **If it's 0, it assumes to use the implicit
     /// allocated VA space associated with the client/device pair**"*
-    /// (`ogkm: ctrl0080dma.h:782-785`, `ogkm-580: ctrl0080dma.h:812-815`).
+    /// (`ogkm-610: ctrl0080dma.h:782-785`, `ogkm-580: ctrl0080dma.h:812-815`).
     ///
     /// That implicit VAS is a real object the RPC does not name and the graph has no node
     /// for. Passing `HObject(0)` through would attach the PDB to a node key the guest
@@ -520,15 +534,19 @@ impl BridgeRefusal {
     /// [`kayfabe_abi::NV_VGPU_MSG_RESULT_VMIOP_BASE`]; the three facts that decided it:
     ///
     /// 1. the guest **collapses** every `rpc_result` at or above `0xFF000000` to one
-    ///    indistinguishable `NV_ERR_GENERIC` (`ogkm: rpc.c:2020-2025`), so a status
+    ///    indistinguishable `NV_ERR_GENERIC` (`ogkm-610: rpc.c:2023-2026`,
+    ///    `ogkm-580: :2004-2007`; `_issueRpcLarge` repeats the identical collapse at
+    ///    `ogkm-610: :2237-2240` / `ogkm-580: :2216-2219`), so a status
     ///    above the base cannot say anything at all — `0x56` is below it and arrives
     ///    verbatim;
     /// 2. `rpcRmApiControl_GSP` already lists `NV_ERR_NOT_SUPPORTED` among the statuses
-    ///    it logs *quietly* (`ogkm: rpc.c:10914-10920`) — it is an ordinary outcome to
+    ///    it logs *quietly* (`ogkm-610: rpc.c:10913-10920`, `ogkm-580: :11108-11115`) — it
+    ///    is an ordinary outcome to
     ///    the driver, not an anomaly;
     /// 3. the obvious alternative, `NV_VGPU_MSG_RESULT_RPC_API_CONTROL_NOT_SUPPORTED`
     ///    (`0xFF100009`), is translated back to a real `NV_STATUS` only on the vGPU
-    ///    `RM_API_CONTROL` path and **not** on fn 76 (`ogkm: rpc.c:5432-5437` vs
+    ///    `RM_API_CONTROL` path and **not** on fn 76
+    ///    (`ogkm-610: rpc.c:5432-5437`, `ogkm-580: :5425-5430` vs
     ///    `rpcRmApiControl_GSP`), so on our path it would reach the RM caller as a value
     ///    that is not an `NV_STATUS`.
     ///
@@ -675,15 +693,19 @@ fn declared_handle(handle: u32) -> Option<HObject> {
 ///
 /// On the wire a client root arrives with `hParent = hObject = NV01_NULL_OBJECT = 0`: the
 /// driver's own macro calls `AllocWithHandle(pRmApi, hclient, NV01_NULL_OBJECT,
-/// NV01_NULL_OBJECT, NV01_ROOT, …)` (`ogkm: src/nvidia/inc/kernel/vgpu/rpc.h:85-87`) and
-/// `rpcRmApiAlloc_GSP` copies all three through verbatim (`ogkm: rpc.c:11007-11009`).
+/// NV01_NULL_OBJECT, NV01_ROOT, …)`
+/// (`ogkm-610: src/nvidia/inc/kernel/vgpu/rpc.h:85-87`; `ogkm-580:` byte-identical at the
+/// same lines) and
+/// `rpcRmApiAlloc_GSP` copies all three through verbatim (`ogkm-610: rpc.c:11007-11009`,
+/// `ogkm-580: :11201-11203`).
 /// The core, meanwhile, requires `parent == handle` for a root
 /// (`kayfabe_core::rmgraph::RmEvent::Alloc`'s doc). Passing `0/0` through would create a
 /// node at `(client, HObject(0))` whose relationship to the namespace is accidental.
 ///
 /// The fix is **NVIDIA's own rule**, not an invention: in RM the `hClient` *is* its root
 /// object's handle — `serverAllocClient` writes `pParams->hResource = hClient`
-/// (`ogkm: src/nvidia/src/libraries/resserv/src/rs_server.c:625`).
+/// (`ogkm-610: src/nvidia/src/libraries/resserv/src/rs_server.c:625`; `ogkm-580:`
+/// byte-identical at the same line).
 ///
 /// It applies to the client root **and to nothing else**: every other class's `hParent`
 /// and `hObject` are copied verbatim, which is why the normalisation cannot leak into a
@@ -743,7 +765,8 @@ fn translate_alloc(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation, 
             facts: AllocFacts {
                 // ★ The one genuinely guest-OS-shaped value in the whole bridge. The
                 // `KERNEL_PID` sentinel branch that produces it is gated on
-                // `RMCFG_FEATURE_PLATFORM_UNIX` (`ogkm: rpc.h:67-77`), so on a non-UNIX
+                // `RMCFG_FEATURE_PLATFORM_UNIX` (`ogkm-610: rpc.h:67-77`; `ogkm-580:`
+                // byte-identical at the same lines), so on a non-UNIX
                 // guest a kernel-privileged client declares a *real* pid and this
                 // classification would be wrong in the direction that folds a guest
                 // process into the guest kernel's isolate. The seam is already the right
@@ -921,9 +944,9 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
 /// `DUP_OBJECT` (fn 21) → [`RmEvent::Dup`].
 ///
 /// `rpc_dup_object_v03_00` *is* `NVOS55_PARAMETERS_v03_00` — a bare struct with no
-/// wrapper and no header of its own (`ogkm: g_rpc-structures.h:200-205`,
+/// wrapper and no header of its own (`ogkm-610: g_rpc-structures.h:200-205`,
 /// `ogkm-580: :198-203`), whose seven members are character-for-character identical in
-/// both vendored trees (`ogkm: g_sdk-structures.h:368-377`, `ogkm-580: :366-375`). So the
+/// both vendored trees (`ogkm-610: g_sdk-structures.h:368-377`, `ogkm-580: :366-375`). So the
 /// existing ioctl-side decoder applies **verbatim**, which is what
 /// `gsp_core_bridge.md` §1.4 claims and what
 /// `crates/kayfabe-abi/tests/mean_wire.rs` pins.
@@ -960,7 +983,7 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
 ///   not a bridge change — `gsp_core_bridge.md` §2.4 records the loss and declines it, and
 ///   this arm inherits the decision rather than re-taking it.
 /// - **`flags`** — `NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE` = `0x1`
-///   (`ogkm: nvos.h:2276-2277`, `ogkm-580: nvos.h:2275-2276`) is a *privilege* assertion
+///   (`ogkm-610: nvos.h:2276-2277`, `ogkm-580: nvos.h:2275-2276`) is a *privilege* assertion
 ///   about the duping client, and the core models privilege as `ClientKind`, declared once
 ///   at the client root. Nowhere to put it, and nothing to do with it.
 ///
@@ -1025,9 +1048,11 @@ fn translate_dup(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation, Br
 
 /// `FREE` (fn 10) → [`RmEvent::Free`].
 ///
-/// `rpc_free_v03_00` *is* `NVOS00_PARAMETERS_v03_00` (`ogkm: g_rpc-structures.h:162-167`),
+/// `rpc_free_v03_00` *is* `NVOS00_PARAMETERS_v03_00` (`ogkm-610: g_rpc-structures.h:162-167`,
+/// `ogkm-580: :160-165`),
 /// filled by `rpcRmApiFree_GSP` as `hRoot = hClient`, `hObjectParent = NV01_NULL_OBJECT`,
-/// `hObjectOld = hObject` (`ogkm: rpc.c:11147-11149`) — so the existing ioctl-side decoder
+/// `hObjectOld = hObject` (`ogkm-610: rpc.c:11147-11149`, `ogkm-580: :11339-11341`) — so
+/// the existing ioctl-side decoder
 /// applies verbatim.
 ///
 /// `hObjectParent` is **discarded**: it is always zero on this path and

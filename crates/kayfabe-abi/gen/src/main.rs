@@ -241,8 +241,9 @@ generated here, and the reason is a measured version divergence rather than a
 generator limitation. At 610.43.02 the struct carries `hHandleVASpace` at +32,
 inserted directly after `hVASpace`; at 580.159.04 — the driver this project's
 bench actually runs (`versions::BENCH_DRIVER`) — that field does not exist and
-`hUserdMemory[]` starts at +32 instead (`ogkm: alloc_channel.h:296-347` vs
-`ogkm-580: alloc_channel.h:288-330`). A generated 610 mirror would therefore
+`hUserdMemory[]` starts at +32 instead (`ogkm-610: alloc_channel.h:296-347` vs
+`ogkm-580: alloc_channel.h:296-342` — the typedef opens at `:296` in BOTH trees;
+only 610's body is one member longer). A generated 610 mirror would therefore
 mis-read EVERY field from +32 onward for the guest we run. The three fields
 `AllocFacts` needs (`flags` @20, `hContextShare` @24, `hVASpace` @28) are
 byte-identical in both trees, so `versions::CHANNEL_ALLOC_PREFIX` decodes exactly
@@ -470,11 +471,11 @@ that codegen gives shapes and never protocol.",
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
-    let [_, ogkm, out] = args.as_slice() else {
+    let [_, ogkm_root, out] = args.as_slice() else {
         eprintln!("usage: kayfabe-abi-gen <ogkm-root> <out-dir>");
         return ExitCode::FAILURE;
     };
-    match run(Path::new(ogkm), Path::new(out)) {
+    match run(Path::new(ogkm_root), Path::new(out)) {
         Ok(files) => {
             for f in files {
                 println!("wrote {}", f.display());
@@ -488,13 +489,13 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(ogkm: &Path, out: &Path) -> Result<Vec<PathBuf>, String> {
-    let version = read_version(ogkm)?;
+fn run(ogkm_root: &Path, out: &Path) -> Result<Vec<PathBuf>, String> {
+    let version = read_version(ogkm_root)?;
 
     // Global `#define` table for array lengths.
     let mut defines: BTreeMap<String, usize> = BTreeMap::new();
     for h in DEFINE_SOURCES {
-        let clean = strip_comments(&read(ogkm, h)?);
+        let clean = strip_comments(&read(ogkm_root, h)?);
         defines.extend(scan_defines(&clean));
     }
 
@@ -507,15 +508,15 @@ fn run(ogkm: &Path, out: &Path) -> Result<Vec<PathBuf>, String> {
         // header. This is the only hand-supplied size in the pipeline, so it is
         // the only one that needs an independent check.
         for ag in m.aggregate_scalars {
-            verify_aggregate_scalar(ogkm, ag, &defines, m.aggregate_lookup)?;
+            verify_aggregate_scalar(ogkm_root, ag, &defines, m.aggregate_lookup)?;
         }
         let mut layouts = Vec::new();
         for sr in m.structs {
-            layouts.push(build_struct(ogkm, sr, &defines, m.aggregate_lookup)?);
+            layouts.push(build_struct(ogkm_root, sr, &defines, m.aggregate_lookup)?);
         }
         let mut consts: Vec<(String, String, String, String)> = Vec::new();
         for cr in m.consts {
-            let clean = strip_comments(&read(ogkm, cr.header)?);
+            let clean = strip_comments(&read(ogkm_root, cr.header)?);
             let d = scan_defines(&clean);
             let v = d.get(cr.c_name).ok_or_else(|| {
                 format!(
@@ -532,7 +533,7 @@ fn run(ogkm: &Path, out: &Path) -> Result<Vec<PathBuf>, String> {
             ));
         }
         for ml in m.macro_lists {
-            let clean = strip_comments(&read(ogkm, ml.header)?);
+            let clean = strip_comments(&read(ogkm_root, ml.header)?);
             let all = scan_macro_list(&clean, ml.prefix, ml.arity);
             if all.is_empty() {
                 return Err(format!(
@@ -614,12 +615,12 @@ fn rustfmt(files: &[PathBuf]) -> Result<(), String> {
 }
 
 fn verify_aggregate_scalar(
-    ogkm: &Path,
+    ogkm_root: &Path,
     ag: &AggregateScalar,
     defines: &BTreeMap<String, usize>,
     extra: &'static [ctype::Scalar],
 ) -> Result<(), String> {
-    let clean = strip_comments(&read(ogkm, ag.verify_header)?);
+    let clean = strip_comments(&read(ogkm_root, ag.verify_header)?);
     let aggs =
         find_aggregates(&clean).map_err(|e: ParseError| format!("{}: {e}", ag.verify_header))?;
     let found = aggs.get(ag.verify_against).ok_or_else(|| {
@@ -671,12 +672,12 @@ fn verify_aggregate_scalar(
 }
 
 fn build_struct(
-    ogkm: &Path,
+    ogkm_root: &Path,
     sr: &StructReq,
     defines: &BTreeMap<String, usize>,
     extra: &'static [ctype::Scalar],
 ) -> Result<Layout, String> {
-    let clean = strip_comments(&read(ogkm, sr.header)?);
+    let clean = strip_comments(&read(ogkm_root, sr.header)?);
     let aggs = find_aggregates(&clean).map_err(|e: ParseError| format!("{}: {e}", sr.header))?;
     let found = aggs
         .get(sr.name)
@@ -734,13 +735,13 @@ fn build_struct(
     Ok(with_fam)
 }
 
-fn read(ogkm: &Path, rel: &str) -> Result<String, String> {
-    let p = ogkm.join(rel);
+fn read(ogkm_root: &Path, rel: &str) -> Result<String, String> {
+    let p = ogkm_root.join(rel);
     std::fs::read_to_string(&p).map_err(|e| format!("read {}: {e}", p.display()))
 }
 
-fn read_version(ogkm: &Path) -> Result<String, String> {
-    let mk = read(ogkm, "version.mk")?;
+fn read_version(ogkm_root: &Path) -> Result<String, String> {
+    let mk = read(ogkm_root, "version.mk")?;
     for l in mk.lines() {
         if let Some(v) = l.trim().strip_prefix("NVIDIA_VERSION") {
             return Ok(v.trim_start_matches([' ', '=']).trim().to_string());

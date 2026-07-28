@@ -15,8 +15,14 @@
 //! sources before this file was written* rather than taken on trust:
 //!
 //! 1. **RM serialises every ioctl-reachable path on a per-client `down_write`, and its
-//!    waits are UNINTERRUPTIBLE** (`ogkm: .../resserv/src/rs_server.c:778`,
-//!    `.../gpu/gsp/kernel_gsp.c:2963-3060`). So "cancel" can never mean "interrupt the
+//!    waits are UNINTERRUPTIBLE**. The `down_write` is
+//!    `_serverLockClientWithLockInfo(.., LOCK_ACCESS_WRITE, ..)`, byte-identical at the
+//!    same line in both tags (`ogkm-580: .../resserv/src/rs_server.c:778`, `ogkm-610:`
+//!    idem). The wait is `_kgspRpcRecvPoll`'s `for(;;) { … osSpinLoop(); }` with no
+//!    signal check at either tag (`ogkm-610: .../gpu/gsp/kernel_gsp.c:2963-3060`,
+//!    `ogkm-580: :2391-2481`; 610 adds a fatal-timeout classification the 580 loop does
+//!    not have, which changes what it logs, not that it cannot be interrupted).
+//!    So "cancel" can never mean "interrupt the
 //!    host ioctl" — it means *deliver a break signal and find out*. The mock models the
 //!    denial explicitly ([`RmRecorder::never_cancels`]), because a harness in which every
 //!    cancel lands would prove a property the host does not have and would make §7.5's

@@ -4,8 +4,14 @@
 //! (§6.2's capture patch is a separate task against a file this work does not own), so the
 //! oracle here is the next best thing and in one respect a better one: an independent
 //! re-implementation of **the driver's own side** of the protocol, written from
-//! `ogkm: src/nvidia/src/libraries/msgq/msgq.c` and
-//! `ogkm: .../gpu/gsp/message_queue_cpu.c` rather than from `kayfabe-gsp`.
+//! `msgq.c` and `.../gpu/gsp/message_queue_cpu.c` rather than from `kayfabe-gsp`.
+//!
+//! ★ The `msgq` library **moved between the two trees**, so every citation below names
+//! its tag and its own path: `ogkm-610: src/nvidia/src/libraries/msgq/msgq.c` (headers in
+//! `src/nvidia/inc/libraries/msgq/`) is `ogkm-580: src/common/shared/msgq/msgq.c`
+//! (headers in `src/common/shared/msgq/inc/msgq/`). The two are byte-identical and 580
+//! runs a uniform **+1 line** from one extra include. `message_queue_cpu.c` keeps its
+//! path (`src/nvidia/src/kernel/gpu/gsp/`) at both, but **not** its line numbers.
 //!
 //! ★ The independence is the point, so it is maintained deliberately: [`Guest`] does not
 //! call `kayfabe_gsp::checksum32`, `rx_link_check` or `bytes_to_elements`. It folds its
@@ -50,8 +56,12 @@ pub const PAGE: u64 = 4096;
 pub const SMALL_QUEUE_SIZE: u32 = 0x8000;
 
 /// The queue size three independent trees agree the driver actually uses: `0x40000`, i.e.
-/// a **63-slot** ring (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:88-91`
-/// derived, `nv: r535/gsp.c:1164-1172` verbatim).
+/// a **63-slot** ring
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c:71-72`,
+/// `ogkm-610: message_queue_cpu.c:71-72` — `defaultCommandQueueSize` /
+/// `defaultStatusQueueSize`, the same two lines at both tags; `nv: r535/gsp.c:1164-1172`
+/// verbatim). ★ Not `:88-91`, which this used to cite: at 580 those lines are the
+/// status-queue *registry override*, not the default.
 ///
 /// ★ Needed for the staging-buffer bound: only at this size can a message declare an
 /// element count above `GSP_MSG_QUEUE_ELEMENT_SIZE_MAX / RM_PAGE_SIZE` **and have that
@@ -155,7 +165,13 @@ pub const P580: Profile = Profile {
 /// The **610** element: 16 bytes, MCTP/NVDM transport headers at 0 and 4, no `elemCount`.
 ///
 /// [src] `ogkm-610: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:52-67`, validated on
-/// receive at `ogkm-610: message_queue_cpu.c:735-762`.
+/// receive at `ogkm-610: message_queue_cpu.c:737-759` (the whole block; `:762` is already
+/// the seqNum test and belongs to the next check).
+///
+/// ★★ **A seam, not a shape change: `ogkm-580` validates nothing here.** There is no
+/// MCTP/NVDM block anywhere in 580's `GspMsgQueueReceiveStatus` — checksum
+/// (`ogkm-580: message_queue_cpu.c:685-690`) is followed straight by the sequence check
+/// (`:692-719`). The transport words exist only at 610.
 pub const P610: Profile = Profile {
     name: "610 (MCTP/NVDM)",
     version: kayfabe_abi::DriverVersion {
@@ -266,8 +282,13 @@ impl Profile {
         GspAbi {
             msgq: MsgqAbi {
                 // MSGQ_VERSION = 0, MSGQ_MSG_SIZE_MIN = 16, MSGQ_FLAGS_SWAP_RX = 1
-                // (`ogkm: msgq_priv.h:37-38`, `ogkm: msgq.h:30-39`); RM_PAGE_SIZE = 4096
-                // (`ogkm: rm_page_size.h:38`) — a DRIVER page size, not the host's.
+                // — byte-identical AND on the same lines at both tags, only the path
+                // moves: `ogkm-610: src/nvidia/inc/libraries/msgq/msgq_priv.h:37-38` +
+                // `msgq.h:30-39`,
+                // `ogkm-580: src/common/shared/msgq/inc/msgq/msgq_priv.h:37-38` +
+                // `msgq.h:30-39`. RM_PAGE_SIZE = 4096
+                // (`ogkm-610: src/nvidia/inc/kernel/gpu/mem_mgr/rm_page_size.h:38`,
+                // `ogkm-580: rm_page_size.h:38`) — a DRIVER page size, not the host's.
                 version: 0,
                 msg_size_min: 16,
                 swap_rx_flag: 1,
@@ -288,8 +309,11 @@ impl Profile {
 }
 
 /// The function ids, all explicit in the driver's X-macro table
-/// (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:11, 20, 31, 57, 75, 81, 82, 83,
-/// 86, 113, 254, 256`).
+/// (`ogkm-610: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:11, 20, 31, 57, 75, 81, 82,
+/// 83, 86, 113, 254, 256`). The ten `X(…)` rows sit on the same lines at `ogkm-580`; the
+/// two `E(…)` event rows do not — `GSP_INIT_DONE` is `ogkm-580: rpc_global_enums.h:253`
+/// and `POST_EVENT` is `:255`, because 610 carries an `#endif` at `:252` that 580 does
+/// not. Every id is identical at both tags.
 pub const FUNCTIONS: FunctionCodes = FunctionCodes {
     set_guest_system_info: 1,
     free: 10,
@@ -538,13 +562,16 @@ impl GspModel for FakeGspModel {
     fn libos_region_layout(&self) -> LibosRegionLayout {
         LibosRegionLayout {
             // `{ LibosAddress id8; LibosAddress pa; LibosAddress size; NvU8 kind; NvU8 loc; }`
-            // = 32 bytes with alignment (`ogkm: libos_init_args.h:49-56`), matching the C's
-            // `LIBOS_REGION_STRIDE 32`.
+            // = 32 bytes with alignment
+            // (`ogkm-610: src/common/uproc/os/common/include/libos_init_args.h:49-56`,
+            // `ogkm-580: libos_init_args.h:49-56` — identical at both, same lines),
+            // matching the C's `LIBOS_REGION_STRIDE 32`.
             entry_stride: 32,
             id_offset: 0,
             pa_offset: 8,
             size_offset: 16,
-            // LIBOS_MEMORY_REGION_INIT_ARGUMENTS_MAX = 4096 (`ogkm: libos_init_args.h:31`).
+            // LIBOS_MEMORY_REGION_INIT_ARGUMENTS_MAX = 4096
+            // (`ogkm-610: libos_init_args.h:31`, `ogkm-580: libos_init_args.h:31`).
             // The C caps its scan at 16 (`C:3388-3407`) — a parameter it never named.
             // Kept small here only so a test's array is small; the point is that it is a
             // parameter at all.
@@ -646,23 +673,47 @@ impl Arch for NoGspArch {
 // ─────────────────────────────────── the guest ───────────────────────────────────
 
 /// What the guest's receive path refused with — the driver's own error vocabulary.
+///
+/// ★ Every citation here is `message_queue_cpu.c`, whose path is the same at both tags
+/// and whose line numbers are not. Where only one tag is named, that is the claim: the
+/// behaviour exists **only** there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuestRefusal {
-    /// `"Bad checksum."` (`ogkm: message_queue_cpu.c:730-734`).
+    /// `"Bad checksum."` (`ogkm-610: message_queue_cpu.c:730-735`,
+    /// `ogkm-580: message_queue_cpu.c:685-690`).
     BadChecksum,
-    /// `"MCTP protocol violation"` (`ogkm: message_queue_cpu.c:737-759`).
+    /// `"MCTP protocol violation"` — **610 only**
+    /// (`ogkm-610: message_queue_cpu.c:737-759`).
+    ///
+    /// ★★ A version seam, not a moved line: `ogkm-580` has no MCTP/NVDM validation at
+    /// all, so under [`P580`] this variant is unreachable by construction (the profile
+    /// carries no transport words).
     MctpViolation,
-    /// `"Bad sequence number."` — carrying both numbers (`:761-766`).
+    /// `"Bad sequence number."` — carrying both numbers
+    /// (`ogkm-610: message_queue_cpu.c:761-766`, `ogkm-580: message_queue_cpu.c:692-697`;
+    /// the same `!=` test and the same `<`-only recovery branch at both).
     BadSequence {
         /// What the guest expected.
         expected: u32,
         /// What arrived.
         got: u32,
     },
-    /// `"Incorrect message length"` (`:487-497`, and the receive mirror at `:824-833`).
+    /// `"Incorrect message length"` — the send-path check
+    /// (`ogkm-610: message_queue_cpu.c:491-497`, `ogkm-580: message_queue_cpu.c:468-475`)
+    /// and its receive mirror (`ogkm-610: :826-833`, `ogkm-580: :762-770`).
+    ///
+    /// ★★ **The lower bound is version-split, and it is the seam this model sits on.**
+    /// 610 refuses `msgLen < queueElementHdrSize`, which admits `rpc.length == 0`. 580
+    /// refuses `msgLen < sizeof(GSP_MSG_QUEUE_ELEMENT)` — and at 580 that `sizeof`
+    /// **includes the embedded `rpc_message_header_v`**
+    /// (`ogkm-580: message_queue_priv.h:43-51`,
+    /// `NV_DECLARE_ALIGNED(rpc_message_header_v rpc, 8)` at +48), so the bound is
+    /// `48 + rpc.length >= 80`, i.e. **`rpc.length >= 32`**: 580 requires the RPC
+    /// envelope to be present and 610 does not.
     BadLength(u32),
     /// The producer has not finished: fewer elements are available than declared
-    /// (`NV_ERR_NOT_READY`, `:670-680`).
+    /// (`NV_ERR_NOT_READY`, `ogkm-610: message_queue_cpu.c:664-677`,
+    /// `ogkm-580: message_queue_cpu.c:632-645`).
     Incomplete,
 }
 
@@ -734,13 +785,25 @@ pub struct Guest {
 
 impl Guest {
     /// Allocate a guest's queues at `pages` — a **scrambled**, non-contiguous list, which
-    /// is what `NV_MEMORY_NONCONTIGUOUS` produces (`ogkm: message_queue_cpu.c:250-256`).
+    /// is what `NV_MEMORY_NONCONTIGUOUS` produces
+    /// (`ogkm-610: message_queue_cpu.c:250-256`, `ogkm-580: message_queue_cpu.c:228-234`
+    /// — the same `memdescCreate` call at both).
     ///
     /// The geometry is `msgqTxCreate`'s own derivation
-    /// (`ogkm: msgq.c:236-251`): `rxHdrOff = ALIGN_UP(32, 1 << hdrAlign)`,
+    /// (`ogkm-610: src/nvidia/src/libraries/msgq/msgq.c:236-251`,
+    /// `ogkm-580: src/common/shared/msgq/msgq.c:237-252` — identical code, one line of
+    /// drift from an extra include): `rxHdrOff = ALIGN_UP(32, 1 << hdrAlign)`,
     /// `entryOff = ALIGN_UP(rxHdrOff + 4, 1 << entryAlign)`,
-    /// `msgCount = (size - entryOff) / msgSize`, with `hdrAlign = 4` and
-    /// `entryAlign = RM_PAGE_SHIFT` (`ogkm: message_queue_cpu.c:88-91`).
+    /// `msgCount = (size - entryOff) / msgSize`.
+    ///
+    /// ★ `hdrAlign = 4` and `entryAlign = RM_PAGE_SHIFT` are the **same numbers reached
+    /// two different ways** — the axis-A seam B7 names. At 610 they are *runtime fields*
+    /// the driver fills in (`ogkm-610: message_queue_cpu.c:88-91`:
+    /// `queueHeaderAlign = 4`, `queueElementAlign = RM_PAGE_SHIFT`). At 580 they are
+    /// compile-time macros with no field behind them
+    /// (`ogkm-580: message_queue_priv.h:101-104`: `GSP_MSG_QUEUE_HEADER_ALIGN 4`,
+    /// `GSP_MSG_QUEUE_ELEMENT_ALIGN RM_PAGE_SHIFT`). 580's `message_queue_cpu.c:88-91`
+    /// is the status-queue registry override and says nothing about alignment.
     #[must_use]
     pub fn new(p: Profile, pages: Vec<u64>, boot_args_gpa: u64, rmargs_id: u64) -> Guest {
         // 8 pages per queue: a 7-slot ring, small on purpose.
@@ -800,7 +863,8 @@ impl Guest {
     /// the command queue's own tx header.
     pub fn publish(&self, ram: &mut FakeRam) {
         // The self-describing page table: entry i is the region's page i, and entry 0 is
-        // the page the table itself starts on (`ogkm: message_queue_cpu.c:295-329`).
+        // the page the table itself starts on (`ogkm-610: message_queue_cpu.c:295-310`,
+        // `ogkm-580: message_queue_cpu.c:273-288` — same `memdescGetPhysAddrs` fill).
         let mut table = Vec::new();
         for pa in &self.pages {
             table.extend_from_slice(&pa.to_le_bytes());
@@ -851,7 +915,9 @@ impl Guest {
     }
 
     /// `msgqRxLink`, re-implemented: read the peer's header and run all nine checks in
-    /// the driver's order (`ogkm: msgq.c:329-405`), returning the driver's own code.
+    /// the driver's order (`ogkm-610: src/nvidia/src/libraries/msgq/msgq.c:329-405`,
+    /// `ogkm-580: src/common/shared/msgq/msgq.c:330-406` — same checks, same order, same
+    /// codes), returning the driver's own code.
     ///
     /// # Errors
     ///
@@ -894,7 +960,8 @@ impl Guest {
         }
         self.linked = true;
         // On success the read pointer is zeroed and published — into OUR OWN backing
-        // store, because SWAP_RX is agreed (`ogkm: msgq.c:416-419, 435-437`).
+        // store, because SWAP_RX is agreed (`ogkm-610: msgq.c:416-419, 435-437`,
+        // `ogkm-580: msgq.c:417-420, 436-438`).
         self.rx_read_ptr = 0;
         self.publish_read_ptr(ram);
         Ok(())
@@ -910,7 +977,8 @@ impl Guest {
     }
 
     /// Free elements in the command queue, as `msgqTxGetFreeSpace` computes it
-    /// (`ogkm: msgq.c:490-496`), reading the peer's ack from the status queue's rx header.
+    /// (`ogkm-610: msgq.c:490-496`, `ogkm-580: msgq.c:491-497`), reading the peer's ack
+    /// from the status queue's rx header.
     pub fn free_space(&self, ram: &mut FakeRam) -> u32 {
         let mut b = [0u8; 4];
         self.rd(ram, self.stat_off + u64::from(self.rx_hdr_off), &mut b);
@@ -930,7 +998,7 @@ impl Guest {
     /// # Errors
     ///
     /// `"no free space"` when the ring is full — the driver's own refusal
-    /// (`ogkm: msgq.c:544-547`).
+    /// (`ogkm-610: msgq.c:544-547`, `ogkm-580: msgq.c:545-548`).
     pub fn send(
         &mut self,
         ram: &mut FakeRam,
@@ -1031,10 +1099,22 @@ impl Guest {
             );
             let rpc_length = get32(&first, self.p.hdr() + 8);
             let msg_len = self.p.hdr() as u32 + rpc_length;
-            // The driver's own bound is `msgLen >= queueElementHdrSize`
-            // (`ogkm: message_queue_cpu.c:824-833`), which admits `rpc.length == 0`; this
-            // model additionally needs the envelope itself to be present, because unlike
-            // the driver it slices rather than casting a flexible array.
+            // ★★ The lower bound is VERSION-SPLIT, and this `rpc_length < 32` is 580's,
+            // not an addition of ours:
+            //   580 — `msgLen >= sizeof(GSP_MSG_QUEUE_ELEMENT)`
+            //         (`ogkm-580: message_queue_cpu.c:762-770`, mirroring the send check
+            //         at `:468-475`). That `sizeof` embeds `rpc_message_header_v` at +48
+            //         (`ogkm-580: message_queue_priv.h:43-51`), so 48 + rpc.length >= 80
+            //         ⇒ **rpc.length >= 32**. Exactly the test below.
+            //   610 — `msgLen >= queueElementHdrSize`
+            //         (`ogkm-610: message_queue_cpu.c:826-833`), which **admits
+            //         `rpc.length == 0`**, because 610's element ends at a flexible
+            //         `payload[]` with no envelope inside it
+            //         (`ogkm-610: message_queue_priv.h:52-67`).
+            // ⚠ So under `P610` this predicate is STRICTER THAN THE DRIVER. It is left
+            // as-is deliberately — the model slices where the driver casts a flexible
+            // array, and relaxing it would need a shape change, not a comment — but no
+            // test may assert that a 610 guest *rejects* `rpc.length == 0`: it does not.
             if rpc_length < 32
                 || msg_len < self.p.hdr() as u32
                 || msg_len > self.p.element_size_max()
@@ -1092,7 +1172,9 @@ impl Guest {
             }
             // ★★ B6 — validate **only what the driver validates**: the MCTP header
             // version nibble and the NVDM vendor id
-            // (`ogkm-610: message_queue_cpu.c:735-762`). SOM, EOM, the packet sequence
+            // (`ogkm-610: message_queue_cpu.c:737-759` — the whole block; `:762` is
+            // already the seqNum test and belongs to the next check). SOM, EOM, the
+            // packet sequence
             // and the NVDM *type* byte are written by the sender and never read, so an
             // instrument that enforced the whole words would be stricter than the driver
             // — and a test written against it would assert a behaviour the guest does not
@@ -1161,8 +1243,12 @@ impl Guest {
     }
 }
 
-/// The XOR fold, re-implemented from `ogkm: message_queue_priv.h:191-209`: 64-bit steps
-/// to the next 8-byte boundary past `len`, reduced by `hi ^ lo`.
+/// The XOR fold, re-implemented from `_checkSum32`
+/// (`ogkm-610: src/nvidia/inc/kernel/gpu/gsp/message_queue_priv.h:191-209`,
+/// `ogkm-580: message_queue_priv.h:106-124` — character for character the same routine;
+/// it moved because 610 inserted the CC helpers above it, and 580's copy of that header
+/// is only 126 lines long, so `:191-209` does not exist there at all): 64-bit steps to
+/// the next 8-byte boundary past `len`, reduced by `hi ^ lo`.
 #[must_use]
 pub fn fold(bytes: &[u8], len: usize) -> u32 {
     let end = len.next_multiple_of(8).min(bytes.len());
@@ -1241,7 +1327,8 @@ impl GspWorld {
 
     /// Give the guest a **fresh, fragmented** region — a new driver life allocates new
     /// memory, and `NV_MEMORY_NONCONTIGUOUS` means the pages are wherever the allocator
-    /// had them (`ogkm: message_queue_cpu.c:250-256`).
+    /// had them (`ogkm-610: message_queue_cpu.c:250-256`,
+    /// `ogkm-580: message_queue_cpu.c:228-234`).
     /// Give the guest a fresh, fragmented region — what a new driver life allocates.
     pub fn allocate_guest_memory(&mut self) {
         let rmargs_id = self.arch.model().rmargs_id;
@@ -1377,8 +1464,16 @@ impl GspWorld {
     }
 
     /// The guest's boot, in `kgspBootstrap_TU102`'s order
-    /// (`ogkm: kernel_gsp_tu102.c:522-618`): FWSEC/STARTCPU, boot-args mailboxes, Booter
-    /// Load. Returns every transition that fired.
+    /// (`ogkm-610: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:522-618`,
+    /// `ogkm-580: kernel_gsp_tu102.c:493-578`): FWSEC/STARTCPU, boot-args mailboxes,
+    /// Booter Load. Returns every transition that fired.
+    ///
+    /// ★★ The two bootstraps are **not** the same function with a moved line. 610 sends
+    /// the init RPCs from *inside* it, after Booter Load
+    /// (`ogkm-610: kernel_gsp_tu102.c:578` calls `kgspSendInitRpcs`); at 580 no such call
+    /// exists in this function at all — the same two RPCs are queued *before* bootstrap
+    /// by `kgspQueueAsyncInitRpcs_IMPL`. That is the B4 seam, and it is why
+    /// [`GspWorld::boot_with`] drains a pre-bind backlog.
     /// Drive the guest's boot and return every transition that fired.
     ///
     /// # Panics

@@ -8,8 +8,16 @@
 //!
 //! `mode2_gsp_port_plan.md` §7-G8: two guest polls hang the *guest* forever if we stop
 //! answering, and both are on the teardown path — the fn-47 reply
-//! (`ogkm: src/nvidia/src/kernel/vgpu/rpc.c:9146-9170`, synchronous) and the
-//! suspend-sentinel poll (`ogkm: kernel_gsp_tu102.c:352-357`). So a `GspFault` is
+//! (`ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:9146-9170`, `ogkm-580: :9168-9192`;
+//! `_issueRpcAndWait`, synchronous at both tags) and the suspend-sentinel poll
+//! (`kgspWaitForProcessorSuspend_TU102` → `gpuTimeoutCondWait`:
+//! `ogkm-610: kernel_gsp_tu102.c:351-359`, `ogkm-580: :1241-1249` — the function sits in a
+//! completely different part of the file at each tag, and ★ **the sentinel predicate
+//! itself is a version seam**: `ogkm-580: :1238` polls `mailbox == 0x80000000`, exact
+//! equality, while `ogkm-610: :348` polls `(mailbox & INTERRUPT_PROCESSOR_SUSPENDED_VALUE)
+//! != 0` — a symbol that does not exist at 580. Serving the sentinel *OR-ed into* the
+//! echoed boot-args value satisfies 610 and hangs 580 forever; the encoding is
+//! `kayfabe-arch`'s, and it must replace the whole value). So a `GspFault` is
 //! **per-message**: it aborts one service step, and the register surface keeps answering.
 //! Nothing in this crate can stop the observable surface, which is why
 //! [`GspFault`] is a return type and never a state.
@@ -26,38 +34,45 @@ pub struct RamRefused {
 
 /// The `msgqRxLink` rejection codes, as the **guest's own** predicate spells them.
 ///
-/// Reproduced code-for-code from `ogkm: src/nvidia/src/libraries/msgq/msgq.c:329-461`
-/// so that "would the guest link the header we just published?" is answerable here,
-/// offline, without a bench slot. The numeric values are the guest's return values.
+/// Reproduced code-for-code from `msgqRxLink`. **The library moved between tags but the
+/// function did not change**: `ogkm-610: src/nvidia/src/libraries/msgq/msgq.c:329-461`
+/// and `ogkm-580: src/common/shared/msgq/msgq.c:330-462` are byte-identical (the two
+/// files differ only in their `#include` preamble), so every 580 line below is its 610
+/// line **+ 1**. That is a load-bearing negative result: there is no version seam in the
+/// link predicate, and the codes may be modelled once.
+///
+/// It is answerable here, offline, without a bench slot. The numeric values are the
+/// guest's return values.
 ///
 /// ★ `-7` is the one that mattered: it has exactly one cause, `rx.size != size`
-/// (`msgq.c:386-389`), which is the signature of *a status queue that never received a
-/// tx header* — the measured failure of the C artifact's second driver life
-/// (`docs/reference/mode2_bench_lifecycle.md` §3).
+/// (`ogkm-610: msgq.c:386-389` / `ogkm-580: :387-390`), which is the signature of *a
+/// status queue that never received a tx header* — the measured failure of the C
+/// artifact's second driver life (`docs/reference/mode2_bench_lifecycle.md` §3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RxLinkCode {
-    /// `-1` — handle null, or already linked (`msgq.c:335-338`).
+    /// `-1` — handle null, or already linked (`ogkm-610: msgq.c:335-338`).
     AlreadyLinked,
-    /// `-2` — `msgSize < MSGQ_MSG_SIZE_MIN` (`msgq.c:340-343`).
+    /// `-2` — `msgSize < MSGQ_MSG_SIZE_MIN` (`ogkm-610: msgq.c:340-343`).
     MsgSizeBelowMin,
-    /// `-3` — `msgSize > size` (`msgq.c:345-348`).
+    /// `-3` — `msgSize > size` (`ogkm-610: msgq.c:345-348`).
     MsgSizeAboveQueue,
-    /// `-5` — null backing store (`msgq.c:350-353`). There is no `-4`.
+    /// `-5` — null backing store (`ogkm-610: msgq.c:350-353`). There is no `-4`.
     NullBackingStore,
-    /// `-6` — `size < rx.entryOff + msgSize` (`msgq.c:380-383`).
+    /// `-6` — `size < rx.entryOff + msgSize` (`ogkm-610: msgq.c:380-383`).
     EntryOffTooLarge,
-    /// `-7` — `rx.size != size` (`msgq.c:386-389`).
+    /// `-7` — `rx.size != size` (`ogkm-610: msgq.c:386-389`).
     SizeMismatch,
-    /// `-8` — `rx.msgSize != msgSize` (`msgq.c:390-393`).
+    /// `-8` — `rx.msgSize != msgSize` (`ogkm-610: msgq.c:390-393`).
     MsgSizeMismatch,
-    /// `-9` — `rx.version != MSGQ_VERSION` (`msgq.c:394-397`).
+    /// `-9` — `rx.version != MSGQ_VERSION` (`ogkm-610: msgq.c:394-397`).
     VersionMismatch,
-    /// `-10` — the derived-field triple (`msgq.c:400-405`).
+    /// `-10` — the derived-field triple (`ogkm-610: msgq.c:400-405`).
     DerivedFieldsMismatch,
-    /// `-11` — the backend read of the peer header failed (`msgq.c:370-373`). Reachable
-    /// here as "we could not read the guest's header at all".
+    /// `-11` — the backend read of the peer header failed (`ogkm-610: msgq.c:370-373`).
+    /// Reachable here as "we could not read the guest's header at all".
     BackendReadFailed,
-    /// `-12` — the backend write of the zeroed read pointer failed (`msgq.c:438-441`).
+    /// `-12` — the backend write of the zeroed read pointer failed
+    /// (`ogkm-610: msgq.c:438-441`).
     BackendWriteFailed,
 }
 
@@ -135,10 +150,13 @@ pub enum GspFault {
     MsgCountZero,
     /// The guest's queue flags do not carry `MSGQ_FLAGS_SWAP_RX`.
     ///
-    /// `rxSwapped` is the **AND** of both sides' flags (`ogkm: msgq.c:411-412`), so a
-    /// guest that did not set it flips the read-pointer polarity and both sides deadlock
-    /// **silently, with no error**. Every known client sets it — the driver
-    /// (`ogkm: message_queue_cpu.c:174-180`) and nouveau (`nv: r535/gsp.c:1171`) — so
+    /// `rxSwapped` is the **AND** of both sides' flags (`ogkm-610: msgq.c:411-412` /
+    /// `ogkm-580: :412-413`), so a guest that did not set it flips the read-pointer
+    /// polarity and both sides deadlock **silently, with no error**. Every known client
+    /// sets it — the driver (`ogkm-610: message_queue_cpu.c:174-180`,
+    /// `ogkm-580: :155-161`; the `msgqTxCreate` call passes `MSGQ_FLAGS_SWAP_RX` at both
+    /// tags, 610 differing only in taking the element sizes from `pMQI` rather than from
+    /// `GSP_MSG_QUEUE_*` constants) and nouveau (`nv: r535/gsp.c:1171`) — so
     /// this refusal only ever fires on input a conforming guest does not produce, and it
     /// exists to convert the one failure mode with no diagnostic into a named one.
     SwapRxNotAgreed {
@@ -146,7 +164,8 @@ pub enum GspFault {
         flags: u32,
     },
     /// The guest's read pointer into our status queue is out of range. Hostile input:
-    /// the guest writes it (`ogkm: msgq.c:485-488` returns "no space" for the same case).
+    /// the guest writes it (`ogkm-610: msgq.c:485-488` / `ogkm-580: :486-489` returns
+    /// "no space" for the same case).
     PeerReadPtrOutOfRange {
         /// The value read.
         value: u32,
@@ -154,7 +173,7 @@ pub enum GspFault {
         count: u32,
     },
     /// The guest's write pointer into its command queue is out of range
-    /// (`ogkm: msgq.c:655-658`).
+    /// (`ogkm-610: msgq.c:655-658` / `ogkm-580: :656-659`).
     PeerWritePtrOutOfRange {
         /// The value read.
         value: u32,
@@ -166,7 +185,8 @@ pub enum GspFault {
     QueueFull {
         /// How many elements the message needs.
         needed: u32,
-        /// How many are free (`readPtr + msgCount - writePtr - 1`, `ogkm: msgq.c:490`).
+        /// How many are free (`readPtr + msgCount - writePtr - 1`,
+        /// `ogkm-610: msgq.c:490` / `ogkm-580: :491`).
         free: u32,
     },
     /// A message length outside the bounds the transport allows.
@@ -259,7 +279,10 @@ pub enum GspFault {
     Envelope(kayfabe_abi::wire::AbiError),
     /// An event may not be posted before the boot handshake has completed
     /// (`mode2_gsp_port_plan.md` §7-G7; the guest `NV_ASSERT(0)`s on a non-allowlisted
-    /// event during its bootup window, `ogkm: kernel_gsp.c:1419-1440`).
+    /// event during its bootup window — `ogkm-610: kernel_gsp.c:1419-1439`, eight entries;
+    /// `ogkm-580: kernel_gsp.c:1464-1482`, six *different* entries. The allowlist is a
+    /// version seam; `POST_EVENT` is absent from both, which is the only part this
+    /// refusal depends on. See `RpcFunction::allowed_in_bootup_window`).
     NotRunning,
     /// The element layout supplied by the ABI seam is self-inconsistent.
     Layout(LayoutError),

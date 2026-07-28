@@ -166,8 +166,9 @@ fn freed_handles(rec: &SharedRecorder) -> Vec<HostHandle> {
 /// host VAS, and every channel's host channel + engine objects.
 ///
 /// Order is RM's, not ours: unmaps first, then objects. RM auto-unmaps a resource's
-/// inter-mappings inside `clientFreeResource_IMPL` before `objDelete` (`ogkm:
-/// src/nvidia/src/libraries/resserv/src/rs_client.c:830-849`), so the ordering does not
+/// inter-mappings inside `clientFreeResource_IMPL` before `objDelete` (`ogkm-580:
+/// src/nvidia/src/libraries/resserv/src/rs_client.c:830-849`, and `ogkm-610:` is
+/// byte-identical at the same lines), so the ordering does not
 /// protect RM — it keeps OUR mirror of the mapping honest.
 fn reclaim_plan(proc: &Proc, gpu: GpuId) -> Orphans {
     let mut o = Orphans::default();

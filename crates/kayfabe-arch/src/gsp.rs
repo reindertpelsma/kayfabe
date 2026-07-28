@@ -15,14 +15,20 @@
 //! ## Why the boot *sequence* is a parameter and not a protocol
 //!
 //! Because ogkm says so, generation by generation. `kgspBootstrap_TU102`
-//! (`ogkm: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:522-618`) is the
-//! Turing→Ada regime: FWSEC, then boot-args in `MAILBOX0/1`, then the SEC2 Booter Load
-//! that raises WPR2. Hopper+ replaces the whole chain with FSP secure boot and a RISC-V
-//! BCR path, and *requires `MAILBOX0` to read back 0*
-//! (`ogkm: .../hopper/kernel_gsp_gh100.c:248-263, 500-544, 730-776`), while
+//! (`ogkm-610: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:522-618`,
+//! `ogkm-580: :493-578`) is the Turing→Ada regime: FWSEC, then boot-args in
+//! `MAILBOX0/1`, then the SEC2 Booter Load that raises WPR2. **That ordering is identical
+//! at both tags** — 610's only addition inside the function is a `kgspSendInitRpcs` call
+//! after the Booter Load, which is not part of the register regime. Hopper+ replaces the
+//! whole chain with FSP secure boot and a RISC-V BCR path, and *requires `MAILBOX0` to
+//! read back 0* (`ogkm-610: .../hopper/kernel_gsp_gh100.c:248-263, 500-544, 730-776`;
+//! `ogkm-580: :239-254, 491-535, 710-756` — the same three regions, the only textual
+//! difference being that 610 names the CC-regkey mailbox index
+//! `NV_PGSP_MAILBOX_REGISTER_CC_REGKEYS` where 580 writes `0`), while
 //! `kgspIsWpr2Up_GH100` returns FALSE unconditionally under Confidential Compute
-//! (`:236-245`). A model that hard-coded "mailbox0 carries the boot-args pointer" would
-//! be wrong on the next generation in a way no test on this one could see.
+//! (`ogkm-610: :236-245`, `ogkm-580: :227-236`, byte-identical). A model that hard-coded
+//! "mailbox0 carries the boot-args pointer" would be wrong on the next generation in a
+//! way no test on this one could see.
 //!
 //! ## What is deliberately NOT here
 //!
@@ -42,19 +48,50 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GspReg {
     /// GFW boot progress. The guest polls it for "complete"
-    /// (`ogkm: src/nvidia/src/kernel/gpu/arch/turing/kern_gpu_tu102.c:391-479`).
+    /// (`ogkm-610: src/nvidia/src/kernel/gpu/arch/turing/kern_gpu_tu102.c:391-479`,
+    /// `ogkm-580: :381-469` — byte-identical, a pure 10-line shift).
     GfwBootProgress,
     /// The privilege-level mask guarding the progress scratch register; the guest
     /// requires it fully lowered before it trusts the progress value (same citation).
     GfwBootPlm,
     /// GSP falcon `CPUCTL`. Written to start the core; read for `HALTED`.
     GspFalconCpuctl,
-    /// GSP falcon `HWCFG2` — carries `RISCV_ENABLE` (`ogkm: kernel_gsp_tu102.c:534-538`).
+    /// GSP falcon `HWCFG2` — carries `RISCV_ENABLE`.
+    ///
+    /// ★ **PHANTOM CORRECTED.** The citation here used to be an untagged `ogkm` pointer
+    /// at `kernel_gsp_tu102.c:534-538`, which says this at **neither** tag — those lines
+    /// are inside `kgspBootstrap_TU102`'s scrubber preamble at 610 and mid-function at
+    /// 580, and `HWCFG2` is never read in
+    /// `kernel_gsp_tu102.c` in either tree. The reader is `kflcnIsRiscvCpuEnabled_TU102`
+    /// (`ogkm-610:`/`ogkm-580:`
+    /// `src/nvidia/src/kernel/gpu/falcon/arch/turing/kernel_falcon_tu102.c:130-132` —
+    /// same path and same lines at both tags), testing
+    /// `NV_PFALCON_FALCON_HWCFG2_RISCV_ENABLE`, whose value `0x1` is declared in
+    /// `ogkm-610:`/`ogkm-580:`
+    /// `src/common/inc/swref/published/turing/tu102/dev_falcon_v4.h:64` and
+    /// `.../ampere/ga102/dev_falcon_v4.h:103` — also identical at both.
     GspFalconHwcfg2,
     /// GSP falcon `DMATRFCMD` — the ucode-load DMA command/status.
     GspFalconDmatrfcmd,
     /// GSP falcon `MAILBOX0`. Carries the low half of the LibOS boot-args address on
-    /// write, and the suspend sentinel on read (`ogkm: kernel_gsp_tu102.c:333, 392-403`).
+    /// write (`kgspProgramLibosBootArgsAddr_TU102`:
+    /// `ogkm-610: kernel_gsp_tu102.c:391-403`, `ogkm-580: :362-374`, byte-identical), and
+    /// the suspend sentinel on read.
+    ///
+    /// ★★ **The sentinel is a VERSION SEAM, and it is the kind that fails silently.**
+    ///
+    /// | tag | `_kgspIsProcessorSuspended` | the predicate |
+    /// |---|---|---|
+    /// | `ogkm-580:` | `kernel_gsp_tu102.c:1225-1239` | `mailbox == 0x80000000` — **exact equality**, an inline literal; the symbol `INTERRUPT_PROCESSOR_SUSPENDED_VALUE` does not exist anywhere at 580 |
+    /// | `ogkm-610:` | `kernel_gsp_tu102.c:335-349` | `(mailbox & INTERRUPT_PROCESSOR_SUSPENDED_VALUE) != 0`, the `#define` at `:333` |
+    ///
+    /// So an implementation that ORs the sentinel into the echoed `boot_args_lo` passes at
+    /// 610 and makes the bench's own driver poll until `gpuTimeoutCondWait` expires — on
+    /// the teardown path, where a hang is a wedged GPU. ★ **580 governs: `encode` must
+    /// replace the whole `MAILBOX0` value with the sentinel, never OR it in.** (Note the
+    /// old untagged citation to `kernel_gsp_tu102.c:333` is a *610* line number that
+    /// happens to land on unrelated code at 580 — exactly the drift the tag rule exists
+    /// for.)
     GspFalconMailbox0,
     /// GSP falcon `MAILBOX1` — the high half of the boot-args address.
     GspFalconMailbox1,
@@ -68,7 +105,9 @@ pub enum GspReg {
     /// draining the status queue.
     GspFalconIrqsclr,
     /// The RISC-V core's `CPUCTL`, whose `ACTIVE` bit the guest's liveness gate reads
-    /// (`ogkm: src/nvidia/src/kernel/gpu/falcon/arch/ampere/kernel_falcon_ga102.c:53-55`).
+    /// (`kflcnIsRiscvActive_GA102`: `ogkm-610:`/`ogkm-580:`
+    /// `src/nvidia/src/kernel/gpu/falcon/arch/ampere/kernel_falcon_ga102.c:53-55` — same
+    /// path, same lines, byte-identical at both tags).
     GspRiscvCpuctl,
     /// SEC2 falcon `CPUCTL` — the Booter's start register.
     Sec2FalconCpuctl,
@@ -80,12 +119,14 @@ pub enum GspReg {
     /// WPR2 region base, low half.
     Wpr2AddrLo,
     /// WPR2 region base, high half. "WPR2 is up" is `_VAL != 0` on this register
-    /// (`ogkm: kernel_gsp_tu102.c:1172-1180`).
+    /// (`kgspIsWpr2Up_TU102`: `ogkm-610: kernel_gsp_tu102.c:1172-1180`,
+    /// `ogkm-580: :1251-1261` — byte-identical).
     Wpr2AddrHi,
     /// The command-queue doorbell for queue `i`.
     ///
     /// ★ Indexed deliberately: `NV_PGSP_QUEUE_HEAD(i)` is an array
-    /// (`ogkm: src/common/inc/swref/published/ampere/ga102/dev_gsp.h:38`), and the C
+    /// (`ogkm-610:`/`ogkm-580: src/common/inc/swref/published/ampere/ga102/dev_gsp.h:38`
+    /// — same path, same line, `(0x110c00+(i)*8)` with `__SIZE_1 = 8` at both tags), and the C
     /// artifact hard-codes queue 0 (`C: src/qemu/mode2_regs_ga10x.h:69`).
     GspQueueHead(u8),
 }
@@ -117,7 +158,8 @@ pub struct GspObservation {
 /// Values are the driver's, not ours: the entry is
 /// `{ LibosAddress id8; LibosAddress pa; LibosAddress size; NvU8 kind; NvU8 loc; }`
 /// with the array's declared maximum of 4096 entries
-/// (`ogkm: src/common/uproc/os/common/include/libos_init_args.h:31-56`). The C artifact
+/// (`ogkm-610:`/`ogkm-580: src/common/uproc/os/common/include/libos_init_args.h:31-56` —
+/// the header is byte-identical at both tags, same path, same lines). The C artifact
 /// caps its scan at **16** entries (`C: src/qemu/nvkvm_gpu_emul.c:3388-3407`), which is a
 /// parameter it never wrote down as one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

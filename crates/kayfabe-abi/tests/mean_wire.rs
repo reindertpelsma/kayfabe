@@ -590,7 +590,8 @@ where
 /// see) shows up as a byte mismatch.
 #[test]
 fn every_encoder_refuses_short_writes_nothing_and_lays_down_exactly_these_bytes() {
-    // NVOS00_PARAMETERS — 16 bytes, no padding (ogkm nvos.h:162).
+    // NVOS00_PARAMETERS — 16 bytes, no padding
+    // (`ogkm-580: nvos.h:160-166` / `ogkm-610: nvos.h:162-168` — same four members).
     encode_sweep(
         "NVOS00_PARAMETERS",
         16,
@@ -1331,7 +1332,8 @@ fn an_undersized_rpc_buffer_is_truncated_not_a_signature_error() {
 #[test]
 fn the_client_kind_seam_works_from_the_prefix_and_refuses_seven_bytes() {
     let t = bench();
-    // A kernel client, as RM writes it (`ogkm rpc.h:70`).
+    // A kernel client, as RM writes it (`ogkm-580: rpc.h:70` / `ogkm-610: rpc.h:70`
+    // — same line at both).
     let mut b = vec![0u8; 8];
     b[0..4].copy_from_slice(&0xC1D0_0069u32.to_le_bytes());
     b[4..8].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
@@ -1651,7 +1653,9 @@ fn the_stream_runs_under_both_tables_with_the_skew_case_mirrored() {
 /// `0xC0DE_0016` and the assertion names which field moved.
 ///
 /// `[src]` the two transcriptions:
-/// - `ogkm: src/nvidia/generated/g_rpc-structures.h:1408-1419`
+/// - `ogkm-580: src/nvidia/generated/g_rpc-structures.h:1491-1502` /
+///   `ogkm-610: src/nvidia/generated/g_rpc-structures.h:1408-1419` (same nine
+///   members at both tags; only the line numbers move)
 /// - `nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2132-2135` — *"fn=103
 ///   (GSP_RM_ALLOC) body: hClient@80, hParent@84, hObject@88, hClass@92,
 ///   paramsSize@100, params@112"*, repeated verbatim at `:6464-6465`.
@@ -1863,12 +1867,16 @@ fn the_control_table_names_exactly_the_commands_it_can_argue_for() {
 }
 
 /// ★ **The pinning test `gsp_core_bridge.md` §1.4 asks for**: `rpc_free_v03_00`
-/// *is* `NVOS00_PARAMETERS_v03_00` (`ogkm: g_rpc-structures.h:162-167`), so
+/// *is* `NVOS00_PARAMETERS_v03_00`
+/// (`ogkm-580: src/nvidia/generated/g_rpc-structures.h:160-165` /
+/// `ogkm-610: src/nvidia/generated/g_rpc-structures.h:162-167` — the same
+/// one-member typedef at both), so
 /// [`DriverAbiTable::decode_free`] applies to an RPC body **verbatim** — no new
 /// decoder, and no silent 4-byte skew if someone assumes an RPC body has a header
 /// of its own.
 ///
-/// The values are the ones `rpcRmApiFree_GSP` writes (`ogkm: rpc.c:11147-11149`):
+/// The values are the ones `rpcRmApiFree_GSP` writes
+/// (`ogkm-580: rpc.c:11339-11341` / `ogkm-610: rpc.c:11147-11149`):
 /// `hRoot = hClient`, `hObjectParent = NV01_NULL_OBJECT`, `hObjectOld = hObject`.
 #[test]
 fn decode_free_applies_verbatim_to_an_rpc_free_body() {

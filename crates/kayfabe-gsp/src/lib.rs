@@ -69,9 +69,18 @@
 //! the checksum, the per-message `seqNum` discipline, `bytesToElements`, the RPC envelope
 //! and its `(function, sequence)` matching, the flow-control bound, `GSP_INIT_DONE`, and
 //! fn-47's synchronousness. The reason is structural rather than optimistic: all of it
-//! lives in `ogkm: src/nvidia/`, which is NVIDIA's **OS-independent RM core** — the
-//! per-OS layer (ioctl versus escape) sits *above* it, and the GSP firmware on the other
-//! side is the same binary either way.
+//! lives below the per-OS layer, in NVIDIA's **OS-independent RM core** — the per-OS
+//! layer (ioctl versus escape) sits *above* it, and the GSP firmware on the other side is
+//! the same binary either way.
+//!
+//! The *directory* that core occupies is itself version-dependent, so it is named per
+//! tag: `ogkm-610: src/nvidia/` holds all of it, including `src/nvidia/src/libraries/msgq/`;
+//! at `ogkm-580:` the RM core is `src/nvidia/` **but the `msgq` library is not in it** —
+//! it is `src/common/shared/msgq/` (headers under `src/common/shared/msgq/inc/msgq/`).
+//! Same code, different tree position — the two `msgq.c` files are byte-identical apart
+//! from their `#include` preamble, with a uniform 580 = 610 + 1 line offset through the
+//! body — so the argument from placement is unaffected, and if anything strengthened:
+//! `src/common/shared/` is *more* OS-independent than `src/nvidia/`, not less.
 //!
 //! **RM-shaped, so it varies with the driver *version* and not with the OS.**
 //! `MESSAGE_QUEUE_INIT_ARGUMENTS` (three shapes across r535/r570/610), the LibOS region

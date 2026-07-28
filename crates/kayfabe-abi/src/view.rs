@@ -84,7 +84,9 @@ pub enum AllocWire {
 /// §1.3). Running `decode_alloc` on an RPC body would read `hClass` out of
 /// `status` and a pointer out of `paramsSize`.
 ///
-/// Layout `[src]` `ogkm: src/nvidia/generated/g_rpc-structures.h:1408-1419`:
+/// Layout `[src]` `ogkm-580: src/nvidia/generated/g_rpc-structures.h:1491-1502` /
+/// `ogkm-610: src/nvidia/generated/g_rpc-structures.h:1408-1419` — the same nine
+/// members in the same order at both tags, only the line numbers move:
 /// `hClient@0, hParent@4, hObject@8, hClass@12, status@16, paramsSize@20,
 /// flags@24, reserved[4]@28, params[]@32`.
 ///
@@ -138,9 +140,9 @@ impl RpcAllocReq {
 /// `paramsSize` lives, so running the wrong decoder yields a plausible struct
 /// full of wrong numbers rather than an error.
 ///
-/// Layout `[src]` `ogkm: src/nvidia/generated/g_rpc-structures.h:1423-1435`, and
-/// `ogkm-580: g_rpc-structures.h:1506-1518` is **character for character the
-/// same list** — this struct does not move across the supported range:
+/// Layout `[src]` `ogkm-610: src/nvidia/generated/g_rpc-structures.h:1423-1435`, and
+/// `ogkm-580: src/nvidia/generated/g_rpc-structures.h:1506-1518` is **character for
+/// character the same list** — this struct does not move across the supported range:
 /// `hClient@0, hObject@4, cmd@8, status@12, paramsSize@16, rmapiRpcFlags@20,
 /// rmctrlFlags@24, rmctrlAccessRight@28, reserved0(NvU64, 8-aligned)@32,
 /// params[]@40`.
@@ -173,8 +175,10 @@ pub struct RpcControlReq {
     ///
     /// ★ Two bits live here, not one: `RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR` =
     /// `NVBIT(0)` and `RMAPI_RPC_FLAGS_SERIALIZED` = `NVBIT(1)`
-    /// (`ogkm: src/nvidia/inc/kernel/rmapi/rmapi.h:161-163`), and
-    /// `rpcRmApiControl_GSP` sets them independently (`ogkm: rpc.c:10803-10807`).
+    /// (`ogkm-580: src/nvidia/inc/kernel/rmapi/rmapi.h:161-163` /
+    /// `ogkm-610: src/nvidia/inc/kernel/rmapi/rmapi.h:161-163` — same lines at both), and
+    /// `rpcRmApiControl_GSP` sets them independently
+    /// (`ogkm-580: rpc.c:10997-11001` / `ogkm-610: rpc.c:10802-10806`).
     /// So the serialization question is [`crate::rpc_params_are_serialized`], a
     /// **bit test** — a `!= 0` on the whole word would refuse every control that
     /// merely asked for copy-out-on-error.
@@ -289,18 +293,24 @@ pub struct UnmapMemoryDma {
 ///
 /// - `hClient` @ +0 and `processID` @ +4 are the first two members in every
 ///   ogkm tree, and RM's own writer sets exactly them
-///   (`ogkm src/nvidia/inc/kernel/vgpu/rpc.h:55,70,75`).
-/// - The **rest** of the struct — `processName[100]` and `pOsPidInfo` — has
-///   **no second oracle**. gVisor's `nvproxy` does not model
-///   `NV0000_ALLOC_PARAMETERS` at all, and neither does the C artifact
-///   (`grep NV0000_ALLOC_PARAMETERS` finds nothing in either). `pOsPidInfo` in
-///   particular has the shape of a recent addition, so `sizeof` at 575 is
-///   **unverified**.
+///   (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc.h:55,70,75` /
+///   `ogkm-610: src/nvidia/inc/kernel/vgpu/rpc.h:55,70,75` — same lines at both).
+/// - The **rest** of the struct — `processName[100]` and `pOsPidInfo` — is
+///   spelled identically by both vendored tags
+///   (`ogkm-580: src/common/sdk/nvidia/inc/class/cl0000.h:47-52` /
+///   `ogkm-610: src/common/sdk/nvidia/inc/class/cl0000.h:47-52`, with
+///   `NV_PROC_NAME_MAX_LENGTH = 100U` at `nvlimits.h:47` in both), but has **no
+///   oracle outside ogkm at all**: gVisor's `nvproxy` does not model
+///   `NV0000_ALLOC_PARAMETERS`, and neither does the C artifact
+///   (`grep NV0000_ALLOC_PARAMETERS` finds nothing in either). Both vendored
+///   tags are ≥ 580 while [`crate::versions::TABLES`] admits versions down to
+///   550.54.04, and `pOsPidInfo` has the shape of a recent addition — so
+///   `sizeof` at 550/575 is still **unverified**.
 ///
 /// Requiring 120 bytes here would therefore refuse a legitimate older client
-/// alloc on a guess. Requiring 8 asserts only what three independent readings
-/// agree on. If the tail ever becomes load-bearing, the fix is to vendor a
-/// second ogkm tag — not to widen this contract on faith.
+/// alloc on a guess. Requiring 8 asserts only what every available reading
+/// agrees on. The remaining gap is *below* 580, so settling the tail needs a
+/// vendored 550/575 tag — the two we have cannot do it, and neither can faith.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ClientAllocFacts {
     /// `hClient` — the client handle the guest asks for.
@@ -323,7 +333,8 @@ pub struct DeviceAllocFacts {
     /// ★ NVIDIA spells this field `deviceId`; the project's prose (and
     /// `AllocFacts::device_instance`) calls it the *device instance*. Same field:
     /// ogkm's own MIG shim assigns `ws->nv0080Params.deviceId = migDev->deviceInstance`
-    /// (`src/common/src/nv_smg.c:517`), which is the two names meeting.
+    /// (`ogkm-580: src/common/src/nv_smg.c:503` / `ogkm-610: src/common/src/nv_smg.c:517`
+    /// — same statement, moved), which is the two names meeting.
     ///
     /// Guest-declared and therefore attacker-controlled — see
     /// `docs/reference/mode2_bench_lifecycle.md`.
@@ -347,7 +358,8 @@ pub struct DeviceAllocFacts {
 ///
 /// Decoded from the **whole** 20-byte struct, because unlike the client root its
 /// tail has a second oracle: the field list is byte-identical in both vendored
-/// trees (`ogkm: nvos.h:2899-2906` and `ogkm-580: nvos.h:2903-2911`), so there is
+/// trees (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2903-2911` and
+/// `ogkm-610: src/common/sdk/nvidia/inc/nvos.h:2899-2906`), so there is
 /// no version fork to be tolerant about.
 ///
 /// ★ `engineType` is deliberately **not** carried. It is a declared fact, but
@@ -365,7 +377,8 @@ pub struct TsgAllocFacts {
 /// `NV_CTXSHARE_ALLOCATION_PARAMETERS` — the VASpace a subcontext declares.
 ///
 /// Whole-struct (12 bytes) for the same reason as [`TsgAllocFacts`]: identical at
-/// both vendored tags (`ogkm: nvos.h:3223-3228`, `ogkm-580: nvos.h:3232-3237`).
+/// both vendored tags (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:3232-3237`,
+/// `ogkm-610: src/common/sdk/nvidia/inc/nvos.h:3223-3228`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CtxShareAllocFacts {
     /// `hVASpace` — the VASpace this context share is bound to. 0 = none.
@@ -388,17 +401,23 @@ pub struct CtxShareAllocFacts {
 ///   +32  ————————————————————  hHandleVASpace     hUserdMemory[0]   ★ diverges
 /// ```
 ///
-/// `ogkm: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-347` inserts
-/// `hHandleVASpace` after `hVASpace`; `ogkm-580: alloc_channel.h:288-330` has no
-/// such field. A generated 610 mirror would mis-read every field from +32 onward
-/// for the driver this project's bench actually runs
+/// `ogkm-610: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-347` inserts
+/// `hHandleVASpace` after `hVASpace`;
+/// `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-342` has no
+/// such field. (The `typedef` opens at `:296` in **both** trees; only the closing
+/// line differs, because 610 carries one member more.) A generated 610 mirror
+/// would mis-read every field from +32 onward for the driver this bench runs
 /// ([`crate::versions::BENCH_DRIVER`] = 580.159.04), so the struct is not
 /// mirrored at all and only the agreeing prefix is read.
 ///
 /// # ★ What is NOT here, and why that costs something
 ///
-/// `engineType` (`+136` at 580, `+140` at 610 — i.e. past the prefix, in the
-/// divergent region). It is the ONLY thing that distinguishes a GR channel from a
+/// `engineType` (`+128` at 580, `+136` at 610 — i.e. past the prefix, in the
+/// divergent region; the 8-byte skew is `hHandleVASpace`'s 4 bytes plus the
+/// 4 bytes of re-alignment it forces on the 8-aligned `userdOffset[]`. The C
+/// artifact, measured on 580, independently records `engineType@128`:
+/// `nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:6760`, `:9232`). It is the
+/// ONLY thing that distinguishes a GR channel from a
 /// CE channel on the wire: both are `AMPERE_CHANNEL_GPFIFO_A`. The core learns a
 /// channel's engine from `Arch::classify(class)` refined by its engine object
 /// (`kayfabe_core::project`), never from this field — so dropping it costs
@@ -417,7 +436,9 @@ pub struct ChannelAllocFacts {
 }
 
 /// Where a page directory lives, from `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS_APERTURE`
-/// (`flags[1:0]`, ogkm `ctrl0080dma.h:812-815`).
+/// (`flags[1:0]`, `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h:842-845` /
+/// `ogkm-610: src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h:812-815` — identical
+/// values at both).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PdbAperture {
     /// `_VIDMEM` (0) — the root is in framebuffer.
