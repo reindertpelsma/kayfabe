@@ -100,6 +100,12 @@ const NV_ESCAPE_H: &str = "src/nvidia/arch/nvalloc/unix/include/nv_escape.h";
 const CL0000_H: &str = "src/common/sdk/nvidia/inc/class/cl0000.h";
 const CL0080_H: &str = "src/common/sdk/nvidia/inc/class/cl0080.h";
 const CTRL0080DMA_H: &str = "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h";
+const CL9067_H: &str = "src/common/sdk/nvidia/inc/class/cl9067.h";
+const CL90F1_H: &str = "src/common/sdk/nvidia/inc/class/cl90f1.h";
+const CLA06C_H: &str = "src/common/sdk/nvidia/inc/class/cla06c.h";
+const CLC56F_H: &str = "src/common/sdk/nvidia/inc/class/clc56f.h";
+const CLC7B5_H: &str = "src/common/sdk/nvidia/inc/class/clc7b5.h";
+const CLC7C0_H: &str = "src/common/sdk/nvidia/inc/class/clc7c0.h";
 const RPC_HDR_H: &str = "src/nvidia/generated/g_rpc-message-header.h";
 const RPC_ENUMS_H: &str = "src/nvidia/inc/kernel/vgpu/rpc_global_enums.h";
 
@@ -217,12 +223,35 @@ and is NOT in this file, because the vendored ogkm tree is a single snapshot
         file: "classes.rs",
         title: "Per-class alloc-param structs and their class IDs.",
         doc: "\
-The two alloc-param structs the core's `AllocFacts` actually reads today.
+The alloc-param structs the core's `AllocFacts` actually reads, and the class IDs
+that select them.
 
 - `NV0000_ALLOC_PARAMETERS` (`NV01_ROOT`) carries `processID`, the decision-#14
   client-kind discriminator (`l1_concurrency.md` §12.27).
 - `NV0080_ALLOC_PARAMETERS` (`NV01_DEVICE_0`) carries `deviceId`, the multi-GPU
   routing fact (`multi_gpu_and_mig.md`).
+- `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS` (`KEPLER_CHANNEL_GROUP_A`) and
+  `NV_CTXSHARE_ALLOCATION_PARAMETERS` (`FERMI_CONTEXT_SHARE_A`) each carry an
+  `hVASpace`, the two indirect halves of a channel's VAS resolution
+  (`kayfabe_core::project::resolve_channel_vas`: own handle -> CtxShare's ->
+  parent TSG's).
+
+★★ `NV_CHANNEL_ALLOC_PARAMS` (`AMPERE_CHANNEL_GPFIFO_A`) is DELIBERATELY NOT
+generated here, and the reason is a measured version divergence rather than a
+generator limitation. At 610.43.02 the struct carries `hHandleVASpace` at +32,
+inserted directly after `hVASpace`; at 580.159.04 — the driver this project's
+bench actually runs (`versions::BENCH_DRIVER`) — that field does not exist and
+`hUserdMemory[]` starts at +32 instead (`ogkm: alloc_channel.h:296-347` vs
+`ogkm-580: alloc_channel.h:288-330`). A generated 610 mirror would therefore
+mis-read EVERY field from +32 onward for the guest we run. The three fields
+`AllocFacts` needs (`flags` @20, `hContextShare` @24, `hVASpace` @28) are
+byte-identical in both trees, so `versions::CHANNEL_ALLOC_PREFIX` decodes exactly
+that prefix — the same contract, and for the same kind of reason, as
+`CLIENT_ALLOC_PREFIX`.
+
+A class whose alloc params carry nothing `AllocFacts` models
+(`FERMI_VASPACE_A`, the engine objects) gets a class ID here and no struct: the
+ID is the consumer, and mirroring params nothing reads would be breadth.
 
 Every other class's alloc params is deferred: the class table is its own
 milestone and a half-populated one is worse than none, because a missing entry
@@ -236,6 +265,16 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
             StructReq {
                 header: CL0080_H,
                 name: "NV0080_ALLOC_PARAMETERS",
+                fam_align: None,
+            },
+            StructReq {
+                header: NVOS_H,
+                name: "NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS",
+                fam_align: None,
+            },
+            StructReq {
+                header: NVOS_H,
+                name: "NV_CTXSHARE_ALLOCATION_PARAMETERS",
                 fam_align: None,
             },
         ],
@@ -260,6 +299,48 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
                 rust_name: "NV01_DEVICE_0",
                 rust_ty: "u32",
                 doc: "`NV01_DEVICE_0` — the Device class; its alloc params are\n[`Nv0080AllocParameters`] and carry the GPU routing target.",
+            },
+            ConstReq {
+                header: CL90F1_H,
+                c_name: "FERMI_VASPACE_A",
+                rust_name: "FERMI_VASPACE_A",
+                rust_ty: "u32",
+                doc: "`FERMI_VASPACE_A` — the VASpace class. Its alloc params\n(`NV_VASPACE_ALLOCATION_PARAMETERS`: `index`, `flags`, `vaSize`, `vaBase`,\n`pasid`) carry NOTHING `AllocFacts` models, so no struct is mirrored for it —\nthe VAS's data-plane identity arrives later, on\n`NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`.",
+            },
+            ConstReq {
+                header: CLA06C_H,
+                c_name: "KEPLER_CHANNEL_GROUP_A",
+                rust_name: "KEPLER_CHANNEL_GROUP_A",
+                rust_ty: "u32",
+                doc: "`KEPLER_CHANNEL_GROUP_A` — the TSG class; its alloc params are\n[`NvChannelGroupAllocationParameters`] and declare the VASpace every channel in\nthe group inherits.",
+            },
+            ConstReq {
+                header: CL9067_H,
+                c_name: "FERMI_CONTEXT_SHARE_A",
+                rust_name: "FERMI_CONTEXT_SHARE_A",
+                rust_ty: "u32",
+                doc: "`FERMI_CONTEXT_SHARE_A` — the CtxShare (subcontext) class; its alloc\nparams are [`NvCtxshareAllocationParameters`] and declare a VASpace a channel\ncan reach indirectly.",
+            },
+            ConstReq {
+                header: CLC56F_H,
+                c_name: "AMPERE_CHANNEL_GPFIFO_A",
+                rust_name: "AMPERE_CHANNEL_GPFIFO_A",
+                rust_ty: "u32",
+                doc: "`AMPERE_CHANNEL_GPFIFO_A` — the GPFIFO channel class on GA10x.\n\n★ There is exactly ONE channel class per architecture: a GR channel and a CE\nchannel are the SAME `hClass` and differ only by `NV_CHANNEL_ALLOC_PARAMS.\nengineType`, which `kayfabe_core::rmgraph::RmEvent::Alloc` has nowhere to put.\nThe engine therefore reaches the core only through the engine-object refinement\n(`kayfabe_core::project`), never through the class ID.",
+            },
+            ConstReq {
+                header: CLC7C0_H,
+                c_name: "AMPERE_COMPUTE_B",
+                rust_name: "AMPERE_COMPUTE_B",
+                rust_ty: "u32",
+                doc: "`AMPERE_COMPUTE_B` — the compute engine object a CUDA process allocates\non its GR channel. Declares no `AllocFacts`; its whole protocol content is the\nedge (channel -> engine object) that refines the channel's `EngineKind`.",
+            },
+            ConstReq {
+                header: CLC7B5_H,
+                c_name: "AMPERE_DMA_COPY_B",
+                rust_name: "AMPERE_DMA_COPY_B",
+                rust_ty: "u32",
+                doc: "`AMPERE_DMA_COPY_B` — the copy-engine object on a CE channel. Same shape\nas [`AMPERE_COMPUTE_B`]: no declared facts, and the only thing that tells the\ncore this channel is a CE channel at all.",
             },
         ],
         macro_lists: &[],

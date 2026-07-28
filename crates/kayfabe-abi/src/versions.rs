@@ -32,9 +32,9 @@
 use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::transcribed::Nvos46ParametersPre580;
 use crate::view::{
-    AllocReq, AllocWire, ClientAllocFacts, ControlReq, DeviceAllocFacts, DupReq, FreeReq,
-    MapMemoryDma, PdbAperture, RpcAllocReq, RpcEnvelope, SetPageDir, UnmapMemoryDma,
-    rpc_payload_len,
+    AllocReq, AllocWire, ChannelAllocFacts, ClientAllocFacts, ControlReq, CtxShareAllocFacts,
+    DeviceAllocFacts, DupReq, FreeReq, MapMemoryDma, PdbAperture, RpcAllocReq, RpcEnvelope,
+    SetPageDir, TsgAllocFacts, UnmapMemoryDma, rpc_payload_len,
 };
 use crate::wire::{AbiError, u32_at};
 use crate::{DriverAbi, DriverVersion};
@@ -634,6 +634,93 @@ impl DriverAbiTable {
         })
     }
 
+    /// Decode the TSG alloc params.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`].
+    pub fn decode_tsg_alloc_facts(&self, bytes: &[u8]) -> Result<TsgAllocFacts, AbiError> {
+        let p = classes::NvChannelGroupAllocationParameters::decode(bytes)?;
+        Ok(TsgAllocFacts {
+            h_vaspace: p.h_va_space,
+        })
+    }
+
+    /// Decode the CtxShare (subcontext) alloc params.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`].
+    pub fn decode_ctxshare_alloc_facts(
+        &self,
+        bytes: &[u8],
+    ) -> Result<CtxShareAllocFacts, AbiError> {
+        let p = classes::NvCtxshareAllocationParameters::decode(bytes)?;
+        Ok(CtxShareAllocFacts {
+            h_vaspace: p.h_va_space,
+        })
+    }
+
+    /// Decode the channel alloc params under the **prefix contract** — see
+    /// [`ChannelAllocFacts`] for the 580-vs-610 divergence that makes it one, and
+    /// [`CHANNEL_ALLOC_PREFIX`] for the bound.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if fewer than [`CHANNEL_ALLOC_PREFIX`] bytes are
+    /// available. Never a zero-extended partial decode: a channel whose params
+    /// stop short of `hVASpace` has not declared one, and reading absence as
+    /// `hVASpace = 0` would silently turn a malformed message into a legal
+    /// "GSP-managed VAS" declaration.
+    pub fn decode_channel_alloc_facts(&self, bytes: &[u8]) -> Result<ChannelAllocFacts, AbiError> {
+        if bytes.len() < CHANNEL_ALLOC_PREFIX {
+            return Err(AbiError::Truncated {
+                c_name: CHANNEL_ALLOC_C_NAME,
+                need: CHANNEL_ALLOC_PREFIX,
+                got: bytes.len(),
+            });
+        }
+        Ok(ChannelAllocFacts {
+            flags: u32_at(bytes, 20)?,
+            h_ctx_share: u32_at(bytes, 24)?,
+            h_vaspace: u32_at(bytes, 28)?,
+        })
+    }
+
+    /// Which alloc-params shape a class carries — the **class table**, and the
+    /// only thing that decides which decoder above an alloc goes through.
+    ///
+    /// `None` means *this port has not mapped that class*, which is a different
+    /// statement from "it declares nothing": [`AllocParams::NoDeclaredFacts`] is
+    /// the second one, and it is a decision with a citation behind it rather
+    /// than an absence.
+    ///
+    /// Lives here, not in the bridge above, for decision #2's quarantine reason:
+    /// the NVIDIA class *numbers* are this crate's and the crates above speak a
+    /// vocabulary. Same shape as [`Self::is_client_root_class`] and
+    /// [`crate::client_kind_from_process_id`].
+    #[must_use]
+    pub fn alloc_params(&self, class: ClassId) -> Option<AllocParams> {
+        if self.is_client_root_class(class) {
+            return Some(AllocParams::ClientRoot);
+        }
+        match class.0 {
+            classes::NV01_DEVICE_0 => Some(AllocParams::Device),
+            classes::KEPLER_CHANNEL_GROUP_A => Some(AllocParams::Tsg),
+            classes::FERMI_CONTEXT_SHARE_A => Some(AllocParams::CtxShare),
+            classes::AMPERE_CHANNEL_GPFIFO_A => Some(AllocParams::Channel),
+            // ★ Mapped, and declaring nothing the object model reads. A VASpace's
+            // params are geometry (`index`, `vaSize`, `vaBase`, `pasid`) and an
+            // engine object's are engine-private; the protocol content of all
+            // three is the EDGE — parent, handle, class — which the RPC header
+            // already carries.
+            classes::FERMI_VASPACE_A | classes::AMPERE_COMPUTE_B | classes::AMPERE_DMA_COPY_B => {
+                Some(AllocParams::NoDeclaredFacts)
+            }
+            _ => None,
+        }
+    }
+
     /// Decode a `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` payload.
     ///
     /// # Errors
@@ -757,6 +844,35 @@ impl DriverAbiTable {
 
 /// The bytes [`ClientAllocFacts`] is decoded from — `hClient` and `processID`.
 pub const CLIENT_ALLOC_PREFIX: usize = 8;
+
+/// The bytes [`ChannelAllocFacts`] is decoded from — through `hVASpace` @ +28.
+///
+/// ★ This is a **version-agreement** bound, not a struct size: it is exactly the
+/// region `ogkm` 610.43.02 and `ogkm-580` 580.159.04 spell identically. See
+/// [`ChannelAllocFacts`] for the divergence at +32.
+pub const CHANNEL_ALLOC_PREFIX: usize = 32;
+
+/// The C typedef [`CHANNEL_ALLOC_PREFIX`] is a prefix of. Named here rather than
+/// taken from a generated `C_NAME` because the struct is deliberately **not**
+/// mirrored — see [`ChannelAllocFacts`].
+const CHANNEL_ALLOC_C_NAME: &str = "NV_CHANNEL_ALLOC_PARAMS";
+
+/// Which alloc-params shape a class carries. See [`DriverAbiTable::alloc_params`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AllocParams {
+    /// `NV01_ROOT` / `NV01_ROOT_CLIENT` — [`DriverAbiTable::decode_client_alloc_facts`].
+    ClientRoot,
+    /// `NV01_DEVICE_0` — [`DriverAbiTable::decode_device_alloc_facts`].
+    Device,
+    /// `KEPLER_CHANNEL_GROUP_A` — [`DriverAbiTable::decode_tsg_alloc_facts`].
+    Tsg,
+    /// `FERMI_CONTEXT_SHARE_A` — [`DriverAbiTable::decode_ctxshare_alloc_facts`].
+    CtxShare,
+    /// `AMPERE_CHANNEL_GPFIFO_A` — [`DriverAbiTable::decode_channel_alloc_facts`].
+    Channel,
+    /// A mapped class whose params declare nothing the object model reads.
+    NoDeclaredFacts,
+}
 
 impl DriverAbi for DriverAbiTable {
     fn version(&self) -> DriverVersion {

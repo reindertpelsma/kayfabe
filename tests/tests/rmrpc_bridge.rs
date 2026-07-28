@@ -39,13 +39,14 @@ use std::collections::BTreeMap;
 use kayfabe_abi::versions::{BENCH_DRIVER, DriverAbiTable, table_for};
 use kayfabe_abi::wire::AbiError;
 use kayfabe_arch::ClientKind;
-use kayfabe_arch::ids::{ClassId, HClient, HObject};
+use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
-use kayfabe_core::project::{Boundaries, NO_CONDEMNED, project};
-use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraphError};
+use kayfabe_core::project::{Boundaries, NO_CONDEMNED, ProjectionError, project};
+use kayfabe_core::rmgraph::{AllocFacts, NodeKey, ResourceKey, RmEvent, RmGraphError};
+use kayfabe_fwd::{FwdFault, handle_doorbell};
 use kayfabe_gsp::{RpcCommand, RpcFunction, Transition};
-use kayfabe_mocks::{MockIsolateFactory, WireClassArch, mock_classes};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, WireClassArch, mock_classes};
 use kayfabe_rmrpc::{BridgeRefusal, GraphPolicy, RefusalCensus, Translation, translate};
 use kayfabe_tests::Scenario;
 use kayfabe_tests::gspworld::{
@@ -339,13 +340,45 @@ fn a_client_roots_wire_parent_and_handle_are_ignored_whatever_they_say() {
         "the class decides the shape of a root alloc; the guest's parent/handle do not",
     );
 
-    // Non-vacuity for the ignoring itself: the same lie under a NON-root class is not
-    // ignored — it is refused, because this stage has no decoder for that class.
-    body[12..16].copy_from_slice(&w::NV01_DEVICE_0.to_le_bytes());
+    // ★★ Non-vacuity for the ignoring itself, and the B3 half of it: under a MAPPED
+    // non-root class the very same two words are carried through **verbatim**. Before B3
+    // there was no such class and this arm could only show a refusal, which proves the
+    // normalisation did not fire but not that the alternative is the wire's own values.
+    let dev = w::message(
+        fn_id::GSP_RM_ALLOC,
+        1,
+        &w::alloc_body(
+            HEX_CLIENT,
+            0xbaad_f00d,
+            0x1234_5678,
+            w::NV01_DEVICE_0,
+            56,
+            w::RMAPI_RPC_FLAGS_NONE,
+            &w::device_params(0, 0, 0),
+        ),
+    );
+    assert_eq!(
+        xlate(&dev),
+        Ok(Translation::Event(RmEvent::Alloc {
+            client: HClient(HEX_CLIENT),
+            parent: HObject(0xbaad_f00d),
+            handle: HObject(0x1234_5678),
+            class: ClassId(w::NV01_DEVICE_0),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        })),
+        "★ the normalisation is the client root's alone — every other class's edge is \
+         whatever the wire said, unexamined",
+    );
+
+    // And a class with no entry in the table is still refused rather than defaulted.
+    body[12..16].copy_from_slice(&w::NV01_MEMORY_SYSTEM.to_le_bytes());
     assert_eq!(
         xlate(&w::message(fn_id::GSP_RM_ALLOC, 1, &body)),
         Err(BridgeRefusal::UnmappedAllocClass {
-            class: w::NV01_DEVICE_0
+            class: w::NV01_MEMORY_SYSTEM
         }),
     );
 }
@@ -765,7 +798,7 @@ fn the_refusal_order_is_namespace_then_encoding_then_bounds_then_class() {
             0,
             w::RMAPI_RPC_FLAGS_SERIALIZED,
             999,
-            w::NV01_DEVICE_0
+            w::NV01_MEMORY_SYSTEM
         )),
         Err(BridgeRefusal::ReservedClient),
     );
@@ -775,10 +808,10 @@ fn the_refusal_order_is_namespace_then_encoding_then_bounds_then_class() {
             HEX_CLIENT,
             w::RMAPI_RPC_FLAGS_SERIALIZED,
             999,
-            w::NV01_DEVICE_0
+            w::NV01_MEMORY_SYSTEM
         )),
         Err(BridgeRefusal::SerializedParams {
-            class: w::NV01_DEVICE_0
+            class: w::NV01_MEMORY_SYSTEM
         }),
     );
     // Encoding fixed -> the bounds.
@@ -787,7 +820,7 @@ fn the_refusal_order_is_namespace_then_encoding_then_bounds_then_class() {
             HEX_CLIENT,
             w::RMAPI_RPC_FLAGS_NONE,
             999,
-            w::NV01_DEVICE_0
+            w::NV01_MEMORY_SYSTEM
         )),
         Err(BridgeRefusal::ParamsSizeExceedsPayload {
             declared: 999,
@@ -800,10 +833,10 @@ fn the_refusal_order_is_namespace_then_encoding_then_bounds_then_class() {
             HEX_CLIENT,
             w::RMAPI_RPC_FLAGS_NONE,
             8,
-            w::NV01_DEVICE_0
+            w::NV01_MEMORY_SYSTEM
         )),
         Err(BridgeRefusal::UnmappedAllocClass {
-            class: w::NV01_DEVICE_0
+            class: w::NV01_MEMORY_SYSTEM
         }),
     );
     // Class fixed -> the content.
@@ -1071,7 +1104,7 @@ fn malformed_traffic_between_valid_messages_leaves_the_valid_stream_untouched() 
                     A,
                     0,
                     0,
-                    w::NV01_DEVICE_0,
+                    w::NV01_MEMORY_SYSTEM,
                     8,
                     0,
                     &w::client_root_params(A, 1),
@@ -2000,7 +2033,7 @@ fn hostile_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
                     x::A,
                     0,
                     0,
-                    w::NV01_DEVICE_0,
+                    w::NV01_MEMORY_SYSTEM,
                     8,
                     0,
                     &w::client_root_params(x::A, 1),
@@ -2110,4 +2143,1181 @@ fn hostile_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
         "★ hostile traffic must be inert to the graph, not partially applied",
     );
     assert_eq!(boundaries(&gpu), boundaries_of_scenario(&scenario_x()));
+}
+
+// =================================================================================
+// ★★ 7. **Stage B3 — the class table**: a CUDA process's whole subgraph, from bytes
+//
+// B1/B2 could declare and free a client NAMESPACE. Nothing below the root existed,
+// because `translate_alloc` refused every class but the root by name. B3 is the class
+// table (`DriverAbiTable::alloc_params`) plus the four params decoders it selects, and
+// what it buys is the first *shaped* subgraph: client → device → VASpace → TSG →
+// CtxShare → two channels → two engine objects.
+//
+// Three things stay refused, each for a reason recorded at the site rather than skipped:
+// a memory object (§6's `mem_phys` row is unbuildable in this direction — see
+// `w::NV01_MEMORY_SYSTEM`), a channel's `engineType` (nowhere to put it in `RmEvent`),
+// and everything past the channel-params prefix (the two vendored trees disagree there).
+// =================================================================================
+
+/// Handles for one CUDA-process-shaped subgraph. Written as a module of constants rather
+/// than a builder so the byte side and the event side can be read against each other on
+/// one screen — the same reason `mod x` exists above.
+mod cp {
+    /// The compute client.
+    pub const C: u32 = 0xc1d0_0071;
+    /// Its pid, deliberately unequal to its handle.
+    pub const PID: u32 = 0x0000_ab21;
+    /// `NV01_DEVICE_0`.
+    pub const DEV: u32 = 0x5c00_0001;
+    /// `FERMI_VASPACE_A`.
+    pub const VAS: u32 = 0x5c00_0010;
+    /// `KEPLER_CHANNEL_GROUP_A`.
+    pub const TSG: u32 = 0x5c00_0012;
+    /// `FERMI_CONTEXT_SHARE_A`.
+    pub const CTXSHARE: u32 = 0x5c00_0013;
+    /// The GR channel.
+    pub const GR: u32 = 0x5c00_0019;
+    /// The CE channel — adjacent to the GR handle, so a bridge that mixed the two up
+    /// would still produce a plausible graph.
+    pub const CE: u32 = 0x5c00_001a;
+    /// `AMPERE_COMPUTE_B` on the GR channel.
+    pub const GR_OBJ: u32 = 0x5c00_0020;
+    /// `AMPERE_DMA_COPY_B` on the CE channel.
+    pub const CE_OBJ: u32 = 0x5c00_0021;
+    /// The physical GPU the Device declares. Non-zero on purpose: `Some(0)` is also what
+    /// a dropped `deviceId` would look like.
+    pub const DEVICE_INSTANCE: u32 = 0;
+}
+
+/// The two channels' vChids, through the arch's own encoding — the guest declares the
+/// *encoded* word and the arch recovers the id, which is the seam B3 explicitly cannot
+/// prove against real silicon.
+const CP_GR_VCHID: VChid = VChid(0x21);
+const CP_CE_VCHID: VChid = VChid(0x22);
+
+fn gr_flags() -> u32 {
+    MockArch::userd_flags_for(CP_GR_VCHID)
+}
+fn ce_flags() -> u32 {
+    MockArch::userd_flags_for(CP_CE_VCHID)
+}
+
+/// **Transcription #1** of the compute subgraph: bytes, from `ogkm`'s struct definitions.
+///
+/// ★ The GR channel declares its VASpace **directly**; the CE channel declares
+/// `hVASpace = 0` and reaches the same VAS **through its context share**. That is not
+/// decoration: `resolve_channel_vas`'s precedence (own handle → CtxShare's → parent TSG's)
+/// has three arms, and a script that only ever used the first would leave two of them
+/// unobserved on this path.
+fn script_compute() -> RpcScript {
+    let mut s = RpcScript::new();
+    s.client_root(w::NV01_ROOT, cp::C, cp::PID)
+        .device(cp::C, cp::C, cp::DEV, cp::DEVICE_INSTANCE)
+        .vaspace(cp::C, cp::DEV, cp::VAS)
+        .tsg(cp::C, cp::DEV, cp::TSG, cp::VAS)
+        .ctxshare(cp::C, cp::VAS, cp::CTXSHARE, cp::VAS)
+        .channel(cp::C, cp::TSG, cp::GR, gr_flags(), 0, cp::VAS)
+        .channel(cp::C, cp::TSG, cp::CE, ce_flags(), cp::CTXSHARE, 0)
+        .engine_object(cp::C, cp::GR, cp::GR_OBJ, w::AMPERE_COMPUTE_B)
+        .engine_object(cp::C, cp::CE, cp::CE_OBJ, w::AMPERE_DMA_COPY_B);
+    s
+}
+
+/// **Transcription #2** of the same subgraph: `RmEvent`s, written by hand, in
+/// `mock_classes` — so an agreement between the two is an agreement about
+/// *classification and facts*, never about a class number travelling twice.
+fn scenario_compute() -> Scenario {
+    let alloc = |parent: u32, handle: u32, class, facts| RmEvent::Alloc {
+        client: HClient(cp::C),
+        parent: HObject(parent),
+        handle: HObject(handle),
+        class,
+        facts,
+    };
+    let vas_only = |vas: u32| AllocFacts {
+        h_vaspace: Some(HObject(vas)),
+        ..Default::default()
+    };
+    let mut s = Scenario::new();
+    s.push(alloc(
+        cp::C,
+        cp::C,
+        mock_classes::CLIENT,
+        AllocFacts {
+            client_kind: Some(ClientKind::User { pid: cp::PID }),
+            ..Default::default()
+        },
+    ))
+    .push(alloc(
+        cp::C,
+        cp::DEV,
+        mock_classes::DEVICE,
+        AllocFacts {
+            device_instance: Some(cp::DEVICE_INSTANCE),
+            ..Default::default()
+        },
+    ))
+    .push(alloc(
+        cp::DEV,
+        cp::VAS,
+        mock_classes::VASPACE,
+        AllocFacts::default(),
+    ))
+    .push(alloc(
+        cp::DEV,
+        cp::TSG,
+        mock_classes::TSG,
+        vas_only(cp::VAS),
+    ))
+    .push(alloc(
+        cp::VAS,
+        cp::CTXSHARE,
+        mock_classes::CTXSHARE,
+        vas_only(cp::VAS),
+    ))
+    .push(alloc(
+        cp::TSG,
+        cp::GR,
+        // ★ The wire says `AMPERE_CHANNEL_GPFIFO_A` for BOTH channels; the reference says
+        // `CHANNEL_GR` for both, because that is what a class-id-only `classify` can
+        // answer. The CE-ness of the second one arrives with its engine object.
+        mock_classes::CHANNEL_GR,
+        AllocFacts {
+            h_vaspace: Some(HObject(cp::VAS)),
+            userd_flags: gr_flags(),
+            ..Default::default()
+        },
+    ))
+    .push(alloc(
+        cp::TSG,
+        cp::CE,
+        mock_classes::CHANNEL_GR,
+        AllocFacts {
+            h_ctx_share: Some(HObject(cp::CTXSHARE)),
+            userd_flags: ce_flags(),
+            ..Default::default()
+        },
+    ))
+    .push(alloc(
+        cp::GR,
+        cp::GR_OBJ,
+        mock_classes::COMPUTE,
+        AllocFacts::default(),
+    ))
+    .push(alloc(
+        cp::CE,
+        cp::CE_OBJ,
+        mock_classes::DMA_COPY,
+        AllocFacts::default(),
+    ));
+    s
+}
+
+/// The compute client's root, as an event — written by hand from the normalisation rule.
+fn root_of_c() -> RmEvent {
+    RmEvent::Alloc {
+        client: HClient(cp::C),
+        parent: HObject(cp::C),
+        handle: HObject(cp::C),
+        class: ClassId(w::NV01_ROOT),
+        facts: AllocFacts {
+            client_kind: Some(ClientKind::User { pid: cp::PID }),
+            ..Default::default()
+        },
+    }
+}
+
+/// The PDB the compute VAS gets. Applied as a **raw event on both sides** — translating
+/// `GSP_RM_CONTROL` is B4's, and this stage may not pretend otherwise. Holding it
+/// constant on both sides is what keeps the comparison about the alloc translation.
+const CP_PDB: Pdb = Pdb(0x0034_1000);
+
+fn set_page_dir() -> RmEvent {
+    RmEvent::SetPageDir {
+        client: HClient(cp::C),
+        vaspace: HObject(cp::VAS),
+        pdb: CP_PDB,
+    }
+}
+
+/// Drive a script through the policy onto a fresh device, then bind the PDB.
+fn gpu_from_script(script: &RpcScript) -> kayfabe_tests::Guarded<Gpu> {
+    let mut gpu = fresh_gpu();
+    {
+        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        for (i, out) in deliver_all(&mut policy, &script.messages())
+            .into_iter()
+            .enumerate()
+        {
+            let _ = out.unwrap_or_else(|e| panic!("message {i} of the script refused: {e:?}"));
+        }
+        assert!(policy.census().is_empty(), "a clean script refuses nothing");
+    }
+    gpu.apply(set_page_dir()).expect("the PDB binds");
+    gpu
+}
+
+// ---------------------------------------------------------------------------------
+// 7.0 Transcription #2 for the new shape — a channel alloc, written byte by byte
+// ---------------------------------------------------------------------------------
+
+/// A complete `GSP_RM_ALLOC` message allocating the GR channel of the compute subgraph,
+/// written out by hand. The third transcription of the channel layout, sharing no code
+/// path with the builder or with the decoder.
+///
+/// ```text
+/// ── rpc_message_header_v03_00 (32 B) ──────────────────────────────────────────
+/// +0   header_version      00 00 00 03   -> 0x03000000
+/// +4   signature           56 52 50 43   -> "VRPC" LE
+/// +8   length              60 00 00 00   -> 96 = 32 envelope + 32 alloc hdr + 32 params
+/// +12  function            67 00 00 00   -> 103 = GSP_RM_ALLOC
+/// +16  rpc_result          00 00 00 00
+/// +20  rpc_result_private  00 00 00 00
+/// +24  sequence            03 00 00 00
+/// +28  u                   00 00 00 00
+/// ── rpc_gsp_rm_alloc_v03_00 (32 B) ────────────────────────────────────────────
+/// +32  hClient             71 00 d0 c1   -> 0xc1d00071  (cp::C)
+/// +36  hParent             12 00 00 5c   -> 0x5c000012  (cp::TSG)  ★ carried VERBATIM
+/// +40  hObject             19 00 00 5c   -> 0x5c000019  (cp::GR)   ★ carried VERBATIM
+/// +44  hClass              6f c5 00 00   -> 0xc56f = AMPERE_CHANNEL_GPFIFO_A
+/// +48  status              00 00 00 00   [OUT]
+/// +52  paramsSize          20 00 00 00   -> 32 = the agreed prefix
+/// +56  flags               00 00 00 00   -> RMAPI_RPC_FLAGS_NONE
+/// +60  reserved[4]         00 00 00 00
+/// ── NV_CHANNEL_ALLOC_PARAMS, the 32-byte agreed prefix ────────────────────────
+/// +64  hObjectError        00 00 00 00                       (params +0)
+/// +68  hObjectBuffer       00 00 00 00                       (params +4)
+/// +72  gpFifoOffset        00 … 00  (NvU64, 8-aligned)       (params +8)
+/// +80  gpFifoEntries       00 00 00 00                       (params +16)
+/// +84  flags               85 10 00 00   -> 0x1085           (params +20) ★
+/// +88  hContextShare       00 00 00 00   -> none declared    (params +24) ★
+/// +92  hVASpace            10 00 00 5c   -> 0x5c000010       (params +28) ★
+/// ── and NOTHING follows: +96 is where 610 would put `hHandleVASpace` and 580
+///    would put `hUserdMemory[0]`, which is exactly why the message stops here.
+/// ```
+const HEX_CHANNEL_ALLOC: [u8; 96] = [
+    0x00, 0x00, 0x00, 0x03, 0x56, 0x52, 0x50, 0x43, 0x60, 0x00, 0x00, 0x00, 0x67, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x71, 0x00, 0xd0, 0xc1, 0x12, 0x00, 0x00, 0x5c, 0x19, 0x00, 0x00, 0x5c, 0x6f, 0xc5, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x85, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x5c,
+];
+
+/// ★ **Transcription #1 vs #2, for the channel.** Two humans, two methods, one byte
+/// string. The hex above was written from `ogkm`'s header with a ruler; the builder was
+/// written from the same header independently; if they disagree, one reading is wrong,
+/// which is the only reason to write ninety-six bytes out by hand.
+#[test]
+fn the_hand_written_hex_channel_and_the_independent_builder_agree_byte_for_byte() {
+    // The encoded flags word is part of the fixture, so it is pinned as a literal too —
+    // otherwise the hex would silently follow the mock arch's packing wherever it went.
+    assert_eq!(gr_flags(), 0x1085, "MockArch::userd_flags_for(VChid(0x21))");
+    assert_eq!(
+        w::message(
+            fn_id::GSP_RM_ALLOC,
+            3,
+            &w::alloc_body(
+                cp::C,
+                cp::TSG,
+                cp::GR,
+                w::AMPERE_CHANNEL_GPFIFO_A,
+                32,
+                w::RMAPI_RPC_FLAGS_NONE,
+                &w::channel_params(gr_flags(), 0, cp::VAS),
+            ),
+        ),
+        HEX_CHANNEL_ALLOC.to_vec(),
+    );
+}
+
+/// …and it becomes the event written out by hand from `AllocFacts`' own documentation.
+#[test]
+fn the_hand_hex_channel_alloc_becomes_the_declared_event() {
+    assert_eq!(
+        xlate(&HEX_CHANNEL_ALLOC),
+        Ok(Translation::Event(RmEvent::Alloc {
+            client: HClient(cp::C),
+            parent: HObject(cp::TSG),
+            handle: HObject(cp::GR),
+            class: ClassId(w::AMPERE_CHANNEL_GPFIFO_A),
+            facts: AllocFacts {
+                h_vaspace: Some(HObject(cp::VAS)),
+                // `hContextShare` was `NV01_NULL_OBJECT` on the wire, which is absence.
+                h_ctx_share: None,
+                userd_flags: 0x1085,
+                ..Default::default()
+            },
+        })),
+    );
+}
+
+// ---------------------------------------------------------------------------------
+// 7.1 Each class, on its own, decoded from bytes
+// ---------------------------------------------------------------------------------
+
+/// Every class B3 added produces **exactly** the `AllocFacts` its params declare — and
+/// exactly nothing else. Written as one table so a decoder that filled the wrong field
+/// fails on the row it belongs to.
+///
+/// ★ The expected events are written out by hand from the core's own `AllocFacts` docs,
+/// never derived from the builder.
+#[test]
+fn every_class_in_the_table_decodes_its_declared_facts_and_only_those() {
+    const P: u32 = 0x5c00_00aa; // an arbitrary parent
+    const H: u32 = 0x5c00_00bb; // an arbitrary handle
+    let msg = |class: u32, params: &[u8]| {
+        w::message(
+            fn_id::GSP_RM_ALLOC,
+            1,
+            &w::alloc_body(
+                cp::C,
+                P,
+                H,
+                class,
+                params.len() as u32,
+                w::RMAPI_RPC_FLAGS_NONE,
+                params,
+            ),
+        )
+    };
+    let want = |class: u32, facts: AllocFacts| {
+        Ok(Translation::Event(RmEvent::Alloc {
+            client: HClient(cp::C),
+            parent: HObject(P),
+            handle: HObject(H),
+            class: ClassId(class),
+            facts,
+        }))
+    };
+
+    assert_eq!(
+        xlate(&msg(w::NV01_DEVICE_0, &w::device_params(3, 0xbeef, 7))),
+        want(
+            w::NV01_DEVICE_0,
+            AllocFacts {
+                device_instance: Some(3),
+                ..Default::default()
+            }
+        ),
+        "Device: `deviceId` @ +0 and nothing else — `hClientShare` and `vaMode` are set \
+         here precisely so a decoder that read one of them fails",
+    );
+    assert_eq!(
+        xlate(&msg(w::FERMI_VASPACE_A, &[0xff; 56])),
+        want(w::FERMI_VASPACE_A, AllocFacts::default()),
+        "★ VASpace: 56 bytes of 0xff declare NOTHING. Its params are geometry, and a \
+         decoder that invented a fact from them would be inventing it from garbage",
+    );
+    assert_eq!(
+        xlate(&msg(w::KEPLER_CHANNEL_GROUP_A, &w::tsg_params(cp::VAS, 9))),
+        want(
+            w::KEPLER_CHANNEL_GROUP_A,
+            AllocFacts {
+                h_vaspace: Some(HObject(cp::VAS)),
+                ..Default::default()
+            }
+        ),
+        "TSG: `hVASpace` @ +8. `engineType` @ +12 is set to 9 and dropped — declared, \
+         with nowhere in `AllocFacts` to go",
+    );
+    assert_eq!(
+        xlate(&msg(
+            w::FERMI_CONTEXT_SHARE_A,
+            &w::ctxshare_params(cp::VAS, 1, 2)
+        )),
+        want(
+            w::FERMI_CONTEXT_SHARE_A,
+            AllocFacts {
+                h_vaspace: Some(HObject(cp::VAS)),
+                ..Default::default()
+            }
+        ),
+        "CtxShare: `hVASpace` @ +0 — a DIFFERENT offset from the TSG's, which is the \
+         mistake this pair invites",
+    );
+    assert_eq!(
+        xlate(&msg(
+            w::AMPERE_CHANNEL_GPFIFO_A,
+            &w::channel_params(gr_flags(), cp::CTXSHARE, cp::VAS)
+        )),
+        want(
+            w::AMPERE_CHANNEL_GPFIFO_A,
+            AllocFacts {
+                h_vaspace: Some(HObject(cp::VAS)),
+                h_ctx_share: Some(HObject(cp::CTXSHARE)),
+                userd_flags: gr_flags(),
+                ..Default::default()
+            }
+        ),
+        "Channel: all three, from +20/+24/+28",
+    );
+    for class in [w::AMPERE_COMPUTE_B, w::AMPERE_DMA_COPY_B] {
+        assert_eq!(
+            xlate(&msg(class, &[0xff; 64])),
+            want(class, AllocFacts::default()),
+            "an engine object declares only its edge, whatever its params say",
+        );
+    }
+    // …and the class the table does NOT have stays refused, by name.
+    assert_eq!(
+        xlate(&msg(w::NV01_MEMORY_SYSTEM, &[0u8; 64])),
+        Err(BridgeRefusal::UnmappedAllocClass {
+            class: w::NV01_MEMORY_SYSTEM
+        }),
+        "★ `mem_phys` is `gsp_core_bridge.md` §6's B3 row and is not buildable in this \
+         direction — the refusal is the record of that, not a gap",
+    );
+}
+
+/// ★ `NV01_NULL_OBJECT` in a declared-handle field means **nothing is declared**, which
+/// the core spells `None`. `Some(HObject(0))` would be a handle the guest never allocated
+/// and can never allocate, so every resolution of it would MISS forever.
+#[test]
+fn a_zero_handle_field_declares_nothing_rather_than_object_zero() {
+    let msg = |class: u32, params: &[u8]| {
+        w::message(
+            fn_id::GSP_RM_ALLOC,
+            1,
+            &w::alloc_body(
+                cp::C,
+                cp::TSG,
+                cp::GR,
+                class,
+                params.len() as u32,
+                w::RMAPI_RPC_FLAGS_NONE,
+                params,
+            ),
+        )
+    };
+    let facts_of = |m: &[u8]| match xlate(m) {
+        Ok(Translation::Event(RmEvent::Alloc { facts, .. })) => facts,
+        other => panic!("expected an Alloc, got {other:?}"),
+    };
+
+    // A channel that declares neither: both `None`, and `userd_flags` still carried.
+    assert_eq!(
+        facts_of(&msg(
+            w::AMPERE_CHANNEL_GPFIFO_A,
+            &w::channel_params(gr_flags(), 0, 0)
+        )),
+        AllocFacts {
+            h_vaspace: None,
+            h_ctx_share: None,
+            userd_flags: gr_flags(),
+            ..Default::default()
+        },
+        "★ hVASpace = 0 is the GSP-managed VAS, which `AllocFacts` models as absence",
+    );
+    // Non-vacuity: the same fields non-zero are `Some`, so the `None` above is the zero's
+    // doing and not the decoder's.
+    assert_eq!(
+        facts_of(&msg(
+            w::AMPERE_CHANNEL_GPFIFO_A,
+            &w::channel_params(gr_flags(), 1, 2)
+        )),
+        AllocFacts {
+            h_vaspace: Some(HObject(2)),
+            h_ctx_share: Some(HObject(1)),
+            userd_flags: gr_flags(),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        facts_of(&msg(w::KEPLER_CHANNEL_GROUP_A, &w::tsg_params(0, 0))).h_vaspace,
+        None,
+    );
+    assert_eq!(
+        facts_of(&msg(w::FERMI_CONTEXT_SHARE_A, &w::ctxshare_params(0, 0, 0))).h_vaspace,
+        None,
+    );
+    // ★ And `userd_flags` is NOT given the same treatment: it is a `u32`, not an
+    // `Option`, because zero is a legal encoded flags word and absence is not
+    // expressible. Asserted so the asymmetry is a decision rather than an oversight.
+    assert_eq!(
+        facts_of(&msg(
+            w::AMPERE_CHANNEL_GPFIFO_A,
+            &w::channel_params(0, cp::CTXSHARE, cp::VAS)
+        ))
+        .userd_flags,
+        0,
+    );
+}
+
+/// ★★ **The 580-vs-610 fork, made a test.** `NV_CHANNEL_ALLOC_PARAMS` diverges at +32:
+/// 610 has `hHandleVASpace` there, 580 — the bench driver — has `hUserdMemory[0]`. The
+/// decoder must therefore read the agreed prefix and **never one byte past it**.
+#[test]
+fn nothing_past_the_channel_prefix_is_read_however_hostile_it_is() {
+    let facts_of = |params: &[u8]| match xlate(&w::message(
+        fn_id::GSP_RM_ALLOC,
+        1,
+        &w::alloc_body(
+            cp::C,
+            cp::TSG,
+            cp::GR,
+            w::AMPERE_CHANNEL_GPFIFO_A,
+            params.len() as u32,
+            w::RMAPI_RPC_FLAGS_NONE,
+            params,
+        ),
+    )) {
+        Ok(Translation::Event(RmEvent::Alloc { facts, .. })) => facts,
+        other => panic!("expected an Alloc, got {other:?}"),
+    };
+
+    let want = AllocFacts {
+        h_vaspace: Some(HObject(cp::VAS)),
+        h_ctx_share: Some(HObject(cp::CTXSHARE)),
+        userd_flags: gr_flags(),
+        ..Default::default()
+    };
+    let exact = w::channel_params(gr_flags(), cp::CTXSHARE, cp::VAS);
+    assert_eq!(facts_of(&exact), want, "the prefix alone decodes");
+
+    // The same prefix followed by 0xff to the 610 length, to the 580 length, and to an
+    // absurd length. All three must decode identically — the tail is not consulted.
+    for extra in [4usize, 8, 104, 108, 512] {
+        let mut long = exact.clone();
+        long.extend(std::iter::repeat_n(0xffu8, extra));
+        assert_eq!(
+            facts_of(&long),
+            want,
+            "★ {extra} bytes of tail changed a fact — the decoder is reading past the \
+             region the two vendored trees agree on",
+        );
+    }
+}
+
+/// One byte short of the prefix is a **refusal carrying both numbers**, never a
+/// zero-extended decode — a channel whose params stop before `hVASpace` has not declared
+/// one, and reading absence as `hVASpace = 0` would silently manufacture a legal
+/// "GSP-managed VAS" declaration out of a truncated message.
+#[test]
+fn a_channel_params_short_of_the_prefix_is_refused_at_every_length() {
+    let full = w::channel_params(gr_flags(), cp::CTXSHARE, cp::VAS);
+    for len in 0..full.len() {
+        let params = &full[..len];
+        assert_eq!(
+            xlate(&w::message(
+                fn_id::GSP_RM_ALLOC,
+                1,
+                &w::alloc_body(
+                    cp::C,
+                    cp::TSG,
+                    cp::GR,
+                    w::AMPERE_CHANNEL_GPFIFO_A,
+                    len as u32,
+                    w::RMAPI_RPC_FLAGS_NONE,
+                    params,
+                ),
+            )),
+            Err(BridgeRefusal::Abi(AbiError::Truncated {
+                c_name: "NV_CHANNEL_ALLOC_PARAMS",
+                need: 32,
+                got: len,
+            })),
+            "a {len}-byte channel params",
+        );
+    }
+    // Non-vacuity: the full prefix is accepted, so the loop is refusing shortness rather
+    // than refusing channels.
+    assert!(matches!(
+        xlate(&w::message(
+            fn_id::GSP_RM_ALLOC,
+            1,
+            &w::alloc_body(
+                cp::C,
+                cp::TSG,
+                cp::GR,
+                w::AMPERE_CHANNEL_GPFIFO_A,
+                full.len() as u32,
+                w::RMAPI_RPC_FLAGS_NONE,
+                &full,
+            ),
+        )),
+        Ok(Translation::Event(_))
+    ));
+}
+
+/// The other three classes refuse a short params too, each naming **its own** struct —
+/// so a truncation is attributed to the class that was actually being decoded.
+#[test]
+fn every_new_decoder_names_its_own_struct_when_it_refuses() {
+    let cases: [(u32, &str, usize, Vec<u8>); 3] = [
+        (
+            w::NV01_DEVICE_0,
+            "NV0080_ALLOC_PARAMETERS",
+            56,
+            w::device_params(0, 0, 0),
+        ),
+        (
+            w::KEPLER_CHANNEL_GROUP_A,
+            "NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS",
+            20,
+            w::tsg_params(cp::VAS, 0),
+        ),
+        (
+            w::FERMI_CONTEXT_SHARE_A,
+            "NV_CTXSHARE_ALLOCATION_PARAMETERS",
+            12,
+            w::ctxshare_params(cp::VAS, 0, 0),
+        ),
+    ];
+    for (class, c_name, need, full) in cases {
+        assert_eq!(full.len(), need, "the builder emits sizeof for {c_name}");
+        let short = &full[..need - 1];
+        assert_eq!(
+            xlate(&w::message(
+                fn_id::GSP_RM_ALLOC,
+                1,
+                &w::alloc_body(
+                    cp::C,
+                    cp::DEV,
+                    cp::VAS,
+                    class,
+                    short.len() as u32,
+                    w::RMAPI_RPC_FLAGS_NONE,
+                    short,
+                ),
+            )),
+            Err(BridgeRefusal::Abi(AbiError::Truncated {
+                c_name,
+                need,
+                got: need - 1,
+            })),
+        );
+    }
+}
+
+/// ★ Per-field non-vacuity (§5.1): change **one word** of a channel's params and exactly
+/// one fact of the event moves. Three mutations, three facts, no overlap.
+#[test]
+fn one_changed_word_of_the_channel_params_moves_exactly_one_fact() {
+    let base = w::channel_params(gr_flags(), cp::CTXSHARE, cp::VAS);
+    let reference = AllocFacts {
+        h_vaspace: Some(HObject(cp::VAS)),
+        h_ctx_share: Some(HObject(cp::CTXSHARE)),
+        userd_flags: gr_flags(),
+        ..Default::default()
+    };
+    let facts_of = |params: &[u8]| match xlate(&w::message(
+        fn_id::GSP_RM_ALLOC,
+        1,
+        &w::alloc_body(
+            cp::C,
+            cp::TSG,
+            cp::GR,
+            w::AMPERE_CHANNEL_GPFIFO_A,
+            params.len() as u32,
+            w::RMAPI_RPC_FLAGS_NONE,
+            params,
+        ),
+    )) {
+        Ok(Translation::Event(RmEvent::Alloc { facts, .. })) => facts,
+        other => panic!("expected an Alloc, got {other:?}"),
+    };
+    assert_eq!(facts_of(&base), reference);
+
+    let mutate = |off: usize, v: u32| {
+        let mut p = base.clone();
+        p[off..off + 4].copy_from_slice(&v.to_le_bytes());
+        facts_of(&p)
+    };
+    assert_eq!(
+        mutate(20, ce_flags()),
+        AllocFacts {
+            userd_flags: ce_flags(),
+            ..reference
+        },
+        "+20 moves `userd_flags` and nothing else",
+    );
+    assert_eq!(
+        mutate(24, 0x5c00_00ff),
+        AllocFacts {
+            h_ctx_share: Some(HObject(0x5c00_00ff)),
+            ..reference
+        },
+        "+24 moves `h_ctx_share` and nothing else",
+    );
+    assert_eq!(
+        mutate(28, 0x5c00_00ee),
+        AllocFacts {
+            h_vaspace: Some(HObject(0x5c00_00ee)),
+            ..reference
+        },
+        "+28 moves `h_vaspace` and nothing else",
+    );
+}
+
+// ---------------------------------------------------------------------------------
+// 7.2 ★★ The composed subgraph — `Boundaries(RpcScript) == Boundaries(Scenario)`
+// ---------------------------------------------------------------------------------
+
+/// ★★ **B3's headline** (`gsp_core_bridge.md` §6): a compute-process-shaped subgraph,
+/// from wire bytes, projecting identically to the hand-written reference.
+///
+/// The two sides share no class number, no offset and no decoder. What they share is the
+/// *meaning*, and `Boundaries` is what must not be able to tell them apart.
+#[test]
+fn the_compute_subgraph_from_wire_bytes_equals_the_hand_written_scenario() {
+    let mut gpu = gpu_from_script(&script_compute());
+    let from_bytes = boundaries(&gpu);
+
+    let mut reference = fresh_gpu();
+    for ev in &scenario_compute().events {
+        reference
+            .apply(*ev)
+            .expect("the reference scenario is legal");
+    }
+    reference.apply(set_page_dir()).expect("the PDB binds");
+
+    assert_eq!(from_bytes, boundaries(&reference));
+
+    // Non-vacuity: the equality is not between two empty projections, and the subgraph
+    // really has the shape the name claims.
+    assert_ne!(from_bytes, Boundaries::default());
+    assert_eq!(from_bytes.procs.len(), 1, "one compute process");
+    assert_eq!(
+        from_bytes.procs[0].client_values(),
+        [HClient(cp::C)].into_iter().collect(),
+    );
+    assert_eq!(
+        from_bytes.by_pdb.keys().copied().collect::<Vec<_>>(),
+        vec![(GpuId::ZERO, CP_PDB)],
+        "★ the VAS routes — which needed the Device's `deviceId` to resolve a target",
+    );
+    assert_eq!(
+        from_bytes.by_vchid.keys().copied().collect::<Vec<_>>(),
+        vec![(GpuId::ZERO, CP_GR_VCHID), (GpuId::ZERO, CP_CE_VCHID),],
+        "★★ BOTH channels routed, and their vChids came out of `userd_flags` — the one \
+         thing in this stage that is a wire word all the way to the exec plane",
+    );
+
+    // ★ The engine refinement: the CE channel is a CE channel because its engine object
+    // said so, NOT because its class id differed — the wire has one channel class.
+    let engines: Vec<(VChid, EngineKind)> = from_bytes.procs[0]
+        .channels
+        .values()
+        .map(|c| (c.vchid, c.engine))
+        .collect();
+    assert_eq!(
+        engines,
+        vec![
+            (CP_GR_VCHID, EngineKind::GrCompute),
+            (CP_CE_VCHID, EngineKind::Ce),
+        ],
+    );
+
+    // And the doorbell actually works on both, which is what "the subgraph is real" means.
+    for vchid in [CP_GR_VCHID, CP_CE_VCHID] {
+        assert!(
+            handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(vchid), &[]).is_ok(),
+            "the {vchid:?} channel rings",
+        );
+    }
+}
+
+/// ★ Non-vacuity for the projection comparison, per §5.1: mutate one field of the
+/// script's **bytes** and the projections must differ. One mutation per decoder B3 added,
+/// so a decoder that quietly stopped reading its field would be caught here as well as at
+/// its own unit test.
+#[test]
+fn one_changed_field_of_the_compute_script_changes_the_projection() {
+    let reference = boundaries(&gpu_from_script(&script_compute()));
+
+    // ★ (a) The Device decoder gets its own arm, and it is not a projection difference:
+    //     this device was realized with ONE GPU, so a `deviceId` of 1 is refused by the
+    //     graph with its exact variant. That is a stronger reading of "the field is
+    //     read" than any boundary comparison — a decoder that dropped `deviceId` would
+    //     declare instance 0 here and the alloc would sail through.
+    let mut other_gpu = RpcScript::new();
+    other_gpu
+        .client_root(w::NV01_ROOT, cp::C, cp::PID)
+        .device(cp::C, cp::C, cp::DEV, 1);
+    {
+        let mut gpu = fresh_gpu();
+        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        let out = deliver_all(&mut policy, &other_gpu.messages());
+        assert_eq!(out[0], Ok(Translation::Event(root_of_c())));
+        assert_eq!(
+            out[1],
+            Err(BridgeRefusal::Graph(GpuError::Graph(
+                RmGraphError::InvalidDeviceInstance { instance: 1 }
+            ))),
+        );
+    }
+
+    // ★ (b) The channel decoder's own arm, and it is also a refusal rather than a
+    //     difference: give the GR channel the CE's `userd_flags` and the two channels
+    //     claim one vChid. `userd_flags` is a wire word that reaches the exec plane
+    //     unaltered, so a decoder that dropped it would make BOTH channels vChid 0 and
+    //     collide anyway — which is why the surviving channel is asserted by handle.
+    let mut swapped_vchid = RpcScript::new();
+    swapped_vchid
+        .client_root(w::NV01_ROOT, cp::C, cp::PID)
+        .device(cp::C, cp::C, cp::DEV, cp::DEVICE_INSTANCE)
+        .vaspace(cp::C, cp::DEV, cp::VAS)
+        .tsg(cp::C, cp::DEV, cp::TSG, cp::VAS)
+        .ctxshare(cp::C, cp::VAS, cp::CTXSHARE, cp::VAS)
+        .channel(cp::C, cp::TSG, cp::GR, ce_flags(), 0, cp::VAS)
+        .channel(cp::C, cp::TSG, cp::CE, ce_flags(), cp::CTXSHARE, 0);
+    {
+        let mut gpu = fresh_gpu();
+        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        let out = deliver_all(&mut policy, &swapped_vchid.messages());
+        for (i, o) in out.iter().enumerate().take(6) {
+            assert!(o.is_ok(), "message {i} of the prefix refused: {o:?}");
+        }
+        assert_eq!(
+            out[6],
+            Err(BridgeRefusal::Graph(GpuError::Projection(
+                ProjectionError::VchidCollision {
+                    gpu: Some(GpuId::ZERO),
+                    vchid: CP_CE_VCHID,
+                    a: ResourceKey::first(NodeKey::new(HClient(cp::C), HObject(cp::GR))),
+                    b: ResourceKey::first(NodeKey::new(HClient(cp::C), HObject(cp::CE))),
+                }
+            ))),
+            "★ two channels at one vChid is a projection refusal, by exact variant",
+        );
+    }
+
+    // (c) The CtxShare names no VASpace: the CE channel, which reaches its VAS ONLY
+    //     through the context share, loses it.
+    let mut ctxshare_unbound = RpcScript::new();
+    ctxshare_unbound
+        .client_root(w::NV01_ROOT, cp::C, cp::PID)
+        .device(cp::C, cp::C, cp::DEV, cp::DEVICE_INSTANCE)
+        .vaspace(cp::C, cp::DEV, cp::VAS)
+        .tsg(cp::C, cp::DEV, cp::TSG, cp::VAS)
+        .ctxshare(cp::C, cp::VAS, cp::CTXSHARE, 0)
+        .channel(cp::C, cp::TSG, cp::GR, gr_flags(), 0, cp::VAS)
+        .channel(cp::C, cp::TSG, cp::CE, ce_flags(), cp::CTXSHARE, 0);
+
+    // (d) The two engine objects swap channels: the engines swap with them.
+    let mut swapped_engines = RpcScript::new();
+    swapped_engines
+        .client_root(w::NV01_ROOT, cp::C, cp::PID)
+        .device(cp::C, cp::C, cp::DEV, cp::DEVICE_INSTANCE)
+        .vaspace(cp::C, cp::DEV, cp::VAS)
+        .tsg(cp::C, cp::DEV, cp::TSG, cp::VAS)
+        .ctxshare(cp::C, cp::VAS, cp::CTXSHARE, cp::VAS)
+        .channel(cp::C, cp::TSG, cp::GR, gr_flags(), 0, cp::VAS)
+        .channel(cp::C, cp::TSG, cp::CE, ce_flags(), cp::CTXSHARE, 0)
+        .engine_object(cp::C, cp::GR, cp::GR_OBJ, w::AMPERE_DMA_COPY_B)
+        .engine_object(cp::C, cp::CE, cp::CE_OBJ, w::AMPERE_COMPUTE_B);
+
+    for (what, script) in [
+        ("the CtxShare declared no VASpace", ctxshare_unbound),
+        ("the engine objects swapped channels", swapped_engines),
+    ] {
+        assert_ne!(
+            boundaries(&gpu_from_script(&script)),
+            reference,
+            "★ the projection comparison would not notice: {what}",
+        );
+    }
+}
+
+/// ★★ **The design's own B3 non-vacuity arm** (`gsp_core_bridge.md` §5.2): *"with the
+/// decoder removed, the channel gets no `Vas` and the doorbell takes `FwdFault::NoVas` —
+/// assert that, so the decoder's value is measured, not assumed."*
+///
+/// "The decoder removed" is expressed exactly: the identical edge (client, parent,
+/// handle, class) with `AllocFacts::default()`, which is what a class with no decoder
+/// would have produced. Everything else is held constant, including the PDB — so the
+/// difference between a served ring and a named fault is *the decoder*.
+///
+/// ★ It takes **three** runs, not two, and the third is a finding the design's one-line
+/// arm does not have: the channel decoder recovers `userd_flags` as well as the VAS
+/// handles, and `userd_flags` is what the channel ROUTES by. So a wholly absent decoder
+/// does not reach `NoVas` at all — the doorbell's token resolves to no channel and the
+/// fault is `UnknownVchid`, one plane earlier. Only stripping the handle facts while
+/// keeping the flags isolates the VAS, and that is the run the design is describing.
+#[test]
+fn with_the_channel_decoder_removed_the_doorbell_takes_no_vas() {
+    let channel_msg = w::message(
+        fn_id::GSP_RM_ALLOC,
+        1,
+        &w::alloc_body(
+            cp::C,
+            cp::TSG,
+            cp::GR,
+            w::AMPERE_CHANNEL_GPFIFO_A,
+            32,
+            w::RMAPI_RPC_FLAGS_NONE,
+            &w::channel_params(gr_flags(), 0, cp::VAS),
+        ),
+    );
+    let decoded = match xlate(&channel_msg) {
+        Ok(Translation::Event(ev)) => ev,
+        other => panic!("expected an Alloc, got {other:?}"),
+    };
+    // The SAME edge, with the facts a class with no decoder behind it would carry.
+    let with_facts = |facts: AllocFacts| match decoded {
+        RmEvent::Alloc {
+            client,
+            parent,
+            handle,
+            class,
+            ..
+        } => RmEvent::Alloc {
+            client,
+            parent,
+            handle,
+            class,
+            facts,
+        },
+        other => panic!("expected an Alloc, got {other:?}"),
+    };
+    let undecoded = with_facts(AllocFacts::default());
+    let flags_only = with_facts(AllocFacts {
+        userd_flags: gr_flags(),
+        ..Default::default()
+    });
+    assert_ne!(decoded, undecoded, "the two differ only in `facts`");
+    assert_ne!(decoded, flags_only);
+
+    // ★ The TSG declares NO VASpace, so the channel's own `hVASpace` is the only path to
+    // one — which is what makes this a measurement of the decoder rather than of the TSG.
+    let prefix = {
+        let mut s = RpcScript::new();
+        s.client_root(w::NV01_ROOT, cp::C, cp::PID)
+            .device(cp::C, cp::C, cp::DEV, cp::DEVICE_INSTANCE)
+            .vaspace(cp::C, cp::DEV, cp::VAS)
+            .tsg(cp::C, cp::DEV, cp::TSG, 0);
+        s
+    };
+    let run = |channel: RmEvent| {
+        let mut gpu = fresh_gpu();
+        {
+            let mut policy = GraphPolicy::new(abi(), &mut gpu);
+            for out in deliver_all(&mut policy, &prefix.messages()) {
+                let _ = out.expect("the prefix is legal");
+            }
+        }
+        gpu.apply(channel).expect("the channel applies either way");
+        gpu.apply(set_page_dir()).expect("the PDB binds");
+        let outcome = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CP_GR_VCHID), &[]);
+        let vas_pdb = gpu
+            .spine
+            .by_vchid
+            .get(&(GpuId::ZERO, CP_GR_VCHID))
+            .map(|&(pid, cid)| gpu.procs[&pid].channels[&cid].vas_pdb);
+        (outcome.map(|_| ()), vas_pdb)
+    };
+
+    // (1) With the decoder: the channel routes at the declared vChid, finds its VAS, and
+    //     the ring is served.
+    let (with_decoder, with_pdb) = run(decoded);
+    assert_eq!(with_pdb, Some(Some(CP_PDB)), "the channel found its VAS");
+    assert_eq!(with_decoder, Ok(()), "…and the ring is served");
+
+    // (2) ★ With NO decoder at all: `userd_flags` is 0 too, so the channel is not even at
+    //     this vChid. The absence surfaces one plane earlier, by name.
+    let (no_decoder, no_pdb) = run(undecoded);
+    assert_eq!(
+        no_pdb, None,
+        "★ no decoder ⇒ no `userd_flags` ⇒ the channel routes at a different vChid",
+    );
+    assert_eq!(
+        no_decoder,
+        Err(FwdFault::UnknownVchid {
+            gpu: GpuId::ZERO,
+            vchid: CP_GR_VCHID,
+        }),
+        "the EXACT fault, and it is not `NoVas` — this is the arm the design's one-liner \
+         folds together",
+    );
+
+    // (3) ★★ The design's arm proper: the flags survive, the declared handles do not.
+    //     The channel routes, materializes with no VAS, and the doorbell faults by name.
+    let (vas_stripped, stripped_pdb) = run(flags_only);
+    assert_eq!(
+        stripped_pdb,
+        Some(None),
+        "★ no declared VASpace ⇒ the channel materializes with no VAS — deferred, not \
+         guessed",
+    );
+    let cid = gpu_cid_at(CP_GR_VCHID, &prefix, flags_only);
+    assert_eq!(
+        vas_stripped,
+        Err(FwdFault::NoVas(cid)),
+        "★★ at ring time there is no 'later' — the EXACT `NoVas`, never a served ring",
+    );
+}
+
+/// The `ChanId` a channel materializes at, for the exact-variant assertion above.
+fn gpu_cid_at(vchid: VChid, prefix: &RpcScript, channel: RmEvent) -> kayfabe_core::ChanId {
+    let mut gpu = fresh_gpu();
+    {
+        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        for out in deliver_all(&mut policy, &prefix.messages()) {
+            let _ = out.expect("the prefix is legal");
+        }
+    }
+    gpu.apply(channel).expect("the channel applies");
+    gpu.spine.by_vchid[&(GpuId::ZERO, vchid)].1
+}
+
+/// The three arms of `resolve_channel_vas`, each driven from bytes: a channel finds its
+/// VASpace through its **own** handle, through its **CtxShare**, or through its **parent
+/// TSG** — and through nothing at all when none of the three declares one.
+#[test]
+fn a_channels_vaspace_resolves_through_all_three_declared_paths() {
+    // (own, ctxshare, tsg) -> does the channel end up with the PDB?
+    let case = |chan_vas: u32, chan_ctxshare: u32, tsg_vas: u32, ctxshare_vas: u32| {
+        let mut s = RpcScript::new();
+        s.client_root(w::NV01_ROOT, cp::C, cp::PID)
+            .device(cp::C, cp::C, cp::DEV, cp::DEVICE_INSTANCE)
+            .vaspace(cp::C, cp::DEV, cp::VAS)
+            .tsg(cp::C, cp::DEV, cp::TSG, tsg_vas)
+            .ctxshare(cp::C, cp::VAS, cp::CTXSHARE, ctxshare_vas)
+            .channel(cp::C, cp::TSG, cp::GR, gr_flags(), chan_ctxshare, chan_vas);
+        let gpu = gpu_from_script(&s);
+        let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, CP_GR_VCHID)];
+        gpu.procs[&pid].channels[&cid].vas_pdb
+    };
+
+    assert_eq!(
+        case(cp::VAS, 0, 0, 0),
+        Some(CP_PDB),
+        "own `hVASpace` — first in the precedence",
+    );
+    assert_eq!(
+        case(0, cp::CTXSHARE, 0, cp::VAS),
+        Some(CP_PDB),
+        "through the CtxShare",
+    );
+    assert_eq!(
+        case(0, 0, cp::VAS, 0),
+        Some(CP_PDB),
+        "through the parent TSG",
+    );
+    assert_eq!(
+        case(0, 0, 0, 0),
+        None,
+        "★ nothing declares a VASpace ⇒ nothing is resolved, and no path invents one",
+    );
+}
+
+/// ★★ **The statelessness canary, extended below the root** (§3.3). RM recycles object
+/// handles by design, so the same `hObject` VALUE is re-declared as a **different class**
+/// after its predecessor is freed — a per-handle memo would answer the first class for
+/// the second alloc, and a seen-set would refuse the recycle outright.
+///
+/// It also carries the idempotent-resend arm: the identical channel message twice is
+/// accepted, which a dedup cache would break in the other direction.
+#[test]
+fn an_object_handle_recycled_as_a_different_class_is_translated_afresh() {
+    let mut gpu = fresh_gpu();
+    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+
+    let mut boot = RpcScript::new();
+    boot.client_root(w::NV01_ROOT, cp::C, cp::PID)
+        .device(cp::C, cp::C, cp::DEV, cp::DEVICE_INSTANCE)
+        .vaspace(cp::C, cp::DEV, cp::VAS);
+    for out in deliver_all(&mut policy, &boot.messages()) {
+        let _ = out.expect("the boot prefix is legal");
+    }
+
+    // The value 0x5c00_0012 is first a TSG…
+    let mut as_tsg = RpcScript::new();
+    as_tsg.tsg(cp::C, cp::DEV, cp::TSG, cp::VAS);
+    let tsg_msgs = as_tsg.messages();
+    assert_eq!(
+        policy.deliver(&command(&tsg_msgs[0])),
+        Ok(Translation::Event(RmEvent::Alloc {
+            client: HClient(cp::C),
+            parent: HObject(cp::DEV),
+            handle: HObject(cp::TSG),
+            class: ClassId(w::KEPLER_CHANNEL_GROUP_A),
+            facts: AllocFacts {
+                h_vaspace: Some(HObject(cp::VAS)),
+                ..Default::default()
+            },
+        })),
+    );
+    // …an identical re-send is accepted idempotently (a dedup cache would refuse it)…
+    assert_eq!(
+        policy.deliver(&command(&tsg_msgs[0])),
+        Ok(Translation::Event(RmEvent::Alloc {
+            client: HClient(cp::C),
+            parent: HObject(cp::DEV),
+            handle: HObject(cp::TSG),
+            class: ClassId(w::KEPLER_CHANNEL_GROUP_A),
+            facts: AllocFacts {
+                h_vaspace: Some(HObject(cp::VAS)),
+                ..Default::default()
+            },
+        })),
+        "★ the identical message maps to the identical event — that is what makes \
+         `RmGraphError::ConflictingAlloc`'s retried-RPC tolerance reachable",
+    );
+
+    // …then it is freed and re-declared as a CHANNEL, with different facts.
+    let mut recycle = RpcScript::new();
+    recycle
+        .free(cp::C, cp::TSG)
+        .channel(cp::C, cp::VAS, cp::TSG, ce_flags(), 0, cp::VAS);
+    let recycle_msgs = recycle.messages();
+    assert_eq!(
+        policy.deliver(&command(&recycle_msgs[0])),
+        Ok(Translation::Event(RmEvent::Free {
+            client: HClient(cp::C),
+            handle: HObject(cp::TSG),
+        })),
+    );
+    assert_eq!(
+        policy.deliver(&command(&recycle_msgs[1])),
+        Ok(Translation::Event(RmEvent::Alloc {
+            client: HClient(cp::C),
+            parent: HObject(cp::VAS),
+            handle: HObject(cp::TSG),
+            class: ClassId(w::AMPERE_CHANNEL_GPFIFO_A),
+            facts: AllocFacts {
+                h_vaspace: Some(HObject(cp::VAS)),
+                userd_flags: ce_flags(),
+                ..Default::default()
+            },
+        })),
+        "★★ the recycled value is translated from THIS message's bytes — a memo keyed on \
+         `hObject` would still be answering `KEPLER_CHANNEL_GROUP_A`",
+    );
+    assert!(policy.census().is_empty(), "nothing here is a refusal");
+}
+
+/// ★ The whole compute subgraph, through the **real command ring** and the boot FSM —
+/// the B2 transport, now carrying B3's traffic. Nine allocs, one doorbell, no refusals.
+#[test]
+fn the_compute_subgraph_reaches_the_graph_through_the_real_transport() {
+    let script = script_compute();
+    let mut gpu = fresh_gpu();
+    let run = run_through_transport(P580, script.steps(), &mut gpu);
+
+    assert!(
+        run.census.is_empty(),
+        "a conforming compute stream refuses nothing: {:?}",
+        run.census
+    );
+    assert_eq!(run.applied, 9, "nine allocs, all applied");
+    assert_eq!(run.inert, 0);
+    assert!(
+        run.transitions.contains(&Transition::Running),
+        "the FSM reached Running"
+    );
+    assert_eq!(
+        run.replies.len(),
+        script.steps().len(),
+        "every command was answered on (function, sequence)"
+    );
+
+    gpu.apply(set_page_dir()).expect("the PDB binds");
+    assert_eq!(
+        boundaries(&gpu),
+        boundaries(&gpu_from_script(&script)),
+        "★ the ring and the direct path reach the same object model",
+    );
 }

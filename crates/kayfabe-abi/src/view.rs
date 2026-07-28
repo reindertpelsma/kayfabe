@@ -275,6 +275,80 @@ pub struct DeviceAllocFacts {
     pub va_mode: u32,
 }
 
+/// `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS` — the one fact a TSG declares that
+/// the core models.
+///
+/// Decoded from the **whole** 20-byte struct, because unlike the client root its
+/// tail has a second oracle: the field list is byte-identical in both vendored
+/// trees (`ogkm: nvos.h:2899-2906` and `ogkm-580: nvos.h:2903-2911`), so there is
+/// no version fork to be tolerant about.
+///
+/// ★ `engineType` is deliberately **not** carried. It is a declared fact, but
+/// `kayfabe_core::rmgraph::AllocFacts` has nowhere to put it and nothing above
+/// would read it — and this crate's rule is that a field needs a consumer first.
+/// See [`ChannelAllocFacts`] for why the same absence is *load-bearing* one level
+/// down.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TsgAllocFacts {
+    /// `hVASpace` — the VASpace every channel in the group inherits.
+    /// `NV01_NULL_OBJECT` (0) means the group declares none.
+    pub h_vaspace: u32,
+}
+
+/// `NV_CTXSHARE_ALLOCATION_PARAMETERS` — the VASpace a subcontext declares.
+///
+/// Whole-struct (12 bytes) for the same reason as [`TsgAllocFacts`]: identical at
+/// both vendored tags (`ogkm: nvos.h:3223-3228`, `ogkm-580: nvos.h:3232-3237`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CtxShareAllocFacts {
+    /// `hVASpace` — the VASpace this context share is bound to. 0 = none.
+    pub h_vaspace: u32,
+}
+
+/// `NV_CHANNEL_ALLOC_PARAMS` — the three fields a channel declares that the core
+/// models, decoded under a **prefix contract** ([`crate::versions::CHANNEL_ALLOC_PREFIX`]).
+///
+/// # ★★ Why the prefix stops at 32, with a measurement rather than a caveat
+///
+/// This is the one struct in the slice whose tail is **known to have moved**
+/// inside the supported version range:
+///
+/// ```text
+///                              610.43.02          580.159.04 (the bench)
+///   +20  flags                 flags              flags
+///   +24  hContextShare         hContextShare      hContextShare
+///   +28  hVASpace              hVASpace           hVASpace
+///   +32  ————————————————————  hHandleVASpace     hUserdMemory[0]   ★ diverges
+/// ```
+///
+/// `ogkm: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-347` inserts
+/// `hHandleVASpace` after `hVASpace`; `ogkm-580: alloc_channel.h:288-330` has no
+/// such field. A generated 610 mirror would mis-read every field from +32 onward
+/// for the driver this project's bench actually runs
+/// ([`crate::versions::BENCH_DRIVER`] = 580.159.04), so the struct is not
+/// mirrored at all and only the agreeing prefix is read.
+///
+/// # ★ What is NOT here, and why that costs something
+///
+/// `engineType` (`+136` at 580, `+140` at 610 — i.e. past the prefix, in the
+/// divergent region). It is the ONLY thing that distinguishes a GR channel from a
+/// CE channel on the wire: both are `AMPERE_CHANNEL_GPFIFO_A`. The core learns a
+/// channel's engine from `Arch::classify(class)` refined by its engine object
+/// (`kayfabe_core::project`), never from this field — so dropping it costs
+/// nothing *today* and is recorded because it is a declared fact we discard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ChannelAllocFacts {
+    /// `flags` @ +20 — the `NVOS04_FLAGS_*` word. Opaque here: the arch recovers
+    /// the channel's `VChid` from it (`kayfabe_arch::Arch::vchid_from_userd_flags`),
+    /// and this crate does not interpret a single bit of it.
+    pub flags: u32,
+    /// `hContextShare` @ +24. 0 = the channel declares no context share.
+    pub h_ctx_share: u32,
+    /// `hVASpace` @ +28. 0 = the channel declares no VASpace of its own, in which
+    /// case its VAS is resolved through the context share or the parent TSG.
+    pub h_vaspace: u32,
+}
+
 /// Where a page directory lives, from `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS_APERTURE`
 /// (`flags[1:0]`, ogkm `ctrl0080dma.h:812-815`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

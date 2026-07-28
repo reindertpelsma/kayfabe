@@ -18,6 +18,7 @@
 
 use kayfabe_abi::generated::{classes, ctrl, nvos, rpc};
 use kayfabe_abi::transcribed::Nvos46ParametersPre580;
+use kayfabe_abi::versions::{BENCH_DRIVER, table_for};
 use kayfabe_abi::wire::StructLayout;
 
 /// A generated module's two layout tables: the generator's `STRUCTS` and the
@@ -110,11 +111,11 @@ fn the_generators_layout_equals_rustcs_for_every_generated_struct() {
     }
     // Non-vacuity: a green run of a loop that never iterated is a zero nobody
     // re-checks (`testing_doctrine.md` §1).
-    assert_eq!(checked_structs, 11, "the slice is 11 generated structs");
-    // 4+7+11+8+7+7+9 (nvos) + 4+9 (classes) + 7 (ctrl) + 8 (rpc). The first
+    assert_eq!(checked_structs, 13, "the slice is 13 generated structs");
+    // 4+7+11+8+7+7+9 (nvos) + 4+9+5+3 (classes) + 7 (ctrl) + 8 (rpc). The first
     // draft of this line said 66 and the test caught it — which is the point of
     // asserting the count rather than trusting the loop ran.
-    assert_eq!(checked_fields, 81, "…with 81 fields between them");
+    assert_eq!(checked_fields, 89, "…with 89 fields between them");
 }
 
 /// The transcribed layout gets the same treatment. A hand-written table that
@@ -566,6 +567,124 @@ fn class_ids_match_the_headers() {
     assert_eq!(classes::NV01_ROOT, 0x0, "ogkm cl0000.h:42");
     assert_eq!(classes::NV01_ROOT_CLIENT, 0x41, "ogkm nvos.h:185");
     assert_eq!(classes::NV01_DEVICE_0, 0x80, "ogkm cl0080.h:36");
+    // ★ B3's classes — the ones a CUDA process's subgraph is made of. Each id is
+    // read off its own `cl*.h`, and each appears in `kayfabe_mocks::WireClassArch`
+    // and in `DriverAbiTable::alloc_params`; a typo here would classify an object
+    // as `Unknown` and declare no namespace at all, which is why they are pinned
+    // as literals rather than compared to themselves.
+    assert_eq!(classes::FERMI_CONTEXT_SHARE_A, 0x9067, "ogkm cl9067.h:33");
+    assert_eq!(classes::FERMI_VASPACE_A, 0x90f1, "ogkm cl90f1.h:33");
+    assert_eq!(classes::KEPLER_CHANNEL_GROUP_A, 0xa06c, "ogkm cla06c.h:33");
+    assert_eq!(
+        classes::AMPERE_CHANNEL_GPFIFO_A,
+        0xc56f,
+        "ogkm clc56f.h:43 — the ONE channel class; GR vs CE is `engineType`, not this"
+    );
+    assert_eq!(classes::AMPERE_COMPUTE_B, 0xc7c0, "ogkm clc7c0.h:32");
+    assert_eq!(classes::AMPERE_DMA_COPY_B, 0xc7b5, "ogkm clc7b5.h:33");
+}
+
+/// `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS` and `NV_CTXSHARE_ALLOCATION_PARAMETERS`
+/// — the two indirect halves of a channel's VAS resolution — have a **second
+/// oracle**, and it is the 580 tree.
+///
+/// Neither nvproxy nor the C artifact models either struct, so 610 alone would be
+/// single-oracle territory like `NV0000_ALLOC_PARAMETERS`. But
+/// `research_clones/ogkm-580.159.04/src/common/sdk/nvidia/inc/nvos.h:2903-2911`
+/// and `:3232-3237` declare the identical field lists in the identical order —
+/// and 580.159.04 is `BENCH_DRIVER`, i.e. the guest this port is actually aimed
+/// at. Agreement between the two vendored tags is what licenses the whole-struct
+/// decoders (`decode_tsg_alloc_facts` / `decode_ctxshare_alloc_facts`), so it is
+/// asserted here rather than asserted about.
+#[test]
+fn the_tsg_and_ctxshare_params_agree_between_the_two_vendored_trees() {
+    let tsg = &classes::NvChannelGroupAllocationParameters::LAYOUT;
+    assert_eq!(tsg.offset_of("h_object_error"), Some(0));
+    assert_eq!(tsg.offset_of("h_object_ecc_error"), Some(4));
+    assert_eq!(
+        tsg.offset_of("h_va_space"),
+        Some(8),
+        "★ the only field `AllocFacts` reads"
+    );
+    assert_eq!(
+        tsg.offset_of("engine_type"),
+        Some(12),
+        "declared, and dropped: `AllocFacts` has nowhere to put it"
+    );
+    assert_eq!(
+        tsg.offset_of("b_is_calling_context_vgpu_plugin"),
+        Some(16),
+        "NvBool = NvU8"
+    );
+    assert_eq!(tsg.size, 20, "17 bytes rounded up to the 4-byte alignment");
+
+    let cs = &classes::NvCtxshareAllocationParameters::LAYOUT;
+    assert_eq!(
+        cs.offset_of("h_va_space"),
+        Some(0),
+        "★ CtxShare declares its VASpace FIRST, unlike the TSG"
+    );
+    assert_eq!(cs.offset_of("flags"), Some(4));
+    assert_eq!(cs.offset_of("subctx_id"), Some(8));
+    assert_eq!(cs.size, 12);
+}
+
+/// ★★ **`NV_CHANNEL_ALLOC_PARAMS` is not generated, and this test is the reason.**
+///
+/// The two vendored trees **disagree** about it, inside the supported version
+/// range and past the three fields we read:
+///
+/// | off | `ogkm` 610.43.02 | `ogkm-580` 580.159.04 |
+/// |---|---|---|
+/// | +20 | `flags` | `flags` |
+/// | +24 | `hContextShare` | `hContextShare` |
+/// | +28 | `hVASpace` | `hVASpace` |
+/// | +32 | `hHandleVASpace` | `hUserdMemory[0]` |
+///
+/// (`ogkm: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-347` versus
+/// `ogkm-580: .../alloc_channel.h:288-330`.) A generated 610 mirror decoded
+/// against a 580 guest — and 580.159.04 IS [`BENCH_DRIVER`] — would read
+/// `hUserdMemory[0]` as `hHandleVASpace` and every subsequent field one slot
+/// late, including `engineType`. So the prefix stops at the last offset both
+/// trees spell the same way, and this test pins the number so that widening it
+/// has to argue with a second oracle rather than with a comment.
+#[test]
+fn the_channel_alloc_prefix_stops_where_the_two_trees_stop_agreeing() {
+    use kayfabe_abi::versions::CHANNEL_ALLOC_PREFIX;
+    assert_eq!(
+        CHANNEL_ALLOC_PREFIX, 32,
+        "through hVASpace@28 inclusive, and not one byte further"
+    );
+    assert!(
+        !classes::STRUCTS
+            .iter()
+            .any(|l| l.c_name == "NV_CHANNEL_ALLOC_PARAMS"),
+        "★ if someone generates this struct, the version fork above becomes a silent \
+         mis-decode for the bench driver — the absence is the design"
+    );
+
+    // The prefix decodes exactly the three declared fields, from a buffer built
+    // here by hand at the offsets both trees agree on.
+    let t = table_for(BENCH_DRIVER).expect("supported");
+    let mut p = [0u8; 64];
+    p[20..24].copy_from_slice(&0xF105_04A6u32.to_le_bytes()); // flags     @ +20
+    p[24..28].copy_from_slice(&0xC500_0011u32.to_le_bytes()); // hCtxShare @ +24
+    p[28..32].copy_from_slice(&0x7A50_0012u32.to_le_bytes()); // hVASpace  @ +28
+    p[32..36].copy_from_slice(&0xDEAD_BEEFu32.to_le_bytes()); // the divergent slot
+    let f = t.decode_channel_alloc_facts(&p).expect("prefix decodes");
+    assert_eq!(f.flags, 0xF105_04A6);
+    assert_eq!(f.h_ctx_share, 0xC500_0011);
+    assert_eq!(f.h_vaspace, 0x7A50_0012);
+
+    // …and refuses one byte short of the prefix rather than zero-extending it.
+    assert_eq!(
+        t.decode_channel_alloc_facts(&p[..CHANNEL_ALLOC_PREFIX - 1]),
+        Err(kayfabe_abi::wire::AbiError::Truncated {
+            c_name: "NV_CHANNEL_ALLOC_PARAMS",
+            need: 32,
+            got: 31,
+        })
+    );
 }
 
 /// `NV0000_ALLOC_PARAMETERS` — the one struct in the slice with a **single**
@@ -620,6 +739,8 @@ fn every_generated_struct_is_covered_by_an_oracle_assertion() {
         "NVOS64_PARAMETERS",
         "NV0000_ALLOC_PARAMETERS",
         "NV0080_ALLOC_PARAMETERS",
+        "NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS",
+        "NV_CTXSHARE_ALLOCATION_PARAMETERS",
         "NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS",
         "rpc_message_header_v03_00",
     ];

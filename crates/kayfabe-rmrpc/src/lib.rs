@@ -92,15 +92,33 @@
 //! lands: the applying half cannot grow a handle cache without going through
 //! [`translate`], which has nowhere to put one.
 //!
-//! ## Scope of this stage (B1 + B2)
+//! ## Scope of this stage (B1 + B2 + B3)
 //!
-//! `GSP_RM_ALLOC` **of a client root** and `FREE`. Everything else is a named refusal,
-//! including the functions the design maps but whose arms are not built
-//! ([`BridgeRefusal::NotYetTranslated`] — control/dup/continuation) and the classes whose
-//! `AllocFacts` decoders are not built ([`BridgeRefusal::UnmappedAllocClass`]). Those are
-//! deliberately **not** [`BridgeRefusal::UnknownFunction`]: "known and inert", "known and
-//! not yet built" and "not known at all" are three different states, and collapsing them
-//! is how the C ended up answering everything `NV_OK`.
+//! `GSP_RM_ALLOC` and `FREE`. Everything else is a named refusal, including the functions
+//! the design maps but whose arms are not built ([`BridgeRefusal::NotYetTranslated`] —
+//! control/dup/continuation) and the classes with no entry in the class table
+//! ([`BridgeRefusal::UnmappedAllocClass`]). Those are deliberately **not**
+//! [`BridgeRefusal::UnknownFunction`]: "known and inert", "known and not yet built" and
+//! "not known at all" are three different states, and collapsing them is how the C ended
+//! up answering everything `NV_OK`.
+//!
+//! ★ **B3 is the class table** ([`kayfabe_abi::versions::DriverAbiTable::alloc_params`]):
+//! client root, Device, VASpace, TSG, CtxShare, channel, and the two engine objects — the
+//! classes a CUDA process's subgraph is made of. Three things it deliberately does *not*
+//! recover, each because `RmEvent`/`AllocFacts` has nowhere to put it:
+//!
+//! - a channel's **`engineType`**, the only wire fact separating a GR channel from a CE
+//!   channel (they share one `hClass`). The engine reaches the core through the
+//!   engine-object refinement in `kayfabe_core::project` instead.
+//! - a memory object's **`mem_phys`**. `gsp_core_bridge.md` §6 lists it under B3, and it
+//!   is unbuildable *twice over*: `NV_MEMORY_ALLOCATION_PARAMS.offset`/`address` are
+//!   `[OUT]` in the guest→GSP direction (RM picks the address and returns it), and the
+//!   only consumer of `AllocFacts::mem_phys` is `Gpu::sync_rpc_mappings`, driven by
+//!   `RmEvent::MapMemoryDma` — which §2.7 proves has **no producer on this wire at all**.
+//!   A decoder for it would be a field nothing reads, derived from a value the guest has
+//!   not yet been told.
+//! - a **TSG's `engineType`** and a **CtxShare's `subctxId`**, for the same
+//!   nowhere-to-put-it reason.
 //!
 //! ★ Two whole RPCs are **not** on the roadmap because they never reach the wire:
 //! `MAP_MEMORY_DMA`/`UNMAP_MEMORY_DMA` are HAL stubs on every GSP-client part, so
@@ -112,7 +130,7 @@ mod policy;
 
 pub use policy::{GraphPolicy, RefusalCensus};
 
-use kayfabe_abi::versions::DriverAbiTable;
+use kayfabe_abi::versions::{AllocParams, DriverAbiTable};
 use kayfabe_abi::wire::AbiError;
 use kayfabe_abi::{NV_ERR_NOT_SUPPORTED, client_kind_from_process_id, rpc_params_are_serialized};
 use kayfabe_arch::ids::{ClassId, HClient, HObject};
@@ -338,7 +356,35 @@ pub fn translate(abi: &DriverAbiTable, cmd: &RpcCommand) -> Result<Translation, 
     }
 }
 
-/// `GSP_RM_ALLOC` (fn 103) → [`RmEvent::Alloc`], for the client-root classes.
+/// A declared handle field, as [`AllocFacts`] models it: `NV01_NULL_OBJECT` is the
+/// protocol's way of saying *nothing is declared here*, and the core spells that `None`
+/// (`AllocFacts::h_vaspace`: *"`None` models `hVASpace=0` (GSP-managed)"*).
+///
+/// ★ Written once and used by all three VAS-declaring classes, because the alternative —
+/// `Some(HObject(0))` — is a node key the graph would then try to resolve, and a failed
+/// resolve of a handle the guest never declared is a MISS the guest cannot fix. The
+/// difference is DEFER-forever versus correctly-nothing.
+fn declared_handle(handle: u32) -> Option<HObject> {
+    (handle != 0).then_some(HObject(handle))
+}
+
+/// `GSP_RM_ALLOC` (fn 103) → [`RmEvent::Alloc`].
+///
+/// ## The class table
+///
+/// Which params shape a class carries is [`kayfabe_abi::versions::DriverAbiTable::alloc_params`]'s
+/// answer, not this function's: every NVIDIA class *number* stays behind decision #2's
+/// quarantine and this crate names none. An unmapped class is
+/// [`BridgeRefusal::UnmappedAllocClass`] — **not** a silent `AllocFacts::default()`.
+///
+/// ★ That refusal is the deviation from `gsp_core_bridge.md` §2.2b, which sanctions
+/// default facts for a class whose decoder is merely missing on the argument that a
+/// channel with no declared VASpace *hangs at its first doorbell rather than answering
+/// wrongly*. The argument is sound for a channel and **false for the classes above it**:
+/// a Device with no declared `deviceInstance` is unroutable, and a client root with no
+/// declared `client_kind` is a hard `RmGraphError::UndeclaredClientKind` by design. A
+/// blanket default cannot tell those apart, so the default is a refusal and each class
+/// argues its way out of it with a decoder and an offsets assertion behind it.
 ///
 /// ## ★ The client-root normalisation, and why it is required
 ///
@@ -353,6 +399,10 @@ pub fn translate(abi: &DriverAbiTable, cmd: &RpcCommand) -> Result<Translation, 
 /// The fix is **NVIDIA's own rule**, not an invention: in RM the `hClient` *is* its root
 /// object's handle — `serverAllocClient` writes `pParams->hResource = hClient`
 /// (`ogkm: src/nvidia/src/libraries/resserv/src/rs_server.c:625`).
+///
+/// It applies to the client root **and to nothing else**: every other class's `hParent`
+/// and `hObject` are copied verbatim, which is why the normalisation cannot leak into a
+/// class that did not ask for it.
 fn translate_alloc(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation, BridgeRefusal> {
     let h = abi.decode_rpc_alloc(payload)?;
 
@@ -383,39 +433,95 @@ fn translate_alloc(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation, 
     };
 
     let class = ClassId(h.class);
-    if !abi.is_client_root_class(class) {
+    let Some(shape) = abi.alloc_params(class) else {
         return Err(BridgeRefusal::UnmappedAllocClass { class: h.class });
+    };
+
+    // ── The one class whose *edge* is not what the wire says. Handled first and
+    // separately so the normalisation is visibly unreachable from every other arm.
+    if shape == AllocParams::ClientRoot {
+        // The 8-byte prefix contract — `hClient` and `processID`, the only two fields of
+        // `NV0000_ALLOC_PARAMETERS` with more than one oracle. See `ClientAllocFacts`.
+        let facts = abi.decode_client_alloc_facts(params)?;
+        if facts.h_client != h.client {
+            return Err(BridgeRefusal::ClientHandleDisagrees {
+                header: h.client,
+                params: facts.h_client,
+            });
+        }
+        let root = HObject(h.client);
+        return Ok(Translation::Event(RmEvent::Alloc {
+            client,
+            parent: root,
+            handle: root,
+            class,
+            facts: AllocFacts {
+                // ★ The one genuinely guest-OS-shaped value in the whole bridge. The
+                // `KERNEL_PID` sentinel branch that produces it is gated on
+                // `RMCFG_FEATURE_PLATFORM_UNIX` (`ogkm: rpc.h:67-77`), so on a non-UNIX
+                // guest a kernel-privileged client declares a *real* pid and this
+                // classification would be wrong in the direction that folds a guest
+                // process into the guest kernel's isolate. The seam is already the right
+                // shape — one total function of one declared field — so the fix is a
+                // **guest-OS profile** selected at realize beside the ABI table, never an
+                // `if` here. Nothing else in this crate is OS-aware.
+                // (`gsp_core_bridge.md` §1.5.)
+                client_kind: Some(client_kind_from_process_id(facts.process_id)),
+                ..Default::default()
+            },
+        }));
     }
 
-    // The 8-byte prefix contract — `hClient` and `processID`, the only two fields of
-    // `NV0000_ALLOC_PARAMETERS` with more than one oracle. See `ClientAllocFacts`.
-    let facts = abi.decode_client_alloc_facts(params)?;
-    if facts.h_client != h.client {
-        return Err(BridgeRefusal::ClientHandleDisagrees {
-            header: h.client,
-            params: facts.h_client,
-        });
-    }
-
-    let root = HObject(h.client);
-    Ok(Translation::Event(RmEvent::Alloc {
-        client,
-        parent: root,
-        handle: root,
-        class,
-        facts: AllocFacts {
-            // ★ The one genuinely guest-OS-shaped value in the whole bridge. The
-            // `KERNEL_PID` sentinel branch that produces it is gated on
-            // `RMCFG_FEATURE_PLATFORM_UNIX` (`ogkm: rpc.h:67-77`), so on a non-UNIX guest
-            // a kernel-privileged client declares a *real* pid and this classification
-            // would be wrong in the direction that folds a guest process into the guest
-            // kernel's isolate. The seam is already the right shape — one total function
-            // of one declared field — so the fix is a **guest-OS profile** selected at
-            // realize beside the ABI table, never an `if` here. Nothing else in this
-            // crate is OS-aware. (`gsp_core_bridge.md` §1.5.)
-            client_kind: Some(client_kind_from_process_id(facts.process_id)),
+    let facts = match shape {
+        // Unreachable: handled above, and left as an explicit arm rather than a `_` so a
+        // future shape cannot join this match by accident.
+        AllocParams::ClientRoot => {
+            return Err(BridgeRefusal::UnmappedAllocClass { class: h.class });
+        }
+        AllocParams::Device => AllocFacts {
+            // ★ Required, not optional. `deviceId` is a mandatory field of
+            // `NV0080_ALLOC_PARAMETERS`, so a real Device always declares one, and the
+            // core refuses to route an object whose Device ancestor declared none rather
+            // than defaulting it to GPU 0 (`RmGraph::gpu_of`).
+            device_instance: Some(abi.decode_device_alloc_facts(params)?.device_id),
             ..Default::default()
         },
+        AllocParams::Tsg => AllocFacts {
+            h_vaspace: declared_handle(abi.decode_tsg_alloc_facts(params)?.h_vaspace),
+            ..Default::default()
+        },
+        AllocParams::CtxShare => AllocFacts {
+            h_vaspace: declared_handle(abi.decode_ctxshare_alloc_facts(params)?.h_vaspace),
+            ..Default::default()
+        },
+        AllocParams::Channel => {
+            let c = abi.decode_channel_alloc_facts(params)?;
+            AllocFacts {
+                h_vaspace: declared_handle(c.h_vaspace),
+                h_ctx_share: declared_handle(c.h_ctx_share),
+                // ★ Copied verbatim and interpreted by nobody here. `Arch::vchid_from_userd_flags`
+                // is the only thing that reads it, which is the seam that has to move when
+                // a real arch replaces the mock — `gsp_core_bridge.md` §6 names "that the
+                // `userd_flags`→`VChid` recovery matches real silicon" as precisely what
+                // this stage cannot prove.
+                userd_flags: c.flags,
+                ..Default::default()
+            }
+        }
+        // A mapped class that declares nothing: its params are never read, so a hostile
+        // one is bytes we do not look at. The `paramsSize` bound above still applied.
+        AllocParams::NoDeclaredFacts => AllocFacts::default(),
+    };
+
+    Ok(Translation::Event(RmEvent::Alloc {
+        client,
+        // ★ Verbatim. The namespace is the header's `hClient` (read once, at the top);
+        // the edge is the header's own `hParent`/`hObject`. No params field may name
+        // either — that would be the C's `GPU_PROMOTE_CTX` substitution.
+        parent: HObject(h.parent),
+        handle: HObject(h.handle),
+        class,
+        facts,
     }))
 }
 

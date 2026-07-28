@@ -9,12 +9,35 @@
 // is rustc's, via `offset_of!`. The `const` block after each struct asserts they
 // agree, so a layout bug is a BUILD failure, not a runtime surprise.
 
-//! The two alloc-param structs the core's `AllocFacts` actually reads today.
+//! The alloc-param structs the core's `AllocFacts` actually reads, and the class IDs
+//! that select them.
 //!
 //! - `NV0000_ALLOC_PARAMETERS` (`NV01_ROOT`) carries `processID`, the decision-#14
 //!   client-kind discriminator (`l1_concurrency.md` §12.27).
 //! - `NV0080_ALLOC_PARAMETERS` (`NV01_DEVICE_0`) carries `deviceId`, the multi-GPU
 //!   routing fact (`multi_gpu_and_mig.md`).
+//! - `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS` (`KEPLER_CHANNEL_GROUP_A`) and
+//!   `NV_CTXSHARE_ALLOCATION_PARAMETERS` (`FERMI_CONTEXT_SHARE_A`) each carry an
+//!   `hVASpace`, the two indirect halves of a channel's VAS resolution
+//!   (`kayfabe_core::project::resolve_channel_vas`: own handle -> CtxShare's ->
+//!   parent TSG's).
+//!
+//! ★★ `NV_CHANNEL_ALLOC_PARAMS` (`AMPERE_CHANNEL_GPFIFO_A`) is DELIBERATELY NOT
+//! generated here, and the reason is a measured version divergence rather than a
+//! generator limitation. At 610.43.02 the struct carries `hHandleVASpace` at +32,
+//! inserted directly after `hVASpace`; at 580.159.04 — the driver this project's
+//! bench actually runs (`versions::BENCH_DRIVER`) — that field does not exist and
+//! `hUserdMemory[]` starts at +32 instead (`ogkm: alloc_channel.h:296-347` vs
+//! `ogkm-580: alloc_channel.h:288-330`). A generated 610 mirror would therefore
+//! mis-read EVERY field from +32 onward for the guest we run. The three fields
+//! `AllocFacts` needs (`flags` @20, `hContextShare` @24, `hVASpace` @28) are
+//! byte-identical in both trees, so `versions::CHANNEL_ALLOC_PREFIX` decodes exactly
+//! that prefix — the same contract, and for the same kind of reason, as
+//! `CLIENT_ALLOC_PREFIX`.
+//!
+//! A class whose alloc params carry nothing `AllocFacts` models
+//! (`FERMI_VASPACE_A`, the engine objects) gets a class ID here and no struct: the
+//! ID is the consumer, and mirroring params nothing reads would be breadth.
 //!
 //! Every other class's alloc params is deferred: the class table is its own
 //! milestone and a half-populated one is worse than none, because a missing entry
@@ -39,6 +62,54 @@ pub const NV01_ROOT_CLIENT: u32 = 0x41;
 ///
 /// ogkm `src/common/sdk/nvidia/inc/class/cl0080.h`.
 pub const NV01_DEVICE_0: u32 = 0x80;
+
+/// `FERMI_VASPACE_A` — the VASpace class. Its alloc params
+/// (`NV_VASPACE_ALLOCATION_PARAMETERS`: `index`, `flags`, `vaSize`, `vaBase`,
+/// `pasid`) carry NOTHING `AllocFacts` models, so no struct is mirrored for it —
+/// the VAS's data-plane identity arrives later, on
+/// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/cl90f1.h`.
+pub const FERMI_VASPACE_A: u32 = 0x90f1;
+
+/// `KEPLER_CHANNEL_GROUP_A` — the TSG class; its alloc params are
+/// [`NvChannelGroupAllocationParameters`] and declare the VASpace every channel in
+/// the group inherits.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/cla06c.h`.
+pub const KEPLER_CHANNEL_GROUP_A: u32 = 0xa06c;
+
+/// `FERMI_CONTEXT_SHARE_A` — the CtxShare (subcontext) class; its alloc
+/// params are [`NvCtxshareAllocationParameters`] and declare a VASpace a channel
+/// can reach indirectly.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/cl9067.h`.
+pub const FERMI_CONTEXT_SHARE_A: u32 = 0x9067;
+
+/// `AMPERE_CHANNEL_GPFIFO_A` — the GPFIFO channel class on GA10x.
+///
+/// ★ There is exactly ONE channel class per architecture: a GR channel and a CE
+/// channel are the SAME `hClass` and differ only by `NV_CHANNEL_ALLOC_PARAMS.
+/// engineType`, which `kayfabe_core::rmgraph::RmEvent::Alloc` has nowhere to put.
+/// The engine therefore reaches the core only through the engine-object refinement
+/// (`kayfabe_core::project`), never through the class ID.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/clc56f.h`.
+pub const AMPERE_CHANNEL_GPFIFO_A: u32 = 0xc56f;
+
+/// `AMPERE_COMPUTE_B` — the compute engine object a CUDA process allocates
+/// on its GR channel. Declares no `AllocFacts`; its whole protocol content is the
+/// edge (channel -> engine object) that refines the channel's `EngineKind`.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/clc7c0.h`.
+pub const AMPERE_COMPUTE_B: u32 = 0xc7c0;
+
+/// `AMPERE_DMA_COPY_B` — the copy-engine object on a CE channel. Same shape
+/// as [`AMPERE_COMPUTE_B`]: no declared facts, and the only thing that tells the
+/// core this channel is a CE channel at all.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/clc7b5.h`.
+pub const AMPERE_DMA_COPY_B: u32 = 0xc7b5;
 
 /// `NV0000_ALLOC_PARAMETERS` — ogkm `src/common/sdk/nvidia/inc/class/cl0000.h:47`.
 #[repr(C)]
@@ -537,11 +608,389 @@ const _: () = {
     assert!(core::mem::offset_of!(Nv0080AllocParameters, va_mode) == 48);
 };
 
+/// `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS` — ogkm `src/common/sdk/nvidia/inc/nvos.h:2900`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct NvChannelGroupAllocationParameters {
+    /// `NvHandle hObjectError` @ +0 (src/common/sdk/nvidia/inc/nvos.h:2902).
+    pub h_object_error: u32,
+    /// `NvHandle hObjectEccError` @ +4 (src/common/sdk/nvidia/inc/nvos.h:2903).
+    pub h_object_ecc_error: u32,
+    /// `NvHandle hVASpace` @ +8 (src/common/sdk/nvidia/inc/nvos.h:2904).
+    pub h_va_space: u32,
+    /// `NvU32 engineType` @ +12 (src/common/sdk/nvidia/inc/nvos.h:2905).
+    pub engine_type: u32,
+    /// `NvBool bIsCallingContextVgpuPlugin` @ +16 (src/common/sdk/nvidia/inc/nvos.h:2906).
+    pub b_is_calling_context_vgpu_plugin: u8,
+}
+
+impl NvChannelGroupAllocationParameters {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS";
+    /// `sizeof(NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 20;
+    /// `alignof(NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS)`.
+    pub const ALIGN: usize = 4;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS",
+        size: 20,
+        align: 4,
+        fields: &[
+            Field {
+                c_name: "hObjectError",
+                rust_name: "h_object_error",
+                offset: 0,
+                width: 4,
+            },
+            Field {
+                c_name: "hObjectEccError",
+                rust_name: "h_object_ecc_error",
+                offset: 4,
+                width: 4,
+            },
+            Field {
+                c_name: "hVASpace",
+                rust_name: "h_va_space",
+                offset: 8,
+                width: 4,
+            },
+            Field {
+                c_name: "engineType",
+                rust_name: "engine_type",
+                offset: 12,
+                width: 4,
+            },
+            Field {
+                c_name: "bIsCallingContextVgpuPlugin",
+                rust_name: "b_is_calling_context_vgpu_plugin",
+                offset: 16,
+                width: 1,
+            },
+        ],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[
+        (
+            "h_object_error",
+            core::mem::offset_of!(NvChannelGroupAllocationParameters, h_object_error),
+        ),
+        (
+            "h_object_ecc_error",
+            core::mem::offset_of!(NvChannelGroupAllocationParameters, h_object_ecc_error),
+        ),
+        (
+            "h_va_space",
+            core::mem::offset_of!(NvChannelGroupAllocationParameters, h_va_space),
+        ),
+        (
+            "engine_type",
+            core::mem::offset_of!(NvChannelGroupAllocationParameters, engine_type),
+        ),
+        (
+            "b_is_calling_context_vgpu_plugin",
+            core::mem::offset_of!(
+                NvChannelGroupAllocationParameters,
+                b_is_calling_context_vgpu_plugin
+            ),
+        ),
+    ];
+
+    /// Decode from a little-endian byte image of `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            h_object_error: u32_at(bytes, 0)?,
+            h_object_ecc_error: u32_at(bytes, 4)?,
+            h_va_space: u32_at(bytes, 8)?,
+            engine_type: u32_at(bytes, 12)?,
+            b_is_calling_context_vgpu_plugin: u8_at(bytes, 16)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.h_object_error.to_le_bytes();
+            bytes
+                .get_mut(0..4)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.h_object_ecc_error.to_le_bytes();
+            bytes
+                .get_mut(4..8)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.h_va_space.to_le_bytes();
+            bytes
+                .get_mut(8..12)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.engine_type.to_le_bytes();
+            bytes
+                .get_mut(12..16)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.b_is_calling_context_vgpu_plugin.to_le_bytes();
+            bytes
+                .get_mut(16..17)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(
+        core::mem::size_of::<NvChannelGroupAllocationParameters>()
+            == NvChannelGroupAllocationParameters::SIZE
+    );
+    assert!(
+        core::mem::align_of::<NvChannelGroupAllocationParameters>()
+            == NvChannelGroupAllocationParameters::ALIGN
+    );
+    assert!(core::mem::offset_of!(NvChannelGroupAllocationParameters, h_object_error) == 0);
+    assert!(core::mem::offset_of!(NvChannelGroupAllocationParameters, h_object_ecc_error) == 4);
+    assert!(core::mem::offset_of!(NvChannelGroupAllocationParameters, h_va_space) == 8);
+    assert!(core::mem::offset_of!(NvChannelGroupAllocationParameters, engine_type) == 12);
+    assert!(
+        core::mem::offset_of!(
+            NvChannelGroupAllocationParameters,
+            b_is_calling_context_vgpu_plugin
+        ) == 16
+    );
+};
+
+/// `NV_CTXSHARE_ALLOCATION_PARAMETERS` — ogkm `src/common/sdk/nvidia/inc/nvos.h:3223`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct NvCtxshareAllocationParameters {
+    /// `NvHandle hVASpace` @ +0 (src/common/sdk/nvidia/inc/nvos.h:3225).
+    pub h_va_space: u32,
+    /// `NvU32 flags` @ +4 (src/common/sdk/nvidia/inc/nvos.h:3226).
+    pub flags: u32,
+    /// `NvU32 subctxId` @ +8 (src/common/sdk/nvidia/inc/nvos.h:3227).
+    pub subctx_id: u32,
+}
+
+impl NvCtxshareAllocationParameters {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV_CTXSHARE_ALLOCATION_PARAMETERS";
+    /// `sizeof(NV_CTXSHARE_ALLOCATION_PARAMETERS)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 12;
+    /// `alignof(NV_CTXSHARE_ALLOCATION_PARAMETERS)`.
+    pub const ALIGN: usize = 4;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "NV_CTXSHARE_ALLOCATION_PARAMETERS",
+        size: 12,
+        align: 4,
+        fields: &[
+            Field {
+                c_name: "hVASpace",
+                rust_name: "h_va_space",
+                offset: 0,
+                width: 4,
+            },
+            Field {
+                c_name: "flags",
+                rust_name: "flags",
+                offset: 4,
+                width: 4,
+            },
+            Field {
+                c_name: "subctxId",
+                rust_name: "subctx_id",
+                offset: 8,
+                width: 4,
+            },
+        ],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[
+        (
+            "h_va_space",
+            core::mem::offset_of!(NvCtxshareAllocationParameters, h_va_space),
+        ),
+        (
+            "flags",
+            core::mem::offset_of!(NvCtxshareAllocationParameters, flags),
+        ),
+        (
+            "subctx_id",
+            core::mem::offset_of!(NvCtxshareAllocationParameters, subctx_id),
+        ),
+    ];
+
+    /// Decode from a little-endian byte image of `NV_CTXSHARE_ALLOCATION_PARAMETERS`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            h_va_space: u32_at(bytes, 0)?,
+            flags: u32_at(bytes, 4)?,
+            subctx_id: u32_at(bytes, 8)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.h_va_space.to_le_bytes();
+            bytes
+                .get_mut(0..4)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.flags.to_le_bytes();
+            bytes
+                .get_mut(4..8)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.subctx_id.to_le_bytes();
+            bytes
+                .get_mut(8..12)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(
+        core::mem::size_of::<NvCtxshareAllocationParameters>()
+            == NvCtxshareAllocationParameters::SIZE
+    );
+    assert!(
+        core::mem::align_of::<NvCtxshareAllocationParameters>()
+            == NvCtxshareAllocationParameters::ALIGN
+    );
+    assert!(core::mem::offset_of!(NvCtxshareAllocationParameters, h_va_space) == 0);
+    assert!(core::mem::offset_of!(NvCtxshareAllocationParameters, flags) == 4);
+    assert!(core::mem::offset_of!(NvCtxshareAllocationParameters, subctx_id) == 8);
+};
+
 /// Every struct this module generates, in declaration order — the enumerated-vs-
 /// exercised coverage surface (`mode2_abi_agnostic_layer.md` §2.3, rule 2).
 pub const STRUCTS: &[&StructLayout] = &[
     &Nv0000AllocParameters::LAYOUT,
     &Nv0080AllocParameters::LAYOUT,
+    &NvChannelGroupAllocationParameters::LAYOUT,
+    &NvCtxshareAllocationParameters::LAYOUT,
 ];
 
 /// The generator-computed offsets paired with rustc's own, per struct. The
@@ -555,5 +1004,13 @@ pub const RUSTC_OFFSETS: &[(&str, &[(&str, usize)])] = &[
     (
         "NV0080_ALLOC_PARAMETERS",
         Nv0080AllocParameters::RUSTC_OFFSETS,
+    ),
+    (
+        "NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS",
+        NvChannelGroupAllocationParameters::RUSTC_OFFSETS,
+    ),
+    (
+        "NV_CTXSHARE_ALLOCATION_PARAMETERS",
+        NvCtxshareAllocationParameters::RUSTC_OFFSETS,
     ),
 ];

@@ -244,17 +244,42 @@ impl Arch for WireClassArch {
         self.0.name()
     }
 
-    /// NVIDIA's real client-root and Device ids first, then [`MockArch`]'s plan.
+    /// NVIDIA's real ids first, then [`MockArch`]'s plan.
     ///
     /// The constants are `kayfabe-abi`'s (decision #2's quarantine: every NVIDIA value
     /// lives there, once). `NV01_ROOT` and `NV01_ROOT_CLIENT` are **one resource kind** —
     /// RM's own `is_client_root_class` says so — which is why both map to
     /// [`ObjectKind::Client`] rather than the newer spelling getting an arm of its own.
+    ///
+    /// ## ★★ The channel arm is where a real `Arch` runs out of information
+    ///
+    /// There is exactly ONE GPFIFO channel class per architecture. A CUDA process's GR
+    /// channel and its CE channel are both `AMPERE_CHANNEL_GPFIFO_A`, and what separates
+    /// them is `NV_CHANNEL_ALLOC_PARAMS.engineType` — a *params* fact, which
+    /// `kayfabe_core::rmgraph::RmEvent::Alloc` has nowhere to carry. So `classify` cannot
+    /// answer it, and does not pretend to: the class maps to
+    /// [`EngineKind::GrCompute`] and the CE channel becomes a CE channel only when its
+    /// `AMPERE_DMA_COPY_B` engine object arrives and `kayfabe_core::project`'s refinement
+    /// pass rewrites it. That is [`MockArch`]'s documented behaviour too (*"a GR-class
+    /// channel is GrCompute until an engine object refines it"*) — the mock was right
+    /// about the shape before the wire ids showed up to confirm it.
     fn classify(&self, class: ClassId) -> ObjectKind {
         use kayfabe_abi::generated::classes as nv;
         match class.0 {
             nv::NV01_ROOT | nv::NV01_ROOT_CLIENT => ObjectKind::Client,
             nv::NV01_DEVICE_0 => ObjectKind::Device,
+            nv::FERMI_VASPACE_A => ObjectKind::VaSpace,
+            nv::KEPLER_CHANNEL_GROUP_A => ObjectKind::Tsg,
+            nv::FERMI_CONTEXT_SHARE_A => ObjectKind::CtxShare,
+            nv::AMPERE_CHANNEL_GPFIFO_A => ObjectKind::Channel {
+                engine: EngineKind::GrCompute,
+            },
+            nv::AMPERE_COMPUTE_B => ObjectKind::EngineObject {
+                engine: EngineKind::GrCompute,
+            },
+            nv::AMPERE_DMA_COPY_B => ObjectKind::EngineObject {
+                engine: EngineKind::Ce,
+            },
             _ => self.0.classify(class),
         }
     }

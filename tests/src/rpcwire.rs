@@ -156,6 +156,129 @@ pub fn client_root_params(h_client: u32, process_id: u32) -> Vec<u8> {
     client_root_params_sized(h_client, process_id, 8)
 }
 
+/// Write a little-endian `u64` at `off`.
+fn put64(buf: &mut [u8], off: usize, v: u64) {
+    buf[off..off + 8].copy_from_slice(&v.to_le_bytes());
+}
+
+/// `NV0080_ALLOC_PARAMETERS` — the Device class's params, all 56 bytes.
+///
+/// `[src]` `ogkm: src/common/sdk/nvidia/inc/class/cl0080.h:47-56`, transcribed field by
+/// field with the `NV_DECLARE_ALIGNED(…, 8)` padding written out:
+///
+/// ```text
+/// NvU32    deviceId;          // +0   ★ the multi-GPU routing fact
+/// NvHandle hClientShare;      // +4
+/// NvHandle hTargetClient;     // +8
+/// NvHandle hTargetDevice;     // +12
+/// NvV32    flags;             // +16
+///                             // +20  4 bytes of padding to the 8-aligned u64
+/// NvU64    vaSpaceSize;       // +24
+/// NvU64    vaStartInternal;   // +32
+/// NvU64    vaLimitInternal;   // +40
+/// NvV32    vaMode;            // +48
+///                             // +52  4 bytes of tail padding => sizeof == 56
+/// ```
+///
+/// The non-`deviceId` fields are settable so a test can prove that moving one of them
+/// does **not** move the fact the bridge reads.
+#[must_use]
+pub fn device_params(device_id: u32, h_client_share: u32, va_mode: u32) -> Vec<u8> {
+    let mut p = vec![0u8; 56];
+    put32(&mut p, 0, device_id);
+    put32(&mut p, 4, h_client_share);
+    // +8 hTargetClient, +12 hTargetDevice, +16 flags, +20 pad
+    put64(&mut p, 24, 0);
+    put64(&mut p, 32, 0);
+    put64(&mut p, 40, 0);
+    put32(&mut p, 48, va_mode);
+    p
+}
+
+/// `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS` — the TSG's params, 20 bytes.
+///
+/// `[src]` `ogkm: src/common/sdk/nvidia/inc/nvos.h:2899-2906`, and — the point of writing
+/// it out twice — `ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2903-2911` is character for
+/// character the same list:
+///
+/// ```text
+/// NvHandle hObjectError;                  // +0
+/// NvHandle hObjectEccError;               // +4
+/// NvHandle hVASpace;                      // +8   ★ the fact
+/// NvU32    engineType;                    // +12  declared, and dropped
+/// NvBool   bIsCallingContextVgpuPlugin;   // +16  (NvU8)
+///                                         // +17  3 bytes of tail padding => 20
+/// ```
+#[must_use]
+pub fn tsg_params(h_vaspace: u32, engine_type: u32) -> Vec<u8> {
+    let mut p = vec![0u8; 20];
+    put32(&mut p, 0, 0); // hObjectError
+    put32(&mut p, 4, 0); // hObjectEccError
+    put32(&mut p, 8, h_vaspace);
+    put32(&mut p, 12, engine_type);
+    p[16] = 0; // bIsCallingContextVgpuPlugin
+    p
+}
+
+/// `NV_CTXSHARE_ALLOCATION_PARAMETERS` — 12 bytes, and note `hVASpace` is **first** here
+/// and **third** in the TSG. Getting the two the same way round is the bug this layout
+/// invites.
+///
+/// `[src]` `ogkm: nvos.h:3223-3228`, `ogkm-580: nvos.h:3232-3237` (identical):
+///
+/// ```text
+/// NvHandle hVASpace;   // +0   ★ the fact
+/// NvU32    flags;      // +4
+/// NvU32    subctxId;   // +8
+/// ```
+#[must_use]
+pub fn ctxshare_params(h_vaspace: u32, flags: u32, subctx_id: u32) -> Vec<u8> {
+    let mut p = vec![0u8; 12];
+    put32(&mut p, 0, h_vaspace);
+    put32(&mut p, 4, flags);
+    put32(&mut p, 8, subctx_id);
+    p
+}
+
+/// `NV_CHANNEL_ALLOC_PARAMS` — a channel's params, emitted at the **580** length.
+///
+/// `[src]` `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:288-330`, which is
+/// the tree matching this project's bench driver:
+///
+/// ```text
+/// NvHandle hObjectError;      // +0
+/// NvHandle hObjectBuffer;     // +4
+///                             // +8   (NvU64 gpFifoOffset, 8-aligned — already is)
+/// NvU64    gpFifoOffset;      // +8
+/// NvU32    gpFifoEntries;     // +16
+/// NvU32    flags;             // +20  ★ the opaque USERD/flags word
+/// NvHandle hContextShare;     // +24  ★
+/// NvHandle hVASpace;          // +28  ★
+/// NvHandle hUserdMemory[8];   // +32  ── 610 puts `hHandleVASpace` HERE instead ──
+/// ```
+///
+/// ★★ The builder stops caring at +32 on purpose: everything past it is exactly the
+/// region the two vendored trees disagree about, so a fixture that asserted anything
+/// there would be asserting one tree's opinion. `total` lets a test choose how long the
+/// message claims to be — a real guest sends `sizeof`, which differs *between the two
+/// trees* and is therefore not something this file is entitled to state.
+#[must_use]
+pub fn channel_params_sized(flags: u32, h_ctx_share: u32, h_vaspace: u32, total: usize) -> Vec<u8> {
+    let mut p = vec![0u8; total.max(32)];
+    put32(&mut p, 20, flags);
+    put32(&mut p, 24, h_ctx_share);
+    put32(&mut p, 28, h_vaspace);
+    p.truncate(total);
+    p
+}
+
+/// [`channel_params_sized`] at the agreed prefix — the shortest params a channel can
+/// declare and still be decodable.
+#[must_use]
+pub fn channel_params(flags: u32, h_ctx_share: u32, h_vaspace: u32) -> Vec<u8> {
+    channel_params_sized(flags, h_ctx_share, h_vaspace, 32)
+}
+
 /// `rpc_free_v03_00` — which *is* `NVOS00_PARAMETERS_v03_00`
 /// (`ogkm: g_rpc-structures.h:162-167`), i.e. no wrapper and no header of its own:
 ///
@@ -204,8 +327,43 @@ pub const NV01_ROOT: u32 = 0x0;
 /// (`ogkm: src/nvidia/generated/g_allclasses.h:289`).
 pub const NV01_ROOT_CLIENT: u32 = 0x41;
 
-/// `NV01_DEVICE_0` — a non-root class, for the "this is not a client root" arms.
+/// `NV01_DEVICE_0` — the Device class (`ogkm: cl0080.h:36`).
 pub const NV01_DEVICE_0: u32 = 0x80;
+
+/// `FERMI_VASPACE_A` — the VASpace class (`ogkm: cl90f1.h:33`).
+pub const FERMI_VASPACE_A: u32 = 0x90f1;
+
+/// `KEPLER_CHANNEL_GROUP_A` — the TSG class (`ogkm: cla06c.h:33`).
+pub const KEPLER_CHANNEL_GROUP_A: u32 = 0xa06c;
+
+/// `FERMI_CONTEXT_SHARE_A` — the subcontext class (`ogkm: cl9067.h:33`).
+pub const FERMI_CONTEXT_SHARE_A: u32 = 0x9067;
+
+/// `AMPERE_CHANNEL_GPFIFO_A` — the GA10x GPFIFO channel class (`ogkm: clc56f.h:43`).
+///
+/// ★ There is only one. A CUDA process's GR channel and its CE channel are both this
+/// `hClass`; `NV_CHANNEL_ALLOC_PARAMS.engineType` is the difference, and it lives past
+/// the prefix the bridge reads and has nowhere to go in `RmEvent` anyway.
+pub const AMPERE_CHANNEL_GPFIFO_A: u32 = 0xc56f;
+
+/// `AMPERE_COMPUTE_B` — the compute engine object (`ogkm: clc7c0.h:32`).
+pub const AMPERE_COMPUTE_B: u32 = 0xc7c0;
+
+/// `AMPERE_DMA_COPY_B` — the copy-engine object (`ogkm: clc7b5.h:33`).
+pub const AMPERE_DMA_COPY_B: u32 = 0xc7b5;
+
+/// `NV01_MEMORY_SYSTEM` (`ogkm: src/common/sdk/nvidia/inc/class/cl003e.h:33`) — a real
+/// class that this port **does not map**, used wherever a test needs one.
+///
+/// ★ It is the honest choice rather than an invented id, and the reason is a finding
+/// rather than convenience: `gsp_core_bridge.md` §6 lists *Memory (`mem_phys`)* as part
+/// of stage B3, and it is not buildable. `NV_MEMORY_ALLOCATION_PARAMS.offset`/`address`
+/// are `[OUT]` in the guest→GSP direction — RM picks the address and reports it back — so
+/// the request carries no physical backing to decode; and the only consumer of
+/// `AllocFacts::mem_phys` is the RPC-mapping sync, driven by `RmEvent::MapMemoryDma`,
+/// which §2.7 shows never reaches this wire at all. So a memory alloc is refused by name,
+/// and that refusal is the record of both facts.
+pub const NV01_MEMORY_SYSTEM: u32 = 0x3e;
 
 /// `KERNEL_PID` — the `processID` a kernel-privileged client declares
 /// (`ogkm: rpc.h:67-71`).
@@ -265,6 +423,130 @@ impl RpcScript {
     /// A `FREE` shaped the way `rpcRmApiFree_GSP` shapes one — see [`driver_free_body`].
     pub fn free(&mut self, h_client: u32, h_object: u32) -> &mut RpcScript {
         self.raw(fn_id::FREE, driver_free_body(h_client, h_object))
+    }
+
+    /// A `GSP_RM_ALLOC` of any class, with `paramsSize` taken from the params actually
+    /// carried — i.e. a **conforming** guest. A test that wants the guest to lie about
+    /// its own size builds the body with [`alloc_body`] and posts it through [`Self::raw`].
+    pub fn alloc(
+        &mut self,
+        h_client: u32,
+        h_parent: u32,
+        h_object: u32,
+        h_class: u32,
+        params: &[u8],
+    ) -> &mut RpcScript {
+        self.raw(
+            fn_id::GSP_RM_ALLOC,
+            alloc_body(
+                h_client,
+                h_parent,
+                h_object,
+                h_class,
+                params.len() as u32,
+                RMAPI_RPC_FLAGS_NONE,
+                params,
+            ),
+        )
+    }
+
+    /// A `NV01_DEVICE_0` alloc declaring physical-GPU index `device_id`.
+    pub fn device(
+        &mut self,
+        h_client: u32,
+        h_parent: u32,
+        h_object: u32,
+        device_id: u32,
+    ) -> &mut RpcScript {
+        self.alloc(
+            h_client,
+            h_parent,
+            h_object,
+            NV01_DEVICE_0,
+            &device_params(device_id, 0, 0),
+        )
+    }
+
+    /// A `FERMI_VASPACE_A` alloc.
+    ///
+    /// `NV_VASPACE_ALLOCATION_PARAMETERS` is 56 bytes of geometry (`index`, `flags`,
+    /// `vaSize`, `vaStartInternal`, `vaLimitInternal`, `bigPageSize`, `vaBase`, `pasid` —
+    /// `ogkm: nvos.h:3145-3156`) and **not one field of it** is something the object model
+    /// models, so the script sends a plausibly-sized params the bridge never reads. The
+    /// VAS's data-plane identity arrives later, on `SET_PAGE_DIRECTORY`.
+    pub fn vaspace(&mut self, h_client: u32, h_parent: u32, h_object: u32) -> &mut RpcScript {
+        self.alloc(h_client, h_parent, h_object, FERMI_VASPACE_A, &[0u8; 56])
+    }
+
+    /// A `KEPLER_CHANNEL_GROUP_A` (TSG) alloc declaring `h_vaspace`.
+    pub fn tsg(
+        &mut self,
+        h_client: u32,
+        h_parent: u32,
+        h_object: u32,
+        h_vaspace: u32,
+    ) -> &mut RpcScript {
+        self.alloc(
+            h_client,
+            h_parent,
+            h_object,
+            KEPLER_CHANNEL_GROUP_A,
+            &tsg_params(h_vaspace, 0),
+        )
+    }
+
+    /// A `FERMI_CONTEXT_SHARE_A` alloc declaring `h_vaspace`.
+    pub fn ctxshare(
+        &mut self,
+        h_client: u32,
+        h_parent: u32,
+        h_object: u32,
+        h_vaspace: u32,
+    ) -> &mut RpcScript {
+        self.alloc(
+            h_client,
+            h_parent,
+            h_object,
+            FERMI_CONTEXT_SHARE_A,
+            &ctxshare_params(h_vaspace, 0, 0),
+        )
+    }
+
+    /// An `AMPERE_CHANNEL_GPFIFO_A` alloc — the only channel class there is.
+    ///
+    /// `flags` is the opaque `NVOS04_FLAGS_*` word; nothing in the bridge interprets it,
+    /// and the arch is what turns it into a `VChid`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn channel(
+        &mut self,
+        h_client: u32,
+        h_parent: u32,
+        h_object: u32,
+        flags: u32,
+        h_ctx_share: u32,
+        h_vaspace: u32,
+    ) -> &mut RpcScript {
+        self.alloc(
+            h_client,
+            h_parent,
+            h_object,
+            AMPERE_CHANNEL_GPFIFO_A,
+            &channel_params(flags, h_ctx_share, h_vaspace),
+        )
+    }
+
+    /// An engine object (`AMPERE_COMPUTE_B` / `AMPERE_DMA_COPY_B`) on a channel.
+    ///
+    /// Its params declare nothing; the protocol content is the edge, and the edge is what
+    /// tells the core which engine the parent channel belongs to.
+    pub fn engine_object(
+        &mut self,
+        h_client: u32,
+        h_channel: u32,
+        h_object: u32,
+        h_class: u32,
+    ) -> &mut RpcScript {
+        self.alloc(h_client, h_channel, h_object, h_class, &[0u8; 8])
     }
 
     /// Any function and any body, including a hostile one.
