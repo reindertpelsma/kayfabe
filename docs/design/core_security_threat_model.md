@@ -241,16 +241,29 @@ Audit of every resolution site (grep `origin_of`/`resolve*`/`backing_of`/`node`)
 
 | Site | Turns handle into | Type-checked via |
 | --- | --- | --- |
-| `project::resolve_vaspace_handle` | a VASpace (channel `hVASpace`) | `origin_of_kind(_, VaSpace)` |
-| `project::resolve_channel_vas` (CtxShare hop) | a CtxShare | `origin_of_kind(_, CtxShare)` |
-| `project::resolve_channel_vas` (parent hop) | a TSG | `origin_of_kind(_, Tsg)` |
-| `project` engine refinement | a Channel (any engine) | `origin_of_kind(_, Channel{..})` |
+| `project::resolve_declared_handle` | whatever `want` names | `origin_of_kind(_, want)` |
+| `project::resolve_channel_vas` (own `hVASpace`) | a VASpace | via `resolve_declared_handle` |
+| `project::resolve_channel_vas` (CtxShare hop) | a CtxShare, then a VASpace | via `resolve_declared_handle` |
+| `project::resolve_channel_vas` (parent hop) | a TSG, then a VASpace | via `resolve_declared_handle` |
+| `project` engine refinement | a Channel (any engine) | via `resolve_declared_handle` |
 | `RmGraph::backing_of` | a Memory → phys | `matches!(_, Memory)` (Memory-only) |
 | `RmGraph::apply_map` (backing) | a Memory → phys | now via `backing_of` (see §5 F2) |
 | `RmGraph::is_client_root` | a Client (one-hop, no alias) | `matches!(_, Client)` |
 
 Mechanised: `p3_origin_of_kind_rejects_every_cross_kind_pairing` (the full cross-kind
 matrix) and `p3_channel_vas_resolution_type_checks_every_hop`.
+
+★★★ **§12.44 — the type check was never the whole question, and the other half was
+missing.** Every row above resolves a handle *in a namespace*, and until §12.44 that
+namespace was the bare `HClient` value carried on the resource's `NodeKey`. RM recycles
+that value by design, and a resource can outlive its namespace's root (a foreign
+`DUP_OBJECT` refcounts it), so a **ghost's declared handle facts were resolved against the
+handle table of whoever holds the number now** — a correctly *typed* resolution into an
+unrelated tenant's namespace. `project::resolve_declared_handle` now scopes every one of
+these sites to the resource's own `ClientKey` DECLARATION, and a superseded declaration
+resolves to nothing (MISS ⇒ DEFER here, FAULT at use). Mechanised:
+`rmgraph_order_independence::a_ghost_channels_declared_hvaspace_never_binds_the_next_tenant_of_its_namespace`
+and `::a_ghost_engine_object_never_retypes_the_next_tenants_channel`.
 
 **Residual (named follow-up):** the check is *centralised runtime*, not *compile-time*.
 A phantom-typed handle (`Handle<VaSpace>`) that makes an untyped resolution

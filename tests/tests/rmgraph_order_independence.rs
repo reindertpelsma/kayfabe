@@ -42,6 +42,7 @@ use kayfabe_core::rmgraph::{ClientKey, RmEvent, RmGraph};
 use kayfabe_fwd::{FwdFault, handle_doorbell, publish_backing};
 use kayfabe_mocks::{MockArch, MockIsolateFactory};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
+use std::collections::BTreeSet;
 
 // ---------------------------------------------------------------------------------
 // The measured identities. Taken verbatim from the 2026-07-25 RTX 3060 / 580.159.04
@@ -1444,4 +1445,563 @@ fn a_recycled_object_handle_projects_identically_in_every_order() {
             );
         }
     }
+}
+
+// =================================================================================
+// ★★★ §12.44 — the two shapes the A1 fuzz property's shrinker drove out of hiding: a
+// grouping edge that OUTLIVES its source declaration, and a ghost whose declared handle
+// facts name a namespace that has since changed hands.
+// =================================================================================
+
+/// The client whose namespace is orphaned and then handed back — the recycled `hClient`.
+const SPLIT_SRC: HClient = HClient(0xE1);
+/// The alias holder: a live user client that keeps [`SPLIT_SRC`]'s resource alive.
+const SPLIT_DST: HClient = HClient(0xE2);
+/// ★ The NEGATIVE control: a third user client that shares NOTHING with anybody and must
+/// therefore be its own `Proc` at every step. Without it this test could pass on a
+/// projection that simply put every client in one component, which IS #14 un-fixed.
+const SPLIT_BYSTANDER: HClient = HClient(0xE3);
+/// The handle [`SPLIT_DST`] holds [`SPLIT_SRC`]'s client object under.
+const SPLIT_ALIAS: HObject = HObject(0x7f00_0001);
+
+/// ★★★ **A grouping edge that outlives its source declaration must never re-group onto
+/// the recycled `hClient`'s NEXT tenant** (`l1_concurrency.md` §12.44 — the hand-written
+/// statement of the A1 shrink; the seed itself is pinned in
+/// `fuzz_rmgraph_invariants.proptest-regressions`).
+///
+/// The shrunk stream, in five events:
+///
+/// ```text
+/// Alloc user SPLIT_DST(root) │ Alloc user SPLIT_SRC(root)
+/// Dup { src: (SPLIT_SRC, root), dst: (SPLIT_DST, alias) }   ⇒ a user↔user GROUPING edge
+/// Free (SPLIT_SRC, root)      ⇒ the resource LIVES on the alias; the declaration is ORPHANED
+/// Alloc user SPLIT_SRC(root)  ⇒ an UNRELATED later tenant of the same `hClient` VALUE
+/// ```
+///
+/// After the last event the edge is still there and still resolves — RM refcounts the
+/// aliased object for its holder (`ogkm src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`) —
+/// and BOTH of its endpoints' `hClient` values name declared `ClientKind::User` clients.
+/// Read as VALUES, that is a live user↔user dup across two `Proc`s, i.e. exactly the thing
+/// §12.27 says must be one `Proc`. Read as DECLARATIONS it is nothing of the kind: the
+/// edge's source is generation 0, which has no root and therefore no live namespace, while
+/// the client the value names *now* is generation 1, an unrelated process that never
+/// dup'd anything. Merging them is §12.39 Shape B — the victim inherits the previous
+/// tenant's isolate, GPA arena and host VAS.
+///
+/// Three things are asserted in order, and the first is what makes the other two mean
+/// anything: **the grouping edge was real before the free** (so this is a genuine split,
+/// not a pair that was never joined), the split then happens, and the re-declaration joins
+/// nobody. The bystander pins the negative direction throughout.
+#[test]
+fn a_dup_whose_source_declaration_lost_its_root_never_regroups_onto_the_recycled_value() {
+    use kayfabe_core::ProcAnchor;
+    use kayfabe_core::rmgraph::NodeKey;
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+
+    let components = |g: &RmGraph| -> Vec<(ProcAnchor, Vec<ClientKey>)> {
+        project(g, &arch, &NO_CONDEMNED)
+            .expect("projects")
+            .procs
+            .iter()
+            .map(|p| (p.anchor, p.clients.iter().copied().collect()))
+            .collect()
+    };
+    let decl = |c: HClient, n: u32| ClientKey {
+        client: c,
+        incarnation: n,
+    };
+
+    for c in [SPLIT_DST, SPLIT_SRC, SPLIT_BYSTANDER] {
+        g.apply(&arch, kayfabe_tests::client_root(c))
+            .expect("a user client root");
+    }
+    // ---- ★ PRECONDITION (the non-vacuity assertion): before anything is freed, the
+    // user↔user dup makes the two ONE component — and leaves the bystander alone.
+    g.apply(
+        &arch,
+        RmEvent::Dup {
+            src: NodeKey::new(SPLIT_SRC, HObject(SPLIT_SRC.0)),
+            dst: NodeKey::new(SPLIT_DST, SPLIT_ALIAS),
+        },
+    )
+    .expect("the alias applies");
+    assert_eq!(
+        components(&g),
+        vec![
+            (
+                ProcAnchor(decl(SPLIT_SRC, 0)),
+                vec![decl(SPLIT_SRC, 0), decl(SPLIT_DST, 0)]
+            ),
+            (
+                ProcAnchor(decl(SPLIT_BYSTANDER, 0)),
+                vec![decl(SPLIT_BYSTANDER, 0)]
+            ),
+        ],
+        "★ precondition: a live user↔user dup IS a grouping edge — and a client that \
+         shares nothing is its own component"
+    );
+
+    // ---- The source frees its client ROOT. The resource lives on the alias, so the
+    // declaration survives as an ORPHAN — and the component splits, because §12.27's
+    // predicate wants positive evidence of a LIVE declaration at both ends.
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: SPLIT_SRC,
+            handle: HObject(SPLIT_SRC.0),
+        },
+    )
+    .expect("the source frees its root");
+    assert_eq!(
+        g.origin_of(NodeKey::new(SPLIT_DST, SPLIT_ALIAS))
+            .map(|n| n.key),
+        Some(NodeKey::new(SPLIT_SRC, HObject(SPLIT_SRC.0))),
+        "the edge must SURVIVE the free — RM refcounts the object for its alias holder",
+    );
+    assert_eq!(
+        components(&g),
+        vec![
+            (ProcAnchor(decl(SPLIT_SRC, 0)), vec![decl(SPLIT_SRC, 0)]),
+            (ProcAnchor(decl(SPLIT_DST, 0)), vec![decl(SPLIT_DST, 0)]),
+            (
+                ProcAnchor(decl(SPLIT_BYSTANDER, 0)),
+                vec![decl(SPLIT_BYSTANDER, 0)]
+            ),
+        ],
+        "freeing the root SPLITS the component — and the orphan keeps a component of its \
+         own, because retiring it would free host memory RM still says is live (§12.42 N1)"
+    );
+
+    // ---- ★★ THE BREACH. The value is handed to an unrelated later process. Its own
+    // first RM event is its client root, and it MUST be accepted (RM recycles by design;
+    // refusing hangs a legal guest). The surviving edge must group it with nobody.
+    g.apply(&arch, kayfabe_tests::client_root(SPLIT_SRC))
+        .expect("★ re-declaring a recycled namespace is LEGAL");
+    assert_eq!(
+        components(&g),
+        vec![
+            (ProcAnchor(decl(SPLIT_SRC, 0)), vec![decl(SPLIT_SRC, 0)]),
+            (ProcAnchor(decl(SPLIT_SRC, 1)), vec![decl(SPLIT_SRC, 1)]),
+            (ProcAnchor(decl(SPLIT_DST, 0)), vec![decl(SPLIT_DST, 0)]),
+            (
+                ProcAnchor(decl(SPLIT_BYSTANDER, 0)),
+                vec![decl(SPLIT_BYSTANDER, 0)]
+            ),
+        ],
+        "★★ the new tenant of the recycled `hClient` was merged into the alias holder's \
+         `Proc` by an edge whose source is a declaration that died before it existed"
+    );
+    // The orphan is still a real, live declaration owning a real, live resource: nothing
+    // was dropped on the floor to buy the isolation (§12.42 N1's whole point).
+    assert_eq!(
+        g.client_declarations()
+            .keys()
+            .filter(|k| k.client == SPLIT_SRC)
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![decl(SPLIT_SRC, 0), decl(SPLIT_SRC, 1)],
+        "both generations of the value must be live declarations",
+    );
+}
+
+/// The namespace whose `hClient` is orphaned and then recycled.
+const GHOST_NS: HClient = HClient(0xE5);
+/// The client that keeps the dead namespace's channel alive with a `DUP_OBJECT`.
+const GHOST_KEEPER: HClient = HClient(0xE6);
+/// The handle value the ghost channel declares as its `hVASpace` — and that the
+/// namespace's NEXT tenant then allocates its own VASpace at.
+const GHOST_HVAS: HObject = HObject(0x8000_0010);
+/// The ghost channel's own handle.
+const GHOST_CHAN: HObject = HObject(0x8000_0020);
+/// The first tenant's device handle.
+const GHOST_DEV1: HObject = HObject(0x8000_0001);
+/// The second tenant's device handle.
+const GHOST_DEV2: HObject = HObject(0x8000_0002);
+/// The handle [`GHOST_KEEPER`] holds the ghost channel under.
+const GHOST_ALIAS: HObject = HObject(0x8100_0001);
+/// The second tenant's page-directory base — the plane the ghost must never reach.
+const GHOST_VICTIM_PDB: Pdb = Pdb(0x5900_0000);
+
+/// ★★★ **A ghost's declared handle facts name a namespace that no longer exists — they
+/// must MISS, never bind the recycled `hClient`'s next tenant** (`l1_concurrency.md`
+/// §12.44, the exec-plane sibling of §12.39 Shape B).
+///
+/// `hVASpace`, `hContextShare` and `parent` are handles **into the allocating client's own
+/// handle table**, and that table belongs to a DECLARATION: freeing a client root destroys
+/// every handle in the namespace. A channel that outlives its namespace's root — kept
+/// alive by a foreign `DUP_OBJECT`, which is the steady state, since the measured UVM
+/// session holds 82 aliases per CUDA process — therefore declares facts about a table that
+/// is gone.
+///
+/// §12.41 moved `project`'s per-node *lookups* onto resource identity
+/// (`pdb_of_resource` / `gpu_of_resource`) but left the declared-fact *resolvers* keyed on
+/// the recyclable `HClient` VALUE, so the ghost was handed whatever the value's NEXT tenant
+/// had allocated at that handle number. Measured on the pre-fix tree, this exact script
+/// projected the ghost channel with `vas_origin` = the second tenant's VASpace and
+/// `vas_pdb` = [`GHOST_VICTIM_PDB`] — an attacker-retained channel bound to a victim's
+/// page directory, which is #14 in one hop.
+///
+/// The fix may not refuse the recycle (RM recycles by design), so it is a **MISS**: the
+/// ghost projects with no VAS at all and its use faults loudly by name. Both halves are
+/// asserted — the ghost gets nothing, *and* the victim keeps everything, including the
+/// `by_pdb` route to its own plane.
+#[test]
+fn a_ghost_channels_declared_hvaspace_never_binds_the_next_tenant_of_its_namespace() {
+    use kayfabe_core::ProcAnchor;
+    use kayfabe_core::rmgraph::{AllocFacts, NodeKey};
+    use kayfabe_mocks::mock_classes as mc;
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    let ghost_gen = ClientKey::first(GHOST_NS);
+    let victim_gen = ClientKey {
+        client: GHOST_NS,
+        incarnation: 1,
+    };
+
+    for ev in [
+        kayfabe_tests::client_root(GHOST_KEEPER),
+        kayfabe_tests::client_root(GHOST_NS),
+        RmEvent::Alloc {
+            client: GHOST_NS,
+            parent: HObject(GHOST_NS.0),
+            handle: GHOST_DEV1,
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        // The channel, declaring an `hVASpace` at a handle value it will hand back. (The
+        // VASpace itself is never allocated: what is under test is the RESOLUTION of the
+        // declared fact, and a fact whose target never arrives is the ordinary DEFER.)
+        RmEvent::Alloc {
+            client: GHOST_NS,
+            parent: GHOST_DEV1,
+            handle: GHOST_CHAN,
+            class: mc::CHANNEL_GR,
+            facts: AllocFacts {
+                h_vaspace: Some(GHOST_HVAS),
+                userd_flags: MockArch::userd_flags_for(VChid(0x77)),
+                ..Default::default()
+            },
+        },
+        // The alias that will keep the channel alive past its namespace's death.
+        RmEvent::Dup {
+            src: NodeKey::new(GHOST_NS, GHOST_CHAN),
+            dst: NodeKey::new(GHOST_KEEPER, GHOST_ALIAS),
+        },
+        RmEvent::Free {
+            client: GHOST_NS,
+            handle: HObject(GHOST_NS.0),
+        },
+        // ★ The victim: an unrelated later process handed the same `hClient`, which
+        // allocates its own VASpace at the very handle value the ghost still names.
+        kayfabe_tests::client_root(GHOST_NS),
+        RmEvent::Alloc {
+            client: GHOST_NS,
+            parent: HObject(GHOST_NS.0),
+            handle: GHOST_DEV2,
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: GHOST_NS,
+            parent: GHOST_DEV2,
+            handle: GHOST_HVAS,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: GHOST_NS,
+            vaspace: GHOST_HVAS,
+            pdb: GHOST_VICTIM_PDB,
+        },
+    ] {
+        g.apply(&arch, ev).expect("every event is legal RM traffic");
+    }
+
+    let b = project(&g, &arch, &NO_CONDEMNED).expect("projects cleanly");
+    // ---- ★ PRECONDITION (non-vacuity): the ghost really is still alive and really is a
+    // component of its own, distinct from the victim's. A test that lost the ghost here
+    // would assert the absence of a binding that had no chance to exist.
+    let ghost_proc = b
+        .procs
+        .iter()
+        .find(|p| p.anchor == ProcAnchor(ghost_gen))
+        .expect("★ the ghost's declaration must still project — RM says it is alive");
+    let victim_proc = b
+        .procs
+        .iter()
+        .find(|p| p.anchor == ProcAnchor(victim_gen))
+        .expect("the victim has its own component");
+    assert_eq!(
+        ghost_proc.channels.len(),
+        1,
+        "★ the ghost channel must still be projected (kept alive by the keeper's alias)"
+    );
+
+    // ---- ★★ THE BREACH: the ghost's declared `hVASpace` must resolve to NOTHING.
+    let ghost_chan = ghost_proc.channels.values().next().expect("one channel");
+    assert_eq!(
+        (ghost_chan.vas_origin, ghost_chan.vas_pdb),
+        (None, None),
+        "★★ the ghost channel BOUND the next tenant of its recycled `hClient` — an \
+         attacker-retained channel on a victim's page directory"
+    );
+
+    // ---- …and the victim keeps its own plane, whole. The fix is a MISS for the ghost,
+    // never a refusal of the victim's perfectly legal allocation.
+    assert_eq!(
+        b.by_pdb
+            .get(&(GpuId::ZERO, GHOST_VICTIM_PDB))
+            .map(|&(a, _)| a),
+        Some(ProcAnchor(victim_gen)),
+        "the victim's own address plane must route to the victim"
+    );
+    assert_eq!(
+        victim_proc
+            .vases
+            .values()
+            .filter_map(|f| f.pdb)
+            .collect::<std::collections::BTreeSet<_>>(),
+        std::collections::BTreeSet::from([GHOST_VICTIM_PDB]),
+        "the victim owns its VASpace and its page-directory base"
+    );
+    assert_eq!(
+        ghost_proc.vases.len(),
+        0,
+        "the ghost's component owns no address plane — it never allocated one"
+    );
+}
+
+/// The guest-kernel client whose root is freed while a user client's alias keeps its
+/// object alive — an ORPHANED kernel declaration.
+const ORPHAN_KERNEL: HClient = HClient(0xE7);
+/// The user client holding the alias.
+const ORPHAN_KEEPER: HClient = HClient(0xE8);
+/// The handle it holds the kernel object under.
+const ORPHAN_K_ALIAS: HObject = HObject(0x8200_0001);
+
+/// ★★★ **An ORPHANED kernel declaration is still the guest kernel's** (`l1_concurrency.md`
+/// §12.44 — the INV6 half of the same collapse).
+///
+/// §12.39's rule is that the assignment pass must classify a component by the kind its
+/// namespace **declared**, never by an absence: a declaration whose client root has been
+/// freed still owns live resources (a foreign alias refcounts them) and must keep its
+/// side of the user/kernel line — filing the guest kernel's orphan as a USER boundary is
+/// the `FwdFault::SystemDataPlane` shape, and the spine would mint it an isolate and a
+/// GPA arena.
+///
+/// `RmGraph::client_kinds` answers the *other* question ("is there a LIVE declared root
+/// here?") and is the grouping predicate's input; reading the system component's expected
+/// membership off it — which the A1 fuzz checker did — made an orphaned kernel declaration
+/// read as "no longer a kernel client" while `project` (correctly) kept it in the system
+/// component. This pins the distinction from both sides.
+#[test]
+fn an_orphaned_kernel_declaration_stays_in_the_system_component() {
+    use kayfabe_core::project::SYSTEM_ANCHOR;
+    use kayfabe_core::rmgraph::NodeKey;
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+    let orphan = ClientKey::first(ORPHAN_KERNEL);
+
+    for ev in [
+        kayfabe_tests::client_root(ORPHAN_KEEPER),
+        kayfabe_tests::kernel_client_root(ORPHAN_KERNEL),
+        RmEvent::Dup {
+            src: NodeKey::new(ORPHAN_KERNEL, HObject(ORPHAN_KERNEL.0)),
+            dst: NodeKey::new(ORPHAN_KEEPER, ORPHAN_K_ALIAS),
+        },
+    ] {
+        g.apply(&arch, ev).expect("legal traffic");
+    }
+    // ★ PRECONDITION (non-vacuity): while its root is live the kernel client is in the
+    // system component and the user client is NOT — so the assertion after the free is
+    // about a change of liveness, not about a component that was never populated.
+    let before = project(&g, &arch, &NO_CONDEMNED).expect("projects");
+    assert_eq!(before.system.clients, BTreeSet::from([orphan]));
+    assert_eq!(
+        before
+            .procs
+            .iter()
+            .map(|p| p.clients.clone())
+            .collect::<Vec<_>>(),
+        vec![BTreeSet::from([ClientKey::first(ORPHAN_KEEPER)])],
+        "★ precondition: a dup INTO a kernel client is a REFERENCE, never a merge"
+    );
+
+    // The kernel client frees its root. The keeper's alias keeps the object — hence the
+    // declaration — alive, with no live root.
+    g.apply(
+        &arch,
+        RmEvent::Free {
+            client: ORPHAN_KERNEL,
+            handle: HObject(ORPHAN_KERNEL.0),
+        },
+    )
+    .expect("the kernel client frees its root");
+    assert!(
+        !g.client_kinds().any(|(k, _)| k.client == ORPHAN_KERNEL),
+        "the orphan must have no LIVE root — that is what makes it an orphan",
+    );
+    let after = project(&g, &arch, &NO_CONDEMNED).expect("projects");
+    assert_eq!(
+        after.system.clients,
+        BTreeSet::from([orphan]),
+        "★★ the guest kernel's orphaned declaration left the system component"
+    );
+    assert_eq!(
+        after
+            .procs
+            .iter()
+            .map(|p| (p.anchor, p.clients.clone()))
+            .collect::<Vec<_>>(),
+        vec![(
+            kayfabe_core::ProcAnchor(ClientKey::first(ORPHAN_KEEPER)),
+            BTreeSet::from([ClientKey::first(ORPHAN_KEEPER)])
+        )],
+        "★★ the guest kernel's orphan was filed as a USER boundary — the spine would mint \
+         it an isolate, a GPA arena and a data plane it must never have"
+    );
+    assert_ne!(after.system.anchor, after.procs[0].anchor);
+    assert_eq!(after.system.anchor, SYSTEM_ANCHOR);
+}
+
+/// The namespace whose engine object is orphaned and whose `hClient` is then recycled.
+const REFINE_NS: HClient = HClient(0xE9);
+/// The client keeping that engine object alive.
+const REFINE_KEEPER: HClient = HClient(0xEA);
+/// The handle value the ghost engine object names as its `parent` — and that the
+/// namespace's next tenant allocates its GR channel at.
+const REFINE_PARENT: HObject = HObject(0x8300_0020);
+/// The ghost engine object's own handle.
+const REFINE_ENG: HObject = HObject(0x8300_0030);
+/// The handle [`REFINE_KEEPER`] holds the ghost engine object under.
+const REFINE_ALIAS: HObject = HObject(0x8400_0001);
+/// The victim tenant's page-directory base.
+const REFINE_PDB: Pdb = Pdb(0x5a00_0000);
+
+/// ★★★ **A ghost ENGINE OBJECT never refines the channel of the next tenant of its
+/// namespace** (`l1_concurrency.md` §12.44 — the same rule on `parent`).
+///
+/// `ChannelFacts::engine` is refined by *the engine object allocated on the channel*
+/// (`execution_plane.md` §2.1/§2.2): an NVENC session on a GR-class channel makes it an
+/// `NvEnc` context, which selects the completion arm and the routing. The refinement hops
+/// through the engine object's `parent`, and `parent` is a handle in the **allocating
+/// client's** table — so a ghost engine object kept alive by a foreign alias would
+/// otherwise reach whatever the recycled `hClient`'s next tenant allocated at that handle
+/// number and silently retype **the victim's** channel.
+///
+/// Less severe than the `hVASpace` case ([`a_ghost_channels_declared_hvaspace_never_binds_the_next_tenant_of_its_namespace`])
+/// — it mistypes rather than cross-binds — but the same organ and the same rule, so it is
+/// pinned rather than left to argument.
+#[test]
+fn a_ghost_engine_object_never_retypes_the_next_tenants_channel() {
+    use kayfabe_arch::ids::EngineKind;
+    use kayfabe_core::rmgraph::{AllocFacts, NodeKey};
+    use kayfabe_mocks::mock_classes as mc;
+    let arch = MockArch::new();
+    let mut g = RmGraph::new();
+
+    for ev in [
+        kayfabe_tests::client_root(REFINE_KEEPER),
+        kayfabe_tests::client_root(REFINE_NS),
+        RmEvent::Alloc {
+            client: REFINE_NS,
+            parent: HObject(REFINE_NS.0),
+            handle: HObject(0x8300_0001),
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        // An NVENC engine object naming a `parent` handle it will hand back.
+        RmEvent::Alloc {
+            client: REFINE_NS,
+            parent: REFINE_PARENT,
+            handle: REFINE_ENG,
+            class: mc::NVENC,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::Dup {
+            src: NodeKey::new(REFINE_NS, REFINE_ENG),
+            dst: NodeKey::new(REFINE_KEEPER, REFINE_ALIAS),
+        },
+        RmEvent::Free {
+            client: REFINE_NS,
+            handle: HObject(REFINE_NS.0),
+        },
+        // ★ The victim: the same `hClient`, with a plain GR channel at that handle value.
+        kayfabe_tests::client_root(REFINE_NS),
+        RmEvent::Alloc {
+            client: REFINE_NS,
+            parent: HObject(REFINE_NS.0),
+            handle: HObject(0x8300_0002),
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: REFINE_NS,
+            parent: HObject(0x8300_0002),
+            handle: HObject(0x8300_0010),
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: REFINE_NS,
+            vaspace: HObject(0x8300_0010),
+            pdb: REFINE_PDB,
+        },
+        RmEvent::Alloc {
+            client: REFINE_NS,
+            parent: HObject(0x8300_0002),
+            handle: REFINE_PARENT,
+            class: mc::CHANNEL_GR,
+            facts: AllocFacts {
+                h_vaspace: Some(HObject(0x8300_0010)),
+                userd_flags: MockArch::userd_flags_for(VChid(0x88)),
+                ..Default::default()
+            },
+        },
+    ] {
+        g.apply(&arch, ev).expect("every event is legal RM traffic");
+    }
+
+    let b = project(&g, &arch, &NO_CONDEMNED).expect("projects cleanly");
+    let victim = b
+        .procs
+        .iter()
+        .find(|p| {
+            p.anchor
+                == kayfabe_core::ProcAnchor(ClientKey {
+                    client: REFINE_NS,
+                    incarnation: 1,
+                })
+        })
+        .expect("the victim has its own component");
+    // ★ PRECONDITION (non-vacuity): the ghost engine object is still a live resource, so
+    // the refinement pass really does visit it.
+    assert!(
+        g.nodes()
+            .any(|n| n.key == NodeKey::new(REFINE_NS, REFINE_ENG)
+                && matches!(n.kind, kayfabe_arch::ObjectKind::EngineObject { .. })),
+        "★ the ghost engine object must still be live (the keeper's alias holds it)"
+    );
+    assert_eq!(
+        victim
+            .channels
+            .values()
+            .map(|f| f.engine)
+            .collect::<Vec<_>>(),
+        vec![EngineKind::GrCompute],
+        "★★ a dead namespace's NVENC object retyped the NEXT tenant's GR channel"
+    );
 }

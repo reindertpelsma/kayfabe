@@ -5864,3 +5864,137 @@ amount of green running would have.
 4. **Multi-region spans are refused, not served.** Argued from §6.7 (coarse windows), not
    measured against a real guest's descriptors. If a legitimate one ever straddles two
    windows, the fix is a loop that re-proves each step — never a resolve-once-copy-across.
+
+### 12.44 ★★★ THE INSTRUMENT WAS THE BUG — and the round it forced found a REAL one in the same organ
+
+**Status: LANDED.** 543 → **547 tests**; `scripts/ci_gates.sh --all` clean, suite green in
+both the default and `KAYFABE_NO_KVM=1` configurations. `ogkm` = `C: research_clones/ogkm`.
+
+The round opened on a reproduced counterexample: the A1 hostile-stream property
+(`tests/tests/fuzz_rmgraph_invariants.rs::a1_hostile_stream_never_panics_and_invariants_hold`)
+shrank to five events and failed INV5 —
+
+```text
+Alloc user A → Alloc user B → Dup (B,root) into A → Free (B,root) → Alloc (B,root)
+```
+
+— reported as *"a user↔user dup edge joins two DIFFERENT procs — grouping is
+inconsistent"*, i.e. as a #14-class grouping break.
+
+---
+
+#### 1. THE LEADING SUSPECT, REFUTED
+
+The standing hypothesis was that `project`'s grouping predicate and `rmgraph`'s dup-edge
+survival rules **disagree about what a freed source means for an edge that outlives it**.
+They do disagree — and `project` is right. It sees the edge (`RmGraph::dups` yields it, the
+alias resolves, RM refcounts the object for its holder,
+`ogkm src/nvidia/src/kernel/mem_mgr/mem.c:1027-1031`) and deliberately declines to group on
+it, because the edge's **source declaration** has no live root while the `hClient` VALUE has
+been handed to an unrelated later tenant. Grouping the two would be §12.39 Shape B, which
+`l1_mean::a_recycled_namespace_cannot_inherit_the_previous_tenants_address_plane` pins —
+including the deliberate component **split** at the free (`assert_ne!(orphan, attacker,
+"freeing the root split the component")`).
+
+**The defect was in the checker.** `assert_boundary_invariants` asked all three of its
+grouping questions about the `hClient` **VALUE**: `client_proc` came from
+`ProcBoundary::client_values`, `is_user` from `RmGraph::client_kinds` collapsed to
+`HClient`, and the endpoints came off `RmGraph::dups`, which reports handles. One value may
+name **two simultaneously live declarations** (§12.42), so the checker compared the alias
+holder's anchor against generation **1**'s — a client that never dup'd anything — and fired.
+It was asserting that a recycled `hClient` MUST re-merge: the breach, stated as an
+invariant, inside the one instrument whose whole job is to notice that collapse.
+
+Two further members of the same collapse were latent-red in the same function, reachable by
+the same generator and never yet hit:
+
+- **INV6** derived the system component's expected membership from `client_kinds` (live
+  roots only), so an **orphaned KERNEL declaration** — root freed, resources kept alive by a
+  user client's alias — stayed in `Boundaries::system` while vanishing from the expected set.
+- **INV3** asserted a channel's resolved VAS is owned by the **same** `Proc`. False for a
+  legal stream: after `B` dups a VASpace to `A`, `A` binds a channel to the alias and `B`
+  frees its root, the component splits and `A`'s channel is legitimately bound to a VASpace
+  another component owns.
+
+---
+
+#### 2. ★★★ THE REAL DEFECT — a ghost's declared handle facts were resolved in a namespace
+that had changed hands
+
+Correcting INV3 to the honest statement (*"the channel's VAS must be a resource RM's own
+refcount joins to the channel — the same declaration, or one the sharing relation connects
+it to; never an unrelated third party"*) required knowing whether a cross-component bind is
+ever **not** reachable through a live reference. It is, and the shape is ordinary:
+
+```text
+N: Alloc (N,chan) Channel, hVASpace = (N,0x110)   ⇒ the VAS fact, declared
+A: Dup { src: (N,chan), dst: (A,alias) }          ⇒ A keeps the channel alive
+N: Free (N,root)                                   ⇒ N's handle table is GONE; the channel is a ghost
+N: Alloc (N,root)                                  ⇒ an unrelated later tenant (legal: RM recycles by design)
+N: Alloc (N,0x110) VASpace + SET_PAGE_DIRECTORY    ⇒ the VICTIM's address plane
+```
+
+Measured on the pre-fix tree, `project` gave the ghost channel — owned by declaration
+`{N, 0}`, sitting in `{N, 0}`'s own `Proc` — `vas_origin` = the VASpace owned by `{N, 1}`
+and `vas_pdb` = the victim's `Pdb`, which `by_pdb` routes to the victim. An
+attacker-retained channel on a victim's page directory.
+
+**`hVASpace`, `hContextShare` and `parent` are handles into the ALLOCATING CLIENT's own
+table, and that table belongs to a DECLARATION.** Freeing a client root destroys every
+handle in the namespace, so a resource that outlives its root declares facts about a table
+that no longer exists. §12.41 moved `project`'s per-node *lookups* onto resource identity
+(`pdb_of_resource` / `gpu_of_resource`) but left the declared-fact *resolvers* keyed on the
+recyclable value — the family sweep's last member, missed because the sweep audited what a
+key **identifies** and not what a namespace **scopes**.
+
+**The fix may not be a refusal** (RM recycles by design; refusing hangs a legal guest), so
+it is a **MISS**: `project::resolve_declared_handle` scopes every declared-fact resolution
+to the resource's own `ClientKey`, a superseded declaration resolves to nothing, and the
+ghost's use faults loudly by name (MISS ⇒ DEFER here, FAULT at use). The blast radius is
+exactly the recycled case: where the owner's namespace has no live root at all the lookup
+already missed, so the guard changes an answer only where a *different* declaration now
+holds the value. Landing it changed **no other test in the workspace**.
+
+---
+
+#### 3. WHAT THE INSTRUMENT SAYS NOW
+
+- **INV5** — the user boundaries are **EXACTLY the connected components** of the grouping
+  relation, anchor and all. Both halves, where it used to assert only the positive one: a
+  checker that can only prove sameness passes trivially on a projection that put every
+  client in one `Proc`, which IS #14 un-fixed. The edge set is derived from the **resource**
+  side (`RmGraph::nodes_with_owner` + `RmGraph::references_of`) rather than from `dups()` +
+  `owner_key_of`, so the two derivations of "who shares what with whom" have to agree.
+- **INV6** — the system component is exactly the declared kernel **declarations**, orphans
+  included.
+- **INV3** — sharing-component reachability, per §2.
+
+---
+
+#### 4. BITE-CHECKS, INCLUDING THE NON-BITERS
+
+| # | neuter | result |
+|---|---|---|
+| B1 | drop `resolve_declared_handle`'s declaration guard | **BITES** — `a_ghost_channels_declared_hvaspace_never_binds_the_next_tenant_of_its_namespace`. ★ A1's INV3 did **not** bite: 2000 random cases never built the 5-event shape |
+| B2 | drop the live-rooted-source conjunct in the grouping predicate | ★ **NON-BITER** — whole suite green (unchanged from §12.42's finding G) |
+| B3 | key `is_user` by the `HClient` VALUE | ★ **NON-BITER** — unchanged from §12.42's finding H |
+| B2+B3 | both | **BITES** — A1 (new INV5), `l1_mean::a_recycled_namespace_cannot_inherit_…`, and `a_dup_whose_source_declaration_lost_its_root_never_regroups_onto_the_recycled_value`. The property is now a *third* witness instead of a false accuser |
+| B4 | read `is_kernel` off live-rooted `client_kinds` | **BITES** — `cross_proc_lifetime::an_orphaned_kernel_resource_never_becomes_a_user_data_plane` and the new `an_orphaned_kernel_declaration_stays_in_the_system_component`. ★ A1's INV6 did **not** bite |
+| B5 | union every user declaration into one component (#14 un-fixed) | **BITES** — A1's new INV5 negative half, plus 16 tests across `l1_mean`/`cross_proc_lifetime`. The **old** INV5 could not have caught this |
+| B7 | resolve the engine-refinement `parent` through the bare `HClient` again | **BITES** — but only after `a_ghost_engine_object_never_retypes_the_next_tenants_channel` was written for it. It was a non-biter first |
+
+★ The honest reading of B1/B4: the strengthened property is a *searched* instrument and the
+two shapes above are past its reach at the configured case count, which is exactly why each
+one is also pinned by a named hand-written test. The seed for the INV5 shape is pinned in
+`tests/tests/fuzz_rmgraph_invariants.proptest-regressions`, and the property was **seen to
+fail on it** before anything was changed.
+
+#### 5. Residuals, named
+
+1. **`ChannelFacts::vas_origin` is re-resolved on every projection; RM resolves `hVASpace`
+   ONCE, at channel alloc, into an object pointer.** The MISS above is the conservative
+   answer for a ghost, not the faithful one — the faithful one is to pin the resolved
+   `ResourceKey` at alloc. That collides with the DEFER design (a channel legally precedes
+   its VASpace), so it is a design change and is named rather than done silently.
+2. **B2/B3 remain mutually redundant.** Kept as defence in depth for §12.42's stated reason;
+   still no single-neuter witness for either.

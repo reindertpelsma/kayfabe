@@ -331,53 +331,106 @@ impl ClientUnion {
     }
 }
 
-/// Resolve `(ns, handle)` to its origin **only if that origin is a VASpace**.
+/// ★★★ §12.44 — resolve ONE declared handle fact of a resource, **inside the namespace
+/// DECLARATION that allocated it**, and only if that declaration still owns the namespace.
 ///
-/// A channel/TSG/CtxShare's `hVASpace` is a *declared protocol fact* that names a
-/// `FERMI_VASPACE_A`; a hostile or buggy guest may instead name a TSG, a memory
-/// object, or a dangling handle (possibly one that happens to carry a `SetPageDir`
-/// PDB). Binding a channel to a non-VASpace's PDB would make the channel's
-/// `vas_pdb` disagree with `by_pdb` (which only routes real VASpaces) — a
-/// confused-deputy inconsistency the fuzz property caught. So resolution to a
-/// non-VASpace returns `None`: the channel is treated as having no declared VAS
-/// (a loud MISS at use time), never silently bound to an unrelated object's PDB.
+/// ## What this closes (the §12.41 family's last member)
 ///
-/// **MISS ⇒ DEFER here, FAULT at use** (`kayfabe_core` crate docs, the miss taxonomy).
-/// Deferring is right for the not-yet-arrived case; the wrong-kind case is never
-/// knowable and is fused into the same `None` by [`RmGraph::origin_of_kind`] — see that
-/// function for why, and `l1_concurrency.md` §12.30 finding B for the open question.
-fn resolve_vaspace_handle(g: &RmGraph, ns: HClient, handle: HObject) -> Option<&RmNode> {
-    // The ONE typed-resolution primitive (decision #18C): resolving a handle to the
-    // wrong `ObjectKind` is a single centrally-enforced check, not a per-caller
-    // `matches!` a new site could forget.
-    g.origin_of_kind(NodeKey::new(ns, handle), ObjectKind::VaSpace)
+/// A `hVASpace` / `hContextShare` / `parent` is a handle **into the allocating client's
+/// own handle table**. That table belongs to a *declaration*, not to an `hClient` VALUE —
+/// and RM recycles the value by design (`ClientKey`'s docs cite the four places). Freeing
+/// a client root destroys every handle in the namespace, so the table a live handle sits
+/// in is always the **live-rooted** declaration's. A resource that outlives its
+/// namespace's root (a foreign `DUP_OBJECT` alias keeps it — faithful RM refcounting) is
+/// therefore a resource whose declared handle facts name a table that **no longer exists**.
+///
+/// Resolving them anyway, through the bare `HClient`, hands the ghost whatever the value's
+/// NEXT tenant allocated at that handle number:
+///
+/// ```text
+/// N: Alloc (N,chan) Channel, hVASpace = (N,0x110)   ⇒ the VAS fact, declared
+/// A: Dup { src: (N,chan), dst: (A,alias) }          ⇒ A keeps the channel alive
+/// N: Free (N,root)                                   ⇒ N's table is gone; the channel is a GHOST
+/// N: Alloc (N,root) — a DIFFERENT process              ⇒ the value is recycled (legal, by design)
+/// N: Alloc (N,0x110) VASpace, SET_PAGE_DIRECTORY pdb  ⇒ the VICTIM's address plane
+/// ```
+///
+/// Measured on the pre-fix tree: the ghost channel — owned by declaration `{N, 0}`, in
+/// `{N, 0}`'s own `Proc` — projected `vas_origin` = the VASpace owned by `{N, 1}` and
+/// `vas_pdb` = the victim's `Pdb`, which `by_pdb` routes to the victim. That is §12.39
+/// Shape B on the **exec plane's** binding, reached through the one resolver
+/// [`ResourceKey`] did not cover: §12.41 moved `project`'s per-node *lookups* to resource
+/// identity (`pdb_of_resource` / `gpu_of_resource`) but left the declared-fact *resolvers*
+/// keyed on the recyclable value.
+///
+/// The fix may not be a refusal of the recycle — RM recycles by design and refusing hangs
+/// a legal guest — so it is a **MISS**: a dead declaration's handle facts resolve to
+/// nothing, the ghost channel materializes with no VAS, and its use faults loudly by name
+/// rather than silently binding to a stranger (MISS ⇒ DEFER here, FAULT at use).
+///
+/// ★ Note the blast radius is exactly the recycled case and nothing else: when the owner's
+/// namespace has no live root at all, the handle lookup already missed (the table is
+/// empty). The guard changes an answer only where a *different* declaration now holds the
+/// value — which is the breach and only the breach.
+///
+/// ## The typed half (decision #18C — unchanged)
+///
+/// `want` is the ONE typed-resolution primitive: a hostile or buggy guest may name a TSG,
+/// a memory object or a dangling handle as its `hVASpace`, and binding a channel to a
+/// non-VASpace's PDB would make the channel's `vas_pdb` disagree with `by_pdb` (which only
+/// routes real VASpaces) — the confused-deputy inconsistency the fuzz property caught. The
+/// wrong-kind case is never knowable and is fused into the same `None` by
+/// [`RmGraph::origin_of_kind`] — see that function, and `l1_concurrency.md` §12.30
+/// finding B for the open question.
+fn resolve_declared_handle<'g>(
+    g: &'g RmGraph,
+    live_root: &BTreeMap<HClient, ClientKey>,
+    owner: ClientKey,
+    handle: HObject,
+    want: ObjectKind,
+) -> Option<&'g RmNode> {
+    // ★★★ §12.44 — the declaration must still own its namespace. A superseded declaration
+    // has no handle table to read, and the value's current tenant's table is not its own.
+    if live_root.get(&owner.client) != Some(&owner) {
+        return None;
+    }
+    g.origin_of_kind(NodeKey::new(owner.client, handle), want)
 }
 
 /// Resolve a channel node's VASpace origin per the declared-facts precedence:
-/// own `hVASpace` → CtxShare's → parent TSG's. Every hop is a typed resolution
-/// through [`RmGraph::origin_of_kind`] — an `hVASpace` naming a non-VASpace, an
-/// `hContextShare` naming a non-CtxShare, or a `parent` that is not a TSG each
-/// resolves to `None` (a loud MISS at use time), never a silent cross-object bind.
+/// own `hVASpace` → CtxShare's → parent TSG's. Every hop is a
+/// [`resolve_declared_handle`] — so every hop is both typed (decision #18C) and scoped to
+/// the DECLARATION that made the declaration (★★★ §12.44).
 ///
-/// **MISS ⇒ DEFER** (same category and same caveat as [`resolve_vaspace_handle`]): the
+/// Each hop re-reads the owner from the graph rather than from the handle's `HClient`:
+/// a CtxShare or TSG may itself be a dup-kept ghost, and *its* `hVASpace` is a fact about
+/// *its* namespace declaration.
+///
+/// **MISS ⇒ DEFER** (same category and same caveat as [`resolve_declared_handle`]): the
 /// channel materializes with `vas_pdb: None` and rings nothing, because
 /// `kayfabe_fwd::gate_working_set_in` refuses a channel with no VAS by name.
-fn resolve_channel_vas<'g>(g: &'g RmGraph, chan: &RmNode) -> Option<&'g RmNode> {
-    let ns = chan.key.client;
+fn resolve_channel_vas<'g>(
+    g: &'g RmGraph,
+    live_root: &BTreeMap<HClient, ClientKey>,
+    chan: &RmNode,
+    owner: ClientKey,
+) -> Option<&'g RmNode> {
     if let Some(hv) = chan.facts.h_vaspace {
-        return resolve_vaspace_handle(g, ns, hv);
+        return resolve_declared_handle(g, live_root, owner, hv, ObjectKind::VaSpace);
     }
     if let Some(hcs) = chan.facts.h_ctx_share
-        && let Some(cs) = g.origin_of_kind(NodeKey::new(ns, hcs), ObjectKind::CtxShare)
+        && let Some(cs) = resolve_declared_handle(g, live_root, owner, hcs, ObjectKind::CtxShare)
         && let Some(hv) = cs.facts.h_vaspace
+        && let Some(cs_owner) = g.owner_key_of(NodeKey::new(owner.client, hcs))
     {
-        return resolve_vaspace_handle(g, cs.key.client, hv);
+        return resolve_declared_handle(g, live_root, cs_owner, hv, ObjectKind::VaSpace);
     }
     // Parent may be a TSG that declares the VAS.
-    if let Some(parent) = g.origin_of_kind(NodeKey::new(ns, chan.parent), ObjectKind::Tsg)
+    if let Some(parent) = resolve_declared_handle(g, live_root, owner, chan.parent, ObjectKind::Tsg)
         && let Some(hv) = parent.facts.h_vaspace
+        && let Some(tsg_owner) = g.owner_key_of(NodeKey::new(owner.client, chan.parent))
     {
-        return resolve_vaspace_handle(g, parent.key.client, hv);
+        return resolve_declared_handle(g, live_root, tsg_owner, hv, ObjectKind::VaSpace);
     }
     None
 }
@@ -613,13 +666,18 @@ pub fn project(
     // on one channel the smallest-key one wins — deterministic and order-independent
     // (the real protocol allocates one engine object per channel context).
     let mut engine_refine: BTreeMap<ResourceKey, EngineKind> = BTreeMap::new();
-    for node in g.nodes() {
+    for (node, owner) in g.nodes_with_owner() {
         // The engine-object's parent must typed-resolve to a Channel (any engine —
         // discriminant match) before its kind refines that channel; a hostile engine
-        // object parented on a non-channel never refines anyone (decision #18C).
+        // object parented on a non-channel never refines anyone (decision #18C). ★★★
+        // §12.44 — and `parent` is a fact about the OWNER's handle table, so a ghost
+        // engine object never refines whatever the recycled value's next tenant put there.
         if let ObjectKind::EngineObject { engine } = node.kind
-            && let Some(chan) = g.origin_of_kind(
-                NodeKey::new(node.key.client, node.parent),
+            && let Some(chan) = resolve_declared_handle(
+                g,
+                &live_root,
+                owner,
+                node.parent,
                 ObjectKind::Channel {
                     engine: EngineKind::GrCompute,
                 },
@@ -681,7 +739,7 @@ pub fn project(
                 // ★★★ §12.41 — by resource identity, on both the channel and the VASpace
                 // its `hVASpace` resolves to (see the VaSpace arm).
                 let gpu = g.gpu_of_resource(node.id());
-                let vas = resolve_channel_vas(g, node);
+                let vas = resolve_channel_vas(g, &live_root, node, owner);
                 let facts = ChannelFacts {
                     vchid,
                     gpu,

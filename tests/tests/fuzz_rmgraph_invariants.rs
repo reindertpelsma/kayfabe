@@ -28,10 +28,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb};
 use kayfabe_arch::{Arch, ClientKind, ObjectKind};
+use kayfabe_core::ProcAnchor;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::project::{NO_CONDEMNED, project};
-use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph};
+use kayfabe_core::rmgraph::{AllocFacts, ClientKey, NodeKey, ResourceKey, RmEvent, RmGraph};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -173,6 +174,117 @@ fn any_stream() -> impl Strategy<Value = Vec<RmEvent>> {
 // Structural-invariant checker — run on every derived Boundaries.
 // ---------------------------------------------------------------------------------
 
+/// A tiny deterministic union-find over [`ClientKey`], used by the checker to build the
+/// components the GRAPH says must exist and compare them to the ones `project` derived.
+///
+/// It is the same *shape* as `project`'s `ClientUnion` and deliberately so — what makes
+/// it an oracle rather than a mirror is that the **edge set** below is derived from the
+/// resource side (`nodes_with_owner` + `references_of`) instead of from `dups()` +
+/// `owner_key_of`, so the two derivations of "who shares what with whom" have to agree.
+#[derive(Default)]
+struct Uf(BTreeMap<ClientKey, ClientKey>);
+
+impl Uf {
+    fn find(&mut self, c: ClientKey) -> ClientKey {
+        let p = *self.0.entry(c).or_insert(c);
+        if p == c {
+            return c;
+        }
+        let root = self.find(p);
+        self.0.insert(c, root);
+        root
+    }
+
+    /// Union by minimum, so the representative IS the anchor `project` must have chosen.
+    fn union(&mut self, a: ClientKey, b: ClientKey) {
+        let (ra, rb) = (self.find(a), self.find(b));
+        if ra != rb {
+            let (lo, hi) = if ra < rb { (ra, rb) } else { (rb, ra) };
+            self.0.insert(hi, lo);
+        }
+    }
+}
+
+/// ★★★ §12.42/§12.44 — everything the structural checker needs about **declarations**,
+/// derived from the graph's resource side.
+///
+/// The vocabulary matters, and getting it wrong is what this struct exists to stop: an
+/// `hClient` is a recyclable VALUE that may name **two simultaneously live declarations**
+/// (an orphan whose resources a foreign alias keeps alive, plus the tenant that
+/// re-declared the number). Every question below is asked about a [`ClientKey`].
+struct Decls {
+    /// Every LIVE declaration → the [`ClientKind`] it declared. Includes ORPHANS: a
+    /// declaration whose client root has been freed but whose resources RM still
+    /// refcounts for an alias holder.
+    kind: BTreeMap<ClientKey, ClientKind>,
+    /// The **live-rooted** declaration of each `hClient` value — at most one, by
+    /// `RmGraphError::DuplicateClientRoot`. A declaration absent here is an orphan.
+    live_root: BTreeMap<HClient, ClientKey>,
+    /// Which declaration ALLOCATED each live resource (attribution is by origin).
+    owner: BTreeMap<ResourceKey, ClientKey>,
+    /// ★ **THE SHARING RELATION** — `{owner declaration, holder declaration}` for every
+    /// live resource and every live handle that references it from a *different*
+    /// declaration. This is what a `DUP_OBJECT` leaves behind, read off the refcount
+    /// (`references_of`) rather than off the edge list.
+    share: BTreeSet<(ClientKey, ClientKey)>,
+}
+
+impl Decls {
+    fn of(g: &RmGraph) -> Self {
+        let kind: BTreeMap<ClientKey, ClientKind> = g
+            .client_declarations()
+            .into_iter()
+            .map(|(k, (_, kind))| (k, kind))
+            .collect();
+        let live_root: BTreeMap<HClient, ClientKey> =
+            g.client_kinds().map(|(k, _)| (k.client, k)).collect();
+        let mut owner = BTreeMap::new();
+        let mut share = BTreeSet::new();
+        for (node, o) in g.nodes_with_owner() {
+            owner.insert(node.id(), o);
+            for h in g.references_of(node.id()) {
+                // A live handle implies a live root (§12.38 — freeing a client root
+                // destroys every handle in its namespace), so the holder is always a
+                // live-rooted declaration. The OWNER may well be an orphan.
+                let Some(&holder) = live_root.get(&h.client) else {
+                    continue;
+                };
+                if holder != o {
+                    share.insert(if o < holder { (o, holder) } else { (holder, o) });
+                }
+            }
+        }
+        Decls {
+            kind,
+            live_root,
+            owner,
+            share,
+        }
+    }
+
+    /// Is `k` a declared **kernel** client? (Answered for orphans too — that is the
+    /// §12.39 finding: the assignment pass must read a declared fact, never an absence.)
+    fn is_kernel(&self, k: ClientKey) -> bool {
+        matches!(self.kind.get(&k), Some(ClientKind::Kernel))
+    }
+
+    /// Is `k` a **live-rooted** declared USER client — the positive evidence §12.27's
+    /// grouping predicate requires at BOTH ends of an edge?
+    fn is_live_user(&self, k: ClientKey) -> bool {
+        self.live_root.get(&k.client) == Some(&k)
+            && matches!(self.kind.get(&k), Some(ClientKind::User { .. }))
+    }
+
+    /// The subset of [`Self::share`] that is a **GROUPING** edge: both ends live-rooted
+    /// user declarations (§12.27). Every other shape is a *reference*.
+    fn grouping_edges(&self) -> impl Iterator<Item = (ClientKey, ClientKey)> + '_ {
+        self.share
+            .iter()
+            .copied()
+            .filter(|&(a, b)| self.is_live_user(a) && self.is_live_user(b))
+    }
+}
+
 /// Assert every structural invariant on a derived `Boundaries` (or catch a loud
 /// error — both are acceptable; a panic or a corrupt projection is not).
 fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
@@ -209,20 +321,63 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
         }
     }
 
-    // INV3: every channel maps to at most one Vas, and the VAS it resolved — wherever
-    // it routes in the (target, PDB) map — is owned by the SAME proc (never another
-    // proc's address space). Matching on the VAS origin node (not a bare PDB) is robust
-    // to the per-GPU scoping of `by_pdb`.
+    let d = Decls::of(g);
+    // Which component each DECLARATION landed in. Keyed by `ClientKey`, never by the
+    // `hClient` VALUE: two live declarations at one value land in two different
+    // components, and collapsing them is exactly the §12.42 mistake this checker used to
+    // make (see INV5).
+    let decl_proc: BTreeMap<ClientKey, ProcAnchor> = bounds
+        .procs
+        .iter()
+        .chain(std::iter::once(&bounds.system))
+        .flat_map(|p| p.clients.iter().map(move |&c| (c, p.anchor)))
+        .collect();
+
+    // ★★★ §12.44 — INV3, CORRECTED, and the correction is a finding rather than a
+    // relaxation. It used to read *"the VAS a channel resolved to, wherever it routes in
+    // `by_pdb`, is owned by the SAME `Proc`"*. **That is false for a legal RM stream**, and
+    // the shape is ordinary: `B` allocs a VASpace and `DUP_OBJECT`s it to `A`, `A` binds a
+    // channel to the alias, then `B` frees its client root. RM keeps the VASpace alive on
+    // `A`'s reference (`ogkm .../mem_mgr/mem.c:1027-1031`) and the component SPLITS (the
+    // edge stops being a grouping edge once its source namespace has no live root —
+    // `l1_mean::a_recycled_namespace_cannot_inherit_the_previous_tenants_address_plane`
+    // pins that split deliberately). `A`'s channel is then legitimately bound to a VASpace
+    // owned by another component. Asserting sameness would have made a correct projection
+    // fail; asserting nothing would have retired a real confused-deputy detector.
+    //
+    // So the honest invariant is **reachability, not sameness**: a channel's VAS must be a
+    // resource RM's own refcount joins to the channel — the same declaration, or one the
+    // sharing relation connects it to (possibly through a CtxShare/TSG hop, hence the
+    // transitive closure). An UNRELATED third party's address space is still a hard
+    // failure, which is the whole of what the old assertion was for.
+    let mut sharing = Uf::default();
+    for &(a, b) in &d.share {
+        sharing.union(a, b);
+    }
     for p in &bounds.procs {
-        for facts in p.channels.values() {
-            if let Some(vas_node) = facts.vas_origin {
-                for (anchor, node) in bounds.by_pdb.values() {
-                    if *node == vas_node {
-                        assert_eq!(
-                            *anchor, p.anchor,
-                            "channel resolved to a VAS owned by another Proc (confused deputy)"
-                        );
-                    }
+        for (chan, facts) in &p.channels {
+            let Some(vas) = facts.vas_origin else {
+                continue;
+            };
+            let (Some(&co), Some(&vo)) = (d.owner.get(chan), d.owner.get(&vas)) else {
+                panic!("a projected channel/VAS resource has no owning declaration");
+            };
+            assert_eq!(
+                sharing.find(co),
+                sharing.find(vo),
+                "a channel resolved to a VAS in a component it shares NOTHING with \
+                 (confused deputy): channel {chan:?} owned by {co:?}, VAS {vas:?} owned \
+                 by {vo:?}"
+            );
+            // …and wherever that VAS routes, it routes to the component that OWNS it —
+            // never to the component that merely holds a reference.
+            for (anchor, node) in bounds.by_pdb.values() {
+                if *node == vas {
+                    assert_eq!(
+                        Some(*anchor),
+                        decl_proc.get(&vo).copied(),
+                        "by_pdb routes a VAS to a component that does not own it"
+                    );
                 }
             }
         }
@@ -246,68 +401,94 @@ fn assert_boundary_invariants(g: &RmGraph, arch: &dyn Arch) {
         );
     }
 
-    // INV5: every proc's client set is dup-connected (a single component). Verified
-    // by checking that no two distinct procs' client sets are joined by a dup edge —
-    // if they were, they'd be one proc. (Union-find already did this; we re-check the
-    // contrapositive: two clients in DIFFERENT procs share no dup edge.)
-    let client_proc: BTreeMap<HClient, kayfabe_core::ProcAnchor> = bounds
+    // ★★★ §12.44 — INV5, RESTATED AND STRENGTHENED. **The user boundaries are EXACTLY the
+    // connected components of the grouping relation**, anchor and all.
+    //
+    // ## What this used to say, and why it was wrong
+    //
+    // It asserted the contrapositive only — *"two clients in DIFFERENT procs share no dup
+    // edge"* — and it asked that question about the `hClient` **VALUE**: `client_proc` came
+    // from `client_values()`, `is_user` from `client_kinds()` collapsed to `HClient`, and
+    // the endpoints came off `dups()`, which reports handles. Every one of those is a
+    // §12.42 collapse, in the one instrument whose whole job is to notice §12.42 collapses.
+    //
+    // The cost was a FALSE POSITIVE on a legal stream, found by this very property's
+    // shrinker and reproduced by
+    // `rmgraph_order_independence::a_dup_whose_source_declaration_lost_its_root_never_
+    // regroups_onto_the_recycled_value`:
+    //
+    // ```text
+    // Alloc user A → Alloc user B → Dup (B,root) into A → Free (B,root) → Alloc (B,root)
+    // ```
+    //
+    // The alias keeps B-generation-0's resource alive, so the edge survives and
+    // `origin_of(dst)` still resolves; B's value is then re-declared by an unrelated
+    // tenant. `project` correctly refuses to group A with B-generation-**1** — that
+    // refusal is the §12.39 Shape-B isolation fix — but the checker, reading the bare
+    // value `B`, saw "a user↔user edge across two procs" and fired. It was asserting that
+    // a recycled `hClient` MUST re-merge, i.e. the breach.
+    //
+    // ## What it says now
+    //
+    // Both halves, in the declaration vocabulary and in one comparison:
+    //  - **positive** — declarations joined by a grouping edge are in ONE component;
+    //  - **negative** — declarations NOT so joined are in DIFFERENT components (the
+    //    vacuity guard: a checker that only ever proves sameness passes trivially on a
+    //    projection that put everyone in one `Proc`, which IS #14 un-fixed);
+    //  - and the anchor is the component's minimum declaration (§12.42).
+    //
+    // `NO_CONDEMNED` is what this property projects with, so the predicate's second
+    // conjunct — §12.37's condemnation line — is inert here by construction and is pinned
+    // by the `condemned_*` tests in `l1_mean.rs` instead.
+    let mut grouping = Uf::default();
+    for k in d.kind.keys().copied().filter(|&k| !d.is_kernel(k)) {
+        grouping.find(k); // seed, so a lone declaration is its own component
+    }
+    for (a, b) in d.grouping_edges() {
+        grouping.union(a, b);
+    }
+    let mut expect: BTreeMap<ProcAnchor, BTreeSet<ClientKey>> = BTreeMap::new();
+    for k in d.kind.keys().copied().filter(|&k| !d.is_kernel(k)) {
+        expect
+            .entry(ProcAnchor(grouping.find(k)))
+            .or_default()
+            .insert(k);
+    }
+    let got: BTreeMap<ProcAnchor, BTreeSet<ClientKey>> = bounds
         .procs
         .iter()
-        .flat_map(|p| p.client_values().into_iter().map(move |c| (c, p.anchor)))
-        .chain(
-            bounds
-                .system
-                .client_values()
-                .iter()
-                .map(|c| (*c, bounds.system.anchor)),
-        )
+        .map(|p| (p.anchor, p.clients.clone()))
         .collect();
-    // ★ §12.27 — the predicate is now typed: a dup GROUPS only when both endpoints are
-    // declared USER clients. A dup into (or out of) a kernel client is a reference, and
-    // the two sides staying in different components is the whole point of the fix.
-    let kinds: BTreeMap<HClient, kayfabe_arch::ClientKind> =
-        g.client_kinds().map(|(k, v)| (k.client, v)).collect();
-    let is_user = |c: HClient| matches!(kinds.get(&c), Some(kayfabe_arch::ClientKind::User { .. }));
-    // Any shape OTHER than user↔user is a REFERENCE: a kernel endpoint stays in the
-    // system component no matter how many user clients dup into it (that edge is exactly
-    // the one whose merge collapsed the whole guest into one `Proc`), and an undeclared
-    // endpoint groups with nobody. Both are covered by INV6 below.
-    for (dst, src) in g.dups() {
-        // Only edges whose origin resolves participate in grouping.
-        if g.origin_of(dst).is_some()
-            && is_user(dst.client)
-            && is_user(src.client)
-            && let (Some(&da), Some(&sa)) =
-                (client_proc.get(&dst.client), client_proc.get(&src.client))
-        {
-            assert_eq!(
-                da, sa,
-                "a user↔user dup edge joins two DIFFERENT procs — grouping is inconsistent"
-            );
-        }
-    }
+    assert_eq!(
+        got, expect,
+        "the user boundaries are not the connected components of the grouping relation"
+    );
 
-    // INV6 ★ §12.27: the system component holds exactly the declared KERNEL clients, and
-    // no user boundary holds any of them.
-    let kernel_clients: BTreeSet<HClient> = kinds
-        .iter()
-        .filter(|(_, k)| matches!(k, kayfabe_arch::ClientKind::Kernel))
-        .map(|(c, _)| *c)
-        .collect();
+    // INV6 ★ §12.27 / ★★★ §12.44: the system component holds exactly the declared KERNEL
+    // **declarations**, and no user boundary holds any of them.
+    //
+    // Keyed by declaration for the second reason §12.39 gives: the assignment pass reads
+    // the kind a namespace DECLARED, which outlives its client root, so an ORPHANED kernel
+    // declaration (its root freed, its resources kept alive by a user client's alias) is
+    // still the guest kernel's and still belongs to the system component. Read off
+    // `client_kinds()` — live roots only — that orphan vanished from the expected set
+    // while staying in `system.clients`, so this assertion was a latent false positive of
+    // exactly INV5's kind, on exactly INV5's collapse.
+    let kernel_decls: BTreeSet<ClientKey> =
+        d.kind.keys().copied().filter(|&k| d.is_kernel(k)).collect();
     for p in &bounds.procs {
         assert_ne!(
             p.anchor, bounds.system.anchor,
             "a user boundary took the system anchor"
         );
         assert!(
-            p.client_values().is_disjoint(&kernel_clients),
+            p.clients.is_disjoint(&kernel_decls),
             "a kernel client leaked into a USER proc — #14 collapse"
         );
     }
     assert_eq!(
-        bounds.system.client_values(),
-        kernel_clients,
-        "the system component is EXACTLY the declared kernel clients — no more, no less"
+        bounds.system.clients, kernel_decls,
+        "the system component is EXACTLY the declared kernel declarations — no more, no less"
     );
 }
 
