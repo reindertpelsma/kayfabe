@@ -264,7 +264,7 @@ proptest! {
         for ev in &b_events {
             ref_gpu.apply(*ev).expect("benign B applies cleanly on its own");
         }
-        let ref_bounds = project(&ref_gpu.spine.rmgraph, ref_gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("B projects");
+        let ref_bounds = project(&ref_gpu.spine.rmgraph, ref_gpu.spine.arch(), &NO_CONDEMNED).expect("B projects");
         let b_ref = boundary_of(&ref_bounds, B_CLIENT).expect("B has a boundary");
 
         // Adversarial world: A interleaved with B.
@@ -279,7 +279,7 @@ proptest! {
         }
 
         // The device still projects (a hostile A left it in a consistent state).
-        let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED)
+        let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED)
             .expect("device still projects after hostile A");
         let b_now = boundary_of(&bounds, B_CLIENT).expect("B still has a boundary");
         prop_assert_eq!(b_ref, b_now, "B's boundary changed under A's hostility");
@@ -562,7 +562,7 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
         "innocent C still routes"
     );
     // And the device as a whole is still consistent (no wedge, no corruption).
-    assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).is_ok());
+    assert!(project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).is_ok());
 }
 
 /// **Boundary 1.** The per-`Proc` completion plane is private: a hostile process
@@ -640,7 +640,7 @@ proptest! {
             let _ = resolve(&gpu, GpuId::ZERO, B_PDB, GpuVa(v));
         }
         // The device is still consistent after all of it.
-        prop_assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).is_ok());
+        prop_assert!(project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).is_ok());
     }
 }
 
@@ -1245,8 +1245,7 @@ fn b5_channel_cannot_bind_another_clients_vaspace_handle() {
     })
     .unwrap();
 
-    let bounds =
-        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("projects");
+    let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).expect("projects");
     // A's channel resolved to NO VAS — it never reached across into B's VASpace/PDB.
     let a_proc = boundary_of(&bounds, A_CLIENT).expect("A exists");
     let chan = a_proc.channels.values().next().expect("A's channel");
@@ -1315,8 +1314,7 @@ fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
     );
     // No phantom proc: the never-allocated SOURCE client groups into nothing, and the
     // declared destination is its own component and joins nobody through a parked edge.
-    let bounds =
-        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("projects");
+    let bounds = project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).expect("projects");
     assert!(
         bounds
             .procs
@@ -1347,7 +1345,7 @@ fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
         "a dup into an UNDECLARED destination namespace is a protocol violation"
     );
     assert_eq!(
-        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("projects"),
+        project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).expect("projects"),
         bounds,
         "the refusal mutated nothing"
     );

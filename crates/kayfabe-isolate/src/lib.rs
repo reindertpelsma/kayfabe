@@ -760,18 +760,6 @@ impl Cancels {
         Cancels(Vec::new())
     }
 
-    /// How many requests are latched.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    /// True if nothing is latched.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
     /// Latch one more.
     pub fn push(&mut self, req: CancelRequest) {
         self.0.push(req);

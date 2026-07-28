@@ -10290,12 +10290,8 @@ fn the_rpc_bridge_survives_two_interleaved_guest_streams_under_mean_device_load(
             );
 
             // ---- The two processes are two `Proc`s, despite sharing every object handle.
-            let b = project(
-                &bridge.spine.rmgraph,
-                bridge.spine.arch.as_ref(),
-                &NO_CONDEMNED,
-            )
-            .expect("projects");
+            let b = project(&bridge.spine.rmgraph, bridge.spine.arch(), &NO_CONDEMNED)
+                .expect("projects");
             assert_eq!(
                 b.procs
                     .iter()

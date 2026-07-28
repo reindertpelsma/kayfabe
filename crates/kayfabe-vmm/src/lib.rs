@@ -694,19 +694,6 @@ impl DeferQueue {
         }
         out
     }
-
-    /// How many events are still outstanding (the bound the §6.6 inventory cites: one
-    /// entry per outstanding `defer`).
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.heap.len()
-    }
-
-    /// Is the queue empty?
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.heap.is_empty()
-    }
 }
 
 /// # The hypervisor adapter — everything the Mode-2 core may ask of a VMM

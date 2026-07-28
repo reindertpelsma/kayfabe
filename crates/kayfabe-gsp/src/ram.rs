@@ -186,12 +186,6 @@ impl RegionMap {
         false
     }
 
-    /// The page size the region is described in.
-    #[must_use]
-    pub fn page_size(&self) -> u64 {
-        self.page_size
-    }
-
     /// The physically contiguous runs `[offset, offset+len)` decomposes into.
     ///
     /// One entry per page crossing; a contiguous region still yields one run per page,

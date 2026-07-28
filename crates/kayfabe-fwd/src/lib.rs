@@ -1119,7 +1119,7 @@ pub fn route_doorbell(
     token: u64,
 ) -> Result<DoorbellRoute, FwdFault> {
     let target = spine
-        .arch
+        .arch()
         .decode_doorbell(token)
         .ok_or(FwdFault::MalformedToken { token })?;
     let (pid, cid) = *spine
@@ -1531,7 +1531,7 @@ pub fn route_engine_object(
     class: ClassId,
 ) -> Result<EngineObjectRoute, FwdFault> {
     let engine = spine
-        .arch
+        .arch()
         .engine_of_object(class)
         .ok_or(FwdFault::NotAnEngine(class))?;
     let (pid, cid) = *spine
@@ -1798,7 +1798,7 @@ pub fn forward_engine_object(
 /// spine read (`Arch::is_case2_control`), no proc touched.
 #[must_use]
 pub fn classify_control(spine: &Spine, cmd: ControlCmd) -> ControlRoute {
-    if spine.arch.is_case2_control(cmd) {
+    if spine.arch().is_case2_control(cmd) {
         // Case 2: ack-only. The host already did it (Case-1). Do NOT replay — an
         // unprivileged replay returns InsufficientPermissions ("wrong layer").
         ControlRoute::AckOnly
@@ -2058,7 +2058,7 @@ pub fn read_pushbuffer(
     // Walk the GPFIFO entries (arch format), reading each range's method bytes. A
     // hostile GPFIFO entry can name any length; cap the per-range read so a bogus
     // length is a bounded read, never an arbitrary allocation (boundary-1 posture).
-    let ranges = spine.arch.pushbuffer().gpfifo_entries(ring);
+    let ranges = spine.arch().pushbuffer().gpfifo_entries(ring);
     let mut methods = Vec::new();
     let mut total = 0usize;
     for r in ranges {
@@ -2070,7 +2070,7 @@ pub fn read_pushbuffer(
             .min(MAX_PUSH_TOTAL_BYTES - total);
         let mut buf = vec![0u8; len];
         guest_read(vmm, r.gpa, &mut buf)?;
-        methods.extend(decode_methods(spine.arch.as_ref(), &buf));
+        methods.extend(decode_methods(spine.arch(), &buf));
         total += len;
     }
     Ok(methods)
@@ -2096,7 +2096,7 @@ pub fn apply_pushbuffer(
 
     let mut out = PushbufferOutcome::default();
     for (header, args) in methods {
-        match spine.arch.pushbuffer().decode_method(header, &args) {
+        match spine.arch().pushbuffer().decode_method(header, &args) {
             kayfabe_arch::PushMethod::SetObject { .. } => {
                 // Routing confirmation only — no address/completion state changes.
             }

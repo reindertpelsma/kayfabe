@@ -142,17 +142,6 @@ impl TraceLog {
     pub fn filter(&self, pred: impl Fn(&TraceEvent) -> bool) -> Vec<&Record> {
         self.records.iter().filter(|r| pred(&r.ev)).collect()
     }
-
-    /// Drop everything recorded so far, keeping the allocation.
-    pub fn clear(&mut self) {
-        self.records.clear();
-    }
-
-    /// Take the records out.
-    #[must_use]
-    pub fn take(&mut self) -> Vec<Record> {
-        core::mem::take(&mut self.records)
-    }
 }
 
 impl TraceSink for TraceLog {

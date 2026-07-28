@@ -641,15 +641,14 @@ fn wo_retried_duplicate_events_are_idempotent() {
     // Deliver every event, then deliver every event AGAIN (a full retry storm).
     apply_all(&mut gpu, events.clone());
     let after_first: usize = gpu.procs.len();
-    let bounds_first = project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).unwrap();
+    let bounds_first = project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).unwrap();
 
     // The retried delivery must be accepted idempotently (no ConflictingAlloc).
     for ev in &events {
         gpu.apply(*ev)
             .expect("retried event is idempotent, not a conflict");
     }
-    let bounds_second =
-        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).unwrap();
+    let bounds_second = project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).unwrap();
 
     assert_eq!(
         gpu.procs.len(),

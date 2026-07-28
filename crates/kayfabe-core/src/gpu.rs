@@ -827,7 +827,15 @@ pub struct Spine {
     /// The Axis-B behavior this device was realized with. The core only ever
     /// calls trait methods on it — never names a generation. **One arch for all
     /// targets** (MG-6: V1 multi-GPU is homogeneous-arch).
-    pub arch: Box<dyn Arch>,
+    ///
+    /// ★ **Private, read-only through [`Spine::arch`]** — and that is what makes MG-6's
+    /// homogeneity guard (`ensure_target`, `plan_refresh`) a statement rather than a
+    /// branch. Written exactly once, at realize; every [`GpuTarget`] is minted
+    /// with `self.arch.name()` and `GpuTarget::arch_name` is private too, so within this
+    /// composition `t.arch_name != self.arch.name()` cannot hold. While the field was
+    /// `pub`, an out-of-crate assignment was the ONLY thing that could make it hold — so
+    /// the guard's unreachability was a convention, not a property. It is a property now.
+    arch: Box<dyn Arch>,
     /// ★ Source of truth (decision #14).
     pub rmgraph: RmGraph,
     /// ★ Data-plane routing (derived): `(GpuId, PDB)` → owning proc (MG-3). Keyed on
@@ -1096,6 +1104,13 @@ struct RefreshPlan {
 }
 
 impl Spine {
+    /// The Axis-B behavior this device was realized with — **read-only**. There is no
+    /// setter, and that absence is load-bearing: see the `arch` field's comment.
+    #[must_use]
+    pub fn arch(&self) -> &dyn Arch {
+        self.arch.as_ref()
+    }
+
     /// Ensure target `gpu` exists (minting its disjoint window + drain gate on first
     /// touch, MG-6), enforcing the homogeneous-arch invariant loudly.
     fn ensure_target(&mut self, gpu: GpuId) -> Result<(), GpuError> {
@@ -2746,12 +2761,6 @@ impl Gpu {
     /// Apply one RM protocol event (see [`Spine::apply`]).
     pub fn apply(&mut self, ev: RmEvent) -> Result<(), GpuError> {
         self.spine.apply(&mut self.system, &mut self.procs, ev)
-    }
-
-    /// Take the latched cancels for lock-free discharge (see
-    /// [`Spine::take_pending_cancels`]).
-    pub fn take_pending_cancels(&mut self) -> Cancels {
-        self.spine.take_pending_cancels()
     }
 
     /// Reap retired procs at the quiesce point (see [`Spine::reap_retired`]).

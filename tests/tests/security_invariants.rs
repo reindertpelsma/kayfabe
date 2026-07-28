@@ -221,7 +221,7 @@ proptest! {
         }
 
         // Device still projects (hostile junk left it consistent).
-        prop_assert!(project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).is_ok());
+        prop_assert!(project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).is_ok());
 
         // THE property: each PDB resolves the shared VA to ITS OWN phys, never another's.
         for &(pdb, phys) in &oracle {
@@ -633,7 +633,7 @@ proptest! {
             let _ = gpu.apply(ev);
             // No global wedge at ANY point: the device always still projects.
             prop_assert!(
-                project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).is_ok(),
+                project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).is_ok(),
                 "a hostile event left the device unprojectable (a global wedge)"
             );
         }

@@ -673,7 +673,7 @@ framing of this milestone inherits that and asks whether to import the O(live ch
 
 - `kayfabe_rt::SharedDevice::doorbell(target_gpu, token, working_set)` — the token is a
   **parameter**.
-- `kayfabe_fwd::route_doorbell` — `spine.arch.decode_doorbell(token)` → `target.vchid` → a
+- `kayfabe_fwd::route_doorbell` — `spine.arch().decode_doorbell(token)` → `target.vchid` → a
   `by_vchid` lookup; a token that does not decode is `FwdFault::MalformedToken`.
 - `kayfabe_arch::Arch::decode_doorbell(token) -> Option<DoorbellTarget>`, and
   `kayfabe_arch::DoorbellTarget` carries `vchid`.

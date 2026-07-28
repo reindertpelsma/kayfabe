@@ -190,7 +190,7 @@ fn fresh_gpu() -> kayfabe_tests::Guarded<Gpu> {
 }
 
 fn boundaries(gpu: &Gpu) -> Boundaries {
-    project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("projects")
+    project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).expect("projects")
 }
 
 /// Translate and apply one message, returning whatever refused first.

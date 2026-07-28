@@ -927,11 +927,6 @@ impl RmGraph {
         self.gpus = gpus;
     }
 
-    /// The physical-GPU instances this device was realized with (G9's entitlement).
-    pub fn entitled(&self) -> impl Iterator<Item = u32> + '_ {
-        self.gpus.iter().copied()
-    }
-
     /// This namespace's ONE client-root handle, if its root has been observed and is
     /// still live (§12.27). O(log n) — an index read, never a scan.
     ///

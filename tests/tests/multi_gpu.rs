@@ -276,7 +276,7 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
     // The old device-global guard would have refused GPU1's identical PDB as a
     // PdbCollision; under the (GpuId, Pdb) key it is legal traffic.
     assert!(
-        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).is_ok(),
+        project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).is_ok(),
         "the two-GPU world projects cleanly"
     );
 
@@ -447,7 +447,7 @@ fn determinism_holds_under_gpu_axis() {
             gpu.apply(*ev)
                 .expect("valid multi-GPU fact applies in any order");
         }
-        project(&gpu.spine.rmgraph, gpu.spine.arch.as_ref(), &NO_CONDEMNED).expect("projects")
+        project(&gpu.spine.rmgraph, gpu.spine.arch(), &NO_CONDEMNED).expect("projects")
     };
 
     let reference = derive(&events);
@@ -587,7 +587,7 @@ fn homogeneous_arch_all_targets_share_the_device_arch() {
     // heterogeneous config would be a loud GpuError::HeterogeneousArch at realize; here
     // we assert the invariant holds — every target shares the device's arch identity.
     assert!(gpu.spine.targets.len() >= 2, "two GPU targets exist");
-    let name = gpu.spine.arch.name();
+    let name = gpu.spine.arch().name();
     // The FwdFault surface is unchanged by the axis (a compile-level check that the
     // per-target routing faults carry their GpuId).
     let miss = resolve(&gpu, GpuId(9), SHARED_PDB, SHARED_VA);
