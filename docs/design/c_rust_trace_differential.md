@@ -11,8 +11,7 @@
 ## 0. The decision
 
 The C artifact is **not** history. It is a second implementation of the same contract, and
-the only one a real NVIDIA driver has ever accepted end-to-end (Qwen2.5-7B at 63 t/s,
-`llm_7b_inference_done`). It is therefore promoted to a **standing oracle**, and the
+the only one a real NVIDIA driver has ever accepted end-to-end. It is therefore promoted to a **standing oracle**, and the
 C↔Rust trace differential becomes **rung zero of the bring-up ladder**
 (`host_execution_plane.md` §4) rather than a later tool.
 
@@ -104,6 +103,56 @@ nothing.
 `#46` (*kayfabe-abi codegen*). **`#46` is complete, so `#47` is unblocked** and was mis-parked;
 its true remaining dependency is Track B's recorded traces.
 
+## 5a. ★★★ MEASURED LIMITS — what a C recording can and cannot witness
+
+An instrumentation audit of `nvkvm_gpu_emul.c` at HEAD (`2899a74`) found four limits that
+narrow this oracle sharply. They are recorded here **before** the capture, because each one
+is a place a green diff would mean nothing.
+
+**L1 — the completion plane has NO C oracle at all.** `CompletionOp::Observed` is
+unproducible: the C never observes a host completion source, it **forges** completions —
+`nvkvm_chan_sem_wr32` (`C:5278`), the finishPayload forge (`C:4093-4097`), the `0xFFF508`
+guest-kernel backdoor (`C:3545-3587`). A grep over `nvkvm_isolate_*(` finds 17 call sites
+and **zero** poll/event verbs. ⇒ **The entire completion-source plane — precisely what L1-M1
+is being built around — is invisible to this differential.** A green diff says nothing about
+it. This is the single biggest blind spot and the likeliest source of false confidence.
+
+**L2 — the diff will NEVER be green end-to-end, and a green diff would itself be the bug.**
+The C has no refusal vocabulary; `nvkvm_m3_service_cmdq` echoes `NV_OK` for essentially
+everything (`C:2417-2419`). So `Outcome::Refused` is unproducible from the C, and **every**
+MUST-DIFFER row is a position where the C emits a positive event and the Rust emits a
+`Refused`. The ledger is not a footnote to the diff — it is the only thing that makes the
+diff readable at all.
+
+**L3 — any forwarding-mode trace is non-hermetic BY CONSTRUCTION.** With `m2fwd=on` (the
+default, `C:9567`) `nvkvm_m2_share_guest_ram` (`C:6358-6394`) `MAP_FIXED`s the whole guest-RAM
+memfd into the stub, and the **host GPU DMAs into guest RAM directly** — bytes that are
+guest-visible and pass through neither `nvkvm_dmaw` nor any QEMU path. Replaying such a trace
+cannot reproduce the guest's view. This is a stronger limitation than §6.1 acknowledges.
+
+**L4 — the archived logs are UNUSABLE for this; capture must be a fresh instrumented run.**
+`s->access_count` is incremented *inside* the log statement (`C:1525`, `C:4309`), so it counts
+**logged BAR0 accesses only**; DMA reads/writes, IRQ raises and RPC replies carry no sequence
+number and interleave by wall-clock arrival. The ordering information was never recorded.
+(Three further defects are why the recorder cannot simply reuse the existing logging: the
+BAR0 read trace has **three early returns that bypass it entirely** — PROM/VBIOS and the two
+`LINK_*` registers, `C:1500-1515` — so ~1 MiB of streamed VBIOS and the value gating
+`UVM_REGISTER_GPU` have never appeared in any C log; `nvkvm_bar0_write` logs itself **last**,
+after all side effects, inverting causality; and it is **re-entered internally** with a
+fabricated doorbell at `C:3366-3370` that the guest never wrote.)
+
+★ **The good news, and it is load-bearing:** the single-counter total order is *sound*.
+`qemu_thread_create|pthread_create|qemu_bh_new|timer_new` return **zero hits** in the device;
+all four `MemoryRegionOps` keep `global_locking = true`; the isolate reader thread never
+touches `NvkvmGpuEmul`. A plain non-atomic `uint64_t` in the device struct is a genuine total
+order — no lock, no atomic. This upgrades the port plan's `[inferred] I2` to **evidenced**.
+
+⇒ **Consequence for the capture order:** the hermetic cold bring-up (`m2fwd=off`,
+`m2romregs=off`, BAR0, full mask) is the one trace a replay can be *closed* over, it is small,
+and it is exactly what `kayfabe-gsp` S5 needs. **Take it first.** Forwarding-mode traces are
+worth capturing for their *decision* planes, not for replayability, and must be marked
+non-hermetic in their header.
+
 ## 6. Limits — what this oracle does NOT establish
 
 - **One point on each axis.** The C's traces are one GPU (GA106), one host driver
@@ -112,6 +161,18 @@ its true remaining dependency is Track B's recorded traces.
 - **The C is a reference, not a correctness oracle.** Matching it is evidence, not proof —
   it shipped the nine `GSP-D*` divergences and the promote-ctx defects. Where the ledger says
   we differ, *the C is the thing that is wrong*.
+- ★ **What the C actually proved in MODE 2, stated correctly.** Mode-2's LLM result is
+  **49.9 tok/s on a ~0.5 B Qwen2 (469 MB GGUF)** against a **47.5 t/s host-native ceiling on
+  the same RTX 3050** — i.e. parity, zero overhead bare-metal (`mode2_baremetal_32`). The
+  **63 t/s figure is MODE 1**, on a faster RTX 3060, and the **Qwen2.5-7B** run is likewise
+  **Mode 1**, at ~20 tok/s (`llm_7b_inference_done`). `mode2_baremetal_32` flags this exact
+  conflation as apples-to-oranges. Do not cite the 7B or the 63 t/s as Mode-2 evidence.
+- ★ **A stock guest is evidenced for matmul, NOT for the LLM.** At emulator source `862c7c2`
+  a stock, unpatched 580.159.04-open guest passed `cup2`, `cupctx2_min` (#12), `cup8`
+  (2048² matmul byte-exact, `bad=0 maxerr=0`) and `cup8_iter` (#13, 5/5). The LLM and PyTorch
+  were **not** re-validated stock — they were lost with the original overlay and never
+  re-staged. "Stock guest → working LLM" is therefore **unevidenced**, and is the first novel
+  risk any capture campaign meets.
 - **It cannot cover what the recording did not exercise** — §6's S5 row names exactly this as
   its residual risk.
 - It says nothing about the host execution plane, which is a separate ★★★ gap
