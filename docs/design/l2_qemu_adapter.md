@@ -1,3 +1,27 @@
+> ## ★★★ SUPERSEDED IN PART — 2026-07-29 (owner decision)
+>
+> **§5.4's memory-plane mechanism is replaced.** Do not express the guest-visible map
+> through QEMU's `MemoryRegion` tree. QEMU reserves the GPA window and does not back it;
+> we install our own memslot via `KVM_SET_USER_MEMORY_REGION` and populate by `mmap`,
+> with `KVM_MEM_READONLY` giving the read-native tier directly. See
+> **`host_execution_plane.md` §1** for the decision, its three arguments, the C citations
+> (`nvkvm_mmap_host.c:482`, `nvkvm_isolate_handlers.c:1792`) and the named risks.
+>
+> Consequences for this document:
+> * ★ **§4.3 vs §5.4 no longer conflict** — the contradiction dissolves rather than being
+>   worked around, because nothing touches QEMU's tree after realize. `f0053ef`'s
+>   latch-and-claim workaround becomes unnecessary.
+> * ★ **§5.1's pointer hand-over is not needed**, so Q2 does **not** owe
+>   `kayfabe-linux-raw` a relaxation — the unwrap stays inside `kvm_unsafe.rs` and the
+>   ratchet stays at 37.
+> * §5.4's "classify the overlay `Device`" is dropped; it contradicted
+>   `Vmm::map_read_native`'s own contract and made Q1's "identical operation logs"
+>   acceptance unachievable.
+>
+> The rest of this document — the crate split, the lock ladder, §9.3's three-part gate,
+> the doorbell decision, the balloon finding, and every QEMU-facility citation — **stands
+> unchanged**.
+
 # L2-Q — the QEMU adapter: the device, the threads, the doorbell, and the lifecycle
 
 **What this doc is.** The design for the last unbuilt layer between `kayfabe` and a running
