@@ -94,9 +94,94 @@ designed; the ratchet stays at 37.
   failure should be loud at realize, not silent at runtime.
 - **[unverified]** Whether QEMU's KVM listener ever recomputes and clobbers foreign slots
   (BAR remap by guest firmware, hotplug). The C survived it; **find out why** rather than
-  assuming.
+  assuming. → **RESOLVED, see §1.5.**
 - **[unverified]** Whether the C needed a QEMU patch for any of this. It ran on 9.2.0 from
-  `C: scripts/build_qemu.sh:10`.
+  `C: scripts/build_qemu.sh:10`. → **RESOLVED: no patch. See §1.5.**
+
+### 1.5 ★★★ RESOLVED against QEMU 9.2.0 source, 2026-07-29 — safe, and here is *why*
+
+**The reservation object is a pure MMIO `MemoryRegion`.** `memory_region_init_io` +
+`pci_register_bar` as a 64-bit prefetchable BAR — `C: src/qemu/virtio_nvgpu_pci.c:108-114`,
+size `128 GiB` at `:41-42`, with stub ops that *"are never reached normally"* (`:50-66`). Not
+a container, not a reservation API (there is none), not nothing.
+
+**It is structurally invisible to KVM, which is the whole answer.**
+`qemu: system/memory.c:1568-1579` — `memory_region_init_io` never sets `mr->ram`. So
+`memory_region_is_ram()` (`qemu: include/exec/memory.h:1690-1693`, literally `return mr->ram;`)
+is false, and `qemu: accel/kvm/kvm-all.c:1449-1457` takes an **unconditional early return**
+for a *writable non-RAM* region — **before** `kvm_alloc_slot`, before
+`kvm_lookup_matching_slot`, before any ioctl.
+⇒ **QEMU never creates, deletes, or even looks up a memslot for our BAR range**, in either
+direction. A BAR remap (`qemu: hw/pci/pci.c:1535-1575`, `del_subregion` +
+`add_subregion_overlap`) feeds `kvm_region_del`/`kvm_region_add` which both land on that same
+early return, so a remap produces **exactly zero KVM slot operations**. Hotplug and
+`has_power` route through the same `pci_update_mappings`. Every whole-array sweep in
+`kvm-all.c` is bounded by QEMU's own `kml->slots[]` and never enumerates KVM's table — QEMU
+has no read-back ioctl. **QEMU is structurally incapable of clobbering a slot it did not
+create, except by reusing its id.**
+
+**No QEMU patch is needed.** `C: scripts/build_qemu.sh` patches exactly two upstream files —
+`hw/misc/meson.build` (`:120-173`) and `hw/virtio/virtio.c` (`:175-211`, the
+`virtio_device_names[]` assert). `accel/kvm/` and `system/` are **stock 9.2.0**. That makes
+this a *source-level* guarantee, not an empirical one, and it should hold on Cloud Hypervisor
+too, which likewise tracks only its own slots.
+
+#### ★★★ But the C has a LATENT BUG here, and "it survived" is the wrong lesson
+
+`C: src/qemu/nvkvm_mmap_host.c:189-193` caches the window base **once** and never re-resolves
+it; `window_base_get` has no other caller and there is **no BAR-change hook anywhere in
+`src/qemu/`**. So if the guest moves BAR2 after the slot is installed, QEMU's MMIO region
+follows and **our memslot does not** — the window keeps working at the *old* GPA (now
+unreserved, and available to another BAR) while the *new* GPA reads zeros. Silent.
+
+It never fired for three reasons, all evidenced: the install is lazy, on the first GPU mmap
+(`:241-243`), long after PCI resource assignment; the transient unmap during Linux's BAR
+sizing **is** properly guarded (`qemu: hw/pci/pci.c:1494-1496` →
+`C: virtio_nvgpu_pci.c:74-75` → `C: nvkvm_mmap_host.c:196-204`, real code not just a comment);
+and Linux honours firmware BAR assignment absent a conflict or `pci=realloc`.
+⇒ **The mechanism is sound; the C's implementation of it carries an unguarded assumption.**
+**We must close it:** latch the base at first install and *assert it unchanged* on every
+resolve, failing **loudly** — which is what §1.4's second bullet already demands of us.
+
+#### ★★ Correction to §1.4's first bullet — comment ≠ measurement
+
+`C: virtio_nvgpu_pci.c:30-33` states the collision was *"proven by the earlier probe"*. The
+probe writeup says only *"the **likely cause** is a memslot conflict"*
+(`C: docs/design/gpa_window_pci_bar.md:68-74`). What is **evidenced** is that adding a
+`memory_region_init_ram_ptr` BAR regressed `cuInit` and removing it restored matmul. The
+*mechanism* was never root-caused, and both candidate mechanisms look implausible: a slot-id
+collision needs 64 simultaneously live AS-0 slots (a Mode-2 VM uses well under 16), and a GPA
+overlap would have `abort()`ed QEMU loudly (`qemu: kvm-all.c:1516-1521, 1537-1541`) — the
+probe explicitly reports *no* QEMU/KVM error. **This does not endanger §1**, which proposes
+the shape the C shipped and measured green; it means the *rejected alternative's* failure is
+unexplained. Third instance of the comment-vs-measurement trap.
+
+#### ★ Slot ids: allocate TOP-DOWN, not from a hardcoded base
+
+The C uses `NVKVM_KVM_SLOT_BASE 64` / `COUNT 448` (`C: nvkvm_mmap_host.c:390-435`) on the
+convention that *"below the base is reserved for QEMU's static regions"* — **enforced by
+nothing**. QEMU allocates densely from 0 (`qemu: kvm-all.c:250-262`, `slots[i].slot = i` at
+`:208-210`), starting at 16 slots and doubling. So disjointness holds by arithmetic *for this
+device set*, and breaks under virtio-mem, memory hotplug, or several VFIO devices with RAM
+BARs. **Allocate our range from the top of `KVM_CAP_NR_MEMSLOTS` instead** — QEMU grows
+upward and `abort()`s before wrapping, so collision would require exhausting the whole space.
+
+#### ★ §1.5a The window is KVM-visible but QEMU-FlatView-OPAQUE — a real constraint
+
+The shadowing is KVM-only. Anything reaching the window through QEMU's `FlatView`
+(`address_space_rw`, `pci_dma_read/write`, `memory_region_find`) hits the stub ops and gets
+**zeros / silent discard**, not our memory. Mode 1 never did this; we will.
+⇒ **`Vmm::gpa_read`/`gpa_write` must NOT route window GPAs through QEMU** — they must use our
+own HVA arithmetic — and `GuestRamMap` will (correctly) classify the window as `Device`.
+
+#### ★★ Scope: §1's tiering is NEW CONSTRUCTION, not a port
+
+The measured artifact is the **Mode-1** virtio-nvgpu window. **Mode 2 has never had a
+memslot**: `C: nvkvm_gpu_emul.c:9743-9779` makes BAR0/BAR1/BAR3 all trapping MMIO, and
+`KVM_SET_USER_MEMORY_REGION` appears **nowhere** in that file; `bar1_memslot_perf` is a
+roadmap note, not code. So the C is precedent for **reservation + one RW slot** and for
+nothing else. `KVM_MEM_READONLY` read-native and the mixed passthrough/observe taxonomy must
+earn their own green gate.
 
 ## 2. ★★ DECISION — model RM's semantics in the mock, deterministically
 
