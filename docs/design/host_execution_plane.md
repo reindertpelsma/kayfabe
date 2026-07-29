@@ -157,6 +157,37 @@ around the weaker true property, or the flag stays off and the divergence stays 
 **No test was narrowed to get green**; the flag exists so the hazard is testable *today*
 without silently editing twelve assertions.
 
+#### ★★★ ANSWERED ON HARDWARE, 2026-07-29 (`93bc38d`) — and the answer is neither hypothesis
+
+This section said only a real host could settle it. A real host has. RTX 3060 (GA104),
+NVIDIA open 580.159.04, **800 `alloc_vaspace` + `free` pairs**, three configurations:
+
+| configuration | wall | speedup |
+|---|---|---|
+| 1 worker, sequential | 1610 ms | 1.00× |
+| 1 isolate × 4 workers (**one** RM client) | 1602 ms | **1.00×** |
+| 4 isolates × 1 worker (**four** clients, four processes) | 1610 ms | **1.00×** |
+
+Ideal is 4.00×. **Neither the worker pool NOR separate RM clients buys any alloc/free
+throughput.** The binding constraint is the **device-global API write lock held across the
+GSP RPC**, not the per-client lock. So the working hypothesis carried into the isolate task
+— *"parallelism must come from multiple clients, not multiple workers on one client"* — is
+**false for this verb class**, and so is the belief that the pool provides it.
+
+⇒ **The 12 tests are NOT refuted, and none was touched.** The double is now wrong in the
+*other* direction: `ClientLock` stops a sibling from **entering**, whereas real RM accepts it
+and queues it in the kernel — so both verbs genuinely are in flight, and the tests' liveness
+claims hold. What does not hold is the *throughput* they imply, and **no test asserts
+throughput**. Scope honestly: this measures alloc/free only, the class that takes the lock in
+WRITE; a read-mostly or doorbell-path verb may behave differently and has not been measured.
+
+★ **Instrument warning, because it nearly produced the opposite headline.** The first version
+of this measurement counted overlapping request *intervals* and reported ~460 concurrent in
+the one-client case — reading as "the pool DOES buy concurrency". It does not; an interval
+spans the socket round trip. **The sequential baseline is what made the numbers readable, and
+it was missing from the first version.** Any future concurrency claim here needs that baseline
+in the same table.
+
 ### 2.1 ★ The mock must lie where the real host lies
 
 `MockRmBackend` validates handles against its own per-isolate namespace. `HostHandle`'s

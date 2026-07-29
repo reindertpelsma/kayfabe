@@ -66,10 +66,28 @@ file it constrains.
 
 ## Layout
 
-`crates/` — the ~12 crates (see `ARCHITECTURE.md` for the crate→design-section table).
-Fully implemented this milestone: `util`, `arch`, `vmm` (traits), `isolate` (traits),
-`mmu`, `completion`, `core`, `fwd` (core slice), `mocks`. Skeletons: `abi`, `gsp`,
-`trace`. `tests/` — the VMM-agnostic conformance suite.
+`crates/` — **20 crates** (see `ARCHITECTURE.md` for the crate→design-section table).
+`util`, `arch`, `vmm`/`isolate` (traits), `mmu`, `completion`, `core`, `fwd`, `mocks`,
+`abi` (codegen from the open kmods — no longer a skeleton), `gsp` (fake-boot FSM + the
+B0–B6 bridge), `rmrpc` (RPC → `RmEvent` → `Gpu::apply`), `trace`, `rt`, `shell`,
+`linux-raw` (**the ONLY crate permitted `unsafe`**), `vmm-kvm` (real KVM), `vmm-qemu`,
+`qemu-raw`, and ★ `isolate-host` — the **real** host isolate, added 2026-07-29.
+`tests/` — the VMM-agnostic conformance suite.
+
+## ★★★ What "done" means — read before planning any milestone
+
+**The stock NVIDIA driver boots against kayfabe in a real KVM guest and runs one real CUDA
+kernel to a correct result.** Not "L1 complete", not a mutation score — those are internal
+milestones **the mocks can bless**. The mock wall is *measured*, not theoretical: with 749
+tests green, 15/15 gates and 99.2 % mutation, making the double honest about ONE property
+killed **12 tests**, and a "working" handle-namespace gate turned out never to have been
+load-bearing. Get to hardware early and let it delete assumptions.
+- **The ladder of un-fakeable events:** (1) real RM ioctl to `/dev/nvidiactl` — **DONE
+  2026-07-29**; (2) replay the C's recorded `cap1` against the Rust GSP; (3) the full event.
+- **"Correct result" has a literal bar:** `cup8` — 2048² matmul, `bad=0 maxerr=0`, byte-exact,
+  the same source file the C passes.
+- Key docs: `docs/design/host_execution_plane.md` (the memory plane + execution plane
+  decisions), `docs/design/c_rust_trace_differential.md` (the oracle and its limits).
 
 `docs/reference/` — **measured** ground truth, cited per fact, kept out of the design docs so
 it can be corrected in one place:
@@ -90,9 +108,25 @@ MIG-accommodating so MIG is a later adapter, not a refactor).
 
 ## Working notes
 
-- The C repo (`../nvidia-gpu-passthrough`) is the single-process **differential oracle**
-  and stays alive — do not delete or co-mingle. Real-GPU work happens there / on the
-  serialized vast.ai bench; this repo's tests are GPU-free by construction.
+- ★★★ **"GPU-free by construction" STOPPED BEING TRUE on 2026-07-29.** `kayfabe-isolate-host`
+  spawns a real sandboxed child process that issues **real NVIDIA RM ioctls**, and
+  `crates/kayfabe-isolate-host/src/bin/rmladder.rs` is a committed, re-runnable program that
+  does so against a real driver. The *unit/integration suite* is still GPU-free and must stay
+  that way; the ladder is a separate binary, run deliberately on hardware. Do not restore the
+  old claim.
+- **Two hosts, and they are different dies — do not conflate a result from one with the other:**
+  `ssh vh` = the **C reference bench**, RTX 3060 **GA106**, full Mode-2 stack (QEMU + guest +
+  GA106 VBIOS). `ssh vr` = the **Rust hardware box**, RTX 3060 **GA104**, driver only. GA104 is
+  fine for RM ioctls (chip-independent); it is **not** a GA106 result once the VBIOS or
+  chip-specific registers matter. Both on NVIDIA **open 580.159.04**.
+- The C repo (`../nvidia-gpu-passthrough`) is the **differential oracle** and stays alive — do
+  not delete or co-mingle. ★ It is now a *standing* oracle, not a memory: it was rebuilt from
+  source on fresh hardware on 2026-07-29 and reproduced `cuCtxCreate → 2048² matmul` at
+  `bad=0 maxerr=0` on a **stock unpatched guest**, and its recorded reference traces are
+  committed at `../nvidia-gpu-passthrough/traces/mode2_c_reference/` (~11 MB zstd, dense,
+  `n_errors=0`). See `docs/design/c_rust_trace_differential.md` — **including its four measured
+  limits**, chiefly that the completion plane has NO C oracle at all and that the diff can
+  never be green end-to-end.
   ★ "Single-process" is now **measured, not stylistic**: the C runs exactly one CUDA process
   per QEMU lifetime (`docs/reference/mode2_bench_lifecycle.md` §1), so it cannot oracle
   multi-process **Mode-2** behaviour at all. Mode-1 (per-`mm` isolates, 22 real apps at host
