@@ -41,6 +41,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_abi::versions::{BENCH_DRIVER, DriverAbiTable, table_for};
 use kayfabe_abi::wire::AbiError;
+use kayfabe_abi::{ClientKindRuleUnknown, GuestOs};
 use kayfabe_arch::ClientKind;
 use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
@@ -93,7 +94,7 @@ fn command(msg: &[u8]) -> RpcCommand {
 
 /// `translate` over a whole message.
 fn xlate(msg: &[u8]) -> Result<Translation, BridgeRefusal> {
-    translate(abi(), &command(msg))
+    translate(abi(), GuestOs::Linux, &command(msg))
 }
 
 /// A `GSP_RM_ALLOC` message declaring a client root, built by the independent builder.
@@ -1108,6 +1109,17 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
             params: 2,
         },
         BridgeRefusal::ReservedClient,
+        // ★★★ The fourth axis's, added 2026-07-29. It has to be here for the same reason
+        // every other one is: the guest-OS fold was invisible precisely because nothing
+        // counted it, and a refusal that is not in this list is a refusal a census cannot
+        // report. Its tag must be distinct from `ReservedClient`'s and from
+        // `ClientHandleDisagrees`'s — all three fire on the same `NV01_ROOT` message, and
+        // a census that folded them could not tell "this guest is misconfigured" from
+        // "this guest sent nonsense".
+        BridgeRefusal::ClientKindRuleUnknown(ClientKindRuleUnknown {
+            guest_os: GuestOs::Windows,
+            process_id: 0x0000_dd13,
+        }),
         BridgeRefusal::Abi(AbiError::Truncated {
             c_name: "NVOS00_PARAMETERS",
             need: 16,
@@ -1686,7 +1698,7 @@ fn deliver_all(
 fn the_policy_translates_and_applies_and_counts_what_it_did() {
     let mut gpu = fresh_gpu();
     let (census, applied, inert, out, midway) = {
-        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
         let mut out = vec![
             policy.deliver(&command(&HEX_ROOT_ALLOC)),
             policy.deliver(&command(&w::message(
@@ -1752,7 +1764,7 @@ fn an_accepted_command_is_acked_by_the_fsm_and_a_refused_one_is_answered_here() 
     use kayfabe_gsp::{CommandPolicy, Reply};
 
     let mut gpu = fresh_gpu();
-    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
 
     assert_eq!(
         policy.respond(&command(&HEX_ROOT_ALLOC)),
@@ -1798,7 +1810,7 @@ fn a_free_of_an_undeclared_object_is_refused_by_the_graph_and_named_on_the_wire(
     use kayfabe_gsp::{CommandPolicy, Reply};
 
     let mut gpu = fresh_gpu();
-    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
     let _ = policy
         .deliver(&command(&root_alloc_msg(w::NV01_ROOT, HEX_CLIENT, HEX_PID)))
         .expect("the namespace is declared");
@@ -1839,7 +1851,7 @@ fn a_free_of_an_undeclared_object_is_refused_by_the_graph_and_named_on_the_wire(
 #[test]
 fn a_double_free_of_a_client_root_is_refused_by_name() {
     let mut gpu = fresh_gpu();
-    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
     let _ = policy
         .deliver(&command(&root_alloc_msg(w::NV01_ROOT, HEX_CLIENT, HEX_PID)))
         .expect("root");
@@ -1873,7 +1885,7 @@ fn a_double_free_of_a_client_root_is_refused_by_name() {
 #[test]
 fn a_conflicting_client_root_is_refused_while_an_identical_resend_is_not() {
     let mut gpu = fresh_gpu();
-    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
     let first = command(&root_alloc_msg(w::NV01_ROOT, HEX_CLIENT, HEX_PID));
     let want = Ok(Translation::Event(expected_root_event(
         HEX_CLIENT,
@@ -1928,7 +1940,7 @@ fn a_conflicting_client_root_is_refused_while_an_identical_resend_is_not() {
 fn the_projection_from_wire_bytes_equals_the_projection_from_hand_written_events() {
     let mut gpu = fresh_gpu();
     {
-        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
         for out in deliver_all(&mut policy, &script_x().messages()) {
             let _ = out.expect("every message of the fixture is legal");
         }
@@ -1990,7 +2002,7 @@ fn one_changed_field_of_the_script_changes_the_projection() {
     ] {
         let mut gpu = fresh_gpu();
         {
-            let mut policy = GraphPolicy::new(abi(), &mut gpu);
+            let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
             for out in deliver_all(&mut policy, &script.messages()) {
                 let _ = out.expect("the mutated script is still legal");
             }
@@ -2031,7 +2043,7 @@ struct Run {
 /// transport we did not write twice.
 fn run_through_transport(profile: Profile, steps: &[w::Step], gpu: &mut Gpu) -> Run {
     let mut world = GspWorld::new_sized(profile, MODEL_A, REAL_QUEUE_SIZE);
-    let mut policy = GraphPolicy::new(profile.table(), gpu);
+    let mut policy = GraphPolicy::new(profile.table(), GuestOs::Linux, gpu);
 
     let mut transitions = world.boot_with(&mut policy);
     // The guest links its status queue and consumes `GSP_INIT_DONE` — which is also what
@@ -2156,7 +2168,7 @@ fn commands_queued_before_the_bind_reach_the_policy_when_it_publishes() {
     }
 
     let (transitions, applied, census) = {
-        let mut policy = GraphPolicy::new(P580.table(), &mut gpu);
+        let mut policy = GraphPolicy::new(P580.table(), GuestOs::Linux, &mut gpu);
         // The pre-bootstrap doorbell: the healthy arm, and it must read no guest RAM and
         // reach no policy.
         let early = world
@@ -2826,7 +2838,7 @@ fn set_page_dir() -> RmEvent {
 fn gpu_from_script(script: &RpcScript) -> kayfabe_tests::Guarded<Gpu> {
     let mut gpu = fresh_gpu();
     {
-        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
         for (i, out) in deliver_all(&mut policy, &script.messages())
             .into_iter()
             .enumerate()
@@ -3424,7 +3436,7 @@ fn one_changed_field_of_the_compute_script_changes_the_projection() {
         .device(cp::C, cp::C, cp::DEV, 1);
     {
         let mut gpu = fresh_gpu();
-        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
         let out = deliver_all(&mut policy, &other_gpu.messages());
         assert_eq!(out[0], Ok(Translation::Event(root_of_c())));
         assert_eq!(
@@ -3451,7 +3463,7 @@ fn one_changed_field_of_the_compute_script_changes_the_projection() {
         .channel(cp::C, cp::TSG, cp::CE, ce_flags(), cp::CTXSHARE, 0);
     {
         let mut gpu = fresh_gpu();
-        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
         let out = deliver_all(&mut policy, &swapped_vchid.messages());
         for (i, o) in out.iter().enumerate().take(6) {
             assert!(o.is_ok(), "message {i} of the prefix refused: {o:?}");
@@ -3579,7 +3591,7 @@ fn with_the_channel_decoder_removed_the_doorbell_takes_no_vas() {
     let run = |channel: RmEvent| {
         let mut gpu = fresh_gpu();
         {
-            let mut policy = GraphPolicy::new(abi(), &mut gpu);
+            let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
             for out in deliver_all(&mut policy, &prefix.messages()) {
                 let _ = out.expect("the prefix is legal");
             }
@@ -3639,7 +3651,7 @@ fn with_the_channel_decoder_removed_the_doorbell_takes_no_vas() {
 fn gpu_cid_at(vchid: VChid, prefix: &RpcScript, channel: RmEvent) -> kayfabe_core::ChanId {
     let mut gpu = fresh_gpu();
     {
-        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
         for out in deliver_all(&mut policy, &prefix.messages()) {
             let _ = out.expect("the prefix is legal");
         }
@@ -3700,7 +3712,7 @@ fn a_channels_vaspace_resolves_through_all_three_declared_paths() {
 #[test]
 fn an_object_handle_recycled_as_a_different_class_is_translated_afresh() {
     let mut gpu = fresh_gpu();
-    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
 
     let mut boot = RpcScript::new();
     boot.client_root(w::NV01_ROOT, cp::C, cp::PID)
@@ -5215,7 +5227,7 @@ fn deliver_script(
     gpu: &mut Gpu,
     script: &RpcScript,
 ) -> (Vec<Result<Translation, BridgeRefusal>>, RefusalCensus) {
-    let mut policy = GraphPolicy::new(abi(), gpu);
+    let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, gpu);
     let out = deliver_all(&mut policy, &script.messages());
     let census = policy.census().clone();
     (out, census)
@@ -5248,7 +5260,7 @@ fn a_dup_into_an_undeclared_namespace_is_refused_by_the_graph_naming_dst_first()
         "translate never pre-empts the graph's namespace rule",
     );
 
-    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
     assert_eq!(
         policy.deliver(&command(&undeclared)),
         Err(BridgeRefusal::Graph(GpuError::Graph(
@@ -5324,7 +5336,7 @@ fn a_zero_source_client_is_refused_by_the_rule_that_owns_it() {
         "★ the bridge carries it — the zero SOURCE client is not its question",
     );
 
-    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
     assert_eq!(
         policy.deliver(&command(&msg)),
         Err(BridgeRefusal::Graph(GpuError::Graph(
@@ -5369,7 +5381,7 @@ fn a_conflicting_dup_is_refused_while_an_identical_resend_is_not() {
     // The same alias handle, pointing at a DIFFERENT resource.
     let alias_dev1 = dup_msg(tp::C2, tp::DEV2, tp::ALIAS2, tp::C1, tp::DEV1, 0);
 
-    let mut policy = GraphPolicy::new(abi(), &mut gpu);
+    let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
     assert_eq!(
         policy.deliver(&command(&alias_vas1)),
         Ok(Translation::Event(expected_dup(
@@ -5656,6 +5668,352 @@ fn a_dup_into_the_kernel_client_merges_nothing_and_the_alias_lands_in_the_system
         ],
     );
     assert!(merged.system.client_values().is_empty());
+}
+
+// =================================================================================
+// 8.5 ★★★ The FOURTH AXIS — the guest OS, and the privilege fold it used to hide
+//
+// `four_axes_of_variation.md` §1 lists the guest OS as the one axis with *"nowhere yet"*
+// as its home, and warns that Windows-as-a-guest *"only stays true if nothing bakes in
+// 'the guest is Linux'"*. Until 2026-07-29 something did, in the single worst place: the
+// wire→`ClientKind` translation, i.e. the function that decides which RM clients share a
+// host isolate.
+//
+// The rule it applied — `processID == 0xFFFF_FFFF` means kernel-privileged — is gated in
+// the guest driver on `RMCFG_FEATURE_PLATFORM_UNIX`
+// (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` / `ogkm-610: rpc.h:67-77`,
+// byte-identical). On a non-UNIX guest the `else` arm runs for kernel clients too, so
+// they declare a *real* pid — and the old code answered `ClientKind::User { pid }` for
+// them, silently, with no refusal and nothing counted.
+//
+// These tests are about the SHAPE of that answer, so they are driven end to end through
+// the policy from wire bytes and asserted at the projection: what a refusal must not do
+// is leave a partial graph, and what a profile must not do is change anything else.
+// =================================================================================
+
+/// Drive a whole script through the policy under a **named** guest OS, and report
+/// everything an assertion could want: the per-message outcomes, the census, how many
+/// commands the graph actually accepted, and the resulting boundaries.
+///
+/// ★ Deliberately does **not** `unwrap` (unlike [`gpu_from_script`], which asserts a
+/// clean run): the subject here is what happens when a message is refused, so a helper
+/// that panicked on a refusal could not express any of it.
+fn run_script_under(
+    guest_os: GuestOs,
+    script: &RpcScript,
+) -> (
+    Vec<Result<Translation, BridgeRefusal>>,
+    RefusalCensus,
+    u64,
+    Boundaries,
+) {
+    let mut gpu = fresh_gpu();
+    let (out, census, applied) = {
+        let mut policy = GraphPolicy::new(abi(), guest_os, &mut gpu);
+        let out = deliver_all(&mut policy, &script.messages());
+        (out, policy.census().clone(), policy.applied())
+    };
+    let b = boundaries(&gpu);
+    (out, census, applied, b)
+}
+
+/// The measured #14 fixture: two user processes, the guest kernel's client, and the 2×
+/// dup into it that every guest CUDA process performs.
+fn two_process_plus_kernel_script() -> RpcScript {
+    let mut s = RpcScript::new();
+    push_process_bytes(&mut s, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    push_process_bytes(&mut s, tp::C2, tp::PID2, tp::DEV2, tp::VAS2, tp::PDB2);
+    s.client_root(w::NV01_ROOT, tp::K, w::KERNEL_PID)
+        .dup(tp::K, tp::K, tp::KALIAS, tp::C1, tp::VAS1)
+        .dup(tp::K, tp::K, tp::KALIAS + 1, tp::C2, tp::VAS2);
+    s
+}
+
+/// ★★★ **The whole measured fixture, under a guest whose privilege rule we do not have:
+/// every client root REFUSES, and the graph is left with NOTHING.**
+///
+/// This is the mean form of the fix, not the unit form. The unit question ("does the
+/// function return `Err`?") is answered in `kayfabe-abi`; the question here is what a
+/// refusal does to a *run*: nine messages, three namespaces, two page directories and two
+/// dups, and the assertion is that not one byte of it reached the object model. A refusal
+/// that stopped the client root but let the Device, VASpace and `SET_PAGE_DIRECTORY`
+/// through would leave a graph with routable page directories owned by nobody — which is
+/// a worse outcome than the fold, because it is a fold with no client to name.
+///
+/// The three assertions are deliberately independent:
+/// 1. every `NV01_ROOT` message carries the typed refusal, naming the profile **and** the
+///    `processID` it would not interpret;
+/// 2. every *dependent* message refuses too, and by the graph's own rule
+///    (`UndeclaredClient`), not by an OS rule — the profile decides one thing and the
+///    graph notices the consequence, which is what "one seam" means;
+/// 3. the projection is empty: no `Proc`, no system component, no routable PDB.
+#[test]
+fn a_guest_os_without_a_rule_refuses_every_client_root_and_leaves_no_partial_graph() {
+    let script = two_process_plus_kernel_script();
+    let (out, census, applied, b) = run_script_under(GuestOs::Windows, &script);
+
+    // 1. The three client roots — two user pids and the sentinel — all refuse, and the
+    //    sentinel is NOT special-cased back into `Kernel`. "The sentinel still means
+    //    kernel, we just also accept pids" is the most tempting wrong rule available, and
+    //    it is wrong for the same reason the whole thing is: on a non-UNIX guest RM never
+    //    writes the sentinel, so a message carrying it is not evidence of anything.
+    let refused_roots: Vec<_> = out
+        .iter()
+        .filter_map(|r| match r {
+            Err(BridgeRefusal::ClientKindRuleUnknown(e)) => Some(*e),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        refused_roots,
+        vec![
+            ClientKindRuleUnknown {
+                guest_os: GuestOs::Windows,
+                process_id: tp::PID1,
+            },
+            ClientKindRuleUnknown {
+                guest_os: GuestOs::Windows,
+                process_id: tp::PID2,
+            },
+            ClientKindRuleUnknown {
+                guest_os: GuestOs::Windows,
+                process_id: w::KERNEL_PID,
+            },
+        ],
+        "★ each refusal must name the profile AND the value it would not interpret — a \
+         refusal that only said \"no\" cannot tell a misconfigured guest from a driver \
+         whose rule changed",
+    );
+
+    // 2. Nothing applied, and the dependent messages refused for the GRAPH's reason.
+    assert_eq!(
+        applied, 0,
+        "★ NON-VACUITY IN THE OTHER DIRECTION: a run that applied something would mean \
+         part of this fixture got in",
+    );
+    assert_eq!(
+        out.iter().filter(|r| r.is_err()).count(),
+        script.steps().len(),
+        "every message in the script must be accounted for as a refusal",
+    );
+    assert!(
+        census.of(FaultTag("BridgeRefusal::ClientKindRuleUnknown")) == 3
+            && census.of(FaultTag("RmGraphError::UndeclaredClient")) > 0,
+        "the census must show BOTH the OS refusal and its downstream consequence, not \
+         one flat count: {:?}",
+        census.tags().collect::<Vec<_>>(),
+    );
+
+    // 3. The graph is empty. Not "mostly empty" — empty.
+    assert!(b.procs.is_empty(), "no Proc may exist: {:?}", b.procs);
+    assert!(b.system.client_values().is_empty());
+    assert!(
+        b.by_pdb.is_empty(),
+        "★ a routable page directory owned by no client is the worst outcome available \
+         here: {:?}",
+        b.by_pdb.keys().collect::<Vec<_>>(),
+    );
+}
+
+/// ★★ **Non-vacuity, and the reason the test above is not simply "Windows breaks
+/// everything": the identical bytes are fully served under Linux.**
+///
+/// Same script, same builder, same policy, one parameter different — and it produces the
+/// measured #14 answer: two `Proc`s that do not merge despite 2 dups into one kernel
+/// client, and the kernel client in the system component. So the refusal above is a
+/// property of the *profile*, not of the fixture.
+#[test]
+fn the_same_bytes_are_fully_served_under_linux_and_that_is_the_only_difference() {
+    let script = two_process_plus_kernel_script();
+    let (out, census, applied, b) = run_script_under(GuestOs::Linux, &script);
+
+    assert!(
+        out.iter().all(Result::is_ok),
+        "the measured fixture is legal under the profile it was measured on: {:?}",
+        out.iter().filter(|r| r.is_err()).collect::<Vec<_>>(),
+    );
+    assert!(census.is_empty());
+    assert_eq!(
+        applied,
+        script.steps().len() as u64,
+        "★ every message declared a fact — 'no refusals' over a run that applied nothing \
+         is the green-instrument-on-an-unexercised-path failure",
+    );
+    assert_eq!(
+        b.procs
+            .iter()
+            .map(|p| p.client_values())
+            .collect::<Vec<_>>(),
+        vec![
+            [HClient(tp::C1)].into_iter().collect(),
+            [HClient(tp::C2)].into_iter().collect(),
+        ],
+    );
+    assert_eq!(
+        b.system.client_values(),
+        [HClient(tp::K)].into_iter().collect(),
+    );
+}
+
+/// ★★★ **The fold itself, reachable from bytes — and it is bigger than "one process's
+/// blast radius": it collapses the WHOLE GUEST into one isolate.**
+///
+/// ★ This test was written assuming the isolate key was the pid, i.e. that two client
+/// roots declaring the same `processID` would merge. **They do not** — and the correction
+/// is the finding. `ClientKind::User` is not the key; it is the *eligibility predicate*
+/// for a merge, and merges are driven by `DUP_OBJECT`
+/// (`a_dup_into_the_kernel_client_merges_nothing_and_the_alias_lands_in_the_system_component`
+/// is the Linux-side proof: the grouping requires **both** ends of a dup to be declared
+/// user clients).
+///
+/// Run that through the measured traffic and the consequence is larger than the seam
+/// audit's "folds the WDDM kernel into a guest process's blast radius":
+///
+/// - every guest CUDA process dups into the one kernel/UVM session client — `[measured]`,
+///   two concurrent processes, 82 dups **each**, every one into that client;
+/// - on a UNIX guest that client declares `KERNEL_PID`, is `ClientKind::Kernel`, is
+///   therefore **not** merge-eligible, and the dups merge nothing — which is exactly what
+///   fixes #14;
+/// - on a WDDM guest `RMCFG_FEATURE_PLATFORM_UNIX` is false, so it declares a real pid
+///   (`ogkm-580: rpc.h:74` / `ogkm-610: rpc.h:74`), becomes merge-eligible, and every
+///   process's dups now join it — and through it, each other.
+///
+/// So the old code did not leak one guest process into the kernel's clients. It put
+/// **every process in the guest, plus the guest kernel, into a single host isolate** —
+/// #14 un-fixed, silently, on a guest nobody had run yet.
+///
+/// The bytes are genuinely ambiguous: a client root declaring pid 4 is a normal user
+/// client on Linux and the `System` process on Windows, and *nothing on the wire
+/// distinguishes them*. Only the declared profile can, which is the whole argument for
+/// configuration over detection. Both halves are pinned here.
+#[test]
+fn a_kernel_client_that_declares_a_real_pid_collapses_the_whole_guest_and_only_the_profile_stops_it()
+ {
+    /// The Windows `System` process, so the fixture reads as what it models.
+    const SYSTEM_PID: u32 = 4;
+
+    let mut script = RpcScript::new();
+    push_process_bytes(&mut script, tp::C1, tp::PID1, tp::DEV1, tp::VAS1, tp::PDB1);
+    push_process_bytes(&mut script, tp::C2, tp::PID2, tp::DEV2, tp::VAS2, tp::PDB2);
+    script
+        // ★ The ONE message that differs from the measured fixture, and inside it the
+        // four bytes of `NV0000_ALLOC_PARAMETERS.processID`: a real pid where a UNIX
+        // guest would have written the sentinel. That is what a WDDM guest sends.
+        .client_root(w::NV01_ROOT, tp::K, SYSTEM_PID)
+        .dup(tp::K, tp::K, tp::KALIAS, tp::C1, tp::VAS1)
+        .dup(tp::K, tp::K, tp::KALIAS + 1, tp::C2, tp::VAS2);
+
+    // Under the Linux rule those bytes are three user clients joined by dups — ONE Proc.
+    // Correct on Linux; a total privilege collapse on WDDM. No care taken in the grouping
+    // rule could have caught it, because the grouping rule is right either way.
+    let (out, _, applied, linux) = run_script_under(GuestOs::Linux, &script);
+    assert!(out.iter().all(Result::is_ok));
+    assert_eq!(applied, script.steps().len() as u64);
+    assert_eq!(
+        linux
+            .procs
+            .iter()
+            .map(|p| p.client_values())
+            .collect::<Vec<_>>(),
+        vec![
+            [HClient(tp::C1), HClient(tp::C2), HClient(tp::K)]
+                .into_iter()
+                .collect::<BTreeSet<_>>()
+        ],
+        "★★★ one word of one message, and the entire guest is one isolate",
+    );
+    assert!(
+        linux.system.client_values().is_empty(),
+        "★ and the system component is EMPTY — there is no privileged client left at all",
+    );
+
+    // ★ The measured fixture differs in exactly that one word, and keeps the two
+    // processes apart. Asserted here rather than assumed, because "one word decides it"
+    // is the claim and a second difference would make the comparison prove something
+    // weaker.
+    let measured = two_process_plus_kernel_script();
+    assert_eq!(measured.steps().len(), script.steps().len());
+    assert_eq!(
+        measured
+            .steps()
+            .iter()
+            .zip(script.steps())
+            .filter(|(a, b)| a != b)
+            .count(),
+        1,
+    );
+
+    // Under a profile with no rule the question is refused, not answered — and there is
+    // no Proc to collapse into.
+    let (out, census, applied, other) = run_script_under(GuestOs::Windows, &script);
+    assert_eq!(
+        out.iter()
+            .filter_map(|r| match r {
+                Err(BridgeRefusal::ClientKindRuleUnknown(e)) => Some(e.process_id),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        vec![tp::PID1, tp::PID2, SYSTEM_PID],
+    );
+    assert_eq!(applied, 0);
+    assert_eq!(
+        census.of(FaultTag("BridgeRefusal::ClientKindRuleUnknown")),
+        3
+    );
+    assert!(other.procs.is_empty() && other.system.client_values().is_empty());
+}
+
+/// ★★ **The seam is NARROW: the profile changes exactly one decision and nothing else.**
+///
+/// The failure mode of a new axis is that it becomes a second switch on everything, and
+/// the failure mode of a refusal is that it quietly becomes a kill switch. Both are
+/// checked here by driving traffic that declares no client kind at all — inert messages,
+/// an unmapped alloc class, an unmodelled control, a malformed free — under **both**
+/// profiles and requiring the outcomes to be **identical**, refusals included.
+///
+/// ★ The non-vacuity guard matters more than usual: a version of this that happened to
+/// send only inert traffic would compare two empty censuses and pass forever. So it
+/// asserts that the shared traffic produces refusals of at least three distinct tags,
+/// i.e. that the two profiles are being compared on a real refusal surface.
+#[test]
+fn the_guest_os_profile_changes_nothing_that_does_not_declare_a_client_kind() {
+    let msgs = vec![
+        w::message(fn_id::SET_GUEST_SYSTEM_INFO, 1, &[0xab; 16]),
+        w::message(fn_id::GSP_RM_CONTROL, 2, &[0u8; 8]),
+        w::message(fn_id::FREE, 3, &[0u8; 4]),
+        w::message(fn_id::GSP_RM_ALLOC, 4, &[0u8; 32]),
+        w::message(0x0000_7fff, 5, &[]),
+    ];
+
+    let run = |guest_os: GuestOs| {
+        let mut gpu = fresh_gpu();
+        let mut policy = GraphPolicy::new(abi(), guest_os, &mut gpu);
+        let out = deliver_all(&mut policy, &msgs);
+        let census: Vec<_> = policy.census().tags().collect();
+        (out, census, policy.applied(), policy.inert())
+    };
+    let linux = run(GuestOs::Linux);
+    let other = run(GuestOs::Windows);
+
+    assert_eq!(
+        linux, other,
+        "★ the fourth axis must be one decision, not a mode. Anything that differs here \
+         is a second place the guest OS leaked into the bridge",
+    );
+    assert!(
+        linux.1.len() >= 3,
+        "★ NON-VACUITY: the shared traffic must actually exercise a refusal surface, or \
+         this test compares two empty censuses forever ({:?})",
+        linux.1,
+    );
+    assert!(
+        !linux
+            .1
+            .iter()
+            .any(|(t, _)| *t == FaultTag("BridgeRefusal::ClientKindRuleUnknown")),
+        "★ none of this traffic declares a client kind, so the OS refusal must not appear \
+         under EITHER profile — if it does, the refusal has become a kill switch",
+    );
 }
 
 /// ★★★ **§12.41, driven from wire bytes for the first time.** A dup keeps a resource
@@ -6220,6 +6578,7 @@ fn a_control_split_into_many_records_rejoins_byte_for_byte() {
         assert_eq!(
             translate(
                 abi(),
+                GuestOs::Linux,
                 &command(&w::message(fn_id::GSP_RM_CONTROL, 0x2200, &body))
             ),
             Err(BridgeRefusal::UnknownControl {
@@ -6791,7 +7150,7 @@ fn a_fragmented_control_reaches_the_graph_as_the_unfragmented_one_does() {
 
         let mut gpu = fresh_gpu();
         let (out, applied, held, census) = {
-            let mut policy = GraphPolicy::new(abi(), &mut gpu);
+            let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
             for (i, o) in deliver_all(&mut policy, &prereq.messages())
                 .into_iter()
                 .enumerate()
@@ -6858,7 +7217,7 @@ fn two_identical_fragmented_controls_produce_two_identical_events() {
 
     let mut gpu = fresh_gpu();
     let (first, second, third, held) = {
-        let mut policy = GraphPolicy::new(abi(), &mut gpu);
+        let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
         for o in deliver_all(&mut policy, &spd_prerequisites().messages()) {
             let _ = o.expect("prerequisites");
         }
@@ -6910,8 +7269,8 @@ fn two_policies_interleaving_fragment_runs_do_not_share_a_head() {
     let mut a = fresh_gpu();
     let mut b = fresh_gpu();
     let (outs_a, outs_b) = {
-        let mut pa = GraphPolicy::new(abi(), &mut a);
-        let mut pb = GraphPolicy::new(abi(), &mut b);
+        let mut pa = GraphPolicy::new(abi(), GuestOs::Linux, &mut a);
+        let mut pb = GraphPolicy::new(abi(), GuestOs::Linux, &mut b);
         for p in [&mut pa, &mut pb] {
             for o in deliver_all(p, &spd_prerequisites().messages()) {
                 let _ = o.expect("prerequisites");

@@ -107,6 +107,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant as WallInstant};
 
+use kayfabe_abi::GuestOs;
 use kayfabe_arch::GspReg;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
@@ -10456,7 +10457,7 @@ fn rb_post(
     steps: &[w::Step],
     seq_base: u32,
 ) -> (Vec<u32>, BTreeMap<FaultTag, usize>, u64, u64) {
-    let mut policy = GraphPolicy::new(profile.table(), gpu);
+    let mut policy = GraphPolicy::new(profile.table(), GuestOs::Linux, gpu);
     for (i, s) in steps.iter().enumerate() {
         world
             .guest

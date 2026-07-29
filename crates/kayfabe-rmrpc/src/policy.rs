@@ -64,6 +64,7 @@
 use std::collections::BTreeMap;
 
 use kayfabe_abi::DriverAbi;
+use kayfabe_abi::GuestOs;
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand};
@@ -127,6 +128,18 @@ impl RefusalCensus {
 pub struct GraphPolicy<'a> {
     /// Axis A: which driver's wire layouts to decode with. Selected once at realize.
     abi: &'a DriverAbiTable,
+    /// ★ The **fourth axis** (`four_axes_of_variation.md` §1): which OS built that
+    /// driver. Selected once at realize, beside `abi` and never inside it — the two are
+    /// independent keys, and the doc's *"do not collapse guest OS into the version key"*
+    /// is exactly the mistake a field on `DriverAbiTable` would be.
+    ///
+    /// ★★ There is **no default here on purpose.** Both constructors take it, so every
+    /// site that builds a policy has to name the guest it is serving. Until 2026-07-29
+    /// the answer was an unnamed "Linux", applied to every guest by a free function, and
+    /// on a Windows guest it silently folded the guest kernel's RM clients into a guest
+    /// process's isolate. A `new()` that quietly meant Linux would be the same silence
+    /// one level up.
+    guest_os: GuestOs,
     /// The object model this policy declares facts into.
     gpu: &'a mut Gpu,
     /// ★ B6. The crate's one piece of state, and the only thing here that is not either
@@ -140,10 +153,10 @@ pub struct GraphPolicy<'a> {
 }
 
 impl<'a> GraphPolicy<'a> {
-    /// A policy that declares into `gpu`, decoding with `abi`.
+    /// A policy that declares into `gpu`, decoding with `abi`, serving a `guest_os`.
     #[must_use]
-    pub fn new(abi: &'a DriverAbiTable, gpu: &'a mut Gpu) -> GraphPolicy<'a> {
-        GraphPolicy::with_limits(abi, gpu, ReasmLimits::default())
+    pub fn new(abi: &'a DriverAbiTable, guest_os: GuestOs, gpu: &'a mut Gpu) -> GraphPolicy<'a> {
+        GraphPolicy::with_limits(abi, guest_os, gpu, ReasmLimits::default())
     }
 
     /// A policy with explicit continuation bounds — the hostile-length matrix's
@@ -152,11 +165,13 @@ impl<'a> GraphPolicy<'a> {
     #[must_use]
     pub fn with_limits(
         abi: &'a DriverAbiTable,
+        guest_os: GuestOs,
         gpu: &'a mut Gpu,
         limits: ReasmLimits,
     ) -> GraphPolicy<'a> {
         GraphPolicy {
             abi,
+            guest_os,
             gpu,
             reasm: Reassembler::with_limits(limits),
             census: RefusalCensus::default(),
@@ -242,9 +257,9 @@ impl<'a> GraphPolicy<'a> {
             .reasm
             .accept(self.abi, cmd)
             .and_then(|r| match r {
-                Reassembled::Whole => translate(self.abi, cmd),
+                Reassembled::Whole => translate(self.abi, self.guest_os, cmd),
                 Reassembled::Held => Ok(Translation::Held),
-                Reassembled::Complete(full) => translate(self.abi, &full),
+                Reassembled::Complete(full) => translate(self.abi, self.guest_os, &full),
             })
             .and_then(|t| match t {
                 // ★ The bridge does not pre-empt the graph's MISS/DEFER/FAULT taxonomy — it

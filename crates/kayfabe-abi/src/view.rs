@@ -316,7 +316,7 @@ pub struct ClientAllocFacts {
     /// `hClient` — the client handle the guest asks for.
     pub h_client: u32,
     /// `processID` — the decision-#14 grouping discriminator. Decode it with
-    /// [`crate::client_kind_from_process_id`].
+    /// [`crate::GuestOs::client_kind_from_process_id`].
     pub process_id: u32,
 }
 

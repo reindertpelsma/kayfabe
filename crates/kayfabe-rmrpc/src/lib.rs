@@ -198,7 +198,9 @@ pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassemble
 
 use kayfabe_abi::versions::{AllocParams, ControlParams, DriverAbiTable};
 use kayfabe_abi::wire::AbiError;
-use kayfabe_abi::{NV_ERR_NOT_SUPPORTED, client_kind_from_process_id, rpc_params_are_serialized};
+use kayfabe_abi::{
+    ClientKindRuleUnknown, GuestOs, NV_ERR_NOT_SUPPORTED, rpc_params_are_serialized,
+};
 use kayfabe_arch::ids::{ClassId, ControlCmd, HClient, HObject, Pdb};
 use kayfabe_core::gpu::GpuError;
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RESERVED_CLIENT, RmEvent};
@@ -407,6 +409,35 @@ pub enum BridgeRefusal {
         /// The alloc params' `hClient`.
         params: u32,
     },
+    /// ★★★ **A client root from a guest OS whose privilege rule we do not have.**
+    ///
+    /// The configured [`GuestOs`] profile has no [`kayfabe_abi::ClientKindRule`], so
+    /// `NV0000_ALLOC_PARAMETERS.processID` cannot be turned into a
+    /// [`kayfabe_arch::ClientKind`] — and this refuses instead of picking one.
+    ///
+    /// ## Why it is a refusal and not a default
+    ///
+    /// Until 2026-07-29 there was no profile: the bridge applied the **Linux** rule to
+    /// every guest, unconditionally and silently. That rule is
+    /// `processID == KERNEL_PID (0xFFFF_FFFF) → Kernel`, and the driver gates the
+    /// sentinel on `RMCFG_FEATURE_PLATFORM_UNIX`
+    /// (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` /
+    /// `ogkm-610: rpc.h:67-77`, byte-identical) — so on a Windows guest every
+    /// kernel-privileged RM client declares a real pid, classifies as
+    /// `ClientKind::User { pid }`, and **joins whatever isolate that pid names**.
+    /// Decision #14 groups a host isolate per user pid, so the WDDM kernel's clients
+    /// would have shared a blast radius with a guest process.
+    ///
+    /// ★★ That was not a wrong answer that stops something — it was a *plausible* answer
+    /// produced in silence, on the one path whose job is to decide who may reach whose
+    /// memory. Replacing it with a different silent answer is not a fix, so the arm for
+    /// an OS whose rule is unmeasured is this: named, counted by [`Faulted::fault_tag`],
+    /// and `NV_ERR_NOT_SUPPORTED` on the guest's own client root — which fails its boot
+    /// at the first RPC, loudly, instead of running it wrong.
+    ///
+    /// Carries the profile and the unclassified `processID` verbatim, so a census entry
+    /// distinguishes "misconfigured guest OS" from "the rule changed under us".
+    ClientKindRuleUnknown(ClientKindRuleUnknown),
     /// A `GSP_RM_CONTROL` whose `cmd` this port does not model — **and B4's answer to
     /// `gsp_core_bridge.md` §7 item 6, which asked for one.**
     ///
@@ -525,6 +556,12 @@ impl From<AbiError> for BridgeRefusal {
     }
 }
 
+impl From<ClientKindRuleUnknown> for BridgeRefusal {
+    fn from(e: ClientKindRuleUnknown) -> Self {
+        BridgeRefusal::ClientKindRuleUnknown(e)
+    }
+}
+
 impl BridgeRefusal {
     /// The `NV_STATUS` a reply carries when this refusal is what happened.
     ///
@@ -604,6 +641,13 @@ impl Faulted for BridgeRefusal {
             BridgeRefusal::ClientHandleDisagrees { .. } => {
                 FaultTag("BridgeRefusal::ClientHandleDisagrees")
             }
+            // ★ Flat, not delegated. The contained value names an OS and a `processID`,
+            // neither of which is a *rule* the census could count — what the census wants
+            // to say is "a client root arrived that this profile cannot classify", and
+            // that is one finding however many pids reach it.
+            BridgeRefusal::ClientKindRuleUnknown(_) => {
+                FaultTag("BridgeRefusal::ClientKindRuleUnknown")
+            }
             BridgeRefusal::ReservedClient => FaultTag("BridgeRefusal::ReservedClient"),
             BridgeRefusal::Abi(_) => FaultTag("BridgeRefusal::Abi"),
             // ★ Delegated, not flattened: `kayfabe_core`'s own `impl Faulted for
@@ -621,13 +665,30 @@ impl Faulted for BridgeRefusal {
 /// A **pure function of one message**: no `&mut self`, no guest memory, no host state, no
 /// lookup, no minted identity. See the crate docs for why each of those is load-bearing.
 ///
+/// ## ★ Two declared keys, not one
+///
+/// `abi` is Axis A — *which driver version's layouts do these bytes have?* `guest_os` is
+/// `four_axes_of_variation.md`'s fourth axis — *which OS built that driver?* They are
+/// independent, and the doc is explicit that collapsing them is a mistake
+/// (*"do not collapse guest OS into the version key"*), so they arrive as two parameters
+/// and never as one table.
+///
+/// Both are **declared at realize**, never sniffed. The guest OS in particular is
+/// undetectable on the wire — it is a `#define` in the guest driver's build — so a
+/// function that inferred it from traffic would be inferring an isolation boundary from a
+/// value the guest chooses ([`GuestOs`]).
+///
 /// # Errors
 ///
 /// [`BridgeRefusal`], by variant. A refusal is never a drop — the caller still owes the
 /// guest a reply carrying [`BridgeRefusal::rpc_result`].
-pub fn translate(abi: &DriverAbiTable, cmd: &RpcCommand) -> Result<Translation, BridgeRefusal> {
+pub fn translate(
+    abi: &DriverAbiTable,
+    guest_os: GuestOs,
+    cmd: &RpcCommand,
+) -> Result<Translation, BridgeRefusal> {
     match cmd.function {
-        RpcFunction::RmAlloc => translate_alloc(abi, &cmd.payload),
+        RpcFunction::RmAlloc => translate_alloc(abi, guest_os, &cmd.payload),
         RpcFunction::Free => translate_free(abi, &cmd.payload),
         RpcFunction::RmControl => translate_control(abi, &cmd.payload),
         RpcFunction::DupObject => translate_dup(abi, &cmd.payload),
@@ -710,7 +771,11 @@ fn declared_handle(handle: u32) -> Option<HObject> {
 /// It applies to the client root **and to nothing else**: every other class's `hParent`
 /// and `hObject` are copied verbatim, which is why the normalisation cannot leak into a
 /// class that did not ask for it.
-fn translate_alloc(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation, BridgeRefusal> {
+fn translate_alloc(
+    abi: &DriverAbiTable,
+    guest_os: GuestOs,
+    payload: &[u8],
+) -> Result<Translation, BridgeRefusal> {
     let h = abi.decode_rpc_alloc(payload)?;
 
     // ── The namespace, read ONCE, from the header, before anything else. Everything
@@ -763,18 +828,25 @@ fn translate_alloc(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation, 
             handle: root,
             class,
             facts: AllocFacts {
-                // ★ The one genuinely guest-OS-shaped value in the whole bridge. The
-                // `KERNEL_PID` sentinel branch that produces it is gated on
-                // `RMCFG_FEATURE_PLATFORM_UNIX` (`ogkm-610: rpc.h:67-77`; `ogkm-580:`
-                // byte-identical at the same lines), so on a non-UNIX
-                // guest a kernel-privileged client declares a *real* pid and this
-                // classification would be wrong in the direction that folds a guest
-                // process into the guest kernel's isolate. The seam is already the right
-                // shape — one total function of one declared field — so the fix is a
-                // **guest-OS profile** selected at realize beside the ABI table, never an
-                // `if` here. Nothing else in this crate is OS-aware.
-                // (`gsp_core_bridge.md` §1.5.)
-                client_kind: Some(client_kind_from_process_id(facts.process_id)),
+                // ★★ The one genuinely guest-OS-shaped value in the whole bridge, and as
+                // of 2026-07-29 the profile that decides it is a **parameter of this
+                // function** rather than an assumption baked into a free function.
+                //
+                // The `KERNEL_PID` sentinel branch that produces it is gated on
+                // `RMCFG_FEATURE_PLATFORM_UNIX` (`ogkm-580: rpc.h:67-77` /
+                // `ogkm-610: rpc.h:67-77`, byte-identical), so on a non-UNIX guest a
+                // kernel-privileged client declares a *real* pid — and classifying it as
+                // `ClientKind::User` folded the guest kernel's RM clients into a guest
+                // process's blast radius, silently. The comment that used to sit here
+                // named that defect and predicted this exact fix
+                // (*"a guest-OS profile selected at realize beside the ABI table, never
+                // an `if` here"*); what it could not do was make anything happen.
+                //
+                // So this is a `?`, not a branch: a profile with no rule REFUSES
+                // (`BridgeRefusal::ClientKindRuleUnknown`) and the guest sees
+                // `NV_ERR_NOT_SUPPORTED` on its client root. Nothing else in this crate is
+                // OS-aware. (`gsp_core_bridge.md` §1.5, `four_axes_of_variation.md` §1.)
+                client_kind: Some(guest_os.client_kind_from_process_id(facts.process_id)?),
                 ..Default::default()
             },
         }));

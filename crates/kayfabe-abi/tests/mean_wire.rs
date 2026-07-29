@@ -28,7 +28,7 @@ use kayfabe_abi::transcribed::Nvos46ParametersPre580;
 use kayfabe_abi::versions::{BENCH_DRIVER, DriverAbiTable, MapDmaWire, table_for};
 use kayfabe_abi::view::{AllocWire, PdbAperture, RpcEnvelope};
 use kayfabe_abi::wire::AbiError;
-use kayfabe_abi::{DriverAbi, DriverVersion, client_kind_from_process_id};
+use kayfabe_abi::{DriverAbi, DriverVersion, GuestOs};
 use kayfabe_arch::ClientKind;
 
 const V575: DriverVersion = DriverVersion {
@@ -1342,16 +1342,16 @@ fn the_client_kind_seam_works_from_the_prefix_and_refuses_seven_bytes() {
         .expect("8 bytes is the contract");
     assert_eq!(f.h_client, 0xC1D0_0069);
     assert_eq!(
-        client_kind_from_process_id(f.process_id),
-        ClientKind::Kernel
+        GuestOs::Linux.client_kind_from_process_id(f.process_id),
+        Ok(ClientKind::Kernel)
     );
 
     // A user client — the measured process A from §12.27.
     b[4..8].copy_from_slice(&0x0000_DD13u32.to_le_bytes());
     let f = t.decode_client_alloc_facts(&b).expect("8 bytes");
     assert_eq!(
-        client_kind_from_process_id(f.process_id),
-        ClientKind::User { pid: 0xDD13 }
+        GuestOs::Linux.client_kind_from_process_id(f.process_id),
+        Ok(ClientKind::User { pid: 0xDD13 })
     );
 
     // Seven bytes is refused; the contract is 8, not "as much as you have".
@@ -1424,8 +1424,8 @@ fn a_realistic_event_stream_decodes_and_the_skewed_event_in_the_middle_is_refuse
     root_params[4..8].copy_from_slice(&0x0000_DD13u32.to_le_bytes());
     let facts = t.decode_client_alloc_facts(&root_params).expect("prefix");
     assert_eq!(
-        client_kind_from_process_id(facts.process_id),
-        ClientKind::User { pid: 0xDD13 }
+        GuestOs::Linux.client_kind_from_process_id(facts.process_id),
+        Ok(ClientKind::User { pid: 0xDD13 })
     );
     seen.push("alloc-client");
 

@@ -64,6 +64,17 @@
 //! below the oldest entry is [`wire::AbiError::NoTableForVersion`], never a
 //! nearest-neighbour fallback.
 //!
+//! ## 2.1 ★ The guest OS is a SECOND key, and it lives beside this one
+//!
+//! [`GuestOs`] ([`guest_os`]) — `four_axes_of_variation.md` §1's fourth axis, given a
+//! home on 2026-07-29. It is deliberately **not** a field of a
+//! [`versions::DriverAbiTable`]: the same doc's *"do not collapse guest OS into the
+//! version key"* is the C's major-only version-key mistake one level up, a single key
+//! silently spanning two independent dimensions. Every rule that is conditioned on which
+//! OS built the guest driver hangs off that type, and there is exactly one such rule
+//! today — [`GuestOs::client_kind_from_process_id`], whose sentinel is gated on
+//! `RMCFG_FEATURE_PLATFORM_UNIX` in the driver.
+//!
 //! # 3. Safety
 //!
 //! `#![forbid(unsafe_code)]` holds. The `#[repr(C)]` mirrors are a layout
@@ -85,40 +96,17 @@
 /// The generated wire layouts. Produced by `kayfabe-abi-gen`; do not edit.
 pub mod bringup;
 pub mod generated;
+pub mod guest_os;
 pub mod transcribed;
 pub mod versions;
 pub mod view;
 pub mod wire;
 
-use kayfabe_arch::ClientKind;
+pub use guest_os::{
+    ClientKindRule, ClientKindRuleUnknown, GUEST_OS_CONFIG_NAMES, GuestOs, UnknownGuestOsName,
+};
+
 use kayfabe_arch::ids::ClassId;
-
-/// `KERNEL_PID` — the reserved `processID` RM stamps on a **kernel-privileged** client's
-/// `NV01_ROOT` alloc params (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` /
-/// `ogkm-610: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` — byte-identical, same lines at both:
-/// `privLevel >= RS_PRIV_LEVEL_KERNEL → processID = KERNEL_PID`, else the client's own
-/// `ProcID`).
-///
-/// This is an NVIDIA wire constant, so per the quarantine rule (decision #2) it exists
-/// **only in this crate**; the logic crates speak [`ClientKind`].
-const KERNEL_PID: u32 = 0xFFFF_FFFF;
-
-/// Decode a declared `processID` from `NV0000_ALLOC_PARAMETERS` into the abstract
-/// [`ClientKind`] the core groups on (`l1_concurrency.md` §12.27).
-///
-/// This is the whole wire→domain translation for decision #14's grouping rule, and it is
-/// deliberately one total function of one declared field: no handle-range test, no
-/// `processName` sniffing, no dup-graph inference. Measured shape (RTX 3060 / 580.159.04):
-/// the two concurrent CUDA processes' clients declared their own pids, while the single
-/// UVM session client and every other RM-internal client declared [`KERNEL_PID`].
-#[must_use]
-pub fn client_kind_from_process_id(process_id: u32) -> ClientKind {
-    if process_id == KERNEL_PID {
-        ClientKind::Kernel
-    } else {
-        ClientKind::User { pid: process_id }
-    }
-}
 
 /// `RMAPI_RPC_FLAGS_SERIALIZED` = `NVBIT(1)`
 /// (`ogkm-580: src/nvidia/inc/kernel/rmapi/rmapi.h:163` /
@@ -143,7 +131,7 @@ const RMAPI_RPC_FLAGS_SERIALIZED: u32 = 1 << 1;
 /// `[unverified]` (§7 item 3): refusing them by name is safe, and the day a boot-path
 /// class turns out to be serialized, this predicate is where that is discovered.
 ///
-/// One total function of one declared field, exactly like [`client_kind_from_process_id`].
+/// One total function of one declared field, exactly like [`GuestOs::client_kind_from_process_id`].
 #[must_use]
 pub fn rpc_params_are_serialized(flags: u32) -> bool {
     flags & RMAPI_RPC_FLAGS_SERIALIZED != 0
@@ -253,29 +241,10 @@ kayfabe_util::assert_send_sync!(DriverVersion, dyn DriverAbi);
 mod tests {
     use super::*;
 
-    /// The `KERNEL_PID` sentinel is the ONLY thing that makes a client kernel-privileged,
-    /// and every other value — including the numerically adjacent ones and the handle-like
-    /// values that seeded the old mis-reading — is a user pid. Kills the `==`→`!=`,
-    /// `==`→`>=` and constant mutants in one predicate.
-    #[test]
-    fn only_the_kernel_sentinel_decodes_to_a_kernel_client() {
-        assert_eq!(client_kind_from_process_id(0xFFFF_FFFF), ClientKind::Kernel);
-        for pid in [
-            0u32,
-            1,
-            0x0000_dd13, // process A, measured
-            0x0000_dd14, // process B, measured
-            0xFFFF_FFFE, // adjacent below the sentinel
-            0x7FFF_FFFF, // sign-bit boundary
-            0xc1d0_0069, // ★ the UVM session's HANDLE — not its processID
-        ] {
-            assert_eq!(
-                client_kind_from_process_id(pid),
-                ClientKind::User { pid },
-                "processID {pid:#x} declares a user client",
-            );
-        }
-    }
+    // ★ `only_the_kernel_sentinel_decodes_to_a_kernel_client` MOVED on 2026-07-29, to
+    // `guest_os.rs`'s own test module, together with the function it is about. It now
+    // reads `GuestOs::Linux.client_kind_from_process_id`, and it has a sibling asserting
+    // that the same inputs REFUSE under a profile whose rule we do not have.
 
     /// `RMAPI_RPC_FLAGS_SERIALIZED` is **bit 1**, so the neighbouring bit must not fire
     /// the predicate and the bit must be found under any amount of surrounding noise.

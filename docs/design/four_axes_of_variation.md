@@ -21,7 +21,7 @@ ABIs must agree.
 | **GPU architecture** | the silicon (GA106, Ada, Hopper…) | `kayfabe-arch`: `Arch`, `GmmuFmt`, `UserdModel`, `GspModel` | seam exists, **one** impl |
 | **Guest driver version** | the driver *in the guest* | `kayfabe-abi::DriverVersion` — a full `(major, minor, patch)` triple with a loud `NoTableForVersion` floor | seam exists, few tables |
 | **Host driver version** | the driver *on the host* | implicit: `VerbPlan` carries **named intents** that *"the adapter lowers to the correct per-version NVOS sequence"* (`kayfabe-isolate`) | abstract by construction, **unbuilt** |
-| ★ **Guest OS** | Linux / Windows / … | **nowhere yet** — `DriverVersion` silently means "Linux, ogkm-shaped" | **not a seam yet** |
+| ★ **Guest OS** | Linux / Windows / … | `kayfabe-abi::GuestOs` (`guest_os.rs`) — a profile **beside** the version table, declared at realize; every OS-conditional rule is data on it, and an OS with no rule is a typed refusal | ★ seam exists (2026-07-29), **one** profile + one named refusal |
 
 ★ **The fourth axis is the one to protect now**, because it is the only one with no home. A
 Windows guest runs an entirely different driver, but the **GSP RPC protocol and the RM object
@@ -109,6 +109,40 @@ That is a real advantage over API-proxying approaches (which must track CUDA's s
 release), and it is why the axis table above has no CUDA row. It also means a guest can run a
 CUDA version the host has never had installed.
 
+## 4.5 ★★★ What the fourth axis actually cost, measured on 2026-07-29
+
+The seam audit costed this axis at *"~100 lines across 3 files, zero trait changes below the ABI
+seam"*. That was right about the size and **wrong about the blast radius**, in a direction worth
+recording.
+
+**The one violation.** `client_kind_from_process_id` — the wire→`ClientKind` translation, i.e.
+the function that decides which RM clients share a host isolate — applied a rule the guest driver
+gates on `RMCFG_FEATURE_PLATFORM_UNIX` (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` /
+`ogkm-610: rpc.h:67-77`, byte-identical) to **every** guest, silently. On a WDDM guest the `else`
+arm runs for kernel-privileged clients too, so they declare a real pid.
+
+**The blast radius is not one process.** `ClientKind::User` is not the isolate key — it is the
+*eligibility predicate* for a `DUP_OBJECT`-driven merge. Every guest CUDA process dups into the
+one kernel/UVM session client (`[measured]`: two concurrent processes, 82 dups each, every one
+into that client). On a UNIX guest that client is `ClientKind::Kernel`, is not merge-eligible, and
+the dups merge nothing — which is exactly what fixes #14. On a WDDM guest it would have been
+merge-eligible, and **every process in the guest plus the guest kernel would have landed in one
+host isolate**: #14 un-fixed, silently, on a guest nobody had booted yet. Pinned by
+`a_kernel_client_that_declares_a_real_pid_collapses_the_whole_guest_and_only_the_profile_stops_it`.
+
+**★ A SECOND gate on the same field, and it is not the OS.** The `RMCFG_FEATURE_PLATFORM_UNIX`
+test sits inside `if (!IsT234DorBetter(pGpu))` (`ogkm-580: rpc.h:57` / `ogkm-610: rpc.h:57`), and
+the params struct is zero-initialised at `rpc.h:53`. So on Orin-class silicon RM never writes
+`processID` at all and **every** client declares `0` — which today's rule reads as
+`User { pid: 0 }` for all of them, collapsing the whole guest by a *chip*-axis condition rather
+than an OS one. Recorded, not fixed: our target is GA106, and inventing a rule for hardware we
+have never observed is the mistake the Windows arm exists to refuse. The characterisation test is
+`a_zero_process_id_is_a_user_client_today_and_that_is_wrong_on_t234d`.
+
+**The lesson for the remaining axes.** One declared wire field was conditioned on two independent
+axes, and the code that read it named neither. The cost of the seam really was ~100 lines; the
+cost of *finding* it was an audit. Rule 3 below is now gated so the next one is a test failure.
+
 ## 5. What this forbids
 
 1. No `if guest_version == …` in a logic crate. Transitions fire on **observed protocol facts**
@@ -116,4 +150,7 @@ CUDA version the host has never had installed.
    doctrine, applied to bring-up where an identity check is most tempting.
 2. No chip constant in a logic crate — it goes behind `Arch` (`kayfabe-gsp` is a logic crate).
 3. No OS assumption without a comment naming it, so the future Windows seam is a grep away.
+   **Gated since 2026-07-29** by `tests/tests/guest_os_axis_gate.rs` — a Rust test rather than a
+   `ci.yml` step, because it runs its own checker against a synthetic violation per token and so
+   can prove it is able to fail, which a YAML `grep` cannot.
 4. Any bootstrap we do not support is a **refusal at realize**, not a partial attempt.

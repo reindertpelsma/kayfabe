@@ -698,7 +698,7 @@ impl DriverAbiTable {
     /// Lives here, not in the bridge above, for decision #2's quarantine reason:
     /// the NVIDIA class *numbers* are this crate's and the crates above speak a
     /// vocabulary. Same shape as [`Self::is_client_root_class`] and
-    /// [`crate::client_kind_from_process_id`].
+    /// [`crate::GuestOs::client_kind_from_process_id`].
     #[must_use]
     pub fn alloc_params(&self, class: ClassId) -> Option<AllocParams> {
         if self.is_client_root_class(class) {
@@ -863,7 +863,7 @@ impl DriverAbiTable {
     /// Lives here rather than in the bridge for the quarantine reason
     /// (decision #2): the NVIDIA class *numbers* are this crate's, and the crates
     /// above it speak a predicate. Same shape as
-    /// [`crate::client_kind_from_process_id`].
+    /// [`crate::GuestOs::client_kind_from_process_id`].
     #[must_use]
     pub fn is_client_root_class(&self, class: ClassId) -> bool {
         class.0 == classes::NV01_ROOT || class.0 == classes::NV01_ROOT_CLIENT
