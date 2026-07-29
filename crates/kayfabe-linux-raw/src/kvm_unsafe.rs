@@ -38,7 +38,7 @@ use crate::error::{RawError, last_syscall_error};
 use crate::host_fd_unsafe::adopt_fd;
 use crate::window_unsafe::GuestWindow;
 use kayfabe_util::{leafwitness, lockwitness};
-use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::fd::{AsRawFd, BorrowedFd, OwnedFd, RawFd};
 use std::sync::Arc;
 
 // --- ioctl numbers -------------------------------------------------------------------
@@ -179,6 +179,14 @@ impl Kvm {
     }
 }
 
+/// The `/proc/self/fd` link text the kernel reports for **every** KVM VM descriptor.
+///
+/// `anon_inode:kvm-vm` — an anonymous inode, which is why the descriptor cannot be
+/// *reopened* through `/proc/self/fd/N` (that `open` is `ENXIO`, measured on this host) and
+/// must be **duplicated** instead. Spelled as a constant here because it is the entire
+/// identification: there is no ioctl that asks "are you a VM?".
+const KVM_VM_LINK: &str = "anon_inode:kvm-vm";
+
 /// One VM's address space.
 #[derive(Debug)]
 pub struct KvmVm {
@@ -186,6 +194,174 @@ pub struct KvmVm {
 }
 
 impl KvmVm {
+    /// Adopt a VM descriptor this process already owns.
+    ///
+    /// ★ The door the QEMU adapter comes through. Under `host_execution_plane.md` §1 the
+    /// hypervisor **reserves** the guest-physical window and does not back it, and *we*
+    /// install the memslots that shadow it — which means we need the descriptor of a VM we
+    /// did not create. Taking an [`OwnedFd`] rather than a number is what keeps that from
+    /// being a second, unowned lifetime: the caller has already proved ownership by
+    /// possessing the type.
+    #[must_use]
+    pub fn adopt(fd: OwnedFd) -> Self {
+        KvmVm { fd }
+    }
+
+    /// Duplicate this VM's descriptor into an independently-owned one.
+    ///
+    /// The counterpart of [`KvmVm::adopt`], and the reason the pair is testable at all: a
+    /// test can mint the second handle the adapter would have been handed, without a
+    /// hypervisor to hand it. Both handles name **one** address space — which is the
+    /// property, and which is why the tests assert it with the kernel's own `EEXIST` rather
+    /// than by comparing descriptor numbers.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] if the duplication failed.
+    pub fn try_clone_descriptor(&self) -> Result<OwnedFd, RawError> {
+        self.fd.try_clone().map_err(|e| RawError::Syscall {
+            call: "dup(a KVM VM descriptor)",
+            errno: e.raw_os_error(),
+        })
+    }
+
+    /// ★★★ Find **this process's** KVM VM descriptor by scanning `/proc/self/fd`.
+    ///
+    /// This is the C artifact's mechanism, ported: `C: src/qemu/virtio_nvgpu.c:1114-1141`
+    /// scans `/proc/self/fd` for the [`KVM_VM_LINK`] symlink target because the header that
+    /// would expose the hypervisor's own handle is *"target-only"* and cannot be included
+    /// from a device file. The same constraint applies to us one layer further out — we are
+    /// a Rust library loaded into the hypervisor, with no access to its internal state at
+    /// all — and the mechanism is hypervisor-agnostic, which is the property
+    /// `host_execution_plane.md` §1.1 argument 3 wants from this seam.
+    ///
+    /// ## ★★ Why it refuses when it finds more than one
+    ///
+    /// The link text is identical for every VM in the process, so with two of them there is
+    /// **no way to tell which one is the machine our device is in**. The C has no such arm:
+    /// it takes the first match and stops (`:1136-1141`). One VM per hypervisor process
+    /// makes that correct today and undiagnosable the day it stops being — the wrong VM's
+    /// memslots install *successfully*, and the guest simply never sees the window. So the
+    /// ambiguity is a loud refusal here, not a first-match.
+    ///
+    /// ## ★ The race, and why losing it is a refusal rather than a wrong descriptor
+    ///
+    /// Between reading the directory and duplicating the number, another thread may close
+    /// that descriptor — nothing in this process can prevent that. The duplicate is
+    /// therefore **confirmed after the fact**, by reading the link of the descriptor we now
+    /// own, which no other thread can change. A lost race yields
+    /// [`RawError::Syscall`] (`EBADF`) or the confirmation refusal below; it never yields a
+    /// descriptor that is not a VM.
+    ///
+    /// **The residual, stated rather than argued away:** if the number were closed *and*
+    /// recycled onto a different VM between the scan and the duplication, the confirmation
+    /// would pass and we would hold the wrong VM. That needs a second VM to exist, which is
+    /// exactly what the ambiguity refusal already rejects — so the two arms close each
+    /// other, and the uncovered case is a second VM created concurrently with this call.
+    ///
+    /// # Errors
+    /// - [`RawError::Unsupported`] — no VM descriptor in this process, more than one, or a
+    ///   duplicate that did not confirm. All three are **distinct** `what` strings: an
+    ///   operator must be able to tell "the hypervisor has no KVM machine" (a
+    ///   configuration fact) from "it has two" (a fact about the invocation).
+    /// - [`RawError::Syscall`] — the directory could not be read, or the duplication failed.
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn discover_in_this_process() -> Result<Self, RawError> {
+        lockwitness::assert_lock_free("scanning /proc/self/fd for the KVM VM descriptor");
+        leafwitness::assert_leaf_free("scanning /proc/self/fd for the KVM VM descriptor");
+        let found = Self::scan_proc_self_fd()?;
+        let [only] = found[..] else {
+            return Err(if found.is_empty() {
+                RawError::Unsupported {
+                    what: "this process's KVM VM descriptor",
+                    detail: "no descriptor in /proc/self/fd is a KVM machine; the hypervisor \
+                             is not running on the KVM accelerator, or this library was \
+                             loaded into a process that has no virtual machine",
+                }
+            } else {
+                RawError::Unsupported {
+                    what: "an unambiguous KVM VM descriptor",
+                    detail: "this process holds more than one KVM machine and they are \
+                             indistinguishable from outside; installing memslots into the \
+                             wrong one succeeds silently and the guest never sees them",
+                }
+            });
+        };
+        // SAFETY: `only` was reported by the kernel as an open descriptor of this process
+        // moments ago, on the line above, and the borrow is used for exactly one
+        // `F_DUPFD_CLOEXEC` and then discarded — it is never stored, never closed here, and
+        // its `'static` lifetime never escapes this expression. The obligation this block
+        // CANNOT discharge is that no other thread closed `only` in between; that is not a
+        // memory-safety hazard (the duplication of a closed number is `EBADF`, checked
+        // immediately below), and the descriptor-identity hazard it does leave is closed by
+        // `confirm_is_a_vm`, which re-reads the link of the descriptor we now OWN and which
+        // therefore no other thread can change under us.
+        let borrowed = unsafe { BorrowedFd::borrow_raw(only) };
+        let dup = borrowed
+            .try_clone_to_owned()
+            .map_err(|e| RawError::Syscall {
+                call: "dup(the KVM VM descriptor)",
+                errno: e.raw_os_error(),
+            })?;
+        Self::confirm_is_a_vm(&dup)?;
+        Ok(KvmVm { fd: dup })
+    }
+
+    /// Every descriptor in this process whose `/proc/self/fd` link is [`KVM_VM_LINK`].
+    ///
+    /// Split out so the *decision* above reads as one `match` on a count, and so a test can
+    /// drive the zero / one / many arms by creating VMs rather than by mocking a directory.
+    fn scan_proc_self_fd() -> Result<Vec<RawFd>, RawError> {
+        let dir = std::fs::read_dir("/proc/self/fd").map_err(|e| RawError::Syscall {
+            call: "opendir(/proc/self/fd)",
+            errno: e.raw_os_error(),
+        })?;
+        let mut found = Vec::new();
+        for entry in dir {
+            let entry = entry.map_err(|e| RawError::Syscall {
+                call: "readdir(/proc/self/fd)",
+                errno: e.raw_os_error(),
+            })?;
+            // A non-numeric name cannot be a descriptor, and a descriptor that vanished
+            // between `readdir` and `read_link` is simply not in the answer — both are
+            // ordinary, so neither is an error.
+            let Some(n) = entry.file_name().to_str().and_then(|s| s.parse().ok()) else {
+                continue;
+            };
+            if std::fs::read_link(entry.path()).is_ok_and(|t| t.as_os_str() == KVM_VM_LINK) {
+                found.push(n);
+            }
+        }
+        // `read_dir` yields in directory order, which is not numeric order; sorting makes
+        // the "more than one" arm report deterministically and makes a test that asserts
+        // *which* descriptor was found reproducible.
+        found.sort_unstable();
+        Ok(found)
+    }
+
+    /// Re-read the link of a descriptor **we own**, and refuse if it is not a VM.
+    ///
+    /// The whole race argument above rests on this: ownership is what makes the answer
+    /// stable, so the confirmation has to happen on the duplicate and never on the number.
+    fn confirm_is_a_vm(fd: &OwnedFd) -> Result<(), RawError> {
+        let link =
+            std::fs::read_link(format!("/proc/self/fd/{}", fd.as_raw_fd())).map_err(|e| {
+                RawError::Syscall {
+                    call: "readlink(/proc/self/fd/<dup>)",
+                    errno: e.raw_os_error(),
+                }
+            })?;
+        if link.as_os_str() == KVM_VM_LINK {
+            return Ok(());
+        }
+        Err(RawError::Unsupported {
+            what: "a confirmed KVM VM descriptor",
+            detail: "the duplicated descriptor is not a KVM machine; the number was closed \
+                     and reused between the scan and the duplication",
+        })
+    }
+
     /// Ask the kernel whether it implements one capability, by number.
     ///
     /// # Errors
@@ -608,6 +784,44 @@ mod tests {
             },
             "slot {ceiling} is one past the ceiling the kernel just reported"
         );
+    }
+
+    /// ★★ **The confirmation really rejects.** `confirm_is_a_vm` is the whole of the
+    /// discovery race argument — if it accepted anything, `discover_in_this_process` would
+    /// hand back whatever descriptor the number had been recycled onto and say nothing.
+    ///
+    /// Driven with an ordinary file, which is the *shape* a recycled number has: open,
+    /// ours, duplicable, and not a machine. No `/dev/kvm` needed, so this arm holds on a
+    /// runner with no device — the half of the property that would otherwise be observed
+    /// only on a developer box.
+    #[test]
+    fn the_confirmation_refuses_a_descriptor_that_is_not_a_machine() {
+        let not_a_vm = OwnedFd::from(
+            std::fs::File::open("/dev/null").expect("/dev/null is present on every Linux host"),
+        );
+        assert_eq!(
+            KvmVm::confirm_is_a_vm(&not_a_vm).unwrap_err(),
+            RawError::Unsupported {
+                what: "a confirmed KVM VM descriptor",
+                detail: "the duplicated descriptor is not a KVM machine; the number was \
+                         closed and reused between the scan and the duplication",
+            },
+            "an ordinary file must not confirm as a machine — this is the only thing \
+             standing between a recycled descriptor number and a memslot plane installed \
+             into something that is not a VM"
+        );
+    }
+
+    /// And the same predicate must **accept** a real one, or the refusal above is a
+    /// function that rejects everything and the discovery path is dead.
+    #[test]
+    fn the_confirmation_accepts_a_real_machine() {
+        crate::require_kvm!("the_confirmation_accepts_a_real_machine");
+        let vm = kvm().create_vm().expect("KVM_CREATE_VM");
+        // Duplicated first, so the predicate is exercised on exactly the shape
+        // `discover_in_this_process` hands it: an `OwnedFd` this process just minted.
+        let dup = vm.fd.try_clone().expect("duplicating a VM descriptor");
+        assert_eq!(KvmVm::confirm_is_a_vm(&dup), Ok(()));
     }
 
     /// Two windows may not claim the same guest-physical range.

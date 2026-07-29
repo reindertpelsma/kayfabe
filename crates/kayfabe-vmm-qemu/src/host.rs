@@ -26,14 +26,18 @@
 //!    citation). This is the whole reason [`kayfabe_vmm::GuestRamMap`] exists, and it is
 //!    invisible to every gate in the tree, so it is written on the method an implementor
 //!    would otherwise write the easy way.
-//! 2. **Every topology-transaction method runs only from realize/unrealize** — the
-//!    contexts the hypervisor already entered holding its global lock (§4.3: *"the adapter
-//!    contains ZERO calls to `bql_lock`"*). The adapter does not merely promise this: it
-//!    latches realize and **refuses** a topology call afterwards, so the discipline is a
-//!    mechanism (see [`crate::QemuMachine::finish_realize`]).
-//! 3. **[`QemuHost::signal_msix`] is one descriptor write and nothing else.** It is the
-//!    single in-lock-legal foreign call (§7), and it must never become a notify call that
-//!    takes the global lock.
+//! 2. ★★★ **There is no topology-transaction method left.** Under
+//!    `host_execution_plane.md` §1 the hypervisor **reserves** the guest-physical window
+//!    and does not back it; we install our own memslots. So this trait no longer has a
+//!    `publish_window`, a `publish_rom_overlay` or an `unpublish` — nothing on it mutates
+//!    the hypervisor's region tree at all, in realize or out of it, and §4.3's *"the
+//!    adapter contains ZERO calls to `bql_lock`"* is discharged by there being nothing to
+//!    call it for. What is left is three realize-time *facts* (version, accelerator,
+//!    reservation shape), two paired lifecycle calls (the migration blocker and the
+//!    discard refusal), and the hot path.
+//! 3. **[`QemuHost::signal_msix`] and [`QemuHost::bar_base`] are one field access each.**
+//!    They are the only in-lock-legal foreign calls (§7), and it must never become a notify
+//!    call that takes the global lock.
 //!
 //! ## ★ What is deliberately NOT here
 //!
@@ -41,8 +45,12 @@
 //! blocked outright), no deferred-callback scheduling (§4.5, decision Q3: our threads
 //! stay ours), and no interrupt *masking* callbacks — those arrive from above, holding
 //! the VMM's global lock, and are latch-and-defer like every other such callback.
-
-use core::ops::Range;
+//!
+//! ★★ And, since 2026-07-29, **no memslot method either**. Installing a memslot is a call
+//! to the *kernel*, not to the hypervisor, so it does not belong on a trait whose subject
+//! is the hypervisor's C API. It crosses [`crate::slots::SlotPlane`] instead — a separate
+//! seam with a real implementation (`kayfabe_linux_raw::KvmVm`) and a mock, so the tiering
+//! can be tested against a real kernel rather than against a double that cannot refuse.
 
 use kayfabe_vmm::BarId;
 
@@ -193,16 +201,33 @@ pub trait QemuHost: Send + Sync + core::fmt::Debug {
     /// Withdraw a blocker at unrealize.
     fn migrate_del_blocker(&self, id: BlockerId);
 
-    /// Refuse guest-driven discard of RAM ranges machine-wide (§8.5, decision Q4).
+    /// ★★★ Refuse guest-driven discard of RAM ranges machine-wide (decision Q4, task #97).
     ///
-    /// ★ Mandatory, not tidy: the balloon path accepts any section that reports itself
-    /// RAM and calls a discard helper that has **no check for the preallocated flag**, so
-    /// a guest that hands it a guest-physical address inside our reservation reaches a
-    /// `madvise`-shaped zeroing underneath live placements.
+    /// # ★★ §8.5's reasoning is VOID; this is the argument that replaces it
+    ///
+    /// §8.5 justified this by the balloon reaching *our reservation*. Under
+    /// `host_execution_plane.md` §1 the reservation is no longer a hypervisor RAM block at
+    /// all, so the balloon skips it **trivially** — its inflate path only walks the
+    /// machine's own RAM blocks (`qemu: hw/virtio/virtio-balloon.c:425-435`) and ours is
+    /// not one. The old argument does not survive the decision it was written under.
+    ///
+    /// **The real hazard is guest RAM exported to isolates.** That backing is a shared
+    /// `memfd`, and the discard helper punches the **file** with `FALLOC_FL_PUNCH_HOLE`
+    /// (`qemu: system/physmem.c:3629-3692`) — which destroys the file's backing pages and
+    /// therefore reaches **every** mapping of it: the hypervisor's, the accelerator's
+    /// second-stage tables, and the isolate's own `MAP_SHARED` one. The hypervisor's own
+    /// comment warns the call works *"as long as nobody else uses that file"*; an isolate
+    /// holding a mapping of exported guest RAM is precisely somebody else. This is the same
+    /// rationale a pass-through device driver has, and it is why the call is mandatory
+    /// rather than tidy.
     ///
     /// # Errors
-    /// [`HostError::Busy`] if a discard *requirer* is already present — realize must
-    /// refuse and name the conflict, never proceed.
+    /// [`HostError::Busy`] if a discard *requirer* is already present — a device that needs
+    /// guest-driven discard to function. Realize must refuse **naming the conflict**, never
+    /// proceed: the two devices cannot coexist, and an operator who is told only
+    /// *"refused"* has to bisect their command line to find out which one to remove. See
+    /// [`HostError::Busy::what`], which is the name, and `crate::qemu_refused`, which is
+    /// what carries it out to the caller instead of flattening it to a class.
     fn ram_block_discard_disable(&self, disable: bool) -> Result<(), HostError>;
 
     /// Start receiving topology callbacks for the address space this device does DMA in
@@ -212,46 +237,45 @@ pub trait QemuHost: Send + Sync + core::fmt::Debug {
     /// [`HostError::Refused`].
     fn register_listener(&self) -> Result<(), HostError>;
 
-    /// Publish one of **our** reservations as a RAM region and add it as a subregion of
-    /// `at.bar` (§5.1, §5.4's coarse tier).
-    ///
-    /// The host takes the mapping by pointer and never frees it — teardown is entirely
-    /// ours (§8.3 step 8).
-    ///
-    /// # Errors
-    /// [`HostError::Refused`] / [`HostError::Unsupported`].
-    fn publish_window(
-        &self,
-        name: &'static str,
-        at: BarPlacement,
-        bar_offset: u64,
-        len: u64,
-    ) -> Result<MrHandle, HostError>;
+    // --- the reservation BAR (host_execution_plane.md §1, §1.5) --------------------
 
-    /// Publish a **host-owned** read-native overlay: reads are served from RAM the host
-    /// allocated, writes go to our callbacks (§5.4).
+    /// ★★★ Whether `bar` is a **pure-MMIO reservation** the hypervisor does not back.
     ///
-    /// ★ The host allocates that RAM. There is no pointer-taking variant of this
-    /// constructor at the pinned version, so the backing is **not** inside our
-    /// reservation and nothing may ever be placed into it.
+    /// `host_execution_plane.md` §1.5, resolved against the hypervisor's own source: the
+    /// reservation object is `memory_region_init_io` + a 64-bit prefetchable BAR
+    /// (`C: src/qemu/virtio_nvgpu_pci.c:108-114`), whose stub ops are never reached because
+    /// our memslot shadows it. That construction *never sets the region's RAM flag*
+    /// (`qemu: system/memory.c:1568-1579`), so the accelerator's listener takes an
+    /// unconditional early return for it (`qemu: accel/kvm/kvm-all.c:1449-1457`) — **before**
+    /// allocating a slot, in both directions, so a BAR remap produces exactly zero slot
+    /// operations.
     ///
-    /// # Errors
-    /// [`HostError::Refused`] / [`HostError::Unsupported`].
-    fn publish_rom_overlay(
-        &self,
-        name: &'static str,
-        at: BarPlacement,
-        bar_offset: u64,
-        len: u64,
-    ) -> Result<MrHandle, HostError>;
+    /// **That early return is the entire safety argument for installing foreign memslots,
+    /// and it is a property of how the BAR was constructed.** A BAR the shim registered
+    /// with a RAM-backed constructor instead would get a hypervisor-managed slot of its
+    /// own, over the same guest-physical range as ours — and only one of the two can win.
+    /// So the adapter refuses to place a window in a BAR that does not report this, rather
+    /// than trusting that whoever wrote the shim read §1.5.
+    fn bar_is_unbacked_reservation(&self, bar: BarId) -> bool;
 
-    /// Remove a region we published and drop our reference to it.
+    /// ★★★ Where `bar` is **currently** programmed, or `None` while it is unmapped.
     ///
-    /// ★ This is the destructor-shaped foreign call §0 item 1 is about, and it is
-    /// confined to unrealize for exactly that reason: it may run a finalizer, and a
-    /// finalizer wants the VMM's global lock — which unrealize is already holding and a
-    /// deferred-collection thread would not be. See [`crate::QemuMachine::unrealize`].
-    fn unpublish(&self, mr: MrHandle);
+    /// # NORMATIVE — this is a field read, and it is on the hot path
+    ///
+    /// Called on **every** guest-physical access that lands in a window, because
+    /// `host_execution_plane.md` §1.5's *"the C has a LATENT BUG here"* finding is that a
+    /// base cached once and never re-checked is silently wrong the moment the guest moves
+    /// the BAR: the hypervisor's own region follows, our memslot does not, the old
+    /// guest-physical range keeps working **and becomes reassignable to another BAR**, and
+    /// the new one reads zeros. The C caches it once (`C: nvkvm_mmap_host.c:189-193`) and
+    /// has no BAR-change hook anywhere.
+    ///
+    /// So an implementor must spell this as **one read of the device's own PCI bookkeeping**
+    /// — `C: virtio_nvgpu_pci.c:71-76` is the whole function — and never as a call that
+    /// takes the VMM's global lock. It is in the same in-lock-legal class as
+    /// [`QemuHost::signal_msix`], and for the same reason: its legality is a property of
+    /// the implementation, not of the name.
+    fn bar_base(&self, bar: BarId) -> Option<u64>;
 
     // --- the listener's own reference counting (§5.2) ------------------------------
 
@@ -301,26 +325,4 @@ pub trait QemuHost: Send + Sync + core::fmt::Debug {
     /// [`HostError::Refused`] / [`HostError::Unsupported`] (a vector the device was not
     /// realized with).
     fn signal_msix(&self, vector: u16) -> Result<(), HostError>;
-}
-
-/// A read-native overlay the device is realized with (§5.4).
-///
-/// ★★ **Why this is realize-time configuration and not a runtime argument.** Publishing
-/// an overlay is a topology transaction, and §4.3 confines those to realize/unrealize.
-/// [`kayfabe_vmm::Vmm::map_read_native`] is a *runtime* call, so on this backend it can
-/// only **claim** an overlay that already exists, never create one. That is consistent
-/// with §5.4's own scope for the class — *"small and static (faked registers)"* — and it
-/// is the reason the refusal for an unmatched request names the constraint rather than
-/// reporting a generic fault.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OverlaySpec {
-    /// Which BAR the overlay lives in.
-    pub bar: BarId,
-    /// Guest-physical base.
-    pub gpa: u64,
-    /// Length in bytes.
-    pub len: u64,
-    /// The write-trap sub-range, in guest-physical addresses, or `None` for "the whole
-    /// overlay traps writes" — which is what a ROM-device region does natively.
-    pub write_trap: Option<Range<u64>>,
 }

@@ -25,10 +25,12 @@
 //! function to score.
 
 use std::collections::BTreeMap;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, Weak};
 
 use crate::host::{BarPlacement, BlockerId, HostError, MrHandle, QemuHost, SectionDesc};
+use crate::slots::{KERNEL_EEXIST, KERNEL_EINVAL, LiveSlot, SlotPlane};
+use kayfabe_linux_raw::{GuestWindow, HostPageSize, RawError, geometry};
 use kayfabe_vmm::BarId;
 
 /// One call the adapter made into the host, in order.
@@ -50,12 +52,10 @@ pub enum HostCall {
     DiscardDisable(bool),
     /// The topology listener was registered.
     RegisterListener,
-    /// One of our reservations was published.
-    PublishWindow(MrHandle),
-    /// A read-native overlay was published.
-    PublishRomOverlay(MrHandle),
-    /// A region we published was removed.
-    Unpublish(MrHandle),
+    /// A BAR was asked whether it is an unbacked reservation.
+    ReservationShape(BarId),
+    /// A BAR's current base was read — the latch check.
+    BarBase(BarId),
     /// A reference to a reported region was taken.
     RefRegion(MrHandle),
     /// A reference to a reported region was released.
@@ -92,9 +92,10 @@ pub struct MockPolicy {
     pub discard_refuses: Option<HostError>,
     /// If set, [`QemuHost::register_listener`] refuses with it.
     pub listener_refuses: Option<HostError>,
-    /// Refuse the `n`-th region publication (0-based), so a **partial** realize can be
-    /// constructed on purpose.
-    pub publish_refuses_at: Option<u64>,
+    /// BARs the shim registered as unbacked pure-MMIO reservations. A window placed in a
+    /// BAR outside this set is refused at install — see
+    /// [`crate::host::QemuHost::bar_is_unbacked_reservation`].
+    pub reservation_bars: Vec<BarId>,
     /// If set, [`QemuHost::signal_msix`] refuses with it.
     pub msix_refuses: Option<HostError>,
     /// Vectors the device was realized with. A vector outside this is refused.
@@ -109,7 +110,7 @@ impl Default for MockPolicy {
             blocker_refuses: None,
             discard_refuses: None,
             listener_refuses: None,
-            publish_refuses_at: None,
+            reservation_bars: vec![BarId::Bar0, BarId::Bar1, BarId::Bar2],
             msix_refuses: None,
             msix_vectors: 8,
         }
@@ -123,7 +124,6 @@ pub struct MockQemuHost {
     state: Mutex<MockState>,
     next_mr: AtomicU64,
     next_blocker: AtomicU64,
-    publishes: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -134,6 +134,11 @@ struct MockState {
     discard_disabled: bool,
     blockers: Vec<BlockerId>,
     listening: bool,
+    /// ★ Where each BAR is **currently** programmed. A test moves a BAR by writing here,
+    /// which is exactly what a guest reprogramming the base register does to the
+    /// hypervisor's own bookkeeping (`C: virtio_nvgpu_pci.c:71-76` reads that field and
+    /// nothing else).
+    bar_bases: Vec<(BarId, Option<u64>)>,
 }
 
 impl MockQemuHost {
@@ -151,7 +156,6 @@ impl MockQemuHost {
             state: Mutex::new(MockState::default()),
             next_mr: AtomicU64::new(1),
             next_blocker: AtomicU64::new(1),
-            publishes: AtomicU64::new(0),
         }
     }
 
@@ -268,30 +272,35 @@ impl MockQemuHost {
         }
     }
 
-    fn record(&self, c: HostCall) {
-        self.state.lock().expect("mock state").log.push(c);
+    /// ★★ Program a BAR at `base` — what firmware does at enumeration.
+    ///
+    /// A window cannot be installed into a BAR that has never been programmed, which is
+    /// the C's own guard (`C: nvkvm_mmap_host.c:194-207`: a base of 0 means *"the guest
+    /// hasn't programmed the BAR yet"* and the install is deferred rather than cached at a
+    /// fallback).
+    pub fn place_bar(&self, bar: BarId, base: u64) {
+        set_bar_base(
+            &mut self.state.lock().expect("mock state").bar_bases,
+            bar,
+            Some(base),
+        );
     }
 
-    fn publish(&self, len: u64, tag: fn(MrHandle) -> HostCall) -> Result<MrHandle, HostError> {
-        let n = self.publishes.fetch_add(1, Ordering::SeqCst);
-        if self.policy.publish_refuses_at == Some(n) {
-            return Err(HostError::Refused {
-                what: "publishing a region",
-                errno: Some(12),
-            });
-        }
-        let mr = MrHandle(self.next_mr.fetch_add(1, Ordering::SeqCst));
-        let mut st = self.state.lock().expect("mock state");
-        st.regions.insert(
-            mr,
-            Region {
-                bytes: vec![0; usize::try_from(len).expect("a test-sized region")],
-                refs: 1,
-                live: true,
-            },
+    /// ★★★ **Move a BAR out from under a live memslot.** The whole subject of
+    /// `host_execution_plane.md` §1.5's latent-bug finding: the hypervisor's region follows
+    /// the guest's write and our memslot does not.
+    ///
+    /// `None` unmaps it, which is the transient state PCI BAR sizing passes through.
+    pub fn move_bar(&self, bar: BarId, base: Option<u64>) {
+        set_bar_base(
+            &mut self.state.lock().expect("mock state").bar_bases,
+            bar,
+            base,
         );
-        st.log.push(tag(mr));
-        Ok(mr)
+    }
+
+    fn record(&self, c: HostCall) {
+        self.state.lock().expect("mock state").log.push(c);
     }
 }
 
@@ -349,39 +358,18 @@ impl QemuHost for MockQemuHost {
         Ok(())
     }
 
-    fn publish_window(
-        &self,
-        _name: &'static str,
-        at: BarPlacement,
-        bar_offset: u64,
-        len: u64,
-    ) -> Result<MrHandle, HostError> {
-        if bar_offset.saturating_add(len) > at.len {
-            return Err(HostError::Unsupported("a subregion outside its BAR"));
-        }
-        self.publish(len, HostCall::PublishWindow)
+    fn bar_is_unbacked_reservation(&self, bar: BarId) -> bool {
+        self.record(HostCall::ReservationShape(bar));
+        self.policy.reservation_bars.contains(&bar)
     }
 
-    fn publish_rom_overlay(
-        &self,
-        _name: &'static str,
-        at: BarPlacement,
-        bar_offset: u64,
-        len: u64,
-    ) -> Result<MrHandle, HostError> {
-        if bar_offset.saturating_add(len) > at.len {
-            return Err(HostError::Unsupported("a subregion outside its BAR"));
-        }
-        self.publish(len, HostCall::PublishRomOverlay)
-    }
-
-    fn unpublish(&self, mr: MrHandle) {
+    fn bar_base(&self, bar: BarId) -> Option<u64> {
         let mut st = self.state.lock().expect("mock state");
-        if let Some(r) = st.regions.get_mut(&mr) {
-            r.refs = r.refs.saturating_sub(1);
-            r.live = false;
-        }
-        st.log.push(HostCall::Unpublish(mr));
+        st.log.push(HostCall::BarBase(bar));
+        st.bar_bases
+            .iter()
+            .find(|(b, _)| *b == bar)
+            .and_then(|(_, base)| *base)
     }
 
     fn ref_region(&self, mr: MrHandle) -> Result<(), HostError> {
@@ -470,8 +458,232 @@ impl QemuHost for MockQemuHost {
     }
 }
 
+/// `BarId` is deliberately not ordered in the port's vocabulary, so the mock's own base
+/// table is an association list rather than a map. Three BARs; the linear scan is the
+/// honest shape.
+fn set_bar_base(table: &mut Vec<(BarId, Option<u64>)>, bar: BarId, base: Option<u64>) {
+    match table.iter_mut().find(|(b, _)| *b == bar) {
+        Some(slot) => slot.1 = base,
+        None => table.push((bar, base)),
+    }
+}
+
 /// A BAR placement a test can hand to [`crate::MachineConfig`] without repeating itself.
 #[must_use]
 pub fn bar(bar: BarId, base: u64, len: u64) -> BarPlacement {
     BarPlacement { bar, base, len }
+}
+
+// =====================================================================================
+// The memslot plane, without a kernel
+// =====================================================================================
+
+/// One memslot the mock kernel is holding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MockSlotRecord {
+    /// The slot number.
+    pub slot: u32,
+    /// Guest-physical base.
+    pub gpa: u64,
+    /// Length in bytes.
+    pub len: u64,
+    /// Whether the guest may only read it.
+    pub readonly: bool,
+}
+
+/// ★★★ A [`SlotPlane`] with no kernel — **and it refuses where the kernel refuses**.
+///
+/// `host_execution_plane.md` §2.1's rule, applied to the memory plane: *"the mock must lie
+/// where the real host lies"*. A `BTreeMap::insert` would accept a misaligned base, an
+/// overlapping range and a number past the ceiling, so a suite built on one would assert
+/// only that the adapter's bookkeeping is self-consistent. The three arms modelled here are
+/// the three the real kernel has, and each is measured in
+/// `kayfabe_linux_raw::kvm_unsafe`'s own tests:
+///
+/// | request | kernel | modelled |
+/// |---|---|---|
+/// | a base that is not page-aligned | `EINVAL` | yes |
+/// | a range another live slot covers | `EEXIST` | yes |
+/// | a number at or past the ceiling | `EINVAL` | yes |
+///
+/// ★ The **fourth** arm is deliberately absent and named instead: a number that is already
+/// live is a *replace*, not a refusal, and the kernel says nothing. That is the hazard
+/// [`crate::slots::SlotAllocator`] exists for, so this mock reproduces the silence — see
+/// [`MockSlotPlane::replaces`], which counts it. A mock that refused a duplicate number
+/// would make the allocator's whole argument untestable by making the failure impossible.
+#[derive(Debug)]
+pub struct MockSlotPlane {
+    ceiling: u32,
+    page: u64,
+    state: Arc<Mutex<MockSlotState>>,
+}
+
+#[derive(Debug, Default)]
+struct MockSlotState {
+    live: Vec<MockSlotRecord>,
+    installs: u64,
+    clears: u64,
+    replaces: u64,
+    read_only_installs: u64,
+}
+
+/// The handle a mock install returns. Dropping it clears the slot.
+#[derive(Debug)]
+pub struct MockLiveSlot {
+    state: Weak<Mutex<MockSlotState>>,
+    slot: u32,
+}
+
+impl LiveSlot for MockLiveSlot {}
+
+impl Drop for MockLiveSlot {
+    fn drop(&mut self) {
+        if let Some(st) = self.state.upgrade() {
+            let mut st = st.lock().expect("mock slot state");
+            st.live.retain(|r| r.slot != self.slot);
+            st.clears += 1;
+        }
+    }
+}
+
+impl MockSlotPlane {
+    /// A plane whose kernel reports `ceiling` memslots and a `page`-byte page.
+    #[must_use]
+    pub fn new(ceiling: u32, page: u64) -> Self {
+        MockSlotPlane {
+            ceiling,
+            page,
+            state: Arc::new(Mutex::new(MockSlotState::default())),
+        }
+    }
+
+    /// The slots currently live, sorted by guest-physical base.
+    ///
+    /// ★ This is how a test sees the **tiering**: which ranges have a slot at all
+    /// (passthrough or read-native) and which do not (observe-everything). Nothing else in
+    /// the adapter can distinguish "no slot" from "a slot nobody looked at".
+    #[must_use]
+    pub fn live(&self) -> Vec<MockSlotRecord> {
+        let mut v = self.state.lock().expect("mock slot state").live.clone();
+        v.sort_unstable_by_key(|r| r.gpa);
+        v
+    }
+
+    /// Cumulative installs — the memslot-frequency numerator (§9.3).
+    #[must_use]
+    pub fn installs(&self) -> u64 {
+        self.state.lock().expect("mock slot state").installs
+    }
+
+    /// Cumulative clears. At quiescence this must equal [`MockSlotPlane::installs`], or a
+    /// slot is live in a kernel nobody is going to tell.
+    #[must_use]
+    pub fn clears(&self) -> u64 {
+        self.state.lock().expect("mock slot state").clears
+    }
+
+    /// Installs that carried the read-only flag — the read-native tier's own counter.
+    #[must_use]
+    pub fn read_only_installs(&self) -> u64 {
+        self.state
+            .lock()
+            .expect("mock slot state")
+            .read_only_installs
+    }
+
+    /// ★★★ Installs that **silently replaced** a live slot with the same number.
+    ///
+    /// Must be zero. The kernel does not report this and neither does this mock; it is
+    /// counted so a test can assert the absence, which is the only form the assertion can
+    /// take. A non-zero value means the allocator handed out a number that was still live —
+    /// exactly the failure counting down from the ceiling is meant to make unreachable.
+    #[must_use]
+    pub fn replaces(&self) -> u64 {
+        self.state.lock().expect("mock slot state").replaces
+    }
+}
+
+impl SlotPlane for MockSlotPlane {
+    fn ceiling(&self) -> Result<u32, RawError> {
+        Ok(self.ceiling)
+    }
+
+    fn install(
+        &self,
+        slot: u32,
+        gpa: u64,
+        window: &Arc<GuestWindow>,
+        window_offset: u64,
+        len: u64,
+        guest_readonly: bool,
+    ) -> Result<Box<dyn LiveSlot>, RawError> {
+        // ★★★ THE PRE-SYSCALL CHECKS, IN THE REAL ONE'S ORDER — and the order is the
+        // finding. The real install asks the window for the host address of
+        // `window_offset..+len`, and that accessor refuses **before any syscall happens**:
+        // first the two alignments, then the bounds. So a misaligned *length* is
+        // `RawError::Misaligned`, NOT the kernel's `EINVAL` — a distinction the first draft
+        // of this mock got wrong and the real-kernel differential caught, which is exactly
+        // what that differential exists for.
+        //
+        // Getting this wrong in the other direction would be worse than untidy: a mock that
+        // reported `EINVAL` where the real path reports `Misaligned` teaches every test
+        // above it to expect the kernel's answer for a condition the kernel never sees.
+        geometry::require_aligned(window_offset, HostPageSize::query(), "memslot offset")?;
+        geometry::require_aligned(len, HostPageSize::query(), "memslot length")?;
+        if len == 0 {
+            return Err(RawError::ZeroLength {
+                what: "memslot length",
+            });
+        }
+        if window_offset.checked_add(len).is_none() {
+            return Err(RawError::LengthOverflow {
+                offset: window_offset,
+                len,
+            });
+        }
+        if window_offset + len > window.len_bytes() {
+            return Err(RawError::OutOfRange {
+                offset: window_offset,
+                len,
+                object_len: window.len_bytes(),
+            });
+        }
+        // Only now the kernel's own refusals.
+        if slot >= self.ceiling || !gpa.is_multiple_of(self.page) {
+            return Err(RawError::Syscall {
+                call: "KVM_SET_USER_MEMORY_REGION",
+                errno: Some(KERNEL_EINVAL),
+            });
+        }
+        let mut st = self.state.lock().expect("mock slot state");
+        if st
+            .live
+            .iter()
+            .any(|r| r.slot != slot && gpa < r.gpa + r.len && r.gpa < gpa + len)
+        {
+            return Err(RawError::Syscall {
+                call: "KVM_SET_USER_MEMORY_REGION",
+                errno: Some(KERNEL_EEXIST),
+            });
+        }
+        if st.live.iter().any(|r| r.slot == slot) {
+            // The silence, reproduced. See the type docs.
+            st.replaces += 1;
+            st.live.retain(|r| r.slot != slot);
+        }
+        st.live.push(MockSlotRecord {
+            slot,
+            gpa,
+            len,
+            readonly: guest_readonly,
+        });
+        st.installs += 1;
+        if guest_readonly {
+            st.read_only_installs += 1;
+        }
+        Ok(Box::new(MockLiveSlot {
+            state: Arc::downgrade(&self.state),
+            slot,
+        }))
+    }
 }

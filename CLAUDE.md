@@ -70,8 +70,11 @@ file it constrains.
 `util`, `arch`, `vmm`/`isolate` (traits), `mmu`, `completion`, `core`, `fwd`, `mocks`,
 `abi` (codegen from the open kmods — no longer a skeleton), `gsp` (fake-boot FSM + the
 B0–B6 bridge), `rmrpc` (RPC → `RmEvent` → `Gpu::apply`), `trace`, `rt`, `shell`,
-`linux-raw` (**the ONLY crate permitted `unsafe`**), `vmm-kvm` (real KVM), `vmm-qemu`,
-`qemu-raw`, and ★ `isolate-host` — the **real** host isolate, added 2026-07-29.
+`linux-raw` (**the ONLY crate permitted `unsafe`**), `vmm-kvm` (real KVM), `vmm-qemu`
+(★ the QEMU adapter's memory plane — **our own memslots** over a window the hypervisor
+reserves and does not back; `host_execution_plane.md` §1/§1.6), `qemu-raw` (still empty:
+the C QOM shim needs a hypervisor source tree this machine does not have), and
+★ `isolate-host` — the **real** host isolate, added 2026-07-29.
 `tests/` — the VMM-agnostic conformance suite.
 
 ## ★★★ What "done" means — read before planning any milestone
@@ -87,7 +90,8 @@ load-bearing. Get to hardware early and let it delete assumptions.
 - **"Correct result" has a literal bar:** `cup8` — 2048² matmul, `bad=0 maxerr=0`, byte-exact,
   the same source file the C passes.
 - Key docs: `docs/design/host_execution_plane.md` (the memory plane + execution plane
-  decisions), `docs/design/c_rust_trace_differential.md` (the oracle and its limits).
+  decisions, **and §1.6's five findings from building them**),
+  `docs/design/c_rust_trace_differential.md` (the oracle and its limits).
 
 `docs/reference/` — **measured** ground truth, cited per fact, kept out of the design docs so
 it can be corrected in one place:

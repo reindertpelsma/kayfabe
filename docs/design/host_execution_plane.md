@@ -183,6 +183,108 @@ roadmap note, not code. So the C is precedent for **reservation + one RW slot** 
 nothing else. `KVM_MEM_READONLY` read-native and the mixed passthrough/observe taxonomy must
 earn their own green gate.
 
+### 1.6 ★★★ BUILT, 2026-07-29 (stage Q2–Q5) — and the five things the build FOUND
+
+§1 is no longer a decision; it is the memory plane. What exists: a memslot seam with a
+**real** implementation (`kayfabe_vmm_qemu::slots::KvmSlotPlane` over
+`kayfabe_linux_raw::KvmVm`) and a mock that refuses where the kernel refuses; a descending
+allocator; the three tiers; the BAR latch in three parts; and task #97's refusal. 904 tests,
+15/15 gates, and every new guard **watched failing** before it was trusted.
+
+**What is NOT built, stated first:** the C QOM shim. `kayfabe-qemu-raw` is still empty,
+because it needs a hypervisor source tree to compile against and this machine has none.
+Everything below the seam is real and runs against a real kernel; everything above it is
+still a double. That is the honest boundary of this stage.
+
+#### ★★★ Finding 1 — §1 does not merely fix §4.3/§5.4, it DELETES a constraint
+
+`f0053ef` built the coarse tier **realize-only**, because publishing a region was a topology
+transaction and §4.3 confines those to realize/unrealize. That made `Vmm::map_read_native` a
+method which could only *claim* an overlay realize had already created, with four refusals
+attached to the impossibility, and it made `TOPOLOGY_AFTER_REALIZE` a design constraint
+dressed as a lifecycle error.
+
+Under §1 **none of that exists**: installing a window is a call to the kernel, legal at any
+time, and `map_read_native` creates one exactly as the sibling backend does. The refusal lost
+its subject. What replaced it is `MEMORY_PLANE_AFTER_UNREALIZE`, which is a real and reachable
+lifecycle error. ⇒ The decision's value was under-stated in §1.1: it is not a third argument
+about performance and portability, it is the removal of a restriction that had propagated
+into the port's semantics.
+
+#### ★★★ Finding 2 — the opacity (§1.5a) needs a LAYERING, not a rule
+
+§1.5a says `gpa_read`/`gpa_write` must not route window addresses through the hypervisor. A
+rule is not enough, because the failure is **silent and successful**: the reservation BAR's
+stub ops return zeros and discard writes, so a bypassed window lookup does not error — it
+returns what freshly-zeroed guest memory would.
+
+So the built shape is two layers that disagree on purpose. Our own window map answers first,
+by our own offset arithmetic, with no hypervisor call at all. The region map keeps declaring
+the window's BAR **`Device`** — which is *correct*, because that is what the range is through
+the hypervisor — so a bypass falls into `NonRamGpa` rather than into a memcpy of zeros. A
+bite-check confirms it: neutering the window lookup turns the memory-plane suite red rather
+than green-and-wrong.
+
+★ **One visible consequence, recorded rather than smoothed over.** A range straddling the end
+of a window reports **its own start**, where the KVM backend reports the **boundary** byte,
+because our window is not a region-map region at all. Both are correct; the property that
+matters — refused as a unit, not one byte copied — holds in both, and is asserted directly.
+
+#### ★★ Finding 3 — the C's VM-descriptor mechanism ports, and needs one arm the C lacks
+
+`C: src/qemu/virtio_nvgpu.c:1114-1141` finds the hypervisor's VM descriptor by scanning
+`/proc/self/fd` for the symlink target `anon_inode:kvm-vm`, because the header that would
+expose the handle is target-only. That mechanism ports unchanged and is
+hypervisor-**agnostic**, which is the property §1.1 argument 3 wants from this seam.
+
+Two things the C does not have:
+* the descriptor is an anonymous inode, so `/proc/self/fd/N` cannot be **re-opened** —
+  measured `ENXIO` on this host — and must be duplicated. That is this build's only new
+  `unsafe` block (ratchet 49 → 50, itemised in `ci.yml`), and its race is closed by
+  re-reading the link of the descriptor we now **own**, so losing it is a refusal and never a
+  wrong machine;
+* the C takes the **first** match and stops. With two machines in one process there is no way
+  to tell which one the device is in, and installing into the wrong one **succeeds silently**.
+  Ambiguity is a loud refusal here, distinct from "no machine at all" — one is a fact about
+  the invocation, the other a configuration fact, and they send an operator to different
+  places. All three arms are driven for real.
+
+#### ★★★ Finding 4 — the real-kernel differential caught the mock lying TWICE, on its first run
+
+The mock slot plane is what keeps the tiering assertions runnable where `/dev/kvm` is absent.
+Its first draft modelled the kernel's `EINVAL`/`EEXIST` and stopped there. Running the
+identical scenario list against a real kernel found **two divergences immediately**:
+
+| request | mock said | the real path says |
+|---|---|---|
+| a misaligned memslot **length** | `EINVAL` | `RawError::Misaligned` — refused **before any syscall** |
+| a **zero-length** memslot | `EINVAL` | `RawError::ZeroLength` — likewise |
+
+Both are pre-syscall refusals by the window's own bounded accessor, which the kernel therefore
+never sees. A mock reporting the kernel's answer for a condition the kernel never reaches
+teaches every test above it to expect the wrong variant. ⇒ **`07da582` was not a one-off.**
+Two more divergences, in the first double built after it, found by running the double against
+the real thing rather than by reading it.
+
+#### ★★ Finding 5 — a bite-check found a SECOND evaluation site for the tier rule
+
+Fourteen of fifteen new guards went red when neutered. The fifteenth — *"the observe tier
+installs no slot"* — **survived**: the install path filtered on `s.tier != Tier::Observe`
+while `Tier::readonly_slot()` was the stated rule, so flipping the rule changed nothing. The
+same decay `classify.rs` is a whole module to prevent, one crate over. Fixed by making
+`readonly_slot()` the only site that decides; the guard bites now.
+
+#### ★ What #97's own argument turned out to be
+
+§8.5's reasoning is **void**, and the correction is worth keeping because it inverts which
+memory is at risk. The balloon skips our reservation *trivially* now — it walks only the
+machine's own RAM blocks and ours is not one. The live hazard is **guest RAM exported to
+isolates**: a shared `memfd` that the discard helper punches with `FALLOC_FL_PUNCH_HOLE`,
+destroying the file's pages and so reaching **every** mapping — the hypervisor's, the
+accelerator's second-stage tables, and the isolate's. The `-EBUSY` arm refuses realize
+**naming the conflicting device**, because the two cannot coexist and an operator told only
+*"a requirer is present"* has to bisect their own command line.
+
 ## 2. ★★ DECISION — model RM's semantics in the mock, deterministically
 
 **Do NOT use random sleeps as the primary instrument.** Timing jitter in a fixture

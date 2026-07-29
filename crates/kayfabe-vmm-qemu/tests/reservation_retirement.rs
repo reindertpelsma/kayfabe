@@ -56,15 +56,10 @@ fn a_reservation_torn_down_under_a_live_reader_is_never_unmapped_by_the_reader()
             base: BIG_BAR,
             len: BIG_LEN,
         }],
-        windows: vec![WindowSpec {
-            bar: BarId::Bar1,
-            gpa: BIG_BAR,
-            len: BIG_LEN,
-        }],
-        overlays: Vec::new(),
+        windows: vec![WindowSpec::passthrough(BIG_BAR, BIG_LEN)],
         traps: Vec::new(),
     };
-    let (m, host) = common::machine_with(MockPolicy::default(), cfg);
+    let (m, host, _slots) = common::machine_with(MockPolicy::default(), cfg);
 
     let mut buf = vec![0u8; usize::try_from(BIG_LEN).expect("fits")];
     std::thread::scope(|s| {
@@ -131,8 +126,15 @@ fn a_reservation_torn_down_under_a_live_reader_is_never_unmapped_by_the_reader()
     );
     assert!(
         host.live_regions().is_empty(),
-        "and the hypervisor got its region back regardless of the deferral, because the \
-         two releases are independent: ours is an unmap, its is a reference"
+        "★ and the hypervisor is holding NOTHING — which under `host_execution_plane.md` \
+         §1 it never was: this device publishes no region to it at all, so the only \
+         teardown that can leak is ours"
+    );
+    assert_eq!(
+        m.audit().regions_published,
+        0,
+        "★★★ §1 as one number: the hypervisor was asked to back ZERO regions, at realize \
+         and at every moment after it"
     );
 }
 
@@ -147,7 +149,7 @@ fn a_reservation_torn_down_under_a_live_reader_is_never_unmapped_by_the_reader()
 /// prescription would have prevented.
 #[test]
 fn a_hypervisor_owned_region_is_released_inline_and_is_never_deferred() {
-    let (m, host) = common::machine();
+    let (m, host, _slots) = common::machine();
     let p = common::page();
     let section = host.mint_foreign(common::FOREIGN_RAM, 1024 * p, SectionFacts::plain_ram());
     m.region_add(section).expect("guest RAM");

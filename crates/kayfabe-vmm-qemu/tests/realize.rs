@@ -1,575 +1,474 @@
-//! ★★ Realize, its refusals, its unwinding, and §4.3's latch.
+//! Realize and its refusals — every acceptance here is a **refusal**, and none of them
+//! needs a guest.
 //!
-//! `l2_qemu_adapter.md` §8.1 lists ten ordered steps and §10 assigns their *runtime*
-//! acceptance to stage Q2 — a booted hypervisor refusing at the monitor. Everything below
-//! is the half that needs no hypervisor at all: the **order**, the **unwinding**, and the
-//! **latch**, all of which are pure logic and all of which Q2 would otherwise discover
-//! against a machine where a failure has two candidate causes.
-//!
-//! Every assertion here is by exact content. The refusal strings are public constants
-//! precisely so a test can name the one it means instead of matching `is_err()`.
+//! `l2_qemu_adapter.md` §10 stage Q2. Plus **task #97**, whose whole content is one call and
+//! one arm, and whose *reason* changed completely under `host_execution_plane.md` §1 — see
+//! [`a_discard_requirer_makes_realize_refuse_NAMING_THE_CONFLICT`].
 
 mod common;
 
-use std::sync::Arc;
+use common::{BAR0_BASE, config, machine, machine_with, page, window_gpa, window_len};
 
-use common::{config, machine, machine_with, page};
 use kayfabe_vmm::{BarId, TrapMode, Vmm, VmmError};
 use kayfabe_vmm_qemu::host::HostError;
-use kayfabe_vmm_qemu::mock_host::{HostCall, MockPolicy, MockQemuHost};
+use kayfabe_vmm_qemu::mock_host::{HostCall, MockPolicy};
+use kayfabe_vmm_qemu::slots::KERNEL_EBUSY;
 use kayfabe_vmm_qemu::{
-    BELOW_FLOOR, DISCARD_REQUIRER_PRESENT, MachineConfig, NOT_ACCELERATED, QemuMachine,
-    TOPOLOGY_AFTER_REALIZE, TRAP_OUTSIDE_THE_REALIZED_TABLE, TrapSpec,
+    BELOW_FLOOR, MachineConfig, NOT_ACCELERATED, QemuMachine, TRAP_OUTSIDE_THE_REALIZED_TABLE,
+    VERSION_FLOOR, WINDOW_IN_A_BACKED_BAR, WindowSpec,
 };
+use std::sync::Arc;
 
-/// ★★ §8.1's order is the assertion, and a set of counters could not make it.
-///
-/// The two orderings that are load-bearing rather than tidy: the migration blocker is
-/// taken **before anything is mapped** (§8.1 step 3 — a partially realized device that
-/// somebody migrates is the silent failure §8.4 is about), and guest-driven discard is
-/// refused **before the reservation exists** (§8.1 step 4 — the window it protects is
-/// created in step 5).
+/// ★★ Realize's order is load-bearing, and an ordered log is the only thing that can see an
+/// order at all: the blocker before anything is mapped, the discard refusal before the
+/// reservation exists.
 #[test]
 fn realize_takes_the_blocker_and_refuses_discard_before_it_maps_anything() {
-    let (_m, host) = machine();
+    let (m, host, slots) = machine();
     let log = host.log();
-
-    // The prefix, by exact content. Not `contains`: a step in the wrong place is exactly
-    // the defect, and `contains` cannot see an order.
-    assert_eq!(
-        log[0],
-        HostCall::Version,
-        "the runtime floor is checked first — everything after it is written against a \
-         version whose facilities we have not yet confirmed ({log:?})"
-    );
-    assert_eq!(
-        log[1],
-        HostCall::KvmEnabled,
-        "and the accelerator second, because without it the whole threading design of \
-         section 4 is false and nothing else is worth doing ({log:?})"
-    );
+    let blocker = log
+        .iter()
+        .position(|c| matches!(c, HostCall::AddBlocker(_)))
+        .expect("a blocker was taken");
+    let discard = log
+        .iter()
+        .position(|c| *c == HostCall::DiscardDisable(true))
+        .expect("discard was disabled");
+    let first_bar_read = log
+        .iter()
+        .position(|c| matches!(c, HostCall::BarBase(_)))
+        .expect("the reservation BAR was read");
     assert!(
-        matches!(log[2], HostCall::AddBlocker(_)),
-        "the migration blocker comes BEFORE anything is mapped ({log:?})"
+        blocker < discard && discard < first_bar_read,
+        "the blocker and the discard refusal must both precede the first thing that maps \
+         memory. Log: {log:?}"
     );
-    assert_eq!(
-        log[3],
-        HostCall::DiscardDisable(true),
-        "and guest-driven discard is refused before the reservation it protects exists \
-         ({log:?})"
-    );
-    assert!(
-        matches!(log[4], HostCall::PublishWindow(_)),
-        "only then is the reservation published ({log:?})"
-    );
-    assert!(
-        matches!(log[5], HostCall::PublishRomOverlay(_)),
-        "then the read-native overlays ({log:?})"
-    );
-    assert_eq!(
-        log[6],
-        HostCall::RegisterListener,
-        "and the topology listener LAST, so no callback can arrive naming a range we have \
-         not finished declaring ({log:?})"
-    );
-    assert_eq!(log.len(), 7, "and nothing else at all ({log:?})");
-    assert!(host.discard_disabled(), "the refusal is still in force");
+    assert!(host.discard_disabled());
+    assert_eq!(host.blockers().len(), 1);
     assert!(host.listening(), "and the listener is registered");
-}
-
-/// ★★ The runtime floor, swept rather than witnessed — and the refusal leaves the machine
-/// **untouched**, which is the half a single `assert!(is_err())` would miss.
-///
-/// §3.5: the compile-time check is a claim about the headers and this is a claim about
-/// the binary; a header-only mismatch or a compatible relink separates them, so neither
-/// substitutes for the other.
-#[test]
-fn every_version_below_the_floor_is_refused_by_name_and_takes_no_blocker() {
-    for (version, expected) in [
-        ((9, 0), Some(BELOW_FLOOR)),
-        ((9, 2), Some(BELOW_FLOOR)),
-        ((10, 0), Some(BELOW_FLOOR)),
-        ((10, 1), Some(BELOW_FLOOR)),
-        ((10, 2), None),
-        ((10, 3), None),
-        ((11, 0), None),
-    ] {
-        let host = Arc::new(MockQemuHost::with_policy(MockPolicy {
-            version,
-            ..MockPolicy::default()
-        }));
-        let got = QemuMachine::realize(config(), Arc::clone(&host) as Arc<_>);
-        match expected {
-            Some(reason) => {
-                assert_eq!(
-                    got.err(),
-                    Some(VmmError::Unsupported(reason)),
-                    "{version:?} is below the 10.2 floor and must be refused by that name"
-                );
-                assert_eq!(
-                    host.log(),
-                    vec![HostCall::Version],
-                    "{version:?}: a refused realize asks the host NOTHING else — it must \
-                     not take a blocker, disable discard or publish a region it will then \
-                     have to unwind"
-                );
-                assert!(
-                    host.blockers().is_empty() && !host.discard_disabled(),
-                    "{version:?}: and it leaves the machine exactly as it found it"
-                );
-            }
-            None => {
-                assert!(
-                    got.is_ok(),
-                    "{version:?} is at or above the floor and must realize"
-                );
-                assert!(
-                    host.blockers().len() == 1,
-                    "{version:?}: a realized device holds exactly one migration blocker"
-                );
-            }
-        }
-    }
-}
-
-/// ★ No accelerator is a **refusal**, never a slow mode (§3.4, decision Q6), and it too
-/// happens before the blocker.
-#[test]
-fn a_machine_without_the_accelerator_is_refused_before_the_blocker_is_taken() {
-    let host = Arc::new(MockQemuHost::with_policy(MockPolicy {
-        kvm_enabled: false,
-        ..MockPolicy::default()
-    }));
     assert_eq!(
-        QemuMachine::realize(config(), Arc::clone(&host) as Arc<_>).err(),
-        Some(VmmError::Unsupported(NOT_ACCELERATED)),
-        "the lockless-IO opt-out is honoured only on the accelerator's dispatch path, so \
-         an interpreted machine runs this device under the VMM's global lock on every \
-         access — a measured 5.3x amplification with no way to see it from inside"
-    );
-    assert_eq!(
-        host.log(),
-        vec![HostCall::Version, HostCall::KvmEnabled],
-        "and it asks for nothing it would then have to give back"
-    );
-}
-
-/// ★★ §8.5's `-EBUSY` arm: a discard *requirer* is already present, and realize must
-/// refuse **and withdraw the blocker it had already taken**.
-///
-/// This is the first step whose failure has something to unwind, and the unwinding is the
-/// assertion — a machine left permanently unmigratable by a device that failed to realize
-/// is a worse outcome than the failure.
-#[test]
-fn a_discard_requirer_makes_realize_refuse_and_give_back_the_blocker_it_took() {
-    let host = Arc::new(MockQemuHost::with_policy(MockPolicy {
-        discard_refuses: Some(HostError::Busy {
-            what: "a device that requires guest-driven discard",
-        }),
-        ..MockPolicy::default()
-    }));
-    assert_eq!(
-        QemuMachine::realize(config(), Arc::clone(&host) as Arc<_>).err(),
-        Some(VmmError::Unsupported(DISCARD_REQUIRER_PRESENT)),
-        "the conflict is named, not folded into a generic host refusal — an operator must \
-         be able to tell a configuration clash from a bug in us"
-    );
-    assert!(
-        host.blockers().is_empty(),
-        "★ the blocker taken one step earlier is withdrawn. Without this the machine is \
-         unmigratable forever because of a device that does not exist"
-    );
-    let log = host.log();
-    assert!(
-        matches!(log.last(), Some(HostCall::DelBlocker(_))),
-        "and the withdrawal is the LAST thing it does ({log:?})"
-    );
-    assert!(
-        !host.discard_disabled(),
-        "the refusal never took effect, so nothing must claim it did"
-    );
-}
-
-/// ★★★ **The partial realize, swept over every step that can fail.**
-///
-/// The device publishes N regions. For each k, the k-th publication is refused, and the
-/// property asserted is the same one every time: **nothing survives**. Not "it returned an
-/// error" — the host address space, the blocker and the discard refusal are all measured
-/// afterwards, because a ledger that only increments on success cannot see a leak.
-///
-/// Sweeping k rather than witnessing one is what makes this a test of the unwinding
-/// rather than of one arm of it: with a single k, an unwind that handles the first failure
-/// and not the second passes.
-#[test]
-fn a_partial_realize_gives_back_every_region_it_had_already_published() {
-    let cfg = config();
-    let publications = cfg.windows.len() + cfg.overlays.len();
-    assert!(
-        publications >= 2,
-        "★ NON-VACUITY: the sweep below needs at least two publications for 'unwind the \
-         ones that already landed' to differ from 'unwind nothing'"
-    );
-    for k in 0..publications {
-        let host = Arc::new(MockQemuHost::with_policy(MockPolicy {
-            publish_refuses_at: Some(k as u64),
-            ..MockPolicy::default()
-        }));
-        let got = QemuMachine::realize(config(), Arc::clone(&host) as Arc<_>);
-        let what = if k < cfg.windows.len() {
-            "publishing a reservation"
-        } else {
-            "publishing a read-native overlay"
-        };
-        assert_eq!(
-            got.err(),
-            Some(VmmError::HostRefused {
-                what,
-                errno: Some(12)
-            }),
-            "publication {k} was refused, and WHICH operation was refused is named — an \
-             operator reading a log must be able to tell a reservation from an overlay"
-        );
-        assert_eq!(
-            host.live_regions(),
-            Vec::new(),
-            "★ publication {k}: every region published BEFORE the failure is given back. \
-             This is measured on the host, not inferred from a counter we increment"
-        );
-        assert!(
-            host.blockers().is_empty(),
-            "publication {k}: and the migration blocker with it"
-        );
-        assert!(
-            !host.discard_disabled(),
-            "publication {k}: and the discard refusal is lifted, or the next device in \
-             this machine inherits a restriction from one that never realized"
-        );
-    }
-}
-
-/// ★ The listener registration is the last step, so its failure unwinds the most.
-#[test]
-fn a_listener_that_cannot_be_registered_unwinds_the_whole_device() {
-    let host = Arc::new(MockQemuHost::with_policy(MockPolicy {
-        listener_refuses: Some(HostError::Refused {
-            what: "registering a listener",
-            errno: Some(1),
-        }),
-        ..MockPolicy::default()
-    }));
-    assert_eq!(
-        QemuMachine::realize(config(), Arc::clone(&host) as Arc<_>).err(),
-        Some(VmmError::HostRefused {
-            what: "registering the topology listener",
-            errno: Some(1),
-        }),
-    );
-    assert_eq!(
-        host.live_regions(),
-        Vec::new(),
-        "the reservation and the overlay were both published before this step, and both \
-         must be given back"
-    );
-    assert!(host.blockers().is_empty() && !host.discard_disabled());
-}
-
-/// ★★★ **§4.3 as a mechanism.** The design states *"the adapter contains ZERO calls to
-/// `bql_lock`"* as a discipline; here it is a latch with a negative test.
-///
-/// A topology transaction after realize would have to take the VMM's global lock, because
-/// no thread that reaches this method is holding it. So it is refused by name and
-/// **counted** — the counter is what makes the refusal string provably reachable rather
-/// than a constant nothing evaluates.
-#[test]
-fn a_topology_transaction_after_realize_is_refused_by_name_and_counted() {
-    let (m, host) = machine();
-    let published_at_realize = m.audit().regions_published;
-    let before = host.log().len();
-
-    let p = page();
-    assert_eq!(
-        m.install_ram_window(BarId::Bar1, common::BAR1_BASE + 32 * p, 2 * p)
-            .err(),
-        Some(VmmError::Unsupported(TOPOLOGY_AFTER_REALIZE)),
-        "★ a reservation created after realize is a topology transaction on a thread that \
-         does not hold the VMM's global lock — the one thing section 4.3 says this adapter \
-         must never construct"
-    );
-    assert_eq!(
-        m.audit().topology_ops_refused_after_realize,
+        slots.installs(),
         1,
-        "★ NON-VACUITY: the refusal is counted, so 'that string is unreachable' is a \
-         failing assertion rather than an unexamined possibility"
-    );
-    assert_eq!(
-        host.log().len(),
-        before,
-        "and the host was not asked for anything at all — a refusal that had already \
-         published the region would be the violation with a tidy return value"
+        "the realize-time reservation's memslot"
     );
     assert_eq!(
         m.audit().regions_published,
-        published_at_realize,
-        "★ the frequency claim: the count of regions handed to the hypervisor stops moving \
-         the instant realize returns, whatever the guest asks for afterwards"
+        0,
+        "★★★ and ZERO regions were handed to the hypervisor to back — that number is \
+         `host_execution_plane.md` §1 in one field, and it must never move"
     );
 }
 
-/// ★★ Unrealize is the conservation ledger: every region given back, every reference
-/// released, the blocker withdrawn and the discard refusal lifted.
+/// ★★ Every version below the floor is refused **by name**, and takes no blocker.
 #[test]
-fn unrealize_gives_back_every_region_and_reference_and_the_blocker() {
-    let (m, host) = machine();
+fn every_version_below_the_floor_is_refused_by_name_and_takes_no_blocker() {
+    let (maj, min) = VERSION_FLOOR;
+    for v in [(0, 0), (9, 9), (maj - 1, 99), (maj, min - 1)] {
+        let host = common::host_with(MockPolicy {
+            version: v,
+            ..MockPolicy::default()
+        });
+        let slots = common::slot_plane();
+        assert_eq!(
+            QemuMachine::realize(
+                config(),
+                Arc::clone(&host) as Arc<_>,
+                Arc::clone(&slots) as Arc<_>
+            )
+            .err(),
+            Some(VmmError::Unsupported(BELOW_FLOOR)),
+            "version {v:?} is below the {VERSION_FLOOR:?} floor"
+        );
+        assert!(host.blockers().is_empty());
+        assert_eq!(slots.installs(), 0);
+    }
+    // ...and the floor itself, plus above it, must realize — or the sweep refuses everything.
+    for v in [(maj, min), (maj, min + 1), (maj + 1, 0)] {
+        let (_m, host, _s) = machine_with(
+            MockPolicy {
+                version: v,
+                ..MockPolicy::default()
+            },
+            config(),
+        );
+        assert_eq!(
+            host.blockers().len(),
+            1,
+            "version {v:?} is at or above the floor"
+        );
+    }
+}
+
+/// ★★ A machine with no hardware accelerator is refused **before** the blocker is taken.
+///
+/// Under §1 this stopped being only a performance argument: the memory plane **is** the
+/// accelerator's memslot table, so without it the device has no data path at all.
+#[test]
+fn a_machine_without_the_accelerator_is_refused_before_the_blocker_is_taken() {
+    let host = common::host_with(MockPolicy {
+        kvm_enabled: false,
+        ..MockPolicy::default()
+    });
+    let slots = common::slot_plane();
     assert_eq!(
-        host.live_regions().len(),
-        2,
-        "★ NON-VACUITY: there is something to give back — one reservation and one overlay"
+        QemuMachine::realize(
+            config(),
+            Arc::clone(&host) as Arc<_>,
+            Arc::clone(&slots) as Arc<_>
+        )
+        .err(),
+        Some(VmmError::Unsupported(NOT_ACCELERATED))
     );
-    m.unrealize();
+    assert!(host.blockers().is_empty());
+    assert!(
+        !host
+            .log()
+            .iter()
+            .any(|c| matches!(c, HostCall::AddBlocker(_))),
+        "not even taken and given back — refused before"
+    );
+}
+
+/// ★★★ **TASK #97.** A discard *requirer* makes realize refuse, **naming the conflict**.
+///
+/// ## §8.5's reasoning for this call is VOID; here is the one that replaced it
+///
+/// §8.5 justified `ram_block_discard_disable` by the balloon reaching *our reservation*.
+/// Under `host_execution_plane.md` §1 the reservation is no longer a hypervisor RAM block at
+/// all, so the balloon skips it **trivially** — its inflate path only walks the machine's own
+/// RAM blocks and ours is not one. The old argument does not survive the decision.
+///
+/// The real hazard is **guest RAM exported to isolates**: that backing is a shared `memfd`,
+/// and the discard helper punches the *file* with a hole-punching `fallocate`, which destroys
+/// the file's backing pages and therefore reaches **every** mapping of it — the hypervisor's,
+/// the accelerator's second-stage tables, and the isolate's own shared one. The hypervisor's
+/// own comment warns the call works *"as long as nobody else uses that file"*; an isolate
+/// holding exported guest RAM is exactly somebody else.
+///
+/// ## Why "naming the conflict" is the assertion and not a nicety
+///
+/// The two devices cannot coexist. An operator who is told only *"a discard requirer is
+/// present"* has to bisect their own command line to find out which one to remove — so the
+/// refusal carries the requirer's **name**, with the kernel's own `EBUSY` beside it. The
+/// previous shape of this adapter flattened it to a class constant and threw the name away.
+#[test]
+#[allow(non_snake_case)]
+fn a_discard_requirer_makes_realize_refuse_NAMING_THE_CONFLICT() {
+    const CONFLICT: &str = "a memory device that requires guest-driven discard (virtio-mem)";
+    let host = common::host_with(MockPolicy {
+        discard_refuses: Some(HostError::Busy { what: CONFLICT }),
+        ..MockPolicy::default()
+    });
+    let slots = common::slot_plane();
     assert_eq!(
-        host.live_regions(),
-        Vec::new(),
-        "every region this device published is gone"
+        QemuMachine::realize(
+            config(),
+            Arc::clone(&host) as Arc<_>,
+            Arc::clone(&slots) as Arc<_>
+        )
+        .err(),
+        Some(VmmError::HostRefused {
+            what: CONFLICT,
+            errno: Some(KERNEL_EBUSY),
+        }),
+        "the refusal must carry the NAME of the conflicting device; a class constant tells \
+         an operator that something is wrong and not what to remove"
     );
     assert!(
         host.blockers().is_empty(),
-        "and the machine is migratable again"
+        "and it must give back the migration blocker it had already taken, or a device \
+         that failed to realize leaves the machine unmigratable forever"
     );
+    assert_eq!(
+        slots.installs(),
+        0,
+        "and no memslot may be live in a machine with no device to tear it down"
+    );
+}
+
+/// ★★ The cooperative arm, so the refusal above is not the only behaviour this call has:
+/// discard really is disabled at realize and really is re-enabled at unrealize.
+///
+/// The pairing is what makes the device removable without permanently changing the
+/// machine's policy — the same obligation the migration blocker has.
+#[test]
+fn discard_is_disabled_at_realize_and_re_enabled_at_unrealize() {
+    let (m, host, _slots) = machine();
+    assert!(host.discard_disabled());
+    m.unrealize();
     assert!(
         !host.discard_disabled(),
-        "and the next device does not inherit our discard refusal"
+        "a device that is gone must not still be suppressing the machine's discard policy"
     );
     assert_eq!(
-        m.audit().window_mappings_released,
-        1,
-        "★ and the reservation's mapping came back. The hypervisor frees nothing of ours \
-         — it never took ownership — so this step is not optional and has no backstop"
+        host.log()
+            .iter()
+            .filter(|c| matches!(c, HostCall::DiscardDisable(_)))
+            .count(),
+        2,
+        "exactly one disable and one enable"
     );
 }
 
-/// ★★ The Rust half of §3.3's coverage clause: a trap the realize-time table never named
-/// is refused, because a trapped region nobody enumerated is a region nobody marked.
+/// ★★ A listener that cannot be registered unwinds the **whole** device: the blocker goes
+/// back, discard is re-enabled, and every memslot the reservations installed is cleared.
+#[test]
+fn a_listener_that_cannot_be_registered_unwinds_the_whole_device() {
+    let host = common::host_with(MockPolicy {
+        listener_refuses: Some(HostError::Refused {
+            what: "registering the topology listener",
+            errno: Some(1),
+        }),
+        ..MockPolicy::default()
+    });
+    let slots = common::slot_plane();
+    assert!(
+        QemuMachine::realize(
+            config(),
+            Arc::clone(&host) as Arc<_>,
+            Arc::clone(&slots) as Arc<_>
+        )
+        .is_err()
+    );
+    assert!(host.blockers().is_empty(), "the blocker went back");
+    assert!(!host.discard_disabled(), "discard was re-enabled");
+    assert!(
+        slots.live().is_empty(),
+        "★ and the kernel is holding NOTHING — the reservation's memslot was installed \
+         before the listener failed, and a failed realize that leaves a live slot leaves it \
+         over memory nobody will unmap. {:?}",
+        slots.live()
+    );
+    assert_eq!(
+        slots.clears(),
+        slots.installs(),
+        "every install matched by a clear"
+    );
+}
+
+/// ★★★ A window in a BAR the hypervisor **backs** is refused, and that refusal is the whole
+/// safety argument of `host_execution_plane.md` §1.5 turned into a check.
 ///
-/// Swept over containment, mode and BAR, because the three failure directions are
-/// independent and a single case would test whichever one it happened to pick.
+/// The reservation BAR is a pure-MMIO region: its constructor never sets the RAM flag, so
+/// the accelerator's listener early-returns for it and creates **no slot of its own**, in
+/// either direction, even across a BAR remap. That early return is what makes installing a
+/// foreign memslot over the range safe. A BAR registered with a RAM-backed constructor
+/// instead gets a hypervisor-managed slot over the same guest-physical range — and only one
+/// of the two can win.
+///
+/// The C states the collision as *"proven by the earlier probe"*; the probe writeup says
+/// only *"the likely cause is a memslot conflict"*, so the mechanism is a strong prior and
+/// not a measurement. This device does not need to know which mechanism it is: it refuses
+/// to be in that position at all.
+#[test]
+fn a_window_in_a_bar_the_hypervisor_backs_is_refused_by_name() {
+    let host = common::host_with(MockPolicy {
+        // BAR1 is NOT declared a reservation.
+        reservation_bars: vec![BarId::Bar0],
+        ..MockPolicy::default()
+    });
+    let slots = common::slot_plane();
+    assert_eq!(
+        QemuMachine::realize(
+            config(),
+            Arc::clone(&host) as Arc<_>,
+            Arc::clone(&slots) as Arc<_>
+        )
+        .err(),
+        Some(VmmError::Unsupported(WINDOW_IN_A_BACKED_BAR))
+    );
+    assert_eq!(slots.installs(), 0, "refused before anything was installed");
+    assert!(host.blockers().is_empty());
+
+    // ★ And the shape really was asked about — a check nobody performs is a check.
+    assert!(
+        host.log()
+            .contains(&HostCall::ReservationShape(BarId::Bar1)),
+        "the adapter must ASK whether the BAR is an unbacked reservation. Log: {:?}",
+        host.log()
+    );
+
+    // The same device with BAR1 declared a reservation realizes — so the refusal is about
+    // the declaration and not about the device.
+    let (_m, _h, s) = machine_with(
+        MockPolicy {
+            reservation_bars: vec![BarId::Bar0, BarId::Bar1],
+            ..MockPolicy::default()
+        },
+        config(),
+    );
+    assert_eq!(s.installs(), 1);
+}
+
+/// ★★ Unrealize gives back every reference, the blocker, and every memslot — the
+/// conservation ledger, balanced.
+#[test]
+fn unrealize_gives_back_every_reference_and_the_blocker_and_every_memslot() {
+    let (m, host, slots) = machine();
+    let s = host.mint_foreign(common::FOREIGN_RAM, 4 * page(), common::ram_facts());
+    m.region_add(s).expect("guest RAM");
+    let mut v = m.vmm();
+    v.map_read_native(
+        common::overlay_gpa(),
+        common::overlay_len(),
+        kayfabe_vmm::HostRegion {
+            id: u64::MAX,
+            offset: 0,
+        },
+        Some(common::overlay_trap()),
+    )
+    .expect("a read-native window");
+
+    m.unrealize();
+
+    assert!(host.blockers().is_empty(), "the blocker");
+    assert!(!host.discard_disabled(), "the discard policy");
+    assert!(slots.live().is_empty(), "every memslot");
+    assert_eq!(slots.clears(), slots.installs());
+    let a = m.audit();
+    assert_eq!(a.live_windows, 0);
+    assert_eq!(a.live_memslots, 0);
+    assert_eq!(a.window_bytes, 0);
+    assert!(
+        a.peak_memslots >= 3,
+        "and the ledger was not vacuously empty"
+    );
+    assert_eq!(
+        a.regions_published, 0,
+        "★★★ still zero — the hypervisor never backed a byte of ours"
+    );
+}
+
+/// ★★ A trap outside the realize-time table is refused, however it misses it.
 #[test]
 fn a_trap_outside_the_realize_time_table_is_refused_however_it_misses() {
-    let (m, _host) = machine();
-    let mut v = m.vmm();
     let p = page();
-
-    // Inside a realized row, right mode: accepted.
+    let (m, _host, _slots) = machine_with(
+        MockPolicy::default(),
+        MachineConfig {
+            windows: Vec::new(),
+            ..config()
+        },
+    );
+    let mut v = m.vmm();
     for (what, bar, range, mode) in [
         (
-            "the whole read-write row",
+            "past the row's end",
             BarId::Bar0,
-            0..16 * p,
+            8 * p..20 * p,
             TrapMode::ReadWrite,
         ),
-        (
-            "a sub-range of the read-write row",
-            BarId::Bar0,
-            p..2 * p,
-            TrapMode::ReadWrite,
-        ),
-        (
-            "the write-only row",
-            BarId::Bar0,
-            16 * p..18 * p,
-            TrapMode::WriteOnly,
-        ),
+        ("the wrong mode", BarId::Bar0, 0..2 * p, TrapMode::WriteOnly),
+        ("a BAR with no row", BarId::Bar1, 0..p, TrapMode::ReadWrite),
     ] {
         assert_eq!(
-            v.set_trap(bar, range, mode),
-            Ok(()),
-            "{what} is in the realized table and must be accepted"
+            v.set_trap(bar, range.clone(), mode),
+            Err(VmmError::Unsupported(TRAP_OUTSIDE_THE_REALIZED_TABLE)),
+            "{what}"
         );
     }
-
-    for (what, bar, range, mode, expected) in [
+    for (what, bar, range, mode) in [
         (
-            "a range past the end of every row",
+            "empty",
             BarId::Bar0,
-            32 * p..33 * p,
-            TrapMode::ReadWrite,
-            VmmError::Unsupported(TRAP_OUTSIDE_THE_REALIZED_TABLE),
+            0..0,
+            "an empty or inverted trap range",
         ),
         (
-            "a range straddling the two rows",
-            BarId::Bar0,
-            15 * p..17 * p,
-            TrapMode::ReadWrite,
-            VmmError::Unsupported(TRAP_OUTSIDE_THE_REALIZED_TABLE),
-        ),
-        (
-            "the right range with the WRONG mode",
-            BarId::Bar0,
-            0..p,
-            TrapMode::WriteOnly,
-            VmmError::Unsupported(TRAP_OUTSIDE_THE_REALIZED_TABLE),
-        ),
-        (
-            "the right range in the wrong BAR",
-            BarId::Bar1,
-            0..p,
-            TrapMode::ReadWrite,
-            VmmError::Unsupported(TRAP_OUTSIDE_THE_REALIZED_TABLE),
-        ),
-        (
-            "a BAR the device was never realized with",
-            BarId::Bar2,
-            0..p,
-            TrapMode::ReadWrite,
-            VmmError::Unsupported("a BAR this machine was not realized with"),
-        ),
-        (
-            "a range past the end of the BAR itself",
-            BarId::Bar0,
-            0..1024 * p,
-            TrapMode::ReadWrite,
-            VmmError::Unsupported("a trap range outside its BAR"),
-        ),
-        (
-            "an empty range",
-            BarId::Bar0,
-            p..p,
-            TrapMode::ReadWrite,
-            VmmError::Unsupported("an empty or inverted trap range"),
-        ),
-        (
-            "an inverted range",
+            "inverted",
             BarId::Bar0,
             2 * p..p,
-            TrapMode::ReadWrite,
-            VmmError::Unsupported("an empty or inverted trap range"),
+            "an empty or inverted trap range",
         ),
-    ] {
+        (
+            "past the BAR",
+            BarId::Bar0,
+            0..4096 * p,
+            "a trap range outside its BAR",
+        ),
+    ]
+    .map(|(w, b, r, e)| (w, b, r, e))
+    {
         assert_eq!(
-            v.set_trap(bar, range, mode).err(),
-            Some(expected),
-            "{what}: the four refusals are near neighbours and must never start reporting \
-             as one another"
+            v.set_trap(bar, range, TrapMode::ReadWrite),
+            Err(VmmError::Unsupported(mode)),
+            "{what}: a geometry refusal is NOT the table refusal, and merging them would \
+             hide a configuration mistake behind an arithmetic one"
         );
     }
+    // ...and a row that IS in the table, over a range with no slot, is accepted.
+    v.set_trap(BarId::Bar0, 0..2 * p, TrapMode::ReadWrite)
+        .expect("a registration the table covers");
+    assert_eq!(BAR0_BASE, common::BAR0_BASE);
 }
 
-/// ★ A device realized with an empty trap table accepts **nothing** — the degenerate case
-/// that proves the validation is against the table and not against the BAR.
+/// ★ A device with no realized trap table accepts no trap registration at all.
 #[test]
 fn a_device_with_no_realized_traps_accepts_no_trap_registration_at_all() {
-    let cfg = MachineConfig {
-        traps: Vec::new(),
-        ..config()
-    };
-    let (m, _host) = machine_with(MockPolicy::default(), cfg);
+    let (m, _host, _slots) = machine_with(
+        MockPolicy::default(),
+        MachineConfig {
+            traps: Vec::new(),
+            windows: Vec::new(),
+            ..config()
+        },
+    );
     let mut v = m.vmm();
     assert_eq!(
-        v.set_trap(BarId::Bar0, 0..page(), TrapMode::ReadWrite)
-            .err(),
-        Some(VmmError::Unsupported(TRAP_OUTSIDE_THE_REALIZED_TABLE)),
-        "with no rows in the table there is no trapped region to register against, and \
-         accepting one would be bookkeeping for a trap that does not exist"
+        v.set_trap(BarId::Bar0, 0..page(), TrapMode::ReadWrite),
+        Err(VmmError::Unsupported(TRAP_OUTSIDE_THE_REALIZED_TABLE))
     );
 }
 
-/// ★ A realize-time trap row that names a BAR the device does not have is a configuration
-/// error, and it must not be silently ignorable through `set_trap` either.
-#[test]
-fn a_realized_trap_row_in_an_absent_bar_cannot_be_registered_against() {
-    let mut cfg = config();
-    cfg.traps.push(TrapSpec {
-        bar: BarId::Bar2,
-        range: 0..page(),
-        mode: TrapMode::ReadWrite,
-    });
-    let (m, _host) = machine_with(MockPolicy::default(), cfg);
-    let mut v = m.vmm();
-    assert_eq!(
-        v.set_trap(BarId::Bar2, 0..page(), TrapMode::ReadWrite)
-            .err(),
-        Some(VmmError::Unsupported(
-            "a BAR this machine was not realized with"
-        )),
-        "the BAR check runs BEFORE the table check, so a row naming an absent BAR reports \
-         the absent BAR rather than an apparently-missing table row"
-    );
-}
-
-/// ★★ A reservation whose geometry the device cannot honour is refused **at realize**, by
-/// the exact reason, swept over all five ways it can be wrong.
-///
-/// Found by a bite-check: without the empty-length and past-the-end rows, deleting either
-/// check survived the whole suite. Neither is harmless. A zero-length reservation reaches
-/// the mapping layer and comes back with a *different* refusal, so an operator reading the
-/// log is told the host refused a mapping when in fact the configuration is nonsense; and
-/// a reservation that runs past its BAR is only caught by the hypervisor's own subregion
-/// check, which is a check we do not own and must not rely on.
+/// ★ A reservation whose geometry the device cannot honour is refused at realize, by name,
+/// and each way of being wrong is distinguishable.
 #[test]
 fn a_reservation_with_geometry_the_device_cannot_honour_is_refused_at_realize_by_name() {
     let p = page();
-    let bad_geometry = "a reservation whose base or length is not a whole number of host pages";
-    let outside_bar = "a reservation outside the BAR it names";
-    for (what, gpa, len, expected) in [
+    for (what, spec, expected) in [
         (
-            "a zero-length reservation",
-            common::BAR1_BASE,
-            0,
-            bad_geometry,
+            "misaligned base",
+            WindowSpec::passthrough(window_gpa() + 8, p),
+            "a reservation whose base or length is not a whole number of host pages",
         ),
         (
-            "a base that is not a whole number of host pages",
-            common::BAR1_BASE + 8,
-            p,
-            bad_geometry,
+            "misaligned length",
+            WindowSpec::passthrough(window_gpa(), p + 8),
+            "a reservation whose base or length is not a whole number of host pages",
         ),
         (
-            "a length that is not a whole number of host pages",
-            common::BAR1_BASE,
-            p + 8,
-            bad_geometry,
+            "zero length",
+            WindowSpec::passthrough(window_gpa(), 0),
+            "a reservation whose base or length is not a whole number of host pages",
         ),
         (
-            "a reservation that starts inside its BAR and runs past the end",
-            common::BAR1_BASE + 60 * p,
-            8 * p,
-            outside_bar,
+            "outside every BAR",
+            WindowSpec::passthrough(0x5000_0000, p),
+            "a reservation that is not inside any realized BAR",
         ),
         (
-            "a reservation below its BAR's base",
-            common::BAR1_BASE - 4 * p,
-            2 * p,
-            outside_bar,
+            "straddling the end of its BAR",
+            WindowSpec::passthrough(window_gpa() + 1023 * p, 2 * p),
+            "a reservation that is not inside any realized BAR",
         ),
     ] {
-        let mut cfg = config();
-        cfg.windows = vec![kayfabe_vmm_qemu::WindowSpec {
-            bar: BarId::Bar1,
-            gpa,
-            len,
-        }];
-        let host = Arc::new(MockQemuHost::new());
+        let host = common::host_with(MockPolicy::default());
+        let slots = common::slot_plane();
         assert_eq!(
-            QemuMachine::realize(cfg, Arc::clone(&host) as Arc<_>).err(),
+            QemuMachine::realize(
+                MachineConfig {
+                    windows: vec![spec.clone()],
+                    ..config()
+                },
+                Arc::clone(&host) as Arc<_>,
+                Arc::clone(&slots) as Arc<_>
+            )
+            .err(),
             Some(VmmError::Unsupported(expected)),
-            "{what}: the refusal must name the CONFIGURATION, not whatever the host \
-             happened to say about a request we should never have made"
+            "{what}"
         );
-        assert_eq!(
-            host.live_regions(),
-            Vec::new(),
-            "{what}: and nothing was published"
-        );
-        assert!(
-            host.blockers().is_empty(),
-            "{what}: and the blocker was given back"
-        );
+        assert_eq!(slots.installs(), 0, "{what}: refused before any syscall");
+        assert!(host.blockers().is_empty(), "{what}: and unwound");
     }
-
-    // The control: the same shape with legal geometry realizes.
-    let host = Arc::new(MockQemuHost::new());
-    assert!(
-        QemuMachine::realize(config(), Arc::clone(&host) as Arc<_>).is_ok(),
-        "★ NON-VACUITY: legal geometry still realizes, so the sweep above is about \
-         geometry and not about a device that stopped accepting reservations"
-    );
+    assert_eq!(window_len(), 8 * p);
 }

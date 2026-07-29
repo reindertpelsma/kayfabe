@@ -46,15 +46,31 @@
 //! - every topology-transaction method is called only from realize/unrealize, and
 //!   `kayfabe_vmm_qemu` enforces that with a latch rather than a comment.
 //!
-//! ## ★ One thing Q2 will need that does not exist yet
+//! ## ★★★ CORRECTED at stage Q2 — the pointer hand-over is NOT what this crate will do
 //!
-//! §5.1's shape is *"**we** mmap one large reservation and hand QEMU the pointer"*, via
-//! `memory_region_init_ram_ptr`. `kayfabe_linux_raw::GuestWindow` has **no accessor for
-//! its base address** — by design: the host-pointer gate confines every such type to
-//! `*_unsafe.rs`, and `GuestWindow`'s base is a private field. So Q2 owes
-//! `kayfabe-linux-raw` one new relaxation (a base-address accessor inside
-//! `window_unsafe.rs`, moving that crate's ratchet off 37) *or* a `GuestWindow`
-//! constructor that hands the mapping over. Neither is a Q0/Q1 item; it is recorded here
-//! because §5.1 reads as though the pointer were already reachable.
+//! This section used to read: *"§5.1's shape is `we mmap one large reservation and hand
+//! QEMU the pointer`, via `memory_region_init_ram_ptr`, so Q2 owes `kayfabe-linux-raw` a
+//! base-address accessor"*. **That is void.** `host_execution_plane.md` §1 supersedes §5.4:
+//! the hypervisor **reserves** the guest-physical window with `memory_region_init_io` — a
+//! pure-MMIO BAR it does not back — and *we* install the memslots that shadow it, with the
+//! kernel's own ioctl.
+//!
+//! Three consequences for this crate, all of them subtractions:
+//!
+//! 1. **No pointer crosses this seam.** The unwrap happens inside
+//!    `kayfabe_linux_raw`'s own `kvm_unsafe.rs`, on a safe `&GuestWindow`, so the
+//!    host-pointer gate holds as designed and `GuestWindow` still has no base accessor.
+//! 2. **No region constructor is called at all.** `memory_region_init_ram_ptr` and the
+//!    ROM-device overlay constructor are both gone from the design; what the C shim above
+//!    this crate does with the memory API is `memory_region_init_io` + `pci_register_bar`,
+//!    once, at realize (`C: src/qemu/virtio_nvgpu_pci.c:108-114`).
+//! 3. **The memslot calls are not this crate's either** — they are the kernel's, and they
+//!    cross `kayfabe_vmm_qemu::slots::SlotPlane`, which has a real implementation today.
+//!
+//! What is left for this crate is genuinely small: the `extern "C"` trampolines for the
+//! trapped regions' read/write ops, the two field reads
+//! (`kayfabe_vmm_qemu::host::QemuHost::bar_base` and the reservation-shape query), the
+//! lifecycle calls, and the interrupt write. **It is still empty**, because all of that
+//! needs a hypervisor source tree to build against and this machine has none.
 
 #![doc(test(attr(deny(warnings))))]

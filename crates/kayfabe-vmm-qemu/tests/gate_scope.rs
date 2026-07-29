@@ -109,9 +109,16 @@ fn the_vocabulary_gates_exclude_the_adapter_crates_and_the_exemption_is_not_vacu
     for (file, needle) in [
         ("crates/kayfabe-vmm-qemu/src/host.rs", "MemoryRegion"),
         ("crates/kayfabe-vmm-qemu/src/lib.rs", "bql_lock"),
+        // ★ CHANGED AT Q2. This used to be `memory_region_init_ram_ptr`, the constructor
+        // §5.4 had us hand a pointer to. `host_execution_plane.md` §1 replaced that whole
+        // mechanism: the hypervisor RESERVES the window with `memory_region_init_io` and
+        // backs nothing. The witness follows the mechanism — its job is to prove the
+        // adapter crates really do speak the vocabulary the gates forbid elsewhere, and a
+        // witness naming a constructor the design no longer calls would prove it about a
+        // sentence nobody reads.
         (
             "crates/kayfabe-qemu-raw/src/lib.rs",
-            "memory_region_init_ram_ptr",
+            "memory_region_init_io",
         ),
     ] {
         let text = std::fs::read_to_string(root.join(file))

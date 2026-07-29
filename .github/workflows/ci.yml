@@ -646,7 +646,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:49 kayfabe-qemu-raw:0"
+          AUDITED="kayfabe-linux-raw:50 kayfabe-qemu-raw:0"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -702,12 +702,14 @@ jobs:
           # Counts the syntactic forms only (`unsafe {`, `unsafe fn/impl/trait`), so prose
           # inside those files — which gate C permits there — cannot inflate it.
           #
-          # kayfabe-linux-raw (47). ★ 7 -> 25 at M2-c (l1_os_shell.md §10), the stage that
+          # kayfabe-linux-raw (50). ★ 7 -> 25 at M2-c (l1_os_shell.md §10), the stage that
           # gives the raw crate its first consumers. ★ 25 -> 37 at M2-d, the stage that
           # gives it a reactor and a guest. ★ 37 -> 47 at L1-#91, the stage that gives it
           # a HOST GPU and a child process (host_execution_plane.md §3 step 2): until then
           # the entire host side of this project was a double, and a double needs no
           # syscalls. The three new files are argued at the bottom of this list.
+          # ★ 49 -> 50 at L2-Q stage Q2, the stage that gives it a machine it did not
+          # create: ONE block, in kvm_unsafe.rs, argued in full below.
           # The surface, per file, each block carrying its
           # own `// SAFETY:` (clippy `undocumented_unsafe_blocks = deny`):
           #   window_unsafe.rs  (7) — the GuestWindow: one mmap, one MAP_FIXED shared by
@@ -718,7 +720,23 @@ jobs:
           #     ftruncate, F_ADD_SEALS, F_DUPFD_CLOEXEC, the notify descriptor's create,
           #     write and read, and getrlimit (the §3.8 descriptor budget: the core's
           #     source cap may not be set optimistically past the process's real limit).
-          #   kvm_unsafe.rs     (3) — open(/dev/kvm), the by-value ioctl, the memslot ioctl.
+          #   kvm_unsafe.rs     (4) — open(/dev/kvm), the by-value ioctl, the memslot
+          #     ioctl, and ★ ADDED AT L2-Q STAGE Q2 (host_execution_plane.md §1): the
+          #     `BorrowedFd::borrow_raw` in `KvmVm::discover_in_this_process`. Under §1 the
+          #     hypervisor RESERVES the guest-physical window and does not back it, and we
+          #     install the memslots that shadow it — which means we need the descriptor of
+          #     a VM WE DID NOT CREATE. There is no API for that: the descriptor is an
+          #     anonymous inode, so `/proc/self/fd/N` cannot be re-opened (measured: ENXIO)
+          #     and it must be DUPLICATED, which needs a `BorrowedFd` over a number read
+          #     out of `/proc/self/fd`. This is the C's own mechanism
+          #     (`C: src/qemu/virtio_nvgpu.c:1114-1141`, which scans for the same symlink
+          #     target because the header that would expose the handle is target-only).
+          #     ★ Its SAFETY comment states an obligation it CANNOT discharge — that no
+          #     other thread closed the number in between — and closes the resulting
+          #     descriptor-identity hazard by re-reading the link of the descriptor it now
+          #     OWNS, which no other thread can change. Losing the race is a refusal, never
+          #     a wrong machine. The residual (the number closed AND recycled onto a second
+          #     VM) needs a second VM to exist, which the ambiguity arm already refuses.
           #   mapping_unsafe.rs (6) — ★ ADDED TO THE ITEMISATION AT Q0, not to the count:
           #     the list below this line accounted for 30 of the 37 the ratchet has been
           #     asserting since M2-d, and the two files that make up the other 7 were

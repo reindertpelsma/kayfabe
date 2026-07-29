@@ -19,8 +19,36 @@
 >   acceptance unachievable.
 >
 > The rest of this document — the crate split, the lock ladder, §9.3's three-part gate,
-> the doorbell decision, the balloon finding, and every QEMU-facility citation — **stands
-> unchanged**.
+> the doorbell decision and every QEMU-facility citation — **stands unchanged**.
+>
+> ## ★★★ SECOND AMENDMENT — 2026-07-29, stage Q2–Q5 BUILT
+>
+> `host_execution_plane.md` **§1.6** records what the build found. The four that amend *this*
+> document:
+>
+> * ★★★ **§4.3's realize-only confinement no longer applies to the memory plane at all**, and
+>   §5.4's realize-time overlay class is gone with it. There is no topology transaction left:
+>   installing a window is a call to the **kernel**. `Vmm::map_read_native` creates a window at
+>   runtime, exactly as the sibling backend does, and its four "you may only claim what realize
+>   made" refusals are deleted. `TOPOLOGY_AFTER_REALIZE` lost its subject.
+> * ★★★ **§8.5's balloon argument is VOID and decision Q4 stands on a new one** (task #97). Our
+>   reservation is not a hypervisor RAM block, so the balloon skips it trivially; the live
+>   hazard is guest RAM **exported to isolates** — a shared `memfd` whose backing pages a
+>   hole-punching discard destroys for *every* mapping of the file. The `-EBUSY` arm must name
+>   the conflicting device, not a class.
+> * ★★ **Decision Q8 is superseded.** `map_read_native` is not a ROM-device overlay with
+>   hypervisor-owned backing; it is a memslot with the kernel's read-only flag over **our own**
+>   reservation. So §5.4's "the backing is not ours and nothing may be placed into it" is gone,
+>   and a caller-supplied backing is honoured rather than refused.
+> * ★ **§12 item 7's pointer hand-over never happens**, so `kayfabe-linux-raw` still has no
+>   base-address accessor. The one relaxation stage Q2 did cost is elsewhere and is argued in
+>   `ci.yml`: a `BorrowedFd` over a number read out of `/proc/self/fd`, to duplicate the
+>   hypervisor's own VM descriptor.
+>
+> **Not built:** the C QOM shim. `kayfabe-qemu-raw` is still empty — it needs a hypervisor
+> source tree, and this machine has none. Stage Q2's *Rust* half, Q3's GPA plane, Q4's
+> read-native tier and Q5's teardown are built and gated against a real kernel; the C half and
+> its `-S`/QMP acceptances are not.
 
 # L2-Q — the QEMU adapter: the device, the threads, the doorbell, and the lifecycle
 

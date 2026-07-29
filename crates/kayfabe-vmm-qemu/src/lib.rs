@@ -1,99 +1,85 @@
 //! # `kayfabe-vmm-qemu` — the QEMU adapter's **logic half**, and all of it
 //!
-//! `l2_qemu_adapter.md` stage **Q1**: *"the pure half — the biggest stage, and it needs
-//! nothing."* No hypervisor, no guest, no GPU. Every foreign effect crosses
-//! [`host::QemuHost`], and [`mock_host::MockQemuHost`] is the implementor the whole suite
-//! runs against. `forbid(unsafe_code)`, like [`kayfabe_vmm_kvm`], and for the same reason:
-//! the unsound surface belongs in one auditable crate per host axis, never in the logic.
+//! `l2_qemu_adapter.md` stages **Q1–Q5**, under the memory-plane decision that supersedes
+//! §5.4: **`host_execution_plane.md` §1**. No guest, no GPU. Every hypervisor effect
+//! crosses [`host::QemuHost`]; every *kernel* effect crosses [`slots::SlotPlane`].
+//! `forbid(unsafe_code)`, like [`kayfabe_vmm_kvm`], and for the same reason: the unsound
+//! surface belongs in one auditable crate per host axis, never in the logic.
 //!
 //! [`kayfabe_vmm_kvm`]: https://docs.rs/kayfabe-vmm-kvm
 //!
-//! ## ★★ The four places this crate departs from the design it implements
+//! ## ★★★ The shape, in one paragraph
 //!
-//! Each is a **finding**, each is load-bearing, and each has a mechanism here rather than
-//! a note. They are collected at the top because a reader who takes §5 at face value will
-//! not otherwise find them.
+//! The hypervisor **reserves** the guest-physical window as a pure-MMIO BAR and does not
+//! back it. We install our own memslots over that range with the kernel's own ioctl, so an
+//! access with a slot resolves from the slot and never exits, and an access without one
+//! exits to us. Passthrough is an ordinary read-write slot; read-native is a slot with the
+//! kernel's read-only flag (reads native, writes exit — *that is* the read-native
+//! semantic); observe-everything is the **absence** of a slot. Nothing is ever added to the
+//! hypervisor's region tree, in realize or out of it.
 //!
-//! ### 1. Topology is realize-only, so the coarse memory tier is too
+//! ## ★★ The four things this build does differently from the C artifact
 //!
-//! §4.3 is absolute — *"the adapter contains ZERO calls to `bql_lock`"*, and every
-//! topology mutation is confined to realize/unrealize, which the hypervisor already
-//! entered holding its global lock. §5.4 then spells the coarse tier as *"one region
-//! added as a BAR subregion"* and the read-native overlay as *"a higher-priority
-//! subregion added with an overlap-adding call"*. **Both of those are topology
-//! transactions**, and [`kayfabe_vmm::Vmm::map_read_native`] is a **runtime** method.
+//! Each is a finding with a mechanism here, not a note. They are collected at the top
+//! because a reader who takes the C as precedent will not otherwise find them.
 //!
-//! The two rules cannot both hold with a runtime constructor, so this crate takes §4.3 as
-//! the stronger one and makes it a **mechanism**: [`QemuMachine::realize`] creates every
-//! window and every overlay from configuration and then **latches**. Afterwards
-//! [`QemuMachine::install_ram_window`] refuses by name, and
-//! [`kayfabe_vmm::Vmm::map_read_native`] can only **claim** an overlay that already
-//! exists. That is consistent with §5.4's own scope for the read-native class — *"small
-//! and static"* — and it means §4.3 is enforced by a latch with a negative test instead
-//! of by a discipline with a comment.
+//! ### 1. The BAR base is **latched and re-checked**, and a move is loud
 //!
-//! The consequence §6.7's per-window frequency rule cares about is unchanged: one
-//! reservation, and per-process arenas are `MAP_FIXED` placements **inside** it, which
-//! §5.4's fine tier already says perform no hypervisor call at all.
+//! `C: nvkvm_mmap_host.c:189-193` caches the window base once, and there is **no
+//! BAR-change hook anywhere in the C's device**. If the guest moves the BAR after the slot
+//! is installed, the hypervisor's own region follows and our memslot does not: the *old*
+//! guest-physical range keeps working — and becomes reassignable to another BAR — while the
+//! *new* one reads zeros. Silently. It never fired only because the install is lazy, the
+//! transient unmap during BAR sizing is separately guarded, and Linux honours firmware
+//! assignment; none of those is a mechanism.
 //!
-//! ### 2. ★★ A foreign region is copied **inside** the view lock, and that DELETES the
-//! retirement obligation §0 item 1 tries to create for it
+//! Here the base is latched at the first install and **asserted unchanged on every
+//! resolve** ([`QemuMachine::note_bar_mapping`] is the tripwire, [`QemuMachine::bar_move_requested`]
+//! is the refusal, and [`BAR_MOVED_UNDER_US`] is what an access gets once either fires).
+//! The poison is **sticky**: a BAR that moved does not start working again if it moves back,
+//! because in between it may have been another device's.
 //!
-//! §0 item 1 reasons: releasing our last reference to a foreign region is a `Drop`-shaped
-//! call site, therefore it is subject to #57's rule, therefore the answer is the
-//! retire/collect machinery `kayfabe_vmm_kvm::Plane::retire` already implements.
+//! ### 2. Slot numbers descend from the kernel's ceiling
 //!
-//! **The first two steps are right and the conclusion is backwards.** #57's fix moves a
-//! release *off* the accessor's thread and onto a thread that has been proved lock-free.
-//! For a foreign region that is the **wrong destination**: releasing the last reference
-//! can run the owning object's finalizer, and a finalizer wants the VMM's global lock —
-//! which the topology callback is already holding and a deferred-collection thread of
-//! ours is not. Retiring a foreign region therefore takes a release that was legal where
-//! it stood and moves it somewhere it is not.
+//! The C allocates upward from a hardcoded base of 64, on a convention enforced by nothing.
+//! See [`slots::SlotAllocator`] for why a number collision is not an error but a silent
+//! **replace**, and why counting down inverts the argument.
 //!
-//! So this adapter splits the two backings by **who frees them**:
+//! ### 3. ★★★ The window is guest-physical-address-space visible but hypervisor-**opaque**
 //!
-//! | backing | released by | where | mechanism |
-//! |---|---|---|---|
-//! | our reservation (`Backing::Ours`) | us, an unmap | a door proved lock-free | retire + collect, exactly as #57 |
-//! | a foreign region (`Backing::HostOwned`) | the owner's finalizer | the topology callback, global lock held | **no retirement**: the copy runs *inside* the view lock, so no accessor can hold the region across the callback |
+//! The shadowing is the kernel's, not the hypervisor's. Anything that reaches the window
+//! through the hypervisor's flat view hits the reservation BAR's stub read/write ops and
+//! gets **zeros**, silently. So [`Vmm::gpa_read`]/[`Vmm::gpa_write`] must **not** route a
+//! window address through the hypervisor — and they do not: the window is served from our
+//! own mapping, by our own offset arithmetic, and the lookup that does it runs **before**
+//! the region map is consulted at all.
 //!
-//! The cost is stated rather than hidden: a foreign copy serialises against another
-//! foreign copy, which the reservation's copies do not. The benefit is that §5.5's second
-//! R5 invalidator — *"a topology callback can retire a cached foreign pointer between our
-//! plan and our commit"* — **stops existing**, by the same move
-//! [`kayfabe_vmm::GuestRamMap`] uses to delete the `RamGpa` token: resolution and copy are
-//! indivisible, so there is no gap to revalidate. The topology generation is still
-//! counted, as an instrument (see [`AuditReport::topology_generation`]).
+//! The region map then declares the window's BAR [`RegionKind::Device`] — which is *correct*
+//! rather than a compromise, because that is what the hypervisor's flat view says it is. The
+//! two together are a layered failure: if the window lookup were ever bypassed, the access
+//! does not fall through to a memcpy of zeros, it refuses with [`VmmError::NonRamGpa`].
+//! There is a test that removes the window and leaves the declaration standing precisely to
+//! watch that happen.
 //!
-//! ### 3. A read-native overlay is declared **RAM**, not a device
+//! ### 4. The tiering is new construction and is gated as such
 //!
-//! §5.4 says to classify the overlay `Device` *"so the core can never `gpa_write` through
-//! it"*. But [`kayfabe_vmm::Vmm::map_read_native`]'s own contract is *"RAM the core keeps
-//! current"*, and the only way the core has to keep anything current is
-//! [`kayfabe_vmm::Vmm::gpa_write`] — which a `Device` declaration refuses. The two cannot
-//! both hold, and the existing suite settles it: the mean run writes into a read-native
-//! overlay immediately after installing one, so a `Device` declaration would make this
-//! backend refuse what the other backend serves, breaking stage Q1's own acceptance that
-//! the two produce *identical* operation logs.
+//! Mode 2 in the C has never had a memslot at all, and the Mode-1 window that does has one,
+//! read-write, forever — `readonly` is a dead parameter there. So there is no precedent to
+//! port for the read-only tier or for a mixed layout; [`slots`] carries the taxonomy and
+//! the suite gates it against a real kernel as well as a double.
 //!
-//! The hazard §5.4 is defending against is real but is not the classification: it is
-//! reaching a **foreign** region through a general read/write-anywhere accessor. Our
-//! overlay is not foreign in that sense — we published it, we hold its handle, and
-//! [`host::QemuHost::write_region`] is normatively a bounded memcpy against that one
-//! region. So the overlay is `Ram` with a `Backing::HostOwned`, and the prove-RAM rule
-//! is satisfied by an install we performed, exactly as [`kayfabe_vmm::GuestRamMap`]'s
-//! rustdoc requires.
+//! ## ★★ What §1 DELETED from this crate, which is a finding in its own right
 //!
-//! ### 4. A caller-supplied host backing under a read-native overlay is **refused**
+//! `f0053ef` built this adapter with a coarse tier that was **realize-only**, because
+//! publishing a region was a topology transaction and §4.3 confines those to
+//! realize/unrealize. That made [`Vmm::map_read_native`] a method that could only *claim* an
+//! overlay realize had already created, with four refusals attached to the impossibility.
 //!
-//! §12 item 7 records that there is no pointer-taking constructor for a ROM-device region
-//! and that the backing is therefore hypervisor-owned. It does not say what
-//! [`kayfabe_vmm::Vmm::map_read_native`]'s `backing` argument then means. It cannot mean
-//! what it means on the other backend — that spelling is a `MAP_FIXED` placement, and
-//! §5.4 forbids placing anything into an overlay. So a non-sentinel backing is a
-//! **backend-conditional refusal**, in the shape [`kayfabe_vmm::IrqSpec::IntxLevel`]
-//! establishes: named, exact, and never a silent difference.
+//! Under §1 there is no topology transaction left, so **all of that is gone**: installing a
+//! window is a kernel call, legal at any time, and `map_read_native` creates one exactly as
+//! the sibling backend does. The `TOPOLOGY_AFTER_REALIZE` refusal lost its subject; what
+//! replaces it is [`MEMORY_PLANE_AFTER_UNREALIZE`], which is a real and reachable lifecycle
+//! error rather than a design constraint dressed as one.
 //!
 //! ## The lock ladder
 //!
@@ -102,19 +88,28 @@
 //!     │
 //!   rank 0 / rank 1         the core's ranked locks
 //!     │
-//!   leaf(view) · leaf(installer)                   ── ours, unranked, leafwitness
+//!   leaf(bars) · leaf(view) · leaf(installer)      ── ours, unranked, leafwitness
 //! ```
 //!
 //! Never the reverse. No leaf critical section calls the hypervisor **except**
-//! [`host::QemuHost::read_region`]/[`host::QemuHost::write_region`], which are normatively
-//! a bounded memcpy and take nothing — that exception is finding 2 above and is the one
-//! place this adapter differs from the other backend's ladder.
+//! [`host::QemuHost::read_region`]/[`host::QemuHost::write_region`], which are normatively a
+//! bounded memcpy and take nothing. [`host::QemuHost::bar_base`] is called on the hot path
+//! but **outside** every leaf, before the view is taken.
+//!
+//! ★★ **This adapter contains ZERO calls to `bql_lock`** (§4.3), and under
+//! `host_execution_plane.md` §1 that is no longer a discipline — it is arithmetic. The only
+//! reason to take the hypervisor's global lock would be to mutate its region tree, and this
+//! adapter never mutates it: the window is a reservation the hypervisor made once, at
+//! realize, in its own C shim, and every memory-plane operation after that is a call to the
+//! **kernel**. A grep for `bql_lock` over this crate finds this sentence and nothing else,
+//! which is the intended result.
 
 #![allow(clippy::module_name_repetitions)]
 
 pub mod classify;
 pub mod host;
 pub mod mock_host;
+pub mod slots;
 
 use core::ops::Range;
 use core::time::Duration;
@@ -132,7 +127,8 @@ use kayfabe_vmm::{
     RegionKind, SlotId, TrapMode, Vmm, VmmError,
 };
 
-use host::{BarPlacement, BlockerId, HostError, MrHandle, OverlaySpec, QemuHost, SectionDesc};
+use host::{BarPlacement, BlockerId, HostError, MrHandle, QemuHost, SectionDesc};
+use slots::{LiveSlot, SlotAllocator, SlotPlane, Span, Tier};
 
 // =====================================================================================
 // The refusal vocabulary — constants, because every one of them is asserted by content
@@ -147,37 +143,45 @@ pub const BELOW_FLOOR: &str = "the hypervisor binary is below the 10.2 floor; th
      entire threading design rests on does not exist there";
 
 /// Realize-time refusal: not running on the hardware accelerator (§3.4, decision Q6).
-pub const NOT_ACCELERATED: &str = "this device requires the hardware accelerator; without it every trapped access runs \
-     under the VMM's global lock, which is a measured 5.3x amplification and not a slow mode";
+///
+/// ★★ Under `host_execution_plane.md` §1 this stopped being only a performance argument.
+/// The memory plane **is** the accelerator's memslot table; without the accelerator there
+/// is no table to install into and the device has no data path at all.
+pub const NOT_ACCELERATED: &str = "this device requires the hardware accelerator; the memory plane IS its memslot table, \
+     and without it every trapped access also runs under the VMM's global lock — a measured \
+     5.3x amplification and not a slow mode";
 
-/// Realize-time refusal: a discard requirer is already present (§8.5's `-EBUSY` arm).
-pub const DISCARD_REQUIRER_PRESENT: &str = "another device in this machine requires guest-driven RAM discard, which would let the \
-     guest zero the backing under our live placements";
+/// ★ Lifecycle refusal: a memory-plane operation after the device was unrealized.
+pub const MEMORY_PLANE_AFTER_UNREALIZE: &str = "a memory-plane operation on a device that has been unrealized; its reservations are \
+     gone, its memslots are cleared, and installing another would put a live slot in a \
+     machine nothing is going to tear it down from";
 
-/// §4.3's refusal: a topology transaction outside realize/unrealize.
-pub const TOPOLOGY_AFTER_REALIZE: &str = "a topology transaction after realize; on this backend that would need the VMM's global \
-     lock, and the adapter takes it in no context but realize/unrealize";
+/// ★★★ The BAR moved after we latched it — [`crate::VERSION_FLOOR`]'s neighbour in
+/// importance, and the C's latent bug made loud.
+pub const BAR_MOVED_UNDER_US: &str = "the reservation BAR moved after a memslot was installed into it; the hypervisor's own \
+     region followed the guest and our memslot did not, so the OLD guest-physical range is \
+     still live and now reassignable, and the NEW one reads zeros. Every access into this \
+     BAR is refused from here on";
 
-/// `map_read_native` refusal: nothing was realized at that address.
-pub const NO_SUCH_OVERLAY: &str = "no read-native overlay was realized at that guest-physical range; on this backend an \
-     overlay is a topology transaction and therefore realize-time configuration";
+/// Realize/install refusal: the BAR has no base yet.
+pub const BAR_NOT_PROGRAMMED: &str = "a window in a BAR the guest has not programmed yet; installing at a fallback base now \
+     would cache the wrong one, which is exactly what the C guards against at its own \
+     install";
 
-/// `map_read_native` refusal: an overlay is there, but not of the requested shape.
-pub const OVERLAY_SHAPE_MISMATCH: &str = "a read-native overlay exists at that guest-physical range but with a different length \
-     or write-trap sub-range than the one requested";
+/// Install refusal: the BAR is not where the configuration says it is.
+pub const BAR_NOT_AT_ITS_DECLARED_BASE: &str = "the BAR is programmed somewhere other than the base this device was realized with; \
+     one of the two is stale and installing a memslot would commit to the wrong one";
 
-/// `map_read_native` refusal: the overlay is already claimed by a live slot.
-pub const OVERLAY_ALREADY_CLAIMED: &str = "that read-native overlay is already claimed by a live slot; unmap it before claiming it \
-     again";
-
-/// `map_read_native` refusal: finding 4 in the crate docs.
-pub const OVERLAY_BACKING_UNPLACEABLE: &str = "a caller-supplied host backing under a read-native overlay; the overlay's RAM is the \
-     hypervisor's, there is no pointer-taking constructor for it, and nothing may be placed \
-     into it";
+/// ★★★ Install refusal: the BAR is not a pure-MMIO reservation.
+pub const WINDOW_IN_A_BACKED_BAR: &str = "a window in a BAR the hypervisor BACKS; the whole safety argument for installing our \
+     own memslots is that the reservation's region never sets the RAM flag, so the \
+     accelerator's listener early-returns for it and creates no slot of its own. A backed \
+     BAR gets a hypervisor-managed slot over the same range, and only one of the two wins";
 
 /// `map_guest` refusal: per-object protection (§6.7 item 4).
-pub const PER_OBJECT_PROTECTION: &str = "per-object read-only protection inside a read-write window; protection is a WINDOW \
-     property, so place the object in a read-only window instead";
+pub const PER_OBJECT_PROTECTION: &str = "per-object read-only protection inside a read-write window; protection is a SLOT \
+     property and therefore a WINDOW property, so place the object in a read-native window \
+     instead";
 
 /// `export_ram` refusal: the deployment fact no code gate can observe (§8.1 step 9).
 pub const NO_SHARED_BACKING: &str =
@@ -192,31 +196,47 @@ pub const TRAP_OUTSIDE_THE_REALIZED_TABLE: &str = "a trap registration outside t
      device is enumerated there and marked there, and a range the table does not cover is a \
      region nobody marked";
 
+/// ★★ `set_trap` refusal: a read-write trap over a range a memslot already serves.
+pub const TRAP_OVER_A_LIVE_SLOT: &str = "a read-write trap over a range a live memslot serves; the guest's access resolves from \
+     the slot and never leaves the guest, so the registration reads as a trap and is none";
+
+/// ★★ `set_trap` refusal: a write-only trap with no read-only slot beneath it.
+pub const WRITE_TRAP_WITHOUT_A_READ_ONLY_SLOT: &str = "a write-only trap over a range no read-native tier covers — reads are served from RAM \
+     only if a memslot exists, and writes exit only if that memslot is READ-ONLY";
+
 /// Topology-callback refusal: a reported section overlaps a region we published.
-pub const FOREIGN_OVERLAPS_OURS: &str = "a reported topology section overlaps a region this device published itself; the two \
-     sources would race to declare the same guest-physical range";
+pub const FOREIGN_OVERLAPS_OURS: &str = "a reported topology section overlaps a range this device owns; the two sources would \
+     race to declare the same guest-physical range";
 
 // =====================================================================================
 // Configuration
 // =====================================================================================
 
-/// One reservation the device is realized with (§5.1, §5.4's coarse tier).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One reservation the device is realized with, and how it is tiered.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WindowSpec {
-    /// Which BAR the reservation is published inside.
-    pub bar: BarId,
-    /// Guest-physical base. Must lie inside the named BAR and be page-aligned.
+    /// Guest-physical base. Must lie inside a reservation BAR and be page-aligned.
     pub gpa: u64,
     /// Length in bytes. Must be a whole number of host pages.
     pub len: u64,
+    /// ★ Guest-physical sub-ranges that get **no memslot at all**, so every guest access
+    /// to them exits. Everything else in the window is passthrough.
+    pub observe: Vec<Range<u64>>,
+}
+
+impl WindowSpec {
+    /// A wholly-passthrough window.
+    #[must_use]
+    pub fn passthrough(gpa: u64, len: u64) -> Self {
+        WindowSpec {
+            gpa,
+            len,
+            observe: Vec::new(),
+        }
+    }
 }
 
 /// One trapped region of the device, as the realize-time table names it.
-///
-/// ★ This is the Rust-side half of §3.3's clause (c). The C shim owns the literal region
-/// table and the realize-time self-check over it; **this** list is what
-/// [`kayfabe_vmm::Vmm::set_trap`] is validated against, so a core that registers a trap
-/// the table does not cover is refused rather than silently bookkept.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrapSpec {
     /// Which BAR.
@@ -232,15 +252,14 @@ pub struct TrapSpec {
 pub struct MachineConfig {
     /// Whether guest RAM is created from a shareable backing. `false` models a machine
     /// launched without it: everything works until the first
-    /// [`kayfabe_vmm::Vmm::export_ram`], which then refuses loudly.
+    /// [`Vmm::export_ram`], which then refuses loudly.
     pub shareable_ram: bool,
     /// The BARs, whose ranges are declared [`RegionKind::Device`] at realize.
     pub bars: Vec<BarPlacement>,
-    /// The reservations (§5.4's coarse tier), all of them realize-time.
+    /// The reservations, installed in order at realize. Runtime installs are legal too —
+    /// see the crate docs' "what §1 deleted".
     pub windows: Vec<WindowSpec>,
-    /// The read-native overlays (§5.4), all of them realize-time.
-    pub overlays: Vec<OverlaySpec>,
-    /// The trapped regions [`kayfabe_vmm::Vmm::set_trap`] is validated against.
+    /// The trapped regions [`Vmm::set_trap`] is validated against.
     pub traps: Vec<TrapSpec>,
 }
 
@@ -274,13 +293,29 @@ pub struct AuditReport {
     pub peak_windows: u64,
     /// High-water mark of live placements.
     pub peak_placements: u64,
-    /// Cumulative `MAP_FIXED` placements — §9.3's memslot-frequency denominator. The
-    /// numerator on this backend is a **constant**, because publication performs no
-    /// hypervisor call at all: see `regions_published`.
+    /// Cumulative `MAP_FIXED` placements — §9.3's memslot-frequency denominator.
     pub placements_made: u64,
-    /// ★ Cumulative regions handed to the hypervisor. The frequency gate's numerator, and
-    /// on this backend it must stop moving the instant realize returns.
+    /// ★★★ Cumulative regions handed to the **hypervisor** to back.
+    ///
+    /// **Must be zero, forever.** It is the whole of `host_execution_plane.md` §1 as one
+    /// number: the hypervisor reserves the window and backs nothing, so there is no
+    /// constructor call to make. It is kept as a field rather than deleted because
+    /// "we stopped calling it" is a claim a test can hold, and "the method no longer
+    /// exists" is one that stops holding the moment somebody adds it back.
     pub regions_published: u64,
+    /// Memslots currently installed in the kernel.
+    pub live_memslots: u64,
+    /// High-water mark of live memslots.
+    pub peak_memslots: u64,
+    /// Cumulative memslot installs — §9.3's memslot-frequency numerator.
+    pub memslot_installs: u64,
+    /// Memslot numbers re-issued from the allocator's free list.
+    pub slot_numbers_recycled: u64,
+    /// ★★ Times the latched BAR base was re-read and compared. The non-vacuity half of
+    /// [`BAR_MOVED_UNDER_US`]: a check that never runs cannot fire.
+    pub bar_base_checks: u64,
+    /// ★★ Times a BAR was found somewhere other than where it was latched.
+    pub bar_moves_detected: u64,
     /// `(min, max)` of the core's ranked-lock depth observed at `gpa_read`/`gpa_write`.
     /// `max == 0` means the in-lock hazard was never exercised; `min == u32::MAX` means
     /// no access happened at all. Both halves are load-bearing.
@@ -292,9 +327,9 @@ pub struct AuditReport {
     /// that copy runs outside the view lock, held alive by an `Arc`.
     pub own_copy_leaf_depth_max: u32,
     /// ★★ Min leaf depth observed at a copy out of a **host-owned** region. Must be
-    /// `>= 1` once one has happened, because finding 2 keeps that copy *inside* the view
-    /// lock. `u32::MAX` means no such copy ever ran — the vacuous case, and the reason
-    /// this is a minimum rather than a maximum.
+    /// `>= 1` once one has happened, because the copy runs *inside* the view lock.
+    /// `u32::MAX` means no such copy ever ran — the vacuous case, and the reason this is
+    /// a minimum rather than a maximum.
     pub host_copy_leaf_depth_min: u32,
     /// Max leaf depth observed while the view lock was held. Must be `>= 1`, or the leaf
     /// witness is measuring nothing.
@@ -305,38 +340,26 @@ pub struct AuditReport {
     pub accesses_refused: u64,
     /// Memory-plane ops that failed in the execute phase — a real host refusal.
     pub host_refusals: u64,
-    /// Ops that reached commit and were undone by the R5 re-validation — a placement
-    /// whose reservation was torn down in the gap between plan and commit.
+    /// Ops that reached commit and were undone by the R5 re-validation.
     ///
     /// ★★ **NOT YET WITNESSED, and said so rather than left to be discovered.** The arm is
     /// genuinely reachable — a teardown on another thread between this op's execute and
     /// commit phases — but no test in this suite has been *seen* to reach it, because the
-    /// gap is a few instructions wide and there is no place to rendezvous inside it (the
-    /// fine tier deliberately calls the hypervisor zero times, so there is no seam to
-    /// interpose on). A test that retried until it landed would be a flake dressed as a
-    /// gate, and one asserting a conditional invariant that may never fire would be the
-    /// green-instrument-on-an-unexercised-path failure this project names. So this is a
-    /// **named residual**: the arm is correct by inspection and unexercised by measurement,
-    /// and closing it needs a seam that does not exist yet, not a longer loop.
+    /// gap is a few instructions wide and there is no place to rendezvous inside it.
     pub r5_revalidation_failures: u64,
-    /// ★ §4.3's counter: topology transactions refused because realize had already
-    /// latched. Non-vacuity for [`TOPOLOGY_AFTER_REALIZE`], which is otherwise a string
-    /// nothing proves is reachable.
-    pub topology_ops_refused_after_realize: u64,
+    /// ★ Memory-plane operations refused because the device was already unrealized.
+    /// Non-vacuity for [`MEMORY_PLANE_AFTER_UNREALIZE`].
+    pub ops_refused_after_unrealize: u64,
     /// Topology sections added by the listener.
     pub topology_adds: u64,
     /// Topology sections removed by the listener.
     pub topology_dels: u64,
-    /// ★ §5.5's generation. Not an R5 token here — finding 2 dissolves that obligation —
-    /// but the instrument that says the listener really ran.
+    /// ★ §5.5's generation — the instrument that says the listener really ran.
     pub topology_generation: u64,
-    /// Read-native overlays currently claimed by a live slot.
-    pub overlays_claimed: u64,
     /// Interrupt vectors raised.
     pub irqs_raised: u64,
     /// ★★ Reservation releases that found an accessor still holding the mapping and so
-    /// handed the release to the machine instead of performing it inline. The non-vacuity
-    /// half of #57's fix: with no live accessor the deferral never happens.
+    /// handed the release to the machine instead of performing it inline.
     pub window_releases_deferred: u64,
     /// Retired reservation mappings actually released. At quiescence this must equal the
     /// number removed, or a mapping is parked forever.
@@ -352,6 +375,12 @@ struct Audit {
     peak_placements: AtomicU64,
     placements_made: AtomicU64,
     regions_published: AtomicU64,
+    live_memslots: AtomicU64,
+    peak_memslots: AtomicU64,
+    memslot_installs: AtomicU64,
+    slot_numbers_recycled: AtomicU64,
+    bar_base_checks: AtomicU64,
+    bar_moves_detected: AtomicU64,
     accessor_depth_min: AtomicU32,
     accessor_depth_max: AtomicU32,
     syscall_depth_min: AtomicU32,
@@ -363,11 +392,10 @@ struct Audit {
     accesses_refused: AtomicU64,
     host_refusals: AtomicU64,
     r5_failures: AtomicU64,
-    topology_refused: AtomicU64,
+    ops_refused_after_unrealize: AtomicU64,
     topology_adds: AtomicU64,
     topology_dels: AtomicU64,
     topology_generation: AtomicU64,
-    overlays_claimed: AtomicU64,
     irqs_raised: AtomicU64,
     window_releases_deferred: AtomicU64,
     window_mappings_released: AtomicU64,
@@ -376,8 +404,7 @@ struct Audit {
 impl Audit {
     /// ★ Hand-written for the reason the other backend's is: a derived `Default` gives
     /// every minimum `0`, which makes the lower half of every span assertion vacuously
-    /// true — a witness reporting a constant would still pass. "Never observed" must be
-    /// distinguishable from "observed zero".
+    /// true. "Never observed" must be distinguishable from "observed zero".
     fn new() -> Self {
         Audit {
             accessor_depth_min: AtomicU32::new(u32::MAX),
@@ -412,6 +439,12 @@ impl Audit {
             peak_placements: g(&self.peak_placements),
             placements_made: g(&self.placements_made),
             regions_published: g(&self.regions_published),
+            live_memslots: g(&self.live_memslots),
+            peak_memslots: g(&self.peak_memslots),
+            memslot_installs: g(&self.memslot_installs),
+            slot_numbers_recycled: g(&self.slot_numbers_recycled),
+            bar_base_checks: g(&self.bar_base_checks),
+            bar_moves_detected: g(&self.bar_moves_detected),
             accessor_ranked_depth: (h(&self.accessor_depth_min), h(&self.accessor_depth_max)),
             syscall_ranked_depth: (h(&self.syscall_depth_min), h(&self.syscall_depth_max)),
             own_copy_leaf_depth_max: h(&self.own_copy_leaf_max),
@@ -421,11 +454,10 @@ impl Audit {
             accesses_refused: g(&self.accesses_refused),
             host_refusals: g(&self.host_refusals),
             r5_revalidation_failures: g(&self.r5_failures),
-            topology_ops_refused_after_realize: g(&self.topology_refused),
+            ops_refused_after_unrealize: g(&self.ops_refused_after_unrealize),
             topology_adds: g(&self.topology_adds),
             topology_dels: g(&self.topology_dels),
             topology_generation: g(&self.topology_generation),
-            overlays_claimed: g(&self.overlays_claimed),
             irqs_raised: g(&self.irqs_raised),
             window_releases_deferred: g(&self.window_releases_deferred),
             window_mappings_released: g(&self.window_mappings_released),
@@ -434,55 +466,90 @@ impl Audit {
 }
 
 // =====================================================================================
+// The BAR latch
+// =====================================================================================
+
+/// ★★★ Where each reservation BAR was when we first installed into it, and whether it has
+/// since been caught somewhere else.
+///
+/// See crate doc finding 1. The poison is per-BAR and **sticky**.
+#[derive(Debug, Default)]
+struct BarLatch {
+    /// `(bar, base at first install)`. An association list because the port's `BarId` is
+    /// deliberately unordered vocabulary and there are three of them.
+    latched: Vec<(BarId, u64)>,
+    poisoned: Vec<BarId>,
+}
+
+impl BarLatch {
+    fn base_of(&self, bar: BarId) -> Option<u64> {
+        self.latched
+            .iter()
+            .find(|(b, _)| *b == bar)
+            .map(|(_, v)| *v)
+    }
+
+    fn poison(&mut self, bar: BarId) {
+        if !self.poisoned.contains(&bar) {
+            self.poisoned.push(bar);
+        }
+    }
+}
+
+// =====================================================================================
 // The plane
 // =====================================================================================
 
-/// What backs one declared guest-physical region.
+/// A region the **hypervisor** owns: a section the topology listener reported.
 ///
-/// ★★ The split is by **who frees it**, which is finding 2 in the crate docs.
+/// The copy out of one runs *inside* the view lock, so the owner's release can never race
+/// an accessor and never has to leave the context that is allowed to run a finalizer.
+#[derive(Debug, Clone, Copy)]
+struct HostOwned {
+    mr: MrHandle,
+    region_off: u64,
+}
+
+/// One of **our** reservations, as an accessor sees it.
 #[derive(Debug, Clone)]
-pub enum Backing {
-    /// Inside our own reservation. The copy runs **outside** the view lock, held alive by
-    /// this `Arc` — and the release is ours, so it is retired rather than dropped.
-    Ours(
-        /// The reservation the range lives in.
-        Arc<GuestWindow>,
-    ),
-    /// A region the hypervisor owns: a section the topology listener reported, or one of
-    /// our read-native overlays. The copy runs **inside** the view lock, so the owner's
-    /// release can never race an accessor and never has to leave the context that is
-    /// allowed to run a finalizer.
-    HostOwned {
-        /// The region the hypervisor owns.
-        mr: MrHandle,
-        /// Offset of this region's first byte within `mr`'s backing.
-        region_off: u64,
-    },
+struct WindowView {
+    gpa: u64,
+    len: u64,
+    window: Arc<GuestWindow>,
 }
 
 /// What `gpa_read`/`gpa_write` and the topology listener share, under the **view** leaf.
 #[derive(Debug, Default)]
 pub(crate) struct View {
+    /// The hypervisor's flat view as reported, plus our BARs — which are `Device`, because
+    /// that is what they are through the hypervisor. Crate doc finding 3.
     regions: GuestRamMap,
-    backings: BTreeMap<RamRegionId, Backing>,
-    /// Foreign sections the listener declared, keyed by guest-physical base, so
-    /// `region_del` can undeclare exactly what `region_add` declared.
+    backings: BTreeMap<RamRegionId, HostOwned>,
+    /// ★★★ **Our** reservations, consulted BEFORE `regions` and served by our own offset
+    /// arithmetic. Nothing here is ever reachable through the hypervisor.
+    windows: BTreeMap<RamRegionId, WindowView>,
+    /// The guest-physical tiering of every live window, as the kernel was told it.
+    /// Published under the same lock as the window, so no dispatcher can see one without
+    /// the other.
+    tiers: Vec<(u64, u64, Tier)>,
+    /// Foreign sections the listener declared, keyed by guest-physical base.
     foreign: BTreeMap<u64, (RamRegionId, u64, Option<MrHandle>)>,
-    /// ★ The guest-physical ranges **this device published itself**, so a reported
-    /// topology section that lands on one can be refused rather than silently replacing
-    /// a declaration we own. §5.2 never says which source wins; here neither does,
-    /// because the collision is a refusal.
+    /// The guest-physical ranges **this device owns**, so a reported topology section that
+    /// lands on one is refused rather than silently replacing a declaration we own.
     ours: Vec<(u64, u64)>,
     /// §5.5's counter. Bumped by every listener callback.
     topology_generation: u64,
 }
 
-/// One realize-time reservation, as the **installer** knows it.
+/// One realize- or run-time reservation, as the **installer** knows it.
 #[derive(Debug)]
 struct Window {
     gpa: u64,
     len: u64,
     window: Arc<GuestWindow>,
+    /// The live memslots and the numbers they hold. Dropping a slot clears it in the
+    /// kernel; the number goes back to the allocator only afterwards.
+    memslots: Vec<(u32, Box<dyn LiveSlot>)>,
     placements: BTreeMap<SlotId, (u64, u64)>,
 }
 
@@ -492,16 +559,7 @@ struct Window {
 struct Installed {
     window: Arc<GuestWindow>,
     ram: Option<Arc<SharedRam>>,
-    mr: MrHandle,
-}
-
-/// One realize-time read-native overlay.
-#[derive(Debug)]
-struct Overlay {
-    spec: OverlaySpec,
-    mr: MrHandle,
-    region: RamRegionId,
-    claimed_by: Option<SlotId>,
+    memslots: Vec<(u32, Box<dyn LiveSlot>)>,
 }
 
 /// The **installer**'s state: everything authoritative about the memory plane.
@@ -509,16 +567,15 @@ struct Overlay {
 struct Installer {
     windows: BTreeMap<RamRegionId, Window>,
     placement_owner: BTreeMap<SlotId, RamRegionId>,
-    overlays: Vec<Overlay>,
-    overlay_slot: BTreeMap<SlotId, usize>,
+    window_slot: BTreeMap<SlotId, RamRegionId>,
     traps: Vec<TrapSpec>,
     registered_traps: Vec<(BarId, Range<u64>, TrapMode)>,
     exports: Vec<std::os::fd::OwnedFd>,
     rams: BTreeMap<RamRegionId, Arc<SharedRam>>,
-    published: Vec<MrHandle>,
     blocker: Option<BlockerId>,
     next_region: u64,
     next_slot_id: u64,
+    alloc: SlotAllocator,
     /// Removed reservations whose mapping has not been released yet — #57's mechanism.
     retired: Vec<Arc<GuestWindow>>,
 }
@@ -526,12 +583,13 @@ struct Installer {
 #[derive(Debug)]
 pub(crate) struct Plane {
     host: Arc<dyn QemuHost>,
+    slots: Arc<dyn SlotPlane>,
     page: HostPageSize,
     shareable_ram: bool,
     bars: Vec<BarPlacement>,
-    /// ★★ §4.3 as a mechanism. Set at the end of realize, cleared at the start of
-    /// unrealize; every topology transaction asserts it is clear.
-    realized: AtomicBool,
+    /// Cleared at unrealize; every memory-plane operation asserts it is set.
+    live: AtomicBool,
+    bar_latch: Mutex<BarLatch>,
     view: Mutex<View>,
     installer: Mutex<Installer>,
     clock: Mutex<(Instant, DeferQueue)>,
@@ -572,39 +630,96 @@ impl Plane {
             kayfabe_util::lockwitness::held_depth(),
         );
         assert_leaf_free(what);
-        // Every door that reaches this line has just been proved lock-free on both
-        // halves, which makes it the legal place to release a reservation an accessor was
-        // still reading when it was removed.
+        // Every door that reaches this line has just been proved lock-free on both halves,
+        // which makes it the legal place to release a reservation an accessor was still
+        // reading when it was removed.
         self.collect_retired();
     }
 
-    /// ★ §4.3's gate. A topology transaction is legal only before realize latches (or
-    /// after unrealize clears it), because those are the contexts the hypervisor entered
-    /// holding its own global lock.
-    fn assert_realize_context(&self) -> Result<(), VmmError> {
-        if self.realized.load(Ordering::SeqCst) {
-            self.audit.topology_refused.fetch_add(1, Ordering::SeqCst);
-            return Err(VmmError::Unsupported(TOPOLOGY_AFTER_REALIZE));
+    /// The lifecycle gate.
+    fn assert_live(&self) -> Result<(), VmmError> {
+        if self.live.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        self.audit
+            .ops_refused_after_unrealize
+            .fetch_add(1, Ordering::SeqCst);
+        Err(VmmError::Unsupported(MEMORY_PLANE_AFTER_UNREALIZE))
+    }
+
+    /// ★★★ **Latch the BAR's base**, or refuse. Called once per BAR, at its first install.
+    ///
+    /// Three refusals, deliberately distinct: the BAR has no base at all (the C's own
+    /// guard, `C: nvkvm_mmap_host.c:194-207` — a base of zero means the guest has not
+    /// programmed it and installing at a fallback would cache the wrong one); the BAR is
+    /// somewhere other than where this device was realized; and the BAR has already been
+    /// caught moving.
+    fn latch_bar(&self, bar: BarId, declared_base: u64) -> Result<(), VmmError> {
+        let mut l = self
+            .bar_latch
+            .lock()
+            .expect("the BAR latch is never poisoned");
+        if l.poisoned.contains(&bar) {
+            return Err(VmmError::Unsupported(BAR_MOVED_UNDER_US));
+        }
+        self.audit.bar_base_checks.fetch_add(1, Ordering::SeqCst);
+        let Some(live) = self.host.bar_base(bar) else {
+            return Err(VmmError::Unsupported(BAR_NOT_PROGRAMMED));
+        };
+        if live != declared_base {
+            return Err(VmmError::Unsupported(BAR_NOT_AT_ITS_DECLARED_BASE));
+        }
+        match l.base_of(bar) {
+            Some(was) if was != live => {
+                l.poison(bar);
+                self.audit.bar_moves_detected.fetch_add(1, Ordering::SeqCst);
+                Err(VmmError::Unsupported(BAR_MOVED_UNDER_US))
+            }
+            Some(_) => Ok(()),
+            None => {
+                l.latched.push((bar, live));
+                Ok(())
+            }
+        }
+    }
+
+    /// ★★★ **The assertion on every resolve.** Re-reads each latched BAR's base and
+    /// compares it with what it was when we installed into it.
+    ///
+    /// Runs **outside** every leaf lock, before the view is taken — see the crate docs'
+    /// ladder. [`host::QemuHost::bar_base`] is normatively one field read for exactly this
+    /// reason.
+    fn check_bars(&self) -> Result<(), VmmError> {
+        let mut l = self
+            .bar_latch
+            .lock()
+            .expect("the BAR latch is never poisoned");
+        if !l.poisoned.is_empty() {
+            return Err(VmmError::Unsupported(BAR_MOVED_UNDER_US));
+        }
+        let latched = l.latched.clone();
+        let mut moved = false;
+        for (bar, was) in latched {
+            self.audit.bar_base_checks.fetch_add(1, Ordering::SeqCst);
+            if self.host.bar_base(bar) != Some(was) {
+                l.poison(bar);
+                self.audit.bar_moves_detected.fetch_add(1, Ordering::SeqCst);
+                moved = true;
+            }
+        }
+        if moved {
+            return Err(VmmError::Unsupported(BAR_MOVED_UNDER_US));
         }
         Ok(())
     }
 
-    /// Park a removed reservation's mapping where no accessor's clone can be the last
-    /// one — #57's ownership fix, verbatim, and it applies to [`Backing::Ours`] only.
+    /// Park a removed reservation's mapping where no accessor's clone can be the last one.
     fn retire(&self, window: Arc<GuestWindow>) {
         if Arc::strong_count(&window) > 1 {
             self.audit
                 .window_releases_deferred
                 .fetch_add(1, Ordering::SeqCst);
         }
-        // ★ Push only. An inline collection here would be **unfalsifiable** on this
-        // backend and a bite-check said so: `retire` has exactly one caller
-        // (`remove_window`), which has exactly one caller (`unrealize`), which collects at
-        // its own tail — so a collection at this line can never be the one that releases
-        // anything, and a mutation deleting it survived the whole suite. Collection
-        // happens where it is provably legal instead: at `about_to_syscall`, and at
-        // unrealize's tail. If a runtime removal path is ever added, this is the line to
-        // reconsider — with a test that can tell the difference.
         let (mut ins, _h) = self.installer();
         ins.retired.push(window);
     }
@@ -635,6 +750,14 @@ impl Plane {
             .topology_generation
             .store(v.topology_generation, Ordering::SeqCst);
     }
+
+    /// The BAR a guest-physical range lies wholly inside.
+    fn bar_for(&self, gpa: u64, len: u64) -> Option<BarPlacement> {
+        self.bars
+            .iter()
+            .copied()
+            .find(|b| gpa >= b.base && gpa.checked_add(len).is_some_and(|e| e <= b.base + b.len))
+    }
 }
 
 /// Map a raw-OS refusal onto the port's vocabulary, keeping the error number.
@@ -648,10 +771,19 @@ fn host_refused(what: &'static str, e: &RawError) -> VmmError {
     }
 }
 
-/// Map a hypervisor refusal onto the port's vocabulary.
+/// ★★ Map a hypervisor refusal onto the port's vocabulary.
+///
+/// [`HostError::Busy`] is the interesting arm and it is task #97's whole point: it carries
+/// **the name of the conflicting device**, and that name must reach the operator. Flattening
+/// it to a class constant — which is what this function used to do — leaves an operator who
+/// is told only *"a discard requirer is present"* to bisect their own command line. So the
+/// name is what comes out, with the kernel's own `EBUSY` beside it.
 fn qemu_refused(what: &'static str, e: &HostError) -> VmmError {
     match e {
-        HostError::Busy { .. } => VmmError::Unsupported(DISCARD_REQUIRER_PRESENT),
+        HostError::Busy { what } => VmmError::HostRefused {
+            what,
+            errno: Some(slots::KERNEL_EBUSY),
+        },
         HostError::Refused { errno, .. } => VmmError::HostRefused {
             what,
             errno: *errno,
@@ -664,10 +796,10 @@ fn qemu_refused(what: &'static str, e: &HostError) -> VmmError {
 // The machine
 // =====================================================================================
 
-/// A realized device: the owner of the memory plane and of every region we published.
+/// A realized device: the owner of the memory plane and of every memslot we installed.
 ///
-/// Hand out [`QemuMachine::vmm`] handles to threads; keep this to drive the realize-time
-/// tier, to feed the topology listener, and to read the [`AuditReport`].
+/// Hand out [`QemuMachine::vmm`] handles to threads; keep this to drive the lifecycle, to
+/// feed the topology listener and the BAR tripwire, and to read the [`AuditReport`].
 #[derive(Debug)]
 pub struct QemuMachine {
     plane: Arc<Plane>,
@@ -677,20 +809,19 @@ impl QemuMachine {
     /// ★★ §8.1's realize, in its order, with every failure arm unwinding what it created
     /// **before** recording it anywhere.
     ///
-    /// The steps that are ours: the runtime floor assertion, the accelerator refusal, the
-    /// migration blocker, the discard refusal, the reservations, the overlays, the
-    /// listener registration, and the latch. The QOM half — the device type, the BAR
-    /// registration, the message-signalled interrupt table — belongs to the C shim and is
-    /// stage Q2.
-    ///
     /// # Errors
-    /// - [`VmmError::Unsupported`] naming [`BELOW_FLOOR`], [`NOT_ACCELERATED`] or
-    ///   [`DISCARD_REQUIRER_PRESENT`] for the three realize-time refusals;
-    /// - [`VmmError::HostRefused`] if the hypervisor or the OS refused something.
+    /// - [`VmmError::Unsupported`] naming [`BELOW_FLOOR`] or [`NOT_ACCELERATED`];
+    /// - [`VmmError::HostRefused`] if the hypervisor or the OS refused something —
+    ///   including task #97's `EBUSY` arm, which carries the **name of the conflicting
+    ///   device**.
     ///
     /// # Panics
     /// If called with any ranked lock held (R1).
-    pub fn realize(cfg: MachineConfig, host: Arc<dyn QemuHost>) -> Result<Self, VmmError> {
+    pub fn realize(
+        cfg: MachineConfig,
+        host: Arc<dyn QemuHost>,
+        slots: Arc<dyn SlotPlane>,
+    ) -> Result<Self, VmmError> {
         // 1. The runtime floor. The compile-time check is a claim about the headers; this
         //    is a claim about the binary, and neither substitutes for the other (§3.5).
         let (major, minor) = host.version();
@@ -701,11 +832,16 @@ impl QemuMachine {
         if !host.kvm_enabled() {
             return Err(VmmError::Unsupported(NOT_ACCELERATED));
         }
-        // 3. Block migration and checkpoint-restart, before anything is mapped (§8.4).
+        // 3. The kernel's memslot ceiling, and a descending allocator carved out of it.
+        let ceiling = slots
+            .ceiling()
+            .map_err(|e| host_refused("querying the memslot ceiling", &e))?;
+        let alloc = SlotAllocator::new(ceiling).map_err(VmmError::Unsupported)?;
+        // 4. Block migration and checkpoint-restart, before anything is mapped (§8.4).
         let blocker = host
             .migrate_add_blocker("this device forwards to a host GPU through process-local state")
             .map_err(|e| qemu_refused("adding a migration blocker", &e))?;
-        // 4. Refuse guest-driven discard, or unwind the blocker (§8.5).
+        // 5. Refuse guest-driven discard, or unwind the blocker (task #97).
         if let Err(e) = host.ram_block_discard_disable(true) {
             host.migrate_del_blocker(blocker);
             return Err(qemu_refused("disabling guest-driven RAM discard", &e));
@@ -714,24 +850,25 @@ impl QemuMachine {
         let page = HostPageSize::query();
         let plane = Arc::new(Plane {
             host: Arc::clone(&host),
+            slots,
             page,
             shareable_ram: cfg.shareable_ram,
             bars: cfg.bars.clone(),
-            realized: AtomicBool::new(false),
+            live: AtomicBool::new(true),
+            bar_latch: Mutex::new(BarLatch::default()),
             view: Mutex::new(View::default()),
             installer: Mutex::new(Installer {
                 windows: BTreeMap::new(),
                 placement_owner: BTreeMap::new(),
-                overlays: Vec::new(),
-                overlay_slot: BTreeMap::new(),
+                window_slot: BTreeMap::new(),
                 traps: cfg.traps.clone(),
                 registered_traps: Vec::new(),
                 exports: Vec::new(),
                 rams: BTreeMap::new(),
-                published: Vec::new(),
                 blocker: Some(blocker),
                 next_region: 1,
                 next_slot_id: 1,
+                alloc,
                 retired: Vec::new(),
             }),
             clock: Mutex::new((Instant::ZERO, DeferQueue::new())),
@@ -739,25 +876,25 @@ impl QemuMachine {
         });
         let machine = QemuMachine { plane };
 
-        // 5-8. Everything that can fail from here unwinds through `unrealize`, which is
-        //      the same teardown the ordinary path takes. A partial realize must leave
-        //      the host address space and the hypervisor's blocker exactly as it found
-        //      them, and using the real teardown is what stops that from being a second,
-        //      less-tested code path.
+        // 6-8. Everything that can fail from here unwinds through `unrealize`, which is the
+        //      same teardown the ordinary path takes. A partial realize must leave the host
+        //      address space, the kernel's slot table and the hypervisor's blocker exactly
+        //      as it found them, and using the real teardown is what stops that from being
+        //      a second, less-tested code path.
         if let Err(e) = machine.realize_regions(&cfg) {
             machine.unrealize();
             return Err(e);
         }
-        machine.plane.realized.store(true, Ordering::SeqCst);
         Ok(machine)
     }
 
     fn realize_regions(&self, cfg: &MachineConfig) -> Result<(), VmmError> {
-        // The BARs first: a reservation or an overlay declared afterwards REPLACES the
-        // device declaration over its own range, which is the layering a flat view has.
         {
             let (mut v, _h) = self.plane.view();
             for b in &cfg.bars {
+                // ★★ Every BAR is DEVICE, and a reservation installed into one does NOT
+                // change that (crate doc finding 3). It is what the hypervisor's flat view
+                // says, and it is the backstop under our own window lookup.
                 v.regions
                     .declare(
                         RamRegionId((1u64 << 63) | b.base),
@@ -770,10 +907,7 @@ impl QemuMachine {
             }
         }
         for w in &cfg.windows {
-            self.install_ram_window(w.bar, w.gpa, w.len)?;
-        }
-        for o in &cfg.overlays {
-            self.publish_overlay(o)?;
+            self.install_window(w, "installing a realize-time reservation")?;
         }
         self.plane
             .host
@@ -782,53 +916,107 @@ impl QemuMachine {
         Ok(())
     }
 
-    /// ★★ The coarse tier, and on this backend it is **realize-only**.
+    /// ★★ **The coarse tier** — one reservation and the memslots that shadow it.
     ///
-    /// Creates one reservation and hands it to the hypervisor as a subregion of `bar`.
-    /// After realize has latched this refuses with [`TOPOLOGY_AFTER_REALIZE`] — see
-    /// finding 1 in the crate docs for why that is the design and not a limitation.
+    /// Legal at any time: under `host_execution_plane.md` §1 this touches the *kernel*, not
+    /// the hypervisor's region tree, so it is not a topology transaction and §4.3 has
+    /// nothing to say about it.
     ///
     /// # Errors
-    /// - [`VmmError::Unsupported`] — after realize, or a misaligned/empty request, or a
-    ///   range outside the named BAR.
-    /// - [`VmmError::HostRefused`] — the OS or the hypervisor refused. **On any of these
-    ///   the reservation is dropped and nothing is recorded.**
+    /// - [`VmmError::Unsupported`] — a misaligned or empty request, a range outside every
+    ///   BAR, a BAR that is backed / unprogrammed / moved, an unsatisfiable tier list, or
+    ///   the slot budget.
+    /// - [`VmmError::HostRefused`] — the OS or the kernel refused. **On any of these the
+    ///   reservation is dropped, every slot that did install is cleared, and nothing is
+    ///   recorded.**
     ///
     /// # Panics
     /// If called with any ranked lock or any leaf lock held (R1).
-    pub fn install_ram_window(
-        &self,
-        bar: BarId,
-        gpa: u64,
-        len: u64,
-    ) -> Result<RamRegionId, VmmError> {
-        let p = &self.plane;
-        p.about_to_syscall("installing a reservation");
-        p.assert_realize_context()?;
+    pub fn install_ram_window(&self, gpa: u64, len: u64) -> Result<RamRegionId, VmmError> {
+        self.install_window(
+            &WindowSpec::passthrough(gpa, len),
+            "installing a reservation",
+        )
+    }
 
-        // ---- PLAN (installer held; pure bookkeeping, no syscall) --------------------
-        let (region, placement, bar_offset) = {
+    /// The same, with an explicit tier list — the mixed passthrough/observe layout.
+    ///
+    /// # Errors
+    /// As [`QemuMachine::install_ram_window`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock or any leaf lock held (R1).
+    pub fn install_tiered_window(&self, spec: &WindowSpec) -> Result<RamRegionId, VmmError> {
+        self.install_window(spec, "installing a tiered reservation")
+    }
+
+    fn install_window(
+        &self,
+        spec: &WindowSpec,
+        what: &'static str,
+    ) -> Result<RamRegionId, VmmError> {
+        self.install_window_inner(spec, None, what).map(|(r, _)| r)
+    }
+
+    /// The shared body. `read_native` carries the write-trap sub-range that needs a
+    /// read-only slot of its own.
+    fn install_window_inner(
+        &self,
+        spec: &WindowSpec,
+        read_native: Option<&Range<u64>>,
+        what: &'static str,
+    ) -> Result<(RamRegionId, SlotId), VmmError> {
+        let p = &self.plane;
+        p.about_to_syscall(what);
+        p.assert_live()?;
+        let (gpa, len) = (spec.gpa, spec.len);
+
+        // ---- PLAN (pure bookkeeping; the only syscall is the BAR field read) ----------
+        if !geometry::is_aligned(gpa, p.page) || !geometry::is_aligned(len, p.page) || len == 0 {
+            return Err(VmmError::Unsupported(
+                "a reservation whose base or length is not a whole number of host pages",
+            ));
+        }
+        let Some(placement) = p.bar_for(gpa, len) else {
+            return Err(VmmError::Unsupported(
+                "a reservation that is not inside any realized BAR",
+            ));
+        };
+        // ★★★ The reservation BAR must be one the hypervisor does NOT back. This is the
+        // whole §1.5 safety argument, asked rather than assumed.
+        if !p.host.bar_is_unbacked_reservation(placement.bar) {
+            return Err(VmmError::Unsupported(WINDOW_IN_A_BACKED_BAR));
+        }
+        p.latch_bar(placement.bar, placement.base)?;
+
+        let cuts = self.tier_cuts(spec, read_native)?;
+        let spans = slots::spans(len, &cuts).map_err(VmmError::Unsupported)?;
+        // ★★ ONE place decides whether a tier installs a slot, and it is
+        // `Tier::readonly_slot`. This used to read `s.tier != Tier::Observe` — a **second
+        // evaluation site** for the same rule, and a bite-check proved it: flipping
+        // `Tier::Observe`'s arm from "no slot" to "a read-write slot" changed nothing here,
+        // because this line was not asking. That is the decay `classify` is a whole module
+        // to prevent, reproduced one crate over.
+        let want: Vec<&Span> = spans
+            .iter()
+            .filter(|s| s.tier.readonly_slot().is_some())
+            .collect();
+
+        let (region, slot_id, numbers) = {
             let (mut ins, _h) = p.installer();
-            if !geometry::is_aligned(gpa, p.page) || !geometry::is_aligned(len, p.page) || len == 0
-            {
-                return Err(VmmError::Unsupported(
-                    "a reservation whose base or length is not a whole number of host pages",
-                ));
-            }
-            let Some(placement) = p.bars.iter().copied().find(|b| {
-                b.bar == bar && gpa >= b.base && gpa.saturating_add(len) <= b.base + b.len
-            }) else {
-                return Err(VmmError::Unsupported(
-                    "a reservation outside the BAR it names",
-                ));
-            };
+            let numbers = ins.alloc.alloc(want.len()).map_err(VmmError::Unsupported)?;
+            p.audit
+                .slot_numbers_recycled
+                .store(ins.alloc.recycled(), Ordering::SeqCst);
             let region = RamRegionId(ins.next_region);
             ins.next_region += 1;
-            (region, placement, gpa - placement.base)
+            let slot_id = SlotId(ins.next_slot_id);
+            ins.next_slot_id += 1;
+            (region, slot_id, numbers)
         };
 
-        // ---- EXECUTE (every lock dropped) ------------------------------------------
-        assert_leaf_free("creating a reservation");
+        // ---- EXECUTE (every lock dropped) --------------------------------------------
+        assert_leaf_free(what);
         let outcome = (|| -> Result<Installed, VmmError> {
             let window = Arc::new(GuestWindow::create(len, p.page).map_err(|e| {
                 p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
@@ -856,25 +1044,56 @@ impl QemuMachine {
             } else {
                 None
             };
-            let mr = p
-                .host
-                .publish_window("nvkvm-window", placement, bar_offset, len)
-                .map_err(|e| {
-                    p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
-                    qemu_refused("publishing a reservation", &e)
-                })?;
-            p.audit.regions_published.fetch_add(1, Ordering::SeqCst);
-            Ok(Installed { window, ram, mr })
+            let mut memslots = Vec::new();
+            for (n, s) in numbers.iter().zip(want.iter()) {
+                let readonly = s
+                    .tier
+                    .readonly_slot()
+                    .expect("the filter above admitted exactly the tiers that install one");
+                let live = p
+                    .slots
+                    .install(*n, gpa + s.offset, &window, s.offset, s.len, readonly)
+                    .map_err(|e| {
+                        p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
+                        host_refused("a memslot install", &e)
+                    })?;
+                p.audit.memslot_installs.fetch_add(1, Ordering::SeqCst);
+                memslots.push((*n, live));
+            }
+            Ok(Installed {
+                window,
+                ram,
+                memslots,
+            })
         })();
-        // The partial-failure path: `outcome` owns everything that was created, so
-        // dropping it here unmaps the reservation before any of it was recorded.
-        let Installed { window, ram, mr } = outcome?;
 
-        // ---- COMMIT (installer, then the view) -------------------------------------
+        // ★ The partial-failure path. `outcome` owns everything that was created, so
+        // dropping it here unmaps the reservation and clears whatever slots did install —
+        // before any of it was recorded anywhere. The numbers still have to go back, and
+        // they go back AFTER that drop, which is the ordering the allocator's contract
+        // demands.
+        let installed = match outcome {
+            Ok(i) => i,
+            Err(e) => {
+                let (mut ins, _h) = p.installer();
+                for n in numbers {
+                    ins.alloc.release(n);
+                }
+                return Err(e);
+            }
+        };
+        let n_slots = installed.memslots.len() as u64;
+        let win_handle = Arc::clone(&installed.window);
+        let tiers: Vec<(u64, u64, Tier)> = spans
+            .iter()
+            .map(|s| (gpa + s.offset, s.len, s.tier))
+            .collect();
+
+        // ---- COMMIT (installer, then the view) ---------------------------------------
         {
             let (mut ins, _h) = p.installer();
-            ins.published.push(mr);
-            if let Some(r) = ram {
+            ins.window_slot.insert(slot_id, region);
+            if let Some(r) = installed.ram {
                 ins.rams.insert(region, r);
             }
             ins.windows.insert(
@@ -882,79 +1101,63 @@ impl QemuMachine {
                 Window {
                     gpa,
                     len,
-                    window: Arc::clone(&window),
+                    window: Arc::clone(&installed.window),
+                    memslots: installed.memslots,
                     placements: BTreeMap::new(),
                 },
             );
             Audit::bump(&p.audit.live_windows, &p.audit.peak_windows, 1);
+            Audit::bump(
+                &p.audit.live_memslots,
+                &p.audit.peak_memslots,
+                n_slots as i64,
+            );
             p.audit.window_bytes.fetch_add(len, Ordering::SeqCst);
         }
         {
             let (mut v, _h) = p.view();
-            v.regions
-                .declare(region, RegionKind::Ram, gpa, len)
-                .map_err(|_| VmmError::Unsupported("a reservation that leaves the 64-bit space"))?;
-            v.backings.insert(region, Backing::Ours(window));
+            // ★★★ NOT a `regions.declare(.., Ram, ..)`. The window is served from OUR map,
+            // and the region map keeps saying `Device` — crate doc finding 3.
+            v.windows.insert(
+                region,
+                WindowView {
+                    gpa,
+                    len,
+                    window: win_handle,
+                },
+            );
+            v.tiers.extend(tiers);
+            v.ours.push((gpa, len));
         }
-        Ok(region)
+        Ok((region, slot_id))
     }
 
-    /// Publish one realize-time read-native overlay (§5.4).
-    fn publish_overlay(&self, spec: &OverlaySpec) -> Result<(), VmmError> {
+    /// The tier cuts for one window: its configured observe ranges, plus the read-native
+    /// span if this is a `map_read_native`. All rounded out to whole host pages, because a
+    /// tier is a **page** attribute in the kernel's tables.
+    fn tier_cuts(
+        &self,
+        spec: &WindowSpec,
+        read_native: Option<&Range<u64>>,
+    ) -> Result<Vec<(u64, u64, Tier)>, VmmError> {
         let p = &self.plane;
-        p.about_to_syscall("publishing a read-native overlay");
-        p.assert_realize_context()?;
-        let Some(placement) = p.bars.iter().copied().find(|b| {
-            b.bar == spec.bar
-                && spec.gpa >= b.base
-                && spec.gpa.saturating_add(spec.len) <= b.base + b.len
-        }) else {
-            return Err(VmmError::Unsupported(
-                "a read-native overlay outside the BAR it names",
-            ));
-        };
-        if let Some(t) = &spec.write_trap
-            && (t.start < spec.gpa || t.end > spec.gpa + spec.len || t.start >= t.end)
-        {
-            return Err(VmmError::Unsupported(
-                "a write-trap sub-range that is not inside the overlay it overlays",
-            ));
+        let mut cuts = Vec::new();
+        for r in spec.observe.iter().chain(read_native) {
+            let tier = if read_native.is_some_and(|rn| rn == r) {
+                Tier::ReadNative
+            } else {
+                Tier::Observe
+            };
+            if r.start < spec.gpa || r.end > spec.gpa + spec.len || r.start >= r.end {
+                return Err(VmmError::Unsupported(slots::TIER_OUTSIDE_ITS_WINDOW));
+            }
+            let (off, l) = geometry::round_out(r.start - spec.gpa, r.end - r.start, p.page)
+                .map_err(|_| {
+                    VmmError::Unsupported("a tier sub-range that cannot be page-aligned")
+                })?;
+            cuts.push((off, l.min(spec.len - off), tier));
         }
-        assert_leaf_free("publishing a read-native overlay");
-        let mr = p
-            .host
-            .publish_rom_overlay(
-                "nvkvm-read-native",
-                placement,
-                spec.gpa - placement.base,
-                spec.len,
-            )
-            .map_err(|e| {
-                p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
-                qemu_refused("publishing a read-native overlay", &e)
-            })?;
-        p.audit.regions_published.fetch_add(1, Ordering::SeqCst);
-        let region = {
-            let (mut ins, _h) = p.installer();
-            let region = RamRegionId(ins.next_region);
-            ins.next_region += 1;
-            ins.published.push(mr);
-            ins.overlays.push(Overlay {
-                spec: spec.clone(),
-                mr,
-                region,
-                claimed_by: None,
-            });
-            region
-        };
-        // ★ Unclaimed, it is declared a DEVICE: the hypervisor is serving reads out of it
-        // already, but nothing has told us what should be in it, so a `gpa_write` must
-        // refuse by name rather than scribble on a register page. Claiming it through
-        // `map_read_native` is what re-declares it RAM — finding 3 in the crate docs.
-        let (mut v, _h) = p.view();
-        v.regions
-            .declare(region, RegionKind::Device, spec.gpa, spec.len)
-            .map_err(|_| VmmError::Unsupported("an overlay that leaves the 64-bit space"))
+        Ok(cuts)
     }
 
     /// A `Vmm` handle. Cheap to clone; hand one to each thread.
@@ -971,14 +1174,20 @@ impl QemuMachine {
         self.plane.page
     }
 
+    /// The kernel's memslot ceiling, and the floor this device's numbers descend to.
+    #[must_use]
+    pub fn slot_range(&self) -> (u32, u32) {
+        let ins = self.plane.installer.lock().expect("installer");
+        (ins.alloc.floor(), ins.alloc.ceiling())
+    }
+
     /// The audit / conservation ledger.
     #[must_use]
     pub fn audit(&self) -> AuditReport {
         self.plane.audit.report()
     }
 
-    /// Create a host backing an isolate would have handed us, and name it as the port
-    /// does.
+    /// Create a host backing an isolate would have handed us, and name it as the port does.
     ///
     /// # Errors
     /// [`VmmError::HostRefused`] if the host refuses the backing.
@@ -1005,15 +1214,24 @@ impl QemuMachine {
 
     /// Query the guest-physical region map directly, without touching a backing.
     ///
-    /// Exists for the reason the other backend's does: nothing else can tell *"the region
-    /// was undeclared"* from *"the region is still declared RAM but its backing is gone"*,
-    /// and both arrive at `gpa_read` as [`VmmError::BadGpa`].
+    /// ★ Under crate doc finding 3 this reports our window's BAR as a **device**, which is
+    /// what the hypervisor's flat view says it is. A window is not in this map at all; it
+    /// is in ours.
     ///
     /// # Errors
     /// As [`GuestRamMap::resolve`].
     pub fn resolve_region(&self, gpa: u64, len: u64) -> Result<kayfabe_vmm::RamSpan, VmmError> {
         let (v, _h) = self.plane.view();
         v.regions.resolve(gpa, len)
+    }
+
+    /// The guest-physical tiering, as the kernel was told it.
+    #[must_use]
+    pub fn tiers(&self) -> Vec<(u64, u64, Tier)> {
+        let (v, _h) = self.plane.view();
+        let mut t = v.tiers.clone();
+        t.sort_unstable_by_key(|(g, _, _)| *g);
+        t
     }
 
     /// Advance the virtual clock, returning every deferred event that became due.
@@ -1024,28 +1242,67 @@ impl QemuMachine {
         c.1.due(now)
     }
 
+    // --- the BAR tripwire (crate doc finding 1) ------------------------------------
+
+    /// ★★★ **The tripwire.** What a topology listener — or the device's own PCI
+    /// mapping-update path — calls when a BAR is (re)mapped.
+    ///
+    /// `host_execution_plane.md` §1.5: the accelerator's own handler early-returns for our
+    /// pure-MMIO reservation, so it creates no slot — but the hypervisor's *listener* still
+    /// fires for it, which is what makes this callable at all. A base that differs from the
+    /// latched one poisons the BAR, and every access into it refuses from then on.
+    ///
+    /// Sticky on purpose: a BAR that moved away and back may have been another device's in
+    /// between, and our memslot was live over the old range the whole time.
+    pub fn note_bar_mapping(&self, bar: BarId, base: Option<u64>) {
+        let p = &self.plane;
+        let mut l = p.bar_latch.lock().expect("the BAR latch is never poisoned");
+        let Some(was) = l.base_of(bar) else {
+            return;
+        };
+        if base != Some(was) {
+            l.poison(bar);
+            p.audit.bar_moves_detected.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// ★★ **The refusal.** What a configuration-space write override calls *before* letting
+    /// a base-address-register write through.
+    ///
+    /// The tripwire above is a detector and this is a preventer; they are both here because
+    /// they close different halves. A device that refuses the move never gets into the
+    /// inconsistent state at all; a device that only detects it finds out afterwards, which
+    /// is still infinitely better than the C's silence but is not the same thing.
+    ///
+    /// # Errors
+    /// [`VmmError::Unsupported`] naming [`BAR_MOVED_UNDER_US`] once a memslot has been
+    /// installed into that BAR.
+    pub fn bar_move_requested(&self, bar: BarId) -> Result<(), VmmError> {
+        let l = self
+            .plane
+            .bar_latch
+            .lock()
+            .expect("the BAR latch is never poisoned");
+        if l.base_of(bar).is_some() {
+            return Err(VmmError::Unsupported(BAR_MOVED_UNDER_US));
+        }
+        Ok(())
+    }
+
     // --- the topology listener (§5.2) ---------------------------------------------
 
     /// ★ The listener's add callback. Arrives holding the VMM's global lock, so the only
     /// thing it may do is a bounded update of our leaf map (§4.2's table).
     ///
-    /// Lock order on this path is `global -> leaf(view)`, the safe direction; the reverse
-    /// never occurs because no leaf critical section takes the global lock.
-    ///
     /// # Errors
     /// [`VmmError::Unsupported`] naming [`FOREIGN_OVERLAPS_OURS`] if the reported section
-    /// overlaps a region this device published — the two declaration sources would
-    /// otherwise race to own the same guest-physical range, and the loser would be
-    /// whichever ran second.
-    /// [`VmmError::HostRefused`] if the reference could not be taken.
+    /// overlaps a range this device owns; [`VmmError::HostRefused`] if the reference could
+    /// not be taken.
     pub fn region_add(&self, s: SectionDesc) -> Result<(), VmmError> {
         let p = &self.plane;
         let kind = classify::classify(&s.facts);
         // ★ The overlap check happens BEFORE any reference is taken, so a refusal leaves
-        // the hypervisor's reference count exactly as it found it. It is checked against
-        // the ranges WE published, not against the map — a previously reported foreign
-        // section may legitimately be re-reported, and the map cannot tell the two
-        // sources apart.
+        // the hypervisor's reference count exactly as it found it.
         {
             let (v, _h) = p.view();
             let end = u128::from(s.gpa) + u128::from(s.len.max(1));
@@ -1071,7 +1328,7 @@ impl QemuMachine {
         if let Some(mr) = mr {
             v.backings.insert(
                 region,
-                Backing::HostOwned {
+                HostOwned {
                     mr,
                     region_off: s.offset_within_region,
                 },
@@ -1085,12 +1342,6 @@ impl QemuMachine {
 
     /// ★★ The listener's delete callback, in §5.2's order — **undeclare first**, drop the
     /// backing, and only then release the reference.
-    ///
-    /// The release happens **after** the leaf lock is dropped and **on this thread**,
-    /// which is the whole of finding 2 in the crate docs: because a copy out of a foreign
-    /// region runs *inside* the view lock, undeclaring under that lock means no accessor
-    /// can be holding this region when the reference falls — so the release never has to
-    /// leave the one context that is allowed to run a finalizer.
     pub fn region_del(&self, gpa: u64, len: u64) {
         let p = &self.plane;
         let mr = {
@@ -1111,21 +1362,17 @@ impl QemuMachine {
 
     // --- teardown ------------------------------------------------------------------
 
-    /// ★ §8.3's unrealize: clear the latch, release every reservation, unpublish every
-    /// region we published, and withdraw the migration blocker.
+    /// ★ §8.3's unrealize: stop serving, release every reservation and its memslots, and
+    /// withdraw the migration blocker.
     ///
-    /// The hypervisor frees **nothing** of ours — it never took ownership of the
-    /// reservation — so this step is not optional and there is no backstop for it.
+    /// The hypervisor frees **nothing** of ours — it never took ownership of anything — so
+    /// this step is not optional and there is no backstop for it.
     ///
     /// # Panics
     /// If called with any ranked lock or any leaf lock held (R1).
     pub fn unrealize(&self) {
         let p = &self.plane;
         p.about_to_syscall("unrealize");
-        // Clearing the latch first is what makes the teardown's own topology calls legal
-        // under §4.3 — unrealize is the other context the hypervisor enters holding its
-        // global lock.
-        p.realized.store(false, Ordering::SeqCst);
 
         let regions: Vec<RamRegionId> = {
             let (ins, _h) = p.installer();
@@ -1134,20 +1381,20 @@ impl QemuMachine {
         for r in regions {
             let _ = self.remove_window(r);
         }
-        let (published, blocker) = {
+        p.live.store(false, Ordering::SeqCst);
+        let blocker = {
             let (mut ins, _h) = p.installer();
-            ins.overlays.clear();
-            ins.overlay_slot.clear();
-            (core::mem::take(&mut ins.published), ins.blocker.take())
+            ins.blocker.take()
         };
         {
             let (mut v, _h) = p.view();
             *v = View::default();
         }
-        assert_leaf_free("unpublishing the device's regions");
-        for mr in published {
-            p.host.unpublish(mr);
+        {
+            let mut l = p.bar_latch.lock().expect("the BAR latch is never poisoned");
+            *l = BarLatch::default();
         }
+        assert_leaf_free("withdrawing the device's lifecycle claims");
         if let Some(b) = blocker {
             p.host.migrate_del_blocker(b);
         }
@@ -1155,25 +1402,27 @@ impl QemuMachine {
         p.collect_retired();
     }
 
-    /// Remove one reservation: the guest-physical range stops resolving **first**, then
-    /// the mapping is retired.
+    /// Remove one reservation: the guest-physical range stops resolving **first**, then the
+    /// memslots are cleared, then the mapping is retired and the numbers go back.
+    ///
+    /// Public because a reservation is now a runtime object — see the crate docs' "what §1
+    /// deleted". [`Vmm::unmap_guest`] reaches the same code with the coarse slot id.
     ///
     /// # Errors
     /// [`VmmError::BadSlot`] if the region is unknown.
-    fn remove_window(&self, region: RamRegionId) -> Result<(), VmmError> {
+    ///
+    /// # Panics
+    /// If called with any ranked lock or any leaf lock held (R1).
+    pub fn remove_window(&self, region: RamRegionId) -> Result<(), VmmError> {
         let p = &self.plane;
         p.about_to_syscall("removing a reservation");
-        // ★ Releasing a reservation is half of a topology transaction — the other half is
-        // the `unpublish` that unrealize performs right after — so it is latched exactly
-        // like its creation. This is also what makes `unrealize`'s FIRST line load-bearing
-        // rather than decorative: clear the latch or nothing below it happens.
-        p.assert_realize_context()?;
         let taken = {
             let (mut ins, _h) = p.installer();
             let Some(w) = ins.windows.remove(&region) else {
                 return Err(VmmError::BadSlot(SlotId(region.0)));
             };
             ins.placement_owner.retain(|_, r| *r != region);
+            ins.window_slot.retain(|_, r| *r != region);
             ins.rams.remove(&region);
             Audit::bump(&p.audit.live_windows, &p.audit.peak_windows, -1);
             Audit::bump(
@@ -1181,15 +1430,38 @@ impl QemuMachine {
                 &p.audit.peak_placements,
                 -(w.placements.len() as i64),
             );
+            Audit::bump(
+                &p.audit.live_memslots,
+                &p.audit.peak_memslots,
+                -(w.memslots.len() as i64),
+            );
             p.audit.window_bytes.fetch_sub(w.len, Ordering::SeqCst);
             w
         };
         {
             let (mut v, _h) = p.view();
-            v.regions.undeclare(taken.gpa, taken.len);
-            v.backings.remove(&region);
+            v.windows.remove(&region);
+            v.tiers
+                .retain(|(g, l, _)| !(*g >= taken.gpa && g + l <= taken.gpa + taken.len));
+            v.ours
+                .retain(|(g, l)| !(*g == taken.gpa && *l == taken.len));
         }
-        assert_leaf_free("retiring a reservation's mapping");
+        assert_leaf_free("clearing a reservation's memslots");
+        // ★★★ The ordering the allocator's contract demands: drop the live slots FIRST —
+        // each `Drop` is the clearing ioctl and asserts it succeeded — and only then hand
+        // the numbers back. A number returned before its slot was cleared turns the next
+        // install from an ADD into a silent REPLACE.
+        let mut numbers = Vec::with_capacity(taken.memslots.len());
+        for (n, live) in taken.memslots {
+            drop(live);
+            numbers.push(n);
+        }
+        {
+            let (mut ins, _h) = p.installer();
+            for n in numbers {
+                ins.alloc.release(n);
+            }
+        }
         p.retire(taken.window);
         Ok(())
     }
@@ -1205,9 +1477,7 @@ pub struct QemuVmm {
     plane: Arc<Plane>,
 }
 
-/// The copy a host-owned resolution performs **inside** the view lock: the host, the
-/// region, and the byte offset within it. Named because the whole point of finding 2 is
-/// that this call happens at exactly one place and under exactly one lock.
+/// The copy a host-owned resolution performs **inside** the view lock.
 type CopyIntoHostOwned<'a> = dyn FnMut(&dyn QemuHost, MrHandle, u64) -> Result<(), VmmError> + 'a;
 
 /// What a resolved guest-physical access copies against.
@@ -1225,12 +1495,14 @@ impl QemuVmm {
         self.plane.audit.report()
     }
 
-    /// ★★ Resolve, and for a host-owned region **copy as well** — the two are indivisible
-    /// on that path by construction (finding 2).
+    /// ★★★ Resolve, in the one order that matters.
     ///
-    /// `copy` is applied under the view lock for [`Backing::HostOwned`] and returns
-    /// [`Resolved::Ours`] for [`Backing::Ours`], whose copy the caller then performs
-    /// outside the lock.
+    /// 1. **The BAR latch**, outside every leaf lock (crate doc finding 1).
+    /// 2. **Our own windows**, by our own offset arithmetic (crate doc finding 3). The
+    ///    hypervisor is not consulted, because through the hypervisor this range is a stub
+    ///    that returns zeros.
+    /// 3. Only then the region map, for foreign RAM — and for the refusal a bypassed step 2
+    ///    lands on.
     fn resolve_and_maybe_copy(
         &self,
         gpa: u64,
@@ -1243,37 +1515,42 @@ impl QemuVmm {
             &p.audit.accessor_depth_max,
             kayfabe_util::lockwitness::held_depth(),
         );
+        p.check_bars().inspect_err(|_| {
+            p.audit.accesses_refused.fetch_add(1, Ordering::SeqCst);
+        })?;
         let (v, held) = p.view();
+        if let Some(w) = v
+            .windows
+            .values()
+            .find(|w| gpa >= w.gpa && gpa.checked_add(len).is_some_and(|e| e <= w.gpa + w.len))
+        {
+            let (window, offset) = (Arc::clone(&w.window), gpa - w.gpa);
+            // Released EXPLICITLY, before the caller copies — `own_copy_leaf_depth_max` is
+            // the assertion that this really happened.
+            core::mem::drop(v);
+            core::mem::drop(held);
+            return Ok(Resolved::Ours(window, offset));
+        }
         let span = v.regions.resolve(gpa, len).inspect_err(|_| {
             p.audit.accesses_refused.fetch_add(1, Ordering::SeqCst);
         })?;
-        let backing = v.backings.get(&span.region).cloned().ok_or_else(|| {
+        let backing = v.backings.get(&span.region).copied().ok_or_else(|| {
             p.audit.accesses_refused.fetch_add(1, Ordering::SeqCst);
             VmmError::BadGpa { gpa }
         })?;
-        match backing {
-            Backing::Ours(w) => {
-                let offset = span.offset;
-                // Released EXPLICITLY, before the caller copies. Writing it out is what
-                // makes the property visible at the line that owns it, and what a
-                // bite-check can neuter — `own_copy_leaf_depth_max` is the assertion.
-                core::mem::drop(v);
-                core::mem::drop(held);
-                Ok(Resolved::Ours(w, offset))
-            }
-            Backing::HostOwned { mr, region_off } => {
-                // ★ INSIDE the lock, on purpose. The leaf witness must read >= 1 here,
-                // and `host_copy_leaf_depth_min` is the assertion that it does.
-                p.audit
-                    .host_copy_leaf_min
-                    .fetch_min(leafwitness::depth(), Ordering::SeqCst);
-                p.audit.accesses_served.fetch_add(1, Ordering::SeqCst);
-                let r = copy(p.host.as_ref(), mr, region_off + span.offset);
-                core::mem::drop(v);
-                core::mem::drop(held);
-                r.map(|()| Resolved::Done)
-            }
-        }
+        // ★ INSIDE the lock, on purpose. `host_copy_leaf_depth_min` is the assertion.
+        p.audit
+            .host_copy_leaf_min
+            .fetch_min(leafwitness::depth(), Ordering::SeqCst);
+        p.audit.accesses_served.fetch_add(1, Ordering::SeqCst);
+        let r = copy(
+            p.host.as_ref(),
+            backing.mr,
+            backing.region_off + span.offset,
+        );
+        core::mem::drop(v);
+        core::mem::drop(held);
+        r.map(|()| Resolved::Done)
     }
 
     fn about_to_copy_ours(&self) {
@@ -1342,9 +1619,9 @@ impl Vmm for QemuVmm {
         }
     }
 
-    /// ★★ The fine tier — a `MAP_FIXED` placement inside an already-published
-    /// reservation. **No hypervisor call at all** (§5.4), which is why it is the one
-    /// memory-plane op that stays legal after realize has latched.
+    /// ★★ The fine tier — a `MAP_FIXED` placement inside an already-installed reservation.
+    /// **No kernel call and no hypervisor call at all**: the window's memslot already names
+    /// the whole range, which is what keeps §6.7's frequency rule satisfiable.
     fn map_guest(
         &mut self,
         gpa: u64,
@@ -1354,6 +1631,7 @@ impl Vmm for QemuVmm {
     ) -> Result<SlotId, VmmError> {
         let p = &self.plane;
         p.about_to_syscall("map_guest (a MAP_FIXED placement inside a reservation)");
+        p.assert_live()?;
 
         // ---- PLAN ------------------------------------------------------------------
         let (slot_id, region, window, offset) = {
@@ -1423,17 +1701,10 @@ impl Vmm for QemuVmm {
 
         // ---- COMMIT + R5 -----------------------------------------------------------
         //
-        // ★★ R5's token here is the reservation's **presence**, not a version counter, and
-        // that is a bite-check finding rather than a simplification. The ported shape
-        // carried a per-window `generation` compared against the one read at plan time —
-        // and it is **unfalsifiable**: a `Window`'s generation is written once at install
-        // and never mutated, a removal takes the whole `Window` out of the map, and a
-        // `RamRegionId` is never reused. So the compare can be `true` unconditionally and
-        // nothing changes; a mutation to exactly that survived the entire suite. A safety
-        // check nobody can make fail is worse than no check, because it reads as
-        // protection — so the token is the lookup, which a concurrent teardown really can
-        // and does change. (The same vacuity is present in `kayfabe-vmm-kvm`, which is
-        // where this shape was ported from; it is recorded here rather than fixed there.)
+        // ★★ R5's token is the reservation's **presence**, not a version counter: a
+        // per-window generation written once at install and never mutated is unfalsifiable
+        // (a bite-check found exactly that survivor), whereas a concurrent teardown really
+        // does remove the whole entry.
         let (mut ins, _h) = p.installer();
         match ins.windows.get_mut(&region) {
             Some(w) => {
@@ -1453,23 +1724,20 @@ impl Vmm for QemuVmm {
         }
     }
 
-    /// Remove a mapping — a fine-tier placement is **restored** to anonymous backing,
-    /// never unmapped, and a read-native slot **un-claims** its overlay without
-    /// unpublishing it (§4.3: unpublishing is a topology transaction).
+    /// Remove a mapping — a fine-tier placement is **restored** to anonymous backing, never
+    /// unmapped; a coarse-tier slot removes the whole reservation and clears its memslots.
     fn unmap_guest(&mut self, slot: SlotId) -> Result<(), VmmError> {
         let p = &self.plane;
         p.about_to_syscall("unmap_guest");
 
         enum Plan {
             Placement(Arc<GuestWindow>, u64, u64),
-            Overlay(RamRegionId, u64, u64),
+            Window(RamRegionId),
         }
         let plan = {
             let (mut ins, _h) = p.installer();
-            if let Some(i) = ins.overlay_slot.remove(&slot) {
-                let o = &mut ins.overlays[i];
-                o.claimed_by = None;
-                Plan::Overlay(o.region, o.spec.gpa, o.spec.len)
+            if let Some(region) = ins.window_slot.get(&slot).copied() {
+                Plan::Window(region)
             } else if let Some(region) = ins.placement_owner.remove(&slot) {
                 let w = ins
                     .windows
@@ -1482,21 +1750,11 @@ impl Vmm for QemuVmm {
             }
         };
         match plan {
-            Plan::Overlay(region, gpa, len) => {
-                // Back to a device declaration: the hypervisor still serves reads out of
-                // the overlay, but nothing of ours is keeping it current any more, so a
-                // `gpa_write` must refuse by name again.
-                let (mut v, _h) = p.view();
-                v.backings.remove(&region);
-                v.regions
-                    .declare(region, RegionKind::Device, gpa, len)
-                    .map_err(|_| {
-                        VmmError::Unsupported("an overlay that leaves the 64-bit space")
-                    })?;
-                drop(v);
-                drop(_h);
-                p.audit.overlays_claimed.fetch_sub(1, Ordering::SeqCst);
-                Ok(())
+            Plan::Window(region) => {
+                let machine = QemuMachine {
+                    plane: Arc::clone(p),
+                };
+                machine.remove_window(region)
             }
             Plan::Placement(window, off, len) => {
                 assert_leaf_free("unmap_guest's restore");
@@ -1509,15 +1767,19 @@ impl Vmm for QemuVmm {
         }
     }
 
-    /// ★ Register a trapped range — and **validate it against the realize-time table**.
+    /// ★★ Register a trapped range — validated against the realize-time table **and against
+    /// the physical tiering**.
     ///
-    /// This is the Rust half of §3.3's clause (c). The C shim owns the literal region
-    /// table and the realize-time self-check that every row of it is marked; what nothing
-    /// else covers is the core registering a trap over a range the table never named,
-    /// which would be a trap that exists only in our bookkeeping. It is refused by name.
+    /// The table check is the Rust half of §3.3's clause (c). The tier check is the half
+    /// that is new here and is the whole point of `host_execution_plane.md` §1's taxonomy: a
+    /// trap registration is a claim about what the guest's access *does*, and what it does
+    /// is decided by whether a memslot covers the range and with which polarity. A
+    /// read-write trap over a passthrough span never fires; a write-only trap over one never
+    /// fires either. Both read as protection and are none.
     fn set_trap(&mut self, bar: BarId, range: Range<u64>, mode: TrapMode) -> Result<(), VmmError> {
         let p = &self.plane;
         p.about_to_syscall("set_trap");
+        p.assert_live()?;
         if range.start >= range.end {
             return Err(VmmError::Unsupported("an empty or inverted trap range"));
         }
@@ -1529,24 +1791,45 @@ impl Vmm for QemuVmm {
         if range.end > b.len {
             return Err(VmmError::Unsupported("a trap range outside its BAR"));
         }
-        let (mut ins, _h) = p.installer();
-        if !ins.traps.iter().any(|t| {
-            t.bar == bar
-                && t.mode == mode
-                && t.range.start <= range.start
-                && range.end <= t.range.end
-        }) {
-            return Err(VmmError::Unsupported(TRAP_OUTSIDE_THE_REALIZED_TABLE));
+        let (gpa, len) = (b.base + range.start, range.end - range.start);
+        {
+            let (ins, _h) = p.installer();
+            if !ins.traps.iter().any(|t| {
+                t.bar == bar
+                    && t.mode == mode
+                    && t.range.start <= range.start
+                    && range.end <= t.range.end
+            }) {
+                return Err(VmmError::Unsupported(TRAP_OUTSIDE_THE_REALIZED_TABLE));
+            }
         }
+        {
+            let (v, _h) = p.view();
+            let covering = |want: Tier| {
+                v.tiers
+                    .iter()
+                    .any(|(g, l, t)| *t == want && gpa >= *g && gpa + len <= g + l)
+            };
+            let any_slot = v
+                .tiers
+                .iter()
+                .any(|(g, l, t)| *t != Tier::Observe && gpa < g + l && *g < gpa + len);
+            match mode {
+                TrapMode::ReadWrite if any_slot => {
+                    return Err(VmmError::Unsupported(TRAP_OVER_A_LIVE_SLOT));
+                }
+                TrapMode::WriteOnly if !covering(Tier::ReadNative) => {
+                    return Err(VmmError::Unsupported(WRITE_TRAP_WITHOUT_A_READ_ONLY_SLOT));
+                }
+                _ => {}
+            }
+        }
+        let (mut ins, _h) = p.installer();
         ins.registered_traps.push((bar, range, mode));
         Ok(())
     }
 
     /// ★ The one in-lock-legal foreign call: one descriptor write (§7).
-    ///
-    /// It must never become a notify call that takes the VMM's global lock — that is a
-    /// normative requirement on [`QemuHost::signal_msix`], not something this line can
-    /// enforce, and it is stated on the trait method for that reason.
     fn raise_irq(&mut self, irq: IrqSpec) -> Result<(), VmmError> {
         match irq {
             IrqSpec::Msix(v) => {
@@ -1605,15 +1888,12 @@ impl Vmm for QemuVmm {
         self.plane.clock.lock().expect("clock").0
     }
 
-    /// ★★ Claim a realize-time read-native overlay — see findings 1, 3 and 4 in the crate
-    /// docs. This creates nothing: on this backend an overlay is a topology transaction
-    /// and therefore realize-time configuration.
+    /// ★★★ Back `gpa..gpa+len` with a reservation whose write-trap sub-range is a
+    /// **read-only memslot**: the guest's reads are served from our RAM with no exit at
+    /// all, and its writes leave the guest. That is the read-native semantic, and under
+    /// `host_execution_plane.md` §1 it is one slot flag rather than a region construction.
     ///
-    /// The four refusals are deliberately distinguishable, because they are near
-    /// neighbours and an operator must be able to tell a configuration mistake
-    /// ([`NO_SUCH_OVERLAY`], [`OVERLAY_SHAPE_MISMATCH`]) from a lifecycle bug
-    /// ([`OVERLAY_ALREADY_CLAIMED`]) from a portability difference
-    /// ([`OVERLAY_BACKING_UNPLACEABLE`]).
+    /// The window is created here, at runtime — see the crate docs' "what §1 deleted".
     fn map_read_native(
         &mut self,
         gpa: u64,
@@ -1621,51 +1901,31 @@ impl Vmm for QemuVmm {
         backing: HostRegion,
         write_trap: Option<Range<u64>>,
     ) -> Result<SlotId, VmmError> {
-        let p = &self.plane;
-        p.about_to_syscall("map_read_native");
-        // Finding 4: the overlay's RAM belongs to the hypervisor and nothing may be
-        // placed into it, so a caller-supplied backing cannot mean here what it means on
-        // a backend that MAP_FIXEDs it. `u64::MAX` is the port's established "fill it
-        // from nothing" sentinel.
-        if backing.id != u64::MAX {
-            return Err(VmmError::Unsupported(OVERLAY_BACKING_UNPLACEABLE));
-        }
-
-        let (mut ins, _h) = p.installer();
-        let Some(i) = ins.overlays.iter().position(|o| o.spec.gpa == gpa) else {
-            return Err(VmmError::Unsupported(NO_SUCH_OVERLAY));
+        let machine = QemuMachine {
+            plane: Arc::clone(&self.plane),
         };
-        if ins.overlays[i].spec.len != len || ins.overlays[i].spec.write_trap != write_trap {
-            return Err(VmmError::Unsupported(OVERLAY_SHAPE_MISMATCH));
+        let spec = WindowSpec::passthrough(gpa, len);
+        let (region, slot) = machine.install_window_inner(
+            &spec,
+            write_trap.as_ref(),
+            "map_read_native (a read-native reservation)",
+        )?;
+        // The overlay's contents come from the named backing; a read-native window whose
+        // pages were anonymous zeroes would serve reads natively and serve the wrong value,
+        // which is worse than trapping.
+        if backing.id != u64::MAX {
+            let mut this = self.clone();
+            if let Err(e) = this.map_guest(gpa, len, backing, Prot::ReadWrite) {
+                machine.remove_window(region)?;
+                return Err(e);
+            }
         }
-        if ins.overlays[i].claimed_by.is_some() {
-            return Err(VmmError::Unsupported(OVERLAY_ALREADY_CLAIMED));
-        }
-        let slot_id = SlotId(ins.next_slot_id);
-        ins.next_slot_id += 1;
-        ins.overlays[i].claimed_by = Some(slot_id);
-        ins.overlay_slot.insert(slot_id, i);
-        let (region, mr) = (ins.overlays[i].region, ins.overlays[i].mr);
-        drop(ins);
-        drop(_h);
-
-        // Finding 3: RAM, backed by the hypervisor's own allocation, so the core can keep
-        // it current through the same `gpa_write` it uses everywhere else.
-        let (mut v, _h) = p.view();
-        v.regions
-            .declare(region, RegionKind::Ram, gpa, len)
-            .map_err(|_| VmmError::Unsupported("an overlay that leaves the 64-bit space"))?;
-        v.backings
-            .insert(region, Backing::HostOwned { mr, region_off: 0 });
-        drop(v);
-        drop(_h);
-        p.audit.overlays_claimed.fetch_add(1, Ordering::SeqCst);
-        Ok(slot_id)
+        Ok(slot)
     }
 }
 
-/// Duplicate a borrowed descriptor into an owned one, so the borrow — and the lock it
-/// came from — can be released **before** the syscall that uses it runs.
+/// Duplicate a borrowed descriptor into an owned one, so the borrow — and the lock it came
+/// from — can be released **before** the syscall that uses it runs.
 fn dup_owned(fd: std::os::fd::BorrowedFd<'_>) -> Result<std::os::fd::OwnedFd, RawError> {
     fd.try_clone_to_owned().map_err(|e| RawError::Syscall {
         call: "dup",
