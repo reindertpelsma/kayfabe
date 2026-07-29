@@ -179,7 +179,14 @@ jobs:
                     crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc \
                     crates/kayfabe-arch crates/kayfabe-abi \
                     crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
-                    crates/kayfabe-vmm crates/kayfabe-rt"
+                    crates/kayfabe-vmm crates/kayfabe-rt crates/kayfabe-shell"
+          # ★ `crates/kayfabe-shell` ADDED 2026-07-29 (task #100). This step is named
+          # *"…in the core or the shell"* and did not cover the crate literally called
+          # `kayfabe-shell` — the L1 OS shell, which owns the reactor and the executor
+          # thread, i.e. exactly the code a QEMU-ism would reach for. `kayfabe-rt` (the
+          # L1 *threaded* shell) was in the list and `kayfabe-shell` was not; that reads
+          # as an omission when the second crate was split out, not as a decision. It is
+          # clean today, so this widens the gate's reach without moving anything.
           if grep -rniE '\bBQL\b|bql_lock|qemu_mutex_lock_iothread|BQL_LOCK_GUARD|MemoryRegion|memory_region_|qemu_bh|QEMUBH|aio_bh|qdev_|VMStateDescription|\bbottom.?half|\bmain.?loop|iothread' $portable; then
             echo ""
             echo "★ HYPERVISOR-VOCABULARY BREACH — l1_os_shell.md §6.0."
@@ -319,6 +326,62 @@ jobs:
       #    `unsafe_code`, or put it in a `*_unsafe.rs` file. No allowlist, no
       #    per-file judgement, nothing to argue about in review.
       #
+      # ★ AXIS A, and until 2026-07-29 (task #100) NOTHING ENFORCED IT.
+      #
+      # CLAUDE.md rule 1 says, verbatim: *"Quarantine: `#[repr(C)]` NVIDIA layouts live
+      # ONLY in `kayfabe-abi` (Axis A)"*, and ARCHITECTURE.md's port table repeats it.
+      # There was a gate for the generation name (Axis B), a gate for the hypervisor
+      # vocabulary (Axis D) and a gate for the unsafe surface — and none for the rule
+      # the driver-version axis actually turns on. It held at HEAD, but it held by
+      # discipline: on 2026-07-29 `kayfabe-isolate-host` was written against a REAL
+      # driver, and a struct transcribed inline there rather than into `kayfabe-abi`
+      # would have made a 610 driver a retrofit with nothing saying so.
+      #
+      # TWO crates may carry `#[repr(C)]`, and they are quarantines of two DIFFERENT
+      # foreign ABIs — which is why this is a two-entry list and not one:
+      #   kayfabe-abi       — NVIDIA's wire layouts (Axis A). Version-dispatched.
+      #   kayfabe-linux-raw — the KERNEL's uapi structs (Axis C). Already the sole
+      #                       `unsafe` crate; a uapi mirror is exactly the surface its
+      #                       audit is for, and it is the crate a kernel change edits.
+      # A third entry is a design decision about where a foreign ABI is allowed to
+      # live, not a CI edit — same rule as AUDITED in the unsafe-containment gate.
+      #
+      # `find` over the whole repo, not a crate list: a new crate is covered the day it
+      # is added (the failure mode the enumerated gates below this one still have).
+      # Comment lines are out of scope, by the same rule and the same expression the
+      # generation-name gate uses — a doc citing `#[repr(C)]` in prose is how these
+      # invariants get explained, and four such lines exist today.
+      - name: ABI-quarantine gate (Axis A — `#[repr(C)]` lives only in the two ABI crates)
+        run: |
+          offenders=$(find . -name '*.rs' \
+                        -not -path './crates/kayfabe-abi/*' \
+                        -not -path './crates/kayfabe-linux-raw/*' \
+                        -not -path './target/*' -not -path './*/target/*' \
+                        -not -path './mutants.out/*' \
+                        -exec grep -Hn '#\[repr(C' {} + 2>/dev/null \
+                      | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|/\*|\*)' || true)
+          if [ -n "$offenders" ]; then
+            echo "$offenders"
+            echo ""
+            echo "★ ABI-QUARANTINE BREACH — CLAUDE.md rule 1, Axis A."
+            echo "The lines above declare a C-layout struct outside the two crates that"
+            echo "are allowed to mirror a foreign ABI. That is one driver version's (or"
+            echo "one kernel's) memory layout, frozen into a crate that has no version"
+            echo "dispatch — which is precisely how 'support the next driver' turns from"
+            echo "a table entry into a retrofit. What to do:"
+            echo "  - an NVIDIA wire struct -> kayfabe-abi, and give it a"
+            echo "    kayfabe_abi::versions::DriverAbiTable arm if its shape has ever"
+            echo "    differed across versions. Encode/decode over a byte slice; the"
+            echo "    crate's own convention is that callers never see the layout."
+            echo "  - a KERNEL uapi struct  -> kayfabe-linux-raw, in a *_unsafe.rs file,"
+            echo "    where the unsafe audit already covers it."
+            echo "  - neither               -> you do not need repr(C). Rust's default"
+            echo "    layout is correct for anything that is not crossing an ABI."
+            echo "Do not add a third exempt crate to make a struct fit: which crates may"
+            echo "mirror a foreign ABI is the Axis-A seam itself."
+            exit 1
+          fi
+
       # `find` walks the whole repo minus build output, rather than a list of known
       # directories: a gate that enumerates today's crates stops covering the code
       # the moment someone adds one.
@@ -784,11 +847,25 @@ jobs:
             c="${entry%%:*}"; want="${entry##*:}"
             # `find ... -exec ... +` rather than a glob: a crate with NO *_unsafe.rs files
             # must count 0, and an unmatched glob would make grep fail the step instead.
-            actual=$(find "crates/$c/src" -maxdepth 1 -name '*_unsafe.rs' \
+            #
+            # ★★ RECURSIVE, and it was NOT until 2026-07-29 (task #100, the five-axis
+            # seam audit). This loop carried `-maxdepth 1`, and gate B's prune above is
+            # `-not -path "./crates/<c>/src/*"` — whose `*` matches slashes. Between them,
+            # a `*_unsafe.rs` file ONE DIRECTORY DEEPER was invisible to BOTH: gate C
+            # (the naming gate) exempts it because it IS named `*_unsafe.rs`, gate B
+            # prunes it because it is under an audited `src/`, and the ratchet never
+            # looked. MEASURED, not reasoned about: two live relaxations (`unsafe fn` +
+            # an `unsafe {}` block) were compiled into `kayfabe-linux-raw` via
+            # `src/sub/hidden_unsafe.rs` + `pub mod sub;` and the ratchet still printed
+            # `50 (bar: 50)`. The one number this project reviews the unsafe surface by
+            # could be moved by any amount without a single gate firing, by putting the
+            # file in a subdirectory. There is no `-maxdepth` here now, deliberately:
+            # the audit surface is "every `*_unsafe.rs` under the crate", at any depth.
+            actual=$(find "crates/$c/src" -name '*_unsafe.rs' \
                        -exec grep -hoE 'unsafe (\{|fn |impl |trait )' {} + 2>/dev/null \
                      | wc -l | tr -d ' ')
             echo "$c: $actual relaxation(s) (bar: $want)"
-            find "crates/$c/src" -maxdepth 1 -name '*_unsafe.rs' \
+            find "crates/$c/src" -name '*_unsafe.rs' \
               -exec grep -coE 'unsafe (\{|fn |impl |trait )' {} + 2>/dev/null || true
             [ "$actual" -ne "$want" ] && fail=1
           done

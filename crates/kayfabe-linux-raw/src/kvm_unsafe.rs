@@ -659,6 +659,39 @@ mod tests {
     /// The whole record is compared, not just `flags`, because "read-only" arriving on the
     /// right *slot* and the right *range* is the property — a flag word that is right about
     /// a region the kernel is wrong about protects nothing.
+    /// ★★ The `32` inside [`KVM_SET_USER_MEMORY_REGION`] is the size of
+    /// [`UserspaceMemoryRegion`] — and until 2026-07-29 nothing checked it.
+    ///
+    /// The `// SAFETY:` block on the memslot ioctl asserts this equality **in prose**
+    /// (*"the request encodes that struct's size (32) in its own bits"*) and nothing
+    /// re-derived it. `vcpu_unsafe.rs`'s
+    /// `the_uapi_struct_sizes_are_the_ones_the_ioctl_encodings_declare` does exactly this
+    /// for its four structs; the memslot record — the single most-used uapi struct in the
+    /// workspace, and the one the whole QEMU memory plane (`kayfabe-vmm-qemu::slots`) was
+    /// built on this week — was the one without the guard.
+    ///
+    /// Why it matters even though the kernel ABI is frozen: the failure is **silent in the
+    /// safe direction**. Widen or reorder a field here and the ioctl number still says 32,
+    /// so the kernel reads 32 bytes of a larger record and ignores the rest — an install
+    /// that lands on the wrong `guest_phys_addr` with no error from anyone. Found by the
+    /// five-axis seam audit (task #100), Axis C.
+    #[test]
+    fn the_memslot_uapi_size_is_the_one_the_ioctl_encoding_declares() {
+        assert_eq!(
+            core::mem::size_of::<UserspaceMemoryRegion>(),
+            32,
+            "struct kvm_userspace_memory_region — include/uapi/linux/kvm.h"
+        );
+        // And the encoding really does carry it. `0x3FFF` is the 14-bit `_IOC_SIZEBITS`
+        // field at bit 16 of the asm-generic ioctl word, spelled out rather than imported
+        // so this asserts the layout and not that a name equals itself.
+        assert_eq!(
+            (KVM_SET_USER_MEMORY_REGION >> 16) & 0x3FFF,
+            32,
+            "KVM_SET_USER_MEMORY_REGION's _IOC_SIZE field"
+        );
+    }
+
     #[test]
     fn a_read_only_install_carries_the_kernels_read_only_bit_and_a_writable_one_carries_none() {
         /// `KVM_MEM_READONLY` as the uapi header defines it, retyped rather than imported.

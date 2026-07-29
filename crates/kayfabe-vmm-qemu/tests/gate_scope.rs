@@ -139,6 +139,137 @@ fn the_vocabulary_gates_exclude_the_adapter_crates_and_the_exemption_is_not_vacu
     );
 }
 
+/// Which crates each vocabulary gate deliberately does **not** scope, and why.
+///
+/// ★★ This table encodes the tree as it is at 2026-07-29. It changes NOTHING about the
+/// gates; its whole job is to make the next crate's classification a decision somebody
+/// has to write down, instead of a silence.
+///
+/// One line per (gate, crate) exemption. If a reason reads wrong to you, that is the
+/// point — it is now in one place and arguable, which it was not when it was the
+/// difference between two hand-written lists 250 lines apart in a YAML file.
+type Exemption = (&'static str, &'static str);
+const GATE_EXEMPTIONS: &[Exemption] = &[
+    // ── Hexagonal boundary gate (`pure`): may this crate name an OS readiness primitive?
+    ("Hexagonal boundary gate", "kayfabe-rt"), // adapter; its own manifest says "deliberately outside the hexagonal-boundary grep"
+    ("Hexagonal boundary gate", "kayfabe-shell"), // IS the L1 OS shell — naming epoll is its job
+    ("Hexagonal boundary gate", "kayfabe-linux-raw"), // the one audited raw-OS crate
+    ("Hexagonal boundary gate", "kayfabe-isolate-host"), // host adapter: spawns a child, opens /dev/nvidia*
+    ("Hexagonal boundary gate", "kayfabe-vmm-kvm"),      // real KVM adapter
+    ("Hexagonal boundary gate", "kayfabe-vmm-qemu"),     // ADAPTER_CRATES
+    ("Hexagonal boundary gate", "kayfabe-qemu-raw"),     // ADAPTER_CRATES
+    ("Hexagonal boundary gate", "kayfabe-crec"), // Axis-B arch adapter + trace replay; test-facing
+    ("Hexagonal boundary gate", "kayfabe-mocks"), // test-only doubles
+    // ── VMM-vocabulary gate (`portable`): may this crate name one hypervisor's API?
+    ("VMM-vocabulary gate", "kayfabe-linux-raw"),
+    ("VMM-vocabulary gate", "kayfabe-isolate-host"),
+    ("VMM-vocabulary gate", "kayfabe-vmm-kvm"), // ★ ARGUABLE: a non-QEMU adapter; a QEMU-ism here would be a real defect and nothing catches it
+    ("VMM-vocabulary gate", "kayfabe-vmm-qemu"), // ADAPTER_CRATES — must say MemoryRegion
+    ("VMM-vocabulary gate", "kayfabe-qemu-raw"), // ADAPTER_CRATES
+    ("VMM-vocabulary gate", "kayfabe-crec"),
+    ("VMM-vocabulary gate", "kayfabe-mocks"), // ★ ARGUABLE: holds MockVmm, the port's reference impl
+    // ── Generation-name gate (`pure`): may this crate name a concrete chip/driver version?
+    ("Generation-name gate", "kayfabe-abi"), // Axis-A's OWN quarantine — the gate's prose says so
+    ("Generation-name gate", "kayfabe-crec"), // Axis-B's arch adapter: ga10x.rs is where GA106 BELONGS
+    ("Generation-name gate", "kayfabe-mocks"), // MockArch classifies AMPERE_* class ids (mocks/src/lib.rs:298-306)
+    ("Generation-name gate", "kayfabe-rt"), // ★ ARGUABLE: clean today, and should never name a chip
+    ("Generation-name gate", "kayfabe-shell"), // ★ ARGUABLE: same
+    ("Generation-name gate", "kayfabe-linux-raw"),
+    ("Generation-name gate", "kayfabe-isolate-host"), // ★ ARGUABLE: clean today
+    ("Generation-name gate", "kayfabe-vmm-kvm"),
+    ("Generation-name gate", "kayfabe-vmm-qemu"),
+    ("Generation-name gate", "kayfabe-qemu-raw"),
+];
+
+/// ★★★ Every crate in the tree is either **scoped by** a vocabulary gate or **named in
+/// the exemption table above**. A new crate is covered on the day it is added.
+///
+/// ## The hole this closes, measured rather than reasoned about
+///
+/// The three vocabulary gates scope a **hand-written list of crate paths**. Nothing
+/// re-derived those lists against the tree, and the sibling test above only asserts (a)
+/// that the adapter crates are *absent* and (b) that `crates/kayfabe-core` is *present*
+/// as a non-vacuity anchor. Measured on 2026-07-29 (task #100, the five-axis seam audit):
+/// deleting `crates/kayfabe-rt` from the VMM-vocabulary gate's `portable=` list made the
+/// gate stop covering a crate **and every test in the workspace still passed**. The same
+/// silence covers the other direction, which is the one that actually happens: two crates
+/// added on 2026-07-29 — `kayfabe-crec` (the first concrete GPU generation in the tree)
+/// and `kayfabe-isolate-host` (the first real driver ioctls) — entered a workspace whose
+/// seam gates could not see them, and nothing said so.
+///
+/// That is the failure mode the Unsafe-surface gate's own comment already names:
+/// *"a gate that enumerates today's crates stops covering the code the moment someone
+/// adds one"* (`ci.yml`). That gate walks the whole repo and so does not have it. These
+/// three cannot — a per-crate scope is the whole point of them — so the enumeration is
+/// checked against the filesystem here instead.
+///
+/// ## What this test does NOT do
+///
+/// It does not decide anything. Every exemption above is the status quo, transcribed. The
+/// ones marked ★ ARGUABLE are flagged for the owner and left exactly as they were.
+#[test]
+fn every_crate_is_either_gated_or_explicitly_exempted() {
+    let yml = ci_yml();
+    let root = repo_root();
+
+    let mut crates: Vec<String> = std::fs::read_dir(root.join("crates"))
+        .expect("crates/ exists")
+        .filter_map(|e| {
+            let e = e.expect("readable dir entry");
+            let name = e.file_name().to_string_lossy().into_owned();
+            e.path().join("Cargo.toml").is_file().then_some(name)
+        })
+        .collect();
+    crates.sort();
+    assert!(
+        crates.len() >= 20,
+        "★ NON-VACUITY: only {} crates discovered — the scan is broken, and every \
+         assertion below would be about an empty set ({crates:?})",
+        crates.len()
+    );
+
+    let mut unclassified = Vec::new();
+    for (step, var) in [
+        ("Hexagonal boundary gate", "pure"),
+        ("VMM-vocabulary gate", "portable"),
+        ("Generation-name gate", "pure"),
+    ] {
+        let list = gate_list(&step_body(&yml, step), var);
+        for c in &crates {
+            // Substring is not enough: `crates/kayfabe-vmm` is a prefix of
+            // `crates/kayfabe-vmm-kvm`, so a naive `contains` would report the KVM
+            // adapter as gated by the VMM gate. Match the whitespace-delimited token.
+            let gated = list
+                .split_whitespace()
+                .any(|tok| tok == format!("crates/{c}"));
+            let exempt = GATE_EXEMPTIONS.iter().any(|(s, x)| *s == step && x == c);
+            match (gated, exempt) {
+                (true, true) => unclassified.push(format!(
+                    "  {step}: {c} is BOTH scoped and exempted — the table contradicts the gate"
+                )),
+                (false, false) => {
+                    unclassified.push(format!("  {step}: {c} is neither scoped nor exempted"))
+                }
+                _ => {}
+            }
+        }
+    }
+
+    assert!(
+        unclassified.is_empty(),
+        "★ A CRATE IS INVISIBLE TO A SEAM GATE.\n{}\n\n\
+         Every crate must be one of two things for each vocabulary gate, and saying which \
+         is a design decision, not a list edit:\n\
+         - SCOPED   -> add `crates/<name>` to that gate's list in .github/workflows/ci.yml\n\
+         - EXEMPT   -> add a row to GATE_EXEMPTIONS in this file, WITH the reason on the \
+         line. \"It is an adapter\" is a reason; silence is not.\n\
+         This test exists because on 2026-07-29 the answer for two brand-new crates was \
+         neither, and the seam gates that are supposed to protect Axes A/B/D could not \
+         see the first real GPU generation or the first real driver ioctls in the tree.",
+        unclassified.join("\n")
+    );
+}
+
 /// ★★ The containment step's `AUDITED` list, re-derived against the tree.
 ///
 /// Three properties, and the third is the one Q0 actually changed:
