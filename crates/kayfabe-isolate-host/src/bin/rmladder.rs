@@ -25,8 +25,148 @@ use kayfabe_isolate_host::rm::{HostRmBackend, RmConnection};
 use kayfabe_linux_raw::DevDir;
 use std::sync::Arc;
 
+/// ★★★ R12 — **the concurrency measurement, against the real driver.**
+///
+/// `host_execution_plane.md` §2.0 left one question open and said only a real host could
+/// answer it: does an isolate's worker pool buy **wire concurrency**, or only latency
+/// isolation? Twelve tests in the suite assert the former.
+///
+/// A real RM verb cannot be parked on demand, so this measures **overlap** rather than
+/// waiting on an edge: every verb records the interval it occupied, and we count how many
+/// pairs of intervals from *different threads* intersect. Overlap is a positive fact —
+/// counting zero of it across thousands of verbs is a much stronger statement than a
+/// wall-clock ratio, and it cannot be explained away by a slow machine.
+///
+/// Two configurations, same total work:
+///   - **one isolate, N workers** — N threads on ONE RM client;
+///   - **N isolates, one worker each** — N threads on N RM clients.
+fn concurrency(program: &std::path::Path, gpu: u32, threads: usize, verbs: usize) -> bool {
+    use std::sync::Mutex;
+    use std::time::Instant;
+
+    /// Run `verbs` alloc/free pairs on each of `workers`, in parallel, and report how many
+    /// pairs of intervals from different threads overlapped.
+    fn measure(mut workers: Vec<kayfabe_isolate::Worker>, verbs: usize) -> (usize, u128) {
+        let origin = Instant::now();
+        let spans: Arc<Mutex<Vec<(usize, u128, u128)>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut handles = Vec::new();
+        for (t, mut w) in workers.drain(..).enumerate() {
+            let spans = Arc::clone(&spans);
+            handles.push(std::thread::spawn(move || {
+                for _ in 0..verbs {
+                    let start = origin.elapsed().as_nanos();
+                    let h = w.with_rm(|rm| rm.alloc_vaspace());
+                    let end = origin.elapsed().as_nanos();
+                    spans.lock().expect("spans").push((t, start, end));
+                    if let Ok(h) = h {
+                        let _ = w.with_rm(|rm| rm.free(h));
+                    }
+                }
+                w
+            }));
+        }
+        let done: Vec<_> = handles
+            .into_iter()
+            .map(|h| h.join().expect("join"))
+            .collect();
+        drop(done);
+        let spans = spans.lock().expect("spans").clone();
+        let total = origin.elapsed().as_millis();
+        let mut overlaps = 0;
+        for (i, a) in spans.iter().enumerate() {
+            for b in &spans[i + 1..] {
+                if a.0 != b.0 && a.1 < b.2 && b.1 < a.2 {
+                    overlaps += 1;
+                }
+            }
+        }
+        (overlaps, total)
+    }
+
+    let id = |p: u32| IsolateId::new(p, GpuId(gpu));
+
+    // ★ (0) THE BASELINE, and without it the other two numbers cannot be read at all: one
+    // worker doing ALL the work, sequentially. If (a) and (b) both match this, then no
+    // amount of parallelism buys throughput and the bottleneck is device-global — which is
+    // a completely different finding from "the pool does not help".
+    let mut base_f =
+        kayfabe_isolate_host::HostIsolateFactory::new(program, kayfabe_isolate_host::RmMode::Real)
+            .with_pool_size(1);
+    let mut base = kayfabe_isolate::IsolateFactory::spawn(&mut base_f, id(899));
+    if base.is_retired() {
+        println!("FAIL  R12 baseline         = it did not start");
+        return false;
+    }
+    let Some(w) = base.checkout() else {
+        println!("FAIL  R12 baseline         = no worker");
+        return false;
+    };
+    let (_, t_base) = measure(vec![w], threads * verbs);
+
+    // (a) ONE isolate, `threads` workers — one RM client.
+    let mut f =
+        kayfabe_isolate_host::HostIsolateFactory::new(program, kayfabe_isolate_host::RmMode::Real)
+            .with_pool_size(threads);
+    let mut one = kayfabe_isolate::IsolateFactory::spawn(&mut f, id(900));
+    if one.is_retired() {
+        println!("FAIL  R12 one-isolate      = it did not start");
+        return false;
+    }
+    let ws: Vec<_> = (0..threads).filter_map(|_| one.checkout()).collect();
+    if ws.len() != threads {
+        println!("FAIL  R12 one-isolate      = only {} workers", ws.len());
+        return false;
+    }
+    let (same_client, t_same) = measure(ws, verbs);
+
+    // (b) `threads` isolates, one worker each — `threads` RM clients.
+    let mut g =
+        kayfabe_isolate_host::HostIsolateFactory::new(program, kayfabe_isolate_host::RmMode::Real)
+            .with_pool_size(1);
+    let mut many: Vec<_> = (0..threads)
+        .map(|i| kayfabe_isolate::IsolateFactory::spawn(&mut g, id(910 + i as u32)))
+        .collect();
+    if many.iter().any(|i| i.is_retired()) {
+        println!("FAIL  R12 many-isolates    = one did not start");
+        return false;
+    }
+    let ws: Vec<_> = many.iter_mut().filter_map(|i| i.checkout()).collect();
+    if ws.len() != threads {
+        println!("FAIL  R12 many-isolates    = only {} workers", ws.len());
+        return false;
+    }
+    let (many_clients, t_many) = measure(ws, verbs);
+
+    let n = threads * verbs;
+    println!("info  R12 {threads} threads x {verbs} verbs, alloc_vaspace + free");
+    println!(
+        "ok    R12 1 thread (base)  = {} verbs sequential, {t_base} ms",
+        threads * verbs
+    );
+    println!("ok    R12 one client       = {same_client} overlapping pairs, {t_same} ms");
+    println!("ok    R12 {threads} clients      = {many_clients} overlapping pairs, {t_many} ms");
+    // ★ Speedup against the sequential baseline is the only reading that means anything.
+    // "Overlapping intervals" counts the whole request/reply span — transport included —
+    // so it can be non-zero while every ioctl is strictly serialised. Suspect the
+    // instrument: the timing is the evidence, the overlap count is a hint.
+    let sp = |t: u128| {
+        if t == 0 {
+            0.0
+        } else {
+            t_base as f64 / t as f64
+        }
+    };
+    println!(
+        "★     R12 SPEEDUP         = one client x{threads} workers: {:.2}x   |   {threads} clients: {:.2}x   (ideal {threads}.00x, {n} verbs)",
+        sp(t_same),
+        sp(t_many)
+    );
+    true
+}
+
 fn main() -> std::process::ExitCode {
     let mut gpu = 0u32;
+    let mut want_concurrency = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -43,6 +183,7 @@ fn main() -> std::process::ExitCode {
                     }
                 }
             }
+            "--concurrency" => want_concurrency = true,
             other => {
                 eprintln!("unknown flag {other}");
                 return std::process::ExitCode::from(64);
@@ -170,6 +311,17 @@ fn main() -> std::process::ExitCode {
                 Err(e) => println!("FAIL  R11 through-isolate = {:?}", e.err),
             }
             isolate.checkin(w);
+        }
+    }
+
+    if want_concurrency {
+        match kayfabe_isolate_host::HostIsolateFactory::locate_program() {
+            Err(why) => println!("skip  R12 concurrency     = {why}"),
+            Ok(program) => {
+                if !concurrency(&program, gpu, 4, 200) {
+                    return std::process::ExitCode::from(1);
+                }
+            }
         }
     }
 

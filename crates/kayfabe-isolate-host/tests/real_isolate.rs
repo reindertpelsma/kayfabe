@@ -5,19 +5,37 @@
 //! suite has been driving against `kayfabe_mocks` since L1-M1. Nothing here reaches past the
 //! port to poke the implementation.
 //!
-//! ## The requirement these exist to settle
+//! ## The requirement these exist to settle, and ★★ WHAT THEY DO AND DO NOT PROVE
 //!
 //! > *"multiple ioctls must execute IN PARALLEL WITHOUT HANGING"*
 //!
-//! and the finding that constrains it: RM serialises **all** ioctls per client and waits
-//! uninterruptibly, so parallelism has to come from **multiple clients** — i.e. from
-//! per-`(Proc, GpuId)` isolates — and not from multiple workers on one client
-//! (`rm_concurrency_semantics`; `host_execution_plane.md` §2.0).
+//! The two concurrency tests below run against the **loopback fixture**, whose client lock
+//! models RM's per-client serialisation in its *strongest* form: a sibling cannot even
+//! enter. They therefore prove **the design survives that constraint** — no deadlock, no
+//! lost work, a queued sibling completes when the holder is released.
 //!
-//! `parallelism_comes_from_isolates…` and
-//! `the_pool_does_not_buy_wire_concurrency_on_one_client` are the two halves of that, and
-//! they are deliberately written as a matched pair: one asserts progress, the other asserts
-//! its absence, over the *same* fixture. Either alone could pass for the wrong reason.
+//! They do **not** prove the constraint has that shape on real hardware, and it does not.
+//! Measured on RTX 3060 / open 580.159.04 (`kayfabe-rm-ladder --concurrency`, R12), 800
+//! `alloc_vaspace` + `free` pairs:
+//!
+//! | configuration | wall time | speedup |
+//! |---|---|---|
+//! | 1 worker, sequential | 1610 ms | 1.00x (baseline) |
+//! | 1 isolate, 4 workers (ONE RM client) | 1602 ms | **1.00x** |
+//! | 4 isolates, 1 worker each (FOUR RM clients, four processes) | 1610 ms | **1.00x** |
+//!
+//! ★★★ **Neither the pool nor separate clients buys any alloc/free throughput.** The
+//! bottleneck is **device-global**, not per-client: RM takes the global API lock in WRITE
+//! for every alloc/free and holds it across the GSP RPC — which
+//! `kayfabe_isolate::DEFAULT_POOL_WORKERS`' own docs already cite
+//! (`ogkm-610:`/`ogkm-580: .../rmapi/rmapi.c:53-58`, `:535`;
+//! `ogkm-610: .../rmapi/alloc_free.c:1714-1718`, `ogkm-580: :1692-1696`).
+//!
+//! So the guidance that parallelism "must come from multiple clients" is false for this
+//! verb class, and so is the belief that the pool provides it. Both were reasonable; the
+//! hardware says the answer is neither. The measurement is deliberately kept as a *program*
+//! (`--concurrency`) rather than a test, because it needs a GPU and a wall clock, and a
+//! timing assertion in CI is a flake with a justification.
 //!
 //! ## No sleeps
 //!
@@ -324,8 +342,16 @@ fn parallelism_comes_from_isolates_and_a_parked_client_does_not_stall_its_peers(
     ta.join().expect("join");
 }
 
-/// ★★★ The other half, and the one that settles `host_execution_plane.md` §2.0's open
-/// question: **N pool workers of ONE isolate do not get N verbs in flight.**
+/// ★★★ The other half: **under the strongest form of per-client serialisation, N pool
+/// workers of ONE isolate do not get N verbs in flight — and nothing deadlocks.**
+///
+/// ★ Read the module docs before reading this as a statement about RM. The fixture's lock
+/// blocks a sibling from *entering*; real RM accepts the sibling's ioctl and queues it
+/// inside the kernel, so from our side both verbs really are in flight. What the hardware
+/// measurement adds is that neither arrangement completes any *faster* (R12), because the
+/// binding constraint on alloc/free is the device-global API lock rather than the
+/// per-client one. This test's value is that the design is correct under the stricter
+/// model too: the sibling is queued, not lost, and releasing the holder releases it.
 ///
 /// Worker 0 parks. Worker 1 of the *same* isolate then issues a completely different verb —
 /// `alloc_vaspace`, which does not park — and makes **no progress**, because RM's

@@ -191,6 +191,58 @@ Two things this changed, and neither was a weakening:
 foreign-handle gate by design. It is bring-up-only and the ledger still catches it, but it
 is now the *only* place a cross-namespace reach can execute.
 
+### 2.2 ★★★ ANSWERED ON HARDWARE, 2026-07-29 — and the answer is neither hypothesis
+
+§2.0 left one question open and said only a real host could settle it: does the worker
+pool buy **wire concurrency**, or only latency isolation? The working assumption when the
+real isolate was built was the second, with the corollary that *parallelism must therefore
+come from multiple clients* — i.e. from per-`(Proc, GpuId)` isolates.
+
+**Both halves are false for the alloc/free verb class.** Measured with
+`kayfabe-rm-ladder --concurrency` on RTX 3060 / NVIDIA open 580.159.04, 800
+`alloc_vaspace` + `free` pairs, three configurations of the same total work:
+
+| configuration | wall time | speedup |
+|---|---|---|
+| 1 worker, sequential | 1610 ms | 1.00x (baseline) |
+| 1 isolate, 4 workers — **one** RM client | 1602 ms | **1.00x** |
+| 4 isolates, 1 worker each — **four** RM clients, four processes | 1610 ms | **1.00x** |
+
+Ideal would be 4.00x. Neither arrangement moves the number at all: ~2 ms per alloc+free
+pair regardless of how many workers, clients or processes are issuing. The bottleneck is
+**device-global**, not per-client — RM takes the global API lock in WRITE for every
+alloc/free and holds it across the GSP RPC, which `DEFAULT_POOL_WORKERS`' own docs already
+cite (`ogkm-610:`/`ogkm-580: .../rmapi/rmapi.c:53-58`, `:535`;
+`ogkm-610: .../rmapi/alloc_free.c:1714-1718`, `ogkm-580: :1692-1696`). The per-client
+write lock is real, and for this verb class it is *not the binding constraint*.
+
+**What this does and does not say.** It is a measurement of alloc/free, which is precisely
+the class that takes the API lock in WRITE. Verbs that take it in READ are not measured and
+may well parallelise; nothing here licenses "RM never parallelises anything". A second
+instrument caveat, recorded because it nearly produced the wrong headline: the first
+version of this experiment counted *overlapping request intervals* and found ~460 of them
+in the one-client case, which reads as "the pool DOES buy concurrency". It does not — an
+interval spans the socket round trip as well as the ioctl, so intervals overlap while the
+ioctls inside them serialise. **The sequential baseline is what made the numbers
+readable**, and it was not in the first version.
+
+#### ★ What it means for §2.0's twelve tests
+
+They are **not refuted by hardware**, and the reason is that the double is wrong in the
+*other* direction now. `ClientLock` models RM's serialisation as a lock that stops a
+sibling **entering**; real RM accepts the sibling's ioctl and queues it in the kernel. From
+our side both verbs are genuinely in flight, so the twelve liveness claims — *"sibling
+threads of one `Proc` complete"* — hold against a real host. What does not hold is the
+*throughput* those tests imply, and no test asserts throughput.
+
+So: the double was too polite before `15651b1` and is too strict after it, and the true
+constraint is at a different granularity than either. The flag stays opt-in, the twelve
+tests stay unmodified, and the honest summary is that **the pool and the client split are
+both blast-radius mechanisms, not performance ones** — which is what `DEFAULT_POOL_WORKERS`
+says and what the isolate-per-`(Proc, GpuId)` split was designed for (#14).
+
+---
+
 ## 3. ★★ DECISION — build the real isolate next, and force the question
 
 No gate substitutes for building it. Shape is the C's Mode-1 architecture, which is
