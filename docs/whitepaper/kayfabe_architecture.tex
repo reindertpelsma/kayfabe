@@ -16,20 +16,40 @@
 \textbf{Subject.} Two repositories on one machine. \file{/workspace/nvidia-gpu-passthrough} —
 the C research artifact, 739 commits, 44\,031 lines of C, developed 2026-05-24 to 2026-07-24; it
 works on real hardware. \file{/workspace/nvkvm-rs} — \textbf{kayfabe}, a clean-slate Rust rewrite,
-125 commits, 45\,421 lines of implementation and 52\,931 lines of test code, developed
-2026-07-24 to 2026-07-28; it has never touched a GPU. This document is pinned to Rust HEAD
-\code{b612a91} and C HEAD \code{2899a74}.
+142 commits, 57\,187 lines of implementation and 53\,767 lines of test code, developed
+2026-07-24 to 2026-07-29; \textbf{it has still never touched a GPU}. This document is pinned to
+Rust HEAD \code{15651b1} and C HEAD \code{4f52877}.
 
 \smallskip
-\textbf{What moved since the previous pin (\code{6ce8599}), and why this is a rewrite of the
-status narrative rather than a version bump.} Twelve commits landed in between, and they falsify
-this paper's previous headline. That revision said \code{kayfabe-gsp} was a working island — "no
-production crate depends on it, \code{RpcCommand} has zero references outside its own crate,
-therefore \emph{the critical path is the bridge, not the crate}". \textbf{The bridge now exists}:
-a new crate, \code{kayfabe-rmrpc}, built in four stages (\code{76a0077}, \code{2dac655},
-\code{712e370}, \code{3a1704f}) against a design document written first
-(\file{docs/design/gsp\_core\_bridge.md}, \code{bdd7625}). A decoded GSP RPC now becomes an
-\code{RmEvent} and reaches \code{Gpu::apply} inside \emph{production} crates.
+\textbf{What moved since the previous pin (\code{b612a91}): the double stopped being polite, and
+that cost twelve tests.} The isolate's defining hazard was, until now, \emph{unmockable}: RM
+serialises all ioctls per client and waits uninterruptibly, so one wedged verb puts every isolate
+sharing that client into D-state — while a mock returns promptly by construction. \code{15651b1}
+models that as \emph{semantics} rather than sleeps (a per-client lock held for the whole verb, an
+uninterruptible hold, a positive progress edge). \textbf{Forced on unconditionally it makes twelve
+tests stop terminating and zero assertions fail.} Every one is a liveness claim of the shape
+\emph{"$N$ pool workers of one isolate have $N$ verbs in flight at once"} — but \file{l1\_os\_shell.md}
+§6.6 states \textsc{i-noamp} as a \emph{cross-process} obligation, and \code{DEFAULT\_POOL\_WORKERS}'
+own documentation already says the pool buys latency isolation, not wire concurrency. \textbf{The
+suite's intra-process claim was stronger than the design's, and it passed only because the double
+returned promptly.} Nothing was narrowed: the modelling is opt-in, the measurement is recorded, and
+the renegotiation is an owner decision. Parallelism must come from \emph{multiple clients}, not
+multiple workers on one client.
+
+\smallskip
+\textbf{Second: the C artifact was promoted from history to a standing oracle — and found to be
+perishable.} Two virtualizers facing the same guest driver see identical MMIO iff they behave
+identically, so a divergence at guest access $N$ localises the fault to our reply at $N-1$: one
+message, not one layer. Most of the mechanism already existed. What did not exist was a
+\emph{running C}: recording needs a built QEMU, a pinned 6.8.0-117 guest and host driver
+580.159.04, and that deployment had died with its rented box. It was rebuilt from scratch on a
+fresh GA106 host during this revision, which surfaced a silent build defect
+(\S\ref{sec:bridge}): \file{build\_qemu.sh} never built or embedded the isolate stub, so QEMU
+compiled cleanly and came up with \emph{forwarding off}, reporting only \code{open ctl/gpu FAILED
+r1=-2 r2=-2} — an error that reads as a missing device node and is not one. Fixed at C
+\code{4f52877}; the rebuilt bench now reaches \code{MEMTEST ... PASS} and
+\code{GET\_SURFACE\_PHYS\_ATTR rc=0}, i.e.\ real host GPU memory allocated, mapped and verified
+through the unprivileged isolate.
 
 \smallskip
 \textbf{Three things stop that from being a victory lap, and they are the reason to read
@@ -46,7 +66,23 @@ carried the identical bug (\S\ref{sec:oracle}); three defects found \emph{in the
 instruments themselves} (\S\ref{sec:instruments}), which is this revision's real theme; and the
 first mutation campaign over the whole implementation. A pinned document that has been edited
 past its pin is worse than an unpinned one; every number below was re-measured at
-\code{b612a91}.
+\code{15651b1} (749 tests, all fifteen CI gates clean).
+
+\smallskip
+\textbf{Third, and it bounds the oracle: four measured limits of a C recording.} \textbf{(i)} The
+completion plane has \emph{no} C oracle at all — the C never observes a host completion source, it
+\emph{forges} completions, and a grep over its isolate verbs finds seventeen call sites and zero
+poll/event verbs. The plane the current milestone is being built around is therefore invisible to
+the differential, which is the likeliest source of false confidence. \textbf{(ii)} The diff will
+never be green end-to-end, and a green diff would itself be the bug: the C has no refusal
+vocabulary, so every must-differ row is a position where it emits a positive event and we emit a
+refusal. \textbf{(iii)} Any forwarding-mode trace is non-hermetic by construction — the host GPU
+DMAs into guest RAM behind every recorder. \textbf{(iv)} The archived logs are unusable: the C's
+sequence counter is incremented \emph{inside} its log statement, so it counts logged BAR0 accesses
+only and everything else interleaves by wall-clock. The ordering information was never recorded.
+★ The load-bearing good news is that a single-counter total order is nonetheless \emph{sound} —
+the device creates no thread, bottom half or timer, and all four \code{MemoryRegionOps} run under
+the BQL — which upgrades a previously \emph{inferred} assumption to an evidenced one.
 
 \smallskip
 \textbf{Stance.} Every number here was measured from the tree while writing, not copied from a
