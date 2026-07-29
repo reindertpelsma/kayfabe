@@ -1,0 +1,36 @@
+[package]
+name = "kayfabe-isolate-host"
+description = "The REAL host isolate behind kayfabe-isolate's ports: a sandboxed child process per (Proc, GpuId), its request/reply wire protocol, and an RmBackend that issues genuine NVIDIA RM ioctls. The first implementor of IsolateFactory/Isolate/RmBackend outside kayfabe-mocks (host_execution_plane.md §3)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-abi.workspace = true
+kayfabe-vmm.workspace = true
+kayfabe-isolate.workspace = true
+kayfabe-linux-raw.workspace = true
+
+# ★ The child process. It is a binary in THIS crate rather than a separate one so the
+# parent's factory and the child's serve loop cannot drift out of protocol agreement
+# without failing to compile: they share `crate::proto` by construction, not by review.
+[[bin]]
+name = "kayfabe-isolate"
+path = "src/bin/isolate.rs"
+
+# ★ The bring-up ladder as a program (host_execution_plane.md §4). A human-facing
+# diagnostic, deliberately NOT part of the isolate: the isolate faces a hostile guest and
+# has no business owning an argument parser or a `println!`.
+[[bin]]
+name = "kayfabe-rm-ladder"
+path = "src/bin/rmladder.rs"
+
+[dev-dependencies]
+# The R1 lock witness, so the real backend can be driven WITH a ranked lock held and the
+# assert watched to fire — a gate never seen to fail is not evidence.
+kayfabe-util.workspace = true
+
+[lints]
+workspace = true

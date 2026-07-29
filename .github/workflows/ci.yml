@@ -646,7 +646,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:47 kayfabe-qemu-raw:0"
+          AUDITED="kayfabe-linux-raw:49 kayfabe-qemu-raw:0"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -749,11 +749,13 @@ jobs:
           #     point is relaxed separately rather than one block spanning the function —
           #     the house rule is that every SAFETY comment's invariant is established on a
           #     line above it, and a single block would have four unrelated invariants.
-          #   spawn_unsafe.rs   (1) — ★ L1-#91, `Command::pre_exec`: the post-fork,
+          #   spawn_unsafe.rs   (3) — ★ L1-#91. `Command::pre_exec`: the post-fork,
           #     pre-exec descriptor shuffle and closefrom. ONE block, deliberately: the
           #     async-signal-safety argument is about the whole closure, not per call, so
           #     splitting it would produce four SAFETY comments each unable to state the
-          #     invariant that matters.
+          #     invariant that matters. Plus the CHILD half of the same contract:
+          #     `adopt_inherited_fd`'s liveness probe and its `from_raw_fd`, two blocks
+          #     because the second's invariant IS the first's result.
           #
           # kayfabe-qemu-raw (0) — L2-Q stage Q0. Nothing yet, and §2.2's "itemise the
           # second crate's blocks exactly as the first crate's 37 are" is therefore

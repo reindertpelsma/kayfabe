@@ -83,6 +83,7 @@
 //!   is invisible until a guest trips it.
 
 /// The generated wire layouts. Produced by `kayfabe-abi-gen`; do not edit.
+pub mod bringup;
 pub mod generated;
 pub mod transcribed;
 pub mod versions;

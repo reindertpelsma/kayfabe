@@ -39,10 +39,10 @@
 //! What *is* here — the closed descriptor table, the cleared environment, and
 //! `PR_SET_NO_NEW_PRIVS` — is the part this host can execute and therefore test.
 
-use crate::error::RawError;
+use crate::error::{RawError, last_syscall_error};
 use kayfabe_util::{leafwitness, lockwitness};
 use std::ffi::{OsStr, OsString};
-use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -141,6 +141,43 @@ impl ChildSpec {
     }
 }
 
+/// ★ Adopt a descriptor this process was **given** at `exec` — the child half of
+/// [`FdGrant`].
+///
+/// The number is the ABI (see the module docs), so the child has nothing but an integer to
+/// go on. This is the one door that turns it back into an owned object, and it **probes
+/// first**: a number that is not open is a refusal here rather than an `EBADF` from the
+/// first read, which on a protocol channel is indistinguishable from a peer that hung up.
+///
+/// # Errors
+/// [`RawError::Syscall`] (`fcntl`) — `EBADF` when the parent did not grant that number.
+///
+/// # Panics
+/// If called with any ranked or adapter-leaf lock held (R1, §4.5).
+pub fn adopt_inherited_fd(number: i32) -> Result<OwnedFd, RawError> {
+    lockwitness::assert_lock_free("adopting an inherited descriptor");
+    leafwitness::assert_leaf_free("adopting an inherited descriptor");
+    if number < 0 {
+        return Err(RawError::Syscall {
+            call: "fcntl(F_GETFD)",
+            errno: Some(libc::EBADF),
+        });
+    }
+    // SAFETY: `F_GETFD` takes an integer command by value and dereferences no user memory;
+    // it is the standard liveness probe for a descriptor number. It returns the flags or
+    // -1, and nothing is adopted unless it succeeded — so the `from_raw_fd` below is
+    // reached only for a number this process demonstrably owns.
+    let rc = unsafe { libc::fcntl(number, libc::F_GETFD) };
+    if rc < 0 {
+        return Err(last_syscall_error("fcntl(F_GETFD)"));
+    }
+    // SAFETY: `number` is open in this process (probed on the line above) and was placed
+    // there by the parent's `dup2` before `execve`, so this process is its sole owner and
+    // nothing else in this program adopts it — the caller is the child's entry point,
+    // which runs once. The `OwnedFd` will `close` it exactly once.
+    Ok(unsafe { OwnedFd::from_raw_fd(number) })
+}
+
 /// A spawned child, reaped on drop.
 ///
 /// ## ★ Drop is a blocking call, and that is why [`kayfabe_isolate::IsolateBox`] exists
@@ -234,10 +271,16 @@ impl SandboxChild {
                 // strictly better security: the descriptors stop existing at the exec
                 // boundary atomically, and if the exec fails they are still there to carry
                 // the diagnosis.
-                if libc::close_range(
-                    (highest + 1) as libc::c_uint,
+                //
+                // Issued as a raw syscall rather than through libc's wrapper: `close_range`
+                // is glibc-only in the `libc` crate, and this crate must keep building for
+                // a static musl target — which is how the isolate reaches a bench box whose
+                // glibc is older than the build host's.
+                if libc::syscall(
+                    libc::SYS_close_range,
+                    libc::c_uint::from(u32::try_from(highest + 1).unwrap_or(u32::MAX)),
                     libc::c_uint::MAX,
-                    libc::CLOSE_RANGE_CLOEXEC as libc::c_int,
+                    libc::CLOSE_RANGE_CLOEXEC,
                 ) < 0
                 {
                     return Err(std::io::Error::last_os_error());

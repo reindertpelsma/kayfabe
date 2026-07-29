@@ -184,6 +184,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-isolate-host"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-isolate",
+ "kayfabe-linux-raw",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
 name = "kayfabe-linux-raw"
 version = "0.1.0"
 dependencies = [

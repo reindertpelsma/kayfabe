@@ -10,6 +10,7 @@ members = [
     "crates/kayfabe-vmm-qemu",
     "crates/kayfabe-qemu-raw",
     "crates/kayfabe-isolate",
+    "crates/kayfabe-isolate-host",
     "crates/kayfabe-completion",
     "crates/kayfabe-core",
     "crates/kayfabe-fwd",
@@ -39,6 +40,7 @@ kayfabe-vmm-kvm = { path = "crates/kayfabe-vmm-kvm" }
 kayfabe-vmm-qemu = { path = "crates/kayfabe-vmm-qemu" }
 kayfabe-qemu-raw = { path = "crates/kayfabe-qemu-raw" }
 kayfabe-isolate = { path = "crates/kayfabe-isolate" }
+kayfabe-isolate-host = { path = "crates/kayfabe-isolate-host" }
 kayfabe-completion = { path = "crates/kayfabe-completion" }
 kayfabe-core = { path = "crates/kayfabe-core" }
 kayfabe-fwd = { path = "crates/kayfabe-fwd" }
