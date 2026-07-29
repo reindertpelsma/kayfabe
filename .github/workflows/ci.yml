@@ -646,7 +646,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:37 kayfabe-qemu-raw:0"
+          AUDITED="kayfabe-linux-raw:47 kayfabe-qemu-raw:0"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -702,9 +702,13 @@ jobs:
           # Counts the syntactic forms only (`unsafe {`, `unsafe fn/impl/trait`), so prose
           # inside those files — which gate C permits there — cannot inflate it.
           #
-          # kayfabe-linux-raw (37). ★ 7 -> 25 at M2-c (l1_os_shell.md §10), the stage that
+          # kayfabe-linux-raw (47). ★ 7 -> 25 at M2-c (l1_os_shell.md §10), the stage that
           # gives the raw crate its first consumers. ★ 25 -> 37 at M2-d, the stage that
-          # gives it a reactor and a guest. The surface, per file, each block carrying its
+          # gives it a reactor and a guest. ★ 37 -> 47 at L1-#91, the stage that gives it
+          # a HOST GPU and a child process (host_execution_plane.md §3 step 2): until then
+          # the entire host side of this project was a double, and a double needs no
+          # syscalls. The three new files are argued at the bottom of this list.
+          # The surface, per file, each block carrying its
           # own `// SAFETY:` (clippy `undocumented_unsafe_blocks = deny`):
           #   window_unsafe.rs  (7) — the GuestWindow: one mmap, one MAP_FIXED shared by
           #     place/restore, one munmap in Drop, two copy_nonoverlapping, and the two
@@ -731,6 +735,25 @@ jobs:
           #     an MMIO load's completion, the two by-reference register ioctls, and the
           #     per-type `Send` grant for a vCPU (one runner thread owns one; `Sync` is
           #     deliberately withheld).
+          #   chardev_unsafe.rs (3) — ★ L1-#91, the RM connection: open(O_PATH) of the
+          #     device DIRECTORY (the C's fd-4 grant, so a sandbox with no path to /dev can
+          #     still name its nodes), openat of a device node, and THE ioctl. The third is
+          #     the one that matters: it is the only place in the workspace where a host
+          #     CPU address is written into a caller-supplied buffer, it is bounds-checked
+          #     before the write and SCRUBBED after the syscall, so §4.2.1's "no host
+          #     address crosses a crate boundary" is a property of the values the caller
+          #     can observe rather than of who wrote the keyword.
+          #   signal_unsafe.rs  (6) — ★ L1-#91, the break signal (§7.2, C #73): zeroing a
+          #     sigaction, sigemptyset, sigaction WITHOUT SA_RESTART, gettid, getpid, and
+          #     tgkill. Six blocks for what reads as three calls because each libc entry
+          #     point is relaxed separately rather than one block spanning the function —
+          #     the house rule is that every SAFETY comment's invariant is established on a
+          #     line above it, and a single block would have four unrelated invariants.
+          #   spawn_unsafe.rs   (1) — ★ L1-#91, `Command::pre_exec`: the post-fork,
+          #     pre-exec descriptor shuffle and closefrom. ONE block, deliberately: the
+          #     async-signal-safety argument is about the whole closure, not per call, so
+          #     splitting it would produce four SAFETY comments each unable to state the
+          #     invariant that matters.
           #
           # kayfabe-qemu-raw (0) — L2-Q stage Q0. Nothing yet, and §2.2's "itemise the
           # second crate's blocks exactly as the first crate's 37 are" is therefore

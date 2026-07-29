@@ -93,8 +93,9 @@
 //!
 //! ```text
 //! $ ls crates/kayfabe-linux-raw/src/*_unsafe.rs
-//! host_fd_unsafe.rs   kvm_unsafe.rs   mapping_unsafe.rs
-//! sysconf_unsafe.rs   window_unsafe.rs
+//! chardev_unsafe.rs   epoll_unsafe.rs   host_fd_unsafe.rs   kvm_unsafe.rs
+//! mapping_unsafe.rs   signal_unsafe.rs  spawn_unsafe.rs     sysconf_unsafe.rs
+//! vcpu_unsafe.rs      window_unsafe.rs
 //! ```
 //!
 //! §4.1.1's standing rule: the dangerous keyword may appear **only** in a file whose
@@ -264,14 +265,18 @@ compile_error!(
 
 pub mod bounds;
 pub mod cache;
+mod chardev_unsafe;
 mod epoll_unsafe;
 pub mod error;
 pub mod geometry;
 mod host_fd_unsafe;
+pub mod ioctl;
 pub mod kvm_gate;
 mod kvm_unsafe;
 mod mapping_unsafe;
 pub mod page_size;
+mod signal_unsafe;
+mod spawn_unsafe;
 mod sysconf_unsafe;
 mod vcpu_unsafe;
 pub mod view;
@@ -279,6 +284,7 @@ mod window_unsafe;
 
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
+pub use chardev_unsafe::{CharDevice, DevDir, Indirect, POINTER_FIELD_WIDTH};
 pub use epoll_unsafe::{MAX_READY_BATCH, PollTimeout, Poller, ReadyTokens};
 pub use error::RawError;
 pub use host_fd_unsafe::{Notifier, SharedRam, descriptor_budget};
@@ -287,6 +293,10 @@ pub use mapping_unsafe::{
     Backing, HostProt, MappedRegion, PlacementId, Reservation, VolatileRegion,
 };
 pub use page_size::HostPageSize;
+pub use signal_unsafe::{
+    BREAK_SIGNAL, ThreadId, current_thread_id, install_break_handler, interrupt_thread,
+};
+pub use spawn_unsafe::{ChildSpec, FdGrant, SandboxChild};
 pub use vcpu_unsafe::{KvmVcpu, VcpuExit};
 pub use view::RegionView;
 pub use window_unsafe::GuestWindow;
