@@ -122,8 +122,8 @@ use kayfabe_gsp::{BootPhase, GspFault, QueueState, Transition};
 use kayfabe_isolate::{CancelReason, HostHandle, IsolateId, RmError, WorkerId};
 use kayfabe_mmu::AddressFault;
 use kayfabe_mocks::{
-    HoldSpec, MockArch, MockIsolateFactory, MockPushbuffer, RmVerb, SharedRecorder, VerbHold,
-    VerbKind, VmmErrorKind, mock_classes, mock_ctrl,
+    CancelEvent, ClientLock, ClientWait, HoldSpec, MockArch, MockIsolateFactory, MockPushbuffer,
+    ParkedVerb, RmVerb, SharedRecorder, VerbHold, VerbKind, VmmErrorKind, mock_classes, mock_ctrl,
 };
 use kayfabe_rmrpc::GraphPolicy;
 use kayfabe_rt::device::{LockMode, SharedDevice, SignalOutcome};
@@ -10449,5 +10449,622 @@ fn the_rpc_bridge_survives_two_interleaved_guest_streams_under_mean_device_load(
                 "non-vacuity: the device planes really were under load throughout",
             );
         }
+    }
+}
+
+// =================================================================================
+// ★★★ RM's BLOCKING SEMANTICS — per-client serialisation and the uninterruptible hold
+// (`host_execution_plane.md` §2)
+//
+// ## What could not be expressed before this
+//
+// The whole host side of this system is a double: the only implementors of
+// `IsolateFactory`, `Isolate`, `RmBackend` and `Present` live in `kayfabe-mocks`. And the
+// isolate's DEFINING hazard was not modelled at all. Real RM:
+//
+// - **serialises every ioctl per client** — a second verb on one client cannot proceed
+//   while the first is in flight (eight `LOCK_ACCESS_WRITE` client-lock sites at BOTH
+//   vendored tags — `ogkm-610:`/`ogkm-580: src/nvidia/src/libraries/resserv/src/rs_server.c:778`
+//   and six siblings at identical lines, the eighth at `ogkm-610: :2546` /
+//   `ogkm-580: :2468`; alloc asserts it at `ogkm-610:`/`ogkm-580: :786-788`. Alloc/free
+//   additionally take the GLOBAL API lock in write, held across the GSP RPC);
+// - waits **UNINTERRUPTIBLY** — `_kgspRpcRecvPoll` busy-polls with no signal check, the
+//   API lock is a `down_write`;
+// - ⇒ one wedged verb puts every sibling of that client into D state.
+//
+// R1, F1 and I-NOAMP exist to survive exactly that, and **the suite had never seen it**,
+// because a mock returns promptly by construction. `MockRmBackend::gate` now takes the
+// isolate's `ClientLock` for the whole verb, so the hazard is a value the tests can
+// construct — deterministically, with no sleeps anywhere (the mechanism is
+// `ClientLock::wait_until_blocked`, a progress EDGE exactly like
+// `VerbHold::wait_until_pending`; `KAYFABE_SLOW=1` adds interleaving fuzz and nothing
+// here rests on it).
+//
+// ## ★★ Read `RmRecorder::serialize_per_client` before changing anything here
+//
+// It is opt-in, and the reason is the finding: forced on, TWELVE tests stop terminating
+// and ZERO assertions fail — every one of them a *liveness* claim of the form "N pool
+// workers of one isolate have N verbs in flight at once", which is precisely what RM
+// refutes. `l1_os_shell.md` §6.6 already states I-NOAMP as a **cross-process**
+// obligation (*"on real hardware, process A's slow RM call already makes process B's RM
+// call wait … we do not create this property and we cannot delete it"*). The tests below
+// assert the design's own, weaker, TRUE claim; the stronger intra-proc one is a doc
+// question, not an assert to loosen.
+// =================================================================================
+
+/// The publication whose verb is wedged under RM's client lock.
+const VA_RM_HELD: u64 = 0x2_0100_0000;
+/// A SIBLING thread of the same client, which must be blocked behind it.
+const VA_RM_SIB: u64 = 0x2_0200_0000;
+/// Every other client's publication — the progress half.
+const VA_RM_OTHER: u64 = 0x2_0300_0000;
+
+/// The three victims `a_verb_wedged_on_one_rm_client_blocks_its_sibling_and_no_other_client` sweeps: **two procs on GPU0 and one on GPU1**, so "the block
+/// is per CLIENT" is separated from "the block is per GPU" by content rather than by
+/// being asserted once and generalised.
+const RM_VICTIMS: [usize; 3] = [P_WITNESS, P_TEARDOWN, P_PEER];
+
+/// Materialize every proc's host VAS, so the next publication's FIRST host verb is
+/// exactly `AllocSysmem` on every client — which is what makes the queued verb's identity
+/// an assertable value instead of "whatever the chain happened to reach".
+fn rm_warm(dev: &SharedDevice) {
+    for i in 0..N_PROCS {
+        dev.publish_backing(gpu_of(i), lane_of(i).pdb, GpuVa(VA_WARM), 0x1000)
+            .expect("warm-up publish materializes the host VAS");
+    }
+}
+
+/// `(pid, gpu)`'s isolate id — spelled once, because every assertion below is really an
+/// assertion about *which client* something happened on.
+fn iso(pids: &[ProcId], i: usize) -> IsolateId {
+    IsolateId::new(pids[i].0, gpu_of(i))
+}
+
+/// `i`'s [`kayfabe_mocks::ClientLock`]. Panics if the isolate has not been spawned —
+/// a test that asks about a client that does not exist is asking the wrong question.
+fn client_lock(rec: &SharedRecorder, pids: &[ProcId], i: usize) -> Arc<ClientLock> {
+    rec.lock()
+        .expect("recorder")
+        .client_lock(iso(pids, i))
+        .expect("the isolate was spawned by the warm-up")
+}
+
+/// ★★★ **The I-NOAMP assertion, against RM's real serialisation.**
+///
+/// A verb wedged on client A blocks a **sibling isolate worker on the same client** —
+/// and a **different client** still makes full progress. Both halves are asserted by
+/// CONTENT: which `(worker, verb)` is queued behind which, and which client recorded no
+/// block at all. A count would be equally true of a lock that serialised the wrong pair.
+///
+/// Three things this pins that nothing could pin before:
+///
+/// 1. **the block is real** — `ClientLock::queued` names the exact waiter, reached
+///    through a progress edge, so "blocked" is a positive observation and not an absence
+///    sampled at a moment;
+/// 2. **the block is per CLIENT, not per GPU or per device** — the sweep wedges two
+///    different procs on GPU0 and one on GPU1, and every *other* client, including one on
+///    the wedged client's own GPU, completes publish + doorbell + engine-object end to
+///    end with **zero** entries in its own `waits()`;
+/// 3. **R1 holds ACROSS the wedge** — `RmRecorder::parked_verbs` records the ranked-lock
+///    mask the parking thread held at the wait itself, which is a stronger and different
+///    fact from `Worker::execute`'s entry assert, and it is read off the witness rather
+///    than inspected.
+#[test]
+fn a_verb_wedged_on_one_rm_client_blocks_its_sibling_and_no_other_client() {
+    let _wd = watchdog("rm_client_serialisation", Duration::from_secs(180));
+    for mode in [LockMode::Sharded, LockMode::Degenerate] {
+        for victim in RM_VICTIMS {
+            let (device, pids, rec) = mean_world(mode);
+            rec.lock().expect("recorder").serialize_per_client = true;
+            let dev: &SharedDevice = &device;
+            let who = format!("{mode:?}/victim=proc{victim}");
+            rm_warm(dev);
+
+            let v_gpu = gpu_of(victim);
+            let v_pdb = lane_of(victim).pdb;
+            let v_iso = iso(&pids, victim);
+            let lock = client_lock(&rec, &pids, victim);
+
+            let (held, sibling, snapshot, waits_while_blocked) = thread::scope(|sc| {
+                // ---- The wedge: worker 0's `AllocSysmem` parks holding the client lock.
+                let mut latches = Latches::new();
+                latches.arm(&rec, pids[victim], v_gpu, 0, VerbKind::AllocSysmem);
+                let latches = latches; // moved in: an unwind releases before the joins
+                let t_held =
+                    sc.spawn(move || dev.publish_backing(v_gpu, v_pdb, GpuVa(VA_RM_HELD), 0x1000));
+                latches.wait_all_pending();
+
+                assert_eq!(
+                    lock.held_by(),
+                    Some((WorkerId(0), VerbKind::AllocSysmem)),
+                    "({who}) the wedged verb must hold its client's RM lock — the whole \
+                     hazard is that it does"
+                );
+                let snapshot = rec.lock().expect("recorder").verbs_of(v_iso);
+
+                // ---- The SIBLING of the same client, on a different pool worker.
+                let t_sib =
+                    sc.spawn(move || dev.publish_backing(v_gpu, v_pdb, GpuVa(VA_RM_SIB), 0x1000));
+                lock.wait_until_blocked(1); // a progress EDGE, never a sleep
+                assert_eq!(
+                    lock.queued(),
+                    vec![(WorkerId(1), VerbKind::AllocSysmem)],
+                    "({who}) ★ the sibling is blocked BEHIND the wedge, named exactly — a \
+                     second pool worker buys liveness isolation, NOT wire concurrency"
+                );
+                assert_eq!(
+                    rec.lock().expect("recorder").verbs_of(v_iso),
+                    snapshot,
+                    "({who}) …and it got no further: not one host verb of the sibling's \
+                     reached the backend while the client lock was held"
+                );
+
+                // ---- EVERY OTHER CLIENT MAKES FULL PROGRESS — including the one that
+                //      shares the wedged client's GPU. This is I-NOAMP as `l1_os_shell.md`
+                //      §6.6 actually states it: cross-PROCESS, which is the obligation the
+                //      hardware path also meets.
+                for j in (0..N_PROCS).filter(|&j| j != victim) {
+                    let (g, l) = (gpu_of(j), lane_of(j));
+                    dev.publish_backing(g, l.pdb, GpuVa(VA_RM_OTHER), 0x1000)
+                        .unwrap_or_else(|e| {
+                            panic!("({who}) proc{j} publish stalled behind another client: {e:?}")
+                        });
+                    dev.doorbell(g, MockArch::token_for(l.ce), &[])
+                        .unwrap_or_else(|e| panic!("({who}) proc{j} doorbell stalled: {e:?}"));
+                    dev.forward_engine_object(g, l.gr, mock_classes::COMPUTE, &[])
+                        .unwrap_or_else(|e| panic!("({who}) proc{j} engine object stalled: {e:?}"));
+                    assert_eq!(
+                        (
+                            client_lock(&rec, &pids, j).waits(),
+                            client_lock(&rec, &pids, j).queued()
+                        ),
+                        (vec![], vec![]),
+                        "({who}) ★★ I-NOAMP: proc{j}'s client recorded a block while \
+                         proc{victim}'s verb was wedged — one client's stall amplified \
+                         onto another's"
+                    );
+                }
+
+                // ---- R1, across the wedge, off the witness.
+                assert_eq!(
+                    rec.lock().expect("recorder").parked_verbs,
+                    vec![ParkedVerb {
+                        isolate: v_iso,
+                        worker: WorkerId(0),
+                        verb: VerbKind::AllocSysmem,
+                        held_lock_mask: 0,
+                    }],
+                    "({who}) ★ R1 ACROSS the wedge: the thread that spent an unbounded \
+                     wait inside the host verb held no ranked lock while it waited"
+                );
+
+                // Captured BEFORE the release: afterwards the two threads interleave and
+                // further blocks are legitimate, so only the pre-release census is a
+                // deterministic value.
+                let waits_while_blocked = lock.waits();
+                latches.release_all();
+                (
+                    t_held.join().expect("the wedged thread joins"),
+                    t_sib.join().expect("the sibling thread joins"),
+                    snapshot,
+                    waits_while_blocked,
+                )
+            });
+
+            assert_eq!(
+                waits_while_blocked,
+                vec![ClientWait {
+                    isolate: v_iso,
+                    waiter: WorkerId(1),
+                    waiter_verb: VerbKind::AllocSysmem,
+                    holder: WorkerId(0),
+                    holder_verb: VerbKind::AllocSysmem,
+                }],
+                "({who}) exactly one block, and it names both sides"
+            );
+            assert!(
+                !snapshot.is_empty(),
+                "({who}) non-vacuity: the warm-up really did issue verbs on this client, \
+                 so the unchanged-log assertion above compared something"
+            );
+
+            // ---- Both publications land, and land correctly: serialisation delays, it
+            //      does not corrupt. Exact bindings, never `is_ok()`.
+            let held = held.unwrap_or_else(|e| panic!("({who}) the wedged publish: {e:?}"));
+            let sibling = sibling.unwrap_or_else(|e| panic!("({who}) the sibling publish: {e:?}"));
+            assert_ne!(held.gpa, sibling.gpa, "({who}) two commits shared a GPA");
+            for (va, p) in [(VA_RM_HELD, held), (VA_RM_SIB, sibling)] {
+                let (binding, off) = dev
+                    .resolve(v_gpu, v_pdb, GpuVa(va + 0x40))
+                    .unwrap_or_else(|e| panic!("({who}) {va:#x} must resolve: {e:?}"));
+                assert_eq!(
+                    (binding.phys, binding.host_va(), off),
+                    (p.gpa, Some(p.host_va), 0x40),
+                    "({who}) a serialised commit wrote a binding it did not compute"
+                );
+            }
+            assert_eq!(
+                rec.lock().expect("recorder").bystander_hits,
+                vec![],
+                "({who}) ★ non-vacuity for the foreign-handle gate: the double CAN now \
+                 serve a cross-namespace handle (a real host does), so an empty census \
+                 means the gate refused every one before the backend saw it"
+            );
+            let l = rec.lock().expect("recorder").ledger();
+            assert_eq!(
+                (
+                    l.double_free.as_slice(),
+                    l.free_of_unknown.as_slice(),
+                    l.unmap_of_unknown.as_slice()
+                ),
+                (&[][..], &[][..], &[][..]),
+                "({who}) serialisation must not corrupt the acquire/release ledger"
+            );
+            device.assert_teardown_invariant();
+        }
+    }
+}
+
+/// ★★★ **The UNINTERRUPTIBLE hold: a cancellation request is delivered, observed to
+/// arrive, and changes nothing.**
+///
+/// RM's waits are not cancellable — the API lock is a `down_write`, the GSP RPC busy-polls
+/// with no signal check — so `RmError::Interrupted` is a *best effort* and the D-state
+/// shape is the common case, not the exception. Until the double could **deny** the
+/// cancel while holding the client lock, "the cancel did nothing" and "the cancel seam is
+/// broken" were the same observation.
+///
+/// Four separate facts, because collapsing any two is how this area gets a vacuous test:
+///
+/// 1. the request was **fired and delivered** to a live txn (`CancelEvent`, exact,
+///    including the txn value read from the live `CancelHandle`);
+/// 2. it **reached the wait** (`VerbHold::cancel_request_seen`) — without this, (4) below
+///    would also be true of a seam that never sent anything;
+/// 3. it was **not observed** by the verb, which is still parked, and the client lock is
+///    still held with the sibling still queued behind it — a cancel does not release RM's
+///    client lock either;
+/// 4. once released, the verb **runs to completion** and the conservation ledger balances
+///    — including `cancels_observed` staying empty, so the spent-but-unobserved signal
+///    did not leak onto the next verb (§7.2 refinement 4, the door nobody watched).
+#[test]
+fn a_wedged_verb_is_not_cancelled_and_still_holds_its_clients_lock() {
+    let _wd = watchdog("rm_uninterruptible_wedge", Duration::from_secs(180));
+    for mode in [LockMode::Sharded, LockMode::Degenerate] {
+        for victim in [P_WITNESS, P_PEER] {
+            let (device, pids, rec) = mean_world(mode);
+            {
+                let mut r = rec.lock().expect("recorder");
+                r.serialize_per_client = true;
+                // ★ The modelled fact, not a convenience: this verb's host wait does not
+                // break on a signal.
+                r.never_cancels.insert(VerbKind::MapGpuVa);
+            }
+            let dev: &SharedDevice = &device;
+            let who = format!("{mode:?}/victim=proc{victim}");
+            rm_warm(dev);
+
+            let v_gpu = gpu_of(victim);
+            let v_pdb = lane_of(victim).pdb;
+            let v_iso = iso(&pids, victim);
+            let lock = client_lock(&rec, &pids, victim);
+
+            let (held, sibling) = thread::scope(|sc| {
+                // Park MID-chain: the host memory object is already minted, so the wedge
+                // is the state where "release what you allocated" is neither empty nor
+                // total — the KillPoint that finds real bugs.
+                let mut latches = Latches::new();
+                let hold = latches.arm(&rec, pids[victim], v_gpu, 0, VerbKind::MapGpuVa);
+                let latches = latches;
+                let t_held =
+                    sc.spawn(move || dev.publish_backing(v_gpu, v_pdb, GpuVa(VA_RM_HELD), 0x1000));
+                latches.wait_all_pending();
+                let t_sib =
+                    sc.spawn(move || dev.publish_backing(v_gpu, v_pdb, GpuVa(VA_RM_SIB), 0x1000));
+                lock.wait_until_blocked(1);
+
+                // ---- (1) fire it at the LIVE txn, read from the live cancel handle.
+                let txn = dev
+                    .cancel_handle(pids[victim], v_gpu, WorkerId(0))
+                    .expect("the wedged slot is checked out, so it has a cancel handle")
+                    .txn();
+                assert!(
+                    dev.request_cancel(pids[victim], v_gpu, WorkerId(0), CancelReason::Watchdog),
+                    "({who}) the watchdog's first expiry must reach a live transaction"
+                );
+                assert_eq!(
+                    rec.lock().expect("recorder").cancels_delivered,
+                    vec![CancelEvent {
+                        isolate: v_iso,
+                        worker: WorkerId(0),
+                        txn,
+                        reason: Some(CancelReason::Watchdog),
+                        delivered: true,
+                    }],
+                    "({who}) exactly one request, delivered, naming the exact txn"
+                );
+
+                // ---- (2) it reached the wait, and (3) the wait did not break.
+                assert_eq!(
+                    hold.cancel_request_seen(),
+                    Some(CancelReason::Watchdog),
+                    "({who}) ★ the break signal ARRIVED at the parked verb — this is the \
+                     non-vacuity half of `observed == []` below"
+                );
+                assert_eq!(
+                    rec.lock().expect("recorder").cancels_observed,
+                    vec![],
+                    "({who}) ★★ …and the host wait did not break on it. RM's waits are \
+                     uninterruptible; a double in which every cancel lands proves a \
+                     property the host does not have"
+                );
+                assert!(
+                    hold.is_pending(),
+                    "({who}) the cancelled verb is still parked"
+                );
+                assert_eq!(
+                    (lock.held_by(), lock.queued()),
+                    (
+                        Some((WorkerId(0), VerbKind::MapGpuVa)),
+                        vec![(WorkerId(1), VerbKind::AllocSysmem)]
+                    ),
+                    "({who}) ★ a cancellation does not release RM's client lock either — \
+                     the sibling is STILL behind the uncancellable verb"
+                );
+                assert_eq!(
+                    rec.lock()
+                        .expect("recorder")
+                        .parked_of(v_iso)
+                        .iter()
+                        .map(|p| p.held_lock_mask)
+                        .collect::<Vec<_>>(),
+                    vec![0],
+                    "({who}) R1 across the wedge, cancelled or not"
+                );
+
+                latches.release_all();
+                (
+                    t_held.join().expect("the wedged thread joins"),
+                    t_sib.join().expect("the sibling thread joins"),
+                )
+            });
+
+            // ---- (4) the verb ran to completion despite the cancel, and both commits
+            //          are exact.
+            let held = held.unwrap_or_else(|e| {
+                panic!("({who}) an unobserved cancel must not fail the verb: {e:?}")
+            });
+            let sibling = sibling.unwrap_or_else(|e| panic!("({who}) the sibling: {e:?}"));
+            for (va, p) in [(VA_RM_HELD, held), (VA_RM_SIB, sibling)] {
+                let (binding, off) = dev
+                    .resolve(v_gpu, v_pdb, GpuVa(va))
+                    .unwrap_or_else(|e| panic!("({who}) {va:#x} must resolve: {e:?}"));
+                assert_eq!(
+                    (binding.phys, binding.host_va(), off),
+                    (p.gpa, Some(p.host_va), 0),
+                    "({who}) the uncancelled verb's commit"
+                );
+            }
+            assert_eq!(
+                rec.lock().expect("recorder").cancels_observed,
+                vec![],
+                "({who}) ★ §7.2 refinement 4: the signal was armed for ONE ioctl. If it \
+                 outlived the verb it named, the next thing to run would observe it — and \
+                 on a failing op the next thing to run is the DISPOSAL"
+            );
+            let l = rec.lock().expect("recorder").ledger();
+            assert_eq!(
+                (
+                    l.double_free.as_slice(),
+                    l.free_of_unknown.as_slice(),
+                    l.unmap_of_unknown.as_slice()
+                ),
+                (&[][..], &[][..], &[][..]),
+                "({who}) the conservation ledger balances after an ignored cancellation"
+            );
+            device.assert_teardown_invariant();
+        }
+    }
+}
+
+/// ★★ **F1 under a wedge: every poll around a wedged verb terminates within its stated
+/// bound.**
+///
+/// F1's testable form is a **quantity**, not an absence: *"the loop's wake count is
+/// asserted against the signal count"* (`l1_os_shell.md` §3.4). An absence-shaped rule
+/// ("no spinning") is satisfied vacuously by a loop that never runs; a level-triggered
+/// source that never stops being ready fails a wake-count assertion loudly.
+///
+/// Asserted here **while a verb is wedged and a sibling is queued behind it on the same
+/// client** — the state in which a completion plane that had any dependency on a worker
+/// would stall. §3.5 guarantee 3 says delivery needs no worker; this is the first time
+/// that claim has been put in front of the hazard it is a claim about.
+///
+/// Bounded by content, three ways: the executor's effects equal the signals **exactly and
+/// in order**, the wedged proc's own poll returns **exactly its own** completions (never
+/// the peer's), and the pump loop is drained in a counted number of rounds and then
+/// answers `None`.
+#[test]
+fn every_poll_around_a_wedged_client_is_bounded_and_delivers_only_its_own() {
+    let _wd = watchdog("rm_wedge_f1", Duration::from_secs(180));
+    for mode in [LockMode::Sharded, LockMode::Degenerate] {
+        let (device, pids, rec) = mean_world(mode);
+        rec.lock().expect("recorder").serialize_per_client = true;
+        let dev: &SharedDevice = &device;
+        let who = format!("{mode:?}");
+        rm_warm(dev);
+
+        let (tx, rx) = inbox();
+        let mut ex = Executor::new(Arc::clone(&device), rx);
+        // Two sources on the WEDGED client, two on a client on the other GPU.
+        let src: Vec<_> = [
+            (P_WITNESS, EV[0]),
+            (P_PEER, EV[1]),
+            (P_WITNESS, EV[2]),
+            (P_PEER, EV[3]),
+        ]
+        .into_iter()
+        .map(|(i, ev)| {
+            dev.register_source(SourceKind::OsEvent {
+                proc: pids[i],
+                gpu: gpu_of(i),
+                ev,
+            })
+        })
+        .collect();
+
+        let lock = client_lock(&rec, &pids, P_WITNESS);
+        let held = thread::scope(|sc| {
+            let mut latches = Latches::new();
+            latches.arm(&rec, pids[P_WITNESS], GPU0, 0, VerbKind::AllocSysmem);
+            let latches = latches;
+            let t_held = sc.spawn(move || {
+                dev.publish_backing(GPU0, lane_of(P_WITNESS).pdb, GpuVa(VA_RM_HELD), 0x1000)
+            });
+            latches.wait_all_pending();
+            let t_sib = sc.spawn(move || {
+                dev.publish_backing(GPU0, lane_of(P_WITNESS).pdb, GpuVa(VA_RM_SIB), 0x1000)
+            });
+            lock.wait_until_blocked(1);
+
+            // ---- F1's wake-count gate: FOUR signals in, FOUR effects out, in order,
+            //      with a verb wedged and a sibling queued on the witness's own client.
+            for s in &src {
+                tx.send(CoreEvent::SourceSignal(*s));
+            }
+            assert_eq!(
+                ex.drain_all(),
+                vec![
+                    Effect::Signal(SignalOutcome::Observed {
+                        proc: pids[P_WITNESS],
+                        gpu: GPU0,
+                        ev: EV[0]
+                    }),
+                    Effect::Signal(SignalOutcome::Observed {
+                        proc: pids[P_PEER],
+                        gpu: GPU1,
+                        ev: EV[1]
+                    }),
+                    Effect::Signal(SignalOutcome::Observed {
+                        proc: pids[P_WITNESS],
+                        gpu: GPU0,
+                        ev: EV[2]
+                    }),
+                    Effect::Signal(SignalOutcome::Observed {
+                        proc: pids[P_PEER],
+                        gpu: GPU1,
+                        ev: EV[3]
+                    }),
+                ],
+                "({who}) ★ F1: one wake per signal, no more and no fewer, while a host \
+                 verb is wedged on the client that owns half of them"
+            );
+
+            // ---- The wedged proc's OWN poll returns its OWN completions — delivery
+            //      needs no worker, and its client's only worker that could run one is
+            //      parked while a second is queued behind it.
+            let first = dev
+                .completion_poll(GPU0, pids[P_WITNESS], Instant(0))
+                .unwrap_or_else(|| {
+                    panic!("({who}) the wedged proc's own poll must be served with no worker")
+                });
+            assert_eq!(
+                first.events,
+                vec![EV[0], EV[2]],
+                "({who}) exactly its OWN two completions — never the peer's, and never a \
+                 batch composed across targets"
+            );
+            dev.completions_drained(GPU0);
+
+            // ---- ★ The loop that HAS a termination condition is the pump, and it
+            //      terminates: everything the poll posted was drained, so there is
+            //      nothing pending left to compose. Exited by content (`None`), with a
+            //      hard round cap so a regression is a loud failure and not a hang.
+            let mut rounds = 0usize;
+            while dev.pump_completions(GPU0).is_some() {
+                dev.completions_drained(GPU0);
+                rounds += 1;
+                assert!(
+                    rounds <= 4,
+                    "({who}) ★ F1 VIOLATED: the pump did not drain within its bound"
+                );
+            }
+            assert_eq!(
+                rounds, 0,
+                "({who}) the wedged client's target is drained after its owner's poll"
+            );
+
+            // ---- ★★ AND THE HONEST BOUND FOR THE POLL ITSELF, which is a QUANTITY and
+            //      not a termination.
+            //
+            //      Found by writing the wrong assertion first: "poll until it returns
+            //      `None`" spun forever and looked like an F1 violation. It is not — the
+            //      poll is **level-triggered by design**. `DeliveryPlane::on_poll` is the
+            //      starvation fix: it calls `take_unacked()` and re-posts the owner's
+            //      drained-but-unacked events off the owner's own RPC, and re-delivery is
+            //      documented as idempotent at that layer. Nothing ACKs at this seam yet
+            //      (`CompletionQueue::ack` has no `SharedDevice` door), so a
+            //      poll-to-exhaustion loop cannot terminate and asserting that it does
+            //      would have been THE TEST being wrong, not the product.
+            //
+            //      §3.4's gate is stated as a quantity for exactly this reason: *"a
+            //      level-triggered fd that never stops being readable fails a wake-count
+            //      assertion loudly, while it satisfies any absence-shaped rule
+            //      vacuously."* So the bound asserted here is that each poll yields
+            //      **exactly** the owner's own outstanding set — bounded, constant, and
+            //      never growing under a wedge.
+            let second = dev
+                .completion_poll(GPU0, pids[P_WITNESS], Instant(1))
+                .unwrap_or_else(|| panic!("({who}) re-delivery off the owner's own poll"));
+            assert_eq!(
+                (second.events, second.batch == first.batch),
+                (vec![EV[0], EV[2]], false),
+                "({who}) ★ a re-post is the SAME event set in a NEW batch — bounded and \
+                 idempotent. A growing set would be duplication; a repeated batch id \
+                 would desync the seqNum ring (lesson L10)"
+            );
+            dev.completions_drained(GPU0);
+
+            // ---- …and the device-wide pump drains in a counted number of rounds and
+            //      then STOPS. `None` is the bound, asserted rather than assumed.
+            let mut pumped: Vec<Vec<OsEventRef>> = Vec::new();
+            for _ in 0..8 {
+                match dev.pump_completions(GPU1) {
+                    Some(b) => {
+                        pumped.push(b.events);
+                        dev.completions_drained(GPU1);
+                    }
+                    None => break,
+                }
+            }
+            assert_eq!(
+                pumped,
+                vec![vec![EV[1], EV[3]]],
+                "({who}) the peer's GPU pumped exactly its own batch, once, then answered \
+                 `None` — a bounded drain, by content"
+            );
+            assert_eq!(
+                dev.pump_completions(GPU1),
+                None,
+                "({who}) …and stays drained"
+            );
+            assert_eq!(
+                (lock.held_by(), lock.queued()),
+                (
+                    Some((WorkerId(0), VerbKind::AllocSysmem)),
+                    vec![(WorkerId(1), VerbKind::AllocSysmem)]
+                ),
+                "({who}) ★ non-vacuity: the wedge and the queued sibling were STILL in \
+                 place for every poll above — otherwise this proves nothing at all"
+            );
+            assert_eq!(lock::held_depth(), 0, "({who}) the poller leaked a guard");
+
+            latches.release_all();
+            let held = t_held.join().expect("the wedged thread joins");
+            t_sib.join().expect("the sibling joins").expect("commits");
+            held
+        });
+        held.unwrap_or_else(|e| panic!("({who}) the wedged publish: {e:?}"));
+        drop(ex);
+        device.assert_teardown_invariant();
     }
 }

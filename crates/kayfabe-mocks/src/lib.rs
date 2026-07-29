@@ -17,6 +17,32 @@
 //!   can be scripted to fail (`fail_next`) for negative paths.
 //!
 //! All mocks are pure in-memory state machines: no files, no sockets, no wall clock.
+//!
+//! ## ★★ Modelling RM's blocking semantics (`host_execution_plane.md` §2)
+//!
+//! The isolate's defining hazard is **semantic, not temporal**: RM serialises every
+//! ioctl-reachable path on the per-client WRITE lock and waits **uninterruptibly**, so a
+//! wedged verb puts every sibling of that client into D state. A mock that returns
+//! promptly by construction cannot express it, which is why **R1**, **F1** and
+//! **I-NOAMP** had never been tested against the hazard they exist for.
+//!
+//! Three pieces model it, all deterministic (no sleeps — timing jitter in a fixture
+//! manufactures flakes and does not model serialisation anyway):
+//!
+//! 1. [`ClientLock`] — one lock per isolate (= per RM client). Every verb takes it for
+//!    its whole duration, so a second verb on the same client **blocks**, while verbs on
+//!    other clients proceed. Enabled by [`RmRecorder::serialize_per_client`].
+//! 2. [`VerbHold`] parked with `interruptible == false` (via
+//!    [`RmRecorder::never_cancels`]) — an **uninterruptible hold**: the verb does not
+//!    return until the test releases it, and a cancellation request lands on it with no
+//!    effect, which is observable ([`VerbHold::cancel_request_seen`] says the request
+//!    arrived, [`RmRecorder::cancels_observed`] stays empty).
+//! 3. [`RmRecorder::parked_verbs`] — the ranked-lock mask the park was entered with, so
+//!    "no lock is held **across** the wedge" is read off the witness rather than
+//!    inspected.
+//!
+//! Randomised delay is available as **secondary** fuzz only, behind `KAYFABE_SLOW=1`
+//! ([`slow_fuzz_enabled`]); no invariant rests on it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
@@ -1035,6 +1061,25 @@ impl VerbHold {
         }
     }
 
+    /// ★★ The break signal that **reached** this parked verb, if any — regardless of
+    /// whether the verb honoured it.
+    ///
+    /// This is the half that makes "the wedged verb was not cancelled" a positive
+    /// assertion instead of a vacuous one. `RmRecorder::cancels_observed` staying empty
+    /// is equally true of a cancel that was never delivered; pairing it with *this*
+    /// says the request arrived at the wait and the wait did not break — which is the
+    /// D-state shape, not a broken seam.
+    #[must_use]
+    pub fn cancel_request_seen(&self) -> Option<CancelReason> {
+        self.state.lock().expect("hold").cancelled
+    }
+
+    /// True once §7.5's abandon reached this parked verb.
+    #[must_use]
+    pub fn abandon_seen(&self) -> bool {
+        self.state.lock().expect("hold").abandoned
+    }
+
     /// Release the held verb. Idempotent.
     pub fn release(&self) {
         let mut g = self.state.lock().expect("hold");
@@ -1278,6 +1323,237 @@ impl CancelSink for MockCancelSink {
     }
 }
 
+// ---------------------------------------------------------------------------------
+// ★★★ ClientLock — RM's per-client serialisation (`host_execution_plane.md` §2)
+// ---------------------------------------------------------------------------------
+
+/// ★ One recorded **block**: a verb that had to wait for the client lock, and the verb
+/// it waited behind.
+///
+/// Content, not a count. A counter answers *"was anything serialised"*, which is
+/// equally true of a lock that serialises the wrong pair; this names both sides, so
+/// "proc A's worker 1 blocked behind proc A's worker 0" and "…behind proc B's" are
+/// different values rather than the same `1`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ClientWait {
+    /// The client (= isolate) whose lock was contended.
+    pub isolate: IsolateId,
+    /// The pool slot that had to wait.
+    pub waiter: WorkerId,
+    /// The verb it was trying to issue.
+    pub waiter_verb: VerbKind,
+    /// The pool slot that held the lock.
+    pub holder: WorkerId,
+    /// The verb that was holding it.
+    pub holder_verb: VerbKind,
+}
+
+#[derive(Debug, Default)]
+struct ClientLockState {
+    held_by: Option<(WorkerId, VerbKind)>,
+    queued: Vec<(WorkerId, VerbKind)>,
+    waits: Vec<ClientWait>,
+}
+
+/// ★★★ **The per-RM-client serialisation lock** — the modelled half of
+/// `rm_concurrency_semantics`'s central measured fact.
+///
+/// Every ioctl-reachable resource-server entry point passes `LOCK_ACCESS_WRITE` for the
+/// client lock — eight `_serverLockClientWithLockInfo(…, LOCK_ACCESS_WRITE, …)` sites at
+/// BOTH vendored tags, seven of them at identical lines
+/// (`ogkm-610:`/`ogkm-580: src/nvidia/src/libraries/resserv/src/rs_server.c:778`,
+/// `:1143`, `:1503`, `:1923`, `:2009`, `:2131`, `:2218`; only the last moved,
+/// `ogkm-610: :2546` / `ogkm-580: :2468`), and alloc ASSERTS the client is not held for
+/// read (`ogkm-610:`/`ogkm-580: :786-788`, byte-identical). Alloc/free additionally take
+/// the **global** API lock in write, held across the GSP RPC. **There is no version seam
+/// in RM's locking** — which is what makes this model version-independent rather than a
+/// 610-shaped guess. So two ioctls on one client are legal and
+/// ordinary but **never concurrent**, and a verb that wedges holds the lock the whole
+/// time. gVisor's nvproxy corroborates in production: a per-client exclusive mutex held
+/// across the host ioctl (`gvisor: pkg/sentry/devices/nvproxy/frontend_unsafe.go:367-381`).
+///
+/// One lock per [`IsolateId`], because an isolate is one sandboxed host process with one
+/// RM client (`l1_concurrency.md` §7.2). Its whole worker pool shares it — which is the
+/// point: the pool buys **liveness isolation**, not wire concurrency, and until this
+/// existed the mock claimed the latter.
+///
+/// ## ★ It is deliberately NOT a ranked lock
+///
+/// It stands in for a lock inside the **host kernel**, on the far side of the isolate
+/// port. Our R1/R3 discipline governs locks we own; the host kernel does not participate
+/// in it (`l1_os_shell.md` §6.6: *"we do not create this property and we cannot delete
+/// it — we can only amplify it"*). Registering it with
+/// [`kayfabe_util::lockwitness`] would make every host verb look like an R1 violation of
+/// our own rules, which is a category error.
+///
+/// ## Off by default, and that is a **recorded divergence**, not an oversight
+///
+/// See [`RmRecorder::serialize_per_client`].
+#[derive(Debug)]
+pub struct ClientLock {
+    isolate: IsolateId,
+    st: Mutex<ClientLockState>,
+    cv: std::sync::Condvar,
+}
+
+impl ClientLock {
+    fn new(isolate: IsolateId) -> Arc<Self> {
+        Arc::new(ClientLock {
+            isolate,
+            st: Mutex::new(ClientLockState::default()),
+            cv: std::sync::Condvar::new(),
+        })
+    }
+
+    /// Take the client lock for `(worker, verb)`, blocking while another verb of the
+    /// same client holds it. A block is published in [`ClientLock::queued`] **before**
+    /// the wait, so a test has a positive edge to synchronise on
+    /// ([`ClientLock::wait_until_blocked`]) instead of a sleep.
+    fn acquire(&self, worker: WorkerId, verb: VerbKind) {
+        let mut g = self.st.lock().expect("client lock");
+        if let Some((hw, hv)) = g.held_by {
+            g.waits.push(ClientWait {
+                isolate: self.isolate,
+                waiter: worker,
+                waiter_verb: verb,
+                holder: hw,
+                holder_verb: hv,
+            });
+            g.queued.push((worker, verb));
+            self.cv.notify_all();
+            while g.held_by.is_some() {
+                g = self.cv.wait(g).expect("client lock");
+            }
+            let i = g
+                .queued
+                .iter()
+                .position(|&e| e == (worker, verb))
+                .expect("this waiter published itself before waiting");
+            g.queued.remove(i);
+        }
+        g.held_by = Some((worker, verb));
+    }
+
+    fn release(&self) {
+        let mut g = self.st.lock().expect("client lock");
+        g.held_by = None;
+        self.cv.notify_all();
+    }
+
+    /// The `(worker, verb)` currently holding this client's lock, if any.
+    #[must_use]
+    pub fn held_by(&self) -> Option<(WorkerId, VerbKind)> {
+        self.st.lock().expect("client lock").held_by
+    }
+
+    /// The `(worker, verb)` pairs blocked on this client right now, in arrival order.
+    #[must_use]
+    pub fn queued(&self) -> Vec<(WorkerId, VerbKind)> {
+        self.st.lock().expect("client lock").queued.clone()
+    }
+
+    /// Every block this client's lock has caused, in order — the exact-content census.
+    #[must_use]
+    pub fn waits(&self) -> Vec<ClientWait> {
+        self.st.lock().expect("client lock").waits.clone()
+    }
+
+    /// ★ Block **this** (test) thread until at least `n` verbs are queued behind the
+    /// holder — the progress EDGE that replaces a sleep, exactly like
+    /// [`VerbHold::wait_until_pending`]. Without it, "the sibling is blocked" could only
+    /// be probed as an absence at a moment, which is a race.
+    pub fn wait_until_blocked(&self, n: usize) {
+        let mut g = self.st.lock().expect("client lock");
+        while g.queued.len() < n {
+            g = self.cv.wait(g).expect("client lock");
+        }
+    }
+}
+
+/// Releases its [`ClientLock`] on drop — including on every early `return Err` inside
+/// [`MockRmBackend::gate`], which is why the lock is a guard rather than a pair of calls.
+/// `None` when [`RmRecorder::serialize_per_client`] is off.
+#[derive(Debug)]
+pub struct ClientGuard(Option<Arc<ClientLock>>);
+
+impl Drop for ClientGuard {
+    fn drop(&mut self) {
+        if let Some(l) = &self.0 {
+            l.release();
+        }
+    }
+}
+
+/// ★ One verb that **parked** in a [`VerbHold`], with the ranked-lock mask its thread
+/// held at the moment it parked.
+///
+/// R1's own assert fires at [`kayfabe_isolate::Worker::execute`]'s *entry*. This is the
+/// stronger, different fact the wedge tests need: **nothing is held across the wait**.
+/// Read off [`kayfabe_util::lockwitness::held_mask`] by the parking thread itself, so it
+/// is a witness rather than an inspection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ParkedVerb {
+    /// The isolate whose verb parked.
+    pub isolate: IsolateId,
+    /// The pool slot.
+    pub worker: WorkerId,
+    /// The verb kind.
+    pub verb: VerbKind,
+    /// The parking thread's ranked-lock mask (bit = rank). MUST be 0.
+    pub held_lock_mask: u8,
+}
+
+/// ★★ A **bystander hit**: a handle from another client's namespace was presented, the
+/// raw value was live *here*, and the host served it against the local object.
+///
+/// See [`MockRmBackend::check`] for why the double now does this instead of refusing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BystanderHit {
+    /// The isolate whose connection the verb ran on.
+    pub isolate: IsolateId,
+    /// The handle the caller presented (carrying the namespace it really belongs to).
+    pub presented: HostHandle,
+    /// The **local** object the host actually operated on — the bystander.
+    pub hit: HostHandle,
+}
+
+/// ★ Is the **secondary** randomised-delay fuzz on (`KAYFABE_SLOW=1`)?
+///
+/// Deliberately secondary and deliberately opt-in: the modelled hazard is serialisation
+/// and uninterruptibility, not slowness, and a fixture whose invariants rest on timing
+/// manufactures flakes (this project has paid for three — `reactor_os` #73's 1.15 %
+/// race, #69's 2-in-26 teardown, and `9254e85`'s 13 silent park points). Nothing in the
+/// mock's *semantics* changes when it is on; it only widens the interleavings a
+/// multi-threaded test explores.
+#[must_use]
+pub fn slow_fuzz_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KAYFABE_SLOW").is_ok_and(|v| v == "1"))
+}
+
+/// The secondary fuzz itself: a bounded, cheap yield storm whose length comes from a
+/// per-thread xorshift. No sleep, no clock, no allocation — and no effect at all unless
+/// [`slow_fuzz_enabled`].
+fn slow_fuzz() {
+    if !slow_fuzz_enabled() {
+        return;
+    }
+    thread_local! {
+        static SEED: std::cell::Cell<u64> = const { std::cell::Cell::new(0x2545_F491_4F6C_DD1D) };
+    }
+    let n = SEED.with(|s| {
+        let mut x = s.get();
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        s.set(x);
+        x % 64
+    });
+    for _ in 0..n {
+        std::thread::yield_now();
+    }
+}
+
 /// Shared recorder: `(isolate, verb)` in global order, so tests can assert both
 /// per-isolate behavior and cross-isolate separation. Plus a scriptable failure and
 /// the armed [`VerbHold`]s.
@@ -1333,6 +1609,62 @@ pub struct RmRecorder {
     /// gone and its thread is inside the ioctl, so issuing a verb on it is a write to a
     /// dead socket, never a harmless no-op.
     pub verbs_that_hit_an_abandoned_worker: usize,
+    /// ★★★ **Serialise every verb of one client behind one lock** — RM's measured
+    /// behaviour ([`ClientLock`]). Set it before the first verb; it is read per verb.
+    ///
+    /// ## Why the default is `false`, stated as the divergence it is
+    ///
+    /// Turning it on unconditionally **deadlocks `l1_mean`'s composed run**, and that is
+    /// the finding rather than a reason to leave it off quietly: the mean run parks two
+    /// verbs on the witness's own isolate and then requires three *sibling threads of the
+    /// same `Proc`* to complete alloc/map-heavy workloads end to end. Against real RM
+    /// they cannot — they are behind the same client's write lock. `l1_os_shell.md`
+    /// §6.6 already says so in as many words (*"on real hardware, process A's slow RM
+    /// call already makes process B's RM call wait … any claim that our design gives B
+    /// independent progress would be claiming something the hardware path does not
+    /// have"*), and states I-NOAMP as a **cross-process** obligation; the mean run's
+    /// intra-proc progress claim is stronger than the design's, and was passing only
+    /// because the double was too polite.
+    ///
+    /// ## ★ MEASURED, 2026-07-29 — exactly what a `true` default costs
+    ///
+    /// Forced on for one full `cargo test --workspace --no-fail-fast` run, **twelve**
+    /// tests stop terminating and **zero** assertions fail. Every one is a *liveness*
+    /// claim, and each names the same premise — *N pool workers of one isolate have N
+    /// verbs in flight at once*:
+    ///
+    /// | test | the claim RM refutes |
+    /// |---|---|
+    /// | `l1_mean::mean_multiproc_multithread_multigpu_multiworkload` | 3 sibling threads of the witness `Proc` finish while 2 of its verbs are parked |
+    /// | `l1_mean::n3_c_…straddler_progresses_under_pending_work_on_both_isolates` | same, per target |
+    /// | `l1_mean::a_guest_steering_dma_descriptors_…_under_load` | ditto, DMA arm |
+    /// | `l1_mean::a_real_memory_plane_survives_…_under_load` | ditto, KVM arm |
+    /// | `l1_mean::trace_arm::the_shared_trace_is_totally_ordered_…` | ditto, trace arm |
+    /// | `l1_verb_seam::progress_under_pending_verb_intra_proc` | the #37 invariant, stated directly |
+    /// | `l1_verb_seam::poll_and_delivery_need_no_worker_at_full_saturation` | the pool saturated by *concurrent* verbs |
+    /// | `retry_ledger::converging_retries_release_every_host_object_they_allocated` | ★ one hold **per pool slot**, all pending at once |
+    /// | `retry_ledger::a_retry_whose_replan_diverges_…` | same shape |
+    /// | `retry_ledger::the_commit_retry_bound_still_releases_…` | same shape |
+    /// | `t0_subset_free::the_drain_never_races_a_verb_in_flight_on_the_same_isolate` | a drain runs while a sibling's verb is in flight |
+    /// | `cancellation::every_checked_out_worker_of_a_dying_proc_is_cancelled` | two workers of one proc parked simultaneously |
+    ///
+    /// **That nothing fails an assertion is the finding's precise shape:** the design is
+    /// not *incorrect* under RM's serialisation, it is *slower than the suite assumes*,
+    /// and the assumption is load-bearing in twelve places.
+    ///
+    /// So this stays opt-in until that claim is renegotiated in the doc — the mean test
+    /// is not narrowed to accommodate it — and every test that asserts a *blocking*
+    /// property turns it on explicitly.
+    pub serialize_per_client: bool,
+    /// Every isolate's [`ClientLock`], by session — how a test reaches the edge
+    /// [`ClientLock::wait_until_blocked`] without owning the factory.
+    pub client_locks: BTreeMap<IsolateId, Arc<ClientLock>>,
+    /// ★ Every verb that entered a [`VerbHold`] and the ranked-lock mask it parked with
+    /// (see [`ParkedVerb`]).
+    pub parked_verbs: Vec<ParkedVerb>,
+    /// ★★ Every cross-namespace handle the backend **served** rather than refused — the
+    /// bystander hits a real host cannot detect (see [`BystanderHit`]).
+    pub bystander_hits: Vec<BystanderHit>,
     /// Armed holds, matched newest-spec-first and consumed one-shot.
     holds: Vec<(HoldSpec, Arc<VerbHold>)>,
     /// ★ Accounting for verbs whose log entries [`RmRecorder::compact`] has already
@@ -1481,6 +1813,22 @@ impl RmRecorder {
         h
     }
 
+    /// `id`'s [`ClientLock`] — `None` until its isolate has been spawned.
+    #[must_use]
+    pub fn client_lock(&self, id: IsolateId) -> Option<Arc<ClientLock>> {
+        self.client_locks.get(&id).map(Arc::clone)
+    }
+
+    /// Every [`ParkedVerb`] of `id`, in order (assertion helper).
+    #[must_use]
+    pub fn parked_of(&self, id: IsolateId) -> Vec<ParkedVerb> {
+        self.parked_verbs
+            .iter()
+            .filter(|p| p.isolate == id)
+            .copied()
+            .collect()
+    }
+
     /// Every verb this isolate issued, in order (assertion helper).
     #[must_use]
     pub fn verbs_of(&self, id: IsolateId) -> Vec<RmVerb> {
@@ -1532,7 +1880,21 @@ pub struct MockRmBackend {
     /// This slot's out-of-band cancel seam — the same `Arc` its pool slot's
     /// [`kayfabe_isolate::CancelHandle`] holds (§7.1).
     cancel: Arc<MockCancelSink>,
+    /// The RM client lock every worker of this isolate shares ([`ClientLock`]).
+    client: Arc<ClientLock>,
 }
+
+/// ★★ The part of a mock handle a **real host** would see.
+///
+/// [`MockRmBackend`] mints `handle_hi() | n`, where the high lanes are pure
+/// instrumentation (they make a cross-namespace value *readable* in an assertion) and
+/// `n` is the per-client sequence — which every client mints from the same base, exactly
+/// as RM does from `RS_CLIENT_HANDLE_BASE` (`ogkm-610:
+/// src/nvidia/generated/g_resserv_nvoc.h:173`, `ogkm-580: :188`, same `0xC1D00000`). So
+/// masking off the lanes leaves precisely the value a real client would have been handed,
+/// and two isolates' `n`-th objects collide — which is the fact
+/// [`MockRmBackend::check`] must honour.
+pub const HOST_RAW_MASK: u64 = 0x00ff_ffff;
 
 impl MockRmBackend {
     fn namespace(idlane: u64, gpu: GpuId) -> Arc<Mutex<RmNamespace>> {
@@ -1554,6 +1916,7 @@ impl MockRmBackend {
         recorder: SharedRecorder,
         ns: Arc<Mutex<RmNamespace>>,
         cancel: Arc<MockCancelSink>,
+        client: Arc<ClientLock>,
     ) -> Self {
         MockRmBackend {
             id,
@@ -1563,6 +1926,7 @@ impl MockRmBackend {
             recorder,
             ns,
             cancel,
+            client,
         }
     }
 
@@ -1573,14 +1937,34 @@ impl MockRmBackend {
         (self.idlane << 32) | (u64::from(self.gpu.0) << 24)
     }
 
-    /// Pre-verb gate: park in any armed [`VerbHold`] matching this
-    /// `(isolate, gpu, worker, verb)`, then apply `fail_next` / the retired refusal.
+    /// Pre-verb gate: take this client's RM lock, park in any armed [`VerbHold`]
+    /// matching this `(isolate, gpu, worker, verb)`, then apply `fail_next` / the retired
+    /// refusal.
     ///
     /// The hold is looked up and REMOVED under the recorder lock, then parked in with
     /// the recorder lock released — otherwise a held verb would freeze every other
     /// isolate's recording and the "everything else keeps running" property the mean
     /// test asserts would be a lie about the mock, not about the design.
-    fn gate(&mut self, verb: VerbKind) -> Result<(), RmError> {
+    ///
+    /// ## ★★ Order: the CLIENT lock first, then everything else
+    ///
+    /// RM takes the client write lock at the ioctl's door and only then does the work
+    /// that may block, so the wedged verb holds it for the whole wait. Modelling it in
+    /// the other order would let a sibling slip past the wedge and would reproduce
+    /// exactly the politeness this exists to remove. The returned [`ClientGuard`] is what
+    /// releases it — including on every `return Err` below.
+    ///
+    /// **Lock order is `ClientLock` → `RmRecorder` → `RmNamespace`, never reversed**, and
+    /// no two of them are ever held at once except that outer-to-inner nesting.
+    fn gate(&mut self, verb: VerbKind) -> Result<ClientGuard, RmError> {
+        let serialize = self.recorder.lock().expect("recorder").serialize_per_client;
+        let guard = if serialize {
+            self.client.acquire(self.worker, verb);
+            ClientGuard(Some(Arc::clone(&self.client)))
+        } else {
+            ClientGuard(None)
+        };
+        slow_fuzz();
         let (hold, interruptible) = {
             let mut r = self.recorder.lock().expect("recorder");
             let interruptible = !r.never_cancels.contains(&verb);
@@ -1610,6 +1994,20 @@ impl MockRmBackend {
             _ => {}
         }
         if let Some(h) = hold {
+            // ★ R1's *other* half, witnessed rather than inspected: the mask this thread
+            // is about to spend an unbounded wait holding. `Worker::execute` asserts
+            // lock-freedom at its entry; this records it at the WAIT, which is the fact a
+            // wedge test needs and the one an entry assert cannot give.
+            self.recorder
+                .lock()
+                .expect("recorder")
+                .parked_verbs
+                .push(ParkedVerb {
+                    isolate: self.id,
+                    worker: self.worker,
+                    verb,
+                    held_lock_mask: kayfabe_util::lockwitness::held_mask(),
+                });
             match h.enter_and_park(interruptible) {
                 Ok(()) => {}
                 Err(RmError::Interrupted) => {
@@ -1647,7 +2045,8 @@ impl MockRmBackend {
         if let Some(e) = r.fail_next.take() {
             return Err(e);
         }
-        Ok(())
+        drop(r);
+        Ok(guard)
     }
 
     fn mint(&mut self) -> HostHandle {
@@ -1658,11 +2057,65 @@ impl MockRmBackend {
         h
     }
 
-    fn check(&self, h: HostHandle) -> Result<(), RmError> {
-        if self.ns.lock().expect("ns").handles.contains(&h) {
-            Ok(())
-        } else {
-            Err(RmError::BadHandle(h))
+    /// ★★★ Resolve `h` **the way a real host would**, returning the object the verb will
+    /// actually operate on.
+    ///
+    /// ## The lie this used to tell
+    ///
+    /// It used to answer [`RmError::BadHandle`] for any handle not minted in *this*
+    /// isolate — i.e. it validated against the mock's own per-isolate namespace.
+    /// [`kayfabe_isolate::HostHandle`]'s own docs say a real host does **not**: RM mints
+    /// every client's handles from one `RS_CLIENT_HANDLE_BASE`, so isolate A's `0x…07`
+    /// and isolate B's `0x…07` are *both live and unrelated*, and presenting one on the
+    /// other's connection does not fault — **it names a different, live object**. A free
+    /// would destroy a bystander; an unmap would tear down a bystander's mapping.
+    ///
+    /// That divergence is not hypothetical: `07da582`'s cross-GPU handle was caught
+    /// **only** by this refusal, which the real host does not provide, so every
+    /// handle-boundary test that leaned on it was optimistic.
+    ///
+    /// ## What it does now
+    ///
+    /// A foreign handle whose **host-visible** value ([`HOST_RAW_MASK`]) is live in this
+    /// client is *served*, against the local twin, and recorded as a
+    /// [`BystanderHit`]. A value that is live nowhere here is still `BadHandle` — that
+    /// arm is real too (RM's `clientGetResource` fails on an unknown handle).
+    ///
+    /// ## What still catches it, and why that is the right place
+    ///
+    /// Two instruments, neither of which is the backend's luck:
+    ///
+    /// - [`kayfabe_isolate::Worker::execute`]'s **foreign-handle gate**, which refuses on
+    ///   the recorded provenance carried in the type and runs before any verb;
+    /// - [`HostLedger::free_of_unknown`], because a `Free` is logged with the handle as
+    ///   *presented* — so an isolate that freed something it never minted still shows up,
+    ///   and the local twin it destroyed stays outstanding forever, which is the actual
+    ///   damage rather than a proxy for it.
+    fn check(&self, h: HostHandle) -> Result<HostHandle, RmError> {
+        let twin = {
+            let ns = self.ns.lock().expect("ns");
+            if ns.handles.contains(&h) {
+                return Ok(h);
+            }
+            ns.handles
+                .iter()
+                .find(|t| t.raw() & HOST_RAW_MASK == h.raw() & HOST_RAW_MASK)
+                .copied()
+        };
+        match twin {
+            Some(hit) => {
+                self.recorder
+                    .lock()
+                    .expect("recorder")
+                    .bystander_hits
+                    .push(BystanderHit {
+                        isolate: self.id,
+                        presented: h,
+                        hit,
+                    });
+                Ok(hit)
+            }
+            None => Err(RmError::BadHandle(h)),
         }
     }
 
@@ -1682,7 +2135,7 @@ impl RmBackend for MockRmBackend {
         class: ClassId,
         _params: &[u8],
     ) -> Result<HostHandle, RmError> {
-        self.gate(VerbKind::Alloc)?;
+        let _client = self.gate(VerbKind::Alloc)?;
         if parent != HostHandle::NULL {
             self.check(parent)?;
         }
@@ -1696,14 +2149,14 @@ impl RmBackend for MockRmBackend {
     }
 
     fn alloc_vaspace(&mut self) -> Result<HostHandle, RmError> {
-        self.gate(VerbKind::AllocVaSpace)?;
+        let _client = self.gate(VerbKind::AllocVaSpace)?;
         let handle = self.mint();
         self.record(RmVerb::AllocVaSpace { handle });
         Ok(handle)
     }
 
     fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
-        self.gate(VerbKind::AllocSysmem)?;
+        let _client = self.gate(VerbKind::AllocSysmem)?;
         let handle = self.mint();
         self.record(RmVerb::AllocSysmem { handle, len });
         Ok(handle)
@@ -1714,7 +2167,7 @@ impl RmBackend for MockRmBackend {
         vas: HostHandle,
         engine: EngineKind,
     ) -> Result<(HostHandle, u64), RmError> {
-        self.gate(VerbKind::AllocChannel)?;
+        let _client = self.gate(VerbKind::AllocChannel)?;
         self.check(vas)?;
         let handle = self.mint();
         let token = {
@@ -1738,7 +2191,7 @@ impl RmBackend for MockRmBackend {
         class: ClassId,
         _params: &[u8],
     ) -> Result<HostHandle, RmError> {
-        self.gate(VerbKind::AllocEngineObject)?;
+        let _client = self.gate(VerbKind::AllocEngineObject)?;
         self.check(chan)?;
         let handle = self.mint();
         self.record(RmVerb::AllocEngineObject {
@@ -1750,16 +2203,20 @@ impl RmBackend for MockRmBackend {
     }
 
     fn schedule(&mut self, chan: HostHandle) -> Result<(), RmError> {
-        self.gate(VerbKind::Schedule)?;
+        let _client = self.gate(VerbKind::Schedule)?;
         self.check(chan)?;
         self.record(RmVerb::Schedule { chan });
         Ok(())
     }
 
     fn free(&mut self, obj: HostHandle) -> Result<(), RmError> {
-        self.gate(VerbKind::Free)?;
-        self.check(obj)?;
-        self.ns.lock().expect("ns").handles.remove(&obj);
+        let _client = self.gate(VerbKind::Free)?;
+        // ★ The VICTIM, which is `obj` itself in the ordinary case and the local twin on
+        // a cross-namespace reach — the bystander a real host would destroy. The log
+        // still names the handle as PRESENTED, so `HostLedger::free_of_unknown` sees the
+        // reach and the twin stays outstanding: both halves of the damage, separately.
+        let victim = self.check(obj)?;
+        self.ns.lock().expect("ns").handles.remove(&victim);
         self.record(RmVerb::Free { obj });
         Ok(())
     }
@@ -1770,7 +2227,7 @@ impl RmBackend for MockRmBackend {
         cmd: ControlCmd,
         _payload: &mut [u8],
     ) -> Result<(), RmError> {
-        self.gate(VerbKind::Control)?;
+        let _client = self.gate(VerbKind::Control)?;
         self.check(obj)?;
         self.record(RmVerb::Control { obj, cmd });
         Ok(())
@@ -1782,7 +2239,7 @@ impl RmBackend for MockRmBackend {
         memory: HostHandle,
         len: u64,
     ) -> Result<u64, RmError> {
-        self.gate(VerbKind::MapGpuVa)?;
+        let _client = self.gate(VerbKind::MapGpuVa)?;
         self.check(vas)?;
         self.check(memory)?;
         // Fake placement with strictly disjoint fields, so every minted VA is
@@ -1820,20 +2277,20 @@ impl RmBackend for MockRmBackend {
     }
 
     fn unmap_gpu_va(&mut self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError> {
-        self.gate(VerbKind::UnmapGpuVa)?;
+        let _client = self.gate(VerbKind::UnmapGpuVa)?;
         self.check(vas)?;
         self.record(RmVerb::UnmapGpuVa { vas, va: gpu_va });
         Ok(())
     }
 
     fn ring_doorbell(&mut self, host_token: u64) -> Result<(), RmError> {
-        self.gate(VerbKind::RingDoorbell)?;
+        let _client = self.gate(VerbKind::RingDoorbell)?;
         self.record(RmVerb::RingDoorbell { token: host_token });
         Ok(())
     }
 
     fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {
-        self.gate(VerbKind::ExportSurface)?;
+        let _client = self.gate(VerbKind::ExportSurface)?;
         // An unknown memory object is a LOUD BadHandle — never a silently minted
         // surface (and cross-isolate render targets are refused by the same check).
         self.check(memory)?;
@@ -2029,6 +2486,15 @@ impl IsolateFactory for MockIsolateFactory {
     fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate> {
         self.spawned.push(id);
         let ns = MockRmBackend::namespace(u64::from(id.proc()) + 1, id.gpu());
+        // ★ ONE RM client lock per isolate, shared by its whole pool — and published on
+        // the recorder, which is the handle the test keeps (the factory is moved into
+        // `Gpu::realize` and is unreachable afterwards).
+        let client = ClientLock::new(id);
+        self.recorder
+            .lock()
+            .expect("recorder")
+            .client_locks
+            .insert(id, Arc::clone(&client));
         let cancels: Vec<Arc<MockCancelSink>> = (0..self.pool_size)
             .map(|i| MockCancelSink::new(id, WorkerId(i as u32), Arc::clone(&self.recorder)))
             .collect();
@@ -2044,6 +2510,7 @@ impl IsolateFactory for MockIsolateFactory {
                         Arc::clone(&self.recorder),
                         Arc::clone(&ns),
                         Arc::clone(&cancels[i]),
+                        Arc::clone(&client),
                     )),
                     Arc::clone(&cancels[i]) as Arc<dyn CancelSink>,
                 ))
@@ -2115,6 +2582,11 @@ kayfabe_util::assert_send_sync!(
     VerbHold,
     VerbKind,
     HoldSpec,
+    ClientLock,
+    ClientGuard,
+    ClientWait,
+    ParkedVerb,
+    BystanderHit,
     SlotRecord,
     RmVerb,
 );
@@ -2141,6 +2613,41 @@ mod tests {
             None,
             "hostile token must not decode"
         );
+    }
+
+    /// ★★ **Bounded termination for the two tests below that park a real thread.**
+    ///
+    /// The house rule (`concurrency_stress.rs`'s M4b lesson, and `l1_mean`'s own
+    /// `l1_mean::watchdog`-shaped guard): a test that can wedge must
+    /// **fail fast and loudly**, never eat the CI timeout. It earned its place
+    /// immediately — a bite-check mutant that disabled [`ClientLock`] hung the whole
+    /// `kayfabe-mocks` unittest binary forever, with no watchdog anywhere in this crate
+    /// to stop it, and stalled the harness rather than reporting CAUGHT.
+    ///
+    /// Returns a guard; dropping it disarms.
+    #[must_use]
+    fn bounded(test: &'static str) -> BoundedGuard {
+        let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = Arc::clone(&done);
+        std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(60);
+            while std::time::Instant::now() < deadline {
+                if flag.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            eprintln!("WATCHDOG: kayfabe-mocks::{test} wedged — aborting");
+            std::process::abort();
+        });
+        BoundedGuard(done)
+    }
+
+    struct BoundedGuard(Arc<std::sync::atomic::AtomicBool>);
+    impl Drop for BoundedGuard {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
     }
 
     #[test]
@@ -2261,6 +2768,15 @@ mod tests {
         );
     }
 
+    /// A handle whose raw value is live in **no** client is `BadHandle` — RM's own
+    /// `clientGetResource` failure, and the arm that must survive the host-faithful
+    /// rewrite of [`MockRmBackend::check`].
+    ///
+    /// ★ Note precisely what this does and does not show. Isolate B has allocated
+    /// nothing, so `ha`'s host-visible value names no object *there* either. It is a test
+    /// of the unknown-handle arm, **not** of blast-radius containment — which the mock
+    /// deliberately no longer provides, because a real host does not. See
+    /// [`a_sibling_clients_live_raw_value_is_served_exactly_as_a_real_host_would`].
     #[test]
     fn mock_rm_handles_are_isolate_scoped() {
         let (mut f, _rec) = MockIsolateFactory::new();
@@ -2270,12 +2786,246 @@ mod tests {
             .checkout()
             .expect("idle worker")
             .with_rm(|rm| rm.alloc_vaspace().unwrap());
-        // Using isolate A's handle on isolate B is refused: blast-radius containment.
         assert_eq!(
             b.checkout()
                 .expect("idle worker")
                 .with_rm(|rm| rm.schedule(ha)),
             Err(RmError::BadHandle(ha))
+        );
+    }
+
+    /// ★★★ **The double's one known LIE, corrected** (`host_execution_plane.md` §2.1).
+    ///
+    /// `MockRmBackend` used to validate handles against its own per-isolate namespace, so
+    /// a cross-namespace handle was *refused by the backend*. [`HostHandle`]'s own docs
+    /// say a real host does **not**: every client's handles come from one
+    /// `RS_CLIENT_HANDLE_BASE`, so isolate A's n-th object and isolate B's n-th object
+    /// wear the same raw value, both live and unrelated. `07da582`'s cross-GPU handle was
+    /// caught **only** by that refusal — i.e. by something production does not have.
+    ///
+    /// Five facts, in the order the damage happens:
+    ///
+    /// 1. two clients really do mint the same host-visible value;
+    /// 2. presenting A's handle on B's connection **succeeds** — no fault, as on a host;
+    /// 3. …and it is recorded as the [`BystanderHit`] it is, naming the local victim;
+    /// 4. the victim is **destroyed**: B's own handle no longer resolves, which is the
+    ///    actual damage rather than a proxy for it;
+    /// 5. the [`HostLedger`] still catches it — `free_of_unknown` names the reach and the
+    ///    destroyed twin stays outstanding forever. That is the right place for the
+    ///    detector: an audit of what happened, not the backend's luck.
+    #[test]
+    fn a_sibling_clients_live_raw_value_is_served_exactly_as_a_real_host_would() {
+        let (mut f, rec) = MockIsolateFactory::new();
+        let (ia, ib) = (
+            IsolateId::new(1, GpuId::ZERO),
+            IsolateId::new(2, GpuId::ZERO),
+        );
+        let mut a = f.spawn(ia);
+        let mut b = f.spawn(ib);
+        let ha = a
+            .checkout()
+            .expect("idle worker")
+            .with_rm(|rm| rm.alloc_vaspace().unwrap());
+        let hb = b
+            .checkout()
+            .expect("idle worker")
+            .with_rm(|rm| rm.alloc_vaspace().unwrap());
+
+        // ---- (1) one base, two clients, one value.
+        assert_ne!(ha, hb, "the recorded PROVENANCE still separates them");
+        assert_eq!(
+            ha.raw() & HOST_RAW_MASK,
+            hb.raw() & HOST_RAW_MASK,
+            "★ …but the HOST-VISIBLE value is identical, as RM's single handle base makes it"
+        );
+
+        // ---- (2)+(3) B serves A's handle against B's own object.
+        assert_eq!(
+            b.checkout().expect("idle worker").with_rm(|rm| rm.free(ha)),
+            Ok(()),
+            "★★ a real host does not fault here — it names a different, LIVE object"
+        );
+        assert_eq!(
+            rec.lock().expect("recorder").bystander_hits,
+            vec![BystanderHit {
+                isolate: ib,
+                presented: ha,
+                hit: hb,
+            }],
+            "★ and the double says which bystander was hit, by name"
+        );
+
+        // ---- (4) the bystander really is gone from B's client.
+        assert_eq!(
+            b.checkout()
+                .expect("idle worker")
+                .with_rm(|rm| rm.schedule(hb)),
+            Err(RmError::BadHandle(hb)),
+            "★★ B's OWN object was destroyed by a verb that never named it"
+        );
+
+        // ---- (5) the ledger is the detector, and it names both halves of the damage.
+        let l = rec.lock().expect("recorder").ledger();
+        assert_eq!(
+            l.free_of_unknown,
+            vec![(ib, ha)],
+            "the cross-namespace reach (boundary 2), recorded"
+        );
+        assert_eq!(
+            (l.leaked_on(ia), l.leaked_on(ib)),
+            (BTreeSet::from([ha]), BTreeSet::from([hb])),
+            "★ A's object is untouched and B's destroyed twin is outstanding forever — \
+             nothing will ever free it, because nothing can name it"
+        );
+
+        // ---- The unknown-handle arm is untouched: a value live NOWHERE still faults.
+        let mut c = f.spawn(IsolateId::new(3, GpuId::ZERO));
+        assert_eq!(
+            c.checkout()
+                .expect("idle worker")
+                .with_rm(|rm| rm.schedule(ha)),
+            Err(RmError::BadHandle(ha)),
+            "a client with no object at that value still refuses — this is not a \
+             blanket accept"
+        );
+    }
+
+    /// ★★★ **The park witness reads the real thread-local, not a constant.**
+    ///
+    /// Every wedge test asserts [`ParkedVerb::held_lock_mask`] `== 0`, and a field
+    /// hard-wired to `0` would satisfy all of them — the exact vacuity this campaign keeps
+    /// finding. So this test makes the witness report a **non-zero** mask, which is only
+    /// possible if it is genuinely reading [`kayfabe_util::lockwitness::held_mask`].
+    ///
+    /// ★ And the shape it uses is not artificial. `Worker::with_rm` asserts lock-freedom
+    /// at **its entry**; a rank noted *inside* the closure is a lock acquired **past the
+    /// door**, which the entry assert cannot see and which is precisely the R1 violation
+    /// the park record exists to catch — a thread spending an unbounded host wait with one
+    /// of our ranked locks held.
+    #[test]
+    fn the_park_witness_reads_the_real_thread_local_not_a_constant() {
+        let _wd = bounded("the_park_witness_reads_the_real_thread_local_not_a_constant");
+        use kayfabe_util::lockwitness;
+
+        let (mut f, rec) = MockIsolateFactory::new();
+        let id = IsolateId::new(7, GpuId::ZERO);
+        let mut iso = f.spawn(id);
+        let hold = rec.lock().expect("recorder").hold(HoldSpec::exact(
+            id,
+            WorkerId(0),
+            VerbKind::AllocVaSpace,
+        ));
+        let mut w = iso.checkout().expect("idle worker");
+
+        std::thread::scope(|sc| {
+            sc.spawn(|| {
+                w.with_rm(|rm| {
+                    lockwitness::note_acquired(1); // ★ past the entry assert
+                    let r = rm.alloc_vaspace();
+                    lockwitness::note_released(1);
+                    r
+                })
+                .expect("the verb completes once released");
+            });
+            hold.wait_until_pending();
+            hold.release();
+        });
+
+        assert_eq!(
+            rec.lock().expect("recorder").parked_of(id),
+            vec![ParkedVerb {
+                isolate: id,
+                worker: WorkerId(0),
+                verb: VerbKind::AllocVaSpace,
+                held_lock_mask: lockwitness::bit(1),
+            }],
+            "★★ the park record must carry the mask the PARKING THREAD actually held. A \
+             constant `0` passes every `== 0` assertion in the suite and detects nothing"
+        );
+        assert_eq!(
+            lockwitness::held_depth(),
+            0,
+            "the test thread itself never held one"
+        );
+    }
+
+    /// ★★ [`ClientLock`]: verbs of ONE client serialise; verbs of DIFFERENT clients do
+    /// not. The port-level version of what `l1_mean` asserts through the whole device.
+    ///
+    /// The edge is [`ClientLock::wait_until_blocked`], never a sleep.
+    #[test]
+    fn one_clients_verbs_serialise_and_another_clients_do_not() {
+        let _wd = bounded("one_clients_verbs_serialise_and_another_clients_do_not");
+        let (mut f, rec) = MockIsolateFactory::new();
+        rec.lock().expect("recorder").serialize_per_client = true;
+        let (ia, ib) = (
+            IsolateId::new(1, GpuId::ZERO),
+            IsolateId::new(2, GpuId::ZERO),
+        );
+        let mut a = f.spawn(ia);
+        let mut b = f.spawn(ib);
+        let hold = rec.lock().expect("recorder").hold(HoldSpec::exact(
+            ia,
+            WorkerId(0),
+            VerbKind::AllocVaSpace,
+        ));
+        let lock_a = rec
+            .lock()
+            .expect("recorder")
+            .client_lock(ia)
+            .expect("spawned");
+        let lock_b = rec
+            .lock()
+            .expect("recorder")
+            .client_lock(ib)
+            .expect("spawned");
+
+        let mut w0 = a.checkout().expect("slot 0");
+        let mut w1 = a.checkout().expect("slot 1");
+        std::thread::scope(|sc| {
+            sc.spawn(|| w0.with_rm(|rm| rm.alloc_vaspace().expect("released eventually")));
+            hold.wait_until_pending();
+            assert_eq!(
+                lock_a.held_by(),
+                Some((WorkerId(0), VerbKind::AllocVaSpace))
+            );
+
+            sc.spawn(|| w1.with_rm(|rm| rm.alloc_sysmem(0x1000).expect("released eventually")));
+            lock_a.wait_until_blocked(1);
+            assert_eq!(
+                lock_a.queued(),
+                vec![(WorkerId(1), VerbKind::AllocSysmem)],
+                "★ a sibling worker of the SAME client is blocked, named exactly"
+            );
+
+            // …while the OTHER client runs to completion, on this very thread.
+            b.checkout().expect("idle worker").with_rm(|rm| {
+                rm.alloc_vaspace()
+                    .expect("a different client is unaffected")
+            });
+            assert_eq!(
+                (lock_b.waits(), lock_b.queued()),
+                (vec![], vec![]),
+                "★★ …and recorded no block of its own — no cross-client amplification"
+            );
+
+            assert_eq!(
+                lock_a.waits(),
+                vec![ClientWait {
+                    isolate: ia,
+                    waiter: WorkerId(1),
+                    waiter_verb: VerbKind::AllocSysmem,
+                    holder: WorkerId(0),
+                    holder_verb: VerbKind::AllocVaSpace,
+                }],
+                "exactly one block, naming both sides"
+            );
+            hold.release();
+        });
+        assert_eq!(
+            lock_a.held_by(),
+            None,
+            "every guard released its client's lock"
         );
     }
 }

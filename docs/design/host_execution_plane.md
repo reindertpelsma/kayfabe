@@ -122,6 +122,41 @@ new infrastructure.
 Randomised delay is kept as a **secondary** fuzz behind `KAYFABE_SLOW=1`, never as the
 thing an invariant rests on.
 
+### 2.0 ★★★ BUILT, 2026-07-29 — and the measurement §2 asked for
+
+Built as `kayfabe_mocks::ClientLock` (one lock per `IsolateId`, taken by
+`MockRmBackend::gate` for the whole verb, released by a `ClientGuard` on every exit
+including the `Err` paths), plus `RmRecorder::parked_verbs` (the ranked-lock mask a verb
+parked with — R1 *across* the wait, which `Worker::execute`'s entry assert cannot see) and
+`ClientLock::wait_until_blocked` (a progress **edge**, the `VerbHold::wait_until_pending`
+idiom, so nothing sleeps). Asserted by `l1_mean`'s
+`a_verb_wedged_on_one_rm_client_blocks_its_sibling_and_no_other_client`,
+`a_wedged_verb_is_not_cancelled_and_still_holds_its_clients_lock` and
+`every_poll_around_a_wedged_client_is_bounded_and_delivers_only_its_own`.
+
+**★★ It is opt-in (`RmRecorder::serialize_per_client`, default off) and that is the
+finding, not a compromise.** Forced on for one full workspace run: **12 tests stop
+terminating, 0 assertions fail.** Every one is a *liveness* claim of the form *"N pool
+workers of one isolate have N verbs in flight at once"* — `retry_ledger` arms one hold
+**per pool slot** and requires them all pending; `l1_mean`'s composed run requires three
+sibling threads of the witness `Proc` to finish while two of its verbs are parked;
+`l1_verb_seam::progress_under_pending_verb_intra_proc` states it directly. The full table
+is on the field's own docs.
+
+That claim is **stronger than this design's**. §6.6 of `l1_os_shell.md` already states
+I-NOAMP as a **cross-process** obligation and says so in as many words: *"on real
+hardware, process A's slow RM call already makes process B's RM call wait. We do not
+create this property and we cannot delete it. We can only amplify it."* The suite's
+intra-proc progress claim was passing only because the double returned promptly by
+construction.
+
+**Open, and an owner call — not fixed here.** Either the intra-proc claim is renegotiated
+in `l1_concurrency.md` §3.5/§7.2 (the pool buys latency isolation, not wire concurrency —
+which `DEFAULT_POOL_WORKERS`' own docs already say) and those 12 tests are rewritten
+around the weaker true property, or the flag stays off and the divergence stays recorded.
+**No test was narrowed to get green**; the flag exists so the hazard is testable *today*
+without silently editing twelve assertions.
+
 ### 2.1 ★ The mock must lie where the real host lies
 
 `MockRmBackend` validates handles against its own per-isolate namespace. `HostHandle`'s
@@ -129,6 +164,32 @@ docs state a real host does **not** — RM mints from one base, so the same raw 
 live and unrelated in a sibling isolate's client. Until the double reproduces that, every
 handle-boundary test is optimistic. **This is a known, specific divergence: fix the double
 rather than trusting it.** (`07da582` is the instance that exposed it.)
+
+**★ FIXED, 2026-07-29.** `MockRmBackend::check` now resolves on the **host-visible** part
+of the value (`kayfabe_mocks::HOST_RAW_MASK` — the mock's high lanes are instrumentation,
+the low field is the per-client sequence every client mints from the same base, exactly as
+RM does from `RS_CLIENT_HANDLE_BASE`). A sibling client's handle whose value is live here
+is **served against the local twin** and recorded as a `BystanderHit`; the twin is
+destroyed, which is the actual damage. A value live nowhere is still `BadHandle`.
+
+Two things this changed, and neither was a weakening:
+
+- **What still catches it** is `Worker::execute`'s foreign-handle gate (recorded
+  provenance, refused before any verb) and `HostLedger::free_of_unknown` (the `Free` is
+  logged with the handle as *presented*, so the reach is named and the destroyed twin
+  stays outstanding forever). Both are audits of what happened rather than the backend's
+  luck. `kayfabe_mocks`' own
+  `a_sibling_clients_live_raw_value_is_served_exactly_as_a_real_host_would` pins all five
+  steps.
+- **Nothing in the suite broke** — 748/748 both ways. Measured, not assumed: no existing
+  test was relying on the backend refusal in a case where a twin existed. The mean tests
+  now additionally assert `bystander_hits == []` through the composed runs, which is
+  non-vacuity for the gate: the door is open in the double and production never reaches
+  it.
+
+★ The remaining door is `Worker::with_rm`, the documented escape hatch, which skips the
+foreign-handle gate by design. It is bring-up-only and the ledger still catches it, but it
+is now the *only* place a cross-namespace reach can execute.
 
 ## 3. ★★ DECISION — build the real isolate next, and force the question
 
