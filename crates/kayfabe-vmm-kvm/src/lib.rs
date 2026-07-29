@@ -135,10 +135,65 @@
 //!   [`KvmMachine::advance`], sharing `kayfabe_vmm::DeferQueue` with the mock (§6.4).
 //!   A wall clock here would buy nothing and would make every suite that composes this
 //!   backend non-deterministic, which §8.3 forbids.
+//!
+//! ## ★★★ The seam map: what this crate shares with `kayfabe-vmm-qemu`, measured
+//!
+//! **Reported, not acted on.** Hoisting is an owner decision and a large refactor; what is
+//! recorded here is the measurement, so the decision is made against numbers. Taken over
+//! the two `lib.rs` files, comparing same-named items line by line with comments and blanks
+//! stripped (2026-07-29):
+//!
+//! | item | qemu | kvm | identical | note |
+//! |---|---|---|---|---|
+//! | `map_guest` | 88 | 92 | **77 (84%)** | the plan/execute/commit dance, `Prot`, R5 revalidate |
+//! | `export_ram` | 33 | 33 | **28 (85%)** | identical but for the refusal constant |
+//! | `unmap_guest` | 39 | 34 | 25 (64%) | |
+//! | `AuditReport::report` | 35 | 32 | 22 (63%) | field-for-field, watermarks and all |
+//! | `map_read_native` | 25 | 25 | **19 (76%)** | |
+//! | `collect_retired` | 18 | 18 | **17 (94%)** | |
+//! | `register_backing` | 17 | 17 | **17 (100%)** | byte-identical |
+//! | `retire` | 9 | 12 | 9 (75%) | #57's ownership fix, twice |
+//! | `Plane::view` / `installer` / `about_to_syscall` | 31 | 31 | 22 (71%) | the lock discipline |
+//! | `Audit::{new,bump,note_ranked}` | 20 | 20 | **18 (90%)** | |
+//! | `dup_owned`, `advance`, `defer`, `now`, `resolve_region`, `page_size`, `audit` | 28 | 28 | **28 (100%)** | byte-identical |
+//!
+//! **405 identical lines across same-named items**, of which roughly 120 are byte-identical
+//! whole functions. `map_guest` alone is 77.
+//!
+//! ### Genuinely hypervisor-specific — a third backend must write these itself
+//!
+//! - *QEMU*: the `QemuHost` trait and the topology listener (`region_add`/`region_del`/
+//!   `classify`), the BAR latch and its move tripwire, `realize`/`unrealize` lifecycle and
+//!   `assert_live`, the migration blocker and `ram_block_discard_disable`, the `SlotPlane`
+//!   seam, and finding 3 (our reservations are served from *our* map and stay `Device` in
+//!   the region map).
+//! - *KVM-direct*: `Kvm`/`KvmVm` ownership, `vcpu.rs` and exit classification,
+//!   `GuestRamMap::declare`/`undeclare` (here a RAM region **is** a memslot), the notifier.
+//! - *Both, but oppositely*: slot-number **direction** — see [`slotnum`].
+//!
+//! ### The shared core a `kayfabe-vmm-common` would hold
+//!
+//! `map_guest`/`unmap_guest`'s phase structure, `retire`/`collect_retired`, the whole
+//! `Audit`/`AuditReport` ledger and its non-vacuity discipline, the `view`/`installer`/
+//! `about_to_syscall` lock protocol, `export_ram`/`register_backing`, the virtual clock,
+//! `host_refused`/`dup_owned`, the tier/span algebra (`kayfabe_vmm_qemu::slots::spans`
+//! versus this crate's `memslot_spans` — the same function, written twice), the trap-mode
+//! rule (`trap_is_physical` here has no counterpart yet: this crate still inlines it), and
+//! slot-number allocation behind one release contract.
+//!
+//! ### What a Cloud Hypervisor port would be forced to fork **today**
+//!
+//! All of the second list. CH is a Rust VMM that owns its own `KvmVm`, so it would copy
+//! `kayfabe-vmm-kvm` — and thereby inherit a third copy of `map_guest` (92 lines), a third
+//! `Audit` (32), a third `retire`, a third clock, and a third slot allocator. It would also
+//! inherit whichever of the two crates' **bug fixes had not yet been ported at the moment
+//! it copied**, which is the real cost: the two `set_trap` implementations are 45% identical
+//! and disagreed about whether anybody reads the registration for a month.
 
 #![allow(clippy::module_name_repetitions)]
 
 pub mod leaf;
+pub mod slotnum;
 pub mod vcpu;
 
 use core::ops::Range;
@@ -156,6 +211,8 @@ use kayfabe_vmm::{
     BarId, CoreEvent, DeferQueue, GuestRamMap, HostRegion, IrqSpec, Prot, RamHandle, RamRegionId,
     RegionKind, SlotId, TrapMode, Vmm, VmmError,
 };
+
+use crate::slotnum::MemslotNumbers;
 
 /// Refusal text for the deployment fact no code gate can observe (§4.4.1).
 const NO_SHARED_BACKING: &str =
@@ -236,6 +293,11 @@ pub struct AuditReport {
     pub memslot_installs: u64,
     /// ★ Cumulative `MAP_FIXED` placements — the gate's denominator.
     pub placements_made: u64,
+    /// ★★ Memslot numbers re-issued from the allocator's free list — the **non-vacuity**
+    /// half of [`crate::slotnum`]'s adjudication. A suite where this stays zero would pass
+    /// identically against the never-recycling allocator that was replaced, so a churn test
+    /// that does not assert it is a churn test that proves nothing.
+    pub slot_numbers_recycled: u64,
     /// `(min, max)` of `lockwitness::held_depth()` observed at `gpa_read`/`gpa_write`.
     /// `max == 0` means the in-lock hazard was never exercised; `min == u32::MAX` means
     /// no access happened at all. **Both halves are load-bearing.**
@@ -294,6 +356,7 @@ struct Audit {
     peak_placements: AtomicU64,
     memslot_installs: AtomicU64,
     placements_made: AtomicU64,
+    slot_numbers_recycled: AtomicU64,
     accessor_depth_min: AtomicU32,
     accessor_depth_max: AtomicU32,
     syscall_depth_min: AtomicU32,
@@ -354,6 +417,7 @@ impl Audit {
             peak_placements: g(&self.peak_placements),
             memslot_installs: g(&self.memslot_installs),
             placements_made: g(&self.placements_made),
+            slot_numbers_recycled: g(&self.slot_numbers_recycled),
             accessor_ranked_depth: (h(&self.accessor_depth_min), h(&self.accessor_depth_max)),
             syscall_ranked_depth: (h(&self.syscall_depth_min), h(&self.syscall_depth_max)),
             copy_leaf_depth_max: h(&self.copy_leaf_max),
@@ -439,11 +503,14 @@ struct Installer {
     exports: Vec<std::os::fd::OwnedFd>,
     next_region: u64,
     next_slot_id: u64,
-    /// Kernel memslot numbers currently in use, and the next free one. Numbers are not
-    /// recycled: a recycled slot number is indistinguishable from a stale one in a
-    /// kernel log, and the ceiling is in the hundreds.
-    next_memslot: u32,
-    max_memslots: u32,
+    /// ★★ Kernel memslot numbers, **recycled through a free list** — see
+    /// [`crate::slotnum`] for the adjudication that changed this. It used to be a bare
+    /// ascending cursor on the stated ground that *"a recycled slot number is
+    /// indistinguishable from a stale one in a kernel log, and the ceiling is in the
+    /// hundreds"*, which is the same policy the sibling QEMU adapter's own docs record as
+    /// the C's **measured** exhaustion (`C: nvkvm_mmap_host.c:382-389`, *"exhausted the
+    /// pool after a few CUDA processes"*). Neither doc cited the other.
+    memslot_numbers: MemslotNumbers,
     generation: u64,
     /// ★★ **Removed windows whose mapping has not been released yet** — see
     /// [`Plane::retire`]. The machine holds one reference to each, so an accessor's clone
@@ -677,8 +744,7 @@ impl KvmMachine {
                     exports: Vec::new(),
                     next_region: 1,
                     next_slot_id: 1,
-                    next_memslot: 0,
-                    max_memslots,
+                    memslot_numbers: MemslotNumbers::new(max_memslots),
                     generation: 1,
                     retired: Vec::new(),
                 }),
@@ -709,7 +775,12 @@ impl KvmMachine {
     /// The kernel's memslot ceiling for this VM.
     #[must_use]
     pub fn memslot_ceiling(&self) -> u32 {
-        self.plane.installer.lock().expect("installer").max_memslots
+        self.plane
+            .installer
+            .lock()
+            .expect("installer")
+            .memslot_numbers
+            .ceiling()
     }
 
     /// ★★ **The coarse tier.** Map `len` bytes of host memory and install it as a memslot
@@ -777,20 +848,17 @@ impl KvmMachine {
                     return Err(VmmError::Unsupported(TRAP_SPAN_OUTSIDE_EVERY_BAR));
                 }
             }
-            if ins.next_memslot as u64 + spans.len() as u64 > u64::from(ins.max_memslots) {
-                return Err(VmmError::Unsupported(
-                    "the kernel's memslot ceiling — §6.7's frequency rule is what keeps a \
-                     data plane away from it",
-                ));
-            }
+            let numbers = ins
+                .memslot_numbers
+                .alloc(spans.len())
+                .map_err(VmmError::Unsupported)?;
+            p.audit
+                .slot_numbers_recycled
+                .store(ins.memslot_numbers.recycled(), Ordering::SeqCst);
             let region = RamRegionId(ins.next_region);
             ins.next_region += 1;
             let slot_id = SlotId(ins.next_slot_id);
             ins.next_slot_id += 1;
-            let numbers: Vec<u32> = (0..spans.len() as u32)
-                .map(|i| ins.next_memslot + i)
-                .collect();
-            ins.next_memslot += spans.len() as u32;
             (region, slot_id, numbers, spans, ins.generation)
         };
 
@@ -856,7 +924,21 @@ impl KvmMachine {
         // dropping it here `munmap`s the window and clears whatever memslots did install
         // — before any of it was recorded anywhere. Nothing leaks and nothing is
         // half-declared, which is the property a mock's infallible insert cannot have.
-        let installed = outcome?;
+        //
+        // ★★ The numbers go back too, and they go back **after** that drop — the ordering
+        // [`MemslotNumbers::release`]'s contract demands, since each drop is the clearing
+        // ioctl. This arm was a plain `outcome?` while numbers were never recycled: a leak
+        // that a never-recycling allocator makes invisible, because it leaks anyway.
+        let installed = match outcome {
+            Ok(i) => i,
+            Err(e) => {
+                let (mut ins, _h) = p.installer();
+                for n in memslot_numbers {
+                    ins.memslot_numbers.release(n);
+                }
+                return Err(e);
+            }
+        };
         let n_slots = installed.memslots.len() as u64;
         let win_handle = Arc::clone(&installed.window);
         // The rounded, guest-physical span that is read-only in the kernel — i.e. exactly
@@ -967,8 +1049,19 @@ impl KvmMachine {
             ram,
             ..
         } = taken;
+        // ★★★ The ordering [`MemslotNumbers::release`]'s contract demands: read the numbers,
+        // drop the live slots FIRST — each `Drop` is the clearing ioctl — and only then hand
+        // the numbers back. A number returned before its slot was cleared turns the next
+        // install from an ADD into a silent REPLACE.
+        let numbers: Vec<u32> = memslots.iter().map(KvmMemslot::slot).collect();
         drop(memslots);
         drop(ram);
+        {
+            let (mut ins, _h) = p.installer();
+            for n in numbers {
+                ins.memslot_numbers.release(n);
+            }
+        }
         p.retire(window);
         Ok(())
     }
@@ -1079,6 +1172,28 @@ impl KvmMachine {
             "the installer holds windows the view cannot resolve — a mapping the guest \
              can reach and the region map denies is the inverse of the §10.1 item 6 hazard"
         );
+        // ★★★ **What is deliberately NOT asserted here, and why.**
+        //
+        // The obvious companion to [`crate::slotnum`]'s release contract is *"no two live
+        // windows hold the same kernel memslot number"*. It was written, and then removed,
+        // because **it could not be made to fire.** Every route by which an allocator hands
+        // out a number that is already live is caught earlier and more sharply somewhere
+        // else, as four separate bite-checks measured on this kernel:
+        //
+        // - re-issuing a live number to a second window at a different guest-physical base
+        //   is `EINVAL` from `KVM_SET_USER_MEMORY_REGION` (a move to a new host address is
+        //   not a thing KVM does), so the install fails and no duplicate is recorded;
+        // - re-issuing it over an *overlapping* range is the kernel's `EEXIST`;
+        // - a number returned to the pool twice trips
+        //   [`slotnum::MemslotNumbers::release`]'s own assertion first;
+        // - and a slot that really did get double-installed fails **loudly at teardown**, in
+        //   `kayfabe_linux_raw`'s clearing assertion — measured in the QEMU adapter's
+        //   `kvm_differential`.
+        //
+        // A duplicate that survives to be observed here needs the one arm the kernel accepts
+        // silently (same number, same base, same size, different host mapping), which no
+        // path through this adapter can produce. An assertion nobody could ever see fail is
+        // the exact defect this whole audit is about, so it is a comment instead.
         // ★★ And every registered trap is still PHYSICALLY a trap. `set_trap` checked its
         // precondition once, at registration; a window installed afterwards can falsify
         // it, and until this loop existed `Installer::traps` was never read by anything,

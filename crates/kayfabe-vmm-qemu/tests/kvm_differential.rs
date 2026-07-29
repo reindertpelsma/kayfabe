@@ -278,3 +278,91 @@ fn the_mock_ceiling_and_a_real_one_are_in_the_same_class() {
         "and so must the fixture, or every mock-side test is exercising the too-small arm"
     );
 }
+
+/// ★★★ **The mock's fourth arm, MEASURED at last.**
+///
+/// [`MockSlotPlane`] deliberately does not refuse a number that is already live, and its
+/// docs state why: *"a number that is already live is a replace, not a refusal, and the
+/// kernel says nothing"* — the silence [`kayfabe_vmm_qemu::slots::SlotAllocator`] and
+/// `kayfabe_vmm_kvm::slotnum` both exist to prevent. That sentence was the one claim in
+/// this file's scenario list nobody had ever run against a kernel, which is the shape of
+/// defect this whole task is about: a hazard argument resting on unmeasured behaviour.
+///
+/// It is measured here, and it is **true in the arm that matters** — re-installing a live
+/// number over the same host mapping succeeds, returns `Ok`, and reports nothing at all.
+///
+/// ★ It is *not* universally true, and the difference is worth writing down: the kernel
+/// rejects a re-issue that is simultaneously a **move** (a new guest-physical base) and a
+/// new host address, with `EINVAL`. So a collision with a foreign allocator's slot is
+/// sometimes loud. Sometimes-loud is not a safety property, so nothing depends on it —
+/// but a reader who measures the loud arm first should not conclude the silence is a myth.
+#[test]
+fn a_live_slot_number_is_silently_replaced_by_a_real_kernel_exactly_as_the_mock_models() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_live_slot_number_is_silently_replaced_by_a_real_kernel_exactly_as_the_mock_models"
+    );
+    let p = page();
+    let real = real();
+    let mock = MockSlotPlane::new(real.ceiling().expect("ceiling"), p);
+    let w = window(4);
+    let base = 0x5E00_0000;
+
+    // The first slot, in both planes.
+    let first_real = real
+        .install(9, base, &w, 0, 2 * p, false)
+        .expect("the first");
+    let first_mock = mock
+        .install(9, base, &w, 0, 2 * p, false)
+        .expect("the first");
+    assert_eq!(mock.replaces(), 0, "nothing has been replaced yet");
+
+    // The SAME number again, over the same host mapping. Both accept; neither says a word.
+    let second_real = real
+        .install(9, base, &w, 0, 2 * p, false)
+        .expect("★ THE SILENCE: a real kernel accepts a number that is already live");
+    let second_mock = mock
+        .install(9, base, &w, 0, 2 * p, false)
+        .expect("and so does the double, by design");
+    assert_eq!(
+        mock.replaces(),
+        1,
+        "★ NON-VACUITY: the double COUNTED the replace it refuses to refuse — which is the          only way any test can assert the absence of one"
+    );
+
+    // The loud arm, for the record: a re-issue that is also a move to a different host
+    // address is EINVAL. Measured, not assumed — and nothing depends on it.
+    let w2 = window(4);
+    assert_eq!(
+        real.install(9, base + 0x10_0000, &w2, 0, 2 * p, false)
+            .map(|_| ())
+            .unwrap_err(),
+        RawError::Syscall {
+            call: "KVM_SET_USER_MEMORY_REGION",
+            errno: Some(KERNEL_EINVAL),
+        },
+        "a re-issue that MOVES the slot to a new host address is refused; a re-issue in          place is not"
+    );
+
+    // ★★ And the aliasing that was silent at install is **loud at release**: the first
+    // handle's drop clears slot 9, and the shadowed handle's drop then finds nothing to
+    // clear. `kayfabe_linux_raw`'s own drop assertion is what says so — measured here
+    // rather than assumed, because it is the last line of defence if an allocator ever
+    // does hand out a live number.
+    drop(second_real);
+    drop(second_mock);
+    drop(first_mock);
+    let boom = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(first_real)));
+    let err = boom.expect_err(
+        "★ dropping the SHADOWED handle must fail loudly — if this ever starts succeeding, \
+         a double-installed slot leaves no trace anywhere in the system",
+    );
+    let msg = err
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| err.downcast_ref::<&str>().map(|s| (*s).to_owned()))
+        .unwrap_or_default();
+    assert!(
+        msg.contains("clearing memslot 9 failed"),
+        "and it must fail for THAT reason, not merely fail: {msg}"
+    );
+}

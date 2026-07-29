@@ -196,6 +196,27 @@ pub const TRAP_OUTSIDE_THE_REALIZED_TABLE: &str = "a trap registration outside t
      device is enumerated there and marked there, and a range the table does not cover is a \
      region nobody marked";
 
+/// ★★★ `install_window` refusal: a reservation over a guest-physical range one of ours
+/// already covers.
+///
+/// # Why this is ours to refuse and not the kernel's
+///
+/// It looks like the kernel's job — `KVM_SET_USER_MEMORY_REGION` answers `EEXIST` for an
+/// overlapping range, and that is what this path relied on. But the kernel only ever sees
+/// the spans that get a **memslot**, and a [`Tier::Observe`] span deliberately gets none:
+/// it is the tier whose whole definition is "no slot at all". So a reservation whose
+/// overlapping part is observe-tiered — on either side — is installed with the kernel never
+/// asked, and two of our windows then claim the same guest-physical range. `resolve` picks
+/// whichever the `BTreeMap` iteration order reaches first, and the loser's memslots stay
+/// live underneath.
+///
+/// The kernel is also the wrong place to ask on principle: a refusal that arrives from the
+/// execute phase has already `mmap`ed a reservation and installed some of its slots, and
+/// unwinding that is strictly more expensive than not starting.
+pub const WINDOW_OVER_A_LIVE_RESERVATION: &str = "a reservation over a guest-physical range one of this device's reservations already \
+     covers; the kernel refuses overlapping MEMSLOTS, but an observe-tiered span has no \
+     memslot for it to refuse, so nothing outside this check can see the collision";
+
 /// ★★ `set_trap` refusal: a read-write trap over a range a memslot already serves.
 pub const TRAP_OVER_A_LIVE_SLOT: &str = "a read-write trap over a range a live memslot serves; the guest's access resolves from \
      the slot and never leaves the guest, so the registration reads as a trap and is none";
@@ -528,17 +549,77 @@ pub(crate) struct View {
     /// ★★★ **Our** reservations, consulted BEFORE `regions` and served by our own offset
     /// arithmetic. Nothing here is ever reachable through the hypervisor.
     windows: BTreeMap<RamRegionId, WindowView>,
-    /// The guest-physical tiering of every live window, as the kernel was told it.
-    /// Published under the same lock as the window, so no dispatcher can see one without
-    /// the other.
-    tiers: Vec<(u64, u64, Tier)>,
+    /// The guest-physical tiering of every live window, as the kernel was told it,
+    /// **keyed by the window that owns it**. Published under the same lock as the window,
+    /// so no dispatcher can see one without the other.
+    ///
+    /// ★★★ Keyed, not flat, and that is the fix for a guard-defeating bookkeeping bug.
+    /// This was a flat `Vec` that `remove_window` pruned by **containment** — every row
+    /// inside the departing window's `[gpa, gpa+len)`. Windows nest (a `map_read_native`
+    /// overlay inside a reservation is the ordinary case), so removing an OUTER window
+    /// deleted an INNER window's rows while the inner window's memslots stayed live. What
+    /// that costs is not a stale table: [`Vmm::set_trap`]'s [`TRAP_OVER_A_LIVE_SLOT`] check
+    /// reads exactly these rows, so it would then find no slot and **pass vacuously** —
+    /// registering a read-write trap over a range a live memslot serves, which is the
+    /// precise condition it exists to refuse. A guard defeated by a bookkeeping bug is
+    /// indistinguishable from a guard that works. Ownership is not a geometry question and
+    /// is no longer answered with one.
+    tiers: BTreeMap<RamRegionId, Vec<(u64, u64, Tier)>>,
     /// Foreign sections the listener declared, keyed by guest-physical base.
     foreign: BTreeMap<u64, (RamRegionId, u64, Option<MrHandle>)>,
     /// The guest-physical ranges **this device owns**, so a reported topology section that
     /// lands on one is refused rather than silently replacing a declaration we own.
-    ours: Vec<(u64, u64)>,
+    ///
+    /// ★★ The third element is the owner: `Some(region)` for a reservation, `None` for a
+    /// realize-time BAR. Same bug as `tiers`, one axis over — this was pruned by matching
+    /// `(gpa, len)` exactly, so removing a reservation that happened to span its **whole
+    /// BAR** (`WindowSpec::passthrough(bar.base, bar.len)`, the ordinary full-BAR shape)
+    /// deleted the BAR's own row, after which a reported topology section could declare
+    /// over a range this device owns and [`FOREIGN_OVERLAPS_OURS`] would not fire.
+    ours: Vec<(u64, u64, Option<RamRegionId>)>,
     /// §5.5's counter. Bumped by every listener callback.
     topology_generation: u64,
+}
+
+impl View {
+    /// Every live window's tier rows, flattened. The map is keyed by owner; a *rule* about
+    /// the guest-physical plane does not care which window a row came from.
+    fn tier_rows(&self) -> impl Iterator<Item = &(u64, u64, Tier)> {
+        self.tiers.values().flatten()
+    }
+}
+
+/// ★★★ **Is `[gpa, gpa+len)` physically what `mode` claims it is?**
+///
+/// The single evaluation of the rule behind [`TRAP_OVER_A_LIVE_SLOT`] and
+/// [`WRITE_TRAP_WITHOUT_A_READ_ONLY_SLOT`]. [`Vmm::set_trap`] asks it at registration;
+/// [`QemuMachine::assert_map_matches_the_kernel`] asks it again of the live plane, because a
+/// window installed *after* a registration can falsify it and the registration would then
+/// survive only in our bookkeeping.
+///
+/// # Errors
+/// The refusal text naming which half failed.
+fn trap_is_physical(v: &View, gpa: u64, len: u64, mode: TrapMode) -> Result<(), &'static str> {
+    match mode {
+        // A read-write trap IS the absence of a memslot. Any span with a slot under it —
+        // passthrough or read-native — serves the access inside the guest.
+        TrapMode::ReadWrite
+            if v.tier_rows()
+                .any(|(g, l, t)| *t != Tier::Observe && gpa < g + l && *g < gpa + len) =>
+        {
+            Err(TRAP_OVER_A_LIVE_SLOT)
+        }
+        // A write-only trap IS a read-only memslot. Without one the reads are served and so
+        // are the writes, silently.
+        TrapMode::WriteOnly
+            if !v
+                .tier_rows()
+                .any(|(g, l, t)| *t == Tier::ReadNative && gpa >= *g && gpa + len <= g + l) =>
+        {
+            Err(WRITE_TRAP_WITHOUT_A_READ_ONLY_SLOT)
+        }
+        _ => Ok(()),
+    }
 }
 
 /// One realize- or run-time reservation, as the **installer** knows it.
@@ -903,7 +984,7 @@ impl QemuMachine {
                         b.len,
                     )
                     .map_err(|_| VmmError::Unsupported("a BAR that leaves the 64-bit space"))?;
-                v.ours.push((b.base, b.len));
+                v.ours.push((b.base, b.len, None));
             }
         }
         for w in &cfg.windows {
@@ -1004,6 +1085,17 @@ impl QemuMachine {
 
         let (region, slot_id, numbers) = {
             let (mut ins, _h) = p.installer();
+            // ★★★ No two of OUR reservations may claim the same guest-physical range. See
+            // [`WINDOW_OVER_A_LIVE_RESERVATION`] for why the kernel's `EEXIST` does not
+            // cover this: an observe-tiered span installs no memslot, so the kernel is
+            // never asked about it.
+            if ins
+                .windows
+                .values()
+                .any(|w| gpa < w.gpa + w.len && w.gpa < gpa + len)
+            {
+                return Err(VmmError::Unsupported(WINDOW_OVER_A_LIVE_RESERVATION));
+            }
             let numbers = ins.alloc.alloc(want.len()).map_err(VmmError::Unsupported)?;
             p.audit
                 .slot_numbers_recycled
@@ -1126,8 +1218,8 @@ impl QemuMachine {
                     window: win_handle,
                 },
             );
-            v.tiers.extend(tiers);
-            v.ours.push((gpa, len));
+            v.tiers.insert(region, tiers);
+            v.ours.push((gpa, len, Some(region)));
         }
         Ok((region, slot_id))
     }
@@ -1229,9 +1321,143 @@ impl QemuMachine {
     #[must_use]
     pub fn tiers(&self) -> Vec<(u64, u64, Tier)> {
         let (v, _h) = self.plane.view();
-        let mut t = v.tiers.clone();
+        let mut t: Vec<(u64, u64, Tier)> = v.tiers.values().flatten().copied().collect();
         t.sort_unstable_by_key(|(g, _, _)| *g);
         t
+    }
+
+    /// ★★★ **The whole memory plane, re-checked against itself — and the only thing that
+    /// reads [`Installer::registered_traps`].**
+    ///
+    /// Returns the number of live reservations checked, so a caller can assert non-vacuity;
+    /// an empty plane passes this trivially and must never be mistaken for a verified one.
+    ///
+    /// # Why it exists
+    ///
+    /// `registered_traps` was **write-only**: [`Vmm::set_trap`] pushed to it and nothing —
+    /// not even an accessor — ever read it. That is the same shape the sibling KVM adapter
+    /// found and fixed in its own `Installer::traps`, and the same shape as #89: a
+    /// registration that looks like it configures something and configures nothing.
+    ///
+    /// The defect is not merely tidiness. `set_trap` checks its precondition **once, at
+    /// registration time**, against the tiering as it stands then. A reservation installed
+    /// afterwards can falsify it — install a passthrough window over a range registered as
+    /// a read-write trap and the guest's access is served silently from the memslot, with
+    /// the trap surviving only in that vector. Re-asking the question of the live plane is
+    /// the only thing that makes keeping the vector worth more than deleting it.
+    ///
+    /// It asks three further questions that only this side of the seam can answer, because
+    /// the installer's bookkeeping and the view's are separate structures that a partial
+    /// failure or a mis-scoped prune can silently pull apart.
+    ///
+    /// # Panics
+    /// If the plane disagrees with itself, naming which of the four clauses failed.
+    #[must_use]
+    pub fn assert_map_matches_the_kernel(&self) -> usize {
+        let p = &self.plane;
+        let (v, _h) = p.view();
+        let (ins, _h2) = p.installer();
+        let mut checked = 0usize;
+        for (region, w) in &ins.windows {
+            let view = v.windows.get(region).unwrap_or_else(|| {
+                panic!(
+                    "{region:?} is installed — {} live memslot(s) over [{:#x}, {:#x}) — and \
+                     the view cannot resolve it; the guest can reach a mapping our own \
+                     lookup denies",
+                    w.memslots.len(),
+                    w.gpa,
+                    w.gpa + w.len
+                )
+            });
+            assert_eq!(
+                (view.gpa, view.len),
+                (w.gpa, w.len),
+                "{region:?}'s view and installer disagree about where it is"
+            );
+            assert!(
+                Arc::ptr_eq(&view.window, &w.window),
+                "{region:?}'s view and installer disagree about which mapping backs it"
+            );
+
+            // ★★ The tier rows this window owns must still BE this window's tier rows: they
+            // must tile `[gpa, gpa+len)` exactly, and the ones that install a slot must
+            // number exactly its live memslots. This is what a prune-by-containment cannot
+            // survive — the inner window it deleted has zero rows and one live memslot.
+            let rows = v.tiers.get(region).unwrap_or_else(|| {
+                panic!(
+                    "{region:?} is a live reservation with NO tier rows — every rule about \
+                     what the guest's access does reads those rows, so a trap registration \
+                     over this range would now pass vacuously"
+                )
+            });
+            let mut at = w.gpa;
+            for (g, l, _) in rows {
+                assert_eq!(
+                    *g, at,
+                    "{region:?}'s tier rows must tile its range with no gap and no \
+                     overlap ({rows:?})"
+                );
+                at += l;
+            }
+            assert_eq!(
+                at,
+                w.gpa + w.len,
+                "{region:?}'s tier rows must cover it all"
+            );
+            assert_eq!(
+                rows.iter()
+                    .filter(|(_, _, t)| t.readonly_slot().is_some())
+                    .count(),
+                w.memslots.len(),
+                "{region:?} has {} live memslot(s) and {} slot-installing tier row(s) — the \
+                 kernel and the table disagree about which spans exit",
+                w.memslots.len(),
+                rows.iter()
+                    .filter(|(_, _, t)| t.readonly_slot().is_some())
+                    .count()
+            );
+
+            // ★ And the range is still claimed as ours, or a reported topology section
+            // could declare over it and `FOREIGN_OVERLAPS_OURS` would not fire.
+            assert!(
+                v.ours.contains(&(w.gpa, w.len, Some(*region))),
+                "{region:?} covers [{:#x}, {:#x}) and no longer claims it — a foreign \
+                 section over this range would be accepted",
+                w.gpa,
+                w.gpa + w.len
+            );
+            checked += 1;
+        }
+        assert_eq!(
+            checked,
+            v.windows.len(),
+            "the view resolves reservations the installer does not hold — a range served \
+             from a mapping nobody is going to unmap"
+        );
+        assert_eq!(
+            checked,
+            v.tiers.len(),
+            "there are tier rows for reservations that no longer exist; a stale row is \
+             worse than a missing one, because `set_trap` would refuse on the strength of a \
+             memslot that is gone"
+        );
+
+        // ★★★ THE READ. Every registered trap, re-asked of the live plane through the same
+        // one function `set_trap` used, so the two can never drift.
+        for (bar, range, mode) in &ins.registered_traps {
+            let Some(b) = p.bars.iter().find(|b| b.bar == *bar) else {
+                continue;
+            };
+            if let Err(why) =
+                trap_is_physical(&v, b.base + range.start, range.end - range.start, *mode)
+            {
+                panic!(
+                    "{bar:?}+{range:?} is registered as a {mode:?} trap and the live plane \
+                     no longer makes it one: {why}"
+                );
+            }
+        }
+        checked
     }
 
     /// Advance the virtual clock, returning every deferred event that became due.
@@ -1306,7 +1532,7 @@ impl QemuMachine {
         {
             let (v, _h) = p.view();
             let end = u128::from(s.gpa) + u128::from(s.len.max(1));
-            if v.ours.iter().any(|(b, l)| {
+            if v.ours.iter().any(|(b, l, _)| {
                 u128::from(s.gpa) < u128::from(*b) + u128::from(*l) && u128::from(*b) < end
             }) {
                 return Err(VmmError::Unsupported(FOREIGN_OVERLAPS_OURS));
@@ -1441,10 +1667,12 @@ impl QemuMachine {
         {
             let (mut v, _h) = p.view();
             v.windows.remove(&region);
-            v.tiers
-                .retain(|(g, l, _)| !(*g >= taken.gpa && g + l <= taken.gpa + taken.len));
-            v.ours
-                .retain(|(g, l)| !(*g == taken.gpa && *l == taken.len));
+            // ★★★ By OWNERSHIP, not by containment or by equality — see `View::tiers`
+            // and `View::ours`. The two lines this replaced deleted rows belonging to
+            // whatever else happened to sit inside, or to exactly match, the departing
+            // window's range.
+            v.tiers.remove(&region);
+            v.ours.retain(|(_, _, owner)| *owner != Some(region));
         }
         assert_leaf_free("clearing a reservation's memslots");
         // ★★★ The ordering the allocator's contract demands: drop the live slots FIRST —
@@ -1805,23 +2033,13 @@ impl Vmm for QemuVmm {
         }
         {
             let (v, _h) = p.view();
-            let covering = |want: Tier| {
-                v.tiers
-                    .iter()
-                    .any(|(g, l, t)| *t == want && gpa >= *g && gpa + len <= g + l)
-            };
-            let any_slot = v
-                .tiers
-                .iter()
-                .any(|(g, l, t)| *t != Tier::Observe && gpa < g + l && *g < gpa + len);
-            match mode {
-                TrapMode::ReadWrite if any_slot => {
-                    return Err(VmmError::Unsupported(TRAP_OVER_A_LIVE_SLOT));
-                }
-                TrapMode::WriteOnly if !covering(Tier::ReadNative) => {
-                    return Err(VmmError::Unsupported(WRITE_TRAP_WITHOUT_A_READ_ONLY_SLOT));
-                }
-                _ => {}
+            // ★ ONE evaluation site for "is this registration physically a trap", shared
+            // with [`QemuMachine::assert_map_matches_the_kernel`], which re-asks it of the
+            // live plane. Two copies of this rule would drift, and the drifted copy that
+            // still passes is the failure this crate has already caught once (see the
+            // `Tier::readonly_slot` note in `install_window_inner`).
+            if let Err(why) = trap_is_physical(&v, gpa, len, mode) {
+                return Err(VmmError::Unsupported(why));
             }
         }
         let (mut ins, _h) = p.installer();

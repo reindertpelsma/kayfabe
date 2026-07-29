@@ -481,9 +481,23 @@ fn a_window_the_address_space_cannot_hold_is_the_kernels_enomem() {
     assert_eq!(a.host_refusals, 1, "★ NON-VACUITY: the refusal was counted");
 }
 
-/// ★ The **memslot ceiling** is a real, kernel-imposed number, and §6.7's frequency rule
-/// is what keeps a data plane away from it. The adapter refuses before the kernel does,
-/// by a name that says which resource ran out.
+/// ★★★ The **memslot ceiling** is a real, kernel-imposed number — and what it binds on is
+/// numbers **live at once**, not numbers ever issued.
+///
+/// # What this test used to assert, and why that was the defect
+///
+/// It used to walk `ceiling` **install/remove** cycles and assert the next install
+/// refused, on the stated ground that slot numbers *"are deliberately not recycled — a
+/// recycled slot number is indistinguishable from a stale one in a kernel log"*. So the
+/// green test was pinning, as a requirement, exactly the behaviour the sibling QEMU
+/// adapter's own allocator docs record as the C artifact's **measured** failure:
+/// `C: nvkvm_mmap_host.c:382-389`, a never-recycling allocator that *"exhausted the pool
+/// after a few CUDA processes"*. Neither doc cited the other. See [`slotnum`] for the
+/// adjudication.
+///
+/// So the test is split in two, and neither half is weaker than the old one: churn must
+/// **not** exhaust (the C's datum, on the real plane), and the ceiling must still refuse
+/// by name when that many windows are genuinely live at once.
 #[test]
 fn the_memslot_ceiling_is_a_real_number_and_the_refusal_names_it() {
     kayfabe_linux_raw::require_kvm!(
@@ -497,27 +511,176 @@ fn the_memslot_ceiling_is_a_real_number_and_the_refusal_names_it() {
          capability query is not reaching KVM"
     );
     let p = page();
-    // Walk the adapter's own slot counter up to the ceiling without paying for `ceiling`
-    // mmaps: install and remove, which consumes slot NUMBERS (they are deliberately not
-    // recycled — a recycled slot number is indistinguishable from a stale one in a
-    // kernel log).
-    for i in 0..ceiling {
+
+    // ---- half 1: CHURN, twice the ceiling, on real memslots. -----------------------
+    // With the allocator this replaced, iteration `ceiling` of this loop refuses.
+    for i in 0..ceiling * 2 {
         let r = m
-            .install_ram_window(GPA_RAM + u64::from(i) * p.bytes() * 2, p.bytes())
-            .expect("a window below the ceiling");
+            .install_ram_window(GPA_RAM + u64::from(i % 4) * p.bytes() * 2, p.bytes())
+            .unwrap_or_else(|e| {
+                panic!(
+                    "iteration {i} of a workload that holds ONE window at a time exhausted \
+                     the kernel's memslot pool ({e:?}) — this is the C's measured failure, \
+                     reproduced"
+                )
+            });
         m.remove_window(r).expect("remove");
     }
+    let a = m.audit();
+    assert_eq!(a.live_memslots, 0, "the churn left nothing live");
     assert_eq!(
-        m.install_ram_window(0x9000_0000, p.bytes()),
-        Err(VmmError::Unsupported(
-            "the kernel's memslot ceiling — §6.7's frequency rule is what keeps a \
-                     data plane away from it"
-        ))
+        a.memslot_installs,
+        u64::from(ceiling) * 2,
+        "★ NON-VACUITY: twice the ceiling's worth of REAL installs happened"
     );
     assert_eq!(
-        m.audit().memslot_installs,
+        a.slot_numbers_recycled,
+        u64::from(ceiling) * 2 - 1,
+        "★ NON-VACUITY: the free list — not a bigger pool — is what served them; every \
+         install after the first re-issued a number"
+    );
+
+    // ---- half 2: the ceiling still binds, on numbers live SIMULTANEOUSLY. ----------
+    // Kept honest by holding the windows rather than by counting issues. `shareable_ram`
+    // is off for this machine only: a shareable backing is one memfd per window, and
+    // `ceiling`-many live descriptors is a file-descriptor limit masquerading as a
+    // memslot limit.
+    let m = KvmMachine::realize(MachineConfig {
+        shareable_ram: false,
+        bars: vec![BarPlacement {
+            bar: BarId::Bar0,
+            base: GPA_BAR0,
+            len: BAR0_LEN,
+        }],
+    })
+    .expect("/dev/kvm must be present and permitted");
+    let mut held = Vec::with_capacity(ceiling as usize);
+    for i in 0..ceiling {
+        held.push(
+            m.install_ram_window(GPA_RAM + u64::from(i) * p.bytes() * 2, p.bytes())
+                .unwrap_or_else(|e| panic!("window {i} of {ceiling} must fit ({e:?})")),
+        );
+    }
+    assert_eq!(
+        m.install_ram_window(0x9000_0000_0000, p.bytes()),
+        Err(VmmError::Unsupported(
+            kayfabe_vmm_kvm::slotnum::MEMSLOT_CEILING_REACHED
+        )),
+        "with every number live at once the ceiling must refuse, by a name that says \
+         which resource ran out"
+    );
+    assert_eq!(
+        m.audit().live_memslots,
         u64::from(ceiling),
-        "★ NON-VACUITY: exactly `ceiling` installs really happened before the refusal"
+        "★ NON-VACUITY: they really were all live"
+    );
+    // And giving exactly one back makes exactly one available — the property that
+    // distinguishes a recycling allocator from one that merely has a large pool.
+    m.remove_window(held.pop().expect("one to give back"))
+        .expect("remove");
+    let r = m
+        .install_ram_window(0x9000_0000_0000, p.bytes())
+        .expect("the number that just came back");
+    m.remove_window(r).expect("remove");
+}
+
+/// ★★★ **The mean shape of the recycling change**: many windows live at once, of mixed
+/// arity (a read-native overlay is three memslots, an ordinary window one), churned in an
+/// order that is neither FIFO nor LIFO, with a registered trap standing over it the whole
+/// time — and after every step the plane must still agree with itself.
+///
+/// The property recycling puts at risk is not exhaustion, it is **aliasing**: a number
+/// handed back before its slot was cleared gets re-issued and the next install is a silent
+/// REPLACE. The kernel reports nothing, `install` returns `Ok`, every counter balances.
+/// `assert_map_matches_the_kernel`'s distinctness clause is the only observable, so this
+/// drives the state where duplicates would appear and then asks.
+#[test]
+fn recycled_memslot_numbers_never_alias_across_a_mean_churn() {
+    kayfabe_linux_raw::require_kvm!("recycled_memslot_numbers_never_alias_across_a_mean_churn");
+    let m = machine();
+    let p = page();
+    let b = p.bytes();
+    let mut v = m.vmm();
+
+    // A read-native overlay over the BAR's head — two memslots, `[trapped page RO][tail
+    // RW]` — and a trap registered over its read-only span. Both must survive every churn
+    // below: the trap cross-check runs on every `assert_map_matches_the_kernel` call in
+    // the loop.
+    let backing = m.register_backing(2 * b).expect("backing");
+    v.map_read_native(GPA_BAR0, 2 * b, backing, Some(GPA_BAR0..GPA_BAR0 + b))
+        .expect("the overlay installs");
+    v.set_trap(BarId::Bar0, 0..b, TrapMode::WriteOnly)
+        .expect("a write-only trap over the read-only span");
+
+    // Now churn ordinary windows around it, in a rotation that frees the OLDEST while the
+    // newest is still live, so the free list is never empty and never drained in issue
+    // order.
+    let mut live: Vec<kayfabe_vmm::RamRegionId> = Vec::new();
+    for i in 0..200u64 {
+        live.push(
+            m.install_ram_window(GPA_RAM + (i % 16) * 2 * b, b)
+                .unwrap_or_else(|e| panic!("window {i} must install ({e:?})")),
+        );
+        if live.len() > 8 {
+            m.remove_window(live.remove(0)).expect("the oldest goes");
+        }
+        // The whole plane, every iteration: view vs installer, trap vs tiering, and no two
+        // live memslots sharing a number.
+        let checked = m.assert_map_matches_the_kernel();
+        assert_eq!(
+            checked,
+            live.len() + 1,
+            "★ NON-VACUITY: the check saw every live window (the {} ordinary ones plus the \
+             overlay), not an empty map",
+            live.len()
+        );
+    }
+    // ★★★ And the shape that makes the distinctness clause reachable at all: a second
+    // window over a guest-physical range a live one already covers. With correct
+    // allocation the two carry DIFFERENT numbers, so the kernel sees an overlapping range
+    // and refuses with `EEXIST`. Hand out a number that is already live and the very same
+    // call becomes a silent in-place REPLACE (measured in the QEMU adapter's
+    // `kvm_differential`: same number, same base, same size — `Ok`, and the kernel says
+    // nothing) — after which two live windows in our books point at one kernel slot, and
+    // the first window's mapping is reachable by nobody while its handle still promises it
+    // is installed.
+    let gpa_of_a_live_one = GPA_RAM + (199 % 16) * 2 * b;
+    let collided = m.install_ram_window(gpa_of_a_live_one, b);
+    // ★ The plane is interrogated FIRST, and on the outcome that actually happened — so
+    // that a duplicate number is reported as a duplicate number rather than as a surprising
+    // `Ok` from an install. Asserting the refusal first would make the sharper failure
+    // unreachable: the weaker assertion would always fire before it.
+    assert_eq!(
+        m.assert_map_matches_the_kernel(),
+        live.len() + 1 + usize::from(collided.is_ok()),
+        "★ whatever the kernel did, no two live windows may share a kernel memslot number"
+    );
+    assert!(
+        matches!(collided, Err(VmmError::HostRefused { .. })),
+        "and what it must have done is REFUSE: distinct numbers over an overlapping \
+         guest-physical range is the kernel's own EEXIST ({collided:?})"
+    );
+    if let Ok(r) = collided {
+        m.remove_window(r).expect("unwind the surprise");
+    }
+
+    for r in live {
+        m.remove_window(r).expect("teardown");
+    }
+    let a = m.audit();
+    assert_eq!(a.live_memslots, 2, "only the overlay's two spans remain");
+    assert!(
+        a.slot_numbers_recycled >= 190,
+        "★ NON-VACUITY: this churn must actually have RE-ISSUED numbers — with a \
+         never-recycling allocator it is 0 and every other assertion here still passes \
+         (got {})",
+        a.slot_numbers_recycled
+    );
+    assert!(
+        a.peak_memslots >= 10,
+        "★ NON-VACUITY: at least ten slots really were live at once — eight ordinary \
+         windows plus the overlay's two spans (got {})",
+        a.peak_memslots
     );
 }
 
