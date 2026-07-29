@@ -161,6 +161,17 @@ use kayfabe_vmm::{
 const NO_SHARED_BACKING: &str =
     "guest RAM was not created with a shareable backing; an isolate cannot map it";
 
+/// ★★ Refusal text for a read-native overlay whose write-trap span has no device behind
+/// it. Named, because it is the one refusal that prevents a **silently dropped guest
+/// store** rather than a failed setup.
+const TRAP_SPAN_OUTSIDE_EVERY_BAR: &str = "a read-native write-trap span (rounded to whole host pages) that is not inside any \
+     realized BAR — the guest's store would exit, classify as unclaimed, and be dropped";
+
+/// Refusal text for a write-only trap registration with no read-only memslot under it.
+const WRITE_TRAP_WITHOUT_A_READ_ONLY_SLOT: &str = "a write-only trap over a range no read-native overlay traps — reads are served from \
+     RAM only if a memslot exists, and writes exit only if that memslot is READ-ONLY; \
+     install the overlay with `map_read_native` first";
+
 // =====================================================================================
 // Configuration
 // =====================================================================================
@@ -372,6 +383,17 @@ impl Audit {
 pub(crate) struct View {
     pub(crate) regions: GuestRamMap,
     windows: BTreeMap<RamRegionId, Arc<GuestWindow>>,
+    /// ★★ **The guest-physical spans a read-native window traps WRITES over**, by the
+    /// region that owns them — the rounded-outward sub-range that got its own *read-only*
+    /// memslot in [`KvmMachine::install_window`].
+    ///
+    /// It lives here, next to [`View::regions`], and not in the [`Installer`], for one
+    /// reason: [`Plane::classify_exit`] runs on the exit path and must see the trap spans
+    /// and the region map **under the same lock**. That is what keeps the happens-before
+    /// argument in `vcpu.rs`'s docs a proof — a second lock on the exit path would let a
+    /// `remove_window` land between the two reads, and the classification would then be
+    /// about two different instants.
+    write_traps: BTreeMap<RamRegionId, Range<u64>>,
 }
 
 /// One installed window, as the **installer** knows it.
@@ -402,6 +424,17 @@ struct Installer {
     placement_owner: BTreeMap<SlotId, RamRegionId>,
     /// Which window a coarse-tier `SlotId` names.
     window_slot: BTreeMap<SlotId, RamRegionId>,
+    /// Trap ranges registered through [`Vmm::set_trap`], **read** by
+    /// [`KvmMachine::assert_map_matches_the_kernel`].
+    ///
+    /// ★ It used to be write-only — pushed here and consulted nowhere, not even by an
+    /// accessor — which is the same "reads as protection" shape as #89: a registration
+    /// that looks like it configures something and configures nothing. `set_trap` checks
+    /// its precondition **at registration time**, but a memslot installed afterwards can
+    /// falsify it (install a RAM window over a read-write-trapped BAR range and the
+    /// guest's access is served silently, with the trap surviving only in this vector).
+    /// The assertion re-checks both modes against the live plane, which is the only thing
+    /// that makes keeping the vector worth more than deleting it.
     traps: Vec<(BarId, Range<u64>, TrapMode)>,
     exports: Vec<std::os::fd::OwnedFd>,
     next_region: u64,
@@ -634,6 +667,7 @@ impl KvmMachine {
                 view: Mutex::new(View {
                     regions,
                     windows: BTreeMap::new(),
+                    write_traps: BTreeMap::new(),
                 }),
                 installer: Mutex::new(Installer {
                     windows: BTreeMap::new(),
@@ -724,6 +758,25 @@ impl KvmMachine {
                 ));
             }
             let spans = memslot_spans(gpa, len, read_native_trap.as_ref(), p.page)?;
+            // ★★ A write-trap span outside every realized BAR is REFUSED, and this is the
+            // half of the read-native overlay that was never designed. The read-only
+            // memslot really does send the guest's store out to userspace — but
+            // `Plane::classify_exit` can only route that store to a device by finding the
+            // address inside a BAR. Outside one there is no device to hand it to, so the
+            // store would be classified `Unclaimed` and **silently dropped**. Refusing at
+            // install is the only place the caller can still be told; at the exit it is
+            // one lost guest write and no diagnosis.
+            //
+            // The check is on the **rounded** span, not the requested one, because the
+            // rounded span is what physically becomes read-only: a 4 KiB request on a
+            // 64 KiB-page host traps a whole 64 KiB, and every byte of it must have a
+            // device behind it.
+            if let Some((off, l, _)) = spans.iter().find(|(_, _, ro)| *ro) {
+                let (t0, t1) = (gpa + off, gpa + off + l);
+                if !p.bars.iter().any(|b| t0 >= b.base && t1 <= b.base + b.len) {
+                    return Err(VmmError::Unsupported(TRAP_SPAN_OUTSIDE_EVERY_BAR));
+                }
+            }
             if ins.next_memslot as u64 + spans.len() as u64 > u64::from(ins.max_memslots) {
                 return Err(VmmError::Unsupported(
                     "the kernel's memslot ceiling — §6.7's frequency rule is what keeps a \
@@ -806,6 +859,12 @@ impl KvmMachine {
         let installed = outcome?;
         let n_slots = installed.memslots.len() as u64;
         let win_handle = Arc::clone(&installed.window);
+        // The rounded, guest-physical span that is read-only in the kernel — i.e. exactly
+        // the addresses at which a guest STORE exits and a guest LOAD does not.
+        let trap_span = spans
+            .iter()
+            .find(|(_, _, ro)| *ro)
+            .map(|(off, l, _)| (gpa + off)..(gpa + off + l));
 
         // ---- COMMIT (installer, then the view) ------------------------------------
         {
@@ -830,6 +889,12 @@ impl KvmMachine {
                 .declare(region, RegionKind::Ram, gpa, len)
                 .map_err(|_| VmmError::Unsupported("a window that leaves the 64-bit space"))?;
             v.windows.insert(region, win_handle);
+            // ★ Under the SAME lock as the declaration. The two facts a classification
+            // needs — "this range is RAM" and "a store into it exits" — are published
+            // atomically, so no exit can observe one without the other.
+            if let Some(t) = trap_span {
+                v.write_traps.insert(region, t);
+            }
         }
         Ok((region, slot_id))
     }
@@ -884,6 +949,11 @@ impl KvmMachine {
             let (mut v, _h) = p.view();
             v.regions.undeclare(taken.gpa, taken.len);
             v.windows.remove(&region);
+            // ★ And the write-trap span goes with it, in the same critical section. A
+            // stale entry would be worse than a missing one: it would make a LATER exit
+            // at that address dispatch into a device on the strength of a read-only
+            // memslot that no longer exists.
+            v.write_traps.remove(&region);
         }
 
         // ---- EXECUTE (every lock dropped): the memslot DELETEs happen in `drop`, here.
@@ -1009,6 +1079,34 @@ impl KvmMachine {
             "the installer holds windows the view cannot resolve — a mapping the guest \
              can reach and the region map denies is the inverse of the §10.1 item 6 hazard"
         );
+        // ★★ And every registered trap is still PHYSICALLY a trap. `set_trap` checked its
+        // precondition once, at registration; a window installed afterwards can falsify
+        // it, and until this loop existed `Installer::traps` was never read by anything,
+        // so nothing could notice. Both modes are checked against the live plane:
+        for (bar, range, mode) in &ins.traps {
+            let Some(b) = self.plane.bars.iter().find(|b| b.bar == *bar) else {
+                continue;
+            };
+            let (t0, t1) = (b.base + range.start, b.base + range.end);
+            match mode {
+                // A read-write trap IS the absence of a memslot. If the range resolves,
+                // something installed RAM under it and the guest's access is now served
+                // inside the guest — the trap survives only in this vector.
+                TrapMode::ReadWrite => assert!(
+                    v.regions.resolve(t0, t1 - t0).is_err(),
+                    "{bar:?}+{range:?} is registered as a read-write trap but a live \
+                     memslot now serves it — the guest's access never leaves the guest"
+                ),
+                // A write-only trap IS a read-only memslot. Without one, reads are still
+                // served but writes are served too, silently.
+                TrapMode::WriteOnly => assert!(
+                    v.write_traps.values().any(|t| t0 >= t.start && t1 <= t.end),
+                    "{bar:?}+{range:?} is registered as a write-only trap but no \
+                     read-native overlay's read-only span covers it — its writes land in \
+                     RAM instead of exiting"
+                ),
+            }
+        }
         checked
     }
 
@@ -1375,10 +1473,21 @@ impl Vmm for KvmVmm {
                          the guest's access would never leave the guest",
                     ));
                 }
-                // Write-only trapping is the read-native overlay's other half: reads are
-                // served from RAM, so the range MUST resolve, and the read-only memslot
-                // that traps the writes was installed by `map_read_native`.
+                // ★ Write-only trapping is the read-native overlay's other half: reads
+                // are served from RAM, so the range MUST resolve — and the memslot that
+                // serves them must be the READ-ONLY one `map_read_native` installed.
+                // "It resolves" alone was the weaker claim, and it accepted an ordinary
+                // read-write window, over which a write does not exit at all: a
+                // registration that reads as protection and is none.
                 (Err(e), TrapMode::WriteOnly) => return Err(e),
+                (Ok(_), TrapMode::WriteOnly)
+                    if !v
+                        .write_traps
+                        .values()
+                        .any(|t| gpa >= t.start && gpa + len <= t.end) =>
+                {
+                    return Err(VmmError::Unsupported(WRITE_TRAP_WITHOUT_A_READ_ONLY_SLOT));
+                }
                 _ => {}
             }
         }

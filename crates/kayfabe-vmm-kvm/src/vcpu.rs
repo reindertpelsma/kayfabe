@@ -66,6 +66,13 @@ pub enum ExitClass {
     /// region map calls RAM. On KVM a RAM region *is* a live memslot, so this state is
     /// unreachable unless a memslot was cleared while the map still promised memory — the
     /// teardown-order bug, observed from the guest's side.
+    ///
+    /// ★ Since #87 this is **sharper**, not weaker. A store into a read-native overlay's
+    /// write-trap span is no longer counted here — it is a [`ExitClass::Bar`], because a
+    /// read-only memslot exists precisely so that writes exit. What remains is every
+    /// *read* that exits from RAM, **including** a read from a read-native span: that one
+    /// the old classifier could not even express, since it had no `is_write` to tell the
+    /// two directions apart.
     RamDeclared {
         /// The address the map still calls RAM.
         gpa: u64,
@@ -180,9 +187,18 @@ impl KvmMachine {
     /// window answers `RamDeclared` here — correctly: the answer means *"an exit at this
     /// address would be the map and the kernel disagreeing"*, and while the window is live
     /// no exit can happen, which is the whole invariant.
+    ///
+    /// ## ★★ Why `is_write` is an argument and not an omission
+    ///
+    /// Over a read-native overlay's write-trap span the two directions have **different**
+    /// answers, so a classifier that could not see the direction had to get one of them
+    /// wrong. A load there is served by the read-only memslot with no exit, so an exit is
+    /// the contradiction; a store there exits *by design* and belongs to the device. #87
+    /// was exactly that: the store was counted as the N13 defect **and dropped**, because
+    /// only the [`ExitClass::Bar`] arm reaches [`kayfabe_vmm::Device`].
     #[must_use]
-    pub fn classify_guest_exit(&self, gpa: u64, len: u64) -> ExitClass {
-        self.plane.classify_exit(gpa, len)
+    pub fn classify_guest_exit(&self, gpa: u64, len: u64, is_write: bool) -> ExitClass {
+        self.plane.classify_exit(gpa, len, is_write)
     }
 }
 
@@ -271,7 +287,7 @@ impl VcpuRunner {
         data: [u8; 8],
     ) -> Result<(), VmmError> {
         self.plane.audit.guest_exits.fetch_add(1, Ordering::SeqCst);
-        let class = self.plane.classify_exit(gpa, u64::from(len));
+        let class = self.plane.classify_exit(gpa, u64::from(len), is_write);
         if let ExitClass::RamDeclared { gpa } = class {
             self.report.ram_declared_exits += 1;
             self.plane
@@ -326,12 +342,34 @@ impl Plane {
     /// Takes the **view** lock — the same one `remove_window` undeclares under, which is
     /// what makes the ordering argument in this module's docs a happens-before rather than
     /// a hope.
-    pub(crate) fn classify_exit(&self, gpa: u64, len: u64) -> ExitClass {
-        let ram = {
+    pub(crate) fn classify_exit(&self, gpa: u64, len: u64, is_write: bool) -> ExitClass {
+        // ★★ Both facts, one critical section. Reading the region map and the write-trap
+        // spans under two separate acquisitions would let a `remove_window` land between
+        // them, and the answer would then describe two different instants of the plane.
+        let (ram, write_trapped) = {
             let (v, _h) = self.view();
-            v.regions.resolve(gpa, len.max(1)).is_ok()
+            (
+                v.regions.resolve(gpa, len.max(1)).is_ok(),
+                // Start-address containment, because an MMIO exit reports the address
+                // that FAULTED. A store straddling the end of the read-only span faults
+                // at its first byte, inside the span, and is the device's to see.
+                v.write_traps
+                    .values()
+                    .any(|t| gpa >= t.start && gpa < t.end),
+            )
         };
-        if ram {
+        // ★★★ Reads and writes are NOT symmetric over a read-only memslot, and this is
+        // the whole of #87. A **read** there is served from RAM and cannot exit, so an
+        // exit is the contradiction — as it is for any other RAM. A **write** there
+        // exits BY DESIGN: that is what `KVM_MEM_READONLY` is for, and it is the
+        // read-native overlay's other half. Classifying it `RamDeclared` both slandered
+        // a correct event as the teardown-order defect and dropped the guest's store,
+        // because only the `Bar` arm reaches the device.
+        //
+        // Falling through to the BAR lookup is safe *because* `install_window` refuses a
+        // write-trap span that no realized BAR covers — otherwise this would land in
+        // `Unclaimed` and drop the store anyway, one layer down.
+        if ram && !(is_write && write_trapped) {
             return ExitClass::RamDeclared { gpa };
         }
         for b in &self.bars {

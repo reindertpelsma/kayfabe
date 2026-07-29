@@ -6910,6 +6910,11 @@ const RGPA_REVOKE: u64 = 0x3000_0000;
 /// **Our own trapped BAR0** — declared a device region, which on KVM means it has no
 /// memslot at all and a guest access to it exits instead of landing anywhere.
 const RGPA_BAR0: u64 = 0x7000_0000;
+/// How big that BAR is. ★ Four MiB rather than 64 KiB because a read-native overlay's
+/// write-trap span must lie **inside** a realized BAR (#87) and is rounded out to whole
+/// host pages: a BAR sized in 4 KiB units cannot hold a three-page overlay on a
+/// 64 KiB-page arm64 host, and the test would then be about the page size it ran on.
+const RBAR0_LEN: u64 = 0x40_0000;
 /// Never declared. On a real backend the region map starts EMPTY, so this is a hole by
 /// construction rather than by declaration — the opposite of the mock's all-RAM default.
 const RGPA_HOLE: u64 = 0x6000_0000;
@@ -6955,7 +6960,7 @@ fn real_machine() -> kayfabe_vmm_kvm::KvmMachine {
         bars: vec![kayfabe_vmm_kvm::BarPlacement {
             bar: kayfabe_vmm::BarId::Bar0,
             base: RGPA_BAR0,
-            len: 0x1_0000,
+            len: RBAR0_LEN,
         }],
     })
     .expect(
@@ -7885,31 +7890,35 @@ fn guest_mean_run(mode: LockMode) -> GuestMeanReport {
     // layout this function chose, so the invariant below is measured with an instrument
     // that has been shown to work.
     use kayfabe_vmm_kvm::vcpu::ExitClass;
-    assert_eq!(
-        machine.classify_guest_exit(probe_wins[0].0, 4),
-        ExitClass::RamDeclared {
-            gpa: probe_wins[0].0
-        },
-        "★ a LIVE RAM window classifies as the contradiction — correctly: the answer means \
-         'an exit here would be the map and the kernel disagreeing', and while the window \
-         is live no exit can happen. This is the arm the invariant is about, and it must \
-         be REACHABLE"
-    );
-    assert_eq!(
-        machine.classify_guest_exit(RGPA_BAR0 + 0x100, 4),
-        ExitClass::Bar {
-            bar: kayfabe_vmm::BarId::Bar0,
-            off: 0x100
-        },
-        "★ and a BAR address classifies to the BAR and the OFFSET WITHIN IT — an offset \
-         that was not base-relative would dispatch every doorbell to the wrong lane"
-    );
-    assert_eq!(
-        machine.classify_guest_exit(RGPA_HOLE, 4),
-        ExitClass::Unclaimed { gpa: RGPA_HOLE },
-        "★ and an address nothing declares is unclaimed — never silently absorbed into \
-         either of the other two"
-    );
+    for is_write in [false, true] {
+        assert_eq!(
+            machine.classify_guest_exit(probe_wins[0].0, 4, is_write),
+            ExitClass::RamDeclared {
+                gpa: probe_wins[0].0
+            },
+            "★ a LIVE RAM window classifies as the contradiction — correctly: the answer \
+             means 'an exit here would be the map and the kernel disagreeing', and while \
+             the window is live no exit can happen. This is the arm the invariant is \
+             about, and it must be REACHABLE — in BOTH directions, because an ordinary \
+             read-write window traps neither one (is_write={is_write})"
+        );
+        assert_eq!(
+            machine.classify_guest_exit(RGPA_BAR0 + 0x100, 4, is_write),
+            ExitClass::Bar {
+                bar: kayfabe_vmm::BarId::Bar0,
+                off: 0x100
+            },
+            "★ and a BAR address classifies to the BAR and the OFFSET WITHIN IT — an \
+             offset that was not base-relative would dispatch every doorbell to the wrong \
+             lane (is_write={is_write})"
+        );
+        assert_eq!(
+            machine.classify_guest_exit(RGPA_HOLE, 4, is_write),
+            ExitClass::Unclaimed { gpa: RGPA_HOLE },
+            "★ and an address nothing declares is unclaimed — never silently absorbed \
+             into either of the other two (is_write={is_write})"
+        );
+    }
 
     // ---- the device the exits dispatch into: one doorbell lane per vCPU, alternating
     // GPUs, each with the cookie we just wrote and the CE token it stands for.
@@ -8453,7 +8462,11 @@ fn a_guest_reading_from_a_read_native_windows_third_span_gets_that_spans_bytes()
     let _code = machine
         .install_ram_window(RGPA_CODE, page)
         .expect("the code window");
-    let overlay_gpa = RGPA_PROBE;
+    // ★ Inside BAR0, four pages up from its base — since #87 a write-trap span must have a
+    // realized BAR behind it (a trapped store with no device to dispatch to is a DROPPED
+    // store), and four pages up keeps the doorbell page at BAR0+0x100 a device region with
+    // no memslot, which is what makes the guest's store below still exit.
+    let overlay_gpa = RGPA_BAR0 + 4 * page;
     let third_span = overlay_gpa + 2 * page;
     let slot = {
         let mut vmm = machine.vmm();
@@ -8531,6 +8544,271 @@ fn a_guest_reading_from_a_read_native_windows_third_span_gets_that_spans_bytes()
         "removing the overlay removed all THREE of its memslots, leaving only the code \
          window"
     );
+}
+
+/// ★★★ **#87 — a guest STORE into a read-native window's write-trap span is a DEVICE
+/// write, not the N13 defect.** Two guests, one trapped page, both directions asserted.
+///
+/// ## What was wrong
+///
+/// A `KVM_MEM_READONLY` memslot is the read-native overlay: loads are served from RAM with
+/// no exit, and stores exit to userspace. That is the entire mechanism, and
+/// `host_execution_plane.md` §1 makes it *the* read-native mechanism inside the BAR window.
+/// But `classify_exit` answered `RamDeclared` for **anything** the region map resolved,
+/// before the BAR lookup and without ever consulting `is_write` — so the store was
+///
+/// 1. counted as `ram_declared_exits`, the teardown-order contradiction, which is the sole
+///    N13 invariant (`== 0`) and feeds `mode_independent`; and, worse,
+/// 2. **dropped**. Only the `Bar` arm reaches `Device::mmio_write`; the `RamDeclared` arm
+///    completes a *read* and does nothing at all for a write. The guest's store vanished.
+///
+/// Nothing failed, because nothing wrote into a trapped span: `Installer::traps` was a
+/// write-only field, `set_trap(_, _, TrapMode::WriteOnly)` had no effect on dispatch at
+/// all, and the only read-native overlay in this suite sat outside every BAR and was only
+/// ever read from. This test is the guest that writes.
+///
+/// ## The shape, and why both arms are here
+///
+/// Reads and writes are **not symmetric** over a read-only slot, so one test cannot stand
+/// for the other:
+///
+/// - **The store arm.** `ebx` points at a doorbell register that lives inside the trapped
+///   page. Every iteration stores there, and the assertion is that it arrives at
+///   `DoorbellDevice::mmio_write` with the right BAR **offset** (the lane) and the right
+///   **value** (the cookie) — an offset that was not base-relative rings the wrong lane,
+///   and a dropped store rings none.
+/// - **The load arm.** The cookie itself is read out of the overlay's read-write span,
+///   which is *also* declared RAM. If a load there ever exited, it would be the
+///   contradiction — and the sharpened rule says so: `ram_declared_exits == 0` still
+///   covers every read, **including** reads of a read-native span, which the old
+///   classifier could not express for want of an `is_write`. The counted form is
+///   `exits == mmio_writes`: not one exit in the run was a read.
+#[test]
+fn a_guest_store_into_a_read_native_windows_trapped_span_reaches_the_device_and_is_not_n13() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_guest_store_into_a_read_native_windows_trapped_span_reaches_the_device_and_is_not_n13"
+    );
+    use kayfabe_vmm_kvm::vcpu::ExitClass;
+    const LANES: usize = 2;
+    let _wd = watchdog(
+        "a_guest_store_into_a_read_native_windows_trapped_span_reaches_the_device_and_is_not_n13",
+        Duration::from_secs(120),
+    );
+    let (device, _pids, _rec) = mean_world(LockMode::Sharded);
+    let machine = real_machine();
+    let page = host_page();
+
+    let _code = machine
+        .install_ram_window(RGPA_CODE, LANES as u64 * page)
+        .expect("the code window");
+
+    // ★ The overlay is BAR0's first three pages, with the FIRST one write-trapped. Page 0
+    // is where the doorbells live (`DOORBELL_OFF` = 0x100), so the trapped span is a span
+    // the device actually decodes — the whole point of #87's refusal rule, exercised
+    // rather than asserted.
+    let overlay_gpa = RGPA_BAR0;
+    let trapped = overlay_gpa..overlay_gpa + page;
+    let slot = {
+        let mut vmm = machine.vmm();
+        vmm.map_read_native(
+            overlay_gpa,
+            3 * page,
+            kayfabe_vmm::HostRegion {
+                id: u64::MAX,
+                offset: 0,
+            },
+            Some(trapped.clone()),
+        )
+        .expect("a read-native overlay over BAR0's doorbell page")
+    };
+    assert_eq!(
+        machine.audit().memslot_installs,
+        1 + 2,
+        "★ two slots for the overlay: [the trapped page RO][the rest RW]. With one slot \
+         the guest's store would either never exit or never be served"
+    );
+
+    // ---- ★★ THE CLASSIFICATION, BOTH DIRECTIONS, BEFORE A GUEST RUNS. This is the
+    // instrument the counted assertions below are measured with, and it is the exact pair
+    // the old classifier collapsed into one answer.
+    assert_eq!(
+        machine.classify_guest_exit(overlay_gpa + kayfabe_tests::guest::DOORBELL_OFF, 4, true),
+        ExitClass::Bar {
+            bar: kayfabe_vmm::BarId::Bar0,
+            off: kayfabe_tests::guest::DOORBELL_OFF
+        },
+        "★★ a STORE inside the write-trap span is the device's — it exits BY DESIGN, which \
+         is what KVM_MEM_READONLY is for. Answering `RamDeclared` here both slandered a \
+         correct event as the teardown-order defect and DROPPED the guest's write"
+    );
+    assert_eq!(
+        machine.classify_guest_exit(overlay_gpa + kayfabe_tests::guest::DOORBELL_OFF, 4, false),
+        ExitClass::RamDeclared {
+            gpa: overlay_gpa + kayfabe_tests::guest::DOORBELL_OFF
+        },
+        "★★ and a LOAD from the very same address is the contradiction — the read-only \
+         memslot serves it from RAM, so an exit means the memslot is gone. The invariant \
+         got SHARPER, not weaker: this arm did not exist before, because the classifier \
+         could not see the direction"
+    );
+    assert_eq!(
+        machine.classify_guest_exit(overlay_gpa + page, 4, true),
+        ExitClass::RamDeclared {
+            gpa: overlay_gpa + page
+        },
+        "★ and a store one page ON — inside the overlay but OUTSIDE the trapped span — is \
+         still the contradiction: that span is a read-WRITE memslot and a store to it \
+         cannot exit at all"
+    );
+
+    // ---- the cookies live in the overlay's read-write span; the images read them from
+    // there, so every load in the run is a load of a read-native page.
+    let mut vmm = machine.vmm();
+    for i in 0..LANES {
+        let probe = overlay_gpa + page + (i as u64) * 8;
+        vmm.gpa_write(probe, &vcpu_cookie(i).to_le_bytes())
+            .expect("the cookie lands in the overlay's read-write span");
+        vmm.gpa_write(
+            RGPA_CODE + (i as u64) * page,
+            &kayfabe_tests::probe_loop_image(u32::try_from(probe).expect("below 4 GiB")),
+        )
+        .expect("the image lands");
+    }
+
+    let doorbell = Arc::new(kayfabe_tests::DoorbellDevice::new(
+        Arc::clone(&device),
+        (0..LANES)
+            .map(|i| kayfabe_tests::DoorbellLane {
+                gpu: gpu_of(i),
+                cookie: vcpu_cookie(i),
+                token: MockArch::token_for(lane_of(i).ce),
+            })
+            .collect(),
+    ));
+
+    // ---- ★ two vCPUs storming the SAME trapped page at once, on two GPUs. The classifier
+    // reads the region map and the write-trap spans under one lock; a second acquisition
+    // on the exit path is what this concurrency would find.
+    let stop = AtomicBool::new(false);
+    let reports: Vec<_> = thread::scope(|sc| {
+        let handles: Vec<_> = (0..LANES)
+            .map(|i| {
+                let mut runner = machine
+                    .create_vcpu(
+                        u32::try_from(i).expect("few vCPUs"),
+                        Arc::clone(&doorbell) as _,
+                    )
+                    .expect("a real vCPU");
+                runner
+                    .enter_at(
+                        RGPA_CODE + (i as u64) * page,
+                        kayfabe_tests::DoorbellDevice::lane_gpa(RGPA_BAR0, i),
+                    )
+                    .expect("flat protected mode");
+                let s = &stop;
+                sc.spawn(move || {
+                    let why = runner.run_until(s, 64).expect("KVM_RUN");
+                    (why, runner.report(), runner.first_ram_declared_exit())
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("a vCPU thread joins"))
+            .collect()
+    });
+
+    // ---- ★★★ THE STORE ARRIVED, WITH THE RIGHT OFFSET AND THE RIGHT VALUE.
+    let t = doorbell.tally();
+    assert_eq!(
+        (t.cookie_mismatch, t.unbacked_cookie, t.stray_writes),
+        (0, 0, 0),
+        "★ every store into the trapped span reached `Device::mmio_write` decoded to its \
+         OWN lane and carrying the cookie we placed in the read-native span. A wrong \
+         offset is `stray_writes`/`cookie_mismatch`; a load that took an exit and was \
+         completed with all-ones is `unbacked_cookie`. {t:?}"
+    );
+    assert_eq!(
+        t.rang,
+        u64::from(LANES as u32) * 64,
+        "★ NON-VACUITY, as an EXACT count and not a floor: both guests spent their whole \
+         budget on stores that rang a real channel. Under the defect this is ZERO — the \
+         write is dropped on the `RamDeclared` arm, which serves reads only. {t:?}"
+    );
+    assert_eq!(
+        t.reads, 0,
+        "★★ THE LOAD ARM: not one read ever reached the device, because the read-only \
+         memslot serves loads from RAM with no exit. A read that exited would have been \
+         dispatched — or, correctly, counted as the contradiction below"
+    );
+
+    // ---- ★★ AND IT IS NOT THE N13 DEFECT.
+    for (why, rep, first) in &reports {
+        assert_eq!(
+            *why,
+            kayfabe_vmm_kvm::vcpu::StopReason::BudgetSpent,
+            "each guest ran its whole budget rather than faulting"
+        );
+        assert_eq!(
+            (rep.ram_declared_exits, rep.unclaimed_exits, *first),
+            (0, 0, None),
+            "★★★ THE INVARIANT, SHARPENED: a store into a read-native write-trap span is a \
+             correct event and must not be counted as the map-and-kernel contradiction. \
+             Every exit in this run was one, and every one of them was dispatched. {rep:?}"
+        );
+        assert_eq!(
+            (rep.exits, rep.mmio_writes, rep.mmio_reads),
+            (64, 64, 0),
+            "★ and the whole exit budget is accounted for as WRITES — `exits == \
+             mmio_writes` is the counted form of 'no load from a read-native span ever \
+             left the guest'. {rep:?}"
+        );
+    }
+    assert_eq!(
+        machine.audit().ram_declared_exits,
+        0,
+        "★ and the device-wide aggregate agrees with the per-vCPU ones — this is the field \
+         `mode_independent` carries, and the one #92 would have started failing on \
+         CORRECT behaviour"
+    );
+
+    // ---- ★★ THE TEARDOWN: the write-trap span is forgotten with its window. A stale
+    // entry would be worse than a missing one — it would keep routing stores into the
+    // device on the strength of a read-only memslot that no longer exists.
+    let mut vmm = machine.vmm();
+    vmm.unmap_guest(slot).expect("the overlay goes");
+    assert_eq!(
+        machine.classify_guest_exit(overlay_gpa + kayfabe_tests::guest::DOORBELL_OFF, 4, false),
+        ExitClass::Bar {
+            bar: kayfabe_vmm::BarId::Bar0,
+            off: kayfabe_tests::guest::DOORBELL_OFF
+        },
+        "★ with the overlay gone the range is BAR again in BOTH directions — the trap span \
+         did not outlive the memslot that made it real"
+    );
+    assert_eq!(
+        (machine.audit().live_memslots, machine.audit().live_windows),
+        (1, 1),
+        "and both of the overlay's memslots went with it, leaving only the code window"
+    );
+    // ★★ And the sharp form, found by a bite-check that did NOT bite: the assertion above
+    // passes with a STALE trap span, because an undeclared range never reaches the
+    // `ram && …` test at all. The stale entry only becomes visible once something else
+    // declares that range RAM again — and then it is a **read-write** window whose stores
+    // cannot exit, so an exit there is the contradiction and nothing else.
+    let plain = machine
+        .install_ram_window(overlay_gpa, page)
+        .expect("an ORDINARY window over the range the overlay used to hold");
+    assert_eq!(
+        machine.classify_guest_exit(overlay_gpa + kayfabe_tests::guest::DOORBELL_OFF, 4, true),
+        ExitClass::RamDeclared {
+            gpa: overlay_gpa + kayfabe_tests::guest::DOORBELL_OFF
+        },
+        "★★ a store into a plain read-write window is the contradiction again. A trap span \
+         that outlived its window would route it into the device instead — dispatching a \
+         guest write on the strength of a read-only memslot that no longer exists"
+    );
+    machine.remove_window(plain).expect("and it goes too");
 }
 
 /// ★ **A wedged guest is LOUD.** Closing a bite-check that did not bite: mislabelling a

@@ -21,7 +21,12 @@ use kayfabe_vmm_kvm::{BarPlacement, KvmMachine, MachineConfig, leaf};
 
 const GPA_RAM: u64 = 0x1000_0000;
 const GPA_BAR0: u64 = 0x7000_0000;
-const BAR0_LEN: u64 = 0x1_0000;
+/// ★ Four MiB, not 64 KiB. A read-native overlay's write-trap span must lie inside a
+/// realized BAR (#87), and the span is rounded out to whole **host** pages — so a BAR
+/// sized in 4 KiB units stops being able to hold a multi-page overlay on a 64 KiB-page
+/// arm64 host. Sizing it in host-page-agnostic megabytes is what keeps these tests about
+/// the overlay rather than about the page size they happened to run on.
+const BAR0_LEN: u64 = 0x40_0000;
 
 fn page() -> HostPageSize {
     HostPageSize::query()
@@ -707,10 +712,10 @@ fn a_read_native_overlay_installs_a_read_only_slot_over_the_rounded_write_trap()
     let p = page();
     let mut v = m.vmm();
     let backing = m.register_backing(4 * p.bytes()).expect("backing");
-    // Trap one byte in the middle: the slot must widen to the whole host page containing
-    // it, and split the window into three slots.
-    let trap = (GPA_RAM + p.bytes() + 8)..(GPA_RAM + p.bytes() + 9);
-    v.map_read_native(GPA_RAM, 4 * p.bytes(), backing, Some(trap))
+    // ★ Over the BAR, not over anonymous guest RAM: since #87 a write-trap span must have
+    // a device behind it, because the store it traps has to be dispatchable to one.
+    let trap = (GPA_BAR0 + p.bytes() + 8)..(GPA_BAR0 + p.bytes() + 9);
+    v.map_read_native(GPA_BAR0, 4 * p.bytes(), backing, Some(trap))
         .expect("a read-native overlay installs");
     let a = m.audit();
     assert_eq!(
@@ -722,16 +727,158 @@ fn a_read_native_overlay_installs_a_read_only_slot_over_the_rounded_write_trap()
     );
     // Reads are still served natively through our own accessor.
     let mut got = [0xFFu8; 8];
-    v.gpa_read(GPA_RAM + p.bytes(), &mut got)
+    v.gpa_read(GPA_BAR0 + p.bytes(), &mut got)
         .expect("a read-native range is RAM to us as well");
     assert_eq!(got, [0u8; 8]);
 
     assert_eq!(
-        v.map_read_native(GPA_RAM + 8 * p.bytes(), p.bytes(), backing, Some(0..1)),
+        v.map_read_native(GPA_BAR0 + 8 * p.bytes(), p.bytes(), backing, Some(0..1)),
         Err(VmmError::Unsupported(
             "a write-trap sub-range that is not inside the range it overlays"
         )),
         "a trap outside the range it overlays is a refusal, not a silent clamp"
+    );
+}
+
+/// ★★ **#87: a write-trap span with no device behind it is REFUSED**, because the store it
+/// traps would have nowhere to go.
+///
+/// The read-only memslot really does send the guest's store out to userspace. But the exit
+/// carries a guest-physical address and nothing else, so the dispatcher can only route it
+/// by finding it inside a realized BAR. Outside one it classifies `Unclaimed` and the
+/// guest's write is **dropped** — a lost store, with no error anywhere. The only place a
+/// caller can still be told is here.
+#[test]
+fn a_write_trap_span_no_realized_bar_covers_is_refused_because_its_stores_would_be_dropped() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_write_trap_span_no_realized_bar_covers_is_refused_because_its_stores_would_be_dropped"
+    );
+    let m = machine();
+    let p = page();
+    let mut v = m.vmm();
+    let backing = m.register_backing(2 * p.bytes()).expect("backing");
+    let refusal = Err(VmmError::Unsupported(
+        "a read-native write-trap span (rounded to whole host pages) that is not inside \
+         any realized BAR — the guest's store would exit, classify as unclaimed, and be \
+         dropped",
+    ));
+
+    // (a) Nowhere near a BAR.
+    assert_eq!(
+        v.map_read_native(
+            GPA_RAM,
+            2 * p.bytes(),
+            backing,
+            Some(GPA_RAM..GPA_RAM + p.bytes())
+        ),
+        refusal,
+        "an overlay over plain guest RAM traps stores nobody can deliver"
+    );
+    assert_eq!(
+        (m.audit().live_windows, m.audit().live_memslots),
+        (0, 0),
+        "★ and the refusal happened BEFORE any syscall — nothing was mapped on the way out"
+    );
+
+    // (b) ★ The mean one: the window overlaps the BAR, but the trap span falls off the
+    // END of it. Checking "the window is in a BAR" instead of "the trap span is" would
+    // pass this and drop every store to the last page.
+    assert_eq!(
+        v.map_read_native(
+            GPA_BAR0 + BAR0_LEN - p.bytes(),
+            2 * p.bytes(),
+            backing,
+            Some(GPA_BAR0 + BAR0_LEN..GPA_BAR0 + BAR0_LEN + p.bytes())
+        ),
+        refusal,
+        "★ the span, not the window, is what must be covered — the trapped page here is \
+         one page PAST the BAR's end"
+    );
+
+    // (c) And the same shape wholly inside the BAR installs, so (a) and (b) are refusals
+    // about coverage and not about read-native overlays in general.
+    v.map_read_native(
+        GPA_BAR0,
+        2 * p.bytes(),
+        backing,
+        Some(GPA_BAR0..GPA_BAR0 + p.bytes()),
+    )
+    .expect("★ NON-VACUITY: the very same call inside the BAR is accepted");
+    assert_eq!(
+        (m.audit().live_windows, m.audit().live_memslots),
+        (1, 2),
+        "one window, two slots: [the trapped page RO][tail RW]"
+    );
+}
+
+/// ★★ **#87's other half at the registration seam**: `set_trap(WriteOnly)` used to accept
+/// any range that merely *resolved*, including an ordinary read-write window — over which
+/// a write does not exit at all. A registration that reads as protection and is none.
+#[test]
+fn a_write_only_trap_is_refused_over_a_read_write_window_and_accepted_over_a_read_only_one() {
+    kayfabe_linux_raw::require_kvm!(
+        "a_write_only_trap_is_refused_over_a_read_write_window_and_accepted_over_a_read_only_one"
+    );
+    let m = machine();
+    let p = page();
+    let mut v = m.vmm();
+
+    // An ORDINARY window over the BAR: it resolves, so the old check passed. Its writes
+    // land in RAM.
+    let plain = m
+        .install_ram_window(GPA_BAR0, p.bytes())
+        .expect("a read-write window over the BAR's first page");
+    assert_eq!(
+        v.set_trap(BarId::Bar0, 0..p.bytes(), TrapMode::WriteOnly),
+        Err(VmmError::Unsupported(
+            "a write-only trap over a range no read-native overlay traps — reads are \
+             served from RAM only if a memslot exists, and writes exit only if that \
+             memslot is READ-ONLY; install the overlay with `map_read_native` first"
+        )),
+        "★ resolving is NOT enough: over a read-write memslot the guest's store never \
+         leaves the guest, and the trap would exist only in our bookkeeping"
+    );
+    m.remove_window(plain).expect("the plain window goes");
+
+    // The same range, this time under a read-native overlay's read-only span.
+    let backing = m.register_backing(2 * p.bytes()).expect("backing");
+    let slot = v
+        .map_read_native(
+            GPA_BAR0,
+            2 * p.bytes(),
+            backing,
+            Some(GPA_BAR0..GPA_BAR0 + p.bytes()),
+        )
+        .expect("the overlay installs");
+    assert_eq!(
+        v.set_trap(BarId::Bar0, 0..p.bytes(), TrapMode::WriteOnly),
+        Ok(()),
+        "★ NON-VACUITY: with the read-only slot actually there, the registration is right"
+    );
+    assert_eq!(
+        m.assert_map_matches_the_kernel(),
+        1,
+        "and the registered trap cross-checks against the live plane"
+    );
+
+    // ★ And the assertion is not a no-op: pull the overlay out from under the registered
+    // trap and the cross-check must SEE it.
+    v.unmap_guest(slot).expect("the overlay goes");
+    let seen = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        m.assert_map_matches_the_kernel()
+    }));
+    let err = seen.expect_err(
+        "★ a write-only trap whose read-only span was removed must FAIL the cross-check — \
+         until #87 `Installer::traps` was never read by anything, so nothing could notice",
+    );
+    let msg = err
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| err.downcast_ref::<&str>().map(|s| (*s).to_owned()))
+        .unwrap_or_default();
+    assert!(
+        msg.contains("no read-native overlay's read-only span covers it"),
+        "and it must fail for THAT reason, not merely fail: {msg}"
     );
 }
 
