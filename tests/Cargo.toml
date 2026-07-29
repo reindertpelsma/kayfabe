@@ -37,6 +37,10 @@ kayfabe-trace.workspace = true
 # (tests/src/gspworld.rs), so the boot exchange is exercised end to end with no GPU,
 # no hypervisor and no OS.
 kayfabe-gsp.workspace = true
+# ★ The C↔Rust trace differential (task #47, `docs/design/c_rust_trace_differential.md`).
+# The replay and its ledger classifier live in that crate; what lives HERE is the check
+# that its Axis-A bundle is the same one the rest of this suite drives the GSP through.
+kayfabe-crec.workspace = true
 # ★ The GSP -> core bridge (docs/design/gsp_core_bridge.md). The conformance suite is where
 # wire bytes meet `Gpu::apply`, so this is where the bridge's integration tests live: the
 # mocks, the `Guarded` leak audit and the mean composed runs are all already here.

@@ -177,3 +177,95 @@ non-hermetic in their header.
   its residual risk.
 - It says nothing about the host execution plane, which is a separate ★★★ gap
   (`host_execution_plane.md` §0).
+
+---
+
+## 7. ★★★ BUILT AND RUN — the cap1 differential, 2026-07-29 (task #47)
+
+`crates/kayfabe-crec` is the harness; `traces/cap1_coldboot_hermetic.rec` is the artifact,
+committed uncompressed so the harness needs no decoder, no external binary and no
+third-party crate. `cargo run -p kayfabe-crec --example cap1_report` prints the whole run;
+`crates/kayfabe-crec/tests/{decoder_matches_reference,cap1_differential}.rs` and
+`tests/tests/c_trace_differential.rs` assert it (24 tests, in the default suite, 1.5 s).
+
+**The instrument was validated before the results were believed.** The Rust decoder is a
+second implementation of the recorder's format, so it is pinned against the *first* —
+`rec_dump.py`'s exact census, header counters, provenance offset and dense-order verdict.
+Two instrument defects surfaced and were fixed before any divergence was interpreted: a
+truncation assertion that had the wrong failure mode, and three wrong RPC function ids
+caught by the `bench_abi() == P580.abi()` mechanism (`cap1` independently confirms
+`gsp_rm_alloc = 103` — 45 of its 178 commands carry it).
+
+### 7.1 What the replay does
+
+One transaction = one MMIO record plus every guest-RAM access, IRQ raise and clock reading
+it caused, up to the next MMIO record. A transaction is projected **only if its driving
+access decodes to a `GspReg`**, symmetrically on both sides — `cap1` also contains the
+channel/pushbuffer plane (`0xbb0090`, 66 records) and the CPU interrupt tree, which this
+crate does not implement and reports as a number. Guest-RAM reads from unprojected
+transactions are still installed into the oracle. Nothing is sampled. Both the global
+positional diff and the per-transaction one go through `kayfabe_trace::diff`.
+
+### 7.2 The result
+
+**Within the oracle's reach — cold boot → bind → `GSP_INIT_DONE` → four RPC round-trips —
+the Rust GSP reproduces the C exactly in decoded projection**: all 498 GSP register reads
+in that span, the published status tx header, the write pointers and the command
+read-pointer acknowledgements. Nine divergences, one of them a ledger row:
+
+| | count | what |
+|---|---|---|
+| **GSP-D1** | 1 | found in the artifact without being told where: the C's `GSP_INIT_DONE` declares `rpc.length = 36` for a bare 32-byte header; we declare 32 |
+| **F-2** | 1 | we publish a command read-pointer ack **on the bind**; the C waits for a doorbell. B4 drain-on-publish — and the capture *proves the premise*: the guest's own command tx header reads `writePtr = 2` at bind time |
+| **F-3** | 5 | we ask the shell to announce the status queue; the C announces nothing, ever |
+| **F-4** | 2 | two replies agree on every matched field and differ in the **body** — the C models fn 65 and fn 76 rather than echoing them |
+
+`beyond the closure limit: 544`, counted and never interpreted.
+
+### 7.3 ★★★ The structural finding — why `cap1` cannot be closed
+
+**The C's guest-RAM read set is a strict subset of ours, in three independent places, and
+each is one of the ledger's own rows.** A hermetic capture answers the reads its subject
+made and no others, so the C's defects bound the differential's reach:
+
+| row | the read the C never makes | consequence |
+|---|---|---|
+| **GSP-D8** | the region's own page table (`sharedMemPhysAddr`, 129 × 8 bytes) — the C computes `base + offset` instead | strict replay **stops at the bind** |
+| **GSP-D2** | the peer's status-queue `readPtr` at `cmdQueueBase + rxHdrOff` — the C has no flow control. ★ It sits **one byte past** the end of the 32-byte tx-header read the C *does* make | every `post` |
+| **GSP-D6** | continuation elements of a multi-element command — the C reads element 0 and advances past the rest | **the closure limit** |
+
+The first two are reconstructible under assumptions the harness names out loud
+(`ReconKind::{RegionPageTable, PeerStatusReadPtr}`) and counts. **The third is not.** The
+run stops at the first multi-element command — record 141976, `GSP_RM_CONTROL`,
+`rpc.length = 8276`, `elemCount = 3` — because the capture contains no observation of
+command slots 7 and 8 while they were live, and the ring has since been rewritten. Every
+later observation of slot 7 is >150 000 records away, i.e. a different generation.
+
+⇒ **A capture of a defective implementation cannot fully close a replay of a correct one.**
+Closing the remaining 173 doorbells needs a re-capture with the C patched to *read* the
+continuation elements it already skips — a one-site change (`C:3341-3350`) that alters no
+reply, only what the recorder witnesses.
+
+### 7.4 ★★ Correction to §5a's limit 4
+
+The pre-registered limit said *"the C raises SWGEN0 once for `INIT_DONE`"*. **It does not.**
+`cap1` contains exactly one `IrqRaise` in 359 062 records and it is the driver's own
+`INTR_LEAF_TRIGGER` self-test (`0xb81640 <- 129`, `_osVerifyInterrupts`), *not* a GSP
+interrupt: `nvkvm_gsp_raise_swgen0` is reachable only from `nvkvm_gsp_deliver_events`,
+which returns immediately with no os-event registered, and no CUDA process runs in `cap1`.
+So the C posts **202 status elements and announces none of them**; the guest picks up
+`GSP_INIT_DONE` and every RPC reply by polling, and writes `IRQSCLR` **zero** times.
+
+Two consequences. This capture constrains the GSP interrupt plane **not at all** — an even
+sharper statement of limit 1. And **F-3 is undecidable from it**: our `post` latches
+`swgen0_pending`, which only an `IRQSCLR` write clears (E10), so we re-announce on every
+service; whether a real guest clears the edge cannot be learned from a capture in which it
+never received one.
+
+### 7.5 What landed alongside
+
+`kayfabe-crec::ga10x` is the **first non-fake `GspModel`** — the GA10x register map, every
+constant carrying `ogkm-580`'s swref header or the C's arch header, and none of it read off
+the capture. It is what makes the Axis-B seam's claim ("one FSM, several register models")
+a measurement rather than a design note, and `tests/tests/c_trace_differential.rs` asserts
+it shares no encoding with either fake model.

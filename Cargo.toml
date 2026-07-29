@@ -13,6 +13,7 @@ members = [
     "crates/kayfabe-isolate-host",
     "crates/kayfabe-completion",
     "crates/kayfabe-core",
+    "crates/kayfabe-crec",
     "crates/kayfabe-fwd",
     "crates/kayfabe-gsp",
     "crates/kayfabe-rmrpc",
@@ -43,6 +44,7 @@ kayfabe-isolate = { path = "crates/kayfabe-isolate" }
 kayfabe-isolate-host = { path = "crates/kayfabe-isolate-host" }
 kayfabe-completion = { path = "crates/kayfabe-completion" }
 kayfabe-core = { path = "crates/kayfabe-core" }
+kayfabe-crec = { path = "crates/kayfabe-crec" }
 kayfabe-fwd = { path = "crates/kayfabe-fwd" }
 kayfabe-gsp = { path = "crates/kayfabe-gsp" }
 kayfabe-rmrpc = { path = "crates/kayfabe-rmrpc" }

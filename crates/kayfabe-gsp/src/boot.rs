@@ -322,12 +322,24 @@ pub trait CommandPolicy: Send {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply>;
 }
 
-/// The C artifact's own policy: echo the request back with `NV_OK`.
+/// A safe default policy: echo the request back with `NV_OK`.
 ///
-/// `C: src/qemu/nvkvm_gpu_emul.c:2410-2416` — every command that is not on the async list
-/// is echoed. Kept as the default so the port's baseline behaviour is the behaviour that
-/// booted a real guest, and so the forwarding plane is a *replacement* for a working
-/// policy rather than the only one that exists.
+/// `C: src/qemu/nvkvm_gpu_emul.c:2410-2416` is the C's generic path — every command that is
+/// not on the async list is echoed — and this reproduces it, so the port's baseline is the
+/// behaviour that booted a real guest and the forwarding plane is a *replacement* for a
+/// working policy rather than the only one that exists.
+///
+/// ★★ **CORRECTED 2026-07-29 by the trace differential — this is NOT a faithful model of
+/// the C, and the doc used to claim it was.** Replaying `cap1` against this policy
+/// (`kayfabe-crec`) produced two replies that agree with the C on every field a guest
+/// matches on — slot, `seqNum`, `function`, `sequence`, `rpc_result` **and `rpc.length`** —
+/// and differ in the **body**. The C special-cases at least `GET_GSP_STATIC_INFO` (fn 65),
+/// splicing a captured GA106 `GspStaticConfigInfo` blob into the reply
+/// (`C: src/qemu/nvkvm_gpu_emul.c:3434-3452`), and its `GSP_RM_CONTROL` (fn 76) replies are
+/// sized by the control's own response rather than echoed. Whether a guest *notices* is a
+/// question about each control's semantics, not about the transport, and it is
+/// [`crate::CommandPolicy`]'s job — but "`EchoOk` is what the C does" was measurably wrong
+/// and is now measurably narrower.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct EchoOk;
 

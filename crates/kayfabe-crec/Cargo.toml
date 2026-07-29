@@ -1,0 +1,26 @@
+[package]
+name = "kayfabe-crec"
+description = "The C↔Rust trace differential (task #47): a decoder for the C emulator's §6 replay-trace format, the GA10x register model that gives `kayfabe-gsp` a real chip to answer as, a transaction-segmented replay of a recorded trace against `GspFsm`, and the classifier that sorts every divergence into the §6.3 MUST-DIFFER ledger or reports it as a finding."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+kayfabe-util.workspace = true
+# The `GspModel`/`Arch` seam the GA10x model plugs into. This crate is an ADAPTER: it is
+# where a real chip's offsets are allowed to live, and the reason `kayfabe-gsp` has none.
+kayfabe-arch.workspace = true
+# Axis A is a PARAMETER here, not a constant: the replay takes a `GspAbi` from its caller.
+kayfabe-abi.workspace = true
+# The faked GSP under test.
+kayfabe-gsp.workspace = true
+# `TraceEvent`, `diff`, `check_dense_order` — the differential mechanism, reused rather
+# than reinvented (`mode2_gsp_port_plan.md` §6.3).
+kayfabe-trace.workspace = true
+# The non-GSP half of `Arch`. The GA10x model composes onto it exactly the way the
+# conformance suite's `GspArch` composes onto it: zero edits to either.
+kayfabe-mocks.workspace = true
+
+[lints]
+workspace = true

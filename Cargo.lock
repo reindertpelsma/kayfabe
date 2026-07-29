@@ -150,6 +150,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-crec"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-gsp",
+ "kayfabe-mocks",
+ "kayfabe-trace",
+ "kayfabe-util",
+]
+
+[[package]]
 name = "kayfabe-fwd"
 version = "0.1.0"
 dependencies = [
@@ -274,6 +286,7 @@ dependencies = [
  "kayfabe-arch",
  "kayfabe-completion",
  "kayfabe-core",
+ "kayfabe-crec",
  "kayfabe-fwd",
  "kayfabe-gsp",
  "kayfabe-isolate",
