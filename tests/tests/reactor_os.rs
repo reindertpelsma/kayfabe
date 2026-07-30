@@ -890,10 +890,46 @@ fn os_a_real_counter_signal_reaches_the_core_through_real_reactor_and_executor_t
             (0, 0),
             "({mode:?}) every report was drained and named a live source: {s:?}"
         );
+        // ★★ What this test can and cannot say about the shutdown edge.
+        //
+        // It used to assert `control_reports >= 1` here — *"the shutdown really travelled
+        // through the control source"* — and that failed on unmodified master at about
+        // 1.15%. It is not a race in the product: `ReactorHandle::shutdown` publishes the
+        // stop through **two** independent channels on purpose (`stop.store(Release)` then
+        // `control.signal()`), and the loop honours whichever it reaches first. Which one
+        // that is, is a scheduling order — a clock.
+        //
+        // The window is wide and was measured: the loop pushes its last `SourceSignal` onto
+        // the inbox BEFORE it calls `waker.wake()`, so an executor thread that is still
+        // awake can consume it, finish the chain and release the main thread's rendezvous
+        // while the loop is still inside `wake()`. `shutdown()` then lands before the loop
+        // reaches its post-batch `stop` check, the loop returns `Ok` from there, and the
+        // control descriptor is simply never polled. Inserting a 5 ms sleep in front of
+        // `waker.wake()` turns that 1.15% into 9 failures in 10.
+        //
+        // ⊘ Removing it must not remove the coverage, and it does not: proving the control
+        // descriptor really carries an edge into the loop moved to
+        // `os_the_control_source_is_the_loops_only_way_to_learn_of_a_shutdown_it_is_waiting_on`,
+        // which drives it single-threaded with nothing else armed, so it is an EQUALITY with
+        // no order in it at all. That matters more than it looks: production `Reactor::run`
+        // waits with `PollTimeout::Blocking`, where the `stop` flag alone is never observed
+        // and a dead control source hangs the loop forever. The 50 ms backstop above is what
+        // hides that here — which is exactly why the property belongs in a test that does
+        // not have one.
+        //
+        // ⊘ And NOT replaced here by a `control_reports <= 1` consolation bound. That is a
+        // true statement, but it was measured to be a toothless one in this shape: poisoning
+        // `handle_token` to leave the control source readable — the level-triggered
+        // re-report it drains to refuse — does NOT make it fire, because the loop exits on
+        // the very next line once `stop` is set and never gets a second wait to re-report
+        // in. It bites in 6b, where the loop keeps running, and that is where it lives.
+        //
+        // ★ What DOES survive here is the concern the old assertion's own message named —
+        // "otherwise the loop exited on its wait budget" — as a bound that cannot race.
         assert!(
-            s.control_reports >= 1,
-            "({mode:?}) ★ the shutdown really travelled through the control source — \
-             otherwise the loop exited on its wait budget and this test is about a timeout"
+            s.wakes + s.idle_waits < 100_000,
+            "({mode:?}) ★ the loop returned because it was told to stop, NOT because it \
+             spent all 100_000 of its waits: {s:?}"
         );
 
         // ---- ★ the end-state, in the core.
@@ -932,6 +968,113 @@ fn os_a_real_counter_signal_reaches_the_core_through_real_reactor_and_executor_t
         );
         reg.disarm_all();
     }
+}
+
+// =====================================================================================
+// 6b. THE CONTROL SOURCE, WITH NO ORDER IN IT
+// =====================================================================================
+
+/// ★★ The loop's control descriptor really carries an edge, and it is the **only** thing
+/// that can end a wait — asserted as an equality, single-threaded, with nothing armed.
+///
+/// This is the half test 6 cannot state. `ReactorHandle::shutdown` publishes the stop
+/// through two independent channels — `stop.store(Release)` and `control.signal()` — and a
+/// loop running concurrently honours whichever it reaches first, so *which* channel carried
+/// it is a scheduling order. Test 6 used to assert the descriptor won that race and failed
+/// about 1.15% of the time saying so.
+///
+/// Here nothing races: the signal is written **before** the wait begins, on this thread, and
+/// nothing else is armed, so the only descriptor in the readiness set is the control one.
+/// `control_reports` is therefore an exact count and `signals_pushed` an exact zero.
+///
+/// ★ Why the property is worth a test of its own rather than a bound inside test 6:
+/// production `Reactor::run` waits with [`PollTimeout::Blocking`], where the `stop` flag
+/// alone is **never** observed — a loop whose control source did not deliver would sit in
+/// `epoll_wait` forever on shutdown. Test 6's 50 ms poll timeout hides exactly that, which
+/// is why the wait below is 30 s: long enough that only a control source that genuinely does
+/// not deliver can reach it, and it then FAILS by name instead of hanging.
+#[test]
+fn os_the_control_source_is_the_loops_only_way_to_learn_of_a_shutdown_it_is_waiting_on() {
+    /// Long enough that reaching it means the descriptor did not deliver at all, short
+    /// enough that the suite reports rather than hangs. Never the mechanism: when the
+    /// control source works the wait below returns immediately, because the write already
+    /// happened.
+    const NO_DELIVERY: PollTimeout = PollTimeout::Millis(30_000);
+
+    let reg = registrar(64);
+    let (tx, _rx) = inbox();
+    let parker = Arc::new(Parker::new());
+    let (mut reactor, handle) =
+        Reactor::new(reg, tx, parker as Arc<dyn ExecutorWaker>).expect("the reactor builds");
+
+    // ---- ★ THE ZERO DIRECTION FIRST. Nothing has been signalled, so one wait must come
+    // back empty. Without this the counts below could be a control source that reports
+    // whether or not anybody wrote it, which would make every assertion here vacuous.
+    reactor
+        .run_with(PollTimeout::Immediate, 1)
+        .expect("no fault");
+    assert_eq!(
+        (
+            handle.stats().control_reports,
+            handle.stats().wakes,
+            handle.stats().idle_waits
+        ),
+        (0, 0, 1),
+        "★ NON-VACUITY: an unsignalled control source must report NOTHING. stats={:?}",
+        handle.stats()
+    );
+
+    // ---- ★ ONE wake, written before the wait, and therefore exactly one report.
+    handle
+        .wake()
+        .expect("the control descriptor accepts a write");
+    reactor.run_with(NO_DELIVERY, 1).expect("no fault");
+    let s = handle.stats();
+    assert_eq!(
+        (s.control_reports, s.wakes, s.idle_waits, s.signals_pushed),
+        (1, 1, 1, 0),
+        "★ one write to the control descriptor ended one wait and produced exactly one \
+         control report and NO signals — the wake is a barrier, not work. Reaching this with \
+         idle_waits=2 means the {NO_DELIVERY:?} backstop expired, i.e. the write never became \
+         readable to the loop's readiness set at all. stats={s:?}"
+    );
+    assert_eq!(
+        (s.undrained_reports, s.stale_reports, s.retired_reports),
+        (0, 0, 0),
+        "the control token resolves through its own arm, never through the registrar: {s:?}"
+    );
+
+    // ---- ★ AND THE SHUTDOWN EDGE ITSELF, over the same descriptor. `shutdown` sets the
+    // flag too, but the loop is INSIDE the wait when it is called here, so the flag alone
+    // cannot end it — this is the production shape (`run` blocks) that test 6's poll timeout
+    // conceals.
+    handle.shutdown().expect("shutdown");
+    reactor
+        .run_with(NO_DELIVERY, 1)
+        .expect("the loop exits cleanly");
+    let s = handle.stats();
+    assert_eq!(
+        (s.control_reports, s.wakes, s.idle_waits),
+        (2, 2, 1),
+        "★ the shutdown TRAVELLED: it ended a wait that nothing else could have ended, and \
+         it was drained rather than left readable. stats={s:?}"
+    );
+
+    // ---- ★ …and it was drained, so a further wait finds nothing. A control source left
+    // readable is the level-triggered re-report `handle_token` drains to refuse — the F1
+    // spin, on the loop's own descriptor. This is the ONLY assertion in the tree that can
+    // see it: test 6 exits on `stop` immediately after its single control report, so a
+    // bound there never gets a second wait to fire in (measured, not assumed).
+    reactor
+        .run_with(PollTimeout::Immediate, 1)
+        .expect("no fault");
+    let s = handle.stats();
+    assert_eq!(
+        (s.control_reports, s.idle_waits),
+        (2, 2),
+        "★ the control descriptor was DRAINED: the next wait came back empty instead of \
+         reporting the same edge again. stats={s:?}"
+    );
 }
 
 // =====================================================================================
