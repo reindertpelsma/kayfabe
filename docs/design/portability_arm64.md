@@ -99,3 +99,56 @@ gates work. Verified green at introduction (whole workspace cross-checks clean f
 3. Run the Axis-A ABI codegen for the arm64 target (should be a no-op layout-wise, but verified).
 4. Validate on real arm64 + NVIDIA hardware (Grace-Hopper / Jetson — the x86 GeForce bench cannot
    exercise it).
+
+## ★★ 2026-07-30 — portability is not only about the ISA: the host CPU's physical-address width
+
+**[measured]** A KVM-gated test passed on one x86_64 box and failed on another x86_64 box, and
+the variable was neither the kernel nor the distro but the **CPU**:
+
+| box | CPU | phys bits | memslot at GPA `0x9000_0000_0000` |
+|---|---|---|---|
+| dev box | AMD EPYC 7543 | **48** | installs |
+| `vr` | Intel Xeon E5-2697A v4 | **46** | **`EINVAL`** |
+
+`KVM_SET_USER_MEMORY_REGION` refuses any memslot whose guest-physical address exceeds the
+**host** CPU's physical-address width. A 46-bit host tops out at `0x3FFF_FFFF_FFFF`. This is not
+configurable, and `KVM_CAP_NR_MEMSLOTS` says nothing about it — both boxes advertise the identical
+`32764`, and both refuse their first out-of-range *slot number* at exactly `32764`, so that cap is
+a **count** whose highest legal index is `cap - 1`. Two independent ceilings, one of them invisible
+until you cross it.
+
+**Why it belongs in this doc.** The five axes we guard (driver version, GPU architecture, kernel
+version, hypervisor, guest OS) are all *software* axes, and the arm64 work above frames portability
+as an *ISA* question. This was neither. Two machines of the same ISA, same distro family, same
+driver, differing only in silicon generation — and a test changed colour. **"x86_64" is not a
+platform; it is a family with measurable spread.** Anything that hands a hardcoded address to the
+kernel is making a claim about the host CPU whether or not it knows it.
+
+**What it does NOT establish, stated so nobody over-reads it:**
+- Nothing about the *product* was found to depend on the width. The sweep found the offending
+  constants only in **tests**. Product code does not currently mint far-away GPAs.
+- The other high-address constants in the suite (`l1_mean.rs`, `determinism.rs` — the latter
+  `0x1_0000_0000_0000`, i.e. 2⁴⁸, illegal even on the 48-bit box) are safe **only because they
+  never reach a real memslot.** That safety is incidental, not designed. The day one of those
+  paths becomes real, it breaks, and it will break on someone else's machine.
+- `vm.max_map_count` also differs by an order of magnitude between the two boxes (1048576 vs
+  65530). It was not the cause here, but it is the next ceiling any test holding tens of thousands
+  of live mappings will hit.
+
+**The rules that follow:**
+- **Derive the address, don't declare it.** The fix was to compute the probe GPA from the test's
+  own layout rather than pick a dramatic constant — then there is no width to be wrong about. A
+  literal above 2⁴⁶ is a portability bug even in a test.
+- **This family is CI-blind.** The KVM-gated tests are counted by CI and never passed by it (no
+  `/dev/kvm` on the runner), so a CPU-dependent failure here is invisible in CI *and* invisible on
+  whichever box happens to accept it. A local green is not a portability result — the only
+  instrument that has ever caught one of these is running the suite on a *second, different* box.
+- **Suspect the CPU before the kernel** when two Linux boxes disagree. This is now the second
+  incident where the vendor/silicon, not the kernel version, was the hidden variable.
+
+★ There is a testing lesson here that outlived the bug. The failing assertion read
+`.expect("the number that just came back")` — it named the **hypothesis** it was probing, so an
+`EINVAL` arriving for a completely unrelated reason surfaced as apparent proof that the slot
+**recycling allocator** had broken. A message that names what a call *did* costs nothing; a message
+that names what its failure *would prove* actively misdirects the next reader. See
+`testing_doctrine.md`.
