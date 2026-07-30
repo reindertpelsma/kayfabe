@@ -264,6 +264,55 @@ new idea.
 - The reservation *policy* (sizes, admission control, per-class arenas) is configuration and can
   arrive whenever. **Only the addressing shape is time-sensitive.**
 
+### 8.4 ★ BUILT (2026-07-30) — the shape that landed, and why it is an enum
+
+`crates/kayfabe-mmu/src/lib.rs`:
+
+```rust
+pub struct HostSlice { offset: u64, len: u64 }        // private fields; HostSlice::new validates
+pub enum   HostExtent { Whole, Slice(HostSlice) }
+pub struct HostBacking { memory: HostHandle, host_va: u64, extent: HostExtent }  // private fields
+```
+
+**Enum, not `offset: u64, len: u64`.** Bare coordinates cannot answer the question every reclaim
+site actually asks, because `offset == 0` is ambiguous: the sole owner of a small object and the
+first slice of a large arena are the same value. The two cases are not two spellings of a
+coordinate pair, they are **two ownership regimes** — `Whole` means *reclaiming the binding frees
+the object*, `Slice` means *the object outlives the binding*. Putting that in the type turned every
+existing free site into a compile error until it said which regime it was in, which is precisely
+the retrofit §8.2 says to buy now. The single question is asked once, as
+`HostBacking::frees_object()`.
+
+**What is now unrepresentable.** A slice with no owner (constructors take the `HostHandle`); an
+offset with no length (`HostSlice`'s fields are private and there is one validated constructor); a
+zero-length or `u64`-wrapping slice (`HostSliceError::Empty` / `::Wraps`); a slice whose length
+disagrees with the range it backs (`AddressFault::SliceLenMismatch`, refused at
+`AddressTable::bind`, the table's only entrance, and re-walked by `audit_identity`); and — the one
+that matters — **freeing a shared arena on the release of one of its slices**, at both reclaim
+sites (`kayfabe_fwd::unpublish_backing`, `Gpu::stage_dropped_vases`). The teardown site is the
+sharper of the two: it used to queue the *same* handle once per slice, i.e. a double free of a live
+object.
+
+**§9.3's branding is inherited, not re-invented.** A slice's `memory` *is* the arena's
+`HostHandle`, which already carries `IsolateId`; `HostBacking::owner()`/`belongs_to()` delegate to
+it. `kayfabe_fwd::commit_publish` now refuses a reply whose object is outside the publication's own
+isolate (`FwdFault::ForeignBacking`) — the same `belongs_to` predicate `Worker::execute` uses — and
+does **not** put the foreign handle on our own release list.
+
+**What deliberately did NOT land, and must be sequenced:**
+
+- **Nothing mints a `Slice` yet.** `VerbReply::Published` carries no offset, and that reply lives in
+  `kayfabe-isolate`, on the isolate seam. The publish chain constructs `HostExtent::Whole`, exactly
+  as before. Widening the reply is the next step and it is an isolate-seam edit.
+- **No slice release frees the arena — not the first, and not the last.** The arena's owner is
+  §8.1(a)'s reservation allocator, which is not built; a refcount held by nobody is not ownership,
+  and building one here would be building the allocator. Until it exists, the isolate process
+  boundary (§7.0) is the only backstop, and `tests/tests/arena_slice_backing.rs` holds the arena as
+  a *declared* `ResidueClaim` so the day the owner lands the declaration must be deleted or the
+  suite says so.
+- **No "bytes owed back to the arena" record.** That ledger is the allocator's own; adding a
+  third `Orphans` bucket for it would also mean editing `kayfabe-isolate`.
+
 ## 9. Arena GRANULARITY is a security boundary — and arenas invert §5's scrubber conclusion
 
 > Owner, 2026-07-30: *"for reserved ranges the scrubber can do a real clean since the page is

@@ -1686,7 +1686,7 @@ fn a_refused_merge_leaves_the_victim_it_reached_first_bit_identical() {
     // And the touched proc's host state survived its own refusal.
     let (binding, _) = resolve(&gpu, GPU0, PDB3, GpuVa(0x2_0000_0000)).expect("p3 still resolves");
     assert_eq!(
-        binding.host.expect("still published").host_va,
+        binding.host.expect("still published").host_va(),
         published.host_va,
         "the refused event must not disturb the backing that earned the refusal either"
     );

@@ -183,8 +183,14 @@ fn reclaim_plan(proc: &Proc, gpu: GpuId) -> Orphans {
             // ★ G1: BOTH halves come out of the binding. Before the fix `b` carried
             // only the VA, so this loop could unmap and never free.
             if let Some(h) = b.host {
-                o.unmap.push((host_vas, h.host_va));
-                o.free.push(h.memory);
+                o.unmap.push((host_vas, h.host_va()));
+                // ★ §8.2: the free is per-OBJECT, the unmap per-binding. This mirrors
+                // `kayfabe_fwd::unpublish_backing`, so it must mirror its extent check
+                // too — a hand-rolled reclaim that frees an arena once per slice is the
+                // double free the production path was just taught to avoid.
+                if h.frees_object() {
+                    o.free.push(h.memory());
+                }
             }
         }
         o.free.push(host_vas);
@@ -238,7 +244,7 @@ fn g1_a_published_backing_names_the_exact_host_object_that_allocated_it() {
     let (binding, _off) = kayfabe_fwd::resolve(&gpu, GPU, PDB, VA).expect("resolves");
     let backing = binding.host.expect("the range is host-published");
     assert_eq!(
-        (backing.memory, backing.host_va),
+        (backing.memory(), backing.host_va()),
         (minted[0], out.host_va),
         "the binding must name the allocated host object AND its placement"
     );

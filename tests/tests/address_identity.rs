@@ -379,10 +379,11 @@ fn a_binding_published_at_the_wrong_address_cannot_enter_the_table() {
     let lying = Binding {
         phys: 0x8000_0000,
         aperture: Aperture::SysmemCoherent,
-        host: Some(HostBacking {
-            memory: kayfabe_isolate::HostHandle::new(kayfabe_isolate::IsolateId::new(1, GPU), 9),
-            host_va: va.0 + 0x1000, // one page off — the whole bug, in one field
-        }),
+        // one page off — the whole bug, in one argument
+        host: Some(HostBacking::whole(
+            kayfabe_isolate::HostHandle::new(kayfabe_isolate::IsolateId::new(1, GPU), 9),
+            va.0 + 0x1000,
+        )),
     };
     assert_eq!(
         t.bind(A_PDB, va, 0x10000, lying),
@@ -401,10 +402,10 @@ fn a_binding_published_at_the_wrong_address_cannot_enter_the_table() {
     // The honest form of the same binding is accepted, so the guard is not simply
     // rejecting everything (the failure mode a negative-only test cannot see).
     let honest = Binding {
-        host: Some(HostBacking {
-            host_va: va.0,
-            ..lying.host.expect("set above")
-        }),
+        host: Some(HostBacking::whole(
+            lying.host.expect("set above").memory(),
+            va.0,
+        )),
         ..lying
     };
     t.bind(A_PDB, va, 0x10000, honest)

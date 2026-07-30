@@ -78,7 +78,8 @@ use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Channel, Gpu, Proc, Spine};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_isolate::{
-    CancelReason, ChannelHandles, HostHandle, RmError, VerbPlan, VerbReply, Worker, WorkerId,
+    CancelReason, ChannelHandles, HostHandle, IsolateId, RmError, VerbPlan, VerbReply, Worker,
+    WorkerId,
 };
 #[doc(inline)]
 pub use kayfabe_isolate::{CeExecutor, CeSource, CeSubCopy};
@@ -321,6 +322,32 @@ pub enum FwdFault {
     /// deliberately — with a refcount or a global quiesce point — not discovered
     /// afterwards.
     SystemDataPlane,
+    /// ★★ **A host backing whose object is not in this publication's own isolate
+    /// namespace** (`gpga_address_space.md` §9.3, boundary 2).
+    ///
+    /// The commit phase is where a host object first enters core state, so it is where
+    /// the object's owner scope has to be checked — and under **reservation arenas** the
+    /// check stops being belt-and-braces. RM grants *objects, not ranges*: an isolate
+    /// that holds an arena handle can map **any** offset in it. So adopting a backing
+    /// whose object belongs to another isolate does not hand this proc one range, it
+    /// hands it reach over that isolate's entire reservation, and it does so through a
+    /// binding that reads as perfectly ordinary everywhere downstream.
+    ///
+    /// The scope tested is [`kayfabe_isolate::HostHandle`]'s own — `belongs_to`, the
+    /// same predicate `Worker::execute`'s foreign-handle gate uses — deliberately, so
+    /// there is one notion of "whose object is this" rather than two that can drift.
+    ///
+    /// Not guest-reachable today (the reply comes from this proc's own worker, which
+    /// mints in its own namespace), which is exactly why it is a *loud refusal* and not
+    /// an assertion: the day something else fills this reply in — a shared arena
+    /// allocator, a replayed capture — the wrong answer must be a refusal rather than a
+    /// silently adopted cross-isolate mapping.
+    ForeignBacking {
+        /// The isolate this publication is for.
+        isolate: IsolateId,
+        /// The handle that does not belong to it.
+        memory: HostHandle,
+    },
 }
 
 /// Which re-validation a commit phase failed (`FwdFault::Stale`). Each variant is a
@@ -856,6 +883,32 @@ pub fn commit_publish(
         });
     }
     let pid = proc.id;
+
+    // ★★ §9.3 — OWNER SCOPE, checked where a host object ENTERS core state.
+    //
+    // ★ Ordered AFTER the R5 identity guard, and that ordering was corrected rather than
+    // chosen: placed before it, this refusal fired on a commit applied to the *wrong
+    // proc* and reported "foreign handle" about a plan/proc mismatch — §12.10's
+    // wrong-reason conflation, masking the root cause with a symptom of it
+    // (`l1_verb_seam.rs::commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone`
+    // caught it). Here the proc's identity is already established, so "is this object
+    // ours" is a well-posed question rather than a consequence of a different failure.
+    // See [`FwdFault::ForeignBacking`].
+    let isolate = IsolateId::new(pid.0, plan.gpu);
+    if !memory.belongs_to(isolate) {
+        return Err(Refusal {
+            fault: FwdFault::ForeignBacking { isolate, memory },
+            // Only what is OURS goes on the release list. `memory` is another isolate's
+            // object: we have no standing to free it, and queueing it would ask this
+            // proc's worker to free across the very boundary this refusal names.
+            orphans: Orphans {
+                unmap: vec![(vas_used, host_va)],
+                free: fresh_vas.into_iter().collect(),
+            },
+            retry: false,
+        });
+    }
+
     let Proc { vases, arenas, .. } = proc;
     let Some(vas) = vases.get_mut(&(plan.gpu, plan.pdb)) else {
         return Err(Refusal {
@@ -921,7 +974,13 @@ pub fn commit_publish(
             // only `host_va` here is what made the host memory object
             // unreachable from core state — a bound range no reclaim path could
             // ever free. `HostBacking` makes that omission untypeable.
-            host: Some(kayfabe_mmu::HostBacking { memory, host_va }),
+            //
+            // ★ `whole` and not `slice` (`gpga_address_space.md` §8.2): this chain
+            // allocates a fresh host object per publication, so the binding IS the
+            // object and its release frees it. Arena sub-allocation is the OTHER
+            // constructor, and nothing mints it yet — `VerbReply::Published` has no
+            // offset to carry one, and that reply lives on the isolate seam.
+            host: Some(kayfabe_mmu::HostBacking::whole(memory, host_va)),
         },
     ) {
         // ★ G6: the bind refused, so the GPA is owed straight back. Before the arena
@@ -996,8 +1055,17 @@ pub fn unpublish_backing(
     }
     let mut out = Orphans::default();
     if let (Some(host_vas), Some(h)) = (host_vas, backing) {
-        out.unmap.push((host_vas, h.host_va));
-        out.free.push(h.memory);
+        // The UNMAP is unconditional — the GPU mapping is per-binding either way.
+        out.unmap.push((host_vas, h.host_va()));
+        // ★★ The FREE is not (`gpga_address_space.md` §8.2/§9.3). `frees_object()` is
+        // false for an arena slice: the object serves sibling bindings at other offsets,
+        // so freeing it here would unmap the arena out from under them — the first
+        // release destroying what the last one owns. The arena is freed by its own
+        // owner, and until that owner exists the isolate process boundary is the
+        // backstop (§7.0), never this call.
+        if h.frees_object() {
+            out.free.push(h.memory());
+        }
     }
     Ok(out)
 }

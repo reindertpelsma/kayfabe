@@ -1556,9 +1556,18 @@ impl Spine {
                 // that ever stopped holding, the memory object must still be freed rather
                 // than silently skipped along with the unmap it has no target for.
                 if let Some(host_vas) = host_vas {
-                    q.unmap.push((host_vas, h.host_va));
+                    q.unmap.push((host_vas, h.host_va()));
                 }
-                q.free.push(h.memory);
+                // ★★ …but the free is conditional on the EXTENT
+                // (`gpga_address_space.md` §8.2/§9.3). One arena object backs many
+                // bindings, so an unconditional push would queue the SAME handle once
+                // per slice — a double free of a live object, with the sibling slices
+                // still mapped. `frees_object()` is the one place that question is
+                // asked; the arena is disposed of by its own owner, not by the Vas that
+                // happened to die first.
+                if h.frees_object() {
+                    q.free.push(h.memory());
+                }
             }
             // …and the host VAS last: everything mapped into it is freed first.
             q.free.extend(host_vas);

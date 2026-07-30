@@ -86,10 +86,7 @@ fn table_of(base: u64, runs: &[(u64, Kind)]) -> AddressTable {
             aperture: Aperture::Vidmem,
             // ★ Address identity: a host-backed binding's host VA IS the VA it is bound
             // at, and `AddressTable::bind` refuses anything else.
-            host: host.then_some(HostBacking {
-                memory: HostHandle::NULL,
-                host_va: at,
-            }),
+            host: host.then_some(HostBacking::whole(HostHandle::NULL, at)),
         };
         match kind {
             Kind::Real => t.bind(A_PDB, GpuVa(at), len, binding(true)).expect("bind"),
@@ -693,10 +690,7 @@ fn the_source_operand_splits_the_request_too_and_a_fabricated_source_is_never_ha
         Binding {
             phys: 0x7100_0000,
             aperture: Aperture::Vidmem,
-            host: Some(HostBacking {
-                memory: HostHandle::NULL,
-                host_va: src_base,
-            }),
+            host: Some(HostBacking::whole(HostHandle::NULL, src_base)),
         },
     )
     .expect("real source half");

@@ -45,36 +45,237 @@ pub mod walker;
 
 use kayfabe_arch::Aperture;
 use kayfabe_arch::ids::{GpuVa, Pdb};
-use kayfabe_isolate::HostHandle;
+use kayfabe_isolate::{HostHandle, IsolateId};
 use kayfabe_util::IntervalMap;
 
-/// ★ **The host materialization of one binding — allocation and placement, together**
-/// (`l1_concurrency.md` §12.16, gap G1).
+/// Why a `[offset, offset+len)` byte range inside a host object was refused at
+/// construction. Two variants because they are different mistakes and a caller that
+/// reports "bad slice" for both has told nobody anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostSliceError {
+    /// `len == 0`. A binding backed by no bytes is not a binding; it is a handle with
+    /// an opinion.
+    Empty,
+    /// `offset + len` wraps `u64`. Guest-influenced arithmetic never panics here
+    /// (boundary-1 posture) — it refuses.
+    Wraps,
+}
+
+/// ★★★ **A byte range inside a host memory object** — the arena sub-allocation unit
+/// (`gpga_address_space.md` §8.2).
 ///
-/// A published range is backed by TWO host facts: an allocated host memory object
-/// (`memory`) and the GPU VA it is mapped at inside the owning `Vas`'s own host VAS
-/// (`host_va`). Reclaiming it needs BOTH — `unmap_gpu_va(vas, host_va)` then
-/// `free(memory)` — so they are ONE value, not two fields.
+/// The fields are **private and there is exactly one constructor**, and that is the
+/// whole point of the type: *"an offset with no length"* is not a state you can write
+/// down. [`HostSlice::new`] additionally refuses the two ranges that are not ranges —
+/// empty, and wrapping `u64` — so a `HostSlice` that exists names real bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct HostSlice {
+    offset: u64,
+    len: u64,
+}
+
+impl HostSlice {
+    /// Bytes `[offset, offset+len)` of a host object.
+    ///
+    /// # Errors
+    /// - [`HostSliceError::Empty`] — `len == 0`.
+    /// - [`HostSliceError::Wraps`] — `offset + len` does not fit in `u64`.
+    pub const fn new(offset: u64, len: u64) -> Result<Self, HostSliceError> {
+        if len == 0 {
+            return Err(HostSliceError::Empty);
+        }
+        if offset.checked_add(len).is_none() {
+            return Err(HostSliceError::Wraps);
+        }
+        Ok(HostSlice { offset, len })
+    }
+
+    /// Byte offset of the slice within its object.
+    #[must_use]
+    pub const fn offset(self) -> u64 {
+        self.offset
+    }
+
+    /// Length of the slice in bytes. Never zero.
+    ///
+    /// ★ No `is_empty` on purpose (clippy's pairing lint is allowed off here): a
+    /// `HostSlice` **cannot** be empty — [`HostSliceError::Empty`] refuses that at
+    /// construction — so an `is_empty` could only ever answer `false`, and a predicate
+    /// that has one possible answer invites callers to branch on a question that is
+    /// already settled by the type.
+    #[must_use]
+    #[allow(clippy::len_without_is_empty)]
+    pub const fn len(self) -> u64 {
+        self.len
+    }
+
+    /// One past the last byte, within the object. Never wraps (refused at construction).
+    #[must_use]
+    pub const fn end(self) -> u64 {
+        self.offset + self.len
+    }
+}
+
+/// ★★★ **WHICH PART of the host object a binding is backed by — and, inseparably, WHO
+/// FREES IT** (`gpga_address_space.md` §8.2/§9.3).
+///
+/// The two cases are not two spellings of a coordinate pair; they are two **ownership
+/// regimes**, which is why this is an exhaustively-matched enum and not an `offset`
+/// field:
+///
+/// - [`HostExtent::Whole`] — the object was allocated for this binding and nothing else
+///   refers to it. Reclaiming the binding is what frees it. This is every publication
+///   the code makes today.
+/// - [`HostExtent::Slice`] — the object is a **reservation arena** that outlives this
+///   binding and serves other bindings at other offsets. Reclaiming the binding must
+///   **not** free it; the bytes are owed back to the arena, and the arena's own owner
+///   frees the object.
+///
+/// ★ **Why an enum rather than `offset: u64, len: u64` on [`HostBacking`].** With bare
+/// coordinates, `offset == 0` is ambiguous — the sole owner of a small object and the
+/// first slice of a large arena are the same value — so every reclaim site would have to
+/// *re-derive* whether it may free, from information it does not have. `Whole`/`Slice`
+/// puts the answer in the type: adding the second case turns every existing free site
+/// into a compile error until it says which regime it is in, which is exactly the
+/// retrofit §8.2 says to buy now rather than later.
+///
+/// ★ **Why `Whole` carries no length.** The object *is* the bound range, so its length
+/// is the range's length, already held by the table. Copying it here would be a second
+/// source of truth that can drift. `Slice` must carry its own because the object is
+/// **bigger than the binding** — the coordinates are not recoverable from the range —
+/// and because a `HostBacking` travels standalone (trace events, refusal payloads) where
+/// no interval length is attached to it. [`AddressTable::bind`] pins `Slice`'s length to
+/// the range it backs ([`AddressFault::SliceLenMismatch`]), so the duplication cannot
+/// drift silently either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostExtent {
+    /// The entire object, owned by this binding alone.
+    Whole,
+    /// Bytes of an arena object that outlives this binding.
+    Slice(HostSlice),
+}
+
+/// ★ **The host materialization of one binding — allocation, placement and EXTENT,
+/// together** (`l1_concurrency.md` §12.16 gap G1; `gpga_address_space.md` §8.2).
+///
+/// A published range is backed by THREE host facts: an allocated host memory object
+/// ([`HostBacking::memory`]), the GPU VA it is mapped at inside the owning `Vas`'s own
+/// host VAS ([`HostBacking::host_va`]), and **which part of that object it is**
+/// ([`HostBacking::extent`]). Reclaiming it needs all three — `unmap_gpu_va(vas,
+/// host_va)`, then `free(memory)` **only if the binding owns the whole object** — so
+/// they are ONE value, not three fields anyone can assemble a subset of.
 ///
 /// **Why a struct rather than a second `Option` on [`Binding`].** With
 /// `memory: Option<HostHandle>` beside `host_va: Option<u64>`, the state
 /// *"mapped somewhere, owning nothing freeable"* is representable — and that state
 /// was precisely the G1 defect: `commit_publish` stored the mapped VA and dropped the
 /// `HostHandle` on the floor, so the majority of allocated host bytes existed in no
-/// core state and no reclaim path could ever name them. Folding the pair into one
+/// core state and no reclaim path could ever name them. Folding the trio into one
 /// `Option<HostBacking>` makes **bound-but-unfreeable unrepresentable**: you cannot
 /// write a host VA into a binding without also writing the handle that frees it.
 /// (House pattern — `GpaSpace::release(arena)`-by-value: prefer the type over the
 /// runtime check.)
+///
+/// ★★ **The fields are private and the constructors are [`HostBacking::whole`] and
+/// [`HostBacking::slice`].** That is the same discipline one level down: a slice cannot
+/// be assembled without its owning handle, and an extent cannot be attached to a
+/// backing that has no handle to attach it to.
+///
+/// ★★ **Owner scope is INHERITED, not invented** (§9.3). RM grants *objects*, not
+/// ranges: an isolate holding an arena handle can map **any** offset in it, so a slice
+/// handed across an isolate boundary is a reach over that isolate's whole reservation.
+/// The scope is already carried by [`HostHandle`]'s [`IsolateId`], and
+/// `Worker::execute`'s foreign-handle gate already refuses across it — so
+/// [`HostBacking::owner`] and [`HostBacking::belongs_to`] delegate to it rather than
+/// adding a second, separately-maintained notion of who owns what.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HostBacking {
-    /// The host memory object this range was allocated from, in the OWNING isolate's
-    /// handle namespace (`(Proc, GpuId)`-scoped — a handle from another isolate is a
-    /// different object, boundary 2).
-    pub memory: HostHandle,
+    /// The host object this range is backed by, in the OWNING isolate's handle
+    /// namespace (`(Proc, GpuId)`-scoped — a handle from another isolate is a different
+    /// object, boundary 2). For [`HostExtent::Slice`] this is the **arena**.
+    memory: HostHandle,
     /// The host GPU VA it is mapped at, inside the owning `Vas`'s own host VAS.
     /// Per-Vas host placement is #14's proven fix — see `kayfabe-fwd`.
-    pub host_va: u64,
+    host_va: u64,
+    /// Which part of `memory`, and therefore who frees it.
+    extent: HostExtent,
+}
+
+impl HostBacking {
+    /// A backing that owns its whole object: reclaiming this binding frees `memory`.
+    #[must_use]
+    pub const fn whole(memory: HostHandle, host_va: u64) -> Self {
+        HostBacking {
+            memory,
+            host_va,
+            extent: HostExtent::Whole,
+        }
+    }
+
+    /// A backing over `slice` of the arena object `arena`, which **outlives** this
+    /// binding: reclaiming this binding must not free `arena`.
+    #[must_use]
+    pub const fn slice(arena: HostHandle, host_va: u64, slice: HostSlice) -> Self {
+        HostBacking {
+            memory: arena,
+            host_va,
+            extent: HostExtent::Slice(slice),
+        }
+    }
+
+    /// The host object — the whole object, or the arena a slice was cut from.
+    #[must_use]
+    pub const fn memory(self) -> HostHandle {
+        self.memory
+    }
+
+    /// The host GPU VA this range is mapped at.
+    #[must_use]
+    pub const fn host_va(self) -> u64 {
+        self.host_va
+    }
+
+    /// Which part of [`HostBacking::memory`] this binding covers.
+    #[must_use]
+    pub const fn extent(self) -> HostExtent {
+        self.extent
+    }
+
+    /// The slice, if this backing is one. `None` means it owns the whole object.
+    #[must_use]
+    pub const fn as_slice(self) -> Option<HostSlice> {
+        match self.extent {
+            HostExtent::Whole => None,
+            HostExtent::Slice(s) => Some(s),
+        }
+    }
+
+    /// ★★ **Does reclaiming this binding free [`HostBacking::memory`]?**
+    ///
+    /// The single question every reclaim site must ask, asked once, here. `true` only
+    /// for [`HostExtent::Whole`]: a slice's object is the arena, which serves other
+    /// bindings at other offsets and is freed by its own owner — freeing it on the
+    /// first slice's release would pull the backing out from under every sibling slice,
+    /// which is the `ALREADY-MAPPED`/use-after-free class one level up.
+    #[must_use]
+    pub const fn frees_object(self) -> bool {
+        matches!(self.extent, HostExtent::Whole)
+    }
+
+    /// The isolate whose handle namespace this backing lives in — [`HostHandle`]'s
+    /// [`IsolateId`], not a parallel notion (§9.3).
+    #[must_use]
+    pub const fn owner(self) -> IsolateId {
+        self.memory.isolate()
+    }
+
+    /// Is this backing usable on `isolate`'s connection? Delegates to
+    /// [`HostHandle::belongs_to`], so a slice is scoped exactly as tightly as the arena
+    /// object it names and no more loosely.
+    #[must_use]
+    pub const fn belongs_to(self, isolate: IsolateId) -> bool {
+        self.memory.belongs_to(isolate)
+    }
 }
 
 /// Where a bound VA range points, in core terms.
@@ -97,14 +298,14 @@ impl Binding {
     /// (Convenience over [`Binding::host`]; the #14 gate's predicate.)
     #[must_use]
     pub fn host_va(&self) -> Option<u64> {
-        self.host.map(|h| h.host_va)
+        self.host.map(HostBacking::host_va)
     }
 
     /// The host memory object backing this range, if it is published at all — the
     /// handle a reclaim path must `free`. Its existence is G1's whole point.
     #[must_use]
     pub fn host_memory(&self) -> Option<HostHandle> {
-        self.host.map(|h| h.memory)
+        self.host.map(HostBacking::memory)
     }
 }
 
@@ -156,6 +357,30 @@ pub enum AddressFault {
         /// The host VA the binding actually carried.
         host_va: u64,
     },
+    /// ★★ **A [`HostExtent::Slice`] whose length is not the length of the range it
+    /// backs** (`gpga_address_space.md` §8.2).
+    ///
+    /// The slice's `len` is deliberately redundant with the bound range's `len` — it has
+    /// to be, because a [`HostBacking`] travels standalone. Redundancy that is never
+    /// checked is just drift waiting to happen, and the drift is not benign: the slice
+    /// coordinates are what an arena's free path will use to work out which bytes came
+    /// back, so a slice claiming fewer bytes than it holds silently strands the
+    /// remainder, and one claiming more hands the next requester bytes that are still
+    /// mapped. Refused at [`AddressTable::bind`] — the table's only entrance.
+    ///
+    /// Near neighbour of [`AddressFault::Malformed`] and deliberately distinct: that one
+    /// means the **guest's range** is nonsense, this one means **our own bookkeeping**
+    /// disagrees with itself.
+    SliceLenMismatch {
+        /// The PDB whose table refused the bind.
+        pdb: Pdb,
+        /// The VA the range is being bound at.
+        va: GpuVa,
+        /// The length of the range being bound.
+        len: u64,
+        /// The length the slice claimed.
+        slice_len: u64,
+    },
 }
 
 /// The forward-populated VA→backing table of ONE VAS (identified by its PDB).
@@ -191,12 +416,25 @@ impl AddressTable {
         // than its own VA is not merely reportable — it is never in the table for a
         // resolve to hand out, and never in the ring gate for a doorbell to pass on.
         if let Some(h) = binding.host
-            && h.host_va != va.0
+            && h.host_va() != va.0
         {
             return Err(AddressFault::HostVaMismatch {
                 pdb,
                 va,
-                host_va: h.host_va,
+                host_va: h.host_va(),
+            });
+        }
+        // ★★ §8.2 — EXTENT AGREEMENT. A slice's own length must be the length of the
+        // range it backs; see [`AddressFault::SliceLenMismatch`] for why the redundancy
+        // is checked rather than trusted. `Whole` has nothing to disagree with.
+        if let Some(s) = binding.host.and_then(HostBacking::as_slice)
+            && s.len() != len
+        {
+            return Err(AddressFault::SliceLenMismatch {
+                pdb,
+                va,
+                len,
+                slice_len: s.len(),
             });
         }
         self.map.insert(va.0, len, binding).map_err(|e| match e {
@@ -305,17 +543,32 @@ impl AddressTable {
     /// bulk-populate path, a deserialize, a merge. A law with only an entry check is one
     /// refactor away from being a law about nothing.
     ///
+    /// ★ It walks **both** entrance laws, for the same reason it walks the first one:
+    /// [`AddressTable::bind`] also pins a slice's length to its range
+    /// ([`AddressFault::SliceLenMismatch`]), and a law with only an entry check is one
+    /// bulk-populate path away from being a law about nothing.
+    ///
     /// # Errors
-    /// [`AddressFault::HostVaMismatch`] naming the offending range.
+    /// [`AddressFault::HostVaMismatch`] or [`AddressFault::SliceLenMismatch`] naming the
+    /// offending range.
     pub fn audit_identity(&self, pdb: Pdb) -> Result<(), AddressFault> {
-        for (va, _len, b) in self.map.iter() {
-            if let Some(h) = b.host
-                && h.host_va != va
-            {
+        for (va, len, b) in self.map.iter() {
+            let Some(h) = b.host else { continue };
+            if h.host_va() != va {
                 return Err(AddressFault::HostVaMismatch {
                     pdb,
                     va: GpuVa(va),
-                    host_va: h.host_va,
+                    host_va: h.host_va(),
+                });
+            }
+            if let Some(s) = h.as_slice()
+                && s.len() != len
+            {
+                return Err(AddressFault::SliceLenMismatch {
+                    pdb,
+                    va: GpuVa(va),
+                    len,
+                    slice_len: s.len(),
                 });
             }
         }
@@ -328,6 +581,9 @@ kayfabe_util::assert_send_sync!(
     AddressTable,
     Binding,
     HostBacking,
+    HostExtent,
+    HostSlice,
+    HostSliceError,
     AddressFault,
     walker::WalkResult
 );
@@ -419,10 +675,7 @@ mod tests {
         let honest = |va: u64| Binding {
             phys: 0x8000_0000 + va,
             aperture: Aperture::SysmemCoherent,
-            host: Some(HostBacking {
-                memory: mem,
-                host_va: va,
-            }),
+            host: Some(HostBacking::whole(mem, va)),
         };
 
         let mut t = AddressTable::new();
@@ -441,13 +694,10 @@ mod tests {
                 Binding {
                     phys: 0x1234_0000,
                     aperture: Aperture::Vidmem,
-                    host: Some(HostBacking {
-                        memory: mem,
-                        // Published one page away from where it is bound — the exact
-                        // state that reads as "mapped" everywhere in core state and
-                        // resolves to nothing on the host GPU.
-                        host_va: rogue_va + 0x1000,
-                    }),
+                    // Published one page away from where it is bound — the exact
+                    // state that reads as "mapped" everywhere in core state and
+                    // resolves to nothing on the host GPU.
+                    host: Some(HostBacking::whole(mem, rogue_va + 0x1000)),
                 },
             )
             .expect("the private map takes it — that is the whole premise");
@@ -460,5 +710,173 @@ mod tests {
             }),
             "the walk names the offending range, so the diagnostic is actionable"
         );
+    }
+
+    fn mem(raw: u64) -> kayfabe_isolate::HostHandle {
+        kayfabe_isolate::HostHandle::new(
+            kayfabe_isolate::IsolateId::new(1, kayfabe_arch::ids::GpuId::ZERO),
+            raw,
+        )
+    }
+
+    /// §8.2 — the two ranges that are not ranges are refused **at construction**, by
+    /// their exact variant. `Empty` and `Wraps` are different mistakes.
+    ///
+    /// **Instrument check, performed 2026-07-30 — WATCHED IT FAIL.** With both validation
+    /// blocks deleted from [`HostSlice::new`]:
+    ///
+    /// ```text
+    /// assertion `left == right` failed
+    ///   left: Ok(HostSlice { offset: 4096, len: 0 })
+    ///  right: Err(Empty)
+    /// ```
+    ///
+    /// Restored.
+    #[test]
+    fn hostslice_refuses_the_two_non_ranges() {
+        assert_eq!(HostSlice::new(0x1000, 0), Err(HostSliceError::Empty));
+        assert_eq!(HostSlice::new(u64::MAX, 1), Err(HostSliceError::Wraps));
+        assert_eq!(HostSlice::new(u64::MAX - 1, 2), Err(HostSliceError::Wraps));
+        // …and the last representable range is accepted, so `end()` cannot overflow.
+        assert_eq!(
+            HostSlice::new(u64::MAX - 1, 1).map(HostSlice::end),
+            Ok(u64::MAX)
+        );
+        let s = HostSlice::new(0x2_0000, 0x1000).expect("a real range");
+        assert_eq!((s.offset(), s.len(), s.end()), (0x2_0000, 0x1000, 0x2_1000));
+    }
+
+    /// ★★ §8.2 — **`bind` refuses a slice whose length is not its range's.**
+    ///
+    /// **Instrument check, performed 2026-07-30 — WATCHED IT FAIL.** With the
+    /// `SliceLenMismatch` block short-circuited in [`AddressTable::bind`]:
+    ///
+    /// ```text
+    /// assertion `left == right` failed: our own bookkeeping must not disagree with itself
+    ///   left: Ok(())
+    ///  right: Err(SliceLenMismatch { pdb: Pdb(54530048), va: GpuVa(8592031744),
+    ///                                len: 65536, slice_len: 4096 })
+    /// ```
+    ///
+    /// Restored.
+    #[test]
+    fn taddr_bind_refuses_a_slice_that_disagrees_with_its_range() {
+        let mut t = AddressTable::new();
+        let va = GpuVa(0x2_0020_0000);
+        let arena = mem(7);
+        let short = HostSlice::new(0x8000, 0x1000).expect("real");
+        assert_eq!(
+            t.bind(
+                PDB,
+                va,
+                0x10000,
+                Binding {
+                    phys: 0x8000_0000,
+                    aperture: Aperture::Vidmem,
+                    host: Some(HostBacking::slice(arena, va.0, short)),
+                },
+            ),
+            Err(AddressFault::SliceLenMismatch {
+                pdb: PDB,
+                va,
+                len: 0x10000,
+                slice_len: 0x1000,
+            }),
+            "our own bookkeeping must not disagree with itself"
+        );
+        // …and the refusal is not a blanket one: the same slice at its own length binds.
+        let honest = HostSlice::new(0x8000, 0x10000).expect("real");
+        assert_eq!(
+            t.bind(
+                PDB,
+                va,
+                0x10000,
+                Binding {
+                    phys: 0x8000_0000,
+                    aperture: Aperture::Vidmem,
+                    host: Some(HostBacking::slice(arena, va.0, honest)),
+                },
+            ),
+            Ok(())
+        );
+        assert_eq!(t.audit_identity(PDB), Ok(()));
+    }
+
+    /// ★★ The whole-table walk carries the slice law too, fired the only way it can be
+    /// fired — by writing the private map, exactly as the `#102` arm above does.
+    ///
+    /// **Instrument check, performed 2026-07-30 — WATCHED IT FAIL.** With the
+    /// `SliceLenMismatch` block short-circuited in `audit_identity`:
+    ///
+    /// ```text
+    /// assertion `left == right` failed
+    ///   left: Ok(())
+    ///  right: Err(SliceLenMismatch { pdb: Pdb(54530048), va: GpuVa(8598323200),
+    ///                                len: 4096, slice_len: 8192 })
+    /// ```
+    ///
+    /// Restored.
+    #[test]
+    fn taddr_audit_identity_catches_a_slice_that_bypassed_the_entrance() {
+        let mut t = AddressTable::new();
+        let va = 0x2_0080_0000u64;
+        t.map
+            .insert(
+                va,
+                0x1000,
+                Binding {
+                    phys: 0x1234_0000,
+                    aperture: Aperture::Vidmem,
+                    host: Some(HostBacking::slice(
+                        mem(9),
+                        va,
+                        HostSlice::new(0, 0x2000).expect("real"),
+                    )),
+                },
+            )
+            .expect("the private map takes it — that is the whole premise");
+        assert_eq!(
+            t.audit_identity(PDB),
+            Err(AddressFault::SliceLenMismatch {
+                pdb: PDB,
+                va: GpuVa(va),
+                len: 0x1000,
+                slice_len: 0x2000,
+            })
+        );
+    }
+
+    /// §8.2/§9.3 — the ownership regime and the owner scope are both readable from the
+    /// backing, and the scope is [`HostHandle`]'s, not a second one.
+    #[test]
+    fn host_backing_states_who_frees_it_and_whose_it_is() {
+        let a = kayfabe_isolate::IsolateId::new(1, kayfabe_arch::ids::GpuId::ZERO);
+        let b = kayfabe_isolate::IsolateId::new(2, kayfabe_arch::ids::GpuId::ZERO);
+        let arena = kayfabe_isolate::HostHandle::new(a, 0x5c00_0001);
+
+        let whole = HostBacking::whole(arena, 0x1000);
+        assert!(whole.frees_object(), "sole owner: its release frees it");
+        assert_eq!(whole.as_slice(), None);
+        assert_eq!(whole.extent(), HostExtent::Whole);
+
+        let s = HostSlice::new(0x4000, 0x1000).expect("real");
+        let slice = HostBacking::slice(arena, 0x1000, s);
+        assert!(
+            !slice.frees_object(),
+            "a slice never frees the arena it was cut from"
+        );
+        assert_eq!(slice.as_slice(), Some(s));
+        assert_eq!(slice.extent(), HostExtent::Slice(s));
+
+        // The scope is inherited: same answer as the handle's own gate, both ways.
+        for backing in [whole, slice] {
+            assert_eq!(backing.owner(), a);
+            assert!(backing.belongs_to(a));
+            assert!(
+                !backing.belongs_to(b),
+                "a slice must not be nameable from another isolate"
+            );
+            assert_eq!(backing.belongs_to(b), backing.memory().belongs_to(b));
+        }
     }
 }

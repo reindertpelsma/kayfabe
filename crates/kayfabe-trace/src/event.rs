@@ -177,6 +177,7 @@ impl Faulted for AddressFault {
             AddressFault::Overlap { .. } => FaultTag("AddressFault::Overlap"),
             AddressFault::Malformed { .. } => FaultTag("AddressFault::Malformed"),
             AddressFault::HostVaMismatch { .. } => FaultTag("AddressFault::HostVaMismatch"),
+            AddressFault::SliceLenMismatch { .. } => FaultTag("AddressFault::SliceLenMismatch"),
         }
     }
 }

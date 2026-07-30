@@ -61,6 +61,7 @@ impl Faulted for FwdFault {
             FwdFault::Wedged { .. } => FaultTag("FwdFault::Wedged"),
             FwdFault::Stale(s) => s.fault_tag(),
             FwdFault::SystemDataPlane => FaultTag("FwdFault::SystemDataPlane"),
+            FwdFault::ForeignBacking { .. } => FaultTag("FwdFault::ForeignBacking"),
         }
     }
 }
