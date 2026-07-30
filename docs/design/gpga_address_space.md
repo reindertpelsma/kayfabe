@@ -108,3 +108,85 @@ neither a clear nor an allocation. That is the construct doing the work instead 
 - **Orphan support (invariant 4) already has a precedent**: the C's teardown hardening built a host
   reaper and a GPA free-list, and the Rust carries the `#80` recycle regression from it. Orphaned
   backing is that lifetime, made first-class rather than a teardown special case.
+
+## 7. Sizing GPGA, and what happens when the HOST GPU is out of memory
+
+> Owner brainstorm, 2026-07-30, explicitly *"none of this seems urgent to get cup2 to pass"*.
+> Agreed — nothing here blocks first compute. Recorded because two of the answers are cheap
+> **only if taken before the allocator is written**.
+
+### 7.1 Shrinking GPGA is nearly free, and it is the PRIMARY answer
+
+**[measured]** The guest learns its VRAM size from a **single emulated register**:
+`NV_USABLE_FB_SIZE_IN_MB` (`0x001183A4`), which the C answers with a compile-time constant
+(`C: src/qemu/mode2_regs_ga10x.h:62` — `12288u`, "12 GiB (RTX 3060)"). Turning that constant into a
+per-VM configuration value is a knob, not a project.
+
+⇒ **A user-settable GPGA size gives per-VM VRAM limiting almost for free**, and it is the same
+mechanism the industry already uses for isolation: vGPU gives each guest a fixed framebuffer and
+MIG partitions memory statically. **Neither overcommits.** That is not a coincidence — see §7.2.
+
+⚠ **One consistency trap.** The register is not necessarily the only place the size appears. The C
+also models RPC **fn 65** by splicing a **captured `GspStaticConfigInfo` blob**
+(`c_rust_trace_differential.md`, F-4). If a size lives in that blob too, shrinking the register
+alone leaves the guest holding **two different answers**, which will not present as "wrong size" —
+it will present as an inexplicable downstream failure. **Find every place the size is stated and
+derive them all from one value.**
+
+### 7.2 ★★★ The tension to name out loud: lazy materialisation IS overcommit
+
+§3's design — most of GPGA unbacked, materialised on write touch — is exactly memory overcommit.
+So these two goals are in direct conflict and cannot both be had unconditionally:
+
+- *"Only allocate what the guest touches"* (density), and
+- *"An allocation the guest's own accounting says is free never fails"* (safety).
+
+Two coherent postures, and the mistake would be drifting between them by accident:
+
+1. **Reserve.** GPGA size **is** a reservation against host VRAM. Admission control refuses to start
+   a VM whose GPGA does not fit alongside existing ones. Wastes VRAM; **cannot OOM**; matches
+   vGPU/MIG. ★ Recommended default for multi-tenant.
+2. **Overcommit.** Density, and §7.3's failure path becomes load-bearing rather than theoretical.
+
+**Recommendation:** make it a policy knob, default to **reserve** when more than one VM shares a
+GPU, and treat §7.3 as required regardless — because a host process outside our control can always
+consume VRAM even under posture (1).
+
+### 7.3 When allocation fails, by where it fails
+
+**At an RM command** — easy, and well-trodden: return the RM status a real driver already returns
+(`NV_ERR_INSUFFICIENT_RESOURCES` / `NV_ERR_NO_MEMORY`), which surfaces to CUDA as
+`CUDA_ERROR_OUT_OF_MEMORY`. The guest driver has handled this path since forever. **The guest's
+error will not name the true cause (host-side OOM) — and that is acceptable.** The requirement is a
+defined failure, not an accurate diagnosis.
+
+★★★ **At a PDB update — the hard case, and the owner named it correctly.** Materialisation here is
+triggered by the guest *writing a page-table entry*, not by a call it made. **There is no return
+channel.** The guest is not expecting a failure and there is no status to fill in.
+
+The faithful surface is a **GPU fault** — which is what real hardware raises when a page cannot be
+accessed, and which the guest driver already has a handler for.
+
+★★ **This is the SAME mechanism as `#111`'s "a bad application pointer in Mode 2 must surface as a
+simulated GPU fault".** Different trigger, identical need: *we cannot materialise this access, and
+must tell the guest in a language it already speaks.* **Build the fault-injection path once**, with
+at least two triggers feeding it. If OOM-at-PDB and bad-pointer grow separate mechanisms, the
+construct was missed — the same smell §5 flags about the range algebra.
+
+### 7.4 The guest cannot see host GPU usage — and that is a FEATURE, not only a problem
+
+The owner is right that Mode 1 and NVIDIA containers do not have this problem *because all GPU
+stats are shared*. ★ **The flip side is worth stating: shared stats are a cross-tenant information
+leak.** Fine inside one trust domain; not fine between VMs. **Mode 2's opacity is precisely what
+makes it more isolating than a container** — so the fix must not be "share the host's numbers".
+
+**What to report instead: the PARTITION's numbers, not the host's.** Total = this VM's GPGA size;
+used = our own accounting for this VM. Self-consistent, leaks nothing, and is what a guest actually
+wants to know. Again the vGPU model.
+
+⇒ Under posture (1) **the problem largely dissolves**: the partition's numbers are *true*. Under
+posture (2) they are true about the partition and optimistic about the host, which is the classic
+balloon situation — and §7.3's fault path is the honest handling of it.
+
+**Not urgent.** None of §7 blocks `cup2`. §7.1's consistency trap and §7.3's shared fault path are
+the two items worth deciding *before* the allocator exists; the rest can follow.
