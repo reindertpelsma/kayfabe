@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/kayfabe-util",
     "crates/kayfabe-arch",
+    "crates/kayfabe-chips",
     "crates/kayfabe-abi",
     "crates/kayfabe-mmu",
     "crates/kayfabe-vmm",
@@ -34,6 +35,7 @@ authors = ["kayfabe"]
 [workspace.dependencies]
 kayfabe-util = { path = "crates/kayfabe-util" }
 kayfabe-arch = { path = "crates/kayfabe-arch" }
+kayfabe-chips = { path = "crates/kayfabe-chips" }
 kayfabe-abi = { path = "crates/kayfabe-abi" }
 kayfabe-mmu = { path = "crates/kayfabe-mmu" }
 kayfabe-vmm = { path = "crates/kayfabe-vmm" }

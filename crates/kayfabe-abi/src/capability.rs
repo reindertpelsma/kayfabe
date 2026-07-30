@@ -1742,6 +1742,87 @@ mod tests {
 
     /// The same derivation for controls, over the class prefixes the table itself
     /// declares — the universe is read out of the data, never hand-written.
+    /// ★★★ **CHARACTERISATION, not a wish**: the 575.51.02 boundary is *subtractive*, and
+    /// this shape can only add — so the boundary's content is lost and the loss is
+    /// observable.
+    ///
+    /// nvproxy's `v575_51_02` deletes two control commands and re-adds them one number
+    /// lower (`gvisor/pkg/sentry/devices/nvproxy/version.go:1036-1053`):
+    ///
+    /// | command | ≤ 570 | ≥ 575 |
+    /// |---|---|---|
+    /// | `..._FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT` | `0x20801358` | `0x20801357` |
+    /// | `..._FB_QUERY_DRAM_ENCRYPTION_STATUS` | `0x20801359` | `0x20801358` |
+    ///
+    /// [`CAPS_BASE`] is the **550.54.04** row but was populated from the 575 set the C
+    /// shipped, so it carries the 575 numbering at every version. Two consequences, both
+    /// asserted below because both are true today:
+    ///
+    /// 1. `0x20801359` — a command a 550/560/570 guest legitimately issues — is on **no**
+    ///    table in the chain, so it is refused at every version.
+    /// 2. `0x20801358` is permitted at 550 under the name `..._STATUS_V575`, while at 550
+    ///    that number means `..._INFOROM_SUPPORT`. The gate happens to answer *permit*
+    ///    for the right number and states the wrong reason.
+    ///
+    /// ★ This test asserts the **status quo**. If someone gives [`CapabilityTable`] a
+    /// removal field and splits the control set by version, this test SHOULD go red —
+    /// that is the signal, and the fix is to update it with the new behaviour, never to
+    /// widen it so both answers pass.
+    #[test]
+    fn the_575_boundary_is_subtractive_and_this_shape_cannot_carry_it() {
+        const INFOROM_PRE575: u32 = 0x2080_1358;
+        const STATUS_PRE575: u32 = 0x2080_1359;
+
+        // The version rows exist and are distinct; a typo in `TABLES` would make this
+        // whole test assert about one row twice.
+        let v550 = at(550, 54, 4);
+        let v575 = at(575, 51, 2);
+        // `DriverAbiTable` exposes no version accessor, so the row is identified by the
+        // one public field that distinguishes it: its `note`. A 575 request that fell
+        // through to 570's row would carry 570's note instead.
+        let row = table_for(DriverVersion {
+            major: 575,
+            minor: 51,
+            patch: 2,
+        })
+        .expect("575.51.02 has a row");
+        assert!(
+            row.note.contains("SUBTRACTIVE"),
+            "575.51.02 resolved to a row whose note is {:?} — it must resolve to its OWN \
+             row, not fall through to 570's",
+            row.note
+        );
+
+        // (1) The pre-575 STATUS command is refused at every version in the chain,
+        //     including the ones where it is the correct number.
+        for (name, t) in [("550.54.04", v550), ("575.51.02", v575)] {
+            assert!(
+                !t.control(ControlCmd(STATUS_PRE575)).is_permitted(),
+                "{name}: {STATUS_PRE575:#010x} is unexpectedly permitted — if this now \
+                 passes, the control set has been version-split and this test must be \
+                 rewritten to the new behaviour"
+            );
+        }
+
+        // (2) …and the overlapping number is permitted at 550 under the 575-era name.
+        let entry = v550
+            .chain()
+            .flat_map(|t| t.controls.iter())
+            .find(|e| e.cmd == INFOROM_PRE575)
+            .expect("the overlapping number is on the base table");
+        assert!(
+            entry.name.ends_with("_V575"),
+            "the row for {INFOROM_PRE575:#010x} is named {:?}; at 550 that number is the \
+             PRE-575 command, so a name without the _V575 suffix would mean the table has \
+             been version-split",
+            entry.name
+        );
+        assert!(
+            v550.control(ControlCmd(INFOROM_PRE575)).is_permitted(),
+            "characterisation: it is permitted at 550 today"
+        );
+    }
+
     #[test]
     fn every_control_this_port_models_is_permitted() {
         let abi = table_for(crate::versions::BENCH_DRIVER).expect("bench");

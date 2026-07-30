@@ -194,7 +194,8 @@ jobs:
           pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
                 crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch \
                 crates/kayfabe-abi \
-                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm"
+                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm \
+                crates/kayfabe-chips"
           if grep -rniE 'eventfd|epoll|timerfd|rawfd|libc|O_NONBLOCK' $pure; then
             echo ""
             echo "★ BOUNDARY BREACH — l1_concurrency.md §6.2."
@@ -248,7 +249,8 @@ jobs:
                     crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc \
                     crates/kayfabe-arch crates/kayfabe-abi \
                     crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
-                    crates/kayfabe-vmm crates/kayfabe-rt crates/kayfabe-shell"
+                    crates/kayfabe-vmm crates/kayfabe-rt crates/kayfabe-shell \
+                    crates/kayfabe-chips"
           # ★ `crates/kayfabe-shell` ADDED 2026-07-29 (task #100). This step is named
           # *"…in the core or the shell"* and did not cover the crate literally called
           # `kayfabe-shell` — the L1 OS shell, which owns the reactor and the executor

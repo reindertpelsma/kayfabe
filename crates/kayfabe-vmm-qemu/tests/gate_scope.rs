@@ -179,6 +179,15 @@ const GATE_EXEMPTIONS: &[Exemption] = &[
     ("Generation-name gate", "kayfabe-vmm-kvm"),
     ("Generation-name gate", "kayfabe-vmm-qemu"),
     ("Generation-name gate", "kayfabe-qemu-raw"),
+    // ★ `kayfabe-chips` is the arch-impl crate the Generation-name gate's OWN failure
+    // message points at: *"the concrete number itself -> an arch-impl crate
+    // (`impl Arch for <Gen>`), never a logic crate"*. Naming AD10x and GH100 is the
+    // crate's entire job, so it is exempt HERE and SCOPED by the other two gates
+    // (`crates/kayfabe-chips` is in both `pure=` and `portable=` in ci.yml) — a chip
+    // model must still never name an OS readiness primitive or one hypervisor's API.
+    // Exempting it from all three would have been the quiet way to let a new
+    // architecture escape the seam checks.
+    ("Generation-name gate", "kayfabe-chips"),
 ];
 
 /// ★★★ Every crate in the tree is either **scoped by** a vocabulary gate or **named in
