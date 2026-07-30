@@ -36,23 +36,38 @@
 //!
 //! ## ★★ The verbs that are NOT implemented, and why that is a refusal
 //!
-//! This section used to list five. `alloc_channel`, `alloc_engine_object` and `schedule`
-//! are now real (R13) and proven on hardware. **`ring_doorbell`, `ce_copy` and
-//! `export_surface` still return [`RmError::Other`] carrying [`NOT_ON_THIS_RUNG`]**, and
-//! each names what it lacks at its own definition: a doorbell *mapping* rather than an
-//! ioctl, the mapped ring the doorbell announces, a PRIME export.
+//! This section used to list five, then three. `alloc_channel`, `alloc_engine_object` and
+//! `schedule` are real (R13); `ring_doorbell` is real (R15) and `ce_copy`'s **`HostCe`
+//! arm** is real (R17), both proven on hardware. What still returns [`RmError::Other`]
+//! carrying [`NOT_ON_THIS_RUNG`], each naming what it lacks at its own definition:
+//!
+//! - **`fb_read`** and **`ce_copy`'s [`CeExecutor::Ours`] arm** — the isolate's own
+//!   mapping of the *fabricated* aperture, whose extent is not written down anywhere in
+//!   this tree.
+//! - **`ce_copy` with a [`CeSource::Constant`]** — a fill needs `REMAP_ENABLE` and the
+//!   `SET_REMAP_*` method block, which the ABI module does not transcribe.
+//! - **`export_surface`** — a PRIME export.
 //!
 //! Returning a plausible success would be the exact failure `mode2_real_forward_not_fake`
 //! forbids: *"prove compute via HW sema/util, never green-guest-log"*. A named refusal
 //! keeps MISS = FAULT true one layer down.
 //!
-//! ★ **What R13 does and does not prove.** It proves a channel exists in hardware: RM
-//! assigns it a chid out of the GPU's channel RAM and reports a work-submit token we
-//! neither compute nor can predict, and two channels get two different ones. It proves
-//! nothing whatsoever about *submission* — the ring and USERD are allocated and GPU-mapped
-//! but not CPU-mapped, so nothing here can put a byte in front of the engine. That is the
-//! next rung, and the separation is deliberate: a token from a channel that has never been
-//! written to is a much cleaner fact than a token from one that has.
+//! ## ★★★ What each rung proves, and what it deliberately does not
+//!
+//! - **R13 — a channel exists in hardware.** RM assigns it a chid out of the GPU's channel
+//!   RAM and reports a work-submit token we neither compute nor can predict, and two
+//!   channels get two different ones. It proves nothing about *submission*.
+//! - **R14 — the ring is the GPU's memory.** Written through one mapping, read back
+//!   through a second, independent one. It proves nothing about *execution*.
+//! - **R15 — hardware executed our methods.** The semaphore goes `0 -> payload` **and**
+//!   `GP_GET` advances to meet `GP_PUT`. `GP_GET` is the only word in this crate hardware
+//!   writes and we do not. Measured RTX 3090 / 580.159.04.
+//! - **R16 — the mapping survives the SANDBOX.** The capability-less isolate CPU-maps the
+//!   ring, USERD and the usermode BAR0 window and rings. ⊘ It produces **no submission
+//!   evidence**: the port's verb surface cannot build a pushbuffer through the child, so
+//!   R16 shows the mapping and the store, not that anything ran.
+//! - **R17 — a real copy engine moved device memory.** Destination read before and after,
+//!   the "after" through an independent mapping, plus the engine's own release semaphore.
 
 use kayfabe_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
@@ -62,8 +77,8 @@ use kayfabe_abi::bringup::{
     NvVaspaceAllocationParameters, Nvos02ParametersWithFd, RegisterFd,
 };
 use kayfabe_abi::generated::classes::{
-    AMPERE_CHANNEL_GPFIFO_A, FERMI_VASPACE_A, KEPLER_CHANNEL_GROUP_A, NV01_DEVICE_0,
-    NV01_ROOT_CLIENT, Nv0080AllocParameters, NvChannelGroupAllocationParameters,
+    AMPERE_CHANNEL_GPFIFO_A, AMPERE_DMA_COPY_B, FERMI_VASPACE_A, KEPLER_CHANNEL_GROUP_A,
+    NV01_DEVICE_0, NV01_ROOT_CLIENT, Nv0080AllocParameters, NvChannelGroupAllocationParameters,
 };
 use kayfabe_abi::generated::nvos::{
     NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA,
@@ -71,23 +86,26 @@ use kayfabe_abi::generated::nvos::{
     Nvos47Parameters, Nvos54Parameters,
 };
 use kayfabe_abi::submit::{
-    ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, ChannelAllocParams, ENGINE_TYPE_GRAPHICS,
-    GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY, NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND,
+    AMPERE_USERMODE_A, ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams,
+    ENGINE_TYPE_COPY0, ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams,
+    NV_ESC_RM_MAP_MEMORY, NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND,
     NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
-    NvMemoryAllocationParams, Nvos33ParametersWithFd, USERD_GP_GET, USERD_GP_PUT,
-    WORK_SUBMIT_TOKEN_PARAMS_SIZE, engine_type_copy,
+    NvMemoryAllocationParams, Nvos33ParametersWithFd, SET_OBJECT, USERD_GP_GET, USERD_GP_PUT,
+    USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_WINDOW_SIZE, WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce,
+    engine_type_copy, fifo, gp_entry, method_header_inc,
 };
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
-use kayfabe_isolate::{CeSubCopy, HostHandle, IsolateId, RmBackend, RmError};
+use kayfabe_isolate::{CeExecutor, CeSource, CeSubCopy, HostHandle, IsolateId, RmBackend, RmError};
 use kayfabe_linux_raw::{
     Backing, CachePolicy, CharDevice, DevDir, HostOffset, HostPageSize, Indirect, RawError,
-    VolatileRegion, ioctl,
+    VolatileRegion, ioctl, release_fence,
 };
 use kayfabe_util::leafwitness;
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeMap;
 use std::ffi::CString;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 /// The opaque status a verb this rung does not implement reports.
 ///
@@ -147,6 +165,39 @@ pub struct RmConnection {
     /// table, and the handle table must not be held across it. Two locks, each held for one
     /// kind of thing, is the R3 lock-rank discipline rather than a convenience.
     rings: Mutex<BTreeMap<u32, ChannelRings>>,
+    /// ★★★ The **doorbell window** — an `AMPERE_USERMODE_A` object and its CPU mapping,
+    /// established once at [`RmConnection::open`] and immutable afterwards.
+    ///
+    /// A `Result`, deliberately, and it is the honest shape rather than a convenience:
+    ///
+    /// - It is **not** `Mutex<Option<…>>`. Building it lazily would mean issuing an
+    ///   `NV_ESC_RM_ALLOC`, an `openat`, an `NV_ESC_RM_MAP_MEMORY` and an `mmap` **while
+    ///   holding a ranked lock**, which R1 forbids with no exception (the same rule that
+    ///   makes `forget_rings` drop its mappings outside the lock). Immutable-after-open
+    ///   needs no lock at all.
+    /// - It is **not** a hard failure of `open`. An isolate that never submits work is
+    ///   perfectly usable without a doorbell, and making bring-up depend on a BAR mapping
+    ///   would turn "this GPU refused one mapping" into "this isolate is stillborn", which
+    ///   loses the diagnosis.
+    /// - So the error is **kept** and re-reported by [`RmBackend::ring_doorbell`]. The
+    ///   refusal names what actually happened at open time instead of a generic
+    ///   "unimplemented", which is the difference between *"the sandbox blocked the BAR
+    ///   mapping"* and *"nobody wrote this yet"*.
+    usermode: Result<UsermodeWindow, RmError>,
+}
+
+/// The `AMPERE_USERMODE_A` object, the node its mmap context is registered against, and
+/// the mapping itself. All three must live exactly as long as each other.
+#[derive(Debug)]
+struct UsermodeWindow {
+    /// The RM object handle. Held so a teardown could free it; nothing frees it today
+    /// because the connection outlives every channel by construction.
+    _object: u32,
+    /// The freshly opened per-GPU node the mmap context is registered against.
+    _node: CharDevice,
+    /// The 64 KiB BAR0 window. [`kayfabe_abi::submit::USERMODE_NOTIFY_CHANNEL_PENDING`]
+    /// is the only offset in it this code ever touches.
+    region: VolatileRegion,
 }
 
 #[derive(Debug, Default)]
@@ -241,6 +292,28 @@ const GPFIFO_OFFSET: u64 = 0x1000;
 /// the isolate's own submissions, not the guest's.
 const GPFIFO_ENTRIES: u32 = 64;
 
+/// Offset of the pushbuffer within the ring object — the methods hardware fetches.
+///
+/// The layout below is the C's proven one, offset for offset
+/// (`C: src/qemu/nvkvm_gpu_emul.c:9460-9463`: pushbuffer at base, GPFIFO at `+0x1000`,
+/// semaphore at `+0x2000`). Keeping the numbers identical is deliberate: when a
+/// submission fails, "is our layout the same as the one that worked?" must not be a
+/// question anyone has to re-answer.
+const PUSHBUFFER_OFFSET: u64 = 0;
+
+/// One pushbuffer slot per GPFIFO entry, so a submission never overwrites methods a
+/// previous one may still be being fetched. 64 slots × 64 bytes fits in the page before
+/// [`GPFIFO_OFFSET`].
+const PUSHBUFFER_SLOT_BYTES: u64 = 64;
+
+/// Offset of the semaphore word **hardware writes** within the ring object.
+///
+/// ★ A whole page away from both the pushbuffer and the GPFIFO. It has to be somewhere,
+/// and putting it adjacent to either would mean a length mistake in one corrupts the
+/// other — with the failure appearing as "the semaphore never landed", which is also what
+/// a broken doorbell looks like.
+const SEMAPHORE_OFFSET: u64 = 0x2000;
+
 /// Everything that can go wrong bringing an RM connection up, with the rung it failed on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BringUpError {
@@ -312,6 +385,46 @@ pub const NOT_IN_THIS_OBJECT: u32 = 0x4B47;
 /// the point — if it ever appears, someone changed a mapping's attribute without changing
 /// the allocation's, and the status says so.
 pub const MAPPING_ATTRIBUTE_REFUSED: u32 = 0x4B48;
+
+/// How long [`RmBackend::ce_copy`] waits for the copy engine's own release semaphore
+/// before calling the copy failed.
+///
+/// ★ Generous on purpose. The failure this bounds is a **wedge**, not a slow copy: a
+/// copy that has genuinely started retires in microseconds, so anything that reaches this
+/// deadline did not start. Two seconds is long enough that a scheduling hiccup or a busy
+/// GPU cannot manufacture a false failure, and short enough that a wedged engine does not
+/// look like a hang. The C polls its equivalent self-test for five (`C:
+/// src/qemu/nvkvm_gpu_emul.c:9622`).
+pub const CE_COPY_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// The opaque status a copy that **never released its semaphore** reports.
+///
+/// ★★ The single most important refusal in this file. The copy engine writes this word
+/// after the copy retires; if it never appears, the bytes did not move — and the *only*
+/// alternative to reporting that is returning `Ok(())`, which is the forged completion
+/// `mode2_real_forward_not_fake` exists to forbid. It is deliberately **not**
+/// [`RmError::Interrupted`]: nothing cancelled it. `0x4B4B` is `"KK"`.
+pub const CE_NEVER_RETIRED: u32 = 0x4B4B;
+
+/// The opaque status an **unencodable pushbuffer or GPFIFO entry** reports.
+///
+/// ★ Distinct from [`NOT_ON_THIS_RUNG`] because it is the opposite kind of statement: the
+/// verb exists and the *arguments* cannot be expressed on the wire — a semaphore VA above
+/// the GPFIFO's 2^40 ceiling, a method count past the header's 13 bits, a pushbuffer whose
+/// length is not a whole number of dwords. Every one of those is a value
+/// `kayfabe_abi::submit`'s encoders answer `None` for, and every one of them, if forced
+/// through, produces an entry that **runs** — pointing the engine at a truncated address
+/// or a wrong method. `0x4B4A` is `"KJ"`.
+pub const BAD_ENCODE: u32 = 0x4B4A;
+
+/// The opaque status a **work-submit token that does not fit in 32 bits** reports.
+///
+/// ★ The port carries the token as a `u64` because a port must not encode NVIDIA's field
+/// widths, and the doorbell register is 32 bits wide. Truncating instead of refusing would
+/// not error — it would ring **a different channel**, chosen by whichever low bits
+/// survived, and the only symptom would be work executing on hardware nobody asked. That
+/// is the whole reason this is a named status rather than an `as u32`. `0x4B49` is `"KI"`.
+pub const NOT_A_WORK_TOKEN: u32 = 0x4B49;
 
 /// Classify a failure from a mapped region: a bounds refusal, or a syscall.
 ///
@@ -403,6 +516,8 @@ impl RmConnection {
                 channels: BTreeMap::new(),
             }),
             rings: Mutex::new(BTreeMap::new()),
+            // Filled in below, once there is a subdevice to parent it to.
+            usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),
         };
 
         // R4 — the root client. RM writes back the handle it assigned.
@@ -451,12 +566,79 @@ impl RmConnection {
             o.parents.insert(device, client);
             o.parents.insert(subdevice, device);
         }
-        Ok(RmConnection {
+        // ★★ R6b — the doorbell window, attempted here and NOT fatal. See
+        // `RmConnection::usermode` for why it is a stored `Result` rather than a rung.
+        let conn = RmConnection {
             client,
             device,
             subdevice,
             ..conn
+        };
+        let usermode = conn.open_usermode();
+        Ok(RmConnection { usermode, ..conn })
+    }
+
+    /// ★★★ Allocate `AMPERE_USERMODE_A` under the **subdevice** and CPU-map its 64 KiB
+    /// BAR0 window — the mapping whose existence *is* [`RmBackend::ring_doorbell`].
+    ///
+    /// Three things here are not obvious and each was read out of the driver or the C:
+    ///
+    /// 1. **The parent is the subdevice, the mapper is the device.** The object is
+    ///    allocated under `hSubdevice`, but the `NV_ESC_RM_MAP_MEMORY` that maps it names
+    ///    `hDevice` — exactly as the C's proven self-test does
+    ///    (`C: src/qemu/nvkvm_gpu_emul.c:9532-9546`, alloc under `SUB`, `mm.h_device =
+    ///    DEV`). Passing the subdevice as the mapper is the plausible-looking variant.
+    /// 2. **No alloc parameters at all**, not a zeroed struct: `clc561.h` defines the
+    ///    class id and nothing else.
+    /// 3. ★★ **[`CachePolicy::Uncached`], not write-combining.** This is a BAR0
+    ///    *register* range, so `nvidia_mmap_helper` takes the `IS_REG_OFFSET` branch and
+    ///    calls `nv_encode_caching(…, NV_MEMORY_UNCACHED, NV_MEMORY_TYPE_REGISTERS)`
+    ///    unconditionally (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`); the
+    ///    write-combining branch two lines down is the *framebuffer* one. Nothing in this
+    ///    process can check that claim — `Backing::DeviceFile`'s attainable policy is
+    ///    `None` by design, so `require_attainable` cannot refuse a wrong requirement over
+    ///    a device fd — which is precisely why the policy had to become a parameter of
+    ///    [`RmConnection::map_cpu`] before this call site existed.
+    fn open_usermode(&self) -> Result<UsermodeWindow, RmError> {
+        let want = self.mint();
+        let object = self.raw_alloc(
+            self.client,
+            self.subdevice,
+            want,
+            AMPERE_USERMODE_A,
+            &mut [],
+        )?;
+        self.remember(object, self.subdevice);
+        let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::Uncached)?;
+        Ok(UsermodeWindow {
+            _object: object,
+            _node: node,
+            region,
         })
+    }
+
+    /// ★★★ **The doorbell store**: tell the GPU's host unit that the channel named by
+    /// `token` has work.
+    ///
+    /// Two acts, in this order and no other:
+    ///
+    /// 1. [`release_fence`] — the ring's stores are into a **write-combining** mapping and
+    ///    are therefore *not* ordered against this one. Without the fence the doorbell can
+    ///    reach the device before the pushbuffer bytes it announces and the engine runs
+    ///    whatever was in the ring before, with no error anywhere.
+    /// 2. A single 32-bit store of the token to
+    ///    [`USERMODE_NOTIFY_CHANNEL_PENDING`] in the uncached window.
+    ///
+    /// There is no completion to check and no status to read: the store either happened or
+    /// the process took a fault. Everything that can be *known* about a submission is
+    /// downstream of it — the semaphore and `GP_GET`.
+    fn doorbell(&self, token: u32) -> Result<(), RmError> {
+        let window = self.usermode.as_ref().map_err(|e| *e)?;
+        release_fence();
+        window
+            .region
+            .store_u32(HostOffset::new(USERMODE_NOTIFY_CHANNEL_PENDING), token)
+            .map_err(|e| region_error(&e))
     }
 
     /// The driver version string the frontend reported, if it answered.
@@ -776,7 +958,12 @@ impl RmConnection {
     /// The node is returned alongside the region and must be kept: the mapping outlives the
     /// descriptor on Linux, but `NV_ESC_RM_UNMAP_MEMORY` needs it, and dropping it early
     /// makes the teardown unexpressible.
-    fn map_cpu(&self, h_memory: u32, len: u64) -> Result<(CharDevice, VolatileRegion), RmError> {
+    fn map_cpu(
+        &self,
+        h_memory: u32,
+        len: u64,
+        cache: CachePolicy,
+    ) -> Result<(CharDevice, VolatileRegion), RmError> {
         let name = CString::new(format!("nvidia{}", self.gpu_index))
             .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
         let node = CharDevice::openat(&self.dev, &name).map_err(|e| ioctl_error(&e))?;
@@ -811,17 +998,18 @@ impl RmConnection {
         //
         // ★★ The cache policy is a REQUIREMENT that this layer cannot check, and says so:
         // `Backing::DeviceFile`'s attainable policy is `None` because one NVIDIA descriptor
-        // yields three different attributes depending on the range. What RM actually
-        // installs for a framebuffer offset is write-combining, except for the USERD
-        // sub-window, which it maps uncached
-        // (`ogkm-580: kernel-open/nvidia/nv-mmap.c:575-597`). We state write-combining
-        // because that is what the *object* was allocated as; the residual is named rather
-        // than claimed, and the fence discipline below is what makes it survivable either
-        // way.
+        // yields three different attributes depending on the range, so
+        // `require_attainable` CANNOT refuse a wrong requirement over a device fd. That is
+        // exactly why it is a parameter and not a constant here: a hardcoded
+        // write-combining is right for a framebuffer object and **wrong for the doorbell**,
+        // which is a BAR0 register range NVIDIA maps uncached unconditionally
+        // (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574` vs `:575-597`), and no test in
+        // this workspace could have failed on the difference. The obligation therefore sits
+        // with each call site, which is the least dishonest place available.
         let region = VolatileRegion::map(
             Backing::DeviceFile { fd: node.as_fd() },
             len,
-            CachePolicy::WriteCombining,
+            cache,
             HostPageSize::query(),
         )
         .map_err(|e| region_error(&e))?;
@@ -861,6 +1049,125 @@ impl RmConnection {
         let _leaf = leafwitness::Held::enter();
         self.objects.lock().expect("objects").parents.remove(&child);
     }
+}
+
+/// ★★★ The subchannel a copy engine's methods go on — **4, and it is load-bearing**
+/// (`ogkm-580: kernel-open/nvidia-uvm/cla06fsubch.h:30`,
+/// `NVA06F_SUBCHANNEL_COPY_ENGINE`).
+///
+/// It looks arbitrary and is not. UVM's own comment
+/// (`ogkm-580: kernel-open/nvidia-uvm/uvm_maxwell_ce.c:31-36`) says subchannel 4 is
+/// *"required to match CE usage on GRCE"* — and GRCE is exactly what this port gets:
+/// `NV2080_ENGINE_TYPE_COPY0` was measured (rung 1, `--engines`) to land on **runlist 0**,
+/// the graphics runlist, because on this architecture the first two logical copy engines
+/// *are* the graphics copy engines.
+///
+/// ## ★★ MEASURED, RTX 3090 / 580.159.04, 2026-07-30 — and it corrected a wrong diagnosis
+///
+/// Rung 4's first failure was attributed to `SET_OBJECT` carrying an object handle instead
+/// of a class id. That reading was **wrong**, and the bite that was supposed to confirm it
+/// disconfirmed it instead. Isolated, one variable at a time:
+///
+/// | subchannel | `SET_OBJECT` data | result |
+/// |---|---|---|
+/// | 0 | the class id, correct | `GP_GET` advanced to `GP_PUT`, **semaphore never released, destination unchanged** |
+/// | 4 | the class id, correct | 4096 bytes copied, semaphore released |
+/// | 4 | a garbage handle (`0xCAFE_000E`) | **4096 bytes copied anyway** |
+///
+/// So on this part, with the channel group bound to `COPY0`, the *subchannel* routes and
+/// `SET_OBJECT`'s data does not appear to. The failure shape is the dangerous one: the
+/// entry **is fetched** — `GP_GET` moves — and the methods simply evaporate. No fault, no
+/// Xid, no RM status; only the destination not changing says anything happened wrongly.
+const CE_SUBCHANNEL: u32 = 4;
+
+/// One copy engine request, as the arguments [`ce_pushbuffer`] needs.
+///
+/// A struct because six positional arguments of which four are addresses is exactly how
+/// a source and a destination get swapped.
+#[derive(Debug, Clone, Copy)]
+struct CePush {
+    /// The **class id** for `SET_OBJECT` — `AMPERE_DMA_COPY_B` (`0xc7b5`), and **not** the
+    /// engine object's handle.
+    ///
+    /// `NVC56F_SET_OBJECT_NVCLASS` is bits `15:0` of the data word
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:68-71`), i.e. a *class
+    /// number*, and it is what UVM sends
+    /// (`ogkm-580: kernel-open/nvidia-uvm/uvm_maxwell_ce.c:36`, `rm_info.ceClass`).
+    ///
+    /// ★ **Honest limit: this field was NOT observed to matter.** A deliberately wrong
+    /// value here still produced a correct 4096-byte copy on RTX 3090 / 580.159.04 — see
+    /// [`CE_SUBCHANNEL`] for the table. The class is sent because that is what the
+    /// encoding and the driver's own client say it is, not because a measurement here
+    /// distinguishes it, and claiming otherwise would be attributing a green run to the
+    /// wrong cause.
+    class_id: u32,
+    /// Source GPU VA.
+    src: u64,
+    /// Destination GPU VA.
+    dst: u64,
+    /// Bytes.
+    len: u32,
+    /// Where the engine releases its completion payload.
+    sem_va: u64,
+    /// The payload it releases.
+    payload: u32,
+}
+
+/// ★★ Build the pushbuffer for one copy-engine copy — **pure**, so it is testable with no
+/// GPU and no RM connection, which is the only part of rung 4 that can be.
+///
+/// Five method runs, in submission order:
+///
+/// 1. `SET_OBJECT` — binds the engine object to subchannel 0. Without it the subchannel
+///    holds whatever it last held, and the address methods below go to that class.
+/// 2. `OFFSET_IN_UPPER … OFFSET_OUT_LOWER` — four consecutive dwords, so one header.
+/// 3. `LINE_LENGTH_IN`, `LINE_COUNT` — a pair. With `MULTI_LINE_ENABLE_FALSE`,
+///    `LINE_LENGTH_IN` is a **byte** count and `LINE_COUNT` is 1.
+/// 4. `SET_SEMAPHORE_A/B/PAYLOAD` — a run of three. `_A` is address bits 48:32, `_B` is
+///    31:0 (`ogkm-580: clc7b5.h:47-52`), which is the reverse of the host-FIFO
+///    semaphore's LO/HI order and is a real trap.
+/// 5. `LAUNCH_DMA` — the flags, last, because it is what starts the copy.
+///
+/// ★ The address `_UPPER` fields are **17 bits** (`clc7b5.h:162`), not eight like the
+/// GPFIFO entry's. The check is still here because a truncated destination is a copy into
+/// somebody else's page, and it succeeds.
+fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
+    let bad = || RmError::Other(BAD_ENCODE);
+    for va in [p.src, p.dst, p.sem_va] {
+        if va >> 49 != 0 {
+            return Err(bad());
+        }
+    }
+    if !p.sem_va.is_multiple_of(4) {
+        return Err(bad());
+    }
+    let flags = ce::LAUNCH_TRANSFER_NON_PIPELINED
+        | ce::LAUNCH_FLUSH_ENABLE
+        | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD
+        | ce::LAUNCH_SRC_PITCH
+        | ce::LAUNCH_DST_PITCH
+        | ce::LAUNCH_MULTI_LINE_DISABLE
+        | ce::LAUNCH_SRC_VIRTUAL
+        | ce::LAUNCH_DST_VIRTUAL;
+    let sub = CE_SUBCHANNEL;
+    Ok(vec![
+        method_header_inc(sub, SET_OBJECT, 1).ok_or_else(bad)?,
+        p.class_id,
+        method_header_inc(sub, ce::OFFSET_IN_UPPER, 4).ok_or_else(bad)?,
+        (p.src >> 32) as u32,
+        (p.src & 0xFFFF_FFFF) as u32,
+        (p.dst >> 32) as u32,
+        (p.dst & 0xFFFF_FFFF) as u32,
+        method_header_inc(sub, ce::LINE_LENGTH_IN, 2).ok_or_else(bad)?,
+        p.len,
+        1,
+        method_header_inc(sub, ce::SET_SEMAPHORE_A, 3).ok_or_else(bad)?,
+        (p.sem_va >> 32) as u32,
+        (p.sem_va & 0xFFFF_FFFF) as u32,
+        p.payload,
+        method_header_inc(sub, ce::LAUNCH_DMA, 1).ok_or_else(bad)?,
+        flags,
+    ])
 }
 
 /// The runlist an [`EngineKind`] channel belongs on, as an `NV2080_ENGINE_TYPE_*`.
@@ -942,13 +1249,117 @@ fn read_version(ctl: &CharDevice) -> Option<String> {
 pub struct HostRmBackend {
     id: IsolateId,
     conn: Arc<RmConnection>,
+    /// `channel -> how many entries this worker has published`, so the next submission
+    /// takes the next GPFIFO slot instead of overwriting the live one. Per **worker**
+    /// rather than per connection: see [`HostRmBackend::next_slot`].
+    slots: BTreeMap<u32, u64>,
+    /// `host VAS range -> the copy-engine channel this worker built over it`, for
+    /// [`RmBackend::ce_copy`]. Built on first use and reused, because a channel is six RM
+    /// objects and a copy is one pushbuffer.
+    ce_channels: BTreeMap<u32, CeChannel>,
+}
+
+/// A copy-engine channel and the engine object bound into its subchannel 0.
+#[derive(Debug, Clone, Copy)]
+struct CeChannel {
+    /// The channel, in this backend's namespace.
+    chan: HostHandle,
+    /// Its work-submit token.
+    token: u64,
+    // ★ There is deliberately NO engine-object handle here. The object must be
+    // ALLOCATED — it is what gives the channel a copy-engine context — but its handle is
+    // never named again: `SET_OBJECT`'s data field is `NVCLASS`, a class number
+    // (`ogkm-580: clc56f.h:68-71`). Keeping the handle would invite exactly the mistake
+    // that was made and measured here on 2026-07-30. It dies with the channel, as a
+    // child of it.
+    /// The payload the next copy will release, so two copies on one channel cannot be
+    /// confused for each other by a stale word.
+    next_payload: u32,
+}
+
+/// What one submission produced — the whole evidence bar for rung 3, as data.
+///
+/// ★ A struct rather than a `bool` because the *interesting* case is the one where every
+/// field is legal and the submission did nothing: `semaphore = 0`, `gp_get = 0`,
+/// `gp_put = 1` is the `userdOffset` failure, and it reports no error anywhere.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubmitOutcome {
+    /// The semaphore word after the wait — the payload if the engine released it.
+    pub semaphore: u32,
+    /// USERD `GP_GET`: **hardware's** consume cursor. Advancing to meet `gp_put` is the
+    /// one fact in this struct that no store of ours can produce.
+    pub gp_get: u32,
+    /// USERD `GP_PUT`: our produce cursor, read back so the pair is a comparison and not
+    /// an assumption.
+    pub gp_put: u32,
+}
+
+/// What [`HostRmBackend::prove_ce_copy`] observed in **device memory**, before and after.
+///
+/// ★ The expectations travel with the observations rather than being re-derived by the
+/// caller: a diagnostic that computes its own expected value from the same variable it
+/// printed is how a copy of the wrong length reads as a pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeEvidence {
+    /// The destination's first word **before** the copy — the sentinel, i.e. `!pattern`.
+    pub before: u32,
+    /// The destination's first word after, read through an independent second mapping.
+    pub after: u32,
+    /// The destination's **last** word after. A truncated copy matches `after` and not
+    /// this.
+    pub after_last: u32,
+    /// What `after` must be.
+    pub expect_after: u32,
+    /// What `after_last` must be.
+    pub expect_after_last: u32,
+    /// How many bytes were asked for.
+    pub bytes: u64,
+    /// What the submission itself did — the cursors and the engine's release semaphore.
+    /// Carried so a failed copy can be triaged without a second run: see
+    /// [`HostRmBackend::ce_copy_outcome`].
+    pub submit: SubmitOutcome,
+    /// The payload the engine was told to release.
+    pub payload: u32,
+}
+
+impl CeEvidence {
+    /// Did the destination change **from the sentinel to the source's bytes**, first word
+    /// and last, *and* did the engine say it had retired?
+    ///
+    /// ★ The semaphore is part of the conjunction rather than a separate check. Bytes that
+    /// match without a release would mean something moved them that we did not ask, and
+    /// that is not a pass — it is a different question.
+    #[must_use]
+    pub fn copied(&self) -> bool {
+        self.before != self.expect_after
+            && self.after == self.expect_after
+            && self.after_last == self.expect_after_last
+            && self.submit.semaphore == self.payload
+    }
+}
+
+impl SubmitOutcome {
+    /// Did hardware both **consume** the entry and **release** the semaphore?
+    ///
+    /// Both, never either: a `GP_GET` that moved with no semaphore means the methods did
+    /// not execute, and a semaphore without a `GP_GET` means the word was not written by
+    /// the submission this call made.
+    #[must_use]
+    pub fn landed(&self, payload: u32) -> bool {
+        self.semaphore == payload && self.gp_get == self.gp_put
+    }
 }
 
 impl HostRmBackend {
     /// One worker's backend over `conn`.
     #[must_use]
     pub fn new(id: IsolateId, conn: Arc<RmConnection>) -> Self {
-        HostRmBackend { id, conn }
+        HostRmBackend {
+            id,
+            conn,
+            slots: BTreeMap::new(),
+            ce_channels: BTreeMap::new(),
+        }
     }
 
     fn stamp(&self, raw: u32) -> HostHandle {
@@ -1197,6 +1608,18 @@ impl RmBackend for HostRmBackend {
 
     fn free(&mut self, obj: HostHandle) -> Result<(), RmError> {
         let raw = self.narrow(obj)?;
+        // ★★ A `Vas` freed while this worker holds a copy-engine channel over it must take
+        // that channel with it. Otherwise the channel outlives its address space (RM would
+        // refuse the free of the space, or worse, accept it) and — the sharper failure —
+        // the handle value gets recycled, so a later `ce_copy` on a *different* `Vas` with
+        // the same raw handle would submit into the dead one's ring. Recycling is exactly
+        // the #80 regression class, and it is cheap to close here.
+        if let Some(ce) = self.ce_channels.remove(&raw) {
+            let _ = self.free(ce.chan);
+        }
+        // The slot counter is per-channel state with nothing to free; dropping it keeps a
+        // recycled handle from inheriting a stale cursor.
+        self.slots.remove(&raw);
         // ★★ A channel is six objects and a mapping (see `ChannelParts`), and the ORDER
         // is the reason this is not another `companions` chain. The channel goes first
         // because the group must outlive it; the mapping is torn down before the memory
@@ -1266,30 +1689,67 @@ impl RmBackend for HostRmBackend {
         let h_dma = self.narrow(vas)?;
         self.conn.raw_unmap_dma(h_dma, gpu_va)
     }
-    fn ring_doorbell(&mut self, _host_token: u64) -> Result<(), RmError> {
-        // Not an ioctl at all: a doorbell is a store into a mapped BAR page. It cannot be
-        // expressed on this rung, and expressing it as a no-op would make every submission
-        // test pass while nothing ran.
-        Err(RmError::Other(NOT_ON_THIS_RUNG))
+    /// ★★★ **Rung 3.** Not an ioctl at all: a store into the mapped usermode BAR window
+    /// (see `RmConnection::doorbell`).
+    ///
+    /// ★ The token is **32 bits** — `(runlistId << 16) | chid`, as
+    /// `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` reports it — while the port carries
+    /// it as a `u64` because a port must not encode a vendor's field widths. A value that
+    /// does not fit was never a token this connection handed out, so it is refused here
+    /// rather than truncated into a store that would ring **some other channel**.
+    fn ring_doorbell(&mut self, host_token: u64) -> Result<(), RmError> {
+        let token = u32::try_from(host_token).map_err(|_| RmError::Other(NOT_A_WORK_TOKEN))?;
+        self.conn.doorbell(token)
     }
 
-    /// ★ NOT ON THIS RUNG, and for two different reasons depending on the arm — which
-    /// is why it is one refusal and not a half-built verb.
+    /// ★★★ **Rung 4 — a real copy engine moves the bytes**, for the
+    /// [`CeExecutor::HostCe`] arm only.
     ///
-    /// [`kayfabe_isolate::CeExecutor::HostCe`] needs a GPFIFO ring, USERD in mapped
-    /// memory and a work-submit token — the same machinery `ring_doorbell` is refused
-    /// for on this rung. [`kayfabe_isolate::CeExecutor::Ours`] needs the isolate's
-    /// mapping of the fabricated aperture, which is the `FbRead` production
-    /// implementation deliberately left to the stage after this one
-    /// (`eight_blockers_resolved.md` §12.3).
+    /// The owner's ruling that frames the split: *only a CE whose operands are genuinely
+    /// GPGA (physical) must be emulated; everything VA-addressed can be forwarded, because
+    /// we control the mapping.* This is the forwarding half, and it is forwarded **as
+    /// virtual addresses** — `LAUNCH_DMA` goes out with `SRC_TYPE_VIRTUAL` and
+    /// `DST_TYPE_VIRTUAL`, so the engine walks the isolate's own host VAS (`#14`'s
+    /// per-`Vas` boundary) and cannot be pointed at physical memory even by a wrong
+    /// address. `kayfabe_abi::submit::ce` deliberately does not define the `_PHYSICAL`
+    /// constants.
     ///
-    /// Returning `Ok(())` for a copy that moved no byte is precisely the
-    /// forged-completion failure `mode2_real_forward_not_fake` forbids, and it would be
-    /// invisible: the guest's next read is the only thing that would ever notice.
-    fn ce_copy(&mut self, _vas: HostHandle, _sub: CeSubCopy) -> Result<(), RmError> {
-        Err(RmError::Other(NOT_ON_THIS_RUNG))
+    /// ## What it does
+    ///
+    /// A copy-engine channel is built over `vas` on first use and kept
+    /// (`CeChannel`): six RM objects, an `AMPERE_DMA_COPY_B` engine object, and a
+    /// schedule. Each copy is then one pushbuffer — `SET_OBJECT`, the four address
+    /// methods, length and line count, a one-word release semaphore, `LAUNCH_DMA` — one
+    /// GPFIFO entry, one doorbell, and a **wait for the engine's own semaphore**.
+    ///
+    /// ★★ The wait is not optional and is not a convenience. The port's verb is
+    /// synchronous, so returning before the engine retires would mean returning `Ok(())`
+    /// for bytes that have not moved — the forged completion `mode2_real_forward_not_fake`
+    /// forbids, and the guest's next read would be the only thing that ever noticed. A
+    /// copy that does not retire inside [`CE_COPY_TIMEOUT`] is [`RmError::Other`] carrying
+    /// [`CE_NEVER_RETIRED`], never a success.
+    ///
+    /// ## Two named refusals, both deliberate
+    ///
+    /// - [`CeExecutor::Ours`] — needs the isolate's mapping of the *fabricated* aperture,
+    ///   which does not exist (the `FbRead` production implementation,
+    ///   `eight_blockers_resolved.md` §12.3). Unchanged from the previous rung.
+    /// - [`CeSource::Constant`] — a fill is `LAUNCH_DMA` with `REMAP_ENABLE` plus the
+    ///   `SET_REMAP_*` method block, which `kayfabe_abi::submit::ce` does not transcribe.
+    ///   Emitting a copy from address zero instead would be a plausible success that
+    ///   scrubs the destination with whatever is at VA 0.
+    fn ce_copy(&mut self, vas: HostHandle, sub: CeSubCopy) -> Result<(), RmError> {
+        // ★ The verb answers `Ok`/`Err`; the OUTCOME is what a diagnostic needs to tell
+        // "the engine never fetched the entry" from "it fetched it and released nothing",
+        // and those two have completely different causes. So the body is one level down
+        // and this is the port's projection of it.
+        let (outcome, payload) = self.ce_copy_outcome(vas, sub)?;
+        if outcome.semaphore == payload {
+            Ok(())
+        } else {
+            Err(RmError::Other(CE_NEVER_RETIRED))
+        }
     }
-
     /// ★★★ NOT ON THIS RUNG — and this refusal is the honest half of `#102` stage C3.
     ///
     /// The seam, the decoder and the production `FbRead`
@@ -1427,6 +1887,15 @@ impl HostRmBackend {
             h_context_share: 0,
             h_va_space: 0,
             h_userd_memory_0: userd,
+            // ★★★ ZERO, and it is now a MEASURED requirement rather than a plausible
+            // default. Hardware reads USERD at `hUserdMemory[0] + userdOffset[0]`, so a
+            // non-zero offset makes it look for `GP_PUT` somewhere our store never lands:
+            // it sees `GP_PUT == GP_GET` forever, fetches nothing, and **reports no error
+            // at all** — the C's M5.47 root cause
+            // (`C: src/qemu/nvkvm_gpu_emul.c:9291-9299`). Bitten on RTX 3090 / 580.159.04
+            // on 2026-07-30 by setting it to `0x2000`: every ioctl still returned 0, the
+            // channel scheduled, the doorbell rang, and R15 reported `sem 0x00000000
+            // GP_GET 0 GP_PUT 1` with R17's destination byte-for-byte unchanged.
             userd_offset_0: 0,
             engine_type,
         }
@@ -1477,8 +1946,19 @@ impl HostRmBackend {
         // this process getting its hands on the channel. Keeping the order means a failure
         // here cannot be confused for a channel that never existed.
         let rings = match (
-            self.conn.map_cpu(ring, RING_OBJECT_BYTES),
-            self.conn.map_cpu(userd, RING_OBJECT_BYTES),
+            // ★ Both write-combining, and that is a claim about what these OBJECTS are,
+            // not about what they are used for: they are `NV01_MEMORY_LOCAL_USER`
+            // allocations in the framebuffer, so RM's mmap handler takes the
+            // write-combining branch for both (`ogkm-580: nv-mmap.c:575-597`). The
+            // *uncached* sub-case two lines below it is RM's own USERD window for a
+            // channel whose USERD the driver allocated — not this one, which is our own
+            // vidmem object handed to the channel via `hUserdMemory[0]`. Claiming
+            // uncached here because the word "USERD" appears would be a comfortable
+            // guess, and the fence discipline is what makes write-combining survivable.
+            self.conn
+                .map_cpu(ring, RING_OBJECT_BYTES, CachePolicy::WriteCombining),
+            self.conn
+                .map_cpu(userd, RING_OBJECT_BYTES, CachePolicy::WriteCombining),
         ) {
             (Ok((ring_node, ring_map)), Ok((userd_node, userd_map))) => ChannelRings {
                 _ring_node: ring_node,
@@ -1575,6 +2055,297 @@ impl HostRmBackend {
             .unwrap_or(Err(RmError::BadHandle(chan)))
     }
 
+    /// ★★★ R15 — **submit one host-FIFO semaphore release and watch hardware answer.**
+    ///
+    /// The smallest thing a GPU can be asked to do that leaves evidence *we cannot
+    /// forge*: five consecutive `NVC56F_SEM_*` methods executed by the channel's own front
+    /// end. No engine object, no golden context, no compute — so a failure localises to
+    /// the submission machinery and to nothing else. It is the C's own host-channel
+    /// self-test, method for method (`C: src/qemu/nvkvm_gpu_emul.c:9597-9640`).
+    ///
+    /// ## ★★ The evidence bar, and why it is two facts and not one
+    ///
+    /// Returns [`SubmitOutcome`], and a pass requires **both**:
+    ///
+    /// - `semaphore == payload` — a word in device memory changed to a value only the
+    ///   engine could have written there;
+    /// - `gp_get` advanced to meet `gp_put` — the GPU's host unit *consumed* the ring
+    ///   entry. `GP_GET` is the one word in this crate hardware writes and we do not.
+    ///
+    /// Either alone is weaker than it looks. A semaphore could in principle be stale from
+    /// an earlier submission (hence the sentinel below); `GP_GET` advancing without the
+    /// semaphore landing would mean the entry was fetched and the methods did nothing.
+    ///
+    /// ★ `payload` is chosen by the caller and must be **neither zero** (the sentinel this
+    /// writes first) **nor the token** (which we store into the doorbell window and could
+    /// alias). A false pass should be unavailable, not merely unlikely.
+    ///
+    /// ## ★★★ What this is the FIRST live consumer of
+    ///
+    /// `userdOffset[0]`. Rungs 1 and 2 allocated USERD and mapped it; nothing *read* it.
+    /// Here hardware does, at `hUserdMemory[0] + userdOffset[0]`, and a wrong offset makes
+    /// the GPU look for `GP_PUT` somewhere our store never lands: it sees
+    /// `GP_PUT == GP_GET` forever, fetches nothing, and **reports no error at all**
+    /// (the C's M5.47 root cause, `C: src/qemu/nvkvm_gpu_emul.c:9291-9299`). Zero
+    /// utilisation and no Xid is the worst failure shape available, which is why this
+    /// function returns the cursors rather than a `bool`.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] if `chan` is not this connection's channel, whatever the
+    /// doorbell refuses with (including the stored open-time failure of the usermode
+    /// mapping), or a bounds refusal if the ring object cannot hold the layout.
+    pub fn submit_semaphore_probe(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        payload: u32,
+        timeout: Duration,
+    ) -> Result<SubmitOutcome, RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let slot = self.next_slot(raw);
+        let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
+        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+
+        // The sentinel FIRST, so "the payload is there" cannot be satisfied by whatever
+        // the previous submission left behind.
+        self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
+
+        // One incrementing run, SEM_ADDR_LO..SEM_EXECUTE. `SEM_ADDR_HI` is eight bits of
+        // address: the 2^40 ceiling `gp_entry` enforces applies here too, and a VA above
+        // it would be silently truncated into someone else's page.
+        let header =
+            method_header_inc(0, fifo::SEM_ADDR_LO, 5).ok_or(RmError::Other(BAD_ENCODE))?;
+        if sem_va >= 1 << 40 || !sem_va.is_multiple_of(4) {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        let words = [
+            header,
+            (sem_va & 0xFFFF_FFFC) as u32,
+            ((sem_va >> 32) & 0xFF) as u32,
+            payload,
+            0,
+            fifo::SEM_EXECUTE_RELEASE_32BIT,
+        ];
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)?;
+        self.await_semaphore(chan, SEMAPHORE_OFFSET, payload, timeout)
+    }
+
+    /// Publish one GPFIFO entry and ring for it: entry → fence → `GP_PUT` → fence →
+    /// doorbell.
+    ///
+    /// ★★ **The two fences are the whole point of the ordering.** The ring is a
+    /// write-combining mapping, so its stores are not ordered against each other or
+    /// against the doorbell store; without the first fence the GPU can see a `GP_PUT` that
+    /// announces methods that have not landed, and without the second it can see a
+    /// doorbell for a `GP_PUT` that has not landed. Neither produces an error — the engine
+    /// simply executes whatever bytes were there.
+    fn submit_entry(
+        &mut self,
+        chan: HostHandle,
+        pb_va: u64,
+        pb_len: u64,
+        slot: u64,
+        token: u64,
+    ) -> Result<(), RmError> {
+        let entry = gp_entry(pb_va, pb_len).ok_or(RmError::Other(BAD_ENCODE))?;
+        let at = GPFIFO_OFFSET + slot * GP_ENTRY_SIZE;
+        self.ring_store_u32(chan, at, entry as u32)?;
+        self.ring_store_u32(chan, at + 4, (entry >> 32) as u32)?;
+
+        release_fence();
+        // ★ `GP_PUT` is an INDEX INTO THE RING, so it wraps with the ring: after the last
+        // entry it is 0, not `GPFIFO_ENTRIES`. Writing 64 into a 64-entry ring names an
+        // entry that does not exist. Latent rather than live at this rung — nothing here
+        // submits 64 times — which is exactly the kind of arithmetic that is wrong for a
+        // year and then wrong at scale.
+        let put = u32::try_from((slot + 1) % u64::from(GPFIFO_ENTRIES))
+            .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        self.userd_store_u32(chan, USERD_GP_PUT, put)?;
+        release_fence();
+        self.ring_doorbell(token)
+    }
+
+    /// Poll a semaphore word in the channel's ring object until it holds `payload` or
+    /// `timeout` expires, then report it together with both USERD cursors.
+    ///
+    /// ★ Polling, not waiting on an interrupt: this rung deliberately has no event
+    /// delivery, and a poll cannot mistake "we were never woken" for "it never landed".
+    /// The cursors are read **after** the loop ends either way, so a timeout returns the
+    /// same three facts a success does — which is what makes the `userdOffset` failure
+    /// (`sem = 0`, `gp_get = 0`, `gp_put = 1`, no error) legible instead of invisible.
+    fn await_semaphore(
+        &mut self,
+        chan: HostHandle,
+        sem_offset: u64,
+        payload: u32,
+        timeout: Duration,
+    ) -> Result<SubmitOutcome, RmError> {
+        let deadline = Instant::now() + timeout;
+        let mut semaphore = self.ring_load_u32(chan, sem_offset)?;
+        while semaphore != payload && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(1));
+            semaphore = self.ring_load_u32(chan, sem_offset)?;
+        }
+        let (gp_get, gp_put) = self.userd_cursors(chan)?;
+        Ok(SubmitOutcome {
+            semaphore,
+            gp_get,
+            gp_put,
+        })
+    }
+
+    /// [`RmBackend::ce_copy`]'s body, returning **what hardware did** rather than a
+    /// verdict: the [`SubmitOutcome`] and the payload that was asked for.
+    ///
+    /// ★ The distinction it preserves is the one that costs a day to re-derive by hand.
+    /// `gp_get == gp_put` with no semaphore means the entry was *fetched* and the methods
+    /// did nothing — a wrong class in `SET_OBJECT`, a wrong subchannel, a bad operand.
+    /// `gp_get == 0` with `gp_put == 1` means it was never fetched at all — USERD, the
+    /// token, or the schedule. One error status cannot carry that, and a verb whose only
+    /// answer is `Err(CE_NEVER_RETIRED)` cannot be debugged.
+    ///
+    /// # Errors
+    /// As [`RmBackend::ce_copy`], minus the never-retired verdict which is the caller's.
+    pub fn ce_copy_outcome(
+        &mut self,
+        vas: HostHandle,
+        sub: CeSubCopy,
+    ) -> Result<(SubmitOutcome, u32), RmError> {
+        if sub.by != CeExecutor::HostCe {
+            return Err(RmError::Other(NOT_ON_THIS_RUNG));
+        }
+        let CeSource::Address(src) = sub.src else {
+            return Err(RmError::Other(NOT_ON_THIS_RUNG));
+        };
+        // A zero-length sub-copy is a partition bug upstream, and `LINE_LENGTH_IN = 0` is
+        // not a no-op on every part — so it is refused rather than issued.
+        let len = u32::try_from(sub.len).map_err(|_| RmError::Other(BAD_ENCODE))?;
+        if len == 0 {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+
+        let ce_chan = self.ce_channel(vas)?;
+        let payload = ce_chan.next_payload;
+        let chan = ce_chan.chan;
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
+        let slot = self.next_slot(raw);
+        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+
+        let words = ce_pushbuffer(CePush {
+            class_id: AMPERE_DMA_COPY_B,
+            src,
+            dst: sub.dst,
+            len,
+            sem_va,
+            payload,
+        })?;
+        if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, ce_chan.token)?;
+
+        let outcome = self.await_semaphore(chan, SEMAPHORE_OFFSET, payload, CE_COPY_TIMEOUT)?;
+        let key = self.narrow(vas)?;
+        if let Some(c) = self.ce_channels.get_mut(&key) {
+            c.next_payload = c.next_payload.wrapping_add(1);
+        }
+        Ok((outcome, payload))
+    }
+
+    /// The copy-engine channel over `vas`, built on first use.
+    ///
+    /// ★★ Three RM acts in a fixed order, and the order is the C's proven one: the
+    /// channel (which carries `engineType = COPY0` into the group, GR-1), then the
+    /// `AMPERE_DMA_COPY_B` object **under the channel**, then the schedule. Allocating the
+    /// engine object after scheduling is the variant that looks equivalent and is not.
+    ///
+    /// ★ The engine object's eight alloc bytes are [`CeAllocParams`] with the **same**
+    /// ordinal the channel used. Omitting them is the C's `engineType = 0` bug, whose
+    /// symptom is `NV_ERR_NOT_READY` from the schedule — two steps from the cause.
+    ///
+    /// ★★ **Honest limit, measured on RTX 3090 / 580.159.04:** skipping the engine-object
+    /// allocation entirely **still produced a correct 4096-byte copy**. With the group
+    /// bound to `COPY0`, subchannel 4's methods reach the copy engine without it. It is
+    /// allocated anyway — the C allocates it, UVM allocates it, and a channel with no
+    /// engine context is not a thing this port wants to depend on being fine — but the
+    /// dependency is *asserted from those sources*, not from a bite that fired here. A
+    /// step kept for a reason that has not been demonstrated must say so.
+    fn ce_channel(&mut self, vas: HostHandle) -> Result<CeChannel, RmError> {
+        let key = self.narrow(vas)?;
+        if let Some(c) = self.ce_channels.get(&key) {
+            return Ok(*c);
+        }
+        let (chan, token) = self.alloc_channel_on(vas, ENGINE_TYPE_COPY0)?;
+        let mut params = [0u8; CeAllocParams::SIZE];
+        CeAllocParams {
+            version: CeAllocParams::VERSION_1,
+            engine_type: ENGINE_TYPE_COPY0,
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        if let Err(e) = self.alloc_engine_object(chan, ClassId(AMPERE_DMA_COPY_B), &params) {
+            let _ = self.free(chan);
+            return Err(e);
+        }
+        if let Err(e) = self.schedule(chan) {
+            let _ = self.free(chan);
+            return Err(e);
+        }
+        let c = CeChannel {
+            chan,
+            token,
+            // ★ Starts at 1, never 0: zero is the sentinel written before every
+            // submission, so a payload of zero would be satisfied by the sentinel itself.
+            next_payload: 1,
+        };
+        self.ce_channels.insert(key, c);
+        Ok(c)
+    }
+
+    /// The next GPFIFO slot for `chan`, wrapping at [`GPFIFO_ENTRIES`].
+    ///
+    /// ★ Kept per **backend**, not per connection: `submit_entry` is the only writer and
+    /// it runs under `&mut self`, so the counter needs no lock. A second worker submitting
+    /// to the same channel would need one — and would need much more than a counter, which
+    /// is why nothing here pretends to support it.
+    fn next_slot(&mut self, chan: u32) -> u64 {
+        let n = self.slots.entry(chan).or_insert(0);
+        let slot = *n % u64::from(GPFIFO_ENTRIES);
+        *n += 1;
+        slot
+    }
+
+    /// Store one 32-bit word into the channel's USERD.
+    fn userd_store_u32(&self, chan: HostHandle, offset: u64, value: u32) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        self.conn
+            .with_rings(raw, |r| {
+                r.userd
+                    .store_u32(HostOffset::new(offset), value)
+                    .map_err(|e| region_error(&e))
+            })
+            .unwrap_or(Err(RmError::BadHandle(chan)))
+    }
+
     /// ★★★ R14b — **prove the mapped bytes are in the GPU's memory and not in ours.**
     ///
     /// A mapping that succeeds proves nothing. `mmap` of an anonymous page succeeds too,
@@ -1618,7 +2389,9 @@ impl HostRmBackend {
 
         // The independent mapping. `map_cpu` opens its own node, so this shares nothing
         // with the first — not the descriptor, not the mmap context, not the address.
-        let (node, second) = self.conn.map_cpu(parts.ring, RING_OBJECT_BYTES)?;
+        let (node, second) =
+            self.conn
+                .map_cpu(parts.ring, RING_OBJECT_BYTES, CachePolicy::WriteCombining)?;
         let a = second
             .load_u32(HostOffset::new(offset))
             .map_err(|e| region_error(&e))?;
@@ -1628,6 +2401,109 @@ impl HostRmBackend {
         drop(second);
         drop(node);
         Ok((a, b))
+    }
+
+    /// ★★★ R17 — **prove a copy engine moved bytes of device memory**, by reading the
+    /// destination before and after through mappings that are not the ones written.
+    ///
+    /// Two device-local buffers are allocated, GPU-mapped into `vas` and CPU-mapped. The
+    /// source is filled with a per-word pattern; the destination is filled with a
+    /// **different** sentinel so that "the copy happened" and "the destination already
+    /// looked like that" are distinguishable outcomes. Then one [`RmBackend::ce_copy`]
+    /// runs, and the destination is read back through a **freshly opened, independent**
+    /// mapping — a different device node, a different mmap context, a kernel-chosen
+    /// address — so the answer cannot come from our own page cache.
+    ///
+    /// ★ The last word is returned as well as the first. A copy engine that wrote only a
+    /// header, or a length that got truncated to one dword, would match on word 0 alone.
+    ///
+    /// Everything it allocates is freed before it returns, including on the error paths
+    /// that matter (the copy itself failing still tears down).
+    ///
+    /// # Errors
+    /// Whatever the allocation, the mapping or the copy refuses with.
+    pub fn prove_ce_copy(&mut self, vas: HostHandle, pattern: u32) -> Result<CeEvidence, RmError> {
+        const BYTES: u64 = 4096;
+        const WORDS: u64 = BYTES / 4;
+        let range = self.narrow(vas)?;
+        let sentinel = !pattern;
+
+        let src = self.conn.alloc_device_local(BYTES)?;
+        let dst = match self.conn.alloc_device_local(BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(src));
+                return Err(e);
+            }
+        };
+        let mut cleanup: Vec<(u32, Option<u64>)> = vec![(src, None), (dst, None)];
+        let mut go = || -> Result<CeEvidence, RmError> {
+            let src_va = self.conn.raw_map_dma(range, src, BYTES, None)?;
+            cleanup[0].1 = Some(src_va);
+            let dst_va = self.conn.raw_map_dma(range, dst, BYTES, None)?;
+            cleanup[1].1 = Some(dst_va);
+
+            let (src_node, src_map) = self.conn.map_cpu(src, BYTES, CachePolicy::WriteCombining)?;
+            let (dst_node, dst_map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            for i in 0..WORDS {
+                src_map
+                    .store_u32(HostOffset::new(i * 4), pattern.wrapping_add(i as u32))
+                    .map_err(|e| region_error(&e))?;
+                dst_map
+                    .store_u32(HostOffset::new(i * 4), sentinel)
+                    .map_err(|e| region_error(&e))?;
+            }
+            let before = dst_map
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            // The stores above are into a write-combining mapping; the engine must not be
+            // launched while they are still in a write-combining buffer.
+            release_fence();
+            drop(dst_map);
+            drop(dst_node);
+            drop(src_map);
+            drop(src_node);
+
+            let (submit, payload) = self.ce_copy_outcome(
+                vas,
+                CeSubCopy {
+                    dst: dst_va,
+                    src: CeSource::Address(src_va),
+                    len: BYTES,
+                    by: CeExecutor::HostCe,
+                },
+            )?;
+
+            // ★ The read-back mapping is opened AFTER the copy and is not the one the
+            // sentinel was written through.
+            let (node, second) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let after = second
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            let after_last = second
+                .load_u32(HostOffset::new((WORDS - 1) * 4))
+                .map_err(|e| region_error(&e))?;
+            drop(second);
+            drop(node);
+            Ok(CeEvidence {
+                before,
+                after,
+                after_last,
+                expect_after: pattern,
+                expect_after_last: pattern.wrapping_add(WORDS as u32 - 1),
+                bytes: BYTES,
+                submit,
+                payload,
+            })
+        };
+        let out = go();
+        for (h, va) in cleanup.into_iter().rev() {
+            if let Some(va) = va {
+                let _ = self.conn.raw_unmap_dma(range, va);
+            }
+            let _ = self.free(self.stamp(h));
+        }
+        out
     }
 
     /// Free exactly one RM object — the body [`RmBackend::free`] had before a channel
@@ -1782,6 +2658,180 @@ mod tests {
         );
     }
 
+    /// ★★ The copy-engine pushbuffer, word for word. This is the only part of rung 4 that
+    /// can be checked without a GPU, and the two things it pins are the two that failed
+    /// silently on hardware: **which subchannel** every header names, and that the source
+    /// and destination do not swap.
+    #[test]
+    fn the_ce_pushbuffer_addresses_the_copy_engine_subchannel_and_does_not_swap_operands() {
+        let w = ce_pushbuffer(CePush {
+            class_id: AMPERE_DMA_COPY_B,
+            src: 0x1234_5678_9ABC,
+            dst: 0x0000_DEAD_0000,
+            len: 4096,
+            sem_va: 0x7_0000_2000,
+            payload: 7,
+        })
+        .expect("encodable");
+
+        // Every header names subchannel 4 — bits 15:13. A header on subchannel 0 is the
+        // measured silent failure (the entry is fetched and nothing happens).
+        for (i, word) in w.iter().enumerate() {
+            if *word >> 29 == 1 {
+                assert_eq!(
+                    (word >> 13) & 0x7,
+                    CE_SUBCHANNEL,
+                    "header at {i} is on the wrong subchannel"
+                );
+            }
+        }
+        // SET_OBJECT carries the CLASS, and the addresses go out in-then-out, hi-then-lo.
+        assert_eq!(w[1], AMPERE_DMA_COPY_B);
+        assert_eq!(w[3], 0x1234);
+        assert_eq!(w[4], 0x5678_9ABC, "source low");
+        assert_eq!(w[5], 0x0000);
+        assert_eq!(w[6], 0xDEAD_0000, "destination low");
+        assert_eq!(w[8], 4096, "LINE_LENGTH_IN is a BYTE count");
+        assert_eq!(w[9], 1, "LINE_COUNT");
+        // ★ The CE semaphore is A = HIGH, B = LOW — the REVERSE of the host-FIFO
+        // semaphore's LO/HI order, and swapping them writes the payload into a page 4 GiB
+        // away that we happen to own.
+        assert_eq!(w[11], 0x7, "SET_SEMAPHORE_A is the HIGH bits");
+        assert_eq!(w[12], 0x0000_2000, "SET_SEMAPHORE_B is the LOW bits");
+        assert_eq!(w[13], 7);
+        // The launch flags: virtual on both sides, and a one-word release.
+        let flags = w[15];
+        assert_eq!(flags & 0b11, ce::LAUNCH_TRANSFER_NON_PIPELINED);
+        assert_ne!(flags & ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD, 0);
+        assert_eq!(flags & (1 << 12), 0, "SRC_TYPE must stay VIRTUAL");
+        assert_eq!(flags & (1 << 13), 0, "DST_TYPE must stay VIRTUAL");
+        assert_eq!(flags & (1 << 9), 0, "MULTI_LINE must stay disabled");
+    }
+
+    /// An address the methods cannot express is refused, never truncated. A truncated
+    /// destination is a copy into somebody else's page and it succeeds.
+    #[test]
+    fn an_inexpressible_copy_operand_is_refused() {
+        let base = CePush {
+            class_id: AMPERE_DMA_COPY_B,
+            src: 0,
+            dst: 0,
+            len: 4,
+            sem_va: 0,
+            payload: 1,
+        };
+        for bad in [
+            CePush {
+                dst: 1 << 49,
+                ..base
+            },
+            CePush {
+                src: 1 << 49,
+                ..base
+            },
+            CePush {
+                sem_va: 1 << 49,
+                ..base
+            },
+            // A semaphore address that is not dword-aligned: the low bits are not part of
+            // the field, so the release would land somewhere else entirely.
+            CePush {
+                sem_va: 0x1002,
+                ..base
+            },
+        ] {
+            assert_eq!(
+                ce_pushbuffer(bad).err(),
+                Some(RmError::Other(BAD_ENCODE)),
+                "{bad:?} must be refused"
+            );
+        }
+        // …and the whole pushbuffer fits in one slot, which the submit path asserts too.
+        let w = ce_pushbuffer(base).expect("encodable");
+        assert!(4 * w.len() as u64 <= PUSHBUFFER_SLOT_BYTES);
+    }
+
+    /// ★★★ The evidence bar, as a predicate. `landed` must require BOTH facts: a
+    /// semaphore alone could be stale and a `GP_GET` alone means the methods did nothing.
+    #[test]
+    fn a_submission_has_landed_only_when_both_facts_hold() {
+        let ok = SubmitOutcome {
+            semaphore: 0xBEEF,
+            gp_get: 1,
+            gp_put: 1,
+        };
+        assert!(ok.landed(0xBEEF));
+        assert!(
+            !ok.landed(0xBEE0),
+            "a different payload is not this submission"
+        );
+        // The `userdOffset` failure shape, measured on hardware: everything legal, nothing
+        // happened, no error anywhere.
+        let userd_bug = SubmitOutcome {
+            semaphore: 0,
+            gp_get: 0,
+            gp_put: 1,
+        };
+        assert!(!userd_bug.landed(0xBEEF));
+        // Fetched, but the methods evaporated — the wrong-subchannel shape.
+        let fetched_only = SubmitOutcome {
+            semaphore: 0,
+            gp_get: 1,
+            gp_put: 1,
+        };
+        assert!(!fetched_only.landed(0xBEEF));
+    }
+
+    /// ★★ A copy is only proven when the destination CHANGED — the `before` reading is
+    /// what makes it non-vacuous, and a destination that already held the answer must not
+    /// pass.
+    #[test]
+    fn a_copy_into_a_destination_that_already_matched_is_not_evidence() {
+        let landed = SubmitOutcome {
+            semaphore: 3,
+            gp_get: 1,
+            gp_put: 1,
+        };
+        let good = CeEvidence {
+            before: 0xFFFF_FFFF,
+            after: 0xC0FF_EE00,
+            after_last: 0xC0FF_F1FF,
+            expect_after: 0xC0FF_EE00,
+            expect_after_last: 0xC0FF_F1FF,
+            bytes: 4096,
+            submit: landed,
+            payload: 3,
+        };
+        assert!(good.copied());
+        assert!(
+            !CeEvidence {
+                before: 0xC0FF_EE00,
+                ..good
+            }
+            .copied(),
+            "the destination already held the answer"
+        );
+        assert!(
+            !CeEvidence {
+                after_last: 0,
+                ..good
+            }
+            .copied(),
+            "a copy that moved only the first word is not a copy"
+        );
+        assert!(
+            !CeEvidence {
+                submit: SubmitOutcome {
+                    semaphore: 0,
+                    ..landed
+                },
+                ..good
+            }
+            .copied(),
+            "bytes without a release is a different question, not a pass"
+        );
+    }
+
     /// ★★ The two local refusal statuses must be distinguishable from each other AND
     /// from anything the driver can say. A bounds error reported as `NOT_ON_THIS_RUNG`
     /// reads as "unimplemented", which is how a real out-of-range access gets triaged as
@@ -1820,14 +2870,28 @@ mod tests {
             }),
             RmError::Other(MAPPING_ATTRIBUTE_REFUSED)
         );
-        for (a, b) in [
-            (NOT_ON_THIS_RUNG, NOT_IN_THIS_OBJECT),
-            (NOT_ON_THIS_RUNG, MAPPING_ATTRIBUTE_REFUSED),
-            (NOT_IN_THIS_OBJECT, MAPPING_ATTRIBUTE_REFUSED),
-        ] {
-            assert_ne!(a, b);
+        // ★ Quantified over the LIST, and the list is every local status this file
+        // defines: shortening it would weaken the gate with no red test. Adding a status
+        // without adding it here is the mistake, and it is a mistake in one place.
+        let all = [
+            NOT_ON_THIS_RUNG,
+            NOT_IN_THIS_OBJECT,
+            MAPPING_ATTRIBUTE_REFUSED,
+            BAD_ENCODE,
+            NOT_A_WORK_TOKEN,
+            CE_NEVER_RETIRED,
+        ];
+        for (i, a) in all.iter().enumerate() {
+            assert_ne!(*a, 0, "no local status may be success");
+            assert_eq!(
+                a & 0x8000_0000,
+                0,
+                "no local status may enter the errno lane"
+            );
+            for b in all.iter().skip(i + 1) {
+                assert_ne!(a, b, "two local statuses collide");
+            }
         }
-        assert_eq!(MAPPING_ATTRIBUTE_REFUSED & 0x8000_0000, 0);
     }
 
     /// Every isolate mints from the same base — the property that makes two isolates'

@@ -1,19 +1,23 @@
 # The doorbell mapping, and whether it survives the sandbox
 
-**Status: rung 3 was NOT BUILT and NOTHING here was measured on hardware.** Both bench
-boxes went down before a line of it was written. This file exists so the analysis is not
-re-derived from scratch, and every claim in it carries a label saying what kind of claim it
-is. There are exactly three labels and they are used strictly:
+**Status: rungs 3 and 4 are BUILT and MEASURED on hardware** — RTX 3090 (GA102) /
+580.159.04 open kernel modules, 2026-07-30. §§1–6 below were written *before* the run and
+are left as they were; §8 is what the hardware said, including the one place §6's analysis
+was wrong. Every claim carries a label and they are used strictly:
 
 | label | meaning |
 |---|---|
-| **MEASURED** | observed on an RTX 3060 / 580.159.04 by rung 1 or rung 2, with the output quoted |
+| **MEASURED** | observed on real hardware, with the output quoted |
 | **SOURCE** | read out of `research_clones/ogkm-580.159.04/`, cited to file:line. Not run. |
 | **UNKNOWN** | nobody knows, and this file says so rather than guessing |
 
-Nothing below is MEASURED for the doorbell itself. The MEASURED rows are facts from the two
-landed rungs that the doorbell path either inherits or is explicitly *not* covered by — and
-telling those two apart is most of the value here.
+★ The part worth reading first is §8.3: **the prediction in §3 held**, and the failure that
+actually cost the run was one nobody had predicted at all.
+
+★★ **Chip note.** The measurements are on **GA102**, not the GA106 the C bench used. RM
+ioctls, channel allocation, doorbells and CE copies are chip-independent, and nothing below
+touches VBIOS or a chip-specific register. The one place the part *could* matter is named
+where it arises (§8.4: `COPY0` is a graphics copy engine on **this** architecture).
 
 ---
 
@@ -222,13 +226,13 @@ the token (which we stored elsewhere and could alias).
 
 ---
 
-## 7. ★ The `userdOffset[0] := 0x2000` bite — owed, and NOT yet paid
+## 7. ★ The `userdOffset[0] := 0x2000` bite — **PAID, and it fired** (see §8.2)
 
-Stated plainly because it has now been deferred twice.
+Stated plainly because it had been deferred twice.
 
 - **Rung 1: run, did not fire.** Correct — nothing read USERD at all.
 - **Rung 2: run, did not fire.** Correct — USERD was mapped but still nothing *read* it.
-- **Rung 3: NEVER REACHED.** The box went down first.
+- **Rung 3: RUN, AND IT FIRED**, exactly as predicted below.
 
 This is the C's own M5.47 root cause (`C: src/qemu/nvkvm_gpu_emul.c:9291-9299`): USERD lives
 at `hUserdMemory[0] + userdOffset[0]`, so a non-zero offset makes hardware read USERD past
@@ -239,3 +243,149 @@ available, which is why the bite is worth paying rather than dropping.
 **It becomes observable at exactly the step in §6 where `GP_GET` must advance**, and it is
 owed there. Whoever builds rung 3: set `userd_offset_0` to `0x2000`, expect the semaphore to
 stay `0` and `GP_GET` to stay `0` **with no error reported anywhere**, and restore.
+
+---
+
+## 8. ★★★ WHAT THE HARDWARE SAID — RTX 3090 (GA102) / 580.159.04 open, 2026-07-30
+
+Rungs 3 and 4 were built and run. `kayfabe-rm-ladder --gpu 0`, exit code 0. The three new
+rows, quoted verbatim:
+
+```
+★     R15 SEM LANDED      = sem 0xbeef5ea1 (want 0xbeef5ea1), GP_GET 1 -> caught GP_PUT 1
+                            — the GPU consumed our ring and released our semaphore
+★     R17 CE COPY         = 4096 bytes: dst[0] 0x3f0011ff -> 0xc0ffee00,
+                            dst[last] 0xc0fff1ff (want 0xc0fff1ff)
+                            — read back through an INDEPENDENT mapping
+★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped the ring, USERD and
+                            the usermode BAR0 window, and rang channel 0xcafe000c token 0x4
+```
+
+### 8.1 ★★ The sandbox question, answered: the mapping SURVIVES
+
+**MEASURED.** §3's source-derived prediction held. R16 drives the production
+`VerbPlan::Doorbell` chain through the **real sandboxed isolate** — its own user namespace,
+every capability dropped, `NoNewPrivs`, a 256 KiB read-only tmpfs root holding only
+`/dev/nvidiactl` and `/dev/nvidia0`, exec'd from a sealed memfd — and it succeeded. That
+chain makes **three** CPU mappings from inside the sandbox, covering both whitelist rows of
+§3.2 in one plan:
+
+| mapping | BAR0 row | result |
+|---|---|---|
+| the GPFIFO ring (`NV01_MEMORY_LOCAL_USER`) | framebuffer, *"See bug 1784955"* | **mapped** |
+| USERD (`NV01_MEMORY_LOCAL_USER`) | framebuffer | **mapped** |
+| the `AMPERE_USERMODE_A` window | `kfifoGetUsermodeMapInfo_HAL`, the read-write one | **mapped** |
+
+So §3.3's honest boundary — *"no CPU mapping has ever been made from inside the sandbox, of
+anything"* — is retired. No capability was restored, no namespace was escaped, nothing was
+relaxed. `RmValidateMmapRequest`'s validation path really does whitelist the doorbell
+window read-write for a caller with no `CAP_SYS_ADMIN`, which is the same thing that lets an
+ordinary CUDA process ring its own doorbell.
+
+⊘ **What R16 does NOT prove, stated because the ★ line could be read as more than it is:**
+the sandboxed path produces **no submission evidence**. The isolate's channel is its own,
+its ring is in its own address space, and the port's verb surface has no way to build a
+pushbuffer through it — so R16 shows the mapping and the store succeeded, not that anything
+executed. The semaphore-and-`GP_GET` evidence (R15) is from the **unsandboxed** ladder.
+Closing that gap needs a plan variant that submits *and* reports, and it is not built.
+
+### 8.2 ★★★ The `userdOffset` bite: INDUCED, WATCHED, REMOVED
+
+**MEASURED.** With `userd_offset_0 := 0x2000` and nothing else changed:
+
+```
+ok    R13.1 channel      = 0xcafe000d, engine Ce, token 0x00000004 (runlist 0 chid 4)
+ok    R13.1 schedule     = on the runlist
+FAIL  R15 SEM NEVER LANDED= sem 0x00000000 (want 0xbeef5ea1), GP_GET 0 GP_PUT 1
+FAIL  R17 CE COPY         = dst[0] 0x3f0011ff -> 0x3f0011ff (want 0xc0ffee00)
+```
+
+Precisely the predicted shape, and precisely why it was worth paying: **every ioctl still
+returned 0.** The channel allocated, the group bound, the schedule succeeded, the token came
+back, the doorbell store completed. Nothing anywhere reported an error; the only thing that
+said anything was wrong was a word in device memory that did not change. Restored to `0`
+and re-run green.
+
+Two further bites were run on the same principle:
+
+- **The doorbell store removed** (the `store_u32` replaced by `Ok(())`) → `sem 0x00000000
+  GP_GET 0 GP_PUT 1`. So R15's green is *caused by the doorbell*, not something that would
+  have happened anyway. The write-combining release fence protects a live seam, not a
+  hypothetical one.
+- **The `AMPERE_DMA_COPY_B` engine object not allocated at all** → **the copy still
+  worked**. See §8.4.
+
+### 8.3 ★★★ The failure §6 did not predict — and a wrong diagnosis, corrected by its own bite
+
+Rung 4's first run failed: `CE_NEVER_RETIRED`. The first diagnosis was that `SET_OBJECT`
+carries a **class id** (`NVC56F_SET_OBJECT_NVCLASS` is bits 15:0,
+`ogkm-580: clc56f.h:68-71`) and the code was passing an object *handle*. Two things were
+changed at once — the data word *and* the subchannel — and it went green.
+
+The bite that was supposed to confirm the diagnosis **disconfirmed it**. Isolated, one
+variable at a time on the same hardware:
+
+| subchannel | `SET_OBJECT` data | result |
+|---|---|---|
+| 0 | the class id, correct | `GP_GET` advanced to `GP_PUT`, **semaphore never released, destination byte-for-byte unchanged** |
+| 4 | the class id, correct | 4096 bytes copied, semaphore released |
+| 4 | a garbage handle (`0xCAFE_000E`) | **4096 bytes copied anyway** |
+
+So **the subchannel is what routes**, and `SET_OBJECT`'s data was not observed to matter at
+all on this part. The class is still sent, because that is what the encoding says and what
+UVM sends (`ogkm-580: kernel-open/nvidia-uvm/uvm_maxwell_ce.c:36`) — but the code now says
+in as many words that this is an argument from source, not a measurement.
+
+★ **The methodological point, which is the transferable part:** the green run was
+attributed to the change that *looked* like a bug fix, and only running the bite separated
+the two. "It went green when I changed X and Y" is not evidence about X.
+
+### 8.4 ★★ Why subchannel 4, and the one place the chip could matter
+
+**SOURCE + MEASURED.** `NVA06F_SUBCHANNEL_COPY_ENGINE = 4`
+(`ogkm-580: kernel-open/nvidia-uvm/cla06fsubch.h:30`), and UVM's own comment
+(`uvm_maxwell_ce.c:31-36`) says subchannel 4 is *"required to match CE usage on GRCE"*.
+GRCE is exactly what this port gets: rung 1's `--engines` sweep measured
+`NV2080_ENGINE_TYPE_COPY0` landing on **runlist 0**, the graphics runlist, because on this
+architecture the first two logical copy engines *are* the graphics copy engines.
+
+⚠ That last sentence is the chip-dependent one. It was measured on GA106 (rung 1, RTX 3060)
+and again on GA102 (RTX 3090) — the same answer both times — but a part whose CE0 is not a
+GRCE could behave differently on subchannel 0, and this file should not be read as claiming
+otherwise.
+
+**Also measured, and deliberately not acted on:** the copy works with **no engine object
+allocated**. It is allocated anyway — the C allocates it, UVM allocates it, and a channel
+with no engine context is not something to depend on being fine — but that is an argument
+from those sources, not a bite that fired. A step kept for an undemonstrated reason must say
+so, rather than be quietly deleted because a test did not notice it.
+
+### 8.5 The cache-policy correction, applied before it could bite
+
+**Applied, not measured** — and it *cannot* be measured from userspace, which is the point.
+`map_cpu` no longer hardcodes `CachePolicy::WriteCombining`; it takes the policy as a
+parameter, and the doorbell window passes `Uncached` (a BAR0 register range,
+`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`) while the ring and USERD pass
+`WriteCombining` (framebuffer objects, `:575-597`). `Backing::DeviceFile`'s attainable
+policy is `None` by design, so `require_attainable` **cannot** refuse a wrong requirement
+over a device fd — there is no test in this workspace that could have failed on the old
+constant, which is exactly why it had to be fixed before the doorbell was written rather
+than after.
+
+### 8.6 What rung 4 is, precisely
+
+`ce_copy`'s `HostCe` arm forwards a **VA-addressed** copy: `LAUNCH_DMA` goes out with
+`SRC_TYPE_VIRTUAL` and `DST_TYPE_VIRTUAL`, so the engine walks the isolate's own host VAS
+(#14's per-`Vas` boundary) and cannot be pointed at physical memory even by a wrong address
+— `kayfabe_abi::submit::ce` does not define the `_PHYSICAL` constants at all. That is the
+owner's ruling implemented: *only a CE whose operands are genuinely GPGA must be emulated;
+everything VA-addressed can be forwarded, because we control the mapping.*
+
+Still refused, by name:
+
+- **`CeExecutor::Ours`** — needs the isolate's mapping of the fabricated aperture, whose
+  extent is an open owner question. Unchanged.
+- **`CeSource::Constant`** — a fill is `LAUNCH_DMA` with `REMAP_ENABLE` plus the
+  `SET_REMAP_*` block, which the ABI module does not transcribe. Emitting a copy from
+  address 0 instead would scrub the destination with whatever is at VA 0.
+- **`fb_read`** — unchanged (`NOT_ON_THIS_RUNG`).

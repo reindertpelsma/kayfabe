@@ -916,7 +916,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:75 kayfabe-qemu-raw:31"
+          AUDITED="kayfabe-linux-raw:77 kayfabe-qemu-raw:31"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -1163,6 +1163,26 @@ jobs:
           #    Without these two the pool would have to be a single worker. No syscall
           #    surface is added by this rung at all — the mapping primitive it uses
           #    (`Backing::DeviceFile`) reuses the existing `mmap` block.
+          #
+          # ★★★ 75 -> 77 AT WORK-SUBMISSION RUNG 3 (the doorbell). Two blocks, both inside
+          #    ONE new free function, `mapping_unsafe.rs::release_fence`, and they are two
+          #    rather than one because they are two different architectures' instructions:
+          #      - x86_64 — `core::arch::x86_64::_mm_sfence()`. No operands, no memory
+          #        access, no preconditions beyond SSE, which is baseline for the target.
+          #      - aarch64 — `asm!("dsb st")`. Same: no operands, touches no memory,
+          #        `preserves_flags` only. Deliberately NOT `nomem`, because the entire
+          #        point is that it orders memory.
+          #    WHY IT IS NEEDED, and why nothing safe would do: stores into a
+          #    write-combining mapping are not ordered against each other, and
+          #    `core::sync::atomic::fence(Release)` emits **no instruction at all** on
+          #    x86-64 — it is a compiler barrier. A doorbell rung without a real store
+          #    fence can reach the GPU before the pushbuffer bytes it announces, and the
+          #    engine then executes whatever was in the ring before, silently. This is
+          #    NVIDIA's own `os_flush_cpu_write_combine_buffer`. Watched to fire: with the
+          #    doorbell store removed, R15 reports `sem 0x00000000 GP_GET 0 GP_PUT 1` on
+          #    RTX 3090 / 580.159.04 — i.e. the seam this fence protects is live, not
+          #    hypothetical.
+          #    ★ No syscall surface is added: the fence is one instruction and no fd.
           #
           # kayfabe-qemu-raw (0) — L2-Q stage Q0. Nothing yet, and §2.2's "itemise the
           # second crate's blocks exactly as the first crate's 37 are" is therefore

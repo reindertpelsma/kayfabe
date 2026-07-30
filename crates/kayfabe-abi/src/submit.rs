@@ -823,10 +823,21 @@ pub mod ce {
     pub const LAUNCH_DMA: u32 = 0x0000_0300;
     /// `NVC7B5_OFFSET_IN_UPPER` @ `0x400`
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:161`).
+    ///
+    /// ★ The four address methods are **consecutive** — `0x400`, `0x404`, `0x408`,
+    /// `0x40c` — so one incrementing header of count 4 starting here writes the whole
+    /// source-and-destination pair. That is why the two `_LOWER` constants exist next to
+    /// their `_UPPER`s rather than being derived by adding four at a call site.
     pub const OFFSET_IN_UPPER: u32 = 0x0000_0400;
+    /// `NVC7B5_OFFSET_IN_LOWER` @ `0x404` — the source address' low 32 bits
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:163`).
+    pub const OFFSET_IN_LOWER: u32 = 0x0000_0404;
     /// `NVC7B5_OFFSET_OUT_UPPER` @ `0x408`
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:165`).
     pub const OFFSET_OUT_UPPER: u32 = 0x0000_0408;
+    /// `NVC7B5_OFFSET_OUT_LOWER` @ `0x40c` — the destination address' low 32 bits
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:167`).
+    pub const OFFSET_OUT_LOWER: u32 = 0x0000_040C;
     /// `NVC7B5_LINE_LENGTH_IN` @ `0x418`
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:173`).
     pub const LINE_LENGTH_IN: u32 = 0x0000_0418;
@@ -872,6 +883,70 @@ pub mod ce {
     pub const LAUNCH_DST_VIRTUAL: u32 = 0;
 }
 
+// =====================================================================================
+// The copy engine's ALLOC parameters — eight bytes with the whole runlist bug in them
+// =====================================================================================
+
+/// `NVB0B5_ALLOCATION_PARAMETERS` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clb0b5sw.h:50-53`. Eight bytes, and they
+/// are the alloc params for **every** `*_DMA_COPY_*` class including
+/// [`crate::generated::classes::AMPERE_DMA_COPY_B`].
+///
+/// ★★★ **This is the C's proven `engineType = 0` bug, in struct form.** A copy-engine
+/// object allocated with these eight bytes missing (or zeroed) does not fail: RM reads
+/// zeros, `pParamToEngDescFn` defaults to `ENG_COPY(0)`, the channel lands on the
+/// **graphics** runlist, and the failure surfaces two steps later as
+/// `GPFIFO_SCHEDULE → NV_ERR_NOT_READY` or, further away still, as `cuCtxCreate`
+/// returning 401 (`C: src/abi/nvgpu.h:87-95`, `dma_copy_class_alloc_params`, seam audit
+/// GR-1). Nothing between the alloc and the symptom says the word "engine".
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CeAllocParams {
+    /// `NvU32 version` @ +0. See [`CeAllocParams::VERSION_1`].
+    pub version: u32,
+    /// `NvU32 engineType` @ +4 — under [`CeAllocParams::VERSION_1`] an
+    /// `NV2080_ENGINE_TYPE_*` ordinal, i.e. the **same number** the channel group was
+    /// allocated with ([`ENGINE_TYPE_COPY0`]). Under `VERSION_0` it would instead be a
+    /// bare CE *instance* index, which is a different numbering — hence no default.
+    pub engine_type: u32,
+}
+
+impl CeAllocParams {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NVB0B5_ALLOCATION_PARAMETERS";
+    /// `sizeof`.
+    pub const SIZE: usize = 8;
+    /// `alignof`.
+    pub const ALIGN: usize = 4;
+    /// `NVB0B5_ALLOCATION_PARAMETERS_VERSION_1` —
+    /// `ogkm-580: src/common/sdk/nvidia/inc/class/clb0b5sw.h:46`, *"engineType as an
+    /// `NV2080_ENGINE_TYPE` ordinal"*. Version 0 reinterprets the same field as a CE
+    /// instance for 85B5/90B5 compatibility (`:40`), so the version is not cosmetic:
+    /// it selects which namespace the other four bytes are in.
+    pub const VERSION_1: u32 = 1;
+
+    /// Encode into a little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            0,
+            &self.version.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            4,
+            &self.engine_type.to_le_bytes(),
+        )
+    }
+}
+
 /// Bounds-checked field write. Same helper as [`crate::bringup`]'s, private to each
 /// module on purpose: a shared one would have to pick a home, and neither module is the
 /// other's dependency.
@@ -892,6 +967,10 @@ fn put(
 
 // The transcriptions vs rustc, at COMPILE time — the same gate the generated structs get.
 const _: () = {
+    assert!(core::mem::size_of::<CeAllocParams>() == CeAllocParams::SIZE);
+    assert!(core::mem::align_of::<CeAllocParams>() == CeAllocParams::ALIGN);
+    assert!(core::mem::offset_of!(CeAllocParams, version) == 0);
+    assert!(core::mem::offset_of!(CeAllocParams, engine_type) == 4);
     assert!(core::mem::size_of::<Nvos33ParametersWithFd>() == Nvos33ParametersWithFd::SIZE);
     assert!(core::mem::align_of::<Nvos33ParametersWithFd>() == Nvos33ParametersWithFd::ALIGN);
     assert!(core::mem::offset_of!(Nvos33ParametersWithFd, h_client) == 0);
@@ -1330,5 +1409,61 @@ mod tests {
         // (`C: src/qemu/nvkvm_gpu_emul.c:8598`.)
         let h = method_header_inc(0, fifo::SEM_ADDR_LO, 5).expect("encodable");
         assert_eq!(h, (1 << 29) | (5 << 16) | (0x5C >> 2));
+    }
+
+    /// ★ The copy engine's four address methods are consecutive too, so the copy's
+    /// operands go out under one header of count 4. Same failure shape as the row above:
+    /// a gap would make the header address `PITCH_IN`/`PITCH_OUT` with an address.
+    #[test]
+    fn the_copy_engine_address_methods_are_four_consecutive_dwords() {
+        let m = [
+            ce::OFFSET_IN_UPPER,
+            ce::OFFSET_IN_LOWER,
+            ce::OFFSET_OUT_UPPER,
+            ce::OFFSET_OUT_LOWER,
+        ];
+        for (i, w) in m.iter().enumerate() {
+            assert_eq!(*w, 0x400 + 4 * i as u32, "method {i}");
+        }
+        // …and LINE_LENGTH_IN/LINE_COUNT are a consecutive PAIR, one header of count 2.
+        assert_eq!(ce::LINE_COUNT, ce::LINE_LENGTH_IN + 4);
+        // …and the three semaphore methods are a consecutive RUN of three.
+        assert_eq!(ce::SET_SEMAPHORE_B, ce::SET_SEMAPHORE_A + 4);
+        assert_eq!(ce::SET_SEMAPHORE_PAYLOAD, ce::SET_SEMAPHORE_A + 8);
+    }
+
+    /// ★★ The eight bytes that decide the runlist: version 1 and the SAME engine ordinal
+    /// the group was allocated with. A zeroed image is `engineType = 0`, which is the
+    /// C's proven bug — so `Default` must not be mistaken for a usable value.
+    #[test]
+    fn the_ce_alloc_params_carry_the_engine_ordinal_at_plus_four() {
+        let mut b = [0xEEu8; CeAllocParams::SIZE];
+        CeAllocParams {
+            version: CeAllocParams::VERSION_1,
+            engine_type: ENGINE_TYPE_COPY0,
+        }
+        .encode_into(&mut b)
+        .expect("encodable");
+        assert_eq!(b, [1, 0, 0, 0, 9, 0, 0, 0]);
+        // The defaulted struct is the BUG, and it is spelled out so that a future caller
+        // reaching for `..Default::default()` sees why it is refused at review.
+        let mut z = [0xEEu8; CeAllocParams::SIZE];
+        CeAllocParams::default().encode_into(&mut z).expect("enc");
+        assert_eq!(z, [0u8; 8], "a defaulted CE alloc IS engineType 0");
+    }
+
+    /// A short buffer is refused, never truncated — the same rule as every other encoder
+    /// in this module.
+    #[test]
+    fn a_short_ce_alloc_image_is_refused() {
+        let mut b = [0u8; CeAllocParams::SIZE - 1];
+        assert!(
+            CeAllocParams {
+                version: 1,
+                engine_type: 9
+            }
+            .encode_into(&mut b)
+            .is_err()
+        );
     }
 }

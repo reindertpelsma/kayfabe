@@ -503,6 +503,60 @@ impl MappedRegion {
 }
 
 // =====================================================================================
+// The write-combining release fence — the seam VolatileRegion's docs named
+// =====================================================================================
+
+/// ★★★ **The store barrier that must sit between the ring stores and the doorbell
+/// store**, and NOT the same thing as a Rust `atomic::fence(Release)`.
+///
+/// Stores into a [`CachePolicy::WriteCombining`] mapping are held in the CPU's
+/// write-combining buffers and become visible to the device **in no particular order**.
+/// x86's usual store-store ordering does not apply to them — it is a guarantee about
+/// write-back memory — so `core::sync::atomic::fence(Ordering::Release)`, which on
+/// x86-64 emits **no instruction at all** (it is a compiler barrier only), does not
+/// drain them. A doorbell rung without this fence can reach the GPU before the
+/// pushbuffer bytes it announces, and the engine then executes whatever was in the ring
+/// before — silently, because nothing errors.
+///
+/// This is exactly NVIDIA's own `os_flush_cpu_write_combine_buffer`
+/// (`ogkm-580: kernel-open/nvidia/nv.c` → `asm volatile("sfence" ::: "memory")` on x86,
+/// `dsb st` on arm64), and the C artifact's equivalent is the `__sync_synchronize()` plus
+/// read-back it performs before writing `GP_PUT` and again before the doorbell
+/// (`C: src/qemu/nvkvm_gpu_emul.c:9608-9617`).
+///
+/// ★ It is a *free function*, not a method on [`VolatileRegion`], because it orders
+/// **the CPU**, not a region: the stores it drains are typically to one mapping (the
+/// write-combining ring) and the store it protects is to a different one (the uncached
+/// doorbell window). A method on either would suggest it belonged to that mapping.
+///
+/// The compiler-side half is included as well: `compiler_fence(SeqCst)` prevents the
+/// optimiser from sinking the earlier stores below this call.
+pub fn release_fence() {
+    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+    #[cfg(target_arch = "x86_64")]
+    {
+        // SAFETY: `_mm_sfence` is a store fence with no operands, no memory access and no
+        // preconditions beyond SSE — which is baseline for `x86_64` and therefore always
+        // enabled for this target. It cannot fail and cannot observe or modify any object.
+        unsafe { core::arch::x86_64::_mm_sfence() };
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        // SAFETY: `dsb st` is a data-synchronisation barrier limited to stores. It takes no
+        // operands, touches no memory and has no preconditions on any architecture level
+        // this target implies. `nomem`/`nostack` are not asserted: the whole point is that
+        // it orders memory, so it must stay a full compiler barrier as well.
+        unsafe { core::arch::asm!("dsb st", options(preserves_flags)) };
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        // No instruction is known for this target, so fall back to the strongest thing the
+        // abstract machine offers rather than silently emitting nothing.
+        core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+// =====================================================================================
 // VolatileRegion — the hardware-written one, aligned atomics only
 // =====================================================================================
 
@@ -574,8 +628,9 @@ impl VolatileRegion {
     /// announces, and the GPU then executes whatever was there before. The fix is a
     /// **release fence before the doorbell store** — a named, explicit act at that one
     /// seam (`sfence` on x86, `dsb st` on arm64: exactly NVIDIA's
-    /// `os_flush_cpu_write_combine_buffer`). That seam does not exist yet, so the fence is
-    /// not written yet; it is recorded here so it is not discovered against real silicon.
+    /// `os_flush_cpu_write_combine_buffer`). ★ That seam now exists and the fence is
+    /// [`release_fence`]; `kayfabe_isolate_host`'s submission path calls it between the
+    /// ring stores and the doorbell store.
     ///
     /// # Errors
     /// As [`MappedRegion::map`].

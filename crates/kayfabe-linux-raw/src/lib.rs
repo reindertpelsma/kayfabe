@@ -306,7 +306,7 @@ pub use error::RawError;
 pub use host_fd_unsafe::{Notifier, SharedRam, descriptor_budget};
 pub use kvm_unsafe::{Kvm, KvmMemslot, KvmVm};
 pub use mapping_unsafe::{
-    Backing, HostProt, MappedRegion, PlacementId, Reservation, VolatileRegion,
+    Backing, HostProt, MappedRegion, PlacementId, Reservation, VolatileRegion, release_fence,
 };
 pub use page_size::HostPageSize;
 pub use signal_unsafe::{

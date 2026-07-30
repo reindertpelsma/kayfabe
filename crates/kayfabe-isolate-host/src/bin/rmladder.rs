@@ -442,6 +442,90 @@ fn main() -> std::process::ExitCode {
         }
     }
 
+    // ★★★ R15 — THE DOORBELL. One host-FIFO semaphore release, submitted for real.
+    //
+    // The evidence bar, and nothing below it counts: the semaphore word must go
+    // `0 -> payload` AND `GP_GET` must advance to meet `GP_PUT`. A doorbell store that
+    // returns without error proves only that a page was writable. `GP_GET` is the one
+    // word in the crate hardware writes and we do not.
+    //
+    // The payload is neither 0 (the sentinel written first) nor the token (which is
+    // stored into the doorbell window and could alias), so a false pass is unavailable.
+    let mut evidence_failed = false;
+    if let Some(&(chan, _, token)) = channels.first() {
+        const PAYLOAD: u32 = 0xBEEF_5EA1;
+        match rm.submit_semaphore_probe(chan, token, PAYLOAD, std::time::Duration::from_secs(2)) {
+            Ok(o) if o.landed(PAYLOAD) => println!(
+                "★     R15 SEM LANDED      = sem {:#010x} (want {PAYLOAD:#010x}), \
+                 GP_GET {} -> caught GP_PUT {} — the GPU consumed our ring and released \
+                 our semaphore",
+                o.semaphore, o.gp_get, o.gp_put
+            ),
+            Ok(o) => {
+                evidence_failed = true;
+                println!(
+                    "FAIL  R15 SEM NEVER LANDED= sem {:#010x} (want {PAYLOAD:#010x}), \
+                     GP_GET {} GP_PUT {} — {}",
+                    o.semaphore,
+                    o.gp_get,
+                    o.gp_put,
+                    if o.gp_get == 0 && o.gp_put != 0 {
+                        "hardware never fetched the entry: USERD is not where the channel \
+                         says it is (userdOffset), or the doorbell/token is wrong"
+                    } else {
+                        "the entry was fetched but the methods did not release"
+                    }
+                );
+            }
+            Err(e) => {
+                evidence_failed = true;
+                println!("FAIL  R15 submit          = {e:?}");
+            }
+        }
+    }
+
+    // ★★★ R17 — A REAL COPY ENGINE MOVES BYTES OF DEVICE MEMORY. Two vidmem buffers, a
+    // sentinel in the destination, one `LAUNCH_DMA`, and the destination read back
+    // through an independent second mapping. The `before` value is what makes it
+    // non-vacuous: the destination provably did not already contain the answer.
+    {
+        const PATTERN: u32 = 0xC0FF_EE00;
+        match rm.prove_ce_copy(vas, PATTERN) {
+            Ok(e) if e.copied() => println!(
+                "★     R17 CE COPY         = {} bytes: dst[0] {:#010x} -> {:#010x}, \
+                 dst[last] {:#010x} (want {:#010x}) — read back through an INDEPENDENT mapping",
+                e.bytes, e.before, e.after, e.after_last, e.expect_after_last
+            ),
+            Ok(e) => {
+                evidence_failed = true;
+                println!(
+                    "FAIL  R17 CE COPY         = dst[0] {:#010x} -> {:#010x} (want {:#010x}), \
+                     dst[last] {:#010x} (want {:#010x}); engine sem {:#010x} (want \
+                     {:#010x}) GP_GET {} GP_PUT {} — {}",
+                    e.before,
+                    e.after,
+                    e.expect_after,
+                    e.after_last,
+                    e.expect_after_last,
+                    e.submit.semaphore,
+                    e.payload,
+                    e.submit.gp_get,
+                    e.submit.gp_put,
+                    if e.submit.gp_get == e.submit.gp_put {
+                        "the entry WAS fetched and the methods did nothing: SET_OBJECT \
+                         class, subchannel or an operand"
+                    } else {
+                        "the entry was never fetched: USERD, the token, or the schedule"
+                    }
+                );
+            }
+            Err(e) => {
+                evidence_failed = true;
+                println!("FAIL  R17 CE COPY         = {e:?}");
+            }
+        }
+    }
+
     if want_engines {
         engines(&mut rm, gpu);
     }
@@ -496,6 +580,62 @@ fn main() -> std::process::ExitCode {
                 Ok(other) => println!("FAIL  R11 through-isolate = unexpected reply {other:?}"),
                 Err(e) => println!("FAIL  R11 through-isolate = {:?}", e.err),
             }
+
+            // ★★★ R16 — DOES A CPU MAPPING SURVIVE THE SANDBOX? This is the question
+            // rung 2 could not answer: `kayfabe-rm-ladder` runs as root, so every mapping
+            // above took `RmValidateMmapRequest`'s `osIsAdministrator()` fast path
+            // (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:2023-2054`) and never
+            // executed the validation code. The isolate has **no capabilities at all**, so
+            // it takes the validation path, which walks BAR0 range by range.
+            //
+            // The Doorbell plan exercises BOTH whitelist rows in one go:
+            //   * `alloc_channel` CPU-maps the ring and USERD — the FRAMEBUFFER row,
+            //     permitted read-write for a non-admin ("See bug 1784955");
+            //   * `ring_doorbell` needs the connection's usermode window — the
+            //     `kfifoGetUsermodeMapInfo_HAL` row, the only BAR0 range left READ-WRITE
+            //     for a non-admin, which is what lets an ordinary CUDA process ring its
+            //     own doorbell.
+            //
+            // A refusal here is a FINDING, not a licence to weaken the sandbox.
+            //
+            // ★ The plan is built through `gated_doorbell` — the only constructor — with
+            // an EMPTY working set, which passes by design: the gate's content is "every
+            // claimed VA is published in THIS Vas", and this submission claims none.
+            struct NothingClaimed;
+            impl kayfabe_isolate::RingWorkingSet for NothingClaimed {
+                fn is_host_published(&self, _va: kayfabe_arch::ids::GpuVa) -> bool {
+                    false
+                }
+            }
+            match kayfabe_isolate::VerbPlan::gated_doorbell(
+                &NothingClaimed,
+                &[],
+                None,
+                None,
+                EngineKind::Ce,
+                true,
+            ) {
+                Err(u) => println!("FAIL  R16 ring gate       = refused an empty set at {u:?}"),
+                Ok(plan) => match w.execute(&plan) {
+                    Ok(kayfabe_isolate::VerbReply::Doorbell { channel, .. }) => println!(
+                        "★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped \
+                         the ring, USERD and the usermode BAR0 window, and rang channel {:#010x} \
+                         token {:#010x}",
+                        channel.map_or(0, |c| c.0.raw()),
+                        channel.map_or(0, |c| c.1)
+                    ),
+                    Ok(other) => println!("FAIL  R16 sandboxed doorbell = unexpected {other:?}"),
+                    Err(e) => {
+                        evidence_failed = true;
+                        println!(
+                            "FAIL  R16 sandboxed doorbell = {:?} — the sandbox blocked a \
+                             mapping the whitelist predicted it would allow. This is a \
+                             FINDING; do not relax the sandbox to make it pass.",
+                            e.err
+                        );
+                    }
+                },
+            }
             isolate.checkin(w);
         }
     }
@@ -504,6 +644,13 @@ fn main() -> std::process::ExitCode {
         return std::process::ExitCode::from(1);
     }
 
+    // ★ The three ★-evidence rungs are the only ones that set the exit code, and they set
+    // it on the *evidence*, not on the call returning. A submission that came back `Ok`
+    // with a semaphore that never moved is the failure this whole file exists to catch.
+    if evidence_failed {
+        println!("done — WITH FAILED EVIDENCE");
+        return std::process::ExitCode::from(1);
+    }
     println!("done");
     std::process::ExitCode::SUCCESS
 }
