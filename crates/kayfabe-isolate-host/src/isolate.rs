@@ -53,13 +53,46 @@ use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeExecutor, CeSource, CeSubCopy, DEFAULT_POOL_WORKERS,
     HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
 };
-use kayfabe_linux_raw::{ChildSpec, FdGrant, SandboxChild};
+use kayfabe_linux_raw::{ChildSpec, FdGrant, ProgramImage, SandboxChild};
 use kayfabe_vmm::SurfaceHandle;
 use std::io::ErrorKind;
 use std::os::fd::OwnedFd;
 use std::os::unix::net::{UnixDatagram, UnixStream};
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
+
+// =====================================================================================
+// The embedded isolate
+// =====================================================================================
+
+/// ★★★ The isolate binary, compiled into this one.
+///
+/// `build.rs` produces it: a **static** `x86_64-unknown-linux-musl` build of this package's
+/// `kayfabe-isolate` binary. See that file for the build-ordering argument and for the one
+/// reviewed opt-out that makes these bytes empty.
+static ISOLATE_IMAGE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/kayfabe-isolate.image"));
+
+/// The embedded isolate's bytes, for a test that has to assert what got embedded.
+#[must_use]
+pub fn embedded_isolate_bytes() -> &'static [u8] {
+    ISOLATE_IMAGE
+}
+
+/// ★ The image, published **once per process** into a sealed `memfd`.
+///
+/// Once, because the seal is what makes the bytes immutable and a per-spawn republication
+/// would be a per-spawn window in which they are not. Each spawn takes its own duplicate of
+/// the descriptor, so one child's exit cannot invalidate the next one's image.
+fn embedded_image() -> Result<&'static Arc<ProgramImage>, String> {
+    static IMAGE: OnceLock<Result<Arc<ProgramImage>, String>> = OnceLock::new();
+    IMAGE
+        .get_or_init(|| {
+            ProgramImage::from_bytes(c"kayfabe-isolate", ISOLATE_IMAGE)
+                .map(Arc::new)
+                .map_err(|e| format!("the embedded isolate image could not be published: {e}"))
+        })
+        .as_ref()
+        .map_err(Clone::clone)
+}
 
 /// fd number of the control datagram socket in the child.
 pub const CONTROL_FD: i32 = 3;
@@ -657,7 +690,13 @@ impl Drop for HostIsolate {
 /// Spawns [`HostIsolate`]s.
 #[derive(Debug)]
 pub struct HostIsolateFactory {
-    program: PathBuf,
+    /// ★★★ The isolate this factory spawns, as bytes in a sealed `memfd`. **Not a path.**
+    ///
+    /// There is no constructor that takes one, no environment variable that names one, and
+    /// no directory that is searched — see the crate's `build.rs`. `Err` here is a build that
+    /// embedded no image; it produces stillborn isolates that name why, exactly as a failed
+    /// spawn does.
+    image: Result<&'static Arc<ProgramImage>, String>,
     pool: usize,
     rm: RmMode,
     park: crate::loopback::ParkVerb,
@@ -668,11 +707,11 @@ pub struct HostIsolateFactory {
 }
 
 impl HostIsolateFactory {
-    /// A factory that runs `program` as its isolate, with the default pool width.
+    /// A factory that spawns the **embedded** isolate, with the default pool width.
     #[must_use]
-    pub fn new(program: impl Into<PathBuf>, rm: RmMode) -> Self {
+    pub fn new(rm: RmMode) -> Self {
         HostIsolateFactory {
-            program: program.into(),
+            image: embedded_image(),
             pool: DEFAULT_POOL_WORKERS,
             rm,
             park: crate::loopback::ParkVerb::Nothing,
@@ -703,52 +742,45 @@ impl HostIsolateFactory {
         self
     }
 
-    /// ★ Locate the isolate binary beside the current executable.
+    /// ★★★ Is an isolate embedded in this build at all?
     ///
-    /// `KAYFABE_ISOLATE_BIN` overrides it. Otherwise the search is *"a sibling of this
-    /// program"*, which is where both a cargo build (`target/<profile>/`) and an install
-    /// tree put it — and, critically, it is not `PATH`: an isolate found on `PATH` is an
-    /// isolate an environment variable chose, and this process hands that binary a
-    /// descriptor for `/dev`.
+    /// The one question a caller may ask about the image, and it has a `bool` answer rather
+    /// than a path — there is nothing to name. `false` means `build.rs` ran with
+    /// `KAYFABE_ISOLATE_IMAGE_STUB=1`, which only the cross-*check* job may do.
+    #[must_use]
+    pub fn is_embedded() -> bool {
+        embedded_image().is_ok()
+    }
+
+    /// Why the embedded image is unusable, if it is.
     ///
     /// # Errors
-    /// A message naming what was looked for and where. Deliberately a `String`: the caller
-    /// is a composition root that is about to refuse loudly, not a retry loop.
-    pub fn locate_program() -> Result<PathBuf, String> {
-        if let Some(explicit) = std::env::var_os("KAYFABE_ISOLATE_BIN") {
-            let p = PathBuf::from(explicit);
-            return if p.is_file() {
-                Ok(p)
-            } else {
-                Err(format!(
-                    "KAYFABE_ISOLATE_BIN names {p:?}, which is not a file"
-                ))
-            };
-        }
-        let me = std::env::current_exe().map_err(|e| format!("current_exe: {e}"))?;
-        let dir = me
-            .parent()
-            .ok_or_else(|| format!("{me:?} has no parent directory"))?;
-        // A cargo integration test lives in `target/<profile>/deps/`, one level below the
-        // binaries. Both are checked, nearest first, and nothing else is.
-        for cand in [dir.join("kayfabe-isolate"), sibling_of_deps(dir)] {
-            if cand.is_file() {
-                return Ok(cand);
-            }
-        }
-        Err(format!(
-            "no `kayfabe-isolate` beside {me:?} (set KAYFABE_ISOLATE_BIN)"
-        ))
+    /// The publication failure, verbatim.
+    pub fn embedded(&self) -> Result<(), String> {
+        self.image.as_ref().map(|_| ()).map_err(Clone::clone)
     }
-}
 
-fn sibling_of_deps(dir: &Path) -> PathBuf {
-    dir.parent().unwrap_or(dir).join("kayfabe-isolate")
+    /// ★ Spawn, keeping the **concrete** type.
+    ///
+    /// [`IsolateFactory::spawn`] hands back a `Box<dyn Isolate>`, which is right for the core
+    /// — it has no business knowing an isolate is a process. It is wrong for a *test of the
+    /// containment*, which has to observe the child process itself: its pid, and therefore
+    /// its namespaces. Without this the only assertions available about
+    /// [`ChildSpec::in_new_namespaces`] would be against a `/bin/sh` fixture, and removing
+    /// that one line from `build_isolate` would turn nothing red.
+    pub fn spawn_host(&mut self, id: IsolateId) -> HostIsolate {
+        self.spawned.push(id);
+        let built = self
+            .image
+            .clone()
+            .and_then(|image| build_isolate(image, self.rm, self.park, id, self.pool));
+        built.unwrap_or_else(|why| HostIsolate::stillborn(id, self.pool, why))
+    }
 }
 
 /// Everything that can go wrong before an isolate is usable, as a message.
 fn build_isolate(
-    program: &Path,
+    image: &ProgramImage,
     rm: RmMode,
     park: crate::loopback::ParkVerb,
     id: IsolateId,
@@ -757,7 +789,8 @@ fn build_isolate(
     let (control_ours, control_theirs) =
         UnixDatagram::pair().map_err(|e| format!("control socketpair: {e}"))?;
     let mut ours = Vec::with_capacity(pool);
-    let mut spec = ChildSpec::new(program)
+    let mut spec = ChildSpec::from_image(image, "kayfabe-isolate")
+        .map_err(|e| format!("publishing the isolate image for this spawn: {e}"))?
         .arg("--proc")
         .arg(id.proc().to_string())
         .arg("--gpu")
@@ -768,6 +801,16 @@ fn build_isolate(
         .arg(rm.as_arg())
         .arg("--park")
         .arg(park.as_arg())
+        // ★★★ Born namespaced. The user, pid, network, IPC, UTS and mount namespaces are
+        // taken by the `clone` that CREATES this process, not by anything it does afterwards
+        // — which is the only way `CLONE_NEWPID` can be had at all, and which means the
+        // image cannot decline the namespaces it starts in.
+        //
+        // ★ There is no opt-out and no fallback to a plain `fork`. A host that will not grant
+        // them makes every isolate stillborn with `clone`/`EPERM` in its message. That is the
+        // same posture `sandbox::enter` already takes and for the same reason: a silent
+        // degrade is how a boundary becomes a comment.
+        .in_new_namespaces()
         // ★ And NO device-directory grant. `RESERVED_NEVER_GRANTED_FD` stays empty; the
         // child builds its own sandbox and mints the descriptor inside it.
         .grant(FdGrant::new(OwnedFd::from(control_theirs), CONTROL_FD));
@@ -780,7 +823,8 @@ fn build_isolate(
         ));
     }
 
-    let child = SandboxChild::spawn(spec).map_err(|e| format!("spawning {program:?}: {e}"))?;
+    let child =
+        SandboxChild::spawn(spec).map_err(|e| format!("spawning the embedded isolate: {e}"))?;
 
     // ★ A synchronous readiness handshake, one frame per worker. Without it the first verb
     // of the first guest operation is where "the driver is not loaded" surfaces — miles
@@ -839,11 +883,7 @@ fn build_isolate(
 
 impl IsolateFactory for HostIsolateFactory {
     fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate> {
-        self.spawned.push(id);
-        match build_isolate(&self.program, self.rm, self.park, id, self.pool) {
-            Ok(iso) => Box::new(iso),
-            Err(why) => Box::new(HostIsolate::stillborn(id, self.pool, why)),
-        }
+        Box::new(self.spawn_host(id))
     }
 }
 
@@ -910,9 +950,23 @@ mod tests {
 
     /// A spawn that cannot work produces a STILLBORN isolate rather than a panic or a
     /// half-built one — the shape [`HostIsolate::spawn_error`] documents, exercised.
+    ///
+    /// ★ The fixture is a factory whose **image** is unusable, because that is now the only
+    /// way a spawn can fail before it starts: there is no path to point at a missing file.
+    /// The struct is built here by hand rather than through a constructor, deliberately —
+    /// a public "factory with a broken image" constructor would be a door into spawning
+    /// something other than the embedded isolate, which is the whole thing this change
+    /// removes.
     #[test]
-    fn a_missing_isolate_binary_yields_a_retired_isolate_that_names_why() {
-        let mut f = HostIsolateFactory::new("/kayfabe/no/such/isolate", RmMode::Loopback);
+    fn an_unusable_image_yields_a_retired_isolate_that_names_why() {
+        let mut f = HostIsolateFactory {
+            image: Err("no image in this build".to_owned()),
+            pool: 4,
+            rm: RmMode::Loopback,
+            park: crate::loopback::ParkVerb::Nothing,
+            spawned: Vec::new(),
+        };
+        assert_eq!(f.embedded(), Err("no image in this build".to_owned()));
         let id = IsolateId::new(1, GpuId(0));
         let mut iso = f.spawn(id);
         assert_eq!(iso.id(), id);
@@ -923,9 +977,72 @@ mod tests {
         assert_eq!(f.spawned, vec![id]);
     }
 
+    /// The stillborn isolate carries the reason, on the concrete type that has it.
+    #[test]
+    fn a_stillborn_isolate_names_why_it_never_started() {
+        let iso = HostIsolate::stillborn(
+            IsolateId::new(2, GpuId(0)),
+            2,
+            "no image in this build".to_owned(),
+        );
+        assert_eq!(iso.spawn_error(), Some("no image in this build"));
+    }
+
+    /// ★★ The image really is embedded, and it really is a **static** ELF.
+    ///
+    /// Asserted on the bytes rather than on the build script's exit status: a build that
+    /// took the `KAYFABE_ISOLATE_IMAGE_STUB=1` opt-out succeeds and embeds nothing, and this
+    /// is the assertion that makes such a build unable to pass a test run.
+    #[test]
+    fn the_embedded_image_is_a_static_elf() {
+        let bytes = embedded_isolate_bytes();
+        assert!(
+            bytes.len() > 4096,
+            "no isolate image is embedded ({} bytes) — a build with \
+             KAYFABE_ISOLATE_IMAGE_STUB=1 cannot pass a test run",
+            bytes.len()
+        );
+        assert_eq!(&bytes[..4], b"\x7fELF", "the image must be an ELF");
+        assert!(
+            HostIsolateFactory::is_embedded(),
+            "and it must publish into a memfd"
+        );
+        // ★ Static: no `PT_INTERP`. A dynamic isolate cannot be `exec`'d from inside its own
+        // `pivot_root`ed sandbox, because the loader it needs is not in the sandbox — which
+        // is exactly why the image is built for musl. Checked by walking the program headers
+        // rather than by shelling out to `file`, so the assertion holds with no tools
+        // installed.
+        assert!(
+            !has_interpreter(bytes),
+            "the embedded isolate is dynamically linked (it has a PT_INTERP); it must be static"
+        );
+    }
+
+    /// Does this 64-bit little-endian ELF carry a `PT_INTERP` program header?
+    fn has_interpreter(bytes: &[u8]) -> bool {
+        const PT_INTERP: u32 = 3;
+        let read_u16 = |o: usize| u16::from_le_bytes([bytes[o], bytes[o + 1]]);
+        let read_u64 = |o: usize| {
+            u64::from_le_bytes(
+                bytes[o..o + 8]
+                    .try_into()
+                    .expect("eight bytes are eight bytes"),
+            )
+        };
+        assert_eq!(bytes[4], 2, "the image must be ELF64");
+        assert_eq!(bytes[5], 1, "the image must be little-endian");
+        let phoff = usize::try_from(read_u64(0x20)).expect("a sane program-header offset");
+        let phentsize = read_u16(0x36) as usize;
+        let phnum = read_u16(0x38) as usize;
+        (0..phnum).any(|i| {
+            let at = phoff + i * phentsize;
+            u32::from_le_bytes(bytes[at..at + 4].try_into().expect("four bytes")) == PT_INTERP
+        })
+    }
+
     #[test]
     #[should_panic(expected = "at least one worker")]
     fn a_zero_width_pool_is_refused() {
-        let _ = HostIsolateFactory::new("/bin/true", RmMode::Loopback).with_pool_size(0);
+        let _ = HostIsolateFactory::new(RmMode::Loopback).with_pool_size(0);
     }
 }

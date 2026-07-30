@@ -312,7 +312,7 @@ pub use page_size::HostPageSize;
 pub use signal_unsafe::{
     BREAK_SIGNAL, ThreadId, current_thread_id, install_break_handler, interrupt_thread,
 };
-pub use spawn_unsafe::{ChildSpec, FdGrant, SandboxChild, adopt_inherited_fd};
+pub use spawn_unsafe::{ChildSpec, FdGrant, ProgramImage, SandboxChild, adopt_inherited_fd};
 pub use vcpu_unsafe::{KvmVcpu, VcpuExit};
 pub use view::RegionView;
 pub use window_unsafe::GuestWindow;

@@ -40,7 +40,7 @@ use std::sync::Arc;
 /// Two configurations, same total work:
 ///   - **one isolate, N workers** — N threads on ONE RM client;
 ///   - **N isolates, one worker each** — N threads on N RM clients.
-fn concurrency(program: &std::path::Path, gpu: u32, threads: usize, verbs: usize) -> bool {
+fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
     use std::sync::Mutex;
     use std::time::Instant;
 
@@ -90,7 +90,7 @@ fn concurrency(program: &std::path::Path, gpu: u32, threads: usize, verbs: usize
     // amount of parallelism buys throughput and the bottleneck is device-global — which is
     // a completely different finding from "the pool does not help".
     let mut base_f =
-        kayfabe_isolate_host::HostIsolateFactory::new(program, kayfabe_isolate_host::RmMode::Real)
+        kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
             .with_pool_size(1);
     let mut base = kayfabe_isolate::IsolateFactory::spawn(&mut base_f, id(899));
     if base.is_retired() {
@@ -104,9 +104,8 @@ fn concurrency(program: &std::path::Path, gpu: u32, threads: usize, verbs: usize
     let (_, t_base) = measure(vec![w], threads * verbs);
 
     // (a) ONE isolate, `threads` workers — one RM client.
-    let mut f =
-        kayfabe_isolate_host::HostIsolateFactory::new(program, kayfabe_isolate_host::RmMode::Real)
-            .with_pool_size(threads);
+    let mut f = kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+        .with_pool_size(threads);
     let mut one = kayfabe_isolate::IsolateFactory::spawn(&mut f, id(900));
     if one.is_retired() {
         println!("FAIL  R12 one-isolate      = it did not start");
@@ -120,9 +119,8 @@ fn concurrency(program: &std::path::Path, gpu: u32, threads: usize, verbs: usize
     let (same_client, t_same) = measure(ws, verbs);
 
     // (b) `threads` isolates, one worker each — `threads` RM clients.
-    let mut g =
-        kayfabe_isolate_host::HostIsolateFactory::new(program, kayfabe_isolate_host::RmMode::Real)
-            .with_pool_size(1);
+    let mut g = kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+        .with_pool_size(1);
     let mut many: Vec<_> = (0..threads)
         .map(|i| kayfabe_isolate::IsolateFactory::spawn(&mut g, id(910 + i as u32)))
         .collect();
@@ -423,13 +421,10 @@ fn main() -> std::process::ExitCode {
     // wire protocol, and `Worker::execute`'s verb chain. Everything above proved the ioctls;
     // this proves the isolate. Skipped (loudly) when the isolate binary is not beside us,
     // because a silent skip is worse than a red run.
-    match kayfabe_isolate_host::HostIsolateFactory::locate_program() {
-        Err(why) => println!("skip  R10 isolate         = {why}"),
-        Ok(program) => {
-            let mut factory = kayfabe_isolate_host::HostIsolateFactory::new(
-                program,
-                kayfabe_isolate_host::RmMode::Real,
-            );
+    {
+        {
+            let mut factory =
+                kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real);
             let mut isolate = kayfabe_isolate::IsolateFactory::spawn(&mut factory, id);
             if isolate.is_retired() {
                 println!(
@@ -465,15 +460,8 @@ fn main() -> std::process::ExitCode {
         }
     }
 
-    if want_concurrency {
-        match kayfabe_isolate_host::HostIsolateFactory::locate_program() {
-            Err(why) => println!("skip  R12 concurrency     = {why}"),
-            Ok(program) => {
-                if !concurrency(&program, gpu, 4, 200) {
-                    return std::process::ExitCode::from(1);
-                }
-            }
-        }
+    if want_concurrency && !concurrency(gpu, 4, 200) {
+        return std::process::ExitCode::from(1);
     }
 
     println!("done");

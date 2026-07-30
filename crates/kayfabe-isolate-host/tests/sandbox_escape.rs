@@ -597,3 +597,72 @@ fn the_runtime_still_spawns_threads_inside_the_sandbox() {
         "the runtime did not survive the pivot:\n{stdout}"
     );
 }
+
+/// ★★★ The **production shape**: a child that was *born* namespaced still enters the sandbox.
+///
+/// Every other test in this file runs the prober through `std::process::Command`, so it takes
+/// `sandbox::enter`'s *own* user namespace on the way in. The real isolate no longer does
+/// that — its parent `clone`s it into a user namespace and writes its `uid_map` before it
+/// runs (`ChildSpec::in_new_namespaces`), and `enter` must then take **no second** user
+/// namespace: a nested one has no mapping and nobody left to write one, and every mount below
+/// it fails `EPERM`. `born_in_a_rootless_user_namespace` is that branch, and this is the only
+/// test that reaches it.
+///
+/// ★ Non-vacuity has two halves and both are asserted: the child reports `PID 1`, which is
+/// only true of a process born in its own pid namespace (so the branch under test really was
+/// the one taken); and the anchor probe `null` still **opens**, so the wall of denials is a
+/// contained sandbox and not a broken one.
+#[test]
+fn a_child_born_namespaced_still_enters_the_sandbox() {
+    kayfabe_linux_raw::require_user_namespace!("a_child_born_namespaced_still_enters_the_sandbox");
+    use kayfabe_linux_raw::{ChildSpec, FdGrant, SandboxChild};
+    use std::io::Read as _;
+    use std::os::fd::OwnedFd;
+
+    let (mut rx, tx) = std::io::pipe().expect("pipe");
+    // `/bin/sh` only to move the prober's stdout onto the granted descriptor: `ChildSpec`
+    // owns the standard streams, so a report has to arrive on a number we declared.
+    let spec = ChildSpec::new("/bin/sh")
+        .arg("-c")
+        .arg(format!("exec {PROBE} --mode sandboxed >&7"))
+        .grant(FdGrant::new(OwnedFd::from(tx), 7))
+        .in_new_namespaces();
+    let mut child = SandboxChild::spawn(spec).expect("clone the prober into fresh namespaces");
+    let mut lines = String::new();
+    rx.read_to_string(&mut lines).expect("the prober's report");
+    assert_eq!(
+        child.reap().expect("reap"),
+        0,
+        "the prober failed:\n{lines}"
+    );
+
+    assert!(
+        lines.contains("\nPID 1\n") || lines.starts_with("PID 1\n"),
+        "the prober was not born in its own pid namespace, so this test exercised the \
+         ordinary path:\n{lines}"
+    );
+    let report = parse(&lines, "sandboxed");
+    assert_eq!(report.status, "ok", "enter() refused:\n{lines}");
+    assert_eq!(
+        report.table.get("null"),
+        Some(&Reach::Opened),
+        "the anchor must still open, or the denials below mean nothing:\n{lines}"
+    );
+    for escape in [
+        "../etc/passwd",
+        "../../../../../../etc/passwd",
+        "../proc/1/maps",
+        "../root",
+    ] {
+        assert_eq!(
+            report.table.get(escape),
+            Some(&Reach::Denied(ENOENT)),
+            "{escape} was reachable from a child born namespaced:\n{lines}"
+        );
+    }
+    assert_eq!(
+        report.priv_bits("eff"),
+        0,
+        "a child born namespaced must still end up unprivileged:\n{lines}"
+    );
+}

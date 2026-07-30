@@ -46,16 +46,22 @@
 
 use kayfabe_arch::ids::{EngineKind, GpuId, GpuVa};
 use kayfabe_isolate::{
-    CancelReason, HostHandle, IsolateFactory, IsolateId, RingWorkingSet, RmError, VerbPlan,
-    VerbReply, Worker,
+    CancelReason, HostHandle, Isolate as _, IsolateFactory, IsolateId, RingWorkingSet, RmError,
+    VerbPlan, VerbReply, Worker,
 };
 use kayfabe_isolate_host::loopback::ParkVerb;
 use kayfabe_isolate_host::{HostIsolateFactory, RmMode};
 use std::sync::mpsc;
 use std::time::Duration;
 
-/// The isolate binary this crate builds. `CARGO_BIN_EXE_*` is cargo's own answer, so the
-/// test cannot drift from the binary it is testing.
+/// The isolate binary this crate builds **for the host triple**. `CARGO_BIN_EXE_*` is
+/// cargo's own answer, so the test cannot drift from the binary it is testing.
+///
+/// ★ This is NOT what a factory spawns. The factory spawns the **embedded** static musl
+/// image (`build.rs`, `isolate::embedded_isolate_bytes`); this path exists only for the two
+/// tests below that need a program to run *by hand* — one to check the isolate's refusal to
+/// start standalone, one as the decoy that proves an environment variable can no longer
+/// redirect what gets executed.
 const ISOLATE: &str = env!("CARGO_BIN_EXE_kayfabe-isolate");
 
 /// ★ #102 — the guest VA every publish here maps AT. Address identity made placement an
@@ -69,7 +75,7 @@ const AT: GpuVa = GpuVa(0x2_0020_0000);
 const TICK: Duration = Duration::from_millis(25);
 
 fn factory(park: ParkVerb) -> HostIsolateFactory {
-    HostIsolateFactory::new(ISOLATE, RmMode::Loopback).with_park(park)
+    HostIsolateFactory::new(RmMode::Loopback).with_park(park)
 }
 
 fn iso(proc: u32) -> IsolateId {
@@ -97,7 +103,7 @@ fn a_real_isolate_serves_a_verb_chain_through_the_port() {
     let mut isolate = f.spawn(iso(1));
     assert!(
         !isolate.is_retired(),
-        "spawn failed — the isolate binary should be at {ISOLATE}"
+        "spawn failed — the isolate image is embedded, so this is not a path problem"
     );
     assert_eq!(isolate.pool_size(), kayfabe_isolate::DEFAULT_POOL_WORKERS);
     assert_eq!(isolate.idle_workers(), isolate.pool_size());
@@ -729,4 +735,215 @@ fn a_verb_under_a_ranked_lock_panics_naming_r1() {
         .unwrap_or_default();
     assert!(msg.contains("R1"), "the panic must name R1, got: {msg}");
     isolate.checkin(w);
+}
+
+/// ★★★ The **isolate itself** — not a `/bin/sh` fixture — is born in its own user, pid,
+/// mount, network, IPC and UTS namespaces.
+///
+/// This is the gate over the production call site. `ChildSpec::in_new_namespaces()` is one
+/// line in `build_isolate`, and without this test deleting it would turn **nothing** red:
+/// `kayfabe_linux_raw`'s own namespace test drives `/bin/sh`, and the sandbox prober is
+/// spawned by the test that measures it, not by the factory.
+///
+/// ★ Measured from the **parent**, by inode identity (`readlink /proc/<pid>/ns/<kind>`).
+/// Nothing inside the child can answer it: with `CLONE_NEWPID` its own `getpid()` is 1
+/// whatever happens, and a number is not a namespace.
+#[test]
+fn the_isolate_child_is_born_in_its_own_namespaces() {
+    kayfabe_linux_raw::require_user_namespace!("the_isolate_child_is_born_in_its_own_namespaces");
+    let mut f = HostIsolateFactory::new(RmMode::Loopback);
+    let isolate = f.spawn_host(iso(55));
+    assert!(
+        !isolate.is_retired(),
+        "the isolate did not start: {:?}",
+        isolate.spawn_error()
+    );
+    let pid = isolate.child_pid().expect("a live child has a pid");
+
+    let link = |path: String| -> String {
+        std::fs::read_link(&path)
+            .unwrap_or_else(|e| panic!("readlink {path}: {e}"))
+            .to_string_lossy()
+            .into_owned()
+    };
+    for kind in ["pid", "user", "net", "ipc", "uts", "mnt"] {
+        let ours = link(format!("/proc/self/ns/{kind}"));
+        let theirs = link(format!("/proc/{pid}/ns/{kind}"));
+        // Non-vacuity: both readings have to be real namespace identities, or "they differ"
+        // would be satisfied by two different kinds of failure.
+        assert!(
+            ours.starts_with(&format!("{kind}:[")) && theirs.starts_with(&format!("{kind}:[")),
+            "unreadable {kind} namespace: ours={ours:?} theirs={theirs:?}"
+        );
+        assert_ne!(
+            ours, theirs,
+            "the isolate shares our {kind} namespace — it was not born namespaced"
+        );
+    }
+}
+
+// =====================================================================================
+// ★★★ The environment variable is gone — asserted by watching it be ignored
+// =====================================================================================
+
+/// ★★★ `KAYFABE_ISOLATE_BIN` can no longer redirect what gets executed.
+///
+/// The factory used to resolve its isolate by name: that variable if set, otherwise a
+/// sibling of `current_exe()`. Its own rustdoc named the hazard — *"an isolate found on
+/// `PATH` is an isolate an environment variable chose, and this process hands that binary a
+/// descriptor for `/dev`"* — and then kept a narrower instance of it. The image is now
+/// embedded, so there is no name to resolve at all.
+///
+/// ## How this is made non-vacuous
+///
+/// A test that merely sets a variable nothing reads asserts nothing. So it runs in two
+/// halves, and the outer half **proves the decoy is a real, different, runnable program**
+/// before concluding anything from the inner half:
+///
+/// 1. the decoy is `exec`'d directly and observed to exit **3** — it runs, and it is not an
+///    isolate, so a factory that used it would produce a stillborn isolate (its hello frame
+///    never arrives);
+/// 2. this test binary is re-`exec`'d with `KAYFABE_ISOLATE_BIN` pointing at the decoy, and
+///    the inner run drives a **full verb chain** through a spawned isolate. A verb chain can
+///    only complete if the real isolate ran.
+///
+/// Setting the variable in-process is not available: `std::env::set_var` needs the
+/// `unsafe_code` this crate forbids under edition 2024. Re-`exec`ing is also the more
+/// honest instrument — the variable is set *before* the process starts, which is the only
+/// way it was ever going to be set in production.
+#[test]
+fn an_environment_variable_can_no_longer_redirect_the_isolate() {
+    const INNER: &str = "KAYFABE_ISOLATE_DECOY_INNER";
+
+    if std::env::var_os(INNER).is_some() {
+        // ── the inner run: KAYFABE_ISOLATE_BIN names the decoy, and this still works ──
+        let mut f = factory(ParkVerb::Nothing);
+        let mut isolate = f.spawn(iso(77));
+        assert!(
+            !isolate.is_retired(),
+            "the decoy was used: the isolate did not start"
+        );
+        let mut w = isolate.checkout().expect("worker");
+        let reply = w
+            .execute(&VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: AT,
+            })
+            .expect("the EMBEDDED isolate served the verb");
+        assert!(
+            matches!(reply, VerbReply::Published { .. }),
+            "expected a publish, got {reply:?}"
+        );
+        isolate.checkin(w);
+        return;
+    }
+
+    // ── the outer run ───────────────────────────────────────────────────────────────
+    let decoy = std::env::temp_dir().join(format!("kayfabe-decoy-isolate-{}", std::process::id()));
+    std::fs::write(&decoy, "#!/bin/sh\nexit 3\n").expect("write the decoy");
+    let mut perms = std::fs::metadata(&decoy)
+        .expect("stat the decoy")
+        .permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+    std::fs::set_permissions(&decoy, perms).expect("chmod the decoy");
+
+    // (1) The decoy is real, runnable, and NOT an isolate.
+    let ran = std::process::Command::new(&decoy)
+        .status()
+        .expect("the decoy is executable");
+    assert_eq!(
+        ran.code(),
+        Some(3),
+        "the fixture is worthless unless the decoy really runs and really is not an isolate"
+    );
+
+    // (2) With it named, the embedded isolate is what runs anyway.
+    let out = std::process::Command::new(std::env::current_exe().expect("this test binary"))
+        .args([
+            "--exact",
+            "an_environment_variable_can_no_longer_redirect_the_isolate",
+            "--nocapture",
+        ])
+        .env("KAYFABE_ISOLATE_BIN", &decoy)
+        .env(INNER, "1")
+        .output()
+        .expect("re-exec this test binary");
+    std::fs::remove_file(&decoy).ok();
+    assert!(
+        out.status.success(),
+        "with KAYFABE_ISOLATE_BIN={decoy:?} the isolate must still be the embedded one\n\
+         stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // Non-vacuity of the re-exec itself: the inner run must have RUN the test, not filtered
+    // it away. `1 passed` is libtest's own word for that.
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("1 passed"),
+        "the inner run did not execute the test:\n{stdout}"
+    );
+}
+
+/// ★★ And the name is gone from the source, so it cannot come back through a different door.
+///
+/// A ratchet rather than a comment: `locate_program` was deleted, but a future edit could
+/// reintroduce "read a path out of the environment" under any name, and the *specific* name
+/// this project already shipped is the one a reviewer would not look twice at.
+///
+/// ★ **Comments are stripped before matching**, the same correction `ci.yml`'s host-pointer
+/// gate carries and for the same reason: the rule is about what the code *reads*, and the
+/// history of a deleted door is worth writing down at the door. Measured — the first run of
+/// this test failed on `spawn_unsafe.rs` and `build.rs`, both of which name the variable in
+/// prose explaining why it is gone. Truncating each line at its first `//` can only hide the
+/// token *after* a comment marker, which no `env::var` call can be.
+#[test]
+fn no_source_file_mentions_the_deleted_environment_variable() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("crates/<pkg> is two levels below the workspace root")
+        .to_path_buf();
+    // Non-vacuity: the walk must actually find source files.
+    let mut seen = 0usize;
+    let mut offenders = Vec::new();
+    let mut stack = vec![root.join("crates")];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n == "target") {
+                    continue;
+                }
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                seen += 1;
+                // This file names it on purpose, in the test above.
+                if path.file_name().is_some_and(|n| n == "real_isolate.rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                let code: String = text
+                    .lines()
+                    .map(|l| l.split("//").next().unwrap_or(""))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if code.contains("KAYFABE_ISOLATE_BIN") {
+                    offenders.push(path);
+                }
+            }
+        }
+    }
+    assert!(
+        seen > 50,
+        "the walk found only {seen} source files — the instrument is broken, not the tree"
+    );
+    assert!(
+        offenders.is_empty(),
+        "the deleted variable is back: {offenders:?}"
+    );
 }

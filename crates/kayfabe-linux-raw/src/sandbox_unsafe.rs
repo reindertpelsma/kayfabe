@@ -96,20 +96,42 @@
 //! (`C: src/stub/nvkvm_stub.c:2505-2587`) and this does not, deliberately **named rather
 //! than stubbed** (the discipline `spawn_unsafe.rs` states): the allowlist is a property of
 //! the isolate's *verb surface*, it needs its own falsification test, and an untested
-//! control reads as a boundary in every review that follows. Nor a pid namespace — see
-//! [`enter`]'s docs for why that one cannot be had from here at all.
+//! control reads as a boundary in every review that follows.
+//!
+//! Nor a pid namespace — **from here**. `CLONE_NEWPID` is now taken by the parent, in the
+//! `clone` that creates the isolate ([`crate::ChildSpec::in_new_namespaces`]); it still
+//! cannot be had from this side, and [`ISOLATING_NAMESPACES`] says so at the flag word.
 //!
 //! ## ★ A port finding: why this runs in the child's own `main`, not before `exec`
 //!
-//! The C does all of this **between `clone` and `fexecve`**, which is strictly better —
-//! the exec'd image cannot decline a sandbox it was born in. That is not available here,
-//! and the reason is concrete rather than stylistic: the C `fexecve`s a **statically
-//! linked** stub out of a `memfd`, so it needs no path and no loader once the old root is
-//! gone. `std::process::Command` `execve`s a *path*, and a dynamically linked Rust binary
-//! additionally needs `/lib64/ld-linux-*.so` — neither of which survives the pivot. Doing
-//! it pre-`exec` therefore requires a static isolate binary; until that exists, the child
-//! enters the sandbox as the **first thing it does with its own descriptors** and before it
-//! has read one byte of anything a guest influenced.
+//! The C does all of this **between `clone` and `fexecve`**. The half of that which is a
+//! real security property — *the exec'd image cannot decline the namespaces it was born in*
+//! — is now ported: the isolate is `clone`d into user, pid, mount, net, IPC and UTS
+//! namespaces before it exists, and it is a **sealed memfd image** rather than a path, so
+//! there is nothing to substitute for it either.
+//!
+//! What is still on this side is the *filesystem construction* — the tmpfs, the binds, the
+//! `pivot_root`, the reseal — and the reason is concrete rather than stylistic: [`enter`]
+//! **allocates** (it formats paths, reads `/proc` and walks a policy), and allocating between
+//! `fork` and `exec` in a process that has other threads is the classic malloc-lock deadlock.
+//! The C can do it because its stub is freestanding C with no allocator anywhere in the path.
+//! Moving it needs a no-allocation `enter`, which is separate work with its own falsification
+//! test.
+//!
+//! ## ★★ A MEASURED finding: this file needed **no change** for the pre-`exec` namespaces
+//!
+//! The expectation going in was that it would: a process `clone`d into a rootless user
+//! namespace has its map already written, and taking a *second* user namespace here looked
+//! like it would nest an unmapped one with nobody left to write its map — so a
+//! "were we born namespaced?" branch was written, reading `/proc/self/uid_map`.
+//!
+//! It was then **poisoned to prove it was load-bearing, and the test still passed**. The
+//! nested `unshare(CLONE_NEWUSER)` works: a process that is `0` in its parent's namespace may
+//! write the single-line map `0 0 1` for a namespace of its own, which is exactly what
+//! [`acquire_mount_namespace`] already does. The branch was dead and was deleted rather than
+//! shipped as an untested path. The isolate therefore ends up **two** user namespaces deep,
+//! and `tests/sandbox_escape.rs`'s `a_child_born_namespaced_still_enters_the_sandbox` is the
+//! measurement that says the containment is unaffected.
 
 use crate::chardev_unsafe::DevDir;
 use crate::error::{RawError, last_syscall_error};
@@ -550,10 +572,12 @@ fn surrender_privilege() -> Result<(), RawError> {
 /// (`C: nvkvm_isolate.c:127-129`): the network, SysV IPC and hostname reach an isolate has
 /// no use for, removed rather than filtered.
 ///
-/// ★ `CLONE_NEWPID` is **absent, and cannot be had here**. The C gets it free because it
-/// `clone`s the child *into* the namespace; `unshare(CLONE_NEWPID)` after `exec` moves only
-/// the caller's future *children*, of which the isolate creates none, so taking it would
-/// change nothing and read as a boundary. Named rather than stubbed, like seccomp.
+/// ★ `CLONE_NEWPID` is **absent from this list and cannot be had here** — but it is no
+/// longer absent from the isolate. `unshare(CLONE_NEWPID)` after `exec` moves only the
+/// caller's future *children*, of which the isolate creates none, so taking it here would
+/// change nothing and read as a boundary. It is taken by the PARENT instead, in the `clone`
+/// that creates the child ([`crate::ChildSpec::in_new_namespaces`]) — which is where the C
+/// takes it and the only place it can be had.
 const ISOLATING_NAMESPACES: libc::c_int =
     libc::CLONE_NEWNS | libc::CLONE_NEWNET | libc::CLONE_NEWIPC | libc::CLONE_NEWUTS;
 

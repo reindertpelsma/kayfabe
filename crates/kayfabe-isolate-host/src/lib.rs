@@ -25,21 +25,38 @@
 //!    (`proto`). `l1_concurrency.md` §11 B6 rules it, and it makes the C's audit-R2-H2
 //!    use-after-free unrepresentable.
 //! 2. **`CLOSE_RANGE_CLOEXEC` rather than a closefrom** (`kayfabe_linux_raw`'s
-//!    `spawn_unsafe`). The C's literal close breaks `std`'s exec-status reporting, so a
-//!    failed `execve` reads as a successful spawn.
+//!    `spawn_unsafe`). The C's literal close would take the pre-`exec` error pipe and the
+//!    image descriptor with it, so a failed `exec` would be unreportable — and it is
+//!    strictly better security besides: the descriptors stop existing at the `exec` boundary
+//!    atomically.
 //! 3. **A dedicated control socket for cancels**, so "out of band" means it rather than
 //!    meaning "expects no reply" (`isolate`).
 //!
+//! ## ★★★ The isolate is EMBEDDED, and that is a security property
+//!
+//! `build.rs` builds this package's `kayfabe-isolate` binary as a **static musl** image and
+//! `include_bytes!`s it; the factory publishes it into a **sealed `memfd`** and `exec`s the
+//! descriptor with `execveat(AT_EMPTY_PATH)` — the C's own posture
+//! (`C: src/qemu/nvkvm_isolate.c:9-10`). There is no path, no `KAYFABE_ISOLATE_BIN`, and no
+//! search beside `current_exe()`. This process hands the child a descriptor for `/dev`; it
+//! no longer lets an environment variable, or whoever can write one directory, choose which
+//! binary that is.
+//!
 //! ## ★★ What is NOT here — the security gap of record
 //!
-//! The C's hardened spawn also enters user/pid/net/ipc/uts/mount namespaces, `pivot_root`s
-//! onto a tmpfs containing only the bound nvidia nodes, drops every capability, and applies
-//! a seccomp allowlist with `TSYNC`. **None of that is implemented.** It is named rather
-//! than stubbed, in `kayfabe_linux_raw::spawn_unsafe`'s own docs and here, because an
-//! untested sandbox reads as a boundary in every review that follows it. What this crate
-//! does give is the part that can be executed and therefore tested on any host: a closed
-//! descriptor table, a cleared environment, `PR_SET_NO_NEW_PRIVS`, and a process boundary
-//! that is a real reclamation boundary.
+//! The C's hardened spawn enters user/pid/net/ipc/uts/mount namespaces, `pivot_root`s onto a
+//! tmpfs containing only the bound nvidia nodes, drops every capability, and applies a
+//! seccomp allowlist with `TSYNC`. Of that list:
+//!
+//! - **the namespaces are pre-`exec`** — the child is `clone`d into all six, so it cannot
+//!   decline them, and `CLONE_NEWPID` (unreachable from a process's own `main`) is had;
+//! - **the `pivot_root` and the capability drop are post-`exec`**, in the child's own `main`
+//!   via `kayfabe_linux_raw::sandbox::enter`. They allocate, and allocating between `fork`
+//!   and `exec` in a threaded process is the malloc-lock deadlock; the C escapes it only by
+//!   being freestanding C with no allocator in the path;
+//! - **seccomp is absent.** Named rather than stubbed, because an untested control reads as
+//!   a boundary in every review that follows it. It is a property of the isolate's *verb
+//!   surface* and needs its own falsification test.
 //!
 //! ## Layout
 //!
@@ -56,5 +73,5 @@ pub mod loopback;
 pub mod proto;
 pub mod rm;
 
-pub use isolate::{HostIsolate, HostIsolateFactory, RmMode};
+pub use isolate::{HostIsolate, HostIsolateFactory, RmMode, embedded_isolate_bytes};
 pub use loopback::ParkVerb;

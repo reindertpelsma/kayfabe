@@ -62,6 +62,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          # ★★★ The isolate is EMBEDDED, and it is embedded as a STATIC binary:
+          # `crates/kayfabe-isolate-host/build.rs` runs a nested cargo for this triple and
+          # `include_bytes!`s the result. Without the target installed, every cargo command
+          # in this job fails in the build script. It is a build input, not an optimisation:
+          # the isolate is `exec`'d from a memfd inside a mount namespace that has no path to
+          # a dynamic loader.
+          targets: x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --workspace
@@ -122,9 +129,9 @@ jobs:
           ran=$(grep -c 'SANDBOX-GATE: RAN' /tmp/kayfabe-test.log || true)
           skipped=$(grep -c 'SANDBOX-GATE: SKIPPED' /tmp/kayfabe-test.log || true)
           total=$(( ran + skipped ))
-          echo "SANDBOX-gate: ran=$ran skipped=$skipped total=$total (floor 6)"
-          if [ "$total" -lt 6 ]; then
-            echo "::error::sandbox-gated tests were not reached: $total < 6." \
+          echo "SANDBOX-gate: ran=$ran skipped=$skipped total=$total (floor 10)"
+          if [ "$total" -lt 10 ]; then
+            echo "::error::sandbox-gated tests were not reached: $total < 10." \
                  "Either they were deleted, or the gate stopped announcing itself." \
                  "These are the tests that assert the isolate cannot reach the host" \
                  "filesystem and holds no capability; a silent skip is worse than red."
@@ -884,6 +891,17 @@ jobs:
       # `Option<unsafe extern "C" fn(...)>` FIELD TYPES, which are declarations and not
       # relaxations.
       #
+      # ★★★ `kayfabe-linux-raw` 60 -> 73 AT THE EMBEDDED-ISOLATE CHANGE. All 13 are in
+      # `spawn_unsafe.rs`, itemised block-by-block in the list below, and every one of them
+      # is `std::process::Command`'s mechanism moving INTO the audited crate rather than new
+      # surface appearing: `Command` cannot `exec` a descriptor and cannot `clone`, so it
+      # could express neither of the two properties this change is for. `sandbox_unsafe.rs`
+      # is UNCHANGED at 9 — re-measured, not carried forward — which is itself the finding
+      # recorded in its module docs: a branch written to handle "born in a user namespace"
+      # was poisoned to prove it was load-bearing, the test passed anyway (the nested
+      # `unshare(CLONE_NEWUSER)` works), and the branch was deleted rather than shipped
+      # untested.
+      #
       # ★★ THE CORRECTION DOES NOT MOVE THE OTHER CRATE'S BAR, RE-MEASURED AT THIS TIP.
       # `kayfabe-linux-raw` is 60 under the corrected pattern and 60 under the old one,
       # because it contains ZERO occurrences of `unsafe extern` in any form — checked across
@@ -898,7 +916,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:60 kayfabe-qemu-raw:31"
+          AUDITED="kayfabe-linux-raw:73 kayfabe-qemu-raw:31"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -1040,13 +1058,48 @@ jobs:
           #     point is relaxed separately rather than one block spanning the function —
           #     the house rule is that every SAFETY comment's invariant is established on a
           #     line above it, and a single block would have four unrelated invariants.
-          #   spawn_unsafe.rs   (3) — ★ L1-#91. `Command::pre_exec`: the post-fork,
-          #     pre-exec descriptor shuffle and closefrom. ONE block, deliberately: the
-          #     async-signal-safety argument is about the whole closure, not per call, so
-          #     splitting it would produce four SAFETY comments each unable to state the
-          #     invariant that matters. Plus the CHILD half of the same contract:
-          #     `adopt_inherited_fd`'s liveness probe and its `from_raw_fd`, two blocks
-          #     because the second's invariant IS the first's result.
+          #   spawn_unsafe.rs   (16) — ★★★ 3 -> 16 AT THE EMBEDDED-ISOLATE CHANGE. The
+          #     whole of `std::process::Command` was removed from the spawn path and the file
+          #     now owns fork/exec/wait outright, so the +13 is a mechanism moving INTO the
+          #     audited crate rather than new surface appearing. It buys three things that
+          #     were previously impossible and were all named as gaps in this same file's
+          #     docs: the isolate is `exec`'d from a **sealed memfd** with no path anywhere
+          #     (`KAYFABE_ISOLATE_BIN` and the `current_exe()` sibling search are deleted —
+          #     this process hands the child a descriptor for `/dev`, and it used to let an
+          #     environment variable choose which binary that was); the child is **cloned into
+          #     its own pid namespace**, which `unshare` after `exec` can never do; and the
+          #     uid/gid map handshake exists at all. Each is argued below.
+          #
+          #     The image (4): `memfd_create` — ONE block for both attempts, because the
+          #       `MFD_EXEC` retry differs by a single flag bit and has the identical
+          #       obligation (a `&CStr` name, nothing else dereferenced); the `from_raw_fd`
+          #       that adopts the result; the write loop, whose bound IS the caller's slice
+          #       length; and `F_ADD_SEALS`, an integer bitmask on a live descriptor.
+          #     The child half of the descriptor contract (2): `adopt_inherited_fd`'s liveness
+          #       probe and its `from_raw_fd`, two blocks because the second's invariant IS
+          #       the first's result.
+          #     The post-`fork` child (2): `child_after_fork` is an `unsafe fn` (its
+          #       precondition — "only in a just-forked child, on a plan built before the
+          #       fork" — is a real soundness contract and belongs in the signature) plus the
+          #       ONE block that discharges it. Deliberately not split per call: the
+          #       async-signal-safety argument is about the whole sequence, and five SAFETY
+          #       comments would each be unable to state the invariant that matters. The two
+          #       helpers it calls (`errno_now`, `report_and_exit`) are ORDINARY functions
+          #       with one block each — they are sound to call anywhere, and marking them
+          #       `unsafe fn` cost two extra relaxations to restate a contract their caller
+          #       already carries.
+          #     The fork (1): `fork` in the plain case, raw `clone` with the C's flag word in
+          #       the namespaced one (`C: nvkvm_isolate.c:124-133`), and the child-side
+          #       dispatch — one block, because "the child never returns from here" is the
+          #       invariant and it spans all three.
+          #     Reaping (2): `kill` and `waitpid`. Two, because the invariant differs: `kill`
+          #       must argue that the pid has NOT been reaped (a recycled pid is a signal to a
+          #       stranger), `waitpid` that it is ours to wait on.
+          #     Parent-side plumbing (3): `dup_above`'s `F_DUPFD_CLOEXEC` and its
+          #       `from_raw_fd` (same two-block shape as `adopt_inherited_fd`, same reason),
+          #       and `geteuid`/`getegid` in `write_child_maps` — read in the PARENT, because
+          #       the map line must name the ids the outer namespace uses.
+          #     ★ `errno_now` and `report_and_exit` account for the remaining 2 blocks.
           #   sandbox_unsafe.rs (9) — ★★ THE CONTAINMENT, and the reason it is nine and not
           #     one: every entry point is a syscall whose RETURN VALUE is the security
           #     property, so each gets its own checked wrapper rather than one block
@@ -1146,7 +1199,15 @@ jobs:
         with:
           targets: aarch64-unknown-linux-gnu
       - uses: Swatinem/rust-cache@v2
+      # ★★ KAYFABE_ISOLATE_IMAGE_STUB=1 — the ONE reviewed opt-out from embedding a real
+      # isolate image, and this job is the only place it may be used. This job type-CHECKS
+      # for a triple it has neither a musl standard library nor a linker for, and it runs no
+      # test. It is not a soft-fail: the build script emits an empty image and warns, and
+      # `the_embedded_image_is_a_static_elf` turns any *test* run of such a build red at the
+      # first assertion, so an image-less build cannot reach the gate that matters.
       - name: Cross-check the workspace for aarch64 (arch-portability gate; no linker needed)
+        env:
+          KAYFABE_ISOLATE_IMAGE_STUB: "1"
         run: cargo check --workspace --target aarch64-unknown-linux-gnu
 
   nightly-fuzz:
@@ -1173,6 +1234,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl   # the embedded isolate image; see the stable job
       - uses: Swatinem/rust-cache@v2
       - name: Test with the slow gate open (pushbuffer proptest fuzz + 16-thread stress soak)
         run: KAYFABE_SLOW=1 cargo test --workspace
@@ -1189,6 +1252,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src
+          # ★ The nested isolate build KEEPS `RUSTUP_TOOLCHAIN`, so it is nightly that
+          # builds the image in this job — which is why the musl target has to be installed
+          # for nightly here rather than assumed from the stable job.
+          targets: x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
       # The exact first-campaign invocation (l1_concurrency.md §12.15: 28 tests,
       # 0 races), plus KAYFABE_SLOW=1 so the gated stress soak — the whole reason
@@ -1250,6 +1317,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl   # the embedded isolate image; see the stable job
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-mutants
         run: cargo install --locked cargo-mutants
