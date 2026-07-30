@@ -381,10 +381,43 @@ mod tests {
 
     /// ★★ The one RM semantic this fixture models: a parked verb holds the client lock, so
     /// a **sibling worker of the same isolate** cannot proceed. Asserted as a progress
-    /// edge, not a sleep — the sibling's completion channel stays empty while the park is
-    /// held and delivers once it is released.
+    /// edge, not a sleep — the sibling's completion channel is empty while the park is held
+    /// and delivers once it is released.
+    ///
+    /// ## ★ The interval is ESTABLISHED, not assumed — and why that is the whole test
+    ///
+    /// The obvious shape — publish the parker's tid, spawn the sibling, then re-sample the
+    /// sibling's channel every time the parked verb has not answered yet — failed under
+    /// load and was set aside as a flake. It is neither a flake nor a product bug: it
+    /// asserts *"the sibling made no progress"* across two intervals in which that is
+    /// **not the property being tested**, and both were reproduced at 20/20 by widening
+    /// them with a sleep:
+    ///
+    /// * **Before the park.** The tid is published from *outside* the critical section —
+    ///   [`LoopbackRm::verb`] takes the client lock afterwards — so a received tid says
+    ///   only that the thread is running. A sibling that wins the lock first completes
+    ///   **legitimately, before any verb was parked**.
+    /// * **After the release.** `verb` drops the guard on `return`, and only *then* does
+    ///   the thread send its result. A sibling that takes the freed lock in that gap has
+    ///   also completed legitimately, **after the park ended** — but the sampling loop
+    ///   scores it as progress during the park, because the parker's answer has not landed
+    ///   yet.
+    ///
+    /// Both windows produce the identical message, which is why the report was ambiguous.
+    /// So the sample below is taken **once, strictly inside the interval where it is
+    /// sound**: the parked verb is proven to hold the lock, the sibling is proven to have
+    /// reached that lock and found it held, and **no break signal has been delivered yet** —
+    /// and a break is the only thing that can end a park, so the lock cannot have moved.
     #[test]
     fn a_parked_verb_holds_the_client_lock_against_its_own_siblings() {
+        use std::sync::TryLockError;
+        use std::sync::mpsc::TryRecvError;
+
+        /// Backstop on the rendezvous below, never the mechanism: each is a condition that
+        /// holds within microseconds when the fixture works, so reaching this means the
+        /// thread never arrived at all — and it then FAILS by name instead of hanging.
+        const NEVER_ARRIVED: std::time::Duration = std::time::Duration::from_secs(30);
+
         kayfabe_linux_raw::install_break_handler().expect("handler");
         let shared = LoopbackShared::new(ParkVerb::Sysmem).expect("pipe");
         let id = IsolateId::new(1, GpuId(0));
@@ -401,28 +434,78 @@ mod tests {
         });
         let tid = tid_rx.recv().expect("tid");
 
-        // The sibling issues a NON-parking verb. It must still be blocked, because the lock
-        // is per client and not per verb.
+        // ---- ★ PRECONDITION 1: the parked verb really holds the client lock. `try_lock`
+        // is the direct observation of exactly that, and it is the observation the tid is
+        // NOT: nothing else has taken this lock, so `WouldBlock` means the parker has it.
+        let deadline = std::time::Instant::now() + NEVER_ARRIVED;
+        loop {
+            match shared.client.try_lock() {
+                Err(TryLockError::WouldBlock) => break,
+                // Still free — the parker has not reached the lock. Release it at once so
+                // it can, rather than becoming the thing that blocks it.
+                Ok(guard) => drop(guard),
+                Err(TryLockError::Poisoned(_)) => panic!("the client lock is poisoned"),
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "★ the parked verb never took the client lock within {NEVER_ARRIVED:?}, so \
+                 nothing below would have been about a park at all"
+            );
+            std::thread::yield_now();
+        }
+
+        // ---- ★ PRECONDITION 2: the sibling really reaches that lock, and finds it HELD.
+        // Reported from the sibling's OWN side, because otherwise the emptiness asserted
+        // below is satisfied just as well by a sibling that had not started yet — the
+        // vacuous pass this test would otherwise be one scheduling decision away from.
+        let shared_b = Arc::clone(&shared);
+        let (contended_tx, contended_rx) = std::sync::mpsc::channel();
         let (sib_tx, sib_rx) = std::sync::mpsc::channel();
         let b = std::thread::spawn(move || {
+            contended_tx
+                .send(matches!(
+                    shared_b.client.try_lock(),
+                    Err(TryLockError::WouldBlock)
+                ))
+                .expect("contended");
+            // The sibling issues a NON-parking verb. It must still block, because the lock
+            // is per client and not per verb.
             sib_tx.send(sibling.alloc_vaspace()).expect("send");
         });
+        assert_eq!(
+            contended_rx.recv_timeout(NEVER_ARRIVED),
+            Ok(true),
+            "★ NON-VACUITY: the sibling must have reached the client lock and found it HELD"
+        );
 
-        // Deliver the break until the parked verb reports it. Every attempt is also a
-        // sample of the sibling's channel: it must be empty every time.
+        // ---- ★ THE ASSERTION, in the interval where it is sound. No break has been
+        // delivered, and a break is the only thing that ends a park, so the parked verb
+        // still holds the lock — and the sibling is blocked on it rather than absent.
+        assert_eq!(
+            sib_rx.try_recv(),
+            Err(TryRecvError::Empty),
+            "a sibling on the SAME client made progress while a verb was parked"
+        );
+
+        // ---- Deliver the break until the parked verb reports it.
         let parked_result = loop {
             assert!(kayfabe_linux_raw::interrupt_thread(tid).expect("tgkill"));
-            match parked_rx.recv_timeout(std::time::Duration::from_millis(50)) {
-                Ok(r) => break r,
-                Err(_) => assert!(
-                    sib_rx.try_recv().is_err(),
-                    "a sibling on the SAME client made progress while a verb was parked"
-                ),
+            if let Ok(r) = parked_rx.recv_timeout(std::time::Duration::from_millis(50)) {
+                break r;
             }
         };
         assert_eq!(parked_result, Err(RmError::Interrupted));
-        // And once released, the sibling completes.
-        assert!(sib_rx.recv().expect("sibling").is_ok());
+
+        // ---- ★ And once released, the sibling completes — with the isolate's FIRST
+        // handle. That exact value is the other half of the statement and is not a clock:
+        // the interrupted verb held the lock and parked, but it returned before the mint,
+        // so it consumed no handle and the sibling gets `next` untouched.
+        assert_eq!(
+            sib_rx.recv_timeout(NEVER_ARRIVED),
+            Ok(Ok(HostHandle::new(id, 0x00CA_FE01))),
+            "★ the sibling's verb completed once the lock was released, and it minted the \
+             isolate's FIRST handle — so the verb that parked and was interrupted took none"
+        );
         a.join().expect("join a");
         b.join().expect("join b");
     }
