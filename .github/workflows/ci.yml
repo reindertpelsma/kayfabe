@@ -140,6 +140,42 @@ jobs:
           if [ "$ran" -gt 0 ]; then
             echo "This runner permits namespaces: $ran gated tests actually executed."
           fi
+      # ★★ VBIOS-ORACLE-gate non-vacuity — the same argument as the two gates above, for the
+      # tests that run NVIDIA's OWN VBIOS parser (`tests/oracle/vbios_oracle.c`, compiled by
+      # `tests/build.rs` out of the vendored open-kernel-modules trees).
+      #
+      # ★ Its honest limit, stated rather than glossed: **GitHub's runners do not have those
+      # trees**, and nothing is vendored here to stand in for them, so on THIS runner the
+      # suite is counted and never passes. It is a developer-box and bench gate. That is the
+      # KVM gate's failure mode repeated knowingly, and the floor is the only thing that
+      # stops the tests vanishing from both places at once.
+      #
+      # Why it is nonetheless worth a step: what the oracle tests catch is a MISREADING
+      # SHARED between the VBIOS builder and its transcribed Rust test oracle — measured, by
+      # transposing `StoredSize` and `PKCDataOffset` in both at once: `kayfabe-abi`'s own 94
+      # tests stayed GREEN and the real parser answered
+      # `failed to parse/prepare Falcon ucode … 0x37` (NV_ERR_INVALID_OFFSET). No amount of
+      # Rust-side testing reaches that class.
+      #
+      # Floor 10 = the ten tests in the suite; a floor, not an equality, because the set grows.
+      - name: VBIOS-ORACLE-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          ran=$(grep -c 'VBIOS-ORACLE-GATE: RAN' /tmp/kayfabe-test.log || true)
+          skipped=$(grep -c 'VBIOS-ORACLE-GATE: SKIPPED' /tmp/kayfabe-test.log || true)
+          total=$(( ran + skipped ))
+          echo "VBIOS-oracle gate: ran=$ran skipped=$skipped total=$total (floor 10)"
+          if [ "$total" -lt 10 ]; then
+            echo "::error::VBIOS-oracle tests were not reached: $total < 10." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "These are the ONLY tests that judge the synthetic VBIOS against the" \
+                 "real driver's parser rather than against a transcription of it;" \
+                 "a silent skip is worse than a red build."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This machine has the vendored ogkm trees: $ran oracle tests actually executed."
+          fi
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Format check
