@@ -196,6 +196,7 @@ mod reasm;
 pub use policy::{GraphPolicy, RefusalCensus};
 pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassembled, Reassembler};
 
+use kayfabe_abi::capability::{AllocPermit, ControlPermit, Denial};
 use kayfabe_abi::versions::{AllocParams, ControlParams, DriverAbiTable};
 use kayfabe_abi::wire::AbiError;
 use kayfabe_abi::{
@@ -347,6 +348,48 @@ pub enum BridgeRefusal {
     EventFromGuest {
         /// The raw wire id.
         code: u32,
+    },
+    /// ★★★ **The boundary refuses this class outright** — [`kayfabe_abi::capability`],
+    /// the port of the C's nvproxy-derived default-deny allowlist
+    /// (`C: src/qemu/nvkvm_fe_alloc_allowlist.h`).
+    ///
+    /// ## Why this is a *different* refusal from [`Self::UnmappedAllocClass`]
+    ///
+    /// They answer different questions, and collapsing them would lose the one that
+    /// matters. `UnmappedAllocClass` says *"the guest may allocate this and we have not
+    /// built the decoder"* — a **modelling gap**, and the arm that becomes a decoder as
+    /// the port grows. This says *"the guest may not allocate this at all"* — a
+    /// **policy** answer that does not change when the port grows, and the only one of
+    /// the two that is still a refusal after every decoder is written.
+    ///
+    /// ★ That distinction is the whole gap being closed. Before this variant, the only
+    /// thing standing between a guest and an arbitrary class was whether we happened to
+    /// decode it, so *adding a decoder widened the security boundary as a side effect*.
+    /// The gate now runs first and the two are independent.
+    ///
+    /// Carries the [`Denial`] so a census can tell a class we deliberately refuse (with a
+    /// reason, e.g. `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`) from one nobody has ever seen.
+    AllocClassNotPermitted {
+        /// `hClass`.
+        class: u32,
+        /// Deliberately refused, or simply not on the list.
+        denial: Denial,
+    },
+    /// ★★★ **The boundary refuses this control outright** — the control half of
+    /// [`Self::AllocClassNotPermitted`], ported from
+    /// `C: src/qemu/nvkvm_ctrl_allowlist.h`.
+    ///
+    /// Distinct from [`Self::UnknownControl`] for the same reason and in the same
+    /// direction: `UnknownControl` is *"permitted, and this port has no arm for it"* —
+    /// which is where §1.2's `Translation::Forward` lands when `classify_control` grows
+    /// one — while this is *"not permitted, and a `Forward` arm must never see it"*.
+    /// Checking the permit **before** the params table is what makes that true: an
+    /// unlisted command is refused before anything decodes a byte of its payload.
+    ControlNotPermitted {
+        /// `cmd`.
+        cmd: u32,
+        /// Deliberately refused, or simply not on the list.
+        denial: Denial,
     },
     /// A `GSP_RM_ALLOC` whose class this stage has no `AllocFacts` decoder for.
     ///
@@ -623,6 +666,29 @@ impl Faulted for BridgeRefusal {
             BridgeRefusal::UnmappedAllocClass { .. } => {
                 FaultTag("BridgeRefusal::UnmappedAllocClass")
             }
+            // ★ Split by [`Denial`], not flat. "A class we deliberately refuse" and "a
+            // class nobody has ever seen" are the two findings a security census exists
+            // to tell apart: the first is a guest doing something we named, the second is
+            // a guest exploring. One tag for both would make a probe indistinguishable
+            // from an unimplemented feature — which is exactly the collapse
+            // `ClientKindRuleUnknown`'s comment argues the *other* way about, because
+            // there the contained value was not a rule and here it is.
+            BridgeRefusal::AllocClassNotPermitted {
+                denial: Denial::Refused { .. },
+                ..
+            } => FaultTag("BridgeRefusal::AllocClassNotPermitted::Refused"),
+            BridgeRefusal::AllocClassNotPermitted {
+                denial: Denial::NotOnAllowlist,
+                ..
+            } => FaultTag("BridgeRefusal::AllocClassNotPermitted::NotOnAllowlist"),
+            BridgeRefusal::ControlNotPermitted {
+                denial: Denial::Refused { .. },
+                ..
+            } => FaultTag("BridgeRefusal::ControlNotPermitted::Refused"),
+            BridgeRefusal::ControlNotPermitted {
+                denial: Denial::NotOnAllowlist,
+                ..
+            } => FaultTag("BridgeRefusal::ControlNotPermitted::NotOnAllowlist"),
             BridgeRefusal::SerializedParams { .. } => FaultTag("BridgeRefusal::SerializedParams"),
             BridgeRefusal::SerializedControlParams { .. } => {
                 FaultTag("BridgeRefusal::SerializedControlParams")
@@ -805,6 +871,18 @@ fn translate_alloc(
     };
 
     let class = ClassId(h.class);
+
+    // ── ★★★ The capability gate, and it runs BEFORE the params table on purpose.
+    // "May the guest allocate this?" is a policy question whose answer must not depend
+    // on whether this port happens to have a decoder — otherwise writing a decoder
+    // silently widens the boundary. Default-deny (`kayfabe_abi::capability`).
+    if let AllocPermit::Denied(denial) = abi.capabilities().alloc_class(class) {
+        return Err(BridgeRefusal::AllocClassNotPermitted {
+            class: h.class,
+            denial,
+        });
+    }
+
     let Some(shape) = abi.alloc_params(class) else {
         return Err(BridgeRefusal::UnmappedAllocClass { class: h.class });
     };
@@ -979,6 +1057,13 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
             available: payload.len().saturating_sub(h.params_at),
         });
     };
+
+    // ── ★★★ The capability gate. Before the params table, for the reason spelled out on
+    // `BridgeRefusal::ControlNotPermitted`: an unlisted command is refused before a byte
+    // of its payload is decoded, and a future `Forward` arm can never be handed one.
+    if let ControlPermit::Denied(denial) = abi.capabilities().control(ControlCmd(h.cmd)) {
+        return Err(BridgeRefusal::ControlNotPermitted { cmd: h.cmd, denial });
+    }
 
     let shape = match abi.control_params(ControlCmd(h.cmd)) {
         Some(shape) => shape,

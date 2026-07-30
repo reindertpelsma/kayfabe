@@ -270,6 +270,53 @@ mock crate**; class and parameter bytes pass through unsanitised.
 guest sends real ioctls; Mode 2's guest sends GSP RPCs, so the *transport* differs even though
 the command space is the same. Graphics is the known exception.
 
+### 6.1 DONE (2026-07-30) — `kayfabe_abi::capability`, and four corrections to the paragraph above
+
+The port landed as `crates/kayfabe-abi/src/capability.rs`, enforced at the **guest ingress**
+(`kayfabe_rmrpc::translate`, before the params decoder) with two new named refusals —
+`BridgeRefusal::ControlNotPermitted` and `::AllocClassNotPermitted`, each carrying a `Denial`
+so a census tells *"we refuse this by name"* from *"nobody has ever seen this"*. One gate, in
+the place the C put its one gate, because *port the C, do not redesign it*.
+
+**Four things the census above got wrong, all measurable:**
+
+1. **112 allocation classes is wrong — the C has 89.** (165 controls is right.)
+2. **Nine of the 165 control rows are dead.** Each has the GSS-legacy bit set or sits in the
+   `NV2081_BINAPI` class, so the rule-based passthroughs answer for them whether or not a row
+   exists; none has a name in nvproxy's map or in either vendored ogkm tree, so none could be
+   reviewed either. They are **not carried**, and `RULE_COVERED_C_ROWS` re-checks all nine
+   against the live rules so narrowing a rule turns nine silent new denials into a red test.
+3. ★★★ **The Mode-1/Mode-2 transport caveat is bigger than "graphics is the exception".**
+   **Six** controls this port already names are on the C's list **nowhere**: the four
+   page-directory commands and the two canonical Case-2 commands
+   (`GPU_PROMOTE_CTX` `0x2080012b`, `GR_GET_CTX_BUFFER_INFO` `0x20801219`). In Mode 1 the
+   guest's own driver issues all six to *its* GSP and none crosses a userspace ioctl boundary
+   — so a list validated against 22 applications **could not** have contained them. They are
+   carried as `Origin::Mode2Rpc`, and six is a **floor**: the rest of the delta is unknown
+   until a GSP boots and the refusals are read off.
+4. ★★★ **"Default-deny" is true of half the command space.** `RM_GSS_LEGACY_MASK` is bit 15,
+   so nvproxy's own rule — and therefore the C's, and therefore ours — passes 2³¹ commands
+   with no row and no review (`gvisor/…/nvproxy/frontend.go:769-780`). Ported verbatim, and
+   pinned by a test that says so, because the sentence *"an unknown control is refused"* is
+   only true where that bit is clear. Narrowing it is a design decision on evidence nobody
+   has yet.
+
+**The version seam** is a field on `DriverAbiTable`: adding a driver version is a `TABLES` row
+pointing at a `CapabilityTable`, which is inherit-then-add, so the row is only the delta and
+**no logic crate is edited**. It bites: `NVCEB7`/`NVD1B7` exist at 580.65.06 and not at
+580.65.05, and two capability-only boundaries (560.28.03, 570.86.15) exist so a 550 guest is
+not silently handed a 570 guest's class set.
+
+**Deliberately not ported:** the 23-row frontend-ioctl NR list and the 31-row UVM schema (both
+gate an *ioctl* transport Mode 2 does not have — the guest's `nvidia-uvm` talks to the guest's
+own `nvidia` module), and the C's 1 MiB inner-params cap (`MAX_REASSEMBLED_BODY` already binds
+at 64 KiB, sixteen times tighter, so the C's number could never fire here).
+
+**Still open:** the *host egress* (`kayfabe_fwd::classify_control`) remains default-forward. It
+is fed only by tests today, it has no `kayfabe-abi` dependency by design, and a second gate
+would be a second source of truth for one question. When the `Translation::Forward` arm lands,
+the permit it must carry is the one the ingress already computed.
+
 ---
 
 ## 7. ★★ Handle identity — RESOLVED, and the owner's fix is better than the gate

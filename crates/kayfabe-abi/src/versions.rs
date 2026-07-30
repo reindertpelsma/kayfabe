@@ -29,6 +29,9 @@
 //! 550.54.04 are refused rather than decoded with a layout that is wrong by 8
 //! bytes in the middle of the struct.
 
+use crate::capability::{
+    CAPS_560_28_03, CAPS_570_86_15, CAPS_580_65_06, CAPS_BASE, CapabilityTable,
+};
 use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::transcribed::Nvos46ParametersPre580;
 use crate::view::{
@@ -226,6 +229,16 @@ pub struct DriverAbiTable {
     map_dma: MapDmaWire,
     gsp_element: GspElementWire,
     gsp_init_args: GspInitArgsWire,
+    /// ★ The **default-deny RM capability surface** for this boundary
+    /// ([`crate::capability`]): which control commands and which allocation
+    /// classes a guest at this driver version may name at all.
+    ///
+    /// It is a field here, and not a free function, for the reason the whole
+    /// module exists: *adding a driver version must not edit a logic crate*. A
+    /// new version is a new `TABLES` row pointing at a new
+    /// [`CapabilityTable`] — and because that type is inherit-then-add, the new
+    /// row is only the delta.
+    caps: &'static CapabilityTable,
     /// Why this entry exists — kept in the data so a reader of the table sees
     /// the boundary's justification without leaving the file.
     pub note: &'static str,
@@ -245,8 +258,42 @@ pub const TABLES: &[DriverAbiTable] = &[
         map_dma: MapDmaWire::Pre580_65_06,
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
+        caps: &CAPS_BASE,
         note: "oldest supported: NVOS47 gained `size` here \
                (gvisor/pkg/abi/nvgpu/frontend.go:707-710, NVOS47_PARAMETERS_V550)",
+    },
+    // ★ The next two rows exist ONLY for the capability surface: every wire
+    // layout in them is its predecessor's, and nvproxy adds no frontend ioctl
+    // and no control command at either boundary — just allocation classes
+    // (`gvisor/pkg/sentry/devices/nvproxy/version.go:945-977` and `:990-1027`).
+    // They are here because the alternative is giving a 550 guest the class set
+    // of a 570 one, which is a quietly WIDER gate at the oldest supported
+    // version — the direction a security table must never drift in.
+    DriverAbiTable {
+        version: DriverVersion {
+            major: 560,
+            minor: 28,
+            patch: 3,
+        },
+        map_dma: MapDmaWire::Pre580_65_06,
+        gsp_element: GspElementWire::Pre610,
+        gsp_init_args: GspInitArgsWire::FourField,
+        caps: &CAPS_560_28_03,
+        note: "capability-only boundary: +8 allocation classes, no layout change \
+               (gvisor/pkg/sentry/devices/nvproxy/version.go:945-977)",
+    },
+    DriverAbiTable {
+        version: DriverVersion {
+            major: 570,
+            minor: 86,
+            patch: 15,
+        },
+        map_dma: MapDmaWire::Pre580_65_06,
+        gsp_element: GspElementWire::Pre610,
+        gsp_init_args: GspInitArgsWire::FourField,
+        caps: &CAPS_570_86_15,
+        note: "capability-only boundary: +6 allocation classes, no layout change \
+               (gvisor/pkg/sentry/devices/nvproxy/version.go:990-1027)",
     },
     DriverAbiTable {
         version: DriverVersion {
@@ -257,8 +304,9 @@ pub const TABLES: &[DriverAbiTable] = &[
         map_dma: MapDmaWire::From580_65_06,
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
-        note: "NVOS46 gained flags2+kindOverride \
-               (gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1059)",
+        caps: &CAPS_580_65_06,
+        note: "NVOS46 gained flags2+kindOverride, and +2 allocation classes \
+               (gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1078)",
     },
     DriverAbiTable {
         version: DriverVersion {
@@ -269,6 +317,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         map_dma: MapDmaWire::From580_65_06,
         gsp_element: GspElementWire::From610_43_02,
         gsp_init_args: GspInitArgsWire::NineField,
+        caps: &CAPS_580_65_06,
         note: "★ the GSP element header changes shape here: 48 bytes with an \
                elemCount become 16 with MCTP/NVDM transport words, and \
                MESSAGE_QUEUE_INIT_ARGUMENTS grows from 4 fields to 9 \
@@ -311,6 +360,17 @@ pub fn table_for(version: DriverVersion) -> Result<&'static DriverAbiTable, AbiE
 }
 
 impl DriverAbiTable {
+    /// ★ The **default-deny capability surface** for this driver version — which
+    /// control commands and which allocation classes the guest may name at all
+    /// ([`crate::capability`]).
+    ///
+    /// The one gate is at the guest ingress (`kayfabe_rmrpc::translate`), and this
+    /// is where it reads its answer from.
+    #[must_use]
+    pub fn capabilities(&self) -> &'static CapabilityTable {
+        self.caps
+    }
+
     /// Which `GSP_MSG_QUEUE_ELEMENT` shape this version speaks.
     #[must_use]
     pub fn gsp_element_wire(&self) -> GspElementWire {
@@ -958,7 +1018,7 @@ pub enum AllocParams {
 /// Hand-written rather than generated: the generator's slice emits exactly the
 /// one control struct the port decodes, and these three ids exist to be
 /// **refused by name**, not decoded.
-const NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
+pub(crate) const NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
 
 /// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h:268` /
@@ -984,7 +1044,7 @@ const NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
 /// message that carries a PDB, and a port that models only `0x00801813` has no
 /// PDB for it at all. That is `gsp_core_bridge.md` §7 item 1, now settled and
 /// settled *against* the design's assumption.
-const NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES: u32 = 0x90f1_0106;
+pub(crate) const NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES: u32 = 0x90f1_0106;
 
 /// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:1902`,
@@ -1000,7 +1060,8 @@ const NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES: u32 = 0x90f1_0106;
 /// | INTERNAL). It is emitted for the GPU-group global VASpace on the
 /// `!IS_VIRTUAL` arm — i.e. on bare metal, which is our target
 /// (`ogkm-580: gpu_vaspace.c:4140-4154`), on `pGpu->hInternalClient`.
-const NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER: u32 = 0x2080_0a9f;
+pub(crate) const NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER: u32 =
+    0x2080_0a9f;
 
 /// Which params shape a control command carries. See
 /// [`DriverAbiTable::control_params`].

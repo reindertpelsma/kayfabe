@@ -39,6 +39,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use kayfabe_abi::capability::{Denial, DeniedBecause};
 use kayfabe_abi::versions::{BENCH_DRIVER, DriverAbiTable, table_for};
 use kayfabe_abi::wire::AbiError;
 use kayfabe_abi::{ClientKindRuleUnknown, GuestOs};
@@ -531,15 +532,40 @@ fn every_function_id_lands_on_its_own_arm() {
         })),
     );
     // fn 76 is now dispatched on its `cmd`, so it needs a well-formed body to reach the
-    // command table at all. cmd 0 is not a command this port names — and the refusal is
-    // about the CONTROL, not about the function.
+    // command table at all. Both refusals below are about the CONTROL, not about the
+    // function — and they are two different controls, because the capability gate and
+    // the params table are two different questions asked in that order.
+    //
+    // cmd 0 is on nobody's allowlist: the boundary refuses it before decoding anything.
     assert_eq!(
         xlate(&w::message(
             fn_id::GSP_RM_CONTROL,
             5,
             &w::control_body(spd::C, spd::DEV, 0, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
         )),
-        Err(BridgeRefusal::UnknownControl { cmd: 0 }),
+        Err(BridgeRefusal::ControlNotPermitted {
+            cmd: 0,
+            denial: Denial::NotOnAllowlist,
+        }),
+    );
+    // …and a command that IS allowed but has no arm is still `UnknownControl`, which is
+    // what keeps the two variants from collapsing into one.
+    assert_eq!(
+        xlate(&w::message(
+            fn_id::GSP_RM_CONTROL,
+            5,
+            &w::control_body(
+                spd::C,
+                spd::DEV,
+                UNMODELLED_CMD,
+                0,
+                w::RMAPI_RPC_FLAGS_NONE,
+                &[]
+            ),
+        )),
+        Err(BridgeRefusal::UnknownControl {
+            cmd: UNMODELLED_CMD
+        }),
     );
 
     // Ours to send, never to receive.
@@ -1027,10 +1053,27 @@ fn the_control_refusal_order_matches_the_alloc_arms() {
             available: 32,
         }),
     );
-    // Bounds fixed -> the command table, and the command is not in it at all.
+    // ★ Bounds fixed -> the CAPABILITY GATE, which is a step the alloc side has too and
+    // which runs BEFORE the command table. `unknown_cmd` is on no allowlist, so this is
+    // as far as it gets — the port never looks up its params shape at all.
     assert_eq!(
         xlate(&all_wrong(spd::C, w::RMAPI_RPC_FLAGS_NONE, 32, unknown_cmd)),
-        Err(BridgeRefusal::UnknownControl { cmd: unknown_cmd }),
+        Err(BridgeRefusal::ControlNotPermitted {
+            cmd: unknown_cmd,
+            denial: Denial::NotOnAllowlist,
+        }),
+    );
+    // Gate passed -> the command table, and the command is not in it at all.
+    assert_eq!(
+        xlate(&all_wrong(
+            spd::C,
+            w::RMAPI_RPC_FLAGS_NONE,
+            32,
+            UNMODELLED_CMD
+        )),
+        Err(BridgeRefusal::UnknownControl {
+            cmd: UNMODELLED_CMD
+        }),
     );
     // A command that IS in the table, and is one we cannot express, is a DIFFERENT
     // refusal at the same step — the whole reason the table has two arms.
@@ -1167,6 +1210,38 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
         BridgeRefusal::ContinuationOverrun {
             have: 200,
             declared: 168,
+        },
+        // ★★★ The capability gate's four, and they are FOUR rather than two because the
+        // `Denial` is part of the tag. "A control we refuse by name" and "a control
+        // nobody has ever seen" are the two findings a security census exists to
+        // separate — the first is a guest doing something we anticipated, the second is a
+        // guest exploring the surface — and the same split holds on the alloc side.
+        //
+        // They must also be distinct from `UnknownControl`/`UnmappedAllocClass`, which
+        // are one step LATER in the same function and mean the opposite thing: permitted,
+        // not yet modelled. Folding either pair would make "is the boundary holding?"
+        // and "is the port finished?" the same question.
+        BridgeRefusal::ControlNotPermitted {
+            cmd: 0x2080_0112,
+            denial: Denial::NotOnAllowlist,
+        },
+        BridgeRefusal::ControlNotPermitted {
+            cmd: 0x2080_0122,
+            denial: Denial::Refused {
+                name: "NV2080_CTRL_CMD_GPU_EXEC_REG_OPS",
+                why: DeniedBecause::RegisterAccess,
+            },
+        },
+        BridgeRefusal::AllocClassNotPermitted {
+            class: 0x0000_f001,
+            denial: Denial::NotOnAllowlist,
+        },
+        BridgeRefusal::AllocClassNotPermitted {
+            class: 0x0000_0071,
+            denial: Denial::Refused {
+                name: "NV01_MEMORY_SYSTEM_OS_DESCRIPTOR",
+                why: DeniedBecause::CallerMemoryDescriptor,
+            },
         },
     ];
     let tags: std::collections::BTreeSet<FaultTag> = all.iter().map(Faulted::fault_tag).collect();
@@ -4233,14 +4308,18 @@ fn a_page_dir_bearing_control_is_refused_as_itself_not_as_unknown() {
 /// address table rather than the object model (`gsp_core_bridge.md` §2.7).
 #[test]
 fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
+    // ★★ The list SPLIT when the capability gate landed, and the split is the finding.
+    // Every one of these used to answer `UnknownControl`; only the ones the boundary
+    // actually permits still do. `GPU_PROMOTE_CTX` is here on purpose: the C artifact
+    // treats it as a primary address source and it is deliberately not modelled, so it
+    // is the canonical permitted-but-unmodelled control — and it is permitted only
+    // because this port added it as `Origin::Mode2Rpc`; the C's ioctl-era list has it
+    // nowhere.
     for cmd in [
-        0x0000_0000u32,
-        0x0080_1812, // one BELOW the modelled command
-        0x0080_1815,
-        0x0080_180f, // UPDATE_PDE_2 — one PDE, not the root
-        0x2080_012b, // GPU_PROMOTE_CTX
-        0x90f1_0105,
-        u32::MAX,
+        0x2080_012b, // GPU_PROMOTE_CTX — Mode-2 only, listed, unmodelled
+        0x2080_1219, // GR_GET_CTX_BUFFER_INFO — the same
+        UNMODELLED_CMD,
+        u32::MAX, // permitted by the GSS-legacy rule, not by a row
     ] {
         let body = w::control_body(spd::C, spd::DEV, cmd, 0, w::RMAPI_RPC_FLAGS_NONE, &[]);
         assert_eq!(
@@ -4249,6 +4328,45 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
             "cmd {cmd:#x}",
         );
     }
+    // …and the ones the boundary refuses outright never reach the params table. This is
+    // the half of the old list that moved, and it must not be able to move back: a
+    // `ControlNotPermitted` that quietly became `UnknownControl` would mean the gate had
+    // stopped running.
+    for cmd in [
+        0x0000_0000u32,
+        0x0080_1812, // one BELOW the modelled command
+        0x0080_1815,
+        0x0080_180f, // UPDATE_PDE_2 — one PDE, not the root
+        0x90f1_0105, // one below COPY_SERVER_RESERVED_PDES
+        UNPERMITTED_CMD,
+    ] {
+        let body = w::control_body(spd::C, spd::DEV, cmd, 0, w::RMAPI_RPC_FLAGS_NONE, &[]);
+        assert_eq!(
+            xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)),
+            Err(BridgeRefusal::ControlNotPermitted {
+                cmd,
+                denial: Denial::NotOnAllowlist,
+            }),
+            "cmd {cmd:#x}",
+        );
+    }
+    // ★ A control the port refuses BY NAME is a third answer, distinct from both — and
+    // the `Denial` it carries is what a census counts it under.
+    let regops = 0x2080_0122u32;
+    assert_eq!(
+        xlate(&w::message(
+            fn_id::GSP_RM_CONTROL,
+            3,
+            &w::control_body(spd::C, spd::DEV, regops, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
+        )),
+        Err(BridgeRefusal::ControlNotPermitted {
+            cmd: regops,
+            denial: Denial::Refused {
+                name: "NV2080_CTRL_CMD_GPU_EXEC_REG_OPS",
+                why: DeniedBecause::RegisterAccess,
+            },
+        }),
+    );
     // The function itself is emphatically KNOWN — this is not `UnknownFunction`, and the
     // two carry different numbers (a wire fn id vs an RM command).
     assert_ne!(
@@ -6253,7 +6371,18 @@ mod frag {
 /// port does not model — the only shape that fragments into **many** records under a legal
 /// split. `translate` refuses it as `UnknownControl`, which is the point: reassembly is
 /// what lets that refusal name the right command instead of a truncated one.
-const UNMODELLED_CMD: u32 = 0x2080_0112;
+///
+/// ★ It must be a command the capability gate **permits**, or the refusal these tests
+/// pin would be `ControlNotPermitted` instead and they would be measuring the gate rather
+/// than the reassembler. `NV2080_CTRL_CMD_GPU_GET_INFO` is on the ported allowlist
+/// (`kayfabe_abi::capability`) and has no arm in `control_params` — the exact
+/// permitted-but-unmodelled state `Translation::Forward` will one day occupy.
+/// [`UNPERMITTED_CMD`] is its counterpart, and the two are asserted to differ.
+const UNMODELLED_CMD: u32 = 0x2080_0110;
+
+/// A `GSP_RM_CONTROL` command the capability gate refuses outright — one below
+/// [`UNMODELLED_CMD`]'s neighbour and on nobody's list.
+const UNPERMITTED_CMD: u32 = 0x2080_0112;
 
 fn big_control_body(params_size: u32, carried: usize) -> Vec<u8> {
     w::control_body(
@@ -7472,4 +7601,251 @@ fn hostile_fragment_traffic_through_the_ring_leaves_the_valid_stream_untouched()
         boundaries(&gpu_from_script(&clean)),
         "★ hostile fragment traffic is inert to the graph",
     );
+}
+
+// =================================================================================
+// 4b. The capability gate — the ported default-deny boundary, driven from the wire
+// =================================================================================
+
+/// ★★★ **The gap, closed and observed end to end.** A guest that names an allocation
+/// class outside the ported allowlist is answered on the wire with a non-zero
+/// `rpc_result`, the refusal is counted, and **the object model is untouched**.
+///
+/// Driven through the real msgq ring rather than through `translate`, because the claim
+/// is about the boundary a guest can actually reach: before this, `kayfabe_fwd` answered
+/// `Forwarded` for anything that was not Case-2 and nothing anywhere asked whether a
+/// class was permitted, so a guest could name **any** `hClass` at all
+/// (`docs/design/eight_blockers_resolved.md` §6).
+///
+/// ★ The mean part: the refused alloc is in the *middle* of a legal stream, so the test
+/// also says that a refusal does not poison what follows — the surrounding client roots
+/// still land, and the projection is the one the clean script produces.
+#[test]
+fn an_unpermitted_alloc_class_is_refused_on_the_wire_and_declares_nothing() {
+    let mut script = RpcScript::new();
+    script
+        .client_root(w::NV01_ROOT, x::A, x::PID_A)
+        // ★ `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — a class nvproxy deliberately omits and
+        // the C omitted with it, because it pins a descriptor over the CALLER's own
+        // address range, and in Mode 2 the caller is the guest kernel.
+        .alloc(x::A, x::A, 0x5c00_0099, 0x0000_0071, &[0u8; 16])
+        // …and one nobody has ever seen.
+        .alloc(x::A, x::A, 0x5c00_009a, 0x0000_f001, &[0u8; 16])
+        .client_root(w::NV01_ROOT_CLIENT, x::B, x::PID_B)
+        .client_root(w::NV01_ROOT, x::K, w::KERNEL_PID)
+        .free(x::A, x::A);
+
+    let mut gpu = fresh_gpu();
+    let run = run_through_transport(P580, script.steps(), &mut gpu);
+
+    let statuses: Vec<u32> = run.replies.iter().map(|m| m.rpc_result).collect();
+    assert_eq!(
+        statuses,
+        vec![0, 0x56, 0x56, 0, 0, 0],
+        "the two refused allocs are answered NV_ERR_NOT_SUPPORTED and nothing else is",
+    );
+
+    // ★★ The status word alone CANNOT tell the gate from the decoder — both answer
+    // `NV_ERR_NOT_SUPPORTED`, deliberately, because the guest must not learn which
+    // (`BridgeRefusal::rpc_result` is one value for every variant). So the discriminating
+    // assertion is on the *variant*, and it is a triple: a class the gate refuses by
+    // name, one it refuses as unknown, and one it PERMITS and merely cannot decode.
+    // Removing the gate collapses all three onto the third, and only this says so.
+    let alloc = |class: u32| {
+        xlate(&w::message(
+            fn_id::GSP_RM_ALLOC,
+            9,
+            &w::alloc_body(
+                x::A,
+                x::A,
+                0x5c00_0099,
+                class,
+                16,
+                w::RMAPI_RPC_FLAGS_NONE,
+                &[0u8; 16],
+            ),
+        ))
+    };
+    assert_eq!(
+        alloc(0x0000_0071),
+        Err(BridgeRefusal::AllocClassNotPermitted {
+            class: 0x0000_0071,
+            denial: Denial::Refused {
+                name: "NV01_MEMORY_SYSTEM_OS_DESCRIPTOR",
+                why: DeniedBecause::CallerMemoryDescriptor,
+            },
+        }),
+    );
+    assert_eq!(
+        alloc(0x0000_f001),
+        Err(BridgeRefusal::AllocClassNotPermitted {
+            class: 0x0000_f001,
+            denial: Denial::NotOnAllowlist,
+        }),
+    );
+    // `NV20_SUBDEVICE_0` is on the allowlist and has no decoder — permitted, unmodelled,
+    // and therefore the OTHER refusal. This is the one that must not move.
+    assert_eq!(
+        alloc(0x0000_2080),
+        Err(BridgeRefusal::UnmappedAllocClass { class: 0x0000_2080 }),
+    );
+    assert_eq!(
+        run.census
+            .of(FaultTag("BridgeRefusal::AllocClassNotPermitted::Refused")),
+        1,
+        "the named refusal is counted as itself",
+    );
+    assert_eq!(
+        run.census.of(FaultTag(
+            "BridgeRefusal::AllocClassNotPermitted::NotOnAllowlist"
+        )),
+        1,
+        "…and the unknown one separately — a probe is not an unimplemented feature",
+    );
+    assert_eq!(run.census.total(), 2);
+    // ★ Non-vacuity: the run really did apply the surrounding traffic. Zero refusals over
+    // a run that applied nothing would prove nothing, and neither would two refusals over
+    // a run that got no further.
+    assert_eq!(run.applied, 4, "the four legal verbs still landed");
+    // ★★ And the graph is *exactly* the clean script's graph: a refused alloc declared no
+    // node, so the projection cannot tell this run from `script_x()`.
+    assert_eq!(boundaries(&gpu), boundaries_of_scenario(&scenario_x()));
+}
+
+/// The control half, same shape: a command outside the ported allowlist is refused before
+/// its params are decoded, and the two denial kinds are counted apart.
+///
+/// ★ The third command is the one that says the gate is a *gate* and not a rename: it is
+/// `SET_PAGE_DIRECTORY`, which is permitted, modelled, and lands as a fact in the same
+/// run. A gate that refused everything would pass every assertion above this line.
+#[test]
+fn an_unpermitted_control_is_refused_before_its_params_are_read() {
+    let mut script = RpcScript::new();
+    script
+        .client_root(w::NV01_ROOT, spd::C, x::PID_A)
+        .device(spd::C, spd::C, spd::DEV, 0)
+        .vaspace(spd::C, spd::DEV, spd::VAS)
+        // Refused by name: arbitrary register peek/poke.
+        .control(spd::C, spd::DEV, 0x2080_0122, &[0u8; 32])
+        // Refused as unknown: on nobody's list.
+        .control(spd::C, spd::DEV, UNPERMITTED_CMD, &[0u8; 32])
+        // …and the modelled one still gets through, in the same run.
+        .set_page_dir(
+            spd::C,
+            spd::DEV,
+            spd::VAS,
+            spd::PDB,
+            w::PDB_FLAGS_ALL_CHANNELS,
+        );
+
+    let mut gpu = fresh_gpu();
+    let run = run_through_transport(P580, script.steps(), &mut gpu);
+
+    assert_eq!(
+        run.replies.iter().map(|m| m.rpc_result).collect::<Vec<_>>(),
+        vec![0, 0, 0, 0x56, 0x56, 0],
+    );
+    assert_eq!(
+        run.census
+            .of(FaultTag("BridgeRefusal::ControlNotPermitted::Refused")),
+        1,
+    );
+    assert_eq!(
+        run.census.of(FaultTag(
+            "BridgeRefusal::ControlNotPermitted::NotOnAllowlist"
+        )),
+        1,
+    );
+    assert_eq!(run.census.total(), 2);
+    assert_eq!(run.applied, 4, "three allocs and the page-directory fact");
+}
+
+/// ★★ **The known-good set still passes.** The whole compute bring-up sequence — client,
+/// device, VASpace, TSG, subcontext, channel, engine object, page directory — runs
+/// through the gate with **zero** refusals.
+///
+/// This is the half of the deliverable that a default-deny change is most likely to break
+/// silently, and it is the half a "refuse everything" bug would fail. It is asserted as a
+/// census *bound* rather than as an absence, with `applied` as the non-vacuity instrument.
+#[test]
+fn the_whole_compute_bringup_passes_the_gate_with_no_refusals() {
+    let script = script_compute();
+    let mut gpu = fresh_gpu();
+    let run = run_through_transport(P580, script.steps(), &mut gpu);
+
+    assert!(
+        run.census.is_empty(),
+        "the compute bring-up must not be refused anywhere: {:?}",
+        run.census.tags().collect::<Vec<_>>(),
+    );
+    assert!(
+        run.applied >= 7,
+        "non-vacuity: the run has to have DONE something ({} applied)",
+        run.applied,
+    );
+    assert!(
+        run.replies.iter().all(|m| m.rpc_result == 0),
+        "every reply is NV_OK",
+    );
+    // ★ And every class the script names really is on the ported allowlist — read from
+    // the table rather than assumed, so this cannot pass because the script drifted.
+    let caps = abi().capabilities();
+    for class in [
+        w::NV01_ROOT,
+        w::NV01_DEVICE_0,
+        w::FERMI_VASPACE_A,
+        w::KEPLER_CHANNEL_GROUP_A,
+        w::FERMI_CONTEXT_SHARE_A,
+        w::AMPERE_CHANNEL_GPFIFO_A,
+        w::AMPERE_COMPUTE_B,
+        w::AMPERE_DMA_COPY_B,
+    ] {
+        assert!(
+            caps.alloc_class(kayfabe_arch::ids::ClassId(class))
+                .is_permitted(),
+            "{class:#010x}",
+        );
+    }
+}
+
+/// ★ A **fragmented** control the gate refuses is refused on the last fragment, exactly
+/// as an unmodelled one is — the reassembler runs first and decides nothing, so the gate
+/// sees the whole message or none of it.
+///
+/// Without this, a guest could split an unpermitted command across records and the head's
+/// `NV_OK` ack would be indistinguishable from acceptance.
+#[test]
+fn a_fragmented_unpermitted_control_is_refused_on_the_last_fragment() {
+    let body = w::control_body(
+        spd::C,
+        spd::DEV,
+        UNPERMITTED_CMD,
+        frag::BIG_PARAMS as u32,
+        w::RMAPI_RPC_FLAGS_NONE,
+        &[0x5a; frag::BIG_PARAMS],
+    );
+    let run = w::fragment(fn_id::GSP_RM_CONTROL, 0, &body, frag::SPLIT_AT_PARAMS);
+    assert!(run.len() >= 3, "a head and intermediates");
+
+    let mut script = RpcScript::new();
+    for m in &run {
+        let c = command(m);
+        script.raw(c.code, c.payload);
+    }
+    let mut gpu = fresh_gpu();
+    let out = run_through_transport(P580, script.steps(), &mut gpu);
+
+    let statuses: Vec<u32> = out.replies.iter().map(|m| m.rpc_result).collect();
+    let (last, rest) = statuses.split_last().expect("replies");
+    assert!(rest.iter().all(|&s| s == 0), "{statuses:?}");
+    assert_eq!(*last, 0x56);
+    assert_eq!(
+        out.census.of(FaultTag(
+            "BridgeRefusal::ControlNotPermitted::NotOnAllowlist"
+        )),
+        1,
+        "counted ONCE — the fragments are one message",
+    );
+    assert_eq!(out.held, run.len() as u64 - 1);
+    assert_eq!(out.applied, 0);
 }
