@@ -42,6 +42,7 @@
 
 use std::sync::Arc;
 
+use kayfabe_device::{ChipError, ChipProfile, RegPlane};
 use kayfabe_vmm::{BarId, VmmError};
 use kayfabe_vmm_qemu::host::{BarPlacement, MrHandle, QemuHost, SectionDesc, SectionFacts};
 use kayfabe_vmm_qemu::slots::SlotPlane;
@@ -54,7 +55,11 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine};
 /// table whose `abi_version` disagrees. One-sided version checks were the exact shape of the
 /// hypervisor's own per-build module stamp lesson (`l2_qemu_adapter.md` §2.1): a mismatch
 /// that is not refused is a mismatch that is executed.
-pub const ABI_VERSION: u32 = 1;
+/// ★ Bumped to **2** at stage Q4, when the register plane's entry points were added. The
+/// number is checked in both directions, so a hypervisor built against the ABI-1 header and
+/// linked against this archive is a named refusal at realize rather than a call into an
+/// entry point that did not exist.
+pub const ABI_VERSION: u32 = 2;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -441,4 +446,253 @@ impl Shim {
             ops_refused_after_unrealize: a.ops_refused_after_unrealize,
         }
     }
+}
+
+// =====================================================================================
+// The register plane (stage Q4) — the safe half
+// =====================================================================================
+
+/// The driver version the emulated GSP answers as.
+///
+/// ★★ **Hardcoded, and named here as the one place a bolt-on starts.** The device has no
+/// way to *ask* which driver a guest is about to load — the answer is only knowable from
+/// traffic the guest has not sent yet — so a version must be chosen before the first
+/// register is answered. This is the bench's version, which is the version the whole port
+/// is derived against ([`kayfabe_abi::versions::BENCH_DRIVER`]).
+///
+/// What makes it a bolt-on point rather than a wall: [`kayfabe_device::abi::gsp_abi_for`]
+/// takes any version, refuses below its floor rather than nearest-neighbouring, and the
+/// table it reads is already keyed on the full `major.minor.patch`. Supporting a second
+/// guest driver is a table row plus a way to select it — a device property, or the
+/// version-detection traffic itself — and no code below this line changes.
+pub const GUEST_DRIVER: kayfabe_abi::DriverVersion = kayfabe_abi::versions::BENCH_DRIVER;
+
+/// What a chip's device must put in configuration space, in the wire shape.
+///
+/// `#[repr(C)]` for the same reason [`KayfabeAudit`] is: it is copied into a C structure
+/// field for field. Field order is fixed for natural alignment so the two spellings cannot
+/// differ by padding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct KayfabeChipIdentity {
+    /// Must equal [`ABI_VERSION`].
+    pub abi_version: u32,
+    /// Must equal `size_of::<KayfabeChipIdentity>()`.
+    pub struct_size: u32,
+    /// The register aperture's length, per the chip table.
+    pub regs_aperture_len: u64,
+    /// `(base << 16) | (sub << 8) | prog_if`.
+    pub class_code: u32,
+    /// PCI vendor id.
+    pub vendor_id: u16,
+    /// PCI device id.
+    pub device_id: u16,
+    /// Subsystem vendor id.
+    pub subsystem_vendor_id: u16,
+    /// Subsystem device id.
+    pub subsystem_id: u16,
+    /// How many message-signalled vectors to offer.
+    pub msix_vectors: u16,
+    /// PCI revision id.
+    pub revision: u8,
+    /// Padding, so the layout is the same on every ABI that cares.
+    pub reserved: u8,
+}
+
+/// The register plane's counters, in the wire shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct KayfabeRegAudit {
+    /// Register reads dispatched into the plane.
+    pub reads: u64,
+    /// Register writes dispatched into the plane.
+    pub writes: u64,
+    /// Reads answered from the chip's silicon constants.
+    pub boot_reg_reads: u64,
+    /// Reads answered from the ROM window.
+    pub rom_reads: u64,
+    /// Reads answered by the GSP register model.
+    pub gsp_reads: u64,
+    /// Writes the GSP register model claimed.
+    pub gsp_writes: u64,
+    /// ★ Reads no source claimed, answered with a defaulted zero.
+    pub unclaimed_reads: u64,
+    /// Writes no source claimed, dropped.
+    pub unclaimed_writes: u64,
+    /// Faults the emulated GSP raised.
+    pub faults: u64,
+    /// Guest-RAM accesses the plane's RAM port refused.
+    pub ram_refusals: u64,
+    /// Times a write asked for the status-queue interrupt to be announced.
+    pub irq_requests: u64,
+}
+
+/// Translate a chip-table refusal into the wire vocabulary, keeping the sentence.
+///
+/// ★ Every arm is [`Status::Unsupported`] rather than [`Status::Refused`], and that is the
+/// distinction the type already draws: a chip row that does not exist, or one whose sources
+/// overlap, cannot be fixed by retrying. It is a property of this build.
+#[must_use]
+pub fn classify_chip(e: &ChipError) -> (Status, &'static str) {
+    match e {
+        ChipError::NoChipForDevice { .. } => (
+            Status::Unsupported,
+            "this build has no emulated-chip profile for that PCI device id, and there is \
+             deliberately no nearest-neighbour fallback: answering a driver as a chip we do \
+             not model surfaces as a failure a thousand registers later",
+        ),
+        ChipError::VbiosProfileMissing { .. } => (
+            Status::Unsupported,
+            "the chip row has no synthetic-VBIOS row behind it, so the identity this device \
+             would claim has no ROM; the two are keyed on the same PCI device id precisely \
+             so they cannot disagree",
+        ),
+        ChipError::Vbios(_) => (
+            Status::Unsupported,
+            "the synthetic VBIOS for this chip could not be built; its profile declares a \
+             geometry the guest driver's own bounds checks would reject",
+        ),
+        ChipError::RomTooLargeForWindow { .. } => (
+            Status::Unsupported,
+            "the generated ROM does not fit the ROM window the chip declares; the guest \
+             would parse a truncated image and fail far from here",
+        ),
+        ChipError::OverlappingSources { .. } => (
+            Status::Unsupported,
+            "two of the chip's declared read sources cover one offset; the read path asks \
+             them in a fixed order, so the loser would silently never be consulted",
+        ),
+        ChipError::OutsideAperture { .. } => (
+            Status::Unsupported,
+            "the chip declares a register or window outside its own register aperture, so \
+             the guest could never address it",
+        ),
+    }
+}
+
+/// Resolve a chip row. `0` means "the table's default".
+///
+/// # Errors
+/// [`Status::Unsupported`], [`classify_chip`]-ed.
+pub fn chip_for(device_id: u16) -> Result<&'static ChipProfile, (Status, &'static str)> {
+    if device_id == 0 {
+        return Ok(kayfabe_device::default_chip());
+    }
+    kayfabe_device::chip_for_device_id(device_id).map_err(|e| classify_chip(&e))
+}
+
+/// The identity a chip's device claims, in the wire shape.
+///
+/// # Errors
+/// [`classify_chip`]-ed.
+pub fn chip_identity(device_id: u16) -> Result<KayfabeChipIdentity, (Status, &'static str)> {
+    let chip = chip_for(device_id)?;
+    let id = kayfabe_device::identity_for(chip).map_err(|e| classify_chip(&e))?;
+    Ok(KayfabeChipIdentity {
+        abi_version: ABI_VERSION,
+        struct_size: size_of::<KayfabeChipIdentity>() as u32,
+        regs_aperture_len: chip.regs_aperture_len,
+        class_code: id.class_code,
+        vendor_id: id.vendor_id,
+        device_id: id.device_id,
+        subsystem_vendor_id: id.subsystem_vendor_id,
+        subsystem_id: id.subsystem_id,
+        msix_vectors: id.msix_vectors,
+        revision: id.revision,
+        reserved: 0,
+    })
+}
+
+/// The realized register plane — what the C shim holds behind its second opaque handle.
+#[derive(Debug)]
+pub struct Regs {
+    plane: RegPlane,
+}
+
+impl Regs {
+    /// Build the register plane for a chip. `0` selects the table's default row.
+    ///
+    /// # Errors
+    /// [`classify_chip`]-ed, or [`Status::Unsupported`] if the guest driver version this
+    /// build answers as has no wire table.
+    pub fn create(device_id: u16) -> Result<Regs, (Status, &'static str)> {
+        let chip = chip_for(device_id)?;
+        let abi = kayfabe_device::abi::gsp_abi_for(GUEST_DRIVER).map_err(|_| {
+            (
+                Status::Unsupported,
+                "this build has no wire table for the guest driver version its register \
+                 plane answers as; the table is keyed on the full major.minor.patch and \
+                 refuses below its floor rather than nearest-neighbouring",
+            )
+        })?;
+        let plane = RegPlane::new(chip, abi).map_err(|e| classify_chip(&e))?;
+        Ok(Regs { plane })
+    }
+
+    /// The plane, for a caller that needs more than this seam exposes.
+    #[must_use]
+    pub fn plane(&self) -> &RegPlane {
+        &self.plane
+    }
+
+    /// Serve one register read.
+    #[must_use]
+    pub fn read(&self, bar: u32, off: u64, size: u32) -> u64 {
+        self.plane
+            .read(clamp_bar(bar), off, clamp_size(size))
+            .value()
+    }
+
+    /// Serve one register write.
+    ///
+    /// ★ Returns the **port's** outcome, not the wire shape. `KayfabeRegWrite` carries a
+    /// raw pointer to the fault's sentence, and a host address may not appear in a file
+    /// that is not `*_unsafe.rs` — the host-pointer gate refused the first draft of this,
+    /// which is the gate doing exactly its job. The conversion lives one file over, beside
+    /// every other structure in this crate that holds an address.
+    #[must_use]
+    pub fn write(&self, bar: u32, off: u64, size: u32, val: u64) -> kayfabe_device::WriteOutcome {
+        self.plane.write(clamp_bar(bar), off, clamp_size(size), val)
+    }
+
+    /// Power-on reset.
+    pub fn reset(&self) {
+        self.plane.device_reset();
+    }
+
+    /// The counters, in the wire shape.
+    #[must_use]
+    pub fn audit(&self) -> KayfabeRegAudit {
+        let c = self.plane.counters();
+        KayfabeRegAudit {
+            reads: c.reads,
+            writes: c.writes,
+            boot_reg_reads: c.boot_reg_reads,
+            rom_reads: c.rom_reads,
+            gsp_reads: c.gsp_reads,
+            gsp_writes: c.gsp_writes,
+            unclaimed_reads: c.unclaimed_reads,
+            unclaimed_writes: c.unclaimed_writes,
+            faults: c.faults,
+            ram_refusals: c.ram_refusals,
+            irq_requests: c.irq_requests,
+        }
+    }
+}
+
+/// A base-address-register index the plane can express.
+///
+/// ★ Saturating rather than refusing, and this is the one place in this file where that is
+/// the right call: this is the *hot path*, reached from a vCPU with no error channel, and a
+/// register index above 255 cannot come from a PCI device at all — the hypervisor derives
+/// it from its own region table. The register model's own `decode_reg` answers `None` for
+/// any base-address register it does not own, so a wrong index reads as unclaimed rather
+/// than as another register's value.
+fn clamp_bar(bar: u32) -> u8 {
+    u8::try_from(bar).unwrap_or(u8::MAX)
+}
+
+/// An access width the plane can express. Anything wider than 8 bytes is 8.
+fn clamp_size(size: u32) -> u8 {
+    u8::try_from(size).unwrap_or(8)
 }

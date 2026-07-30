@@ -277,8 +277,28 @@ impl Profile {
     }
 
     /// The whole Axis-A bundle.
+    ///
+    /// ★★ **Delegated, as of 2026-07-31 — this used to be the ONLY assembly of a
+    /// [`GspAbi`] anywhere in the tree, and it lived in a test harness.** Stage Q4 needs a
+    /// production one, so the composition moved to
+    /// [`kayfabe_device::abi::gsp_abi_for`] and this calls it. The consequence is the
+    /// reason it is worth doing rather than copying: every GSP conformance test in this
+    /// repository now drives the assembly a shipped device uses, so a mistake in it is a
+    /// red test here instead of a bench cycle.
     #[must_use]
     pub fn abi(&self) -> GspAbi {
+        kayfabe_device::abi::gsp_abi_for(self.version)
+            .expect("a supported driver version with a describable element layout")
+    }
+
+    /// The assembly this harness used to perform itself, kept as the **differential**.
+    ///
+    /// ★ Not dead code and not a duplicate to be deleted: `abi_assembly_agrees` asserts
+    /// this and [`Profile::abi`] produce the same value, which is what makes "the harness
+    /// delegates" a checked statement rather than a claim in a comment. If the production
+    /// assembly drifts, this is what says so.
+    #[must_use]
+    pub fn abi_local(&self) -> GspAbi {
         GspAbi {
             msgq: MsgqAbi {
                 // MSGQ_VERSION = 0, MSGQ_MSG_SIZE_MIN = 16, MSGQ_FLAGS_SWAP_RX = 1

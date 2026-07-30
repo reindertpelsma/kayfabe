@@ -75,6 +75,26 @@ pub const NV_VGPU_MSG_FUNCTION_GSP_RM_ALLOC: u32 = 0x67;
 /// `X(GSP_RM_CONTROL, 0x4c)` — ogkm `src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`.
 pub const NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL: u32 = 0x4c;
 
+/// RPC function IDs (`rpc_global_enums.h`, `X(RM, NAME, id)`).
+///
+/// `X(GET_GSP_STATIC_INFO, 0x41)` — ogkm `src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`.
+pub const NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO: u32 = 0x41;
+
+/// RPC function IDs (`rpc_global_enums.h`, `X(RM, NAME, id)`).
+///
+/// `X(CONTINUATION_RECORD, 0x47)` — ogkm `src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`.
+pub const NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD: u32 = 0x47;
+
+/// RPC function IDs (`rpc_global_enums.h`, `X(RM, NAME, id)`).
+///
+/// `X(GSP_SET_SYSTEM_INFO, 0x48)` — ogkm `src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`.
+pub const NV_VGPU_MSG_FUNCTION_GSP_SET_SYSTEM_INFO: u32 = 0x48;
+
+/// RPC function IDs (`rpc_global_enums.h`, `X(RM, NAME, id)`).
+///
+/// `X(SET_REGISTRY, 0x49)` — ogkm `src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`.
+pub const NV_VGPU_MSG_FUNCTION_SET_REGISTRY: u32 = 0x49;
+
 /// GSP→CPU event IDs (`rpc_global_enums.h`, `E(NAME, id)`).
 ///
 /// `E(FIRST_EVENT, 0x1000)` — ogkm `src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`.

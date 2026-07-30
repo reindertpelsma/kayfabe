@@ -507,6 +507,33 @@ impl GspFsm {
         let Some(model) = arch.gsp() else {
             return Some(Err(GspFault::NoGspModel));
         };
+        self.mmio_read_with(model, bar, off)
+    }
+
+    /// [`GspFsm::mmio_read`], given the register model directly.
+    ///
+    /// ★★ **Why this variant exists, and it is not convenience.** The register plane needs
+    /// a *register model* and nothing else — it never calls `mmu()`, `userd()`,
+    /// `pushbuffer()` or `classify()`. Requiring a whole [`Arch`] to serve one register
+    /// makes the device shell either carry an architecture it has no implementation for, or
+    /// compose one out of `kayfabe-mocks`, whose own manifest says *"never a production
+    /// dependency"*. Neither is a thing to ship, and neither is a statement about the GSP.
+    ///
+    /// [`GspFsm::mmio_read`] is kept, unchanged, as the one-line wrapper — every existing
+    /// caller and the whole trace differential still go through it.
+    ///
+    /// `None` means the offset is not this model's and another must answer — never a
+    /// defaulted zero.
+    ///
+    /// # Errors
+    ///
+    /// [`GspFault::RegisterUnserviceable`] if the model decodes an offset it cannot serve.
+    pub fn mmio_read_with(
+        &self,
+        model: &dyn kayfabe_arch::GspModel,
+        bar: u8,
+        off: u64,
+    ) -> Option<Result<u64, GspFault>> {
         let reg = model.decode_reg(bar, off)?;
         Some(
             model
@@ -533,6 +560,25 @@ impl GspFsm {
         let Some(model) = arch.gsp() else {
             return Err(GspFault::NoGspModel);
         };
+        self.mmio_write_with(ram, model, policy, bar, off, val)
+    }
+
+    /// [`GspFsm::mmio_write`], given the register model directly. See
+    /// [`GspFsm::mmio_read_with`] for why the variant exists.
+    ///
+    /// # Errors
+    ///
+    /// Whatever the transition it triggers refuses with. A refusal is **per-message**:
+    /// the register surface keeps answering (§7-G8).
+    pub fn mmio_write_with(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        model: &dyn kayfabe_arch::GspModel,
+        policy: &mut dyn CommandPolicy,
+        bar: u8,
+        off: u64,
+        val: u64,
+    ) -> Result<ServiceReport, GspFault> {
         let Some(reg) = model.decode_reg(bar, off) else {
             return Ok(ServiceReport::default());
         };
@@ -582,7 +628,7 @@ impl GspFsm {
                     // Consumed: the next publish needs a fresh pair, so a single later
                     // write cannot re-trigger against a half that is no longer current.
                     self.boot_args_seen = (false, false);
-                    let mut r = self.publish(ram, arch, policy, gpa)?;
+                    let mut r = self.publish(ram, model, policy, gpa)?;
                     report.transitions.push(Transition::E6);
                     report.transitions.append(&mut r.transitions);
                     report.commands = r.commands;
@@ -652,11 +698,10 @@ impl GspFsm {
     fn publish(
         &mut self,
         ram: &mut dyn GuestRam,
-        arch: &dyn Arch,
+        model: &dyn kayfabe_arch::GspModel,
         policy: &mut dyn CommandPolicy,
         boot_args_gpa: u64,
     ) -> Result<ServiceReport, GspFault> {
-        let model = arch.gsp().ok_or(GspFault::NoGspModel)?;
         let layout = model.libos_region_layout();
 
         // The region array. Bounded by the descriptor's own declared maximum, and a zero

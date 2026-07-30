@@ -170,7 +170,13 @@ const GATE_EXEMPTIONS: &[Exemption] = &[
     ("VMM-vocabulary gate", "kayfabe-mocks"), // ★ ARGUABLE: holds MockVmm, the port's reference impl
     // ── Generation-name gate (`pure`): may this crate name a concrete chip/driver version?
     ("Generation-name gate", "kayfabe-abi"), // Axis-A's OWN quarantine — the gate's prose says so
-    ("Generation-name gate", "kayfabe-crec"), // Axis-B's arch adapter: ga10x.rs is where GA106 BELONGS
+    ("Generation-name gate", "kayfabe-crec"), // Axis-B's arch adapter: still names GA10x in prose
+    // ★★ Axis-B's PRODUCTION home as of 2026-07-31. The GA10x register map moved here from
+    // `kayfabe-crec` so a shipped archive could reach it, and `ga10x.rs` is exactly where a
+    // chip's offsets BELONG — the gate's own failure text says "an arch-impl crate". This is
+    // the crate that sentence names. Note it is SCOPED by the other two vocabulary gates:
+    // being allowed to say GA106 is not being allowed to say `epoll` or `MemoryRegion`.
+    ("Generation-name gate", "kayfabe-device"),
     ("Generation-name gate", "kayfabe-mocks"), // MockArch classifies AMPERE_* class ids (mocks/src/lib.rs:298-306)
     ("Generation-name gate", "kayfabe-rt"), // ★ ARGUABLE: clean today, and should never name a chip
     ("Generation-name gate", "kayfabe-shell"), // ★ ARGUABLE: same

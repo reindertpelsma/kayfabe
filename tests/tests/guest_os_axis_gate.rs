@@ -73,6 +73,11 @@ const SCOPED: &[&str] = &[
     "kayfabe-arch",
     "kayfabe-completion",
     "kayfabe-core",
+    // ★ Added 2026-07-31 with the crate. It is NOT a host adapter: it holds the chip table
+    // and the register plane, i.e. it answers a GUEST driver's reads, so §1.1's host-side
+    // exemption does not reach it and any assumption about which OS wrote the bytes must be
+    // named at the site.
+    "kayfabe-device",
     "kayfabe-fwd",
     "kayfabe-gsp",
     "kayfabe-isolate",

@@ -157,7 +157,7 @@ jobs:
         run: |
           pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
                 crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch \
-                crates/kayfabe-abi \
+                crates/kayfabe-abi crates/kayfabe-device \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm"
           if grep -rniE 'eventfd|epoll|timerfd|rawfd|libc|O_NONBLOCK' $pure; then
             echo ""
@@ -210,7 +210,7 @@ jobs:
         run: |
           portable="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
                     crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc \
-                    crates/kayfabe-arch crates/kayfabe-abi \
+                    crates/kayfabe-arch crates/kayfabe-abi crates/kayfabe-device \
                     crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
                     crates/kayfabe-vmm crates/kayfabe-rt crates/kayfabe-shell"
           # ★ `crates/kayfabe-shell` ADDED 2026-07-29 (task #100). This step is named
@@ -876,6 +876,28 @@ jobs:
       #   [G5]  2 handle/allocation transitions: `Box::from_raw` in unrealize (the ONE place
       #        the plane is reclaimed) and the single `&*handle` in `borrow`.
       #
+      # ★★★ `kayfabe-qemu-raw` 31 -> 44 AT STAGE Q4, 2026-07-31 — the register plane. The
+      # thirteen are the SECOND handle's surface, and every one of them is the same three
+      # shapes as [G2], [G3] and [G5] above rather than a new kind of hazard:
+      #
+      #   [Q4-a] 7 `extern "C"` entry points: chip_identity, regs_create, regs_destroy,
+      #          regs_read, regs_write, regs_reset, regs_audit. Each has a `# Safety` clause
+      #          about the handle and its out-parameters. ★ `regs_read` and `regs_reset`
+      #          contribute ONE each — they take no out-parameter, so the entry point is the
+      #          whole relaxation.
+      #   [Q4-b] 5 writes through caller-supplied out-parameters: the identity, the handle,
+      #          the write outcome and the audit block. All plain `Copy` data; the one
+      #          pointer among them (`KayfabeRegWrite::fault`) addresses this archive's
+      #          read-only data and is `'static`, so nothing dangles.
+      #   [Q4-c] 1 `Box::from_raw` in regs_destroy (the ONE place the plane is reclaimed)
+      #          and 1 `&*handle` in `borrow_regs` — the same pair as [G5], for the second
+      #          handle. ★ `borrow_regs` is a private helper with one kind of caller, folded
+      #          the same way `borrow` was, so it costs one relaxation and not seven.
+      #
+      # ★ There is no new SHAPE here, which is the thing to check when a ratchet moves: a
+      # count that grew because a crate acquired a new kind of unsoundness is a different
+      # review from one that grew because it acquired more of the same.
+      #
       # ★★ WHAT WAS FOLDED, so the number is not padded. An earlier draft was 42. Three
       # private helpers — the out-parameter writer, `borrow`, and the table adopter — were
       # `unsafe fn`s that every caller re-acknowledged, which cost ~20 blocks to say one
@@ -916,7 +938,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:77 kayfabe-qemu-raw:31"
+          AUDITED="kayfabe-linux-raw:77 kayfabe-qemu-raw:44"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

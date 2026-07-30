@@ -448,3 +448,91 @@ fn the_register_index_mapping_is_a_bijection_over_the_registers_this_port_names(
     assert_eq!(bar_from_index(3), None);
     assert_eq!(bar_from_index(u32::MAX), None);
 }
+
+// =====================================================================================
+// Stage Q4 — the register plane's half of the seam
+// =====================================================================================
+
+#[test]
+fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
+    use kayfabe_qemu_raw::shim::{KayfabeChipIdentity, KayfabeRegAudit};
+    use kayfabe_qemu_raw::shim_unsafe::KayfabeRegWrite;
+
+    // Hand-mirrored structures: a field added on one side only misaligns every field after
+    // it, and the runtime `struct_size` handshake only covers the one structure carrying
+    // that field. This is the compile-time half.
+    assert_eq!(size_of::<KayfabeChipIdentity>(), 32);
+    assert_eq!(align_of::<KayfabeChipIdentity>(), 8);
+    assert_eq!(size_of::<KayfabeRegWrite>(), 32);
+    assert_eq!(size_of::<KayfabeRegAudit>(), 11 * size_of::<u64>());
+}
+
+#[test]
+fn the_default_chip_identity_is_what_a_stock_drivers_own_table_matches() {
+    let id = kayfabe_qemu_raw::shim::chip_identity(0).expect("the table has a default row");
+    assert_eq!(id.abi_version, kayfabe_qemu_raw::shim::ABI_VERSION);
+    assert_eq!(id.struct_size as usize, size_of_val(&id));
+    // ★ `nv_pci_table` (`ogkm-580: kernel-open/nvidia/nv-pci-table.c:39`) matches vendor
+    // 0x10DE with class 0300xx / 0302xx, and the module unloads itself when nothing
+    // matches. These two numbers are the whole reason the identity is not neutral.
+    assert_eq!(id.vendor_id, 0x10DE);
+    assert_eq!(id.class_code >> 16, 0x03);
+    assert!(
+        id.msix_vectors > 0,
+        "the interrupt capability must be askable-for"
+    );
+    assert_eq!(id.regs_aperture_len, 16 << 20);
+}
+
+#[test]
+fn a_device_id_the_chip_table_does_not_carry_is_unsupported_and_says_why() {
+    let (status, msg) =
+        kayfabe_qemu_raw::shim::chip_identity(0x1234).expect_err("no such chip row");
+    // ★ `Unsupported`, not `Refused`: retrying cannot help, it is a property of this build.
+    assert_eq!(status, Status::Unsupported);
+    assert!(
+        msg.contains("nearest-neighbour"),
+        "the sentence must survive the seam: {msg}"
+    );
+}
+
+#[test]
+fn the_register_plane_answers_through_the_seam_the_c_shim_calls() {
+    use kayfabe_qemu_raw::shim::Regs;
+
+    let regs = Regs::create(0).expect("the default chip is servable");
+    // ★★★ THE ACCEPTANCE REGISTER: `NV_PGSP` + `NV_PFALCON_FALCON_CPUCTL`, which
+    // `kflcnWaitForHalt_TU102` polls. `HALTED_TRUE` is bit 4.
+    assert_eq!(regs.read(0, 0x0011_0100, 4), 0x10);
+    assert_eq!(regs.read(0, 0x0011_8234, 4), 0xFF);
+    assert_eq!(regs.read(0, 0x0000_0000, 4), 0x1760_00A1);
+    assert_eq!(regs.read(0, 0x0030_0000, 2), 0xAA55);
+    // An offset nobody owns, and it must be zero rather than another register's value.
+    assert_eq!(regs.read(0, 0x0077_7777, 4), 0);
+
+    let a = regs.audit();
+    assert_eq!(a.reads, 5);
+    assert_eq!(a.gsp_reads, 2);
+    assert_eq!(a.boot_reg_reads, 1);
+    assert_eq!(a.rom_reads, 1);
+    assert_eq!(a.unclaimed_reads, 1);
+
+    // A write that reaches guest RAM the plane does not have refuses BY NAME through the
+    // seam; the pointer is into the archive's read-only data, so the C may hold it.
+    let _ = regs.write(0, 0x0011_0100, 4, 0x2);
+    let _ = regs.write(0, 0x0011_0040, 4, 0x1000);
+    let w = regs.write(0, 0x0011_0044, 4, 0);
+    assert!(w.claimed);
+    assert_eq!(
+        w.fault,
+        Some("GspFault::GuestRam"),
+        "the refusal must name itself across the seam"
+    );
+}
+
+#[test]
+fn a_base_address_register_the_plane_does_not_own_reads_zero() {
+    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    assert_eq!(regs.read(1, 0x0011_0100, 4), 0);
+    assert_eq!(regs.read(255, 0x0011_0100, 4), 0);
+}

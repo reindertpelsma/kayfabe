@@ -24,8 +24,8 @@ use kayfabe_gsp::{
     available_elements, checksum32, free_elements, rx_link_check,
 };
 use kayfabe_tests::gspworld::{
-    FakeRam, GspArch, GspWorld, Guest, GuestRefusal, MODEL_A, MODEL_B, NoGspArch, P580, P610, PAGE,
-    REAL_QUEUE_SIZE, RingId, STAGING_BYTES, fold,
+    FUNCTIONS, FakeRam, GspArch, GspWorld, Guest, GuestRefusal, MODEL_A, MODEL_B, NoGspArch, P580,
+    P610, PAGE, REAL_QUEUE_SIZE, RingId, STAGING_BYTES, fold,
 };
 
 /// The composed world lives in the shared harness so the mean test can drive the same one
@@ -3130,5 +3130,50 @@ fn the_projection_decodes_the_header_the_envelope_and_the_body_at_both_layouts()
         kayfabe_gsp::digest(&[1, 2, 3]),
         kayfabe_gsp::digest(&[1, 2, 4]),
         "a digest that cannot separate two bodies is not a change detector",
+    );
+}
+
+/// ★★★ **The harness delegates, and this is what makes that a checked statement.**
+///
+/// `Profile::abi` used to be the only assembly of a [`kayfabe_gsp::GspAbi`] anywhere in the
+/// tree — in a *test* crate, so nothing that ships could construct the value the boot FSM
+/// requires. Stage Q4 moved the composition to `kayfabe_device::abi::gsp_abi_for` and the
+/// harness now calls it. `Profile::abi_local` is the assembly it used to perform itself,
+/// kept precisely so the two can be compared: without this test, "the harness delegates" is
+/// a claim in a doc comment, and the production assembly could drift while every one of the
+/// ~3 000 lines of conformance tests below stayed green.
+#[test]
+fn abi_assembly_agrees_between_the_harness_and_the_production_composition() {
+    for p in [P580, P610] {
+        assert_eq!(
+            p.abi(),
+            p.abi_local(),
+            "{}: the production Axis-A assembly and the harness's own must be one value",
+            p.name
+        );
+    }
+    // ★ And the function ids now come from the GENERATED table rather than from literals
+    // transcribed into this harness. Four of them (65, 71, 72, 73) were not in the
+    // generated set until the generator's keep-list grew for exactly this reason.
+    assert_eq!(kayfabe_device::abi::FUNCTIONS, FUNCTIONS);
+    assert_eq!(kayfabe_device::abi::FUNCTIONS.get_gsp_static_info, 65);
+    assert_eq!(kayfabe_device::abi::FUNCTIONS.continuation_record, 71);
+    assert_eq!(kayfabe_device::abi::FUNCTIONS.gsp_set_system_info, 72);
+    assert_eq!(kayfabe_device::abi::FUNCTIONS.set_registry, 73);
+}
+
+/// ★★ The register map the trace differential replays is now **the map the guest reads
+/// through** — asserted, not assumed.
+///
+/// The GA10x model moved out of `kayfabe-crec` (a harness crate a shipped archive cannot
+/// depend on) into `kayfabe-device`. If a second copy ever reappears in either place this is
+/// what says so: both paths must name the same type.
+#[test]
+fn the_replayed_register_map_is_the_shipped_one() {
+    fn takes(_: kayfabe_device::ga10x::Ga10xGspModel) {}
+    takes(kayfabe_crec::Ga10xGspModel::new());
+    assert_eq!(
+        kayfabe_crec::ga10x::RMARGS_ID,
+        kayfabe_device::ga10x::RMARGS_ID
     );
 }

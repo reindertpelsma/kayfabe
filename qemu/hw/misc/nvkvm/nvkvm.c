@@ -38,6 +38,7 @@
 
 #include "hw/pci/pci.h"
 #include "hw/pci/pci_device.h"
+#include "hw/pci/msix.h"
 #include "hw/qdev-properties.h"
 #include "hw/resettable.h"
 #include "migration/blocker.h"
@@ -47,6 +48,7 @@
 #include "qemu/range.h"
 #include "qemu/units.h"
 #include "qom/object.h"
+#include "system/system.h"
 
 #include "kayfabe_shim.h"
 
@@ -54,7 +56,13 @@
 OBJECT_DECLARE_SIMPLE_TYPE(NvkvmState, NVKVM)
 
 /* Kept in step with `nvkvm_regions` by a build-time assertion in nvkvm_bars_realize. */
-#define NVKVM_N_REGIONS 3
+#define NVKVM_N_REGIONS 4
+
+/* The table row the message-signalled-interrupt container occupies.  Named, and asserted
+ * against the table in nvkvm_regions_selfcheck, so it cannot drift into a row that is a
+ * reservation — which would hand the archive's memslots and the hypervisor's vector table
+ * the same guest-physical range. */
+#define NVKVM_MSIX_ROW 3
 
 typedef enum NvkvmRegionKind {
     /* Accesses trap to this device. */
@@ -62,6 +70,16 @@ typedef enum NvkvmRegionKind {
     /* ★ A pure-MMIO reservation the archive shadows with its own slots.  Its callbacks are
      * not reached in normal operation; if one fires, the shadow is missing. */
     NVKVM_KIND_RESERVATION = 1,
+    /*
+     * ★★ The message-signalled-interrupt table's own register.
+     *
+     * A CONTAINER, not an io region: `msix_init` adds the table and the pending-bit array
+     * into it as subregions, and a leaf built by `memory_region_init_io` has nowhere to put
+     * them.  It is in this table rather than beside it for the reason the table exists —
+     * `nvkvm_regions_selfcheck` counts constructor calls against rows, so a region built
+     * anywhere else is an omission the count catches.
+     */
+    NVKVM_KIND_MSIX = 2,
 } NvkvmRegionKind;
 
 typedef struct NvkvmRegionSpec {
@@ -85,6 +103,22 @@ typedef struct NvkvmRegionSpec {
     uint32_t               port_index;
     int                    pci_bar;
     NvkvmRegionKind        kind;
+    /*
+     * ★★★ 64-BIT-NESS IS PER ROW, and making it so is a CORRECTION, not a feature.
+     *
+     * Every row used to be registered 64-bit prefetchable, including the register aperture.
+     * A real GA10x reports its register aperture as a 32-bit NON-prefetchable region and
+     * both halves of that matter: a prefetchable register window tells a guest its reads
+     * are side-effect-free, which for a register plane is false, and the C artifact — the
+     * only implementation a real driver has ever accepted — registers exactly
+     * `PCI_BASE_ADDRESS_SPACE_MEMORY` there (`C: src/qemu/nvkvm_gpu_emul.c:9804`).
+     *
+     * It also frees a hardware register: three 64-bit regions consume 0+1, 2+3, 4+5 and
+     * leave nowhere for the interrupt table.  With the register aperture 32-bit the layout
+     * becomes 0, 1+2, 3+4, 5 — which is the C's layout exactly, arrived at from the same
+     * constraint.
+     */
+    bool                   bar64;
     /* Byte offset of the uint64_t size property inside NvkvmState.  A row cannot name a size
      * directly, because the sizes are operator-settable. */
     size_t                 size_off;
@@ -98,8 +132,11 @@ struct NvkvmState {
     uint64_t bar0_size;
     uint64_t bar1_size;
     uint64_t bar2_size;
+    uint64_t msix_size;
     uint64_t window_size;
     bool     shareable_ram;
+    /* 0 = the chip table's default row.  A hex PCI device id selects another. */
+    uint32_t chip_device_id;
 
     /* --- regions ---------------------------------------------------------------- */
     MemoryRegion mr[NVKVM_N_REGIONS];
@@ -114,44 +151,106 @@ struct NvkvmState {
     bool     listening;
     MemoryListener listener;
 
-    void    *shim;         /* the archive's handle, or NULL */
+    void    *shim;         /* the archive's memory-plane handle, or NULL */
     bool     shim_refused; /* refused once, loudly; never retried */
+    /* ★★ The archive's REGISTER-plane handle.  A second handle with its own lifetime — see
+     * kayfabe_shim.h for why it is not the same one.  Created at realize, because unlike
+     * the memory plane it needs no base-address register to exist. */
+    void    *regs;
+    /* MSI-X was asked for and the hypervisor refused it.  Recorded rather than fatal: the
+     * guest driver's own gate is satisfied by the capability OR by a legacy line, and a
+     * device that cannot enumerate tells nobody anything. */
+    bool     msix_refused;
+    /* One-shot, so a guest polling a doorbell cannot fill the log with the same refusal. */
+    bool     irq_refusal_reported;
+    /* ★ The register audit is printed from BOTH device teardown and process exit, because
+     * a plain machine shutdown reaches neither `exit` nor `unrealize` — the device is never
+     * unplugged, the process simply ends.  Measured: the first run of this device printed
+     * nothing at shutdown and the counters were unobservable in exactly the case an
+     * operator cares about most.  `audit_printed` keeps the two paths from double-printing.
+     */
+    Notifier exit_notifier;
+    bool     audit_printed;
+    /* How many vectors the chip table says this device offers. */
+    uint16_t msix_vectors;
     uint64_t reset_epoch;
     bool     traps_open;
 
     uint64_t trap_reads;
     uint64_t trap_writes;
     uint64_t reservation_touches;
+    uint64_t irq_requests_dropped;
 };
 
 /* ===================================================================================
  * Region callbacks
  * =================================================================================== */
 
+/*
+ * ═══ ★★★ STAGE Q4: THE REGISTER DISPATCH ═══════════════════════════════════════════════
+ *
+ * This used to return a constant zero and say so in its own comment.  The archive was
+ * already linked into this binary; what was missing was any path that crossed into it, so
+ * the emulated GSP had no way for a guest to reach it and a stock driver polled the GSP
+ * falcon's HALTED bit until it timed out.
+ *
+ * ★★ THERE IS NO LOGIC BELOW THIS LINE, and that is the file's own rule (see the header):
+ * the routing — which of the chip's read sources owns an offset, what the boot state
+ * machine does with a write — is entirely inside the archive.  What is here is the
+ * translation of one hypervisor callback into one call, which is the only thing this file
+ * is allowed to be.
+ *
+ * ★ The register plane is deliberately NOT gated on `traps_open`.  That latch belongs to
+ * the memory plane's reset dance, where the thing being protected is a reservation being
+ * rebuilt; the register plane's reset is a value being rebuilt behind its own lock, and a
+ * guest whose registers go silent across a reset learns nothing it can act on.
+ */
 static uint64_t nvkvm_trap_read(void *opaque, hwaddr addr, unsigned size)
 {
     NvkvmState *s = opaque;
 
-    (void)addr;
-    (void)size;
     s->trap_reads++;
-    /*
-     * ★ Nothing routes an access into the core at this stage, and this returns a constant
-     * rather than a plausible register value on purpose: a guest driver must fail to
-     * recognise this device rather than half-recognise it.  Wiring the dispatch is a separate
-     * stage with its own acceptance.
-     */
-    return 0;
+    return kayfabe_shim_regs_read(s->regs, 0, (uint64_t)addr, size);
 }
 
 static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     NvkvmState *s = opaque;
+    KayfabeRegWrite w;
 
-    (void)addr;
-    (void)val;
-    (void)size;
     s->trap_writes++;
+    memset(&w, 0, sizeof(w));
+    kayfabe_shim_regs_write(s->regs, 0, (uint64_t)addr, size, val, &w);
+
+    if (w.fault && w.fault_len) {
+        /* ★ Per-message, never fatal: the archive's own rule is that a refused message
+         * leaves the register surface answering.  Reported at trace level would be
+         * invisible; reported every time would let a polling guest fill the disk — so it is
+         * a warning, and the archive counts them for the audit. */
+        warn_report("nvkvm: the emulated GSP refused a register write at +0x%" PRIx64 ": %.*s",
+                    (uint64_t)addr, (int)w.fault_len, (const char *)w.fault);
+    }
+    if (w.raise_status_irq) {
+        s->irq_requests_dropped++;
+        if (!s->irq_refusal_reported) {
+            s->irq_refusal_reported = true;
+            /*
+             * ★★ A NAMED REFUSAL, not silence, and the distinction is the whole point.
+             *
+             * The interrupt CAPABILITY is real — this device offers a message-signalled
+             * vector table and a guest driver's probe-time gate is satisfied by it.
+             * DELIVERY is not wired: raising a vector from here would call the
+             * hypervisor's notify path underneath a region this device has taken the
+             * global-lock opt-out on, and that inversion is invisible to every gate in
+             * this tree.  A guest that blocks on an event we never deliver hangs, so the
+             * one thing this must not do is hang QUIETLY.
+             */
+            warn_report("nvkvm: the emulated GSP asked for its status-queue interrupt and "
+                        "this device does not deliver vectors yet. The capability exists so "
+                        "the guest's driver can bind; delivery is a later stage. A guest "
+                        "that waits on this event will not be woken by us.");
+        }
+    }
 }
 
 static const MemoryRegionOps nvkvm_trap_ops = {
@@ -191,14 +290,27 @@ static const MemoryRegionOps nvkvm_reservation_ops = {
     .valid      = { .min_access_size = 1, .max_access_size = 8 },
 };
 
-/* ★★ THE table.  Complete, literal, and the only place a region is named. */
+/* ★★ THE table.  Complete, literal, and the only place a region is named.
+ *
+ * The hardware indices are 0, 1, 3, 5 and NOT 0, 2, 4: the register aperture is 32-bit (see
+ * `NvkvmRegionSpec::bar64`) so it consumes one register, the two windows are 64-bit and
+ * consume two each, and the interrupt table lands in the one that is left.  That is a real
+ * GA10x's layout and the C artifact's (`C: src/qemu/nvkvm_gpu_emul.c:9804-9831`).
+ *
+ * ★ The interrupt table's row has no callbacks: it is a container the hypervisor's own
+ * message-signalled-interrupt code fills in.  `nvkvm_region_init_io` is not used for it,
+ * which is why the constructor counter counts a DIFFERENT number from the row count and
+ * `nvkvm_regions_selfcheck` derives the expected value from the table instead of assuming
+ * it — an assumption that would have hidden exactly this addition. */
 static const NvkvmRegionSpec nvkvm_regions[NVKVM_N_REGIONS] = {
-    { "nvkvm-bar0-regs",   0, 0, NVKVM_KIND_TRAP,
+    { "nvkvm-bar0-regs",   0, 0, NVKVM_KIND_TRAP,        false,
       offsetof(NvkvmState, bar0_size), &nvkvm_trap_ops },
-    { "nvkvm-bar1-window", 1, 2, NVKVM_KIND_RESERVATION,
+    { "nvkvm-bar1-window", 1, 1, NVKVM_KIND_RESERVATION, true,
       offsetof(NvkvmState, bar1_size), &nvkvm_reservation_ops },
-    { "nvkvm-bar2-window", 2, 4, NVKVM_KIND_RESERVATION,
+    { "nvkvm-bar2-window", 2, 3, NVKVM_KIND_RESERVATION, true,
       offsetof(NvkvmState, bar2_size), &nvkvm_reservation_ops },
+    { "nvkvm-msix",        3, 5, NVKVM_KIND_MSIX,        false,
+      offsetof(NvkvmState, msix_size), NULL },
 };
 
 static uint64_t nvkvm_row_size(const NvkvmState *s, const NvkvmRegionSpec *row)
@@ -269,14 +381,71 @@ static bool nvkvm_bars_realize(NvkvmState *s, Error **errp)
             return false;
         }
 
-        nvkvm_region_init_io(s, &s->mr[i], row->ops, row->name, size);
+        if (row->kind == NVKVM_KIND_MSIX) {
+            /* A plain container.  Its contents are the hypervisor's, added by msix_init. */
+            memory_region_init(&s->mr[i], OBJECT(s), row->name, size);
+        } else {
+            nvkvm_region_init_io(s, &s->mr[i], row->ops, row->name, size);
+        }
         pci_register_bar(pci, row->pci_bar,
                          PCI_BASE_ADDRESS_SPACE_MEMORY |
-                         PCI_BASE_ADDRESS_MEM_TYPE_64 |
-                         PCI_BASE_ADDRESS_MEM_PREFETCH,
+                         (row->bar64 ? (PCI_BASE_ADDRESS_MEM_TYPE_64 |
+                                        PCI_BASE_ADDRESS_MEM_PREFETCH)
+                                     : 0),
                          &s->mr[i]);
     }
     return true;
+}
+
+/* How many hardware base-address registers a row consumes. */
+static int nvkvm_row_bars(const NvkvmRegionSpec *row)
+{
+    return row->bar64 ? 2 : 1;
+}
+
+/*
+ * ★★★ Does this row cross `kayfabe_shim.h`?
+ *
+ * The archive names the MEMORY plane's registers 0, 1, 2 — densely, and it refuses an index
+ * it does not name.  The interrupt table's register is this device's and the hypervisor's;
+ * the archive neither backs it nor places anything in it, and handing it over made realize
+ * refuse with *"a base-address-register index this port does not name"* — the seam's own
+ * check firing correctly on a table that had grown a row the seam does not have a word for.
+ *
+ * So the table is the enumeration of this device's REGIONS, and this predicate is the
+ * enumeration of the subset the archive is told about.  Written as a function rather than a
+ * `< 3` because the next row added must be a decision and not an off-by-one.
+ */
+static bool nvkvm_row_crosses_the_seam(const NvkvmRegionSpec *row)
+{
+    return row->kind != NVKVM_KIND_MSIX;
+}
+
+/* How many rows the archive is told about. */
+static unsigned nvkvm_seam_rows(void)
+{
+    unsigned i, n = 0;
+
+    for (i = 0; i < NVKVM_N_REGIONS; i++) {
+        if (nvkvm_row_crosses_the_seam(&nvkvm_regions[i])) {
+            n++;
+        }
+    }
+    return n;
+}
+
+/* How many rows go through the io constructor — DERIVED from the table, never assumed.
+ * See the table's own comment for the addition that made assuming it wrong. */
+static unsigned nvkvm_expected_io_inits(void)
+{
+    unsigned i, n = 0;
+
+    for (i = 0; i < NVKVM_N_REGIONS; i++) {
+        if (nvkvm_regions[i].kind != NVKVM_KIND_MSIX) {
+            n++;
+        }
+    }
+    return n;
 }
 
 /*
@@ -292,12 +461,13 @@ static bool nvkvm_regions_selfcheck(NvkvmState *s, Error **errp)
     PCIDevice *pci = PCI_DEVICE(s);
     unsigned i;
 
-    if (s->io_inits != NVKVM_N_REGIONS) {
+    if (s->io_inits != nvkvm_expected_io_inits()) {
         error_setg(errp,
-                   "nvkvm: the region table has %u rows but the constructor ran %u times; "
-                   "a region was built somewhere other than nvkvm_region_init_io, which is "
-                   "exactly the omission the table exists to make impossible",
-                   NVKVM_N_REGIONS, s->io_inits);
+                   "nvkvm: the region table has %u rows the io constructor should have built "
+                   "but it ran %u times; a region was built somewhere other than "
+                   "nvkvm_region_init_io, which is exactly the omission the table exists to "
+                   "make impossible",
+                   nvkvm_expected_io_inits(), s->io_inits);
         return false;
     }
 
@@ -320,21 +490,50 @@ static bool nvkvm_regions_selfcheck(NvkvmState *s, Error **errp)
                        NVKVM_N_REGIONS - 1);
             return false;
         }
-        if (nvkvm_regions[i].pci_bar + 2 > PCI_NUM_REGIONS) {
+        /* ★ The rows the archive is told about must be the table's PREFIX, because the
+         * archive addresses them densely: a non-crossing row in the middle would make the
+         * indices this device sends and the ones it names diverge, silently. */
+        if (nvkvm_row_crosses_the_seam(&nvkvm_regions[i]) && i >= nvkvm_seam_rows()) {
+            error_setg(errp,
+                       "nvkvm: %s crosses the archive seam but sits after a row that does "
+                       "not; the archive names its registers densely from zero",
+                       nvkvm_regions[i].name);
+            return false;
+        }
+        if (nvkvm_regions[i].pci_bar + nvkvm_row_bars(&nvkvm_regions[i]) > PCI_NUM_REGIONS) {
             error_setg(errp, "nvkvm: %s is registered past the last base-address register",
                        nvkvm_regions[i].name);
             return false;
         }
-        if (i > 0 && nvkvm_regions[i].pci_bar < nvkvm_regions[i - 1].pci_bar + 2) {
+        /* ★ The spacing rule is now PER ROW, because 64-bit-ness is.  A row that consumes
+         * two registers must be two apart from its neighbour; one that consumes one need
+         * only be one.  Reading the WIDTH from the table rather than assuming it is the
+         * whole reason this check keeps working after the register aperture became 32-bit
+         * — a fixed "+2" would have refused the correct layout. */
+        if (i > 0 &&
+            nvkvm_regions[i].pci_bar <
+                nvkvm_regions[i - 1].pci_bar + nvkvm_row_bars(&nvkvm_regions[i - 1])) {
             error_setg(errp,
-                       "nvkvm: %s is at base-address register %d and %s is at %d; these are "
-                       "64-bit registers, so each consumes TWO and they overlap. PCI accepts "
-                       "this silently and the device then reports two registers at one "
-                       "guest-physical base",
+                       "nvkvm: %s is at base-address register %d and consumes %d, and %s is "
+                       "at %d; they overlap. PCI accepts this silently and the device then "
+                       "reports two registers at one guest-physical base",
                        nvkvm_regions[i - 1].name, nvkvm_regions[i - 1].pci_bar,
+                       nvkvm_row_bars(&nvkvm_regions[i - 1]),
                        nvkvm_regions[i].name, nvkvm_regions[i].pci_bar);
             return false;
         }
+    }
+
+    /* ★ NVKVM_MSIX_ROW is a name the vector table is installed through; if it ever pointed
+     * at a reservation row, the hypervisor's vector table and the archive's memslots would
+     * be handed the same guest-physical range and only one could win. */
+    if (nvkvm_regions[NVKVM_MSIX_ROW].kind != NVKVM_KIND_MSIX) {
+        error_setg(errp,
+                   "nvkvm: NVKVM_MSIX_ROW names row %d, which the table says is a %s and not "
+                   "the interrupt table; installing a vector table there would put it over a "
+                   "range the archive's own slots claim",
+                   NVKVM_MSIX_ROW, nvkvm_regions[NVKVM_MSIX_ROW].name);
+        return false;
     }
 
     for (i = 0; i < NVKVM_N_REGIONS; i++) {
@@ -354,7 +553,7 @@ static bool nvkvm_regions_selfcheck(NvkvmState *s, Error **errp)
             return false;
         }
 #if NVKVM_HAVE_LOCKLESS_IO
-        if (!s->mr[i].lockless_io) {
+        if (row->kind != NVKVM_KIND_MSIX && !s->mr[i].lockless_io) {
             error_setg(errp,
                        "nvkvm: %s did not get the global-lock opt-out; a device with one "
                        "marked region and one unmarked one keeps BOTH hazards on the "
@@ -683,12 +882,16 @@ static void nvkvm_listener_region_del(MemoryListener *l, MemoryRegionSection *se
  * Realizing the archive, once the registers have bases
  * =================================================================================== */
 
+
 static bool nvkvm_bars_all_mapped(NvkvmState *s)
 {
     PCIDevice *pci = PCI_DEVICE(s);
     unsigned i;
 
     for (i = 0; i < NVKVM_N_REGIONS; i++) {
+        if (!nvkvm_row_crosses_the_seam(&nvkvm_regions[i])) {
+            continue;
+        }
         if (pci->io_regions[nvkvm_regions[i].pci_bar].addr == PCI_BAR_UNMAPPED) {
             return false;
         }
@@ -704,19 +907,23 @@ static void nvkvm_shim_realize(NvkvmState *s)
     const uint8_t *msg = NULL;
     uint64_t msg_len = 0;
     void *handle = NULL;
-    unsigned i;
+    unsigned i, n;
     int32_t rc;
 
-    for (i = 0; i < NVKVM_N_REGIONS; i++) {
-        bars[i].index    = nvkvm_regions[i].port_index;
-        bars[i].reserved = 0;
-        bars[i].base     = (uint64_t)pci->io_regions[nvkvm_regions[i].pci_bar].addr;
-        bars[i].len      = nvkvm_row_size(s, &nvkvm_regions[i]);
+    for (i = 0, n = 0; i < NVKVM_N_REGIONS; i++) {
+        if (!nvkvm_row_crosses_the_seam(&nvkvm_regions[i])) {
+            continue;
+        }
+        bars[n].index    = nvkvm_regions[i].port_index;
+        bars[n].reserved = 0;
+        bars[n].base     = (uint64_t)pci->io_regions[nvkvm_regions[i].pci_bar].addr;
+        bars[n].len      = nvkvm_row_size(s, &nvkvm_regions[i]);
+        n++;
     }
     cfg.abi_version   = KAYFABE_SHIM_ABI;
     cfg.struct_size   = (uint32_t)sizeof(cfg);
     cfg.shareable_ram = s->shareable_ram ? 1 : 0;
-    cfg.n_bars        = NVKVM_N_REGIONS;
+    cfg.n_bars        = n;
     cfg.bars          = bars;
 
     rc = kayfabe_shim_realize(&nvkvm_host_ops, s, &cfg, &handle, &msg, &msg_len);
@@ -794,7 +1001,12 @@ static void nvkvm_after_bar_update(NvkvmState *s)
     }
     /* The detector.  The preventer already ran, in nvkvm_config_write. */
     for (i = 0; i < NVKVM_N_REGIONS; i++) {
-        pcibus_t addr = pci->io_regions[nvkvm_regions[i].pci_bar].addr;
+        pcibus_t addr;
+
+        if (!nvkvm_row_crosses_the_seam(&nvkvm_regions[i])) {
+            continue;
+        }
+        addr = pci->io_regions[nvkvm_regions[i].pci_bar].addr;
 
         kayfabe_shim_note_bar_mapping(s->shim, nvkvm_regions[i].port_index,
                                       addr == PCI_BAR_UNMAPPED ? 0 : 1,
@@ -821,6 +1033,9 @@ static void nvkvm_config_write(PCIDevice *pci, uint32_t addr, uint32_t val, int 
             const uint8_t *msg = NULL;
             uint64_t msg_len = 0;
 
+            if (!nvkvm_row_crosses_the_seam(&nvkvm_regions[i])) {
+                continue;
+            }
             if (kayfabe_shim_bar_move_requested(s->shim, nvkvm_regions[i].port_index,
                                                 &msg, &msg_len) != KAYFABE_OK) {
                 warn_report("nvkvm: a base-address-register write was refused: %.*s",
@@ -837,6 +1052,111 @@ static void nvkvm_config_write(PCIDevice *pci, uint32_t addr, uint32_t val, int 
 /* ===================================================================================
  * Lifecycle
  * =================================================================================== */
+
+static void nvkvm_report_registers(NvkvmState *s)
+{
+    KayfabeRegAudit a;
+
+    /*
+     * ★★ `unclaimed_reads` is the number to read.
+     *
+     * It counts every register this device answered with a DEFAULTED ZERO because no model
+     * owns the offset.  That is not an error today and the C artifact does the same — but it
+     * is the difference between "the guest booted" and "the guest booted on answers nobody
+     * wrote", and without a number nobody can tell which.
+     *
+     * ★ Called from BOTH device teardown and process exit.  Teardown alone is not enough: a
+     * plain machine shutdown never unplugs the device, so `exit` is never reached and the
+     * counters were unobservable in exactly the case an operator cares about.  Measured on
+     * the first run of this device — the shutdown printed nothing.
+     */
+    if (s->audit_printed || !s->regs) {
+        return;
+    }
+    s->audit_printed = true;
+    if (kayfabe_shim_regs_audit(s->regs, &a) != KAYFABE_OK) {
+        return;
+    }
+    info_report("nvkvm: registers: %" PRIu64 " reads / %" PRIu64 " writes "
+                "(chip-constant %" PRIu64 ", rom %" PRIu64 ", gsp %" PRIu64 "r/%" PRIu64 "w, "
+                "UNCLAIMED %" PRIu64 "r/%" PRIu64 "w), faults %" PRIu64 ", "
+                "guest-RAM refusals %" PRIu64 ", interrupt requests dropped %" PRIu64,
+                a.reads, a.writes, a.boot_reg_reads, a.rom_reads, a.gsp_reads,
+                a.gsp_writes, a.unclaimed_reads, a.unclaimed_writes,
+                a.faults, a.ram_refusals, s->irq_requests_dropped);
+}
+
+static void nvkvm_exit_notify(Notifier *n, void *data)
+{
+    NvkvmState *s = container_of(n, NvkvmState, exit_notifier);
+
+    (void)data;
+    nvkvm_report_registers(s);
+}
+
+/*
+ * Ask the archive who this device is, and put the answer in configuration space.
+ *
+ * ★★ Every number below comes from ONE call.  There is no fallback identity and no partial
+ * one: an identity assembled half here and half in the archive is the two-descriptions
+ * failure this device's whole region table exists to prevent, one plane over.
+ */
+static bool nvkvm_identity_realize(NvkvmState *s, Error **errp)
+{
+    PCIDevice *pci = PCI_DEVICE(s);
+    KayfabeChipIdentity id;
+    const uint8_t *msg = NULL;
+    uint64_t msg_len = 0;
+    uint8_t *cfg = pci->config;
+    int32_t rc;
+
+    memset(&id, 0, sizeof(id));
+    rc = kayfabe_shim_chip_identity((uint16_t)s->chip_device_id, &id, &msg, &msg_len);
+    if (rc != KAYFABE_OK) {
+        error_setg(errp, "nvkvm: the chip table refused an identity (%d): %.*s",
+                   (int)rc, (int)msg_len, (const char *)msg);
+        return false;
+    }
+    if (id.abi_version != KAYFABE_SHIM_ABI || id.struct_size != sizeof(id)) {
+        error_setg(errp,
+                   "nvkvm: the chip identity came back with ABI %u size %u; this shim speaks "
+                   "ABI %u size %zu, so the two are from different builds",
+                   id.abi_version, id.struct_size, KAYFABE_SHIM_ABI, sizeof(id));
+        return false;
+    }
+
+    /*
+     * ★ The register aperture's size is the chip's, not the operator's.  A property that
+     * disagrees is refused rather than clamped: the archive answers registers by offset
+     * within the aperture the CHIP declares, so a smaller one would make the guest's map
+     * and the archive's map disagree about where the ROM window is — the same class of
+     * silent divergence `nvkvm_bars_realize` refuses a non-power-of-two size for.
+     */
+    if (s->bar0_size != id.regs_aperture_len) {
+        error_setg(errp,
+                   "nvkvm: bar0-size is 0x%" PRIx64 " but chip %04x:%04x declares a "
+                   "0x%" PRIx64 "-byte register aperture; the archive answers registers by "
+                   "offset within the chip's aperture, so the two maps would disagree",
+                   s->bar0_size, id.vendor_id, id.device_id, id.regs_aperture_len);
+        return false;
+    }
+
+    pci_config_set_vendor_id(cfg, id.vendor_id);
+    pci_config_set_device_id(cfg, id.device_id);
+    pci_config_set_revision(cfg, id.revision);
+    pci_config_set_class(cfg, (uint16_t)(id.class_code >> 8));
+    cfg[PCI_CLASS_PROG] = (uint8_t)(id.class_code & 0xff);
+    pci_set_word(cfg + PCI_SUBSYSTEM_VENDOR_ID, id.subsystem_vendor_id);
+    pci_set_word(cfg + PCI_SUBSYSTEM_ID, id.subsystem_id);
+
+    s->msix_vectors = id.msix_vectors;
+
+    info_report("nvkvm: presenting %04x:%04x class %06x rev %02x subsys %04x:%04x "
+                "(%u interrupt vectors)",
+                id.vendor_id, id.device_id, id.class_code, id.revision,
+                id.subsystem_vendor_id, id.subsystem_id, id.msix_vectors);
+    return true;
+}
 
 static void nvkvm_realize(PCIDevice *pci, Error **errp)
 {
@@ -865,12 +1185,90 @@ static void nvkvm_realize(PCIDevice *pci, Error **errp)
         return;
     }
 
+    /*
+     * ═══ ★★★ THE IDENTITY, AND WHY IT IS NOT A LIE ══════════════════════════════════
+     *
+     * This device used to present neutral identifiers, on the argument that "this device
+     * emulates no vendor's silicon and claiming one would make a guest driver bind to
+     * something that cannot serve it".  The second half of that has been measured and it is
+     * backwards: a stock NVIDIA driver's own table matches vendor 0x10DE with a display
+     * class and the module UNLOADS ITSELF when nothing matches, so a neutral identity does
+     * not produce a driver that binds cautiously — it produces one that never binds at all,
+     * and there is no force-bind fallback to fall back to.
+     *
+     * We are emulating an NVIDIA GPU.  Saying so is the accurate statement, and the identity
+     * comes from the same table row the ROM this device serves is generated from, so the
+     * two cannot disagree.
+     */
+    if (!nvkvm_identity_realize(s, errp)) {
+        return;
+    }
+
     if (!nvkvm_bars_realize(s, errp)) {
         return;
     }
     if (!nvkvm_regions_selfcheck(s, errp)) {
         return;
     }
+
+    /*
+     * ★★ The interrupt capability, and it is the CAPABILITY that is load-bearing here.
+     *
+     * `nv_pci_probe` aborts when the device has neither an interrupt line nor a
+     * message-signalled capability, and treats that as an error on an accelerated machine.
+     * Delivery is a later stage (see nvkvm_trap_write's named refusal); a capability the
+     * guest can find is what lets its driver get far enough to need one.
+     *
+     * ★ Refusal is recorded, not fatal.  A device that fails to realize because the
+     * hypervisor would not give it a vector table tells an operator nothing about the
+     * emulation, and the register plane is independently useful.
+     */
+    if (s->msix_vectors > 0) {
+        Error *local = NULL;
+        int i;
+
+        if (msix_init(pci, s->msix_vectors,
+                      &s->mr[NVKVM_MSIX_ROW], nvkvm_regions[NVKVM_MSIX_ROW].pci_bar, 0x0,
+                      &s->mr[NVKVM_MSIX_ROW], nvkvm_regions[NVKVM_MSIX_ROW].pci_bar, 0x800,
+                      0x00, &local) < 0) {
+            s->msix_refused = true;
+            warn_report("nvkvm: this machine refused a %u-vector message-signalled table "
+                        "(%s); the device still enumerates, but a guest driver that requires "
+                        "one will refuse to bind",
+                        s->msix_vectors, error_get_pretty(local));
+            error_free(local);
+        } else {
+            for (i = 0; i < (int)s->msix_vectors; i++) {
+                msix_vector_use(pci, i);
+            }
+        }
+    }
+
+    /*
+     * ═══ ★★★ THE REGISTER PLANE ═════════════════════════════════════════════════════
+     *
+     * Built HERE, and not from the configuration-space write path the memory plane uses,
+     * because it needs no base-address register: a guest driver's first act is to read
+     * chip-identity registers and the answer is a function of the chip table alone.  Two
+     * planes, two lifetimes — see kayfabe_shim.h.
+     */
+    {
+        const uint8_t *msg = NULL;
+        uint64_t msg_len = 0;
+        void *handle = NULL;
+        int32_t rc = kayfabe_shim_regs_create((uint16_t)s->chip_device_id, &handle,
+                                              &msg, &msg_len);
+
+        if (rc != KAYFABE_OK) {
+            error_setg(errp, "nvkvm: the register plane refused to build (%d): %.*s",
+                       (int)rc, (int)msg_len, (const char *)msg);
+            return;
+        }
+        s->regs = handle;
+    }
+    s->exit_notifier.notify = nvkvm_exit_notify;
+    qemu_add_exit_notifier(&s->exit_notifier);
+
     s->traps_open = true;
 }
 
@@ -888,6 +1286,16 @@ static void nvkvm_exit(PCIDevice *pci)
         kayfabe_shim_unrealize(s->shim);
         s->shim = NULL;
     }
+    /* ★ The register plane is destroyed AFTER the listener is unregistered and the memory
+     * plane is gone, because a topology callback still in flight can reach neither. */
+    nvkvm_report_registers(s);
+    if (s->regs) {
+        kayfabe_shim_regs_destroy(s->regs);
+        s->regs = NULL;
+    }
+    if (msix_present(pci)) {
+        msix_uninit(pci, &s->mr[NVKVM_MSIX_ROW], &s->mr[NVKVM_MSIX_ROW]);
+    }
     if (s->discard_disabled) {
         ram_block_discard_disable(false);
         s->discard_disabled = false;
@@ -896,6 +1304,8 @@ static void nvkvm_exit(PCIDevice *pci)
         migrate_del_blocker(&s->migrate_blocker);
     }
 }
+
+
 
 /*
  * Three-phase reset, latch-and-defer.  `enter` must not have a side effect on any other
@@ -917,6 +1327,15 @@ static void nvkvm_reset_hold(Object *obj, ResetType type)
 
     (void)type;
     s->traps_open = false;
+    /*
+     * ★★ The emulated GSP's state machine goes back to cold here, and this is the one
+     * thing the C artifact could not do: its WPR2 latch only cleared on a full hypervisor
+     * restart, which is where the bench's "each clean run needs a fresh boot" tax comes
+     * from.  The archive rebuilds the value behind its own lock, so a guest reboot is a
+     * reboot rather than a restart.  Empty-handle safe: this phase also runs before the
+     * device has realized.
+     */
+    kayfabe_shim_regs_reset(s->regs);
 }
 
 static void nvkvm_reset_exit(Object *obj, ResetType type)
@@ -935,6 +1354,13 @@ static const Property nvkvm_properties[] = {
      * reservation register, which is what an acceptance test drives. */
     DEFINE_PROP_UINT64("window-size", NvkvmState, window_size, 0),
     DEFINE_PROP_BOOL("shareable-ram", NvkvmState, shareable_ram, true),
+    /* One page holds a 256-entry vector table at 0x0 and its pending bits at 0x800, which
+     * is far more than any chip row asks for. */
+    DEFINE_PROP_UINT64("msix-size", NvkvmState, msix_size, 4 * KiB),
+    /* 0 = the archive's chip table picks its default row.  A PCI device id selects another,
+     * and an id the table does not carry is a named refusal at realize — there is
+     * deliberately no nearest-neighbour fallback. */
+    DEFINE_PROP_UINT32("chip-device-id", NvkvmState, chip_device_id, 0),
     NVKVM_PROP_TERMINATOR
 };
 
@@ -949,8 +1375,13 @@ static void nvkvm_class_init(ObjectClass *klass, NVKVM_CLASS_DATA *data)
     k->realize      = nvkvm_realize;
     k->exit         = nvkvm_exit;
     k->config_write = nvkvm_config_write;
-    /* Deliberately neutral identifiers: this device emulates no vendor's silicon and claiming
-     * one would make a guest driver bind to something that cannot serve it. */
+    /*
+     * ★ These are PLACEHOLDERS and nothing binds to them.  The class is instantiated before
+     * any instance exists, so it cannot ask the archive which chip THIS device is — that is
+     * a per-instance property.  `nvkvm_identity_realize` overwrites all four from the chip
+     * table at realize, and refuses rather than proceeding if it cannot, so a device that
+     * still reports these has failed to realize and is not on a bus.
+     */
     k->vendor_id    = PCI_VENDOR_ID_QEMU;
     k->device_id    = 0x11ea;
     k->revision     = 1;
@@ -960,7 +1391,7 @@ static void nvkvm_class_init(ObjectClass *klass, NVKVM_CLASS_DATA *data)
     rc->phases.hold  = nvkvm_reset_hold;
     rc->phases.exit  = nvkvm_reset_exit;
 
-    dc->desc = "kayfabe accelerator memory plane";
+    dc->desc = "kayfabe emulated GPU (memory plane + register plane)";
     device_class_set_props(dc, nvkvm_properties);
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
 }

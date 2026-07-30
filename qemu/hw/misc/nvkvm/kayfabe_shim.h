@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 1u
+#define KAYFABE_SHIM_ABI 2u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -187,5 +187,104 @@ int32_t kayfabe_shim_install_window(void *handle, uint64_t gpa, uint64_t len,
                                     const uint8_t **out_msg, uint64_t *out_msg_len);
 
 int32_t kayfabe_shim_audit(void *handle, KayfabeAudit *out);
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════
+ * THE REGISTER PLANE (stage Q4) — a SECOND handle, deliberately
+ * ═══════════════════════════════════════════════════════════════════════════════════════
+ *
+ * ★★★ Why this is not part of the memory plane's handle, which is the obvious shape.
+ *
+ * The memory plane realizes LATE — it needs base-address registers, and firmware programs
+ * those long after the device object exists — and it may refuse outright, at which point
+ * the device is deliberately dead.  The register plane needs neither: a guest driver's very
+ * first act is to read chip-identity registers, and the answer is a function of the chip
+ * table and nothing else.  Hanging the registers off the memory plane's handle would mean a
+ * device whose registers answer zero until firmware has finished, and a device whose memory
+ * plane refused could not tell a driver *anything* — including the refusal.
+ *
+ * So: two handles, two lifetimes, one device.  The register plane is created at realize and
+ * destroyed at exit.  Joining them (so the GSP's queue doorbell can reach guest RAM) is the
+ * NEXT stage and is a named refusal today — see `KayfabeRegAudit::ram_refusals`.
+ */
+
+/* What a chip's device must put in configuration space before a stock driver will bind.
+ *
+ * ★ Field order is fixed for natural alignment on both sides (8-byte, then 4, then 2, then
+ * 1) so the two spellings of this structure cannot differ by padding.  `struct_size` is
+ * checked anyway. */
+typedef struct KayfabeChipIdentity {
+    uint32_t abi_version;        /* == KAYFABE_SHIM_ABI            */
+    uint32_t struct_size;        /* == sizeof(KayfabeChipIdentity) */
+    uint64_t regs_aperture_len;  /* the register BAR's size, per the chip table */
+    uint32_t class_code;         /* (base << 16) | (sub << 8) | prog_if */
+    uint16_t vendor_id;
+    uint16_t device_id;
+    uint16_t subsystem_vendor_id;
+    uint16_t subsystem_id;
+    uint16_t msix_vectors;
+    uint8_t  revision;
+    uint8_t  reserved;
+} KayfabeChipIdentity;
+
+/* What one register WRITE did.  A read needs none of this and returns its value directly.
+ *
+ * `fault` is (pointer, length) into the archive's read-only data, or NULL.  It is NOT
+ * NUL-terminated; print it with "%.*s". */
+typedef struct KayfabeRegWrite {
+    const uint8_t *fault;
+    uint64_t       fault_len;
+    uint32_t       transitions;
+    uint32_t       commands;
+    int32_t        claimed;            /* the register model owns this offset */
+    int32_t        raise_status_irq;   /* the status queue wants announcing */
+} KayfabeRegWrite;
+
+/* Register-plane counters.  u64-only and address-free, like KayfabeAudit.
+ *
+ * ★ `unclaimed_reads` is the honest one: it counts every register this device answered
+ * with a DEFAULTED ZERO because no model owns the offset.  It is not an error today (the
+ * C artifact does the same, and refusing would mean the device could not boot until every
+ * register in a 16 MiB aperture had a model) — it is the number that says how much of a
+ * boot rests on that. */
+typedef struct KayfabeRegAudit {
+    uint64_t reads;
+    uint64_t writes;
+    uint64_t boot_reg_reads;
+    uint64_t rom_reads;
+    uint64_t gsp_reads;
+    uint64_t gsp_writes;
+    uint64_t unclaimed_reads;
+    uint64_t unclaimed_writes;
+    uint64_t faults;
+    uint64_t ram_refusals;
+    uint64_t irq_requests;
+} KayfabeRegAudit;
+
+/* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.
+ * Takes no handle: it is a pure function of the table, and the device needs the answer at
+ * class-init/realize time, before anything else exists. */
+int32_t kayfabe_shim_chip_identity(uint16_t device_id, KayfabeChipIdentity *out,
+                                   const uint8_t **out_msg, uint64_t *out_msg_len);
+
+/* Create the register plane for a chip.  `device_id` of 0 selects the default row. */
+int32_t kayfabe_shim_regs_create(uint16_t device_id, void **out_handle,
+                                 const uint8_t **out_msg, uint64_t *out_msg_len);
+
+void    kayfabe_shim_regs_destroy(void *handle);
+
+/* ★★ THE HOT PATH.  One trapped register access, one value.  `size` is the access width in
+ * bytes and the answer is masked to it.  An empty handle reads zero — a device whose plane
+ * failed to build must not crash a guest, and it has already said so loudly at realize. */
+uint64_t kayfabe_shim_regs_read(void *handle, uint32_t bar, uint64_t off, uint32_t size);
+
+/* One trapped register write.  `out` may be NULL if the caller does not care. */
+void     kayfabe_shim_regs_write(void *handle, uint32_t bar, uint64_t off, uint32_t size,
+                                 uint64_t val, KayfabeRegWrite *out);
+
+/* Power-on reset: rebuild the emulated GSP's state machine.  The C artifact could only do
+ * this by restarting the whole hypervisor process, which is the bench's fresh-boot tax. */
+void     kayfabe_shim_regs_reset(void *handle);
+
+int32_t  kayfabe_shim_regs_audit(void *handle, KayfabeRegAudit *out);
 
 #endif /* KAYFABE_SHIM_H */

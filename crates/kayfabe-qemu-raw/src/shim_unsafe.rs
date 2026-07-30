@@ -64,7 +64,55 @@ use kayfabe_vmm::BarId;
 use kayfabe_vmm_qemu::host::{BlockerId, HostError, MrHandle, QemuHost};
 use kayfabe_vmm_qemu::slots::KvmSlotPlane;
 
-use crate::shim::{ABI_VERSION, BarDesc, SectionWire, Shim, ShimConfig, Status, bar_index};
+use crate::shim::{
+    ABI_VERSION, BarDesc, KayfabeChipIdentity, KayfabeRegAudit, Regs, SectionWire, Shim,
+    ShimConfig, Status, bar_index,
+};
+
+/// What one register WRITE did, on the wire.
+///
+/// ★ This structure lives in the **unsafe** half and its two siblings
+/// ([`KayfabeChipIdentity`], [`KayfabeRegAudit`]) do not, and the split is not arbitrary:
+/// this one holds a raw pointer. The host-pointer gate refuses a host CPU address in any
+/// file not named `*_unsafe.rs`, and it refused the first draft of this — the same rule that
+/// already keeps [`KayfabeRealizeCfg`]'s register array on this side.
+///
+/// `fault` addresses this archive's read-only data and has `'static` lifetime, so the C may
+/// hold it indefinitely. It is **not** NUL-terminated.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct KayfabeRegWrite {
+    /// The fault's tag, or null.
+    pub fault: *const u8,
+    /// Its length in bytes.
+    pub fault_len: u64,
+    /// How many boot transitions fired.
+    pub transitions: u32,
+    /// How many commands were decoded off the command queue.
+    pub commands: u32,
+    /// Non-zero if the register model owns this offset.
+    pub claimed: i32,
+    /// Non-zero if the status-queue interrupt wants announcing.
+    pub raise_status_irq: i32,
+}
+
+impl KayfabeRegWrite {
+    /// The wire form of the port's outcome. The one place the sentence becomes an address.
+    fn from_outcome(o: &kayfabe_device::WriteOutcome) -> KayfabeRegWrite {
+        let (fault, fault_len) = match o.fault {
+            None => (core::ptr::null(), 0),
+            Some(m) => (m.as_ptr(), m.len() as u64),
+        };
+        KayfabeRegWrite {
+            fault,
+            fault_len,
+            transitions: o.transitions as u32,
+            commands: o.commands as u32,
+            claimed: i32::from(o.claimed),
+            raise_status_irq: i32::from(o.raise_status_irq),
+        }
+    }
+}
 
 // =====================================================================================
 // The wire vocabulary — mirrored, field for field, in `qemu/hw/misc/nvkvm/kayfabe_shim.h`
@@ -801,5 +849,196 @@ pub unsafe extern "C" fn kayfabe_shim_audit(
     // precondition. `KayfabeAudit` is `Copy` and owns nothing, so the write cannot leak or drop
     // anything the C would then have to reclaim.
     unsafe { out.write(shim.audit()) };
+    Status::Ok.code()
+}
+
+// =====================================================================================
+// The register plane (stage Q4) — a SECOND handle with its own lifetime
+// =====================================================================================
+
+/// Borrow the register plane behind a handle.
+///
+/// Safe to call for the same reason [`borrow`] is: the precondition is stated on every
+/// entry point, all of which are `unsafe`.
+fn borrow_regs<'a>(handle: *mut c_void) -> Option<&'a Regs> {
+    if handle.is_null() {
+        return None;
+    }
+    // SAFETY: non-null was just established. That the address is a live `Box<Regs>` this
+    // crate created is the documented precondition of every entry point below; the C shim
+    // discharges it by storing the handle in the device's own state and clearing it in the
+    // same call that reclaims it. The borrow is immutable and `Regs` is `Sync`, so the
+    // concurrent borrows a multi-vCPU machine produces are sound.
+    Some(unsafe { &*handle.cast::<Regs>() })
+}
+
+/// The identity a chip's device claims. `device_id` of 0 selects the table's default row.
+///
+/// # Safety
+/// `out` must address a writable, correctly aligned [`KayfabeChipIdentity`]; the message
+/// out-parameters must be writable or empty.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_chip_identity(
+    device_id: u16,
+    out: *mut KayfabeChipIdentity,
+    out_msg: *mut *const u8,
+    out_msg_len: *mut u64,
+) -> i32 {
+    let msg = MsgOut {
+        msg: out_msg,
+        len: out_msg_len,
+    };
+    if out.is_null() {
+        msg.set("the shim asked for a chip identity with nowhere to put it");
+        return Status::Malformed.code();
+    }
+    match crate::shim::chip_identity(device_id) {
+        Ok(id) => {
+            // SAFETY: non-null established; writability and alignment are this function's
+            // documented precondition, discharged by the C shim passing the address of one
+            // of its own stack locals. The structure is `Copy` and owns nothing, so the
+            // write cannot leak or drop anything the C would have to reclaim.
+            unsafe { out.write(id) };
+            Status::Ok.code()
+        }
+        Err((s, m)) => {
+            msg.set(m);
+            s.code()
+        }
+    }
+}
+
+/// Create the register plane. `device_id` of 0 selects the table's default row.
+///
+/// # Safety
+/// `out_handle` must be writable; the message out-parameters must be writable or empty.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_regs_create(
+    device_id: u16,
+    out_handle: *mut *mut c_void,
+    out_msg: *mut *const u8,
+    out_msg_len: *mut u64,
+) -> i32 {
+    let msg = MsgOut {
+        msg: out_msg,
+        len: out_msg_len,
+    };
+    if out_handle.is_null() {
+        msg.set("the shim asked for a register plane with nowhere to put the handle");
+        return Status::Malformed.code();
+    }
+    match Regs::create(device_id) {
+        Ok(regs) => {
+            let handle = Box::into_raw(Box::new(regs)).cast::<c_void>();
+            // SAFETY: `out_handle` was proven non-null above, and that it is writable and
+            // aligned is this function's documented precondition. The value written is a
+            // freshly leaked allocation this crate owns until the shim returns it to
+            // `kayfabe_shim_regs_destroy`.
+            unsafe { out_handle.write(handle) };
+            msg.set("");
+            Status::Ok.code()
+        }
+        Err((s, m)) => {
+            msg.set(m);
+            s.code()
+        }
+    }
+}
+
+/// Destroy the register plane. An empty handle is accepted; passing the same live handle
+/// twice is a use-after-free and the shim must not do it.
+///
+/// # Safety
+/// `handle` must be empty, or one [`kayfabe_shim_regs_create`] returned and not yet passed
+/// here.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_regs_destroy(handle: *mut c_void) {
+    if handle.is_null() {
+        return;
+    }
+    // SAFETY: non-null established; that this addresses a live `Box<Regs>` this crate
+    // created and has not yet reclaimed is the documented precondition. This is the only
+    // place the allocation is freed.
+    drop(unsafe { Box::from_raw(handle.cast::<Regs>()) });
+}
+
+/// ★★★ **The hot path.** One trapped register read, one value.
+///
+/// An empty handle reads zero rather than trapping: a device whose plane failed to build
+/// has already said so loudly at realize, and crashing a guest afterwards adds nothing.
+///
+/// # Safety
+/// `handle` must be empty, or one [`kayfabe_shim_regs_create`] returned and not yet
+/// destroyed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_regs_read(
+    handle: *mut c_void,
+    bar: u32,
+    off: u64,
+    size: u32,
+) -> u64 {
+    match borrow_regs(handle) {
+        None => 0,
+        Some(regs) => regs.read(bar, off, size),
+    }
+}
+
+/// One trapped register write. `out` may be empty if the caller does not care.
+///
+/// # Safety
+/// `handle` as [`kayfabe_shim_regs_read`]; `out` must be writable and correctly aligned, or
+/// empty.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_regs_write(
+    handle: *mut c_void,
+    bar: u32,
+    off: u64,
+    size: u32,
+    val: u64,
+    out: *mut KayfabeRegWrite,
+) {
+    let Some(regs) = borrow_regs(handle) else {
+        return;
+    };
+    let o = KayfabeRegWrite::from_outcome(&regs.write(bar, off, size, val));
+    if out.is_null() {
+        return;
+    }
+    // SAFETY: non-null established; writability and alignment are this function's
+    // documented precondition. The structure is `Copy`; its one pointer addresses this
+    // archive's read-only data and has `'static` lifetime, so the C may hold it
+    // indefinitely and nothing dangles when this returns.
+    unsafe { out.write(o) };
+}
+
+/// Power-on reset: rebuild the emulated GSP's state machine.
+///
+/// # Safety
+/// `handle` as [`kayfabe_shim_regs_read`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_regs_reset(handle: *mut c_void) {
+    if let Some(regs) = borrow_regs(handle) {
+        regs.reset();
+    }
+}
+
+/// Copy the register plane's counters out.
+///
+/// # Safety
+/// `handle` as [`kayfabe_shim_regs_read`]; `out` must be writable and correctly aligned.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_regs_audit(
+    handle: *mut c_void,
+    out: *mut KayfabeRegAudit,
+) -> i32 {
+    if out.is_null() {
+        return Status::Malformed.code();
+    }
+    let Some(regs) = borrow_regs(handle) else {
+        return Status::Malformed.code();
+    };
+    // SAFETY: non-null established; writability and alignment are this function's
+    // documented precondition. `KayfabeRegAudit` is `Copy` and owns nothing.
+    unsafe { out.write(regs.audit()) };
     Status::Ok.code()
 }

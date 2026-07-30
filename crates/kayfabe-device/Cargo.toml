@@ -1,0 +1,24 @@
+[package]
+name = "kayfabe-device"
+description = "Axis-B: the emulated device's CHIP TABLE and its register plane. One row per GPU generation carries the PCI identity, the register-map constructor and the chip-adjacent windows; the plane routes a trapped BAR access into `kayfabe-gsp`'s boot FSM. Not a logic crate: this is where a generation's offsets are ALLOWED to live."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+kayfabe-util.workspace = true
+# The Axis-B seam the register maps plug into (`GspModel`, `GspReg`, `GspObservation`).
+kayfabe-arch.workspace = true
+# Axis A: the driver-version wire tables, the RPC function ids and the synthetic-VBIOS
+# generator. The chip row names a PCI device id; `kayfabe_abi::vbios` owns what that id
+# MEANS, so the ROM this device serves and the identity it claims cannot disagree.
+kayfabe-abi.workspace = true
+# The faked GSP the register plane drives.
+kayfabe-gsp.workspace = true
+# `Faulted::fault_tag` — how a `GspFault` becomes a `&'static str` a C shell can print
+# without this crate inventing a second name for every variant.
+kayfabe-trace.workspace = true
+
+[lints]
+workspace = true

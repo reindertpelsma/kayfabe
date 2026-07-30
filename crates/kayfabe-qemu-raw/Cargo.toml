@@ -14,6 +14,11 @@ crate-type = ["rlib", "staticlib"]
 [dependencies]
 kayfabe-vmm.workspace = true
 kayfabe-vmm-qemu.workspace = true
+# Stage Q4: the chip table and the register plane. ★ This is the crossing the device's
+# MMIO path was missing — the archive was already linked in, and nothing routed into it.
+kayfabe-device.workspace = true
+# The guest driver version the register plane answers as (`shim::GUEST_DRIVER`).
+kayfabe-abi.workspace = true
 
 # ★ DELIBERATELY NOT `[lints] workspace = true` — the SECOND crate to omit it, and the
 # first one added since the rule was written. `l2_qemu_adapter.md` §2.2 / decision Q2:

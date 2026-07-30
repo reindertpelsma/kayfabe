@@ -1,0 +1,398 @@
+//! ★★★ **"Adding a GPU generation is a table row" — proved by doing it.**
+//!
+//! The claim is made in three places in this repository's prose and, before this file, was
+//! checked nowhere. A claim about *what an edit costs* cannot be checked by reading the
+//! code that exists; it is checked by making the edit and seeing what had to change.
+//!
+//! So this file declares a **second chip** — a register map that is deliberately not GA10x,
+//! at offsets GA10x does not use, with its own silicon constants — and drives the **same**
+//! [`kayfabe_device::RegPlane`] through it. Nothing in `kayfabe-gsp`, `kayfabe-arch` or
+//! `kayfabe-device::plane` is touched to make that work, and the compiler is what says so:
+//! if the plane had a GA10x-shaped assumption in it, this file would not build or would not
+//! pass.
+//!
+//! ★ The second chip's identity is a **real** row of
+//! [`kayfabe_abi::vbios::VBIOS_PROFILES`], because the identity and the ROM are keyed on one
+//! device id on purpose — a made-up id would exercise the refusal instead of the path.
+
+use kayfabe_arch::gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
+use kayfabe_device::plane::ReadOutcome;
+use kayfabe_device::{BootReg, ChipProfile, RegPlane, RomWindow, abi};
+
+// ── the second chip's register map: same trait, different numbers ────────────────────
+
+/// Not a real chip. Every offset is chosen to be one GA10x does **not** use, so a plane
+/// that quietly reached for the GA10x map instead of this one is a failing assertion rather
+/// than a coincidence.
+#[derive(Debug, Clone, Copy, Default)]
+struct OtherGspModel;
+
+/// The falcon control register, at an offset the GA10x map has no meaning for.
+const OTHER_CPUCTL: u64 = 0x0090_0000;
+/// The boot-progress register.
+const OTHER_PROGRESS: u64 = 0x0090_0004;
+/// This model's "halted" encoding — a different bit from GA10x's, on purpose.
+const OTHER_HALTED: u64 = 0x0000_0001;
+/// This model's "boot complete" encoding.
+const OTHER_COMPLETE: u64 = 0x0000_ABCD;
+
+impl GspModel for OtherGspModel {
+    fn decode_reg(&self, bar: u8, off: u64) -> Option<GspReg> {
+        if bar != 0 {
+            return None;
+        }
+        match off {
+            OTHER_CPUCTL => Some(GspReg::GspFalconCpuctl),
+            OTHER_PROGRESS => Some(GspReg::GfwBootProgress),
+            _ => None,
+        }
+    }
+    fn is_startcpu(&self, value: u64) -> bool {
+        value == 0xFF
+    }
+    fn is_booter_unload(&self, sec2_mailbox0: u32) -> bool {
+        sec2_mailbox0 == 0xDEAD
+    }
+    fn is_swgen0_clear(&self, value: u64) -> bool {
+        value == 1
+    }
+    fn encode(&self, reg: GspReg, _obs: &GspObservation) -> Option<u64> {
+        match reg {
+            GspReg::GspFalconCpuctl => Some(OTHER_HALTED),
+            GspReg::GfwBootProgress => Some(OTHER_COMPLETE),
+            _ => None,
+        }
+    }
+    fn libos_region_layout(&self) -> LibosRegionLayout {
+        LibosRegionLayout {
+            entry_stride: 32,
+            id_offset: 0,
+            pa_offset: 8,
+            size_offset: 16,
+            max_entries: 16,
+            rmargs_id: 0x1234,
+        }
+    }
+}
+
+/// This chip's silicon constants — a different offset and a different value from GA106's.
+static OTHER_BOOT_REGS: &[BootReg] = &[BootReg {
+    off: 0x0000_0100,
+    value: 0x5555_AAAA,
+    name: "OTHER_CHIP_ID",
+}];
+
+/// ★ **The row.** This is the whole cost of the second chip, and it is data.
+static OTHER: ChipProfile = ChipProfile {
+    name: "OTHER (test-only)",
+    // A real VBIOS row's device id: identity and ROM are keyed together on purpose.
+    pci_device_id: 0x2504,
+    pci_revision: 0x07,
+    pci_subsystem_vendor_id: 0xAAAA,
+    pci_subsystem_id: 0xBBBB,
+    regs_aperture_len: 32 << 20,
+    boot_regs: OTHER_BOOT_REGS,
+    // A different window from GA10x's, at a different base.
+    rom_window: RomWindow {
+        base: 0x0100_0000,
+        len: 0x0010_0000,
+    },
+    vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
+    msix_vectors: 3,
+    gsp_model: || Box::new(OtherGspModel),
+};
+
+fn abi() -> kayfabe_gsp::GspAbi {
+    abi::gsp_abi_for(kayfabe_abi::versions::BENCH_DRIVER).expect("the bench driver has a table")
+}
+
+#[test]
+fn a_second_chip_is_a_table_row_and_the_plane_serves_it_unchanged() {
+    let plane = RegPlane::new(&OTHER, abi()).expect("the second chip's row is servable");
+
+    // Its OWN falcon register answers its OWN halted encoding.
+    assert_eq!(
+        plane.read(0, OTHER_CPUCTL, 4),
+        ReadOutcome::Gsp(OTHER_HALTED),
+        "the plane must serve the chip's own register map"
+    );
+    assert_eq!(
+        plane.read(0, OTHER_PROGRESS, 4),
+        ReadOutcome::Gsp(OTHER_COMPLETE)
+    );
+    // Its own silicon constant.
+    assert_eq!(plane.read(0, 0x100, 4), ReadOutcome::BootReg(0x5555_AAAA));
+
+    // ★★ THE BITE. GA10x's falcon register is 0x110100 and its progress register is
+    // 0x118234. On this chip those are offsets nobody owns — so if the plane had reached
+    // for the GA10x map (or for any map other than this row's), these would answer.
+    assert_eq!(
+        plane.read(0, 0x0011_0100, 4),
+        ReadOutcome::Unclaimed,
+        "GA10x's falcon offset must mean nothing on a chip whose row does not name it"
+    );
+    assert_eq!(plane.read(0, 0x0011_8234, 4), ReadOutcome::Unclaimed);
+    // GA106's chip-identity register, likewise.
+    assert_eq!(plane.read(0, 0x0000_0000, 4), ReadOutcome::Unclaimed);
+}
+
+#[test]
+fn the_second_chips_rom_window_is_its_own() {
+    let plane = RegPlane::new(&OTHER, abi()).expect("servable");
+    // The PCI expansion-ROM signature, at THIS chip's window base.
+    assert_eq!(plane.read(0, 0x0100_0000, 2), ReadOutcome::Rom(0xAA55));
+    // And nothing at GA10x's window base.
+    assert_eq!(plane.read(0, 0x0030_0000, 2), ReadOutcome::Unclaimed);
+}
+
+#[test]
+fn the_shipped_table_answers_the_registers_the_bench_driver_polls() {
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi()).expect("the shipped row is servable");
+
+    // ★★★ THE ACCEPTANCE REGISTER. `NV_PGSP` (0x110000) + `NV_PFALCON_FALCON_CPUCTL`
+    // (0x100) is what `kflcnWaitForHalt_TU102` polls, and it is where a stock 580.159.04
+    // driver spun until it timed out for as long as this device answered a constant zero.
+    // `NV_PFALCON_FALCON_CPUCTL_HALTED_TRUE` is bit 4.
+    assert_eq!(
+        plane.read(0, 0x0011_0100, 4),
+        ReadOutcome::Gsp(0x10),
+        "the GSP falcon must report HALTED"
+    );
+    // The next two the driver reads, in `gpuWaitForGfwBootComplete_TU102`.
+    assert_eq!(plane.read(0, 0x0011_8234, 4), ReadOutcome::Gsp(0xFF));
+    assert_eq!(plane.read(0, 0x0011_8128, 4), ReadOutcome::Gsp(0xFFFF_FFFF));
+    // The chip identity the HAL selects on.
+    assert_eq!(
+        plane.read(0, 0x0000_0000, 4),
+        ReadOutcome::BootReg(0x1760_00A1)
+    );
+    assert_eq!(
+        plane.read(0, 0x0000_0A00, 4),
+        ReadOutcome::BootReg(0x176A_1000)
+    );
+}
+
+#[test]
+fn an_access_width_narrows_the_answer() {
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi()).expect("servable");
+    // 0x176000A1 read a byte at a time from the register's own offset is the LOW byte: the
+    // plane masks, it does not shift, because a sub-word read of a register is the low part
+    // of that register and the hypervisor addresses the parts separately.
+    assert_eq!(plane.read(0, 0, 1).value(), 0xA1);
+    assert_eq!(plane.read(0, 0, 2).value(), 0x00A1);
+    assert_eq!(plane.read(0, 0, 4).value(), 0x1760_00A1);
+}
+
+#[test]
+fn the_counters_separate_the_four_sources() {
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi()).expect("servable");
+    plane.read(0, 0x0000_0000, 4); // chip constant
+    plane.read(0, 0x0030_0000, 2); // rom
+    plane.read(0, 0x0011_0100, 4); // gsp
+    plane.read(0, 0x0055_5555, 4); // nobody
+    let c = plane.counters();
+    assert_eq!(c.reads, 4);
+    assert_eq!(c.boot_reg_reads, 1);
+    assert_eq!(c.rom_reads, 1);
+    assert_eq!(c.gsp_reads, 1);
+    assert_eq!(c.unclaimed_reads, 1);
+    assert_eq!(
+        plane.unclaimed_sample(),
+        vec![0x0055_5555],
+        "the offsets nobody owns must be nameable, not merely countable"
+    );
+}
+
+#[test]
+fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
+    // ★★ THE BITE for `assert_disjoint`. A ROM window placed over GA10x's own GSP block
+    // means every falcon register would read as ROM bytes forever and the boot FSM would
+    // simply never be consulted — a failure with no symptom on this side.
+    static OVERLAPPING: ChipProfile = ChipProfile {
+        name: "OVERLAPPING (test-only)",
+        pci_device_id: 0x2504,
+        pci_revision: 0,
+        pci_subsystem_vendor_id: 0,
+        pci_subsystem_id: 0,
+        regs_aperture_len: 16 << 20,
+        boot_regs: &[],
+        // Straddles `NV_PGSP` at 0x110000.
+        rom_window: RomWindow {
+            base: 0x0010_0000,
+            len: 0x0010_0000,
+        },
+        vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
+        msix_vectors: 1,
+        gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
+    };
+    let e = RegPlane::new(&OVERLAPPING, abi()).expect_err("must refuse");
+    assert!(
+        matches!(e, kayfabe_device::ChipError::OverlappingSources { .. }),
+        "expected an overlap refusal, got {e:?}"
+    );
+    assert!(format!("{e}").contains("never be reached"));
+}
+
+#[test]
+fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
+    static PAST_THE_END: ChipProfile = ChipProfile {
+        name: "PAST_THE_END (test-only)",
+        pci_device_id: 0x2504,
+        pci_revision: 0,
+        pci_subsystem_vendor_id: 0,
+        pci_subsystem_id: 0,
+        // One page. The GA10x ROM window at 0x300000 cannot fit.
+        regs_aperture_len: 0x1000,
+        boot_regs: &[],
+        rom_window: RomWindow {
+            base: 0x0030_0000,
+            len: 0x0010_0000,
+        },
+        vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
+        msix_vectors: 1,
+        gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
+    };
+    let e = RegPlane::new(&PAST_THE_END, abi()).expect_err("must refuse");
+    assert!(
+        matches!(e, kayfabe_device::ChipError::OutsideAperture { .. }),
+        "expected an aperture refusal, got {e:?}"
+    );
+}
+
+#[test]
+fn a_device_id_the_table_does_not_carry_is_a_named_refusal_and_not_a_neighbour() {
+    let e = kayfabe_device::chip_for_device_id(0x1234).expect_err("must refuse");
+    assert!(matches!(
+        e,
+        kayfabe_device::ChipError::NoChipForDevice { device_id: 0x1234 }
+    ));
+}
+
+#[test]
+fn the_identity_comes_from_the_rom_row_and_not_from_the_chip_row() {
+    // ★★ The whole point of keying both tables on one device id. The chip row does NOT
+    // carry a vendor id or a class code; if it did, the two could disagree.
+    let chip = kayfabe_device::default_chip();
+    let id = kayfabe_device::identity_for(chip).expect("the row has a ROM behind it");
+    let vb = kayfabe_abi::vbios::profile_for_device_id(chip.pci_device_id).expect("a ROM row");
+    assert_eq!(id.vendor_id, vb.pci_vendor_id);
+    assert_eq!(id.device_id, vb.pci_device_id);
+    assert_eq!(
+        id.class_code,
+        u32::from(vb.pci_class_code[2]) << 16
+            | u32::from(vb.pci_class_code[1]) << 8
+            | u32::from(vb.pci_class_code[0])
+    );
+    // 0x030000 — VGA-compatible display controller, which is what `nv_pci_table` matches.
+    assert_eq!(id.class_code, 0x0003_0000);
+    assert_eq!(id.vendor_id, 0x10DE);
+}
+
+#[test]
+fn the_rom_the_plane_serves_is_the_generator_s_own_output_byte_for_byte() {
+    // ★ Not "a ROM parses" — the same bytes. The device no longer loads an image from
+    // disk, so this is what says the guest reads what the generator produced.
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi()).expect("servable");
+    let vb = kayfabe_abi::vbios::profile_for_device_id(chip.pci_device_id).expect("a ROM row");
+    let expected = kayfabe_abi::vbios::build(vb, chip.vbios_wire).expect("buildable");
+    assert_eq!(plane.rom(), expected.as_slice());
+    assert!(!expected.is_empty());
+    for (i, want) in expected.iter().enumerate().take(4096) {
+        let got = plane.read(0, chip.rom_window.base + i as u64, 1).value();
+        assert_eq!(
+            got,
+            u64::from(*want),
+            "ROM byte {i} differs through the plane"
+        );
+    }
+}
+
+#[test]
+fn a_read_past_the_rom_image_is_zero_and_still_counts_as_the_rom_window() {
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi()).expect("servable");
+    let past = chip.rom_window.base + chip.rom_window.len - 4;
+    assert_eq!(plane.read(0, past, 4), ReadOutcome::Rom(0));
+}
+
+#[test]
+fn a_cold_doorbell_is_the_healthy_pre_bootstrap_ring_and_not_a_fault() {
+    // ★★ **I asserted the opposite first and the FSM was right.**
+    //
+    // This test originally required `NV_PGSP_QUEUE_HEAD(0)` (0x110c00) from `Cold` to
+    // refuse with `QueueNotBound`, on the reasoning that a doorbell with no queue behind it
+    // cannot mean anything. `GspFsm::doorbell` disagrees, with a citation: an unbound
+    // doorbell is the stale-binding attack signature ONLY from `Halted`, which is reached
+    // exactly by a teardown; from `Cold` it is the healthy 580 pre-bootstrap ring, and
+    // calling that a fault would put a false positive in the ledger on every boot.
+    //
+    // ★ The guest settled it. A stock 580.159.04 driver rings this register **twice, with
+    // zero, from cold** before it has published anything — visible in the bench's own
+    // register trace. Both arms read no guest RAM; only the name differs.
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi()).expect("servable");
+    let w = plane.write(0, 0x0011_0c00, 4, 0);
+    assert!(
+        w.claimed,
+        "the doorbell must be claimed by the register model"
+    );
+    assert_eq!(w.fault, None, "a cold ring is healthy, not a refusal");
+    assert_eq!(w.transitions, 1);
+    assert_eq!(plane.counters().faults, 0);
+}
+
+#[test]
+#[allow(non_snake_case)]
+fn reaching_guest_RAM_with_none_installed_is_a_NAMED_refusal_and_not_a_silent_zero() {
+    // ★★★ The stage-Q4 boundary, asserted rather than described. The register plane has no
+    // guest-RAM port yet; the first thing that genuinely needs one is the boot-args mailbox
+    // pair, whose completion sends the FSM to read the LibOS region array out of guest RAM.
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi()).expect("servable");
+
+    // `NV_PFALCON_FALCON_CPUCTL_STARTCPU` — bit 1 — on the GSP falcon: FWSEC has run.
+    plane.write(0, 0x0011_0100, 4, 0x2);
+    assert_eq!(plane.phase(), kayfabe_gsp::BootPhase::FwsecRan);
+
+    // The boot-args address, low half then high half (`kgspProgramLibosBootArgsAddr_TU102`
+    // writes them in that order). Completing the pair is what triggers the read.
+    plane.write(0, 0x0011_0040, 4, 0x1000);
+    let w = plane.write(0, 0x0011_0044, 4, 0);
+    assert!(w.claimed);
+    assert_eq!(
+        w.fault,
+        Some("GspFault::GuestRam"),
+        "reaching guest RAM with no port installed must name itself"
+    );
+    let c = plane.counters();
+    assert_eq!(c.faults, 1);
+    assert_eq!(
+        c.ram_refusals, 1,
+        "the RAM arm must be separately countable"
+    );
+
+    // ★ And the register surface keeps answering afterwards — §7-G8's per-message rule.
+    assert_eq!(plane.read(0, 0x0011_0100, 4), ReadOutcome::Gsp(0x10));
+    // The mailbox shadow still reads back what the guest wrote, as hardware would.
+    assert_eq!(plane.read(0, 0x0011_0040, 4), ReadOutcome::Gsp(0x1000));
+}
+
+#[test]
+fn a_reset_puts_the_emulated_gsp_back_to_cold_in_process() {
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi()).expect("servable");
+    assert_eq!(plane.phase(), kayfabe_gsp::BootPhase::Cold);
+    // `NV_PFALCON_FALCON_CPUCTL_STARTCPU` is bit 1; writing it to the GSP falcon starts it.
+    plane.write(0, 0x0011_0100, 4, 0x2);
+    assert_ne!(
+        plane.phase(),
+        kayfabe_gsp::BootPhase::Cold,
+        "STARTCPU must move the FSM, or this test is asserting nothing"
+    );
+    plane.device_reset();
+    assert_eq!(plane.phase(), kayfabe_gsp::BootPhase::Cold);
+}

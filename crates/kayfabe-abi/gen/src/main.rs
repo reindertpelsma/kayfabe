@@ -523,6 +523,18 @@ that codegen gives shapes and never protocol.",
                     "UNLOADING_GUEST_DRIVER",
                     "GSP_RM_ALLOC",
                     "GSP_RM_CONTROL",
+                    // ★ Added 2026-07-31 for the production `GspAbi` assembly
+                    // (`kayfabe_device::abi::FUNCTIONS`). These four were already
+                    // named by the GSP boot FSM's `FunctionCodes`, but only in a
+                    // test harness that transcribed the numbers by hand — which is
+                    // a second copy of an NVIDIA constant outside the Axis-A
+                    // quarantine. The list grows because the consumer grew, which
+                    // is the legitimate direction; shortening it is the one that
+                    // weakens a proof with no red test.
+                    "GET_GSP_STATIC_INFO",
+                    "CONTINUATION_RECORD",
+                    "GSP_SET_SYSTEM_INFO",
+                    "SET_REGISTRY",
                 ],
                 doc: "RPC function IDs (`rpc_global_enums.h`, `X(RM, NAME, id)`).",
             },

@@ -155,8 +155,20 @@ version = "0.1.0"
 dependencies = [
  "kayfabe-abi",
  "kayfabe-arch",
+ "kayfabe-device",
  "kayfabe-gsp",
  "kayfabe-mocks",
+ "kayfabe-trace",
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-device"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-gsp",
  "kayfabe-trace",
  "kayfabe-util",
 ]
@@ -241,6 +253,8 @@ dependencies = [
 name = "kayfabe-qemu-raw"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-abi",
+ "kayfabe-device",
  "kayfabe-vmm",
  "kayfabe-vmm-qemu",
 ]
@@ -292,6 +306,7 @@ dependencies = [
  "kayfabe-completion",
  "kayfabe-core",
  "kayfabe-crec",
+ "kayfabe-device",
  "kayfabe-fwd",
  "kayfabe-gsp",
  "kayfabe-isolate",

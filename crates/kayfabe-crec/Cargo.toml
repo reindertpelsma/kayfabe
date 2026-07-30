@@ -21,6 +21,9 @@ kayfabe-trace.workspace = true
 # The non-GSP half of `Arch`. The GA10x model composes onto it exactly the way the
 # conformance suite's `GspArch` composes onto it: zero edits to either.
 kayfabe-mocks.workspace = true
+# ★ Axis B moved out on 2026-07-31: the GA10x register map now lives in a crate a shipped
+# archive can depend on, and this crate re-exports it. One map, two consumers.
+kayfabe-device.workspace = true
 
 [lints]
 workspace = true
