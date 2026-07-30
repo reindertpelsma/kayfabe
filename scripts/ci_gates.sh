@@ -61,7 +61,11 @@ want_all=0
 # reassuring. `tests/tests/gate_runner_floor.rs` asserts from outside the script that both
 # literals still exist and are still compared before the loop, so deleting the floor turns
 # the suite red rather than turning this script quiet.
-GATE_STEPS_ALL_MIN=17
+# ★ 17 -> 18: the VBIOS-ORACLE reached-count step (the tests that run NVIDIA's own VBIOS
+# parser over our generated image). It READS /tmp/kayfabe-test.log, so it is a consumer
+# step and is deferred out of the default mode by the extractor's own rule — which is why
+# only the `--all` literal moves and `GATE_STEPS_FAST_MIN` stays where it was.
+GATE_STEPS_ALL_MIN=18
 GATE_STEPS_FAST_MIN=10
 
 deferred_note=$(mktemp)

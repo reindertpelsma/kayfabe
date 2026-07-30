@@ -23,7 +23,7 @@ use kayfabe_arch::ids::{ClassId, ControlCmd, VChid};
 use kayfabe_arch::{Arch, DoorbellTarget, GmmuFmt, ObjectKind, PushbufferAbi, UserdModel};
 use kayfabe_mocks::MockArch;
 
-pub use kayfabe_device::ga10x::{Ga10xGspModel, RMARGS_ID};
+pub use kayfabe_device::ga10x::{FB_SIZE_MB, Ga10xGspModel, RMARGS_ID, USABLE_FB_SIZE_IN_MB_ADDR};
 
 /// An [`Arch`] that is `MockArch` in every respect except that its GSP is [`Ga10xGspModel`].
 ///

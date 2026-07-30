@@ -125,14 +125,90 @@ const IRQSTAT_SWGEN0: u64 = 1 << 6;
 /// which is why `GspModel` asks for a predicate.
 const SEC2_BOOTER_UNLOAD: u32 = 0xff;
 
-/// The WPR2 region the emulated GPU advertises once FWSEC has run. A **chip parameter**
-/// the C chose for a 12 GiB part, not a protocol constant — the guest's own test is
-/// `_VAL != 0` on the HI register (`kgspIsWpr2Up_TU102`,
-/// `ogkm-580: kernel_gsp_tu102.c:1251-1261`), so only zero-vs-nonzero is load-bearing.
-/// (`C: src/qemu/mode2_regs_ga10x.h`, `NVKVM_WPR2_LO_VAL`/`NVKVM_WPR2_HI_VAL`.)
-const WPR2_LO_UP: u64 = 0x02FF_E000;
-/// See [`WPR2_LO_UP`].
-const WPR2_HI_UP: u64 = 0x02FF_F000;
+/// `NV_USABLE_FB_SIZE_IN_MB` = `NV_PGC6_AON_SECURE_SCRATCH_GROUP_42`
+/// (`ogkm-580: src/common/inc/swref/published/ampere/ga102/dev_gc6_island_addendum.h:33`;
+/// ★ Ampere+ only — the Turing headers do not publish it).
+///
+/// ⚠ **This model does not decode it, on purpose.** `GspModel`'s stated rule is that a
+/// register belongs to the GSP plane only if its served value is a function of the boot
+/// FSM's state, and this one is a devinit constant. It is recorded here because it is the
+/// *input* to [`WPR2_LO_UP`] below, and whichever plane ends up serving it
+/// (`mode2_gsp_port_plan.md` §11-O1) must use [`FB_SIZE_MB`] and not a second literal —
+/// the C artifact keeps exactly one (`C: src/qemu/nvkvm_gpu_emul.c:1546` answers this
+/// address with `NVKVM_FB_SIZE_MB`, the same constant its WPR2 values were sized from).
+///
+/// ★ Measured 2026-07-31: the C's `cap1_coldboot_hermetic` capture contains **exactly 3**
+/// reads of this address. Teaching this model to decode it moves every positional golden
+/// in `tests/cap1_differential.rs` by +3, which is how the count above was established.
+pub const USABLE_FB_SIZE_IN_MB_ADDR: u64 = 0x0011_83A4;
+
+// ── the WPR2 layout, DERIVED from the advertised FB size ──────────────────────────
+//
+// ★★★ CORRECTED 2026-07-31. These two used to be hand-written constants documented as
+// "only zero-vs-nonzero is load-bearing", citing `kgspIsWpr2Up_TU102`. That reader only
+// looks at the HI register. The LO register's reader is `kgspExecuteFwsec_TU102`
+// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:514-524`)
+// and it is an **exact compare** against the driver's own arithmetic:
+//
+//     if (wpr2LoVal != (NvU32)(pPreparedCmd->frtsOffset >> NV_PFB_PRI_MMU_WPR2_ADDR_LO_ALIGNMENT))
+//         "failed to execute FWSEC for FRTS: WPR2 initialized at an unexpected location"
+//
+// So the value is a *function of `NV_USABLE_FB_SIZE_IN_MB`*, and writing it as a literal
+// couples two registers with nothing to hold them together. It is now computed by the same
+// chain the driver walks, so changing the FB size cannot desynchronise them.
+// `docs/design/gsp_boot_gate_spec.md` §1 gates G5.2/G6.3b carry the full derivation.
+
+/// The usable framebuffer this emulated GA10x advertises, in MiB.
+///
+/// ★ **A chip/board parameter, and the only free variable in the WPR2 layout.** 12 GiB
+/// matches the C artifact's `NVKVM_FB_SIZE_MB` (`C: src/qemu/mode2_regs_ga10x.h:62`),
+/// which is the RTX 3060 the oracle ran on.
+pub const FB_SIZE_MB: u64 = 12288;
+
+/// `DRF_SIZE(NV_PRAMIN)` — the VGA workspace the driver reserves at the top of FB.
+/// `NV_PRAMIN` is `0x007FFFFF:0x00700000`
+/// (`ogkm-580: src/common/inc/swref/published/turing/tu102/dev_ram.h:26`), so 1 MiB.
+const PRAMIN_SIZE: u64 = 0x0010_0000;
+/// `kgspGetFrtsSize_TU102` — 1 MiB on Turing through Ada
+/// (`ogkm-580: .../gsp/arch/turing/kernel_gsp_frts_tu102.c:49-58`; GA100 and GB10B are 0).
+const FRTS_SIZE: u64 = 0x0010_0000;
+/// The 128 KiB alignment `kgspPopulateWprMeta_TU102` rounds the WPR end down to
+/// (`ogkm-580: kernel_gsp_tu102.c:776`, literal `0x20000`).
+const WPR_ALIGNMENT: u64 = 0x2_0000;
+/// `NV_PFB_PRI_MMU_WPR2_ADDR_{LO,HI}_ALIGNMENT` — the address is `_VAL << 12`
+/// (`ogkm-580: src/common/inc/swref/published/turing/tu102/dev_fb.h:36, 39`).
+const WPR2_ADDR_ALIGNMENT: u32 = 0xc;
+/// `NV_PFB_PRI_MMU_WPR2_ADDR_{LO,HI}_VAL` is bits `31:4` (`dev_fb.h:35, 38`).
+const WPR2_VAL_SHIFT: u32 = 4;
+
+/// `gspFwWprEnd` — the top of the WPR2 region, as `kgspPopulateWprMeta_TU102` computes it
+/// (`ogkm-580: kernel_gsp_tu102.c:761, 776`). The WPR end margin is zero unless a regkey
+/// sets it (`kgspGetWprEndMargin_IMPL`, `ogkm-580: kernel_gsp.c:5637`), and no MMU lock is
+/// advertised, so `vbiosReservedOffset` is the VGA workspace offset.
+const fn gsp_fw_wpr_end() -> u64 {
+    let fb_size = FB_SIZE_MB << 20;
+    let vga_workspace_offset = fb_size - PRAMIN_SIZE;
+    // NV_ALIGN_DOWN64(x, WPR_ALIGNMENT)
+    vga_workspace_offset & !(WPR_ALIGNMENT - 1)
+}
+
+/// `frtsOffset` (`ogkm-580: kernel_gsp_tu102.c:779`) — the address the driver expects to
+/// read back out of `NV_PFB_PRI_MMU_WPR2_ADDR_LO`.
+const fn frts_offset() -> u64 {
+    gsp_fw_wpr_end() - FRTS_SIZE
+}
+
+/// Pack a byte address into the `_VAL` field of a WPR2 address register.
+const fn wpr2_reg(addr: u64) -> u64 {
+    (addr >> WPR2_ADDR_ALIGNMENT) << WPR2_VAL_SHIFT
+}
+
+/// `NV_PFB_PRI_MMU_WPR2_ADDR_LO` once FWSEC has run. **Exact-compared** at G6.3b.
+const WPR2_LO_UP: u64 = wpr2_reg(frts_offset());
+/// `NV_PFB_PRI_MMU_WPR2_ADDR_HI` once FWSEC has run. Only `!= 0` is read
+/// (`kgspIsWpr2Up_TU102`, `ogkm-580: kernel_gsp_tu102.c:1251-1261`), but it is derived
+/// anyway so the pair describes one region rather than two independent literals.
+const WPR2_HI_UP: u64 = wpr2_reg(gsp_fw_wpr_end());
 
 /// The teardown sentinel `MAILBOX0` must report once fn-47 has been serviced.
 ///
