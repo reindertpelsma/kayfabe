@@ -379,3 +379,108 @@ observation and the guest's reclaim.
 Everything else has an answer good enough to build from. ★ Three of the eight resolutions
 overturned a belief held by *both* parties, and two overturned a design document — which is the
 argument for verifying against the artifact before designing.
+
+---
+
+## 10. ★★★ The data-plane redesign — what was BUILT (2026-07-30), and where C/D stand
+
+`#102` + `#93` + the working-set half of the address table are **one change**. Two of its
+four stages are landed on `master`; this section records the state of the other two so the
+next pass executes rather than re-derives.
+
+### Landed
+
+| stage | commit | what |
+|---|---|---|
+| **A — address identity (`#102`)** | `705175b` | the mapping port takes `at: GpuVa`; the real backend sets `DMA_OFFSET_FIXED_TRUE`; `Worker::execute` refuses a downgraded placement; `AddressTable::bind` refuses a host-backed binding whose host VA is not its own VA |
+| **B — the operand split** | `379f712` | classify on the **resolved physical** destination, not on `dst_is_virtual`; device-global page-table-page ownership on `Spine`; the tautological self-bind and the hardcoded `Vidmem` deleted |
+
+★★ **Seven suite sites asserted that two processes' identical guest VAs must get
+DISTINCT host VAs.** That is a wrong reading of #14 and it is the exact condition under
+which forwarding cannot work. All corrected to per-address-**space** separation. One of
+them (`multi_gpu::hash14_across_gpu`) had the conflation written into its own failure
+message: *"must land in disjoint host VASes"* while asserting distinct **addresses**.
+
+★ Address identity also removed a fact the suite was leaning on without saying so: the
+mock minted host VAs out of `(proc, GPU)` bit lanes, and **six** assertions read
+provenance off those bits (`l1_mean::host_va_lane`, `multi_gpu`'s `va >> 47 & 1`). The
+host VA is the guest's number now and carries no provenance. `Published` gained
+`memory: HostHandle`, whose `.isolate()` is `(Proc, GpuId)` **by type**.
+
+### ★★★ Stage C — the decode — IS BLOCKED, and §2's open item is the blocker, confirmed
+
+§2 left one thing open: *"where the destination-page content comes from if the core does
+not emulate the copy."* **Measured on the tree, 2026-07-30: `kayfabe_mmu::walker::FbRead`
+has ZERO implementors, and the emulated framebuffer is not modelled in this core at all.**
+The C got the content free because QEMU performed the copy itself and could re-read the
+destination page afterwards (`C: :6414`). We deliberately do not perform the copy — that
+is the whole of stage B — so there is nothing to re-read.
+
+So the decode splits cleanly, and only one half is buildable now:
+
+- **Buildable today, behind the existing seam:** the GMMU-VER2 decoder as pure logic —
+  `decode_page(fmt, fb: &dyn FbRead, page, {level, vabase}) → children + leaves`, driven by
+  `GmmuFmt::decode_entry`, property-tested against synthetic FB images. It needs one Axis-B
+  addition, `GmmuFmt::level_shift(level)`, because the VA bits a level strides are format,
+  not core (the C's table is `{47,512},{38,512},{29,512},{21,256},{12,512},{16,32}` at
+  `C: :8706-8708`). Reconstruct the VA from the page's **recorded level metadata**, never
+  from a root walk — *"the guest fills a leaf page and links it under the root a separate
+  push later"* (`C: :8681-8690`).
+- **Not buildable until the FB shadow lands:** the production content source. A decoder
+  wired to a seam nothing implements is not a stage, it is a stub with tests.
+
+⇒ **Sequence the FB shadow before, or with, the decode.** Do not land the decoder alone.
+
+Three things stage C must carry when it does land, all already established:
+
+1. **Latch at write, decode at the guest's commit point** — the semaphore release. Decoding
+   per write **livelocked on the bench** (`C: :8686-8690`); the latch half is built (it is
+   `PtWrite`), the release trigger is not.
+2. **The GA10x 512 MiB PD1-leaf case.** Detection is `(pde & 1) && level == 2`, aperture in
+   bits `[2:1]` with **PTE** encoding (`0=VID, 2/3=SYS` — note this differs from PDE
+   encoding, where vidmem is `1`), offset mask `va & 0x1FFF_FFFF` (`C: :4949`). The C
+   handles it at **three** sites and they must stay consistent: `walk_pdb_root` **resolves**
+   it (`:4949`), while `pt_enum` (`:8649`) and `cpt_decode_page` (`:8733`) **skip** it —
+   never descend, never back. ★ Policy note: the skip is because the only known producer is
+   the whole-FB identity alias, not because a 512 MiB leaf is invalid. The walker should
+   **decode faithfully** and let the binding site apply the policy; a walker that silently
+   drops a leaf size is the #13 round-4 gap.
+3. **Apply strictly once, in submission order.**
+
+★ **Acceptance criterion, and it is already written down as a marker in the code:**
+`cb13_pt_write_capture_is_direct_no_root_reachability_needed` currently does **not** cover
+the literal *"orphan leaf filled in push 1, linked under the root in push 2"* case, because
+a leaf page only becomes tracked once a PDE pointing at it is decoded. Its doc comment says
+so. Restoring that case is how the decode stage proves itself.
+
+### Stage D — `#93` promote-ctx — unblocked in principle, two named costs
+
+`gpu_promote_ctx.md` §4/§5 are still accurate and neither is dissolved by stages A/B:
+
+- **§4** the codegen cannot express `promoteEntry[16]` (a fixed array of a nested struct).
+  The decomposition in §4.1 stands: **generate the entry** (all scalars, full pinning
+  stack), **hand-transcribe the 48-byte header** into `transcribed.rs`, index by stride.
+  Knock-ons are three hardcoded counts in `oracle_layout.rs` and two negative assertions
+  that flip.
+- **§5** the consumer is a new seam: `route_control` returns the Case-2 ack **under the read
+  lock, before any `Proc` is touched**, and binding needs `&mut Proc` plus a resolved
+  `(GpuId, Pdb)` from a guest `hObject` that is not in scope there.
+
+★★ Stage B **supplies the missing half of §5's step 2**: `Spine::pt_page_owner` is the
+precedent for a device-global, projection-derived index that answers an ownership question
+across procs, and `SharedDevice::with_proc_mut` is the one-lock-at-a-time applying pass a
+Case-2 harvest needs. The lock-discipline objection is answered; the ABI cost is not.
+
+★★ And key it on the **address space, not the RM client**: measured on hardware, two
+concurrent processes **share one duplicated client**, so a client key aliases them — and
+the C's own table is not dup-edge aware (§4, §2). Carries **seven** C defects; see
+`c_bug_regression_matrix.md`. Notably an entry count clamped to **64** where the truth is
+**16** (`NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES`, identical at 580 and 610), reading
+560 bytes past the struct out of guest-writable memory. Do not port it.
+
+### ★ Explicitly NOT built, and it is not this bug's cause
+
+The **cross-channel fence** — blocking where a forwarded command acquires a semaphore a
+page-table channel releases. It is real and recorded. It attaches at
+`kayfabe_fwd::apply_pushbuffer`'s `SemRelease` arm, the same point the decode trigger
+attaches. It is a separate, later concern.
