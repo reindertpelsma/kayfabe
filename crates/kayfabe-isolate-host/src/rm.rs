@@ -59,7 +59,7 @@ use kayfabe_abi::generated::nvos::{
     Nvos47Parameters, Nvos54Parameters,
 };
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
-use kayfabe_isolate::{HostHandle, IsolateId, RmBackend, RmError};
+use kayfabe_isolate::{CeSubCopy, HostHandle, IsolateId, RmBackend, RmError};
 use kayfabe_linux_raw::{CharDevice, DevDir, Indirect, RawError, ioctl};
 use kayfabe_util::leafwitness;
 use kayfabe_vmm::SurfaceHandle;
@@ -754,6 +754,23 @@ impl RmBackend for HostRmBackend {
         // Not an ioctl at all: a doorbell is a store into a mapped BAR page. It cannot be
         // expressed on this rung, and expressing it as a no-op would make every submission
         // test pass while nothing ran.
+        Err(RmError::Other(NOT_ON_THIS_RUNG))
+    }
+
+    /// ★ NOT ON THIS RUNG, and for two different reasons depending on the arm — which
+    /// is why it is one refusal and not a half-built verb.
+    ///
+    /// [`kayfabe_isolate::CeExecutor::HostCe`] needs a GPFIFO ring, USERD in mapped
+    /// memory and a work-submit token — the same machinery `ring_doorbell` is refused
+    /// for on this rung. [`kayfabe_isolate::CeExecutor::Ours`] needs the isolate's
+    /// mapping of the fabricated aperture, which is the `FbRead` production
+    /// implementation deliberately left to the stage after this one
+    /// (`eight_blockers_resolved.md` §12.3).
+    ///
+    /// Returning `Ok(())` for a copy that moved no byte is precisely the
+    /// forged-completion failure `mode2_real_forward_not_fake` forbids, and it would be
+    /// invisible: the guest's next read is the only thing that would ever notice.
+    fn ce_copy(&mut self, _vas: HostHandle, _sub: CeSubCopy) -> Result<(), RmError> {
         Err(RmError::Other(NOT_ON_THIS_RUNG))
     }
 

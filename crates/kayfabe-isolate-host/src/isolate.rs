@@ -50,8 +50,8 @@
 use crate::proto::{Envelope, Reply, Request, WireError, engine_code, read_frame, write_frame};
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
-    CancelHandle, CancelReason, CancelSink, DEFAULT_POOL_WORKERS, HostHandle, Isolate,
-    IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
+    CancelHandle, CancelReason, CancelSink, CeExecutor, CeSource, CeSubCopy, DEFAULT_POOL_WORKERS,
+    HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_linux_raw::{ChildSpec, FdGrant, SandboxChild};
 use kayfabe_vmm::SurfaceHandle;
@@ -447,6 +447,24 @@ impl RmBackend for ProxyRmBackend {
 
     fn ring_doorbell(&mut self, host_token: u64) -> Result<(), RmError> {
         self.unit(Request::RingDoorbell { token: host_token })
+    }
+
+    fn ce_copy(&mut self, vas: HostHandle, sub: CeSubCopy) -> Result<(), RmError> {
+        let (src, src_is_const) = match sub.src {
+            CeSource::Address(a) => (a, 0u8),
+            CeSource::Constant(c) => (u64::from(c), 1u8),
+        };
+        self.unit(Request::CeCopy {
+            vas: vas.raw(),
+            dst: sub.dst,
+            src,
+            len: sub.len,
+            src_is_const,
+            by_ours: match sub.by {
+                CeExecutor::HostCe => 0,
+                CeExecutor::Ours => 1,
+            },
+        })
     }
 
     fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {

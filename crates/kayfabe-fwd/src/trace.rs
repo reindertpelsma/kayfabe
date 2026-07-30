@@ -41,6 +41,7 @@ impl Faulted for FwdFault {
             FwdFault::RetiredProc(_) => FaultTag("FwdFault::RetiredProc"),
             FwdFault::Condemned { .. } => FaultTag("FwdFault::Condemned"),
             FwdFault::NoVas(_) => FaultTag("FwdFault::NoVas"),
+            FwdFault::CeTooFragmented { .. } => FaultTag("FwdFault::CeTooFragmented"),
             FwdFault::UnknownPdb { .. } => FaultTag("FwdFault::UnknownPdb"),
             FwdFault::NoTarget { .. } => FaultTag("FwdFault::NoTarget"),
             // ★ Delegated, so an address fault's tag names WHICH address fault. A miss

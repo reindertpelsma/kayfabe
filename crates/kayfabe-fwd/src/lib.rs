@@ -80,6 +80,8 @@ use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_isolate::{
     CancelReason, ChannelHandles, HostHandle, RmError, VerbPlan, VerbReply, Worker, WorkerId,
 };
+#[doc(inline)]
+pub use kayfabe_isolate::{CeExecutor, CeSource, CeSubCopy};
 use kayfabe_mmu::AddressTable;
 use kayfabe_mmu::{AddressFault, Binding};
 use kayfabe_vmm::{FbMeta, IrqSpec, Present, PresentError, SurfaceHandle, Vmm, VmmError};
@@ -144,6 +146,17 @@ pub enum FwdFault {
     /// The channel is not bound to any declared VAS and system routing does not
     /// apply — refusing to guess an address space.
     NoVas(ChanId),
+    /// ★ A copy-engine request partitioned into more sub-copies than [`MAX_CE_SPANS`]
+    /// (`#102` stage C2). Guest-influenced on both axes — the request's length and the
+    /// address table's fragmentation — so it is bounded, and the bound is a LOUD refusal
+    /// rather than a truncation: a partition that stops early silently drops the tail of
+    /// a copy.
+    CeTooFragmented {
+        /// The request's destination.
+        dst: GpuVa,
+        /// The request's declared length.
+        len: u64,
+    },
     /// The target proc has no `Vas` for this `(GpuId, PDB)` (data-plane routing miss).
     /// Carries its target: a `Pdb` is a per-GPU namespace (MG-3).
     UnknownPdb {
@@ -2064,23 +2077,6 @@ impl ChannelOrigin {
     }
 }
 
-/// ★★★ **THE EXECUTE DECISION** — who actually moves the bytes.
-///
-/// Deliberately *not* a `bool`: the C's `host_ce` is a bare local at `C: :6310` and its
-/// negation is spelled `} else if (mscrub) {` / `} else if (remap) {` / `} else {` three
-/// branches later, which is exactly how "everything else is forwarded" became an answer
-/// nobody had made.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CeExecutor {
-    /// Real hardware runs it: the forwarded ring's own copy engine, honouring its own
-    /// semaphores. No byte passes through us.
-    HostCe,
-    /// **We** run it. In the C this is the CPU byte-copy at `C: :6371-6425` (and the
-    /// scrub/fill arms above it); here the executor is the **isolate**, never the
-    /// hypervisor process and never the pure core (§12.4).
-    Ours,
-}
-
 /// ★ **The C's execute predicate, ported literally** (`C: nvkvm_gpu_emul.c:6310`):
 ///
 /// ```text
@@ -2203,11 +2199,22 @@ pub struct PushbufferOutcome {
     /// the same commands on the other predicate. `data_copies + pt_writes.len()` and
     /// `host_ce + ours` count the same `LAUNCH_DMA`s two different ways.
     pub data_copies: usize,
-    /// ★★★ EXECUTE, arm one: commands [`ce_executor_c`] leaves to **real hardware**.
-    pub host_ce: usize,
-    /// ★★★ EXECUTE, arm two: commands **we** run. In the C, every guest-kernel CE copy,
-    /// every scrub and every fill lands here (`C: nvkvm_gpu_emul.c:6310`).
-    pub ours: usize,
+    /// ★★★ EXECUTE, the **C BASELINE**, arm one: commands [`ce_executor_c`] leaves to
+    /// real hardware.
+    ///
+    /// This is what the C would have done, kept beside what we actually do
+    /// ([`PushbufferOutcome::ce_spans`]) so every departure §12's ruling introduces is a
+    /// value a test reads rather than a paragraph. Nothing acts on it.
+    pub c_execute_host_ce: usize,
+    /// ★★★ EXECUTE, the **C BASELINE**, arm two: commands the C runs itself. There,
+    /// every guest-kernel CE copy, every scrub and every fill lands here
+    /// (`C: nvkvm_gpu_emul.c:6310`).
+    pub c_execute_ours: usize,
+    /// ★★★ **The partition we act on** (§12): every copy-engine request in this
+    /// pushbuffer, split into sub-copies by the representability of its operands, in
+    /// submission order. The caller turns these into [`VerbPlan::CeSplit`] and runs them
+    /// on a worker — with no lock held (R1).
+    pub ce_spans: Vec<CeSpan>,
     /// Semaphore releases observed → each `observe`d on the owning proc's queue.
     pub sem_releases: Vec<(GpuVa, u64)>,
     /// TLB invalidates seen (pdb, membar). A membar is honored as a hard barrier
@@ -2362,6 +2369,323 @@ fn classify_ce(
     }
 }
 
+// =================================================================================
+// ★★★ THE REPRESENTABILITY SPLIT (`eight_blockers_resolved.md` §12) — #102 stage C2.
+//
+// The owner's ruling, restated as the four things it decides:
+//
+//   1. We perform a copy ONLY where it is UNREPRESENTABLE by a real copy engine — an
+//      operand landing in *fabricated* space that no real engine can be pointed at.
+//   2. Everything representable goes to real hardware. That is normally FASTER than a
+//      CPU memcpy, not merely more faithful.
+//   3. A single request may SPLIT. Its representable sub-ranges are issued to real CE;
+//      only the unrepresentable remainder is ours. ⇒ the operand ranges must be
+//      PARTITIONED, not classified whole.
+//   4. The executor is the ISOLATE in both cases (`VerbPlan::CeSplit`).
+//
+// ★★★ THE CRITERION IS A PROPERTY OF THE ADDRESS, NOT OF OUR KNOWLEDGE ABOUT ITS ROLE.
+// That is what dissolves the orphan-leaf problem (§12.1(i)): a fresh page-table leaf in
+// fabricated space is performed-by-us — and therefore its content is in our hands —
+// BEFORE any PDE points at it, so it does not need to be recognised as a page table
+// first. There is deliberately NO "is this a page table?" test here; re-introducing one
+// is precisely the bug the ruling removes.
+// =================================================================================
+
+/// ★★★ **Where a copy-engine operand's address LIVES** — the §12 criterion, and it is a
+/// property of the address alone.
+///
+/// The C's own version of this is `nvkvm_dp_classify_fb` (`C: nvkvm_gpu_emul.c:1013`),
+/// which answers `1 = fbback`, `2 = gpga with a real object`, `0 = still a fake
+/// fb_page`. It is the same question — *does real device memory exist behind this
+/// address?* — asked over guest-framebuffer-physical addresses instead of over the
+/// address table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Representability {
+    /// ★ **Representable.** The range is host-published in the owning `Vas` — real host
+    /// memory, mapped into that `Vas`'s own host VAS **at the identical address**
+    /// (address identity, `#102` stage A). A real engine can be pointed at the guest's
+    /// own number, because that is the number the host MMU walks for.
+    HostBacked,
+    /// ★★★ **Fabricated.** The range is *declared* in the address table and nothing
+    /// host-side exists behind it: it lives in the emulated framebuffer, which is memory
+    /// we invented. A real engine pointed here resolves nothing — `Xid 31 FAULT_PDE`.
+    /// This is where the guest's page tables live, and it is where a
+    /// declared-but-unpublished range lives, and the split does not distinguish them
+    /// *because it must not* (§12.1(i)).
+    Fabricated,
+    /// **A physical operand** — the command named a guest-framebuffer-physical address,
+    /// so no GPU VA denotes it at all. Unrepresentable by construction rather than by
+    /// lookup: *"a CE physical copy bypasses the MMU, so the page-table walk can NEVER
+    /// discover this dst (no PTE)"* (`C: :6244`). The C agrees on the answer for a
+    /// different-looking reason — `dst_phys` is a negated conjunct of its execute
+    /// predicate (`C: :6310`), so a physical operand is never the host engine's there
+    /// either.
+    PhysicalOperand,
+    /// **Not tracked.** No binding covers the range. Forwarded — never guessed into a
+    /// capture and never claimed as ours (MISS = FAULT is about *resolving*, and we are
+    /// not resolving it; the overwhelming majority of these are ordinary data in a user
+    /// address space we never had to model).
+    ///
+    /// ★ The safety net for this arm is **not** here: it is the #14 ring gate
+    /// ([`VerbPlan::gated_doorbell`]), which refuses to ring a channel whose working set
+    /// is not host-published. So "forward it" cannot degrade into "hardware dereferences
+    /// something that was never mapped" — that submission does not reach a doorbell.
+    Untracked,
+}
+
+impl Representability {
+    /// Which engine may be pointed at an address of this kind.
+    ///
+    /// ★ Note what is NOT consulted: the work kind, and who submitted it. Those are
+    /// [`ce_executor_c`]'s inputs — the C's predicate, kept as the baseline this is
+    /// measured against — and replacing them with the address is the whole content of
+    /// §12's ruling.
+    #[must_use]
+    pub fn executor(self) -> CeExecutor {
+        match self {
+            Representability::HostBacked | Representability::Untracked => CeExecutor::HostCe,
+            Representability::Fabricated | Representability::PhysicalOperand => CeExecutor::Ours,
+        }
+    }
+}
+
+/// One sub-range of a partitioned copy-engine request: the instruction, plus the
+/// evidence that chose its engine.
+///
+/// The evidence rides along rather than being recomputed, because "why did this range go
+/// to that engine" is exactly what a test must be able to assert without re-implementing
+/// the classifier and thereby asserting nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeSpan {
+    /// The instruction handed to the isolate.
+    pub sub: CeSubCopy,
+    /// Where the destination address lives.
+    pub dst_kind: Representability,
+    /// Where the source address lives — `None` for a scrub or a fill, which have no
+    /// source operand (`C: :6320` "No src is set.").
+    pub src_kind: Option<Representability>,
+}
+
+/// Upper bound on the sub-copies ONE copy-engine request may partition into.
+///
+/// A guest controls both the request's length and its address table's fragmentation, so
+/// the span count is guest-influenced and needs a bound (boundary-1). Exceeding it is a
+/// **loud refusal** ([`FwdFault::CeTooFragmented`]) and never a truncation: a partition
+/// that stops early is a partition that silently drops the tail of a copy, which is the
+/// C's own `#13 CE-DROP` failure mode (`C: :6389`) reintroduced on purpose.
+pub const MAX_CE_SPANS: usize = 4096;
+
+/// Upper bound on the sub-copies ONE `parse_pushbuffer` call may produce across ALL of a
+/// ring's copy-engine requests.
+///
+/// [`MAX_CE_SPANS`] bounds any single request; a hostile ring can declare *many*
+/// maximally fragmented ones, and the same reasoning that gave the parser
+/// `MAX_PUSH_TOTAL_BYTES` beside `MAX_PUSH_RANGE_BYTES` applies here. Loud, never a
+/// truncation, for the same reason.
+pub const MAX_CE_SPANS_PER_PARSE: usize = 1 << 16;
+
+/// Classify ONE already-resolved sub-range of an operand.
+fn representability_of(binding: Option<&Binding>) -> Representability {
+    match binding {
+        Some(b) if b.host.is_some() => Representability::HostBacked,
+        Some(_) => Representability::Fabricated,
+        None => Representability::Untracked,
+    }
+}
+
+/// The partition of one operand's range, as `(start, len, kind)` runs.
+///
+/// A physical operand is ONE run of [`Representability::PhysicalOperand`]: there is
+/// nothing to look up, and no sub-range of it could be anything else.
+fn operand_runs(
+    table: Option<&AddressTable>,
+    addr: GpuVa,
+    is_virtual: bool,
+    len: u64,
+) -> Vec<(u64, u64, Representability)> {
+    if len == 0 {
+        return Vec::new();
+    }
+    if !is_virtual {
+        return vec![(addr.0, len, Representability::PhysicalOperand)];
+    }
+    match table {
+        Some(t) => t
+            .spans(addr, len)
+            .into_iter()
+            .map(|(s, l, b)| (s, l, representability_of(b.as_ref())))
+            .collect(),
+        // No table for this channel's VAS at all: nothing is tracked, so nothing is
+        // ours. The same clipping rule the table's own range query uses.
+        None => {
+            let end = (u128::from(addr.0) + u128::from(len)).min(1u128 << 64);
+            let eff = (end - u128::from(addr.0)) as u64;
+            if eff == 0 {
+                Vec::new()
+            } else {
+                vec![(addr.0, eff, Representability::Untracked)]
+            }
+        }
+    }
+}
+
+/// ★★★ **THE RANGE ALGEBRA** (§12.3): partition one copy-engine request into the
+/// maximal sub-copies over which BOTH operands' representability is constant.
+///
+/// A copy has two ends, and a sub-copy may go to real hardware only if **both** of them
+/// can be expressed to it. So the destination's partition and the source's partition are
+/// **intersected** — at their common offsets, not at their addresses, because the two
+/// operands sit at different addresses and advance together.
+///
+/// Guarantees, all pinned by the property test:
+/// - the sub-copies are contiguous, ordered and non-overlapping;
+/// - they cover the effective range **exactly** — a partition that is not total is a
+///   silently dropped copy;
+/// - none is zero-length;
+/// - `dst`/`src` of the `i`-th sub-copy are the original operands advanced by the same
+///   offset, which is what makes partition-then-execute byte-identical to
+///   execute-whole.
+///
+/// A wrapping `addr + len` is CLIPPED, never wrapped (see [`AddressTable::spans`]); the
+/// destination governs the effective length, and the source is clipped to match, so a
+/// copy is never issued reading past where its destination stops.
+///
+/// # Errors
+/// [`FwdFault::CeTooFragmented`] if the partition exceeds [`MAX_CE_SPANS`].
+pub fn partition_ce(
+    dst_table: Option<&AddressTable>,
+    dst: GpuVa,
+    dst_is_virtual: bool,
+    src: GpuVa,
+    src_is_virtual: bool,
+    len: u64,
+    work: kayfabe_arch::CeWork,
+) -> Result<Vec<CeSpan>, FwdFault> {
+    let dst_runs = operand_runs(dst_table, dst, dst_is_virtual, len);
+    // The destination decides how much of the request exists at all (a clipped
+    // destination clips the whole copy).
+    let eff: u64 = dst_runs.iter().map(|(_, l, _)| *l).sum();
+    if eff == 0 {
+        return Ok(Vec::new());
+    }
+    // A scrub or a fill has NO source operand, so there is no second partition to
+    // intersect — its representability is a property of its destination alone.
+    let has_src = matches!(work, kayfabe_arch::CeWork::Copy);
+    let src_runs = if has_src {
+        operand_runs(dst_table, src, src_is_virtual, eff)
+    } else {
+        Vec::new()
+    };
+
+    // Walk both partitions by OFFSET into the request, cutting at every boundary either
+    // one introduces. `src_runs` may be shorter than `eff` only if the source range was
+    // clipped at the top of the address space; the remainder then has no source, which
+    // is a source that reads nothing — modelled as untracked (forwardable), never as a
+    // silent shortening of the destination.
+    let mut out: Vec<CeSpan> = Vec::new();
+    let mut off: u64 = 0;
+    let mut di = 0usize;
+    let mut d_consumed: u64 = 0;
+    let mut si = 0usize;
+    let mut s_consumed: u64 = 0;
+    while off < eff {
+        let (_, d_len, d_kind) = dst_runs[di];
+        let d_left = d_len - d_consumed;
+        let (s_left, s_kind) = if !has_src {
+            (u64::MAX, None)
+        } else if si < src_runs.len() {
+            let (_, s_len, s_kind) = src_runs[si];
+            (s_len - s_consumed, Some(s_kind))
+        } else {
+            (eff - off, Some(Representability::Untracked))
+        };
+        let take = d_left.min(s_left).min(eff - off);
+        debug_assert!(take > 0, "a partition step must consume bytes");
+        if out.len() == MAX_CE_SPANS {
+            return Err(FwdFault::CeTooFragmented { dst, len });
+        }
+        let by = match s_kind {
+            // Both ends must be expressible for hardware to run it. Combining by "the
+            // stricter answer wins" rather than by a rule per operand: an unrepresentable
+            // SOURCE is just as fatal to a real engine as an unrepresentable destination,
+            // and the C says the same thing with `!src_phys && !dst_phys` (`C: :6310`).
+            Some(s) => match (d_kind.executor(), s.executor()) {
+                (CeExecutor::HostCe, CeExecutor::HostCe) => CeExecutor::HostCe,
+                _ => CeExecutor::Ours,
+            },
+            None => d_kind.executor(),
+        };
+        out.push(CeSpan {
+            sub: CeSubCopy {
+                dst: dst.0.wrapping_add(off),
+                src: match work {
+                    kayfabe_arch::CeWork::Copy => CeSource::Address(src.0.wrapping_add(off)),
+                    // A scrub zeroes; a fill writes its pattern. The C's scrub arm is a
+                    // no-op only because ITS backing is sparse-zero — stating it as an
+                    // explicit zero fill keeps the meaning where the backing cannot
+                    // supply it.
+                    kayfabe_arch::CeWork::Scrub => CeSource::Constant(0),
+                    kayfabe_arch::CeWork::Fill { pattern } => CeSource::Constant(pattern),
+                },
+                len: take,
+                by,
+            },
+            dst_kind: d_kind,
+            src_kind: s_kind,
+        });
+        off += take;
+        d_consumed += take;
+        if d_consumed == d_len {
+            di += 1;
+            d_consumed = 0;
+        }
+        if has_src && si < src_runs.len() {
+            s_consumed += take;
+            if s_consumed == src_runs[si].1 {
+                si += 1;
+                s_consumed = 0;
+            }
+        }
+    }
+    // Adjacent sub-copies that ended up on the SAME engine are merged, so a boundary
+    // that both partitions happen to agree across does not become two instructions. The
+    // evidence is kept from the first of the run.
+    let mut merged: Vec<CeSpan> = Vec::with_capacity(out.len());
+    for s in out {
+        match merged.last_mut() {
+            Some(prev)
+                if prev.sub.by == s.sub.by
+                    && prev.dst_kind == s.dst_kind
+                    && prev.src_kind == s.src_kind
+                    && prev.sub.dst.wrapping_add(prev.sub.len) == s.sub.dst =>
+            {
+                prev.sub.len += s.sub.len;
+            }
+            _ => merged.push(s),
+        }
+    }
+    Ok(merged)
+}
+
+/// ★★★ Build the ISOLATE's instruction for a partitioned request (§12.4 — *"the
+/// executor is the isolate in both cases"*).
+///
+/// The core decides *what*; the isolate holds bytes and does *it*. There is deliberately
+/// no path by which the pure core moves a byte: this returns a plan, and a plan is
+/// executed on a checked-out worker with **no lock held** (R1).
+///
+/// An empty partition yields no plan: a request that covers nothing is not a verb.
+#[must_use]
+pub fn plan_ce_split(host_vas: HostHandle, spans: &[CeSpan]) -> Option<VerbPlan> {
+    if spans.is_empty() {
+        return None;
+    }
+    Some(VerbPlan::CeSplit {
+        vas: host_vas,
+        subs: spans.iter().map(|s| s.sub).collect(),
+    })
+}
+
 /// ACT phase of the pushbuffer parse: apply the decoded `methods` of channel `cid`
 /// to **its owning proc only** (`&mut Proc` + the read-only spine for the arch's
 /// method decoder). Feeds: the operand split ([`classify_ce`]) → latched [`PtWrite`]s
@@ -2395,18 +2719,39 @@ pub fn apply_pushbuffer(
             }
             kayfabe_arch::PushMethod::CeLaunchDma {
                 dst,
-                src: _,
+                src,
                 len,
                 dst_is_virtual,
                 src_is_virtual,
                 work,
             } => {
-                // ★★★ DECISION 1 of 2 — EXECUTE (§11.5). Reads the work kind, BOTH
-                // operand forms and the submitting channel's origin; reads no address.
+                // ★★★ DECISION 1 of 2 — EXECUTE.
+                //
+                // (a) The C's predicate (§11.5): work kind, BOTH operand forms, and the
+                //     submitting channel's origin. No address. Recorded as the baseline.
                 match ce_executor_c(work, origin, src_is_virtual, dst_is_virtual) {
-                    CeExecutor::HostCe => out.host_ce += 1,
-                    CeExecutor::Ours => out.ours += 1,
+                    CeExecutor::HostCe => out.c_execute_host_ce += 1,
+                    CeExecutor::Ours => out.c_execute_ours += 1,
                 }
+                // (b) §12's ruling, which is what we ACT on: the ADDRESSES, partitioned.
+                //     Resolved in the ISSUING channel's own Vas — the same table, and
+                //     the same reason, as the capture decision below.
+                let dst_table = chan_pdb
+                    .and_then(|pdb| proc.vases.get(&(cgpu, pdb)))
+                    .map(|v| &v.table);
+                let spans = partition_ce(
+                    dst_table,
+                    dst,
+                    dst_is_virtual,
+                    src,
+                    src_is_virtual,
+                    len,
+                    work,
+                )?;
+                if out.ce_spans.len() + spans.len() > MAX_CE_SPANS_PER_PARSE {
+                    return Err(FwdFault::CeTooFragmented { dst, len });
+                }
+                out.ce_spans.extend(spans);
                 // ★★★ DECISION 2 of 2 — CAPTURE. Reads the RESOLVED PHYSICAL destination
                 // and nothing else. Independent of the above by construction: it is not
                 // in scope of that match and cannot see its answer.

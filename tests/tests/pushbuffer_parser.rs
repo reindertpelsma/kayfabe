@@ -189,7 +189,11 @@ fn scripted_pushbuffer_captures_pt_writes_and_observes_completion() {
 ///   handed to the host copy engine, whoever submitted it.
 #[test]
 fn ce_execute_predicate_is_the_c_row_for_row() {
-    use kayfabe_arch::CeWork::{Copy, Fill, Scrub};
+    use kayfabe_arch::CeWork::{Copy, Scrub};
+    // A non-uniform pattern: a byte-uniform one hides every phase error downstream.
+    const FILL: kayfabe_arch::CeWork = kayfabe_arch::CeWork::Fill {
+        pattern: 0xdead_beef,
+    };
     use kayfabe_fwd::CeExecutor::{HostCe, Ours};
     use kayfabe_fwd::ChannelOrigin::{GuestKernel, User};
     use kayfabe_fwd::{ChannelOrigin, ce_executor_c};
@@ -215,14 +219,14 @@ fn ce_execute_predicate_is_the_c_row_for_row() {
         ((Scrub, GuestKernel, true, false), Ours),
         ((Scrub, GuestKernel, false, true), Ours),
         ((Scrub, GuestKernel, false, false), Ours),
-        ((Fill, User, true, true), Ours),
-        ((Fill, User, true, false), Ours),
-        ((Fill, User, false, true), Ours),
-        ((Fill, User, false, false), Ours),
-        ((Fill, GuestKernel, true, true), Ours),
-        ((Fill, GuestKernel, true, false), Ours),
-        ((Fill, GuestKernel, false, true), Ours),
-        ((Fill, GuestKernel, false, false), Ours),
+        ((FILL, User, true, true), Ours),
+        ((FILL, User, true, false), Ours),
+        ((FILL, User, false, true), Ours),
+        ((FILL, User, false, false), Ours),
+        ((FILL, GuestKernel, true, true), Ours),
+        ((FILL, GuestKernel, true, false), Ours),
+        ((FILL, GuestKernel, false, true), Ours),
+        ((FILL, GuestKernel, false, false), Ours),
     ];
     assert_eq!(rows.len(), 24, "the cross product, not a sample of it");
     for ((work, origin, srcv, dstv), want) in rows {
@@ -309,7 +313,7 @@ fn execute_and_capture_are_two_decisions_and_they_disagree() {
         "CAPTURE: one page-table write among three copies"
     );
     assert_eq!(
-        (out.host_ce, out.ours),
+        (out.c_execute_host_ce, out.c_execute_ours),
         (1, 2),
         "EXECUTE: exactly one of the three is the host copy engine's"
     );
@@ -317,12 +321,12 @@ fn execute_and_capture_are_two_decisions_and_they_disagree() {
     // partitions cover the same three commands and are NOT the same partition.
     assert_eq!(
         out.pt_writes.len() + out.data_copies,
-        out.host_ce + out.ours,
+        out.c_execute_host_ce + out.c_execute_ours,
         "both decisions see every LAUNCH_DMA"
     );
     assert_ne!(
         (out.pt_writes.len(), out.data_copies),
-        (out.ours, out.host_ce),
+        (out.c_execute_ours, out.c_execute_host_ce),
         "…and they are not each other's mirror either"
     );
 }

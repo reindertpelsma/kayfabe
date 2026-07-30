@@ -55,8 +55,8 @@ use kayfabe_arch::{
     PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
 use kayfabe_isolate::{
-    CancelHandle, CancelReason, CancelSink, HostHandle, Isolate, IsolateFactory, IsolateId,
-    RmBackend, RmError, Txn, Worker, WorkerId,
+    CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, HostHandle, Isolate,
+    IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_util::Instant;
 use kayfabe_vmm::{
@@ -355,7 +355,7 @@ pub mod mock_method {
     pub const SET_OBJECT: u8 = 0xA0;
     /// CE `LAUNCH_DMA`: args = [dst_lo, dst_hi, len,
     /// flags(bit0 = dst_is_virtual, bit1 = src_is_virtual, bits[3:2] = work kind),
-    /// src_lo, src_hi]. A short arg list decodes the missing words as zero (decode is
+    /// src_lo, src_hi, fill_pattern]. A short arg list decodes the missing words as zero (decode is
     /// total on hostile input), so the flag layout puts the two operand-form bits where
     /// a truncated stream reads them as "physical", never as a virtual address into
     /// somebody's table.
@@ -404,10 +404,10 @@ impl MockPushbuffer {
         len: u64,
         work: CeWork,
     ) -> (u32, Vec<u32>) {
-        let work_bits: u32 = match work {
-            CeWork::Copy => 0,
-            CeWork::Scrub => 1,
-            CeWork::Fill => 2,
+        let (work_bits, pattern): (u32, u32) = match work {
+            CeWork::Copy => (0, 0),
+            CeWork::Scrub => (1, 0),
+            CeWork::Fill { pattern } => (2, pattern),
         };
         Self::method(
             mock_method::CE_LAUNCH_DMA,
@@ -418,6 +418,7 @@ impl MockPushbuffer {
                 u32::from(dst_is_virtual) | (u32::from(src_is_virtual) << 1) | (work_bits << 2),
                 src.0 as u32,
                 (src.0 >> 32) as u32,
+                pattern,
             ],
         )
     }
@@ -470,7 +471,9 @@ impl PushbufferAbi for MockPushbuffer {
                 // which is a *destroying* operation (trap-min: no guessed semantics).
                 work: match (lo64(3) >> 2) & 3 {
                     1 => CeWork::Scrub,
-                    2 => CeWork::Fill,
+                    2 => CeWork::Fill {
+                        pattern: lo64(6) as u32,
+                    },
                     _ => CeWork::Copy,
                 },
             },
@@ -954,6 +957,15 @@ pub enum RmVerb {
         /// The token.
         token: u64,
     },
+    /// ★★★ #102 stage C2 — ONE sub-copy of a partitioned copy-engine request, as it was
+    /// actually performed. The `by` field is what makes "this range went to real
+    /// hardware and that one did not" an assertable fact rather than an inference.
+    CeCopy {
+        /// The host VAS the addresses live in.
+        vas: HostHandle,
+        /// The sub-copy, exactly as the plan built it.
+        sub: CeSubCopy,
+    },
     /// Intent: a host memory object exported as a presentable surface (the display
     /// seam's producer half, GR-2b — the isolate-side PRIME export).
     ExportSurface {
@@ -1002,6 +1014,8 @@ pub enum VerbKind {
     UnmapGpuVa,
     /// [`RmBackend::ring_doorbell`].
     RingDoorbell,
+    /// [`RmBackend::ce_copy`].
+    CeCopy,
     /// [`RmBackend::export_surface`].
     ExportSurface,
 }
@@ -1725,6 +1739,24 @@ pub struct RmRecorder {
     /// and folds the remaining [`RmRecorder::log`] on top, so draining the log to bound
     /// memory costs nothing in accounting — which it silently did before.
     carried: HostLedger,
+    /// ★★★ #102 stage C2 — **the model GPU memory the two copy engines move bytes
+    /// through**, sparse and byte-addressed.
+    ///
+    /// It exists so the split can be checked the only way that means anything: *the
+    /// bytes*. A partition that is off by one page, drops a sub-copy, or gets a
+    /// sub-copy's source offset wrong is invisible to any assertion about span COUNTS
+    /// and immediately visible here.
+    ///
+    /// Sparse, and an unwritten byte reads `0` — the C's framebuffer backing has exactly
+    /// this shape (*"Our FB backing is sparse-zero (unwritten reads return 0)"*,
+    /// `C: nvkvm_gpu_emul.c:6316`), and it is what makes a scrub a no-op there.
+    ///
+    /// ★ **Device-wide rather than per-isolate, deliberately.** This models memory the
+    /// host GPU owns; two isolates copying to the same host address are, on real
+    /// hardware, writing the same bytes. It is therefore NOT a blast-radius surface and
+    /// no isolation test should read it as one (isolation lives in the handle namespace
+    /// and the per-`Vas` host VAS, which are unchanged).
+    ce_mem: BTreeMap<u64, u8>,
 }
 
 /// ★ **The acquire/release ledger** — every host resource the mock handed out, and
@@ -1785,6 +1817,76 @@ impl HostLedger {
 }
 
 impl RmRecorder {
+    /// ★ Seed the model GPU memory (see [`RmRecorder::ce_mem`]) — a test's way of
+    /// putting source bytes somewhere a copy can read them.
+    pub fn ce_seed(&mut self, addr: u64, bytes: &[u8]) {
+        for (i, b) in bytes.iter().enumerate() {
+            self.ce_mem.insert(addr.wrapping_add(i as u64), *b);
+        }
+    }
+
+    /// Read `len` bytes of the model GPU memory back. Unwritten bytes read `0`
+    /// (sparse-zero, `C: nvkvm_gpu_emul.c:6316`).
+    #[must_use]
+    pub fn ce_image(&self, addr: u64, len: u64) -> Vec<u8> {
+        (0..len)
+            .map(|i| self.ce_mem.get(&addr.wrapping_add(i)).copied().unwrap_or(0))
+            .collect()
+    }
+
+    /// Forget every byte — so two runs of the same copy start from the same state.
+    pub fn ce_clear(&mut self) {
+        self.ce_mem.clear();
+    }
+
+    /// Forget one range. The narrow form matters for a sweep: re-seeding a whole source
+    /// region per execution costs more than the copies under test, and a comparison
+    /// harness that dominates its own subject stops being run.
+    pub fn ce_clear_range(&mut self, addr: u64, len: u64) {
+        for i in 0..len {
+            self.ce_mem.remove(&addr.wrapping_add(i));
+        }
+    }
+
+    /// ★★★ Perform one sub-copy against the model memory.
+    ///
+    /// **Both engines move the same bytes**, and that is the whole point: §12's split is
+    /// about *who is allowed to be pointed at an address*, never about what the copy
+    /// means. A model in which the two arms wrote different bytes could not detect a
+    /// partition that sent a range to the wrong engine — it would detect only that it
+    /// sent it somewhere. The engine is recorded in the verb log instead, so "which
+    /// engine" and "which bytes" are two independent assertions.
+    ///
+    /// ★ **The fill's pattern phase is taken from the ADDRESS, not from the start of the
+    /// sub-copy.** That is what makes splitting a fill at an unaligned offset produce
+    /// byte-identical results to filling the whole range at once — the compliant path is
+    /// the natural one, rather than a rule about where a fill may be cut. Real remap
+    /// components are address-indexed for the same reason.
+    ///
+    /// Read-then-write, so a sub-copy whose operands overlap is at least
+    /// self-consistent. Overlap ACROSS sub-copies is genuinely undefined — a real copy
+    /// engine gives no such guarantee either — so callers keep source and destination
+    /// disjoint.
+    fn ce_apply(&mut self, sub: CeSubCopy) {
+        match sub.src {
+            CeSource::Address(src) => {
+                let bytes: Vec<u8> = (0..sub.len)
+                    .map(|i| self.ce_mem.get(&src.wrapping_add(i)).copied().unwrap_or(0))
+                    .collect();
+                for (i, b) in bytes.into_iter().enumerate() {
+                    self.ce_mem.insert(sub.dst.wrapping_add(i as u64), b);
+                }
+            }
+            CeSource::Constant(pattern) => {
+                let p = pattern.to_le_bytes();
+                for i in 0..sub.len {
+                    let a = sub.dst.wrapping_add(i);
+                    self.ce_mem.insert(a, p[(a % 4) as usize]);
+                }
+            }
+        }
+    }
+
     /// ★ Replay the verb log into an acquire/release [`HostLedger`].
     ///
     /// Handle-minting verbs are acquisitions; [`RmVerb::Free`] is a release;
@@ -2369,6 +2471,27 @@ impl RmBackend for MockRmBackend {
     fn ring_doorbell(&mut self, host_token: u64) -> Result<(), RmError> {
         let _client = self.gate(VerbKind::RingDoorbell)?;
         self.record(RmVerb::RingDoorbell { token: host_token });
+        Ok(())
+    }
+
+    fn ce_copy(&mut self, vas: HostHandle, sub: CeSubCopy) -> Result<(), RmError> {
+        let _client = self.gate(VerbKind::CeCopy)?;
+        // A copy into a host VAS this isolate does not own is a LOUD BadHandle. Same
+        // check as every other verb that names a VAS: the addresses are only meaningful
+        // inside it, and per-`Vas` host separation is #14's proven fix.
+        self.check(vas)?;
+        // ★ A zero-length sub-copy is a PARTITION BUG, not a degenerate case to absorb.
+        // `kayfabe-fwd` never emits one; a backend that quietly accepted one would make
+        // an off-by-one in the range algebra invisible here and visible only as missing
+        // bytes much later.
+        if sub.len == 0 {
+            return Err(RmError::BadHandle(vas));
+        }
+        {
+            let mut rec = self.recorder.lock().expect("recorder");
+            rec.ce_apply(sub);
+        }
+        self.record(RmVerb::CeCopy { vas, sub });
         Ok(())
     }
 

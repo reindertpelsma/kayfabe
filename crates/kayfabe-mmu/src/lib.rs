@@ -232,6 +232,68 @@ impl AddressTable {
         self.map.iter()
     }
 
+    /// ★★★ **The range algebra's one primitive** (`#102` stage C2,
+    /// `eight_blockers_resolved.md` §12.3): partition `[va, va+len)` into the maximal
+    /// runs over which this table's answer is CONSTANT — each either covered by exactly
+    /// one binding (`Some`, with the offset already *inside* that binding, so a caller
+    /// never recomputes it) or a hole (`None`).
+    ///
+    /// This exists because §12.3's ruling is *"the operand ranges must be PARTITIONED,
+    /// not classified whole"*: one privileged copy-engine request can cover fabricated
+    /// and real memory at once, and classifying it by its start address answers for the
+    /// wrong half of it. [`AddressTable::resolve`] is the point query; this is the
+    /// range query, and it is deliberately here rather than reimplemented over
+    /// [`AddressTable::iter`] at each call site — a partition that is not TOTAL is
+    /// silently a dropped sub-copy.
+    ///
+    /// # Guarantees (all pinned by test)
+    /// - Ascending, contiguous, non-overlapping, **no zero-length span**.
+    /// - The spans cover the *effective* range EXACTLY — nothing implicit is dropped.
+    /// - Total on hostile input: never panics, never allocates unboundedly.
+    ///
+    /// ★ **A wrapping range is CLIPPED at the top of the address space, never wrapped.**
+    /// `va + len` is computed in `u128`; the effective end is `min(va+len, 2^64)`. A
+    /// copy that ran off the top and resumed at address 0 is not something a real engine
+    /// does, and honouring the wrap would let a hostile length reach a mapping at the
+    /// BOTTOM of the space from a request aimed at the top. The clipped surplus
+    /// addresses nothing, so it needs no span. (`len == 0`, likewise, yields no spans:
+    /// an empty request is empty, not a fault — the guest is allowed to ask for nothing.)
+    #[must_use]
+    pub fn spans(&self, va: GpuVa, len: u64) -> Vec<(u64, u64, Option<Binding>)> {
+        let start = u128::from(va.0);
+        let end = (start + u128::from(len)).min(1u128 << 64);
+        let mut out = Vec::new();
+        let mut at = start;
+        while at < end {
+            let here = at as u64;
+            match self.map.lookup(here) {
+                Some((b_start, b_len, b)) => {
+                    // The covered run ends at the binding's end or the request's, first.
+                    let b_end = u128::from(b_start) + u128::from(b_len);
+                    let run_end = b_end.min(end);
+                    out.push((here, (run_end - at) as u64, Some(*b)));
+                    at = run_end;
+                }
+                None => {
+                    // A hole: it runs until the next binding that STARTS inside the
+                    // request, or to the end of the request. Derived from the map rather
+                    // than probed byte-by-byte — a per-byte scan of a 4 GiB copy is the
+                    // same shape as the C's O(n) overlay scan that ate 42% of a run.
+                    let next = self
+                        .map
+                        .iter()
+                        .map(|(s, _, _)| u128::from(s))
+                        .find(|&s| s > at)
+                        .unwrap_or(end)
+                        .min(end);
+                    out.push((here, (next - at) as u64, None));
+                    at = next;
+                }
+            }
+        }
+        out
+    }
+
     /// ★★★ #102 — the identity law as a **whole-table walk**: the first host-backed
     /// binding whose host VA is not the VA it is bound at, or `None` if the table is
     /// clean.

@@ -257,6 +257,9 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
             own(memory);
             assert_eq!(surface.0 >> 32, ns, "surface token leaked across isolates");
         }
+        // A copy-engine sub-copy names the host VAS it runs in, and nothing else that
+        // could cross a namespace: its addresses are guest numbers by address identity.
+        RmVerb::CeCopy { vas, .. } => own(vas),
     }
 }
 

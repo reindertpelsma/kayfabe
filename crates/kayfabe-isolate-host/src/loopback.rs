@@ -35,7 +35,7 @@
 //! the next reader to suppress the witness, which is the expensive mistake.
 
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
-use kayfabe_isolate::{HostHandle, IsolateId, RmBackend, RmError};
+use kayfabe_isolate::{CeSubCopy, HostHandle, IsolateId, RmBackend, RmError};
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeSet;
 use std::io::Read;
@@ -266,6 +266,12 @@ impl RmBackend for LoopbackRm {
     }
 
     fn ring_doorbell(&mut self, _host_token: u64) -> Result<(), RmError> {
+        self.verb(false)?;
+        Ok(())
+    }
+
+    fn ce_copy(&mut self, vas: HostHandle, _sub: CeSubCopy) -> Result<(), RmError> {
+        self.known(vas)?;
         self.verb(false)?;
         Ok(())
     }

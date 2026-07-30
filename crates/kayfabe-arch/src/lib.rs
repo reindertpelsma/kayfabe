@@ -270,7 +270,19 @@ pub enum CeWork {
     /// `MEMORY_SCRUB` — zero the destination; no source operand.
     Scrub,
     /// `REMAP_ENABLE` constant fill — write a repeating pattern; no source operand.
-    Fill,
+    ///
+    /// ★ **The pattern is part of the fact.** The C carries it as `remapA` and writes it
+    /// per 32-bit word (`C: nvkvm_gpu_emul.c:6349`); a decode that dropped it could
+    /// describe *that* a fill happened and never *what it wrote*, which is not a
+    /// forwardable intent. It is also what makes the fill's split-invariance testable at
+    /// all: a byte-uniform pattern hides every phase error.
+    Fill {
+        /// The 32-bit pattern, repeated across the destination. Its phase is taken from
+        /// the DESTINATION ADDRESS (component `n` of a 4-byte-aligned word), never from
+        /// the start of a sub-copy — which is what makes splitting a fill at an
+        /// unaligned offset produce the same bytes as filling the range whole.
+        pattern: u32,
+    },
 }
 
 /// A pushbuffer method, decoded into **core terms** (no raw bits). The ONE parser

@@ -128,6 +128,26 @@ pub enum Request {
         /// Host work-submit token.
         token: u64,
     },
+    /// [`kayfabe_isolate::RmBackend::ce_copy`] — ONE sub-copy of a partitioned
+    /// copy-engine request (`#102` stage C2). The engine is carried as a byte because
+    /// the PLAN chose it and the child must not re-decide it: a wire that omitted it
+    /// would leave the child to infer representability, which is address-plane
+    /// knowledge it does not have.
+    CeCopy {
+        /// Host VAS handle, raw.
+        vas: u64,
+        /// Destination address.
+        dst: u64,
+        /// Source address, or the fill constant (see `src_is_const`).
+        src: u64,
+        /// Bytes.
+        len: u64,
+        /// `0` = `src` is an address, `1` = `src` is a constant pattern.
+        src_is_const: u8,
+        /// `0` = [`kayfabe_isolate::CeExecutor::HostCe`], `1` =
+        /// [`kayfabe_isolate::CeExecutor::Ours`].
+        by_ours: u8,
+    },
     /// [`kayfabe_isolate::RmBackend::export_surface`].
     ExportSurface {
         /// Memory object to export, raw.
@@ -419,6 +439,22 @@ impl Envelope {
                 out.push(12);
                 out.extend_from_slice(&memory.to_le_bytes());
             }
+            Request::CeCopy {
+                vas,
+                dst,
+                src,
+                len,
+                src_is_const,
+                by_ours,
+            } => {
+                out.push(13);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&dst.to_le_bytes());
+                out.extend_from_slice(&src.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*src_is_const);
+                out.push(*by_ours);
+            }
         }
         out
     }
@@ -475,6 +511,14 @@ impl Envelope {
             },
             12 => Request::ExportSurface {
                 memory: c.u64("export memory")?,
+            },
+            13 => Request::CeCopy {
+                vas: c.u64("ce vas")?,
+                dst: c.u64("ce dst")?,
+                src: c.u64("ce src")?,
+                len: c.u64("ce len")?,
+                src_is_const: c.u8("ce src kind")?,
+                by_ours: c.u8("ce engine")?,
             },
             tag => {
                 return Err(ProtoError::UnknownTag {
@@ -713,6 +757,24 @@ mod tests {
             },
             Request::RingDoorbell { token: 0xDEAD },
             Request::ExportSurface { memory: 11 },
+            // Both engine arms and both source kinds, so a wire that dropped either
+            // discriminant round-trips WRONG rather than round-tripping short.
+            Request::CeCopy {
+                vas: 7,
+                dst: 0x2_0000_0000,
+                src: 0x3_0000_0000,
+                len: 0x1000,
+                src_is_const: 0,
+                by_ours: 0,
+            },
+            Request::CeCopy {
+                vas: 7,
+                dst: 0x2_0000_0000,
+                src: 0xdead_beef,
+                len: 4,
+                src_is_const: 1,
+                by_ours: 1,
+            },
         ]
     }
 

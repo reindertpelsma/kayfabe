@@ -335,6 +335,7 @@ fn host_verb_surface_does_not_grow_per_engine() {
             RmVerb::Free { .. } => "Free",
             RmVerb::Control { .. } => "Control",
             RmVerb::ExportSurface { .. } => "ExportSurface",
+            RmVerb::CeCopy { .. } => "CeCopy",
         }
     };
 

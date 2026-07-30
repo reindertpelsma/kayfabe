@@ -770,3 +770,95 @@ no production caller.
 - ★ **§11.5's finding is untouched and still owed:** stage B folded the C's *execute* predicate
   (`C: :6310`, which CPU-emulates every **kernel**-CE copy) into its *capture* predicate. This
   ruling is about execute. The two must now be re-separated deliberately rather than by accident.
+
+## 13. ★★★ STAGE C1 + C2 — BUILT (2026-07-30). What landed, and the one finding that
+contradicts a stated premise
+
+### 13.1 C1 — the two predicates, separated (§11.5 discharged)
+
+`kayfabe_fwd::ce_executor_c(work, origin, src_is_virtual, dst_is_virtual) -> CeExecutor`
+is the C's execute predicate (`C: :6310`), ported literally; `classify_ce` remains the
+capture one. `PushMethod::CeLaunchDma` grew `src` / `src_is_virtual` / `work`, because
+three of the C's five live conjuncts read the source operand and the work kind and the
+decode carried neither — **a decision you cannot state is a decision you answer with
+whatever you already have**, which is precisely what stage B did.
+
+One conjunct is deliberately not modelled: `m2cexec`, the C's bench debug switch. This
+port has no mode in which execution forwarding is off.
+
+`ChannelOrigin::of(ProcId)` ports `is_user_ce(chan_client)` onto the **proc** rather than
+onto a runtime-accumulated client list — `Gpu::system` already *is* the guest-kernel
+component (§12.27). A strengthening: the C's list was populated by observation, so a
+client it had not yet seen read as *not* user-CE.
+
+### 13.2 C2 — the representability split
+
+- `Representability { HostBacked, Fabricated, PhysicalOperand, Untracked }` — a property
+  of the **address**. `HostBacked` = host-published in the owning `Vas` at the identical
+  host VA (stage A's identity law is what makes the guest's own number usable by real
+  hardware). `Fabricated` = declared, nothing host-side. `PhysicalOperand` =
+  unrepresentable *by construction*, no lookup. `Untracked` = forwarded, never guessed;
+  its safety net is the #14 ring gate, not this classification.
+- `AddressTable::spans(va, len)` — the range query beside the point query. A wrapping
+  `va + len` is **clipped at the top of the address space, never wrapped**: honouring the
+  wrap would let a hostile length aimed at the top reach a mapping at the bottom.
+- `partition_ce(...) -> Vec<CeSpan>` — the algebra. **Both operands are partitioned and
+  the partitions are intersected**, because a sub-copy is hardware's only if BOTH ends are
+  expressible (`!src_phys && !dst_phys` in the C's one conjunction). Bounded by
+  `MAX_CE_SPANS` per request and `MAX_CE_SPANS_PER_PARSE` per parse, both **loud**
+  refusals — a truncated partition is a silently dropped tail, i.e. `#13 CE-DROP` rebuilt.
+- `VerbPlan::CeSplit { vas, subs }` + `RmBackend::ce_copy` — §12.4's *"the executor is the
+  isolate in both cases"*, made structural: the core builds a plan and has no way to move
+  a byte. ONE verb, with the engine as a field of the instruction, because representability
+  is address-plane knowledge the backend does not hold and must not appear to.
+
+**Three measured departures from the C's predicate** (`ce_representability_split.rs` pins
+each as a value):
+
+1. a **guest-kernel** copy between host-backed ranges — C: ours; §12: real hardware;
+2. a **user** scrub/fill of a host-backed range — C: ours; §12: real hardware;
+3. ★ a **user** copy into *fabricated* space — the C's predicate alone would hand it to
+   the host engine, which would resolve nothing; the C survives only because a separate
+   map-on-touch step (`C: :6267-6295`) backs the destination first. §12 keeps it, with no
+   second mechanism.
+
+### 13.3 Fabricated VRAM in a guest *userspace* GPU VA — no special case exists
+
+The owner's rare corner (give it a real host backing so a real engine can be pointed at
+it) is implemented as **publication**, i.e. the port's ordinary path, and the classifier
+then answers `HostBacked` on its own. **The dummy backing IS the representation.** There
+is no code anywhere that knows this case exists.
+
+The uninspected userspace fast path stays uninspected, and that is structural: the split
+runs inside the pushbuffer parser, and the parser only runs where the core is already the
+mediator.
+
+### 13.4 ⚠ FINDING — there is NO read-at-invalidate, in this port or in the measured C
+
+The premise that would make an uninspected userspace copy engine safe *by mechanism* —
+"the table is forward-populated by RPC **and PDB-read-at-invalidate**, so a fabricated
+page table scribbled through an uninspected engine is recovered at the next invalidate" —
+**does not hold**:
+
+- **This port:** `PushbufferOutcome::invalidates` has **no production consumer**. The
+  parser records `(pdb, membar)`; nothing re-reads a page directory. Pinned by
+  `there_is_no_read_at_invalidate_and_the_table_is_unchanged_across_one`.
+- **The C artifact:** `mode2_address_table.md` §5's own ★ CORRECTION (2026-07-22, audit
+  S3, #14 round-6) records **both** invalidate transports measured at **zero** occurrences
+  on the Mode-2 GSP-emulated compute path, and concludes the two co-equal populate sources
+  are bind-time RPC bindings and the **observed CE PT-write** — *"§4.2's
+  'read-at-invalidate is load-bearing' … [is] false for the GSP-emulated compute path"*.
+
+⇒ Correctness rests on **witnessing the CE page-table write**. Leaving the userspace path
+uninspected is nonetheless correct on the measured path — the page-table writer is the
+guest *kernel*'s copy-engine utility, on a channel the core does mediate — but for that
+reason, not because of an invalidate contract. **If a guest userspace channel ever becomes
+the writer, nothing currently recovers.**
+
+### 13.5 Still not built, deliberately
+
+`FbRead`'s production implementation and the decoder (stage C3). The `Ours` arm's real
+backend is `NOT_ON_THIS_RUNG` in `HostRmBackend` — it needs the isolate's mapping of the
+fabricated aperture, which is exactly what C3 builds. The `HostCe` arm is refused there
+for the same reason `ring_doorbell` is. Returning `Ok(())` for a copy that moved no byte
+is the forged-completion failure `mode2_real_forward_not_fake` forbids.

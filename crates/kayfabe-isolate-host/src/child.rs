@@ -34,7 +34,7 @@ use crate::proto::{
 };
 use crate::rm::{HostRmBackend, RmConnection};
 use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa};
-use kayfabe_isolate::{HostHandle, IsolateId, RmBackend, RmError};
+use kayfabe_isolate::{CeExecutor, CeSource, CeSubCopy, HostHandle, IsolateId, RmBackend, RmError};
 use kayfabe_linux_raw::sandbox::{self, SandboxPolicy};
 use kayfabe_linux_raw::{
     ThreadId, adopt_inherited_fd, current_thread_id, install_break_handler, interrupt_thread,
@@ -369,6 +369,34 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             Ok(s) => Reply::Surface(s.0),
             Err(e) => failed(e),
         },
+        Request::CeCopy {
+            vas,
+            dst,
+            src,
+            len,
+            src_is_const,
+            by_ours,
+        } => unit(rm.ce_copy(
+            raw(vas),
+            CeSubCopy {
+                dst,
+                src: if src_is_const == 0 {
+                    CeSource::Address(src)
+                } else {
+                    // A wide `src` carrying a narrow constant: take the low 32 bits and
+                    // do not reject the rest. The pattern register IS 32 bits, and a
+                    // hostile peer setting high bits is describing nothing — refusing
+                    // here would turn a meaningless field into a denial of service.
+                    CeSource::Constant(src as u32)
+                },
+                len,
+                by: if by_ours == 0 {
+                    CeExecutor::HostCe
+                } else {
+                    CeExecutor::Ours
+                },
+            },
+        )),
     }
 }
 

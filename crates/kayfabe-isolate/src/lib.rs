@@ -405,6 +405,30 @@ pub trait RmBackend: Send + Sync {
     /// Ring the host work-submit doorbell with an (already host-translated) token.
     fn ring_doorbell(&mut self, host_token: u64) -> Result<(), RmError>;
 
+    /// ★★★ Perform **one** sub-copy of a partitioned copy-engine request, on the engine
+    /// the plan chose (`eight_blockers_resolved.md` §12.4).
+    ///
+    /// ONE verb rather than two, and the arm is a field of the instruction rather than a
+    /// choice this method makes. The distinction §12 draws is *representability*, which
+    /// is a property of the ADDRESS PLANE — the backend does not hold the address plane
+    /// and must not appear to. An implementation matches on [`CeSubCopy::by`]:
+    ///
+    /// - [`CeExecutor::HostCe`] — submit a real copy-engine copy in `vas`. Both operands
+    ///   are host-published at guest-identical addresses (`#102` stage A), so the guest's
+    ///   own numbers are the ones hardware walks for.
+    /// - [`CeExecutor::Ours`] — move the bytes here, against this isolate's mapping of
+    ///   the fabricated aperture. This is the arm the C spends most of its time in and
+    ///   the only arm that can serve a page-table write, whose payload is guest-physical
+    ///   PTE values hardware would resolve as addresses.
+    ///
+    /// # Errors
+    /// Whatever the host refuses with. ★ A refusal **may leave a prefix of this
+    /// sub-copy applied** — that is what a real engine does when it faults mid-copy
+    /// (the C breaks out of its span loop and the remainder is silently never written,
+    /// `C: nvkvm_gpu_emul.c:6389` "#13 CE-DROP"). Nothing is allocated, so there are no
+    /// orphans to unwind; the caller's evidence is the sub-copy index that failed.
+    fn ce_copy(&mut self, vas: HostHandle, sub: CeSubCopy) -> Result<(), RmError>;
+
     /// Intent verb: export the host memory object `memory` (a render target in host
     /// VRAM) as a presentable [`SurfaceHandle`] — the **producer half of the display
     /// seam** (`execution_plane.md` §3.3, seam audit GR-2b). The C proved this runs
@@ -927,6 +951,28 @@ pub enum VerbPlan {
         /// The in/out payload.
         payload: Vec<u8>,
     },
+    /// ★★★ **A copy-engine request, already PARTITIONED by representability**
+    /// (`eight_blockers_resolved.md` §12.3).
+    ///
+    /// One guest `LAUNCH_DMA` becomes one of these, carrying one sub-copy per maximal
+    /// run over which the answer is constant. §12.4's ruling is that **the executor is
+    /// the isolate in both cases** — real copy-engine submission and our own copy over
+    /// VRAM-backed mappings alike, never the hypervisor process and never the pure core
+    /// — and this variant is what makes that structural rather than aspirational: the
+    /// core builds a plan and has no way to move a byte itself.
+    ///
+    /// The **plan** chooses the engine per sub-copy ([`CeSubCopy::by`]); the backend
+    /// only obeys. A backend free to pick would be free to point a real engine at
+    /// fabricated space, which is `Xid 31 FAULT_PDE` one layer down.
+    CeSplit {
+        /// The host VAS the sub-copies' addresses live in — the owning `Vas`'s own,
+        /// per-`Vas` (the #14 fix), at guest-identical addresses (`#102` stage A).
+        vas: HostHandle,
+        /// The sub-copies, **in submission order**. A copy engine's ordering guarantee
+        /// within one request is what the guest's own semaphore release depends on, so
+        /// this is a sequence and never a set.
+        subs: Vec<CeSubCopy>,
+    },
     /// ★ The disposition of host objects a **refused commit** could not adopt
     /// (`l1_concurrency.md` §3.3 R5: a commit whose target vanished must not
     /// silently leak what it already allocated). Runs on the same worker, still
@@ -937,6 +983,59 @@ pub enum VerbPlan {
         /// Objects to free, in the given order.
         free: Vec<HostHandle>,
     },
+}
+
+/// ★★★ **THE EXECUTE DECISION** — which engine moves the bytes of one sub-copy.
+///
+/// Deliberately *not* a `bool`: in the C this is a bare local (`bool host_ce`,
+/// `C: nvkvm_gpu_emul.c:6310`) whose negation is spelled as three `else if` branches
+/// further down, which is exactly how "everything else is forwarded" became an answer
+/// nobody had made (`eight_blockers_resolved.md` §11.5).
+///
+/// It lives in the **port** crate rather than in `kayfabe-fwd` because both sides of the
+/// seam must name it: the core decides it, the isolate obeys it, and one concept gets
+/// one name. `kayfabe-fwd` re-exports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CeExecutor {
+    /// Real hardware runs it — a real copy-engine submission, honouring its own
+    /// semaphores. §12.2: *"that is normally faster than a CPU memcpy, not merely more
+    /// faithful."* No byte passes through us.
+    HostCe,
+    /// **We** run it, because the operand is *unrepresentable*: it names fabricated
+    /// space (our page-directory base, our guest-physical framebuffer) that no real
+    /// engine can be pointed at. In the C this is the CPU byte-copy at `C: :6371-6425`;
+    /// here it runs **in the isolate**, against the isolate's mapping of that aperture.
+    Ours,
+}
+
+/// What a sub-copy READS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CeSource {
+    /// A source address, in the same host VAS as the destination.
+    Address(u64),
+    /// A constant pattern — the scrub (`0`) and the `REMAP_ENABLE` fill (`C: :6320`,
+    /// `:6349`). No source address exists, so there is no source operand to classify
+    /// and no source range to partition: a fill's representability is a property of its
+    /// **destination alone**.
+    Constant(u32),
+}
+
+/// One sub-copy of a (possibly split) copy-engine request.
+///
+/// Addresses are absolute, not offsets: a sub-copy is a self-contained instruction, and
+/// an offset-relative form would need the original request to be interpretable, which is
+/// how a partition silently becomes non-total.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CeSubCopy {
+    /// Destination address.
+    pub dst: u64,
+    /// What to read.
+    pub src: CeSource,
+    /// Bytes. **Never zero** — a zero-length sub-copy is a partition bug, not a
+    /// degenerate case to be handled downstream, and `kayfabe-fwd` never emits one.
+    pub len: u64,
+    /// ★ Which engine performs it — chosen by the PLAN, obeyed by the backend.
+    pub by: CeExecutor,
 }
 
 /// ★★ The #14 ring-gate's view of **one channel's `Vas`** — the address-plane
@@ -1044,6 +1143,7 @@ impl VerbPlan {
                 .chain(channel.map(|(h, _)| h))
                 .collect(),
             VerbPlan::Control { obj, .. } => vec![*obj],
+            VerbPlan::CeSplit { vas, .. } => vec![*vas],
             VerbPlan::Release { unmap, free } => unmap
                 .iter()
                 .map(|&(vas, _)| vas)
@@ -1091,6 +1191,15 @@ pub enum VerbReply {
     Control {
         /// The written-back payload.
         payload: Vec<u8>,
+    },
+    /// [`VerbPlan::CeSplit`]'s reply — how the request was actually divided between the
+    /// two engines. Counted rather than merely "ok" so a test can assert that a split
+    /// request really did reach BOTH engines, which is the whole claim §12.3 makes.
+    CeSplit {
+        /// Sub-copies performed on real hardware.
+        host_ce: usize,
+        /// Sub-copies performed by us.
+        ours: usize,
     },
     /// [`VerbPlan::Release`]'s reply.
     Released,
@@ -1492,6 +1601,23 @@ impl Worker {
                 let mut payload = payload.clone();
                 rm.control(*obj, *cmd, &mut payload)?;
                 Ok(VerbReply::Control { payload })
+            }
+            VerbPlan::CeSplit { vas, subs } => {
+                // ★★★ §12.4 — THE EXECUTOR IS THE ISOLATE, for both arms. In submission
+                // ORDER, because a copy engine's within-request ordering is what the
+                // guest's own semaphore release depends on; and one at a time, because a
+                // sub-copy that fails must not be followed by later ones that assume it
+                // landed.
+                let mut host_ce = 0usize;
+                let mut ours = 0usize;
+                for sub in subs {
+                    rm.ce_copy(*vas, *sub)?;
+                    match sub.by {
+                        CeExecutor::HostCe => host_ce += 1,
+                        CeExecutor::Ours => ours += 1,
+                    }
+                }
+                Ok(VerbReply::CeSplit { host_ce, ours })
             }
             VerbPlan::Release { unmap, free } => {
                 // ★ G4 (§12.16): still best-effort — this IS the failure path and a
@@ -1900,6 +2026,9 @@ kayfabe_util::assert_send_sync!(
     Cancels,
     dyn CancelSink,
     VerbPlan,
+    CeExecutor,
+    CeSource,
+    CeSubCopy,
     UngatedVa,
     VerbReply,
     Orphans,
