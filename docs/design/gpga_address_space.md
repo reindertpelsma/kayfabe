@@ -263,3 +263,71 @@ new idea.
   independent of any GPU VA is exactly what a sub-allocated arena slice is.
 - The reservation *policy* (sizes, admission control, per-class arenas) is configuration and can
   arrive whenever. **Only the addressing shape is time-sensitive.**
+
+## 9. Arena GRANULARITY is a security boundary — and arenas invert §5's scrubber conclusion
+
+> Owner, 2026-07-30: *"for reserved ranges the scrubber can do a real clean since the page is
+> reused across processes. but also think about security, if all reserved pages is one object then
+> you don't want different isolates get full access to it."*
+
+Both halves are right, and the second one is the **binding constraint on §8's whole design**.
+
+### 9.1 One object cannot be shared by mutually-untrusting isolates
+
+**RM grants OBJECTS, not ranges.** An isolate holding a handle to the arena can map **any offset in
+it**, not merely the slice we intended. So a single global arena would hand every isolate reach
+over every other isolate's memory — defeating boundary 2 by construction, no bug required.
+
+**The rule that follows, in strength order:**
+
+1. ⊘ **NEVER share an arena across VMs.** This is our declared boundary
+   (`SECURITY_MODEL.md` / the access-model split: *QEMU owns the cross-VM boundary*). Non-negotiable.
+2. ★ **Default to one arena per ISOLATE.** Then every slice in an arena belongs to the same guest
+   process, and sub-allocation cannot cross a trust line *at all*. Costs some pooling efficiency;
+   buys boundary 2 by construction rather than by care.
+3. **Per-VM arenas shared by that VM's isolates are PERMISSIBLE but weaker.** Under the declared
+   access model, *the guest kernel is the authority for intra-VM rights*, so intra-VM sharing is
+   not a violation of the stated model. But it means a **compromised isolate** reaches its VM's
+   entire reservation instead of its own slice — and the isolate sandbox is still incomplete
+   (`#96`: capability drop, seccomp and the USER/PID/NET/IPC/UTS namespaces are absent; only the
+   mount namespace and pivot_root landed). ⇒ Make granularity a **policy dial**, default per-isolate,
+   and never coarser than per-VM.
+
+★ **Property classes compose with this, they do not fight it**: §8.1(a) already wants one arena per
+aperture/page-size/PTE-kind. Per-isolate × per-class is more objects but each is still large enough
+to pool within, and the count is bounded by isolates × a handful of classes.
+
+### 9.2 ★★★ Arenas INVERT the scrubber conclusion — and make it a SECURITY requirement
+
+§2 invariant 6 said freeing the backing is usually enough, *because a newly allocated host object
+is already zero-initialised*. **That reasoning does not survive arenas**, and the owner spotted why:
+
+- Without arenas, a freed page **goes back to the host**, and the guest's next allocation is a
+  **fresh RM object** the driver zeroes.
+- With arenas, a freed slice **stays inside our own reservation** and is handed to the next
+  requester **directly**. **Nothing zeroes it.** If that next requester is a different guest
+  process, it reads the previous one's data.
+
+⇒ **Under reservation, the scrubber must perform a REAL clear.** It stops being a bookkeeping
+nicety and becomes a **cross-process data-disclosure control** — the classic memory-reuse leak.
+Note the reuse is across *guest processes* even under §9.1's per-isolate default, because an
+isolate outlives the guest processes it serves.
+
+**Zero on FREE, not on allocate.** Two reasons: stale guest data never lingers in our arena (so a
+*later* compromise cannot mine it), and the allocation-time guarantee then costs nothing. The clear
+itself is a CE memset on the GPU, not a CPU loop.
+
+★ **A pleasant consequence:** this makes §5's open question — *"verify that a newly allocated host
+object really is zero-initialised"* — **much less load-bearing**. Under arenas we zero it ourselves
+regardless of what the host driver does, so the guarantee stops depending on an unverified
+assumption about NVIDIA's allocator. The verification is still worth doing for the *non*-reserved
+path, but it is no longer the linchpin.
+
+### 9.3 What this adds to §8.2's time-sensitive item
+
+Nothing changes about the conclusion — `HostBacking` still needs to express *"a slice of an
+object"*. But §9.1 sharpens **what the slice type must carry**: not only `(object, offset, len)`
+but the fact that **the object is scoped to an owner**, so that a slice can never be handed across
+that scope. `HostHandle` already carries `IsolateId` for exactly this reason and
+`Worker::execute`'s foreign-handle gate already refuses across it — so the arena slice type should
+**inherit that branding rather than invent a parallel one**.
