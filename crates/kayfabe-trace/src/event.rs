@@ -176,6 +176,7 @@ impl Faulted for AddressFault {
             AddressFault::Miss { .. } => FaultTag("AddressFault::Miss"),
             AddressFault::Overlap { .. } => FaultTag("AddressFault::Overlap"),
             AddressFault::Malformed { .. } => FaultTag("AddressFault::Malformed"),
+            AddressFault::HostVaMismatch { .. } => FaultTag("AddressFault::HostVaMismatch"),
         }
     }
 }
@@ -189,6 +190,7 @@ impl Faulted for RmError {
             RmError::Interrupted => FaultTag("RmError::Interrupted"),
             RmError::Wedged => FaultTag("RmError::Wedged"),
             RmError::ForeignHandle { .. } => FaultTag("RmError::ForeignHandle"),
+            RmError::PlacementRefused { .. } => FaultTag("RmError::PlacementRefused"),
             RmError::Other(_) => FaultTag("RmError::Other"),
         }
     }

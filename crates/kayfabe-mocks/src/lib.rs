@@ -1572,6 +1572,16 @@ pub struct RmRecorder {
     /// `orphans`. A failing teardown is not an exotic scenario to script; it is the
     /// scenario the residue vocabulary exists for.
     pub fail_kinds: BTreeMap<VerbKind, RmError>,
+    /// ★★★ #102 — script the backend into **ignoring the fixed-offset placement**: every
+    /// `map_gpu_va` returns `at + this` instead of `at`.
+    ///
+    /// This models a real, reachable host condition — an RM that does not honour
+    /// `DMA_OFFSET_FIXED_TRUE`, or a port that forgot to set it (which is what
+    /// `flags: 0, dma_offset: 0` was) — and it is the ONLY lever that makes
+    /// [`RmError::PlacementRefused`] fire. A guard nothing can trip is not a guard; this
+    /// is how the address-identity check is proven to be live rather than decorative
+    /// (`suspect_the_instrument_first`).
+    pub placement_drift: Option<u64>,
     /// ★★ **The uninterruptible verbs** (`l1_os_shell.md` §7.9, §12.26): verb kinds whose
     /// host wait a break signal does NOT break.
     ///
@@ -1856,7 +1866,13 @@ struct RmNamespace {
     handles: BTreeSet<HostHandle>,
     next: u64,
     next_token: u64,
-    next_map_page: u64,
+    /// ★ #102 — GPU VA occupancy **per host VAS**: `vas -> (va -> span)`.
+    ///
+    /// Replaces the `next_map_page` bump counter. Under address identity the mock no
+    /// longer *chooses* addresses, so the only thing left to track is whether the
+    /// caller's chosen one is free — and it is free or not *within one VAS*, which is
+    /// the separation #14 actually rests on.
+    maps: BTreeMap<HostHandle, BTreeMap<u64, u64>>,
     retired: bool,
 }
 
@@ -1905,7 +1921,7 @@ impl MockRmBackend {
             // ProcId+1); the target GPU is folded into a LOWER field, so two isolates of
             // ONE proc on DIFFERENT GPUs still mint provably-disjoint tokens (MG-5).
             next_token: (idlane << 20) | (u64::from(gpu.0) << 8),
-            next_map_page: 0,
+            maps: BTreeMap::new(),
             retired: false,
         }))
     }
@@ -2233,40 +2249,53 @@ impl RmBackend for MockRmBackend {
         Ok(())
     }
 
+    /// ★★★ #102 — the mock honours the requested placement, because the real backend
+    /// does (`DMA_OFFSET_FIXED_TRUE`) and a double that chose its own address would be
+    /// modelling the bug rather than the driver.
+    ///
+    /// This used to mint a synthetic VA out of disjoint bit lanes, so every mapping in
+    /// the process was distinct by construction. That made the suite's #14 assertions
+    /// pass for the wrong reason and hid the whole of `#102`: no test could observe that
+    /// a forwarded guest VA had no host mapping at that VA, because *no* host mapping was
+    /// ever at a guest VA.
+    ///
+    /// What the mock still models faithfully is the property the lanes were really for:
+    /// **collisions are per host VAS**. Occupancy is tracked per `vas`, so two mappings
+    /// of the same range in ONE VAS is a loud [`RmError::NoMemory`] (RM refuses a fixed
+    /// map over a live range), while two *different* VASes mapping the *same* guest VA
+    /// is entirely fine — which is #14's actual fix and now the arrangement the tests
+    /// assert.
     fn map_gpu_va(
         &mut self,
         vas: HostHandle,
         memory: HostHandle,
         len: u64,
+        at: GpuVa,
     ) -> Result<u64, RmError> {
         let _client = self.gate(VerbKind::MapGpuVa)?;
         self.check(vas)?;
         self.check(memory)?;
-        // Fake placement with strictly disjoint fields, so every minted VA is
-        // distinct by construction and its provenance is readable off the bits:
-        //   [46..] base | [40..46) isolate lane | [32..40) VAS lane | [12..32) page
-        // The page counter is shared per ISOLATE (all its workers mint from one
-        // namespace, exactly as one RM client would), capped LOUDLY before it could
-        // bleed into the VAS lane. (The old scheme OR-ed the lane at bit 28 over a
-        // bump counter, which wrapped into duplicates after 2^16 pages — caught by
-        // the M4b concurrency stress.)
-        let page = {
+        let span = len.next_multiple_of(0x1000).max(0x1000);
+        {
             let mut ns = self.ns.lock().expect("ns");
-            assert!(
-                ns.next_map_page < 1 << 20,
-                "MockRmBackend VA lane exhausted (2^20 pages mapped on isolate {:?} gpu {:?})",
-                self.id,
-                self.gpu
-            );
-            let p = ns.next_map_page;
-            ns.next_map_page += len.next_multiple_of(0x1000) >> 12;
-            p
-        };
-        let va = 0x4000_0000_0000
-            + (self.idlane << 40)
-            + (u64::from(self.gpu.0) << 47)
-            + ((vas.raw() & 0xff) << 32)
-            + (page << 12);
+            let occupied = ns.maps.entry(vas).or_default();
+            // A fixed-offset map onto a live range is refused, not silently relocated —
+            // relocating is exactly the behaviour `RmError::PlacementRefused` exists to
+            // catch one layer up, and RM does not do it.
+            let clash = occupied
+                .range(..at.0.saturating_add(span))
+                .next_back()
+                .is_some_and(|(&start, &l)| start.saturating_add(l) > at.0);
+            if clash {
+                return Err(RmError::NoMemory);
+            }
+            occupied.insert(at.0, span);
+        }
+        // The one scripted deviation: a backend that ignored the fixed-offset request
+        // and placed the mapping elsewhere. Nothing else in the mock can produce it, and
+        // it is the only way to make `Worker::execute`'s identity check fire.
+        let drift = self.recorder.lock().expect("recorder").placement_drift;
+        let va = at.0 + drift.unwrap_or(0);
         self.record(RmVerb::MapGpuVa {
             vas,
             memory,
@@ -2279,6 +2308,17 @@ impl RmBackend for MockRmBackend {
     fn unmap_gpu_va(&mut self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError> {
         let _client = self.gate(VerbKind::UnmapGpuVa)?;
         self.check(vas)?;
+        // #102: release the occupancy so a later fixed map at the same VA succeeds —
+        // "unmap eager, then rebind" is the address plane's own discipline, and a mock
+        // that never freed the range would make every legitimate rebind look like the
+        // `ALREADY-MAPPED` collision class.
+        self.ns
+            .lock()
+            .expect("ns")
+            .maps
+            .entry(vas)
+            .or_default()
+            .remove(&gpu_va);
         self.record(RmVerb::UnmapGpuVa { vas, va: gpu_va });
         Ok(())
     }
@@ -2680,12 +2720,23 @@ mod tests {
         );
     }
 
-    /// Regression (found by the M4b concurrency stress): the old VA minting OR-ed a
-    /// per-VAS lane at bit 28 over a page-bump counter, so after 2^16 single-page
-    /// maps the counter wrapped into the lane and duplicate host VAs came out. The
-    /// mock must mint distinct VAs well past that boundary, across multiple VASes.
+    /// ★★★ #102 — the mock's placement contract, at scale and at the boundary that
+    /// matters.
+    ///
+    /// This replaces `mock_rm_map_gpu_va_stays_distinct_past_65536_pages`, which pinned
+    /// the *old* minting scheme (disjoint bit lanes, distinct-by-construction) after an
+    /// M4b wrap bug. That scheme is gone: under address identity the mock does not choose
+    /// addresses at all, so "the mock mints distinct VAs" is no longer a property it has
+    /// or should have. What replaces it is the property the real driver has and the whole
+    /// data plane depends on — **it puts the mapping where it was told** — plus the
+    /// collision rule that carries #14: collisions are per host VAS, so the SAME address
+    /// in two DIFFERENT VASes is legal and the same address twice in ONE VAS is refused.
+    ///
+    /// Kept at 70k iterations, deliberately: the replaced test's whole value was crossing
+    /// 2^16, and a rewrite that quietly dropped the scale would be narrowing a test to
+    /// fit a change.
     #[test]
-    fn mock_rm_map_gpu_va_stays_distinct_past_65536_pages() {
+    fn mock_rm_map_gpu_va_places_exactly_where_asked_and_collides_only_within_one_vas() {
         let (mut f, _rec) = MockIsolateFactory::new();
         let mut iso = f.spawn(IsolateId::new(1, GpuId::ZERO));
         let mut w = iso.checkout().expect("fresh pool has an idle worker");
@@ -2693,12 +2744,27 @@ mod tests {
             let vas_a = rm.alloc_vaspace().unwrap();
             let vas_b = rm.alloc_vaspace().unwrap();
             let mem = rm.alloc_sysmem(0x1000).unwrap();
-            let mut seen = std::collections::BTreeSet::new();
+            const BASE: u64 = 0x2_0000_0000;
             for k in 0..70_000u64 {
-                let vas = if k % 2 == 0 { vas_a } else { vas_b };
-                let va = rm.map_gpu_va(vas, mem, 0x1000).unwrap();
-                assert!(seen.insert(va), "duplicate host VA {va:#x} at map #{k}");
+                let want = GpuVa(BASE + k * 0x1000);
+                // The SAME address is mapped into BOTH VASes — the #14 arrangement.
+                for vas in [vas_a, vas_b] {
+                    assert_eq!(
+                        rm.map_gpu_va(vas, mem, 0x1000, want),
+                        Ok(want.0),
+                        "map #{k} must land exactly at {want:?} in {vas:?}"
+                    );
+                }
             }
+            // A third map over a live range in the SAME VAS is refused, not relocated.
+            assert_eq!(
+                rm.map_gpu_va(vas_a, mem, 0x1000, GpuVa(BASE)),
+                Err(RmError::NoMemory),
+                "a fixed map over a live range in one VAS is loud"
+            );
+            // …and becomes legal again once the range is released (unmap eager, rebind).
+            rm.unmap_gpu_va(vas_a, BASE).unwrap();
+            assert_eq!(rm.map_gpu_va(vas_a, mem, 0x1000, GpuVa(BASE)), Ok(BASE));
         });
     }
 
@@ -2718,7 +2784,9 @@ mod tests {
         let (vas, mem) = iso.checkout().expect("idle worker").with_rm(|rm| {
             let vas = rm.alloc_vaspace().unwrap();
             let mem = rm.alloc_sysmem(0x1000).unwrap();
-            let _ = rm.map_gpu_va(vas, mem, 0x1000).unwrap();
+            let _ = rm
+                .map_gpu_va(vas, mem, 0x1000, GpuVa(0x2_0020_0000))
+                .unwrap();
             (vas, mem)
         });
 

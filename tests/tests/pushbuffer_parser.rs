@@ -227,9 +227,19 @@ fn t14_per_vas_publication_gates_the_ring() {
         0x10000,
     )
     .unwrap();
+    // ★★★ #102 — corrected (was `assert_ne!`, the wrong reading of #14 — see
+    // `sim_14_two_process::t14_identical_va_disjoint_backing` for the full argument).
+    // Identical guest VAs map at the SAME host VA in DIFFERENT host VASes; that is what
+    // lets each proc's forwarded ring resolve, and the separation is the VAS.
+    assert_eq!(
+        (pub_a.host_va, pub_b.host_va),
+        (SHARED_VA.0, SHARED_VA.0),
+        "address identity: both procs are host-mapped AT the guest VA they named"
+    );
     assert_ne!(
-        pub_a.host_va, pub_b.host_va,
-        "identical guest VA → distinct host VA"
+        gpu.procs[&pid_a].vases[&(GpuId::ZERO, A_PDB)].host_vas,
+        gpu.procs[&pid_b].vases[&(GpuId::ZERO, B_PDB)].host_vas,
+        "…in DIFFERENT host VASes — the separation #14 actually rests on"
     );
 
     // Now the SAME ring path passes for BOTH — each resolves in its OWN host VAS.

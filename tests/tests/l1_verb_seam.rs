@@ -203,6 +203,7 @@ fn r1_is_asserted_at_the_host_verb_itself_not_at_a_wrapper() {
     let _ = worker.execute(&VerbPlan::Publish {
         host_vas: None,
         len: 0x1000,
+        at: VA,
     });
 }
 
@@ -221,6 +222,7 @@ fn r1_legal_path_checked_out_worker_with_no_guards_runs() {
         .execute(&VerbPlan::Publish {
             host_vas: None,
             len: 0x1000,
+            at: VA,
         })
         .expect("the chain runs");
     match reply {
@@ -1419,10 +1421,21 @@ fn commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone() {
 /// "release only when there is nothing to release", the exact leak the rule exists to
 /// prevent.
 ///
-/// Driven through a **re-publication of a VA that is already bound**: the plan phase
-/// legitimately cannot know the bind will collide (a sibling could have unbound it),
-/// so the sysmem alloc and the host map both run first and only the commit refuses —
-/// a refusal that owns host state, reached with no threads at all.
+/// ★★ **The vehicle changed with `#102`, the property did not.** This used to be driven
+/// by re-publishing an already-bound VA, on the reasoning that the plan phase *"cannot
+/// know the bind will collide"*. Under address identity it can, and it must: the host VAS
+/// is occupied at that same address, so the map verb would fail inside the driver and the
+/// core's `Overlap` vocabulary would be shadowed by a bare `Rm(NoMemory)` — after
+/// allocating host memory for a publication that could never land. So `plan_publish` now
+/// refuses a bound VA up front, and this test can no longer reach a commit that way.
+///
+/// The replacement vehicle is **GPA-arena exhaustion**, which is the one refusal
+/// `commit_publish` reaches with no threads at all *and* with host state already
+/// allocated: the plan is legal, the chain allocates and maps, and then the carve fails
+/// because the proc's private arena is spent. That is the same R5 disposition rule, on
+/// the same code path (`round_trip`'s orphan release), and it is a strictly *better*
+/// vehicle — arena exhaustion under churn is the C's own #80 leak class, so the release
+/// being real matters here for a second reason.
 #[test]
 fn a_refused_commit_releases_its_orphans_on_the_single_threaded_path() {
     let _wd = watchdog("round_trip_orphan_release", Duration::from_secs(30));
@@ -1431,14 +1444,22 @@ fn a_refused_commit_releases_its_orphans_on_the_single_threaded_path() {
     let mut gpu = device.map(|d| Arc::into_inner(d).expect("not shared").into_gpu());
     let proc = gpu.procs.get_mut(&pid).expect("live");
 
-    kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000).expect("the first publication binds");
+    // One publication that consumes the proc's WHOLE arena (the fixture cuts 64 GiB
+    // sub-ranges), so the next legal-looking publish cannot be carved.
+    const WHOLE_ARENA: u64 = 0x10_0000_0000;
+    kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, WHOLE_ARENA)
+        .expect("the first publication binds");
+    // A DIFFERENT VA — the plan is clean, the host chain runs to completion, and only the
+    // arena carve inside the commit refuses.
+    let starved = GpuVa(VA.0 + WHOLE_ARENA + 0x1000);
     assert_eq!(
-        kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000),
-        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Overlap {
-            pdb: PDB,
-            va: VA
-        })),
-        "re-publishing a bound VA is a loud overlap — never a silent rebind"
+        kayfabe_fwd::publish_backing(proc, GPU, PDB, starved, 0x1000),
+        Err(FwdFault::Arena),
+        "a spent arena refuses in the COMMIT — after the host chain already allocated"
+    );
+    assert!(
+        kayfabe_fwd::resolve(&gpu, GPU, PDB, starved).is_err(),
+        "…and nothing was bound for it: a refused commit leaves no half-published range"
     );
 
     let verbs = rec

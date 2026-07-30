@@ -255,6 +255,29 @@ pub enum RmError {
         /// The isolate this worker would have issued the verb on.
         worker_isolate: IsolateId,
     },
+    /// ★★★ **ADDRESS IDENTITY REFUSED** (`#102`, `eight_blockers_resolved.md` §1) — the
+    /// backend was asked to map at a specific host GPU VA and produced a different one.
+    ///
+    /// A forwarded pushbuffer names **guest** virtual addresses. For the host GPU's MMU
+    /// to resolve one, the mapping must exist **at that same address** in the channel's
+    /// host VAS. So [`RmBackend::map_gpu_va`] takes the address as an argument and the
+    /// real backend sets `DMA_OFFSET_FIXED_TRUE` (bit 15, `0x8000`; `dmaOffset` becomes
+    /// **[IN]** — `C: nvkvm_gpu_emul.c:7663-7692`, *"the irreducible primitive the whole
+    /// data plane rests on"*). A backend that ignores the flag and picks its own
+    /// placement produces a mapping that **looks published and cannot be addressed**:
+    /// the guest's copy is forwarded, the host MMU walks for the guest VA, finds
+    /// nothing, and the run dies as `Xid 31 FAULT_PDE`. That is exactly the failure this
+    /// error exists to convert into a loud, local refusal.
+    ///
+    /// It is *our* invariant breaking, not a guest fault and not a host resource
+    /// condition: it means the placement request was silently downgraded. The verb chain
+    /// unwinds the mapping and everything under it before surfacing this.
+    PlacementRefused {
+        /// The host GPU VA the plan required (the guest VA, by identity).
+        want: u64,
+        /// The host GPU VA the backend actually produced.
+        got: u64,
+    },
     /// Any other backend-reported failure (opaque status for diagnostics).
     Other(u32),
 }
@@ -345,12 +368,36 @@ pub trait RmBackend: Send + Sync {
         payload: &mut [u8],
     ) -> Result<(), RmError>;
 
-    /// Map `len` bytes of `memory` into the host GPU VA space owned by `vas`,
-    /// returning the host GPU VA. The isolate picks/owns the actual placement —
-    /// per-Vas host-VAS separation is what makes two guest processes' identical
-    /// guest VAs land in disjoint host mappings (#14's proven fix).
-    fn map_gpu_va(&mut self, vas: HostHandle, memory: HostHandle, len: u64)
-    -> Result<u64, RmError>;
+    /// Map `len` bytes of `memory` into the host GPU VA space owned by `vas`
+    /// **at `at`**, returning the host GPU VA actually achieved.
+    ///
+    /// ★★★ **`at` is not a hint** (`#102`). The caller passes the *guest* VA and the
+    /// backend must place the mapping there — the real backend by setting
+    /// `DMA_OFFSET_FIXED_TRUE` (bit 15, `0x8000`) so `dmaOffset` is **[IN]** rather than
+    /// [OUT] (`C: nvkvm_gpu_emul.c:7663-7692`). Address identity is what makes a
+    /// forwarded pushbuffer resolve at all: the guest's commands carry guest VAs, and
+    /// the host MMU walks the host VAS for exactly those numbers. A backend free to
+    /// choose its own placement produces a binding that is published and unaddressable.
+    ///
+    /// This used to take no address at all while [`RmBackend::unmap_gpu_va`] took one —
+    /// the asymmetry was the tell (`eight_blockers_resolved.md` §1).
+    ///
+    /// ★★ Address identity does **not** weaken #14. Two guest processes' identical guest
+    /// VAs now land at the *same* host VA — inside *different* host VASes, one per
+    /// `Vas`, on different isolates. Per-address-**space** separation is #14's proven
+    /// fix; per-*address* separation never was, and asserting it was a wrong reading.
+    ///
+    /// # Errors
+    /// [`RmError::PlacementRefused`] if the backend could not honour `at`. Returning a
+    /// different VA is a contract violation the caller ([`Worker::execute`]) converts
+    /// into that error and unwinds — it must never be adopted.
+    fn map_gpu_va(
+        &mut self,
+        vas: HostHandle,
+        memory: HostHandle,
+        len: u64,
+        at: GpuVa,
+    ) -> Result<u64, RmError>;
 
     /// Unmap a previous [`RmBackend::map_gpu_va`].
     fn unmap_gpu_va(&mut self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError>;
@@ -815,12 +862,15 @@ pub type ChannelHandles = (HostHandle, u64);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerbPlan {
     /// `publish_backing`'s chain: (optionally) allocate the Vas's own host VAS, then
-    /// allocate sysmem and map it into that VAS.
+    /// allocate sysmem and map it into that VAS **at the guest VA** (`#102`).
     Publish {
         /// The Vas's already-materialized host VAS, or `None` to allocate one.
         host_vas: Option<HostHandle>,
         /// Bytes to allocate and map.
         len: u64,
+        /// ★★★ The guest VA this range must be addressable at. Address identity: the
+        /// mapping is placed HERE, not wherever the host driver would have chosen.
+        at: GpuVa,
     },
     /// The doorbell chain: (optionally) host VAS → (optionally) host channel →
     /// (optionally) schedule → ring.
@@ -1306,7 +1356,7 @@ impl Worker {
         }
         let rm = &mut *self.backend;
         match plan {
-            VerbPlan::Publish { host_vas, len } => {
+            VerbPlan::Publish { host_vas, len, at } => {
                 let (vas, fresh_vas) = match *host_vas {
                     Some(h) => (h, None),
                     None => {
@@ -1318,7 +1368,7 @@ impl Worker {
                     Ok(m) => m,
                     Err(e) => return Err(unwind(rm, fresh_vas.into_iter().collect(), e)),
                 };
-                let host_va = match rm.map_gpu_va(vas, memory, *len) {
+                let host_va = match rm.map_gpu_va(vas, memory, *len, *at) {
                     Ok(va) => va,
                     Err(e) => {
                         let mut orphans = vec![memory];
@@ -1326,6 +1376,27 @@ impl Worker {
                         return Err(unwind(rm, orphans, e));
                     }
                 };
+                // ★★★ #102 — ADDRESS IDENTITY, checked at the seam that crosses into the
+                // untrusted-by-construction backend. A backend that ignores the
+                // fixed-offset request hands back a mapping that is published and
+                // **unaddressable**: the forwarded pushbuffer names `at`, the host MMU
+                // walks for `at`, and finds nothing (Xid 31 FAULT_PDE). Undo the mapping
+                // and everything under it rather than adopting a binding whose host VA is
+                // a lie. This is the ONE place a placement can be downgraded silently, so
+                // it is the one place the check belongs.
+                if host_va != at.0 {
+                    let _ = rm.unmap_gpu_va(vas, host_va);
+                    let mut orphans = vec![memory];
+                    orphans.extend(fresh_vas);
+                    return Err(unwind(
+                        rm,
+                        orphans,
+                        RmError::PlacementRefused {
+                            want: at.0,
+                            got: host_va,
+                        },
+                    ));
+                }
                 Ok(VerbReply::Published {
                     host_vas: fresh_vas,
                     memory,

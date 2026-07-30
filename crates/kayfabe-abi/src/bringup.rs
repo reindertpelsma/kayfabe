@@ -424,6 +424,21 @@ pub const NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS: u32 = 1 << 4;
 /// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:342-345`).
 pub const NVOS02_FLAGS_MAPPING_NO_MAP: u32 = 1 << 30;
 
+/// ★★★ `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` — field `15:15`, value 1
+/// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2094-2096`), i.e. `0x8000`.
+///
+/// **The one flag address identity rests on** (`#102`). For a VASpace (non-CTXDMA) map
+/// target, `NVOS46_PARAMETERS::dmaOffset` is an **[OUT]** parameter by default — RM picks
+/// the GPU VA and tells you where it put it. With this bit set it becomes **[IN]**: RM
+/// places the mapping at the address you name (`C: nvkvm_gpu_emul.c:7663-7692`).
+///
+/// That difference is the whole data plane. A forwarded pushbuffer carries the *guest's*
+/// virtual addresses, and the host GPU's MMU walks the host VAS for exactly those numbers.
+/// Let the driver choose, and the mapping exists somewhere the guest never names: the
+/// submission looks published and faults the instant hardware resolves it
+/// (`Xid 31 FAULT_PDE`).
+pub const NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE: u32 = 1 << 15;
+
 /// Bounds-checked field write, shared by every `encode_into` above.
 fn put(
     bytes: &mut [u8],

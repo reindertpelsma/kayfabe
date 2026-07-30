@@ -133,19 +133,30 @@ fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[kayfabe_core::P
 
     // (3) No backing collision across procs sharing an identical guest VA: each
     // proc resolves the SAME VA to ITS OWN distinct host backing.
+    //
+    // ★★★ #102 — the host-VA half of this was corrected. It used to require the host VAs
+    // to be distinct too; under address identity every one of them equals `KV_VA_BASE`,
+    // by design and necessarily — that is what lets each proc's forwarded ring resolve.
+    // The collision that matters is in the host OBJECTS, which is now what is asserted,
+    // together with the identity law itself.
     let shared = GpuVa(KV_VA_BASE);
     let mut seen_phys: BTreeSet<u64> = BTreeSet::new();
-    let mut seen_hva: BTreeSet<u64> = BTreeSet::new();
+    let mut seen_mem: BTreeSet<kayfabe_isolate::HostHandle> = BTreeSet::new();
     for inf in infs {
         if let Ok((bind, _)) = resolve(gpu, GpuId::ZERO, inf.pdb, shared) {
             assert!(
                 seen_phys.insert(bind.phys),
                 "two procs' identical VA share a GPA backing"
             );
-            if let Some(hva) = bind.host_va() {
+            if let Some(mem) = bind.host_memory() {
                 assert!(
-                    seen_hva.insert(hva),
-                    "two procs' identical VA share a host VA"
+                    seen_mem.insert(mem),
+                    "two procs' identical VA share a host memory object"
+                );
+                assert_eq!(
+                    bind.host_va(),
+                    Some(shared.0),
+                    "address identity: the KV VA is host-mapped AT the VA the guest named"
                 );
             }
         }

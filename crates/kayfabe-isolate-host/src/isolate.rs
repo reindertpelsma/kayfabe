@@ -36,7 +36,7 @@
 //!    [`ProxyRmBackend::call`].
 
 use crate::proto::{Envelope, Reply, Request, WireError, engine_code, read_frame, write_frame};
-use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind};
+use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, DEFAULT_POOL_WORKERS, HostHandle, Isolate,
     IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
@@ -405,11 +405,13 @@ impl RmBackend for ProxyRmBackend {
         vas: HostHandle,
         memory: HostHandle,
         len: u64,
+        at: GpuVa,
     ) -> Result<u64, RmError> {
         let reply = self.call(Request::MapGpuVa {
             vas: vas.raw(),
             memory: memory.raw(),
             len,
+            at: at.0,
         })?;
         match self.lift(reply)? {
             Reply::Va(va) => Ok(va),

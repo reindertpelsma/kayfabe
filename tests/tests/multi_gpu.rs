@@ -165,10 +165,20 @@ fn cross_gpu_isolation() {
     )
     .expect("GPU1 publish");
 
-    // Disjoint GPA arenas AND disjoint host VAs — each proc's per-(proc, GPU) isolate
-    // + arena are separate by construction.
+    // Disjoint GPA arenas — each proc's per-(proc, GPU) isolate + arena are separate by
+    // construction.
+    //
+    // ★★★ #102 — corrected. This used to also require distinct host VAs. Under address
+    // identity both are host-mapped AT the guest VA, on different GPUs, in different host
+    // VASes owned by different isolates. "Cross-GPU host-VA collision" was never the
+    // hazard: two GPUs' address spaces are unrelated, and a shared *number* between them
+    // means nothing.
     assert_ne!(pub_a.gpa, pub_b.gpa, "cross-GPU GPA collision");
-    assert_ne!(pub_a.host_va, pub_b.host_va, "cross-GPU host-VA collision");
+    assert_eq!(
+        (pub_a.host_va, pub_b.host_va),
+        (0x5_0000_0000, 0x5_0000_0000),
+        "address identity holds on each GPU independently"
+    );
 
     // A proc materialized ONLY its own target's isolate/arena — never the other GPU's.
     let a = gpu.procs.get(&pid_a).unwrap();
@@ -189,18 +199,26 @@ fn cross_gpu_isolation() {
     // An op for GPU0 never lands on GPU1's backend: the doorbell/PDB for GPU0 resolves
     // GPU0's proc, and GPU1's identical identities resolve GPU1's proc — a GPU0 op can
     // never reach GPU1's host handles (namespaced per (proc, GPU) in the recorder).
+    // ★★ #102 — this used to read the target GPU out of **bit 47 of the returned host
+    // VA**, which worked only because the mock minted synthetic addresses with a GPU lane
+    // in them. Under address identity the host VA is the guest's number and carries no
+    // provenance at all, so the check had to move to the fact it was always a proxy for:
+    // the **isolate the verb was issued on**, which the recorder logs directly and which
+    // *is* a `(Proc, GpuId)` pair. Reading identity off address bits was the weaker test
+    // even before this change — it would have kept passing had both maps landed on one
+    // isolate that happened to mint across both lanes.
     let log = rec.lock().unwrap();
-    let sessions_gpu0: std::collections::BTreeSet<u64> = log
+    let map_gpus: std::collections::BTreeSet<GpuId> = log
         .log
         .iter()
-        .filter_map(|(_id, verb)| match verb {
-            kayfabe_mocks::RmVerb::MapGpuVa { va, .. } => Some(va >> 47 & 1), // GPU lane bit
+        .filter_map(|(id, verb)| match verb {
+            kayfabe_mocks::RmVerb::MapGpuVa { .. } => Some(id.gpu()),
             _ => None,
         })
         .collect();
-    // Both GPU lanes (0 and 1) appear — the two procs mapped on distinct target isolates.
-    assert!(
-        sessions_gpu0.contains(&0) && sessions_gpu0.contains(&1),
+    assert_eq!(
+        map_gpus,
+        std::collections::BTreeSet::from([GpuId(0), GpuId(1)]),
         "each proc mapped on its own GPU's isolate"
     );
 
@@ -240,9 +258,19 @@ fn hash14_across_gpu() {
         pa.gpa, pb.gpa,
         "identical VAs across GPUs must land at disjoint GPAs"
     );
+    // ★★★ #102 — corrected, and the old assertion's own message says why it was wrong:
+    // it claimed "must land in disjoint host VASes" while asserting distinct host
+    // *addresses*. Those are different properties and only the first one is #14's. The
+    // VAS separation is asserted directly below, where it belongs.
+    assert_eq!(
+        (pa.host_va, pb.host_va),
+        (ident_va.0, ident_va.0),
+        "identical VAs across GPUs are each host-mapped AT that VA"
+    );
     assert_ne!(
-        pa.host_va, pb.host_va,
-        "identical VAs across GPUs must land in disjoint host VASes"
+        gpu.procs[&pid_a].vases[&(GpuId(0), SHARED_PDB)].host_vas,
+        gpu.procs[&pid_b].vases[&(GpuId(1), SHARED_PDB)].host_vas,
+        "…in disjoint host VASes — THE property, now asserted as itself"
     );
     // Each still resolves to ITS OWN host publication, never the other's.
     let (ba, _) = resolve(&gpu, GpuId(0), SHARED_PDB, ident_va).unwrap();

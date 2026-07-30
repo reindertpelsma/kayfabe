@@ -316,9 +316,18 @@ fn wo_14_two_proc_identical_va_interleaved_events_disjoint_backing() {
         pa.gpa, pb.gpa,
         "identical VA, interleaved order → disjoint GPA"
     );
+    // ★★★ #102 — corrected (was `assert_ne!` on the host VA). Under address identity
+    // the two land at the SAME host VA and the separation is the host VAS + the backing.
+    // The interleaved-arrival property this test is about is untouched by that.
+    assert_eq!(
+        (pa.host_va, pb.host_va),
+        (VA.0, VA.0),
+        "identical VA, interleaved order → both host-mapped AT the guest VA"
+    );
     assert_ne!(
-        pa.host_va, pb.host_va,
-        "identical VA, interleaved order → disjoint host VA"
+        gpu.procs[&pid_a].vases[&(GpuId::ZERO, A_PDB)].host_vas,
+        gpu.procs[&pid_b].vases[&(GpuId::ZERO, B_PDB)].host_vas,
+        "…in DIFFERENT host VASes, allocated on their own isolates"
     );
 }
 

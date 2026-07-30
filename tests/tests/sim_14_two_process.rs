@@ -124,11 +124,28 @@ fn t14_identical_va_disjoint_backing() {
     )
     .expect("B publishes — must NOT collide with A");
 
-    // Disjoint GPA (different arenas) AND disjoint host VA (different host VASes).
+    // ★★★ #102 — THE CORRECTED ASSERTION, and it is a correction rather than a
+    // weakening.
+    //
+    // This used to require `pub_a.host_va != pub_b.host_va`: two processes' identical
+    // guest VAs had to get *distinct host addresses*. That encodes a wrong reading of
+    // #14. #14's proven fix is per-address-**SPACE** separation, never per-address
+    // separation — and the two are not just different, they are incompatible. A guest
+    // pushbuffer names guest VAs; the host GPU's MMU resolves them in the channel's host
+    // VAS. If the host mapping is at some other address, the forwarded submission
+    // resolves nothing and the run dies as `Xid 31 FAULT_PDE`. The old assertion was
+    // pinning the condition that makes forwarding impossible.
+    //
+    // So: the SAME host VA, in DIFFERENT host VASes, on DIFFERENT isolates, over
+    // DIFFERENT physical backing. That is what safety looks like here.
     assert_ne!(pub_a.gpa, pub_b.gpa, "identical guest VA → distinct GPA");
-    assert_ne!(
-        pub_a.host_va, pub_b.host_va,
-        "identical guest VA → distinct host VA"
+    assert_eq!(
+        pub_a.host_va, SHARED_VA.0,
+        "address identity: A is host-mapped AT the guest VA the guest named"
+    );
+    assert_eq!(
+        pub_b.host_va, SHARED_VA.0,
+        "address identity: B is host-mapped AT the same guest VA — in its OWN host VAS"
     );
 
     // Each Vas resolves ITS OWN backing for the identical VA — no cross-talk.
@@ -138,6 +155,26 @@ fn t14_identical_va_disjoint_backing() {
     assert_eq!(bind_a.host_va(), Some(pub_a.host_va));
     assert_eq!(bind_b.host_va(), Some(pub_b.host_va));
     assert_ne!(bind_a.phys, bind_b.phys);
+    // The separation that IS load-bearing: the host memory objects are different, and
+    // they name different isolates (boundary 2 — a handle is `(Proc, GpuId)`-scoped).
+    let (mem_a, mem_b) = (
+        bind_a.host_memory().expect("A published"),
+        bind_b.host_memory().expect("B published"),
+    );
+    assert_ne!(mem_a, mem_b, "identical guest VA → distinct host memory");
+    assert_ne!(
+        mem_a.isolate(),
+        mem_b.isolate(),
+        "…minted by different isolates"
+    );
+    // ★ And the identity law holds over a full walk of both tables, not just the two
+    // ranges this test happens to look at.
+    for (pdb, pid) in [(A_PDB, pid_a), (B_PDB, pid_b)] {
+        gpu.procs[&pid].vases[&(GpuId::ZERO, pdb)]
+            .table
+            .audit_identity(pdb)
+            .expect("every host-backed binding is bound at its own host VA");
+    }
 
     // The two host VASes were allocated on DIFFERENT isolates (blast-radius).
     let log = recorder.lock().unwrap();

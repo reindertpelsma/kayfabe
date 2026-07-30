@@ -47,9 +47,9 @@
 use kayfabe_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
     NV01_MEMORY_SYSTEM, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0, NVOS02_FLAGS_LOCATION_PCI,
-    NVOS02_FLAGS_MAPPING_NO_MAP, NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, Nv2080AllocParameters,
-    NvMemoryVirtualAllocationParams, NvVaspaceAllocationParameters, Nvos02ParametersWithFd,
-    RegisterFd,
+    NVOS02_FLAGS_MAPPING_NO_MAP, NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS,
+    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
+    NvVaspaceAllocationParameters, Nvos02ParametersWithFd, RegisterFd,
 };
 use kayfabe_abi::generated::classes::Nv0080AllocParameters;
 use kayfabe_abi::generated::classes::{FERMI_VASPACE_A, NV01_DEVICE_0, NV01_ROOT_CLIENT};
@@ -58,7 +58,7 @@ use kayfabe_abi::generated::nvos::{
     NV_ESC_RM_UNMAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters, Nvos46Parameters,
     Nvos47Parameters, Nvos54Parameters,
 };
-use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId};
+use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_isolate::{HostHandle, IsolateId, RmBackend, RmError};
 use kayfabe_linux_raw::{CharDevice, DevDir, Indirect, RawError, ioctl};
 use kayfabe_util::leafwitness;
@@ -684,6 +684,7 @@ impl RmBackend for HostRmBackend {
         vas: HostHandle,
         memory: HostHandle,
         len: u64,
+        at: GpuVa,
     ) -> Result<u64, RmError> {
         // R9. The 64-byte `NVOS46` — the 580.65.06-and-later shape, which is the bench's
         // driver. A host older than that speaks the 56-byte one
@@ -699,10 +700,16 @@ impl RmBackend for HostRmBackend {
             h_memory,
             offset: 0,
             length: len,
-            flags: 0,
+            // ★★★ #102 — `DMA_OFFSET_FIXED_TRUE`. With this bit set `dmaOffset` is an
+            // **[IN]** parameter: RM places the mapping at the address we name instead of
+            // choosing one and reporting it back. Without it, `flags: 0, dma_offset: 0`
+            // asked the driver to pick — and a forwarded pushbuffer naming guest VAs then
+            // resolves against nothing (`C: nvkvm_gpu_emul.c:7663-7692`, *"the irreducible
+            // primitive the whole data plane rests on"*).
+            flags: NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
             flags2: 0,
             kind_override: 0,
-            dma_offset: 0,
+            dma_offset: at.0,
             status: 0,
         }
         .encode_into(&mut arg)

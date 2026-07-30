@@ -34,7 +34,7 @@
 //! make every parked verb trip an assert about a rule it is not breaking — and would train
 //! the next reader to suppress the witness, which is the expensive mistake.
 
-use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind};
+use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{HostHandle, IsolateId, RmBackend, RmError};
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeSet;
@@ -246,11 +246,17 @@ impl RmBackend for LoopbackRm {
         vas: HostHandle,
         memory: HostHandle,
         _len: u64,
+        at: GpuVa,
     ) -> Result<u64, RmError> {
         self.known(vas)?;
         self.known(memory)?;
-        let h = self.verb(false)?;
-        Ok(h << 16)
+        let _ = self.verb(false)?;
+        // #102 address identity: a placement request is honoured, not invented. The
+        // loopback double used to hand back a handle-derived VA, which under the new
+        // contract is precisely the "backend silently chose" failure `PlacementRefused`
+        // exists to catch — so it would fail every publish for a reason that has nothing
+        // to do with what this double is for.
+        Ok(at.0)
     }
 
     fn unmap_gpu_va(&mut self, vas: HostHandle, _gpu_va: u64) -> Result<(), RmError> {

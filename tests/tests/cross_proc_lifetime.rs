@@ -503,6 +503,7 @@ fn every_plan_shape_that_names_a_foreign_handle_is_refused() {
             &VerbPlan::Publish {
                 host_vas: Some(host_vas),
                 len: 0x1000,
+                at: VA2,
             },
         ),
         Err(VerbFailure {

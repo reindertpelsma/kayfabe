@@ -680,8 +680,20 @@ pub fn verb_fault(proc: ProcId, err: RmError, reason: Option<CancelReason>) -> F
 pub struct Published {
     /// The GPA carved from the proc's private arena.
     pub gpa: u64,
-    /// The host GPU VA inside this Vas's own host VAS.
+    /// The host GPU VA this range is addressable at — **equal to the guest VA**
+    /// (`#102`, address identity). It is reported rather than dropped because a caller
+    /// that just published wants the fact confirmed, not re-derived.
     pub host_va: u64,
+    /// ★ #102 — the host memory object backing the range, in the minting isolate's
+    /// namespace.
+    ///
+    /// Added because address identity took a fact away: the host VA used to encode which
+    /// isolate produced it (the mock minted it out of `(proc, GPU)` bit lanes, and half a
+    /// dozen tests read provenance straight off those bits). It cannot any more — the
+    /// address is now the *guest's* number and says nothing about who mapped it. A
+    /// [`HostHandle`] does say, exactly and by type: it is `(Proc, GpuId)`-scoped, so
+    /// `memory.isolate()` is the provenance those tests were approximating.
+    pub memory: HostHandle,
 }
 
 /// Back `[va, va+len)` in the `Vas` identified by `(gpu, pdb)` inside `proc`:
@@ -756,6 +768,22 @@ pub fn plan_publish(
     if !proc.arenas.contains_key(&gpu) || !proc.isolates.contains_key(&gpu) {
         return Err(FwdFault::NoTarget { proc: pid, gpu });
     }
+    // ★★★ #102 — refuse an already-bound VA HERE, before a single host verb exists.
+    //
+    // Address identity made this necessary *and* possible. Necessary: the host VAS is
+    // occupied at exactly this address too, so the map verb would now fail inside the
+    // driver — and the caller would learn about the collision as `Rm(NoMemory)` after
+    // allocating a VAS and a memory object, with the core's own `Overlap` vocabulary
+    // shadowed by the host's. Possible: before identity the core could not know, because
+    // the host chose the address and every map got a fresh one.
+    //
+    // This is the plan-side half only. `commit_publish`'s bind still refuses (R5) — a
+    // sibling thread can bind this range in the gap between the read and the commit, and
+    // *that* is the case the commit check exists for. Checking twice is not redundancy:
+    // the cheap check avoids host work, the late check is the correctness one.
+    if vas.table.resolve(pdb, va).is_ok() {
+        return Err(FwdFault::Address(AddressFault::Overlap { pdb, va }));
+    }
     let host_vas = vas.host_vas;
     Ok(Planned {
         plan: PublishPlan {
@@ -766,7 +794,15 @@ pub fn plan_publish(
             len,
             host_vas,
         },
-        verbs: Some(VerbPlan::Publish { host_vas, len }),
+        // ★★★ #102 — the guest VA travels INTO the host verb. The plan no longer says
+        // "map this somewhere and tell me where"; it says "map this at the address the
+        // guest named", which is the only request whose answer a forwarded pushbuffer
+        // can use.
+        verbs: Some(VerbPlan::Publish {
+            host_vas,
+            len,
+            at: va,
+        }),
     })
 }
 
@@ -890,6 +926,7 @@ pub fn commit_publish(
     Ok(Published {
         gpa: gpa.0,
         host_va,
+        memory,
     })
 }
 

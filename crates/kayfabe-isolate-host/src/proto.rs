@@ -112,6 +112,9 @@ pub enum Request {
         memory: u64,
         /// Bytes to map.
         len: u64,
+        /// ★ #102 — the host GPU VA to map AT (the guest VA, by address identity). Raw
+        /// because the wire carries scalars; the child re-wraps it as a `GpuVa`.
+        at: u64,
     },
     /// [`kayfabe_isolate::RmBackend::unmap_gpu_va`].
     UnmapGpuVa {
@@ -391,11 +394,17 @@ impl Envelope {
                 out.extend_from_slice(&cmd.to_le_bytes());
                 put_blob(&mut out, payload);
             }
-            Request::MapGpuVa { vas, memory, len } => {
+            Request::MapGpuVa {
+                vas,
+                memory,
+                len,
+                at,
+            } => {
                 out.push(9);
                 out.extend_from_slice(&vas.to_le_bytes());
                 out.extend_from_slice(&memory.to_le_bytes());
                 out.extend_from_slice(&len.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
             }
             Request::UnmapGpuVa { vas, gpu_va } => {
                 out.push(10);
@@ -455,6 +464,7 @@ impl Envelope {
                 vas: c.u64("map vas")?,
                 memory: c.u64("map memory")?,
                 len: c.u64("map len")?,
+                at: c.u64("map at")?,
             },
             10 => Request::UnmapGpuVa {
                 vas: c.u64("unmap vas")?,
@@ -695,6 +705,7 @@ mod tests {
                 vas: 7,
                 memory: 11,
                 len: 0x1000,
+                at: 0x2_0020_0000,
             },
             Request::UnmapGpuVa {
                 vas: 7,
@@ -793,12 +804,17 @@ mod tests {
                 vas: 1,
                 memory: 2,
                 len: 3,
+                at: 0x4000,
             },
         };
         let full = env.encode();
         assert_eq!(
             Envelope::decode(&full[..full.len() - 1]),
-            Err(ProtoError::Truncated { what: "map len" })
+            // #102: `at` is the LAST field on the wire, so a one-byte truncation now
+            // lands on it. That the refusal moved is the point — the placement address
+            // is carried, and a frame missing it is refused by name rather than decoded
+            // into a map at address zero.
+            Err(ProtoError::Truncated { what: "map at" })
         );
     }
 

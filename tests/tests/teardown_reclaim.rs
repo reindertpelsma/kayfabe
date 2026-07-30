@@ -794,6 +794,7 @@ fn g4_a_mid_chain_failure_enumerates_the_orphans_it_could_not_free() {
         .execute(&VerbPlan::Publish {
             host_vas: None,
             len: 0x1000,
+            at: VA,
         })
         .expect_err("the map fails, so the chain fails");
 
@@ -848,6 +849,7 @@ fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
         .execute(&VerbPlan::Publish {
             host_vas: None,
             len: 0x1000,
+            at: VA,
         })
         .expect("the chain runs");
     let VerbReply::Published {

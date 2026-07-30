@@ -124,7 +124,43 @@ read back. **That is a port-architecture question, not a detail.**
 
 ---
 
-## 3. ★★★ #13's likely root cause — a one-line un-propagated fix
+## 3. ~~★★★ #13's likely root cause — a one-line un-propagated fix~~ **REFUTED 2026-07-30**
+
+> ★★★ **This section's hypothesis is DEAD. Do not design around it.** Measured on the bench
+> 2026-07-30, after this file was written:
+>
+> - **`comp=1 runs=0` is not a failure signature.** The *passing* run has **more** of them
+>   (40 vs 38) than the hanging one.
+> - **There is no `root=SYS` in any log ever taken on this bench** — 12 × `root=FB`. Every
+>   UVM root here is framebuffer-rooted, so the "un-propagated" hardcoded `false` already
+>   **is** the resolved value and changing it is a provable no-op on this workload.
+> - ★ That also contradicts the C's own comment that *"the UVM root is typically in
+>   SYSMEM"*. On GA106 + 580.159.04, measured, it never is. One more comment that is not a
+>   measurement.
+>
+> ★★★ **And `cup8_iter` is not an oracle.** The bit-for-bit identical binary that scored
+> 1 PASS / 2 HANG yesterday ran **9/9 green** today (3/3 at the same commit, 5/5 at HEAD,
+> one clean `ITERS=16`) — ~4e-6 against yesterday's rate. The rig is healthy (`mp14` still
+> reproduces #14 exactly), so the variable is environmental and unidentified. **#13's honest
+> status is "not reproducible on demand, root cause unknown"** — neither resolved nor
+> reliably broken. A green `cup8_iter` is not evidence that anything was fixed.
+>
+> ★★ **What survives, and it is the useful half.** The owner's four-way diagnostic
+> (below) came back **"the faulting address was NOT in our table"** in **5/5** hangs —
+> zero hits at exact, 2 MiB *and* 512 MiB granularity, and not instrument blindness (the
+> same logs print backing lines for neighbouring addresses in the same format). So #13 is a
+> **capture gap, not a propagation gap.** The conclusion this section reached was right; the
+> mechanism it proposed was wrong. Capture is what `#102`/`#93` and the operand split
+> address.
+>
+> ★ **Unexplained lead, recorded not built to:** a second, never-enumerated 256 MiB-aligned
+> region at exactly `backed_span_base − 0x10400000`, into which three of the four GRAPHICS
+> faults land a bare `+0x9000`/`+0xa000`. Best guess is CUDA's kernel local-memory backing
+> store, grown at the first N=2048 launch — which would explain "ITER 3 specifically". It is
+> a hypothesis with no confirmation. The shape worth designing for is the general one:
+> *regions the guest touches that we never enumerated.*
+
+### The refuted hypothesis, kept for the record
 
 Two calls thirty lines apart:
 

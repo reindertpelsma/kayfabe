@@ -494,14 +494,23 @@ fn token_lane(t: u64) -> (u32, u32) {
     ((t >> 20) as u32, ((t >> 8) & 0xfff) as u32)
 }
 
-/// The `(isolate lane, GPU lane)` a mock host **GPU VA** was minted in: the mock places
-/// every mapping at `0x4000_0000_0000 + (idlane << 40) + (gpu << 47) + ((vas & 0xff) <<
-/// 32) + (page << 12)`, and the two lower fields provably cannot carry into bit 40
-/// (`0xff << 32` plus `(2^20 - 1) << 12` is strictly under `1 << 40`), so the provenance
-/// of a mapped VA is readable straight off the bits. Bit 46 is the constant base, hence
-/// the `0x3f` mask rather than `0x7f`.
-fn host_va_lane(va: u64) -> (u32, u32) {
-    (((va >> 40) & 0x3f) as u32, ((va >> 47) & 1) as u32)
+/// ★★★ #102 — **the `(isolate lane, GPU lane)` a publication was minted in, read off the
+/// HANDLE instead of off the address.**
+///
+/// This used to decode the mock's synthetic host GPU VA
+/// (`0x4000_0000_0000 + (idlane << 40) + (gpu << 47) + …`). That was only ever possible
+/// because the mock *chose* the address; under address identity the host VA is the
+/// **guest's** number, carries no provenance, and is deliberately identical across two
+/// procs that named the same VA. Decoding it would now report the guest's bits as an
+/// isolate id.
+///
+/// The replacement is not a workaround, it is the fact the old one approximated: a
+/// [`HostHandle`] is `(Proc, GpuId)`-scoped by type, so its isolate IS the provenance.
+/// Kept as `(u32, u32)` with the same `+ 1` lane convention so every call site's
+/// expectation is unchanged.
+fn host_va_lane(memory: kayfabe_isolate::HostHandle) -> (u32, u32) {
+    let iso = memory.isolate();
+    (iso.proc() + 1, iso.gpu().0)
 }
 
 // =================================================================================
@@ -582,7 +591,7 @@ fn ctl_workload(device: &SharedDevice, pids: &[ProcId], i: usize) -> usize {
             "another thread's commit landed in this thread's binding"
         );
         assert_eq!(
-            host_va_lane(p.host_va),
+            host_va_lane(p.memory),
             (pid.0 + 1, gpu.0),
             "a host VA was minted in another proc's / another GPU's isolate"
         );
@@ -1765,12 +1774,21 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], recycled: (ProcId, ProcId)
                     "({mode:?}) one host handle is observed by two procs"
                 );
             }
-            for (_va, _len, b) in vas.table.iter() {
-                let Some(hv) = b.host_va() else { continue };
+            for (va, _len, b) in vas.table.iter() {
+                let Some(mem) = b.host_memory() else { continue };
                 assert_eq!(
-                    host_va_lane(hv),
+                    host_va_lane(mem),
                     (lane, g.0),
-                    "({mode:?}) {pid:?} holds a host VA from another (proc, GPU)"
+                    "({mode:?}) {pid:?} holds host backing from another (proc, GPU)"
+                );
+                // ★★★ #102 — the identity law, over a full table walk of every proc on
+                // every target, inside the MEAN run: a host-backed binding is mapped at
+                // the VA it is bound at, or a forwarded submission naming that VA
+                // resolves nothing on the host.
+                assert_eq!(
+                    b.host_va(),
+                    Some(va),
+                    "({mode:?}) {pid:?} holds a binding published somewhere other than                      its own VA — the #102 unaddressable-mapping state"
                 );
                 let r = p
                     .arenas
@@ -9999,7 +10017,7 @@ fn n3_c_the_mean_two_gpu_straddler_progresses_under_pending_work_on_both_isolate
                             "another target's commit landed in this one's binding"
                         );
                         assert_eq!(
-                            host_va_lane(p.host_va),
+                            host_va_lane(p.memory),
                             (lane, gpu.0),
                             "a host VA was minted in the wrong (proc, GPU) isolate"
                         );
@@ -10141,7 +10159,7 @@ fn n3_c_the_mean_two_gpu_straddler_progresses_under_pending_work_on_both_isolate
         for (i, (gpu, p)) in parked.iter().enumerate() {
             assert_eq!(gpu.0, i as u32);
             assert_eq!(
-                host_va_lane(p.host_va),
+                host_va_lane(p.memory),
                 (s.0 + 1, gpu.0),
                 "({mode:?}) a parked publication's host VA came from the other isolate"
             );
@@ -10618,8 +10636,8 @@ fn the_rpc_bridge_survives_two_interleaved_guest_streams_under_mean_device_load(
                 .publish_backing(GPU0, Pdb(rb::PDB2), GpuVa(0x50_0000_0000), 0x1000)
                 .expect("process 2 publishes at the SAME guest VA");
             assert_ne!(
-                host_va_lane(pub1.host_va),
-                host_va_lane(pub2.host_va),
+                host_va_lane(pub1.memory),
+                host_va_lane(pub2.memory),
                 "{mode:?}/{profile:?}: ★★ two host VASes, in two isolate namespaces — the \
                  same guest VA in two procs must never share host state",
             );
@@ -10715,8 +10733,8 @@ fn the_rpc_bridge_survives_two_interleaved_guest_streams_under_mean_device_load(
                 .publish_backing(GPU0, Pdb(rb::PDB3), GpuVa(0x50_0000_0000), 0x1000)
                 .expect("the recycled declaration publishes in its own isolate");
             assert!(
-                host_va_lane(pub3.host_va) != host_va_lane(pub1.host_va)
-                    && host_va_lane(pub3.host_va) != host_va_lane(pub2.host_va),
+                host_va_lane(pub3.memory) != host_va_lane(pub1.memory)
+                    && host_va_lane(pub3.memory) != host_va_lane(pub2.memory),
                 "{mode:?}/{profile:?}: ★ a re-declared hClient never inherits the previous \
                  tenant's isolate",
             );

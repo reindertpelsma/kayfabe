@@ -33,7 +33,7 @@ use crate::proto::{
     Envelope, Reply, Request, WireError, engine_from_code, read_frame, write_frame,
 };
 use crate::rm::{HostRmBackend, RmConnection};
-use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId};
+use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa};
 use kayfabe_isolate::{HostHandle, IsolateId, RmBackend, RmError};
 use kayfabe_linux_raw::{
     DevDir, ThreadId, adopt_inherited_fd, current_thread_id, install_break_handler,
@@ -343,7 +343,12 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             Ok(()) => Reply::Payload(payload),
             Err(e) => failed(e),
         },
-        Request::MapGpuVa { vas, memory, len } => match rm.map_gpu_va(raw(vas), raw(memory), len) {
+        Request::MapGpuVa {
+            vas,
+            memory,
+            len,
+            at,
+        } => match rm.map_gpu_va(raw(vas), raw(memory), len, GpuVa(at)) {
             Ok(va) => Reply::Va(va),
             Err(e) => failed(e),
         },
@@ -378,7 +383,10 @@ fn failed(e: RmError) -> Reply {
         RmError::NoMemory => WireError::NoMemory,
         RmError::Interrupted => WireError::Interrupted,
         RmError::Other(status) => WireError::Other(status),
-        RmError::Wedged | RmError::ForeignHandle { .. } => {
+        // #102: a child backend cannot produce `PlacementRefused` — the check that mints
+        // it lives in the PARENT's `Worker::execute`, above the wire. Listed explicitly
+        // rather than caught by a wildcard, so adding a variant stays a compile error.
+        RmError::Wedged | RmError::ForeignHandle { .. } | RmError::PlacementRefused { .. } => {
             WireError::Other(crate::rm::NOT_ON_THIS_RUNG)
         }
     })

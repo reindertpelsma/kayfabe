@@ -740,14 +740,33 @@ fn per_proc_parallelism_two_procs_no_shared_lock() {
         (ta.join().expect("A clean"), tb.join().expect("B clean"))
     });
 
-    // Identical guest VAs → fully disjoint GPAs and host VAs (no cross-talk at all).
+    // Identical guest VAs → fully disjoint GPAs and disjoint host BACKING.
     let gpas_a: BTreeSet<u64> = pub_a.iter().map(|p| p.gpa).collect();
     let gpas_b: BTreeSet<u64> = pub_b.iter().map(|p| p.gpa).collect();
     assert_eq!(gpas_a.len() as u64, PUBLISHES, "no GPA reuse within A");
     assert!(gpas_a.is_disjoint(&gpas_b), "GPA overlap across procs");
+    // ★★★ #102 — corrected. This used to require the two host-VA SETS to be disjoint,
+    // which under address identity is the opposite of correct: the two threads publish
+    // the SAME guest VAs, so the host VA sets are necessarily EQUAL. What must be
+    // disjoint is the host state behind them — different memory objects, minted in
+    // different isolates, mapped into different host VASes.
     let hva_a: BTreeSet<u64> = pub_a.iter().map(|p| p.host_va).collect();
     let hva_b: BTreeSet<u64> = pub_b.iter().map(|p| p.host_va).collect();
-    assert!(hva_a.is_disjoint(&hva_b), "host VA overlap across procs");
+    assert_eq!(
+        hva_a, hva_b,
+        "identical guest VAs are host-mapped at identical host VAs (address identity)"
+    );
+    let mem_a: BTreeSet<_> = pub_a.iter().map(|p| p.memory).collect();
+    let mem_b: BTreeSet<_> = pub_b.iter().map(|p| p.memory).collect();
+    assert_eq!(
+        mem_a.len() as u64,
+        PUBLISHES,
+        "no host-object reuse within A"
+    );
+    assert!(
+        mem_a.is_disjoint(&mem_b),
+        "host backing overlap across procs — THE #14 hazard, asserted as itself"
+    );
 
     // Each proc's host VAS came from its OWN isolate (namespace = ProcId + 1).
     for p in gpu.procs.values() {
@@ -768,8 +787,10 @@ fn per_proc_parallelism_two_procs_no_shared_lock() {
 /// isolate's host mappings must come out byte-exact, with zero double-allocations.
 ///
 /// (This test caught a real mock bug: `MockRmBackend::map_gpu_va` OR-ed its per-VAS
-/// lane over a bump counter and minted duplicate host VAs after 2^16 pages — see
-/// `mock_rm_map_gpu_va_stays_distinct_past_65536_pages` in `kayfabe-mocks`.)
+/// lane over a bump counter and minted duplicate host VAs after 2^16 pages. ★ That
+/// minting scheme no longer exists — under `#102` the mock places mappings where it is
+/// told — and the successor property lives in
+/// `mock_rm_map_gpu_va_places_exactly_where_asked_and_collides_only_within_one_vas`.)
 #[test]
 fn same_proc_interleaving_is_exact() {
     let _wd = watchdog("same_proc_interleaving_is_exact", Duration::from_secs(60));

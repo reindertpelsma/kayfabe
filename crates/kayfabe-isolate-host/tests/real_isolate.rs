@@ -58,6 +58,12 @@ use std::time::Duration;
 /// test cannot drift from the binary it is testing.
 const ISOLATE: &str = env!("CARGO_BIN_EXE_kayfabe-isolate");
 
+/// ★ #102 — the guest VA every publish here maps AT. Address identity made placement an
+/// argument, so these plans carry one; the specific value is immaterial to what each test
+/// is about (all of them allocate a fresh host VAS), but it must be *present*, because a
+/// publish with no address is no longer expressible.
+const AT: GpuVa = GpuVa(0x2_0020_0000);
+
 /// How long one sampling tick waits before re-checking a progress edge. Never a deadline:
 /// see the module docs.
 const TICK: Duration = Duration::from_millis(25);
@@ -104,6 +110,7 @@ fn a_real_isolate_serves_a_verb_chain_through_the_port() {
         .execute(&VerbPlan::Publish {
             host_vas: None,
             len: 0x1000,
+            at: AT,
         })
         .expect("the child served it");
     match reply {
@@ -232,6 +239,7 @@ fn two_real_isolates_mint_colliding_values_and_the_gate_is_what_refuses_them() {
         .execute(&VerbPlan::Publish {
             host_vas: Some(ha),
             len: 0x1000,
+            at: AT,
         })
         .expect_err("a foreign handle must be refused");
     assert_eq!(
@@ -293,6 +301,7 @@ fn parallelism_comes_from_isolates_and_a_parked_client_does_not_stall_its_peers(
         VerbPlan::Publish {
             host_vas: None,
             len: 0x1000,
+            at: AT,
         },
     );
 
@@ -303,6 +312,7 @@ fn parallelism_comes_from_isolates_and_a_parked_client_does_not_stall_its_peers(
         let reply = wb.execute(&VerbPlan::Publish {
             host_vas: None,
             len: 0x1000,
+            at: AT,
         });
         assert!(
             reply.is_ok(),
@@ -388,6 +398,7 @@ fn the_pool_does_not_buy_wire_concurrency_on_one_client() {
             VerbPlan::Publish {
                 host_vas: None,
                 len: 0x1000,
+                at: AT,
             },
         );
 
@@ -415,6 +426,7 @@ fn the_pool_does_not_buy_wire_concurrency_on_one_client() {
                 wp.execute(&VerbPlan::Publish {
                     host_vas: None,
                     len: 0x1000,
+                    at: AT,
                 })
                 .is_ok(),
                 "round {round}: the peer isolate must keep running"
@@ -490,7 +502,8 @@ fn a_cancel_for_a_finished_transaction_is_dropped() {
     assert!(
         w.execute(&VerbPlan::Publish {
             host_vas: None,
-            len: 0x1000
+            len: 0x1000,
+            at: AT,
         })
         .is_ok()
     );
@@ -506,7 +519,8 @@ fn a_cancel_for_a_finished_transaction_is_dropped() {
     assert!(
         w.execute(&VerbPlan::Publish {
             host_vas: None,
-            len: 0x1000
+            len: 0x1000,
+            at: AT,
         })
         .is_ok(),
         "a stale cancel landed on an innocent later operation"
@@ -528,6 +542,7 @@ fn abandon_releases_a_wedged_requester_with_wedged() {
         VerbPlan::Publish {
             host_vas: None,
             len: 0x1000,
+            at: AT,
         },
     );
     // It really is parked before we abandon it.
@@ -592,7 +607,8 @@ fn a_retired_isolate_refuses_new_checkouts() {
     assert!(
         w.execute(&VerbPlan::Publish {
             host_vas: None,
-            len: 0x1000
+            len: 0x1000,
+            at: AT,
         })
         .is_ok()
     );
@@ -615,6 +631,7 @@ fn retiring_a_proc_cancels_every_checked_out_worker() {
             VerbPlan::Publish {
                 host_vas: None,
                 len: 0x1000,
+                at: AT,
             },
         ));
     }
@@ -664,6 +681,7 @@ fn dropping_an_isolate_mid_verb_does_not_hang() {
         VerbPlan::Publish {
             host_vas: None,
             len: 0x1000,
+            at: AT,
         },
     );
     drop(isolate);
@@ -700,6 +718,7 @@ fn a_verb_under_a_ranked_lock_panics_naming_r1() {
         let _ = w.execute(&VerbPlan::Publish {
             host_vas: None,
             len: 0x1000,
+            at: AT,
         });
     }));
     kayfabe_util::lockwitness::note_released(1);

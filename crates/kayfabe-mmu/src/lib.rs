@@ -136,6 +136,26 @@ pub enum AddressFault {
         /// Start of the attempted (malformed) range.
         va: GpuVa,
     },
+    /// ★★★ **A host-backed binding whose host GPU VA is not the VA it is bound at**
+    /// (`#102`, `eight_blockers_resolved.md` §1).
+    ///
+    /// The address plane's one identity law: *every binding with a host backing satisfies
+    /// `host_va == the VA it is bound at`*. It has to hold because the guest's own
+    /// commands are what dereference these addresses — a forwarded pushbuffer names the
+    /// guest VA and the host MMU resolves it in the host VAS. A binding that records
+    /// "published, but over there" is a mapping the guest can never reach, and it fails
+    /// **later and elsewhere**, as `Xid 31 FAULT_PDE` inside a copy engine.
+    ///
+    /// Refused at [`AddressTable::bind`] — the table's only entrance — so the state is
+    /// not merely detectable, it never enters the table.
+    HostVaMismatch {
+        /// The PDB whose table refused the bind.
+        pdb: Pdb,
+        /// The VA the range is being bound at (what the host VA must equal).
+        va: GpuVa,
+        /// The host VA the binding actually carried.
+        host_va: u64,
+    },
 }
 
 /// The forward-populated VA→backing table of ONE VAS (identified by its PDB).
@@ -166,6 +186,19 @@ impl AddressTable {
         len: u64,
         binding: Binding,
     ) -> Result<(), AddressFault> {
+        // ★★★ #102 — ADDRESS IDENTITY, at the table's only entrance. Checked before the
+        // range is inserted, so a binding that claims a host publication somewhere other
+        // than its own VA is not merely reportable — it is never in the table for a
+        // resolve to hand out, and never in the ring gate for a doorbell to pass on.
+        if let Some(h) = binding.host
+            && h.host_va != va.0
+        {
+            return Err(AddressFault::HostVaMismatch {
+                pdb,
+                va,
+                host_va: h.host_va,
+            });
+        }
         self.map.insert(va.0, len, binding).map_err(|e| match e {
             kayfabe_util::IntervalError::Overlap { .. } => AddressFault::Overlap { pdb, va },
             // Zero-length / u64-wrapping range from hostile guest input: loud, not a panic.
@@ -197,6 +230,34 @@ impl AddressTable {
     /// Iterate bindings as `(va, len, &binding)` in ascending VA order.
     pub fn iter(&self) -> impl Iterator<Item = (u64, u64, &Binding)> {
         self.map.iter()
+    }
+
+    /// ★★★ #102 — the identity law as a **whole-table walk**: the first host-backed
+    /// binding whose host VA is not the VA it is bound at, or `None` if the table is
+    /// clean.
+    ///
+    /// [`AddressTable::bind`] already refuses such a binding, so in a correct build this
+    /// always answers `None`. It exists anyway, and is not redundant: `bind` proves the
+    /// law about *every write that went through it*, and this proves it about the
+    /// *table*. Those differ the moment anything reaches the map another way — a future
+    /// bulk-populate path, a deserialize, a merge. A law with only an entry check is one
+    /// refactor away from being a law about nothing.
+    ///
+    /// # Errors
+    /// [`AddressFault::HostVaMismatch`] naming the offending range.
+    pub fn audit_identity(&self, pdb: Pdb) -> Result<(), AddressFault> {
+        for (va, _len, b) in self.map.iter() {
+            if let Some(h) = b.host
+                && h.host_va != va
+            {
+                return Err(AddressFault::HostVaMismatch {
+                    pdb,
+                    va: GpuVa(va),
+                    host_va: h.host_va,
+                });
+            }
+        }
+        Ok(())
     }
 }
 
@@ -269,5 +330,73 @@ mod tests {
             Err(AddressFault::Miss { .. })
         ));
         t.bind(PDB, GpuVa(0x1800), 0x1000, bind).unwrap();
+    }
+
+    /// ★★★ `#102` — **`audit_identity` fires.**
+    ///
+    /// [`AddressTable::bind`] refuses a host-backed binding whose host VA is not the VA
+    /// it is bound at, which means **no caller of the public API can build a table this
+    /// walk fails on** — so the walk cannot be fired from an integration test, and a
+    /// control that cannot be fired is not a control. It is fired here, from inside the
+    /// crate, by writing the private map directly.
+    ///
+    /// That is not cheating: it is *exactly* the situation the walk exists for. `bind`
+    /// proves the law about every write that went through it; the walk proves it about
+    /// the table. They differ the moment anything else reaches `self.map` — a bulk
+    /// populate path, a deserialize, a merge — which is a plausible next commit, not a
+    /// hypothetical.
+    ///
+    /// **Instrument check, performed 2026-07-30:** with `audit_identity`'s body replaced
+    /// by `Ok(())`, this test fails on the negative assertion. Restored.
+    #[test]
+    fn taddr_audit_identity_catches_a_binding_that_bypassed_the_entrance() {
+        let mem = kayfabe_isolate::HostHandle::new(
+            kayfabe_isolate::IsolateId::new(1, kayfabe_arch::ids::GpuId::ZERO),
+            9,
+        );
+        let honest = |va: u64| Binding {
+            phys: 0x8000_0000 + va,
+            aperture: Aperture::SysmemCoherent,
+            host: Some(HostBacking {
+                memory: mem,
+                host_va: va,
+            }),
+        };
+
+        let mut t = AddressTable::new();
+        for k in 0..4u64 {
+            let va = 0x2_0020_0000 + k * 0x10000;
+            t.bind(PDB, GpuVa(va), 0x10000, honest(va)).unwrap();
+        }
+        assert_eq!(t.audit_identity(PDB), Ok(()), "a clean table audits clean");
+
+        // Bypass the entrance, the way a future populate path would.
+        let rogue_va = 0x2_0080_0000u64;
+        t.map
+            .insert(
+                rogue_va,
+                0x1000,
+                Binding {
+                    phys: 0x1234_0000,
+                    aperture: Aperture::Vidmem,
+                    host: Some(HostBacking {
+                        memory: mem,
+                        // Published one page away from where it is bound — the exact
+                        // state that reads as "mapped" everywhere in core state and
+                        // resolves to nothing on the host GPU.
+                        host_va: rogue_va + 0x1000,
+                    }),
+                },
+            )
+            .expect("the private map takes it — that is the whole premise");
+        assert_eq!(
+            t.audit_identity(PDB),
+            Err(AddressFault::HostVaMismatch {
+                pdb: PDB,
+                va: GpuVa(rogue_va),
+                host_va: rogue_va + 0x1000,
+            }),
+            "the walk names the offending range, so the diagnostic is actionable"
+        );
     }
 }

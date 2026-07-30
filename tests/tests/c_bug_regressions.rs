@@ -481,7 +481,19 @@ fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
         pub_a.gpa, pub_b.gpa,
         "late-arriving B still gets disjoint backing"
     );
-    assert_ne!(pub_a.host_va, pub_b.host_va);
+    // ★★★ #102 — corrected (was `assert_ne!`). Identical guest VAs are host-mapped at the
+    // SAME address in DIFFERENT host VASes; the separation is the VAS and the backing,
+    // never the address. See `sim_14_two_process::t14_identical_va_disjoint_backing`.
+    assert_eq!(
+        (pub_a.host_va, pub_b.host_va),
+        (VA.0, VA.0),
+        "both procs host-mapped AT the guest VA they named"
+    );
+    assert_ne!(
+        gpu.procs[&pid_a].vases[&(GpuId::ZERO, A_PDB)].host_vas,
+        gpu.procs[&pid_b].vases[&(GpuId::ZERO, B_PDB)].host_vas,
+        "…in different host VASes — the late arrival got its OWN, not a share of A's"
+    );
     let out_b =
         handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x20)), &[]).unwrap();
     assert!(

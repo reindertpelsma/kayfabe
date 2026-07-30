@@ -540,7 +540,15 @@ fn two_processes_sharing_one_kernel_client_stay_fully_isolated() {
     )
     .expect("B publishes — must NOT collide with A");
     assert_ne!(pa.gpa, pb.gpa, "identical guest VA → distinct GPA");
-    assert_ne!(pa.host_va, pb.host_va, "…and distinct host VA");
+    // ★★★ #102 — corrected (was `assert_ne!` on the host VA). The two processes here
+    // share ONE duplicated RM client, which is precisely why the separation must be the
+    // address SPACE and not the address: a client key aliases them (`eight_blockers_
+    // resolved.md` §4), and distinct-addresses would have been an accident of the mock.
+    assert_eq!(
+        (pa.host_va, pb.host_va),
+        (SHARED_VA.0, SHARED_VA.0),
+        "…both host-mapped AT the guest VA they named"
+    );
 
     // No shared host handles: every host handle names the isolate that minted it
     // (§12.26), and the two procs' host VASes name different isolates.

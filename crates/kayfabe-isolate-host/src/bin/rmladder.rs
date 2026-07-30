@@ -19,7 +19,7 @@
 //! $ kayfabe-rm-ladder --gpu 0
 //! ```
 
-use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId};
+use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa};
 use kayfabe_isolate::{IsolateId, RmBackend};
 use kayfabe_isolate_host::rm::{HostRmBackend, RmConnection};
 use kayfabe_linux_raw::DevDir;
@@ -245,10 +245,23 @@ fn main() -> std::process::ExitCode {
         }
     };
 
-    // R9 — map it into the address space from R7. A non-zero GPU VA out of this is the
-    // first end-to-end fact this project has ever had about its own host plane.
-    match rm.map_gpu_va(vas, mem, LEN) {
-        Ok(va) => println!("ok    R9 host GPU VA    = {va:#018x}"),
+    // R9 — map it into the address space from R7, AT A CHOSEN ADDRESS. A non-zero GPU VA
+    // out of this is the first end-to-end fact this project has ever had about its own
+    // host plane; that the VA is the one we ASKED for is #102's fact, and only hardware
+    // can supply it (no mock can, which is how the gap survived).
+    //
+    // The address is a plausible guest compute VA — high enough to sit above whatever the
+    // driver reserves at the bottom of a fresh `FERMI_VASPACE_A`, and 2 MiB-aligned.
+    const AT: GpuVa = GpuVa(0x2_0020_0000);
+    match rm.map_gpu_va(vas, mem, LEN, AT) {
+        Ok(va) if va == AT.0 => {
+            println!("ok    R9 host GPU VA    = {va:#018x} (FIXED, as requested)");
+        }
+        Ok(va) => println!(
+            "FAIL  R9 placement       = asked {:#018x}, RM chose {va:#018x} \
+             (DMA_OFFSET_FIXED_TRUE not honoured — the data plane cannot work)",
+            AT.0
+        ),
         Err(e) => println!("FAIL  R9 NV_ESC_RM_MAP_MEMORY_DMA: {e:?}"),
     }
 
@@ -298,6 +311,7 @@ fn main() -> std::process::ExitCode {
             match w.execute(&kayfabe_isolate::VerbPlan::Publish {
                 host_vas: None,
                 len: LEN,
+                at: AT,
             }) {
                 Ok(kayfabe_isolate::VerbReply::Published {
                     host_va, memory, ..
