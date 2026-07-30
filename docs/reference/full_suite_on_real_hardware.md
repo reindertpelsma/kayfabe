@@ -77,8 +77,12 @@ GPU and a wall clock, and a timing assertion in CI is a flake with a justificati
 
 ### 2.3 ★★★ SILENT PASSES
 
-**Zero, as of this measurement**, and that is a real property of the tree rather than luck:
-every environment-conditional early return in a `#[test]` writes a marker to stderr first.
+**Zero** — measured by the census sweep of 2026-07-30 over `HEAD = 5c4cb0d`, re-checked by the
+`gate-census` phase of the run recorded in §7 (RTX 3090 box, `KAYFABE_SLOW=1`, KVM and both
+ogkm trees present), and standing evidence thereafter: `gate-census` fails on any `SKIPPED`
+marker, and `tests/tests/full_suite_ledger.rs` fails if the instrument that emits them is
+weakened. That zero is a real property of the tree rather than luck: every
+environment-conditional early return in a `#[test]` writes a marker to stderr first.
 
 Two defects of the *instrument* were found by this census and fixed in the same commit as
 this file. Neither was a silent pass; both were a marker that lied:

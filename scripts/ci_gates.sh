@@ -117,7 +117,16 @@ for step in job.get("steps", []):
         if consumes:
             deferred.append(name)
         continue
-    out.append(json.dumps({"name": name, "run": run}))
+    # ★ `working-directory` is part of the step, MEASURED 2026-07-30. One step
+    # ("Format check (fuzz workspace)") carries `working-directory: fuzz`, and this
+    # extractor dropped it — so locally that step ran `cargo fmt --all --check` at the
+    # REPOSITORY ROOT: a second copy of the previous step, and the fuzz workspace's own
+    # formatting was never checked by this runner at all. Two identical gates where there
+    # should be two different ones is the same class as a gate that cannot fire, and it
+    # hides in plain sight because both are green on a clean tree.
+    out.append(json.dumps({
+        "name": name, "run": run, "wd": step.get("working-directory", "."),
+    }))
 for name in deferred:
     print(f"__DEFERRED__{name}", file=sys.stderr)
 print("\n".join(out))
@@ -165,8 +174,10 @@ fail=0
 for s in "${steps[@]}"; do
   name=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["name"])' "$s")
   run=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["run"])' "$s")
+  wd=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("wd","."))' "$s")
   printf '\n=== %s\n' "$name"
-  if bash -e -c "$run"; then
+  if [ "$wd" != "." ]; then printf '    (in %s/)\n' "$wd"; fi
+  if ( cd "$wd" && bash -e -c "$run" ); then
     printf '    ok\n'
   else
     printf '    ★ FAILED\n'

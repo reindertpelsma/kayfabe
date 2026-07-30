@@ -28,8 +28,11 @@
 //!
 //! It does not re-derive the phase count, the target universe or the gate families. That would
 //! be a second implementation of the runner living next to the first — the shape that let the
-//! tier rule keep two evaluation sites and the ratchet keep a blind spot. Those are facts to be
-//! *measured* by running the script; this test only insists the pins exist and bite.
+//! tier rule keep two evaluation sites and the ratchet keep a blind spot. Those numbers come
+//! from a run — `scripts/run_full_suite.sh` on a real box, whose ledger records which box, which
+//! revision and which phases — and the run of record is written up in
+//! `docs/reference/full_suite_on_real_hardware.md`. This test only insists the pins exist and
+//! bite.
 
 use std::path::PathBuf;
 
@@ -247,9 +250,9 @@ fn a_red_caused_by_the_box_cannot_be_reported_as_a_red_caused_by_the_code() {
     assert!(
         src.contains("git status --porcelain"),
         "★ the runner no longer reports working-tree state. The boundary, vocabulary, \
-         unsafe-surface and ABI-quarantine gates grep the tree AS IT IS, so a file belonging \
-         to another writer is a real input to a real gate — a red run needs that fact beside \
-         it, not discovered an hour later."
+         `*_unsafe.rs`-naming and ABI-quarantine gates grep the tree AS IT IS, so a file \
+         belonging to another writer is a real input to a real gate — a red run needs that \
+         fact beside it, not discovered an hour later."
     );
 }
 
@@ -276,7 +279,9 @@ fn a_reached_count_of_zero_names_which_kind_of_zero_it_is() {
         "★ the test step no longer writes a completion sentinel, so the reached-count steps \
          below it cannot tell a real zero from an unreadable input."
     );
-    let guards = src.matches("INFRASTRUCTURE FAILURE, NOT A TEST RESULT").count();
+    let guards = src
+        .matches("INFRASTRUCTURE FAILURE, NOT A TEST RESULT")
+        .count();
     assert!(
         guards >= 3,
         "★ only {guards} reached-count step(s) refuse over an unreadable log; there are three \
@@ -355,9 +360,8 @@ fn every_cargo_workspace_in_the_tree_is_named_by_the_runner() {
                 }
                 stack.push(p);
             } else if name == "Cargo.toml"
-                && std::fs::read_to_string(&p).is_ok_and(|s| {
-                    s.lines().any(|l| l.trim_start().starts_with("[workspace]"))
-                })
+                && std::fs::read_to_string(&p)
+                    .is_ok_and(|s| s.lines().any(|l| l.trim_start().starts_with("[workspace]")))
             {
                 let rel = p
                     .parent()
