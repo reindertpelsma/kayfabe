@@ -190,3 +190,76 @@ balloon situation — and §7.3's fault path is the honest handling of it.
 
 **Not urgent.** None of §7 blocks `cup2`. §7.1's consistency trap and §7.3's shared fault path are
 the two items worth deciding *before* the allocator exists; the rest can follow.
+
+## 8. Reservation (Xms/Xmx) — recorded for later, and the ONE thing that must be shaped now
+
+> Owner, 2026-07-30: an operator asks to reserve GPU RAM; we pre-occupy that much on the host GPU
+> and hand it out to guest processes, so the full GPGA is always accessible **like vGPU**. Dynamic
+> GPGA still works on top: unreserved memory may be claimed by other VMs or the host while the
+> guest believes it is free. **Xms / Xmx.**
+
+**The shape is right and it does solve §7 definitively.** Reserving converts *"an allocation may
+fail at an arbitrary later moment"* into *"the VM failed to start"*, which is the correct time to
+fail. Below the floor the guest's own accounting is **true**, which is exactly the vGPU property.
+
+### 8.1 Three refinements, offered honestly
+
+**(a) Don't "swap" — OWN and SUB-ALLOCATE.** Releasing a dummy page and allocating a real one in
+its place is a **race**: between the free and the alloc, another tenant can take the memory, and RM
+offers no atomic exchange to close it. Reserving as **arenas we simply keep**, and sub-allocating
+from them, has nothing to race — the memory is already ours. Simpler *and* strictly stronger.
+- ⚠ **The caveat that keeps the idea honest:** sub-allocations inherit their arena's properties
+  (aperture, page size, PTE kind/compression). So reserve **one arena per property class**, not one
+  giant arena. Where a guest genuinely needs an object shape no arena can carve, free-then-alloc is
+  the fallback — **and that step is precisely where the guarantee leaks**, so it should be named as
+  such rather than hidden.
+
+**(b) The Xms/Xmx analogy is apt, with one wrinkle worth designing around.** The JVM *knows* it is
+above Xms and can GC under pressure. **Our guest has no equivalent** — it believes all of GPGA is
+free, so a failure in the opportunistic region is genuinely *unexpected* to it in a way heap-growth
+failure is not to Java. ⇒ **Default Xms == Xmx** (full reservation) and let the operator opt down,
+rather than following Java's default of a low floor.
+
+**(c) "Others may claim it if unused" needs NO eviction machinery — provided we never allocated
+it.** Others can claim it *because it was never ours*. If instead we pre-allocated above the floor
+and had to give it back, that is **eviction**, i.e. migrating live guest data out of VRAM with
+in-flight DMA to handle — essentially UVM-style oversubscription, a large project. Keep the simple
+reading: **the floor is allocated, above the floor nothing is**, and §7.3's fault path covers the
+opportunistic region.
+
+### 8.2 ★★★ The one construct that must be right NOW, or this IS a bolt-on
+
+**[measured, `crates/kayfabe-mmu/src/lib.rs:70-78`]**
+
+```rust
+pub struct HostBacking {
+    pub memory: HostHandle,   // "the host memory object this range was allocated from"
+    pub host_va: u64,
+}
+```
+
+**There is no offset.** The shape hardcodes **one host object per binding**. A reservation arena
+requires the opposite: **many bindings sharing one host object at different offsets**. So as
+written, arenas cannot be expressed — and retrofitting an offset later means touching every
+consumer that reasons about backing identity, lifetime and reclaim.
+
+⇒ **Give `HostBacking` an explicit offset (and length) now**, or make it a type that can express
+*"the whole object"* and *"a slice of an object"* as distinct, exhaustively-matched cases. Doing it
+today is a small, localised change; doing it after the publish/reclaim/orphan paths have grown is
+the expensive version.
+
+★ **The existing design is already the right *kind* of construct, which is why this is cheap.**
+`HostBacking` exists specifically so that *"mapped somewhere, owning nothing freeable"* is
+**unrepresentable** — the G1 defect, where `commit_publish` stored the VA and dropped the handle,
+leaving most allocated host bytes in no core state and no reclaim path. Extending that same
+type-makes-it-impossible discipline to *"which part of the object"* is the natural next step, not a
+new idea.
+
+### 8.3 What does NOT need to change now
+
+- **Allocation failure is already modelled** — the publish path returns `Result` and already
+  carries `Rm(NoMemory)`, so §7.3's refusals have somewhere to live. No retrofit needed.
+- **Orphan support (§2 invariant 4) already anticipates arenas**: backing whose lifetime is
+  independent of any GPU VA is exactly what a sub-allocated arena slice is.
+- The reservation *policy* (sizes, admission control, per-class arenas) is configuration and can
+  arrive whenever. **Only the addressing shape is time-sensitive.**
