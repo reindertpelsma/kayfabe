@@ -695,3 +695,78 @@ answer, and if it is "we perform it", the content is free — which is exactly h
   encoding `0=VID, 2/3=SYS`), `pt_enum` **skips** it (`C: :8649`) and `cpt_decode_page` **skips** it
   (`C: :8733`) — and both skips carry the same reason, *"its only known producer is the CeUtils
   whole-FB identity alias"*, i.e. **policy about that alias, not a property of a 512 MiB leaf.**
+
+## 12. ★★★ §11.3 ANSWERED BY THE OWNER (2026-07-30) — stage C is UNBLOCKED
+
+The blocking question was *who performs a phys-operand copy?* The ruling is not a boolean over
+whole copies. It is a **decomposition by representability**:
+
+1. **We perform a copy only where it is UNREPRESENTABLE by real NVIDIA CE** — i.e. where an
+   operand is *fabricated*: our fake PDB / GPGA / emulated-FB space, which no real engine can be
+   pointed at because the addresses do not denote real device memory.
+2. **Everything representable goes to real hardware.** If the operands can be expressed as GPU VAs
+   and source and/or destination is VRAM, issue a **real CE copy** — that is normally *faster*
+   than a CPU `memcpy`, not merely more faithful.
+3. **A single privileged CE request may SPLIT.** If a privileged copy also covers non-fake memory
+   that a real CE *can* express, those sub-copies are issued to **real CE**; only the
+   unrepresentable remainder is ours.
+4. **The executor is the ISOLATE in both cases** — real CE submission and our own copy over
+   VRAM-backed mappings alike. Never the hypervisor process, never the pure core.
+
+### 12.1 Why this dissolves §11.2's three objections
+
+**(i) The orphan leaf.** §11.2 objected that a fresh leaf is unclassified at fill time, because
+`pt_page_owner` consults `pt_roots` and exactly one page per VAS is classifiable. That objection
+assumed the capture criterion is *"is this a page table?"*. **Under this ruling the criterion is
+"is the destination representable?"** — a property of the *address*, not of our knowledge about
+its role. A fresh leaf living in fabricated space is therefore performed-by-us, and its content
+held, **before** any PDE points at it. The classification can arrive later; the bytes are already
+ours. ★ This is the reason the ruling is stronger than either option as written.
+
+**(ii) Descent by physical address.** The decoder descends into child tables read by physical
+address. Under the split, every page in fabricated space was written by *us* and is readable from
+the isolate's VRAM-backed mapping of that aperture; every page outside it is real memory the host
+can read directly. Both arms have a source.
+
+**(iii) At least two writers.** The CE path is covered by construction. The second writer —
+CPU/BAR/PRAMIN stores into fabricated space (`C: :1398-1403`) — is covered by the *same*
+principle rather than a second mechanism: **a write into fabricated space is ours**, because
+there is no real engine it could have gone to. It still has to be *wired*, and it is not wired
+today.
+
+### 12.2 Where this puts the content store — and why the core stays pure
+
+**Option 3 (a core-owned store of intercepted payloads) remains rejected**, and this ruling does
+not revive it. The content lives where the memory lives: in the **isolate's VRAM-backed mapping
+of the fabricated aperture**. The core holds the address table and decides *what*; the isolate
+holds bytes and does *it*.
+
+⇒ `walker::FbRead` keeps its abstract seam (Option 1's shape) and gets its production
+implementation over Option 2's backing. **This is exactly §11.6's recommendation, with the piece
+it was missing.** The core never learns a GPA for a page table and never owns device memory, so
+whichever backing **O1** eventually settles on stays a shell decision.
+
+★★ **The bound that makes this safe to build:** we shadow the **fabricated aperture only** — not
+"every CE destination", which is what made Option 3 collapse into Option 1 with the store in the
+wrong crate. The fabricated aperture is memory we invented and therefore already own.
+
+### 12.3 What stage C may now do, and what is still open
+
+**May build:** `GmmuFmt::level_shift`, `decode_page`, and the walker wired to a **real** `FbRead`
+implemented over the isolate's fabricated-aperture mapping — no longer a decoder with tests and
+no production caller.
+
+**Still open, and must not be guessed:**
+- ⚠ **One ambiguity in the ruling to confirm before relying on it.** "Execute in host userspace…
+  if source and/or dest is VRAM" and "our memcpy for VRAM-backed addresses, executed by the
+  isolate" can be read two ways. This document takes: *representable ⇒ real CE; unrepresentable ⇒
+  our copy, performed in the isolate against the VRAM-backed mapping.* If the intent was instead
+  that VRAM involvement alone selects our copy, §12.1(i) still holds but the split boundary moves.
+- **The CPU/BAR/PRAMIN writer (ii) is not wired.** Named here so it is not mistaken for done.
+- **Splitting a request into representable and unrepresentable sub-copies needs a range
+  algebra** — the operand ranges must be partitioned, not classified whole. That is new code with
+  an obvious mean test (a copy straddling the boundary must produce byte-identical results to the
+  same copy issued wholly by either path where both are legal).
+- ★ **§11.5's finding is untouched and still owed:** stage B folded the C's *execute* predicate
+  (`C: :6310`, which CPU-emulates every **kernel**-CE copy) into its *capture* predicate. This
+  ruling is about execute. The two must now be re-separated deliberately rather than by accident.
