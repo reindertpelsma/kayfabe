@@ -1185,6 +1185,89 @@ inventory — an unmarked BAR2 keeps both hazards while passing any per-device c
 
 ---
 
+## 12a. ★★★ BUILT, 2026-07-30 (stage Q2) — and what building it settled in §12
+
+The C QOM shim exists. It is `qemu/hw/misc/nvkvm/` (the device, the compatibility header and
+the wire header) plus `crates/kayfabe-qemu-raw`, and it was **compiled into two real
+hypervisor binaries and run**: 9.2.0 and 10.2.4, the same overlay unchanged, on a machine with
+a real accelerator. `scripts/build_qom_shim.sh` is the whole install story, and its length is
+the honest measure of §2.1's unpaid cost.
+
+**What was observed, not inferred.** On 10.2.4 the device registers, realizes, survives
+firmware's base-address assignment, realizes the memory plane, and installs a **real
+accelerator memslot into the hypervisor's own machine** — reported as
+`kernel slots live=1 installs=1, regions the hypervisor backs=0`. That last number is §1 of
+`host_execution_plane.md` as a single measured quantity. On 9.2.0 the identical binary path
+runs and is **refused by name** at the runtime floor. Both were watched.
+
+**Nine things §12 did not have, in the order they cost time:**
+
+1. ★★★ **§3.5's two-floor argument is void, and a better one survives.** §3.5 justifies two
+   floors by *"the build-time check is a claim about the headers, this is a claim about the
+   binary"*. §2.1 of this same document proves those cannot differ here: there is no
+   out-of-tree device mechanism, so the shim is compiled **inside** the binary it runs in. The
+   two floors survive because they are about different **subjects** — the compile-time one
+   about *symbols* (9.2, where every function the shim names was verified present), the
+   realize-time one about *semantics* (10.2, the global-lock opt-out). They are now different
+   numbers, and that is what made the shim testable at all.
+2. ★★★ **§2.3's seam is a TABLE OF PRIMITIVES, not linked symbols.** §2.3 says both sides call
+   primitives and leaves the mechanism implicit. `extern "C"` declarations resolved at link
+   time would make the raw crate unbuildable without a hypervisor — deleting §10's whole
+   "Q0/Q1 need no machine" property — and would put the vendor's symbol names inside Rust.
+   The table is `kayfabe_shim.h`, which names **no hypervisor type at all**.
+3. ★★ **The listener must be registered AFTER realize returns, and §5.2 does not say so.**
+   `memory_listener_register` replays the entire topology through `region_add` before it
+   returns, and the archive calls `register_listener` from *inside* its own realize — so every
+   replayed section would arrive with no handle to deliver it to, and be dropped **silently**,
+   which is indistinguishable from a machine with no memory in it. The primitive records the
+   request; the caller registers the moment a handle exists.
+4. ★★ **§8.5's `Busy` class does not survive the port's own error translation.** `HostError::Busy`
+   is a named variant *"not an errno"* by its own rustdoc, and `qemu_refused` turns it into
+   `HostRefused { errno: Some(EBUSY) }`. The sentence and the number survive; the class does
+   not. It is reconstructed at realize only — the one place the reconstruction is exact — and
+   the imprecision is pinned by a test rather than left to be found.
+5. ★★★ **§3.3's coverage clause needed a structural check it does not name, and the gap
+   shipped a bug.** Every region here is a **64-bit** base-address register, and a 64-bit
+   register consumes **two** hardware registers. The first build registered three of them at
+   0, 1 and 2; PCI accepted it silently and the device came up reporting two registers at the
+   same guest-physical base, with a reservation installed over the wrong one. §3.3's four
+   structural devices — one table, one constructor, one loop, one self-check — do not catch
+   it, because nothing was omitted. The table now carries the port's dense name and the
+   hardware's sparse one separately, and the self-check asserts the spacing.
+6. ★★ **The unsafe ratchet could not see this crate's dominant form.** Its pattern cannot
+   match `unsafe extern "C" fn`, which is what an FFI entry point *is* — so it counted 23 of
+   31 relaxations and reported a complete audit. Corrected; `kayfabe-linux-raw` contains no
+   occurrence of the form, so its reviewed bar is unchanged, measured rather than assumed.
+7. ★★★ **The Axis-A quarantine became a PREDICATE, not a third list entry** — and this is the
+   correction worth reading twice, because the first attempt got it wrong in the way this
+   repository gets things wrong. An FFI crate needs C layouts, and §11's inherited-gate list
+   did not anticipate that. The first fix added `kayfabe-qemu-raw` as a **third exempt crate
+   name**; the owner refused it, on grounds that outlive this milestone: *lengthening an
+   exemption list weakens a rule with **zero red tests** and licenses a fourth entry.* The
+   substance was accepted — these layouts really are ours, and flattening them to scalars is
+   **less** safe, because a function-pointer table behind an untyped array turns thirteen call
+   sites into transmute-by-position at the exact seam where a mistake is a memory-safety bug.
+   So the gate now asks *"is this layout foreign, or own-wire?"* and **own-wire must be
+   proved**: a structure of the **same name** in a repository-local header, **and** a
+   `tests/wire_mirror.rs` in that crate enforcing the pair in both directions. It **fails
+   closed**, so it is strictly stronger than the rule it replaces — a fourth crate needs no CI
+   edit and cannot arrive without both proofs, and a logic crate cannot acquire a C layout by
+   any route. Negative-tested four ways, including the sharp one: a logic crate declaring a
+   type whose name *is* in our header passes proof 1 and is still refused by proof 2.
+   `CLAUDE.md` rule 1 was rewritten to match, because the old text said *"live ONLY in
+   `kayfabe-abi`"* and a reader finding that next to this code would either revert it or copy
+   the violation.
+8. ★ **The compatibility surface between two hypervisor releases is four items**, and they
+   are the whole of §12's "which QEMU" worry made concrete: the include-path rename, one
+   class-initialiser signature, one property-array terminator, and the opt-out itself. Two are
+   feature-detected rather than versioned. Nothing in the device branches on a version, and
+   nothing in Rust does.
+9. ★ **§7 is untouched and says so.** The vector-raising primitive refuses by name. §3.3's
+   opt-out is applied and self-checked where the facility exists, but §11's last row — the A/B
+   acceptance measurement against *our* device — was not run.
+
+---
+
 ## 13. Decision ledger
 
 | # | Decision | §  |

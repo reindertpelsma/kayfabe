@@ -274,6 +274,25 @@ while `Tier::readonly_slot()` was the stated rule, so flipping the rule changed 
 same decay `classify.rs` is a whole module to prevent, one crate over. Fixed by making
 `readonly_slot()` the only site that decides; the guard bites now.
 
+#### ★★★ §1.6's stated absence is CLOSED, 2026-07-30 — the C QOM shim exists and was run
+
+§1.6 opens with *"What is NOT built, stated first: the C QOM shim. `kayfabe-qemu-raw` is still
+empty, because it needs a hypervisor source tree to compile against and this machine has
+none."* It has one now. The shim is built, and the memory plane above it has been driven from
+inside a real hypervisor process — full account in `l2_qemu_adapter.md` §12a.
+
+The one number worth repeating here, because it is §1 restated as a measurement: with a 64 MiB
+reservation live inside QEMU 10.2.4, the device reports **`kernel slots live=1 installs=1,
+regions the hypervisor backs=0`**. The hypervisor reserved the guest-physical range with a
+pure-MMIO base-address register and backed nothing; the accelerator slot over that range is
+ours, installed by our own code through the kernel's own ioctl, in the machine the hypervisor
+created. §1.5's early-return argument held in practice, on two releases.
+
+★ §1.5's *"allocate TOP-DOWN"* note and the BAR-latch findings were exercised end to end: the
+shim carries both the **preventer** (a configuration-space write override that asks before
+letting a base-address-register write through) and the **detector** (a re-read afterwards) —
+the two halves the C artifact has neither of.
+
 #### ★ What #97's own argument turned out to be
 
 §8.5's reasoning is **void**, and the correction is worth keeping because it inverts which

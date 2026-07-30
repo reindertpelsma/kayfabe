@@ -1,9 +1,19 @@
 [package]
 name = "kayfabe-qemu-raw"
-description = "The SECOND audited unsafe crate: the QEMU FFI surface (l2_qemu_adapter.md §2.2, decision Q2). Empty at stage Q0 — it exists so the unsafe-containment gates' two-crate shape is decided and landed BEFORE any adapter code, not discovered by a manifest edit."
+description = "The SECOND audited unsafe crate: the hypervisor FFI surface (l2_qemu_adapter.md §2.2, decision Q2). Built at stage Q2 — the extern \"C\" entry points a C QOM shim calls, and QemuHost implemented over a table of C function pointers. Every decision lives one module over, in the safe half."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+
+# ★★ `staticlib` is what the C shim links, and `rlib` is what `cargo test` links. Both, or
+# one of the two consumers stops working: an rlib-only crate cannot be linked into a
+# hypervisor, and a staticlib-only crate cannot be a dependency or host a test target.
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+kayfabe-vmm.workspace = true
+kayfabe-vmm-qemu.workspace = true
 
 # ★ DELIBERATELY NOT `[lints] workspace = true` — the SECOND crate to omit it, and the
 # first one added since the rule was written. `l2_qemu_adapter.md` §2.2 / decision Q2:

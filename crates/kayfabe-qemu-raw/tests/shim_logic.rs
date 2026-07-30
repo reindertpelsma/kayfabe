@@ -1,0 +1,450 @@
+//! ★★ The shim's decisions, driven with **no hypervisor present**.
+//!
+//! `l2_qemu_adapter.md` §10's stage table makes a promise the rest of the milestone rests on:
+//! the adapter must never become a *reason* for a test to need a machine. This file is that
+//! promise applied to the raw crate. Everything here runs against
+//! [`MockQemuHost`](kayfabe_vmm_qemu::mock_host::MockQemuHost) and
+//! [`MockSlotPlane`](kayfabe_vmm_qemu::mock_host::MockSlotPlane); the C half's own acceptance
+//! is a separate, coarser instrument that needs a hypervisor binary and gets one.
+//!
+//! **Every assertion below names an exact variant and an exact sentence.** `is_err()` would
+//! pass for the wrong refusal, and this crate's whole job is to keep two near-neighbour
+//! refusals apart across a seam that flattens everything to an `int32_t`.
+
+use std::sync::Arc;
+
+use kayfabe_qemu_raw::shim::{BarDesc, SectionWire, Shim, ShimConfig, Status};
+use kayfabe_vmm::BarId;
+use kayfabe_vmm_qemu::host::{SectionDesc, SectionFacts};
+use kayfabe_vmm_qemu::mock_host::{MockPolicy, MockQemuHost, MockSlotPlane};
+use kayfabe_vmm_qemu::{
+    BAR_MOVED_UNDER_US, BELOW_FLOOR, MEMORY_PLANE_AFTER_UNREALIZE, NOT_ACCELERATED,
+    WINDOW_IN_A_BACKED_BAR,
+};
+
+/// Guest-physical bases well inside every host's physical-address width. ★ Not a
+/// convenience: the accelerator refuses a guest-physical address above the host CPU's own
+/// physical-address width, which is 46 bits on some of the machines this suite runs on, and a
+/// hard-coded 47-bit constant has already blamed the allocator for a CPU fact here.
+const BAR0_BASE: u64 = 0x0000_0000_C000_0000;
+const BAR1_BASE: u64 = 0x0000_0004_0000_0000;
+const BAR2_BASE: u64 = 0x0000_0008_0000_0000;
+const PAGE: u64 = 4096;
+
+fn cfg() -> ShimConfig {
+    ShimConfig {
+        shareable_ram: true,
+        bars: vec![
+            BarDesc {
+                index: 0,
+                base: BAR0_BASE,
+                len: 16 << 20,
+            },
+            BarDesc {
+                index: 1,
+                base: BAR1_BASE,
+                len: 1 << 30,
+            },
+            BarDesc {
+                index: 2,
+                base: BAR2_BASE,
+                len: 1 << 30,
+            },
+        ],
+    }
+}
+
+fn host_with(policy: MockPolicy) -> Arc<MockQemuHost> {
+    let h = Arc::new(MockQemuHost::with_policy(policy));
+    h.place_bar(BarId::Bar0, BAR0_BASE);
+    h.place_bar(BarId::Bar1, BAR1_BASE);
+    h.place_bar(BarId::Bar2, BAR2_BASE);
+    h
+}
+
+fn slots() -> Arc<MockSlotPlane> {
+    Arc::new(MockSlotPlane::new(509, PAGE))
+}
+
+fn realize_with(policy: MockPolicy) -> Result<(Shim, Arc<MockQemuHost>), (Status, &'static str)> {
+    let host = host_with(policy);
+    let shim = Shim::realize(&cfg(), host.clone(), slots())?;
+    Ok((shim, host))
+}
+
+// =====================================================================================
+// The floor and the accelerator — two refusals that are NEAR NEIGHBOURS and must not merge
+// =====================================================================================
+
+#[test]
+fn a_hypervisor_below_the_floor_is_refused_by_name() {
+    let err = realize_with(MockPolicy {
+        version: (9, 2),
+        ..MockPolicy::default()
+    })
+    .expect_err("a 9.2 hypervisor is below the floor and realize must refuse it");
+    assert_eq!(err, (Status::Unsupported, BELOW_FLOOR));
+}
+
+#[test]
+fn the_floor_is_a_floor_and_not_an_equality() {
+    // ★ Non-vacuity for the test above: if the check were `!= (10, 2)` rather than
+    // `< (10, 2)`, that refusal test would still pass and every later release would break.
+    let (_shim, _host) = realize_with(MockPolicy {
+        version: (11, 0),
+        ..MockPolicy::default()
+    })
+    .expect("a release above the floor must realize");
+}
+
+#[test]
+fn an_unaccelerated_machine_is_refused_by_a_different_name() {
+    let err = realize_with(MockPolicy {
+        kvm_enabled: false,
+        ..MockPolicy::default()
+    })
+    .expect_err("an unaccelerated machine must be refused");
+    assert_eq!(err, (Status::Unsupported, NOT_ACCELERATED));
+    // The two carry the same status class on purpose — both mean "retrying cannot help" —
+    // so the SENTENCE is the only thing that separates them, and it must.
+    assert_ne!(NOT_ACCELERATED, BELOW_FLOOR);
+}
+
+// =====================================================================================
+// The register table is the enumeration, so it must not be able to contradict itself
+// =====================================================================================
+
+#[test]
+fn a_register_index_this_port_does_not_name_is_malformed_not_refused() {
+    let mut c = cfg();
+    c.bars.push(BarDesc {
+        index: 5,
+        base: 0x1_0000_0000,
+        len: PAGE,
+    });
+    let err = Shim::realize(&c, host_with(MockPolicy::default()), slots())
+        .expect_err("a register index outside this port must be refused");
+    assert_eq!(err.0, Status::Malformed);
+    assert_ne!(err.0, Status::Refused);
+    assert!(
+        err.1.contains("index this port does not name"),
+        "the sentence must name the problem, got: {}",
+        err.1
+    );
+}
+
+#[test]
+fn a_register_table_that_names_one_register_twice_is_refused() {
+    let mut c = cfg();
+    c.bars.push(BarDesc {
+        index: 1,
+        base: BAR2_BASE,
+        len: PAGE,
+    });
+    let err = Shim::realize(&c, host_with(MockPolicy::default()), slots())
+        .expect_err("a duplicated register must be refused");
+    assert_eq!(err.0, Status::Malformed);
+    assert!(err.1.contains("cannot contradict itself"), "got: {}", err.1);
+}
+
+// =====================================================================================
+// §8.5's -EBUSY arm — an operator's mistake, reported apart from every other refusal
+// =====================================================================================
+
+#[test]
+fn the_busy_arm_is_its_own_status_and_not_a_plain_refusal() {
+    use kayfabe_vmm_qemu::host::HostError;
+
+    let err = realize_with(MockPolicy {
+        discard_refuses: Some(HostError::Busy {
+            what: "a memory balloon with free-page reporting",
+        }),
+        ..MockPolicy::default()
+    })
+    .expect_err("a discard requirer must make realize refuse");
+    assert_eq!(err.0, Status::Busy);
+    assert_ne!(err.0, Status::Refused);
+    assert!(
+        err.1.contains("balloon"),
+        "the sentence must name what conflicts, got: {}",
+        err.1
+    );
+}
+
+#[test]
+fn an_ordinary_host_refusal_is_refused_and_not_busy() {
+    use kayfabe_vmm_qemu::host::HostError;
+
+    // ★ The other half of the pair. A `Busy` reported as `Refused` would pass the test above
+    // only if this one also passed, and vice versa — neither alone pins the split.
+    let err = realize_with(MockPolicy {
+        blocker_refuses: Some(HostError::Refused {
+            what: "adding a migration blocker",
+            errno: Some(1),
+        }),
+        ..MockPolicy::default()
+    })
+    .expect_err("a refused migration blocker must make realize refuse");
+    assert_eq!(err.0, Status::Refused);
+    assert_ne!(err.0, Status::Busy);
+}
+
+#[test]
+fn a_runtime_refusal_carrying_the_same_number_is_not_upgraded_to_busy() {
+    // ★★ The imprecision of `classify_realize`, pinned rather than left to be discovered.
+    // The class is reconstructed from an errno, and that reconstruction is exact only at
+    // realize. `classify` — everything else — must stay blunt: a kernel that returns the
+    // same number for a memslot is not an operator's configuration mistake.
+    use kayfabe_qemu_raw::shim::{classify, classify_realize};
+    use kayfabe_vmm::VmmError;
+
+    let e = VmmError::HostRefused {
+        what: "a memslot install",
+        errno: Some(kayfabe_vmm_qemu::slots::KERNEL_EBUSY),
+    };
+    assert_eq!(classify(&e).0, Status::Refused);
+    assert_eq!(classify_realize(&e).0, Status::Busy);
+}
+
+// =====================================================================================
+// The reservation register — the whole safety argument, asked rather than assumed
+// =====================================================================================
+
+#[test]
+fn a_reservation_in_a_register_the_hypervisor_backs_is_refused_by_name() {
+    let (shim, _host) = realize_with(MockPolicy {
+        // Only register 2 is a pure-MMIO reservation; a reservation aimed at register 1 must
+        // be refused, because a backed register gets a hypervisor-managed slot of its own
+        // over the same guest-physical range and only one of the two can win.
+        reservation_bars: vec![BarId::Bar2],
+        ..MockPolicy::default()
+    })
+    .expect("realize");
+    let err = shim
+        .install_window(BAR1_BASE, 64 * PAGE)
+        .expect_err("a reservation in a backed register must be refused");
+    assert_eq!(err, (Status::Unsupported, WINDOW_IN_A_BACKED_BAR));
+}
+
+#[test]
+fn a_reservation_in_an_unbacked_register_is_installed() {
+    // ★ Non-vacuity for the refusal above: the same call, against a register the hypervisor
+    // does not back, goes in.
+    let (shim, _host) = realize_with(MockPolicy::default()).expect("realize");
+    shim.install_window(BAR1_BASE, 64 * PAGE)
+        .expect("a reservation in an unbacked register must install");
+    let a = shim.audit();
+    assert_eq!(a.live_windows, 1);
+    assert_eq!(a.memslot_installs, 1);
+}
+
+#[test]
+fn a_register_move_is_refused_once_a_reservation_lives_in_it() {
+    let (shim, _host) = realize_with(MockPolicy::default()).expect("realize");
+    // Before any reservation, a move is nobody's business.
+    shim.bar_move_requested(1)
+        .expect("a register with nothing in it may move freely");
+    shim.install_window(BAR1_BASE, 64 * PAGE).expect("install");
+    let err = shim
+        .bar_move_requested(1)
+        .expect_err("a register a reservation lives in may not move");
+    assert_eq!(err, (Status::Unsupported, BAR_MOVED_UNDER_US));
+    // A register with nothing in it is still free, so the refusal is about the reservation
+    // and not about registers in general.
+    shim.bar_move_requested(2)
+        .expect("an untouched register is still free to move");
+}
+
+#[test]
+fn the_detector_counts_a_move_the_preventer_did_not_stop() {
+    let (shim, _host) = realize_with(MockPolicy::default()).expect("realize");
+    shim.install_window(BAR1_BASE, 64 * PAGE).expect("install");
+    assert_eq!(shim.audit().bar_moves_detected, 0);
+    shim.note_bar_mapping(1, Some(BAR1_BASE + 0x1000_0000))
+        .expect("a known register index");
+    assert_eq!(
+        shim.audit().bar_moves_detected,
+        1,
+        "the detector exists precisely for the move the preventer did not see"
+    );
+    // A register nothing was latched in reports no move.
+    shim.note_bar_mapping(2, Some(BAR2_BASE)).expect("known");
+    assert_eq!(shim.audit().bar_moves_detected, 1);
+}
+
+#[test]
+fn a_register_index_this_port_does_not_name_is_refused_on_both_halves() {
+    let (shim, _host) = realize_with(MockPolicy::default()).expect("realize");
+    assert_eq!(
+        shim.bar_move_requested(9).map_err(|e| e.0),
+        Err(Status::Malformed)
+    );
+    assert_eq!(
+        shim.note_bar_mapping(9, Some(0)).map_err(|e| e.0),
+        Err(Status::Malformed)
+    );
+}
+
+// =====================================================================================
+// The topology listener
+// =====================================================================================
+
+/// The wire form of a section the mock host minted.
+///
+/// ★ Deliberately field-by-field rather than a helper on `SectionWire`: this direction is
+/// what the C shim performs by hand, and writing it out here is what would catch an inverted
+/// or dropped fact.
+fn wire_of(d: SectionDesc) -> SectionWire {
+    SectionWire {
+        mr: d.mr.0,
+        gpa: d.gpa,
+        len: d.len,
+        offset_within_region: d.offset_within_region,
+        is_ram: d.facts.is_ram,
+        is_ram_device: d.facts.is_ram_device,
+        is_rom_device: d.facts.is_rom_device,
+        readonly: d.facts.readonly,
+        nonvolatile: d.facts.nonvolatile,
+    }
+}
+
+#[test]
+fn a_reported_section_is_declared_and_the_counter_says_so() {
+    let (shim, host) = realize_with(MockPolicy::default()).expect("realize");
+    let d = host.mint_foreign(0x1_0000_0000, 0x1_0000, SectionFacts::plain_ram());
+    shim.region_add(wire_of(d))
+        .expect("a plain memory section must be taken");
+    assert_eq!(shim.audit().topology_adds, 1);
+    shim.region_del(0x1_0000_0000, 0x1_0000);
+    assert_eq!(shim.audit().topology_dels, 1);
+}
+
+#[test]
+fn a_section_that_overlaps_one_of_our_own_registers_is_refused() {
+    let (shim, host) = realize_with(MockPolicy::default()).expect("realize");
+    let d = host.mint_foreign(BAR1_BASE, 0x1_0000, SectionFacts::plain_ram());
+    let err = shim
+        .region_add(wire_of(d))
+        .expect_err("a section over one of our own registers must be refused");
+    assert_eq!(err.0, Status::Unsupported);
+    assert!(
+        err.1.contains("overlaps a range this device owns"),
+        "got: {}",
+        err.1
+    );
+}
+
+#[test]
+fn the_five_facts_are_carried_across_unclassified() {
+    // ★ The rule that turns five facts into a verdict lives in one module, one crate over.
+    // What THIS seam owes is that it does not lose or invert a fact on the way. A
+    // device-memory section is the sharpest case: it reports memory and is not.
+    let (shim, host) = realize_with(MockPolicy::default()).expect("realize");
+    let facts = SectionFacts {
+        is_ram_device: true,
+        ..SectionFacts::plain_ram()
+    };
+    let d = host.mint_foreign(0x2_0000_0000, 0x1_0000, facts);
+    shim.region_add(wire_of(d)).expect("declared, not dropped");
+    assert_eq!(shim.audit().topology_adds, 1);
+    // ★ SUSPECT THE INSTRUMENT. `live_regions()` reports every minted region with its
+    // reference count, so its LENGTH is 1 whatever the classifier decided — an assertion on
+    // the length would have been green for both answers. The count is the instrument.
+    assert_eq!(
+        host.live_regions(),
+        vec![(d.mr, 0)],
+        "a device section must be declared but must NOT have a reference taken on it"
+    );
+}
+
+#[test]
+fn a_plain_memory_section_does_take_a_counted_reference() {
+    // ★ Non-vacuity for the assertion above: the count is not simply always zero.
+    let (shim, host) = realize_with(MockPolicy::default()).expect("realize");
+    let d = host.mint_foreign(0x3_0000_0000, 0x1_0000, SectionFacts::plain_ram());
+    shim.region_add(wire_of(d)).expect("taken");
+    assert_eq!(host.live_regions(), vec![(d.mr, 1)]);
+}
+
+// =====================================================================================
+// Teardown, and the number that is the whole memory-plane decision
+// =====================================================================================
+
+#[test]
+fn no_region_is_ever_handed_to_the_hypervisor_to_back() {
+    let (shim, _host) = realize_with(MockPolicy::default()).expect("realize");
+    shim.install_window(BAR1_BASE, 64 * PAGE).expect("install");
+    assert_eq!(
+        shim.audit().regions_published,
+        0,
+        "the hypervisor reserves the range and backs nothing; a non-zero here is the whole \
+         memory-plane decision being undone"
+    );
+}
+
+#[test]
+fn unrealize_withdraws_the_blocker_and_re_enables_discard() {
+    let (shim, host) = realize_with(MockPolicy::default()).expect("realize");
+    assert!(host.discard_disabled());
+    assert_eq!(host.blockers().len(), 1);
+    shim.unrealize();
+    assert!(
+        !host.discard_disabled(),
+        "a device that leaves discard disabled after it is gone has taken a machine-wide \
+         facility away permanently"
+    );
+    assert_eq!(
+        host.blockers().len(),
+        0,
+        "an unwithdrawn blocker leaves the machine permanently unmigratable"
+    );
+}
+
+#[test]
+fn an_operation_after_unrealize_is_refused_and_counted() {
+    let (shim, _host) = realize_with(MockPolicy::default()).expect("realize");
+    shim.unrealize();
+    let err = shim
+        .install_window(BAR1_BASE, 64 * PAGE)
+        .expect_err("the memory plane is gone");
+    assert_eq!(err, (Status::Unsupported, MEMORY_PLANE_AFTER_UNREALIZE));
+    assert_eq!(shim.audit().ops_refused_after_unrealize, 1);
+}
+
+// =====================================================================================
+// The wire contract itself — the hand-mirroring hazard, made a test
+// =====================================================================================
+
+#[test]
+fn the_status_codes_are_the_numbers_the_header_names() {
+    // ★ `qemu/hw/misc/nvkvm/kayfabe_shim.h` spells these five numbers by hand. Nothing in the
+    // build makes the two agree, so this test IS the agreement: change one side and this is
+    // what fails, rather than a device that reports "busy" as "malformed" in production.
+    assert_eq!(Status::Ok.code(), 0);
+    assert_eq!(Status::Refused.code(), 1);
+    assert_eq!(Status::Busy.code(), 2);
+    assert_eq!(Status::Unsupported.code(), 3);
+    assert_eq!(Status::Malformed.code(), 4);
+}
+
+#[test]
+fn the_audit_structure_is_the_size_the_header_declares() {
+    // Nine 64-bit counters, in the order `KayfabeAudit` lists them. A field added on one side
+    // only would be a silent misalignment of every field after it.
+    assert_eq!(
+        size_of::<kayfabe_qemu_raw::shim::KayfabeAudit>(),
+        9 * size_of::<u64>()
+    );
+}
+
+#[test]
+fn the_register_index_mapping_is_a_bijection_over_the_registers_this_port_names() {
+    use kayfabe_qemu_raw::shim::{bar_from_index, bar_index};
+
+    for i in 0..3u32 {
+        let bar = bar_from_index(i).expect("this port names registers 0, 1 and 2");
+        assert_eq!(bar_index(bar), i);
+    }
+    assert_eq!(bar_from_index(3), None);
+    assert_eq!(bar_from_index(u32::MAX), None);
+}

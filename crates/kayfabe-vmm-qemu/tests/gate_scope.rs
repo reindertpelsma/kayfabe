@@ -334,11 +334,30 @@ fn the_audited_crate_list_matches_the_tree_and_is_used_by_all_three_sub_gates() 
             // text names rewording as the fix; here the word is a pattern rather than
             // prose, so the rewording has to be lexical.
             let kw = concat!("uns", "afe");
+            // ★★★ THE FIFTH FORM, added 2026-07-30 at stage Q2, because the first FFI crate
+            // proved the other four are not a partition. `{kw} extern "C" fn` is the
+            // dominant shape in a foreign-function crate — it is what an entry point IS —
+            // and none of the four above can match it, so the ratchet counted 23 of this
+            // crate's 31 relaxations and reported a complete audit. A DEFINITION is matched
+            // (a name follows `fn `) and a FIELD TYPE is not (`(` follows), because
+            // `Option<{kw} extern "C" fn(..)>` declares a signature and relaxes nothing.
+            // `kayfabe-linux-raw` contains no occurrence of the form, so its reviewed bar is
+            // unchanged by this — measured before the change, not assumed after it.
+            let extern_defs = text
+                .match_indices(&format!("{kw} extern \"C\" fn "))
+                .filter(|(i, m)| {
+                    text[i + m.len()..]
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                })
+                .count();
             actual += u32::try_from(
                 text.match_indices(&format!("{kw} {{")).count()
                     + text.match_indices(&format!("{kw} fn ")).count()
                     + text.match_indices(&format!("{kw} impl ")).count()
-                    + text.match_indices(&format!("{kw} trait ")).count(),
+                    + text.match_indices(&format!("{kw} trait ")).count()
+                    + extern_defs,
             )
             .expect("a reviewable number of relaxations");
         }
