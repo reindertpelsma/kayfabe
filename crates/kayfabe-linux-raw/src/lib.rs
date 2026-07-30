@@ -94,8 +94,8 @@
 //! ```text
 //! $ ls crates/kayfabe-linux-raw/src/*_unsafe.rs
 //! chardev_unsafe.rs   epoll_unsafe.rs   host_fd_unsafe.rs   kvm_unsafe.rs
-//! mapping_unsafe.rs   signal_unsafe.rs  spawn_unsafe.rs     sysconf_unsafe.rs
-//! vcpu_unsafe.rs      window_unsafe.rs
+//! mapping_unsafe.rs   sandbox_unsafe.rs signal_unsafe.rs    spawn_unsafe.rs
+//! sysconf_unsafe.rs   vcpu_unsafe.rs    window_unsafe.rs
 //! ```
 //!
 //! §4.1.1's standing rule: the dangerous keyword may appear **only** in a file whose
@@ -275,12 +275,24 @@ pub mod kvm_gate;
 mod kvm_unsafe;
 mod mapping_unsafe;
 pub mod page_size;
+mod sandbox_unsafe;
 mod signal_unsafe;
 mod spawn_unsafe;
 mod sysconf_unsafe;
 mod vcpu_unsafe;
 pub mod view;
 mod window_unsafe;
+
+/// ★★★ The isolate's **filesystem containment**: a private mount namespace, a `pivot_root`
+/// onto a `tmpfs` holding only the granted device nodes, and the `/dev` descriptor minted
+/// **inside** it.
+///
+/// A facade over the audited module, so the security boundary has a name that says what it
+/// is. Start at [`sandbox::enter`] — its docs carry the measured escape this closes and the
+/// one property that closes it, which is the **order** of the last two steps.
+pub mod sandbox {
+    pub use crate::sandbox_unsafe::{SandboxPolicy, enter, namespaces_available, report};
+}
 
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;

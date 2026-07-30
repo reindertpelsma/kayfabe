@@ -27,6 +27,14 @@ path = "src/bin/isolate.rs"
 name = "kayfabe-rm-ladder"
 path = "src/bin/rmladder.rs"
 
+# ★★ The containment prober. A separate PROCESS is not a stylistic choice here: entering
+# the sandbox rewrites this process's mount namespace and root, so the property can only be
+# measured in something disposable. `tests/sandbox_escape.rs` drives it in three modes,
+# including the deliberately mis-ordered one that must still show the escape.
+[[bin]]
+name = "kayfabe-sandbox-probe"
+path = "src/bin/sandbox_probe.rs"
+
 [dev-dependencies]
 # The R1 lock witness, so the real backend can be driven WITH a ranked lock held and the
 # assert watched to fire — a gate never seen to fail is not evidence.

@@ -6,10 +6,10 @@
 //!
 //! Three doors, all small:
 //!
-//! - [`DevDir`] — a directory held **by descriptor**, so a sandbox that no longer has a
-//!   path to `/dev` can still open the nodes it was granted. This is the C's
-//!   `NVKVM_DEV_DIRFD` parked at fd 4, ported: the capability is the descriptor, and after
-//!   `pivot_root` there is no name left to re-derive it from.
+//! - [`DevDir`] — a directory held **by descriptor**, so a sandboxed isolate can open the
+//!   device nodes it was granted. ★ The descriptor is only a *bounded* grant when the
+//!   directory it names has nothing above it: see [`crate::sandbox`], which is the thing
+//!   that makes it one, and read its docs before touching this type.
 //! - [`CharDevice`] — an owned `O_RDWR` descriptor on a device node.
 //! - [`Indirect`] — the mechanism that lets a *safe* caller describe an ioctl argument
 //!   struct containing **pointers to its own buffers**, without ever holding an address.
@@ -66,17 +66,35 @@ pub const POINTER_FIELD_WIDTH: usize = 8;
 ///
 /// ## Why a descriptor and not a path
 ///
-/// A sandboxed isolate has no `/dev` (Mode-1 posture: cleared descriptors, namespaces,
-/// `pivot_root` — `l1_os_shell.md` §11 item 4). It nevertheless has to open
-/// `nvidiactl` and `nvidia<N>`. The C solved it by opening `/dev` `O_PATH` in the
-/// **parent**, before the sandbox exists, and parking the descriptor at a fixed number in
-/// the child (`NVKVM_DEV_DIRFD`); the child then `openat`s from it. The grant is the
-/// descriptor, and it is auditable because the parent chose it.
+/// A sandboxed isolate has no path to `/dev` — after `pivot_root` there is no name left to
+/// re-derive one from — and it nevertheless has to open `nvidiactl` and `nvidia<N>`. So the
+/// capability it carries is the descriptor itself.
 ///
-/// `O_PATH` is the right flag and the choice is load-bearing: it opens the directory
-/// **without** the ability to read it, so the grant is *"you may name things under here"*
-/// and not *"you may enumerate here"*. `openat(2)` names `O_PATH` descriptors as a
-/// supported `dirfd`.
+/// ## ★★★ A descriptor bounds NOTHING on its own. Read this before using one.
+///
+/// This type's rustdoc used to argue the opposite, and the argument was **shipped**:
+///
+/// > *`O_PATH` is the right flag and the choice is load-bearing: it opens the directory
+/// > **without** the ability to read it, so the grant is "you may name things under here"
+/// > and not "you may enumerate here".*
+///
+/// Every clause of that is true, and it settles the wrong question. `O_PATH` is about
+/// **enumeration**; the threat is **naming `..`**, and an `O_PATH` descriptor places no
+/// restriction on `..` whatsoever. There is no `RESOLVE_BENEATH` in an `openat(2)`, so with
+/// no mount namespace `openat(dirfd, "../etc/shadow")` resolves out to the real host root
+/// and **opens**. Measured, on the real child, in exactly those words. A doc that reasons
+/// about the adjacent property and concludes safety is how the escape survived review, so
+/// the wrong argument is quoted here rather than deleted.
+///
+/// What bounds it is [`crate::sandbox`]: a private mount namespace and a `pivot_root` onto
+/// a `tmpfs` that holds nothing but the granted nodes, entered **before** this descriptor
+/// is opened. [`crate::sandbox::enter`] returns the `DevDir` for exactly that reason —
+/// ordering is the fix, and a function that returns the capability cannot be called in the
+/// wrong order.
+///
+/// [`DevDir::open`] itself remains available and remains **unbounded**: it is what a
+/// bench-side diagnostic on a trusted box uses, and what the committed regression test uses
+/// to reproduce the escape on purpose. It is not what an isolate uses.
 #[derive(Debug)]
 pub struct DevDir {
     fd: OwnedFd,
@@ -121,6 +139,45 @@ impl DevDir {
     #[must_use]
     pub fn as_fd(&self) -> BorrowedFd<'_> {
         self.fd.as_fd()
+    }
+
+    /// ★★ **Can this descriptor reach `name`?** — the containment question, asked as a
+    /// syscall instead of argued as a comment.
+    ///
+    /// Opens `name` relative to this directory `O_RDONLY | O_CLOEXEC` and closes it again,
+    /// reporting only whether the kernel agreed. It exists because the escape this
+    /// descriptor once had was *measured*, and the fix has to be measured the same way:
+    /// `crates/kayfabe-isolate-host/tests/sandbox_escape.rs` drives this against a real
+    /// sandboxed child over the same probe table the defect was found with, and against a
+    /// deliberately mis-ordered child that must still show the escape.
+    ///
+    /// `O_RDONLY` deliberately, not the `O_RDWR` [`CharDevice::openat`] uses: the point is
+    /// whether the *path* resolves, and an `O_RDWR` probe of `/proc/1/maps` fails on the
+    /// access mode alone — reporting containment that is not there.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] (`openat`) with the exact `errno`. `ENOENT` is the answer a
+    /// contained descriptor gives: inside the sandbox root the name does not exist at all.
+    ///
+    /// # Panics
+    /// If called with any ranked or adapter-leaf lock held (R1, §4.5).
+    pub fn can_reach(&self, name: &CStr) -> Result<(), RawError> {
+        lockwitness::assert_lock_free("probing what a device directory can reach");
+        leafwitness::assert_leaf_free("probing what a device directory can reach");
+        // SAFETY: `self.fd` is a live descriptor owned by `self` for this borrow, and
+        // `name` is NUL-terminated by its type and outlives the call; `openat` dereferences
+        // the path and nothing else. The result is a fresh descriptor or a negative error,
+        // and `adopt_fd` — which checks the sign — is what takes ownership, so the
+        // descriptor is closed exactly once, by the `drop` below.
+        let raw = unsafe {
+            libc::openat(
+                self.fd.as_raw_fd(),
+                name.as_ptr(),
+                libc::O_RDONLY | libc::O_CLOEXEC,
+            )
+        };
+        drop(adopt_fd(raw, "openat")?);
+        Ok(())
     }
 }
 
@@ -369,6 +426,38 @@ mod tests {
                 call: "openat",
                 errno: Some(libc::ENOENT),
             })
+        );
+    }
+
+    /// The containment probe answers both ways on an UNCONTAINED directory, which is the
+    /// premise every assertion in `sandbox_escape.rs` rests on: a present name opens, an
+    /// absent one is exactly `ENOENT`. Without this the sandboxed run's wall of `ENOENT`
+    /// could be a probe that never worked at all.
+    #[test]
+    fn the_containment_probe_answers_both_ways() {
+        let dir = DevDir::open(c"/dev").expect("/dev");
+        assert_eq!(dir.can_reach(c"null"), Ok(()));
+        assert_eq!(
+            dir.can_reach(c"kayfabe-no-such-node"),
+            Err(RawError::Syscall {
+                call: "openat",
+                errno: Some(libc::ENOENT),
+            })
+        );
+    }
+
+    /// ★★ The escape itself, asserted as a **fact about the unbounded door** rather than
+    /// left to a comment. `DevDir::open` is not contained and this is what that means: from
+    /// a host `/dev` descriptor, `..` walks out. If this ever starts failing, either the
+    /// kernel grew `RESOLVE_BENEATH` semantics for `O_PATH` dirfds — it has not — or the
+    /// probe stopped working, and `sandbox_escape.rs`'s green would be worthless.
+    #[test]
+    fn an_unbounded_device_directory_really_can_name_its_parent() {
+        let dir = DevDir::open(c"/dev").expect("/dev");
+        assert_eq!(
+            dir.can_reach(c"../etc/hostname"),
+            Ok(()),
+            "the premise of the whole containment argument has changed"
         );
     }
 
