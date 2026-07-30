@@ -62,12 +62,42 @@
 //! root and nothing said so. Here a failed reseal is a refusal, and because the [`DevDir`]
 //! is the return value, a refusal means the caller never receives the capability at all.
 //!
+//! ## ★★★ The second half: the process that comes out the other side holds NO privilege
+//!
+//! A filesystem boundary around a process with `CapEff = 000001ffffffffff` is a boundary
+//! with a key taped to it. Measured on the spawning host: the VMM runs as uid 0 with **every
+//! capability** and `Seccomp: 0`, and the isolate child inherited all of it. With
+//! `CAP_SYS_PTRACE` such a child reaches its **parent** through `process_vm_readv`
+//! regardless of Yama — and the parent holds the KVM descriptor, all guest RAM, and every
+//! other isolate's socket. `PR_SET_NO_NEW_PRIVS` (which `spawn_unsafe.rs` already sets) is
+//! **inert** against that: it blocks *gaining* privilege via setuid/fcaps and nothing else.
+//!
+//! So [`enter`] ends by surrendering privilege, ported from `C: nvkvm_isolate.c:66-81`:
+//! `PR_SET_NO_NEW_PRIVS`, `PR_SET_DUMPABLE 0`, the `PR_CAPBSET_DROP` loop, `capset` to zero,
+//! `PR_CAP_AMBIENT_CLEAR_ALL`. Two things are ours rather than the C's, and both are cheap:
+//!
+//! 1. ★★ **The outcome is read back and the refusal is on the measurement, not on the
+//!    calls.** The C checks the return of `prctl(PR_SET_NO_NEW_PRIVS)` and lets the rest go
+//!    — reasonable, since `PR_CAPBSET_DROP` legitimately answers `EINVAL` past the last
+//!    capability. But then "the caps were dropped" is an argument about a sequence of calls,
+//!    which is exactly the shape of the R4-L1 audit finding one function above. Here
+//!    [`privileges`] is called again afterwards and a single surviving bit is a refusal —
+//!    and because the [`DevDir`] is the return value, a refusal means the isolate never
+//!    receives the capability it would have been holding.
+//! 2. ★ **The user namespace is taken first, not as a fallback.** It is what makes the
+//!    capability drop irreversible against the *parent*: a tracer in a different user
+//!    namespace needs `CAP_SYS_PTRACE` **in the tracee's** namespace, and this process has
+//!    none anywhere. The C takes `CLONE_NEWUSER` for the same reason
+//!    (`C: nvkvm_isolate.c:117-133`).
+//!
 //! ## What this is NOT
 //!
-//! Not a capability drop, not seccomp. Those are tracked as the broader sandbox work and
-//! are deliberately **named rather than stubbed** (the discipline `spawn_unsafe.rs` states):
-//! an untested boundary reads as a boundary in every review that follows. What is here is
-//! the filesystem boundary, and it is measured.
+//! Not seccomp. The C's stub filters its syscalls with a `TSYNC` allowlist
+//! (`C: src/stub/nvkvm_stub.c:2505-2587`) and this does not, deliberately **named rather
+//! than stubbed** (the discipline `spawn_unsafe.rs` states): the allowlist is a property of
+//! the isolate's *verb surface*, it needs its own falsification test, and an untested
+//! control reads as a boundary in every review that follows. Nor a pid namespace — see
+//! [`enter`]'s docs for why that one cannot be had from here at all.
 //!
 //! ## ★ A port finding: why this runs in the child's own `main`, not before `exec`
 //!
@@ -259,40 +289,315 @@ fn outer_ids() -> (u32, u32) {
     unsafe { (libc::getuid(), libc::getgid()) }
 }
 
+/// `prctl(2)` with two integer arguments and no memory operand — every process-control
+/// operation this module performs is of that shape (`PR_SET_NO_NEW_PRIVS`,
+/// `PR_SET_DUMPABLE`, `PR_CAPBSET_READ`/`_DROP`, `PR_CAP_AMBIENT`), so they share one
+/// relaxation and one invariant instead of five copies of the same sentence.
+///
+/// Returns the raw non-negative result (`PR_CAPBSET_READ` answers 0/1 in it).
+fn prctl_(op: libc::c_int, arg2: libc::c_ulong, arg3: libc::c_ulong) -> Result<i32, i32> {
+    // SAFETY: `prctl` is variadic and every operation named above takes its arguments BY
+    // VALUE — none of them is a pointer, so this block passes no memory to the kernel and
+    // there is nothing for it to dereference. The trailing two arguments are zero, which
+    // every one of these operations requires. It returns -1 with `errno` set, or a
+    // non-negative result.
+    let rc = unsafe { libc::prctl(op, arg2, arg3, 0 as libc::c_ulong, 0 as libc::c_ulong) };
+    if rc < 0 {
+        return Err(std::io::Error::last_os_error()
+            .raw_os_error()
+            .unwrap_or(libc::EINVAL));
+    }
+    Ok(rc)
+}
+
+/// Linux's capability ABI, version 3 — the 64-bit-capability layout every kernel since 2.6.26
+/// speaks. Named here rather than taken from `libc` because the constant is missing on some
+/// of the targets this crate builds for, and a wrong version word makes `capget` answer
+/// `EINVAL` while looking like a permission problem.
+const CAP_VERSION_3: u32 = 0x2008_0522;
+
+/// The `capget`/`capset` header. A kernel uapi struct, in the crate the ABI-quarantine gate
+/// names for exactly this (`ci.yml`, Axis A).
+#[repr(C)]
+struct CapHeader {
+    version: u32,
+    pid: libc::c_int,
+}
+
+/// One 32-bit slice of the three capability sets. Version 3 passes **two** of these, low
+/// word then high word, which is the entire reason a `u64` is not simply passed.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct CapData {
+    effective: u32,
+    permitted: u32,
+    inheritable: u32,
+}
+
+/// Recombine the kernel's two 32-bit slices into the `u64` the rest of this file reasons in.
+fn join(low: u32, high: u32) -> u64 {
+    u64::from(low) | (u64::from(high) << 32)
+}
+
+/// `capget(2)` for this thread — the three sets as they actually are.
+fn capget_() -> Result<[CapData; 2], RawError> {
+    let mut header = CapHeader {
+        version: CAP_VERSION_3,
+        pid: 0,
+    };
+    let mut data = [CapData::default(); 2];
+    // SAFETY: both pointers address local variables that outlive the call, and both have the
+    // layout the kernel's version-3 ABI defines (`#[repr(C)]`, above): one header and an
+    // array of exactly the two `CapData` words version 3 requires — passing fewer is the one
+    // way to make this call write out of bounds, and the array's type is what prevents it.
+    // `pid: 0` means "this thread", so no other process is addressed. The kernel writes only
+    // into `data` and retains neither pointer.
+    let rc = unsafe { libc::syscall(libc::SYS_capget, &raw mut header, data.as_mut_ptr()) };
+    if rc < 0 {
+        return Err(last_syscall_error("capget"));
+    }
+    Ok(data)
+}
+
+/// `capset(2)` for this thread, to the three sets given.
+fn capset_(data: &[CapData; 2]) -> Result<(), RawError> {
+    let mut header = CapHeader {
+        version: CAP_VERSION_3,
+        pid: 0,
+    };
+    // SAFETY: as `capget_` above, with the direction reversed — the kernel READS the two
+    // `CapData` words and the header, both borrowed from locals that outlive the call, both
+    // laid out by the version-3 ABI this header declares. `pid: 0` addresses this thread
+    // only. Nothing is written back and no pointer is retained.
+    let rc = unsafe { libc::syscall(libc::SYS_capset, &raw mut header, data.as_ptr()) };
+    if rc < 0 {
+        return Err(last_syscall_error("capset"));
+    }
+    Ok(())
+}
+
+// =====================================================================================
+// Privilege — measured, surrendered, and measured again
+// =====================================================================================
+
+/// ★ **What privilege this process holds, measured.**
+///
+/// Every field is read from the kernel rather than inferred from what was called. That is
+/// the whole point of the type: "we dropped the capabilities" is a statement about a
+/// sequence of `prctl`s, and the R4-L1 audit finding this module already carries is what
+/// happens when such a statement goes unchecked.
+///
+/// The three capability sets are `u64` bitmaps over `CAP_*` numbers; the *values* are
+/// deliberately not interpreted here, because this crate has no business logic (§4.7) and
+/// "which capability is bit 21" is the kernel's vocabulary, not ours. The only question
+/// asked of them is whether they are **empty**.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Privileges {
+    /// Capabilities in force right now.
+    pub effective: u64,
+    /// Capabilities that may be raised into [`Self::effective`] without an `exec`.
+    pub permitted: u64,
+    /// Capabilities that survive into a child's permitted set across `exec`.
+    pub inheritable: u64,
+    /// ★ The **bounding** set: the ceiling on everything above, for this process and every
+    /// descendant. Non-empty here means privilege is merely *set aside*, not gone.
+    pub bounding: u64,
+    /// The ambient set — the modern way a non-root process carries capabilities over `exec`.
+    pub ambient: u64,
+    /// `PR_SET_NO_NEW_PRIVS`. Necessary and **nowhere near sufficient**: it stops privilege
+    /// being *gained*, and is inert about privilege already held.
+    pub no_new_privs: bool,
+    /// Whether this process may be core-dumped — and therefore, under the same kernel
+    /// check, `ptrace`d and read by a same-uid process.
+    pub dumpable: bool,
+}
+
+impl Privileges {
+    /// Nothing held, nothing latent, nothing gainable, nothing readable.
+    ///
+    /// The bounding set is deliberately **not** part of this: a process that never had
+    /// `CAP_SETPCAP` cannot empty it, and with `no_new_privs` set it cannot be used either.
+    /// [`surrender_privilege`] applies the stricter rule, because it knows whether the
+    /// process had the means.
+    #[must_use]
+    pub fn is_unprivileged(&self) -> bool {
+        self.effective == 0
+            && self.permitted == 0
+            && self.inheritable == 0
+            && self.ambient == 0
+            && self.no_new_privs
+            && !self.dumpable
+    }
+}
+
+/// The highest capability number this kernel knows, discovered by asking rather than by a
+/// compiled-in constant: `PR_CAPBSET_READ` answers `EINVAL` past the last one, and a
+/// hard-coded ceiling would silently stop covering the capabilities a newer kernel adds —
+/// which is the direction that matters, since a *new* capability is one nobody's drop loop
+/// was written for.
+fn last_capability() -> u32 {
+    let mut last = 0;
+    for c in 0..64u32 {
+        if prctl_(libc::PR_CAPBSET_READ, libc::c_ulong::from(c), 0).is_err() {
+            break;
+        }
+        last = c;
+    }
+    last
+}
+
+/// ★ Read this process's privilege state. The instrument [`surrender_privilege`] fails
+/// closed on, and the one `kayfabe-sandbox-probe` prints.
+///
+/// # Errors
+/// [`RawError::Syscall`] (`capget`, `prctl`).
+pub fn privileges() -> Result<Privileges, RawError> {
+    let data = capget_()?;
+    let mut bounding = 0u64;
+    let mut ambient = 0u64;
+    for c in 0..=last_capability() {
+        if prctl_(libc::PR_CAPBSET_READ, libc::c_ulong::from(c), 0) == Ok(1) {
+            bounding |= 1u64 << c;
+        }
+        if prctl_(
+            libc::PR_CAP_AMBIENT,
+            libc::PR_CAP_AMBIENT_IS_SET as libc::c_ulong,
+            libc::c_ulong::from(c),
+        ) == Ok(1)
+        {
+            ambient |= 1u64 << c;
+        }
+    }
+    let no_new_privs =
+        prctl_(libc::PR_GET_NO_NEW_PRIVS, 0, 0).map_err(|errno| RawError::Syscall {
+            call: "prctl(PR_GET_NO_NEW_PRIVS)",
+            errno: Some(errno),
+        })? == 1;
+    let dumpable = prctl_(libc::PR_GET_DUMPABLE, 0, 0).map_err(|errno| RawError::Syscall {
+        call: "prctl(PR_GET_DUMPABLE)",
+        errno: Some(errno),
+    })? != 0;
+    Ok(Privileges {
+        effective: join(data[0].effective, data[1].effective),
+        permitted: join(data[0].permitted, data[1].permitted),
+        inheritable: join(data[0].inheritable, data[1].inheritable),
+        bounding,
+        ambient,
+        no_new_privs,
+        dumpable,
+    })
+}
+
+/// ★★★ **Surrender every capability, and refuse if any survived.**
+///
+/// The C's sequence (`C: nvkvm_isolate.c:66-81`) in the C's order, with the read-back this
+/// module's own R4-L1 lesson demands. Individual call failures are *tolerated* — the
+/// `PR_CAPBSET_DROP` loop answers `EINVAL` past the last capability by design, and `EPERM`
+/// for a process that never had `CAP_SETPCAP` — because the verdict is taken from
+/// [`privileges`] afterwards and not from any of them.
+///
+/// ## Errors
+/// [`RawError::Syscall`] naming what survived. Three distinct refusals, because "the drop
+/// failed" is not a diagnosis:
+///
+/// - a capability still held (effective/permitted/inheritable/ambient), or
+///   `no_new_privs` unset, or the process still dumpable;
+/// - a non-empty **bounding** set *when the process began with privilege* — it had
+///   `CAP_SETPCAP` and the ceiling is still there, which means the drop did not do what it
+///   reported. A process that started unprivileged cannot empty the bounding set and is not
+///   held to it, because `no_new_privs` already makes it unusable.
+fn surrender_privilege() -> Result<(), RawError> {
+    let before = privileges()?;
+
+    // The C's order. `no_new_privs` first so that nothing between here and the end of the
+    // function could regain what the lines below give up.
+    let _ = prctl_(libc::PR_SET_NO_NEW_PRIVS, 1, 0);
+    let _ = prctl_(libc::PR_SET_DUMPABLE, 0, 0);
+    for c in 0..=last_capability() {
+        let _ = prctl_(libc::PR_CAPBSET_DROP, libc::c_ulong::from(c), 0);
+    }
+    let _ = capset_(&[CapData::default(); 2]);
+    let _ = prctl_(
+        libc::PR_CAP_AMBIENT,
+        libc::PR_CAP_AMBIENT_CLEAR_ALL as libc::c_ulong,
+        0,
+    );
+
+    let after = privileges()?;
+    if !after.is_unprivileged() {
+        return Err(RawError::Syscall {
+            call: "sandbox: privilege survived the drop",
+            errno: Some(libc::EPERM),
+        });
+    }
+    // ★ The latent half. A full bounding set with everything else empty is not a contained
+    // process, it is one `exec` of a file-capability binary away from a privileged one —
+    // and this arm only fires for a process that demonstrably HAD the means to empty it.
+    if before.effective != 0 && after.bounding != 0 {
+        return Err(RawError::Syscall {
+            call: "sandbox: the capability bounding set survived the drop",
+            errno: Some(libc::EPERM),
+        });
+    }
+    Ok(())
+}
+
 // =====================================================================================
 // Entering
 // =====================================================================================
 
-/// Acquire a mount namespace, by whichever route this process is entitled to.
+/// The namespaces taken alongside the mount namespace, matching the C's clone flags
+/// (`C: nvkvm_isolate.c:127-129`): the network, SysV IPC and hostname reach an isolate has
+/// no use for, removed rather than filtered.
 ///
-/// Privileged first (`CAP_SYS_ADMIN` — the posture the isolate actually ships in), then the
-/// rootless route: a **user** namespace, in which this process is root and may therefore
-/// unshare the mount namespace it could not unshare outside. `setgroups` must be denied
-/// before `gid_map` is writable, which is the kernel's rule and not ours.
+/// ★ `CLONE_NEWPID` is **absent, and cannot be had here**. The C gets it free because it
+/// `clone`s the child *into* the namespace; `unshare(CLONE_NEWPID)` after `exec` moves only
+/// the caller's future *children*, of which the isolate creates none, so taking it would
+/// change nothing and read as a boundary. Named rather than stubbed, like seccomp.
+const ISOLATING_NAMESPACES: libc::c_int =
+    libc::CLONE_NEWNS | libc::CLONE_NEWNET | libc::CLONE_NEWIPC | libc::CLONE_NEWUTS;
+
+/// Acquire the namespaces, by whichever route this process is entitled to.
 ///
-/// ★ There is no third arm. A host that grants neither gets an error, and the caller's
+/// ★★ **The user namespace is tried FIRST, and that is a security decision rather than a
+/// fallback order.** The privileged route (`CAP_SYS_ADMIN` in the initial user namespace)
+/// also works — it is what this used to do, because it is what an isolate spawned by a root
+/// VMM is entitled to — but it leaves the child in the *same* user namespace as its parent,
+/// and there the `ptrace` access check is satisfied by matching uids alone. Taking a user
+/// namespace first means a compromised isolate needs `CAP_SYS_PTRACE` **in the parent's**
+/// namespace to reach the parent at all, and [`surrender_privilege`] has just made sure it
+/// holds no capability in any namespace.
+///
+/// `setgroups` must be denied before `gid_map` is writable, which is the kernel's rule and
+/// not ours. The single-line map names this process's *outer* ids, which is why
+/// [`outer_ids`] is read before the `unshare` — afterwards `getuid` answers the overflow id
+/// and the map the kernel would accept is no longer the map we could compute.
+///
+/// ★ There is no third arm. A host that grants neither route gets an error, and the caller's
 /// contract is that an error means no [`DevDir`] — never a `/dev` handed out uncontained.
 fn acquire_mount_namespace() -> Result<(), RawError> {
-    if unshare_(libc::CLONE_NEWNS, "unshare(CLONE_NEWNS)").is_ok() {
-        return Ok(());
-    }
     let (uid, gid) = outer_ids();
-    unshare_(libc::CLONE_NEWUSER, "unshare(CLONE_NEWUSER)")?;
-    write_proc_self("setgroups", "deny", "write(/proc/self/setgroups)")?;
-    write_proc_self(
-        "uid_map",
-        &format!("0 {uid} 1\n"),
-        "write(/proc/self/uid_map)",
-    )?;
-    write_proc_self(
-        "gid_map",
-        &format!("0 {gid} 1\n"),
-        "write(/proc/self/gid_map)",
-    )?;
-    unshare_(
-        libc::CLONE_NEWNS,
-        "unshare(CLONE_NEWNS) after CLONE_NEWUSER",
-    )
+    if unshare_(libc::CLONE_NEWUSER, "unshare(CLONE_NEWUSER)").is_ok() {
+        // Past this point the process is in a namespace with no mapping at all, so every
+        // failure below is a refusal and never a fallback: dropping back to the privileged
+        // route from here would run the rest of the sequence in a half-built namespace.
+        write_proc_self("setgroups", "deny", "write(/proc/self/setgroups)")?;
+        write_proc_self(
+            "uid_map",
+            &format!("0 {uid} 1\n"),
+            "write(/proc/self/uid_map)",
+        )?;
+        write_proc_self(
+            "gid_map",
+            &format!("0 {gid} 1\n"),
+            "write(/proc/self/gid_map)",
+        )?;
+        return unshare_(
+            ISOLATING_NAMESPACES,
+            "unshare(mount/net/ipc/uts) after CLONE_NEWUSER",
+        );
+    }
+    unshare_(ISOLATING_NAMESPACES, "unshare(mount/net/ipc/uts)")
 }
 
 /// One-shot write of a `/proc/self/<what>` control file. Plain `std::fs`, deliberately:
@@ -338,11 +643,20 @@ fn validate_node_name(name: &str) -> Result<(), RawError> {
     Ok(())
 }
 
-/// ★★★ **Enter the sandbox and mint the `/dev` descriptor inside it.**
+/// ★★★ **Enter the sandbox, mint the `/dev` descriptor inside it, and surrender every
+/// capability.**
 ///
 /// Returns the *only* [`DevDir`] the isolate should ever hold: one whose `..` is a `tmpfs`
 /// containing nothing but the nodes `policy` named. On return the process has a private
-/// mount namespace, a read-only root, and no path to the host filesystem at all.
+/// mount namespace, its own user/network/IPC/UTS namespaces, a read-only root, no path to
+/// the host filesystem at all, and — measured by [`privileges`], not assumed — **no
+/// capability in any namespace**, `no_new_privs` set and `dumpable` cleared.
+///
+/// The three are one call because their **order** is the security property and an API that
+/// let a caller choose it would let a caller get it wrong: the descriptor must be minted
+/// after the pivot, and the privilege must be surrendered after the last mount. A caller
+/// that could sequence them itself is a caller that can ship the mis-ordered build the
+/// committed regression test exists to catch.
 ///
 /// ## Preconditions the caller owns
 ///
@@ -356,7 +670,8 @@ fn validate_node_name(name: &str) -> Result<(), RawError> {
 /// [`RawError::Syscall`], naming the step. Every arm is a **refusal**: there is no partial
 /// sandbox, because the value this returns is the capability itself. In particular a failed
 /// read-only reseal returns `Err` rather than a `DevDir` inside a writable root — the C's
-/// R4-L1 audit finding, ported as a type-level consequence rather than as a comment.
+/// R4-L1 audit finding, ported as a type-level consequence rather than as a comment — and
+/// so does a capability that survived [`surrender_privilege`]'s read-back.
 ///
 /// # Panics
 /// If called with any ranked or adapter-leaf lock held (R1, §4.5) — this mounts filesystems
@@ -481,6 +796,13 @@ pub fn enter(policy: &SandboxPolicy) -> Result<DevDir, RawError> {
         "mount(MS_REMOUNT|MS_RDONLY sandbox root)",
     )?;
 
+    // ★★★ LAST, and the position is forced: every step above needs `CAP_SYS_ADMIN`, and
+    // this is the line that ends it. Nothing this process does from here on can mount, can
+    // be `ptrace`d by a same-uid peer, or can regain a capability across an `exec` — and the
+    // `?` means a residual privilege drops `dev` on the way out, so the isolate never
+    // receives a device descriptor it would have been holding with privilege.
+    surrender_privilege()?;
+
     Ok(dev)
 }
 
@@ -506,32 +828,55 @@ pub fn enter(policy: &SandboxPolicy) -> Result<DevDir, RawError> {
 pub fn namespaces_available() -> bool {
     static AVAILABLE: OnceLock<bool> = OnceLock::new();
     *AVAILABLE.get_or_init(|| {
-        if std::env::var_os("KAYFABE_NO_SANDBOX_NS").is_some_and(|v| v == "1") {
+        !forced_absent() && (can_unshare(libc::CLONE_NEWNS) || can_unshare(libc::CLONE_NEWUSER))
+    })
+}
+
+/// ★ Can this process create a **user** namespace specifically?
+///
+/// A narrower question than [`namespaces_available`] and a separate gate, because the two
+/// have different answers on real hosts: a root process in a container with `CAP_SYS_ADMIN`
+/// but `user.max_user_namespaces = 0` gets a mount namespace and no user namespace. The
+/// tests that assert the *privilege* boundary — a distinct user namespace, and therefore a
+/// `ptrace` refusal against the parent — gate on this one; the tests that assert the
+/// *filesystem* boundary do not, because [`enter`]'s privileged route contains the
+/// filesystem just as well.
+#[must_use]
+pub fn user_namespaces_available() -> bool {
+    static AVAILABLE: OnceLock<bool> = OnceLock::new();
+    *AVAILABLE.get_or_init(|| !forced_absent() && can_unshare(libc::CLONE_NEWUSER))
+}
+
+/// ★★ `KAYFABE_NO_SANDBOX_NS=1` forces both gates to report **absent**, so the gated arm is
+/// runnable on purpose rather than only by accident of what a machine lacks. It gates
+/// *tests*; it does not weaken [`enter`], which has no opt-out at all.
+fn forced_absent() -> bool {
+    std::env::var_os("KAYFABE_NO_SANDBOX_NS").is_some_and(|v| v == "1")
+}
+
+/// Ask the kernel, in a child that is thrown away. The parent's namespaces are untouched
+/// whichever way it answers, which is why the question can be asked at all.
+fn can_unshare(flags: libc::c_int) -> bool {
+    // SAFETY: `fork` in a possibly-threaded process is sound only if the child confines
+    // itself to async-signal-safe calls, and this child makes exactly two — `unshare` (via
+    // `unshare_`, which allocates nothing and only reads an integer) and `_exit`, which is
+    // on POSIX's list and, unlike `exit`, runs no handler and touches no shared allocator
+    // state. It cannot return into this function. On the parent side `waitpid` is an
+    // ordinary blocking wait on a child that provably exits at once.
+    unsafe {
+        let pid = libc::fork();
+        if pid < 0 {
             return false;
         }
-        // SAFETY: `fork` in a possibly-threaded process is sound only if the child confines
-        // itself to async-signal-safe calls, and this child makes exactly two — `unshare`
-        // (via `unshare_`, which allocates nothing and only reads an integer) and `_exit`,
-        // which is on POSIX's list and, unlike `exit`, runs no handler and touches no
-        // shared allocator state. It cannot return into this function. On the parent side
-        // `waitpid` is an ordinary blocking wait on a child that provably exits at once.
-        unsafe {
-            let pid = libc::fork();
-            if pid < 0 {
-                return false;
-            }
-            if pid == 0 {
-                let ok = unshare_(libc::CLONE_NEWNS, "probe").is_ok()
-                    || unshare_(libc::CLONE_NEWUSER, "probe").is_ok();
-                libc::_exit(i32::from(!ok));
-            }
-            let mut status: libc::c_int = 0;
-            if libc::waitpid(pid, &raw mut status, 0) != pid {
-                return false;
-            }
-            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0
+        if pid == 0 {
+            libc::_exit(i32::from(unshare_(flags, "probe").is_err()));
         }
-    })
+        let mut status: libc::c_int = 0;
+        if libc::waitpid(pid, &raw mut status, 0) != pid {
+            return false;
+        }
+        libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0
+    }
 }
 
 /// Emit this test's gate line. Called by [`crate::require_sandbox`]; public because the
@@ -541,6 +886,12 @@ pub fn namespaces_available() -> bool {
 /// a gate whose "it ran" marker only appears on failure cannot be counted, and counting both
 /// arms is the whole non-vacuity argument.
 pub fn report(test: &str, available: bool) {
+    report_gate(test, available, "create a mount namespace");
+}
+
+/// As [`report`], naming the capability that was missing. Both gates emit the same two
+/// countable markers, so CI's floor covers them together.
+pub fn report_gate(test: &str, available: bool, needed: &str) {
     use std::io::Write as _;
     let mut err = std::io::stderr();
     let _ = if available {
@@ -548,7 +899,7 @@ pub fn report(test: &str, available: bool) {
     } else {
         writeln!(
             err,
-            "SANDBOX-GATE: SKIPPED {test} — this process may not create a mount namespace \
+            "SANDBOX-GATE: SKIPPED {test} — this process may not {needed} \
              (the test asserts nothing; this line is the only record that it did not run)"
         )
     };
@@ -566,6 +917,22 @@ macro_rules! require_sandbox {
         let __ns = $crate::sandbox::namespaces_available();
         $crate::sandbox::report($name, __ns);
         if !__ns {
+            return;
+        }
+    };
+}
+
+/// Gate the enclosing `#[test]` on a host that permits **user** namespaces —
+/// `require_user_namespace!("test_name")`.
+///
+/// The narrower gate, for the tests that assert the privilege boundary rather than the
+/// filesystem one. Same two markers as [`require_sandbox!`], so one CI floor counts both.
+#[macro_export]
+macro_rules! require_user_namespace {
+    ($name:expr) => {
+        let __uns = $crate::sandbox::user_namespaces_available();
+        $crate::sandbox::report_gate($name, __uns, "create a user namespace");
+        if !__uns {
             return;
         }
     };
@@ -648,6 +1015,142 @@ mod tests {
     #[test]
     fn the_namespace_gate_is_stable_across_calls() {
         assert_eq!(namespaces_available(), namespaces_available());
+        assert_eq!(user_namespaces_available(), user_namespaces_available());
+    }
+
+    /// ★ The user-namespace gate is the *narrower* question and must never claim more than
+    /// the broad one: a host that permits a user namespace permits [`enter`]'s route, so
+    /// `user ⇒ any`. The converse is genuinely false on hosts with `CAP_SYS_ADMIN` and
+    /// `user.max_user_namespaces = 0`, which is exactly why they are two gates.
+    #[test]
+    fn the_user_namespace_gate_implies_the_broad_one() {
+        assert!(!user_namespaces_available() || namespaces_available());
+    }
+
+    /// ★★ The instrument the whole privilege boundary is asserted with, checked against an
+    /// **independent** one: `/proc/self/status` is the kernel's own text rendering of the
+    /// same state, produced by different code from `capget`/`prctl`. If the two ever
+    /// disagree, every capability assertion in `sandbox_escape.rs` is suspect — and a
+    /// measurement nobody cross-checks is how a green gate ends up asserting nothing
+    /// (`suspect_the_instrument_first`).
+    #[test]
+    fn the_privilege_reading_agrees_with_proc_self_status() {
+        let measured = privileges().expect("privileges are readable on any Linux host");
+        let status = std::fs::read_to_string("/proc/self/status").expect("/proc/self/status");
+        let field = |name: &str| -> Option<u64> {
+            status
+                .lines()
+                .find_map(|l| l.strip_prefix(name))
+                .and_then(|v| u64::from_str_radix(v.trim(), 16).ok())
+        };
+        assert_eq!(field("CapEff:"), Some(measured.effective), "CapEff");
+        assert_eq!(field("CapPrm:"), Some(measured.permitted), "CapPrm");
+        assert_eq!(field("CapInh:"), Some(measured.inheritable), "CapInh");
+        assert_eq!(field("CapBnd:"), Some(measured.bounding), "CapBnd");
+        assert_eq!(field("CapAmb:"), Some(measured.ambient), "CapAmb");
+        assert_eq!(
+            status
+                .lines()
+                .find_map(|l| l.strip_prefix("NoNewPrivs:"))
+                .map(|v| v.trim() == "1"),
+            Some(measured.no_new_privs),
+            "NoNewPrivs"
+        );
+    }
+
+    /// A capability set is a bitmap the kernel hands over in two 32-bit halves, and joining
+    /// them the wrong way round is the silent way every assertion above starts comparing
+    /// the wrong 32 bits. Asserted on a value whose halves differ.
+    #[test]
+    fn the_two_capability_words_join_high_word_last() {
+        assert_eq!(join(0x0000_00ff, 0x0000_0001), 0x0000_0001_0000_00ff);
+        assert_eq!(join(0, 0), 0);
+    }
+
+    /// ★ `is_unprivileged` is a conjunction, and a conjunction is exactly the shape that
+    /// rots into "returns true" when one clause is dropped. Every clause is falsified
+    /// individually — a mutation that deletes any one of them turns a row below red.
+    #[test]
+    fn every_clause_of_the_unprivileged_verdict_is_load_bearing() {
+        let clean = Privileges {
+            effective: 0,
+            permitted: 0,
+            inheritable: 0,
+            bounding: 0,
+            ambient: 0,
+            no_new_privs: true,
+            dumpable: false,
+        };
+        assert!(clean.is_unprivileged());
+        for (what, p) in [
+            (
+                "effective",
+                Privileges {
+                    effective: 1,
+                    ..clean
+                },
+            ),
+            (
+                "permitted",
+                Privileges {
+                    permitted: 1,
+                    ..clean
+                },
+            ),
+            (
+                "inheritable",
+                Privileges {
+                    inheritable: 1,
+                    ..clean
+                },
+            ),
+            (
+                "ambient",
+                Privileges {
+                    ambient: 1,
+                    ..clean
+                },
+            ),
+            (
+                "no_new_privs",
+                Privileges {
+                    no_new_privs: false,
+                    ..clean
+                },
+            ),
+            (
+                "dumpable",
+                Privileges {
+                    dumpable: true,
+                    ..clean
+                },
+            ),
+        ] {
+            assert!(!p.is_unprivileged(), "{what} stopped being load-bearing");
+        }
+        // ★ And the deliberate non-clause: a bounding set alone does not make a process
+        // privileged, because `no_new_privs` makes it unusable. `surrender_privilege`
+        // applies the stricter rule where it is achievable, and that is where it belongs —
+        // here it would refuse every unprivileged host.
+        assert!(
+            Privileges {
+                bounding: u64::MAX,
+                ..clean
+            }
+            .is_unprivileged()
+        );
+    }
+
+    /// The kernel's last capability number is *discovered*, and the discovery must land in
+    /// the plausible range — a 0 would make the drop loop and the read-back both vacuous,
+    /// which is the failure mode that reads as success.
+    #[test]
+    fn the_last_capability_is_discovered_and_plausible() {
+        let last = last_capability();
+        assert!(
+            (14..64).contains(&last),
+            "implausible last capability {last}: CAP_SYS_ADMIN alone is 21"
+        );
     }
 
     /// The `/proc/self` writer reports the exact errno, never a bare failure. A control

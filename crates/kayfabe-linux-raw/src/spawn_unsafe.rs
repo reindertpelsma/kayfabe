@@ -51,12 +51,17 @@
 //! improvement (an image cannot decline a sandbox it was born in) and it is gated on a
 //! static isolate build, which is why this crate keeps building for musl.
 //!
-//! Still absent: **the pid/net/ipc/uts namespaces, the capability drop and seccomp.** Named
-//! rather than stubbed, because an untested sandbox is worse than a declared absence: it
-//! reads as a boundary in every review that follows. Note in particular that
-//! `PR_SET_NO_NEW_PRIVS` below is **inert for an already-privileged process** — it blocks
-//! *gaining* privilege through setuid/fcaps and nothing else — so it is not a substitute
-//! for the drop.
+//! The **capability drop and the user/net/ipc/uts namespaces** now exist too, and are in the
+//! same place for the same reason ([`crate::sandbox::enter`], which reads back the outcome
+//! and refuses on a surviving bit). Note in particular that `PR_SET_NO_NEW_PRIVS` below is
+//! **inert for an already-privileged process** — it blocks *gaining* privilege through
+//! setuid/fcaps and nothing else — so it never was a substitute for that drop, and the
+//! isolate ran with `CapEff = 000001ffffffffff` for as long as it was the only control here.
+//!
+//! Still absent: **seccomp**, and **`CLONE_NEWPID`** — which cannot be had from the child's
+//! own `main` at all, since `unshare(CLONE_NEWPID)` moves only future children and the
+//! isolate creates none. Both named rather than stubbed, because an untested sandbox is
+//! worse than a declared absence: it reads as a boundary in every review that follows.
 
 use crate::error::{RawError, last_syscall_error};
 use kayfabe_util::{leafwitness, lockwitness};

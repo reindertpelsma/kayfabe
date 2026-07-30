@@ -107,6 +107,32 @@ jobs:
           if [ "$ran" -gt 0 ]; then
             echo "This runner has /dev/kvm: $ran gated tests actually executed."
           fi
+      # ★★ SANDBOX-gate non-vacuity — the same argument as the KVM gate above, for the
+      # tests that need a mount or user namespace. They are the ONLY tests that assert the
+      # isolate's containment (a `/dev` descriptor that cannot name `..`, a child that holds
+      # no capability), so a runner where they silently stop running is a runner where a
+      # security property stops being checked while the build stays green.
+      #
+      # Deliberately a floor over RAN+SKIPPED and not an exact match: the gated set grows.
+      # The `RAN` line is printed too, so a job that HAS the capability says how many
+      # actually executed rather than leaving it to be inferred.
+      - name: SANDBOX-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          ran=$(grep -c 'SANDBOX-GATE: RAN' /tmp/kayfabe-test.log || true)
+          skipped=$(grep -c 'SANDBOX-GATE: SKIPPED' /tmp/kayfabe-test.log || true)
+          total=$(( ran + skipped ))
+          echo "SANDBOX-gate: ran=$ran skipped=$skipped total=$total (floor 6)"
+          if [ "$total" -lt 6 ]; then
+            echo "::error::sandbox-gated tests were not reached: $total < 6." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "These are the tests that assert the isolate cannot reach the host" \
+                 "filesystem and holds no capability; a silent skip is worse than red."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This runner permits namespaces: $ran gated tests actually executed."
+          fi
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Format check
@@ -709,7 +735,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:57 kayfabe-qemu-raw:0"
+          AUDITED="kayfabe-linux-raw:60 kayfabe-qemu-raw:0"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -782,6 +808,12 @@ jobs:
           # allowed to swallow the return value of. The seventh block is the probe that
           # makes the fix MEASURABLE rather than argued; it is why the bar is raised for a
           # security fix and not only for a feature.
+          # ★★ 57 -> 60 CLOSING THE PRIVILEGE HALF. Three new blocks, all in
+          # `sandbox_unsafe.rs`, itemised in full below: the capability drop the C carries
+          # (`prctl`, `capget`, `capset`) and the read-back that turns "we dropped them"
+          # from a sequence of calls into a checked outcome. The filesystem containment
+          # landed around a process that still held EVERY capability, which is what made
+          # this the same piece of work and not a follow-up.
           # The surface, per file, each block carrying its
           # own `// SAFETY:` (clippy `undocumented_unsafe_blocks = deny`):
           #   window_unsafe.rs  (7) — the GuestWindow: one mmap, one MAP_FIXED shared by
@@ -852,10 +884,10 @@ jobs:
           #     invariant that matters. Plus the CHILD half of the same contract:
           #     `adopt_inherited_fd`'s liveness probe and its `from_raw_fd`, two blocks
           #     because the second's invariant IS the first's result.
-          #   sandbox_unsafe.rs (6) — ★★ THE FILESYSTEM CONTAINMENT, and the reason it is
-          #     six and not one: every entry point is a syscall whose RETURN VALUE is the
-          #     security property, so each gets its own checked wrapper rather than one
-          #     block spanning the sequence. `unshare_` (mount / user namespace),
+          #   sandbox_unsafe.rs (9) — ★★ THE CONTAINMENT, and the reason it is nine and not
+          #     one: every entry point is a syscall whose RETURN VALUE is the security
+          #     property, so each gets its own checked wrapper rather than one block
+          #     spanning the sequence. `unshare_` (mount / user namespace),
           #     `mount_` (the ONE mount entry point — the private-propagation flip, the
           #     scratch tmpfs, each device bind AND the read-only reseal all go through it,
           #     so there is exactly one place a return could be dropped and the C's R4-L1
@@ -863,11 +895,38 @@ jobs:
           #     cannot recur), `pivot_root_` (no libc wrapper exists on any target),
           #     `umount_detach`, `outer_ids` (getuid/getgid, which cannot fail and must be
           #     read BEFORE the uid_map is written), and the capability probe in
-          #     `namespaces_available`, which forks a child that calls `unshare` and
-          #     `_exit` and nothing else. Everything else in the sequence is plain
+          #     `can_unshare`, which forks a child that calls `unshare` and `_exit` and
+          #     nothing else. Everything else in the sequence is plain
           #     `std::fs` and needs no relaxation at all — this runs in the child's own
           #     `main`, not post-`fork`, so the async-signal-safety constraint that shapes
           #     `spawn_unsafe.rs` does not apply here.
+          #     ★★ 6 -> 9 CLOSING THE PRIVILEGE HALF (#96). The filesystem containment shipped
+          #     around a process that still held `CapEff = 000001ffffffffff` — measured, on
+          #     the host this ships on — which is a boundary with a key taped to it:
+          #     `CAP_SYS_PTRACE` reaches the PARENT's memory, and the parent holds the KVM
+          #     descriptor and all guest RAM. The three new blocks are the C's capability
+          #     drop (`C: src/qemu/nvkvm_isolate.c:66-81`) plus the read-back that makes it
+          #     checkable:
+          #       `prctl_`  — ONE block for every process-control operation, because they
+          #         all have the same shape and the same invariant: `prctl` is variadic and
+          #         each of `PR_SET_NO_NEW_PRIVS`, `PR_SET_DUMPABLE`, `PR_CAPBSET_READ`,
+          #         `PR_CAPBSET_DROP`, `PR_CAP_AMBIENT` and the two `PR_GET_*` reads passes
+          #         its arguments BY VALUE. No memory crosses to the kernel, so there is
+          #         nothing per-call to argue and five copies of one sentence would be five
+          #         places for it to rot.
+          #       `capget_` / `capset_` — two blocks, not one, because the direction is the
+          #         invariant: one has the kernel WRITE into a local array, the other has it
+          #         READ one. Both pass a version-3 header and an array of exactly the two
+          #         `CapData` words that ABI requires — passing fewer is the one way to make
+          #         `capget` write out of bounds, and the array's TYPE is what prevents it.
+          #         `pid: 0` in the header means "this thread", so no other process is
+          #         addressed by either.
+          #     ★ The refusal is on the MEASUREMENT, not on the calls: individual failures
+          #     are tolerated (`PR_CAPBSET_DROP` answers EINVAL past the last capability by
+          #     design), then `privileges()` is read again and one surviving bit returns Err
+          #     — which drops the `DevDir` on the way out, so the isolate never receives a
+          #     device descriptor it would have been holding with privilege. Watched to fire:
+          #     deleting the `PR_CAPBSET_DROP` loop makes `enter` REFUSE, not pass.
           #
           # kayfabe-qemu-raw (0) — L2-Q stage Q0. Nothing yet, and §2.2's "itemise the
           # second crate's blocks exactly as the first crate's 37 are" is therefore

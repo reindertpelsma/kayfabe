@@ -283,15 +283,19 @@ mod vcpu_unsafe;
 pub mod view;
 mod window_unsafe;
 
-/// ★★★ The isolate's **filesystem containment**: a private mount namespace, a `pivot_root`
-/// onto a `tmpfs` holding only the granted device nodes, and the `/dev` descriptor minted
-/// **inside** it.
+/// ★★★ The isolate's **containment**: a private mount namespace, a `pivot_root` onto a
+/// `tmpfs` holding only the granted device nodes, the `/dev` descriptor minted **inside**
+/// it, and a process that comes out the other side holding no capability at all.
 ///
 /// A facade over the audited module, so the security boundary has a name that says what it
 /// is. Start at [`sandbox::enter`] — its docs carry the measured escape this closes and the
-/// one property that closes it, which is the **order** of the last two steps.
+/// one property that closes it, which is the **order** of the last three steps.
+/// [`sandbox::privileges`] is the instrument the last of them fails closed on.
 pub mod sandbox {
-    pub use crate::sandbox_unsafe::{SandboxPolicy, enter, namespaces_available, report};
+    pub use crate::sandbox_unsafe::{
+        Privileges, SandboxPolicy, enter, namespaces_available, privileges, report, report_gate,
+        user_namespaces_available,
+    };
 }
 
 pub use bounds::HostOffset;
