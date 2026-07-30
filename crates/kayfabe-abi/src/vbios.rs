@@ -331,6 +331,39 @@ pub static VBIOS_PROFILES: &[VbiosProfile] = &[
             signature_versions: 0x0001,
         },
     },
+    // ★★ AD106 (Ada) — the SECOND generation, added 2026-07-30 to MEASURE what a second
+    // generation costs rather than to assert it. It cost this row and nothing else in
+    // this crate.
+    //
+    // ⚠ **Two of these numbers are INVENTED and one is real.** `pci_device_id` is the
+    // real AD106 id; the FWSEC geometry is the *same generated geometry* as GA106's,
+    // reused because it satisfies the driver's inequalities — it is NOT a transcription
+    // of any Ada card's ROM, and `vbios_version` below is a placeholder, not a version
+    // any board reports. That is legitimate here for exactly the reason the GA106 row
+    // gives: the driver performs no crypto verification of FWSEC and copies these fields
+    // without interpreting them. It would NOT be legitimate to quote them back as a
+    // measurement.
+    VbiosProfile {
+        name: "AD106",
+        pci_vendor_id: 0x10DE,
+        pci_device_id: 0x2803,
+        pci_class_code: [0x00, 0x00, 0x03],
+        vbios_version: 0x9518_0000,
+        vbios_oem_version: 0x00,
+        fwsec: FwsecProfile {
+            imem_load_size: 0x1000,
+            imem_phys_base: 0,
+            imem_virt_base: 0,
+            dmem_load_size: 0x1000,
+            dmem_phys_base: 0,
+            pkc_data_offset: 0x0800,
+            interface_offset: 0,
+            ucode_id: 0x01,
+            engine_id_mask: 0x0001,
+            signature_count: 1,
+            signature_versions: 0x0001,
+        },
+    },
 ];
 
 /// Look a profile up by PCI device ID.

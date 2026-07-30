@@ -309,6 +309,45 @@ pub const TABLES: &[DriverAbiTable] = &[
         note: "capability-only boundary: +6 allocation classes, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:990-1027)",
     },
+    // ★★★ 575.51.02 — added 2026-07-30 as the SECOND-DRIVER-VERSION MEASUREMENT, and it
+    // is the row that shows what this shape can and cannot carry.
+    //
+    // The additive half really is one row: no wire layout moves here, so every field
+    // below is its predecessor's and this entry costs exactly these lines.
+    //
+    // ⚠ **The subtractive half cannot be expressed, and the boundary is MOSTLY
+    // subtractive.** nvproxy's `v575_51_02` is three deletes-and-replaces on the control
+    // map, not an addition (`gvisor/pkg/sentry/devices/nvproxy/version.go:1036-1053`):
+    //   - `NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT` 0x20801358 -> 0x20801357
+    //   - `NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS`          0x20801359 -> 0x20801358
+    //   - `NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2` 0x20800513 added
+    // `CapabilityTable` is inherit-then-**add** and has no removal field, which its own
+    // module doc already states. So this row carries the *fact* of the boundary and none
+    // of its *content*, and the consequence is live and measured — see
+    // `the_575_boundary_is_subtractive_and_this_shape_cannot_carry_it` in
+    // `crate::capability`'s tests, which pins that 0x20801359 is refused for a 550/570
+    // guest that legitimately issues it, and that 0x20801358 is permitted under the
+    // 575-era NAME while a 550/570 guest means the pre-575 command by that number.
+    //
+    // Recorded, not fixed: a removal field is a type change with its own blast radius and
+    // belongs with its first real consumer, exactly as the module doc says.
+    DriverAbiTable {
+        version: DriverVersion {
+            major: 575,
+            minor: 51,
+            patch: 2,
+        },
+        map_dma: MapDmaWire::Pre580_65_06,
+        gsp_element: GspElementWire::Pre610,
+        gsp_init_args: GspInitArgsWire::FourField,
+        caps: &CAPS_570_86_15,
+        vbios: VbiosWire::Tu102Bit,
+        note: "★ the first SUBTRACTIVE boundary: nvproxy replaces two DRAM-encryption \
+               commands here rather than adding any (version.go:1036-1053). This shape \
+               can only add, so the row records the boundary and carries none of its \
+               content — the additive third (THERMAL_SYSTEM_EXECUTE_V2) is already in \
+               CAPS_BASE because that table is the 575 set the C shipped",
+    },
     DriverAbiTable {
         version: DriverVersion {
             major: 580,

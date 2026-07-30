@@ -71,6 +71,13 @@ fn repo_root() -> PathBuf {
 const SCOPED: &[&str] = &[
     "kayfabe-abi",
     "kayfabe-arch",
+    // ★ SCOPED, not exempt. `kayfabe-chips` is the arch-impl crate: it may name a GPU
+    // generation (that is its job, and the Generation-name gate exempts it for exactly
+    // that) but a *silicon* model must never assume a guest OS. Axis B and Axis D are
+    // independent, and §4.5 records what it cost the last time one field was conditioned
+    // on two axes and the code named neither. Exempting it would have made a new
+    // architecture the quiet way past this gate.
+    "kayfabe-chips",
     "kayfabe-completion",
     "kayfabe-core",
     // ★ Added 2026-07-31 with the crate. It is NOT a host adapter: it holds the chip table

@@ -130,6 +130,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-chips"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-mocks",
+ "kayfabe-util",
+]
+
+[[package]]
 name = "kayfabe-completion"
 version = "0.1.0"
 dependencies = [
@@ -303,6 +312,7 @@ version = "0.1.0"
 dependencies = [
  "kayfabe-abi",
  "kayfabe-arch",
+ "kayfabe-chips",
  "kayfabe-completion",
  "kayfabe-core",
  "kayfabe-crec",

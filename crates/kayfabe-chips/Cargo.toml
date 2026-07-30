@@ -1,0 +1,20 @@
+[package]
+name = "kayfabe-chips"
+description = "The arch-impl (adapter) crate `mode2_gsp_port_plan.md` §3.5 names but the workspace did not have: one `impl Arch` + `impl GspModel` per GPU generation, where a chip's offsets and encodings are ALLOWED to live. Holds AD10x (Ada) and, as a REFUTATION FIXTURE, GH100 (Hopper) — see the crate docs for what Hopper proves."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+kayfabe-util.workspace = true
+# The Axis-B seams this crate implements. It is an ADAPTER: this is where a real chip's
+# offsets are allowed to live, and the reason `kayfabe-gsp` has none.
+kayfabe-arch.workspace = true
+# The non-GSP half of `Arch`, composed exactly the way `kayfabe-crec`'s GA10x model
+# composes onto it — so the second generation is measured against the same baseline the
+# first one was.
+kayfabe-mocks.workspace = true
+
+[lints]
+workspace = true
