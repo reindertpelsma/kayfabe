@@ -223,6 +223,92 @@ fn the_three_censuses_are_wired_and_derive_rather_than_hand_list() {
 }
 
 #[test]
+fn a_red_caused_by_the_box_cannot_be_reported_as_a_red_caused_by_the_code() {
+    // ★★★ Three of these landed in one evening, each costing a wasted verification cycle: a
+    // reached-count step reporting `total=0` because a sibling process wrote the same `/tmp`
+    // path; a background run reported "failed, exit 1" that was purely a full disk; a suite
+    // run in a shared tree failing a seam gate on another agent's untracked crate. Same
+    // shape every time — an environment failure wearing the costume of a code failure — and
+    // the ledger is the only place that can tell them apart, because it is the only thing
+    // that sees both.
+    let src = runner();
+
+    assert!(
+        src.contains("DISK_REFUSE_MB") && src.contains("REFUSING TO RUN"),
+        "★ the disk floor is gone. A build that dies of ENOSPC reports a compiler error, and \
+         a compiler error reads as a code defect. Refusing to start is the only answer that \
+         cannot be misattributed."
+    );
+    assert!(
+        src.contains("exit 4"),
+        "★ the unfit-box refusal no longer has its own exit status. Sharing `1` with a real \
+         failure is exactly the conflation this test exists to prevent."
+    );
+    assert!(
+        src.contains("git status --porcelain"),
+        "★ the runner no longer reports working-tree state. The boundary, vocabulary, \
+         unsafe-surface and ABI-quarantine gates grep the tree AS IT IS, so a file belonging \
+         to another writer is a real input to a real gate — a red run needs that fact beside \
+         it, not discovered an hour later."
+    );
+}
+
+#[test]
+fn a_reached_count_of_zero_names_which_kind_of_zero_it_is() {
+    // ★★★ MEASURED 2026-07-30. `ran=0 skipped=0 total=0` was reported on a box that has
+    // /dev/kvm and both vendored ogkm trees, and whose own test run had just printed 51
+    // `KVM-GATE: RAN` and 10 `VBIOS-ORACLE-GATE: RAN`. The gates were reading a concurrent
+    // run's file. That output reads as *the gated tests vanished* — a confident wrong
+    // answer, and strictly worse than no check at all, because someone acts on it.
+    //
+    // "The producer ran and genuinely found zero" and "I could not read my input" must not
+    // be representable the same way. The producer writes a completion sentinel; every
+    // consumer refuses, with its own exit status, over an input that lacks one.
+    let ci = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the tests crate lives one level below the root")
+        .join(".github/workflows/ci.yml");
+    let src = std::fs::read_to_string(&ci)
+        .unwrap_or_else(|e| panic!("★ {} is not readable: {e}", ci.display()));
+
+    assert!(
+        src.contains("KAYFABE-TEST-LOG-COMPLETE rc="),
+        "★ the test step no longer writes a completion sentinel, so the reached-count steps \
+         below it cannot tell a real zero from an unreadable input."
+    );
+    let guards = src.matches("INFRASTRUCTURE FAILURE, NOT A TEST RESULT").count();
+    assert!(
+        guards >= 3,
+        "★ only {guards} reached-count step(s) refuse over an unreadable log; there are three \
+         (KVM, SANDBOX, VBIOS-ORACLE). A step without the guard reports a count of zero and \
+         calls it a regression."
+    );
+    assert!(
+        src.contains("${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"),
+        "★ the test log path is hardcoded again. A fixed name in /tmp is SHARED: two runs on \
+         one box clobber each other, which is invisible on GitHub (one runner per job) and \
+         wrong exactly where the authoritative run happens."
+    );
+
+    // And the runner that drives those steps must actually set the variable — a default that
+    // nothing overrides is the old hardcoded path with extra syntax.
+    assert!(
+        runner_gates().contains("export KAYFABE_TEST_LOG"),
+        "★ scripts/ci_gates.sh no longer exports a private KAYFABE_TEST_LOG, so concurrent \
+         local runs share `/tmp/kayfabe-test.log` again. The steps are extracted from ci.yml \
+         and run in child shells, so the environment is the only channel that reaches them."
+    );
+}
+
+fn runner_gates() -> String {
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the tests crate lives one level below the root")
+        .join("scripts/ci_gates.sh");
+    std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("★ {} is not readable: {e}", p.display()))
+}
+
+#[test]
 fn every_cargo_workspace_in_the_tree_is_named_by_the_runner() {
     // ★★★ `cargo test --workspace` is a statement about ONE workspace. A `Cargo.toml` with its
     // own `[workspace]` table is a ROOT, and nothing run at the repository root reaches its

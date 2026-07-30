@@ -99,8 +99,22 @@ jobs:
       # the authoritative run happens — a real box — and nowhere CI would ever show it. The
       # default keeps GitHub's behaviour byte-identical; `ci_gates.sh` sets the variable to a
       # per-invocation path so concurrent local runs cannot see each other.
+      #
+      # ★★★ AND IT WRITES A COMPLETION SENTINEL. The three consumers below cannot otherwise
+      # tell "the producer ran and genuinely found zero" from "I could not read my input" —
+      # both look like `ran=0 skipped=0 total=0`, and the second is an INFRASTRUCTURE
+      # failure wearing the costume of a catastrophic regression. That cost two full gate
+      # runs to diagnose the first time it happened. The sentinel is written after the pipe
+      # and carries the run's own exit code, so a truncated, clobbered, half-written or
+      # simply absent log is a DIFFERENT and louder answer than a real count of zero.
       - name: Test (OS-free configuration — KVM forced absent)
-        run: KAYFABE_NO_KVM=1 cargo test --workspace 2>&1 | tee ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}; exit "${PIPESTATUS[0]}"
+        run: |
+          set -uo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          KAYFABE_NO_KVM=1 cargo test --workspace 2>&1 | tee "$log"
+          rc="${PIPESTATUS[0]}"
+          printf 'KAYFABE-TEST-LOG-COMPLETE rc=%s pid=%s\n' "$rc" "$$" >> "$log"
+          exit "$rc"
       # ★★ KVM-gate non-vacuity. GitHub runners do NOT provide /dev/kvm, so the ~33
       # tests that need a real VM fd SKIP here — and a skip that nobody counts is the
       # "green instrument on an unexercised path" failure this repo cares most about
@@ -115,8 +129,22 @@ jobs:
       - name: KVM-gate reached-count (floor, not an exact match)
         run: |
           set -euo pipefail
-          ran=$(grep -c 'KVM-GATE: RAN' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
-          skipped=$(grep -c 'KVM-GATE: SKIPPED' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          # A missing, empty, truncated or foreign log makes every count below zero, which
+          # reads as "the gated tests vanished" and is a confident wrong answer. Exit 2 (not
+          # 1) so a caller can tell "the tree is bad" from "my input was".
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
+                 "(scripts/ci_gates.sh does) and re-run."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'KVM-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'KVM-GATE: SKIPPED' "$log" || true)
           total=$(( ran + skipped ))
           echo "KVM-gate: ran=$ran skipped=$skipped total=$total (floor 35)"
           if [ "$total" -lt 35 ]; then
@@ -140,8 +168,22 @@ jobs:
       - name: SANDBOX-gate reached-count (floor, not an exact match)
         run: |
           set -euo pipefail
-          ran=$(grep -c 'SANDBOX-GATE: RAN' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
-          skipped=$(grep -c 'SANDBOX-GATE: SKIPPED' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          # A missing, empty, truncated or foreign log makes every count below zero, which
+          # reads as "the gated tests vanished" and is a confident wrong answer. Exit 2 (not
+          # 1) so a caller can tell "the tree is bad" from "my input was".
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
+                 "(scripts/ci_gates.sh does) and re-run."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'SANDBOX-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'SANDBOX-GATE: SKIPPED' "$log" || true)
           total=$(( ran + skipped ))
           echo "SANDBOX-gate: ran=$ran skipped=$skipped total=$total (floor 10)"
           if [ "$total" -lt 10 ]; then
@@ -175,8 +217,22 @@ jobs:
       - name: VBIOS-ORACLE-gate reached-count (floor, not an exact match)
         run: |
           set -euo pipefail
-          ran=$(grep -c 'VBIOS-ORACLE-GATE: RAN' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
-          skipped=$(grep -c 'VBIOS-ORACLE-GATE: SKIPPED' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          # A missing, empty, truncated or foreign log makes every count below zero, which
+          # reads as "the gated tests vanished" and is a confident wrong answer. Exit 2 (not
+          # 1) so a caller can tell "the tree is bad" from "my input was".
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
+                 "(scripts/ci_gates.sh does) and re-run."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'VBIOS-ORACLE-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'VBIOS-ORACLE-GATE: SKIPPED' "$log" || true)
           total=$(( ran + skipped ))
           # 10 -> 13: the FWSEC interface-walk suite. The oracle now compiles
           # `s_vbiosPatchInterfaceData` as well as the ROM parser, which is a whole

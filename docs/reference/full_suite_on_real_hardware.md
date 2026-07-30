@@ -124,6 +124,35 @@ repeat the trick.
   **`rm-ladder-concurrency`**, **`sandbox-probe`**, **`examples`**, **`qom-shim`** — the
   things no job runs.
 
+## 3.1 ★★★ A red caused by the BOX must not look like a red caused by the CODE
+
+Three of these landed in one evening, each costing a wasted verification cycle:
+
+| what was reported | what it actually was |
+|---|---|
+| `KVM-gate: ran=0 skipped=0 total=0` — *the gated tests vanished* | a sibling process writing the same `/tmp/kayfabe-test.log`. The run's own output had just printed 51 `KVM-GATE: RAN` |
+| "failed, exit 1" from a background verification | the box had filled to **zero bytes** mid-run |
+| a seam gate failing on a crate nobody recognised | a shared tree, and another agent's untracked crate. Correct gate, contaminated input |
+
+All three are the same shape, and it is the worse half of this whole subject: a *confident
+wrong answer*. A missing check is at least visibly missing. Three defences, all in this
+change:
+
+1. **The test log path is `${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}`**, and `ci_gates.sh`
+   exports a per-invocation `mktemp` path. GitHub's behaviour is byte-identical (its default
+   is the old path); concurrent local runs can no longer see each other.
+2. **The producer writes a completion sentinel** (`KAYFABE-TEST-LOG-COMPLETE rc=…`) and each
+   of the three reached-count steps **refuses, with exit status 2**, over a log that is
+   missing, empty, or has no sentinel. *"The producer ran and genuinely found zero"* and
+   *"I could not read my input"* are now different answers.
+3. **`run_full_suite.sh` measures the box before it measures the tree** — free space on the
+   repo filesystem and on `$TMPDIR`, and `git status --porcelain`. It **refuses to start**
+   below `DISK_REFUSE_MB` (exit **4**, its own status), warns below `DISK_WARN_MB`, and
+   prints the box state again in the ledger — on green runs too, so it is a line people can
+   read rather than an alarm they only meet in a crisis. A dirty tree is not an error, but
+   it *is* reported, because the boundary / vocabulary / unsafe-surface / ABI-quarantine
+   gates grep the tree **as it is on disk**.
+
 ## 4. Why a PROFILE, and why `--allow-skip` is the only escape
 
 A ledger built on probes alone is circular: *"the resource was absent, so skipping was fine"*

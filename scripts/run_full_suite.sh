@@ -58,6 +58,23 @@
 #   1  something failed, OR something was skipped for a reason this box's profile says it
 #      should have satisfied. **A clean exit means "everything this box can run, ran".**
 #   3  the phase list itself is suspect (below `PHASE_FLOOR`) — nothing was run.
+#   4  the BOX is unfit (out of disk) — nothing was run, and nothing here is about the code.
+#
+# ## ★★★ A red whose cause is the ENVIRONMENT must not look like a red whose cause is the
+# ## CODE
+#
+# Three of those landed in one evening, each costing a wasted verification cycle:
+#
+#   * a reached-count step reported `ran=0 skipped=0 total=0` — which reads as *the gated
+#     tests vanished* — because a sibling process was writing the same `/tmp` log;
+#   * a background run came back "failed, exit 1" that was **purely disk**: the box had
+#     filled to zero bytes mid-run;
+#   * a suite run in a shared tree picked up another agent's untracked crate and failed a
+#     seam gate on it — the correct gate, over contaminated input.
+#
+# All three are the same shape, and a ledger is the natural place to separate them. So this
+# script measures the box BEFORE it measures the tree, prints the result whether or not it
+# is alarming, and refuses outright rather than producing a misattributable red.
 #
 # `--allow-skip <phase>` is the ONLY way to get a clean exit with a phase unrun, it must
 # name the phase explicitly, and the ledger prints it as `ACKNOWLEDGED` — visible in the
@@ -92,6 +109,14 @@ IGNORED_ALLOWANCE=1
 # workspace is handled" is only a real statement if an undiscovered-yet-added one turns the
 # census red rather than silently joining the set.
 HANDLED_WORKSPACES=". fuzz crates/kayfabe-abi/gen"
+# ★★ Disk. A full `--all` run builds the workspace, an aarch64 check, a release archive, an
+# instrumented `-Zbuild-std` std and (with a hypervisor tree) a QEMU — tens of gigabytes of
+# target directories. Running out mid-run produces a compiler error that looks like a code
+# defect; it was misread as one on 2026-07-30. `DISK_REFUSE_MB` is where this script would
+# rather say nothing than say something misattributable; `DISK_WARN_MB` is where it says so
+# and continues. Literals, for the same reason every floor here is a literal.
+DISK_REFUSE_MB=2048
+DISK_WARN_MB=15360
 
 # =====================================================================================
 # Requirements — probe, and the sentence that says how to satisfy it
@@ -556,6 +581,47 @@ echo " profile   $PROFILE$AUTOPROFILE"
 echo " logs      $LOGDIR"
 echo "======================================================================"
 echo
+# =====================================================================================
+# ★★★ THE BOX, measured before the tree
+# =====================================================================================
+# Everything printed here answers one question a reader will otherwise ask about a red run:
+# *was it the code, or was it the machine?* It is printed unconditionally — a box-state line
+# that only appears when something is wrong is a line nobody learns to read.
+echo "BOX STATE"
+free_mb() { df -Pm "$1" 2>/dev/null | awk 'NR==2 {print $4}'; }
+disk_free=$(free_mb "$REPO")
+tmp_free=$(free_mb "${TMPDIR:-/tmp}")
+printf '  %-14s %s MB free on the repo filesystem, %s MB on %s\n' \
+  "disk" "${disk_free:-?}" "${tmp_free:-?}" "${TMPDIR:-/tmp}"
+
+# ★ A dirty tree is not an error — it is the normal state of a working branch. It is
+# reported because a gate that greps the tree (the boundary, vocabulary, unsafe-surface and
+# ABI-quarantine gates all do) measures whatever is ON DISK, so an untracked file from
+# another writer is a real input to a real gate. A red run in a dirty tree needs that fact
+# beside it, not discovered afterwards.
+dirty=$(git status --porcelain 2>/dev/null | wc -l)
+untracked=$(git status --porcelain 2>/dev/null | grep -c '^??' || true)
+printf '  %-14s %s change(s) in the working tree, %s untracked\n' "git" "$dirty" "$untracked"
+if [ "${dirty:-0}" -gt 0 ]; then
+  echo "  ★ The tree is not clean. The boundary/vocabulary/unsafe-surface/ABI gates grep"
+  echo "    the tree AS IT IS, so a file that belongs to someone else is a real input to a"
+  echo "    real gate: a failure below may be about code that is in no branch. First 10:"
+  git status --porcelain 2>/dev/null | head -10 | sed 's/^/      /'
+fi
+if [ -n "${disk_free:-}" ] && [ "$disk_free" -lt "$DISK_REFUSE_MB" ]; then
+  echo
+  echo " ★★★ REFUSING TO RUN — ${disk_free} MB free, below the ${DISK_REFUSE_MB} MB floor."
+  echo " Nothing was run, and this says NOTHING about the tree. A build that dies of ENOSPC"
+  echo " reports a compiler error, and a compiler error reads as a code defect; that misread"
+  echo " cost a whole verification cycle on 2026-07-30. Free space and re-run."
+  exit 4
+fi
+if [ -n "${disk_free:-}" ] && [ "$disk_free" -lt "$DISK_WARN_MB" ]; then
+  echo "  ★ Below the ${DISK_WARN_MB} MB comfort bar. A full run builds the workspace, an"
+  echo "    aarch64 check, a release archive, an instrumented std and possibly a hypervisor."
+  echo "    If a phase below dies with a write error, suspect the disk before the code."
+fi
+echo
 echo "REQUIREMENTS"
 declare -A HAVE=()
 for r in $ALL_REQS; do
@@ -627,6 +693,25 @@ echo " LEDGER — profile $PROFILE"
 echo "======================================================================"
 printf ' RAN %d / FAILED %d / SKIPPED %d / ACKNOWLEDGED %d\n' \
   "${#RAN_OK[@]}" "${#FAILED[@]}" "${#SKIPPED[@]}" "${#ACKED[@]}"
+
+# ★★ The box, again, beside the result. A failure list without the environment it was
+# produced in is the thing that sends someone reading code for an hour over a full disk or a
+# foreign file. Printed on green runs too, so it is a line people can read rather than an
+# alarm they only meet in a crisis.
+disk_end=$(free_mb "$REPO")
+printf ' box:  %s MB free (was %s at start), %s working-tree change(s), revision %s\n' \
+  "${disk_end:-?}" "${disk_free:-?}" "${dirty:-?}" \
+  "$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
+if [ "${#FAILED[@]}" -gt 0 ]; then
+  if [ -n "${disk_end:-}" ] && [ "$disk_end" -lt "$DISK_WARN_MB" ]; then
+    echo " ★ …and the disk is below the comfort bar. Check the failing phase's log for a"
+    echo "   write error before reading any of this as being about the code."
+  fi
+  if [ "${dirty:-0}" -gt 0 ]; then
+    echo " ★ …and the tree is dirty. The grep-based gates measured what is on disk, which"
+    echo "   includes those changes — including any that belong to another writer."
+  fi
+fi
 echo
 for n in "${RAN_OK[@]:-}";  do [ -n "$n" ] && printf '  RAN          %s\n' "$n"; done
 for n in "${FAILED[@]:-}";  do [ -n "$n" ] && printf '  ★ FAILED     %s   (%s)\n' "$n" "$LOGDIR/$n.log"; done
