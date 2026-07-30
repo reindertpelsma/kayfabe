@@ -27,7 +27,7 @@
 //! attempts to resynchronise after a framing error is exactly the desynchronisation hazard
 //! §7.2 forbids, reached from the other end.
 
-use crate::isolate::{CONTROL_FD, DEV_DIR_FD, RmMode, WORKER_FD_BASE, decode_control};
+use crate::isolate::{CONTROL_FD, RmMode, WORKER_FD_BASE, decode_control};
 use crate::loopback::{LoopbackRm, LoopbackShared, ParkVerb};
 use crate::proto::{
     Envelope, Reply, Request, WireError, engine_from_code, read_frame, write_frame,
@@ -35,9 +35,9 @@ use crate::proto::{
 use crate::rm::{HostRmBackend, RmConnection};
 use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa};
 use kayfabe_isolate::{HostHandle, IsolateId, RmBackend, RmError};
+use kayfabe_linux_raw::sandbox::{self, SandboxPolicy};
 use kayfabe_linux_raw::{
-    DevDir, ThreadId, adopt_inherited_fd, current_thread_id, install_break_handler,
-    interrupt_thread,
+    ThreadId, adopt_inherited_fd, current_thread_id, install_break_handler, interrupt_thread,
 };
 use std::os::unix::net::{UnixDatagram, UnixStream};
 use std::sync::{Arc, Mutex};
@@ -193,10 +193,21 @@ pub fn serve(args: &ChildArgs) -> i32 {
 fn build_backends(args: &ChildArgs, id: IsolateId) -> Result<Vec<Box<dyn RmBackend>>, String> {
     match args.rm {
         RmMode::Real => {
-            let dev = DevDir::from_fd(
-                adopt_inherited_fd(DEV_DIR_FD)
-                    .map_err(|e| format!("the /dev directory was not granted: {e}"))?,
-            );
+            // ★★★ The containment and the capability are created by ONE call, in that
+            // order, and there is no other way to obtain the second. The parent used to
+            // hand a `/dev` descriptor down on fd 4 and that descriptor could name
+            // `../etc/shadow`; see `kayfabe_linux_raw::sandbox` and
+            // `crate::isolate`'s "fd 4 is vacant" note.
+            //
+            // ★ Still single-threaded here, deliberately: the rootless arm of
+            // `sandbox::enter` needs `CLONE_NEWUSER`, which the kernel refuses to a
+            // multi-threaded process. Worker threads start after `build_backends` returns.
+            //
+            // Fail CLOSED. A sandbox that could not be built is not a warning, it is the
+            // end of this isolate: the error propagates to the hello frame and the parent
+            // reports a startup failure.
+            let dev = sandbox::enter(&SandboxPolicy::for_gpu(args.gpu))
+                .map_err(|e| format!("the isolate sandbox could not be built: {e}"))?;
             let conn =
                 Arc::new(RmConnection::open(&dev, GpuId(args.gpu)).map_err(|e| e.to_string())?);
             Ok((0..args.workers)

@@ -12,11 +12,23 @@
 //! | fd | what |
 //! |----|------|
 //! | 3  | the control datagram socket (parent → child: interrupt requests) |
-//! | 4  | the `/dev` `O_PATH` directory — the C's `NVKVM_DEV_DIRFD`, same number |
+//! | 4  | ★ **deliberately vacant** — see below |
 //! | 5.. | one request/reply stream per pool worker, in slot order |
 //!
-//! Numbers rather than a negotiation because an `exec`'d child has no other channel, and
-//! fd 4 keeps the C's value so the two implementations remain comparable.
+//! Numbers rather than a negotiation because an `exec`'d child has no other channel.
+//!
+//! ## ★★★ fd 4 is vacant, and that vacancy is a fix
+//!
+//! It used to carry the `/dev` `O_PATH` directory — the C's `NVKVM_DEV_DIRFD`, same number,
+//! opened **here in the parent** and granted down. Measured against the real child, that
+//! descriptor was a full host-filesystem escape: `openat(4, "../etc/shadow")` **opened**,
+//! because `O_PATH` restricts enumeration and places no restriction at all on `..`.
+//!
+//! There is no bounded way for a parent to hand that grant down, so the grant is gone. The
+//! child mints its own, from inside a `pivot_root`ed sandbox, via
+//! [`kayfabe_linux_raw::sandbox::enter`] — which is where the whole argument lives. The
+//! number stays reserved and unused so that a future edit re-adding a `/dev` grant collides
+//! with a documented hole rather than quietly restoring the escape.
 //!
 //! ## ★★ Three things the real isolate does that the mock cannot
 //!
@@ -41,9 +53,8 @@ use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, DEFAULT_POOL_WORKERS, HostHandle, Isolate,
     IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
 };
-use kayfabe_linux_raw::{ChildSpec, DevDir, FdGrant, SandboxChild};
+use kayfabe_linux_raw::{ChildSpec, FdGrant, SandboxChild};
 use kayfabe_vmm::SurfaceHandle;
-use std::ffi::CString;
 use std::io::ErrorKind;
 use std::os::fd::OwnedFd;
 use std::os::unix::net::{UnixDatagram, UnixStream};
@@ -52,8 +63,10 @@ use std::sync::{Arc, Mutex};
 
 /// fd number of the control datagram socket in the child.
 pub const CONTROL_FD: i32 = 3;
-/// fd number of the `/dev` directory in the child — the C's `NVKVM_DEV_DIRFD`.
-pub const DEV_DIR_FD: i32 = 4;
+/// ★ The number the C parks `NVKVM_DEV_DIRFD` on, **reserved and never granted** here. See
+/// the module docs: a parent-opened `/dev` descriptor is an escape, and the vacancy is the
+/// fix rather than an oversight.
+pub const RESERVED_NEVER_GRANTED_FD: i32 = 4;
 /// fd number of pool worker 0's stream in the child; worker *n* is `WORKER_FD_BASE + n`.
 pub const WORKER_FD_BASE: i32 = 5;
 
@@ -63,9 +76,15 @@ pub const WORKER_FD_BASE: i32 = 5;
 // collides two grants fails the build.
 const _: () = {
     assert!(CONTROL_FD >= 3, "grants start above the standard streams");
-    assert!(CONTROL_FD != DEV_DIR_FD);
-    assert!(WORKER_FD_BASE > DEV_DIR_FD, "workers come after the grants");
-    assert!(DEV_DIR_FD == 4, "the C's NVKVM_DEV_DIRFD value, kept");
+    assert!(CONTROL_FD != RESERVED_NEVER_GRANTED_FD);
+    assert!(
+        WORKER_FD_BASE > RESERVED_NEVER_GRANTED_FD,
+        "workers come after the reserved hole"
+    );
+    assert!(
+        RESERVED_NEVER_GRANTED_FD == 4,
+        "the C's NVKVM_DEV_DIRFD value, kept vacant"
+    );
 };
 
 /// Which RM the child is to speak to.
@@ -622,7 +641,6 @@ impl Drop for HostIsolate {
 pub struct HostIsolateFactory {
     program: PathBuf,
     pool: usize,
-    dev_dir: CString,
     rm: RmMode,
     park: crate::loopback::ParkVerb,
     /// Every id this factory was asked for, in order — the isolate-per-`(Proc, GpuId)`
@@ -638,7 +656,6 @@ impl HostIsolateFactory {
         HostIsolateFactory {
             program: program.into(),
             pool: DEFAULT_POOL_WORKERS,
-            dev_dir: c"/dev".to_owned(),
             rm,
             park: crate::loopback::ParkVerb::Nothing,
             spawned: Vec::new(),
@@ -714,13 +731,11 @@ fn sibling_of_deps(dir: &Path) -> PathBuf {
 /// Everything that can go wrong before an isolate is usable, as a message.
 fn build_isolate(
     program: &Path,
-    dev_dir: &CString,
     rm: RmMode,
     park: crate::loopback::ParkVerb,
     id: IsolateId,
     pool: usize,
 ) -> Result<HostIsolate, String> {
-    let dev = DevDir::open(dev_dir).map_err(|e| format!("opening the device directory: {e}"))?;
     let (control_ours, control_theirs) =
         UnixDatagram::pair().map_err(|e| format!("control socketpair: {e}"))?;
     let mut ours = Vec::with_capacity(pool);
@@ -735,13 +750,9 @@ fn build_isolate(
         .arg(rm.as_arg())
         .arg("--park")
         .arg(park.as_arg())
-        .grant(FdGrant::new(OwnedFd::from(control_theirs), CONTROL_FD))
-        .grant(FdGrant::new(
-            dev.as_fd()
-                .try_clone_to_owned()
-                .map_err(|e| e.to_string())?,
-            DEV_DIR_FD,
-        ));
+        // ★ And NO device-directory grant. `RESERVED_NEVER_GRANTED_FD` stays empty; the
+        // child builds its own sandbox and mints the descriptor inside it.
+        .grant(FdGrant::new(OwnedFd::from(control_theirs), CONTROL_FD));
     for i in 0..pool {
         let (mine, theirs) = UnixStream::pair().map_err(|e| format!("worker socketpair: {e}"))?;
         ours.push(mine);
@@ -811,14 +822,7 @@ fn build_isolate(
 impl IsolateFactory for HostIsolateFactory {
     fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate> {
         self.spawned.push(id);
-        match build_isolate(
-            &self.program,
-            &self.dev_dir,
-            self.rm,
-            self.park,
-            id,
-            self.pool,
-        ) {
+        match build_isolate(&self.program, self.rm, self.park, id, self.pool) {
             Ok(iso) => Box::new(iso),
             Err(why) => Box::new(HostIsolate::stillborn(id, self.pool, why)),
         }

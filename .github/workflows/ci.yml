@@ -709,7 +709,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:50 kayfabe-qemu-raw:0"
+          AUDITED="kayfabe-linux-raw:57 kayfabe-qemu-raw:0"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -773,6 +773,15 @@ jobs:
           # syscalls. The three new files are argued at the bottom of this list.
           # ★ 49 -> 50 at L2-Q stage Q2, the stage that gives it a machine it did not
           # create: ONE block, in kvm_unsafe.rs, argued in full below.
+          # ★★ 50 -> 57 CLOSING THE MEASURED HOST-FILESYSTEM ESCAPE. Six new blocks in
+          # `sandbox_unsafe.rs` and one in `chardev_unsafe.rs`, all argued below. The bar
+          # moved because the isolate's `/dev` descriptor was measured to open
+          # `../etc/shadow` on a real host — an `O_PATH` dirfd restricts enumeration and
+          # places NO restriction on `..` — and the only fix is a mount namespace plus a
+          # `pivot_root`, which is six syscalls glibc either does not wrap or must not be
+          # allowed to swallow the return value of. The seventh block is the probe that
+          # makes the fix MEASURABLE rather than argued; it is why the bar is raised for a
+          # security fix and not only for a feature.
           # The surface, per file, each block carrying its
           # own `// SAFETY:` (clippy `undocumented_unsafe_blocks = deny`):
           #   window_unsafe.rs  (7) — the GuestWindow: one mmap, one MAP_FIXED shared by
@@ -816,14 +825,20 @@ jobs:
           #     an MMIO load's completion, the two by-reference register ioctls, and the
           #     per-type `Send` grant for a vCPU (one runner thread owns one; `Sync` is
           #     deliberately withheld).
-          #   chardev_unsafe.rs (3) — ★ L1-#91, the RM connection: open(O_PATH) of the
-          #     device DIRECTORY (the C's fd-4 grant, so a sandbox with no path to /dev can
-          #     still name its nodes), openat of a device node, and THE ioctl. The third is
-          #     the one that matters: it is the only place in the workspace where a host
-          #     CPU address is written into a caller-supplied buffer, it is bounds-checked
-          #     before the write and SCRUBBED after the syscall, so §4.2.1's "no host
-          #     address crosses a crate boundary" is a property of the values the caller
-          #     can observe rather than of who wrote the keyword.
+          #   chardev_unsafe.rs (4) — ★ L1-#91, the RM connection: open(O_PATH) of the
+          #     device DIRECTORY (so an isolate with no path to /dev can still name its
+          #     nodes), openat of a device node, and THE ioctl. The third is the one that
+          #     matters: it is the only place in the workspace where a host CPU address is
+          #     written into a caller-supplied buffer, it is bounds-checked before the write
+          #     and SCRUBBED after the syscall, so §4.2.1's "no host address crosses a crate
+          #     boundary" is a property of the values the caller can observe rather than of
+          #     who wrote the keyword.
+          #     ★ 3 -> 4: `DevDir::can_reach`, an `openat(O_RDONLY)` that immediately closes
+          #     what it opened. It exists so the containment question is a SYSCALL rather
+          #     than a comment — this file's own docs once argued the descriptor was bounded
+          #     and it was not. Its invariant is the same as `openat`'s neighbour above (a
+          #     live owned dirfd, a `&CStr` path outliving the call) and it takes ownership
+          #     through the same checked `adopt_fd`, so nothing is leaked on either arm.
           #   signal_unsafe.rs  (6) — ★ L1-#91, the break signal (§7.2, C #73): zeroing a
           #     sigaction, sigemptyset, sigaction WITHOUT SA_RESTART, gettid, getpid, and
           #     tgkill. Six blocks for what reads as three calls because each libc entry
@@ -837,6 +852,22 @@ jobs:
           #     invariant that matters. Plus the CHILD half of the same contract:
           #     `adopt_inherited_fd`'s liveness probe and its `from_raw_fd`, two blocks
           #     because the second's invariant IS the first's result.
+          #   sandbox_unsafe.rs (6) — ★★ THE FILESYSTEM CONTAINMENT, and the reason it is
+          #     six and not one: every entry point is a syscall whose RETURN VALUE is the
+          #     security property, so each gets its own checked wrapper rather than one
+          #     block spanning the sequence. `unshare_` (mount / user namespace),
+          #     `mount_` (the ONE mount entry point — the private-propagation flip, the
+          #     scratch tmpfs, each device bind AND the read-only reseal all go through it,
+          #     so there is exactly one place a return could be dropped and the C's R4-L1
+          #     audit finding — a silently ignored reseal, i.e. a writable sandbox root —
+          #     cannot recur), `pivot_root_` (no libc wrapper exists on any target),
+          #     `umount_detach`, `outer_ids` (getuid/getgid, which cannot fail and must be
+          #     read BEFORE the uid_map is written), and the capability probe in
+          #     `namespaces_available`, which forks a child that calls `unshare` and
+          #     `_exit` and nothing else. Everything else in the sequence is plain
+          #     `std::fs` and needs no relaxation at all — this runs in the child's own
+          #     `main`, not post-`fork`, so the async-signal-safety constraint that shapes
+          #     `spawn_unsafe.rs` does not apply here.
           #
           # kayfabe-qemu-raw (0) — L2-Q stage Q0. Nothing yet, and §2.2's "itemise the
           # second crate's blocks exactly as the first crate's 37 are" is therefore

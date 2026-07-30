@@ -27,6 +27,13 @@
 //! the numbers — that is the adapter's protocol — it only guarantees that the set the
 //! caller declared is exactly the set that arrives.
 //!
+//! ★★★ **The port does NOT grant fd 4, and the difference is a security fix rather than a
+//! simplification.** A `/dev` `O_PATH` descriptor opened in the parent and handed down was
+//! measured to open `../etc/shadow` from inside the child: `O_PATH` restricts *enumeration*
+//! and places no restriction at all on `..`. There is no bounded way to pass that grant
+//! across `exec`, so the child mints its own after entering a `pivot_root`ed sandbox — see
+//! [`crate::sandbox`] and `kayfabe_isolate_host::isolate`'s "fd 4 is vacant" note.
+//!
 //! ## What is deliberately absent, and it is the security gap of record
 //!
 //! The C's hardened spawn also does: `CLONE_NEWUSER|NEWPID|NEWNET|NEWIPC|NEWUTS|NEWNS`
@@ -34,10 +41,22 @@
 //! (`C: src/qemu/nvkvm_isolate.c:124-133`, `:102-114`), a `pivot_root` onto a `tmpfs`
 //! containing only the bound nvidia nodes (`:155-231`), a capability drop (`:66-81`), and
 //! a seccomp allowlist applied with `TSYNC` (`C: src/stub/nvkvm_stub.c:2505-2587`).
-//! **None of that is here.** It is named rather than stubbed because an untested sandbox
-//! is worse than a declared absence: it reads as a boundary in every review that follows.
-//! What *is* here — the closed descriptor table, the cleared environment, and
-//! `PR_SET_NO_NEW_PRIVS` — is the part this host can execute and therefore test.
+//!
+//! Of that list, the **mount namespace and the `pivot_root`** now exist —
+//! [`crate::sandbox`] — but they are entered by the child in its own `main`, **not** here
+//! between `fork` and `exec` as the C does it. That is not a preference: the C `fexecve`s a
+//! statically linked stub out of a `memfd`, so it needs neither a path nor a loader once
+//! the old root is gone, while `Command` `execve`s a *path* and a dynamically linked Rust
+//! binary additionally wants `/lib64/ld-linux-*.so`. Moving it pre-`exec` is a real
+//! improvement (an image cannot decline a sandbox it was born in) and it is gated on a
+//! static isolate build, which is why this crate keeps building for musl.
+//!
+//! Still absent: **the pid/net/ipc/uts namespaces, the capability drop and seccomp.** Named
+//! rather than stubbed, because an untested sandbox is worse than a declared absence: it
+//! reads as a boundary in every review that follows. Note in particular that
+//! `PR_SET_NO_NEW_PRIVS` below is **inert for an already-privileged process** — it blocks
+//! *gaining* privilege through setuid/fcaps and nothing else — so it is not a substitute
+//! for the drop.
 
 use crate::error::{RawError, last_syscall_error};
 use kayfabe_util::{leafwitness, lockwitness};
