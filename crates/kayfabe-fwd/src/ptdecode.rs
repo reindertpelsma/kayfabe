@@ -30,10 +30,21 @@
 //!
 //! The commit point is the guest's **CE release semaphore** — *"decode each dirtied page
 //! DIRECTLY … the release is the guest's own commit point for those PTEs"*
-//! (`C: nvkvm_gpu_emul.c:8676-8695`). It is **not** an invalidate: `#102` stage C2
-//! measured that there is no read-at-invalidate on this path, in this port or in the C
-//! (§13.4), so correctness rests on *witnessing* the write. There is no second chance for
-//! a write nobody saw, and nothing here is designed as if there were.
+//! (`C: nvkvm_gpu_emul.c:8676-8695`). It is **not** an invalidate — and the two halves of
+//! that sentence rest on different things, which this note used to run together:
+//!
+//! - **In the C: MEASURED.** Both invalidate transports counted ZERO on the GSP-emulated
+//!   compute path (`INVALIDATE_TLB` RPC fn=200, and the `MEM_OP`/`MMU_TLB_INVALIDATE`
+//!   pushbuffer method), as did `DMA_FILL_PTE_MEM`. That is a run, on hardware, and it is
+//!   the audit that refuted the read-at-invalidate model repo-wide.
+//! - **In this port: NOT MEASURED.** `#102` stage C2 (§13.4) is an argument that the same
+//!   holds here, carried across from the C. It has not been re-run against this code.
+//!
+//! The design consequence is the same either way and is not softened by the distinction:
+//! correctness rests on *witnessing* the write. There is no second chance for a write
+//! nobody saw, and nothing here is designed as if there were. ★ The reason to keep the
+//! two apart is that this exact claim, stated in one breath, is the one CLAUDE.md
+//! repeated for weeks after its own design doc had corrected it.
 
 use std::collections::BTreeMap;
 

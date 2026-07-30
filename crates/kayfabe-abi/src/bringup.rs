@@ -333,9 +333,14 @@ pub struct Nvos02ParametersWithFd {
     /// ★ **Not +44.** `NVOS02_PARAMETERS` ends at `status` (+40) and is 48 bytes with its
     /// tail padding; the frontend's `nv_ioctl_nvos02_parameters_with_fd` embeds that whole
     /// struct and appends `fd` **after** it. Putting `fd` at +44 writes into RM's padding
-    /// and leaves the frontend reading a zero — i.e. descriptor 0, which is stdin. Measured
-    /// against `C: src/abi/nvgpu.h:243-256` and the C stub's own translation table, which
+    /// and leaves the frontend reading a zero — i.e. descriptor 0, which is stdin.
+    ///
+    /// ★ **Read off two sources, not measured.** This said "Measured against", and the two
+    /// things it was measured against are a header and a translation table — both text.
+    /// The offset agrees in `C: src/abi/nvgpu.h:243-256` and in the C stub's own table, which
     /// rewrites the NVOS02 descriptor at **offset 48** (`C: src/stub/nvkvm_stub.c:1149-1174`).
+    /// Two independent readings that agree, which is worth stating and is still not a run:
+    /// nobody has watched a descriptor of 0 come back from a live frontend.
     pub fd: i32,
     // +52: four bytes of tail padding; the ioctl's declared size is 56.
 }

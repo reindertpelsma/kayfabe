@@ -140,7 +140,11 @@ const KERNEL_PID: u32 = 0xFFFF_FFFF;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum GuestOs {
     /// A Linux guest running the ogkm-shaped driver — the only guest we can currently
-    /// boot, and the only one whose rules are **measured** rather than read.
+    /// boot, and the only one whose rules are **measured** rather than read: RTX 3060 /
+    /// 580.159.04, the run written up in this module's own docs and in
+    /// `l1_concurrency.md` §12.27. The measurement is named here rather than left as a
+    /// bare adjective, because "measured rather than read" is the exact assertion that
+    /// must not be inherited on trust.
     ///
     /// ★ This is [`Default`], and that default is a *declaration*, not a detection: it
     /// is the value the (not-yet-built) realize-time configuration starts from, chosen

@@ -65,8 +65,12 @@ want_all=0
 # parser over our generated image). It READS /tmp/kayfabe-test.log, so it is a consumer
 # step and is deferred out of the default mode by the extractor's own rule — which is why
 # only the `--all` literal moves and `GATE_STEPS_FAST_MIN` stays where it was.
-GATE_STEPS_ALL_MIN=18
-GATE_STEPS_FAST_MIN=10
+# ★ 18 -> 19 and 10 -> 11: the CLAIM-LEDGER step (docs/design/claim_ledger.md) — a
+# measurement word must name its run rather than a source read. It reads only the tree,
+# produces no artifact and consumes none, so unlike the VBIOS-ORACLE step it runs in BOTH
+# modes and BOTH literals move together.
+GATE_STEPS_ALL_MIN=19
+GATE_STEPS_FAST_MIN=11
 
 deferred_note=$(mktemp)
 # ★ `$( … )` and THEN `mapfile`, not `mapfile < <( … )`. The second form was here before

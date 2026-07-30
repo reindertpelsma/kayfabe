@@ -125,6 +125,13 @@ a wrong fact is corrected once: `rm_semantics_measured.md` (RM/UVM semantics, wi
 version caveat) and `mode2_bench_lifecycle.md` (the C artifact's teardown behaviour). The C is
 a **single-process** Mode-2 oracle — measured, §1 of that file.
 
+Which claims in this tree are *measured*, which are *read out of the driver's source*, and
+which are neither is not left to the reader: `docs/design/claim_ledger.md` is the census, and
+CI enforces it. Reading the open kernel modules tells you what the driver **does**; only a
+live boot with real work tells you what **happens**, and a comment that says "measured" when
+it means "read" converts an inference into a fact with no experiment behind it. Run
+`scripts/claim_ledger.py`.
+
 ## Build & test
 
 ```sh

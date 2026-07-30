@@ -2382,7 +2382,8 @@ impl Spine {
         //
         // ★ It is copied WHOLE, deliberately. A `by_pdb`-membership filter was written
         // here first — to keep a condemned component's context objects out — and it was
-        // then measured to be **dead defence**: `promote::route_promote_ctx` looks the
+        // then measured — by bite-check, poisoning the filter and running the suite — to
+        // be **dead defence**: `promote::route_promote_ctx` looks the
         // resulting `(gpu, pdb)` up in `by_pdb` anyway, so a condemned VAS already
         // answers `ContextVasUndeclared` with or without it. Poisoning the filter failed
         // no test; poisoning the route's lookup fails one immediately. A guard never seen

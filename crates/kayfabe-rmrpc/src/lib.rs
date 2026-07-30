@@ -1154,7 +1154,14 @@ fn translate_alloc(
 
 /// `GSP_RM_CONTROL` (fn 76) → [`RmEvent::SetPageDir`], for exactly one `cmd`.
 ///
-/// ## Which control, and the hole that is now measured rather than suspected
+/// ## Which control, and the hole that is now READ rather than suspected
+///
+/// ★★★ **This heading said "measured" and the claim below is a source reading.** Nothing
+/// was run: the answer comes from an assert in `gpu_vaspace.c`, not from a boot. The
+/// distinction is load-bearing here rather than pedantic, because what the reading
+/// establishes is that this arm is **not sufficient** — and "not sufficient" is precisely
+/// the kind of conclusion a live boot can refute and a source read cannot. Restated at
+/// the level actually held, with the citation left exactly as specific as it was.
 ///
 /// [`kayfabe_abi::versions::DriverAbiTable::control_params`] is the table; this function
 /// names no command number. It has three outcomes and they are three different

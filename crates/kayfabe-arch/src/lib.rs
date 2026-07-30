@@ -235,10 +235,16 @@ pub enum PteDecode {
 /// a leaf with no VA is not a mapping — which is why the C carries exactly this table
 /// beside its decoder (`C: nvkvm_gpu_emul.c:8706-8708`).
 ///
-/// ★ **`entries` is a count, not a size.** The two are not interchangeable: the measured
-/// regime's big-page table holds **32** entries in a page that could hold 512, so
+/// ★ **`entries` is a count, not a size.** The two are not interchangeable: the big-page
+/// regime's table holds **32** entries in a page that could hold 512, so
 /// `page_bytes / entry_size` over-reads it by 3 840 bytes. The count is a fact about the
 /// format and it is stated as one.
+///
+/// ★ The word here was "the *measured* regime", and the 32 is **read**, from the C's own
+/// table beside its decoder (`C: nvkvm_gpu_emul.c:8706-8708`) — this port has not decoded
+/// a big-page table on hardware and watched the count. The over-read arithmetic is
+/// arithmetic and holds either way; what is not established by a reading is that the
+/// hardware in front of us is in that regime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LevelShift {
     /// Virtual-address bit position at which this level's entry index begins. Entry `i`

@@ -85,9 +85,15 @@ designed; the ratchet stays at 37.
 ### 1.4 Named risks — decided WITH these on the record
 
 - ★ **QEMU must not place a conflicting slot in the window.** The C hit exactly this and
-  records the fix as proven — `C: src/qemu/virtio_nvgpu_pci.c:32` refers to a collision
-  with *"the window's own raw `KVM_SET_USER_MEMORY_REGION` slot"*. **Read that fix before
-  implementing; do not re-derive it.**
+  its comment calls the fix proven — `C: src/qemu/virtio_nvgpu_pci.c:32` refers to a
+  collision with *"the window's own raw `KVM_SET_USER_MEMORY_REGION` slot"*. **Read that
+  fix before implementing; do not re-derive it.**
+  ⚠ **"Proven" here is the C's own comment, and the correction below retracts it.** What
+  is evidenced is a regression-and-restore; the *mechanism* was never root-caused. Read
+  the *"Correction to §1.4's first bullet — comment ≠ measurement"* subsection below
+  before quoting this bullet. It is left in place, downgraded
+  rather than deleted, because the bullet is still the right instruction — it is the word
+  "proven" that was borrowed.
 - ★ **This is more fragile than the `MemoryRegion` API.** We depend on QEMU tolerating
   slots it does not own — behaviour it does not promise. Accepted deliberately: the
   performance and portability wins are judged worth it. If a future QEMU breaks it, the

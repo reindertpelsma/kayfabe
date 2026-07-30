@@ -838,6 +838,26 @@ jobs:
             grep -rn 'ogkm:' docs --include='*.md' | sed 's/^/  /' || true
             exit 1
           fi
+      # ★★★ The CLAIM-LEDGER gate — docs/design/claim_ledger.md.
+      #
+      # The NEXT QUESTION ABOUT THE SAME SENTENCE the ogkm gate above interrogates, and it
+      # is deliberately the same mechanism rather than a second one. That gate asks: does
+      # this citation name WHICH TREE it was read from? This one asks: does the VERB name
+      # WHAT ACTUALLY HAPPENED? Reading the open kernel modules tells you what the driver
+      # DOES; only a live boot with real work tells you what HAPPENS, and a comment that
+      # says "measured" when it means "read" converts an inference into a fact with no
+      # experiment behind it.
+      #
+      # ★ It preserves the distinction the two gates share a boundary on: cited-to-source
+      # (INFERRED) is attribution and is legitimate; measured-on-hardware is a different
+      # and stronger claim. The ogkm gate accepts either; this one refuses to let the
+      # first stand in for the second.
+      #
+      # Two bars with different polarity, argued in the script: CONFLATED is exact (65,
+      # the named failure mode, small enough to read whole), UNATTRIBUTED is a ceiling
+      # (383, a census of pre-existing prose across a tree several agents write at once).
+      - name: "Claim-ledger gate (a measurement word names its run, not a source read)"
+        run: scripts/claim_ledger.py --gate
       # ★ The UNSAFE-CONTAINMENT gates — A, B and the ratchet (l1_os_shell.md §4.1).
       #
       # Landed WITH `kayfabe-linux-raw`, because that crate is what makes them necessary.
