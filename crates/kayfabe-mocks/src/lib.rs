@@ -51,7 +51,7 @@ use std::time::Duration;
 
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
 use kayfabe_arch::{
-    Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, ObjectKind, PageSize, PteDecode,
+    Aperture, Arch, CeWork, DoorbellTarget, GmmuFmt, GmmuVersion, ObjectKind, PageSize, PteDecode,
     PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
 use kayfabe_isolate::{
@@ -353,7 +353,12 @@ pub struct MockPushbuffer;
 pub mod mock_method {
     /// `SET_OBJECT`: arg[0] = engine-object class id.
     pub const SET_OBJECT: u8 = 0xA0;
-    /// CE `LAUNCH_DMA`: args = [dst_lo, dst_hi, len, flags(bit0 = dst_is_virtual)].
+    /// CE `LAUNCH_DMA`: args = [dst_lo, dst_hi, len,
+    /// flags(bit0 = dst_is_virtual, bit1 = src_is_virtual, bits[3:2] = work kind),
+    /// src_lo, src_hi]. A short arg list decodes the missing words as zero (decode is
+    /// total on hostile input), so the flag layout puts the two operand-form bits where
+    /// a truncated stream reads them as "physical", never as a virtual address into
+    /// somebody's table.
     pub const CE_LAUNCH_DMA: u8 = 0xB0;
     /// `SEM_RELEASE`: args = [addr_lo, addr_hi, payload_lo, payload_hi].
     pub const SEM_RELEASE: u8 = 0xC0;
@@ -374,16 +379,45 @@ impl MockPushbuffer {
         Self::method(mock_method::SET_OBJECT, &[class.0])
     }
 
-    /// Encode a CE `LAUNCH_DMA` to `dst` for `len` bytes.
+    /// Encode a plain CE `LAUNCH_DMA` copy to `dst` for `len` bytes, from an
+    /// **untracked virtual source** (`GpuVa(0)`, bound in no test's table).
+    ///
+    /// Kept at its original three-argument shape on purpose: every existing caller is
+    /// asserting something about the *destination*, and a source it never named should
+    /// not silently become a physical operand — which is what a widened signature
+    /// defaulting to `false` would have done, flipping the C's execute predicate
+    /// (`src_phys`) for the whole suite. Callers that care use
+    /// [`MockPushbuffer::ce_launch_dma_full`].
     #[must_use]
     pub fn ce_launch_dma(dst: u64, len: u64, dst_is_virtual: bool) -> (u32, Vec<u32>) {
+        Self::ce_launch_dma_full(dst, dst_is_virtual, GpuVa(0), true, len, CeWork::Copy)
+    }
+
+    /// Encode a CE `LAUNCH_DMA` naming **both** operands and the work kind — the inputs
+    /// the C's execute predicate reads (`C: nvkvm_gpu_emul.c:6310`).
+    #[must_use]
+    pub fn ce_launch_dma_full(
+        dst: u64,
+        dst_is_virtual: bool,
+        src: GpuVa,
+        src_is_virtual: bool,
+        len: u64,
+        work: CeWork,
+    ) -> (u32, Vec<u32>) {
+        let work_bits: u32 = match work {
+            CeWork::Copy => 0,
+            CeWork::Scrub => 1,
+            CeWork::Fill => 2,
+        };
         Self::method(
             mock_method::CE_LAUNCH_DMA,
             &[
                 dst as u32,
                 (dst >> 32) as u32,
                 len as u32,
-                u32::from(dst_is_virtual),
+                u32::from(dst_is_virtual) | (u32::from(src_is_virtual) << 1) | (work_bits << 2),
+                src.0 as u32,
+                (src.0 >> 32) as u32,
             ],
         )
     }
@@ -428,8 +462,17 @@ impl PushbufferAbi for MockPushbuffer {
             },
             mock_method::CE_LAUNCH_DMA => PushMethod::CeLaunchDma {
                 dst: GpuVa(pair(0)),
+                src: GpuVa(pair(4)),
                 len: lo64(2),
                 dst_is_virtual: lo64(3) & 1 != 0,
+                src_is_virtual: lo64(3) & 2 != 0,
+                // An unknown kind decodes as a plain copy — never guessed into a scrub,
+                // which is a *destroying* operation (trap-min: no guessed semantics).
+                work: match (lo64(3) >> 2) & 3 {
+                    1 => CeWork::Scrub,
+                    2 => CeWork::Fill,
+                    _ => CeWork::Copy,
+                },
             },
             mock_method::SEM_RELEASE => PushMethod::SemRelease {
                 addr: GpuVa(pair(0)),

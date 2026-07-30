@@ -256,6 +256,23 @@ pub trait UserdModel: Send + Sync {
     fn gp_put_offset(&self) -> u64;
 }
 
+/// What a copy-engine command asks the engine to **do**, in core terms.
+///
+/// The C reads this off `LAUNCH_DMA`'s flags as two booleans, `mscrub`
+/// (`MEMORY_SCRUB`) and `remap` (`REMAP_ENABLE`, a constant fill), and both appear
+/// *negated* in its execute predicate (`C: nvkvm_gpu_emul.c:6310`): a scrub or a fill is
+/// never handed to the host copy engine there. Carried as a decoded kind rather than two
+/// arch-shaped flag bits, per the no-raw-bits discipline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CeWork {
+    /// A source→destination copy.
+    Copy,
+    /// `MEMORY_SCRUB` — zero the destination; no source operand.
+    Scrub,
+    /// `REMAP_ENABLE` constant fill — write a repeating pattern; no source operand.
+    Fill,
+}
+
 /// A pushbuffer method, decoded into **core terms** (no raw bits). The ONE parser
 /// (`kayfabe-fwd`) dispatches on this; the [`PushbufferAbi`] produces it. Mirrors
 /// [`PteDecode`]'s "no raw bits in the core" discipline (`execution_plane.md` §2.3):
@@ -272,13 +289,29 @@ pub enum PushMethod {
     /// CE `LAUNCH_DMA` / `MEMSET` / `COPY`: a copy whose destination the address plane
     /// must capture — #13's CE-PT-write capture input when `dst_is_virtual` is false
     /// (a physical PT-page write) or a data copy otherwise.
+    ///
+    /// ★ **Both operands and the work kind, because two different decisions read them**
+    /// (`eight_blockers_resolved.md` §11.5). The C's *execute* predicate is
+    /// `!mscrub && !remap && !src_phys && !dst_phys && is_user_ce(chan_client)`
+    /// (`C: nvkvm_gpu_emul.c:6310`) — it reads the SOURCE operand's form and the work
+    /// kind, neither of which this method used to carry. A decode that drops them cannot
+    /// express the C's decision at all, so the port silently answered it with the
+    /// destination-only *capture* predicate instead.
     CeLaunchDma {
         /// Destination address (a GPU VA when `dst_is_virtual`, else a physical addr).
         dst: GpuVa,
+        /// Source address (a GPU VA when `src_is_virtual`, else a physical addr).
+        /// Meaningless for [`CeWork::Scrub`]/[`CeWork::Fill`], which have no source
+        /// (`C: :6320` "No src is set.").
+        src: GpuVa,
         /// Length in bytes.
         len: u64,
         /// Whether the destination is a virtual (VAS) address vs a physical FB address.
         dst_is_virtual: bool,
+        /// Whether the source is a virtual (VAS) address vs a physical FB address.
+        src_is_virtual: bool,
+        /// What the engine is being asked to do.
+        work: CeWork,
     },
     /// `SEM_RELEASE` / `SET_SEMAPHORE_A/B` + payload / finishPayload: the completion —
     /// a semaphore address in a VAS advanced to `payload`. Extracted for the
@@ -436,6 +469,7 @@ kayfabe_util::assert_send_sync!(
     Aperture,
     PteDecode,
     PushMethod,
+    CeWork,
     PushRange,
     dyn Arch,
     dyn GmmuFmt,

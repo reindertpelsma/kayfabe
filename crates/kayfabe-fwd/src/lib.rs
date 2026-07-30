@@ -2010,6 +2010,109 @@ const MAX_PUSH_RANGE_BYTES: usize = 1 << 20;
 /// are skipped (their content decodes to nothing actionable — MISS=FAULT at use).
 const MAX_PUSH_TOTAL_BYTES: usize = 8 << 20;
 
+// ---------------------------------------------------------------------------------
+// ★★★ TWO DECISIONS, NOT ONE (`eight_blockers_resolved.md` §11.5 / §12).
+//
+// The C makes two different decisions about one `LAUNCH_DMA`, on two different
+// predicates, and stage B (`379f712`) folded them together — it got the CAPTURE
+// predicate right and answered EXECUTE by accident, routing everything non-phys to
+// "forward it, let hardware run it".
+//
+// | decision | the C's predicate | site |
+// |---|---|---|
+// | EXECUTE — host CE vs our own copy | `m2cexec && !mscrub && !remap && !src_phys && !dst_phys && is_user_ce(chan_client)` | `C: nvkvm_gpu_emul.c:6310` |
+// | CAPTURE — is this a page-table write? | the fb-write hook, on the **resolved physical** destination | `C: :6353`, `:6437` |
+//
+// They are separate here because they read different inputs and can disagree on the
+// same command. Read the C's execute row carefully: `is_user_ce` means **every
+// guest-kernel CE copy is CPU-emulated there**, including the framebuffer-alias
+// page-table write — which is *virtual*-destination and would pass any purely
+// operand-carried test — and so are all scrubs and fills.
+//
+// [`ce_executor_c`] is that predicate, ported. [`classify_ce`] is the capture one.
+// ---------------------------------------------------------------------------------
+
+/// Who submitted a copy-engine command — the C's `is_user_ce(chan_client)`
+/// (`C: nvkvm_gpu_emul.c:2493` — paraphrased rather than quoted, because the C's own
+/// wording names a host user-mode library and the hexagonal gate rightly refuses that
+/// vocabulary here: *is this client one of the user-mode driver's CE-copy clients, the
+/// user-observable data path? UVM/init clients are not*).
+///
+/// The port keys it on the **proc**, not on a client list. `kayfabe_core::Gpu::system`
+/// already *is* the guest-kernel component — "kernel RM / scrubber / CeUtils traffic",
+/// every declared kernel client joined by rule (§12.27) — so the fact the C had to
+/// accumulate into `m2_user_ce_clients[]` at runtime is one the projection declares.
+/// That is a strengthening, not a departure: the C's list was populated by observation
+/// and a client it had not yet seen read as *not* user-CE.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChannelOrigin {
+    /// A user process's channel — the user-observable CE data path.
+    User,
+    /// The guest kernel's own channel — CeUtils, the scrubber, UVM.
+    GuestKernel,
+}
+
+impl ChannelOrigin {
+    /// The origin of a channel owned by `pid`.
+    #[must_use]
+    pub fn of(pid: ProcId) -> Self {
+        if pid == Gpu::SYSTEM_PROC {
+            ChannelOrigin::GuestKernel
+        } else {
+            ChannelOrigin::User
+        }
+    }
+}
+
+/// ★★★ **THE EXECUTE DECISION** — who actually moves the bytes.
+///
+/// Deliberately *not* a `bool`: the C's `host_ce` is a bare local at `C: :6310` and its
+/// negation is spelled `} else if (mscrub) {` / `} else if (remap) {` / `} else {` three
+/// branches later, which is exactly how "everything else is forwarded" became an answer
+/// nobody had made.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CeExecutor {
+    /// Real hardware runs it: the forwarded ring's own copy engine, honouring its own
+    /// semaphores. No byte passes through us.
+    HostCe,
+    /// **We** run it. In the C this is the CPU byte-copy at `C: :6371-6425` (and the
+    /// scrub/fill arms above it); here the executor is the **isolate**, never the
+    /// hypervisor process and never the pure core (§12.4).
+    Ours,
+}
+
+/// ★ **The C's execute predicate, ported literally** (`C: nvkvm_gpu_emul.c:6310`):
+///
+/// ```text
+/// bool host_ce = s->m2cexec && !mscrub && !remap && !src_phys && !dst_phys &&
+///                nvkvm_m2_is_user_ce(s, s->chan_client);
+/// ```
+///
+/// Every conjunct survives except `m2cexec`, which is a **bench debug switch** (the
+/// C's "run the copy on the CPU so I can read it" flag), not a design axis — this port
+/// has no mode in which execution forwarding is off, so a constant `true` conjunct is
+/// not modelled. Named here rather than silently dropped.
+///
+/// ★★ This is the **baseline**, not the shipped policy. §12's ruling replaces the
+/// `is_user_ce` conjunct — a fact about *who submitted the work* — with representability,
+/// a fact about the **address**. `ce_c_vs_representability` (integration tests) pins
+/// every row where the two answers differ, so each departure is a value a test reads
+/// rather than a paragraph.
+#[must_use]
+pub fn ce_executor_c(
+    work: kayfabe_arch::CeWork,
+    origin: ChannelOrigin,
+    src_is_virtual: bool,
+    dst_is_virtual: bool,
+) -> CeExecutor {
+    let plain_copy = matches!(work, kayfabe_arch::CeWork::Copy);
+    if plain_copy && src_is_virtual && dst_is_virtual && origin == ChannelOrigin::User {
+        CeExecutor::HostCe
+    } else {
+        CeExecutor::Ours
+    }
+}
+
 /// ★★★ **What a copy-engine command's operands CARRY** — the discriminator the whole
 /// data plane turns on (`mode2_dataplane_architecture.md`, "The architecture to build").
 ///
@@ -2017,16 +2120,21 @@ const MAX_PUSH_TOTAL_BYTES: usize = 8 << 20;
 /// operands mean:
 ///
 /// - **VA-operand** — copies and kernels. The operands are GPU virtual addresses the host
-///   MMU resolves once the address space is resident. **Forward to the host channel's
-///   ring; let hardware execute and honour the semaphores natively.** No per-command
-///   interception, just residency. There is no software emulation of these, and there must
-///   not be: the C's shadow-plus-forged-completion was byte-exact and never touched a GPU,
-///   which is precisely why nothing noticed the buffer had no host mapping until hardware
-///   was finally asked to resolve it.
+///   MMU resolves once the address space is resident. Nothing for the **address plane** to
+///   extract: no PTE values are in flight, so there is no capture. There is no software
+///   *shadow* of these, and there must not be: the C's shadow-plus-forged-completion was
+///   byte-exact and never touched a GPU, which is precisely why nothing noticed the buffer
+///   had no host mapping until hardware was finally asked to resolve it.
 /// - **Phys-operand** — page-table writes and scrubs. The payload is guest-physical PTE
-///   values, which **cannot be handed to hardware**. Intercept, translate, apply into the
-///   host address space — strictly once, in submission order, honouring the gating
-///   semaphores.
+///   values, which **cannot be handed to hardware**. Capture, so the address plane can
+///   decode what the page now describes at the guest's own commit point.
+///
+/// ★★ **This enum answers CAPTURE ONLY.** It used to say "forward it, let hardware
+/// execute it" on the `VaOperand` arm — which is the *execute* decision, a different
+/// predicate over different inputs, answered here by accident
+/// (`eight_blockers_resolved.md` §11.5). Who runs the copy is [`CeExecutor`]'s question.
+/// A command can perfectly well be "not a page-table write" **and** "not hardware's to
+/// run": every guest-kernel data copy in the C is exactly that.
 ///
 /// ★★ The classification runs on the **resolved physical destination**, never on
 /// `dst_is_virtual`. This port used to gate on `!dst_is_virtual`, which excludes exactly
@@ -2085,11 +2193,21 @@ pub struct PushbufferOutcome {
     /// ★ Phys-operand commands: page-table pages this pushbuffer's copies wrote, each
     /// carrying the `Vas` that owns it. Latched here; applied by the caller.
     pub pt_writes: Vec<PtWrite>,
-    /// ★ VA-operand commands seen and **deliberately not intercepted** — the forward
-    /// path. Counted so "we forwarded rather than emulated" is an assertable fact rather
-    /// than an absence, and so a test can tell "classified as data" apart from "never
-    /// decoded at all".
+    /// ★ VA-operand commands seen and **not captured** — the address plane extracted
+    /// nothing from them. Counted so "we did not intercept this" is an assertable fact
+    /// rather than an absence, and so a test can tell "classified as data" apart from
+    /// "never decoded at all".
+    ///
+    /// ★★ This is the CAPTURE tally and says **nothing** about who executes the copy —
+    /// see [`PushbufferOutcome::host_ce`] / [`PushbufferOutcome::ours`], which partition
+    /// the same commands on the other predicate. `data_copies + pt_writes.len()` and
+    /// `host_ce + ours` count the same `LAUNCH_DMA`s two different ways.
     pub data_copies: usize,
+    /// ★★★ EXECUTE, arm one: commands [`ce_executor_c`] leaves to **real hardware**.
+    pub host_ce: usize,
+    /// ★★★ EXECUTE, arm two: commands **we** run. In the C, every guest-kernel CE copy,
+    /// every scrub and every fill lands here (`C: nvkvm_gpu_emul.c:6310`).
+    pub ours: usize,
     /// Semaphore releases observed → each `observe`d on the owning proc's queue.
     pub sem_releases: Vec<(GpuVa, u64)>,
     /// TLB invalidates seen (pdb, membar). A membar is honored as a hard barrier
@@ -2265,6 +2383,9 @@ pub fn apply_pushbuffer(
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
     let chan_pdb = chan.vas_pdb;
     let cgpu = chan.gpu;
+    // The C's `is_user_ce(s->chan_client)` conjunct — a property of the SUBMITTER, read
+    // once per parse because a channel belongs to exactly one proc.
+    let origin = ChannelOrigin::of(proc.id);
 
     let mut out = PushbufferOutcome::default();
     for (header, args) in methods {
@@ -2274,15 +2395,26 @@ pub fn apply_pushbuffer(
             }
             kayfabe_arch::PushMethod::CeLaunchDma {
                 dst,
+                src: _,
                 len,
                 dst_is_virtual,
+                src_is_virtual,
+                work,
             } => {
+                // ★★★ DECISION 1 of 2 — EXECUTE (§11.5). Reads the work kind, BOTH
+                // operand forms and the submitting channel's origin; reads no address.
+                match ce_executor_c(work, origin, src_is_virtual, dst_is_virtual) {
+                    CeExecutor::HostCe => out.host_ce += 1,
+                    CeExecutor::Ours => out.ours += 1,
+                }
+                // ★★★ DECISION 2 of 2 — CAPTURE. Reads the RESOLVED PHYSICAL destination
+                // and nothing else. Independent of the above by construction: it is not
+                // in scope of that match and cannot see its answer.
                 match classify_ce(spine, proc, cid, chan_pdb, cgpu, dst, dst_is_virtual)? {
-                    // ★ VA-OPERAND — a data copy. The operands are addresses the host MMU
-                    // resolves for itself once the address space is resident, so there is
-                    // nothing here to intercept and nothing to emulate: forward it, let
-                    // hardware execute it, let it honour its own semaphores. Counted, not
-                    // acted on.
+                    // ★ VA-OPERAND — not a page-table write. The operands are addresses
+                    // the host MMU resolves for itself once the address space is
+                    // resident, so the address plane has nothing to extract. Counted, not
+                    // acted on. Whether hardware or we execute it is DECISION 1's answer.
                     CeOperands::VaOperand { .. } => out.data_copies += 1,
                     // ★★★ PHYS-OPERAND — a page-table write. The payload is guest-physical
                     // PTE values, which cannot be handed to hardware. LATCH the page here

@@ -173,6 +173,160 @@ fn scripted_pushbuffer_captures_pt_writes_and_observes_completion() {
     );
 }
 
+/// ★★★ **#102 stage C1 — the C's EXECUTE predicate, row for row** (`C:
+/// nvkvm_gpu_emul.c:6310`).
+///
+/// A literal transcription of the C's conjunction rather than a re-derivation of it:
+/// each row states the four inputs and the answer the C gives, so a change to
+/// [`kayfabe_fwd::ce_executor_c`]'s *formula* cannot also change what it is being
+/// checked against.
+///
+/// The two rows that matter most, and that stage B could not express at all:
+/// - **`(Copy, GuestKernel, virtual, virtual)` ⇒ `Ours`.** Every guest-kernel CE copy is
+///   ours in the C — *including* the framebuffer-alias page-table write, which is
+///   virtual-destination and passes any purely operand-carried test.
+/// - **`(Scrub|Fill, User, virtual, virtual)` ⇒ `Ours`.** A scrub or a fill is never
+///   handed to the host copy engine, whoever submitted it.
+#[test]
+fn ce_execute_predicate_is_the_c_row_for_row() {
+    use kayfabe_arch::CeWork::{Copy, Fill, Scrub};
+    use kayfabe_fwd::CeExecutor::{HostCe, Ours};
+    use kayfabe_fwd::ChannelOrigin::{GuestKernel, User};
+    use kayfabe_fwd::{ChannelOrigin, ce_executor_c};
+
+    // (work, origin, src_is_virtual, dst_is_virtual) -> the C's `host_ce`.
+    // The FULL cross product: 3 work kinds x 2 origins x 2 x 2 = 24 rows, none omitted.
+    let rows = [
+        // The ONE combination the C forwards.
+        ((Copy, User, true, true), HostCe),
+        // …and every one of its 23 neighbours.
+        ((Copy, User, true, false), Ours),
+        ((Copy, User, false, true), Ours),
+        ((Copy, User, false, false), Ours),
+        ((Copy, GuestKernel, true, true), Ours),
+        ((Copy, GuestKernel, true, false), Ours),
+        ((Copy, GuestKernel, false, true), Ours),
+        ((Copy, GuestKernel, false, false), Ours),
+        ((Scrub, User, true, true), Ours),
+        ((Scrub, User, true, false), Ours),
+        ((Scrub, User, false, true), Ours),
+        ((Scrub, User, false, false), Ours),
+        ((Scrub, GuestKernel, true, true), Ours),
+        ((Scrub, GuestKernel, true, false), Ours),
+        ((Scrub, GuestKernel, false, true), Ours),
+        ((Scrub, GuestKernel, false, false), Ours),
+        ((Fill, User, true, true), Ours),
+        ((Fill, User, true, false), Ours),
+        ((Fill, User, false, true), Ours),
+        ((Fill, User, false, false), Ours),
+        ((Fill, GuestKernel, true, true), Ours),
+        ((Fill, GuestKernel, true, false), Ours),
+        ((Fill, GuestKernel, false, true), Ours),
+        ((Fill, GuestKernel, false, false), Ours),
+    ];
+    assert_eq!(rows.len(), 24, "the cross product, not a sample of it");
+    for ((work, origin, srcv, dstv), want) in rows {
+        assert_eq!(
+            ce_executor_c(work, origin, srcv, dstv),
+            want,
+            "C: :6310 row ({work:?}, {origin:?}, src_virt={srcv}, dst_virt={dstv})"
+        );
+    }
+
+    // The `is_user_ce` conjunct's port: the system proc IS the guest-kernel component.
+    assert_eq!(ChannelOrigin::of(Gpu::SYSTEM_PROC), GuestKernel);
+    assert_eq!(ChannelOrigin::of(kayfabe_core::ProcId(1)), User);
+}
+
+/// ★★★ **#102 stage C1 — EXECUTE and CAPTURE are two decisions, and they DISAGREE on
+/// the same pushbuffer** (`eight_blockers_resolved.md` §11.5).
+///
+/// Stage B folded them: it classified on the resolved physical destination (right, for
+/// capture) and answered execute by routing everything non-phys to hardware (wrong —
+/// nobody had made that decision). Three commands here, and no function of one tally
+/// yields the other:
+///
+/// | command | CAPTURE | EXECUTE |
+/// |---|---|---|
+/// | physical copy onto the VAS's page-directory root | PT write | ours (`dst_phys`) |
+/// | user scrub of an untracked virtual address | data | ours (`mscrub`) |
+/// | user copy, virtual→virtual, untracked | data | **host CE** |
+///
+/// `pt_writes=1, data_copies=2` and `host_ce=1, ours=2` count the SAME three commands,
+/// and the pairing between them is the point: the row that is "not a page-table write"
+/// is not therefore hardware's, and the row that is hardware's is not therefore
+/// uninteresting to the address plane.
+#[test]
+fn execute_and_capture_are_two_decisions_and_they_disagree() {
+    use kayfabe_arch::CeWork;
+
+    let (mut gpu, mut vmm) = one_proc_gpu();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
+    let pt_page: u64 = A_PDB.0 & !0xfff;
+
+    let ring = script_pushbuffer(
+        &mut vmm,
+        0x5000_0000,
+        &[
+            MockPushbuffer::set_object(mc::DMA_COPY),
+            // CAPTURE: PT write.  EXECUTE: ours — a physical destination is never the
+            // host copy engine's in the C, whoever submitted it.
+            MockPushbuffer::ce_launch_dma_full(
+                pt_page + 0x40,
+                false,
+                GpuVa(0x9_0000_0000),
+                true,
+                0x1000,
+                CeWork::Copy,
+            ),
+            // CAPTURE: data (untracked).  EXECUTE: ours — `mscrub`.
+            MockPushbuffer::ce_launch_dma_full(
+                0x2_0040_0000,
+                true,
+                GpuVa(0),
+                true,
+                0x2000,
+                CeWork::Scrub,
+            ),
+            // CAPTURE: data (untracked).  EXECUTE: host CE — the one forwarded row.
+            MockPushbuffer::ce_launch_dma_full(
+                0x2_0080_0000,
+                true,
+                GpuVa(0x2_00c0_0000),
+                true,
+                0x2000,
+                CeWork::Copy,
+            ),
+        ],
+    );
+
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("parses");
+
+    assert_eq!(
+        (out.pt_writes.len(), out.data_copies),
+        (1, 2),
+        "CAPTURE: one page-table write among three copies"
+    );
+    assert_eq!(
+        (out.host_ce, out.ours),
+        (1, 2),
+        "EXECUTE: exactly one of the three is the host copy engine's"
+    );
+    // ★ The non-vacuity of the split, stated as an equation rather than a hope: the two
+    // partitions cover the same three commands and are NOT the same partition.
+    assert_eq!(
+        out.pt_writes.len() + out.data_copies,
+        out.host_ce + out.ours,
+        "both decisions see every LAUNCH_DMA"
+    );
+    assert_ne!(
+        (out.pt_writes.len(), out.data_copies),
+        (out.ours, out.host_ce),
+        "…and they are not each other's mirror either"
+    );
+}
+
 /// A hostile / truncated ring never panics and never desyncs the parser into an
 /// unbounded read.
 #[test]
