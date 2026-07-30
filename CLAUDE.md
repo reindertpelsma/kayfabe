@@ -13,7 +13,25 @@ The design is settled — **implement it, do not re-improvise architecture.**
    types, no `#[repr(C)]` NVIDIA wire structs, and **no concrete GPU-generation or
    driver-version name** (`Ampere`, `V580`, …). `#![forbid(unsafe_code)]` workspace-wide.
    Everything effectful crosses a trait: `Vmm`, `Arch`, `RmBackend`, `Isolate`.
-   - Quarantine: `#[repr(C)]` NVIDIA layouts live ONLY in `kayfabe-abi` (Axis A).
+   - **Quarantine (Axis A): a `#[repr(C)]` layout is either QUARANTINED or provably
+     OUR OWN WIRE FORMAT — and foreign is the default.** The hazard is a layout whose
+     *owner decides when it changes*, frozen into a crate with no version dispatch, so
+     the question the CI gate asks is **"foreign, or own-wire?"**, never "is this crate
+     on a list?".
+     - NVIDIA's layouts → `kayfabe-abi`. The kernel's uapi → `kayfabe-linux-raw`.
+     - **Own-wire** is admitted anywhere, and must be *proved* by two facts the gate
+       checks: a structure of the **same name** in a repository-local `.h`, **and** a
+       `tests/wire_mirror.rs` in that crate enforcing the pair in **both** directions.
+       Both, or it is foreign. (`kayfabe-qemu-raw` is the first: its counterpart is
+       `qemu/hw/misc/nvkvm/kayfabe_shim.h`, and the pair additionally carries an ABI
+       number and a `sizeof` checked at runtime in both directions — stronger than the
+       quarantine gives the NVIDIA structs.)
+     - ★ This text used to read *"live ONLY in `kayfabe-abi`"* with the gate's failure
+       message adding *"do not add a third exempt crate"*. That phrasing was replaced
+       rather than exempted-around, on the owner's ruling: **lengthening an exemption
+       list weakens a rule with zero red tests** and invites a fourth entry
+       (`gates_quantified_over_a_list`, three prior instances). The predicate fails
+       closed, so a new crate needs no CI edit and cannot arrive without both proofs.
    - Grep gate (CI): no `Ampere|Turing|Hopper|Blackwell|Ada|V5\d\d` in any logic crate.
 
 2. **Arch impls inherit the core without editing it.** Adding a real GPU generation is

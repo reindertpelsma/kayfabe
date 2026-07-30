@@ -372,39 +372,145 @@ jobs:
       # A third entry is a design decision about where a foreign ABI is allowed to
       # live, not a CI edit — same rule as AUDITED in the unsafe-containment gate.
       #
+      # ★★★ 2026-07-30 — THE RULE IS NOW A PREDICATE, NOT A LIST. Owner ruling, stage Q2.
+      #
+      # The hypervisor seam needs C layouts and no existing crate fits: `kayfabe-abi` is
+      # codegen'd from the open kernel modules and quarantines NVIDIA's ABI (our seam's
+      # structs would dilute what that crate MEANS), and `kayfabe-linux-raw` holds OS
+      # syscall wrappers and must stay OS-generic for the aarch64 and musl cross-checks.
+      # The obvious fix — add a third crate name above — was REFUSED, and the reasoning is
+      # worth keeping because it is this repository's most expensive recurring mistake:
+      #
+      #   ★ Lengthening an exemption list weakens the rule with ZERO RED TESTS, and sets
+      #     the precedent for a fourth. `gates_quantified_over_a_list` records three
+      #     separate instances. An exemption list cannot say WHY, so the next reader
+      #     cannot tell a considered entry from a convenient one.
+      #
+      # So the gate now asks the question the rule was always about:
+      #
+      #     Is this layout FOREIGN, or is it OUR OWN WIRE?
+      #
+      # Foreign means somebody else decides when it changes — a driver release, a kernel
+      # release — and that is the whole hazard: a layout frozen into a crate with no
+      # version dispatch. Own-wire means both sides are files in THIS repository.
+      #
+      # ★★ OWN-WIRE MUST BE PROVED, NOT ASSERTED, and the proof is two facts this gate
+      # checks directly:
+      #
+      #   (1) a repository-local C header declares a structure of the SAME NAME. Same
+      #       name, not a mapping: a hand-maintained Rust-name-to-C-name table would be
+      #       the list problem one level down, and identical names let a shell gate
+      #       re-derive the proof without parsing Rust.
+      #   (2) the declaring crate carries `tests/wire_mirror.rs`, which enforces the
+      #       mirror in BOTH directions — every C layout has a header counterpart AND
+      #       every header structure has a Rust one. Clause (1) alone would admit a type
+      #       whose name merely happens to appear somewhere; (2) is what makes the pair a
+      #       maintained invariant. This is the `*_unsafe.rs` doctrine reused: a naming
+      #       convention `ls` can enumerate, never an allowlist.
+      #
+      # ★★★ IT FAILS CLOSED. A `#[repr(C)]` anywhere outside the quarantine crates is
+      # refused unless BOTH proofs hold, so this is strictly STRONGER than the rule it
+      # replaces: previously a third crate needed a CI edit and got one; now a fourth
+      # needs no CI edit and cannot arrive without both proofs. A logic crate cannot
+      # acquire a C layout by any route, which is the property that must not have been
+      # loosened and is negative-tested three ways.
+      #
+      # ★ Why not flatten the structures instead and keep two crates? Because it is LESS
+      # safe. `KayfabeHostOps` is a function-pointer table; an untyped array plus an index
+      # makes all thirteen call sites transmute-by-position and stops the compiler
+      # checking arity and signature at the exact seam where a mistake is a memory-safety
+      # bug. Simpler only in gate-satisfaction terms.
+      #
       # `find` over the whole repo, not a crate list: a new crate is covered the day it
       # is added (the failure mode the enumerated gates below this one still have).
       # Comment lines are out of scope, by the same rule and the same expression the
       # generation-name gate uses — a doc citing `#[repr(C)]` in prose is how these
       # invariants get explained, and four such lines exist today.
-      - name: ABI-quarantine gate (Axis A — `#[repr(C)]` lives only in the two ABI crates)
+      - name: ABI-quarantine gate (Axis A — a C layout is quarantined, or provably own-wire)
         run: |
-          offenders=$(find . -name '*.rs' \
-                        -not -path './crates/kayfabe-abi/*' \
-                        -not -path './crates/kayfabe-linux-raw/*' \
-                        -not -path './target/*' -not -path './*/target/*' \
-                        -not -path './mutants.out/*' \
-                        -exec grep -Hn '#\[repr(C' {} + 2>/dev/null \
-                      | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|/\*|\*)' || true)
-          if [ -n "$offenders" ]; then
-            echo "$offenders"
+          # Every repository-local C header, once. A structure declared in one of these is
+          # something WE wrote; anything else is somebody else's release schedule.
+          headers=$(find . -name '*.h' \
+                      -not -path './target/*' -not -path './*/target/*' \
+                      -not -path './mutants.out/*' || true)
+
+          fail=0
+          # Candidates: every C-layout attribute outside the two quarantine crates. Comment
+          # lines are out of scope, by the same expression the generation-name gate uses.
+          #
+          # ★ The attribute must START its line, which is how one is written and is also the
+          # only way this gate can avoid matching a STRING LITERAL — `wire_mirror.rs` has to
+          # be able to name the attribute in order to scan for it, and the previous gate
+          # reported that scanner as an offender. Same shape as the unsafe-surface gate,
+          # whose own mirror assembles the keyword from fragments for the same reason; the
+          # test does that too, so this anchor is a second line of defence and not the only
+          # one. Known lexical limit, stated: an attribute written mid-line after a `;` or a
+          # `{` is not matched. There are none, and the compiler makes that spelling rare.
+          while IFS=: read -r file line _; do
+            [ -z "$file" ] && continue
+            crate=$(echo "$file" | sed -nE 's|^\./(crates/[^/]+)/.*|\1|p')
+
+            # The type name: the next `struct`/`union`/`enum` at or after the attribute.
+            ty=$(tail -n +"$line" "$file" \
+                 | grep -m1 -oE '(struct|union|enum) [A-Za-z_][A-Za-z0-9_]*' \
+                 | awk '{print $2}')
+
+            # PROOF (1) — a repository-local header declares the SAME NAME.
+            mirrored=""
+            if [ -n "$ty" ] && [ -n "$headers" ]; then
+              mirrored=$(grep -l -E "^\} ${ty};" $headers 2>/dev/null || true)
+            fi
+            # PROOF (2) — the declaring crate enforces the mirror in BOTH directions.
+            proof=""
+            if [ -n "$crate" ] && [ -f "$crate/tests/wire_mirror.rs" ]; then
+              proof="yes"
+            fi
+
+            if [ -n "$mirrored" ] && [ -n "$proof" ]; then
+              continue
+            fi
+            fail=1
+            echo "$file:$line: \`$ty\` is a C layout and is NOT provably own-wire:"
+            [ -z "$ty" ]       && echo "    - the attribute is not on a named type"
+            [ -n "$ty" ] && [ -z "$mirrored" ] && \
+              echo "    - no repository-local header declares \`} $ty;\`  (proof 1 FAILED)"
+            [ -z "$proof" ] && \
+              echo "    - ${crate:-that crate} has no tests/wire_mirror.rs (proof 2 FAILED)"
+          # ★ Process substitution, NOT a heredoc. A heredoc's terminator must start at
+          # column 0, which ends the YAML block scalar this whole step lives in — the step
+          # then parses as a truncated fragment and the runner reports ZERO steps rather
+          # than a failure. Watched happening. Gate B above uses the same form for the same
+          # reason.
+          done < <(find . -name '*.rs' \
+                     -not -path './crates/kayfabe-abi/*' \
+                     -not -path './crates/kayfabe-linux-raw/*' \
+                     -not -path './target/*' -not -path './*/target/*' \
+                     -not -path './mutants.out/*' \
+                     -exec grep -Hn '^[[:space:]]*#\[repr(C' {} + 2>/dev/null \
+                   | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|/\*|\*)' || true)
+
+          if [ "$fail" -ne 0 ]; then
             echo ""
             echo "★ ABI-QUARANTINE BREACH — CLAUDE.md rule 1, Axis A."
-            echo "The lines above declare a C-layout struct outside the two crates that"
-            echo "are allowed to mirror a foreign ABI. That is one driver version's (or"
-            echo "one kernel's) memory layout, frozen into a crate that has no version"
-            echo "dispatch — which is precisely how 'support the next driver' turns from"
-            echo "a table entry into a retrofit. What to do:"
+            echo "A C layout may live outside the quarantine crates ONLY when it is"
+            echo "provably OUR OWN WIRE FORMAT rather than somebody else's ABI. Foreign is"
+            echo "the DEFAULT, because the hazard is a layout whose owner decides when it"
+            echo "changes: one driver version's (or one kernel's) memory shape, frozen into"
+            echo "a crate with no version dispatch. Four ways out, no fifth:"
             echo "  - an NVIDIA wire struct -> kayfabe-abi, and give it a"
             echo "    kayfabe_abi::versions::DriverAbiTable arm if its shape has ever"
             echo "    differed across versions. Encode/decode over a byte slice; the"
             echo "    crate's own convention is that callers never see the layout."
             echo "  - a KERNEL uapi struct  -> kayfabe-linux-raw, in a *_unsafe.rs file,"
             echo "    where the unsafe audit already covers it."
-            echo "  - neither               -> you do not need repr(C). Rust's default"
+            echo "  - OUR OWN wire format   -> declare the counterpart structure under the"
+            echo "    SAME NAME in a repository-local .h, and add tests/wire_mirror.rs to"
+            echo "    the crate so the pair is enforced in BOTH directions. Both proofs, or"
+            echo "    it is foreign."
+            echo "  - none of these         -> you do not need repr(C). Rust's default"
             echo "    layout is correct for anything that is not crossing an ABI."
-            echo "Do not add a third exempt crate to make a struct fit: which crates may"
-            echo "mirror a foreign ABI is the Axis-A seam itself."
+            echo "There is no exemption list to add a name to, and that is deliberate:"
+            echo "lengthening one weakens the rule with no test going red."
             exit 1
           fi
 
@@ -722,20 +828,77 @@ jobs:
       # specificity, not host-side *hypervisor* specificity, and folding an FFI surface
       # for a hypervisor into it would make the OS crate un-auditable in a different way.
       #
-      # ★ `kayfabe-qemu-raw` IS EMPTY TODAY and its expected count is 0. That is the
-      # strongest setting available: the first relaxation ever added there turns this step
-      # red until somebody itemises it below, exactly as the 37 are itemised. Two other
-      # gates cover the interim and neither has a crate list at all — the unsafe-surface
-      # gate (a file using the keyword must be named *_unsafe.rs) and the host-pointer
-      # gate. If stage Q2 is abandoned, DELETE the crate rather than leave a standing
-      # exemption over nothing.
+      # ★★★ `kayfabe-qemu-raw` 0 -> 31 AT STAGE Q2, 2026-07-30 — the stage that gives the
+      # crate its first contents. The bar was 0 precisely so that this had to be a reviewed
+      # commit rather than a manifest edit, and here is the review. Five groups:
+      #
+      #   shim_unsafe.rs (31), and the whole file is the surface:
+      #
+      #   [G1] 13 calls into the C shim's primitive table — one per method of the
+      #        `QemuHost` port that has a foreign implementation. Each is
+      #        `unsafe { (table.f)(device_token, ...) }` with its own `// SAFETY:` naming
+      #        its own obligation: the table was validated at adopt time, the token is the
+      #        one that table came with, and — for the two copy primitives — the buffer
+      #        bound we pass is the bound the C is required to honour.
+      #        ★ THIRTEEN IS THE SURFACE, NOT A STYLE. A macro emitting the call would
+      #        collapse all thirteen into ONE textual relaxation, because this ratchet
+      #        counts source tokens and a macro body is one token. That is gaming the
+      #        instrument. There really are thirteen foreign calls with thirteen different
+      #        obligations, and the count says so.
+      #
+      #   [G2]  8 `extern "C"` entry points the C shim calls: realize, unrealize,
+      #        region_add, region_del, bar_move_requested, note_bar_mapping,
+      #        install_window, audit. Each carries a `# Safety` clause stating what the
+      #        caller must guarantee about the handle and the out-parameters. A ninth entry
+      #        point, the ABI-number query, takes no address and is therefore SAFE and not
+      #        counted — which is what makes it usable as the first call, before anything
+      #        has been validated.
+      #
+      #   [G3]  6 structure reads/writes across the seam: the primitive table, the realize
+      #        configuration and one topology section are `ptr::read`; the register array is
+      #        `slice::from_raw_parts`; the handle and the audit block are writes through
+      #        caller-supplied out-parameters. All six are plain `Copy` data with no
+      #        ownership in it, so none can leak or double-drop.
+      #
+      #   [G4]  2 `unsafe impl` — Send and Sync for the device token. It is an opaque value
+      #        this crate never dereferences, so the claim is about the C side's obligation
+      #        (stated in kayfabe_shim.h) and not about anything Rust can see. Kept as two
+      #        explicit relaxations with a written argument rather than laundered through
+      #        an `AtomicPtr`, which would confer both for free and record nothing.
+      #
+      #   [G5]  2 handle/allocation transitions: `Box::from_raw` in unrealize (the ONE place
+      #        the plane is reclaimed) and the single `&*handle` in `borrow`.
+      #
+      # ★★ WHAT WAS FOLDED, so the number is not padded. An earlier draft was 42. Three
+      # private helpers — the out-parameter writer, `borrow`, and the table adopter — were
+      # `unsafe fn`s that every caller re-acknowledged, which cost ~20 blocks to say one
+      # thing twenty times. Each has exactly ONE kind of caller: an entry point that is
+      # already `unsafe` and whose `# Safety` clause states the very precondition the helper
+      # needs. They are now ordinary functions with one documented relaxation inside each.
+      #
+      # ★★★ AND THE RATCHET'S OWN PATTERN WAS WRONG, found by being its first FFI consumer.
+      # `unsafe (\{|fn |impl |trait )` cannot match `unsafe extern "C" fn` — the dominant
+      # form in a foreign-function crate, i.e. exactly what this crate was added to hold. It
+      # counted 23 of 31 and called it a complete audit. The pattern now also matches an
+      # `extern "C"` DEFINITION (`fn ` followed by a name), and deliberately not the
+      # `Option<unsafe extern "C" fn(...)>` FIELD TYPES, which are declarations and not
+      # relaxations.
+      #
+      # ★★ THE CORRECTION DOES NOT MOVE THE OTHER CRATE'S BAR, RE-MEASURED AT THIS TIP.
+      # `kayfabe-linux-raw` is 60 under the corrected pattern and 60 under the old one,
+      # because it contains ZERO occurrences of `unsafe extern` in any form — checked across
+      # every file including `sandbox_unsafe.rs`, which is new in this same merge and added
+      # three of that 60. This is stated as a re-measurement and not as a number carried
+      # forward: the pattern changed in one commit and the bar changed in another, they
+      # landed together, and "it was 57 when I looked" would have been a claim about a tree
+      # that no longer exists.
       - name: "Unsafe-containment gates (A: forbid inheritance, B: the named crates, ratchet)"
         run: |
           # ★ THE ONE LIST. `crate:expected-relaxations`, and all three sub-gates read it.
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:60 kayfabe-qemu-raw:0"
+          AUDITED="kayfabe-linux-raw:60 kayfabe-qemu-raw:31"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -952,11 +1115,11 @@ jobs:
             # file in a subdirectory. There is no `-maxdepth` here now, deliberately:
             # the audit surface is "every `*_unsafe.rs` under the crate", at any depth.
             actual=$(find "crates/$c/src" -name '*_unsafe.rs' \
-                       -exec grep -hoE 'unsafe (\{|fn |impl |trait )' {} + 2>/dev/null \
+                       -exec grep -hoE 'unsafe (\{|fn |impl |trait )|unsafe extern "C" fn [A-Za-z_]' {} + 2>/dev/null \
                      | wc -l | tr -d ' ')
             echo "$c: $actual relaxation(s) (bar: $want)"
             find "crates/$c/src" -name '*_unsafe.rs' \
-              -exec grep -coE 'unsafe (\{|fn |impl |trait )' {} + 2>/dev/null || true
+              -exec grep -coE 'unsafe (\{|fn |impl |trait )|unsafe extern "C" fn [A-Za-z_]' {} + 2>/dev/null || true
             [ "$actual" -ne "$want" ] && fail=1
           done
           if [ "$fail" -ne 0 ]; then
