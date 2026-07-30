@@ -151,3 +151,118 @@ box? This is cost/ergonomics, not architecture — but it sets the cadence of ev
 
 Q3 is nearly as urgent but is partly answerable from the C: measuring whether its ~host-parity
 number included the software CE would resolve half of it without a decision from anyone.
+
+---
+
+# ANSWERED — the owner's rulings, 2026-07-30
+
+All six were answered the same day they were raised. Recorded here because several **changed shape**
+from the question as I posed it, and two dissolved rather than being decided.
+
+## Q1 — the completion / interrupt plane → **staged, not blind**
+
+**Ruling:** the interrupt path is the **slow path**; correctness rests on **semaphore polling**.
+Treat interrupts as an **optimisation with a fallback**, and test that disabling the optimisation
+keeps everything working.
+
+⚠ **My correction, which the owner accepted:** *we do not choose which path the guest takes.* If its
+driver blocks on an os-event and we never deliver, it **hangs** — polling is not ours to fall back
+to. Mode 1 hit exactly this as `#127`, whose fix (an os-event poll relay) is recorded as
+load-bearing for Mode-2 interrupt delivery. **An interrupt capability must exist even if delivery is
+staged.**
+
+★★★ **What rescues it is Q5:** since the guest may be patched for bring-up, we can **force the guest
+to poll** during development, isolating the interrupt plane into a separately testable step. That
+converts an unbounded, un-oracled risk into a staged one — and is strictly better than my proposal
+of chasing another capture.
+
+## Q2 — the fabricated aperture → **the question was wrong**
+
+**Ruling:** *"you ask it wrong. the address or size parameter itself never was sufficient alone…
+better is, if I have a region containing this block of memory, what is: gpu object backed / faked
+ram / null pages / unallocated — and then decide per such region."*
+
+★★ **This is already built.** Stage C2 landed exactly that: `Representability {HostBacked,
+Fabricated, PhysicalOperand, Untracked}`, `AddressTable::spans()` as the region query, and
+`partition_ce()` intersecting both operands. The "aperture extent" is **not needed as a global
+fact**.
+
+★★★ **And the sharper half:** *a guest-userspace CE can only address GPU VA and guest-process VA,
+both valid in the isolate, so it forwards **without inspection**; only privileged CE must be
+handled.* Independently the C's own `is_user_ce` predicate — derived from first principles rather
+than copied.
+
+★★ **The map-time argument that retired my objection.** I worried a naive `origin == User` fast path
+would make the rare case (fabricated VRAM in a userspace GPU VA) *invisible*. The owner: *"you should
+not have an incomplete guest gpu va that has some things not mapped in the first place… if its gpu
+va anywhere we have mapped it."* **Every VA the guest can name is one we published**, so its backing
+was decided at **map time**, not CE time. The rare case is not invisible — it is **impossible to be
+unhandled**. My "fast-path + assert the premise" would have asserted a state the invariant already
+excludes. C2 had in fact implemented this already: the fabricated-VRAM case is *"the normal path —
+ordinary publication, after which the classifier answers `HostBacked` by itself"*.
+
+## Q3 — the software CE → **allowed, and bounded**
+
+**Ruling:** a software CE is permitted **only for privileged/kernel CE that directly addresses
+GPGA**. Everything VA-addressed forwards.
+
+⇒ The §11.6 doctrine conflict is resolved: the doctrine's *"never build a software CE"* governs the
+**fast path**; the bounded privileged case is what the C does too. **Never on the 99% path**, so the
+performance risk is bounded by construction.
+
+★ The crisp statement: **the only genuine requirement to emulate is a CE whose operands are GPGA.
+Everything VA-addressed can be forwarded, because we control the mapping — emulating it is an
+optimisation, not a requirement.**
+
+## Q4 — multi-process → **assert it in mocks now, test on hardware later**
+
+**Ruling:** *"your mock tests need to assert #14 isn't an issue, this already fixes 95% of an
+architecture flaw. then yes I would focus on getting #14 to test as soon as possible, but if gsp boot
+sequence didn't even complete yet with rust… I think the test is futile now on real hardware."*
+
+★★ And it named a **better intermediate rung** than the one I was aiming at: **guest driver loads and
+`nvidia-smi` enumerates**, between "RM ioctl works" and "CUDA kernel runs". That reframe is what
+produced the first end-to-end boot attempt the same day.
+
+## Q5 — must the guest be stock? → **split by purpose**
+
+1. **Debugging and testing: NO.** Patch the guest's ogkm, kernel or userspace however is useful.
+2. **The shipped product: YES** — *"thats the whole selling point. its what allows linux isos to work
+   out of the box and windows eventually."*
+
+★★★ The single most useful ruling of the day: it unblocks bring-up instrumentation **without**
+weakening the claim that matters. (And the first boot needed **no** guest patches anyway.)
+
+## Q6 — performance target → **by path frequency, with one addition**
+
+1. **The common 99% path:** performance **and** correctness.
+2. **The uncommon <1% path:** correctness only.
+3. ⊘ **But it must not become a bolt-on** — *"you need to have the code written against the spec so
+   the uncommon is already covered by construction."*
+
+★★ **My addition, accepted:** the trap on the <1% path is not performance, it is that **an uncommon
+path with no perf pressure is exactly where a plausible-but-wrong implementation survives**, because
+nothing stresses it. So the <1% path needs *correctness plus a falsification story*, not correctness
+alone. (Same shape as Q1's oracle-less completion plane.)
+
+## Q-VBIOS — generate, never dump
+
+Raised after the first guest boot stopped at `kgspExtractVbiosFromRom`. **Ruling:** a dumped ROM is
+*"an unstable hack that requires one time root and is difficult with shipping"*; generate a **fake
+VBIOS that passes ogkm's parsers**, as a **generator for any driver/arch**, with **no pinned version
+or arch** — part of the auto-gen, *"it shouldn't become a bolt on"*.
+
+★★★ **The stronger reason, which does not decay:** a dumped ROM describes the **host's** card while
+we emulate a **different** device, so it can silently disagree with the registers we answer. A
+generated one, derived from the same config, **cannot disagree by construction.** The dumped ROM was
+always the *wrong source of truth*, not merely the inconvenient one.
+
+**Verified before building** (`ogkm-580.159.04`): the driver performs **no cryptographic
+verification** of FWSEC — `kernel_gsp_fwsec.c:993` copies signatures out, `frts_tu102.c:355`
+null-checks them, `:397` hands one to the **falcon**. In Mode 2 **we are the falcon**. ⇒ **structure,
+not secrets.**
+
+**Outcome (`7825926`):** the driver parses the generated ROM, echoes `VBIOS version 94.18.00.00.00`
+— our own profile, from a field initialised to `"unknown"` — and is **past the ROM gate**. Generating
+against 580.159.04 and 610.43.02 produces byte-identical output, and the diff has teeth (over the
+same tags `nvos.rs` moves 122 lines). New stop: `BAR0+0x110100`, the GSP falcon's `CPUCTL` halt bit.
