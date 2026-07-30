@@ -244,6 +244,75 @@ impl ControlPermit {
     pub const fn is_permitted(self) -> bool {
         !matches!(self, ControlPermit::Denied(_))
     }
+
+    /// Which **rule** admitted it, if a rule did rather than a table row.
+    ///
+    /// `None` for [`Self::Listed`] (a row named it) and for [`Self::Denied`]. See
+    /// [`PassthroughRule`] for why a caller downstream of the gate needs to be able to
+    /// tell the two apart.
+    #[must_use]
+    pub const fn passthrough_rule(self) -> Option<PassthroughRule> {
+        match self {
+            ControlPermit::GssLegacyRule => Some(PassthroughRule::GssLegacy),
+            ControlPermit::BinApiRule => Some(PassthroughRule::BinApi),
+            ControlPermit::Listed { .. } | ControlPermit::Denied(_) => None,
+        }
+    }
+}
+
+/// Which of the two **rule-based passthroughs** admitted a control that no table row
+/// names.
+///
+/// ## The two rules share one justification, and it is nvproxy's
+///
+/// Both say: this command is serviced by the **GPU System Processor**, so its parameters
+/// cannot reasonably contain application pointers and the sentry need not model them.
+/// nvproxy states it in as many words at
+/// `gvisor/pkg/sentry/devices/nvproxy/frontend.go:769-780` —
+///
+/// > *"This is a 'legacy GSS control' that is implemented by the GPU System Processor
+/// > (GSP). Consequently, its parameters cannot reasonably contain application pointers,
+/// > and the control is in any case undocumented."*
+///
+/// — and then hands the blob to `rmControlSimple` (`frontend.go:818`), which copies a
+/// bounded flat byte range and never interprets a pointer. That is **principled, not
+/// lazy**: nvproxy's security property is *pointer-translation safety*, and it is
+/// preserved by construction. Semantic validation is left to the host RM, which is
+/// downstream and real.
+///
+/// ## ★★★ Why this enum exists: the second half of that sentence does not transfer
+///
+/// nvproxy is a **Mode-1-shaped** situation — the guest's ioctl is replayed against a real
+/// host `/dev/nvidia*`, so a real GSP does eventually answer, and "the host RM validates
+/// it" is true. In Mode 2 the guest's GSP **is ours**. A command admitted by one of these
+/// rules is, *by the rule's own definition*, one that nothing downstream will service:
+/// there is no host RM behind our fake GSP to be the adult in the room. So the rule
+/// answers *"may the guest send it?"* — which is all a sandbox needs — and leaves
+/// *"what do we answer?"* wide open.
+///
+/// [`ControlPermit::is_permitted`] therefore has a **narrower meaning than its name
+/// suggests** for these two arms, and a consumer that reads `Listed` and a rule arm as the
+/// same fact has silently inherited a premise that is false here.
+/// [`ControlPermit::passthrough_rule`] is how a consumer keeps them apart;
+/// `kayfabe_rmrpc::BridgeRefusal::GspRuleControlUnserviced` is the consumer that does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[must_use]
+pub enum PassthroughRule {
+    /// [`RM_GSS_LEGACY_MASK`] — bit 15 of the command word. Half the command space.
+    GssLegacy,
+    /// [`NV2081_BINAPI_CLASS`] — the whole binary-API subdevice class.
+    BinApi,
+}
+
+impl PassthroughRule {
+    /// The rule's own name, for a census tag or a message.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            PassthroughRule::GssLegacy => "GssLegacy",
+            PassthroughRule::BinApi => "BinApi",
+        }
+    }
 }
 
 /// What the boundary makes of an allocation class.

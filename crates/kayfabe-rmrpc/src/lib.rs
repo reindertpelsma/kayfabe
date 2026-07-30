@@ -196,7 +196,7 @@ mod reasm;
 pub use policy::{GraphPolicy, RefusalCensus};
 pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassembled, Reassembler};
 
-use kayfabe_abi::capability::{AllocPermit, ControlPermit, Denial};
+use kayfabe_abi::capability::{AllocPermit, ControlPermit, Denial, PassthroughRule};
 use kayfabe_abi::versions::{AllocParams, ControlParams, DriverAbiTable};
 use kayfabe_abi::wire::AbiError;
 use kayfabe_abi::{
@@ -495,9 +495,128 @@ pub enum BridgeRefusal {
     /// consumes is a variant no test can bite. The choice is deliberately the reversible
     /// one — when `classify_control` lands, *this arm* is where `Forward` is emitted
     /// instead, and every control that reaches it is already named in the census.
+    ///
+    /// ★ Narrowed: a control admitted by a **rule** rather than by a table row is
+    /// [`Self::GspRuleControlUnserviced`] instead, because the two are not the same
+    /// finding. This arm now means *"a row (or nothing) named it and we have no decoder"*.
     UnknownControl {
         /// `cmd`.
         cmd: u32,
+    },
+    /// ★★★ **A control the capability gate admitted by a *rule* — meaning "the GSP
+    /// services this" — which this GSP does not service.** The default answer to the
+    /// GSS-legacy long tail, and the thing that keeps it from being answered by accident.
+    ///
+    /// # 1. Why this is not [`Self::UnknownControl`]
+    ///
+    /// Both are "permitted, no decoder". They are different findings because they were
+    /// permitted for different reasons, and only one of the reasons is *void here*:
+    ///
+    /// - `UnknownControl` — a table row (or the absence of one plus a table lookup) put
+    ///   the command in scope. Nothing about that says who answers it.
+    /// - **this** — [`kayfabe_abi::capability::PassthroughRule`] put it in scope, and the
+    ///   rule's whole content is *"the GPU System Processor implements this, so its params
+    ///   hold no application pointers"* (nvproxy,
+    ///   `gvisor/pkg/sentry/devices/nvproxy/frontend.go:769-780`). In **Mode 1** that is a
+    ///   complete argument, because the ioctl is replayed on a real host `/dev/nvidia*` and
+    ///   a real GSP answers. In **Mode 2 the guest's GSP is ours**, so the rule has
+    ///   admitted precisely the set of commands *with nothing behind them* — it decided
+    ///   "may the guest send it?", never "what do we answer?".
+    ///
+    /// Collapsing the two would hide the second question inside the first, which is a
+    /// re-run of the collapse this crate's module doc already names as how the C ended up
+    /// answering everything `NV_OK`.
+    ///
+    /// # 2. Why the default is a **refusal** and not a forward or a replay
+    ///
+    /// The C research artifact resolved one concrete instance of this — the cudart
+    /// initialisation-gate cluster, `0x2080_9009` / `0x2080_9001` / `0x2080_9064`, all
+    /// three GSS-legacy and all three non-privileged
+    /// (`cmd & RM_GSS_LEGACY_MASK_PRIVILEGED != RM_GSS_LEGACY_MASK_PRIVILEGED`) — as
+    /// **forward to the host GPU, replay a capture if the forward fails**
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:3328-3395`). That resolution is right and it is
+    /// where this arm should eventually go. Neither half is available as a *default*:
+    ///
+    /// - **Forward** needs `kayfabe_fwd::classify_control`, which does not exist. A
+    ///   `Translation::Forward` nothing consumes is the C's `NV_OK` echo with a Rust type
+    ///   on it — the argument [`Self::UnknownControl`] already makes, unchanged.
+    /// - **Replay** is definitionally unavailable for an *unknown* command: you can only
+    ///   replay what was captured, and the C captured exactly three. A replay table is the
+    ///   right home for those three when someone measures them (and it is a
+    ///   [`kayfabe_abi`] table row, not a logic-crate edit, so it costs no change here) —
+    ///   but it cannot be the answer for the tail.
+    ///
+    /// So the default is the one honest remaining answer, and it is chosen the same
+    /// reversible way B4 chose: when a forward arm lands, *this* is the site it replaces,
+    /// and every command that reached it is already named and counted in the census.
+    ///
+    /// # 3. ★★★ Why a refusal must be delivered at the **envelope**, which is the part
+    /// that was not obvious
+    ///
+    /// The C's measured failure mode was not a crash. Its default echo returned all-zeros
+    /// under `NV_OK`; cudart read `0` where it expected real data and aborted with
+    /// `cudaErrorInitializationError(3)` **silently** — the rejection was in the reply
+    /// *payload*, not an errno and not a log line (`C: src/qemu/nvkvm_gpu_emul.c:3335-3360`).
+    /// A wrong number is worse than a crash because nothing reports it.
+    ///
+    /// Reading the guest's own receive path shows that failure has a **worse Mode-2 form
+    /// than the C ever hit**, and shows exactly which field prevents it. In
+    /// `rpcRmApiControl_GSP` (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:10855`,
+    /// `ogkm-610: :10660`) there are two independent status words, and they are not
+    /// interchangeable:
+    ///
+    /// | word | who sets it | what it gates |
+    /// |---|---|---|
+    /// | the RPC **envelope**'s `rpc_result` | [`kayfabe_gsp::Reply::rpc_result`] | `_issueRpcAndWait` returns non-`NV_OK` (`ogkm-580: rpc.c:1994`, `ogkm-610: :2012`), so the entire `if (status == NV_OK) { … }` block is skipped |
+    /// | `rpc_params->status`, inside the control body | a body we would have to forge | only the copy-out, and only conditionally |
+    ///
+    /// Inside that block, two things happen to a *successful* reply and **neither is
+    /// reachable once the envelope says no**:
+    ///
+    /// 1. **Copy-out.** The skip is *conditional*, not automatic:
+    ///    `if (rpc_params->status != NV_OK && !(rmapiRpcFlags & RMAPI_RPC_FLAGS_COPYOUT_ON_ERROR))`
+    ///    (`ogkm-580: rpc.c:11065-11069`, `ogkm-610: :10870-10874`). The guest sets that bit
+    ///    itself, on the wire, for any control carrying `RMCTRL_FLAGS_COPYOUT_ON_ERROR`
+    ///    (`ogkm-580: rpc.c:10997-10998`, `ogkm-610: :10802-10803`) — so for those commands a
+    ///    body-level failure still copies our bytes to the caller.
+    /// 2. **★★ The guest CACHES the answer.** GSS-legacy controls have their own cache
+    ///    path in the guest's CPU-RM, on both the set and the get side:
+    ///    `rmapiControlCacheSetUnchecked(hClient, hObject, cmd, rpc_params->params, …)`
+    ///    (`ogkm-580: rpc.c:11098-11103`, `ogkm-610: :10903-10908`) and, on the next call,
+    ///    `else if (IsGssLegacyCall(cmd)) rmapiControlCacheGetUnchecked(…)` followed by
+    ///    `if (rmctrlCacheStatus == NV_OK) goto done;` (`ogkm-580: rpc.c:10962-10971`,
+    ///    `ogkm-610: :10766-10775`) — i.e. **the RPC never reaches us again**.
+    ///
+    ///    ★ And the branch's own predicate reads `rpc_params->rmctrlFlags` and
+    ///    `rpc_params->rmctrlAccessRight` — *fields the replying GSP fills*
+    ///    (`rmapiControlIsCacheable`, `ogkm-580: src/nvidia/src/kernel/rmapi/rmapi_cache.c:152-174`,
+    ///    byte-identical at `ogkm-610: :152-174`). So **whether the guest permanently caches
+    ///    our answer is decided by bytes we put in the reply.** Today the echo path happens
+    ///    not to cache, purely because `RpcCommand::ack` reflects the request, in which the
+    ///    guest zeroed `rmctrlFlags` itself (`ogkm-580: rpc.c:10990-10991`,
+    ///    `ogkm-610: :10795-10796`), and `!(0 & RMCTRL_FLAGS_CACHEABLE_ANY)` is false. That
+    ///    is an accident, and it is exactly the class of accident this refusal exists to
+    ///    stop being load-bearing.
+    ///
+    /// ⇒ The one reply that is safe *regardless of any byte in the body* is one whose
+    /// **envelope** `rpc_result` is non-zero, because the guest short-circuits before both
+    /// hazards. [`BridgeRefusal::rpc_result`] is that word and it is
+    /// [`kayfabe_abi::NV_ERR_NOT_SUPPORTED`] for every refusal, so the guarantee is
+    /// structural rather than per-variant. `gss_legacy_answer.rs` is the test that watches
+    /// it hold.
+    ///
+    /// # 4. Mode 1 is untouched
+    ///
+    /// This is a `GSP_RM_CONTROL` decoder on the Mode-2 RPC transport. Mode 1 forwards a
+    /// guest *ioctl* to a real host driver, which is nvproxy's exact situation, where
+    /// pass-through is correct — and nothing on that path routes through this crate.
+    GspRuleControlUnserviced {
+        /// `cmd`.
+        cmd: u32,
+        /// Which rule admitted it. Carried, not dropped: `GssLegacy` is half the command
+        /// space and `BinApi` is one class, so a census that could not tell them apart
+        /// would answer "which rule is costing us?" with a shrug.
+        rule: PassthroughRule,
     },
     /// ★★ **A control that moves a VASpace's page-directory binding, which this port
     /// cannot express.** Distinct from [`Self::UnknownControl`] because the consequence is
@@ -694,6 +813,20 @@ impl Faulted for BridgeRefusal {
                 FaultTag("BridgeRefusal::SerializedControlParams")
             }
             BridgeRefusal::UnknownControl { .. } => FaultTag("BridgeRefusal::UnknownControl"),
+            // ★ Split by [`PassthroughRule`], for the reason `AllocClassNotPermitted`
+            // splits by `Denial`: the contained value IS a rule, and the two rules are
+            // different-sized holes. `GssLegacy` is half the command space and is where
+            // the C's cudart cluster lives; `BinApi` is one class. A census that merged
+            // them could not answer which rule the long tail is actually arriving through,
+            // which is the one number that decides what gets a forward arm first.
+            BridgeRefusal::GspRuleControlUnserviced {
+                rule: PassthroughRule::GssLegacy,
+                ..
+            } => FaultTag("BridgeRefusal::GspRuleControlUnserviced::GssLegacy"),
+            BridgeRefusal::GspRuleControlUnserviced {
+                rule: PassthroughRule::BinApi,
+                ..
+            } => FaultTag("BridgeRefusal::GspRuleControlUnserviced::BinApi"),
             BridgeRefusal::PageDirControlNotModelled { .. } => {
                 FaultTag("BridgeRefusal::PageDirControlNotModelled")
             }
@@ -1061,13 +1194,30 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
     // ── ★★★ The capability gate. Before the params table, for the reason spelled out on
     // `BridgeRefusal::ControlNotPermitted`: an unlisted command is refused before a byte
     // of its payload is decoded, and a future `Forward` arm can never be handed one.
-    if let ControlPermit::Denied(denial) = abi.capabilities().control(ControlCmd(h.cmd)) {
+    let permit = abi.capabilities().control(ControlCmd(h.cmd));
+    if let ControlPermit::Denied(denial) = permit {
         return Err(BridgeRefusal::ControlNotPermitted { cmd: h.cmd, denial });
     }
 
     let shape = match abi.control_params(ControlCmd(h.cmd)) {
         Some(shape) => shape,
-        None => return Err(BridgeRefusal::UnknownControl { cmd: h.cmd }),
+        // ★★★ The permitted-but-unmodelled tail, split by WHY it was permitted. A control
+        // admitted by a rule was admitted on the premise that a GSP services it — which
+        // in Mode 2 names our own fake GSP, so the premise is the refusal. The whole
+        // argument, and the guest-side control flow that makes an envelope-level refusal
+        // the only safe answer, is on `BridgeRefusal::GspRuleControlUnserviced`.
+        //
+        // ★ Ordering, and it is load-bearing: this sits AFTER the params-table lookup, so
+        // it can only ever refine the arm that was already a refusal. A control this port
+        // models is answered by its decoder whether or not its command word happens to
+        // have bit 15 set — none of the modelled six does today, and this arm does not
+        // depend on that staying true.
+        None => {
+            return Err(match permit.passthrough_rule() {
+                Some(rule) => BridgeRefusal::GspRuleControlUnserviced { cmd: h.cmd, rule },
+                None => BridgeRefusal::UnknownControl { cmd: h.cmd },
+            });
+        }
     };
     if shape == ControlParams::PageDirNotModelled {
         return Err(BridgeRefusal::PageDirControlNotModelled { cmd: h.cmd });

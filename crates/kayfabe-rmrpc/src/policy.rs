@@ -314,10 +314,28 @@ impl CommandPolicy for GraphPolicy<'_> {
     /// body, which `RpcCommand::reply` zero-fills to the request's own length (the M9
     /// clamp). Empty rather than the request echoed back: reflecting the guest's own bytes
     /// at it under a failing status is precisely `memcpy(resp, cmd, 4096)`
-    /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2737`), and the status we send
-    /// is the one RM answers with `SKIP_COPYOUT`, so the guest does not read the body at
-    /// all. `[open]`, with §4.2's: which `NV_STATUS` each refusal deserves needs an
-    /// `NV_STATUS` table that does not exist, and B4 revisits both together.
+    /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2737`). `[open]`, with §4.2's:
+    /// which `NV_STATUS` each refusal deserves needs an `NV_STATUS` table that does not
+    /// exist, and B4 revisits both together.
+    ///
+    /// ★★ **The zero-filled body is unreachable by the guest, and the mechanism is not
+    /// the one this doc used to name.** It said *"the status we send is the one RM answers
+    /// with `SKIP_COPYOUT`"*. `SKIP_COPYOUT` is real
+    /// (`ogkm-580: src/nvidia/src/kernel/rmapi/control.c:314-318`) but it is one layer
+    /// below and it is **conditional** — it is skipped when the control carries
+    /// `RMCTRL_FLAGS_COPYOUT_ON_ERROR`, a property the guest advertises to us on the wire
+    /// (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:10997-10998`,
+    /// `ogkm-610: :10802-10803`). What actually saves us is one level up and
+    /// unconditional: the refusal rides the RPC **envelope**'s `rpc_result`, so
+    /// `_issueRpcAndWait` returns non-`NV_OK` (`ogkm-580: rpc.c:1994`, `ogkm-610: :2012`)
+    /// and `rpcRmApiControl_GSP`'s whole post-RPC block — the copy-out *and* the control
+    /// cache — never runs at all.
+    ///
+    /// That distinction is load-bearing rather than pedantic, because the cache half of
+    /// that block would make a wrong answer **sticky**: see
+    /// [`BridgeRefusal::GspRuleControlUnserviced`] §3, which reads the branch out of the
+    /// guest's own source. A refusal expressed in the reply *body* instead of the envelope
+    /// would inherit both hazards.
     ///
     /// ★★ **The `Held` arm is load-bearing on the wire, not a convenience.** For a
     /// fragmented `GSP_RM_CONTROL` the driver awaits one reply per fragment — the head at

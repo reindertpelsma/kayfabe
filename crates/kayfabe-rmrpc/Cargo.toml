@@ -24,5 +24,11 @@ kayfabe-core.workspace = true
 # countable in the trace (`gsp_core_bridge.md` §4.2 item 2).
 kayfabe-trace.workspace = true
 
+[dev-dependencies]
+# `tests/gss_legacy_answer.rs` drives `GraphPolicy`, which holds a `&mut Gpu`, so it needs
+# an `Arch` and an `IsolateFactory`. Test-only, and acyclic: `kayfabe-mocks` has no
+# dependency on this crate (`kayfabe-core` dev-deps it the same way).
+kayfabe-mocks.workspace = true
+
 [lints]
 workspace = true

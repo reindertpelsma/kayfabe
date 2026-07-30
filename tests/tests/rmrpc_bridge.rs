@@ -39,7 +39,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use kayfabe_abi::capability::{Denial, DeniedBecause};
+use kayfabe_abi::capability::{Denial, DeniedBecause, PassthroughRule};
 use kayfabe_abi::versions::{BENCH_DRIVER, DriverAbiTable, table_for};
 use kayfabe_abi::wire::AbiError;
 use kayfabe_abi::{ClientKindRuleUnknown, GuestOs};
@@ -4319,7 +4319,6 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
         0x2080_012b, // GPU_PROMOTE_CTX — Mode-2 only, listed, unmodelled
         0x2080_1219, // GR_GET_CTX_BUFFER_INFO — the same
         UNMODELLED_CMD,
-        u32::MAX, // permitted by the GSS-legacy rule, not by a row
     ] {
         let body = w::control_body(spd::C, spd::DEV, cmd, 0, w::RMAPI_RPC_FLAGS_NONE, &[]);
         assert_eq!(
@@ -4328,6 +4327,21 @@ fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
             "cmd {cmd:#x}",
         );
     }
+    // ★★ `u32::MAX` was in that list, annotated *"permitted by the GSS-legacy rule, not
+    // by a row"* — and that annotation is now the variant. A control admitted by a RULE
+    // rather than a row was admitted on nvproxy's premise that a GSP services it, which
+    // in Mode 2 names our own fake GSP; `BridgeRefusal::GspRuleControlUnserviced` carries
+    // the argument and the guest-side control flow. The split is asserted here rather
+    // than merged away because the two are separately countable in the census, and
+    // `crates/kayfabe-rmrpc/tests/gss_legacy_answer.rs` is where it is pinned in full.
+    let body = w::control_body(spd::C, spd::DEV, u32::MAX, 0, w::RMAPI_RPC_FLAGS_NONE, &[]);
+    assert_eq!(
+        xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)),
+        Err(BridgeRefusal::GspRuleControlUnserviced {
+            cmd: u32::MAX,
+            rule: PassthroughRule::GssLegacy,
+        }),
+    );
     // …and the ones the boundary refuses outright never reach the params table. This is
     // the half of the old list that moved, and it must not be able to move back: a
     // `ControlNotPermitted` that quietly became `UnknownControl` would mean the gate had

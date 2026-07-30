@@ -340,6 +340,33 @@ pub trait CommandPolicy: Send {
 /// question about each control's semantics, not about the transport, and it is
 /// [`crate::CommandPolicy`]'s job — but "`EchoOk` is what the C does" was measurably wrong
 /// and is now measurably narrower.
+///
+/// ## ★★★ Not a production policy, and here is the sharpest reason why
+///
+/// This answers **every** command `NV_OK` with the request's own body reflected. For a
+/// control whose params are `[OUT]` the request body is zeros, so the guest is handed a
+/// plausible, well-formed, entirely fictional answer — which is the C's measured
+/// cudart-initialisation failure exactly: the library read `0` where it expected data and
+/// aborted **silently**, the rejection living in the reply *payload* rather than in a
+/// status or a log line (`C: src/qemu/nvkvm_gpu_emul.c:3335-3360`).
+///
+/// On the Mode-2 transport that failure is worse than the C ever observed, for a class of
+/// control the guest treats specially. A control the guest's RM considers GSP-implemented
+/// gets a dedicated cache path — set on a successful reply
+/// (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11098-11103`, `ogkm-610: :10903-10908`)
+/// and consulted before the next send, which then returns without reaching the wire
+/// (`ogkm-580: rpc.c:10962-10971`, `ogkm-610: :10766-10775`). So an `NV_OK` answer is not
+/// one bad reply; it can be **persisted in the guest and served forever**, invisibly to
+/// any recorder on this side, because the traffic stops arriving. Whether it persists is
+/// decided by flag fields *the replying GSP fills in the reply body* — `EchoOk` avoids it
+/// only by the accident of reflecting a request in which the guest zeroed them itself.
+///
+/// The production policy (`kayfabe_rmrpc::GraphPolicy`) therefore answers an unmodelled
+/// control with a non-zero **envelope** `rpc_result`, which short-circuits the guest ahead
+/// of both the copy-out and the cache
+/// (`ogkm-580: rpc.c:1994`, `ogkm-610: :2012`); its `BridgeRefusal::GspRuleControlUnserviced`
+/// carries the whole argument. Keep `EchoOk` for what it is — the C-baseline transport
+/// proof, and the fixture a test uses to show that the baseline would be wrong.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct EchoOk;
 
