@@ -336,6 +336,7 @@ fn host_verb_surface_does_not_grow_per_engine() {
             RmVerb::Control { .. } => "Control",
             RmVerb::ExportSurface { .. } => "ExportSurface",
             RmVerb::CeCopy { .. } => "CeCopy",
+            RmVerb::FbRead { .. } => "FbRead",
         }
     };
 

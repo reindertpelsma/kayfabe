@@ -148,6 +148,18 @@ pub enum Request {
         /// [`kayfabe_isolate::CeExecutor::Ours`].
         by_ours: u8,
     },
+    /// [`kayfabe_isolate::RmBackend::fb_read`] — read the fabricated aperture (`#102`
+    /// stage C3). The reply carries the bytes **and** whether the aperture covered the
+    /// range at all, because those are two different facts and the second one is what
+    /// the walker turns into `MISS = FAULT`.
+    FbRead {
+        /// Guest-framebuffer-physical address to read.
+        phys: u64,
+        /// How many bytes. Bounded by the frame limit on the way back, not here — a
+        /// request that asks for more than a reply can carry is refused by the child
+        /// with a named error rather than truncated.
+        len: u64,
+    },
     /// [`kayfabe_isolate::RmBackend::export_surface`].
     ExportSurface {
         /// Memory object to export, raw.
@@ -181,6 +193,18 @@ pub enum Reply {
     Va(u64),
     /// An exported surface.
     Surface(u64),
+    /// ★★★ #102 stage C3 — the answer to a [`Request::FbRead`].
+    ///
+    /// Two fields, not one, and the second is not a length: `covered == false` means the
+    /// isolate's fabricated aperture does not reach that address, which the walker turns
+    /// into a loud `MISS = FAULT`. Encoding it as "zero bytes came back" would make it
+    /// indistinguishable from a page of genuine zeros, and those are opposite facts.
+    FbBytes {
+        /// Whether a mapped extent covered the whole requested range.
+        covered: bool,
+        /// The bytes. Empty when `covered` is false.
+        bytes: Vec<u8>,
+    },
     /// The verb failed.
     Failed(WireError),
 }
@@ -455,6 +479,11 @@ impl Envelope {
                 out.push(*src_is_const);
                 out.push(*by_ours);
             }
+            Request::FbRead { phys, len } => {
+                out.push(14);
+                out.extend_from_slice(&phys.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+            }
         }
         out
     }
@@ -520,6 +549,10 @@ impl Envelope {
                 src_is_const: c.u8("ce src kind")?,
                 by_ours: c.u8("ce engine")?,
             },
+            14 => Request::FbRead {
+                phys: c.u64("fb phys")?,
+                len: c.u64("fb len")?,
+            },
             tag => {
                 return Err(ProtoError::UnknownTag {
                     what: "request",
@@ -559,6 +592,11 @@ impl Reply {
             Reply::Surface(s) => {
                 out.push(6);
                 out.extend_from_slice(&s.to_le_bytes());
+            }
+            Reply::FbBytes { covered, bytes } => {
+                out.push(8);
+                out.push(u8::from(*covered));
+                put_blob(&mut out, bytes);
             }
             Reply::Failed(e) => {
                 out.push(7);
@@ -606,6 +644,13 @@ impl Reply {
                     });
                 }
             }),
+            8 => Reply::FbBytes {
+                // ★ Any non-zero byte is `true`. A peer that wrote 2 said "covered", and
+                // refusing the frame over a boolean's spelling would turn a harmless
+                // encoding difference into a dead isolate.
+                covered: c.u8("fb covered")? != 0,
+                bytes: c.blob("fb bytes")?,
+            },
             tag => return Err(ProtoError::UnknownTag { what: "reply", tag }),
         };
         c.finish()?;
@@ -775,7 +820,65 @@ mod tests {
                 src_is_const: 1,
                 by_ours: 1,
             },
+            Request::FbRead {
+                phys: 0x1000_4000,
+                len: 4096,
+            },
         ]
+    }
+
+    /// ★★ **The name of a request's variant, as an exhaustive match.**
+    ///
+    /// This exists so that `every_request()` cannot silently shrink. A list-quantified
+    /// gate is only as strong as its list, and the list is hand-written: adding a variant
+    /// without adding a sample would leave the round-trip proved about everything except
+    /// the new thing. Adding a variant breaks *this* match at compile time, and the
+    /// coverage test below then fails until the sample exists.
+    fn request_tag(r: &Request) -> &'static str {
+        match r {
+            Request::Alloc { .. } => "Alloc",
+            Request::AllocVaSpace => "AllocVaSpace",
+            Request::AllocSysmem { .. } => "AllocSysmem",
+            Request::AllocChannel { .. } => "AllocChannel",
+            Request::AllocEngineObject { .. } => "AllocEngineObject",
+            Request::Schedule { .. } => "Schedule",
+            Request::Free { .. } => "Free",
+            Request::Control { .. } => "Control",
+            Request::MapGpuVa { .. } => "MapGpuVa",
+            Request::UnmapGpuVa { .. } => "UnmapGpuVa",
+            Request::RingDoorbell { .. } => "RingDoorbell",
+            Request::CeCopy { .. } => "CeCopy",
+            Request::FbRead { .. } => "FbRead",
+            Request::ExportSurface { .. } => "ExportSurface",
+        }
+    }
+
+    #[test]
+    fn the_round_trip_sample_covers_every_request_variant() {
+        let seen: std::collections::BTreeSet<&'static str> =
+            every_request().iter().map(request_tag).collect();
+        assert_eq!(
+            seen,
+            [
+                "Alloc",
+                "AllocChannel",
+                "AllocEngineObject",
+                "AllocSysmem",
+                "AllocVaSpace",
+                "CeCopy",
+                "Control",
+                "ExportSurface",
+                "FbRead",
+                "Free",
+                "MapGpuVa",
+                "RingDoorbell",
+                "Schedule",
+                "UnmapGpuVa",
+            ]
+            .into_iter()
+            .collect(),
+            "the sample list and the variant list must be the same set"
+        );
     }
 
     #[test]
@@ -803,6 +906,18 @@ mod tests {
             Reply::Failed(WireError::NoMemory),
             Reply::Failed(WireError::Interrupted),
             Reply::Failed(WireError::Other(0x56)),
+            // ★ BOTH arms of the fabricated-aperture reply. `covered: false` with no bytes
+            // is a MISS, `covered: true` with bytes is a page — a wire that dropped the
+            // flag would round-trip the second correctly and turn the first into an empty
+            // page, which is the one answer this seam must never give.
+            Reply::FbBytes {
+                covered: false,
+                bytes: Vec::new(),
+            },
+            Reply::FbBytes {
+                covered: true,
+                bytes: vec![0xA5; 4096],
+            },
         ];
         for r in replies {
             assert_eq!(Reply::decode(&r.encode()), Ok(r));

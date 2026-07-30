@@ -163,6 +163,27 @@ pub struct Vas {
     /// Captured page-table pages of this VAS (#13's per-PDB `m2_cpt` equivalent;
     /// populated by the CE-PT-write capture feed once the mmu port lands).
     pub pt_pages: BTreeSet<u64>,
+    /// ★★★ #102 stage C3 — **the forward-populated page-table metadata chain**: for each
+    /// known table page, the level it sits at and the virtual address its entry 0
+    /// describes.
+    ///
+    /// A page of eight-byte words is the same bytes at every level; what it *means*
+    /// depends entirely on where in the tree it hangs, so a direct decode of a dirtied
+    /// page cannot happen without this. The C carries the same triple in `m2_cpt` and
+    /// fills it from a **discovery sweep** that it *"reset + rebuilt on every recorded
+    /// walk"* (`C: nvkvm_gpu_emul.c:604`).
+    ///
+    /// ★ This port does not port that sweep, and does not need to. Level 0 is a
+    /// **declared** fact — a PDB *is* its own root page — and every decode then hands each
+    /// child its own level and `vabase`, so the chain grows forward from the root, one
+    /// observed write at a time. Nothing here is derived backwards from a physical
+    /// address, and nothing sweeps a tree looking for what might be a page table.
+    ///
+    /// Keyed by physical page address; the root is **not** stored, because a fact that is
+    /// declared does not need a cache that can disagree with it. Bounded by
+    /// `kayfabe_fwd::MAX_PT_META`, which is guest-influenced and therefore a boundary-1
+    /// concern rather than a tidiness one.
+    pub pt_meta: BTreeMap<u64, kayfabe_mmu::walker::PtPage>,
     /// ★ G6 (§12.20): the live [`GpaBlock`] behind each **host-published** VA — the
     /// token that lets that GPA range be given BACK to the proc's arena instead of
     /// leaking until the whole proc is reaped. Keyed by VA, exactly like the binding it
@@ -197,6 +218,7 @@ impl Vas {
             table: AddressTable::new(),
             host_vas: None,
             pt_pages: BTreeSet::new(),
+            pt_meta: BTreeMap::new(),
             blocks: BTreeMap::new(),
             rpc_bound: BTreeSet::new(),
             promote_bound: BTreeSet::new(),

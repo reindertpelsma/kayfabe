@@ -1283,6 +1283,63 @@ impl SharedDevice {
         Ok(out)
     }
 
+    /// ★★★ **The page-table decode pass** (`#102` stage C3) for one proc, in the three
+    /// phases R1 forces — the shell half of `kayfabe_fwd::plan_pt_decode` /
+    /// `run_pt_decode` / `commit_pt_decode`.
+    ///
+    /// Called at the guest's own commit point: the **CE release semaphore**, which is
+    /// where the guest declares its page-table writes complete
+    /// (`C: nvkvm_gpu_emul.c:8676-8695`). Not at an invalidate — `#102` stage C2 measured
+    /// that there is no read-at-invalidate on this path (§13.4), so this pass is the only
+    /// thing that turns a witnessed write into a mapping.
+    ///
+    /// **Plan** (rank 1): drain the proc's dirtied page-table pages. **Execute** (no
+    /// lock): decode them over `worker`'s isolate, one round trip per page.
+    /// **Commit** (rank 1): re-resolve each `Vas` (R5) and forward-populate.
+    ///
+    /// ★ **`fmt` is a parameter, and that is R1 made visible.** The format lives in the
+    /// spine behind the device read lock, so a `&dyn GmmuFmt` obtained from it cannot
+    /// outlive the guard — and the execute phase must run with no guard held. Having to
+    /// pass it in is the type system stating the constraint rather than a comment stating
+    /// it.
+    ///
+    /// Returns `None` if `pid` is not live.
+    ///
+    /// # Panics
+    /// If a ranked lock is somehow held across the execute phase: `Worker::fb_read`
+    /// asserts it, and the assertion is the reason the read goes through a worker.
+    pub fn decode_pt_writes(
+        &self,
+        pid: ProcId,
+        fmt: &dyn kayfabe_arch::GmmuFmt,
+        worker: &mut kayfabe_isolate::Worker,
+    ) -> Option<kayfabe_fwd::PtDecodeOutcome> {
+        // PLAN — rank 1, the owner's lock and no other.
+        let plan = self.with_proc_mut(pid, kayfabe_fwd::plan_pt_decode)?;
+        // EXECUTE — no lock held. `with_proc_mut` released it above, and the borrow of
+        // the plan is of owned data, so nothing keeps a guard alive into here (★ a `Drop`
+        // is a call site: `plan` owns `Vec`s of plain values, whose drop touches nothing).
+        let results = {
+            let mut fb = kayfabe_fwd::IsolateFb::new(worker);
+            let r = kayfabe_fwd::run_pt_decode(
+                fmt,
+                &mut fb,
+                &plan.tasks,
+                kayfabe_fwd::PT_DECODE_BUDGET,
+            );
+            (r, fb.transport_error())
+        };
+        // COMMIT — rank 1 again, re-resolving every target (R5).
+        let mut out =
+            self.with_proc_mut(pid, |p| kayfabe_fwd::commit_pt_decode(fmt, p, &results.0))?;
+        // ★ A transport failure is surfaced as its own fact rather than blended into the
+        // walk faults: `Ok(false)` from the isolate is a statement about the GUEST's page
+        // tables, an `Err` is a statement about US, and a caller that cannot tell them
+        // apart debugs the wrong plane.
+        out.transport = results.1;
+        Some(out)
+    }
+
     /// Back `[va, va+len)` in the `(gpu, pdb)` VAS. **Plan**: route via `by_pdb`,
     /// read the Vas's host VAS. **Execute**: host VAS (first touch) + sysmem alloc +
     /// map, lock-free. **Commit**: re-resolve the Vas, adopt the host VAS, carve the

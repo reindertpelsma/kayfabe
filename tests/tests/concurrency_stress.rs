@@ -260,6 +260,11 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
         // A copy-engine sub-copy names the host VAS it runs in, and nothing else that
         // could cross a namespace: its addresses are guest numbers by address identity.
         RmVerb::CeCopy { vas, .. } => own(vas),
+        // ★ A fabricated-aperture read names NO handle at all — that is why it is not a
+        // `VerbPlan` and why the foreign-handle gate has nothing to check on it. Its
+        // containment is the isolate's own aperture mapping, one layer down, not a
+        // namespace-scoped value this sweep could inspect.
+        RmVerb::FbRead { .. } => {}
     }
 }
 

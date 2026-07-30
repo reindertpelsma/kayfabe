@@ -201,6 +201,17 @@ pub enum PteDecode {
         next: u64,
         /// Aperture the next level lives in.
         aperture: Aperture,
+        /// ★★ **Which level the pointed-at table is** — supplied by the format, never
+        /// assumed to be `level + 1` by the walker.
+        ///
+        /// It is `level + 1` for most edges and it is **not** universally: in the
+        /// measured regime the deepest directory's slot names a small-page table *and* a
+        /// big-page table, which are two different rows of
+        /// [`GmmuFmt::level_shift`]'s table with different strides and different entry
+        /// counts (`C: nvkvm_gpu_emul.c:8706-8708`, rows 4 and 5). A walker that
+        /// incremented would decode a 32-entry table as a 512-entry one and read 3 840
+        /// bytes past its end.
+        child_level: u8,
     },
     /// A leaf mapping.
     Leaf {
@@ -213,6 +224,28 @@ pub enum PteDecode {
         /// Guest-visible read-only bit.
         read_only: bool,
     },
+}
+
+/// ★★★ **The geometry of ONE page-table level** — how far apart its entries' virtual
+/// addresses are, and how many of them a table at that level holds.
+///
+/// This is the second half of what a page-table decode needs; the first half is
+/// [`GmmuFmt::decode_entry`], which says what one entry *means*. Without the geometry a
+/// decoder can read an entry but cannot say **which virtual address it describes**, and
+/// a leaf with no VA is not a mapping — which is why the C carries exactly this table
+/// beside its decoder (`C: nvkvm_gpu_emul.c:8706-8708`).
+///
+/// ★ **`entries` is a count, not a size.** The two are not interchangeable: the measured
+/// regime's big-page table holds **32** entries in a page that could hold 512, so
+/// `page_bytes / entry_size` over-reads it by 3 840 bytes. The count is a fact about the
+/// format and it is stated as one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LevelShift {
+    /// Virtual-address bit position at which this level's entry index begins. Entry `i`
+    /// of a table at this level covers `vabase | (i << shift)`.
+    pub shift: u8,
+    /// How many entries a table at this level holds. **Not** derived from a page size.
+    pub entries: u32,
 }
 
 /// Axis-B core: the GMMU format codec + level geometry for one MMU regime.
@@ -232,6 +265,21 @@ pub trait GmmuFmt: Send + Sync {
     fn entry_size(&self, level: u8) -> u8;
     /// Number of levels in a full walk (root..leaf) for this regime.
     fn levels(&self) -> u8;
+    /// ★★★ Geometry of level `level` — [`LevelShift`]. `None` for a level this regime
+    /// does not have.
+    ///
+    /// **`None` is a loud answer, not a default.** A decoder handed a level it cannot
+    /// size must fault; guessing a stride would place every leaf under it at the wrong
+    /// virtual address, and a wrong VA in the address table is a cross-context mapping,
+    /// not a cosmetic error. The #13 lesson stated one level up: an un-enumerated size
+    /// is a loud fault, never a silent drop.
+    ///
+    /// ★ The level numbering is the **regime's own**, ascending from the root, and it
+    /// may contain more rows than [`GmmuFmt::levels`] counts a single walk to be deep:
+    /// where a regime offers two alternative leaf tables (small pages and big pages)
+    /// under one directory, those are two rows, reachable only via
+    /// [`PteDecode::Pde::child_level`].
+    fn level_shift(&self, level: u8) -> Option<LevelShift>;
     /// Decode a raw entry read at `level` into core terms.
     ///
     /// An encoding this regime cannot represent decodes to [`PteDecode::Invalid`];
@@ -480,6 +528,7 @@ kayfabe_util::assert_send_sync!(
     PageSize,
     Aperture,
     PteDecode,
+    LevelShift,
     PushMethod,
     CeWork,
     PushRange,

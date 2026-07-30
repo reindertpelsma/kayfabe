@@ -500,6 +500,35 @@ impl RmBackend for ProxyRmBackend {
         })
     }
 
+    /// ★★★ #102 stage C3. The reply's `covered` flag is carried through **unchanged**:
+    /// the parent does not get to reinterpret "the aperture does not reach there" as an
+    /// error or as zeros, because the walker's `MISS = FAULT` rule is stated over exactly
+    /// this distinction.
+    ///
+    /// A short reply is a **protocol** failure, not a partial read. `buf` is left
+    /// untouched in that case, so a caller that ignored the error cannot then decode
+    /// half-stale bytes.
+    fn fb_read(&mut self, phys: u64, buf: &mut [u8]) -> Result<bool, RmError> {
+        let reply = self.call(Request::FbRead {
+            phys,
+            len: buf.len() as u64,
+        })?;
+        match self.lift(reply)? {
+            Reply::FbBytes {
+                covered: false,
+                bytes,
+            } if bytes.is_empty() => Ok(false),
+            Reply::FbBytes {
+                covered: true,
+                bytes,
+            } if bytes.len() == buf.len() => {
+                buf.copy_from_slice(&bytes);
+                Ok(true)
+            }
+            _ => Err(RmError::Wedged),
+        }
+    }
+
     fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {
         let reply = self.call(Request::ExportSurface {
             memory: memory.raw(),

@@ -308,6 +308,19 @@ fn worker_loop(
     }
 }
 
+/// ★ Largest [`Request::FbRead`] this child will serve, in bytes.
+///
+/// A page-table page is one 4 KiB table; the bound is generous enough that no legitimate
+/// decode meets it and small enough that the reply always fits a frame
+/// ([`crate::proto::FRAME_MAX`] is 1 MiB). It exists because `len` arrives **on the wire**
+/// and is therefore attacker-influenced in every threat model where the parent can be
+/// compromised — `vec![0u8; len]` with an unchecked `len` is a remote allocation.
+const FB_READ_MAX: usize = 1 << 16;
+
+/// The status a too-large [`Request::FbRead`] is refused with. Opaque on the wire and
+/// named here, so a refusal reads as a refusal and never as an empty page.
+const FB_READ_TOO_LARGE: u32 = 0xFB00_0001;
+
 /// Run one verb and shape its answer. The only place the wire vocabulary meets the port's.
 fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
     fn handle(r: Result<HostHandle, RmError>) -> Reply {
@@ -364,6 +377,27 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             Err(e) => failed(e),
         },
         Request::UnmapGpuVa { vas, gpu_va } => unit(rm.unmap_gpu_va(raw(vas), gpu_va)),
+        // ★★★ #102 stage C3 — a read of the fabricated aperture. `len` is peer-supplied,
+        // so it is bounded HERE, before a buffer is allocated: an unbounded `vec![0; len]`
+        // driven by a frame is a remote allocation, and the fact that the peer is our own
+        // parent is not a reason to write code that trusts a length.
+        Request::FbRead { phys, len } => match usize::try_from(len) {
+            Ok(n) if n <= FB_READ_MAX => {
+                let mut buf = vec![0u8; n];
+                match rm.fb_read(phys, &mut buf) {
+                    Ok(true) => Reply::FbBytes {
+                        covered: true,
+                        bytes: buf,
+                    },
+                    Ok(false) => Reply::FbBytes {
+                        covered: false,
+                        bytes: Vec::new(),
+                    },
+                    Err(e) => failed(e),
+                }
+            }
+            _ => failed(RmError::Other(FB_READ_TOO_LARGE)),
+        },
         Request::RingDoorbell { token } => unit(rm.ring_doorbell(token)),
         Request::ExportSurface { memory } => match rm.export_surface(raw(memory)) {
             Ok(s) => Reply::Surface(s.0),
@@ -434,6 +468,57 @@ fn failed(e: RmError) -> Reply {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::loopback::LoopbackShared;
+
+    /// ★★ **A peer-supplied read length is bounded BEFORE a buffer exists.**
+    ///
+    /// `len` arrives on the wire. `vec![0u8; len]` with an unchecked `len` is a remote
+    /// allocation, and the fact that the peer is our own parent is not a reason to write
+    /// code that trusts a length — boundary 2 runs in both directions. The refusal is a
+    /// named status, so it reads as a refusal and never as an empty page.
+    #[test]
+    fn an_oversized_fabricated_aperture_read_is_refused_before_anything_is_allocated() {
+        let shared = LoopbackShared::new(ParkVerb::Nothing).expect("pipe");
+        let mut rm = LoopbackRm::new(IsolateId::new(1, GpuId(0)), shared).expect("dup");
+
+        assert_eq!(
+            execute(
+                &mut rm,
+                Request::FbRead {
+                    phys: 0,
+                    len: (FB_READ_MAX as u64) + 1,
+                },
+            ),
+            Reply::Failed(WireError::Other(FB_READ_TOO_LARGE)),
+        );
+        assert_eq!(
+            execute(
+                &mut rm,
+                Request::FbRead {
+                    phys: 0,
+                    len: 1 << 24
+                }
+            ),
+            Reply::Failed(WireError::Other(FB_READ_TOO_LARGE)),
+            "…and comfortably past the bound, not only one byte past it"
+        );
+
+        // …while an ordinary read reaches the backend, which honestly maps nothing.
+        assert_eq!(
+            execute(
+                &mut rm,
+                Request::FbRead {
+                    phys: 0x1000,
+                    len: 4096,
+                },
+            ),
+            Reply::FbBytes {
+                covered: false,
+                bytes: Vec::new(),
+            },
+            "a MISS is a MISS on the wire — it is not an error and it is not zeros"
+        );
+    }
 
     #[test]
     fn a_complete_argument_list_parses() {

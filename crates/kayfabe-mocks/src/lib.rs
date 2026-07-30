@@ -51,8 +51,8 @@ use std::time::Duration;
 
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
 use kayfabe_arch::{
-    Aperture, Arch, CeWork, DoorbellTarget, GmmuFmt, GmmuVersion, ObjectKind, PageSize, PteDecode,
-    PushMethod, PushRange, PushbufferAbi, UserdModel,
+    Aperture, Arch, CeWork, DoorbellTarget, GmmuFmt, GmmuVersion, LevelShift, ObjectKind, PageSize,
+    PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, HostHandle, Isolate,
@@ -503,13 +503,28 @@ impl PushbufferAbi for MockPushbuffer {
     }
 }
 
-/// Fake MMU format: VER2-shaped geometry, fake entry encoding
-/// (bit0 = valid, bit1 = leaf, bit2 = sysmem aperture, phys in bits [51:12]).
+/// Fake MMU format: **real VER2 geometry, fake entry encoding**
+/// (bit0 = valid, bit1 = leaf, bit2 = sysmem aperture, bit3 = "the big-page sub-table"
+/// on a directory entry, phys in bits [51:12]).
+///
+/// ★ The split is deliberate and is what makes this double useful for the page-table
+/// decoder: **the geometry is not fake.** [`MockGmmuFmt::level_shift`] is the C's own
+/// table transcribed value-for-value (`C: nvkvm_gpu_emul.c:8706-8708`), because the
+/// decoder's whole job is to turn *(table page, level)* into *(virtual address, leaf)*
+/// and a made-up stride would make every test about that a test about nothing. Only the
+/// **bit layout** of an entry is invented, and that is the half a decoder is
+/// architecturally forbidden to know anyway (`PteDecode`'s no-raw-bits discipline).
 #[derive(Debug, Default)]
 pub struct MockGmmuFmt;
 
 /// Mockingbird leaf sizes (includes a huge leaf so the #13 "every real page size"
 /// discipline is exercised by construction).
+///
+/// ★ These are exactly `1 << shift` of [`MOCK_LEVELS`] rows 4, 5, 3 and 2 — the four
+/// levels at which the measured regime can put a leaf. `MockGmmuFmt::decode_entry` sizes
+/// a leaf from its level for that reason, so a leaf found at a level with **no**
+/// corresponding page size (rows 0 and 1) produces a size that is not in this list —
+/// which is precisely the un-enumerated size the walker must fault on rather than drop.
 pub const MOCK_PAGE_SIZES: [PageSize; 4] = [
     PageSize(0x1000),
     PageSize(0x10000),
@@ -517,11 +532,66 @@ pub const MOCK_PAGE_SIZES: [PageSize; 4] = [
     PageSize(0x2000_0000),
 ];
 
+/// ★★★ **The C's level table, transcribed** (`C: nvkvm_gpu_emul.c:8706-8708`):
+/// `{47,512},{38,512},{29,512},{21,256},{12,512},{16,32}`.
+///
+/// Row `n` is the C's `m2_cpt` level `n`: 0..=2 are the three 8-byte page directories,
+/// 3 is the dual-entry directory (16-byte slots, 256 of them), and 4 / 5 are the **two
+/// alternative leaf tables** under it — small pages and big pages. 4 and 5 are siblings,
+/// not a sequence, which is why an edge into one of them carries its own
+/// [`PteDecode::Pde::child_level`] and the walker never increments.
+pub const MOCK_LEVELS: [LevelShift; 6] = [
+    LevelShift {
+        shift: 47,
+        entries: 512,
+    },
+    LevelShift {
+        shift: 38,
+        entries: 512,
+    },
+    LevelShift {
+        shift: 29,
+        entries: 512,
+    },
+    LevelShift {
+        shift: 21,
+        entries: 256,
+    },
+    LevelShift {
+        shift: 12,
+        entries: 512,
+    },
+    LevelShift {
+        shift: 16,
+        entries: 32,
+    },
+];
+
+/// The level whose slots are 16 bytes wide (the dual-entry directory).
+pub const MOCK_DUAL_LEVEL: u8 = 3;
+
 impl MockGmmuFmt {
     /// Encode a fake leaf entry (test helper; inverse of `decode_entry`).
     #[must_use]
     pub fn encode_leaf(phys: u64, sysmem: bool) -> u128 {
         u128::from((phys & 0x000f_ffff_ffff_f000) | 0b011 | if sysmem { 0b100 } else { 0 })
+    }
+
+    /// Encode a fake directory entry pointing at `next`.
+    ///
+    /// `big` is the mock's one-bit stand-in for the measured regime's dual slot: set, an
+    /// entry at [`MOCK_DUAL_LEVEL`] names the **big-page** table (level 5, 32 entries,
+    /// 64 KiB stride) instead of the small-page one (level 4, 512 entries, 4 KiB). It
+    /// exists so `child_level` has a live value other than `level + 1`; a field whose
+    /// only observed value is the default is a field no test can be wrong about.
+    #[must_use]
+    pub fn encode_pde(next: u64, sysmem: bool, big: bool) -> u128 {
+        u128::from(
+            (next & 0x000f_ffff_ffff_f000)
+                | 0b001
+                | if sysmem { 0b100 } else { 0 }
+                | if big { 0b1000 } else { 0 },
+        )
     }
 }
 
@@ -532,11 +602,17 @@ impl GmmuFmt for MockGmmuFmt {
     fn page_sizes(&self) -> &[PageSize] {
         &MOCK_PAGE_SIZES
     }
-    fn entry_size(&self, _level: u8) -> u8 {
-        8
+    fn entry_size(&self, level: u8) -> u8 {
+        // The dual-entry directory's slots are 16 bytes wide; every other level's are 8.
+        // `256 * 16` and `512 * 8` are both exactly one 4 KiB page, which is the fact
+        // that makes the geometry self-consistent.
+        if level == MOCK_DUAL_LEVEL { 16 } else { 8 }
     }
     fn levels(&self) -> u8 {
         5
+    }
+    fn level_shift(&self, level: u8) -> Option<LevelShift> {
+        MOCK_LEVELS.get(usize::from(level)).copied()
     }
     fn decode_entry(&self, level: u8, raw: u128) -> PteDecode {
         let raw = raw as u64;
@@ -550,8 +626,15 @@ impl GmmuFmt for MockGmmuFmt {
             Aperture::Vidmem
         };
         if raw & 0b10 != 0 {
-            // Fake rule: leaf size depends on the level it appears at.
-            let size = MOCK_PAGE_SIZES[usize::from(4u8.saturating_sub(level).min(3))];
+            // A leaf at level L maps exactly the bytes L's entries stride — that is what
+            // a leaf at that level MEANS, and it is why the 512 MiB leaf lives at the
+            // 29-bit row. Deliberately NOT clamped into `MOCK_PAGE_SIZES`: a leaf at a
+            // level the regime has no page size for must reach the walker as the size it
+            // literally claims, so the "un-enumerated size is a loud fault" rule has
+            // something to fire on.
+            let size = self.level_shift(level).map_or(PageSize(0), |g| {
+                PageSize(1u64.checked_shl(u32::from(g.shift)).unwrap_or(0))
+            });
             PteDecode::Leaf {
                 phys,
                 aperture,
@@ -562,6 +645,11 @@ impl GmmuFmt for MockGmmuFmt {
             PteDecode::Pde {
                 next: phys,
                 aperture,
+                child_level: if level == MOCK_DUAL_LEVEL && raw & 0b1000 != 0 {
+                    5
+                } else {
+                    level + 1
+                },
             }
         }
     }
@@ -966,6 +1054,18 @@ pub enum RmVerb {
         /// The sub-copy, exactly as the plan built it.
         sub: CeSubCopy,
     },
+    /// ★★★ #102 stage C3 — one read of the fabricated aperture, and **whether it was
+    /// covered**. The `covered` field is recorded because "the walker faulted" and "the
+    /// walker was never asked" are two different failures and a log of reads alone
+    /// cannot tell them apart.
+    FbRead {
+        /// The physical address read.
+        phys: u64,
+        /// How many bytes were asked for.
+        len: u64,
+        /// Whether a declared aperture extent covered the range.
+        covered: bool,
+    },
     /// Intent: a host memory object exported as a presentable surface (the display
     /// seam's producer half, GR-2b — the isolate-side PRIME export).
     ExportSurface {
@@ -1016,6 +1116,8 @@ pub enum VerbKind {
     RingDoorbell,
     /// [`RmBackend::ce_copy`].
     CeCopy,
+    /// [`RmBackend::fb_read`].
+    FbRead,
     /// [`RmBackend::export_surface`].
     ExportSurface,
 }
@@ -1757,6 +1859,23 @@ pub struct RmRecorder {
     /// no isolation test should read it as one (isolation lives in the handle namespace
     /// and the per-`Vas` host VAS, which are unchanged).
     ce_mem: BTreeMap<u64, u8>,
+    /// ★★★ #102 stage C3 — **the extents of the FABRICATED APERTURE** this double models
+    /// an isolate mapping of, as `(base, len)` ranges.
+    ///
+    /// [`RmBackend::fb_read`] serves a range only if one of these covers it whole. That
+    /// is the entire reason the field exists: [`RmRecorder::ce_mem`] is sparse-zero, so
+    /// without an explicit extent every address in the 64-bit space would read as a page
+    /// of zeros and the walker's `MISS = FAULT` arm could **never fire**. A guard that
+    /// cannot fire is not a guard, and this one guards the rule the whole stage rests on.
+    ///
+    /// ★ It is a *fixture knob*, not a design fact. Where the real aperture begins and
+    /// how big it is, on a real host, is not written down anywhere in this tree and is
+    /// deliberately not invented here — see `HostRmBackend::fb_read`, which refuses for
+    /// exactly that reason. Tests declare what they mean to model.
+    ///
+    /// Empty by default: a double that had not been told it maps anything must not
+    /// pretend it does.
+    pub fb_aperture: Vec<(u64, u64)>,
 }
 
 /// ★ **The acquire/release ledger** — every host resource the mock handed out, and
@@ -1837,6 +1956,24 @@ impl RmRecorder {
     /// Forget every byte — so two runs of the same copy start from the same state.
     pub fn ce_clear(&mut self) {
         self.ce_mem.clear();
+    }
+
+    /// ★ Declare that the modelled isolate maps `[base, base+len)` of the fabricated
+    /// aperture (see [`RmRecorder::fb_aperture`]).
+    pub fn fb_declare(&mut self, base: u64, len: u64) {
+        self.fb_aperture.push((base, len));
+    }
+
+    /// Does a declared aperture extent cover `[phys, phys+len)` **whole**?
+    ///
+    /// Whole, not partially: a half-served page-table page is a page whose tail decodes
+    /// as zeros, which is the one answer this seam is forbidden to give.
+    #[must_use]
+    pub fn fb_covers(&self, phys: u64, len: u64) -> bool {
+        let end = u128::from(phys) + u128::from(len);
+        self.fb_aperture.iter().any(|&(b, l)| {
+            u128::from(b) <= u128::from(phys) && end <= u128::from(b) + u128::from(l)
+        })
     }
 
     /// Forget one range. The narrow form matters for a sweep: re-seeding a whole source
@@ -2493,6 +2630,38 @@ impl RmBackend for MockRmBackend {
         }
         self.record(RmVerb::CeCopy { vas, sub });
         Ok(())
+    }
+
+    /// ★★★ #102 stage C3 — the fabricated aperture, read back.
+    ///
+    /// The bytes come from the **same** [`RmRecorder::ce_mem`] that
+    /// [`RmBackend::ce_copy`]'s `Ours` arm wrote them into, and that identity is the
+    /// whole model: §12.2's ruling is that the content lives in the isolate's mapping of
+    /// the fabricated aperture *because we are the ones who wrote it there*. A separate
+    /// store here would be modelling a different design.
+    ///
+    /// Coverage is a *declared* extent ([`RmRecorder::fb_aperture`]), not "anything the
+    /// sparse map has a byte for": an aperture covers addresses nobody has written yet,
+    /// and a page of genuine zeros inside it is a real answer.
+    fn fb_read(&mut self, phys: u64, buf: &mut [u8]) -> Result<bool, RmError> {
+        let _client = self.gate(VerbKind::FbRead)?;
+        let len = buf.len() as u64;
+        let covered = {
+            let rec = self.recorder.lock().expect("recorder");
+            let covered = rec.fb_covers(phys, len);
+            if covered {
+                for (i, b) in buf.iter_mut().enumerate() {
+                    *b = rec
+                        .ce_mem
+                        .get(&phys.wrapping_add(i as u64))
+                        .copied()
+                        .unwrap_or(0);
+                }
+            }
+            covered
+        };
+        self.record(RmVerb::FbRead { phys, len, covered });
+        Ok(covered)
     }
 
     fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {

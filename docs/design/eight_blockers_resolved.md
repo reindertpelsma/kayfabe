@@ -880,3 +880,106 @@ backend is `NOT_ON_THIS_RUNG` in `HostRmBackend` — it needs the isolate's mapp
 fabricated aperture, which is exactly what C3 builds. The `HostCe` arm is refused there
 for the same reason `ring_doorbell` is. Returning `Ok(())` for a copy that moved no byte
 is the forged-completion failure `mode2_real_forward_not_fake` forbids.
+
+## 14. ★★★ STAGE C3 — BUILT (2026-07-30). `FbRead`'s production implementation, the
+decoder, and the one guard that is honestly not built
+
+### 14.1 What `FbRead` reads from, and why that is the isolate
+
+`kayfabe_fwd::IsolateFb` is the production [`walker::FbRead`] — the seam's first
+implementor. It holds **a borrow of a checked-out `Worker` and two counters**, and every
+read is `RmBackend::fb_read`, a round trip to the isolate's mapping of the **fabricated
+aperture**.
+
+That is §12.2 made structural. The content lives in the isolate because §12's criterion is
+the *address*: an operand in space we invented is unrepresentable to a real engine, so
+that copy is performed by us, in the isolate — and therefore **every byte in the
+fabricated aperture was written by us**. The read side and the write side are the same
+memory. `FbRead` has **no method that hands content in**, so "the core acquired a store of
+device memory" (§11.6 Option 3, rejected) is not a state this type can drift into.
+
+★★ The bound is unchanged and is checked at the seam's doc: there is exactly one read
+verb and it reads **the fabricated aperture only** — never "every CE destination". No
+verb here reads *representable* memory, and a caller wanting one has moved the boundary,
+not widened a signature.
+
+★ A **transport** failure and an **aperture miss** are kept apart
+(`IsolateFb::transport_error()` vs `IsolateFb::misses()`). Both make a read fail and both
+make the walker fault; if the pass could not tell them apart, a broken socket would send
+someone to debug a guest's page tables.
+
+### 14.2 What the decoder does, and what it refuses
+
+`GmmuFmt::level_shift(level) -> Option<LevelShift{shift, entries}>` is the C's table
+(`C: :8706-8708`) as an Axis-B seam; `walker::decode_page` reads one table page in a
+single round trip and turns each slot into a child (`PtPage` carrying **its own** level
+and `vabase`) or a `DecodedLeaf`. `decode_subtree` descends, bounded.
+
+It refuses, by name and loudly: `Unbacked` (**MISS = FAULT** — never zeros, which is
+exactly what the C's `nvkvm_pt_rd64` returns for an unreadable page, `C: :4891-4904`),
+`NoSuchLevel`, `BadGeometry`, `UnknownLeafSize` (#13's corollary L3), `VaOverflow`,
+`BudgetExhausted`, `TooDeep`. Nothing anywhere reverse-resolves a physical address into a
+virtual one.
+
+★ **`PteDecode::Pde` grew `child_level`**, because `level + 1` is false on the measured
+regime: the deepest directory names a small-page table *and* a big-page table, rows 4 and
+5, with different strides and different entry counts. A walker that incremented would read
+a 32-entry table as a 512-entry one.
+
+★ **The metadata chain is forward-populated and the root is a declared fact.** `Vas`
+gained `pt_meta: {page -> PtPage}`; level 0 is `pdb & !0xfff` and needs no storage. The C
+filled the same triple from a discovery sweep it *"reset + rebuilt on every recorded
+walk"* (`C: :604`); this port does not port that sweep.
+
+### 14.3 The 512 MiB leaf: decode and policy, separated in code and in test
+
+`decode_page` **resolves** it, exactly as `walk_pdb_root` does (`C: :4949`).
+`walker::leaf_disposition` — a separate function, the only policy in the module — answers
+`Drop(DropReason::WholeFbIdentityAlias)`, and `walker::populate` is where that runs. The
+predicate is *"this leaf maps the regime's largest enumerated page size"*, which is the
+C's own identification of the alias (*"identity-maps the WHOLE FB heap into its own VAS at
+the largest page size"*, `C: :4941-4944`) rather than a hard-coded 512 MiB in a logic
+crate.
+
+★★ The separation is **measured**, not asserted: poisoning the walker to skip the alias
+fails the walker test and **not** the policy test; poisoning the policy to always bind
+fails the policy test and **not** the walker test. Two poisons, two disjoint failures.
+
+### 14.4 The pass, and R1/R3/R5
+
+`plan_pt_decode` (rank 1, drains the dirty set) → `run_pt_decode` (**no lock**; this is
+the phase that blocks) → `commit_pt_decode` (rank 1, re-resolves by `(gpu, pdb)`).
+`kayfabe_rt::SharedDevice::decode_pt_writes` is the shell half.
+
+★ R1 is enforced rather than reviewed: `Worker::fb_read` runs the same
+`lockwitness::assert_lock_free` every host verb runs, so a shell that decoded under a lock
+panics on the first page.
+
+★ `fmt` is a **parameter** of the shell method, and that is R1 made visible: a
+`&dyn GmmuFmt` obtained from the spine cannot outlive the device read guard, and the
+execute phase must hold none.
+
+★ An unlinked page is **deferred**, not lost (`PtDecodePlan::deferred`). This is §12.1(i)
+end to end: its bytes are already ours, and the descent reaches it when the link — itself
+a witnessed write — arrives.
+
+### 14.5 ⚠ NOT BUILT, and the exact measurement owed
+
+`HostRmBackend::fb_read` is `NOT_ON_THIS_RUNG`. It needs the isolate's own **VRAM-backed
+mapping** of the fabricated aperture: an RM allocation of host video memory plus a CPU
+mapping of it, held for the isolate's life. Neither exists, and **no GPU exists to write
+it against** (the rented boxes were reclaimed on 2026-07-30).
+
+**Owed, on a host with a real device:** allocate the aperture's backing object, CPU-map it
+inside the isolate, write a known pattern through `CeExecutor::Ours`, read it back through
+`fb_read` — the bytes must be identical — and read an address outside the mapped extent,
+which must answer `Ok(false)` and **not** zeros.
+
+★ **A second fact that is not written down anywhere in this tree**, and was deliberately
+not invented: where the fabricated aperture *begins* and how large it is. The design does
+not need it (the core asks and is told yes/no), but the real backend does, and that is the
+second reason `HostRmBackend::fb_read` refuses rather than guesses.
+
+Also untested, and named rather than claimed: `ProxyRmBackend::fb_read`'s **short-reply**
+refusal. It is only reachable from a child that lies about a byte count, and no
+adversarial-child fixture exists.

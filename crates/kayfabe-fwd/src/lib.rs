@@ -87,7 +87,14 @@ use kayfabe_mmu::AddressTable;
 use kayfabe_mmu::{AddressFault, Binding};
 use kayfabe_vmm::{FbMeta, IrqSpec, Present, PresentError, SurfaceHandle, Vmm, VmmError};
 
+mod ptdecode;
 mod trace;
+
+#[doc(inline)]
+pub use ptdecode::{
+    IsolateFb, MAX_PT_META, PT_DECODE_BUDGET, PtDecodeOutcome, PtDecodePlan, PtDecodeResult,
+    PtDecodeTask, commit_pt_decode, plan_pt_decode, pt_meta_of, run_pt_decode,
+};
 
 /// The MSI-X vector completions are raised on. Abstract placeholder until the
 /// interrupt-tree model ports (`kayfabe-regs`-equivalent); the mocks assert on it.

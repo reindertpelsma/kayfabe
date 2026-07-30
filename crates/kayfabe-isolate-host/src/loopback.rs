@@ -276,6 +276,23 @@ impl RmBackend for LoopbackRm {
         Ok(())
     }
 
+    /// ★ **This fixture models no device memory, and says so.**
+    ///
+    /// `Ok(false)` is the honest answer for an isolate whose fabricated aperture maps
+    /// nothing — and it is the *correct* one, not a stub: the walker turns it into a loud
+    /// `MISS = FAULT`, which is exactly what should happen when the content source has no
+    /// content. Growing a byte store here is the thing this file's own header refuses
+    /// ("a fixture that grows toward being a driver becomes the thing the design gets
+    /// validated against"); the byte-level model lives in `kayfabe_mocks::MockRmBackend`,
+    /// beside the copies that write it.
+    ///
+    /// What it still proves, and is the reason it is not `Err`: the verb crosses the real
+    /// socket, into the real child process, and back.
+    fn fb_read(&mut self, _phys: u64, _buf: &mut [u8]) -> Result<bool, RmError> {
+        self.verb(false)?;
+        Ok(false)
+    }
+
     fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {
         self.known(memory)?;
         let h = self.verb(false)?;

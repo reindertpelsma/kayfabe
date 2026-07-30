@@ -429,6 +429,43 @@ pub trait RmBackend: Send + Sync {
     /// orphans to unwind; the caller's evidence is the sub-copy index that failed.
     fn ce_copy(&mut self, vas: HostHandle, sub: CeSubCopy) -> Result<(), RmError>;
 
+    /// ★★★ **Read `buf.len()` bytes of the FABRICATED APERTURE** at guest-framebuffer
+    /// physical address `phys` — the page-table decoder's byte source
+    /// (`eight_blockers_resolved.md` §12.2, `#102` stage C3).
+    ///
+    /// ## Why this verb exists, and why it is bounded to *fabricated* memory
+    ///
+    /// §12's ruling decomposes a copy-engine request by **representability**: what a real
+    /// engine can be pointed at goes to real hardware, and what it cannot — an operand in
+    /// space *we* invented — is performed by us, [`CeExecutor::Ours`], **in the isolate**.
+    /// The consequence the ruling then draws is the whole reason for this method: every
+    /// byte written into fabricated space was written *by us*, so the content of the
+    /// guest's page tables is already in the isolate's own mapping of that aperture. This
+    /// is the read half of the write [`RmBackend::ce_copy`]'s `Ours` arm performs.
+    ///
+    /// ★★ **The bound is the safety property.** We shadow the fabricated aperture *only*
+    /// — memory we invented and therefore already own — never "every copy destination".
+    /// Generalising past that is what made a core-owned content store collapse (§11.6
+    /// Option 3, rejected). There is deliberately no verb here that reads *representable*
+    /// memory: if a caller ever wants one, the boundary has moved and the design has to
+    /// be re-argued, not the signature widened.
+    ///
+    /// ## The three answers, and why "not covered" is not an error
+    ///
+    /// - `Ok(true)` — served; `buf` holds the bytes.
+    /// - `Ok(false)` — **this isolate's fabricated aperture does not cover the range.**
+    ///   A guest's page table naming a physical page outside it is an ordinary guest
+    ///   fact, not a malfunction, and the walker turns it into a loud
+    ///   `kayfabe_mmu::walker::WalkFault::Unbacked`: MISS = FAULT, forwarded, never
+    ///   guessed into a capture. It must **never** be answered as a page of zeros, which
+    ///   decodes as a page that legitimately maps nothing.
+    /// - `Err` — the transport or the host failed. A different fact from `Ok(false)` and
+    ///   kept separate on purpose: one is about the guest, the other is about us.
+    ///
+    /// # Errors
+    /// Whatever the host or the transport refuses with.
+    fn fb_read(&mut self, phys: u64, buf: &mut [u8]) -> Result<bool, RmError>;
+
     /// Intent verb: export the host memory object `memory` (a render target in host
     /// VRAM) as a presentable [`SurfaceHandle`] — the **producer half of the display
     /// seam** (`execution_plane.md` §3.3, seam audit GR-2b). The C proved this runs
@@ -1433,6 +1470,37 @@ impl Worker {
     #[must_use]
     pub fn isolate(&self) -> IsolateId {
         self.isolate
+    }
+
+    /// ★★★ **Read the fabricated aperture** through this worker's backend
+    /// ([`RmBackend::fb_read`], `#102` stage C3) — the page-table decoder's byte source.
+    ///
+    /// ## Why this is beside [`Worker::execute`] and not a [`VerbPlan`] variant
+    ///
+    /// `execute` exists to run a **chain that allocates**: it gates the plan's handles,
+    /// chains intermediate results and unwinds what a mid-chain failure already acquired.
+    /// A read of the aperture has none of those properties — it names **no
+    /// [`HostHandle`]**, so there is nothing for the foreign-handle gate to check, and it
+    /// acquires nothing, so there is nothing to unwind. Expressing it as a plan would add
+    /// a `VerbReply` variant carrying bytes and a plan variant with no handles, i.e. two
+    /// shapes whose only content is that they are exceptions to what the type is for.
+    ///
+    /// ★★ What it does keep, and the reason it is a method on `Worker` rather than a
+    /// direct call on the backend: **the R1 assertion**. A decode pass reads one page per
+    /// round trip to the isolate; doing that under a ranked lock is precisely the
+    /// "blocking call under a lock" R1 forbids, and it is the failure that would be
+    /// found in production rather than in a test. Every route to this call therefore runs
+    /// the same lock-freedom check every host verb does.
+    ///
+    /// # Errors
+    /// Whatever the backend refuses with. `Ok(false)` is **not** an error — see
+    /// [`RmBackend::fb_read`].
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn fb_read(&mut self, phys: u64, buf: &mut [u8]) -> Result<bool, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("reading the fabricated aperture");
+        self.backend.fb_read(phys, buf)
     }
 
     /// ★ Run `plan`'s verb chain. **Asserts R1 first** — invoking a host verb with

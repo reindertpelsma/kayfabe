@@ -1087,6 +1087,32 @@ impl RmBackend for HostRmBackend {
         Err(RmError::Other(NOT_ON_THIS_RUNG))
     }
 
+    /// ★★★ NOT ON THIS RUNG — and this refusal is the honest half of `#102` stage C3.
+    ///
+    /// The seam, the decoder and the production `FbRead`
+    /// (`kayfabe_fwd::IsolateFb`) are built and exercised. What is **not** built is this:
+    /// the isolate's own VRAM-backed mapping of the fabricated aperture, which needs an
+    /// RM allocation of host video memory plus a CPU mapping of it, held for the life of
+    /// the isolate. Neither exists on this rung, and neither could be written honestly
+    /// without a GPU to run it against.
+    ///
+    /// ★ **What is owed, precisely.** On a host with a real device: allocate the
+    /// fabricated aperture's backing object, CPU-map it inside the isolate, write a known
+    /// pattern through [`kayfabe_isolate::CeExecutor::Ours`], and read it back here — the
+    /// bytes must be identical, and an address outside the mapped extent must answer
+    /// `Ok(false)` rather than zeros. The extent itself (where the aperture begins, how
+    /// large it is) is **not written down anywhere in this tree**, which is the second
+    /// reason this is a refusal and not a guess.
+    ///
+    /// Serving zeros instead would be worse than refusing by a wide margin: a page of
+    /// zeros decodes as a page-table page that legitimately maps nothing, so a whole
+    /// address space would read as empty and every mapping in it would silently vanish —
+    /// the same class as the forged completion `mode2_real_forward_not_fake` forbids,
+    /// with a longer fuse.
+    fn fb_read(&mut self, _phys: u64, _buf: &mut [u8]) -> Result<bool, RmError> {
+        Err(RmError::Other(NOT_ON_THIS_RUNG))
+    }
+
     fn export_surface(&mut self, _memory: HostHandle) -> Result<SurfaceHandle, RmError> {
         Err(RmError::Other(NOT_ON_THIS_RUNG))
     }

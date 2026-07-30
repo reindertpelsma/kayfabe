@@ -470,6 +470,21 @@ impl AddressTable {
         self.map.iter()
     }
 
+    /// The binding covering `va`, **with the range it occupies** — `(start, len,
+    /// binding)`.
+    ///
+    /// [`AddressTable::resolve`] answers the question hardware asks (*"what is at this
+    /// address"*, offset included, MISS = FAULT) and deliberately hides the extent. A
+    /// **populate** asks a different question — *"is what is already here the same shape
+    /// as what I am about to write"* — and answering it from `resolve` means guessing the
+    /// extent, which is how a leaf silently resizes its neighbour. Hence a second, total
+    /// accessor rather than a wider `resolve`: the two callers want different things and
+    /// one of them must not be tempted by a fault vocabulary it has no use for.
+    #[must_use]
+    pub fn binding_at(&self, va: GpuVa) -> Option<(u64, u64, Binding)> {
+        self.map.lookup(va.0).map(|(s, l, b)| (s, l, *b))
+    }
+
     /// ★★★ **The range algebra's one primitive** (`#102` stage C2,
     /// `eight_blockers_resolved.md` §12.3): partition `[va, va+len)` into the maximal
     /// runs over which this table's answer is CONSTANT — each either covered by exactly
@@ -585,7 +600,16 @@ kayfabe_util::assert_send_sync!(
     HostSlice,
     HostSliceError,
     AddressFault,
-    walker::WalkResult
+    walker::WalkResult,
+    walker::PtPage,
+    walker::DecodedLeaf,
+    walker::PageDecode,
+    walker::SubtreeDecode,
+    walker::WalkFault,
+    walker::DropReason,
+    walker::LeafDisposition,
+    walker::PopulateRefusal,
+    walker::PopulateOutcome
 );
 
 #[cfg(test)]
