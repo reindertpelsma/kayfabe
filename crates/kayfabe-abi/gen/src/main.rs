@@ -23,7 +23,8 @@ mod parse;
 
 use ctype::{Layout, lay_out};
 use parse::{
-    ParseError, find_aggregates, parse_fields, scan_defines, scan_macro_list, strip_comments,
+    ParseError, find_aggregates, parse_fields, scan_defines, scan_drf_ranges, scan_macro_list,
+    strip_comments,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -49,6 +50,17 @@ struct ConstReq {
     c_name: &'static str,
     rust_name: &'static str,
     rust_ty: &'static str,
+    doc: &'static str,
+}
+
+/// A DRF **bit range** (`#define NAME hi:lo`) we want as a typed Rust constant.
+///
+/// Emitted as a [`kayfabe_abi::wire::Drf`], which keeps `hi` and `lo` together so
+/// they cannot be transposed at the use site.
+struct DrfReq {
+    header: &'static str,
+    c_name: &'static str,
+    rust_name: &'static str,
     doc: &'static str,
 }
 
@@ -88,6 +100,8 @@ struct ModuleReq {
     doc: &'static str,
     structs: &'static [StructReq],
     consts: &'static [ConstReq],
+    /// DRF bit ranges (`hi:lo`), emitted as `Drf` constants.
+    drfs: &'static [DrfReq],
     macro_lists: &'static [MacroListReq],
     /// Extra by-value aggregate types this module's structs embed.
     aggregate_scalars: &'static [AggregateScalar],
@@ -110,8 +124,47 @@ const CLC7C0_H: &str = "src/common/sdk/nvidia/inc/class/clc7c0.h";
 const RPC_HDR_H: &str = "src/nvidia/generated/g_rpc-message-header.h";
 const RPC_ENUMS_H: &str = "src/nvidia/inc/kernel/vgpu/rpc_global_enums.h";
 
+// ── VBIOS / FWSEC ────────────────────────────────────────────────────────────
+//
+// ★ Two of these are `.c` files, not headers, and that is deliberate: NVIDIA
+// declares the entire BIT-table and FWSEC-descriptor vocabulary *inside* the
+// implementation files rather than in a header. Scanning the `.c` is therefore
+// scanning the **only** authoritative statement of those constants. The scanner
+// does not care — it reads `#define` lines out of a text file.
+const PCI_EXP_TABLE_H: &str = "src/nvidia/inc/kernel/platform/pci_exp_table.h";
+const FWSEC_C: &str = "src/nvidia/src/kernel/gpu/gsp/kernel_gsp_fwsec.c";
+const VBIOS_TU102_C: &str = "src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_vbios_tu102.c";
+
 /// Headers whose `#define`s feed array-length resolution, globally.
 const DEFINE_SOURCES: &[&str] = &["src/common/sdk/nvidia/inc/nvlimits.h", NVOS_H];
+
+/// Terse [`ConstReq`] for the VBIOS module, where the Rust name is always the C
+/// name (these constants have no NVIDIA-namespace prefix to strip and renaming
+/// them would only break the grep from generated code back to the driver).
+const fn vbios_const(
+    header: &'static str,
+    c_name: &'static str,
+    rust_ty: &'static str,
+    doc: &'static str,
+) -> ConstReq {
+    ConstReq {
+        header,
+        c_name,
+        rust_name: c_name,
+        rust_ty,
+        doc,
+    }
+}
+
+/// Terse [`DrfReq`], same naming rule as [`vbios_const`].
+const fn vbios_drf(header: &'static str, c_name: &'static str, doc: &'static str) -> DrfReq {
+    DrfReq {
+        header,
+        c_name,
+        rust_name: c_name,
+        doc,
+    }
+}
 
 const MODULES: &[ModuleReq] = &[
     ModuleReq {
@@ -216,6 +269,7 @@ and is NOT in this file, because the vendored ogkm tree is a single snapshot
                 doc: "`NV_ESC_RM_UNMAP_MEMORY_DMA` — ioctl NR carrying [`Nvos47Parameters`].",
             },
         ],
+        drfs: &[],
         macro_lists: &[],
         aggregate_scalars: &[],
         aggregate_lookup: &[],
@@ -345,6 +399,7 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
                 doc: "`AMPERE_DMA_COPY_B` — the copy-engine object on a CE channel. Same shape\nas [`AMPERE_COMPUTE_B`]: no declared facts, and the only thing that tells the\ncore this channel is a CE channel at all.",
             },
         ],
+        drfs: &[],
         macro_lists: &[],
         aggregate_scalars: &[],
         aggregate_lookup: &[],
@@ -421,6 +476,7 @@ failure.",
                 doc: "`NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES` — the length of\n`promoteEntry[]`, **16**, identical at 580.159.04 and 610.43.02.\n\n★ Generated rather than written down: the C artifact hand-wrote `64` here (with a\ncomment claiming `20`) and read 1536 bytes past the 560-byte struct out of\nguest-writable memory.",
             },
         ],
+        drfs: &[],
         macro_lists: &[],
         aggregate_scalars: &[],
         aggregate_lookup: &[],
@@ -448,6 +504,7 @@ that codegen gives shapes and never protocol.",
             fam_align: Some(8),
         }],
         consts: &[],
+        drfs: &[],
         macro_lists: &[
             MacroListReq {
                 header: RPC_ENUMS_H,
@@ -507,6 +564,369 @@ that codegen gives shapes and never protocol.",
             rust: "u32",
             prim: "u32",
         }],
+    },
+    ModuleReq {
+        file: "vbios.rs",
+        title: "The VBIOS ROM / BIT-table / FWSEC-descriptor vocabulary — the synthetic-ROM seam.",
+        doc: "\
+The constants a **synthetic VBIOS** must be built out of, so that the guest's own
+`kgspExtractVbiosFromRom_TU102` → `kgspParseFwsecUcodeFromVbiosImg` path accepts
+it. Consumed by `crate::vbios`, which is the builder.
+
+★ Two of the four sources are `.c` files. NVIDIA declares the BIT-table and
+FWSEC-descriptor vocabulary inside `kernel_gsp_fwsec.c` itself and the ROM
+code-type constants inside `kernel_gsp_vbios_tu102.c`; there is no header to
+read them from, so the implementation file **is** the authoritative statement
+and is what the generator scans.
+
+# Why this is structure and not secrets
+
+The driver performs **no cryptographic verification** of what it parses here.
+`kernel_gsp_fwsec.c:993` copies the signature blob out of the image with a plain
+`portMemCopy`; `kernel_gsp_frts_tu102.c:355` checks only that the pointer is
+non-`NULL`; `:397` hands one signature to the falcon. Everything that *looks*
+cryptographic in this path is a magic (`BIT_HEADER_SIGNATURE` = `\"BIT\\0\"`), a
+size (`BCRT30_RSA3K_SIG_SIZE` = 384), a one-byte checksum (the BIT header), or a
+bounds check (`portSafeAddU32`, offsets `<= biosSize`). Verification happens on
+the falcon — and in Mode 2 we *are* the falcon. So a generated image needs a
+signature blob of the right **size** at the declared **offset**, and its contents
+are never inspected by anything outside our control.
+
+# Why a generated image and not a dumped one
+
+A dumped ROM describes the **host's** card. We emulate a *different* device — our
+own FB size, our own straps, our own PCI identity — so a dumped image can
+silently disagree with the registers the device answers. An image generated from
+the same profile that drives those registers cannot disagree, by construction.
+
+# Version stability (measured, not assumed)
+
+Both vendored ogkm tags — 580.159.04 and 610.43.02 — carry `kernel_gsp_fwsec.c`,
+`kernel_gsp_vbios_tu102.c`, `pci_exp_table.h` and `dev_bus.h` **byte-identically**
+(`diff` is empty on all four). So every constant in this module has the same
+value at both, and `crate::vbios::VbiosWire` has exactly one variant. That is a
+measurement, and the generator re-checks it every time it is run against a tree.",
+        structs: &[],
+        consts: &[
+            // ── The PCI expansion-ROM container (`s_locateExpansionRoms`) ────
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "PCI_EXP_ROM_SIGNATURE",
+                "u16",
+                "`0xAA55` at image offset 0 — what `IS_VALID_PCI_ROM_SIG` accepts,\n\
+                 and the byte pattern whose absence produced `did not find valid ROM\n\
+                 signature`. Placing it at offset 0 is what lets a generated image\n\
+                 skip the IFR/ROM-directory path entirely.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_EXP_ROM_SIG",
+                "usize",
+                "Offset of the ROM signature within an expansion-ROM image.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_EXP_ROM_PCI_DATA_STRUCT_PTR",
+                "usize",
+                "Offset of the `u16` pointer to this image's PCIR structure.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "PCI_DATA_STRUCT_SIGNATURE",
+                "u32",
+                "`\"PCIR\"` — the PCI Data Structure magic `IS_VALID_PCI_DATA_SIG` accepts.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_STRUCT_SIG",
+                "usize",
+                "`PCIR` magic, within the PCI Data Structure.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_STRUCT_VENDOR_ID",
+                "usize",
+                "PCI vendor ID (`u16`), then device ID at +2.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_STRUCT_LEN",
+                "usize",
+                "Length of the PCI Data Structure (`u16`) — also what positions the\n\
+                 NPDE extension, at `(pcir + len + 0xF) & ~0xF`.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_STRUCT_CLASS_CODE",
+                "usize",
+                "3-byte PCI class code.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_STRUCT_IMAGE_LEN",
+                "usize",
+                "Image length (`u16`) in 512-byte blocks.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_STRUCT_CODE_TYPE",
+                "usize",
+                "Code type (`u8`) — selects BASE vs EXT in `s_locateExpansionRoms`.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_STRUCT_LAST_IMAGE",
+                "usize",
+                "Last-image indicator (`u8`); bit 7 terminates the walk.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "PCI_LAST_IMAGE",
+                "u8",
+                "`NVBIT(7)` — the bit that ends `s_locateExpansionRoms`' `for(;;)`.\n\
+                 Without it the walk runs off the end of the image.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "PCI_ROM_IMAGE_BLOCK_SIZE",
+                "usize",
+                "512 — the unit `IMAGE_LEN` and `SUBIMAGE_LEN` count in, and therefore\n\
+                 the granularity a generated image must be padded to.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "NV_PCI_DATA_EXT_SIG",
+                "u32",
+                "`\"NPDE\"` — NVIDIA's PCI Data Extension magic.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "NV_PCI_DATA_EXT_REV_11",
+                "u16",
+                "NPDE revision 1.1 — one of the two revisions the walk honours.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_EXT_STRUCT_SIG",
+                "usize",
+                "`NPDE` magic, within the extension.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_EXT_STRUCT_REV",
+                "usize",
+                "NPDE revision (`u16`).",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_EXT_STRUCT_LEN",
+                "usize",
+                "NPDE length (`u16`) — gates whether `LAST_IMAGE` below is even read.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_EXT_STRUCT_SUBIMAGE_LEN",
+                "usize",
+                "NPDE sub-image length (`u16`, blocks) — **overrides** `IMAGE_LEN`\n\
+                 when the NPDE is present, and is what actually advances the walk.",
+            ),
+            vbios_const(
+                PCI_EXP_TABLE_H,
+                "OFFSETOF_PCI_DATA_EXT_STRUCT_LAST_IMAGE",
+                "usize",
+                "NPDE last-image indicator (`u8`).",
+            ),
+            // ── ROM code types (`kernel_gsp_vbios_tu102.c`) ──────────────────
+            vbios_const(
+                VBIOS_TU102_C,
+                "NV_BCRT_HASH_INFO_BASE_CODE_TYPE_VBIOS_BASE",
+                "u8",
+                "Code type of the **base** VBIOS image; its block size becomes\n\
+                 `baseRomSize` in the `expansionRomOffset` computation.",
+            ),
+            vbios_const(
+                VBIOS_TU102_C,
+                "NV_BCRT_HASH_INFO_BASE_CODE_TYPE_VBIOS_EXT",
+                "u8",
+                "Code type of an **extended** VBIOS image; the first one's offset\n\
+                 becomes `extRomOffset`. `expansionRomOffset = extRomOffset -\n\
+                 baseRomSize`, and is 0 when either is absent.",
+            ),
+            // ── The BIT table (`kernel_gsp_fwsec.c`) ─────────────────────────
+            vbios_const(
+                FWSEC_C,
+                "BIT_HEADER_ID",
+                "u16",
+                "`0xB8FF` — the `u16` `s_vbiosFindBitHeader` scans the whole image for.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "BIT_HEADER_SIGNATURE",
+                "u32",
+                "`\"BIT\\0\"` — the `u32` at `bitAddr + 2` that confirms a candidate.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "BIT_HEADER_SIZE_OFFSET",
+                "usize",
+                "Offset of `HeaderSize` — the byte count the header checksum covers.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "BIT_TOKEN_V1_00_SIZE_6",
+                "u8",
+                "Token stride below which the 6-byte token format is used (`u16` DataPtr).",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "BIT_TOKEN_V1_00_SIZE_8",
+                "u8",
+                "Token stride at or above which the 8-byte format is used — the one a\n\
+                 generated image wants, because its `DataPtr` is a full `u32`.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "BIT_TOKEN_BIOSDATA",
+                "u8",
+                "`0x42` — the token carrying the VBIOS version the driver reports.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "BIT_TOKEN_FALCON_DATA",
+                "u8",
+                "`0x70` — the token that points at the falcon ucode table. THE one\n\
+                 that matters: without it FWSEC is never found.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "BIT_DATA_BIOSDATA_VERSION_2",
+                "u8",
+                "`DataVersion` accepted for a BIOSDATA token.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "BIT_DATA_BIOSDATA_BINVER_SIZE_5",
+                "u16",
+                "The BIOSDATA token's `DataSize` must be **strictly greater** than this\n\
+                 for the version to be read (`bitToken.DataSize > 5`).",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "BIT_DATA_FALCON_DATA_V2_SIZE_4",
+                "u16",
+                "Minimum `DataSize` of a falcon-data token; its payload is one `u32`\n\
+                 `FalconUcodeTablePtr`.",
+            ),
+            // ── The falcon ucode table ───────────────────────────────────────
+            vbios_const(
+                FWSEC_C,
+                "FALCON_UCODE_TABLE_HDR_V1_VERSION",
+                "u8",
+                "Required `Version` of the falcon ucode table header, else skipped.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "FALCON_UCODE_TABLE_HDR_V1_SIZE_6",
+                "u8",
+                "Minimum `HeaderSize`; also the stride from header to first entry.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "FALCON_UCODE_TABLE_ENTRY_V1_SIZE_6",
+                "u8",
+                "Minimum `EntrySize`; the entry is `2b1d` = appId, targetId, descPtr.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "FALCON_UCODE_ENTRY_APPID_FIRMWARE_SEC_LIC",
+                "u8",
+                "★ `0x05`. Read the skip condition carefully: an entry with this appId\n\
+                 matches **regardless of `bUseDebugFwsec`**, because it short-circuits\n\
+                 the `&&` before the debug/prod test is reached. That makes it the one\n\
+                 appId a generated image can rely on without knowing whether the\n\
+                 emulated GPU will read as debug-fused or prod-fused.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "FALCON_UCODE_ENTRY_APPID_FWSEC_DBG",
+                "u8",
+                "`0x45` — matched only when `kgspIsDebugModeEnabled_HAL` says debug.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "FALCON_UCODE_ENTRY_APPID_FWSEC_PROD",
+                "u8",
+                "`0x85` — matched only when it says prod.",
+            ),
+            // ── The FWSEC ucode descriptor ───────────────────────────────────
+            vbios_const(
+                FWSEC_C,
+                "NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_FLAGS_VERSION_AVAILABLE",
+                "u32",
+                "The `vDesc` flag bit that must be set, else the entry is skipped with\n\
+                 `unexpected ucode desc version missing`.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2",
+                "u32",
+                "Descriptor version 2 — the 60-byte boot-with-loader shape.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3",
+                "u32",
+                "Descriptor version 3 — the 44-byte boot-from-HS shape, the one with\n\
+                 `PKCDataOffset`/`SignatureCount` and the one a modern part uses.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "FALCON_UCODE_DESC_V2_SIZE_60",
+                "usize",
+                "`sizeof` the V2 descriptor (`15d`); the declared `vDesc` size must be\n\
+                 at least this for V2 to be accepted.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "FALCON_UCODE_DESC_V3_SIZE_44",
+                "usize",
+                "`sizeof` the V3 descriptor (`9d1w2b2w`). ★ Doubly load-bearing: the\n\
+                 declared `vDesc` size must be `>=` it, **and** `signaturesTotalSize =\n\
+                 descSize - 44` — so the signature blob's length is defined entirely by\n\
+                 how much larger than 44 the descriptor claims to be.",
+            ),
+            vbios_const(
+                FWSEC_C,
+                "BCRT30_RSA3K_SIG_SIZE",
+                "usize",
+                "384 — the per-signature size the bounds checks use (`sigDataOffset +\n\
+                 sigSize <= size`). A size constant, not a key: nothing verifies the\n\
+                 384 bytes themselves anywhere in this path.",
+            ),
+        ],
+        drfs: &[
+            vbios_drf(
+                FWSEC_C,
+                "NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_FLAGS_VERSION",
+                "Whether a descriptor version is present at all. Must be\n\
+                 `_AVAILABLE`, else `s_vbiosParseFwsecUcodeDescFromBit` skips the entry.",
+            ),
+            vbios_drf(
+                FWSEC_C,
+                "NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION",
+                "The descriptor version (2 or 3) inside the `vDesc` word.",
+            ),
+            vbios_drf(
+                FWSEC_C,
+                "NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_SIZE",
+                "The descriptor size inside the `vDesc` word — 16 bits, which is the\n\
+                 hard ceiling on `44 + signatureCount * 384` and therefore on how many\n\
+                 signatures a descriptor can carry.",
+            ),
+        ],
+        macro_lists: &[],
+        aggregate_scalars: &[],
+        aggregate_lookup: &[],
     },
 ];
 
@@ -570,6 +990,26 @@ fn run(ogkm_root: &Path, out: &Path) -> Result<Vec<PathBuf>, String> {
                 cr.rust_name.to_string(),
                 cr.rust_ty.to_string(),
                 format!("{v:#x}"),
+                doc,
+            ));
+        }
+        for dr in m.drfs {
+            let clean = strip_comments(&read(ogkm_root, dr.header)?);
+            let d = scan_drf_ranges(&clean);
+            let (hi, lo) = d.get(dr.c_name).copied().ok_or_else(|| {
+                format!(
+                    "`{}` not found as a `hi:lo` DRF range in {}",
+                    dr.c_name, dr.header
+                )
+            })?;
+            let doc = format!(
+                "{}\n\n`{}` = `{hi}:{lo}` — ogkm `{}`.",
+                dr.doc, dr.c_name, dr.header
+            );
+            consts.push((
+                dr.rust_name.to_string(),
+                "Drf".to_string(),
+                format!("Drf::new({hi}, {lo})"),
                 doc,
             ));
         }

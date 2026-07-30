@@ -255,6 +255,78 @@ impl StructLayout {
     }
 }
 
+/// A **DRF bit range** — NVIDIA's `hi:lo` field spelling, as written in the
+/// headers and consumed by `DRF_VAL`/`REF_VAL`.
+///
+/// NVIDIA declares sub-word fields as `#define NV_FOO_BAR 15:8`, a token pair the
+/// C preprocessor splices into `DRF_VAL`'s `hi` and `lo` parameters. That is not
+/// an integral `#define`, so [`crate::generated`]'s ordinary constant scanner
+/// cannot carry one; the generator scans these separately and emits them as this
+/// type. Keeping the pair together makes "which half is which" a type property
+/// rather than a naming convention — a swapped `(lo, hi)` is caught by
+/// [`Drf::new`]'s assertion at const-eval time, not by a wrong image at runtime.
+///
+/// Both bounds are inclusive, matching the C. Only 32-bit words are expressible,
+/// which is every field this crate reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Drf {
+    /// Most-significant bit of the field, inclusive.
+    pub hi: u32,
+    /// Least-significant bit of the field, inclusive.
+    pub lo: u32,
+}
+
+impl Drf {
+    /// Build a field spec from an inclusive `hi:lo` pair.
+    ///
+    /// # Panics
+    ///
+    /// If `hi < lo` or `hi > 31`. Both are const-evaluable, so a generated
+    /// `Drf::new(…)` constant with either defect fails the **build**.
+    #[must_use]
+    pub const fn new(hi: u32, lo: u32) -> Self {
+        assert!(hi >= lo, "DRF range is written hi:lo, inclusive");
+        assert!(hi <= 31, "DRF ranges here are within a 32-bit word");
+        Self { hi, lo }
+    }
+
+    /// Width of the field in bits.
+    #[must_use]
+    pub const fn width(self) -> u32 {
+        self.hi - self.lo + 1
+    }
+
+    /// The field's mask, already shifted into position.
+    #[must_use]
+    pub const fn mask(self) -> u32 {
+        // `width()` is 1..=32; a 32-wide shift would overflow, so build the mask
+        // from the top down instead of `(1 << width) - 1`.
+        (u32::MAX >> (32 - self.width())) << self.lo
+    }
+
+    /// Extract this field from a word — the `DRF_VAL`/`REF_VAL` direction.
+    #[must_use]
+    pub const fn get(self, word: u32) -> u32 {
+        (word & self.mask()) >> self.lo
+    }
+
+    /// Place `value` into this field's bits, **truncating** anything that does
+    /// not fit rather than corrupting neighbouring fields.
+    ///
+    /// Truncation is deliberate and is the same thing `DRF_NUM` does. A caller
+    /// that must not truncate should check [`Drf::fits`] first.
+    #[must_use]
+    pub const fn set(self, value: u32) -> u32 {
+        (value << self.lo) & self.mask()
+    }
+
+    /// Whether `value` fits in this field without truncation.
+    #[must_use]
+    pub const fn fits(self, value: u32) -> bool {
+        (value & (u32::MAX >> (32 - self.width()))) == value
+    }
+}
+
 macro_rules! le_reader {
     ($name:ident, $ty:ty, $width:literal, $doc:literal) => {
         #[doc = $doc]

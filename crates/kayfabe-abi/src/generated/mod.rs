@@ -13,6 +13,8 @@ pub mod ctrl;
 pub mod nvos;
 /// The GSP-RPC envelope and its function/event IDs.
 pub mod rpc;
+/// The VBIOS ROM / BIT-table / FWSEC-descriptor vocabulary — the synthetic-ROM seam.
+pub mod vbios;
 
 /// The ogkm checkout these modules were generated from.
 pub const OGKM_VERSION: &str = "610.43.02";

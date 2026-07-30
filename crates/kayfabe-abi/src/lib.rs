@@ -100,6 +100,7 @@ pub mod generated;
 pub mod guest_os;
 pub mod submit;
 pub mod transcribed;
+pub mod vbios;
 pub mod versions;
 pub mod view;
 pub mod wire;

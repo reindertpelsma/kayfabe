@@ -65,11 +65,21 @@ pub fn module(
         .collect();
     readers.sort_unstable();
     readers.dedup();
-    let mut names: Vec<String> = vec!["AbiError".into()];
+    // `StructLayout` is always named — by the `STRUCTS` table's type, which is
+    // emitted even when empty so that "the generated table IS the coverage
+    // report" holds for every module. `AbiError` and `Field`, by contrast, are
+    // used only by a struct's decoder, so a constants-only module must not
+    // import them.
+    let mut names: Vec<String> = Vec::new();
     if !layouts.is_empty() {
+        names.push("AbiError".into());
         names.push("Field".into());
-        names.push("StructLayout".into());
     }
+    if consts.iter().any(|(_, ty, _, _)| ty == "Drf") {
+        names.push("Drf".into());
+    }
+    names.push("StructLayout".into());
+    names.sort_unstable();
     names.extend(readers.iter().map(|p| format!("{p}_at")));
     let _ = writeln!(s, "use crate::wire::{{{}}};", names.join(", "));
     let _ = writeln!(s);

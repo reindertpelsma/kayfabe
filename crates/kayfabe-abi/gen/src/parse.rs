@@ -406,7 +406,17 @@ pub fn scan_defines(clean: &str) -> BTreeMap<String, usize> {
             continue; // function-like macro
         }
         let Some(val) = it.next() else { continue };
-        let val = val.trim().trim_start_matches('(').trim();
+        let val = val.trim();
+        // `NVBIT(n)` is an object-like macro whose *value* is a function-like
+        // macro call. It is still a constant, and refusing it would push the
+        // caller into hand-declaring the number — exactly the hardcode this
+        // generator exists to avoid. `PCI_LAST_IMAGE NVBIT(7)`
+        // (`pci_exp_table.h`) is the case that forced this.
+        if let Some(v) = parse_nvbit(val) {
+            out.insert(name.to_string(), v);
+            continue;
+        }
+        let val = val.trim_start_matches('(').trim();
         let val = val
             .split([')', ' ', '\t'])
             .next()
@@ -420,6 +430,74 @@ pub fn scan_defines(clean: &str) -> BTreeMap<String, usize> {
         if let Some(v) = parsed {
             out.insert(name.to_string(), v);
         }
+    }
+    out
+}
+
+/// `NVBIT(n)` / `NVBIT32(n)` / `NVBIT64(n)` → `1 << n`, or `None` if `val` is not
+/// one. Refuses a shift that would not fit in `usize` rather than wrapping.
+fn parse_nvbit(val: &str) -> Option<usize> {
+    let v = val.trim().trim_start_matches('(').trim();
+    let rest = v
+        .strip_prefix("NVBIT64")
+        .or_else(|| v.strip_prefix("NVBIT32"))
+        .or_else(|| v.strip_prefix("NVBIT"))?;
+    let rest = rest.trim().strip_prefix('(')?;
+    let close = rest.find(')')?;
+    let n: u32 = rest[..close]
+        .trim()
+        .trim_end_matches(['U', 'u'])
+        .parse()
+        .ok()?;
+    if n as usize >= usize::BITS as usize {
+        return None;
+    }
+    Some(1usize << n)
+}
+
+/// Scan NVIDIA's **DRF bit-range** spellings: `#define NAME hi:lo`, where `hi`
+/// and `lo` are decimal literals.
+///
+/// These are not integral `#define`s — the C preprocessor splices the token pair
+/// into `DRF_VAL(d, r, f, v)`'s `hi` and `lo` parameters — so [`scan_defines`]
+/// cannot see them, and a caller that needs one would otherwise have to hardcode
+/// the range. `NV_PBUS_IFR_FMT_FIXED1_VERSIONSW 15:8` (`dev_bus.h`) and
+/// `NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION 15:8`
+/// (`kernel_gsp_fwsec.c`) are the cases that forced this.
+///
+/// Returns `(hi, lo)` with both bounds inclusive, exactly as written. Ranges are
+/// rejected (skipped) if `hi < lo` — that spelling does not occur and silently
+/// accepting it would emit a `Drf` that panics at const-eval with no clue why.
+#[must_use]
+pub fn scan_drf_ranges(clean: &str) -> BTreeMap<String, (u32, u32)> {
+    let mut out = BTreeMap::new();
+    for raw in clean.lines() {
+        let l = raw.trim();
+        let Some(rest) = l.strip_prefix("#define") else {
+            continue;
+        };
+        let rest = rest.trim();
+        let mut it = rest.splitn(2, char::is_whitespace);
+        let Some(name) = it.next() else { continue };
+        if name.contains('(') {
+            continue; // function-like macro
+        }
+        let Some(val) = it.next() else { continue };
+        // Take the first whitespace-delimited token: the value is `15:8`, and
+        // anything after it on the line is not part of the range.
+        let Some(tok) = val.split_whitespace().next() else {
+            continue;
+        };
+        let Some((hi, lo)) = tok.split_once(':') else {
+            continue;
+        };
+        let (Ok(hi), Ok(lo)) = (hi.trim().parse::<u32>(), lo.trim().parse::<u32>()) else {
+            continue;
+        };
+        if hi < lo {
+            continue;
+        }
+        out.insert(name.to_string(), (hi, lo));
     }
     out
 }
@@ -603,6 +681,59 @@ mod tests {
                 ("POST_EVENT".into(), 0x1003)
             ]
         );
+    }
+
+    /// `NVBIT(n)` is an integral constant even though its value *looks* like a
+    /// macro call. `PCI_LAST_IMAGE` is the real line, verbatim.
+    #[test]
+    fn scan_defines_resolves_nvbit() {
+        let d = scan_defines(
+            "#define PCI_LAST_IMAGE NVBIT(7)\n\
+             #define A NVBIT32(0)\n\
+             #define B NVBIT64(31)\n\
+             #define C NVBIT(999)\n\
+             #define D NOTNVBIT(3)\n",
+        );
+        assert_eq!(d.get("PCI_LAST_IMAGE"), Some(&0x80));
+        assert_eq!(d.get("A"), Some(&1));
+        assert_eq!(d.get("B"), Some(&0x8000_0000));
+        assert_eq!(d.get("C"), None, "a shift wider than usize is refused");
+        assert_eq!(d.get("D"), None, "only NVBIT spellings resolve");
+    }
+
+    /// A DRF range is `hi:lo`, inclusive, and is invisible to `scan_defines` —
+    /// the two scanners must not poach each other's lines.
+    #[test]
+    fn scan_drf_ranges_reads_hi_lo_pairs() {
+        let src = "#define NV_PBUS_IFR_FMT_FIXED1_VERSIONSW 15:8\n\
+                   #define NV_PBUS_IFR_FMT_FIXED2_TOTAL_DATA_SIZE 19:0\n\
+                   #define FLAGS_VERSION 0:0\n\
+                   #define NV_PBUS_IFR_FMT_FIXED1 0x00000004\n\
+                   #define BACKWARDS 3:9\n\
+                   #define FUNCLIKE(x) 15:8\n";
+        let d = scan_drf_ranges(src);
+        assert_eq!(d.get("NV_PBUS_IFR_FMT_FIXED1_VERSIONSW"), Some(&(15, 8)));
+        assert_eq!(
+            d.get("NV_PBUS_IFR_FMT_FIXED2_TOTAL_DATA_SIZE"),
+            Some(&(19, 0))
+        );
+        assert_eq!(
+            d.get("FLAGS_VERSION"),
+            Some(&(0, 0)),
+            "0:0 is a 1-bit field"
+        );
+        assert_eq!(
+            d.get("NV_PBUS_IFR_FMT_FIXED1"),
+            None,
+            "an integral #define is not a DRF range"
+        );
+        assert_eq!(d.get("BACKWARDS"), None, "hi < lo is refused, not accepted");
+        assert_eq!(d.get("FUNCLIKE"), None);
+
+        // …and the integral scanner must not claim the DRF lines.
+        let i = scan_defines(src);
+        assert_eq!(i.get("NV_PBUS_IFR_FMT_FIXED1_VERSIONSW"), None);
+        assert_eq!(i.get("NV_PBUS_IFR_FMT_FIXED1"), Some(&4));
     }
 
     /// The wrong arity is skipped, not mis-read: an `E(…)` line must never be

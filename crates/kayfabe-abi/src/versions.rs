@@ -34,6 +34,7 @@ use crate::capability::{
 };
 use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::transcribed::{Nv2080CtrlGpuPromoteCtxParamsHeader, Nvos46ParametersPre580};
+use crate::vbios::VbiosWire;
 use crate::view::{
     AllocReq, AllocWire, ChannelAllocFacts, ClientAllocFacts, ControlReq, CtxShareAllocFacts,
     DeviceAllocFacts, DupReq, FreeReq, MAX_PROMOTE_ENTRIES, MapMemoryDma, PdbAperture, PromoteCtx,
@@ -240,6 +241,15 @@ pub struct DriverAbiTable {
     /// [`CapabilityTable`] — and because that type is inherit-then-add, the new
     /// row is only the delta.
     caps: &'static CapabilityTable,
+    /// Which **synthetic-VBIOS** parse path this driver version speaks
+    /// ([`crate::vbios`]).
+    ///
+    /// Here for the same reason `caps` is: adding a driver version must not edit
+    /// a logic crate. Today every row carries [`VbiosWire::Tu102Bit`], because
+    /// the four files defining that path are byte-identical at both vendored
+    /// ogkm tags — see [`VbiosWire`]'s doc for the measurement. The field exists
+    /// so the day a version diverges is a table edit, not a redesign.
+    vbios: VbiosWire,
     /// Why this entry exists — kept in the data so a reader of the table sees
     /// the boundary's justification without leaving the file.
     pub note: &'static str,
@@ -260,6 +270,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
         caps: &CAPS_BASE,
+        vbios: VbiosWire::Tu102Bit,
         note: "oldest supported: NVOS47 gained `size` here \
                (gvisor/pkg/abi/nvgpu/frontend.go:707-710, NVOS47_PARAMETERS_V550)",
     },
@@ -280,6 +291,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
         caps: &CAPS_560_28_03,
+        vbios: VbiosWire::Tu102Bit,
         note: "capability-only boundary: +8 allocation classes, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:945-977)",
     },
@@ -293,6 +305,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
         caps: &CAPS_570_86_15,
+        vbios: VbiosWire::Tu102Bit,
         note: "capability-only boundary: +6 allocation classes, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:990-1027)",
     },
@@ -306,6 +319,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
         caps: &CAPS_580_65_06,
+        vbios: VbiosWire::Tu102Bit,
         note: "NVOS46 gained flags2+kindOverride, and +2 allocation classes \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1078)",
     },
@@ -319,6 +333,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_element: GspElementWire::From610_43_02,
         gsp_init_args: GspInitArgsWire::NineField,
         caps: &CAPS_580_65_06,
+        vbios: VbiosWire::Tu102Bit,
         note: "★ the GSP element header changes shape here: 48 bytes with an \
                elemCount become 16 with MCTP/NVDM transport words, and \
                MESSAGE_QUEUE_INIT_ARGUMENTS grows from 4 fields to 9 \
@@ -370,6 +385,13 @@ impl DriverAbiTable {
     #[must_use]
     pub fn capabilities(&self) -> &'static CapabilityTable {
         self.caps
+    }
+
+    /// Which synthetic-VBIOS parse path this version speaks
+    /// ([`crate::vbios::build`]'s `wire` argument).
+    #[must_use]
+    pub fn vbios_wire(&self) -> VbiosWire {
+        self.vbios
     }
 
     /// Which `GSP_MSG_QUEUE_ELEMENT` shape this version speaks.
