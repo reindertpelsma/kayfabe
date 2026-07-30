@@ -251,19 +251,31 @@ impl fmt::Display for CachePolicy {
 ///
 /// # Errors
 /// [`RawError::CachePolicyUnattainable`] when `requested != attainable`.
+/// Refuse a cache policy the backing provably cannot have.
+///
+/// ★★ `attainable = None` means **this layer cannot adjudicate** — the driver's own `mmap`
+/// handler decided, from an attribute fixed at allocation time, and userspace cannot read
+/// it back (`crate::Backing::attainable_cache_policy`, decider 4 in this module's table).
+/// It does **not** mean "anything goes": the caller's requirement is still mandatory and
+/// still travels with the region; what is absent is a mechanism, and pretending otherwise
+/// is precisely the "comforting wrapper" this module's docs refuse to be.
+///
+/// The distinction is worth the `Option`. Collapsing `None` into "attainable == requested"
+/// would make every device mapping *pass*, which reads identically to a checked one in
+/// every log and every review.
 pub(crate) fn require_attainable(
     requested: CachePolicy,
-    attainable: CachePolicy,
+    attainable: Option<CachePolicy>,
     backing: &'static str,
 ) -> Result<(), RawError> {
-    if requested == attainable {
-        Ok(())
-    } else {
-        Err(RawError::CachePolicyUnattainable {
+    match attainable {
+        None => Ok(()),
+        Some(attainable) if requested == attainable => Ok(()),
+        Some(attainable) => Err(RawError::CachePolicyUnattainable {
             requested,
             attainable,
             backing,
-        })
+        }),
     }
 }
 
@@ -276,14 +288,14 @@ mod tests {
         assert_eq!(
             require_attainable(
                 CachePolicy::WriteBack,
-                CachePolicy::WriteBack,
+                Some(CachePolicy::WriteBack),
                 "anonymous memory"
             ),
             Ok(())
         );
         for requested in [CachePolicy::WriteCombining, CachePolicy::Uncached] {
             assert_eq!(
-                require_attainable(requested, CachePolicy::WriteBack, "anonymous memory"),
+                require_attainable(requested, Some(CachePolicy::WriteBack), "anonymous memory"),
                 Err(RawError::CachePolicyUnattainable {
                     requested,
                     attainable: CachePolicy::WriteBack,
@@ -301,7 +313,7 @@ mod tests {
     fn the_refusal_says_what_the_caller_would_have_silently_got() {
         let e = require_attainable(
             CachePolicy::WriteCombining,
-            CachePolicy::WriteBack,
+            Some(CachePolicy::WriteBack),
             "a shared file",
         )
         .unwrap_err();
@@ -310,5 +322,36 @@ mod tests {
             "a shared file is always write-back (WB); a mapping of it cannot be \
              write-combining (WC), and asking silently yields write-back (WB)"
         );
+    }
+
+    /// ★★★ **The non-vacuity of `None`.** An unadjudicable backing accepts EVERY policy —
+    /// that is the point — so this test's job is to make the difference from the checked
+    /// case visible, because in a log they look identical.
+    ///
+    /// The pair below is the whole argument: `WriteCombining` over a page-cache backing is
+    /// a REFUSAL, and the same request over a device backing is an ACCEPTANCE, and neither
+    /// tells you anything about what the pages actually are. If this test ever passes with
+    /// `Some(_)` substituted for `None`, the `Option` has stopped meaning anything.
+    #[test]
+    fn an_unadjudicable_backing_accepts_every_policy_and_a_known_one_still_refuses() {
+        for requested in [
+            CachePolicy::WriteBack,
+            CachePolicy::WriteCombining,
+            CachePolicy::Uncached,
+        ] {
+            assert_eq!(
+                require_attainable(requested, None, "a device file"),
+                Ok(()),
+                "{requested} over a driver-decided mapping cannot be adjudicated here"
+            );
+            // …and the SAME request over a backing this layer does know is still judged.
+            let known =
+                require_attainable(requested, Some(CachePolicy::WriteBack), "a shared file");
+            assert_eq!(
+                known.is_ok(),
+                requested == CachePolicy::WriteBack,
+                "the check must still discriminate where it CAN"
+            );
+        }
     }
 }

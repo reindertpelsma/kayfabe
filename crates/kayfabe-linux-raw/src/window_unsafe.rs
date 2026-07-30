@@ -206,6 +206,11 @@ impl GuestWindow {
                     .map_err(|_| RawError::TooLargeForHost { value: offset })?;
                 (fd.as_raw_fd(), off, libc::MAP_SHARED)
             }
+            // ★★★ Refused by variant, at the door. See `RawError::DeviceBackingNotPlaceable`:
+            // a window placement is MAP_FIXED into a range a guest memslot already names, and
+            // a device backing is a window onto hardware. There is no call for which the
+            // composition is right, so there is no check — there is a refusal.
+            Backing::DeviceFile { .. } => return Err(RawError::DeviceBackingNotPlaceable),
         };
         self.fixed_map(offset, len, fd, file_offset, share_flags, "placement")
     }

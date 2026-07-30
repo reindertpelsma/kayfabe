@@ -95,30 +95,79 @@ pub enum Backing<'fd> {
         /// offset is neither bounded by us nor an offset into anything we mapped.
         offset: u64,
     },
+    /// ★★ A **device** file whose driver's own `mmap` handler decides everything.
+    ///
+    /// This is the variant [`Backing::attainable_cache_policy`]'s docs said did not exist
+    /// yet, and its arrival is what makes that method return an `Option`.
+    ///
+    /// ## There is no offset, and that is the driver's rule not ours
+    ///
+    /// The mapping a device fd yields is **not** selected by the `mmap` offset. For
+    /// `/dev/nvidia*` the offset must be zero — `nvidia_mmap_helper` refuses any non-zero
+    /// `vm_pgoff` with `EINVAL`
+    /// (`ogkm-580: kernel-open/nvidia/nv-mmap.c:533-536`) — and *what* gets mapped was
+    /// fixed earlier, by an ioctl that registered a mapping context against **this exact
+    /// descriptor** (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:529-534`). A
+    /// field that can only ever hold zero is a field someone will eventually put something
+    /// else in, so there is none.
+    ///
+    /// ## ★ The consequence a caller must know: **one mapping per descriptor**
+    ///
+    /// That registration is one-shot. A second one on a descriptor that already carries a
+    /// live context is refused with `NV_ERR_STATE_IN_USE`
+    /// (`ogkm-580: kernel-open/nvidia/nv-usermap.c:53-57`). Two mappings therefore need
+    /// two freshly opened nodes — the descriptor is not a handle to the device, it is a
+    /// handle to *one* pending mapping.
+    DeviceFile {
+        /// The descriptor the mapping context was registered against. Borrowed: this crate
+        /// never closes a caller's fd, and the caller must keep it alive at least until
+        /// the `mmap` returns.
+        fd: BorrowedFd<'fd>,
+    },
 }
 
 impl Backing<'_> {
-    /// ★ The **one** cache policy a mapping of this backing can actually have.
+    /// The **one** cache policy a mapping of this backing can have — or [`None`] when this
+    /// layer genuinely cannot say.
     ///
-    /// Both of today's variants are ordinary kernel pages — the anonymous page allocator
-    /// and the page cache — and Linux maps those write-back with no way to ask for
-    /// anything else: `mmap` has no cacheability flag, and `PROT_*`/`MAP_*` do not carry
-    /// one. So this is a fact about the pages, reported rather than chosen.
+    /// The first two variants are ordinary kernel pages — the anonymous page allocator and
+    /// the page cache — and Linux maps those write-back with no way to ask for anything
+    /// else: `mmap` has no cacheability flag, and `PROT_*`/`MAP_*` do not carry one. So for
+    /// those this is a fact about the pages, reported rather than chosen.
     ///
-    /// **The variant that would return something else does not exist yet**, and its
-    /// absence is the honest statement: write-combining and uncached are reachable only
-    /// through a *driver's* `mmap` handler (for us, `/dev/nvidia*`, where RM's
-    /// `nv_encode_caching` acts on the `NV_MEMORY_*` attribute fixed at allocation time).
-    /// A `Backing::DeviceFile` arrives with the isolate's RM mappings (M2-d); when it
-    /// does, it is this method that stops returning a single answer, and every call site
-    /// already names what it requires.
+    /// ## ★★★ Why [`Backing::DeviceFile`] is `None` and not a third answer
+    ///
+    /// The honest answer for a device mapping is not *"write-combining"* and not
+    /// *"uncached"*. It is **"the driver already decided, from an attribute chosen at
+    /// allocation time, and userspace cannot read it back"** — which is decider 4 in
+    /// [`crate::cache`]'s table, named there as the one this crate cannot enforce.
+    ///
+    /// For `/dev/nvidia*` specifically, one descriptor yields *three different attributes*
+    /// depending on which address range the context covers:
+    /// **uncached** for BAR0 registers, **uncached** for the USERD sub-window of the
+    /// framebuffer, and **write-combining** for the rest of it
+    /// (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-597`). Returning any single value here
+    /// would be wrong for two of those three, and — worse — it would be wrong *silently*,
+    /// because [`require_attainable`] would then start refusing correct requests and
+    /// accepting incorrect ones with equal confidence.
+    ///
+    /// `None` therefore means **"not checkable here"**, never "anything goes". The
+    /// requirement the caller states is still mandatory, still travels with the region, and
+    /// is still the thing a review reads; what changes is that this layer stops pretending
+    /// it can adjudicate it. That is the same conclusion [`crate::cache`]'s module docs
+    /// already reach in prose — *"requesting an attribute and observing no change is not
+    /// evidence about the attribute"* — made into a return type.
+    ///
+    /// [`require_attainable`]: crate::cache::require_attainable
     #[must_use]
-    pub const fn attainable_cache_policy(self) -> CachePolicy {
+    pub const fn attainable_cache_policy(self) -> Option<CachePolicy> {
         match self {
             // The anonymous page allocator hands out ordinary write-back RAM.
-            Backing::PrivateAnonymous => CachePolicy::WriteBack,
+            Backing::PrivateAnonymous => Some(CachePolicy::WriteBack),
             // A `memfd`/`tmpfs`/regular-file mapping is the page cache: also write-back.
-            Backing::SharedFile { .. } => CachePolicy::WriteBack,
+            Backing::SharedFile { .. } => Some(CachePolicy::WriteBack),
+            // The driver's `mmap` handler decided. See above.
+            Backing::DeviceFile { .. } => None,
         }
     }
 
@@ -127,6 +176,7 @@ impl Backing<'_> {
         match self {
             Backing::PrivateAnonymous => "anonymous memory",
             Backing::SharedFile { .. } => "a shared file",
+            Backing::DeviceFile { .. } => "a device file",
         }
     }
 }
@@ -284,6 +334,10 @@ fn decode_backing(
                 .map_err(|_| RawError::TooLargeForHost { value: offset })?;
             Ok((fd.as_raw_fd(), off, libc::MAP_SHARED))
         }
+        // ★ The offset is **structurally** zero — see [`Backing::DeviceFile`]. It is
+        // written as a literal here rather than taken from the variant precisely so that a
+        // future edit to that variant cannot introduce one.
+        Backing::DeviceFile { fd } => Ok((fd.as_raw_fd(), 0, libc::MAP_SHARED)),
     }
 }
 
@@ -475,6 +529,30 @@ pub struct VolatileRegion {
     map: Mapping,
     cache: CachePolicy,
 }
+
+// SAFETY: a `VolatileRegion` owns a process-wide mapping, not a thread-affine resource.
+// Its two fields are the mapping (established by exactly one `mmap` in `map`, never
+// rewritten, released by exactly one `munmap` in `Drop`) and a `Copy` attribute. `munmap`
+// from a thread other than the one that called `mmap` is valid on Linux, so moving the
+// owner between threads is sound. Same argument as `GuestWindow`'s, one layer in.
+unsafe impl Send for VolatileRegion {}
+
+// SAFETY: ★ this is the ONE type in the crate for which `Sync` is not a residual but the
+// literal definition. Every accessor takes `&self` and every access goes through
+// `word_at`, which yields `&AtomicU32`/`&AtomicU64` and performs a `Relaxed` load or
+// store — the exact operations the abstract machine defines under concurrent modification,
+// and the reason this type exists instead of a `*mut` and a `volatile`. There is no bulk
+// accessor and no way to obtain a borrow of more than one naturally-aligned word (the
+// `AtomicWord` trait is private and has two impls), so two `&self` methods on different
+// threads cannot tear anything. `base`, `len` and `cache` are immutable for the object's
+// life. The *other* writer — real hardware — is outside the abstract machine either way,
+// and is precisely what `Relaxed` atomics are chosen here to tolerate.
+//
+// ★★ Load-bearing consequence, stated so it is not discovered later: this grant is what
+// lets one RM connection's ring and USERD be shared by a whole worker pool. Without it
+// `RmBackend: Send + Sync` cannot hold for a backend that owns a mapping, and the pool
+// would have to be one worker.
+unsafe impl Sync for VolatileRegion {}
 
 impl VolatileRegion {
     /// Map `len` bytes of `backing` as a hardware-shared region, requiring cache policy
@@ -1524,7 +1602,7 @@ mod tests {
     /// has exactly one attribute. Pinned as a table so the day a device backing lands, the
     /// row that changes is visible in the diff.
     #[test]
-    fn every_backing_today_attains_write_back_and_only_write_back() {
+    fn every_page_backed_backing_attains_write_back_and_only_write_back() {
         let p = page();
         let f = shared_file(p.bytes());
         let fd = std::os::fd::AsFd::as_fd(&f);
@@ -1532,9 +1610,47 @@ mod tests {
             Backing::PrivateAnonymous,
             Backing::SharedFile { fd, offset: 0 },
         ] {
-            assert_eq!(backing.attainable_cache_policy(), CachePolicy::WriteBack);
+            assert_eq!(
+                backing.attainable_cache_policy(),
+                Some(CachePolicy::WriteBack)
+            );
         }
+        // ★★ …and the device backing is `None`, which is a THIRD answer and not a fourth
+        // policy. It is what the method's docs call "not checkable here": one NVIDIA
+        // descriptor yields uncached for BAR0, uncached for the USERD sub-window and
+        // write-combining for the rest of the framebuffer, so no single value is right.
+        assert_eq!(
+            Backing::DeviceFile { fd }.attainable_cache_policy(),
+            None,
+            "a driver-decided mapping must not claim an attainable policy"
+        );
         let _ = p;
+    }
+
+    /// ★★★ A device backing is refused **by variant** at a `MAP_FIXED` window placement.
+    ///
+    /// Non-vacuity: the same window accepts the same length from a shared file on the line
+    /// below, so the refusal is about the BACKING and not about the geometry.
+    #[test]
+    fn a_device_backing_cannot_be_placed_inside_a_guest_window() {
+        let p = page();
+        let f = shared_file(p.bytes());
+        let fd = std::os::fd::AsFd::as_fd(&f);
+        let w = crate::GuestWindow::create(p.bytes() * 4, p).expect("create");
+        assert_eq!(
+            w.place(HostOffset::new(0), p.bytes(), Backing::DeviceFile { fd }),
+            Err(RawError::DeviceBackingNotPlaceable)
+        );
+        assert_eq!(
+            w.place(
+                HostOffset::new(0),
+                p.bytes(),
+                Backing::SharedFile { fd, offset: 0 }
+            ),
+            Ok(()),
+            "the SAME window, offset and length must accept a file backing — otherwise \
+             the refusal above proves nothing about the backing"
+        );
     }
 
     /// ★ §4.5: every syscall-performing entry asserts the R1 witness. The `Drop` path is

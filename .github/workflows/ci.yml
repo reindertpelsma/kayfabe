@@ -916,7 +916,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:73 kayfabe-qemu-raw:31"
+          AUDITED="kayfabe-linux-raw:75 kayfabe-qemu-raw:31"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -1143,6 +1143,26 @@ jobs:
           #     — which drops the `DevDir` on the way out, so the isolate never receives a
           #     device descriptor it would have been holding with privilege. Watched to fire:
           #     deleting the `PR_CAPBSET_DROP` loop makes `enter` REFUSE, not pass.
+          #
+          # ★★ 60 -> 62 AT WORK-SUBMISSION RUNG 2. Two blocks, both in
+          #    `mapping_unsafe.rs`, both `unsafe impl` and NEITHER a new syscall:
+          #    `Send`/`Sync` for `VolatileRegion`. Itemised because the ratchet is a
+          #    review gate, not a counter:
+          #      - Send  — the same argument as `GuestWindow`'s, one layer in: the type
+          #        owns a process-wide mapping, its fields are immutable after `map`, and
+          #        `munmap` from another thread is valid.
+          #      - Sync  — ★ the one place in this crate where `Sync` is the DEFINITION
+          #        rather than a residual. Every accessor is a `Relaxed` atomic load or
+          #        store of one naturally-aligned word through `&self`; the width trait is
+          #        private with two impls, so there is no bulk accessor and nothing to
+          #        tear. Contrast `GuestWindow::Sync`, which explicitly does NOT claim the
+          #        race away.
+          #    WHY IT IS NEEDED: an RM connection's GPFIFO ring and USERD are mapped once
+          #    and shared by the isolate's whole worker pool, and `RmBackend: Send + Sync`
+          #    is structural (a `Proc` stores the boxed backend inside a `Sync` `Gpu`).
+          #    Without these two the pool would have to be a single worker. No syscall
+          #    surface is added by this rung at all — the mapping primitive it uses
+          #    (`Backing::DeviceFile`) reuses the existing `mmap` block.
           #
           # kayfabe-qemu-raw (0) — L2-Q stage Q0. Nothing yet, and §2.2's "itemise the
           # second crate's blocks exactly as the first crate's 37 are" is therefore

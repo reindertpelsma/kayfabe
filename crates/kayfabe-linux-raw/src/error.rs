@@ -97,6 +97,20 @@ pub enum RawError {
         /// The backing that decides it (`"anonymous memory"`, `"a shared file"`).
         backing: &'static str,
     },
+    /// ★★★ A [`crate::Backing::DeviceFile`] offered to a `MAP_FIXED` placement.
+    ///
+    /// A [`crate::GuestWindow`] placement is `MAP_FIXED` into a range a **guest** memslot
+    /// already names, and a device mapping is a window onto real hardware registers or
+    /// framebuffer. Composing them would publish device state straight into a guest's
+    /// physical address space at an address chosen by the code that asked — which is the
+    /// one thing the reserve-first design exists to make unrepresentable, and the exact
+    /// shape of *"never `MAP_FIXED` at a guest-supplied address"*.
+    ///
+    /// It is refused **by variant, at the door**, rather than by a check somewhere inside
+    /// `fixed_map`, because the argument is about what the two things *are* and not about
+    /// any property of a particular call. If a legitimate need for a device mapping inside
+    /// a window ever appears, it is a design change with an owner ruling, not a matched arm.
+    DeviceBackingNotPlaceable,
     /// A write to a region mapped read-only. Refused *before* the store, because the
     /// alternative is a `SIGSEGV` — and a read-only isolate mapping (§11 item 3) is
     /// precisely a place a caller can get this wrong.
@@ -175,6 +189,11 @@ impl fmt::Display for RawError {
                 f,
                 "{backing} is always {attainable}; a mapping of it cannot be {requested}, \
                  and asking silently yields {attainable}"
+            ),
+            RawError::DeviceBackingNotPlaceable => write!(
+                f,
+                "a device-file backing cannot be placed inside a guest window: that would \
+                 MAP_FIXED hardware registers into a guest's physical address space"
             ),
             RawError::NotWritable => write!(f, "the region is mapped read-only"),
             RawError::Syscall { call, errno } => match errno {

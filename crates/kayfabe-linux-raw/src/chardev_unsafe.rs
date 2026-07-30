@@ -101,6 +101,29 @@ pub struct DevDir {
 }
 
 impl DevDir {
+    /// Duplicate the grant, so it can be **held** as well as borrowed.
+    ///
+    /// ★ Why this exists at all: [`crate::sandbox::enter`] returns the one `DevDir` an
+    /// isolate will ever have, and long-lived users need to keep it rather than thread a
+    /// borrow through every structure. The alternative — re-deriving it from a path — is
+    /// exactly the thing that cannot work after `pivot_root`, and is the escape this type's
+    /// docs are about.
+    ///
+    /// It is `F_DUPFD_CLOEXEC` through `std`, so it needs **no unsafe relaxation**: the
+    /// grant is duplicated by the same mechanism the kernel uses for a `fork`, and the
+    /// duplicate carries the same bounds — which are the *mount namespace's*, never the
+    /// descriptor's.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] (`fcntl`).
+    pub fn try_clone(&self) -> Result<Self, RawError> {
+        let fd = self.fd.try_clone().map_err(|e| RawError::Syscall {
+            call: "fcntl(F_DUPFD_CLOEXEC)",
+            errno: e.raw_os_error(),
+        })?;
+        Ok(DevDir { fd })
+    }
+
     /// Open `path` as an `O_PATH | O_DIRECTORY | O_CLOEXEC` directory descriptor.
     ///
     /// # Errors

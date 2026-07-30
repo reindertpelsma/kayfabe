@@ -72,13 +72,17 @@ use kayfabe_abi::generated::nvos::{
 };
 use kayfabe_abi::submit::{
     ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, ChannelAllocParams, ENGINE_TYPE_GRAPHICS,
-    GpfifoScheduleParams, NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND,
+    GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY, NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND,
     NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
-    NvMemoryAllocationParams, WORK_SUBMIT_TOKEN_PARAMS_SIZE, engine_type_copy,
+    NvMemoryAllocationParams, Nvos33ParametersWithFd, USERD_GP_GET, USERD_GP_PUT,
+    WORK_SUBMIT_TOKEN_PARAMS_SIZE, engine_type_copy,
 };
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_isolate::{CeSubCopy, HostHandle, IsolateId, RmBackend, RmError};
-use kayfabe_linux_raw::{CharDevice, DevDir, Indirect, RawError, ioctl};
+use kayfabe_linux_raw::{
+    Backing, CachePolicy, CharDevice, DevDir, HostOffset, HostPageSize, Indirect, RawError,
+    VolatileRegion, ioctl,
+};
 use kayfabe_util::leafwitness;
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeMap;
@@ -119,6 +123,15 @@ pub struct RmConnection {
     /// The per-GPU node. `NV_ACTUAL_DEVICE_ONLY` escapes go here, and it is held for its
     /// whole life because `REGISTER_FD` binds the *session*.
     gpu: CharDevice,
+    /// ★ The `/dev` grant, **held** rather than borrowed. A CPU mapping needs a
+    /// *freshly opened* per-GPU node for every single mapping (the driver's mmap context
+    /// is one-shot per descriptor — see `kayfabe_abi::submit::NV_ESC_RM_MAP_MEMORY`), and
+    /// after `pivot_root` there is no path to re-derive one from. So the connection keeps
+    /// the capability it was opened with instead of taking a borrow it cannot outlive.
+    dev: DevDir,
+    /// Which GPU node to open for those mappings. Kept as the index rather than as a name
+    /// so the naming rule lives in exactly one place.
+    gpu_index: u32,
     client: u32,
     device: u32,
     subdevice: u32,
@@ -126,6 +139,14 @@ pub struct RmConnection {
     /// input; never a gate (see the module docs).
     version: String,
     objects: Mutex<Objects>,
+    /// ★ The CPU mappings, in their **own** mutex rather than inside [`Objects`].
+    ///
+    /// Two reasons, and the second is the real one. (a) [`Objects`] is copied out from
+    /// under its lock by every accessor, and a mapping is not copyable. (b) A ring access
+    /// is a *store into a page hardware reads*; it must not be serialised behind the handle
+    /// table, and the handle table must not be held across it. Two locks, each held for one
+    /// kind of thing, is the R3 lock-rank discipline rather than a convenience.
+    rings: Mutex<BTreeMap<u32, ChannelRings>>,
 }
 
 #[derive(Debug, Default)]
@@ -163,6 +184,26 @@ struct Objects {
     /// (the control is on the group, not the channel), and the ring verbs need the ring's
     /// GPU VA.
     channels: BTreeMap<u32, ChannelParts>,
+}
+
+/// One channel's **CPU mappings** — the ring and USERD, as this process sees them.
+///
+/// Separate from [`ChannelParts`] and not `Copy`, which is the whole reason: a
+/// [`VolatileRegion`] owns an `mmap` and a [`CharDevice`] owns a descriptor, and both must
+/// be dropped exactly once, in this process, when the channel goes. A handle table can be
+/// copied out from under a lock; a mapping cannot.
+#[derive(Debug)]
+struct ChannelRings {
+    /// The node the ring's mmap context was registered against. Held rather than used:
+    /// Linux keeps the mapping alive without it, but `NV_ESC_RM_UNMAP_MEMORY` names it, and
+    /// a descriptor closed early makes teardown unexpressible.
+    _ring_node: CharDevice,
+    /// The pushbuffer / GPFIFO / semaphore object.
+    ring: VolatileRegion,
+    /// The node USERD's mmap context was registered against.
+    _userd_node: CharDevice,
+    /// USERD — where `GP_GET` (hardware writes) and `GP_PUT` (we write) live.
+    userd: VolatileRegion,
 }
 
 /// Everything [`RmBackend::alloc_channel`] built, kept because the port hands back one
@@ -248,6 +289,44 @@ fn status_check(status: u32) -> Result<(), RmError> {
     }
 }
 
+/// The opaque status a **bounds** refusal made by this crate reports.
+///
+/// ★ Distinct from [`NOT_ON_THIS_RUNG`], and the distinction is not cosmetic. An access
+/// that leaves a mapped object is a caller error with an exact answer; *"this rung does not
+/// implement that"* is a statement about the port's completeness. Collapsing them — which
+/// the first draft of this file did, because every non-syscall `RawError` fell into one
+/// catch-all arm — makes a real out-of-range read indistinguishable from an unimplemented
+/// verb in every log and every assertion. `0x4B47` is `"KG"`, one past `"KF"`.
+pub const NOT_IN_THIS_OBJECT: u32 = 0x4B47;
+
+/// The opaque status a **cache-attribute** refusal reports.
+///
+/// ★ A third local status, and it exists because a bite produced the second one for
+/// something that is not a bound. `RawError::CachePolicyUnattainable` means *"the backing
+/// provably cannot have the attribute this call site requires"* — a configuration fault in
+/// the pairing of an RM allocation with its mapping, which is neither an out-of-range
+/// access nor an unimplemented verb. Reporting it as either is the symptom-not-truth
+/// failure §7.3 forbids. `0x4B48` is `"KH"`.
+///
+/// Unreachable in normal operation: every policy this file passes is a constant. That is
+/// the point — if it ever appears, someone changed a mapping's attribute without changing
+/// the allocation's, and the status says so.
+pub const MAPPING_ATTRIBUTE_REFUSED: u32 = 0x4B48;
+
+/// Classify a failure from a mapped region: a bounds refusal, or a syscall.
+///
+/// Deliberately a different function from [`ioctl_error`]. They share the syscall arm and
+/// nothing else, and the reason they are not one function with a flag is that the *default*
+/// differs: an unrecognised failure from an ioctl is a rung gap, and an unrecognised
+/// failure from a region access is a bound.
+fn region_error(e: &RawError) -> RmError {
+    match e {
+        RawError::Syscall { .. } => ioctl_error(e),
+        RawError::CachePolicyUnattainable { .. } => RmError::Other(MAPPING_ATTRIBUTE_REFUSED),
+        _ => RmError::Other(NOT_IN_THIS_OBJECT),
+    }
+}
+
 /// Classify an ioctl-level failure. `EINTR` is **the cancellation signal**, not an error.
 fn ioctl_error(e: &RawError) -> RmError {
     match e {
@@ -307,9 +386,12 @@ impl RmConnection {
         )?;
         rung("R3 REGISTER_FD", gpu_node.ioctl(req, &mut reg, &mut []))?;
 
+        let held = rung("R1 hold the /dev grant", dev.try_clone())?;
         let conn = RmConnection {
             ctl,
             gpu: gpu_node,
+            dev: held,
+            gpu_index: gpu.0,
             client: 0,
             device: 0,
             subdevice: 0,
@@ -320,6 +402,7 @@ impl RmConnection {
                 companions: BTreeMap::new(),
                 channels: BTreeMap::new(),
             }),
+            rings: Mutex::new(BTreeMap::new()),
         };
 
         // R4 — the root client. RM writes back the handle it assigned.
@@ -517,6 +600,38 @@ impl RmConnection {
             .copied()
     }
 
+    /// Run `f` against one channel's mappings.
+    ///
+    /// ★ A closure rather than a getter, because a [`VolatileRegion`] cannot leave the
+    /// mutex — and that is the correct shape rather than a limitation: the mapping is
+    /// shared by every worker on this connection, so the only safe borrow is a scoped one.
+    ///
+    /// ★★ R1: `f` must not block. Everything passed to it here is a `Relaxed` atomic load
+    /// or store into a mapped page — nanoseconds, no syscall — and an ioctl under this lock
+    /// would be the violation. The lock is deliberately *not* the handle table's, so a ring
+    /// access and an object operation cannot contend.
+    fn with_rings<T>(&self, chan: u32, f: impl FnOnce(&ChannelRings) -> T) -> Option<T> {
+        let _leaf = leafwitness::Held::enter();
+        let rings = self.rings.lock().expect("rings");
+        rings.get(&chan).map(f)
+    }
+
+    fn remember_rings(&self, chan: u32, rings: ChannelRings) {
+        let _leaf = leafwitness::Held::enter();
+        self.rings.lock().expect("rings").insert(chan, rings);
+    }
+
+    /// Drop one channel's mappings, returning whether there were any. Taken out of the map
+    /// and dropped **outside** the lock: `munmap` and `close` are syscalls, and R1 does not
+    /// have an exception for teardown.
+    fn forget_rings(&self, chan: u32) -> bool {
+        let taken = {
+            let _leaf = leafwitness::Held::enter();
+            self.rings.lock().expect("rings").remove(&chan)
+        };
+        taken.is_some()
+    }
+
     fn forget_channel(&self, chan: u32) -> Option<ChannelParts> {
         let _leaf = leafwitness::Held::enter();
         self.objects.lock().expect("objects").channels.remove(&chan)
@@ -628,6 +743,89 @@ impl RmConnection {
             .map_err(|e| ioctl_error(&e))?;
         let out = Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
         status_check(out.status)
+    }
+
+    /// ★★★ R14 — **CPU-map an RM memory object.** Two syscalls, in an order neither of
+    /// them documents, plus a descriptor whose *kind* and whose *freshness* both matter.
+    ///
+    /// ```text
+    ///   node = openat(dev, "nvidia<N>")          a FRESH per-GPU node, per mapping
+    ///   NV_ESC_RM_MAP_MEMORY on the CONTROL node, naming node's descriptor NUMBER
+    ///   mmap(node, len, offset = 0)
+    /// ```
+    ///
+    /// Four facts, each of which is a different failure if got wrong:
+    ///
+    /// 1. **The escape goes on the control node** — it is `NV_CTL_DEVICE_ONLY`
+    ///    (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:521`) — while the `mmap`
+    ///    goes on the *device* node. The two halves of one mapping use two different files.
+    /// 2. **The descriptor's kind must match what is being mapped.** RM chooses the device
+    ///    node's state for an address inside a BAR and the control node's for system memory
+    ///    (`ogkm-580: .../osapi.c:2270-2279`); `nv_get_file_private` then refuses a
+    ///    descriptor of the other kind (`ogkm-580: kernel-open/nvidia/nv-usermap.c:45-47`).
+    ///    Everything mapped here is device-local, so it is always the per-GPU node.
+    /// 3. **A fresh node per mapping.** The context is one-shot: a second registration on a
+    ///    descriptor that already has one is `NV_ERR_STATE_IN_USE`
+    ///    (`ogkm-580: kernel-open/nvidia/nv-usermap.c:53-57`). Reusing `self.gpu` would work
+    ///    exactly once and then start failing on the second channel, which is the kind of
+    ///    bug that looks like a resource leak.
+    /// 4. **The `mmap` offset is zero and the length is exact** — the driver refuses any
+    ///    other offset with `EINVAL` and any other length with `ENXIO`
+    ///    (`ogkm-580: kernel-open/nvidia/nv-mmap.c:533-536`, `:562-565`).
+    ///
+    /// The node is returned alongside the region and must be kept: the mapping outlives the
+    /// descriptor on Linux, but `NV_ESC_RM_UNMAP_MEMORY` needs it, and dropping it early
+    /// makes the teardown unexpressible.
+    fn map_cpu(&self, h_memory: u32, len: u64) -> Result<(CharDevice, VolatileRegion), RmError> {
+        let name = CString::new(format!("nvidia{}", self.gpu_index))
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let node = CharDevice::openat(&self.dev, &name).map_err(|e| ioctl_error(&e))?;
+
+        let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];
+        Nvos33ParametersWithFd {
+            h_client: self.client,
+            h_device: self.device,
+            h_memory,
+            offset: 0,
+            length: len,
+            p_linear_address: 0,
+            status: 0,
+            flags: 0,
+            fd: node.fd_number(),
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out =
+            Nvos33ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+
+        // ★ `VolatileRegion`, not `MappedRegion`, and the choice is the type system doing
+        // the work: this is memory **hardware writes**, so every access must be a naturally
+        // aligned atomic of at most eight bytes. A bulk `read_into` of USERD while the GPU
+        // is advancing `GP_GET` is exactly the tearing `VolatileRegion` exists to forbid.
+        //
+        // ★★ The cache policy is a REQUIREMENT that this layer cannot check, and says so:
+        // `Backing::DeviceFile`'s attainable policy is `None` because one NVIDIA descriptor
+        // yields three different attributes depending on the range. What RM actually
+        // installs for a framebuffer offset is write-combining, except for the USERD
+        // sub-window, which it maps uncached
+        // (`ogkm-580: kernel-open/nvidia/nv-mmap.c:575-597`). We state write-combining
+        // because that is what the *object* was allocated as; the residual is named rather
+        // than claimed, and the fence discipline below is what makes it survivable either
+        // way.
+        let region = VolatileRegion::map(
+            Backing::DeviceFile { fd: node.as_fd() },
+            len,
+            CachePolicy::WriteCombining,
+            HostPageSize::query(),
+        )
+        .map_err(|e| region_error(&e))?;
+        Ok((node, region))
     }
 
     /// Allocate `len` bytes of **device-local** memory — the only kind a ring, a USERD
@@ -1010,6 +1208,11 @@ impl RmBackend for HostRmBackend {
         // not free, because the alternative is a silent leak that only shows up as the
         // *next* allocation failing.
         if let Some(parts) = self.conn.forget_channel(raw) {
+            // ★ The CPU mappings go FIRST, before any RM object is freed. `munmap` of a
+            // device mapping whose backing object RM has already destroyed is the classic
+            // use-after-free of this layer, and the driver's own revocation path
+            // (`ogkm-580: kernel-open/nvidia/nv-mmap.c:786-800`) exists because it happens.
+            self.conn.forget_rings(raw);
             let mut first: Result<(), RmError> = Ok(());
             let mut keep = |r: Result<(), RmError>| {
                 if first.is_ok() {
@@ -1269,6 +1472,34 @@ impl HostRmBackend {
         }
         let token = u32::from_le_bytes(token);
 
+        // ★★★ R14 — the CPU mappings. Deliberately AFTER the token: everything above is a
+        // fact about hardware that no byte of ours has touched, and everything below is
+        // this process getting its hands on the channel. Keeping the order means a failure
+        // here cannot be confused for a channel that never existed.
+        let rings = match (
+            self.conn.map_cpu(ring, RING_OBJECT_BYTES),
+            self.conn.map_cpu(userd, RING_OBJECT_BYTES),
+        ) {
+            (Ok((ring_node, ring_map)), Ok((userd_node, userd_map))) => ChannelRings {
+                _ring_node: ring_node,
+                ring: ring_map,
+                _userd_node: userd_node,
+                userd: userd_map,
+            },
+            (a, b) => {
+                // Either half failing means the channel cannot be submitted to, so it is
+                // torn down here rather than handed back as a channel that silently is not
+                // one. The first error is the one reported.
+                let e = a
+                    .err()
+                    .or(b.err())
+                    .unwrap_or(RmError::Other(NOT_ON_THIS_RUNG));
+                unwind(self, &[ring, userd, tsg, chan]);
+                return Err(e);
+            }
+        };
+        self.conn.remember_rings(chan, rings);
+
         self.conn.remember_channel(
             chan,
             ChannelParts {
@@ -1280,6 +1511,123 @@ impl HostRmBackend {
             },
         );
         Ok((self.stamp(chan), u64::from(token)))
+    }
+
+    /// Read USERD's two ring cursors: `(GP_GET, GP_PUT)`.
+    ///
+    /// ★★ **`GP_GET` is the only word in this whole crate that hardware writes and we do
+    /// not.** It is the GPU host unit's consume cursor. Every claim this port can make
+    /// about submission bottoms out in watching it move, so it is surfaced as its own
+    /// accessor rather than as an offset a caller has to know.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] if `chan` is not a channel of this connection, and whatever
+    /// the bounds check refuses with if USERD is somehow shorter than its own cursors.
+    pub fn userd_cursors(&self, chan: HostHandle) -> Result<(u32, u32), RmError> {
+        let raw = self.narrow(chan)?;
+        self.conn
+            .with_rings(raw, |r| {
+                let get = r
+                    .userd
+                    .load_u32(HostOffset::new(USERD_GP_GET))
+                    .map_err(|e| region_error(&e))?;
+                let put = r
+                    .userd
+                    .load_u32(HostOffset::new(USERD_GP_PUT))
+                    .map_err(|e| region_error(&e))?;
+                Ok((get, put))
+            })
+            .unwrap_or(Err(RmError::BadHandle(chan)))
+    }
+
+    /// Store one 32-bit word into the channel's ring object at `offset`.
+    ///
+    /// The ring object holds this channel's pushbuffer, its GPFIFO and its semaphore, all
+    /// of which are built a dword at a time. It is `pub` because the ladder builds them and
+    /// the next rung's `ring_doorbell` will; nothing in the core can reach it, and nothing
+    /// should — the ring is the adapter's own object, not an address the guest names.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`], or the bounds refusal if `offset` leaves the object.
+    pub fn ring_store_u32(&self, chan: HostHandle, offset: u64, value: u32) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        self.conn
+            .with_rings(raw, |r| {
+                r.ring
+                    .store_u32(HostOffset::new(offset), value)
+                    .map_err(|e| region_error(&e))
+            })
+            .unwrap_or(Err(RmError::BadHandle(chan)))
+    }
+
+    /// Load one 32-bit word from the channel's ring object at `offset`.
+    ///
+    /// # Errors
+    /// As [`HostRmBackend::ring_store_u32`].
+    pub fn ring_load_u32(&self, chan: HostHandle, offset: u64) -> Result<u32, RmError> {
+        let raw = self.narrow(chan)?;
+        self.conn
+            .with_rings(raw, |r| {
+                r.ring
+                    .load_u32(HostOffset::new(offset))
+                    .map_err(|e| region_error(&e))
+            })
+            .unwrap_or(Err(RmError::BadHandle(chan)))
+    }
+
+    /// ★★★ R14b — **prove the mapped bytes are in the GPU's memory and not in ours.**
+    ///
+    /// A mapping that succeeds proves nothing. `mmap` of an anonymous page succeeds too,
+    /// and a store into it reads back exactly as well — so "I wrote `0xDEADBEEF` and read
+    /// `0xDEADBEEF`" is a statement about our own process, which is precisely the class of
+    /// evidence `mode2_real_forward_not_fake` rejects.
+    ///
+    /// What this does instead: write a pattern through the channel's live mapping, then
+    /// build a **completely independent second mapping** of the same RM object — a fresh
+    /// device node, a fresh mmap context, a kernel-chosen address that has nothing to do
+    /// with the first — and read the pattern back through *that*. Two mappings of one
+    /// anonymous allocation cannot exist; two mappings of one device object can, and they
+    /// alias because the bytes are in the object.
+    ///
+    /// A control word is read at a second offset in the same pass, so a mapping that
+    /// returned a constant would fail even though it "matched".
+    ///
+    /// Returns `(observed_at_offset, observed_at_control_offset)` read through the second
+    /// mapping. The second mapping is dropped before returning: it exists only to be a
+    /// different mapping.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`], or whatever the driver refuses the second mapping with.
+    pub fn prove_ring_is_device_memory(
+        &mut self,
+        chan: HostHandle,
+        offset: u64,
+        pattern: u32,
+    ) -> Result<(u32, u32), RmError> {
+        const CONTROL_OFFSET: u64 = 0x40;
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+
+        self.ring_store_u32(chan, offset, pattern)?;
+        // A second, deliberately different value, so "the mapping returns a constant" and
+        // "the mapping aliases the object" are distinguishable outcomes.
+        self.ring_store_u32(chan, CONTROL_OFFSET, !pattern)?;
+
+        // The independent mapping. `map_cpu` opens its own node, so this shares nothing
+        // with the first — not the descriptor, not the mmap context, not the address.
+        let (node, second) = self.conn.map_cpu(parts.ring, RING_OBJECT_BYTES)?;
+        let a = second
+            .load_u32(HostOffset::new(offset))
+            .map_err(|e| region_error(&e))?;
+        let b = second
+            .load_u32(HostOffset::new(CONTROL_OFFSET))
+            .map_err(|e| region_error(&e))?;
+        drop(second);
+        drop(node);
+        Ok((a, b))
     }
 
     /// Free exactly one RM object — the body [`RmBackend::free`] had before a channel
@@ -1432,6 +1780,54 @@ mod tests {
             GPFIFO_ENTRIES.is_power_of_two(),
             "RM requires a power of two"
         );
+    }
+
+    /// ★★ The two local refusal statuses must be distinguishable from each other AND
+    /// from anything the driver can say. A bounds error reported as `NOT_ON_THIS_RUNG`
+    /// reads as "unimplemented", which is how a real out-of-range access gets triaged as
+    /// a missing feature.
+    #[test]
+    fn a_bounds_refusal_is_not_the_unimplemented_status() {
+        assert_ne!(NOT_IN_THIS_OBJECT, NOT_ON_THIS_RUNG);
+        assert_ne!(NOT_IN_THIS_OBJECT, 0);
+        assert_eq!(NOT_IN_THIS_OBJECT & 0x8000_0000, 0);
+        assert_eq!(
+            region_error(&RawError::OutOfRange {
+                offset: 0x1_0000,
+                len: 4,
+                object_len: 0x1_0000,
+            }),
+            RmError::Other(NOT_IN_THIS_OBJECT)
+        );
+        // …and a syscall failure through the SAME function still classifies as one, so the
+        // split did not swallow the errno lane.
+        assert_eq!(
+            region_error(&RawError::Syscall {
+                call: "mmap",
+                errno: Some(4),
+            }),
+            RmError::Interrupted
+        );
+        // ★ …and the THIRD one, which a bite produced: an attribute the backing cannot
+        // have is not a bound. All three local statuses are pairwise distinct and none
+        // collides with the errno lane, so a triage can tell them apart without reading
+        // this file.
+        assert_eq!(
+            region_error(&RawError::CachePolicyUnattainable {
+                requested: kayfabe_linux_raw::CachePolicy::WriteCombining,
+                attainable: kayfabe_linux_raw::CachePolicy::WriteBack,
+                backing: "a device file",
+            }),
+            RmError::Other(MAPPING_ATTRIBUTE_REFUSED)
+        );
+        for (a, b) in [
+            (NOT_ON_THIS_RUNG, NOT_IN_THIS_OBJECT),
+            (NOT_ON_THIS_RUNG, MAPPING_ATTRIBUTE_REFUSED),
+            (NOT_IN_THIS_OBJECT, MAPPING_ATTRIBUTE_REFUSED),
+        ] {
+            assert_ne!(a, b);
+        }
+        assert_eq!(MAPPING_ATTRIBUTE_REFUSED & 0x8000_0000, 0);
     }
 
     /// Every isolate mints from the same base — the property that makes two isolates'

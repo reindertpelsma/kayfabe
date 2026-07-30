@@ -402,6 +402,46 @@ fn main() -> std::process::ExitCode {
         Ok((h, _)) => println!("FAIL  R13 unknown engine  = accepted as {:#010x}", h.raw()),
         Err(e) => println!("FAIL  R13 unknown engine  = wrong refusal {e:?}"),
     }
+    // ★★★ R14 — THE RING, CPU-MAPPED. The mapping itself proves nothing (an anonymous
+    // page maps and reads back too), so the evidence is that the bytes are in the GPU's
+    // object: written through one mapping, read back through a second, INDEPENDENT one —
+    // different descriptor, different mmap context, different address. Two mappings of one
+    // anonymous allocation cannot exist.
+    if let Some(&(chan, _, _)) = channels.first() {
+        const PROBE_OFFSET: u64 = 0x800;
+        const PATTERN: u32 = 0xA5A5_1234;
+        match rm.prove_ring_is_device_memory(chan, PROBE_OFFSET, PATTERN) {
+            Ok((a, b)) if a == PATTERN && b == !PATTERN => println!(
+                "★     R14 device memory   = wrote {PATTERN:#010x}/{:#010x} through mapping A, \
+                 read both back through an INDEPENDENT mapping B",
+                !PATTERN
+            ),
+            Ok((a, b)) if a == b => println!(
+                "FAIL  R14 device memory   = mapping B returned {a:#010x} at BOTH offsets — \
+                 a constant, not an aliasing view"
+            ),
+            Ok((a, b)) => println!(
+                "FAIL  R14 device memory   = mapping B saw {a:#010x}/{b:#010x}, wanted \
+                 {PATTERN:#010x}/{:#010x} — the mappings do not alias, so the bytes are ours",
+                !PATTERN
+            ),
+            Err(e) => println!("FAIL  R14 device memory   = {e:?}"),
+        }
+        match rm.userd_cursors(chan) {
+            Ok((get, put)) => println!("ok    R14 USERD cursors   = GP_GET {get} GP_PUT {put}"),
+            Err(e) => println!("FAIL  R14 USERD cursors   = {e:?}"),
+        }
+        // The ring is bounded, and the bound is the object's — a store past it must be a
+        // refusal here, not a fault or a write into whatever the driver mapped next.
+        match rm.ring_load_u32(chan, 0x1_0000) {
+            Err(RmError::Other(s)) if s == kayfabe_isolate_host::rm::NOT_IN_THIS_OBJECT => {
+                println!("ok    R14 ring bound      = a load past the object is refused BY BOUND");
+            }
+            Ok(v) => println!("FAIL  R14 ring bound      = read {v:#010x} past the object"),
+            Err(e) => println!("FAIL  R14 ring bound      = wrong refusal {e:?}"),
+        }
+    }
+
     if want_engines {
         engines(&mut rm, gpu);
     }
