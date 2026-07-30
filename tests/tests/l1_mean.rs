@@ -7345,6 +7345,17 @@ impl RealMeanReport {
             // the sharpest one in this run. It is asserted as a bound below; the
             // *number* of mappings released is the mode-independent half and stays.
             window_releases_deferred: 0,
+            // ★★ How many installs re-issued a number from the FREE LIST rather than
+            // minting a fresh one depends on the order in which the racing threads
+            // released and re-acquired — the same clock `held_slot_id` above names, and
+            // measured: this run yields 30 under one mode and 29 under the other while
+            // every other field is bit-identical. Leaving it in the equality made a
+            // correct run fail roughly 1 in 12, and it was twice dismissed as "a flake".
+            //
+            // ⊘ Removing it from the equality must NOT remove it from coverage — it is
+            // asserted as a NON-VACUITY bound below, per `window_releases_deferred`'s
+            // precedent, so the free list is still proven to have served.
+            slot_numbers_recycled: 0,
             ..self.audit
         };
         self
@@ -7788,6 +7799,18 @@ fn a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_
             r.map_regions_checked, 2,
             "({name}) at the end of the run the map and the kernel still agreed about the \
              two surviving windows"
+        );
+
+        // ★ NON-VACUITY for the one field `mode_independent` neutralises as a clock: its
+        // exact value is order-dependent, but that the free list SERVED AT ALL is not, and
+        // is the property worth keeping. A run that recycled nothing would mean every
+        // install minted a fresh number — the never-recycling allocator this plane
+        // replaced, whose exhaustion is the C's measured failure.
+        assert!(
+            r.audit.slot_numbers_recycled > 0,
+            "({name}) ★ NON-VACUITY: not one slot number came from the free list, so this \
+             run exercised a never-recycling allocator and every claim about recycling \
+             below is about a mechanism that did not run"
         );
     }
 
