@@ -345,7 +345,11 @@ fn every_cargo_workspace_in_the_tree_is_named_by_the_runner() {
             if p.is_dir() {
                 if matches!(
                     name.to_str(),
-                    Some("target" | ".git" | "mutants.out" | "corpus" | "artifacts")
+                    // ★ `.claude` too: a git worktree created under the repo is a FULL
+                    // second copy of the tree, and walking into it would report
+                    // `.claude/worktrees/x/fuzz` as an uncovered workspace root — a red
+                    // about the checkout layout rather than about the tree.
+                    Some("target" | ".git" | ".claude" | "mutants.out" | "corpus" | "artifacts")
                 ) {
                     continue;
                 }

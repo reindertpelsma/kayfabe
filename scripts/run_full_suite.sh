@@ -473,6 +473,7 @@ census_workspaces() {
   local found rc=0
   found=$(find . -name Cargo.toml \
             -not -path '*/target/*' -not -path '*/mutants.out/*' -not -path './.git/*' \
+            -not -path './.claude/*' \
             -exec grep -l '^\[workspace\]' {} + \
           | sed 's|/Cargo.toml$||; s|^\./||; s|^Cargo.toml$|.|' | sort)
   echo "cargo workspace roots discovered:"
