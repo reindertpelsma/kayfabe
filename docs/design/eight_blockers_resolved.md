@@ -374,6 +374,8 @@ observation and the guest's reclaim.
 ## What is still open after all of this
 
 1. **§2** — where the destination-page content comes from if the core does not emulate the copy.
+   ★ **§11 answers the *classification* of this question and escalates it: it is an ARCHITECTURE
+   decision, not an implementation gap.** Read §11 before building anything in stage C.
 2. **§8/§9** — the supervised-mmap policy, and specifically the dynamic-range mechanism.
 
 Everything else has an answer good enough to build from. ★ Three of the eight resolutions
@@ -484,3 +486,165 @@ The **cross-channel fence** — blocking where a forwarded command acquires a se
 page-table channel releases. It is real and recorded. It attaches at
 `kayfabe_fwd::apply_pushbuffer`'s `SemRelease` arm, the same point the decode trigger
 attaches. It is a separate, later concern.
+
+---
+
+## 11. ★★★ Stage C's content source — the verdict is (b): an ARCHITECTURE decision, NOT built
+
+> **Question put to this pass:** is the missing content source (a) an implementation gap with a
+> settled shape — *"the core already latches the phys-operand PT writes, so the payload is in
+> hand; all that is missing is a store"* — or (b) a genuine architecture decision the owner must
+> make?
+>
+> ★★★ **It is (b), and (a)'s premise is factually false.** Nothing was built. The evidence is
+> below; every claim is cited and was read on the tree at `a1eca8a` / in the C artifact.
+
+### 11.1 (a)'s premise is false: the payload is not in hand, and never was
+
+- `kayfabe_arch::PushMethod::CeLaunchDma` carries **`{dst, len, dst_is_virtual}`** and nothing
+  else (`rs: crates/kayfabe-arch/src/lib.rs:272-281`). There is **no source operand**, so the
+  parser never sees the bytes a copy would move.
+- `kayfabe_fwd::PtWrite` carries **`{gpu, page, aperture, owner, owner_pdb, bytes}`**
+  (`rs: crates/kayfabe-fwd/src/lib.rs:2066-2080`) — the *identity* of a page that was written and
+  *how much* of it, deliberately, because that is what a latch is. **No content, no `level`, no
+  `vabase`.**
+- `Vas::pt_pages` (`rs: kayfabe-core/src/gpu.rs:165`) is **write-only in production**: the only
+  writers are `latch_pt_writes` and `SharedDevice::parse_pushbuffer`; the only readers are tests.
+
+So "the payload of every write we intercept is in hand" describes a tree that does not exist.
+Adding a source operand to Axis B would be cheap — but it would not help, for §11.2.
+
+### 11.2 ★★★ A store of intercepted payloads cannot produce what the decode needs — three
+independent reasons, any one of which is fatal
+
+**(i) The orphan-leaf case is, by construction, written while the page is unclassified.**
+`classify_ce` calls `Spine::pt_page_owner` (`gpu.rs:1159`), which consults **`pt_roots` only** —
+and `Spine::refresh` seeds `pt_roots` **exclusively from declared PDB roots**
+(`gpu.rs:2284-2292`: `pt_roots.insert((gpu, pdb.0 & !0xfff), (pid, pdb))`). ⇒ **today exactly one
+page per VAS is classifiable as phys-operand.** Every deeper table page is `VaOperand` until a PDE
+pointing at it is decoded. That is precisely the acceptance case §10 names — *"the guest fills a
+leaf page and links it under the root a separate push later"* (`C: :8681-8690`) — so the leaf's
+**fill** is classified as data and discarded, and by the time the link makes it interesting, the
+write that filled it is gone. A payload store is empty exactly where the decode reads.
+
+**(ii) The decode descends into pages that were never written on our watch.**
+`nvkvm_m2_cpt_decode_page` recurses through `nvkvm_m2_pt_enum` (`C: :8737, :8656`), reading child
+tables **by physical address, in FB *and* in guest sysmem** (`nvkvm_pt_rd64`, `C: :4891-4904`).
+Those are reads of *memory*, not replays of *observed writes*.
+
+**(iii) A page table has more than one writer, and the C hooks each separately.** The CE path is
+`nvkvm_m2_ce_fb_write_hook` (`C: :6360` fills, `:6431` copies); the **CPU/BAR/PRAMIN** path is a
+second, independent dirty arm inside `nvkvm_fb_write` itself (`C: :1398-1403`). Both converge on
+one store. A capture that sees only the CE path sees only one producer.
+
+★ **And the level metadata has the same shape of problem.** The `{page → pdb, vabase, level}`
+triple stage C needs is populated in the C **only** by `nvkvm_m2_cpt_record`, whose three call
+sites are all inside the **discovery root-walk** (`C: :8614, :8624, :8640`) — *"reset + rebuilt on
+every recorded sweep"* (`C: :604`). It does not come from writes either.
+**Good news, recorded so it is not re-derived:** the Rust does **not** need to port that sweep.
+Level 0 is a declared fact (a PDB *is* its root page), so `decode_page(root) → children` yields
+each child's `level+1` and `vabase` forward, from the root down — the metadata chain is
+forward-populable in a way the C's never was. What it still requires is the **content of each page
+in the chain**, which is §11.2 again.
+
+### 11.3 The C's own words: the #13 fix depends on the emulator PERFORMING the write
+
+`C: :4936-4952`, the PD1-leaf comment, states the causal chain outright: without the 512 MiB leaf
+case *"chan_execute silently DROPPED every such PT write, the compute VAS's rebuilt subtree never
+reached **our FB shadow**, its re-mapped buffers were never backed … and the host CE FAULT_PDE'd
+one page past the last-backed leaf (#13, Xid 31)."*
+
+The subtree reaches the shadow **because QEMU performs the copy into it** (`memcpy` /
+`nvkvm_fb_host_ptr`, `C: :6413-6419`). Stage B removed the performing half. Nothing replaced the
+store, and **nothing performs the intercepted copy at all today** — `PhysOperand` latches an index
+and returns; `plan_doorbell` still rings the issuing channel on the host unconditionally. So the
+question is not only *"where do we read the content back from"* but the one upstream of it:
+★★ **who performs a phys-operand copy, and does its ring still reach hardware?**
+
+### 11.4 What the production `FbRead` actually is in the C — and why it is not a shadow
+
+`nvkvm_fb_read` / `nvkvm_fb_write` are the emulated device's **memory**, and they are a **hybrid**:
+a sparse `g_malloc0(4096)` page store (`C: :906-919`) *overlaid by real host GPU memory* wherever
+a range is host-backed (`nvkvm_fb_host_overlay` / `nvkvm_fb_host_ptr`, `C: :1445-1457, :5528`).
+Where the overlay hits, **the host GPU co-writes the bytes behind us** — the same uninstrumented-
+channel class `c_rust_trace_differential.md` names for `pci_dma_map`.
+
+And it is **device-wide, not a stage-C detail.** The same two functions serve BAR0-PRAMIN
+(`:1478`), BAR1/BAR2 (`:4623`, `:4690`), the BAR1/BAR2 page directories (`:3522`, `:3529`), channel
+USERD `GP_PUT`/`GP_GET` (`:4132-4133`), the instance block's PDB words (`:4795-4796`), GPFIFO entry
+fetch (`:6086`) and semaphore payloads (`:4333-4335`).
+
+⇒ Implementing `FbRead` "for the decode" **is building the emulated device's memory plane**, and
+its home is an **explicitly open question in this repo's own docs**: the planned `nvkvm-regs` crate
+(*"BAR0 map, intr tree, MSI-X routing, PRAMIN window, read-native overlay policy"*,
+`mode2_rust_rewrite_architecture.md` §4.2) **was never built**, and `mode2_gsp_port_plan.md`
+records **`[open] O1 — where does the rest of the register model live?`** … *"PTIMER, the display
+fuse, the PCI-config mirror, PRAMIN … This plan does not decide it."*
+
+That is the (b) trigger as the owner stated it, met twice over: a new authoritative store of
+device memory, in a core whose premise is that it holds none, whose owning crate is undecided.
+
+### 11.5 ★★ A second, adjacent departure found while verifying — stage B folded TWO C predicates
+into one
+
+The C has **two different decisions**, and they are not the same predicate:
+
+| decision | C predicate | site |
+|---|---|---|
+| **execute** — host CE vs CPU emulation | `m2cexec && !mscrub && !remap && !src_phys && !dst_phys && is_user_ce(chan_client)` | `C: :6310` |
+| **capture** — is this a PT write? | the fb-write hook fires on the **resolved physical** of every emulated FB write | `C: :6360, :6431` |
+
+So in the C, **every kernel-CE copy is CPU-emulated** — including the FB-alias PT write, which is
+*virtual*-dst and would pass a purely operand-carried test — and so are scrubs and fills. Stage B's
+split (`379f712`) is right about **capture** and silently answers **execute** as well, by routing
+everything non-phys to "forward it, let hardware execute it"
+(`rs: kayfabe-fwd/src/lib.rs:2281-2286`). Whether kernel/CeUtils/scrubber work is forwarded or
+emulated is a **separate decision the Rust has not made**, and it is upstream of the content
+question: if the answer is "emulated", the content is free exactly as it was in the C.
+
+### 11.6 The options, and the recommendation
+
+**Option 1 — device memory as an effect port outside the pure crates (port the C's shape).**
+Keep `walker::FbRead` as the abstract seam; implement it in the shell over a sparse owned page
+store plus the host-vidmem overlay where a range is host-backed. Core purity is preserved (this is
+structurally `Vmm`). *Costs:* a software CE must exist to perform intercepted copies — which the
+execution-plane doctrine says never to build, and which the C nonetheless does for kernel channels;
+the port is a **second** memory port; and where the overlay hits, it is an *alias* of memory
+hardware also writes, not a shadow we own.
+
+**Option 2 — PT pages RAM-backed in guest-physical space, read back through `Vmm`.**
+This is the posture §4.4's **audit C1** already argues for: *"PT pages are RAM-backed and the guest
+writes them natively; we capture via the CE-write hook and decode at the commit point"*, and the
+mechanism exists in the port already (`Vmm::map_read_native`, cap 7). Core adds an **FB-address →
+backing index**, not a content store; content read-back is `gpa_read`; one memory port, no aliasing
+of host vidmem. *Costs / unknowns:* (i) it **drops a capture channel the C had** — a guest **CPU**
+write to a PT page becomes invisible, where `nvkvm_fb_write`'s dirty arm saw it (§11.2 iii); (ii) it
+still needs an answer to *who performs the intercepted copy* (§11.3); (iii) it needs the BAR/PRAMIN
+aperture model, i.e. **O1**.
+
+**Option 3 — the literal (a): a core-owned store of intercepted payloads.** ⊘ **Rejected on the
+evidence**, not on taste: it cannot serve the orphan-leaf case (§11.2 i), cannot serve descent
+(ii), and sees one of at least two writers (iii). Generalising it until it works means shadowing
+**every** CE destination — which is Option 1 with the store in the wrong crate.
+
+★ **Recommendation, for the owner to rule on.** Take **Option 2 as the target posture and Option 1's
+port shape as the seam** — the core keeps naming pages by FB address through `FbRead` and never
+learns a GPA for a page table, so whichever backing **O1** settles on is a shell decision that does
+not reach a logic crate. **But decide §11.3 first**: *who performs a phys-operand copy, and does its
+channel's ring still reach hardware?* Every version of the content question is downstream of that
+answer, and if it is "we perform it", the content is free — which is exactly how the C got it.
+
+### 11.7 What stage C may and may not do until this is ruled on
+
+- **May not** land the FB shadow, the decoder wired to a production source, or any store of device
+  memory content. §10's own instruction stands: *"do not land the decoder alone."*
+- **May** land, if the owner wants motion meanwhile: `GmmuFmt::level_shift(level)` (Axis-B; the C's
+  table is `{47,512},{38,512},{29,512},{21,256},{12,512},{16,32}`, `C: :8706-8708`) and the pure
+  `decode_page` over a synthetic `FbRead`, property-tested — **as a decoder with tests and no
+  production caller**, which is what §10 already calls "a stub with tests".
+- ★ **Unchanged and still binding:** the 512 MiB PD1 leaf must **decode faithfully** at the walker
+  and be dropped by *policy* at the binding site. Re-verified at all three C sites this pass:
+  `walk_pdb_root` **resolves** it (`C: :4949`, offset mask `va & 0x1FFF_FFFF`, PTE aperture
+  encoding `0=VID, 2/3=SYS`), `pt_enum` **skips** it (`C: :8649`) and `cpt_decode_page` **skips** it
+  (`C: :8733`) — and both skips carry the same reason, *"its only known producer is the CeUtils
+  whole-FB identity alias"*, i.e. **policy about that alias, not a property of a 512 MiB leaf.**
