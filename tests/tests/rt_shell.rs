@@ -35,7 +35,7 @@ use std::ops::Range;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant as WallInstant};
+use std::time::Duration;
 
 use kayfabe_arch::ids::{EngineKind, GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
@@ -58,38 +58,18 @@ use kayfabe_vmm::CoreEventKind;
 // Harness helpers (watchdog + scenario), following concurrency_stress.rs
 // ---------------------------------------------------------------------------------
 
-/// Watchdog: abort the process loudly if the guard is not dropped within `limit`
-/// (bounded termination — a future wedge fails fast, never an opaque CI timeout).
-#[must_use]
-fn watchdog(test: &'static str, limit: Duration) -> WatchdogGuard {
-    let limit = match std::env::var("KAYFABE_STRESS_WATCHDOG_SECS") {
-        Ok(s) => Duration::from_secs(s.parse().expect("KAYFABE_STRESS_WATCHDOG_SECS: seconds")),
-        Err(_) => limit,
-    };
-    let done = Arc::new(AtomicBool::new(false));
-    let flag = Arc::clone(&done);
-    thread::spawn(move || {
-        let deadline = WallInstant::now() + limit;
-        while WallInstant::now() < deadline {
-            if flag.load(Ordering::Relaxed) {
-                return;
-            }
-            thread::sleep(Duration::from_millis(200));
-        }
-        if !flag.load(Ordering::Relaxed) {
-            eprintln!("WATCHDOG: {test} still running after {limit:?} — aborting the process");
-            std::process::abort();
-        }
-    });
-    WatchdogGuard(done)
-}
-
-struct WatchdogGuard(Arc<AtomicBool>);
-impl Drop for WatchdogGuard {
-    fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
-    }
-}
+/// Bounded termination for every test in this file — see [`kayfabe_mocks::watchdog`].
+///
+/// ★ This used to be a hand-copied local definition, one of **ten** identical ones, and
+/// every one of them announced its abort with `eprintln!` — which libtest's inherited
+/// output capture buffers and `abort()` then discards, so a wedged test reported a bare
+/// `SIGABRT` and nothing else — measured 2026-07-31 with a standalone `cargo test` probe
+/// whose watchdog thread wrote the same text twice, once via `eprintln!` (nothing reached
+/// the log) and once to a real fd 2 (all of it did). The shared one writes its diagnostic,
+/// including every thread's kernel wait channel, to a real descriptor;
+/// `kayfabe_mocks::watchdog::the_diagnostic_reaches_a_real_descriptor` is the test that
+/// fails if that stops being true.
+use kayfabe_mocks::watchdog;
 
 fn pdb_of(i: usize) -> Pdb {
     Pdb(0x3400_0000 + (i as u64) * 0x1_0000)

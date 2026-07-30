@@ -149,38 +149,18 @@ use kayfabe_vmm::{GuestRamMap, RamRegionId, RamSpan, RegionKind};
 // eat the CI timeout.
 // =================================================================================
 
-/// Abort the process loudly if the guard is not dropped within `limit`.
-#[must_use]
-fn watchdog(test: &'static str, limit: Duration) -> WatchdogGuard {
-    let limit = match std::env::var("KAYFABE_STRESS_WATCHDOG_SECS") {
-        Ok(s) => Duration::from_secs(s.parse().expect("KAYFABE_STRESS_WATCHDOG_SECS: seconds")),
-        Err(_) => limit,
-    };
-    let done = Arc::new(AtomicBool::new(false));
-    let flag = Arc::clone(&done);
-    thread::spawn(move || {
-        let deadline = WallInstant::now() + limit;
-        while WallInstant::now() < deadline {
-            if flag.load(Ordering::Relaxed) {
-                return;
-            }
-            thread::sleep(Duration::from_millis(200));
-        }
-        if !flag.load(Ordering::Relaxed) {
-            eprintln!("WATCHDOG: {test} still running after {limit:?} — aborting the process");
-            std::process::abort();
-        }
-    });
-    WatchdogGuard(done)
-}
-
-/// Disarms its [`watchdog`] on drop.
-struct WatchdogGuard(Arc<AtomicBool>);
-impl Drop for WatchdogGuard {
-    fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
-    }
-}
+/// Bounded termination for every test in this file — see [`kayfabe_mocks::watchdog`].
+///
+/// ★ This used to be a hand-copied local definition, one of **ten** identical ones, and
+/// every one of them announced its abort with `eprintln!` — which libtest's inherited
+/// output capture buffers and `abort()` then discards, so a wedged test reported a bare
+/// `SIGABRT` and nothing else — measured 2026-07-31 with a standalone `cargo test` probe
+/// whose watchdog thread wrote the same text twice, once via `eprintln!` (nothing reached
+/// the log) and once to a real fd 2 (all of it did). The shared one writes its diagnostic,
+/// including every thread's kernel wait channel, to a real descriptor;
+/// `kayfabe_mocks::watchdog::the_diagnostic_reaches_a_real_descriptor` is the test that
+/// fails if that stops being true.
+use kayfabe_mocks::watchdog;
 
 /// ★ The armed latches, as a **drop guard** — harness lesson, learned the hard way on
 /// this file's first run.
@@ -241,6 +221,16 @@ impl Drop for Latches {
         self.release_all();
     }
 }
+
+/// ★ The wedge bound for the five composed mean runs. Was **300 s**, which is a five
+/// minute CI slot spent on a test that is measured — on a 38-core box already carrying a
+/// load average of 58 — at **0.17 s to 2.50 s**. A bound two orders of magnitude above the
+/// thing it bounds is not caution, it is a hang that reports late; and until 2026-07-31 it
+/// reported late and then said nothing at all, because the abort's `eprintln!` went to a
+/// buffer libtest never flushed. 60 s matches every other watchdog in this file and still
+/// leaves 24-350x headroom. Sanitizer runs raise all of them at once with
+/// `KAYFABE_STRESS_WATCHDOG_SECS`; that is what that variable is for.
+const MEAN_WEDGE: u64 = 60;
 
 /// Control-plane ops per alloc/map-heavy thread. Sized to SECONDS in a debug build on
 /// a 4-core box — six workload threads per mode, two modes per test (measured: ≈2 s debug for the whole test). Deliberately large enough that the threads genuinely
@@ -2116,7 +2106,7 @@ fn report_census(c: &Census, rec: &SharedRecorder, mode: LockMode) {
 fn mean_multiproc_multithread_multigpu_multiworkload() {
     let _wd = watchdog(
         "mean_multiproc_multithread_multigpu_multiworkload",
-        Duration::from_secs(300),
+        Duration::from_secs(MEAN_WEDGE),
     );
     // The pids are graph-derived and identical in both worlds; resolve them once so the
     // expected `Stale::Proc` payload is derived rather than guessed.
@@ -5868,7 +5858,7 @@ struct RevokeProbe {
 fn a_guest_steering_dma_descriptors_at_device_windows_is_refused_by_name_under_load() {
     let _wd = watchdog(
         "a_guest_steering_dma_descriptors_at_device_windows_is_refused_by_name_under_load",
-        Duration::from_secs(300),
+        Duration::from_secs(MEAN_WEDGE),
     );
     let degenerate = dma_mean_run(LockMode::Degenerate);
     let sharded = dma_mean_run(LockMode::Sharded);
@@ -6848,7 +6838,7 @@ fn gpa_mean_run(mode: LockMode) -> GpaMeanReport {
 fn a_published_gpa_is_provably_its_own_procs_ram_under_mean_arena_churn() {
     let _wd = watchdog(
         "a_published_gpa_is_provably_its_own_procs_ram_under_mean_arena_churn",
-        Duration::from_secs(300),
+        Duration::from_secs(MEAN_WEDGE),
     );
     let degenerate = gpa_mean_run(LockMode::Degenerate);
     let sharded = gpa_mean_run(LockMode::Sharded);
@@ -7585,7 +7575,7 @@ fn a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_
     );
     let _wd = watchdog(
         "a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_load",
-        Duration::from_secs(300),
+        Duration::from_secs(MEAN_WEDGE),
     );
     let degenerate = real_mean_run(LockMode::Degenerate);
     let sharded = real_mean_run(LockMode::Sharded);
@@ -8211,7 +8201,7 @@ fn a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_dea
     );
     let _wd = watchdog(
         "a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_deadline",
-        Duration::from_secs(300),
+        Duration::from_secs(MEAN_WEDGE),
     );
     let degenerate = guest_mean_run(LockMode::Degenerate);
     let sharded = guest_mean_run(LockMode::Sharded);
@@ -8307,16 +8297,40 @@ fn a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_dea
             "({name}) ★ EXACTLY the signals the producers sent: {RSIGNALS} counter writes \
              plus the one worker HUP. Coalescing moves the wake count, never this. {s:?}"
         );
-        // ★ The control channel is an instrument too, and until 2026-07-27 it was the one
-        // instrument in this block nothing asserted — which is exactly how it went missing
-        // from the bound below. `ReactorHandle::shutdown` is the only thing in this harness
-        // that signals it (`wake()` is never called here), and the teardown calls it once.
-        assert_eq!(
-            s.control_reports, 1,
-            "({name}) ★ EXACTLY the one control wake this run performs — the teardown's \
-             `shutdown()`. It is asserted rather than merely added to the bound below, \
-             because an unbounded control term would turn that bound into a free pass. \
-             {s:?}"
+        // ★★★ THE CONTROL TERM IS AN INEQUALITY, AND THAT IS A CORRECTION — 2026-07-31.
+        //
+        // This was `assert_eq!(s.control_reports, 1)` — *"exactly the one control wake
+        // this run performs"* — and it **flaked on unmodified master at 4 in 460** on a
+        // 38-core box (`control_reports: 0`, every time, in both lock modes). It is the
+        // identical defect `reactor_os`'s `control_reports >= 1` was removed for: an
+        // assertion about **which of two legitimate channels won a race**.
+        //
+        // `ReactorHandle::shutdown` publishes the stop through two independent channels on
+        // purpose — `stop.store(Release)` then `control.signal()` — and `Reactor::run_with`
+        // honours whichever it reaches first. At the bottom of a productive batch it
+        // returns on `self.stop.load(Acquire)` (`kayfabe-shell/src/reactor.rs:353`) without
+        // ever polling the control descriptor, and the idle arm does the same. Under this
+        // test's load the teardown's `shutdown()` routinely lands in exactly that window,
+        // so the descriptor is never reported. Which channel carried it is a **clock**.
+        //
+        // ⊘ NOT loosened into nothing: `<= 1` is the strongest statement that does not
+        // name a scheduling order, and it is TRUE BY CONSTRUCTION here rather than by
+        // luck — `shutdown()` is called exactly once and `ReactorHandle::wake` is never
+        // called in this harness, so the control source can be signalled at most once.
+        //
+        // ★ What that costs, stated rather than hidden: this test no longer witnesses the
+        // control descriptor **delivering** an edge. It is not lost coverage, because it
+        // is proved deterministically one file over, by
+        // `reactor_os::os_the_control_source_is_the_loops_only_way_to_learn_of_a_shutdown_it_is_waiting_on`,
+        // which drives the loop single-threaded with nothing else armed and asserts the
+        // count as an EQUALITY with no order in it. A property that needs a total order
+        // belongs in a test that has one.
+        assert!(
+            s.control_reports <= 1,
+            "({name}) ★ at most the ONE control wake this run can perform — the teardown's \
+             `shutdown()`. `wake()` is never called in this harness, so anything above one \
+             means the control source was left readable and re-reported, which is the F1 \
+             spin on the loop's own descriptor. {s:?}"
         );
         // ★★ THE BOUND INCLUDES THE CONTROL WAKES — and it did not until 2026-07-27, when
         // this assertion was caught flaking at 1-in-20 under CPU contention (`wakes: 152`
@@ -8331,17 +8345,25 @@ fn a_real_guest_storm_survives_a_window_teardown_worker_death_and_a_deferred_dea
         // A flake here is not cosmetic: a red test in an UNMUTATED tree aborts
         // `cargo mutants` outright, which is the same way the fetch-from-nothing test was
         // blocking the mutation gate on the bench.
+        // ★★ …AND THE BOUND IS NOW A CONSTANT, WHICH MAKES IT STRICTLY STRONGER.
+        //
+        // It read `s.wakes <= s.signals_pushed + s.control_reports`, whose second term is
+        // read out of the very snapshot it is bounding — a bound asserted against itself.
+        // That form only had teeth because the `== 1` above pinned the term, and pinning it
+        // is what raced. Writing the literal `1` instead removes the race AND removes the
+        // self-reference: the ceiling is now a fixed `RSIGNALS + 2`, so a run whose control
+        // source really did re-report without limit blows through it instead of raising it.
+        const MAX_CONTROL_WAKES: u64 = 1;
         assert!(
-            s.wakes >= 1 && s.wakes <= s.signals_pushed + s.control_reports,
-            "({name}) ★ the F1 quantity: {} wakes for {} signals plus {} control wakes. \
-             The upper bound is what an undrained level-triggered source blows through \
-             without limit — and the never-signalled source in this run contributes ZERO \
-             to it, which is the other polarity. Both terms are pinned exactly by the two \
-             assertions above, so this stays a real ceiling and not an arithmetic \
-             identity. {s:?}",
+            s.wakes >= 1 && s.wakes <= s.signals_pushed + MAX_CONTROL_WAKES,
+            "({name}) ★ the F1 quantity: {} wakes for {} signals plus at most \
+             {MAX_CONTROL_WAKES} control wake. The upper bound is what an undrained \
+             level-triggered source blows through without limit — and the never-signalled \
+             source in this run contributes ZERO to it, which is the other polarity. The \
+             signal term is pinned exactly above and the control term is a LITERAL, so \
+             this is a real ceiling and not an arithmetic identity. {s:?}",
             s.wakes,
             s.signals_pushed,
-            s.control_reports,
         );
         assert_eq!(
             (s.undrained_reports, s.stale_reports),

@@ -840,18 +840,78 @@ fn an_environment_variable_can_no_longer_redirect_the_isolate() {
     }
 
     // ── the outer run ───────────────────────────────────────────────────────────────
+    //
+    // ★★★ THE DECOY IS WRITTEN BY A CHILD PROCESS, AND THAT IS LOAD-BEARING — 2026-07-31.
+    //
+    // It used to be `fs::write` + `set_permissions` right here, and the `exec` two
+    // statements below then failed **ETXTBSY ("Text file busy") at 14 in 200** whole-binary
+    // runs, always at that `expect`. It reads as a real regression in whatever change is in
+    // flight, and it did: it landed in another agent's report tonight as an unexplained red.
+    //
+    // ⊘ It is NOT a shared or colliding path — the name already carries `process::id()`,
+    // and each run's file is its own. The mechanism is the classic multithreaded
+    // fork/exec race, and it was confirmed by direct measurement rather than by reading:
+    //
+    //   `fs::write` holds a WRITE descriptor to this inode for the length of the write.
+    //   libtest runs this file's other fifteen tests concurrently, and most of them
+    //   `spawn` a real isolate — a `fork`. A child forked inside that window inherits the
+    //   descriptor: `O_CLOEXEC` clears it at the child's OWN `exec`, not at the fork, so
+    //   for the microseconds until then the kernel still counts a writer on our inode and
+    //   refuses `execve` on it with ETXTBSY.
+    //
+    // ★ Measured, in a standalone probe with eight background forker threads and a fresh
+    // unique path per trial, so neither path reuse nor this repo is in it:
+    //
+    //   | who writes the file we then exec | ETXTBSY |
+    //   |---|---|
+    //   | this process (`fs::write`)       | **32 / 300** |
+    //   | a child process                  | **0 / 300**  |
+    //
+    // So the fix is structural, not a retry: the write descriptor is moved into a child
+    // that exits before we exec, and **this process never opens the decoy for writing at
+    // all**. A fork of ours therefore has nothing to inherit. `cp` reads a scratch file we
+    // did write — but that scratch file is never executed, so a writer on *it* is
+    // harmless. ⊘ A retry loop would have made the red go away while leaving the test
+    // unable to run concurrently, which is the property that actually failed.
     let decoy = std::env::temp_dir().join(format!("kayfabe-decoy-isolate-{}", std::process::id()));
-    std::fs::write(&decoy, "#!/bin/sh\nexit 3\n").expect("write the decoy");
-    let mut perms = std::fs::metadata(&decoy)
-        .expect("stat the decoy")
-        .permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
-    std::fs::set_permissions(&decoy, perms).expect("chmod the decoy");
+    let scratch = decoy.with_extension("src");
+    std::fs::write(&scratch, "#!/bin/sh\nexit 3\n").expect("write the decoy's source");
+    let copied = std::process::Command::new("cp")
+        .args([&scratch, &decoy])
+        .status()
+        .expect("`cp` must be runnable — the decoy is installed by a child on purpose");
+    assert!(
+        copied.success(),
+        "cp {scratch:?} {decoy:?} failed: {copied:?}"
+    );
+    let chmodded = std::process::Command::new("chmod")
+        .arg("755")
+        .arg(&decoy)
+        .status()
+        .expect("`chmod` must be runnable");
+    assert!(
+        chmodded.success(),
+        "chmod 755 {decoy:?} failed: {chmodded:?}"
+    );
+    std::fs::remove_file(&scratch).ok();
 
     // (1) The decoy is real, runnable, and NOT an isolate.
     let ran = std::process::Command::new(&decoy)
         .status()
-        .expect("the decoy is executable");
+        .unwrap_or_else(|e| {
+            // ★ If this ever comes back, say what it is. An `expect` here printed
+            // `Os { code: 26, kind: ExecutableFileBusy }` and nothing about why, and the
+            // reader's first guess — a stale file at a shared path — is the wrong one.
+            assert_ne!(
+                e.raw_os_error(),
+                Some(26),
+                "ETXTBSY exec'ing {decoy:?}: some thread of THIS process still holds a write \
+             descriptor to that inode, so the decoy is being installed in-process again \
+             somewhere. The write must happen in a child (see the comment above); a retry \
+             here would only hide it. Underlying: {e:?}"
+            );
+            panic!("the decoy is executable: {e:?}");
+        });
     assert_eq!(
         ran.code(),
         Some(3),

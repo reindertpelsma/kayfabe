@@ -100,10 +100,7 @@
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
-use std::time::{Duration, Instant as WallInstant};
+use std::time::Duration;
 
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
@@ -122,38 +119,18 @@ use kayfabe_tests::{Guarded, ResidueClaim, Scenario, identical_handles};
 // Harness
 // ---------------------------------------------------------------------------------
 
-/// Bounded termination (the `concurrency_stress.rs` rule): a regression that wedges a
-/// teardown must fail fast rather than eat the CI timeout.
-#[must_use]
-fn watchdog(test: &'static str, limit: Duration) -> WatchdogGuard {
-    let limit = match std::env::var("KAYFABE_STRESS_WATCHDOG_SECS") {
-        Ok(s) => Duration::from_secs(s.parse().expect("KAYFABE_STRESS_WATCHDOG_SECS: seconds")),
-        Err(_) => limit,
-    };
-    let done = Arc::new(AtomicBool::new(false));
-    let flag = Arc::clone(&done);
-    thread::spawn(move || {
-        let deadline = WallInstant::now() + limit;
-        while WallInstant::now() < deadline {
-            if flag.load(Ordering::Relaxed) {
-                return;
-            }
-            thread::sleep(Duration::from_millis(50));
-        }
-        if !flag.load(Ordering::Relaxed) {
-            eprintln!("WATCHDOG: {test} still running after {limit:?} — aborting the process");
-            std::process::abort();
-        }
-    });
-    WatchdogGuard(done)
-}
-
-struct WatchdogGuard(Arc<AtomicBool>);
-impl Drop for WatchdogGuard {
-    fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
-    }
-}
+/// Bounded termination for every test in this file — see [`kayfabe_mocks::watchdog`].
+///
+/// ★ This used to be a hand-copied local definition, one of **ten** identical ones, and
+/// every one of them announced its abort with `eprintln!` — which libtest's inherited
+/// output capture buffers and `abort()` then discards, so a wedged test reported a bare
+/// `SIGABRT` and nothing else — measured 2026-07-31 with a standalone `cargo test` probe
+/// whose watchdog thread wrote the same text twice, once via `eprintln!` (nothing reached
+/// the log) and once to a real fd 2 (all of it did). The shared one writes its diagnostic,
+/// including every thread's kernel wait channel, to a real descriptor;
+/// `kayfabe_mocks::watchdog::the_diagnostic_reaches_a_real_descriptor` is the test that
+/// fails if that stops being true.
+use kayfabe_mocks::watchdog;
 
 const GPU: GpuId = GpuId::ZERO;
 /// U — the *owner*: the guest compute process whose isolate mints the backing.

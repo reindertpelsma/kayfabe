@@ -65,6 +65,13 @@ use kayfabe_vmm::{
 };
 
 // ---------------------------------------------------------------------------------
+// Bounded termination — the one watchdog every test file shares
+// ---------------------------------------------------------------------------------
+
+pub mod watchdog;
+pub use watchdog::{WATCHDOG_ENV, WatchdogGuard, watchdog};
+
+// ---------------------------------------------------------------------------------
 // MockArch — the "Mockingbird" generation
 // ---------------------------------------------------------------------------------
 
@@ -1213,10 +1220,53 @@ impl VerbHold {
 
     /// Block **this** (test) thread until the held verb has entered the backend —
     /// the progress edge that replaces a sleep.
+    ///
+    /// ★★ **Bounded, and the bound is a HANG BEING CONVERTED INTO A FAILURE.**
+    ///
+    /// This was an unbounded `Condvar::wait`, and it is the single commonest way a test
+    /// in this workspace wedges: fifty-two call sites arm a hold and then block here, so a
+    /// verb that never reaches the backend — because the routing changed, because the
+    /// worker died, because a mutant broke dispatch — parks the test thread forever. The
+    /// only thing that ever ended it was the file's watchdog, whole minutes later, killing
+    /// the entire binary with a `SIGABRT` that named nothing.
+    ///
+    /// The timeout is **not** the synchronisation mechanism: when the verb arrives, the
+    /// condvar returns immediately and the deadline is never consulted. It is only ever
+    /// reached by a verb that is genuinely not coming, and it then fails **on the test's
+    /// own thread**, with the hold's state, so libtest reports one failed test instead of a
+    /// dead process. [`WATCHDOG_ENV`](crate::watchdog::WATCHDOG_ENV) raises it for
+    /// sanitizer runs, which is also every file's watchdog knob, so one variable still
+    /// covers a slow run.
+    ///
+    /// # Panics
+    /// If the verb has not entered within the bound — deliberately, and by name.
     pub fn wait_until_pending(&self) {
+        /// Long enough that reaching it means the verb is not coming at all: the mock
+        /// backend does no I/O, so entry is a function call away once the verb is issued.
+        const NOT_COMING: Duration = Duration::from_secs(30);
+
+        let bound = crate::watchdog::limit_or_env(NOT_COMING);
+        let started = std::time::Instant::now();
         let mut g = self.state.lock().expect("hold");
         while !g.entered {
-            g = self.cv.wait(g).expect("hold");
+            let left = match bound.checked_sub(started.elapsed()) {
+                Some(d) if !d.is_zero() => d,
+                _ => panic!(
+                    "★★ HELD VERB NEVER ENTERED THE BACKEND within {bound:?}. This is a \
+                     nontermination being reported instead of hung on: the test armed a \
+                     hold and blocked for the verb to reach it, and no verb arrived — so \
+                     it was never issued, or it was routed somewhere else, or the thread \
+                     that should have issued it is itself blocked. Hold state: \
+                     entered={} released={} cancelled={:?} abandoned={}. Threads:\n{}",
+                    g.entered,
+                    g.released,
+                    g.cancelled,
+                    g.abandoned,
+                    crate::watchdog::thread_report(),
+                ),
+            };
+            let (ng, _) = self.cv.wait_timeout(g, left).expect("hold");
+            g = ng;
         }
     }
 
@@ -2999,30 +3049,14 @@ mod tests {
     /// `kayfabe-mocks` unittest binary forever, with no watchdog anywhere in this crate
     /// to stop it, and stalled the harness rather than reporting CAUGHT.
     ///
-    /// Returns a guard; dropping it disarms.
+    /// ★ Now the crate's own [`crate::watchdog::watchdog`] — this was the tenth copy of
+    /// it, and like the other nine it announced its abort with `eprintln!`, which libtest
+    /// buffers and `abort()` discards. Its own doc comment above says the guard "earned
+    /// its place immediately" when a `ClientLock` mutant hung this binary forever; what
+    /// it could not say is that the hang was reported as a bare `SIGABRT` with no text.
     #[must_use]
-    fn bounded(test: &'static str) -> BoundedGuard {
-        let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let flag = Arc::clone(&done);
-        std::thread::spawn(move || {
-            let deadline = std::time::Instant::now() + Duration::from_secs(60);
-            while std::time::Instant::now() < deadline {
-                if flag.load(std::sync::atomic::Ordering::Relaxed) {
-                    return;
-                }
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            eprintln!("WATCHDOG: kayfabe-mocks::{test} wedged — aborting");
-            std::process::abort();
-        });
-        BoundedGuard(done)
-    }
-
-    struct BoundedGuard(Arc<std::sync::atomic::AtomicBool>);
-    impl Drop for BoundedGuard {
-        fn drop(&mut self) {
-            self.0.store(true, std::sync::atomic::Ordering::Relaxed);
-        }
+    fn bounded(test: &'static str) -> crate::watchdog::WatchdogGuard {
+        crate::watchdog::watchdog(test, Duration::from_secs(60))
     }
 
     #[test]
