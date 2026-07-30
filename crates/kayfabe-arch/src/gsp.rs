@@ -117,6 +117,27 @@ pub enum GspReg {
     /// SEC2 falcon `DMATRFCMD`.
     Sec2FalconDmatrfcmd,
     /// WPR2 region base, low half.
+    ///
+    /// ★★ **CORRECTED (2026-07-31): this register has TWO readers and they disagree
+    /// about how much of it matters.** The doc that used to sit on the GA10x encoding
+    /// said only zero-vs-nonzero was load-bearing and cited `kgspIsWpr2Up_TU102` — but
+    /// that reader only ever looks at [`GspReg::Wpr2AddrHi`]. The *low* register's reader
+    /// is `kgspExecuteFwsec_TU102`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:514-524`),
+    /// and it is an **exact compare** against `frtsOffset >> ALIGNMENT` — the driver's own
+    /// arithmetic over the **usable FB size**, read from `NV_USABLE_FB_SIZE_IN_MB`
+    /// (`kmemsysReadUsableFbSize_GA102`,
+    /// `ogkm-580: src/nvidia/src/kernel/gpu/mem_sys/arch/ampere/kern_mem_sys_ga102.c:48`).
+    /// So this value is a *function of the advertised FB size*, not a free constant.
+    ///
+    /// ⚠ **That makes this variant a cross-plane dependency, and the FB-size register is
+    /// deliberately NOT a [`GspReg`].** Its served value is not a function of the boot
+    /// FSM's state — devinit publishes it before the driver looks — so this module's own
+    /// rule puts it on the *other* side of the seam, with PTIMER and the fuses
+    /// (`mode2_gsp_port_plan.md` §11-O1, still open). Whichever plane ends up owning it
+    /// must share one FB-size constant with whatever serves this register, or the two
+    /// disagree silently and the guest refuses to boot. `docs/design/gsp_boot_gate_spec.md`
+    /// §1 gates G5.2/G6.3b carry the arithmetic.
     Wpr2AddrLo,
     /// WPR2 region base, high half. "WPR2 is up" is `_VAL != 0` on this register
     /// (`kgspIsWpr2Up_TU102`: `ogkm-610: kernel_gsp_tu102.c:1172-1180`,
