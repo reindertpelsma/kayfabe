@@ -13,11 +13,13 @@
 //! `kgspExtractVbiosFromRom_TU102` → `kgspParseFwsecUcodeFromVbiosImg` path accepts
 //! it. Consumed by `crate::vbios`, which is the builder.
 //!
-//! ★ Two of the four sources are `.c` files. NVIDIA declares the BIT-table and
-//! FWSEC-descriptor vocabulary inside `kernel_gsp_fwsec.c` itself and the ROM
-//! code-type constants inside `kernel_gsp_vbios_tu102.c`; there is no header to
-//! read them from, so the implementation file **is** the authoritative statement
-//! and is what the generator scans.
+//! ★ Three of the five sources are `.c` files. NVIDIA declares the BIT-table and
+//! FWSEC-descriptor vocabulary inside `kernel_gsp_fwsec.c` itself, the ROM
+//! code-type constants inside `kernel_gsp_vbios_tu102.c`, and the FWSEC
+//! **application interface table** — the three typedefs `s_vbiosPatchInterfaceData`
+//! walks inside the DMEM payload — inside `kernel_gsp_frts_tu102.c`. There is no
+//! header to read any of them from, so the implementation file **is** the
+//! authoritative statement and is what the generator scans.
 //!
 //! # Why this is structure and not secrets
 //!
@@ -42,12 +44,35 @@
 //! # Version stability (measured, not assumed)
 //!
 //! Both vendored ogkm tags — 580.159.04 and 610.43.02 — carry `kernel_gsp_fwsec.c`,
-//! `kernel_gsp_vbios_tu102.c`, `pci_exp_table.h` and `dev_bus.h` **byte-identically**
-//! (`diff` is empty on all four). So every constant in this module has the same
-//! value at both, and `crate::vbios::VbiosWire` has exactly one variant. That is a
+//! `kernel_gsp_vbios_tu102.c`, `kernel_gsp_frts_tu102.c`, `pci_exp_table.h` and
+//! `dev_bus.h` **byte-identically** (`diff` is empty on all five; the fifth,
+//! `kernel_gsp_frts_tu102.c`, was diffed on 2026-07-31 when the interface-table
+//! structs below were added). So every constant in this module has the same value at
+//! both, and `crate::vbios::VbiosWire` has exactly one variant. That is a
 //! measurement, and the generator re-checks it every time it is run against a tree.
 
-use crate::wire::{Drf, StructLayout};
+use crate::wire::{AbiError, Drf, Field, StructLayout, u8_at, u16_at, u32_at, u64_at};
+
+/// `0x4` — the one entry `id` `s_vbiosPatchInterfaceData` is looking
+/// for. An interface table with `entryCount >= 2` but no entry
+/// carrying this id fails with `failed to find required interface
+/// entry`, which is a REFUSAL of the whole adapter init.
+///
+/// ogkm `src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c`.
+pub const FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER: u32 = 0x4;
+
+/// `0x15` — the command written into the mapper's `init_cmd` for the
+/// FRTS (WPR2 carve-out) request. The first of the two FWSEC commands
+/// the driver issues, and the one in the failure message.
+///
+/// ogkm `src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c`.
+pub const FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS: u32 = 0x15;
+
+/// `0x19` — the second command (`SB`), issued through the same table.
+/// A table that only satisfies FRTS would stop the boot one step later.
+///
+/// ogkm `src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c`.
+pub const FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_SB: u32 = 0x19;
 
 /// `0xAA55` at image offset 0 — what `IS_VALID_PCI_ROM_SIG` accepts,
 /// and the byte pattern whose absence produced `did not find valid ROM
@@ -313,11 +338,1300 @@ pub const NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION: Drf = Drf::new(15, 8);
 /// `NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_SIZE` = `31:16` — ogkm `src/nvidia/src/kernel/gpu/gsp/kernel_gsp_fwsec.c`.
 pub const NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_SIZE: Drf = Drf::new(31, 16);
 
+/// `FALCON_APPLICATION_INTERFACE_HEADER_V1` — ogkm `src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:64`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FalconApplicationInterfaceHeaderV1 {
+    /// `NvU8 version` @ +0 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:66).
+    pub version: u8,
+    /// `NvU8 headerSize` @ +1 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:67).
+    pub header_size: u8,
+    /// `NvU8 entrySize` @ +2 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:68).
+    pub entry_size: u8,
+    /// `NvU8 entryCount` @ +3 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:69).
+    pub entry_count: u8,
+}
+
+impl FalconApplicationInterfaceHeaderV1 {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "FALCON_APPLICATION_INTERFACE_HEADER_V1";
+    /// `sizeof(FALCON_APPLICATION_INTERFACE_HEADER_V1)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 4;
+    /// `alignof(FALCON_APPLICATION_INTERFACE_HEADER_V1)`.
+    pub const ALIGN: usize = 1;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "FALCON_APPLICATION_INTERFACE_HEADER_V1",
+        size: 4,
+        align: 1,
+        fields: &[
+            Field {
+                c_name: "version",
+                rust_name: "version",
+                offset: 0,
+                width: 1,
+            },
+            Field {
+                c_name: "headerSize",
+                rust_name: "header_size",
+                offset: 1,
+                width: 1,
+            },
+            Field {
+                c_name: "entrySize",
+                rust_name: "entry_size",
+                offset: 2,
+                width: 1,
+            },
+            Field {
+                c_name: "entryCount",
+                rust_name: "entry_count",
+                offset: 3,
+                width: 1,
+            },
+        ],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[
+        (
+            "version",
+            core::mem::offset_of!(FalconApplicationInterfaceHeaderV1, version),
+        ),
+        (
+            "header_size",
+            core::mem::offset_of!(FalconApplicationInterfaceHeaderV1, header_size),
+        ),
+        (
+            "entry_size",
+            core::mem::offset_of!(FalconApplicationInterfaceHeaderV1, entry_size),
+        ),
+        (
+            "entry_count",
+            core::mem::offset_of!(FalconApplicationInterfaceHeaderV1, entry_count),
+        ),
+    ];
+
+    /// Decode from a little-endian byte image of `FALCON_APPLICATION_INTERFACE_HEADER_V1`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            version: u8_at(bytes, 0)?,
+            header_size: u8_at(bytes, 1)?,
+            entry_size: u8_at(bytes, 2)?,
+            entry_count: u8_at(bytes, 3)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.version.to_le_bytes();
+            bytes
+                .get_mut(0..1)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.header_size.to_le_bytes();
+            bytes
+                .get_mut(1..2)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.entry_size.to_le_bytes();
+            bytes
+                .get_mut(2..3)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.entry_count.to_le_bytes();
+            bytes
+                .get_mut(3..4)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(
+        core::mem::size_of::<FalconApplicationInterfaceHeaderV1>()
+            == FalconApplicationInterfaceHeaderV1::SIZE
+    );
+    assert!(
+        core::mem::align_of::<FalconApplicationInterfaceHeaderV1>()
+            == FalconApplicationInterfaceHeaderV1::ALIGN
+    );
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceHeaderV1, version) == 0);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceHeaderV1, header_size) == 1);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceHeaderV1, entry_size) == 2);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceHeaderV1, entry_count) == 3);
+};
+
+/// `FALCON_APPLICATION_INTERFACE_ENTRY_V1` — ogkm `src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:72`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FalconApplicationInterfaceEntryV1 {
+    /// `NvU32 id` @ +0 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:74).
+    pub id: u32,
+    /// `NvU32 dmemOffset` @ +4 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:75).
+    pub dmem_offset: u32,
+}
+
+impl FalconApplicationInterfaceEntryV1 {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "FALCON_APPLICATION_INTERFACE_ENTRY_V1";
+    /// `sizeof(FALCON_APPLICATION_INTERFACE_ENTRY_V1)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 8;
+    /// `alignof(FALCON_APPLICATION_INTERFACE_ENTRY_V1)`.
+    pub const ALIGN: usize = 4;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "FALCON_APPLICATION_INTERFACE_ENTRY_V1",
+        size: 8,
+        align: 4,
+        fields: &[
+            Field {
+                c_name: "id",
+                rust_name: "id",
+                offset: 0,
+                width: 4,
+            },
+            Field {
+                c_name: "dmemOffset",
+                rust_name: "dmem_offset",
+                offset: 4,
+                width: 4,
+            },
+        ],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[
+        (
+            "id",
+            core::mem::offset_of!(FalconApplicationInterfaceEntryV1, id),
+        ),
+        (
+            "dmem_offset",
+            core::mem::offset_of!(FalconApplicationInterfaceEntryV1, dmem_offset),
+        ),
+    ];
+
+    /// Decode from a little-endian byte image of `FALCON_APPLICATION_INTERFACE_ENTRY_V1`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            id: u32_at(bytes, 0)?,
+            dmem_offset: u32_at(bytes, 4)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.id.to_le_bytes();
+            bytes
+                .get_mut(0..4)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.dmem_offset.to_le_bytes();
+            bytes
+                .get_mut(4..8)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(
+        core::mem::size_of::<FalconApplicationInterfaceEntryV1>()
+            == FalconApplicationInterfaceEntryV1::SIZE
+    );
+    assert!(
+        core::mem::align_of::<FalconApplicationInterfaceEntryV1>()
+            == FalconApplicationInterfaceEntryV1::ALIGN
+    );
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceEntryV1, id) == 0);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceEntryV1, dmem_offset) == 4);
+};
+
+/// `FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3` — ogkm `src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:80`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FalconApplicationInterfaceDmemMapperV3 {
+    /// `NvU32 signature` @ +0 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:82).
+    pub signature: u32,
+    /// `NvU16 version` @ +4 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:83).
+    pub version: u16,
+    /// `NvU16 size` @ +6 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:84).
+    pub size: u16,
+    /// `NvU32 cmd_in_buffer_offset` @ +8 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:85).
+    pub cmd_in_buffer_offset: u32,
+    /// `NvU32 cmd_in_buffer_size` @ +12 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:86).
+    pub cmd_in_buffer_size: u32,
+    /// `NvU32 cmd_out_buffer_offset` @ +16 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:87).
+    pub cmd_out_buffer_offset: u32,
+    /// `NvU32 cmd_out_buffer_size` @ +20 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:88).
+    pub cmd_out_buffer_size: u32,
+    /// `NvU32 nvf_img_data_buffer_offset` @ +24 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:89).
+    pub nvf_img_data_buffer_offset: u32,
+    /// `NvU32 nvf_img_data_buffer_size` @ +28 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:90).
+    pub nvf_img_data_buffer_size: u32,
+    /// `NvU32 printfBufferHdr` @ +32 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:91).
+    pub printf_buffer_hdr: u32,
+    /// `NvU32 ucode_build_time_stamp` @ +36 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:92).
+    pub ucode_build_time_stamp: u32,
+    /// `NvU32 ucode_signature` @ +40 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:93).
+    pub ucode_signature: u32,
+    /// `NvU32 init_cmd` @ +44 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:94).
+    pub init_cmd: u32,
+    /// `NvU32 ucode_feature` @ +48 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:95).
+    pub ucode_feature: u32,
+    /// `NvU32 ucode_cmd_mask0` @ +52 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:96).
+    pub ucode_cmd_mask0: u32,
+    /// `NvU32 ucode_cmd_mask1` @ +56 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:97).
+    pub ucode_cmd_mask1: u32,
+    /// `NvU32 multiTgtTbl` @ +60 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:98).
+    pub multi_tgt_tbl: u32,
+}
+
+impl FalconApplicationInterfaceDmemMapperV3 {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3";
+    /// `sizeof(FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 64;
+    /// `alignof(FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3)`.
+    pub const ALIGN: usize = 4;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3",
+        size: 64,
+        align: 4,
+        fields: &[
+            Field {
+                c_name: "signature",
+                rust_name: "signature",
+                offset: 0,
+                width: 4,
+            },
+            Field {
+                c_name: "version",
+                rust_name: "version",
+                offset: 4,
+                width: 2,
+            },
+            Field {
+                c_name: "size",
+                rust_name: "size",
+                offset: 6,
+                width: 2,
+            },
+            Field {
+                c_name: "cmd_in_buffer_offset",
+                rust_name: "cmd_in_buffer_offset",
+                offset: 8,
+                width: 4,
+            },
+            Field {
+                c_name: "cmd_in_buffer_size",
+                rust_name: "cmd_in_buffer_size",
+                offset: 12,
+                width: 4,
+            },
+            Field {
+                c_name: "cmd_out_buffer_offset",
+                rust_name: "cmd_out_buffer_offset",
+                offset: 16,
+                width: 4,
+            },
+            Field {
+                c_name: "cmd_out_buffer_size",
+                rust_name: "cmd_out_buffer_size",
+                offset: 20,
+                width: 4,
+            },
+            Field {
+                c_name: "nvf_img_data_buffer_offset",
+                rust_name: "nvf_img_data_buffer_offset",
+                offset: 24,
+                width: 4,
+            },
+            Field {
+                c_name: "nvf_img_data_buffer_size",
+                rust_name: "nvf_img_data_buffer_size",
+                offset: 28,
+                width: 4,
+            },
+            Field {
+                c_name: "printfBufferHdr",
+                rust_name: "printf_buffer_hdr",
+                offset: 32,
+                width: 4,
+            },
+            Field {
+                c_name: "ucode_build_time_stamp",
+                rust_name: "ucode_build_time_stamp",
+                offset: 36,
+                width: 4,
+            },
+            Field {
+                c_name: "ucode_signature",
+                rust_name: "ucode_signature",
+                offset: 40,
+                width: 4,
+            },
+            Field {
+                c_name: "init_cmd",
+                rust_name: "init_cmd",
+                offset: 44,
+                width: 4,
+            },
+            Field {
+                c_name: "ucode_feature",
+                rust_name: "ucode_feature",
+                offset: 48,
+                width: 4,
+            },
+            Field {
+                c_name: "ucode_cmd_mask0",
+                rust_name: "ucode_cmd_mask0",
+                offset: 52,
+                width: 4,
+            },
+            Field {
+                c_name: "ucode_cmd_mask1",
+                rust_name: "ucode_cmd_mask1",
+                offset: 56,
+                width: 4,
+            },
+            Field {
+                c_name: "multiTgtTbl",
+                rust_name: "multi_tgt_tbl",
+                offset: 60,
+                width: 4,
+            },
+        ],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[
+        (
+            "signature",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, signature),
+        ),
+        (
+            "version",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, version),
+        ),
+        (
+            "size",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, size),
+        ),
+        (
+            "cmd_in_buffer_offset",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, cmd_in_buffer_offset),
+        ),
+        (
+            "cmd_in_buffer_size",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, cmd_in_buffer_size),
+        ),
+        (
+            "cmd_out_buffer_offset",
+            core::mem::offset_of!(
+                FalconApplicationInterfaceDmemMapperV3,
+                cmd_out_buffer_offset
+            ),
+        ),
+        (
+            "cmd_out_buffer_size",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, cmd_out_buffer_size),
+        ),
+        (
+            "nvf_img_data_buffer_offset",
+            core::mem::offset_of!(
+                FalconApplicationInterfaceDmemMapperV3,
+                nvf_img_data_buffer_offset
+            ),
+        ),
+        (
+            "nvf_img_data_buffer_size",
+            core::mem::offset_of!(
+                FalconApplicationInterfaceDmemMapperV3,
+                nvf_img_data_buffer_size
+            ),
+        ),
+        (
+            "printf_buffer_hdr",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, printf_buffer_hdr),
+        ),
+        (
+            "ucode_build_time_stamp",
+            core::mem::offset_of!(
+                FalconApplicationInterfaceDmemMapperV3,
+                ucode_build_time_stamp
+            ),
+        ),
+        (
+            "ucode_signature",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, ucode_signature),
+        ),
+        (
+            "init_cmd",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, init_cmd),
+        ),
+        (
+            "ucode_feature",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, ucode_feature),
+        ),
+        (
+            "ucode_cmd_mask0",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, ucode_cmd_mask0),
+        ),
+        (
+            "ucode_cmd_mask1",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, ucode_cmd_mask1),
+        ),
+        (
+            "multi_tgt_tbl",
+            core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, multi_tgt_tbl),
+        ),
+    ];
+
+    /// Decode from a little-endian byte image of `FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            signature: u32_at(bytes, 0)?,
+            version: u16_at(bytes, 4)?,
+            size: u16_at(bytes, 6)?,
+            cmd_in_buffer_offset: u32_at(bytes, 8)?,
+            cmd_in_buffer_size: u32_at(bytes, 12)?,
+            cmd_out_buffer_offset: u32_at(bytes, 16)?,
+            cmd_out_buffer_size: u32_at(bytes, 20)?,
+            nvf_img_data_buffer_offset: u32_at(bytes, 24)?,
+            nvf_img_data_buffer_size: u32_at(bytes, 28)?,
+            printf_buffer_hdr: u32_at(bytes, 32)?,
+            ucode_build_time_stamp: u32_at(bytes, 36)?,
+            ucode_signature: u32_at(bytes, 40)?,
+            init_cmd: u32_at(bytes, 44)?,
+            ucode_feature: u32_at(bytes, 48)?,
+            ucode_cmd_mask0: u32_at(bytes, 52)?,
+            ucode_cmd_mask1: u32_at(bytes, 56)?,
+            multi_tgt_tbl: u32_at(bytes, 60)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.signature.to_le_bytes();
+            bytes
+                .get_mut(0..4)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.version.to_le_bytes();
+            bytes
+                .get_mut(4..6)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.size.to_le_bytes();
+            bytes
+                .get_mut(6..8)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.cmd_in_buffer_offset.to_le_bytes();
+            bytes
+                .get_mut(8..12)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.cmd_in_buffer_size.to_le_bytes();
+            bytes
+                .get_mut(12..16)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.cmd_out_buffer_offset.to_le_bytes();
+            bytes
+                .get_mut(16..20)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.cmd_out_buffer_size.to_le_bytes();
+            bytes
+                .get_mut(20..24)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.nvf_img_data_buffer_offset.to_le_bytes();
+            bytes
+                .get_mut(24..28)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.nvf_img_data_buffer_size.to_le_bytes();
+            bytes
+                .get_mut(28..32)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.printf_buffer_hdr.to_le_bytes();
+            bytes
+                .get_mut(32..36)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.ucode_build_time_stamp.to_le_bytes();
+            bytes
+                .get_mut(36..40)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.ucode_signature.to_le_bytes();
+            bytes
+                .get_mut(40..44)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.init_cmd.to_le_bytes();
+            bytes
+                .get_mut(44..48)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.ucode_feature.to_le_bytes();
+            bytes
+                .get_mut(48..52)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.ucode_cmd_mask0.to_le_bytes();
+            bytes
+                .get_mut(52..56)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.ucode_cmd_mask1.to_le_bytes();
+            bytes
+                .get_mut(56..60)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.multi_tgt_tbl.to_le_bytes();
+            bytes
+                .get_mut(60..64)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(
+        core::mem::size_of::<FalconApplicationInterfaceDmemMapperV3>()
+            == FalconApplicationInterfaceDmemMapperV3::SIZE
+    );
+    assert!(
+        core::mem::align_of::<FalconApplicationInterfaceDmemMapperV3>()
+            == FalconApplicationInterfaceDmemMapperV3::ALIGN
+    );
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, signature) == 0);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, version) == 4);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, size) == 6);
+    assert!(
+        core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, cmd_in_buffer_offset) == 8
+    );
+    assert!(
+        core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, cmd_in_buffer_size) == 12
+    );
+    assert!(
+        core::mem::offset_of!(
+            FalconApplicationInterfaceDmemMapperV3,
+            cmd_out_buffer_offset
+        ) == 16
+    );
+    assert!(
+        core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, cmd_out_buffer_size) == 20
+    );
+    assert!(
+        core::mem::offset_of!(
+            FalconApplicationInterfaceDmemMapperV3,
+            nvf_img_data_buffer_offset
+        ) == 24
+    );
+    assert!(
+        core::mem::offset_of!(
+            FalconApplicationInterfaceDmemMapperV3,
+            nvf_img_data_buffer_size
+        ) == 28
+    );
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, printf_buffer_hdr) == 32);
+    assert!(
+        core::mem::offset_of!(
+            FalconApplicationInterfaceDmemMapperV3,
+            ucode_build_time_stamp
+        ) == 36
+    );
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, ucode_signature) == 40);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, init_cmd) == 44);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, ucode_feature) == 48);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, ucode_cmd_mask0) == 52);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, ucode_cmd_mask1) == 56);
+    assert!(core::mem::offset_of!(FalconApplicationInterfaceDmemMapperV3, multi_tgt_tbl) == 60);
+};
+
+/// `FWSECLIC_READ_VBIOS_DESC` — ogkm `src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:104`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FwseclicReadVbiosDesc {
+    /// `NvU32 version` @ +0 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:106).
+    pub version: u32,
+    /// `NvU32 size` @ +4 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:107).
+    pub size: u32,
+    /// `NvU64 gfwImageOffset` @ +8 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:108).
+    pub gfw_image_offset: u64,
+    /// `NvU32 gfwImageSize` @ +16 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:109).
+    pub gfw_image_size: u32,
+    /// `NvU32 flags` @ +20 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:110).
+    pub flags: u32,
+}
+
+impl FwseclicReadVbiosDesc {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "FWSECLIC_READ_VBIOS_DESC";
+    /// `sizeof(FWSECLIC_READ_VBIOS_DESC)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 24;
+    /// `alignof(FWSECLIC_READ_VBIOS_DESC)`.
+    pub const ALIGN: usize = 8;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "FWSECLIC_READ_VBIOS_DESC",
+        size: 24,
+        align: 8,
+        fields: &[
+            Field {
+                c_name: "version",
+                rust_name: "version",
+                offset: 0,
+                width: 4,
+            },
+            Field {
+                c_name: "size",
+                rust_name: "size",
+                offset: 4,
+                width: 4,
+            },
+            Field {
+                c_name: "gfwImageOffset",
+                rust_name: "gfw_image_offset",
+                offset: 8,
+                width: 8,
+            },
+            Field {
+                c_name: "gfwImageSize",
+                rust_name: "gfw_image_size",
+                offset: 16,
+                width: 4,
+            },
+            Field {
+                c_name: "flags",
+                rust_name: "flags",
+                offset: 20,
+                width: 4,
+            },
+        ],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[
+        (
+            "version",
+            core::mem::offset_of!(FwseclicReadVbiosDesc, version),
+        ),
+        ("size", core::mem::offset_of!(FwseclicReadVbiosDesc, size)),
+        (
+            "gfw_image_offset",
+            core::mem::offset_of!(FwseclicReadVbiosDesc, gfw_image_offset),
+        ),
+        (
+            "gfw_image_size",
+            core::mem::offset_of!(FwseclicReadVbiosDesc, gfw_image_size),
+        ),
+        ("flags", core::mem::offset_of!(FwseclicReadVbiosDesc, flags)),
+    ];
+
+    /// Decode from a little-endian byte image of `FWSECLIC_READ_VBIOS_DESC`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            version: u32_at(bytes, 0)?,
+            size: u32_at(bytes, 4)?,
+            gfw_image_offset: u64_at(bytes, 8)?,
+            gfw_image_size: u32_at(bytes, 16)?,
+            flags: u32_at(bytes, 20)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.version.to_le_bytes();
+            bytes
+                .get_mut(0..4)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.size.to_le_bytes();
+            bytes
+                .get_mut(4..8)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.gfw_image_offset.to_le_bytes();
+            bytes
+                .get_mut(8..16)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.gfw_image_size.to_le_bytes();
+            bytes
+                .get_mut(16..20)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.flags.to_le_bytes();
+            bytes
+                .get_mut(20..24)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(core::mem::size_of::<FwseclicReadVbiosDesc>() == FwseclicReadVbiosDesc::SIZE);
+    assert!(core::mem::align_of::<FwseclicReadVbiosDesc>() == FwseclicReadVbiosDesc::ALIGN);
+    assert!(core::mem::offset_of!(FwseclicReadVbiosDesc, version) == 0);
+    assert!(core::mem::offset_of!(FwseclicReadVbiosDesc, size) == 4);
+    assert!(core::mem::offset_of!(FwseclicReadVbiosDesc, gfw_image_offset) == 8);
+    assert!(core::mem::offset_of!(FwseclicReadVbiosDesc, gfw_image_size) == 16);
+    assert!(core::mem::offset_of!(FwseclicReadVbiosDesc, flags) == 20);
+};
+
+/// `FWSECLIC_FRTS_REGION_DESC` — ogkm `src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:115`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FwseclicFrtsRegionDesc {
+    /// `NvU32 version` @ +0 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:117).
+    pub version: u32,
+    /// `NvU32 size` @ +4 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:118).
+    pub size: u32,
+    /// `NvU32 frtsRegionOffset4K` @ +8 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:119).
+    pub frts_region_offset4_k: u32,
+    /// `NvU32 frtsRegionSize` @ +12 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:120).
+    pub frts_region_size: u32,
+    /// `NvU32 frtsRegionMediaType` @ +16 (src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:121).
+    pub frts_region_media_type: u32,
+}
+
+impl FwseclicFrtsRegionDesc {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "FWSECLIC_FRTS_REGION_DESC";
+    /// `sizeof(FWSECLIC_FRTS_REGION_DESC)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 20;
+    /// `alignof(FWSECLIC_FRTS_REGION_DESC)`.
+    pub const ALIGN: usize = 4;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "FWSECLIC_FRTS_REGION_DESC",
+        size: 20,
+        align: 4,
+        fields: &[
+            Field {
+                c_name: "version",
+                rust_name: "version",
+                offset: 0,
+                width: 4,
+            },
+            Field {
+                c_name: "size",
+                rust_name: "size",
+                offset: 4,
+                width: 4,
+            },
+            Field {
+                c_name: "frtsRegionOffset4K",
+                rust_name: "frts_region_offset4_k",
+                offset: 8,
+                width: 4,
+            },
+            Field {
+                c_name: "frtsRegionSize",
+                rust_name: "frts_region_size",
+                offset: 12,
+                width: 4,
+            },
+            Field {
+                c_name: "frtsRegionMediaType",
+                rust_name: "frts_region_media_type",
+                offset: 16,
+                width: 4,
+            },
+        ],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[
+        (
+            "version",
+            core::mem::offset_of!(FwseclicFrtsRegionDesc, version),
+        ),
+        ("size", core::mem::offset_of!(FwseclicFrtsRegionDesc, size)),
+        (
+            "frts_region_offset4_k",
+            core::mem::offset_of!(FwseclicFrtsRegionDesc, frts_region_offset4_k),
+        ),
+        (
+            "frts_region_size",
+            core::mem::offset_of!(FwseclicFrtsRegionDesc, frts_region_size),
+        ),
+        (
+            "frts_region_media_type",
+            core::mem::offset_of!(FwseclicFrtsRegionDesc, frts_region_media_type),
+        ),
+    ];
+
+    /// Decode from a little-endian byte image of `FWSECLIC_FRTS_REGION_DESC`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            version: u32_at(bytes, 0)?,
+            size: u32_at(bytes, 4)?,
+            frts_region_offset4_k: u32_at(bytes, 8)?,
+            frts_region_size: u32_at(bytes, 12)?,
+            frts_region_media_type: u32_at(bytes, 16)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.version.to_le_bytes();
+            bytes
+                .get_mut(0..4)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.size.to_le_bytes();
+            bytes
+                .get_mut(4..8)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.frts_region_offset4_k.to_le_bytes();
+            bytes
+                .get_mut(8..12)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.frts_region_size.to_le_bytes();
+            bytes
+                .get_mut(12..16)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.frts_region_media_type.to_le_bytes();
+            bytes
+                .get_mut(16..20)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(core::mem::size_of::<FwseclicFrtsRegionDesc>() == FwseclicFrtsRegionDesc::SIZE);
+    assert!(core::mem::align_of::<FwseclicFrtsRegionDesc>() == FwseclicFrtsRegionDesc::ALIGN);
+    assert!(core::mem::offset_of!(FwseclicFrtsRegionDesc, version) == 0);
+    assert!(core::mem::offset_of!(FwseclicFrtsRegionDesc, size) == 4);
+    assert!(core::mem::offset_of!(FwseclicFrtsRegionDesc, frts_region_offset4_k) == 8);
+    assert!(core::mem::offset_of!(FwseclicFrtsRegionDesc, frts_region_size) == 12);
+    assert!(core::mem::offset_of!(FwseclicFrtsRegionDesc, frts_region_media_type) == 16);
+};
+
 /// Every struct this module generates, in declaration order — the enumerated-vs-
 /// exercised coverage surface (`mode2_abi_agnostic_layer.md` §2.3, rule 2).
-pub const STRUCTS: &[&StructLayout] = &[];
+pub const STRUCTS: &[&StructLayout] = &[
+    &FalconApplicationInterfaceHeaderV1::LAYOUT,
+    &FalconApplicationInterfaceEntryV1::LAYOUT,
+    &FalconApplicationInterfaceDmemMapperV3::LAYOUT,
+    &FwseclicReadVbiosDesc::LAYOUT,
+    &FwseclicFrtsRegionDesc::LAYOUT,
+];
 
 /// The generator-computed offsets paired with rustc's own, per struct. The
 /// crate's tests walk this so the agreement is also a RUNTIME assertion the
 /// mutation gate can see.
-pub const RUSTC_OFFSETS: &[(&str, &[(&str, usize)])] = &[];
+pub const RUSTC_OFFSETS: &[(&str, &[(&str, usize)])] = &[
+    (
+        "FALCON_APPLICATION_INTERFACE_HEADER_V1",
+        FalconApplicationInterfaceHeaderV1::RUSTC_OFFSETS,
+    ),
+    (
+        "FALCON_APPLICATION_INTERFACE_ENTRY_V1",
+        FalconApplicationInterfaceEntryV1::RUSTC_OFFSETS,
+    ),
+    (
+        "FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3",
+        FalconApplicationInterfaceDmemMapperV3::RUSTC_OFFSETS,
+    ),
+    (
+        "FWSECLIC_READ_VBIOS_DESC",
+        FwseclicReadVbiosDesc::RUSTC_OFFSETS,
+    ),
+    (
+        "FWSECLIC_FRTS_REGION_DESC",
+        FwseclicFrtsRegionDesc::RUSTC_OFFSETS,
+    ),
+];

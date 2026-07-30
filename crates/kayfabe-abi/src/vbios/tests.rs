@@ -23,9 +23,15 @@
 
 use super::*;
 // Constants the *parser* needs but the builder does not: the 6-byte token form
-// (the builder always emits the 8-byte one) and the EXT code type (the builder
-// only ever emits BASE).
-use crate::generated::vbios::{BIT_TOKEN_V1_00_SIZE_6, NV_BCRT_HASH_INFO_BASE_CODE_TYPE_VBIOS_EXT};
+// (the builder always emits the 8-byte one), the EXT code type (the builder only
+// ever emits BASE), and the two FWSEC command codes — the BUILDER never names a
+// command, it lays out the mapper and leaves `init_cmd` zero, so only the
+// interface-walk transcription below has any business knowing what the driver
+// writes there.
+use crate::generated::vbios::{
+    BIT_TOKEN_V1_00_SIZE_6, FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+    FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_SB, NV_BCRT_HASH_INFO_BASE_CODE_TYPE_VBIOS_EXT,
+};
 
 /// The subset of the driver's parse result the tests assert on.
 #[derive(Debug, PartialEq, Eq)]
@@ -347,6 +353,46 @@ fn ga106() -> &'static VbiosProfile {
 
 fn good() -> Vec<u8> {
     build(ga106(), VbiosWire::Tu102Bit).expect("the shipped profile must build")
+}
+
+/// The DMEM structures the builder actually **writes into the image**, as
+/// `(name, payload-relative offset, length)`.
+///
+/// ★ Deliberately NOT the same list `build` bounds-checks. The command buffers
+/// and `hsSigDmemAddr` are *destinations the driver fills at run time* — in the
+/// ROM image those ranges are still marker fill, and treating them as written
+/// would blind the marker check over 896 bytes for no reason.
+fn dmem_structures(p: &VbiosProfile) -> [(&'static str, usize, usize); 2] {
+    let fw = &p.fwsec;
+    let base = fw.imem_load_size as usize;
+    [
+        (
+            "the interface header and its entries",
+            base + fw.interface_offset as usize,
+            FalconApplicationInterfaceHeaderV1::SIZE
+                + usize::from(INTERFACE_ENTRY_COUNT) * FalconApplicationInterfaceEntryV1::SIZE,
+        ),
+        (
+            "the DMEM mapper",
+            base + fw.dmem_mapper_offset as usize,
+            FalconApplicationInterfaceDmemMapperV3::SIZE,
+        ),
+    ]
+}
+
+/// The payload bytes of a built image, i.e. what the driver hands the falcon.
+fn payload_of(img: &[u8]) -> &[u8] {
+    let p = parse(img).expect("a generated image must parse");
+    let at = p.desc_offset + p.desc_size;
+    &img[at..at + p.ucode_size as usize]
+}
+
+/// The DMEM section of a built image — `pMappedData` as
+/// `s_prepareForFwsec_TU102` computes it (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:394-396`).
+fn dmem_of(img: &[u8], p: &VbiosProfile) -> Vec<u8> {
+    let pay = payload_of(img);
+    pay[p.fwsec.imem_load_size as usize..][..p.fwsec.dmem_load_size as usize].to_vec()
 }
 
 // ─── Acceptance ──────────────────────────────────────────────────────────────
@@ -784,13 +830,33 @@ fn the_ucode_payload_sits_immediately_after_the_signatures() {
     let p = parse(&img).unwrap();
     let image_offset = p.desc_offset + p.desc_size;
 
+    // ★ The DMEM structures are laid OVER the marker fill, so they are the only
+    // payload bytes that are legitimately not marker bytes. Skipping them costs
+    // this test some reach, and the `checked` count below is what stops the skip
+    // from quietly growing to swallow the assertion — a hole punched by a later
+    // profile change makes the count wrong rather than making the test vacuous.
+    let structures = dmem_structures(ga106());
+    let skipped: usize = structures.iter().map(|&(_, _, len)| len).sum();
+    let mut checked = 0usize;
     for i in 0..p.ucode_size as usize {
+        if structures
+            .iter()
+            .any(|&(_, at, len)| (at..at + len).contains(&i))
+        {
+            continue;
+        }
         assert_eq!(
             img[image_offset + i],
             UCODE_MARKER ^ (i % 251) as u8,
             "ucode payload byte {i} is not at descOffset+descSize ({image_offset:#x})"
         );
+        checked += 1;
     }
+    assert_eq!(
+        checked,
+        p.ucode_size as usize - skipped,
+        "the marker check covered the payload minus exactly the DMEM structures"
+    );
     // …and the byte just before it is the last signature byte, not padding — so
     // there is provably no gap.
     let last_sig = p.signatures_total_size - 1;
@@ -799,4 +865,415 @@ fn the_ucode_payload_sits_immediately_after_the_signatures() {
         (last_sig % 251) as u8,
         "the signature blob must run right up to the payload"
     );
+}
+
+// ─── The FWSEC application interface table ───────────────────────────────────
+//
+// The plane the ROM parser above cannot see. `kgspParseFwsecUcodeFromVbiosImg`
+// reads `InterfaceOffset` as an opaque number and copies the payload; it is
+// `s_prepareForFwsec_TU102` → `s_vbiosPatchInterfaceData`, one whole stage later
+// and in a different file, that walks what the number points at. A guest whose
+// ROM parses perfectly still stops there with
+// `failed to find required interface entry for FWSEC cmd 0x15`.
+//
+// ★ Same honest limit as `parse` above, and it bites harder here: this is a
+// transcription of a function the compiled oracle did not run either until this
+// commit extended it. The independent check is
+// `tests/tests/vbios_real_parser_oracle.rs`, which compiles the real
+// `s_vbiosPatchInterfaceData` and runs it over this image; above that, a boot.
+
+/// Every way the driver's interface walk refuses, named after its own diagnostic
+/// or returned status
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:163-262`).
+#[derive(Debug, PartialEq, Eq)]
+enum PatchFail {
+    /// `:180-186,199-208,215-224,406-413` — any `NV_ERR_INVALID_OFFSET`.
+    InvalidOffset,
+    /// `:190-194` — "too few interface entires found for FWSEC cmd 0x%x".
+    TooFewEntries,
+    /// `:230-234` — "failed to find required interface entry for FWSEC cmd 0x%x".
+    /// **This is the message the stock guest stopped on.**
+    NoDmemMapper,
+}
+
+/// What a successful walk produces.
+#[derive(Debug, PartialEq, Eq)]
+struct Patched {
+    /// The DMEM section after the patch — `init_cmd` written, command copied in.
+    dmem: Vec<u8>,
+    /// Where the mapper was found.
+    mapper_at: u32,
+    /// Whether the driver emitted "insufficient cmd buffer" (a warning only: it
+    /// copies regardless, `:238-241`).
+    warned_small_buffer: bool,
+}
+
+/// A transcription of `s_vbiosPatchInterfaceData`, including its quirks.
+///
+/// ★ Two of those quirks are load-bearing and are reproduced rather than tidied:
+/// the walk keeps the **last** `_DMEMMAPPER` it sees, and the final bounds check
+/// tests `pIntFaceEntry->dmemOffset + cmdBufferSize` — the *entry's* offset —
+/// where the copy it guards uses `pDmemMapper->cmd_in_buffer_offset` (`:243-254`).
+/// A tidied transcription would accept tables the driver rejects and vice versa.
+fn patch_interface_data(
+    dmem: &[u8],
+    cmd: u32,
+    cmd_buffer: &[u8],
+    interface_offset: u32,
+) -> Result<Patched, PatchFail> {
+    let mapped = dmem.len() as u32;
+    let hdr_size = FalconApplicationInterfaceHeaderV1::SIZE as u32;
+    let entry_size = FalconApplicationInterfaceEntryV1::SIZE as u32;
+    let mapper_size = FalconApplicationInterfaceDmemMapperV3::SIZE as u32;
+    let cmd_len = cmd_buffer.len() as u32;
+
+    if interface_offset >= mapped {
+        return Err(PatchFail::InvalidOffset);
+    }
+    let mut next = interface_offset
+        .checked_add(hdr_size)
+        .ok_or(PatchFail::InvalidOffset)?;
+    if next > mapped {
+        return Err(PatchFail::InvalidOffset);
+    }
+    let hdr = FalconApplicationInterfaceHeaderV1::decode(&dmem[interface_offset as usize..])
+        .map_err(|_| PatchFail::InvalidOffset)?;
+    if hdr.entry_count < 2 {
+        return Err(PatchFail::TooFewEntries);
+    }
+
+    let mut cur = next;
+    let mut mapper_at: Option<u32> = None;
+    let mut last_entry: Option<FalconApplicationInterfaceEntryV1> = None;
+    for _ in 0..hdr.entry_count {
+        if cur >= mapped {
+            return Err(PatchFail::InvalidOffset);
+        }
+        next = cur
+            .checked_add(entry_size)
+            .ok_or(PatchFail::InvalidOffset)?;
+        if next > mapped {
+            return Err(PatchFail::InvalidOffset);
+        }
+        let entry = FalconApplicationInterfaceEntryV1::decode(&dmem[cur as usize..])
+            .map_err(|_| PatchFail::InvalidOffset)?;
+        cur = next;
+        if entry.id == FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER {
+            if entry.dmem_offset >= mapped {
+                return Err(PatchFail::InvalidOffset);
+            }
+            let end = entry
+                .dmem_offset
+                .checked_add(mapper_size)
+                .ok_or(PatchFail::InvalidOffset)?;
+            if end > mapped {
+                return Err(PatchFail::InvalidOffset);
+            }
+            mapper_at = Some(entry.dmem_offset);
+        }
+        last_entry = Some(entry);
+    }
+    let mapper_at = mapper_at.ok_or(PatchFail::NoDmemMapper)?;
+
+    let mut out = dmem.to_vec();
+    let mut mapper = FalconApplicationInterfaceDmemMapperV3::decode(&out[mapper_at as usize..])
+        .map_err(|_| PatchFail::InvalidOffset)?;
+    mapper.init_cmd = cmd;
+    let warned_small_buffer = mapper.cmd_in_buffer_size < cmd_len;
+    if mapper.cmd_in_buffer_offset >= mapped {
+        return Err(PatchFail::InvalidOffset);
+    }
+    // The quirk: the *entry's* offset, not the buffer's.
+    let quirk = last_entry
+        .map(|e| e.dmem_offset)
+        .ok_or(PatchFail::InvalidOffset)?;
+    if quirk.checked_add(cmd_len).ok_or(PatchFail::InvalidOffset)? > mapped {
+        return Err(PatchFail::InvalidOffset);
+    }
+    let _ = mapper.encode_into(&mut out[mapper_at as usize..]);
+    let at = mapper.cmd_in_buffer_offset as usize;
+    out[at..at + cmd_buffer.len()].copy_from_slice(cmd_buffer);
+    Ok(Patched {
+        dmem: out,
+        mapper_at,
+        warned_small_buffer,
+    })
+}
+
+/// A stand-in for whatever `s_prepareForFwsec_TU102` builds — the walk copies it
+/// verbatim and never inspects it, so its *content* is irrelevant and its
+/// *length* is the only thing that matters. [`FWSEC_CMD_BUFFER_MIN`] is the
+/// larger of the two real payloads' floor.
+fn fake_cmd_buffer() -> Vec<u8> {
+    (0..FWSEC_CMD_BUFFER_MIN).map(|i| (i % 251) as u8).collect()
+}
+
+/// ★ THE ROW THIS COMMIT ADDS: the DMEM payload now describes itself well enough
+/// for the driver to deliver a FWSEC command into it.
+#[test]
+fn the_dmem_payload_carries_an_interface_table_the_driver_can_walk() {
+    let img = good();
+    let p = ga106();
+    let dmem = dmem_of(&img, p);
+    let cmd = fake_cmd_buffer();
+
+    let out = patch_interface_data(
+        &dmem,
+        FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+        &cmd,
+        p.fwsec.interface_offset,
+    )
+    .expect("the walk must find a DMEM mapper");
+
+    assert_eq!(out.mapper_at, p.fwsec.dmem_mapper_offset);
+    assert!(
+        !out.warned_small_buffer,
+        "cmd_in_buffer_size must hold the command the driver builds"
+    );
+
+    // `init_cmd` was 0 in the image and is 0x15 after the patch — which is the
+    // whole reason the builder emits 0 there.
+    let before =
+        FalconApplicationInterfaceDmemMapperV3::decode(&dmem[out.mapper_at as usize..]).unwrap();
+    let after = FalconApplicationInterfaceDmemMapperV3::decode(&out.dmem[out.mapper_at as usize..])
+        .unwrap();
+    assert_eq!(
+        before.init_cmd, 0,
+        "the image must not pre-declare a command"
+    );
+    assert_eq!(
+        after.init_cmd,
+        FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS
+    );
+
+    // And the command landed where the mapper said it would.
+    let at = after.cmd_in_buffer_offset as usize;
+    assert_eq!(&out.dmem[at..at + cmd.len()], &cmd[..]);
+    assert_ne!(
+        &dmem[at..at + cmd.len()],
+        &cmd[..],
+        "the command buffer must not already contain the command — that would make \
+         the copy unobservable, which is the marker-fill lesson"
+    );
+}
+
+/// The second FWSEC command goes through the same table. A table that only
+/// satisfied FRTS would stop the boot one step later, at `SB`.
+#[test]
+fn the_same_table_serves_the_sb_command() {
+    let img = good();
+    let p = ga106();
+    let dmem = dmem_of(&img, p);
+    let out = patch_interface_data(
+        &dmem,
+        FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_SB,
+        &fake_cmd_buffer(),
+        p.fwsec.interface_offset,
+    )
+    .expect("SB must walk the same table");
+    let after = FalconApplicationInterfaceDmemMapperV3::decode(&out.dmem[out.mapper_at as usize..])
+        .unwrap();
+    assert_eq!(
+        after.init_cmd,
+        FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_SB
+    );
+}
+
+// ─── Non-vacuity: poison the interface table, watch the walk refuse ──────────
+
+/// Poison the header's `entryCount` to 1 — the driver's own floor.
+#[test]
+fn one_interface_entry_is_too_few() {
+    let img = good();
+    let p = ga106();
+    let mut dmem = dmem_of(&img, p);
+    // `entryCount` is the header's fourth byte.
+    dmem[p.fwsec.interface_offset as usize + 3] = 1;
+    assert_eq!(
+        patch_interface_data(
+            &dmem,
+            FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+            &fake_cmd_buffer(),
+            p.fwsec.interface_offset,
+        ),
+        Err(PatchFail::TooFewEntries)
+    );
+}
+
+/// Poison **both** entries' `id`. That both must be poisoned is itself the proof
+/// that the builder emits two mappers rather than one and a filler.
+#[test]
+fn a_table_with_no_dmemmapper_entry_is_the_failure_the_guest_reported() {
+    let img = good();
+    let p = ga106();
+    let base = p.fwsec.interface_offset as usize + FalconApplicationInterfaceHeaderV1::SIZE;
+    let cmd = fake_cmd_buffer();
+
+    // Poisoning only the first still walks: the second is a mapper too.
+    let mut one = dmem_of(&img, p);
+    one[base] = 0xEE;
+    assert!(
+        patch_interface_data(
+            &one,
+            FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+            &cmd,
+            p.fwsec.interface_offset
+        )
+        .is_ok(),
+        "one surviving mapper entry must still satisfy the walk"
+    );
+
+    let mut both = one;
+    both[base + FalconApplicationInterfaceEntryV1::SIZE] = 0xEE;
+    assert_eq!(
+        patch_interface_data(
+            &both,
+            FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+            &cmd,
+            p.fwsec.interface_offset
+        ),
+        Err(PatchFail::NoDmemMapper),
+        "this is `failed to find required interface entry for FWSEC cmd 0x15`"
+    );
+}
+
+/// An `interfaceOffset` at or past `DMEMLoadSize` is refused before anything is
+/// read.
+#[test]
+fn an_interface_offset_outside_dmem_is_refused() {
+    let img = good();
+    let p = ga106();
+    let dmem = dmem_of(&img, p);
+    assert_eq!(
+        patch_interface_data(
+            &dmem,
+            FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+            &fake_cmd_buffer(),
+            p.fwsec.dmem_load_size,
+        ),
+        Err(PatchFail::InvalidOffset)
+    );
+}
+
+/// The mapper's `dmemOffset` is bounds-checked against `sizeof(mapper)`, not
+/// merely against the section end.
+#[test]
+fn a_mapper_that_straddles_the_end_of_dmem_is_refused() {
+    let img = good();
+    let p = ga106();
+    let mut dmem = dmem_of(&img, p);
+    let straddle = p.fwsec.dmem_load_size - FalconApplicationInterfaceDmemMapperV3::SIZE as u32 + 1;
+    let base = p.fwsec.interface_offset as usize + FalconApplicationInterfaceHeaderV1::SIZE;
+    for i in 0..usize::from(INTERFACE_ENTRY_COUNT) {
+        let at = base + i * FalconApplicationInterfaceEntryV1::SIZE + 4; // `dmemOffset`
+        dmem[at..at + 4].copy_from_slice(&straddle.to_le_bytes());
+    }
+    assert_eq!(
+        patch_interface_data(
+            &dmem,
+            FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+            &fake_cmd_buffer(),
+            p.fwsec.interface_offset,
+        ),
+        Err(PatchFail::InvalidOffset)
+    );
+}
+
+// ─── The builder's own DMEM refusals ─────────────────────────────────────────
+
+#[test]
+fn refuses_an_interface_table_that_leaves_dmem() {
+    let mut p = *ga106();
+    p.fwsec.interface_offset = p.fwsec.dmem_load_size - 4;
+    assert!(matches!(
+        build(&p, VbiosWire::Tu102Bit),
+        Err(VbiosError::DmemRegionOutOfBounds { .. })
+    ));
+}
+
+#[test]
+fn refuses_a_mapper_that_leaves_dmem() {
+    let mut p = *ga106();
+    p.fwsec.dmem_mapper_offset =
+        p.fwsec.dmem_load_size - FalconApplicationInterfaceDmemMapperV3::SIZE as u32 + 1;
+    assert!(matches!(
+        build(&p, VbiosWire::Tu102Bit),
+        Err(VbiosError::DmemRegionOutOfBounds { .. })
+    ));
+}
+
+/// ★ The overrun the DRIVER does not catch. `cmd_in_buffer_offset` is tested
+/// against `mappedDataSize`, but the copy's *end* is guarded by the entry's
+/// `dmemOffset` instead — so a buffer starting in range and ending out of it
+/// walks clean and writes past the section. The builder refuses it here because
+/// nothing downstream will.
+#[test]
+fn refuses_a_command_buffer_that_ends_outside_dmem() {
+    let mut p = *ga106();
+    p.fwsec.cmd_in_buffer_offset = p.fwsec.dmem_load_size - 4;
+    p.fwsec.cmd_in_buffer_size = FWSEC_CMD_BUFFER_MIN;
+    assert!(matches!(
+        build(&p, VbiosWire::Tu102Bit),
+        Err(VbiosError::DmemRegionOutOfBounds { .. })
+    ));
+}
+
+/// The signature is copied into DMEM **after** the command is patched in, so an
+/// overlap silently destroys the command rather than failing anything.
+#[test]
+fn refuses_a_signature_that_overlaps_the_command_buffer() {
+    let mut p = *ga106();
+    p.fwsec.pkc_data_offset = p.fwsec.cmd_in_buffer_offset;
+    assert!(matches!(
+        build(&p, VbiosWire::Tu102Bit),
+        Err(VbiosError::DmemRegionsOverlap { .. })
+    ));
+}
+
+#[test]
+fn refuses_a_mapper_that_overlaps_its_own_interface_table() {
+    let mut p = *ga106();
+    p.fwsec.dmem_mapper_offset = p.fwsec.interface_offset;
+    assert!(matches!(
+        build(&p, VbiosWire::Tu102Bit),
+        Err(VbiosError::DmemRegionsOverlap { .. })
+    ));
+}
+
+#[test]
+fn refuses_a_command_buffer_too_small_for_a_fwsec_command() {
+    let mut p = *ga106();
+    p.fwsec.cmd_in_buffer_size = FWSEC_CMD_BUFFER_MIN - 1;
+    assert_eq!(
+        build(&p, VbiosWire::Tu102Bit),
+        Err(VbiosError::CmdBufferTooSmall {
+            declared: FWSEC_CMD_BUFFER_MIN - 1,
+            needed: FWSEC_CMD_BUFFER_MIN,
+        })
+    );
+    // …and one more byte is accepted, so the boundary is where it is claimed.
+    p.fwsec.cmd_in_buffer_size = FWSEC_CMD_BUFFER_MIN;
+    assert!(build(&p, VbiosWire::Tu102Bit).is_ok());
+}
+
+/// Every shipped profile carries a walkable table, not just the one the other
+/// tests use. A row added to `VBIOS_PROFILES` cannot silently be one that stops
+/// the guest at `s_prepareForFwsec_TU102`.
+#[test]
+fn every_shipped_profile_carries_a_walkable_interface_table() {
+    let mut checked = 0usize;
+    for p in VBIOS_PROFILES {
+        let img = build(p, VbiosWire::Tu102Bit).expect("builds");
+        let out = patch_interface_data(
+            &dmem_of(&img, p),
+            FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+            &fake_cmd_buffer(),
+            p.fwsec.interface_offset,
+        )
+        .unwrap_or_else(|e| panic!("profile {} has no walkable table: {e:?}", p.name));
+        assert_eq!(out.mapper_at, p.fwsec.dmem_mapper_offset, "{}", p.name);
+        checked += 1;
+    }
+    assert_eq!(checked, VBIOS_PROFILES.len());
+    assert!(checked >= 2, "the table must exercise more than one row");
 }

@@ -16,7 +16,7 @@
 //! assertion of both sides rather than resolved silently — see
 //! [`nvos46_the_three_oracles_disagree_and_here_is_exactly_how`].
 
-use kayfabe_abi::generated::{classes, ctrl, nvos, rpc};
+use kayfabe_abi::generated::{classes, ctrl, nvos, rpc, vbios};
 use kayfabe_abi::transcribed::Nvos46ParametersPre580;
 use kayfabe_abi::versions::{BENCH_DRIVER, table_for};
 use kayfabe_abi::wire::StructLayout;
@@ -75,6 +75,7 @@ fn the_generators_layout_equals_rustcs_for_every_generated_struct() {
         ("classes", classes::STRUCTS, classes::RUSTC_OFFSETS),
         ("ctrl", ctrl::STRUCTS, ctrl::RUSTC_OFFSETS),
         ("rpc", rpc::STRUCTS, rpc::RUSTC_OFFSETS),
+        ("vbios", vbios::STRUCTS, vbios::RUSTC_OFFSETS),
     ];
     let mut checked_fields = 0usize;
     let mut checked_structs = 0usize;
@@ -111,11 +112,12 @@ fn the_generators_layout_equals_rustcs_for_every_generated_struct() {
     }
     // Non-vacuity: a green run of a loop that never iterated is a zero nobody
     // re-checks (`testing_doctrine.md` §1).
-    assert_eq!(checked_structs, 14, "the slice is 14 generated structs");
-    // 4+7+11+8+7+7+9 (nvos) + 4+9+5+3 (classes) + 7+7 (ctrl) + 8 (rpc). The first
-    // draft of this line said 66 and the test caught it — which is the point of
-    // asserting the count rather than trusting the loop ran.
-    assert_eq!(checked_fields, 96, "…with 96 fields between them");
+    assert_eq!(checked_structs, 19, "the slice is 19 generated structs");
+    // 4+7+11+8+7+7+9 (nvos) + 4+9+5+3 (classes) + 7+7 (ctrl) + 8 (rpc)
+    // + 4+2+17+5+5 (vbios). The first draft of this line said 66 and the test
+    // caught it — which is the point of asserting the count rather than trusting
+    // the loop ran.
+    assert_eq!(checked_fields, 129, "…with 129 fields between them");
 }
 
 /// The transcribed layout gets the same treatment. A hand-written table that

@@ -1,6 +1,29 @@
 //! **Synthetic VBIOS generation** — build a ROM image the stock NVIDIA driver's
-//! own `kgspExtractVbiosFromRom_TU102` → `kgspParseFwsecUcodeFromVbiosImg` path
-//! accepts, from the same profile that drives the emulated device's registers.
+//! own `kgspExtractVbiosFromRom_TU102` → `kgspParseFwsecUcodeFromVbiosImg` →
+//! `s_prepareForFwsec_TU102` path accepts, from the same profile that drives the
+//! emulated device's registers.
+//!
+//! # Two planes, and the second is easy to forget
+//!
+//! The ROM parse and the **FWSEC DMEM payload** are separate stages in separate
+//! files, and an image can pass the first completely while failing the second:
+//!
+//! | plane | who reads it | what it needs |
+//! |---|---|---|
+//! | the ROM container | `kernel_gsp_vbios_tu102.c` + `kernel_gsp_fwsec.c` | PCIR/NPDE, a BIT table, a falcon ucode table, a V3 descriptor |
+//! | the FWSEC DMEM payload | `kernel_gsp_frts_tu102.c` | a `FALCON_APPLICATION_INTERFACE_HEADER_V1` at `InterfaceOffset`, `entryCount >= 2`, and a `_DMEMMAPPER` entry |
+//!
+//! The parser treats `InterfaceOffset` as an opaque number and copies the payload
+//! without following it, so it accepts an image whose DMEM is noise. One stage
+//! later `s_vbiosPatchInterfaceData` follows it, and a table that is not there
+//! ends adapter init outright:
+//! *"failed to find required interface entry for FWSEC cmd 0x15"* →
+//! `NV_ERR_INVALID_DATA` → `RmInitAdapter failed! (0x62:0x25:2028)`.
+//!
+//! ★ The second plane is **not** more opaque than the first. It is the same kind
+//! of work — a header, fixed-size entries, and offsets that have to satisfy
+//! `portSafeAddU32` and stay inside `DMEMLoadSize`. See [`FwsecProfile`]'s
+//! interface fields and [`VbiosError::DmemRegionOutOfBounds`].
 //!
 //! # Why generate instead of serving a dump
 //!
@@ -69,10 +92,13 @@ use crate::generated::vbios::{
     BCRT30_RSA3K_SIG_SIZE, BIT_DATA_BIOSDATA_BINVER_SIZE_5, BIT_DATA_BIOSDATA_VERSION_2,
     BIT_DATA_FALCON_DATA_V2_SIZE_4, BIT_HEADER_ID, BIT_HEADER_SIGNATURE, BIT_HEADER_SIZE_OFFSET,
     BIT_TOKEN_BIOSDATA, BIT_TOKEN_FALCON_DATA, BIT_TOKEN_V1_00_SIZE_8,
-    FALCON_UCODE_DESC_V3_SIZE_44, FALCON_UCODE_ENTRY_APPID_FIRMWARE_SEC_LIC,
-    FALCON_UCODE_ENTRY_APPID_FWSEC_DBG, FALCON_UCODE_ENTRY_APPID_FWSEC_PROD,
-    FALCON_UCODE_TABLE_ENTRY_V1_SIZE_6, FALCON_UCODE_TABLE_HDR_V1_SIZE_6,
-    FALCON_UCODE_TABLE_HDR_V1_VERSION, NV_BCRT_HASH_INFO_BASE_CODE_TYPE_VBIOS_BASE,
+    FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER, FALCON_UCODE_DESC_V3_SIZE_44,
+    FALCON_UCODE_ENTRY_APPID_FIRMWARE_SEC_LIC, FALCON_UCODE_ENTRY_APPID_FWSEC_DBG,
+    FALCON_UCODE_ENTRY_APPID_FWSEC_PROD, FALCON_UCODE_TABLE_ENTRY_V1_SIZE_6,
+    FALCON_UCODE_TABLE_HDR_V1_SIZE_6, FALCON_UCODE_TABLE_HDR_V1_VERSION,
+    FalconApplicationInterfaceDmemMapperV3, FalconApplicationInterfaceEntryV1,
+    FalconApplicationInterfaceHeaderV1, FwseclicFrtsRegionDesc, FwseclicReadVbiosDesc,
+    NV_BCRT_HASH_INFO_BASE_CODE_TYPE_VBIOS_BASE,
     NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_FLAGS_VERSION,
     NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_FLAGS_VERSION_AVAILABLE,
     NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_SIZE, NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION,
@@ -120,6 +146,46 @@ pub const UCODE_ALIGN: u32 = 256;
 /// `UCODE_MARKER ^ (i % 251)` makes the placement observable to a test and makes
 /// a stray copy identifiable in a trace.
 pub const UCODE_MARKER: u8 = 0xA5;
+
+/// How many entries the generated FWSEC application interface table declares.
+///
+/// `s_vbiosPatchInterfaceData` refuses outright when `entryCount < 2` — *"too few
+/// interface entires found for FWSEC cmd 0x%x"*, `NV_ERR_INVALID_DATA`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:190-194`).
+/// Two is therefore the floor, and there is nothing a third entry would say.
+///
+/// ★ **Both entries are `_DMEMMAPPER`, and that is the point.** The walk records the
+/// *last* `_DMEMMAPPER` it sees and leaves `pIntFaceEntry` pointing at the *last
+/// entry of any kind*; the post-loop bounds check then reads
+/// `pIntFaceEntry->dmemOffset` (`:412` — it checks the **entry's** offset where it
+/// means the mapper's `cmd_in_buffer_offset`, which is a defect in the driver, not
+/// in the table). Making every entry a `_DMEMMAPPER` pointing at the same mapper
+/// collapses those two into the same number, so the check is applied to the value
+/// it was meant to be applied to. The alternative — a filler entry carrying some
+/// other `id` — would put a value in the image that the driver has **no name for**,
+/// which is precisely the kind of invention a generated ROM is supposed to avoid.
+pub const INTERFACE_ENTRY_COUNT: u8 = 2;
+
+/// The smallest `cmd_in_buffer_size` that can hold the larger of the two FWSEC
+/// command payloads.
+///
+/// `s_prepareForFwsec_TU102` builds a `FWSECLIC_FRTS_CMD` for cmd `0x15` and a bare
+/// `FWSECLIC_READ_VBIOS_DESC` for cmd `0x19`, then `portMemCopy`s `cmdBufferSize`
+/// bytes into DMEM at the mapper's `cmd_in_buffer_offset`
+/// (`ogkm-580: kernel_gsp_frts_tu102.c:317-341,414-415`). `FWSECLIC_FRTS_CMD` is
+/// those two structures one after the other, so its size is **at least** their
+/// sizes summed.
+///
+/// ★ **A lower bound, deliberately, and the gap is covered elsewhere.** The true
+/// `sizeof(FWSECLIC_FRTS_CMD)` can be larger than the sum — the C compiler is free
+/// to pad the tail out to the aggregate's alignment — and computing that here would
+/// mean re-implementing C's layout rules over a struct this crate does not mirror.
+/// So this constant states only what is provable by addition, and
+/// `tests/tests/vbios_real_parser_oracle.rs` asserts the profile's declared
+/// `cmd_in_buffer_size` against the **compiled** `sizeof`, reported by the oracle
+/// out of NVIDIA's own typedef.
+pub const FWSEC_CMD_BUFFER_MIN: u32 =
+    (FwseclicReadVbiosDesc::SIZE + FwseclicFrtsRegionDesc::SIZE) as u32;
 
 /// Which VBIOS parse path a driver version speaks.
 ///
@@ -200,8 +266,33 @@ pub struct FwsecProfile {
     /// `PKCDataOffset` — becomes `hsSigDmemAddr`, the DMEM address the signature
     /// is copied to. Bounds-checked relative to the *data* section.
     pub pkc_data_offset: u32,
-    /// `InterfaceOffset`.
+    /// `InterfaceOffset` — where, **inside the DMEM section**, the FWSEC
+    /// application interface table begins.
+    ///
+    /// ★ Not a free number and not opaque. `s_prepareForFwsec_TU102` maps the
+    /// ucode, offsets by `dataOffset` (= `IMEMLoadSize`) and hands
+    /// `s_vbiosPatchInterfaceData` the DMEM section with `mappedDataSize =
+    /// DMEMLoadSize` (`ogkm-580: kernel_gsp_frts_tu102.c:394-396`). Everything
+    /// this and the four fields below address is relative to **that** base.
     pub interface_offset: u32,
+    /// Where the `FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3` sits in DMEM — the
+    /// `dmemOffset` both interface entries carry, and the structure whose
+    /// `init_cmd` the driver writes the FWSEC command into.
+    pub dmem_mapper_offset: u32,
+    /// The mapper's `cmd_in_buffer_offset`: where in DMEM the driver
+    /// `portMemCopy`s the command payload it built.
+    pub cmd_in_buffer_offset: u32,
+    /// The mapper's `cmd_in_buffer_size`. Must be at least
+    /// [`FWSEC_CMD_BUFFER_MIN`]; a smaller value draws *"insufficient cmd buffer
+    /// for FWSEC interface cmd"* — which is only an `NV_PRINTF`, so the driver
+    /// then copies the payload anyway (`ogkm-580: kernel_gsp_frts_tu102.c:400-404`).
+    /// The overrun is ours to prevent, not the driver's.
+    pub cmd_in_buffer_size: u32,
+    /// The mapper's `cmd_out_buffer_offset`. Never read on the driver's side of
+    /// this path; it is where **we**, as the falcon, put the command's result.
+    pub cmd_out_buffer_offset: u32,
+    /// The mapper's `cmd_out_buffer_size`.
+    pub cmd_out_buffer_size: u32,
     /// `UcodeId`.
     pub ucode_id: u8,
     /// `EngineIdMask`.
@@ -262,6 +353,46 @@ pub enum VbiosError {
         /// Size the image would have had.
         size: usize,
     },
+    /// A structure the FWSEC application interface table addresses does not fit
+    /// inside the DMEM section.
+    ///
+    /// `s_vbiosPatchInterfaceData` bounds-checks each of them against
+    /// `mappedDataSize` (= `DMEMLoadSize`) and returns `NV_ERR_INVALID_OFFSET`
+    /// (`ogkm-580: kernel_gsp_frts_tu102.c:180-235,406-413`). The command *input*
+    /// buffer is the exception and the reason this check exists on our side at
+    /// all: the driver tests `cmd_in_buffer_offset < mappedDataSize` but then
+    /// bounds-checks the **entry's** `dmemOffset` rather than that buffer before
+    /// copying into it, so a buffer that starts in range and ends out of it is a
+    /// DMEM overrun the driver will not catch.
+    DmemRegionOutOfBounds {
+        /// Which structure — the same wording the diagnostics use.
+        region: &'static str,
+        /// One past its last byte, in DMEM-relative bytes.
+        end: u32,
+        /// `DMEMLoadSize`.
+        dmem_size: u32,
+    },
+    /// Two structures inside DMEM overlap.
+    ///
+    /// The driver checks none of this, and it still matters: the signature is
+    /// `portMemCopy`d to `hsSigDmemAddr` **after** `s_vbiosPatchInterfaceData`
+    /// returns (`ogkm-580: kernel_gsp_frts_tu102.c:414-417`), so a signature
+    /// region overlapping the interface table or the command buffer silently
+    /// destroys the command the driver just wrote.
+    DmemRegionsOverlap {
+        /// The earlier of the two structures.
+        first: &'static str,
+        /// The later one.
+        second: &'static str,
+    },
+    /// `cmd_in_buffer_size` is below [`FWSEC_CMD_BUFFER_MIN`], so the payload the
+    /// driver copies would not fit the buffer the mapper advertises.
+    CmdBufferTooSmall {
+        /// What the profile declared.
+        declared: u32,
+        /// [`FWSEC_CMD_BUFFER_MIN`].
+        needed: u32,
+    },
 }
 
 impl core::fmt::Display for VbiosError {
@@ -293,6 +424,21 @@ impl core::fmt::Display for VbiosError {
                     "image is {size} bytes, over the {BIOS_MAX_SIZE}-byte cap"
                 )
             }
+            Self::DmemRegionOutOfBounds {
+                region,
+                end,
+                dmem_size,
+            } => write!(
+                f,
+                "{region} ends at DMEM+{end} but DMEMLoadSize is only {dmem_size}"
+            ),
+            Self::DmemRegionsOverlap { first, second } => {
+                write!(f, "{first} and {second} overlap inside DMEM")
+            }
+            Self::CmdBufferTooSmall { declared, needed } => write!(
+                f,
+                "cmd_in_buffer_size is {declared}, below the {needed} bytes a FWSEC command needs"
+            ),
         }
     }
 }
@@ -321,10 +467,24 @@ pub static VBIOS_PROFILES: &[VbiosProfile] = &[
             imem_virt_base: 0,
             dmem_load_size: 0x1000,
             dmem_phys_base: 0,
-            // Inside the 0x1000-byte data section with room for a 384-byte
-            // signature: 0x800 + 384 = 0x980 <= 0x1000.
+            // ── The DMEM section's floor plan ────────────────────────────────
+            // 0x1000 bytes, five structures, all disjoint, all in bounds. Every
+            // offset here is CHOSEN, not read off any card: the driver dictates
+            // the inequalities (see `VbiosError::DmemRegionOutOfBounds`) and
+            // nothing else, so these are the loosest layout that satisfies them
+            // with room either side.
+            //   0x0100  interface header + 2 entries        (20 bytes)
+            //   0x0140  DMEM mapper                         (64 bytes)
+            //   0x0200  command input buffer               (256 bytes)
+            //   0x0300  command output buffer              (256 bytes)
+            //   0x0800  HS signature (`hsSigDmemAddr`)     (384 bytes)
             pkc_data_offset: 0x0800,
-            interface_offset: 0,
+            interface_offset: 0x0100,
+            dmem_mapper_offset: 0x0140,
+            cmd_in_buffer_offset: 0x0200,
+            cmd_in_buffer_size: 0x0100,
+            cmd_out_buffer_offset: 0x0300,
+            cmd_out_buffer_size: 0x0100,
             ucode_id: 0x01,
             engine_id_mask: 0x0001,
             signature_count: 1,
@@ -357,7 +517,12 @@ pub static VBIOS_PROFILES: &[VbiosProfile] = &[
             dmem_load_size: 0x1000,
             dmem_phys_base: 0,
             pkc_data_offset: 0x0800,
-            interface_offset: 0,
+            interface_offset: 0x0100,
+            dmem_mapper_offset: 0x0140,
+            cmd_in_buffer_offset: 0x0200,
+            cmd_in_buffer_size: 0x0100,
+            cmd_out_buffer_offset: 0x0300,
+            cmd_out_buffer_size: 0x0100,
             ucode_id: 0x01,
             engine_id_mask: 0x0001,
             signature_count: 1,
@@ -498,6 +663,69 @@ pub fn build(profile: &VbiosProfile, wire: VbiosWire) -> Result<Vec<u8>, VbiosEr
             sig_end,
             available: ucode_size,
         });
+    }
+
+    // ── The DMEM floor plan, checked before a byte of it is written ──────────
+    // Every structure `s_vbiosPatchInterfaceData` reaches, as (name, offset,
+    // length) in DMEM-relative bytes. The signature is in the list even though
+    // that function never touches it, because the driver copies it into the same
+    // section immediately afterwards and an overlap would erase the command.
+    let entry_bytes = usize::from(INTERFACE_ENTRY_COUNT) * FalconApplicationInterfaceEntryV1::SIZE;
+    let interface_table_len =
+        u32::try_from(FalconApplicationInterfaceHeaderV1::SIZE + entry_bytes).unwrap_or(u32::MAX);
+    let dmem_regions: [(&'static str, u32, u32); 5] = [
+        (
+            "the FWSEC interface table",
+            fw.interface_offset,
+            interface_table_len,
+        ),
+        (
+            "the DMEM mapper",
+            fw.dmem_mapper_offset,
+            u32::try_from(FalconApplicationInterfaceDmemMapperV3::SIZE).unwrap_or(u32::MAX),
+        ),
+        (
+            "the FWSEC command input buffer",
+            fw.cmd_in_buffer_offset,
+            fw.cmd_in_buffer_size,
+        ),
+        (
+            "the FWSEC command output buffer",
+            fw.cmd_out_buffer_offset,
+            fw.cmd_out_buffer_size,
+        ),
+        (
+            "the HS signature",
+            fw.pkc_data_offset,
+            u32::try_from(BCRT30_RSA3K_SIG_SIZE).unwrap_or(u32::MAX),
+        ),
+    ];
+    if fw.cmd_in_buffer_size < FWSEC_CMD_BUFFER_MIN {
+        return Err(VbiosError::CmdBufferTooSmall {
+            declared: fw.cmd_in_buffer_size,
+            needed: FWSEC_CMD_BUFFER_MIN,
+        });
+    }
+    for (region, at, len) in dmem_regions {
+        // Saturating, not wrapping: an overflow must land ABOVE `dmem_load_size`
+        // so the check below refuses it, never below where it would look legal.
+        let end = at.saturating_add(len);
+        if at >= fw.dmem_load_size || end > fw.dmem_load_size {
+            return Err(VbiosError::DmemRegionOutOfBounds {
+                region,
+                end,
+                dmem_size: fw.dmem_load_size,
+            });
+        }
+    }
+    for (i, &(first, a_at, a_len)) in dmem_regions.iter().enumerate() {
+        for &(second, b_at, b_len) in dmem_regions.iter().skip(i + 1) {
+            // Every `at + len` is already known to fit `dmem_load_size` — the loop
+            // above returned otherwise — so neither sum can overflow here.
+            if a_at < b_at + b_len && b_at < a_at + a_len {
+                return Err(VbiosError::DmemRegionsOverlap { first, second });
+            }
+        }
     }
 
     // ── Layout. Everything below is derived; no offset is a magic number. ────
@@ -725,6 +953,101 @@ pub fn build(profile: &VbiosProfile, wire: VbiosWire) -> Result<Vec<u8>, VbiosEr
     for i in 0..ucode_size as usize {
         c.u8(ucode + i, UCODE_MARKER ^ (i % 251) as u8);
     }
+
+    // ── The FWSEC application interface table, inside the DMEM section ───────
+    //
+    // ★ This is what turns an opaque payload into one the driver will *use*. With
+    // the payload opaque, RmInitAdapter got as far as `s_prepareForFwsec_TU102`
+    // and stopped: *"failed to find required interface entry for FWSEC cmd 0x15"*
+    // → `NV_ERR_INVALID_DATA` → `RmInitAdapter failed! (0x62:0x25:2028)`.
+    //
+    // ★★ MEASURED ON THE BENCH, 2026-07-31, stock 580.159.04 in a KVM guest, as a
+    // CONTROLLED A/B on one machine: the parent revision's builder reproduces that
+    // whole chain verbatim, ending
+    // `NVRM: nvCheckOkFailedNoLog: … returned from kgspPrepareForBootstrap_HAL(…)
+    // @ kernel_gsp.c:3890` and `RmInitAdapter failed! (0x62:0x25:2028)`; this one
+    // emits none of those lines and RmInitAdapter proceeds into
+    // `kgspBootstrap_HAL`, where it then hangs with no further diagnostic. So the
+    // table is load-bearing on real `nvidia.ko`, and the next wall is a different
+    // one. ⚠ `tmrSetCurrentTime_GV100: … Level 0 PLM is disabled` appears in BOTH
+    // arms and is therefore PRE-EXISTING, not something this change introduced —
+    // its status is discarded at the call site (`ogkm-580: kernel_gsp.c:4107`).
+    //
+    // The table is laid over the marker fill rather than into a hole in it, so it
+    // is distinguishable from its surroundings for the same reason the marker
+    // exists at all (see the payload comment above): a structure written to the
+    // wrong DMEM offset must be something a reader can SEE, and zero-filled
+    // padding is exactly what made the earlier payload-shift bite unobservable.
+    //
+    // `dmem` is the base `s_prepareForFwsec_TU102` hands the walker:
+    // `pMappedData = pMappedImage + pUcode->dataOffset`, and `dataOffset =
+    // IMEMLoadSize` (`ogkm-580: kernel_gsp_fwsec.c:919`,
+    // `kernel_gsp_frts_tu102.c:394-396`).
+    let dmem = ucode + fw.imem_load_size as usize;
+
+    // Each `encode_into` below writes into a buffer that is exactly `SIZE` bytes,
+    // and `AbiError::Truncated` — its only failure — is raised only for a SHORTER
+    // one. The branch is therefore unreachable by construction, which is why the
+    // result is discarded here rather than laundered into a `VbiosError` variant
+    // no profile could ever produce.
+    let mut hdr_bytes = [0u8; FalconApplicationInterfaceHeaderV1::SIZE];
+    let _ = FalconApplicationInterfaceHeaderV1 {
+        // The driver reads `entryCount` and nothing else from this header — it
+        // strides by `sizeof()`, never by the declared sizes. They are emitted
+        // truthfully anyway so the table describes itself to the falcon (us).
+        version: 1,
+        header_size: u8::try_from(FalconApplicationInterfaceHeaderV1::SIZE).unwrap_or(0),
+        entry_size: u8::try_from(FalconApplicationInterfaceEntryV1::SIZE).unwrap_or(0),
+        entry_count: INTERFACE_ENTRY_COUNT,
+    }
+    .encode_into(&mut hdr_bytes);
+    c.put(dmem + fw.interface_offset as usize, &hdr_bytes);
+
+    let entries_at = dmem + fw.interface_offset as usize + FalconApplicationInterfaceHeaderV1::SIZE;
+    for i in 0..usize::from(INTERFACE_ENTRY_COUNT) {
+        let mut entry_bytes = [0u8; FalconApplicationInterfaceEntryV1::SIZE];
+        let _ = FalconApplicationInterfaceEntryV1 {
+            id: FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER,
+            dmem_offset: fw.dmem_mapper_offset,
+        }
+        .encode_into(&mut entry_bytes);
+        c.put(
+            entries_at + i * FalconApplicationInterfaceEntryV1::SIZE,
+            &entry_bytes,
+        );
+    }
+
+    let mut mapper_bytes = [0u8; FalconApplicationInterfaceDmemMapperV3::SIZE];
+    let _ = FalconApplicationInterfaceDmemMapperV3 {
+        // Of these seventeen fields the driver reads exactly two —
+        // `cmd_in_buffer_size` (to warn) and `cmd_in_buffer_offset` (to copy to) —
+        // and writes exactly one, `init_cmd`
+        // (`ogkm-580: kernel_gsp_frts_tu102.c:397-415`). The rest belong to the
+        // falcon, which in Mode 2 is us.
+        signature: 0,
+        version: 3,
+        size: u16::try_from(FalconApplicationInterfaceDmemMapperV3::SIZE).unwrap_or(0),
+        cmd_in_buffer_offset: fw.cmd_in_buffer_offset,
+        cmd_in_buffer_size: fw.cmd_in_buffer_size,
+        cmd_out_buffer_offset: fw.cmd_out_buffer_offset,
+        cmd_out_buffer_size: fw.cmd_out_buffer_size,
+        nvf_img_data_buffer_offset: 0,
+        nvf_img_data_buffer_size: 0,
+        printf_buffer_hdr: 0,
+        ucode_build_time_stamp: 0,
+        ucode_signature: 0,
+        // ★ Emitted as 0 ON PURPOSE. The driver *overwrites* this with the FWSEC
+        // command (`0x15` FRTS, `0x19` SB), so leaving it zero is what makes that
+        // write observable: a reader that finds `0x15` here after the patch knows
+        // the driver reached this structure, and one that finds 0 knows it did not.
+        init_cmd: 0,
+        ucode_feature: 0,
+        ucode_cmd_mask0: 0,
+        ucode_cmd_mask1: 0,
+        multi_tgt_tbl: 0,
+    }
+    .encode_into(&mut mapper_bytes);
+    c.put(dmem + fw.dmem_mapper_offset as usize, &mapper_bytes);
 
     // ── Pad to a whole number of 512-byte blocks ─────────────────────────────
     c.grow_to(image_size);

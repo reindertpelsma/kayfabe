@@ -354,6 +354,26 @@ void kgspFreeFlcnUcode(KernelGspFlcnUcode *pFlcnUcode)
 #include OGKM_VBIOS_TU102_C
 #include OGKM_FWSEC_C
 
+/*
+ * ★ AND ONE STAGE FURTHER: the FWSEC INTERFACE WALK.
+ *
+ * `kgspParseFwsecUcodeFromVbiosImg` above reads `InterfaceOffset` as an opaque number
+ * and never follows it. What follows it is `s_vbiosPatchInterfaceData`, in
+ * kernel_gsp_frts_tu102.c — and that is where a stock guest with a perfectly parseable
+ * ROM stops, with "failed to find required interface entry for FWSEC cmd 0x15". A ROM
+ * oracle that ends at the parser cannot see that plane at all.
+ *
+ * That file cannot be included whole: it also holds `s_prepareForFwsec_TU102` and the
+ * FRTS entry points, which need HAL dispatch, KernelFalcon and memdescMapInternal. So
+ * `tests/build.rs` cuts a BYTE-FOR-BYTE RANGE of it — the three interface typedefs, the
+ * FWSECLIC command structures, and `s_vbiosPatchInterfaceData` — into OUT_DIR and points
+ * OGKM_FRTS_INTERFACE_SLICE at the result. The cut is delimited by the file's own text
+ * (not by line number) and build.rs asserts the anchors the slice must and must not
+ * contain, so a slice that caught the wrong region is a build failure rather than a
+ * quieter oracle. Nothing in it is rewritten.
+ */
+#include OGKM_FRTS_INTERFACE_SLICE
+
 /* ------------------------------------------------------------------------- */
 /* Reporting                                                                  */
 /* ------------------------------------------------------------------------- */
@@ -376,6 +396,94 @@ static void print_hex(const char *key, const unsigned char *p, unsigned long n)
     for (i = 0; i < n; i++)
         printf("%02x", p[i]);
     printf("\n");
+}
+
+/* ------------------------------------------------------------------------- */
+/* Stage two: the real interface walk, over the real parser's own output      */
+/* ------------------------------------------------------------------------- */
+/*
+ * `s_prepareForFwsec_TU102` is NOT compiled in (see the include note above), so the two
+ * things it supplies are reproduced here and only here:
+ *
+ *   - the DMEM base. `pMappedData = memdescMapInternal(...) + pUcode->dataOffset`, and
+ *     `mappedDataSize = pUcode->dmemSize`. Both come straight off the KernelGsp*
+ *     structure the REAL parser filled in, so neither is a number this harness chose.
+ *
+ *   - a command buffer. The walk copies `cmdBufferSize` bytes verbatim and never looks
+ *     inside them, so the CONTENT is irrelevant and only the LENGTH is load-bearing —
+ *     and the length is `sizeof()` of NVIDIA's own typedef, out of the same slice. The
+ *     buffer is filled with a recognisable ramp and printed, so the caller checks the
+ *     copy landed against the bytes that were actually passed rather than against a
+ *     constant both sides agreed on.
+ *
+ * The DMEM is snapshotted and restored between commands, so FRTS and SB are each run
+ * against the pristine image the parser produced.
+ */
+static void print_walk(const char *prefix, NV_STATUS st, const unsigned char *dmem,
+                       unsigned long dmem_len)
+{
+    char key[64];
+    snprintf(key, sizeof(key), "%s_status", prefix);
+    printf("%s=0x%08x\n", key, (unsigned) st);
+    snprintf(key, sizeof(key), "%s_dmem", prefix);
+    print_hex(key, dmem, dmem_len);
+}
+
+static void run_interface_walk(const KernelGspFlcnUcodeBootFromHs *u,
+                               const unsigned char *ucode, unsigned long ucode_len)
+{
+    unsigned char *mapped;
+    unsigned char *pristine;
+    unsigned char *data;
+    FWSECLIC_FRTS_CMD frtsCmd;
+    FWSECLIC_READ_VBIOS_DESC sbCmd;
+    NV_STATUS st;
+    unsigned i;
+
+    printf("frts_cmd_size=%lu\n", (unsigned long) sizeof(FWSECLIC_FRTS_CMD));
+    printf("read_vbios_desc_size=%lu\n", (unsigned long) sizeof(FWSECLIC_READ_VBIOS_DESC));
+    printf("interface_hdr_size=%lu\n",
+           (unsigned long) sizeof(FALCON_APPLICATION_INTERFACE_HEADER_V1));
+    printf("interface_entry_size=%lu\n",
+           (unsigned long) sizeof(FALCON_APPLICATION_INTERFACE_ENTRY_V1));
+    printf("dmem_mapper_size=%lu\n",
+           (unsigned long) sizeof(FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3));
+    printf("dmemmapper_entry_id=%u\n", (unsigned) FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER);
+
+    /* The walk mutates DMEM in place; work on a copy of the parser's buffer. */
+    if (u->dataOffset > ucode_len || u->dmemSize > ucode_len - u->dataOffset) {
+        printf("walk_skipped=dmem-out-of-ucode\n");
+        return;
+    }
+    mapped = malloc(ucode_len);
+    pristine = malloc(u->dmemSize);
+    if (mapped == NULL || pristine == NULL)
+        return;
+    memcpy(mapped, ucode, ucode_len);
+    data = mapped + u->dataOffset;
+    memcpy(pristine, data, u->dmemSize);
+    print_hex("walk_dmem_before", pristine, u->dmemSize);
+
+    for (i = 0; i < sizeof(frtsCmd); i++)
+        ((unsigned char *) &frtsCmd)[i] = (unsigned char) (0x5Au ^ (i % 251u));
+    for (i = 0; i < sizeof(sbCmd); i++)
+        ((unsigned char *) &sbCmd)[i] = (unsigned char) (0xC3u ^ (i % 251u));
+    print_hex("frts_cmd_bytes", (const unsigned char *) &frtsCmd, sizeof(frtsCmd));
+    print_hex("sb_cmd_bytes", (const unsigned char *) &sbCmd, sizeof(sbCmd));
+
+    st = s_vbiosPatchInterfaceData(data, u->dmemSize,
+                                   FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+                                   &frtsCmd, (NvU32) sizeof(frtsCmd), u->interfaceOffset);
+    print_walk("walk_frts", st, data, u->dmemSize);
+
+    memcpy(data, pristine, u->dmemSize);
+    st = s_vbiosPatchInterfaceData(data, u->dmemSize,
+                                   FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_SB,
+                                   &sbCmd, (NvU32) sizeof(sbCmd), u->interfaceOffset);
+    print_walk("walk_sb", st, data, u->dmemSize);
+
+    free(pristine);
+    free(mapped);
 }
 
 int main(int argc, char **argv)
@@ -488,6 +596,8 @@ int main(int argc, char **argv)
                     printf("ucode_fnv1a=0x%016llx\n", fnv1a(b, n));
                     print_hex("ucode_head", b, n < 32 ? n : 32);
                     print_hex("ucode_tail", n < 32 ? b : b + n - 32, n < 32 ? n : 32);
+
+                    run_interface_walk(u, b, n);
                 }
             }
         }

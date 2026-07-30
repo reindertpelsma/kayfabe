@@ -134,6 +134,13 @@ const RPC_ENUMS_H: &str = "src/nvidia/inc/kernel/vgpu/rpc_global_enums.h";
 const PCI_EXP_TABLE_H: &str = "src/nvidia/inc/kernel/platform/pci_exp_table.h";
 const FWSEC_C: &str = "src/nvidia/src/kernel/gpu/gsp/kernel_gsp_fwsec.c";
 const VBIOS_TU102_C: &str = "src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_vbios_tu102.c";
+/// ★ The third `.c`, and the one that reads the FWSEC **DMEM payload** rather than
+/// the ROM around it. `s_vbiosPatchInterfaceData` walks a
+/// `FALCON_APPLICATION_INTERFACE_HEADER_V1` at the descriptor's `InterfaceOffset`
+/// and refuses the whole adapter init if it cannot find a `_DMEMMAPPER` entry — so
+/// these three typedefs are as load-bearing as the BIT table, and they too are
+/// declared inside the implementation file with no header to read them from.
+const FRTS_TU102_C: &str = "src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c";
 
 /// Headers whose `#define`s feed array-length resolution, globally.
 const DEFINE_SOURCES: &[&str] = &["src/common/sdk/nvidia/inc/nvlimits.h", NVOS_H];
@@ -585,11 +592,13 @@ The constants a **synthetic VBIOS** must be built out of, so that the guest's ow
 `kgspExtractVbiosFromRom_TU102` → `kgspParseFwsecUcodeFromVbiosImg` path accepts
 it. Consumed by `crate::vbios`, which is the builder.
 
-★ Two of the four sources are `.c` files. NVIDIA declares the BIT-table and
-FWSEC-descriptor vocabulary inside `kernel_gsp_fwsec.c` itself and the ROM
-code-type constants inside `kernel_gsp_vbios_tu102.c`; there is no header to
-read them from, so the implementation file **is** the authoritative statement
-and is what the generator scans.
+★ Three of the five sources are `.c` files. NVIDIA declares the BIT-table and
+FWSEC-descriptor vocabulary inside `kernel_gsp_fwsec.c` itself, the ROM
+code-type constants inside `kernel_gsp_vbios_tu102.c`, and the FWSEC
+**application interface table** — the three typedefs `s_vbiosPatchInterfaceData`
+walks inside the DMEM payload — inside `kernel_gsp_frts_tu102.c`. There is no
+header to read any of them from, so the implementation file **is** the
+authoritative statement and is what the generator scans.
 
 # Why this is structure and not secrets
 
@@ -614,12 +623,79 @@ the same profile that drives those registers cannot disagree, by construction.
 # Version stability (measured, not assumed)
 
 Both vendored ogkm tags — 580.159.04 and 610.43.02 — carry `kernel_gsp_fwsec.c`,
-`kernel_gsp_vbios_tu102.c`, `pci_exp_table.h` and `dev_bus.h` **byte-identically**
-(`diff` is empty on all four). So every constant in this module has the same
-value at both, and `crate::vbios::VbiosWire` has exactly one variant. That is a
+`kernel_gsp_vbios_tu102.c`, `kernel_gsp_frts_tu102.c`, `pci_exp_table.h` and
+`dev_bus.h` **byte-identically** (`diff` is empty on all five; the fifth,
+`kernel_gsp_frts_tu102.c`, was diffed on 2026-07-31 when the interface-table
+structs below were added). So every constant in this module has the same value at
+both, and `crate::vbios::VbiosWire` has exactly one variant. That is a
 measurement, and the generator re-checks it every time it is run against a tree.",
-        structs: &[],
+        structs: &[
+            // ── The FWSEC application interface table (`kernel_gsp_frts_tu102.c`) ──
+            //
+            // Read by `s_vbiosPatchInterfaceData`, which is where a driver that has
+            // ALREADY accepted the ROM stops if the DMEM payload does not describe
+            // itself: `failed to find required interface entry for FWSEC cmd 0x15`.
+            // Mirrored rather than transcribed because every one of these sizes is a
+            // stride the walk uses (`interfaceOffset + sizeof(hdr)`, then
+            // `curOffset + sizeof(entry)` per entry, then
+            // `dmemOffset + sizeof(mapper)`), and a stride that is one byte wrong
+            // reads the next field.
+            StructReq {
+                header: FRTS_TU102_C,
+                name: "FALCON_APPLICATION_INTERFACE_HEADER_V1",
+                fam_align: None,
+            },
+            StructReq {
+                header: FRTS_TU102_C,
+                name: "FALCON_APPLICATION_INTERFACE_ENTRY_V1",
+                fam_align: None,
+            },
+            StructReq {
+                header: FRTS_TU102_C,
+                name: "FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3",
+                fam_align: None,
+            },
+            // The command payloads `s_prepareForFwsec_TU102` builds and hands to
+            // `s_vbiosPatchInterfaceData` as `pCmdBuffer`/`cmdBufferSize`. Their
+            // sizes are what `cmd_in_buffer_size` has to be able to hold, and what
+            // gets `portMemCopy`d into DMEM at `cmd_in_buffer_offset`.
+            StructReq {
+                header: FRTS_TU102_C,
+                name: "FWSECLIC_READ_VBIOS_DESC",
+                fam_align: None,
+            },
+            StructReq {
+                header: FRTS_TU102_C,
+                name: "FWSECLIC_FRTS_REGION_DESC",
+                fam_align: None,
+            },
+        ],
         consts: &[
+            // ── The FWSEC application interface table (`kernel_gsp_frts_tu102.c`) ──
+            vbios_const(
+                FRTS_TU102_C,
+                "FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER",
+                "u32",
+                "`0x4` — the one entry `id` `s_vbiosPatchInterfaceData` is looking\n\
+                 for. An interface table with `entryCount >= 2` but no entry\n\
+                 carrying this id fails with `failed to find required interface\n\
+                 entry`, which is a REFUSAL of the whole adapter init.",
+            ),
+            vbios_const(
+                FRTS_TU102_C,
+                "FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS",
+                "u32",
+                "`0x15` — the command written into the mapper's `init_cmd` for the\n\
+                 FRTS (WPR2 carve-out) request. The first of the two FWSEC commands\n\
+                 the driver issues, and the one in the failure message.",
+            ),
+            vbios_const(
+                FRTS_TU102_C,
+                "FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_SB",
+                "u32",
+                "`0x19` — the second command (`SB`), issued through the same table.\n\
+                 A table that only satisfies FRTS would stop the boot one step later.",
+            ),
             // ── The PCI expansion-ROM container (`s_locateExpansionRoms`) ────
             vbios_const(
                 PCI_EXP_TABLE_H,

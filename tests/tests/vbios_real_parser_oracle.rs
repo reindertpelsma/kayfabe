@@ -17,15 +17,22 @@
 //! ```text
 //! kgspExtractVbiosFromRom_TU102   (ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_vbios_tu102.c)
 //!   -> kgspParseFwsecUcodeFromVbiosImg_IMPL (ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp_fwsec.c)
+//!   -> s_vbiosPatchInterfaceData           (ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c)
 //! ```
 //!
 //! compiled UNMODIFIED, against those trees' own headers, and served the image through a
 //! stubbed `GPU_REG_RD32` at the **PROM window** — which is exactly how a real device is
 //! read. There is no transcription anywhere in the path.
 //!
+//! ★ The third stage is a **second plane**, and it was added because a stock guest proved
+//! the first two are not enough: an image the parser accepts completely can still stop
+//! adapter init at `s_prepareForFwsec_TU102` with *"failed to find required interface entry
+//! for FWSEC cmd 0x15"*. See section 8 below for how it is compiled and what it still
+//! cannot see.
+//!
 //! # Licensing
 //!
-//! The two parser sources are NVIDIA's, dual MIT / GPL-2.0 (`SPDX-License-Identifier: MIT`
+//! The parser sources are NVIDIA's, dual MIT / GPL-2.0 (`SPDX-License-Identifier: MIT`
 //! in each header). Compiling a slice of them for testing is within the MIT grant.
 //! **Nothing from those trees is vendored into this repository**: `tests/build.rs`
 //! `#include`s them out of the existing checkout under
@@ -48,8 +55,17 @@
 //! about whether the image is one the real parser accepts, and what the real parser makes
 //! of it. The register/PROM plumbing is a different seam.
 
-use kayfabe_abi::generated::vbios::{BCRT30_RSA3K_SIG_SIZE, FALCON_UCODE_DESC_V3_SIZE_44};
-use kayfabe_abi::vbios::{UCODE_ALIGN, UCODE_MARKER, VbiosWire, build, profile_for_device_id};
+use kayfabe_abi::generated::vbios::{
+    BCRT30_RSA3K_SIG_SIZE, FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+    FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_SB,
+    FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER, FALCON_UCODE_DESC_V3_SIZE_44,
+    FalconApplicationInterfaceDmemMapperV3, FalconApplicationInterfaceEntryV1,
+    FalconApplicationInterfaceHeaderV1,
+};
+use kayfabe_abi::vbios::{
+    FWSEC_CMD_BUFFER_MIN, INTERFACE_ENTRY_COUNT, UCODE_ALIGN, UCODE_MARKER, VbiosWire, build,
+    profile_for_device_id,
+};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
@@ -812,6 +828,305 @@ fn the_oracle_reads_the_image_through_the_prom_window() {
              being served through the register window:\n{v}",
             img.len()
         );
+    }
+}
+
+// ===========================================================================================
+// 8. ★★★ THE FWSEC INTERFACE WALK — the plane the parser cannot see
+// ===========================================================================================
+//
+// `kgspParseFwsecUcodeFromVbiosImg` reads `InterfaceOffset` and copies it into
+// `KernelGspFlcnUcodeBootFromHs` without ever following it, so every test above passes on an
+// image whose DMEM payload is opaque noise. The stock 580.159.04 guest proved that the hard
+// way: it got through this whole parser and then stopped one stage later, in
+// `s_prepareForFwsec_TU102` → `s_vbiosPatchInterfaceData`, with
+//
+//     NVRM: s_vbiosPatchInterfaceData: failed to find required interface entry for FWSEC cmd 0x15
+//     NVRM: s_prepareForFwsec_TU102: (note: VBIOS version 94.18.00.00.00)
+//     NVRM: RmInitAdapter failed! (0x62:0x25:2028)
+//
+// The oracle now compiles that function too — see the include note in `oracle/vbios_oracle.c`
+// — and runs it over the DMEM section the REAL parser produced, with `mappedDataSize` and
+// `dataOffset` taken off the structure the real parser filled in.
+//
+// ★★ WHAT THIS STILL CANNOT SEE, and it is the same shape as the payload-shift finding
+// above: the walk is the LAST reader before the falcon. It checks that the table is
+// reachable and in bounds; it does not check that the mapper's `cmd_out_buffer_*` are
+// sensible, that `signature`/`version`/`ucode_feature` mean anything, or that the falcon
+// could do something with the command once it is delivered — because in Mode 2 the falcon is
+// us, and nothing in NVIDIA's tree models it. A green here says the driver will HAND US the
+// command. It says nothing about what happens next.
+
+/// `NV_ERR_INVALID_OFFSET` (`ogkm-580: src/common/sdk/nvidia/inc/nvstatuscodes.h:84`).
+const NV_ERR_INVALID_OFFSET: u64 = 0x0000_0037;
+
+/// The interface table's location in the image, found by the header's own byte pattern
+/// followed by a `_DMEMMAPPER` entry — not computed from the profile's offsets, so a
+/// builder that wrote it in the wrong place surfaces as "not found" or "found twice".
+fn interface_table(img: &[u8]) -> usize {
+    let hdr = [
+        1u8,
+        FalconApplicationInterfaceHeaderV1::SIZE as u8,
+        FalconApplicationInterfaceEntryV1::SIZE as u8,
+        INTERFACE_ENTRY_COUNT,
+    ];
+    let mut id = [0u8; 4];
+    id.copy_from_slice(&FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER.to_le_bytes());
+    let mut needle = hdr.to_vec();
+    needle.extend_from_slice(&id);
+    let hits: Vec<usize> = img
+        .windows(needle.len())
+        .enumerate()
+        .filter(|(_, w)| *w == needle.as_slice())
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(
+        hits.len(),
+        1,
+        "the interface header must appear exactly once in the image, found {}",
+        hits.len()
+    );
+    hits[0]
+}
+
+/// The mapper as the driver would find it, decoded out of a DMEM hex dump the oracle
+/// produced.
+fn mapper_from(dmem: &[u8], at: u32) -> FalconApplicationInterfaceDmemMapperV3 {
+    FalconApplicationInterfaceDmemMapperV3::decode(&dmem[at as usize..])
+        .expect("the mapper must decode out of DMEM")
+}
+
+fn hex_field(v: &Verdict, k: &str) -> Vec<u8> {
+    let s = v
+        .get(k)
+        .unwrap_or_else(|| panic!("the oracle reported no `{k}`; it said:\n{v}"));
+    (0..s.len() / 2)
+        .map(|i| u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).expect("hex"))
+        .collect()
+}
+
+#[test]
+fn the_real_interface_walk_delivers_both_fwsec_commands() {
+    let found = require_oracle!("the_real_interface_walk_delivers_both_fwsec_commands");
+    let img = generated_image();
+    let fw = &profile_for_device_id(0x2504).unwrap().fwsec;
+
+    for (tag, oracle) in found {
+        let v = ask(oracle, &img, false);
+        let ctx = format!("{tag}\n{v}");
+
+        // ★ THE ROW. Both commands walk the table clean, with no diagnostic at all — the
+        // 0x15 in the guest's failure message is the FRTS one.
+        assert_eq!(v.num("walk_frts_status"), 0, "FRTS interface walk:\n{ctx}");
+        assert_eq!(v.num("walk_sb_status"), 0, "SB interface walk:\n{ctx}");
+        assert!(
+            v.logs.is_empty(),
+            "the driver complained while walking a clean table:\n{ctx}"
+        );
+
+        let before = hex_field(&v, "walk_dmem_before");
+        let after_frts = hex_field(&v, "walk_frts_dmem");
+        let after_sb = hex_field(&v, "walk_sb_dmem");
+        assert_eq!(
+            before.len(),
+            fw.dmem_load_size as usize,
+            "DMEM size:\n{ctx}"
+        );
+
+        // The mapper the walk found is the one the profile declared, and `init_cmd` moved
+        // from the 0 the builder emits to the command the driver issues. Emitting 0 is what
+        // makes that write observable at all.
+        assert_eq!(mapper_from(&before, fw.dmem_mapper_offset).init_cmd, 0);
+        assert_eq!(
+            mapper_from(&after_frts, fw.dmem_mapper_offset).init_cmd,
+            FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+            "the driver did not write the FRTS command into our mapper:\n{ctx}"
+        );
+        assert_eq!(
+            mapper_from(&after_sb, fw.dmem_mapper_offset).init_cmd,
+            FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_SB,
+            "the driver did not write the SB command into our mapper:\n{ctx}"
+        );
+
+        // …and each command payload landed at `cmd_in_buffer_offset`, byte for byte,
+        // compared against the bytes the harness actually passed rather than a constant.
+        for (what, dumped, cmd_key) in [
+            ("FRTS", &after_frts, "frts_cmd_bytes"),
+            ("SB", &after_sb, "sb_cmd_bytes"),
+        ] {
+            let cmd = hex_field(&v, cmd_key);
+            let at = fw.cmd_in_buffer_offset as usize;
+            assert_eq!(
+                &dumped[at..at + cmd.len()],
+                &cmd[..],
+                "{what}: the command did not land at cmd_in_buffer_offset:\n{ctx}"
+            );
+            assert_ne!(
+                &before[at..at + cmd.len()],
+                &cmd[..],
+                "{what}: the command bytes were already there, so the copy is unobservable \
+                 — the marker-fill lesson:\n{ctx}"
+            );
+        }
+
+        // The table is where the descriptor says it is. ★ Unlike the ucode payload, whose
+        // placement the parser CANNOT check (test 4 above), this one it can and does: the
+        // walk starts at `dataOffset + interfaceOffset` and finds nothing if the builder
+        // wrote the table elsewhere.
+        let p = ask(oracle, &img, false);
+        let payload_at = interface_table(&img);
+        assert_eq!(
+            p.num("interface_offset"),
+            u64::from(fw.interface_offset),
+            "InterfaceOffset:\n{ctx}"
+        );
+        assert!(payload_at > 0, "the table must not be at image offset 0");
+    }
+}
+
+/// The sizes the builder computes from the generated mirrors equal `sizeof()` as the C
+/// compiler lays the same typedefs out — including
+/// `sizeof(FWSECLIC_FRTS_CMD)`, which this repository does NOT mirror and which
+/// [`FWSEC_CMD_BUFFER_MIN`] only bounds from below.
+#[test]
+fn the_declared_command_buffer_holds_the_real_fwsec_command() {
+    let found = require_oracle!("the_declared_command_buffer_holds_the_real_fwsec_command");
+    let img = generated_image();
+    let fw = &profile_for_device_id(0x2504).unwrap().fwsec;
+
+    for (tag, oracle) in found {
+        let v = ask(oracle, &img, false);
+        let ctx = format!("{tag}\n{v}");
+
+        assert_eq!(
+            v.num("interface_hdr_size"),
+            FalconApplicationInterfaceHeaderV1::SIZE as u64,
+            "interface header:\n{ctx}"
+        );
+        assert_eq!(
+            v.num("interface_entry_size"),
+            FalconApplicationInterfaceEntryV1::SIZE as u64,
+            "interface entry:\n{ctx}"
+        );
+        assert_eq!(
+            v.num("dmem_mapper_size"),
+            FalconApplicationInterfaceDmemMapperV3::SIZE as u64,
+            "DMEM mapper:\n{ctx}"
+        );
+        assert_eq!(
+            v.num("dmemmapper_entry_id"),
+            u64::from(FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER),
+            "the `_DMEMMAPPER` id:\n{ctx}"
+        );
+
+        // ★ The bound the builder could only state from below. `FWSEC_CMD_BUFFER_MIN` is
+        // `sizeof(READ_VBIOS_DESC) + sizeof(FRTS_REGION_DESC)`; the compiler is free to pad
+        // the aggregate's tail beyond that, and here it does not — but the profile's
+        // declared buffer is checked against the COMPILED size either way.
+        let frts = v.num("frts_cmd_size");
+        assert!(
+            frts >= u64::from(FWSEC_CMD_BUFFER_MIN),
+            "sizeof(FWSECLIC_FRTS_CMD) is {frts}, below the sum of its members:\n{ctx}"
+        );
+        assert!(
+            u64::from(fw.cmd_in_buffer_size) >= frts,
+            "cmd_in_buffer_size is {} but the driver copies {frts} bytes into it:\n{ctx}",
+            fw.cmd_in_buffer_size
+        );
+        assert!(
+            u64::from(fw.cmd_in_buffer_size) >= v.num("read_vbios_desc_size"),
+            "cmd_in_buffer_size does not hold the SB command either:\n{ctx}"
+        );
+    }
+}
+
+// ===========================================================================================
+// 9. ★★ NON-VACUITY on the interface plane: the tables the real walk REFUSES
+// ===========================================================================================
+
+/// One DMEM corruption, applied to the image before the parser ever sees it.
+struct DmemCorruption {
+    name: &'static str,
+    /// `(image, table offset within the image)`.
+    mutate: fn(&mut [u8], usize),
+    /// What `s_vbiosPatchInterfaceData` must return for the FRTS command.
+    walk: u64,
+    /// A substring of the driver's own diagnostic, or `""` when it emits none.
+    says: &'static str,
+}
+
+const DMEM_CORRUPTIONS: &[DmemCorruption] = &[
+    DmemCorruption {
+        name: "the interface header's entryCount, dropped to 1",
+        mutate: |m, at| m[at + 3] = 1,
+        walk: NV_ERR_INVALID_DATA,
+        says: "too few interface entires found for FWSEC cmd 0x15",
+    },
+    DmemCorruption {
+        name: "both entries' id, so no _DMEMMAPPER remains",
+        mutate: |m, at| {
+            let e = at + FalconApplicationInterfaceHeaderV1::SIZE;
+            m[e] = 0xEE;
+            m[e + FalconApplicationInterfaceEntryV1::SIZE] = 0xEE;
+        },
+        // ★ THE EXACT FAILURE THE STOCK GUEST REPORTED, reproduced on demand.
+        walk: NV_ERR_INVALID_DATA,
+        says: "failed to find required interface entry for FWSEC cmd 0x15",
+    },
+    DmemCorruption {
+        name: "both entries' dmemOffset, aimed past the end of DMEM",
+        mutate: |m, at| {
+            let e = at + FalconApplicationInterfaceHeaderV1::SIZE;
+            for i in 0..usize::from(INTERFACE_ENTRY_COUNT) {
+                let o = e + i * FalconApplicationInterfaceEntryV1::SIZE + 4;
+                m[o..o + 4].copy_from_slice(&0xFFFF_FFF0u32.to_le_bytes());
+            }
+        },
+        walk: NV_ERR_INVALID_OFFSET,
+        says: "",
+    },
+];
+
+#[test]
+fn the_real_interface_walk_refuses_corrupted_tables() {
+    let found = require_oracle!("the_real_interface_walk_refuses_corrupted_tables");
+    let clean = generated_image();
+    let table_at = interface_table(&clean);
+
+    for (tag, oracle) in found {
+        // The positive control lives in the same test as the negatives.
+        let ok = ask(oracle, &clean, false);
+        assert_eq!(
+            ok.num("walk_frts_status"),
+            0,
+            "{tag} refused the clean table:\n{ok}"
+        );
+
+        for c in DMEM_CORRUPTIONS {
+            let mut m = clean.clone();
+            (c.mutate)(&mut m, table_at);
+            assert_ne!(m, clean, "{tag}: corruption `{}` changed nothing", c.name);
+
+            let v = ask(oracle, &m, false);
+            let ctx = format!("{tag} / corrupting {}\n{v}", c.name);
+
+            // The ROM still parses — this plane is downstream of everything above, which is
+            // exactly why the parser tests could not see it.
+            assert_eq!(v.num("parse_status"), 0, "the ROM must still parse:\n{ctx}");
+            assert_eq!(
+                v.num("fwsec_present"),
+                1,
+                "FWSEC must still be found:\n{ctx}"
+            );
+            assert_eq!(v.num("walk_frts_status"), c.walk, "walk status:\n{ctx}");
+            if !c.says.is_empty() {
+                assert!(
+                    v.log_text().contains(c.says),
+                    "the driver did not say `{}`. It said:\n{ctx}",
+                    c.says
+                );
+            }
+        }
     }
 }
 

@@ -164,9 +164,13 @@ jobs:
           ran=$(grep -c 'VBIOS-ORACLE-GATE: RAN' /tmp/kayfabe-test.log || true)
           skipped=$(grep -c 'VBIOS-ORACLE-GATE: SKIPPED' /tmp/kayfabe-test.log || true)
           total=$(( ran + skipped ))
-          echo "VBIOS-oracle gate: ran=$ran skipped=$skipped total=$total (floor 10)"
-          if [ "$total" -lt 10 ]; then
-            echo "::error::VBIOS-oracle tests were not reached: $total < 10." \
+          # 10 -> 13: the FWSEC interface-walk suite. The oracle now compiles
+          # `s_vbiosPatchInterfaceData` as well as the ROM parser, which is a whole
+          # extra PLANE — the one a stock guest actually stopped on — and three tests
+          # judge it. Raise this only when tests are added, and say which.
+          echo "VBIOS-oracle gate: ran=$ran skipped=$skipped total=$total (floor 13)"
+          if [ "$total" -lt 13 ]; then
+            echo "::error::VBIOS-oracle tests were not reached: $total < 13." \
                  "Either they were deleted, or the gate stopped announcing itself." \
                  "These are the ONLY tests that judge the synthetic VBIOS against the" \
                  "real driver's parser rather than against a transcription of it;" \
