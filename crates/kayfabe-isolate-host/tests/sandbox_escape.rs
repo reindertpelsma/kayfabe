@@ -376,7 +376,15 @@ fn a_child_without_the_sandbox_inherits_every_capability_its_parent_holds() {
         "an unsandboxed child's bounding set must be its parent's, verbatim"
     );
     if ours.effective == 0 {
-        eprintln!(
+        // ★ Straight to `stderr`, NOT `eprintln!`. This is the *passing* arm, and libtest's
+        // capture swallows everything a passing test writes through the capture-aware
+        // macros — so the note announcing that the bite went vacuous was invisible in
+        // exactly the runs where it mattered. Every other gate marker in this repository is
+        // written this way for this reason; this one was the exception.
+        // (Found by the full-suite census, 2026-07-30.)
+        use std::io::Write as _;
+        let _ = writeln!(
+            std::io::stderr(),
             "SANDBOX-GATE: NOTE a_child_without_the_sandbox_inherits_every_capability_its_parent_holds \
              — this process holds NO capabilities, so the inheritance assertion is exact but the \
              bite is vacuous here. The privileged bite is the one that matters and it needs a \

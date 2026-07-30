@@ -434,17 +434,32 @@ fn fwsec_is_found_under_both_debug_and_prod_by_the_real_parser() {
 
 #[test]
 fn the_two_vendored_ogkm_tags_agree_on_our_image() {
-    let found = require_oracle!("the_two_vendored_ogkm_tags_agree_on_our_image");
+    // ★ THE PRECONDITION IS TESTED BEFORE `require_oracle!`, NOT AFTER — deliberately, and
+    // the ordering is the whole point. This test needs **two** trees, not one, so on a box
+    // with a single tree `require_oracle!` would print `RAN` (its own precondition holds)
+    // and the body would then return having asserted nothing. CI counts the `RAN` markers:
+    // the run would have been recorded as *this test executed* while the only comparison it
+    // exists to make did not happen. Same shape as
+    // `sandbox_escape.rs::the_sandboxed_childs_capability_ceiling_is_empty_when_it_could_be_emptied`,
+    // and for the same reason — exactly ONE countable marker, whichever way it goes.
+    //
+    // (Found by the full-suite census, 2026-07-30: this was the one place in the tree where
+    // the RAN/SKIPPED instrument disagreed with what actually ran.)
+    let found = oracles();
     if found.len() < 2 {
-        // One tree present is not a disagreement; say so rather than passing quietly.
         use std::io::Write as _;
         let _ = writeln!(
             std::io::stderr(),
-            "VBIOS-ORACLE-GATE: only {} tree(s) available — the 580/610 comparison did not run",
+            "VBIOS-ORACLE-GATE: SKIPPED the_two_vendored_ogkm_tags_agree_on_our_image — \
+             only {} of the 2 vendored open-kernel-modules trees is present, and a \
+             one-tree box cannot disagree with itself (set KAYFABE_OGKM_580 and \
+             KAYFABE_OGKM_610). The test asserts NOTHING; this line is the only record \
+             that it did not run.",
             found.len()
         );
         return;
     }
+    report("the_two_vendored_ogkm_tags_agree_on_our_image", true);
     let img = generated_image();
     for debug in [false, true] {
         let a = ask(found[0].1, &img, debug);
