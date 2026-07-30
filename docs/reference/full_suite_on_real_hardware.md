@@ -216,9 +216,25 @@ export KAYFABE_QEMU_SRC=/root/qemu-src
 scripts/run_full_suite.sh
 ```
 
-★ **If you `rsync` or `cp -a` the tree, `touch` it afterwards.** Preserved mtimes make cargo
-serve stale rlibs and report symbols missing that are plainly present; that has fired
-repeatedly. `find <tree> -path <tree>/target -prune -o -exec touch {} +`.
+★ **If you `rsync` or `cp -a` the tree, `touch` the SOURCES afterwards — and no build
+directory.** Preserved mtimes make cargo serve stale rlibs and report symbols missing that
+are plainly present; that has fired repeatedly. But the naive fix fires the same failure
+from the other side, and it did here, on 2026-07-30:
+
+```sh
+# ✗ WRONG — prunes ONE target dir. This repo has THREE cargo workspaces, so
+#   fuzz/target and crates/kayfabe-abi/gen/target get touched to `now`, land at the
+#   SAME mtime as the sources, and cargo calls their stale rlibs fresh.
+find "$T" -path "$T/target" -prune -o -exec touch {} +
+
+# ✓ RIGHT — every build directory, by NAME, wherever it is.
+find "$T" -name target -prune -o -exec touch {} +
+```
+
+The symptom of getting it wrong is indistinguishable from a real code error: a compile
+failure saying a constant "cannot be found" while `grep` shows it on line 96 of the file
+rustc is pointing at. It cost three phases of one run here (`fuzz-build`, `fuzz-run`,
+`fuzz-corpus-replay`) before the mtimes were compared.
 
 ★ **`pgrep -x qemu-system-x86`, never `qemu-system-x86_64`** — `/proc/PID/comm` truncates at
 15 characters, so the long form can never match and any "nothing is running" check built on
