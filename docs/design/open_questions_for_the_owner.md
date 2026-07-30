@@ -266,3 +266,92 @@ not secrets.**
 — our own profile, from a field initialised to `"unknown"` — and is **past the ROM gate**. Generating
 against 580.159.04 and 610.43.02 produces byte-identical output, and the diff has teeth (over the
 same tags `nvos.rs` moves 122 lines). New stop: `BAR0+0x110100`, the GSP falcon's `CPUCTL` halt bit.
+
+---
+
+# NEW — raised by the overnight run of 2026-07-31
+
+Three questions that **measurement produced**, not analysis. Each is a design decision rather than a
+patch, each is written down as a live defect with a pinning test, and none is blocking today's north
+star (GA10x, 580). They are here because answering them wrong is the kind of thing that costs months.
+
+## Q7 — how does a boot **SEQUENCE** become data? (task #121)
+
+**What was measured** — run named: task #118, commit `554c333`, both vendored ogkm tags
+(580.159.04 and 610.43.02), pinned by `tests/tests/arch_axis_second_generation.rs`. The claim
+*"adding a GPU generation is an adapter-crate impl with zero logic-crate edits"* was asserted in
+three places and had never been executed. It now has been, on two
+generations, and they answer in opposite directions:
+
+- **Ada holds** — one struct, one `VBIOS_PROFILES` row, boots the unmodified `GspFsm` to `Booted`.
+  ⚠ But it is the **easiest member of the universe**, and provably so: NVIDIA's own generated HAL
+  binds the Turing/Ampere implementations across `TU102…AD107`, so for the registers `GspReg` models,
+  Ada and GA10x are **byte-identical**. An experiment that selects its easiest case produces a green
+  with no red available to it.
+- **Hopper fails, inside a logic crate.** Four of eighteen `GspReg` variants have **no register** on
+  GH100 and three are ones `GspFsm::mmio_write` fires transitions on. Not offsets — Hopper's offsets
+  are mostly Ampere's.
+
+★★★ **The root cause, and it is the question:** `kayfabe-gsp/src/boot.rs:544-598` encodes **Turing's
+boot ordering itself** in `match` arms over `GspReg`. `Sec2FalconMailbox0` latches the Booter arg;
+`Sec2FalconCpuctl` decides Load-vs-Unload; `GspQueueHead` advances the ring. **The seam transports a
+generation's VALUES but not its SEQUENCE.** Hopper does not have that sequence at all — it boots a
+partitioned GSP-FMC through FSP's EMEM queue, and boot stages 1, 2, 6 and 8 do not exist there.
+
+**Why it is a decision, not a task.** Making a boot *sequence* data means choosing a representation
+for it — a per-generation state table, a trait with a default Turing impl, or an accepted per-arch
+module. Each has a different cost when a generation disagrees *structurally* rather than numerically.
+⚠ Note the honest distinction we are relying on: a **one-time seam widening** is not a bolt-on (the
+register plane got one this session and it is fine); a **per-generation `match` arm** is.
+
+**Not urgent** — GA10x is the target and Hopper is not on the roadmap. But this is the **first
+measured failure** of an architecture claim the project has repeated for months, and the fix is a
+shape, not a patch. Currently pinned by `the_boot_fsm_cannot_be_driven_past_fwsec_on_that_generation`,
+which goes **red if the seam is widened** without answering this.
+
+## Q8 — how does a driver version express **REMOVAL**? (task #122)
+
+**What was measured** — run named: task #118, commit `554c333`, pinned by the characterisation test
+added to `crates/kayfabe-abi/src/capability.rs`; the replacement itself is read from
+`gvisor nvproxy: version.go:1036-1053`. 575.51.02 was added as a second driver version. Its
+*additive* half is one `TABLES` row, exactly as designed. Its **subtractive half cannot be expressed at all**: nvproxy
+*replaces* two DRAM-encryption commands at 575, while `CapabilityTable` is **inherit-then-ADD** — its
+own module doc says so.
+
+**Live consequences today**, now pinned by a characterisation test rather than fixed:
+- `0x20801359` is **refused at every version**, although a 550/570 guest legitimately issues it.
+- `0x20801358` is **permitted under the 575-era name**, while pre-575 guests mean a *different
+  command* by that number.
+
+★★ **Why it matters beyond two commands.** The standing requirement is 575/570/etc *"out of the box
+and no bolt-on"*. A version model that can only ever ADD will keep accumulating wrong answers as
+versions diverge: every command a newer driver **removes or repurposes** becomes either a false
+permit or a false refuse, silently. The question is what a version *is* — an increment, or a full
+description that can differ in both directions.
+
+★ Related and deferred — same run (task #118, `554c333`), and the version delta itself is read from
+the generator's own record over `ogkm-580` vs `ogkm-610`: `kayfabe-abi/src/submit.rs`'s
+`ChannelAllocParams` is
+documented *"abstract by construction, unbuilt"* but is concretely **pinned to 580** by a const-offset
+encoder used unconditionally in `kayfabe-isolate-host`. 610 inserts `hHandleVASpace` at +32 and shifts
+every later field. Adding a version parameter has blast radius outside `kayfabe-abi`.
+
+## Q9 — a cross-process **"verb parked"** edge (the fifth flake)
+
+`abandon_releases_a_wedged_requester_with_wedged` flakes at ~0.5% (2/400 before *and* after the flake
+campaign — untouched by it). Its precondition is `recv_timeout(25ms).is_err()`: **a sleep used as a
+progress edge** for a park that happens in a **child process**, where *"no reply yet"* is not the same
+as *"past the VAS allocation"*.
+
+**Deliberately not fixed**, and the reasoning is the ask: lengthening the sleep moves the rate without
+killing the class, and loosening the `== 1` assertion would delete the §7.5 contract it exists to
+protect. A correct fix needs a **real cross-process parked-verb edge** — a protocol change. That is a
+decision about the isolate protocol, so it is yours.
+
+---
+
+★ **Method note, since it is the reusable part.** All three came from *executing* a claim the repo had
+only asserted. The pattern that produced them: pick the claim that is cheapest to falsify, run it
+against the case most likely to break it — **not** the easiest case — and report refutation as the
+valuable outcome. Two of the three were invisible while only one generation and one driver version
+existed, and no amount of testing the existing one could have surfaced them.
