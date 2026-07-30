@@ -269,3 +269,76 @@ constant carrying `ogkm-580`'s swref header or the C's arch header, and none of 
 the capture. It is what makes the Axis-B seam's claim ("one FSM, several register models")
 a measurement rather than a design note, and `tests/tests/c_trace_differential.rs` asserts
 it shares no encoding with either fake model.
+
+## §7 — cap1b measured: GSP-D6's capture gap is CLOSED, and the wall moved to GSP-D2
+
+**[measured 2026-07-30]** The D6 witness patch (`C: nvkvm_gpu_emul.c` ~`:2578`, commit
+`819282d` in the C repo) and its re-capture `cap1b_coldboot_hermetic_d6` were already
+committed. Running the existing differential against cap1b via the `KAYFABE_C_TRACE_CAP1`
+override — **no repo change, no bench, no GPU** — gives the like-for-like:
+
+| `Fill::Reconstructed` | `cap1` (359 062 rec) | `cap1b` (360 725 rec) |
+|---|---|---|
+| closure limit | txn **978** | txn **1028** |
+| max lookahead | 2373 records | **1035** |
+| FSM refusals | 169 | 219 |
+| divergences (beyond limit) | 553 (544) | 773 (688) |
+
+★★★ **The headline is not the +50 transactions — it is the CHANGE OF KIND at the wall.**
+
+On `cap1` the run died on a **missing observation**: txn 978 read
+`gpa=0x127209000 len=4096 -> Unobserved`, a continuation element the C consumed without
+ever reading. On `cap1b` **every read at the wall is `Observed`** — including all nine
+continuations `0x127602000 … 0x127609000`. The witness patch did precisely what it was
+written to do, and **GSP-D6 is no longer a closure limit.**
+
+What stops it now is a **refusal by our own GSP**:
+
+```
+txn 1028  -> QueueFull { needed: 9, free: 1 }
+txn 1030+ -> QueueFull { needed: 1, free: 0 }   (215 more)
+```
+
+### Why this is oracle blindness and NOT a Rust defect
+
+`QueueFull` is status-queue flow control: our GSP will not post 9 elements into a ring it
+believes has 1 slot free. `free` is derived from the **peer's status readPtr** — the pointer
+the *guest* advances as it consumes status elements.
+
+**The C never reads that pointer.** Verified in the source, not inferred: the only accesses
+to the status queue header are **writes** — `nvkvm_dmaw(… q_stat_base + 16 …)` for our
+writePtr (`C: :1783`) and `nvkvm_dmaw(… q_stat_base + 0x20 …)` for the command-readPtr echo
+(`C: :3576`). That is ledger row **GSP-D2** exactly: *no flow control*. The C simply posts.
+
+So the guest **is** advancing its readPtr (the boot succeeds, and the C posts 202 status
+elements), our GSP is **right** to consult it, and **no capture taken from this C can ever
+contain it** — the value passes through no recorder chokepoint. The replay is blind here by
+construction, not wrong.
+
+★ This is the fourth measured limit of §5a arriving in concrete form: *a capture of an
+implementation that does not perform a read cannot close a replay of one that does.* D6 was
+the first instance and it was fixable by witnessing. **D2 is the same shape and fixable the
+same way.**
+
+### The next witness patch, specified — and what NOT to guess
+
+To move the limit past 1028, the C must **witness** the guest's status-queue readPtr so the
+recorder sees it. Same discipline as D6: recorder-gated (`nvkvm_rec_on()`), a pure read of
+guest RAM, bytes discarded, **no reply changed** — the divergence stays real, it merely
+becomes observable.
+
+Two things that make this **not** a copy of the D6 patch:
+
+1. **It is not a one-time read.** The value is live — it changes as the guest consumes — so
+   it must be witnessed **at each status post** (the path around `C: :1774-1783`), not once
+   at init. Extending the 32-byte `txh[32]` init read at `C: :3659` would witness the wrong
+   thing: that read is of the **command** queue header, taken once, at bind.
+2. ⊘ **Do not guess the offset.** The status queue's RX header is located via `rxHdrOff`
+   (`txh+24` in the header the C already logs); read the layout rather than assuming the
+   readPtr sits at a fixed displacement from `q_stat_base`. A witness read at the wrong
+   address would record a plausible number and silently validate a wrong flow-control model
+   — worse than the blindness it replaces.
+
+★★ **Do not treat `QueueFull` as a bug to be tuned away.** Relaxing our flow control to get
+a greener diff would delete a correctness property that the oracle simply cannot see. The
+diff is the instrument; the instrument does not get to edit the subject.
