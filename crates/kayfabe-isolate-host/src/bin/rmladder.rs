@@ -19,8 +19,8 @@
 //! $ kayfabe-rm-ladder --gpu 0
 //! ```
 
-use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa};
-use kayfabe_isolate::{IsolateId, RmBackend};
+use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
+use kayfabe_isolate::{IsolateId, RmBackend, RmError};
 use kayfabe_isolate_host::rm::{HostRmBackend, RmConnection};
 use kayfabe_linux_raw::DevDir;
 use std::sync::Arc;
@@ -164,9 +164,72 @@ fn concurrency(program: &std::path::Path, gpu: u32, threads: usize, verbs: usize
     true
 }
 
+/// ★★★ R13b — **does `engineType` actually route?**
+///
+/// The first R13 run returned runlist 0 for a copy channel *and* for a graphics channel,
+/// which is exactly what the C's proven `engineType = 0` bug looks like
+/// (`dma_copy_class_alloc_params`, seam audit GR-1): wrong runlist, no error, failure three
+/// steps later. Two readings fit that observation and they are opposite —
+///
+///   (a) the engine type is being ignored, or
+///   (b) the first two copy engines really are on the graphics runlist on this part.
+///
+/// A single measurement cannot separate them, so this sweeps the engine type and reads the
+/// runlist back out of the work-submit token. If the runlist never changes, (a). If it
+/// changes with the engine type, (b) — and the runlist-0 result is a fact about the
+/// hardware rather than a symptom.
+///
+/// It exists as a diagnostic rather than a test for the reason the whole file does: it
+/// needs a GPU, and it *reports* a table rather than asserting one, because the table is
+/// per-part.
+fn engines(rm: &mut HostRmBackend, gpu: u32) {
+    println!("info  R13b engine sweep   = NV2080_ENGINE_TYPE_COPY(i) -> runlist, on GPU {gpu}");
+    let mut seen = std::collections::BTreeSet::new();
+    for i in 0..8u32 {
+        let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(i) else {
+            println!("info  R13b COPY({i})       = not expressible (past the macro's first arm)");
+            continue;
+        };
+        let Ok(vas) = rm.alloc_vaspace() else {
+            println!("FAIL  R13b COPY({i})       = no address space");
+            return;
+        };
+        match rm.alloc_channel_on(vas, engine_type) {
+            Ok((chan, token)) => {
+                let runlist = (token >> 16) & 0xFFFF;
+                println!(
+                    "ok    R13b COPY({i})       = engineType {engine_type:#x} -> \
+                     runlist {runlist} (token {token:#010x})"
+                );
+                seen.insert(runlist);
+                let _ = rm.free(chan);
+            }
+            Err(e) => println!("info  R13b COPY({i})       = refused {e:?}"),
+        }
+        let _ = rm.free(vas);
+    }
+    // The verdict, stated as the disambiguation rather than as a pass: MORE THAN ONE
+    // distinct runlist across the sweep is what rules out "the engine type is ignored".
+    if seen.len() > 1 {
+        println!(
+            "★     R13b VERDICT        = {} DISTINCT runlists {:?} — engineType routes; \
+             a copy channel on runlist 0 is this part's GRCE, not a wrong-runlist bug",
+            seen.len(),
+            seen
+        );
+    } else {
+        println!(
+            "★     R13b VERDICT        = every engine type produced runlist {:?} — \
+             engineType is NOT routing, which is the wrong-runlist bug",
+            seen
+        );
+    }
+}
+
 fn main() -> std::process::ExitCode {
     let mut gpu = 0u32;
     let mut want_concurrency = false;
+    let mut want_engines = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -184,6 +247,7 @@ fn main() -> std::process::ExitCode {
                 }
             }
             "--concurrency" => want_concurrency = true,
+            "--engines" => want_engines = true,
             other => {
                 eprintln!("unknown flag {other}");
                 return std::process::ExitCode::from(64);
@@ -277,6 +341,79 @@ fn main() -> std::process::ExitCode {
     match rm.alloc(kayfabe_isolate::HostHandle::NULL, ClassId(0xFFFF), &[]) {
         Ok(h) => println!("info  R+ bogus class      = accepted as {:#010x}", h.raw()),
         Err(e) => println!("ok    R+ bogus class      = refused: {e:?}"),
+    }
+
+    // ★★★ R13 — A REAL HOST CHANNEL. Six RM objects, a GPU mapping and two controls.
+    //
+    // The evidence is the work-submit token: `(runlistId << 16) | chid`, assigned by RM
+    // from the GPU's channel RAM. We do not compute it and cannot predict it, and a
+    // channel that was never bound to a runlist does not have one — the control answers
+    // `NV_ERR_INVALID_STATE` (0x40) instead. So a token here is a fact about hardware.
+    //
+    // Two channels are allocated, on two different `Vas`es, for one reason: **the tokens
+    // must differ.** One token proves a control returned a number; two different tokens
+    // prove the number identifies a channel. A backend that returned a constant would
+    // pass the first check and fail this one.
+    let mut channels = Vec::new();
+    for (n, engine) in [(1u32, EngineKind::Ce), (2, EngineKind::GrCompute)] {
+        let vas = match rm.alloc_vaspace() {
+            Ok(h) => h,
+            Err(e) => {
+                println!("FAIL  R13.{n} vaspace      = {e:?}");
+                break;
+            }
+        };
+        match rm.alloc_channel(vas, engine) {
+            Ok((chan, token)) => {
+                println!(
+                    "ok    R13.{n} channel      = {:#010x}, engine {engine:?}, \
+                     token {token:#010x} (runlist {} chid {})",
+                    chan.raw(),
+                    (token >> 16) & 0xFFFF,
+                    token & 0xFFFF
+                );
+                match rm.schedule(chan) {
+                    Ok(()) => println!("ok    R13.{n} schedule     = on the runlist"),
+                    Err(e) => println!("FAIL  R13.{n} schedule     = {e:?}"),
+                }
+                channels.push((chan, vas, token));
+            }
+            Err(e) => {
+                println!("FAIL  R13.{n} channel      = {e:?}");
+                let _ = rm.free(vas);
+            }
+        }
+    }
+    if channels.len() == 2 {
+        let (a, b) = (channels[0].2, channels[1].2);
+        if a == b {
+            println!(
+                "FAIL  R13 token identity  = both channels report {a:#010x} — a token \
+                      that does not identify a channel is not evidence"
+            );
+        } else {
+            println!("★     R13 token identity  = {a:#010x} != {b:#010x} (two live channels)");
+        }
+    }
+    // An engine the port cannot place on a runlist must be REFUSED, not sent as zero —
+    // `engineType = 0` is the C's proven wrong-runlist bug and it fails three steps later.
+    match rm.alloc_channel(channels.first().map_or(vas, |c| c.1), EngineKind::Other) {
+        Err(RmError::Other(s)) if s == kayfabe_isolate_host::rm::NOT_ON_THIS_RUNG => {
+            println!("ok    R13 unknown engine  = refused before any object was allocated");
+        }
+        Ok((h, _)) => println!("FAIL  R13 unknown engine  = accepted as {:#010x}", h.raw()),
+        Err(e) => println!("FAIL  R13 unknown engine  = wrong refusal {e:?}"),
+    }
+    if want_engines {
+        engines(&mut rm, gpu);
+    }
+
+    for (chan, vas, _) in channels {
+        match rm.free(chan) {
+            Ok(()) => println!("ok    R13 free channel    = group, ring, USERD and mapping"),
+            Err(e) => println!("FAIL  R13 free channel    = {e:?}"),
+        }
+        let _ = rm.free(vas);
     }
 
     let _ = rm.free(mem);

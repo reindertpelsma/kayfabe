@@ -1,0 +1,1334 @@
+//! ★ The **work-submission** ABI — the layouts and numbers an RM client needs to put
+//! work on a real engine, as opposed to the layouts [`crate::bringup`] needs to exist.
+//!
+//! [`crate::bringup`] gets an isolate as far as *"a client, a device, an address space,
+//! a memory object, a GPU mapping"*. Everything here is the next thing: a **channel**, a
+//! ring the channel fetches from, the token that names it to hardware, and the methods a
+//! copy engine executes. `kayfabe_isolate_host::rm`'s module docs enumerate exactly this
+//! as the machinery its five refused verbs lack — *"a GPFIFO ring and USERD in mapped
+//! memory, a channel group and a context share, a work-submit token read back by a
+//! control, a doorbell mapping rather than an ioctl"*.
+//!
+//! ## ★★ Provenance, and why this is a separate module from the generated mirrors
+//!
+//! Everything here is read off the **bench's own driver**, `ogkm-580: 580.159.04`, and
+//! the central struct *cannot* come from the generator: `crate::generated::classes`'
+//! own docs record that `NV_CHANNEL_ALLOC_PARAMS` diverges between the two vendored
+//! trees — at `ogkm-610: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-347` there
+//! is an `hHandleVASpace` at +32 that does **not** exist at
+//! `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-342`, so every field
+//! from +32 onward differs by four bytes between them. A generated 610 mirror would put
+//! `engineType` at +132 for a driver that reads it at +128 — i.e. it would route the
+//! channel to a **different runlist**, which is the C's proven `engineType = 0` bug
+//! class (`dma_copy_class_alloc_params`, seam audit GR-1) arrived at by a different
+//! road.
+//!
+//! So [`ChannelAllocParams`] is an **offset-addressed encoder** rather than a
+//! `#[repr(C)]` mirror, for the same reason `crate::versions::CHANNEL_ALLOC_PREFIX` is a
+//! prefix decoder: the fields we set are the ones both trees agree on plus the ones 580
+//! places where 580 places them, and the ~30 reserved members in the tail are zero on
+//! the wire and are never read back. Mirroring them would be breadth, and a mirror that
+//! is right for the wrong tree is worse than no mirror.
+//!
+//! ## What is deliberately NOT here
+//!
+//! No policy. This module says where `engineType` lives and what value means "the first
+//! copy engine"; it does not say which engine a channel should be on. That is
+//! `kayfabe_isolate::RmBackend::alloc_channel`'s `engine` argument, declared by the
+//! caller because an engine-blind channel alloc is the bug class named above.
+
+use crate::wire::{AbiError, u32_at};
+
+// =====================================================================================
+// Escapes this module adds to the frontend set kayfabe-abi::bringup opened
+// =====================================================================================
+
+/// `NV_ESC_RM_MAP_MEMORY` —
+/// `ogkm-580: src/nvidia/arch/nvalloc/unix/include/nv_escape.h:42`.
+///
+/// ★★ **This escape is only half of a mapping.** It validates the request and registers
+/// an mmap *context* against a descriptor the caller supplies
+/// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:529-534`); the mapping itself
+/// happens when the caller then `mmap`s **that descriptor**. Three consequences that are
+/// invisible from the struct and each cost a real failure to find:
+///
+/// 1. The escape is `NV_CTL_DEVICE_ONLY` (`escape.c:521`) — it is issued on the control
+///    node **regardless** of which node the resulting `mmap` uses.
+/// 2. The descriptor in [`Nvos33ParametersWithFd::fd`] must be of the **right kind**:
+///    RM picks the device node's state for an address inside a BAR and the control
+///    node's for system memory (`ogkm-580: .../osapi.c:2270-2279`), and
+///    `nv_get_file_private(fd, NV_IS_CTL_DEVICE(nv), …)` then refuses a descriptor of
+///    the other kind outright (`ogkm-580: kernel-open/nvidia/nv-usermap.c:45-47`).
+/// 3. The context is **one-shot per descriptor**: a second registration on a descriptor
+///    that already has a live one is `NV_ERR_STATE_IN_USE`
+///    (`ogkm-580: kernel-open/nvidia/nv-usermap.c:53-57`). Every mapping needs its own
+///    freshly opened node.
+pub const NV_ESC_RM_MAP_MEMORY: u8 = 0x4E;
+
+/// `NV_ESC_RM_UNMAP_MEMORY` —
+/// `ogkm-580: src/nvidia/arch/nvalloc/unix/include/nv_escape.h:43`.
+pub const NV_ESC_RM_UNMAP_MEMORY: u8 = 0x4F;
+
+/// The `mmap` file offset the driver accepts for a mapping registered by
+/// [`NV_ESC_RM_MAP_MEMORY`] — **zero, and only zero**.
+///
+/// `nvidia_mmap_helper` refuses any non-zero `vm_pgoff` with `EINVAL`
+/// (`ogkm-580: kernel-open/nvidia/nv-mmap.c:533-536`), and the length must equal the
+/// registered context's size exactly (`:562-565`). The offset *within* the object is the
+/// one given to the escape, not to `mmap` — which is the opposite of the usual device
+/// convention and reads as a bug at every call site that does not say so.
+pub const MMAP_FILE_OFFSET: u64 = 0;
+
+// =====================================================================================
+// NVOS33_PARAMETERS + fd — the CPU-mapping request
+// =====================================================================================
+
+/// `nv_ioctl_nvos33_parameters_with_fd` —
+/// `ogkm-580: src/nvidia/arch/nvalloc/unix/include/nv-unix-nvos-params-wrappers.h:42-46`,
+/// wrapping `NVOS33_PARAMETERS`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:1844-1854`).
+///
+/// Same shape of thing as [`crate::bringup::Nvos02ParametersWithFd`]: the SDK struct plus
+/// an `int fd` the Unix frontend appends, so `sizeof` is the wrapper's and not the SDK's.
+///
+/// ★ `p_linear_address` is `[OUT]` — RM writes the *kernel's* notion of the address, and
+/// it is **not** something userspace may dereference or is even expected to use. It is
+/// carried because it is what the subsequent `mmap` context was registered against, and
+/// because `NV_ESC_RM_UNMAP_MEMORY` names it. Nothing outside the raw adapter ever sees
+/// it, which is why this field is not a host address in the sense
+/// `kayfabe_linux_raw`'s §4.2.1 refusal is about: it is an opaque cookie RM minted.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Nvos33ParametersWithFd {
+    /// `NvHandle hClient` @ +0.
+    pub h_client: u32,
+    /// `NvHandle hDevice` @ +4 — device **or subdevice** handle.
+    pub h_device: u32,
+    /// `NvHandle hMemory` @ +8 — the object to map. For USERD this is the **channel**
+    /// handle: RM maps a channel's USERD when the channel object itself is the map
+    /// target (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:1277-1324`).
+    pub h_memory: u32,
+    // +12: four bytes of padding before the 8-aligned `offset`.
+    /// `NvU64 offset` @ +16 — the offset **within the object**, not within the mapping.
+    pub offset: u64,
+    /// `NvU64 length` @ +24.
+    pub length: u64,
+    /// `NvP64 pLinearAddress` @ +32 — `[OUT]`, an opaque cookie (see the type docs).
+    pub p_linear_address: u64,
+    /// `NvU32 status` @ +40 — `[OUT]`.
+    pub status: u32,
+    /// `NvU32 flags` @ +44. ★ The caching bits here are **ignored**: the frontend
+    /// overwrites the field with `_CACHING_TYPE_DEFAULT` before RM sees it
+    /// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:523-524`, comment
+    /// *"Don't allow userspace to override the caching type"*). Cacheability is
+    /// decided by what the pages ARE — exactly the finding `kayfabe_linux_raw::cache`
+    /// is built around, here confirmed by the driver refusing to be told.
+    pub flags: u32,
+    /// `int fd` @ +48 — the descriptor the mmap context is registered against.
+    pub fd: i32,
+    // +52: four bytes of tail padding to the wrapper's 8-byte alignment.
+}
+
+impl Default for Nvos33ParametersWithFd {
+    /// `fd = -1`, everything else zero. Same reasoning as
+    /// [`crate::bringup::Nvos02ParametersWithFd`]: zero is a *valid descriptor number*,
+    /// so a defaulted struct must not name one.
+    fn default() -> Self {
+        Nvos33ParametersWithFd {
+            h_client: 0,
+            h_device: 0,
+            h_memory: 0,
+            offset: 0,
+            length: 0,
+            p_linear_address: 0,
+            status: 0,
+            flags: 0,
+            fd: -1,
+        }
+    }
+}
+
+impl Nvos33ParametersWithFd {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "nv_ioctl_nvos33_parameters_with_fd";
+    /// `sizeof`.
+    pub const SIZE: usize = 56;
+    /// `alignof`.
+    pub const ALIGN: usize = 8;
+
+    /// Encode into a little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            0,
+            &self.h_client.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            4,
+            &self.h_device.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            8,
+            &self.h_memory.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            16,
+            &self.offset.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            24,
+            &self.length.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            32,
+            &self.p_linear_address.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            40,
+            &self.status.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            44,
+            &self.flags.to_le_bytes(),
+        )?;
+        put(bytes, Self::C_NAME, Self::SIZE, 48, &self.fd.to_le_bytes())
+    }
+
+    /// Decode a little-endian image.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        Ok(Nvos33ParametersWithFd {
+            h_client: u32_at(bytes, 0)?,
+            h_device: u32_at(bytes, 4)?,
+            h_memory: u32_at(bytes, 8)?,
+            offset: crate::wire::u64_at(bytes, 16)?,
+            length: crate::wire::u64_at(bytes, 24)?,
+            p_linear_address: crate::wire::u64_at(bytes, 32)?,
+            status: u32_at(bytes, 40)?,
+            flags: u32_at(bytes, 44)?,
+            #[expect(
+                clippy::cast_possible_wrap,
+                reason = "`int fd`: the wire field IS signed, and -1 is the value that means \
+                          'no descriptor'. Reading it as unsigned would turn that into 2^32-1."
+            )]
+            fd: u32_at(bytes, 48)? as i32,
+        })
+    }
+}
+
+// =====================================================================================
+// NV_CHANNEL_ALLOC_PARAMS — the 580 shape, by offset
+// =====================================================================================
+
+/// `NV_CHANNEL_ALLOC_PARAMS` at `ogkm-580: 580.159.04` — an **offset-addressed encoder**,
+/// not a `#[repr(C)]` mirror. The module docs say why; the short version is that the 610
+/// tree has one extra handle at +32 and every field after it moves.
+///
+/// `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-342`. The layout, with
+/// `NV_MAX_SUBDEVICES = 8` (`ogkm-580: src/common/sdk/nvidia/inc/nvlimits.h:42`) and
+/// `NV_MEMORY_DESC_PARAMS` = 24 bytes (`alloc_channel.h:37-42`):
+///
+/// ```text
+///   +0    hObjectError        +128  engineType        +240  hPhysChannelGroup
+///   +4    hObjectBuffer       +132  cid               +244  internalFlags
+///   +8    gpFifoOffset (u64)  +136  subDeviceId       +248  errorNotifierMem
+///   +16   gpFifoEntries       +140  hObjectEccError   +272  eccErrorNotifierMem
+///   +20   flags               +144  instanceMem       +296  ProcessID
+///   +24   hContextShare       +168  userdMem          +300  SubProcessID
+///   +28   hVASpace            +192  ramfcMem          +304  encryptIv[3]
+///   +32   hUserdMemory[8]     +216  mthdbufMem        +316  decryptIv[3]
+///   +64   userdOffset[8]                              +328  hmacNonce[8]
+///                                                     +360  tpcConfigID
+///   sizeof = 368 (364 rounded to the 8-byte alignment `NV_DECLARE_ALIGNED` forces)
+/// ```
+///
+/// Everything from +144 on is `// reserved` in the header and is left zero. The fields
+/// this struct names are the ones a client must fill for a channel to exist and land on
+/// the right runlist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ChannelAllocParams {
+    /// `NvHandle hObjectError` @ +0 — the error-notifier context DMA. Zero is legal and
+    /// means *"do not report channel errors through a notifier"*; the isolate learns
+    /// about a wedged channel from the verb that does not complete, not from here.
+    pub h_object_error: u32,
+    /// `NvU64 gpFifoOffset` @ +8 — the **GPU virtual address** of the GPFIFO ring, in
+    /// this channel's own address space. Not a CPU address and not a physical one.
+    pub gp_fifo_offset: u64,
+    /// `NvU32 gpFifoEntries` @ +16 — the ring's capacity in 8-byte entries, so the ring
+    /// is `gp_fifo_entries * 8` bytes long. RM requires a power of two.
+    pub gp_fifo_entries: u32,
+    /// `NvU32 flags` @ +20 — `NVOS04_FLAGS_*`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:65-287`). Zero is the
+    /// ordinary unprivileged channel, which is the only kind an isolate may have.
+    pub flags: u32,
+    /// `NvHandle hContextShare` @ +24 — a `FERMI_CONTEXT_SHARE_A` under this channel's
+    /// TSG, or **zero to inherit the TSG's**. The C's host channel leaves it zero
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:9517-9522`), and so does this port: a subcontext
+    /// is a *sharing* mechanism between channels, and an isolate's own channel shares
+    /// with nothing.
+    pub h_context_share: u32,
+    /// `NvHandle hVASpace` @ +28 — the `FERMI_VASPACE_A`.
+    ///
+    /// ★★ **Zero, for a channel under a TSG, and this is not an omission.** The TSG
+    /// declares the address space and its channels inherit it; naming one *again* here
+    /// is refused by host RM (`C: src/qemu/nvkvm_gpu_emul.c:7049-7052`, *"TSG channels
+    /// can't use an explicit vaspace"*). The place a host VAS is declared is
+    /// [`crate::generated::classes::NvChannelGroupAllocationParameters::h_va_space`].
+    ///
+    /// ★ And when it *is* set, it is the **VASpace object**, never the
+    /// `NV01_MEMORY_VIRTUAL` range over it — two different handles, and
+    /// `kayfabe_isolate::RmBackend::alloc_vaspace` returns the *range*, because that is
+    /// what `NV_ESC_RM_MAP_MEMORY_DMA` needs.
+    pub h_va_space: u32,
+    /// `NvHandle hUserdMemory[0]` @ +32 — **client-allocated USERD**, and this port
+    /// supplies one.
+    ///
+    /// The header says *"ignored if hUserdMemory[0]=0"*, in which case RM allocates
+    /// USERD itself
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/arch/volta/kernel_channel_gv100.c:80`
+    /// takes the client-allocated branch only when the handle is non-zero). ★ We do not
+    /// take that option, because the C did not: its proven host channel passes its own
+    /// 64 KiB vidmem object (`C: src/qemu/nvkvm_gpu_emul.c:9520`). Owning the object is
+    /// what lets us map it with one ordinary [`NV_ESC_RM_MAP_MEMORY`] on a *memory*
+    /// handle instead of relying on `kchannelMap`, and USERD's two cursors
+    /// ([`USERD_GP_GET`], [`USERD_GP_PUT`]) are where all of this rung's hardware
+    /// evidence is read from.
+    pub h_userd_memory_0: u32,
+    /// `NvU64 userdOffset[0]` @ +64 — the offset of USERD **within**
+    /// [`Self::h_userd_memory_0`].
+    ///
+    /// ★★★ **Zero, and the C paid for that in days.** The host channel's USERD address
+    /// is `hUserdMemory[0] + userdOffset[0]`. A guest pools many channels' USERDs into
+    /// one object and addresses each by a non-zero offset; substituting a fresh
+    /// per-channel object while carrying the guest's offset across makes hardware read
+    /// USERD *past* the object while our `GP_PUT` lands at offset 0 — so the GPU sees
+    /// `GP_PUT == GP_GET` forever, fetches nothing, and reports **no error at all**
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:9291-9299`, the M5.47 root-cause fix). Zero
+    /// utilisation and no Xid is the worst failure shape available.
+    pub userd_offset_0: u64,
+    /// `NvU32 engineType` @ +128 — an `NV2080_ENGINE_TYPE_*`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/cl2080_notification.h:282,291,396`).
+    /// See [`ENGINE_TYPE_GRAPHICS`] / [`engine_type_copy`].
+    ///
+    /// ## ★★★ MEASURED: for a channel **inside a TSG**, this field is INERT
+    ///
+    /// The offset is the whole reason this module is hand-written — 610 puts `engineType`
+    /// at +132 — so it was bitten on hardware (RTX 3060 / 580.159.04): the encoder was
+    /// changed to write +132 and the engine-type sweep re-run. **Nothing changed.** Every
+    /// engine still routed to the same runlist it routed to before.
+    ///
+    /// The follow-up separated the two candidate fields. Zeroing *this* field while
+    /// leaving the group's changed nothing; zeroing the **group's**
+    /// ([`crate::generated::classes::NvChannelGroupAllocationParameters::engine_type`])
+    /// while leaving this one made every allocation fail with `NV_ERR_INVALID_ARGUMENT`
+    /// (0x1F). So the routing decision is the **TSG's**, and a channel in a group inherits
+    /// it — exactly like `hVASpace` and `hContextShare` two fields up.
+    ///
+    /// ★ Two honest consequences, both worth more than the tidy version:
+    ///
+    /// 1. **The +128 offset is NOT verified by this hardware.** It is read off the 580
+    ///    header and asserted by the encoder test, and that is all. A configuration where
+    ///    it *is* load-bearing — a channel with no TSG — is the only thing that could
+    ///    check it, and this port does not build one.
+    /// 2. This field is nonetheless still sent, because the C sends it
+    ///    (`C: src/qemu/nvkvm_gpu_emul.c:9520`) and *"port the C, subtract only its named
+    ///    bugs"*. Removing it would be a redesign justified by one part's behaviour.
+    pub engine_type: u32,
+}
+
+impl ChannelAllocParams {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV_CHANNEL_ALLOC_PARAMS";
+    /// `sizeof` at 580.159.04. ★ RM discriminates on `paramsSize`, so this number is
+    /// part of the request: sending 364 (the un-rounded sum) is a different, refused
+    /// request from sending 368.
+    pub const SIZE: usize = 368;
+    /// `alignof`.
+    pub const ALIGN: usize = 8;
+
+    /// Encode into a little-endian image of at least [`Self::SIZE`] bytes. Every byte
+    /// this struct does not name is left as found — so the caller must supply a
+    /// **zeroed** buffer, which is what the reserved tail requires.
+    ///
+    /// ★★ The length is checked **up front**, and that is not the same check the `put`
+    /// calls below make. The last field this encoder writes is at +128 of a 368-byte
+    /// struct, so a per-field bounds check accepts any buffer ≥ 132 bytes and encodes
+    /// perfectly into it — and the caller then sends `paramsSize = 132`, which RM reads
+    /// as a *different request*. A test caught exactly that: the per-field checks passed
+    /// on 367 bytes. The reserved tail is part of the request even though nothing writes
+    /// it.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let n = Self::C_NAME;
+        let s = Self::SIZE;
+        if bytes.len() < s {
+            return Err(AbiError::Truncated {
+                c_name: n,
+                need: s,
+                got: bytes.len(),
+            });
+        }
+        put(bytes, n, s, 0, &self.h_object_error.to_le_bytes())?;
+        put(bytes, n, s, 8, &self.gp_fifo_offset.to_le_bytes())?;
+        put(bytes, n, s, 16, &self.gp_fifo_entries.to_le_bytes())?;
+        put(bytes, n, s, 20, &self.flags.to_le_bytes())?;
+        put(bytes, n, s, 24, &self.h_context_share.to_le_bytes())?;
+        put(bytes, n, s, 28, &self.h_va_space.to_le_bytes())?;
+        put(bytes, n, s, 32, &self.h_userd_memory_0.to_le_bytes())?;
+        put(bytes, n, s, 64, &self.userd_offset_0.to_le_bytes())?;
+        put(bytes, n, s, 128, &self.engine_type.to_le_bytes())
+    }
+}
+
+/// `NV2080_ENGINE_TYPE_GRAPHICS` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/cl2080_notification.h:282`.
+pub const ENGINE_TYPE_GRAPHICS: u32 = 0x0000_0001;
+
+/// `NV2080_ENGINE_TYPE_COPY0` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/cl2080_notification.h:291`.
+pub const ENGINE_TYPE_COPY0: u32 = 0x0000_0009;
+
+/// `NV2080_ENGINE_TYPE_COPY(i)` for `i < 10` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/cl2080_notification.h:396`.
+///
+/// **Only `i < 10`.** The macro's other arm re-bases on `NV2080_ENGINE_TYPE_COPY10`,
+/// which is a different, discontiguous block; this returns `None` there rather than
+/// computing a number that names a *different engine class*. A copy engine index past 9
+/// on a part that has one is a real request, and it needs the second constant read off
+/// the header — not an extrapolation.
+#[must_use]
+pub const fn engine_type_copy(index: u32) -> Option<u32> {
+    if index < 10 {
+        Some(ENGINE_TYPE_COPY0 + index)
+    } else {
+        None
+    }
+}
+
+// =====================================================================================
+// The two channel controls
+// =====================================================================================
+
+/// ★★ `NVA06C_CTRL_CMD_BIND` = `0xa06c0102`, issued **on the TSG**, params a single
+/// `NvU32 engineType` (4 bytes).
+///
+/// **This must happen before [`NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN`], and the
+/// failure if it does not is a status that names nothing about binding.** RM generates a
+/// work-submit token from the channel's runlist assignment, and a channel that has not
+/// been bound has no runlist yet — so the token control answers
+/// `NV_ERR_INVALID_STATE` (0x40) (`C: src/qemu/nvkvm_gpu_emul.c:9568-9572`, and the same
+/// diagnosis at `:4080-4088`). The C found this the expensive way; it is written down
+/// here so the ordering is a property of the code rather than of whoever remembers.
+///
+/// The command number is Kepler-era (`a06c` = `KEPLER_CHANNEL_GROUP_A`) and is the live
+/// one for every later TSG: the class inherits the interface rather than renumbering it.
+pub const NVA06C_CTRL_CMD_BIND: u32 = 0xa06c_0102;
+
+/// `sizeof(NVA06C_CTRL_BIND_PARAMS)` — a single `NvU32 engineType`.
+pub const BIND_PARAMS_SIZE: usize = 4;
+
+/// `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` = `0xa06c0101`, issued **on the TSG**.
+///
+/// ★ There are two schedule commands and they are not interchangeable: this one takes a
+/// channel *group*, and [`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`] takes a single channel. A
+/// channel that lives in a TSG is scheduled by scheduling its group — which is what the
+/// C's proven host channel does (`C: src/qemu/nvkvm_gpu_emul.c:9577`), and what this
+/// port does. Both take [`GpfifoScheduleParams`].
+pub const NVA06C_CTRL_CMD_GPFIFO_SCHEDULE: u32 = 0xa06c_0101;
+
+/// `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:66`.
+///
+/// Issued **on the channel object**, for a channel that is not in a TSG. Present for
+/// completeness and *not* what this port uses — see [`NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`].
+pub const NVA06F_CTRL_CMD_GPFIFO_SCHEDULE: u32 = 0xa06f_0103;
+
+/// `NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:69-73`.
+///
+/// Three `NvBool`s, i.e. **three bytes**. `NvBool` is one byte, so this struct is 3 long
+/// and 1 aligned — passing four bytes is a different `paramsSize` and a different request.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GpfifoScheduleParams {
+    /// `NvBool bEnable` @ +0 — schedule the channel and add it to its runlist.
+    pub b_enable: u8,
+    /// `NvBool bSkipSubmit` @ +1.
+    pub b_skip_submit: u8,
+    /// `NvBool bSkipEnable` @ +2.
+    pub b_skip_enable: u8,
+}
+
+impl GpfifoScheduleParams {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS";
+    /// `sizeof`.
+    pub const SIZE: usize = 3;
+
+    /// Encode into a little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        put(bytes, Self::C_NAME, Self::SIZE, 0, &[self.b_enable])?;
+        put(bytes, Self::C_NAME, Self::SIZE, 1, &[self.b_skip_submit])?;
+        put(bytes, Self::C_NAME, Self::SIZE, 2, &[self.b_skip_enable])
+    }
+}
+
+/// `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrlc36f.h:79`.
+///
+/// ★★ **This is the rung's oracle.** The token is a hardware-assigned identity for the
+/// channel — RM does not invent it and we cannot compute it — so a value coming back out
+/// of this control is a fact about the GPU's channel RAM, not about our code. Issued **on
+/// the channel object** (not the TSG). Its params are a single `NvU32 workSubmitToken`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrlc36f.h:83-85`), which is why there is
+/// no struct here: four bytes, `[OUT]`.
+///
+/// ★ The value is structural, not opaque: `(runlistId << 16) | chid`, measured in the C
+/// (`C: docs/design/mode2_doorbell_chid.md:337-345`). This port does **not** decompose
+/// it — [`kayfabe_isolate::RmBackend::alloc_channel`] returns it whole and
+/// `ring_doorbell` stores it whole — but the structure is why a token is *evidence*: a
+/// channel that was never bound to a runlist cannot have one.
+pub const NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN: u32 = 0xc36f_0108;
+
+/// `sizeof(NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN_PARAMS)` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrlc36f.h:83-85`.
+pub const WORK_SUBMIT_TOKEN_PARAMS_SIZE: usize = 4;
+
+// =====================================================================================
+// Device-local memory — the only kind a ring, a USERD and a semaphore can be built from
+// =====================================================================================
+
+/// `NV01_MEMORY_LOCAL_USER` — `ogkm-580: src/common/sdk/nvidia/inc/nvos.h` class `0x0040`,
+/// allocated with [`NvMemoryAllocationParams`].
+///
+/// ★ Why not the sysmem path [`crate::bringup`] already has: `alloc_sysmem` issues
+/// `NV_ESC_RM_ALLOC_MEMORY` with `NVOS02_FLAGS_MAPPING_NO_MAP`, which deliberately makes
+/// the object **un-CPU-mappable** — right for a data buffer the GPU alone touches, and
+/// exactly wrong for a ring whose whole purpose is that both sides write it. This class
+/// takes the `NV_ESC_RM_ALLOC` path and produces an object [`NV_ESC_RM_MAP_MEMORY`] can
+/// map. It is what the C's proven host channel allocates for its pushbuffer, GPFIFO,
+/// semaphore and USERD (`C: src/qemu/nvkvm_gpu_emul.c:9488-9495`, `:7278-7298`).
+pub const NV01_MEMORY_LOCAL_USER: u32 = 0x0040;
+
+/// `NV_MEMORY_ALLOCATION_PARAMS` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/nvos.h:1608-1642`. 128 bytes.
+///
+/// Only the four fields a device-local allocation needs are named; the rest are `[IN]`
+/// zero or `[OUT]`. `pitch`, `offset`, `limit` and `address` are `[IN/OUT]` or `[OUT]`
+/// and are deliberately not surfaced — reading back a returned `address` would be reading
+/// back a host CPU address, which is the representation `kayfabe_linux_raw`'s §4.2.1
+/// refusal is about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct NvMemoryAllocationParams {
+    /// `NvU32 owner` @ +0 — an owner tag. The C passes the client handle
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:7283`).
+    pub owner: u32,
+    /// `NvU32 type` @ +4 — `NVOS32_TYPE_IMAGE` = 0
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:884`).
+    pub kind: u32,
+    /// `NvU32 attr` @ +24 — see [`ATTR_CONTIGUOUS_VIDMEM`].
+    pub attr: u32,
+    /// `NvU64 size` @ +64 — `[IN/OUT]`; RM may round it up.
+    pub size: u64,
+    /// `NvU64 alignment` @ +72.
+    pub alignment: u64,
+}
+
+impl NvMemoryAllocationParams {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV_MEMORY_ALLOCATION_PARAMS";
+    /// `sizeof`.
+    pub const SIZE: usize = 128;
+    /// `alignof`.
+    pub const ALIGN: usize = 8;
+
+    /// Encode into a **zeroed** little-endian image of at least [`Self::SIZE`] bytes.
+    /// The length is checked up front, for the reason
+    /// [`ChannelAllocParams::encode_into`] states.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let n = Self::C_NAME;
+        let s = Self::SIZE;
+        if bytes.len() < s {
+            return Err(AbiError::Truncated {
+                c_name: n,
+                need: s,
+                got: bytes.len(),
+            });
+        }
+        put(bytes, n, s, 0, &self.owner.to_le_bytes())?;
+        put(bytes, n, s, 4, &self.kind.to_le_bytes())?;
+        put(bytes, n, s, 24, &self.attr.to_le_bytes())?;
+        put(bytes, n, s, 64, &self.size.to_le_bytes())?;
+        put(bytes, n, s, 72, &self.alignment.to_le_bytes())
+    }
+}
+
+/// `NVOS32_ATTR_PHYSICALITY_CONTIGUOUS` in field `28:27` (value 2,
+/// `ogkm-580: src/common/sdk/nvidia/inc/nvos.h:1078-1081`) OR
+/// `NVOS32_ATTR_LOCATION_VIDMEM` in field `26:25` (value 0, `:1067-1068`).
+///
+/// ★ Like every `NVOS*` flag, these are **field ranges with values in them**, not bit
+/// masks — the mistake `crate::bringup::NVOS02_FLAGS_LOCATION_PCI` records having made
+/// against real hardware. `_VIDMEM` being zero is what "device-local" encodes as.
+///
+/// Contiguous is a *requirement* here, not a preference: a GPFIFO ring, a USERD block and
+/// a pushbuffer are addressed as flat spans by hardware.
+pub const ATTR_CONTIGUOUS_VIDMEM: u32 = 2 << 27;
+
+// =====================================================================================
+// USERD, the GPFIFO ring, and the doorbell
+// =====================================================================================
+
+/// Byte offset of `GP_GET` within USERD — `NV_RAMUSERD_GP_GET` is dword 34
+/// (`ogkm-580: src/common/inc/swref/published/ampere/ga100/dev_ram.h:37`, the field range
+/// `(34*32+31):(34*32+0)`), so `34 * 4`.
+///
+/// ★★ **Hardware writes this and nothing else does.** It is the consume cursor: the GPU's
+/// host unit advances it as it fetches GPFIFO entries. That makes it the one value in this
+/// whole module that can serve as evidence — we write `GP_PUT`, and if `GP_GET` moves to
+/// meet it, something outside this process read the ring. The C artifact reads exactly
+/// these two offsets for exactly that reason (`C: src/qemu/nvkvm_gpu_emul.c:4199-4202`,
+/// *"USERD: GP_GET@0x88, GP_PUT@0x8C"*).
+pub const USERD_GP_GET: u64 = 34 * 4;
+
+/// Byte offset of `GP_PUT` within USERD — `NV_RAMUSERD_GP_PUT`, dword 35
+/// (`ogkm-580: src/common/inc/swref/published/ampere/ga100/dev_ram.h:38`).
+///
+/// The produce cursor: **we** write it, and writing it is what makes new ring entries
+/// visible to hardware. It must be written *after* the entries it announces, which is the
+/// release-fence seam `kayfabe_linux_raw::VolatileRegion` names in its own docs.
+pub const USERD_GP_PUT: u64 = 35 * 4;
+
+/// `NVC56F_GP_ENTRY__SIZE` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:267`.
+pub const GP_ENTRY_SIZE: u64 = 8;
+
+/// Build one GPFIFO entry pointing at `gpu_va` for `len_bytes` of pushbuffer.
+///
+/// The encoding, all from `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:266-284`:
+///
+/// - `GP_ENTRY0_GET` is `31:2` — bits `31:2` of the **address**, i.e. the low 32 bits of
+///   a 4-byte-aligned address used as-is. Bit 0 is `FETCH` and bit 1 is unused, so an
+///   address whose low two bits are not zero would set `FETCH_CONDITIONAL` by accident.
+/// - `GP_ENTRY1_GET_HI` is `7:0` — bits `39:32` of the address. **Eight bits, not more**:
+///   a GPFIFO entry cannot name a pushbuffer above 2^40, and silently truncating one is
+///   the kind of failure that presents as the engine executing whatever else lives there.
+/// - `GP_ENTRY1_LENGTH` is `30:10` — the pushbuffer length **in dwords**, so 21 bits =
+///   at most 2^21 - 1 dwords.
+/// - `GP_ENTRY1_SYNC` is `31:31`, left `PROCEED` (0).
+///
+/// Returns `None` — never a truncated entry — when any of those bounds is exceeded or
+/// `len_bytes` is not a whole number of dwords. A GPFIFO entry that names the wrong
+/// address or the wrong length does not fail: it runs.
+#[must_use]
+pub const fn gp_entry(gpu_va: u64, len_bytes: u64) -> Option<u64> {
+    if !gpu_va.is_multiple_of(4) {
+        return None;
+    }
+    if gpu_va >= 1 << 40 {
+        return None;
+    }
+    if len_bytes == 0 || !len_bytes.is_multiple_of(4) {
+        return None;
+    }
+    let dwords = len_bytes / 4;
+    if dwords >= 1 << 21 {
+        return None;
+    }
+    let entry0 = gpu_va & 0xFFFF_FFFC;
+    let entry1 = ((gpu_va >> 32) & 0xFF) | (dwords << 10);
+    Some(entry0 | (entry1 << 32))
+}
+
+/// `AMPERE_USERMODE_A` — `ogkm-580: src/common/sdk/nvidia/inc/class/clc561.h:27`.
+///
+/// The object whose CPU mapping **is** the doorbell page. Allocated under the subdevice;
+/// it has no alloc parameters. Its register layout is the Volta one — `clc561.h` defines
+/// only the class id, and the offsets live at
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc361.h:30-33`.
+pub const AMPERE_USERMODE_A: u32 = 0xc561;
+
+/// `NVC361_NV_USERMODE__SIZE` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc361.h:31`. The BAR window the usermode
+/// object exposes, in bytes.
+pub const USERMODE_WINDOW_SIZE: u64 = 65536;
+
+/// `NVC361_NOTIFY_CHANNEL_PENDING` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc361.h:33`.
+///
+/// ★★★ **The doorbell.** A 32-bit store of a channel's work-submit token to this offset
+/// in the mapped usermode window tells the host unit that the named channel has work. It
+/// is *not* an ioctl and there is no ioctl that can stand in for it — which is why
+/// `kayfabe_isolate::RmBackend::ring_doorbell` was a named refusal until a mapping existed.
+pub const USERMODE_NOTIFY_CHANNEL_PENDING: u64 = 0x0000_0090;
+
+// =====================================================================================
+// Pushbuffer method encoding
+// =====================================================================================
+
+/// The number of method-address bits in a pushbuffer header — `NVC56F_DMA_INCR_ADDRESS`
+/// is `11:0` (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:308`).
+const METHOD_ADDRESS_BITS: u32 = 12;
+
+/// The number of methods one header may carry — `NVC56F_DMA_INCR_COUNT` is `28:16`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:310`).
+const METHOD_COUNT_BITS: u32 = 13;
+
+/// The number of subchannels — `NVC56F_NUMBER_OF_SUBCHANNELS`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:67`).
+pub const NUMBER_OF_SUBCHANNELS: u32 = 8;
+
+/// Build an **incrementing** pushbuffer method header:
+/// `count` dwords of data follow, applied to consecutive methods starting at `method`.
+///
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:307-312` —
+/// `ADDRESS` `11:0`, `SUBCHANNEL` `15:13`, `COUNT` `28:16`, `OPCODE` `31:29` = 1.
+///
+/// ★ `method` is the **byte** offset from the class header (e.g. `NVC7B5_OFFSET_IN_UPPER`
+/// = `0x400`) and the field holds it **shifted right by two**: methods are dword-indexed.
+/// Passing the byte offset unshifted names a method 4× further along, which on a copy
+/// engine is a completely different register and does not fault.
+///
+/// Returns `None` rather than a truncated header when any field overflows.
+#[must_use]
+pub const fn method_header_inc(subchannel: u32, method: u32, count: u32) -> Option<u32> {
+    if !method.is_multiple_of(4) {
+        return None;
+    }
+    let addr = method / 4;
+    if addr >= 1 << METHOD_ADDRESS_BITS {
+        return None;
+    }
+    if subchannel >= NUMBER_OF_SUBCHANNELS {
+        return None;
+    }
+    if count == 0 || count >= 1 << METHOD_COUNT_BITS {
+        return None;
+    }
+    // OPCODE_VALUE = 1 at bits 31:29 — `clc56f.h:311-312`.
+    Some(addr | (subchannel << 13) | (count << 16) | (1 << 29))
+}
+
+/// `NVC56F_SET_OBJECT` — `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:68`.
+///
+/// The method that binds a class to a subchannel. It is the first thing a pushbuffer
+/// carrying *engine* methods must do, and one that omits it addresses whatever the
+/// subchannel last held. ★ It is **not** needed for the host-FIFO methods in [`fifo`]:
+/// those are executed by the channel's own front end, not by an engine, which is exactly
+/// what makes them provable with no engine object allocated.
+pub const SET_OBJECT: u32 = 0x0000_0000;
+
+/// ★★★ The **host-FIFO semaphore** methods — `NVC56F_SEM_*`,
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:206-231`.
+///
+/// These are the smallest thing a GPU can be asked to do that leaves *evidence*: five
+/// consecutive methods that make the channel's front end write a chosen payload to a
+/// chosen GPU virtual address. No engine class object, no golden context, no compute —
+/// so a failure localises to the submission machinery itself and to nothing else.
+///
+/// That is why the C's host channel self-test uses exactly this and nothing more
+/// (`C: src/qemu/nvkvm_gpu_emul.c:8595-8604`, `:9595-9639`), on a copy-engine runlist
+/// deliberately chosen because it has no graphics-context dependency. Its verdict line
+/// is the bar this port is trying to clear: *"SEM LANDED — host doorbell+schedule+USERD
+/// mechanics GOOD"*.
+pub mod fifo {
+    /// `NVC56F_SEM_ADDR_LO` @ `0x5c` — semaphore address bits `31:2`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:206-207`).
+    pub const SEM_ADDR_LO: u32 = 0x0000_005C;
+    /// `NVC56F_SEM_ADDR_HI` @ `0x60` — semaphore address bits `39:32`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:208-209`). **Eight bits**:
+    /// the same 2^40 ceiling [`super::gp_entry`] enforces.
+    pub const SEM_ADDR_HI: u32 = 0x0000_0060;
+    /// `NVC56F_SEM_PAYLOAD_LO` @ `0x64`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:210-211`).
+    pub const SEM_PAYLOAD_LO: u32 = 0x0000_0064;
+    /// `NVC56F_SEM_PAYLOAD_HI` @ `0x68`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:212-213`).
+    pub const SEM_PAYLOAD_HI: u32 = 0x0000_0068;
+    /// `NVC56F_SEM_EXECUTE` @ `0x6c`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:214-234`).
+    pub const SEM_EXECUTE: u32 = 0x0000_006C;
+
+    /// `SEM_EXECUTE_OPERATION_RELEASE` — field `2:0`, value 1
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:217`).
+    ///
+    /// ★ With `PAYLOAD_SIZE` (`24:24`) left `_32BIT` (0, `:230`), `RELEASE_WFI` left
+    /// `_DIS` (0, `:227`) and `RELEASE_TIMESTAMP` left `_DIS` (0, `:233`), the whole
+    /// method word is `1` — which is what the C writes (`C: nvkvm_gpu_emul.c:8603`). The
+    /// value is spelled as a named constant rather than as a literal `1` because the
+    /// three zeros are *choices*: a 64-bit payload writes eight bytes over a four-byte
+    /// sentinel, and a timestamp release writes a 16-byte structure.
+    pub const SEM_EXECUTE_RELEASE_32BIT: u32 = 1;
+}
+
+// =====================================================================================
+// The copy engine's methods
+// =====================================================================================
+
+/// `AMPERE_DMA_COPY_B` method offsets —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h`.
+///
+/// A module of constants rather than an enum: these are *addresses in a method space*,
+/// they are consumed by arithmetic ([`method_header_inc`]), and an enum would invite a
+/// discriminant cast — the exact shape of the wire-code bug
+/// `kayfabe_isolate_host::proto::engine_code` exists to prevent.
+pub mod ce {
+    /// `NVC7B5_SET_SEMAPHORE_A` @ `0x240` — the semaphore address, bits `48:32`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:47-48`).
+    pub const SET_SEMAPHORE_A: u32 = 0x0000_0240;
+    /// `NVC7B5_SET_SEMAPHORE_B` @ `0x244` — the semaphore address, bits `31:0`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:49-50`).
+    pub const SET_SEMAPHORE_B: u32 = 0x0000_0244;
+    /// `NVC7B5_SET_SEMAPHORE_PAYLOAD` @ `0x248` — the value the engine will write
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:51-52`).
+    pub const SET_SEMAPHORE_PAYLOAD: u32 = 0x0000_0248;
+    /// `NVC7B5_LAUNCH_DMA` @ `0x300` — the method that starts the copy
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:84`).
+    pub const LAUNCH_DMA: u32 = 0x0000_0300;
+    /// `NVC7B5_OFFSET_IN_UPPER` @ `0x400`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:161`).
+    pub const OFFSET_IN_UPPER: u32 = 0x0000_0400;
+    /// `NVC7B5_OFFSET_OUT_UPPER` @ `0x408`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:165`).
+    pub const OFFSET_OUT_UPPER: u32 = 0x0000_0408;
+    /// `NVC7B5_LINE_LENGTH_IN` @ `0x418`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:173`).
+    pub const LINE_LENGTH_IN: u32 = 0x0000_0418;
+    /// `NVC7B5_LINE_COUNT` @ `0x41C`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:175`).
+    pub const LINE_COUNT: u32 = 0x0000_041C;
+
+    /// `LAUNCH_DMA_DATA_TRANSFER_TYPE_NON_PIPELINED` — field `1:0`, value 2
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:88`).
+    pub const LAUNCH_TRANSFER_NON_PIPELINED: u32 = 2;
+    /// `LAUNCH_DMA_FLUSH_ENABLE_TRUE` — field `2:2`, value 1
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:91`).
+    pub const LAUNCH_FLUSH_ENABLE: u32 = 1 << 2;
+    /// `LAUNCH_DMA_SEMAPHORE_TYPE_RELEASE_ONE_WORD_SEMAPHORE` — field `4:3`, value 1
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:99`).
+    ///
+    /// ★ The whole reason a CE copy is *provable*: the engine writes the payload to the
+    /// semaphore address **after** the copy retires. A payload that appears is the
+    /// hardware saying it finished, and it is the only signal in this module that our own
+    /// code cannot produce.
+    pub const LAUNCH_SEMAPHORE_RELEASE_ONE_WORD: u32 = 1 << 3;
+    /// `LAUNCH_DMA_SRC_MEMORY_LAYOUT_PITCH` — field `7:7`, value 1
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:108`).
+    pub const LAUNCH_SRC_PITCH: u32 = 1 << 7;
+    /// `LAUNCH_DMA_DST_MEMORY_LAYOUT_PITCH` — field `8:8`, value 1
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:111`).
+    pub const LAUNCH_DST_PITCH: u32 = 1 << 8;
+    /// `LAUNCH_DMA_MULTI_LINE_ENABLE_FALSE` — field `9:9`, value 0
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:113`). Named, not omitted: a
+    /// single-line copy is a *choice* about how `LINE_LENGTH_IN` is read, and leaving it
+    /// implicit is how a byte count becomes a pitch.
+    pub const LAUNCH_MULTI_LINE_DISABLE: u32 = 0;
+    /// `LAUNCH_DMA_SRC_TYPE_VIRTUAL` — field `12:12`, value 0
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:122`).
+    ///
+    /// ★★ Virtual, always, for anything an isolate submits. `_PHYSICAL` points the engine
+    /// at physical addresses with no MMU between it and the rest of the machine; nothing
+    /// in this project's threat model permits it, and the constant is deliberately absent
+    /// rather than present-and-unused.
+    pub const LAUNCH_SRC_VIRTUAL: u32 = 0;
+    /// `LAUNCH_DMA_DST_TYPE_VIRTUAL` — field `13:13`, value 0
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:125`).
+    pub const LAUNCH_DST_VIRTUAL: u32 = 0;
+}
+
+/// Bounds-checked field write. Same helper as [`crate::bringup`]'s, private to each
+/// module on purpose: a shared one would have to pick a home, and neither module is the
+/// other's dependency.
+fn put(
+    bytes: &mut [u8],
+    c_name: &'static str,
+    need: usize,
+    off: usize,
+    src: &[u8],
+) -> Result<(), AbiError> {
+    let got = bytes.len();
+    bytes
+        .get_mut(off..off + src.len())
+        .ok_or(AbiError::Truncated { c_name, need, got })?
+        .copy_from_slice(src);
+    Ok(())
+}
+
+// The transcriptions vs rustc, at COMPILE time — the same gate the generated structs get.
+const _: () = {
+    assert!(core::mem::size_of::<Nvos33ParametersWithFd>() == Nvos33ParametersWithFd::SIZE);
+    assert!(core::mem::align_of::<Nvos33ParametersWithFd>() == Nvos33ParametersWithFd::ALIGN);
+    assert!(core::mem::offset_of!(Nvos33ParametersWithFd, h_client) == 0);
+    assert!(core::mem::offset_of!(Nvos33ParametersWithFd, h_device) == 4);
+    assert!(core::mem::offset_of!(Nvos33ParametersWithFd, h_memory) == 8);
+    assert!(core::mem::offset_of!(Nvos33ParametersWithFd, offset) == 16);
+    assert!(core::mem::offset_of!(Nvos33ParametersWithFd, length) == 24);
+    assert!(core::mem::offset_of!(Nvos33ParametersWithFd, p_linear_address) == 32);
+    assert!(core::mem::offset_of!(Nvos33ParametersWithFd, status) == 40);
+    assert!(core::mem::offset_of!(Nvos33ParametersWithFd, flags) == 44);
+    assert!(core::mem::offset_of!(Nvos33ParametersWithFd, fd) == 48);
+
+    // `NvMemoryAllocationParams` has no `#[repr(C)]` mirror to take offsets of (like
+    // `ChannelAllocParams`, it is an offset-addressed encoder over a struct whose tail we
+    // do not model), so its layout is asserted by the wire test below instead.
+    assert!(core::mem::size_of::<GpfifoScheduleParams>() == GpfifoScheduleParams::SIZE);
+    assert!(core::mem::offset_of!(GpfifoScheduleParams, b_enable) == 0);
+    assert!(core::mem::offset_of!(GpfifoScheduleParams, b_skip_submit) == 1);
+    assert!(core::mem::offset_of!(GpfifoScheduleParams, b_skip_enable) == 2);
+};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The 580 channel-param offsets, asserted as BYTES ON THE WIRE rather than as
+    /// `offset_of!` — there is no `#[repr(C)]` mirror to take offsets of, which is the
+    /// point of the module docs. Each field is written into a zeroed buffer alone and
+    /// its bytes located.
+    #[test]
+    fn channel_alloc_params_land_at_the_580_offsets() {
+        let cases: [(ChannelAllocParams, usize, &[u8]); 9] = [
+            (
+                ChannelAllocParams {
+                    h_object_error: 0x1111_1111,
+                    ..Default::default()
+                },
+                0,
+                &0x1111_1111u32.to_le_bytes(),
+            ),
+            (
+                ChannelAllocParams {
+                    gp_fifo_offset: 0x2222_2222_2222_2222,
+                    ..Default::default()
+                },
+                8,
+                &0x2222_2222_2222_2222u64.to_le_bytes(),
+            ),
+            (
+                ChannelAllocParams {
+                    gp_fifo_entries: 0x3333_3333,
+                    ..Default::default()
+                },
+                16,
+                &0x3333_3333u32.to_le_bytes(),
+            ),
+            (
+                ChannelAllocParams {
+                    flags: 0x4444_4444,
+                    ..Default::default()
+                },
+                20,
+                &0x4444_4444u32.to_le_bytes(),
+            ),
+            (
+                ChannelAllocParams {
+                    h_context_share: 0x5555_5555,
+                    ..Default::default()
+                },
+                24,
+                &0x5555_5555u32.to_le_bytes(),
+            ),
+            (
+                ChannelAllocParams {
+                    h_va_space: 0x6666_6666,
+                    ..Default::default()
+                },
+                28,
+                &0x6666_6666u32.to_le_bytes(),
+            ),
+            (
+                ChannelAllocParams {
+                    h_userd_memory_0: 0x7777_7777,
+                    ..Default::default()
+                },
+                32,
+                &0x7777_7777u32.to_le_bytes(),
+            ),
+            (
+                ChannelAllocParams {
+                    userd_offset_0: 0x8888_8888_8888_8888,
+                    ..Default::default()
+                },
+                64,
+                &0x8888_8888_8888_8888u64.to_le_bytes(),
+            ),
+            (
+                ChannelAllocParams {
+                    engine_type: 0x9999_9999,
+                    ..Default::default()
+                },
+                128,
+                &0x9999_9999u32.to_le_bytes(),
+            ),
+        ];
+        for (params, offset, want) in cases {
+            let mut buf = [0u8; ChannelAllocParams::SIZE];
+            params.encode_into(&mut buf).expect("encode");
+            assert_eq!(&buf[offset..offset + want.len()], want, "at +{offset}");
+            // And nothing else moved: every byte outside the field is still zero.
+            let nonzero: Vec<usize> = (0..ChannelAllocParams::SIZE)
+                .filter(|&i| buf[i] != 0)
+                .collect();
+            let expected: Vec<usize> = (offset..offset + want.len()).collect();
+            assert_eq!(nonzero, expected, "field at +{offset} spilled");
+        }
+    }
+
+    /// ★★ The offset that is the whole reason this module is hand-written. At
+    /// `ogkm-610` `engineType` is at +132; at `ogkm-580` it is at +128.
+    ///
+    /// ★★★ **This test asserts the ENCODER, and hardware does not corroborate it.** The
+    /// bite was run — the encoder was changed to +132 on a real 580.159.04 driver and the
+    /// engine-routing sweep produced byte-identical output. For a channel inside a TSG the
+    /// field is inert; the group's `engineType` is what routes. See
+    /// [`ChannelAllocParams::engine_type`] for the full measurement. The test stays
+    /// because the header says +128 and an encoder that drifts off its header is still a
+    /// defect — but it is a claim about the header, not about the GPU, and calling it
+    /// hardware evidence would be exactly the green-suite-that-means-nothing this project
+    /// has measured before.
+    #[test]
+    fn engine_type_is_at_128_which_is_the_580_offset_and_not_the_610_one() {
+        let mut buf = [0u8; ChannelAllocParams::SIZE];
+        ChannelAllocParams {
+            engine_type: ENGINE_TYPE_COPY0,
+            ..Default::default()
+        }
+        .encode_into(&mut buf)
+        .expect("encode");
+        assert_eq!(u32::from_le_bytes(buf[128..132].try_into().unwrap()), 9);
+        assert_eq!(
+            u32::from_le_bytes(buf[132..136].try_into().unwrap()),
+            0,
+            "+132 is 610's engineType offset and must be untouched"
+        );
+    }
+
+    /// A short buffer is a refusal, never a partial encode.
+    #[test]
+    fn a_short_buffer_is_truncated_and_not_a_partial_encode() {
+        let mut buf = [0u8; ChannelAllocParams::SIZE - 1];
+        let err = ChannelAllocParams {
+            engine_type: 1,
+            ..Default::default()
+        }
+        .encode_into(&mut buf)
+        .expect_err("must refuse");
+        assert_eq!(
+            err,
+            AbiError::Truncated {
+                c_name: ChannelAllocParams::C_NAME,
+                need: ChannelAllocParams::SIZE,
+                got: ChannelAllocParams::SIZE - 1,
+            }
+        );
+    }
+
+    /// The engine-type table, by value. `COPY(10)` is `None` and NOT `COPY0 + 10`.
+    #[test]
+    fn engine_type_copy_refuses_past_the_macro_s_first_arm() {
+        assert_eq!(engine_type_copy(0), Some(9));
+        assert_eq!(engine_type_copy(1), Some(10));
+        assert_eq!(engine_type_copy(9), Some(18));
+        assert_eq!(engine_type_copy(10), None);
+        assert_eq!(engine_type_copy(u32::MAX), None);
+        assert_eq!(ENGINE_TYPE_GRAPHICS, 1);
+    }
+
+    /// The GPFIFO entry encoding, by field.
+    #[test]
+    fn gp_entry_places_address_and_length_in_their_fields() {
+        // A 40-bit address and a 64-byte (16-dword) pushbuffer.
+        let e = gp_entry(0x0000_00AB_CDEF_0000, 64).expect("encodable");
+        assert_eq!(e & 0xFFFF_FFFF, 0xCDEF_0000, "GP_ENTRY0_GET = address 31:2");
+        let hi = (e >> 32) as u32;
+        assert_eq!(hi & 0xFF, 0xAB, "GP_ENTRY1_GET_HI = address 39:32");
+        assert_eq!((hi >> 10) & 0x1F_FFFF, 16, "GP_ENTRY1_LENGTH = dwords");
+        assert_eq!(hi >> 31, 0, "GP_ENTRY1_SYNC = PROCEED");
+        assert_eq!((hi >> 9) & 1, 0, "GP_ENTRY1_LEVEL = MAIN");
+    }
+
+    /// ★ Every bound is a refusal, not a truncation. Each row is a value that WOULD
+    /// have produced a wrong-but-runnable entry.
+    #[test]
+    fn gp_entry_refuses_every_value_it_cannot_represent() {
+        // Misaligned address: bit 0 is FETCH_CONDITIONAL, bit 1 is reserved.
+        assert_eq!(gp_entry(0x1002, 4), None);
+        assert_eq!(gp_entry(0x1001, 4), None);
+        // Above 2^40 — GET_HI is eight bits.
+        assert_eq!(gp_entry(1 << 40, 4), None);
+        // Zero length, and a length that is not a whole dword.
+        assert_eq!(gp_entry(0x1000, 0), None);
+        assert_eq!(gp_entry(0x1000, 6), None);
+        // Past 2^21 dwords — LENGTH is 21 bits.
+        assert_eq!(gp_entry(0x1000, (1 << 21) * 4), None);
+        // The largest representable one is accepted, so the bound is exact.
+        assert!(gp_entry(0x1000, ((1 << 21) - 1) * 4).is_some());
+        assert!(gp_entry((1 << 40) - 4, 4).is_some());
+    }
+
+    /// ★★ The method header's address field is DWORD-indexed. This is the assertion
+    /// that would catch passing a byte offset unshifted, which names a different
+    /// register four times further along and does not fault.
+    #[test]
+    fn method_header_shifts_the_byte_offset_into_a_dword_index() {
+        let h = method_header_inc(4, ce::OFFSET_IN_UPPER, 4).expect("encodable");
+        assert_eq!(h & 0xFFF, 0x100, "0x400 bytes is method index 0x100");
+        assert_eq!((h >> 13) & 0x7, 4, "SUBCHANNEL");
+        assert_eq!((h >> 16) & 0x1FFF, 4, "COUNT");
+        assert_eq!(h >> 29, 1, "OPCODE = INC_METHOD");
+    }
+
+    /// Every bound on the header is a refusal too.
+    #[test]
+    fn method_header_refuses_every_value_it_cannot_represent() {
+        // A method offset that is not dword-aligned has no dword index.
+        assert_eq!(method_header_inc(0, 0x401, 1), None);
+        // Past the 12-bit address field (0x1000 dwords = 0x4000 bytes).
+        assert_eq!(method_header_inc(0, 0x4000, 1), None);
+        assert!(method_header_inc(0, 0x3FFC, 1).is_some());
+        // Subchannel is 3 bits.
+        assert_eq!(method_header_inc(8, 0, 1), None);
+        assert!(method_header_inc(7, 0, 1).is_some());
+        // Count is 13 bits and zero is not a header.
+        assert_eq!(method_header_inc(0, 0, 0), None);
+        assert_eq!(method_header_inc(0, 0, 1 << 13), None);
+        assert!(method_header_inc(0, 0, (1 << 13) - 1).is_some());
+    }
+
+    /// The schedule params are THREE bytes. A fourth would be a different `paramsSize`
+    /// and therefore a different request.
+    #[test]
+    fn schedule_params_are_three_bytes_and_encode_by_position() {
+        assert_eq!(GpfifoScheduleParams::SIZE, 3);
+        let mut buf = [0u8; 3];
+        GpfifoScheduleParams {
+            b_enable: 1,
+            b_skip_submit: 0,
+            b_skip_enable: 0,
+        }
+        .encode_into(&mut buf)
+        .expect("encode");
+        assert_eq!(buf, [1, 0, 0]);
+    }
+
+    /// The USERD cursors, and that they are DISTINCT. The C reads them at 0x88/0x8C
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:4199-4202`); this is the same pair derived from
+    /// the dword indices rather than from the C's constants.
+    #[test]
+    fn userd_cursor_offsets_match_the_c_artifact_s_measured_pair() {
+        assert_eq!(USERD_GP_GET, 0x88);
+        assert_eq!(USERD_GP_PUT, 0x8C);
+        assert_ne!(USERD_GP_GET, USERD_GP_PUT);
+    }
+
+    /// The `NVOS33` round trip, including a negative descriptor.
+    #[test]
+    fn nvos33_round_trips_and_keeps_a_negative_descriptor_negative() {
+        let p = Nvos33ParametersWithFd {
+            h_client: 0xC1D0_0001,
+            h_device: 0xCAFE_0001,
+            h_memory: 0xCAFE_0007,
+            offset: 0,
+            length: 0x1000,
+            p_linear_address: 0,
+            status: 0,
+            flags: 0,
+            fd: -1,
+        };
+        let mut buf = [0u8; Nvos33ParametersWithFd::SIZE];
+        p.encode_into(&mut buf).expect("encode");
+        assert_eq!(Nvos33ParametersWithFd::decode(&buf).expect("decode"), p);
+        assert_eq!(Nvos33ParametersWithFd::default().fd, -1);
+    }
+
+    /// The doorbell offset and the window it lives in — a store past the window is a
+    /// store into another object's registers.
+    #[test]
+    fn the_doorbell_offset_is_inside_the_usermode_window() {
+        assert_eq!(USERMODE_NOTIFY_CHANNEL_PENDING, 0x90);
+        const { assert!(USERMODE_NOTIFY_CHANNEL_PENDING + 4 <= USERMODE_WINDOW_SIZE) };
+        assert_eq!(MMAP_FILE_OFFSET, 0);
+    }
+
+    /// The memory-allocation params' offsets, field by field, with the same
+    /// nothing-else-moved check as the channel params.
+    #[test]
+    fn memory_allocation_params_land_at_the_580_offsets() {
+        let cases: [(NvMemoryAllocationParams, usize, &[u8]); 5] = [
+            (
+                NvMemoryAllocationParams {
+                    owner: 0x1111_1111,
+                    ..Default::default()
+                },
+                0,
+                &0x1111_1111u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryAllocationParams {
+                    kind: 0x2222_2222,
+                    ..Default::default()
+                },
+                4,
+                &0x2222_2222u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryAllocationParams {
+                    attr: 0x3333_3333,
+                    ..Default::default()
+                },
+                24,
+                &0x3333_3333u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryAllocationParams {
+                    size: 0x4444_4444_4444_4444,
+                    ..Default::default()
+                },
+                64,
+                &0x4444_4444_4444_4444u64.to_le_bytes(),
+            ),
+            (
+                NvMemoryAllocationParams {
+                    alignment: 0x5555_5555_5555_5555,
+                    ..Default::default()
+                },
+                72,
+                &0x5555_5555_5555_5555u64.to_le_bytes(),
+            ),
+        ];
+        for (params, offset, want) in cases {
+            let mut buf = [0u8; NvMemoryAllocationParams::SIZE];
+            params.encode_into(&mut buf).expect("encode");
+            assert_eq!(&buf[offset..offset + want.len()], want, "at +{offset}");
+            let nonzero: Vec<usize> = (0..NvMemoryAllocationParams::SIZE)
+                .filter(|&i| buf[i] != 0)
+                .collect();
+            let expected: Vec<usize> = (offset..offset + want.len()).collect();
+            assert_eq!(nonzero, expected, "field at +{offset} spilled");
+        }
+    }
+
+    /// ★ `ATTR_CONTIGUOUS_VIDMEM` is a FIELD VALUE, not a bit mask — the mistake the
+    /// `NVOS02` flags record having made against real hardware. `PHYSICALITY` is `28:27`
+    /// and `CONTIGUOUS` is 2; `LOCATION` is `26:25` and `VIDMEM` is 0.
+    ///
+    /// ★★ **This test is narrower than its first draft, and the narrowing is the
+    /// finding.** It also asserted `!= 1 << 28`, and that assertion FIRED: `2 << 27` and
+    /// `1 << 28` are the same number. The mask reading and the field reading happen to
+    /// agree here, so no test can distinguish them by value — only the *decode* below can
+    /// say the constant means "field 28:27 holds 2", and `!= 1 << 27` is the one mask
+    /// spelling that is genuinely a different number. Asserting the rest would have been
+    /// a false claim that happened to be checkable.
+    #[test]
+    fn the_vidmem_attribute_is_a_field_value_and_not_a_bit_mask() {
+        assert_eq!(ATTR_CONTIGUOUS_VIDMEM, 0x1000_0000);
+        assert_eq!(
+            (ATTR_CONTIGUOUS_VIDMEM >> 27) & 0b11,
+            2,
+            "PHYSICALITY 28:27"
+        );
+        assert_eq!(
+            (ATTR_CONTIGUOUS_VIDMEM >> 25) & 0b11,
+            0,
+            "LOCATION 26:25 = VIDMEM"
+        );
+        assert_ne!(ATTR_CONTIGUOUS_VIDMEM, 1 << 27);
+    }
+
+    /// The same up-front length check on the memory params, whose last written field is
+    /// at +72 of 128 — an even wider gap than the channel params'.
+    #[test]
+    fn memory_params_refuse_a_buffer_that_would_encode_a_shorter_request() {
+        let mut buf = [0u8; NvMemoryAllocationParams::SIZE - 1];
+        let err = NvMemoryAllocationParams {
+            size: 0x1000,
+            ..Default::default()
+        }
+        .encode_into(&mut buf)
+        .expect_err("must refuse");
+        assert_eq!(
+            err,
+            AbiError::Truncated {
+                c_name: NvMemoryAllocationParams::C_NAME,
+                need: NvMemoryAllocationParams::SIZE,
+                got: NvMemoryAllocationParams::SIZE - 1,
+            }
+        );
+    }
+
+    /// ★★ The three TSG-side control numbers are DISTINCT and none is the channel-side
+    /// schedule. Confusing `0xa06c0101` (schedule a group) with `0xa06c0102` (bind a
+    /// group to an engine) reorders the sequence the token control depends on.
+    #[test]
+    fn the_tsg_controls_are_three_distinct_commands() {
+        assert_eq!(NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, 0xa06c_0101);
+        assert_eq!(NVA06C_CTRL_CMD_BIND, 0xa06c_0102);
+        assert_eq!(NVA06F_CTRL_CMD_GPFIFO_SCHEDULE, 0xa06f_0103);
+        assert_ne!(NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NVA06C_CTRL_CMD_BIND);
+        assert_ne!(
+            NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+            NVA06F_CTRL_CMD_GPFIFO_SCHEDULE
+        );
+        assert_eq!(BIND_PARAMS_SIZE, 4);
+        assert_eq!(WORK_SUBMIT_TOKEN_PARAMS_SIZE, 4);
+    }
+
+    /// The five host-FIFO semaphore methods are consecutive dwords starting at `0x5c`,
+    /// so ONE incrementing header of count 5 covers them. If they were not consecutive
+    /// the pushbuffer in the rung above would silently address the wrong registers.
+    #[test]
+    fn the_fifo_semaphore_methods_are_five_consecutive_dwords() {
+        let m = [
+            fifo::SEM_ADDR_LO,
+            fifo::SEM_ADDR_HI,
+            fifo::SEM_PAYLOAD_LO,
+            fifo::SEM_PAYLOAD_HI,
+            fifo::SEM_EXECUTE,
+        ];
+        assert_eq!(m[0], 0x5C);
+        for (i, w) in m.iter().enumerate() {
+            assert_eq!(*w, 0x5C + 4 * i as u32, "method {i}");
+        }
+        assert_eq!(fifo::SEM_EXECUTE_RELEASE_32BIT, 1);
+        // The C writes exactly this header: INC, count 5, subchannel 0, method 0x5c.
+        // (`C: src/qemu/nvkvm_gpu_emul.c:8598`.)
+        let h = method_header_inc(0, fifo::SEM_ADDR_LO, 5).expect("encodable");
+        assert_eq!(h, (1 << 29) | (5 << 16) | (0x5C >> 2));
+    }
+}
