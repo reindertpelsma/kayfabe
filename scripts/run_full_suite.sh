@@ -327,8 +327,14 @@ for pkg in meta["packages"]:
             name = tgt["name"].replace("-", "_")
             want[name] += 1
             owner.setdefault(name, []).append(f'{pkg["name"]}:{"+".join(tgt["kind"])}')
+        # ★ Normalised to underscores on BOTH sides. `cargo metadata` reports the PACKAGE
+        # name (`kayfabe-vmm-qemu`); cargo's own output names the CRATE
+        # (`Doc-tests kayfabe_vmm_qemu`). Comparing them raw reported all 22 doc-test
+        # packages as never having run — on a run in which every one of them did. Caught by
+        # the census's first real execution, which is also the proof it is not a constant
+        # function.
         if tgt.get("doctest"):
-            want_doc[pkg["name"]] += 1
+            want_doc[pkg["name"].replace("-", "_")] += 1
 
 if sum(want.values()) < floor:
     print(f"★★★ TARGET UNIVERSE TRUNCATED — cargo metadata yielded "
@@ -347,7 +353,7 @@ with open(log_path, errors="replace") as fh:
             seen[m.group(1)] += 1
         m = doc_re.match(line)
         if m:
-            seen_doc[m.group(1)] += 1
+            seen_doc[m.group(1).replace("-", "_")] += 1
 
 missing = []
 for name, n in sorted(want.items()):

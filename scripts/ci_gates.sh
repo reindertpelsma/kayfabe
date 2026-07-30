@@ -72,6 +72,23 @@ want_all=0
 GATE_STEPS_ALL_MIN=19
 GATE_STEPS_FAST_MIN=11
 
+# ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.
+#
+# `ci.yml`'s test step writes a log and three reached-count steps read it. The path used to be
+# the fixed `/tmp/kayfabe-test.log`, which is a SHARED name — invisible on GitHub, where every
+# job owns its runner, and wrong on a real box, where two `--all` runs at once clobber each
+# other and the gates then count the other run's tests. It was seen: a box with both vendored
+# ogkm trees present reported `VBIOS-oracle gate: ran=0 skipped=0 total=0` and failed, having
+# read a concurrent run's file.
+#
+# ★ Exported, not passed: the steps are extracted from ci.yml verbatim and run in child
+# shells, so the environment is the only channel that reaches all four of them. ci.yml keeps
+# `/tmp/kayfabe-test.log` as its default, so GitHub's behaviour is byte-identical and the
+# extractor's `PRODUCED` substring still matches.
+KAYFABE_TEST_LOG="${KAYFABE_TEST_LOG:-$(mktemp -t kayfabe-test.XXXXXX.log)}"
+export KAYFABE_TEST_LOG
+trap 'rm -f "$KAYFABE_TEST_LOG"' EXIT
+
 deferred_note=$(mktemp)
 # ★ `$( … )` and THEN `mapfile`, not `mapfile < <( … )`. The second form was here before
 # and its `|| exit 2` was DECORATIVE: `mapfile`'s exit status is the builtin's, never the

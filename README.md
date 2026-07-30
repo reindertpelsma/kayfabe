@@ -145,7 +145,20 @@ KAYFABE_SLOW=1 cargo test --workspace  # + the measured-slow tests (the pushbuff
 cargo clippy --all-targets       # clean (-D warnings in CI intent)
 cargo +nightly fuzz build        # coverage fuzz lives in fuzz/ (own workspace; the
                                  # ONLY place unsafe deps are allowed)
+
+scripts/run_full_suite.sh        # ★★★ EVERYTHING, on a real box, ending in a ledger
+scripts/run_full_suite.sh --list #     the phase table + what each phase requires
 ```
+
+★★★ **GitHub CI is opportunistic convenience, not the definition of green** (owner ruling,
+2026-07-30). The authoritative run is `scripts/run_full_suite.sh` on real hardware: it runs
+the whole `stable` job plus the five other CI jobs plus the phases CI structurally cannot do
+(real KVM, real namespaces, the vendored ogkm trees, a real GPU), and it ends in a
+`RAN / FAILED / SKIPPED / ACKNOWLEDGED` ledger where every skip is named with its unmet
+requirement. Exit 0 means *everything this box can run, ran*.
+**`docs/reference/full_suite_on_real_hardware.md`** is the census — which gated families
+exist, what each requires, what it does when the requirement is absent, and (★) what had
+never run anywhere at all.
 
 `KAYFABE_SLOW` is the ONE slow-test switch (doc: `tests/src/lib.rs`). It is env-only
 because Rust's libtest takes no custom CLI flags; with it unset every gated test

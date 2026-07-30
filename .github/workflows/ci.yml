@@ -85,8 +85,22 @@ jobs:
       # The with-KVM configuration is covered on developer boxes and the bench; the
       # reached-count gate below is what stops the gated tests from silently vanishing
       # from BOTH.
+      #
+      # ★★ `${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}`, NOT the bare path — MEASURED
+      # 2026-07-30. The three reached-count steps below read the log this step writes, and a
+      # fixed path in `/tmp` is a SHARED name. On GitHub that is invisible: every job gets its
+      # own runner. On a real box it is not — two `scripts/ci_gates.sh --all` runs at once
+      # (two agents, or a rebuild beside a bench run) clobber each other's log, and the gates
+      # then count the OTHER run's tests. It was seen: a run on a box WITH both vendored ogkm
+      # trees reported `VBIOS-oracle gate: ran=0 skipped=0 total=0` and failed, having read a
+      # concurrent run's file.
+      #
+      # That failure mode is worse than a flake, because it lands exactly where the owner says
+      # the authoritative run happens — a real box — and nowhere CI would ever show it. The
+      # default keeps GitHub's behaviour byte-identical; `ci_gates.sh` sets the variable to a
+      # per-invocation path so concurrent local runs cannot see each other.
       - name: Test (OS-free configuration — KVM forced absent)
-        run: KAYFABE_NO_KVM=1 cargo test --workspace 2>&1 | tee /tmp/kayfabe-test.log; exit "${PIPESTATUS[0]}"
+        run: KAYFABE_NO_KVM=1 cargo test --workspace 2>&1 | tee ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}; exit "${PIPESTATUS[0]}"
       # ★★ KVM-gate non-vacuity. GitHub runners do NOT provide /dev/kvm, so the ~33
       # tests that need a real VM fd SKIP here — and a skip that nobody counts is the
       # "green instrument on an unexercised path" failure this repo cares most about
@@ -101,8 +115,8 @@ jobs:
       - name: KVM-gate reached-count (floor, not an exact match)
         run: |
           set -euo pipefail
-          ran=$(grep -c 'KVM-GATE: RAN' /tmp/kayfabe-test.log || true)
-          skipped=$(grep -c 'KVM-GATE: SKIPPED' /tmp/kayfabe-test.log || true)
+          ran=$(grep -c 'KVM-GATE: RAN' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
+          skipped=$(grep -c 'KVM-GATE: SKIPPED' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
           total=$(( ran + skipped ))
           echo "KVM-gate: ran=$ran skipped=$skipped total=$total (floor 35)"
           if [ "$total" -lt 35 ]; then
@@ -126,8 +140,8 @@ jobs:
       - name: SANDBOX-gate reached-count (floor, not an exact match)
         run: |
           set -euo pipefail
-          ran=$(grep -c 'SANDBOX-GATE: RAN' /tmp/kayfabe-test.log || true)
-          skipped=$(grep -c 'SANDBOX-GATE: SKIPPED' /tmp/kayfabe-test.log || true)
+          ran=$(grep -c 'SANDBOX-GATE: RAN' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
+          skipped=$(grep -c 'SANDBOX-GATE: SKIPPED' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
           total=$(( ran + skipped ))
           echo "SANDBOX-gate: ran=$ran skipped=$skipped total=$total (floor 10)"
           if [ "$total" -lt 10 ]; then
@@ -161,8 +175,8 @@ jobs:
       - name: VBIOS-ORACLE-gate reached-count (floor, not an exact match)
         run: |
           set -euo pipefail
-          ran=$(grep -c 'VBIOS-ORACLE-GATE: RAN' /tmp/kayfabe-test.log || true)
-          skipped=$(grep -c 'VBIOS-ORACLE-GATE: SKIPPED' /tmp/kayfabe-test.log || true)
+          ran=$(grep -c 'VBIOS-ORACLE-GATE: RAN' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
+          skipped=$(grep -c 'VBIOS-ORACLE-GATE: SKIPPED' ${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log} || true)
           total=$(( ran + skipped ))
           # 10 -> 13: the FWSEC interface-walk suite. The oracle now compiles
           # `s_vbiosPatchInterfaceData` as well as the ROM parser, which is a whole
