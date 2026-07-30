@@ -1837,15 +1837,28 @@ fn the_control_table_names_exactly_the_commands_it_can_argue_for() {
         );
     }
 
-    // Not in the table at all — including both neighbours of the modelled cmd and
-    // a control the C artifact treats as primary (`GPU_PROMOTE_CTX`), which is
-    // deliberately NOT here: it populates the address table, not the graph.
+    // ★ The ADDRESS-plane control. It was in the "not in the table at all" list until
+    // the promote-ctx decoder landed, with the note that it *populates the address table,
+    // not the graph* — which is still true, and is now a reason it has its OWN shape
+    // rather than a reason it has none.
+    assert_eq!(
+        t.control_params(ControlCmd(0x2080_012b)),
+        Some(ControlParams::PromoteCtx),
+    );
+    assert_eq!(
+        ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX,
+        0x2080_012b,
+        "the generated id and the hand-written one agree",
+    );
+
+    // Not in the table at all — including both neighbours of each modelled cmd.
     for cmd in [
         0x0u32,
         0x0080_1812,
         0x0080_1815,
         0x0080_180f, // NV0080_CTRL_CMD_DMA_UPDATE_PDE_2 — one PDE, not the root
-        0x2080_012b, // NV2080_CTRL_CMD_GPU_PROMOTE_CTX
+        0x2080_012a,
+        0x2080_012c,
         0x90f1_0105,
         0x90f1_0107,
         u32::MAX,
@@ -1853,7 +1866,7 @@ fn the_control_table_names_exactly_the_commands_it_can_argue_for() {
         assert_eq!(t.control_params(ControlCmd(cmd)), None, "cmd {cmd:#x}");
     }
 
-    // Only the modelled one states a size, and it is the struct's own.
+    // Only the modelled ones state a size, and each is its struct's own.
     assert_eq!(
         ControlParams::SetPageDir.params_size(),
         Some(ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE),
@@ -1863,6 +1876,25 @@ fn the_control_table_names_exactly_the_commands_it_can_argue_for() {
         ControlParams::PageDirNotModelled.params_size(),
         None,
         "no decoder means no size to claim",
+    );
+    // ★ 560, and it is asserted BOTH ways: against the literal the captured host RPC
+    // recorded (`psize=560`), and against the composition the port actually computes —
+    // 48 transcribed prefix + 16 generated entries of 32. If either drifts the pair
+    // disagrees, which is the thing the C artifact's three-different-numbers defect
+    // had nothing to catch it.
+    assert_eq!(ControlParams::PromoteCtx.params_size(), Some(560));
+    assert_eq!(
+        ControlParams::PromoteCtx.params_size(),
+        Some(
+            48 + ctrl::NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES
+                * ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry::SIZE
+        ),
+    );
+    assert_eq!(
+        ctrl::NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES,
+        16,
+        "★ the number the C artifact hand-wrote as 64 (comment: 20) and over-read 1536 \
+         bytes on — generated here, never typed",
     );
 }
 

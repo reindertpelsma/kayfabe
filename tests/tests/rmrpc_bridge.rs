@@ -208,6 +208,14 @@ fn drive(gpu: &mut Gpu, msg: &[u8]) -> Result<(), BridgeRefusal> {
         // `translate_never_holds` is the general form of this; a `_ =>` here would let a
         // regression that moved reassembly into `translate` pass silently.
         Translation::Held => panic!("`translate` has no state and cannot hold a fragment"),
+        // ★ The ADDRESS plane, not the graph. Applied through the same core entry point
+        // `GraphPolicy` uses, so a fixture driven through `drive` sees the same
+        // bindings a guest would — and a promotion the join refuses surfaces here as a
+        // panic rather than as a silently green fixture.
+        Translation::CtxPromotion(p) => {
+            gpu.promote_ctx(&p).expect("the join accepts this fixture");
+            Ok(())
+        }
     }
 }
 
@@ -1469,7 +1477,10 @@ fn malformed_traffic_between_valid_messages_leaves_the_valid_stream_untouched() 
             w::message(
                 fn_id::GSP_RM_CONTROL,
                 1,
-                &w::control_body(A, spd::DEV, 0x2080_012b, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
+                // ★ Was `0x2080_012b` until that control gained a decoder (`#93`); the
+                // finding this row carries is "permitted, and no arm for it", which
+                // `GR_GET_CTX_BUFFER_INFO` now supplies.
+                &w::control_body(A, spd::DEV, 0x2080_1219, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
             ),
             FaultTag("BridgeRefusal::UnknownControl"),
         ),
@@ -2451,7 +2462,8 @@ fn hostile_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
         (
             w::Step {
                 function: fn_id::GSP_RM_CONTROL,
-                body: w::control_body(x::A, spd::DEV, 0x2080_012b, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
+                // ★ Was `0x2080_012b`; see the sibling test — it is decoded now.
+                body: w::control_body(x::A, spd::DEV, 0x2080_1219, 0, w::RMAPI_RPC_FLAGS_NONE, &[]),
             },
             FaultTag("BridgeRefusal::UnknownControl"),
         ),
@@ -4303,21 +4315,20 @@ fn a_page_dir_bearing_control_is_refused_as_itself_not_as_unknown() {
 /// unknown *function*, because "we do not know this RPC" and "we know this RPC and not
 /// this command" are different findings.
 ///
-/// `GPU_PROMOTE_CTX` is in the list on purpose: the C artifact treats it as a primary
-/// address source, and it is deliberately not modelled here because it populates the
-/// address table rather than the object model (`gsp_core_bridge.md` §2.7).
+/// ★★ `GPU_PROMOTE_CTX` **left this list on 2026-07-30**, and that is the point of the
+/// comment rather than a tidy-up: it was the canonical permitted-but-unmodelled control,
+/// and modelling it is `#93`. Its own assertions are in
+/// `tests/tests/promote_ctx.rs`. `GR_GET_CTX_BUFFER_INFO` inherits the role.
 #[test]
 fn an_unmodelled_control_is_refused_as_unknown_control_not_unknown_function() {
     // ★★ The list SPLIT when the capability gate landed, and the split is the finding.
     // Every one of these used to answer `UnknownControl`; only the ones the boundary
-    // actually permits still do. `GPU_PROMOTE_CTX` is here on purpose: the C artifact
-    // treats it as a primary address source and it is deliberately not modelled, so it
-    // is the canonical permitted-but-unmodelled control — and it is permitted only
-    // because this port added it as `Origin::Mode2Rpc`; the C's ioctl-era list has it
-    // nowhere.
+    // actually permits still do. `GR_GET_CTX_BUFFER_INFO` is here on purpose: it is
+    // permitted only because this port added it as `Origin::Mode2Rpc` (the C's
+    // ioctl-era list has it nowhere) and it is deliberately not modelled, so it is the
+    // canonical permitted-but-unmodelled control now that `GPU_PROMOTE_CTX` is decoded.
     for cmd in [
-        0x2080_012b, // GPU_PROMOTE_CTX — Mode-2 only, listed, unmodelled
-        0x2080_1219, // GR_GET_CTX_BUFFER_INFO — the same
+        0x2080_1219, // GR_GET_CTX_BUFFER_INFO — Mode-2 only, listed, unmodelled
         UNMODELLED_CMD,
     ] {
         let body = w::control_body(spd::C, spd::DEV, cmd, 0, w::RMAPI_RPC_FLAGS_NONE, &[]);
@@ -6247,7 +6258,7 @@ fn an_alias_handle_recycled_against_a_different_source_is_translated_afresh() {
         "★ a recycle is legal traffic — refusing it hangs a conforming guest: {census:?}",
     );
     assert_eq!(
-        out.last().copied(),
+        out.last().cloned(),
         Some(Ok(Translation::Event(expected_dup(
             tp::C2,
             tp::ALIAS2,
@@ -7380,7 +7391,7 @@ fn two_identical_fragmented_controls_produce_two_identical_events() {
         spd::VAS,
         spd::PDB,
     )));
-    assert_eq!(first, vec![Ok(Translation::Held), want]);
+    assert_eq!(first, vec![Ok(Translation::Held), want.clone()]);
     assert_eq!(
         second, first,
         "★ the second run is byte-identical in outcome"

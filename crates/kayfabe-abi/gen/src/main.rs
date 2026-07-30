@@ -100,6 +100,7 @@ const NV_ESCAPE_H: &str = "src/nvidia/arch/nvalloc/unix/include/nv_escape.h";
 const CL0000_H: &str = "src/common/sdk/nvidia/inc/class/cl0000.h";
 const CL0080_H: &str = "src/common/sdk/nvidia/inc/class/cl0080.h";
 const CTRL0080DMA_H: &str = "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h";
+const CTRL2080GPU_H: &str = "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h";
 const CL9067_H: &str = "src/common/sdk/nvidia/inc/class/cl9067.h";
 const CL90F1_H: &str = "src/common/sdk/nvidia/inc/class/cl90f1.h";
 const CLA06C_H: &str = "src/common/sdk/nvidia/inc/class/cla06c.h";
@@ -352,11 +353,28 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
         file: "ctrl.rs",
         title: "RM control commands and their payload structs.",
         doc: "\
-The one RM control command in the slice: `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`.
+Two RM controls: `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` and the entry record of
+`NV2080_CTRL_CMD_GPU_PROMOTE_CTX`.
 
 This is where a VAS's page-directory base is declared, i.e. where the data-plane
 identity (`Pdb`) is born — `RmEvent::SetPageDir`. It arrives inside an
 `NVOS54_PARAMETERS` as the control payload.
+
+★★ `NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS` itself is NOT generated, and the reason is a
+generator limitation rather than a version fact: its last member is
+`promoteEntry[16]`, a fixed array of a NESTED struct, which
+`crate::gen`'s closed scalar table and `ParseError::NestedAggregate` both refuse by
+design. The decomposition is `crate::transcribed::Nv2080CtrlGpuPromoteCtxParamsHeader`
+(the 48-byte scalar prefix, hand-transcribed under the same `LAYOUT`/`RUSTC_OFFSETS`
+pinning) plus stride arithmetic over the entry emitted here. The entry is where the
+risk actually lives — its `u32`/`u16`/`u8`/`u8` tail is the field the C artifact read
+32 bits wide — and it is fully machine-pinned.
+
+★ `NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES` is generated as a constant for a
+specific reason: the C artifact's handler clamped the guest's `entryCount` to a
+hand-written `64` (its own comment said `20`) where the header says `16`, and read
+1536 bytes past the struct. The number the transcription got wrong is the one number
+this port refuses to write by hand.
 
 ★ Version caveat, stated because it is real: the prefix through `hVASpace` is
 confirmed by three independent oracles (ogkm 610.43.02; the C emulator's snoop
@@ -368,18 +386,41 @@ addition, in the same family as the `NV_VASPACE_ALLOCATION_PARAMETERS` `+Pasid`
 growth the C artifact records at 580. If a 575 guest sends a shorter payload,
 `decode` refuses **loudly** rather than reading past it, which is the correct
 failure.",
-        structs: &[StructReq {
-            header: CTRL0080DMA_H,
-            name: "NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS",
-            fam_align: None,
-        }],
-        consts: &[ConstReq {
-            header: CTRL0080DMA_H,
-            c_name: "NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY",
-            rust_name: "NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY",
-            rust_ty: "u32",
-            doc: "`NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` — the control command whose\npayload is [`Nv0080CtrlDmaSetPageDirectoryParams`].",
-        }],
+        structs: &[
+            StructReq {
+                header: CTRL0080DMA_H,
+                name: "NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS",
+                fam_align: None,
+            },
+            StructReq {
+                header: CTRL2080GPU_H,
+                name: "NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY",
+                fam_align: None,
+            },
+        ],
+        consts: &[
+            ConstReq {
+                header: CTRL0080DMA_H,
+                c_name: "NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY",
+                rust_name: "NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY",
+                rust_ty: "u32",
+                doc: "`NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` — the control command whose\npayload is [`Nv0080CtrlDmaSetPageDirectoryParams`].",
+            },
+            ConstReq {
+                header: CTRL2080GPU_H,
+                c_name: "NV2080_CTRL_CMD_GPU_PROMOTE_CTX",
+                rust_name: "NV2080_CTRL_CMD_GPU_PROMOTE_CTX",
+                rust_ty: "u32",
+                doc: "`NV2080_CTRL_CMD_GPU_PROMOTE_CTX` — the control that declares where a\ngraphics/compute context's buffers live. `ROUTE_TO_PHYSICAL`, so CPU-RM compiles\nits implementation out entirely and it exists only in GSP firmware — i.e. in the\nthing this port fakes.",
+            },
+            ConstReq {
+                header: CTRL2080GPU_H,
+                c_name: "NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES",
+                rust_name: "NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES",
+                rust_ty: "usize",
+                doc: "`NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES` — the length of\n`promoteEntry[]`, **16**, identical at 580.159.04 and 610.43.02.\n\n★ Generated rather than written down: the C artifact hand-wrote `64` here (with a\ncomment claiming `20`) and read 1536 bytes past the 560-byte struct out of\nguest-writable memory.",
+            },
+        ],
         macro_lists: &[],
         aggregate_scalars: &[],
         aggregate_lookup: &[],

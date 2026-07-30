@@ -607,6 +607,121 @@ pub const NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY: u32 = 0x0080_1813;
 /// table that got the constant off by one would still look plausible.
 pub const NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
 
+/// `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` (`ogkm-610: ctrl2080gpu.h:947`,
+/// `ogkm-580: ctrl2080gpu.h:976`) — the address-plane control.
+pub const NV2080_CTRL_CMD_GPU_PROMOTE_CTX: u32 = 0x2080_012b;
+
+/// `NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES` (`ogkm-610: ctrl2080gpu.h:917`,
+/// `ogkm-580: ctrl2080gpu.h:946`) — **16**, transcribed by hand here so a decoder that
+/// hard-codes a different bound disagrees with an independent reading rather than with
+/// itself.
+pub const PROMOTE_MAX_ENTRIES: usize = 16;
+
+/// `sizeof(NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY)`.
+pub const PROMOTE_ENTRY_SIZE: usize = 32;
+
+/// `sizeof(NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS)` — 48 + 16 × 32.
+pub const PROMOTE_PARAMS_SIZE: usize = 48 + PROMOTE_MAX_ENTRIES * PROMOTE_ENTRY_SIZE;
+
+/// One `NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY`, as a caller writes it.
+///
+/// `[src]` `ogkm-610: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:893-901`,
+/// `ogkm-580: ctrl2080gpu.h:922-930` — the same seven members at both:
+///
+/// ```text
+/// NV_DECLARE_ALIGNED(NvU64 gpuPhysAddr, 8);  // +0
+/// NV_DECLARE_ALIGNED(NvU64 gpuVirtAddr, 8);  // +8
+/// NV_DECLARE_ALIGNED(NvU64 size, 8);         // +16
+/// NvU32 physAttr;                            // +24  [1:0] APERTURE
+/// NvU16 bufferId;                            // +28  ★ TWO bytes
+/// NvU8  bInitialize;                         // +30
+/// NvU8  bNonmapped;                          // +31
+/// ```
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PromoteEntryWire {
+    /// `gpuPhysAddr` @ +0.
+    pub gpu_phys_addr: u64,
+    /// `gpuVirtAddr` @ +8.
+    pub gpu_virt_addr: u64,
+    /// `size` @ +16.
+    pub size: u64,
+    /// `physAttr` @ +24.
+    pub phys_attr: u32,
+    /// `bufferId` @ +28 — 16 bits.
+    pub buffer_id: u16,
+    /// `bInitialize` @ +30.
+    pub b_initialize: u8,
+    /// `bNonmapped` @ +31.
+    pub b_nonmapped: u8,
+}
+
+/// `NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS` — 560 bytes.
+///
+/// `[src]` `ogkm-610: ctrl2080gpu.h:959-971`, `ogkm-580: ctrl2080gpu.h:988-1000` — the
+/// same ten members at both:
+///
+/// ```text
+/// NvU32    engineType;    // +0
+/// NvHandle hClient;       // +4   (the LEGACY path's client, for hVirtMemory)
+/// NvU32    ChID;          // +8   (deprecated)
+/// NvHandle hChanClient;   // +12  ★ the namespace hObject lives in
+/// NvHandle hObject;       // +16  ★ a channel OR a channel group
+/// NvHandle hVirtMemory;   // +20  ┐
+/// NvU64    virtAddress;   // +24  ├ the LEGACY path
+/// NvU64    size;          // +32  ┘
+/// NvU32    entryCount;    // +40
+/// //                         +44  (padding; promoteEntry is 8-aligned)
+/// NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY promoteEntry[16];  // +48
+/// ```
+///
+/// `entry_count` is written **verbatim**, so a test can declare a count that disagrees
+/// with `entries.len()` — which is the whole of C defect D1.
+#[must_use]
+pub fn promote_ctx_params(
+    engine_type: u32,
+    h_chan_client: u32,
+    h_object: u32,
+    entry_count: u32,
+    entries: &[PromoteEntryWire],
+) -> Vec<u8> {
+    let mut p = vec![0u8; PROMOTE_PARAMS_SIZE];
+    put32(&mut p, 0, engine_type);
+    put32(&mut p, 12, h_chan_client);
+    put32(&mut p, 16, h_object);
+    put32(&mut p, 40, entry_count);
+    for (i, e) in entries.iter().enumerate() {
+        let at = 48 + i * PROMOTE_ENTRY_SIZE;
+        put64(&mut p, at, e.gpu_phys_addr);
+        put64(&mut p, at + 8, e.gpu_virt_addr);
+        put64(&mut p, at + 16, e.size);
+        put32(&mut p, at + 24, e.phys_attr);
+        p[at + 28..at + 30].copy_from_slice(&e.buffer_id.to_le_bytes());
+        p[at + 30] = e.b_initialize;
+        p[at + 31] = e.b_nonmapped;
+    }
+    p
+}
+
+/// The **legacy** `PROMOTE_CTX` shape — `hVirtMemory` / `(virtAddress, size)` set, no
+/// entries. Neither real producer emits it; the decoder refuses it by name rather than
+/// guessing a reading for it.
+#[must_use]
+pub fn promote_ctx_legacy_params(
+    h_chan_client: u32,
+    h_object: u32,
+    h_virt_memory: u32,
+    virt_address: u64,
+    size: u64,
+) -> Vec<u8> {
+    let mut p = vec![0u8; PROMOTE_PARAMS_SIZE];
+    put32(&mut p, 12, h_chan_client);
+    put32(&mut p, 16, h_object);
+    put32(&mut p, 20, h_virt_memory);
+    put64(&mut p, 24, virt_address);
+    put64(&mut p, 32, size);
+    p
+}
+
 /// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`ogkm-580: ctrl90f1.h:268`,
 /// `ogkm-610: ctrl90f1.h:268` — same line at both; the old `:272` was the *params*
 /// typedef, not the command id).

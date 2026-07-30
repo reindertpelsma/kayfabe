@@ -573,6 +573,271 @@ pub(crate) fn rpc_payload_len(declared: u32, available: usize) -> Result<usize, 
     Ok(declared_usize - RpcEnvelope::SIZE)
 }
 
+// ─────────────────────────── NV2080_CTRL_CMD_GPU_PROMOTE_CTX ───────────────────────────
+
+/// ★★ **One `promoteEntry[i]`, classified into the three states the protocol can
+/// actually produce.**
+///
+/// # Why this is an enum and not the wire struct with `Option`s
+///
+/// `kgrobjPromoteContext` zeroes the whole params struct and then runs **two independent
+/// preparers into the same entry slot**
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics_object.c:90-124`):
+///
+/// - the *initialize* preparer writes `gpuPhysAddr`, `size`, `physAttr`, `bufferId`,
+///   `bInitialize = 1`, `bNonmapped = 1` — and **never touches `gpuVirtAddr`**
+///   (`kernel_graphics_context.c:1843-1849`);
+/// - the *promote* preparer writes `bufferId`, `gpuVirtAddr`, `bNonmapped = 0` — and
+///   **never touches `gpuPhysAddr`, `size`, `physAttr` or `bInitialize`**
+///   (`kernel_graphics_context.c:1949-1955`).
+///
+/// Either may decline and write nothing. So an entry on the wire is exactly one of three
+/// things, and the zeroes in it are **absence of a fact, not a fact**:
+///
+/// | state | phys | size | va | variant |
+/// |---|---|---|---|---|
+/// | initialize-only | set | set | 0 | [`Self::InitializeOnly`] |
+/// | promote-only | **0** | **0** | set | [`Self::PromoteOnly`] |
+/// | both | set | set | set | [`Self::Promotable`] |
+///
+/// ★★★ **`gpuPhysAddr == 0 && size == 0` in a promote-only entry means "not supplied".**
+/// Binding `va → phys 0` would be manufacturing an address, which is exactly what
+/// MISS = FAULT forbids; and refusing the entry as malformed would reject legitimate
+/// guest traffic (it is the ordinary multi-channel-TSG case). It is therefore *named and
+/// counted*, never bound and never silently skipped. The C artifact's
+/// `if (!va || !sz || bNonmapped) continue;`
+/// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2468`) discards it without a name
+/// or a count — 4 of the 9 entries in the repo's own captured blob.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromoteEntry {
+    /// Both preparers ran: a complete VA → phys mapping. The **only** bindable state.
+    Promotable {
+        /// `gpuVirtAddr`. Never 0 in this variant.
+        va: u64,
+        /// `size`. Never 0 in this variant.
+        len: u64,
+        /// `gpuPhysAddr`, in the aperture named by [`Self::Promotable::aperture`]. For
+        /// `Vidmem` this is a **guest** framebuffer offset.
+        phys: u64,
+        /// `physAttr[1:0]`, decoded.
+        aperture: kayfabe_arch::Aperture,
+        /// `bufferId` — `NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_*`. **Two bytes wide**;
+        /// carried rather than dropped, so MAIN/PATCH/PRIV_ACCESS_MAP stay
+        /// distinguishable.
+        buffer_id: u16,
+    },
+    /// The initialize preparer ran and the promote preparer declined (or was not
+    /// attempted): a physical buffer that declares **no** VA and says so via
+    /// `bNonmapped`. Not bindable — there is no address to bind.
+    InitializeOnly {
+        /// `gpuPhysAddr`.
+        phys: u64,
+        /// `size`.
+        len: u64,
+        /// `physAttr[1:0]`, decoded.
+        aperture: kayfabe_arch::Aperture,
+        /// `bufferId`.
+        buffer_id: u16,
+    },
+    /// The promote preparer ran and the initialize preparer declined: a VA for a buffer
+    /// initialized against some *other* channel/VAS. Not bindable — `phys` and `size`
+    /// were never written, so there is nothing to point it at.
+    PromoteOnly {
+        /// `gpuVirtAddr`.
+        va: u64,
+        /// `bufferId`.
+        buffer_id: u16,
+    },
+}
+
+impl PromoteEntry {
+    /// `bufferId`, whichever state this is.
+    #[must_use]
+    pub const fn buffer_id(self) -> u16 {
+        match self {
+            Self::Promotable { buffer_id, .. }
+            | Self::InitializeOnly { buffer_id, .. }
+            | Self::PromoteOnly { buffer_id, .. } => buffer_id,
+        }
+    }
+}
+
+/// ★ **The classifier** — one wire entry to one [`PromoteEntry`] state. Pure, total, and
+/// the single place §2.3's *"zero means not-supplied"* reading is applied.
+///
+/// # The rules, in order, and why the order is the order
+///
+/// 1. **`bNonmapped != 0` ⇒ [`PromoteEntry::InitializeOnly`], whatever `gpuVirtAddr`
+///    says.** The flag dominates the value: NVIDIA's own comment is *"the virtual
+///    address is not to be promoted with this call"*, and a hostile guest can set the
+///    flag **and** a plausible VA. Value-first would bind it.
+/// 2. `va != 0 && size != 0` ⇒ [`PromoteEntry::Promotable`] — both preparers ran.
+/// 3. `va != 0` (so `size == 0`) ⇒ [`PromoteEntry::PromoteOnly`] — the promote preparer
+///    ran alone and never wrote `gpuPhysAddr`/`size`. **`size == 0` is not malformed
+///    input here**; it is a field this pass does not write.
+/// 4. otherwise ⇒ [`PromoteEntry::InitializeOnly`] — the entry declares no VA at all.
+///
+/// # ★ `physAttr` is decoded only where the protocol wrote it
+///
+/// The promote preparer never touches `physAttr`, so on a [`PromoteEntry::PromoteOnly`]
+/// entry the field is the struct's pre-zeroed initial value. Refusing an undefined
+/// aperture *there* would be reading an absence as a fact — the same mistake §2.3 forbids
+/// one field over. The [`crate::wire::AbiError::PromoteAperture`] refusal therefore fires
+/// on exactly the two states that carry an aperture.
+///
+/// # Errors
+///
+/// [`crate::wire::AbiError::PromoteAperture`] when `physAttr[1:0] == 3` on an entry whose
+/// state carries an aperture.
+pub fn classify_promote_entry(
+    index: usize,
+    e: &crate::generated::ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry,
+) -> Result<PromoteEntry, AbiError> {
+    let aperture = |phys_attr: u32| -> Result<kayfabe_arch::Aperture, AbiError> {
+        match phys_attr & 0x3 {
+            0 => Ok(kayfabe_arch::Aperture::Vidmem),
+            1 => Ok(kayfabe_arch::Aperture::SysmemCoherent),
+            2 => Ok(kayfabe_arch::Aperture::SysmemNonCoherent),
+            _ => Err(AbiError::PromoteAperture {
+                entry: index,
+                phys_attr,
+            }),
+        }
+    };
+    if e.b_nonmapped != 0 {
+        return Ok(PromoteEntry::InitializeOnly {
+            phys: e.gpu_phys_addr,
+            len: e.size,
+            aperture: aperture(e.phys_attr)?,
+            buffer_id: e.buffer_id,
+        });
+    }
+    if e.gpu_virt_addr != 0 && e.size != 0 {
+        return Ok(PromoteEntry::Promotable {
+            va: e.gpu_virt_addr,
+            len: e.size,
+            phys: e.gpu_phys_addr,
+            aperture: aperture(e.phys_attr)?,
+            buffer_id: e.buffer_id,
+        });
+    }
+    if e.gpu_virt_addr != 0 {
+        return Ok(PromoteEntry::PromoteOnly {
+            va: e.gpu_virt_addr,
+            buffer_id: e.buffer_id,
+        });
+    }
+    Ok(PromoteEntry::InitializeOnly {
+        phys: e.gpu_phys_addr,
+        len: e.size,
+        aperture: aperture(e.phys_attr)?,
+        buffer_id: e.buffer_id,
+    })
+}
+
+/// A decoded `NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS`.
+///
+/// ★ The two client handles are BOTH carried, because they do two different jobs
+/// (`gpu_promote_ctx.md` §6.2):
+///
+/// | job | field |
+/// |---|---|
+/// | **namespace attribution** — which client is acting | the RPC **envelope**'s `hClient`, which this struct does not hold and the bridge must not replace |
+/// | **object resolution** — whose handle table `hObject` is a handle in | [`Self::h_chan_client`] |
+///
+/// The C artifact reads `hChanClient` and never looks at the envelope at all
+/// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2447`), so it cannot notice a
+/// disagreement between them, let alone refuse one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PromoteCtx {
+    /// `engineType` — which engine's virtual context this is.
+    pub engine_type: u32,
+    /// `hChanClient` — the namespace [`Self::h_object`] is a handle in.
+    pub h_chan_client: u32,
+    /// `hObject` — a channel **or** a channel group (TSG).
+    pub h_object: u32,
+    /// The decoded entries, in wire order. Sparse-safe: iterate with
+    /// [`Self::entries`], which never depends on a prefix invariant.
+    entries: [Option<PromoteEntry>; MAX_PROMOTE_ENTRIES],
+}
+
+/// `NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES`, re-exported at the view layer so a
+/// caller sizing a buffer does not have to name the generated module.
+pub const MAX_PROMOTE_ENTRIES: usize =
+    crate::generated::ctrl::NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES;
+
+impl PromoteCtx {
+    /// Build from a decoded prefix and the entries that survived decoding.
+    pub(crate) fn new(
+        engine_type: u32,
+        h_chan_client: u32,
+        h_object: u32,
+        entries: [Option<PromoteEntry>; MAX_PROMOTE_ENTRIES],
+    ) -> Self {
+        Self {
+            engine_type,
+            h_chan_client,
+            h_object,
+            entries,
+        }
+    }
+
+    /// The decoded entries, in wire order.
+    pub fn entries(&self) -> impl Iterator<Item = PromoteEntry> + '_ {
+        self.entries.iter().flatten().copied()
+    }
+
+    /// How many entries decoded — i.e. the guest's `entryCount`, after the
+    /// [`crate::wire::AbiError::PromoteEntryCount`] bound has already refused anything
+    /// above [`MAX_PROMOTE_ENTRIES`].
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.entries.iter().flatten().count()
+    }
+
+    /// `true` when the control declared no entries at all.
+    ///
+    /// A legal, if unusual, message — `entryCount == 0` with the legacy fields also zero
+    /// is a well-formed no-op, and it is decoded rather than refused.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// ★ **The classification, counted** — the three-way split of `entries()` reduced to
+    /// numbers, so a caller that binds only [`PromoteEntry::Promotable`] can still report
+    /// what it dropped and why.
+    ///
+    /// This exists because the C's defect D3 was not the *behaviour* (a promote-only
+    /// entry is structurally unbindable — `AddressTable::bind` refuses a zero length)
+    /// but the **silence**: a forced outcome that is never named reads as an intentional
+    /// decision it is not.
+    #[must_use]
+    pub fn census(&self) -> PromoteCensus {
+        let mut c = PromoteCensus::default();
+        for e in self.entries() {
+            match e {
+                PromoteEntry::Promotable { .. } => c.promotable += 1,
+                PromoteEntry::InitializeOnly { .. } => c.initialize_only += 1,
+                PromoteEntry::PromoteOnly { .. } => c.promote_only += 1,
+            }
+        }
+        c
+    }
+}
+
+/// How many entries of each state one `PROMOTE_CTX` carried. See
+/// [`PromoteCtx::census`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PromoteCensus {
+    /// Complete mappings — the bindable ones.
+    pub promotable: u32,
+    /// Physical-only declarations (`bNonmapped`), which name no VA.
+    pub initialize_only: u32,
+    /// VA-only declarations, whose phys/size were never written by the producer.
+    pub promote_only: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

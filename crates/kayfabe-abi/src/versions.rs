@@ -33,11 +33,12 @@ use crate::capability::{
     CAPS_560_28_03, CAPS_570_86_15, CAPS_580_65_06, CAPS_BASE, CapabilityTable,
 };
 use crate::generated::{classes, ctrl, nvos, rpc};
-use crate::transcribed::Nvos46ParametersPre580;
+use crate::transcribed::{Nv2080CtrlGpuPromoteCtxParamsHeader, Nvos46ParametersPre580};
 use crate::view::{
     AllocReq, AllocWire, ChannelAllocFacts, ClientAllocFacts, ControlReq, CtxShareAllocFacts,
-    DeviceAllocFacts, DupReq, FreeReq, MapMemoryDma, PdbAperture, RpcAllocReq, RpcControlReq,
-    RpcEnvelope, SetPageDir, TsgAllocFacts, UnmapMemoryDma, rpc_payload_len,
+    DeviceAllocFacts, DupReq, FreeReq, MAX_PROMOTE_ENTRIES, MapMemoryDma, PdbAperture, PromoteCtx,
+    PromoteEntry, RpcAllocReq, RpcControlReq, RpcEnvelope, SetPageDir, TsgAllocFacts,
+    UnmapMemoryDma, classify_promote_entry, rpc_payload_len,
 };
 use crate::wire::{AbiError, u32_at};
 use crate::{DriverAbi, DriverVersion};
@@ -794,6 +795,7 @@ impl DriverAbiTable {
     pub fn control_params(&self, cmd: ControlCmd) -> Option<ControlParams> {
         match cmd.0 {
             ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY => Some(ControlParams::SetPageDir),
+            ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX => Some(ControlParams::PromoteCtx),
             NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY
             | NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES
             | NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER => {
@@ -868,6 +870,85 @@ impl DriverAbiTable {
             flags: p.flags,
             h_vaspace: p.h_va_space,
         })
+    }
+
+    /// ★★ Decode `NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS` — the 48-byte transcribed prefix
+    /// plus `entryCount` entries of the generated 32-byte record, classified into
+    /// [`PromoteEntry`]'s three protocol states.
+    ///
+    /// # The four refusals, each by name
+    ///
+    /// 1. **`bytes.len() < 560`** → [`AbiError::Truncated`]. The caller has already
+    ///    checked the guest's declared `paramsSize` against
+    ///    [`ControlParams::params_size`] *exactly*; this is the second, independent
+    ///    check against the bytes that actually arrived.
+    /// 2. **`entryCount > 16`** → [`AbiError::PromoteEntryCount`]. Never clamped — see
+    ///    that variant for the 1536-byte over-read a clamp produced in the C artifact.
+    ///    ★ The bound is checked **before a single entry is touched**.
+    /// 3. **`physAttr[1:0] == 3`** → [`AbiError::PromoteAperture`]. Undefined, so it is
+    ///    refused rather than folded into sysmem.
+    /// 4. **the legacy `hVirtMemory`/`(virtAddress, size)` shape** →
+    ///    [`AbiError::PromoteLegacyShape`].
+    ///
+    /// # ★ What it does NOT do
+    ///
+    /// It does not drop an unbindable entry. A promote-only entry (`phys == 0`,
+    /// `size == 0`, VA set) is a legitimate, expected message the two-preparer protocol
+    /// produces — 4 of the 9 entries in the repo's own captured blob — and it is
+    /// **classified**, so a consumer that cannot bind it can still say so. The C's
+    /// `!sz` arm discarded it with no name and no count.
+    ///
+    /// # Errors
+    ///
+    /// The four above.
+    pub fn decode_promote_ctx(&self, bytes: &[u8]) -> Result<PromoteCtx, AbiError> {
+        let need = Nv2080CtrlGpuPromoteCtxParamsHeader::PARAMS_SIZE;
+        if bytes.len() < need {
+            return Err(AbiError::Truncated {
+                c_name: Nv2080CtrlGpuPromoteCtxParamsHeader::C_NAME,
+                need,
+                got: bytes.len(),
+            });
+        }
+        let h = Nv2080CtrlGpuPromoteCtxParamsHeader::decode(bytes)?;
+
+        // ★ The legacy path is refused, not guessed. Both real producers zero all three.
+        if h.h_virt_memory != 0 || h.virt_address != 0 || h.size != 0 {
+            return Err(AbiError::PromoteLegacyShape {
+                h_virt_memory: h.h_virt_memory,
+                virt_address: h.virt_address,
+                size: h.size,
+            });
+        }
+
+        // ★★★ D1. The bound, against the header's own constant, BEFORE any entry read.
+        let declared = h.entry_count;
+        if declared as usize > MAX_PROMOTE_ENTRIES {
+            return Err(AbiError::PromoteEntryCount {
+                declared,
+                max: MAX_PROMOTE_ENTRIES,
+            });
+        }
+
+        let mut entries: [Option<PromoteEntry>; MAX_PROMOTE_ENTRIES] = [None; MAX_PROMOTE_ENTRIES];
+        for (i, slot) in entries.iter_mut().enumerate().take(declared as usize) {
+            let at = Nv2080CtrlGpuPromoteCtxParamsHeader::SIZE
+                + i * ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry::SIZE;
+            let e = ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry::decode(bytes.get(at..).ok_or(
+                AbiError::Truncated {
+                    c_name: Nv2080CtrlGpuPromoteCtxParamsHeader::C_NAME,
+                    need,
+                    got: bytes.len(),
+                },
+            )?)?;
+            *slot = Some(classify_promote_entry(i, &e)?);
+        }
+        Ok(PromoteCtx::new(
+            h.engine_type,
+            h.h_chan_client,
+            h.h_object,
+            entries,
+        ))
     }
 
     /// Decode the fixed header of a `GSP_RM_ALLOC` **RPC body** (everything after
@@ -1091,6 +1172,16 @@ pub enum ControlParams {
     ///   *revocation*. `RmEvent` has no verb for it, and inventing one is a core
     ///   change rather than a bridge change.
     PageDirNotModelled,
+    /// ★★ `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` —
+    /// [`DriverAbiTable::decode_promote_ctx`]. The **address-plane** control: it
+    /// declares where a graphics/compute context's buffers live.
+    ///
+    /// ★ Not versioned, and the absence of a fork is the finding. The params struct, the
+    /// entry struct, `NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES` and **both** producer
+    /// functions are byte-identical at 580.159.04 and 610.43.02. `MapDmaWire` exists
+    /// because `NVOS46_PARAMETERS` genuinely moved; adding a seam here would be inventing
+    /// one that the trees say does not exist.
+    PromoteCtx,
 }
 
 impl ControlParams {
@@ -1113,6 +1204,11 @@ impl ControlParams {
         match self {
             ControlParams::SetPageDir => Some(ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE),
             ControlParams::PageDirNotModelled => None,
+            // 560 — and it is a PRODUCT of two machine-checked numbers plus the
+            // transcribed prefix, never a literal. `subdeviceCtrlCmdGpuPromoteCtx`'s
+            // caller passes `sizeof(NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS)` verbatim, so a
+            // different declared size is a guest that means a different struct.
+            ControlParams::PromoteCtx => Some(Nv2080CtrlGpuPromoteCtxParamsHeader::PARAMS_SIZE),
         }
     }
 }

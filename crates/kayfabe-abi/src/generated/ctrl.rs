@@ -9,11 +9,28 @@
 // is rustc's, via `offset_of!`. The `const` block after each struct asserts they
 // agree, so a layout bug is a BUILD failure, not a runtime surprise.
 
-//! The one RM control command in the slice: `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`.
+//! Two RM controls: `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` and the entry record of
+//! `NV2080_CTRL_CMD_GPU_PROMOTE_CTX`.
 //!
 //! This is where a VAS's page-directory base is declared, i.e. where the data-plane
 //! identity (`Pdb`) is born — `RmEvent::SetPageDir`. It arrives inside an
 //! `NVOS54_PARAMETERS` as the control payload.
+//!
+//! ★★ `NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS` itself is NOT generated, and the reason is a
+//! generator limitation rather than a version fact: its last member is
+//! `promoteEntry[16]`, a fixed array of a NESTED struct, which
+//! `crate::gen`'s closed scalar table and `ParseError::NestedAggregate` both refuse by
+//! design. The decomposition is `crate::transcribed::Nv2080CtrlGpuPromoteCtxParamsHeader`
+//! (the 48-byte scalar prefix, hand-transcribed under the same `LAYOUT`/`RUSTC_OFFSETS`
+//! pinning) plus stride arithmetic over the entry emitted here. The entry is where the
+//! risk actually lives — its `u32`/`u16`/`u8`/`u8` tail is the field the C artifact read
+//! 32 bits wide — and it is fully machine-pinned.
+//!
+//! ★ `NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES` is generated as a constant for a
+//! specific reason: the C artifact's handler clamped the guest's `entryCount` to a
+//! hand-written `64` (its own comment said `20`) where the header says `16`, and read
+//! 1536 bytes past the struct. The number the transcription got wrong is the one number
+//! this port refuses to write by hand.
 //!
 //! ★ Version caveat, stated because it is real: the prefix through `hVASpace` is
 //! confirmed by three independent oracles (ogkm 610.43.02; the C emulator's snoop
@@ -26,13 +43,31 @@
 //! `decode` refuses **loudly** rather than reading past it, which is the correct
 //! failure.
 
-use crate::wire::{AbiError, Field, StructLayout, u32_at, u64_at};
+use crate::wire::{AbiError, Field, StructLayout, u8_at, u16_at, u32_at, u64_at};
 
 /// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` — the control command whose
 /// payload is [`Nv0080CtrlDmaSetPageDirectoryParams`].
 ///
 /// ogkm `src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h`.
 pub const NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY: u32 = 0x801813;
+
+/// `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` — the control that declares where a
+/// graphics/compute context's buffers live. `ROUTE_TO_PHYSICAL`, so CPU-RM compiles
+/// its implementation out entirely and it exists only in GSP firmware — i.e. in the
+/// thing this port fakes.
+///
+/// ogkm `src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h`.
+pub const NV2080_CTRL_CMD_GPU_PROMOTE_CTX: u32 = 0x2080012b;
+
+/// `NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES` — the length of
+/// `promoteEntry[]`, **16**, identical at 580.159.04 and 610.43.02.
+///
+/// ★ Generated rather than written down: the C artifact hand-wrote `64` here (with a
+/// comment claiming `20`) and read 1536 bytes past the 560-byte struct out of
+/// guest-writable memory.
+///
+/// ogkm `src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h`.
+pub const NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES: usize = 0x10;
 
 /// `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS` — ogkm `src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h:802`.
 #[repr(C)]
@@ -293,14 +328,282 @@ const _: () = {
     assert!(core::mem::offset_of!(Nv0080CtrlDmaSetPageDirectoryParams, pasid) == 28);
 };
 
+/// `NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY` — ogkm `src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:893`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Nv2080CtrlGpuPromoteCtxBufferEntry {
+    /// `NvU64 gpuPhysAddr` @ +0 (src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:894).
+    pub gpu_phys_addr: u64,
+    /// `NvU64 gpuVirtAddr` @ +8 (src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:895).
+    pub gpu_virt_addr: u64,
+    /// `NvU64 size` @ +16 (src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:896).
+    pub size: u64,
+    /// `NvU32 physAttr` @ +24 (src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:897).
+    pub phys_attr: u32,
+    /// `NvU16 bufferId` @ +28 (src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:898).
+    pub buffer_id: u16,
+    /// `NvU8 bInitialize` @ +30 (src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:899).
+    pub b_initialize: u8,
+    /// `NvU8 bNonmapped` @ +31 (src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:900).
+    pub b_nonmapped: u8,
+}
+
+impl Nv2080CtrlGpuPromoteCtxBufferEntry {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY";
+    /// `sizeof(NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 32;
+    /// `alignof(NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY)`.
+    pub const ALIGN: usize = 8;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY",
+        size: 32,
+        align: 8,
+        fields: &[
+            Field {
+                c_name: "gpuPhysAddr",
+                rust_name: "gpu_phys_addr",
+                offset: 0,
+                width: 8,
+            },
+            Field {
+                c_name: "gpuVirtAddr",
+                rust_name: "gpu_virt_addr",
+                offset: 8,
+                width: 8,
+            },
+            Field {
+                c_name: "size",
+                rust_name: "size",
+                offset: 16,
+                width: 8,
+            },
+            Field {
+                c_name: "physAttr",
+                rust_name: "phys_attr",
+                offset: 24,
+                width: 4,
+            },
+            Field {
+                c_name: "bufferId",
+                rust_name: "buffer_id",
+                offset: 28,
+                width: 2,
+            },
+            Field {
+                c_name: "bInitialize",
+                rust_name: "b_initialize",
+                offset: 30,
+                width: 1,
+            },
+            Field {
+                c_name: "bNonmapped",
+                rust_name: "b_nonmapped",
+                offset: 31,
+                width: 1,
+            },
+        ],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[
+        (
+            "gpu_phys_addr",
+            core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, gpu_phys_addr),
+        ),
+        (
+            "gpu_virt_addr",
+            core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, gpu_virt_addr),
+        ),
+        (
+            "size",
+            core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, size),
+        ),
+        (
+            "phys_attr",
+            core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, phys_attr),
+        ),
+        (
+            "buffer_id",
+            core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, buffer_id),
+        ),
+        (
+            "b_initialize",
+            core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, b_initialize),
+        ),
+        (
+            "b_nonmapped",
+            core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, b_nonmapped),
+        ),
+    ];
+
+    /// Decode from a little-endian byte image of `NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            gpu_phys_addr: u64_at(bytes, 0)?,
+            gpu_virt_addr: u64_at(bytes, 8)?,
+            size: u64_at(bytes, 16)?,
+            phys_attr: u32_at(bytes, 24)?,
+            buffer_id: u16_at(bytes, 28)?,
+            b_initialize: u8_at(bytes, 30)?,
+            b_nonmapped: u8_at(bytes, 31)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.gpu_phys_addr.to_le_bytes();
+            bytes
+                .get_mut(0..8)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.gpu_virt_addr.to_le_bytes();
+            bytes
+                .get_mut(8..16)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.size.to_le_bytes();
+            bytes
+                .get_mut(16..24)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.phys_attr.to_le_bytes();
+            bytes
+                .get_mut(24..28)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.buffer_id.to_le_bytes();
+            bytes
+                .get_mut(28..30)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.b_initialize.to_le_bytes();
+            bytes
+                .get_mut(30..31)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.b_nonmapped.to_le_bytes();
+            bytes
+                .get_mut(31..32)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(
+        core::mem::size_of::<Nv2080CtrlGpuPromoteCtxBufferEntry>()
+            == Nv2080CtrlGpuPromoteCtxBufferEntry::SIZE
+    );
+    assert!(
+        core::mem::align_of::<Nv2080CtrlGpuPromoteCtxBufferEntry>()
+            == Nv2080CtrlGpuPromoteCtxBufferEntry::ALIGN
+    );
+    assert!(core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, gpu_phys_addr) == 0);
+    assert!(core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, gpu_virt_addr) == 8);
+    assert!(core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, size) == 16);
+    assert!(core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, phys_attr) == 24);
+    assert!(core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, buffer_id) == 28);
+    assert!(core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, b_initialize) == 30);
+    assert!(core::mem::offset_of!(Nv2080CtrlGpuPromoteCtxBufferEntry, b_nonmapped) == 31);
+};
+
 /// Every struct this module generates, in declaration order — the enumerated-vs-
 /// exercised coverage surface (`mode2_abi_agnostic_layer.md` §2.3, rule 2).
-pub const STRUCTS: &[&StructLayout] = &[&Nv0080CtrlDmaSetPageDirectoryParams::LAYOUT];
+pub const STRUCTS: &[&StructLayout] = &[
+    &Nv0080CtrlDmaSetPageDirectoryParams::LAYOUT,
+    &Nv2080CtrlGpuPromoteCtxBufferEntry::LAYOUT,
+];
 
 /// The generator-computed offsets paired with rustc's own, per struct. The
 /// crate's tests walk this so the agreement is also a RUNTIME assertion the
 /// mutation gate can see.
-pub const RUSTC_OFFSETS: &[(&str, &[(&str, usize)])] = &[(
-    "NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS",
-    Nv0080CtrlDmaSetPageDirectoryParams::RUSTC_OFFSETS,
-)];
+pub const RUSTC_OFFSETS: &[(&str, &[(&str, usize)])] = &[
+    (
+        "NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS",
+        Nv0080CtrlDmaSetPageDirectoryParams::RUSTC_OFFSETS,
+    ),
+    (
+        "NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY",
+        Nv2080CtrlGpuPromoteCtxBufferEntry::RUSTC_OFFSETS,
+    ),
+];

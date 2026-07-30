@@ -150,6 +150,7 @@ pub struct GraphPolicy<'a> {
     applied: u64,
     inert: u64,
     held: u64,
+    promoted: u64,
 }
 
 impl<'a> GraphPolicy<'a> {
@@ -178,6 +179,7 @@ impl<'a> GraphPolicy<'a> {
             applied: 0,
             inert: 0,
             held: 0,
+            promoted: 0,
         }
     }
 
@@ -231,6 +233,18 @@ impl<'a> GraphPolicy<'a> {
         self.held
     }
 
+    /// How many commands were **context promotions the address plane accepted**
+    /// ([`Translation::CtxPromotion`]).
+    ///
+    /// ★ The non-vacuity instrument for every promote assertion, and a fourth counter for
+    /// the reason there are three: a promotion declares *address* facts, not object-model
+    /// ones, and a run that folded it into [`Self::applied`] could not tell a regression
+    /// that stopped joining anything from a run that had no promotions in it.
+    #[must_use]
+    pub fn promoted(&self) -> u64 {
+        self.promoted
+    }
+
     /// The object model, for a caller that wants to project it.
     #[must_use]
     pub fn gpu(&self) -> &Gpu {
@@ -268,15 +282,34 @@ impl<'a> GraphPolicy<'a> {
                 // is what turns it into a non-zero `rpc_result` on the wire. The C's
                 // behaviour is the opposite: it accepted everything and answered `NV_OK`
                 // (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:3326`).
-                Translation::Event(ev) => {
-                    self.gpu.apply(ev).map(|()| t).map_err(BridgeRefusal::Graph)
-                }
+                Translation::Event(ev) => self
+                    .gpu
+                    .apply(ev)
+                    .map(|()| Translation::Event(ev))
+                    .map_err(BridgeRefusal::Graph),
+                // ★★ The ADDRESS-plane apply, and it is deliberately here rather than
+                // left to the caller. A `Translation` variant nothing consumes is the
+                // C's `NV_OK` echo with a Rust type on it — the same argument
+                // `BridgeRefusal::UnknownControl` already makes about a `Forward` arm.
+                // The join routes on the ADDRESS SPACE the promotion names, so it is
+                // legal to run against `&mut Gpu` regardless of which proc's RPC this
+                // was; the sharded shell runs the same two functions under its own locks.
+                Translation::CtxPromotion(p) => self
+                    .gpu
+                    .promote_ctx(&p)
+                    .map(|_| Translation::CtxPromotion(p))
+                    .map_err(BridgeRefusal::Promote),
                 Translation::Inert | Translation::Held => Ok(t),
             });
         match &outcome {
             Ok(Translation::Event(_)) => self.applied = self.applied.saturating_add(1),
             Ok(Translation::Inert) => self.inert = self.inert.saturating_add(1),
             Ok(Translation::Held) => self.held = self.held.saturating_add(1),
+            // ★ Its own counter, for the reason `held` has one: "this RPC declared
+            // address bindings" is a different observation from "this RPC declared a
+            // graph fact", and a single total would let a regression that stopped
+            // promoting anything report the same number.
+            Ok(Translation::CtxPromotion(_)) => self.promoted = self.promoted.saturating_add(1),
             Err(r) => self.census.record(r),
         }
         outcome

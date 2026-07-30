@@ -1335,6 +1335,52 @@ impl SharedDevice {
         )
     }
 
+    /// ★★ Apply one context promotion — the **sharded** form of
+    /// `kayfabe_core::promote`'s two functions.
+    ///
+    /// # Why it is two passes and not one
+    ///
+    /// The proc that *issues* a `GPU_PROMOTE_CTX` and the proc that *owns* the address
+    /// space it names are not required to be the same one, and R3 forbids holding two
+    /// rank-1 locks. So the route is a rank-0 spine read that touches no proc, and the
+    /// apply takes the **owner's** lock alone — the same shape as `#102`'s page-table
+    /// latch, and for the same reason.
+    ///
+    /// This is also §5 of `gpu_promote_ctx.md` discharged: `route_control` answers a
+    /// Case-2 control under the read lock *before any `Proc` is touched*, so the harvest
+    /// could not live inside it. It is a separate verb, not a widened one.
+    ///
+    /// A proc that retired in the gap is [`kayfabe_core::promote::PromoteFault::RetiredProc`]
+    /// rather than a silent skip: unlike a dirty page-table page (whose owner's tables are
+    /// simply gone), a promotion is a control the guest is blocked waiting on, and it has
+    /// to be answered.
+    ///
+    /// # Errors
+    ///
+    /// [`kayfabe_core::promote::PromoteFault`], by variant.
+    pub fn promote_ctx(
+        &self,
+        p: &kayfabe_core::promote::CtxPromotion,
+    ) -> Result<kayfabe_core::promote::PromoteJoin, kayfabe_core::promote::PromoteFault> {
+        // ROUTE — rank 0 only. No proc lock is held while this runs.
+        let route = {
+            let route_in = |spine: &kayfabe_core::gpu::Spine| {
+                kayfabe_core::promote::route_promote_ctx(spine, p.chan_client, p.object)
+            };
+            match self.mode {
+                LockMode::Sharded => route_in(&self.state.read().spine),
+                LockMode::Degenerate => route_in(&self.state.write().spine),
+            }?
+        };
+        // ACT — the OWNING proc's rank-1 lock, alone.
+        self.with_proc_mut(route.proc, |proc| {
+            kayfabe_core::promote::apply_promote_ctx(proc, &route, p)
+        })
+        .unwrap_or(Err(kayfabe_core::promote::PromoteFault::RetiredProc(
+            route.proc,
+        )))
+    }
+
     /// Route a `GSP_RM_CONTROL` through the Case-1/Case-2 split. Case 2 is ACKed
     /// under the device read lock and never leaves the process; Case 1 runs the same
     /// three phases, with `payload` written back in the commit.

@@ -88,6 +88,53 @@ pub enum AbiError {
         /// Bytes actually available.
         available: usize,
     },
+    /// ★★★ **A `PROMOTE_CTX` declared more entries than `promoteEntry[]` has.**
+    ///
+    /// `entryCount` is a guest-supplied count into a **fixed** 16-element array. The C
+    /// artifact clamped it to `64` — with a comment claiming the constant is `20` — and
+    /// then read `params+560 … params+2096`, i.e. 1536 bytes past the struct, out of the
+    /// guest-writable 4096-byte queue element. Every 32-byte window there with a plausible
+    /// `va`/`size` went into its address table under the guest's own choice of client, on
+    /// the hot resolution path. Three numbers, all different, none of them 16.
+    ///
+    /// Refused by name rather than clamped: a clamp turns "the guest declared nonsense"
+    /// into "we decoded a prefix of the nonsense", which is `abi_struct_truncation`
+    /// pointed the other way.
+    PromoteEntryCount {
+        /// `entryCount`, as the guest declared it.
+        declared: u32,
+        /// `NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES` — 16 at 580.159.04 and 610.43.02.
+        max: usize,
+    },
+    /// A `PROMOTE_CTX` entry whose `physAttr[1:0]` is `3` — a value NVIDIA has not
+    /// defined (`_VIDMEM` = 0, `_COH_SYS` = 1, `_NCOH_SYS` = 2).
+    ///
+    /// Refused rather than folded into sysmem. The C artifact's
+    /// `(physAttr & 0x3u) != 0` maps `3` to sysmem *and* collapses the coherent /
+    /// non-coherent distinction that `kayfabe_arch::Aperture` models, so porting it would
+    /// be a strict regression against this port's own vocabulary.
+    PromoteAperture {
+        /// Index of the offending entry within `promoteEntry[]`.
+        entry: usize,
+        /// The whole `physAttr` word, so a reader can see the other flags too.
+        phys_attr: u32,
+    },
+    /// A `PROMOTE_CTX` that used the **legacy** `hVirtMemory` / `(virtAddress, size)`
+    /// path instead of `promoteEntry[]`.
+    ///
+    /// Both real producers leave all three zero and set `entryCount > 0`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics_object.c:131`,
+    /// `.../kernel_graphics_context.c:2166`). The legacy shape is refused rather than
+    /// guessed at: it declares one mapping through a *memory handle* this port does not
+    /// resolve, and inventing a reading for it would be a decoder with no oracle.
+    PromoteLegacyShape {
+        /// `hVirtMemory` @ +20.
+        h_virt_memory: u32,
+        /// `virtAddress` @ +24.
+        virt_address: u64,
+        /// `size` @ +32.
+        size: u64,
+    },
     /// A GSP RPC envelope carried the wrong `signature`. Not a security control
     /// on its own — a guest can write the right bytes — but a decode that
     /// ignores it would happily parse a buffer that was never an RPC at all.
@@ -135,6 +182,29 @@ impl core::fmt::Display for AbiError {
             }
             Self::RpcSignature { found, expected } => {
                 write!(f, "RPC signature {found:#010x}, expected {expected:#010x}")
+            }
+            Self::PromoteEntryCount { declared, max } => {
+                write!(
+                    f,
+                    "PROMOTE_CTX declared entryCount {declared} against a {max}-element promoteEntry[]"
+                )
+            }
+            Self::PromoteAperture { entry, phys_attr } => {
+                write!(
+                    f,
+                    "PROMOTE_CTX entry {entry}: physAttr {phys_attr:#010x} names undefined aperture 3"
+                )
+            }
+            Self::PromoteLegacyShape {
+                h_virt_memory,
+                virt_address,
+                size,
+            } => {
+                write!(
+                    f,
+                    "PROMOTE_CTX used the legacy path (hVirtMemory {h_virt_memory:#010x}, \
+                     virtAddress {virt_address:#x}, size {size:#x})"
+                )
             }
         }
     }

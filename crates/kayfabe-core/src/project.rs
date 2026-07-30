@@ -216,6 +216,26 @@ pub struct Boundaries {
     /// Exec-plane routing: (target, vChid) → (owning component, channel resource). The
     /// owning component may be [`SYSTEM_ANCHOR`] (a guest-kernel channel).
     pub by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, ResourceKey)>,
+    /// ★★ **Context-object → address space**: a **channel or TSG** resource → the
+    /// `(target, PDB)` whose table its GR/compute context buffers belong in.
+    ///
+    /// The routing input of `GPU_PROMOTE_CTX` ([`crate::promote`]), whose `hObject` the
+    /// SDK documents as *"either a single channel or a channel group"*. Both real
+    /// producers pass a channel handle
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics_object.c:131`,
+    /// `.../kernel_graphics_context.c:2166`), and the contract admits the group — so both
+    /// are derived here rather than one being refused for the convenience of the index.
+    ///
+    /// A TSG's own `hVASpace` is resolved through the same scoped, typed
+    /// [`resolve_declared_handle`] every other declared handle fact goes through: a
+    /// group belonging to a superseded client declaration resolves to nothing rather
+    /// than to whatever the recycled value's next tenant allocated (★★★ §12.44).
+    ///
+    /// Only fully-resolved entries appear — an unresolved target or an undeclared PDB is
+    /// a **DEFER**, and a promotion naming one takes
+    /// [`crate::promote::PromoteFault::ContextVasUndeclared`] rather than landing
+    /// somewhere plausible.
+    pub ctx_vas: BTreeMap<ResourceKey, (GpuId, Pdb)>,
 }
 
 impl ProcBoundary {
@@ -251,6 +271,7 @@ impl Default for Boundaries {
             system: ProcBoundary::empty(SYSTEM_ANCHOR),
             by_pdb: BTreeMap::new(),
             by_vchid: BTreeMap::new(),
+            ctx_vas: BTreeMap::new(),
         }
     }
 }
@@ -654,6 +675,7 @@ pub fn project(
 
     let mut by_pdb: BTreeMap<(GpuId, Pdb), (ProcAnchor, ResourceKey)> = BTreeMap::new();
     let mut by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, ResourceKey)> = BTreeMap::new();
+    let mut ctx_vas: BTreeMap<ResourceKey, (GpuId, Pdb)> = BTreeMap::new();
     // ★ The F1 collision guard's scope tables, keyed on `(Option<GpuId>, id)`: the
     // guard still bites within one target (and within the unresolved-`None` scope),
     // while identical ids on DIFFERENT targets are legal and never collide.
@@ -763,7 +785,29 @@ pub fn project(
                 if let Some(gpu) = gpu {
                     by_vchid.insert((gpu, vchid), (anchor, node.id()));
                 }
+                // ★★ The context-object index. A channel's own resolved VAS is already
+                // in hand; it enters only when BOTH halves are declared, because a
+                // half-resolved entry is a DEFER and a promotion must fault on it rather
+                // than land in a guessed table.
+                if let (Some(gpu), Some(pdb)) = (gpu, facts.vas_pdb) {
+                    ctx_vas.insert(node.id(), (gpu, pdb));
+                }
                 boundary.channels.insert(node.id(), facts);
+            }
+            // ★★ A TSG is the other legal `hObject` of `GPU_PROMOTE_CTX`. It declares
+            // its VASpace directly, resolved through the same scoped+typed resolver every
+            // other declared handle fact uses. It contributes NOTHING else to the
+            // projection — the group's channels are what route work — so this arm exists
+            // solely for the promote join and does nothing when nobody promotes.
+            ObjectKind::Tsg => {
+                if let Some(hv) = node.facts.h_vaspace
+                    && let Some(vas) =
+                        resolve_declared_handle(g, &live_root, owner, hv, ObjectKind::VaSpace)
+                    && let Some(gpu) = g.gpu_of_resource(node.id())
+                    && let Some(pdb) = g.pdb_of_resource(vas.id())
+                {
+                    ctx_vas.insert(node.id(), (gpu, pdb));
+                }
             }
             _ => {}
         }
@@ -774,5 +818,6 @@ pub fn project(
         system,
         by_pdb,
         by_vchid,
+        ctx_vas,
     })
 }

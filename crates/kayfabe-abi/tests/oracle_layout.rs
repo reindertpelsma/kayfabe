@@ -111,11 +111,11 @@ fn the_generators_layout_equals_rustcs_for_every_generated_struct() {
     }
     // Non-vacuity: a green run of a loop that never iterated is a zero nobody
     // re-checks (`testing_doctrine.md` §1).
-    assert_eq!(checked_structs, 13, "the slice is 13 generated structs");
-    // 4+7+11+8+7+7+9 (nvos) + 4+9+5+3 (classes) + 7 (ctrl) + 8 (rpc). The first
+    assert_eq!(checked_structs, 14, "the slice is 14 generated structs");
+    // 4+7+11+8+7+7+9 (nvos) + 4+9+5+3 (classes) + 7+7 (ctrl) + 8 (rpc). The first
     // draft of this line said 66 and the test caught it — which is the point of
     // asserting the count rather than trusting the loop ran.
-    assert_eq!(checked_fields, 89, "…with 89 fields between them");
+    assert_eq!(checked_fields, 96, "…with 96 fields between them");
 }
 
 /// The transcribed layout gets the same treatment. A hand-written table that
@@ -135,6 +135,121 @@ fn the_transcribed_layout_equals_rustcs() {
         );
     }
     assert_eq!(l.size, core::mem::size_of::<Nvos46ParametersPre580>());
+}
+
+/// The **second** transcription — the `PROMOTE_CTX` params prefix — against rustc, and
+/// then against the C artifact's own independently-written offsets.
+///
+/// # The C artifact as the third oracle here
+///
+/// `nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2441-2445` is a handler comment
+/// written by a human reading the same headers, and its code
+/// (`:2446-2461`) reads exactly those offsets against a real GA106 + 580 guest. So it is
+/// a genuinely independent reading, not a copy of ours — and it agrees on **every offset
+/// this test names**. Where it does not agree is a field WIDTH, which is
+/// [`the_c_artifacts_bufferid_bug_does_not_reproduce`] below.
+#[test]
+fn the_promote_ctx_prefix_is_pinned_against_rustc_and_the_c_artifact() {
+    use kayfabe_abi::transcribed::Nv2080CtrlGpuPromoteCtxParamsHeader as H;
+
+    let l = &H::LAYOUT;
+    let r = H::RUSTC_OFFSETS;
+    assert_eq!(l.fields.len(), r.len());
+    assert_eq!(l.fields.len(), 9);
+    for (f, (rn, ro)) in l.fields.iter().zip(r.iter()) {
+        assert_eq!(f.rust_name, *rn);
+        assert_eq!(
+            f.offset, *ro,
+            "transcribed `{rn}`: table +{}, rustc +{ro}",
+            f.offset
+        );
+    }
+    assert_eq!(l.size, core::mem::size_of::<H>());
+    assert_eq!(l.size, 48, "the prefix IS offsetof(.., promoteEntry)");
+
+    // The C artifact's three snoop offsets, verbatim from its own comment.
+    assert_eq!(
+        l.offset_of("h_chan_client"),
+        Some(12),
+        "C: `hChanClient@+12`"
+    );
+    assert_eq!(l.offset_of("entry_count"), Some(40), "C: `entryCount@+40`");
+    assert_eq!(H::SIZE, 48, "C: `promoteEntry[]@+48`");
+
+    // …and the entry record it describes as "32B each: gpuPhysAddr@0, gpuVirtAddr@8,
+    // size@16, physAttr@24, bufferId@28, bInitialize@30, bNonmapped@31".
+    let e = &ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry::LAYOUT;
+    assert_eq!(e.size, 32, "C: `32B each`");
+    for (name, off) in [
+        ("gpu_phys_addr", 0usize),
+        ("gpu_virt_addr", 8),
+        ("size", 16),
+        ("phys_attr", 24),
+        ("buffer_id", 28),
+        ("b_initialize", 30),
+        ("b_nonmapped", 31),
+    ] {
+        assert_eq!(
+            e.offset_of(name),
+            Some(off),
+            "C artifact says `{name}@{off}`"
+        );
+    }
+
+    // The total, from the two generated numbers rather than from a literal.
+    assert_eq!(
+        H::PARAMS_SIZE,
+        560,
+        "the captured host RPC records psize=560",
+    );
+    assert_eq!(
+        H::PARAMS_SIZE,
+        H::SIZE + ctrl::NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES * e.size,
+    );
+}
+
+/// ★★ **C defect D2, written as a NEGATIVE so it cannot come back.**
+///
+/// `C: nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2459` reads
+/// `uint32_t bufferId = ldl_le_p(e + 28);` — four bytes at +28, over a `NvU16 bufferId`
+/// with `bInitialize` at +30 and `bNonmapped` at +31. So its `bufferId` silently carried
+/// `bufferId | (bInitialize << 16) | (bNonmapped << 24)`, and a human later
+/// reverse-engineered that packing back out of the emulator's own log
+/// (`mode2_cuctxcreate_resume.md:210`: *"low byte = type; `0x0001xxxx`=mapped,
+/// `0x0101xxxx`=NONMAPPED"*) — an analysis artefact shaped by an ABI bug.
+///
+/// The width is already asserted above. This asserts the **consequence**: the two flag
+/// bytes must not be able to reach `buffer_id` at all, so two entries that differ ONLY in
+/// those flags must decode to the same `buffer_id`. A four-byte read fails this and a
+/// two-byte read cannot.
+#[test]
+fn the_c_artifacts_bufferid_bug_does_not_reproduce() {
+    let mut plain = [0u8; 32];
+    plain[28..30].copy_from_slice(&0x00A5u16.to_le_bytes());
+    // Same bufferId; both flag bytes set as loudly as they can be.
+    let mut flagged = plain;
+    flagged[30] = 0xFF;
+    flagged[31] = 0xFF;
+
+    let a = ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry::decode(&plain).expect("decodes");
+    let b = ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry::decode(&flagged).expect("decodes");
+    assert_eq!(a.buffer_id, 0x00A5);
+    assert_eq!(
+        a.buffer_id, b.buffer_id,
+        "★ D2: bInitialize/bNonmapped must be unreachable from bufferId",
+    );
+    assert_eq!((a.b_initialize, a.b_nonmapped), (0, 0));
+    assert_eq!((b.b_initialize, b.b_nonmapped), (0xFF, 0xFF));
+
+    // And the top of the u16 is real: 0xFFFF is a bufferId, not a flag spill.
+    let mut wide = [0u8; 32];
+    wide[28..30].copy_from_slice(&0xFFFFu16.to_le_bytes());
+    assert_eq!(
+        ctrl::Nv2080CtrlGpuPromoteCtxBufferEntry::decode(&wide)
+            .expect("decodes")
+            .buffer_id,
+        0xFFFF,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -791,6 +906,7 @@ fn every_generated_struct_is_covered_by_an_oracle_assertion() {
         "NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS",
         "NV_CTXSHARE_ALLOCATION_PARAMETERS",
         "NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS",
+        "NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY",
         "rpc_message_header_v03_00",
     ];
     let generated: Vec<&str> = nvos::STRUCTS

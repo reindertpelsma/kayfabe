@@ -213,7 +213,14 @@ use kayfabe_trace::{FaultTag, Faulted};
 /// Deliberately three-valued rather than `Option<RmEvent>`: "this RPC carries no
 /// object-model content" is a *conclusion* about a known function, and it must not be
 /// spelled the same way as "we could not translate it".
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// ★ **Not `Copy`.** [`Self::CtxPromotion`] carries a variable number of declared ranges,
+/// so it owns a `Vec`. The alternative — a fixed 16-slot array — would have made every
+/// `Translation` 600-plus bytes to move on every RPC, and would have duplicated NVIDIA's
+/// array bound into a third place. The bound belongs to the ABI layer (the wire) and to
+/// `kayfabe_core::promote::MAX_PROMOTED_RANGES` (the core), and those two are checked
+/// against each other rather than silently agreeing.
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub enum Translation {
     /// One declared protocol fact, to be handed to `Gpu::apply`.
@@ -244,6 +251,21 @@ pub enum Translation {
     /// produce a `Held`. `translate_never_holds` pins that so the state cannot migrate
     /// into the free function unnoticed.
     Held,
+    /// ★★ **An ADDRESS-plane fact**, not an object-model one — `GPU_PROMOTE_CTX`.
+    ///
+    /// A fourth answer rather than a fourth shade of [`Self::Event`], because the two
+    /// go to different places and a caller must not be able to confuse them.
+    /// `RmEvent` is applied to the [`kayfabe_core::rmgraph::RmGraph`] and reshapes the
+    /// object model; a promotion declares VA → physical bindings and goes to the address
+    /// table of ONE `Vas`, touching the graph not at all. Folding it into `Event` would
+    /// mean inventing an `RmEvent` variant for a message that declares no resource, no
+    /// edge and no handle — and `Gpu::apply` would then be the site that decides which
+    /// plane a fact belongs to, which is exactly the collapse this crate exists to
+    /// prevent.
+    ///
+    /// It is also *not* [`Self::Inert`]: inert means "recognised, and carries nothing".
+    /// This carries the only address facts a GSP client's RPC stream ever declares.
+    CtxPromotion(kayfabe_core::promote::CtxPromotion),
 }
 
 /// Every way [`translate`] can refuse, by name.
@@ -710,6 +732,18 @@ pub enum BridgeRefusal {
     /// `::ConflictingAlloc` are different findings) rather than one flat "the graph said
     /// no" — the same argument `kayfabe_core`'s own `impl Faulted for GpuError` makes.
     Graph(GpuError),
+    /// ★★ **The address-plane join refused the promotion.**
+    ///
+    /// The [`Self::Graph`] arm's counterpart for the other plane, and a separate variant
+    /// for the same reason that one exists separately from the decode refusals: the
+    /// bridge does not answer these questions locally (it resolves nothing and looks
+    /// nothing up), and the answer must still reach the guest as a non-zero
+    /// `rpc_result` rather than being swallowed into an `NV_OK`.
+    ///
+    /// The census tag **delegates** to the fault, so a promotion refused for naming a
+    /// foreign address space is a different finding from one refused for colliding with
+    /// a live binding.
+    Promote(kayfabe_core::promote::PromoteFault),
 }
 
 impl From<AbiError> for BridgeRefusal {
@@ -855,6 +889,8 @@ impl Faulted for BridgeRefusal {
             // bridge; the tag says what actually went wrong, which is what a census is
             // for.
             BridgeRefusal::Graph(e) => e.fault_tag(),
+            // ★ Delegated for the same reason `Graph` is.
+            BridgeRefusal::Promote(e) => e.fault_tag(),
         }
     }
 }
@@ -1235,6 +1271,13 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
         });
     }
 
+    // ★★ The address-plane control. Decoded here, applied nowhere near here: this
+    // function resolves nothing and looks nothing up, so `hObject` leaves as the guest's
+    // own handle and the join resolves it against the live graph at the moment it acts.
+    if shape == ControlParams::PromoteCtx {
+        return translate_promote_ctx(abi, client, params);
+    }
+
     let p = abi.decode_set_page_dir(params)?;
     // ★ Zero is not "unspecified" here — it names the client/device pair's *implicit*
     // VASpace, an object this RPC does not identify. See `BridgeRefusal::ImplicitVaspace`.
@@ -1245,6 +1288,90 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
         client,
         vaspace: HObject(p.h_vaspace),
         pdb: Pdb(p.phys_address),
+    }))
+}
+
+/// ★★ `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` → [`Translation::CtxPromotion`].
+///
+/// # The two clients, and the rule that needed a SCOPE rather than enforcement
+///
+/// This crate's governing rule is *"the namespace is always the RPC body's own `hClient`;
+/// never a params field, never inferred"*, and the C artifact's promote handler is named
+/// in the crate docs as **the** counter-example, because it reads `hChanClient` out of
+/// `params+12` and never looks at the envelope at all
+/// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:2447`).
+///
+/// Per `ogkm`, reading `hChanClient` is **correct**. RM sets
+/// `params.hChanClient = RES_GET_CLIENT_HANDLE(pChannelDescendant)` and then issues the
+/// control with `RES_GET_CLIENT_HANDLE(pSubdevice)` as the envelope client
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics_object.c:130-135`); the two
+/// are usually equal and are **not required** to be. So promote-ctx is not a violation of
+/// the rule, it is a case the rule's phrasing does not cover, and the fix is to separate
+/// the two jobs the phrase conflates:
+///
+/// | job | source | why |
+/// |---|---|---|
+/// | **namespace attribution** — which client is acting | the envelope's `hClient` | a params field naming a different client would be a silent cross-namespace substitution |
+/// | **object resolution** — whose handle table `hObject` is in | `hChanClient` | the SDK documents `hObject` as living in `hChanClient`'s namespace, and RM populates it accordingly |
+///
+/// Both are carried out of here, which is the whole difference from the C: it kept only
+/// the second, so it could not notice a disagreement between them, let alone refuse one.
+/// The refusal itself is not this crate's — it needs the object model — and lives at
+/// [`kayfabe_core::promote::PromoteFault::ForeignContextObject`].
+///
+/// ★ This is the third time a params field has legitimately named a client (`DUP_OBJECT`
+/// was the second). The question is never *"envelope or params?"* but **"attribution or
+/// resolution?"**; expect a fourth, and write its rule with the two jobs already
+/// distinguished.
+///
+/// # ★ What is dropped
+///
+/// `ChID` (the SDK calls it deprecated), `engineType` (the address plane does not route
+/// on it; the channel's engine is derived from the graph), and — since the legacy shape
+/// is refused outright by the decoder — `hVirtMemory`/`virtAddress`/`size`.
+fn translate_promote_ctx(
+    abi: &DriverAbiTable,
+    client: HClient,
+    params: &[u8],
+) -> Result<Translation, BridgeRefusal> {
+    use kayfabe_abi::view::PromoteEntry;
+    use kayfabe_core::promote::{CtxPromotion, PromoteDeclined, PromotedRange};
+
+    let p = abi.decode_promote_ctx(params)?;
+    let census = p.census();
+    let mut ranges = Vec::new();
+    for e in p.entries() {
+        // ★ ONLY the complete state becomes a range. The other two are counted and
+        // dropped — named, never silent (C defect D3): a promote-only entry's
+        // `gpuPhysAddr == 0 && size == 0` is the *absence* of a fact, and binding
+        // `va → phys 0` would be manufacturing an address, which is what MISS = FAULT
+        // forbids.
+        if let PromoteEntry::Promotable {
+            va,
+            len,
+            phys,
+            aperture,
+            buffer_id,
+        } = e
+        {
+            ranges.push(PromotedRange {
+                va: kayfabe_arch::ids::GpuVa(va),
+                len,
+                phys,
+                aperture,
+                buffer_id,
+            });
+        }
+    }
+    Ok(Translation::CtxPromotion(CtxPromotion {
+        client,
+        chan_client: HClient(p.h_chan_client),
+        object: HObject(p.h_object),
+        ranges,
+        declined: PromoteDeclined {
+            initialize_only: census.initialize_only,
+            promote_only: census.promote_only,
+        },
     }))
 }
 

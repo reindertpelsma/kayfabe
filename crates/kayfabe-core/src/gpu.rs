@@ -174,6 +174,18 @@ pub struct Vas {
     /// so the sync can idempotently add/remove them without disturbing bindings from
     /// other populate sources (`publish_backing`, CE-PT-write capture).
     pub rpc_bound: BTreeSet<u64>,
+    /// ★★ VAs currently bound into `table` by the **context-promotion source**
+    /// (`GPU_PROMOTE_CTX` — [`crate::promote`]), i.e. that source's own idempotence set.
+    ///
+    /// Deliberately NOT [`Self::rpc_bound`], and the separation is load-bearing rather
+    /// than tidy: [`Spine::sync_rpc_mappings`] builds its desired set exclusively from
+    /// `RmGraph::mappings()` and unbinds every `rpc_bound` VA that is not in it. A
+    /// promotion is not a `MapMemoryDma` and never will be — no `RmEvent::MapMemoryDma`
+    /// has a producer on a GSP client at all — so a promote binding filed under
+    /// `rpc_bound` would be silently reaped on the very next [`Spine::apply`]. The
+    /// failure mode is a table that is correct immediately after the control and empty a
+    /// moment later, which reads as a race and is not one.
+    pub promote_bound: BTreeSet<u64>,
 }
 
 impl Vas {
@@ -187,6 +199,7 @@ impl Vas {
             pt_pages: BTreeSet::new(),
             blocks: BTreeMap::new(),
             rpc_bound: BTreeSet::new(),
+            promote_bound: BTreeSet::new(),
         }
     }
 }
@@ -874,6 +887,30 @@ pub struct Spine {
     /// `Vas` that dies takes its pages with it, where the C's table was *"never pruned on
     /// handle free"* (`eight_blockers_resolved.md` §2).
     pub pt_roots: BTreeMap<(GpuId, u64), (ProcId, Pdb)>,
+    /// ★★ **Context-object → address space**: a channel or TSG **resource** → the
+    /// `(GpuId, Pdb)` whose table its context buffers belong in
+    /// ([`crate::promote::route_promote_ctx`]).
+    ///
+    /// ## Why it is device-global, like [`Self::pt_roots`]
+    ///
+    /// Because a promotion's *issuer* and its *target* are two different questions, and
+    /// the answer to the second is a property of the address space rather than of
+    /// whoever asked. Answering it out of the issuing proc's own state would key the
+    /// join on the RM client — which is precisely the C artifact's table, and which
+    /// hardware has measured cannot identify a process: two concurrent CUDA processes
+    /// share one duplicated client.
+    ///
+    /// ## Why by [`ResourceKey`], not by handle
+    ///
+    /// RM recycles object-handle values with no quarantine, so `(client, handle)` is a
+    /// *label*. The route resolves the guest's handle through the LIVE handle table at
+    /// the moment of use and then indexes here by the resulting stable identity, so a
+    /// dup-kept ghost and the value's next tenant can never be confused for one another.
+    ///
+    /// **Derived, never accreted** — rebuilt in [`Spine::refresh`] beside
+    /// [`Self::by_pdb`], and filtered through it, so a CONDEMNED component's context
+    /// objects do not route: its address space must not attract new bindings.
+    pub ctx_vas: BTreeMap<ResourceKey, (GpuId, Pdb)>,
     /// ★ MG-6: per-target device state — one [`GpuTarget`] (its own guest-physical
     /// window + GSP-queue drain gate) per routable GPU. `GpuId::ZERO` is realized at
     /// [`Gpu::new`]; further targets are minted lazily as their Devices are derived.
@@ -2273,6 +2310,7 @@ impl Spine {
         self.by_pdb.clear();
         self.by_vchid.clear();
         self.pt_roots.clear();
+        self.ctx_vas.clear();
         self.condemned_by_pdb.clear();
         self.condemned_by_vchid.clear();
         let anchor_to_pid: BTreeMap<ProcAnchor, ProcId> =
@@ -2318,6 +2356,18 @@ impl Spine {
                 self.condemned_by_vchid.insert((gpu, vchid), anchor);
             }
         }
+        // ★★ The context-object index ([`Spine::ctx_vas`]), from the same projection.
+        //
+        // ★ It is copied WHOLE, deliberately. A `by_pdb`-membership filter was written
+        // here first — to keep a condemned component's context objects out — and it was
+        // then measured to be **dead defence**: `promote::route_promote_ctx` looks the
+        // resulting `(gpu, pdb)` up in `by_pdb` anyway, so a condemned VAS already
+        // answers `ContextVasUndeclared` with or without it. Poisoning the filter failed
+        // no test; poisoning the route's lookup fails one immediately. A guard never seen
+        // to fail is not evidence, so the redundant one is gone and the exclusion lives
+        // in exactly one place.
+        self.ctx_vas
+            .extend(bounds.ctx_vas.iter().map(|(&r, &v)| (r, v)));
 
         // 5. ★ Commit the re-derived condemnation LAST: every early return above is a
         // faulting derivation that `Spine::apply` rolls back, and a rolled-back apply
@@ -2803,6 +2853,7 @@ impl Gpu {
             by_pdb: BTreeMap::new(),
             by_vchid: BTreeMap::new(),
             pt_roots: BTreeMap::new(),
+            ctx_vas: BTreeMap::new(),
             targets,
             sources: SourceRegistry::new(),
             pending_cancels: Cancels::new(),
@@ -2830,6 +2881,35 @@ impl Gpu {
     /// Apply one RM protocol event (see [`Spine::apply`]).
     pub fn apply(&mut self, ev: RmEvent) -> Result<(), GpuError> {
         self.spine.apply(&mut self.system, &mut self.procs, ev)
+    }
+
+    /// ★★ Apply one context promotion — the composed, single-owner form of
+    /// [`crate::promote::route_promote_ctx`] + [`crate::promote::apply_promote_ctx`].
+    ///
+    /// The two phases stay separate functions because the sharded L1 shell must run them
+    /// under two *different* locks (rank 0, then the owning proc's rank 1, one at a
+    /// time). `&mut Gpu` is an exclusivity proof rather than a lock, so this composition
+    /// is legal here and nowhere else — the same split `Gpu::retire_proc` makes.
+    ///
+    /// ★ It routes to the owner of the **address space**, which is not necessarily the
+    /// proc that issued the control.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::promote::PromoteFault`], by variant.
+    pub fn promote_ctx(
+        &mut self,
+        p: &crate::promote::CtxPromotion,
+    ) -> Result<crate::promote::PromoteJoin, crate::promote::PromoteFault> {
+        let route = crate::promote::route_promote_ctx(&self.spine, p.chan_client, p.object)?;
+        let proc = if route.proc == Gpu::SYSTEM_PROC {
+            &mut self.system
+        } else {
+            self.procs
+                .get_mut(&route.proc)
+                .ok_or(crate::promote::PromoteFault::RetiredProc(route.proc))?
+        };
+        crate::promote::apply_promote_ctx(proc, &route, p)
     }
 
     /// Reap retired procs at the quiesce point (see [`Spine::reap_retired`]).

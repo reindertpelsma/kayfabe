@@ -502,6 +502,24 @@ the literal *"orphan leaf filled in push 1, linked under the root in push 2"* ca
 a leaf page only becomes tracked once a PDE pointing at it is decoded. Its doc comment says
 so. Restoring that case is how the decode stage proves itself.
 
+### Stage D — `#93` promote-ctx — ★ **BUILT (2026-07-30)**
+
+Both named costs are paid; `gpu_promote_ctx.md` **§9** is the record. In one paragraph:
+§4 was resolved by §4.1's decomposition (**generate** the all-scalar entry, **transcribe**
+the 48-byte header, index by stride) rather than by teaching the generator struct-typed
+fields — with the strengthening that `MAX_ENTRIES` and the command id are now *generated
+constants*, so the one number the C hand-wrote is the one this port refuses to write. §5 was
+resolved as a **new verb** rather than a widened `route_control`: a projection-derived
+`Spine::ctx_vas` index (the `pt_roots` shape, keyed by `ResourceKey`) for the rank-0 route,
+then `apply_promote_ctx` under the owner's rank-1 lock alone. Keyed on the **address space**
+throughout, so the shared dup-DST client cannot alias two procs; and the envelope's
+`hClient` is checked *against* the resolution, which is the refusal the C could not express
+because it never read the envelope. Six of the seven C defects are subtracted (D6 does not
+port); each subtraction has a test that was watched failing under poison. One guard —
+a `by_pdb` filter on `ctx_vas` — was written, measured to be dead defence, and **deleted**.
+
+The original entry follows.
+
 ### Stage D — `#93` promote-ctx — unblocked in principle, two named costs
 
 `gpu_promote_ctx.md` §4/§5 are still accurate and neither is dissolved by stages A/B:

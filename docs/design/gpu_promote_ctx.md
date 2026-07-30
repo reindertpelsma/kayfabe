@@ -1,8 +1,9 @@
 # `GPU_PROMOTE_CTX` (`0x2080012b`) — ABI, protocol, and why it is not the compute path
 
-**Status:** design, not built. The tree at `ca9e4ae` contains no promote-ctx decoder and no
-consumer. This document is the fact-establishment and the build plan; §4 and §5 are the two
-blockers that stopped a code drop.
+**Status:** ★ **BUILT, 2026-07-30.** §4 and §5 are both resolved; **§9** below records how,
+what the join refuses, and the one guard that was written and then **deleted** for failing
+to bite. Everything above §9 is the original fact-establishment and remains accurate — read
+it first, then §9.
 
 **Citation tags** follow `mode2_gsp_port_plan.md` §0.1:
 
@@ -681,3 +682,124 @@ Everything above was verified against primary sources, not transcribed from prio
   notes report.
 - **Rust-side facts:** read from the tree at `ca9e4ae` (691 tests green, `ci_gates.sh --all` =
   ALL GATES CLEAN, 14 steps).
+
+---
+
+## §9 WHAT WAS BUILT (2026-07-30) — the two blockers, resolved
+
+Landed on `master` at 1097 tests green, `ci_gates.sh --all` = ALL GATES CLEAN (17 steps).
+
+### 9.1 §4 resolved — **§4.1's decomposition, taken, plus one strengthening**
+
+The generator was **not** extended. `NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY` is all
+scalars, so it goes through the generator unchanged with its whole pinning stack
+(`#[repr(C)]` mirror, generator `LAYOUT`, rustc `RUSTC_OFFSETS` via `offset_of!`, the
+compile-time `const _: () = { assert!(…) }` block). The 48-byte params **header** is
+hand-transcribed into `transcribed.rs` with the same `LAYOUT`/`RUSTC_OFFSETS` pair and its
+own compile-time offset block. The array is stride arithmetic.
+
+Why not teach the generator: struct-typed fields would need both a scalar-table extension
+*and* an emitter arm for nested `decode`/`encode_into`, i.e. a change to the artefact that
+**guards** the L11 truncation bug class — and `ParseError::NestedAggregate` and the
+"deliberately closed" scalar table are load-bearing refusals whose behaviour would move.
+Riding that alongside a decoder couples two risks in one commit. It stays the right
+long-term fix (it also unblocks `0x90f10106`) and is written down as the deletion condition
+on `Nv2080CtrlGpuPromoteCtxParamsHeader`.
+
+Why not bytes-plus-accessor: that throws away the one thing the entry decode most needs —
+rustc's *independent* confirmation of the `u32`/`u16`/`u8`/`u8` tail at +24/+28/+30/+31,
+which is exactly the field the C artifact read four bytes wide (D2).
+
+★ **The strengthening over §4.1 as written.** `NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES`
+and `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` are **generated constants**, scanned out of the
+header. `PARAMS_SIZE` is then `48 + MAX_ENTRIES * Entry::SIZE`, a product of machine-checked
+numbers. So **the one number the C hand-wrote in this control is the one number this port
+refuses to write by hand** — its clamp said 64, its comment said 20, the header says 16, and
+the disagreement was silent.
+
+Adding a driver version remains a table row: the struct is byte-identical at 580.159.04 and
+610.43.02 (§1.1), `ControlParams::PromoteCtx` carries no version fork, and the reason is
+recorded on the type so nobody adds a `MapDmaWire`-style seam that the trees say does not
+exist.
+
+**Knock-ons, all as §4.2 predicted:** `oracle_layout.rs`'s three literals (13→14 structs,
+89→96 fields, the typedef list) and two negative assertions that flipped positive
+(`control_params(0x2080012b)`, and `rmrpc_bridge`'s `UnknownControl`). A third,
+unpredicted: `capability.rs`'s "the port models four controls today" became five.
+
+### 9.2 §5 resolved — a new verb, not a widened `route_control`
+
+`route_control` answers a Case-2 control under the read lock **before any `Proc` is
+touched**, and that is left exactly as it was: the harvest is a separate verb.
+
+| stage | where |
+|---|---|
+| decode + classify | `kayfabe_abi::versions::decode_promote_ctx` → `view::{PromoteCtx, PromoteEntry, classify_promote_entry}` |
+| ABI → core vocabulary | `kayfabe_rmrpc::translate_control` → `Translation::CtxPromotion` |
+| ROUTE (rank 0, no proc) | `kayfabe_core::promote::route_promote_ctx` over `Spine::ctx_vas` + `Spine::by_pdb` |
+| ACT (one rank-1 lock) | `kayfabe_core::promote::apply_promote_ctx` |
+| compositions | `Gpu::promote_ctx` (single-owner; what `GraphPolicy::deliver` calls) and `SharedDevice::promote_ctx` (sharded, two passes) |
+
+`Spine::ctx_vas` is the projection-derived cross-proc ownership index §5 needed —
+`Spine::pt_roots`'s shape, keyed by **`ResourceKey`** so a recycled handle value can never
+alias, and rebuilt in `Spine::refresh` beside `by_pdb` rather than accreted. The guest's
+handle is resolved through the **live** handle table at the moment of use and immediately
+replaced by the resource identity.
+
+★★ **Keyed on the address space, never on the client.** The resolution is
+`(hChanClient, hObject)` → live resource → `(GpuId, Pdb)` → owning proc. Two concurrent
+CUDA processes sharing one duplicated client cannot alias, because the client is never a key.
+
+★★ **Attribution is checked AGAINST resolution.** §6.2's scope is implemented: the envelope's
+`hClient` is carried and the acting client must be in the component that owns the target
+address space (`PromoteFault::ForeignContextObject`). A mismatch between the two clients is
+*not* refused — RM sets them from different objects and does not require equality — so the
+refusal is the one that actually matters, and the C could not express it because it never
+read the envelope at all.
+
+### 9.3 What the join refuses, and what it deliberately accepts
+
+Refuses by name: an unknown context object; an object of the wrong kind; a context object
+whose VAS is undeclared or dead; a retired owner; a foreign acting client; more ranges than
+the core's own bound; a zero-length or `u64`-wrapping range; two ranges of one promotion
+overlapping each other; a range colliding with a binding this source does not own. **A
+promotion that would half-apply is refused whole** — everything is validated before the
+first `bind`.
+
+Accepts: an identical re-promote (counted `already`, nothing rebound — the second channel of
+a TSG does this); a control carrying only unbindable entries (counted in `PromoteDeclined`,
+**no fault** — refusing it would reject legitimate guest traffic); a `TSG` as `hObject`.
+
+Never done: binding a promote-only entry's VA to physical `0`. `gpuPhysAddr == 0 && size == 0`
+in that state is the *absence* of a fact and binding it would be manufacturing an address.
+
+### 9.4 The seven C defects
+
+D1 (entryCount clamp), D2 (`bufferId` width), D3 (silent promote-only drop), D4 (aperture
+collapsed to a bool, `3` accepted), D7 (the reply clobbering the caller's params) are
+subtracted and each has a test that was **seen to fail** when the fix was poisoned. D5
+(client-keyed table) is subtracted by construction — the key is the address space. D6
+(silent table-full drop) does not port: `AddressTable` has no capacity limit; the bound that
+*does* exist (`promote::MAX_PROMOTED_RANGES`) is a loud refusal, and it is deliberately a
+**second** number from the ABI's rather than an import of it, so a future disagreement is
+red instead of silent.
+
+### 9.5 ★ One guard was written, measured, and DELETED
+
+`Spine::refresh` first filtered `ctx_vas` through `by_pdb` membership, to keep a condemned
+component's context objects out of the index. Poisoning it failed **no** test — because
+`route_promote_ctx` looks the resulting `(gpu, pdb)` up in `by_pdb` anyway, so a condemned
+VAS already answers `ContextVasUndeclared` with or without it. Poisoning *that* lookup fails
+a test immediately. A guard never seen to fail is not evidence, so the redundant one is gone
+and the exclusion lives in exactly one place. Recorded here so it is not re-added as
+"defence in depth".
+
+### 9.6 Not built
+
+- The address plane still has no consumer of `PromoteJoin`'s counters beyond tests and the
+  `GraphPolicy` census; nothing acts on `declined`.
+- `engine_type` and `ChID` are decoded and dropped (the SDK calls `ChID` deprecated; the
+  channel's engine is graph-derived).
+- Nothing forwards a promotion to the host, and nothing should: the host kernel-RM allocates
+  and self-promotes its own GR context buffers on the Case-1 engine-object forward. §0 is
+  unchanged.

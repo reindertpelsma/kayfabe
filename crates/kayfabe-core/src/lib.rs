@@ -152,6 +152,7 @@
 pub mod gpa;
 pub mod gpu;
 pub mod project;
+pub mod promote;
 pub mod reactor;
 pub mod rmgraph;
 mod trace;

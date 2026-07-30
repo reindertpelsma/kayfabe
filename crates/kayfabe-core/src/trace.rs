@@ -91,3 +91,25 @@ impl Faulted for GpuError {
         }
     }
 }
+
+impl Faulted for crate::promote::PromoteFault {
+    /// Flat, per variant — and exhaustive, so a new refusal cannot reach the census
+    /// unnamed. Each of these is a distinct finding: "the guest named an object we
+    /// cannot see" and "the guest tried to write another process's address space" must
+    /// never be counted as one number.
+    fn fault_tag(&self) -> FaultTag {
+        use crate::promote::PromoteFault as F;
+        match self {
+            F::UnknownContextObject { .. } => FaultTag("PromoteFault::UnknownContextObject"),
+            F::NotAContextObject { .. } => FaultTag("PromoteFault::NotAContextObject"),
+            F::ContextVasUndeclared { .. } => FaultTag("PromoteFault::ContextVasUndeclared"),
+            F::RetiredProc(_) => FaultTag("PromoteFault::RetiredProc"),
+            F::UnknownVas { .. } => FaultTag("PromoteFault::UnknownVas"),
+            F::ForeignContextObject { .. } => FaultTag("PromoteFault::ForeignContextObject"),
+            F::TooManyRanges { .. } => FaultTag("PromoteFault::TooManyRanges"),
+            F::Malformed { .. } => FaultTag("PromoteFault::Malformed"),
+            F::SelfOverlap { .. } => FaultTag("PromoteFault::SelfOverlap"),
+            F::Collides { .. } => FaultTag("PromoteFault::Collides"),
+        }
+    }
+}

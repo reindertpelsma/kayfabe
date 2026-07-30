@@ -1767,7 +1767,7 @@ mod tests {
                 );
             }
         }
-        assert_eq!(modelled, 4, "the port models four controls today");
+        assert_eq!(modelled, 5, "the port models five controls today");
     }
 
     /// ★ The capability gate must not **pre-empt** the more informative refusals.
@@ -1785,6 +1785,10 @@ mod tests {
             (0x0080_1814, ControlParams::PageDirNotModelled),
             (0x2080_0a9f, ControlParams::PageDirNotModelled),
             (0x90f1_0106, ControlParams::PageDirNotModelled),
+            // ★ The address-plane control joins the same pairing: it is the only other
+            // control the port turns into facts, and it is equally worth failing loudly
+            // if a tidy-up removes its row.
+            (0x2080_012b, ControlParams::PromoteCtx),
         ] {
             assert!(
                 abi.capabilities().control(ControlCmd(cmd)).is_permitted(),
