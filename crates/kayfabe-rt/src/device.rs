@@ -618,6 +618,25 @@ impl SharedDevice {
         out
     }
 
+    /// The mutating twin of [`SharedDevice::with_proc`]: run `f` against ONE live proc
+    /// under its own rank-1 lock, taking no other proc lock.
+    ///
+    /// ★ Added for `#102`'s page-table latch, which is the first operation whose *target*
+    /// proc is not the proc that produced the work — the guest kernel writes user
+    /// processes' page tables. `None` means the proc is gone (retired or never existed),
+    /// which every caller treats as "the state this would have touched died with it",
+    /// never as an error.
+    pub fn with_proc_mut<R>(&self, pid: ProcId, f: impl FnOnce(&mut Proc) -> R) -> Option<R> {
+        let mut out = None;
+        let _ = self.route_act(
+            |_| Ok((pid, ())),
+            |_, p, ()| {
+                out = Some(f(p));
+            },
+        );
+        out
+    }
+
     /// Every proc the device currently holds live, the system proc first. **Spine op**
     /// (read guard); pairs with [`SharedDevice::with_proc`] so a caller can walk the
     /// whole live set one rank-1 lock at a time — never two at once, which R3 would
@@ -1236,12 +1255,32 @@ impl SharedDevice {
         cid: ChanId,
         ring: &[u8],
     ) -> Result<kayfabe_fwd::PushbufferOutcome, FwdFault> {
-        self.route_act(
+        let out = self.route_act(
             // ROUTE phase — rank 0 held. The guest-memory read lives here, exactly as
             // `read_pushbuffer` documents, and touches no proc.
             move |spine| kayfabe_fwd::read_pushbuffer(spine, vmm, ring).map(|m| (pid, m)),
             |spine, proc, methods| kayfabe_fwd::apply_pushbuffer(spine, proc, cid, methods),
-        )?
+        )??;
+        // ★★★ #102/#13 — LATCH phase, and it needs its own pass for a structural reason.
+        //
+        // The act phase above holds the **issuing** proc's lock, and the owner of a
+        // written page-table page is routinely a *different* proc: the guest kernel is
+        // what writes a user process's page tables. So the latch cannot happen inside the
+        // act — it would need a second rank-1 lock, which R3 refuses. Each owner is
+        // visited on its own, one lock at a time, exactly as `live_pids`/`with_proc` are
+        // designed to be walked.
+        //
+        // An owner that retired in the gap is simply skipped: its page tables are gone,
+        // and re-attaching a dirty page to whoever inherits its id is the C's
+        // never-pruned-table aliasing class.
+        for w in &out.pt_writes {
+            self.with_proc_mut(w.owner, |p| {
+                if let Some(vas) = p.vases.get_mut(&(w.gpu, w.owner_pdb)) {
+                    vas.pt_pages.insert(w.page);
+                }
+            });
+        }
+        Ok(out)
     }
 
     /// Back `[va, va+len)` in the `(gpu, pdb)` VAS. **Plan**: route via `by_pdb`,

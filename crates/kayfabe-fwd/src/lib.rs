@@ -2010,12 +2010,86 @@ const MAX_PUSH_RANGE_BYTES: usize = 1 << 20;
 /// are skipped (their content decodes to nothing actionable — MISS=FAULT at use).
 const MAX_PUSH_TOTAL_BYTES: usize = 8 << 20;
 
+/// ★★★ **What a copy-engine command's operands CARRY** — the discriminator the whole
+/// data plane turns on (`mode2_dataplane_architecture.md`, "The architecture to build").
+///
+/// Not *who submitted the work* and not *what form the destination took*, but what the
+/// operands mean:
+///
+/// - **VA-operand** — copies and kernels. The operands are GPU virtual addresses the host
+///   MMU resolves once the address space is resident. **Forward to the host channel's
+///   ring; let hardware execute and honour the semaphores natively.** No per-command
+///   interception, just residency. There is no software emulation of these, and there must
+///   not be: the C's shadow-plus-forged-completion was byte-exact and never touched a GPU,
+///   which is precisely why nothing noticed the buffer had no host mapping until hardware
+///   was finally asked to resolve it.
+/// - **Phys-operand** — page-table writes and scrubs. The payload is guest-physical PTE
+///   values, which **cannot be handed to hardware**. Intercept, translate, apply into the
+///   host address space — strictly once, in submission order, honouring the gating
+///   semaphores.
+///
+/// ★★ The classification runs on the **resolved physical destination**, never on
+/// `dst_is_virtual`. This port used to gate on `!dst_is_virtual`, which excludes exactly
+/// the case #13 is about: the guest kernel's copy-engine utility identity-maps the whole
+/// framebuffer into its own address space at 512 MiB pages and issues its page-table
+/// writes as **VIRTUAL-destination** copies (`C: nvkvm_gpu_emul.c:4936-4952`). The C hooks
+/// on the resolved physical regardless of form (`C: :6353`, `:6437`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CeOperands {
+    /// Operands the host MMU resolves. Forward; do not intercept.
+    VaOperand {
+        /// The resolved physical destination (diagnostics only — nothing acts on it).
+        phys: u64,
+    },
+    /// Operands carrying guest-physical PTE values. Intercept.
+    PhysOperand {
+        /// The 4 KiB page-table page this write landed on.
+        page: u64,
+        /// The aperture the destination resolved through.
+        aperture: Aperture,
+        /// ★ The proc whose `Vas` OWNS that page — **not necessarily the proc whose
+        /// channel issued the write.** The guest kernel writes user processes' page
+        /// tables; that asymmetry is the reason the ownership index is device-global.
+        owner: ProcId,
+        /// The owning `Vas`'s PDB.
+        owner_pdb: Pdb,
+    },
+}
+
+/// One latched page-table write (`#13`, the C's `m2_cpt` dirty entry).
+///
+/// **Latched, not decoded.** The hot path records which page was touched and nothing else:
+/// a big scrub can hit one page-directory page thousands of times, and decoding its
+/// subtree per span **livelocked on the bench** — *"the first per-write attempt hung with
+/// State=R busy-poll and no CTX OK"* (`C: :8686-8690`). The decode happens at the guest's
+/// own commit point, the semaphore release.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PtWrite {
+    /// The target GPU (a physical page address is per-GPU).
+    pub gpu: GpuId,
+    /// The 4 KiB page-table page base.
+    pub page: u64,
+    /// The aperture the write resolved through.
+    pub aperture: Aperture,
+    /// The proc whose `Vas` owns the page (see [`CeOperands::PhysOperand`]).
+    pub owner: ProcId,
+    /// The owning `Vas`'s PDB.
+    pub owner_pdb: Pdb,
+    /// Bytes the copy declared — how much of the page it may have changed.
+    pub bytes: u64,
+}
+
 /// What one pushbuffer parse observed (for assertions + the caller's next steps).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushbufferOutcome {
-    /// CE PT-write destination pages captured (#13): physical PT pages this
-    /// pushbuffer's CE copies wrote, added to the channel's `Vas.pt_pages`.
-    pub pt_writes: Vec<u64>,
+    /// ★ Phys-operand commands: page-table pages this pushbuffer's copies wrote, each
+    /// carrying the `Vas` that owns it. Latched here; applied by the caller.
+    pub pt_writes: Vec<PtWrite>,
+    /// ★ VA-operand commands seen and **deliberately not intercepted** — the forward
+    /// path. Counted so "we forwarded rather than emulated" is an assertable fact rather
+    /// than an absence, and so a test can tell "classified as data" apart from "never
+    /// decoded at all".
+    pub data_copies: usize,
     /// Semaphore releases observed → each `observe`d on the owning proc's queue.
     pub sem_releases: Vec<(GpuVa, u64)>,
     /// TLB invalidates seen (pdb, membar). A membar is honored as a hard barrier
@@ -2113,11 +2187,72 @@ pub fn read_pushbuffer(
     Ok(methods)
 }
 
+/// ★★★ **The operand split**, for one decoded copy-engine command.
+///
+/// Two steps, in this order and only this order:
+///
+/// 1. **RESOLVE** the destination to a physical address. A virtual destination is walked
+///    through the *issuing channel's own* `Vas` — which is what makes the framebuffer-alias
+///    case work: the kernel's copy-engine utility maps FB into its own address space, so
+///    its 512 MiB alias resolves in ITS table to the physical page it is writing. MISS =
+///    FAULT, no fallback walk, no cross-VAS guess (that fallback is the C's #12 collision
+///    class, `eight_blockers_resolved.md` §2).
+/// 2. **CLASSIFY** on that resolved physical, via the device-global ownership index.
+///
+/// Doing it in the other order — classify on the operand *form*, then resolve — is the
+/// inverted gate this replaces.
+fn classify_ce(
+    spine: &Spine,
+    proc: &Proc,
+    cid: ChanId,
+    chan_pdb: Option<Pdb>,
+    cgpu: GpuId,
+    dst: GpuVa,
+    dst_is_virtual: bool,
+) -> Result<CeOperands, FwdFault> {
+    let (phys, aperture) = if dst_is_virtual {
+        // The destination is an address in the issuing channel's VAS. Walk it there.
+        let pdb = chan_pdb.ok_or(FwdFault::NoVas(cid))?;
+        let vas = proc
+            .vases
+            .get(&(cgpu, pdb))
+            .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
+        match vas.table.resolve(pdb, dst) {
+            Ok((b, off)) => (b.phys.wrapping_add(off), b.aperture),
+            // ★ A virtual destination we cannot resolve is NOT a fault here, and that is
+            // deliberate. The overwhelming majority of virtual-destination copies are
+            // ordinary data writes into a user address space we never had to model — the
+            // forward path, whose whole premise is that we do not track those addresses.
+            // Faulting would turn "we are not intercepting this" into "the guest did
+            // something wrong". What must never happen is *guessing* it into a page-table
+            // write, and an unresolved destination cannot be classified as one: it has no
+            // physical address to look up.
+            Err(_) => return Ok(CeOperands::VaOperand { phys: 0 }),
+        }
+    } else {
+        // A physical destination names the framebuffer directly.
+        (dst.0, Aperture::Vidmem)
+    };
+    match spine.pt_page_owner(cgpu, phys) {
+        Some((owner, owner_pdb)) => Ok(CeOperands::PhysOperand {
+            page: phys & !0xfffu64,
+            aperture,
+            owner,
+            owner_pdb,
+        }),
+        None => Ok(CeOperands::VaOperand { phys }),
+    }
+}
+
 /// ACT phase of the pushbuffer parse: apply the decoded `methods` of channel `cid`
 /// to **its owning proc only** (`&mut Proc` + the read-only spine for the arch's
-/// method decoder). Feeds: CE-PT-write capture → the channel's `Vas.pt_pages` +
-/// address table; `SemRelease` → the proc's `CompletionQueue`; honors
-/// `TlbInvalidate` membars; passes opaque methods through.
+/// method decoder). Feeds: the operand split ([`classify_ce`]) → latched [`PtWrite`]s
+/// for the caller to route to their owners; `SemRelease` → the proc's
+/// `CompletionQueue`; honors `TlbInvalidate` membars; passes opaque methods through.
+///
+/// ★ It **observes** page-table writes and does not apply them: the owner of a written
+/// page is routinely a different proc, and this phase holds only the issuing one.
+/// [`latch_pt_writes`] is the applying half.
 pub fn apply_pushbuffer(
     spine: &Spine,
     proc: &mut Proc,
@@ -2142,32 +2277,30 @@ pub fn apply_pushbuffer(
                 len,
                 dst_is_virtual,
             } => {
-                // #13 CE-PT-write capture: a PHYSICAL destination is a page-table write
-                // into this channel's compute VAS. Record the dirtied PT page and
-                // forward-populate the same per-`Vas` table (co-equal RPC source).
-                if !dst_is_virtual {
-                    let pdb = chan_pdb.ok_or(FwdFault::NoVas(cid))?;
-                    let vas = proc
-                        .vases
-                        .get_mut(&(cgpu, pdb))
-                        .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
-                    let page = dst.0 & !0xfffu64;
-                    vas.pt_pages.insert(page);
-                    out.pt_writes.push(page);
-                    // Co-populate the address table with the captured mapping (the leaf
-                    // the PT-write publishes), MISS=FAULT on overlap.
-                    if vas.table.resolve(pdb, dst).is_err() {
-                        vas.table.bind(
-                            pdb,
-                            dst,
-                            len.max(0x1000),
-                            Binding {
-                                phys: dst.0,
-                                aperture: Aperture::Vidmem,
-                                host: None,
-                            },
-                        )?;
-                    }
+                match classify_ce(spine, proc, cid, chan_pdb, cgpu, dst, dst_is_virtual)? {
+                    // ★ VA-OPERAND — a data copy. The operands are addresses the host MMU
+                    // resolves for itself once the address space is resident, so there is
+                    // nothing here to intercept and nothing to emulate: forward it, let
+                    // hardware execute it, let it honour its own semaphores. Counted, not
+                    // acted on.
+                    CeOperands::VaOperand { .. } => out.data_copies += 1,
+                    // ★★★ PHYS-OPERAND — a page-table write. The payload is guest-physical
+                    // PTE values, which cannot be handed to hardware. LATCH the page here
+                    // (O(1), index only — decoding per write livelocked on the bench,
+                    // `C: :8686-8690`) and let the caller route it to its OWNER.
+                    CeOperands::PhysOperand {
+                        page,
+                        aperture,
+                        owner,
+                        owner_pdb,
+                    } => out.pt_writes.push(PtWrite {
+                        gpu: cgpu,
+                        page,
+                        aperture,
+                        owner,
+                        owner_pdb,
+                        bytes: len,
+                    }),
                 }
             }
             kayfabe_arch::PushMethod::SemRelease { addr, payload } => {
@@ -2205,7 +2338,34 @@ pub fn parse_pushbuffer(
 ) -> Result<PushbufferOutcome, FwdFault> {
     let methods = read_pushbuffer(&gpu.spine, vmm, ring)?;
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
-    apply_pushbuffer(&gpu.spine, proc, cid, methods)
+    let out = apply_pushbuffer(&gpu.spine, proc, cid, methods)?;
+    latch_pt_writes(gpu, &out.pt_writes);
+    Ok(out)
+}
+
+/// ★★★ Route each latched page-table write to the `Vas` that **owns** the page.
+///
+/// This is a separate step from [`apply_pushbuffer`] for a structural reason, not a
+/// stylistic one: the act phase holds the **issuing** proc, and the owner of a written
+/// page-table page is routinely a **different** proc — the guest kernel is what writes a
+/// user process's page tables. So the act phase can only *observe* the write; applying it
+/// needs the device, which is exactly the plan/commit shape the rest of the plane uses.
+///
+/// A write whose owner has retired between the parse and here is **dropped, silently and
+/// correctly**: its page tables are gone, and re-attaching a dirty page to a survivor is
+/// how the C's never-pruned table aliased two processes (`eight_blockers_resolved.md` §2).
+pub fn latch_pt_writes(gpu: &mut Gpu, writes: &[PtWrite]) {
+    for w in writes {
+        let Some(owner) = gpu.procs.get_mut(&w.owner) else {
+            continue; // owner retired in the gap — the pages died with it
+        };
+        if owner.is_retired() {
+            continue;
+        }
+        if let Some(vas) = owner.vases.get_mut(&(w.gpu, w.owner_pdb)) {
+            vas.pt_pages.insert(w.page);
+        }
+    }
 }
 
 // =================================================================================

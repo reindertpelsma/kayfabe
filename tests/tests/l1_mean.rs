@@ -5639,8 +5639,6 @@ const GPA_OUR_BAR0: Range<u64> = 0x7000_0000..0x7001_0000;
 const GPA_HOLE: Range<u64> = 0x6000_0000..0x6001_0000;
 /// The window torn down mid-flight while a thread is actively parsing out of it.
 const GPA_REVOKE: u64 = 0x5000_0000;
-/// Physical page base the DMA workload's CE PT-writes name (clear of every VA above).
-const VA_PT: u64 = 0x60_0000_0000;
 /// Submits per DMA thread. Four hostile shapes per legal one, so every arm runs many
 /// times while the peers do real work.
 const DMA_OPS: usize = 200;
@@ -5691,6 +5689,11 @@ impl Drop for OpenOnDrop<'_> {
 struct DmaTally {
     /// Legal pushbuffers that parsed and applied.
     legal_ok: usize,
+    /// ★ #102 — page-table writes CAPTURED across all legal submits. Under the operand
+    /// split every legal submit writes the same page (its VAS's root), so the set size in
+    /// `Vas::pt_pages` is 1 by construction and no longer carries the "a refused ring
+    /// applied nothing" evidence. This running count does.
+    pt_captured: usize,
     /// Refusals naming a device window (`NonRamGpa`) — the security-relevant arm.
     non_ram: usize,
     /// Refusals naming an unbacked address (`GpaRead`) — its near neighbour.
@@ -5727,13 +5730,18 @@ fn dma_workload(dev: &SharedDevice, vmm: &SharedVmm, pids: &[ProcId], i: usize) 
 
     for k in 0..DMA_OPS {
         // ---- the LEGITIMATE submit: real work, through the same locked path.
-        let pt_page = VA_PT + (i as u64) * 0x100_0000 + (k as u64) * 0x1000;
+        // ★★★ #102/#13 — the operand split. A page-table write is a copy whose RESOLVED
+        // PHYSICAL destination lands on a tracked page-table page; this lane's PDB *is*
+        // the physical address of its root page directory, so writing into that page at a
+        // rotating offset is the real shape rather than a synthetic address that would
+        // now (correctly) classify as an ordinary data copy and be forwarded untouched.
+        let pt_page = lane.pdb.0 & !0xfff;
         let ring = script_ring(
             &vmm,
             scratch + (k as u64) * 0x100,
             &[
                 MockPushbuffer::set_object(mock_classes::DMA_COPY),
-                MockPushbuffer::ce_launch_dma(pt_page, 0x1000, false),
+                MockPushbuffer::ce_launch_dma(pt_page + (k as u64 % 8) * 0x200, 0x100, false),
                 MockPushbuffer::tlb_invalidate(lane.pdb.0, true),
                 MockPushbuffer::method(0xEE, &[1, 2, 3]),
             ],
@@ -5742,11 +5750,17 @@ fn dma_workload(dev: &SharedDevice, vmm: &SharedVmm, pids: &[ProcId], i: usize) 
             .parse_pushbuffer(&mut vmm, pid, cid, &ring)
             .expect("a RAM-backed pushbuffer parses while peers hold verbs and DMA at MMIO");
         assert_eq!(
-            out.pt_writes,
-            vec![pt_page],
+            out.pt_writes.len(),
+            1,
             "the legitimate submit's CE PT-write must be captured — non-vacuity for \
              every refusal below (an instrument that only ever refuses proves nothing)"
         );
+        assert_eq!(
+            (out.pt_writes[0].page, out.pt_writes[0].owner_pdb),
+            (pt_page, lane.pdb),
+            "…attributed to the Vas that OWNS the page, not to whoever wrote it"
+        );
+        t.pt_captured += out.pt_writes.len();
         assert_eq!(out.opaque, 1, "the opaque method passed through");
         t.legal_ok += 1;
 
@@ -5897,11 +5911,23 @@ fn a_guest_steering_dma_descriptors_at_device_windows_is_refused_by_name_under_l
              Every refusal is classified: no third arm, no silent pass-through"
         );
         // ---- nothing hostile was ever half-applied.
+        //
+        // ★ #102 — this used to be `(DMA_OPS, DMA_OPS)` distinct pages, which only held
+        // because every synthetic destination was captured. Under the operand split a
+        // capture means "this landed on a tracked page-table page", and each proc has
+        // exactly one such page today (its root), so the DISTINCT-page count is 1 by
+        // construction. The count that carries the evidence moved into the tally.
+        assert_eq!(
+            (w.pt_captured, p.pt_captured),
+            (DMA_OPS, DMA_OPS),
+            "({name}) each proc captured exactly its LEGAL submits' PT writes — a \
+             refused ring must apply nothing at all"
+        );
         assert_eq!(
             r.pt_pages,
-            (DMA_OPS, DMA_OPS),
-            "({name}) each proc captured exactly its LEGAL submits' PT pages — a \
-             refused ring must apply nothing at all"
+            (1, 1),
+            "({name}) …all onto that VAS's own root page, and no other page was ever \
+             latched — a capture on a page we do not own is the #12 aliasing class"
         );
         // ---- mid-flight window teardown: served, then refused, and never served again.
         assert!(
@@ -6958,6 +6984,8 @@ fn host_page() -> u64 {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct RealDmaTally {
     legal_ok: usize,
+    /// ★ #102 — see [`DmaTally::pt_captured`].
+    pt_captured: usize,
     non_ram: usize,
     unbacked: usize,
 }
@@ -7013,13 +7041,16 @@ fn real_dma_workload(
 
     for k in 0..RDMA_OPS {
         // ---- the LEGITIMATE submit, scripted into REAL guest memory.
-        let pt_page = VA_PT + (i as u64) * 0x100_0000 + (k as u64) * 0x1000;
+        // ★ #102/#13 — see the twin in `dma_workload`: the write must land on a tracked
+        // page-table page (this lane's page-directory ROOT) to be a page-table write at
+        // all. A synthetic address is a data copy and is forwarded, not captured.
+        let pt_page = lane.pdb.0 & !0xfff;
         let ring = kayfabe_tests::script_ring_via(
             &mut vmm,
             base + ((k % 16) as u64) * 0x100,
             &[
                 MockPushbuffer::set_object(mock_classes::DMA_COPY),
-                MockPushbuffer::ce_launch_dma(pt_page, 0x1000, false),
+                MockPushbuffer::ce_launch_dma(pt_page + (k as u64 % 8) * 0x200, 0x100, false),
                 MockPushbuffer::tlb_invalidate(lane.pdb.0, true),
                 MockPushbuffer::method(0xEE, &[1, 2, 3]),
             ],
@@ -7028,11 +7059,17 @@ fn real_dma_workload(
             .parse_pushbuffer(&mut vmm, pid, cid, &ring)
             .expect("a RAM-backed pushbuffer parses out of a real mmap'd window");
         assert_eq!(
-            out.pt_writes,
-            vec![pt_page],
+            out.pt_writes.len(),
+            1,
             "the legitimate submit's CE PT-write must be captured — non-vacuity for every \
              refusal below"
         );
+        assert_eq!(
+            (out.pt_writes[0].page, out.pt_writes[0].owner_pdb),
+            (pt_page, lane.pdb),
+            "…attributed to the OWNING Vas"
+        );
+        t.pt_captured += out.pt_writes.len();
         t.legal_ok += 1;
 
         // ---- the four HOSTILE shapes, each by exact variant AND payload.

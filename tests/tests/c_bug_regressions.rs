@@ -146,13 +146,21 @@ fn cb11_ce_write_never_clobbers_live_binding() {
     );
     let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("parses");
 
-    // Observed (dirty-latched), but the LIVE binding was not replaced: the VA still
-    // resolves to its original backing + host publication — never to the CE write's
-    // identity mapping (the wipe-shaped clobber).
+    // ★★★ #102 — the operand split makes this STRONGER than "observed but did not
+    // clobber". `VA` is an ordinary data buffer, not a page-table page, so its resolved
+    // physical destination owns nothing in the page-table index and the copy is
+    // classified **VA-operand**: forwarded to the host copy engine, never intercepted,
+    // with nothing for the core to write over the live binding with. The wipe shape is
+    // not "prevented"; there is no longer a code path that could perform it.
+    //
+    // This replaces a latch assertion that read `out.pt_writes == vec![VA & !0xfff]` —
+    // i.e. that a *data* buffer was captured as a page table, which was the inverted
+    // gate's behaviour and is exactly the over-capture #13-round-4-part2 broke
+    // cuCtxCreate with.
     assert_eq!(
-        out.pt_writes,
-        vec![VA.0 & !0xfff],
-        "write observed as a dirtied page"
+        (out.pt_writes.len(), out.data_copies),
+        (0, 1),
+        "a copy into a data buffer is FORWARDED, not intercepted"
     );
     let (b, off) = resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(VA.0 + 0x20)).unwrap();
     assert_eq!(off, 0x20);
@@ -265,50 +273,103 @@ fn cb12_system_forge_never_reaches_a_user_proc_queue() {
 
 /// **Guards #13 rounds 1-3's mystery** (`mode2_13_multiiter_idle_hang`): the guest
 /// fills a leaf PT page and links it under the root a SEPARATE push later. The C's
-/// root walks read `runs=0` while the host faulted one page past the last-backed
-/// leaf; the v6 fix decodes each dirtied page DIRECTLY. The rewrite's capture path
-/// must make an observed CE PT-write resolvable IMMEDIATELY — with zero
-/// root-reachability, before any "linking" write arrives — and a later linking
-/// write must not disturb it. (There is no root-walk resolve path to get this
-/// wrong, but this pins the observable contract.)
+/// root walks read `runs=0` while the host faulted one page past the last-backed leaf;
+/// the v6 fix decodes each dirtied page DIRECTLY.
+///
+/// ## ★★★ What this test asserts after `#102`, and what MOVED
+///
+/// The old form asserted that an observed physical CE destination becomes **resolvable**
+/// — `resolve(leaf_page).phys == leaf_page`. That was a tautology over the bug: it held
+/// only because the capture bound `phys: dst.0`, mapping a page-table page, as a virtual
+/// address, to its own physical address. It publishes nothing, it is not a fact about the
+/// guest, and it is the identity function wearing a regression test's clothes. It also
+/// required capturing an address the core had no reason to believe was a page table at
+/// all, which is over-capture — the shape that broke `cuCtxCreate` in #13 round 4 part 2.
+///
+/// What is asserted here instead is the part the capture path owns TODAY:
+///
+/// 1. **No root reachability is ever consulted.** There is no walk to read `runs=0` from.
+///    The index is seeded from a DECLARED fact — a PDB *is* the physical address of its
+///    root page directory — so the very first page-table write, with zero prior traffic
+///    and nothing linked anywhere, is captured at the write.
+/// 2. **Order-independence across pushes**, which is the leaf-then-link property in the
+///    form stage B can state: a second, later push into the same tracked page does not
+///    disturb the first capture.
+/// 3. **A page we do not know is a page table is NOT captured** — it is forwarded. The
+///    failure direction is "not yet tracked", never "captured as something it is not".
+///
+/// ★★ **HONEST COVERAGE NOTE — do not let this rest here.** The literal
+/// *"orphan LEAF page filled in push 1, linked under the root in push 2"* case is **not
+/// covered by this test any more**, because a leaf page only enters the tracked set when
+/// a page-directory entry pointing at it is DECODED, and the decode-at-semaphore-release
+/// stage is not built yet. Point 3 pins the safe direction in the meantime. Restoring the
+/// literal case is the acceptance criterion for that stage, and this note is the marker.
 #[test]
 fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
     let (mut gpu, _rec) = fresh_gpu();
     let mut vmm = MockVmm::new();
     let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
 
-    // Push 1: the CE fills an ORPHAN leaf PT page — nothing references it yet.
-    let leaf_page: u64 = 0x1_2340_0000;
+    // Push 1: the FIRST write this device has ever seen, into the VAS's root page
+    // directory. Nothing is linked, nothing has been swept, no completion has fired.
+    let root: u64 = A_PDB.0 & !0xfff;
     let ring1 = script_pushbuffer(
         &mut vmm,
         0x5000_0000,
-        &[MockPushbuffer::ce_launch_dma(leaf_page, 0x1000, false)],
+        &[MockPushbuffer::ce_launch_dma(root + 0x18, 0x40, false)],
     );
-    parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring1).expect("push 1 parses");
-
-    // ★ Resolvable IMMEDIATELY at the release point — no link, no walk, no sweep.
-    let (b, _) = resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(leaf_page))
-        .expect("an observed PT-write is resolvable directly — the C's root walk read runs=0 here");
-    assert_eq!(b.phys, leaf_page);
+    let out1 = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring1).expect("push 1 parses");
+    assert_eq!(
+        out1.pt_writes.len(),
+        1,
+        "captured at the write — no walk, no sweep"
+    );
+    assert_eq!(
+        (out1.pt_writes[0].page, out1.pt_writes[0].owner),
+        (root, pid),
+        "…and attributed from a DECLARED fact, not a discovered one"
+    );
     assert!(
         gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)]
             .pt_pages
-            .contains(&leaf_page)
+            .contains(&root)
     );
 
-    // Push 2 (a push LATER): the upper-PD "linking" write. Both captured; the leaf
-    // from push 1 is undisturbed.
-    let upper_pd: u64 = 0x1_2000_0000;
+    // ★ The capture binds NOTHING. A page-table page is not a mapping of itself; what its
+    // CONTENT describes is a separate act, at the guest's own commit point.
+    assert!(
+        resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(root + 0x18)).is_err(),
+        "the latch must not fabricate an identity mapping of the page table"
+    );
+
+    // Push 2, a push LATER, into the same tracked page: captured again, independently.
+    // The first capture is undisturbed — no ordering between pushes is required.
     let ring2 = script_pushbuffer(
         &mut vmm,
         0x5001_0000,
-        &[MockPushbuffer::ce_launch_dma(upper_pd, 0x1000, false)],
+        &[MockPushbuffer::ce_launch_dma(root + 0x800, 0x40, false)],
     );
-    parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring2).expect("push 2 parses");
-    assert!(resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(upper_pd)).is_ok());
-    assert!(
-        resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(leaf_page)).is_ok(),
-        "leaf capture survives the link"
+    let out2 = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring2).expect("push 2 parses");
+    assert_eq!(out2.pt_writes.len(), 1);
+    assert_eq!(
+        gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)].pt_pages.len(),
+        1,
+        "one page, latched idempotently — the latch is an index, not a log"
+    );
+
+    // ★ The safe direction: a page nothing declares as a page table is FORWARDED, never
+    // guessed into a capture.
+    let unknown_page: u64 = 0x1_2340_0000;
+    let ring3 = script_pushbuffer(
+        &mut vmm,
+        0x5002_0000,
+        &[MockPushbuffer::ce_launch_dma(unknown_page, 0x1000, false)],
+    );
+    let out3 = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring3).expect("push 3 parses");
+    assert_eq!(
+        (out3.pt_writes.len(), out3.data_copies),
+        (0, 1),
+        "an untracked destination is VA-operand work — forwarded, not captured"
     );
 }
 
@@ -346,27 +407,53 @@ fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
             false,
         )],
     );
-    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring);
-    // Loud fault (address-table refusal), NOT a panic and NOT a silent accept.
-    // ★ §12.38 — the EXACT `AddressFault`, not just "some address fault": a wrapping
-    // range must be `Malformed` (the input was never a range), never a `Miss` (which
-    // would say the range was fine and merely unmapped).
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring)
+        .expect("a wrapping CE dst must not panic and must not fault the parse");
+    // ★★★ #102 — the ANSWER changed with the operand split, and the change is correct.
+    //
+    // This used to require `AddressFault::Malformed`, which came from the CE arm binding
+    // `phys: dst.0` — a page-table page mapped to itself. There is no such bind any more,
+    // so there is no malformed *range* to refuse: the destination is simply an address
+    // that owns no page table, i.e. VA-operand work, forwarded untouched. Refusing it
+    // would mean faulting the guest for issuing a copy we are not interested in.
+    //
+    // The property the fuzz campaign actually found stands unchanged and is asserted
+    // directly: **wrapping arithmetic on an attacker-controlled destination does not
+    // panic**, and nothing is half-applied.
     assert_eq!(
-        out,
-        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Malformed {
-            pdb: A_PDB,
-            va: kayfabe_arch::ids::GpuVa(0xFFFF_FFFF_FFFF_F800),
-        })),
-        "a u64-wrapping CE dst must be a loud MALFORMED fault"
+        (out.pt_writes.len(), out.data_copies),
+        (0, 1),
+        "a destination that owns no page table is forwarded, not captured"
     );
-    // No torn state: nothing was left half-bound.
     assert_eq!(
         gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)]
             .table
             .iter()
             .count(),
         0,
-        "a refused malformed bind leaves the table empty (no torn partial state)"
+        "no torn partial state"
+    );
+
+    // ★ The sharper case the old form could not reach: a wrapping length whose START is
+    // a real page-table page. Classification must still be total, and the latched page
+    // must be the page-aligned base — never a wrapped or truncated address.
+    let root = A_PDB.0 & !0xfff;
+    let ring = script_pushbuffer(
+        &mut vmm,
+        0x5001_0000,
+        &[MockPushbuffer::ce_launch_dma(
+            root + 0xff8,
+            u64::from(u32::MAX),
+            false,
+        )],
+    );
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring)
+        .expect("a wrapping length on a real PT page must not panic either");
+    assert_eq!(out.pt_writes.len(), 1);
+    assert_eq!(
+        (out.pt_writes[0].page, out.pt_writes[0].bytes),
+        (root, u64::from(u32::MAX)),
+        "page-aligned base, length carried verbatim for the decode to bound itself with"
     );
 }
 

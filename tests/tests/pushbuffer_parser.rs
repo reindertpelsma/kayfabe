@@ -75,25 +75,45 @@ fn one_proc_gpu() -> (Guarded<Gpu>, MockVmm) {
     )
 }
 
-/// A scripted pushbuffer drives ALL four fact kinds: CE-PT-write capture populates
-/// `pt_pages` + the table, `SemRelease` is observed, `TlbInvalidate` is recorded,
-/// `Opaque` changes nothing.
+/// A scripted pushbuffer drives ALL four fact kinds: CE-PT-write capture latches
+/// `pt_pages`, `SemRelease` is observed, `TlbInvalidate` is recorded, `Opaque` changes
+/// nothing.
+///
+/// ★★★ **#102 — this test was rewritten around the operand split, and the old form was
+/// a tautology over the bug.** It used to assert that a physical CE destination is
+/// captured *and then resolves as a virtual address to itself* — i.e. it pinned
+/// `phys: dst.0`, a binding that publishes nothing, as if it were a fact about the guest.
+/// It also asserted that *"a VIRTUAL CE dst is a data copy, NOT a PT write"*, which is
+/// false and is #13: the guest kernel's copy-engine utility identity-maps the whole
+/// framebuffer into its own address space at 512 MiB pages and issues its page-table
+/// writes as **virtual-destination** copies (`C: nvkvm_gpu_emul.c:4936-4952`).
+///
+/// What decides is what the operands CARRY, read off the **resolved physical**
+/// destination: does it land on a tracked page-table page? The physical-destination case
+/// is below; the virtual one has its own test.
 #[test]
-fn scripted_pushbuffer_populates_table_and_observes_completion() {
+fn scripted_pushbuffer_captures_pt_writes_and_observes_completion() {
     let (mut gpu, mut vmm) = one_proc_gpu();
     let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
 
-    let pt_page: u64 = 0x1_2340_0000; // physical PT page the CE writes
+    // The VAS's page-directory ROOT — a PDB *is* the physical address of its root page
+    // directory, so this page is a declared fact, not a discovered one.
+    let pt_page: u64 = A_PDB.0 & !0xfff;
     let sem_addr: u64 = 0x2_0030_0000;
     let ring = script_pushbuffer(
         &mut vmm,
         0x5000_0000,
         &[
             MockPushbuffer::set_object(mc::DMA_COPY),
-            // Physical CE dst = a PT-page write (#13 capture).
+            // Physical CE dst ON a page-table page = a PT write (#13 capture).
             MockPushbuffer::ce_launch_dma(pt_page + 0x40, 0x1000, false),
-            // A VIRTUAL CE dst is a data copy, NOT a PT write — must not be captured.
+            // A physical CE dst that is NOT a page-table page is a DATA copy: forwarded,
+            // never intercepted. (The old test asserted the discriminator was the
+            // virtual/physical FORM; it is not.)
+            MockPushbuffer::ce_launch_dma(0x1_2340_0000, 0x2000, false),
+            // An unresolvable VIRTUAL dst is likewise data — we do not track user data
+            // addresses, and not tracking one must never be read as a page-table write.
             MockPushbuffer::ce_launch_dma(0x2_0040_0000, 0x2000, true),
             MockPushbuffer::sem_release(sem_addr, 0xabc),
             MockPushbuffer::tlb_invalidate(A_PDB.0, true),
@@ -104,23 +124,26 @@ fn scripted_pushbuffer_populates_table_and_observes_completion() {
 
     let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("parses");
 
-    // CE-PT-write capture: exactly the physical dst page, aligned.
+    // Exactly ONE of the three copies is a page-table write, and it names its owner.
+    assert_eq!(out.pt_writes.len(), 1, "one PT write among three copies");
     assert_eq!(
-        out.pt_writes,
-        vec![pt_page],
-        "physical CE dst captured as a PT page"
+        (
+            out.pt_writes[0].page,
+            out.pt_writes[0].owner,
+            out.pt_writes[0].owner_pdb
+        ),
+        (pt_page, pid, A_PDB),
+        "captured as a PT page, attributed to the Vas that owns it"
+    );
+    assert_eq!(
+        out.data_copies, 2,
+        "the other two are VA-operand work: forwarded, not intercepted"
     );
     assert!(
         gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)]
             .pt_pages
             .contains(&pt_page),
-        "recorded in Vas.pt_pages"
-    );
-    // The virtual CE dst was NOT captured as a PT write.
-    assert_eq!(
-        out.pt_writes.len(),
-        1,
-        "virtual CE dst is a data copy, not a PT-write"
+        "latched into the OWNING Vas.pt_pages"
     );
     // SemRelease observed.
     assert_eq!(out.sem_releases, vec![(GpuVa(sem_addr), 0xabc)]);
@@ -133,8 +156,21 @@ fn scripted_pushbuffer_populates_table_and_observes_completion() {
     // Opaque method counted, changed nothing else.
     assert_eq!(out.opaque, 1);
 
-    // The captured PT-write leaf is now resolvable in the table (co-populate source).
-    assert!(kayfabe_fwd::resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(pt_page + 0x40)).is_ok());
+    // ★★★ And the captured page is **NOT** bound as a mapping of itself.
+    //
+    // The old test asserted the opposite — that `pt_page + 0x40` resolves — which was
+    // true only because the CE arm bound `phys: dst.0`: a page-table page mapped, as a
+    // virtual address, to its own physical address. That is not a fact about the guest,
+    // it is the identity function. It publishes nothing, it is the *destination* rather
+    // than anything the destination describes, and its aperture was hardcoded `Vidmem`
+    // where the C reads it from PTE bits [2:1].
+    //
+    // A latch is a latch. What the page's CONTENT describes is decoded at the guest's own
+    // commit point (the semaphore release) and bound then — the next stage.
+    assert!(
+        kayfabe_fwd::resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(pt_page + 0x40)).is_err(),
+        "a page-table page does not map to itself — the latch binds NOTHING"
+    );
 }
 
 /// A hostile / truncated ring never panics and never desyncs the parser into an
@@ -575,5 +611,178 @@ fn sem_release_completion_identities_mix_both_operands_and_never_collide() {
         3,
         "…and three distinct releases stay three distinct completions — a lossy \
          fold collides them and loses one"
+    );
+}
+
+// =================================================================================
+// ★★★ #102/#13 — THE OPERAND SPLIT: the discriminator is what the operands CARRY,
+// read off the RESOLVED PHYSICAL destination, never the operand's FORM.
+// =================================================================================
+
+/// Give `pdb`'s VAS the framebuffer alias the guest kernel's copy-engine utility builds:
+/// a virtual range that maps straight onto physical framebuffer, at the largest page
+/// size, so page-table writes issued through it are **virtual-destination** copies.
+///
+/// This is the C's `bUseVasForCeCopy` / `channel_utils.c` shape:
+/// *"identity-maps the WHOLE FB heap into its own VAS at the largest page size — 512 MiB
+/// — and then issues its page-table writes as VIRTUAL-dst CE copies (dstAddr = fbPhys +
+/// fbAliasVA - startFbOffset = fbPhys)"* (`C: nvkvm_gpu_emul.c:4936-4952`).
+fn declare_fb_alias(gpu: &mut Gpu, pid: kayfabe_core::ProcId, pdb: Pdb, at: GpuVa, phys: u64) {
+    gpu.procs
+        .get_mut(&pid)
+        .expect("live proc")
+        .vases
+        .get_mut(&(GpuId::ZERO, pdb))
+        .expect("the Vas")
+        .table
+        .bind(
+            pdb,
+            at,
+            0x2000_0000, // 512 MiB, the alias's page size
+            kayfabe_mmu::Binding {
+                phys,
+                aperture: kayfabe_arch::Aperture::Vidmem,
+                host: None,
+            },
+        )
+        .expect("the alias binds");
+}
+
+/// ★★★ **THE INVERTED GATE, fixed.** A page-table write issued as a **VIRTUAL**
+/// destination through the framebuffer alias is captured — and the old gate
+/// (`if !dst_is_virtual`) skipped exactly this, which is what #13 is.
+///
+/// The C hooks on the **resolved physical** destination regardless of the form the
+/// operand took (`C: :6353` for the fill path, `:6437` for the copy path — both take the
+/// post-resolve address). Our port gated on the form and therefore excluded the only
+/// shape the guest's page-table writer actually uses.
+///
+/// **Non-vacuity, and it is the whole test:** the same page is written twice, once as a
+/// physical destination and once as a virtual one through the alias, and the two must
+/// produce the SAME capture. A test that only checked the virtual case could pass on a
+/// parser that captured everything.
+#[test]
+fn a_virtual_destination_through_the_fb_alias_is_captured_as_a_pt_write() {
+    let (mut gpu, mut vmm) = one_proc_gpu();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
+
+    let root: u64 = A_PDB.0 & !0xfff;
+    // The alias covers physical 0 upward, so `ALIAS_BASE + p` resolves to physical `p`.
+    // ★ Deliberately under 2^46. This is a GPU VA and never becomes a KVM memslot, but
+    // the house rule after task #105 is that no hardcoded address in a test needs 47+
+    // bits: the memslot ceiling is the HOST CPU's physical-address width (46 on the
+    // Xeon E5-2697A v4 bench box, 48 on the AMD dev box), and a test that encodes the
+    // wider assumption passes locally and fails on hardware.
+    const ALIAS_BASE: GpuVa = GpuVa(0x3000_0000_0000);
+    declare_fb_alias(&mut gpu, pid, A_PDB, ALIAS_BASE, 0);
+
+    // (a) the PHYSICAL form.
+    let ring = script_pushbuffer(
+        &mut vmm,
+        0x5000_0000,
+        &[MockPushbuffer::ce_launch_dma(root + 0x40, 0x40, false)],
+    );
+    let phys_form = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("parses");
+
+    // (b) the VIRTUAL form, through the alias, naming the SAME physical page.
+    let ring = script_pushbuffer(
+        &mut vmm,
+        0x5001_0000,
+        &[MockPushbuffer::ce_launch_dma(
+            ALIAS_BASE.0 + root + 0x40,
+            0x40,
+            true,
+        )],
+    );
+    let virt_form = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("parses");
+
+    assert_eq!(
+        phys_form.pt_writes, virt_form.pt_writes,
+        "★ the SAME page-table write, in two operand forms, must capture identically — \
+         the old `if !dst_is_virtual` gate dropped the second one entirely, and the \
+         second one is the only form the guest's page-table writer uses"
+    );
+    assert_eq!(virt_form.pt_writes.len(), 1);
+    assert_eq!(
+        (
+            virt_form.pt_writes[0].page,
+            virt_form.pt_writes[0].owner_pdb
+        ),
+        (root, A_PDB)
+    );
+    assert_eq!(
+        (phys_form.data_copies, virt_form.data_copies),
+        (0, 0),
+        "neither was misclassified as forwardable data"
+    );
+
+    // ★ Non-vacuity in the other direction: a VIRTUAL destination through the SAME alias
+    // that lands on a page nothing owns is data — forwarded. So the capture above is
+    // about the destination, not about the alias.
+    let ring = script_pushbuffer(
+        &mut vmm,
+        0x5002_0000,
+        &[MockPushbuffer::ce_launch_dma(
+            ALIAS_BASE.0 + 0x1_2340_0000,
+            0x1000,
+            true,
+        )],
+    );
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("parses");
+    assert_eq!((out.pt_writes.len(), out.data_copies), (0, 1));
+}
+
+/// ★★★ **The write and the owner are DIFFERENT procs**, which is why the page-table
+/// ownership index is device-global and why the latch is a separate pass.
+///
+/// The guest kernel is what writes a user process's page tables. Here proc B's channel,
+/// through B's own framebuffer alias, writes the page table belonging to proc **A** — and
+/// the capture must be attributed to A, latched into A's `Vas`, and must NOT appear in
+/// B's. Attributing it to the writer is the C's `va_map[]` aliasing class
+/// (`eight_blockers_resolved.md` §2: keyed on client, *"not dup-edge aware"*).
+#[test]
+fn a_pt_write_is_attributed_to_the_vas_that_owns_the_page_not_to_the_writer() {
+    let (mut gpu, _vmm, _rec) = two_proc_gpu();
+    let mut vmm = MockVmm::new();
+    let pid_a = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let pid_b = *gpu.spine.by_pdb.get(&(GpuId::ZERO, B_PDB)).unwrap();
+    let cid_b = *gpu.procs[&pid_b].chan_ids.values().next().unwrap();
+
+    // B's channel has the FB alias; A's page-directory root is what it writes.
+    // Under 2^46, as above (task #105).
+    const ALIAS_BASE: GpuVa = GpuVa(0x3000_0000_0000);
+    declare_fb_alias(&mut gpu, pid_b, B_PDB, ALIAS_BASE, 0);
+    let a_root: u64 = A_PDB.0 & !0xfff;
+
+    let ring = script_pushbuffer(
+        &mut vmm,
+        0x5000_0000,
+        &[MockPushbuffer::ce_launch_dma(
+            ALIAS_BASE.0 + a_root + 0x80,
+            0x40,
+            true,
+        )],
+    );
+    let out =
+        parse_pushbuffer(&mut gpu, &mut vmm, pid_b, cid_b, &ring).expect("B's channel parses");
+
+    assert_eq!(out.pt_writes.len(), 1, "captured");
+    assert_eq!(
+        (out.pt_writes[0].owner, out.pt_writes[0].owner_pdb),
+        (pid_a, A_PDB),
+        "★ attributed to A, whose page table it is — NOT to B, who wrote it"
+    );
+    assert!(
+        gpu.procs[&pid_a].vases[&(GpuId::ZERO, A_PDB)]
+            .pt_pages
+            .contains(&a_root),
+        "latched into A's Vas"
+    );
+    assert!(
+        gpu.procs[&pid_b].vases[&(GpuId::ZERO, B_PDB)]
+            .pt_pages
+            .is_empty(),
+        "…and NOT into the writer's — an alias in B's VAS confers no ownership"
     );
 }

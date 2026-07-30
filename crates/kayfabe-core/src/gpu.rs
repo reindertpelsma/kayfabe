@@ -844,6 +844,36 @@ pub struct Spine {
     pub by_pdb: BTreeMap<(GpuId, Pdb), ProcId>,
     /// ★ Exec-plane routing (derived): `(GpuId, vChid)` → (proc, channel) (MG-3).
     pub by_vchid: BTreeMap<(GpuId, VChid), (ProcId, ChanId)>,
+    /// ★★★ **Page-table-page ownership: `(GpuId, physical page)` → the `Vas` whose page
+    /// table it is** (`#102`/#13's operand split; the C's `m2_cpt`, `C:
+    /// nvkvm_gpu_emul.c:596-609`).
+    ///
+    /// ## Why this is device-global and not per-`Proc`
+    ///
+    /// Because **the writer and the owner are different procs.** The guest kernel's
+    /// CeUtils channel is what writes a user process's page tables — it identity-maps the
+    /// whole framebuffer into its OWN address space and issues the writes as copies into
+    /// that alias (`C: :4936-4952`). So when the parser sees that copy, the channel it is
+    /// parsing belongs to the system proc while the page being written belongs to a user
+    /// proc. A per-proc index cannot answer "whose page table is this?" — which is the
+    /// only question the operand split turns on.
+    ///
+    /// ## Why the physical page and not the VA
+    ///
+    /// Because the operand form varies and the target does not. The same page-table write
+    /// arrives as a *physical* destination from one channel and as a *virtual* one through
+    /// the FB alias from another; the C hooks on the **resolved physical** in both cases
+    /// (`C: :6353`, `:6437`) and so must we. Gating on `!dst_is_virtual`, as this port did,
+    /// excludes exactly the case #13 is about.
+    ///
+    /// **Derived, never accreted** — rebuilt from the projection in [`Spine::refresh`]
+    /// beside [`Spine::by_pdb`], seeded from each live `Vas`'s **root**: a PDB *is* the
+    /// physical address of its root page directory, so the root page is a declared fact
+    /// and needs no discovery. Deeper levels are forward-populated by the decode at the
+    /// guest's commit point (the next stage), which is also what makes them prunable: a
+    /// `Vas` that dies takes its pages with it, where the C's table was *"never pruned on
+    /// handle free"* (`eight_blockers_resolved.md` §2).
+    pub pt_roots: BTreeMap<(GpuId, u64), (ProcId, Pdb)>,
     /// ★ MG-6: per-target device state — one [`GpuTarget`] (its own guest-physical
     /// window + GSP-queue drain gate) per routable GPU. `GpuId::ZERO` is realized at
     /// [`Gpu::new`]; further targets are minted lazily as their Devices are derived.
@@ -1109,6 +1139,25 @@ impl Spine {
     #[must_use]
     pub fn arch(&self) -> &dyn Arch {
         self.arch.as_ref()
+    }
+
+    /// ★★★ Whose page table is the physical address `phys` part of, on `gpu`?
+    ///
+    /// **The operand split's one question** (`#102`/#13). A copy-engine command whose
+    /// *resolved physical destination* lands on a tracked page-table page is a
+    /// **phys-operand** command: its payload is guest-physical PTE values, which cannot be
+    /// handed to hardware, so it must be intercepted and translated. Anything else is a
+    /// **VA-operand** command whose operands the host MMU resolves for itself once the
+    /// address space is resident — forward it, do not intercept it.
+    ///
+    /// `None` is the ordinary answer and it means *forward*, not *fault*: the overwhelming
+    /// majority of copies are data. It is [`AddressTable::resolve`] that is MISS = FAULT,
+    /// and it runs first — an unresolvable destination faults there, before this is asked.
+    ///
+    /// [`AddressTable::resolve`]: kayfabe_mmu::AddressTable::resolve
+    #[must_use]
+    pub fn pt_page_owner(&self, gpu: GpuId, phys: u64) -> Option<(ProcId, Pdb)> {
+        self.pt_roots.get(&(gpu, phys & !0xfff)).copied()
     }
 
     /// Ensure target `gpu` exists (minting its disjoint window + drain gate on first
@@ -2214,6 +2263,7 @@ impl Spine {
         // projection — to a named refusal rather than to an anonymous miss.
         self.by_pdb.clear();
         self.by_vchid.clear();
+        self.pt_roots.clear();
         self.condemned_by_pdb.clear();
         self.condemned_by_vchid.clear();
         let anchor_to_pid: BTreeMap<ProcAnchor, ProcId> =
@@ -2230,6 +2280,15 @@ impl Spine {
                 self.by_pdb.insert((gpu, pdb), pid);
             } else if condemned_anchors.contains(&anchor) {
                 self.condemned_by_pdb.insert((gpu, pdb), anchor);
+            }
+            // ★★★ The page-table ROOT, from the same projection ([`Spine::pt_roots`]).
+            // A PDB is the physical address of its root page directory, so the root is a
+            // *declared* fact and the operand split gets a non-empty index before any
+            // decoding exists. A CONDEMNED component's root is deliberately excluded: its
+            // page tables must not attract capture (the C re-checked ownership at decode
+            // time for exactly this, `C: :8574-8586`).
+            if let Some(&pid) = self.by_pdb.get(&(gpu, pdb)) {
+                self.pt_roots.insert((gpu, pdb.0 & !0xfff), (pid, pdb));
             }
         }
         for (&(gpu, vchid), &(anchor, key)) in &bounds.by_vchid {
@@ -2734,6 +2793,7 @@ impl Gpu {
             rmgraph,
             by_pdb: BTreeMap::new(),
             by_vchid: BTreeMap::new(),
+            pt_roots: BTreeMap::new(),
             targets,
             sources: SourceRegistry::new(),
             pending_cancels: Cancels::new(),

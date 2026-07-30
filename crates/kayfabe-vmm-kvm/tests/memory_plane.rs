@@ -561,8 +561,19 @@ fn the_memslot_ceiling_is_a_real_number_and_the_refusal_names_it() {
                 .unwrap_or_else(|e| panic!("window {i} of {ceiling} must fit ({e:?})")),
         );
     }
+    // ★★ The probe GPA is derived from this test's OWN layout — the page just past the
+    // last window installed above — and deliberately NOT a far-away constant.
+    //
+    // It used to be `0x9000_0000_0000`, and that made the test **CPU-dependent**:
+    // `KVM_SET_USER_MEMORY_REGION` refuses (EINVAL) any GPA above the *host CPU's*
+    // physical-address width. Measured 2026-07-30 with the same probe on both boxes —
+    // AMD EPYC 7543 (48 phys bits) accepts it, Intel Xeon E5-2697A v4 (46 phys bits)
+    // refuses it — so the test passed on one machine and failed on the other for a
+    // reason with nothing to do with memslots. Deriving the address means there is no
+    // width to be wrong about: this GPA sits a few hundred MiB up, legal on any host.
+    let probe_gpa = GPA_RAM + u64::from(ceiling) * p.bytes() * 2;
     assert_eq!(
-        m.install_ram_window(0x9000_0000_0000, p.bytes()),
+        m.install_ram_window(probe_gpa, p.bytes()),
         Err(VmmError::Unsupported(
             kayfabe_vmm_kvm::slotnum::MEMSLOT_CEILING_REACHED
         )),
@@ -578,9 +589,13 @@ fn the_memslot_ceiling_is_a_real_number_and_the_refusal_names_it() {
     // distinguishes a recycling allocator from one that merely has a large pool.
     m.remove_window(held.pop().expect("one to give back"))
         .expect("remove");
+    // ★ The message names what this call DID, not what its failure would prove. The
+    // previous text ("the number that just came back") named the *hypothesis*, so the
+    // unrelated EINVAL above surfaced as apparent evidence that the recycling allocator
+    // had broken — a failure that misattributes itself costs more than the bug.
     let r = m
-        .install_ram_window(0x9000_0000_0000, p.bytes())
-        .expect("the number that just came back");
+        .install_ram_window(probe_gpa, p.bytes())
+        .expect("installing one window after freeing one, with the ceiling otherwise full");
     m.remove_window(r).expect("remove");
 }
 
