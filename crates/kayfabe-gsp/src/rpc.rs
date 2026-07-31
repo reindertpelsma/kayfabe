@@ -86,6 +86,15 @@ pub struct FunctionCodes {
     pub unloading_guest_driver: u32,
     /// `GET_GSP_STATIC_INFO` — the second synchronous RPC after `GSP_INIT_DONE`.
     pub get_gsp_static_info: u32,
+    /// `INIT_GSP_TRACE_CRASH_BUFFER` (0xE4) — the guest handing its GSP a sysmem buffer
+    /// to write crash traces into.
+    ///
+    /// ★ Named because `kgspInitGspTraceCrashBuffer` sends it from inside
+    /// `kgspInitRm_IMPL` and **asserts on the status**
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:3396-3402`, hoisted at
+    /// `:4239`), so it is on the critical boot path rather than a diagnostic aside. Its
+    /// consumer is `kayfabe_device::inert`.
+    pub init_gsp_trace_crash_buffer: u32,
     /// `CONTINUATION_RECORD` — the large-message carrier.
     pub continuation_record: u32,
     /// `GSP_SET_SYSTEM_INFO` — init RPC, no reply.
@@ -118,7 +127,7 @@ pub struct FunctionCodes {
 
 impl FunctionCodes {
     /// Every id, for the distinctness check.
-    fn all(&self) -> [u32; 14] {
+    fn all(&self) -> [u32; 15] {
         [
             self.set_guest_system_info,
             self.set_guest_system_info_ext,
@@ -126,6 +135,7 @@ impl FunctionCodes {
             self.dup_object,
             self.unloading_guest_driver,
             self.get_gsp_static_info,
+            self.init_gsp_trace_crash_buffer,
             self.continuation_record,
             self.gsp_set_system_info,
             self.set_registry,
@@ -168,6 +178,7 @@ impl FunctionCodes {
             c if c == self.dup_object => RpcFunction::DupObject,
             c if c == self.unloading_guest_driver => RpcFunction::UnloadingGuestDriver,
             c if c == self.get_gsp_static_info => RpcFunction::GetGspStaticInfo,
+            c if c == self.init_gsp_trace_crash_buffer => RpcFunction::InitGspTraceCrashBuffer,
             c if c == self.continuation_record => RpcFunction::ContinuationRecord,
             c if c == self.gsp_set_system_info => RpcFunction::GspSetSystemInfo,
             c if c == self.set_registry => RpcFunction::SetRegistry,
@@ -215,6 +226,9 @@ pub enum RpcFunction {
     UnloadingGuestDriver,
     /// `GET_GSP_STATIC_INFO`.
     GetGspStaticInfo,
+    /// `INIT_GSP_TRACE_CRASH_BUFFER` — a buffer declaration this port accepts and does
+    /// nothing with; see `kayfabe_device::inert`.
+    InitGspTraceCrashBuffer,
     /// `CONTINUATION_RECORD`.
     ContinuationRecord,
     /// `GSP_SET_SYSTEM_INFO` — init RPC, asynchronous.

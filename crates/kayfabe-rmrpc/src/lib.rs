@@ -934,6 +934,7 @@ pub fn translate(
         RpcFunction::SetGuestSystemInfo
         | RpcFunction::SetGuestSystemInfoExt
         | RpcFunction::GetGspStaticInfo
+        | RpcFunction::InitGspTraceCrashBuffer
         | RpcFunction::UnloadingGuestDriver
         | RpcFunction::GspSetSystemInfo
         | RpcFunction::SetRegistry => Ok(Translation::Inert),

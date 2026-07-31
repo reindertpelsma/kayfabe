@@ -126,6 +126,11 @@ pub const NV_VGPU_MSG_FUNCTION_SET_REGISTRY: u32 = 0x49;
 /// `X(SET_GUEST_SYSTEM_INFO_EXT, 0x40)` — ogkm `src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`.
 pub const NV_VGPU_MSG_FUNCTION_SET_GUEST_SYSTEM_INFO_EXT: u32 = 0x40;
 
+/// RPC function IDs (`rpc_global_enums.h`, `X(RM, NAME, id)`).
+///
+/// `X(INIT_GSP_TRACE_CRASH_BUFFER, 0xe4)` — ogkm `src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`.
+pub const NV_VGPU_MSG_FUNCTION_INIT_GSP_TRACE_CRASH_BUFFER: u32 = 0xe4;
+
 /// GSP→CPU event IDs (`rpc_global_enums.h`, `E(NAME, id)`).
 ///
 /// `E(FIRST_EVENT, 0x1000)` — ogkm `src/nvidia/inc/kernel/vgpu/rpc_global_enums.h`.

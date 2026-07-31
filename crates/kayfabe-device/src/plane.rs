@@ -376,6 +376,7 @@ impl RegPlane {
                     Box::new(crate::inittables::InitTablePolicy::new(chip, abi.driver)),
                     Box::new(crate::staticinfo::StaticInfoPolicy::new(chip, abi.driver)),
                     Box::new(crate::guestsysinfo::GuestSystemInfoPolicy::new(abi.driver)),
+                    Box::new(crate::inert::InertPolicy::new()),
                     Box::new(crate::unserviced::UnservicedLedger::new(
                         abi.driver,
                         unserviced.clone(),
