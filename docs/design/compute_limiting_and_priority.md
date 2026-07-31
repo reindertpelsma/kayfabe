@@ -28,7 +28,10 @@ subject: on Turing+ with GSP enabled, the runlist is built inside firmware.
 Task #129 established that the unprivileged construction prevents **brick** but not
 **wedge**: a tenant can hang an engine with a non-terminating kernel or a malformed
 pushbuffer and deny service to co-tenants on the same physical GPU. A memory bound does not
-address that, because the resource being denied is *time*, not bytes. The threat model
+address that, because the resource being denied is *time*, not bytes. That work is written up
+in `guest_blast_radius.md`; ★ two of its findings land on **this** file and are flagged in
+place below — its **F3** corrects §4.1's grant path for `RS_ACCESS_NICE`, and its **F4**
+re-derives §4.2's count and confirms it. The threat model
 already concedes the shape of this — `core_security_threat_model.md` I4 is about
 *containment* (no wedge of **our** device model, no OOM, no bystander corruption) and it says
 in as many words that *"the caps bound memory, not time"*.
@@ -224,6 +227,21 @@ escape layer sets from `osIsAdministrator()`
 ⇒ Our isolate — every capability surrendered, own user namespace — can never hold
 `RS_ACCESS_NICE` `[inferred]`. Entering a user namespace does not restore `capable()`.
 
+⚠ ★ **CORRECTION (task #129, `guest_blast_radius.md` F3) — the paragraph above names ONE grant
+path and there are TWO.** After the `ALLOW_PRIVILEGED` arm fails, `_rsAccessGrantCallback`
+still invokes the resource's own access callback
+(`ogkm-580: src/nvidia/src/libraries/resserv/src/rs_access_map.c:533-536`), which for the client
+resource is `cliresAccessCallback_IMPL` → `osCheckAccess(RS_ACCESS_NICE)`
+(`ogkm-580: src/nvidia/src/kernel/rmapi/client_resource.c:141-156`) → **`capable(CAP_SYS_NICE)`**
+(`ogkm-580: kernel-open/nvidia/os-interface.c:395-398`) `[src@580]`. The conclusion is unchanged
+— both legs are live `capable()` checks against the initial user namespace and a
+zero-capability process fails both `[inferred]` — but the single-path phrasing invites the fix
+*"just grant `CAP_SYS_ADMIN`"*, which would not be the whole answer. ★ Note also that
+`RS_ACCESS_NICE` carries `RS_ACCESS_FLAG_UNCACHED_CHECK`
+(`ogkm-580: src/nvidia/src/libraries/resserv/src/rs_access_rights.c:46-49`), so it is
+re-evaluated rather than latched at allocation time (`rs_access_map.c:232-240`) `[src@580]` —
+which is what keeps it out of reach of RM's per-client `cachedPrivilege` (that doc's F2).
+
 ### 4.2 ★★★ The whole-tree census, and it is five entries long
 
 `grep -h "accessRight=" src/nvidia/generated/*.c | sort | uniq -c` over `ogkm-580` returns
@@ -241,6 +259,18 @@ Every access-right-gated control in the entire driver is a *scheduling priority*
 ★ That NVIDIA spent its *entire* access-right budget on exactly this problem is the strongest
 signal in this note. It is a designed refusal, not an oversight: rows 3, 4, 5, 6 and 7 of §2
 are **closed to us on the host side, by construction.**
+
+✎ **The count was re-derived independently (task #129, `guest_blast_radius.md` F4) and it is
+right — 1 354 at `0x0`, exactly 5 at `0x2`, no third value, and `accessRight=` occurs nowhere
+in the tree outside `src/nvidia/generated/` `[src@580]`.** ⚠ But the *inference* wants a
+caveat: "the tree has a tiny access-right surface" is true and reads as "a tiny privilege
+surface", which is false. The access-right field is one narrow gate layered on top of a much
+bigger one — a census of the `flags` field over the same 1 359 exported entries returns **265
+`RMCTRL_FLAGS_PRIVILEGED`, 211 `INTERNAL`, and 115 that carry none of
+`NON_PRIVILEGED`/`PRIVILEGED`/`INTERNAL` and therefore default to `RS_PRIV_LEVEL_KERNEL`
+(`ogkm-580: src/nvidia/src/kernel/rmapi/control.c:702-711`), i.e. 591 of 1 359 unreachable from
+any userspace caller** `[src@580]`. That is the driver's main bar, it is 53× the access-right
+surface, and this note does not count it.
 
 ### 4.3 ★★ And the one that is open
 

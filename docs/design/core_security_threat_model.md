@@ -25,6 +25,14 @@ methods).
 resolution, completion routing/forgery, refcount soundness, and DoS containment, all
 expressed over the core's abstract state.
 
+**Out of scope here, and stated elsewhere rather than nowhere:** what a hostile guest can do
+to the **host GPU** is a system-level property, not a core-logic one, and it has its own
+document — `guest_blast_radius.md`, which states it as the falsifiable comparison *"the
+guest's blast radius ≤ a local unprivileged process's"*, splits **brick** (out of reach) from
+**wedge** (in reach, and inside the property), and audits the forwarded op set against it.
+★ Its §5 is the honest companion to I4 below: I4 contains a storm inside **our** device model,
+and says nothing about a hung **host** engine.
+
 **Out of scope (deferred to a post-L2 audit):** memory-safety, out-of-bounds, use-after-
 free, and any host-breakout surface. These are *born at L1/L2* (the mmap/isolate/trap/
 VMM adapters), not in pure logic — the pure core has no pointer to get out of bounds and
