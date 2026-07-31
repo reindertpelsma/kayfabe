@@ -218,10 +218,27 @@ mod tests {
         while !started.load(Ordering::SeqCst) {
             std::thread::yield_now();
         }
-        let r = thread_report();
+        // ★★ Sample until the name appears, bounded — do NOT assert a single sample.
+        //
+        // `thread_report` is documented best-effort: a `/proc/<tid>/comm` read can fail
+        // transiently under load and the field degrades to `?` rather than failing. A
+        // single-sample assertion therefore asserts the OUTCOME OF A RACE, which is the
+        // defect this whole module exists to stop being tolerated — it went red once
+        // under full-workspace parallelism and passed 4/4 alone.
+        //
+        // ⊘ Loosening to "name or `?`" would be vacuous, and dropping the check would
+        // narrow the test. The real guarantee is *a live thread's name is obtainable*,
+        // so poll for it while the probe is definitely alive (it sleeps 300 ms) and fail
+        // if it never becomes obtainable. Retries are the instrument, not the claim.
+        let deadline = std::time::Instant::now() + Duration::from_millis(200);
+        let mut r = thread_report();
+        while !r.contains("kf-wd-probe") && std::time::Instant::now() < deadline {
+            std::thread::yield_now();
+            r = thread_report();
+        }
         assert!(
             r.contains("kf-wd-probe"),
-            "the report must name a live thread by its `comm`; got:\n{r}"
+            "the report must name a live thread by its `comm` within 200ms of sampling; got:\n{r}"
         );
         assert!(
             r.lines().filter(|l| l.contains("tid ")).count() >= 2,
