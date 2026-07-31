@@ -79,7 +79,7 @@ pub struct InitTablePolicy {
 
 /// Which of the two tables a command asked for. Returned by [`InitTablePolicy::wanted`] so
 /// a test can ask the classification question without building a wire message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WantedTable {
     /// `NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE`.
     DeviceInfo,
@@ -111,6 +111,42 @@ pub enum WantedTable {
 }
 
 impl WantedTable {
+    /// ★★ **Every control this policy serves**, as a value a caller can quantify over.
+    ///
+    /// A test that wants to say *"the differential exercises every served control"* has to
+    /// get the universe from somewhere, and a list written in the test is the defect shape
+    /// this repository has been bitten by most: shortening it weakens the gate with zero
+    /// red tests. The list lives here, next to the `match` that consumes it, and
+    /// [`WantedTable::cmd_id`] is what keeps the two in step — it is exhaustive over
+    /// `Self`, so a new variant does not compile until it has an id, and
+    /// `tests/init_tables.rs` walks this array through `cmd_id` → [`WantedTable::from_cmd`]
+    /// and back.
+    pub const ALL: [WantedTable; 5] = [
+        Self::DeviceInfo,
+        Self::IntrKernelTable,
+        Self::PciBarInfo,
+        Self::ChipInfo,
+        Self::UserRegisterAccessMap,
+    ];
+
+    /// The control id this table answers — the inverse of [`WantedTable::from_cmd`].
+    ///
+    /// ★ An exhaustive `match`, which is the mechanism: adding a variant to this enum
+    /// stops the crate compiling until the id is stated, and the round trip in
+    /// `tests/init_tables.rs` then fails until it is in [`WantedTable::ALL`] too.
+    #[must_use]
+    pub fn cmd_id(self) -> u32 {
+        match self {
+            Self::DeviceInfo => NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
+            Self::IntrKernelTable => NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE,
+            Self::PciBarInfo => NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO,
+            Self::ChipInfo => NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO,
+            Self::UserRegisterAccessMap => {
+                NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP
+            }
+        }
+    }
+
     /// The `[OUT]` struct size RM allocates for this table.
     #[must_use]
     pub fn params_size(self) -> usize {

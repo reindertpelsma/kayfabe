@@ -46,7 +46,8 @@ use kayfabe_arch::Arch;
 use kayfabe_arch::gsp::GspReg;
 use kayfabe_arch::ids::Gpa;
 use kayfabe_gsp::{
-    BootPhase, EchoOk, GspAbi, GspFault, GspFsm, Observation, Projection, QueueState, Transition,
+    BootPhase, EchoOk, GspAbi, GspFault, GspFsm, Observation, Projection, QueueState, RpcCommand,
+    Transition,
 };
 use kayfabe_trace::{Bar, IrqSpec, TraceEvent, Width};
 
@@ -173,6 +174,14 @@ pub struct ReplayResult {
     /// Every guest-RAM read, in order: where, how big, and how it was answered. The
     /// hermeticity evidence in raw form.
     pub read_log: Vec<(u64, usize, Answer)>,
+    /// ★★ Every command the guest sent that this run **decoded and acted on**, with the
+    /// transaction it arrived in.
+    ///
+    /// Reported because a reply-plane assertion is otherwise unfalsifiable in the direction
+    /// that matters: *"our fn-76 answer matched the C's"* means nothing without evidence
+    /// that a fn-76 arrived at all, and which one. `docs/design/c_rust_trace_differential.md`
+    /// §6.3's census compares what was *posted*; this is what provoked it.
+    pub commands: Vec<(usize, RpcCommand)>,
 }
 
 /// The part of the capture this differential does not cover.
@@ -202,11 +211,20 @@ pub enum Fill {
     Reconstructed,
 }
 
+/// How a run builds the command policy the FSM answers with.
+///
+/// ★★ A **factory**, not a value, and that is forced rather than stylistic:
+/// [`Fill::Reconstructed`] re-runs the whole capture up to [`Replay::MAX_ROUNDS`] times, and
+/// a policy carried across rounds would answer round *n* with state accumulated in round
+/// *n − 1*. A `fn` pointer keeps [`Replay`] `Send`/`Sync` and keeps every round identical.
+pub type PolicyFactory = fn() -> Box<dyn kayfabe_gsp::CommandPolicy>;
+
 /// The replay.
 pub struct Replay<'a> {
     trace: &'a CTrace,
     abi: GspAbi,
     arch: Ga10xArch,
+    policy: PolicyFactory,
 }
 
 impl<'a> Replay<'a> {
@@ -225,7 +243,21 @@ impl<'a> Replay<'a> {
             trace,
             abi,
             arch: Ga10xArch::new(),
+            policy: || Box::new(EchoOk),
         }
+    }
+
+    /// Replace the C-baseline echo with the policy a real guest is answered by.
+    ///
+    /// ★★★ **This is the difference between exercising the reply plane and not.** With the
+    /// default [`EchoOk`] the replay reproduces the C's own *"acknowledge everything"*
+    /// baseline, which is the right null model for measuring the transport — and it means
+    /// no served control's *body* is ever produced, so no served control's body is ever
+    /// differenced. `kayfabe_device::served_policy` is the chain a guest gets; handing it
+    /// here is what makes a regression in one of those replies turn a differential red.
+    #[must_use]
+    pub fn with_policy(self, policy: PolicyFactory) -> Replay<'a> {
+        Replay { policy, ..self }
     }
 
     /// Run it.
@@ -305,7 +337,7 @@ impl<'a> Replay<'a> {
         }
 
         let mut fsm = GspFsm::new(self.abi);
-        let mut policy = EchoOk;
+        let mut policy = (self.policy)();
         let mut projection: Option<Projection> = None;
 
         let mut c = Projected::default();
@@ -314,6 +346,7 @@ impl<'a> Replay<'a> {
         let mut unprojected = Unprojected::default();
         let mut transitions_seen: Vec<Transition> = Vec::new();
         let mut unobserved: Vec<(usize, Unobserved)> = Vec::new();
+        let mut commands: Vec<(usize, RpcCommand)> = Vec::new();
 
         let is_mmio = |k: CKind| matches!(k, CKind::MmioRead | CKind::MmioWrite);
 
@@ -370,8 +403,14 @@ impl<'a> Replay<'a> {
 
             // ── our side ──
             if write {
-                let res =
-                    fsm.mmio_write(&mut ram, &self.arch, &mut policy, head.bar, head.a, head.b);
+                let res = fsm.mmio_write(
+                    &mut ram,
+                    &self.arch,
+                    policy.as_mut(),
+                    head.bar,
+                    head.a,
+                    head.b,
+                );
                 let mut raise_irq = false;
                 match res {
                     Ok(report) => {
@@ -382,6 +421,7 @@ impl<'a> Replay<'a> {
                             }
                         }
                         raise_irq = report.raise_status_irq;
+                        commands.extend(report.commands.iter().map(|c| (txn, c.clone())));
                     }
                     Err(f) => refusal = Some(f),
                 }
@@ -502,6 +542,7 @@ impl<'a> Replay<'a> {
             transitions_seen,
             max_lookahead: ram.max_lookahead(),
             read_log: ram.answers.clone(),
+            commands,
         }
     }
 }

@@ -571,3 +571,39 @@ pub fn rom_for(chip: &ChipProfile) -> Result<Vec<u8>, ChipError> {
     }
     Ok(image)
 }
+
+/// ★★ **The one command-policy chain this device answers with** — built here rather than
+/// inside [`plane::RegPlane::new`] so that the *differential* drives the same chain a
+/// guest does.
+///
+/// The chain used to be an expression inside `RegPlane::new`, which meant the 359 062-record
+/// `cap1`/`cap1b` replay could only ever exercise `kayfabe_gsp::EchoOk` — the C baseline —
+/// and **not one** of the served controls. Three of the four [`inittables::InitTablePolicy`]
+/// replies therefore had no reply-plane coverage at all, which is why a defect in
+/// [`staticinfo::StaticInfoPolicy`] could sit unnoticed. One chain, two consumers: change
+/// an order or a link here and the replay changes with the device.
+///
+/// ★ Order is precedence and the three answering links are disjoint by function code:
+/// [`inittables::InitTablePolicy`] claims only `GSP_RM_CONTROL`,
+/// [`staticinfo::StaticInfoPolicy`] only `GET_GSP_STATIC_INFO`,
+/// [`guestsysinfo::GuestSystemInfoPolicy`] only fn 1 and fn 64.
+/// `crates/kayfabe-device/tests/gsp_static_info.rs` pins the disjointness rather than
+/// trusting the reading.
+///
+/// ★ The LEDGER is last, and it answers nothing — it writes down exactly what the links
+/// above declined and lets the FSM refuse it by name. See [`unserviced`] for why a
+/// host-side list is the only way to know how long that list is.
+#[must_use]
+pub fn served_policy(
+    chip: &'static ChipProfile,
+    driver: kayfabe_abi::versions::DriverAbiTable,
+    unserviced: unserviced::UnservicedLog,
+) -> Box<dyn kayfabe_gsp::CommandPolicy> {
+    Box::new(kayfabe_gsp::PolicyChain::new(vec![
+        Box::new(inittables::InitTablePolicy::new(chip, driver)),
+        Box::new(staticinfo::StaticInfoPolicy::new(chip, driver)),
+        Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
+        Box::new(inert::InertPolicy::new()),
+        Box::new(unserviced::UnservicedLedger::new(driver, unserviced)),
+    ]))
+}

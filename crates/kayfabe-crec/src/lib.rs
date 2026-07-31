@@ -50,11 +50,21 @@
 //! every such read is filled under a **named assumption** and counted, and the count is
 //! part of the result.
 //!
-//! ## Where the trace lives
+//! ## Where the traces live
 //!
-//! `traces/cap1_coldboot_hermetic.rec`, committed uncompressed so this crate needs no
-//! decoder, no external binary and no third-party dependency. [`cap1_path`] resolves it,
-//! and honours `KAYFABE_C_TRACE_CAP1` for a caller that has it elsewhere.
+//! `traces/cap1_coldboot_hermetic.rec` and `traces/cap1b_coldboot_hermetic_d6.rec`,
+//! committed uncompressed so this crate needs no decoder, no external binary and no
+//! third-party dependency. [`cap1_path`]/[`cap1b_path`] resolve them, and honour
+//! `KAYFABE_C_TRACE_CAP1`/`KAYFABE_C_TRACE_CAP1B` for a caller that has them elsewhere.
+//!
+//! ## ★★ And the sixth limit, which is about THIS CRATE rather than the capture
+//!
+//! A replay answers with a [`kayfabe_gsp::CommandPolicy`], and for a long time the only one
+//! it could answer with was [`kayfabe_gsp::EchoOk`] — the C's own acknowledge-everything
+//! baseline. That is the right null model for measuring the **transport**, and it means the
+//! **reply** plane was not being measured at all: no served control's body was ever produced,
+//! so none was ever compared. [`Replay::with_policy`] and [`served_policy`] are the fix, and
+//! `tests/cap1b_differential.rs` is where the reply plane is now differenced.
 
 pub mod format;
 pub mod ga10x;
@@ -66,7 +76,7 @@ pub use format::{CHeader, CKind, CRecord, CTrace, CrecError};
 pub use ga10x::{Ga10xArch, Ga10xGspModel};
 pub use ledger::{Census, Classified, Verdict, census, classify};
 pub use oracle::{Answer, OracleRam, ReconKind, Reconstruction, Unobserved};
-pub use replay::{Fill, Note, Projected, Replay, ReplayResult, Txn, Unprojected};
+pub use replay::{Fill, Note, PolicyFactory, Projected, Replay, ReplayResult, Txn, Unprojected};
 
 use std::path::PathBuf;
 
@@ -166,6 +176,26 @@ pub fn bench_abi() -> kayfabe_gsp::GspAbi {
     }
 }
 
+/// ★★ The command-policy chain a **guest** is answered by, as a [`PolicyFactory`] the
+/// replay can be handed.
+///
+/// `kayfabe_device::served_policy` for [`kayfabe_device::default_chip`] and the capture's
+/// own driver — the same call `kayfabe_device::plane::RegPlane::new` makes, so a link
+/// added or reordered there is a link added or reordered here. ⊘ Never a second list.
+///
+/// The [`unserviced::UnservicedLog`](kayfabe_device::unserviced::UnservicedLog) is fresh
+/// per run, which is what a factory is for: a log shared across
+/// [`Fill::Reconstructed`]'s rounds would count the same command up to
+/// [`Replay::MAX_ROUNDS`] times.
+#[must_use]
+pub fn served_policy() -> Box<dyn kayfabe_gsp::CommandPolicy> {
+    kayfabe_device::served_policy(
+        kayfabe_device::default_chip(),
+        bench_abi().driver,
+        kayfabe_device::unserviced::UnservicedLog::new(),
+    )
+}
+
 /// The committed hermetic cold-boot capture.
 ///
 /// `KAYFABE_C_TRACE_CAP1` overrides, for a caller that keeps the artifact outside the
@@ -187,5 +217,43 @@ pub fn cap1_path() -> PathBuf {
 /// capture. Both are returned rather than panicked, so a caller can say which happened.
 pub fn load_cap1() -> Result<Result<CTrace, CrecError>, std::io::Error> {
     let blob = std::fs::read(cap1_path())?;
+    Ok(CTrace::parse(&blob))
+}
+
+/// ★★★ The **same experiment as `cap1`, re-captured with GSP-D6 witnessed** — the capture
+/// that can be closed *past* the first multi-element command.
+///
+/// `cap1`'s closure limit is txn 978, and the reason is a defect in the C's *recorder
+/// reach*, not in the protocol: the C acts on element 0 of a multi-element command and
+/// advances its read pointer past the continuations without reading them, so the capture
+/// holds no observation of them while they were live. `cap1b` was taken at the C's
+/// `819282d`, where `nvkvm_m3_service_cmdq` reads the continuation slots through the
+/// recorder chokepoint and **throws the bytes away** — the bug is unchanged, it is merely
+/// *witnessed*: 32/32 continuation elements observed against 0/32 before, and the reply
+/// stream proven byte-unchanged against a same-binary control (`C:
+/// traces/mode2_c_reference/README.md`, "The reply stream is unchanged — the proof").
+///
+/// ⚠ It is **not** a strictly-larger `cap1`: it is driven by `cap1_coldboot_guest.sh`
+/// rather than by hand, so its `nvidia-smi -q` is not SIGPIPE-truncated and it carries
+/// more RPC work after `GSP_INIT_DONE` (859 `GuestWrite` vs 563). The bring-up prefix is
+/// the same, which is what a differential of the boot needs.
+///
+/// `KAYFABE_C_TRACE_CAP1B` overrides, on the same terms as [`cap1_path`].
+#[must_use]
+pub fn cap1b_path() -> PathBuf {
+    if let Ok(p) = std::env::var("KAYFABE_C_TRACE_CAP1B") {
+        return PathBuf::from(p);
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../traces/cap1b_coldboot_hermetic_d6.rec")
+}
+
+/// Load and decode the capture at [`cap1b_path`].
+///
+/// # Errors
+///
+/// The `io::Error` if the file is missing, or the [`CrecError`] if it is not a well-formed
+/// capture. Both are returned rather than panicked, so a caller can say which happened.
+pub fn load_cap1b() -> Result<Result<CTrace, CrecError>, std::io::Error> {
+    let blob = std::fs::read(cap1b_path())?;
     Ok(CTrace::parse(&blob))
 }

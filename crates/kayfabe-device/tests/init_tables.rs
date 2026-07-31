@@ -255,3 +255,31 @@ fn a_size_this_port_does_not_encode_is_refused_loudly_not_answered() {
     let r = p.respond(&ser).expect("refused");
     assert_eq!(r.rpc_result, kayfabe_abi::NV_ERR_NOT_SUPPORTED);
 }
+
+#[test]
+fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id() {
+    // ★★ [`WantedTable::ALL`] exists so a *consumer* — `kayfabe-crec`'s reply-plane
+    // differential — can quantify over "every control this port serves" without writing
+    // the list a second time. A list that could silently shrink would weaken that gate
+    // with zero red tests, which is this repository's most-repeated defect shape.
+    //
+    // The mechanism is two-sided. `cmd_id` is an exhaustive `match` over `Self`, so a new
+    // variant does not compile until it has an id; this walks the array through it and back
+    // through `from_cmd`, so a variant that has an id but is missing from `ALL` fails here.
+    // The length is a literal on purpose — a fact someone must consciously change.
+    assert_eq!(WantedTable::ALL.len(), 5, "the served universe's size");
+    let mut ids = std::collections::BTreeSet::new();
+    for w in WantedTable::ALL {
+        let id = w.cmd_id();
+        assert!(ids.insert(id), "two variants claim control 0x{id:08x}");
+        assert_eq!(
+            WantedTable::from_cmd(id),
+            Some(w),
+            "0x{id:08x} does not classify back to {w:?}"
+        );
+        assert!(w.params_size() > 0, "{w:?} has no [OUT] size");
+    }
+    // And the negative: an id nothing serves must classify as nothing, or the universe is
+    // not a universe.
+    assert_eq!(WantedTable::from_cmd(0x2080_0000), None);
+}
