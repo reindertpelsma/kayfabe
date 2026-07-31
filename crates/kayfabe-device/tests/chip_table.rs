@@ -161,6 +161,28 @@ macro_rules! bars_for_aperture {
     };
 }
 
+/// A chip-identity row that names **no** register group.
+///
+/// ★ For the four register-plane refusal fixtures below, which are about `assert_disjoint`
+/// and the aperture and never build a chip-info reply. An empty `reg_bases` is not a
+/// degenerate value: the encoder writes sixteen `REG_BASE_UNSUPPORTED`s, i.e. RM's own
+/// *"this device has no such group"* in every slot.
+static NO_REG_BASES: kayfabe_abi::chipinfo::ChipInfoRow = kayfabe_abi::chipinfo::ChipInfoRow {
+    chip_sub_rev: 0,
+    is_cmp_sku: false,
+    reg_bases: &[],
+};
+
+/// The second chip's register groups — deliberately at a **different offset and index**
+/// from GA10x's, so a reply that had hard-coded the shipped row would show up as an
+/// equality failure rather than as a passing test.
+static OTHER_REG_BASES: &[kayfabe_abi::chipinfo::RegBaseRow] =
+    &[kayfabe_abi::chipinfo::RegBaseRow {
+        index: kayfabe_abi::chipinfo::reg_base::TIMER,
+        offset: 0x0055_0000,
+        name: "OTHER timer block",
+    }];
+
 /// ★ **The row.** This is the whole cost of the second chip, and it is data.
 static OTHER: ChipProfile = ChipProfile {
     name: "OTHER (test-only)",
@@ -185,6 +207,11 @@ static OTHER: ChipProfile = ChipProfile {
     intr_table: OTHER_INTR,
     intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
     fb_regions: OTHER_FB_REGIONS,
+    chip_info: kayfabe_abi::chipinfo::ChipInfoRow {
+        chip_sub_rev: 0x0B,
+        is_cmp_sku: true,
+        reg_bases: OTHER_REG_BASES,
+    },
     fb_length: OTHER_FB_LENGTH,
 };
 
@@ -329,6 +356,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
         intr_table: OTHER_INTR,
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
         fb_regions: OTHER_FB_REGIONS,
+        chip_info: NO_REG_BASES,
         fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&OVERLAPPING, abi(), test_clock()).expect_err("must refuse");
@@ -363,6 +391,7 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
         intr_table: OTHER_INTR,
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
         fb_regions: OTHER_FB_REGIONS,
+        chip_info: NO_REG_BASES,
         fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&PAST_THE_END, abi(), test_clock()).expect_err("must refuse");
@@ -621,6 +650,7 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
         intr_table: OTHER_INTR,
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
         fb_regions: OTHER_FB_REGIONS,
+        chip_info: NO_REG_BASES,
         fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&COLLIDING, abi(), test_clock()).expect_err("must refuse");
@@ -659,6 +689,7 @@ fn a_counter_outside_the_aperture_is_refused_at_realize() {
         intr_table: OTHER_INTR,
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
         fb_regions: OTHER_FB_REGIONS,
+        chip_info: NO_REG_BASES,
         fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&TOO_HIGH, abi(), test_clock()).expect_err("must refuse");
@@ -792,5 +823,61 @@ fn the_second_chip_serves_its_own_init_tables_through_unchanged_code() {
         )
         .expect("encodes"),
         "two chips encoded to the same framebuffer, so the row is not actually being read"
+    );
+}
+
+#[test]
+fn the_second_chip_states_its_own_identity_and_its_own_register_groups() {
+    // ★★ The chip-identity reply is the newest field on the row (task #132), and it is the
+    // one where "a second chip is a table row" is easiest to break, because the reply is
+    // built by *joining* two sources — the row and `identity_for`. Nothing below names a
+    // generation, and both halves are checked against this chip's own numbers.
+    let id = kayfabe_device::identity_for(&OTHER).expect("the second chip's row resolves");
+    let got = kayfabe_abi::chipinfo::encode_chip_info(
+        &OTHER.chip_info,
+        &kayfabe_abi::chipinfo::ChipIdentity {
+            pci_vendor_id: id.vendor_id,
+            pci_device_id: id.device_id,
+            pci_subsystem_vendor_id: id.subsystem_vendor_id,
+            pci_subsystem_id: id.subsystem_id,
+            pci_revision: id.revision,
+        },
+        OTHER.regs_aperture_len,
+    )
+    .expect("the second chip's identity encodes");
+
+    // Literal offsets, for the reason `tests/chip_info.rs` states at length.
+    assert_eq!(got[0], 0x0B, "chipSubRev — this chip's, not GA106's zero");
+    assert_eq!(got[8], 1, "isCmpSku — true here, false on GA106");
+    assert_eq!(
+        &got[16..20],
+        &0xBBBB_AAAAu32.to_le_bytes()[..],
+        "pciSubDeviceId = (0xBBBB << 16) | 0xAAAA"
+    );
+    assert_eq!(&got[20..24], &0x07u32.to_le_bytes()[..], "pciRevisionId");
+    // This chip names `NV_REG_BASE_TIMER` (index 2, at byte 32) and nothing else — where
+    // GA106 names `NV_REG_BASE_USERMODE` (index 4, at byte 40).
+    assert_eq!(&got[32..36], &0x0055_0000u32.to_le_bytes()[..]);
+    assert_eq!(
+        &got[40..44],
+        &0xFFFF_FFFFu32.to_le_bytes()[..],
+        "this chip does NOT name the group GA106 does"
+    );
+
+    let ga106 = kayfabe_abi::chipinfo::encode_chip_info(
+        &kayfabe_device::ga10x::GA106.chip_info,
+        &kayfabe_abi::chipinfo::ChipIdentity {
+            pci_vendor_id: 0x10DE,
+            pci_device_id: 0x2504,
+            pci_subsystem_vendor_id: 0x1462,
+            pci_subsystem_id: 0x397D,
+            pci_revision: 0xA1,
+        },
+        kayfabe_device::ga10x::GA106.regs_aperture_len,
+    )
+    .expect("encodes");
+    assert_ne!(
+        got, ga106,
+        "two chips encoded to the same identity, so the row is not actually being read"
     );
 }

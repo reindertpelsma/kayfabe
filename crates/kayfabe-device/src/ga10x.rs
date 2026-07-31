@@ -39,6 +39,7 @@
 //! variant for; `decode_reg` returns `None` there, which the FSM treats as *"another
 //! model owns this offset"* and never as a defaulted zero (plan §11-O1, still open).
 
+use kayfabe_abi::chipinfo::{ChipInfoRow, RegBaseRow, reg_base};
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::pcibars::PciBarRow;
@@ -1053,6 +1054,116 @@ pub static GA106_PCI_BARS: &[PciBarRow] = &[
 // without meaning to change that claim is a build error.
 const _: () = assert!(GA106_PCI_BARS.len() == kayfabe_abi::pcibars::bus_bar::NUM);
 
+// ── The chip-info reply's per-chip half (task #132) ────────────────────────────────
+
+/// Where `NV_VIRTUAL_FUNCTION`'s registers sit in *this* device's base-address register 0.
+///
+/// `GPU_GET_VREG_OFFSET(pGpu, a) = pGpu->sriovState.virtualRegPhysOffset + a`
+/// (`ogkm-580: src/nvidia/generated/g_gpu_access_nvoc.h:269`), where the offset is
+/// `DRF_BASE(NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET) = 0x00B8_0000` on a physical function
+/// and zero only on an SR-IOV virtual one (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/arch/turing/kern_gpu_tu102.c:92-101`), and
+/// `DRF_BASE(NV_VIRTUAL_FUNCTION) = 0x0003_0000`
+/// (`ogkm-580: src/common/inc/swref/published/turing/tu102/dev_vm.h:27-28`).
+/// `0x00B8_0000 + 0x0003_0000 = 0x00BB_0000` — which is also, exactly, the value the
+/// oracle's RTX 3060 reported in `regBases[NV_REG_BASE_USERMODE]`.
+///
+/// ⚠ This device is **not** an SR-IOV virtual function and does not claim to be, so the
+/// physical-function arm is the right one. See `docs/design/mode2_vgpu_posture_decision.md`
+/// in the C tree for the posture that decision belongs to.
+const VIRTUAL_FUNCTION_BASE: u32 = 0x00BB_0000;
+
+/// `DRF_SIZE(NVC361)` — how much of the aperture `kfifoConstructUsermodeMemdescs_GV100`
+/// asks for (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/arch/volta/kernel_fifo_gv100.c:175`).
+/// `NVC361` is `0x0081ffff:0x00810000` (`ogkm-580:
+/// src/common/sdk/nvidia/inc/class/clc361.h:29`), i.e. 64 KiB.
+const VIRTUAL_FUNCTION_LEN: u32 = 0x1_0000;
+
+// ★★ The advertisement and the thing it advertises, tied together at compile time. The
+// register base below is a promise that this window is one this device answers; the only
+// offset inside it that any source claims is the free-running counter, so if the counter
+// ever moved out of the window the promise would become a lie silently. It cannot now.
+const _: () = assert!(VIRTUAL_FUNCTION_TIME_0 >= VIRTUAL_FUNCTION_BASE as u64);
+const _: () =
+    assert!(VIRTUAL_FUNCTION_TIME_1 < (VIRTUAL_FUNCTION_BASE as u64 + VIRTUAL_FUNCTION_LEN as u64));
+
+/// ★★★ **The register groups this device names, and the three it deliberately does not.**
+///
+/// `regBases[]` has sixteen slots and RM defines four
+/// (`ogkm-580: src/nvidia/generated/g_gpu_nvoc.h:5828-5833`). This table has **one row**,
+/// and the emptiness is the decision: an index with no row is encoded as
+/// [`kayfabe_abi::chipinfo::REG_BASE_UNSUPPORTED`], which `gpuGetRegBaseOffset_FWCLIENT`
+/// turns straight back into `NV_ERR_NOT_SUPPORTED` at whichever call site wanted it
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_gspclient.c:315-326`).
+///
+/// ⊘ The oracle's board named all four. It had silicon behind every one of them; this
+/// device has a register plane that decodes a listed set of offsets and answers **zero**
+/// everywhere else (`crate::plane`), and a zero read out of a register group we advertised
+/// is exactly the *plausible wrong answer* that plane's own docs argue is worse than a
+/// refusal. So the oracle settles the layout and the encoding, and this table is decided
+/// on what we can serve.
+///
+/// ### Served — `NV_REG_BASE_USERMODE` at [`VIRTUAL_FUNCTION_BASE`]
+///
+/// ★ Not optional: `kfifoStateInit` calls `kfifoConstructUsermodeMemdescs_HAL` under
+/// `NV_ASSERT_OK_OR_RETURN` (`ogkm-580: kernel_fifo_init.c:232`), which asks for this base
+/// under `NV_ASSERT_OK_OR_RETURN` again (`ogkm-580: kernel_fifo_gv100.c:369`). A device
+/// that declined it could not finish `RmInitAdapter`. And it is a window this device really
+/// answers — the free-running nanosecond counter [`GA106_PTIMER`] serves lives inside it,
+/// as the `const _` assertions above check.
+///
+/// ### Not named — and what each omission actually costs
+///
+/// - **`NV_REG_BASE_GR` (1).** `[measured]` grep of `ogkm-580`: the identifier occurs
+///   **once**, at its own `#define`. Nothing reads it, so naming it would advertise a
+///   4 MiB window to nobody.
+/// - **`NV_REG_BASE_TIMER` (2).** Its readers hand `0x9000` to a client that then maps the
+///   timer block and reads `NV_PTIMER_TIME_0/_1` out of it
+///   (`ogkm-580: src/nvidia/src/kernel/gpu/timer/timer.c:1712-1734`,
+///   `subdevice_ctrl_timer_kernel.c:287`). ⊘ This device does **not** serve those: see
+///   [`GA106_PTIMER`], whose whole point is that this generation's driver reads the counter
+///   through the virtual-function aperture instead, and whose doc says the `0x9400` block
+///   is not served. Advertising the group would hand a client a **stopped clock** —
+///   `crate::plane`'s named worst case, arrived at from the other direction.
+/// - **`NV_REG_BASE_MASTER` (3).** Its one reader maps `GF100_SUBDEVICE_MASTER` read-only
+///   for a client (`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/generic_engine.c:118-135`).
+///   Three registers of that block are in [`GA106_BOOT_REGS`] and the rest read zero, so
+///   the same argument applies with less force — it is left out because *partly* serving a
+///   client mapping is not serving it, and because nothing on the initialisation path asks.
+///
+/// ⚠ `[inferred]`, not measured: all three arguments are greps of the two **open** trees. A
+/// closed client (NVML, `nvidia-smi`) can allocate `NV01_TIMER` or `GF100_SUBDEVICE_MASTER`
+/// and this port cannot grep it. If one is ever observed to, the refusal surfaces *as a
+/// named `NV_ERR_NOT_SUPPORTED` at that client's own call*, and the fix is a row here plus
+/// the register model behind it — in that order.
+static GA106_REG_BASES: &[RegBaseRow] = &[RegBaseRow {
+    index: reg_base::USERMODE,
+    offset: VIRTUAL_FUNCTION_BASE,
+    name: "NV_VIRTUAL_FUNCTION (usermode work submission)",
+}];
+
+/// The two silicon facts the chip-info reply carries that the PCI identity does not.
+///
+/// ★ `chip_sub_rev = 0` and `is_cmp_sku = false` are the values the oracle's RTX 3060's own
+/// physical RM reported for **this exact part** (`C: mode2_initctrl_ga106.h:3356`, bytes 0
+/// and 8), which is the one thing a capture of the silicon we claim to be can adjudicate.
+/// Neither is derivable from a register this port serves: `gpuGetChipSubRev_HAL` and
+/// `gpuGetIsCmpSku_HAL` have no implementation in the open tree at all — only the
+/// `_FWCLIENT` readers that consume this reply.
+///
+/// ⊘ Neither is branched on. `chipSubRev` reaches exactly one place,
+/// `NV2080_CTRL_CMD_MC_GET_ARCH_INFO`'s `subRevision`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mc/kernel_mc.c:66`); `isCmpSku` reaches exactly
+/// one, `NV2080_CTRL_GPU_INFO_INDEX_CMP_SKU`
+/// (`ogkm-580: subdevice_ctrl_gpu_kernel.c:491-501`). Both report to a client and decide
+/// nothing — which is why taking them from the capture is cheap to be wrong about, and is
+/// stated here rather than assumed.
+pub static GA106_CHIP_INFO: ChipInfoRow = ChipInfoRow {
+    chip_sub_rev: 0,
+    is_cmp_sku: false,
+    reg_bases: GA106_REG_BASES,
+};
+
 /// ★ **The GA106 row.** Everything above, selected.
 ///
 /// The PCI identity is deliberately *incomplete* here: the vendor id and class code are
@@ -1083,6 +1194,7 @@ pub static GA106: ChipProfile = ChipProfile {
     intr_subtree_map: GA106_INTR_SUBTREE_MAP,
     fb_regions: GA106_FB_REGIONS,
     pci_bars: GA106_PCI_BARS,
+    chip_info: GA106_CHIP_INFO,
     fb_length: GA106_FB_LENGTH,
 };
 

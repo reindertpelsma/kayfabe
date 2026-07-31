@@ -134,6 +134,7 @@ name = "kayfabe-chips"
 version = "0.1.0"
 dependencies = [
  "kayfabe-arch",
+ "kayfabe-gsp",
  "kayfabe-mocks",
  "kayfabe-util",
 ]

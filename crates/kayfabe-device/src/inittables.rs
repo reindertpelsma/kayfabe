@@ -1,5 +1,10 @@
-//! The command policy that answers the three `GSP_RM_CONTROL`s the guest's RM cannot start
+//! The command policy that answers the four `GSP_RM_CONTROL`s the guest's RM cannot start
 //! without, from the chip row's own tables.
+//!
+//! ⚠ The type names say *table* and one of the four is not one:
+//! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` is an identity, not a list. The names are
+//! kept because what actually unifies the four is the property the module is about —
+//! **`[OUT]`-only, and a pure function of the chip row** — and that holds for all four.
 //!
 //! ## ★★ Why this is here and not in a logic crate
 //!
@@ -12,7 +17,7 @@
 //!
 //! ## ★★★ What it does NOT do, deliberately
 //!
-//! Three controls, all `[OUT]`-only, all answered from a table. It touches no RM graph
+//! Four controls, all `[OUT]`-only, all answered from the chip row. It touches no RM graph
 //! state, allocates no handle, and remembers nothing between commands. Every other command
 //! falls through to whatever the FSM would have done — this is a *supplement* to the
 //! baseline policy, not a replacement for `kayfabe_rmrpc::GraphPolicy`, which is the
@@ -29,6 +34,9 @@
 //! (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:1994`).
 
 use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
+use kayfabe_abi::chipinfo::{
+    self, CHIP_INFO_PARAMS_SIZE, ChipIdentity, NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO,
+};
 use kayfabe_abi::inittables::{
     self, DEVICE_INFO_PARAMS_SIZE, INTR_PARAMS_SIZE, NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
     NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE,
@@ -79,6 +87,13 @@ pub enum WantedTable {
     /// `tests/pci_bar_info.rs::the_policy_answers_the_control_without_reflecting_one_byte_of_the_request`
     /// is the test that fails if the reply ever carries a request byte again.
     PciBarInfo,
+    /// `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` — ★ not a table but an **identity**,
+    /// and the one whose refusal ends `RmInitNvDevice` before anything else runs
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:886, 2124`). Its reply's identity half
+    /// comes from [`crate::identity_for`], the same call that builds configuration space,
+    /// because `_gpuInitChipInfo` overwrites `pGpu->idInfo` with what it carries. See
+    /// [`kayfabe_abi::chipinfo`].
+    ChipInfo,
 }
 
 impl WantedTable {
@@ -89,6 +104,7 @@ impl WantedTable {
             Self::DeviceInfo => DEVICE_INFO_PARAMS_SIZE,
             Self::IntrKernelTable => INTR_PARAMS_SIZE,
             Self::PciBarInfo => PCI_BAR_INFO_PARAMS_SIZE,
+            Self::ChipInfo => CHIP_INFO_PARAMS_SIZE,
         }
     }
 
@@ -99,6 +115,7 @@ impl WantedTable {
             NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE => Some(Self::DeviceInfo),
             NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE => Some(Self::IntrKernelTable),
             NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO => Some(Self::PciBarInfo),
+            NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO => Some(Self::ChipInfo),
             _ => None,
         }
     }
@@ -187,6 +204,33 @@ impl CommandPolicy for InitTablePolicy {
                 Ok(p) => p,
                 Err(_) => return refuse(),
             },
+            // ★★ The identity half is taken from `identity_for`, which is the *same* call
+            // the hypervisor shell builds configuration space from — and which refuses if
+            // the chip's BAR table and its declared aperture disagree. That is deliberate:
+            // `_gpuInitChipInfo` overwrites `pGpu->idInfo` with this reply
+            // (`ogkm-580: gpu.c:891-893`), so a device whose reply and whose config header
+            // disagreed would leave RM believing a part it did not enumerate, and nothing
+            // would log. There is no second source here to drift from the first.
+            WantedTable::ChipInfo => {
+                let Ok(id) = crate::identity_for(self.chip) else {
+                    return refuse();
+                };
+                let id = ChipIdentity {
+                    pci_vendor_id: id.vendor_id,
+                    pci_device_id: id.device_id,
+                    pci_subsystem_vendor_id: id.subsystem_vendor_id,
+                    pci_subsystem_id: id.subsystem_id,
+                    pci_revision: id.revision,
+                };
+                match chipinfo::encode_chip_info(
+                    &self.chip.chip_info,
+                    &id,
+                    self.chip.regs_aperture_len,
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
         };
 
         // Keep the guest's own control header — `hClient`/`hObject`/`cmd` are echoed, as

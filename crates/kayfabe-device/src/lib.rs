@@ -59,6 +59,7 @@ pub mod plane;
 pub mod staticinfo;
 pub mod unserviced;
 
+use kayfabe_abi::chipinfo::ChipInfoRow;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::pcibars::{PciBarRow, bus_bar};
@@ -217,6 +218,19 @@ pub struct ChipProfile {
     /// [`kayfabe_abi::pcibars`] for what would have to change if one is ever observed to
     /// care.
     pub pci_bars: &'static [PciBarRow],
+    /// ★★ **The chip-identity reply's per-chip half** — the two silicon facts the PCI
+    /// identity does not already state, and the register groups this chip *names*.
+    ///
+    /// The identity fields of `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` are not here on
+    /// purpose: they are assembled from [`identity_for`], the same call configuration space
+    /// is served from, because `_gpuInitChipInfo` **overwrites** `pGpu->idInfo` with what
+    /// this reply carries (`ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:891-893`) and a
+    /// second, drifting statement of the device's identity is exactly what that would be.
+    ///
+    /// ⊘ A register group listed in [`kayfabe_abi::chipinfo::ChipInfoRow::reg_bases`] is a
+    /// window the guest will **map and read**. See [`ga10x::GA106_CHIP_INFO`], which names
+    /// one and states, per omission, what leaving the other three out costs.
+    pub chip_info: ChipInfoRow,
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and

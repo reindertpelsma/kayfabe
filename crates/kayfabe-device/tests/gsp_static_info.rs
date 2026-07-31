@@ -342,6 +342,14 @@ const fn copy_of_ga106() -> ChipProfile {
         intr_table: &[],
         intr_subtree_map: [0; kayfabe_abi::inittables::INTR_CATEGORY_COUNT],
         fb_regions: &[],
+        // This test is about the framebuffer regions; the chip-identity reply is not
+        // exercised, so the row names no register group at all — which the encoder
+        // spells as sixteen `REG_BASE_UNSUPPORTED`s rather than a zero.
+        chip_info: kayfabe_abi::chipinfo::ChipInfoRow {
+            chip_sub_rev: 0,
+            is_cmp_sku: false,
+            reg_bases: &[],
+        },
         fb_length: 0,
     }
 }
