@@ -61,6 +61,7 @@ use crate::fault::GspFault;
 use crate::ram::{GuestRam, RegionMap};
 use crate::ring::{MsgqAbi, MsgqGeometry, RxCursor, TxCursor, available_elements, free_elements};
 use crate::rpc::{Disposition, RpcAbi, RpcCommand, RpcFunction};
+use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_arch::{
     Arch, ArchBootState, BootContext, BootPhase, BootStep, GspObservation, RegWrite,
@@ -272,6 +273,26 @@ pub struct ServiceReport {
     /// The FSM deliberately does not name an `IrqSpec`: interrupt delivery is the VMM
     /// port's vocabulary and the device shell owns it (see `kayfabe_arch::gsp`'s docs).
     pub raise_status_irq: bool,
+    /// ★★ Commands no [`CommandPolicy`] answered, which the FSM therefore refused by name.
+    ///
+    /// The refusal is the right default ([`GspFsm::answer`]) but it is **quiet in the
+    /// guest**: RM logs `NV_ERR_NOT_SUPPORTED` at `LEVEL_INFO`. Without this, *"what has
+    /// this port not built yet"* is answerable only one boot at a time, which is the
+    /// difference between reporting a list and discovering it over a week.
+    ///
+    /// ⊘ Function ids only. Deciding *which control* a `GSP_RM_CONTROL` carried means
+    /// decoding a body, and this stage does not decode bodies (see `crate::rpc`'s module
+    /// docs); the crate that owns the control vocabulary attaches that.
+    pub unserviced: Vec<Unserviced>,
+}
+
+/// One command the FSM had to refuse because nothing offered an answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Unserviced {
+    /// The wire function id, as sent.
+    pub code: u32,
+    /// `rpc.sequence`, so a refusal can be tied to a recorder's stream position.
+    pub sequence: u32,
 }
 
 /// What the caller wants replied to a command.
@@ -360,18 +381,35 @@ pub trait CommandPolicy: Send {
 /// kernel stack** at our reply's instruction. Reflecting a request is never safe by
 /// default, and this is the measured proof of it.
 ///
-/// The production policy (`kayfabe_rmrpc::GraphPolicy`) therefore answers an unmodelled
-/// control with a non-zero **envelope** `rpc_result`, which short-circuits the guest ahead
-/// of both the copy-out and the cache
-/// (`ogkm-580: rpc.c:1994`, `ogkm-610: :2012`); its `BridgeRefusal::GspRuleControlUnserviced`
-/// carries the whole argument. Keep `EchoOk` for what it is — the C-baseline transport
-/// proof, and the fixture a test uses to show that the baseline would be wrong.
+/// ## ★★★ So it stopped being a default — task #127
+///
+/// It is no longer reachable by *not deciding*. [`GspFsm::answer`] answers a command no
+/// policy claimed with a non-zero **envelope** `rpc_result`, which short-circuits the guest
+/// ahead of both the copy-out and the control cache (`ogkm-580: rpc.c:1994`,
+/// `ogkm-610: :2012`); `kayfabe_rmrpc::BridgeRefusal::GspRuleControlUnserviced` carries the
+/// whole argument for why that is the right status.
+///
+/// ⊘ This type therefore had to change shape: it now returns `Some` **explicitly**, because
+/// `None` means *"I decline"* and no longer means *"echo"*. Nothing in the port installs it;
+/// it is the C-baseline transport proof (`kayfabe_crec`'s `cap1` replay drives it, and the
+/// bytes it produces are unchanged), and the fixture a test uses to show that the baseline
+/// would be wrong — `tests/gsp_boot.rs`'s
+/// `a_command_no_policy_answers_is_refused_by_name_rather_than_echoed` runs both arms side
+/// by side, which is the only way to see that they differ.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct EchoOk;
 
 impl CommandPolicy for EchoOk {
-    fn respond(&mut self, _cmd: &RpcCommand) -> Option<Reply> {
-        None
+    fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        // ★★ `Some`, explicitly, and NOT `None`. `None` used to mean "echo" because the
+        // FSM's own fallback was one; task #127 made that fallback a named refusal, so a
+        // policy that wants the C's behaviour must now say so. That is the whole point of
+        // the change: echoing is a thing a caller opts into, in one place, with this
+        // type's docs attached — never something a caller gets by not deciding.
+        Some(Reply {
+            rpc_result: 0,
+            body: cmd.payload.clone(),
+        })
     }
 }
 
@@ -381,7 +419,8 @@ impl CommandPolicy for EchoOk {
 /// have an opinion. But a port grows one answered command at a time, and folding each new
 /// one into the previous policy would make an unrelated pair share a type and a state.
 /// So composition lives here, as data: a policy that answers nothing returns `None` and
-/// the next is asked, and a chain that answers nothing at all is exactly [`EchoOk`].
+/// the next is asked, and a chain that answers nothing at all leaves the FSM to refuse by
+/// name ([`GspFsm::answer`]) — which is the safe end of the chain, not [`EchoOk`].
 ///
 /// ⚠ Order is precedence, and it is the caller's to declare. Two policies claiming one
 /// function is not detectable from here — it is a contradiction in the *port*, and the
@@ -403,7 +442,7 @@ impl PolicyChain {
         self.links.len()
     }
 
-    /// Whether the chain is empty — in which case it behaves as [`EchoOk`].
+    /// Whether the chain is empty — in which case every command is refused by name.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.links.is_empty()
@@ -735,6 +774,7 @@ impl GspFsm {
                 report.transitions.push(Transition::E6);
                 report.transitions.append(&mut r.transitions);
                 report.commands.extend(r.commands);
+                report.unserviced.extend(r.unserviced);
                 report.raise_status_irq = true;
             }
             BootStep::CommandDoorbell => {
@@ -742,6 +782,7 @@ impl GspFsm {
                 report.transitions.push(t);
                 report.transitions.append(&mut r.transitions);
                 report.commands.extend(r.commands);
+                report.unserviced.extend(r.unserviced);
                 report.raise_status_irq |= r.raise_status_irq;
             }
             // E10 — the guest's ISR clears the edge before draining the queue
@@ -1114,6 +1155,54 @@ impl GspFsm {
     }
 
     /// Post the reply a command earns, and run E9 if it was fn-47.
+    ///
+    /// # ★★★ What an unanswered command gets, and why it is a refusal
+    ///
+    /// Three policies were available for the command a [`CommandPolicy`] declines, and the
+    /// choice is not a matter of taste — each was measured on a stock 580.159.04 guest.
+    ///
+    /// **(a) Echo the request back with `NV_OK`** — what the C does
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:2410-2416`) and what this method used to do. ⊘
+    /// **Rejected: it is not merely uninformative, it is an out-of-bounds read performed
+    /// by the guest at our instruction.** `kbusInitBarsSize_KERNEL` declares its `[OUT]`
+    /// params on the stack with no initialiser and no `portMemSet`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/bus/kern_bus.c:585`); RM serialises the
+    /// uninitialised struct into the RPC, an echo hands it straight back, and the caller
+    /// loops to `params.pciBarCount` over an eight-element array. `[measured]` run
+    /// `t126b`, twice on two fresh boots at `f2acb89`: `BUG: unable to handle page fault
+    /// for address: ffffd4a44035c000 / RIP: kbusInitBarsSize_KERNEL+0x90/0x110`. ★ This
+    /// instance faults loudly; nothing makes the next one loud.
+    ///
+    /// **(b) Zero the reply body** — ⊘ **rejected: a zero is an answer too.** At the
+    /// engine-table rung a zeroed `[OUT]` body made RM read *"this device has nothing"* —
+    /// `portMemAllocNonPaged(0)` is `NULL` and `vectReserve(0)` asserts — and RM refused
+    /// with `NV_ERR_NO_MEMORY` / `NV_ERR_INVALID_ARGUMENT`
+    /// (`kayfabe_abi::inittables`' module docs carry that dmesg). Zeros are not neutral;
+    /// they are a small number, and RM branches on small numbers.
+    ///
+    /// **(c) Refuse by name** — what this does. The reply carries
+    /// [`kayfabe_abi::NV_ERR_NOT_SUPPORTED`] in the **envelope**, which short-circuits the
+    /// guest *ahead of the copy-out and ahead of the control cache*
+    /// (`ogkm-580: rpc.c:1994-2005`, `:11061-11065`): RM never reads the body at all, so
+    /// there is no value in it to be believed. It is also the house style everywhere else
+    /// in this port ([`crate::fault::GspFault::GuestRam`], `RefusingRam`,
+    /// `kayfabe_rmrpc`'s `BridgeRefusal`), and it is why a rung costs one boot: the guest
+    /// stops at the *first* thing it needed and names it, instead of proceeding on
+    /// fiction and dying somewhere else.
+    ///
+    /// ## ⚠ The refusal is QUIET IN THE GUEST, and that is why [`ServiceReport`] carries it
+    ///
+    /// `rpcRmApiControl_GSP` lists `NV_ERR_NOT_SUPPORTED` among the statuses it logs
+    /// *quietly* (`ogkm-580: rpc.c:11109-11115`), so a refused control produces **no
+    /// dmesg line of its own** on a release module — only the eventual `LEVEL_ERROR` at
+    /// whichever caller could not continue. Answering *"which controls did we refuse"*
+    /// from the guest therefore costs one boot per control. [`ServiceReport::unserviced`]
+    /// is the host-side ledger that answers it in one, and it is not optional
+    /// instrumentation.
+    ///
+    /// ⊘ A [`Disposition::NoReply`] command is still not replied to, refusal included:
+    /// posting anything for fn-72/73 surfaces in the driver as an unexpected event and
+    /// desyncs the sequence.
     fn answer(
         &mut self,
         ram: &mut dyn GuestRam,
@@ -1133,9 +1222,20 @@ impl GspFsm {
             // surfaces in the driver as an unexpected event and desyncs the sequence.
             return Ok(());
         }
+        // ★★★ **THE DEFAULT IS A NAMED REFUSAL** (task #127). A policy that has no answer
+        // gets one posted for it, and that reply carries a non-zero envelope `rpc_result`
+        // with a zeroed body — never the request reflected, and never a fabricated
+        // `NV_OK`. See this method's docs for the measurement that made echoing
+        // indefensible and for why zeroing alone is not the fix either.
         let out = match policy.respond(cmd) {
             Some(r) => cmd.reply(r.rpc_result, &r.body),
-            None => cmd.ack(0),
+            None => {
+                report.unserviced.push(Unserviced {
+                    code: cmd.code,
+                    sequence: cmd.sequence,
+                });
+                cmd.reply(NV_ERR_NOT_SUPPORTED, &[])
+            }
         };
         self.post(ram, &out)?;
 

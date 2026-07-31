@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 4u
+#define KAYFABE_SHIM_ABI 5u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -216,6 +216,13 @@ typedef struct KayfabeChipIdentity {
     uint32_t abi_version;        /* == KAYFABE_SHIM_ABI            */
     uint32_t struct_size;        /* == sizeof(KayfabeChipIdentity) */
     uint64_t regs_aperture_len;  /* the register BAR's size, per the chip table */
+    /* ★★ The two windows' sizes, per the SAME chip table row the emulated GSP answers
+     * NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO from.  They are here so this device cannot
+     * register an aperture of one size while telling the guest's resource manager
+     * another: RM copies barSizeBytes straight into pKernelBus->pciBarSizes[] and sizes
+     * its own mappings against it, and a disagreement never logs. */
+    uint64_t fb_window_len;
+    uint64_t inst_window_len;
     uint32_t class_code;         /* (base << 16) | (sub << 8) | prog_if */
     uint16_t vendor_id;
     uint16_t device_id;
@@ -257,6 +264,12 @@ typedef struct KayfabeRegWrite {
  * C artifact does the same, and refusing would mean the device could not boot until every
  * register in a 16 MiB aperture had a model) — it is the number that says how much of a
  * boot rests on that. */
+
+/* How many distinct unserviced commands KayfabeRegAudit carries, and the low half of a
+ * packed entry that names no control. */
+#define KAYFABE_UNSERVICED_SLOTS 32u
+#define KAYFABE_UNSERVICED_NO_CMD 0xFFFFFFFFu
+
 typedef struct KayfabeRegAudit {
     uint64_t reads;
     uint64_t writes;
@@ -270,6 +283,23 @@ typedef struct KayfabeRegAudit {
     uint64_t faults;
     uint64_t ram_refusals;
     uint64_t irq_requests;
+    uint64_t commands;
+    /* ★★★ THE LIST A BOOT IS WORTH.
+     *
+     * The emulated GSP's default answer to a command no policy models is a NAMED REFUSAL
+     * (NV_ERR_NOT_SUPPORTED in the RPC envelope), never the request echoed back — an echo
+     * hands the guest its own uninitialised stack and was MEASURED to page-fault the guest
+     * kernel inside kbusInitBarsSize_KERNEL.
+     *
+     * That refusal is QUIET IN THE GUEST: the resource manager logs NV_ERR_NOT_SUPPORTED
+     * at its INFO level, which a release module never prints.  So without these three
+     * fields, "which controls has this port not built yet" is answerable only one guest
+     * boot at a time.  Each entry is (function << 32) | cmd, with
+     * KAYFABE_UNSERVICED_NO_CMD in the low half when the function was not a GSP_RM_CONTROL.
+     * `unserviced_len` is the truth even when it exceeds the array. */
+    uint64_t commands_unserviced;
+    uint64_t unserviced_len;
+    uint64_t unserviced[KAYFABE_UNSERVICED_SLOTS];
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.

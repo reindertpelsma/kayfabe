@@ -1,4 +1,4 @@
-//! The command policy that answers the two `GSP_RM_CONTROL`s the guest's RM cannot start
+//! The command policy that answers the three `GSP_RM_CONTROL`s the guest's RM cannot start
 //! without, from the chip row's own tables.
 //!
 //! ## ★★ Why this is here and not in a logic crate
@@ -12,7 +12,7 @@
 //!
 //! ## ★★★ What it does NOT do, deliberately
 //!
-//! Two controls, both `[OUT]`-only, both answered from a table. It touches no RM graph
+//! Three controls, all `[OUT]`-only, all answered from a table. It touches no RM graph
 //! state, allocates no handle, and remembers nothing between commands. Every other command
 //! falls through to whatever the FSM would have done — this is a *supplement* to the
 //! baseline policy, not a replacement for `kayfabe_rmrpc::GraphPolicy`, which is the
@@ -33,6 +33,7 @@ use kayfabe_abi::inittables::{
     self, DEVICE_INFO_PARAMS_SIZE, INTR_PARAMS_SIZE, NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
     NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE,
 };
+use kayfabe_abi::pcibars::{self, NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO, PCI_BAR_INFO_PARAMS_SIZE};
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 
@@ -70,6 +71,14 @@ pub enum WantedTable {
     DeviceInfo,
     /// `NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE`.
     IntrKernelTable,
+    /// `NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO` — ★ the one whose *echo* faulted the guest's
+    /// own kernel, because its caller does not pre-zero its params
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/bus/kern_bus.c:585`). `[measured]` run
+    /// `t126b`, a stock 580.159.04 guest at `f2acb89`, twice on two fresh boots;
+    /// `kayfabe_abi::pcibars`' module docs carry the dmesg, and
+    /// `tests/pci_bar_info.rs::the_policy_answers_the_control_without_reflecting_one_byte_of_the_request`
+    /// is the test that fails if the reply ever carries a request byte again.
+    PciBarInfo,
 }
 
 impl WantedTable {
@@ -79,6 +88,7 @@ impl WantedTable {
         match self {
             Self::DeviceInfo => DEVICE_INFO_PARAMS_SIZE,
             Self::IntrKernelTable => INTR_PARAMS_SIZE,
+            Self::PciBarInfo => PCI_BAR_INFO_PARAMS_SIZE,
         }
     }
 
@@ -88,6 +98,7 @@ impl WantedTable {
         match cmd {
             NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE => Some(Self::DeviceInfo),
             NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE => Some(Self::IntrKernelTable),
+            NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO => Some(Self::PciBarInfo),
             _ => None,
         }
     }
@@ -164,6 +175,15 @@ impl CommandPolicy for InitTablePolicy {
                 self.chip.intr_table,
                 &self.chip.intr_subtree_map,
             ) {
+                Ok(p) => p,
+                Err(_) => return refuse(),
+            },
+            // ★ No cursor and no request field is read: the answer is a pure function of
+            // the chip row. That is not laziness — the request body for THIS control is
+            // uninitialised guest stack (`ogkm-580: kern_bus.c:585`), so every byte of it
+            // is untrusted, and the only field the reply keeps from it is the control
+            // header the envelope path already validated.
+            WantedTable::PciBarInfo => match pcibars::encode_pci_bar_info(self.chip.pci_bars) {
                 Ok(p) => p,
                 Err(_) => return refuse(),
             },

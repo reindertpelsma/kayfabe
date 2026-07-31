@@ -322,6 +322,10 @@ const fn copy_of_ga106() -> ChipProfile {
         pci_subsystem_vendor_id: 0x1462,
         pci_subsystem_id: 0x397D,
         regs_aperture_len: 0x0100_0000,
+        pci_bars: &[kayfabe_abi::pcibars::PciBarRow {
+            name: "registers",
+            size_bytes: 0x0100_0000,
+        }],
         boot_regs: &[],
         ptimer: kayfabe_device::PtimerRegs {
             lo_off: 0x9400,

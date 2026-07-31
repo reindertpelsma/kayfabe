@@ -126,7 +126,7 @@ pub mod seq;
 
 pub use boot::{
     CommandPolicy, EchoOk, GspAbi, GspFsm, InitArgsLayout, PolicyChain, QueueBinding, QueueState,
-    Reply, ServiceReport, Transition,
+    Reply, ServiceReport, Transition, Unserviced,
 };
 // ★ Re-exported, not defined here (task #121): `BootPhase` is read by the register model
 // and by the boot sequence, neither of which may depend on this crate. Every existing

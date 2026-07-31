@@ -33,10 +33,12 @@ use kayfabe_gsp::{
 /// outside the Axis-A quarantine, which decision #2 exists to prevent.
 pub const FUNCTIONS: FunctionCodes = FunctionCodes {
     set_guest_system_info: rpcids::NV_VGPU_MSG_FUNCTION_SET_GUEST_SYSTEM_INFO,
+    set_guest_system_info_ext: rpcids::NV_VGPU_MSG_FUNCTION_SET_GUEST_SYSTEM_INFO_EXT,
     free: rpcids::NV_VGPU_MSG_FUNCTION_FREE,
     dup_object: rpcids::NV_VGPU_MSG_FUNCTION_DUP_OBJECT,
     unloading_guest_driver: rpcids::NV_VGPU_MSG_FUNCTION_UNLOADING_GUEST_DRIVER,
     get_gsp_static_info: rpcids::NV_VGPU_MSG_FUNCTION_GET_GSP_STATIC_INFO,
+    init_gsp_trace_crash_buffer: rpcids::NV_VGPU_MSG_FUNCTION_INIT_GSP_TRACE_CRASH_BUFFER,
     continuation_record: rpcids::NV_VGPU_MSG_FUNCTION_CONTINUATION_RECORD,
     gsp_set_system_info: rpcids::NV_VGPU_MSG_FUNCTION_GSP_SET_SYSTEM_INFO,
     set_registry: rpcids::NV_VGPU_MSG_FUNCTION_SET_REGISTRY,

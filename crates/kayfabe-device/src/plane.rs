@@ -214,6 +214,12 @@ pub struct Counters {
     pub ram_refusals: u64,
     /// Times a write asked for the status-queue interrupt to be announced.
     pub irq_requests: u64,
+    /// Commands decoded off the guest's command queue.
+    pub commands: u64,
+    /// ★★ Of those, the ones **no policy answered** — refused by name by the FSM. See
+    /// [`crate::unserviced`]: the refusal is quiet in the guest, so this and
+    /// [`RegPlane::unserviced_sample`] are the only place the list is readable.
+    pub commands_unserviced: u64,
 }
 
 /// The mutable half — everything that needs the lock.
@@ -296,6 +302,11 @@ pub struct RegPlane {
     clock: Box<dyn NanoClock>,
     state: Mutex<PlaneState>,
     c: PlaneCounters,
+    /// ★★ The list of commands nothing answered. Held here as well as inside the chain's
+    /// terminal link because a caller that replaces the policy with
+    /// [`RegPlane::set_policy`] still gets to read what the default one recorded — and
+    /// because reading it must not take the FSM's lock behind a doorbell.
+    unserviced: crate::unserviced::UnservicedLog,
 }
 
 impl core::fmt::Debug for RegPlane {
@@ -322,6 +333,7 @@ struct PlaneCounters {
     gsp_writes: AtomicU64,
     unclaimed_reads: AtomicU64,
     unclaimed_writes: AtomicU64,
+    commands: AtomicU64,
     faults: AtomicU64,
     ram_refusals: AtomicU64,
     irq_requests: AtomicU64,
@@ -342,6 +354,7 @@ impl RegPlane {
         let rom = crate::rom_for(chip)?;
         let model = (chip.gsp_model)();
         assert_disjoint(chip, model.as_ref())?;
+        let unserviced = crate::unserviced::UnservicedLog::new();
         Ok(RegPlane {
             chip,
             model,
@@ -350,17 +363,29 @@ impl RegPlane {
             state: Mutex::new(PlaneState {
                 fsm: GspFsm::new(abi),
                 ram: Box::new(RefusingRam),
-                // ★ Order is precedence and the two links are disjoint by function code:
-                // `InitTablePolicy` claims only `GSP_RM_CONTROL`, `StaticInfoPolicy` only
-                // `GET_GSP_STATIC_INFO`. `tests/gsp_static_info.rs` pins the disjointness
+                // ★ Order is precedence and the three answering links are disjoint by
+                // function code: `InitTablePolicy` claims only `GSP_RM_CONTROL`,
+                // `StaticInfoPolicy` only `GET_GSP_STATIC_INFO`, `GuestSystemInfoPolicy`
+                // only fn 1 and fn 64. `tests/gsp_static_info.rs` pins the disjointness
                 // rather than trusting the reading.
+                // ★ The LEDGER is last, and it answers nothing — it writes down exactly
+                // what the two links above declined and lets the FSM refuse it by name.
+                // See `crate::unserviced` for why a host-side list is the only way to
+                // know how long that list is.
                 policy: Box::new(kayfabe_gsp::PolicyChain::new(vec![
                     Box::new(crate::inittables::InitTablePolicy::new(chip, abi.driver)),
                     Box::new(crate::staticinfo::StaticInfoPolicy::new(chip, abi.driver)),
+                    Box::new(crate::guestsysinfo::GuestSystemInfoPolicy::new(abi.driver)),
+                    Box::new(crate::inert::InertPolicy::new()),
+                    Box::new(crate::unserviced::UnservicedLedger::new(
+                        abi.driver,
+                        unserviced.clone(),
+                    )),
                 ])),
                 unclaimed: Vec::new(),
             }),
             c: PlaneCounters::default(),
+            unserviced,
         })
     }
 
@@ -406,10 +431,20 @@ impl RegPlane {
             gsp_writes: g(&self.c.gsp_writes),
             unclaimed_reads: g(&self.c.unclaimed_reads),
             unclaimed_writes: g(&self.c.unclaimed_writes),
+            commands: g(&self.c.commands),
+            commands_unserviced: self.unserviced.total(),
             faults: g(&self.c.faults),
             ram_refusals: g(&self.c.ram_refusals),
             irq_requests: g(&self.c.irq_requests),
         }
+    }
+
+    /// ★★ The distinct commands nothing answered, up to
+    /// [`crate::unserviced::UNSERVICED_SAMPLE_MAX`] — see that module for why the guest
+    /// cannot be asked this question.
+    #[must_use]
+    pub fn unserviced_sample(&self) -> Vec<crate::unserviced::UnservicedCommand> {
+        self.unserviced.sample()
     }
 
     /// The distinct offsets no source claimed, up to [`UNCLAIMED_SAMPLE_MAX`].
@@ -569,6 +604,9 @@ impl RegPlane {
                 if report.raise_status_irq {
                     self.c.irq_requests.fetch_add(1, Ordering::Relaxed);
                 }
+                self.c
+                    .commands
+                    .fetch_add(report.commands.len() as u64, Ordering::Relaxed);
                 WriteOutcome {
                     claimed: true,
                     fault: None,

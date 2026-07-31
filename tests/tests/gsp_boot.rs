@@ -3247,3 +3247,76 @@ fn the_replayed_register_map_is_the_shipped_one() {
         kayfabe_device::ga10x::RMARGS_ID
     );
 }
+
+/// ★★★ Task #127 — **a command nothing answers is REFUSED BY NAME, not echoed.**
+///
+/// The three candidates and why (c) won are argued in `GspFsm::answer`'s docs; this is the
+/// test that fails if the default ever goes back. It drives the same doorbell twice with
+/// two policies that differ *only* in whether they answer, and asserts the two outcomes are
+/// distinguishable — because "no policy" used to be indistinguishable from "echo", and that
+/// is exactly how the hazard got a doc claiming it was safe.
+#[test]
+fn a_command_no_policy_answers_is_refused_by_name_rather_than_echoed() {
+    /// Answers nothing at all. The state a port is in for every control it has not built.
+    struct AnswersNothing;
+    impl kayfabe_gsp::CommandPolicy for AnswersNothing {
+        fn respond(&mut self, _cmd: &kayfabe_gsp::RpcCommand) -> Option<kayfabe_gsp::Reply> {
+            None
+        }
+    }
+
+    // The request body is 0xAA, standing in for the uninitialised guest stack that
+    // `kbusInitBarsSize_KERNEL` really sends (`ogkm-580: kern_bus.c:585`).
+    let stack_garbage = [0xAAu8; 32];
+
+    let mut w = World::new(P580, MODEL_A);
+    w.boot();
+    w.link_and_drain();
+    w.guest
+        .send(&mut w.ram, FN_RM_CONTROL, 900, &stack_garbage)
+        .unwrap();
+    let r = w.doorbell_with(&mut AnswersNothing).unwrap();
+    let replies = w.guest.recv(&mut w.ram).unwrap();
+
+    assert_eq!(replies.len(), 1, "a refusal is still a reply");
+    assert_eq!(replies[0].function, FN_RM_CONTROL);
+    assert_eq!(replies[0].sequence, 900, "matched on the transaction id");
+    // 0x56 = NV_ERR_NOT_SUPPORTED, written out: it is below
+    // `NV_VGPU_MSG_RESULT_VMIOP_BASE`, so `_issueRpcAndWait` hands it to the RM caller
+    // verbatim instead of collapsing it (`ogkm-580: rpc.c:2004-2005`).
+    assert_eq!(replies[0].rpc_result, 0x56);
+    // ★★★ THE BITE. Not one byte of the request comes back — RM short-circuits on the
+    // envelope and never reads this, but if it did there is nothing of its own in it.
+    assert!(
+        !replies[0].payload.contains(&0xAA),
+        "the guest was handed its own stack back",
+    );
+    assert!(replies[0].payload.iter().all(|b| *b == 0));
+
+    // …and the FSM says so, because RM will not: `rpcRmApiControl_GSP` logs
+    // NV_ERR_NOT_SUPPORTED at its INFO level (`ogkm-580: rpc.c:11109-11115`).
+    assert_eq!(r.unserviced.len(), 1);
+    assert_eq!(r.unserviced[0].code, FN_RM_CONTROL);
+    assert_eq!(r.unserviced[0].sequence, 900);
+
+    // ★ NON-VACUITY, and the whole reason this test has two arms: the C-baseline policy
+    // driven through the identical path DOES echo, so the assertions above are measuring
+    // the default rather than something true of every policy.
+    let mut v = World::new(P580, MODEL_A);
+    v.boot();
+    v.link_and_drain();
+    v.guest
+        .send(&mut v.ram, FN_RM_CONTROL, 900, &stack_garbage)
+        .unwrap();
+    let e = v.doorbell_with(&mut EchoOk).unwrap();
+    let echoed = v.guest.recv(&mut v.ram).unwrap();
+    assert_eq!(echoed[0].rpc_result, 0, "EchoOk still says NV_OK");
+    assert_eq!(
+        echoed[0].payload, stack_garbage,
+        "EchoOk still hands the stack back — which is why it is not a default",
+    );
+    assert!(
+        e.unserviced.is_empty(),
+        "a policy that answered is not an unserviced command",
+    );
+}

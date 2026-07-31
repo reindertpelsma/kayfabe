@@ -587,6 +587,19 @@ that codegen gives shapes and never protocol.",
                     "CONTINUATION_RECORD",
                     "GSP_SET_SYSTEM_INFO",
                     "SET_REGISTRY",
+                    // ★ Added 2026-07-31 (task #127) for the same reason and by the
+                    // same rule: `RmRpcSetGuestSystemInfo` tail-calls
+                    // `NV_RM_RPC_SET_GUEST_SYSTEM_INFO_EXT` and returns ITS status
+                    // (`ogkm-580: rpc.c:8825-8832`), so a port that answers fn 1 and
+                    // not fn 64 fails `RmInitAdapter` one line further on. The
+                    // consumer is `kayfabe_device::guestsysinfo`.
+                    "SET_GUEST_SYSTEM_INFO_EXT",
+                    // ★ Added 2026-07-31 (task #127c) — `kgspInitGspTraceCrashBuffer`
+                    // sends it from inside `kgspInitRm_IMPL` and asserts on the status
+                    // (`ogkm-580: kernel_gsp.c:3396-3402, 4239`). The consumer is
+                    // `kayfabe_device::inert`, which acknowledges it and does nothing —
+                    // deliberately, and with the reason written down there.
+                    "INIT_GSP_TRACE_CRASH_BUFFER",
                 ],
                 doc: "RPC function IDs (`rpc_global_enums.h`, `X(RM, NAME, id)`).",
             },

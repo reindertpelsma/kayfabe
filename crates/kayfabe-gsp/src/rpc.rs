@@ -64,6 +64,15 @@ use crate::fault::GspFault;
 pub struct FunctionCodes {
     /// `SET_GUEST_SYSTEM_INFO` — the first synchronous RPC after `GSP_INIT_DONE`.
     pub set_guest_system_info: u32,
+    /// `SET_GUEST_SYSTEM_INFO_EXT` (0x40) — its **tail call**, and not optional.
+    ///
+    /// ★ `RmRpcSetGuestSystemInfo` ends by issuing this and **returning its status**
+    /// (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:8825-8832`,
+    /// `ogkm-610: rpc.c:8630-8637`), so a port that answers fn 1 and refuses fn 64 fails
+    /// `RmInitAdapter` one line further on with a different message. Named here because
+    /// something downstream consumes it — `kayfabe_device::guestsysinfo` — which is this
+    /// table's whole membership rule.
+    pub set_guest_system_info_ext: u32,
     /// `FREE` (0xa) — RM's object teardown stream.
     ///
     /// ★ It is **the** teardown signal, and `UNLOADING_GUEST_DRIVER` is not:
@@ -77,6 +86,15 @@ pub struct FunctionCodes {
     pub unloading_guest_driver: u32,
     /// `GET_GSP_STATIC_INFO` — the second synchronous RPC after `GSP_INIT_DONE`.
     pub get_gsp_static_info: u32,
+    /// `INIT_GSP_TRACE_CRASH_BUFFER` (0xE4) — the guest handing its GSP a sysmem buffer
+    /// to write crash traces into.
+    ///
+    /// ★ Named because `kgspInitGspTraceCrashBuffer` sends it from inside
+    /// `kgspInitRm_IMPL` and **asserts on the status**
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:3396-3402`, hoisted at
+    /// `:4239`), so it is on the critical boot path rather than a diagnostic aside. Its
+    /// consumer is `kayfabe_device::inert`.
+    pub init_gsp_trace_crash_buffer: u32,
     /// `CONTINUATION_RECORD` — the large-message carrier.
     pub continuation_record: u32,
     /// `GSP_SET_SYSTEM_INFO` — init RPC, no reply.
@@ -109,13 +127,15 @@ pub struct FunctionCodes {
 
 impl FunctionCodes {
     /// Every id, for the distinctness check.
-    fn all(&self) -> [u32; 13] {
+    fn all(&self) -> [u32; 15] {
         [
             self.set_guest_system_info,
+            self.set_guest_system_info_ext,
             self.free,
             self.dup_object,
             self.unloading_guest_driver,
             self.get_gsp_static_info,
+            self.init_gsp_trace_crash_buffer,
             self.continuation_record,
             self.gsp_set_system_info,
             self.set_registry,
@@ -153,10 +173,12 @@ impl FunctionCodes {
     pub fn classify(&self, code: u32) -> RpcFunction {
         match code {
             c if c == self.set_guest_system_info => RpcFunction::SetGuestSystemInfo,
+            c if c == self.set_guest_system_info_ext => RpcFunction::SetGuestSystemInfoExt,
             c if c == self.free => RpcFunction::Free,
             c if c == self.dup_object => RpcFunction::DupObject,
             c if c == self.unloading_guest_driver => RpcFunction::UnloadingGuestDriver,
             c if c == self.get_gsp_static_info => RpcFunction::GetGspStaticInfo,
+            c if c == self.init_gsp_trace_crash_buffer => RpcFunction::InitGspTraceCrashBuffer,
             c if c == self.continuation_record => RpcFunction::ContinuationRecord,
             c if c == self.gsp_set_system_info => RpcFunction::GspSetSystemInfo,
             c if c == self.set_registry => RpcFunction::SetRegistry,
@@ -194,6 +216,8 @@ pub struct RpcAbi {
 pub enum RpcFunction {
     /// `SET_GUEST_SYSTEM_INFO`.
     SetGuestSystemInfo,
+    /// `SET_GUEST_SYSTEM_INFO_EXT` — the tail call whose status the guest returns.
+    SetGuestSystemInfoExt,
     /// `FREE` — one object (or, when it names a client root, one namespace) goes away.
     Free,
     /// `DUP_OBJECT` — alias an object into another client's namespace.
@@ -202,6 +226,9 @@ pub enum RpcFunction {
     UnloadingGuestDriver,
     /// `GET_GSP_STATIC_INFO`.
     GetGspStaticInfo,
+    /// `INIT_GSP_TRACE_CRASH_BUFFER` — a buffer declaration this port accepts and does
+    /// nothing with; see `kayfabe_device::inert`.
+    InitGspTraceCrashBuffer,
     /// `CONTINUATION_RECORD`.
     ContinuationRecord,
     /// `GSP_SET_SYSTEM_INFO` — init RPC, asynchronous.

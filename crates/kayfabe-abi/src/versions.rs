@@ -34,6 +34,7 @@ use crate::capability::{
     CAPS_580_65_06, CAPS_610_43_02, CapabilityTable,
 };
 use crate::generated::{classes, ctrl, nvos, rpc};
+use crate::guestsysinfo::VgxVersion;
 use crate::transcribed::{Nv2080CtrlGpuPromoteCtxParamsHeader, Nvos46ParametersPre580};
 use crate::vbios::VbiosWire;
 use crate::view::{
@@ -287,6 +288,15 @@ pub struct DriverAbiTable {
     /// ogkm tags — see [`VbiosWire`]'s doc for the measurement. The field exists
     /// so the day a version diverges is a table edit, not a redesign.
     vbios: VbiosWire,
+    /// ★★ The **vGPU RPC version this driver speaks** — the pair the `SET_GUEST_SYSTEM_INFO`
+    /// handshake exchanges ([`crate::guestsysinfo`]).
+    ///
+    /// `None` where this port has no `VGX_*_VERSION_NUMBER` citation for the row, and
+    /// answering the handshake then **refuses by name**. That is the point: the guest
+    /// reads the version back out of the *reply* and selects its whole RPC function table
+    /// from it, so a device that echoed would agree with anything and the disagreement
+    /// would surface hundreds of messages later at the wrong struct offsets.
+    vgx: Option<VgxVersion>,
     /// Why this entry exists — kept in the data so a reader of the table sees
     /// the boundary's justification without leaving the file.
     pub note: &'static str,
@@ -309,6 +319,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_550_54_04,
         vbios: VbiosWire::Tu102Bit,
+        vgx: None,
         note: "oldest supported: NVOS47 gained `size` here \
                (gvisor/pkg/abi/nvgpu/frontend.go:707-710, NVOS47_PARAMETERS_V550)",
     },
@@ -335,6 +346,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_550_90_07,
         vbios: VbiosWire::Tu102Bit,
+        vgx: None,
         note: "capability-only boundary: +NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION\
                _STATE, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:906)",
@@ -351,6 +363,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_555_42_02,
         vbios: VbiosWire::Tu102Bit,
+        vgx: None,
         note: "★ capability-only and purely SUBTRACTIVE: nvproxy deletes \
                NVC36F_CTRL_GET_CLASS_ENGINEID here and adds nothing this port carries \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:933)",
@@ -367,6 +380,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_560_28_03,
         vbios: VbiosWire::Tu102Bit,
+        vgx: None,
         note: "capability-only boundary: +8 allocation classes and \
                +NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:945-977)",
@@ -383,6 +397,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_570_86_15,
         vbios: VbiosWire::Tu102Bit,
+        vgx: None,
         note: "capability-only boundary: +6 allocation classes and the two \
                DRAM-encryption controls at their PRE-575 numbers, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:990-1027)",
@@ -417,6 +432,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_575_51_02,
         vbios: VbiosWire::Tu102Bit,
+        vgx: None,
         note: "★ the REPLACING boundary: nvproxy deletes two DRAM-encryption controls \
                here and re-adds them one number lower, and adds \
                THERMAL_SYSTEM_EXECUTE_V2 (version.go:1036-1053). CAPS_575_51_02 says all \
@@ -435,6 +451,13 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_580_65_06,
         vbios: VbiosWire::Tu102Bit,
+        // `ogkm-580: src/nvidia/inc/kernel/vgpu/vgpu_version.h:33-34`. Cross-checked
+        // against the OTHER tree: `ogkm-610: vgpu_version.h:41-42` names the identical
+        // pair as `VGX_*_VERSION_NUMBER_VGPU_19_0`, so two trees state it independently.
+        vgx: Some(VgxVersion {
+            major: 0x2B,
+            minor: 0x13,
+        }),
         note: "NVOS46 gained flags2+kindOverride, and +2 allocation classes \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1078)",
     },
@@ -450,6 +473,12 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_static_info: GspStaticInfoWire::From610_43_02,
         caps: &CAPS_610_43_02,
         vbios: VbiosWire::Tu102Bit,
+        // `ogkm-610: src/nvidia/inc/kernel/vgpu/vgpu_version.h:33-34` — and it MOVED,
+        // which is why this is a row and not a constant.
+        vgx: Some(VgxVersion {
+            major: 0x2E,
+            minor: 0x0D,
+        }),
         note: "★ the GSP element header changes shape here: 48 bytes with an \
                elemCount become 16 with MCTP/NVDM transport words, and \
                MESSAGE_QUEUE_INIT_ARGUMENTS grows from 4 fields to 9 \
@@ -508,6 +537,13 @@ impl DriverAbiTable {
     #[must_use]
     pub fn vbios_wire(&self) -> VbiosWire {
         self.vbios
+    }
+
+    /// The vGPU RPC version this driver speaks, or `None` where this port has no citation
+    /// for it — see the field's own doc for why that is a refusal and not a default.
+    #[must_use]
+    pub fn vgx_version(&self) -> Option<VgxVersion> {
+        self.vgx
     }
 
     /// Which `GSP_MSG_QUEUE_ELEMENT` shape this version speaks.

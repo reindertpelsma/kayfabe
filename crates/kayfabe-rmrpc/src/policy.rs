@@ -335,13 +335,31 @@ impl core::fmt::Debug for GraphPolicy<'_> {
 impl CommandPolicy for GraphPolicy<'_> {
     /// Answer one command.
     ///
-    /// **Accepted, inert or held → `None`**, which the FSM turns into `cmd.ack(0)`: the
-    /// `(function, sequence)` pair echoed with `NV_OK` and the request's own body
-    /// preserved. That is deliberate rather than an omission — reply **bodies** are the
-    /// device data model's job (`mode2_device_data_model.md` class C) and are named
-    /// out of scope by `gsp_core_bridge.md` §6, so B2 owes the guest the acknowledgement
-    /// and nothing more. The alternative, `Some(Reply { rpc_result: 0, body })`, is the
-    /// identical wire bytes with a second place to get the status wrong.
+    /// **Accepted, inert or held → `Some(Reply)`** carrying `NV_OK` and the request's own
+    /// body: the C-baseline acknowledgement (`C: src/qemu/nvkvm_gpu_emul.c:2410-2416`),
+    /// asked for **explicitly**. Reply *bodies* are the device data model's job
+    /// (`mode2_device_data_model.md` class C) and are named out of scope by
+    /// `gsp_core_bridge.md` §6, so B2 owes the guest the acknowledgement and nothing more.
+    ///
+    /// ## ★★★ This used to be `None`, and the change is not cosmetic (task #127)
+    ///
+    /// `None` used to mean *"let the FSM post its own `cmd.ack(0)`"*, so this doc argued
+    /// that spelling it out would be *"the identical wire bytes with a second place to get
+    /// the status wrong"*. That argument died with the default. **`None` now means "I
+    /// decline", and the FSM answers a declined command with a named refusal** — because
+    /// echoing by default was measured to hand a guest its own uninitialised kernel stack
+    /// and fault it (`kayfabe_gsp::GspFsm::answer`). One word therefore had two meanings:
+    /// *"I accepted this, acknowledge it"* and *"I have nothing for this"*. They are now
+    /// two answers, and this is the first.
+    ///
+    /// ⚠ **What that leaves, stated plainly.** The echo is gone as a default; it survives
+    /// here, for the commands this policy has **accepted** — an allowlisted, modelled set
+    /// with a decoded body, which is a categorically different thing from reflecting a
+    /// command nobody looked at. The bytes are unchanged on purpose: the fragmented-control
+    /// arithmetic below consumes each fragment's own body and length, so changing them is a
+    /// separate, measurable step and not a side effect of moving the default. Subtracting
+    /// it — authoring the reply body instead of reflecting it — belongs with the device
+    /// data model that owns reply bodies.
     ///
     /// **Refused → `Some(Reply)`** carrying [`BridgeRefusal::rpc_result`] and an **empty**
     /// body, which `RpcCommand::reply` zero-fills to the request's own length (the M9
@@ -375,7 +393,7 @@ impl CommandPolicy for GraphPolicy<'_> {
     /// `(expectedFunc, firstSequence)`, then each continuation at
     /// `(CONTINUATION_RECORD, firstSequence + i)` — and reads `rpc_result` from the
     /// **last** one it received (`ogkm-610: rpc.c:2156-2241`, `ogkm-580: :2135-2220` —
-    /// the same loop and the same final read). So `None` here is the right
+    /// the same loop and the same final read). So the accepted arm is the right
     /// answer for the head and every intermediate fragment (an `NV_OK` ack, echoing that
     /// fragment's own body and length, which is what the loop's `entryLength` arithmetic
     /// consumes), and the reassembly completes on the final fragment — the very one whose
@@ -384,7 +402,11 @@ impl CommandPolicy for GraphPolicy<'_> {
     /// breaks a guest silently.
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         match self.deliver(cmd) {
-            Ok(_) => None,
+            // ★ Explicit, not `None`. See this method's docs: `None` is a refusal now.
+            Ok(_) => Some(Reply {
+                rpc_result: 0, // NV_OK
+                body: cmd.payload.clone(),
+            }),
             Err(r) => Some(Reply {
                 rpc_result: r.rpc_result(),
                 body: Vec::new(),

@@ -1,0 +1,115 @@
+//! `kayfabe_device::inert` — the commands this port acknowledges and deliberately does
+//! nothing about.
+//!
+//! ## ★★★ What has to be tested here is the LIST, not the answer
+//!
+//! The answer is two lines. The risk is that the list grows by drift: task #127 made the
+//! FSM's default a **named refusal** precisely so that an unmodelled command cannot pass
+//! silently, and a policy that says `NV_OK` to things is the one place that guarantee can
+//! be given back. So `the_inert_list_is_exactly_one_entry` pins the membership, and
+//! `nothing_of_the_guests_request_comes_back` pins the property that separates an inert
+//! acknowledgement from the echo the whole task deleted.
+
+use kayfabe_device::inert::InertPolicy;
+use kayfabe_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+
+fn command(function: RpcFunction, code: u32, payload: Vec<u8>) -> RpcCommand {
+    RpcCommand {
+        function,
+        code,
+        sequence: 7,
+        payload,
+        elements: 1,
+    }
+}
+
+/// Every function this port's vocabulary names, so the list below is quantified over the
+/// real universe rather than over whatever the test author remembered.
+const EVERY_FUNCTION: &[RpcFunction] = &[
+    RpcFunction::SetGuestSystemInfo,
+    RpcFunction::SetGuestSystemInfoExt,
+    RpcFunction::Free,
+    RpcFunction::DupObject,
+    RpcFunction::UnloadingGuestDriver,
+    RpcFunction::GetGspStaticInfo,
+    RpcFunction::InitGspTraceCrashBuffer,
+    RpcFunction::ContinuationRecord,
+    RpcFunction::GspSetSystemInfo,
+    RpcFunction::SetRegistry,
+    RpcFunction::RmControl,
+    RpcFunction::RmAlloc,
+    RpcFunction::InitDone,
+    RpcFunction::PostEvent,
+    RpcFunction::RcTriggered,
+    RpcFunction::Other(0),
+    RpcFunction::Other(228),
+    RpcFunction::Other(u32::MAX),
+];
+
+#[test]
+fn the_inert_list_is_exactly_one_entry() {
+    let inert: Vec<RpcFunction> = EVERY_FUNCTION
+        .iter()
+        .copied()
+        .filter(|f| InertPolicy::is_inert(*f))
+        .collect();
+    assert_eq!(
+        inert,
+        vec![RpcFunction::InitGspTraceCrashBuffer],
+        "adding an entry is a deliberate edit to this assertion; see the module's docs \
+         for what makes a command eligible",
+    );
+    // ★ And `Other(228)` is NOT inert: the wire id is only inert once the ABI table has
+    // CLASSIFIED it, so a build whose function table forgot the id refuses rather than
+    // accepting it by number.
+    assert!(!InertPolicy::is_inert(RpcFunction::Other(228)));
+}
+
+#[test]
+fn the_inert_command_is_acknowledged_with_nv_ok() {
+    let mut p = InertPolicy::new();
+    let reply = p
+        .respond(&command(
+            RpcFunction::InitGspTraceCrashBuffer,
+            0xE4,
+            vec![0u8; 12],
+        ))
+        .expect("fn 228 is acknowledged");
+    assert_eq!(reply.rpc_result, 0);
+}
+
+#[test]
+fn nothing_of_the_guests_request_comes_back() {
+    let mut p = InertPolicy::new();
+    // A plausible `{pa, size}`: a guest-physical address and a length. If either came
+    // back, this policy would be an echo with a shorter list.
+    let mut payload = vec![0u8; 12];
+    payload[0..8].copy_from_slice(&0x1_2345_6000u64.to_le_bytes());
+    payload[8..12].copy_from_slice(&0x4000u32.to_le_bytes());
+    let reply = p
+        .respond(&command(
+            RpcFunction::InitGspTraceCrashBuffer,
+            0xE4,
+            payload.clone(),
+        ))
+        .expect("acknowledged");
+    assert!(
+        reply.body.is_empty(),
+        "an empty body, which `RpcCommand::reply` zero-fills to the request's length",
+    );
+    assert_ne!(reply.body, payload);
+}
+
+#[test]
+fn every_other_function_falls_through_to_the_chain() {
+    let mut p = InertPolicy::new();
+    for f in EVERY_FUNCTION.iter().copied() {
+        if f == RpcFunction::InitGspTraceCrashBuffer {
+            continue;
+        }
+        assert!(
+            p.respond(&command(f, 1, vec![0u8; 8])).is_none(),
+            "{f:?} must reach the next link, not be acknowledged here",
+        );
+    }
+}
