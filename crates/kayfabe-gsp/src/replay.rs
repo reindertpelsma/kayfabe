@@ -408,6 +408,31 @@ pub struct Divergence {
 /// A differential harness reads this; a reviewer can check every row against its oracle;
 /// and a row without a guest-visible consequence cannot be added without lying in a field
 /// that is read.
+///
+/// # ⚠ `GSP-Dn` is the **C's** defects. Ours are `PC-Dn`.
+///
+/// Every row below says *"the C does X and we deliberately do not"*. It is a ledger of the
+/// artifact's bugs, and `Verdict::Expected(row)` asserts the C is the thing that is wrong at
+/// that site.
+///
+/// A **second** numbering exists and it is not this one: `PC-D1` … `PC-D7`, the
+/// 2026-07-31 **protocol-compliance audit** of *our* GSP command path. Those are defects in
+/// this port, each closed by a commit and a biting test:
+///
+/// | id | ours | where it was closed |
+/// |---|---|---|
+/// | `PC-D1` | a service pass consumed a command **before** answering it, so a `QueueFull` lost it | [`GspFsm::service_command_queue`] / `tests/tests/service_pass_atomicity.rs` |
+/// | `PC-D2` | the consumption acknowledgement was not published when a pass faulted | the same |
+/// | `PC-D3` | the `NoReply` set was short by one (`ECC_NOTIFIER_WRITE_ACK`) | [`RpcFunction::disposition`] / `tests/tests/rpc_async_set_oracle.rs` |
+/// | `PC-D4` | `GET_GSP_STATIC_INFO` compared no size at all | `kayfabe_device::staticinfo` |
+/// | `PC-D5` | fn 47's refusal escaped `kgspUnloadRm` and failed a successful `rmmod` | `kayfabe_device::inert` |
+/// | `PC-D6` | a **false rationale** on `CONTROL_PARAMS_SIZE_OFF`, corrected | `kayfabe_device::inittables` |
+/// | `PC-D7` | `sharedMemPhysAddr` as an instance discriminator — a **named trade-off**, not fixed | [`GspFsm::publish`] |
+///
+/// ★ The two namespaces collided once, on the day the audit landed: the audit numbered its
+/// findings `D1…D7` and the first attempt at labelling them wrote `GSP-D4` for what this
+/// table calls *"the C parses guest RAM on a doorbell while `q_ready` is stale"*. A reader
+/// following the id would have found an unrelated row. Kept apart by name from here on.
 pub const LEDGER: &[Divergence] = &[
     Divergence {
         id: "GSP-D1",

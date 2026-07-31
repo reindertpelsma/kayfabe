@@ -106,7 +106,7 @@ fn nothing_of_the_guests_request_comes_back() {
 
 #[test]
 fn the_teardown_rpc_is_acknowledged_rather_than_refused() {
-    // ★★★ GSP-D5. Fn 47's refusal does not stay inside the reply: `kgspUnloadRm_IMPL`
+    // ★★★ PC-D5. Fn 47's refusal does not stay inside the reply: `kgspUnloadRm_IMPL`
     // stashes the RPC's status (`ogkm-580: kernel_gsp.c:4301`), runs the ENTIRE unload, and
     // then returns that stashed status in preference to the teardown's own
     // (`:4341-4343`). So refusing it hands `rmmod` a failure for an unload that succeeded.
@@ -126,7 +126,10 @@ fn the_teardown_rpc_is_acknowledged_rather_than_refused() {
             payload.clone(),
         ))
         .expect("fn 47 is acknowledged, not left to the ledger's refusal");
-    assert_eq!(reply.rpc_result, 0, "NV_OK, or rmmod reports a failed unload");
+    assert_eq!(
+        reply.rpc_result, 0,
+        "NV_OK, or rmmod reports a failed unload"
+    );
     // ⊘ And still nothing of the guest's comes back: an inert acknowledgement is not an
     // echo with a shorter list.
     assert!(reply.body.is_empty());
@@ -164,7 +167,11 @@ fn through_the_whole_served_chain_the_teardown_rpc_never_reaches_the_ledger() {
         log.clone(),
     );
     let reply = chain
-        .respond(&command(RpcFunction::UnloadingGuestDriver, 47, vec![0u8; 12]))
+        .respond(&command(
+            RpcFunction::UnloadingGuestDriver,
+            47,
+            vec![0u8; 12],
+        ))
         .expect("the chain answers fn 47");
     assert_eq!(reply.rpc_result, 0);
     assert_eq!(log.total(), 0, "fn 47 was recorded as unserviced");

@@ -218,7 +218,7 @@ fn cap1b_closes_the_replay_past_cap1s_wall_and_the_new_wall_is_a_different_findi
         .count();
     assert_eq!(between, 50, "fifty commands cap1 could never reach");
 
-    // ★★★ **GSP-D1, in the artifact.** The answered stream must have no HOLE. Before the
+    // ★★★ **PC-D1, in the artifact.** The answered stream must have no HOLE. Before the
     // fix the pass at txn 1028 consumed `rpc.sequence` 52, failed to post its reply, and
     // went on to answer 53 at txn 1029 — a command silently swallowed, and a guest blocked
     // on `_issueRpcAndWait` for the whole RPC timeout. Now 52 is left owed, so the stream
@@ -456,7 +456,7 @@ fn the_boot_fsm_is_driven_all_the_way_through_and_the_census_is_itemised() {
             ("WritePtrAdvanced", 53),
         ]
     );
-    // ★★ `ReadPtrAcked` is the number GSP-D2 moved, and it moved *toward the C*: 54 -> 273
+    // ★★ `ReadPtrAcked` is the number PC-D2 moved, and it moved *toward the C*: 54 -> 273
     // against the C's 272. Before the fix the consumption acknowledgement was written after
     // the drain's `?`s, so a pass that faulted published nothing and the guest kept reading
     // a stale `readPtr`. It is now published however the pass ended.

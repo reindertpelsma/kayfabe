@@ -283,3 +283,39 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // not a universe.
     assert_eq!(WantedTable::from_cmd(0x2080_0000), None);
 }
+
+#[test]
+fn no_control_this_port_serves_can_be_cached_permanently_by_the_guest() {
+    // ★★ PC-D6's neighbour, and the one the audit called "inert today, nothing checks
+    // that". Our reply keeps the request's whole control header, `rmctrlFlags` included,
+    // and those flags decide whether the guest puts the answer in its control cache
+    // FOREVER — `rmapiControlCacheSetUnchecked` (`ogkm-580: rpc.c:11096-11103`), reached
+    // only when `IsGssLegacyCall(cmd)` holds, i.e. `cmd & RM_GSS_LEGACY_MASK`
+    // (`rmapi_deprecated.h:41`, `rmapi_deprecated_control.c:95-98`).
+    //
+    // ⊘ Quantified over `WantedTable::ALL`, so a served control ADDED tomorrow is checked
+    // tomorrow. A list written here would have to be remembered.
+    for w in WantedTable::ALL {
+        assert_eq!(
+            w.cmd_id() & 0x0000_8000,
+            0,
+            "{w:?} (0x{:08x}) is a GSS-legacy call: the guest would cache our answer \
+             permanently, so serving it is a decision that needs its own reasoning",
+            w.cmd_id()
+        );
+    }
+
+    // ★ The predicate the serve-site guard rests on, checked against a REAL GSS-legacy
+    // control rather than a synthesised one: `NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2_PHYSICAL`
+    // is `0x20808513` (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080thermal.h:137`),
+    // built from a `LEGACY_NON_PRIVILEGED_INTERFACE_ID`. The guard inside `respond` is
+    // unreachable while the assertion above holds — an unreachable branch cannot be bitten,
+    // so the mechanism is exposed and tested here instead of argued for in a comment.
+    assert!(kayfabe_device::inittables::is_gss_legacy(0x2080_8513));
+    assert!(!kayfabe_device::inittables::is_gss_legacy(
+        NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE
+    ));
+    assert!(kayfabe_device::inittables::is_gss_legacy(
+        NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE | 0x0000_8000
+    ));
+}

@@ -362,7 +362,7 @@ const fn copy_of_ga106() -> ChipProfile {
 
 #[test]
 fn a_request_whose_body_is_not_the_struct_this_port_encodes_is_refused_in_the_envelope() {
-    // ★★★ GSP-D4. The failure this closes is **silent**, which is why the test has to state
+    // ★★★ PC-D4. The failure this closes is **silent**, which is why the test has to state
     // what silence looked like: `RpcCommand::reply` clamps the body to the request's own
     // declared length, so a guest whose `sizeof(GspStaticConfigInfo)` differs from ours got
     // a TRUNCATED or ZERO-PADDED table — no fault, no counter, no refusal — copied straight

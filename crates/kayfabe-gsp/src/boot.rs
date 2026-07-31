@@ -522,6 +522,13 @@ pub struct GspFsm {
     cmd_read_ptr: u32,
     /// `sharedMemPhysAddr` of the region the last bind used, if any — the discriminator
     /// between a re-acquire and a new driver life. See [`GspFsm::publish`].
+    ///
+    /// ⚠ **PC-D7, a named trade-off**: an address is not an identity, and the guest's
+    /// allocator recycles pages. A destruct → construct cycle onto the same page reads as
+    /// *"same instance"* and yields a permanent [`GspFault::SeqNumGap`]. Always resetting
+    /// instead is **worse** — `task #64`, and the C's own `C: src/qemu/nvkvm_gpu_emul.c`
+    /// at `C:3459-3483`. See [`GspFsm::publish`] for the full statement and for what would
+    /// actually dissolve it.
     region_identity: Option<u64>,
     /// Bound on how many LibOS region-array entries a hostile guest can make us read.
     /// Also bounds the page-table entry count.
@@ -565,7 +572,7 @@ impl GspFsm {
     /// The **command** sequence we next expect from the guest — the other half of the
     /// cursor a service pass may commit.
     ///
-    /// ★ Exposed so a test can assert what a *failed* pass committed. GSP-D1 is precisely a
+    /// ★ Exposed so a test can assert what a *failed* pass committed. PC-D1 is precisely a
     /// question about this number: a pass that consumed a command it never answered has
     /// advanced it, and that is not visible from [`GspFsm::queue`] alone. See
     /// `tests/tests/service_pass_atomicity.rs`.
@@ -956,6 +963,31 @@ impl GspFsm {
         // [`GspFsm::cmd_read_ptr`] gives: the guest's tx `writePtr` is only zeroed by
         // `msgqTxCreate` at module load, so a same-instance rebind must resume where we
         // stopped, and a new instance starts at 0 because the guest's producer did.
+        //
+        // ═══ ★★★ PC-D7 — A NAMED TRADE-OFF, NOT A DEFECT TO BE FIXED ═══════════════════
+        //
+        // `sharedMemPhysAddr` is an ADDRESS, and the guest's allocator recycles pages. A
+        // destruct → construct cycle that lands the new shared memdesc on the SAME physical
+        // page reads here as *"the same instance"*, so we preserve a sequence the guest has
+        // just reset to 0 — and it then sees `seqNum > rxSeqNum`, for which its receive path
+        // has NO recovery branch at either tag (`ogkm-610: message_queue_cpu.c:768-782`,
+        // `ogkm-580: :699-713` handle only `<`, and `rxSeqNum++` happens anyway). The
+        // streams stay one apart forever: `GspFault::SeqNumGap`, permanently.
+        //
+        // ⊘ **The obvious fix is WORSE, and that is a source reading rather than a run of
+        // ours**: always resetting is what `task #64` tried, and it is the C's own expensive
+        // lesson at `C: src/qemu/nvkvm_gpu_emul.c:3459-3483` — a re-posted `INIT_DONE` at
+        // sequence 0 arrives `0 << N`, the guest files it as an old package, and the second
+        // context hangs in `kgspWaitForRmInitDone`. That failure is the COMMON case — every
+        // idle release/re-acquire — where this one needs an allocator to return the same
+        // page across a module unload/reload.
+        //
+        // So the choice is between a rare wrong-preserve and a routine wrong-reset, and the
+        // rare one is taken deliberately. What would actually dissolve it is a discriminator
+        // that is not an address — the guest's own `rxSeqNum`, read at bind time, would say
+        // which instance it thinks it is — and that is a design change with its own reads,
+        // not a one-line swap. Written down here rather than fixed, so the next reader finds
+        // a decision instead of a bug.
         let same_instance = self.region_identity == Some(shared_mem_pa);
         if !same_instance {
             self.stat_seq = 0;
@@ -1054,14 +1086,14 @@ impl GspFsm {
 
         let outcome = self.drain_commands(ram, policy, &geom, &mut report);
 
-        // ★★★ **GSP-D2 — the acknowledgement is published however the pass ended.**
+        // ★★★ **PC-D2 — the acknowledgement is published however the pass ended.**
         //
         // This write used to sit after the drain's `?`s, so a pass that consumed three
         // commands and then faulted on the fourth left our published `readPtr` at the value
         // from the *previous* pass. The guest computes its own free space from that number,
         // so it sees less room than exists — and a pass that keeps failing never publishes
-        // again. That is the C's measured *"buffer is full"* at ~63 elements arriving by a
-        // different door (`C:3352-3358`).
+        // again. `C: src/qemu/nvkvm_gpu_emul.c:3352-3358` is the same symptom arriving by a
+        // different door: *"buffer is full"* at ~63 elements.
         //
         // ⊘ The ordering is the point: `drain_commands` commits `self.cmd_read_ptr` message
         // by message, so this always publishes exactly what we actually consumed — never
@@ -1082,7 +1114,7 @@ impl GspFsm {
 
     /// The drain itself: every complete message decoded, answered, and only then consumed.
     ///
-    /// ★★★ **GSP-D1 — answer BEFORE committing the cursor.** This loop used to commit the
+    /// ★★★ **PC-D1 — answer BEFORE committing the cursor.** This loop used to commit the
     /// read pointer and the expected sequence and *then* call [`GspFsm::answer`]. `answer`
     /// posts, and [`GspFsm::post`] can return [`GspFault::QueueFull`] — whose own
     /// documentation calls it *retryable back-pressure*. On this path there was no retry:
@@ -1185,7 +1217,7 @@ impl GspFsm {
             let msg = decode_message(&self.abi.element, &run, len, expect_seq, &self.abi.driver)?;
             let cmd = RpcCommand::from_incoming(&self.abi.rpc, &msg);
 
-            // ★★★ GSP-D1: answer FIRST. A `?` here leaves the cursor exactly where it was,
+            // ★★★ PC-D1: answer FIRST. A `?` here leaves the cursor exactly where it was,
             // so this message is still owed and the next doorbell re-reads it. Consuming
             // first and answering second loses the command on any refusal `post` can raise
             // — `QueueFull` above all, which is the one this method's caller is expected to

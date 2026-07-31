@@ -61,9 +61,57 @@ use crate::ChipProfile;
 /// decodes what a guest **sent**, and `status` is a field only a reply fills in.
 const CONTROL_STATUS_OFF: usize = 12;
 
-/// Byte offset of `paramsSize` in the same header — rewritten on the reply so RM's
-/// copy-out length is ours rather than the request's echo.
+/// Byte offset of `paramsSize` in the same header.
+///
+/// ★★ **CORRECTED (PC-D6).** This used to say the field was rewritten *"so RM's copy-out
+/// length is ours rather than the request's echo"*. That reason is **wrong**, and a
+/// load-bearing wrong reason is worse than none — it is exactly what the claim ledger
+/// exists to catch. On the flat path this policy serves, RM copies out with the CALLER's
+/// own local `paramsSize` (set by `serverSerializeCtrlDown`, `ogkm-580: rpc.c:10937`) and
+/// never reads the reply's field: `portMemCopy(pParamStructPtr, paramsSize,
+/// rpc_params->params, paramsSize)` (`:11085-11089`). `rmapiControlCacheSetUnchecked` uses
+/// the same local (`:11096-11103`). So writing it changes nothing a guest can observe.
+///
+/// It is still written, and the honest reason is smaller: the reply then **describes
+/// itself** — a `paramsSize` echoed from a request whose params we replaced would state a
+/// length the body does not have, and this port's own decoders read it. ⊘ Nothing depends
+/// on that; it is a consistency property, not a mechanism.
+///
+/// ⚠ The one place the reply's `paramsSize` IS load-bearing is the FINN-serialized arm,
+/// `portMemCopy(pCallContext->pSerializedParams, ..., rpc_params->paramsSize)`
+/// (`ogkm-580: rpc.c:11072-11075`) — and [`InitTablePolicy::respond`] refuses serialized
+/// payloads outright, so this policy never reaches it. A policy that ever stops refusing
+/// them inherits a real dependency on this write.
 const CONTROL_PARAMS_SIZE_OFF: usize = 16;
+
+/// `RM_GSS_LEGACY_MASK` — bit 15 of a control id
+/// (`ogkm-580: src/nvidia/interface/deprecated/rmapi_deprecated.h:41`,
+/// `IsGssLegacyCall` at `rmapi_deprecated_control.c:95-98`).
+///
+/// ★★ **The gate on a STICKY answer.** A reply's `rmctrlFlags` decide whether the guest
+/// puts our answer in its control cache *permanently*: `rmapiControlCacheSetUnchecked`
+/// (`ogkm-580: rpc.c:11096-11103`) is reached only when `IsGssLegacyCall(cmd)` holds, is
+/// not FINN-serialized, and the flags say cacheable. Our replies **reflect the request's
+/// `rmctrlFlags`**, because the whole control header is kept — so for a GSS-legacy control
+/// the guest would cache whatever we answered and never ask again.
+///
+/// None of the controls this port serves has bit 15 set, so the branch is unreachable
+/// today. ⊘ Nothing checked that, which is the defect shape: the NEXT served control with
+/// bit 15 set would inherit a sticky wrong answer with no test and no log.
+/// [`InitTablePolicy::respond`] now asserts it at the serve site.
+const RM_GSS_LEGACY_MASK: u32 = 0x0000_8000;
+
+/// `IsGssLegacyCall(cmd)` — the driver's own predicate, one line and one mask
+/// (`ogkm-580: src/nvidia/interface/deprecated/rmapi_deprecated_control.c:95-98`).
+///
+/// ★ Public and separate from [`InitTablePolicy::respond`] on purpose. The guard inside
+/// `respond` is **unreachable** while no served control has bit 15 set, and an unreachable
+/// branch cannot be bitten — so the predicate it rests on is exposed and tested directly.
+/// The refusal stays where the decision is made; the mechanism is checkable here.
+#[must_use]
+pub fn is_gss_legacy(cmd: u32) -> bool {
+    cmd & RM_GSS_LEGACY_MASK != 0
+}
 
 /// `NV_OK`.
 const NV_OK: u32 = 0;
@@ -299,6 +347,16 @@ impl CommandPolicy for InitTablePolicy {
                 }
             }
         };
+
+        // ★★ The sticky-answer guard, at the serve site rather than in a comment. The reply
+        // keeps the request's `rmctrlFlags`, and for a GSS-legacy control those flags let
+        // the guest cache our answer PERMANENTLY (`rmapiControlCacheSetUnchecked`,
+        // `ogkm-580: rpc.c:11096-11103`). Every id this port serves is outside that mask
+        // today, so this is unreachable — and it is here precisely because nothing else
+        // would notice the day it stops being. A refusal, not a panic: an id is data.
+        if is_gss_legacy(req.cmd) {
+            return refuse();
+        }
 
         // Keep the guest's own control header — `hClient`/`hObject`/`cmd` are echoed, as
         // they are on every real reply — and overwrite only the two fields a GSP owns.

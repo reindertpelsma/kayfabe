@@ -1,4 +1,4 @@
-//! ★★★ **GSP-D1 and GSP-D2 — what a service pass owes the guest when it cannot finish.**
+//! ★★★ **PC-D1 and PC-D2 — what a service pass owes the guest when it cannot finish.**
 //!
 //! `GspFsm::service_command_queue` drains the command ring, answers each message, and
 //! publishes how far it got. Two orderings inside that had to be wrong before anything went
@@ -8,12 +8,12 @@
 //!
 //! | | what it was | what the guest saw |
 //! |---|---|---|
-//! | **GSP-D1** | the read pointer and expected sequence were committed **before** `answer` | `post` can return `QueueFull` — *retryable back-pressure*, by its own doc — and on this path there was no retry. The command was already consumed, so no reply was ever posted; the guest blocked in `_issueRpcAndWait` for the whole RPC timeout. |
-//! | **GSP-D2** | the consumption acknowledgement was written **after** the drain's `?`s | a pass that consumed three commands and faulted on the fourth left our published `readPtr` at the previous pass's value, so the guest's `msgqTxGetFreeSpace` saw less room than existed. Self-healing on the next clean pass; a *persistently* failing pass reproduces the C's measured *"buffer is full"* (`C:3352-3358`). |
+//! | **PC-D1** | the read pointer and expected sequence were committed **before** `answer` | `post` can return `QueueFull` — *retryable back-pressure*, by its own doc — and on this path there was no retry. The command was already consumed, so no reply was ever posted; the guest blocked in `_issueRpcAndWait` for the whole RPC timeout. |
+//! | **PC-D2** | the consumption acknowledgement was written **after** the drain's `?`s | a pass that consumed three commands and faulted on the fourth left our published `readPtr` at the previous pass's value, so the guest's `msgqTxGetFreeSpace` saw less room than existed. Self-healing on the next clean pass; a *persistently* failing pass reproduces the same *"buffer is full"* the C reached from the other direction (`C: src/qemu/nvkvm_gpu_emul.c:3352-3358`). |
 //!
 //! ## ★★ The fix is an ORDERING, and the mirror failure has to be impossible
 //!
-//! D1 is answered by **answer-then-commit**: the cursor *is* the record of what has been
+//! PC-D1 is answered by **answer-then-commit**: the cursor *is* the record of what has been
 //! answered, so a refusal leaves the message still owed and the next doorbell re-reads it.
 //! The alternative — hold the reply and re-post next pass — needs a queue of deferred
 //! replies, and a deferred reply is state that can be lost, reordered or double-sent.
@@ -53,19 +53,22 @@ fn post(w: &mut World, sequence: u32) -> Result<(), GspFault> {
 /// Fill our status ring to within `keep` elements of full, so the next service pass runs
 /// out of room in a controlled place. Returns how many are outstanding.
 ///
-/// ★ The capacity is **measured**, not computed: fill the ring until it refuses, count,
+/// ★ The capacity is discovered at run time, not computed: fill the ring until it refuses, count,
 /// drain it through the guest, then re-fill to `capacity - keep`. Deriving it from
 /// `msgCount - 1` would put a second copy of `msgqTxGetFreeSpace`'s arithmetic in the test,
-/// and a test that shares an off-by-one with the code under test cannot see it. The
-/// measurement also *is* the non-vacuity check: a ring that never refused would make every
-/// assertion below empty.
+/// and a test that shares an off-by-one with the code under test cannot see it. That
+/// discovery step also *is* the non-vacuity check: a ring that never refused would make
+/// every assertion below empty.
 fn fill_status_ring(w: &mut World, keep: u32) -> u32 {
     let mut capacity = 0;
     while post(w, 9000 + capacity).is_ok() {
         capacity += 1;
         assert!(capacity < 1000, "the status ring never filled");
     }
-    assert!(capacity > keep, "the ring is too small to leave {keep} free");
+    assert!(
+        capacity > keep,
+        "the ring is too small to leave {keep} free"
+    );
     let drained = w.guest.recv(&mut w.ram).expect("a clean stream");
     assert_eq!(drained.len(), capacity as usize, "the fill was observable");
 
@@ -86,7 +89,7 @@ fn cursor(w: &World) -> (u32, u32) {
 
 #[test]
 fn a_command_whose_reply_cannot_be_posted_is_not_consumed() {
-    // ★★★ GSP-D1, stated as the guest experiences it: the command must still be there
+    // ★★★ PC-D1, stated as the guest experiences it: the command must still be there
     // afterwards, because a command that has been consumed will never be answered.
     let mut w = World::new(P580, MODEL_A);
     w.boot();
@@ -110,7 +113,7 @@ fn a_command_whose_reply_cannot_be_posted_is_not_consumed() {
     assert_eq!(
         cursor(&w),
         before,
-        "GSP-D1: the cursor moved past a command we never answered"
+        "PC-D1: the cursor moved past a command we never answered"
     );
 
     // ★ And the retry actually works, which is the other half of the claim: a refusal that
@@ -171,7 +174,7 @@ fn a_failed_post_leaves_the_status_ring_byte_for_byte_untouched() {
 
 #[test]
 fn a_pass_that_faults_part_way_still_publishes_what_it_consumed() {
-    // ★★★ GSP-D2. Three commands, room for two replies: the pass answers two, refuses the
+    // ★★★ PC-D2. Three commands, room for two replies: the pass answers two, refuses the
     // third, and must still tell the guest it consumed two command elements. Leaving the
     // published `readPtr` stale makes the guest compute less free space than exists, and a
     // pass that keeps failing never publishes again.
@@ -203,7 +206,7 @@ fn a_pass_that_faults_part_way_still_publishes_what_it_consumed() {
     assert_eq!(
         w.guest.free_space(&mut w.ram),
         guest_free_before - 1,
-        "GSP-D2: the guest must see two of its three command elements returned, so only \
+        "PC-D2: the guest must see two of its three command elements returned, so only \
          the un-answered one is still outstanding"
     );
 

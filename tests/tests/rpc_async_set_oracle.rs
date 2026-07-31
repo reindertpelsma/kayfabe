@@ -1,4 +1,4 @@
-//! ★★★ **GSP-D3 — the "no reply" set, DERIVED FROM THE DRIVER instead of from us.**
+//! ★★★ **PC-D3 — the "no reply" set, DERIVED FROM THE DRIVER instead of from us.**
 //!
 //! [`kayfabe_gsp::RpcFunction::disposition`] answers `NoReply` for the RPCs the guest
 //! issues and never awaits. Posting a reply to one of those surfaces in the driver as an
@@ -57,8 +57,9 @@ fn trees() -> Vec<(&'static str, PathBuf)> {
         ),
         (
             "ogkm-610",
-            std::env::var("KAYFABE_OGKM_610")
-                .unwrap_or_else(|_| "/workspace/nvidia-gpu-passthrough/research_clones/ogkm".into()),
+            std::env::var("KAYFABE_OGKM_610").unwrap_or_else(|_| {
+                "/workspace/nvidia-gpu-passthrough/research_clones/ogkm".into()
+            }),
         ),
     ]
     .into_iter()
@@ -148,9 +149,9 @@ fn async_ids(root: &Path) -> (BTreeSet<u32>, usize) {
         // wraps before its function-id argument at `ogkm-580: rpc.c:10521`, so a
         // line-oriented match finds the call and misses the constant. That is exactly the
         // kind of near-miss that would have made this oracle quietly incomplete.
-        let hdr = body.rfind("rpcWriteCommonHeader").unwrap_or_else(|| {
-            panic!("an async call site at {RPC_C}:{} names no function", n + 1)
-        });
+        let hdr = body
+            .rfind("rpcWriteCommonHeader")
+            .unwrap_or_else(|| panic!("an async call site at {RPC_C}:{} names no function", n + 1));
         let tail = &body[hdr..];
         let k = tail
             .find("NV_VGPU_MSG_FUNCTION_")
@@ -187,7 +188,10 @@ fn our_no_reply(root: &Path) -> BTreeSet<u32> {
 #[test]
 fn the_no_reply_set_is_exactly_what_the_driver_sends_asynchronously() {
     let tags = trees();
-    report("the_no_reply_set_is_exactly_what_the_driver_sends_asynchronously", &tags);
+    report(
+        "the_no_reply_set_is_exactly_what_the_driver_sends_asynchronously",
+        &tags,
+    );
     if tags.is_empty() {
         return;
     }
@@ -232,8 +236,7 @@ fn the_async_senders_live_only_in_rpc_c() {
                 if p.is_dir() {
                     stack.push(p);
                 } else if p.extension().is_some_and(|x| x == "c" || x == "h")
-                    && std::fs::read_to_string(&p)
-                        .is_ok_and(|t| t.contains("_issueRpcAsync"))
+                    && std::fs::read_to_string(&p).is_ok_and(|t| t.contains("_issueRpcAsync"))
                 {
                     hits.push(p);
                 }
@@ -255,10 +258,7 @@ fn the_two_awaited_dispositions_are_still_distinguishable() {
     // ends in `_issueRpcAndWait` (`ogkm-580: rpc.c:9168-9192`) and an unanswered one blocks
     // `rmmod` for the whole RPC timeout, so it must stay on the other side of the line.
     let codes = kayfabe_device::abi::FUNCTIONS;
-    assert_eq!(
-        codes.classify(47).disposition(),
-        Disposition::ReplyRequired
-    );
+    assert_eq!(codes.classify(47).disposition(), Disposition::ReplyRequired);
     assert_eq!(codes.classify(76).disposition(), Disposition::Reply);
     assert_eq!(
         codes.classify(202),
