@@ -139,71 +139,12 @@ impl RomWindow {
 }
 
 /// ★★★ **A framebuffer window — an aperture whose accesses are DEVICE MEMORY, not
-/// registers.**
-///
-/// # Why this is a separate name and not one more unclaimed offset
-///
-/// [`plane`]'s module docs argue that an unclaimed *register* may read a defaulted zero,
-/// because the guest is reading a register a real chip does have and answering zero is a
-/// wrong value rather than a fabricated mapping. **That argument does not extend to these
-/// three windows**, and conflating them is what this type exists to stop:
-///
-/// - a write here is a write to the framebuffer, and **a page table lives in the
-///   framebuffer**. Dropping it silently is `#13 CE-DROP` with a different transport — the
-///   mapping is simply absent later, at an address that names nothing;
-/// - a read here is a read of framebuffer *content*, so a defaulted zero is not merely a
-///   wrong register value, it is a page of invalid page-table entries — which is a
-///   perfectly well-formed answer meaning *"this maps nothing"*. That is the exact shape
-///   [`kayfabe_mmu::walker::FbRead`] refuses to spell as zeros.
-///
-/// ⊘ **Nothing here serves a byte.** This port models no device memory; it names the
-/// absence so that a boot which touches the framebuffer says so in its own counters rather
-/// than looking like a boot that touched an unmodelled register.
-///
-/// # The measurement that made this worth a type (2026-07-31)
-///
-/// Replaying the committed C reference traces
-/// (`nvidia-gpu-passthrough/traces/mode2_c_reference/`) and bucketing every recorded
-/// base-address-register write by region: the cold boot `cap1b_coldboot_hermetic_d6`
-/// carries **177 856** instance-window writes, **33 978** `PRAMIN` writes and **2**
-/// framebuffer-aperture writes; the matmul trace `cap3_matmul_forwarding` carries
-/// **214 552 / 33 978 / 1 511** — i.e. **211 836** and **250 041** window accesses in the
-/// two runs, **461 877** in total. Under this port every one of them was indistinguishable
-/// from an unknown register offset.
-///
-/// ★ **That census is a test, not a paragraph**:
-/// `crates/kayfabe-crec/tests/fb_window_census.rs` re-derives the cold boot's three numbers
-/// from the capture this repository carries, **through this classifier**, and fails if they
-/// move. It reads `cap1_coldboot_hermetic` rather than `cap1b`, which differs only by 32
-/// witnessed continuation-element reads and has the identical window census — checked, not
-/// assumed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum FbWindow {
-    /// The 1 MiB `PRAMIN` window in the register aperture, positioned by
-    /// `NV_PBUS_BAR0_WINDOW`. **Untranslated**: the framebuffer address is the window base
-    /// plus the offset (`C: src/qemu/nvkvm_gpu_emul.c:904-908`).
-    Pramin,
-    /// Base-address register [`kayfabe_abi::pcibars::bus_bar::FB`] — the framebuffer
-    /// aperture. GMMU-translated through the `bar1PdeBase` this port itself reports
-    /// (`C: :4604`).
-    FbAperture,
-    /// Base-address register [`kayfabe_abi::pcibars::bus_bar::INST`] — RM's `BAR2` window.
-    /// Identity while the window is bound physical, GMMU-translated through `bar2PdeBase`
-    /// afterwards (`C: :6588`).
-    InstanceWindow,
-}
-
-impl FbWindow {
-    /// One clause naming the window, for a diagnostic. Never branched on.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Pramin => "the PRAMIN framebuffer window",
-            Self::FbAperture => "the framebuffer aperture (BAR1)",
-            Self::InstanceWindow => "the instance/BAR2 window",
-        }
-    }
-}
+/// registers.** Re-exported from [`kayfabe_arch`], where it moved so that the address
+/// plane can name a window without depending on the device shell (`kayfabe-trace`
+/// depends on `kayfabe-mmu`, and this crate depends on `kayfabe-trace`, so the arrow
+/// only goes one way). The classifier that produces it, [`ChipProfile::fb_window`],
+/// stays here — it is a chip fact; the *name* is shared vocabulary.
+pub use kayfabe_arch::FbWindow;
 
 /// A contiguous byte span inside base-address register 0.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

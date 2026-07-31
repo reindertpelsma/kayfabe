@@ -625,3 +625,52 @@ walker this repo already has rather than a second one.
 3. **What the C shell should do with a per-write window name.** The counters cross the seam;
    `KayfabeRegWrite` did not grow a field, because no C-side consumer exists to read one and
    inventing the reader is not this pass's call.
+
+### ★★★ ANSWERED by the owner, 2026-07-31 — and the index BUILT (this pass)
+
+The owner's answer is neither (A), (B) nor (C) as posed above: it reframes the question from
+*"who serves the window's bytes"* to *"who knows which views a region is visible in"*.
+
+> Each framebuffer window (`PRAMIN`, `BAR1`, `BAR2`) has its own mappings in GPGA, and the
+> same GPGA can be mapped in multiple windows. Whenever a GPGA object or page is allocated,
+> deallocated or remapped, the system asks **who can see this page** — which isolates, which
+> windows, including **partial** maps — and updates them all, so every view is correct and
+> **passthrough by construction**. Objects are the authority; **GPGA is the key**. The same
+> object may be mapped many times, and **slices** of it, when a window covers only part of it.
+>
+> ★★★ **Never ask a single address where it belongs — always ask, per region, what it
+> contains.**
+
+That last line is the address plane's own rule (`mode2_address_table.md`: forward-populated,
+never reverse-resolved, miss = fault) applied to the visibility question.
+
+**What landed:** `kayfabe_mmu::gpga::ViewerIndex`, with **no consumer wired** — deliberately,
+because the invariant is cheap to get right before the first caller and expensive after.
+Twelve tests in `tests/tests/gpga_viewer_index.rs`; thirteen induced defects in
+`scripts/bite_gpga_viewer.py`, all thirteen observed to bite against a green baseline.
+
+**Three corrections the owner accepted, each executed as a test:**
+
+1. **The key is `(Aperture, address)`, never a bare address.** A bare key aliases vidmem
+   offset `X` with sysmem offset `X` — the identity/uniqueness family. `Aperture` gained
+   `Ord` so the correct key is also the convenient one.
+2. **Range-keyed, never page-keyed.** Everything is a `kayfabe_util::IntervalMap`; fan-out is
+   `O(viewers · (log regions + hits))`, never `O(pages · viewers)`.
+3. **The framebuffer-to-framebuffer copy-engine write is a NAMED REFUSAL**
+   (`ViewFault::UnwitnessedContent`), not a silently stale view — §15.4's open induction, made
+   into a state the type system carries rather than a caveat in a paragraph.
+
+**The lock constraint, resolved as a separate pass** (the same shape as `latch_pt_writes` and
+`apply_promote_ctx`, and for the same reason — a GPGA object is visible to viewers owned by
+*other* procs, and R3 forbids a second rank-1 lock): DESCRIBE (rank 1, the issuer's, produces a
+plain owned `ObjectChange`) → PLAN/APPLY (rank 0, the index, **contacts no viewer**) → DRAIN
+(rank 1, one viewer at a time, a **pull**). The pull is what makes a hanging viewer harmless;
+its queue is bounded and overflow is the named `ViewState::Desynced`, never a silent drop.
+
+**`PRAMIN` is what this is shaped for**, per the recommendation above: untranslated, so a
+mapping into it is arithmetic on a register the guest sets. ⊘ `BAR1`/`BAR2` coverage is
+*representable* (a translated window is just a set of regions) but **nothing derives it from
+page tables** — that needs the walker and `fb_read`, and it is a second pass.
+
+⊘ **One limit named rather than assumed away:** `Aperture::Peer` does not say *which* peer. A
+second GPU axis belongs in the key the day a second peer exists.

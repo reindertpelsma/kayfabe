@@ -134,6 +134,70 @@ impl<V> IntervalMap<V> {
     pub fn iter(&self) -> impl Iterator<Item = (u64, u64, &V)> {
         self.ranges.iter().map(|(&s, &(l, ref v))| (s, l, v))
     }
+
+    /// The first range that **starts at or after** `at`, if any. The scan-forward
+    /// primitive [`IntervalMap::spans`] needs to size a hole without walking the whole
+    /// map — `BTreeMap::range` makes it `O(log n)`, where a `find` over
+    /// [`IntervalMap::iter`] is `O(n)` per hole.
+    #[must_use]
+    pub fn next_from(&self, at: u64) -> Option<(u64, u64, &V)> {
+        self.ranges
+            .range(at..)
+            .next()
+            .map(|(&s, &(l, ref v))| (s, l, v))
+    }
+
+    /// ★★★ **THE range algebra's one primitive** — partition `[start, start+len)` into
+    /// the maximal runs over which this map's answer is CONSTANT: each run either lies
+    /// inside exactly one range (`Some`) or is a hole (`None`).
+    ///
+    /// This lives on the container, not on one of its users, because
+    /// `gpga_address_space.md` §5 rules that the GPGA allocator and the copy-engine
+    /// operand split must share **one** range type: *"Build it once. If the CE split and
+    /// the GPGA allocator grow two different range types, that is the smell that the
+    /// construct was missed."* `kayfabe_mmu::AddressTable::spans` was the first user and
+    /// now delegates here; `kayfabe_mmu::gpga` is the second.
+    ///
+    /// # Guarantees (all pinned by test)
+    /// - Ascending, contiguous, non-overlapping, **no zero-length span**.
+    /// - **Total**: the spans cover the effective range EXACTLY. A partition that is not
+    ///   total is silently a dropped sub-operation.
+    /// - Never panics on hostile input, never allocates unboundedly.
+    ///
+    /// ★ **A wrapping range is CLIPPED at the top of the address space, never wrapped.**
+    /// `start + len` is computed in `u128` and the effective end is `min(start+len, 2^64)`.
+    /// Honouring the wrap would let a hostile length reach a range at the BOTTOM of the
+    /// space from a request aimed at the top. `len == 0` yields no spans: an empty request
+    /// is empty, not a fault.
+    #[must_use]
+    pub fn spans(&self, start: u64, len: u64) -> Vec<(u64, u64, Option<&V>)> {
+        let begin = u128::from(start);
+        let end = (begin + u128::from(len)).min(1u128 << 64);
+        let mut out = Vec::new();
+        let mut at = begin;
+        while at < end {
+            let here = at as u64;
+            match self.lookup(here) {
+                Some((r_start, r_len, v)) => {
+                    let r_end = u128::from(r_start) + u128::from(r_len);
+                    let run_end = r_end.min(end);
+                    out.push((here, (run_end - at) as u64, Some(v)));
+                    at = run_end;
+                }
+                None => {
+                    // The hole runs until the next range that STARTS at or after `here`,
+                    // or to the end of the request. `next_from` is O(log n); a per-byte
+                    // probe would be the C's O(n) overlay scan that ate 42% of a run.
+                    let next = self
+                        .next_from(here)
+                        .map_or(end, |(s, _, _)| u128::from(s).min(end));
+                    out.push((here, (next - at) as u64, None));
+                    at = next;
+                }
+            }
+        }
+        out
+    }
 }
 
 #[cfg(test)]

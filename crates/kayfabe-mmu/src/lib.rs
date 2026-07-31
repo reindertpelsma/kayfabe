@@ -41,6 +41,7 @@
 //! safe), bind/unbind are `&mut self` (caller-exclusive). `Send + Sync`
 //! compile-time-asserted below; full contract in `kayfabe-core`'s crate docs.
 
+pub mod gpga;
 pub mod walker;
 
 use kayfabe_arch::Aperture;
@@ -511,40 +512,19 @@ impl AddressTable {
     /// BOTTOM of the space from a request aimed at the top. The clipped surplus
     /// addresses nothing, so it needs no span. (`len == 0`, likewise, yields no spans:
     /// an empty request is empty, not a fault — the guest is allowed to ask for nothing.)
+    ///
+    /// ★ **Delegates to [`kayfabe_util::IntervalMap::spans`]** — the algorithm moved onto
+    /// the container so the GPGA viewer index ([`crate::gpga`]) shares it rather than
+    /// growing a second one (`gpga_address_space.md` §5: *"Build it once"*). The
+    /// guarantees above are the container's, restated here because this is the signature
+    /// callers read.
     #[must_use]
     pub fn spans(&self, va: GpuVa, len: u64) -> Vec<(u64, u64, Option<Binding>)> {
-        let start = u128::from(va.0);
-        let end = (start + u128::from(len)).min(1u128 << 64);
-        let mut out = Vec::new();
-        let mut at = start;
-        while at < end {
-            let here = at as u64;
-            match self.map.lookup(here) {
-                Some((b_start, b_len, b)) => {
-                    // The covered run ends at the binding's end or the request's, first.
-                    let b_end = u128::from(b_start) + u128::from(b_len);
-                    let run_end = b_end.min(end);
-                    out.push((here, (run_end - at) as u64, Some(*b)));
-                    at = run_end;
-                }
-                None => {
-                    // A hole: it runs until the next binding that STARTS inside the
-                    // request, or to the end of the request. Derived from the map rather
-                    // than probed byte-by-byte — a per-byte scan of a 4 GiB copy is the
-                    // same shape as the C's O(n) overlay scan that ate 42% of a run.
-                    let next = self
-                        .map
-                        .iter()
-                        .map(|(s, _, _)| u128::from(s))
-                        .find(|&s| s > at)
-                        .unwrap_or(end)
-                        .min(end);
-                    out.push((here, (next - at) as u64, None));
-                    at = next;
-                }
-            }
-        }
-        out
+        self.map
+            .spans(va.0, len)
+            .into_iter()
+            .map(|(s, l, b)| (s, l, b.copied()))
+            .collect()
     }
 
     /// ★★★ #102 — the identity law as a **whole-table walk**: the first host-backed
