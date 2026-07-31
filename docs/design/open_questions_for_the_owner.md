@@ -382,6 +382,42 @@ documented *"abstract by construction, unbuilt"* but is concretely **pinned to 5
 encoder used unconditionally in `kayfabe-isolate-host`. 610 inserts `hHandleVASpace` at +32 and shifts
 every later field. Adding a version parameter has blast radius outside `kayfabe-abi`.
 
+### What was BUILT (task #122, on top of `b1d3672`)
+
+**Shape (b), not (a)** — the owner's second phrasing, which supersedes the first: `CapabilityTable`
+is now **one shared base + per-boundary blocks**, `resolved(boundary) = SHARED_CAPS ∪
+own_blocks(boundary)`, depth exactly two, **no `inherits` pointer**. Add *and* subtract are both
+expressible, but there is no operation for either: a boundary that must not have a row simply does
+not name the block carrying it. That dissolves the delta chain the caveat above warns about instead
+of managing it — an early subtract cannot shrink a later boundary's set, because no boundary reads
+another's. Cost, paid deliberately: a block four boundaries share is named four times.
+
+**One axis: driver version.** The owner's phrasing said *arch*; the only source for this data —
+nvproxy's registry — is a chain of driver **versions**, and a `CapabilityTable` is reachable only
+through `DriverAbiTable`. The shape is variant-agnostic, so an arch axis later is more variants over
+the same struct; building it now would be rows no traffic can reach.
+
+**The two live consequences changed**, and the characterisation test that pinned them was rewritten
+to assert the right answer rather than deleted
+(`the_575_boundary_replaces_two_dram_encryption_commands`):
+- `0x20801359` was refused at every version; it is now **permitted at 570.86.15** — the only
+  boundary whose vendor map has it — and refused at 550/555/560 (never existed) and 575+ (deleted).
+- `0x20801358` was permitted at every version under the 575-era name; it is now
+  `..._INFOROM_SUPPORT` at 570, `..._STATUS_V575` at 575+, and **refused** below 570.
+
+**A third, independent removal was carried too**: `NVC36F_CTRL_GET_CLASS_ENGINEID` is in nvproxy's
+base map (`gvisor nvproxy: version.go:360`) and deleted at 555.42.02 (`:933`). The port refused it
+at every version, including the two where a 550 guest legitimately issues it. Two `TABLES` rows were
+added (550.90.07, 555.42.02) so the boundary exists to say it at. One worked example is not a
+mechanism; this is the second, at a different boundary and in the other direction.
+
+★ `ChannelAllocParams` was **left alone**, and the redesign did not make it cheaper. It is a *wire
+layout* problem, not a capability-set one: the fix is a `ChannelAllocWire` field on `DriverAbiTable`
+(the `MapDmaWire` precedent, which already existed) plus a version-taking `encode_into` threaded
+through `kayfabe-isolate-host/src/rm.rs`. Nothing in the capability rebuild touches that path. If
+anything it is marginally *dearer*: `TABLES` now has eight rows rather than six, so the new field
+costs two more lines.
+
 ## Q12 — a cross-process **"verb parked"** edge (the fifth flake)
 
 `abandon_releases_a_wedged_requester_with_wedged` flakes at ~0.5% (2/400 before *and* after the flake

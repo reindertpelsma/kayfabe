@@ -57,41 +57,77 @@
 //!    table: the GSS-legacy mask ([`RM_GSS_LEGACY_MASK`]) and the binary-API class
 //!    ([`NV2081_BINAPI_CLASS`]). Both are GSP-routed with no app pointers
 //!    (`gvisor/pkg/sentry/devices/nvproxy/frontend.go:756-816`);
-//! 3. the **allowlist**, walked up the inheritance chain;
+//! 3. the **allowlist** — this boundary's **own** blocks first, then the shared base;
 //! 4. otherwise [`Denial::NotOnAllowlist`].
 //!
 //! Denial first is stricter than nvproxy, which checks its two rules *before* the map. It
 //! costs nothing today — the two sets are provably disjoint, which is its own test — and
 //! it means a future "this is dangerous" row cannot be silently outvoted by a bit.
 //!
-//! ## The version seam
+//! ## The version seam — **shared base + per-boundary declaration**, depth two, no chain
 //!
-//! [`CapabilityTable`] is **inherit-then-add**, the same shape as
-//! [`crate::versions::TABLES`] and as nvproxy's own registry
-//! (`gvisor/pkg/sentry/devices/nvproxy/version.go`), and each
-//! [`crate::versions::DriverAbiTable`] names one. So *adding a driver version costs a
-//! table entry and edits no logic crate* — which is the constraint, stated as data.
+//! ★★★ **A boundary can REMOVE, not only add** (task #122). The shape that made removal
+//! inexpressible was *inherit-then-add*: [`CapabilityTable`] carried an `inherits`
+//! pointer, a lookup walked it, and a row placed at the bottom leaked into every
+//! boundary above whether or not the vendor still had it. That is not a missing field —
+//! it is the wrong shape, because *inheritance is exactly the thing that makes a removal
+//! unsayable*.
 //!
-//! Three boundaries are wired, all read out of nvproxy's own chain:
+//! What is here instead: **one shared base holding only what every declared boundary
+//! shares**, and each boundary naming its **own** blocks explicitly. Nothing is inherited
+//! from a neighbour, so there is no delta chain to replay and no ordering to reason
+//! about:
 //!
-//! | boundary | what changes |
-//! |---|---|
-//! | 550.54.04 | the base: the 575-ABI control map (compute-filtered, as the C filtered it) + the 575 class set minus everything added after 550 |
-//! | 560.28.03 | +8 alloc classes (`version.go:945-977`) |
-//! | 570.86.15 | +6 alloc classes (`version.go:990-1027`) |
-//! | 580.65.06 | +2 alloc classes, `NVCEB7`/`NVD1B7` (`version.go:1057-1078`) |
+//! ```text
+//! resolved(boundary) = SHARED_CAPS  ∪  own_blocks(boundary)
+//! ```
 //!
-//! ★ **Two limits, stated rather than papered over.**
+//! A **removal** is then just a boundary not naming a block. 575.51.02 does not name
+//! [`CONTROLS_DRAM_ENCRYPTION_570`], and that one absent word *is* the deletion nvproxy
+//! spells with two `delete()` calls (`gvisor nvproxy: version.go:1039-1040`). A
+//! **replacement** is a boundary not naming the old block and naming a new one — which
+//! is why the same command word can carry two different NVIDIA names at two boundaries,
+//! the thing an additive table could not say at all.
 //!
-//! - **The control set is not version-split.** nvproxy's `controlCmd` map also changes at
-//!   550.90.07 / 555.42.02 / 565.57.01 / 575.51.02 / 580.65.06, and reproducing that
-//!   chain means replaying five more builders for deltas no consumer reads. The one set
-//!   here is the 575 set the C shipped. When a consumer needs the split, it is more
-//!   `CapabilityTable`s — not a code change.
-//! - **There is no deletion.** nvproxy deletes rows at a boundary (575 replaces two
-//!   DRAM-encryption commands, `version.go:1039-1042`); this shape can only add. Neither
-//!   deleted command is on the C's list, so nothing is wrong today; a boundary that needs
-//!   a removal needs a field, and it should be added *with* its first user.
+//! ★★ **Why (b) and not inherit-then-{add, subtract}.** Both express *replace*. The
+//! difference is what a mistake costs. In a delta chain an early subtract silently
+//! shrinks every later boundary's set, and this repo has been bitten by that exact shape
+//! before — shortening a list weakened a gate with zero red tests
+//! (`docs/design/testing_doctrine.md`, the *gates quantified over a list* incidents).
+//! Here every boundary's content is one line of block names, readable without holding
+//! the chain in your head, and a wrong block name changes **one** boundary. The cost is
+//! that a block shared by four boundaries is named four times — paid deliberately, and
+//! `each_boundarys_resolved_delta_is_materialised` prints the resolved set anyway so the
+//! effect of an edit is visible per-boundary rather than implied.
+//!
+//! ★ **One axis: DRIVER VERSION.** The owner's phrasing said *arch*; the data is
+//! version-keyed, because the only source for it — nvproxy's registry — is a chain of
+//! driver versions and there is no arch-keyed capability source to port. So a
+//! [`CapabilityTable`] is reached through [`crate::versions::DriverAbiTable`] and through
+//! nothing else. The shape is variant-agnostic (a shared base plus per-variant blocks
+//! composes over any axis, and intersection is associative), so an arch axis later is
+//! more variants over the same struct — but building it now would be rows no traffic can
+//! reach, which the module already refuses to do elsewhere.
+//!
+//! Eight boundaries are wired, all read out of nvproxy's own chain
+//! (`gvisor nvproxy: version.go`):
+//!
+//! | boundary | what changes | nvproxy |
+//! |---|---|---|
+//! | 550.54.04 | the shared base + `NVC36F_CTRL_GET_CLASS_ENGINEID` | `version.go:360` |
+//! | 550.90.07 | +`NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE` | `version.go:906` |
+//! | 555.42.02 | **−**`NVC36F_CTRL_GET_CLASS_ENGINEID` | `version.go:933` |
+//! | 560.28.03 | +8 alloc classes, +`NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL` | `version.go:945-977` |
+//! | 570.86.15 | +6 alloc classes, +2 DRAM-encryption controls | `version.go:990-1027` |
+//! | 575.51.02 | **−**those 2, +2 renumbered, +`THERMAL_SYSTEM_EXECUTE_V2` | `version.go:1036-1053` |
+//! | 580.65.06 | +2 alloc classes, `NVCEB7`/`NVD1B7` | `version.go:1057-1078` |
+//! | 610.43.02 | nothing: the 580 surface, declared again rather than inherited | — |
+//!
+//! ★ **The limit that remains.** Only the rows this port carries are split — nvproxy's
+//! `controlCmd` map also gains graphics-, profiling- and fabric-capability rows at
+//! 560.28.03 / 565.57.01 / 570.86.15 / 580.65.06 that the C's compute filter excluded and
+//! this port therefore never had. Those are absent at every boundary here, which is the
+//! same answer the C gave; splitting them would be splitting rows that do not exist.
 //!
 //! ## Deliberately not ported
 //!
@@ -338,18 +374,48 @@ impl AllocPermit {
     }
 }
 
-/// One driver boundary's capability delta, inheriting everything below it.
+/// The rows **every** declared boundary shares — the floor, after everything that is not
+/// universally shared has been stripped out of it.
 ///
-/// The rows in `controls`/`classes` are the ones **added at this boundary**; a lookup
-/// walks `inherits` until something answers. That is nvproxy's own shape, and it means a
-/// new driver version is a new `CapabilityTable` and nothing else.
+/// ★★★ *Stripped*, not *inherited*. A row lives here only if every boundary in
+/// [`crate::versions::TABLES`] has it; the moment one boundary does not, the row moves
+/// out into per-boundary blocks. That is what makes a removal expressible at all, and
+/// `the_shared_base_holds_only_what_every_boundary_shares` is the gate that keeps it
+/// honest in both directions: nothing here may be missing from a boundary, and nothing
+/// that *every* boundary owns may stay outside.
+///
+/// The two deny lists live here and nowhere else, and that is a claim about their
+/// content rather than an omission. They are **this project's policy** — register
+/// peek/poke, HWPM, fabric, privileged memory, caller-supplied descriptors — and a
+/// hazard of that kind does not appear or disappear with a driver version, so there is
+/// no boundary at which one of them would differ. The one thing that *could* make a
+/// version-specific denial necessary is a command word being **repurposed** across a
+/// boundary, which is precisely what 575.51.02 does to `0x20801358`; so
+/// `no_denied_id_is_a_boundary_specific_control` asserts that no denied id is a
+/// per-boundary row, and that test — not this paragraph — is what will fire first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CapabilityTable {
-    inherits: Option<&'static CapabilityTable>,
+pub struct SharedCapabilities {
     controls: &'static [ControlEntry],
     classes: &'static [ClassEntry],
     denied_controls: &'static [DeniedEntry],
     denied_classes: &'static [DeniedEntry],
+}
+
+/// One driver boundary's **complete** capability surface, stated as
+/// `shared ∪ own_blocks`.
+///
+/// Depth is **two, always**: there is no `inherits` pointer and no chain to walk. A
+/// boundary that must *not* have a row simply does not name the block that carries it —
+/// see the module doc, and [`CAPS_575_51_02`] for the case that motivated the shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CapabilityTable {
+    shared: &'static SharedCapabilities,
+    /// The control blocks **this** boundary has beyond [`SharedCapabilities`], named in
+    /// full rather than inherited. Disjoint from the shared set and from each other —
+    /// `no_boundary_repeats_a_shared_or_duplicated_row` is the gate.
+    own_controls: &'static [&'static [ControlEntry]],
+    /// The class blocks this boundary has beyond [`SharedCapabilities`].
+    own_classes: &'static [&'static [ClassEntry]],
     /// Why this boundary exists — the same in-the-data justification
     /// [`crate::versions::DriverAbiTable::note`] carries.
     pub note: &'static str,
@@ -374,42 +440,46 @@ fn find_denied(rows: &'static [DeniedEntry], id: u32) -> Option<&'static DeniedE
 }
 
 impl CapabilityTable {
-    /// This boundary and every one it inherits from, nearest first.
-    fn chain(&'static self) -> impl Iterator<Item = &'static CapabilityTable> {
-        core::iter::successors(Some(self), |t| t.inherits)
-    }
-
-    /// Every permitted control, from every boundary in the chain. Unordered across
-    /// boundaries; sorted within one.
+    /// Every permitted control **at this boundary**: its own blocks, then the shared
+    /// base. Sorted within a block; unordered across blocks.
+    ///
+    /// ★ This is the **resolved** set, not a delta — which is the property the old shape
+    /// could not offer, because there `all_controls` meant "everything anyone below me
+    /// ever added". A census taken here is this boundary's answer and nobody else's.
     pub fn all_controls(&'static self) -> impl Iterator<Item = &'static ControlEntry> {
-        self.chain().flat_map(|t| t.controls.iter())
+        self.own_controls
+            .iter()
+            .flat_map(|b| b.iter())
+            .chain(self.shared.controls.iter())
     }
 
-    /// Every permitted class, from every boundary in the chain.
+    /// Every permitted class at this boundary — the resolved set.
     pub fn all_classes(&'static self) -> impl Iterator<Item = &'static ClassEntry> {
-        self.chain().flat_map(|t| t.classes.iter())
+        self.own_classes
+            .iter()
+            .flat_map(|b| b.iter())
+            .chain(self.shared.classes.iter())
     }
 
-    /// Every explicitly-denied control, from every boundary in the chain.
+    /// Every explicitly-denied control. Shared by every boundary — see
+    /// [`SharedCapabilities`] for why that is a claim and not an omission.
     pub fn all_denied_controls(&'static self) -> impl Iterator<Item = &'static DeniedEntry> {
-        self.chain().flat_map(|t| t.denied_controls.iter())
+        self.shared.denied_controls.iter()
     }
 
-    /// Every explicitly-denied class, from every boundary in the chain.
+    /// Every explicitly-denied class.
     pub fn all_denied_classes(&'static self) -> impl Iterator<Item = &'static DeniedEntry> {
-        self.chain().flat_map(|t| t.denied_classes.iter())
+        self.shared.denied_classes.iter()
     }
 
     /// May the guest issue this control? **Default-deny.** See the module doc for the
     /// order the four answers are decided in.
     pub fn control(&'static self, cmd: ControlCmd) -> ControlPermit {
-        for t in self.chain() {
-            if let Some(d) = find_denied(t.denied_controls, cmd.0) {
-                return ControlPermit::Denied(Denial::Refused {
-                    name: d.name,
-                    why: d.why,
-                });
-            }
+        if let Some(d) = find_denied(self.shared.denied_controls, cmd.0) {
+            return ControlPermit::Denied(Denial::Refused {
+                name: d.name,
+                why: d.why,
+            });
         }
         if cmd.0 & RM_GSS_LEGACY_MASK != 0 {
             return ControlPermit::GssLegacyRule;
@@ -417,39 +487,60 @@ impl CapabilityTable {
         if (cmd.0 >> 16) & 0xffff == NV2081_BINAPI_CLASS {
             return ControlPermit::BinApiRule;
         }
-        for t in self.chain() {
-            if let Some(e) = find_control(t.controls, cmd.0) {
+        // ★ Own blocks before the shared base. The two are disjoint by construction
+        // (`no_boundary_repeats_a_shared_or_duplicated_row`), so this order cannot change
+        // an answer today — it is written this way so that if the invariant is ever
+        // broken, the BOUNDARY-SPECIFIC row wins, which is the direction a version table
+        // must fail in.
+        for block in self.own_controls {
+            if let Some(e) = find_control(block, cmd.0) {
                 return ControlPermit::Listed {
                     name: e.name,
                     origin: e.origin,
                 };
             }
         }
+        if let Some(e) = find_control(self.shared.controls, cmd.0) {
+            return ControlPermit::Listed {
+                name: e.name,
+                origin: e.origin,
+            };
+        }
         ControlPermit::Denied(Denial::NotOnAllowlist)
     }
 
     /// May the guest allocate this class? **Default-deny.**
     pub fn alloc_class(&'static self, class: ClassId) -> AllocPermit {
-        for t in self.chain() {
-            if let Some(d) = find_denied(t.denied_classes, class.0) {
-                return AllocPermit::Denied(Denial::Refused {
-                    name: d.name,
-                    why: d.why,
-                });
-            }
+        if let Some(d) = find_denied(self.shared.denied_classes, class.0) {
+            return AllocPermit::Denied(Denial::Refused {
+                name: d.name,
+                why: d.why,
+            });
         }
-        for t in self.chain() {
-            if let Some(e) = find_class(t.classes, class.0) {
+        for block in self.own_classes {
+            if let Some(e) = find_class(block, class.0) {
                 return AllocPermit::Listed {
                     name: e.name,
                     origin: e.origin,
                 };
             }
         }
+        if let Some(e) = find_class(self.shared.classes, class.0) {
+            return AllocPermit::Listed {
+                name: e.name,
+                origin: e.origin,
+            };
+        }
         AllocPermit::Denied(Denial::NotOnAllowlist)
     }
 }
-pub(crate) static CONTROLS_BASE: &[ControlEntry] = &[
+/// The controls **every** declared boundary permits.
+///
+/// ★ Five rows the C's 575-era list carried were **stripped out of here** by task #122,
+/// because nvproxy does not have all five at all eight boundaries: they live in the
+/// per-boundary blocks below. Sorted by `cmd` — [`CapabilityTable::control`]
+/// binary-searches it.
+pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x00000101, name: "NV0000_CTRL_CMD_SYSTEM_GET_BUILD_VERSION", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00000102, name: "NV0000_CTRL_CMD_SYSTEM_GET_CPU_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00000127, name: "NV0000_CTRL_CMD_SYSTEM_GET_P2P_CAPS", origin: Origin::Nvproxy },
@@ -506,7 +597,6 @@ pub(crate) static CONTROLS_BASE: &[ControlEntry] = &[
     ControlEntry { cmd: 0x00801b01, name: "NV0080_CTRL_CMD_MSENC_GET_CAPS", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00801c02, name: "NV0080_CTRL_CMD_BSP_GET_CAPS_V2", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00da0002, name: "NV_SEMAPHORE_SURFACE_CTRL_CMD_BIND_CHANNEL", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x00da0006, name: "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00de0001, name: "NV00DE_CTRL_CMD_REQUEST_DATA_POLL", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00f80103, name: "NV00F8_CTRL_CMD_ATTACH_MEM", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00fd0101, name: "NV00FD_CTRL_CMD_GET_INFO", origin: Origin::Nvproxy },
@@ -542,7 +632,6 @@ pub(crate) static CONTROLS_BASE: &[ControlEntry] = &[
     ControlEntry { cmd: 0x20800403, name: "NV2080_CTRL_CMD_TIMER_GET_TIME", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20800406, name: "NV2080_CTRL_CMD_TIMER_GET_GPU_CPU_TIME_CORRELATION_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20800407, name: "NV2080_CTRL_CMD_TIMER_SET_GR_TICK_FREQ", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x20800513, name: "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20800802, name: "NV2080_CTRL_CMD_BIOS_GET_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: crate::versions::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER, name: "NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER", origin: Origin::Mode2Rpc },
     ControlEntry { cmd: 0x2080110b, name: "NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS", origin: Origin::Nvproxy },
@@ -562,8 +651,6 @@ pub(crate) static CONTROLS_BASE: &[ControlEntry] = &[
     ControlEntry { cmd: 0x20801315, name: "NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20801320, name: "NV2080_CTRL_CMD_FB_GET_FB_REGION_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20801352, name: "NV2080_CTRL_CMD_FB_GET_SEMAPHORE_SURFACE_LAYOUT", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x20801357, name: "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x20801358, name: "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20801701, name: "NV2080_CTRL_CMD_MC_GET_ARCH_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20801702, name: "NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20801801, name: "NV2080_CTRL_CMD_BUS_GET_PCI_INFO", origin: Origin::Nvproxy },
@@ -611,10 +698,9 @@ pub(crate) static CONTROLS_BASE: &[ControlEntry] = &[
     ControlEntry { cmd: 0xcb330101, name: "NV_CONF_COMPUTE_CTRL_CMD_SYSTEM_GET_CAPABILITIES", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0xcb330104, name: "NV_CONF_COMPUTE_CTRL_CMD_SYSTEM_GET_GPUS_STATE", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0xcb33010b, name: "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_NUM_SECURE_CHANNELS", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0xcb33010c, name: "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE", origin: Origin::Nvproxy },
 ];
 
-pub(crate) static CLASSES_BASE: &[ClassEntry] = &[
+pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
     ClassEntry {
         class: 0x00000000,
         name: "NV01_ROOT",
@@ -992,7 +1078,7 @@ pub(crate) static CLASSES_BASE: &[ClassEntry] = &[
     },
 ];
 
-pub(crate) static CLASSES_ADDED_560_28_03: &[ClassEntry] = &[
+pub(crate) static CLASSES_FROM_560_28_03: &[ClassEntry] = &[
     ClassEntry {
         class: 0x0000c96f,
         name: "BLACKWELL_CHANNEL_GPFIFO_A",
@@ -1035,7 +1121,7 @@ pub(crate) static CLASSES_ADDED_560_28_03: &[ClassEntry] = &[
     },
 ];
 
-pub(crate) static CLASSES_ADDED_570_86_15: &[ClassEntry] = &[
+pub(crate) static CLASSES_FROM_570_86_15: &[ClassEntry] = &[
     ClassEntry {
         class: 0x0000c761,
         name: "BLACKWELL_USERMODE_A",
@@ -1068,7 +1154,7 @@ pub(crate) static CLASSES_ADDED_570_86_15: &[ClassEntry] = &[
     },
 ];
 
-pub(crate) static CLASSES_ADDED_580_65_06: &[ClassEntry] = &[
+pub(crate) static CLASSES_FROM_580_65_06: &[ClassEntry] = &[
     ClassEntry {
         class: 0x0000ceb7,
         name: "NVCEB7_VIDEO_ENCODER",
@@ -1108,7 +1194,7 @@ pub static RULE_COVERED_C_ROWS: &[u32] = &[
 /// sentence, in a form a test can bite.
 ///
 /// Sorted by `id` — [`CapabilityTable::control`] binary-searches it.
-pub(crate) static DENIED_CONTROLS_BASE: &[DeniedEntry] = &[
+pub(crate) static DENIED_CONTROLS: &[DeniedEntry] = &[
     DeniedEntry {
         id: 0x00e0_0102,
         name: "NV00E0_CTRL_CMD_IMPORT_MEM",
@@ -1147,7 +1233,7 @@ pub(crate) static DENIED_CONTROLS_BASE: &[DeniedEntry] = &[
 /// omitted with it (`C: nvkvm_fe_alloc_allowlist.h:8-11`, which names exactly these two
 /// plus bare `NV01_EVENT` — and `NV01_EVENT` was later *added* on graphics evidence, so
 /// it is on the allowlist above and not here).
-pub(crate) static DENIED_CLASSES_BASE: &[DeniedEntry] = &[
+pub(crate) static DENIED_CLASSES: &[DeniedEntry] = &[
     DeniedEntry {
         id: 0x0000_003f,
         name: "NV01_MEMORY_LOCAL_PRIVILEGED",
@@ -1160,42 +1246,181 @@ pub(crate) static DENIED_CLASSES_BASE: &[DeniedEntry] = &[
     },
 ];
 
-/// The base boundary: nvproxy's 575-ABI surface as the C shipped it, plus the six
-/// Mode-2-only controls.
-pub static CAPS_BASE: CapabilityTable = CapabilityTable {
-    inherits: None,
-    controls: CONTROLS_BASE,
-    classes: CLASSES_BASE,
-    denied_controls: DENIED_CONTROLS_BASE,
-    denied_classes: DENIED_CLASSES_BASE,
+// ═══ The per-boundary control blocks ═════════════════════════════════════════════════
+//
+// ★★★ Each block is a set of rows some boundaries have and others do not. A boundary
+// declares the blocks it has; a boundary that must NOT have a row simply does not name
+// its block. That absent name IS the removal — there is nothing else to it, and nothing
+// to un-inherit.
+
+/// Present at 550.54.04 and 550.90.07; **deleted** at 555.42.02
+/// (`gvisor nvproxy: version.go:933` — `delete(abi.controlCmd,
+/// nvgpu.NVC36F_CTRL_GET_CLASS_ENGINEID)`) and never re-added.
+///
+/// ★ The C's list is the 575-era set, so it never had this row and neither did this port
+/// until task #122 — the same defect the DRAM-encryption pair has, in the other
+/// direction: a command a 550 guest legitimately issues, refused at the only boundaries
+/// that should permit it. Carried as [`Origin::Nvproxy`] because nvproxy's own base map
+/// holds it under the compute capability (`gvisor nvproxy: version.go:360`).
+pub(crate) static CONTROLS_UNTIL_555_42_02: &[ControlEntry] = &[ControlEntry {
+    cmd: 0xc36f0101,
+    name: "NVC36F_CTRL_GET_CLASS_ENGINEID",
+    origin: Origin::Nvproxy,
+}];
+
+/// Added at 550.90.07 (`gvisor nvproxy: version.go:906`) and never removed, so every
+/// boundary from there up names it.
+pub(crate) static CONTROLS_FROM_550_90_07: &[ControlEntry] = &[ControlEntry {
+    cmd: 0xcb33010c,
+    name: "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
+    origin: Origin::Nvproxy,
+}];
+
+/// Added at 560.28.03 (`gvisor nvproxy: version.go:955`).
+///
+/// The two other controls nvproxy adds at that boundary are deliberately absent:
+/// `NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO` is on [`DENIED_CONTROLS`] as fabric
+/// management, and `NV2080_CTRL_CMD_BUS_GET_PCIE_CPL_ATOMICS_CAPS` is graphics-capability
+/// and outside the C's compute filter.
+pub(crate) static CONTROLS_FROM_560_28_03: &[ControlEntry] = &[ControlEntry {
+    cmd: 0x00da0006,
+    name: "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
+    origin: Origin::Nvproxy,
+}];
+
+/// ★★★ **The block 575.51.02 does not name.** Added at 570.86.15
+/// (`gvisor nvproxy: version.go:1005-1006`) and deleted at 575.51.02
+/// (`gvisor nvproxy: version.go:1039-1040`), so it belongs to exactly one boundary here.
+///
+/// `NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_PENDING_CONFIGURATION` (`0x20801355`) arrives
+/// at the same boundary and is **not** here: it is graphics-capability, and the port
+/// carries only what the C's compute filter admitted.
+pub(crate) static CONTROLS_DRAM_ENCRYPTION_570: &[ControlEntry] = &[
+    ControlEntry {
+        cmd: 0x20801358,
+        name: "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
+        origin: Origin::Nvproxy,
+    },
+    ControlEntry {
+        cmd: 0x20801359,
+        name: "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS",
+        origin: Origin::Nvproxy,
+    },
+];
+
+/// ★★★ **The block that replaces it.** 575.51.02 re-adds the same two commands one
+/// number lower and adds a third (`gvisor nvproxy: version.go:1041-1043`).
+///
+/// `0x20801358` is in **both** this block and [`CONTROLS_DRAM_ENCRYPTION_570`], under
+/// **different NVIDIA names** — `..._STATUS_V575` here, `..._INFOROM_SUPPORT` there. That
+/// is what an add-only table could not represent: not a missing row, but one command word
+/// meaning two different things on two sides of a boundary.
+pub(crate) static CONTROLS_FROM_575_51_02: &[ControlEntry] = &[
+    ControlEntry {
+        cmd: 0x20800513,
+        name: "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
+        origin: Origin::Nvproxy,
+    },
+    ControlEntry {
+        cmd: 0x20801357,
+        name: "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
+        origin: Origin::Nvproxy,
+    },
+    ControlEntry {
+        cmd: 0x20801358,
+        name: "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
+        origin: Origin::Nvproxy,
+    },
+];
+
+/// The floor every boundary stands on — see [`SharedCapabilities`].
+pub static SHARED_CAPS: SharedCapabilities = SharedCapabilities {
+    controls: CONTROLS_SHARED,
+    classes: CLASSES_SHARED,
+    denied_controls: DENIED_CONTROLS,
+    denied_classes: DENIED_CLASSES,
+};
+
+/// 550.54.04 — the oldest supported boundary: the shared floor plus the one control
+/// nvproxy still has here and deletes at 555.42.02.
+pub static CAPS_550_54_04: CapabilityTable = CapabilityTable {
+    shared: &SHARED_CAPS,
+    own_controls: &[CONTROLS_UNTIL_555_42_02],
+    own_classes: &[],
     note: "the C's ported set: nvproxy 575-ABI control map (compute-filtered) + its \
            575 class set MINUS the classes nvproxy adds after 550.54.04, + the six \
-           Mode-2 GSP-RPC controls the ioctl boundary never saw",
+           Mode-2 GSP-RPC controls the ioctl boundary never saw, + \
+           NVC36F_CTRL_GET_CLASS_ENGINEID, which nvproxy still has here \
+           (version.go:360)",
 };
 
-/// `gvisor/pkg/sentry/devices/nvproxy/version.go:945-977`.
+/// 550.90.07 — `gvisor nvproxy: version.go:906`. Additive only.
+pub static CAPS_550_90_07: CapabilityTable = CapabilityTable {
+    shared: &SHARED_CAPS,
+    own_controls: &[CONTROLS_UNTIL_555_42_02, CONTROLS_FROM_550_90_07],
+    own_classes: &[],
+    note: "v550_90_07 adds NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE \
+           (version.go:906) and changes nothing else this port carries",
+};
+
+/// ★★★ 555.42.02 — a **purely SUBTRACTIVE** boundary, and one the old shape could not
+/// have expressed at all.
+///
+/// It names [`CONTROLS_FROM_550_90_07`] and not [`CONTROLS_UNTIL_555_42_02`]. There is no
+/// removal *operation* anywhere in this file: the block is simply not in the list.
+pub static CAPS_555_42_02: CapabilityTable = CapabilityTable {
+    shared: &SHARED_CAPS,
+    own_controls: &[CONTROLS_FROM_550_90_07],
+    own_classes: &[],
+    note: "★ SUBTRACTIVE: v555_42_02 deletes NVC36F_CTRL_GET_CLASS_ENGINEID \
+           (version.go:933) and adds nothing this port carries",
+};
+
+/// 560.28.03 — `gvisor nvproxy: version.go:945-977`.
 pub static CAPS_560_28_03: CapabilityTable = CapabilityTable {
-    inherits: Some(&CAPS_BASE),
-    controls: &[],
-    classes: CLASSES_ADDED_560_28_03,
-    denied_controls: &[],
-    denied_classes: &[],
+    shared: &SHARED_CAPS,
+    own_controls: &[CONTROLS_FROM_550_90_07, CONTROLS_FROM_560_28_03],
+    own_classes: &[CLASSES_FROM_560_28_03],
     note: "v560_28_03 adds NVCDB0/NVCDD1/NVCDFA and the first Blackwell channel, \
-           copy, graphics, compute and inline-to-memory classes",
+           copy, graphics, compute and inline-to-memory classes, plus \
+           NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
 };
 
-/// `gvisor/pkg/sentry/devices/nvproxy/version.go:990-1027`.
+/// 570.86.15 — `gvisor nvproxy: version.go:990-1027`.
 pub static CAPS_570_86_15: CapabilityTable = CapabilityTable {
-    inherits: Some(&CAPS_560_28_03),
-    controls: &[],
-    classes: CLASSES_ADDED_570_86_15,
-    denied_controls: &[],
-    denied_classes: &[],
+    shared: &SHARED_CAPS,
+    own_controls: &[
+        CONTROLS_FROM_550_90_07,
+        CONTROLS_FROM_560_28_03,
+        CONTROLS_DRAM_ENCRYPTION_570,
+    ],
+    own_classes: &[CLASSES_FROM_560_28_03, CLASSES_FROM_570_86_15],
     note: "v570_86_15 adds the Blackwell B channel/copy/graphics/compute pair, \
-           BLACKWELL_USERMODE_A and NVCFB7_VIDEO_ENCODER",
+           BLACKWELL_USERMODE_A, NVCFB7_VIDEO_ENCODER and the two DRAM-encryption \
+           controls at their PRE-575 numbers",
 };
 
-/// `gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1078`.
+/// ★★★ 575.51.02 — the boundary that motivated task #122: it **replaces** two controls
+/// rather than adding any (`gvisor nvproxy: version.go:1036-1053`).
+///
+/// The replacement is one line. This table names [`CONTROLS_FROM_575_51_02`] and does
+/// **not** name [`CONTROLS_DRAM_ENCRYPTION_570`]; read the two `own_controls` lists here
+/// and at [`CAPS_570_86_15`] side by side and the whole boundary is visible without
+/// resolving anything.
+pub static CAPS_575_51_02: CapabilityTable = CapabilityTable {
+    shared: &SHARED_CAPS,
+    own_controls: &[
+        CONTROLS_FROM_550_90_07,
+        CONTROLS_FROM_560_28_03,
+        CONTROLS_FROM_575_51_02,
+    ],
+    own_classes: &[CLASSES_FROM_560_28_03, CLASSES_FROM_570_86_15],
+    note: "★ REPLACES: v575_51_02 deletes the two DRAM-encryption controls and re-adds \
+           them one number lower, and adds NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2 \
+           (version.go:1036-1053). No allocation class changes",
+};
+
+/// 580.65.06 — `gvisor nvproxy: version.go:1057-1078`.
 ///
 /// ★ This boundary is the one that makes the version seam **observable**: the C's list
 /// is the 575 set, so `NVCEB7`/`NVD1B7` are two classes a 580 guest may allocate and a
@@ -1204,13 +1429,62 @@ pub static CAPS_570_86_15: CapabilityTable = CapabilityTable {
 /// therefore **not** carried, exactly as the C's compute filter excluded every other
 /// graphics-only row.
 pub static CAPS_580_65_06: CapabilityTable = CapabilityTable {
-    inherits: Some(&CAPS_570_86_15),
-    controls: &[],
-    classes: CLASSES_ADDED_580_65_06,
-    denied_controls: &[],
-    denied_classes: &[],
+    shared: &SHARED_CAPS,
+    own_controls: &[
+        CONTROLS_FROM_550_90_07,
+        CONTROLS_FROM_560_28_03,
+        CONTROLS_FROM_575_51_02,
+    ],
+    own_classes: &[
+        CLASSES_FROM_560_28_03,
+        CLASSES_FROM_570_86_15,
+        CLASSES_FROM_580_65_06,
+    ],
     note: "v580_65_06 adds NVCEB7_VIDEO_ENCODER and NVD1B7_VIDEO_ENCODER",
 };
+
+/// 610.43.02 — the 580.65.06 surface, **declared again rather than inherited**.
+///
+/// nvproxy changes no control and no class this port carries between 580.65.06 and here,
+/// so the content is 580's; it is spelled out so a reader of the 610 row sees 610's whole
+/// surface without following a pointer, and so the day 610 diverges the edit is local to
+/// this table. The wire layouts *do* move at this boundary — that is
+/// [`crate::versions::GspElementWire`]'s business, not this module's.
+pub static CAPS_610_43_02: CapabilityTable = CapabilityTable {
+    shared: &SHARED_CAPS,
+    own_controls: &[
+        CONTROLS_FROM_550_90_07,
+        CONTROLS_FROM_560_28_03,
+        CONTROLS_FROM_575_51_02,
+    ],
+    own_classes: &[
+        CLASSES_FROM_560_28_03,
+        CLASSES_FROM_570_86_15,
+        CLASSES_FROM_580_65_06,
+    ],
+    note: "the 580.65.06 capability surface, declared again rather than inherited: \
+           nvproxy changes no control and no class this port carries between there and \
+           610.43.02 — only the GSP wire layouts move",
+};
+
+/// Every boundary in this module, ascending — the **universe** the structural tests are
+/// quantified over.
+///
+/// ★★ Derived-from, not parallel-to: `the_boundary_list_is_the_whole_universe` checks
+/// this against [`crate::versions::TABLES`], so a driver row added there without a
+/// boundary here turns the suite red instead of quietly shrinking every gate below.
+/// (`gates_quantified_over_a_list`: shortening a list weakens a gate with zero red
+/// tests.)
+pub static ALL_BOUNDARIES: &[&CapabilityTable] = &[
+    &CAPS_550_54_04,
+    &CAPS_550_90_07,
+    &CAPS_555_42_02,
+    &CAPS_560_28_03,
+    &CAPS_570_86_15,
+    &CAPS_575_51_02,
+    &CAPS_580_65_06,
+    &CAPS_610_43_02,
+];
 
 #[cfg(test)]
 mod tests {
@@ -1229,6 +1503,21 @@ mod tests {
         .capabilities()
     }
 
+    /// One boundary's expected **resolved** surface: a label, its driver version, the
+    /// resolved control and class counts, and the NVIDIA names of the controls it has
+    /// beyond the shared base.
+    type ResolvedExpectation = (
+        &'static str,
+        (u16, u16, u16),
+        usize,
+        usize,
+        &'static [&'static str],
+    );
+
+    /// One boundary's expected answer for a single command word: the driver version, and
+    /// the NVIDIA name it must be permitted under — `None` meaning refused.
+    type PerVersionAnswer = ((u16, u16, u16), Option<&'static str>);
+
     /// The bench's own driver — the surface every other test here reasons about.
     fn bench() -> &'static CapabilityTable {
         at(580, 159, 4)
@@ -1236,41 +1525,357 @@ mod tests {
 
     // ── Structure: the properties `binary_search` and the deny-first order need ──────
 
-    /// Every boundary's rows are sorted and duplicate-free, in all four tables.
+    /// Every block a boundary names is sorted and duplicate-free, in every boundary.
     ///
-    /// ★ Not decoration: [`CapabilityTable::control`] binary-searches, so an unsorted
-    /// slice does not fail loudly — it silently *misses* rows, i.e. quietly turns
-    /// permitted commands into denials. The generator emits sorted output; this is what
-    /// makes a hand-edited insertion in the wrong place a red test instead of a shrug.
+    /// ★ Not decoration: [`CapabilityTable::control`] binary-searches **within a block**,
+    /// so an unsorted slice does not fail loudly — it silently *misses* rows, i.e.
+    /// quietly turns permitted commands into denials. This is what makes a hand-edited
+    /// insertion in the wrong place a red test instead of a shrug.
     #[test]
     fn every_boundarys_rows_are_sorted_and_unique() {
-        for t in [
-            &CAPS_BASE,
-            &CAPS_560_28_03,
-            &CAPS_570_86_15,
-            &CAPS_580_65_06,
-        ] {
+        for t in ALL_BOUNDARIES {
+            for block in t.own_controls {
+                assert!(
+                    block.windows(2).all(|w| w[0].cmd < w[1].cmd),
+                    "own controls unsorted/duplicated at {:?}",
+                    t.note
+                );
+            }
+            for block in t.own_classes {
+                assert!(
+                    block.windows(2).all(|w| w[0].class < w[1].class),
+                    "own classes unsorted/duplicated at {:?}",
+                    t.note
+                );
+            }
             assert!(
-                t.controls.windows(2).all(|w| w[0].cmd < w[1].cmd),
-                "controls unsorted/duplicated at {:?}",
-                t.note
+                t.shared.controls.windows(2).all(|w| w[0].cmd < w[1].cmd),
+                "shared controls unsorted/duplicated"
             );
             assert!(
-                t.classes.windows(2).all(|w| w[0].class < w[1].class),
-                "classes unsorted/duplicated at {:?}",
-                t.note
+                t.shared.classes.windows(2).all(|w| w[0].class < w[1].class),
+                "shared classes unsorted/duplicated"
             );
             assert!(
-                t.denied_controls.windows(2).all(|w| w[0].id < w[1].id),
-                "denied controls unsorted/duplicated at {:?}",
-                t.note
+                t.shared
+                    .denied_controls
+                    .windows(2)
+                    .all(|w| w[0].id < w[1].id),
+                "denied controls unsorted/duplicated"
             );
             assert!(
-                t.denied_classes.windows(2).all(|w| w[0].id < w[1].id),
-                "denied classes unsorted/duplicated at {:?}",
-                t.note
+                t.shared
+                    .denied_classes
+                    .windows(2)
+                    .all(|w| w[0].id < w[1].id),
+                "denied classes unsorted/duplicated"
             );
         }
+    }
+
+    // ── The shape itself: shared base + per-boundary blocks, depth two ───────────────
+
+    /// ★★★ **The universe every structural test here is quantified over is DERIVED.**
+    ///
+    /// [`ALL_BOUNDARIES`] must be exactly the set of tables [`crate::versions::TABLES`]
+    /// points at. A driver row added there whose `caps` is a table missing from here
+    /// would sit outside every gate below — a smaller universe is a smaller true
+    /// statement, and shortening a list weakens a gate with zero red tests
+    /// (`gates_quantified_over_a_list`).
+    ///
+    /// ★ Identity is by `note`, not by address: a raw pointer may not be *held* outside
+    /// a `*_unsafe.rs` file (the host-pointer gate, `l1_os_shell.md` §9.3), and the notes
+    /// are asserted distinct here so comparing them IS comparing identity.
+    #[test]
+    fn the_boundary_list_is_the_whole_universe() {
+        let declared: BTreeSet<&str> = ALL_BOUNDARIES.iter().map(|t| t.note).collect();
+        assert_eq!(
+            declared.len(),
+            ALL_BOUNDARIES.len(),
+            "two boundaries share a note, so `note` is not an identity here and the \
+             comparison below would pass while conflating them"
+        );
+        let from_tables: BTreeSet<&str> = crate::versions::TABLES
+            .iter()
+            .map(|t| t.capabilities().note)
+            .collect();
+        assert_eq!(
+            from_tables, declared,
+            "ALL_BOUNDARIES and the tables TABLES points at are not the same set — a \
+             boundary outside this list sits outside every gate in this module"
+        );
+        // Eight boundaries, eight driver rows, and the rows outnumber nothing: a
+        // `TABLES` that grew a row without a boundary would already have failed above,
+        // but the literal is what says how big the universe is meant to be.
+        assert_eq!(ALL_BOUNDARIES.len(), 8);
+        assert_eq!(crate::versions::TABLES.len(), 8);
+    }
+
+    /// ★★★ **The strip is real in both directions**, which is the property that makes a
+    /// removal expressible.
+    ///
+    /// - Nothing in [`SHARED_CAPS`] may be absent from any boundary — trivially true
+    ///   given the lookup, and asserted anyway so a future `own`-shadows-`shared`
+    ///   mistake is caught here rather than by a guest.
+    /// - **Nothing that every boundary owns may stay outside it.** A row in *all eight*
+    ///   `own` sets is a row that belongs in the shared base; leaving it in eight blocks
+    ///   is eight places to forget, which is the failure mode this shape exists to avoid.
+    #[test]
+    fn the_shared_base_holds_only_what_every_boundary_shares() {
+        for t in ALL_BOUNDARIES {
+            for e in SHARED_CAPS.controls {
+                assert!(
+                    t.control(ControlCmd(e.cmd)).is_permitted(),
+                    "{:#010x} is shared but refused at {:?}",
+                    e.cmd,
+                    t.note
+                );
+            }
+            for e in SHARED_CAPS.classes {
+                assert!(
+                    t.alloc_class(ClassId(e.class)).is_permitted(),
+                    "{:#010x} is shared but refused at {:?}",
+                    e.class,
+                    t.note
+                );
+            }
+        }
+        // The other direction: no id is in every boundary's OWN rows.
+        let own_ctl = |t: &'static CapabilityTable| -> BTreeSet<u32> {
+            t.own_controls
+                .iter()
+                .flat_map(|b| b.iter())
+                .map(|e| e.cmd)
+                .collect()
+        };
+        let own_cls = |t: &'static CapabilityTable| -> BTreeSet<u32> {
+            t.own_classes
+                .iter()
+                .flat_map(|b| b.iter())
+                .map(|e| e.class)
+                .collect()
+        };
+        let mut ctl = own_ctl(ALL_BOUNDARIES[0]);
+        let mut cls = own_cls(ALL_BOUNDARIES[0]);
+        for t in &ALL_BOUNDARIES[1..] {
+            ctl = ctl.intersection(&own_ctl(t)).copied().collect();
+            cls = cls.intersection(&own_cls(t)).copied().collect();
+        }
+        assert!(
+            ctl.is_empty(),
+            "control(s) {ctl:#010x?} are owned by EVERY boundary — they belong in \
+             SHARED_CAPS, not in eight blocks"
+        );
+        assert!(
+            cls.is_empty(),
+            "class(es) {cls:#010x?} are owned by EVERY boundary — they belong in \
+             SHARED_CAPS"
+        );
+        // Non-vacuity: the intersection above is over a set that is not empty to begin
+        // with, or "no common row" would be true for an uninteresting reason.
+        assert!(!own_ctl(ALL_BOUNDARIES[0]).is_empty());
+        assert!(!own_cls(ALL_BOUNDARIES[7]).is_empty());
+    }
+
+    /// ★★ A boundary's own blocks are disjoint from the shared base and from each other.
+    ///
+    /// If they were not, [`CapabilityTable::control`]'s "own first" order would start
+    /// deciding which of two rows for the same command word answers — and the answer
+    /// carries the NVIDIA **name**, so a shadowed row is a gate that reports the wrong
+    /// command by name while permitting the right number.
+    #[test]
+    fn no_boundary_repeats_a_shared_or_duplicated_row() {
+        let shared_ctl: BTreeSet<u32> = SHARED_CAPS.controls.iter().map(|e| e.cmd).collect();
+        let shared_cls: BTreeSet<u32> = SHARED_CAPS.classes.iter().map(|e| e.class).collect();
+        for t in ALL_BOUNDARIES {
+            let mut seen = BTreeSet::new();
+            for e in t.own_controls.iter().flat_map(|b| b.iter()) {
+                assert!(
+                    !shared_ctl.contains(&e.cmd),
+                    "{} ({:#010x}) is in both SHARED_CAPS and an own block at {:?}",
+                    e.name,
+                    e.cmd,
+                    t.note
+                );
+                assert!(
+                    seen.insert(e.cmd),
+                    "{} ({:#010x}) is in two of {:?}'s own blocks",
+                    e.name,
+                    e.cmd,
+                    t.note
+                );
+            }
+            let mut seen = BTreeSet::new();
+            for e in t.own_classes.iter().flat_map(|b| b.iter()) {
+                assert!(
+                    !shared_cls.contains(&e.class),
+                    "{} ({:#010x}) is in both SHARED_CAPS and an own block at {:?}",
+                    e.name,
+                    e.class,
+                    t.note
+                );
+                assert!(
+                    seen.insert(e.class),
+                    "{} ({:#010x}) is in two of {:?}'s own blocks",
+                    e.name,
+                    e.class,
+                    t.note
+                );
+            }
+        }
+    }
+
+    /// ★★ The deny table is shared, and that is only safe while no denied id is also a
+    /// **boundary-specific** row.
+    ///
+    /// The hazard is concrete rather than hypothetical: 575.51.02 repurposes
+    /// `0x20801358`, so a number can mean two commands. A deny keyed on a repurposed
+    /// number would refuse a command nobody decided to refuse. Today the sets are
+    /// disjoint; the day they are not, [`SharedCapabilities`]'s deny lists need a
+    /// per-boundary half, and this is what says so.
+    #[test]
+    fn no_denied_id_is_a_boundary_specific_control() {
+        let denied: BTreeSet<u32> = SHARED_CAPS.denied_controls.iter().map(|e| e.id).collect();
+        let denied_cls: BTreeSet<u32> = SHARED_CAPS.denied_classes.iter().map(|e| e.id).collect();
+        assert!(!denied.is_empty() && !denied_cls.is_empty());
+        for t in ALL_BOUNDARIES {
+            for e in t.own_controls.iter().flat_map(|b| b.iter()) {
+                assert!(
+                    !denied.contains(&e.cmd),
+                    "{} ({:#010x}) is denied globally and permitted at {:?}",
+                    e.name,
+                    e.cmd,
+                    t.note
+                );
+            }
+            for e in t.own_classes.iter().flat_map(|b| b.iter()) {
+                assert!(!denied_cls.contains(&e.class), "{:#010x}", e.class);
+            }
+        }
+    }
+
+    /// ★★★ **Each boundary's RESOLVED set, materialised** — counts, and the exact rows
+    /// that boundary has beyond the shared base, spelled as literals.
+    ///
+    /// This is the gate the task asks for by name. A delta model — this one included —
+    /// states a boundary's content indirectly, and the failure mode this repo has been
+    /// bitten by is an edit that changes a *resolved* answer while every table still
+    /// reads plausibly. Here the resolved answer is written down, so an edit that moves
+    /// one changes this test or it changes nothing.
+    ///
+    /// ⊘ The expected values are literals, never read back out of the tables under test.
+    #[test]
+    fn each_boundarys_resolved_delta_is_materialised() {
+        // (version, resolved control count, resolved class count, own control names)
+        let want: &[ResolvedExpectation] = &[
+            (
+                "550.54.04",
+                (550, 54, 4),
+                158,
+                75,
+                &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
+            ),
+            (
+                "550.90.07",
+                (550, 90, 7),
+                159,
+                75,
+                &[
+                    "NVC36F_CTRL_GET_CLASS_ENGINEID",
+                    "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
+                ],
+            ),
+            (
+                "555.42.02",
+                (555, 42, 2),
+                158,
+                75,
+                &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
+            ),
+            (
+                "560.28.03",
+                (560, 28, 3),
+                159,
+                83,
+                &[
+                    "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
+                    "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
+                ],
+            ),
+            (
+                "570.86.15",
+                (570, 86, 15),
+                161,
+                89,
+                &[
+                    "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
+                    "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS",
+                    "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
+                    "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
+                ],
+            ),
+            (
+                "575.51.02",
+                (575, 51, 2),
+                162,
+                89,
+                &[
+                    "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
+                    "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
+                    "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
+                    "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
+                    "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
+                ],
+            ),
+            (
+                "580.65.06",
+                (580, 65, 6),
+                162,
+                91,
+                &[
+                    "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
+                    "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
+                    "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
+                    "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
+                    "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
+                ],
+            ),
+            (
+                "610.43.02",
+                (610, 43, 2),
+                162,
+                91,
+                &[
+                    "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
+                    "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
+                    "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
+                    "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
+                    "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
+                ],
+            ),
+        ];
+        assert_eq!(
+            want.len(),
+            ALL_BOUNDARIES.len(),
+            "a boundary has no row here"
+        );
+        for (label, (a, b, c), n_ctl, n_cls, own) in want {
+            let t = at(*a, *b, *c);
+            assert_eq!(t.all_controls().count(), *n_ctl, "{label} controls");
+            assert_eq!(t.all_classes().count(), *n_cls, "{label} classes");
+            let mut got: Vec<&str> = t
+                .own_controls
+                .iter()
+                .flat_map(|blk| blk.iter())
+                .map(|e| e.name)
+                .collect();
+            got.sort_unstable();
+            assert_eq!(&got, own, "{label} boundary-specific controls");
+        }
+        // ★ Non-vacuity for the whole table: the resolved counts must not all be the
+        // same number, or every assertion above would pass on a shape with no seam.
+        let counts: BTreeSet<usize> = want.iter().map(|w| w.2).collect();
+        assert!(counts.len() > 1, "no boundary changes the control count");
     }
 
     /// No id is permitted **and** denied, and no boundary re-adds a row a lower one
@@ -1543,12 +2148,16 @@ mod tests {
             name: "NV2080_CTRL_CMD_SYNTHETIC_LEGACY_MASKED",
             why: DeniedBecause::RegisterAccess,
         }];
-        static T: CapabilityTable = CapabilityTable {
-            inherits: None,
+        static S: SharedCapabilities = SharedCapabilities {
             controls: &[],
             classes: &[],
             denied_controls: DENIED,
             denied_classes: &[],
+        };
+        static T: CapabilityTable = CapabilityTable {
+            shared: &S,
+            own_controls: &[],
+            own_classes: &[],
             note: "test fixture",
         };
         // The premise: the rule really would have passed it.
@@ -1700,7 +2309,7 @@ mod tests {
         // NVCEB7 arrives at 580.65.06 — the boundary the C's 575-era list predates.
         denied(at(580, 65, 5), 0x0000_ceb7);
         listed(at(580, 65, 6), 0x0000_ceb7);
-        // …and inheritance really is inheritance: the base rows survive to the top.
+        // …and the shared base really is shared: it answers at the top too.
         listed(at(610, 43, 2), 0x0000_0080);
         listed(at(610, 43, 2), 0x0000_cd97);
     }
@@ -1740,46 +2349,44 @@ mod tests {
         );
     }
 
-    /// The same derivation for controls, over the class prefixes the table itself
-    /// declares — the universe is read out of the data, never hand-written.
-    /// ★★★ **CHARACTERISATION, not a wish**: the 575.51.02 boundary is *subtractive*, and
-    /// this shape can only add — so the boundary's content is lost and the loss is
-    /// observable.
+    /// ★★★ **The two live consequences of task #118, now asserting the RIGHT answer.**
+    ///
+    /// This test was `the_575_boundary_is_subtractive_and_this_shape_cannot_carry_it`: a
+    /// characterisation that pinned two wrong answers because the shape could not say
+    /// anything else. Task #122 rebuilt the shape, so the same two questions are asked
+    /// here and the expected answers are nvproxy's.
     ///
     /// nvproxy's `v575_51_02` deletes two control commands and re-adds them one number
-    /// lower (`gvisor/pkg/sentry/devices/nvproxy/version.go:1036-1053`):
+    /// lower (`gvisor nvproxy: version.go:1036-1053`); the pair first appears at
+    /// `v570_86_15` (`gvisor nvproxy: version.go:1005-1006`) and exists at no earlier
+    /// version:
     ///
-    /// | command | ≤ 570 | ≥ 575 |
-    /// |---|---|---|
-    /// | `..._FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT` | `0x20801358` | `0x20801357` |
-    /// | `..._FB_QUERY_DRAM_ENCRYPTION_STATUS` | `0x20801359` | `0x20801358` |
+    /// | command | ≤ 565 | 570 | ≥ 575 |
+    /// |---|---|---|---|
+    /// | `..._FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT` | — | `0x20801358` | `0x20801357` |
+    /// | `..._FB_QUERY_DRAM_ENCRYPTION_STATUS` | — | `0x20801359` | `0x20801358` |
     ///
-    /// [`CAPS_BASE`] is the **550.54.04** row but was populated from the 575 set the C
-    /// shipped, so it carries the 575 numbering at every version. Two consequences, both
-    /// asserted below because both are true today:
+    /// What changed, stated as before → after:
     ///
-    /// 1. `0x20801359` — a command a 550/560/570 guest legitimately issues — is on **no**
-    ///    table in the chain, so it is refused at every version.
-    /// 2. `0x20801358` is permitted at 550 under the name `..._STATUS_V575`, while at 550
-    ///    that number means `..._INFOROM_SUPPORT`. The gate happens to answer *permit*
-    ///    for the right number and states the wrong reason.
+    /// 1. `0x20801359` was **refused at every version**. It is now **permitted at
+    ///    570.86.15**, which is the only boundary whose vendor map has it, and refused
+    ///    at 550/555/560 (it did not exist) and at 575+ (deleted).
+    /// 2. `0x20801358` was permitted **at every version under the 575-era name**. It is
+    ///    now `..._INFOROM_SUPPORT` at 570, `..._STATUS_V575` at 575+, and **refused**
+    ///    below 570 — the same number, two commands, and neither answer borrowed from
+    ///    the other.
     ///
-    /// ★ This test asserts the **status quo**. If someone gives [`CapabilityTable`] a
-    /// removal field and splits the control set by version, this test SHOULD go red —
-    /// that is the signal, and the fix is to update it with the new behaviour, never to
-    /// widen it so both answers pass.
+    /// ⊘ Every expected value here is a literal. Nothing is read back out of the table
+    /// under test.
     #[test]
-    fn the_575_boundary_is_subtractive_and_this_shape_cannot_carry_it() {
+    fn the_575_boundary_replaces_two_dram_encryption_commands() {
         const INFOROM_PRE575: u32 = 0x2080_1358;
         const STATUS_PRE575: u32 = 0x2080_1359;
+        const INFOROM_V575: u32 = 0x2080_1357;
 
-        // The version rows exist and are distinct; a typo in `TABLES` would make this
-        // whole test assert about one row twice.
-        let v550 = at(550, 54, 4);
-        let v575 = at(575, 51, 2);
-        // `DriverAbiTable` exposes no version accessor, so the row is identified by the
-        // one public field that distinguishes it: its `note`. A 575 request that fell
-        // through to 570's row would carry 570's note instead.
+        // The 575 row is its own row: a fall-through to 570's would make the whole test
+        // assert about one boundary twice. `DriverAbiTable` exposes no version accessor,
+        // so it is identified by the one public field that distinguishes it.
         let row = table_for(DriverVersion {
             major: 575,
             minor: 51,
@@ -1787,39 +2394,148 @@ mod tests {
         })
         .expect("575.51.02 has a row");
         assert!(
-            row.note.contains("SUBTRACTIVE"),
+            row.note.contains("CAPS_575_51_02"),
             "575.51.02 resolved to a row whose note is {:?} — it must resolve to its OWN \
              row, not fall through to 570's",
             row.note
         );
 
-        // (1) The pre-575 STATUS command is refused at every version in the chain,
-        //     including the ones where it is the correct number.
-        for (name, t) in [("550.54.04", v550), ("575.51.02", v575)] {
-            assert!(
-                !t.control(ControlCmd(STATUS_PRE575)).is_permitted(),
-                "{name}: {STATUS_PRE575:#010x} is unexpectedly permitted — if this now \
-                 passes, the control set has been version-split and this test must be \
-                 rewritten to the new behaviour"
+        // Expected answer per boundary, as (version, permitted?, NVIDIA name).
+        // `None` = refused; a name = permitted under exactly that name.
+        let expect = |cmd: u32, rows: &[PerVersionAnswer]| {
+            for ((a, b, c), want) in rows {
+                let got = at(*a, *b, *c).control(ControlCmd(cmd));
+                match want {
+                    Some(name) => assert_eq!(
+                        got,
+                        ControlPermit::Listed {
+                            name,
+                            origin: Origin::Nvproxy
+                        },
+                        "{cmd:#010x} at {a}.{b}.{c}"
+                    ),
+                    None => assert_eq!(
+                        got,
+                        ControlPermit::Denied(Denial::NotOnAllowlist),
+                        "{cmd:#010x} at {a}.{b}.{c}"
+                    ),
+                }
+            }
+        };
+
+        // (1) The pre-575 STATUS number: refused, then permitted for exactly one
+        //     boundary, then refused again. Before #122 every one of these was refused.
+        expect(
+            STATUS_PRE575,
+            &[
+                ((550, 54, 4), None),
+                ((550, 90, 7), None),
+                ((555, 42, 2), None),
+                ((560, 28, 3), None),
+                (
+                    (570, 86, 15),
+                    Some("NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS"),
+                ),
+                ((575, 51, 2), None),
+                ((580, 65, 6), None),
+                ((610, 43, 2), None),
+            ],
+        );
+
+        // (2) The overlapping number: two different commands on two sides of 575, and
+        //     nothing at all below 570. Before #122 it was `..._STATUS_V575` everywhere.
+        expect(
+            INFOROM_PRE575,
+            &[
+                ((550, 54, 4), None),
+                ((550, 90, 7), None),
+                ((555, 42, 2), None),
+                ((560, 28, 3), None),
+                (
+                    (570, 86, 15),
+                    Some("NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT"),
+                ),
+                (
+                    (575, 51, 2),
+                    Some("NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575"),
+                ),
+                (
+                    (580, 65, 6),
+                    Some("NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575"),
+                ),
+                (
+                    (610, 43, 2),
+                    Some("NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575"),
+                ),
+            ],
+        );
+
+        // …and the third number in the family, which only ever means the 575 command.
+        expect(
+            INFOROM_V575,
+            &[
+                ((550, 54, 4), None),
+                ((570, 86, 15), None),
+                (
+                    (575, 51, 2),
+                    Some("NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575"),
+                ),
+            ],
+        );
+
+        // ★ The boundary is exact on the patch, not on the major: 575.51.01 is still a
+        // 570 guest and must still get the 570 answer.
+        assert_eq!(
+            at(575, 51, 1).control(ControlCmd(STATUS_PRE575)),
+            ControlPermit::Listed {
+                name: "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS",
+                origin: Origin::Nvproxy,
+            }
+        );
+    }
+
+    /// ★★ The **second** removal, at an independent boundary and in the other direction:
+    /// a row present at the bottom of the range and deleted partway up.
+    ///
+    /// `NVC36F_CTRL_GET_CLASS_ENGINEID` is in nvproxy's base control map
+    /// (`gvisor nvproxy: version.go:360`, compute capability) and deleted at `v555_42_02`
+    /// (`gvisor nvproxy: version.go:933`). Under the old shape the port had no row for it
+    /// at all — the C's list is the 575-era set, by which time it was long gone — so a
+    /// 550 guest issuing it was refused.
+    ///
+    /// It matters that this is a *different* boundary from 575.51.02: a shape that
+    /// happened to work for one replace-in-place could still be wrong for a plain delete,
+    /// and one worked example is not a mechanism.
+    #[test]
+    fn the_555_boundary_deletes_a_control_the_550_guest_still_has() {
+        const GET_CLASS_ENGINEID: u32 = 0xc36f_0101;
+        let listed = ControlPermit::Listed {
+            name: "NVC36F_CTRL_GET_CLASS_ENGINEID",
+            origin: Origin::Nvproxy,
+        };
+        let gone = ControlPermit::Denied(Denial::NotOnAllowlist);
+        for ((a, b, c), want) in [
+            ((550u16, 54u16, 4u16), listed),
+            ((550, 90, 7), listed),
+            ((555, 42, 1), listed),
+            ((555, 42, 2), gone),
+            ((560, 28, 3), gone),
+            ((580, 65, 6), gone),
+            ((610, 43, 2), gone),
+        ] {
+            assert_eq!(
+                at(a, b, c).control(ControlCmd(GET_CLASS_ENGINEID)),
+                want,
+                "{GET_CLASS_ENGINEID:#010x} at {a}.{b}.{c}"
             );
         }
-
-        // (2) …and the overlapping number is permitted at 550 under the 575-era name.
-        let entry = v550
-            .chain()
-            .flat_map(|t| t.controls.iter())
-            .find(|e| e.cmd == INFOROM_PRE575)
-            .expect("the overlapping number is on the base table");
+        // ★ The sibling numbers in the same class are untouched by the delete — without
+        // this, deleting the whole `0xc36f` prefix would pass the assertions above.
         assert!(
-            entry.name.ends_with("_V575"),
-            "the row for {INFOROM_PRE575:#010x} is named {:?}; at 550 that number is the \
-             PRE-575 command, so a name without the _V575 suffix would mean the table has \
-             been version-split",
-            entry.name
-        );
-        assert!(
-            v550.control(ControlCmd(INFOROM_PRE575)).is_permitted(),
-            "characterisation: it is permitted at 550 today"
+            at(555, 42, 2)
+                .control(ControlCmd(0xc36f_0108))
+                .is_permitted(),
+            "NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN is not deleted at 555.42.02"
         );
     }
 

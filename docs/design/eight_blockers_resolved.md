@@ -302,10 +302,18 @@ the place the C put its one gate, because *port the C, do not redesign it*.
    has yet.
 
 **The version seam** is a field on `DriverAbiTable`: adding a driver version is a `TABLES` row
-pointing at a `CapabilityTable`, which is inherit-then-add, so the row is only the delta and
-**no logic crate is edited**. It bites: `NVCEB7`/`NVD1B7` exist at 580.65.06 and not at
-580.65.05, and two capability-only boundaries (560.28.03, 570.86.15) exist so a 550 guest is
+pointing at a `CapabilityTable`, and **no logic crate is edited**. It bites: `NVCEB7`/`NVD1B7`
+exist at 580.65.06 and not at 580.65.05, and capability-only boundaries exist so a 550 guest is
 not silently handed a 570 guest's class set.
+
+★★★ **REBUILT by task #122** — that shape was originally *inherit-then-add*, and this paragraph
+used to say so. Inheritance is exactly what makes a **removal** unsayable, and nvproxy removes:
+575.51.02 replaces two DRAM-encryption commands (`gvisor nvproxy: version.go:1036-1053`) and
+555.42.02 deletes one outright (`gvisor nvproxy: version.go:933`). The shape now is **one shared
+base holding only what every boundary shares, plus per-boundary blocks named in full**:
+`resolved(boundary) = SHARED_CAPS ∪ own_blocks(boundary)`, depth two, no chain. A removal is a
+boundary not naming a block. See `crate::capability`'s module doc for why (b) was chosen over
+inherit-then-{add, subtract}.
 
 **Deliberately not ported:** the 23-row frontend-ioctl NR list and the 31-row UVM schema (both
 gate an *ioctl* transport Mode 2 does not have — the guest's `nvidia-uvm` talks to the guest's

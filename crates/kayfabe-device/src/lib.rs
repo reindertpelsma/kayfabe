@@ -77,7 +77,11 @@ pub use plane::{
 /// `set_ram` is *this* crate's seam, so its vocabulary should be reachable from *this*
 /// crate, and an adapter that had to name the state-machine crate to wire memory would be
 /// reaching past the port it is plugging into.
-pub use kayfabe_gsp::{GuestRam, RamRefused};
+///
+/// ★ [`kayfabe_gsp::BootPhase`] and [`kayfabe_gsp::GspFsm`] are re-exported for the same
+/// reason one step further out: [`plane::RegPlane::phase`] and [`plane::RegPlane::gsp_state`]
+/// *return* them, and a shell that cannot name a method's return type cannot bind it.
+pub use kayfabe_gsp::{BootPhase, GspFsm, GuestRam, RamRefused};
 
 /// A register whose value is a constant of the silicon.
 ///

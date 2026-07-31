@@ -14,7 +14,7 @@
 //! |------|---------|--------------------|
 //! | R0 | `openat` the control node from the granted `/dev` directory | a descriptor |
 //! | R1 | `openat` `nvidia<gpu>` | a descriptor |
-//! | R2 | `NV_ESC_CHECK_VERSION_STR` query | a version string; **not** a gate |
+//! | R2 | `NV_ESC_CHECK_VERSION_STR` query | a version string inside the interval these encoders were transcribed for; ★ **a gate since 2026-07-31** |
 //! | R3 | `NV_ESC_REGISTER_FD` binding the GPU node to the control session | rc 0 |
 //! | R4 | `NV01_ROOT_CLIENT` | RM writes back an `hClient` |
 //! | R5 | `NV01_DEVICE_0` with `deviceId = gpu` | status 0 |
@@ -33,6 +33,25 @@
 //! R2 is kept because the version string is what selects an ABI profile, and R3 because a
 //! *device node* used without it answers `0x23 INVALID_CLIENT`
 //! (`C: src/qemu/nvkvm_gpu_emul.c:7217-7231`).
+//!
+//! ## ★★★ R2 IS A GATE, and what it is a gate on is THIS FILE
+//!
+//! Every parameter block below is encoded by a **const-size, version-free** encoder —
+//! `…::SIZE` buffers and `encode_into`, used unconditionally — and those encoders were
+//! transcribed from one driver (`kayfabe_abi::submit` §"Provenance": `ogkm-580:
+//! 580.159.04`). So this file is silently pinned to a host driver interval it never
+//! states. Run it against a host outside that interval and nothing errors: the ioctls
+//! succeed and the fields land in the wrong places — at `ogkm-610` `NV_CHANNEL_ALLOC_PARAMS`
+//! gains a field at +32 and `engineType` moves from +128 to +132, which is the C's proven
+//! `engineType = 0` bug class arrived at from a different road.
+//!
+//! ⊘ **The fix is not a host version axis.** There is one host driver available to this
+//! project, so a per-version table set here would be a mechanism with no red available to
+//! it. The fix is to make the pin **say its own name**: [`host_version_gate`] refuses at
+//! R2, quoting the host's version and the layout delta, and
+//! `kayfabe_abi::host_driver` holds the interval because a version fact is data.
+//! `docs/design/host_driver_version_pin.md` is the note; §5 there names the host-side
+//! table as the follow-on that is deliberately not built.
 //!
 //! ## ★★ The verbs that are NOT implemented, and why that is a refusal
 //!
@@ -153,8 +172,11 @@ pub struct RmConnection {
     client: u32,
     device: u32,
     subdevice: u32,
-    /// The driver version string, as the frontend reported it. Diagnostic and ABI-profile
-    /// input; never a gate (see the module docs).
+    /// The **host** driver's version string, as its frontend reported it.
+    ///
+    /// ★ It got here by passing [`host_version_gate`], so its presence means the interval
+    /// check succeeded — but nothing downstream reads it to *select* anything, and that is
+    /// the honest state of the host axis rather than an omission. See the module docs.
     version: String,
     objects: Mutex<Objects>,
     /// ★ The CPU mappings, in their **own** mutex rather than inside [`Objects`].
@@ -478,10 +500,16 @@ impl RmConnection {
         )?;
         let gpu_node = rung("R1 openat(nvidia<gpu>)", CharDevice::openat(dev, &name))?;
 
-        // R2 — the version string. `cmd = '2'` is the query-non-strict form; `cmd = 0` is
-        // STRICT and deliberately returns EINVAL after filling the string in, which the
-        // open driver enforces (`C: src/qemu/virtio_nvgpu.c:1157-1170`).
-        let version = read_version(&ctl).unwrap_or_default();
+        // ★★★ R2 — the version string, and IT IS NOW A GATE. `cmd = '2'` is the
+        // query-non-strict form; `cmd = 0` is STRICT and deliberately returns EINVAL after
+        // filling the string in, which the open driver enforces
+        // (`C: src/qemu/virtio_nvgpu.c:1157-1170`). See [`host_version_gate`] for why the
+        // rung changed and why the answer is a refusal rather than a table.
+        let version =
+            host_version_gate(read_version(&ctl).as_deref()).map_err(|detail| BringUpError {
+                rung: "R2 host driver version",
+                detail,
+            })?;
 
         // R3 — bind the device node to the control session. Required, and the failure
         // without it is `0x23 INVALID_CLIENT` rather than anything that names a binding.
@@ -1225,6 +1253,26 @@ fn engine_type_for(engine: EngineKind) -> Option<u32> {
         // never sent.
         EngineKind::NvEnc | EngineKind::NvDec | EngineKind::Other => None,
     }
+}
+
+/// ★★★ R2's **decision**, separated from R2's ioctl so the whole gate is testable.
+///
+/// The argument is `Option<&str>` — *"what the frontend said, if it said anything"* — and
+/// the `None` arm is inside [`kayfabe_abi::host_driver::check`] rather than here, because
+/// this is the one function that could turn a failed query into a default, so it never
+/// gets the chance. `unwrap_or_default()` is exactly what used to be here, and an empty
+/// string is what it produced.
+///
+/// Returns the reported string on success. The **parsed** version is deliberately dropped:
+/// nothing on this side selects on it, and that is the finding
+/// (`host_driver_version_pin.md` §2) rather than an oversight — the value of the check is
+/// that a host outside the pinned interval stops here instead of being encoded for.
+///
+/// # Errors
+/// The refusal's own prose, ready to be the [`BringUpError::detail`] of rung R2.
+fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
+    kayfabe_abi::host_driver::check(reported).map_err(|r| r.to_string())?;
+    Ok(reported.unwrap_or_default().to_string())
 }
 
 /// R2: `NV_ESC_CHECK_VERSION_STR`, query form.
@@ -2548,6 +2596,52 @@ impl HostRmBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★★★ R2's gate, over the arm that used to be silent.
+    ///
+    /// The path this replaces was `read_version(&ctl).unwrap_or_default()` — a frontend
+    /// that did not answer produced `""` and bring-up walked on to encode 580-era offsets
+    /// against an unknown driver. The two things this asserts are that the bench's own
+    /// driver still gets through, and that **neither** silence nor a nonsense reply is a
+    /// way through. The strings are literals rather than anything derived from
+    /// `kayfabe_abi::host_driver`'s constants.
+    #[test]
+    fn r2_admits_the_benchs_host_driver_and_refuses_silence() {
+        assert_eq!(
+            host_version_gate(Some("580.159.04")).as_deref(),
+            Ok("580.159.04"),
+            "the driver this crate's encoders were transcribed from must pass R2"
+        );
+        for absent in [None, Some(""), Some("580")] {
+            let refusal = host_version_gate(absent).expect_err("R2 must refuse");
+            assert!(
+                refusal.contains("refusing rather than assuming 580"),
+                "{absent:?} must refuse rather than default: {refusal}"
+            );
+        }
+    }
+
+    /// ★★ The refusal that reaches a human is the one R2 builds, so assert **that** value
+    /// — a `BringUpError` naming the rung, carrying the prose whole.
+    ///
+    /// ⚠ `rung()` cannot be used for it: it formats with `Debug`, which would deliver the
+    /// message quoted and backslash-escaped. This asserts the shape a log actually shows.
+    #[test]
+    fn a_refused_host_driver_arrives_as_a_named_r2_failure() {
+        let detail = host_version_gate(Some("610.43.02")).expect_err("610 must refuse");
+        let e = BringUpError {
+            rung: "R2 host driver version",
+            detail,
+        };
+        let shown = e.to_string();
+        assert!(
+            shown.starts_with("RM bring-up failed at R2 host driver version: "),
+            "names the rung: {shown}"
+        );
+        assert!(shown.contains("host driver is 610.43.02"), "{shown}");
+        assert!(shown.contains("NV_CHANNEL_ALLOC_PARAMS"), "{shown}");
+        assert!(!shown.contains('\\'), "not Debug-escaped: {shown}");
+    }
 
     /// The status map, asserted by variant — never `is_err()`.
     #[test]

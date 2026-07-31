@@ -30,7 +30,8 @@
 //! bytes in the middle of the struct.
 
 use crate::capability::{
-    CAPS_560_28_03, CAPS_570_86_15, CAPS_580_65_06, CAPS_BASE, CapabilityTable,
+    CAPS_550_54_04, CAPS_550_90_07, CAPS_555_42_02, CAPS_560_28_03, CAPS_570_86_15, CAPS_575_51_02,
+    CAPS_580_65_06, CAPS_610_43_02, CapabilityTable,
 };
 use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::guestsysinfo::VgxVersion;
@@ -270,9 +271,13 @@ pub struct DriverAbiTable {
     ///
     /// It is a field here, and not a free function, for the reason the whole
     /// module exists: *adding a driver version must not edit a logic crate*. A
-    /// new version is a new `TABLES` row pointing at a new
-    /// [`CapabilityTable`] — and because that type is inherit-then-add, the new
-    /// row is only the delta.
+    /// new version is a new `TABLES` row pointing at a new [`CapabilityTable`].
+    ///
+    /// ★★★ That type is **shared-base + per-boundary blocks** since task #122, not
+    /// inherit-then-add. So the row a version points at is that version's **whole**
+    /// surface, and a version whose vendor *removed* a command points at a table that
+    /// does not name the block carrying it — which is the case 575.51.02 is, and which
+    /// the previous shape could not express (see [`crate::capability`]'s module doc).
     caps: &'static CapabilityTable,
     /// Which **synthetic-VBIOS** parse path this driver version speaks
     /// ([`crate::vbios`]).
@@ -312,19 +317,57 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
         gsp_static_info: GspStaticInfoWire::Pre610,
-        caps: &CAPS_BASE,
+        caps: &CAPS_550_54_04,
         vbios: VbiosWire::Tu102Bit,
         vgx: None,
         note: "oldest supported: NVOS47 gained `size` here \
                (gvisor/pkg/abi/nvgpu/frontend.go:707-710, NVOS47_PARAMETERS_V550)",
     },
-    // ★ The next two rows exist ONLY for the capability surface: every wire
-    // layout in them is its predecessor's, and nvproxy adds no frontend ioctl
-    // and no control command at either boundary — just allocation classes
-    // (`gvisor/pkg/sentry/devices/nvproxy/version.go:945-977` and `:990-1027`).
-    // They are here because the alternative is giving a 550 guest the class set
-    // of a 570 one, which is a quietly WIDER gate at the oldest supported
-    // version — the direction a security table must never drift in.
+    // ★★ The next four rows exist ONLY for the capability surface: every wire layout in
+    // them is its predecessor's. They are here because the alternative is giving a 550
+    // guest the class set of a 570 one — a quietly WIDER gate at the oldest supported
+    // version, the direction a security table must never drift in — and, since task
+    // #122, because two of them are where the vendor REMOVES something.
+    //
+    // ★★★ 550.90.07 and 555.42.02 were added by #122. nvproxy's control map changes at
+    // both (`gvisor/pkg/sentry/devices/nvproxy/version.go:906` and `:933`), and 555.42.02
+    // is a pure DELETE — so without a row here a 550 guest is refused a command nvproxy
+    // permits it, and a 560 guest is permitted one nvproxy deleted. Neither could be
+    // said before, because `CapabilityTable` had no way to stop inheriting a row.
+    DriverAbiTable {
+        version: DriverVersion {
+            major: 550,
+            minor: 90,
+            patch: 7,
+        },
+        map_dma: MapDmaWire::Pre580_65_06,
+        gsp_element: GspElementWire::Pre610,
+        gsp_init_args: GspInitArgsWire::FourField,
+        gsp_static_info: GspStaticInfoWire::Pre610,
+        caps: &CAPS_550_90_07,
+        vbios: VbiosWire::Tu102Bit,
+        vgx: None,
+        note: "capability-only boundary: +NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION\
+               _STATE, no layout change \
+               (gvisor/pkg/sentry/devices/nvproxy/version.go:906)",
+    },
+    DriverAbiTable {
+        version: DriverVersion {
+            major: 555,
+            minor: 42,
+            patch: 2,
+        },
+        map_dma: MapDmaWire::Pre580_65_06,
+        gsp_element: GspElementWire::Pre610,
+        gsp_init_args: GspInitArgsWire::FourField,
+        gsp_static_info: GspStaticInfoWire::Pre610,
+        caps: &CAPS_555_42_02,
+        vbios: VbiosWire::Tu102Bit,
+        vgx: None,
+        note: "★ capability-only and purely SUBTRACTIVE: nvproxy deletes \
+               NVC36F_CTRL_GET_CLASS_ENGINEID here and adds nothing this port carries \
+               (gvisor/pkg/sentry/devices/nvproxy/version.go:933)",
+    },
     DriverAbiTable {
         version: DriverVersion {
             major: 560,
@@ -338,7 +381,8 @@ pub const TABLES: &[DriverAbiTable] = &[
         caps: &CAPS_560_28_03,
         vbios: VbiosWire::Tu102Bit,
         vgx: None,
-        note: "capability-only boundary: +8 allocation classes, no layout change \
+        note: "capability-only boundary: +8 allocation classes and \
+               +NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:945-977)",
     },
     DriverAbiTable {
@@ -354,31 +398,28 @@ pub const TABLES: &[DriverAbiTable] = &[
         caps: &CAPS_570_86_15,
         vbios: VbiosWire::Tu102Bit,
         vgx: None,
-        note: "capability-only boundary: +6 allocation classes, no layout change \
+        note: "capability-only boundary: +6 allocation classes and the two \
+               DRAM-encryption controls at their PRE-575 numbers, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:990-1027)",
     },
-    // ★★★ 575.51.02 — added 2026-07-30 as the SECOND-DRIVER-VERSION MEASUREMENT, and it
-    // is the row that shows what this shape can and cannot carry.
+    // ★★★ 575.51.02 — added 2026-07-30 as the second driver version, and REBUILT by task
+    // #122, which is the task this boundary is the reason for.
     //
     // The additive half really is one row: no wire layout moves here, so every field
     // below is its predecessor's and this entry costs exactly these lines.
     //
-    // ⚠ **The subtractive half cannot be expressed, and the boundary is MOSTLY
-    // subtractive.** nvproxy's `v575_51_02` is three deletes-and-replaces on the control
-    // map, not an addition (`gvisor/pkg/sentry/devices/nvproxy/version.go:1036-1053`):
+    // ★ The subtractive half is now carried, in the CAPABILITY table rather than here.
+    // nvproxy's `v575_51_02` is two deletes-and-replaces plus one addition on the control
+    // map (`gvisor/pkg/sentry/devices/nvproxy/version.go:1036-1053`):
     //   - `NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT` 0x20801358 -> 0x20801357
     //   - `NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS`          0x20801359 -> 0x20801358
     //   - `NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2` 0x20800513 added
-    // `CapabilityTable` is inherit-then-**add** and has no removal field, which its own
-    // module doc already states. So this row carries the *fact* of the boundary and none
-    // of its *content*, and the consequence is live and measured — see
-    // `the_575_boundary_is_subtractive_and_this_shape_cannot_carry_it` in
-    // `crate::capability`'s tests, which pins that 0x20801359 is refused for a 550/570
-    // guest that legitimately issues it, and that 0x20801358 is permitted under the
-    // 575-era NAME while a 550/570 guest means the pre-575 command by that number.
-    //
-    // Recorded, not fixed: a removal field is a type change with its own blast radius and
-    // belongs with its first real consumer, exactly as the module doc says.
+    // `CAPS_575_51_02` says all three by naming `CONTROLS_FROM_575_51_02` and NOT naming
+    // `CONTROLS_DRAM_ENCRYPTION_570`. What that changes for a guest is asserted by
+    // `the_575_boundary_replaces_two_dram_encryption_commands` in `crate::capability`'s
+    // tests: 0x20801359 is now permitted at 570.86.15 (it was refused at every version),
+    // and 0x20801358 answers `..._INFOROM_SUPPORT` at 570 and `..._STATUS_V575` at 575+
+    // instead of the 575-era name at every version.
     DriverAbiTable {
         version: DriverVersion {
             major: 575,
@@ -389,14 +430,14 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
         gsp_static_info: GspStaticInfoWire::Pre610,
-        caps: &CAPS_570_86_15,
+        caps: &CAPS_575_51_02,
         vbios: VbiosWire::Tu102Bit,
         vgx: None,
-        note: "★ the first SUBTRACTIVE boundary: nvproxy replaces two DRAM-encryption \
-               commands here rather than adding any (version.go:1036-1053). This shape \
-               can only add, so the row records the boundary and carries none of its \
-               content — the additive third (THERMAL_SYSTEM_EXECUTE_V2) is already in \
-               CAPS_BASE because that table is the 575 set the C shipped",
+        note: "★ the REPLACING boundary: nvproxy deletes two DRAM-encryption controls \
+               here and re-adds them one number lower, and adds \
+               THERMAL_SYSTEM_EXECUTE_V2 (version.go:1036-1053). CAPS_575_51_02 says all \
+               three by naming CONTROLS_FROM_575_51_02 and NOT naming \
+               CONTROLS_DRAM_ENCRYPTION_570",
     },
     DriverAbiTable {
         version: DriverVersion {
@@ -430,7 +471,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         gsp_element: GspElementWire::From610_43_02,
         gsp_init_args: GspInitArgsWire::NineField,
         gsp_static_info: GspStaticInfoWire::From610_43_02,
-        caps: &CAPS_580_65_06,
+        caps: &CAPS_610_43_02,
         vbios: VbiosWire::Tu102Bit,
         // `ogkm-610: src/nvidia/inc/kernel/vgpu/vgpu_version.h:33-34` — and it MOVED,
         // which is why this is a row and not a constant.
