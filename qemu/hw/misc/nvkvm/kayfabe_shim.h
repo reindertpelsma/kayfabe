@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 5u
+#define KAYFABE_SHIM_ABI 6u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -280,6 +280,21 @@ typedef struct KayfabeRegAudit {
     uint64_t gsp_writes;
     uint64_t unclaimed_reads;
     uint64_t unclaimed_writes;
+    /* ★★★ FRAMEBUFFER-WINDOW ACCESSES — DEVICE MEMORY, NOT REGISTERS.
+     *
+     * PRAMIN, the framebuffer aperture and the instance/BAR2 window are memory, and a page
+     * table lives in memory.  The `unclaimed` counters above are honest about a defaulted
+     * register value; these two are about something worse, so they are counted apart: a
+     * dropped framebuffer write can be a dropped page-table entry, which does not fail
+     * here — it fails much later as a mapping that is simply absent, at an address that
+     * names nothing.
+     *
+     * MEASURED (2026-07-31, the committed C reference traces): the cold boot carries
+     * 177856 instance-window + 33978 PRAMIN + 2 aperture writes, the matmul 214552 +
+     * 33978 + 1511.  Before these fields every one of them was indistinguishable from an
+     * unknown register offset. */
+    uint64_t fb_window_reads;
+    uint64_t fb_window_writes;
     uint64_t faults;
     uint64_t ram_refusals;
     uint64_t irq_requests;

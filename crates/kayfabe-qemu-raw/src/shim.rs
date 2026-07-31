@@ -71,8 +71,13 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// structure is the quiet one — an old shim would allocate the ABI-3 layout and this
 /// archive would write 32 bytes past the end of it.
 ///
+/// ★ Bumped to **6** at `#102` stage C, for the ABI-3 reason exactly: [`KayfabeRegAudit`]
+/// gained `fb_window_reads` / `fb_window_writes`, so an ABI-5 shim would allocate the old
+/// layout and this archive would write 16 bytes past the end of it. Nothing but the version
+/// stands between those two — the `sizeof` handshake does not cover this structure.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 5;
+pub const ABI_VERSION: u32 = 6;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -670,6 +675,13 @@ pub struct KayfabeRegAudit {
     pub unclaimed_reads: u64,
     /// Writes no source claimed, dropped.
     pub unclaimed_writes: u64,
+    /// ★★★ Reads that landed in a framebuffer window — device memory, not a register.
+    /// Carried across the seam because this is the only channel the C shell reads, and a
+    /// boot that scribbles at the framebuffer must be able to say so from outside the
+    /// process. See `kayfabe_device::FbWindow`.
+    pub fb_window_reads: u64,
+    /// Writes that landed in a framebuffer window and were therefore **dropped**.
+    pub fb_window_writes: u64,
     /// Faults the emulated GSP raised.
     pub faults: u64,
     /// Guest-RAM accesses the plane's RAM port refused.
@@ -931,6 +943,8 @@ impl Regs {
             gsp_writes: c.gsp_writes,
             unclaimed_reads: c.unclaimed_reads,
             unclaimed_writes: c.unclaimed_writes,
+            fb_window_reads: c.fb_window_reads,
+            fb_window_writes: c.fb_window_writes,
             faults: c.faults,
             ram_refusals: c.ram_refusals,
             irq_requests: c.irq_requests,

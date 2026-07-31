@@ -47,7 +47,7 @@ use kayfabe_abi::vbios::VbiosWire;
 use kayfabe_arch::gsp::{BootSequence, GspModel, GspObservation, GspReg, LibosRegionLayout};
 use kayfabe_gsp::FalconSecureBooterBoot;
 
-use crate::{BootReg, ChipProfile, PtimerRegs, RomWindow};
+use crate::{BootReg, ChipProfile, PtimerRegs, RegSpan, RomWindow};
 
 // ── BAR0 offsets ──────────────────────────────────────────────────────────────────
 // `ogkm-580: src/common/inc/swref/published/ampere/ga102/dev_gsp.h:27,29,38`
@@ -174,6 +174,11 @@ pub const FB_SIZE_MB: u64 = 12288;
 /// `NV_PRAMIN` is `0x007FFFFF:0x00700000`
 /// (`ogkm-580: src/common/inc/swref/published/turing/tu102/dev_ram.h:26`), so 1 MiB.
 const PRAMIN_SIZE: u64 = 0x0010_0000;
+/// The same range's **base**, i.e. where the window is reached through the register
+/// aperture rather than how much framebuffer it reserves. Two uses of one constant: the
+/// low bound of `NV_PRAMIN` (`dev_ram.h:26`) and the window offset the C artifact decodes
+/// (`C: src/qemu/mode2_regs_ga10x.h:80-81`).
+const PRAMIN_BASE: u64 = 0x0070_0000;
 /// `kgspGetFrtsSize_TU102` — 1 MiB on Turing through Ada
 /// (`ogkm-580: .../gsp/arch/turing/kernel_gsp_frts_tu102.c:49-58`; GA100 and GB10B are 0).
 const FRTS_SIZE: u64 = 0x0010_0000;
@@ -1185,6 +1190,10 @@ pub static GA106: ChipProfile = ChipProfile {
     rom_window: RomWindow {
         base: PROM_DATA_BASE,
         len: PROM_DATA_SIZE,
+    },
+    pramin_window: RegSpan {
+        base: PRAMIN_BASE,
+        len: PRAMIN_SIZE,
     },
     vbios_wire: VbiosWire::Tu102Bit,
     msix_vectors: MSIX_VECTORS,

@@ -87,6 +87,26 @@
 //! tree is the free-running counter above, where a defaulted zero was a plausible answer
 //! and therefore an unkillable silent spin. A refusal is never plausible, which is exactly
 //! what makes it a diagnosis.
+//!
+//! # ★★★ A FRAMEBUFFER WINDOW IS NOT AN UNCLAIMED REGISTER (`#102` stage C)
+//!
+//! The "unclaimed reads zero" argument two sections up turns on the offset naming a
+//! *register*. Three of the offsets this plane is handed do not: the `PRAMIN` window inside
+//! the register aperture, the framebuffer aperture and the instance/`BAR2` window are
+//! **device memory**, and a page table lives in device memory. So they are classified
+//! before the unclaimed arm and counted under their own name
+//! ([`crate::FbWindow`], [`Counters::fb_window_reads`], [`RegPlane::fb_window_sample`]).
+//!
+//! ⊘ **Nothing here serves a framebuffer byte, and nothing here decides where the
+//! framebuffer should live** — that is plan §11-O1 and `eight_blockers_resolved.md` §12,
+//! which put the bytes in the isolate. This arm exists so that the absence has a name.
+//!
+//! ★★ It is worth the type because the volume is not small and was not visible.
+//! Bucketing every base-address-register write in the committed C reference traces by
+//! region (`nvidia-gpu-passthrough/traces/mode2_c_reference/`, decoded 2026-07-31):
+//! **211 836** of the cold boot's and **250 041** of the matmul's land in one of these three
+//! windows — and under the previous code every one was indistinguishable from an unknown
+//! register offset. See [`crate::FbWindow`] for the per-window split.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -95,7 +115,7 @@ use kayfabe_arch::gsp::GspModel;
 use kayfabe_gsp::{CommandPolicy, GspAbi, GspFault, GspFsm, GuestRam, RamRefused};
 use kayfabe_trace::Faulted;
 
-use crate::{ChipError, ChipProfile};
+use crate::{ChipError, ChipProfile, FbWindow};
 
 /// A [`GuestRam`] that refuses every access, by name.
 ///
@@ -208,6 +228,16 @@ pub struct Counters {
     pub unclaimed_reads: u64,
     /// Writes no source claimed, dropped.
     pub unclaimed_writes: u64,
+    /// ★★★ Reads that landed in a framebuffer window ([`crate::FbWindow`]) — device
+    /// memory this port does not model. **Not** a subset of
+    /// [`Counters::unclaimed_reads`]: an access is classified into exactly one of the two,
+    /// because the whole point is that they are different facts.
+    pub fb_window_reads: u64,
+    /// Writes that landed in a framebuffer window and were therefore **dropped**.
+    ///
+    /// ★★ The one to watch. A dropped framebuffer write can be a dropped page-table entry,
+    /// which does not fail here — it fails much later, as a mapping that is simply absent.
+    pub fb_window_writes: u64,
     /// Faults the FSM raised on a write.
     pub faults: u64,
     /// Guest-RAM accesses the plane's RAM port refused.
@@ -227,9 +257,18 @@ struct PlaneState {
     fsm: GspFsm,
     ram: Box<dyn GuestRam>,
     policy: Box<dyn CommandPolicy>,
-    /// The first unclaimed offsets seen, for diagnosis. Bounded, deliberately: an
-    /// unbounded set is a guest-driven allocation, and a poller can produce millions.
-    unclaimed: Vec<u64>,
+    /// The first unclaimed accesses seen, as `(bar, offset)`, for diagnosis. Bounded,
+    /// deliberately: an unbounded set is a guest-driven allocation, and a poller can produce
+    /// millions.
+    ///
+    /// ★ The **bar** travels with the offset, and that is a fix rather than a decoration:
+    /// offset `0x9008c` in the framebuffer aperture and offset `0x9008c` in the register
+    /// aperture are the same number and different facts, and a sample that reported only the
+    /// number said the second when it meant the first.
+    unclaimed: Vec<(u8, u64)>,
+    /// The first framebuffer-window accesses seen, as `(window, offset)`. Bounded for the
+    /// same reason and by the same constant.
+    fb_window: Vec<(FbWindow, u64)>,
 }
 
 /// How many distinct unclaimed offsets are remembered.
@@ -251,6 +290,10 @@ pub enum ReadOutcome {
     Gsp(u64),
     /// The GSP model claimed the offset and could not serve it.
     GspFault(&'static str),
+    /// ★★★ The offset is inside a framebuffer window — **device memory**, which this port
+    /// does not model. Reads zero like [`ReadOutcome::Unclaimed`] does and is a separate
+    /// variant precisely because the two mean different things: see the module docs.
+    FbWindow(FbWindow),
     /// No source claimed the offset.
     Unclaimed,
 }
@@ -262,7 +305,7 @@ impl ReadOutcome {
     pub fn value(self) -> u64 {
         match self {
             Self::BootReg(v) | Self::Ptimer(v) | Self::Rom(v) | Self::Gsp(v) => v,
-            Self::GspFault(_) | Self::Unclaimed => 0,
+            Self::GspFault(_) | Self::FbWindow(_) | Self::Unclaimed => 0,
         }
     }
 }
@@ -282,6 +325,9 @@ pub struct WriteOutcome {
     /// moment a real port was wired in there were several, and a diagnosis that cannot
     /// distinguish them costs a boot each time.
     pub ram_refusal: Option<RamRefused>,
+    /// ★★★ The write landed in a framebuffer window and was dropped, with the window
+    /// named. `None` means it did not.
+    pub fb_window: Option<FbWindow>,
     /// The status-queue interrupt should be announced to the guest.
     pub raise_status_irq: bool,
     /// How many transitions fired.
@@ -333,6 +379,8 @@ struct PlaneCounters {
     gsp_writes: AtomicU64,
     unclaimed_reads: AtomicU64,
     unclaimed_writes: AtomicU64,
+    fb_window_reads: AtomicU64,
+    fb_window_writes: AtomicU64,
     commands: AtomicU64,
     faults: AtomicU64,
     ram_refusals: AtomicU64,
@@ -383,6 +431,7 @@ impl RegPlane {
                     )),
                 ])),
                 unclaimed: Vec::new(),
+                fb_window: Vec::new(),
             }),
             c: PlaneCounters::default(),
             unserviced,
@@ -431,6 +480,8 @@ impl RegPlane {
             gsp_writes: g(&self.c.gsp_writes),
             unclaimed_reads: g(&self.c.unclaimed_reads),
             unclaimed_writes: g(&self.c.unclaimed_writes),
+            fb_window_reads: g(&self.c.fb_window_reads),
+            fb_window_writes: g(&self.c.fb_window_writes),
             commands: g(&self.c.commands),
             commands_unserviced: self.unserviced.total(),
             faults: g(&self.c.faults),
@@ -447,11 +498,27 @@ impl RegPlane {
         self.unserviced.sample()
     }
 
-    /// The distinct offsets no source claimed, up to [`UNCLAIMED_SAMPLE_MAX`].
+    /// The distinct `(bar, offset)` pairs no source claimed, up to
+    /// [`UNCLAIMED_SAMPLE_MAX`].
+    ///
+    /// ★ `bar` is part of the answer. An offset alone names two different accesses in two
+    /// different apertures, and reporting only the offset made a framebuffer access read as
+    /// a register one.
     #[must_use]
-    pub fn unclaimed_sample(&self) -> Vec<u64> {
+    pub fn unclaimed_sample(&self) -> Vec<(u8, u64)> {
         let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
         s.unclaimed.clone()
+    }
+
+    /// ★★★ The distinct framebuffer-window accesses seen, up to [`UNCLAIMED_SAMPLE_MAX`].
+    ///
+    /// The *which* behind [`Counters::fb_window_reads`] / [`Counters::fb_window_writes`].
+    /// An operator reading a boot that ends in a missing mapping wants this list, because
+    /// every entry is a byte of device memory this port did not carry.
+    #[must_use]
+    pub fn fb_window_sample(&self) -> Vec<(FbWindow, u64)> {
+        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.fb_window.clone()
     }
 
     /// The FSM's current boot phase, so a test can assert the guest moved it.
@@ -500,8 +567,12 @@ impl RegPlane {
             ReadOutcome::Rom(_) => self.c.rom_reads.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::Gsp(_) => self.c.gsp_reads.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::GspFault(_) => self.c.faults.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::FbWindow(w) => {
+                self.note_fb_window(w, off);
+                self.c.fb_window_reads.fetch_add(1, Ordering::Relaxed)
+            }
             ReadOutcome::Unclaimed => {
-                self.note_unclaimed(off);
+                self.note_unclaimed(bar, off);
                 self.c.unclaimed_reads.fetch_add(1, Ordering::Relaxed)
             }
         };
@@ -519,6 +590,14 @@ impl RegPlane {
             if self.chip.rom_window.contains(off) {
                 return ReadOutcome::Rom(self.rom_read(off - self.chip.rom_window.base, size));
             }
+        }
+        // ★★★ Device memory, not a register — asked BEFORE the GSP model and before the
+        // unclaimed arm, because a framebuffer window that some future model happened to
+        // claim an offset inside would be served as a register, which is the silent-
+        // misattribution this classification exists to prevent. `assert_disjoint` refuses
+        // such a chip at realize, so reaching here means the two really are separate.
+        if let Some(w) = self.chip.fb_window(bar, off) {
+            return ReadOutcome::FbWindow(w);
         }
         let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match s.fsm.mmio_read_with(self.model.as_ref(), bar, off) {
@@ -574,14 +653,32 @@ impl RegPlane {
     pub fn write(&self, bar: u8, off: u64, size: u8, val: u64) -> WriteOutcome {
         let _ = size;
         self.c.writes.fetch_add(1, Ordering::Relaxed);
+        // ★★★ A framebuffer write is DROPPED and SAID SO. It is classified first, for the
+        // reason `read_inner` gives, and reported under its own name because "we dropped a
+        // write to device memory" and "we dropped a write to a register nobody models" are
+        // the two facts this counter used to merge.
+        if let Some(w) = self.chip.fb_window(bar, off) {
+            self.note_fb_window(w, off);
+            self.c.fb_window_writes.fetch_add(1, Ordering::Relaxed);
+            return WriteOutcome {
+                claimed: false,
+                fault: None,
+                ram_refusal: None,
+                fb_window: Some(w),
+                raise_status_irq: false,
+                transitions: 0,
+                commands: 0,
+            };
+        }
         let claimed = self.model.decode_reg(bar, off).is_some();
         if !claimed {
-            self.note_unclaimed(off);
+            self.note_unclaimed(bar, off);
             self.c.unclaimed_writes.fetch_add(1, Ordering::Relaxed);
             return WriteOutcome {
                 claimed: false,
                 fault: None,
                 ram_refusal: None,
+                fb_window: None,
                 raise_status_irq: false,
                 transitions: 0,
                 commands: 0,
@@ -611,6 +708,7 @@ impl RegPlane {
                     claimed: true,
                     fault: None,
                     ram_refusal: None,
+                    fb_window: None,
                     raise_status_irq: report.raise_status_irq,
                     transitions: report.transitions.len(),
                     commands: report.commands.len(),
@@ -632,6 +730,7 @@ impl RegPlane {
                     claimed: true,
                     fault: Some(f.fault_tag().0),
                     ram_refusal,
+                    fb_window: None,
                     raise_status_irq: false,
                     transitions: 0,
                     commands: 0,
@@ -640,10 +739,17 @@ impl RegPlane {
         }
     }
 
-    fn note_unclaimed(&self, off: u64) {
+    fn note_unclaimed(&self, bar: u8, off: u64) {
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if s.unclaimed.len() < UNCLAIMED_SAMPLE_MAX && !s.unclaimed.contains(&off) {
-            s.unclaimed.push(off);
+        if s.unclaimed.len() < UNCLAIMED_SAMPLE_MAX && !s.unclaimed.contains(&(bar, off)) {
+            s.unclaimed.push((bar, off));
+        }
+    }
+
+    fn note_fb_window(&self, w: FbWindow, off: u64) {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if s.fb_window.len() < UNCLAIMED_SAMPLE_MAX && !s.fb_window.contains(&(w, off)) {
+            s.fb_window.push((w, off));
         }
     }
 }
@@ -752,6 +858,57 @@ fn assert_disjoint(chip: &ChipProfile, model: &dyn GspModel) -> Result<(), ChipE
             });
         }
         off += 4;
+    }
+    // ★★★ The PRAMIN window is checked against every register source, exhaustively, for a
+    // reason the other windows do not have: it is classified BEFORE the GSP model, so an
+    // overlap here would not read as the wrong source, it would make a register the FSM
+    // needs unreachable — and the FSM would then be waiting on a doorbell that can never
+    // arrive. That is the stopped-clock failure with a different cause.
+    let pramin = chip.pramin_window;
+    if pramin.len != 0 {
+        if pramin.base.saturating_add(pramin.len) > chip.regs_aperture_len {
+            return Err(ChipError::OutsideAperture {
+                off: pramin.base,
+                aperture: chip.regs_aperture_len,
+            });
+        }
+        for r in chip.boot_regs {
+            if pramin.contains(r.off) {
+                return Err(ChipError::OverlappingSources {
+                    off: r.off,
+                    a: "the PRAMIN framebuffer window",
+                    b: "a silicon-constant register",
+                });
+            }
+        }
+        for off in [chip.ptimer.lo_off, chip.ptimer.hi_off] {
+            if pramin.contains(off) {
+                return Err(ChipError::OverlappingSources {
+                    off,
+                    a: "the PRAMIN framebuffer window",
+                    b: "the free-running nanosecond counter",
+                });
+            }
+        }
+        let mut off = pramin.base;
+        let end = pramin.base + pramin.len;
+        while off < end {
+            if chip.rom_window.contains(off) {
+                return Err(ChipError::OverlappingSources {
+                    off,
+                    a: "the PRAMIN framebuffer window",
+                    b: "the ROM window",
+                });
+            }
+            if model.decode_reg(0, off).is_some() {
+                return Err(ChipError::OverlappingSources {
+                    off,
+                    a: "the PRAMIN framebuffer window",
+                    b: "the GSP register model",
+                });
+            }
+            off += 4;
+        }
     }
     Ok(())
 }

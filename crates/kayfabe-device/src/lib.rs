@@ -137,6 +137,90 @@ impl RomWindow {
     }
 }
 
+/// ★★★ **A framebuffer window — an aperture whose accesses are DEVICE MEMORY, not
+/// registers.**
+///
+/// # Why this is a separate name and not one more unclaimed offset
+///
+/// [`plane`]'s module docs argue that an unclaimed *register* may read a defaulted zero,
+/// because the guest is reading a register a real chip does have and answering zero is a
+/// wrong value rather than a fabricated mapping. **That argument does not extend to these
+/// three windows**, and conflating them is what this type exists to stop:
+///
+/// - a write here is a write to the framebuffer, and **a page table lives in the
+///   framebuffer**. Dropping it silently is `#13 CE-DROP` with a different transport — the
+///   mapping is simply absent later, at an address that names nothing;
+/// - a read here is a read of framebuffer *content*, so a defaulted zero is not merely a
+///   wrong register value, it is a page of invalid page-table entries — which is a
+///   perfectly well-formed answer meaning *"this maps nothing"*. That is the exact shape
+///   [`kayfabe_mmu::walker::FbRead`] refuses to spell as zeros.
+///
+/// ⊘ **Nothing here serves a byte.** This port models no device memory; it names the
+/// absence so that a boot which touches the framebuffer says so in its own counters rather
+/// than looking like a boot that touched an unmodelled register.
+///
+/// # The measurement that made this worth a type (2026-07-31)
+///
+/// Replaying the committed C reference traces
+/// (`nvidia-gpu-passthrough/traces/mode2_c_reference/`) and bucketing every recorded
+/// base-address-register write by region: the cold boot `cap1b_coldboot_hermetic_d6`
+/// carries **177 856** instance-window writes, **33 978** `PRAMIN` writes and **2**
+/// framebuffer-aperture writes; the matmul trace `cap3_matmul_forwarding` carries
+/// **214 552 / 33 978 / 1 511** — i.e. **211 836** and **250 041** window accesses in the
+/// two runs, **461 877** in total. Under this port every one of them was indistinguishable
+/// from an unknown register offset.
+///
+/// ★ **That census is a test, not a paragraph**:
+/// `crates/kayfabe-crec/tests/fb_window_census.rs` re-derives the cold boot's three numbers
+/// from the capture this repository carries, **through this classifier**, and fails if they
+/// move. It reads `cap1_coldboot_hermetic` rather than `cap1b`, which differs only by 32
+/// witnessed continuation-element reads and has the identical window census — checked, not
+/// assumed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FbWindow {
+    /// The 1 MiB `PRAMIN` window in the register aperture, positioned by
+    /// `NV_PBUS_BAR0_WINDOW`. **Untranslated**: the framebuffer address is the window base
+    /// plus the offset (`C: src/qemu/nvkvm_gpu_emul.c:904-908`).
+    Pramin,
+    /// Base-address register [`kayfabe_abi::pcibars::bus_bar::FB`] — the framebuffer
+    /// aperture. GMMU-translated through the `bar1PdeBase` this port itself reports
+    /// (`C: :4604`).
+    FbAperture,
+    /// Base-address register [`kayfabe_abi::pcibars::bus_bar::INST`] — RM's `BAR2` window.
+    /// Identity while the window is bound physical, GMMU-translated through `bar2PdeBase`
+    /// afterwards (`C: :6588`).
+    InstanceWindow,
+}
+
+impl FbWindow {
+    /// One clause naming the window, for a diagnostic. Never branched on.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Pramin => "the PRAMIN framebuffer window",
+            Self::FbAperture => "the framebuffer aperture (BAR1)",
+            Self::InstanceWindow => "the instance/BAR2 window",
+        }
+    }
+}
+
+/// A contiguous byte span inside base-address register 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegSpan {
+    /// Byte offset of the span's first byte.
+    pub base: u64,
+    /// The span's length in bytes.
+    pub len: u64,
+}
+
+impl RegSpan {
+    /// Whether `off` lies in the span.
+    #[must_use]
+    pub fn contains(&self, off: u64) -> bool {
+        off >= self.base && off - self.base < self.len
+    }
+}
+
 /// ★★ **One GPU generation, as a row.**
 ///
 /// Every field is either an identity the device reports through configuration space, a
@@ -163,6 +247,13 @@ pub struct ChipProfile {
     pub ptimer: PtimerRegs,
     /// Where the driver reads the VBIOS through the register aperture.
     pub rom_window: RomWindow,
+    /// ★★ Where this generation's `PRAMIN` framebuffer window sits in the register
+    /// aperture — see [`FbWindow::Pramin`] for why a framebuffer window is not a register.
+    ///
+    /// On the row rather than in [`plane`] for the reason every other geometry is: the
+    /// window moved between generations, and a plane that hard-codes it is a plane the
+    /// second generation edits.
+    pub pramin_window: RegSpan,
     /// The VBIOS parse path this generation's driver speaks.
     pub vbios_wire: VbiosWire,
     /// How many message-signalled interrupt vectors the device offers.
@@ -254,6 +345,28 @@ impl ChipProfile {
     #[must_use]
     pub fn pci_bar_len(&self, index: usize) -> u64 {
         self.pci_bars.get(index).map_or(0, |b| b.size_bytes)
+    }
+
+    /// ★★★ **Which framebuffer window, if any, an access lands in.**
+    ///
+    /// `bar` is RM's own logical index ([`kayfabe_abi::pcibars::bus_bar`]), which is what
+    /// the hypervisor shim already hands [`plane::RegPlane`].
+    ///
+    /// ★ A window this chip declares with a **zero length is not a window** — the same
+    /// spelling [`ChipProfile::pci_bar_len`] uses for *"this BAR is not present"*
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:407, 416`).
+    /// A chip with no framebuffer aperture must not have its accesses attributed to one.
+    #[must_use]
+    pub fn fb_window(&self, bar: u8, off: u64) -> Option<FbWindow> {
+        let len = self.pci_bar_len(usize::from(bar));
+        match usize::from(bar) {
+            kayfabe_abi::pcibars::bus_bar::REGS if self.pramin_window.contains(off) => {
+                Some(FbWindow::Pramin)
+            }
+            kayfabe_abi::pcibars::bus_bar::FB if len != 0 => Some(FbWindow::FbAperture),
+            kayfabe_abi::pcibars::bus_bar::INST if len != 0 => Some(FbWindow::InstanceWindow),
+            _ => None,
+        }
     }
 }
 

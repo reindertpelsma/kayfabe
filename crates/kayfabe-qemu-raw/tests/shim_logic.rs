@@ -475,9 +475,11 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // ★ 12 -> 15 counters plus a 32-slot list at task #127: the emulated GSP's default
     // became a NAMED REFUSAL, and the guest logs `NV_ERR_NOT_SUPPORTED` quietly, so the
     // list of what nobody answered has to cross the seam or it costs a boot per entry.
+    // ★ 15 -> 17 at `#102` stage C: a framebuffer-window access is device memory and not
+    // an unclaimed register, and the difference has to be readable from the C side.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (15 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (17 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
     );
 }
 
@@ -522,14 +524,39 @@ fn the_register_plane_answers_through_the_seam_the_c_shim_calls() {
     assert_eq!(regs.read(0, 0x0000_0000, 4), 0x1760_00A1);
     assert_eq!(regs.read(0, 0x0030_0000, 2), 0xAA55);
     // An offset nobody owns, and it must be zero rather than another register's value.
+    //
+    // ★★ It was `0x0077_7777` until 2026-07-31, which is inside `PRAMIN` — so this probe
+    // was measuring a **framebuffer** access and calling it an unclaimed register. The two
+    // are now separate answers and this line names the register one.
+    assert_eq!(regs.read(0, 0x0055_5555, 4), 0);
+    // ★★★ …and the framebuffer one, through the same seam. `0x0077_7777` still reads zero
+    // — nothing here serves device memory — but it is now attributable, which is the whole
+    // change: `fb_window_reads` moves and `unclaimed_reads` does not.
     assert_eq!(regs.read(0, 0x0077_7777, 4), 0);
 
     let a = regs.audit();
-    assert_eq!(a.reads, 5);
+    assert_eq!(a.reads, 6);
     assert_eq!(a.gsp_reads, 2);
     assert_eq!(a.boot_reg_reads, 1);
     assert_eq!(a.rom_reads, 1);
-    assert_eq!(a.unclaimed_reads, 1);
+    assert_eq!(
+        a.unclaimed_reads, 1,
+        "the PRAMIN read must NOT be counted as an unclaimed register"
+    );
+    assert_eq!(
+        a.fb_window_reads, 1,
+        "…it must be counted as a framebuffer-window read, across the C seam"
+    );
+    // A write into the framebuffer aperture is DROPPED and said so — the case that costs a
+    // page-table entry rather than a register value.
+    let w = regs.write(1, 0x0009_008C, 8, 0xDEAD_BEEF);
+    assert!(!w.claimed);
+    assert_eq!(regs.audit().fb_window_writes, 1);
+    assert_eq!(
+        regs.audit().unclaimed_writes,
+        0,
+        "a dropped framebuffer write is not a dropped register write"
+    );
 
     // A write that reaches guest RAM the plane does not have refuses BY NAME through the
     // seam; the pointer is into the archive's read-only data, so the C may hold it.

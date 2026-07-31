@@ -103,7 +103,13 @@ const SECOND_RAM_GPA: u64 = 0x2_0000_0000;
 const SECOND_RAM_LEN: u64 = 0x1_0000;
 
 /// An offset no source in the chip's table claims, for the unclaimed sample.
-const NOBODYS_OFFSET: u64 = 0x0077_7777;
+///
+/// ★★ It used to be `0x0077_7777`, and that was **wrong in a way this fixture could not
+/// see**: `0x0077_7777` is inside `PRAMIN`, the framebuffer window, so what this test
+/// called "an offset nobody owns" was device memory. Two independent fixtures in this
+/// repository had picked a `PRAMIN` address for exactly that reason — the conflation
+/// `kayfabe_device::FbWindow` exists to end. See `plane`'s module docs.
+const NOBODYS_OFFSET: u64 = 0x0055_5555;
 
 fn cfg() -> ShimConfig {
     ShimConfig {
@@ -210,7 +216,7 @@ struct DeviceState {
     /// four disagreeing reset sites is a field in here.
     emulated_gsp: GspFsm,
     /// The distinct offsets no source claimed. Not derived — named because it cannot be.
-    unclaimed_offsets: Vec<u64>,
+    unclaimed_offsets: Vec<(u8, u64)>,
 }
 
 fn observe(d: &Device) -> DeviceState {

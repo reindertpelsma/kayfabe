@@ -509,3 +509,119 @@ only asserted. The pattern that produced them: pick the claim that is cheapest t
 against the case most likely to break it — **not** the easiest case — and report refutation as the
 valuable outcome. Two of the three were invisible while only one generation and one driver version
 existed, and no amount of testing the existing one could have surfaced them.
+
+---
+
+## Q13 — the framebuffer windows: whose job is `PRAMIN`/`BAR1`/`BAR2`? → **REFRAMED 2026-07-31** (`#102` stage C, empirical pass)
+
+### The question this replaces
+
+It was recorded as **"may the core model device-memory content?"**, with a prior
+sub-question, *"who performs a phys-operand copy?"*. **Both are already answered** — §11.3 by
+the owner in §12 (we perform only the unrepresentable copy, and the isolate executes it), and
+the content question by §12.2 (the bytes live in the isolate's mapping of the fabricated
+aperture; the core owns none). `walker::FbRead` has had a production implementor since
+stage C3. Nothing below reopens that.
+
+### ★★★ What is actually being decided, in one sentence
+
+**The guest writes its framebuffer through three memory windows this port does not model —
+211 836 times in the cold boot and 250 041 times in the matmul, measured 2026-07-31 — so: do
+those windows become a modelled plane, and if so, does it live in the device shell or behind
+the isolate that already holds the framebuffer bytes?**
+
+### The evidence
+
+**Measured** (2026-07-31, replaying `nvidia-gpu-passthrough/traces/mode2_c_reference/`,
+md5-verified; full method and per-trace table in `eight_blockers_resolved.md` §15):
+
+| | `cap1b` cold boot | `cap3` matmul |
+|---|---|---|
+| instance/`BAR2` window writes | 177 856 | 214 552 |
+| `PRAMIN` writes | 33 978 | 33 978 |
+| framebuffer aperture (`BAR1`) writes | 2 | 1 511 |
+| resolvable from **witnessed data alone** | 211 836 / 211 836 | 250 041 / 250 041 |
+| framebuffer bytes the shadow had to guess | **0** | **0** |
+
+Two facts fall out of that table and they pull in opposite directions:
+
+- ★ **The content of a CPU-written page table is fully derivable without reading device
+  memory.** `PRAMIN` is untranslated; `BAR2`'s walk root is a field *we* fabricate
+  (`GspStaticConfigInfo.bar2PdeBase`, `C: nvkvm_gpu_emul.c:3498`); its root PDE arrives in the
+  guest's own `UPDATE_BAR_PDE` RPC (`C: :3509-3524`); and everything below that was written
+  through `PRAMIN`. The induction closes, exactly, on all three traces.
+- ⚠ **It does not close for a framebuffer-to-framebuffer copy-engine write** — the CeUtils
+  512 MiB-alias path that `#13` was about (`C: :6414-6417`, and the `#13` comment's own
+  *"BYPASS `nvkvm_fb_write`"*). Its source is framebuffer memory. ⊘ **I could not determine**
+  whether *that* page's content is witnessed: the recorder observes MMIO windows and
+  guest-RAM DMA and **does not observe framebuffer accesses at all**, so these five captures
+  cannot answer it either way.
+
+`ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:407, 416` — a BAR the
+device does not present is encoded as a zero size, which is what makes "this chip has no
+framebuffer window" expressible rather than assumed.
+
+### The options
+
+**(A) Leave it unmodelled, refuse by name.** *This is what landed this pass, and it is the
+floor, not an answer.* `kayfabe_device::FbWindow` classifies the three windows off the chip
+row before the unclaimed-register arm; `Counters::fb_window_reads` / `fb_window_writes` and
+`RegPlane::fb_window_sample` say how many and which, across the C seam.
+*Costs:* the guest's framebuffer writes are still dropped, so a boot that needs one still
+fails — it now fails *legibly*. *Forecloses:* nothing.
+
+**(B) Model the windows in the device shell** (`PRAMIN` base register, `BAR1`/`BAR2` GMMU
+translation, a byte store) — the C's shape, `§11.6` Option 1.
+*Costs:* it is the `nvkvm-regs` crate that §11-O1 has never decided the home of, plus a GMMU
+walker in the shell that duplicates `kayfabe_mmu::walker`. *Forecloses:* it puts a second
+framebuffer store beside the isolate's, and two stores of one memory is the aliasing hazard
+§11.4 named.
+
+**(C) Route the windows into the isolate's fabricated-aperture mapping** — i.e. treat a CPU
+write into fabricated space by §12.1(iii)'s own principle (*"a write into fabricated space is
+ours, because there is no real engine it could have gone to"*), which that section flags as
+**not wired today**. The shell resolves the window offset to a framebuffer address and hands
+the bytes to the isolate; `fb_read` reads them back.
+*Costs:* `BAR1`/`BAR2` translation still has to happen somewhere, and it needs `FbRead` to
+walk — so this option is **downstream of `HostRmBackend::fb_read`**, which is unbuilt and
+needs Q2's answer plus a GPU. *Forecloses:* nothing, and it is the only option with one
+store.
+
+### ★ My recommendation
+
+**(C), and it is (A) plus a wire rather than a different design** — with one ordering
+constraint that makes it answerable now rather than after a hardware trip:
+
+> The **PRAMIN** window is separable from the other two and should be wired first. It is
+> untranslated, so it needs **no** GMMU walk, **no** `FbRead` and **no** answer to Q2: the
+> framebuffer address is arithmetic on a register the guest itself sets. It is also the
+> bootstrap of everything else — `BAR2`'s page tables are built through it (`C: :3517`,
+> *"already in FB via PRAMIN"*), which is why the induction in §15.2 closes at all. 33 978
+> writes per boot, and it is the one window whose modelling is blocked on nothing.
+
+`BAR1`/`BAR2` then follow the same route once `fb_read` exists, and their translation is the
+walker this repo already has rather than a second one.
+
+### ★★ What would change my mind
+
+- **If Q2's answer makes the fabricated aperture a *predicate* rather than an extent**, the
+  shell cannot resolve a window offset into "an address in the aperture" at all, and (C)'s
+  wire has nothing to attach to. Then (B) is right and the second store is the price.
+- **If a framebuffer-to-framebuffer page-table write turns out to be reconstructible** — i.e.
+  §15.4's open induction closes — then a witness shadow is sufficient for *everything*, and
+  the cheapest correct answer becomes a shadow in the shell with no isolate round trip on the
+  read path at all. That would be a strictly faster design and it would be worth having.
+- **If the guest's RM turns out to stage CeUtils page-table entries in sysmem**, the same
+  conclusion arrives from the other direction, and it is answerable by reading `ogkm` rather
+  than by taking a capture.
+
+### ⊘ What I could not determine
+
+1. **Whether the framebuffer-to-framebuffer induction closes** (§15.4) — the instrument
+   cannot see framebuffer accesses.
+2. **Whether `bar2_virtual` is ever false in a live boot.** It is zero in all three traces,
+   but only because our own `GET_GSP_STATIC_INFO` reply precedes the first `BAR2` write; a
+   port that answered that RPC later would see identity-mapped writes and must handle them.
+3. **What the C shell should do with a per-write window name.** The counters cross the seam;
+   `KayfabeRegWrite` did not grow a field, because no C-side consumer exists to read one and
+   inventing the reader is not this pass's call.

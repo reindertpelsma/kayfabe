@@ -18,7 +18,7 @@
 use kayfabe_arch::gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
 use kayfabe_device::plane::ReadOutcome;
 use kayfabe_device::{
-    BootReg, ChipProfile, NanoClock, PtimerRegs, RegPlane, RomWindow, SteppingClock, abi,
+    BootReg, ChipProfile, NanoClock, PtimerRegs, RegPlane, RegSpan, RomWindow, SteppingClock, abi,
 };
 
 // ── the second chip's register map: same trait, different numbers ────────────────────
@@ -167,6 +167,20 @@ macro_rules! bars_for_aperture {
 /// and the aperture and never build a chip-info reply. An empty `reg_bases` is not a
 /// degenerate value: the encoder writes sixteen `REG_BASE_UNSUPPORTED`s, i.e. RM's own
 /// *"this device has no such group"* in every slot.
+/// ★★ **A chip that declares no `PRAMIN` window** — the honest row for the four
+/// `assert_disjoint` fixtures below, which have no framebuffer and never mean to say they
+/// do. A zero length is the same spelling `ChipProfile::pci_bar_len` uses for *"this
+/// aperture is not present"*, and `ChipProfile::fb_window` reads it that way.
+static NO_PRAMIN: RegSpan = RegSpan { base: 0, len: 0 };
+
+/// The second chip's `PRAMIN` window — deliberately at a **different base and a different
+/// length** from GA10x's `0x0070_0000 + 1 MiB`, so a plane that had hard-coded the shipped
+/// generation's window would classify this chip's accesses wrongly and be caught for it.
+static OTHER_PRAMIN: RegSpan = RegSpan {
+    base: 0x00A0_0000,
+    len: 0x0002_0000,
+};
+
 static NO_REG_BASES: kayfabe_abi::chipinfo::ChipInfoRow = kayfabe_abi::chipinfo::ChipInfoRow {
     chip_sub_rev: 0,
     is_cmp_sku: false,
@@ -200,6 +214,7 @@ static OTHER: ChipProfile = ChipProfile {
         base: 0x0100_0000,
         len: 0x0010_0000,
     },
+    pramin_window: OTHER_PRAMIN,
     vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
     msix_vectors: 3,
     gsp_model: || Box::new(OtherGspModel),
@@ -324,7 +339,7 @@ fn the_counters_separate_the_five_sources() {
     assert_eq!(c.unclaimed_reads, 1);
     assert_eq!(
         plane.unclaimed_sample(),
-        vec![0x0055_5555],
+        vec![(0u8, 0x0055_5555)],
         "the offsets nobody owns must be nameable, not merely countable"
     );
 }
@@ -349,6 +364,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
             base: 0x0010_0000,
             len: 0x0010_0000,
         },
+        pramin_window: NO_PRAMIN,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
@@ -384,6 +400,7 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
             base: 0x0030_0000,
             len: 0x0010_0000,
         },
+        pramin_window: NO_PRAMIN,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
@@ -643,6 +660,7 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
             base: 0x0100_0000,
             len: 0x0010_0000,
         },
+        pramin_window: NO_PRAMIN,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(OtherGspModel),
@@ -682,6 +700,7 @@ fn a_counter_outside_the_aperture_is_refused_at_realize() {
             base: 0x0008_0000,
             len: 0x0001_0000,
         },
+        pramin_window: NO_PRAMIN,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(OtherGspModel),
@@ -880,4 +899,170 @@ fn the_second_chip_states_its_own_identity_and_its_own_register_groups() {
         got, ga106,
         "two chips encoded to the same identity, so the row is not actually being read"
     );
+}
+
+// =====================================================================================
+// ★★★ `#102` stage C — A FRAMEBUFFER WINDOW IS NOT AN UNCLAIMED REGISTER
+// =====================================================================================
+
+/// ★★★ The classification, watched firing on all three windows.
+///
+/// # Why this is worth a test rather than a comment
+///
+/// Two independent fixtures in this repository had already chosen `0x0077_7777` as *"an
+/// offset nobody owns"* — and `0x0077_7777` is inside `PRAMIN`, i.e. device memory. That is
+/// the conflation in its natural habitat: it does not announce itself, because a defaulted
+/// zero is a *plausible* answer for a register and a *plausible page of invalid page-table
+/// entries* for a framebuffer page.
+///
+/// The assertions are stated as a **pair** each time — the framebuffer counter moved AND
+/// the unclaimed counter did not — because either alone would pass on a classification that
+/// double-counted, and double-counting is what "is it a subset?" would leave ambiguous.
+#[test]
+fn a_framebuffer_window_access_is_not_an_unclaimed_register() {
+    use kayfabe_device::FbWindow;
+
+    let chip = &kayfabe_device::ga10x::GA106;
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
+
+    // (1) PRAMIN, inside the register aperture.
+    assert_eq!(
+        plane.read(0, 0x0077_7777, 4),
+        ReadOutcome::FbWindow(FbWindow::Pramin)
+    );
+    // (2) The framebuffer aperture — RM's BAR1. The offset is the one the C's own cold-boot
+    // trace writes (`cap1b_coldboot_hermetic_d6`, the single BAR1 write, offset 0x9008c).
+    assert_eq!(
+        plane.read(1, 0x0009_008C, 4),
+        ReadOutcome::FbWindow(FbWindow::FbAperture)
+    );
+    // (3) The instance/BAR2 window — the one the traces hammer 177856 / 214552 times.
+    assert_eq!(
+        plane.read(2, 0x0000_0000, 4),
+        ReadOutcome::FbWindow(FbWindow::InstanceWindow)
+    );
+    // A register offset nobody owns is still exactly that, and is NOT swept in here.
+    assert_eq!(plane.read(0, 0x0055_5555, 4), ReadOutcome::Unclaimed);
+
+    let c = plane.counters();
+    assert_eq!(c.fb_window_reads, 3, "three windows, three reads");
+    assert_eq!(
+        c.unclaimed_reads, 1,
+        "★ and exactly ONE unclaimed read — the framebuffer reads must not also land here"
+    );
+
+    // Writes: the case that costs a page-table entry rather than a register value.
+    let w = plane.write(2, 0x0000_1000, 4, 0xDEAD_BEEF);
+    assert_eq!(w.fb_window, Some(FbWindow::InstanceWindow));
+    assert!(!w.claimed);
+    let w2 = plane.write(0, 0x0055_5555, 4, 1);
+    assert_eq!(w2.fb_window, None, "a register write names no window");
+
+    let c = plane.counters();
+    assert_eq!(c.fb_window_writes, 1);
+    assert_eq!(
+        c.unclaimed_writes, 1,
+        "★ the dropped framebuffer write must not be counted as a dropped register write"
+    );
+
+    // ★★ The sample names WHICH, not merely how many — an operator holding a boot that
+    // ended in a missing mapping needs the addresses.
+    let sample = plane.fb_window_sample();
+    assert!(sample.contains(&(FbWindow::Pramin, 0x0077_7777)));
+    assert!(sample.contains(&(FbWindow::FbAperture, 0x0009_008C)));
+    assert!(sample.contains(&(FbWindow::InstanceWindow, 0x0000_1000)));
+    assert!(
+        !plane
+            .unclaimed_sample()
+            .iter()
+            .any(|&(_, off)| off == 0x0077_7777),
+        "the PRAMIN offset must not appear in the unclaimed sample at all"
+    );
+}
+
+/// ★★★ The window is the **chip's** declaration, not this plane's constant.
+///
+/// The second chip puts `PRAMIN` somewhere else and makes it a different size. A plane that
+/// had hard-coded GA10x's `0x0070_0000 + 1 MiB` — which is exactly what a first
+/// implementation would do — passes the test above and fails this one.
+#[test]
+fn the_framebuffer_windows_come_from_the_chip_row_and_not_from_the_plane() {
+    use kayfabe_device::FbWindow;
+
+    let plane = RegPlane::new(&OTHER, abi(), test_clock()).expect("servable");
+    // Inside GA10x's PRAMIN, outside this chip's. It is a register offset here.
+    assert_eq!(plane.read(0, 0x0077_7777, 4), ReadOutcome::Unclaimed);
+    // Inside THIS chip's declared window.
+    assert_eq!(
+        plane.read(0, 0x00A0_0004, 4),
+        ReadOutcome::FbWindow(FbWindow::Pramin)
+    );
+    // …and one byte past its end is a register again, so the length is read too.
+    assert_eq!(plane.read(0, 0x00A2_0000, 4), ReadOutcome::Unclaimed);
+    let c = plane.counters();
+    assert_eq!(c.fb_window_reads, 1);
+    assert_eq!(c.unclaimed_reads, 2);
+}
+
+/// ★★ A chip with **no** framebuffer aperture must not have accesses attributed to one.
+///
+/// `bars_for_aperture!` declares the register aperture and nothing else, so rows 1 and 2 are
+/// absent — RM's own spelling for *"this BAR is not present"*
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:407, 416`).
+/// Without the length guard, `fb_window` would answer `FbAperture` for a device that has no
+/// framebuffer window at all, and every such access would be filed as device memory this
+/// port dropped — a diagnosis pointing at a plane that was never involved.
+#[test]
+fn a_chip_that_declares_no_framebuffer_aperture_attributes_nothing_to_one() {
+    let plane = RegPlane::new(&OTHER, abi(), test_clock()).expect("servable");
+    assert_eq!(plane.read(1, 0x1000, 4), ReadOutcome::Unclaimed);
+    assert_eq!(plane.read(2, 0x1000, 4), ReadOutcome::Unclaimed);
+    assert_eq!(plane.counters().fb_window_reads, 0);
+    assert_eq!(plane.counters().unclaimed_reads, 2);
+}
+
+/// ★★ THE BITE for the `PRAMIN` arm of `assert_disjoint`.
+///
+/// A window placed over the GSP block does not merely misattribute: the framebuffer
+/// classification runs **first**, so the falcon registers the boot state machine needs would
+/// stop being served at all and the guest would wait on a doorbell that can never arrive.
+/// That is the stopped-clock failure with a different cause, and it must be a refusal at
+/// realize rather than a boot with no symptom.
+#[test]
+fn a_chip_whose_pramin_window_swallows_a_gsp_register_is_refused_at_realize() {
+    static PRAMIN_OVER_GSP: ChipProfile = ChipProfile {
+        name: "PRAMIN_OVER_GSP (test-only)",
+        pci_device_id: 0x2504,
+        pci_revision: 0,
+        pci_subsystem_vendor_id: 0,
+        pci_subsystem_id: 0,
+        regs_aperture_len: 16 << 20,
+        pci_bars: bars_for_aperture!(16 << 20),
+        boot_regs: &[],
+        ptimer: OTHER_PTIMER,
+        rom_window: RomWindow {
+            base: 0x0030_0000,
+            len: 0x0010_0000,
+        },
+        // Straddles `NV_PGSP` at 0x110000.
+        pramin_window: RegSpan {
+            base: 0x0010_0000,
+            len: 0x0010_0000,
+        },
+        vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
+        msix_vectors: 1,
+        gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
+        engines: OTHER_ENGINES,
+        intr_table: OTHER_INTR,
+        intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
+        fb_regions: OTHER_FB_REGIONS,
+        chip_info: NO_REG_BASES,
+        fb_length: OTHER_FB_LENGTH,
+    };
+    let e = RegPlane::new(&PRAMIN_OVER_GSP, abi(), test_clock()).expect_err("must refuse");
+    assert!(
+        matches!(e, kayfabe_device::ChipError::OverlappingSources { .. }),
+        "expected an overlap refusal, got {e:?}"
+    );
+    assert!(format!("{e}").contains("never be reached"));
 }

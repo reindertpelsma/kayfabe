@@ -991,3 +991,143 @@ second reason `HostRmBackend::fb_read` refuses rather than guesses.
 Also untested, and named rather than claimed: `ProxyRmBackend::fb_read`'s **short-reply**
 refusal. It is only reachable from a child that lies about a byte count, and no
 adversarial-child fixture exists.
+
+## 15. ★★★ STAGE C, THE EMPIRICAL PASS (2026-07-31) — does the core need to READ the
+framebuffer at all?
+
+> **Question put to this pass:** §12 put the bytes in the isolate and stage C3 built
+> `IsolateFb` over them. Two things landed afterwards — the guest-RAM port (stage Q5,
+> `d53d952`) and the forward-populated, witness-based address table — and the hypothesis was
+> that between them the content might be derivable from **witnessed writes** alone, making
+> `FbRead` unnecessary and the architecture question moot.
+>
+> ★★★ **The answer is a bounded (b): the witness is complete on every write path a CPU
+> takes, and provably incomplete on the one a copy engine takes.** The evidence for the
+> first half is stronger than expected and is stated below as a number; the evidence for the
+> second half is a limit of the instrument, and is stated as one.
+
+### 15.1 What was measured, on 2026-07-31, and how
+
+Replaying the committed C reference traces — `nvidia-gpu-passthrough/traces/mode2_c_reference/`,
+`cap1b_coldboot_hermetic_d6` (360 725 records), `cap3_matmul_forwarding` (532 824) and
+`cap2b_stalequeue_nofn47` (862 940), md5-verified against their `MD5SUMS` before use — and
+building a **witness-only framebuffer shadow**: a sparse byte store fed *exclusively* by
+facts this port can know without ever reading device memory. Three sources, and nothing else:
+
+| source | what makes it witness-only |
+|---|---|
+| `PRAMIN` writes | the framebuffer address is `(NV_PBUS_BAR0_WINDOW[23:0] << 16) + (off - 0x700000)` — **untranslated** (`C: nvkvm_gpu_emul.c:904-908`), so it is known from the record alone |
+| the instance/`BAR2` window's root | `bar2PdeBase`, a field **we ourselves fabricate** in `GspStaticConfigInfo` (`C: :3498`, offset 1672) |
+| the `BAR2` root PDE | the value arrives in the guest's own `UPDATE_BAR_PDE` RPC, function 70 (`C: :3509-3524`) — a command we service |
+
+The shadow then had to answer **its own** reads: an access through `BAR1` or a virtual-mode
+`BAR2` is GMMU-translated, and the walk reads page-table entries out of the framebuffer. A
+byte the shadow had never seen written was reported as `UNWITNESSED`, never as zero — the
+same discipline `walker::FbRead` is built to.
+
+### 15.2 ★★★ THE RESULT — the CPU write paths close, completely
+
+| trace | `PRAMIN` writes | `BAR2` virtual-mode writes | `BAR1` writes | resolved by the shadow | `UNWITNESSED` bytes |
+|---|---|---|---|---|---|
+| `cap1b_coldboot_hermetic_d6` | 33 978 | 177 856 | 2 | **211 836 / 211 836** | **0** |
+| `cap3_matmul_forwarding` | 33 978 | 214 552 | 1 511 | **250 041 / 250 041** | **0** |
+| `cap2b_stalequeue_nofn47` | 33 978 | 177 856 | 2 | **211 836 / 211 836** | **0** |
+
+Every `BAR2` walk terminated in a 4 KiB leaf and every `BAR1` walk in a 64 KiB leaf; not one
+walk read a page-table byte the shadow had not itself been handed. The chain is **inductive
+and it closes**: our own `bar2PdeBase` → the guest's own fn-70 root PDE → `0x2efbc3000`,
+which lies inside a range `PRAMIN` had already written → the whole `BAR2` page-table tree →
+every one of the ~200 000 window writes.
+
+⇒ For the CPU paths the answer is **(a), always witnessed**. A shadow suffices; no read of
+device memory is needed to know what a `PRAMIN`, `BAR1` or `BAR2` write put where.
+
+★ **One instrument defect found and corrected mid-pass, recorded because the wrong number
+was published to nobody but nearly was:** the first walker implemented only the `PD0` dual
+PDE's *small* (4 KiB) half and reported **1 511 lost `BAR1` writes** in `cap3` — a plausible,
+alarming, entirely false gap. The C reads the *big* (64 KiB) half as a fallback
+(`C: :4983-4998`), `BAR1` uses big pages, and with the arm added the same 1 511 writes
+resolve. Suspect the instrument first.
+
+### 15.3 ★★ Every way a page table can be written that is NOT a copy-engine copy
+
+The brief asked for this list explicitly, because a witness-based shadow is only as complete
+as the set of write paths it watches. Enumerated from the C and counted in the traces:
+
+1. **`PRAMIN`** (`BAR0` `0x700000`–`0x7FFFFF`, positioned by `NV_PBUS_BAR0_WINDOW` at
+   `0x1700`) — 33 978 writes in **every** capture. Untranslated. **Witnessed.**
+2. **The instance/`BAR2` window in virtual mode** — 177 856 / 214 552. GMMU-translated.
+   **Witnessed inductively**, measured above.
+3. **The instance/`BAR2` window in physical mode** — identity-mapped. Zero in these captures:
+   the window goes virtual when we answer `GET_GSP_STATIC_INFO` (record 141 977 in `cap1b`)
+   and the first `BAR2` write is at record 159 740. **Witnessed** (trivially).
+4. **The framebuffer aperture, `BAR1`** — 2 / 1 511, 64 KiB pages. **Witnessed inductively.**
+5. **Us, as the GSP.** `UPDATE_BAR_PDE` (function 70) writes the `BAR1`/`BAR2` root PDE
+   straight into the framebuffer (`C: :3521, :3527`) — 2 per capture. **Ours by
+   construction.**
+6. **The host GPU, through the overlay.** Where a range is host-backed the real device
+   co-writes bytes behind every recorder (`C: :1445-1457, :5528`) — the same
+   uninstrumented-channel class `c_rust_trace_differential.md` names for `pci_dma_map`.
+   **Not witnessable.** Non-hermetic runs only.
+7. **Not present on any measured path**, and named so the list is not read as partial:
+   `DMA_FILL_PTE_MEM`, the `MEM_OP`/`MMU_TLB_INVALIDATE` pushbuffer method and the
+   `INVALIDATE_TLB` RPC (function 200) all measured **zero** on the GSP-emulated compute
+   path — the §5 correction this document's §13.4 already carries.
+
+### 15.4 ⚠ THE HALF THAT DOES NOT CLOSE — and it is the #13 path by name
+
+A copy-engine page-table write whose **source is guest sysmem** is witnessed: the C reads it
+per word through `nvkvm_phys_rd32`, and `cap3` carries 2 236 contiguous runs of such reads
+(121 851 words in runs of ≥ 16), which this port could serve from the stage-Q5 guest-RAM
+port. That much of hypothesis (1) is confirmed, on the 2026-07-31 replay of
+`cap3_matmul_forwarding` described in §15.1.
+
+But a **framebuffer-to-framebuffer** copy is a bulk `memcpy` between two host pointers
+(`C: :6414-6417`) and the C's own `#13` comment says these *"land here through `fb_host_ptr`
+and BYPASS `nvkvm_fb_write`"*. That is exactly the CeUtils 512 MiB-alias page-table write.
+Its source page is framebuffer memory, so a shadow can only serve it if that page's content
+was itself witnessed — an induction one step deeper than the one §15.2 closed.
+
+⊘ **I could not determine whether that induction closes.** The recorder observes MMIO
+windows and guest-RAM DMA; it does **not** observe framebuffer accesses at all, so no
+question of the form *"was this framebuffer page ever written by a path we watch?"* is
+answerable from these five captures. It is not a negative result and must not be reported as
+one. Settling it needs either a capture with a framebuffer-access record kind, or an
+argument from the guest RM's source about where CeUtils stages its page-table entries.
+
+⇒ Case **(b)**, and the shape is named: **framebuffer-to-framebuffer copy-engine writes, and
+the host GPU's overlay writes.** Everything else is (a).
+
+### 15.5 ★★★ WHY THIS DOES NOT REOPEN §12 — and what it does open
+
+It would be a misreading to take §15.2 as *"so build the shadow and drop `FbRead`"*. §12's
+design is **strictly stronger than a shadow** on exactly the two shapes §15.4 names: it reads
+*memory* rather than replaying observations, so a page written by a copy we performed is
+readable whether or not we can reconstruct the write, and a page the host GPU co-wrote is
+readable because it is the same memory. A shadow is a *weaker* mechanism that happens to
+suffice for the paths a CPU takes. **§12 stands.**
+
+What §15 does open is smaller, concrete and was invisible before it was counted:
+
+★★ **This port does not model any of the three framebuffer windows, and 211 836 accesses in
+the cold boot plus 250 041 in the matmul go through them** (2026-07-31; the per-window split
+is §15.2's table). Before this pass every one fell into
+`RegPlane`'s *unclaimed register* bucket — an offset "no source claimed", answered with a
+defaulted zero. That bucket's argument (module docs, *"an unclaimed register reads ZERO"*)
+turns on the offset naming a **register**; it does not extend to device memory, where a
+defaulted zero is a well-formed page of invalid page-table entries and a dropped write is a
+dropped mapping.
+
+**Built this pass** (`kayfabe_device::FbWindow`, `Counters::fb_window_reads` /
+`fb_window_writes`, `RegPlane::fb_window_sample`, carried across the C seam in
+`KayfabeRegAudit` at ABI 6): the three windows are classified **by the chip row**, before the
+unclaimed arm, and refused **by name**. Nothing serves a framebuffer byte and nothing decides
+where the framebuffer lives — that is still §11-O1 and §12.
+
+★ **The finding that made it worth building (2026-07-31), and it is a measurement of
+this repository rather than of the C** — it is pinned by
+`crates/kayfabe-device/tests/chip_table.rs`: two independent fixtures here — `device_recycle.rs`'s
+`NOBODYS_OFFSET` and `shim_logic.rs`'s *"an offset nobody owns"* — had both chosen
+`0x0077_7777`, which is inside `PRAMIN`. Both were asserting that a **framebuffer** access
+was an unclaimed register, and both were green. The classification turned them red on the
+first run, which is the non-vacuity evidence for it.
