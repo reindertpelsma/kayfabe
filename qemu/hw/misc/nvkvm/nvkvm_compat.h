@@ -8,9 +8,13 @@
  * facility that did not exist yet.  Nothing in nvkvm.c branches on a version; nothing in Rust
  * does either.
  *
- * VERIFIED AGAINST, by building: 9.2.0 and 10.2.4.  The range in between is INFERRED from the
- * release the header rename landed in and has NOT been built.  Said here rather than
- * discovered by a user.
+ * VERIFIED AGAINST, by building: 9.2.0, **10.0.0** and 10.2.4.
+ *
+ * ★★ 10.0.0 was added on 2026-07-30 and it REFUTED the inference this line used to carry.
+ * The old text said the in-between range was "INFERRED from the release the header rename
+ * landed in and has NOT been built"; built, it did not compile at all, because `kvm.h` and
+ * `memory.h` moved into `system/` in DIFFERENT cycles and one probe stood in for both. See
+ * the per-header detection below. 10.1 remains un-built and is still an inference.
  */
 
 #ifndef NVKVM_COMPAT_H
@@ -52,27 +56,62 @@
 #endif
 
 /*
- * The headers moved out of exec/ and sysemu/ into system/ during the 10.0 cycle.  Detected
- * rather than versioned, so a backport or a distribution patch cannot get this wrong.
+ * The headers moved out of exec/ and sysemu/ into system/ across the 10.0 and 10.1 cycles.
+ * Detected rather than versioned, so a backport or a distribution patch cannot get this wrong.
+ *
+ * ★★ AND DETECTED **PER HEADER**, because THEY DID NOT MOVE TOGETHER — MEASURED 2026-07-30
+ * by building against v10.0.0, which is exactly the "INFERRED, has NOT been built" range this
+ * file used to name.  At 10.0.0:
+ *
+ *     include/system/kvm.h      PRESENT      include/sysemu/kvm.h    absent
+ *     include/system/memory.h   absent       include/exec/memory.h   PRESENT
+ *
+ * One probe for both therefore chose the OLD branch on the strength of memory.h and then
+ * included `sysemu/kvm.h`, which was already gone:
+ *
+ *     nvkvm_compat.h:69:12: fatal error: sysemu/kvm.h: No such file or directory
+ *
+ * The whole 10.0 series was unbuildable, and nothing said so, because nothing in this
+ * repository ever compiled this file — `scripts/run_full_suite.sh`'s `qom-shim` phase is the
+ * first thing that does, and this was its first finding.
+ *
+ * ★ The lesson is the file's own doctrine turned on itself: "detected rather than versioned"
+ * is only true if each fact has its OWN detection.  A single probe standing in for several
+ * facts is a version check wearing a feature check's clothes, and it is wrong precisely in
+ * the window where the facts disagree.
  */
 #if defined(__has_include)
 #  if __has_include("system/memory.h")
-#    define NVKVM_SYSTEM_HEADERS 1
+#    define NVKVM_SYSTEM_HEADERS 1        /* memory.h — and see NVKVM_CLASS_DATA below */
+#  endif
+#  if __has_include("system/kvm.h")
+#    define NVKVM_SYSTEM_KVM_H 1
 #  endif
 #endif
 
 #ifdef NVKVM_SYSTEM_HEADERS
 #  include "system/memory.h"
-#  include "system/kvm.h"
 #else
 #  include "exec/memory.h"
+#endif
+
+#ifdef NVKVM_SYSTEM_KVM_H
+#  include "system/kvm.h"
+#else
 #  include "sysemu/kvm.h"
 #endif
 
 /*
- * `class_init`'s data pointer gained a `const` in the same cycle as the header rename.  It
+ * `class_init`'s data pointer gained a `const` in the same cycle as MEMORY.H's rename.  It
  * cannot be feature-detected — a function-pointer signature has no preprocessor presence — so
- * this one rides on the rename, which is the closest available proxy.
+ * this one rides on that rename, which is the closest available proxy.
+ *
+ * ★ Now with one measured data point rather than none: at v10.0.0 `system/memory.h` is absent
+ * AND `class_init` still takes a plain `void *data` (`include/qom/object.h:489`), so the two
+ * do move together and the proxy is right there.  It is `system/kvm.h` that broke ranks —
+ * hence the separate probe above.  A proxy with a measurement behind it is still a proxy;
+ * the next tree that disagrees is a `-Wincompatible-pointer-types` at build time, which is
+ * the failure mode this pairing can afford.
  */
 #ifdef NVKVM_SYSTEM_HEADERS
 #  define NVKVM_CLASS_DATA const void
