@@ -116,6 +116,21 @@
 //! That settles **layout**: `rpc.length = 1356 = 32 + 40 + 1284`, a 4-byte count then 64
 //! 20-byte entries. ⊘ It settles nothing about **which** falcons to name — see above, where
 //! this port declines the oracle's eight.
+//!
+//! ## ★★★ The boot, measured
+//!
+//! `[measured]` run `t134a`, a stock 580.159.04 guest at `1c79474`, one `nvidia-smi` on a
+//! fresh boot. The empty inventory is **accepted**: `gpuBuildGenericKernelFalconList @
+//! gpu.c:5368, 2126` is gone from the guest's log, `RmInitAdapter failed! (0x23:0x56:1206)`
+//! with it, and the boot leaves `gpuPreInit` entirely — its dmesg reaches
+//! `gpuStatePreInit_IMPL @ gpu.c:2204` and then `gpuStateInit_IMPL`. Host-side, `commands`
+//! went 8 → 27 and distinct unserviced 1 → 6.
+//!
+//! ★★ So a guest that constructs **no** generic kernel falcon proceeds: nothing between
+//! `:2126` and `gpuStateInit` asked for one, which is the boot-time half of the argument
+//! above turned from `[inferred]` into a measurement. ⊘ The *runtime* half — that a client
+//! allocating a falcon-backed engine class gets `NV_ERR_INVALID_CLASS` — is still
+//! `[inferred]`: no boot has reached a channel allocation.
 
 /// `NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:4472`).

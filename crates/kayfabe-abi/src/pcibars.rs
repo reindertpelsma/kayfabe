@@ -37,36 +37,42 @@
 //!
 //! ## ⚠ THIS REPLY HAS STILL NEVER BEEN EXERCISED BY A GUEST — and the reason is measured
 //!
-//! It is oracle-pinned and unit-tested, but no boot has yet asked for it, so everything
-//! below the layout is **inference**. `kbusInitBarsSize_KERNEL` is reached from
-//! `kbusStatePreInitLocked_GM107`, i.e. from the engine-descriptor `engstateStatePreInit`
-//! loop that `gpuPreInit` runs at `ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:2146-2170`.
-//! ⊘ So the guest has not merely declined to ask — it has not yet executed the code that
-//! would, and the whole question is *how far down `gpuPreInit` the boot gets*.
+//! ★★★ **`[measured]` run `t134a`, a stock 580.159.04 guest at `1c79474`: a live guest has
+//! now asked for this reply, and been served it.** Everything below used to be inference
+//! about a code path no boot reached; the reach is now a measurement and the paragraph
+//! after it records how it was read.
 //!
-//! ★ The distance is now **counted**, not guessed. `[measured]` run `t133a`, a stock
-//! 580.159.04 guest at `c88f803`, cleared `:2125` — the register-access-map rung
-//! ([`crate::regaccessmap`]) — and stopped one line later at `:2126`,
-//! `gpuBuildGenericKernelFalconList`. What still separates the boot from the loop, in
-//! source order:
+//! `kbusInitBarsSize_KERNEL` is reached from `kbusStatePreInitLocked_GM107`, i.e. from the
+//! engine-descriptor `engstateStatePreInit` loop that `gpuPreInit` runs at
+//! `ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:2146-2170`. `t133a` (at `c88f803`) stopped
+//! four statements short of it, at `:2126`. `t134a` served that rung
+//! ([`crate::falconinfo`]) and the boot ran **past the whole loop** — its dmesg reaches
+//! `gpuStatePreInit_IMPL` at `:2204` and then `gpuStateInit_IMPL`, both of which are after
+//! `:2170`.
 //!
-//! | line | statement | asks for |
-//! |---|---|---|
-//! | `:2126` | `gpuBuildGenericKernelFalconList` | `0x208001b0` — **where `t133a` stopped** |
-//! | `:2129` | `gpuBuildKernelVideoEngineList` | — |
-//! | `:2131-2140` | the `PDB_PROP_GPU_MIG_SUPPORTED` block | — |
-//! | `:2143` | `gpuRemoveMissingEngines` | — |
-//! | `:2145` | `pGpu->bFullyConstructed = NV_TRUE` | — |
-//! | `:2146-2170` | the `engstateStatePreInit` loop | **this reply** |
+//! | line | statement | asks for | `t134a` |
+//! |---|---|---|---|
+//! | `:2126` | `gpuBuildGenericKernelFalconList` | `0x208001b0` | served |
+//! | `:2129` | `gpuBuildKernelVideoEngineList` | `0x208001b0` again | served |
+//! | `:2131-2140` | the `PDB_PROP_GPU_MIG_SUPPORTED` block | — | passed |
+//! | `:2143` | `gpuRemoveMissingEngines` | — | passed |
+//! | `:2145` | `pGpu->bFullyConstructed = NV_TRUE` | — | passed |
+//! | `:2146-2170` | the `engstateStatePreInit` loop | **this reply** | **reached** |
 //!
-//! ⊘ Only the first of those five has been shown to ask for anything; the other four are
-//! `[inferred]` from the source and may each be a rung of their own. So the honest
-//! statement is not *"one more rung"* — it is *"at most four statements, at least one of
-//! which the ledger has already named"*.
+//! ★★ **How "served" was read, since the ledger only lists refusals.** `t134a`'s host-side
+//! ledger names six distinct unserviced controls and `0x20801803` is **not among them**,
+//! while `0x20800af3` and `0x20800aac` — which the oracle `cap1b` carries *after* it, at
+//! `rpc.sequence` 13 and 14 against this reply's 12 — **are**. A control that was asked and
+//! refused would appear; one that was never reached could not be followed by two that were.
+//! Together with the dmesg reaching `:2204`, that is the reply being asked for and answered.
 //!
-//! The first boot that clears all of them is the one that can witness this reply, and the
-//! thing to read then is whether `pciBarCount = 4` survives into `pKernelBus->pciBars[]`
-//! without the page fault this module's `[measured]` run `t126b` recorded above.
+//! ⊘ **What that does NOT establish.** The thing this module said to read then was *"whether
+//! `pciBarCount = 4` survives into `pKernelBus->pciBars[]` without the page fault run
+//! `t126b` recorded"*. The absence of a `kern_bus.c` line in `t134a`'s NVRM log is
+//! consistent with that and is **not** the same as observing the array. `t134a` ended in a
+//! guest-kernel `Oops` from an unrelated refusal (`kayfabe_device::unserviced` carries the
+//! chain), so nothing downstream of the heap was exercised. `barOffset` is still served as
+//! zero — see below — and no boot has yet shown a consumer reading it.
 //!
 //! ⊘ The oracle settles **nothing about the values**. Its `barOffset` fields are the *host*
 //! board's physical addresses (`0xc000_0000`, `0x10_0000_0000`, `0x10_1000_0000`) and its

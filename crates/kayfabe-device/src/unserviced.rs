@@ -21,11 +21,12 @@
 //! **act** on — it names the first thing the driver actually needed. It is not a property
 //! that lets anyone answer *how long the list is*. This does, in one boot.
 //!
-//! ## ★★★ What it has actually answered — five boots, five rungs, one entry each
+//! ## ★★★ What it has actually answered — five boots of one rung each, and then `t134a`
 //!
 //! `[measured]` on the bench, a stock 580.159.04 guest driven with `nvidia-smi`, one boot
-//! per revision. The whole point of the table is the **right-hand column**: the question
-//! *"does refusing by default surface everything at once?"* has an answer, and it is no.
+//! per revision. The table's point was always the **right-hand column**: the question
+//! *"does refusing by default surface everything at once?"* had an answer, and it was no —
+//! **for five boots**. The sixth is the counterexample, and it is the more useful row.
 //!
 //! | run | revision | `commands` | distinct unserviced | what the guest said |
 //! |---|---|---|---|---|
@@ -34,18 +35,43 @@
 //! | `t127c` | `110c857` | 6 | **1** — `fn 76 cmd 0x20800a36` | `_gpuInitChipInfo … @ gpu.c:886, 2124` |
 //! | `t132a` | `f83ce31` | 7 | **1** — `fn 76 cmd 0x20800a41` | `gpuConstructUserRegisterAccessMap … @ gpu_register_access_map.c:244, gpu.c:2125` |
 //! | `t133a` | `c88f803` | 8 | **1** — `fn 76 cmd 0x208001b0` | `gpuBuildGenericKernelFalconList … @ gpu.c:5368, 2126` |
+//! | `t134a` | `1c79474` | **27** | **6** — `0x20800a87`, `0x20800a40`, `0x20800a1c`, `0x20800a4b`, `0x20800af3`, `0x20800aac` | `gpuConstructDeviceInfoTable_HAL … @ kernel_fifo.c:2208`, then a guest-kernel `Oops` |
 //!
-//! ★★ Five for five, and the last three walk `gpuPreInit` **one adjacent line at a time** —
-//! `:2124`, `:2125`, `:2126` — so the ledger and the guest agree not merely on *which*
-//! control but on the exact statement that consumed it. `[measured]` run `t132a` answered
-//! `0x20800a36` from the chip row and the boot moved one line; `[measured]` run `t133a`
-//! answered `0x20800a41` from the chip row and it moved one more.
+//! ★★ The first five walk `gpuPreInit` **one adjacent line at a time** — `:2124`, `:2125`,
+//! `:2126` — so the ledger and the guest agreed not merely on *which* control but on the
+//! exact statement that consumed it.
 //!
-//! ⊘ **The `commands` column is not a queue length and does not predict the next rung.** It
-//! goes 3, 5, 6, 7, 8 — one per rung — which invites reading it as *"the guest asks for one
-//! more thing each time"*. It is not: it is *"exactly one new control per boot has been
-//! reached at all"*, which is the same statement as the right-hand column and adds nothing
-//! to it. A single rung whose caller issues four controls would move it by four.
+//! ## ★★★ `t134a`: the one-rung property was a property of `gpuPreInit`, not of refusing
+//!
+//! `[measured]` at `1c79474`, the boot that served the constructed-falcon inventory left
+//! `gpuPreInit` altogether. `commands` went 8 → **27** and distinct unserviced went 1 → **6**
+//! in a single step. Nothing about the default changed; what changed is *which loop the
+//! guest was in*.
+//!
+//! `gpuPreInit`'s statements are a chain of `NV_ASSERT_OK_OR_GOTO`s: the first refusal ends
+//! the function, so exactly one control can be reached per boot and the ledger reads like a
+//! ladder. `gpuStatePreInit_IMPL` is **not** that shape — it iterates the engine list, logs
+//! *"disallowing NV_ERR_NOT_SUPPORTED PreInit removal of untracked engine"*
+//! (`ogkm-580: gpu.c:2204`) and **carries on**. So one boot now surfaces every control the
+//! whole engine sweep wants, which is why `kfifoConstructEngineList_HAL` /
+//! `gpuConstructDeviceInfoTable_HAL` appear a dozen times over.
+//!
+//! ⊘ **So the `commands` column never was a queue length, and now it visibly is not.** It
+//! went 3, 5, 6, 7, 8 — one per rung — which invited reading it as *"the guest asks for one
+//! more thing each time"*. It never meant that; it meant *"exactly one new control per boot
+//! has been reached at all"*, and `t134a` shows what the column does the moment that stops
+//! holding.
+//!
+//! ⚠ **`t134a` ended in a guest-kernel NULL dereference, and the chain is worth naming.**
+//! `kmemsysInitStaticConfig_HAL` was refused (`ogkm-580: kern_mem_sys.c:122`), so
+//! `gpuStatePreInit` declined to remove `KernelMemorySystem` and continued with it
+//! unconstructed; `kern_mem_sys.c:364`'s `pKernelMemorySystem != NULL` is an
+//! `nvAssertFailedNoLog` that **does not return**; and
+//! `memmgrGetBlackListPagesForHeap_GM107` then dereferenced it under
+//! `heapInit_IMPL ← memmgrCreateHeap_IMPL ← memmgrStateInitLocked_IMPL ← gpuStateInit_IMPL`.
+//! `nvidia-smi` therefore **hangs** rather than failing, which is a different observable
+//! from every earlier rung and must not be read as progress stalling. The refusal is
+//! correct; RM's handling of it past `gpuPreInit` is not fail-safe.
 //!
 //! ★ The guest and the ledger name the **same** thing every time, from opposite sides, and
 //! `0x56` is this port's own `NV_ERR_NOT_SUPPORTED` arriving verbatim — so the envelope
@@ -54,7 +80,8 @@
 //! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` — the next rung, named without a boot spent
 //! finding out. The fifth row names
 //! `NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO` (`ogkm-580: ctrl2080gpu.h:4472`) the
-//! same way.
+//! same way. ★★★ The sixth row names **six**, and `0x20800a40` is the one the guest's own
+//! first `LEVEL_ERROR` agrees with.
 //!
 //! ⊘ `t127c`'s counters span **two** `nvidia-smi` attempts in one QEMU life; the second
 //! stopped at `_kgspBootGspRm: unexpected WPR2 already up` before sending anything, which
