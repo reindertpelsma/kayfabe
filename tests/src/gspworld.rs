@@ -349,6 +349,7 @@ pub const FUNCTIONS: FunctionCodes = FunctionCodes {
     continuation_record: 71,
     gsp_set_system_info: 72,
     set_registry: 73,
+    ecc_notifier_write_ack: 202,
     gsp_rm_control: 76,
     gsp_rm_alloc: 103,
     gsp_init_done: 0x1001,

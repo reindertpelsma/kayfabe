@@ -26,7 +26,14 @@
 //! |---|---|---|
 //! | must reply, synchronously | `UNLOADING_GUEST_DRIVER` (47) | `rpcUnloadingGuestDriver_v1F_07` ends in `_issueRpcAndWait` (`ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:9146-9170`, `ogkm-580: :9168-9192` — same function, both tags, the two differing only in the message-buffer accessor) — an unanswered fn-47 blocks `rmmod` for the whole RPC timeout |
 //! | reply expected | everything else the guest sends as a command | the reply is matched on `(function, sequence)` (`ogkm-610: kernel_gsp.c:1824-1828`, `ogkm-580: :1775-1779` — byte-identical) |
-//! | **no** reply | `GSP_SET_SYSTEM_INFO` (72), `SET_REGISTRY` (73) | both end in `_issueRpcAsync` (`ogkm-610: rpc.c:10466` and `:10503`'s own comment *"SET_REGISTRY is async RPC"*; `ogkm-580: rpc.c:10656` and `:10696` — same two functions, same dispositions); echoing them shows up in the driver as an unexpected event and desyncs the seqNum (`C: src/qemu/nvkvm_gpu_emul.c:2410-2416`) |
+//! | **no** reply | `GSP_SET_SYSTEM_INFO` (72), `SET_REGISTRY` (73), `ECC_NOTIFIER_WRITE_ACK` (202) | every `_issueRpcAsync`/`_issueRpcAsyncLarge` call site in the driver, and nothing else — `ogkm-580: rpc.c:10656`, `:10728`/`:10733`, `:11376`; `ogkm-610: :10466`, `:10533`/`:10538`, `:11184`. Echoing one shows up in the driver as an unexpected event and desyncs the seqNum (`C: src/qemu/nvkvm_gpu_emul.c:2410-2416`) |
+//!
+//! ★★ **That third row was missing, and it was missing because the set was read off our
+//! own code.** `tests/tests/rpc_async_set_oracle.rs` now derives it from `rpc.c` instead:
+//! it finds every async call site, walks back to each one's `rpcWriteCommonHeader`,
+//! resolves the name through the X-macro table, and requires the result to equal this
+//! set exactly. A hand-written list cannot detect a shared misreading, and it shortens
+//! with no red test.
 //!
 //! ## What this stage deliberately does not decode
 //!
@@ -101,6 +108,19 @@ pub struct FunctionCodes {
     pub gsp_set_system_info: u32,
     /// `SET_REGISTRY` — init RPC, no reply.
     pub set_registry: u32,
+    /// `ECC_NOTIFIER_WRITE_ACK` (202) — the **third** `_issueRpcAsync` sender, and the one
+    /// this port had missed.
+    ///
+    /// `rpcEccNotifierWriteAck_v23_05` writes the common header and ends in
+    /// `_issueRpcAsync` (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11359-11379`, the call
+    /// at `:11376`), so nothing awaits a reply. The id is `X(RM, ECC_NOTIFIER_WRITE_ACK,
+    /// 202)` (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc_global_enums.h:212`).
+    ///
+    /// ★ It is in this table for the same reason every other entry is: something
+    /// downstream consumes it — [`RpcFunction::disposition`]. Answering it would post a
+    /// reply the guest never awaits, which surfaces as an unsolicited message and hits
+    /// `NV_ASSERT(0)` in the bootup poll (`ogkm-580: kernel_gsp.c:1464-1482`).
+    pub ecc_notifier_write_ack: u32,
     /// `GSP_RM_CONTROL`.
     pub gsp_rm_control: u32,
     /// `GSP_RM_ALLOC`.
@@ -127,7 +147,7 @@ pub struct FunctionCodes {
 
 impl FunctionCodes {
     /// Every id, for the distinctness check.
-    fn all(&self) -> [u32; 15] {
+    fn all(&self) -> [u32; 16] {
         [
             self.set_guest_system_info,
             self.set_guest_system_info_ext,
@@ -139,6 +159,7 @@ impl FunctionCodes {
             self.continuation_record,
             self.gsp_set_system_info,
             self.set_registry,
+            self.ecc_notifier_write_ack,
             self.gsp_rm_control,
             self.gsp_rm_alloc,
             self.gsp_init_done,
@@ -182,6 +203,7 @@ impl FunctionCodes {
             c if c == self.continuation_record => RpcFunction::ContinuationRecord,
             c if c == self.gsp_set_system_info => RpcFunction::GspSetSystemInfo,
             c if c == self.set_registry => RpcFunction::SetRegistry,
+            c if c == self.ecc_notifier_write_ack => RpcFunction::EccNotifierWriteAck,
             c if c == self.gsp_rm_control => RpcFunction::RmControl,
             c if c == self.gsp_rm_alloc => RpcFunction::RmAlloc,
             c if c == self.gsp_init_done => RpcFunction::InitDone,
@@ -235,6 +257,8 @@ pub enum RpcFunction {
     GspSetSystemInfo,
     /// `SET_REGISTRY` — init RPC, asynchronous.
     SetRegistry,
+    /// `ECC_NOTIFIER_WRITE_ACK` — an acknowledgement the guest sends and never awaits.
+    EccNotifierWriteAck,
     /// `GSP_RM_CONTROL`.
     RmControl,
     /// `GSP_RM_ALLOC`.
@@ -270,7 +294,9 @@ impl RpcFunction {
     #[must_use]
     pub fn disposition(self) -> Disposition {
         match self {
-            RpcFunction::GspSetSystemInfo | RpcFunction::SetRegistry => Disposition::NoReply,
+            RpcFunction::GspSetSystemInfo
+            | RpcFunction::SetRegistry
+            | RpcFunction::EccNotifierWriteAck => Disposition::NoReply,
             RpcFunction::UnloadingGuestDriver => Disposition::ReplyRequired,
             _ => Disposition::Reply,
         }

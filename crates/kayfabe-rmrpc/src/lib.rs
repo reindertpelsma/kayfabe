@@ -937,7 +937,15 @@ pub fn translate(
         | RpcFunction::InitGspTraceCrashBuffer
         | RpcFunction::UnloadingGuestDriver
         | RpcFunction::GspSetSystemInfo
-        | RpcFunction::SetRegistry => Ok(Translation::Inert),
+        | RpcFunction::SetRegistry
+        // ★ `EccNotifierWriteAck` is inert here for a reason worth naming rather than
+        // folding silently: it is an **acknowledgement**, not a request. The guest is
+        // telling its GSP *"I finished writing the ECC notifier"*, sends it with
+        // `_issueRpcAsync` and awaits nothing (`ogkm-580: rpc.c:11359-11379`). It declares
+        // no object, frees none and names none, so there is nothing here to translate —
+        // and the transport layer does not answer it at all
+        // (`kayfabe_gsp::RpcFunction::disposition`).
+        | RpcFunction::EccNotifierWriteAck => Ok(Translation::Inert),
         // ★★ B6, and the one arm whose answer is a property of this function's
         // signature. A continuation record is a *transport fragment*: it carries a raw
         // byte slice and no function of its own, so one message's worth of it cannot be

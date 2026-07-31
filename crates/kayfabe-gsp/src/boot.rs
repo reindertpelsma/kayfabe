@@ -1201,7 +1201,7 @@ impl GspFsm {
     /// instrumentation.
     ///
     /// ⊘ A [`Disposition::NoReply`] command is still not replied to, refusal included:
-    /// posting anything for fn-72/73 surfaces in the driver as an unexpected event and
+    /// posting anything for fn-72/73/202 surfaces in the driver as an unexpected event and
     /// desyncs the sequence.
     fn answer(
         &mut self,
@@ -1212,14 +1212,18 @@ impl GspFsm {
     ) -> Result<(), GspFault> {
         let disposition = cmd.function.disposition();
         if disposition == Disposition::NoReply {
-            // 72/73 are both issued asynchronously and neither is awaited:
+            // 72/73/202 are all issued asynchronously and none is awaited:
             // `GSP_SET_SYSTEM_INFO` calls `_issueRpcAsync`
-            // (`ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:10466`, `ogkm-580: :10656`) and
+            // (`ogkm-610: src/nvidia/src/kernel/vgpu/rpc.c:10466`, `ogkm-580: :10656`);
             // `SET_REGISTRY` takes `_issueRpcAsyncLarge` or `_issueRpcAsync` depending on
             // whether the packed registry table fits one message
-            // (`ogkm-610: :10533`/`:10538`, `ogkm-580: :10728`/`:10733`). Identical shape at
-            // both tags. Echoing them
-            // surfaces in the driver as an unexpected event and desyncs the sequence.
+            // (`ogkm-610: :10533`/`:10538`, `ogkm-580: :10728`/`:10733`); and
+            // `ECC_NOTIFIER_WRITE_ACK` calls `_issueRpcAsync` (`ogkm-610: :11184`,
+            // `ogkm-580: :11376`). Identical shape at both tags, and those are ALL the
+            // async call sites in the driver — `tests/tests/rpc_async_set_oracle.rs`
+            // derives the set from `rpc.c` rather than trusting this comment, which is how
+            // the third one was found. Echoing one surfaces in the driver as an unexpected
+            // event and desyncs the sequence.
             return Ok(());
         }
         // ★★★ **THE DEFAULT IS A NAMED REFUSAL** (task #127). A policy that has no answer

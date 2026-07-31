@@ -600,6 +600,20 @@ that codegen gives shapes and never protocol.",
                     // `kayfabe_device::inert`, which acknowledges it and does nothing —
                     // deliberately, and with the reason written down there.
                     "INIT_GSP_TRACE_CRASH_BUFFER",
+                    // ★★ Added 2026-07-31 (GSP-D3) — the **third** `_issueRpcAsync`
+                    // sender, and the one this port had missed. The set was written
+                    // from our own code (fn 72 and fn 73, both real) rather than
+                    // derived from the driver, and a hand-written list is exactly the
+                    // shape that goes stale in silence. Derived now, and the
+                    // derivation is a test: `tests/tests/rpc_async_set_oracle.rs`
+                    // scans `rpc.c` for every call site of `_issueRpcAsync` /
+                    // `_issueRpcAsyncLarge`, walks back to each one's
+                    // `rpcWriteCommonHeader`, and requires the resulting id set to be
+                    // exactly `Disposition::NoReply`'s.
+                    // `rpcEccNotifierWriteAck_v23_05`: `ogkm-580: rpc.c:11359-11379`,
+                    // `ogkm-610: rpc.c:11170-11188`. The consumer is
+                    // `kayfabe_gsp::RpcFunction::disposition`.
+                    "ECC_NOTIFIER_WRITE_ACK",
                 ],
                 doc: "RPC function IDs (`rpc_global_enums.h`, `X(RM, NAME, id)`).",
             },
