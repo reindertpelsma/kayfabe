@@ -32,6 +32,38 @@
 //! The zeros here are a claim this module names, guards and can be argued with; an inert
 //! reply would be the absence of one.
 //!
+//! ## ★★★ What answering it bought — one rung, measured
+//!
+//! `[measured]` run `t133a`, a stock 580.159.04 guest at `c88f803`, driven with
+//! `nvidia-smi`. `gpuConstructUserRegisterAccessMap` succeeded and the boot moved to the
+//! **next line** of `gpuPreInit`:
+//!
+//! ```text
+//! NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED]
+//!       (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient,
+//!       pGpu->hInternalSubdevice, NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
+//!       pParams, sizeof(*pParams)) @ gpu.c:5368
+//! NVRM: nvAssertOkFailedNoLog: Assertion failed: … returned from
+//!       gpuBuildGenericKernelFalconList(pGpu) @ gpu.c:2126
+//! NVRM: RmInitNvDevice: *** Cannot pre-initialize the device
+//! NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x23:0x56:1206)
+//! ```
+//!
+//! and `kayfabe_device::unserviced`'s host-side ledger read
+//! `8 decoded, 1 UNSERVICED, 1 distinct → fn 76 cmd 0x208001b0` — the same control, named
+//! from the other side. `gpu.c:2125` is this one and `:2126` is its successor, so the two
+//! sides agree on the **statement** and not merely on the control.
+//!
+//! ⊘ This is a boot that *cleared* the line, not a boot that read the map. Nothing here
+//! exercised `gpuGetUserRegisterAccessPermissions`, because `nvidia-smi` runs as root and
+//! `osIsAdministrator()` short-circuits the check (`ogkm-580: gpu_access.c:1632`). The
+//! zero-map answer is therefore **accepted**, and its *permission* behaviour remains
+//! `[inferred]`.
+//!
+//! ⊘ And it did not reach [`crate::pcibars`]' reply either: `kbusInitBarsSize_KERNEL` runs
+//! in the `engstateStatePreInit` loop at `ogkm-580: gpu.c:2146-2170`, still four statements
+//! below where `t133a` stopped. That module's docs carry the count.
+//!
 //! ## ★★★ What a bitmap actually is — a policy, not a description
 //!
 //! One bit per 32-bit register of BAR0, set = *userspace may `NV2080_CTRL_CMD_GPU_EXEC_REG_OPS`

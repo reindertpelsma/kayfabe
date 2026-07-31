@@ -38,16 +38,35 @@
 //! ## ⚠ THIS REPLY HAS STILL NEVER BEEN EXERCISED BY A GUEST — and the reason is measured
 //!
 //! It is oracle-pinned and unit-tested, but no boot has yet asked for it, so everything
-//! below the layout is **inference**. `[measured]` run `t132a`, a stock 580.159.04 guest at
-//! `f83ce31`: the boot ends at `gpuConstructUserRegisterAccessMap` (`gpu.c:2125`), and
-//! `kbusInitBarsSize_KERNEL` is reached from `kbusStatePreInitLocked_GM107`, i.e. from the
-//! engine-descriptor `engstateStatePreInit` loop that `gpuPreInit` runs *after* that line
-//! (`ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:2146-2170`). ⊘ So the guest has not merely
-//! declined to ask — it has not yet executed the code that would.
+//! below the layout is **inference**. `kbusInitBarsSize_KERNEL` is reached from
+//! `kbusStatePreInitLocked_GM107`, i.e. from the engine-descriptor `engstateStatePreInit`
+//! loop that `gpuPreInit` runs at `ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:2146-2170`.
+//! ⊘ So the guest has not merely declined to ask — it has not yet executed the code that
+//! would, and the whole question is *how far down `gpuPreInit` the boot gets*.
 //!
-//! The first boot that clears `gpu.c:2125` is the one that can witness it, and the thing to
-//! read then is whether `pciBarCount = 4` survives into `pKernelBus->pciBars[]` without the
-//! page fault this module's `[measured]` run `t126b` recorded above.
+//! ★ The distance is now **counted**, not guessed. `[measured]` run `t133a`, a stock
+//! 580.159.04 guest at `c88f803`, cleared `:2125` — the register-access-map rung
+//! ([`crate::regaccessmap`]) — and stopped one line later at `:2126`,
+//! `gpuBuildGenericKernelFalconList`. What still separates the boot from the loop, in
+//! source order:
+//!
+//! | line | statement | asks for |
+//! |---|---|---|
+//! | `:2126` | `gpuBuildGenericKernelFalconList` | `0x208001b0` — **where `t133a` stopped** |
+//! | `:2129` | `gpuBuildKernelVideoEngineList` | — |
+//! | `:2131-2140` | the `PDB_PROP_GPU_MIG_SUPPORTED` block | — |
+//! | `:2143` | `gpuRemoveMissingEngines` | — |
+//! | `:2145` | `pGpu->bFullyConstructed = NV_TRUE` | — |
+//! | `:2146-2170` | the `engstateStatePreInit` loop | **this reply** |
+//!
+//! ⊘ Only the first of those five has been shown to ask for anything; the other four are
+//! `[inferred]` from the source and may each be a rung of their own. So the honest
+//! statement is not *"one more rung"* — it is *"at most four statements, at least one of
+//! which the ledger has already named"*.
+//!
+//! The first boot that clears all of them is the one that can witness this reply, and the
+//! thing to read then is whether `pciBarCount = 4` survives into `pKernelBus->pciBars[]`
+//! without the page fault this module's `[measured]` run `t126b` recorded above.
 //!
 //! ⊘ The oracle settles **nothing about the values**. Its `barOffset` fields are the *host*
 //! board's physical addresses (`0xc000_0000`, `0x10_0000_0000`, `0x10_1000_0000`) and its
