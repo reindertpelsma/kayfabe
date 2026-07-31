@@ -308,7 +308,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         "a served control the differential never sees is a served control no differential \
          can regress"
     );
-    assert_eq!(universe.len(), 5, "non-vacuity: the universe is not empty");
+    assert_eq!(universe.len(), 6, "non-vacuity: the universe is not empty");
 
     // fn 65 is `StaticInfoPolicy`, and fn 228 is `InertPolicy`. Both are answered here too,
     // so all three answering links of the chain are exercised in one run.
@@ -362,6 +362,12 @@ fn the_served_replies_are_the_ones_posted_and_each_carries_the_result_it_earned(
         vec![
             (WantedTable::ChipInfo, 3, 76, 0),
             (WantedTable::UserRegisterAccessMap, 4, 76, 0),
+            // ★★ Twice, and that is the finding rather than a duplicate: `gpuPreInit`
+            // calls `gpuBuildGenericKernelFalconList` (`ogkm-580: gpu.c:2126`) and
+            // `gpuBuildKernelVideoEngineList` (`:2128`) back to back, and each issues its
+            // own independent control. One chip row answers two adjacent statements.
+            (WantedTable::ConstructedFalconInfo, 5, 76, 0),
+            (WantedTable::ConstructedFalconInfo, 6, 76, 0),
             (WantedTable::DeviceInfo, 9, 76, 0),
             (WantedTable::IntrKernelTable, 10, 76, 0),
             (WantedTable::PciBarInfo, 12, 76, 0),

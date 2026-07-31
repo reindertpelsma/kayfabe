@@ -40,6 +40,7 @@
 //! model owns this offset"* and never as a defaulted zero (plan §11-O1, still open).
 
 use kayfabe_abi::chipinfo::{ChipInfoRow, RegBaseRow, reg_base};
+use kayfabe_abi::falconinfo::FalconInventoryRow;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::pcibars::PciBarRow;
@@ -1210,6 +1211,49 @@ pub static GA106_CHIP_INFO: ChipInfoRow = ChipInfoRow {
 pub static GA106_USER_REGISTER_ACCESS_MAP: RegisterAccessMapRow =
     RegisterAccessMapRow::NOT_PUBLISHED;
 
+/// ★★★ **This device constructs no generic kernel falcons — and that overrules the
+/// oracle.**
+///
+/// The C artifact replays a captured GA106 reply naming **eight**: `OBJFBFLCN` at
+/// `0x9a4000`, `FECS` at `0x409000`, `GPCCS` at `0x41a000`, `OBJBSP` (NVDEC0) at
+/// `0x848000`, `Pmu` at `0x10a000`, `OBJMSENC` (NVENC0) at `0x1c8000`, `OBJSEC2` at
+/// `0x840000` and `OBJOFA` at `0x844000` (`C: src/qemu/mode2_initctrl_ga106.h:3878`;
+/// `[measured]` byte-identical to record 142009 of
+/// `traces/cap1b_coldboot_hermetic_d6.rec`).
+///
+/// ★★ **An entry is an instruction to construct, not a fact to report.** Each one RM
+/// accepts becomes a `GenericKernelFalcon` whose every register access is
+/// `registerBase + offset` handed straight to BAR0 MMIO
+/// (`ogkm-580: kernel_falcon_tu102.c:45-76`), and which is registered as an `IntrService`
+/// (`ogkm-580: gpu.c:5559-5568`) so those reads are reachable from the interrupt path.
+///
+/// `[measured]` by `tests/constructed_falcon_info.rs`: **seven of the eight bases have no
+/// model at all**, and the eighth — `NV_PSEC = 0x840000` — decodes exactly three offsets
+/// (`+0x040` mailbox0, `+0x100` cpuctl, `+0x118` dmatrfcmd), the FWSEC secure-booter
+/// handshake this module scripts. `_HWCFG2`, `_IRQSTAT`, `_IRQMASK` and `_IRQDEST` — what
+/// an `IntrService`-registered falcon reads first — are modelled nowhere.
+/// [`crate::plane::RegPlane`] answers an unclaimed register with a defaulted **zero**,
+/// which its own docs call *"a wrong value rather than a fabricated mapping"*. Advertising
+/// these eight would hand RM eight microcontrollers reporting an all-zero state.
+///
+/// ⚠ That three-register exception is a correction, not a footnote: the first draft of this
+/// row claimed *no* base was modelled and its own test went red on `NV_PSEC`. The true
+/// statement is *"none is modelled as a falcon"*. And RM skips the `ENG_SEC2` row outright
+/// wherever a `KernelSec2` exists (`ogkm-580: gpu.c:5384-5390`), so even the oracle's list
+/// is conditional.
+///
+/// ★ What it costs is deferred and **named at the right place**, not silent: `[inferred]`
+/// from `ogkm-580: channel_descendant.c:221-234`, a guest allocating a
+/// SEC2/NVDEC/NVENC/NVJPG/OFA engine-class object gets `NV_ERR_INVALID_CLASS` and
+/// *"engine is missing for class 0x%x"* — a refusal at the call that wanted the engine.
+/// Nothing at boot requires any of them; see [`kayfabe_abi::falconinfo`].
+///
+/// ★★ Naming one later is an inventory this port authors from the register windows
+/// [`crate::plane`] really decodes — which is why the row carries entries rather than a
+/// boolean. `FECS` and `GPCCS` are the two the compute path will eventually need, and they
+/// are the two whose windows are emptiest today.
+pub static GA106_CONSTRUCTED_FALCONS: FalconInventoryRow = FalconInventoryRow::NONE;
+
 /// ★ **The GA106 row.** Everything above, selected.
 ///
 /// The PCI identity is deliberately *incomplete* here: the vendor id and class code are
@@ -1246,6 +1290,7 @@ pub static GA106: ChipProfile = ChipProfile {
     pci_bars: GA106_PCI_BARS,
     chip_info: GA106_CHIP_INFO,
     user_register_access_map: GA106_USER_REGISTER_ACCESS_MAP,
+    constructed_falcons: GA106_CONSTRUCTED_FALCONS,
     fb_length: GA106_FB_LENGTH,
 };
 

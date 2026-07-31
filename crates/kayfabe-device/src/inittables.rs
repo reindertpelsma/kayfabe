@@ -1,12 +1,13 @@
-//! The command policy that answers the five `GSP_RM_CONTROL`s the guest's RM cannot start
+//! The command policy that answers the six `GSP_RM_CONTROL`s the guest's RM cannot start
 //! without, from the chip row's own tables.
 //!
-//! ⚠ The type names say *table* and two of the five are not one:
-//! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` is an identity and
+//! ⚠ The type names say *table* and three of the six are not one:
+//! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` is an identity,
 //! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP` is a **permission policy**,
-//! neither of which is a list. The names are kept because what actually unifies the five is
+//! and `NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO` is an **instruction to construct**
+//! — none of which is a list. The names are kept because what actually unifies the six is
 //! the property the module is about — **`[OUT]`-only, and a pure function of the chip
-//! row** — and that holds for all five.
+//! row** — and that holds for all six.
 //!
 //! ## ★★ Why this is here and not in a logic crate
 //!
@@ -19,7 +20,7 @@
 //!
 //! ## ★★★ What it does NOT do, deliberately
 //!
-//! Five controls, all `[OUT]`-only, all answered from the chip row. It touches no RM graph
+//! Six controls, all `[OUT]`-only, all answered from the chip row. It touches no RM graph
 //! state, allocates no handle, and remembers nothing between commands. Every other command
 //! falls through to whatever the FSM would have done — this is a *supplement* to the
 //! baseline policy, not a replacement for `kayfabe_rmrpc::GraphPolicy`, which is the
@@ -38,6 +39,9 @@
 use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
 use kayfabe_abi::chipinfo::{
     self, CHIP_INFO_PARAMS_SIZE, ChipIdentity, NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO,
+};
+use kayfabe_abi::falconinfo::{
+    self, FALCON_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
 };
 use kayfabe_abi::inittables::{
     self, DEVICE_INFO_PARAMS_SIZE, INTR_PARAMS_SIZE, NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
@@ -156,6 +160,15 @@ pub enum WantedTable {
     /// [`kayfabe_abi::regaccessmap`], and [`crate::ga10x::GA106_USER_REGISTER_ACCESS_MAP`]
     /// for why this device publishes no map.
     UserRegisterAccessMap,
+    /// `NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO` — ★★ the one that is an
+    /// **instruction to construct** rather than a description, and the only one the guest
+    /// asks **twice**: `gpuBuildGenericKernelFalconList` (`ogkm-580: gpu.c:2126, 5344`) and
+    /// `gpuBuildKernelVideoEngineList` (`:2128, 5435`) each issue their own control, and
+    /// `[measured]` the oracle carries both at `rpc.sequence` 5 and 6 with byte-identical
+    /// replies. Its refusal ends `RmInitNvDevice` at `gpu.c:2126`, the line after
+    /// [`Self::UserRegisterAccessMap`]'s. See [`kayfabe_abi::falconinfo`], and
+    /// [`crate::ga10x::GA106_CONSTRUCTED_FALCONS`] for why this device names no falcon.
+    ConstructedFalconInfo,
 }
 
 impl WantedTable {
@@ -169,12 +182,13 @@ impl WantedTable {
     /// `Self`, so a new variant does not compile until it has an id, and
     /// `tests/init_tables.rs` walks this array through `cmd_id` → [`WantedTable::from_cmd`]
     /// and back.
-    pub const ALL: [WantedTable; 5] = [
+    pub const ALL: [WantedTable; 6] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
         Self::ChipInfo,
         Self::UserRegisterAccessMap,
+        Self::ConstructedFalconInfo,
     ];
 
     /// The control id this table answers — the inverse of [`WantedTable::from_cmd`].
@@ -192,6 +206,7 @@ impl WantedTable {
             Self::UserRegisterAccessMap => {
                 NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP
             }
+            Self::ConstructedFalconInfo => NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
         }
     }
 
@@ -204,6 +219,7 @@ impl WantedTable {
             Self::PciBarInfo => PCI_BAR_INFO_PARAMS_SIZE,
             Self::ChipInfo => CHIP_INFO_PARAMS_SIZE,
             Self::UserRegisterAccessMap => USER_REGISTER_ACCESS_MAP_PARAMS_SIZE,
+            Self::ConstructedFalconInfo => FALCON_INFO_PARAMS_SIZE,
         }
     }
 
@@ -218,6 +234,7 @@ impl WantedTable {
             NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP => {
                 Some(Self::UserRegisterAccessMap)
             }
+            NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO => Some(Self::ConstructedFalconInfo),
             _ => None,
         }
     }
@@ -341,6 +358,22 @@ impl CommandPolicy for InitTablePolicy {
             WantedTable::UserRegisterAccessMap => {
                 match regaccessmap::encode_user_register_access_map(
                     &self.chip.user_register_access_map,
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ An **inventory**, and the refusal on the error arm is the same kind of
+            // load-bearing as the one above. The encoder exists to make a count RM's own
+            // bounds check would let through — 65..=71, which passes its `<= 71`
+            // destination-array assert and then reads past the 1284-byte source struct
+            // (`kayfabe_abi::falconinfo::FalconInfoError::TooManyFalcons`) — unencodable.
+            // Answering anyway when it declines would hand the guest exactly the
+            // out-of-bounds construction it exists to prevent.
+            WantedTable::ConstructedFalconInfo => {
+                match falconinfo::encode_constructed_falcon_info(
+                    &self.chip.constructed_falcons,
+                    self.chip.regs_aperture_len,
                 ) {
                     Ok(p) => p,
                     Err(_) => return refuse(),

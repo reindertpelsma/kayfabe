@@ -60,6 +60,7 @@ pub mod staticinfo;
 pub mod unserviced;
 
 use kayfabe_abi::chipinfo::ChipInfoRow;
+use kayfabe_abi::falconinfo::FalconInventoryRow;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::pcibars::{PciBarRow, bus_bar};
@@ -276,6 +277,19 @@ pub struct ChipProfile {
     /// [`ga10x::GA106_USER_REGISTER_ACCESS_MAP`], which publishes none and says why, and
     /// [`kayfabe_abi::regaccessmap`] for the one encoding that means the opposite of it.
     pub user_register_access_map: RegisterAccessMapRow,
+    /// ★★★ **Which engines this device tells the guest to construct falcons for.**
+    ///
+    /// A chip row because the falcon inventory is a property of silicon — and, on this
+    /// port, of how much of that silicon's register map [`plane`] actually decodes. Every
+    /// entry is an *instruction to construct*: RM turns each into a `GenericKernelFalcon`
+    /// whose `registerBase` becomes a raw BAR0 base for register reads and writes it never
+    /// validates (`ogkm-580: kernel_falcon_tu102.c:45-76`).
+    ///
+    /// ⊘ Naming an engine whose register window this device does not model would hand RM a
+    /// microcontroller reporting a defaulted zero. See
+    /// [`ga10x::GA106_CONSTRUCTED_FALCONS`], which names none and says what that costs,
+    /// and [`kayfabe_abi::falconinfo`] for the count RM's own bounds check lets through.
+    pub constructed_falcons: FalconInventoryRow,
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and
@@ -578,10 +592,12 @@ pub fn rom_for(chip: &ChipProfile) -> Result<Vec<u8>, ChipError> {
 ///
 /// The chain used to be an expression inside `RegPlane::new`, which meant the 359 062-record
 /// `cap1`/`cap1b` replay could only ever exercise `kayfabe_gsp::EchoOk` — the C baseline —
-/// and **not one** of the served controls. Three of the four [`inittables::InitTablePolicy`]
-/// replies therefore had no reply-plane coverage at all, which is why a defect in
-/// [`staticinfo::StaticInfoPolicy`] could sit unnoticed. One chain, two consumers: change
-/// an order or a link here and the replay changes with the device.
+/// and **not one** of the served controls. Four of the five [`inittables::InitTablePolicy`]
+/// replies that existed then had no reply-plane coverage at all, which is why a defect in
+/// [`staticinfo::StaticInfoPolicy`] could sit unnoticed. It is **six of six** now, and the
+/// coverage assertion derives its universe from `WantedTable::ALL` rather than restating a
+/// number here. One chain, two consumers: change an order or a link here and the replay
+/// changes with the device.
 ///
 /// ★ Order is precedence and the three answering links are disjoint by function code:
 /// [`inittables::InitTablePolicy`] claims only `GSP_RM_CONTROL`,

@@ -97,6 +97,7 @@
 pub mod bringup;
 pub mod capability;
 pub mod chipinfo;
+pub mod falconinfo;
 pub mod generated;
 pub mod gspstaticinfo;
 pub mod guest_os;
