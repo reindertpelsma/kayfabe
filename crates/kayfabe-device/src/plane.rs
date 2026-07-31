@@ -92,7 +92,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use kayfabe_arch::gsp::GspModel;
-use kayfabe_gsp::{CommandPolicy, EchoOk, GspAbi, GspFault, GspFsm, GuestRam, RamRefused};
+use kayfabe_gsp::{CommandPolicy, GspAbi, GspFault, GspFsm, GuestRam, RamRefused};
 use kayfabe_trace::Faulted;
 
 use crate::{ChipError, ChipProfile};
@@ -350,7 +350,7 @@ impl RegPlane {
             state: Mutex::new(PlaneState {
                 fsm: GspFsm::new(abi),
                 ram: Box::new(RefusingRam),
-                policy: Box::new(EchoOk),
+                policy: Box::new(crate::inittables::InitTablePolicy::new(chip, abi.driver)),
                 unclaimed: Vec::new(),
             }),
             c: PlaneCounters::default(),

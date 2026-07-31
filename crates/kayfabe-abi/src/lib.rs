@@ -98,6 +98,7 @@ pub mod bringup;
 pub mod capability;
 pub mod generated;
 pub mod guest_os;
+pub mod inittables;
 pub mod rc;
 pub mod submit;
 pub mod transcribed;

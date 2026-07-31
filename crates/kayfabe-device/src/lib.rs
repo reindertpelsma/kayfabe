@@ -52,8 +52,10 @@
 
 pub mod abi;
 pub mod ga10x;
+pub mod inittables;
 pub mod plane;
 
+use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
 
@@ -162,6 +164,21 @@ pub struct ChipProfile {
     /// A constructor rather than a value because [`GspModel`] is a trait object and a
     /// `static` table cannot own one without a lifetime that outlives every reader.
     pub gsp_model: fn() -> Box<dyn GspModel>,
+    /// ★★ **The engines this chip advertises to the guest's RM.**
+    ///
+    /// Rows, not a blob, and on the *chip* row rather than in a logic crate, because an
+    /// engine list is a fact about silicon. `kayfabe_abi::inittables` owns only the wire
+    /// layout; [`inittables::InitTablePolicy`] owns only the decision to answer.
+    ///
+    /// ⊘ An engine listed here is an engine the driver will go on to **use**. Padding this
+    /// to look complete moves the failure later and deeper — see [`ga10x::GA106_ENGINES`],
+    /// which names the four it leaves out.
+    pub engines: &'static [FifoDeviceEntry],
+    /// This chip's kernel interrupt table — the `MC_ENGINE_IDX` → vector map.
+    pub intr_table: &'static [IntrTableEntry],
+    /// `subtreeMap[]`, which travels with [`ChipProfile::intr_table`] because RM copies it
+    /// out of the same reply and asserts on one of its entries.
+    pub intr_subtree_map: [u64; INTR_CATEGORY_COUNT],
 }
 
 impl core::fmt::Debug for ChipProfile {

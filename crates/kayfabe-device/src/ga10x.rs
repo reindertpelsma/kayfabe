@@ -39,6 +39,7 @@
 //! variant for; `decode_reg` returns `None` there, which the FSM treats as *"another
 //! model owns this offset"* and never as a defaulted zero (plan §11-O1, still open).
 
+use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::vbios::VbiosWire;
 use kayfabe_arch::gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
 
@@ -524,6 +525,377 @@ const REGS_APERTURE_LEN: u64 = 16 << 20;
 /// (`C: src/qemu/nvkvm_gpu_emul.c:127`).
 const MSIX_VECTORS: u16 = 8;
 
+// ---------------------------------------------------------------------------------------
+// The two init tables the guest's RM cannot start without.
+// ---------------------------------------------------------------------------------------
+
+/// ★★★ **The engines this device advertises — and the ones it deliberately does not.**
+///
+/// Every value here is a byte the C artifact put on the wire to a stock 580.159.04 guest
+/// during the hermetic cold boot, read back out of the committed capture
+/// (`nvidia-gpu-passthrough/traces/mode2_c_reference/cap1b_coldboot_hermetic_d6.rec.zst`,
+/// the single `cmd=0x20801112` reply at record 142049, `paramsSize=3212`,
+/// `numEntries=10`). They are not synthesised and they are not guessed: that reply is in
+/// turn a replay of a real RTX 3060's own answer, captured through the same control
+/// (`C: src/qemu/mode2_devinfo_ga106.h`).
+///
+/// ## ★★★ What was left out, and why leaving it out is the honest answer
+///
+/// The C advertised **ten** engines. This table carries **six**. An engine in this list is
+/// an engine the guest's RM will go on to *use*, and a use we cannot serve fails later,
+/// deeper, and attributed to the wrong thing. So the four engines this port has no plane
+/// for are absent rather than present-and-hollow:
+///
+/// | omitted | why |
+/// |---|---|
+/// | `SEC2` | a security falcon; nothing in this port drives one, and we *are* the GSP, so the kernel does not need it to boot |
+/// | `NVENC0` | video encode — no encode path exists here |
+/// | `NVDEC0` | video decode — likewise |
+/// | `OFA` | optical flow — likewise |
+///
+/// `CE4` is absent for a different and older reason: the C's own wire table drops it,
+/// because the host's `GET_ENGINES_V2` exposes only `CE0..CE3`. (The C's *other*, unused
+/// captured blob — `ctl_20801112` in `src/qemu/mode2_initctrl_ga106.h` — has eleven
+/// entries including `CE4`; the ten-entry table is the one that reached a guest.)
+///
+/// What remains is exactly the north-star path: `GR0` for compute, `CE0..CE3` for the data
+/// plane, and `SOFTWARE`, which is not an engine at all — it is RM's own pseudo-engine, is
+/// the one entry with `IS_HOST_DRIVEN_ENGINE = 0`, and is the entry
+/// `kfifoGetHostDeviceInfoTable_KERNEL` special-cases when it reserves PBDMA fault ids
+/// (`ogkm-580: kernel_fifo.c:2160-2166`).
+///
+/// ## ⚠ Two fields here are uninitialised on real silicon, and are reproduced anyway
+///
+/// `engineData[7]` (`ENGINE_INFO_TYPE_INTR`) holds capture noise on several rows, and the
+/// `SOFTWARE` row is noise from `RESET` onward — the same three magic words recur across
+/// unrelated entries. That is what a real GA106's GSP answered and what a real driver
+/// accepted, so it is reproduced verbatim rather than tidied: zeroing a field the oracle
+/// did not zero is a redesign with no measurement behind it, and this port's rule is to
+/// reproduce the C and subtract only its *named* bugs.
+pub static GA106_ENGINES: &[FifoDeviceEntry] = &[
+    FifoDeviceEntry {
+        name: "GR0",
+        engine_data: [
+            0xd334df00, // [ 0] ENG_DESC
+            0x00000000, // [ 1] FIFO_TAG
+            0x00000001, // [ 2] RM_ENGINE_TYPE
+            0x00000000, // [ 3] RUNLIST
+            0x00000040, // [ 4] MMU_FAULT_ID
+            0x00000033, // [ 5] RC_MASK
+            0x0000000c, // [ 6] RESET
+            0x00000000, // [ 7] INTR
+            0x00000054, // [ 8] MC
+            0x00000000, // [ 9] DEV_TYPE_ENUM
+            0x00000000, // [10] INSTANCE_ID
+            0x00c00000, // [11] RUNLIST_PRI_BASE
+            0x00000001, // [12] IS_HOST_DRIVEN_ENGINE
+            0x00000000, // [13] RUNLIST_ENGINE_ID
+            0x00c20000, // [14] CHRAM_PRI_BASE
+            0x00000000, // [15] KERNEL_RM_MAX
+        ],
+        pbdma_ids: [0x00000000, 0x00000001],
+        pbdma_fault_ids: [0x00000020, 0x00000021],
+        num_pbdmas: 2,
+    },
+    FifoDeviceEntry {
+        name: "CE0",
+        engine_data: [
+            0x793ceb00, // [ 0] ENG_DESC
+            0x00000001, // [ 1] FIFO_TAG
+            0x00000009, // [ 2] RM_ENGINE_TYPE
+            0x00000000, // [ 3] RUNLIST
+            0x0000000f, // [ 4] MMU_FAULT_ID
+            0x00000017, // [ 5] RC_MASK
+            0x00000002, // [ 6] RESET
+            0x00000000, // [ 7] INTR
+            0x0000000f, // [ 8] MC
+            0x00000013, // [ 9] DEV_TYPE_ENUM
+            0x00000000, // [10] INSTANCE_ID
+            0x00c00000, // [11] RUNLIST_PRI_BASE
+            0x00000001, // [12] IS_HOST_DRIVEN_ENGINE
+            0x00000001, // [13] RUNLIST_ENGINE_ID
+            0x00c20000, // [14] CHRAM_PRI_BASE
+            0x00000000, // [15] KERNEL_RM_MAX
+        ],
+        pbdma_ids: [0x00000000, 0x00000001],
+        pbdma_fault_ids: [0x00000020, 0x00000021],
+        num_pbdmas: 1,
+    },
+    FifoDeviceEntry {
+        name: "CE1",
+        engine_data: [
+            0x793ceb01, // [ 0] ENG_DESC
+            0x00000002, // [ 1] FIFO_TAG
+            0x0000000a, // [ 2] RM_ENGINE_TYPE
+            0x00000000, // [ 3] RUNLIST
+            0x00000010, // [ 4] MMU_FAULT_ID
+            0x00000018, // [ 5] RC_MASK
+            0x00000003, // [ 6] RESET
+            0x82300100, // [ 7] INTR
+            0x00000010, // [ 8] MC
+            0x00000013, // [ 9] DEV_TYPE_ENUM
+            0x00000001, // [10] INSTANCE_ID
+            0x00c00000, // [11] RUNLIST_PRI_BASE
+            0x00000001, // [12] IS_HOST_DRIVEN_ENGINE
+            0x00000002, // [13] RUNLIST_ENGINE_ID
+            0x00c20000, // [14] CHRAM_PRI_BASE
+            0x00000000, // [15] KERNEL_RM_MAX
+        ],
+        pbdma_ids: [0x00000001, 0x00000001],
+        pbdma_fault_ids: [0x00000020, 0x00000021],
+        num_pbdmas: 1,
+    },
+    FifoDeviceEntry {
+        name: "CE2",
+        engine_data: [
+            0x793ceb02, // [ 0] ENG_DESC
+            0x00000003, // [ 1] FIFO_TAG
+            0x0000000b, // [ 2] RM_ENGINE_TYPE
+            0x00000001, // [ 3] RUNLIST
+            0x00000011, // [ 4] MMU_FAULT_ID
+            0x00000019, // [ 5] RC_MASK
+            0x00000004, // [ 6] RESET
+            0x77f2058f, // [ 7] INTR
+            0x00000011, // [ 8] MC
+            0x00000013, // [ 9] DEV_TYPE_ENUM
+            0x00000002, // [10] INSTANCE_ID
+            0x00c00400, // [11] RUNLIST_PRI_BASE
+            0x00000001, // [12] IS_HOST_DRIVEN_ENGINE
+            0x00000000, // [13] RUNLIST_ENGINE_ID
+            0x00c22000, // [14] CHRAM_PRI_BASE
+            0x00000000, // [15] KERNEL_RM_MAX
+        ],
+        pbdma_ids: [0x00000005, 0x00000001],
+        pbdma_fault_ids: [0x00000022, 0x00000021],
+        num_pbdmas: 1,
+    },
+    FifoDeviceEntry {
+        name: "CE3",
+        engine_data: [
+            0x793ceb03, // [ 0] ENG_DESC
+            0x00000004, // [ 1] FIFO_TAG
+            0x0000000c, // [ 2] RM_ENGINE_TYPE
+            0x00000002, // [ 3] RUNLIST
+            0x00000012, // [ 4] MMU_FAULT_ID
+            0x0000001a, // [ 5] RC_MASK
+            0x00000005, // [ 6] RESET
+            0x018e0102, // [ 7] INTR
+            0x00000012, // [ 8] MC
+            0x00000013, // [ 9] DEV_TYPE_ENUM
+            0x00000003, // [10] INSTANCE_ID
+            0x00c00800, // [11] RUNLIST_PRI_BASE
+            0x00000001, // [12] IS_HOST_DRIVEN_ENGINE
+            0x00000000, // [13] RUNLIST_ENGINE_ID
+            0x00c24000, // [14] CHRAM_PRI_BASE
+            0x00000000, // [15] KERNEL_RM_MAX
+        ],
+        pbdma_ids: [0x00000006, 0x00000001],
+        pbdma_fault_ids: [0x00000023, 0x00000021],
+        num_pbdmas: 1,
+    },
+    FifoDeviceEntry {
+        name: "SOFTWARE",
+        engine_data: [
+            0x95a6f500, // [ 0] ENG_DESC
+            0xffffffff, // [ 1] FIFO_TAG
+            0x0000002d, // [ 2] RM_ENGINE_TYPE
+            0x00000007, // [ 3] RUNLIST
+            0xffffffff, // [ 4] MMU_FAULT_ID
+            0x00000000, // [ 5] RC_MASK
+            0x82300810, // [ 6] RESET
+            0x77f2058f, // [ 7] INTR
+            0x018e000f, // [ 8] MC
+            0x00000000, // [ 9] DEV_TYPE_ENUM
+            0x82300100, // [10] INSTANCE_ID
+            0x77f2058f, // [11] RUNLIST_PRI_BASE
+            0x00000000, // [12] IS_HOST_DRIVEN_ENGINE
+            0x00000000, // [13] RUNLIST_ENGINE_ID
+            0x82300710, // [14] CHRAM_PRI_BASE
+            0x00000000, // [15] KERNEL_RM_MAX
+        ],
+        pbdma_ids: [0x00000008, 0x00000001],
+        pbdma_fault_ids: [0x82300100, 0x77f2058f],
+        num_pbdmas: 1,
+    },
+];
+
+/// The kernel interrupt table, reproduced verbatim from the same capture (the single
+/// `cmd=0x20800a5c` reply at record 142056, `paramsSize=2112`, `tableLen=24`).
+///
+/// ## ★★ Why this one is NOT trimmed to match [`GA106_ENGINES`]
+///
+/// It looks like the engine table and is not one. Its key is `MC_ENGINE_IDX_*`, RM's own
+/// interrupt index space, and an entry is a statement about *where a vector would arrive*,
+/// not a claim that an engine exists — so the "advertise only what we can serve" rule that
+/// pruned four engines above has nothing to prune here. This port delivers **no**
+/// interrupts at all, so no row is a promise; and rows 14-23 carry only non-stalling
+/// vectors, which is the GSP-offload split showing through (stall vectors are the GSP's).
+///
+/// Trimming also looks like the riskier move, on a **reading** rather than an observation:
+/// the C's comment on this exact reply states that the `UVM_OWNED` subtree mask must equal
+/// the access-counter vector's subtree or `intrCacheIntrFields_TU102` asserts
+/// (`C: src/qemu/nvkvm_gpu_emul.c:3122-3146`). ⚠ That assert has **not been observed to
+/// fire** from this port — the claim is the C author's, recorded as theirs.
+///
+/// ★ `vectorStall = 0x9b` on `engineIdx 50` (`MC_ENGINE_IDX_GSP`) is the vector this
+/// device would raise for its own message-queue doorbell.
+pub static GA106_INTR_TABLE: &[IntrTableEntry] = &[
+    IntrTableEntry {
+        engine_idx: 59,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0x00000040,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 62,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0x00000083,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 60,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0x00000048,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 73,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0x00000081,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 156,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 157,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 158,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 159,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 160,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 161,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 162,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 163,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 50,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0x0000009b,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 2,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0x0000009a,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 84,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0x00000000,
+    },
+    IntrTableEntry {
+        engine_idx: 47,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0x00000002,
+    },
+    IntrTableEntry {
+        engine_idx: 38,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0x00000001,
+    },
+    IntrTableEntry {
+        engine_idx: 65,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0x00000003,
+    },
+    IntrTableEntry {
+        engine_idx: 15,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 16,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0xffffffff,
+    },
+    IntrTableEntry {
+        engine_idx: 17,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0x00000007,
+    },
+    IntrTableEntry {
+        engine_idx: 18,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0x00000008,
+    },
+    IntrTableEntry {
+        engine_idx: 19,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0x0000000a,
+    },
+    IntrTableEntry {
+        engine_idx: 81,
+        pmc_intr_mask: 0x00000000,
+        vector_stall: 0xffffffff,
+        vector_non_stall: 0x00000009,
+    },
+];
+
+/// `subtreeMap[NV2080_INTR_CATEGORY_*]`, indexed `DEFAULT, ESCHED_DRIVEN_ENGINE,
+/// ESCHED_DRIVEN_ENGINE_NOTIFICATION, RUNLIST, RUNLIST_NOTIFICATION, UVM_OWNED,
+/// UVM_SHARED`.
+///
+/// ★ Two oracles agree on these seven words, which is worth recording because they are the
+/// part of the reply that was *not* captured from silicon: the C synthesises them in code,
+/// and the bytes it put on the wire match the values in its own captured
+/// `ctl_20800a5c` blob exactly. `UVM_OWNED = 0x2` is the load-bearing one.
+pub static GA106_INTR_SUBTREE_MAP: [u64; INTR_CATEGORY_COUNT] = [0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4];
+
 /// ★ **The GA106 row.** Everything above, selected.
 ///
 /// The PCI identity is deliberately *incomplete* here: the vendor id and class code are
@@ -549,6 +921,9 @@ pub static GA106: ChipProfile = ChipProfile {
     vbios_wire: VbiosWire::Tu102Bit,
     msix_vectors: MSIX_VECTORS,
     gsp_model: || Box::new(Ga10xGspModel::new()),
+    engines: GA106_ENGINES,
+    intr_table: GA106_INTR_TABLE,
+    intr_subtree_map: GA106_INTR_SUBTREE_MAP,
 };
 
 // ── The MMU fault-code table (Axis B, task #111) ───────────────────────────────────

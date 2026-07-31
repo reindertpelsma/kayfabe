@@ -90,6 +90,28 @@ static OTHER_PTIMER: PtimerRegs = PtimerRegs {
     hi_off: 0x0090_0084,
 };
 
+/// ★ A second chip's init tables — **one engine, one interrupt vector, its own subtree
+/// map**, none of them GA10x's. The point of the fixture is that this is all it costs:
+/// `kayfabe_abi::inittables` encodes these rows through the same code path, and no logic
+/// crate learns that a second chip exists.
+static OTHER_ENGINES: &[kayfabe_abi::inittables::FifoDeviceEntry] =
+    &[kayfabe_abi::inittables::FifoDeviceEntry {
+        name: "OTHERGR",
+        engine_data: [7; 16],
+        pbdma_ids: [0, 0],
+        pbdma_fault_ids: [1, 0],
+        num_pbdmas: 1,
+    }];
+
+/// This chip's interrupt table, likewise its own.
+static OTHER_INTR: &[kayfabe_abi::inittables::IntrTableEntry] =
+    &[kayfabe_abi::inittables::IntrTableEntry {
+        engine_idx: 3,
+        pmc_intr_mask: 0,
+        vector_stall: 0x11,
+        vector_non_stall: kayfabe_abi::inittables::INTR_VECTOR_INVALID,
+    }];
+
 /// ★ **The row.** This is the whole cost of the second chip, and it is data.
 static OTHER: ChipProfile = ChipProfile {
     name: "OTHER (test-only)",
@@ -109,6 +131,9 @@ static OTHER: ChipProfile = ChipProfile {
     vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
     msix_vectors: 3,
     gsp_model: || Box::new(OtherGspModel),
+    engines: OTHER_ENGINES,
+    intr_table: OTHER_INTR,
+    intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
 };
 
 fn abi() -> kayfabe_gsp::GspAbi {
@@ -247,6 +272,9 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
+        engines: OTHER_ENGINES,
+        intr_table: OTHER_INTR,
+        intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
     };
     let e = RegPlane::new(&OVERLAPPING, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -275,6 +303,9 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
+        engines: OTHER_ENGINES,
+        intr_table: OTHER_INTR,
+        intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
     };
     let e = RegPlane::new(&PAST_THE_END, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -527,6 +558,9 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(OtherGspModel),
+        engines: OTHER_ENGINES,
+        intr_table: OTHER_INTR,
+        intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
     };
     let e = RegPlane::new(&COLLIDING, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -559,6 +593,9 @@ fn a_counter_outside_the_aperture_is_refused_at_realize() {
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(OtherGspModel),
+        engines: OTHER_ENGINES,
+        intr_table: OTHER_INTR,
+        intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
     };
     let e = RegPlane::new(&TOO_HIGH, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -628,4 +665,29 @@ fn the_advertised_framebuffer_size_is_served_and_closes_the_drivers_own_wpr2_ari
         "the served WPR2 low register must equal what the driver recomputes from the FB \
          size this same plane reported"
     );
+}
+
+#[test]
+fn the_second_chip_serves_its_own_init_tables_through_unchanged_code() {
+    // ★ Nothing below names GA10x, and nothing in `kayfabe-abi`, `kayfabe-gsp` or this
+    // crate's `inittables` module was touched to make a second chip's tables encode.
+    let page = kayfabe_abi::inittables::encode_device_info_table(OTHER.engines, 0)
+        .expect("the second chip's engine table encodes");
+    assert_eq!(page.num_entries, 1);
+    assert_eq!(&page.params[96..103], b"OTHERGR");
+    assert_ne!(
+        page.params,
+        kayfabe_abi::inittables::encode_device_info_table(kayfabe_device::ga10x::GA106.engines, 0)
+            .expect("encodes")
+            .params,
+        "two chips encoded to the same table, so the row is not actually being read"
+    );
+
+    let intr = kayfabe_abi::inittables::encode_intr_kernel_table(
+        OTHER.intr_table,
+        &OTHER.intr_subtree_map,
+    )
+    .expect("the second chip's interrupt table encodes");
+    assert_eq!(u32::from_le_bytes(intr[0..4].try_into().unwrap()), 1);
+    assert_eq!(u64::from_le_bytes(intr[2056..2064].try_into().unwrap()), 9);
 }
