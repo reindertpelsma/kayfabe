@@ -105,6 +105,7 @@ pub mod host_driver;
 pub mod inittables;
 pub mod pcibars;
 pub mod rc;
+pub mod regaccessmap;
 pub mod submit;
 pub mod transcribed;
 pub mod vbios;

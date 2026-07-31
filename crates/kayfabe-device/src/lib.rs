@@ -63,6 +63,7 @@ use kayfabe_abi::chipinfo::ChipInfoRow;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::pcibars::{PciBarRow, bus_bar};
+use kayfabe_abi::regaccessmap::RegisterAccessMapRow;
 use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
 
@@ -322,6 +323,18 @@ pub struct ChipProfile {
     /// window the guest will **map and read**. See [`ga10x::GA106_CHIP_INFO`], which names
     /// one and states, per omission, what leaving the other three out costs.
     pub chip_info: ChipInfoRow,
+    /// ★★★ **What this device tells the guest unprivileged userspace may reach with
+    /// `NV2080_CTRL_CMD_GPU_EXEC_REG_OPS` — a policy, not a description.**
+    ///
+    /// A chip row because the reply is a bitmap with one bit per 32-bit register of *this
+    /// chip's* BAR0, and because whether a chip publishes one at all is a fact about the
+    /// chip (`ogkm-580: gpu_register_access_map.c:261-267` is RM's own *"unsupported for
+    /// this chip"*).
+    ///
+    /// ⊘ A set bit is a promise that this device answers that offset meaningfully. See
+    /// [`ga10x::GA106_USER_REGISTER_ACCESS_MAP`], which publishes none and says why, and
+    /// [`kayfabe_abi::regaccessmap`] for the one encoding that means the opposite of it.
+    pub user_register_access_map: RegisterAccessMapRow,
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and

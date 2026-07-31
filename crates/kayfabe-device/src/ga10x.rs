@@ -43,6 +43,7 @@ use kayfabe_abi::chipinfo::{ChipInfoRow, RegBaseRow, reg_base};
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::pcibars::PciBarRow;
+use kayfabe_abi::regaccessmap::RegisterAccessMapRow;
 use kayfabe_abi::vbios::VbiosWire;
 use kayfabe_arch::gsp::{BootSequence, GspModel, GspObservation, GspReg, LibosRegionLayout};
 use kayfabe_gsp::FalconSecureBooterBoot;
@@ -1169,6 +1170,46 @@ pub static GA106_CHIP_INFO: ChipInfoRow = ChipInfoRow {
     reg_bases: GA106_REG_BASES,
 };
 
+/// ★★★ **This device publishes no user register access map — and that is the policy, not a
+/// gap.**
+///
+/// The reply is a bitmap with one bit per 32-bit register of BAR0, and a set bit means
+/// *unprivileged guest userspace may `NV2080_CTRL_CMD_GPU_EXEC_REG_OPS` this offset*
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_access.c:1632-1638`, the map's only reader).
+/// [`crate::plane`] decodes a listed set of offsets and answers **zero** everywhere else, so
+/// a set bit over an offset this device does not model is a plausible wrong answer handed to
+/// a client with no refusal anywhere.
+///
+/// ⊘ **The oracle's board published one and it is not usable here.** Its reply carried
+/// `userRegisterAccessMapSize = 0x80000` and a 1269-byte gzip stream that inflates to
+/// 524 288 bytes permitting **6809 ranges, 37 743 registers**
+/// (`C: src/qemu/mode2_initctrl_ga106.h:3363`, reconstructed from
+/// `traces/mode2_c_reference/cap1b_coldboot_hermetic_d6` records 142000-142002 — see
+/// [`kayfabe_abi::regaccessmap`]). Among them is `0x9400`, the PTIMER block whose *whole
+/// point* in [`GA106_PTIMER`] is that this device does not serve it and that
+/// [`GA106_REG_BASES`] therefore refuses `NV_REG_BASE_TIMER` rather than hand a client a
+/// stopped clock. Replaying the oracle's map would make that same promise 6809 times, one
+/// layer lower and with no refusal vocabulary at all.
+///
+/// ★★ What [`RegisterAccessMapRow::NOT_PUBLISHED`] gets instead is **RM's own** answer:
+/// `userRegisterAccessMapSize == 0` takes the `LEVEL_INFO` *"User Register Access Map
+/// unsupported for this chip"* arm and returns `NV_OK`
+/// (`ogkm-580: gpu_register_access_map.c:261-267`), leaving `pUserRegisterAccessMap` `NULL`
+/// so that `gpuGetUserRegisterAccessPermissions_IMPL` answers `NV_FALSE` to everything
+/// (`:141-152`). It advertises nothing and it fails **closed**, which is the direction a
+/// permission answer should default when the thing it grants access to is not built.
+///
+/// ⊘ The cost is stated in [`kayfabe_abi::regaccessmap`]'s docs rather than discovered:
+/// `bRmProfilingPrivileged` is left `NV_FALSE` (no reader on this port's path — its one
+/// reader is inside `if (IS_VIRTUAL || hypervisorIsVgxHyper())`), and the guest's
+/// framebuffer reservation estimate is 512 KiB smaller.
+///
+/// ★ Publishing one later is a *bitmap this port authors from the offsets [`crate::plane`]
+/// really decodes*, not a copy of the capture — which is why the row carries the compressed
+/// bytes rather than a boolean.
+pub static GA106_USER_REGISTER_ACCESS_MAP: RegisterAccessMapRow =
+    RegisterAccessMapRow::NOT_PUBLISHED;
+
 /// ★ **The GA106 row.** Everything above, selected.
 ///
 /// The PCI identity is deliberately *incomplete* here: the vendor id and class code are
@@ -1204,6 +1245,7 @@ pub static GA106: ChipProfile = ChipProfile {
     fb_regions: GA106_FB_REGIONS,
     pci_bars: GA106_PCI_BARS,
     chip_info: GA106_CHIP_INFO,
+    user_register_access_map: GA106_USER_REGISTER_ACCESS_MAP,
     fb_length: GA106_FB_LENGTH,
 };
 

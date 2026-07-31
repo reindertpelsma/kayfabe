@@ -1,10 +1,12 @@
-//! The command policy that answers the four `GSP_RM_CONTROL`s the guest's RM cannot start
+//! The command policy that answers the five `GSP_RM_CONTROL`s the guest's RM cannot start
 //! without, from the chip row's own tables.
 //!
-//! ⚠ The type names say *table* and one of the four is not one:
-//! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` is an identity, not a list. The names are
-//! kept because what actually unifies the four is the property the module is about —
-//! **`[OUT]`-only, and a pure function of the chip row** — and that holds for all four.
+//! ⚠ The type names say *table* and two of the five are not one:
+//! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` is an identity and
+//! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP` is a **permission policy**,
+//! neither of which is a list. The names are kept because what actually unifies the five is
+//! the property the module is about — **`[OUT]`-only, and a pure function of the chip
+//! row** — and that holds for all five.
 //!
 //! ## ★★ Why this is here and not in a logic crate
 //!
@@ -17,7 +19,7 @@
 //!
 //! ## ★★★ What it does NOT do, deliberately
 //!
-//! Four controls, all `[OUT]`-only, all answered from the chip row. It touches no RM graph
+//! Five controls, all `[OUT]`-only, all answered from the chip row. It touches no RM graph
 //! state, allocates no handle, and remembers nothing between commands. Every other command
 //! falls through to whatever the FSM would have done — this is a *supplement* to the
 //! baseline policy, not a replacement for `kayfabe_rmrpc::GraphPolicy`, which is the
@@ -42,6 +44,10 @@ use kayfabe_abi::inittables::{
     NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE,
 };
 use kayfabe_abi::pcibars::{self, NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO, PCI_BAR_INFO_PARAMS_SIZE};
+use kayfabe_abi::regaccessmap::{
+    self, NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP,
+    USER_REGISTER_ACCESS_MAP_PARAMS_SIZE,
+};
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 
@@ -94,6 +100,14 @@ pub enum WantedTable {
     /// because `_gpuInitChipInfo` overwrites `pGpu->idInfo` with what it carries. See
     /// [`kayfabe_abi::chipinfo`].
     ChipInfo,
+    /// `NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP` — ★★ the one that is a
+    /// **permission policy** rather than a description of silicon, and the first reply this
+    /// port encodes that does not fit one message-queue element (`48 + 32 + 40 + 8204` is
+    /// three of 580's 4096-byte elements). Its refusal ends `RmInitNvDevice` at
+    /// `ogkm-580: gpu.c:2125`, the line after [`Self::ChipInfo`]'s. See
+    /// [`kayfabe_abi::regaccessmap`], and [`crate::ga10x::GA106_USER_REGISTER_ACCESS_MAP`]
+    /// for why this device publishes no map.
+    UserRegisterAccessMap,
 }
 
 impl WantedTable {
@@ -105,6 +119,7 @@ impl WantedTable {
             Self::IntrKernelTable => INTR_PARAMS_SIZE,
             Self::PciBarInfo => PCI_BAR_INFO_PARAMS_SIZE,
             Self::ChipInfo => CHIP_INFO_PARAMS_SIZE,
+            Self::UserRegisterAccessMap => USER_REGISTER_ACCESS_MAP_PARAMS_SIZE,
         }
     }
 
@@ -116,6 +131,9 @@ impl WantedTable {
             NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE => Some(Self::IntrKernelTable),
             NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO => Some(Self::PciBarInfo),
             NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO => Some(Self::ChipInfo),
+            NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP => {
+                Some(Self::UserRegisterAccessMap)
+            }
             _ => None,
         }
     }
@@ -226,6 +244,19 @@ impl CommandPolicy for InitTablePolicy {
                     &self.chip.chip_info,
                     &id,
                     self.chip.regs_aperture_len,
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ A **policy** answered from the chip row, and the refusal on the error
+            // arm is load-bearing rather than defensive: the encoder's job is to make the
+            // one combination that means "open all of BAR0 to unprivileged guest
+            // userspace" unencodable (`kayfabe_abi::regaccessmap`), and answering anyway
+            // when it declines would be exactly the widening it exists to prevent.
+            WantedTable::UserRegisterAccessMap => {
+                match regaccessmap::encode_user_register_access_map(
+                    &self.chip.user_register_access_map,
                 ) {
                     Ok(p) => p,
                     Err(_) => return refuse(),

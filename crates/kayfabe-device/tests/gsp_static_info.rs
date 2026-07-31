@@ -354,6 +354,7 @@ const fn copy_of_ga106() -> ChipProfile {
             is_cmp_sku: false,
             reg_bases: &[],
         },
+        user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
         fb_length: 0,
     }
 }

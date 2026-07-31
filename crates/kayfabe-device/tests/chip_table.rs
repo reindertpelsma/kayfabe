@@ -227,6 +227,7 @@ static OTHER: ChipProfile = ChipProfile {
         is_cmp_sku: true,
         reg_bases: OTHER_REG_BASES,
     },
+    user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
     fb_length: OTHER_FB_LENGTH,
 };
 
@@ -373,6 +374,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
         fb_regions: OTHER_FB_REGIONS,
         chip_info: NO_REG_BASES,
+        user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
         fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&OVERLAPPING, abi(), test_clock()).expect_err("must refuse");
@@ -409,6 +411,7 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
         fb_regions: OTHER_FB_REGIONS,
         chip_info: NO_REG_BASES,
+        user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
         fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&PAST_THE_END, abi(), test_clock()).expect_err("must refuse");
@@ -669,6 +672,7 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
         fb_regions: OTHER_FB_REGIONS,
         chip_info: NO_REG_BASES,
+        user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
         fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&COLLIDING, abi(), test_clock()).expect_err("must refuse");
@@ -709,6 +713,7 @@ fn a_counter_outside_the_aperture_is_refused_at_realize() {
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
         fb_regions: OTHER_FB_REGIONS,
         chip_info: NO_REG_BASES,
+        user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
         fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&TOO_HIGH, abi(), test_clock()).expect_err("must refuse");
@@ -1057,6 +1062,7 @@ fn a_chip_whose_pramin_window_swallows_a_gsp_register_is_refused_at_realize() {
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
         fb_regions: OTHER_FB_REGIONS,
         chip_info: NO_REG_BASES,
+        user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
         fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&PRAMIN_OVER_GSP, abi(), test_clock()).expect_err("must refuse");
