@@ -361,6 +361,30 @@ pub trait CommandPolicy: Send {
 /// decided by flag fields *the replying GSP fills in the reply body* — `EchoOk` avoids it
 /// only by the accident of reflecting a request in which the guest zeroed them itself.
 ///
+/// ## ★★★ And the guest does NOT always zero them — measured on hardware, 2026-07-31
+///
+/// The paragraph above assumes an `[OUT]` request arrives zeroed. It does not always.
+/// Run `t126b` on the bench (a stock 580.159.04 guest at `f2acb89`, driven with
+/// `nvidia-smi`) reached `kbusInitBarsSize_KERNEL`, whose params are an **uninitialised
+/// stack struct** — `NV2080_CTRL_BUS_GET_PCI_BAR_INFO_PARAMS params;` with no
+/// `portMemSet` (`ogkm-580: src/nvidia/src/kernel/gpu/bus/kern_bus.c:585`). RM serialises
+/// it into the RPC as-is, the echo hands it straight back, and the caller then trusts
+/// `params.pciBarCount` as a loop bound over an eight-element array
+/// (`kern_bus.c:595-598`). The guest kernel took a page fault reading off the end of its
+/// own `CONFIG_VMAP_STACK` stack, twice on two fresh boots:
+///
+/// ```text
+/// BUG: unable to handle page fault for address: ffffd4a44035c000
+/// RIP: 0010:kbusInitBarsSize_KERNEL+0x90/0x110 [nvidia]
+///  kbusStatePreInitLocked_GM107+0x73/0xe0 [nvidia]
+///  RmInitAdapter+0x12f2/0x1e80 [nvidia]
+/// ```
+///
+/// So the echo is not merely *uninformative* for an `[OUT]` control; for a control whose
+/// caller does not pre-zero, it is an **out-of-bounds read the guest performs on its own
+/// kernel stack** at our reply's instruction. Reflecting a request is never safe by
+/// default, and this is the measured proof of it.
+///
 /// The production policy (`kayfabe_rmrpc::GraphPolicy`) therefore answers an unmodelled
 /// control with a non-zero **envelope** `rpc_result`, which short-circuits the guest ahead
 /// of both the copy-out and the cache
