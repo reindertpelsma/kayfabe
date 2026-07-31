@@ -78,7 +78,7 @@ GPU and a wall clock, and a timing assertion in CI is a flake with a justificati
 ### 2.3 ★★★ SILENT PASSES
 
 **Zero** — measured by the census sweep of 2026-07-30 over `HEAD = 5c4cb0d`, re-checked by the
-`gate-census` phase of the run recorded in §7 (RTX 3090 box, `KAYFABE_SLOW=1`, KVM and both
+`gate-census` phase of the run recorded in §6 (RTX 3090 box, `KAYFABE_SLOW=1`, KVM and both
 ogkm trees present), and standing evidence thereafter: `gate-census` fails on any `SKIPPED`
 marker, and `tests/tests/full_suite_ledger.rs` fails if the instrument that emits them is
 weakened. That zero is a real property of the tree rather than luck: every
@@ -240,7 +240,71 @@ rustc is pointing at. It cost three phases of one run here (`fuzz-build`, `fuzz-
 15 characters, so the long form can never match and any "nothing is running" check built on
 it passes vacuously. `pkill -9 -x`, never `-f`.
 
-## 6. What this does NOT make runnable, named
+## 6. ★ The run of record
+
+★★ **Any bench claim carries the revision it was taken at** — the standing rule, and the
+reason it exists is that the C artifact's bench silently served a binary built from `862c7c2`
+for weeks while every result was attributed to HEAD. So, for this run: the box, the revision,
+the command, and the profile, all four together.
+
+| | |
+|---|---|
+| box | rented RTX 3090 (GA102), 38 cores / 73 GB, driver 580.159.04, Linux 6.8.0-59 |
+| revision | `bdba063` (branch `full-suite-runner`, based on `1227bab`) |
+| command | `scripts/run_full_suite.sh --allow-skip mutants` |
+| profile | `gpu-box`, auto-detected; all 14 requirements PRESENT |
+
+**`test-hardware`** (`KAYFABE_SLOW=1 cargo test --workspace --no-fail-fast`, KVM present,
+namespaces permitted, both ogkm trees present): **1229 passed / 0 failed / 1 ignored** across
+118 result lines, 304 s.
+
+**`gate-census`** — every gated family ran, none skipped:
+
+```
+  KVM              RAN 51    SKIPPED 0
+  SANDBOX          RAN 10    SKIPPED 0
+  VBIOS-ORACLE     RAN 10    SKIPPED 0
+  slow-gated       SKIPPED 0 (KAYFABE_SLOW=1 was set, so this must be 0)
+  #[ignore]d       1 (allowance 1)
+```
+
+Those 71 gated tests are the ones GitHub counts and never runs. This is the run in which
+they ran.
+
+**`target-census`** — `universe: 93 test targets + 24 doc-test packages (derived from cargo
+metadata, floor 80)` / `observed: 93 test-binary runs + 24 doc-test runs` / `every derived
+target produced output.`
+
+**`tsan`** — the four threaded suites under ThreadSanitizer with `KAYFABE_SLOW=1`: 78 tests,
+**0 races**, ~15 min.
+
+**`rm-ladder`** — R0→R17 against the real driver, including `R15 SEM LANDED` (the GPU
+consumed our ring and released our semaphore) and `R17 CE COPY` (4096 bytes moved by a real
+copy engine, read back through an independent mapping). **`rm-ladder-concurrency`** (R12, 800
+alloc/free pairs) reproduced the RTX 3060 result on a 3090: **1.03× / 1.04×** against an
+ideal of 4.00× — neither a worker pool nor separate RM clients buys alloc/free throughput,
+because the bottleneck is device-global.
+
+### ★ The four things that failed on the way, and what each was
+
+None of them was a defect in the suite; three were the runner reaching code nothing had ever
+run, and one was mine.
+
+1. **`ci-stable`** — the shared `/tmp/kayfabe-test.log`. §3.1.
+2. **`target-census`** — the census's own first execution reported all 24 doc-test packages
+   as never having run, because `cargo metadata` says `kayfabe-vmm-qemu` and cargo says
+   `Doc-tests kayfabe_vmm_qemu`. A false positive, and also the proof the check is not a
+   constant function.
+3. **`fuzz-build` / `fuzz-run` / `fuzz-corpus-replay`** — my own `touch` recipe, §5.
+4. **`qom-shim`** — `hw/misc/nvkvm/nvkvm.c` had never been compiled by anything in this
+   repository, and the first tree it was pointed at did not build:
+   `nvkvm_compat.h:69:12: fatal error: sysemu/kvm.h: No such file or directory`. One
+   `__has_include` probe stood in for two headers that moved into `system/` in **different**
+   QEMU cycles, so the whole 10.0 series was unbuildable. The file's own header had said the
+   in-between range was inferred and unbuilt; building it refuted the inference. Fixed with a
+   probe per header, and `qemu-system-x86_64` now links with our device in it.
+
+## 7. What this does NOT make runnable, named
 
 * **A guest VM.** Nothing in this suite boots one. The stock-driver milestone is measured by
   hand against a QEMU built from the `qom-shim` phase's output; that is a separate procedure
