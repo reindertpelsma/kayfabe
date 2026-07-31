@@ -18,7 +18,33 @@
 //! consumes them yet, and `mode2_abi_agnostic_layer.md` §5 residual 1 is explicit
 //! that codegen gives shapes and never protocol.
 
-use crate::wire::{AbiError, Field, StructLayout, u32_at};
+use crate::wire::{AbiError, Field, StructLayout, u8_at, u16_at, u32_at};
+
+/// `ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT` — the `exceptType` an MMU
+/// fault carries, and the number a host kernel log prints as **`Xid 31`**.
+///
+/// It is generated rather than written down for the ordinary reason, and for one extra:
+/// this repository's own design docs quote `Xid 31` dozens of times as a number READ OUT
+/// OF A HOST LOG. Typing `31` into a Rust source would put a second, uncheckable copy of
+/// it beside those readings.
+///
+/// ogkm `src/common/sdk/nvidia/inc/nverror.h`.
+pub const ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT: u32 = 0x1f;
+
+/// `NV2080_ENGINE_TYPE_GRAPHICS` — the `nv2080EngineType` of a GR
+/// context, compute or graphics.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/cl2080_notification.h`.
+pub const NV2080_ENGINE_TYPE_GRAPHICS: u32 = 0x1;
+
+/// `NV2080_ENGINE_TYPE_COPY0` — the base of the copy-engine range.
+///
+/// ★ The BASE, and the fault emitter deliberately does not add an instance to it: see
+/// `crate::rc::EngineRoute` for why a copy engine gets **no** RC event today rather than
+/// a guessed instance.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/cl2080_notification.h`.
+pub const NV2080_ENGINE_TYPE_COPY0: u32 = 0x9;
 
 /// RPC function IDs (`rpc_global_enums.h`, `X(RM, NAME, id)`).
 ///
@@ -395,14 +421,390 @@ const _: () = {
     assert!(core::mem::offset_of!(RpcMessageHeaderV0300, u) == 28);
 };
 
+/// `rpc_rc_triggered_v17_02` — ogkm `src/nvidia/generated/g_rpc-structures.h:1481`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RpcRcTriggeredV1702 {
+    /// `NvU32 nv2080EngineType` @ +0 (src/nvidia/generated/g_rpc-structures.h:1483).
+    pub nv2080_engine_type: u32,
+    /// `NvU32 chid` @ +4 (src/nvidia/generated/g_rpc-structures.h:1484).
+    pub chid: u32,
+    /// `NvU32 gfid` @ +8 (src/nvidia/generated/g_rpc-structures.h:1485).
+    pub gfid: u32,
+    /// `NvU32 exceptLevel` @ +12 (src/nvidia/generated/g_rpc-structures.h:1486).
+    pub except_level: u32,
+    /// `NvU32 exceptType` @ +16 (src/nvidia/generated/g_rpc-structures.h:1487).
+    pub except_type: u32,
+    /// `NvU32 scope` @ +20 (src/nvidia/generated/g_rpc-structures.h:1488).
+    pub scope: u32,
+    /// `NvU16 partitionAttributionId` @ +24 (src/nvidia/generated/g_rpc-structures.h:1489).
+    pub partition_attribution_id: u16,
+    /// `NvU32 mmuFaultAddrLo` @ +28 (src/nvidia/generated/g_rpc-structures.h:1490).
+    pub mmu_fault_addr_lo: u32,
+    /// `NvU32 mmuFaultAddrHi` @ +32 (src/nvidia/generated/g_rpc-structures.h:1491).
+    pub mmu_fault_addr_hi: u32,
+    /// `NvU32 mmuFaultType` @ +36 (src/nvidia/generated/g_rpc-structures.h:1492).
+    pub mmu_fault_type: u32,
+    /// `NvBool bCallbackNeeded` @ +40 (src/nvidia/generated/g_rpc-structures.h:1493).
+    pub b_callback_needed: u8,
+    /// `NvU32 rcJournalBufferSize` @ +44 (src/nvidia/generated/g_rpc-structures.h:1494).
+    pub rc_journal_buffer_size: u32,
+}
+
+impl RpcRcTriggeredV1702 {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "rpc_rc_triggered_v17_02";
+    /// `sizeof(rpc_rc_triggered_v17_02)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 48;
+    /// `alignof(rpc_rc_triggered_v17_02)`.
+    pub const ALIGN: usize = 4;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "rpc_rc_triggered_v17_02",
+        size: 48,
+        align: 4,
+        fields: &[
+            Field {
+                c_name: "nv2080EngineType",
+                rust_name: "nv2080_engine_type",
+                offset: 0,
+                width: 4,
+            },
+            Field {
+                c_name: "chid",
+                rust_name: "chid",
+                offset: 4,
+                width: 4,
+            },
+            Field {
+                c_name: "gfid",
+                rust_name: "gfid",
+                offset: 8,
+                width: 4,
+            },
+            Field {
+                c_name: "exceptLevel",
+                rust_name: "except_level",
+                offset: 12,
+                width: 4,
+            },
+            Field {
+                c_name: "exceptType",
+                rust_name: "except_type",
+                offset: 16,
+                width: 4,
+            },
+            Field {
+                c_name: "scope",
+                rust_name: "scope",
+                offset: 20,
+                width: 4,
+            },
+            Field {
+                c_name: "partitionAttributionId",
+                rust_name: "partition_attribution_id",
+                offset: 24,
+                width: 2,
+            },
+            Field {
+                c_name: "mmuFaultAddrLo",
+                rust_name: "mmu_fault_addr_lo",
+                offset: 28,
+                width: 4,
+            },
+            Field {
+                c_name: "mmuFaultAddrHi",
+                rust_name: "mmu_fault_addr_hi",
+                offset: 32,
+                width: 4,
+            },
+            Field {
+                c_name: "mmuFaultType",
+                rust_name: "mmu_fault_type",
+                offset: 36,
+                width: 4,
+            },
+            Field {
+                c_name: "bCallbackNeeded",
+                rust_name: "b_callback_needed",
+                offset: 40,
+                width: 1,
+            },
+            Field {
+                c_name: "rcJournalBufferSize",
+                rust_name: "rc_journal_buffer_size",
+                offset: 44,
+                width: 4,
+            },
+        ],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[
+        (
+            "nv2080_engine_type",
+            core::mem::offset_of!(RpcRcTriggeredV1702, nv2080_engine_type),
+        ),
+        ("chid", core::mem::offset_of!(RpcRcTriggeredV1702, chid)),
+        ("gfid", core::mem::offset_of!(RpcRcTriggeredV1702, gfid)),
+        (
+            "except_level",
+            core::mem::offset_of!(RpcRcTriggeredV1702, except_level),
+        ),
+        (
+            "except_type",
+            core::mem::offset_of!(RpcRcTriggeredV1702, except_type),
+        ),
+        ("scope", core::mem::offset_of!(RpcRcTriggeredV1702, scope)),
+        (
+            "partition_attribution_id",
+            core::mem::offset_of!(RpcRcTriggeredV1702, partition_attribution_id),
+        ),
+        (
+            "mmu_fault_addr_lo",
+            core::mem::offset_of!(RpcRcTriggeredV1702, mmu_fault_addr_lo),
+        ),
+        (
+            "mmu_fault_addr_hi",
+            core::mem::offset_of!(RpcRcTriggeredV1702, mmu_fault_addr_hi),
+        ),
+        (
+            "mmu_fault_type",
+            core::mem::offset_of!(RpcRcTriggeredV1702, mmu_fault_type),
+        ),
+        (
+            "b_callback_needed",
+            core::mem::offset_of!(RpcRcTriggeredV1702, b_callback_needed),
+        ),
+        (
+            "rc_journal_buffer_size",
+            core::mem::offset_of!(RpcRcTriggeredV1702, rc_journal_buffer_size),
+        ),
+    ];
+
+    /// Decode from a little-endian byte image of `rpc_rc_triggered_v17_02`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            nv2080_engine_type: u32_at(bytes, 0)?,
+            chid: u32_at(bytes, 4)?,
+            gfid: u32_at(bytes, 8)?,
+            except_level: u32_at(bytes, 12)?,
+            except_type: u32_at(bytes, 16)?,
+            scope: u32_at(bytes, 20)?,
+            partition_attribution_id: u16_at(bytes, 24)?,
+            mmu_fault_addr_lo: u32_at(bytes, 28)?,
+            mmu_fault_addr_hi: u32_at(bytes, 32)?,
+            mmu_fault_type: u32_at(bytes, 36)?,
+            b_callback_needed: u8_at(bytes, 40)?,
+            rc_journal_buffer_size: u32_at(bytes, 44)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.nv2080_engine_type.to_le_bytes();
+            bytes
+                .get_mut(0..4)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.chid.to_le_bytes();
+            bytes
+                .get_mut(4..8)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.gfid.to_le_bytes();
+            bytes
+                .get_mut(8..12)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.except_level.to_le_bytes();
+            bytes
+                .get_mut(12..16)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.except_type.to_le_bytes();
+            bytes
+                .get_mut(16..20)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.scope.to_le_bytes();
+            bytes
+                .get_mut(20..24)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.partition_attribution_id.to_le_bytes();
+            bytes
+                .get_mut(24..26)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.mmu_fault_addr_lo.to_le_bytes();
+            bytes
+                .get_mut(28..32)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.mmu_fault_addr_hi.to_le_bytes();
+            bytes
+                .get_mut(32..36)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.mmu_fault_type.to_le_bytes();
+            bytes
+                .get_mut(36..40)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.b_callback_needed.to_le_bytes();
+            bytes
+                .get_mut(40..41)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.rc_journal_buffer_size.to_le_bytes();
+            bytes
+                .get_mut(44..48)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(core::mem::size_of::<RpcRcTriggeredV1702>() == RpcRcTriggeredV1702::SIZE);
+    assert!(core::mem::align_of::<RpcRcTriggeredV1702>() == RpcRcTriggeredV1702::ALIGN);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, nv2080_engine_type) == 0);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, chid) == 4);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, gfid) == 8);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, except_level) == 12);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, except_type) == 16);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, scope) == 20);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, partition_attribution_id) == 24);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, mmu_fault_addr_lo) == 28);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, mmu_fault_addr_hi) == 32);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, mmu_fault_type) == 36);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, b_callback_needed) == 40);
+    assert!(core::mem::offset_of!(RpcRcTriggeredV1702, rc_journal_buffer_size) == 44);
+};
+
 /// Every struct this module generates, in declaration order — the enumerated-vs-
 /// exercised coverage surface (`mode2_abi_agnostic_layer.md` §2.3, rule 2).
-pub const STRUCTS: &[&StructLayout] = &[&RpcMessageHeaderV0300::LAYOUT];
+pub const STRUCTS: &[&StructLayout] =
+    &[&RpcMessageHeaderV0300::LAYOUT, &RpcRcTriggeredV1702::LAYOUT];
 
 /// The generator-computed offsets paired with rustc's own, per struct. The
 /// crate's tests walk this so the agreement is also a RUNTIME assertion the
 /// mutation gate can see.
-pub const RUSTC_OFFSETS: &[(&str, &[(&str, usize)])] = &[(
-    "rpc_message_header_v03_00",
-    RpcMessageHeaderV0300::RUSTC_OFFSETS,
-)];
+pub const RUSTC_OFFSETS: &[(&str, &[(&str, usize)])] = &[
+    (
+        "rpc_message_header_v03_00",
+        RpcMessageHeaderV0300::RUSTC_OFFSETS,
+    ),
+    (
+        "rpc_rc_triggered_v17_02",
+        RpcRcTriggeredV1702::RUSTC_OFFSETS,
+    ),
+];

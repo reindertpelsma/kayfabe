@@ -1,4 +1,9 @@
 /target
+# ★ The ABI generator is a separate cargo workspace run by hand
+# (`crates/kayfabe-abi/gen`), so its build output is NOT under the root `/target`
+# above. Left untracked it made two CI gates fail on `grep: … binary file matches`
+# the first time anyone regenerated the ABI (task #111).
+/crates/kayfabe-abi/gen/target
 Cargo.lock.orig
 # cargo-mutants run artifacts (the mutation-testing gate, decision #28)
 /mutants.out

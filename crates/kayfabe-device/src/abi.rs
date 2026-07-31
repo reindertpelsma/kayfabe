@@ -44,6 +44,7 @@ pub const FUNCTIONS: FunctionCodes = FunctionCodes {
     gsp_rm_alloc: rpcids::NV_VGPU_MSG_FUNCTION_GSP_RM_ALLOC,
     gsp_init_done: rpcids::NV_VGPU_MSG_EVENT_GSP_INIT_DONE,
     post_event: rpcids::NV_VGPU_MSG_EVENT_POST_EVENT,
+    rc_triggered: rpcids::NV_VGPU_MSG_EVENT_RC_TRIGGERED,
 };
 
 /// `MSGQ_VERSION` — byte-identical and on the same line at both vendored tags, only the

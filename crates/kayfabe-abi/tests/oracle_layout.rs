@@ -112,12 +112,16 @@ fn the_generators_layout_equals_rustcs_for_every_generated_struct() {
     }
     // Non-vacuity: a green run of a loop that never iterated is a zero nobody
     // re-checks (`testing_doctrine.md` §1).
-    assert_eq!(checked_structs, 19, "the slice is 19 generated structs");
-    // 4+7+11+8+7+7+9 (nvos) + 4+9+5+3 (classes) + 7+7 (ctrl) + 8 (rpc)
+    // ★ 19 -> 20 and 129 -> 141: `rpc_rc_triggered_v17_02` and its 12 fields, added
+    // for task #111's simulated-fault emitter (`docs/design/simulated_gpu_fault.md`).
+    // Both literals move together and both are moved BY HAND, which is what makes a
+    // silently-widened generator slice a red test rather than a bigger green number.
+    assert_eq!(checked_structs, 20, "the slice is 20 generated structs");
+    // 4+7+11+8+7+7+9 (nvos) + 4+9+5+3 (classes) + 7+7 (ctrl) + 8+12 (rpc)
     // + 4+2+17+5+5 (vbios). The first draft of this line said 66 and the test
     // caught it — which is the point of asserting the count rather than trusting
     // the loop ran.
-    assert_eq!(checked_fields, 129, "…with 129 fields between them");
+    assert_eq!(checked_fields, 141, "…with 141 fields between them");
 }
 
 /// The transcribed layout gets the same treatment. A hand-written table that
@@ -602,6 +606,49 @@ fn the_rpc_envelope_is_32_bytes_and_the_c_emulator_says_36_in_one_place() {
     );
 }
 
+/// ★★ The **robust-channel event** the simulated-fault emitter posts (task #111,
+/// `docs/design/simulated_gpu_fault.md`) — every offset pinned against the header, and
+/// the two that a hand-written encoder would get wrong called out.
+///
+/// The struct is byte-identical at both vendored tags
+/// (`ogkm-580: src/nvidia/generated/g_rpc-structures.h:1560-1577`, `ogkm-610: :1481-1498`),
+/// so there is no version seam to key on — which is itself worth pinning, because a
+/// future tag that moves a field must turn this test red rather than quietly shipping a
+/// fault event whose address lands in `mmuFaultType`.
+#[test]
+fn the_rc_triggered_event_has_two_padding_holes_a_hand_encoder_would_miss() {
+    let l = &rpc::RpcRcTriggeredV1702::LAYOUT;
+    assert_eq!(l.offset_of("nv2080_engine_type"), Some(0));
+    assert_eq!(l.offset_of("chid"), Some(4), "the ATTRIBUTION field");
+    assert_eq!(l.offset_of("gfid"), Some(8));
+    assert_eq!(l.offset_of("except_level"), Some(12));
+    assert_eq!(l.offset_of("except_type"), Some(16), "the Xid number");
+    assert_eq!(l.offset_of("scope"), Some(20));
+    assert_eq!(l.offset_of("partition_attribution_id"), Some(24));
+    // ★ HOLE 1: `partitionAttributionId` is an `NvU16` at +24 followed by an `NvU32`,
+    // so the compiler inserts two bytes and the next field is at +28, not +26. An
+    // encoder that packed the fields in declaration order would put the faulting
+    // address two bytes low and every field after it would be wrong.
+    assert_eq!(
+        l.offset_of("mmu_fault_addr_lo"),
+        Some(28),
+        "two padding bytes after the NvU16"
+    );
+    assert_eq!(l.offset_of("mmu_fault_addr_hi"), Some(32));
+    assert_eq!(l.offset_of("mmu_fault_type"), Some(36));
+    assert_eq!(l.offset_of("b_callback_needed"), Some(40));
+    // ★ HOLE 2: `NvBool` is one byte at +40, and `rcJournalBufferSize` is 4-aligned, so
+    // three bytes of padding follow.
+    assert_eq!(
+        l.offset_of("rc_journal_buffer_size"),
+        Some(44),
+        "three padding bytes after the NvBool"
+    );
+    // The flexible `rcJournalBuffer[]` tail starts at 48 and we always emit it empty.
+    assert_eq!(rpc::RpcRcTriggeredV1702::SIZE, 48);
+    assert_eq!(rpc::RpcRcTriggeredV1702::ALIGN, 4);
+}
+
 /// The signature word and the two boot-path ids, against the C emulator's
 /// literals.
 #[test]
@@ -910,6 +957,7 @@ fn every_generated_struct_is_covered_by_an_oracle_assertion() {
         "NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS",
         "NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY",
         "rpc_message_header_v03_00",
+        "rpc_rc_triggered_v17_02",
     ];
     let generated: Vec<&str> = nvos::STRUCTS
         .iter()

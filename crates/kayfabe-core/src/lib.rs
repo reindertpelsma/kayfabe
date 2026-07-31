@@ -149,6 +149,7 @@
 //! `RwLock` + split per-`Proc` borrows) over millions of interleaved ops, and is
 //! the suite to run under ThreadSanitizer (invocation documented there).
 
+pub mod fault;
 pub mod gpa;
 pub mod gpu;
 pub mod project;

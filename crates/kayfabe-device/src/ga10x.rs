@@ -550,3 +550,62 @@ pub static GA106: ChipProfile = ChipProfile {
     msix_vectors: MSIX_VECTORS,
     gsp_model: || Box::new(Ga10xGspModel::new()),
 };
+
+// ── The MMU fault-code table (Axis B, task #111) ───────────────────────────────────
+
+/// ★★ **The `NV_PFAULT_*` encoding for this generation** — the Axis-B half of the
+/// simulated-fault emitter (`docs/design/simulated_gpu_fault.md` §6).
+///
+/// The values come from the *chip's* hardware-reference header, which is where they
+/// belong and why they cannot be in a logic crate:
+/// `ogkm-580: kernel-open/nvidia-uvm/hwref/ampere/ga100/dev_fault.h:224-239`
+/// (`NV_PFAULT_FAULT_TYPE_*`) and `:459-472` (`NV_PFAULT_ACCESS_TYPE_*`).
+///
+/// ★ The header is `ampere/ga100`'s and this chip is a GA10x consumer part. That is not
+/// a substitution: the driver reaches the same numbers through the same path, because
+/// this generation's whole GMMU fault HAL dispatches to the Turing/Volta
+/// implementations — `kgmmuGetFaultRegisterMappings` resolves to `_TU102` for
+/// `TU102…GA107` alike (`ogkm-580: src/nvidia/generated/g_kern_gmmu_nvoc.c:775-786`),
+/// and the fault-type decode used on this part is `kgmmuGetFaultType_GV100`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/arch/volta/kern_gmmu_gv100.c:1699-1780`).
+/// The Pascal, Turing, Ampere and Blackwell copies of `dev_fault.h` all carry `PDE = 0`
+/// and `PTE = 2` at the same field width.
+///
+/// ★★★ **The range is closed, and out-of-range is not a lint.** `kgmmuGetFaultType_GV100`
+/// returns `NV_ERR_INVALID_ARGUMENT` from its `default:` arm, which fails
+/// `kgmmuParseFaultPacket_GV100`'s `NV_ASSERT_OR_RETURN`
+/// (`ogkm-580: kern_gmmu_gv100.c:1851-1852`) and aborts the guest's whole drain loop
+/// (`:2004-2005`) — so one bad code does not merely lose its own fault, it stops the
+/// guest servicing the faults behind it. `MmuFaultCause`'s vocabulary is closed for that
+/// reason and this table is total over it.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Ga10xFaultCodes;
+
+impl kayfabe_arch::fault::MmuFaultCodes for Ga10xFaultCodes {
+    fn fault_type(&self, cause: kayfabe_arch::fault::MmuFaultCause) -> u32 {
+        use kayfabe_arch::fault::MmuFaultCause as C;
+        match cause {
+            // `NV_PFAULT_FAULT_TYPE_PDE` = 0x0 (`dev_fault.h:224`).
+            C::NothingMapped => 0x0,
+            // `NV_PFAULT_FAULT_TYPE_RO_VIOLATION` = 0x6 (`dev_fault.h:230`). The guest's
+            // own decoder maps it to `fault_write`, i.e. "a write to a read-only page"
+            // (`ogkm-580: kern_gmmu_gv100.c:1699-1780`).
+            C::PermissionViolation => 0x6,
+        }
+    }
+
+    fn access_type(&self, access: kayfabe_arch::fault::MmuFaultAccess) -> u32 {
+        use kayfabe_arch::fault::MmuFaultAccess as A;
+        match access {
+            // `NV_PFAULT_ACCESS_TYPE_VIRT_READ` = 0x0 (`dev_fault.h:463`).
+            A::Read => 0x0,
+            // `NV_PFAULT_ACCESS_TYPE_VIRT_WRITE` = 0x1 (`:464`).
+            A::Write => 0x1,
+            // `NV_PFAULT_ACCESS_TYPE_VIRT_ATOMIC` = 0x2 (`:465`). The header gives the
+            // same value a second name, `VIRT_ATOMIC_STRONG` (`:466`); the weak flavour
+            // is a different code (0x4, `:468`) and this port does not distinguish them,
+            // so it reports the strong one rather than choosing at random.
+            A::Atomic => 0x2,
+        }
+    }
+}

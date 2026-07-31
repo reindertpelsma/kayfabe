@@ -91,11 +91,25 @@ pub struct FunctionCodes {
     pub gsp_init_done: u32,
     /// `POST_EVENT` — the completion carrier. **Not** on the bootup allowlist.
     pub post_event: u32,
+    /// `RC_TRIGGERED` — the **robust-channel** event: *this channel has been torn down,
+    /// and here is why* (task #111, `docs/design/simulated_gpu_fault.md`).
+    ///
+    /// ★ It is a GSP→CPU event and the direction is the reason this port needs it at
+    /// all. On a GSP-firmware driver the channel teardown runs on the GSP and only the
+    /// client notification runs on the CPU — the receiver's own comment says so:
+    /// *"RC error handling (\"Channel Teardown sequence\") is executed in GSP-RM.
+    /// Client notifications, OS interaction etc happen in CPU-RM (Kernel RM)."*
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:541-545`). In Mode 2 we
+    /// **are** the GSP, so there is no other component that could send it.
+    ///
+    /// ★★ **Not** on either tag's bootup allowlist, exactly like `POST_EVENT` — see
+    /// [`RpcFunction::allowed_in_bootup_window`].
+    pub rc_triggered: u32,
 }
 
 impl FunctionCodes {
     /// Every id, for the distinctness check.
-    fn all(&self) -> [u32; 12] {
+    fn all(&self) -> [u32; 13] {
         [
             self.set_guest_system_info,
             self.free,
@@ -109,6 +123,7 @@ impl FunctionCodes {
             self.gsp_rm_alloc,
             self.gsp_init_done,
             self.post_event,
+            self.rc_triggered,
         ]
     }
 
@@ -149,6 +164,7 @@ impl FunctionCodes {
             c if c == self.gsp_rm_alloc => RpcFunction::RmAlloc,
             c if c == self.gsp_init_done => RpcFunction::InitDone,
             c if c == self.post_event => RpcFunction::PostEvent,
+            c if c == self.rc_triggered => RpcFunction::RcTriggered,
             other => RpcFunction::Other(other),
         }
     }
@@ -200,6 +216,9 @@ pub enum RpcFunction {
     InitDone,
     /// The `POST_EVENT` event (we send it).
     PostEvent,
+    /// The `RC_TRIGGERED` event (we send it; the guest never does). The simulated GPU
+    /// fault's carrier — `docs/design/simulated_gpu_fault.md`.
+    RcTriggered,
     /// An id this table does not name. The guest logs and ignores unknown *events*
     /// (`ogkm-610: kernel_gsp.c:1587-1599`, `ogkm-580: :1610-1622` — byte-identical
     /// `default:` arm at both tags); an unknown *command* still gets a reply, because
