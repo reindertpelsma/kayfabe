@@ -475,6 +475,28 @@ impl Shim {
 /// [`kayfabe_device::RefusingRam`] and the shell installs the real port later, through
 /// [`kayfabe_device::RegPlane::set_ram`]. This is the thing it installs.
 ///
+/// # ★★★ What it bought, MEASURED
+///
+/// Run of record, task #124: 2026-07-31, at commit `3fb3fca`, on the QEMU 10.2.4 + KVM
+/// bench (`-device nvkvm-gpu`, 3 vCPU / 2 GiB), guest Ubuntu kernel 6.8.0-136 with the
+/// **stock, unpatched** open NVIDIA 580.159.04 module, driven by `nvidia-smi`.
+///
+/// Before this port, the guest's GSP bring-up ended at
+/// `GspStatusQueueInit: msgqRxLink failed: -7` followed by
+/// `_kgspBootGspRm: unexpected WPR2 already up`, because the LibOS boot-args write at
+/// `+0x110044` was refused `GspFault::GuestRam`. With it, the register trace shows that
+/// same write accepted (`MAILBOX0 = 0x20259000`, `MAILBOX1 = 0`) and **neither NVRM line
+/// appears at all**; the device's own audit closed the boot at
+/// *"faults 0, guest-RAM refusals 0"* over 2 813 reads and 870 writes, and the driver ran
+/// on into `RmInitAdapter`'s device pre-initialisation.
+///
+/// ★ Where it stops now is **one layer up and nothing to do with memory**: the guest asks
+/// the GSP for its engine-info and interrupt tables, the command policy in force is
+/// `kayfabe_gsp::EchoOk`, and an echoed reply carries no table — so RM reports
+/// `pEngineInfo->engineInfoList != NULL` failing, `NV_ERR_NO_MEMORY` out of
+/// `kfifoGetHostDeviceInfoTable_HAL`, and bails. That is a *protocol* wall, which is the
+/// shape a memory wall turns into once memory works.
+///
 /// # ★★ It is still a REFUSER, and that is the whole design
 ///
 /// [`kayfabe_vmm::Vmm::gpa_read`]/[`kayfabe_vmm::Vmm::gpa_write`] resolve through
