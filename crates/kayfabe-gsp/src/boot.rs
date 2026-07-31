@@ -376,6 +376,55 @@ impl CommandPolicy for EchoOk {
     }
 }
 
+/// Several policies, tried in order; the first `Some` wins.
+///
+/// ★ The seam is *one* policy, and that is right — the FSM must not know how many things
+/// have an opinion. But a port grows one answered command at a time, and folding each new
+/// one into the previous policy would make an unrelated pair share a type and a state.
+/// So composition lives here, as data: a policy that answers nothing returns `None` and
+/// the next is asked, and a chain that answers nothing at all is exactly [`EchoOk`].
+///
+/// ⚠ Order is precedence, and it is the caller's to declare. Two policies claiming one
+/// function is not detectable from here — it is a contradiction in the *port*, and the
+/// crate that installs them is where a test can name both.
+pub struct PolicyChain {
+    links: Vec<Box<dyn CommandPolicy>>,
+}
+
+impl PolicyChain {
+    /// Build a chain. Earlier links take precedence.
+    #[must_use]
+    pub fn new(links: Vec<Box<dyn CommandPolicy>>) -> PolicyChain {
+        PolicyChain { links }
+    }
+
+    /// How many links the chain has.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.links.len()
+    }
+
+    /// Whether the chain is empty — in which case it behaves as [`EchoOk`].
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.links.is_empty()
+    }
+}
+
+impl core::fmt::Debug for PolicyChain {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PolicyChain")
+            .field("links", &self.links.len())
+            .finish()
+    }
+}
+
+impl CommandPolicy for PolicyChain {
+    fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        self.links.iter_mut().find_map(|p| p.respond(cmd))
+    }
+}
+
 /// The faked GSP: one resettable value.
 ///
 /// Resettability is not a feature bolted on (lesson L12): [`GspFsm::device_reset`]

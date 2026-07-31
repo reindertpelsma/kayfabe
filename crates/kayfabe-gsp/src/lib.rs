@@ -124,8 +124,8 @@ pub mod ring;
 pub mod rpc;
 
 pub use boot::{
-    BootPhase, CommandPolicy, EchoOk, GspAbi, GspFsm, InitArgsLayout, QueueBinding, QueueState,
-    Reply, ServiceReport, Transition,
+    BootPhase, CommandPolicy, EchoOk, GspAbi, GspFsm, InitArgsLayout, PolicyChain, QueueBinding,
+    QueueState, Reply, ServiceReport, Transition,
 };
 pub use element::{
     ElementLayout, IncomingRpc, MsgLen, OutgoingRpc, TransportHdr, bytes_to_elements, checksum32,

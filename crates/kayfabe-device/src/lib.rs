@@ -54,7 +54,9 @@ pub mod abi;
 pub mod ga10x;
 pub mod inittables;
 pub mod plane;
+pub mod staticinfo;
 
+use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
@@ -179,6 +181,25 @@ pub struct ChipProfile {
     /// `subtreeMap[]`, which travels with [`ChipProfile::intr_table`] because RM copies it
     /// out of the same reply and asserts on one of its entries.
     pub intr_subtree_map: [u64; INTR_CATEGORY_COUNT],
+    /// ★★★ **The framebuffer regions this chip advertises — a promise, not a
+    /// description.**
+    ///
+    /// Every byte in a region with `reserved == 0` is memory the guest's heap will hand
+    /// out. On the row rather than in a logic crate for the usual reason, and with a
+    /// sharper edge than the engine list has: an invented region is not answered later
+    /// with `NV_ERR_NOT_SUPPORTED`, it is answered with a fault at an address that names
+    /// nothing. See [`ga10x::GA106_FB_REGIONS`], which states what backs each of its two
+    /// and why the oracle's other three are not here.
+    pub fb_regions: &'static [FbRegion],
+    /// `fb_length` — the same framebuffer, in bytes.
+    ///
+    /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and
+    /// [`ChipProfile::fb_regions`]' last limit is the second; RM reads all three and
+    /// believes each (`ogkm-580: mem_mgr_gsp_client.c:104-120`).
+    /// `kayfabe_abi::gspstaticinfo::encode_gsp_static_info` refuses a row whose regions
+    /// and `fb_length` disagree, and `tests/gsp_static_info.rs` pins it against the
+    /// register.
+    pub fb_length: u64,
 }
 
 impl core::fmt::Debug for ChipProfile {

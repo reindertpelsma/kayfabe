@@ -60,6 +60,30 @@ pub enum MapDmaWire {
     From580_65_06,
 }
 
+/// Which `GspStaticConfigInfo` shape a driver version speaks — the `GET_GSP_STATIC_INFO`
+/// (fn 65) reply body ([`crate::gspstaticinfo`]).
+///
+/// ★ The break is at **610.43.02** and it is structural, not a field move: 610 removes
+/// `grCapsBits[]`, `fbio_mask`, `fb_bus_width`, `fb_ram_type`, `fbp_mask`,
+/// `l2_cache_size` and `gpuNameString_Unicode[]`, and adds `bPdiValid`/`pdi` and
+/// `vbiosRevision` (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_static_config.h:78-169`
+/// vs `ogkm-610:` the same path). `grCapsBits[]` is the **first** member, so every offset
+/// in the struct moves — there is no shared prefix to lean on.
+///
+/// ⊘ Only [`GspStaticInfoWire::Pre610`] is encoded. The 580 offsets are pinned against an
+/// RTX 3060's own reply (`traces/mode2_c_reference/cap1b_coldboot_hermetic_d6` record
+/// 141977); there is no such capture for 610, no 610 guest has been booted here, and
+/// computing offsets for a struct this port has never seen on a wire is exactly the
+/// guess this crate exists to avoid. The variant exists so that the day one is captured
+/// is a table edit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GspStaticInfoWire {
+    /// `grCapsBits[23]` first; `fbRegionInfoParams` @344, `fb_length` @1352, 1792 bytes.
+    Pre610,
+    /// The 610 reshuffle. **Not encoded** — see the enum's doc.
+    From610_43_02,
+}
+
 /// Which `GSP_MSG_QUEUE_ELEMENT` shape a driver version speaks.
 ///
 /// ★ The break is at **610.43.02**, and it is the whole element header, not a field:
@@ -231,6 +255,14 @@ pub struct DriverAbiTable {
     map_dma: MapDmaWire,
     gsp_element: GspElementWire,
     gsp_init_args: GspInitArgsWire,
+    /// Which `GspStaticConfigInfo` shape this driver version reads back out of a
+    /// `GET_GSP_STATIC_INFO` reply ([`crate::gspstaticinfo`]).
+    ///
+    /// Here for the reason the whole module exists: the struct is reshuffled at
+    /// 610.43.02, and a port that answered every version with one layout would be
+    /// handing a 610 guest a region table read at the wrong offsets — the failure that
+    /// looks like corrupt memory rather than like a version mismatch.
+    gsp_static_info: GspStaticInfoWire,
     /// ★ The **default-deny RM capability surface** for this boundary
     /// ([`crate::capability`]): which control commands and which allocation
     /// classes a guest at this driver version may name at all.
@@ -269,6 +301,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         map_dma: MapDmaWire::Pre580_65_06,
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
+        gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_BASE,
         vbios: VbiosWire::Tu102Bit,
         note: "oldest supported: NVOS47 gained `size` here \
@@ -290,6 +323,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         map_dma: MapDmaWire::Pre580_65_06,
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
+        gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_560_28_03,
         vbios: VbiosWire::Tu102Bit,
         note: "capability-only boundary: +8 allocation classes, no layout change \
@@ -304,6 +338,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         map_dma: MapDmaWire::Pre580_65_06,
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
+        gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_570_86_15,
         vbios: VbiosWire::Tu102Bit,
         note: "capability-only boundary: +6 allocation classes, no layout change \
@@ -340,6 +375,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         map_dma: MapDmaWire::Pre580_65_06,
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
+        gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_570_86_15,
         vbios: VbiosWire::Tu102Bit,
         note: "★ the first SUBTRACTIVE boundary: nvproxy replaces two DRAM-encryption \
@@ -357,6 +393,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         map_dma: MapDmaWire::From580_65_06,
         gsp_element: GspElementWire::Pre610,
         gsp_init_args: GspInitArgsWire::FourField,
+        gsp_static_info: GspStaticInfoWire::Pre610,
         caps: &CAPS_580_65_06,
         vbios: VbiosWire::Tu102Bit,
         note: "NVOS46 gained flags2+kindOverride, and +2 allocation classes \
@@ -371,6 +408,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         map_dma: MapDmaWire::From580_65_06,
         gsp_element: GspElementWire::From610_43_02,
         gsp_init_args: GspInitArgsWire::NineField,
+        gsp_static_info: GspStaticInfoWire::From610_43_02,
         caps: &CAPS_580_65_06,
         vbios: VbiosWire::Tu102Bit,
         note: "★ the GSP element header changes shape here: 48 bytes with an \
@@ -443,6 +481,12 @@ impl DriverAbiTable {
     #[must_use]
     pub fn gsp_init_args_wire(&self) -> GspInitArgsWire {
         self.gsp_init_args
+    }
+
+    /// Which `GspStaticConfigInfo` shape this version reads a fn-65 reply as.
+    #[must_use]
+    pub fn gsp_static_info_wire(&self) -> GspStaticInfoWire {
+        self.gsp_static_info
     }
 
     /// `GSP_MSG_QUEUE_ELEMENT_SIZE_MIN` — `RM_PAGE_SIZE`, the granularity a run is

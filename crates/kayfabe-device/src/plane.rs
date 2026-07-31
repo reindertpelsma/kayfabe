@@ -350,7 +350,14 @@ impl RegPlane {
             state: Mutex::new(PlaneState {
                 fsm: GspFsm::new(abi),
                 ram: Box::new(RefusingRam),
-                policy: Box::new(crate::inittables::InitTablePolicy::new(chip, abi.driver)),
+                // ★ Order is precedence and the two links are disjoint by function code:
+                // `InitTablePolicy` claims only `GSP_RM_CONTROL`, `StaticInfoPolicy` only
+                // `GET_GSP_STATIC_INFO`. `tests/gsp_static_info.rs` pins the disjointness
+                // rather than trusting the reading.
+                policy: Box::new(kayfabe_gsp::PolicyChain::new(vec![
+                    Box::new(crate::inittables::InitTablePolicy::new(chip, abi.driver)),
+                    Box::new(crate::staticinfo::StaticInfoPolicy::new(chip, abi.driver)),
+                ])),
                 unclaimed: Vec::new(),
             }),
             c: PlaneCounters::default(),

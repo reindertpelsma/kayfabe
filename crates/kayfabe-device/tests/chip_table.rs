@@ -104,6 +104,33 @@ static OTHER_ENGINES: &[kayfabe_abi::inittables::FifoDeviceEntry] =
     }];
 
 /// This chip's interrupt table, likewise its own.
+/// A framebuffer geometry that is deliberately NOT GA106's: 2 GiB, with a 1 MiB carve-out
+/// at the top. If the encoder were reading a generation instead of the row, this would
+/// come out as 12 GiB.
+static OTHER_FB_REGIONS: &[kayfabe_abi::gspstaticinfo::FbRegion] = &[
+    kayfabe_abi::gspstaticinfo::FbRegion {
+        base: 0,
+        limit: 0x7FEF_FFFF,
+        reserved: 0,
+        performance: 1,
+        support_compressed: false,
+        support_iso: true,
+        protected: false,
+    },
+    kayfabe_abi::gspstaticinfo::FbRegion {
+        base: 0x7FF0_0000,
+        limit: 0x7FFF_FFFF,
+        reserved: 0x0010_0000,
+        performance: 0,
+        support_compressed: false,
+        support_iso: false,
+        protected: false,
+    },
+];
+
+/// 2 GiB, matching [`OTHER_FB_REGIONS`]' last limit.
+const OTHER_FB_LENGTH: u64 = 0x8000_0000;
+
 static OTHER_INTR: &[kayfabe_abi::inittables::IntrTableEntry] =
     &[kayfabe_abi::inittables::IntrTableEntry {
         engine_idx: 3,
@@ -134,6 +161,8 @@ static OTHER: ChipProfile = ChipProfile {
     engines: OTHER_ENGINES,
     intr_table: OTHER_INTR,
     intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
+    fb_regions: OTHER_FB_REGIONS,
+    fb_length: OTHER_FB_LENGTH,
 };
 
 fn abi() -> kayfabe_gsp::GspAbi {
@@ -275,6 +304,8 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
         engines: OTHER_ENGINES,
         intr_table: OTHER_INTR,
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
+        fb_regions: OTHER_FB_REGIONS,
+        fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&OVERLAPPING, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -306,6 +337,8 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
         engines: OTHER_ENGINES,
         intr_table: OTHER_INTR,
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
+        fb_regions: OTHER_FB_REGIONS,
+        fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&PAST_THE_END, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -561,6 +594,8 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
         engines: OTHER_ENGINES,
         intr_table: OTHER_INTR,
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
+        fb_regions: OTHER_FB_REGIONS,
+        fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&COLLIDING, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -596,6 +631,8 @@ fn a_counter_outside_the_aperture_is_refused_at_realize() {
         engines: OTHER_ENGINES,
         intr_table: OTHER_INTR,
         intr_subtree_map: [9, 0, 0, 0, 0, 0, 0],
+        fb_regions: OTHER_FB_REGIONS,
+        fb_length: OTHER_FB_LENGTH,
     };
     let e = RegPlane::new(&TOO_HIGH, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -690,4 +727,43 @@ fn the_second_chip_serves_its_own_init_tables_through_unchanged_code() {
     .expect("the second chip's interrupt table encodes");
     assert_eq!(u32::from_le_bytes(intr[0..4].try_into().unwrap()), 1);
     assert_eq!(u64::from_le_bytes(intr[2056..2064].try_into().unwrap()), 9);
+
+    // ★★ And the FB region table, which is the sharper case: the second chip's
+    // framebuffer is 2 GiB where GA106's is 12, and both go through one encoder.
+    let body = kayfabe_abi::gspstaticinfo::encode_gsp_static_info(
+        &kayfabe_abi::gspstaticinfo::GspStaticInfo {
+            fb_regions: OTHER.fb_regions,
+            fb_length: OTHER.fb_length,
+        },
+        kayfabe_abi::versions::GspStaticInfoWire::Pre610,
+    )
+    .expect("the second chip's FB regions encode");
+    // Literals, for the reason `tests/gsp_static_info.rs` states at length.
+    assert_eq!(u32::from_le_bytes(body[344..348].try_into().unwrap()), 2);
+    assert_eq!(
+        u64::from_le_bytes(body[352..360].try_into().unwrap()),
+        0,
+        "fbRegion[0].base"
+    );
+    assert_eq!(
+        u64::from_le_bytes(body[360..368].try_into().unwrap()),
+        0x7FEF_FFFF,
+        "fbRegion[0].limit — this chip's, not GA106's"
+    );
+    assert_eq!(
+        u64::from_le_bytes(body[1352..1360].try_into().unwrap()),
+        0x8000_0000
+    );
+    assert_ne!(
+        body,
+        kayfabe_abi::gspstaticinfo::encode_gsp_static_info(
+            &kayfabe_abi::gspstaticinfo::GspStaticInfo {
+                fb_regions: kayfabe_device::ga10x::GA106.fb_regions,
+                fb_length: kayfabe_device::ga10x::GA106.fb_length,
+            },
+            kayfabe_abi::versions::GspStaticInfoWire::Pre610,
+        )
+        .expect("encodes"),
+        "two chips encoded to the same framebuffer, so the row is not actually being read"
+    );
 }

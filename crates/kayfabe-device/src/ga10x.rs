@@ -39,6 +39,7 @@
 //! variant for; `decode_reg` returns `None` there, which the FSM treats as *"another
 //! model owns this offset"* and never as a defaulted zero (plan §11-O1, still open).
 
+use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::vbios::VbiosWire;
 use kayfabe_arch::gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
@@ -896,6 +897,89 @@ pub static GA106_INTR_TABLE: &[IntrTableEntry] = &[
 /// `ctl_20800a5c` blob exactly. `UVM_OWNED = 0x2` is the load-bearing one.
 pub static GA106_INTR_SUBTREE_MAP: [u64; INTR_CATEGORY_COUNT] = [0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4];
 
+// ---------------------------------------------------------------------------------------
+// The FB region table — the memory this device says it has, and can be asked for.
+// ---------------------------------------------------------------------------------------
+
+/// The framebuffer this device advertises, in bytes. [`FB_SIZE_MB`], once.
+pub const GA106_FB_LENGTH: u64 = FB_SIZE_MB << 20;
+
+/// The contiguous carve-out at the **top** of FB that a GA10x GSP keeps for itself.
+///
+/// ★ Read off the oracle's own answer, not chosen: in
+/// `traces/mode2_c_reference/cap1b_coldboot_hermetic_d6` record 141977 — the 1792-byte
+/// `GspStaticConfigInfo` an RTX 3060's GSP posted — regions 2, 3 and 4 are contiguous,
+/// each carries `reserved == its own size`, and together they span
+/// `[0x2_EFBE_0000, 0x2_FFFF_FFFF]` of a 12 GiB board. That is the top `0x1042_0000`
+/// bytes, and it is the number below. (Regions 0 and 1 of that capture are the low
+/// reserved area and the usable heap; see [`GA106_FB_REGIONS`] for why only one of the
+/// two survives here.)
+///
+/// ⚠ It is deliberately **larger** than the WPR2 + FRTS + VGA-workspace range this device
+/// publishes in `NV_PFB_PRI_MMU_WPR2_ADDR_{LO,HI}`. Over-reserving costs heap; under-
+/// reserving hands the guest memory its own firmware sits in. The const assertion below
+/// pins the direction.
+const FW_CARVE_OUT_BYTES: u64 = 0x1042_0000;
+
+/// Where [`FW_CARVE_OUT_BYTES`] starts, given the FB this device advertises.
+const FW_CARVE_OUT_BASE: u64 = GA106_FB_LENGTH - FW_CARVE_OUT_BYTES;
+
+// ★★ The two publications must not drift: `frts_offset()` is what the guest's FWSEC check
+// exact-compares against `NV_PFB_PRI_MMU_WPR2_ADDR_LO`, so the byte it names is firmware
+// territory and must fall inside the reserved region. A build error here means the FB size
+// and the WPR2 layout have been changed independently of each other.
+const _: () = assert!(FW_CARVE_OUT_BASE < frts_offset());
+const _: () = assert!(gsp_fw_wpr_end() < GA106_FB_LENGTH);
+
+/// ★★★ **The FB regions this device serves, and what backs each.**
+///
+/// Two, both derived from [`FB_SIZE_MB`]:
+///
+/// | # | range | `reserved` | what backs it |
+/// |---|---|---|---|
+/// | 0 | `0 .. FW_CARVE_OUT_BASE-1` | 0 — **usable** | the framebuffer this device already advertises at `NV_USABLE_FB_SIZE_IN_MB` ([`USABLE_FB_SIZE_IN_MB_ADDR`]); one constant, and the guest is told it twice |
+/// | 1 | `FW_CARVE_OUT_BASE .. top` | its own size — **reserved** | the WPR2/FRTS/VGA-workspace layout this device publishes in `NV_PFB_PRI_MMU_WPR2_ADDR_{LO,HI}`, derived from [`gsp_fw_wpr_end`] and [`frts_offset`] and const-asserted to lie inside |
+///
+/// ## ⊘ What was omitted from the oracle's five, and why
+///
+/// | oracle region | disposition |
+/// |---|---|
+/// | 0: `[0, 0x0310_FFFF]`, 49 MiB, reserved | **dropped.** It backs the real GSP-RM's own low allocations. This GSP has none — nothing of ours lives below the carve-out — so reserving it would be 49 MiB withheld to imitate a firmware that is not running. |
+/// | 1: `[0x0311_0000, 0x2_EFBD_FFFF]`, usable | **kept, and widened** to start at 0, absorbing the dropped region 0. |
+/// | 2, 3, 4: `[0x2_EFBE_0000, 0x2_FFFF_FFFF]`, all reserved | **merged into one row.** The split is the real GSP's internal heap/BAR2-page-directory/WPR bookkeeping, and RM treats all three identically — `reserved != 0` is the only bit it reads (`ogkm-580: mem_mgr_gsp_client.c:96-100`). Three rows describing one property is three chances to disagree. |
+///
+/// ## ⚠ What this table promises that is not yet built
+///
+/// Region 0 says every byte below the carve-out can be allocated. The data plane does not
+/// back guest FB yet, so what is really being stated is the *address space* the guest may
+/// place allocations in — which is exactly what the register plane already claims. The
+/// first allocation that must resolve to real memory is a later rung, and it will read
+/// this table rather than restate it.
+pub static GA106_FB_REGIONS: &[FbRegion] = &[
+    FbRegion {
+        base: 0,
+        limit: FW_CARVE_OUT_BASE - 1,
+        reserved: 0,
+        // The oracle's usable region reports 6, compressed and ISO both allowed. There is
+        // one region to compare against, so the number is only ever equal to itself.
+        performance: 6,
+        support_compressed: true,
+        support_iso: true,
+        protected: false,
+    },
+    FbRegion {
+        base: FW_CARVE_OUT_BASE,
+        limit: GA106_FB_LENGTH - 1,
+        // `reserved` is the region's own size: RM makes the whole region reserved on any
+        // non-zero value, and stating the size is what makes `reservedMemSize` add up.
+        reserved: FW_CARVE_OUT_BYTES,
+        performance: 0,
+        support_compressed: false,
+        support_iso: false,
+        protected: false,
+    },
+];
+
 /// ★ **The GA106 row.** Everything above, selected.
 ///
 /// The PCI identity is deliberately *incomplete* here: the vendor id and class code are
@@ -924,6 +1008,8 @@ pub static GA106: ChipProfile = ChipProfile {
     engines: GA106_ENGINES,
     intr_table: GA106_INTR_TABLE,
     intr_subtree_map: GA106_INTR_SUBTREE_MAP,
+    fb_regions: GA106_FB_REGIONS,
+    fb_length: GA106_FB_LENGTH,
 };
 
 // ── The MMU fault-code table (Axis B, task #111) ───────────────────────────────────
