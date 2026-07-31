@@ -52,6 +52,30 @@
 //! this device did. ⊘ Accepting it is not a promise to fill it; it is an acknowledgement
 //! that we received the declaration, which is all the guest asked for.
 //!
+//! ### `UNLOADING_GUEST_DRIVER` (fn 47)
+//!
+//! ★★★ The one whose refusal **escapes the teardown**. `kgspUnloadRm_IMPL` stashes the
+//! RPC's status (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:4301`), runs the
+//! *whole* unload — suspend poll, log dump, `kgspTeardown_HAL` — and then, at the very
+//! end, `if (rpcStatus != NV_OK) return rpcStatus;` (`:4341-4343`) in preference to the
+//! teardown's own status. So a refusal here is not absorbed anywhere: it comes back out of
+//! `rmmod` as the whole unload's result, after everything has already succeeded.
+//!
+//! ★★ And it is eligible by this module's own rule, not by convenience.
+//! `rpcUnloadingGuestDriver_v1F_07` sends `{bInPMTransition, bGc6Entering, newLevel}` and
+//! reads back **only** `_issueRpcAndWait`'s status (`ogkm-580: rpc.c:9168-9192`) — there is
+//! no `[OUT]` field to get wrong, exactly as for `INIT_GSP_TRACE_CRASH_BUFFER`.
+//!
+//! ⊘ *"Inert"* here is a statement about the **reply body**, not about the transport.
+//! `GspFsm::answer` fires E9 on fn 47 regardless of what any policy returned — reply
+//! first, then `Suspending`, so `MAILBOX0` reports the suspend sentinel the guest's close
+//! poll spins on. That is the FSM's business and it is unchanged; what changes is that the
+//! guest is no longer told its own teardown failed.
+//!
+//! ★ And our doing nothing is a *true* report: this port's GSP is not running firmware, so
+//! there is no GSP-side driver state to unload. The guest asked us to acknowledge that it
+//! is going away, and it is.
+//!
 //! ⊘ The address the guest sent is **not recorded**. Nothing here may write to it, so
 //! keeping it would be storing a guest-supplied pointer with no consumer — and the day
 //! something does want to write GSP traces, it will need the address *and* a guest-RAM
@@ -79,7 +103,10 @@ impl InertPolicy {
     /// and so a test can pin the list rather than trusting a `match`.
     #[must_use]
     pub fn is_inert(function: RpcFunction) -> bool {
-        matches!(function, RpcFunction::InitGspTraceCrashBuffer)
+        matches!(
+            function,
+            RpcFunction::InitGspTraceCrashBuffer | RpcFunction::UnloadingGuestDriver
+        )
     }
 }
 
