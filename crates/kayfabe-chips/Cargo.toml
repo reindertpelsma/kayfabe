@@ -11,6 +11,11 @@ kayfabe-util.workspace = true
 # The Axis-B seams this crate implements. It is an ADAPTER: this is where a real chip's
 # offsets are allowed to live, and the reason `kayfabe-gsp` has none.
 kayfabe-arch.workspace = true
+# ★ For `FalconSecureBooterBoot` (task #121) — the falcon/secure-booter BOOT SEQUENCE, one
+# implementation of the Axis-B `BootSequence` seam that Ada SELECTS and Hopper does not.
+# It carries no offsets and no chip facts, which is why it can be shared across adapter
+# crates without either of them inheriting the other's ordering.
+kayfabe-gsp.workspace = true
 # The non-GSP half of `Arch`, composed exactly the way `kayfabe-crec`'s GA10x model
 # composes onto it — so the second generation is measured against the same baseline the
 # first one was.

@@ -22,23 +22,29 @@
 //! selects the easiest member of its universe produces a green with no red available to
 //! it — the same defect as a gate quantified over a shortened list.
 //!
-//! ## [`gh100`] — Hopper. The claim FAILS, and the failure is in a logic crate
+//! ## [`gh100`] — Hopper. The hard member, and it is where the seam was actually built
 //!
 //! Hopper's registers are *also* mostly at the same offsets (see [`gh100`]'s constants,
-//! all read from `ogkm-580`'s `hopper/gh100/` headers). It is not the offsets. It is that
-//! **the boot sequence the FSM implements does not exist on this generation**, and the
-//! FSM's `mmio_write` dispatcher spells that sequence out in `match` arms over the
-//! [`GspReg`] enum — in `kayfabe-gsp`, a logic crate, whose whole stated contract is that
-//! it contains no generation-specific behaviour.
+//! all read from `ogkm-580`'s `hopper/gh100/` headers). It was never the offsets. It was
+//! that **the boot sequence had no seam**: `GspFsm::mmio_write` spelled the
+//! falcon/secure-booter ordering out in `match` arms over the [`GspReg`] enum, inside
+//! `kayfabe-gsp` — a logic crate — so a generation whose boot is driven by an FSP command
+//! queue could be expressed only by editing the ordering GA10x boots on.
 //!
-//! [`Gh100GspModel`] is therefore written to be **structurally honest rather than
-//! green**: it declines (returns `None` from `decode_reg`) for the two SEC2 Booter
-//! registers, because on this generation those registers carry no boot meaning at all,
-//! and it names in [`gh100::MISSING_TRANSITIONS`] the boot events that have no `GspReg`
-//! to hang on. The crate's test asserts that the FSM cannot be driven past
-//! `BootPhase::FwsecRan` by any [`GspReg`] write on this model — i.e. it *pins the
-//! refutation*, so a later change that fixes the seam turns a test red rather than
-//! passing silently.
+//! ★★★ **Task #121 (2026-07-31) reframed and then fixed that.** Arch-specific boot code
+//! is legitimate and has to exist somewhere; the defect was that it was *unhooked*. The
+//! ordering now lives behind `kayfabe_arch::BootSequence`, and
+//! [`gh100::Gh100FspBoot`] is a second one, added **alongside**:
+//!
+//! - it lives in this crate, at this crate's offsets — `NV_PFSP_EMEMC`/`EMEMD` and the
+//!   FSP command queue, none of which any [`GspReg`] variant names;
+//! - it declares **three** boot stages where the falcon regime declares five, because one
+//!   FSP command does what four falcon writes do;
+//! - landing it changed **zero lines** of `kayfabe_gsp::seq::FalconSecureBooterBoot`, of
+//!   `kayfabe_device::ga10x` or of [`ad10x`].
+//!
+//! [`gh100::ARCH_LOCAL_BOOT_EVENTS`] carries the four boot events with no `GspReg` to
+//! hang on, three now served through the seam and **one still unmodelled and saying so**.
 //!
 //! [`Arch`]: kayfabe_arch::Arch
 //! [`GspModel`]: kayfabe_arch::gsp::GspModel

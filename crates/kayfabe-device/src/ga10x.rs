@@ -42,7 +42,8 @@
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::vbios::VbiosWire;
-use kayfabe_arch::gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
+use kayfabe_arch::gsp::{BootSequence, GspModel, GspObservation, GspReg, LibosRegionLayout};
+use kayfabe_gsp::FalconSecureBooterBoot;
 
 use crate::{BootReg, ChipProfile, PtimerRegs, RomWindow};
 
@@ -229,17 +230,22 @@ pub const RMARGS_ID: u64 = 0x0000_524d_4152_4753;
 
 /// The GA10x GSP register model.
 ///
-/// A value with no fields: everything it knows is a compile-time constant of the
-/// generation, and there is nothing to configure. Constructed by [`Ga10xGspModel::new`]
-/// so it stays extensible without churning callers.
+/// Its one field is the **boot sequence it selects** (task #121). A model is a per-GPU
+/// *value*, not a compile-time choice, and holding the sequence as a field rather than
+/// returning a process-wide singleton is what keeps it that way: two `GpuId`s can hold
+/// two models selecting two different sequences without anything in this crate changing.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Ga10xGspModel;
+pub struct Ga10xGspModel {
+    boot: FalconSecureBooterBoot,
+}
 
 impl Ga10xGspModel {
     /// The model.
     #[must_use]
     pub fn new() -> Ga10xGspModel {
-        Ga10xGspModel
+        Ga10xGspModel {
+            boot: FalconSecureBooterBoot::new(),
+        }
     }
 
     /// Where this model puts a register, so a harness can address one without knowing the
@@ -373,6 +379,16 @@ impl GspModel for Ga10xGspModel {
             GspReg::Sec2FalconMailbox0 => 0,
             GspReg::GspQueueHead(_) => 0,
         })
+    }
+
+    /// ★ This generation is inside the falcon/secure-booter regime: NVIDIA's own
+    /// generated HAL binds those implementations for every function the shared `GspReg`
+    /// vocabulary models across `TU102…AD107`
+    /// (`ogkm-580: src/nvidia/generated/g_gpu_nvoc.c:2374-2385`). Selecting the shared
+    /// implementation is one line and states the fact; inheriting it by omission would
+    /// state nothing, which is why [`GspModel::boot_sequence`] has no default.
+    fn boot_sequence(&self) -> &dyn BootSequence {
+        &self.boot
     }
 
     fn libos_region_layout(&self) -> LibosRegionLayout {

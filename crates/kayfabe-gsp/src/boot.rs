@@ -62,7 +62,9 @@ use crate::ram::{GuestRam, RegionMap};
 use crate::ring::{MsgqAbi, MsgqGeometry, RxCursor, TxCursor, available_elements, free_elements};
 use crate::rpc::{Disposition, RpcAbi, RpcCommand, RpcFunction};
 use kayfabe_abi::versions::DriverAbiTable;
-use kayfabe_arch::{Arch, GspObservation, GspReg};
+use kayfabe_arch::{
+    Arch, ArchBootState, BootContext, BootPhase, BootStep, GspObservation, RegWrite,
+};
 
 /// Where the fields of `MESSAGE_QUEUE_INIT_ARGUMENTS` are, for one driver version.
 ///
@@ -134,39 +136,12 @@ pub struct GspAbi {
     pub driver: DriverAbiTable,
 }
 
-/// The boot phase — what is *true* about the emulated GSP.
-///
-/// Ordered so that "WPR2 is up" is a range test, exactly as
-/// `mode2_gsp_port_plan.md` §3.2's observable table states it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub enum BootPhase {
-    /// Power-on, or post-reset. WPR2 down.
-    #[default]
-    Cold,
-    /// FWSEC has run: WPR2 is up, the RISC-V core reports active.
-    FwsecRan,
-    /// The SEC2 Booter Load has run.
-    Booted,
-    /// `GSP_INIT_DONE` was posted **and drained by the guest**: the RPC plane is live and
-    /// unsolicited events are allowed (§7-G7).
-    Running,
-    /// fn-47 has been serviced: `MAILBOX0` reports the suspend sentinel.
-    Suspending,
-    /// Torn down. WPR2 down, no binding.
-    Halted,
-}
-
-impl BootPhase {
-    /// Is WPR2 up in this phase? `phase >= FwsecRan && phase < Halted`
-    /// (`ogkm-610: kernel_gsp_tu102.c:1172-1180`, `ogkm-580: :1252-1260` is the guest's own
-    /// test — `kgspIsWpr2Up_TU102`, byte-identical at both tags — and
-    /// `ogkm-610: kernel_gsp.c:4805-4809`, `ogkm-580: :3873-3877` is the boot gate that
-    /// reads it, likewise identical). No version seam here.
-    #[must_use]
-    pub fn wpr2_up(self) -> bool {
-        self >= BootPhase::FwsecRan && self < BootPhase::Halted
-    }
-}
+// ★ [`BootPhase`] moved to `kayfabe_arch::gsp` at task #121 and is re-exported below.
+// It is now read by TWO planes — the register model, whose answer for a register can
+// depend on the stage, and the boot sequence, which decides what the next write means —
+// and neither of them may depend on this crate. Its `ProtectedRegionUp` variant was renamed
+// `ProtectedRegionUp` in the same move: see that type's docs for why one firmware's name
+// for one generation's way of reaching a stage must not be the stage's name.
 
 /// A live queue binding: the geometry **and** both cursors, as one value.
 ///
@@ -236,7 +211,7 @@ pub enum QueueState {
 /// asserts on this list, not on a downstream side effect that several transitions share.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Transition {
-    /// GSP STARTCPU from `Cold`/`Halted` → `FwsecRan`, WPR2 up.
+    /// GSP STARTCPU from `Cold`/`Halted` → `ProtectedRegionUp`, WPR2 up.
     E1,
     /// GSP STARTCPU while `Suspending` → `Halted`. WPR2 stays down, no rebind, no
     /// re-posted `INIT_DONE` — the trailing teardown STARTCPU.
@@ -475,7 +450,13 @@ pub struct GspFsm {
     /// alone (`C:4298-4302`); the conjunction is more robust ([inferred] I4) only if the
     /// terms are cleared when the pair stops meaning anything.
     boot_args_seen: (bool, bool),
-    sec2_mailbox0: u32,
+    /// ★ Generation-local boot state, stored here and **never interpreted here**.
+    ///
+    /// This field replaces `sec2_mailbox0`, which was one boot regime's latch — the
+    /// secure-booter argument — living as a named field on the arch-independent value.
+    /// Whatever a generation's [`kayfabe_arch::BootSequence`] must remember between
+    /// writes goes in here, which means [`GspFsm::device_reset`] clears it for free.
+    arch_state: ArchBootState,
     init_done_posted: bool,
     /// The status stream's next per-message sequence number.
     stat_seq: u32,
@@ -520,7 +501,7 @@ impl GspFsm {
             mailbox_lo: 0,
             mailbox_hi: 0,
             boot_args_seen: (false, false),
-            sec2_mailbox0: 0,
+            arch_state: ArchBootState::default(),
             init_done_posted: false,
             stat_seq: 0,
             cmd_seq: 0,
@@ -547,6 +528,7 @@ impl GspFsm {
     #[must_use]
     pub fn observe(&self) -> GspObservation {
         GspObservation {
+            stage: self.phase,
             wpr2_up: self.phase.wpr2_up(),
             riscv_active: self.phase.wpr2_up(),
             suspended: self.phase == BootPhase::Suspending,
@@ -607,12 +589,30 @@ impl GspFsm {
         bar: u8,
         off: u64,
     ) -> Option<Result<u64, GspFault>> {
-        let reg = model.decode_reg(bar, off)?;
-        Some(
-            model
-                .encode(reg, &self.observe())
-                .ok_or(GspFault::RegisterUnserviceable { reg }),
-        )
+        if let Some(reg) = model.decode_reg(bar, off) {
+            return Some(
+                model
+                    .encode(reg, &self.observe())
+                    .ok_or(GspFault::RegisterUnserviceable { reg }),
+            );
+        }
+        // ★ The shared vocabulary declined. Before treating the offset as somebody else's,
+        // ask this generation's own boot sequence: a generation whose boot is driven by
+        // registers no [`GspReg`] variant names still has to *answer* them, and their
+        // answers are functions of the boot state this FSM holds. The order is fixed —
+        // model first — so a sequence can never shadow a shared register.
+        model
+            .boot_sequence()
+            .on_read(model, bar, off, &self.boot_context(), &self.arch_state)
+            .map(Ok)
+    }
+
+    /// What a [`kayfabe_arch::BootSequence`] is allowed to look at.
+    fn boot_context(&self) -> BootContext {
+        BootContext {
+            obs: self.observe(),
+            boot_args_seen: self.boot_args_seen,
+        }
     }
 
     /// Drive the FSM from one register write.
@@ -652,85 +652,113 @@ impl GspFsm {
         off: u64,
         val: u64,
     ) -> Result<ServiceReport, GspFault> {
-        let Some(reg) = model.decode_reg(bar, off) else {
-            return Ok(ServiceReport::default());
+        // ★★★ **The flow, and it is now arch-independent.** Decode with the generation's
+        // register model, ask the generation's boot SEQUENCE what the write means, and
+        // apply the steps. This function used to be a `match` over `GspReg` whose arms
+        // *were* the falcon/secure-booter ordering — so a generation reaching the same
+        // truths through different registers could only be added by editing them. It no
+        // longer names a register at all.
+        //
+        // ⚠ `reg` is an `Option` on purpose and the `None` is **not** an early return any
+        // more: a generation whose boot is driven by offsets the shared vocabulary cannot
+        // name sees them here and nowhere else. Sequences that live inside the vocabulary
+        // answer `BootSteps::none()` for a `None`, which is exactly the old early return.
+        let w = RegWrite {
+            bar,
+            off,
+            val,
+            reg: model.decode_reg(bar, off),
         };
+        let ctx = self.boot_context();
+        let steps = model
+            .boot_sequence()
+            .on_write(model, &w, &ctx, &mut self.arch_state);
+        if steps.overflowed() {
+            return Err(GspFault::BootStepOverflow);
+        }
         let mut report = ServiceReport::default();
-        match reg {
-            GspReg::GspFalconCpuctl if model.is_startcpu(val) => {
+        for step in steps {
+            self.apply(ram, model, policy, step, &mut report)?;
+        }
+        Ok(report)
+    }
+
+    /// Perform one [`BootStep`]. The FSM's whole vocabulary of effects.
+    ///
+    /// ★ Each arm is the *same* code the corresponding `match reg` arm used to run — the
+    /// transitions, their guards and their ordering inside a report are unchanged, which
+    /// is what makes "GA10x behaves bit-identically" a claim about a moved body rather
+    /// than a rewritten one.
+    fn apply(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        model: &dyn kayfabe_arch::GspModel,
+        policy: &mut dyn CommandPolicy,
+        step: BootStep,
+        report: &mut ServiceReport,
+    ) -> Result<(), GspFault> {
+        match step {
+            BootStep::StartProcessor => {
                 report.transitions.push(self.gsp_startcpu());
             }
-            GspReg::Sec2FalconMailbox0 => {
-                // Latched, not acted on: Load and Unload differ only by this argument.
-                self.sec2_mailbox0 = val as u32;
+            BootStep::Teardown => {
+                // E4. WPR2 must read down afterwards, and on the falcon/secure-booter
+                // regime the guest asserts exactly that
+                // (`ogkm-610: kernel_gsp_booter_tu102.c:175-187`, `ogkm-580: :179-191`
+                // — identical code at both tags, including the GC6 arm that requires
+                // WPR2 to stay *up*).
+                self.enter_halted();
+                report.transitions.push(Transition::E4);
             }
-            GspReg::Sec2FalconCpuctl if model.is_startcpu(val) => {
-                if model.is_booter_unload(self.sec2_mailbox0) {
-                    // E4 — Booter Unload. WPR2 must read down afterwards, and the guest
-                    // asserts exactly that
-                    // (`ogkm-610: kernel_gsp_booter_tu102.c:175-187`, `ogkm-580: :179-191`
-                    // — identical code at both tags, including the GC6 arm that requires
-                    // WPR2 to stay *up*).
-                    self.enter_halted();
-                    report.transitions.push(Transition::E4);
-                } else if self.phase == BootPhase::FwsecRan {
+            BootStep::FirmwareLoaded => {
+                // E5. The guard is the FSM's, not the sequence's: reaching `Booted` from
+                // anywhere but `ProtectedRegionUp` is a phase-graph question and every
+                // generation gets the same answer.
+                if self.phase == BootPhase::ProtectedRegionUp {
                     self.phase = BootPhase::Booted;
                     report.transitions.push(Transition::E5);
                 }
             }
-            GspReg::GspFalconMailbox0 | GspReg::GspFalconMailbox1 => {
-                if reg == GspReg::GspFalconMailbox0 {
-                    self.mailbox_lo = val as u32;
-                    self.boot_args_seen.0 = true;
-                } else {
-                    self.mailbox_hi = val as u32;
-                    self.boot_args_seen.1 = true;
-                }
-                // ★ [inferred] I4, taking the plan's own robust reading: the pair is
-                // complete when **both halves have been written since the last reset**,
-                // not when a particular half arrives. The C keys on MAILBOX1
-                // (`C:4298-4302`) and ogkm writes lo then hi
-                // (`kgspProgramLibosBootArgsAddr_TU102`,
-                // `ogkm-610: kernel_gsp_tu102.c:392-403`, `ogkm-580: :363-374` — identical
-                // at both tags) — a write *order*, not a protocol guarantee, so keying on
-                // one half would be an assumption where a conjunction costs nothing.
-                if self.boot_args_seen == (true, true)
-                    && matches!(self.phase, BootPhase::FwsecRan | BootPhase::Booted)
-                {
-                    let gpa = (u64::from(self.mailbox_hi) << 32) | u64::from(self.mailbox_lo);
-                    // Consumed: the next publish needs a fresh pair, so a single later
-                    // write cannot re-trigger against a half that is no longer current.
-                    self.boot_args_seen = (false, false);
-                    let mut r = self.publish(ram, model, policy, gpa)?;
-                    report.transitions.push(Transition::E6);
-                    report.transitions.append(&mut r.transitions);
-                    report.commands = r.commands;
-                    report.raise_status_irq = true;
-                }
+            BootStep::BootArgsLo(v) => {
+                self.mailbox_lo = v;
+                self.boot_args_seen.0 = true;
             }
-            GspReg::GspQueueHead(_) => {
+            BootStep::BootArgsHi(v) => {
+                self.mailbox_hi = v;
+                self.boot_args_seen.1 = true;
+            }
+            BootStep::PublishBootArgs(gpa) => {
+                // Consumed: the next publish needs a fresh pair, so a single later
+                // write cannot re-trigger against a half that is no longer current.
+                self.boot_args_seen = (false, false);
+                let mut r = self.publish(ram, model, policy, gpa)?;
+                report.transitions.push(Transition::E6);
+                report.transitions.append(&mut r.transitions);
+                report.commands.extend(r.commands);
+                report.raise_status_irq = true;
+            }
+            BootStep::CommandDoorbell => {
                 let (t, mut r) = self.doorbell(ram, policy)?;
                 report.transitions.push(t);
                 report.transitions.append(&mut r.transitions);
-                report.commands = r.commands;
+                report.commands.extend(r.commands);
                 report.raise_status_irq |= r.raise_status_irq;
             }
             // E10 — the guest's ISR clears the edge before draining the queue
             // (`C: src/qemu/nvkvm_gpu_emul.c:4193-4200`).
-            GspReg::GspFalconIrqsclr if model.is_swgen0_clear(val) => {
+            BootStep::ClearStatusIrq => {
                 self.swgen0_pending = false;
                 report.transitions.push(Transition::E10);
             }
-            _ => {}
         }
-        Ok(report)
+        Ok(())
     }
 
     /// E1 / E2 / E3 — the GSP falcon STARTCPU, classified on `phase` alone.
     fn gsp_startcpu(&mut self) -> Transition {
         match self.phase {
             BootPhase::Cold | BootPhase::Halted => {
-                self.phase = BootPhase::FwsecRan;
+                self.phase = BootPhase::ProtectedRegionUp;
                 Transition::E1
             }
             BootPhase::Suspending => {
@@ -740,7 +768,7 @@ impl GspFsm {
                 self.enter_halted();
                 Transition::E2
             }
-            BootPhase::FwsecRan | BootPhase::Booted | BootPhase::Running => Transition::E3,
+            BootPhase::ProtectedRegionUp | BootPhase::Booted | BootPhase::Running => Transition::E3,
         }
     }
 
@@ -937,7 +965,7 @@ impl GspFsm {
         // ★★ …but only when a binding has already existed. `Halted` is reached exactly by
         // a teardown (E2/E4), so it is precisely the case the bench measured: the guest
         // dropped its queues and is still ringing. Every other unbound phase — `Cold`
-        // after power-on or a device reset, `FwsecRan` before the mailbox pair — is the
+        // after power-on or a device reset, `ProtectedRegionUp` before the mailbox pair — is the
         // *healthy* 580 pre-bootstrap doorbell (see [`Transition::E12`]), and reporting
         // that as the stale-binding attack signature would put a false positive in the
         // ledger on every boot. Both arms read zero guest RAM; only the name differs.

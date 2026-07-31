@@ -544,6 +544,7 @@ impl Faulted for GspFault {
         match self {
             GspFault::NoGspModel => FaultTag("GspFault::NoGspModel"),
             GspFault::RegisterUnserviceable { .. } => FaultTag("GspFault::RegisterUnserviceable"),
+            GspFault::BootStepOverflow => FaultTag("GspFault::BootStepOverflow"),
             GspFault::GuestRam(_) => FaultTag("GspFault::GuestRam"),
             GspFault::QueueNotBound => FaultTag("GspFault::QueueNotBound"),
             GspFault::GeometryRejected(_) => FaultTag("GspFault::GeometryRejected"),

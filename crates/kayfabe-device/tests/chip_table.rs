@@ -29,6 +29,10 @@ use kayfabe_device::{
 #[derive(Debug, Clone, Copy, Default)]
 struct OtherGspModel;
 
+/// A test fixture may share one stateless sequence value: the *selection* is still made
+/// per model instance, which is the property that matters (see `GspModel::boot_sequence`).
+static OTHER_BOOT: kayfabe_gsp::FalconSecureBooterBoot = kayfabe_gsp::FalconSecureBooterBoot;
+
 /// The falcon control register, at an offset the GA10x map has no meaning for.
 const OTHER_CPUCTL: u64 = 0x0090_0000;
 /// The boot-progress register.
@@ -64,6 +68,9 @@ impl GspModel for OtherGspModel {
             GspReg::GfwBootProgress => Some(OTHER_COMPLETE),
             _ => None,
         }
+    }
+    fn boot_sequence(&self) -> &dyn kayfabe_arch::gsp::BootSequence {
+        &OTHER_BOOT
     }
     fn libos_region_layout(&self) -> LibosRegionLayout {
         LibosRegionLayout {
@@ -441,7 +448,7 @@ fn reaching_guest_RAM_with_none_installed_is_a_NAMED_refusal_and_not_a_silent_ze
 
     // `NV_PFALCON_FALCON_CPUCTL_STARTCPU` — bit 1 — on the GSP falcon: FWSEC has run.
     plane.write(0, 0x0011_0100, 4, 0x2);
-    assert_eq!(plane.phase(), kayfabe_gsp::BootPhase::FwsecRan);
+    assert_eq!(plane.phase(), kayfabe_gsp::BootPhase::ProtectedRegionUp);
 
     // The boot-args address, low half then high half (`kgspProgramLibosBootArgsAddr_TU102`
     // writes them in that order). Completing the pair is what triggers the read.

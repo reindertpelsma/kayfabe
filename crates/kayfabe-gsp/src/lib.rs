@@ -122,16 +122,21 @@ pub mod ram;
 pub mod replay;
 pub mod ring;
 pub mod rpc;
+pub mod seq;
 
 pub use boot::{
-    BootPhase, CommandPolicy, EchoOk, GspAbi, GspFsm, InitArgsLayout, PolicyChain, QueueBinding,
-    QueueState, Reply, ServiceReport, Transition,
+    CommandPolicy, EchoOk, GspAbi, GspFsm, InitArgsLayout, PolicyChain, QueueBinding, QueueState,
+    Reply, ServiceReport, Transition,
 };
+// ★ Re-exported, not defined here (task #121): `BootPhase` is read by the register model
+// and by the boot sequence, neither of which may depend on this crate. Every existing
+// `kayfabe_gsp::BootPhase` path still resolves.
 pub use element::{
     ElementLayout, IncomingRpc, MsgLen, OutgoingRpc, TransportHdr, bytes_to_elements, checksum32,
     decode_message, encode_message, max_elements, peek_elem_count, peek_len,
 };
 pub use fault::{GspFault, LayoutError, RamRefused, RegionError, RxLinkCode};
+pub use kayfabe_arch::gsp::BootPhase;
 pub use ram::{GuestRam, RegionMap};
 pub use replay::{
     Divergence, LEDGER, Observation, ObservationLog, Projection, QueueId, RecordingRam, digest,
@@ -141,3 +146,4 @@ pub use ring::{
     available_elements, free_elements, rx_link_check,
 };
 pub use rpc::{Disposition, FunctionCodes, RpcAbi, RpcCommand, RpcFunction};
+pub use seq::FalconSecureBooterBoot;

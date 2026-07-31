@@ -585,6 +585,13 @@ impl GspModel for FakeGspModel {
         })
     }
 
+    /// This fixture models the falcon/secure-booter regime, so it selects that sequence.
+    /// One shared stateless value: the *selection* is still per model instance.
+    fn boot_sequence(&self) -> &dyn kayfabe_arch::gsp::BootSequence {
+        static BOOT: kayfabe_gsp::FalconSecureBooterBoot = kayfabe_gsp::FalconSecureBooterBoot;
+        &BOOT
+    }
+
     fn libos_region_layout(&self) -> LibosRegionLayout {
         LibosRegionLayout {
             // `{ LibosAddress id8; LibosAddress pa; LibosAddress size; NvU8 kind; NvU8 loc; }`

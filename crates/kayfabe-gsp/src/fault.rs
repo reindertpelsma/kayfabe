@@ -148,6 +148,15 @@ pub enum GspFault {
         /// The register that had no value.
         reg: kayfabe_arch::GspReg,
     },
+    /// This generation's [`kayfabe_arch::BootSequence`] returned more steps for one write
+    /// than [`kayfabe_arch::BootSteps::CAPACITY`] holds.
+    ///
+    /// ★ A refusal rather than a truncation on purpose. Executing the first four steps of
+    /// a five-step meaning is a *partially applied boot transition* — precisely the class
+    /// of half-state this FSM exists to make unrepresentable — and it would present as a
+    /// guest that hangs later, somewhere else. The bound is the port's to raise
+    /// deliberately.
+    BootStepOverflow,
     /// A guest-RAM access was refused by the VMM.
     GuestRam(RamRefused),
     /// The queue is not bound: there is no geometry, so there is nothing to parse.

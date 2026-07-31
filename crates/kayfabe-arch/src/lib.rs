@@ -44,7 +44,10 @@ pub mod fault;
 pub mod gsp;
 pub mod ids;
 
-pub use gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
+pub use gsp::{
+    ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep, BootStepKind,
+    BootSteps, GspModel, GspObservation, GspReg, LibosRegionLayout, NoBootSequence, RegWrite,
+};
 use ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
 
 /// ★ **The privilege a client root DECLARES about itself** — the discriminator that

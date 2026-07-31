@@ -28,9 +28,10 @@
 //! ⚠ **This is the easy member of the universe.** See the crate docs: the honest stress
 //! case is [`crate::gh100`], and it is reported separately.
 
-use kayfabe_arch::gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
+use kayfabe_arch::gsp::{BootSequence, GspModel, GspObservation, GspReg, LibosRegionLayout};
 use kayfabe_arch::ids::{ClassId, ControlCmd, VChid};
 use kayfabe_arch::{Arch, DoorbellTarget, GmmuFmt, ObjectKind, PushbufferAbi, UserdModel};
+use kayfabe_gsp::FalconSecureBooterBoot;
 use kayfabe_mocks::MockArch;
 
 // ── BAR0 offsets (`ogkm-580`, via the Ampere headers Ada consumes) ────────────────
@@ -119,14 +120,21 @@ const PROCESSOR_SUSPENDED: u64 = 0x8000_0000;
 const RMARGS_ID: u64 = 0x0000_524d_4152_4753;
 
 /// The AD10x (Ada) GSP register model.
+///
+/// Its one field is the boot sequence it selects — a per-instance value, so which regime
+/// a GPU boots under is a property of *that GPU*, never of the build.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Ad10xGspModel;
+pub struct Ad10xGspModel {
+    boot: FalconSecureBooterBoot,
+}
 
 impl Ad10xGspModel {
     /// The model.
     #[must_use]
     pub fn new() -> Ad10xGspModel {
-        Ad10xGspModel
+        Ad10xGspModel {
+            boot: FalconSecureBooterBoot::new(),
+        }
     }
 
     /// Where this model puts a register, so a harness can address one without knowing the
@@ -254,6 +262,15 @@ impl GspModel for Ad10xGspModel {
             GspReg::Sec2FalconMailbox0 => 0,
             GspReg::GspQueueHead(_) => 0,
         })
+    }
+
+    /// ★ Ada is inside the falcon/secure-booter regime and NVIDIA's generated HAL says so
+    /// in-tree: it binds the Turing/Ampere implementations across `TU102…AD107`
+    /// (`ogkm-580: src/nvidia/generated/g_gpu_nvoc.c:2374-2385`). This model and
+    /// `kayfabe_device::ga10x::Ga10xGspModel` therefore select the **same** sequence value
+    /// from two different crates — shared by selection, not by inheritance.
+    fn boot_sequence(&self) -> &dyn BootSequence {
+        &self.boot
     }
 
     fn libos_region_layout(&self) -> LibosRegionLayout {

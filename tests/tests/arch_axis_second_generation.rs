@@ -36,7 +36,7 @@
 //! second generation costs, and in which crate.
 
 use kayfabe_arch::Arch;
-use kayfabe_arch::gsp::GspReg;
+use kayfabe_arch::gsp::{GspModel, GspReg};
 use kayfabe_chips::{Ad10xArch, Ad10xGspModel, Gh100Arch, Gh100GspModel};
 use kayfabe_gsp::{BootPhase, EchoOk, GspFsm, Transition};
 use kayfabe_tests::gspworld::{FakeRam, P580};
@@ -63,7 +63,7 @@ fn a_second_generation_boots_the_unmodified_fsm() {
         .mmio_write(&mut ram, &arch, &mut policy, bar, off, 0x2)
         .expect("STARTCPU is serviceable");
     assert_eq!(r.transitions, vec![Transition::E1], "FWSEC ran");
-    assert_eq!(f.phase(), BootPhase::FwsecRan);
+    assert_eq!(f.phase(), BootPhase::ProtectedRegionUp);
 
     let (bar, off) = Ad10xGspModel::at(GspReg::Sec2FalconMailbox0).expect("Ada has a SEC2 mailbox");
     f.mmio_write(&mut ram, &arch, &mut policy, bar, off, 0x0)
@@ -150,29 +150,34 @@ fn a_generation_with_a_different_boot_sequence_has_registers_the_seam_cannot_nam
     }
 }
 
-/// ★★★ **The FSM cannot be driven past the first phase on this generation** — by any
-/// register write, because the writes that carry the next transitions have no offset.
+/// ★★★ **The FSM cannot be driven at all on this generation** — by any register write,
+/// because this generation has **no boot sequence**.
 ///
-/// This is the bolt-on, executed rather than argued: `kayfabe-gsp` would need new `match`
-/// arms and `kayfabe-arch` new `GspReg` variants, and both are logic crates.
+/// The seam that carries a boot ordering exists now (`kayfabe_arch::BootSequence`), and
+/// GH100 selects `NoBootSequence`: zero declared stages, no step for any write. That is
+/// the honest state of a generation whose registers are mapped and whose *ordering* has
+/// not been written — and it is deliberately not "the falcon regime by default", which
+/// would make this model appear to boot by running Ada's sequence.
+///
+/// This is a characterisation test. When GH100's own sequence lands it goes red, which is
+/// the signal, and the fix is to rewrite it to the new behaviour — never to widen it so
+/// both answers pass.
 #[test]
-fn the_boot_fsm_cannot_be_driven_past_fwsec_on_that_generation() {
+fn the_boot_fsm_has_no_sequence_to_drive_on_that_generation() {
     let arch = Gh100Arch::new();
     let mut f = fsm();
     let mut ram = FakeRam::default();
     let mut policy = EchoOk;
 
-    // The one transition Hopper shares: the GSP falcon STARTCPU.
-    let (bar, off) = Gh100GspModel::at(GspReg::GspFalconCpuctl).expect("shared register");
-    let r = f
-        .mmio_write(&mut ram, &arch, &mut policy, bar, off, 0x2)
-        .expect("STARTCPU is serviceable");
-    assert_eq!(r.transitions, vec![Transition::E1]);
-    assert_eq!(f.phase(), BootPhase::FwsecRan);
+    assert!(
+        Gh100GspModel::new().boot_sequence().stages().is_empty(),
+        "★ THE SEAM NOW CARRIES A HOPPER BOOT SEQUENCE. That is good news and this test \
+         must be rewritten to the new behaviour — do NOT widen it."
+    );
 
-    // Now sweep EVERY BAR0 offset the model decodes, at the value that would be a
-    // STARTCPU, and assert none of them advances the phase. This is a sweep rather than a
-    // list so that a model change cannot make it pass by moving a register.
+    // Sweep EVERY BAR0 offset the model decodes, at the value that would be a STARTCPU,
+    // and assert none of them moves the phase. A sweep rather than a list, so that a model
+    // change cannot make it pass by moving a register.
     let mut advanced = Vec::new();
     for reg in [
         GspReg::GspFalconCpuctl,
@@ -198,17 +203,17 @@ fn the_boot_fsm_cannot_be_driven_past_fwsec_on_that_generation() {
             continue; // no register on this generation — that IS the finding
         };
         let _ = f.mmio_write(&mut ram, &arch, &mut policy, bar, off, 0x2);
-        if f.phase() != BootPhase::FwsecRan {
+        if f.phase() != BootPhase::Cold {
             advanced.push((reg, f.phase()));
         }
     }
 
     assert!(
         advanced.is_empty(),
-        "★ THE SEAM NOW CARRIES THE HOPPER BOOT SEQUENCE: {advanced:?}. That is good news \
-         and this test must be rewritten to the new behaviour — do NOT widen it."
+        "★ something boots GH100 now: {advanced:?} — rewrite this test to the new \
+         behaviour, do NOT widen it."
     );
-    assert_eq!(f.phase(), BootPhase::FwsecRan);
+    assert_eq!(f.phase(), BootPhase::Cold);
 }
 
 /// ★★ The cost of the bolt-on, enumerated in the fixture and asserted non-empty here so

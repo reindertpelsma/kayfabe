@@ -467,7 +467,7 @@ fn an_idle_release_re_acquire_rebinds_and_preserves_the_sequence_numbers() {
     // sequence is a fresh boot) and a mailbox re-write.
     let m = w.arch.model();
     w.wr(GspReg::GspFalconCpuctl, m.startcpu()).unwrap(); // E2 -> Halted
-    w.wr(GspReg::GspFalconCpuctl, m.startcpu()).unwrap(); // E1 -> FwsecRan
+    w.wr(GspReg::GspFalconCpuctl, m.startcpu()).unwrap(); // E1 -> ProtectedRegionUp
     let gpa = w.guest.boot_args_gpa;
     w.wr(GspReg::GspFalconMailbox0, gpa & 0xFFFF_FFFF).unwrap();
     let r = w.wr(GspReg::GspFalconMailbox1, gpa >> 32).unwrap();
@@ -2697,7 +2697,11 @@ fn the_booter_runs_only_on_a_sec2_startcpu_and_any_other_poke_is_inert() {
         w.wr(GspReg::GspFalconMailbox0, gpa & 0xFFFF_FFFF).unwrap();
         w.wr(GspReg::GspFalconMailbox1, gpa >> 32).unwrap();
         w.wr(GspReg::Sec2FalconMailbox0, 0).unwrap();
-        assert_eq!(w.fsm.phase(), BootPhase::FwsecRan, "{name}: pre-Booter");
+        assert_eq!(
+            w.fsm.phase(),
+            BootPhase::ProtectedRegionUp,
+            "{name}: pre-Booter"
+        );
 
         // Booter **Load**.
         for inert in [0u64, !model.startcpu()] {
@@ -2709,7 +2713,7 @@ fn the_booter_runs_only_on_a_sec2_startcpu_and_any_other_poke_is_inert() {
             );
             assert_eq!(
                 w.fsm.phase(),
-                BootPhase::FwsecRan,
+                BootPhase::ProtectedRegionUp,
                 "{name}: …so the Booter did not run",
             );
         }

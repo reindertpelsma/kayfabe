@@ -51,7 +51,9 @@
 //! this offset"*) and `encode` returns `None` (a `RegisterUnserviceable` fault). A green
 //! obtained by inventing four registers would be a measurement of nothing.
 
-use kayfabe_arch::gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
+use kayfabe_arch::gsp::{
+    BootSequence, GspModel, GspObservation, GspReg, LibosRegionLayout, NoBootSequence,
+};
 use kayfabe_arch::ids::{ClassId, ControlCmd, VChid};
 use kayfabe_arch::{Arch, DoorbellTarget, GmmuFmt, ObjectKind, PushbufferAbi, UserdModel};
 use kayfabe_mocks::MockArch;
@@ -166,13 +168,17 @@ pub const MISSING_TRANSITIONS: &[(&str, &str)] = &[
 
 /// The GH100 (Hopper) GSP register model — see the module docs.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Gh100GspModel;
+pub struct Gh100GspModel {
+    boot: NoBootSequence,
+}
 
 impl Gh100GspModel {
     /// The model.
     #[must_use]
     pub fn new() -> Gh100GspModel {
-        Gh100GspModel
+        Gh100GspModel {
+            boot: NoBootSequence,
+        }
     }
 
     /// Where this model puts a register. **`None` is the interesting answer**: it means
@@ -296,6 +302,15 @@ impl GspModel for Gh100GspModel {
             | GspReg::Sec2FalconDmatrfcmd
             | GspReg::GspQueueHead(_) => return None,
         })
+    }
+
+    /// ★★★ **NOT IMPLEMENTED, and it says so rather than borrowing one.** This
+    /// generation's boot is an FSP command queue, not a falcon STARTCPU + SEC2 Booter
+    /// Load; selecting the falcon regime here would make the model *appear* to boot by
+    /// running another generation's ordering. `NoBootSequence` declares zero stages and
+    /// answers no step, so the gap is a red test rather than a plausible green.
+    fn boot_sequence(&self) -> &dyn BootSequence {
+        &self.boot
     }
 
     fn libos_region_layout(&self) -> LibosRegionLayout {
