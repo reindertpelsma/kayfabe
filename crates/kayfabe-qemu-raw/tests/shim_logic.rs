@@ -464,7 +464,7 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     assert_eq!(size_of::<KayfabeChipIdentity>(), 32);
     assert_eq!(align_of::<KayfabeChipIdentity>(), 8);
     assert_eq!(size_of::<KayfabeRegWrite>(), 32);
-    assert_eq!(size_of::<KayfabeRegAudit>(), 11 * size_of::<u64>());
+    assert_eq!(size_of::<KayfabeRegAudit>(), 12 * size_of::<u64>());
 }
 
 #[test]
@@ -535,4 +535,50 @@ fn a_base_address_register_the_plane_does_not_own_reads_zero() {
     let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
     assert_eq!(regs.read(1, 0x0011_0100, 4), 0);
     assert_eq!(regs.read(255, 0x0011_0100, 4), 0);
+}
+
+#[test]
+fn the_counter_the_c_shim_serves_runs_at_wall_clock_rate() {
+    // ★★★ THE BITE for the adapter's half of the free-running counter, and the reason it is
+    // here rather than only in `kayfabe-device`: the device crate can prove the *plumbing*
+    // with any clock at all, including one that advances a nanosecond per reading. Only this
+    // side can prove the plumbing was given a clock that tells the time.
+    //
+    // Why that distinction is worth a test. Every bounded wait in the guest driver's GSP
+    // bring-up exits either on success or on `gpuCheckTimeout`, which reads this counter
+    // (`ogkm-580: src/nvidia/src/kernel/gpu/timer/arch/turing/timer_tu102.c:130-155`). Its
+    // timeouts are wall-clock microseconds. A counter that advanced per *reading* would
+    // satisfy every structural check this repository has and still turn a 4-second timeout
+    // into an unpredictable number of iterations.
+    use kayfabe_qemu_raw::shim::Regs;
+    use std::time::{Duration, Instant};
+
+    let regs = Regs::create(0).expect("the default chip is servable");
+    let compose = || {
+        let hi = regs.read(0, 0x00BB_0084, 4);
+        let lo = regs.read(0, 0x00BB_0080, 4);
+        (hi << 32) | lo
+    };
+
+    let host_before = Instant::now();
+    let a = compose();
+    std::thread::sleep(Duration::from_millis(20));
+    let b = compose();
+    let host_elapsed = host_before.elapsed();
+
+    assert!(b > a, "the counter did not advance across a 20 ms sleep");
+    let device_elapsed = Duration::from_nanos(b - a);
+    // ★ A wide band on purpose. This asserts the counter is a CLOCK — same order of
+    // magnitude as real time — not that a shared machine scheduled us promptly. A
+    // per-reading counter would land four readings' worth away from this, and a stopped one
+    // would have failed the line above.
+    assert!(
+        device_elapsed >= Duration::from_millis(10) && device_elapsed <= host_elapsed * 4,
+        "the device counter moved {device_elapsed:?} while the host moved {host_elapsed:?}"
+    );
+
+    assert!(
+        regs.audit().ptimer_reads >= 4,
+        "the counter's readings must be separately countable across the seam"
+    );
 }

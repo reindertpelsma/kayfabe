@@ -17,7 +17,9 @@
 
 use kayfabe_arch::gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
 use kayfabe_device::plane::ReadOutcome;
-use kayfabe_device::{BootReg, ChipProfile, RegPlane, RomWindow, abi};
+use kayfabe_device::{
+    BootReg, ChipProfile, NanoClock, PtimerRegs, RegPlane, RomWindow, SteppingClock, abi,
+};
 
 // ── the second chip's register map: same trait, different numbers ────────────────────
 
@@ -82,6 +84,12 @@ static OTHER_BOOT_REGS: &[BootReg] = &[BootReg {
     name: "OTHER_CHIP_ID",
 }];
 
+/// This chip's free-running counter, at offsets GA10x does not use either.
+static OTHER_PTIMER: PtimerRegs = PtimerRegs {
+    lo_off: 0x0090_0080,
+    hi_off: 0x0090_0084,
+};
+
 /// ★ **The row.** This is the whole cost of the second chip, and it is data.
 static OTHER: ChipProfile = ChipProfile {
     name: "OTHER (test-only)",
@@ -92,6 +100,7 @@ static OTHER: ChipProfile = ChipProfile {
     pci_subsystem_id: 0xBBBB,
     regs_aperture_len: 32 << 20,
     boot_regs: OTHER_BOOT_REGS,
+    ptimer: OTHER_PTIMER,
     // A different window from GA10x's, at a different base.
     rom_window: RomWindow {
         base: 0x0100_0000,
@@ -106,9 +115,17 @@ fn abi() -> kayfabe_gsp::GspAbi {
     abi::gsp_abi_for(kayfabe_abi::versions::BENCH_DRIVER).expect("the bench driver has a table")
 }
 
+/// ★ A reproducible clock, so a test that reads the counter gets the same numbers every
+/// run. One nanosecond per reading is the smallest step that still satisfies
+/// [`NanoClock`]'s "advancing" clause.
+fn test_clock() -> Box<dyn NanoClock> {
+    Box::new(SteppingClock::new(1))
+}
+
 #[test]
 fn a_second_chip_is_a_table_row_and_the_plane_serves_it_unchanged() {
-    let plane = RegPlane::new(&OTHER, abi()).expect("the second chip's row is servable");
+    let plane =
+        RegPlane::new(&OTHER, abi(), test_clock()).expect("the second chip's row is servable");
 
     // Its OWN falcon register answers its OWN halted encoding.
     assert_eq!(
@@ -138,7 +155,7 @@ fn a_second_chip_is_a_table_row_and_the_plane_serves_it_unchanged() {
 
 #[test]
 fn the_second_chips_rom_window_is_its_own() {
-    let plane = RegPlane::new(&OTHER, abi()).expect("servable");
+    let plane = RegPlane::new(&OTHER, abi(), test_clock()).expect("servable");
     // The PCI expansion-ROM signature, at THIS chip's window base.
     assert_eq!(plane.read(0, 0x0100_0000, 2), ReadOutcome::Rom(0xAA55));
     // And nothing at GA10x's window base.
@@ -148,7 +165,7 @@ fn the_second_chips_rom_window_is_its_own() {
 #[test]
 fn the_shipped_table_answers_the_registers_the_bench_driver_polls() {
     let chip = kayfabe_device::default_chip();
-    let plane = RegPlane::new(chip, abi()).expect("the shipped row is servable");
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("the shipped row is servable");
 
     // ★★★ THE ACCEPTANCE REGISTER. `NV_PGSP` (0x110000) + `NV_PFALCON_FALCON_CPUCTL`
     // (0x100) is what `kflcnWaitForHalt_TU102` polls, and it is where a stock 580.159.04
@@ -176,7 +193,7 @@ fn the_shipped_table_answers_the_registers_the_bench_driver_polls() {
 #[test]
 fn an_access_width_narrows_the_answer() {
     let chip = kayfabe_device::default_chip();
-    let plane = RegPlane::new(chip, abi()).expect("servable");
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
     // 0x176000A1 read a byte at a time from the register's own offset is the LOW byte: the
     // plane masks, it does not shift, because a sub-word read of a register is the low part
     // of that register and the hypervisor addresses the parts separately.
@@ -186,16 +203,18 @@ fn an_access_width_narrows_the_answer() {
 }
 
 #[test]
-fn the_counters_separate_the_four_sources() {
+fn the_counters_separate_the_five_sources() {
     let chip = kayfabe_device::default_chip();
-    let plane = RegPlane::new(chip, abi()).expect("servable");
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
     plane.read(0, 0x0000_0000, 4); // chip constant
     plane.read(0, 0x0030_0000, 2); // rom
     plane.read(0, 0x0011_0100, 4); // gsp
+    plane.read(0, 0x00BB_0080, 4); // the free-running counter
     plane.read(0, 0x0055_5555, 4); // nobody
     let c = plane.counters();
-    assert_eq!(c.reads, 4);
+    assert_eq!(c.reads, 5);
     assert_eq!(c.boot_reg_reads, 1);
+    assert_eq!(c.ptimer_reads, 1);
     assert_eq!(c.rom_reads, 1);
     assert_eq!(c.gsp_reads, 1);
     assert_eq!(c.unclaimed_reads, 1);
@@ -219,6 +238,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
         pci_subsystem_id: 0,
         regs_aperture_len: 16 << 20,
         boot_regs: &[],
+        ptimer: OTHER_PTIMER,
         // Straddles `NV_PGSP` at 0x110000.
         rom_window: RomWindow {
             base: 0x0010_0000,
@@ -228,7 +248,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
         msix_vectors: 1,
         gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
     };
-    let e = RegPlane::new(&OVERLAPPING, abi()).expect_err("must refuse");
+    let e = RegPlane::new(&OVERLAPPING, abi(), test_clock()).expect_err("must refuse");
     assert!(
         matches!(e, kayfabe_device::ChipError::OverlappingSources { .. }),
         "expected an overlap refusal, got {e:?}"
@@ -247,6 +267,7 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
         // One page. The GA10x ROM window at 0x300000 cannot fit.
         regs_aperture_len: 0x1000,
         boot_regs: &[],
+        ptimer: OTHER_PTIMER,
         rom_window: RomWindow {
             base: 0x0030_0000,
             len: 0x0010_0000,
@@ -255,7 +276,7 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
         msix_vectors: 1,
         gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
     };
-    let e = RegPlane::new(&PAST_THE_END, abi()).expect_err("must refuse");
+    let e = RegPlane::new(&PAST_THE_END, abi(), test_clock()).expect_err("must refuse");
     assert!(
         matches!(e, kayfabe_device::ChipError::OutsideAperture { .. }),
         "expected an aperture refusal, got {e:?}"
@@ -296,7 +317,7 @@ fn the_rom_the_plane_serves_is_the_generator_s_own_output_byte_for_byte() {
     // ★ Not "a ROM parses" — the same bytes. The device no longer loads an image from
     // disk, so this is what says the guest reads what the generator produced.
     let chip = kayfabe_device::default_chip();
-    let plane = RegPlane::new(chip, abi()).expect("servable");
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
     let vb = kayfabe_abi::vbios::profile_for_device_id(chip.pci_device_id).expect("a ROM row");
     let expected = kayfabe_abi::vbios::build(vb, chip.vbios_wire).expect("buildable");
     assert_eq!(plane.rom(), expected.as_slice());
@@ -314,7 +335,7 @@ fn the_rom_the_plane_serves_is_the_generator_s_own_output_byte_for_byte() {
 #[test]
 fn a_read_past_the_rom_image_is_zero_and_still_counts_as_the_rom_window() {
     let chip = kayfabe_device::default_chip();
-    let plane = RegPlane::new(chip, abi()).expect("servable");
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
     let past = chip.rom_window.base + chip.rom_window.len - 4;
     assert_eq!(plane.read(0, past, 4), ReadOutcome::Rom(0));
 }
@@ -334,7 +355,7 @@ fn a_cold_doorbell_is_the_healthy_pre_bootstrap_ring_and_not_a_fault() {
     // zero, from cold** before it has published anything — visible in the bench's own
     // register trace. Both arms read no guest RAM; only the name differs.
     let chip = kayfabe_device::default_chip();
-    let plane = RegPlane::new(chip, abi()).expect("servable");
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
     let w = plane.write(0, 0x0011_0c00, 4, 0);
     assert!(
         w.claimed,
@@ -352,7 +373,7 @@ fn reaching_guest_RAM_with_none_installed_is_a_NAMED_refusal_and_not_a_silent_ze
     // guest-RAM port yet; the first thing that genuinely needs one is the boot-args mailbox
     // pair, whose completion sends the FSM to read the LibOS region array out of guest RAM.
     let chip = kayfabe_device::default_chip();
-    let plane = RegPlane::new(chip, abi()).expect("servable");
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
 
     // `NV_PFALCON_FALCON_CPUCTL_STARTCPU` — bit 1 — on the GSP falcon: FWSEC has run.
     plane.write(0, 0x0011_0100, 4, 0x2);
@@ -384,7 +405,7 @@ fn reaching_guest_RAM_with_none_installed_is_a_NAMED_refusal_and_not_a_silent_ze
 #[test]
 fn a_reset_puts_the_emulated_gsp_back_to_cold_in_process() {
     let chip = kayfabe_device::default_chip();
-    let plane = RegPlane::new(chip, abi()).expect("servable");
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
     assert_eq!(plane.phase(), kayfabe_gsp::BootPhase::Cold);
     // `NV_PFALCON_FALCON_CPUCTL_STARTCPU` is bit 1; writing it to the GSP falcon starts it.
     plane.write(0, 0x0011_0100, 4, 0x2);
@@ -395,4 +416,216 @@ fn a_reset_puts_the_emulated_gsp_back_to_cold_in_process() {
     );
     plane.device_reset();
     assert_eq!(plane.phase(), kayfabe_gsp::BootPhase::Cold);
+}
+
+// ── the free-running nanosecond counter ────────────────────────────────────────────────
+
+#[test]
+fn the_shipped_row_serves_the_counter_the_drivers_every_timeout_reads() {
+    // ★★★ THE ACCEPTANCE READING for the hang this source was added to end. `gpuCheckTimeout`
+    // is the only exit besides success from every bounded wait in the GSP bring-up, and on
+    // this generation it samples the counter through the virtual-function aperture
+    // (`ogkm-580: src/nvidia/src/kernel/gpu/timer/arch/turing/timer_tu102.c:130-155`). With
+    // these two offsets unclaimed, `kflcnPreResetWait_GA102`
+    // (`ogkm-580: src/nvidia/src/kernel/gpu/falcon/arch/ampere/kernel_falcon_ga102.c:212-224`)
+    // is an unbounded, uninterruptible, silent spin.
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
+
+    assert!(
+        matches!(plane.read(0, 0x00BB_0080, 4), ReadOutcome::Ptimer(_)),
+        "NV_VIRTUAL_FUNCTION_TIME_0 must be claimed by a source, not defaulted to zero"
+    );
+    assert!(
+        matches!(plane.read(0, 0x00BB_0084, 4), ReadOutcome::Ptimer(_)),
+        "NV_VIRTUAL_FUNCTION_TIME_1 must be claimed by a source, not defaulted to zero"
+    );
+
+    let c = plane.counters();
+    assert_eq!(c.ptimer_reads, 2);
+    assert_eq!(
+        c.unclaimed_reads, 0,
+        "a counter half answered by the defaulted zero is the whole defect"
+    );
+}
+
+#[test]
+fn the_counter_advances_and_never_reads_the_same_value_twice() {
+    // ★★ The property the driver depends on, asserted as a property. A monotonic *clock* is
+    // not enough — the guest must see the value CHANGE between two polls of its spin loop,
+    // because the elapsed time it computes is a difference.
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), Box::new(SteppingClock::new(1_000))).expect("servable");
+
+    let mut prev = 0u64;
+    for i in 0..64 {
+        let v = plane.read(0, 0x00BB_0080, 4).value();
+        assert!(
+            v > prev || i == 0,
+            "reading {i} gave {v:#x}, not past {prev:#x}: a counter that repeats is a \
+             timeout that never fires"
+        );
+        prev = v;
+    }
+    assert!(prev > 0, "64 readings must have moved the counter off zero");
+}
+
+#[test]
+fn the_low_halfs_bottom_five_bits_read_zero_as_the_field_says() {
+    // `NV_VIRTUAL_FUNCTION_TIME_0_NSEC` is bits 31:5
+    // (`ogkm-580: src/common/inc/swref/published/turing/tu102/dev_vm.h:224-225`), so the
+    // bottom five bits of a real one are not part of the value. The C artifact masks the
+    // same way (`C: src/qemu/nvkvm_gpu_emul.c:1525`).
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), Box::new(SteppingClock::new(1))).expect("servable");
+    for _ in 0..40 {
+        assert_eq!(plane.read(0, 0x00BB_0080, 4).value() & 0x1F, 0);
+    }
+}
+
+#[test]
+fn the_high_half_is_the_nanosecond_counts_top_thirty_two_bits() {
+    // A clock past 2^32 ns (about 4.3 s of uptime) must show up in the high half, or every
+    // elapsed time the driver computes across that boundary is wrong by 4.3 seconds.
+    let chip = kayfabe_device::default_chip();
+    let step = 1u64 << 30;
+    let plane = RegPlane::new(chip, abi(), Box::new(SteppingClock::new(step))).expect("servable");
+    // Readings 0..3 are below 2^32; the fifth crosses it.
+    let mut hi = 0;
+    for _ in 0..8 {
+        hi = plane.read(0, 0x00BB_0084, 4).value();
+    }
+    assert!(
+        hi > 0,
+        "the high half stayed zero after eight readings of {step} ns each"
+    );
+}
+
+#[test]
+fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
+    // ★★ THE BITE for the counter's arm of `assert_disjoint`. A counter half placed under
+    // an earlier source reads a constant, and a constant counter is the silent unkillable
+    // spin this whole source exists to prevent — so it must be a refusal at realize and not
+    // a value nobody can explain.
+    static COLLIDING: ChipProfile = ChipProfile {
+        name: "COLLIDING (test-only)",
+        pci_device_id: 0x2504,
+        pci_revision: 0,
+        pci_subsystem_vendor_id: 0,
+        pci_subsystem_id: 0,
+        regs_aperture_len: 16 << 20,
+        boot_regs: OTHER_BOOT_REGS,
+        // OTHER_BOOT_REGS declares 0x100 a silicon constant; the counter must not hide there.
+        ptimer: PtimerRegs {
+            lo_off: 0x0000_0100,
+            hi_off: 0x0000_0104,
+        },
+        rom_window: RomWindow {
+            base: 0x0100_0000,
+            len: 0x0010_0000,
+        },
+        vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
+        msix_vectors: 1,
+        gsp_model: || Box::new(OtherGspModel),
+    };
+    let e = RegPlane::new(&COLLIDING, abi(), test_clock()).expect_err("must refuse");
+    assert!(
+        matches!(
+            e,
+            kayfabe_device::ChipError::OverlappingSources { off: 0x100, .. }
+        ),
+        "expected an overlap refusal naming the offset, got {e:?}"
+    );
+}
+
+#[test]
+fn a_counter_outside_the_aperture_is_refused_at_realize() {
+    static TOO_HIGH: ChipProfile = ChipProfile {
+        name: "TOO_HIGH (test-only)",
+        pci_device_id: 0x2504,
+        pci_revision: 0,
+        pci_subsystem_vendor_id: 0,
+        pci_subsystem_id: 0,
+        regs_aperture_len: 1 << 20,
+        boot_regs: &[],
+        ptimer: PtimerRegs {
+            lo_off: 0x00BB_0080,
+            hi_off: 0x00BB_0084,
+        },
+        rom_window: RomWindow {
+            base: 0x0008_0000,
+            len: 0x0001_0000,
+        },
+        vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
+        msix_vectors: 1,
+        gsp_model: || Box::new(OtherGspModel),
+    };
+    let e = RegPlane::new(&TOO_HIGH, abi(), test_clock()).expect_err("must refuse");
+    assert!(
+        matches!(e, kayfabe_device::ChipError::OutsideAperture { .. }),
+        "expected an aperture refusal, got {e:?}"
+    );
+}
+
+#[test]
+fn the_ptimer_privilege_mask_grants_level_zero_so_the_driver_stops_asserting() {
+    // `tmrSetCurrentTime_GV100` tests `_WRITE_PROTECTION_LEVEL0_ENABLE` in this register and
+    // otherwise prints `ERROR: Write to PTIMER attempted even though Level 0 PLM is
+    // disabled.` and trips `NV_ASSERT(0)`
+    // (`ogkm-580: src/nvidia/src/kernel/gpu/timer/arch/volta/timer_gv100.c:56-82`). Not a
+    // stop — its status is discarded at
+    // `ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:4107` — but two lines of assert
+    // noise in every boot log is two lines the next reader has to learn to ignore.
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
+    assert_eq!(
+        plane.read(0, 0x0000_9430, 4),
+        ReadOutcome::BootReg(0xFFFF_FFFF)
+    );
+}
+
+#[test]
+fn the_advertised_framebuffer_size_is_served_and_closes_the_drivers_own_wpr2_arithmetic() {
+    // ★★★ THE ACCEPTANCE READING for the second rung. `kgspExecuteFwsec_TU102` does not
+    // trust the WPR2 registers it reads — it recomputes what they should be from
+    // `NV_USABLE_FB_SIZE_IN_MB` and compares exactly
+    // (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_frts_tu102.c:514-524`).
+    //
+    // With this register answered by a defaulted zero, its `fbSize - DRF_SIZE(NV_PRAMIN)`
+    // borrows: a stock 580.159.04 guest reported
+    // `WPR2 initialized at an unexpected location: 0x002ffe00 (expected 0xfffffe00)` —
+    // 0xfffffe00 being the low half of an underflowed 64-bit subtraction, not a location.
+    // So the two must be computed from ONE constant, and this test is where that is checked.
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
+
+    let fb_mb = plane.read(0, 0x0011_83A4, 4).value();
+    assert_eq!(
+        plane.read(0, 0x0011_83A4, 4),
+        ReadOutcome::BootReg(kayfabe_device::ga10x::FB_SIZE_MB),
+        "the FB size must come from the same constant the WPR2 values are derived from"
+    );
+
+    // Walk the driver's own chain: `kgspPopulateWprMeta_TU102` /
+    // `kgspExecuteFwsec_TU102`, with display fused off so the VGA workspace is one PRAMIN.
+    let fb_bytes = fb_mb * (1 << 20);
+    let vga_workspace = fb_bytes - 0x0010_0000;
+    let wpr_end = vga_workspace & !0x1_FFFF;
+    let frts_offset = wpr_end - 0x0010_0000;
+
+    // WPR2 is a function of the boot FSM's state — it is down until FWSEC has run — so the
+    // falcon has to be started before the comparison the driver makes is even defined.
+    // `NV_PFALCON_FALCON_CPUCTL_STARTCPU` is bit 1.
+    assert_eq!(plane.read(0, 0x001F_A824, 4).value(), 0, "WPR2 starts down");
+    plane.write(0, 0x0011_0100, 4, 0x2);
+
+    // `NV_PFB_PRI_MMU_WPR2_ADDR_LO_VAL` is 31:4 with a 12-bit alignment, so the register
+    // holds `offset >> 12 << 4`.
+    let wpr2_lo = plane.read(0, 0x001F_A824, 4).value();
+    assert_eq!(
+        wpr2_lo >> 4,
+        frts_offset >> 12,
+        "the served WPR2 low register must equal what the driver recomputes from the FB \
+         size this same plane reported"
+    );
 }
