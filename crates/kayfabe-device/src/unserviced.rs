@@ -21,10 +21,28 @@
 //! **act** on — it names the first thing the driver actually needed. It is not a property
 //! that lets anyone answer *how long the list is*. This does, in one boot.
 //!
-//! ⊘ Stated as inference, not measurement: what a release module prints for a refused
-//! control has not been observed on this branch. The first boot against it settles it, and
-//! if the refusals turn out to be loud in the guest this module is still the cheaper
-//! answer — it is a set, not a log to grep.
+//! ## ★★★ What it has actually answered — three boots, three rungs, one entry each
+//!
+//! `[measured]` on the bench, a stock 580.159.04 guest driven with `nvidia-smi`, one boot
+//! per revision. The whole point of the table is the **right-hand column**: the question
+//! *"does refusing by default surface everything at once?"* has an answer, and it is no.
+//!
+//! | run | revision | `commands` | distinct unserviced | what the guest said |
+//! |---|---|---|---|---|
+//! | `t127a` | `f870288` | 3 | **1** — `fn 1` | `kgspInitRm_IMPL: SET_GUEST_SYSTEM_INFO failed: 0x56` |
+//! | `t127b` | `0db7c61` | 5 | **1** — `fn 228` | `kgspInitGspTraceCrashBuffer … @ kernel_gsp.c:4239` |
+//! | `t127c` | `110c857` | 6 | **1** — `fn 76 cmd 0x20800a36` | `_gpuInitChipInfo … @ gpu.c:886, 2124` |
+//!
+//! ★ The guest and the ledger name the **same** thing every time, from opposite sides, and
+//! `0x56` is this port's own `NV_ERR_NOT_SUPPORTED` arriving verbatim — so the envelope
+//! really does reach RM. ★★ The third row is why the pair key matters: `fn 76` alone would
+//! have said *"a control"*, and `0x20800a36` says
+//! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` — the next rung, named without a boot spent
+//! finding out.
+//!
+//! ⊘ `t127c`'s counters span **two** `nvidia-smi` attempts in one QEMU life; the second
+//! stopped at `_kgspBootGspRm: unexpected WPR2 already up` before sending anything, which
+//! is the known one-clean-run-per-boot rule and not a new finding.
 //!
 //! ## ★ Recording is not answering
 //!
