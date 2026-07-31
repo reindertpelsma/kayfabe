@@ -218,6 +218,31 @@ fn cap1b_closes_the_replay_past_cap1s_wall_and_the_new_wall_is_a_different_findi
         .count();
     assert_eq!(between, 50, "fifty commands cap1 could never reach");
 
+    // ★★★ **GSP-D1, in the artifact.** The answered stream must have no HOLE. Before the
+    // fix the pass at txn 1028 consumed `rpc.sequence` 52, failed to post its reply, and
+    // went on to answer 53 at txn 1029 — a command silently swallowed, and a guest blocked
+    // on `_issueRpcAndWait` for the whole RPC timeout. Now 52 is left owed, so the stream
+    // simply stops there.
+    let answered: Vec<(u32, u32)> = r
+        .commands
+        .iter()
+        .map(|(_, c)| (c.code, c.sequence))
+        .collect();
+    // ⚠ The first two commands are the pre-bind async pair — fn 72 and fn 73, both at
+    // `rpc.sequence` 0, because `_issueRpcAsync` does not advance the counter a reply is
+    // matched on. The awaited stream starts after them, and it is the awaited stream that
+    // may not have a hole.
+    assert_eq!(&answered[..2], &[(72, 0), (73, 0)]);
+    let awaited: Vec<u32> = answered[2..].iter().map(|(_, s)| *s).collect();
+    assert_eq!(
+        awaited,
+        (0..=51).collect::<Vec<u32>>(),
+        "a hole here is a command consumed and never replied to. Before the fix the pass at \
+         txn 1028 consumed rpc.sequence 52, failed to post its reply, and went on to answer \
+         53 at txn 1029 — swallowed, with the guest blocked on _issueRpcAndWait for the \
+         whole RPC timeout. Now 52 is left OWED and the stream simply stops."
+    );
+
     // And the read that stopped `cap1` is *answered* here rather than reconstructed: the
     // reconstruction list is unchanged, so nothing was invented to buy the extra reach.
     assert_eq!(
@@ -229,7 +254,7 @@ fn cap1b_closes_the_replay_past_cap1s_wall_and_the_new_wall_is_a_different_findi
     assert_eq!(
         r.answers,
         vec![
-            (Answer::Observed, 860),
+            (Answer::Observed, 1030),
             (Answer::Lookahead, 2),
             (Answer::Reconstructed(ReconKind::RegionPageTable), 1),
             (Answer::Reconstructed(ReconKind::PeerStatusReadPtr), 1),
@@ -423,13 +448,25 @@ fn the_boot_fsm_is_driven_all_the_way_through_and_the_census_is_itemised() {
     assert_eq!(
         r.rust.census(),
         vec![
-            ("ElementPosted", 62),
-            ("Irq", 54),
-            ("ReadPtrAcked", 54),
+            ("ElementPosted", 61),
+            ("Irq", 56),
+            ("ReadPtrAcked", 273),
             ("Register", 912),
             ("TxHeaderPublished", 1),
-            ("WritePtrAdvanced", 54),
+            ("WritePtrAdvanced", 53),
         ]
+    );
+    // ★★ `ReadPtrAcked` is the number GSP-D2 moved, and it moved *toward the C*: 54 -> 273
+    // against the C's 272. Before the fix the consumption acknowledgement was written after
+    // the drain's `?`s, so a pass that faulted published nothing and the guest kept reading
+    // a stale `readPtr`. It is now published however the pass ended.
+    assert_eq!(
+        r.c.census()
+            .iter()
+            .find(|(k, _)| *k == "ReadPtrAcked")
+            .map(|(_, n)| *n),
+        Some(272),
+        "the C acknowledges on every pass, and now so do we"
     );
     // ★ The classifier still has no catch-all here either, and GSP-D2 now DOES fire —
     // which is the one ledger row `cap1` could never exercise.

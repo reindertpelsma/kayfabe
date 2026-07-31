@@ -562,6 +562,18 @@ impl GspFsm {
         &self.queue
     }
 
+    /// The **command** sequence we next expect from the guest — the other half of the
+    /// cursor a service pass may commit.
+    ///
+    /// ★ Exposed so a test can assert what a *failed* pass committed. GSP-D1 is precisely a
+    /// question about this number: a pass that consumed a command it never answered has
+    /// advanced it, and that is not visible from [`GspFsm::queue`] alone. See
+    /// `tests/tests/service_pass_atomicity.rs`.
+    #[must_use]
+    pub fn command_seq(&self) -> u32 {
+        self.cmd_seq
+    }
+
     /// The abstract observation the register model serves from — §3.2's table, and
     /// nothing else.
     #[must_use]
@@ -1039,11 +1051,83 @@ impl GspFsm {
             return Err(GspFault::QueueNotBound);
         };
         let geom = binding.geom.clone();
+
+        let outcome = self.drain_commands(ram, policy, &geom, &mut report);
+
+        // ★★★ **GSP-D2 — the acknowledgement is published however the pass ended.**
+        //
+        // This write used to sit after the drain's `?`s, so a pass that consumed three
+        // commands and then faulted on the fourth left our published `readPtr` at the value
+        // from the *previous* pass. The guest computes its own free space from that number,
+        // so it sees less room than exists — and a pass that keeps failing never publishes
+        // again. That is the C's measured *"buffer is full"* at ~63 elements arriving by a
+        // different door (`C:3352-3358`).
+        //
+        // ⊘ The ordering is the point: `drain_commands` commits `self.cmd_read_ptr` message
+        // by message, so this always publishes exactly what we actually consumed — never
+        // more. Both results are carried and the DRAIN's is reported first, because the
+        // drain's fault is the diagnosis and a failure to publish is a consequence.
+        let ack = geom
+            .region()
+            .write_u32(ram, geom.cmd_read_ptr_ack_off(), self.cmd_read_ptr);
+        outcome?;
+        ack?;
+
+        if self.maybe_enter_running(ram, &geom)? {
+            report.transitions.push(Transition::Running);
+        }
+        report.raise_status_irq |= self.swgen0_pending;
+        Ok(report)
+    }
+
+    /// The drain itself: every complete message decoded, answered, and only then consumed.
+    ///
+    /// ★★★ **GSP-D1 — answer BEFORE committing the cursor.** This loop used to commit the
+    /// read pointer and the expected sequence and *then* call [`GspFsm::answer`]. `answer`
+    /// posts, and [`GspFsm::post`] can return [`GspFault::QueueFull`] — whose own
+    /// documentation calls it *retryable back-pressure*. On this path there was no retry:
+    /// the command had already been consumed, so no reply was ever posted for it, and the
+    /// guest blocked on `_issueRpcAndWait` for the whole RPC timeout.
+    ///
+    /// ⚠ It was unreachable **only** because this guest is synchronous under the GPU lock —
+    /// one command in flight, so the status ring cannot fill against it. That is a property
+    /// of the guest, not of the protocol, and `cap1b` reaches a real `QueueFull` at txn 1028
+    /// with nine elements needed and one free.
+    ///
+    /// ## ★★ Why answer-then-commit, and what makes the other failure IMPOSSIBLE
+    ///
+    /// The alternative — hold the reply and re-post on the next pass — needs a queue of
+    /// deferred replies, and a deferred reply is state that can be lost, reordered or
+    /// double-sent. Answer-then-commit needs no state at all: the cursor *is* the record of
+    /// what has been answered.
+    ///
+    /// Its own failure mode is the mirror image — **double-service**, a command answered
+    /// twice because a retry re-reads it after a partially-effective post. Two replies at
+    /// one `rpc.sequence` desynchronise the guest exactly as badly as none. That is made
+    /// impossible rather than unlikely by [`GspFsm::post`]'s shape, and this is the property
+    /// this ordering depends on:
+    ///
+    /// - the flow-control test returns **before any write**, so a `QueueFull` post leaves
+    ///   the ring untouched;
+    /// - the elements are written first and `stat_write_ptr` is advanced **last**, so a post
+    ///   that faults mid-run leaves bytes in slots the guest is not looking at;
+    /// - `stat_seq` and the cached free count advance only after the pointer.
+    ///
+    /// ⇒ a post either becomes visible to the guest in full, or not at all. A retry of a
+    /// failed post rewrites the same slots and publishes once.
+    /// `tests/service_pass_atomicity.rs` is what fails if that stops being true.
+    fn drain_commands(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        policy: &mut dyn CommandPolicy,
+        geom: &MsgqGeometry,
+        report: &mut ServiceReport,
+    ) -> Result<(), GspFault> {
         let count = geom.msg_count();
         let element_size = geom.element_size();
 
         let write_ptr = geom.region().read_u32(ram, geom.cmd_write_ptr_off())?;
-        let mut read_ptr = binding.cmd.read_ptr;
+        let mut read_ptr = self.cmd_read_ptr;
         let mut expect_seq = self.cmd_seq;
         let mut avail = available_elements(write_ptr, read_ptr, count)?;
 
@@ -1097,31 +1181,24 @@ impl GspFsm {
                 // `ogkm-610: message_queue_cpu.c:660-682`).
                 break;
             }
-            let run = self.read_run(ram, &geom, read_ptr, len, &first)?;
+            let run = self.read_run(ram, geom, read_ptr, len, &first)?;
             let msg = decode_message(&self.abi.element, &run, len, expect_seq, &self.abi.driver)?;
             let cmd = RpcCommand::from_incoming(&self.abi.rpc, &msg);
+
+            // ★★★ GSP-D1: answer FIRST. A `?` here leaves the cursor exactly where it was,
+            // so this message is still owed and the next doorbell re-reads it. Consuming
+            // first and answering second loses the command on any refusal `post` can raise
+            // — `QueueFull` above all, which is the one this method's caller is expected to
+            // retry.
+            self.answer(ram, policy, &cmd, report)?;
 
             read_ptr = count.slot(read_ptr + run_elements).index();
             expect_seq = expect_seq.wrapping_add(1);
             avail -= run_elements;
             self.commit_command_cursor(read_ptr, expect_seq);
-
-            self.answer(ram, policy, &cmd, &mut report)?;
             report.commands.push(cmd);
         }
-
-        // Publish our consumption of the command queue into the **status** queue's rx
-        // header — the swapped location. Writing it to `cmd_base + rxHdrOff` instead left
-        // the guest seeing zero free space and reporting *"buffer is full"* once ~63
-        // elements had accumulated (`C:3352-3358`).
-        geom.region()
-            .write_u32(ram, geom.cmd_read_ptr_ack_off(), read_ptr)?;
-
-        if self.maybe_enter_running(ram, &geom)? {
-            report.transitions.push(Transition::Running);
-        }
-        report.raise_status_irq |= self.swgen0_pending;
-        Ok(report)
+        Ok(())
     }
 
     /// Read the `len.elements()` elements of one message, following the ring's wrap.
