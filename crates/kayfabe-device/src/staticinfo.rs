@@ -26,7 +26,9 @@
 //! to the chain, which is a different statement.
 
 use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
-use kayfabe_abi::gspstaticinfo::{GspStaticInfo, encode_gsp_static_info};
+use kayfabe_abi::gspstaticinfo::{
+    GSP_STATIC_CONFIG_INFO_SIZE, GspStaticInfo, encode_gsp_static_info,
+};
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 
@@ -78,6 +80,33 @@ impl CommandPolicy for StaticInfoPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         if cmd.function != RpcFunction::GetGspStaticInfo {
             return None;
+        }
+        // ★★★ **The size check, and the reason it is not optional.**
+        //
+        // Every `InitTablePolicy` control refuses on `req.params_size != want.params_size()`
+        // — the guest's own declared size against ours. Fn 65 carries no `paramsSize` field
+        // to compare, so the equivalent statement is the *body length* the guest's envelope
+        // declares, and this policy compared nothing at all.
+        //
+        // ⚠ That was silent in the worst possible way. `RpcCommand::reply` clamps the body
+        // to whatever the request declared, so a disagreement produces neither a fault nor a
+        // counter nor a refusal — only a `GspStaticConfigInfo` that is **truncated** (guest
+        // struct smaller) or **zero-padded** (guest struct larger), copied wholesale into
+        // `pGpu->pGspStaticInfo` and read from there for the rest of the boot
+        // (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:4232-4236`). Nothing logs.
+        //
+        // ★★ And there is **zero margin**: `1824 - 32 == 1792` exactly. This port's
+        // `GSP_STATIC_CONFIG_INFO_SIZE` and the guest's `sizeof(GspStaticConfigInfo)` are
+        // *the same fact stated twice* — by two teams, from two sources, keyed on a driver
+        // version. When they disagree the whole reply is wrong, and the disagreement is
+        // exactly what a differently-built guest brings. So the refusal goes in the
+        // envelope, where the guest's own `NV_RM_RPC_GET_GSP_STATIC_INFO` fails loudly with
+        // a line that names itself, rather than into a body that cannot carry one.
+        if cmd.payload.len() != GSP_STATIC_CONFIG_INFO_SIZE {
+            return Some(Reply {
+                rpc_result: NV_ERR_NOT_SUPPORTED,
+                body: Vec::new(),
+            });
         }
         match self.body() {
             Ok(body) => Some(Reply {

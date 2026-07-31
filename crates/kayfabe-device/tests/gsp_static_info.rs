@@ -27,7 +27,8 @@
 //! *this* device's own two publications agreeing — not about the oracle.
 
 use kayfabe_abi::gspstaticinfo::{
-    FbRegion, GspStaticInfo, GspStaticInfoError, encode_gsp_static_info,
+    FbRegion, GSP_STATIC_CONFIG_INFO_SIZE, GspStaticInfo, GspStaticInfoError,
+    encode_gsp_static_info,
 };
 use kayfabe_abi::versions::{BENCH_DRIVER, GspStaticInfoWire, table_for};
 use kayfabe_device::staticinfo::StaticInfoPolicy;
@@ -357,4 +358,50 @@ const fn copy_of_ga106() -> ChipProfile {
         user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
         fb_length: 0,
     }
+}
+
+#[test]
+fn a_request_whose_body_is_not_the_struct_this_port_encodes_is_refused_in_the_envelope() {
+    // ★★★ GSP-D4. The failure this closes is **silent**, which is why the test has to state
+    // what silence looked like: `RpcCommand::reply` clamps the body to the request's own
+    // declared length, so a guest whose `sizeof(GspStaticConfigInfo)` differs from ours got
+    // a TRUNCATED or ZERO-PADDED table — no fault, no counter, no refusal — copied straight
+    // into `pGpu->pGspStaticInfo`. Every `InitTablePolicy` control has always refused the
+    // same disagreement; fn 65 compared nothing.
+    //
+    // ⊘ Both directions, and both boundaries. A one-byte-short request is the truncation
+    // case and a one-byte-long request is the padding case; either is a guest whose struct
+    // is not the struct we encode.
+    let mut p = policy();
+    for len in [
+        0,
+        1,
+        GSP_STATIC_CONFIG_INFO_SIZE - 1,
+        GSP_STATIC_CONFIG_INFO_SIZE + 1,
+        4096,
+    ] {
+        let reply = p
+            .respond(&command(RpcFunction::GetGspStaticInfo, 65, len))
+            .unwrap_or_else(|| panic!("len {len} must be REFUSED, not ignored"));
+        assert_eq!(
+            reply.rpc_result,
+            kayfabe_abi::NV_ERR_NOT_SUPPORTED,
+            "len {len} was answered rather than refused"
+        );
+        assert!(
+            reply.body.is_empty(),
+            "a refusal carries no body, least of all a clamped one"
+        );
+    }
+    // Non-vacuity, and it is the whole assertion: the exact size still succeeds, so the
+    // check is a size check and not a policy that has stopped answering.
+    let ok = p
+        .respond(&command(
+            RpcFunction::GetGspStaticInfo,
+            65,
+            GSP_STATIC_CONFIG_INFO_SIZE,
+        ))
+        .expect("answered");
+    assert_eq!(ok.rpc_result, 0);
+    assert_eq!(ok.body.len(), GSP_STATIC_CONFIG_INFO_SIZE);
 }
