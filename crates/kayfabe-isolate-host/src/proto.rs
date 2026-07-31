@@ -165,6 +165,28 @@ pub enum Request {
         /// Memory object to export, raw.
         memory: u64,
     },
+    /// ★★★ [`kayfabe_isolate::RmBackend::export_backing`] — *"perform the mapping and
+    /// hand back memory"* (`isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// ★ The **only** request whose reply may carry a descriptor. That is protocol
+    /// policy, and it is expressed as the `max_fds` allowance the reader passes
+    /// ([`crate::fdcross::read_frame_with_fds`]): every other reply is read with an
+    /// allowance of **zero**, so a child that attaches one to an `Alloc` reply has it
+    /// closed by the kernel and the frame refused — the port of the C's R2-M1 gate,
+    /// enforced by the kernel rather than by a `case` a later edit can forget.
+    ExportBacking {
+        /// `0` = [`kayfabe_isolate::ExportSource::Fabricated`, `1` =
+        /// [`kayfabe_isolate::ExportSource::HostDeviceMemory`]. A code we do not
+        /// recognise is a refusal, never a default — a defaulted source would silently
+        /// turn a request for the card's bytes into a fresh page of zeros.
+        source: u8,
+        /// The RM object, raw, when `source == 1`; ignored otherwise.
+        memory: u64,
+        /// Bytes wanted.
+        len: u64,
+        /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
+        prot: u8,
+    },
 }
 
 /// A request plus the checkout transaction it belongs to.
@@ -205,6 +227,22 @@ pub enum Reply {
         /// The bytes. Empty when `covered` is false.
         bytes: Vec<u8>,
     },
+    /// ★★★ The answer to a [`Request::ExportBacking`] — the geometry of a backing whose
+    /// **descriptor rides this frame's ancillary data**.
+    ///
+    /// ⊘ It carries no token. The child's index into its own export table is a child
+    /// value, and a parent that adopted it would be letting the peer name a slot in the
+    /// parent's registry — the same "the isolate is supplied by the caller, never by the
+    /// wire" rule [`WireError::into_rm_error`] already applies to a `BadHandle`. The
+    /// parent mints its own token when it adopts the descriptor.
+    Backing {
+        /// Byte offset into the backing at which the range begins.
+        offset: u64,
+        /// How many bytes are there.
+        len: u64,
+        /// What the isolate actually granted: `0` = read-write, `1` = read-only.
+        prot: u8,
+    },
     /// The verb failed.
     Failed(WireError),
 }
@@ -223,6 +261,13 @@ pub enum WireError {
     Interrupted,
     /// [`RmError::Other`], carrying the host's opaque status.
     Other(u32),
+    /// ★★★ [`RmError::NotExportableAsMemory`] — the named boundary of decision (b).
+    ///
+    /// A wire form of its own rather than an `Other(status)`, because the whole value of
+    /// naming the boundary is lost if it arrives as an opaque number: a caller must be
+    /// able to tell *"the bytes are on the card and cannot cross as memory"* from
+    /// *"the host refused"*, and a status code makes those the same fact.
+    NotExportableAsMemory(u64),
 }
 
 impl WireError {
@@ -239,7 +284,43 @@ impl WireError {
             WireError::NoMemory => RmError::NoMemory,
             WireError::Interrupted => RmError::Interrupted,
             WireError::Other(status) => RmError::Other(status),
+            WireError::NotExportableAsMemory(raw) => RmError::NotExportableAsMemory {
+                memory: kayfabe_isolate::HostHandle::new(isolate, raw),
+            },
         }
+    }
+}
+
+/// The wire code for [`kayfabe_isolate::ExportSource::Fabricated`].
+pub const EXPORT_SOURCE_FABRICATED: u8 = 0;
+/// The wire code for [`kayfabe_isolate::ExportSource::HostDeviceMemory`].
+pub const EXPORT_SOURCE_HOST_DEVICE: u8 = 1;
+
+/// The wire code for [`kayfabe_vmm::Prot::ReadWrite`].
+pub const PROT_READ_WRITE: u8 = 0;
+/// The wire code for [`kayfabe_vmm::Prot::ReadOnly`].
+pub const PROT_READ_ONLY: u8 = 1;
+
+/// [`kayfabe_vmm::Prot`]'s wire code. A dedicated mapping rather than a discriminant
+/// cast, for [`engine_code`]'s reason: a reordered enum must not silently re-route a
+/// protection, and the direction that fails open here is the dangerous one — a
+/// read-only run installed read-write.
+#[must_use]
+pub fn prot_code(prot: kayfabe_vmm::Prot) -> u8 {
+    match prot {
+        kayfabe_vmm::Prot::ReadWrite => PROT_READ_WRITE,
+        kayfabe_vmm::Prot::ReadOnly => PROT_READ_ONLY,
+    }
+}
+
+/// The inverse of [`prot_code`]. `None` for an unknown code — **never** a default, and
+/// specifically never a default of read-write.
+#[must_use]
+pub fn prot_from_code(code: u8) -> Option<kayfabe_vmm::Prot> {
+    match code {
+        PROT_READ_WRITE => Some(kayfabe_vmm::Prot::ReadWrite),
+        PROT_READ_ONLY => Some(kayfabe_vmm::Prot::ReadOnly),
+        _ => None,
     }
 }
 
@@ -484,6 +565,18 @@ impl Envelope {
                 out.extend_from_slice(&phys.to_le_bytes());
                 out.extend_from_slice(&len.to_le_bytes());
             }
+            Request::ExportBacking {
+                source,
+                memory,
+                len,
+                prot,
+            } => {
+                out.push(15);
+                out.push(*source);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*prot);
+            }
         }
         out
     }
@@ -553,6 +646,12 @@ impl Envelope {
                 phys: c.u64("fb phys")?,
                 len: c.u64("fb len")?,
             },
+            15 => Request::ExportBacking {
+                source: c.u8("export source")?,
+                memory: c.u64("export memory")?,
+                len: c.u64("export len")?,
+                prot: c.u8("export prot")?,
+            },
             tag => {
                 return Err(ProtoError::UnknownTag {
                     what: "request",
@@ -598,6 +697,12 @@ impl Reply {
                 out.push(u8::from(*covered));
                 put_blob(&mut out, bytes);
             }
+            Reply::Backing { offset, len, prot } => {
+                out.push(9);
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*prot);
+            }
             Reply::Failed(e) => {
                 out.push(7);
                 match e {
@@ -611,6 +716,10 @@ impl Reply {
                     WireError::Other(status) => {
                         out.push(5);
                         out.extend_from_slice(&status.to_le_bytes());
+                    }
+                    WireError::NotExportableAsMemory(raw) => {
+                        out.push(6);
+                        out.extend_from_slice(&raw.to_le_bytes());
                     }
                 }
             }
@@ -637,6 +746,7 @@ impl Reply {
                 3 => WireError::NoMemory,
                 4 => WireError::Interrupted,
                 5 => WireError::Other(c.u32("status")?),
+                6 => WireError::NotExportableAsMemory(c.u64("unexportable memory")?),
                 tag => {
                     return Err(ProtoError::UnknownTag {
                         what: "wire error",
@@ -650,6 +760,11 @@ impl Reply {
                 // encoding difference into a dead isolate.
                 covered: c.u8("fb covered")? != 0,
                 bytes: c.blob("fb bytes")?,
+            },
+            9 => Reply::Backing {
+                offset: c.u64("backing offset")?,
+                len: c.u64("backing len")?,
+                prot: c.u8("backing prot")?,
             },
             tag => return Err(ProtoError::UnknownTag { what: "reply", tag }),
         };
@@ -824,6 +939,21 @@ mod tests {
                 phys: 0x1000_4000,
                 len: 4096,
             },
+            // ★ BOTH sources, because the two arms of the verb have opposite outcomes and
+            // a sample carrying only the one that succeeds would prove the round trip
+            // about half the vocabulary.
+            Request::ExportBacking {
+                source: EXPORT_SOURCE_FABRICATED,
+                memory: 0,
+                len: 0x20_0000,
+                prot: PROT_READ_WRITE,
+            },
+            Request::ExportBacking {
+                source: EXPORT_SOURCE_HOST_DEVICE,
+                memory: 0x11,
+                len: 0x1000,
+                prot: PROT_READ_ONLY,
+            },
         ]
     }
 
@@ -850,6 +980,7 @@ mod tests {
             Request::CeCopy { .. } => "CeCopy",
             Request::FbRead { .. } => "FbRead",
             Request::ExportSurface { .. } => "ExportSurface",
+            Request::ExportBacking { .. } => "ExportBacking",
         }
     }
 
@@ -867,6 +998,7 @@ mod tests {
                 "AllocVaSpace",
                 "CeCopy",
                 "Control",
+                "ExportBacking",
                 "ExportSurface",
                 "FbRead",
                 "Free",
@@ -918,6 +1050,20 @@ mod tests {
                 covered: true,
                 bytes: vec![0xA5; 4096],
             },
+            // ★ The reply whose descriptor is NOT in these bytes. It round-trips as
+            // geometry alone, which is the encoding property that matters: the fd travels
+            // as ancillary data and nothing in the body names it.
+            Reply::Backing {
+                offset: 0,
+                len: 0x20_0000,
+                prot: PROT_READ_WRITE,
+            },
+            Reply::Backing {
+                offset: 0x1000,
+                len: 0x1000,
+                prot: PROT_READ_ONLY,
+            },
+            Reply::Failed(WireError::NotExportableAsMemory(0xC1D0_0011)),
         ];
         for r in replies {
             assert_eq!(Reply::decode(&r.encode()), Ok(r));
@@ -937,12 +1083,60 @@ mod tests {
             WireError::NoMemory,
             WireError::Interrupted,
             WireError::Other(0),
+            WireError::NotExportableAsMemory(1),
         ] {
             match w.into_rm_error(iso) {
                 RmError::Wedged => panic!("a child claimed it never answered"),
                 RmError::ForeignHandle { .. } => panic!("a child claimed OUR gate fired"),
                 _ => {}
             }
+        }
+    }
+
+    /// ★★★ The **named boundary** survives the wire as itself, and is stamped with OUR
+    /// namespace — not the child's.
+    ///
+    /// Both halves matter. If `NotExportableAsMemory` arrived as `Other`, a VMM could not
+    /// tell *"the bytes are on the card"* from *"the host refused"*, and the whole point
+    /// of naming the boundary would be lost at the last hop. If the handle carried the
+    /// child's claimed namespace, a compromised isolate could name a **sibling's** object
+    /// in a refusal the VMM logs and acts on.
+    #[test]
+    fn the_unexportable_boundary_keeps_its_name_and_our_namespace() {
+        let ours = kayfabe_isolate::IsolateId::new(4, kayfabe_arch::ids::GpuId(1));
+        let round_tripped =
+            Reply::decode(&Reply::Failed(WireError::NotExportableAsMemory(0x77)).encode())
+                .expect("decodes");
+        let Reply::Failed(w) = round_tripped else {
+            panic!("expected a failure reply");
+        };
+        match w.into_rm_error(ours) {
+            RmError::NotExportableAsMemory { memory } => {
+                assert_eq!(memory.isolate(), ours, "stamped with OUR namespace");
+                assert_eq!(memory.raw(), 0x77);
+            }
+            other => panic!("the boundary lost its name on the wire: {other:?}"),
+        }
+    }
+
+    /// ★★ Neither wire code may be defaulted. A `prot` byte the child does not recognise
+    /// must **refuse**, and specifically must not fall through to read-write: that
+    /// direction hands the guest a write it was never granted.
+    #[test]
+    fn an_unknown_protection_code_is_refused_rather_than_defaulted_to_writable() {
+        assert_eq!(
+            prot_from_code(PROT_READ_WRITE),
+            Some(kayfabe_vmm::Prot::ReadWrite)
+        );
+        assert_eq!(
+            prot_from_code(PROT_READ_ONLY),
+            Some(kayfabe_vmm::Prot::ReadOnly)
+        );
+        for bad in [2u8, 3, 0xFF] {
+            assert_eq!(prot_from_code(bad), None, "code {bad} must not decode");
+        }
+        for p in [kayfabe_vmm::Prot::ReadWrite, kayfabe_vmm::Prot::ReadOnly] {
+            assert_eq!(prot_from_code(prot_code(p)), Some(p));
         }
     }
 

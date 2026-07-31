@@ -34,8 +34,12 @@
 //! make every parked verb trip an assert about a rule it is not breaking — and would train
 //! the next reader to suppress the witness, which is the expensive mistake.
 
+use crate::export::ChildExports;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
-use kayfabe_isolate::{CeSubCopy, HostHandle, IsolateId, RmBackend, RmError};
+use kayfabe_isolate::{
+    CeSubCopy, ExportRequest, ExportSource, ExportedBacking, HostHandle, IsolateId, RmBackend,
+    RmError,
+};
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeSet;
 use std::io::Read;
@@ -122,6 +126,8 @@ pub struct LoopbackRm {
     /// This worker's own reader for the park pipe. Per-worker so a park is this thread's
     /// blocking call and not a contended one.
     park: std::io::PipeReader,
+    /// ★ The isolate's export table (`crate::export`), shared with every sibling worker.
+    exports: Arc<ChildExports>,
 }
 
 impl LoopbackRm {
@@ -129,9 +135,18 @@ impl LoopbackRm {
     ///
     /// # Errors
     /// The descriptor could not be duplicated.
-    pub fn new(id: IsolateId, shared: Arc<LoopbackShared>) -> std::io::Result<Self> {
+    pub fn new(
+        id: IsolateId,
+        shared: Arc<LoopbackShared>,
+        exports: Arc<ChildExports>,
+    ) -> std::io::Result<Self> {
         let park = shared.park_reader.try_clone()?;
-        Ok(LoopbackRm { id, shared, park })
+        Ok(LoopbackRm {
+            id,
+            shared,
+            park,
+            exports,
+        })
     }
 
     /// Take the client lock, park if this verb is the parking one, and mint. The lock is
@@ -298,6 +313,30 @@ impl RmBackend for LoopbackRm {
         let h = self.verb(false)?;
         Ok(SurfaceHandle(h))
     }
+
+    /// ★★★ Decision (b), through the fixture — and it is **real**, not modelled.
+    ///
+    /// This is the one verb where the fixture and the production backend do the *identical
+    /// thing*: [`crate::rm::mint_fabricated`] is called by both. That is not a fixture
+    /// growing toward being a driver (the thing this file's header refuses) — minting a
+    /// `memfd` is not an RM semantic, and there is nothing here to model. It means the
+    /// crossing can be exercised end to end, through a real child process and a real
+    /// socket, on a box with **no GPU**.
+    ///
+    /// ⊘ The device arm refuses here for the same reason and with the same error as the
+    /// real backend. Answering it with a `memfd` — bytes we invented in place of the
+    /// card's — would be exactly the fixture-shaped lie that makes a boundary look
+    /// crossed when it is not.
+    fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError> {
+        if let ExportSource::HostDeviceMemory { memory } = want.source {
+            self.known(memory)?;
+            return Err(RmError::NotExportableAsMemory { memory });
+        }
+        // ★ Under the client lock, like every other verb: a backing is minted by the same
+        // serialised path RM would serialise, so a parked sibling blocks this too.
+        self.verb(false)?;
+        crate::rm::mint_fabricated(&self.exports, want)
+    }
 }
 
 #[cfg(test)]
@@ -305,9 +344,16 @@ mod tests {
     use super::*;
     use kayfabe_arch::ids::GpuId;
 
+    /// A fresh export table per fixture backend. Its own, deliberately: these tests are
+    /// about the client lock and handle namespaces, and a shared table would silently
+    /// couple two "independent" isolates through a resource neither test names.
+    fn exports() -> Arc<ChildExports> {
+        Arc::new(ChildExports::new())
+    }
+
     fn rm(park: ParkVerb) -> LoopbackRm {
         let shared = LoopbackShared::new(park).expect("pipe");
-        LoopbackRm::new(IsolateId::new(1, GpuId(0)), shared).expect("dup")
+        LoopbackRm::new(IsolateId::new(1, GpuId(0)), shared, exports()).expect("dup")
     }
 
     #[test]
@@ -334,6 +380,7 @@ mod tests {
         let mut b = LoopbackRm::new(
             IsolateId::new(2, GpuId(0)),
             LoopbackShared::new(ParkVerb::Nothing).expect("pipe"),
+            exports(),
         )
         .expect("dup");
         let ha = a.alloc_vaspace().expect("a");
@@ -372,7 +419,8 @@ mod tests {
         kayfabe_linux_raw::install_break_handler().expect("handler");
         let shared = LoopbackShared::new(ParkVerb::Sysmem).expect("pipe");
         let mut worker =
-            LoopbackRm::new(IsolateId::new(1, GpuId(0)), Arc::clone(&shared)).expect("dup");
+            LoopbackRm::new(IsolateId::new(1, GpuId(0)), Arc::clone(&shared), exports())
+                .expect("dup");
         let (tid_tx, tid_rx) = std::sync::mpsc::channel();
         let (done_tx, done_rx) = std::sync::mpsc::channel();
         let t = std::thread::spawn(move || {
@@ -438,8 +486,8 @@ mod tests {
         kayfabe_linux_raw::install_break_handler().expect("handler");
         let shared = LoopbackShared::new(ParkVerb::Sysmem).expect("pipe");
         let id = IsolateId::new(1, GpuId(0));
-        let mut parker = LoopbackRm::new(id, Arc::clone(&shared)).expect("dup");
-        let mut sibling = LoopbackRm::new(id, Arc::clone(&shared)).expect("dup");
+        let mut parker = LoopbackRm::new(id, Arc::clone(&shared), exports()).expect("dup");
+        let mut sibling = LoopbackRm::new(id, Arc::clone(&shared), exports()).expect("dup");
 
         let (tid_tx, tid_rx) = std::sync::mpsc::channel();
         let (parked_tx, parked_rx) = std::sync::mpsc::channel();

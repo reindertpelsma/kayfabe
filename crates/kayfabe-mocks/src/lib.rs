@@ -55,8 +55,9 @@ use kayfabe_arch::{
     PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
 use kayfabe_isolate::{
-    CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, HostHandle, Isolate,
-    IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
+    CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, ExportRequest, ExportSource,
+    ExportedBacking, HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn,
+    Worker, WorkerId,
 };
 use kayfabe_util::Instant;
 use kayfabe_vmm::{
@@ -1081,6 +1082,20 @@ pub enum RmVerb {
         /// The minted surface token.
         surface: SurfaceHandle,
     },
+    /// ★★★ Intent: a backing exported to the VMM for a guest memslot — decision (b)
+    /// (`RmBackend::export_backing`).
+    ///
+    /// Records the SOURCE, because the whole point of the verb is that its two sources
+    /// have opposite outcomes and a log that recorded only "an export happened" could not
+    /// tell a fabricated backing from a refused device one.
+    ExportBacking {
+        /// Which class of bytes was asked for.
+        source: ExportSource,
+        /// How many bytes.
+        len: u64,
+        /// The token minted, or `None` when the request was refused.
+        token: Option<u64>,
+    },
     /// Object freed.
     Free {
         /// The handle.
@@ -1127,6 +1142,8 @@ pub enum VerbKind {
     FbRead,
     /// [`RmBackend::export_surface`].
     ExportSurface,
+    /// [`RmBackend::export_backing`].
+    ExportBacking,
 }
 
 /// Which verb occurrence a hold latches onto. Every field is optional; `None`
@@ -2730,6 +2747,56 @@ impl RmBackend for MockRmBackend {
         let surface = SurfaceHandle(self.handle_hi() | n);
         self.record(RmVerb::ExportSurface { memory, surface });
         Ok(surface)
+    }
+
+    /// ★★★ Decision (b) in the double — **and the double refuses the device class too.**
+    ///
+    /// The mock is what the whole core suite runs against, so this is where the boundary
+    /// becomes visible to every test that never touches an OS. It refuses
+    /// `ExportSource::HostDeviceMemory` for the same reason the real backend does, and it
+    /// is deliberately NOT a knob: a mock that could be scripted to succeed there would
+    /// let a core-side consumer be written against an outcome no host can produce — the
+    /// mock-wall shape recorded in `CLAUDE.md` (749 tests green and 99.2 % mutation, and
+    /// making the double honest about ONE property killed 12 of them).
+    ///
+    /// The token is namespaced like a handle (`handle_hi() | n`), so a backing minted by
+    /// proc A's isolate and presented on proc B's is visible in an assertion rather than
+    /// plausible.
+    fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError> {
+        let _client = self.gate(VerbKind::ExportBacking)?;
+        if let ExportSource::HostDeviceMemory { memory } = want.source {
+            // An unknown object is still a LOUD BadHandle: *"I have never heard of this
+            // object"* and *"its bytes are on the card"* are different facts, and a
+            // refusal that merged them would answer a typo with an architectural verdict.
+            self.check(memory)?;
+            self.record(RmVerb::ExportBacking {
+                source: want.source,
+                len: want.len,
+                token: None,
+            });
+            return Err(RmError::NotExportableAsMemory { memory });
+        }
+        if want.len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let n = {
+            let mut ns = self.ns.lock().expect("ns");
+            let n = ns.next;
+            ns.next += 1;
+            n
+        };
+        let token = self.handle_hi() | n;
+        self.record(RmVerb::ExportBacking {
+            source: want.source,
+            len: want.len,
+            token: Some(token),
+        });
+        Ok(ExportedBacking {
+            token,
+            offset: 0,
+            len: want.len,
+            prot: want.prot,
+        })
     }
 }
 

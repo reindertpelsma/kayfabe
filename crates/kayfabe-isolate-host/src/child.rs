@@ -27,18 +27,25 @@
 //! attempts to resynchronise after a framing error is exactly the desynchronisation hazard
 //! §7.2 forbids, reached from the other end.
 
+use crate::export::ChildExports;
+use crate::fdcross::write_frame_with_fds;
 use crate::isolate::{CONTROL_FD, RmMode, WORKER_FD_BASE, decode_control};
 use crate::loopback::{LoopbackRm, LoopbackShared, ParkVerb};
 use crate::proto::{
-    Envelope, Reply, Request, WireError, engine_from_code, read_frame, write_frame,
+    EXPORT_SOURCE_FABRICATED, EXPORT_SOURCE_HOST_DEVICE, Envelope, Reply, Request, WireError,
+    engine_from_code, prot_code, prot_from_code, read_frame, write_frame,
 };
 use crate::rm::{HostRmBackend, RmConnection};
 use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa};
-use kayfabe_isolate::{CeExecutor, CeSource, CeSubCopy, HostHandle, IsolateId, RmBackend, RmError};
+use kayfabe_isolate::{
+    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, HostHandle, IsolateId, RmBackend,
+    RmError,
+};
 use kayfabe_linux_raw::sandbox::{self, SandboxPolicy};
 use kayfabe_linux_raw::{
     ThreadId, adopt_inherited_fd, current_thread_id, install_break_handler, interrupt_thread,
 };
+use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::net::{UnixDatagram, UnixStream};
 use std::sync::{Arc, Mutex};
 
@@ -145,9 +152,14 @@ pub fn serve(args: &ChildArgs) -> i32 {
         }
     };
 
+    // ★ One export table per ISOLATE, not per worker. A backing is an isolate-scoped
+    // resource; a per-worker table would make a token's meaning depend on which pool slot
+    // happened to serve the request, and the parent has no way to know which that was.
+    let exports = Arc::new(ChildExports::new());
+
     // ★ Build the backends BEFORE announcing readiness, so a bring-up failure is reported
     // on the hello frame rather than on the first guest operation.
-    let backends = match build_backends(args, id) {
+    let backends = match build_backends(args, id, &exports) {
         Ok(b) => b,
         Err(why) => {
             eprintln!("kayfabe-isolate: {why}");
@@ -175,8 +187,9 @@ pub fn serve(args: &ChildArgs) -> i32 {
     let mut threads = Vec::with_capacity(args.workers);
     for (i, (sock, backend)) in sockets.into_iter().zip(backends).enumerate() {
         let slots = Arc::clone(&slots);
+        let exports = Arc::clone(&exports);
         threads.push(std::thread::spawn(move || {
-            worker_loop(i, sock, backend, &slots);
+            worker_loop(i, sock, backend, &slots, &exports);
         }));
     }
     for t in threads {
@@ -190,7 +203,11 @@ pub fn serve(args: &ChildArgs) -> i32 {
     0
 }
 
-fn build_backends(args: &ChildArgs, id: IsolateId) -> Result<Vec<Box<dyn RmBackend>>, String> {
+fn build_backends(
+    args: &ChildArgs,
+    id: IsolateId,
+    exports: &Arc<ChildExports>,
+) -> Result<Vec<Box<dyn RmBackend>>, String> {
     match args.rm {
         RmMode::Real => {
             // ★★★ The containment and the capability are created by ONE call, in that
@@ -211,7 +228,13 @@ fn build_backends(args: &ChildArgs, id: IsolateId) -> Result<Vec<Box<dyn RmBacke
             let conn =
                 Arc::new(RmConnection::open(&dev, GpuId(args.gpu)).map_err(|e| e.to_string())?);
             Ok((0..args.workers)
-                .map(|_| Box::new(HostRmBackend::new(id, Arc::clone(&conn))) as Box<dyn RmBackend>)
+                .map(|_| {
+                    Box::new(HostRmBackend::new(
+                        id,
+                        Arc::clone(&conn),
+                        Arc::clone(exports),
+                    )) as Box<dyn RmBackend>
+                })
                 .collect())
         }
         RmMode::Loopback => {
@@ -219,7 +242,7 @@ fn build_backends(args: &ChildArgs, id: IsolateId) -> Result<Vec<Box<dyn RmBacke
             let mut out: Vec<Box<dyn RmBackend>> = Vec::with_capacity(args.workers);
             for _ in 0..args.workers {
                 out.push(Box::new(
-                    LoopbackRm::new(id, Arc::clone(&shared))
+                    LoopbackRm::new(id, Arc::clone(&shared), Arc::clone(exports))
                         .map_err(|e| format!("park pipe dup: {e}"))?,
                 ));
             }
@@ -265,6 +288,7 @@ fn worker_loop(
     sock: UnixStream,
     mut backend: Box<dyn RmBackend>,
     slots: &[Mutex<SlotState>],
+    exports: &ChildExports,
 ) {
     {
         let mut s = slots[index].lock().unwrap_or_else(|e| e.into_inner());
@@ -297,14 +321,109 @@ fn worker_loop(
             let mut s = slots[index].lock().unwrap_or_else(|e| e.into_inner());
             s.txn = envelope.txn;
         }
-        let reply = execute(&mut *backend, envelope.request);
+        let (reply, carried) = serve_one(&mut *backend, envelope.request, exports);
         {
             let mut s = slots[index].lock().unwrap_or_else(|e| e.into_inner());
             s.txn = 0;
         }
-        if write_frame(&mut sock, &reply.encode()).is_err() {
+        // ★★ A descriptor rides the frame's FIRST byte, so it goes on the same single
+        // `sendmsg` the body does. Only an export reply ever carries one; every other reply
+        // takes the plain writer, so the fd-carrying path cannot be reached by a verb that
+        // was not asked for a backing.
+        let wrote = match &carried {
+            Some(fd) => write_frame_with_fds(sock.as_fd(), &reply.encode(), &[fd.as_fd()]).is_ok(),
+            None => write_frame(&mut sock, &reply.encode()).is_ok(),
+        };
+        if !wrote {
             return;
         }
+    }
+}
+
+/// One request, its reply, and **the descriptor that reply carries, if any**.
+///
+/// The split exists because exactly one verb's answer is a descriptor and everything else
+/// is bytes. Threading an `Option<OwnedFd>` through [`execute`]'s twenty arms would put a
+/// resource in nineteen places that have none; making the export arm a sibling keeps
+/// [`execute`] a pure `Request -> Reply` function, which is what its own tests assert.
+fn serve_one(
+    rm: &mut dyn RmBackend,
+    request: Request,
+    exports: &ChildExports,
+) -> (Reply, Option<OwnedFd>) {
+    match request {
+        Request::ExportBacking {
+            source,
+            memory,
+            len,
+            prot,
+        } => export_backing(rm, source, memory, len, prot, exports),
+        other => (execute(rm, other), None),
+    }
+}
+
+/// ★★★ The export arm: run the verb, and attach the backing it minted.
+///
+/// Three refusals happen **before** the backend is reached, and each is a wire value the
+/// child must not guess at:
+///
+/// - an unknown `source` code — never defaulted, because defaulting to `Fabricated` would
+///   answer a request for the card's bytes with a fresh page of zeros, and defaulting to
+///   `HostDeviceMemory` would refuse a request that should have succeeded;
+/// - an unknown `prot` code — never defaulted, and specifically never to read-write;
+/// - a zero length, which `SharedRam::create` refuses anyway but which is worth naming
+///   here rather than surfacing as a `memfd_create` errno.
+fn export_backing(
+    rm: &mut dyn RmBackend,
+    source: u8,
+    memory: u64,
+    len: u64,
+    prot: u8,
+    exports: &ChildExports,
+) -> (Reply, Option<OwnedFd>) {
+    let Some(prot) = prot_from_code(prot) else {
+        return (
+            Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+            None,
+        );
+    };
+    let source = match source {
+        EXPORT_SOURCE_FABRICATED => ExportSource::Fabricated,
+        EXPORT_SOURCE_HOST_DEVICE => ExportSource::HostDeviceMemory {
+            memory: raw(memory),
+        },
+        _ => {
+            return (
+                Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+                None,
+            );
+        }
+    };
+    let want = ExportRequest { source, len, prot };
+    let backing = match rm.export_backing(want) {
+        Ok(b) => b,
+        Err(e) => return (failed(e), None),
+    };
+    // ★ `backing.token` is the CHILD's index into its own table. It does not go on the
+    // wire: the parent mints its own when it adopts the descriptor (`export`'s module
+    // docs). Here it is what says which descriptor to attach.
+    match exports.lend(backing.token) {
+        Ok(fd) => (
+            Reply::Backing {
+                offset: backing.offset,
+                len: backing.len,
+                prot: prot_code(backing.prot),
+            },
+            Some(fd),
+        ),
+        // The backend minted a token this table does not know, which is our own bug and
+        // not the parent's. Reported as a failure rather than as a reply with no
+        // descriptor: a `Backing` frame carrying nothing would have the parent adopt
+        // whatever descriptor arrived next.
+        Err(_) => (
+            Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+            None,
+        ),
     }
 }
 
@@ -403,6 +522,14 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             Ok(s) => Reply::Surface(s.0),
             Err(e) => failed(e),
         },
+        // ★ Unreachable: [`serve_one`] intercepts this request, because its reply carries
+        // a descriptor and this function's whole contract is `Request -> Reply`. Listed
+        // explicitly rather than caught by a wildcard so that a future verb which also
+        // carries a descriptor cannot be silently routed here and answered with bytes and
+        // no fd — which the parent would read as a `Backing` naming nothing.
+        Request::ExportBacking { .. } => {
+            Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG))
+        }
         Request::CeCopy {
             vas,
             dst,
@@ -456,6 +583,11 @@ fn failed(e: RmError) -> Reply {
         RmError::NoMemory => WireError::NoMemory,
         RmError::Interrupted => WireError::Interrupted,
         RmError::Other(status) => WireError::Other(status),
+        // ★★★ The named boundary of decision (b) keeps its own wire form all the way
+        // out. Collapsed into `Other`, the VMM could not tell *"the bytes are on the
+        // card"* from *"the host refused"*, and the whole value of naming the boundary
+        // is that those are different facts with different consequences.
+        RmError::NotExportableAsMemory { memory } => WireError::NotExportableAsMemory(memory.raw()),
         // #102: a child backend cannot produce `PlacementRefused` — the check that mints
         // it lives in the PARENT's `Worker::execute`, above the wire. Listed explicitly
         // rather than caught by a wildcard, so adding a variant stays a compile error.
@@ -479,7 +611,12 @@ mod tests {
     #[test]
     fn an_oversized_fabricated_aperture_read_is_refused_before_anything_is_allocated() {
         let shared = LoopbackShared::new(ParkVerb::Nothing).expect("pipe");
-        let mut rm = LoopbackRm::new(IsolateId::new(1, GpuId(0)), shared).expect("dup");
+        let mut rm = LoopbackRm::new(
+            IsolateId::new(1, GpuId(0)),
+            shared,
+            Arc::new(ChildExports::new()),
+        )
+        .expect("dup");
 
         assert_eq!(
             execute(

@@ -288,6 +288,31 @@ impl CharDevice {
         })
     }
 
+    /// ★★★ **Adopt a descriptor this process was HANDED**, so that an ioctl can be
+    /// *attempted* on it — the falsification instrument for `isolate_vmm_fd_crossing.md`
+    /// §12.
+    ///
+    /// The same shape as [`DevDir::from_fd`] and for the same reason: the number came from
+    /// somewhere other than a path this process opened, so there is nothing to re-open.
+    ///
+    /// ## ⚠ It does NOT check that `fd` is a character device, and that is the point
+    ///
+    /// The property decision (b) rests on is *"the VMM cannot issue an RM ioctl on what it
+    /// received"*, and the only honest way to check it is to **try**. A checker that
+    /// refused a non-device descriptor here would make the attempt unrepresentable and the
+    /// property unfalsifiable — the test would be asserting its own precondition. So this
+    /// wraps whatever it is given, [`CharDevice::ioctl`] issues the escape, and the
+    /// **kernel** answers: `ENOTTY` for an object with no handler for it.
+    ///
+    /// ★ No new capability is created. This process could already
+    /// [`CharDevice::openat`] a node it can reach; what this adds is the ability to aim
+    /// the existing ioctl door at a descriptor that arrived by other means, which is
+    /// exactly the thing a security test has to do.
+    #[must_use]
+    pub fn adopt(fd: OwnedFd) -> Self {
+        CharDevice { fd }
+    }
+
     /// The descriptor **number**, for an ioctl payload that names another descriptor.
     ///
     /// NVIDIA's `NV_ESC_REGISTER_FD` binds a per-GPU node to the control node by passing

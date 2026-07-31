@@ -1,8 +1,10 @@
 # The isolate ⇄ VMM descriptor crossing
 
-> **Status: built, at the transport layer.** Task `#131`. The mechanism, its refusals and
-> its tests are in the tree; the *verbs* that will use it are §10, and `#128`'s timer
-> passthrough is explicitly not built here.
+> **Status: built, at the transport layer — and §12 now has its FIRST VERB.** Tasks `#131`
+> (the transport) and `#133` (the verb). ★ **Read §12 before §2:** the owner ruled on
+> 2026-07-31 that the mapping work moves behind an isolate verb, so for the classes that
+> verb covers **the GPU descriptor no longer crosses at all**. §2 is left standing as the
+> analysis that produced the decision, with its one false clause corrected in place.
 
 ## 1. ★ The precondition `#128` has, and that nothing in this port could satisfy
 
@@ -46,9 +48,19 @@ worth stating exactly rather than asserting:
 - `ioctl` it. **Nothing structurally prevents this**, and that is the honest answer.
 - Keep it past the isolate's death (§9).
 
-**What it cannot do:** it cannot obtain a descriptor the isolate did not choose to open, it
-cannot open a *different* device (there is no path and no directory descriptor on that
-side), and it cannot escalate — a descriptor confers exactly the access the opener had.
+**What it cannot do:** it cannot obtain a descriptor the isolate did not choose to open, and
+it cannot open a *different* device (there is no path and no directory descriptor on that
+side).
+
+⚠ **CORRECTED 2026-07-31 (`guest_blast_radius.md` F14).** This list used to end with *"and it
+cannot escalate — a descriptor confers exactly the access the opener had."* **That is false
+for RM.** `RmIoctl` sets `secInfo.privLevel = osIsAdministrator() ? RS_PRIV_LEVEL_USER_ROOT :
+RS_PRIV_LEVEL_USER` at the **top of every escape**
+(`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:304`, the sole occurrence), and
+`nv_file_private_t` carries no privilege field at all. ⇒ **a descriptor confers the access
+the CALLER HAS AT IOCTL TIME.** On a root VMM the same descriptor that yields 768
+non-privileged controls in the isolate yields all 265 `PRIVILEGED` ones. Permission-checked-
+at-`open` is how ordinary files work and it is not how this driver works.
 
 ### ⚠ Does the threat model change? Yes, in one direction, and it is worth saying so
 
@@ -59,10 +71,21 @@ property: *"the process that **opens** the GPU, and the only process that can **
 device nodes, is unprivileged and confined."*
 
 ⊘ Do not restate the broader property as though it survived. The C carries the same
-weakening and never wrote it down; this note is the place it gets written down. If the
-owner wants the broader property back, the mechanism that buys it is a **`seccomp` filter
-on the VMM refusing `ioctl` on descriptors of this class**, or moving memslot installation
-behind a verb the isolate performs — both are design changes, not adjustments.
+weakening and never wrote it down; this note is the place it gets written down.
+
+★★★ **The owner chose the second option, on 2026-07-31, and rejected the first on
+threat-model grounds.** Two mechanisms were named here — a `seccomp` filter on the VMM, or
+*"moving memslot installation behind a verb the isolate performs"*. The ruling, verbatim:
+
+> *"(a) isn't really possible since the VMM does much more than only our project, we can't
+> sandbox that, it isn't our job also (that's the VMM's job). Our worst case scenario for
+> security is if the VMM (the hypervisor) is compromised; a further compromise is out of
+> scope (like the isolated container/namespace the VMM runs in)."*
+
+⇒ §12 is the verb. And note what the same ruling does to this section's own framing: a
+compromised VMM is the **boundary**, so the weakening recorded above is a weakening of the
+`#96` property as an engineering statement, not a hole in the blast-radius property P —
+`guest_blast_radius.md` §1.1 carries that correction.
 
 ★ Note the asymmetry that makes this tolerable: the VMM is the **more** trusted side. It
 already holds the KVM descriptor, all guest RAM, and every isolate's socket. A GPU
@@ -241,11 +264,11 @@ is, so closing it later has a test that must change.
 The crossing exists; the timer/register passthrough does not, and was deliberately not
 built. In order:
 
-1. **A verb.** `Request`/`Reply` in `proto.rs` are *one variant per `RmBackend` verb* — "the
-   port is the protocol" — and `RmBackend` is in a **pure logic crate**. Adding
-   "hand me the device descriptor" to it is a change to the port, i.e. an owner decision,
-   not something to slip in beside a transport. **This is the next question to settle**, and
-   the C's `ISOLATE_CMD_OPEN_DEVICE` is the shape to port once it is settled.
+1. ~~**A verb.**~~ ★ **SETTLED AND BUILT — §12.** The owner authorised the change to
+   `RmBackend` on 2026-07-31 and it is `RmBackend::export_backing`. ⚠ Note what it is *not*:
+   the question here was posed as *"hand me the device descriptor"*, and the answer the owner
+   gave is the opposite one — **hand me the memory**. The C's `ISOLATE_CMD_OPEN_DEVICE` is
+   therefore **not** the shape that was ported.
 2. **Wiring `ProxyRmBackend::call` / `child.rs::worker_loop`** onto the fd-carrying frames.
    Both already hold the socket; today they use the fd-free `write_frame`/`read_frame`. This
    is mechanical once (1) exists.
@@ -267,12 +290,17 @@ Beyond `#128`'s own list, and answering the owner's question as a list:
 
 1. **§9's lifetime gap** — the one substantive hole. Needs a generation counter or a
    spawner signal.
-2. **§2's posture weakening** — decide whether the VMM holding an `ioctl`-capable GPU
-   descriptor is acceptable, or whether it needs a `seccomp` filter. ★ Today it is
-   *stated*, not *mitigated*.
-3. **No verb uses the crossing yet**, so it has never run against a real isolate or a real
-   `/dev/nvidia*`. Everything measured here is socketpair-level, in-process, on `/dev/null`
-   and `tmpfs` files. That is a genuine bound on what the green means.
+2. ~~**§2's posture weakening**~~ — ★ **DECIDED, 2026-07-31.** Not a `seccomp` filter: §12's
+   verb, so that for the classes it covers no `ioctl`-capable descriptor is held by the VMM
+   at all. ⚠ **Still open for the class §12 cannot cover** — real device MMIO — where the
+   answer today is that the mapping is *refused by name* rather than performed. See §12.4.
+3. ~~**No verb uses the crossing yet**~~ — ★ **PAID IN PART.** `export_backing` runs the
+   crossing against a **real spawned isolate over a real socket**
+   (`crates/kayfabe-isolate-host/tests/export_backing.rs`, 7 tests, 7 bites). ⚠ What is still
+   unrun is a real `/dev/nvidia*`: no descriptor from a real driver has crossed, and the
+   sharpest assertion in that file — that an RM escape on the received backing is refused —
+   has never been *seen to fail*, because making it fail needs a descriptor that genuinely
+   serves one. Owed on the hardware box.
 4. **`MAX_FDS_PER_FRAME = 4` is a bound, not a measurement.** No message in the C carries
    more than one. If a multi-plane message ever needs more, raise it as a design change.
 5. **Descriptor budget interaction.** `linux-raw` already has `descriptor_budget`; nothing
@@ -281,3 +309,179 @@ Beyond `#128`'s own list, and answering the owner's question as a list:
 6. **No fuzzing of the cmsg walk.** The walk trusts the kernel's own `cmsg_len`, which is
    correct, but the frame layer above it parses peer-controlled lengths and is only
    tested by example.
+
+---
+
+## 12. ★★★ The verb — decision (b), and the boundary it does not reach
+
+> **Task `#133`, built 2026-07-31.** `RmBackend::export_backing`. The owner's ruling is
+> quoted in §2; this section is what it became, and — as a **first-class result** rather
+> than a caveat — how far it reaches.
+
+### 12.1 The shape, and where each piece lives
+
+| piece | where | what |
+|---|---|---|
+| `ExportSource`, `ExportRequest`, `ExportedBacking` | `kayfabe-isolate` (**pure**) | value types; no OS type appears |
+| `RmError::NotExportableAsMemory` | `kayfabe-isolate` | ⊘ the named boundary |
+| `RmBackend::export_backing` | `kayfabe-isolate` | the verb, in the same shape as its siblings |
+| `Worker::export_backing` | `kayfabe-isolate` | R1 assert + the foreign-handle gate, beside `fb_read` |
+| `Request::ExportBacking` / `Reply::Backing` | `isolate-host::proto` | one variant per verb, as the port requires |
+| `ChildExports` / `ExportRegistry` | `isolate-host::export` | the two tables, one per side |
+| `mint_fabricated` | `isolate-host::rm` | the memfd mint, shared by the real backend and the fixture |
+
+★ `RmBackend` lives in a pure logic crate, which is why two previous agents declined to
+touch it unasked and why this needed an owner decision rather than a refactor. The verb
+carries **no OS types**: it names a token, an offset, a length and a `kayfabe_vmm::Prot`,
+exactly as `export_surface` names a `SurfaceHandle`.
+
+### 12.2 ★★ What crosses instead of the device descriptor
+
+A **sealed `memfd`** (`kayfabe_linux_raw::SharedRam`: `F_SEAL_SHRINK | F_SEAL_GROW |
+F_SEAL_SEAL`). The isolate mints it, the descriptor rides the export reply's ancillary data,
+the VMM adopts it and `mmap`s it, and the pages both processes see are the same pages.
+
+Three properties follow, and each is asserted:
+
+1. **It is memory, per the kernel.** `ExportRegistry::adopt` hands `CrossedFd::adopt` the
+   promise `DescriptorKind::RegularFile`, so a child answering with a character device is
+   refused **by name** and the descriptor is *closed* on the refusal path. ★ This check is
+   deliberately independent of the child's own refusal in §12.4: a compromised isolate is
+   inside the threat model, so the parent does not take its word for anything.
+2. **There is no RM surface behind it.** Every NVIDIA frontend escape issued on the received
+   descriptor answers `ENOTTY`. Measured, not argued — see §12.6.
+3. **`max_fds = 1` on exactly one reply.** Every other verb's reply is read by the fd-free
+   `read_frame`, which supplies no control buffer at all, so a child that attaches a
+   descriptor to an `Alloc` reply has it dropped by the kernel. §6's allowance, used.
+
+★ The token is minted **twice and never carried**: the child indexes its own table, the
+parent indexes its own, and `Reply::Backing` has no token field. A peer-supplied index into
+*our* registry would let a compromised child make the VMM install one backing where it asked
+for another — a mapping of the wrong bytes, which this design ranks as the worst outcome
+available. The two are associated by the channel being 1-deep, not by a correlator.
+
+### 12.3 ★★★ HOW FAR (b) REACHES — the result, and it is a two-class answer
+
+> **(b) is COMPLETE for memfd-backed regions and INCOMPLETE for real device MMIO.**
+
+| mapping | class | under (b) |
+|---|---|---|
+| guest RAM | memfd (VMM-minted) | already memory; needs no verb — the VMM→isolate direction |
+| the emulated device's framebuffer / instance window / `PRAMIN` view (`viewer_install::HostBacking::VmmOwned`) | memfd | ✔ **covered**; already VMM-minted, and now mintable by the isolate too |
+| any fabricated aperture — bytes that exist only because we wrote them | memfd | ✔ **covered**, `ExportSource::Fabricated` |
+| the isolate's SPSC rings / shared control pages | memfd | ✔ covered by the same mechanism |
+| ⊘ the **real card's** framebuffer (`viewer_install::HostBacking::HostGpuFramebuffer`) | device | ✘ **not covered** |
+| ⊘ a channel's ring / USERD / the `AMPERE_USERMODE_A` doorbell window | device | ✘ **not covered** |
+| ⊘ BAR0 register pages — `#128`'s read-native `NV_PTIMER` passthrough | device | ✘ **not covered** |
+
+**Why the device class cannot be covered — three independent reasons.** ★ Two of the three
+are **`[src@580]` readings** at a named file:line and no GPU was switched on for either; the
+third is a reading of this tree. That is deliberately enough here — both driver citations are
+unconditional refusals on the source path with no runtime input — but they are *readings*,
+said as readings, per `claim_ledger.md`:
+
+1. **The only object whose `mmap` yields a host GPU page is `/dev/nvidia<N>`** carrying a
+   registered mapping context (`RmConnection::map_cpu`; the offset must be zero and the
+   context is one-shot per descriptor — `ogkm-580: kernel-open/nvidia/nv-mmap.c:533-536`,
+   `nv-usermap.c:53-57`). That is a **character device**, i.e. exactly the thing (b) exists
+   to stop crossing. Crossing it would be option (a) wearing a verb's clothes.
+2. **NVIDIA's dma-buf is the one escape hatch, and it is shut on discrete parts.** A dma-buf
+   fd is *not* an RM surface — its `file_operations` are the dma-buf ones, and
+   `nv_get_file_private` would refuse it — so it would have satisfied (b) cleanly. But CPU
+   mapping of one is gated:
+   `*pbCanMmap = pGpu->getProperty(pGpu, PDB_PROP_GPU_ZERO_FB)`
+   (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:5609`, whose own comment reads
+   *"mmap is allowed only for 0FB chips (iGPU)"*), and `nv_dma_buf_mmap` refuses outright
+   when it is false (`ogkm-580: kernel-open/nvidia/nv-dmabuf.c:1246-1250`). Every discrete
+   card this project targets has a framebuffer. ⇒ on our hardware a dma-buf of device memory
+   **cannot be mapped by the CPU at all**, so it cannot back a memslot.
+   ⚠ The neighbouring `NV0000_CTRL_OS_UNIX_EXPORT_OBJECT_TO_FD` is not an alternative
+   either: it attaches an export handle to an **existing NVIDIA device fd**
+   (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/os.c:2274-2280` — `nv_get_file_private`), so
+   what crosses is still an RM escape surface.
+3. **Our own memory plane refuses the result independently.**
+   `kayfabe_linux_raw::GuestWindow::place` rejects `Backing::DeviceFile` with
+   `RawError::DeviceBackingNotPlaceable`, so even a crossed device descriptor could not be
+   installed by `Vmm::map_guest` as it stands.
+
+★★ **The boundary coincides with a boundary the tree already had, and that is the deepest
+form of the result.** `Backing::attainable_cache_policy` answers `Some(WriteBack)` for a
+shared file and **`None`** for a device file, because for a device file *"the driver already
+decided … and userspace cannot read it back"*. The class (b) can export is **exactly** the
+class whose effective CPU memory type is knowable. One boundary, two consequences: what we
+can hand over as memory is what we can also state the memory type of.
+
+### 12.4 ⊘ The refusal, and why it is a result rather than a gap
+
+`ExportSource::HostDeviceMemory` is **always** `RmError::NotExportableAsMemory { memory }` —
+in the real backend, in the loopback fixture, and in `MockRmBackend`. It is a variant of the
+request type rather than an absence, so the incomplete half of (b) is *expressible*, and a
+test watches it fire.
+
+⊘ **Two ways of faking coverage, both explicitly refused.** (i) Crossing the device fd
+anyway, behind the verb — that is (a) with extra steps and it is the exact thing the ruling
+rejected. (ii) Copying the device pages into a `memfd` — a copy is not a mapping; the guest
+would read a snapshot of a live aperture, which is the forged-completion class with a longer
+fuse.
+
+★ **What this does to `viewer_install::InstallRefusal::HostGpuBackingHasNoVerb`.** Its
+*behaviour* is unchanged and still correct — an object whose bytes are the real card's still
+stops the drain and installs nothing. What changes is its **reason**: it is no longer *"no
+verb uses the crossing, and adding one is an owner decision"* but *"the verb exists, the
+decision was taken, and the verb refuses this class for the three reasons in §12.3."* The
+refusal has moved from **unbuilt** to **decided**.
+
+### 12.5 What the mmap installer can rely on
+
+`kayfabe_vmm_qemu::viewer_install` is the consumer. The verb was shaped for it:
+
+- **Per object, not per page.** `export_backing` takes a length and returns one backing;
+  nothing here enumerates a page, and the installer's consolidation is free to place many
+  objects inside one exported backing at different offsets.
+- **The merge key survives.** `ExportedBacking` carries `prot` as **what was granted**, not
+  what was asked, so a run's `MergeKey::prot` can be read off the outcome. The `cache` field
+  of the key is `WriteBack` **by construction** for everything (b) exports — that is
+  `attainable_cache_policy`'s answer for a shared file, not a request — which is why the
+  verb deliberately does *not* carry a memory-type field of its own: a second enum beside
+  `CachePolicy` would be a second source of truth for one fact.
+- **`HostRegion` is one hop away.** `ExportRegistry::dup(token)` yields an `OwnedFd` the VMM
+  adopts exactly as `KvmMachine::register_backing` already adopts one — whose own rustdoc
+  reads *"create a host backing an isolate would have handed us"*. That sentence is now
+  literal.
+
+### 12.6 What was measured (task `#133`, 2026-07-31, 38-core build box, base `90eb50f`)
+
+`crates/kayfabe-isolate-host/tests/export_backing.rs` — 7 tests, all green, each driving a
+**real spawned isolate child over a real socket**. The load-bearing one is
+`the_vmm_cannot_issue_an_rm_ioctl_on_what_it_received`: five NVIDIA frontend escapes
+(`RM_ALLOC`, `RM_CONTROL`, `RM_FREE`, `RM_ALLOC_MEMORY`, `CHECK_VERSION_STR`) issued on the
+received backing, every one `ENOTTY`, with a positive control on the **same descriptor** that
+must succeed first.
+
+★★ **The control was wrong the first time, and correcting it made it better.** It began as
+*"a socket serves `FIONREAD`, a `memfd` does not"* — and the `memfd` answered `Ok(0)`,
+because Linux serves `FIONREAD` for an ordinary file generically. Holding the *object* fixed
+and varying only the *request* is the version that isolates the claim. Two instrument
+defects from `fd_crossing.rs` were also re-met and are recorded in the file: the descriptor
+table is process-wide across libtest threads, and `read_dir` reuses the number a refusal just
+closed.
+
+**Seven bites, each induced, watched to fire on exactly its own tests, and removed:**
+
+| bite | fired |
+|---|---|
+| the child lends `/dev/null` instead of the backing it minted | 3 tests |
+| …and `CrossedFd::adopt`'s kind check removed as well | 4 tests |
+| the export reply read with `max_fds = 0` | 3 tests |
+| `serve_one` routed through `execute`, so no descriptor is attached | 4 tests |
+| the device arm answers with a `memfd` instead of refusing | 1 test (the boundary's own) |
+| the foreign-handle gate removed from `Worker::export_backing` | 1 test |
+| `ExportRegistry::adopt` always returns token 0 | 1 test |
+
+⊘ **The bite that could NOT be paid, named rather than omitted:** making the `ENOTTY`
+assertion fail needs a descriptor that genuinely **serves** an RM escape — a real
+`/dev/nvidia*`. No substitute character device answers those request numbers, so that
+assertion is true and has never been seen to fail. It is owed on the hardware box, and until
+then the property is carried by the two kind assertions beside it — one through `fstat`, one
+through `/proc/self/fd`, deliberately independent so that removing the check does not silence
+both.

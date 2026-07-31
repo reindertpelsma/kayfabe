@@ -192,6 +192,18 @@ pub enum RawError {
         /// The isolate it was about to be handed to.
         target: u64,
     },
+    /// ★ A token presented to an export table that never minted it
+    /// (`kayfabe_isolate_host::export`).
+    ///
+    /// A named refusal rather than an `Option` returned from a lookup, because the two
+    /// callers are on opposite sides of the isolate boundary and one of them is being
+    /// handed a value by a peer: *"this token is not mine"* is a fact about provenance,
+    /// and collapsing it into "not found" is how a peer-supplied index becomes an
+    /// off-by-one somebody debugs later.
+    UnknownExport {
+        /// The token that named nothing.
+        token: u64,
+    },
 }
 
 impl fmt::Display for RawError {
@@ -270,6 +282,9 @@ impl fmt::Display for RawError {
                 "a descriptor from isolate {origin} cannot be handed to isolate {target}: \
                  per-process isolates do not share descriptors"
             ),
+            RawError::UnknownExport { token } => {
+                write!(f, "export token {token} names no backing this table minted")
+            }
         }
     }
 }

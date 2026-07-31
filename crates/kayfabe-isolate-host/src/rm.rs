@@ -88,6 +88,7 @@
 //! - **R17 — a real copy engine moved device memory.** Destination read before and after,
 //!   the "after" through an independent mapping, plus the engine's own release semaphore.
 
+use crate::export::ChildExports;
 use kayfabe_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
     NV01_MEMORY_SYSTEM, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0, NVOS02_FLAGS_LOCATION_PCI,
@@ -114,7 +115,10 @@ use kayfabe_abi::submit::{
     engine_type_copy, fifo, gp_entry, method_header_inc,
 };
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
-use kayfabe_isolate::{CeExecutor, CeSource, CeSubCopy, HostHandle, IsolateId, RmBackend, RmError};
+use kayfabe_isolate::{
+    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, HostHandle,
+    IsolateId, RmBackend, RmError,
+};
 use kayfabe_linux_raw::{
     Backing, CachePolicy, CharDevice, DevDir, HostOffset, HostPageSize, Indirect, RawError,
     VolatileRegion, ioctl, release_fence,
@@ -1305,6 +1309,10 @@ pub struct HostRmBackend {
     /// [`RmBackend::ce_copy`]. Built on first use and reused, because a channel is six RM
     /// objects and a copy is one pushbuffer.
     ce_channels: BTreeMap<u32, CeChannel>,
+    /// ★ The isolate's table of backings minted for the VMM (`crate::export`). Shared with
+    /// every sibling worker: a backing belongs to the isolate, not to the pool slot that
+    /// happened to mint it.
+    exports: Arc<ChildExports>,
 }
 
 /// A copy-engine channel and the engine object bound into its subchannel 0.
@@ -1401,12 +1409,13 @@ impl SubmitOutcome {
 impl HostRmBackend {
     /// One worker's backend over `conn`.
     #[must_use]
-    pub fn new(id: IsolateId, conn: Arc<RmConnection>) -> Self {
+    pub fn new(id: IsolateId, conn: Arc<RmConnection>, exports: Arc<ChildExports>) -> Self {
         HostRmBackend {
             id,
             conn,
             slots: BTreeMap::new(),
             ce_channels: BTreeMap::new(),
+            exports,
         }
     }
 
@@ -1827,6 +1836,81 @@ impl RmBackend for HostRmBackend {
     fn export_surface(&mut self, _memory: HostHandle) -> Result<SurfaceHandle, RmError> {
         Err(RmError::Other(NOT_ON_THIS_RUNG))
     }
+
+    /// ★★★ Decision (b): perform the mapping here, hand back memory —
+    /// **and refuse the device class BY NAME** (`isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// ## The arm that succeeds
+    ///
+    /// [`ExportSource::Fabricated`] mints a sealed `memfd`. That is the whole of *"the
+    /// isolate performs the mapping"* for memory we invented: the pages exist, both
+    /// processes can map them, and the descriptor that crosses has no `ioctl` handler for
+    /// anything. ★ Note it needs **no GPU at all**, which is why this arm is real on this
+    /// rung while [`RmBackend::fb_read`] is not: minting a backing and knowing what the
+    /// emulated device puts in it are different questions, and only the second one is
+    /// blocked.
+    ///
+    /// ## ⊘ The arm that refuses, and why it is a RESULT rather than a gap
+    ///
+    /// [`ExportSource::HostDeviceMemory`] is always
+    /// [`RmError::NotExportableAsMemory`]. A host GPU page is reachable through exactly
+    /// two kinds of object and **neither** can be handed to the VMM as memory:
+    ///
+    /// 1. `/dev/nvidia<N>` with a registered mapping context — what
+    ///    [`RmConnection::map_cpu`] uses, and a **character device**. Crossing it would put
+    ///    an RM escape surface in the VMM, where `secInfo.privLevel` is recomputed from the
+    ///    **caller** on every escape
+    ///    (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:304`), i.e. exactly what
+    ///    decision (b) exists to stop.
+    /// 2. An NVIDIA **dma-buf**, which is *not* an RM surface and would therefore have been
+    ///    the escape hatch — except that its CPU mapping is gated on
+    ///    `*pbCanMmap = pGpu->getProperty(pGpu, PDB_PROP_GPU_ZERO_FB)`
+    ///    (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:5609`), and
+    ///    `nv_dma_buf_mmap` refuses outright when that is false
+    ///    (`ogkm-580: kernel-open/nvidia/nv-dmabuf.c:1246-1250`). `PDB_PROP_GPU_ZERO_FB` is
+    ///    an **integrated**-part property; on every discrete card this project targets a
+    ///    dma-buf of device memory cannot be `mmap`ped by the CPU at all.
+    ///
+    /// ★ And the memory plane refuses the result independently anyway:
+    /// `kayfabe_linux_raw::GuestWindow::place` rejects `Backing::DeviceFile` with
+    /// `RawError::DeviceBackingNotPlaceable`. Three shut doors, none of them ours to open.
+    ///
+    /// ⊘ Do not "fix" this by copying the device pages into a `memfd`. A copy is not a
+    /// mapping: the guest would read a snapshot of a live aperture, which is the forged-
+    /// completion class with a longer fuse.
+    fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError> {
+        let ExportSource::Fabricated = want.source else {
+            let ExportSource::HostDeviceMemory { memory } = want.source else {
+                unreachable!("ExportSource has exactly two variants")
+            };
+            return Err(RmError::NotExportableAsMemory { memory });
+        };
+        mint_fabricated(&self.exports, want)
+    }
+}
+
+/// ★ The fabricated arm, shared by the real backend and the loopback fixture.
+///
+/// One implementation rather than two, because the arm has **nothing to do with RM**: it
+/// is `memfd_create` plus a table insert, and a second copy in the fixture would be a
+/// second place for the seal set or the length handling to drift. `host_execution_plane.md`
+/// §5's warning is about a fixture that *models* the driver; this is the fixture and the
+/// real backend agreeing on a fact neither of them models.
+pub(crate) fn mint_fabricated(
+    exports: &ChildExports,
+    want: ExportRequest,
+) -> Result<ExportedBacking, RmError> {
+    let token = exports.mint(want.len).map_err(|_| RmError::NoMemory)?;
+    Ok(ExportedBacking {
+        token,
+        offset: 0,
+        len: want.len,
+        // ★ Echoed rather than narrowed, and that is a *statement*: this backing carries
+        // no seal that would make it read-only, so claiming read-only would be a claim the
+        // descriptor does not support. When a read-only export is built it will be
+        // `F_SEAL_WRITE` on the memfd and this line is where it becomes visible.
+        prot: want.prot,
+    })
 }
 
 impl HostRmBackend {

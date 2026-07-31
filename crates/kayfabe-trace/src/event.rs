@@ -192,6 +192,7 @@ impl Faulted for RmError {
             RmError::Wedged => FaultTag("RmError::Wedged"),
             RmError::ForeignHandle { .. } => FaultTag("RmError::ForeignHandle"),
             RmError::PlacementRefused { .. } => FaultTag("RmError::PlacementRefused"),
+            RmError::NotExportableAsMemory { .. } => FaultTag("RmError::NotExportableAsMemory"),
             RmError::Other(_) => FaultTag("RmError::Other"),
         }
     }

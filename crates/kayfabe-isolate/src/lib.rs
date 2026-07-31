@@ -62,7 +62,7 @@
 
 pub use kayfabe_arch::ids::ControlCmd;
 use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa};
-use kayfabe_vmm::SurfaceHandle;
+use kayfabe_vmm::{Prot, SurfaceHandle};
 
 /// A host-side RM object handle — **a raw value plus the isolate whose RM client
 /// namespace it lives in** (`l1_concurrency.md` §12.26).
@@ -278,8 +278,120 @@ pub enum RmError {
         /// The host GPU VA the backend actually produced.
         got: u64,
     },
+    /// ★★★ **THE NAMED BOUNDARY of the isolate-performs-the-mapping ruling** — the bytes
+    /// asked for are the real device's, and there is no way to hand them to the VMM as
+    /// *memory* ([`RmBackend::export_backing`], `isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// This is not "not built yet" and it is not a host failure. It is the isolate saying
+    /// *"I performed no mapping, because the only thing I could have handed you is a
+    /// descriptor you could `ioctl`, and that is the thing this verb exists to stop
+    /// crossing."* Three facts, together, make it a decision rather than a gap:
+    ///
+    /// 1. The only object whose `mmap` yields a host GPU BAR page is `/dev/nvidia<N>`
+    ///    carrying a registered mapping context — a **character device**, and RM assigns
+    ///    `secInfo.privLevel` from `osIsAdministrator()` at the top of **every** escape
+    ///    (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:304`, sole occurrence), so
+    ///    the same descriptor is unprivileged in the isolate and privileged in a root VMM
+    ///    (`guest_blast_radius.md` F14).
+    /// 2. NVIDIA's own dma-buf export — the one route that would cross a *non*-RM
+    ///    descriptor — hard-gates CPU mapping to integrated parts:
+    ///    `*pbCanMmap = pGpu->getProperty(pGpu, PDB_PROP_GPU_ZERO_FB)`
+    ///    (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:5609`), and
+    ///    `nv_dma_buf_mmap` refuses when it is false
+    ///    (`ogkm-580: kernel-open/nvidia/nv-dmabuf.c:1246-1250`). On every discrete part
+    ///    this project targets, a dma-buf of device memory **cannot be mapped by the CPU**
+    ///    at all.
+    /// 3. Our own memory plane already refuses the result independently:
+    ///    `kayfabe_linux_raw::GuestWindow::place` rejects `Backing::DeviceFile` with
+    ///    `RawError::DeviceBackingNotPlaceable`.
+    ///
+    /// ⊘ **A caller must never downgrade this to "map it somewhere else".** The bytes are
+    /// on the card; a mapping of different bytes is worse than no mapping, which is the
+    /// same judgement `kayfabe_vmm_qemu::viewer_install` already makes when it refuses to
+    /// install rather than approximate.
+    NotExportableAsMemory {
+        /// The RM object whose pages were asked for.
+        memory: HostHandle,
+    },
     /// Any other backend-reported failure (opaque status for diagnostics).
     Other(u32),
+}
+
+/// ★★★ **What the VMM is asking the isolate to make installable** —
+/// [`RmBackend::export_backing`]'s argument (`isolate_vmm_fd_crossing.md` §12).
+///
+/// Two variants, and the second one **always refuses**. That is the point: the boundary
+/// of the owner's decision (b) is a *typed* fact with a test that watches it fire, not a
+/// paragraph. A request shape that could only ever succeed would leave the incomplete
+/// half of (b) expressible nowhere, and an unexpressible boundary is the shape that gets
+/// silently crossed later by someone adding "just one" backing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportSource {
+    /// ★ **Memory we FABRICATE** — an emulated device's framebuffer/instance window, a
+    /// fabricated aperture, any range whose bytes exist only because we wrote them.
+    ///
+    /// The isolate mints it as a shareable file backing, so what crosses is memory: the
+    /// VMM `mmap`s it, both processes see the same pages, and there is no `ioctl` surface
+    /// anywhere in the transaction. This arm is why (b) is worth doing rather than merely
+    /// safe.
+    ///
+    /// ⊘ It deliberately names **no** [`HostHandle`]: fabricated memory is not an RM
+    /// object, and a request that could name one would invite exactly the confusion the
+    /// other variant exists to refuse.
+    Fabricated,
+    /// ⊘ **The real device's own pages** — host framebuffer, a channel's ring/USERD, a
+    /// BAR0 register window — named by the RM object that owns them.
+    ///
+    /// Always [`RmError::NotExportableAsMemory`]; see that variant for the three
+    /// independent reasons, each cited.
+    HostDeviceMemory {
+        /// The RM object whose pages are wanted.
+        memory: HostHandle,
+    },
+}
+
+/// One request to [`RmBackend::export_backing`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExportRequest {
+    /// Which class of bytes.
+    pub source: ExportSource,
+    /// How many bytes the VMM intends to install.
+    pub len: u64,
+    /// What the **guest** is to be allowed to do with them. A request, not an outcome —
+    /// see [`ExportedBacking::prot`].
+    pub prot: Prot,
+}
+
+/// ★★ What the isolate handed back: **memory, named by a token, never a descriptor**.
+///
+/// ## Why there is no fd in this type, and why that is the whole design
+///
+/// This crate is pure. More importantly, a value type carrying an OS descriptor would put
+/// the descriptor on the *core's* side of the port, where every rule about what may be
+/// done with one would be advisory. The descriptor rides the reply frame's ancillary data
+/// and is adopted by the transport ([`kayfabe_isolate_host::CrossedFd`]), which is the one
+/// place that can check what it actually **is**; [`ExportedBacking::token`] is the adapter's
+/// own index for it, minted by the **parent** and never by the wire — the same discipline
+/// [`HostHandle`] uses, for the same reason.
+///
+/// Deliberately the mirror image of [`kayfabe_vmm::RamHandle`], which carries the VMM →
+/// isolate direction (guest RAM, VMM-minted). This is isolate → VMM.
+///
+/// [`kayfabe_isolate_host::CrossedFd`]: https://docs.rs/kayfabe-isolate-host
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExportedBacking {
+    /// Adapter-scoped opaque index naming the backing the adapter adopted. Feeds a
+    /// `kayfabe_vmm::HostRegion::id`; interpreted by nothing in the core.
+    pub token: u64,
+    /// Byte offset into that backing at which the requested range begins.
+    pub offset: u64,
+    /// How many bytes are actually there.
+    pub len: u64,
+    /// ★ What the isolate **actually granted**, which may be narrower than what
+    /// [`ExportRequest::prot`] asked for — a read-only export is a real thing an isolate
+    /// may decide to hand out, and a caller that installed the *requested* protection
+    /// would hand the guest a write it does not have. Use this one.
+    pub prot: Prot,
 }
 
 /// # The unprivileged host-RM verb surface
@@ -474,6 +586,59 @@ pub trait RmBackend: Send + Sync {
     /// `Present::present`. Anti-bolt-on note: this is the ONE named display verb —
     /// the verb surface does not grow per engine.
     fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError>;
+
+    /// ★★★ **Perform the mapping HERE, and hand back MEMORY the VMM can install** —
+    /// the owner's decision (b) for `#133`/`#128`, made into a verb
+    /// (`isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// ## The problem this exists to solve
+    ///
+    /// A KVM memslot names a userspace address **in the VMM's own address space**, so
+    /// something has to cross the isolate boundary. The obvious something is the GPU
+    /// descriptor: the isolate opens `/dev/nvidia*`, hands it up, the VMM `mmap`s it.
+    /// That works and it is what the C does — and it puts an `ioctl`-capable RM escape
+    /// descriptor in a process that is very often root, where RM re-derives privilege
+    /// **from the caller on every escape**, not from the opener
+    /// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:304`; `guest_blast_radius.md`
+    /// F14). The owner's ruling was to move the mapping work behind this verb instead:
+    /// hygiene and contract, *"the descriptor simply should not be somewhere we do not
+    /// control"*.
+    ///
+    /// ⚠ **The ruling explicitly does not rest on sandboxing the VMM.** A compromised VMM
+    /// is the boundary, not a step inside it; confining the hypervisor is the deployment's
+    /// job and not this project's. F14 is therefore not *closed* by this verb — it is the
+    /// reason not to hand the descriptor up in the first place.
+    ///
+    /// ## What crosses instead
+    ///
+    /// A **shared-file backing** (a sealed `memfd`). The VMM maps *that*, so the pages are
+    /// the same pages and nothing in the transaction has an `ioctl` handler for an RM
+    /// escape. ★ Note the coincidence that is not a coincidence: the class this verb can
+    /// export is exactly the class whose effective CPU memory type is **knowable** —
+    /// `kayfabe_linux_raw::Backing::attainable_cache_policy` answers `Some(WriteBack)` for
+    /// a shared file and `None` for a device file, because for a device file *"the driver
+    /// already decided … and userspace cannot read it back"*. One boundary, two
+    /// consequences.
+    ///
+    /// ## ⊘ What it does NOT cover — a READING of the driver, not an omission
+    ///
+    /// ★ Said at the epistemic level actually held (`claim_ledger.md`): the two citations
+    /// below are **readings of `ogkm-580` at a named file:line**, which say what the
+    /// driver *does*, and no hardware ran for either. That settles this particular
+    /// question because both are unconditional refusals on the source path with no runtime
+    /// input — but the citations are readings, and they are written as readings.
+    ///
+    /// [`ExportSource::HostDeviceMemory`] is always [`RmError::NotExportableAsMemory`].
+    /// The three independent reasons are cited on that variant. This is the incomplete
+    /// half of (b), and it is named here rather than faked: a real device BAR is not
+    /// memfd-backed, and the two routes that could have carried it are a character device
+    /// (an `ioctl` surface — the thing being avoided) and an NVIDIA dma-buf (whose CPU
+    /// mapping is hard-gated to zero-framebuffer parts).
+    ///
+    /// # Errors
+    /// [`RmError::NotExportableAsMemory`] for the device class; [`RmError::NoMemory`] if
+    /// the host would not mint the backing; whatever the transport refuses with.
+    fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError>;
 }
 
 /// ★★ Session identity of an isolate — the **`(Proc, GpuId)` pair**, because that is
@@ -1501,6 +1666,42 @@ impl Worker {
     pub fn fb_read(&mut self, phys: u64, buf: &mut [u8]) -> Result<bool, RmError> {
         kayfabe_util::lockwitness::assert_lock_free("reading the fabricated aperture");
         self.backend.fb_read(phys, buf)
+    }
+
+    /// ★★★ **Ask the isolate to perform a mapping and hand back memory the VMM can
+    /// install** ([`RmBackend::export_backing`], `isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// Beside [`Worker::execute`] rather than inside it, for [`Worker::fb_read`]'s
+    /// reasons exactly: this acquires no RM object, so there is nothing for the chain's
+    /// unwind to release and no [`VerbReply`] shape it fits. What it keeps from `execute`
+    /// is the pair of gates that are not optional —
+    ///
+    /// - **R1.** Minting a backing is a syscall in another process reached over a socket.
+    ///   Doing that under a ranked lock is the blocking-call-under-a-lock R1 forbids.
+    /// - ★★ **The foreign-handle gate.** [`ExportSource::HostDeviceMemory`] names a
+    ///   [`HostHandle`], and a handle from another isolate's namespace is live-and-
+    ///   different here (`l1_concurrency.md` §12.26). It is gated even though the verb
+    ///   refuses every such request anyway, because *"the refusal happens to cover it"* is
+    ///   a property of today's implementation and the gate is a property of the port. A
+    ///   backend that ever learns to serve one must meet the gate already in place.
+    ///
+    /// # Errors
+    /// [`RmError::ForeignHandle`] before anything runs; otherwise whatever
+    /// [`RmBackend::export_backing`] refuses with.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("exporting a host backing to the VMM");
+        if let ExportSource::HostDeviceMemory { memory } = want.source
+            && !memory.belongs_to(self.isolate)
+        {
+            return Err(RmError::ForeignHandle {
+                handle: memory,
+                worker_isolate: self.isolate,
+            });
+        }
+        self.backend.export_backing(want)
     }
 
     /// ★ Run `plan`'s verb chain. **Asserts R1 first** — invoking a host verb with

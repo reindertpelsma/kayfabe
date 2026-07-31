@@ -37,13 +37,59 @@ testable:
 
 > ### ★★★ P — the blast-radius property
 >
-> **Every effect a hostile guest can produce on the host GPU is an effect a LOCAL UNPRIVILEGED
-> PROCESS on the same host could already produce.**
+> **Given a VMM that is doing what it was written to do, every effect a hostile guest can
+> produce on the host GPU is an effect a LOCAL UNPRIVILEGED PROCESS on the same host could
+> already produce.**
 >
-> Falsified by exhibiting one host-GPU effect reachable through us that is not reachable by an
-> unprivileged local process holding no capability.
+> Falsified by exhibiting one host-GPU effect reachable **through the guest interface** that
+> is not reachable by an unprivileged local process holding no capability.
 
-Three things this deliberately does and does not say, because each has been misread already:
+## ★★★ 1.1 — THE TRUST BOUNDARY, and the correction of 2026-07-31
+
+This section is a **correction**, made on the owner's ruling, and the sentence that
+occasioned it is quoted verbatim rather than paraphrased:
+
+> *"(a) isn't really possible since the VMM does much more than only our project, we can't
+> sandbox that, it isn't our job also (that's the VMM's job). Our worst case scenario for
+> security is if the VMM (the hypervisor) is compromised; a further compromise is out of
+> scope (like the isolated container/namespace the VMM runs in)."*
+
+⇒ **A compromised VMM is the BOUNDARY, not a step inside it.** Everything this document
+argues is argued about what a *guest* can reach through a VMM that is behaving. The VMM is
+a large program that hosts far more than this project, confining it is the deployment's job
+and not ours, and treating "and then the VMM is also compromised" as a step in an attack
+chain both over-claims and mis-assigns the work.
+
+Three consequences, and the third is the one that changed a finding below:
+
+1. **P is stated relative to a trusted VMM**, above, in the property itself rather than in a
+   footnote. The falsifier is correspondingly narrowed: a counterexample must be reachable
+   **through the guest interface**, not through code running inside the VMM's own address
+   space.
+2. **VMM compromise is EXPLICITLY OUT OF SCOPE**, and so is anything downstream of it —
+   including whatever container, namespace or service manager the VMM itself runs in. It is
+   named here so that "we did not think about it" is never a reading available to a later
+   auditor. It is not a residual risk this project tracks; it is a boundary this project
+   draws.
+3. ★★★ **The seccomp filter §4 F14 recommends is NOT load-bearing for P.** F14 found that an
+   RM descriptor in a root VMM yields the 265 `PRIVILEGED` controls an isolate cannot reach,
+   and this document concluded that a `seccomp` filter on the VMM was therefore load-bearing
+   for P. Under the ruling above **that conclusion does not follow**: reaching those controls
+   requires issuing an `ioctl` from inside the VMM, which is code the guest does not run and
+   which a behaving VMM does not contain. A guest cannot make a behaving VMM issue an RM
+   escape on a descriptor that VMM never uses that way.
+
+⊘ **F14 itself is NOT withdrawn, and must not be deleted.** Its *mechanism* — that RM derives
+privilege from the **caller at ioctl time** and not from the opener — is a true and load-
+bearing fact about the driver, and it is precisely the reason not to hand the descriptor up
+in the first place. What changes is its status: from *"a latent violation of P awaiting a
+mitigation"* to *"the standing argument for a design decision the owner has since taken."*
+That decision is `#133`'s **(b)** — the mapping moves behind an isolate verb, so the GPU
+descriptor never crosses upward at all — and it is chosen for **hygiene and contract**, not
+to close F14. See `isolate_vmm_fd_crossing.md` §12 for the verb, and for the half of the
+problem it does **not** cover.
+
+Three things P deliberately does and does not say, because each has been misread already:
 
 - **P is a comparison, not a safety claim.** It says the guest is no worse than a local
   unprivileged process. It does **not** say either of them is harmless. If the host driver has
@@ -441,23 +487,54 @@ call site outside its own module, its re-export, and the crossing's tests **[src
 widening, like F11 — and, like F11, P currently holds for a reason that is not written down as
 an invariant anywhere.
 
-⇒ **Consequences, in order.** (1) `isolate_vmm_fd_crossing.md` §2's "cannot escalate" clause
-should be corrected in place — its own recommended mitigation, *"a `seccomp` filter on the VMM
-refusing `ioctl` on descriptors of this class"*, is the right one and its §2 currently
-under-rates why. (2) That mitigation is now load-bearing for **P**, not only for `#96`. (3) ★ The
-note's closing asymmetry — *"the VMM is the more trusted side… a GPU descriptor adds to a process
-that could already do more damage"* — is true about the **host** and does not transfer to P: P
-compares against a local *unprivileged* process, and a privileged RM control is outside that
-class no matter who else could already have issued it.
+### ★★★ F14 — SUPERSEDED IN PART, 2026-07-31. Read §1.1 first.
+
+⚠ **This finding's mechanism stands; its consequence (2) below was wrong and is withdrawn.**
+Both halves are kept in place rather than rewritten away, because a finding that is edited
+into agreement with a later decision teaches nothing, and this one's *reason* is now the
+argument for the design.
+
+**What stands.** Everything above the line: RM computes `secInfo.privLevel` from
+`osIsAdministrator()` at the top of every escape, `nv_file_private_t` carries no privilege
+field, and therefore a descriptor confers the access **the caller has at ioctl time**. The
+"a descriptor confers exactly the access the opener had" clause in
+`isolate_vmm_fd_crossing.md` §2 is **false for RM** and is corrected there.
+
+**What is withdrawn.** The original text read: *"(2) That mitigation is now load-bearing for
+**P**, not only for `#96`."* It is **not**. Under §1.1's ruling a compromised VMM is the
+boundary rather than a step inside it, so reaching those 265 privileged controls requires
+code inside the VMM issuing an escape — which a behaving VMM does not do and which a guest
+cannot cause. P is stated relative to a behaving VMM and is not violated here. ⊘ The
+`seccomp`-on-the-VMM mitigation is not owed, and sandboxing the VMM is explicitly not this
+project's job.
+
+**What replaced it.** The owner took option **(b)** for `#133`: an isolate verb performs the
+mapping and hands the VMM **memory** (a sealed `memfd`) instead of a descriptor —
+`RmBackend::export_backing`, `isolate_vmm_fd_crossing.md` §12. The reason is stated as
+hygiene and contract, *"the descriptor simply should not be somewhere we do not control"*,
+**not** as closing F14. F14 is why the design is worth having.
+
+★ **And it does not cover everything**, which is a first-class result rather than a caveat:
+(b) is complete for memfd-backed regions and **incomplete for real device MMIO**. See §12 of
+that note for which mappings fall in each class, and for the two independent citations that
+make the incompleteness a measurement rather than an omission.
+
+★ One clause of the original consequence (3) stands unchanged and is worth keeping: the
+note's closing asymmetry — *"the VMM is the more trusted side… a GPU descriptor adds to a
+process that could already do more damage"* — is true about the **host** and does not
+transfer to P, because P compares against a local *unprivileged* process.
 
 ### Findings summary
 
 **No live counterexample to P was found in this tree, and two near-misses were.** Ranked by what
 it would cost to be wrong:
 
-1. **F14** — the `#131` fd crossing puts a GPU descriptor in a root process, and RM assigns
-   privilege **per ioctl from the caller**, so "a descriptor confers exactly the access the
-   opener had" is false here. Latent only because the consumer is unbuilt.
+1. **F14** — RM assigns privilege **per ioctl from the caller**, so "a descriptor confers
+   exactly the access the opener had" is false here. ★ **Its consequence for P was withdrawn
+   on 2026-07-31** (§1.1, §4 F14): a compromised VMM is the boundary, not a step inside it,
+   so the `seccomp`-on-the-VMM mitigation is not load-bearing for P and is not owed. The
+   mechanism stands and is now the standing argument for `#133`'s decision (b) — the
+   descriptor no longer crosses at all for the classes (b) covers.
 2. **F11** — the isolate's init-namespace euid is the VMM's, RM keys a real check on euid, and
    P holds only because `hClient` is never guest-derived. The one finding here that is not
    about capabilities at all.

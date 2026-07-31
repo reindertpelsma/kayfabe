@@ -277,7 +277,14 @@ fn main() -> std::process::ExitCode {
     let id = IsolateId::new(0, GpuId(gpu));
     let conn = Arc::new(conn);
     let subdevice = kayfabe_isolate::HostHandle::new(id, u64::from(conn.subdevice()));
-    let mut rm = HostRmBackend::new(id, Arc::clone(&conn));
+    // ★ Its own export table. The ladder is a diagnostic run by hand, not an isolate under
+    // a VMM, so nothing will ever read a backing out of this one — it exists so the
+    // backend's constructor has the same shape here as in the child.
+    let mut rm = HostRmBackend::new(
+        id,
+        Arc::clone(&conn),
+        Arc::new(kayfabe_isolate_host::ChildExports::new()),
+    );
 
     // R7 — a per-`Vas` host address space. This is #14's proven fix made real: two guest
     // processes' identical guest VAs publish into DIFFERENT host VASes and cannot collide.

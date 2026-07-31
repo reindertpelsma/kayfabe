@@ -66,14 +66,20 @@
 //! - [`child`] — what runs inside: a thread per worker, one control thread.
 //! - [`rm`] — the real RM ioctls, and the bring-up ladder.
 //! - [`loopback`] — the transport's fixture, which is emphatically not a model of RM.
+//! - [`export`] — ★ the two ends of `RmBackend::export_backing`: the isolate's minted
+//!   backings and the VMM's registry of what it adopted. **The first consumer of
+//!   [`fdcross`]**, and the answer to that module's standing bound *"no verb uses the
+//!   crossing yet"*.
 
 pub mod child;
+pub mod export;
 pub mod fdcross;
 pub mod isolate;
 pub mod loopback;
 pub mod proto;
 pub mod rm;
 
+pub use export::{ChildExports, ExportRegistry};
 pub use fdcross::{CrossedFd, FdFrameError, FdOrigin, read_frame_with_fds, write_frame_with_fds};
 pub use isolate::{HostIsolate, HostIsolateFactory, RmMode, embedded_isolate_bytes};
 pub use loopback::ParkVerb;

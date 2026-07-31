@@ -237,6 +237,18 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
         // containment is the isolate's own aperture mapping, one layer down, not a
         // namespace-scoped value this sweep could inspect.
         RmVerb::FbRead { .. } => {}
+        // ★★ An export names a handle only on the arm that REFUSES — the device class,
+        // whose object is checked before the refusal. The token it mints on the other arm
+        // is namespaced like a handle, so a backing minted in one isolate and presented on
+        // another is visible here rather than plausible.
+        RmVerb::ExportBacking { source, token, .. } => {
+            if let kayfabe_isolate::ExportSource::HostDeviceMemory { memory } = source {
+                own(memory);
+            }
+            if let Some(token) = token {
+                assert_eq!(token >> 32, ns, "an export token leaked across isolates");
+            }
+        }
     }
 }
 

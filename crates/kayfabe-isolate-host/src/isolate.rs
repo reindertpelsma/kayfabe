@@ -47,15 +47,22 @@
 //!    that is a **socket** synthesises it the moment the reply channel closes — see
 //!    [`ProxyRmBackend::call`].
 
-use crate::proto::{Envelope, Reply, Request, WireError, engine_code, read_frame, write_frame};
+use crate::export::ExportRegistry;
+use crate::fdcross::read_frame_with_fds;
+use crate::proto::{
+    EXPORT_SOURCE_FABRICATED, EXPORT_SOURCE_HOST_DEVICE, Envelope, Reply, Request, WireError,
+    engine_code, prot_code, prot_from_code, read_frame, write_frame,
+};
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeExecutor, CeSource, CeSubCopy, DEFAULT_POOL_WORKERS,
-    HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
+    ExportRequest, ExportSource, ExportedBacking, HostHandle, Isolate, IsolateFactory, IsolateId,
+    RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_linux_raw::{ChildSpec, FdGrant, ProgramImage, SandboxChild};
 use kayfabe_vmm::SurfaceHandle;
 use std::io::ErrorKind;
+use std::os::fd::AsFd;
 use std::os::fd::OwnedFd;
 use std::os::unix::net::{UnixDatagram, UnixStream};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -308,6 +315,9 @@ pub struct ProxyRmBackend {
     sock: Arc<UnixStream>,
     cancel: Arc<HostCancelSink>,
     buf: Vec<u8>,
+    /// ★ The isolate's export registry, shared by every worker in its pool — see
+    /// [`crate::export`] for why the scope is the isolate and not the worker.
+    exports: Arc<ExportRegistry>,
 }
 
 impl ProxyRmBackend {
@@ -366,6 +376,66 @@ impl ProxyRmBackend {
             Reply::Unit => Ok(()),
             _ => Err(RmError::Wedged),
         }
+    }
+
+    /// ★★★ The **one** call that reads with a descriptor allowance
+    /// (`isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// Everything about this differs from [`ProxyRmBackend::call`] in exactly one way —
+    /// `max_fds = 1` instead of the fd-free reader — and that one way is the whole
+    /// protocol policy §6 describes. Every other verb's reply is read by `read_frame`,
+    /// which has **no** control buffer at all, so a child that attaches a descriptor to an
+    /// `Alloc` reply has it dropped by the kernel and never reaches this process's
+    /// descriptor table. The allowance is per call because that is what makes it
+    /// *testable*: undersize it and watch the refusal fire.
+    ///
+    /// ⚠ **The frame is refused whole if the count is wrong**, never served from what
+    /// fitted — a peer must not get to choose which of its descriptors we act on.
+    fn call_for_backing(&mut self, request: Request) -> Result<ExportedBacking, RmError> {
+        let txn = self.cancel.current_txn().unwrap_or(0);
+        let body = Envelope { txn, request }.encode();
+        let mut sock = &*self.sock;
+        if write_frame(&mut sock, &body).is_err() {
+            return Err(RmError::Wedged);
+        }
+        let mut fds = Vec::new();
+        // ★ A refusal from here leaves `fds` owned, so every path out of this function —
+        // including the ones that refuse below — closes whatever arrived, by `Drop`.
+        let Ok(true) = read_frame_with_fds(self.sock.as_fd(), &mut self.buf, &mut fds, 1) else {
+            return Err(RmError::Wedged);
+        };
+        let Ok(reply) = Reply::decode(&self.buf) else {
+            return Err(RmError::Wedged);
+        };
+        let (offset, len, prot) = match self.lift(reply)? {
+            Reply::Backing { offset, len, prot } => (offset, len, prot),
+            // ★ A reply of any other shape must not leave descriptors adopted. `fds` is
+            // dropped on this path, which closes them — the C's R2-M1 sweep, had for free.
+            _ => return Err(RmError::Wedged),
+        };
+        // ★★ Exactly one, and the count is checked HERE rather than trusted from the
+        // allowance: `read_frame_with_fds` bounds the maximum, and a child that attaches
+        // *none* to a `Backing` reply is claiming a backing it did not hand over.
+        let Ok([fd]) = <[_; 1]>::try_from(fds) else {
+            return Err(RmError::Wedged);
+        };
+        let Some(prot) = prot_from_code(prot) else {
+            return Err(RmError::Wedged);
+        };
+        // ★★★ The kind check. `adopt` takes the descriptor by value, so a child answering
+        // with a character device has it REFUSED and CLOSED here, before anything in this
+        // process can `mmap` or `ioctl` it. This is the enforcement point for the property
+        // the verb exists for, and it is deliberately independent of the child's own
+        // refusal: a compromised isolate is inside the threat model.
+        let Ok(token) = self.exports.adopt(fd, self.isolate) else {
+            return Err(RmError::Wedged);
+        };
+        Ok(ExportedBacking {
+            token,
+            offset,
+            len,
+            prot,
+        })
     }
 }
 
@@ -529,6 +599,25 @@ impl RmBackend for ProxyRmBackend {
         }
     }
 
+    /// ★★★ Decision (b), on the wire (`isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// The request carries no descriptor and the reply carries exactly one — a `memfd`,
+    /// checked against the kernel before it is reachable. What the VMM ends up holding is
+    /// a token into [`ExportRegistry`], which yields a backing it can `mmap` and install;
+    /// it never holds anything with an RM `ioctl` handler behind it.
+    fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError> {
+        let (source, memory) = match want.source {
+            ExportSource::Fabricated => (EXPORT_SOURCE_FABRICATED, 0),
+            ExportSource::HostDeviceMemory { memory } => (EXPORT_SOURCE_HOST_DEVICE, memory.raw()),
+        };
+        self.call_for_backing(Request::ExportBacking {
+            source,
+            memory,
+            len: want.len,
+            prot: prot_code(want.prot),
+        })
+    }
+
     fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {
         let reply = self.call(Request::ExportSurface {
             memory: memory.raw(),
@@ -563,6 +652,10 @@ pub struct HostIsolate {
     next_txn: u64,
     retired: bool,
     spawn_error: Option<String>,
+    /// ★★★ The backings this isolate handed up, indexed by the token
+    /// `RmBackend::export_backing` returned. **This is what the VMM installs from** — see
+    /// [`HostIsolate::exports`].
+    exports: Arc<ExportRegistry>,
 }
 
 impl HostIsolate {
@@ -599,7 +692,23 @@ impl HostIsolate {
             next_txn: 0,
             retired: true,
             spawn_error: Some(why),
+            exports: Arc::new(ExportRegistry::new()),
         }
+    }
+
+    /// ★★★ **What this isolate handed the VMM** — the registry a memslot install reads.
+    ///
+    /// The one accessor on the VMM's side of decision (b). It yields descriptors by
+    /// duplication and never lends the registry's own, so an installer may hold a backing
+    /// across this isolate's death — which it must, because a memslot outlives the call
+    /// that installed it.
+    ///
+    /// ⊘ Note what it is NOT: there is no accessor here that yields a *device* descriptor,
+    /// and there is nothing to add one to — [`ExportRegistry::adopt`] refuses anything that
+    /// is not a regular file, so the registry cannot come to contain one.
+    #[must_use]
+    pub fn exports(&self) -> &Arc<ExportRegistry> {
+        &self.exports
     }
 }
 
@@ -861,6 +970,9 @@ fn build_isolate(
     // here, which is legal (R1 is asserted, no lock is held) and is what makes a bring-up
     // failure a *startup* diagnosis.
     let control = Arc::new(control_ours);
+    // ★ One registry per isolate, shared by its pool. Minted here rather than per worker
+    // so that a token means the same thing whichever slot served the request.
+    let exports = Arc::new(ExportRegistry::new());
     let mut cancels = Vec::with_capacity(pool);
     let mut slots = Vec::with_capacity(pool);
     let mut buf = Vec::new();
@@ -894,6 +1006,7 @@ fn build_isolate(
                 sock,
                 cancel: Arc::clone(&sink),
                 buf: Vec::new(),
+                exports: Arc::clone(&exports),
             }),
             sink as Arc<dyn CancelSink>,
         ))));
@@ -907,6 +1020,7 @@ fn build_isolate(
         next_txn: 0,
         retired: false,
         spawn_error: None,
+        exports,
     })
 }
 
