@@ -72,7 +72,7 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// archive would write 32 bytes past the end of it.
 ///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 4;
+pub const ABI_VERSION: u32 = 5;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -610,6 +610,12 @@ pub struct KayfabeChipIdentity {
     pub struct_size: u32,
     /// The register aperture's length, per the chip table.
     pub regs_aperture_len: u64,
+    /// ★★ The framebuffer window's length, per the chip table — the **same** number the
+    /// emulated GSP answers `NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO` with. A shell whose own
+    /// registration differs must refuse to realize; see `kayfabe_abi::pcibars`.
+    pub fb_window_len: u64,
+    /// The instance/`BAR2` window's length, likewise.
+    pub inst_window_len: u64,
     /// `(base << 16) | (sub << 8) | prog_if`.
     pub class_code: u32,
     /// PCI vendor id.
@@ -627,6 +633,20 @@ pub struct KayfabeChipIdentity {
     /// Padding, so the layout is the same on every ABI that cares.
     pub reserved: u8,
 }
+
+/// How many distinct unserviced commands [`KayfabeRegAudit`] carries.
+///
+/// ★ A fixed array rather than a caller-supplied buffer: the shim's whole discipline is
+/// that the hypervisor passes no pointer it has to size. `unserviced_len` reports the
+/// truth even when it exceeds this, so a full array is never mistaken for a complete list.
+pub const UNSERVICED_SLOTS: usize = 32;
+
+/// The low half of a packed [`KayfabeRegAudit::unserviced`] entry when the function was not
+/// a `GSP_RM_CONTROL` — i.e. there is no control command to name.
+///
+/// ⊘ Deliberately not `0`: `0` is a legal `NV*_CTRL_CMD_*` value shape and *"we could not
+/// decode it"* must not read as *"command zero"*.
+pub const UNSERVICED_NO_CMD: u32 = 0xFFFF_FFFF;
 
 /// The register plane's counters, in the wire shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -656,6 +676,23 @@ pub struct KayfabeRegAudit {
     pub ram_refusals: u64,
     /// Times a write asked for the status-queue interrupt to be announced.
     pub irq_requests: u64,
+    /// Commands decoded off the guest's command queue.
+    pub commands: u64,
+    /// ★★ Of those, the ones **no policy answered**, and which the emulated GSP therefore
+    /// refused by name. Includes repeats and anything past [`UNSERVICED_SLOTS`].
+    pub commands_unserviced: u64,
+    /// How many entries of [`KayfabeRegAudit::unserviced`] are populated.
+    pub unserviced_len: u64,
+    /// ★★★ **The list a boot is worth.** Distinct unserviced commands, packed
+    /// `(function << 32) | cmd`, with [`UNSERVICED_NO_CMD`] in the low half for a function
+    /// that is not a `GSP_RM_CONTROL` (or whose header would not decode).
+    ///
+    /// It is in the counters struct rather than behind a second entry point on purpose:
+    /// one call, one `#[repr(C)]` value, no second pointer for the shim to get wrong. See
+    /// `kayfabe_device::unserviced` for why the guest cannot be asked this question — RM
+    /// logs `NV_ERR_NOT_SUPPORTED` quietly, so without this the list costs one boot per
+    /// entry.
+    pub unserviced: [u64; UNSERVICED_SLOTS],
 }
 
 /// Translate a chip-table refusal into the wire vocabulary, keeping the sentence.
@@ -698,6 +735,12 @@ pub fn classify_chip(e: &ChipError) -> (Status, &'static str) {
             "the chip declares a register or window outside its own register aperture, so \
              the guest could never address it",
         ),
+        ChipError::BarTableDisagreesWithAperture { .. } => (
+            Status::Unsupported,
+            "the chip states its register aperture's size twice — as regs_aperture_len and \
+             as row 0 of its BAR table — and the two differ; one is what the hypervisor \
+             registers and the other is what the guest's RM is told, and nothing logs",
+        ),
     }
 }
 
@@ -723,6 +766,8 @@ pub fn chip_identity(device_id: u16) -> Result<KayfabeChipIdentity, (Status, &'s
         abi_version: ABI_VERSION,
         struct_size: size_of::<KayfabeChipIdentity>() as u32,
         regs_aperture_len: chip.regs_aperture_len,
+        fb_window_len: id.fb_window_len,
+        inst_window_len: id.inst_window_len,
         class_code: id.class_code,
         vendor_id: id.vendor_id,
         device_id: id.device_id,
@@ -868,6 +913,14 @@ impl Regs {
     #[must_use]
     pub fn audit(&self) -> KayfabeRegAudit {
         let c = self.plane.counters();
+        // ★ Truncated to what the wire shape holds, and `unserviced_len` says how many —
+        // never silently clipped to look complete. The plane's own sample is bounded by
+        // the same order of magnitude, so this is a shape conversion and not a policy.
+        let sample = self.plane.unserviced_sample();
+        let mut unserviced = [0u64; UNSERVICED_SLOTS];
+        for (slot, e) in unserviced.iter_mut().zip(sample.iter()) {
+            *slot = (u64::from(e.function) << 32) | u64::from(e.cmd.unwrap_or(UNSERVICED_NO_CMD));
+        }
         KayfabeRegAudit {
             reads: c.reads,
             writes: c.writes,
@@ -881,6 +934,10 @@ impl Regs {
             faults: c.faults,
             ram_refusals: c.ram_refusals,
             irq_requests: c.irq_requests,
+            commands: c.commands,
+            commands_unserviced: c.commands_unserviced,
+            unserviced_len: sample.len() as u64,
+            unserviced,
         }
     }
 }

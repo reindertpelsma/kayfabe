@@ -139,6 +139,21 @@ static OTHER_INTR: &[kayfabe_abi::inittables::IntrTableEntry] =
         vector_non_stall: kayfabe_abi::inittables::INTR_VECTOR_INVALID,
     }];
 
+/// ★ A one-row BAR table stating this chip's register aperture and nothing else.
+///
+/// `identity_for` refuses a row whose BAR table and `regs_aperture_len` disagree, so a
+/// test chip has to state the same aperture twice — which is the point of the check.
+/// Building it here keeps each row's spelling to one line and makes the aperture the only
+/// thing the caller repeats.
+macro_rules! bars_for_aperture {
+    ($len:expr) => {
+        &[kayfabe_abi::pcibars::PciBarRow {
+            name: "registers",
+            size_bytes: $len,
+        }]
+    };
+}
+
 /// ★ **The row.** This is the whole cost of the second chip, and it is data.
 static OTHER: ChipProfile = ChipProfile {
     name: "OTHER (test-only)",
@@ -148,6 +163,7 @@ static OTHER: ChipProfile = ChipProfile {
     pci_subsystem_vendor_id: 0xAAAA,
     pci_subsystem_id: 0xBBBB,
     regs_aperture_len: 32 << 20,
+    pci_bars: bars_for_aperture!(32 << 20),
     boot_regs: OTHER_BOOT_REGS,
     ptimer: OTHER_PTIMER,
     // A different window from GA10x's, at a different base.
@@ -291,6 +307,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
         pci_subsystem_vendor_id: 0,
         pci_subsystem_id: 0,
         regs_aperture_len: 16 << 20,
+        pci_bars: bars_for_aperture!(16 << 20),
         boot_regs: &[],
         ptimer: OTHER_PTIMER,
         // Straddles `NV_PGSP` at 0x110000.
@@ -325,6 +342,7 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
         pci_subsystem_id: 0,
         // One page. The GA10x ROM window at 0x300000 cannot fit.
         regs_aperture_len: 0x1000,
+        pci_bars: bars_for_aperture!(0x1000),
         boot_regs: &[],
         ptimer: OTHER_PTIMER,
         rom_window: RomWindow {
@@ -578,6 +596,7 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
         pci_subsystem_vendor_id: 0,
         pci_subsystem_id: 0,
         regs_aperture_len: 16 << 20,
+        pci_bars: bars_for_aperture!(16 << 20),
         boot_regs: OTHER_BOOT_REGS,
         // OTHER_BOOT_REGS declares 0x100 a silicon constant; the counter must not hide there.
         ptimer: PtimerRegs {
@@ -616,6 +635,7 @@ fn a_counter_outside_the_aperture_is_refused_at_realize() {
         pci_subsystem_vendor_id: 0,
         pci_subsystem_id: 0,
         regs_aperture_len: 1 << 20,
+        pci_bars: bars_for_aperture!(1 << 20),
         boot_regs: &[],
         ptimer: PtimerRegs {
             lo_off: 0x00BB_0080,

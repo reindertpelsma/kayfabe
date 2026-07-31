@@ -461,7 +461,10 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // Hand-mirrored structures: a field added on one side only misaligns every field after
     // it, and the runtime `struct_size` handshake only covers the one structure carrying
     // that field. This is the compile-time half.
-    assert_eq!(size_of::<KayfabeChipIdentity>(), 32);
+    // ★ 32 -> 48 at task #127: the two window lengths, so the chip row's BAR table and
+    // the apertures the hypervisor actually registers cannot disagree — `nvkvm_realize`
+    // refuses a property that differs from what the emulated GSP tells the guest's RM.
+    assert_eq!(size_of::<KayfabeChipIdentity>(), 48);
     assert_eq!(align_of::<KayfabeChipIdentity>(), 8);
     // ★ 32 -> 64 at stage Q5: two more (pointer, length) pairs and two more u64s, so the
     // emulated GSP's guest-RAM refusals carry their address and their reason across the
@@ -469,7 +472,13 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // `struct_size` handshake does not cover this structure, so nothing but the version and
     // this line stands between an ABI-3 shim and 32 bytes written past its allocation.
     assert_eq!(size_of::<KayfabeRegWrite>(), 64);
-    assert_eq!(size_of::<KayfabeRegAudit>(), 12 * size_of::<u64>());
+    // ★ 12 -> 15 counters plus a 32-slot list at task #127: the emulated GSP's default
+    // became a NAMED REFUSAL, and the guest logs `NV_ERR_NOT_SUPPORTED` quietly, so the
+    // list of what nobody answered has to cross the seam or it costs a boot per entry.
+    assert_eq!(
+        size_of::<KayfabeRegAudit>(),
+        (15 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+    );
 }
 
 #[test]

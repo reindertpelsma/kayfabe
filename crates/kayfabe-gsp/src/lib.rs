@@ -125,7 +125,7 @@ pub mod rpc;
 
 pub use boot::{
     BootPhase, CommandPolicy, EchoOk, GspAbi, GspFsm, InitArgsLayout, PolicyChain, QueueBinding,
-    QueueState, Reply, ServiceReport, Transition,
+    QueueState, Reply, ServiceReport, Transition, Unserviced,
 };
 pub use element::{
     ElementLayout, IncomingRpc, MsgLen, OutgoingRpc, TransportHdr, bytes_to_elements, checksum32,

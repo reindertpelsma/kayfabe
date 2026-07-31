@@ -55,9 +55,11 @@ pub mod ga10x;
 pub mod inittables;
 pub mod plane;
 pub mod staticinfo;
+pub mod unserviced;
 
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
+use kayfabe_abi::pcibars::{PciBarRow, bus_bar};
 use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
 
@@ -191,6 +193,24 @@ pub struct ChipProfile {
     /// nothing. See [`ga10x::GA106_FB_REGIONS`], which states what backs each of its two
     /// and why the oracle's other three are not here.
     pub fb_regions: &'static [FbRegion],
+    /// ★★ **The base-address registers this device presents, in RM's own index order**
+    /// ([`kayfabe_abi::pcibars::bus_bar`]).
+    ///
+    /// A row here is an aperture the hypervisor shell really decodes: [`identity_for`]
+    /// hands the two window lengths to the shell, which refuses to realize if its own
+    /// registration disagrees. That is what makes this table an *advertisement of what we
+    /// serve* rather than a second, drifting description of the device.
+    ///
+    /// ⊘ Sizes only. `barOffset` is the guest's PCI enumeration's business and this port
+    /// has no source for it. `[inferred]` from the two vendored trees: the only reader of
+    /// a `NV2080_CTRL_BUS_GET_PCI_BAR_INFO_PARAMS` field is
+    /// `ogkm-580: src/nvidia/src/kernel/gpu/bus/kern_bus.c:597`, which copies
+    /// `barSizeBytes` and nothing else, and RM fills its own `pciBars[]` from
+    /// `pGpu->busInfo` instead (`ogkm-580: kern_bus_gm107.c:4709-4720`). ⚠ That covers the
+    /// open trees only; a closed userspace client is not greppable — see
+    /// [`kayfabe_abi::pcibars`] for what would have to change if one is ever observed to
+    /// care.
+    pub pci_bars: &'static [PciBarRow],
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and
@@ -200,6 +220,21 @@ pub struct ChipProfile {
     /// and `fb_length` disagree, and `tests/gsp_static_info.rs` pins it against the
     /// register.
     pub fb_length: u64,
+}
+
+impl ChipProfile {
+    /// The length of one of RM's logical base-address registers, by
+    /// [`kayfabe_abi::pcibars::bus_bar`] index.
+    ///
+    /// ★ An index this chip does not declare is **zero**, and that is the protocol's own
+    /// spelling for *"this BAR is not present"* rather than a defaulted answer: RM's
+    /// physical side encodes a disabled BAR1/BAR2 identically
+    /// (`ogkm-580: kern_bus_gm107.c:407, 416`), and rows past `pciBarCount` are cleared to
+    /// zero before the reply is sent (`ogkm-580: kern_bus_ctrl.c:654-660`).
+    #[must_use]
+    pub fn pci_bar_len(&self, index: usize) -> u64 {
+        self.pci_bars.get(index).map_or(0, |b| b.size_bytes)
+    }
 }
 
 impl core::fmt::Debug for ChipProfile {
@@ -262,6 +297,21 @@ pub enum ChipError {
         /// The source it would therefore never reach.
         b: &'static str,
     },
+    /// ★★ The chip states the register aperture's size twice — once as
+    /// [`ChipProfile::regs_aperture_len`], once as row
+    /// [`kayfabe_abi::pcibars::bus_bar::REGS`] of [`ChipProfile::pci_bars`] — and the two
+    /// do not agree.
+    ///
+    /// One is what the hypervisor registers and the guest's MMU decodes; the other is what
+    /// we tell the guest's RM through `NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO`. A guest told
+    /// the wrong one sizes its own mappings against an aperture that is not there, and
+    /// nothing logs. Refused at realize.
+    BarTableDisagreesWithAperture {
+        /// What the BAR table says.
+        bar_len: u64,
+        /// What [`ChipProfile::regs_aperture_len`] says.
+        aperture: u64,
+    },
     /// A declared register or window lies outside the register aperture the chip states,
     /// so the guest could never address it.
     OutsideAperture {
@@ -299,6 +349,12 @@ impl core::fmt::Display for ChipError {
             Self::OutsideAperture { off, aperture } => write!(
                 f,
                 "offset {off:#x} lies outside the {aperture:#x}-byte register aperture"
+            ),
+            Self::BarTableDisagreesWithAperture { bar_len, aperture } => write!(
+                f,
+                "the chip's BAR table says the register aperture is {bar_len:#x} bytes and \
+                 its regs_aperture_len says {aperture:#x}; the guest would be told one and \
+                 decode the other"
             ),
         }
     }
@@ -352,6 +408,16 @@ pub struct DeviceIdentity {
     pub subsystem_id: u16,
     /// How many message-signalled vectors to offer.
     pub msix_vectors: u16,
+    /// The framebuffer window's length, from [`ChipProfile::pci_bars`].
+    ///
+    /// ★ Here rather than left to the shell's own property because the *same* number is
+    /// what [`inittables::InitTablePolicy`] tells the guest's RM through
+    /// `NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO`. A shell that registers a different aperture
+    /// than the one we advertise is the two-descriptions-of-one-range failure, and the
+    /// only moment an operator can act on it is realize.
+    pub fb_window_len: u64,
+    /// The instance/`BAR2` window's length, likewise.
+    pub inst_window_len: u64,
 }
 
 /// Assemble the identity a chip's device reports.
@@ -362,7 +428,17 @@ pub struct DeviceIdentity {
 /// [`kayfabe_abi::vbios::VbiosProfile`]. This is a refusal rather than a default because
 /// the vendor id and the class code are read *out of the ROM row on purpose* — a default
 /// here would put the two back in a position to disagree.
+///
+/// [`ChipError::BarTableDisagreesWithAperture`] if the chip's own two statements of the
+/// register aperture's size are not the same statement.
 pub fn identity_for(chip: &ChipProfile) -> Result<DeviceIdentity, ChipError> {
+    let regs = chip.pci_bar_len(bus_bar::REGS);
+    if regs != chip.regs_aperture_len {
+        return Err(ChipError::BarTableDisagreesWithAperture {
+            bar_len: regs,
+            aperture: chip.regs_aperture_len,
+        });
+    }
     let p =
         profile_for_device_id(chip.pci_device_id).map_err(|_| ChipError::VbiosProfileMissing {
             device_id: chip.pci_device_id,
@@ -380,6 +456,8 @@ pub fn identity_for(chip: &ChipProfile) -> Result<DeviceIdentity, ChipError> {
         subsystem_vendor_id: chip.pci_subsystem_vendor_id,
         subsystem_id: chip.pci_subsystem_id,
         msix_vectors: chip.msix_vectors,
+        fb_window_len: chip.pci_bar_len(bus_bar::FB),
+        inst_window_len: chip.pci_bar_len(bus_bar::INST),
     })
 }
 

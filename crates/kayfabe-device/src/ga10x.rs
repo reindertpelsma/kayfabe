@@ -41,6 +41,7 @@
 
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
+use kayfabe_abi::pcibars::PciBarRow;
 use kayfabe_abi::vbios::VbiosWire;
 use kayfabe_arch::gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
 
@@ -980,6 +981,62 @@ pub static GA106_FB_REGIONS: &[FbRegion] = &[
     },
 ];
 
+// ---------------------------------------------------------------------------------------
+// The base-address registers — what this device presents, and therefore what it may say.
+// ---------------------------------------------------------------------------------------
+
+/// The framebuffer window's length. **PCI slots 1+2** — a 64-bit prefetchable window.
+///
+/// ★ 256 MiB is a real RTX 3060's BAR1 with resizable-BAR off, it is what the bench boots
+/// with (`-device nvkvm-gpu,bar1-size=268435456`), and it is what the oracle's own answer
+/// carries (`C: src/qemu/mode2_initctrl_ga106.h:5397-5399`, `barSize = 256`,
+/// `barSizeBytes = 0x1000_0000`). `identity_for` hands it to the shell, which refuses to
+/// realize if its registration disagrees.
+const FB_WINDOW_LEN: u64 = 256 << 20;
+
+/// The instance / RM-`BAR2` GMMU window's length. **PCI slots 3+4**, also 64-bit.
+///
+/// 32 MiB, which is `BUS_BAR2_APERTURE_MB` (`ogkm-580: g_kern_bus_nvoc.h:178`), the bench's
+/// `bar2-size=33554432`, and the oracle's `barSize = 32` / `barSizeBytes = 0x200_0000`.
+const INST_WINDOW_LEN: u64 = 32 << 20;
+
+/// ★★ **The four base-address registers this device presents, in RM's index order.**
+///
+/// `pciBarCount = 4` is not a choice: `kbusInitPciBars_GM107` sets `totalPciBars =
+/// BUS_NUM_BARS` for every non-AMODEL part (`ogkm-580: kern_bus_gm107.c:4715-4718`), and
+/// the physical side sends exactly that (`kern_bus_ctrl.c:640`). The oracle's captured
+/// reply agrees — `pciBarCount = 4` with row 3 all zeros.
+///
+/// ⊘ Row 3 is the **I/O BAR, and it is absent**: `size_bytes = 0`. A GA106 has none, this
+/// device registers none, and RM's own encoding for an absent BAR is a zeroed entry. It is
+/// listed rather than truncated because `pciBarCount` is what RM loops to and 4 is the
+/// count a classic dGPU reports; a three-row table would be a different, smaller claim.
+///
+/// ⚠ PCI slot 5 carries the message-signalled interrupt table, which is the hypervisor's
+/// own region and not one of RM's four logical BARs. It has no row here on purpose.
+pub static GA106_PCI_BARS: &[PciBarRow] = &[
+    PciBarRow {
+        name: "registers",
+        size_bytes: REGS_APERTURE_LEN,
+    },
+    PciBarRow {
+        name: "framebuffer-window",
+        size_bytes: FB_WINDOW_LEN,
+    },
+    PciBarRow {
+        name: "instance-window",
+        size_bytes: INST_WINDOW_LEN,
+    },
+    PciBarRow {
+        name: "io",
+        size_bytes: 0,
+    },
+];
+
+// The table must state the count RM's own physical side would. A row added or dropped
+// without meaning to change that claim is a build error.
+const _: () = assert!(GA106_PCI_BARS.len() == kayfabe_abi::pcibars::bus_bar::NUM);
+
 /// ★ **The GA106 row.** Everything above, selected.
 ///
 /// The PCI identity is deliberately *incomplete* here: the vendor id and class code are
@@ -1009,6 +1066,7 @@ pub static GA106: ChipProfile = ChipProfile {
     intr_table: GA106_INTR_TABLE,
     intr_subtree_map: GA106_INTR_SUBTREE_MAP,
     fb_regions: GA106_FB_REGIONS,
+    pci_bars: GA106_PCI_BARS,
     fb_length: GA106_FB_LENGTH,
 };
 

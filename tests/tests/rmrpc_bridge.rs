@@ -1843,19 +1843,30 @@ fn the_policy_translates_and_applies_and_counts_what_it_did() {
     );
 }
 
-/// The policy's answer on the wire: `None` for anything it accepted (the FSM's own
-/// `ack(NV_OK)`), and `Some(Reply)` with a non-zero status for anything it refused.
+/// The policy's answer on the wire: an **explicit** `NV_OK` acknowledgement for anything it
+/// accepted, and `Some(Reply)` with a non-zero status for anything it refused.
+///
+/// ★★★ The accepted arm used to be `None`, because `None` used to mean *"the FSM posts its
+/// own `ack(NV_OK)`"*. Task #127 gave `None` one meaning — **I decline**, answered by the
+/// FSM with a named refusal — so a policy that accepts a command now has to say so. This
+/// test is what fails if the two ever collapse back into one word: with `None` restored on
+/// the accepted arm, every command this bridge applies would reach the guest as
+/// `NV_ERR_NOT_SUPPORTED`.
 #[test]
-fn an_accepted_command_is_acked_by_the_fsm_and_a_refused_one_is_answered_here() {
+fn an_accepted_command_is_acked_explicitly_and_a_refused_one_is_answered_here() {
     use kayfabe_gsp::{CommandPolicy, Reply};
 
     let mut gpu = fresh_gpu();
     let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
 
+    let accepted = command(&HEX_ROOT_ALLOC);
     assert_eq!(
-        policy.respond(&command(&HEX_ROOT_ALLOC)),
-        None,
-        "an accepted fact needs no reply BODY — the FSM acks (function, sequence)",
+        policy.respond(&accepted),
+        Some(Reply {
+            rpc_result: 0,
+            body: accepted.payload.clone(),
+        }),
+        "an accepted fact is acknowledged BY NAME — never by declining to answer",
     );
     assert_eq!(
         policy.respond(&command(&w::message(999, 1, &[0u8; 8]))),

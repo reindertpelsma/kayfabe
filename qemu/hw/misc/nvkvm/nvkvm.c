@@ -1126,6 +1126,33 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.reads, a.writes, a.boot_reg_reads, a.rom_reads, a.gsp_reads,
                 a.gsp_writes, a.unclaimed_reads, a.unclaimed_writes,
                 a.faults, a.ram_refusals, s->irq_requests_dropped);
+
+    /*
+     * ★★★ THE LIST.  Printed unconditionally, INCLUDING when it is empty, because "no line
+     * appeared" is exactly what a silently-dead reporter looks like and this device has
+     * been bitten by that before (see nvkvm_report_registers' own note on shutdown).
+     */
+    info_report("nvkvm: commands: %" PRIu64 " decoded, %" PRIu64 " UNSERVICED "
+                "(refused by name; the guest logs these quietly, which is why they are here)"
+                ", %" PRIu64 " distinct",
+                a.commands, a.commands_unserviced, a.unserviced_len);
+    {
+        uint64_t i, shown = a.unserviced_len;
+
+        if (shown > KAYFABE_UNSERVICED_SLOTS) {
+            shown = KAYFABE_UNSERVICED_SLOTS;
+        }
+        for (i = 0; i < shown; i++) {
+            uint32_t fn = (uint32_t)(a.unserviced[i] >> 32);
+            uint32_t cmd = (uint32_t)(a.unserviced[i] & 0xffffffffu);
+
+            if (cmd == KAYFABE_UNSERVICED_NO_CMD) {
+                info_report("nvkvm:   unserviced fn %u", fn);
+            } else {
+                info_report("nvkvm:   unserviced fn %u cmd 0x%08x", fn, cmd);
+            }
+        }
+    }
 }
 
 static void nvkvm_exit_notify(Notifier *n, void *data)
@@ -1180,6 +1207,33 @@ static bool nvkvm_identity_realize(NvkvmState *s, Error **errp)
                    "0x%" PRIx64 "-byte register aperture; the archive answers registers by "
                    "offset within the chip's aperture, so the two maps would disagree",
                    s->bar0_size, id.vendor_id, id.device_id, id.regs_aperture_len);
+        return false;
+    }
+
+    /*
+     * ★★ AND THE SAME FOR THE TWO WINDOWS, for a sharper reason than the aperture's.
+     *
+     * The emulated GSP answers NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO out of the chip row,
+     * and the guest's resource manager copies barSizeBytes straight into
+     * pKernelBus->pciBarSizes[] and sizes its own mappings against it.  If this device
+     * registers a 128 MiB window and tells the guest 256 MiB, the guest maps past the end
+     * of a region the hypervisor decodes and reads whatever is next — with nothing logged
+     * on either side.  Refused at realize, which is the only moment an operator can act.
+     */
+    if (s->bar1_size != id.fb_window_len) {
+        error_setg(errp,
+                   "nvkvm: bar1-size is 0x%" PRIx64 " but chip %04x:%04x declares a "
+                   "0x%" PRIx64 "-byte framebuffer window, and that is the size the "
+                   "emulated GSP tells the guest's resource manager",
+                   s->bar1_size, id.vendor_id, id.device_id, id.fb_window_len);
+        return false;
+    }
+    if (s->bar2_size != id.inst_window_len) {
+        error_setg(errp,
+                   "nvkvm: bar2-size is 0x%" PRIx64 " but chip %04x:%04x declares a "
+                   "0x%" PRIx64 "-byte instance window, and that is the size the emulated "
+                   "GSP tells the guest's resource manager",
+                   s->bar2_size, id.vendor_id, id.device_id, id.inst_window_len);
         return false;
     }
 
@@ -1398,9 +1452,15 @@ static void nvkvm_reset_exit(Object *obj, ResetType type)
 }
 
 static const Property nvkvm_properties[] = {
+    /* ★★ All three DEFAULTS are the GA106 row's own numbers, and all three are CHECKED
+     * against the chip table at realize (`nvkvm_apply_identity`).  A default that merely
+     * looked plausible would realize a device whose registered apertures disagree with
+     * what the emulated GSP tells the guest's resource manager, and neither side logs it.
+     * These are the chip's facts spelled a second time so an operator can see them; the
+     * chip row is authoritative and a mismatch is refused, never clamped. */
     DEFINE_PROP_UINT64("bar0-size", NvkvmState, bar0_size, 16 * MiB),
-    DEFINE_PROP_UINT64("bar1-size", NvkvmState, bar1_size, 4 * GiB),
-    DEFINE_PROP_UINT64("bar2-size", NvkvmState, bar2_size, 1 * GiB),
+    DEFINE_PROP_UINT64("bar1-size", NvkvmState, bar1_size, 256 * MiB),
+    DEFINE_PROP_UINT64("bar2-size", NvkvmState, bar2_size, 32 * MiB),
     /* 0 = install no reservation at realize.  Non-zero installs one at the base of the first
      * reservation register, which is what an acceptance test drives. */
     DEFINE_PROP_UINT64("window-size", NvkvmState, window_size, 0),

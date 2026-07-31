@@ -100,6 +100,7 @@ pub mod generated;
 pub mod gspstaticinfo;
 pub mod guest_os;
 pub mod inittables;
+pub mod pcibars;
 pub mod rc;
 pub mod submit;
 pub mod transcribed;
