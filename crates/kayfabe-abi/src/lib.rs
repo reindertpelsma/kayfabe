@@ -99,6 +99,7 @@ pub mod capability;
 pub mod generated;
 pub mod gspstaticinfo;
 pub mod guest_os;
+pub mod host_driver;
 pub mod inittables;
 pub mod rc;
 pub mod submit;
@@ -210,6 +211,11 @@ pub const NV_ERR_NOT_SUPPORTED: u32 = 0x0000_0056;
 
 /// A guest driver version, as detected/advertised at device realize.
 /// (Values are data, not code: one generated module per version.)
+///
+/// ★ **Guest.** The host's driver version is a *different* number about a different
+/// machine, and the product property is that the two need not agree
+/// (`host_driver_version_pin.md`). It has its own type,
+/// [`host_driver::HostDriverVersion`], so neither can be passed where the other is meant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DriverVersion {
     /// Major (e.g. 580).

@@ -14,13 +14,19 @@ a translation problem at two well-defined seams rather than a passthrough proble
 capability Mode 1 structurally cannot have — it forwards the guest's own ioctls, so guest and host
 ABIs must agree.
 
+⚠ **Read `host_driver_version_pin.md` before quoting that as a shipped capability.** The
+guest half of the disjointness is built; the **host** half is not. The host-side encoders are
+pinned to one driver interval, which until 2026-07-31 nothing said and nothing checked. That
+note states the property, states what is actually true, and records the refusal that now
+makes a mismatched host stop at rung R2 instead of receiving wrong struct offsets.
+
 ## 1. The four axes
 
 | axis | varies with | where it lives | status |
 |---|---|---|---|
 | **GPU architecture** | the silicon (GA106, Ada, Hopper…) | `kayfabe-arch`: `Arch`, `GmmuFmt`, `UserdModel`, `GspModel` | seam exists, **one** impl |
 | **Guest driver version** | the driver *in the guest* | `kayfabe-abi::DriverVersion` — a full `(major, minor, patch)` triple with a loud `NoTableForVersion` floor | seam exists, few tables |
-| **Host driver version** | the driver *on the host* | implicit: `VerbPlan` carries **named intents** that *"the adapter lowers to the correct per-version NVOS sequence"* (`kayfabe-isolate`) | abstract by construction, **unbuilt** |
+| **Host driver version** | the driver *on the host* | ★ **CORRECTED 2026-07-31** — see `host_driver_version_pin.md`. `VerbPlan` carries named intents, but the thing that lowers them (`kayfabe-isolate-host/src/rm.rs`) uses **const-size, version-free** encoders, so the host edge is concretely **pinned to `[580.65.06, 581.0.00)`** | axis still **unbuilt** — and deliberately so — but the pin is now a **named refusal at rung R2** instead of silently wrong offsets |
 | ★ **Guest OS** | Linux / Windows / … | `kayfabe-abi::GuestOs` (`guest_os.rs`) — a profile **beside** the version table, declared at realize; every OS-conditional rule is data on it, and an OS with no rule is a typed refusal | ★ seam exists (2026-07-29), **one** profile + one named refusal |
 
 ★ **The fourth axis is the one to protect now**, because it is the only one with no home. A
@@ -64,6 +70,11 @@ useful diagnostic; a refusal at realize costs one line of log.
 so an older guest asks for things a newer host still provides. **New guest on old host is where it
 breaks** — the guest can request classes, controls or capabilities the host does not have, and the
 honest answer is a refusal, not emulation.
+
+★ **Both breaks below are host-edge facts as well as guest-edge ones**, and that was not
+written down until 2026-07-31. `kayfabe-isolate-host` emits the post-580.65.06 `NVOS46` form
+and 580's `NV_CHANNEL_ALLOC_PARAMS` offsets unconditionally, so each break bounds the range
+of **hosts** we may point those encoders at — see `host_driver_version_pin.md` §1.3.
 
 **Known layout breaks** (each costs one table entry, mechanical):
 - `NVOS46` 56 → 64 bytes at **580.65.06** (`docs/reference/nvidia_abi_oracles.md` F1)
