@@ -22,6 +22,10 @@ kayfabe-vmm.workspace = true
 # traffic through the mock harness and through real KVM memslots — which is the
 # portability contract exercised rather than asserted.
 kayfabe-vmm-kvm.workspace = true
+# ★ The QEMU adapter, for ONE reason: `viewer_install` — the consumer of the GPGA viewer
+# index — lives there, and the vCPU that proves its layout is native lives in the KVM
+# adapter. `tests/tests/gpga_viewer_native.rs` is the only place the two meet.
+kayfabe-vmm-qemu.workspace = true
 kayfabe-linux-raw.workspace = true
 # ★ The real reactor loop (l1_os_shell.md §3, M2-d): the suite drives real host
 # readiness primitives through the same core the mock harness drives.

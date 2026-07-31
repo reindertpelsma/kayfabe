@@ -13,6 +13,16 @@ kayfabe-vmm.workspace = true
 # the OS through the same audited crate `kayfabe-vmm-kvm` does, and reaches QEMU only
 # through `QemuHost`. Two raw crates, two seams, no overlap.
 kayfabe-linux-raw.workspace = true
+# ★ The GPGA viewer index and the vocabulary it speaks. Pure logic crates, so this is the
+# hexagonal direction: the adapter depends on the core, never the reverse. `viewer_install`
+# is the CONSUMER the index was landed without.
+kayfabe-mmu.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-isolate.workspace = true
+
+[dev-dependencies]
+# The index is driven directly in the installer's tests: a viewer, some objects, a drain.
+kayfabe-mocks.workspace = true
 
 [lints]
 workspace = true

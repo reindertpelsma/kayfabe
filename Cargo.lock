@@ -331,6 +331,7 @@ dependencies = [
  "kayfabe-util",
  "kayfabe-vmm",
  "kayfabe-vmm-kvm",
+ "kayfabe-vmm-qemu",
  "libc",
  "proptest",
 ]
@@ -373,7 +374,11 @@ dependencies = [
 name = "kayfabe-vmm-qemu"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-arch",
+ "kayfabe-isolate",
  "kayfabe-linux-raw",
+ "kayfabe-mmu",
+ "kayfabe-mocks",
  "kayfabe-util",
  "kayfabe-vmm",
 ]

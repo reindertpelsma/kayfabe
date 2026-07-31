@@ -110,6 +110,7 @@ pub mod classify;
 pub mod host;
 pub mod mock_host;
 pub mod slots;
+pub mod viewer_install;
 
 use core::ops::Range;
 use core::time::Duration;

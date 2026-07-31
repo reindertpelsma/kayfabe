@@ -274,6 +274,7 @@ pub mod ioctl;
 pub mod kvm_gate;
 mod kvm_unsafe;
 mod mapping_unsafe;
+pub mod memtype;
 pub mod page_size;
 mod sandbox_unsafe;
 mod scm_unsafe;
