@@ -99,6 +99,7 @@ pub mod capability;
 pub mod generated;
 pub mod gspstaticinfo;
 pub mod guest_os;
+pub mod guestsysinfo;
 pub mod inittables;
 pub mod pcibars;
 pub mod rc;

@@ -505,6 +505,12 @@ fn every_function_id_lands_on_its_own_arm() {
         ),
         (fn_id::GSP_SET_SYSTEM_INFO, "init, no reply"),
         (fn_id::SET_REGISTRY, "init, no reply"),
+        // ★ fn 64 joined the named set at task #127: `RmRpcSetGuestSystemInfo` tail-calls
+        // it and returns ITS status (`ogkm-580: rpc.c:8825-8832`), so a port that names
+        // fn 1 and not fn 64 fails `RmInitAdapter` one line further on. It carries no
+        // object-model content either — a driver-branch string and a bus address — so it
+        // is inert here and answered in `kayfabe_device::guestsysinfo`.
+        (64, "the fn-1 tail call; a version string and a bus address"),
     ] {
         assert_eq!(
             xlate(&w::message(code, 5, &[0u8; 16])),
@@ -585,7 +591,7 @@ fn every_function_id_lands_on_its_own_arm() {
     }
 
     // Not in the table at all — the third state.
-    for code in [0u32, 2, 4, 14, 15, 27, 64, 70, 999, 0x1002, u32::MAX] {
+    for code in [0u32, 2, 4, 14, 15, 27, 70, 999, 0x1002, u32::MAX] {
         assert_eq!(
             xlate(&w::message(code, 5, &[0u8; 16])),
             Err(BridgeRefusal::UnknownFunction { code }),

@@ -326,13 +326,31 @@ def classify(body: str) -> tuple[str, list[str], bool]:
 
 
 def universe() -> list[Path]:
-    """★ DERIVED. `git ls-files` is the list; nothing here enumerates crates or docs."""
-    out = subprocess.run(
-        ["git", "ls-files", "-z", "--", "*.rs", "docs/**/*.md", "*.md"],
-        cwd=ROOT, capture_output=True, text=True, check=True,
-    ).stdout
+    """★ DERIVED. `git ls-files` is the list; nothing here enumerates crates or docs.
+
+    ★★ **Tracked AND untracked-but-not-ignored**, and the second half is not a nicety.
+    `git ls-files` alone lists only what is already in the index, so a run made *before*
+    `git add` scores a brand-new file's prose as if it did not exist — the ledger reports
+    green, the file is committed, and CI (where everything is tracked) then fails on
+    claims nobody was shown. Measured on 2026-07-31 during task #127: a pre-commit run
+    read 383 with three new modules on disk and unstaged; the same tree read 385 the
+    moment they were added. That is this project's own *"gates quantified over a LIST"*
+    failure with the list supplied by git, so the fix is to widen the list rather than to
+    remember to stage first. `--exclude-standard` keeps `.gitignore` honoured, so
+    `target/` and friends stay out.
+    """
+    out = ""
+    for extra in ([], ["-o", "--exclude-standard"]):
+        out += subprocess.run(
+            ["git", "ls-files", "-z", *extra, "--", "*.rs", "docs/**/*.md", "*.md"],
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        ).stdout
     files = []
+    seen = set()
     for f in out.split("\0"):
+        if f in seen:
+            continue
+        seen.add(f)
         if not f:
             continue
         p = ROOT / f

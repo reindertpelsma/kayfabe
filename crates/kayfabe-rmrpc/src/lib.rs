@@ -932,6 +932,7 @@ pub fn translate(
         // Known and inert — three different reasons, collapsed here only because the
         // *answer* is the same. See `Translation::Inert`.
         RpcFunction::SetGuestSystemInfo
+        | RpcFunction::SetGuestSystemInfoExt
         | RpcFunction::GetGspStaticInfo
         | RpcFunction::UnloadingGuestDriver
         | RpcFunction::GspSetSystemInfo

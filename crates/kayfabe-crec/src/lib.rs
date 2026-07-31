@@ -85,6 +85,7 @@ use std::path::PathBuf;
 /// `gsp_rm_alloc = 103` — 45 of its 178 recorded commands carry that function id.
 pub const FUNCTIONS: kayfabe_gsp::FunctionCodes = kayfabe_gsp::FunctionCodes {
     set_guest_system_info: 1,
+    set_guest_system_info_ext: 0x40,
     free: 10,
     dup_object: 21,
     unloading_guest_driver: 47,

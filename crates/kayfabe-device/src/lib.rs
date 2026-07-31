@@ -52,6 +52,7 @@
 
 pub mod abi;
 pub mod ga10x;
+pub mod guestsysinfo;
 pub mod inittables;
 pub mod plane;
 pub mod staticinfo;

@@ -177,8 +177,9 @@ fn the_policy_answers_the_control_without_reflecting_one_byte_of_the_request() {
     assert_eq!(&reply.body[16..20], &200u32.to_le_bytes()[..], "paramsSize");
 
     // ★★★ THE BITE. The request's params were 0xAA. If any of them survived into the
-    // reply, RM would loop to whatever `pciBarCount` that produced — which is the measured
-    // guest-kernel page fault this rung exists to fix.
+    // reply, RM would loop to whatever `pciBarCount` that produced — which is run
+    // `t126b`'s guest-kernel page fault (a stock 580.159.04 guest at `f2acb89`, twice on
+    // two fresh boots; `kayfabe_abi::pcibars` carries the dmesg).
     let params = &reply.body[PARAMS_AT..PARAMS_AT + 200];
     assert!(
         !params.contains(&0xAA),

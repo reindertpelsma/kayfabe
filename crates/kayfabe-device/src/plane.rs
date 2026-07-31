@@ -363,9 +363,10 @@ impl RegPlane {
             state: Mutex::new(PlaneState {
                 fsm: GspFsm::new(abi),
                 ram: Box::new(RefusingRam),
-                // ★ Order is precedence and the two links are disjoint by function code:
-                // `InitTablePolicy` claims only `GSP_RM_CONTROL`, `StaticInfoPolicy` only
-                // `GET_GSP_STATIC_INFO`. `tests/gsp_static_info.rs` pins the disjointness
+                // ★ Order is precedence and the three answering links are disjoint by
+                // function code: `InitTablePolicy` claims only `GSP_RM_CONTROL`,
+                // `StaticInfoPolicy` only `GET_GSP_STATIC_INFO`, `GuestSystemInfoPolicy`
+                // only fn 1 and fn 64. `tests/gsp_static_info.rs` pins the disjointness
                 // rather than trusting the reading.
                 // ★ The LEDGER is last, and it answers nothing — it writes down exactly
                 // what the two links above declined and lets the FSM refuse it by name.
@@ -374,6 +375,7 @@ impl RegPlane {
                 policy: Box::new(kayfabe_gsp::PolicyChain::new(vec![
                     Box::new(crate::inittables::InitTablePolicy::new(chip, abi.driver)),
                     Box::new(crate::staticinfo::StaticInfoPolicy::new(chip, abi.driver)),
+                    Box::new(crate::guestsysinfo::GuestSystemInfoPolicy::new(abi.driver)),
                     Box::new(crate::unserviced::UnservicedLedger::new(
                         abi.driver,
                         unserviced.clone(),

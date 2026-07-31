@@ -340,6 +340,7 @@ impl Profile {
 /// not. Every id is identical at both tags.
 pub const FUNCTIONS: FunctionCodes = FunctionCodes {
     set_guest_system_info: 1,
+    set_guest_system_info_ext: 0x40,
     free: 10,
     dup_object: 21,
     unloading_guest_driver: 47,

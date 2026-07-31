@@ -232,8 +232,9 @@ pub fn encode_pci_bar_info(bars: &[PciBarRow]) -> Result<Vec<u8>, PciBarError> {
         let megabytes = u32::try_from(b.size_bytes >> 20).unwrap_or(u32::MAX);
         params[o + 4..o + 8].copy_from_slice(&megabytes.to_le_bytes());
         params[o + 8..o + 16].copy_from_slice(&b.size_bytes.to_le_bytes());
-        // `barOffset` stays zero — see this module's docs for the measurement that says
-        // no reader in either tree consumes it, and for what would have to change.
+        // `barOffset` stays zero. `[inferred]` from `ogkm-580: kern_bus.c:597` and
+        // `kern_bus_ctrl.c:646-651`: no reader in either vendored tree consumes the
+        // reply's copy. This module's docs carry the grep and what would have to change.
     }
     Ok(params)
 }

@@ -64,6 +64,15 @@ use crate::fault::GspFault;
 pub struct FunctionCodes {
     /// `SET_GUEST_SYSTEM_INFO` — the first synchronous RPC after `GSP_INIT_DONE`.
     pub set_guest_system_info: u32,
+    /// `SET_GUEST_SYSTEM_INFO_EXT` (0x40) — its **tail call**, and not optional.
+    ///
+    /// ★ `RmRpcSetGuestSystemInfo` ends by issuing this and **returning its status**
+    /// (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:8825-8832`,
+    /// `ogkm-610: rpc.c:8630-8637`), so a port that answers fn 1 and refuses fn 64 fails
+    /// `RmInitAdapter` one line further on with a different message. Named here because
+    /// something downstream consumes it — `kayfabe_device::guestsysinfo` — which is this
+    /// table's whole membership rule.
+    pub set_guest_system_info_ext: u32,
     /// `FREE` (0xa) — RM's object teardown stream.
     ///
     /// ★ It is **the** teardown signal, and `UNLOADING_GUEST_DRIVER` is not:
@@ -109,9 +118,10 @@ pub struct FunctionCodes {
 
 impl FunctionCodes {
     /// Every id, for the distinctness check.
-    fn all(&self) -> [u32; 13] {
+    fn all(&self) -> [u32; 14] {
         [
             self.set_guest_system_info,
+            self.set_guest_system_info_ext,
             self.free,
             self.dup_object,
             self.unloading_guest_driver,
@@ -153,6 +163,7 @@ impl FunctionCodes {
     pub fn classify(&self, code: u32) -> RpcFunction {
         match code {
             c if c == self.set_guest_system_info => RpcFunction::SetGuestSystemInfo,
+            c if c == self.set_guest_system_info_ext => RpcFunction::SetGuestSystemInfoExt,
             c if c == self.free => RpcFunction::Free,
             c if c == self.dup_object => RpcFunction::DupObject,
             c if c == self.unloading_guest_driver => RpcFunction::UnloadingGuestDriver,
@@ -194,6 +205,8 @@ pub struct RpcAbi {
 pub enum RpcFunction {
     /// `SET_GUEST_SYSTEM_INFO`.
     SetGuestSystemInfo,
+    /// `SET_GUEST_SYSTEM_INFO_EXT` — the tail call whose status the guest returns.
+    SetGuestSystemInfoExt,
     /// `FREE` — one object (or, when it names a client root, one namespace) goes away.
     Free,
     /// `DUP_OBJECT` — alias an object into another client's namespace.
