@@ -337,8 +337,80 @@ register plane got one this session and it is fine); a **per-generation `match` 
 
 **Not urgent** — GA10x is the target and Hopper is not on the roadmap. But this is the **first
 measured failure** of an architecture claim the project has repeated for months, and the fix is a
-shape, not a patch. Currently pinned by `the_boot_fsm_cannot_be_driven_past_fwsec_on_that_generation`,
-which goes **red if the seam is widened** without answering this.
+shape, not a patch. Was pinned by `the_boot_fsm_cannot_be_driven_past_fwsec_on_that_generation`,
+which went **red if the seam was widened** without answering this.
+
+### ★★★ What was built, and the number the ruling asked for (task #121, 2026-07-31)
+
+**The seam.** `kayfabe_arch::BootSequence` — an implementation of a generation's boot *ordering*,
+sibling to `GspModel`, which always carried its *values*. Three parts, matching the ruling's three
+words:
+
+| the ruling's word | what it became |
+|---|---|
+| **methods** | `BootSequence::on_write` / `::on_read`. `on_write` takes a `RegWrite` carrying **both** the raw `(bar, off, val)` **and** `decode_reg`'s opinion of it, because a generation driven by registers no `GspReg` names has only the former. |
+| **data** | `BootStageDesc` — the named stages of a cold boot, in order, as a table. Plus `ArchBootState`: latches and a byte window the FSM stores and never interprets, so a `&self` sequence can still remember something across writes. |
+| **flow** | `BootStep` — eight arch-independent effects (`StartProcessor`, `FirmwareLoaded`, `Teardown`, `BootArgsLo/Hi`, `PublishBootArgs`, `CommandDoorbell`, `ClearStatusIrq`), applied by `GspFsm::apply`. `mmio_write` no longer names a register. |
+
+`GspModel::boot_sequence()` is **not defaulted**: a default would have to be some generation's
+ordering, which is exactly how one becomes "the" shape. `NoBootSequence` is the explicit
+*not-implemented-yet* answer.
+
+**⊘ Turing did not become the shape.** `FalconSecureBooterBoot` (`crates/kayfabe-gsp/src/seq.rs`) is
+the old `match`, body for body, now *an implementation a generation selects*. It carries no offsets
+and no chip facts — it is written in `GspReg` and in `GspModel`'s predicates — which is why
+`kayfabe-device` (GA10x) and `kayfabe-chips` (Ada) both select it and neither inherits the other's
+ordering. `BootPhase::FwsecRan` was renamed `ProtectedRegionUp` in the same move: FWSEC is one
+firmware's name for one generation's way of reaching that stage.
+
+**★★★ THE NUMBER.** `git diff --numstat e5c0f45..1292f80` — the seam commit to the commit that
+implements GH100's boot ordering — names exactly two files: `crates/kayfabe-chips/src/gh100.rs`
+(+407/−67) and `tests/tests/arch_axis_second_generation.rs` (+499/−95). Lines **changed** in the
+falcon path (`kayfabe-gsp/src/seq.rs`, `kayfabe-device/src/ga10x.rs`, `kayfabe-chips/src/ad10x.rs`)
+and in the logic crates `kayfabe-arch` / `kayfabe-gsp`: **ZERO**. GH100 declares **three** boot
+stages against the falcon regime's **five**, because one FSP command does the work of four falcon
+writes, and a test drives both generations' registers and compares the emitted steps to the declared
+stages.
+
+**★★ Per-GPU, not per-build** (the follow-up ruling: *"multi gpu with each gpu its own arch shouldn't
+become bolt on"*). A boot ordering is reached by a method on a per-instance `Box<dyn GspModel>` value
+— `RegPlane` already holds one — and its mutable state (`ArchBootState`) is a field inside the
+per-instance `GspFsm`. No generics, no compile-time selection, no process-global. So **yes**: two
+`GpuId`s could carry different boot implementations without changing the shape, and `MG-6`
+`HeterogeneousArch` stays a *policy* refusal rather than becoming a structural one.
+`boot_orderings_are_per_instance_values_not_a_build_time_choice` holds three models from two crates
+alive at once and asserts each answers with its own ordering.
+
+**★ A #118 reading corrected.** `GspReg::GspQueueHead` was recorded *absent* on GH100 because
+`hopper/gh100/dev_gsp.h` defines no `NV_PGSP_QUEUE_HEAD` and "the only writer in the tree is the
+Turing HAL". Both halves are true; the inference is wrong. `kgspSetCmdQueueHead` is halified and the
+**Turing binding is the fallback for every chip** that is not a VF or a Tegra part
+(`ogkm-580: src/nvidia/generated/g_kernel_gsp_nvoc.c:664-679`), so GH100 writes `0x110c00+(i)*8` on
+every RPC send (`ogkm-580: kernel_gsp.c:425`). *"This chip's header does not define the symbol"* is a
+fact about headers, not about which registers the driver writes.
+
+**What the seam does NOT solve, said out loud.** `MISSING_TRANSITIONS` is renamed
+`ARCH_LOCAL_BOOT_EVENTS`; three of its four entries are now served through the seam, and the fourth —
+Confidential-Compute WPR2 suppression, `kgspIsWpr2Up_GH100` returning `NV_FALSE` unconditionally
+(`ogkm-580: kernel_gsp_gh100.c:220-236`) — is a **missing observable**, not a missing ordering, and is
+left in the list marked `STILL UNMODELLED`. A test asserts the list still names something unsolved.
+
+⊘ **Still not a Hopper port.** Nothing has touched Hopper silicon; `Gh100FspBoot` enumerates its own
+limits (no FSP reply, no multi-packet NVDM reassembly, no `AINCR`, no teardown).
+
+**What was measured** — run named: task #121, this bench (38 cores), commits `e5c0f45` (seam) and
+`1292f80` (GH100), rebased onto `c97b640`. `cargo test --workspace --no-fail-fast` → **1329 passed /
+0 failed** at `e5c0f45` — the seam adds no net test, it rewrites one in place, so that is its
+parent's count — and **1335 / 0** at `1292f80`, the +6 being the tests named above. clippy
+`-D warnings` clean; `scripts/ci_gates.sh --all` → **ALL GATES CLEAN (19 steps, floor 19)**;
+`claim_ledger.py --gate` unchanged at 383 / 66 / 17. ★ The same two trees measured **1305 / 0** and
+**1311 / 0** before the rebase, against a `b1d3672` baseline of 1305 / 0 — identical deltas; the
+absolute totals moved by +24 because of the four upstream commits. Six induced defects were each watched to fire: dropping
+`FirmwareLoaded` from the FSP command (2 tests red), declaring a stage nothing emits (1), reverting
+the queue-head correction (1), letting GH100 inherit the falcon ordering (6), freezing GH100's
+`HWCFG2` (1), and breaking the falcon regime's own `FirmwareLoaded` guard (**14 failures across 6
+suites**, 1297 passed / 14 failed — which is what proves the moved body is live and that GA10x
+still runs through it).
 
 ## Q11 — how does a driver version express **REMOVAL**? → **ANSWERED 2026-07-31** (task #122)
 
