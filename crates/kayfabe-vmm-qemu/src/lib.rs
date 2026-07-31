@@ -1612,15 +1612,42 @@ impl QemuMachine {
             let (mut ins, _h) = p.installer();
             ins.blocker.take()
         };
-        {
+        // ★★★ THE REFERENCES, BEFORE THE VIEW IS DROPPED — found by the reload test
+        // (`kayfabe-qemu-raw/tests/device_recycle.rs`), 2026-07-31.
+        //
+        // Every reported RAM section carries a reference this device took in `region_add`,
+        // and `*v = View::default()` used to drop the map holding them: a `MrHandle` is an
+        // opaque name, not an owning value, so nothing was released. The hypervisor could
+        // then never finalize a region this device had merely *seen*, and a device that is
+        // unloaded and reloaded leaks one reference per reported section PER LOAD.
+        //
+        // ★ The shipping shell masked it: `nvkvm_exit` unregisters the topology listener
+        // first, and QEMU's `memory_listener_unregister` replays `region_del` over every
+        // flat range (`system/memory.c:3112-3137`), which releases them one at a time. So
+        // the leak was reachable only through the seam, which is precisely where this
+        // archive's contract lives — "unrealize leaves the machine as it found it" was
+        // false for the archive and true only for one caller's ordering.
+        //
+        // ★ Draining rather than iterating is what makes it safe against BOTH orderings:
+        // a section the listener already deleted is no longer in the map, so the shell's
+        // order releases each reference exactly once and this loop finds nothing left.
+        let orphaned: Vec<MrHandle> = {
             let (mut v, _h) = p.view();
+            let mrs = core::mem::take(&mut v.foreign)
+                .into_values()
+                .filter_map(|(_, _, mr)| mr)
+                .collect();
             *v = View::default();
-        }
+            mrs
+        };
         {
             let mut l = p.bar_latch.lock().expect("the BAR latch is never poisoned");
             *l = BarLatch::default();
         }
         assert_leaf_free("withdrawing the device's lifecycle claims");
+        for mr in orphaned {
+            p.host.unref_region(mr);
+        }
         if let Some(b) = blocker {
             p.host.migrate_del_blocker(b);
         }

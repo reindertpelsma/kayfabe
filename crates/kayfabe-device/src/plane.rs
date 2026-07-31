@@ -426,6 +426,25 @@ impl RegPlane {
         s.fsm.phase()
     }
 
+    /// ★★ The emulated GSP's state as a **whole value**, so two device lives can be
+    /// compared rather than a field list somebody chose.
+    ///
+    /// [`RegPlane::phase`] answers one field, which is what a boot test wants and exactly
+    /// what a *recovery* test must not rely on: "is this device indistinguishable from a
+    /// cold one?" quantified over a hand-written list of getters silently stops covering
+    /// the field added next. [`kayfabe_gsp::GspFsm`] derives `PartialEq`, so equality
+    /// against `GspFsm::new` is total by construction and stays total for free — the same
+    /// argument [`kayfabe_gsp::GspFsm::device_reset`] makes for rebuilding the value
+    /// instead of clearing fields, used from the outside.
+    ///
+    /// ★ It is a **clone**, not a borrow: the value lives behind the plane's lock, and
+    /// handing out a guard would let a caller hold the register plane shut.
+    #[must_use]
+    pub fn gsp_state(&self) -> kayfabe_gsp::GspFsm {
+        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.fsm.clone()
+    }
+
     /// Power-on reset: rebuild the FSM. The RAM port and the policy survive, because they
     /// are the *shell's* wiring and not the device's state.
     pub fn device_reset(&self) {

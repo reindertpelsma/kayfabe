@@ -324,6 +324,71 @@ fn three_driver_lifetimes_in_one_process_leave_no_latch_and_no_stale_binding() {
     assert_eq!(w.link_and_drain().len(), 1, "post-reset boot still links");
 }
 
+/// ★★★ **The device reset is TOTAL, asserted as a WHOLE VALUE, after a life that moved
+/// every cursor the state machine has.**
+///
+/// The reset above it is checked on two named fields (`phase`, `queue`), and that is a
+/// **list**: it says nothing about the two ring cursors, the two sequence numbers, the
+/// mailbox shadows, the boot-args conjunction, the region identity or the `INIT_DONE`
+/// latch, and it stops covering whatever field is added next. This asserts equality
+/// against the cold value itself, which is total by construction and stays total for free
+/// — the same argument [`GspFsm::device_reset`] makes for rebuilding the value rather than
+/// clearing fields, turned into a test of it.
+///
+/// ★★ **Why it needs a life that ran, not just a boot.** `cmd_read_ptr` is the field the C
+/// artifact's task `#64` got wrong in the other direction — its `publish` reset the command
+/// ring cursor, which wedged GPU restart permanently. A cursor bug is invisible to any
+/// fixture where the cursor is still zero, so this drives four separate doorbells and
+/// checks each one decoded **exactly its own** command: a consumer whose read pointer were
+/// not advancing would re-decode the first command, or refuse on a sequence gap.
+///
+/// ★ Measured 2026-07-31: with `device_reset` patched to carry `cmd_read_ptr` across, this
+/// is the only test in the workspace that goes red.
+#[test]
+fn a_device_reset_after_a_life_that_moved_every_cursor_is_total() {
+    let mut w = World::new(P580, MODEL_A);
+    let cold = w.fsm.clone();
+    assert_eq!(cold, GspFsm::new(P580.abi()), "the world starts cold");
+
+    w.boot();
+    assert_eq!(
+        w.link_and_drain().len(),
+        1,
+        "the guest linked and got INIT_DONE"
+    );
+
+    for i in 0..4u32 {
+        w.guest
+            .send(&mut w.ram, FN_RM_CONTROL, 300 + i, &[9; 32])
+            .expect("the ring has room");
+        let r = w.doorbell().expect("serviced");
+        assert_eq!(
+            r.commands.len(),
+            1,
+            "★ doorbell {i} decoded exactly ITS OWN command — a read pointer that were not \
+             advancing would re-decode the first one or refuse on a sequence gap, and this \
+             is what makes the cursor's movement observable at all",
+        );
+        assert_eq!(w.guest.recv(&mut w.ram).expect("a clean stream").len(), 1);
+    }
+
+    let ran = w.fsm.clone();
+    assert_ne!(
+        ran, cold,
+        "precondition: a life that booted, bound its queues and ran four commands is not a \
+         cold device",
+    );
+    assert_eq!(ran.phase(), BootPhase::Running);
+    assert!(matches!(w.fsm.queue(), QueueState::Bound { .. }));
+
+    assert_eq!(w.fsm.device_reset(), Transition::E11);
+    assert_eq!(
+        w.fsm, cold,
+        "★★★ the reset must rebuild the value — EVERY field, including both ring cursors \
+         and both sequence numbers, not the ones somebody remembered",
+    );
+}
+
 /// ★ The boot-args pair completes on **whichever half lands second** ([inferred] I4).
 ///
 /// ogkm writes lo then hi (`kgspProgramLibosBootArgsAddr_TU102`, byte-identical at both
