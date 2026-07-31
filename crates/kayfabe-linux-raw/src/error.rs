@@ -8,6 +8,7 @@
 //! passes because the call overflowed somewhere unrelated has tested nothing.
 
 use crate::cache::CachePolicy;
+use crate::scm_unsafe::DescriptorKind;
 use core::fmt;
 
 /// A refusal from the raw-OS adapter.
@@ -145,6 +146,52 @@ pub enum RawError {
         /// What was reported.
         reported: i64,
     },
+    /// ★★★ A descriptor that arrived over a socket is not the kind the protocol promised
+    /// it would be.
+    ///
+    /// The message body carries the sender's *claim*; [`crate::descriptor_kind`] asks the
+    /// kernel what the object actually **is**, and the two are independent. On the VMM's
+    /// receive side the peer is the isolate — deliberately the less trusted end — so this
+    /// is the refusal that stands between "the isolate says it opened the GPU for you" and
+    /// the VMM `mmap`ping whatever came back and installing it as a guest memslot.
+    ///
+    /// See `isolate_vmm_fd_crossing.md` §5.
+    DescriptorKindRefused {
+        /// What the protocol promised.
+        expected: DescriptorKind,
+        /// What the kernel says arrived instead.
+        actual: DescriptorKind,
+    },
+    /// ★★ A peer attached more descriptors to one frame than the boundary allows.
+    ///
+    /// Raised on `MSG_CTRUNC`, which is the *only* signal that this happened: the kernel
+    /// silently drops the excess and closes it, so a receiver that ignores the flag
+    /// believes it got everything while the sender believes it handed over more. The
+    /// frame is refused **whole** rather than served from the prefix that fitted — a peer
+    /// must not get to choose which of its descriptors we act on.
+    ///
+    /// Unbounded descriptor delivery is a table-exhaustion DoS from the less-trusted side;
+    /// see `isolate_vmm_fd_crossing.md` §6.
+    TooManyDescriptors {
+        /// The most this frame was willing to accept.
+        limit: usize,
+    },
+    /// ★★★ A descriptor minted by, or received from, one isolate was offered to a
+    /// **different** one.
+    ///
+    /// Per-process isolates are the architecture, and `#14` — two concurrent CUDA
+    /// applications — is this rewrite's founding problem. A descriptor crossing from
+    /// isolate A to isolate B is a boundary breach, not an untidiness: it is a live
+    /// handle onto A's GPU objects landing in B's table. Refused by name rather than
+    /// prevented by topology, because topology is an assumption and this is a check.
+    ///
+    /// See `isolate_vmm_fd_crossing.md` §7.
+    ForeignDescriptor {
+        /// The isolate the descriptor came from (`u64::MAX` for a VMM-minted one).
+        origin: u64,
+        /// The isolate it was about to be handed to.
+        target: u64,
+    },
 }
 
 impl fmt::Display for RawError {
@@ -207,6 +254,21 @@ impl fmt::Display for RawError {
                 f,
                 "sysconf(_SC_PAGESIZE) reported {reported}, which cannot be a host page \
                  size (expected a power of two in [4096, 65536])"
+            ),
+            RawError::DescriptorKindRefused { expected, actual } => write!(
+                f,
+                "the protocol promised {expected}, but the descriptor the peer attached is \
+                 {actual}"
+            ),
+            RawError::TooManyDescriptors { limit } => write!(
+                f,
+                "the peer attached more than {limit} descriptor(s) to one frame (MSG_CTRUNC); \
+                 the frame is refused whole, not served from the prefix that fitted"
+            ),
+            RawError::ForeignDescriptor { origin, target } => write!(
+                f,
+                "a descriptor from isolate {origin} cannot be handed to isolate {target}: \
+                 per-process isolates do not share descriptors"
             ),
         }
     }

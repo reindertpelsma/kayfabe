@@ -68,10 +68,12 @@
 //! - [`loopback`] — the transport's fixture, which is emphatically not a model of RM.
 
 pub mod child;
+pub mod fdcross;
 pub mod isolate;
 pub mod loopback;
 pub mod proto;
 pub mod rm;
 
+pub use fdcross::{CrossedFd, FdFrameError, FdOrigin, read_frame_with_fds, write_frame_with_fds};
 pub use isolate::{HostIsolate, HostIsolateFactory, RmMode, embedded_isolate_bytes};
 pub use loopback::ParkVerb;

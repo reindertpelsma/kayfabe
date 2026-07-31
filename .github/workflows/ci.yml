@@ -1096,7 +1096,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:77 kayfabe-qemu-raw:46"
+          AUDITED="kayfabe-linux-raw:86 kayfabe-qemu-raw:46"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -1363,6 +1363,34 @@ jobs:
           #    RTX 3090 / 580.159.04 — i.e. the seam this fence protects is live, not
           #    hypothetical.
           #    ★ No syscall surface is added: the fence is one instruction and no fd.
+          #
+          # ★★ 77 -> 86 THE ISOLATE ⇄ VMM DESCRIPTOR CROSSING (task #131). Nine blocks, all
+          #    in the new `scm_unsafe.rs`, and there is no new SHAPE here — every one is a
+          #    `libc` call whose arguments are built in the same function, plus the two
+          #    pointer walks the `cmsg` ABI has no safe expression for. See
+          #    `docs/design/isolate_vmm_fd_crossing.md`.
+          #      `send_with_fds` (3) — the control-message BUILD (`CMSG_FIRSTHDR`/`CMSG_DATA`
+          #        writes into a `[u64; 8]` whose size is asserted against `CMSG_SPACE` on
+          #        the line above the block, not assumed), the `sendmsg` itself, and the
+          #        tail `send` for a stream socket's partial accept. The tail is a plain
+          #        `send` deliberately: re-entering `sendmsg` would attach the descriptors a
+          #        SECOND time.
+          #      `recv_with_fds` (3) — `CMSG_SPACE` (a pure size computation, relaxed only
+          #        because libc declares it unsafe), the `recvmsg`, and the cmsg WALK. The
+          #        walk's invariant is the one worth reading: the descriptor count comes
+          #        from the kernel's own `cmsg_len`, never from a peer-supplied number in
+          #        the message body, and each integer is handed to `adopt_fd` on the
+          #        expression that reads it — so a refusal downstream closes it by `Drop`
+          #        rather than by an arm someone must remember to write.
+          #      `descriptor_kind` (2) — `fstat` and the matching `assume_init`, split
+          #        because the second is only sound on the first's success path.
+          #      `unsafe_zeroed_msghdr` (1) — `msghdr` has private padding on some targets
+          #        and cannot be built with a struct literal portably; all-zeroes is a valid
+          #        inhabitant of a POD C struct and is the correct "no ancillary data".
+          #    ★ Watched to fire (5 bites, `crates/kayfabe-isolate-host/tests/fd_crossing.rs`):
+          #      removing the kind check fails 3 tests; ignoring `MSG_CTRUNC` fails 2;
+          #      removing the cross-isolate check fails 3; dropping `MSG_CMSG_CLOEXEC` fails
+          #      the exec test; `mem::forget`ing a refused descriptor fails 2.
           #
           # kayfabe-qemu-raw (0) — L2-Q stage Q0. Nothing yet, and §2.2's "itemise the
           # second crate's blocks exactly as the first crate's 37 are" is therefore

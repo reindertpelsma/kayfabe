@@ -94,8 +94,8 @@
 //! ```text
 //! $ ls crates/kayfabe-linux-raw/src/*_unsafe.rs
 //! chardev_unsafe.rs   epoll_unsafe.rs   host_fd_unsafe.rs   kvm_unsafe.rs
-//! mapping_unsafe.rs   sandbox_unsafe.rs signal_unsafe.rs    spawn_unsafe.rs
-//! sysconf_unsafe.rs   vcpu_unsafe.rs    window_unsafe.rs
+//! mapping_unsafe.rs   sandbox_unsafe.rs scm_unsafe.rs       signal_unsafe.rs
+//! spawn_unsafe.rs     sysconf_unsafe.rs vcpu_unsafe.rs      window_unsafe.rs
 //! ```
 //!
 //! §4.1.1's standing rule: the dangerous keyword may appear **only** in a file whose
@@ -276,6 +276,7 @@ mod kvm_unsafe;
 mod mapping_unsafe;
 pub mod page_size;
 mod sandbox_unsafe;
+mod scm_unsafe;
 mod signal_unsafe;
 mod spawn_unsafe;
 mod sysconf_unsafe;
@@ -309,6 +310,9 @@ pub use mapping_unsafe::{
     Backing, HostProt, MappedRegion, PlacementId, Reservation, VolatileRegion, release_fence,
 };
 pub use page_size::HostPageSize;
+pub use scm_unsafe::{
+    DescriptorKind, MAX_FDS_PER_FRAME, descriptor_kind, recv_with_fds, require_kind, send_with_fds,
+};
 pub use signal_unsafe::{
     BREAK_SIGNAL, ThreadId, current_thread_id, install_break_handler, interrupt_thread,
 };
