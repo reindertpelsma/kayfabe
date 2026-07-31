@@ -57,7 +57,19 @@ pub mod plane;
 use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
 
-pub use plane::{Counters, NanoClock, ReadOutcome, RegPlane, SteppingClock, WriteOutcome};
+pub use plane::{
+    Counters, NanoClock, ReadOutcome, RefusingRam, RegPlane, SteppingClock, WriteOutcome,
+};
+
+/// ★ The guest-RAM port, re-exported — [`RegPlane::set_ram`]'s argument type.
+///
+/// A shell cannot install a port whose trait it cannot name, and before stage Q5 nobody
+/// had tried: the only implementation was [`RefusingRam`], which lives here. Re-exporting
+/// is deliberately preferred to making every shell depend on `kayfabe-gsp` directly —
+/// `set_ram` is *this* crate's seam, so its vocabulary should be reachable from *this*
+/// crate, and an adapter that had to name the state-machine crate to wire memory would be
+/// reaching past the port it is plugging into.
+pub use kayfabe_gsp::{GuestRam, RamRefused};
 
 /// A register whose value is a constant of the silicon.
 ///

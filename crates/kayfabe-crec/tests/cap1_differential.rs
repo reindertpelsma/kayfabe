@@ -208,7 +208,8 @@ fn without_a_named_reconstruction_the_capture_stops_at_the_bind_and_gsp_d8_is_wh
         r.txns[txn].refusal,
         Some(GspFault::GuestRam(kayfabe_gsp::RamRefused {
             gpa: 0x1_2720_0000,
-            len: 1032
+            len: 1032,
+            why: kayfabe_crec::oracle::UNOBSERVED,
         })),
         "and it refuses by name rather than reading zeros"
     );

@@ -43,11 +43,11 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use kayfabe_device::{ChipError, ChipProfile, NanoClock, RegPlane};
-use kayfabe_vmm::{BarId, VmmError};
+use kayfabe_device::{ChipError, ChipProfile, NanoClock, RamRefused, RegPlane};
+use kayfabe_vmm::{BarId, Vmm, VmmError};
 use kayfabe_vmm_qemu::host::{BarPlacement, MrHandle, QemuHost, SectionDesc, SectionFacts};
 use kayfabe_vmm_qemu::slots::SlotPlane;
-use kayfabe_vmm_qemu::{MachineConfig, QemuMachine};
+use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 
 /// The wire ABI this build speaks.
 ///
@@ -65,7 +65,14 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine};
 /// have the archive write one `u64` past the end of a C caller's allocation: the `sizeof`
 /// handshake covers the ops table and the realize configuration, and it does not cover this
 /// structure. The version does.
-pub const ABI_VERSION: u32 = 3;
+/// ★ Bumped to **4** at stage Q5, for the same reason twice over: two entry points were
+/// added (`kayfabe_shim_regs_attach_ram` / `_detach_ram`) and [`KayfabeRegWrite`] grew four
+/// fields. The entry points alone would be a link error on a stale shim, which is loud; the
+/// structure is the quiet one — an old shim would allocate the ABI-3 layout and this
+/// archive would write 32 bytes past the end of it.
+///
+/// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
+pub const ABI_VERSION: u32 = 4;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -458,6 +465,100 @@ impl Shim {
 // The register plane (stage Q4) — the safe half
 // =====================================================================================
 
+/// ★★★ **Stage Q5: the register plane's guest-RAM port**, over the realized memory plane.
+///
+/// # What this joins, and why it needed a type
+///
+/// The two planes are separate objects with separate lifetimes — the register plane is
+/// built at the device's `realize`, the memory plane only once a base-address register has
+/// been programmed — so `kayfabe_device::RegPlane` is constructed with
+/// [`kayfabe_device::RefusingRam`] and the shell installs the real port later, through
+/// [`kayfabe_device::RegPlane::set_ram`]. This is the thing it installs.
+///
+/// # ★★ It is still a REFUSER, and that is the whole design
+///
+/// [`kayfabe_vmm::Vmm::gpa_read`]/[`kayfabe_vmm::Vmm::gpa_write`] resolve through
+/// [`kayfabe_vmm::GuestRamMap`], which proves a range lies wholly inside one region
+/// **declared as memory** before anything is copied, and refuses otherwise. So the
+/// addresses this port serves are exactly the ones the hypervisor's own topology listener
+/// reported as RAM, and:
+///
+/// - an address nothing backs is [`kayfabe_vmm::VmmError::BadGpa`] — refused;
+/// - an address that resolves to a *device* register window (another device's BAR, the
+///   platform's MMIO, **our own trapped registers**) is
+///   [`kayfabe_vmm::VmmError::NonRamGpa`] — refused, and separately, because serving it
+///   would mean re-entering the register plane through the memory plane.
+///
+/// Neither ever reads as zero. That is the property the previous stage's named refusal
+/// bought and the property this stage must not spend: a plausible answer to an address we
+/// do not back is how a guest is sent into a loop nobody can see.
+///
+/// ★ **The reason survives the crossing.** `RamRefused` carries a `why`, and it is filled
+/// from the error's own variant rather than `map_err(|_| …)`-ed away — the two refusals
+/// above are near neighbours by address and completely different findings, and a port that
+/// reported them identically would cost a boot to tell apart.
+///
+/// # Cheap to hold
+///
+/// [`kayfabe_vmm_qemu::QemuVmm`] is a handle onto the machine's plane, not a copy of it,
+/// so installing one costs an `Arc` clone and the register plane's lock is the only
+/// serialization added.
+#[derive(Debug)]
+pub struct MachineRam {
+    vmm: QemuVmm,
+}
+
+impl MachineRam {
+    /// A port onto one realized machine's guest memory.
+    #[must_use]
+    pub fn new(vmm: QemuVmm) -> MachineRam {
+        MachineRam { vmm }
+    }
+
+    /// The refusing sentence for one adapter error, **by variant**.
+    ///
+    /// ★ Every arm is written out. A catch-all would compile and would be the exact
+    /// `map_err(|_| …)` the GPA-accessor gate's failure text forbids one crate over: the
+    /// discarded variant is the finding.
+    fn why(e: &VmmError) -> &'static str {
+        match e {
+            VmmError::BadGpa { .. } => {
+                "no guest-physical region covers that range as a unit; nothing is there, so \
+                 there is nothing to read and answering zero would be an invention"
+            }
+            VmmError::NonRamGpa { .. } => {
+                "that range resolves to a device register window, not to guest memory; the \
+                 emulated GSP may only follow the guest's pointers into RAM"
+            }
+            VmmError::BadSlot(_) => {
+                "the region the range resolved into is no longer installed; the memory plane \
+                 retired it under us"
+            }
+            VmmError::Unsupported(m) => m,
+            VmmError::HostRefused { what, .. } => what,
+        }
+    }
+}
+
+impl kayfabe_device::GuestRam for MachineRam {
+    fn read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), RamRefused> {
+        let len = buf.len();
+        self.vmm.gpa_read(gpa, buf).map_err(|e| RamRefused {
+            gpa,
+            len,
+            why: MachineRam::why(&e),
+        })
+    }
+
+    fn write(&mut self, gpa: u64, bytes: &[u8]) -> Result<(), RamRefused> {
+        self.vmm.gpa_write(gpa, bytes).map_err(|e| RamRefused {
+            gpa,
+            len: bytes.len(),
+            why: MachineRam::why(&e),
+        })
+    }
+}
+
 /// The driver version the emulated GSP answers as.
 ///
 /// ★★ **Hardcoded, and named here as the one place a bolt-on starts.** The device has no
@@ -682,6 +783,38 @@ impl Regs {
     #[must_use]
     pub fn plane(&self) -> &RegPlane {
         &self.plane
+    }
+
+    /// ★★★ **Stage Q5.** Give the register plane the realized machine's guest memory.
+    ///
+    /// # Why it is a separate call and not a constructor argument
+    ///
+    /// The order is fixed by the hypervisor, not by us: a PCI device realizes — and builds
+    /// its register plane — while its base-address registers are still unprogrammed, and
+    /// the memory plane cannot realize until one has a base, because it installs slots at
+    /// it. So there is a real interval during which registers are being answered and there
+    /// is no memory plane to answer *from*, and that interval must have a defined
+    /// behaviour rather than a null check. It does: [`kayfabe_device::RefusingRam`], which
+    /// refuses by name.
+    ///
+    /// Idempotent, and re-attachable: [`kayfabe_device::RegPlane::set_ram`] takes `&self`
+    /// and the plane's own lock, so a plane already answering registers on one vCPU
+    /// acquires memory without being rebuilt and without a window in which it answers
+    /// something else.
+    pub fn attach_ram(&self, shim: &Shim) {
+        self.plane
+            .set_ram(Box::new(MachineRam::new(shim.machine().vmm())));
+    }
+
+    /// Put the plane back to refusing every guest-memory access, by name.
+    ///
+    /// ★ The teardown half, and it is **not** optional. The port holds a handle onto the
+    /// memory plane; leaving it installed across an unrealize would mean the register
+    /// surface — which keeps answering, deliberately — could still be asked to follow a
+    /// guest pointer into a machine that has released its slots. Refusing is the honest
+    /// answer at that point and it is the one this restores.
+    pub fn detach_ram(&self) {
+        self.plane.set_ram(Box::new(kayfabe_device::RefusingRam));
     }
 
     /// Serve one register read.

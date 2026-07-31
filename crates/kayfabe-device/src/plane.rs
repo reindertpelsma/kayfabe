@@ -65,15 +65,28 @@
 //! closes, this arm becomes a refusal and the counter is how anyone knows what that will
 //! cost.
 //!
-//! # ★ Guest RAM is a NAMED REFUSAL at this stage, not silence
+//! # ★★ Guest RAM is a NAMED REFUSAL — before stage Q5 *and after it*
 //!
 //! [`kayfabe_gsp::GspFsm::mmio_write`] needs a [`GuestRam`] the moment a write is a queue
-//! doorbell. Stage Q4 wires *registers*; the memory plane's realize is a separate object
-//! with a separate lifetime, and joining them is stage Q5. So the plane is constructed with
-//! [`RefusingRam`], every access is counted, and the fault the FSM produces is carried out
-//! to the caller as a tag. A guest that rings the doorbell gets
-//! `GspFault::GuestRam(RamRefused…)` reported by name — which is a diagnosis, where a
-//! zero-filled read would have been a wrong answer nobody could see.
+//! doorbell. Stage Q4 wired *registers* only; the memory plane's realize is a separate
+//! object with a separate lifetime, and joining them is stage **Q5**, which is
+//! [`RegPlane::set_ram`].
+//!
+//! The construction default is still [`RefusingRam`] and that has not moved, because the
+//! default is what a shell that forgot to wire gets, and [`NO_RAM_PORT`] says exactly that
+//! in one sentence. What Q5 changes is only *which* implementation a realized device
+//! carries — and the replacement is a refuser too: the adapter's port resolves through the
+//! guest-physical region map, which proves a range is memory before touching it and
+//! refuses everything else **by name**. So at both stages the answer to an address nothing
+//! backs is `GspFault::GuestRam(RamRefused…)`, carried to the caller with its address, its
+//! length and its reason ([`WriteOutcome::ram_refusal`]).
+//!
+//! That is the property to preserve, and it is worth stating why in the negative: a
+//! zero-filled read of a message queue produces a well-formed-looking element with a zero
+//! checksum — a *wrong answer the guest acts on* — and the closest cautionary case in this
+//! tree is the free-running counter above, where a defaulted zero was a plausible answer
+//! and therefore an unkillable silent spin. A refusal is never plausible, which is exactly
+//! what makes it a diagnosis.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -93,11 +106,20 @@ use crate::{ChipError, ChipProfile};
 #[derive(Debug, Default, Clone, Copy)]
 pub struct RefusingRam;
 
+/// [`RefusingRam`]'s one sentence, as [`RamRefused::why`].
+///
+/// ★ It names the *absence*, not a failure: a plane whose shell never called
+/// [`RegPlane::set_ram`] has no memory to reach, and a reader who sees this has a wiring
+/// question, not a guest-behaviour question. Those two are the near neighbours here.
+pub const NO_RAM_PORT: &str = "the register plane has no guest-RAM port installed; the shell never called set_ram, \
+     so this device cannot reach guest memory at all";
+
 impl GuestRam for RefusingRam {
     fn read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), RamRefused> {
         Err(RamRefused {
             gpa,
             len: buf.len(),
+            why: NO_RAM_PORT,
         })
     }
 
@@ -105,6 +127,7 @@ impl GuestRam for RefusingRam {
         Err(RamRefused {
             gpa,
             len: bytes.len(),
+            why: NO_RAM_PORT,
         })
     }
 }
@@ -245,6 +268,14 @@ pub struct WriteOutcome {
     pub claimed: bool,
     /// The fault the FSM raised, by tag, if it raised one.
     pub fault: Option<&'static str>,
+    /// ★★ The guest-RAM refusal behind a `GspFault::GuestRam`, kept **whole**.
+    ///
+    /// The tag alone says *which kind* of fault; this says *which address*, *how many
+    /// bytes* and *why the port would not serve it*. Stage Q4 shipped without it because
+    /// there was exactly one reason a RAM access could fail (there was no RAM port); the
+    /// moment a real port was wired in there were several, and a diagnosis that cannot
+    /// distinguish them costs a boot each time.
+    pub ram_refusal: Option<RamRefused>,
     /// The status-queue interrupt should be announced to the guest.
     pub raise_status_irq: bool,
     /// How many transitions fired.
@@ -489,6 +520,7 @@ impl RegPlane {
             return WriteOutcome {
                 claimed: false,
                 fault: None,
+                ram_refusal: None,
                 raise_status_irq: false,
                 transitions: 0,
                 commands: 0,
@@ -514,6 +546,7 @@ impl RegPlane {
                 WriteOutcome {
                     claimed: true,
                     fault: None,
+                    ram_refusal: None,
                     raise_status_irq: report.raise_status_irq,
                     transitions: report.transitions.len(),
                     commands: report.commands.len(),
@@ -521,12 +554,20 @@ impl RegPlane {
             }
             Err(f) => {
                 self.c.faults.fetch_add(1, Ordering::Relaxed);
-                if matches!(f, GspFault::GuestRam(_)) {
-                    self.c.ram_refusals.fetch_add(1, Ordering::Relaxed);
-                }
+                // ★ Matched for its PAYLOAD, not merely for its shape: the counter says
+                // how many, and `ram_refusal` carries which address and why out to the
+                // shell, which is the only channel an operator ever reads.
+                let ram_refusal = match f {
+                    GspFault::GuestRam(r) => {
+                        self.c.ram_refusals.fetch_add(1, Ordering::Relaxed);
+                        Some(r)
+                    }
+                    _ => None,
+                };
                 WriteOutcome {
                     claimed: true,
                     fault: Some(f.fault_tag().0),
+                    ram_refusal,
                     raise_status_irq: false,
                     transitions: 0,
                     commands: 0,

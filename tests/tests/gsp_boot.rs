@@ -2245,7 +2245,8 @@ fn loading_a_region_walks_its_own_table_and_names_the_entry_that_is_wrong() {
         RegionMap::load(&mut empty, 0x9_0000, 1, 4096, 64),
         Err(GspFault::GuestRam(kayfabe_gsp::RamRefused {
             gpa: 0x9_0000,
-            len: 8
+            len: 8,
+            why: "this fake guest has no page at that address",
         })),
     );
 }

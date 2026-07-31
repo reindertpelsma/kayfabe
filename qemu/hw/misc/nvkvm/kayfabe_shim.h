@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 3u
+#define KAYFABE_SHIM_ABI 4u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -233,6 +233,17 @@ typedef struct KayfabeChipIdentity {
 typedef struct KayfabeRegWrite {
     const uint8_t *fault;
     uint64_t       fault_len;
+    /* ★★ Stage Q5.  WHY a guest-RAM access was refused, in the port's own words, or NULL.
+     * Also (pointer, length), also NOT NUL-terminated.
+     *
+     * Non-NULL exactly when the fault was a guest-RAM refusal — the only fault that has an
+     * address — so it doubles as the validity flag for `ram_gpa` and `ram_len`, which have
+     * no reserved value of their own: guest-physical address zero is an ordinary address,
+     * and a length of zero is a legal access. */
+    const uint8_t *ram_why;
+    uint64_t       ram_why_len;
+    uint64_t       ram_gpa;            /* valid only when ram_why != NULL */
+    uint64_t       ram_len;            /* valid only when ram_why != NULL */
     uint32_t       transitions;
     uint32_t       commands;
     int32_t        claimed;            /* the register model owns this offset */
@@ -272,6 +283,26 @@ int32_t kayfabe_shim_regs_create(uint16_t device_id, void **out_handle,
                                  const uint8_t **out_msg, uint64_t *out_msg_len);
 
 void    kayfabe_shim_regs_destroy(void *handle);
+
+/* ★★★ STAGE Q5.  Join the two planes: give the register plane the realized memory plane's
+ * guest RAM, so the emulated GSP can follow the guest's own pointers.
+ *
+ * Call it once the memory plane has realized, which is LATER than the register plane's
+ * creation — a memory plane needs a programmed base-address register and a register plane
+ * does not.  Until then, and again after _detach_ram, every guest-memory access the
+ * emulated GSP attempts is refused BY NAME rather than answered with zeros.
+ *
+ * Returns KAYFABE_E_MALFORMED if either handle is empty (the shim called in the wrong
+ * order).  The symptom of the missing call is a device that boots normally and then refuses
+ * one specific register write thousands of accesses in, so it is worth a code. */
+int32_t kayfabe_shim_regs_attach_ram(void *regs, void *shim);
+
+/* Put the register plane back to refusing every guest-memory access, by name.
+ *
+ * ★ Call this BEFORE kayfabe_shim_unrealize.  The register surface keeps answering across a
+ * memory-plane teardown by design, so the port that reaches INTO the memory plane has to be
+ * withdrawn explicitly — a lifetime the C side cannot express any other way. */
+void    kayfabe_shim_regs_detach_ram(void *regs);
 
 /* ★★ THE HOT PATH.  One trapped register access, one value.  `size` is the access width in
  * bytes and the answer is masked to it.  An empty handle reads zero — a device whose plane

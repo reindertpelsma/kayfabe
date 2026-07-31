@@ -100,7 +100,11 @@ impl FakeRam {
             let base = at & !(PAGE - 1);
             let within = (at - base) as usize;
             let take = ((PAGE as usize) - within).min(len - done);
-            let page = self.pages.get_mut(&base).ok_or(RamRefused { gpa, len })?;
+            let page = self.pages.get_mut(&base).ok_or(RamRefused {
+                gpa,
+                len,
+                why: "this fake guest has no page at that address",
+            })?;
             f(&mut page[within..within + take], done);
             done += take;
         }

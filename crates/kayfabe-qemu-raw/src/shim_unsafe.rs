@@ -86,6 +86,18 @@ pub struct KayfabeRegWrite {
     pub fault: *const u8,
     /// Its length in bytes.
     pub fault_len: u64,
+    /// ★★ Stage Q5: **why** a guest-RAM access was refused, in the port's own words, or
+    /// null. Non-null exactly when the fault was a guest-RAM refusal, which is the only
+    /// fault carrying an address — so it is also the validity flag for the two fields
+    /// below, which have no reserved value of their own (a guest-physical address of zero
+    /// is a perfectly ordinary address).
+    pub ram_why: *const u8,
+    /// `ram_why`'s length in bytes, or zero.
+    pub ram_why_len: u64,
+    /// The guest-physical address refused. Meaningful only when `ram_why` is non-null.
+    pub ram_gpa: u64,
+    /// The refused access's length in bytes. Meaningful only when `ram_why` is non-null.
+    pub ram_len: u64,
     /// How many boot transitions fired.
     pub transitions: u32,
     /// How many commands were decoded off the command queue.
@@ -103,9 +115,17 @@ impl KayfabeRegWrite {
             None => (core::ptr::null(), 0),
             Some(m) => (m.as_ptr(), m.len() as u64),
         };
+        let (ram_why, ram_why_len, ram_gpa, ram_len) = match o.ram_refusal {
+            None => (core::ptr::null(), 0, 0, 0),
+            Some(r) => (r.why.as_ptr(), r.why.len() as u64, r.gpa, r.len as u64),
+        };
         KayfabeRegWrite {
             fault,
             fault_len,
+            ram_why,
+            ram_why_len,
+            ram_gpa,
+            ram_len,
             transitions: o.transitions as u32,
             commands: o.commands as u32,
             claimed: i32::from(o.claimed),
@@ -942,6 +962,51 @@ pub unsafe extern "C" fn kayfabe_shim_regs_create(
             msg.set(m);
             s.code()
         }
+    }
+}
+
+/// ★★★ **Stage Q5.** Join the two planes: give the register plane the realized memory
+/// plane's guest RAM.
+///
+/// Called once the memory plane has realized — which is *later* than the register plane's
+/// creation, because a memory plane needs a programmed base-address register and a
+/// register plane does not. Until it is called, and again after
+/// [`kayfabe_shim_regs_detach_ram`], every guest-memory access the emulated GSP attempts is
+/// refused by name.
+///
+/// Returns [`Status::Ok`], or [`Status::Malformed`] if either handle is empty — which is
+/// the C shim calling in the wrong order, and is worth a code rather than a silent no-op:
+/// the symptom of the missing call is a device that boots normally and then refuses one
+/// specific write thousands of records in.
+///
+/// # Safety
+/// `regs` must be empty or one [`kayfabe_shim_regs_create`] returned and not yet destroyed;
+/// `shim` must be empty or one [`kayfabe_shim_realize`] returned and not yet unrealized.
+/// The memory plane must outlive the register plane's use of it, which the C shim
+/// discharges by calling [`kayfabe_shim_regs_detach_ram`] before `kayfabe_shim_unrealize`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_regs_attach_ram(regs: *mut c_void, shim: *mut c_void) -> i32 {
+    let (Some(regs), Some(shim)) = (borrow_regs(regs), borrow(shim)) else {
+        return Status::Malformed.code();
+    };
+    regs.attach_ram(shim);
+    Status::Ok.code()
+}
+
+/// Put the register plane back to refusing every guest-memory access, by name.
+///
+/// ★ The C shim calls this **before** `kayfabe_shim_unrealize`, and the ordering is the
+/// point: the register surface keeps answering across a memory-plane teardown by design,
+/// so the port that reaches into the memory plane has to be withdrawn explicitly rather
+/// than implied by a lifetime the C cannot see.
+///
+/// # Safety
+/// `regs` must be empty, or one [`kayfabe_shim_regs_create`] returned and not yet
+/// destroyed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_regs_detach_ram(regs: *mut c_void) {
+    if let Some(regs) = borrow_regs(regs) {
+        regs.detach_ram();
     }
 }
 

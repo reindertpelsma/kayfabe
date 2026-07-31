@@ -463,7 +463,12 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // that field. This is the compile-time half.
     assert_eq!(size_of::<KayfabeChipIdentity>(), 32);
     assert_eq!(align_of::<KayfabeChipIdentity>(), 8);
-    assert_eq!(size_of::<KayfabeRegWrite>(), 32);
+    // ★ 32 -> 64 at stage Q5: two more (pointer, length) pairs and two more u64s, so the
+    // emulated GSP's guest-RAM refusals carry their address and their reason across the
+    // seam instead of only their tag. Exactly the change the ABI version exists for — the
+    // `struct_size` handshake does not cover this structure, so nothing but the version and
+    // this line stands between an ABI-3 shim and 32 bytes written past its allocation.
+    assert_eq!(size_of::<KayfabeRegWrite>(), 64);
     assert_eq!(size_of::<KayfabeRegAudit>(), 12 * size_of::<u64>());
 }
 
@@ -581,4 +586,188 @@ fn the_counter_the_c_shim_serves_runs_at_wall_clock_rate() {
         regs.audit().ptimer_reads >= 4,
         "the counter's readings must be separately countable across the seam"
     );
+}
+
+// =====================================================================================
+// Stage Q5 — the register plane's guest-RAM port, and the three answers it can give
+// =====================================================================================
+
+/// The offsets `kgspProgramLibosBootArgsAddr_TU102` writes, in its order, plus the
+/// STARTCPU that puts the boot state machine in the phase where the pair means anything.
+///
+/// ★ Written out rather than derived from the register model: this file's whole job is to
+/// be the *second* description that would disagree if the first one moved.
+const GSP_CPUCTL: u64 = 0x0011_0100;
+const GSP_MAILBOX0: u64 = 0x0011_0040;
+const GSP_MAILBOX1: u64 = 0x0011_0044;
+const STARTCPU: u64 = 0x2;
+
+/// Where a test guest keeps its LibOS boot-args array. Any RAM address will do; what
+/// matters is that the region map either does or does not cover it.
+const BOOT_ARGS_GPA: u64 = 0x1_0000_0000;
+
+/// How much guest RAM the bind actually walks: the LibOS init-args array's own declared
+/// maximum of 4096 entries at 32 bytes each
+/// (`ogkm-580: src/common/uproc/os/common/include/libos_init_args.h:31, 49-56`).
+///
+/// ★ Not a round number picked to make a test pass. A first draft declared 64 KiB and the
+/// scan ran off the end of it — reported as a refusal naming the exact address it reached,
+/// which is the port doing its job on the test's own bad input. Sizing the region to the
+/// scan is what makes "the array carries no RMARGS entry" the reason the bind stops.
+const LIBOS_ARRAY_LEN: u64 = 4096 * 32;
+
+/// Drive the guest's own boot-args write sequence and return the write that triggers the
+/// bind — the one the emulated GSP answers by following the guest's pointer.
+fn drive_the_boot_args_pair(regs: &kayfabe_qemu_raw::shim::Regs) -> kayfabe_device::WriteOutcome {
+    let _ = regs.write(0, GSP_CPUCTL, 4, STARTCPU);
+    let _ = regs.write(0, GSP_MAILBOX0, 4, BOOT_ARGS_GPA & 0xFFFF_FFFF);
+    regs.write(0, GSP_MAILBOX1, 4, BOOT_ARGS_GPA >> 32)
+}
+
+#[test]
+fn without_the_port_the_refusal_names_the_missing_wiring_not_the_guests_address() {
+    // ★★ THE BITE for `attach_ram`. This is the state stage Q4 shipped in and the state a
+    // shell that forgot to call `attach_ram` is in, and the two must be the same sentence —
+    // otherwise "the port is missing" and "the guest asked for something that is not there"
+    // read alike, which is a whole debugging session. Delete the `attach_ram` call in
+    // `nvkvm_shim_realize` and every Q5 test below produces THIS sentence.
+    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    let w = drive_the_boot_args_pair(&regs);
+
+    assert_eq!(w.fault, Some("GspFault::GuestRam"));
+    let r = w.ram_refusal.expect("a RAM refusal carries its address");
+    assert_eq!(r.gpa, BOOT_ARGS_GPA);
+    assert_eq!(r.why, kayfabe_device::plane::NO_RAM_PORT);
+    assert_eq!(regs.audit().ram_refusals, 1);
+}
+
+#[test]
+fn with_the_port_an_address_no_region_covers_is_refused_in_the_memory_planes_own_words() {
+    // The port is installed and the machine is real; nothing has declared guest RAM. The
+    // refusal must move from "there is no port" to "nothing is there" — a different
+    // sentence, because they send a reader to different places.
+    let (shim, _host) = realize_with(MockPolicy::default()).expect("realize");
+    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    regs.attach_ram(&shim);
+
+    let w = drive_the_boot_args_pair(&regs);
+    assert_eq!(w.fault, Some("GspFault::GuestRam"));
+    let r = w.ram_refusal.expect("a RAM refusal carries its address");
+    assert_eq!(r.gpa, BOOT_ARGS_GPA);
+    assert_ne!(
+        r.why,
+        kayfabe_device::plane::NO_RAM_PORT,
+        "the port IS installed; saying otherwise would be the Q4 sentence surviving Q5"
+    );
+    assert!(
+        r.why.contains("no guest-physical region covers"),
+        "got: {}",
+        r.why
+    );
+}
+
+#[test]
+fn with_the_port_a_declared_ram_region_is_actually_read_and_the_boot_moves_on() {
+    // ★★★ THE POINT OF STAGE Q5. The emulated GSP follows the guest's own pointer into
+    // guest memory and gets bytes back — so the refusal is no longer about memory at all.
+    //
+    // The bytes it finds are zeros, so the LibOS region array carries no `RMARGS` entry and
+    // the bind refuses for a *protocol* reason. That is the observable difference between
+    // "we could not read the guest's memory" and "we read it and it did not say what the
+    // protocol requires", and it is the whole rung.
+    let (shim, host) = realize_with(MockPolicy::default()).expect("realize");
+    let d = host.mint_foreign(BOOT_ARGS_GPA, LIBOS_ARRAY_LEN, SectionFacts::plain_ram());
+    shim.region_add(wire_of(d)).expect("plain memory is taken");
+
+    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    regs.attach_ram(&shim);
+
+    let w = drive_the_boot_args_pair(&regs);
+    assert!(w.claimed);
+    assert_eq!(
+        w.ram_refusal, None,
+        "guest memory was readable, so nothing about memory was refused"
+    );
+    assert_eq!(
+        w.fault,
+        Some("GspFault::RmargsRegionAbsent"),
+        "the array was read and scanned; it simply carries no RMARGS region"
+    );
+    assert_eq!(
+        regs.audit().ram_refusals,
+        0,
+        "not one guest-memory access was refused"
+    );
+}
+
+#[test]
+fn a_region_that_is_a_device_is_refused_apart_from_a_region_that_is_absent() {
+    // ★★ `testing_doctrine.md` §2 rule 3, at the sharpest pair this port has. Both of these
+    // are "we would not read that address"; one means nothing is there and the other means
+    // something is there and it is REGISTERS — and serving the second would mean the
+    // emulated GSP reached back into a register plane through the memory plane. A port
+    // that reported them identically would make that indistinguishable from a typo.
+    let (shim, host) = realize_with(MockPolicy::default()).expect("realize");
+    let facts = SectionFacts {
+        is_ram_device: true,
+        ..SectionFacts::plain_ram()
+    };
+    let d = host.mint_foreign(BOOT_ARGS_GPA, LIBOS_ARRAY_LEN, facts);
+    shim.region_add(wire_of(d)).expect("declared, unclassified");
+
+    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    regs.attach_ram(&shim);
+
+    let w = drive_the_boot_args_pair(&regs);
+    let r = w.ram_refusal.expect("a RAM refusal carries its address");
+    assert!(
+        r.why.contains("device register window"),
+        "the device arm must not report as the absent arm; got: {}",
+        r.why
+    );
+}
+
+#[test]
+fn detaching_the_port_puts_the_plane_back_to_refusing_by_name() {
+    // The teardown half. The register surface keeps answering across a memory-plane
+    // teardown by design, so the port has to be withdrawn explicitly — and afterwards the
+    // sentence must be the *wiring* one again, not a stale machine's.
+    let (shim, host) = realize_with(MockPolicy::default()).expect("realize");
+    let d = host.mint_foreign(BOOT_ARGS_GPA, LIBOS_ARRAY_LEN, SectionFacts::plain_ram());
+    shim.region_add(wire_of(d)).expect("plain memory is taken");
+
+    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    regs.attach_ram(&shim);
+    assert_eq!(drive_the_boot_args_pair(&regs).ram_refusal, None);
+
+    regs.detach_ram();
+    let r = drive_the_boot_args_pair(&regs)
+        .ram_refusal
+        .expect("after detach every guest-memory access is refused again");
+    assert_eq!(r.why, kayfabe_device::plane::NO_RAM_PORT);
+}
+
+#[test]
+fn the_port_writes_guest_memory_where_the_guest_can_see_it() {
+    // ★ The write direction, which the read tests above cannot cover: the status-queue tx
+    // header the guest's `msgqRxLink` spins on is a WRITE into the guest's own region, and
+    // a port that could only read would pass every test above and hang the guest forever.
+    // Asserted against the host's own bytes, not against our return value.
+    use kayfabe_device::GuestRam;
+
+    let (shim, host) = realize_with(MockPolicy::default()).expect("realize");
+    let d = host.mint_foreign(BOOT_ARGS_GPA, 0x1000, SectionFacts::plain_ram());
+    shim.region_add(wire_of(d)).expect("plain memory is taken");
+
+    let mut ram = kayfabe_qemu_raw::shim::MachineRam::new(shim.machine().vmm());
+    ram.write(BOOT_ARGS_GPA + 8, &[0xDE, 0xAD, 0xBE, 0xEF])
+        .expect("declared memory is writable");
+
+    let bytes = host.region_bytes(d.mr).expect("the region exists");
+    assert_eq!(&bytes[8..12], &[0xDE, 0xAD, 0xBE, 0xEF]);
+
+    let mut back = [0u8; 4];
+    ram.read(BOOT_ARGS_GPA + 8, &mut back)
+        .expect("what was written reads back");
+    assert_eq!(back, [0xDE, 0xAD, 0xBE, 0xEF]);
 }

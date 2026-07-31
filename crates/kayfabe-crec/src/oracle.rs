@@ -53,6 +53,15 @@ use kayfabe_gsp::{GuestRam, RamRefused};
 /// element size — a storage detail here, not a protocol constant.
 const PAGE: u64 = 4096;
 
+/// The one reason this oracle refuses, as [`RamRefused::why`]: the capture never
+/// observed those bytes, so there is no honest answer to give.
+///
+/// ★ Public so the differential's assertions name the same constant the oracle produces.
+/// A test that spelled the sentence out a second time would be asserting against its own
+/// copy, and the two could drift without a single red test.
+pub const UNOBSERVED: &str = "the capture does not contain those bytes; a replay may not \
+                          invent guest memory the recorder never saw";
+
 /// Every `GuestRead` the capture holds, keyed by `(gpa, len)` and carrying each
 /// observation's record index — the lookahead pool.
 type ReadPool = BTreeMap<(u64, usize), VecDeque<(usize, Vec<u8>)>>;
@@ -310,6 +319,7 @@ impl GuestRam for OracleRam {
         Err(RamRefused {
             gpa,
             len: buf.len(),
+            why: UNOBSERVED,
         })
     }
 

@@ -30,6 +30,21 @@ pub struct RamRefused {
     pub gpa: u64,
     /// Its length in bytes.
     pub len: usize,
+    /// ★★ **Why**, in the refusing implementation's own words.
+    ///
+    /// Added at stage Q5, when the first implementation with more than one reason to
+    /// refuse was wired in. The adapter's port resolves through
+    /// `kayfabe_vmm::GuestRamMap`, which distinguishes *"no region covers this range"*
+    /// from *"it resolves to a device register window, not to memory"* — and those two
+    /// send a reader to completely different places. Flattening them to `(gpa, len)`
+    /// would discard exactly the finding: the GPA-accessor gate's own text says
+    /// *"never `map_err(|_| ..)` it away — the discarded variant IS the finding"*, and
+    /// this field is where the variant survives the crossing.
+    ///
+    /// `&'static str` and not a type, because this crate must not see the hypervisor's
+    /// error enum; the sentence is a value the implementation already owns and it costs
+    /// no allocation to carry. Never branched on — it is read by a person.
+    pub why: &'static str,
 }
 
 /// The `msgqRxLink` rejection codes, as the **guest's own** predicate spells them.

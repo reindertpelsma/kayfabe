@@ -1045,6 +1045,32 @@ jobs:
       # `Option<unsafe extern "C" fn(...)>` FIELD TYPES, which are declarations and not
       # relaxations.
       #
+      # ★★★ `kayfabe-qemu-raw` 44 -> 46 AT STAGE Q5, 2026-07-31 — the register plane's
+      # guest-RAM port. The two are BOTH `extern "C"` entry points and NEITHER writes through
+      # a caller-supplied out-parameter, which is why the count moves by two and not by four:
+      #
+      #   [Q5-a] `kayfabe_shim_regs_attach_ram(regs, shim)` — takes the two opaque handles,
+      #          borrows each through the existing `borrow_regs` / `borrow` helpers (whose
+      #          own relaxations are already counted, at [Q4-c] and [G5]) and installs the
+      #          memory plane's guest-RAM port into the register plane. Returns an `i32`.
+      #          Its `# Safety` clause is the same handle-validity precondition every other
+      #          entry point states, plus the ordering obligation that the memory plane
+      #          outlives the port — discharged by the C shim calling `_detach_ram` before
+      #          `kayfabe_shim_unrealize`, which its own comment states in those words.
+      #   [Q5-b] `kayfabe_shim_regs_detach_ram(regs)` — the withdrawal half. One handle, no
+      #          return value, no out-parameter.
+      #
+      # ★ NO NEW SHAPE, and that is the thing to check when a ratchet moves. Both are the
+      # [Q4-a] shape (an entry point whose whole relaxation is the handle borrow) and
+      # neither adds a pointer that outlives the call: the port this installs holds an
+      # `Arc` onto the memory plane, not a raw address.
+      #
+      # ★★ `KayfabeRegWrite` grew four fields in the same change and contributes ZERO. The
+      # write through it is [Q4-b]'s existing relaxation and its two new pointers address
+      # this archive's own read-only `&'static str` data, exactly like `fault` — so the
+      # structure got bigger and its unsoundness argument did not change. What DID have to
+      # move for it is the ABI version, which is a different instrument and moved.
+      #
       # ★★★ `kayfabe-linux-raw` 60 -> 73 AT THE EMBEDDED-ISOLATE CHANGE. All 13 are in
       # `spawn_unsafe.rs`, itemised block-by-block in the list below, and every one of them
       # is `std::process::Command`'s mechanism moving INTO the audited crate rather than new
@@ -1070,7 +1096,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:77 kayfabe-qemu-raw:44"
+          AUDITED="kayfabe-linux-raw:77 kayfabe-qemu-raw:46"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

@@ -157,6 +157,11 @@ struct NvkvmState {
      * kayfabe_shim.h for why it is not the same one.  Created at realize, because unlike
      * the memory plane it needs no base-address register to exist. */
     void    *regs;
+    /* ★★ Stage Q5: the register plane has been given the memory plane's guest RAM.  Kept
+     * so the teardown order is a fact rather than an assumption, and so the realize report
+     * can say which of the two states this device is actually in — the difference is
+     * whether the emulated GSP can follow a guest pointer at all. */
+    bool     regs_have_ram;
     /* MSI-X was asked for and the hypervisor refused it.  Recorded rather than fatal: the
      * guest driver's own gate is satisfied by the capability OR by a legacy line, and a
      * device that cannot enumerate tells nobody anything. */
@@ -227,8 +232,20 @@ static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
          * leaves the register surface answering.  Reported at trace level would be
          * invisible; reported every time would let a polling guest fill the disk — so it is
          * a warning, and the archive counts them for the audit. */
-        warn_report("nvkvm: the emulated GSP refused a register write at +0x%" PRIx64 ": %.*s",
-                    (uint64_t)addr, (int)w.fault_len, (const char *)w.fault);
+        if (w.ram_why && w.ram_why_len) {
+            /* ★★ A guest-RAM refusal is the one fault with an ADDRESS, and the address is
+             * the whole diagnosis: the register offset says which write the guest was
+             * making, and this says which of the guest's own pointers we would not
+             * follow, and why. */
+            warn_report("nvkvm: the emulated GSP refused a register write at +0x%" PRIx64
+                        ": %.*s; guest memory at 0x%" PRIx64 " (%" PRIu64 " bytes): %.*s",
+                        (uint64_t)addr, (int)w.fault_len, (const char *)w.fault,
+                        w.ram_gpa, w.ram_len,
+                        (int)w.ram_why_len, (const char *)w.ram_why);
+        } else {
+            warn_report("nvkvm: the emulated GSP refused a register write at +0x%" PRIx64 ": %.*s",
+                        (uint64_t)addr, (int)w.fault_len, (const char *)w.fault);
+        }
     }
     if (w.raise_status_irq) {
         s->irq_requests_dropped++;
@@ -983,9 +1000,34 @@ static void nvkvm_shim_realize(NvkvmState *s)
         }
     }
 
+    /*
+     * ★★★ STAGE Q5 — the two planes are joined HERE, and this is the only place that can
+     * do it.  The register plane was created at `realize`, when the base-address registers
+     * were still unprogrammed; the memory plane could not exist until one had a base.  So
+     * this instant — the memory plane having just realized, the register plane having been
+     * answering registers for a while already — is the first moment both exist.
+     *
+     * ★ Refusal is a warning, not fatal, for the same reason the memory plane's own refusal
+     * is: the register surface keeps answering either way, and a guest whose registers go
+     * silent learns nothing it can act on.  What it must never be is quiet — without the
+     * port, the emulated GSP refuses one specific write thousands of accesses into a boot
+     * that otherwise looks completely healthy, and that is a whole debugging session.
+     */
+    if (s->regs) {
+        rc = kayfabe_shim_regs_attach_ram(s->regs, s->shim);
+        if (rc != KAYFABE_OK) {
+            error_report("nvkvm: the register plane could not be given guest memory (%d); "
+                         "the emulated GSP will refuse every guest-memory access by name",
+                         (int)rc);
+        } else {
+            s->regs_have_ram = true;
+        }
+    }
+
     info_report("nvkvm: memory plane realized (bar0=0x%" PRIx64 " bar1=0x%" PRIx64
-                " bar2=0x%" PRIx64 ")",
-                bars[0].base, bars[1].base, bars[2].base);
+                " bar2=0x%" PRIx64 ", register plane has guest memory=%s)",
+                bars[0].base, bars[1].base, bars[2].base,
+                s->regs_have_ram ? "yes" : "NO");
 }
 
 static void nvkvm_after_bar_update(NvkvmState *s)
@@ -1279,6 +1321,15 @@ static void nvkvm_exit(PCIDevice *pci)
     if (s->listening) {
         memory_listener_unregister(&s->listener);
         s->listening = false;
+    }
+    /* ★★★ STAGE Q5, IN ORDER.  The register plane's guest-RAM port holds a handle onto the
+     * memory plane, and the register surface keeps answering across this teardown BY
+     * DESIGN — so the port must be withdrawn BEFORE the plane it points into is unrealized.
+     * Afterwards the emulated GSP refuses every guest-memory access by name, which is the
+     * honest answer for a device whose memory plane is gone. */
+    if (s->regs && s->regs_have_ram) {
+        kayfabe_shim_regs_detach_ram(s->regs);
+        s->regs_have_ram = false;
     }
     /* The archive withdraws the blocker and re-enables discard through the primitives, so the
      * two arms below are backstops for the case where it never realized at all. */
