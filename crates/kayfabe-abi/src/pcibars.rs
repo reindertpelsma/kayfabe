@@ -35,6 +35,20 @@
 //! So the **layout** is answered by an RTX 3060 rather than by a header read, and
 //! `crates/kayfabe-device/tests/pci_bar_info.rs` pins this encoder against those bytes.
 //!
+//! ## ⚠ THIS REPLY HAS STILL NEVER BEEN EXERCISED BY A GUEST — and the reason is measured
+//!
+//! It is oracle-pinned and unit-tested, but no boot has yet asked for it, so everything
+//! below the layout is **inference**. `[measured]` run `t132a`, a stock 580.159.04 guest at
+//! `f83ce31`: the boot ends at `gpuConstructUserRegisterAccessMap` (`gpu.c:2125`), and
+//! `kbusInitBarsSize_KERNEL` is reached from `kbusStatePreInitLocked_GM107`, i.e. from the
+//! engine-descriptor `engstateStatePreInit` loop that `gpuPreInit` runs *after* that line
+//! (`ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:2146-2170`). ⊘ So the guest has not merely
+//! declined to ask — it has not yet executed the code that would.
+//!
+//! The first boot that clears `gpu.c:2125` is the one that can witness it, and the thing to
+//! read then is whether `pciBarCount = 4` survives into `pKernelBus->pciBars[]` without the
+//! page fault this module's `[measured]` run `t126b` recorded above.
+//!
 //! ⊘ The oracle settles **nothing about the values**. Its `barOffset` fields are the *host*
 //! board's physical addresses (`0xc000_0000`, `0x10_0000_0000`, `0x10_1000_0000`) and its
 //! sizes are that board's; ours must be the ones **this** device presents, which is why the

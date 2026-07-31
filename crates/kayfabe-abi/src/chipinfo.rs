@@ -21,6 +21,28 @@
 //! builds on every one of them. `kayfabe_device::inert`'s own eligibility rule — *"the
 //! guest reads nothing but the status"* — excludes it by inspection.
 //!
+//! ## ★★★ What answering it bought — one rung, measured
+//!
+//! `[measured]` run `t132a`, a stock 580.159.04 guest at `f83ce31`, driven with
+//! `nvidia-smi`. `_gpuInitChipInfo` succeeded and the boot moved to the **next line** of
+//! `gpuPreInit`:
+//!
+//! ```text
+//! NVRM: [NV_ERR_NOT_SUPPORTED] (0x56) returned from pRmApi->Control(…,
+//!       NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP, …)
+//!       @ gpu_register_access_map.c:244
+//! NVRM: … returned from gpuConstructUserRegisterAccessMap(pGpu) @ gpu.c:2125
+//! NVRM: RmInitNvDevice: *** Cannot pre-initialize the device
+//! NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x23:0x56:1206)
+//! ```
+//!
+//! `gpu.c:2124` is `_gpuInitChipInfo` and `:2125` is its successor, so the two sides of the
+//! ladder — the guest's `LEVEL_ERROR` and `kayfabe_device::unserviced`'s host-side list,
+//! which named `fn 76 cmd 0x20800a41` and nothing else — agree on the statement and not
+//! merely on the control. ⊘ Nothing here reached `kbusInitBarsSize`, which runs inside the
+//! engine-descriptor loop *after* `:2125`, so `kayfabe_abi::pcibars`' reply remains
+//! unwitnessed. See its own docs.
+//!
 //! ## ★★ What the oracle settled, and what it did not
 //!
 //! `C: src/qemu/mode2_initctrl_ga106.h:3355-3364` (`ctl_20800a36`, 88 bytes, registered at

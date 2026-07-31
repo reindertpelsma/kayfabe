@@ -21,7 +21,7 @@
 //! **act** on — it names the first thing the driver actually needed. It is not a property
 //! that lets anyone answer *how long the list is*. This does, in one boot.
 //!
-//! ## ★★★ What it has actually answered — three boots, three rungs, one entry each
+//! ## ★★★ What it has actually answered — four boots, four rungs, one entry each
 //!
 //! `[measured]` on the bench, a stock 580.159.04 guest driven with `nvidia-smi`, one boot
 //! per revision. The whole point of the table is the **right-hand column**: the question
@@ -32,6 +32,12 @@
 //! | `t127a` | `f870288` | 3 | **1** — `fn 1` | `kgspInitRm_IMPL: SET_GUEST_SYSTEM_INFO failed: 0x56` |
 //! | `t127b` | `0db7c61` | 5 | **1** — `fn 228` | `kgspInitGspTraceCrashBuffer … @ kernel_gsp.c:4239` |
 //! | `t127c` | `110c857` | 6 | **1** — `fn 76 cmd 0x20800a36` | `_gpuInitChipInfo … @ gpu.c:886, 2124` |
+//! | `t132a` | `f83ce31` | 7 | **1** — `fn 76 cmd 0x20800a41` | `gpuConstructUserRegisterAccessMap … @ gpu_register_access_map.c:244, gpu.c:2125` |
+//!
+//! ★★ Four for four, and the fourth is the sharpest yet: `gpu.c:2124` and `gpu.c:2125` are
+//! **adjacent lines** of `gpuPreInit`, so the ledger and the guest agree not merely on
+//! *which* control but on the exact statement that consumed it. `[measured]` run `t132a`
+//! answered `0x20800a36` from the chip row and the boot moved one line.
 //!
 //! ★ The guest and the ledger name the **same** thing every time, from opposite sides, and
 //! `0x56` is this port's own `NV_ERR_NOT_SUPPORTED` arriving verbatim — so the envelope
