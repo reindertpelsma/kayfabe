@@ -20,6 +20,14 @@ pinned to one driver interval, which until 2026-07-31 nothing said and nothing c
 note states the property, states what is actually true, and records the refusal that now
 makes a mismatched host stop at rung R2 instead of receiving wrong struct offsets.
 
+★ **Six axes now, and two of them are audited elsewhere.** `compatibility_matrix.md`
+(2026-07-31) adds **guest kernel version** and **multi-GPU**, states every cell of the
+six-axis matrix as built / designed-only / unknown / known-broken, and — the part that
+reframes the four below — derives which crates a shipping artifact actually **links**.
+Read it before quoting any status here: three of the four axes' seams live in crates no
+build output links today, and `scripts/compat_matrix.py` regenerates that answer rather
+than restating it.
+
 ## 1. The four axes
 
 | axis | varies with | where it lives | status |
