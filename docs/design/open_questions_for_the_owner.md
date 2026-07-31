@@ -271,11 +271,42 @@ same tags `nvos.rs` moves 122 lines). New stop: `BAR0+0x110100`, the GSP falcon'
 
 # NEW — raised by the overnight run of 2026-07-31
 
+> ⚠ **Numbered Q10+ deliberately.** `Q7`/`Q8`/`Q9` were already taken by the Tier-3 entries above
+> (the `#13` ghost, the `#95` stale-bench entry, hardware strategy). An earlier draft of this
+> section reused those numbers, which would have read as answering them.
+
 Three questions that **measurement produced**, not analysis. Each is a design decision rather than a
 patch, each is written down as a live defect with a pinning test, and none is blocking today's north
 star (GA10x, 580). They are here because answering them wrong is the kind of thing that costs months.
 
-## Q7 — how does a boot **SEQUENCE** become data? (task #121)
+## Q10 — the boot FSM is an unhooked IMPLEMENTATION → **ANSWERED 2026-07-31** (task #121)
+
+> ★★★ **OWNER RULING, and it reframes the question I asked.** *"Logic that's arch independent remains
+> arch independent. What's not true is that for a series of archs you can't have code that's only for
+> those archs — but then it's no longer in core logic, it's an implementation. The implementation
+> should be constructed so that it has enough methods, data and flow to override or hook on, so any
+> arch can be implemented."*
+>
+> **Three consequences.** (1) The arch-*independent* half of the claim **holds** and is not in
+> question; the CI grep that keeps generation names out of generation-free code is right and stays.
+> (2) Arch-*specific* code is **legitimate and must exist somewhere** — a Turing/Ampere GSP boot
+> sequence is a real thing that has to be written down, and the defect was never that it exists.
+> (3) ★★★ **The defect is that it is UNHOOKED**: `boot.rs:544-598` encodes the Turing ordering in
+> `match` arms with no extension point, so a second architecture cannot supply its own sequence
+> without **editing the first one's**.
+>
+> ⇒ **The acceptance criterion changes, and becomes directly measurable:**
+> ⊘ *not* "adding an arch costs zero logic-crate edits"
+> ★ *but* **"a new arch can be implemented by ADDING ALONGSIDE, without MODIFYING the existing
+> arch's implementation."**
+> Test it by implementing GH100's boot sequence and counting lines **changed** (not added) in the
+> Turing path. Zero changed = the seam works.
+>
+> The work is to give the boot implementation enough **methods, data and flow** to hook or override:
+> which registers exist on a generation, which transitions they drive, what the stages are and their
+> order. GH100 is the forcing case; its cost is enumerated in `kayfabe_chips::gh100::MISSING_TRANSITIONS`.
+
+### What was run (task #118, `554c333`, both vendored ogkm tags)
 
 **What was measured** — run named: task #118, commit `554c333`, both vendored ogkm tags
 (580.159.04 and 610.43.02), pinned by `tests/tests/arch_axis_second_generation.rs`. The claim
@@ -309,7 +340,22 @@ measured failure** of an architecture claim the project has repeated for months,
 shape, not a patch. Currently pinned by `the_boot_fsm_cannot_be_driven_past_fwsec_on_that_generation`,
 which goes **red if the seam is widened** without answering this.
 
-## Q8 — how does a driver version express **REMOVAL**? (task #122)
+## Q11 — how does a driver version express **REMOVAL**? → **ANSWERED 2026-07-31** (task #122)
+
+> ★★ **OWNER RULING:** make **subtract** possible as well as add. That expresses *replace*
+> (subtract the old, add the new), which is exactly the defect recorded at task #118 (`554c333`) and
+> read from `gvisor nvproxy: version.go:1036-1053` — nvproxy replaces two
+> DRAM-encryption commands at 575.
+>
+> ★ **One caveat carried into the task, not a disagreement.** `inherit-then-{add,subtract}` is a
+> **delta chain**, and this repo has already been bitten by that shape: the *gates quantified over a
+> list* finding, where shortening a list weakened a gate with **zero red tests**. A subtract in an
+> early version silently shrinks every later version's set, and you cannot see what 575 actually
+> allows without replaying the chain. ⇒ **Add subtract, and materialize each version's RESOLVED set
+> and gate on it**, so a subtract's effect is visible per-version rather than implied, and a mistake
+> stays local instead of propagating forward in silence.
+
+### What was run (task #118, `554c333`, both vendored ogkm tags)
 
 **What was measured** — run named: task #118, commit `554c333`, pinned by the characterisation test
 added to `crates/kayfabe-abi/src/capability.rs`; the replacement itself is read from
@@ -336,7 +382,7 @@ documented *"abstract by construction, unbuilt"* but is concretely **pinned to 5
 encoder used unconditionally in `kayfabe-isolate-host`. 610 inserts `hHandleVASpace` at +32 and shifts
 every later field. Adding a version parameter has blast radius outside `kayfabe-abi`.
 
-## Q9 — a cross-process **"verb parked"** edge (the fifth flake)
+## Q12 — a cross-process **"verb parked"** edge (the fifth flake)
 
 `abandon_releases_a_wedged_requester_with_wedged` flakes at ~0.5% (2/400 before *and* after the flake
 campaign — untouched by it). Its precondition is `recv_timeout(25ms).is_err()`: **a sleep used as a
