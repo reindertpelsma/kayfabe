@@ -97,6 +97,11 @@ fn guarded() -> Box<dyn CommandPolicy> {
         abi(),
         kayfabe_device::unserviced::UnservicedLog::new(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
+        // ⊘ No object-model link. This file's subject is `GSP_RM_CONTROL` replies and the
+        // two fields the guard zeroes; `kayfabe_rmrpc::ObjectPolicy` claims no control at
+        // all, so including it would add a link that cannot change a single assertion
+        // here — and would quietly make these tests depend on the object model realizing.
+        None,
     )
 }
 
@@ -106,6 +111,11 @@ fn unguarded() -> Box<dyn CommandPolicy> {
         abi(),
         kayfabe_device::unserviced::UnservicedLog::new(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
+        // ⊘ No object-model link. This file's subject is `GSP_RM_CONTROL` replies and the
+        // two fields the guard zeroes; `kayfabe_rmrpc::ObjectPolicy` claims no control at
+        // all, so including it would add a link that cannot change a single assertion
+        // here — and would quietly make these tests depend on the object model realizing.
+        None,
     )
 }
 
@@ -296,7 +306,12 @@ fn the_not_a_control_rows_decline_every_control_command() {
         .collect();
     assert_eq!(
         rows,
-        vec!["StaticInfoPolicy", "GuestSystemInfoPolicy", "InertPolicy"],
+        vec![
+            "StaticInfoPolicy",
+            "GuestSystemInfoPolicy",
+            "InertPolicy",
+            "ObjectPolicy",
+        ],
         "a NotAControl row was added or removed without extending this test",
     );
 
@@ -319,7 +334,34 @@ fn the_not_a_control_rows_decline_every_control_command() {
             "InertPolicy",
             Box::new(kayfabe_device::inert::InertPolicy::new()),
         ),
+        // ★★★ The one row here that is INSTALLED IN THE PORT. The other three are device
+        // links; this is the object model. Built with the same `Ga10xArch` +
+        // `StillbornIsolates` composition `kayfabe_qemu_raw::shim` builds, so what is
+        // swept is the policy a guest actually meets.
+        (
+            "ObjectPolicy",
+            Box::new(kayfabe_rmrpc::ObjectPolicy::new(
+                &abi(),
+                kayfabe_abi::GuestOs::Linux,
+                kayfabe_core::gpu::Gpu::new(
+                    Box::new(kayfabe_chips::Ga10xArch::new()),
+                    Box::new(kayfabe_isolate::StillbornIsolates::new("test")),
+                    kayfabe_core::gpa::GpaSpace::new(
+                        0x10_0000_0000..0x20_0000_0000,
+                        0x1_0000_0000,
+                    ),
+                )
+                .expect("the port's object model realizes"),
+            )),
+        ),
     ];
+    assert_eq!(
+        rows.len(),
+        policies.len(),
+        "the ledger names {} NotAControl rows and this test builds {} of them",
+        rows.len(),
+        policies.len(),
+    );
     let mut asked = 0usize;
     for (name, p) in &mut policies {
         for w in WantedTable::ALL {
@@ -333,7 +375,7 @@ fn the_not_a_control_rows_decline_every_control_command() {
             }
         }
     }
-    assert_eq!(asked, 3 * 2 * WantedTable::ALL.len(), "sweep arithmetic");
+    assert_eq!(asked, policies.len() * 2 * WantedTable::ALL.len(), "sweep arithmetic");
 
     // ★ Non-vacuity: each of these DOES answer something, so "returns None" above is a
     // statement about fn 76 and not about a policy that answers nothing at all.

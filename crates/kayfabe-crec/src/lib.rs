@@ -195,6 +195,14 @@ pub fn served_policy() -> Box<dyn kayfabe_gsp::CommandPolicy> {
         bench_abi().driver,
         kayfabe_device::unserviced::UnservicedLog::new(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
+        // ⊘ **No object-model link, and this is a decision the differential depends on.**
+        // `cap1`/`cap1b` are the C's replies, and the C had no object model — it answered
+        // `GSP_RM_ALLOC` from its own tables. Installing one here would diff our object
+        // model's answers against the C's forged ones and call the disagreement a
+        // regression. The port's chain and this one now differ by exactly this link, which
+        // is why `crates/kayfabe-device/tests/served_chain_objects.rs` pins that the rest
+        // of the chain is unchanged by its presence.
+        None,
     )
 }
 

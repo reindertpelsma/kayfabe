@@ -434,6 +434,34 @@ impl RegPlane {
         abi: GspAbi,
         clock: Box<dyn NanoClock>,
     ) -> Result<RegPlane, ChipError> {
+        RegPlane::with_objects(chip, abi, clock, None)
+    }
+
+    /// Build a plane whose served chain also carries an **object-model link**.
+    ///
+    /// ★★★ A separate constructor rather than a fifth argument on [`RegPlane::new`], and
+    /// the reason is a rule this project already paid for
+    /// (`gates_quantified_over_a_list`): `new` has ~25 call sites, every one of them a
+    /// test about registers, and threading `None` through all of them would make the
+    /// interesting case — *there IS an object model* — look like the default. It is not
+    /// the default. It is a decision one composition root makes, and it is spelled out at
+    /// the one place that makes it.
+    ///
+    /// `objects` is the [`kayfabe_gsp::CommandPolicy`] the object model is behind. This
+    /// crate cannot name its type: it has no `kayfabe-core` dependency, deliberately (*"a
+    /// GSP FSM that can see the RM graph starts firing on graph state"*), so what crosses
+    /// is a trait object and the port owns the choice. See [`crate::served_chain`] for
+    /// where in the chain it lands and what it must not claim.
+    ///
+    /// # Errors
+    ///
+    /// As [`RegPlane::new`].
+    pub fn with_objects(
+        chip: &'static ChipProfile,
+        abi: GspAbi,
+        clock: Box<dyn NanoClock>,
+        objects: Option<Box<dyn CommandPolicy>>,
+    ) -> Result<RegPlane, ChipError> {
         let rom = crate::rom_for(chip)?;
         let model = (chip.gsp_model)();
         assert_disjoint(chip, model.as_ref())?;
@@ -452,6 +480,7 @@ impl RegPlane {
                     abi.driver,
                     unserviced.clone(),
                     fault_buffer.clone(),
+                    objects,
                 ),
                 unclaimed: Vec::new(),
                 fb_window: Vec::new(),

@@ -114,20 +114,25 @@ impl RefusalCensus {
     }
 }
 
-/// The GSP command policy that drives the RM object model.
+/// Everything a bridge policy is *besides* the object model it declares into.
 ///
-/// `respond` = [`translate`](crate::translate) → [`Gpu::apply`] → a reply. It is the
-/// whole of stage B2.
+/// ★ Extracted 2026-08-01 so that [`GraphPolicy`] (which **borrows** a `Gpu`) and
+/// [`ObjectPolicy`] (which **owns** one) are one implementation and not two. The
+/// alternative — a second `deliver` — would be a second copy of the reassembly ordering,
+/// the four counters and the census-vs-outcome bookkeeping, i.e. exactly the shape that
+/// drifts silently: a fix applied to one and not the other is invisible to every test that
+/// drives only the other.
 ///
-/// Borrows rather than owns the device: the same `Gpu` is reached by the doorbell path,
-/// the completion path and the projection, and a policy that owned it would make itself
-/// the only way in. `&'a mut Gpu` is also the exclusivity proof this needs — §1.3's named
-/// caveat is that applying an event can mint a `Proc` through the isolate factory, which
-/// is why the caller runs `respond` under the device write lock and why **no host verb may
-/// be issued from inside it** (R1, no blocking under a lock).
-pub struct GraphPolicy<'a> {
+/// `gpu` is a **parameter** of [`Bridge::deliver`] rather than a field, which is what makes
+/// the split possible at all: the holder decides the ownership, the bridge decides the
+/// meaning.
+struct Bridge {
     /// Axis A: which driver's wire layouts to decode with. Selected once at realize.
-    abi: &'a DriverAbiTable,
+    ///
+    /// ★ By value, not by reference — [`DriverAbiTable`] is `Copy`. The public
+    /// constructors still take `&DriverAbiTable` (their callers hold one), so this is an
+    /// internal change with no API surface.
+    abi: DriverAbiTable,
     /// ★ The **fourth axis** (`four_axes_of_variation.md` §1): which OS built that
     /// driver. Selected once at realize, beside `abi` and never inside it — the two are
     /// independent keys, and the doc's *"do not collapse guest OS into the version key"*
@@ -140,8 +145,6 @@ pub struct GraphPolicy<'a> {
     /// process's isolate. A `new()` that quietly meant Linux would be the same silence
     /// one level up.
     guest_os: GuestOs,
-    /// The object model this policy declares facts into.
-    gpu: &'a mut Gpu,
     /// ★ B6. The crate's one piece of state, and the only thing here that is not either
     /// the graph's or a counter. Bounded two ways and keyed by nothing the guest supplies
     /// — see [`Reassembler`].
@@ -151,6 +154,43 @@ pub struct GraphPolicy<'a> {
     inert: u64,
     held: u64,
     promoted: u64,
+}
+
+impl Bridge {
+    fn new(abi: DriverAbiTable, guest_os: GuestOs, limits: ReasmLimits) -> Bridge {
+        Bridge {
+            abi,
+            guest_os,
+            reasm: Reassembler::with_limits(limits),
+            census: RefusalCensus::default(),
+            applied: 0,
+            inert: 0,
+            held: 0,
+            promoted: 0,
+        }
+    }
+}
+
+/// The GSP command policy that drives the RM object model.
+///
+/// `respond` = [`translate`](crate::translate) → [`Gpu::apply`] → a reply. It is the
+/// whole of stage B2.
+///
+/// Borrows rather than owns the device: the same `Gpu` is reached by the doorbell path,
+/// the completion path and the projection, and a policy that owned it would make itself
+/// the only way in. `&'a mut Gpu` is also the exclusivity proof this needs — §1.3's named
+/// caveat is that applying an event can mint a `Proc` through the isolate factory, which
+/// is why the caller runs `respond` under the device write lock and why **no host verb may
+/// be issued from inside it** (R1, no blocking under a lock).
+///
+/// ⚠ **It claims EVERY command** — `respond` never returns `None` — so it is *the* policy
+/// or it is the end of a chain, never a link with anything after it. That is right for the
+/// differential and wrong for a device chain that still wants its own recorders to see
+/// what nobody answered; [`ObjectPolicy`] is the composable form, and the two differ in
+/// exactly that one property.
+pub struct GraphPolicy<'a> {
+    bridge: Bridge,
+    gpu: &'a mut Gpu,
 }
 
 impl<'a> GraphPolicy<'a> {
@@ -171,15 +211,8 @@ impl<'a> GraphPolicy<'a> {
         limits: ReasmLimits,
     ) -> GraphPolicy<'a> {
         GraphPolicy {
-            abi,
-            guest_os,
+            bridge: Bridge::new(*abi, guest_os, limits),
             gpu,
-            reasm: Reassembler::with_limits(limits),
-            census: RefusalCensus::default(),
-            applied: 0,
-            inert: 0,
-            held: 0,
-            promoted: 0,
         }
     }
 
@@ -190,13 +223,13 @@ impl<'a> GraphPolicy<'a> {
     /// and nothing outside `deliver` may advance it.
     #[must_use]
     pub fn reassembler(&self) -> &Reassembler {
-        &self.reasm
+        &self.bridge.reasm
     }
 
     /// The refusal census — see [`RefusalCensus`].
     #[must_use]
     pub fn census(&self) -> &RefusalCensus {
-        &self.census
+        &self.bridge.census
     }
 
     /// How many commands produced an `RmEvent` the graph **accepted**.
@@ -206,7 +239,7 @@ impl<'a> GraphPolicy<'a> {
     /// green-instrument-on-an-unexercised-path failure the doctrine is about.
     #[must_use]
     pub fn applied(&self) -> u64 {
-        self.applied
+        self.bridge.applied
     }
 
     /// How many commands were known-and-inert.
@@ -217,7 +250,7 @@ impl<'a> GraphPolicy<'a> {
     /// report the same number.
     #[must_use]
     pub fn inert(&self) -> u64 {
-        self.inert
+        self.bridge.inert
     }
 
     /// How many commands were **fragments consumed into reassembly** ([`Translation::Held`]).
@@ -230,7 +263,7 @@ impl<'a> GraphPolicy<'a> {
     /// never fragmented anything.
     #[must_use]
     pub fn held(&self) -> u64 {
-        self.held
+        self.bridge.held
     }
 
     /// How many commands were **context promotions the address plane accepted**
@@ -242,7 +275,7 @@ impl<'a> GraphPolicy<'a> {
     /// that stopped joining anything from a run that had no promotions in it.
     #[must_use]
     pub fn promoted(&self) -> u64 {
-        self.promoted
+        self.bridge.promoted
     }
 
     /// The object model, for a caller that wants to project it.
@@ -262,6 +295,17 @@ impl<'a> GraphPolicy<'a> {
     /// [`BridgeRefusal`], by variant — including [`BridgeRefusal::Graph`], which is the
     /// arm B1 could not construct because nothing in that stage applied.
     pub fn deliver(&mut self, cmd: &RpcCommand) -> Result<Translation, BridgeRefusal> {
+        self.bridge.deliver(self.gpu, cmd)
+    }
+}
+
+impl Bridge {
+    /// Translate one command and apply whatever it declared, into the caller's `gpu`.
+    ///
+    /// ★★ The `gpu` is a **parameter**, and that is the whole of the borrow/own split:
+    /// [`GraphPolicy`] passes a `&mut Gpu` it borrowed, [`ObjectPolicy`] passes a
+    /// `&mut Gpu` it owns, and neither can have a different idea of what a command means.
+    fn deliver(&mut self, gpu: &mut Gpu, cmd: &RpcCommand) -> Result<Translation, BridgeRefusal> {
         // ★ B6 — reassembly runs FIRST and decides nothing. It either hands `translate`
         // the message that arrived, or the message the guest actually meant, or holds a
         // fragment. Every rule `translate` owns is then applied exactly ONCE, to the
@@ -269,11 +313,11 @@ impl<'a> GraphPolicy<'a> {
         // of the translator running on partial bytes.
         let outcome = self
             .reasm
-            .accept(self.abi, cmd)
+            .accept(&self.abi, cmd)
             .and_then(|r| match r {
-                Reassembled::Whole => translate(self.abi, self.guest_os, cmd),
+                Reassembled::Whole => translate(&self.abi, self.guest_os, cmd),
                 Reassembled::Held => Ok(Translation::Held),
-                Reassembled::Complete(full) => translate(self.abi, self.guest_os, &full),
+                Reassembled::Complete(full) => translate(&self.abi, self.guest_os, &full),
             })
             .and_then(|t| match t {
                 // ★ The bridge does not pre-empt the graph's MISS/DEFER/FAULT taxonomy — it
@@ -282,8 +326,7 @@ impl<'a> GraphPolicy<'a> {
                 // is what turns it into a non-zero `rpc_result` on the wire. The C's
                 // behaviour is the opposite: it accepted everything and answered `NV_OK`
                 // (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:3326`).
-                Translation::Event(ev) => self
-                    .gpu
+                Translation::Event(ev) => gpu
                     .apply(ev)
                     .map(|()| Translation::Event(ev))
                     .map_err(BridgeRefusal::Graph),
@@ -294,8 +337,7 @@ impl<'a> GraphPolicy<'a> {
                 // The join routes on the ADDRESS SPACE the promotion names, so it is
                 // legal to run against `&mut Gpu` regardless of which proc's RPC this
                 // was; the sharded shell runs the same two functions under its own locks.
-                Translation::CtxPromotion(p) => self
-                    .gpu
+                Translation::CtxPromotion(p) => gpu
                     .promote_ctx(&p)
                     .map(|_| Translation::CtxPromotion(p))
                     .map_err(BridgeRefusal::Promote),
@@ -314,14 +356,11 @@ impl<'a> GraphPolicy<'a> {
         }
         outcome
     }
-}
 
-/// Hand-written because `Gpu` is not `Debug` — and it should not become `Debug` for a
-/// policy's convenience: the whole object model in a panic message is unreadable, and the
-/// two numbers below plus the census are what a failure here is actually about.
-impl core::fmt::Debug for GraphPolicy<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("GraphPolicy")
+    /// The `Debug` body both policies share, so the two cannot describe themselves
+    /// differently — `name` is the only thing that varies.
+    fn debug_as(&self, name: &'static str, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct(name)
             .field("driver", &self.abi.version())
             .field("applied", &self.applied)
             .field("inert", &self.inert)
@@ -329,6 +368,15 @@ impl core::fmt::Debug for GraphPolicy<'_> {
             .field("in_flight", &self.reasm.in_flight())
             .field("census", &self.census)
             .finish_non_exhaustive()
+    }
+}
+
+/// Hand-written because `Gpu` is not `Debug` — and it should not become `Debug` for a
+/// policy's convenience: the whole object model in a panic message is unreadable, and the
+/// two numbers below plus the census are what a failure here is actually about.
+impl core::fmt::Debug for GraphPolicy<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.bridge.debug_as("GraphPolicy", f)
     }
 }
 
@@ -443,8 +491,159 @@ impl CommandPolicy for GraphPolicy<'_> {
     }
 }
 
+/// ★★★ The **object-declaring verbs**, as a chain link a device policy chain can hold —
+/// the form of this bridge that a port installs.
+///
+/// # Why this exists next to [`GraphPolicy`], and what the one difference is
+///
+/// `GraphPolicy` claims **every** command: its `respond` never returns `None`. That is
+/// right for the C differential (it *is* the policy) and wrong for a port, because
+/// `kayfabe_device::served_chain` ends in two recorders that only ever see what the links
+/// above them declined. A link that answers everything makes the unserviced ledger — the
+/// one instrument that can say *"what has this port not built yet"* — permanently empty.
+///
+/// So this one claims a **declared, closed set of RPC functions** ([`OBJECT_VERBS`]) and
+/// returns `None` for everything else, byte for byte leaving every other arm of the chain
+/// exactly as it was.
+///
+/// # ⊘ What it does NOT claim, and why that is a decision rather than an omission
+///
+/// - **`GSP_RM_CONTROL`.** `translate` maps two controls to facts (`SetPageDir`,
+///   `PromoteCtx`), and claiming the function here would take `GSP_RM_CONTROL` away from
+///   `kayfabe_device::inittables::InitTablePolicy`, which answers six of them. Controls
+///   reach the object model through the device chain's own links or not at all until
+///   somebody measures that they must.
+/// - **`DUP_OBJECT`.** `translate_dup` exists and works; no boot has produced one. Serving
+///   a verb nothing has sent is the *"is it already done / is it actually needed"* trap in
+///   its other direction, and the cost of being wrong is one named refusal on the next
+///   boot — which is exactly how this rung was found. It is [`OBJECT_VERBS`]'s most likely
+///   next member and it is not one today.
+///
+/// # ★ Ownership
+///
+/// Owns its [`Gpu`] because a `CommandPolicy` is installed as `Box<dyn CommandPolicy>`
+/// (`'static`), and there is nothing else in this port holding the object model to borrow
+/// it from. ⚠ That is a **stage fact, not a design**: `GraphPolicy`'s doc explains why
+/// borrowing is right the moment the doorbell path and the projection also want it, and
+/// the day either exists this type hands its `Gpu` to whatever owns them.
+pub struct ObjectPolicy {
+    bridge: Bridge,
+    gpu: Gpu,
+}
+
+/// The RPC functions [`ObjectPolicy`] claims. **Closed, and public, so a test can quantify
+/// over it rather than restate it** — `gates_quantified_over_a_list`'s rule: a gate that
+/// spells its own universe is a gate that shrinks silently.
+pub const OBJECT_VERBS: &[kayfabe_gsp::RpcFunction] = &[
+    kayfabe_gsp::RpcFunction::RmAlloc,
+    kayfabe_gsp::RpcFunction::Free,
+];
+
+impl ObjectPolicy {
+    /// A policy that owns `gpu`, decoding with `abi`, serving a `guest_os`.
+    #[must_use]
+    pub fn new(abi: &DriverAbiTable, guest_os: GuestOs, gpu: Gpu) -> ObjectPolicy {
+        ObjectPolicy::with_limits(abi, guest_os, gpu, ReasmLimits::default())
+    }
+
+    /// As [`ObjectPolicy::new`], with explicit continuation bounds.
+    #[must_use]
+    pub fn with_limits(
+        abi: &DriverAbiTable,
+        guest_os: GuestOs,
+        gpu: Gpu,
+        limits: ReasmLimits,
+    ) -> ObjectPolicy {
+        ObjectPolicy {
+            bridge: Bridge::new(*abi, guest_os, limits),
+            gpu,
+        }
+    }
+
+    /// Whether this policy claims `f` — the predicate `respond` gates on, exposed so the
+    /// chain-composition test asks the type rather than a copy of its list.
+    #[must_use]
+    pub fn claims(f: kayfabe_gsp::RpcFunction) -> bool {
+        OBJECT_VERBS.contains(&f)
+    }
+
+    /// The refusal census — see [`RefusalCensus`].
+    #[must_use]
+    pub fn census(&self) -> &RefusalCensus {
+        &self.bridge.census
+    }
+
+    /// How many commands produced an `RmEvent` the graph **accepted** — the non-vacuity
+    /// instrument for every "no refusals" claim about a boot.
+    #[must_use]
+    pub fn applied(&self) -> u64 {
+        self.bridge.applied
+    }
+
+    /// The object model, for a caller that wants to project it.
+    #[must_use]
+    pub fn gpu(&self) -> &Gpu {
+        &self.gpu
+    }
+
+    /// Translate one command and apply whatever it declared — the `Result` form, for a
+    /// test that asserts an exact [`BridgeRefusal`] variant.
+    ///
+    /// ⊘ Unlike [`CommandPolicy::respond`] this does **not** gate on [`OBJECT_VERBS`]: it
+    /// is the bridge, not the chain link. A test that wants to know what the *chain* does
+    /// with a function must call `respond`.
+    ///
+    /// # Errors
+    ///
+    /// [`BridgeRefusal`], by variant.
+    pub fn deliver(&mut self, cmd: &RpcCommand) -> Result<Translation, BridgeRefusal> {
+        self.bridge.deliver(&mut self.gpu, cmd)
+    }
+}
+
+impl core::fmt::Debug for ObjectPolicy {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.bridge.debug_as("ObjectPolicy", f)
+    }
+}
+
+impl CommandPolicy for ObjectPolicy {
+    /// Answer one command **if it is an object-declaring verb**, else decline.
+    ///
+    /// The accepted/refused shapes are [`GraphPolicy`]'s, verbatim and for its reasons —
+    /// an acknowledgement carrying the request's own body, or
+    /// [`BridgeRefusal::rpc_result`] in the **envelope** with an empty body that
+    /// `RpcCommand::reply` zero-fills. Read that method's docs; they are the argument, and
+    /// duplicating it here would let the two drift.
+    ///
+    /// ★★ `None` for anything not in [`OBJECT_VERBS`] — which in a chain means *"ask the
+    /// next link"*, and at the end of a chain means the FSM's own named refusal
+    /// (`kayfabe_gsp::GspFsm::answer`). Both are correct answers for a verb this port does
+    /// not model; an `NV_OK` would not be.
+    fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        if !ObjectPolicy::claims(cmd.function) {
+            return None;
+        }
+        match self.deliver(cmd) {
+            Ok(_) => Some(Reply {
+                rpc_result: 0, // NV_OK
+                body: cmd.payload.clone(),
+            }),
+            Err(r) => Some(Reply {
+                rpc_result: r.rpc_result(),
+                body: Vec::new(),
+            }),
+        }
+    }
+}
+
 // The concurrency contract, compile-time-asserted (decision #17). `GraphPolicy` must be
 // `Send` or it cannot be a `CommandPolicy` at all — the FSM takes `&mut dyn CommandPolicy`
 // and `kayfabe_gsp::boot` asserts the trait object is `Send`.
 kayfabe_util::assert_send_sync!(RefusalCensus);
 kayfabe_util::assert_send!(GraphPolicy<'static>);
+// ★ `ObjectPolicy` OWNS its `Gpu`, so this asserts something `GraphPolicy`'s bound cannot:
+// that the whole object model — spine, procs, isolate factory — is `Send` when it is moved
+// into a policy the FSM holds across vCPU threads. The `Gpu` behind a `&mut` was already
+// somebody else's problem; here it is this type's.
+kayfabe_util::assert_send!(ObjectPolicy);

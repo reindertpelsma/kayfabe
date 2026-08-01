@@ -81,3 +81,32 @@
 
 pub mod shim;
 pub mod shim_unsafe;
+
+/// ★★★ **The revision this archive was built from** — 40 lowercase hex, or `"unknown"`,
+/// with `-dirty` appended when the worktree had uncommitted tracked changes.
+///
+/// Stamped by `build.rs`; see that file for why a build that cannot answer says `unknown`
+/// rather than guessing.
+///
+/// The `kayfabe-rev:` prefix exists so the answer is findable **from outside the process**:
+/// `strings <binary> | grep kayfabe-rev`. That is the instrument the 2026-08-01 bench
+/// post-mortem did not have — the binary it was debugging contained exactly one 40-hex
+/// string and that string was a build-id, so the only available provenance was "which
+/// worktree did this come from", which was wrong by 19 commits.
+pub static BUILD_REV: &str = concat!("kayfabe-rev:", env!("KAYFABE_BUILD_REV"));
+
+/// ★ The anchor that keeps [`BUILD_REV`] in the archive.
+///
+/// ⊘ Without `#[used]` a `static` that nothing in a linked program reads may be dropped,
+/// and this one is *designed* to have no reader inside the process — its consumer is
+/// `strings`. `#[used]` is the attribute that says "emit this even though it looks dead",
+/// which is exactly the claim being made.
+#[used]
+static BUILD_REV_ANCHOR: &&str = &BUILD_REV;
+
+/// The revision, without the `kayfabe-rev:` marker prefix — for a caller inside the
+/// process (a log line at realize, a test).
+#[must_use]
+pub fn build_rev() -> &'static str {
+    env!("KAYFABE_BUILD_REV")
+}

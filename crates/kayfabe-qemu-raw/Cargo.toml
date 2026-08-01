@@ -17,8 +17,27 @@ kayfabe-vmm-qemu.workspace = true
 # Stage Q4: the chip table and the register plane. ★ This is the crossing the device's
 # MMIO path was missing — the archive was already linked in, and nothing routed into it.
 kayfabe-device.workspace = true
-# The guest driver version the register plane answers as (`shim::GUEST_DRIVER`).
+# The guest driver version the register plane answers as (`shim::GUEST_DRIVER`), and the
+# `GuestOs` the object model is told it is serving.
 kayfabe-abi.workspace = true
+# ★★★ The object model, and the three ports it needs. This is the crossing the 2026-08-01
+# boot measured missing: the register plane reached `GSP_RM_ALLOC` and had nothing to
+# declare it into, so every class was refused by name and `RmInitAdapter` gave up.
+#
+# `kayfabe-rmrpc` is the ONLY crate permitted to name both `RpcCommand` and `RmEvent`, so
+# the link crosses as `Box<dyn CommandPolicy>` and this crate names neither vocabulary.
+kayfabe-rmrpc.workspace = true
+# `Gpu::new` + `GpaSpace` — the object model this port realizes at device-create time.
+kayfabe-core.workspace = true
+# `StillbornIsolates`: there is no forwarding plane in this build and the isolate seam says
+# so by refusing, rather than by a null that something later dereferences.
+kayfabe-isolate.workspace = true
+# `Ga10xArch` — the class table the object model classifies with. ⊘ Chosen over
+# `kayfabe_mocks::WireClassArch` because `kayfabe-mocks` is test-only and this archive
+# ships; see `kayfabe_chips::ga10x`'s module docs for what it refuses and why.
+kayfabe-chips.workspace = true
+# `CommandPolicy` — the trait the object-model link crosses as.
+kayfabe-gsp.workspace = true
 
 # ★ DELIBERATELY NOT `[lints] workspace = true` — the SECOND crate to omit it, and the
 # first one added since the rule was written. `l2_qemu_adapter.md` §2.2 / decision Q2:
