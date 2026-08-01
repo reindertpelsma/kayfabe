@@ -22,6 +22,19 @@
 //! the downgrade did not happen; a *parser* that produced it would be an instrument that
 //! cannot see the thing it exists to see. Either way the test goes red, which is the point.
 //!
+//! # ★★★ The two witnesses are not peers — one is categorical and one is statistical
+//!
+//! `/proc/iomem` and the kernel's PAT record are **categorical**: the kernel names what it
+//! installed and the answer does not depend on how busy the machine is. The timed read is
+//! **statistical**, and on a loaded host it is not always able to answer at all — measured
+//! 2026-08-01 (task #150), a genuine device aperture reads anywhere from 4.2x to 31x the
+//! cached reference depending on load, which straddles any fixed floor. So the categorical
+//! answer is the one this test *requires*, the timed one **corroborates** it, and the timed
+//! one is allowed to return [`memtype::BandwidthVerdict::Inconclusive`] — which is recorded
+//! as its own marker rather than being rounded to either neighbour. What is still red: a
+//! device aperture that reads as *cached*, on every attempt, against a reference that was
+//! stable every time.
+//!
 //! # ⚠ This gate is a BENCH gate and continuous integration cannot reach it
 //!
 //! It needs three things at once: `debugfs` mounted, privilege enough to read
@@ -34,27 +47,51 @@
 //! hand-written address.
 
 use std::fs;
+use std::io::Write as _;
 use std::os::fd::AsFd;
 use std::path::PathBuf;
 
 use kayfabe_linux_raw::memtype::{
-    self, BandwidthVerdict, BandwidthWitness, KernelMemtype, MemtypeError,
+    self, BandwidthVerdict, BandwidthWitness, CachedReference, KernelMemtype, MemtypeError,
+    SCHEDULER_AVERAGING_PASS, Unsettled,
 };
 use kayfabe_linux_raw::{Backing, CachePolicy, HostOffset, HostPageSize, VolatileRegion};
 
 /// One mebibyte — big enough that the timed pass is not dominated by its own loop, small
 /// enough to map on any device that has a register aperture at all.
 const PROBE_LEN: u64 = 1 << 20;
-/// How many strided loads each timed pass performs.
-const READS: u64 = 4096;
+
+/// ★★ How many times the timed comparison may be re-taken before the run gives up on it.
+///
+/// A retry is only legitimate when the ledger says it retried — otherwise it is a flake
+/// hidden behind a loop — so every attempt writes its own line below, and the count is
+/// bounded rather than "until it goes green".
+const TIMED_ATTEMPTS: u32 = 4;
+
+/// ★★★ **Write a marker where a marker can actually be read.**
+///
+/// ⚠ `eprintln!` goes through libtest's capture, which is discarded on the **passing**
+/// path — the arm that matters for a gate whose whole job is to be countable. Measured
+/// 2026-08-01 (task #150) across three hardware-run logs on the bench box: `KVM-GATE`
+/// (56), `SANDBOX-GATE` (10) and `VBIOS-ORACLE-GATE` (13) markers all appear, and
+/// `MEMTYPE-GATE` appears **zero** times — this file's markers had never once reached a
+/// log, so `run_full_suite.sh`'s `gate-census` (which derives its families from the log)
+/// had never counted this family at all, and the one line anybody ever saw from here was
+/// the one libtest dumps when a test *fails*.
+///
+/// `std::io::stderr()` writes straight to the descriptor, exactly as
+/// `kayfabe_linux_raw::kvm_gate::report` does and for exactly the same reason.
+fn record(line: &str) {
+    let _ = writeln!(std::io::stderr(), "{line}");
+}
 
 /// The marker convention this repository uses for a gate whose subject may be absent: it is
 /// written in **both** arms, so "did not run" is visible rather than inferred from silence.
 fn report(test: &str, ran: bool, why: &str) {
     if ran {
-        eprintln!("MEMTYPE-GATE: RAN {test}");
+        record(&format!("MEMTYPE-GATE: RAN {test}"));
     } else {
-        eprintln!("MEMTYPE-GATE: SKIPPED {test} — {why}");
+        record(&format!("MEMTYPE-GATE: SKIPPED {test} — {why}"));
     }
 }
 
@@ -163,7 +200,13 @@ fn the_downgrade_that_111_was_is_visible_and_ordinary_memory_is_not() {
     // ── Instrument 2: the kernel's own record, read while the mapping is LIVE. ──
     // ⚠ Liveness matters: the reservation is created by the mapping and released with it,
     // so reading this after a drop finds either nothing or somebody else's entry.
-    match memtype::recorded_memtype(bar_phys) {
+    //
+    // ★★★ THIS IS THE PRIMARY WITNESS, AND KEEPING ITS ANSWER IS WHAT LETS THE TIMED ONE
+    // BE ALLOWED TO SAY "I CANNOT TELL". It is CATEGORICAL: the kernel names the type it
+    // installed, in its own words, with no statistics anywhere. The timed comparison below
+    // corroborates it. Every path out of this `match` either binds a categorical answer or
+    // leaves the test, so the timed section can never be the only witness in the room.
+    let categorical: KernelMemtype = match memtype::recorded_memtype(bar_phys) {
         Ok(Some(t)) => {
             assert_eq!(
                 t.as_cache_policy(),
@@ -177,6 +220,7 @@ fn the_downgrade_that_111_was_is_visible_and_ordinary_memory_is_not() {
                 matches!(t, KernelMemtype::UncachedMinus | KernelMemtype::Uncached),
                 "unexpected recorded type {t}"
             );
+            t
         }
         Ok(None) => panic!(
             "the kernel kept no record for a live device mapping at {bar_phys:#x}; either the \
@@ -187,7 +231,7 @@ fn the_downgrade_that_111_was_is_visible_and_ordinary_memory_is_not() {
             return;
         }
         Err(e) => panic!("the PAT list did not parse: {e}"),
-    }
+    };
 
     // ── And the control's other answer, through the same code path. ──
     // Anonymous memory is untracked, so the verdict comes from rule 2 rather than from a
@@ -199,37 +243,174 @@ fn the_downgrade_that_111_was_is_visible_and_ordinary_memory_is_not() {
     );
 
     // ── Instrument 3: the two mappings, timed against each other. ──
-    let cached = BandwidthWitness::measure(READS, |i| {
-        let off = (i * 64) % (PROBE_LEN - 64);
-        std::hint::black_box(ram.load_u32(HostOffset::new(off)).expect("in bounds"));
-    });
-    let device = BandwidthWitness::measure(READS, |i| {
-        let off = (i * 64) % (PROBE_LEN - 64);
-        std::hint::black_box(dev.load_u32(HostOffset::new(off)).expect("in bounds"));
-    });
-    eprintln!(
-        "MEMTYPE-GATE: cached {:.2} ns/read, device {:.2} ns/read, ratio {:.1}x",
-        cached.ns_per_read,
-        device.ns_per_read,
-        device.ns_per_read / cached.ns_per_read
-    );
+    //
+    // ★★★ WHAT THIS ARM MAY AND MAY NOT CONCLUDE, measured 2026-08-01 (task #150) on the
+    // 38-core bench box, 440 samples over four load levels:
+    //
+    // | condition | two cached passes, against each other | the device against a cached pass |
+    // |---|---|---|
+    // | idle | 0.91x .. 1.16x | 11.7x .. 13.4x |
+    // | 38-way saturating load | **0.11x .. 11.35x** | 1.58x .. 49.1x |
+    // | 38-way load, passes >= 5 ms | 0.72x .. 1.27x | **4.17x** .. 12.4x |
+    //
+    // Two things follow, and both are why this section looks the way it does rather than
+    // like a single `assert!(ratio >= 10)`. First, the middle row: on a busy host with
+    // short passes, two passes over *the same cached memory* reached 11.35x apart — past
+    // the uncached floor — so the instrument could have called ordinary write-back memory
+    // a device aperture. That is what `measure_over` and the reference's own stability
+    // check are for. Second, the bottom row: even with a stable reference, a genuine
+    // device aperture on a loaded host can read as low as 4.17x. There is no ratio that
+    // separates the populations under load, so the honest instrument has a band where it
+    // does not answer — and the 9.1x that failed 1 run in 180 on 2026-08-01 is inside it.
+    let mut verdicts: Vec<(u32, BandwidthVerdict, f64, f64)> = Vec::new();
+    let mut last_reference = None;
+    for attempt in 1..=TIMED_ATTEMPTS {
+        // ★★ A PAIR, not a single pass: the reference is the whole instrument, so the
+        // reference has to be checkable, and two passes over the same backing are what
+        // makes its stability an observable rather than an assumption.
+        let reference = CachedReference::from_pair(
+            BandwidthWitness::measure_over(SCHEDULER_AVERAGING_PASS, |i| {
+                let off = (i * 64) % (PROBE_LEN - 64);
+                std::hint::black_box(ram.load_u32(HostOffset::new(off)).expect("in bounds"));
+            }),
+            BandwidthWitness::measure_over(SCHEDULER_AVERAGING_PASS, |i| {
+                let off = (i * 64) % (PROBE_LEN - 64);
+                std::hint::black_box(ram.load_u32(HostOffset::new(off)).expect("in bounds"));
+            }),
+        );
+        let device = BandwidthWitness::measure_over(SCHEDULER_AVERAGING_PASS, |i| {
+            let off = (i * 64) % (PROBE_LEN - 64);
+            std::hint::black_box(dev.load_u32(HostOffset::new(off)).expect("in bounds"));
+        });
+        let verdict = device.against(reference);
+        // ⊘ EVERY attempt is on the record, including the ones that were retried away. A
+        // bounded retry whose attempts are not written down is a flake behind a loop.
+        record(&format!(
+            "MEMTYPE-GATE: TIMED {NAME} attempt {attempt}/{TIMED_ATTEMPTS} — cached \
+             {:.2}/{:.2} ns/read (spread {:.2}x), device {:.2} ns/read, ratio {:.1}x, \
+             verdict {verdict:?}",
+            reference.first.ns_per_read,
+            reference.second.ns_per_read,
+            reference.spread(),
+            device.ns_per_read,
+            device.ratio_against(reference),
+        ));
+        verdicts.push((
+            attempt,
+            verdict,
+            device.ratio_against(reference),
+            reference.spread(),
+        ));
+        last_reference = Some(reference);
+        if verdict == BandwidthVerdict::UncachedClass {
+            break;
+        }
+    }
+    let reference = last_reference.expect("the loop runs at least once");
+
+    // ⊘ The reference must not be uncached with respect to itself — a floor at or below
+    // 1.0 would make every mapping in the world uncached.
     assert_eq!(
-        device.against(cached),
-        BandwidthVerdict::UncachedClass,
-        "a real device aperture read at {:.2} ns against a cached {:.2} ns — under \
-         {}x, so either this host caches its registers or the witness is not measuring \
-         what it claims",
-        device.ns_per_read,
-        cached.ns_per_read,
-        memtype::UNCACHED_RATIO_FLOOR
-    );
-    assert_eq!(
-        cached.against(cached),
+        reference.first.against(reference),
         BandwidthVerdict::Cached,
         "the reference must not be uncached with respect to itself"
     );
 
+    // ★★★ THE THREE OUTCOMES, AND WHY ONLY ONE OF THEM IS RED.
+    //
+    // `Cached` on EVERY attempt is the `#111` shape standing still: a stable reference,
+    // four times over, and a register aperture that reads like RAM. That is a defect in
+    // the host, the mapping or this instrument and it must be loud.
+    //
+    // A single `UncachedClass` is corroboration and the test passes.
+    //
+    // Anything else is *unsettled*, and an unsettled reading is not a failed one. The
+    // categorical instrument above has already answered — it named the type the kernel
+    // installed — and it is the primary witness precisely because it does not depend on
+    // how busy the box is. So this arm records what it saw and does not fail.
+    // ⊘ It is NOT a skip: the test ran, its assertions ran, and the line below says
+    // exactly which corroboration is missing rather than leaving a silent green.
+    let corroborated = verdicts
+        .iter()
+        .any(|&(_, v, _, _)| v == BandwidthVerdict::UncachedClass);
+    let all_cached = verdicts
+        .iter()
+        .all(|&(_, v, _, _)| v == BandwidthVerdict::Cached);
+    assert!(
+        !all_cached,
+        "a real device aperture read as CACHED on all {} attempts against a reference that \
+         was stable each time (ratios {:?}); either this host caches its registers or the \
+         witness is not measuring what it claims. The kernel's own record for this range \
+         says {categorical}.",
+        verdicts.len(),
+        verdicts.iter().map(|&(_, _, r, _)| r).collect::<Vec<_>>()
+    );
+    if !corroborated {
+        record(&format!(
+            "MEMTYPE-GATE: UNCORROBORATED {NAME} — the timed witness did not settle in {} \
+             attempts (verdicts {:?}); the categorical instrument answered {categorical} and \
+             it is the primary. Ratios {:?}, reference spreads {:?}. A host under enough \
+             load that two passes over the same cached memory disagree cannot be asked this \
+             question, and 4.17x..12.4x is the measured range a genuine aperture produces \
+             under load (2026-08-01, task #150) — which straddles the {}x floor.",
+            verdicts.len(),
+            verdicts.iter().map(|&(_, v, _, _)| v).collect::<Vec<_>>(),
+            verdicts.iter().map(|&(_, _, r, _)| r).collect::<Vec<_>>(),
+            verdicts.iter().map(|&(_, _, _, s)| s).collect::<Vec<_>>(),
+            memtype::UNCACHED_RATIO_FLOOR,
+        ));
+        // ★ And the unsettled arm is only reachable for the two stated reasons. A verdict
+        // that is neither `Cached`, `UncachedClass`, nor one of the two named ways of
+        // being unsettled would mean a fourth situation nobody has reasoned about.
+        for &(attempt, v, _, _) in &verdicts {
+            assert!(
+                matches!(
+                    v,
+                    BandwidthVerdict::Cached
+                        | BandwidthVerdict::Inconclusive(
+                            Unsettled::InTheBand | Unsettled::ReferenceUnstable
+                        )
+                ),
+                "attempt {attempt} produced {v:?}, which is not one of the outcomes this \
+                 test knows how to read"
+            );
+        }
+    }
+
     report(NAME, true, "");
+}
+
+/// ★★★ **The marker reaches a log at all** — the non-vacuity argument for this whole
+/// family, tested rather than asserted in a comment.
+///
+/// Measured 2026-08-01 (task #150): across three of the bench box's hardware-run logs,
+/// `KVM-GATE` appeared 56 times, `SANDBOX-GATE` 10, `VBIOS-ORACLE-GATE` 13 — and
+/// `MEMTYPE-GATE` **zero**, because this file wrote its markers with `eprintln!` and
+/// libtest discards captured output on the **passing** path. The gate family was therefore
+/// invisible to `run_full_suite.sh`'s `gate-census`, which derives its families from the
+/// log: a family that never prints is not a family that passes, it is a family that is not
+/// counted. A comment saying "write to the real stderr" would not have caught the
+/// regression; running a child and looking does.
+///
+/// ★ This is also the one assertion in this file that a CI runner executes end to end: the
+/// child's own gate may skip for want of a device, and `MEMTYPE-GATE: SKIPPED` is a marker
+/// too. It is the *silence* that is the defect.
+#[test]
+fn the_gate_marker_survives_libtests_capture() {
+    let exe = std::env::current_exe().expect("a test binary knows its own path");
+    // ⚠ Deliberately NO `--nocapture`: capture is the condition under which the marker has
+    // to survive, and passing it would test the opposite of what is claimed. The child runs
+    // only the gated test, so there is no recursion here.
+    let out = std::process::Command::new(&exe)
+        .args(["--test-threads=1", "the_downgrade_that_111_was"])
+        .output()
+        .expect("the test binary is executable");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("MEMTYPE-GATE: "),
+        "a child run of {exe:?} produced no MEMTYPE-GATE marker on its real stderr, so \
+         nothing this file does can be counted from a run log. stderr was: {err:?}"
+    );
 }
 
 /// ★★ The instrument's **absence** answers, rather than being silently permissive.

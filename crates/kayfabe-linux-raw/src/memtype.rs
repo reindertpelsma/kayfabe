@@ -28,7 +28,7 @@
 //! |---|---|---|---|
 //! | [`classify_physical`] | `/proc/iomem` | **predicts** it | it is the kernel's own predicate, evaluated before the mapping exists |
 //! | [`recorded_memtype`] | `/sys/kernel/debug/x86/pat_memtype_list` | **reports** it | needs `debugfs` and x86; a range with no entry is untracked, not write-back-by-proof |
-//! | [`BandwidthWitness`] | the mapping itself, timed | **exhibits** it | needs a live mapping and a reference; a ratio, never a name |
+//! | [`BandwidthWitness`] | the mapping itself, timed | **exhibits** it | needs a live mapping and a *checkable* reference; a ratio, never a name — and on a busy host, often no answer at all |
 //!
 //! ★★ They are deliberately three, because each one alone has a way of being green while
 //! wrong. `/proc/iomem` is a prediction about a mapping that does not exist yet. The PAT list
@@ -54,7 +54,7 @@
 
 use std::fmt;
 use std::fs;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::CachePolicy;
 
@@ -511,7 +511,7 @@ pub fn require_effective(
 // Instrument 3 — the mapping itself, timed
 // ─────────────────────────────────────────────────────────────────────────────────────
 
-/// ★★ **The ratio below which a mapping is not uncached**, as a dimensionless number.
+/// ★★ **The ratio at or above which a mapping is uncached**, as a dimensionless number.
 ///
 /// A cached load is a few nanoseconds; an uncached one is a bus transaction. The gap is
 /// enormous and the threshold does not need to be delicate — what it needs is to be far
@@ -525,17 +525,101 @@ pub fn require_effective(
 /// per-access cost sits in the numerator and the denominator and compresses the ratio by
 /// twenty-fold. A floor chosen from the 602 would have been a floor the instrument itself
 /// could not clear, which is the shape of a threshold that looks generous and is not.
+///
+/// ⊘ **It is a floor and it is NOT the complement of [`CACHED_RATIO_CEILING`].** Below it
+/// the answer is *not* "cached"; below it the answer is "cached, or not settled" — see
+/// [`BandwidthVerdict`] for why that third arm had to exist.
 pub const UNCACHED_RATIO_FLOOR: f64 = 10.0;
 
+/// ★★★ **The ratio at or below which a mapping is cached** — the *other* bound, and the one
+/// whose absence made every boundary case a coin flip.
+///
+/// Measured 2026-08-01 (task #150) with `tests/effective_memtype.rs`'s own two passes,
+/// 440 samples over four load levels on a 38-core host: **two passes over cached memory
+/// never differed by more than 1.27x** once each pass covered
+/// [`SCHEDULER_AVERAGING_PASS`], and a real device aperture never came in below **4.17x**
+/// under the same conditions. `2.0` sits in that gap with margin on both sides, and it is
+/// deliberately nowhere near the floor above: the space between the two is the range where
+/// this instrument's honest answer is *"I cannot tell"*.
+pub const CACHED_RATIO_CEILING: f64 = 2.0;
+
+/// ★★ **How far two passes over the same cached memory may disagree before the instrument
+/// is measuring the scheduler rather than the memory.**
+///
+/// The reference is the whole instrument (see [`CachedReference`]), so the reference has to
+/// be checkable. Two passes over *cached* memory should agree; when they do not, nothing
+/// the third pass says about a *device* mapping means anything either.
+///
+/// Measured 2026-08-01 (task #150), 38-way saturating load on a 38-core host: with passes
+/// of 4096 reads (~0.5 ms, shorter than a scheduling quantum) the two cached passes reached
+/// **11.35x** apart — past [`UNCACHED_RATIO_FLOOR`], i.e. noise alone could have made
+/// ordinary write-back memory read as uncached. With passes covering
+/// [`SCHEDULER_AVERAGING_PASS`] the same load produced at most **1.27x**. `2.0` is above
+/// every stable-instrument observation and far below the pathological ones.
+pub const REFERENCE_SPREAD_CEILING: f64 = 2.0;
+
+/// ★★★ **How long a timed pass must last before its rate is a property of the memory
+/// rather than of the run queue.**
+///
+/// This is not a per-box constant and that is the point — it is a statement about the
+/// *scheduler*, not about the host's speed. A pass much shorter than a scheduling quantum
+/// is either preempted or not, all-or-nothing, and a single preemption then lands entirely
+/// in one of the two passes being compared. A pass long enough to contain several quanta
+/// takes its share of interference in *both* numerator and denominator, where it cancels.
+///
+/// Measured 2026-08-01 (task #150) under 38-way saturating load, cached-pass against
+/// cached-pass: 4096 reads (~0.5 ms) spread from 0.11x to **11.35x**; 16 384 reads
+/// (~3.4 ms) from 0.30x to 3.02x; 65 536 reads (~13.7 ms) from 0.72x to **1.27x**.
+/// [`BandwidthWitness::measure_over`] reaches this by doubling rather than by a read count
+/// somebody tuned, so a host ten times faster performs ten times as many reads and gets the
+/// same guarantee.
+pub const SCHEDULER_AVERAGING_PASS: Duration = Duration::from_millis(5);
+
+/// Where [`BandwidthWitness::measure_over`] starts doubling from.
+const FIRST_PROBE_READS: u64 = 256;
+/// ★ A bound on the doubling, so a pathological clock cannot turn the loop into a hang. At
+/// this many reads a pass shorter than [`SCHEDULER_AVERAGING_PASS`] would mean sub-100 ps
+/// per read, which no load through this crate's checked accessors can produce.
+const MAX_PROBE_READS: u64 = 1 << 26;
+
 /// What a timing comparison says.
+///
+/// ★★★ **Three arms, because the two-armed version made every boundary case a coin flip.**
+/// The measured failure (task #150, 1 run in 180 on a 38-core host, 2026-08-01): a device
+/// aperture came in at **9.1x** against a floor of 10, and a verdict with no third arm
+/// answered [`Self::Cached`] — flatly false for a register aperture — because "not
+/// uncached enough to say so" was spelled with the same word as "indistinguishable from
+/// RAM". The two facts are different and this enum now keeps them apart, the way
+/// [`EffectiveMemtype::effective`]`: None` already keeps *"I could not tell"* apart from
+/// *"it is wrong"* on the categorical side of this module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BandwidthVerdict {
-    /// Indistinguishable from the cached reference.
+    /// At most [`CACHED_RATIO_CEILING`] times the reference — indistinguishable from
+    /// memory known to be cached.
     Cached,
+    /// ★ **Neither.** Carries which of the two ways it failed to settle; ⊘ a caller that
+    /// maps this to `Cached` has rebuilt the defect the third arm exists to remove.
+    Inconclusive(Unsettled),
     /// At least [`UNCACHED_RATIO_FLOOR`] times slower than the reference — uncached, in one
     /// of its forms. ★ It cannot say **which**: `UC-`, `UC` and `WC` are all uncached for
     /// loads, so a read-side witness may not name them apart and does not try.
     UncachedClass,
+}
+
+/// Why a [`BandwidthVerdict`] could not be settled. Two distinguishable situations, kept
+/// distinguishable because they call for different responses: one is worth retrying and one
+/// says the host is too busy for this instrument to mean anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unsettled {
+    /// The ratio landed strictly between [`CACHED_RATIO_CEILING`] and
+    /// [`UNCACHED_RATIO_FLOOR`] — a real number, in the range where this instrument does
+    /// not claim to discriminate.
+    InTheBand,
+    /// ★★ The two reference passes disagreed with each other by more than
+    /// [`REFERENCE_SPREAD_CEILING`]. Nothing was learned about the subject at all: the
+    /// denominator is not a reading of cached memory, so no ratio taken against it is a
+    /// reading of anything.
+    ReferenceUnstable,
 }
 
 /// A timed read pass over a mapping.
@@ -547,12 +631,72 @@ pub struct BandwidthWitness {
     pub reads: u64,
 }
 
+/// ★★ **Two passes over memory known to be cached, and the check that they agree.**
+///
+/// The single-pass reference this replaced could not tell a reference from an accident: a
+/// pass that lost its core for one quantum produced a denominator with no relation to the
+/// memory it ran over, and every verdict computed against it inherited that with no way to
+/// say so. Two passes make the reference's *own* stability an observable, and it is
+/// observable from data the instrument already had to collect.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CachedReference {
+    /// The first pass.
+    pub first: BandwidthWitness,
+    /// The second pass, over cached memory of the same shape.
+    pub second: BandwidthWitness,
+}
+
+impl CachedReference {
+    /// Two passes over cached memory, in the order they were taken.
+    #[must_use]
+    pub const fn from_pair(first: BandwidthWitness, second: BandwidthWitness) -> Self {
+        Self { first, second }
+    }
+
+    /// How far the two passes disagree, as a number `>= 1.0`.
+    ///
+    /// ★ Infinite when either pass timed at zero — a pass the clock could not resolve is
+    /// not a reference, and reporting it as a spread of `1.0` would be the permissive
+    /// reading of a number the clock never produced.
+    #[must_use]
+    pub fn spread(&self) -> f64 {
+        let (lo, hi) = if self.first.ns_per_read <= self.second.ns_per_read {
+            (self.first.ns_per_read, self.second.ns_per_read)
+        } else {
+            (self.second.ns_per_read, self.first.ns_per_read)
+        };
+        if lo > 0.0 { hi / lo } else { f64::INFINITY }
+    }
+
+    /// Whether the two passes agree closely enough for a ratio against them to mean
+    /// anything — [`REFERENCE_SPREAD_CEILING`].
+    #[must_use]
+    pub fn is_stable(&self) -> bool {
+        self.spread() <= REFERENCE_SPREAD_CEILING
+    }
+
+    /// The denominator: the **slower** of the two passes.
+    ///
+    /// ★ The conservative choice, deliberately. A larger denominator makes every ratio
+    /// smaller, so it can only ever make this instrument *less* willing to call something
+    /// uncached — and calling a mapping uncached when it is not is the failure that would
+    /// let a `#111`-shaped downgrade pass a green test.
+    #[must_use]
+    pub fn ns_per_read(&self) -> f64 {
+        self.first.ns_per_read.max(self.second.ns_per_read)
+    }
+}
+
 impl BandwidthWitness {
     /// Time `reads` invocations of `read`.
     ///
     /// ★ The closure takes the read **index**, so the caller strides its own mapping and
     /// this module never needs to hold a pointer or know the mapping's shape. That is what
     /// keeps this instrument outside the pointer surface entirely.
+    ///
+    /// ⚠ Prefer [`Self::measure_over`]. A count chosen by the caller is a pass whose
+    /// *duration* nobody controls, and duration is what decides whether the number means
+    /// anything — see [`SCHEDULER_AVERAGING_PASS`].
     ///
     /// # Panics
     /// If `reads == 0` — a rate over no samples is not a number.
@@ -562,16 +706,45 @@ impl BandwidthWitness {
         for i in 0..reads {
             read(i);
         }
-        let ns = t0.elapsed().as_nanos();
         Self {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "a duration in nanoseconds is far below f64's exact-integer range \
-                          for any pass that finishes, and the result is a ratio"
-            )]
-            ns_per_read: ns as f64 / reads as f64,
+            ns_per_read: rate(t0.elapsed(), reads),
             reads,
         }
+    }
+
+    /// ★★★ **Time a pass that lasts at least `min_pass`, by doubling the read count until
+    /// it does.**
+    ///
+    /// The host's speed decides how many reads that takes, which is the whole point: a
+    /// fixed read count is a per-box constant in disguise, and this module already refuses
+    /// per-box constants for the same reason on the ratio side.
+    ///
+    /// Each attempt at least doubles the elapsed time, so the loop terminates in at most
+    /// `log2(MAX_PROBE_READS / FIRST_PROBE_READS)` attempts, and the total work is bounded
+    /// by twice the final pass.
+    pub fn measure_over(min_pass: Duration, mut read: impl FnMut(u64)) -> Self {
+        let mut reads = FIRST_PROBE_READS;
+        loop {
+            let t0 = Instant::now();
+            for i in 0..reads {
+                read(i);
+            }
+            let elapsed = t0.elapsed();
+            if elapsed >= min_pass || reads >= MAX_PROBE_READS {
+                return Self {
+                    ns_per_read: rate(elapsed, reads),
+                    reads,
+                };
+            }
+            reads *= 2;
+        }
+    }
+
+    /// The dimensionless number [`Self::against`] judges — exposed so a diagnostic prints
+    /// the figure that was actually decided on rather than one it recomputed its own way.
+    #[must_use]
+    pub fn ratio_against(self, cached_reference: CachedReference) -> f64 {
+        self.ns_per_read / cached_reference.ns_per_read()
     }
 
     /// Compare against a reference pass over memory known to be cached.
@@ -580,14 +753,34 @@ impl BandwidthWitness {
     /// nothing across hosts, and a threshold in nanoseconds would be a constant that has to
     /// be re-tuned per box — which is a constant nobody re-tunes. A *ratio against a pass
     /// this same process just performed* carries the host's own speed inside it.
+    ///
+    /// ★★★ And because the reference is the whole instrument, the reference is checked
+    /// first: an unstable one yields [`Unsettled::ReferenceUnstable`] and no ratio is
+    /// reported as meaning anything.
     #[must_use]
-    pub fn against(self, cached_reference: Self) -> BandwidthVerdict {
-        if self.ns_per_read >= cached_reference.ns_per_read * UNCACHED_RATIO_FLOOR {
+    pub fn against(self, cached_reference: CachedReference) -> BandwidthVerdict {
+        if !cached_reference.is_stable() {
+            return BandwidthVerdict::Inconclusive(Unsettled::ReferenceUnstable);
+        }
+        let ratio = self.ratio_against(cached_reference);
+        if ratio >= UNCACHED_RATIO_FLOOR {
             BandwidthVerdict::UncachedClass
-        } else {
+        } else if ratio <= CACHED_RATIO_CEILING {
             BandwidthVerdict::Cached
+        } else {
+            BandwidthVerdict::Inconclusive(Unsettled::InTheBand)
         }
     }
+}
+
+/// Nanoseconds per read, as one place rather than two.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a duration in nanoseconds is far below f64's exact-integer range for any \
+              pass that finishes, and the result is a ratio"
+)]
+fn rate(elapsed: Duration, reads: u64) -> f64 {
+    elapsed.as_nanos() as f64 / reads as f64
 }
 
 #[cfg(test)]
@@ -681,24 +874,131 @@ mod tests {
         assert!(!bad.holds());
     }
 
+    /// A pass at a chosen rate, without running anything — the verdict logic is arithmetic
+    /// and testing it through a real clock would test the clock.
+    fn pass(ns_per_read: f64) -> BandwidthWitness {
+        BandwidthWitness {
+            ns_per_read,
+            reads: 1000,
+        }
+    }
+
+    /// A stable reference at `ns` — the two passes identical, which is the ideal case the
+    /// band's bounds are stated against.
+    fn reference_at(ns: f64) -> CachedReference {
+        CachedReference::from_pair(pass(ns), pass(ns))
+    }
+
     #[test]
-    fn the_bandwidth_witness_is_a_ratio_and_both_verdicts_are_reachable() {
-        let reference = BandwidthWitness {
-            ns_per_read: 2.0,
-            reads: 1000,
-        };
-        let slow = BandwidthWitness {
-            ns_per_read: 2.0 * UNCACHED_RATIO_FLOOR,
-            reads: 1000,
-        };
-        let just_under = BandwidthWitness {
-            ns_per_read: 2.0 * UNCACHED_RATIO_FLOOR - 0.001,
-            reads: 1000,
-        };
-        assert_eq!(slow.against(reference), BandwidthVerdict::UncachedClass);
-        assert_eq!(just_under.against(reference), BandwidthVerdict::Cached);
-        assert_eq!(reference.against(reference), BandwidthVerdict::Cached);
-        // The measurement itself counts what it was asked to. The instrument's
+    fn the_bandwidth_witness_is_a_ratio_and_all_three_verdicts_are_reachable() {
+        let reference = reference_at(2.0);
+        assert_eq!(
+            pass(2.0 * UNCACHED_RATIO_FLOOR).against(reference),
+            BandwidthVerdict::UncachedClass
+        );
+        assert_eq!(
+            pass(2.0 * CACHED_RATIO_CEILING).against(reference),
+            BandwidthVerdict::Cached
+        );
+        assert_eq!(pass(2.0).against(reference), BandwidthVerdict::Cached);
+        // ★★★ THE ARM THIS FILE EXISTS FOR. 9.1x is the ratio a real device aperture
+        // produced on 2026-08-01 (task #150, 1 run in 180), and the two-armed version
+        // answered `Cached` — which is flatly false for a register aperture.
+        assert_eq!(
+            pass(2.0 * 9.1).against(reference),
+            BandwidthVerdict::Inconclusive(Unsettled::InTheBand)
+        );
+        // ...and the whole band is that arm, not just the point that happened to fire.
+        for r in [2.001, 3.0, 5.0, 9.999] {
+            assert_eq!(
+                pass(2.0 * r).against(reference),
+                BandwidthVerdict::Inconclusive(Unsettled::InTheBand),
+                "ratio {r} is between the two bounds and is not a verdict"
+            );
+        }
+        // ⊘ And neither bound is the other's complement: there is real space between them.
+        const { assert!(CACHED_RATIO_CEILING < UNCACHED_RATIO_FLOOR) };
+    }
+
+    #[test]
+    fn an_unstable_reference_settles_nothing_however_extreme_the_subject() {
+        // ★★ Measured 2026-08-01 (task #150): under 38-way load with passes shorter than a
+        // scheduling quantum, two passes over the SAME cached memory came in 11.35x apart.
+        // A ratio against that denominator is a number about the run queue.
+        let wild = CachedReference::from_pair(pass(2.0), pass(2.0 * 11.35));
+        assert!(!wild.is_stable());
+        for subject in [0.001, 2.0, 20.0, 1.0e6] {
+            assert_eq!(
+                pass(subject).against(wild),
+                BandwidthVerdict::Inconclusive(Unsettled::ReferenceUnstable),
+                "an unstable reference cannot be rescued by the subject's own extremity"
+            );
+        }
+        // The check is symmetric — which pass was the slow one is not a property of the
+        // memory, and a one-sided comparison would pass half the pathological cases.
+        let other_way = CachedReference::from_pair(pass(2.0 * 11.35), pass(2.0));
+        assert!(!other_way.is_stable());
+        assert!((wild.spread() - other_way.spread()).abs() < 1.0e-9);
+        // And a reference that agrees with itself is stable, at the ceiling and below it.
+        assert!(reference_at(2.0).is_stable());
+        assert!(
+            CachedReference::from_pair(pass(2.0), pass(2.0 * REFERENCE_SPREAD_CEILING)).is_stable()
+        );
+        assert!(
+            !CachedReference::from_pair(pass(2.0), pass(2.0 * REFERENCE_SPREAD_CEILING + 0.001))
+                .is_stable()
+        );
+        // ⊘ A pass the clock could not resolve is not a reference. Reporting a spread of
+        // 1.0 for it would be the permissive reading of a number never produced.
+        let unresolved = CachedReference::from_pair(pass(0.0), pass(0.0));
+        assert!(unresolved.spread().is_infinite());
+        assert!(!unresolved.is_stable());
+    }
+
+    #[test]
+    fn the_denominator_is_the_slower_pass_so_the_uncached_claim_is_the_conservative_one() {
+        // The direction matters: a bigger denominator only ever makes a subject look LESS
+        // uncached, and claiming uncached wrongly is what would let a #111-shaped downgrade
+        // through a green test.
+        let skewed = CachedReference::from_pair(pass(1.0), pass(1.5));
+        assert!((skewed.ns_per_read() - 1.5).abs() < 1.0e-9);
+        assert!((skewed.spread() - 1.5).abs() < 1.0e-9);
+        // 14x the FASTER pass is only 9.33x the slower one, and 9.33x is not a verdict.
+        assert_eq!(
+            pass(14.0).against(skewed),
+            BandwidthVerdict::Inconclusive(Unsettled::InTheBand)
+        );
+        assert!((pass(15.0).ratio_against(skewed) - 10.0).abs() < 1.0e-9);
+        assert_eq!(pass(15.0).against(skewed), BandwidthVerdict::UncachedClass);
+    }
+
+    #[test]
+    fn a_pass_grows_until_it_covers_the_scheduler_averaging_window() {
+        // ★★★ The parameter the 2026-08-01 measurement blamed: a pass shorter than a
+        // scheduling quantum takes a preemption all-or-nothing, and the whole of it lands
+        // in one side of a ratio. `measure_over` reaches the duration by DOUBLING, so the
+        // read count is derived from the host rather than tuned for one.
+        let mut seen = 0u64;
+        let w = BandwidthWitness::measure_over(SCHEDULER_AVERAGING_PASS, |_| {
+            seen += 1;
+            std::hint::black_box(());
+        });
+        // It really did take at least as long as it was asked to.
+        let total_ns = w.ns_per_read * w.reads as f64;
+        let asked = SCHEDULER_AVERAGING_PASS.as_nanos() as f64;
+        assert!(
+            total_ns >= asked,
+            "a pass of {} reads at {} ns/read is {total_ns} ns, short of the {asked} ns asked for",
+            w.reads,
+            w.ns_per_read
+        );
+        // ...by doubling, so the final count is a power of two above the first probe, and
+        // the work done is bounded by twice the final pass.
+        assert!(w.reads >= FIRST_PROBE_READS);
+        assert!(w.reads.is_power_of_two());
+        assert!(seen < 2 * w.reads + FIRST_PROBE_READS);
+        assert!(w.ns_per_read > 0.0);
+        // The fixed-count primitive still counts what it was asked to. The instrument's
         // discriminating power is measured against a real device aperture in
         // `crates/kayfabe-linux-raw/tests/effective_memtype.rs`, not here.
         let w = BandwidthWitness::measure(64, |_| std::hint::black_box(()));
