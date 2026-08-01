@@ -190,9 +190,11 @@
 //! independent oracles). The address table's populate sources are `GPU_PROMOTE_CTX` and
 //! the copy-engine page-table-write capture, and both belong to `kayfabe-fwd`.
 
+pub mod fault;
 mod policy;
 mod reasm;
 
+pub use fault::{FaultEmitRefusal, rc_triggered_for};
 pub use policy::{GraphPolicy, RefusalCensus};
 pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassembled, Reassembler};
 
@@ -948,7 +950,13 @@ pub fn translate(
             Err(BridgeRefusal::ContinuationWithoutHead { code: cmd.code })
         }
         // Ours to send, never to receive.
-        RpcFunction::InitDone | RpcFunction::PostEvent => {
+        //
+        // ★ `RcTriggered` joins this arm rather than getting one of its own, and the
+        // direction is what makes it safe to fold: it is the simulated-fault carrier
+        // *we* post (`fault::rc_triggered_for`), and a guest that sends one is a guest
+        // telling us its own hardware faulted. There is no reading of that which is not
+        // hostile or broken, so it is refused by the same name as the other two.
+        RpcFunction::InitDone | RpcFunction::PostEvent | RpcFunction::RcTriggered => {
             Err(BridgeRefusal::EventFromGuest { code: cmd.code })
         }
         RpcFunction::Other(code) => Err(BridgeRefusal::UnknownFunction { code }),

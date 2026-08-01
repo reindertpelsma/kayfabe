@@ -7,20 +7,44 @@
 //! `kayfabe_crec` has been driving them from a recorded trace for weeks — but a *guest*
 //! could not reach them, because the hypervisor shim's register region returned a constant
 //! and said so in its own comment. This module is the missing routing, and nothing else:
-//! it decides which of four sources answers an offset and it holds the lock that makes the
+//! it decides which of five sources answers an offset and it holds the lock that makes the
 //! FSM usable from more than one vCPU.
 //!
-//! # ★★ The four sources, in the order they are asked
+//! # ★★ The five sources, in the order they are asked
 //!
 //! 1. **The chip's silicon constants** ([`crate::BootReg`]) — exact-offset, stateless.
-//! 2. **The ROM window** — the synthetic VBIOS, generated from the same profile the
+//! 2. **The free-running nanosecond counter** ([`crate::PtimerRegs`]) — the only source
+//!    whose answer is a function of neither the chip nor the FSM. See below.
+//! 3. **The ROM window** — the synthetic VBIOS, generated from the same profile the
 //!    device's PCI identity comes from.
-//! 3. **The GSP register model** — anything [`kayfabe_arch::GspModel::decode_reg`] claims.
-//! 4. **Nobody** — and this is where the interesting decision is, below.
+//! 4. **The GSP register model** — anything [`kayfabe_arch::GspModel::decode_reg`] claims.
+//! 5. **Nobody** — and this is where the interesting decision is, below.
 //!
-//! The order is safe because the three claimants are provably disjoint: `assert_disjoint`
+//! The order is safe because the four claimants are provably disjoint (`assert_disjoint`): `assert_disjoint`
 //! checks it for a chip at construction, so a future row whose ROM window swallowed a GSP
 //! register is a refusal at realize and not a value nobody can explain.
+//!
+//! # ★★★ A STOPPED CLOCK IS AN UNKILLABLE HANG, WHICH IS WHY THE CLOCK IS A CONSTRUCTOR
+//! ARGUMENT
+//!
+//! The driver's every bounded wait — falcon reset-ready, memory scrubbing, DMA idle, halt,
+//! the message-queue polls — is a bare loop whose only exit besides success is
+//! `gpuCheckTimeout`, and on this generation `gpuCheckTimeout` reads the GPU's own
+//! nanosecond counter through the virtual-function aperture
+//! (`ogkm-580: src/nvidia/src/kernel/gpu/timer/arch/turing/timer_tu102.c:130-155`, whose
+//! `tmrReadTimeLoReg_TU102`/`tmrReadTimeHiReg_TU102` read
+//! `NV_VIRTUAL_FUNCTION_TIME_0`/`_TIME_1`). Answer that counter with a constant and *every*
+//! one of those loops becomes unbounded: the driver spins in kernel context, uninterruptible
+//! by any signal, and prints nothing at all, because the print only exists on the timeout
+//! arm it can never reach. One example, in full, is
+//! `kflcnPreResetWait_GA102`
+//! (`ogkm-580: src/nvidia/src/kernel/gpu/falcon/arch/ampere/kernel_falcon_ga102.c:212-224`).
+//!
+//! So [`NanoClock`] is **not** a port with a default. `set_ram`/`set_policy` can default,
+//! because [`RefusingRam`] refuses *by name* and a refusal is a diagnosis. There is no
+//! refusing answer for a register read — a wrong number is the only thing a reader can be
+//! handed — so the decision is moved to where it cannot be skipped: [`RegPlane::new`] takes
+//! the clock, and a caller that has not thought about time does not compile.
 //!
 //! # ★★★ An unclaimed register reads ZERO, and that is a decision with a cost
 //!
@@ -85,6 +109,56 @@ impl GuestRam for RefusingRam {
     }
 }
 
+/// ★★★ The device's free-running nanosecond counter, as a port.
+///
+/// The one thing this plane serves that is a function of neither the chip nor the boot
+/// state machine. See the module docs for why it is a constructor argument rather than a
+/// settable port with a default.
+///
+/// The contract is narrow and all of it is load-bearing:
+///
+/// - **Monotonic non-decreasing.** The driver reads the counter as high / low / high and
+///   retries when the high half moved; a counter that went backwards would make an elapsed
+///   time negative and a timeout fire immediately or never.
+/// - **Advancing.** Two calls separated by real work must not return the same value
+///   forever. This is the whole point of the type.
+/// - **Nanoseconds.** The driver's timeouts are in microseconds and it converts by
+///   dividing, so the *unit* is part of the contract even though nothing can check it.
+pub trait NanoClock: Send + Sync + core::fmt::Debug {
+    /// Nanoseconds since an arbitrary, fixed origin.
+    fn now_ns(&self) -> u64;
+}
+
+/// A [`NanoClock`] that advances a fixed amount per reading, from zero.
+///
+/// ★ For tests and for any caller that must be reproducible: it makes the counter a pure
+/// function of *how many times it has been read*, so a replay produces bit-identical
+/// values. It is deliberately **not** the default for a live device — the driver's timeouts
+/// are wall-clock quantities, and a clock whose rate depends on how often the guest happens
+/// to poll turns a 4-second timeout into an unpredictable number of iterations.
+#[derive(Debug)]
+pub struct SteppingClock {
+    step_ns: u64,
+    now: AtomicU64,
+}
+
+impl SteppingClock {
+    /// A clock that advances `step_ns` nanoseconds per reading.
+    #[must_use]
+    pub fn new(step_ns: u64) -> SteppingClock {
+        SteppingClock {
+            step_ns,
+            now: AtomicU64::new(0),
+        }
+    }
+}
+
+impl NanoClock for SteppingClock {
+    fn now_ns(&self) -> u64 {
+        self.now.fetch_add(self.step_ns, Ordering::Relaxed)
+    }
+}
+
 /// What a register access did, as numbers an acceptance test outside the process can read.
 ///
 /// ★ Every field is a count of a *route taken*, so the four sources of §"the four sources"
@@ -98,6 +172,8 @@ pub struct Counters {
     pub writes: u64,
     /// Reads answered from [`ChipProfile::boot_regs`].
     pub boot_reg_reads: u64,
+    /// Reads answered from the free-running nanosecond counter.
+    pub ptimer_reads: u64,
     /// Reads answered from the ROM window.
     pub rom_reads: u64,
     /// Reads answered by the GSP register model.
@@ -138,6 +214,8 @@ pub const UNCLAIMED_SAMPLE_MAX: usize = 64;
 pub enum ReadOutcome {
     /// A chip constant.
     BootReg(u64),
+    /// One half of the free-running nanosecond counter.
+    Ptimer(u64),
     /// A byte of the ROM window.
     Rom(u64),
     /// The GSP register model's encoding for the FSM's current state.
@@ -154,7 +232,7 @@ impl ReadOutcome {
     #[must_use]
     pub fn value(self) -> u64 {
         match self {
-            Self::BootReg(v) | Self::Rom(v) | Self::Gsp(v) => v,
+            Self::BootReg(v) | Self::Ptimer(v) | Self::Rom(v) | Self::Gsp(v) => v,
             Self::GspFault(_) | Self::Unclaimed => 0,
         }
     }
@@ -180,6 +258,11 @@ pub struct RegPlane {
     chip: &'static ChipProfile,
     model: Box<dyn GspModel>,
     rom: Vec<u8>,
+    /// ★ Outside the [`Mutex`], and that is the point: the guest reads this counter in the
+    /// inner loop of every timeout it has, millions of times per boot, and putting it
+    /// behind the FSM's lock would serialize the whole thing behind a doorbell being
+    /// serviced. [`NanoClock`] takes `&self` so it needs no lock of ours.
+    clock: Box<dyn NanoClock>,
     state: Mutex<PlaneState>,
     c: PlaneCounters,
 }
@@ -202,6 +285,7 @@ struct PlaneCounters {
     reads: AtomicU64,
     writes: AtomicU64,
     boot_reg_reads: AtomicU64,
+    ptimer_reads: AtomicU64,
     rom_reads: AtomicU64,
     gsp_reads: AtomicU64,
     gsp_writes: AtomicU64,
@@ -219,7 +303,11 @@ impl RegPlane {
     ///
     /// Whatever [`crate::rom_for`] refuses, or [`ChipError::OverlappingSources`] if the
     /// chip's own declarations put two answers over one offset.
-    pub fn new(chip: &'static ChipProfile, abi: GspAbi) -> Result<RegPlane, ChipError> {
+    pub fn new(
+        chip: &'static ChipProfile,
+        abi: GspAbi,
+        clock: Box<dyn NanoClock>,
+    ) -> Result<RegPlane, ChipError> {
         let rom = crate::rom_for(chip)?;
         let model = (chip.gsp_model)();
         assert_disjoint(chip, model.as_ref())?;
@@ -227,6 +315,7 @@ impl RegPlane {
             chip,
             model,
             rom,
+            clock,
             state: Mutex::new(PlaneState {
                 fsm: GspFsm::new(abi),
                 ram: Box::new(RefusingRam),
@@ -273,6 +362,7 @@ impl RegPlane {
             reads: g(&self.c.reads),
             writes: g(&self.c.writes),
             boot_reg_reads: g(&self.c.boot_reg_reads),
+            ptimer_reads: g(&self.c.ptimer_reads),
             rom_reads: g(&self.c.rom_reads),
             gsp_reads: g(&self.c.gsp_reads),
             gsp_writes: g(&self.c.gsp_writes),
@@ -314,6 +404,7 @@ impl RegPlane {
         let out = self.read_inner(bar, off, size);
         match out {
             ReadOutcome::BootReg(_) => self.c.boot_reg_reads.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::Ptimer(_) => self.c.ptimer_reads.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::Rom(_) => self.c.rom_reads.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::Gsp(_) => self.c.gsp_reads.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::GspFault(_) => self.c.faults.fetch_add(1, Ordering::Relaxed),
@@ -330,6 +421,9 @@ impl RegPlane {
             if let Some(r) = self.chip.boot_regs.iter().find(|r| r.off == off) {
                 return ReadOutcome::BootReg(mask(u64::from(r.value), size));
             }
+            if let Some(v) = self.ptimer_read(off) {
+                return ReadOutcome::Ptimer(mask(v, size));
+            }
             if self.chip.rom_window.contains(off) {
                 return ReadOutcome::Rom(self.rom_read(off - self.chip.rom_window.base, size));
             }
@@ -339,6 +433,29 @@ impl RegPlane {
             None => ReadOutcome::Unclaimed,
             Some(Ok(v)) => ReadOutcome::Gsp(mask(v, size)),
             Some(Err(f)) => ReadOutcome::GspFault(f.fault_tag().0),
+        }
+    }
+
+    /// The free-running counter's two halves, or `None` if `off` is neither.
+    ///
+    /// ★ Each half samples the clock independently, which is the C artifact's behaviour
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:1523-1528`) and is safe because the driver reads
+    /// high / low / high and retries whenever the high half moved — so a sample that
+    /// straddles a 2^32-nanosecond boundary (about every 4.3 s) is *detected* by the reader
+    /// rather than needing to be prevented by us.
+    fn ptimer_read(&self, off: u64) -> Option<u64> {
+        let p = self.chip.ptimer;
+        if off == p.lo_off {
+            // The low half's `NSEC` field is bits 31:5, so the bottom five bits of a real
+            // one read zero (`ogkm-580:
+            // src/common/inc/swref/published/turing/tu102/dev_vm.h:224-225`).
+            Some(u64::from(
+                (self.clock.now_ns() as u32) & PTIMER_LO_NSEC_MASK,
+            ))
+        } else if off == p.hi_off {
+            Some(self.clock.now_ns() >> 32)
+        } else {
+            None
         }
     }
 
@@ -426,6 +543,9 @@ impl RegPlane {
     }
 }
 
+/// The low half's `NSEC` field, bits 31:5.
+const PTIMER_LO_NSEC_MASK: u32 = 0xFFFF_FFE0;
+
 /// Mask a value to an access width. A width of 8 or more is the whole value.
 fn mask(v: u64, size: u8) -> u64 {
     match size {
@@ -448,6 +568,46 @@ fn mask(v: u64, size: u8) -> u64 {
 /// realize — cheap enough to be exhaustive, and being exhaustive is the point: a sampled
 /// check would pass a row whose single overlapping register sat between samples.
 fn assert_disjoint(chip: &ChipProfile, model: &dyn GspModel) -> Result<(), ChipError> {
+    // ★ The counter's two halves go first, and are checked against every other source
+    // rather than only against the ones added before them. A counter half swallowed by an
+    // earlier source is the exact defect this whole check exists for, in its worst form:
+    // the guest would read a constant and spin forever with nothing printed.
+    for off in [chip.ptimer.lo_off, chip.ptimer.hi_off] {
+        if off >= chip.regs_aperture_len {
+            return Err(ChipError::OutsideAperture {
+                off,
+                aperture: chip.regs_aperture_len,
+            });
+        }
+        if chip.boot_regs.iter().any(|r| r.off == off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "a silicon-constant register",
+                b: "the free-running nanosecond counter",
+            });
+        }
+        if chip.rom_window.contains(off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the free-running nanosecond counter",
+                b: "the ROM window",
+            });
+        }
+        if model.decode_reg(0, off).is_some() {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the free-running nanosecond counter",
+                b: "the GSP register model",
+            });
+        }
+    }
+    if chip.ptimer.lo_off == chip.ptimer.hi_off {
+        return Err(ChipError::OverlappingSources {
+            off: chip.ptimer.lo_off,
+            a: "the nanosecond counter's low half",
+            b: "its own high half",
+        });
+    }
     for r in chip.boot_regs {
         if chip.rom_window.contains(r.off) {
             return Err(ChipError::OverlappingSources {

@@ -42,7 +42,7 @@
 use kayfabe_abi::vbios::VbiosWire;
 use kayfabe_arch::gsp::{GspModel, GspObservation, GspReg, LibosRegionLayout};
 
-use crate::{BootReg, ChipProfile, RomWindow};
+use crate::{BootReg, ChipProfile, PtimerRegs, RomWindow};
 
 // ── BAR0 offsets ──────────────────────────────────────────────────────────────────
 // `ogkm-580: src/common/inc/swref/published/ampere/ga102/dev_gsp.h:27,29,38`
@@ -423,6 +423,32 @@ const PMC_BOOT_1: u64 = 0x0000_0004;
 /// `NV_PMC_BOOT_42` (`C: mode2_regs_ga10x.h:15`).
 const PMC_BOOT_42: u64 = 0x0000_0A00;
 
+/// `NV_PTIMER_TIME_PRIV_LEVEL_MASK` (`C: src/qemu/mode2_regs_ga10x.h:44`).
+const PTIMER_TIME_PRIV_LEVEL_MASK: u64 = 0x0000_9430;
+/// Every privilege level allowed to write the counter.
+///
+/// ★ `tmrSetCurrentTime_GV100` tests `_WRITE_PROTECTION_LEVEL0_ENABLE` in this register and,
+/// when it does not hold, takes an arm that prints `ERROR: Write to PTIMER attempted even
+/// though Level 0 PLM is disabled.` and trips `NV_ASSERT(0)`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/timer/arch/volta/timer_gv100.c:56-82`). Answering
+/// zero is not a stop — the caller's status is discarded at
+/// `ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:4107` — but it is two lines of
+/// assert noise in every boot log, and an assert nobody expects to fire is an assert nobody
+/// reads. All-ones is the C artifact's answer
+/// (`C: src/qemu/nvkvm_gpu_emul.c:1531`), and it makes the driver take the arm that writes
+/// the counter instead. Those writes land on no source and are counted as unclaimed, which
+/// is the honest outcome: the counter this device serves is free-running and cannot be set.
+const PTIMER_PLM_ALL_LEVELS: u32 = 0xFFFF_FFFF;
+
+/// `NV_VIRTUAL_FUNCTION_TIME_0` — the free-running nanosecond counter's low half, at
+/// `NV_VIRTUAL_FUNCTION`'s base `0x00B8_0000` plus `0x3_0080`
+/// (`ogkm-580: src/common/inc/swref/published/turing/tu102/dev_vm.h:28, 224`;
+/// `C: src/qemu/mode2_regs_ga10x.h:39`).
+const VIRTUAL_FUNCTION_TIME_0: u64 = 0x00BB_0080;
+/// `NV_VIRTUAL_FUNCTION_TIME_1` — its high half
+/// (`ogkm-580: .../tu102/dev_vm.h:226`; `C: mode2_regs_ga10x.h:40`).
+const VIRTUAL_FUNCTION_TIME_1: u64 = 0x00BB_0084;
+
 /// `NV_PMC_BOOT_0` for GA106 stepping A1: `ARCHITECTURE_0[28:24] = 0x17` (the GA100
 /// family), `IMPLEMENTATION[23:20] = 6`, `MAJOR_REVISION[7:4]`/`MINOR_REVISION[3:0]` =
 /// `0xA1` (`C: src/qemu/nvkvm_gpu_emul.c:64-72, 95`).
@@ -449,7 +475,37 @@ static GA106_BOOT_REGS: &[BootReg] = &[
         value: PMC_BOOT_42_GA106_A1,
         name: "NV_PMC_BOOT_42",
     },
+    BootReg {
+        off: PTIMER_TIME_PRIV_LEVEL_MASK,
+        value: PTIMER_PLM_ALL_LEVELS,
+        name: "NV_PTIMER_TIME_PRIV_LEVEL_MASK",
+    },
+    // ★★★ The devinit constant [`USABLE_FB_SIZE_IN_MB_ADDR`]'s own comment predicted would
+    // need a home: *"whichever plane ends up serving it must use `FB_SIZE_MB` and not a
+    // second literal"*. This is that plane, and this is that constant — the WPR2 values the
+    // GSP model serves are derived from the same one, so the two cannot desynchronise.
+    //
+    // It is a `BootReg` and not a `GspReg` for the reason stated there: its served value is
+    // a function of no boot state. `assert_disjoint` is what makes that split safe rather
+    // than merely intended.
+    BootReg {
+        off: USABLE_FB_SIZE_IN_MB_ADDR,
+        value: FB_SIZE_MB as u32,
+        name: "NV_USABLE_FB_SIZE_IN_MB",
+    },
 ];
+
+/// ★★★ Where this generation's driver reads the free-running nanosecond counter.
+///
+/// `tmrReadTimeLoReg_TU102` / `tmrReadTimeHiReg_TU102` read it through the
+/// virtual-function aperture unconditionally — on a virtual function *and* on the physical
+/// one (`ogkm-580: src/nvidia/src/kernel/gpu/timer/arch/turing/timer_tu102.c:130-155`) — so
+/// these are the offsets a bare-metal driver bound to this device actually touches, and
+/// `NV_PTIMER_TIME_0/_1` in the `0x9400` block are not.
+static GA106_PTIMER: PtimerRegs = PtimerRegs {
+    lo_off: VIRTUAL_FUNCTION_TIME_0,
+    hi_off: VIRTUAL_FUNCTION_TIME_1,
+};
 
 /// `NV_PROM_DATA(i) = 0x00300000 + i`
 /// (`ogkm-580: src/common/inc/swref/published/turing/tu102/dev_ext_devices.h:27`;
@@ -485,6 +541,7 @@ pub static GA106: ChipProfile = ChipProfile {
     pci_subsystem_id: 0x397D,
     regs_aperture_len: REGS_APERTURE_LEN,
     boot_regs: GA106_BOOT_REGS,
+    ptimer: GA106_PTIMER,
     rom_window: RomWindow {
         base: PROM_DATA_BASE,
         len: PROM_DATA_SIZE,
@@ -493,3 +550,62 @@ pub static GA106: ChipProfile = ChipProfile {
     msix_vectors: MSIX_VECTORS,
     gsp_model: || Box::new(Ga10xGspModel::new()),
 };
+
+// ── The MMU fault-code table (Axis B, task #111) ───────────────────────────────────
+
+/// ★★ **The `NV_PFAULT_*` encoding for this generation** — the Axis-B half of the
+/// simulated-fault emitter (`docs/design/simulated_gpu_fault.md` §6).
+///
+/// The values come from the *chip's* hardware-reference header, which is where they
+/// belong and why they cannot be in a logic crate:
+/// `ogkm-580: kernel-open/nvidia-uvm/hwref/ampere/ga100/dev_fault.h:224-239`
+/// (`NV_PFAULT_FAULT_TYPE_*`) and `:459-472` (`NV_PFAULT_ACCESS_TYPE_*`).
+///
+/// ★ The header is `ampere/ga100`'s and this chip is a GA10x consumer part. That is not
+/// a substitution: the driver reaches the same numbers through the same path, because
+/// this generation's whole GMMU fault HAL dispatches to the Turing/Volta
+/// implementations — `kgmmuGetFaultRegisterMappings` resolves to `_TU102` for
+/// `TU102…GA107` alike (`ogkm-580: src/nvidia/generated/g_kern_gmmu_nvoc.c:775-786`),
+/// and the fault-type decode used on this part is `kgmmuGetFaultType_GV100`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/arch/volta/kern_gmmu_gv100.c:1699-1780`).
+/// The Pascal, Turing, Ampere and Blackwell copies of `dev_fault.h` all carry `PDE = 0`
+/// and `PTE = 2` at the same field width.
+///
+/// ★★★ **The range is closed, and out-of-range is not a lint.** `kgmmuGetFaultType_GV100`
+/// returns `NV_ERR_INVALID_ARGUMENT` from its `default:` arm, which fails
+/// `kgmmuParseFaultPacket_GV100`'s `NV_ASSERT_OR_RETURN`
+/// (`ogkm-580: kern_gmmu_gv100.c:1851-1852`) and aborts the guest's whole drain loop
+/// (`:2004-2005`) — so one bad code does not merely lose its own fault, it stops the
+/// guest servicing the faults behind it. `MmuFaultCause`'s vocabulary is closed for that
+/// reason and this table is total over it.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Ga10xFaultCodes;
+
+impl kayfabe_arch::fault::MmuFaultCodes for Ga10xFaultCodes {
+    fn fault_type(&self, cause: kayfabe_arch::fault::MmuFaultCause) -> u32 {
+        use kayfabe_arch::fault::MmuFaultCause as C;
+        match cause {
+            // `NV_PFAULT_FAULT_TYPE_PDE` = 0x0 (`dev_fault.h:224`).
+            C::NothingMapped => 0x0,
+            // `NV_PFAULT_FAULT_TYPE_RO_VIOLATION` = 0x6 (`dev_fault.h:230`). The guest's
+            // own decoder maps it to `fault_write`, i.e. "a write to a read-only page"
+            // (`ogkm-580: kern_gmmu_gv100.c:1699-1780`).
+            C::PermissionViolation => 0x6,
+        }
+    }
+
+    fn access_type(&self, access: kayfabe_arch::fault::MmuFaultAccess) -> u32 {
+        use kayfabe_arch::fault::MmuFaultAccess as A;
+        match access {
+            // `NV_PFAULT_ACCESS_TYPE_VIRT_READ` = 0x0 (`dev_fault.h:463`).
+            A::Read => 0x0,
+            // `NV_PFAULT_ACCESS_TYPE_VIRT_WRITE` = 0x1 (`:464`).
+            A::Write => 0x1,
+            // `NV_PFAULT_ACCESS_TYPE_VIRT_ATOMIC` = 0x2 (`:465`). The header gives the
+            // same value a second name, `VIRT_ATOMIC_STRONG` (`:466`); the weak flavour
+            // is a different code (0x4, `:468`) and this port does not distinguish them,
+            // so it reports the strong one rather than choosing at random.
+            A::Atomic => 0x2,
+        }
+    }
+}

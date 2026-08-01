@@ -41,8 +41,9 @@
 //! wherever it has one, so nothing is lost, it is merely not branched on.
 
 use std::sync::Arc;
+use std::time::Instant;
 
-use kayfabe_device::{ChipError, ChipProfile, RegPlane};
+use kayfabe_device::{ChipError, ChipProfile, NanoClock, RegPlane};
 use kayfabe_vmm::{BarId, VmmError};
 use kayfabe_vmm_qemu::host::{BarPlacement, MrHandle, QemuHost, SectionDesc, SectionFacts};
 use kayfabe_vmm_qemu::slots::SlotPlane;
@@ -59,7 +60,12 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine};
 /// number is checked in both directions, so a hypervisor built against the ABI-1 header and
 /// linked against this archive is a named refusal at realize rather than a call into an
 /// entry point that did not exist.
-pub const ABI_VERSION: u32 = 2;
+/// ★ Bumped to **3** when [`KayfabeRegAudit`] gained `ptimer_reads`. A field added to a
+/// counter structure is exactly the change that would otherwise pass every check and then
+/// have the archive write one `u64` past the end of a C caller's allocation: the `sizeof`
+/// handshake covers the ops table and the realize configuration, and it does not cover this
+/// structure. The version does.
+pub const ABI_VERSION: u32 = 3;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -509,6 +515,8 @@ pub struct KayfabeRegAudit {
     pub writes: u64,
     /// Reads answered from the chip's silicon constants.
     pub boot_reg_reads: u64,
+    /// Reads answered from the free-running nanosecond counter.
+    pub ptimer_reads: u64,
     /// Reads answered from the ROM window.
     pub rom_reads: u64,
     /// Reads answered by the GSP register model.
@@ -603,6 +611,46 @@ pub fn chip_identity(device_id: u16) -> Result<KayfabeChipIdentity, (Status, &'s
     })
 }
 
+/// ★★★ The device's free-running nanosecond counter, driven by the host's monotonic clock.
+///
+/// **This is why it is in the adapter and not in the device crate.** Reading real time is an
+/// OS capability, and `kayfabe-device` is one of the pure logic crates — it may model a
+/// counter and say where a chip exposes it, and it may not know what o'clock it is. So the
+/// device declares [`kayfabe_device::NanoClock`] and this crate is the one that satisfies it.
+///
+/// ★★ It is a **host** monotonic clock rather than the hypervisor's virtual one, and the
+/// difference is a real if small departure from the C artifact, which samples
+/// `QEMU_CLOCK_VIRTUAL` (`C: src/qemu/nvkvm_gpu_emul.c:1523-1528`). Sampling the
+/// hypervisor's clock would mean a new primitive in the shim's function-pointer table, i.e.
+/// a hypervisor concept crossing into a decision this crate makes. The two agree except
+/// while the machine is stopped — under a debugger, or across a migration — and what a
+/// guest observes then is a counter that jumped forward, which is a thing real silicon does
+/// to a driver whose vCPU was descheduled. Worth revisiting if a stopped machine ever needs
+/// to look stopped to the guest; not worth a table entry now.
+#[derive(Debug)]
+struct HostMonotonicClock {
+    origin: Instant,
+}
+
+impl HostMonotonicClock {
+    fn new() -> HostMonotonicClock {
+        HostMonotonicClock {
+            origin: Instant::now(),
+        }
+    }
+}
+
+impl NanoClock for HostMonotonicClock {
+    fn now_ns(&self) -> u64 {
+        // ★ Saturating, not wrapping: a counter that went backwards is the one thing
+        // `NanoClock`'s contract forbids, and `as u64` on an overflowing `u128` would do
+        // exactly that. The elapsed nanoseconds of a process cannot reach `u64::MAX`
+        // (584 years), so this cannot be reached — it is here so that if it ever were, the
+        // counter would stick rather than reverse.
+        u64::try_from(self.origin.elapsed().as_nanos()).unwrap_or(u64::MAX)
+    }
+}
+
 /// The realized register plane — what the C shim holds behind its second opaque handle.
 #[derive(Debug)]
 pub struct Regs {
@@ -625,7 +673,8 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
-        let plane = RegPlane::new(chip, abi).map_err(|e| classify_chip(&e))?;
+        let plane = RegPlane::new(chip, abi, Box::new(HostMonotonicClock::new()))
+            .map_err(|e| classify_chip(&e))?;
         Ok(Regs { plane })
     }
 
@@ -668,6 +717,7 @@ impl Regs {
             reads: c.reads,
             writes: c.writes,
             boot_reg_reads: c.boot_reg_reads,
+            ptimer_reads: c.ptimer_reads,
             rom_reads: c.rom_reads,
             gsp_reads: c.gsp_reads,
             gsp_writes: c.gsp_writes,

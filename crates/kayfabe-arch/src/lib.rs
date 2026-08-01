@@ -40,6 +40,7 @@
 //! itself must be shareable. An `impl` needing interior mutation would be a design
 //! smell (encodings don't change at runtime) and is rejected by the compiler.
 
+pub mod fault;
 pub mod gsp;
 pub mod ids;
 

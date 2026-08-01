@@ -3173,3 +3173,59 @@ kayfabe_util::assert_send_sync!(
     ControlPlan,
     Planned<PublishPlan>,
 );
+
+// ── Task #111: from a REFUSED ring to a fault the guest can be told about ──────────
+
+/// ★★★ **The derivation site.** Turn the working-set miss that just refused a doorbell
+/// into the facts `kayfabe_core::fault::verdict` decides on.
+///
+/// `docs/design/simulated_gpu_fault.md` §4. It sits here, beside [`gate_vas`], because
+/// this is where the miss is *produced*: the refusal and the facts about it are one
+/// locked snapshot apart, and re-deriving them later would be re-reading a table the
+/// guest may have changed underneath us.
+///
+/// ## ★★ What this does NOT do, and why the split matters
+///
+/// It does not decide. It collects — the channel's declared engine, the VAS it declared,
+/// the address that missed — and hands them to the core's policy, which is the only
+/// thing that may say *"this may be presented to the guest as hardware"*. The two halves
+/// are deliberately in different crates: a derivation that also decided would make the
+/// guest-kernel-vs-application rule a property of the forwarding plane, where it would
+/// be re-implemented the next time another site wants to fault.
+///
+/// ★ The caller supplies `cause` and `access`. They are **not** derivable here: the
+/// address table records bindings, not the direction of the access that missed, and this
+/// function must not invent one. A caller with no honest access direction has no honest
+/// fault to emit.
+///
+/// # Errors
+///
+/// [`FwdFault::UnknownVchid`] if the route names a channel this proc no longer has —
+/// which is a *race*, not a fault to report: the guest freed the channel while we were
+/// deciding to fault it, and the thing to tell it about is gone.
+pub fn fault_facts(
+    proc: &Proc,
+    route: &DoorbellRoute,
+    va: GpuVa,
+    cause: kayfabe_arch::fault::MmuFaultCause,
+    access: kayfabe_arch::fault::MmuFaultAccess,
+) -> Result<kayfabe_core::fault::FaultFacts, FwdFault> {
+    let chan = proc
+        .channels
+        .get(&route.chan)
+        .ok_or(FwdFault::UnknownVchid {
+            gpu: route.gpu,
+            vchid: route.vchid,
+        })?;
+    Ok(kayfabe_core::fault::FaultFacts {
+        gpu: route.gpu,
+        proc: route.proc,
+        chan: route.chan,
+        vchid: chan.vchid,
+        pdb: chan.vas_pdb,
+        va,
+        engine: chan.engine,
+        cause,
+        access,
+    })
+}

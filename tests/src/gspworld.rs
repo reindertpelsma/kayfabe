@@ -347,6 +347,8 @@ pub const FUNCTIONS: FunctionCodes = FunctionCodes {
     gsp_rm_alloc: 103,
     gsp_init_done: 0x1001,
     post_event: 0x1003,
+    // `E(RC_TRIGGERED, 0x1004)` — `ogkm-610: rpc_global_enums.h:257`, `ogkm-580: :256`.
+    rc_triggered: 0x1004,
 };
 
 // ───────────────────────────────── two GSP models ─────────────────────────────────

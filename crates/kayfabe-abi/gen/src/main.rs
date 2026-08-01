@@ -123,6 +123,16 @@ const CLC7B5_H: &str = "src/common/sdk/nvidia/inc/class/clc7b5.h";
 const CLC7C0_H: &str = "src/common/sdk/nvidia/inc/class/clc7c0.h";
 const RPC_HDR_H: &str = "src/nvidia/generated/g_rpc-message-header.h";
 const RPC_ENUMS_H: &str = "src/nvidia/inc/kernel/vgpu/rpc_global_enums.h";
+/// The RPC **payload** structs. Deliberately a single entry in the slice
+/// (`rpc_rc_triggered_v17_02`): the module doc below states that the 213 payload structs
+/// are out of scope until something consumes one, and task #111's simulated-fault
+/// emission is the first consumer there has been.
+const RPC_STRUCTS_H: &str = "src/nvidia/generated/g_rpc-structures.h";
+/// The `ROBUST_CHANNEL_*` exception codes — the numbers that appear in a host kernel log
+/// as `Xid <n>`.
+const NVERROR_H: &str = "src/common/sdk/nvidia/inc/nverror.h";
+/// `NV2080_ENGINE_TYPE_*` — the engine vocabulary the RC event routes on.
+const CL2080_NOTIFICATION_H: &str = "src/common/sdk/nvidia/inc/class/cl2080_notification.h";
 
 // ── VBIOS / FWSEC ────────────────────────────────────────────────────────────
 //
@@ -500,17 +510,52 @@ envelope half. The per-function *payload* structs (`g_rpc-structures.h`, 213 of
 them) are deliberately NOT here — the boot FSM has not been ported, so nothing
 consumes them yet, and `mode2_abi_agnostic_layer.md` §5 residual 1 is explicit
 that codegen gives shapes and never protocol.",
-        structs: &[StructReq {
-            header: RPC_HDR_H,
-            name: "rpc_message_header_v03_00",
-            // `rpc_generic_union` is a union over the RPC payload structs, whose
-            // arms include `NV_DECLARE_ALIGNED(NvU64 …, 8)` members, so 8 is the
-            // conservative bound. The generator asserts that using it does not
-            // change `sizeof` versus the field-only computation (it does not:
-            // the named fields already end at 32, a multiple of 8).
-            fam_align: Some(8),
-        }],
-        consts: &[],
+        structs: &[
+            StructReq {
+                header: RPC_HDR_H,
+                name: "rpc_message_header_v03_00",
+                // `rpc_generic_union` is a union over the RPC payload structs, whose
+                // arms include `NV_DECLARE_ALIGNED(NvU64 …, 8)` members, so 8 is the
+                // conservative bound. The generator asserts that using it does not
+                // change `sizeof` versus the field-only computation (it does not:
+                // the named fields already end at 32, a multiple of 8).
+                fam_align: Some(8),
+            },
+            StructReq {
+                header: RPC_STRUCTS_H,
+                name: "rpc_rc_triggered_v17_02",
+                // The flexible tail is `NvU8 rcJournalBuffer[]`, so alignment 1. We
+                // emit an EMPTY journal (`rcJournalBufferSize = 0`) — see
+                // `crate::rc` for why an invented journal record would be worse than
+                // none — but the alignment still has to be declared for the mirror to
+                // be `#[repr(C)]`-equal, and the generator refuses it if including it
+                // would move `sizeof`.
+                fam_align: Some(1),
+            },
+        ],
+        consts: &[
+            ConstReq {
+                header: NVERROR_H,
+                c_name: "ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT",
+                rust_name: "ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT",
+                rust_ty: "u32",
+                doc: "`ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT` — the `exceptType` an MMU\nfault carries, and the number a host kernel log prints as **`Xid 31`**.\n\nIt is generated rather than written down for the ordinary reason, and for one extra:\nthis repository's own design docs quote `Xid 31` dozens of times as a number READ OUT\nOF A HOST LOG. Typing `31` into a Rust source would put a second, uncheckable copy of\nit beside those readings.",
+            },
+            ConstReq {
+                header: CL2080_NOTIFICATION_H,
+                c_name: "NV2080_ENGINE_TYPE_GRAPHICS",
+                rust_name: "NV2080_ENGINE_TYPE_GRAPHICS",
+                rust_ty: "u32",
+                doc: "`NV2080_ENGINE_TYPE_GRAPHICS` — the `nv2080EngineType` of a GR\ncontext, compute or graphics.",
+            },
+            ConstReq {
+                header: CL2080_NOTIFICATION_H,
+                c_name: "NV2080_ENGINE_TYPE_COPY0",
+                rust_name: "NV2080_ENGINE_TYPE_COPY0",
+                rust_ty: "u32",
+                doc: "`NV2080_ENGINE_TYPE_COPY0` — the base of the copy-engine range.\n\n★ The BASE, and the fault emitter deliberately does not add an instance to it: see\n`crate::rc::EngineRoute` for why a copy engine gets **no** RC event today rather than\na guessed instance.",
+            },
+        ],
         drfs: &[],
         macro_lists: &[
             MacroListReq {

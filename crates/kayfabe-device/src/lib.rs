@@ -57,7 +57,7 @@ pub mod plane;
 use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
 
-pub use plane::{Counters, ReadOutcome, RegPlane, WriteOutcome};
+pub use plane::{Counters, NanoClock, ReadOutcome, RegPlane, SteppingClock, WriteOutcome};
 
 /// A register whose value is a constant of the silicon.
 ///
@@ -74,6 +74,24 @@ pub struct BootReg {
     pub value: u32,
     /// The register's name, for diagnostics. Never branched on.
     pub name: &'static str,
+}
+
+/// Where this generation exposes its free-running nanosecond counter, as two 32-bit halves.
+///
+/// ★ A chip fact and nothing more — the *value* comes from [`plane::NanoClock`], which is
+/// the shell's to provide. It is on the row rather than in the register model for the same
+/// reason [`BootReg`] is: its answer is a function of no boot state at all, and a row that
+/// needed state would have to move behind [`kayfabe_arch::gsp::GspModel`].
+///
+/// ★★ It is a REQUIRED field with no default, because a generation whose counter we forgot
+/// to place is a generation whose driver hangs in kernel context with nothing printed. See
+/// [`plane`]'s module docs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PtimerRegs {
+    /// Byte offset of the counter's low half within base-address register 0.
+    pub lo_off: u64,
+    /// Byte offset of its high half.
+    pub hi_off: u64,
 }
 
 /// A guest-physical window inside the register aperture that is served from a byte image
@@ -116,6 +134,8 @@ pub struct ChipProfile {
     pub regs_aperture_len: u64,
     /// Registers that are constants of the silicon.
     pub boot_regs: &'static [BootReg],
+    /// Where the driver reads this generation's free-running nanosecond counter.
+    pub ptimer: PtimerRegs,
     /// Where the driver reads the VBIOS through the register aperture.
     pub rom_window: RomWindow,
     /// The VBIOS parse path this generation's driver speaks.

@@ -45,6 +45,14 @@ The design is settled — **implement it, do not re-improvise architecture.**
 
 - **Iterate until green, then review.** `cargo build` + `cargo test` + `cargo clippy
   --all-targets` must be clean before a commit that claims a milestone.
+- ★★★ **CI is opportunistic convenience, not the definition of green** (owner ruling,
+  2026-07-30). The authoritative run is **`scripts/run_full_suite.sh`** on a real box: the
+  whole `stable` job + the five other CI jobs + everything CI structurally cannot do (real
+  KVM, real namespaces, the vendored ogkm trees, a real GPU), ending in a ledger where every
+  skip is named with its unmet requirement. Exit 0 = *everything this box can run, ran*. The
+  census — what each gated family requires, what it does when the requirement is absent, and
+  what had never run **anywhere** — is `docs/reference/full_suite_on_real_hardware.md`.
+  ⊘ Never turn a skip into a quiet pass to make a run clean; a named loud skip is the floor.
 - **No merge on red.** A red unit/integration test blocks the commit.
 - **Tests must be mean and hard.** The #14 mock MUST reproduce the identical-VA +
   identical-handle collision, not a sanitized version. A mock that resolves the loser's
