@@ -896,3 +896,61 @@ row (`RefusalIsInvisible`) therefore survived its first real exercise.
   *refused*, and there is no counter that says which leaf size resolved.
 - ⊘ **One boot.** `#98` records a Mode-2 symptom that was 1/3 one day and 9/9 the next on a
   bit-identical binary.
+
+---
+
+# ★★★ 38. THE INSTRUMENT WAS BROKEN, AND EVERY SECTION ABOVE IS AFFECTED
+
+Read this before citing anything above it.
+
+## 38.1 The measurement
+
+```
+$ grep -ci nvrm /workspace/bench/run_*_serial.log
+run_bar0win_serial.log:0    run_evt1_serial.log:0     run_l2evict1_serial.log:0
+run_gmmu1_serial.log:0      run_alloc1_serial.log:0   run_alloc2_serial.log:0
+```
+
+**Zero, for every boot rung of 2026-08-01.** `[measured]` on this box, 2026-08-01.
+
+## 38.2 Why, and why it looks fine
+
+`-serial file:` captures the **guest console**. The NVIDIA driver is `modprobe`d **over ssh,
+after boot**, so every `NVRM:` line it prints goes to the kernel ring buffer and is read by
+`dmesg` in *the invoking process's* terminal. For six consecutive rungs that invoking process
+was an agent, and an agent's transcript is not a file anybody can re-read.
+
+⇒ every `RmInitAdapter failed! (0x…)` quoted in §1-§37 is **true and unsourced**. The rungs
+were real; the evidence for them was ephemeral. ⊘ The one exception is
+`/workspace/bench/dmesg_master_55a106f.txt`, saved by hand at one rung and not at the others —
+which is the giveaway: a convention that depends on somebody remembering is not an instrument.
+
+## 38.3 The fix, and the fix's own first failure
+
+`scripts/bench/boot_capture.sh` — boots, waits for ssh, loads the driver **cold**, opens the
+device, reads `dmesg` into `/workspace/bench/run_<tag>_dmesg.log`, **verifies the capture**, and
+powers down so the next run gets a fresh WPR2.
+
+⊘ **Its first version reproduced the exact defect it was written to prevent.** Run
+`master7d16c37`: it read the ring buffer straight after `modprobe` and captured **four lines** —
+an nvlink banner, a vgaarb line, and `loading NVIDIA UNIX Open Kernel Module`. Its content check
+was *"does this file contain `NVRM`"*; the banner **is** an `NVRM:` line; the check passed and
+the script exited 0 on a capture with no adapter output in it whatsoever.
+
+Two things were wrong, and both are now encoded in the script rather than in this document:
+
+1. ★★★ **`modprobe` does not run `RmInitAdapter`.** It registers the PCI driver. The adapter is
+   initialised on the first `open()` of `/dev/nvidia0` — and that node **does not exist** until
+   something creates it (`ls /dev/nvidia*` → *"No such file or directory"*, in that same probe
+   log). `nvidia-smi` does both. The device is now opened **before** the buffer is read.
+2. ★★★ **The check is on `RmInitAdapter`, not on `NVRM`.** A predicate satisfied by a banner is
+   a predicate that cannot fail for the reason you care about. ⊘ This is `suspect_the_instrument
+   _first` at one remove: the instrument I *built to fix a flattering instrument* was itself
+   flattering, and only a by-hand read of the four-line file caught it.
+
+## 38.4 What a green exit from `boot_capture.sh` means
+
+**Only that an observation was made and stored.** Not that the boot went well, and not that the
+capture is complete. `run_<tag>_probe.log` carries `MODPROBE_RC`, `SMI_RC`, the `/dev` listing
+and `lsmod` beside it, because each of those distinguishes a different way the file below can be
+short.

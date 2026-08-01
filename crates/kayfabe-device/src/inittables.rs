@@ -443,6 +443,17 @@ pub enum WantedTable {
     /// for what refusing *leaves behind* — a GPU group whose `pGlobalVASpace` was assigned
     /// before its constructor failed — and not for what it returns.
     GvaspaceServerReservedPdes,
+    /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO` — ★★★ the **sixth**
+    /// mandatory GR static-info control, and the one this port refused to guess at.
+    ///
+    /// It sits behind `if (IS_MIG_IN_USE(pGpu) || !kgraphicsShouldDeferContextInit(...))`
+    /// (`ogkm-580: kernel_graphics.c:1524-1529`), and `#150` deliberately left that
+    /// predicate unevaluated rather than assume it — because `bInitialized = NV_TRUE` is set
+    /// at `:1521`, *before* the branch, so the two outcomes are distinguishable in one boot.
+    /// `[measured]` run `stateload1` at `041b4f1` settled it: the branch IS taken, the
+    /// control IS issued, and refusing it sends the whole function to `cleanup:` — the same
+    /// `NV_ERR_INVALID_STATE` in `KernelFifo`, from a different cause.
+    GrContextBuffersInfo,
 }
 
 impl WantedTable {
@@ -473,7 +484,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 20] = [
+    pub const ALL: [WantedTable; 21] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -494,6 +505,7 @@ impl WantedTable {
         Self::GrFecsRecordSize,
         Self::GrPdbProperties,
         Self::GvaspaceServerReservedPdes,
+        Self::GrContextBuffersInfo,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -541,6 +553,9 @@ impl WantedTable {
             Self::GvaspaceServerReservedPdes => {
                 gvaspacepdes::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER
             }
+            Self::GrContextBuffersInfo => {
+                grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO
+            }
         }
     }
 
@@ -570,6 +585,7 @@ impl WantedTable {
             Self::GrFecsRecordSize => grstatic::FECS_RECORD_SIZE_PARAMS_SIZE,
             Self::GrPdbProperties => grstatic::PDB_PROPERTIES_PARAMS_SIZE,
             Self::GvaspaceServerReservedPdes => gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE,
+            Self::GrContextBuffersInfo => grstatic::CONTEXT_BUFFERS_INFO_PARAMS_SIZE,
         }
     }
 
@@ -970,6 +986,16 @@ impl CommandPolicy for InitTablePolicy {
                     return refuse();
                 };
                 gvaspacepdes::encode_server_reserved_pdes(&pdes)
+            }
+            // ⚠ The one GR reply that is NOT a function of the geometry: context-buffer
+            // sizes are the chip's own table, so they come off the chip row directly. See
+            // `kayfabe_abi::grstatic`'s deferred-half section for why pretending they could
+            // be derived from GPC/TPC counts would be inventing a relationship.
+            WantedTable::GrContextBuffersInfo => {
+                match grstatic::encode_context_buffers_info(&self.chip.gr_context_buffers) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
             }
         };
 

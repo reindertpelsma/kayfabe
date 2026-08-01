@@ -71,7 +71,7 @@ use kayfabe_abi::deviceinfo::DeviceInfoRow;
 use kayfabe_abi::falconinfo::FalconInventoryRow;
 use kayfabe_abi::fifochannels::FifoChannelsRow;
 use kayfabe_abi::gmmustatic::GmmuStaticRow;
-use kayfabe_abi::grstatic::GrStaticProfile;
+use kayfabe_abi::grstatic::{CONTEXT_BUFFER_ID_COUNT, ContextBuffer, GrStaticProfile};
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::memsysconfig::MemorySystemRow;
@@ -422,6 +422,15 @@ pub struct ChipProfile {
     /// channel entirely (`ogkm-580: kernel_graphics.c:486`). See
     /// [`kayfabe_abi::grstatic`]'s header for why this port does not.
     pub gr_static: GrStaticProfile,
+    /// ★ This chip's twenty-six context-buffer sizes and alignments, indexed by
+    /// `NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_*`.
+    ///
+    /// ⊘ A **separate** field from [`ChipProfile::gr_static`] on purpose: the other five GR
+    /// replies are views of one geometry that RM cross-checks, and these are not derivable
+    /// from it. Folding them in would have implied a relationship this port has not
+    /// established. See [`kayfabe_abi::grstatic::CONTEXT_BUFFER_ABSENT`] — `NV_U32_MAX`
+    /// means *absent*, and two of GA106's rows are genuinely `0`.
+    pub gr_context_buffers: [ContextBuffer; CONTEXT_BUFFER_ID_COUNT],
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and

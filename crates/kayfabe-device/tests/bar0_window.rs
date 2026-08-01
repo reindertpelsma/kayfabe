@@ -708,6 +708,7 @@ fn ga106_copy() -> kayfabe_device::ChipProfile {
         fifo_channels: g.fifo_channels,
         gmmu_static: g.gmmu_static,
         gr_static: g.gr_static,
+        gr_context_buffers: g.gr_context_buffers,
         fb_length: g.fb_length,
     }
 }
