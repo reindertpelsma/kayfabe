@@ -524,7 +524,7 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // on. Asserted rather than assumed: they are three `pub const`s that a careless edit
     // could collapse without any other test noticing.
     use kayfabe_qemu_raw::shim::{
-        ISOLATE_REFUSAL_NONE, ISOLATE_REFUSAL_NO_PLANE, ISOLATE_REFUSAL_SPAWN_FAILED,
+        ISOLATE_REFUSAL_NO_PLANE, ISOLATE_REFUSAL_NONE, ISOLATE_REFUSAL_SPAWN_FAILED,
     };
     assert_eq!(ISOLATE_REFUSAL_NONE, 0);
     assert_ne!(ISOLATE_REFUSAL_NO_PLANE, ISOLATE_REFUSAL_NONE);

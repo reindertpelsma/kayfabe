@@ -54,7 +54,10 @@ fn stillborn_gpu(why: &'static str) -> Gpu {
     .expect("device realizes")
 }
 
-fn mock_gpu() -> (Gpu, std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>) {
+fn mock_gpu() -> (
+    Gpu,
+    std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
+) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpu = Gpu::new(
         Box::new(MockArch::new()),
@@ -241,7 +244,10 @@ fn the_shipped_default_plane_reports_no_plane_and_never_a_failure() {
     );
     let (kind, why) = c.first.expect("a refusal carries its sentence");
     assert_eq!(kind, RefusalKind::NoPlane);
-    assert_eq!(why, WHY, "verbatim — this is the composition root's sentence");
+    assert_eq!(
+        why, WHY,
+        "verbatim — this is the composition root's sentence"
+    );
 }
 
 /// A device whose isolates all work reports **nothing** to investigate — the control that
