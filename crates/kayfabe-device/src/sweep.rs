@@ -653,6 +653,52 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               reply-plane coverage and must NOT be served — cap1b would then be a capture \
               that cannot exercise a served control",
     },
+    // ── ★★★ The first control that is not a description of silicon at all ──────────
+    SweepControl {
+        cmd: 0xa06f_0103,
+        engine: "KernelChannel (CE scrubber)",
+        disposition: SweepDisposition::RefusalHalts,
+        why: "★★★ NVA06F_CTRL_CMD_GPFIFO_SCHEDULE, and the first row in this table whose \
+              decision is NOT 'which bytes'. Its params are three NvBools, ALL [IN] \
+              (ogkm-580: ctrla06fgpfifo.h:69-73), so there is no reply to get right; the \
+              load-bearing half is the status. ⚠ [measured] 2026-08-01, boot grinfo1: the \
+              refusal halts at _memmgrMemUtilsScrubInitScheduleChannel, which swallows the \
+              status and returns NV_ERR_GENERIC (ogkm-580: mem_utils.c:1976-1987) — and \
+              THAT is what proves the message names its own cause, because the sibling \
+              NVA06F_CTRL_CMD_BIND arm in the same function returns rmStatus verbatim \
+              (:1969), so a BIND failure would have surfaced as 0x56 at mem_utils.c:2006 \
+              rather than 0xFFFF. The later 'Assertion failed: 0 @ kernel_fifo.c:3129' is \
+              NV_ASSERT(0) in the postSchedulingEnable callback loop's abort arm and does \
+              not alter status (ogkm-580: kernel_fifo.c:3126-3131) — it PROPAGATES. \
+              ⊘ NOT SERVED, and the reason is the quadrant this control sits in. \
+              0x20800a6c is served because its postcondition ('the next read misses a \
+              cache') holds STRUCTURALLY on this device and a caller checks it. This one \
+              has the checking caller and NOT the structural argument: CPU-RM does only \
+              bookkeeping — kchannelIsSchedulable_HAL, then kchannelSetRunlistSet, then it \
+              RPCs to GSP under the comment 'All real hardware management is done in the \
+              host' (ogkm-580: kernel_channel.c:3105-3130) — so the runlist write, the \
+              RAMFC update and the runlist submit are ALL on our side of the line, and the \
+              postcondition 'work submitted to this channel executes' is simply FALSE here. \
+              An NV_OK would be a fabricated completion, not a modelled yes. \
+              ★★★ [measured] 2026-08-01, boot schedprobe1 (0bf7eb7 + a throwaway serve arm, \
+              NEVER LANDED; /workspace/bench/run_schedprobe1_dmesg.log): serving NV_OK moves \
+              the wall forward EXACTLY ONE STEP, from mem_utils.c:2006 to mem_utils.c:2022 \
+              (_memmgrMemUtilsScrubInitRegisterCallback: 'event notification control \
+              failed'), with the verdict line 0x25:0xffff:1249 UNCHANGED. ⊘ That refutes the \
+              prediction this row was first written with — that a fabricated schedule would \
+              HANG on a CE wait. It does not hang, because at least two more setup steps \
+              (the callback registration and kfifoRmctrlGetWorkSubmitToken) stand between \
+              the schedule and any submission. The cost of the lie is therefore DEFERRED, \
+              not absent, and that is the worse shape, not the better one: the first \
+              consumer that actually waits is memmgrTestCeUtils, which memsets and copies \
+              via CE and then compares the read-back (ogkm-580: mem_mgr.c:407-470, called \
+              at :4158). ⇒ this is an EXECUTION-PLANE rung and cannot be closed by a reply. \
+              ⚠ Its oracle row is one of the eleven with NO captured body (C: \
+              mode2_initctrl_ga106.h:6234, psize 3, dlen 0); a real GA106 answers 01 00 00 \
+              ([measured] 2026-08-01, traces/real_ga106/rpc_bodies_real_ga106.txt), which is \
+              bEnable=NV_TRUE echoed back — an [IN] echo and NOT an answer, so even a \
+              correct capture of it would license nothing here",
+    },
 ];
 
 /// The dispositions this port has recorded for `cmd`, or `None` if the control has not been

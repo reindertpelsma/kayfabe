@@ -20,6 +20,8 @@
 //! reader has**. They are a GA106's, and this device presents a GA106. See
 //! `kayfabe_abi::grstatic`'s header.
 
+use kayfabe_abi::oracle as abi_oracle;
+
 use kayfabe_abi::grstatic::{
     FECS_RECORD_SIZE_PARAMS_SIZE, FLOORSWEEPING_PARAMS_SIZE, GA106_GR_STATIC, GR_CAPS_PARAMS_SIZE,
     GR_MAX_ENGINES, GR_MAX_SM, GpcRow, GrStaticError, GrStaticProfile, PDB_PROPERTIES_PARAMS_SIZE,
@@ -35,6 +37,35 @@ fn oracle(name: &str) -> Vec<u8> {
 /// ★ The oracle's `dlen` for `0x20800a22` is 16 376 of a 34 592-byte `psize` — the C's
 /// recorder kept one message-queue element. Compare exactly the prefix it kept, and say so,
 /// rather than padding the fixture with zeros this port supplied and calling that agreement.
+///
+/// ★★★ `cmd` is what makes the prose above **checkable**. This helper used to take the
+/// oracle's bytes on trust: whatever length the fixture happened to be became "the prefix",
+/// so a fixture that silently grew — by a re-extraction that zero-padded to `psize`, say —
+/// would have widened the claim without a word changing. Now the length is checked against
+/// [`kayfabe_abi::oracle`]'s censused `kept` for that control, and a comparison that reaches
+/// past what the recorder kept is refused by name.
+fn assert_prefix_matches_for(cmd: u32, what: &str, ours: &[u8], theirs: &[u8]) {
+    // The oracle's own account of this row — truncated or complete — decides how many bytes
+    // the fixture is allowed to be evidence for.
+    let kept = match abi_oracle::truncated_row(cmd) {
+        Some(r) => r.kept,
+        None => theirs.len(),
+    };
+    assert_eq!(
+        theirs.len(),
+        kept,
+        "{what} ({cmd:#010x}): the fixture is {} bytes but the C recorder kept {kept}. \
+         A fixture longer than `dlen` is this port's zero-fill wearing the oracle's name.",
+        theirs.len()
+    );
+    assert!(
+        abi_oracle::field_is_captured(0, theirs.len(), kept),
+        "{what} ({cmd:#010x}): comparing {} bytes reaches past the captured prefix",
+        theirs.len()
+    );
+    assert_prefix_matches(what, ours, theirs);
+}
+
 fn assert_prefix_matches(what: &str, ours: &[u8], theirs: &[u8]) {
     assert!(
         ours.len() >= theirs.len(),
@@ -68,7 +99,12 @@ fn gr_caps_matches_the_real_ga106_reply() {
         "psize must be 8 engines' worth"
     );
     assert_eq!(ours.len(), 184, "the caller passes sizeof(pParams->caps)");
-    assert_prefix_matches("GR caps", &ours, &oracle("ga106_ctl_20800a1f.bin"));
+    assert_prefix_matches_for(
+        0x2080_0a1f,
+        "GR caps",
+        &ours,
+        &oracle("ga106_ctl_20800a1f.bin"),
+    );
 }
 
 #[test]
@@ -76,7 +112,8 @@ fn floorsweeping_masks_match_the_real_ga106_reply() {
     let ours = encode_floorsweeping_masks(&GA106_GR_STATIC).expect("GA106 profile encodes");
     assert_eq!(ours.len(), FLOORSWEEPING_PARAMS_SIZE);
     assert_eq!(ours.len(), 3008);
-    assert_prefix_matches(
+    assert_prefix_matches_for(
+        0x2080_0a26,
         "GR floorsweeping masks",
         &ours,
         &oracle("ga106_ctl_20800a26.bin"),
@@ -95,7 +132,7 @@ fn global_sm_order_matches_the_real_ga106_reply_over_the_captured_prefix() {
         "the oracle's own dlen — if this changes the comparison below silently covers a \
          different amount of the reply"
     );
-    assert_prefix_matches("GR global SM order", &ours, &theirs);
+    assert_prefix_matches_for(0x2080_0a22, "GR global SM order", &ours, &theirs);
     // ★ Engine 0 is entirely inside the captured prefix, which is the reason the truncation
     // costs nothing: `grIdx` is 0 and nothing reads engines 1..7.
     assert!(
@@ -108,14 +145,24 @@ fn global_sm_order_matches_the_real_ga106_reply_over_the_captured_prefix() {
 fn fecs_record_size_matches_the_real_ga106_reply() {
     let ours = encode_fecs_record_size(&GA106_GR_STATIC).expect("GA106 profile encodes");
     assert_eq!(ours.len(), FECS_RECORD_SIZE_PARAMS_SIZE);
-    assert_prefix_matches("FECS record size", &ours, &oracle("ga106_ctl_20800a3d.bin"));
+    assert_prefix_matches_for(
+        0x2080_0a3d,
+        "FECS record size",
+        &ours,
+        &oracle("ga106_ctl_20800a3d.bin"),
+    );
 }
 
 #[test]
 fn pdb_properties_match_the_real_ga106_reply() {
     let ours = encode_pdb_properties(&GA106_GR_STATIC).expect("GA106 profile encodes");
     assert_eq!(ours.len(), PDB_PROPERTIES_PARAMS_SIZE);
-    assert_prefix_matches("PDB properties", &ours, &oracle("ga106_ctl_20800a48.bin"));
+    assert_prefix_matches_for(
+        0x2080_0a48,
+        "PDB properties",
+        &ours,
+        &oracle("ga106_ctl_20800a48.bin"),
+    );
 }
 
 /// ★★★ The rejected shortcut, made unreachable rather than merely discouraged.

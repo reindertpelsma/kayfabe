@@ -149,7 +149,7 @@ fn the_triage_universe_is_pinned_so_shortening_it_is_a_red_test() {
     //
     // ⊘ The order is the oracle's own `rpc.sequence` order, so a reader can line this list
     // up against `cargo run -p kayfabe-crec --example cap1b_report` directly.
-    assert_eq!(SWEEP_TRIAGE.len(), 32, "the triaged universe's size");
+    assert_eq!(SWEEP_TRIAGE.len(), 33, "the triaged universe's size");
     let cmds: Vec<u32> = SWEEP_TRIAGE.iter().map(|c| c.cmd).collect();
     assert_eq!(
         cmds,
@@ -190,6 +190,7 @@ fn the_triage_universe_is_pinned_so_shortening_it_is_a_red_test() {
             0x2080_0a32, // KernelGraphics — context buffers info              SERVED
             0x2080_0a38, // KernelGraphics — FECS trace HW enable (teardown)
             0x2080_0a4b, // NOT in the oracle's prefix — KernelDisplay
+            0xa06f_0103, // ★★★ EXECUTION PLANE — KernelChannel, the CE scrubber's schedule
         ]
     );
     // ⊘ And no duplicates: a repeated id would make `triage_for` answer with whichever row
@@ -388,7 +389,17 @@ fn a_halting_refusal_may_be_served_or_not_and_the_table_says_which() {
     // FUNCTION dressed as claims about a BOOT. `0x20800a9f` went to `RefusalFailsOpen`;
     // `0x20800a1f` and `0x20800a26` to `AmputationUnsurvivable`; `0x20800a2a` to
     // `AmputationIntended`.
-    assert_eq!(halts.len(), 8, "non-vacuity: the class is the roadmap");
+    // ⚠⚠ 8 -> 9: `0xa06f0103` JOINS this class, and it is the first member whose halt is
+    // measured on BOTH sides rather than argued. The five refutations above were all the
+    // same mistake — reading a local `NV_ASSERT_OK_OR_RETURN` as a claim about the boot,
+    // when `gpuStatePostLoad` maps `NV_ERR_NOT_SUPPORTED` to `NV_OK` at `gpu.c:3438` and
+    // absorbs it. ★ This row cannot make that mistake: the status that reaches the absorb
+    // map is `NV_ERR_GENERIC` (0xFFFF), because `_memmgrMemUtilsScrubInitScheduleChannel`
+    // SWALLOWS the 0x56 and substitutes its own (`ogkm-580: mem_utils.c:1986`), and
+    // `NV_ERR_GENERIC` is not in that map. Boot `grinfo1` shows the halt; boot `schedprobe1`
+    // shows the wall moving when the refusal is removed. Where a status ENDS UP is the
+    // question, and here it is answered from two directions.
+    assert_eq!(halts.len(), 9, "non-vacuity: the class is the roadmap");
 }
 
 #[test]

@@ -1482,3 +1482,86 @@ this one.
 - ⊘ **`nvidia-smi` still fails**, no devices.
 - ⊘ **One boot, one 4-core box**, and `#98` records a Mode-2 symptom that was 1/3 one day and
   9/9 the next on a bit-identical binary.
+
+# §44 — boot `schedprobe1`: the schedule wall CONFIRMED by removing it, and a hang prediction REFUTED
+
+**Provenance.** `[measured]` 2026-08-01, this 4-core box. Source revision **`0bf7eb7`
+(`origin/master`) plus a throwaway serve arm for `0xa06f0103` that was NEVER LANDED** — it
+lives only in a stash on branch `w154-gpfifo-sched` and in
+`scripts/`-adjacent scratch, and the bench worktree was restored to `6b27c1f` afterwards.
+On-disk evidence: `/workspace/bench/run_schedprobe1_dmesg.log` (25 lines, 22 `NVRM`, 3
+adapter lines), alongside the baseline `/workspace/bench/run_grinfo1_dmesg.log`.
+
+⊘ **This boot is a PROBE, not a rung.** Its purpose was to measure the consequence of a
+fabricated completion, so that the decision to refuse `0xa06f0103` rests on an observation
+rather than on a prediction. Nothing from it is shipped.
+
+## 44.1 The result — the wall moves exactly one step
+
+The two dmesg logs differ in **two lines and nothing else** (timestamps stripped):
+
+```text
+- NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, status: 56
+- NVRM: ... NV_ERR_GENERIC ... from _memmgrMemUtilsScrubInitScheduleChannel @ mem_utils.c:2006
++ NVRM: _memmgrMemUtilsScrubInitRegisterCallback: event notification control failed
++ NVRM: ... NV_ERR_GENERIC ... from _memmgrMemUtilsScrubInitRegisterCallback @ mem_utils.c:2022
+```
+
+The verdict line is **unchanged**: `RmInitAdapter failed! (0x25:0xffff:1249)`.
+
+⇒ Two things are established at once. **`0xa06f0103` really was the wall** — the step it
+gates is `mem_utils.c:2006`, and removing the refusal advances the boot past it to the next
+statement in `memmgrMemUtilsChannelSchedulingSetup_IMPL`. And **the verdict line is useless
+for locating a wall**: it was identical before and after a real change of position, which is
+the third time tonight a printed message has pointed somewhere other than the cause.
+
+## 44.2 ★★★ The prediction this refutes — mine
+
+The triage row for `0xa06f0103` was first drafted arguing that serving `NV_OK` would
+**hang**: the scrubber would submit CE work and wait on a semaphore no engine would ever
+release. **That is false, and the boot says so.** It does not hang. At least two further
+setup steps stand between the schedule and any submission —
+`_memmgrMemUtilsScrubInitRegisterCallback` (`mem_utils.c:2022`, the one now failing) and
+`kfifoRmctrlGetWorkSubmitToken_HAL` (`:2024`) — and each is its own unbuilt control.
+
+⊘ **This makes the case for refusing stronger, not weaker.** A lie that fails loudly on the
+next line is cheap; a lie whose cost is *deferred* past two more rungs is the shape that
+produces a hang attributed to the wrong subsystem. The first consumer that genuinely waits
+is `memmgrTestCeUtils`, which memsets and copies through the CE and then compares the
+read-back (`ogkm-580: mem_mgr.c:407-470`, called at `:4158`) — several rungs downstream of
+where the fabricated `NV_OK` would have been introduced.
+
+## 44.3 Why this control cannot be answered at all
+
+`kchannelCtrlCmdGpFifoSchedule_IMPL` does two pieces of bookkeeping on the CPU-RM side —
+`kchannelIsSchedulable_HAL` (which passes here; it fails with `NV_ERR_INVALID_STATE`, not
+`NOT_SUPPORTED`) and `kchannelSetRunlistSet` — and then RPCs to GSP under the comment
+**"All real hardware management is done in the host"** (`ogkm-580:
+kernel_channel.c:3105-3130`). Export flags are `0x10008` = `NON_PRIVILEGED |
+GSP_PLUGIN_FOR_VGPU_GSP`; there is no `ROUTE_TO_PHYSICAL` and no `INTERNAL`, so the control
+is dispatched kernel-side and hand-rolls its own RPC.
+
+**We are the GSP.** The runlist write, the RAMFC update and the runlist submit are all on
+our side of that line, and none of them exists. So the postcondition — *work submitted to
+this channel executes* — is plainly false here, and unlike `0x20800a6c` there is no
+structural argument that makes it vacuously true. `0x20800a6c` is served because its
+postcondition holds by construction **and** a caller checks it; this control has the checking
+caller and not the structural argument, which is the quadrant where the only honest moves are
+to perform the action or to refuse.
+
+⇒ **`0xa06f0103` is an execution-plane rung and cannot be closed by a reply.** It is triaged
+`RefusalHalts` in `kayfabe_device::sweep`, with the argument and both boots recorded there.
+
+## 44.4 ⊘ What boot `schedprobe1` does NOT establish
+
+- ⊘ **It does not establish that serving `0xa06f0103` is safe.** It establishes that the
+  damage is not immediate. Those are different claims and the second is the weaker one.
+- ⊘ **It says nothing about `mem_utils.c:2022`'s own control.** The next wall was observed,
+  not diagnosed; which control "event notification control failed" refers to, and whether it
+  is `0x20800301` or a channel-scoped event, is unanalysed here.
+- ⊘ **Nothing executed.** No pushbuffer was fetched, no semaphore released, no CE ran. The
+  probe moved a failure; it did not make anything work.
+- ⊘ **It does not establish the absence of a hang further down** — only that the hang is not
+  where this rung is.
+- ⊘ **One boot, one 4-core box**, and `#98` records a Mode-2 symptom that was 1/3 one day and
+  9/9 the next on a bit-identical binary.

@@ -70,11 +70,72 @@
 //!   same transcript, byte for byte and including all 3712 bytes of `0x20800a2a`
 //!   ([`crate::grinfo`]). It remains the only implementation a real driver has accepted end
 //!   to end.
-//! - ⊘ **It says nothing about TRUNCATED rows** — `dlen > 0` but `dlen < psize`, of which
-//!   `0x20800a22` (16 376 of 34 592) is the largest. That is a *different* capture defect,
-//!   it is named in [`crate::grstatic`], and no hardware body has been taken for it. The
-//!   recipe is now proven and committed; the measurement has not been made.
 //! - ⊘ **It is one part, one driver version, one boot.**
+//!
+//! # ★★★ WIDENED, 2026-08-01 — the truncated class is BIGGER than the empty one
+//!
+//! The paragraph that stood here said this module *"says nothing about TRUNCATED rows"*.
+//! That was true and it was a live hole: a truncated row **passes** a `dlen == 0` test,
+//! because it *has* a body. It therefore decoded cleanly and the uncaptured tail arrived as
+//! zeros — the exact failure `0x20802a08` cost four rungs, with the one signal that had
+//! caught it (an empty array) removed.
+//!
+//! `[measured]` 2026-08-01, the whole table at `nvidia-gpu-passthrough` rev `8baf4f2`
+//! parsed row by row:
+//!
+//! | class | rows | share |
+//! |---|---|---|
+//! | complete (`dlen >= psize`) | **29** | 51.8% |
+//! | **truncated (`0 < dlen < psize`)** | **16** | **28.6%** |
+//! | empty (`dlen == 0`) | 11 | 19.6% |
+//!
+//! **Only half the table is a complete capture, and the truncated class is larger than the
+//! empty one this module was built for.** [`captured_row_evidence`] now refuses
+//! `dlen < psize`, not `dlen == 0`.
+//!
+//! ## ★★★ The hypothesis that had to die first: trailing-zero trimming
+//!
+//! ⚠ Widening was not obviously correct. The C's consumer states in-line that *"any
+//! captured tail beyond `cr->dlen` is zero"* (`C: src/qemu/nvkvm_gpu_emul.c:3421-3422`),
+//! and [`crate::l2evict`] records that this module's own decoder was once read as
+//! trimming trailing zeros. **If `dlen` were trailing-zero-trimmed then truncation would
+//! not be a defect at all** — the tail really would be zeros, zero-filling would be
+//! correct, and widening the predicate would refuse sixteen sound rows.
+//!
+//! It is refuted, from the **raw bytes of the header** rather than from any decoder — the
+//! rule against letting the thing under test be its own observer applies here more than
+//! anywhere. A trailing-zero trimmer cannot leave a zero byte at the end of what it kept.
+//! **All sixteen kept-prefixes end in zero bytes**; `0x20800a40`'s ends in 15 833 of them
+//! and `0x20800a22`'s in 12 053 ([`TruncatedRow::trailing_zeros_kept`]). So `dlen` is not a
+//! trim, the tail is **unknown**, and the C's in-line sentence is an assumption it labels
+//! as one (*"fine where the meaningful prefix is numEntries + entries"*).
+//!
+//! ★ What `dlen` actually is, visible in the two largest rows: `0x20800a22` kept
+//! 16 376 = 16 384 − 8 and `0x20800a40` kept 16 384 — **one GSP message-queue element**.
+//! The recorder did not follow continuation elements. That is the same defect the C repo
+//! later fixed for its replay recorder (`GSP-D6`, "make the C's SKIPPED continuation
+//! elements OBSERVABLE"), and this table is its fossil.
+//!
+//! ## ⚠ Why the refusal is per-FIELD and not per-row
+//!
+//! ⊘ A truncated row is **not** worthless: its first `dlen` bytes came off real hardware
+//! and are as good as any complete row's. [`crate::grstatic`] already argues exactly this
+//! for `0x20800a22` — *"engine 0 occupies the first 4 324 bytes, so nothing that is read is
+//! missing"* — and that argument is **sound**. What it was not, was checkable. Prose cannot
+//! fail a build.
+//!
+//! [`field_is_captured`] is that argument as a predicate. A caller reading a field out of a
+//! truncated row states the offset and gets a decision; a caller reading past `dlen` is
+//! fabricating and now has to say so by name.
+//!
+//! ## ⊘ What the widening does NOT establish
+//!
+//! - ⊘ **No hardware body has been taken for any of the sixteen.** That is #159. This is a
+//!   statement about *the capture*, not about what the missing bytes contain — every one of
+//!   them may yet turn out to be zeros.
+//! - ⊘ **It does not say the nine referenced rows are wrong.** It says their tails are
+//!   unevidenced. Where a module reads only the prefix (`grstatic`) or derives the reply
+//!   outright (`deviceinfo`), nothing about the value changes.
 
 /// One row of `mode2_initctrl_ga106.h` whose reply body was **never captured**.
 ///
@@ -194,6 +255,168 @@ pub const EMPTY_CAPTURE_ROWS: &[EmptyCaptureRow] = &[
     },
 ];
 
+/// One row of `mode2_initctrl_ga106.h` whose reply body was captured only in **part**.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TruncatedRow {
+    /// The control id.
+    pub cmd: u32,
+    /// The reply size on the wire, from the C's own row.
+    pub psize: usize,
+    /// Bytes the recorder kept. Always `0 < kept < psize`.
+    pub kept: usize,
+    /// The line of `src/qemu/mode2_initctrl_ga106.h` the row sits on.
+    pub c_line: u32,
+    /// ★★★ How many bytes of the **kept** prefix are themselves zero, counted from its end.
+    ///
+    /// This field exists to kill one specific hypothesis, and it is the reason this table
+    /// carries a number nobody reads at runtime. If `dlen` were *trailing-zero-trimmed* —
+    /// which is how the C's own decoder was once read — then a truncated row would not be a
+    /// defect at all: the tail really would be zeros and zero-filling it would be correct.
+    /// **A trimmer cannot leave a zero byte at the end.** Every one of the sixteen rows has
+    /// this greater than zero, and `0x20800a40` has 15 833.
+    pub trailing_zeros_kept: usize,
+}
+
+/// ★★★ Every `0 < dlen < psize` row of the C artifact's GA106 table.
+///
+/// `[measured]` 2026-08-01 by parsing the table at `nvidia-gpu-passthrough` rev `8baf4f2`
+/// — 56 rows: **29 complete, 16 truncated, 11 empty**. ⊘ The truncated class is *larger*
+/// than the empty class that [`BodyNeverCaptured`](OracleRowError::BodyNeverCaptured) was
+/// built for, and only half the table is a complete capture.
+///
+/// ⚠ **No hardware body has been taken for any of these.** That is #159 and it is not done.
+/// This table says *which rows are short and by how much*, which is a statement about the
+/// capture; it says nothing about what the missing bytes contain.
+///
+/// ★ The mechanism behind the two largest is visible in the numbers: `0x20800a22` kept
+/// 16 376 = 16 384 − 8 and `0x20800a40` kept 16 384 — one GSP message-queue element's worth.
+/// The recorder did not follow continuation elements, so the capture stops at an element
+/// boundary rather than at a field boundary.
+pub const TRUNCATED_ROWS: &[TruncatedRow] = &[
+    TruncatedRow {
+        cmd: 0x2080_0a49,
+        psize: 24,
+        kept: 16,
+        c_line: 6208,
+        trailing_zeros_kept: 5,
+    },
+    TruncatedRow {
+        cmd: 0x2080_2a0f,
+        psize: 28,
+        kept: 16,
+        c_line: 6212,
+        trailing_zeros_kept: 15,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0a9f,
+        psize: 184,
+        kept: 176,
+        c_line: 6217,
+        trailing_zeros_kept: 43,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0a1f,
+        psize: 184,
+        kept: 176,
+        c_line: 6218,
+        trailing_zeros_kept: 153,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0a22,
+        psize: 34592,
+        kept: 16376,
+        c_line: 6221,
+        trailing_zeros_kept: 12053,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0a34,
+        psize: 72,
+        kept: 64,
+        c_line: 6225,
+        trailing_zeros_kept: 55,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0b03,
+        psize: 16352,
+        kept: 8192,
+        c_line: 6226,
+        trailing_zeros_kept: 8119,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0301,
+        psize: 20,
+        kept: 16,
+        c_line: 6235,
+        trailing_zeros_kept: 11,
+    },
+    TruncatedRow {
+        cmd: 0x0073_0107,
+        psize: 12,
+        kept: 8,
+        c_line: 6240,
+        trailing_zeros_kept: 2,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0a41,
+        psize: 8204,
+        kept: 8200,
+        c_line: 6249,
+        trailing_zeros_kept: 6924,
+    },
+    TruncatedRow {
+        cmd: 0x2080_01b0,
+        psize: 1284,
+        kept: 1280,
+        c_line: 6250,
+        trailing_zeros_kept: 1117,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0a40,
+        psize: 24580,
+        kept: 16384,
+        c_line: 6252,
+        trailing_zeros_kept: 15833,
+    },
+    TruncatedRow {
+        cmd: 0x2080_1112,
+        psize: 3212,
+        kept: 3208,
+        c_line: 6253,
+        trailing_zeros_kept: 2104,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0a01,
+        psize: 36,
+        kept: 32,
+        c_line: 6261,
+        trailing_zeros_kept: 2,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0ac6,
+        psize: 4104,
+        kept: 4072,
+        c_line: 6262,
+        trailing_zeros_kept: 4071,
+    },
+    TruncatedRow {
+        cmd: 0x2080_0adf,
+        psize: 8388,
+        kept: 8368,
+        c_line: 6263,
+        trailing_zeros_kept: 502,
+    },
+];
+
+/// The row for `cmd`, if the C artifact captured only part of its body.
+#[must_use]
+pub fn truncated_row(cmd: u32) -> Option<&'static TruncatedRow> {
+    TRUNCATED_ROWS.iter().find(|r| r.cmd == cmd)
+}
+
+/// Rows of `mode2_initctrl_ga106.h` whose capture is **complete** (`dlen >= psize`),
+/// `[measured]` 2026-08-01 at `nvidia-gpu-passthrough` rev `8baf4f2`.
+pub const COMPLETE_ROWS_TOTAL: usize = 29;
+
 /// The number of rows in `mode2_initctrl_ga106.h`, `[measured]` by counting the table at
 /// `nvidia-gpu-passthrough` rev `8baf4f2` on 2026-08-01. Pinned so that
 /// [`EMPTY_CAPTURE_ROWS`]'s share is a stated fraction rather than a bare count.
@@ -205,12 +428,15 @@ pub enum CapturedEvidence {
     /// The reply is genuinely empty, because the control's `psize` is zero. Checkable from
     /// the row alone.
     NoBodyExists,
-    /// The recorder kept `kept` of `psize` bytes. ⚠ `kept < psize` is a **truncation**, and
-    /// the caller is told the number rather than being handed a padded body.
-    Body {
-        /// Bytes the recorder kept.
-        kept: usize,
-        /// Bytes the reply had on the wire.
+    /// ★ The recorder kept **the whole body** — `dlen >= psize`. This is the only variant
+    /// that licenses reading the row as a reply.
+    ///
+    /// ⊘ Renamed from `Body { kept, psize }` when the predicate was widened to cover
+    /// truncation. The old name could hold `kept < psize`, and every reader of it was
+    /// trusting a body that was partly zero-fill; the rename is deliberate churn, so that
+    /// each site had to be re-decided rather than silently inheriting the weaker meaning.
+    Complete {
+        /// Bytes the reply had on the wire, all of which were kept.
         psize: usize,
     },
 }
@@ -229,6 +455,27 @@ pub enum OracleRowError {
         /// The control whose body is missing.
         cmd: u32,
         /// How many bytes the reply had that were not kept.
+        psize: usize,
+    },
+    /// ★★★ `0 < dlen < psize`: the recorder kept a **prefix** and dropped the rest. The row
+    /// is evidence for its first `kept` bytes and for **nothing** after them.
+    ///
+    /// ⊘ This is the variant that closes the hole [`BodyNeverCaptured`] left open. A
+    /// truncated row *has* a body, so it decoded cleanly and the uncaptured tail arrived as
+    /// zeros — silently, and wearing the oracle's name. **Sixteen of the C table's 56 rows
+    /// are in this state, a larger class than the eleven empty ones**, and the tail is not
+    /// zero-trimmed: all sixteen kept-bodies themselves *end* in zero bytes, one of them in
+    /// 15 833 of them, which no trailing-zero trimmer could emit ([`TRUNCATED_ROWS`]).
+    ///
+    /// ⚠ Refusing the row wholesale would be too strong: a field that lies entirely inside
+    /// the kept prefix is as well-evidenced as any full row. [`field_is_captured`] is how a
+    /// caller says which one it is, per field, instead of per row.
+    BodyTruncated {
+        /// The control.
+        cmd: u32,
+        /// Bytes the recorder kept — the row is evidence for exactly these.
+        kept: usize,
+        /// Bytes the reply had on the wire.
         psize: usize,
     },
     /// `dlen > psize` — the row is internally inconsistent and describes no reply.
@@ -251,6 +498,8 @@ pub enum OracleRowError {
 /// # Errors
 /// [`OracleRowError::BodyNeverCaptured`] when `psize > 0 && dlen == 0` — an empty capture is
 /// evidence of nothing, never evidence of emptiness.
+/// [`OracleRowError::BodyTruncated`] when `0 < dlen < psize` — the row is evidence for its
+/// first `dlen` bytes and for nothing after them.
 /// [`OracleRowError::KeptMoreThanExists`] when `dlen > psize`.
 pub const fn captured_row_evidence(
     cmd: u32,
@@ -266,7 +515,34 @@ pub const fn captured_row_evidence(
     if dlen == 0 {
         return Err(OracleRowError::BodyNeverCaptured { cmd, psize });
     }
-    Ok(CapturedEvidence::Body { kept: dlen, psize })
+    if dlen < psize {
+        return Err(OracleRowError::BodyTruncated {
+            cmd,
+            kept: dlen,
+            psize,
+        });
+    }
+    Ok(CapturedEvidence::Complete { psize })
+}
+
+/// ★★★ Whether the field at `[off, off + len)` lies entirely inside what the recorder kept.
+///
+/// This is the move a blanket row-level refusal would take away. `crate::grstatic` already
+/// makes exactly this argument in prose for `0x20800a22` — *"engine 0 occupies the first
+/// 4 324 bytes, so nothing that is read is missing"* — and prose cannot fail a build. A
+/// caller reading a field out of a truncated row states its offset here and gets a decision
+/// instead of a zero.
+///
+/// ⊘ `true` is **not** a claim the bytes are correct; it is the narrower claim that they
+/// came from the capture rather than from zero-fill. A wrong offset inside the prefix is
+/// still wrong, and that is what the per-module encoders and their fixtures are for.
+#[must_use]
+pub const fn field_is_captured(off: usize, len: usize, dlen: usize) -> bool {
+    match off.checked_add(len) {
+        Some(end) => end <= dlen,
+        // An offset+length that overflows `usize` cannot be inside any capture.
+        None => false,
+    }
 }
 
 /// The row for `cmd`, if the C artifact recorded it with no body at all.
@@ -351,16 +627,78 @@ mod tests {
     }
 
     #[test]
-    fn a_truncated_row_is_a_body_with_its_truncation_stated() {
-        // `0x20800a22`: `psize 34592, dlen 16376` — a real row, a different defect, and it
-        // must NOT be refused. What it must not do is claim to be 34 592 bytes.
+    fn a_truncated_row_is_refused_by_name_and_carries_its_usable_prefix() {
+        // ★★★ This test previously asserted the OPPOSITE — that `0x20800a22` decodes to
+        // `Ok(Body { kept: 16376, psize: 34592 })`. That `Ok` was the hole: every caller of
+        // it received a 34 592-byte body of which 18 216 bytes were zero-fill wearing the
+        // oracle's name. The inversion is the finding, not a test being made to pass.
         assert_eq!(
             captured_row_evidence(0x2080_0a22, 34592, 16376),
-            Ok(CapturedEvidence::Body {
+            Err(OracleRowError::BodyTruncated {
+                cmd: 0x2080_0a22,
                 kept: 16376,
                 psize: 34592
             })
         );
+    }
+
+    #[test]
+    fn all_sixteen_truncated_rows_are_refused_and_none_is_a_zero_trim() {
+        // ★★ Quantified over the whole list — a row added without a decision fails here.
+        assert_eq!(TRUNCATED_ROWS.len(), 16);
+        for r in TRUNCATED_ROWS {
+            assert!(0 < r.kept && r.kept < r.psize, "{:#x} is truncated", r.cmd);
+            assert_eq!(
+                captured_row_evidence(r.cmd, r.psize, r.kept),
+                Err(OracleRowError::BodyTruncated {
+                    cmd: r.cmd,
+                    kept: r.kept,
+                    psize: r.psize
+                }),
+                "{:#x} must be refused, not zero-filled",
+                r.cmd
+            );
+            // ★★★ The refutation of trailing-zero trimming, asserted per row rather than
+            // narrated once. A trimmer cannot leave a zero byte at the end of what it kept,
+            // so a single row with `trailing_zeros_kept == 0` would mean the trim hypothesis
+            // is live again for that row and the refusal above needs re-arguing.
+            assert!(
+                r.trailing_zeros_kept > 0,
+                "{:#x}: kept prefix ends in a non-zero byte — `dlen` could be a zero-trim \
+                 here, and if it is, refusing this row is wrong",
+                r.cmd
+            );
+        }
+        // The three classes partition the table — stated as the sum so no class can be
+        // widened by quietly shrinking another.
+        assert_eq!(
+            COMPLETE_ROWS_TOTAL + TRUNCATED_ROWS.len() + EMPTY_CAPTURE_ROWS.len(),
+            CAPTURED_ROWS_TOTAL
+        );
+        // ⊘ …and the truncated class is the LARGER of the two defective ones, which is the
+        // reason this widening was not optional.
+        assert!(TRUNCATED_ROWS.len() > EMPTY_CAPTURE_ROWS.len());
+        // No row may be in two classes at once.
+        for r in TRUNCATED_ROWS {
+            assert!(empty_capture_row(r.cmd).is_none(), "{:#x}", r.cmd);
+        }
+    }
+
+    #[test]
+    fn a_field_inside_the_kept_prefix_is_captured_and_one_past_it_is_not() {
+        // `crate::grstatic`'s prose argument, mechanized: engine 0 of `0x20800a22` occupies
+        // the first 4 324 bytes and the recorder kept 16 376, so reading it is sound…
+        assert!(field_is_captured(0, 4324, 16376));
+        // …while the eight-engine array's last engine is not there at all.
+        assert!(!field_is_captured(30268, 4324, 16376));
+        // Boundary: the last kept byte is in, one past it is out.
+        assert!(field_is_captured(16375, 1, 16376));
+        assert!(!field_is_captured(16376, 1, 16376));
+        // A zero-length field at the boundary is trivially inside; past it is not.
+        assert!(field_is_captured(16376, 0, 16376));
+        assert!(!field_is_captured(16377, 0, 16376));
+        // ⊘ An overflowing offset+len is not inside any capture, and must not wrap into one.
+        assert!(!field_is_captured(usize::MAX, 1, 16376));
     }
 
     #[test]
@@ -369,12 +707,10 @@ mod tests {
         // byte-identical to hardware for all 3712 bytes. See `crate::grinfo`.
         assert_eq!(
             captured_row_evidence(0x2080_0a2a, 3712, 3712),
-            Ok(CapturedEvidence::Body {
-                kept: 3712,
-                psize: 3712
-            })
+            Ok(CapturedEvidence::Complete { psize: 3712 })
         );
         assert!(empty_capture_row(0x2080_0a2a).is_none());
+        assert!(truncated_row(0x2080_0a2a).is_none());
     }
 
     #[test]

@@ -42,6 +42,7 @@ DEV = "-p kayfabe-device --test gr_info"
 ABI = "-p kayfabe-abi --lib"
 TRACE = "-p kayfabe-abi --test real_ga106_bodies"
 TRIAGE = "-p kayfabe-device --test sweep_triage"
+CENSUS = "-p kayfabe-abi --test initctrl_census"
 INIT = "-p kayfabe-device --test init_tables"
 CREC = "-p kayfabe-crec --test cap1b_differential"
 
@@ -165,7 +166,7 @@ MUTATIONS = [
         "★★★ an EMPTY capture is decoded as psize zero bytes instead of refused",
         ORACLE,
         "    if dlen == 0 {\n        return Err(OracleRowError::BodyNeverCaptured { cmd, psize });\n    }",
-        "    if dlen == 0 {\n        return Ok(CapturedEvidence::Body { kept: psize, psize });\n    }",
+        "    if dlen == 0 {\n        return Ok(CapturedEvidence::Complete { psize });\n    }",
         ABI,
         "every_empty_capture_row_is_refused_by_name_unless_no_body_exists",
     ),
@@ -177,13 +178,48 @@ MUTATIONS = [
         ABI,
         "every_empty_capture_row_is_refused_by_name_unless_no_body_exists",
     ),
+    # ⊘ The bite that stood here — "a TRUNCATED row starts being refused too — the rule
+    # over-reaches into a real body" — asserted the OPPOSITE of what the rule now says, and
+    # its guard test asserted `Ok` for `0x20800a22`. Both were wrong: sixteen of the 56 rows
+    # are truncated, more than the eleven empty ones, and a truncated row decoded cleanly
+    # while zero-filling its uncaptured tail. It is replaced by its inverse rather than
+    # deleted, because the *live* defect is now the one in the other direction.
     (
-        "a TRUNCATED row starts being refused too — the rule over-reaches into a real body",
+        "★★★ a TRUNCATED row decodes as a complete body — the uncaptured tail becomes zeros",
         ORACLE,
-        "    if psize == 0 {\n        return Ok(CapturedEvidence::NoBodyExists);\n    }",
-        "    if psize == 0 || dlen < psize {\n        return Ok(CapturedEvidence::NoBodyExists);\n    }",
+        "    if dlen < psize {\n        return Err(OracleRowError::BodyTruncated {\n"
+        "            cmd,\n            kept: dlen,\n            psize,\n        });\n    }",
+        "    if dlen < psize && psize == usize::MAX {\n        return Err(OracleRowError::BodyTruncated {\n"
+        "            cmd,\n            kept: dlen,\n            psize,\n        });\n    }",
         ABI,
-        "a_truncated_row_is_a_body_with_its_truncation_stated",
+        "all_sixteen_truncated_rows_are_refused_and_none_is_a_zero_trim",
+    ),
+    (
+        "★★ a truncated row leaves the sixteen — the class silently shortens, and the row "
+        "that goes is the one already SERVED at 47%",
+        ORACLE,
+        "    TruncatedRow { cmd: 0x2080_0a22, psize: 34592, kept: 16376, c_line: 6221, trailing_zeros_kept: 12053 },\n",
+        "",
+        CENSUS,
+        "every_truncated_row_in_the_c_header_is_in_truncated_rows_byte_for_byte",
+    ),
+    (
+        "★★★ the zero-trim refutation is inverted — a row is claimed to end in a non-zero "
+        "byte, which would make refusing it wrong",
+        ORACLE,
+        "    TruncatedRow { cmd: 0x2080_0a40, psize: 24580, kept: 16384, c_line: 6252, trailing_zeros_kept: 15833 },",
+        "    TruncatedRow { cmd: 0x2080_0a40, psize: 24580, kept: 16384, c_line: 6252, trailing_zeros_kept: 0 },",
+        CENSUS,
+        "every_truncated_row_in_the_c_header_is_in_truncated_rows_byte_for_byte",
+    ),
+    (
+        "★★ the per-FIELD escape hatch stops bounding — a read past the kept prefix is "
+        "called captured, which is the zero-fill wearing a predicate's name",
+        ORACLE,
+        "        Some(end) => end <= dlen,",
+        "        Some(end) => end <= dlen || end <= usize::MAX,",
+        ABI,
+        "a_field_inside_the_kept_prefix_is_captured_and_one_past_it_is_not",
     ),
     (
         "★★★ a claimed hardware body drifts from the committed trace",
