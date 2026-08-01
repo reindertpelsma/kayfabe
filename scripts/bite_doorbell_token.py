@@ -58,24 +58,48 @@ BODY = """        let raw = u32::try_from(token).ok()?;
         }"""
 
 
-def bite(name, replacement):
-    return (name, BODY, replacement)
+# What a bite is expected to do. Two values, and the second one is a claim that can fail.
+RED = "RED"
+#: ★★★ An **equivalent mutant**: a rewrite that cannot change the function's behaviour on
+#: any input the function accepts, so NO test can catch it and a harness reporting it as
+#: "missed" is reporting a gap that does not exist. Every `EQUIVALENT` row below carries
+#: its proof in the name, and the harness **requires it to stay GREEN** — if one ever turns
+#: red, the equivalence argument was wrong and that is a finding, not a pass.
+EQUIVALENT = "EQUIVALENT"
 
 
-# (name, old, new) — `old` must appear EXACTLY ONCE in the file.
+def bite(name, replacement, expect=RED):
+    return (name, BODY, replacement, expect)
+
+
+# (name, old, new, expect) — `old` must appear EXACTLY ONCE in the file.
 BITES = [
     # ---- the field WIDTHS: what hardware could not pin, because its values were small --
+    #
+    # ★★ The first two are EQUIVALENT, and finding that out is the most useful thing this
+    # harness has produced. The decoder refuses any token with a bit outside `0x007F_0FFF`
+    # BEFORE the field masks are read, so on every input it accepts `raw & 0xFFFF` and
+    # `raw & 0x0FFF` are the same number, as are `(raw >> 16) & 0xFFFF` and `& 0x7F`.
+    # Checked exhaustively over the whole admitted space (2^24 inputs, zero
+    # counterexamples). The field masks and the refusal are redundant with each other by
+    # construction — which is defence in depth, not a hole; bites 14 and 15 relax the
+    # refusal and show the widths become load-bearing the moment it is gone.
     bite(
-        "the chid field is 16 bits, not 12 (the ladder's own ad-hoc `token & 0xFFFF`)",
+        "the chid field is 16 bits, not 12 — EQUIVALENT: the reserved-bit refusal already "
+        "rejects every token with a bit in 15:12, so the two masks agree on every "
+        "accepted input (checked exhaustively over 2^24)",
         BODY.replace("raw & 0x0000_0FFF", "raw & 0x0000_FFFF"),
+        EQUIVALENT,
     ),
     bite(
         "the chid field is 11 bits — one too narrow",
         BODY.replace("raw & 0x0000_0FFF", "raw & 0x0000_07FF"),
     ),
     bite(
-        "the runlist field is 16 bits, not 7 (the ladder's own `(token >> 16) & 0xFFFF`)",
+        "the runlist field is 16 bits, not 7 — EQUIVALENT, for bite 0's reason: bits 31:23 "
+        "are refused before the mask is read",
         BODY.replace("(raw >> 16) & 0x0000_007F", "(raw >> 16) & 0x0000_FFFF"),
+        EQUIVALENT,
     ),
     bite(
         "the runlist field is 6 bits — one too narrow",
@@ -139,6 +163,26 @@ BITES = [
         ),
     ),
     # ---- the total refusal: back to what the seam said before E3 ----------------------
+    # ---- ★ the COMPOSED bites: relax the refusal AND widen the field together ---------
+    #
+    # Bites 0 and 2 are equivalent only because the refusal covers for them. These two
+    # remove that cover, so the field width becomes observable — and a suite that caught
+    # bites 11/12 but not these would be catching the refusal alone and calling it the
+    # encoding.
+    bite(
+        "the chid field is 16 bits AND the refusal lets 15:12 through — the width, "
+        "observable",
+        BODY.replace("raw & 0x0000_0FFF", "raw & 0x0000_FFFF").replace(
+            "!0x007F_0FFF", "!0x007F_FFFF"
+        ),
+    ),
+    bite(
+        "the runlist field is 9 bits AND the refusal lets 31:23 through — the width, "
+        "observable",
+        BODY.replace("(raw >> 16) & 0x0000_007F", "(raw >> 16) & 0x0000_01FF").replace(
+            "!0x007F_0FFF", "!0x01FF_0FFF"
+        ),
+    ),
     bite(
         "the decoder refuses everything, as it did before E3",
         BODY.replace("let raw = u32::try_from(token).ok()?;", "return None;\n        #[allow(unreachable_code)]\n        let raw = u32::try_from(token).ok()?;"),
@@ -159,8 +203,8 @@ def main():
     args = ap.parse_args()
 
     if args.list:
-        for i, (name, _, _) in enumerate(BITES):
-            print(f"{i:2d}  {name}")
+        for i, (name, _, _, expect) in enumerate(BITES):
+            print(f"{i:2d}  [{expect:10s}] {name}")
         return 0
 
     env = dict(os.environ)
@@ -197,16 +241,16 @@ def main():
     todo = range(len(BITES)) if args.only is None else [args.only]
     try:
         for i in todo:
-            name, old, new = BITES[i]
+            name, old, new, expect = BITES[i]
             n = original.count(old)
             if n != 1:
                 print(f"{i:2d}  {name}\n    ★ ANCHOR MATCHED {n} TIMES — bite not applied")
-                results.append((i, name, None, None, None))
+                results.append((i, name, None, None, None, expect))
                 continue
             if new == old:
                 print(f"{i:2d}  {name}\n    ★ BITE IS A NO-OP — the replacement is the "
                       f"original, so this row would report a false GREEN")
-                results.append((i, name, None, None, None))
+                results.append((i, name, None, None, None, expect))
                 continue
             with open(TARGET, "w", encoding="utf-8") as f:
                 f.write(original.replace(old, new))
@@ -218,7 +262,14 @@ def main():
                 red[k] = run(c, env).returncode != 0
             caught_by = [k for k in ("oracle", "hardware", "mock") if red[k]]
             note = ""
-            if not caught_by:
+            if expect == EQUIVALENT:
+                note = (
+                    "  [equivalent — GREEN is correct]"
+                    if not caught_by
+                    else "  ★★★ AN EQUIVALENT MUTANT WENT RED — the equivalence argument "
+                    "in this row's name is WRONG"
+                )
+            elif not caught_by:
                 note = "  ★★ MISSED BY EVERYTHING"
             elif caught_by == ["hardware"]:
                 note = "  <== HARDWARE ALONE"
@@ -230,30 +281,42 @@ def main():
                 f"mock={'RED ' if red['mock'] else 'GREEN'}  {name}{note}",
                 flush=True,
             )
-            results.append((i, name, red["oracle"], red["hardware"], red["mock"]))
+            results.append(
+                (i, name, red["oracle"], red["hardware"], red["mock"], expect)
+            )
     finally:
         with open(TARGET, "w", encoding="utf-8") as f:
             f.write(original)
         os.utime(TARGET, None)
 
     applied = [r for r in results if r[2] is not None]
-    caught = [r for r in applied if r[2] or r[3]]
-    missed = [r for r in applied if not r[2] and not r[3]]
-    mock_caught = [r for r in applied if r[4]]
-    oracle_only = [r for r in applied if r[2] and not r[3]]
-    hw_only = [r for r in applied if r[3] and not r[2]]
+    live = [r for r in applied if r[5] == RED]
+    equiv = [r for r in applied if r[5] == EQUIVALENT]
+    caught = [r for r in live if r[2] or r[3]]
+    missed = [r for r in live if not r[2] and not r[3]]
+    # ★ An equivalent mutant that went RED means the equivalence claim is false. It is a
+    # failure of this harness's own reasoning, and it must not be reported as a pass.
+    broken_equiv = [r for r in equiv if r[2] or r[3] or r[4]]
+    mock_caught = [r for r in live if r[4]]
+    oracle_only = [r for r in live if r[2] and not r[3]]
+    hw_only = [r for r in live if r[3] and not r[2]]
     print(
-        f"\n{len(caught)}/{len(applied)} bites caught by the E3 guards "
+        f"\n{len(caught)}/{len(live)} live bites caught by the E3 guards "
         f"({len(oracle_only)} by the ORACLE alone, {len(hw_only)} by HARDWARE alone).\n"
-        f"{len(mock_caught)}/{len(applied)} caught by the pre-existing mock suite — the "
-        f"number `execution_plane_increments.md` §2.1 predicts is small."
+        f"{len(mock_caught)}/{len(live)} caught by the pre-existing mock suite — "
+        f"`execution_plane_increments.md` §2.1 predicts this is ZERO, and that prediction "
+        f"is the reason the mock arm is here at all.\n"
+        f"{len(equiv)} rows are EQUIVALENT MUTANTS (no test can catch them; they are "
+        f"required to stay green and {len(broken_equiv)} did not)."
     )
     for r in missed:
         print(f"  MISSED: {r[0]:2d} {r[1]}")
+    for r in broken_equiv:
+        print(f"  EQUIVALENCE CLAIM FALSIFIED: {r[0]:2d} {r[1]}")
     if len(applied) != len(results):
         print("  ★ SOME BITES WERE NOT APPLIED — see the ANCHOR lines above.")
         return 2
-    return 1 if missed else 0
+    return 1 if (missed or broken_equiv) else 0
 
 
 if __name__ == "__main__":
