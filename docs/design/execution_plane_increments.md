@@ -960,7 +960,27 @@ a real run, one field changed at a time, refuses.
 ### 8.5 Bites — and the two findings they produced about this work
 
 `scripts/bite_pushbuffer_codec.py`, 26 planted defects across `submit.rs` and `ga10x.rs`,
-four arms (`oracle`, `hostile`, `abi`, `port`). Numbers in §8.6.
+four arms. `[measured]` at `77dde5d` on the 38-core build box, against content verified
+byte-identical to `git show HEAD:` on both ends:
+
+```
+25/25 live bites caught. Per arm: oracle=23, hostile=11, abi=9, port=3.
+14 caught by the ORACLE and not the control; 2 by the CONTROL and not the oracle — the two
+are guarding different things and neither substitutes for the other.
+1 rows are EQUIVALENT MUTANTS (required to stay green; 0 did not).
+```
+
+★★ **The two-instrument split is the number worth reading.** Thirteen defects are *wrong
+bit positions* and only the compiled oracle sees them — the control cannot, because a
+decoder with a shifted mask still refuses garbage perfectly well. Two are *loosened
+refusals* (the exact-argument-count check, the incrementing-framing check) and only the
+control sees them — the oracle cannot, because it only ever feeds well-formed runs. A
+project that had built one and not the other would have had a green suite over a real
+defect either way.
+
+⊘ **The `port` arm caught 3 of 25.** `tests/gsp_rm_alloc.rs`'s tripwire on the shipped
+`Arch` is a *generation-swap* check, not a codec check, and this is that stated as a
+number rather than as a hope.
 
 ★★★ **Two findings, both about the instruments rather than the code, and both are the
 reason the harness exists.**
@@ -982,11 +1002,15 @@ reason the harness exists.**
 
 ### 8.6 Evidence
 
-- **Suite**, `[measured]` at the revision in §8.7 on the 38-core build box:
-  `cargo test --workspace --no-fail-fast` with `KAYFABE_NO_KVM` **unset**.
+- **Suite**, `[measured]` at `77dde5d` on the 38-core build box:
+  `cargo test --workspace --no-fail-fast` with `KAYFABE_NO_KVM` **unset** →
+  **1895 passed, 0 failed, 1 ignored**; `KVM-GATE: RAN` **56**, `SANDBOX-GATE: RAN` **10**,
+  `PUSHBUFFER-ORACLE-GATE: RAN` **12** (`GMMU` 15, `TOKEN` 2, `VBIOS` 13, all unmoved).
 - **Baseline** for comparison, `[measured]` at `e43bc71` on the same box, same command:
-  **1866 passed, 0 failed, 1 ignored**, `KVM-GATE: RAN` **56**.
-- **Gates**: `./scripts/ci_gates.sh --all`.
+  **1866 passed, 0 failed, 1 ignored**, `KVM-GATE: RAN` **56**. ⇒ +29 tests, all new.
+- **Gates**, `[measured]` at `77dde5d`: `./scripts/ci_gates.sh --all` →
+  `ALL GATES CLEAN (21 steps, floor 21 for --all mode)`. ⊘ No step was added, so the pinned
+  floor is untouched — see §8.3 for what that costs.
 - **Claim ledger**: `scripts/claim_ledger.py --gate` → 382 unattributed / 66 conflated /
   17 bare-hardware, i.e. the baseline, unmoved.
 
