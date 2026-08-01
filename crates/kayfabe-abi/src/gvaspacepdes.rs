@@ -219,7 +219,7 @@ pub fn decode_server_reserved_pdes(
             hi: virt_addr_hi,
         });
     }
-    if virt_addr_lo % page_size != 0 {
+    if !virt_addr_lo.is_multiple_of(page_size) {
         return Err(ServerReservedPdesError::VirtAddrLoMisaligned {
             lo: virt_addr_lo,
             page_size,
@@ -235,7 +235,7 @@ pub fn decode_server_reserved_pdes(
                 hi: virt_addr_hi,
                 page_size,
             })?;
-    if hi_end % page_size != 0 {
+    if !hi_end.is_multiple_of(page_size) {
         return Err(ServerReservedPdesError::VirtAddrHiMisaligned {
             hi: virt_addr_hi,
             page_size,

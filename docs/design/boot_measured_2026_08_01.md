@@ -903,7 +903,7 @@ row (`RefusalIsInvisible`) therefore survived its first real exercise.
 
 Read this before citing anything above it.
 
-## 38.1 The measurement
+## 38.1 The measurement — 2026-08-01, on this box, against every rung of that day
 
 ```
 $ grep -ci nvrm /workspace/bench/run_*_serial.log
