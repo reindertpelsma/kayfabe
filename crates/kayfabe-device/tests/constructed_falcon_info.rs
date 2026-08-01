@@ -463,6 +463,7 @@ fn the_serve_site_refuses_when_the_encoder_declines() {
     // answering anyway is exactly the out-of-bounds construction the encoder exists to
     // prevent.
     static BAD: ChipProfile = ChipProfile {
+        memory_system: kayfabe_device::ga10x::GA106_MEMORY_SYSTEM,
         constructed_falcons: FalconInventoryRow {
             // Inside RM's 71-slot check, outside the 64-entry table it indexes.
             falcons: &SIXTY_FIVE,
@@ -574,6 +575,7 @@ const fn copy_of_ga106() -> ChipProfile {
             reg_bases: &[],
         },
         user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
+        memory_system: kayfabe_device::ga10x::GA106_MEMORY_SYSTEM,
         constructed_falcons: FalconInventoryRow::NONE,
         fb_length: 0,
     }

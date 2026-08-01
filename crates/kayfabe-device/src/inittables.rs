@@ -47,6 +47,9 @@ use kayfabe_abi::inittables::{
     self, DEVICE_INFO_PARAMS_SIZE, INTR_PARAMS_SIZE, NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
     NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE,
 };
+use kayfabe_abi::memsysconfig::{
+    self, MEMSYS_STATIC_CONFIG_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG,
+};
 use kayfabe_abi::pcibars::{self, NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO, PCI_BAR_INFO_PARAMS_SIZE};
 use kayfabe_abi::regaccessmap::{
     self, NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP,
@@ -169,6 +172,25 @@ pub enum WantedTable {
     /// [`Self::UserRegisterAccessMap`]'s. See [`kayfabe_abi::falconinfo`], and
     /// [`crate::ga10x::GA106_CONSTRUCTED_FALCONS`] for why this device names no falcon.
     ConstructedFalconInfo,
+    /// `NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG` — ★★★ the first one whose
+    /// refusal is **not survivable**, and the one that ends the ladder.
+    ///
+    /// Every variant above is reached from `gpuPreInit`, a chain of
+    /// `NV_ASSERT_OK_OR_GOTO`s where a refusal stops the boot at a named statement. This
+    /// one is reached from `gpuStatePreInit_IMPL`'s **engine sweep**
+    /// (`ogkm-580: gpu.c:2152-2219`), which reads `NV_ERR_NOT_SUPPORTED` as *"this engine
+    /// is absent — destroy it"* and continues. It is the whole of
+    /// `kmemsysStatePreInitLocked_IMPL` (`ogkm-580: kern_mem_sys.c:99-134`), so refusing it
+    /// deletes `KernelMemorySystem`, and RM then dereferences the pointer it NULLed from a
+    /// different subsystem: `[measured]` run `t134a`, a stock 580.159.04 guest at `1c79474` —
+    /// a guest-kernel `NULL` dereference in `memmgrGetBlackListPagesForHeap_GM107`.
+    ///
+    /// ⊘ And it is not inert-eligible in either direction. RM pre-zeroes the params
+    /// (`kern_mem_sys.c:114`), so an inert reply and an all-zero served reply are the same
+    /// forty bytes — and those forty bytes violate an invariant RM asserts on itself
+    /// (`kern_mem_sys.c:422`) and divide-by-zero in `mem_mgr_gm107.c:211`. See
+    /// [`kayfabe_abi::memsysconfig`], which makes both unencodable.
+    MemorySystemStaticConfig,
 }
 
 impl WantedTable {
@@ -182,13 +204,14 @@ impl WantedTable {
     /// `Self`, so a new variant does not compile until it has an id, and
     /// `tests/init_tables.rs` walks this array through `cmd_id` → [`WantedTable::from_cmd`]
     /// and back.
-    pub const ALL: [WantedTable; 6] = [
+    pub const ALL: [WantedTable; 7] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
         Self::ChipInfo,
         Self::UserRegisterAccessMap,
         Self::ConstructedFalconInfo,
+        Self::MemorySystemStaticConfig,
     ];
 
     /// The control id this table answers — the inverse of [`WantedTable::from_cmd`].
@@ -207,6 +230,7 @@ impl WantedTable {
                 NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP
             }
             Self::ConstructedFalconInfo => NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
+            Self::MemorySystemStaticConfig => NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG,
         }
     }
 
@@ -220,6 +244,7 @@ impl WantedTable {
             Self::ChipInfo => CHIP_INFO_PARAMS_SIZE,
             Self::UserRegisterAccessMap => USER_REGISTER_ACCESS_MAP_PARAMS_SIZE,
             Self::ConstructedFalconInfo => FALCON_INFO_PARAMS_SIZE,
+            Self::MemorySystemStaticConfig => MEMSYS_STATIC_CONFIG_PARAMS_SIZE,
         }
     }
 
@@ -235,6 +260,9 @@ impl WantedTable {
                 Some(Self::UserRegisterAccessMap)
             }
             NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO => Some(Self::ConstructedFalconInfo),
+            NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG => {
+                Some(Self::MemorySystemStaticConfig)
+            }
             _ => None,
         }
     }
@@ -375,6 +403,23 @@ impl CommandPolicy for InitTablePolicy {
                     &self.chip.constructed_falcons,
                     self.chip.regs_aperture_len,
                 ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The one whose error arm is load-bearing in the OTHER direction. Every
+            // refusal above stops a boot at a named statement; this one deletes an engine
+            // and lets the boot continue into a NULL dereference
+            // (`ogkm-580: gpu.c:2170-2214`, and `kayfabe_abi::memsysconfig`'s docs for the Oops
+            // `[measured]` at `1c79474` on a 580.159.04 guest). So `refuse()` here is the
+            // *worse* outcome, not the safe one —
+            // and it is still right, because the combinations the encoder declines are each
+            // a guest-kernel fault of their own: an all-zero policy pair violates an assert
+            // RM makes on itself (`kern_mem_sys.c:422`), and a zero `comprPageSize` is a
+            // divide-by-zero (`mem_mgr_gm107.c:211`). There is no answer that is safe by
+            // default here; there is only a row that is right.
+            WantedTable::MemorySystemStaticConfig => {
+                match memsysconfig::encode_memsys_static_config(&self.chip.memory_system) {
                     Ok(p) => p,
                     Err(_) => return refuse(),
                 }

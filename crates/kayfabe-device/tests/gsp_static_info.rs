@@ -356,6 +356,7 @@ const fn copy_of_ga106() -> ChipProfile {
             reg_bases: &[],
         },
         user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
+        memory_system: kayfabe_device::ga10x::GA106_MEMORY_SYSTEM,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: 0,
     }

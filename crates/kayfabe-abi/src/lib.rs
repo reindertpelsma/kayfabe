@@ -104,6 +104,7 @@ pub mod guest_os;
 pub mod guestsysinfo;
 pub mod host_driver;
 pub mod inittables;
+pub mod memsysconfig;
 pub mod pcibars;
 pub mod rc;
 pub mod regaccessmap;

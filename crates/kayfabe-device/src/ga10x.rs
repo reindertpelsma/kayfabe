@@ -43,6 +43,7 @@ use kayfabe_abi::chipinfo::{ChipInfoRow, RegBaseRow, reg_base};
 use kayfabe_abi::falconinfo::FalconInventoryRow;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
+use kayfabe_abi::memsysconfig::{ComptagAllocationPolicy, MemorySystemRow, RAM_TYPE_GDDR6};
 use kayfabe_abi::pcibars::PciBarRow;
 use kayfabe_abi::regaccessmap::RegisterAccessMapRow;
 use kayfabe_abi::vbios::VbiosWire;
@@ -1254,6 +1255,55 @@ pub static GA106_USER_REGISTER_ACCESS_MAP: RegisterAccessMapRow =
 /// are the two whose windows are emptiest today.
 pub static GA106_CONSTRUCTED_FALCONS: FalconInventoryRow = FalconInventoryRow::NONE;
 
+/// ★★★ **What this device says about its memory system — and the one row where
+/// *reproducing the oracle* is the honest answer rather than the lazy one.**
+///
+/// Every value is a real RTX 3060's own reply, captured from the host's GSP and replayed by
+/// the C artifact (`C: src/qemu/mode2_initctrl_ga106.h:5391`, `ctl_20800a1c`, registered at
+/// `:6255` as `{0x20800a1cu, 0x0u, 40u, 40u, …}` — forty bytes captured for a forty-byte
+/// struct, nothing trimmed). [`kayfabe_abi::memsysconfig`]'s docs decode them byte by byte
+/// and show the four independent internal agreements that make the layout trustworthy.
+///
+/// ★★ **Contrast with [`GA106_CONSTRUCTED_FALCONS`] and [`GA106_USER_REGISTER_ACCESS_MAP`],
+/// which overrule the oracle.** Those two replies are *instructions*: an entry tells RM to
+/// construct a microcontroller, a set bit tells RM a register is safe to hand to
+/// unprivileged userspace — and this port cannot back either, so it declines. This reply is
+/// a *description* of memory the guest is going to be given anyway: the framebuffer
+/// [`GA106_FB_REGIONS`] already promises, the `PRAMIN` window [`crate::plane`] already
+/// decodes, the L2 the guest never addresses directly. Reproducing the silicon's own
+/// numbers is not a promise this port cannot keep; inventing rounder ones would be.
+///
+/// ⊘ Two of the fields are nonetheless *ours* and not the oracle's, in the sense that they
+/// are checked against what this device serves rather than copied blind:
+/// `fbpa_present = true` is the only value
+/// [`kayfabe_abi::memsysconfig::MemorySystemError::FbpaAbsent`] permits, because the other
+/// one would re-place RM's BAR0 window off `l2_cache_size` instead of the fixed `PRAMIN`
+/// span in [`GA106`]; and `comprPageShift` is not here at all, because the encoder derives
+/// it from `compr_page_size` so the pair cannot drift.
+///
+/// ★ `ecc_fbpa_enabled = false` is the oracle's value and the one this port can support:
+/// an RTX 3060 has no ECC, and the heap's blacklist walk
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/heap.c:3920,3996`) reads the field to
+/// decide whether to go looking for retired pages. This device retires none.
+pub static GA106_MEMORY_SYSTEM: MemorySystemRow = MemorySystemRow {
+    // The oracle's byte 2, and the mode in which hardware owns the comptaglines rather than
+    // RM — which is the only one this port could back, since it models no comptag allocator.
+    comptag_policy: ComptagAllocationPolicy::Raw,
+    disable_compbit_backing: false,
+    disable_post_l2_compression: false,
+    ecc_fbpa_enabled: false,
+    l2_prefill: false,
+    // 0x24_0000 = 2.25 MiB = 24 slices x 96 KiB, which is `ltc_count * lts_per_ltc_count`
+    // two fields down. The capture agrees with itself.
+    l2_cache_size: 0x0024_0000,
+    fbpa_present: true,
+    // 64 KiB; the encoder derives `comprPageShift = 16` from it.
+    compr_page_size: 0x0001_0000,
+    ram_type: RAM_TYPE_GDDR6,
+    ltc_count: 6,
+    lts_per_ltc_count: 4,
+};
+
 /// ★ **The GA106 row.** Everything above, selected.
 ///
 /// The PCI identity is deliberately *incomplete* here: the vendor id and class code are
@@ -1291,6 +1341,7 @@ pub static GA106: ChipProfile = ChipProfile {
     chip_info: GA106_CHIP_INFO,
     user_register_access_map: GA106_USER_REGISTER_ACCESS_MAP,
     constructed_falcons: GA106_CONSTRUCTED_FALCONS,
+    memory_system: GA106_MEMORY_SYSTEM,
     fb_length: GA106_FB_LENGTH,
 };
 

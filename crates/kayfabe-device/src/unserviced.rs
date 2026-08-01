@@ -36,6 +36,7 @@
 //! | `t132a` | `f83ce31` | 7 | **1** — `fn 76 cmd 0x20800a41` | `gpuConstructUserRegisterAccessMap … @ gpu_register_access_map.c:244, gpu.c:2125` |
 //! | `t133a` | `c88f803` | 8 | **1** — `fn 76 cmd 0x208001b0` | `gpuBuildGenericKernelFalconList … @ gpu.c:5368, 2126` |
 //! | `t134a` | `1c79474` | **27** | **6** — `0x20800a87`, `0x20800a40`, `0x20800a1c`, `0x20800a4b`, `0x20800af3`, `0x20800aac` | `gpuConstructDeviceInfoTable_HAL … @ kernel_fifo.c:2208`, then a guest-kernel `Oops` |
+//! | `t135a` | `c84ef52` | **28** | **6** — `0x20800a87`, `0x20800a40`, `0x20800a4b`, `0x20800af3`, `0x20800aac`, **`0x20802a08`** | `gpuConstructDeviceInfoTable_HAL … @ kernel_fifo.c:2208` — now the guest's **first** line, and a *different* `Oops` |
 //!
 //! ★★ The first five walk `gpuPreInit` **one adjacent line at a time** — `:2124`, `:2125`,
 //! `:2126` — so the ledger and the guest agreed not merely on *which* control but on the
@@ -82,6 +83,65 @@
 //! `NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO` (`ogkm-580: ctrl2080gpu.h:4472`) the
 //! same way. ★★★ The sixth row names **six**, and `0x20800a40` is the one the guest's own
 //! first `LEVEL_ERROR` agrees with.
+//!
+//! ## ★★★ `t135a`: what the sweep's counters do when a rung IS cleared
+//!
+//! `[measured]` at `c84ef52`, a stock 580.159.04 guest, `nvidia-smi`, one boot — the first
+//! rung served under the sweep rather than under `gpuPreInit`
+//! (`docs/design/preinit_sweep_loop.md`). Read the row above against `t134a`'s:
+//!
+//! - `commands` 27 → **28**. One more control was *reached*.
+//! - distinct unserviced **6 → 6**, and the set is not the same set: `0x20800a1c` left it
+//!   (served) and **`0x20802a08`** entered it — `NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE`
+//!   (`ogkm-580: src/nvidia/src/kernel/gpu/ce/kernel_ce.c:843`), a control nothing had ever
+//!   got far enough to ask.
+//!
+//! ⊘ **So the distinct count is not monotone either, and it is not a progress bar.** The
+//! design doc's §4.4 says `commands` rising means *more engines reached* and distinct
+//! falling means *more engines survived*; `t135a` is the case it did not name — progress
+//! that holds the count flat because clearing one rung **reveals** the next. The set churns.
+//! Watch the membership, never the cardinality.
+//!
+//! ★★ **The guest agrees, from the other side, and more sharply than the count does.**
+//! `t134a`'s first `LEVEL_ERROR` was `gpuConstructDeviceInfoTable_HAL @ kernel_fifo.c:2208`
+//! with `kmemsysInitStaticConfig_HAL @ kern_mem_sys.c:122` and
+//! `"disallowing … (KernelMemorySystem:0)"` alongside it. At `c84ef52` **both of those lines
+//! are gone** and `:2208` is the first and only caller that complains. The engine survived.
+//!
+//! ⚠ **The `Oops` is not gone — it moved, and saying it is gone would be wrong.**
+//!
+//! ```text
+//! t134a  BUG: … address: 0000000000000268
+//!        RIP: memmgrGetBlackListPagesForHeap_GM107+0x23/0x140
+//!          heapInit_IMPL ← memmgrCreateHeap_IMPL ← memmgrStateInitLocked_IMPL
+//!
+//! t135a  BUG: … address: 0000000000000201
+//!        RIP: memmgrCalcReservedFbSpaceHal_GM107+0x40e/0x7b0
+//!          memmgrCalcReservedFbSpace_IMPL ← memmgrRegionSetupForPma_IMPL
+//!          ← heapInitInternal_IMPL ← memmgrCreateHeap_IMPL ← memmgrStateInitLocked_IMPL
+//! ```
+//!
+//! ★ Both are inside `memmgrCreateHeap_IMPL`, and that is the evidence rather than a
+//! coincidence: `heapInit_IMPL`'s **first** statement is the blacklist walk that faulted at
+//! `t134a` (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/objheap.c:41`). At `t135a` it
+//! returns and the fault is in `heapInitInternal_IMPL`, further down the same call. The
+//! served reply moved the boot past the exact statement it was supposed to.
+//!
+//! ★★★ **And the new one names the next rung, which is already written.**
+//! `memmgrCalcReservedFbSpace` sizes the channel and copy-engine reservations, and this boot
+//! failed `gpuConstructDeviceInfoTable_HAL` (`0x20800a40`, 20 times), then
+//! `kfifoConstructEngineList_HAL @ kernel_fifo_gm107.c:713`, then
+//! `NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE @ kernel_ce.c:843` — so `KernelFifo` has
+//! no engine list and `KernelCE` no buffer size when the heap asks them for one.
+//! `[inferred]`, not measured: the faulting field at `+0x201` has not been identified, only
+//! its two starved suppliers.
+//!
+//! ⊘ `0x20800a40` is therefore a **second** `AmputationUnsurvivable` for
+//! [`crate::sweep::SWEEP_TRIAGE`], and by a worse mechanism than the first: it is asked from
+//! `gpuStateInit`, whose loop maps `NV_ERR_NOT_SUPPORTED` to `NV_OK` and does **not** remove
+//! the engine (`ogkm-580: gpu.c:2286-2287`). PreInit at least NULLs the pointer, so a NULL
+//! check can catch it; StateInit leaves a constructed-but-uninitialised object that every
+//! NULL check passes.
 //!
 //! ⊘ `t127c`'s counters span **two** `nvidia-smi` attempts in one QEMU life; the second
 //! stopped at `_kgspBootGspRm: unexpected WPR2 already up` before sending anything, which

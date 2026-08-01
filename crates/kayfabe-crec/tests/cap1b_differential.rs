@@ -308,7 +308,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         "a served control the differential never sees is a served control no differential \
          can regress"
     );
-    assert_eq!(universe.len(), 6, "non-vacuity: the universe is not empty");
+    assert_eq!(universe.len(), 7, "non-vacuity: the universe is not empty");
 
     // fn 65 is `StaticInfoPolicy`, and fn 228 is `InertPolicy`. Both are answered here too,
     // so all three answering links of the chain are exercised in one run.
@@ -370,6 +370,13 @@ fn the_served_replies_are_the_ones_posted_and_each_carries_the_result_it_earned(
             (WantedTable::ConstructedFalconInfo, 6, 76, 0),
             (WantedTable::DeviceInfo, 9, 76, 0),
             (WantedTable::IntrKernelTable, 10, 76, 0),
+            // ★★★ The first entry in this list that the oracle reached from a place other
+            // than `gpuPreInit`. Sequences 3..=10 are that function's statement chain, one
+            // control each, in source order. This one is `KernelMemorySystem`'s
+            // `StatePreInit`, inside `gpuStatePreInit_IMPL`'s engine sweep — so the C's own
+            // capture is where the ladder stops being a ladder, eleven commands in, and
+            // this row is the first evidence of it that costs no boot.
+            (WantedTable::MemorySystemStaticConfig, 11, 76, 0),
             (WantedTable::PciBarInfo, 12, 76, 0),
         ]
     );

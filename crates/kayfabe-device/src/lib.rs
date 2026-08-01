@@ -57,12 +57,14 @@ pub mod inert;
 pub mod inittables;
 pub mod plane;
 pub mod staticinfo;
+pub mod sweep;
 pub mod unserviced;
 
 use kayfabe_abi::chipinfo::ChipInfoRow;
 use kayfabe_abi::falconinfo::FalconInventoryRow;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
+use kayfabe_abi::memsysconfig::MemorySystemRow;
 use kayfabe_abi::pcibars::{PciBarRow, bus_bar};
 use kayfabe_abi::regaccessmap::RegisterAccessMapRow;
 use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
@@ -290,6 +292,24 @@ pub struct ChipProfile {
     /// [`ga10x::GA106_CONSTRUCTED_FALCONS`], which names none and says what that costs,
     /// and [`kayfabe_abi::falconinfo`] for the count RM's own bounds check lets through.
     pub constructed_falcons: FalconInventoryRow,
+    /// ★★★ **What this chip says about its memory system — the first row whose *refusal*
+    /// is not survivable.**
+    ///
+    /// A chip row because L2 geometry, comptag page size and RAM type are facts about
+    /// silicon. It is called out from the others because of *where* the guest asks for it:
+    /// `KernelMemorySystem`'s `StatePreInit`, inside `gpuStatePreInit_IMPL`'s engine sweep,
+    /// which reads `NV_ERR_NOT_SUPPORTED` as *"this engine is absent — delete it"* and
+    /// carries on (`ogkm-580: gpu.c:2170-2214`). RM then dereferences the pointer it just
+    /// NULLed, in a different subsystem, thousands of lines later.
+    ///
+    /// ⊘ So this is not a row that can be omitted and refused like
+    /// [`ChipProfile::constructed_falcons`] can. `[measured]` run `t134a`, a stock
+    /// 580.159.04 guest at `1c79474`: leaving it unserved is a guest-kernel `NULL`
+    /// dereference in
+    /// `memmgrGetBlackListPagesForHeap_GM107`, and `nvidia-smi` hangs rather than fails.
+    /// See [`kayfabe_abi::memsysconfig`] for the full chain and for why an all-zero answer
+    /// is a *different* crash rather than a safe default.
+    pub memory_system: MemorySystemRow,
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and
