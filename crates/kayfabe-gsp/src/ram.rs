@@ -149,6 +149,7 @@ impl RegionMap {
             }
         }
 
+        checked_extent(&pages, page_size)?;
         Ok(RegionMap { page_size, pages })
     }
 
@@ -171,13 +172,20 @@ impl RegionMap {
                 return Err(RegionError::UnalignedEntry { index, value }.into());
             }
         }
+        checked_extent(&pages, page_size)?;
         Ok(RegionMap { page_size, pages })
     }
 
     /// The region's total size in bytes.
+    ///
+    /// ★ Cannot overflow: both constructors refuse a declaration whose extent does not
+    /// fit a `u64` ([`RegionError::RegionTooLong`]), so the product is total here rather
+    /// than checked here. That ordering matters — this value is the bound
+    /// [`RegionMap::runs`] compares every access against, and a bound computed from an
+    /// overflow is not a bound.
     #[must_use]
     pub fn len(&self) -> u64 {
-        self.pages.len() as u64 * self.page_size
+        (self.pages.len() as u64).saturating_mul(self.page_size)
     }
 
     /// Always false — a [`RegionMap`] cannot be constructed with zero pages.
@@ -281,6 +289,31 @@ impl RegionMap {
     ) -> Result<(), GspFault> {
         self.write(ram, offset, &value.to_le_bytes())
     }
+}
+
+/// ★ **The extent check both constructors run before handing out a [`RegionMap`].**
+///
+/// `pages × page_size` must fit a `u64`, because that product IS the bound
+/// [`RegionMap::runs`] tests every guest-supplied access against. Found by the
+/// `gsp_region` fuzz target (2026-08-01): with the multiplication left to
+/// [`RegionMap::len`] it panicked under `overflow-checks` and *wrapped* without them,
+/// and a wrapped bound admits offsets the region does not contain. Checking it once, at
+/// construction, is the same discipline `ElementLayout` follows — the value that cannot
+/// describe a real region is the one that cannot be built.
+///
+/// # Errors
+/// [`RegionError::RegionTooLong`].
+fn checked_extent(pages: &[u64], page_size: u64) -> Result<u64, GspFault> {
+    u64::try_from(pages.len())
+        .ok()
+        .and_then(|n| n.checked_mul(page_size))
+        .ok_or_else(|| {
+            RegionError::RegionTooLong {
+                pages: pages.len(),
+                page_size,
+            }
+            .into()
+        })
 }
 
 kayfabe_util::assert_send_sync!(RegionMap);

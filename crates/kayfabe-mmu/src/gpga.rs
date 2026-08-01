@@ -453,6 +453,27 @@ pub enum ViewFault {
         /// The region it already covers.
         region: GpgaRegion,
     },
+    /// ★ **The view offset would place the region past the end of the view's address
+    /// space.**
+    ///
+    /// `view_off + region.len` did not fit a `u64`. Found by the `gpga_index` fuzz
+    /// target (2026-08-01): the offset is stored verbatim and then added to a
+    /// within-region delta at **three** separate sites — the `ViewUpdate::Shows` built
+    /// here, [`ViewerIndex::viewers_of`] and [`ViewerIndex::view_contents`]. None of the
+    /// three could check it, because by the time they run the offset is already
+    /// committed; the only place the question can be asked once is where the offset
+    /// enters. Unchecked it panicked under `overflow-checks` and — worse — *wrapped*
+    /// without them, which hands a viewer a slice whose `view_off` points somewhere it
+    /// did not map. A wrapped window offset is a mis-addressed mapping, which is the
+    /// silent class this index exists to make impossible.
+    ViewOffsetOverflows {
+        /// The view the mapping was for.
+        viewer: ViewerId,
+        /// The offset supplied.
+        view_off: u64,
+        /// The region it was asked to place there.
+        region: GpgaRegion,
+    },
     /// ★★ **THE DUAL, refused: an isolate view would have seen another isolate's
     /// object.**
     ///
@@ -696,6 +717,18 @@ impl ViewerIndex {
         view_off: u64,
     ) -> Result<Vec<ViewUpdate>, ViewFault> {
         let kind = self.viewer_kind(viewer)?;
+
+        // (0) ★ THE OFFSET FITS. Asked exactly once, here, because this is the only place
+        // `view_off` enters the index — every later reader adds a within-region delta to
+        // the stored value and has no standing to re-litigate it. See
+        // [`ViewFault::ViewOffsetOverflows`].
+        if view_off.checked_add(region.len).is_none() {
+            return Err(ViewFault::ViewOffsetOverflows {
+                viewer,
+                view_off,
+                region,
+            });
+        }
 
         // (1) SELF-ALIAS — refused before anything is inserted.
         {

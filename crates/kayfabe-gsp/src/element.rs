@@ -471,7 +471,25 @@ pub fn encode_message(
         });
     }
 
-    let total = (len.elements() as usize) * (element_size as usize);
+    // ★ A zero element size builds a zero-byte run and then stamps fixed fields into it.
+    // Found by the `gsp_msgq` fuzz target (2026-08-01): `max_elements(0, _)` is 0 and
+    // `bytes_to_elements(_, 0)` is 0, so `elements() > max` is `0 > 0` — false — and the
+    // GSP-S1 gate above waves it through into `buf[seqnum_off..+4]` on an empty `Vec`.
+    //
+    // ⚠ **Not reachable through a bound geometry**: `rx_link_check` refuses
+    // `msgSize < MSGQ_MSG_SIZE_MIN` (16) with code `-2`, so `MsgqGeometry` never carries
+    // a zero. Refused here anyway for the reason the whole crate refuses by name: the
+    // precondition that saves this line lives in a different function, and `encode_message`
+    // is `pub`. Spelled as the existing out-of-range fault rather than a new one — a zero
+    // element size IS an element count out of range, and inventing a variant for it would
+    // split one condition across two names.
+    let total = (len.elements() as usize)
+        .checked_mul(element_size as usize)
+        .filter(|t| *t >= layout.hdr_size())
+        .ok_or(GspFault::ElementCountOutOfRange {
+            count: len.elements(),
+            max,
+        })?;
     let mut buf = vec![0u8; total];
 
     if let TransportHdr::Mctp {

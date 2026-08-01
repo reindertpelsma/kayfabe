@@ -260,17 +260,31 @@ phase abi-gen-tests "" \
   "★ the Axis-A ABI generator's own 22 unit tests — a detached workspace no --workspace command reaches" \
   'cd crates/kayfabe-abi/gen && cargo test'
 
+# ★★★ Both fuzz phases below are quantified over `cargo fuzz list`, NOT over a name.
+#
+# They used to name `parse_pushbuffer` and only `parse_pushbuffer`. That was correct
+# while it was the only target and silently wrong the moment a second one landed: seven
+# more arrived on 2026-08-01 and a hand-named phase would have run one of eight while
+# still reporting green. This is `gates_quantified_over_a_list.md`'s exact shape — a
+# smaller universe is a smaller true statement — so the universe is derived from the
+# `[[bin]]` table `cargo fuzz list` reads, and adding a target to `fuzz/Cargo.toml` is
+# the whole of wiring it in.
 phase fuzz-run "nightly cargofuzz" \
-  "the pushbuffer decoder fuzzer actually EXECUTES (CI only ever compiles it)" \
-  'cd fuzz && cargo +nightly fuzz run parse_pushbuffer -- -max_total_time=${KAYFABE_FUZZ_SECS:-180} -timeout=60'
+  "★ EVERY fuzz target in \`cargo fuzz list\` actually EXECUTES (CI only ever compiles them)" \
+  'run_fuzz_all'
 
-# ★★ The corpus and the committed crash artifact are REGRESSION INPUTS that nothing
-# replays. 114 corpus files and one `crash-…` artifact sit in the tree; no test reads them
-# and the nightly job only compiles the harness, so a re-introduced crash on a known-bad
-# input is invisible. `-runs=0` replays each file exactly once and exits.
+# ★★ The corpus and the committed crash artifacts are REGRESSION INPUTS that nothing
+# replays. They sit in the tree; no test reads them and the nightly job only compiles the
+# harnesses, so a re-introduced crash on a known-bad input is invisible. `-runs=0`
+# replays each file exactly once and exits.
+#
+# ⚠ Until 2026-08-01 `fuzz/.gitignore` ignored `corpus` and `artifacts`, so on a fresh
+# clone this phase replayed NOTHING and passed. `replay_fuzz_all` therefore counts the
+# files it fed and goes red on zero — a replay phase with an empty corpus is the
+# counted-but-never-passes failure this script's own header exists to prevent.
 phase fuzz-corpus-replay "nightly cargofuzz" \
-  "★ replay the 114 committed corpus files AND the committed crash artifact through the decoder" \
-  'cd fuzz && cargo +nightly fuzz run parse_pushbuffer corpus/parse_pushbuffer artifacts/parse_pushbuffer -- -runs=0'
+  "★ replay every committed corpus file AND every committed crash artifact, for every target" \
+  'replay_fuzz_all'
 
 phase tsan "nightly rustsrc nightly_musl" \
   "ThreadSanitizer over the four threaded suites (concurrency_stress, rt_shell, l1_verb_seam, l1_mean)" \
@@ -469,6 +483,62 @@ census_gates() {
 # Discovery is by grep over every `Cargo.toml` in the tree (target dirs excluded), so a new
 # detached sub-project is FOUND. It is compared against a pinned list, so being found is not
 # the same as being covered: an unlisted workspace fails this phase until a phase runs it.
+# ★★★ The fuzz-target universe, derived once and shared by both fuzz phases.
+#
+# `cargo fuzz list` reads the `[[bin]]` table in `fuzz/Cargo.toml`, which is the same
+# table `cargo fuzz run` dispatches on — so this cannot drift from what is runnable. It
+# is deliberately NOT a `ls fuzz/fuzz_targets/*.rs`: a file present but unregistered is
+# not a target, and counting it would report a coverage this script cannot deliver.
+fuzz_targets() {
+  ( cd fuzz && cargo +nightly fuzz list )
+}
+
+# Run every target for `KAYFABE_FUZZ_SECS` (default 180) each. Serial on purpose: the
+# phase's job is to prove each target EXECUTES, and a parallel run makes an OOM or a
+# timeout ambiguous about which target produced it.
+run_fuzz_all() {
+  local t rc=0 n=0
+  for t in $(fuzz_targets); do
+    n=$((n + 1))
+    echo "--- fuzz-run: $t (${KAYFABE_FUZZ_SECS:-180}s)"
+    ( cd fuzz && cargo +nightly fuzz run "$t" -- \
+        -max_total_time="${KAYFABE_FUZZ_SECS:-180}" -timeout=60 ) || rc=1
+  done
+  # A zero universe is a red run, not a clean one: it means the list stopped describing
+  # the tree, which is exactly the failure mode a derived universe exists to make loud.
+  [ "$n" -gt 0 ] || { echo "★★★ cargo fuzz list named NO targets"; rc=1; }
+  echo "fuzz-run: $n target(s) executed"
+  return $rc
+}
+
+# Replay each target's committed corpus + artifacts exactly once (`-runs=0`).
+replay_fuzz_all() {
+  local t rc=0 n=0 files total=0
+  for t in $(fuzz_targets); do
+    n=$((n + 1))
+    files=0
+    [ -d "fuzz/corpus/$t" ]    && files=$((files + $(find "fuzz/corpus/$t"    -type f | wc -l)))
+    [ -d "fuzz/artifacts/$t" ] && files=$((files + $(find "fuzz/artifacts/$t" -type f | wc -l)))
+    total=$((total + files))
+    if [ "$files" -eq 0 ]; then
+      # ⚠ Loud, and RED. An empty corpus directory replays nothing and libFuzzer exits 0
+      # for it — the counted-but-never-passes shape. A target with no committed inputs is
+      # a gap in the regression set, so it is reported as one.
+      echo "★★★ fuzz-corpus-replay: '$t' has ZERO committed corpus/artifact files"
+      echo "  Nothing is replayed for it, so a re-introduced crash on a known-bad input"
+      echo "  would be invisible. Commit a minimised corpus under fuzz/corpus/$t/."
+      rc=1
+      continue
+    fi
+    echo "--- fuzz-corpus-replay: $t ($files file(s))"
+    ( cd fuzz && cargo +nightly fuzz run "$t" \
+        "corpus/$t" "artifacts/$t" -- -runs=0 ) || rc=1
+  done
+  [ "$n" -gt 0 ] || { echo "★★★ cargo fuzz list named NO targets"; rc=1; }
+  echo "fuzz-corpus-replay: $total file(s) replayed across $n target(s)"
+  return $rc
+}
+
 census_workspaces() {
   local found rc=0
   found=$(find . -name Cargo.toml \

@@ -1,4 +1,21 @@
 target
-corpus
-artifacts
 coverage
+
+# ★★★ `corpus` and `artifacts` are DELIBERATELY NOT IGNORED (2026-08-01).
+#
+# They used to be, and the consequence was measured rather than argued: on a fresh clone
+# neither directory existed, so `run_full_suite.sh`'s `fuzz-corpus-replay` phase — whose
+# own description says it *"replays the 114 committed corpus files AND the committed
+# crash artifact"* — replayed **zero inputs and passed**. That is this repository's own
+# named worst case: a step that is COUNTED but never actually checks anything
+# (`gh_ci_is_opportunistic_only.md`, and the two instances `run_full_suite.sh`'s own
+# header already lists). The 114 files and the `crash-…` artifact existed only in one
+# agent's working tree and would have died with it.
+#
+# A crash reproducer that is not committed is a story, not a regression test. Keeping the
+# corpus in-tree is what makes it the latter.
+#
+# ⚠ **Corpora grow without bound if left to a fuzzer.** What is committed must stay a
+# MINIMISED corpus — `cargo fuzz cmin <target>` before committing, and prune. The bound
+# is a few hundred KiB per target, not a few hundred MiB; a fuzz run's raw output does
+# not belong here.
