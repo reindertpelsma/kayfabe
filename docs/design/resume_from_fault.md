@@ -612,7 +612,7 @@ unavailable.** §2.2 and §4.3 say it need not be. The two halves of this note a
 
 ## 7. Recommended strategy
 
-> ### ✅ LANDED 2026-08-01 — steps 1 (in part), 2, 3 and 5a
+> ### ✅ LANDED 2026-08-01 — steps 1 (in part), 2, 3, 4 and 5a
 >
 > Written here rather than in a separate note so the recommendation and its outcome cannot
 > drift apart. Nothing below was deleted; this records what happened to it.
@@ -622,7 +622,7 @@ unavailable.** §2.2 and §4.3 say it need not be. The two halves of this note a
 > | **1** — stop `NV_OK`-ing what we do not implement | ✅ **done, and the port's starting point was better than the C's** | `kayfabe_abi::capability` |
 > | **2** — write the error notifier | ✅ **done**, plus a narrowing the step did not ask for | `kayfabe_abi::notifier`, `kayfabe_core::fault` |
 > | **3** — record the reboot-required blast radius | ✅ **done**, in the rustdoc and in `l1_concurrency.md` in place | `NotAttributable::GuestKernelContext` |
-> | **4** — reachability-on-transition | untouched — separate work | — |
+> | **4** — reachability-on-transition | ✅ **built**, as a content diff rather than as edges — five holes closed, two named as residue | `kayfabe_mmu::reach`, and `reachability_on_transition.md` |
 > | **5a** — receive and record `0x20800a9b` | ✅ **done**, recorder-only | `kayfabe_device::faultbuffer` |
 > | **5b–5d** — the fault buffer itself | **not built**, and not half-built | — |
 >
@@ -693,6 +693,13 @@ one does not.
 **4. Build trap-on-transition as *reachability*-on-transition, closing holes 1–7** (§6). This is
 the data-plane work that has to happen regardless. Close hole 2 with the witness rule — *bind only
 what you saw written* — which means accepting that misses will exist, which is the input to step 5.
+
+> ★ **Built 2026-08-01 — and it did not stay a design about edges.** `reachability_on_transition.md`
+> is the note; the shape it settled on diffs page-table *content* and derives the edges, because
+> holes 4 and 7 exist only for a design that watches for a store. Holes 1, 3, 5, 6, 7 closed;
+> hole 2 closed at **page** granularity and named as open at entry granularity; hole 4's remap
+> closed and its protection-only half detected-but-not-modelled. The residue is that note's §7 and
+> it is the input to step 5, exactly as this line predicted.
 
 **5. Emulate the replayable fault buffer — when, and only when, managed memory is on the
 roadmap.** Sub-order, and 5a is free enough to do now:
