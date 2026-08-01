@@ -312,7 +312,31 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               last statement of memmgrStateInitLocked_IMPL, whose failure path rolls the \
               phase back through memmgrStateDestroy and DELETES the heap created ninety \
               lines earlier (ogkm-580: mem_mgr.c:625, :777, :684, :963-975). [measured] \
-              2026-08-01, boots alloc1 (2ced035) and alloc2 (a6412c0)",
+              2026-08-01, boots alloc1 (2ced035) and alloc2 (a6412c0). \
+              ★★★ CORRECTION, #155: this control has TWO call sites, and the paragraph above \
+              describes only the first. The second is _memmgrMemUtilsScrubInitRegisterCallback \
+              (ogkm-580: mem_utils.c:1920-1934), which arms NV2080_NOTIFIERS_FIFO_EVENT_MTHD \
+              = 35 (cl2080_notification.h:72) — NOT in SILENT_NOTIFIERS, so this port refuses \
+              it, and THAT refusal is the wall at mem_utils.c:2022 ([measured] 2026-08-01, \
+              boot schedprobe1). ⚠ The refusal is invisible in the unserviced ledger: \
+              InitTablePolicy::refuse() returns Some(Reply), so a control that reaches a \
+              WantedTable arm and fails a gate is ANSWERED and never recorded — diffing \
+              ledgers alone would have missed this wall entirely. \
+              ★ Index 35 IS defensible to accept, on an argument DIFFERENT from index 194's, \
+              and the argument is recorded here rather than taken: 194's row says the event \
+              cannot occur; 35's would say the ARMING IS NEVER READ. NV2080_NOTIFIERS_FIFO_EVENT_MTHD \
+              occurs in exactly three places in the whole driver — event_notification.c:482, \
+              which maps it to RM_ENGINE_TYPE_HOST on the NONSTALL registration path, and \
+              mem_utils.c:1901/:1920 — so it is only ever registered with NV01_EVENT_NONSTALL_INTR, \
+              and the nonstall delivery path (_gpuEngineEventNotificationListNotify) keys on \
+              engineNonstallIntrEventNotifications[] built by the NV0005 alloc, NEVER on \
+              pSubdevice->notifyActions[]. No caller anywhere passes 35 to \
+              gpuNotifySubDeviceEvent, the only reader of notifyActions[] (gpu_rmapi.c:572, \
+              :593). ⊘ It is NOT taken, because taking it alone buys nothing observable: \
+              0xa06f0103 refuses FOURTEEN LINES EARLIER in the same function \
+              (mem_utils.c:2006 < :2022), so the boot would not move. It belongs to the \
+              execution-plane set named in this table's 0xa06f0104 row and should be taken \
+              WITH it, not before it",
     },
     // ── seq 26 ─────────────────────────────────────────────────────────────────────
     SweepControl {
@@ -698,6 +722,51 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               ([measured] 2026-08-01, traces/real_ga106/rpc_bodies_real_ga106.txt), which is \
               bEnable=NV_TRUE echoed back — an [IN] echo and NOT an answer, so even a \
               correct capture of it would license nothing here",
+    },
+    // ── ★★★ The two rungs BEHIND 0xa06f0103, measured together in boot evtprobe1 ──────
+    SweepControl {
+        cmd: 0xc36f_0108,
+        engine: "KernelChannel (CE scrubber)",
+        disposition: SweepDisposition::RefusalHalts,
+        why: "NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN (ogkm-580: ctrlc36f.h:79), one \
+              [OUT] NvU32 workSubmitToken (:83-85). Reached from mem_utils.c:2024 via \
+              kfifoRmctrlGetWorkSubmitToken_GV100, which returns rmStatus VERBATIM \
+              (ogkm-580: kernel_fifo_gv100.c:86-93) — so unlike its two neighbours in \
+              memmgrMemUtilsChannelSchedulingSetup this one does not hide behind \
+              NV_ERR_GENERIC, and a boot that stops here says 0x56 rather than 0xFFFF. \
+              ⊘ NOT SERVED. The token is not a description: the guest writes it into the \
+              doorbell to name a channel to HOST, so a number this port invents names \
+              nothing. It is the same execution-plane requirement as 0xa06f0103 wearing a \
+              different id — see this table's 0xa06f0104 row for why the four are ONE wall",
+    },
+    SweepControl {
+        cmd: 0xa06f_0104,
+        engine: "KernelChannel (global CeUtils)",
+        disposition: SweepDisposition::RefusalHalts,
+        why: "★★★ NVA06F_CTRL_CMD_BIND (ogkm-580: ctrla06fgpfifo.h:96), one [IN] NvU32 \
+              engineType. [measured] 2026-08-01, boot evtprobe1 at rev 4e93f17 + a \
+              THROWAWAY probe (NEVER LANDED) that faked 0xa06f0103, 0xc36f0108 and a \
+              SILENT_NOTIFIERS row for index 35; /workspace/bench/run_evtprobe1_dmesg.log \
+              and run_evtprobe1_qemu.log. ★ With those three faked, mem_utils.c:2022 CLEARS \
+              — the scrubber's whole chain (mem_scrub.c:181, mem_mgr_scrub_gp100.c:63, \
+              mem_mgr.c:487) vanishes from the log — and the boot advances to the GLOBAL \
+              CeUtils at mem_mgr.c:4155/:526, whose channel takes the bUseVasForCeCopy arm \
+              the scrubber's did not (ogkm-580: mem_utils.c:1953-1971). That arm's control \
+              is dispatched CPU-side to kchannelBindToRunlist, which RPCs it straight back \
+              to us under NV_ASSERT_OK_OR_RETURN (ogkm-580: kernel_channel.c:2878-2886, \
+              reached from :3230); our NV_ERR_NOT_SUPPORTED returns through mem_utils.c:1969 \
+              VERBATIM, printing 'Unable to bind Channel, status: 56'. \
+              ⊘ NOT SERVED, and this row is where the SET is named. 0xa06f0103 (schedule), \
+              0xa06f0104 (bind), 0xc36f0108 (token) and the index-35 arming at \
+              mem_utils.c:1920 are not four rungs of a ladder; they are ONE requirement — \
+              put a channel on a runlist, arm its completion, hand back its doorbell — asked \
+              four times. The probe that answered three of them did not reach a new KIND of \
+              wall; it reached the fourth. ⇒ this is the execution plane, and a reply cannot \
+              close it. ⚠ The oracle's row for this id is one of the eleven empty ones (C: \
+              mode2_initctrl_ga106.h, psize 4, dlen 0) and a real GA106 answers 0b 00 00 00 \
+              — the [IN] engineType echoed back (kayfabe_abi::oracle, traces/real_ga106/). \
+              As with 0xa06f0103 that is an echo, not an answer, so even a perfect capture \
+              licenses nothing",
     },
 ];
 

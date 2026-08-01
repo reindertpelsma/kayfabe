@@ -149,7 +149,7 @@ fn the_triage_universe_is_pinned_so_shortening_it_is_a_red_test() {
     //
     // ⊘ The order is the oracle's own `rpc.sequence` order, so a reader can line this list
     // up against `cargo run -p kayfabe-crec --example cap1b_report` directly.
-    assert_eq!(SWEEP_TRIAGE.len(), 33, "the triaged universe's size");
+    assert_eq!(SWEEP_TRIAGE.len(), 35, "the triaged universe's size");
     let cmds: Vec<u32> = SWEEP_TRIAGE.iter().map(|c| c.cmd).collect();
     assert_eq!(
         cmds,
@@ -191,6 +191,8 @@ fn the_triage_universe_is_pinned_so_shortening_it_is_a_red_test() {
             0x2080_0a38, // KernelGraphics — FECS trace HW enable (teardown)
             0x2080_0a4b, // NOT in the oracle's prefix — KernelDisplay
             0xa06f_0103, // ★★★ EXECUTION PLANE — KernelChannel, the CE scrubber's schedule
+            0xc36f_0108, // ★★★ EXECUTION PLANE — the CE scrubber's work-submit token
+            0xa06f_0104, // ★★★ EXECUTION PLANE — the global CeUtils channel's runlist bind
         ]
     );
     // ⊘ And no duplicates: a repeated id would make `triage_for` answer with whichever row
@@ -399,7 +401,7 @@ fn a_halting_refusal_may_be_served_or_not_and_the_table_says_which() {
     // `NV_ERR_GENERIC` is not in that map. Boot `grinfo1` shows the halt; boot `schedprobe1`
     // shows the wall moving when the refusal is removed. Where a status ENDS UP is the
     // question, and here it is answered from two directions.
-    assert_eq!(halts.len(), 9, "non-vacuity: the class is the roadmap");
+    assert_eq!(halts.len(), 11, "non-vacuity: the class is the roadmap");
 }
 
 #[test]

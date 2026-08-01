@@ -1565,3 +1565,181 @@ to perform the action or to refuse.
   where this rung is.
 - ⊘ **One boot, one 4-core box**, and `#98` records a Mode-2 symptom that was 1/3 one day and
   9/9 the next on a bit-identical binary.
+
+---
+
+# §44 — boot `evtprobe1` (a PROBE, never landed): `mem_utils.c:2022` diagnosed, and the four controls behind it shown to be ONE wall
+
+**Provenance.** `[measured]` 2026-08-01, `scripts/bench/boot_capture.sh evtprobe1`, this
+4-core box. Guest: stock, unpatched NVIDIA open 580.159.04. QEMU: the QOM shim built from
+`libkayfabe_qemu_raw.a` at **`4e93f17` + a throwaway probe** — the binary stamped
+`kayfabe-rev:4e93f178…-dirty` and `nm` found the probe's two symbols in the exact archive
+the shim links, both read back rather than assumed. Evidence on disk:
+`/workspace/bench/run_evtprobe1_dmesg.log` (46 lines, 43 `NVRM`),
+`/workspace/bench/run_evtprobe1_qemu.log` (the device's own ledger),
+`/workspace/bench/build155probe.log`.
+
+⊘ **The probe is NOT in the tree and must never be.** It fabricated three completions:
+`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`0xa06f0103`) → `NV_OK`;
+`NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` (`0xc36f0108`) → an **invented** token;
+and an extra `SILENT_NOTIFIERS` row for index 35. The bench was restored to clean
+`4e93f17` afterwards and **verified**: the rebuilt binary stamps `4e93f17` with no `-dirty`,
+and `nm` finds zero probe symbols (`/workspace/bench/build155restore.log`).
+
+## 44.1 What `mem_utils.c:2022` requires, and how the statement was located
+
+`mem_utils.c:2022` is `NV_ASSERT_OK_OR_RETURN(_memmgrMemUtilsScrubInitRegisterCallback(...))`.
+That function has **three** failure returns and **all three substitute `NV_ERR_GENERIC`**
+(`:1884`, `:1915`, `:1933`), so the status cannot distinguish them. The **printed message**
+can: the log says `"event notification control failed"`, which is `:1932` alone. ⇒ the NV0005
+event alloc at `:1904` **succeeded**, and the failing statement is the
+`NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` at `:1923`.
+
+It requires this port to answer that control, and it reaches us: despite carrying **no**
+`ROUTE_TO_PHYSICAL` flag (`flags = 0x10118` = `NON_PRIVILEGED | GPU_LOCK_DEVICE_ONLY |
+API_LOCK_READONLY | GSP_PLUGIN_FOR_VGPU_GSP`, `g_subdevice_nvoc.c:1601-1614`),
+`subdeviceCtrlCmdEventSetNotification_IMPL` **hand-rolls** an unconditional forward under
+`if (IS_FW_CLIENT(pGpu))` and `NV_CHECK_OK_OR_RETURN`
+(`subdevice_ctrl_event_kernel.c:108-118`) — which returns our status **before** any local
+state is touched. ⚠ A flag-only reading of this control would have concluded it never
+reaches the GSP.
+
+★★★ **This port serves `0x20800301`, and refused it anyway** — the arming is index **35**,
+`NV2080_NOTIFIERS_FIFO_EVENT_MTHD` (`cl2080_notification.h:72`), and `SILENT_NOTIFIERS`
+holds only index 194. That is the design working as specified: §12 wrote the promise as a
+*list* precisely so "completion notifiers whose silence is a hang nobody could attribute"
+would produce a loud boot.
+
+⚠ **And the refusal is INVISIBLE in the unserviced ledger.** `InitTablePolicy::refuse()`
+returns `Some(Reply)`, so a control that reaches a `WantedTable` arm and fails a gate is
+*answered* and never recorded. `schedprobe1`'s ledger is `grinfo1`'s minus one id; the wall
+that boot actually hit appears nowhere in it. **Diffing ledgers alone cannot find this class
+of wall.**
+
+## 44.2 Index 35 IS defensible — on a different argument, and it is recorded rather than taken
+
+`NV2080_NOTIFIERS_FIFO_EVENT_MTHD` occurs in **exactly three places in the whole driver**:
+`event_notification.c:482` (the switch mapping it to `RM_ENGINE_TYPE_HOST` on the **nonstall**
+path) and `mem_utils.c:1901` / `:1920`. It is therefore only ever registered *with*
+`NV01_EVENT_NONSTALL_INTR`, by one caller. And the nonstall delivery path
+(`_gpuEngineEventNotificationListNotify`) keys on `engineNonstallIntrEventNotifications[]`,
+built by the **NV0005 alloc**, never on `pSubdevice->notifyActions[]` — whose only readers are
+`gpu_rmapi.c:572` and `:593`, and **no caller anywhere passes 35 to
+`gpuNotifySubDeviceEvent`** (verified by grep over the tree).
+
+⇒ index 194's row says *the event cannot occur*; index 35's would say *the arming is never
+read*. Both are honest, and 35's does **not** expire when the execution plane lands.
+
+⊘ **It is not taken.** `0xa06f0103` refuses **fourteen lines earlier in the same function**
+(`:2006` < `:2022`), so landing the row alone moves nothing. It belongs to the set below.
+
+## 44.3 The measurement: three lies bought one step, into the same wall
+
+With all three faked, `mem_utils.c:2022` **clears**. Absent from the new log, present in
+`schedprobe1`'s: `_memmgrMemUtilsScrubInitRegisterCallback`, `mem_utils.c:2022`,
+`mem_scrub.c:181`, `mem_mgr_scrub_gp100.c:63`, `mem_mgr.c:487` — **the scrubber's entire
+chain**. Present and new: `mem_mgr.c:4155` and `mem_mgr.c:526`, which is the **global**
+`CeUtils`, strictly later in `memmgrInitInternalChannels_IMPL` (`:526` > `:487`).
+
+Its channel takes the `bUseVasForCeCopy` arm the scrubber's did not
+(`mem_utils.c:1953-1971`), whose control is dispatched CPU-side into `kchannelBindToRunlist`
+and **RPC'd straight back to us** under `NV_ASSERT_OK_OR_RETURN`
+(`kernel_channel.c:2878-2886`, from `:3230`):
+
+```
+NVRM: … NV_ERR_NOT_SUPPORTED (0x56) … @ kernel_channel.c:2886
+NVRM: … kchannelBindToRunlist(…) @ kernel_channel.c:3230
+NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to bind Channel, status: 56
+NVRM: … NV_ERR_NOT_SUPPORTED (0x56) … @ mem_utils.c:2006
+```
+
+★★ **The substitution trick identifies the site again, in the other direction.** The status
+is `0x56` **verbatim** — `mem_utils.c:1969` returns `rmStatus` — where the schedule arm
+(`:1986`) and the callback arm (`:1933`) both substitute `0xFFFF`. The new wall is
+**`NVA06F_CTRL_CMD_BIND` (`0xa06f0104`)**, and the device's own ledger carries
+`unserviced fn 76 cmd 0xa06f0104` to confirm it.
+
+### How movement was determined WITHOUT the verdict line
+
+The verdict *did* change (`0x25:0xffff:1249` → `0x43:0x59:2239`), but §43's lesson is that it
+cannot locate a wall — two different failure points produced the identical line. The
+independent evidence, from the device's own ledger:
+
+| | `grinfo1` | `schedprobe1` | `evtprobe1` |
+|---|---|---|---|
+| commands decoded | 92 | 95 | **137** |
+| distinct unserviced | 17 | 16 | **20** |
+| `0xa06f0103` refused | yes | no (probe) | no (probe) |
+| `0xa06f0104` refused | no | no | **yes** |
+
+★ The guest asked **42 more questions than it ever had**, and **four control ids appear that
+no previous boot ever reached** (`0xa06f0104`, `0x2080013f`, `0x2080012b`, `0x402c0101`).
+A driver that asks new questions has run new code. That is a positional argument in the
+driver's own source order, and it uses the verdict code nowhere.
+
+## 44.4 ★★★ The finding: four controls, one wall — and a fifth thing that is not a control
+
+`0xa06f0103` (schedule), `0xa06f0104` (bind), `0xc36f0108` (work-submit token) and the
+index-35 arming at `mem_utils.c:1920` are **not four rungs of a ladder**. They are one
+requirement — *put a channel on a runlist, arm its completion, hand back its doorbell* —
+asked four times, by two different channels. The probe answered three and did not reach a new
+**kind** of wall; it reached the fourth. Serving them individually fabricates completions one
+at a time and the boot walks from each to the next.
+
+And `[inferred]` from source, immediately past all four: `memmgrInitCeUtils_IMPL:4158` calls
+**`memmgrTestCeUtils`** unconditionally, which writes `0xAABBCCDD` to framebuffer, issues
+`memmgrMemCopy(… TRANSFER_FLAGS_PREFER_CE)`, reads it back, and asserts
+`sysmemData == vidmemData` (`mem_mgr.c:407-478`). **A functional end-to-end test of the Copy
+Engine with a read-back comparison.** There is no control-shaped answer to it.
+
+Its status returns through `:4165` → `:526` `NV_ASSERT_OK_OR_RETURN` →
+`memmgrPostSchedulingEnableHandler` → `kernel_fifo.c:3111`, whose `else` arm is
+`NV_ASSERT(0); break;` (`:3126-3131`) — **fatal for any non-`NV_OK` status**. ⇒ ★★ the
+sweep's *"`NV_ERR_NOT_SUPPORTED` = amputate and carry on"* rule **does not apply in this
+phase**.
+
+### Every escape hatch, closed by citation
+
+- `PDB_PROP_GPU_REUSE_INIT_CONTING_MEM` (skips the test, `:421-427`) — set `NV_TRUE` for
+  **Blackwell chips only**; GA106 takes the `else` (`g_gpu_nvoc.c:497-506`).
+- `!IS_SILICON(pGpu)` (`:503`, skips the global `CeUtils` *and* scrub-on-free) — ★★★ **the
+  lever does not exist.** `IS_SILICON` = `!(IS_EMULATION || IS_SIMULATION)`; `bIsSimulation`,
+  `bIsFmodel` and `bIsRtlsim` are **declared in `g_gpu_nvoc.h` and assigned nowhere in the
+  tree**, and `PDB_PROP_GPU_EMULATION` is never `setProperty`'d either (its only occurrence is
+  one read, `common_nvlinkapi.c:618`). `IS_SILICON` is structurally constant `TRUE`. This is
+  not a lie we decline to tell; it is a lie we *cannot* tell.
+- `bDisableGlobalCeUtils` (`:500`) — set only from the guest regkey
+  `NV_REG_STR_DISABLE_GLOBAL_CE_UTILS` (`mem_mgr.c:341-345`). Requires modifying the guest ⇒
+  outside "stock, unpatched".
+- `IS_VIRTUAL(pGpu) && !IS_VIRTUAL_WITH_FULL_SRIOV` (`:502`) — the standing
+  `IS_VIRTUAL_WITHOUT_SRIOV` refusal: it makes `intrGetStallInterruptMode` report
+  `pending = FALSE` unconditionally, i.e. the interrupt self-test permanently unpassable.
+- The scrubber's own gate `memmgrIsScrubOnFreeEnabled` (`mem_mgr_scrub_gp100.c:52`) — cleared
+  only by Windows / MODS / `IS_RTLSIM` / `IS_FMODEL` / `IsDFPGA` / vGPU-host /
+  `IS_VIRTUAL_WITHOUT_SRIOV` / GSP-platform build / SLI (`mem_mgr_gm107.c:1473-1482`). None
+  available, and the three simulation ones are the unreachable lever above.
+
+⇒ **This needs the execution plane, and it cannot be faked.** That is the result.
+
+## 44.5 ⊘ What boot `evtprobe1` does NOT establish
+
+- ⊘ **It does not license serving any of the four controls.** It was produced *by* lying
+  about three of them. Nothing here is a reason to land those lies.
+- ⊘ **It does not establish that `memmgrTestCeUtils` is the next wall.** The boot died at
+  `objCreate(CeUtils)` (`mem_mgr.c:4155`), **before** `:4158`. The CE read-back test is
+  `[inferred]` from source and has **never been reached by any boot**.
+- ⊘ **It does not establish that index 35 is safe to serve.** The argument in §44.2 is a
+  source reading; the boot used it but did not test it — with `0xa06f0103` faked, a wrong
+  answer about the arming would not have shown.
+- ⊘ **A SECOND refusal in the same frame is observed and NOT attributed**:
+  `GspRmAlloc … hClass=0x0000c56f … status=0x56` (`AMPERE_CHANNEL_GPFIFO_A`), with the
+  device reporting one `GpuError::Projection` — so the class is permitted and mapped and the
+  failure is in our object model. It is **not** claimed as a cause: the propagating chain
+  reaches `ce_utils.c:304` (`memmgrMemUtilsCopyEngineInitialize`), not `:286`
+  (`memmgrMemUtilsChannelInitialize`), so channel init returned `NV_OK` despite it.
+  ⚠ Adjacency in a log is not a mechanism. This is the next rung's question, not this one's.
+- ⊘ **Nothing executed.** No pushbuffer fetched, no semaphore released, no byte copied.
+- ⊘ **Interrupt delivery is still untested**; the device dropped 136 status-queue requests.
+- ⊘ **`nvidia-smi` still fails**, no devices.
+- ⊘ **One boot, one 4-core box, one guest**, and `#98` records a Mode-2 symptom that was 1/3
+  one day and 9/9 the next on a bit-identical binary.
