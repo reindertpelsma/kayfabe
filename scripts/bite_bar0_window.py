@@ -16,6 +16,13 @@ mutation below is one of the ways a write is lost, and the test it must kill is 
 states that mechanism — checked by NAME, not by exit status, because a mutation that turns
 some other test red is not evidence about the behaviour it was planted to probe.
 
+★ **Mutation strings must not carry leading indentation.** `cargo fmt` collapsed a
+three-line `match` arm to one line between two runs of this harness, and the mutation that
+had bitten an hour earlier came back `NOT-PLANTABLE (0 matches)`. The harness reported that
+distinctly rather than as a survivor, which is the only reason it took one step to see —
+`suspect_the_instrument_first`, seventh instance. Anchor on the distinctive expression, not
+on a whole formatted line.
+
 Usage:  python3 scripts/bite_bar0_window.py [--cargo-target DIR]
 """
 
@@ -87,8 +94,8 @@ MUTATIONS = [
     (
         "the window offset is measured from BAR0 zero, not the window's base",
         PLANE,
-        "                Some(s.bar0_window.fb_addr(off - self.chip.pramin_window.base))",
-        "                Some(s.bar0_window.fb_addr(off))",
+        "FbWindow::Pramin => Some(s.bar0_window.fb_addr(off - self.chip.pramin_window.base)),",
+        "FbWindow::Pramin => Some(s.bar0_window.fb_addr(off)),",
         "bar0_window",
         "the_verify_bar0_window_subtest_passes_at_the_address_the_boot_measured",
     ),
