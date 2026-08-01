@@ -131,6 +131,7 @@ fn chip_info_command(cmd: u32, params_size: u32, params_at: usize) -> RpcCommand
         sequence: 3,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 

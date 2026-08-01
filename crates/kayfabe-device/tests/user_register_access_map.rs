@@ -163,6 +163,7 @@ fn map_command(cmd: u32, params_size: u32, params_at: usize) -> RpcCommand {
         sequence: 0,
         payload,
         elements: 3,
+        delivered: Vec::new(),
     }
 }
 

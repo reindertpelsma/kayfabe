@@ -133,6 +133,13 @@ fn command(msg: &[u8]) -> RpcCommand {
         sequence: env.sequence,
         payload: abi().rpc_payload(msg).expect("payload").to_vec(),
         elements: 1,
+        // ★★★ The whole message after the envelope, NOT `rpc_payload`'s
+        // `length`-bounded view. That difference IS this rung's transport finding: an
+        // alloc's `params[]` live past the declared length (`RpcCommand::delivered`), so
+        // a fixture that filled this from `rpc_payload` would reproduce the bug rather
+        // than the guest, and every alloc test here would pass against a decoder that
+        // could never serve a real boot.
+        delivered: msg[kayfabe_abi::view::RpcEnvelope::SIZE..].to_vec(),
     }
 }
 
@@ -669,4 +676,105 @@ fn a_device_that_declares_no_device_id_is_refused_rather_than_defaulted() {
     let _ = policy
         .deliver(&device_alloc(3, BOOT_HCLIENT, H_DEVICE))
         .expect("the same Device, declaring deviceId, is accepted");
+}
+
+// =================================================================================
+// 6. ★★★ The transport finding — an alloc's params live PAST the declared length
+// =================================================================================
+
+/// ★★★ **The bug the first boot of this rung found, pinned from the guest's own send
+/// rule.**
+///
+/// `rpcRmApiAlloc_GSP` declares `length = sizeof(rpc_message_header_v) +
+/// sizeof(rpc_gsp_rm_alloc_v03_00)` and `params[]` is a flexible array, so the declared
+/// length stops exactly where the params begin — and the params are copied in afterwards
+/// without updating it (`ogkm-580: rpc.c:11196-11221`, `rpc_common.c:183`,
+/// `g_rpc-structures.h:1491-1502`).
+///
+/// This fixture reproduces that shape exactly: `payload` holds the 32-byte alloc header
+/// and nothing else, `delivered` holds the header **and** the params. A decoder reading
+/// `payload` refuses; a decoder reading `wire_body()` serves. Both arms are asserted,
+/// because the refusal is the observation the boot actually made and a test that only
+/// showed the success would not say what was fixed.
+#[test]
+fn an_allocs_params_live_past_the_declared_length_and_are_still_served() {
+    let params = w::client_root_params(BOOT_HCLIENT, KERNEL_PID);
+    let mut full = w::alloc_body(
+        BOOT_HCLIENT,
+        w::NV01_NULL_OBJECT,
+        w::NV01_NULL_OBJECT,
+        0x0000_0000,
+        BOOT_ROOT_PARAMS_SIZE as u32,
+        w::RMAPI_RPC_FLAGS_NONE,
+        &params,
+    );
+    // The guest's own `paramsSize` is 0x78 while it only wrote the 8-byte prefix it
+    // knows; the rest is the zeroed `processName[100]` tail. Grow the body to match.
+    full.resize(32 + BOOT_ROOT_PARAMS_SIZE, 0);
+
+    // ⊘ `payload` is the DECLARED body — 32 bytes, exactly what `rpc.length` covers.
+    let declared_only = RpcCommand {
+        function: RpcFunction::RmAlloc,
+        code: 103,
+        sequence: 1,
+        payload: full[..32].to_vec(),
+        elements: 1,
+        delivered: Vec::new(),
+    };
+    let mut a = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let e = a
+        .deliver(&declared_only)
+        .expect_err("with no delivered run there is nothing to decode");
+    assert!(
+        matches!(
+            e,
+            BridgeRefusal::ParamsSizeExceedsPayload {
+                declared: 0x78,
+                available: 0
+            }
+        ),
+        "this is the refusal the 2026-08-01 boot at rev 2ced035 printed as status=0x56 \
+         on all four classes; got {e:?}"
+    );
+
+    // ★ The same message with its element run recorded: served.
+    let delivered = RpcCommand {
+        delivered: full.clone(),
+        ..declared_only.clone()
+    };
+    let mut b = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let _ = b
+        .deliver(&delivered)
+        .expect("the params are in the element run, where the guest put them");
+    assert_eq!(b.applied(), 1);
+
+    // ⊘ And `wire_body` never SHRINKS a message: a command whose delivered run is shorter
+    // than its declared payload (which the transport cannot produce, but a caller can
+    // construct) still decodes from the payload.
+    let stunted = RpcCommand {
+        delivered: full[..8].to_vec(),
+        payload: full.clone(),
+        ..declared_only.clone()
+    };
+    assert_eq!(stunted.wire_body(), &full[..]);
+}
+
+/// ★★ And the reply is still sized by the **declared** length, not the delivered one.
+///
+/// ⊘ This is the half that would be silently catastrophic if it moved: a reply sized to
+/// the delivered run would be a 4 KiB body where the guest expects 32 bytes, which is the
+/// unclamped-reply bug class `RpcCommand::reply`'s M9 clamp exists for.
+#[test]
+fn a_reply_is_sized_by_the_declared_length_never_by_the_delivered_run() {
+    let cmd = RpcCommand {
+        function: RpcFunction::RmAlloc,
+        code: 103,
+        sequence: 1,
+        payload: vec![0u8; 32],
+        elements: 1,
+        delivered: vec![0u8; 4064],
+    };
+    assert_eq!(cmd.reply(0, &[]).payload.len(), 32);
+    assert_eq!(cmd.ack(0).payload.len(), 32);
+    assert_eq!(cmd.wire_body().len(), 4064, "…while the decoder still sees it all");
 }

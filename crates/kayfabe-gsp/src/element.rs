@@ -305,6 +305,12 @@ pub struct MsgLen {
     rpc_length: u32,
     msg_len: u32,
     elements: u32,
+    /// ★ Kept rather than recomputed: `elements` is a CEIL of `msg_len`, so the element
+    /// size cannot be recovered from the other two — `msg_len / elements` rounds down and
+    /// would under-bound the delivered run by up to one element. The one consumer is
+    /// `decode_message`'s `delivered` bound, where under-bounding silently truncates an
+    /// alloc's params and over-bounding reads past what the guest submitted.
+    element_size_min: u32,
 }
 
 impl MsgLen {
@@ -334,6 +340,7 @@ impl MsgLen {
             rpc_length,
             msg_len,
             elements: bytes_to_elements(msg_len, element_size_min),
+            element_size_min,
         })
     }
 
@@ -353,6 +360,13 @@ impl MsgLen {
     #[must_use]
     pub fn elements(self) -> u32 {
         self.elements
+    }
+
+    /// `GSP_MSG_QUEUE_ELEMENT_SIZE_MIN` as this message was validated against — the width
+    /// one element occupies in the ring.
+    #[must_use]
+    pub fn element_size_min(self) -> u32 {
+        self.element_size_min
     }
 }
 
@@ -530,8 +544,19 @@ pub struct IncomingRpc {
     pub envelope: RpcEnvelope,
     /// How many elements it occupied.
     pub elements: u32,
-    /// The message body after the envelope.
+    /// The message body after the envelope, as `rpc.length` **declares** it.
     pub payload: Vec<u8>,
+    /// ★★★ The message body after the envelope, as the **element run delivers** it — a
+    /// superset of [`IncomingRpc::payload`].
+    ///
+    /// See `crate::RpcCommand::delivered` for the whole argument, which is a protocol fact
+    /// rather than a defensive choice: `GSP_RM_ALLOC`'s declared `length` stops where its
+    /// flexible `params[]` begins, so an alloc's params live **past** `payload` and inside
+    /// the run the guest submitted.
+    ///
+    /// ⚠ Bounded by the run, never by a length the guest declared: whatever the envelope
+    /// says, this stops at `min(run.len(), elements * element_size_min)`.
+    pub delivered: Vec<u8>,
 }
 
 /// Read the declared length out of a message's **first** element.
@@ -673,11 +698,34 @@ pub fn decode_message(
     let body = &run[hdr..len.msg_len() as usize];
     let envelope = abi.decode_rpc_envelope(body)?;
     let payload = body[RpcEnvelope::SIZE..].to_vec();
+    // ★★★ The DELIVERED body, which for `GSP_RM_ALLOC` is strictly longer than the
+    // declared one — see `crate::RpcCommand::delivered`. Two bounds, and both are
+    // necessary: `run.len()` is what the caller actually handed us, and
+    // `elements * element_size_min` is what the guest actually submitted. Taking the
+    // smaller means a short read can never be extended into memory the caller owns, and a
+    // long `run` can never be read past the guest's own element count.
+    //
+    // ⊘ It is NOT `run.len()` alone. The ring hands over a slice whose length is the
+    // caller's business; reading to the end of it would let the size of somebody else's
+    // buffer decide how many bytes a guest message contains.
+    let run_end = run
+        .len()
+        .min(len.elements() as usize * len.element_size_min() as usize);
+    // `saturating_sub` rather than a bound check: a run shorter than the envelope is
+    // already impossible (`MsgLen::new` floors `rpc_length` at `RpcEnvelope::SIZE` and the
+    // truncation check above ran), and an arithmetic panic on the hot path would be a
+    // worse answer than an empty delivered body.
+    let delivered_from = hdr + RpcEnvelope::SIZE;
+    let delivered = run
+        .get(delivered_from..run_end.max(delivered_from))
+        .unwrap_or(&[])
+        .to_vec();
     Ok(IncomingRpc {
         seq_num,
         envelope,
         elements: len.elements(),
         payload,
+        delivered,
     })
 }
 

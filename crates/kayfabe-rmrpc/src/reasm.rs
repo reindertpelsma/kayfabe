@@ -327,6 +327,7 @@ impl Reassembler {
             sequence: head.sequence,
             payload: head.body,
             elements: head.elements,
+            delivered: Vec::new(),
         }))
     }
 }

@@ -2415,10 +2415,49 @@ fn a_run_sized_exactly_to_its_message_decodes_and_one_byte_less_does_not() {
         assert_eq!(decoded.envelope.sequence, 3);
         assert_eq!(decoded.envelope.length, 32 + payload.len() as u32);
         assert_eq!(decoded.envelope.payload_len, payload.len());
+        // ★★★ **The padded element and the exact-fit run agree on everything the
+        // envelope DECLARES, and disagree — correctly — on what was DELIVERED.**
+        //
+        // This assertion used to be a whole-struct `assert_eq!` with the message "the
+        // padded element and the exact-fit run decode identically". It went red on
+        // 2026-08-01 when `IncomingRpc::delivered` landed, and the RIGHT answer was to
+        // split it rather than to relax it: `delivered` is bounded by the run the caller
+        // handed over, so a caller that hands over `msg_len` bytes delivered `msg_len`
+        // bytes and a caller that hands over the whole element delivered the whole
+        // element. Those are different facts about the same message, and the whole point
+        // of the field is that the second one is bigger — `GSP_RM_ALLOC`'s `params[]`
+        // live in exactly that difference (`kayfabe_gsp::RpcCommand::delivered`).
+        let padded = kayfabe_gsp::decode_message(&layout, &run, len, 9, p.table())
+            .expect("padded");
+        assert_eq!(decoded.seq_num, padded.seq_num);
+        assert_eq!(decoded.envelope, padded.envelope);
+        assert_eq!(decoded.elements, padded.elements);
         assert_eq!(
-            decoded,
-            kayfabe_gsp::decode_message(&layout, &run, len, 9, p.table()).expect("padded"),
-            "the padded element and the exact-fit run decode identically",
+            decoded.payload, padded.payload,
+            "{}: the DECLARED body does not depend on how much run the caller passed",
+            p.name
+        );
+        assert_eq!(
+            decoded.delivered.len(),
+            msg_len - hdr - 32,
+            "{}: an exact-fit run delivers exactly its message",
+            p.name
+        );
+        assert_eq!(
+            padded.delivered.len(),
+            4096 - hdr - 32,
+            "{}: a whole element delivers the whole element",
+            p.name
+        );
+        assert!(
+            padded.delivered.starts_with(&decoded.delivered),
+            "{}: delivered is a SUPERSET — same start, further end. If this ever fails,              a params decoder reading `wire_body()` is reading different bytes depending              on the caller's buffer size, which is the one thing that field may not do.",
+            p.name
+        );
+        assert!(
+            padded.delivered.starts_with(&padded.payload),
+            "{}: and it is a superset of the declared body too",
+            p.name
         );
 
         assert_eq!(

@@ -80,6 +80,7 @@ fn control_cmd(cmd: u32, params_len: usize) -> RpcCommand {
         sequence: 7,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 
@@ -349,6 +350,7 @@ fn an_accepted_answer_echoes_the_guests_own_cacheability_bits_verbatim() {
         sequence: 3,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     };
     let r = policy
         .respond(&accepted)

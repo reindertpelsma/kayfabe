@@ -1369,6 +1369,7 @@ fn wire_bytes_reach_the_address_table() {
         sequence: 7,
         payload: abi().rpc_payload(&msg).expect("payload").to_vec(),
         elements: 1,
+        delivered: Vec::new(),
     });
     let Ok(Translation::CtxPromotion(p)) = out else {
         panic!("expected a context promotion, got {out:?}");
@@ -1434,6 +1435,7 @@ fn a_declared_size_that_is_not_560_is_refused_with_both_numbers() {
                 sequence: 7,
                 payload: abi().rpc_payload(&msg).expect("payload").to_vec(),
                 elements: 1,
+                delivered: Vec::new(),
             },
         );
         assert_eq!(
@@ -1476,6 +1478,7 @@ fn a_declared_size_that_is_not_560_is_refused_with_both_numbers() {
                     sequence: 7,
                     payload: abi().rpc_payload(&msg).expect("payload").to_vec(),
                     elements: 1,
+                    delivered: Vec::new(),
                 }
             ),
             Err(BridgeRefusal::ParamsSizeExceedsPayload {
@@ -1520,6 +1523,7 @@ fn a_declared_size_that_is_not_560_is_refused_with_both_numbers() {
                 sequence: 7,
                 payload: abi().rpc_payload(&msg).expect("payload").to_vec(),
                 elements: 1,
+                delivered: Vec::new(),
             }
         ),
         Err(BridgeRefusal::ControlParamsSizeMismatch {

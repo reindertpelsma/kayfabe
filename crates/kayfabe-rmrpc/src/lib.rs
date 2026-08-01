@@ -925,7 +925,22 @@ pub fn translate(
     cmd: &RpcCommand,
 ) -> Result<Translation, BridgeRefusal> {
     match cmd.function {
-        RpcFunction::RmAlloc => translate_alloc(abi, guest_os, &cmd.payload),
+        // ★★★ `wire_body()`, NOT `payload` — and this is the one arm in the match that
+        // needs it. `GSP_RM_ALLOC`'s declared `rpc.length` stops exactly where its
+        // flexible `params[]` begins, so an alloc decoded from `payload` sees a
+        // `paramsSize` it cannot satisfy and is refused `ParamsSizeExceedsPayload`. That
+        // is precisely what the 2026-08-01 boot at rev `2ced035` did to all four of
+        // `RmInitAdapter`'s allocations. The whole derivation, with the guest's own send
+        // path and the C artifact's corroborating read, is on
+        // `kayfabe_gsp::RpcCommand::delivered`.
+        //
+        // ⊘ Deliberately not applied to the other arms. `FREE` and `DUP_OBJECT` have
+        // fixed-size bodies their `length` covers, and `GSP_RM_CONTROL` is sent through
+        // `_issueRpcAndWaitLarge`, which sizes and fragments by the real length
+        // (`ogkm-580: rpc.c:11051`) — `Reassembler` already depends on that being true.
+        // Widening any of them would be reading unchecksummed bytes with no protocol fact
+        // asking for it.
+        RpcFunction::RmAlloc => translate_alloc(abi, guest_os, cmd.wire_body()),
         RpcFunction::Free => translate_free(abi, &cmd.payload),
         RpcFunction::RmControl => translate_control(abi, &cmd.payload),
         RpcFunction::DupObject => translate_dup(abi, &cmd.payload),

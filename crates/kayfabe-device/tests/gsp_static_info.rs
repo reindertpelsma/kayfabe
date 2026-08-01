@@ -126,6 +126,7 @@ fn command(function: RpcFunction, code: u32, payload_len: usize) -> RpcCommand {
         sequence: 1,
         payload: vec![0u8; payload_len],
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 

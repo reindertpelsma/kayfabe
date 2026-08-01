@@ -47,6 +47,7 @@ fn request(major: u32, minor: u32) -> RpcCommand {
         sequence: 3,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 
@@ -188,6 +189,7 @@ fn the_tail_call_is_answered_too_because_the_guest_returns_its_status() {
             sequence: 4,
             payload: vec![0xCDu8; 0x108],
             elements: 1,
+            delivered: Vec::new(),
         })
         .expect("fn 64 is answered");
     assert_eq!(reply.rpc_result, 0);
@@ -212,6 +214,7 @@ fn every_other_function_falls_through() {
                 sequence: 5,
                 payload: vec![0u8; 64],
                 elements: 1,
+                delivered: Vec::new(),
             })
             .is_none(),
             "{f:?} is not this policy's",
