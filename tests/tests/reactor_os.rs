@@ -12,9 +12,13 @@
 //! 1. **★★ The F1 wake-count gate, as a QUANTITY** (§3.4). Not *"the loop does not
 //!    busy-spin"* — an absence any hung loop satisfies vacuously — but two numbers:
 //!    `signals_pushed` is an **equality** against what the producers sent (coalescing moves
-//!    wakes, never signals), and `wakes` is **bounded above** by that same number (a
-//!    level-triggered spin blows through it without bound). Both are structural; neither
-//!    reads a clock.
+//!    wakes, never signals), and `wakes` is **bounded above** by that number *plus the
+//!    loop's own control wakes* (a level-triggered spin blows through it without bound).
+//!    ★ That second term is not decoration. The loop's readiness set always holds the
+//!    control notifier alongside the armed sources, so in any harness that calls
+//!    `shutdown()` while the loop is running a wake has **two** causes and a ceiling of `K`
+//!    is a race — measured red on an unmodified tree twice, `l1_mean.rs` 2026-07-27 and
+//!    test 6 below 2026-08-01. Both are structural; neither reads a clock.
 //! 2. **The gate can fail.** A source the loop cannot drain drives it into a loud, bounded
 //!    `ReactorFault::UndrainableSource` — asserted by variant and by streak, so the
 //!    instrument is proven to have teeth rather than assumed to.
@@ -881,9 +885,120 @@ fn os_a_real_counter_signal_reaches_the_core_through_real_reactor_and_executor_t
             s.signals_pushed, K,
             "({mode:?}) ★ exactly K signals, however the kernel chose to coalesce them: {s:?}"
         );
+        // ★★ THE CEILING INCLUDES THE LOOP'S OWN CONTROL WAKE — and it did not until
+        // 2026-08-01 (#147), which is #73's defect surviving one assertion to the left of
+        // where #73 looked.
+        //
+        // `ReactorStats::wakes` has exactly ONE increment site — `Reactor::run_with`, on
+        // every wait that came back with at least one ready token — and this run's readiness
+        // set holds exactly TWO descriptors: the counter armed above, and the loop's own
+        // control notifier, which `Reactor::new` watches under `CONTROL_TOKEN` before the
+        // loop ever starts. So a wake has **two** causes, not one, and `handle.shutdown()`
+        // below the rendezvous writes the second of them (`stop.store(Release)`, *then*
+        // `control.signal()`). When that write lands in a wait of its own instead of
+        // coalescing into one that also carried a counter edge, `wakes` is `K + 1` and a
+        // ceiling of `K` is red. Measured on an unmodified tree under a full-suite run,
+        // 2026-08-01: `wakes: 201, ready_reports: 201, signals_pushed: 200,
+        // control_reports: 1` — the excess being that one control report, exactly.
+        // `ReactorStats::wakes`'s own rustdoc had said so all along: *"bounded above by the
+        // number of signals sent plus the control wakes"*.
+        //
+        // ★★ AND IT IS NOT A RARE SCHEDULE, IT IS A REGIME — which is worth more than the
+        // 1.15% rate it was first written down as. The producer above writes its K counter
+        // units in a tight loop, so on a fast box the kernel coalesces them into a handful
+        // of readiness reports and `wakes` lands nowhere near K. Put **50 µs between the
+        // writes** and the loop drains between every one of them instead: `wakes` becomes
+        // `K + 1` in 58 of 60 samples, and the pre-#147 assertion at this line fails with
+        // `ReactorStats { wakes: 201, idle_waits: 0, ready_reports: 201, signals_pushed:
+        // 200, control_reports: 1, … }` — the observed line, reconstructed. So the trigger
+        // is not luck, it is *anything that spaces the producer's writes out by more than
+        // the loop's drain latency*, which under a full workspace suite is an ordinary
+        // preemption. The bound had to be wrong, not rare.
+        //
+        // ★ It is the same off-by-one `l1_mean.rs`'s reactor gate was fixed for on
+        // 2026-07-27 (`RSIGNALS + 1` → `signals_pushed + MAX_CONTROL_WAKES`), and the same
+        // mechanism #73 removed `control_reports >= 1` from THIS test for on 2026-07-30.
+        // Those two are opposite polarities of one coin: the shutdown edge either reaches
+        // the loop through the control descriptor — this ceiling's `+ 1` — or it does not,
+        // which is what `control_reports >= 1` raced on. #73 corrected the polarity it was
+        // looking at and left the other one standing, in the same `assert!` block.
+        //
+        // ★ The slack is a LITERAL and not `s.control_reports`, for `l1_mean.rs`'s reason: a
+        // ceiling whose slack is read out of the very snapshot it is bounding is asserted
+        // against itself, and the runaway it exists to catch would raise it without limit.
+        // The slack is pinned separately instead, immediately below.
+        const MAX_CONTROL_WAKES: u64 = 1;
+        // ☆ THE PIN, first — because a ceiling of `K + 1` is only honest while the thing it
+        // makes room for cannot happen twice. Exactly one write to the control descriptor is
+        // reachable before the loop returns: the `shutdown()` above. `ReactorHandle::wake`
+        // is called nowhere in this harness, and `StopOnDrop`'s second `shutdown()` runs
+        // after `t_reactor` has already been joined. `handle_token` DRAINS what it reads, so
+        // anything above one is the control source left readable and re-reporting — the F1
+        // spin, on the loop's own descriptor.
+        //
+        // ⊘ This is NOT #73's `control_reports >= 1` turned around. That one asserted the
+        // shutdown edge *arrived*, which is a scheduling order and therefore a clock. This
+        // one says it cannot arrive *twice*, which no scheduling order can change: #73's
+        // whole race lives inside {0, 1}, and both are green here.
         assert!(
-            s.wakes >= 1 && s.wakes <= K,
-            "({mode:?}) ★ the wake count is bounded by the signal count: {s:?}"
+            s.control_reports <= MAX_CONTROL_WAKES,
+            "({mode:?}) ★ at most the ONE control wake this run can perform — the \
+             teardown's `shutdown()`. Above it means the control descriptor was not drained \
+             and re-reported: the F1 spin, on the loop's own descriptor. {s:?}"
+        );
+        assert!(
+            s.wakes >= 1 && s.wakes <= K + MAX_CONTROL_WAKES,
+            "({mode:?}) ★ the F1 quantity: {} wakes for {K} signals plus at most \
+             {MAX_CONTROL_WAKES} control wake. `>= 1` is the non-vacuity half (a loop that \
+             never woke satisfies every ceiling); the upper half is what an undrained \
+             level-triggered source blows through without limit. The signal term is pinned \
+             as an EQUALITY directly above, the control term is a literal and is pinned too, \
+             so this is the fixed ceiling {} and not an arithmetic identity. {s:?}",
+            s.wakes,
+            K + MAX_CONTROL_WAKES,
+        );
+        // ★ …and the same ceiling one level closer to the kernel, which is the form test 1
+        // asserts. `wakes <= ready_reports` holds BY CONSTRUCTION — a wake is a wait that
+        // carried at least one report — so this is the clause that says the ceiling above is
+        // about the loop's own ARITHMETIC rather than about how the kernel chose to batch.
+        //
+        // ★ Which of the three clauses catches what, MEASURED on 2026-08-01 (38-core box)
+        // rather than reasoned, because the answer was not the expected one:
+        //   * the loop re-signalling its own control descriptor once per batch — the
+        //     "removal barrier" over-applied — is caught by the PIN, `control_reports: 268`;
+        //   * `wakes.fetch_add(2)` (every wait counted twice) is caught HERE, at
+        //     `wakes: 24, ready_reports: 12`, and slips straight past the ceiling above;
+        //   * the ceiling above is reached by an instrument that CONFLATES the two
+        //     quantities the F1 gate keeps apart — a wake counted per signal *pushed* as
+        //     well as per wait. That one fires 10 times in 10, at `wakes: 232`, and it is
+        //     deterministic for the reason the ceiling is a ceiling: `signals_pushed` is
+        //     pinned at K directly above, so `K + wakes` clears `K + 1` on every schedule.
+        //   * `wakes.fetch_add(16)` reaches it only 7 times in 20 (the other 13 land on the
+        //     clause here) — recorded because a probabilistic biter is not a bite.
+        // The reason the ×2 form cannot reach a ceiling of 201 is worth writing down: on
+        // that box K = 200 signals coalesced into **2 to 43** wakes (n = 1160 samples over
+        // five core pinnings, from one core to all of them, `wakes` never once above 43), so
+        // the ceiling carries 5× to 100× of slack there. `ready_reports.fetch_add(n + 1)` is
+        // caught by nothing here for the same reason, and that is recorded rather than
+        // hidden. The regime the flake came from is the opposite one — the loop draining
+        // between every producer write, `ready_reports` equal to K — and it is the regime
+        // in which these ceilings are tight. ⊘ It is NOT reached by loading the box: 400
+        // runs at 40-way concurrency drove `wakes` DOWN (median 9), because starving the
+        // loop coalesces harder. It is reached by spacing the PRODUCER out, which is why
+        // the 50 µs reconstruction above is the honest repro and "run it 180 more times"
+        // was not.
+        //
+        // ⊘ Stated rather than implied: `ready_reports <= K + MAX_CONTROL_WAKES` is a
+        // CONSEQUENCE of `signals_pushed == K` and `undrained_reports == 0` below it, not an
+        // independent fact — every non-control report either drained a unit or is counted as
+        // undrained. The F1 teeth are therefore in `undrained_reports == 0` and in test 2's
+        // `UndrainableSource` refusal; these three lines are the arithmetic frame that makes
+        // the widening above provable instead of merely convenient.
+        assert!(
+            s.wakes <= s.ready_reports && s.ready_reports <= K + MAX_CONTROL_WAKES,
+            "({mode:?}) each wake carries at least one report, and the {K} counter units \
+             plus at most {MAX_CONTROL_WAKES} control edge are the only things in this \
+             loop's readiness set that can report: {s:?}"
         );
         assert_eq!(
             (s.undrained_reports, s.stale_reports),
@@ -917,12 +1032,17 @@ fn os_a_real_counter_signal_reaches_the_core_through_real_reactor_and_executor_t
         // hides that here — which is exactly why the property belongs in a test that does
         // not have one.
         //
-        // ⊘ And NOT replaced here by a `control_reports <= 1` consolation bound. That is a
-        // true statement, but it was measured to be a toothless one in this shape: poisoning
-        // `handle_token` to leave the control source readable — the level-triggered
-        // re-report it drains to refuse — does NOT make it fire, because the loop exits on
-        // the very next line once `stop` is set and never gets a second wait to re-report
-        // in. It bites in 6b, where the loop keeps running, and that is where it lives.
+        // ★ #147, 2026-08-01 — this paragraph used to end *"and NOT replaced here by a
+        // `control_reports <= 1` consolation bound"*, on the measured ground that poisoning
+        // `handle_token` to leave the control source readable does not make it fire, because
+        // the loop exits on the very next line once `stop` is set. That measurement still
+        // holds, and 6b is still the only place THAT mutant bites. What it got wrong is the
+        // conclusion. `control_reports <= 1` is not a consolation here: it is the pin under
+        // the `+ MAX_CONTROL_WAKES` slack the ceiling above now needs, and without it that
+        // slack would be a literal justified by nothing in the test. It also bites a
+        // different mutant — a loop that re-signals its own control descriptor once per
+        // batch, the "removal barrier" over-applied — which was watched fail at
+        // `control_reports: 94`. It is asserted above.
         //
         // ★ What DOES survive here is the concern the old assertion's own message named —
         // "otherwise the loop exited on its wait budget" — as a bound that cannot race.
