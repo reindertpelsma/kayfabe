@@ -84,7 +84,7 @@ that makes a green mean something. A row whose acceptance has no control is mark
 | **E0b** | ★ the spawn becomes **lazy**, so the first *guest* `GSP_RM_ALLOC` is what materializes the isolate — the increment E0's own measurement created (§3.6) | the child's first sighting is **after** the device-open phase line, not 28 s before it | variable unset → still zero children |
 | **E1** | a **failed** real isolate stops being indistinguishable from the stillborn one (bench gap 7) | with the image stubbed, the seam reports a refusal whose text differs from `STILLBORN_WHY` | the unstubbed build reports neither |
 | **E2** | the doorbell reaches the core: a guest MMIO write to the usermode doorbell aperture arrives at `kayfabe_rt::SharedDevice::doorbell` | a boot in which a guest doorbell write produces a `DoorbellOutcome`-or-named-`FwdFault`, counted | a non-doorbell BAR write in the same run produces neither |
-| **E3** | ★ **`Ga10xArch::decode_doorbell` is built** and validated against real silicon | a token RM itself hands a channel decodes to that channel's own vChid, on hardware | a token from a *different* channel must decode to a different vChid — and a fabricated token must decode to `None` |
+| **E3** ✅ | ★ **`Ga10xArch::decode_doorbell` is built** and validated against real silicon | a token RM itself hands a channel decodes to that channel's own vChid, on hardware | a token from a *different* channel must decode to a different vChid — and a fabricated token must decode to `None`. **DONE — `doorbell_token_encoding.md`** |
 | **E4** | GA10x `UserdModel` + `PushbufferAbi` replace `UnbuiltUserd`/`UnbuiltPushbuffer` | `read_pushbuffer` over bytes captured from a real boot yields `LAUNCH_DMA`/`SEM_EXECUTE` at the offsets the guest wrote them | garbage bytes must **fault**, not decode to a plausible method |
 | **E5** | the address table is populated from the guest's own bindings, so the CE operands resolve in the isolate's host VAS | a guest VA that *was* bound resolves; the copy's operands are found | ★ a VA that was **never bound** must FAULT (`mode2_address_table.md`: miss = fault, never a reverse-resolve) |
 | **E6** | the join: guest CE copy → `plan_doorbell` → `Worker::execute` → `HostRmBackend::ce_copy_outcome` | `CeEvidence::copied()` — R17's predicate, driven by the guest | the same boot with `KAYFABE_ISOLATES` unset must **not** produce it |
@@ -119,6 +119,25 @@ it.**
   (`crates/kayfabe-isolate/src/lib.rs:447`), and `rm-ladder` R16 has printed one.
   ⚠ `ogkm_is_versioned`: the vendored tree is 610.43.02 and the bench runs 580.159.04, and
   they already disagree about the GSP queue. Cite the 580 tag.
+
+★★★ **BUILT, 2026-08-01 — `docs/design/doorbell_token_encoding.md`.** Both instruments
+above were built. What they settled, and what they did not, in one line each:
+
+- `tests/oracle/worksubmit_token_oracle.c` compiles
+  `kfifoGenerateWorkSubmitTokenHal_GA100` (HAL binding derived from
+  `g_kernel_fifo_nvoc.c`) and sweeps it: `VECTOR` is **11:0**, `RUNLIST_ID` is **22:16**,
+  the widest token RM can emit is `0x007f_0fff`. **This is what settled the encoding.**
+- `kayfabe-rm-ladder --doorbell-census` (rung `R13c`,
+  `docs/reference/bench_evidence/doorbell-census-ba74151.out`, RTX 3060 / GA106 /
+  580.159.04) pairs six real tokens with the chids RM's own `CHID_MGR` reports — an
+  instrument the token cannot leak into. It confirmed the low field and **could not**
+  reach the runlist ids: `GET_DEVICE_INFO_TABLE` is `KERNEL_PRIVILEGED` and answered
+  `InsufficientPermissions` to root. The refusal is recorded rather than worked around.
+- ⊘ The paragraph above this one, which said a wrong decode has *"no second party to
+  notice"*, is still true of the **product path** — it is now false of the **test path**,
+  and `doorbell_token_encoding.md` §5 tabulates exactly which wrongnesses are loud and
+  which three are still silent (the VF/SR-IOV rewrite, a stale-but-live channel, and every
+  other generation).
 
 ⚠ Second-place risk, named because it is *cheap to underestimate*: **E5**, for a reason
 that is not correctness but shape. `[measured]` on the C artifact, 2026-07-22, audit S3 —

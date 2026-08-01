@@ -46,7 +46,7 @@ run.
 
 ## 2. ★★ The census — where everything runs, and what happens when it can't
 
-### 2.1 The five gate families (all LOUD SKIP, none `#[ignore]`)
+### 2.1 The six gate families (all LOUD SKIP, none `#[ignore]`)
 
 | family | requirement | mechanism | count | absent ⇒ |
 |---|---|---|---|---|
@@ -54,6 +54,7 @@ run.
 | `SANDBOX-GATE` | mount / user namespaces (measured by a throwaway `unshare`, **not** by `geteuid`) | `require_sandbox!` / `require_user_namespace!` (`crates/kayfabe-linux-raw/src/sandbox_unsafe.rs`) | **10** | LOUD SKIP, CI floor 10 |
 | `VBIOS-ORACLE-GATE` | the vendored ogkm 580 **and** 610 trees + a C compiler | `require_oracle!` (`tests/tests/vbios_real_parser_oracle.rs`), fed by `tests/build.rs` | **10** | LOUD SKIP, CI floor 10 |
 | `GMMU-ORACLE-GATE` | a vendored ogkm tree whose GMMU abstraction matches the harness (580.159.04 does; **610.43.02 does not** — its `gmmuFmtPtePhysAddrFld` takes two extra parameters, and `tests/build.rs` detects the arity and names the exclusion) + a C compiler | `require_oracle!` (`tests/tests/gmmu_fmt_oracle.rs`), fed by `tests/build.rs` | **15** | LOUD SKIP, CI floor 15 |
+| `TOKEN-ORACLE-GATE` | a vendored ogkm tree + a C compiler (both 580.159.04 and 610.43.02 serve it — the encoder's shape has not moved between them) | `require_oracle!` (`tests/tests/worksubmit_token_oracle.rs`), fed by `tests/build.rs` | **2** | LOUD SKIP, CI floor 2 |
 | `SKIPPED (slow)` | `KAYFABE_SLOW=1` | `kayfabe_tests::skip_slow!` (`tests/src/lib.rs`) | **5** | LOUD SKIP, no CI floor — the nightly `slow` job runs them instead |
 
 There is **no** `#[ignore]` attribute anywhere in the tree. A run reports exactly one

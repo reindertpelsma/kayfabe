@@ -21,6 +21,13 @@ where it arises (§8.4: `COPY0` is a graphics copy engine on **this** architectu
 
 ---
 
+> ★ **The token's ENCODING is a different document.** This one is about *where* the
+> doorbell is and *whether the sandbox can reach it*. What the 32 bits mean —
+> `NV_CTRL_VF_DOORBELL_VECTOR` 11:0 and `_RUNLIST_ID` 22:16, established against RM's own
+> compiled encoder and against a real GA106 — is `doorbell_token_encoding.md` (increment
+> E3, 2026-08-01). §8.4's runlist table below reads the runlist **out of the token**, which
+> that document records as circular and replaces.
+
 ## 1. What the doorbell is
 
 **SOURCE.** A doorbell is a 32-bit store of a channel's work-submit token into a mapped
