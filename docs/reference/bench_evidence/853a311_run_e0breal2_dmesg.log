@@ -1,0 +1,26 @@
+[   21.874549] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   21.884561] nvidia 0000:00:03.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   21.889947] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   23.338514] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   23.338763] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   25.092338] clocksource: Long readout interval, skipping watchdog check: cs_nsec: 1156781007 wd_nsec: 1156781367
+[   26.187046] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   26.240755] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   26.240940] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   26.241020] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   26.883156] NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, status: 56
+[   26.883163] NVRM: nvAssertOkFailedNoLog: Assertion failed: Failure: Generic Error [NV_ERR_GENERIC] (0x0000FFFF) returned from _memmgrMemUtilsScrubInitScheduleChannel(pGpu, pChannel) @ mem_utils.c:2006
+[   26.883230] NVRM: nvCheckOkFailedNoLog: Check failed: Failure: Generic Error [NV_ERR_GENERIC] (0x0000FFFF) returned from memmgrMemUtilsChannelSchedulingSetup(pGpu, pMemoryManager, pChannel) @ mem_utils_gm107.c:1027
+[   26.906134] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ ce_utils.c:304
+[   26.906190] NVRM: nvAssertOkFailedNoLog: Assertion failed: Failure: Generic Error [NV_ERR_GENERIC] (0x0000FFFF) returned from objCreate(&pScrubber->pCeUtils, pHeap, CeUtils, pGpu, pKernelMIGGPUInstance, &ceUtilsAllocParams) @ mem_scrub.c:181
+[   26.906331] NVRM: nvAssertOkFailedNoLog: Assertion failed: Failure: Generic Error [NV_ERR_GENERIC] (0x0000FFFF) returned from scrubberConstruct(pGpu, pHeap) @ mem_mgr_scrub_gp100.c:63
+[   26.906418] NVRM: nvAssertOkFailedNoLog: Assertion failed: Failure: Generic Error [NV_ERR_GENERIC] (0x0000FFFF) returned from memmgrScrubHandlePostSchedulingEnable_HAL(pGpu, pMemoryManager) @ mem_mgr.c:487
+[   26.906473] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   26.906534] NVRM: RmInitNvDevice: *** Cannot load state into the device
+[   26.906538] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+[   26.907409] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   27.707477] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   27.734084] NVRM: iovaspaceDestruct_IMPL: 1 left-over mappings in IOVAS 0x3
+[   27.734113] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+[   27.739567] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0

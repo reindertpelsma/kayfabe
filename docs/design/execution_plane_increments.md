@@ -1,9 +1,9 @@
 # The execution plane — the increments from here to a guest CE copy on the host GPU
 
 > **Status: PLAN, 2026-08-01.** Written at master `cf3aae9`; increment **E0** built and
-> measured at `e10a6bf` on the RTX 3060 bench. Every row is `[src]` at `cf3aae9`,
-> `[measured]` with a named run and revision, or explicitly `[assumed]`. **E0b and E1–E6
-> are not built.**
+> measured at `e10a6bf` on the RTX 3060 bench, **E3** at `6e4f66f`, and **E0b + E1** at
+> `853a311` (§6). Every row is `[src]` at `cf3aae9`, `[measured]` with a named run and
+> revision, or explicitly `[assumed]`. **E2 and E4–E6 are not built.**
 
 ## 0. Why this document exists now, and what it replaces
 
@@ -81,8 +81,8 @@ that makes a green mean something. A row whose acceptance has no control is mark
 | # | increment | acceptance that could fail | control |
 |---|---|---|---|
 | **E0** ✅ | the crates join: `kayfabe-qemu-raw` can name `kayfabe-isolate-host`, and a runtime selector chooses the isolate plane. Realizing the device materializes a **real sandboxed child** that completes RM bring-up on the host GPU | a live boot with `KAYFABE_ISOLATES=real` shows a `kayfabe-isolate` child of QEMU holding `/dev/nvidiactl` + `/dev/nvidia0` + an RM-served `/dev/nvidia0` mapping | the **same binary**, variable unset → no child, no fds. **`[measured]` §3.5** |
-| **E0b** | ★ the spawn becomes **lazy**, so the first *guest* `GSP_RM_ALLOC` is what materializes the isolate — the increment E0's own measurement created (§3.6) | the child's first sighting is **after** the device-open phase line, not 28 s before it | variable unset → still zero children |
-| **E1** | a **failed** real isolate stops being indistinguishable from the stillborn one (bench gap 7) | with the image stubbed, the seam reports a refusal whose text differs from `STILLBORN_WHY` | the unstubbed build reports neither |
+| **E0b** ✅ | ★ the spawn becomes **lazy**, so the first *guest* `GSP_RM_ALLOC` is what materializes the isolate — the increment E0's own measurement created (§3.6) | the child's first sighting is **after** the device-open phase line, not 28 s before it | variable unset → still zero children. **`[measured]` §6** |
+| **E1** ✅ | a **failed** real isolate stops being indistinguishable from the stillborn one (bench gap 7) | a refusal reported at the `Isolate` seam with a **kind** (`spawn-failed` ≠ `no-plane`) and a sentence, printed by the device at teardown | the same archive with a working plane reports `0 refusing`. **`[measured]` §6** |
 | **E2** | the doorbell reaches the core: a guest MMIO write to the usermode doorbell aperture arrives at `kayfabe_rt::SharedDevice::doorbell` | a boot in which a guest doorbell write produces a `DoorbellOutcome`-or-named-`FwdFault`, counted | a non-doorbell BAR write in the same run produces neither |
 | **E3** ✅ | ★ **`Ga10xArch::decode_doorbell` is built** and validated against real silicon | a token RM itself hands a channel decodes to that channel's own vChid, on hardware | a token from a *different* channel must decode to a different vChid — and a fabricated token must decode to `None`. **DONE — `doorbell_token_encoding.md`** |
 | **E4** | GA10x `UserdModel` + `PushbufferAbi` replace `UnbuiltUserd`/`UnbuiltPushbuffer` | `read_pushbuffer` over bytes captured from a real boot yields `LAUNCH_DMA`/`SEM_EXECUTE` at the offsets the guest wrote them | garbage bytes must **fault**, not decode to a plausible method |
@@ -374,9 +374,74 @@ at rev `e10a6bf`, runs `e0real2`/`e0real3`, the isolate child's first sighting i
   materialization lazy must not turn an infallible installation into a fallible one on a
   path with no error channel. Read that comment before touching it.
 
+### 3.7 E0b — BUILT. The change, and the one thing it deliberately did NOT move
+
+`ensure_proc_target` was **split in two**, and the split is the whole increment:
+
+- **`Spine::ensure_proc_arena`** — `ensure_target` + the GPA carve. This is what
+  `Gpu::realize` calls now. The arena is address-space bookkeeping; it is the thing realize
+  can legitimately fail on, and carving it early keeps `GpuError::Gpa` a **realize-time**
+  refusal instead of a surprise on the guest's first RPC. Realize's failure mode is
+  therefore unchanged.
+- **`Spine::materialize_isolate`** — idempotent, **infallible**, and the only site in the
+  device that calls `IsolateFactory::spawn`. `Spine::apply` calls it for the system proc on
+  its **`Ok` arm**; `Spine::refresh` step 3b calls it for each live proc, which it always
+  did. The §3.6 hazard is answered by construction rather than by care: there is no new
+  error channel because `spawn` still has none, and a factory that cannot spawn hands back a
+  **refusing** isolate — which is exactly what E1 makes readable.
+
+⊘ **On the `Ok` arm only, and that is a decision.** `Spine::apply` is transactional: a
+refused event moves nothing. It must not be the one thing that buys a guest a host process
+either. The cost is stated rather than discovered: a boot whose every event is refused now
+shows **zero** children — and that is a *distinguishable* outcome, not a silent one, because
+`isolates: 0 materialized` is printed (§3.8).
+
+★★ **Multi-process is untouched, and this is the seam the owner's 2026-08-01 ruling
+(*"yes no rewrite for multi process"*) is about.** The *system* proc is the guest **kernel**'s
+objects and is singular by construction (`Gpu::SYSTEM_PROC`, `SYSTEM_ANCHOR`, a reserved
+client `RmGraph::apply` refuses as guest input) — it is not "the guest", and E0b did not
+collapse anything into it. Every guest **process** still gets its own `(Proc, GpuId)` isolate
+through step 3b, keyed on the projection's `ProcAnchor`, i.e. the **anchor client** — one of
+the three keys `proc_is_not_a_set_of_rm_clients` measured as correct, and never a raw pid
+(two concurrent CUDA processes share one dup-DST client, so a pid key aliases them). The
+property is quantified over in
+`tests/tests/isolate_spawn_is_guest_caused.rs::two_guest_processes_get_their_own_isolates_and_none_exists_at_realize`:
+two guest processes ⇒ **three** distinct isolate sessions, **zero** of them at realize.
+
+⊘ **What the bench could NOT show, stated because it is the honest half.** The boot stops at
+`RmInitAdapter`, long before a second guest process exists, so every hardware arm below has
+exactly **one** `Proc` — the system one. The multi-process claim above is carried by the
+suite and by the code's key, **not** by any measurement on this hardware. The first arm that
+could show it is E6 with two guest processes, and nothing here has been run against one.
+
+### 3.8 E1 — BUILT. What became visible, and where
+
+Three layers, each with its own reason:
+
+1. **`Isolate::refusal(&self) -> Option<IsolateRefusal>`** — a **required** trait method
+   (no default, so a new implementor cannot forget it), carrying a `RefusalKind` **and** a
+   sentence. `StillbornIsolate` answers `NoPlane`; `HostIsolate` answers `SpawnFailed` iff
+   its `spawn_error` is set; `MockIsolate` answers `None`, deliberately.
+   ★ **A kind and not only a string**, because a check keyed on a word is satisfied by
+   writing the word — and because `"this build has no forwarding plane"` and `"clone
+   failed"` are *different diagnoses*, only one of which means the host is wrong.
+2. **`Gpu::isolate_census()` → `IsolateCensus`** — `materialized` / `live` / `no_plane` /
+   `spawn_failed` / one sentence, with `SpawnFailed` outranking `NoPlane` for the single
+   line a report has room for. Published through `SharedIsolateCensus`, the same
+   clonable-handle shape `SharedRefusalCensus` already uses and for the same reason: the
+   policy that owns the `Gpu` is boxed into the chain and unreachable afterwards.
+3. **The wire ABI (bumped to 11) and the device's teardown report** — five fields and one
+   `info_report`, printed **unconditionally, all-zeros included**, for the reason every other
+   block in `nvkvm_report_registers` is.
+
+⊘ `HostIsolate::spawn_error`'s own docs already said *"a composition root should check it at
+realize"*. No composition root could: the core holds `dyn Isolate` and that accessor is on
+the concrete type. E1 is that sentence made reachable — and E0b removes the "at realize"
+half of it, because after E0b there is nothing to check at realize.
+
 ## 4. Order of work, and the one thing that should be re-decided
 
-E0 → E1 → **E3** → E2 → E4 → E5 → E6.
+E0 → E0b → E1 → **E3** → E2 → E4 → E5 → E6. **E0, E0b, E1 and E3 are done**; E2 is next.
 
 ★ E3 is pulled ahead of E2 deliberately. E2 (an ABI entry point for the doorbell) is
 mechanical and can be written at any time; E3 is the increment most likely to be *wrong for
@@ -429,3 +494,93 @@ decision than a row in a table.
   naming the planes). Restored-tree sanity check GREEN.
 
 
+
+## 6. Evidence log — E0b and E1
+
+### 2026-08-01 — RTX 3060 GA106, host driver 580.159.04 **open** (stock DKMS), vast `46494693`
+
+- **Archive under test:** `kayfabe-rev:853a311695e6c46613deb7b4be2a2f6eaaf70520`, read out of
+  the QEMU binary with `strings` and recorded in the head of every witness log; built
+  `KAYFABE_SHIM_FEATURES=host-isolates scripts/build_qom_shim.sh`. `REV_UNDER_TEST` in each
+  log is `85c4513` — the witness script gained its settled re-dump between the build and the
+  runs, and each log lists the differing file (`scripts/bench/e0_isolate_witness.sh`, nothing
+  under `crates/`) so a reader can judge instead of assuming.
+- **Host driver, verified before the runs:** banner
+  `NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64 580.159.04 Release Build`,
+  `dkms status` → `nvidia/580.159.04 … installed`, and **zero** `nvkvm`/`kayfabe` symbols in
+  `/proc/kallsyms` **and** in `nvidia.ko` itself.
+
+#### ★★★ E0b — the bar, and the artifact that could have shown otherwise
+
+| run | `KAYFABE_ISOLATES` | distinct children | **first sighting** | **device open** | verdict |
+|---|---|---|---|---|---|
+| `e0breal2` | `real` | 1 | **t+33 s** | t+31 s | ★ spawn **follows** |
+| `e0breal3` | `real` | 1 | **t+33 s** | t+30 s | ★ spawn **follows** |
+| `e0bctl2` | *unset* | **0** | — | t+30 s | control holds |
+| `e0bfail1` | `real`, `user.max_user_namespaces=0` | **0** | — | t+30 s | ⊘ **E0b check RED** |
+
+Compare E0 at rev `e10a6bf`: child **t+3 s**, device open **t+30–34 s**. The ordering has
+inverted, on the same bench, with the same harness.
+
+★★ **The check is an assertion now, not a table for a human to compare.**
+`e0_isolate_witness.sh` computes the minimum over every sighting's `t+` stamp and the `t+`
+stamp of `boot_capture.sh`'s own *"opening the device"* phase line, and exits non-zero if the
+first is smaller — or if either is missing, which is an **instrument** failure and is worded
+as one. ⊘ Neither number is written by the device, the archive or the core: the sightings
+come from scanning host `/proc` at 2 Hz, the phase line from `boot_capture`'s stdout stamped
+by the wrapper.
+
+⊘ **The artifact that could have shown otherwise, and did.** `e0bfail1` is the same
+instrument on a boot where no isolate could spawn, and its verdict line reads
+`★ FAILED: no isolate child was ever sighted, so the lazy spawn cannot be distinguished from
+a spawn that never happens (t_open=30s)`. A check that could not produce that sentence would
+not be a check. `e0breal1` is kept for the same reason from the other direction: its
+`plane→RmMode` arm went **red** because the 2 Hz sampler latched the child **mid-bring-up**
+(fd 9 = `/dev/nvidiactl`, no `/dev/nvidia0`, no mapping, `Threads: 1`) while the device's own
+report said the isolate was live and not refusing. ★ **The instrument was wrong, not the
+run** — `suspect_the_instrument_first` — and the fix is the SETTLED re-dump, which leaves the
+first-sighting stamp (E0b's whole content) untouched.
+
+#### ★★★ E1 — the same archive, three arms, three different sentences
+
+The device's own teardown line, verbatim, from `run_<tag>_qemu.log`:
+
+```
+e0breal2  nvkvm: isolates: 1 materialized, 1 live, 0 refusing (0 no-plane, 0 spawn-failed)
+e0bctl2   nvkvm: isolates: 1 materialized, 1 live, 1 refusing (1 no-plane, 0 spawn-failed)
+          nvkvm:   isolate refusal [no-plane] this build has no forwarding plane: the object
+                   model accepts protocol facts and no host verb can be issued
+e0bfail1  nvkvm: isolates: 1 materialized, 1 live, 1 refusing (0 no-plane, 1 spawn-failed)
+          nvkvm:   isolate refusal [spawn-failed] spawning the embedded isolate: clone failed
+                   (errno 28)
+```
+
+★★ **`e0bfail1` is the increment.** From **outside** the process it is indistinguishable from
+a healthy plane-less boot: `boot_capture rc=0`, zero isolate children, the identical
+`RmInitAdapter failed! (0x25:0xffff:1249)` wall. That is precisely gap 7 — before E1 a real
+host failure *was* "nothing happened". The fault was injected at the **host**, not in the
+code: `sudo sysctl -w user.max_user_namespaces=0` before the run (restored to `201823`
+after), so `clone(CLONE_NEWUSER)` fails and `build_isolate` returns the host's own error.
+Nothing about the archive differs between the three rows.
+
+⊘ **The control is the first row**, and it is the one that stops this being a reporter that
+always reports something: a working plane prints `0 refusing` and **no** refusal line at all.
+
+⊘ **What the census does NOT establish.** It is written by the code under test, so
+`1 materialized` says *whether* a spawn happened and never *why* — the attribution is the
+`/proc` timeline's alone. And `0 refusing` is a statement about the isolate's **bring-up**
+(rungs R0–R6b), not about any forwarded work: no `VerbPlan` ran, no doorbell was rung.
+
+#### Files
+
+`docs/reference/bench_evidence/`, all prefixed `853a311_`:
+
+| file | what it is |
+|---|---|
+| `run_e0breal2_isolate.log` | ★ the E0b acceptance — first sighting t+33 s vs device open t+31 s, settled dump with `/dev/nvidiactl`, `/dev/nvidia0` and the 64 KiB `rw-s` mapping |
+| `run_e0breal3_isolate.log` | the independent repeat |
+| `run_e0bctl2_isolate.log` | ★ the **negative control** — variable unset, 0 children, and the `no-plane` line |
+| `run_e0bfail1_isolate.log` | ★★ the **E1 arm** — a real host spawn failure, invisible from outside and named by the device |
+| `run_e0breal1_isolate.log` | ⊘ the instrument failure, kept: the first sighting caught the child mid-bring-up |
+| `run_e0breal2_qemu.log`, `run_e0bctl2_qemu.log`, `run_e0bfail1_qemu.log` | the device's own reports, the three isolate lines above |
+| `run_e0breal2_dmesg.log` | the guest driver's ring buffer — the wall, unmoved and identical in all four arms |

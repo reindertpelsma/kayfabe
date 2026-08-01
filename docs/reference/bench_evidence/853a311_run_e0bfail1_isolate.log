@@ -1,0 +1,34 @@
+=== e0_isolate_witness tag=e0bfail1 at 2026-08-01T19:27:49+00:00 ===
+REV_UNDER_TEST=85c4513e7dec360742ebb47134b70ba39628058d
+TREE_DIRTY_FILES=0
+KAYFABE_ISOLATES=real
+qemu binary: -rwxr-xr-x 1 root root 84166088 Aug  1 19:22 /workspace/bench/qemu-build/qemu-system-x86_64
+archive rev embedded in the qemu binary:
+  kayfabe-rev:853a311695e6c46613deb7b4be2a2f6eaaf70520
+host gpu: NVIDIA GeForce RTX 3060, 580.159.04
+⚠ ARCHIVE REV != SOURCE REV. Files differing 853a3116..85c4513e:
+    scripts/bench/e0_isolate_witness.sh
+  ⊘ If any line above is under crates/ or Cargo.lock, this run does NOT measure 85c4513e7dec360742ebb47134b70ba39628058d.
+
+=== boot_capture phases (t+ seconds from witness start) ===
+t+0    [boot_capture:e0bfail1] booting (extra args: none)
+t+28   [boot_capture:e0bfail1] guest is up after 28s
+t+30   [boot_capture:e0bfail1] module unloaded and ring buffer cleared; loading cold
+t+30   [boot_capture:e0bfail1] opening the device (this is what runs RmInitAdapter)
+t+36   [boot_capture:e0bfail1] captured 25 dmesg lines, 22 NVRM, 3 adapter → /workspace/bench/run_e0bfail1_dmesg.log
+t+36   [boot_capture:e0bfail1] --- the verdict lines ---
+t+36   [   25.395824] NVRM: RmInitNvDevice: *** Cannot load state into the device
+t+36   [   25.395828] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+t+37   [   26.244870] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+t+37   [boot_capture:e0bfail1] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+t+51   [boot_capture:e0bfail1] done. serial=/workspace/bench/run_e0bfail1_serial.log qemu=/workspace/bench/run_e0bfail1_qemu.log dmesg=/workspace/bench/run_e0bfail1_dmesg.log probe=/workspace/bench/run_e0bfail1_probe.log
+=== summary ===
+boot_capture rc: 0
+isolate-child samples: 0   (0 = never seen alive)
+distinct isolate-child pids: 0
+plane->RmMode mapping check: ★ FAILED: plane=real and NO isolate child ever existed
+E0b lazy-spawn check: ★ FAILED: no isolate child was ever sighted, so the lazy spawn cannot be
+            distinguished from a spawn that never happens (t_open=30s)
+=== E1: the device's own isolate-plane census (from /workspace/bench/run_e0bfail1_qemu.log) ===
+  qemu-system-x86_64: info: nvkvm: isolates: 1 materialized, 1 live, 1 refusing (0 no-plane, 1 spawn-failed)
+  qemu-system-x86_64: info: nvkvm:   isolate refusal [spawn-failed] spawning the embedded isolate: clone failed (errno 28)
