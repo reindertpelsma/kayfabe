@@ -398,6 +398,44 @@ pub enum WantedTable {
     /// bytes (`C: mode2_initctrl_ga106.h:6245`, `psize = 4, dlen = 0`). Both sources agree
     /// on a zero-filled body, so that is what is encoded.
     MemsysL2InvalidateEvict,
+    /// `NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE` (`0x20802a08`) — ★★★ the first
+    /// variant whose reply this port **could not derive from any document it holds**, and
+    /// the first answered with a number taken off a real GA106.
+    ///
+    /// # What refusing it costs, and why the old triage read it as free
+    ///
+    /// It was [`crate::sweep::SweepDisposition::RefusalIsInvisible`] for four rungs, on an
+    /// argument that is *locally correct and globally wrong*:
+    /// `gpuGetCeFaultMethodBufferSize_KERNEL` really does `return NV_OK` unconditionally and
+    /// really does leave `*size` unwritten on failure (`ogkm-580: gpu.c:6031-6043`), so the
+    /// refusal is invisible **as a status**. What that reading missed is that the invisible
+    /// refusal leaves a **zero**, and the zero is not inert: it becomes the length argument
+    /// to `memdescCreate` (`kernel_channel_group_gv100.c:109-110`), which rejects zero with
+    /// `NV_ERR_INVALID_ARGUMENT` (`mem_desc.c:239-241`). That is the `0x25:0x1f:1249` the
+    /// `irq1` boot ended on.
+    ///
+    /// ⚠ ★★★ **And the "halts" lesson lands differently here than it was written.** The
+    /// `boot_measured_2026_08_01.md` §41.7 row says the `0x56` *"is fatal because a caller
+    /// eleven frames up converts it"*. That is **refuted**: nothing converts it. The status
+    /// is *discarded* one frame down, and eleven frames later an entirely **independent**
+    /// `NV_ERR_INVALID_ARGUMENT` is manufactured from the zero it left behind. The
+    /// distinction matters operationally — grepping for the propagation of `0x56` would
+    /// never have found this, because there is none.
+    ///
+    /// # The value, and why it is on the chip row
+    ///
+    /// [`crate::ChipProfile::ce_fault_method_buffer_size`]. `[measured]` 20480 on a real
+    /// RTX 3060; the argument for measuring rather than choosing, and for a chip row rather
+    /// than a constant, is in [`kayfabe_abi::fmbsize`].
+    ///
+    /// # ★★ The `0x20800301` transport trap, checked and PRESENT
+    ///
+    /// Unlike [`Self::MemsysL2InvalidateEvict`], this caller **does** read its own params
+    /// after the RPC returns — `*size = params.size;` on the very next line
+    /// (`ogkm-580: kernel_ce.c:846`). So the body is load-bearing and an empty reply is not
+    /// an option, which is exactly what the C oracle's captured row provides and exactly why
+    /// that row could not be used.
+    CeFaultMethodBufferSize,
     /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CAPS` — the first of the **five
     /// structurally mandatory** GR static-info controls, and the first this port answers
     /// about the shader core. See [`kayfabe_abi::grstatic`] for why these five and not the
@@ -505,7 +543,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 22] = [
+    pub const ALL: [WantedTable; 23] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -520,6 +558,7 @@ impl WantedTable {
         Self::GmmuStaticInfo,
         Self::EventSetNotification,
         Self::MemsysL2InvalidateEvict,
+        Self::CeFaultMethodBufferSize,
         Self::GrCaps,
         Self::GrFloorsweepingMasks,
         Self::GrGlobalSmOrder,
@@ -558,6 +597,9 @@ impl WantedTable {
             }
             Self::MemsysL2InvalidateEvict => {
                 kayfabe_abi::l2evict::NV2080_CTRL_CMD_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT
+            }
+            Self::CeFaultMethodBufferSize => {
+                kayfabe_abi::fmbsize::NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE
             }
             Self::GrCaps => grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CAPS,
             Self::GrFloorsweepingMasks => {
@@ -604,6 +646,9 @@ impl WantedTable {
                 kayfabe_abi::eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE
             }
             Self::MemsysL2InvalidateEvict => kayfabe_abi::l2evict::L2_INVALIDATE_EVICT_PARAMS_SIZE,
+            Self::CeFaultMethodBufferSize => {
+                kayfabe_abi::fmbsize::CE_FAULT_METHOD_BUFFER_SIZE_PARAMS_SIZE
+            }
             Self::GrCaps => grstatic::GR_CAPS_PARAMS_SIZE,
             Self::GrFloorsweepingMasks => grstatic::FLOORSWEEPING_PARAMS_SIZE,
             Self::GrGlobalSmOrder => grstatic::SM_ORDER_PARAMS_SIZE,
@@ -962,6 +1007,27 @@ impl CommandPolicy for InitTablePolicy {
                     return refuse();
                 };
                 l2evict::encode_l2_invalidate_evict(&evict)
+            }
+            // ★★★ The arm answered with a number **measured on real silicon** — an RTX 3060
+            // running open 580.159.04, 2026-08-01, `traces/real_ga106/`. It reads no
+            // request field — the params struct is a single `[OUT]` `NvU32` and the guest
+            // sends it zeroed — so the only thing this arm can get wrong is the value, and
+            // the value is not this crate's to choose: it comes off the chip row, which is
+            // where the measurement is attributed.
+            //
+            // ⊘ `refuse()` when the chip states no size, and that refusal is unreachable in
+            // practice because `identity_for` will not realize such a chip. It is here
+            // anyway, because the alternative to a refusal is `encode` writing four zero
+            // bytes — a reply that looks served and rebuilds the wall
+            // (`ogkm-580: mem_desc.c:239-241`) — and a policy whose worst case is a *silent*
+            // wall is exactly the shape `#127`'s named-refusal default forbids.
+            WantedTable::CeFaultMethodBufferSize => {
+                match kayfabe_abi::fmbsize::encode_fault_method_buffer_size(
+                    self.chip.ce_fault_method_buffer_size,
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
             }
             // ★★★ The five GR static-info arms. Each is a pure function of the chip's own
             // GR profile — no request field is read, because none of these controls carries

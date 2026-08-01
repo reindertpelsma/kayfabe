@@ -573,6 +573,7 @@ const fn copy_of_ga106() -> ChipProfile {
         bar0_window_reg: 0x0000_1700,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
+        ce_fault_method_buffer_size: kayfabe_abi::fmbsize::GA106_CE_FAULT_METHOD_BUFFER_SIZE,
         gsp_model: || Box::new(ga10x::Ga10xGspModel::new()),
         engines: &[],
         intr_table: &[],

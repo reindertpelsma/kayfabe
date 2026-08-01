@@ -1476,6 +1476,12 @@ pub static GA106: ChipProfile = ChipProfile {
     bar0_window_reg: BAR0_WINDOW_REG,
     vbios_wire: VbiosWire::Tu102Bit,
     msix_vectors: MSIX_VECTORS,
+    // ★★★ `[measured]` on a real GA106 — an RTX 3060 on vast `46494693` running NVIDIA open
+    // 580.159.04, its own driver rebuilt with a print and asked. 20480 bytes. The full
+    // provenance, the two independent readings that agree, and the reason no other source
+    // could supply it are in `kayfabe_abi::fmbsize`; the transcripts are in
+    // `traces/real_ga106/`.
+    ce_fault_method_buffer_size: kayfabe_abi::fmbsize::GA106_CE_FAULT_METHOD_BUFFER_SIZE,
     gsp_model: || Box::new(Ga10xGspModel::new()),
     engines: GA106_ENGINES,
     intr_table: GA106_INTR_TABLE,

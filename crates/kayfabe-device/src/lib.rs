@@ -191,6 +191,12 @@ impl RegSpan {
 /// constructor for something that is genuinely code (a register decoder), or a
 /// chip-adjacent geometry. There is no behaviour here, which is the property that makes
 /// "adding a generation is a table row" checkable rather than aspirational.
+///
+/// ★ `Copy` because every field already is — refs, arrays, a fn pointer and nested `Copy`
+/// rows — and because the alternative is what the test tree had grown: hand-written
+/// `copy_of_ga106()` literals restating the whole row, which is precisely the "second,
+/// drifting description" this type's own field docs argue against.
+#[derive(Clone, Copy)]
 pub struct ChipProfile {
     /// Chip name, for diagnostics. Never branched on.
     pub name: &'static str,
@@ -241,6 +247,21 @@ pub struct ChipProfile {
     /// ★ A chip fact, and a small one, but it belongs on the row for the same reason the
     /// aperture size does: a shell that hard-codes it is a shell a second generation edits.
     pub msix_vectors: u16,
+    /// ★★★ **The copy-engine fault method buffer's size in bytes — the first field on this
+    /// row whose value was measured on real silicon rather than read out of a tree.**
+    ///
+    /// A chip row, and emphatically not a constant, for a reason the module that encodes it
+    /// spells out at length ([`kayfabe_abi::fmbsize`]): the number is produced inside GSP
+    /// firmware, appears in no open source, and is refused to every usermode client — so the
+    /// only way to hold it is to have asked a part of *this* generation. GA106 was asked;
+    /// AD10x and GH100 were not. A shared constant would silently answer them with GA106's
+    /// number, which is the flattering direction.
+    ///
+    /// ⊘ **Zero means the chip has not stated one**, and a chip row that reaches realize with
+    /// zero is refused ([`ChipError::NoFaultMethodBufferSize`]) rather than served — because
+    /// serving zero rebuilds the exact `RmInitAdapter failed! (0x25:0x1f:1249)` this field
+    /// removes (`ogkm-580: mem_desc.c:239-241`), while presenting as an answered control.
+    pub ce_fault_method_buffer_size: u32,
     /// Build this generation's GSP register map.
     ///
     /// A constructor rather than a value because [`GspModel`] is a trait object and a
@@ -518,6 +539,17 @@ pub enum ChipError {
         /// The device id that was asked for.
         device_id: u16,
     },
+    /// ★★★ The chip row states no copy-engine fault method buffer size.
+    ///
+    /// See [`ChipProfile::ce_fault_method_buffer_size`]. Refused at realize because the
+    /// alternative — serving the control with a zero — is not a weaker answer but the
+    /// original bug wearing an answer's clothes: `memdescCreate` turns a zero length into
+    /// `NV_ERR_INVALID_ARGUMENT` (`ogkm-580: mem_desc.c:239-241`) and the guest's
+    /// `RmInitAdapter` fails `0x25:0x1f:1249` with nothing naming this row.
+    NoFaultMethodBufferSize {
+        /// The chip that has not stated one.
+        device_id: u16,
+    },
     /// The ROM for this chip could not be generated.
     Vbios(VbiosError),
     /// The generated ROM does not fit the window the chip declares.
@@ -593,6 +625,11 @@ impl core::fmt::Display for ChipError {
                 f,
                 "chip {device_id:#06x} has no synthetic-VBIOS row; its identity would have \
                  no ROM behind it"
+            ),
+            Self::NoFaultMethodBufferSize { device_id } => write!(
+                f,
+                "chip {device_id:#06x} states no copy-engine fault method buffer size; \
+                 serving zero is not a weaker answer, it is RmInitAdapter 0x25:0x1f:1249"
             ),
             Self::Vbios(e) => write!(f, "the synthetic VBIOS could not be built: {e}"),
             Self::RomTooLargeForWindow { len, window } => write!(
@@ -699,7 +736,18 @@ pub struct DeviceIdentity {
 ///
 /// [`ChipError::BarTableDisagreesWithAperture`] if the chip's own two statements of the
 /// register aperture's size are not the same statement.
+///
+/// [`ChipError::NoFaultMethodBufferSize`] if the chip states no
+/// [`ChipProfile::ce_fault_method_buffer_size`]. ★ Checked *here*, at the same assembly
+/// point as the ROM row, and for the same reason: a chip that cannot answer a control the
+/// guest's state load requires is a configuration mistake an operator can see at realize,
+/// and discovering it as `0x25:0x1f:1249` inside a guest costs a bench cycle to attribute.
 pub fn identity_for(chip: &ChipProfile) -> Result<DeviceIdentity, ChipError> {
+    if chip.ce_fault_method_buffer_size == 0 {
+        return Err(ChipError::NoFaultMethodBufferSize {
+            device_id: chip.pci_device_id,
+        });
+    }
     let regs = chip.pci_bar_len(bus_bar::REGS);
     if regs != chip.regs_aperture_len {
         return Err(ChipError::BarTableDisagreesWithAperture {

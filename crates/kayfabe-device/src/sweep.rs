@@ -177,7 +177,10 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         why: "a GeForce GA106 has no NVLink; the caller handles the status itself with \
               NV_PRINTF(LEVEL_INFO, \"NVLink is unavailable\") (ogkm-580: \
               kernel_nvlink.c:1826-1830), and a real GA106's own GSP answers this control \
-              0x56 too (C: mode2_initctrl_ga106.h:6251)",
+              0x56 too — ★ that corroboration was [inferred] from the C's captured row \
+              (C: mode2_initctrl_ga106.h:6251) and is now [measured] first-hand: an RTX 3060 \
+              on open 580.159.04 answers `cmd=0x20800a87 psize=1056 gspst=0x56` \
+              (traces/real_ga106/rpc_transcript_real_ga106.txt)",
     },
     // ── seq 8 ──────────────────────────────────────────────────────────────────────
     SweepControl {
@@ -246,14 +249,21 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
     SweepControl {
         cmd: 0x2080_2a08,
         engine: "KernelCE",
-        disposition: SweepDisposition::RefusalIsInvisible,
-        why: "gpuGetCeFaultMethodBufferSize_KERNEL returns NV_OK UNCONDITIONALLY and leaves \
-              *size unwritten when the control fails (ogkm-580: gpu.c:6031-6043), and both \
-              consumers initialise their local to 0 before calling \
-              (kernel_fifo_gv100.c:302-315, kernel_channel_group_gv100.c:77) — while the \
-              oracle's own GA106 answered this control with size = 0 as well \
-              (C: mode2_initctrl_ga106.h:6233, {0x20802a08u, 0x0u, 4u, 0u} with an empty \
-              ctl_20802a08[]). Refusing and serving the truth leave the same number",
+        disposition: SweepDisposition::AmputationUnsurvivable,
+        why: "★ RECLASSIFIED from RefusalIsInvisible by boot irq1 at bb4f48d, then \
+              re-argued: the refusal IS invisible as a status \
+              (gpuGetCeFaultMethodBufferSize_KERNEL returns NV_OK unconditionally and \
+              leaves *size unwritten, ogkm-580: gpu.c:6031-6043) and the NV_ASSERT at \
+              kernel_channel_group_gv100.c:78 does not return — so execution CONTINUES with \
+              bufSizeInBytes = 0 into memdescCreate, which rejects a zero length with \
+              NV_ERR_INVALID_ARGUMENT (mem_desc.c:239-241). That is RmInitAdapter \
+              0x25:0x1f:1249. ⊘ Nothing 'converts' the 0x56 — it is DISCARDED, and an \
+              independent 0x1f is manufactured eleven frames later from the zero it left. \
+              ⚠ The old row cited the oracle's empty ctl_20802a08[] as corroboration that a \
+              real GA106 answers 0; that is REFUTED — a real RTX 3060 running open \
+              580.159.04, asked directly, answers NV_OK size = 20480 \
+              ([measured] traces/real_ga106/, and see kayfabe_abi::fmbsize for the five \
+              other dlen=0 oracle rows hardware contradicts). Served",
     },
     // ── seq 19 and 20 ──────────────────────────────────────────────────────────────
     SweepControl {

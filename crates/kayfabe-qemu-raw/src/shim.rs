@@ -953,6 +953,15 @@ pub fn classify_chip(e: &ChipError) -> (Status, &'static str) {
              it, or the register and no window; the two are one mechanism, and an aperture \
              nothing can move shows framebuffer address zero forever without saying so",
         ),
+        ChipError::NoFaultMethodBufferSize { .. } => (
+            Status::Unsupported,
+            "the chip row states no copy-engine fault method buffer size, and this device \
+             will not invent one: the value is not derivable from any tree — the GSP-side \
+             handler is firmware and the control is kernel-privileged — so it must be \
+             MEASURED on a part of this generation. Serving a zero instead is not a weaker \
+             answer, it is the guest's RmInitAdapter failing 0x25:0x1f:1249 from a \
+             zero-length memdescCreate, with nothing naming this row",
+        ),
         ChipError::BarTableDisagreesWithAperture { .. } => (
             Status::Unsupported,
             "the chip states its register aperture's size twice — as regs_aperture_len and \

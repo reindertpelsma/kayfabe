@@ -850,6 +850,7 @@ fn bad_chip(
         bar0_window_reg: g.bar0_window_reg,
         vbios_wire: g.vbios_wire,
         msix_vectors: g.msix_vectors,
+        ce_fault_method_buffer_size: g.ce_fault_method_buffer_size,
         gsp_model: g.gsp_model,
         engines,
         intr_table: g.intr_table,

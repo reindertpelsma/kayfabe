@@ -1,0 +1,88 @@
+[ 6178.494771] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a36 psize=88 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.494991] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a41 psize=8204 gspst=0x0 head=00 00 08 00 f5 04 00 00 
+[ 6178.496383] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x208001b0 psize=1284 gspst=0x0 head=08 00 00 00 00 bf 20 8a 
+[ 6178.496636] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x208001b0 psize=1284 gspst=0x0 head=08 00 00 00 00 bf 20 8a 
+[ 6178.496788] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a87 psize=1056 gspst=0x56 head=00 00 00 00 00 00 00 00 
+[ 6178.497286] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a40 psize=24580 gspst=0x0 head=0c 00 00 00 40 00 00 00 
+[ 6178.497608] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20801112 psize=3212 gspst=0x0 head=00 00 00 00 0b 00 00 00 
+[ 6178.497871] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a5c psize=2112 gspst=0x0 head=18 00 00 00 3b 00 00 00 
+[ 6178.498020] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a1c psize=40 gspst=0x0 head=00 00 01 00 00 00 00 00 
+[ 6178.498223] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20801803 psize=200 gspst=0x0 head=04 00 00 00 00 00 00 00 
+[ 6178.498463] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a4b psize=4 gspst=0x0 head=00 00 01 04 
+[ 6178.499518] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800af3 psize=2 gspst=0x0 head=01 01 
+[ 6178.500147] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800aac psize=4 gspst=0x0 head=00 00 01 00 
+[ 6178.500417] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a61 psize=8 gspst=0x0 head=00 00 00 00 00 08 00 00 
+[ 6178.500567] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a61 psize=8 gspst=0x0 head=00 00 00 00 00 08 00 00 
+[ 6178.500777] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a61 psize=8 gspst=0x0 head=00 00 00 00 00 08 00 00 
+[ 6178.500928] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a61 psize=8 gspst=0x0 head=00 00 00 00 00 08 00 00 
+[ 6178.501031] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20802a08 psize=4 gspst=0x0 head=00 50 00 00 
+[ 6178.505986] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800afe psize=16 gspst=0x0 head=01 00 00 00 00 00 00 00 
+[ 6178.506141] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800aff psize=16 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.507058] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800301 psize=20 gspst=0x0 head=c2 00 00 00 02 00 00 00 
+[ 6178.507157] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a59 psize=16 gspst=0x0 head=00 10 03 00 00 00 00 00 
+[ 6178.510655] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a70 psize=0 gspst=0x0 head=
+[ 6178.510805] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a70 psize=0 gspst=0x0 head=
+[ 6178.510975] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a6c psize=4 gspst=0x0 head=31 00 00 00 
+[ 6178.511158] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a6c psize=4 gspst=0x0 head=31 00 00 00 
+[ 6178.511346] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a6c psize=4 gspst=0x0 head=31 00 00 00 
+[ 6178.511511] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a01 psize=36 gspst=0x0 head=0f 0f 00 00 ff 00 00 00 
+[ 6178.511788] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800ac6 psize=4104 gspst=0x0 head=56 00 00 00 00 00 00 00 
+[ 6178.512068] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800adf psize=8388 gspst=0x0 head=10 00 00 00 ff ff 00 00 
+[ 6178.512329] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a49 psize=24 gspst=0x0 head=00 00 bb ef 02 00 00 00 
+[ 6178.512422] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a80 psize=16 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.512528] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a61 psize=8 gspst=0x0 head=00 00 00 00 00 08 00 00 
+[ 6178.521243] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a80 psize=16 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.521495] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x00730151 psize=40 gspst=0x0 head=00 e0 ba ef 02 00 00 00 
+[ 6178.521639] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20802a0f psize=28 gspst=0x0 head=02 00 00 00 00 00 00 00 
+[ 6178.521909] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20802a06 psize=4 gspst=0x0 head=10 00 00 00 
+[ 6178.522777] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20802a0d psize=156 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.523052] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20802a06 psize=4 gspst=0x0 head=10 00 00 00 
+[ 6178.523376] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x2080017e psize=8 gspst=0x0 head=00 00 00 02 00 00 00 00 
+[ 6178.523472] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800af3 psize=2 gspst=0x0 head=01 01 
+[ 6178.524230] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a9f psize=184 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.525120] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a1f psize=184 gspst=0x0 head=b0 62 00 00 00 00 00 01 
+[ 6178.525401] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a2a psize=3712 gspst=0x0 head=00 00 00 00 01 00 00 00 
+[ 6178.525625] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a26 psize=3008 gspst=0x0 head=07 00 00 00 1f 00 00 00 
+[ 6178.526215] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a22 psize=34592 gspst=0x0 head=01 00 00 00 00 00 00 00 
+[ 6178.526361] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a30 psize=512 gspst=0x0 head=07 00 00 00 07 00 00 00 
+[ 6178.526484] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a2c psize=320 gspst=0x0 head=e0 00 00 00 20 00 00 00 
+[ 6178.526603] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a2e psize=96 gspst=0x0 head=06 00 00 00 08 00 00 00 
+[ 6178.526718] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a34 psize=72 gspst=0x0 head=00 00 00 01 00 00 00 00 
+[ 6178.527046] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800b03 psize=16352 gspst=0x0 head=09 00 00 00 00 00 00 00 
+[ 6178.527456] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800b05 psize=16352 gspst=0x56 head=00 00 00 00 00 00 00 00 
+[ 6178.527704] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a3d psize=32 gspst=0x0 head=80 00 00 00 00 00 00 00 
+[ 6178.527856] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a3f psize=256 gspst=0x0 head=80 00 00 00 ff 00 00 00 
+[ 6178.527963] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a48 psize=8 gspst=0x0 head=01 00 00 00 00 00 00 00 
+[ 6178.528132] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a32 psize=1664 gspst=0x0 head=00 97 0a 00 00 10 00 00 
+[ 6178.531053] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x90f10106 psize=184 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.531525] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20802a08 psize=4 gspst=0x0 head=00 50 00 00 
+[ 6178.533329] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0xa06f0103 psize=3 gspst=0x0 head=01 00 00 
+[ 6178.533608] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800301 psize=20 gspst=0x0 head=23 00 00 00 02 00 00 00 
+[ 6178.535165] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x90f10106 psize=184 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.537328] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20802a08 psize=4 gspst=0x0 head=00 50 00 00 
+[ 6178.538838] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0xa06f0104 psize=4 gspst=0x0 head=0b 00 00 00 
+[ 6178.539031] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0xa06f0103 psize=3 gspst=0x0 head=01 00 00 
+[ 6178.539398] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800301 psize=20 gspst=0x0 head=23 00 00 00 02 00 00 00 
+[ 6178.541005] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x90f10106 psize=184 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.541423] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20802a08 psize=4 gspst=0x0 head=00 50 00 00 
+[ 6178.549621] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x2080012b psize=560 gspst=0x0 head=01 00 00 00 00 00 00 00 
+[ 6178.556074] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x2080013f psize=136 gspst=0x0 head=00 00 00 00 47 65 6e 65 
+[ 6178.557827] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x90f10106 psize=184 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.558275] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20802a08 psize=4 gspst=0x0 head=00 50 00 00 
+[ 6178.560019] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x2080012b psize=560 gspst=0x0 head=01 00 00 00 00 00 00 00 
+[ 6178.560992] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0xa06f0103 psize=3 gspst=0x0 head=01 00 00 
+[ 6178.562373] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x402c0101 psize=16 gspst=0x0 head=01 11 01 01 01 17 17 17 
+[ 6178.563283] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x00730107 psize=12 gspst=0x0 head=00 00 00 00 00 3f 00 00 
+[ 6178.563522] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x0073028b psize=56 gspst=0x0 head=00 00 00 00 00 01 00 00 
+[ 6178.563671] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x0073028b psize=56 gspst=0x0 head=00 00 00 00 00 02 00 00 
+[ 6178.563774] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x00730211 psize=16 gspst=0x0 head=00 00 00 00 00 02 00 00 
+[ 6178.563873] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x0073028b psize=56 gspst=0x0 head=00 00 00 00 00 04 00 00 
+[ 6178.563972] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x0073028b psize=56 gspst=0x0 head=00 00 00 00 00 08 00 00 
+[ 6178.564072] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x0073028b psize=56 gspst=0x0 head=00 00 00 00 00 10 00 00 
+[ 6178.564168] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x00730211 psize=16 gspst=0x0 head=00 00 00 00 00 10 00 00 
+[ 6178.564267] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x0073028b psize=56 gspst=0x0 head=00 00 00 00 00 20 00 00 
+[ 6178.732351] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a70 psize=0 gspst=0x0 head=
+[ 6178.732628] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a6c psize=4 gspst=0x0 head=11 00 00 00 
+[ 6178.733085] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x00730151 psize=40 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.737469] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800a38 psize=24 gspst=0x0 head=00 00 00 00 00 00 00 00 
+[ 6178.744522] NVRM: rpcRmApiControl_GSP: KAYFABE-RPC: cmd=0x20800afe psize=16 gspst=0x0 head=00 00 00 00 00 00 00 00 

@@ -47,8 +47,8 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
     // ⊘ The count is not the point — the membership below is. See `sweep.rs`.
     assert_eq!(
         must.len(),
-        12,
-        "nine unsurvivable amputations and three silent fail-opens"
+        13,
+        "ten unsurvivable amputations and three silent fail-opens"
     );
     let cmds: Vec<u32> = must.iter().map(|c| c.cmd).collect();
     assert_eq!(
@@ -58,6 +58,7 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
             0x2080_0a1c,
             0x2080_0af3,
             0x2080_0aac,
+            0x2080_2a08,
             0x2080_0a59,
             0x2080_0a9f,
             0x2080_0a1f,
@@ -76,6 +77,7 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
             "KernelMemorySystem",
             "ConfidentialCompute",
             "KernelBif",
+            "KernelCE",
             "KernelGmmu",
             "OBJGVASPACE",
             "KernelGraphics",
@@ -115,6 +117,7 @@ fn the_unsurvivable_class_still_names_the_measured_crashes() {
         vec![
             0x2080_0a40,
             0x2080_0a1c,
+            0x2080_2a08,
             0x2080_0a59,
             0x2080_0a1f,
             0x2080_0a26,
@@ -124,7 +127,9 @@ fn the_unsurvivable_class_still_names_the_measured_crashes() {
             0x2080_0a32,
         ],
         "t135a's KernelFifo, t134a's KernelMemorySystem, KernelGmmu's freed pStaticInfo, \
-         and gmmu1's five GR static-info controls plus stateload1's sixth"
+         gmmu1's five GR static-info controls plus stateload1's sixth, and irq1's \
+         0x20802a08 — whose zero-length fault method buffer is the ONLY member measured \
+         against a real GA106 rather than reasoned out of the tree"
     );
 }
 
@@ -223,7 +228,22 @@ fn a_control_whose_refusal_is_invisible_must_cite_the_oracles_own_reply() {
     // its stated reason was found FALSE on the GA106 HAL path — `kbusFlush_GM107`
     // overwrites its status only for `NV_ERR_TIMEOUT`, so a refused sysmembar is
     // swallowed even at `kbusVerifyBar2_GM107:4218-4221`. See its `why`.
-    assert_eq!(invisible.len(), 3, "non-vacuity: the class has members");
+    //
+    // ⚠⚠ 3 -> 2 at the `irq1`/`fmb` rung, and the departure is a WARNING ABOUT THIS GATE,
+    // not just a smaller number. `0x20802a08` left for `AmputationUnsurvivable` because a
+    // real GA106 was asked and answered `20480` where the C's captured row carries an
+    // EMPTY body. The row satisfied this test — it cited `C:` exactly as demanded — and it
+    // was still wrong, because **citing the oracle is not the same as the oracle being
+    // right**. Six `dlen = 0` rows of `mode2_initctrl_ga106.h` are now measured to be
+    // contradicted by hardware (`kayfabe_abi::fmbsize`), so a `C:` citation of an *empty*
+    // body is worth nothing at all.
+    //
+    // ⊘ The two survivors were re-checked against the same real-GA106 transcript rather
+    // than grandfathered: `0x20800a80`'s captured body is non-empty and matches hardware
+    // byte for byte, and `0x20800a70` has `psize = 0` — no body exists to disagree about.
+    // A future member whose citation is an empty `ctl_` array must be re-measured, not
+    // admitted because this assertion is green.
+    assert_eq!(invisible.len(), 2, "non-vacuity: the class has members");
     for c in invisible {
         assert!(
             c.why.contains("C:"),

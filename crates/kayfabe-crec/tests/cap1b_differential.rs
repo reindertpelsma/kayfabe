@@ -363,7 +363,10 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
          being past the capture's closure limit — is a served control no differential can \
          regress"
     );
-    assert_eq!(universe.len(), 22, "non-vacuity: the universe is not empty");
+    // ★ 22 -> 23 at the `fmb` rung: `0x20802a08`, and it is the STRONGEST kind of addition
+    // this pair can see — the oracle asks it at sequence 18, INSIDE the closure limit, so
+    // the new control is exercised by the replay rather than merely declared.
+    assert_eq!(universe.len(), 23, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
         5,
@@ -453,16 +456,27 @@ fn every_control_the_oracle_asks_is_either_served_or_triaged() {
     // crossed from triaged to served at the state-load rung. Their three siblings in the
     // same GR run — `0x20800a22`, `0x20800a3d`, `0x20800a48` — are served too but fall
     // PAST this capture's closure limit, so they cannot appear in `asked`.
-    assert_eq!(served_here.len(), 17);
+    // ⚠ 17 -> 18 at the `fmb` rung: `0x20802a08` (seq 18) crossed from triaged to served
+    // — and unlike the three above it did NOT cross because a reading was overturned by
+    // argument. It crossed because a **real GA106 was asked** and gave a number the C's own
+    // captured row does not carry. See `kayfabe_abi::fmbsize`.
+    assert_eq!(served_here.len(), 18);
     let triaged_here: Vec<&str> = asked
         .iter()
         .filter(|c| WantedTable::from_cmd(**c).is_none())
         .map(|c| triage_for(*c).expect("accounted for above").engine)
         .collect();
-    // ⚠ 14 -> 11, the mirror of the three above. The sum is unchanged, which is the point:
-    // this pair partitions the SAME asked set, so a control cannot leave one without
-    // entering the other.
-    assert_eq!(triaged_here.len(), 11);
+    // ⚠ 14 -> 11, the mirror of the three above; then 11 -> 10 at the `fmb` rung as
+    // `0x20802a08` crossed. The sum is unchanged at 28, which is the point: this pair
+    // partitions the SAME asked set, so a control cannot leave one without entering the
+    // other, and a rung that "served" something by dropping it from the trace would show
+    // up here as a shrinking sum rather than as two independently plausible numbers.
+    assert_eq!(triaged_here.len(), 10);
+    assert_eq!(
+        served_here.len() + triaged_here.len(),
+        28,
+        "the partition is over the asked set and its size is not this rung's to change"
+    );
 
     // ⊘ A control the oracle asks may not be triaged `AmputationIntended`: that disposition
     // means "the chip lacks the engine", and the oracle's board demonstrably had it.
@@ -562,6 +576,11 @@ fn the_served_replies_are_the_ones_posted_and_each_carries_the_result_it_earned(
             (WantedTable::FifoNumChannels, 15, 76, 0),
             (WantedTable::FifoNumChannels, 16, 76, 0),
             (WantedTable::FifoNumChannels, 17, 76, 0),
+            // ★★★ The `fmb` rung's control, and the line worth reading twice: the ORACLE
+            // asks it here, at sequence 18, so this port serving it is exercised by a real
+            // captured boot — while the four bytes it answers with came from a real GA106
+            // because the oracle's own row for this control is empty.
+            (WantedTable::CeFaultMethodBufferSize, 18, 76, 0),
             // ★★★ The **event-plane** entry, and the only line here whose reply is a
             // function of the request rather than of a chip row. `paylen 60` = 40 header +
             // 20 params, which is an independent confirmation of

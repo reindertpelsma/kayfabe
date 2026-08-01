@@ -104,6 +104,7 @@ pub mod eventnotify;
 pub mod falconinfo;
 pub mod faultbuffer;
 pub mod fifochannels;
+pub mod fmbsize;
 pub mod generated;
 pub mod gmmustatic;
 pub mod grstatic;

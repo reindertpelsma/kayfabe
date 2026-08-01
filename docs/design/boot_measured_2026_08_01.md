@@ -1253,12 +1253,57 @@ classifications are recorded here, where the evidence is.
 | control | disposition | why, and the line |
 |---|---|---|
 | `0x90f10106` `VASPACE_COPY_SERVER_RESERVED_PDES` | **`RefusalFailsOpen`** | the refusal is invisible — `kernel_fifo.c:3129`'s `0x56` is swallowed at `gpu.c:3438` — **and** the state left behind is wrong: `pGpuGrp->pGlobalVASpace` is assigned before `vaspaceConstruct_` runs (`virt_mem_mgr.c:126` vs `:134`), so a failed construct leaves the group with no device VA space for every later `vaspaceGetByHandleOrDeviceDefault`. `[measured]` by subtraction, §41.2. |
-| `0x20802a08` `CE_GET_FAULT_METHOD_BUFFER_SIZE` | **`AmputationUnsurvivable`** | `[measured]` this boot: refusing it does *not* amputate a CE — `kernel_channel_group_gv100.c:78` turns the zero size into `NV_ERR_INVALID_ARGUMENT`, which `gpu.c:3438` does **not** swallow, so state load aborts at `kernel_fifo.c:3129`. ⚠ It was `RefusalIsInvisible`-shaped for four rungs *only because nothing reached it*. |
+| `0x20802a08` `CE_GET_FAULT_METHOD_BUFFER_SIZE` | **`AmputationUnsurvivable`** | `[measured]` this boot: refusing it does *not* amputate a CE — the zero size becomes `NV_ERR_INVALID_ARGUMENT`, which `gpu.c:3438` does **not** swallow, so state load aborts at `kernel_fifo.c:3129`. ⚠ It was `RefusalIsInvisible`-shaped for four rungs *only because nothing reached it*. ★ See §41.9 — the mechanism stated here was subsequently traced exactly, and one clause of it is wrong. |
 
 ⚠ **This is the fourth-and-fifth instance of the lesson that "halts" is a claim about where a
 status ENDS UP.** `0x20802a08`'s refusal returns `0x56` at `kernel_ce.c:843` and would read
-as survivable from that line alone. It is fatal because a caller **eleven frames up**
-converts it into a different status that the swallow does not cover.
+as survivable from that line alone. ~~It is fatal because a caller **eleven frames up**
+converts it into a different status that the swallow does not cover.~~
+
+★★★ **REFUTED 2026-08-01 by the `fmb` rung — see §41.9.** Nothing converts it. The `0x56` is
+**discarded** one frame *down*, and an entirely independent `NV_ERR_INVALID_ARGUMENT` is
+manufactured eleven frames later out of the zero it left behind. The correction matters
+operationally: a search for where `0x56` *propagates* would never have found this, because it
+does not propagate anywhere.
+
+## 41.9 ★★★ The chain, traced exactly — and asked of real silicon
+
+`[measured]` boot `irq1` (`/workspace/bench/run_irq1_dmesg.log`) supplies every line below;
+`ogkm-580.159.04` supplies the citations. Two independent readings — mine and a second agent
+sent at the tree cold — agree on all of it.
+
+| # | site | what happens |
+|---|---|---|
+| 0 | our emulated GSP | refuses `0x20802a08` → `NV_ERR_NOT_SUPPORTED` |
+| 1 | `kernel_ce.c:843-844` | `NV_ASSERT_OK_OR_RETURN` returns `0x56`; `*size` never assigned |
+| 2 | `gpu.c:6031-6043` | ★ `gpuGetCeFaultMethodBufferSize_KERNEL` assigns `*size` **only** `if (status == NV_OK)` and then **`return NV_OK;` unconditionally** — the error is *swallowed*, not converted |
+| 3 | `kernel_channel_group_gv100.c:77` | the `NV_ASSERT_OK_OR_RETURN` therefore **passes**; `bufSizeInBytes` is still its initialiser `0` (`:44`) |
+| 4 | `kernel_channel_group_gv100.c:78` | `NV_ASSERT((bufSizeInBytes > 0))` is a **bare, non-returning** assert — it logs and execution continues |
+| 5 | `kernel_channel_group_gv100.c:109` | `memdescCreate(…, Size = 0, …)` |
+| 6 | `mem_desc.c:239-241` | **`if (allocSize == 0) return NV_ERR_INVALID_ARGUMENT;`** ← **the `0x1f`, manufactured here** |
+| 7 | `kernel_channel_group.c:246-254` → `kernel_channel_group_api.c:273` → `kernel_channel.c:381` → `mem_utils_gm107.c:1301` → `:857` → `ce_utils.c:286` → `mem_scrub.c:181` → `mem_mgr_scrub_gp100.c:63` → `mem_mgr.c:487` → `kernel_fifo.c:3129` | verbatim propagation |
+| 8 | `osinit.c:1249` | `RM_INIT_GPU_LOAD_FAILED` = `0x20 + 5` = **`0x25`**, with `0x1f` and line `1249` |
+
+**So the rejected argument is named: `Size`, the length operand of `memdescCreate` — and it
+is rejected because it is zero.** Not an engine id, not a runlist, not a handle. The whole
+fix is to make `params.size` non-zero and correct.
+
+### The number, and why it had to come from hardware
+
+⊘ There is **no fallback population path**: `pGpu->ceFaultMethodBufferSize` (the cache
+`gpu.c:6033` reads) is *never written anywhere in the open tree*, so the control is always
+asked. And the answer is in none of our sources —
+`subdeviceCtrlCmdCeGetFaultMethodBufferSize_IMPL` is declared and never defined (GSP
+firmware), the control is `KERNEL_PRIVILEGED` so no usermode probe may ask it
+(`g_subdevice_nvoc.c:7666` `flags=0x1c040`; `control.c:702-709`), and the C oracle's captured
+row is **empty**.
+
+★★★ So a real GA106 was asked, and it answered **20480 (0x5000)**. Provenance, both
+independent readings, and the six oracle rows this falsified: `traces/real_ga106/README.md`
+and `kayfabe_abi::fmbsize`.
+
+⊘ **What §41.9 does NOT establish:** that serving it clears the boot. That is the next boot's
+job, and this section is written before it.
 
 ## 41.8 ⊘ What boot `irq1` does NOT establish
 
@@ -1271,4 +1316,84 @@ converts it into a different status that the swallow does not cover.
 - ⊘ **The scrubber is still not working** — it now fails *later*, on its channel's method
   buffer instead of on its VA space.
 - ⊘ **One boot, one 4-core box.** `#98` records a Mode-2 symptom that was 1/3 one day and
+  9/9 the next on a bit-identical binary.
+
+---
+
+# 42. Boot `fmb1` at rev `b965d46` — MEASURED: the fault-method-buffer wall is **GONE**
+
+`[measured]` boot `fmb1`, 2026-08-01, QEMU stamped `kayfabe-rev:b965d46`; evidence on disk at
+`/workspace/bench/run_fmb1_dmesg.log`.
+
+## 42.1 Provenance
+
+| | |
+|---|---|
+| on-disk evidence | `/workspace/bench/run_fmb1_dmesg.log` (29 lines, 26 `NVRM`, 3 adapter), `run_fmb1_probe.log`, `run_fmb1_serial.log` |
+| harness | `scripts/bench/boot_capture.sh fmb1` — the device is opened before `dmesg` is read |
+| QEMU binary | stamped `kayfabe-rev:b965d46` (`strings … | grep kayfabe-rev`) |
+| this branch's HEAD | `12f3a09`. ⚠ **Not the same commit** — the boot happened first, and the branch was amended afterwards (differential pins, a bite harness, doc and claim-attribution edits). The check that keeps the claim honest is mechanical and was re-run on 2026-08-01 against this branch's final content: `git diff -U0 b965d46 HEAD -- 'crates/*/src/*'` changes **no non-comment line** — the three `src` files it touches differ only in doc comments. So the binary that booted is HEAD's behaviour. Stated rather than glossed, per the rule that a bench claim carries the revision it was measured at. |
+| box | local dev box, 4 cores. One boot. |
+
+## 42.2 The result
+
+```
+[   21.821681] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0x40:1249)
+```
+
+`0x1f` → **`0x40`** (`NV_ERR_INVALID_STATE`). The verdict changed, and so did the reason.
+
+★★★ **The whole `0x20802a08` chain is absent from this log.** Three lines that were in
+`irq1` and are gone:
+
+- `… NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE … @ kernel_ce.c:843` — **gone, both
+  occurrences** (state init and state load);
+- `Assertion failed: (bufSizeInBytes > 0) @ kernel_channel_group_gv100.c:78` — **gone**;
+- `kchangrpInit_IMPL: Fault method buffer allocation failed … status 0x1f` — **gone**.
+
+So the channel group now allocates its method buffers and proceeds. That is the rung.
+
+## 42.3 The new wall, decoded before building anything
+
+```
+:11  Assertion failed: kgrmgrGetLegacyKGraphicsStaticInfo(…)->pGrInfo != NULL @ kernel_fifo.c:2789
+:13  Assertion failed: numMax == numFree && numMax != 0 @ kernel_channel_group_api.c:913
+:14  NV_ERR_INVALID_STATE (0x40) returned from kchangrpapiSetLegacyMode(…) @ kernel_channel.c:660
+```
+
+The chain, `[inferred]` from `ogkm-580.159.04` and consistent with every line above:
+
+1. `kfifoGetMaxSubcontextFromGr_KERNEL` (`kernel_fifo.c:2778-2792`) returns **0** on
+   `NV_ASSERT_OR_RETURN(… ->pGrInfo != NULL, 0)`;
+2. so the subcontext ID heap is constructed with size 0, and
+   `kchangrpapiSetLegacyMode`'s `NV_ASSERT_OR_RETURN(numMax == numFree && numMax != 0,
+   NV_ERR_INVALID_STATE)` (`kernel_channel_group_api.c:913`) fires;
+3. `0x40` propagates out of the channel alloc, through `mem_utils_gm107.c:1301` → `:857` →
+   `ce_utils.c:286` → `mem_scrub.c:181` → `mem_mgr_scrub_gp100.c:63` → `mem_mgr.c:487` →
+   `kernel_fifo.c:3129`. **The same propagation path as before** — only the status and its
+   origin changed.
+
+⚠ `pGrInfo` is NULL because `kgrmgrSetLegacyKgraphicsStaticInfo` only copies it `if
+(pKernelGraphicsStaticInfo->pGrInfo != NULL)` (`kernel_graphics_manager.c:390-397`), and the
+per-`KernelGraphics` copy is filled from
+**`NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_INFO` (`0x20800a2a`)** at
+`kernel_graphics.c:1231`. That control is currently triaged `AmputationIntended`.
+
+★ **The next rung already has hardware for it, and also already knows why that is not
+enough:** `traces/real_ga106/rpc_transcript_real_ga106.txt` carries
+`cmd=0x20800a2a psize=3712 gspst=0x0 head=00 00 00 00 01 00 00 00` — a real GA106 answers it
+`NV_OK` with 3712 bytes, of which the transcript captured **8**. Serving it needs a re-measure
+with a full body dump; the recipe is in `traces/real_ga106/README.md`.
+
+## 42.4 ⊘ What boot `fmb1` does NOT establish
+
+- ⊘ **It does not establish that 20480 is right** — only that it is non-zero and that RM
+  accepted the allocation. A wrong-but-plausible size would look identical here; the reason
+  to believe the number is that a real GA106 was asked, not that this boot got further.
+- ⊘ **Nothing was written into the fault method buffer by anything.** No engine faulted.
+- ⊘ **The scrubber still does not work.** It fails one step later — on its channel's
+  subcontext heap instead of on its method buffer.
+- ⊘ **Interrupt delivery is still untested** (§41.3 stands unchanged).
+- ⊘ **`nvidia-smi` still fails**, no devices.
+- ⊘ **One boot, one 4-core box**, and `#98` records a Mode-2 symptom that was 1/3 one day and
   9/9 the next on a bit-identical binary.

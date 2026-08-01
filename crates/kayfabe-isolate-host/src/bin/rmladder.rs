@@ -224,10 +224,101 @@ fn engines(rm: &mut HostRmBackend, gpu: u32) {
     }
 }
 
+/// ★★★ R18 — **ask the real GPU what a control returns.**
+///
+/// Some numbers the emulated GSP has to answer are not derivable from anything we hold.
+/// `NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE` (`0x20802a08`) is the case that
+/// forced this rung: RM sizes the copy-engine **fault method buffer** from it, and a
+/// plausible-but-wrong number is a buffer that real hardware writes past. The physical
+/// handler is not in the open tree — `subdeviceCtrlCmdCeGetFaultMethodBufferSize_IMPL` is
+/// declared in `g_subdevice_nvoc.h` and defined nowhere, because it is compiled into GSP
+/// firmware — so **source cannot answer it and a guess is not allowed to.** A real part
+/// can.
+///
+/// ## Why the buffer is seeded, and not zeroed
+///
+/// A control that returns `NV_OK` having written nothing is indistinguishable from one
+/// that returned a legitimate zero if the buffer started at zero — and "the size is 0" is
+/// exactly the answer that would send us back to the wall we started at. So every byte is
+/// seeded with `0xCD` first, and the report says whether RM **touched** the buffer
+/// separately from what it left there. An untouched buffer is reported as untouched.
+///
+/// ## What a refusal means here, and why it is still a result
+///
+/// A `KERNEL_PRIVILEGED` control (the RM default: `flags` carrying none of `PRIVILEGED`,
+/// `NON_PRIVILEGED` or `INTERNAL` — `control.c:702`) is refused to every usermode client
+/// including root. That refusal is **recorded, not worked around**: an
+/// `InsufficientPermissions` printed here is the measurement, and it is a much better
+/// artifact than a number nobody can source.
+///
+/// ⊘ `[measured]` 2026-08-01: for `0x20802a08` on an RTX 3060 that is exactly what happens,
+/// so this rung did **not** supply the number in `kayfabe_abi::fmbsize` — an instrumented
+/// build of the driver did. The rung is kept because the refusal is itself the recorded
+/// result, and because the next control may not be kernel-privileged.
+fn probe_ctrl(
+    rm: &mut HostRmBackend,
+    subdevice: kayfabe_isolate::HostHandle,
+    specs: &[(u32, usize)],
+) {
+    println!(
+        "info  R18 ctrl probe      = {} control(s) on the subdevice",
+        specs.len()
+    );
+    for &(cmd, size) in specs {
+        // The sentinel. `0xCD` in every byte is not a size, not a handle and not a status,
+        // so it survives into the report as itself if RM never writes.
+        let mut payload = vec![0xCDu8; size];
+        let result = rm.control(subdevice, ControlCmd(cmd), &mut payload);
+        let touched = payload.iter().any(|&b| b != 0xCD);
+        let hex: String = payload.iter().map(|b| format!("{b:02x}")).collect();
+        match result {
+            Ok(()) if touched => {
+                // Report the little-endian `NvU32` reading too — every control this rung
+                // has needed so far leads with one, and the raw bytes stay printed so a
+                // wider struct is still readable.
+                let head = payload
+                    .get(..4)
+                    .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]));
+                println!(
+                    "★     R18 {cmd:#010x}    = NV_OK, {size} bytes: {hex}{}",
+                    head.map_or(String::new(), |v| format!("   (u32[0] = {v} / {v:#x})"))
+                );
+            }
+            Ok(()) => println!(
+                "info  R18 {cmd:#010x}    = NV_OK but the buffer is UNTOUCHED ({size} bytes \
+                 still {hex}) — an accepted call that answered nothing"
+            ),
+            Err(e) => println!("info  R18 {cmd:#010x}    = refused {e:?} (no value measured)"),
+        }
+    }
+}
+
+/// `cmd[:size]` pairs, comma-separated. Size defaults to 4 — the width of the control
+/// that motivated the rung — and is capped so a typo cannot ask RM to fill a huge buffer.
+fn parse_ctrl_specs(s: &str) -> Result<Vec<(u32, usize)>, String> {
+    const MAX: usize = 4096;
+    let mut out = Vec::new();
+    for item in s.split(',').filter(|i| !i.is_empty()) {
+        let (c, sz) = item.split_once(':').unwrap_or((item, "4"));
+        let c = c.trim().trim_start_matches("0x");
+        let cmd = u32::from_str_radix(c, 16).map_err(|_| format!("{item}: bad control number"))?;
+        let size: usize = sz.trim().parse().map_err(|_| format!("{item}: bad size"))?;
+        if size == 0 || size > MAX {
+            return Err(format!("{item}: size must be 1..={MAX}"));
+        }
+        out.push((cmd, size));
+    }
+    if out.is_empty() {
+        return Err("no controls given".into());
+    }
+    Ok(out)
+}
+
 fn main() -> std::process::ExitCode {
     let mut gpu = 0u32;
     let mut want_concurrency = false;
     let mut want_engines = false;
+    let mut want_probe: Option<Vec<(u32, usize)>> = None;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -246,6 +337,19 @@ fn main() -> std::process::ExitCode {
             }
             "--concurrency" => want_concurrency = true,
             "--engines" => want_engines = true,
+            "--probe-ctrl" => {
+                let Some(v) = args.next() else {
+                    eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
+                    return std::process::ExitCode::from(64);
+                };
+                match parse_ctrl_specs(&v) {
+                    Ok(specs) => want_probe = Some(specs),
+                    Err(e) => {
+                        eprintln!("--probe-ctrl {e}");
+                        return std::process::ExitCode::from(64);
+                    }
+                }
+            }
             other => {
                 eprintln!("unknown flag {other}");
                 return std::process::ExitCode::from(64);
@@ -285,6 +389,15 @@ fn main() -> std::process::ExitCode {
         Arc::clone(&conn),
         Arc::new(kayfabe_isolate_host::ChildExports::new()),
     );
+
+    // ★ R18 runs here and RETURNS, before R7 — a control probe must not be paid for with
+    // a channel, a doorbell and a copy engine. It reads; it allocates nothing; and leaving
+    // the rest of the ladder unrun keeps the answer attributable to the control alone.
+    if let Some(specs) = want_probe {
+        probe_ctrl(&mut rm, subdevice, &specs);
+        println!("done — probe only");
+        return std::process::ExitCode::SUCCESS;
+    }
 
     // R7 — a per-`Vas` host address space. This is #14's proven fix made real: two guest
     // processes' identical guest VAs publish into DIFFERENT host VASes and cannot collide.
