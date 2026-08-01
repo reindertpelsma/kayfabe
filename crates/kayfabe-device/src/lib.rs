@@ -719,10 +719,11 @@ pub fn served_policy(
     driver: kayfabe_abi::versions::DriverAbiTable,
     unserviced: unserviced::UnservicedLog,
     fault_buffer: faultbuffer::FaultBufferLog,
+    objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
     Box::new(sticky::StickyAnswerGuard::new(
         driver,
-        served_chain(chip, driver, unserviced, fault_buffer),
+        served_chain(chip, driver, unserviced, fault_buffer, objects),
     ))
 }
 
@@ -739,17 +740,39 @@ pub fn served_chain(
     driver: kayfabe_abi::versions::DriverAbiTable,
     unserviced: unserviced::UnservicedLog,
     fault_buffer: faultbuffer::FaultBufferLog,
+    objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
-    Box::new(kayfabe_gsp::PolicyChain::new(vec![
+    let mut links: Vec<Box<dyn kayfabe_gsp::CommandPolicy>> = vec![
         Box::new(inittables::InitTablePolicy::new(chip, driver)),
         Box::new(staticinfo::StaticInfoPolicy::new(chip, driver)),
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
         Box::new(inert::InertPolicy::new()),
+    ];
+    // ★★★ The object-model link, if the composition root has one. Its POSITION is the
+    // decision, and it is between the answering links and the recorders:
+    //
+    // - **After** them, so a link that already answers a function keeps answering it. The
+    //   four above are disjoint from `kayfabe_rmrpc::OBJECT_VERBS` today, so this changes
+    //   no byte; it is written this way so that the day they overlap, the *specific*
+    //   answer wins over the general one rather than by accident of vec order.
+    // - **Before** the recorders, because they are terminal-shaped (`respond` never
+    //   answers) and anything below them is unreachable.
+    //
+    // ⚠ And the link must not claim more than it serves. `kayfabe_rmrpc::GraphPolicy`
+    // answers EVERY command, so installing that one here would silence
+    // `unserviced::UnservicedLedger` permanently — the port would lose the only instrument
+    // that can say what it has not built. `kayfabe_rmrpc::ObjectPolicy` is the composable
+    // form and declines by default; this crate cannot name either type (it has no
+    // `kayfabe-core` dependency, deliberately), so the obligation is stated here and
+    // `tests/served_chain_objects.rs` is where it is checked.
+    links.extend(objects);
+    links.extend::<Vec<Box<dyn kayfabe_gsp::CommandPolicy>>>(vec![
         // ★ Two recorders, both terminal-shaped (`respond` never answers), so precedence
         // between them is irrelevant and the pair cannot change what the guest sees. The
         // fault-buffer recorder is FIRST only so a reader meets the specific one before
         // the catch-all; see `faultbuffer`'s docs for why it declines on purpose.
         Box::new(faultbuffer::FaultBufferRecorder::new(driver, fault_buffer)),
         Box::new(unserviced::UnservicedLedger::new(driver, unserviced)),
-    ]))
+    ]);
+    Box::new(kayfabe_gsp::PolicyChain::new(links))
 }

@@ -449,7 +449,7 @@ pub struct PolicyDisposition {
 /// ⊘ Test-only implementations are out of scope by the same derivation: the test filters
 /// `git ls-files` to `crates/*/src/**`, so a `CommandPolicy` written inside a `#[test]`
 /// module or a `tests/` target is neither required here nor forbidden there.
-pub const POLICY_DISPOSITIONS: [PolicyDisposition; 10] = [
+pub const POLICY_DISPOSITIONS: [PolicyDisposition; 11] = [
     PolicyDisposition {
         name: "InitTablePolicy",
         path: "crates/kayfabe-device/src/inittables.rs",
@@ -499,6 +499,27 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 10] = [
         name: "GraphPolicy<'_>",
         path: "crates/kayfabe-rmrpc/src/policy.rs",
         disposition: StickyDisposition::FixtureOnly,
+    },
+    // ★★★ The first row added since a policy was actually INSTALLED in the port
+    // (2026-08-01, the `GspRmAlloc` rung). `GraphPolicy`'s own rustdoc predicted this
+    // moment — *"the day this policy is installed, it must go inside that wrapper"* — and
+    // this is not that day: what got installed is `ObjectPolicy`, a narrower type, and it
+    // IS inside the wrapper (`served_policy` wraps the whole chain including the object
+    // link, which is why the link is a `served_chain` argument and not a second policy the
+    // plane holds beside the guard).
+    //
+    // ⊘ The disposition is `NotAControl` and **not** `Guarded`, deliberately, because the
+    // two say different things. `Guarded` is a claim about a caller: it holds only while
+    // `served_policy` is the installer, and `served_chain` exists precisely so a test can
+    // build the chain WITHOUT the guard. `NotAControl` is a claim about the TYPE — this
+    // policy claims exactly `kayfabe_rmrpc::OBJECT_VERBS`, which contains no
+    // `GSP_RM_CONTROL`, so no reply of its can reach either cache-populating call site
+    // however it is composed. The stronger, unconditional statement is the one worth
+    // pinning, and `the_not_a_control_rows_decline_every_control_command` executes it.
+    PolicyDisposition {
+        name: "ObjectPolicy",
+        path: "crates/kayfabe-rmrpc/src/policy.rs",
+        disposition: StickyDisposition::NotAControl,
     },
 ];
 

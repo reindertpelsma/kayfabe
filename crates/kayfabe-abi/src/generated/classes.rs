@@ -37,8 +37,15 @@
 //! `CLIENT_ALLOC_PREFIX`.
 //!
 //! A class whose alloc params carry nothing `AllocFacts` models
-//! (`FERMI_VASPACE_A`, the engine objects) gets a class ID here and no struct: the
-//! ID is the consumer, and mirroring params nothing reads would be breadth.
+//! (`FERMI_VASPACE_A`, `NV20_SUBDEVICE_0`, `NV01_EVENT_KERNEL_CALLBACK_EX`, the
+//! engine objects) gets a class ID here and no struct: the ID is the consumer, and
+//! mirroring params nothing reads would be breadth.
+//!
+//! ★★ For `NV01_EVENT_KERNEL_CALLBACK_EX` that is stronger than breadth-avoidance
+//! and is the whole reason its row says so out loud: its `NV0005_ALLOC_PARAMETERS`
+//! carries an `NvP64 data` that is a **guest-kernel callback pointer**. A generated
+//! mirror would put a decoder for a guest pointer one `?` away from a path that has
+//! never dereferenced one. The absence is a boundary, not a gap.
 //!
 //! Every other class's alloc params is deferred: the class table is its own
 //! milestone and a half-populated one is worse than none, because a missing entry
@@ -63,6 +70,34 @@ pub const NV01_ROOT_CLIENT: u32 = 0x41;
 ///
 /// ogkm `src/common/sdk/nvidia/inc/class/cl0080.h`.
 pub const NV01_DEVICE_0: u32 = 0x80;
+
+/// `NV20_SUBDEVICE_0` — the Subdevice class, allocated under a Device.
+///
+/// ★ No struct is mirrored for it, and that is a reading rather than a deferral:
+/// `NV2080_ALLOC_PARAMETERS` has exactly one member, `subDeviceId`, which names
+/// WHICH subdevice of an SLI device this is. `AllocFacts` has nowhere to put it and
+/// nothing in the core would read it — the GPU a subdevice routes to is its Device
+/// ancestor's `deviceId` (`RmGraph::gpu_of` walks the parent edge), not a field
+/// here. So the protocol content of this class is entirely the EDGE, which the RPC
+/// header already carries.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/cl2080.h`.
+pub const NV20_SUBDEVICE_0: u32 = 0x2080;
+
+/// `NV01_EVENT_KERNEL_CALLBACK_EX` — the event class the guest's own KERNEL
+/// RM allocates during adapter init (`[measured]`, the 2026-08-01 boot: it is the
+/// fourth and last class `rpcRmApiAlloc_GSP` asks for before `RmInitAdapter`
+/// gives up).
+///
+/// ★★ Its alloc params are `NV0005_ALLOC_PARAMETERS`, shared by every `NV01_EVENT*`
+/// class, and its `data` member is an `NvP64` **guest-kernel callback pointer**
+/// (`ogkm-580: src/common/sdk/nvidia/inc/class/cl0005.h:40-47`). No struct is
+/// mirrored for it and none may be: this port never dereferences that pointer, and
+/// a decoder that read it would be the first thing in the tree that could. The
+/// class reaches the object model as an EDGE and nothing else.
+///
+/// ogkm `src/common/sdk/nvidia/inc/nvos.h`.
+pub const NV01_EVENT_KERNEL_CALLBACK_EX: u32 = 0x7e;
 
 /// `FERMI_VASPACE_A` — the VASpace class. Its alloc params
 /// (`NV_VASPACE_ALLOCATION_PARAMETERS`: `index`, `flags`, `vaSize`, `vaBase`,

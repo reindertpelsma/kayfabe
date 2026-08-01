@@ -1016,6 +1016,25 @@ impl DriverAbiTable {
             classes::FERMI_VASPACE_A | classes::AMPERE_COMPUTE_B | classes::AMPERE_DMA_COPY_B => {
                 Some(AllocParams::NoDeclaredFacts)
             }
+            // ★★ The two classes the 2026-08-01 boot measured this table missing, and
+            // they join the arm above rather than getting decoders, for two *different*
+            // reasons that both end at `NoDeclaredFacts`:
+            //
+            // - `NV20_SUBDEVICE_0`'s `NV2080_ALLOC_PARAMETERS` has one member,
+            //   `subDeviceId`, and the core routes a subdevice by its **Device
+            //   ancestor's** `deviceId` (`RmGraph::gpu_of` walks the parent edge). A
+            //   field nothing reads is not a fact.
+            // - `NV01_EVENT_KERNEL_CALLBACK_EX`'s `NV0005_ALLOC_PARAMETERS` carries an
+            //   `NvP64 data` that is a **guest-kernel callback pointer**
+            //   (`ogkm-580: cl0005.h:40-47`). ⊘ This port must never decode it: nothing
+            //   in the tree dereferences a guest pointer, and the way that stays true is
+            //   that no decoder exists to hand one up. `NoDeclaredFacts`'s contract —
+            //   *"its params are never read, so a hostile one is bytes we do not look
+            //   at"* (`kayfabe_rmrpc::translate_alloc`) — is exactly the property wanted
+            //   here, and it is the strong reading of this arm rather than the weak one.
+            classes::NV20_SUBDEVICE_0 | classes::NV01_EVENT_KERNEL_CALLBACK_EX => {
+                Some(AllocParams::NoDeclaredFacts)
+            }
             _ => None,
         }
     }

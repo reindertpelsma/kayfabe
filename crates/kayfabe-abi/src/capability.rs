@@ -175,8 +175,19 @@ pub enum Origin {
     /// gate's own instruction is *"reword the comment; never weaken this gate"*.
     Empirical,
     /// ★ **Reaches us only because Mode 2's transport is GSP RPC.** Never on the C's
-    /// list, because as an ioctl it never crossed the boundary the C was gating. Every
-    /// row here has a consumer in [`crate::versions::DriverAbiTable::control_params`].
+    /// list, because as an ioctl it never crossed the boundary the C was gating.
+    ///
+    /// ★★ **Corrected 2026-08-01: this is a provenance, not a control-only tag.** The
+    /// sentence here used to be *"every row here has a consumer in
+    /// [`crate::versions::DriverAbiTable::control_params`]"*, which was true of the six
+    /// [`ControlEntry`] rows and quietly asserted that only controls could ever carry
+    /// this origin. They cannot: the same argument holds for an **allocation class** the
+    /// guest's own kernel RM asks for, and `NV01_EVENT_KERNEL_CALLBACK_EX` is the first
+    /// one (see its row in [`CLASSES_SHARED`]). The obligation the sentence was really
+    /// making is the one that generalises — **a row with this origin has a consumer in
+    /// the table that decides its params shape**: [`crate::versions::DriverAbiTable::control_params`]
+    /// for a control, [`crate::versions::DriverAbiTable::alloc_params`] for a class.
+    /// Nothing carries this tag on the strength of a header alone.
     Mode2Rpc,
 }
 
@@ -783,6 +794,34 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
         class: 0x00000079,
         name: "NV01_EVENT_OS_EVENT",
         origin: Origin::Nvproxy,
+    },
+    // ★★★ `Origin::Mode2Rpc`, and it is the FIRST class row to carry it — the same
+    // argument the six control rows make, one axis over.
+    //
+    // nvproxy does not have this class, and that is not an omission on its part: it gates
+    // the **userspace** `/dev/nvidiactl` alloc surface, and it explicitly rewrites the
+    // one neighbouring id it does see (`NV01_EVENT` -> `NV01_EVENT_OS_EVENT`,
+    // `gvisor/pkg/sentry/devices/nvproxy/frontend.go:1139-1141`); its 575 map lists
+    // `NV01_EVENT_OS_EVENT` (`0x79`) and nothing else in the family
+    // (`version.go:412`, `:723`). `NV01_EVENT_KERNEL_CALLBACK_EX` is allocated by the
+    // guest's own KERNEL RM during `RmInitAdapter`, so as an ioctl it never crosses the
+    // boundary nvproxy is gating at all. It reaches us only because in Mode 2 the
+    // transport is GSP RPC and we are the GSP.
+    //
+    // ★ `[measured]` — the 2026-08-01 boot (`docs/design/boot_measured_2026_08_01.md`
+    // §3): `hClass=0x0000007e` is the fourth and last class `rpcRmApiAlloc_GSP` asks for
+    // before `RmInitAdapter failed! (0x24:0x40:1220)`. It is on this list because a boot
+    // sent it, not because a header names it.
+    //
+    // ⊘ What admitting it does NOT admit: its `NV0005_ALLOC_PARAMETERS` carries an
+    // `NvP64 data` guest-kernel callback pointer, and
+    // `DriverAbiTable::alloc_params` answers `AllocParams::NoDeclaredFacts` for it — the
+    // params are never decoded, so the widest thing a hostile one can be is bytes nobody
+    // reads. The object reaches the model as an edge and nothing else.
+    ClassEntry {
+        class: 0x0000007e,
+        name: "NV01_EVENT_KERNEL_CALLBACK_EX",
+        origin: Origin::Mode2Rpc,
     },
     ClassEntry {
         class: 0x00000080,
@@ -1855,19 +1894,25 @@ mod tests {
     #[test]
     fn each_boundarys_resolved_delta_is_materialised() {
         // (version, resolved control count, resolved class count, own control names)
+        //
+        // ★ Every class count went up by ONE on 2026-08-01: `NV01_EVENT_KERNEL_CALLBACK_EX`
+        // (`0x7e`) joined `CLASSES_SHARED`, and `CLASSES_SHARED` is in every boundary's
+        // resolved set by construction. A change that moved only SOME of these numbers
+        // would mean a shared row had stopped being shared, which is why they are pinned
+        // per boundary rather than as one total.
         let want: &[ResolvedExpectation] = &[
             (
                 "550.54.04",
                 (550, 54, 4),
                 155,
-                74,
+                75,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
                 156,
-                74,
+                75,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -1877,14 +1922,14 @@ mod tests {
                 "555.42.02",
                 (555, 42, 2),
                 155,
-                74,
+                75,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
                 156,
-                82,
+                83,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
@@ -1894,7 +1939,7 @@ mod tests {
                 "570.86.15",
                 (570, 86, 15),
                 158,
-                88,
+                89,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS",
@@ -1906,7 +1951,7 @@ mod tests {
                 "575.51.02",
                 (575, 51, 2),
                 159,
-                88,
+                89,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -1919,7 +1964,7 @@ mod tests {
                 "580.65.06",
                 (580, 65, 6),
                 159,
-                90,
+                91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -1932,7 +1977,7 @@ mod tests {
                 "610.43.02",
                 (610, 43, 2),
                 159,
-                90,
+                91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2348,10 +2393,10 @@ mod tests {
     #[test]
     fn the_ported_surface_is_the_reviewed_size() {
         assert_eq!(bench().all_controls().count(), 159, "controls");
-        assert_eq!(at(550, 54, 4).all_classes().count(), 74, "classes at 550");
-        assert_eq!(at(560, 28, 3).all_classes().count(), 82, "classes at 560");
-        assert_eq!(at(570, 86, 15).all_classes().count(), 88, "classes at 570");
-        assert_eq!(bench().all_classes().count(), 90, "classes at 580");
+        assert_eq!(at(550, 54, 4).all_classes().count(), 75, "classes at 550");
+        assert_eq!(at(560, 28, 3).all_classes().count(), 83, "classes at 560");
+        assert_eq!(at(570, 86, 15).all_classes().count(), 89, "classes at 570");
+        assert_eq!(bench().all_classes().count(), 91, "classes at 580");
         assert_eq!(bench().all_denied_controls().count(), 13, "denied controls");
         assert_eq!(bench().all_denied_classes().count(), 3, "denied classes");
     }
@@ -2433,7 +2478,7 @@ mod tests {
                 "{class:#010x} decodes as {params:?} but the capability table refuses it"
             );
         }
-        assert_eq!(seen, 9, "the port decodes nine classes today");
+        assert_eq!(seen, 11, "the port decodes eleven classes today");
         // The sweep must really have covered a class the table refuses, or it proves
         // nothing about the table.
         assert!(

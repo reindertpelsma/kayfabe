@@ -166,6 +166,10 @@ fn through_the_whole_served_chain_the_teardown_rpc_never_reaches_the_ledger() {
             .expect("the bench driver has a wire table"),
         log.clone(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
+        // ★ No object-model link. This test is about fn 47 reaching `InertPolicy` and NOT
+        // reaching the ledger; adding one would make the assertion depend on a link that
+        // has no opinion about fn 47 at all.
+        None,
     );
     let reply = chain
         .respond(&command(

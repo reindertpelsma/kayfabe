@@ -64,8 +64,16 @@ pub const NV_ESC_CHECK_VERSION_STR: u8 = 210;
 /// `ogkm-580: src/nvidia/arch/nvalloc/unix/include/nv_escape.h:27`.
 pub const NV_ESC_RM_ALLOC_MEMORY: u8 = 0x27;
 
-/// `NV20_SUBDEVICE_0` — `ogkm-580: src/common/sdk/nvidia/inc/class/cl2080.h:36`.
-pub const NV20_SUBDEVICE_0: u32 = 0x2080;
+/// `NV20_SUBDEVICE_0`.
+///
+/// ★★ **A re-export, not a second transcription (2026-08-01).** This was a hand-written
+/// `0x2080` until the class table grew a generated row for the same constant, at which
+/// point the workspace briefly held two descriptions of one number — the exact shape
+/// decision #2's quarantine exists to prevent, and one that no test could have caught
+/// because both were right. The generated one is authoritative: it is parsed out of
+/// `cl2080.h` by `kayfabe-abi-gen`, so it cannot drift from the header, and this alias
+/// keeps every existing caller compiling.
+pub use crate::generated::classes::NV20_SUBDEVICE_0;
 
 /// `NV01_MEMORY_SYSTEM` — `ogkm-580: src/common/sdk/nvidia/inc/class/cl003e.h`.
 pub const NV01_MEMORY_SYSTEM: u32 = 0x003e;

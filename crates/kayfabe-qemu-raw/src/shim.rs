@@ -898,8 +898,13 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
-        let plane = RegPlane::new(chip, abi, Box::new(HostMonotonicClock::new()))
-            .map_err(|e| classify_chip(&e))?;
+        let plane = RegPlane::with_objects(
+            chip,
+            abi,
+            Box::new(HostMonotonicClock::new()),
+            Some(object_policy(abi.driver)?),
+        )
+        .map_err(|e| classify_chip(&e))?;
         Ok(Regs { plane })
     }
 
@@ -1023,6 +1028,88 @@ impl Regs {
         }
     }
 }
+
+/// ★★★ **The object model this port declares protocol facts into** — the composition
+/// root's one call, and the answer to the wall the 2026-08-01 boot measured.
+///
+/// # What it joins, and what it deliberately does not
+///
+/// `GSP_RM_ALLOC` and `FREE` become `kayfabe_core::rmgraph::RmEvent`s and go into the
+/// **existing** object model: DUP\_OBJECT refcounting, client/device/subdevice parenting,
+/// the recycled-namespace defences and the cross-GPU handle gate are all already there and
+/// none of them is re-implemented here. `kayfabe_rmrpc::ObjectPolicy` is the link;
+/// `kayfabe_device::served_chain` decides where it sits and what it must not claim.
+///
+/// # ⚠ The three ports this stage has NOT built, named at the site that fakes none of them
+///
+/// A `Gpu` needs an [`Arch`](kayfabe_arch::Arch), an isolate factory and a guest-physical
+/// window. This port has a real answer for exactly one of them, and says so in the values
+/// rather than in a comment:
+///
+/// 1. **`Ga10xArch`** classifies objects from NVIDIA's real class ids and **refuses** every
+///    data-plane seam — zero MMU levels, no page sizes, no doorbell decode. It is not a
+///    mock: `kayfabe_mocks` is not a dependency of this crate and must never become one.
+/// 2. **`StillbornIsolates`** spawns nothing. There is no forwarding plane in this build,
+///    and no host GPU on the bench that measured the wall, so every isolate is retired at
+///    birth and every verb refuses through the core's own backpressure path. ⊘ A verb that
+///    *succeeded* here would be the mock wall in the product.
+/// 3. **The GPA window** below is a declared range that nothing installs a memslot from.
+///    Its only consumer at this stage is `Gpu::realize`, which carves the system proc an
+///    arena out of it; no guest-physical address derived from it reaches the hypervisor.
+///    ⚠ The day the data plane exists, this comes from the VMM's installed window
+///    (`Shim::install_window`) and not from a constant here — a constant that outlived
+///    that day would be two descriptions of one address space.
+///
+/// # Errors
+///
+/// [`Status::Unsupported`] if the object model cannot realize. ★ That is a **refusal to
+/// realize the device**, not a degraded mode: a register plane whose alloc link is missing
+/// answers every `GSP_RM_ALLOC` with the named refusal that stopped the last boot, and
+/// serving that silently is how a port comes to be measured for something it is not doing.
+fn object_policy(
+    driver: kayfabe_abi::versions::DriverAbiTable,
+) -> Result<Box<dyn kayfabe_gsp::CommandPolicy>, (Status, &'static str)> {
+    let isolates = kayfabe_isolate::StillbornIsolates::new(
+        "this build has no forwarding plane: the object model accepts protocol facts and \
+         no host verb can be issued",
+    );
+    let gpu = kayfabe_core::gpu::Gpu::new(
+        Box::new(kayfabe_chips::Ga10xArch::new()),
+        Box::new(isolates),
+        kayfabe_core::gpa::GpaSpace::new(OBJECT_GPA_WINDOW, OBJECT_GPA_ARENA),
+    )
+    .map_err(|_| {
+        (
+            Status::Unsupported,
+            "the object model could not realize: its guest-physical window cannot supply \
+             the system proc an arena",
+        )
+    })?;
+    Ok(Box::new(kayfabe_rmrpc::ObjectPolicy::new(
+        &driver,
+        // ★ The fourth axis, DECLARED and never sniffed. The guest OS is a `#define` in
+        // the guest driver's build and is undetectable on the wire, so a port that
+        // inferred it would be inferring an isolation boundary from a coincidence. This
+        // build answers as the bench's guest, and the day it must answer as another one,
+        // this becomes a realize-time property beside the driver version — not an `if`.
+        kayfabe_abi::GuestOs::Linux,
+        gpu,
+    )))
+}
+
+/// The object model's guest-physical window. See [`object_policy`] for why it is a
+/// constant today and why it must stop being one.
+///
+/// ⚠ Deliberately **not** near the top of the 48-bit space. `kvm_gpa_limited_by_cpu_paddr_bits`
+/// is a trap this project measured on 2026-07-24 (memory
+/// `kvm_gpa_limited_by_cpu_paddr_bits`): a hardcoded `0x9000_0000_0000` works on the
+/// 48-bit AMD dev box and fails on a 46-bit Intel one, and the failure surfaces as an
+/// allocator message that blames the allocator. 64 GiB is above every guest RAM size this bench uses and
+/// inside 40 bits, so it cannot be the thing that differs between two hosts.
+const OBJECT_GPA_WINDOW: core::ops::Range<u64> = 0x10_0000_0000..0x20_0000_0000;
+
+/// Per-proc arena width inside [`OBJECT_GPA_WINDOW`] — 4 GiB, so the window holds 16.
+const OBJECT_GPA_ARENA: u64 = 0x1_0000_0000;
 
 /// A base-address-register index the plane can express.
 ///

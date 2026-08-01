@@ -2268,6 +2268,153 @@ pub trait IsolateFactory: Send + Sync {
     fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate>;
 }
 
+/// ★★★ An [`IsolateFactory`] that spawns **nothing** — the isolate plane's
+/// `kayfabe_device::RefusingRam`.
+///
+/// Every isolate it hands back is **retired at birth**: pool width zero, `checkout()`
+/// always `None`, so the core's ordinary backpressure path refuses every verb before one
+/// is composed. It is what a composition root installs when it has an object model to
+/// declare facts into and **no forwarding plane to issue them against**.
+///
+/// ## ⊘ This is not a mock, and the distinction is the whole point
+///
+/// A mock *answers* a verb — with a made-up handle, a made-up address, a made-up
+/// completion — and that is precisely the failure mode `only_live_boots_are_proof` and the
+/// project's measured "mock wall" are about: a green result that a real driver never
+/// produced. This type answers **no verb at all**. It is the same posture, and the same
+/// argument, as [`kayfabe_isolate_host::HostIsolate::stillborn`]'s already-documented
+/// behaviour — *"retired at birth, every slot dead, `checkout` returning `None`. That is
+/// correct behaviour (the core's backpressure path handles it)"* — reached deliberately
+/// rather than by a spawn failing.
+///
+/// ⚠ **And it is therefore indistinguishable, at the core, from a saturated pool** —
+/// exactly the ambiguity `HostIsolate::spawn_error` exists to record. That is why
+/// [`StillbornIsolates::why`] is a required constructor argument and not a default: a
+/// composition root that installs this owes an operator a sentence, and §4.4.1's pattern
+/// is that a deployment fact no type can carry gets checked at realize.
+///
+/// ⊘ **It is not a substitute for a forwarding plane and must never become one.** The day
+/// this port issues a real host verb, the composition root installs a real factory; the
+/// only thing this type is allowed to make true is *"the object model can accept protocol
+/// facts before the data plane exists"*.
+#[derive(Debug)]
+pub struct StillbornIsolates {
+    why: &'static str,
+    /// Every id this factory was asked for, in order — the same witness
+    /// `MockIsolateFactory::spawned` and `HostIsolateFactory::spawned` publish, so a test
+    /// can assert the isolate-per-`(Proc, GpuId)` property against any of the three.
+    pub spawned: Vec<IsolateId>,
+}
+
+impl StillbornIsolates {
+    /// A factory whose isolates all refuse, naming `why`.
+    ///
+    /// `why` is `&'static str` rather than a `String` on purpose: it is a *deployment*
+    /// fact about this build's composition root, not a runtime condition, so it cannot be
+    /// assembled out of anything a guest supplies.
+    #[must_use]
+    pub fn new(why: &'static str) -> StillbornIsolates {
+        StillbornIsolates {
+            why,
+            spawned: Vec::new(),
+        }
+    }
+
+    /// Why every isolate from this factory refuses — the sentence a composition root
+    /// checks at realize (§4.4.1).
+    #[must_use]
+    pub fn why(&self) -> &'static str {
+        self.why
+    }
+}
+
+impl IsolateFactory for StillbornIsolates {
+    fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate> {
+        self.spawned.push(id);
+        Box::new(StillbornIsolate { id, why: self.why })
+    }
+}
+
+/// One isolate from [`StillbornIsolates`]: retired at birth, no workers, no verbs.
+#[derive(Debug)]
+pub struct StillbornIsolate {
+    id: IsolateId,
+    why: &'static str,
+}
+
+impl StillbornIsolate {
+    /// Why this isolate refuses. The counterpart of
+    /// `kayfabe_isolate_host::HostIsolate::spawn_error`, and `Some` for the same reason:
+    /// *"the pool is saturated"* and *"there is no forwarding plane in this build"* are
+    /// the same observation at the [`Isolate`] seam, and only one of them is transient.
+    #[must_use]
+    pub fn why(&self) -> &'static str {
+        self.why
+    }
+}
+
+impl Isolate for StillbornIsolate {
+    fn id(&self) -> IsolateId {
+        self.id
+    }
+
+    /// **Zero.** Not "one slot that is dead": a width the core could see idle-count
+    /// against is a width something might one day wait for, and there is nothing here to
+    /// wait for. `pool_size() == 0` says *this isolate can never issue a verb* in the one
+    /// vocabulary the core already reads.
+    fn pool_size(&self) -> usize {
+        0
+    }
+
+    fn idle_workers(&self) -> usize {
+        0
+    }
+
+    fn checkout(&mut self) -> Option<Worker> {
+        None
+    }
+
+    /// ⊘ Unreachable by construction, and it drops rather than panics.
+    ///
+    /// [`Isolate::checkout`] never yields a [`Worker`], so nothing can ever be returned to
+    /// this isolate — the only way here is a caller checking a worker in to the wrong
+    /// isolate, which is a bug in the caller. Dropping is what
+    /// `kayfabe_isolate_host::HostIsolate::checkin` already does for a dead slot, and a
+    /// panic on a guest-reachable path would turn somebody else's bug into this device's
+    /// abort.
+    fn checkin(&mut self, worker: Worker) {
+        drop(worker);
+    }
+
+    fn checked_out(&self) -> Vec<WorkerId> {
+        Vec::new()
+    }
+
+    fn cancel_handle(&self, _worker: WorkerId) -> Option<CancelHandle> {
+        None
+    }
+
+    /// `false` — there is no slot to mark dead. Distinct from `HostIsolate`'s `true` for
+    /// an in-range index: a slot that never existed did not just die.
+    fn worker_died(&mut self, _worker: WorkerId) -> bool {
+        false
+    }
+
+    fn in_flight(&self) -> usize {
+        0
+    }
+
+    /// A no-op: [`Self::is_retired`] is already `true` and nothing can change it.
+    fn retire(&mut self) {}
+
+    /// **Always `true`.** Retired at birth — which is what makes every `checkout`
+    /// refusal permanent rather than transient, and is the fact `Spine::reap_retired`
+    /// reads.
+    fn is_retired(&self) -> bool {
+        true
+    }
+}
+
 // The concurrency contract, compile-time-asserted (decision #17).
 //
 // ★ **corrected 2026-07-27.** This comment said `dyn RmBackend` "is the one documented
@@ -2304,7 +2451,13 @@ kayfabe_util::assert_send_sync!(
     VerbFailure,
     dyn Isolate,
     dyn IsolateFactory,
-    IsolateBox
+    IsolateBox,
+    // ★ Asserted for the concrete types too, not only through the trait objects above: a
+    // composition root stores `StillbornIsolates` by value inside the `Sync` core, so
+    // losing either bound would be a compile error HERE rather than a confusing one at
+    // the far end of `Gpu::realize`.
+    StillbornIsolates,
+    StillbornIsolate
 );
 // The backend and the `Worker` that owns one: `Send + Sync` because pool slots live
 // inside the `Sync` core (crate docs), even though no call path ever shares one.

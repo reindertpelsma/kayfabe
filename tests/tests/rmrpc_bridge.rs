@@ -7808,11 +7808,23 @@ fn an_unpermitted_alloc_class_is_refused_on_the_wire_and_declares_nothing() {
             denial: Denial::NotOnAllowlist,
         }),
     );
-    // `NV20_SUBDEVICE_0` is on the allowlist and has no decoder — permitted, unmodelled,
-    // and therefore the OTHER refusal. This is the one that must not move.
+    // A class on the allowlist with no decoder — permitted, unmodelled, and therefore the
+    // OTHER refusal. This is the distinction that must not move.
+    //
+    // ★★ **This row used to be `NV20_SUBDEVICE_0` (`0x2080`), and moving it is the point.**
+    // On 2026-08-01 the subdevice got an `alloc_params` row (the `GspRmAlloc` rung: a live
+    // boot showed the guest's kernel RM allocating one during `RmInitAdapter`), so it is no
+    // longer permitted-but-unmapped and this assertion went red — correctly. The exemplar
+    // is now `NV01_EVENT_OS_EVENT` (`0x79`): nvproxy lists it, this port models it in no
+    // params table, and it is a *different* class from the `0x7e` the same rung added, so
+    // the two refusals stay distinguishable.
+    //
+    // ⚠ The day `0x79` gets a decoder too, move this row again — do NOT delete the
+    // assertion. `UnmappedAllocClass` and `AllocClassNotPermitted` being different answers
+    // is the whole finding this test carries.
     assert_eq!(
-        alloc(0x0000_2080),
-        Err(BridgeRefusal::UnmappedAllocClass { class: 0x0000_2080 }),
+        alloc(0x0000_0079),
+        Err(BridgeRefusal::UnmappedAllocClass { class: 0x0000_0079 }),
     );
     assert_eq!(
         run.census

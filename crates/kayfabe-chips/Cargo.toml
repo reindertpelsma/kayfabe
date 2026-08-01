@@ -16,6 +16,10 @@ kayfabe-arch.workspace = true
 # It carries no offsets and no chip facts, which is why it can be shared across adapter
 # crates without either of them inheriting the other's ordering.
 kayfabe-gsp.workspace = true
+# ★ Decision #2's quarantine, consumed rather than transcribed: `ga10x::Ga10xArch::classify`
+# needs NVIDIA's REAL class ids and this crate may not spell one. It is the same argument
+# `kayfabe-mocks` makes for `WireClassArch`, one crate over.
+kayfabe-abi.workspace = true
 # The non-GSP half of `Arch`, composed exactly the way `kayfabe-crec`'s GA10x model
 # composes onto it — so the second generation is measured against the same baseline the
 # first one was.
