@@ -23,6 +23,7 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
+use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::GpuId;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -124,6 +125,16 @@ fn any_event() -> impl Strategy<Value = RmEvent> {
                             0x00 => Some(ClientKind::User { pid: client.0 }),
                             0x10 => Some(ClientKind::Kernel),
                             _ => None,
+                        },
+                        // ★ A channel may or may not declare an error notifier, and may
+                        // declare one we have no write port for. All three reach the
+                        // graph, so the invariants below hold across every mixture.
+                        error_notifier: match flags & 0xc0 {
+                            0x00 => None,
+                            0x40 => Some(ErrorNotifier::Unreachable),
+                            _ => Some(ErrorNotifier::Sysmem {
+                                gpa: 0x1000_0000 | u64::from(flags),
+                            }),
                         },
                     },
                 }

@@ -54,6 +54,63 @@ pub enum MmuFaultAccess {
     Atomic,
 }
 
+/// ★★★ **Where the guest asked to be TOLD that its channel died.**
+///
+/// A channel declares an *error notifier* at allocation time (`hObjectError` on
+/// `NV_CHANNEL_ALLOC_PARAMS`), and the guest's CPU-RM forwards its resolved backing to
+/// the GSP in the same message — `errorNotifierMem`, a physical address, plus the
+/// notifier's kind in `internalFlags[3:2]`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:548-570`,
+/// `ogkm-580: src/nvidia/generated/g_kernel_channel_nvoc.h:185-189`). **In Mode 2 we are
+/// the GSP, so that message is addressed to us and this is the fact it carries.**
+///
+/// # ★★ Why this is not optional decoration on an RC event
+///
+/// With Confidential Compute **off** — our target — CPU-RM does **not** write the
+/// notifier when it receives `RC_TRIGGERED`; the conditional is explicit
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:657-668`):
+///
+/// ```text
+///     bIsCcEnabled = gpuIsCCFeatureEnabled(pGpu);
+///     // With CC enabled, CPU-RM needs to write error notifiers
+///     if (bIsCcEnabled && pKernelChannel != NULL) { krcErrorSetNotifier(...); }
+/// ```
+///
+/// and RM says so in prose on the very function it calls instead: *"except in the
+/// GSP_CLIENT path where GSP has already written to the notifiers"*
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/rc/kernel_rc_notification.c:85-90`). The
+/// consumer this port can read then spins forever on the zero: `uvm_channel_get_status`
+/// returns `NV_OK` while `error_notifier->status == 0`
+/// (`ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:2058-2082`), and its callers are
+/// `while (1)` loops that **ignore** `UVM_SPIN_LOOP`'s timeout return
+/// (`uvm_channel.c:603-627`, `:660-676`; `kernel-open/nvidia-uvm/uvm_common.h:288-298`).
+///
+/// ⇒ Sending the event without writing this is a **hang generator** — the exact failure
+/// mode task #111 exists to remove. So a fault this port cannot write a notifier for is
+/// not emitted at all; see `kayfabe_core::fault::NotifierGap`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ErrorNotifier {
+    /// The notifier lives in **guest RAM** at this guest-physical address, and this port
+    /// has a write port for it.
+    ///
+    /// The address is `errorNotifierMem.base`, which CPU-RM already added the notifier's
+    /// own offset into (`kernel_channel.c:557-560`), so index 0 of the
+    /// `NV_CHANNELGPFIFO_NOTIFICATION_TYPE_ERROR` array is exactly here — no further
+    /// arithmetic, and none invented.
+    Sysmem {
+        /// Guest-physical address of the 16-byte notification record.
+        gpa: u64,
+    },
+    /// The channel declared one, and it is somewhere this port has **no write port
+    /// for** — device memory, or an aperture the ABI seam does not model.
+    ///
+    /// ★ Kept as its own variant rather than collapsed into "no notifier". They are
+    /// different findings: *"the guest waived error reporting"* and *"the guest asked to
+    /// be told and we cannot reach the place"* lead a reader to different files, and the
+    /// second is a gap in **us**.
+    Unreachable,
+}
+
 /// Axis-B: the per-generation encoding of [`MmuFaultCause`] / [`MmuFaultAccess`].
 ///
 /// **Total by construction.** Both methods return a `u32` and not an `Option`, because

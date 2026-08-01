@@ -56,6 +56,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{ClassId, GpuId, GpuVa, HClient, HObject, Pdb};
 use kayfabe_arch::{Arch, ClientKind, ObjectKind};
 
@@ -390,6 +391,19 @@ pub struct AllocFacts {
     /// is ignored: privilege is a property of the client root, and a hostile guest
     /// stamping it on a channel changes nothing.
     pub client_kind: Option<ClientKind>,
+    /// ★★★ Where a **Channel** declared it wants to be told about its own death — the
+    /// error notifier, resolved by the guest's CPU-RM and RPC'd to the GSP in the same
+    /// alloc message (`kayfabe_abi::notifier`).
+    ///
+    /// `None` = the channel declared none, **or** this driver boundary's layout is not
+    /// pinned so the ABI seam could not read it. Only meaningful on a channel alloc; on
+    /// any other class the field is ignored, exactly as [`Self::client_kind`] is
+    /// everywhere but a client root.
+    ///
+    /// ⚠ It is a *declared* fact and nothing here validates the address. The write port
+    /// refuses an address outside guest RAM by name, and a second opinion here would be a
+    /// second source of truth for where guest RAM is.
+    pub error_notifier: Option<ErrorNotifier>,
 }
 
 /// One abstract RM protocol event. Produced by the ABI adapter (or a test),

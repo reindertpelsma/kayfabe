@@ -35,17 +35,18 @@ use kayfabe_abi::generated::rpc::{
     NV_VGPU_MSG_EVENT_RC_TRIGGERED, ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT, RpcRcTriggeredV1702,
 };
 use kayfabe_abi::rc::{EngineRoute, RC_NOTIFIER_SCOPE_TSG, RcTriggered};
-use kayfabe_arch::fault::{MmuFaultAccess, MmuFaultCause, MmuFaultCodes};
+use kayfabe_arch::fault::{ErrorNotifier, MmuFaultAccess, MmuFaultCause, MmuFaultCodes};
 use kayfabe_arch::ids::{EngineKind, GpuId, GpuVa, HClient, Pdb, VChid};
-use kayfabe_core::fault::{FaultVerdict, NotAttributable, verdict};
+use kayfabe_core::fault::{FaultVerdict, NotAttributable, NotifierGap, verdict};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_device::ga10x::Ga10xFaultCodes;
 use kayfabe_fwd::{FwdFault, fault_facts, handle_doorbell, route_doorbell};
 use kayfabe_mmu::AddressFault;
 use kayfabe_mocks::{MockArch, MockIsolateFactory};
+use kayfabe_rmrpc::fault::{FaultDeliveryError, FaultEmission};
 use kayfabe_rmrpc::{FaultEmitRefusal, rc_triggered_for};
-use kayfabe_tests::{Guarded, Scenario, identical_handles};
+use kayfabe_tests::{Guarded, Scenario, identical_handles, notifier_gpa};
 
 /// The address the application submits and never maps. Its shape is the #14 round-1
 /// working-set base, so a reader recognises it as a plausible operand rather than a
@@ -59,6 +60,15 @@ const B_GR: VChid = VChid(0x20);
 
 /// The chip's Axis-B encoding table — the same one a realized device would use.
 const CODES: Ga10xFaultCodes = Ga10xFaultCodes;
+
+/// A fixed MMU timestamp, so the notifier's bytes are a function of the fault and not of
+/// the clock. Real RM reads `tmrGetCurrentTime`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/method_notification.c:167-174`); nothing
+/// in either consumer path reads it back, which is why a constant is honest here.
+const A_TIMESTAMP: u64 = 0x0000_1234_5678_9abc;
+
+/// A notifier address for the hand-built `FaultFacts` literals below.
+const A_NOTIFIER: u64 = 0x7ffe_0000;
 
 /// `X(RM, SET_GUEST_SYSTEM_INFO, 1)` — the guest's first post-init RPC, used only to
 /// drive the FSM to `Running` so an unsolicited event is legal (§7-G7).
@@ -155,34 +165,35 @@ fn an_unmapped_application_va_reaches_the_guest_as_a_channel_fault() {
         &CODES,
         &kayfabe_tests::gspworld::FUNCTIONS,
         ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT,
+        A_TIMESTAMP,
     )
     .expect("a GR channel has an honest engine route");
-    assert_eq!(rpc.function, NV_VGPU_MSG_EVENT_RC_TRIGGERED);
-    assert_eq!(rpc.payload.len(), RpcRcTriggeredV1702::SIZE);
+    assert_eq!(rpc.rpc.function, NV_VGPU_MSG_EVENT_RC_TRIGGERED);
+    assert_eq!(rpc.rpc.payload.len(), RpcRcTriggeredV1702::SIZE);
     assert_eq!(
-        read_u32(&rpc.payload, "chid"),
+        read_u32(&rpc.rpc.payload, "chid"),
         u32::from(A_GR.0),
         "★ attribution: `chid` is the runlist index of the channel that was refused"
     );
     assert_eq!(
-        read_u32(&rpc.payload, "exceptType"),
+        read_u32(&rpc.rpc.payload, "exceptType"),
         ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT,
         "the exception type is the MMU-fault one — `Xid 31` in a kernel log"
     );
     assert_eq!(
-        (u64::from(read_u32(&rpc.payload, "mmuFaultAddrHi")) << 32)
-            | u64::from(read_u32(&rpc.payload, "mmuFaultAddrLo")),
+        (u64::from(read_u32(&rpc.rpc.payload, "mmuFaultAddrHi")) << 32)
+            | u64::from(read_u32(&rpc.rpc.payload, "mmuFaultAddrLo")),
         BAD_VA.0,
         "★ attribution: the faulting address is the one the submission named"
     );
     assert_eq!(
-        read_u32(&rpc.payload, "mmuFaultType"),
+        read_u32(&rpc.rpc.payload, "mmuFaultType"),
         CODES.fault_type(MmuFaultCause::NothingMapped),
         "the fault type comes from the chip's table, not from this test"
     );
-    assert_eq!(read_u32(&rpc.payload, "scope"), RC_NOTIFIER_SCOPE_TSG);
+    assert_eq!(read_u32(&rpc.rpc.payload, "scope"), RC_NOTIFIER_SCOPE_TSG);
     assert_eq!(
-        read_u32(&rpc.payload, "rcJournalBufferSize"),
+        read_u32(&rpc.rpc.payload, "rcJournalBufferSize"),
         0,
         "an empty journal — we have no register dump and do not invent one"
     );
@@ -201,7 +212,7 @@ fn an_unmapped_application_va_reaches_the_guest_as_a_channel_fault() {
     w.guest.recv(&mut w.ram).expect("and it drains the reply");
 
     w.fsm
-        .post_event(&mut w.ram, &rpc)
+        .post_event(&mut w.ram, &rpc.rpc)
         .expect("★ a Running GSP may post an unsolicited RC event");
     let got = w.guest.recv(&mut w.ram).expect("the guest reads its queue");
     assert_eq!(got.len(), 1, "exactly one event arrived");
@@ -355,6 +366,7 @@ fn a_copy_engine_fault_is_refused_rather_than_forged_as_graphics() {
             &CODES,
             &kayfabe_tests::gspworld::FUNCTIONS,
             ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT,
+            A_TIMESTAMP,
         ),
         Err(FaultEmitRefusal::NoEngineRoute {
             engine: EngineKind::Ce
@@ -394,9 +406,10 @@ fn identical_vas_in_two_processes_produce_two_differently_attributed_faults() {
             &CODES,
             &kayfabe_tests::gspworld::FUNCTIONS,
             ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT,
+            A_TIMESTAMP,
         )
         .expect("both are GR");
-        seen.push((report.proc, read_u32(&rpc.payload, "chid")));
+        seen.push((report.proc, read_u32(&rpc.rpc.payload, "chid")));
     }
     assert_eq!(seen[0].1, u32::from(A_GR.0));
     assert_eq!(seen[1].1, u32::from(B_GR.0));
@@ -459,6 +472,7 @@ fn every_engine_and_ownership_ends_in_an_event_or_a_named_refusal() {
                 engine,
                 cause: MmuFaultCause::NothingMapped,
                 access: MmuFaultAccess::Read,
+                error_notifier: Some(ErrorNotifier::Sysmem { gpa: A_NOTIFIER }),
             };
             match verdict(facts, Gpu::SYSTEM_PROC) {
                 FaultVerdict::Escalate(_) => escalated += 1,
@@ -467,9 +481,10 @@ fn every_engine_and_ownership_ends_in_an_event_or_a_named_refusal() {
                     &CODES,
                     &kayfabe_tests::gspworld::FUNCTIONS,
                     ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT,
+                    A_TIMESTAMP,
                 ) {
                     Ok(rpc) => {
-                        assert_eq!(rpc.payload.len(), RpcRcTriggeredV1702::SIZE);
+                        assert_eq!(rpc.rpc.payload.len(), RpcRcTriggeredV1702::SIZE);
                         assert!(EngineRoute::for_engine(engine).is_some());
                         emitted += 1;
                     }
@@ -507,6 +522,7 @@ fn a_channel_with_no_address_space_escalates_with_its_own_reason() {
         engine: EngineKind::GrCompute,
         cause: MmuFaultCause::NothingMapped,
         access: MmuFaultAccess::Read,
+        error_notifier: Some(ErrorNotifier::Sysmem { gpa: A_NOTIFIER }),
     };
     assert_eq!(
         verdict(facts, Gpu::SYSTEM_PROC),
@@ -550,6 +566,343 @@ fn the_chip_fault_codes_stay_inside_the_range_the_guest_decodes() {
         CODES.fault_type(MmuFaultCause::NothingMapped),
         CODES.fault_type(MmuFaultCause::PermissionViolation),
         "two different causes must not encode to one code"
+    );
+}
+
+// =====================================================================================
+// 6. ★★★ THE ERROR NOTIFIER — the half without which the event is a hang generator
+// =====================================================================================
+
+/// A re-implementation of the guest waiter this port can actually read, so the test can
+/// assert the thing that matters: **it stops spinning.**
+///
+/// This is `uvm_channel_get_status` plus the loop around it, and neither half is
+/// paraphrased:
+///
+/// ```c
+/// /* ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:2058-2082 */
+/// NV_STATUS uvm_channel_get_status(uvm_channel_t *channel) {
+///     ...
+///     if (error_notifier->status == 0) return NV_OK;
+///     ...
+///     return NV_ERR_RC_ERROR;
+/// }
+/// /* :603-627 — and `uvm_channel_manager_wait` at :660-676 has the same shape */
+/// while (1) {
+///     ...
+///     if (uvm_channel_get_status(channel) != NV_OK) { status = ...; break; }
+///     UVM_SPIN_LOOP(&spin);          /* ★ its RETURN VALUE IS IGNORED */
+/// }
+/// ```
+///
+/// ★★ `UVM_SPIN_LOOP` on timeout prints *"Warning: stuck waiting for %llus"* and
+/// **returns** (`ogkm-580: kernel-open/nvidia-uvm/uvm_common.h:288-298`), and these
+/// callers discard that return. So the only exit is a non-zero `status` half-word — which
+/// is why `budget` here models a wall-clock limit the real loop does not have. A waiter
+/// that "times out" in this model is a waiter that hangs in the guest.
+///
+/// Reads only the two bytes at `+14`, because that is all the real one reads.
+fn uvm_style_wait(
+    ram: &mut dyn kayfabe_gsp::ram::GuestRam,
+    gpa: u64,
+    budget: usize,
+) -> Option<u16> {
+    for _ in 0..budget {
+        let mut b = [0u8; 2];
+        ram.read(gpa + 14, &mut b)
+            .expect("the notifier is readable");
+        let status = u16::from_le_bytes(b);
+        if status != 0 {
+            return Some(status);
+        }
+        // UVM_SPIN_LOOP(&spin) — and its return value is ignored, exactly as here.
+    }
+    None
+}
+
+/// ★★★ **THE BITE.** A guest waiter spins forever on a channel we RC'd without writing
+/// its error notifier, and stops the moment we write it.
+///
+/// Both halves are asserted in one test on purpose. The negative half is the finding
+/// (`docs/design/resume_from_fault.md` §S5(b)): with Confidential Compute off CPU-RM does
+/// **not** write the notifier, so an `RC_TRIGGERED` on its own leaves the waiter's only
+/// exit condition unmet — task #111 causing the hang it exists to replace. The positive
+/// half is the fix.
+///
+/// ⊘ Scope, stated rather than implied: this is UVM's waiter, re-implemented from source.
+/// What *libcuda* does with an application channel's notifier is closed and unmeasured
+/// (`docs/design/resume_from_fault.md` §9 item 2). What this test establishes is that the
+/// consumer we can read is unstuck by our write and is not unstuck by the event alone.
+#[test]
+fn a_guest_waiter_spins_on_the_event_alone_and_stops_when_the_notifier_lands() {
+    let mut gpu = two_app_gpu();
+    refuse_ring(&mut gpu, A_GR, BAD_VA, A_PDB);
+    let FaultVerdict::Emit(report) = emit_for(&gpu, A_GR, BAD_VA) else {
+        panic!("an application channel's unmapped VA must be emittable");
+    };
+    assert_eq!(
+        report.notifier_gpa,
+        notifier_gpa(A_GR),
+        "the report carries THIS channel's declared notifier, not a default"
+    );
+
+    let mut w = kayfabe_tests::gspworld::GspWorld::new(
+        kayfabe_tests::gspworld::P580,
+        kayfabe_tests::gspworld::MODEL_A,
+    );
+    w.boot();
+    w.link_and_drain();
+    w.guest
+        .send(&mut w.ram, FN_SET_GUEST_SYSTEM_INFO, 5, &[])
+        .expect("the guest issues its first post-init RPC");
+    w.doorbell().expect("we service it");
+    w.guest.recv(&mut w.ram).expect("and it drains the reply");
+
+    // The guest allocated the notifier out of its own RAM; the harness's RAM is sparse,
+    // so give it the page. ★ Only this page — nothing else in the test's address space is
+    // backed, which is what makes the unwritable-notifier test below a real refusal.
+    w.ram.alloc(report.notifier_gpa);
+
+    let emission = rc_triggered_for(
+        &report,
+        &CODES,
+        &kayfabe_tests::gspworld::FUNCTIONS,
+        ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT,
+        A_TIMESTAMP,
+    )
+    .expect("a GR channel has an honest engine route");
+
+    // ---- (a) THE EVENT ALONE. Post it exactly as the pre-fix path did.
+    w.fsm
+        .post_event(&mut w.ram, &emission.rpc)
+        .expect("a Running GSP may post an unsolicited RC event");
+    assert_eq!(
+        w.guest
+            .recv(&mut w.ram)
+            .expect("the guest reads its queue")
+            .len(),
+        1,
+        "the event really did arrive — this is not a delivery failure"
+    );
+    assert_eq!(
+        uvm_style_wait(&mut w.ram, report.notifier_gpa, 10_000),
+        None,
+        "★★★ the waiter is STILL SPINNING: the RC event does not touch the notifier, and \
+         `error_notifier->status == 0` is the only thing it looks at"
+    );
+
+    // ---- (b) THE WRITE. Same fault, delivered whole.
+    emission
+        .deliver(&mut w.ram, &mut w.fsm)
+        .expect("the notifier is writable guest RAM and the FSM is Running");
+    assert_eq!(
+        uvm_style_wait(&mut w.ram, report.notifier_gpa, 10_000),
+        Some(0xffff),
+        "★★★ the waiter STOPS, on the sentinel krcErrorSetNotifier_IMPL itself passes"
+    );
+
+    // ---- and the rest of the record is the same fault, not a separate story.
+    let mut rec = [0u8; 16];
+    kayfabe_gsp::ram::GuestRam::read(&mut w.ram, report.notifier_gpa, &mut rec)
+        .expect("the record is readable");
+    assert_eq!(
+        u32::from_le_bytes(rec[8..12].try_into().expect("4")),
+        ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT,
+        "info32 carries the same exceptType the event does"
+    );
+    assert_eq!(
+        u16::from_le_bytes(rec[12..14].try_into().expect("2")),
+        1,
+        "info16 carries the same NV2080_ENGINE_TYPE_GRAPHICS the event routes on"
+    );
+    assert_eq!(
+        u64::from_le_bytes(rec[0..8].try_into().expect("8")),
+        A_TIMESTAMP,
+        "and the timestamp is the one we were given, not a clock read inside the encoder"
+    );
+}
+
+/// ★★ Two processes fault on the identical VA and each notifier is written **in its own
+/// channel's memory** — the #14 attribution property, applied to the half that is a
+/// guest-memory write.
+///
+/// A notifier keyed on anything global would unstick both waiters at once, which is worse
+/// than not writing: process B would report an RC error it never took.
+#[test]
+fn two_faulted_channels_get_two_separate_notifiers() {
+    let mut gpu = two_app_gpu();
+    refuse_ring(&mut gpu, A_GR, BAD_VA, A_PDB);
+    refuse_ring(&mut gpu, B_GR, BAD_VA, B_PDB);
+
+    let mut w = kayfabe_tests::gspworld::GspWorld::new(
+        kayfabe_tests::gspworld::P580,
+        kayfabe_tests::gspworld::MODEL_A,
+    );
+    w.boot();
+    w.link_and_drain();
+    w.guest
+        .send(&mut w.ram, FN_SET_GUEST_SYSTEM_INFO, 5, &[])
+        .expect("the guest issues its first post-init RPC");
+    w.doorbell().expect("we service it");
+    w.guest.recv(&mut w.ram).expect("and it drains the reply");
+
+    let FaultVerdict::Emit(a) = emit_for(&gpu, A_GR, BAD_VA) else {
+        panic!("A is an application channel");
+    };
+    let FaultVerdict::Emit(b) = emit_for(&gpu, B_GR, BAD_VA) else {
+        panic!("B is an application channel");
+    };
+    assert_ne!(
+        a.notifier_gpa, b.notifier_gpa,
+        "the identical VA did NOT collapse the two channels onto one notifier"
+    );
+    w.ram.alloc(a.notifier_gpa);
+    w.ram.alloc(b.notifier_gpa);
+
+    // Fault only A.
+    rc_triggered_for(
+        &a,
+        &CODES,
+        &kayfabe_tests::gspworld::FUNCTIONS,
+        ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT,
+        A_TIMESTAMP,
+    )
+    .expect("GR routes")
+    .deliver(&mut w.ram, &mut w.fsm)
+    .expect("delivered");
+
+    assert_eq!(
+        uvm_style_wait(&mut w.ram, a.notifier_gpa, 1_000),
+        Some(0xffff),
+        "A's waiter is released"
+    );
+    assert_eq!(
+        uvm_style_wait(&mut w.ram, b.notifier_gpa, 1_000),
+        None,
+        "★★★ and B's is NOT — a fault on one channel does not report an error on another"
+    );
+}
+
+/// ★★★ **The narrowing.** A channel with no writable error notifier is **escalated, not
+/// emitted** — `#111` firing less often, on purpose.
+///
+/// Both gaps are covered, by exact variant, because they send a reader to different files
+/// (`kayfabe_core::fault::NotifierGap`). And the ordering matters: the notifier check runs
+/// **after** attribution, so a guest-kernel channel with no notifier still escalates for
+/// the ownership reason — the stronger and more specific one.
+#[test]
+fn a_channel_we_cannot_notify_is_escalated_rather_than_rcd() {
+    let base = kayfabe_core::fault::FaultFacts {
+        gpu: GpuId::ZERO,
+        proc: kayfabe_core::ProcId(7),
+        chan: kayfabe_core::ChanId(3),
+        vchid: A_GR,
+        pdb: Some(A_PDB),
+        va: BAD_VA,
+        engine: EngineKind::GrCompute,
+        cause: MmuFaultCause::NothingMapped,
+        access: MmuFaultAccess::Write,
+        error_notifier: None,
+    };
+    assert_eq!(
+        verdict(base, Gpu::SYSTEM_PROC),
+        FaultVerdict::Escalate(NotAttributable::NoErrorNotifier {
+            chan: kayfabe_core::ChanId(3),
+            why: NotifierGap::Undeclared,
+        }),
+        "no notifier declared (or an unpinned driver boundary) ⇒ no RC"
+    );
+    assert_eq!(
+        verdict(
+            kayfabe_core::fault::FaultFacts {
+                error_notifier: Some(ErrorNotifier::Unreachable),
+                ..base
+            },
+            Gpu::SYSTEM_PROC
+        ),
+        FaultVerdict::Escalate(NotAttributable::NoErrorNotifier {
+            chan: kayfabe_core::ChanId(3),
+            why: NotifierGap::Unreachable,
+        }),
+        "declared somewhere we have no write port for ⇒ still no RC, and a DIFFERENT why"
+    );
+    // ★ Ordering: ownership still wins. A system channel with no notifier is a
+    // guest-kernel escalation, not a notifier one — the reader must be sent to the
+    // attribution question first.
+    assert!(matches!(
+        verdict(
+            kayfabe_core::fault::FaultFacts {
+                proc: Gpu::SYSTEM_PROC,
+                error_notifier: None,
+                ..base
+            },
+            Gpu::SYSTEM_PROC
+        ),
+        FaultVerdict::Escalate(NotAttributable::GuestKernelContext { .. })
+    ));
+    // …and the positive control, so the three negatives are not vacuous.
+    assert!(matches!(
+        verdict(
+            kayfabe_core::fault::FaultFacts {
+                error_notifier: Some(ErrorNotifier::Sysmem { gpa: A_NOTIFIER }),
+                ..base
+            },
+            Gpu::SYSTEM_PROC
+        ),
+        FaultVerdict::Emit(_)
+    ));
+}
+
+/// ★★ A notifier the guest pointed at memory we cannot write **stops the delivery**, and
+/// the event is not posted.
+///
+/// The alternative — post anyway — is the worst of both: the guest gets an RC callback and
+/// its waiter still spins, so the failure looks like a driver bug rather than like ours.
+#[test]
+fn an_unwritable_notifier_stops_the_event_rather_than_half_telling_the_guest() {
+    let mut gpu = two_app_gpu();
+    refuse_ring(&mut gpu, A_GR, BAD_VA, A_PDB);
+    let FaultVerdict::Emit(mut report) = emit_for(&gpu, A_GR, BAD_VA) else {
+        panic!("emittable");
+    };
+    // An address outside the harness's RAM: the guest could name one, and the write port
+    // is the thing that knows where RAM is.
+    report.notifier_gpa = 0xffff_ffff_0000;
+
+    let mut w = kayfabe_tests::gspworld::GspWorld::new(
+        kayfabe_tests::gspworld::P580,
+        kayfabe_tests::gspworld::MODEL_A,
+    );
+    w.boot();
+    w.link_and_drain();
+    w.guest
+        .send(&mut w.ram, FN_SET_GUEST_SYSTEM_INFO, 5, &[])
+        .expect("the guest issues its first post-init RPC");
+    w.doorbell().expect("we service it");
+    w.guest.recv(&mut w.ram).expect("and it drains the reply");
+
+    let emission: FaultEmission = rc_triggered_for(
+        &report,
+        &CODES,
+        &kayfabe_tests::gspworld::FUNCTIONS,
+        ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT,
+        A_TIMESTAMP,
+    )
+    .expect("GR routes");
+    assert!(
+        matches!(
+            emission.deliver(&mut w.ram, &mut w.fsm),
+            Err(FaultDeliveryError::Notifier(_))
+        ),
+        "the write refused by name"
+    );
+    assert_eq!(
+        w.guest
+            .recv(&mut w.ram)
+            .expect("the guest reads its queue")
+            .len(),
+        0,
+        "★★★ and NOTHING was posted — the guest is not told half a fault"
     );
 }
 

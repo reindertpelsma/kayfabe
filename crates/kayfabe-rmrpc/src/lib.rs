@@ -1150,6 +1150,13 @@ fn translate_alloc(
                 // `userd_flags`→`VChid` recovery matches real silicon" as precisely what
                 // this stage cannot prove.
                 userd_flags: c.flags,
+                // ★★★ The error notifier, decoded SEPARATELY because it lives past the
+                // version-agreement prefix `decode_channel_alloc_facts` stops at
+                // (`kayfabe_abi::notifier::ChannelNotifierWire`). `Ok(None)` at an
+                // unpinned boundary is the honest answer and costs only that task #111
+                // will not emit for the channel — the safe direction, since an RC with
+                // no notifier write causes the hang it replaces.
+                error_notifier: abi.decode_channel_error_notifier(params)?,
                 ..Default::default()
             }
         }

@@ -353,6 +353,9 @@ pub struct RegPlane {
     /// [`RegPlane::set_policy`] still gets to read what the default one recorded — and
     /// because reading it must not take the FSM's lock behind a doorbell.
     unserviced: crate::unserviced::UnservicedLog,
+    /// ★ Step 5a's whole deliverable: where the guest said its replayable fault buffer is
+    /// (`crate::faultbuffer`). Recorded, never answered.
+    fault_buffer: crate::faultbuffer::FaultBufferLog,
 }
 
 impl core::fmt::Debug for RegPlane {
@@ -403,6 +406,7 @@ impl RegPlane {
         let model = (chip.gsp_model)();
         assert_disjoint(chip, model.as_ref())?;
         let unserviced = crate::unserviced::UnservicedLog::new();
+        let fault_buffer = crate::faultbuffer::FaultBufferLog::new();
         Ok(RegPlane {
             chip,
             model,
@@ -411,12 +415,18 @@ impl RegPlane {
             state: Mutex::new(PlaneState {
                 fsm: GspFsm::new(abi),
                 ram: Box::new(RefusingRam),
-                policy: crate::served_policy(chip, abi.driver, unserviced.clone()),
+                policy: crate::served_policy(
+                    chip,
+                    abi.driver,
+                    unserviced.clone(),
+                    fault_buffer.clone(),
+                ),
                 unclaimed: Vec::new(),
                 fb_window: Vec::new(),
             }),
             c: PlaneCounters::default(),
             unserviced,
+            fault_buffer,
         })
     }
 
@@ -478,6 +488,23 @@ impl RegPlane {
     #[must_use]
     pub fn unserviced_sample(&self) -> Vec<crate::unserviced::UnservicedCommand> {
         self.unserviced.sample()
+    }
+
+    /// How many times the guest registered a replayable fault buffer
+    /// (`NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER`).
+    ///
+    /// ⊘ A count of *asks*, not of anything served: the recorder declines the command, so
+    /// this number rising means the guest's UVM reached the registration and was refused.
+    #[must_use]
+    pub fn fault_buffers_registered(&self) -> u64 {
+        self.fault_buffer.total()
+    }
+
+    /// The fault-buffer registrations remembered, capped at
+    /// [`crate::faultbuffer::FAULT_BUFFER_SAMPLE_MAX`].
+    #[must_use]
+    pub fn fault_buffer_sample(&self) -> Vec<crate::faultbuffer::FaultBufferNote> {
+        self.fault_buffer.sample()
     }
 
     /// The distinct `(bar, offset)` pairs no source claimed, up to

@@ -51,6 +51,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod abi;
+pub mod faultbuffer;
 pub mod ga10x;
 pub mod guestsysinfo;
 pub mod inert;
@@ -634,12 +635,18 @@ pub fn served_policy(
     chip: &'static ChipProfile,
     driver: kayfabe_abi::versions::DriverAbiTable,
     unserviced: unserviced::UnservicedLog,
+    fault_buffer: faultbuffer::FaultBufferLog,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
     Box::new(kayfabe_gsp::PolicyChain::new(vec![
         Box::new(inittables::InitTablePolicy::new(chip, driver)),
         Box::new(staticinfo::StaticInfoPolicy::new(chip, driver)),
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
         Box::new(inert::InertPolicy::new()),
+        // ★ Two recorders, both terminal-shaped (`respond` never answers), so precedence
+        // between them is irrelevant and the pair cannot change what the guest sees. The
+        // fault-buffer recorder is FIRST only so a reader meets the specific one before
+        // the catch-all; see `faultbuffer`'s docs for why it declines on purpose.
+        Box::new(faultbuffer::FaultBufferRecorder::new(driver, fault_buffer)),
         Box::new(unserviced::UnservicedLedger::new(driver, unserviced)),
     ]))
 }

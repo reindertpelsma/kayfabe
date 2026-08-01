@@ -3278,12 +3278,95 @@ fn nothing_past_the_channel_prefix_is_read_however_hostile_it_is() {
         let mut long = exact.clone();
         long.extend(std::iter::repeat_n(0xffu8, extra));
         assert_eq!(
-            facts_of(&long),
+            AllocFacts {
+                error_notifier: None,
+                ..facts_of(&long)
+            },
             want,
             "★ {extra} bytes of tail changed a fact — the decoder is reading past the \
              region the two vendored trees agree on",
         );
     }
+}
+
+/// ★★★ The **one** field that is read past the prefix, and the exact terms it is read on.
+///
+/// `error_notifier` breaks the invariant above on purpose (`kayfabe_abi::notifier`): the
+/// GSP is the component contracted to write a channel's error notifier, and
+/// `errorNotifierMem` is how CPU-RM tells it where. So the prefix contract is not
+/// *"nothing past +32 is ever read"* any more — it is:
+///
+/// - the three **protocol facts** the graph keys on are still prefix-only, which the test
+///   above pins by masking exactly one field out and nothing else;
+/// - the notifier is read **only from an offset a vendored tree was opened at**, and
+/// - at a boundary with no such tree, **nothing past +32 is read at all** — the original
+///   invariant, preserved precisely where the version disagreement lives.
+///
+/// That third clause is the one worth a test: without it a `None` at 550 would be
+/// indistinguishable from a decode that happened to find zeros.
+#[test]
+fn the_notifier_is_the_only_field_past_the_prefix_and_only_where_a_tree_was_read() {
+    use kayfabe_abi::notifier::ChannelNotifierWire;
+    use kayfabe_abi::versions::{BENCH_DRIVER, table_for};
+    use kayfabe_arch::fault::ErrorNotifier;
+
+    // A full-length 580 params image declaring a sysmem notifier at a recognisable GPA.
+    let w580 = ChannelNotifierWire::V580;
+    let mut params = w::channel_params(gr_flags(), cp::CTXSHARE, cp::VAS);
+    params.resize(w580.needs(), 0);
+    // internalFlags[3:2] = ERROR_NOTIFIER_TYPE_MEMORY (3)
+    params[w580.internal_flags..w580.internal_flags + 4]
+        .copy_from_slice(&(3u32 << 2).to_le_bytes());
+    let m = w580.error_notifier_mem;
+    params[m..m + 8].copy_from_slice(&0x7fee_0000u64.to_le_bytes());
+    params[m + 8..m + 16].copy_from_slice(&64u64.to_le_bytes()); // size
+    params[m + 16..m + 20].copy_from_slice(&1u32.to_le_bytes()); // NV_ADDR_SYSMEM
+
+    // The bench boundary HAS a pinned layout, so it learns the address.
+    let bench = table_for(BENCH_DRIVER).expect("bench");
+    assert_eq!(
+        bench.decode_channel_error_notifier(&params),
+        Ok(Some(ErrorNotifier::Sysmem { gpa: 0x7fee_0000 })),
+        "580.159.04's tree was read, so the field is readable"
+    );
+
+    // 550.54.04 has no pinned layout. The IDENTICAL bytes yield nothing — not a guess, and
+    // not a zero.
+    let old = table_for(kayfabe_abi::DriverVersion {
+        major: 550,
+        minor: 54,
+        patch: 4,
+    })
+    .expect("550 is supported");
+    assert_eq!(
+        old.decode_channel_error_notifier(&params),
+        Ok(None),
+        "★★ no tree was opened at 550.54.04, so nothing past the prefix is read there"
+    );
+
+    // ★★★ And the same bytes, through the WHOLE bridge, land on the event the graph
+    // consumes. Without this the decode could be correct and simply not wired: `verdict`
+    // would then escalate every fault as `Undeclared` and nothing would look wrong.
+    let Ok(Translation::Event(RmEvent::Alloc { facts, .. })) = xlate(&w::message(
+        fn_id::GSP_RM_ALLOC,
+        1,
+        &w::alloc_body(
+            cp::C,
+            cp::TSG,
+            cp::GR,
+            w::AMPERE_CHANNEL_GPFIFO_A,
+            params.len() as u32,
+            w::RMAPI_RPC_FLAGS_NONE,
+            &params,
+        ),
+    )) else {
+        panic!("a full-length channel alloc is an Alloc event");
+    };
+    assert_eq!(
+        facts.error_notifier,
+        Some(ErrorNotifier::Sysmem { gpa: 0x7fee_0000 }),
+        "★ the declared notifier reaches AllocFacts — the seam is wired, not merely correct"
+    );
 }
 
 /// One byte short of the prefix is a **refusal carrying both numbers**, never a

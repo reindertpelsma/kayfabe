@@ -3227,5 +3227,10 @@ pub fn fault_facts(
         engine: chan.engine,
         cause,
         access,
+        // ★ A held fact like every other field here: the channel declared it at alloc
+        // time and the core carries it. Collected beside the refusal in the same locked
+        // snapshot, because a notifier address re-read later could belong to a channel
+        // the guest has since freed and re-allocated on the same slot.
+        error_notifier: chan.error_notifier,
     })
 }

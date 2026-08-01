@@ -40,6 +40,7 @@
 #![allow(clippy::unusual_byte_groupings)]
 
 use kayfabe_arch::ClientKind;
+use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::GpuId;
 use kayfabe_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::{
@@ -176,6 +177,18 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
                         0x00 => Some(ClientKind::User { pid: client.0 }),
                         0x10 => Some(ClientKind::Kernel),
                         _ => None,
+                    },
+                    // ★ A also gets to declare an error notifier, including one pointing
+                    // at an address it has no business naming. The notifier is a
+                    // guest-chosen GPA (`kayfabe_abi::notifier`), so it belongs in the
+                    // hostile-facts universe: B's isolation must hold whether or not A
+                    // claims a place to be told about its own faults.
+                    error_notifier: match flags & 0xc0 {
+                        0x00 => None,
+                        0x40 => Some(ErrorNotifier::Unreachable),
+                        _ => Some(ErrorNotifier::Sysmem {
+                            gpa: 0x1000_0000 | u64::from(flags),
+                        }),
                     },
                 },
             }),

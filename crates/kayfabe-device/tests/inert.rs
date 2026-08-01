@@ -165,6 +165,7 @@ fn through_the_whole_served_chain_the_teardown_rpc_never_reaches_the_ledger() {
         *kayfabe_abi::versions::table_for(kayfabe_abi::versions::BENCH_DRIVER)
             .expect("the bench driver has a wire table"),
         log.clone(),
+        kayfabe_device::faultbuffer::FaultBufferLog::new(),
     );
     let reply = chain
         .respond(&command(

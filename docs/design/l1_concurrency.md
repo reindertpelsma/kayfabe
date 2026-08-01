@@ -927,6 +927,47 @@ GPU that faults a channel does not silently hand back a fresh context; it makes 
 context **sticky-fatal** until the application tears it down and builds a new one.
 Every CUDA application already handles that path, because Xids exist.
 
+⚠ **CORRECTION (2026-08-01, `docs/design/resume_from_fault.md` §S6).** The paragraph
+above is **right where this document uses it** — the isolate died, the data is gone,
+fail loudly — and the mechanism it rests on holds: there is no replay after an RC
+anywhere in RM, recovery is kill-then-reset
+(`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:3036-3082`), and
+`bIsRcPending` gates further use until an explicit reset (`:3026-3028`). But its last two
+sentences are wrong in two directions and must not be quoted on their own:
+
+1. ⚠ **Understated on scope.** For a **UVM-owned** channel it is not context-sticky, it is
+   *system-global*: `krcErrorSetNotifier_IMPL` carries `// WAR bug 4503046` and calls
+   `sysSetRecoveryRebootRequired(pSys, NV_TRUE)` whenever `pKernelChannel->bUvmOwned`
+   (`ogkm-580: src/nvidia/src/kernel/gpu/rc/kernel_rc_notification.c:255-262`). UVM's own
+   fatal error is process-global and never cleared outside test builds
+   (`ogkm-580: kernel-open/nvidia-uvm/uvm_global.c:420-445`), and NVIDIA records the
+   cross-GPU spread itself — *"UVM currently attributes all errors as global and fails
+   operations on all GPUs"* (`ogkm-580: kernel_gsp.c:702-707`). **No application "already
+   handles" *"the driver now says reboot"*,** because there is nothing to handle. This is
+   task #111's A/B rule's **second, independent reason**, and it is recorded on
+   `kayfabe_core::fault::NotAttributable::GuestKernelContext` so a refactor cannot delete
+   the rule by disagreeing with the first one.
+2. ⚠ **Overstated in its premise.** *"Because Xids exist"* assumes the application **sees**
+   one. With Confidential Compute off — our target — CPU-RM does **not** write the
+   channel's error notifier on `RC_TRIGGERED`
+   (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:657-668`); it expects the GSP to
+   have written it, and in Mode 2 **we are the GSP**. Without that write the consumer this
+   port can read spins forever (`ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:2058-2082`,
+   `:603-627`). The Xid is not automatic; it is something we have to produce — so
+   `kayfabe_core::fault::verdict` now refuses to emit an RC at all for a channel whose
+   notifier it cannot write (`NotAttributable::NoErrorNotifier`), and
+   `kayfabe_rmrpc::fault::FaultEmission` makes the write and the event inseparable.
+3. ★★★ **And it is not a licence to answer a *replayable* fault with an RC.** A replayable
+   fault is by construction non-fatal: it stalls, is serviced, is replayed, and the program
+   continues. Answering one with an RC converts a **recoverable** event into a **fatal**
+   one — and on a UVM channel into a reboot-required one. The sticky-fatal argument is
+   sound for the case this document uses it for, and for no other.
+
+⇒ Nothing changes for the retire/condemn decision below: the isolate really is gone and the
+data really is unrecoverable. What changes is that *"fail with the semantic real hardware
+has"* is a **larger** promise than it reads, and #111's emitter is where it is kept or
+broken.
+
 ★ **Sticky-fatal, not bricked — recovery does not require the process to die.**
 Condemnation is keyed on the **client set**, so an application that re-initialises (a
 fresh CUDA context allocates a new RM client) forms a component with no dup edge to

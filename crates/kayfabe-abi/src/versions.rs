@@ -35,6 +35,7 @@ use crate::capability::{
 };
 use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::guestsysinfo::VgxVersion;
+use crate::notifier::ChannelNotifierWire;
 use crate::transcribed::{Nv2080CtrlGpuPromoteCtxParamsHeader, Nvos46ParametersPre580};
 use crate::vbios::VbiosWire;
 use crate::view::{
@@ -45,6 +46,7 @@ use crate::view::{
 };
 use crate::wire::{AbiError, u32_at};
 use crate::{DriverAbi, DriverVersion};
+use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{ClassId, ControlCmd};
 
 /// Which `NVOS46_PARAMETERS` shape a driver version uses.
@@ -297,6 +299,20 @@ pub struct DriverAbiTable {
     /// from it, so a device that echoed would agree with anything and the disagreement
     /// would surface hundreds of messages later at the wrong struct offsets.
     vgx: Option<VgxVersion>,
+    /// ★★★ Where this boundary's `NV_CHANNEL_ALLOC_PARAMS` puts `internalFlags` and
+    /// `errorNotifierMem` — **the channel's error notifier**, which the guest's CPU-RM
+    /// resolves and RPCs to the GSP, and which the GSP is the one contracted to write
+    /// (`crate::notifier`).
+    ///
+    /// `None` where this port has **not read that version's tree**, and that is the
+    /// point rather than an omission. `crate::view::ChannelAllocFacts` stops decoding at
+    /// +32 because the struct's tail moves inside the supported range, so reading these
+    /// two fields is a right a *read* tree buys; only 580.159.04 and 610.43.02 are
+    /// vendored (`ogkm_is_versioned`). A boundary with `None` never learns a notifier,
+    /// so `kayfabe_core::fault::verdict` refuses to emit an RC there — which is the safe
+    /// direction, because an RC with no notifier write is the hang task #111 exists to
+    /// remove (`docs/design/resume_from_fault.md` §S5(b)).
+    channel_notifier: Option<ChannelNotifierWire>,
     /// Why this entry exists — kept in the data so a reader of the table sees
     /// the boundary's justification without leaving the file.
     pub note: &'static str,
@@ -320,6 +336,8 @@ pub const TABLES: &[DriverAbiTable] = &[
         caps: &CAPS_550_54_04,
         vbios: VbiosWire::Tu102Bit,
         vgx: None,
+        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
+        channel_notifier: None,
         note: "oldest supported: NVOS47 gained `size` here \
                (gvisor/pkg/abi/nvgpu/frontend.go:707-710, NVOS47_PARAMETERS_V550)",
     },
@@ -347,6 +365,8 @@ pub const TABLES: &[DriverAbiTable] = &[
         caps: &CAPS_550_90_07,
         vbios: VbiosWire::Tu102Bit,
         vgx: None,
+        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
+        channel_notifier: None,
         note: "capability-only boundary: +NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION\
                _STATE, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:906)",
@@ -364,6 +384,8 @@ pub const TABLES: &[DriverAbiTable] = &[
         caps: &CAPS_555_42_02,
         vbios: VbiosWire::Tu102Bit,
         vgx: None,
+        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
+        channel_notifier: None,
         note: "★ capability-only and purely SUBTRACTIVE: nvproxy deletes \
                NVC36F_CTRL_GET_CLASS_ENGINEID here and adds nothing this port carries \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:933)",
@@ -381,6 +403,8 @@ pub const TABLES: &[DriverAbiTable] = &[
         caps: &CAPS_560_28_03,
         vbios: VbiosWire::Tu102Bit,
         vgx: None,
+        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
+        channel_notifier: None,
         note: "capability-only boundary: +8 allocation classes and \
                +NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:945-977)",
@@ -398,6 +422,8 @@ pub const TABLES: &[DriverAbiTable] = &[
         caps: &CAPS_570_86_15,
         vbios: VbiosWire::Tu102Bit,
         vgx: None,
+        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
+        channel_notifier: None,
         note: "capability-only boundary: +6 allocation classes and the two \
                DRAM-encryption controls at their PRE-575 numbers, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:990-1027)",
@@ -433,6 +459,8 @@ pub const TABLES: &[DriverAbiTable] = &[
         caps: &CAPS_575_51_02,
         vbios: VbiosWire::Tu102Bit,
         vgx: None,
+        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
+        channel_notifier: None,
         note: "★ the REPLACING boundary: nvproxy deletes two DRAM-encryption controls \
                here and re-adds them one number lower, and adds \
                THERMAL_SYSTEM_EXECUTE_V2 (version.go:1036-1053). CAPS_575_51_02 says all \
@@ -458,6 +486,7 @@ pub const TABLES: &[DriverAbiTable] = &[
             major: 0x2B,
             minor: 0x13,
         }),
+        channel_notifier: Some(ChannelNotifierWire::V580),
         note: "NVOS46 gained flags2+kindOverride, and +2 allocation classes \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1078)",
     },
@@ -479,6 +508,7 @@ pub const TABLES: &[DriverAbiTable] = &[
             major: 0x2E,
             minor: 0x0D,
         }),
+        channel_notifier: Some(ChannelNotifierWire::V610),
         note: "★ the GSP element header changes shape here: 48 bytes with an \
                elemCount become 16 with MCTP/NVDM transport words, and \
                MESSAGE_QUEUE_INIT_ARGUMENTS grows from 4 fields to 9 \
@@ -926,6 +956,34 @@ impl DriverAbiTable {
             h_ctx_share: u32_at(bytes, 24)?,
             h_vaspace: u32_at(bytes, 28)?,
         })
+    }
+
+    /// ★★★ Decode the channel's declared **error notifier** — where the GSP is
+    /// contracted to write when it RCs this channel (`crate::notifier`).
+    ///
+    /// Separate from [`Self::decode_channel_alloc_facts`] rather than folded into it, and
+    /// that separation is the version seam: the facts decoder reads only the +0..+32
+    /// region both vendored trees spell identically, while these two fields sit in the
+    /// region that **moves**. Keeping them apart is what lets a boundary answer
+    /// `Ok(None)` for the notifier without weakening the prefix contract for everything
+    /// else.
+    ///
+    /// `Ok(None)` means *this port cannot learn a notifier for this channel* and covers
+    /// two different situations, deliberately merged here and split one level up by
+    /// [`ErrorNotifier`]'s own variants: the boundary has no pinned layout (the tree was
+    /// never read), or the channel declared no notifier at all.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if a pinned boundary's params stop short of the fields.
+    pub fn decode_channel_error_notifier(
+        &self,
+        bytes: &[u8],
+    ) -> Result<Option<ErrorNotifier>, AbiError> {
+        match self.channel_notifier {
+            Some(wire) => wire.decode(bytes),
+            None => Ok(None),
+        }
     }
 
     /// Which alloc-params shape a class carries — the **class table**, and the

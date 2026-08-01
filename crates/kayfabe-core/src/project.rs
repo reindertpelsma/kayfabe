@@ -90,6 +90,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{EngineKind, GpuId, HClient, HObject, Pdb, VChid};
 use kayfabe_arch::{Arch, ClientKind, ObjectKind};
 
@@ -148,6 +149,15 @@ pub struct ChannelFacts {
     /// independent: the refinement is a pure function of the graph, not of when the
     /// engine-object alloc arrived.
     pub engine: EngineKind,
+    /// ★★★ The channel's declared **error notifier** — see
+    /// [`crate::rmgraph::AllocFacts::error_notifier`]. Carried through the projection
+    /// unchanged, because it is a declared fact of the channel's own alloc and nothing
+    /// in the graph refines it.
+    ///
+    /// `None` means task #111 must **not** emit a simulated fault for this channel:
+    /// `RC_TRIGGERED` with no notifier write is the hang it exists to replace
+    /// (`kayfabe_core::fault::NotifierGap`).
+    pub error_notifier: Option<ErrorNotifier>,
 }
 
 /// One derived process boundary: a dup-connected component of **user** clients, or the
@@ -769,6 +779,14 @@ pub fn project(
                     vas_pdb: vas.and_then(|v| g.pdb_of_resource(v.id())),
                     // The engine-object refinement wins over the channel-class default.
                     engine: engine_refine.get(&node.id()).copied().unwrap_or(engine),
+                    // ★ Straight off the channel's OWN alloc facts, never refined and
+                    // never inherited from the TSG. `NV_CHANNEL_ALLOC_PARAMS` carries
+                    // `errorNotifierMem` per channel — CPU-RM has already applied the
+                    // group's fallback by the time it fills the field
+                    // (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:506-570`),
+                    // so re-deriving it from the group here would be a second, competing
+                    // resolution of a question the guest already answered.
+                    error_notifier: node.facts.error_notifier,
                 };
                 // The F1 guard, scoped per target (see the PDB arm above).
                 if let Some(&prev) = vchid_claims.get(&(gpu, vchid))

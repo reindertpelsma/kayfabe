@@ -51,7 +51,7 @@
 //! *attributable to an application's context*, which is strictly weaker than *caused by
 //! the application*, and the emitter must never be described as the stronger thing.
 
-use kayfabe_arch::fault::{MmuFaultAccess, MmuFaultCause};
+use kayfabe_arch::fault::{ErrorNotifier, MmuFaultAccess, MmuFaultCause};
 use kayfabe_arch::ids::{EngineKind, GpuId, GpuVa, Pdb, VChid};
 
 use crate::{ChanId, ProcId};
@@ -86,6 +86,16 @@ pub struct FaultReport {
     pub cause: MmuFaultCause,
     /// What kind of access it was.
     pub access: MmuFaultAccess,
+    /// ★★★ **Where to write the error notifier — and it is not optional.**
+    ///
+    /// Guest-physical, always writable: [`verdict`] refuses to build a report at all
+    /// unless the channel declared a notifier this port can reach ([`NotifierGap`]). So
+    /// an emitter holding a `FaultReport` cannot post the event without also having
+    /// somewhere to write, which is the type-level form of the finding in
+    /// `docs/design/resume_from_fault.md` §S5(a)/(b): with Confidential Compute off,
+    /// CPU-RM does **not** write this, and the consumer this port can read spins forever
+    /// on the zero it would otherwise find.
+    pub notifier_gpa: u64,
 }
 
 impl FaultReport {
@@ -113,6 +123,36 @@ pub enum NotAttributable {
     /// not resolve, either it never bound or we lost it, and both are defects on this
     /// side of the boundary. A simulated fault here would tell the guest kernel that its
     /// own correct request faulted in hardware.
+    ///
+    /// # ★★ The SECOND, independent reason — the blast radius is SYSTEM-GLOBAL
+    ///
+    /// Added because a rule with two reasons survives a refactor that a rule with one
+    /// does not (`docs/design/resume_from_fault.md` §S5(c), §S6). The first reason above
+    /// is about *attribution*; this one is about *scope*, and it holds even for a reader
+    /// who decides the attribution argument is too strict.
+    ///
+    /// `krcErrorSetNotifier_IMPL` carries a work-around whose blast radius is the whole
+    /// machine (`ogkm-580: src/nvidia/src/kernel/gpu/rc/kernel_rc_notification.c:255-262`):
+    ///
+    /// ```text
+    ///     // WAR bug 4503046: mark reboot required when any UVM channels receive an error.
+    ///     if (pKernelChannel->bUvmOwned) { sysSetRecoveryRebootRequired(pSys, NV_TRUE); }
+    /// ```
+    ///
+    /// and UVM's own fatal error is process-global and never cleared outside test builds
+    /// — `atomic_cmpxchg(&g_uvm_global.fatal_error, NV_OK, error)` (`ogkm-580:
+    /// kernel-open/nvidia-uvm/uvm_global.c:420-445`), contract *"the driver should refuse
+    /// to do anything other than try and clean up as much as possible"*
+    /// (`uvm_global.h:262-266`), reported onward by `nvGpuOpsReportFatalError` which logs
+    /// *"requiring os reboot to recover"* (`ogkm-580:
+    /// src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:11538-11549`). NVIDIA even records the
+    /// cross-GPU spread: *"UVM currently attributes all errors as global and fails
+    /// operations on all GPUs"* (`ogkm-580: kernel_gsp.c:702-707`).
+    ///
+    /// ⇒ One mis-attributed fault on a UVM-owned channel does not make a context
+    /// sticky-fatal; it tells the guest's whole driver stack that the **machine** needs a
+    /// reboot. No application "already handles" that, because there is nothing to handle.
+    /// This is why the rule must never be relaxed into a heuristic.
     GuestKernelContext {
         /// The channel, so the escalation names the same thing an emit would have.
         chan: ChanId,
@@ -131,6 +171,55 @@ pub enum NotAttributable {
         /// The channel.
         chan: ChanId,
     },
+    /// ★★★ **There is nowhere to write the error notifier, so the fault is not emitted.**
+    ///
+    /// This is task #111 firing **less** often, on purpose, and it is the second
+    /// independent reason the emitter declines rather than guesses.
+    ///
+    /// With Confidential Compute off — our target — CPU-RM does not write the channel's
+    /// error notifier when it receives `RC_TRIGGERED`; the conditional is explicit
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:657-668`) and RM's own
+    /// prose says the GSP has already done it (`ogkm-580:
+    /// src/nvidia/src/kernel/gpu/rc/kernel_rc_notification.c:85-90`). The consumer this
+    /// port **can** read then never leaves its loop: `uvm_channel_get_status` returns
+    /// `NV_OK` while `error_notifier->status == 0` (`ogkm-580:
+    /// kernel-open/nvidia-uvm/uvm_channel.c:2058-2082`), and the waiters are `while (1)`
+    /// loops that ignore `UVM_SPIN_LOOP`'s timeout return (`:603-627`, `:660-676`).
+    ///
+    /// ⇒ An RC we cannot back with a notifier write does not replace the hang, it
+    /// **causes** one. Escalating is strictly better: the operator is told, and the guest
+    /// is left in the state it was already in rather than moved into a worse one.
+    NoErrorNotifier {
+        /// The channel.
+        chan: ChanId,
+        /// Which of the two gaps it is.
+        why: NotifierGap,
+    },
+}
+
+/// Why a channel has no writable error notifier.
+///
+/// ★ Two variants and not one, because they send a reader to different files: the first
+/// is a fact about the guest, the second is a gap in **us**.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotifierGap {
+    /// The channel declared none — `hObjectError` was `NV01_NULL_OBJECT` and its group
+    /// had none either, so `errorContextType` is `ERROR_NOTIFIER_TYPE_NONE`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:506-522`).
+    ///
+    /// ⚠ Or the driver boundary's `NV_CHANNEL_ALLOC_PARAMS` layout is not pinned, so the
+    /// ABI seam could not read the field at all
+    /// (`kayfabe_abi::notifier::ChannelNotifierWire`). The two are merged **here** and
+    /// not at the seam, and that is a real cost: a report saying `Undeclared` at an
+    /// unpinned boundary is saying "we did not look" in the words "the guest did not
+    /// ask". Splitting them means carrying the boundary's pinned-ness into the core's
+    /// vocabulary, which is a version fact the core is not allowed to hold.
+    Undeclared,
+    /// The channel declared one somewhere this port has no write port for — device
+    /// memory, or an aperture the ABI seam does not model
+    /// (`kayfabe_arch::fault::ErrorNotifier::Unreachable`). The guest **did** ask to be
+    /// told; we cannot reach the place it asked us to write.
+    Unreachable,
 }
 
 /// What to do about an untranslatable address.
@@ -173,6 +262,8 @@ pub struct FaultFacts {
     pub cause: MmuFaultCause,
     /// What kind of access it was.
     pub access: MmuFaultAccess,
+    /// The channel's declared error notifier, as the channel model holds it.
+    pub error_notifier: Option<ErrorNotifier>,
 }
 
 /// ★★★ **The rule.** Decide whether `facts` may be presented to the guest as a hardware
@@ -196,6 +287,25 @@ pub fn verdict(facts: FaultFacts, system_proc: ProcId) -> FaultVerdict {
     let Some(pdb) = facts.pdb else {
         return FaultVerdict::Escalate(NotAttributable::NoAddressSpace { chan: facts.chan });
     };
+    // ★★★ Deliverability LAST, and it is a real narrowing: everything above asks whether
+    // the fault may honestly be blamed on this channel, and this asks whether telling the
+    // channel would work. A fault that passes attribution and fails here used to become
+    // an RC that hangs the guest (§S5(b)); it is now an escalation.
+    let notifier_gpa = match facts.error_notifier {
+        Some(ErrorNotifier::Sysmem { gpa }) => gpa,
+        Some(ErrorNotifier::Unreachable) => {
+            return FaultVerdict::Escalate(NotAttributable::NoErrorNotifier {
+                chan: facts.chan,
+                why: NotifierGap::Unreachable,
+            });
+        }
+        None => {
+            return FaultVerdict::Escalate(NotAttributable::NoErrorNotifier {
+                chan: facts.chan,
+                why: NotifierGap::Undeclared,
+            });
+        }
+    };
     FaultVerdict::Emit(FaultReport {
         gpu: facts.gpu,
         proc: facts.proc,
@@ -206,7 +316,14 @@ pub fn verdict(facts: FaultFacts, system_proc: ProcId) -> FaultVerdict {
         engine: facts.engine,
         cause: facts.cause,
         access: facts.access,
+        notifier_gpa,
     })
 }
 
-kayfabe_util::assert_send_sync!(FaultReport, FaultVerdict, NotAttributable, FaultFacts);
+kayfabe_util::assert_send_sync!(
+    FaultReport,
+    FaultVerdict,
+    NotAttributable,
+    NotifierGap,
+    FaultFacts
+);

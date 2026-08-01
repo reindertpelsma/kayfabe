@@ -194,6 +194,7 @@ pub fn served_policy() -> Box<dyn kayfabe_gsp::CommandPolicy> {
         kayfabe_device::default_chip(),
         bench_abi().driver,
         kayfabe_device::unserviced::UnservicedLog::new(),
+        kayfabe_device::faultbuffer::FaultBufferLog::new(),
     )
 }
 

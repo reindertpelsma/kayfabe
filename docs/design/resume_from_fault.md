@@ -612,6 +612,61 @@ unavailable.** §2.2 and §4.3 say it need not be. The two halves of this note a
 
 ## 7. Recommended strategy
 
+> ### ✅ LANDED 2026-08-01 — steps 1 (in part), 2, 3 and 5a
+>
+> Written here rather than in a separate note so the recommendation and its outcome cannot
+> drift apart. Nothing below was deleted; this records what happened to it.
+>
+> | step | state | where |
+> |---|---|---|
+> | **1** — stop `NV_OK`-ing what we do not implement | ✅ **done, and the port's starting point was better than the C's** | `kayfabe_abi::capability` |
+> | **2** — write the error notifier | ✅ **done**, plus a narrowing the step did not ask for | `kayfabe_abi::notifier`, `kayfabe_core::fault` |
+> | **3** — record the reboot-required blast radius | ✅ **done**, in the rustdoc and in `l1_concurrency.md` in place | `NotAttributable::GuestKernelContext` |
+> | **4** — reachability-on-transition | untouched — separate work | — |
+> | **5a** — receive and record `0x20800a9b` | ✅ **done**, recorder-only | `kayfabe_device::faultbuffer` |
+> | **5b–5d** — the fault buffer itself | **not built**, and not half-built | — |
+>
+> **★ One correction to step 1's premise.** §S4(2) reads the C's generic `NV_OK`
+> fall-through and infers the Rust port has the same false green. It does not:
+> `GspFsm::answer`'s default has been `NV_ERR_NOT_SUPPORTED` since task #127, and
+> `0x20800177` and `0x20800a9b` were never on the allowlist. **The real defect was one step
+> earlier and in the other direction**: `GT200_DEBUGGER` (`0x83DE`) *and three of its
+> controls* were on the **capability allowlist**, ported verbatim from nvproxy — which
+> permits them because gVisor forwards to a real GPU that implements them. A default-deny
+> table that names a surface this port cannot serve is a promise it cannot keep, so the
+> class and six controls moved to the deny table under
+> `DeniedBecause::SmDebuggerTrapping`, and `0x20800177` was named under
+> `DeniedBecause::FaultMechanismNotModelled`.
+>
+> ⚠ **What the guest observes is unchanged, and that is checked rather than assumed.**
+> `BridgeRefusal::rpc_result()` is `NV_ERR_NOT_SUPPORTED` for every variant, and `0x83DE`
+> had no `AllocParams` row either — so a debugger alloc already refused, as
+> `UnmappedAllocClass`. The refusal now **names the mechanism** instead of the modelling
+> gap. ⊘ No in-tree component allocates `GT200_DEBUGGER`; it is a userspace (cuda-gdb /
+> profiler) object, so nothing on the compute path is touched. That is a reading of
+> `ogkm-580`, not a run: **no live guest attached a debugger to this port**, and if some
+> closed userspace path allocates the class during ordinary `cuInit`, this is where that
+> would be discovered.
+>
+> **★★ And step 2 came with a narrowing the step did not ask for**, which is the *"emit
+> fewer"* outcome §7's preamble and §S6(3) both point at: a channel whose error notifier
+> this port **cannot write** is now escalated
+> (`NotAttributable::NoErrorNotifier { why: NotifierGap::{Undeclared,Unreachable} }`)
+> rather than RC'd, because §S5(b) establishes that an RC without the write *causes* the
+> hang `#111` exists to remove. `FaultReport::notifier_gpa` is therefore **not** an
+> `Option`: the emitter cannot be constructed without somewhere to write.
+>
+> ⊘ **The narrowing §S1 wants is still NOT built**, and must not be assumed: a first-touch
+> managed-memory miss is an application-context miss, so the A/B rule classifies it **A**
+> and the emitter would RC it. This port models no managed ranges, so there is no fact to
+> branch on. Until step 5 exists, `#111` must not be wired to a path that can carry one.
+>
+> **Bite evidence.** The notifier's value is asserted by a guest-side waiter
+> re-implemented from `uvm_channel_get_status` + its `while (1)` caller: it is **still
+> spinning** after the RC event alone and **stops** on the notifier write, in one test
+> (`tests/tests/simulated_fault.rs::a_guest_waiter_spins_on_the_event_alone_and_stops_when_the_notifier_lands`).
+> ⊘ Mock-level, and UVM's waiter only — libcuda's remains §9 item 2.
+
 Ordered by cost-to-value. Steps 1–3 are days, remove real defects, and are worth doing whether or
 not managed memory is ever on the roadmap.
 

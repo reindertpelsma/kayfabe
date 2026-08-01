@@ -227,6 +227,42 @@ pub enum DeniedBecause {
     /// the guest kernel and the range is guest RAM, so honouring it would hand the host
     /// driver a guest-chosen pointer.
     CallerMemoryDescriptor,
+    /// ★★★ **SM-level debugger / profiler trapping, which this port does not model — and
+    /// `NV83DE` resume is NOT MMU fault replay.**
+    ///
+    /// The two share no code. MMU replay is `MEM_OP_C.TLB_INVALIDATE_REPLAY` on a
+    /// pushbuffer (`ogkm-580: kernel-open/nvidia-uvm/uvm_volta_host.c:234-264`);
+    /// `NV83DE_CTRL_CMD_DEBUG_RESUME_CONTEXT` resumes a *warp* from an SM exception. This
+    /// port implements neither, and the reason it must say so out loud is that the
+    /// surface is **reachable by an unprivileged guest application**: `GT200_DEBUGGER`
+    /// allocates with `RS_FLAGS_ALLOC_NON_PRIVILEGED`
+    /// (`ogkm-580: src/nvidia/src/kernel/rmapi/resource_list.h:186-196`) and the debug
+    /// controls carry flags `0x10248` — `NON_PRIVILEGED`
+    /// (`ogkm-580: src/nvidia/generated/g_kernel_sm_debugger_session_nvoc.c:562`, `:577`).
+    ///
+    /// ⚠ It needs SM error state, warp trap handling and single-step on a GR context
+    /// whose golden image is the silicon boundary this project forwards across, so it is
+    /// **out of scope permanently**, not merely unbuilt
+    /// (`docs/design/resume_from_fault.md` §S4, §8 row L2).
+    ///
+    /// ★★ And refusing it is what keeps task #111 honest. *MMU debug mode*
+    /// (`NV83DE_CTRL_CMD_DEBUG_SET_MODE_MMU_DEBUG`) changes what RM does on a fault:
+    /// `kgmmuServiceMmuFault_GV100` writes the error notifier and resets the channel
+    /// **only if it is disabled**
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/arch/volta/kern_gmmu_gv100.c:2059-2073`,
+    /// `:2207-2211`). An emitter that ignored that flag would kill a context a debugger
+    /// explicitly asked it to preserve. Denying the control means the flag can never be
+    /// set, which closes the sub-case instead of leaving it to be remembered.
+    SmDebuggerTrapping,
+    /// ★★ A **fault-reporting mechanism this port does not implement**, refused rather
+    /// than succeeded.
+    ///
+    /// Answering `NV_OK` to a fault-plumbing verb we do not service is the shape this
+    /// project has named most often: the guest arms a path, believes it armed, and the
+    /// path is inert. `docs/design/resume_from_fault.md` §7 step 1 calls the C's generic
+    /// `NV_OK` echo here *"a false green"*; this is the row that makes the refusal say
+    /// which mechanism, rather than *"never heard of it"*.
+    FaultMechanismNotModelled,
 }
 
 /// A row this port refuses deliberately, with a reason.
@@ -677,9 +713,6 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x503c0102, name: "NV503C_CTRL_CMD_REGISTER_VA_SPACE", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x503c0104, name: "NV503C_CTRL_CMD_REGISTER_VIDMEM", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x503c0105, name: "NV503C_CTRL_CMD_UNREGISTER_VIDMEM", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x83de0309, name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x83de030c, name: "NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x83de0310, name: "NV83DE_CTRL_CMD_DEBUG_CLEAR_ALL_SM_ERROR_STATES", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0101, name: "NV906F_CTRL_GET_CLASS_ENGINEID", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0102, name: "NV906F_CTRL_CMD_RESET_CHANNEL", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x90960101, name: "NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR", origin: Origin::Nvproxy },
@@ -824,11 +857,6 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
     ClassEntry {
         class: 0x000050a0,
         name: "NV50_MEMORY_VIRTUAL",
-        origin: Origin::Nvproxy,
-    },
-    ClassEntry {
-        class: 0x000083de,
-        name: "GT200_DEBUGGER",
         origin: Origin::Nvproxy,
     },
     ClassEntry {
@@ -1187,11 +1215,23 @@ pub static RULE_COVERED_C_ROWS: &[u32] = &[
 
 /// Controls this port refuses **by name**, with a reason.
 ///
-/// ★ Every row here is already absent from the allowlist, so none of them changes what a
-/// guest can do — what they change is what the refusal *says*, and therefore what a
-/// census can distinguish. The C makes the same exclusions implicitly and says so in
-/// prose (*"reg-ops/HWPM/debug/fabric/power fall out automatically"*); this is that
-/// sentence, in a form a test can bite.
+/// ★ Most rows here are already absent from the allowlist, so they change what the
+/// refusal *says* — and therefore what a census can distinguish — rather than what a
+/// guest can do. The C makes the same exclusions implicitly and says so in prose
+/// (*"reg-ops/HWPM/debug/fabric/power fall out automatically"*); this is that sentence,
+/// in a form a test can bite.
+///
+/// ★★★ **Three rows are an exception and really do narrow the surface**, and they are
+/// called out here because the sentence above used to be unqualified and was true:
+/// `0x83de0309`, `0x83de030c` and `0x83de0310` were on the **allowlist** (ported from
+/// nvproxy, which permits them because gVisor forwards to a real GPU that implements
+/// them). This port does not implement SM debugger trapping at all
+/// ([`DeniedBecause::SmDebuggerTrapping`]), so permitting the controls was a promise it
+/// could not keep. What a guest observes is unchanged — `BridgeRefusal::rpc_result` is
+/// `NV_ERR_NOT_SUPPORTED` for every variant, and `GT200_DEBUGGER` had no
+/// [`crate::versions::AllocParams`] row either, so an alloc already refused as
+/// `UnmappedAllocClass` — but the refusal now names the mechanism instead of the
+/// modelling gap.
 ///
 /// Sorted by `id` — [`CapabilityTable::control`] binary-searches it.
 pub(crate) static DENIED_CONTROLS: &[DeniedEntry] = &[
@@ -1211,9 +1251,48 @@ pub(crate) static DENIED_CONTROLS: &[DeniedEntry] = &[
         why: DeniedBecause::RegisterAccess,
     },
     DeniedEntry {
+        id: 0x2080_0177,
+        name: "NV2080_CTRL_CMD_GPU_REPORT_NON_REPLAYABLE_FAULT",
+        why: DeniedBecause::FaultMechanismNotModelled,
+    },
+    DeniedEntry {
         id: 0x2080_3083,
         name: "NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO",
         why: DeniedBecause::FabricManagement,
+    },
+    // ★★ The `NV83DE` block. The first three MOVED here from the allowlist; the last
+    // three were already absent and are named so a census can tell a debugger attaching
+    // from an unmodelled command. `0x83de0307` is the load-bearing one — see
+    // `DeniedBecause::SmDebuggerTrapping`'s second half.
+    DeniedEntry {
+        id: 0x83de_0307,
+        name: "NV83DE_CTRL_CMD_DEBUG_SET_MODE_MMU_DEBUG",
+        why: DeniedBecause::SmDebuggerTrapping,
+    },
+    DeniedEntry {
+        id: 0x83de_0309,
+        name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK",
+        why: DeniedBecause::SmDebuggerTrapping,
+    },
+    DeniedEntry {
+        id: 0x83de_030c,
+        name: "NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES",
+        why: DeniedBecause::SmDebuggerTrapping,
+    },
+    DeniedEntry {
+        id: 0x83de_0310,
+        name: "NV83DE_CTRL_CMD_DEBUG_CLEAR_ALL_SM_ERROR_STATES",
+        why: DeniedBecause::SmDebuggerTrapping,
+    },
+    DeniedEntry {
+        id: 0x83de_0317,
+        name: "NV83DE_CTRL_CMD_DEBUG_SUSPEND_CONTEXT",
+        why: DeniedBecause::SmDebuggerTrapping,
+    },
+    DeniedEntry {
+        id: 0x83de_0318,
+        name: "NV83DE_CTRL_CMD_DEBUG_RESUME_CONTEXT",
+        why: DeniedBecause::SmDebuggerTrapping,
     },
     DeniedEntry {
         id: 0xb0cc_0105,
@@ -1243,6 +1322,15 @@ pub(crate) static DENIED_CLASSES: &[DeniedEntry] = &[
         id: 0x0000_0071,
         name: "NV01_MEMORY_SYSTEM_OS_DESCRIPTOR",
         why: DeniedBecause::CallerMemoryDescriptor,
+    },
+    // ★★★ MOVED off the allowlist. nvproxy permits it because gVisor forwards to real
+    // silicon; this port emulates the GPU, and there is no SM state behind the class.
+    // Allowing the alloc and refusing every control would let a debugger *attach* and
+    // then fail at first use — a worse shape than refusing the attach.
+    DeniedEntry {
+        id: 0x0000_83de,
+        name: "GT200_DEBUGGER",
+        why: DeniedBecause::SmDebuggerTrapping,
     },
 ];
 
@@ -1771,15 +1859,15 @@ mod tests {
             (
                 "550.54.04",
                 (550, 54, 4),
-                158,
-                75,
+                155,
+                74,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
-                159,
-                75,
+                156,
+                74,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -1788,15 +1876,15 @@ mod tests {
             (
                 "555.42.02",
                 (555, 42, 2),
-                158,
-                75,
+                155,
+                74,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
-                159,
-                83,
+                156,
+                82,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
@@ -1805,8 +1893,8 @@ mod tests {
             (
                 "570.86.15",
                 (570, 86, 15),
-                161,
-                89,
+                158,
+                88,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS",
@@ -1817,8 +1905,8 @@ mod tests {
             (
                 "575.51.02",
                 (575, 51, 2),
-                162,
-                89,
+                159,
+                88,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -1830,8 +1918,8 @@ mod tests {
             (
                 "580.65.06",
                 (580, 65, 6),
-                162,
-                91,
+                159,
+                90,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -1843,8 +1931,8 @@ mod tests {
             (
                 "610.43.02",
                 (610, 43, 2),
-                162,
-                91,
+                159,
+                90,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2248,18 +2336,24 @@ mod tests {
     /// arriving, which the founding-rows pin alone cannot do for the 140-odd rows it
     /// does not name.
     ///
-    /// 162 controls = the C's 165 minus the 9 rule-covered rows, plus the 6 Mode-2 rows.
-    /// 91 classes at 580 = the C's 89 plus `NVCEB7`/`NVD1B7`, which nvproxy adds at
-    /// 580.65.06 and the C's 575-era list therefore could not have.
+    /// 159 controls = the C's 165 minus the 9 rule-covered rows, plus the 6 Mode-2 rows,
+    /// **minus the 3 `NV83DE` debug controls** this port moved onto the deny table
+    /// (see [`DENIED_CONTROLS`]'s doc). 90 classes at 580 = the C's 89 plus
+    /// `NVCEB7`/`NVD1B7`, which nvproxy adds at 580.65.06 and the C's 575-era list
+    /// therefore could not have, **minus `GT200_DEBUGGER`**, moved for the same reason.
+    ///
+    /// ★ The four class counts move together because `GT200_DEBUGGER` was in the SHARED
+    /// base: a class this port never modelled was permitted at *every* boundary, which is
+    /// exactly the direction a default-deny table must not drift in.
     #[test]
     fn the_ported_surface_is_the_reviewed_size() {
-        assert_eq!(bench().all_controls().count(), 162, "controls");
-        assert_eq!(at(550, 54, 4).all_classes().count(), 75, "classes at 550");
-        assert_eq!(at(560, 28, 3).all_classes().count(), 83, "classes at 560");
-        assert_eq!(at(570, 86, 15).all_classes().count(), 89, "classes at 570");
-        assert_eq!(bench().all_classes().count(), 91, "classes at 580");
-        assert_eq!(bench().all_denied_controls().count(), 6, "denied controls");
-        assert_eq!(bench().all_denied_classes().count(), 2, "denied classes");
+        assert_eq!(bench().all_controls().count(), 159, "controls");
+        assert_eq!(at(550, 54, 4).all_classes().count(), 74, "classes at 550");
+        assert_eq!(at(560, 28, 3).all_classes().count(), 82, "classes at 560");
+        assert_eq!(at(570, 86, 15).all_classes().count(), 88, "classes at 570");
+        assert_eq!(bench().all_classes().count(), 90, "classes at 580");
+        assert_eq!(bench().all_denied_controls().count(), 13, "denied controls");
+        assert_eq!(bench().all_denied_classes().count(), 3, "denied classes");
     }
 
     /// The origins are all populated — a `Mode2Rpc` count of zero would mean the
@@ -2270,7 +2364,7 @@ mod tests {
         let n = |o: Origin| bench().all_controls().filter(|e| e.origin == o).count();
         assert_eq!(n(Origin::Mode2Rpc), 6);
         assert_eq!(n(Origin::Empirical), 5);
-        assert_eq!(n(Origin::Nvproxy), 151);
+        assert_eq!(n(Origin::Nvproxy), 148);
         assert_eq!(
             bench()
                 .all_classes()

@@ -17,6 +17,7 @@ pub use guest::{DeviceTally, DoorbellDevice, Lane as DoorbellLane, probe_loop_im
 pub use teardown::{Guarded, ResidueClaim, TeardownView, audit_teardown, unpublish_and_release};
 
 use kayfabe_arch::ClientKind;
+use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{ClassId, GpuVa, HClient, HObject, Pdb};
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, RmEvent};
 use kayfabe_mocks::{MockArch, MockVmm, mock_classes as mc};
@@ -372,6 +373,9 @@ impl Scenario {
             facts: AllocFacts {
                 h_vaspace: Some(vas),
                 userd_flags: MockArch::userd_flags_for(h.gr_vchid),
+                error_notifier: Some(ErrorNotifier::Sysmem {
+                    gpa: notifier_gpa(h.gr_vchid),
+                }),
                 ..Default::default()
             },
         });
@@ -383,6 +387,9 @@ impl Scenario {
             facts: AllocFacts {
                 h_vaspace: Some(vas),
                 userd_flags: MockArch::userd_flags_for(h.ce_vchid),
+                error_notifier: Some(ErrorNotifier::Sysmem {
+                    gpa: notifier_gpa(h.ce_vchid),
+                }),
                 ..Default::default()
             },
         });
@@ -592,6 +599,19 @@ pub fn identical_handles(gr_vchid: u16, ce_vchid: u16) -> ProcessHandles {
         ce_channel: HObject(0x5c00_001a),
         ce_vchid: VChid(ce_vchid),
     }
+}
+
+/// ★ Where a scripted channel declares its **error notifier** — the guest-physical
+/// address `kayfabe_abi::notifier` would have decoded out of `errorNotifierMem`.
+///
+/// Keyed on the vChid rather than on the client, because a scenario's whole point is that
+/// two procs share handle *values*: a notifier keyed on a handle would collide across the
+/// #14 shape and hide exactly the attribution error those tests exist to catch. Real
+/// guests allocate the notifier per channel too (`ogkm-580:
+/// src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:5887-5933`).
+#[must_use]
+pub fn notifier_gpa(vchid: kayfabe_arch::ids::VChid) -> u64 {
+    0x7000_0000 + (u64::from(vchid.0) << 8)
 }
 
 /// The compute class id in the mock arch (re-export for tests).

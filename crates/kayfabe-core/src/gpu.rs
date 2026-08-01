@@ -16,6 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_arch::Arch;
+use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa, HClient, Pdb, VChid};
 use kayfabe_completion::{CompletionQueue, DeliveryPlane, FenceArms, PostBatch};
 use kayfabe_isolate::{
@@ -263,6 +264,14 @@ pub struct Channel {
     /// a duplicate host object (the same retried-RPC discipline as the graph's
     /// alloc/DUP replay).
     pub host_engine_objects: BTreeMap<ClassId, HostHandle>,
+    /// ★★★ Where this channel asked to be told it died — graph-synced from
+    /// [`crate::project::ChannelFacts::error_notifier`].
+    ///
+    /// `None` is the reason a fault on this channel is **escalated instead of emitted**:
+    /// see `crate::fault::NotifierGap`. Kept on the runtime channel, beside `vchid` and
+    /// `vas_pdb`, because the emitter runs off a refused doorbell and the channel is the
+    /// only thing it holds.
+    pub error_notifier: Option<ErrorNotifier>,
 }
 
 /// Per-proc execution plane. Nothing scalar, nothing one-shot (the C's
@@ -1551,11 +1560,13 @@ impl Spine {
                 host_channel: None,
                 host_token: None,
                 host_engine_objects: BTreeMap::new(),
+                error_notifier: facts.error_notifier,
             });
             entry.gpu = gpu;
             entry.vchid = facts.vchid;
             entry.vas_pdb = facts.vas_pdb;
             entry.engine = facts.engine;
+            entry.error_notifier = facts.error_notifier;
         }
         let live_chans: BTreeSet<ResourceKey> = b.channels.keys().copied().collect();
         p.chan_ids.retain(|key, _| live_chans.contains(key));
