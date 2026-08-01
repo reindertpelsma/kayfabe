@@ -52,6 +52,7 @@
 
 pub mod abi;
 pub mod bar2;
+pub mod cpuintr;
 pub mod faultbuffer;
 pub mod fbwin;
 pub mod ga10x;

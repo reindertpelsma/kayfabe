@@ -323,11 +323,29 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     //
     // ★ Pinned as an exact set, so adding a served control silently to it is a red test in
     // the same way shortening the universe would be.
+    //
+    // ⚠ `#151` added a FIFTH, and it is outside the limit for a different reason worth
+    // stating separately rather than folding into the paragraph above.
+    // `GvaspaceServerReservedPdesClient` is `0x90f10106`, the CLIENT-context arm of
+    // `gvaspaceCopyServerRmReservedPdesToServerRm_IMPL` (`ogkm-580: gpu_vaspace.c:4058`).
+    // `cap1b` closes at `rpc.sequence` 51, which is inside `gpuStateInit`; the client arm is
+    // first reached from `memmgrScrubHandlePostSchedulingEnable` during **state LOAD**,
+    // hundreds of sequences later. ⊘ So this is not "the capture stopped mid-function" —
+    // it is a control that belongs to a boot phase `cap1b` does not contain at all, and no
+    // extension of this particular capture's closure limit would reach it.
+    //
+    // ★ Its reply plane is nonetheless covered where it can be: the payload is byte-for-byte
+    // the `0x20800a9f` one (`ctrl2080internal.h:1906-1908` wraps exactly this member), that
+    // id IS in the differential, and both ids route to one decode/encode pair in
+    // `kayfabe_abi::gvaspacepdes`. What is genuinely uncovered here is the ENVELOPE for this
+    // specific command id, and `[measured]` run `irq1` is the only thing that has exercised
+    // it.
     let outside_the_closure_limit: BTreeSet<WantedTable> = [
         WantedTable::GrGlobalSmOrder,
         WantedTable::GrFecsRecordSize,
         WantedTable::GrPdbProperties,
         WantedTable::GrContextBuffersInfo,
+        WantedTable::GvaspaceServerReservedPdesClient,
     ]
     .into_iter()
     .collect();
@@ -345,10 +363,10 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
          being past the capture's closure limit — is a served control no differential can \
          regress"
     );
-    assert_eq!(universe.len(), 21, "non-vacuity: the universe is not empty");
+    assert_eq!(universe.len(), 22, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        4,
+        5,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

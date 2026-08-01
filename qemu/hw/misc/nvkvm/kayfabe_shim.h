@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 9u
+#define KAYFABE_SHIM_ABI 10u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -276,6 +276,17 @@ typedef struct KayfabeRegWrite {
     uint32_t       commands;
     int32_t        claimed;            /* the register model owns this offset */
     int32_t        raise_status_irq;   /* the status queue wants announcing */
+    /* ★★★ #151.  The guest wrote NV_VIRTUAL_FUNCTION_PRIV_CPU_INTR_LEAF_TRIGGER and a
+     * vector is now pending in the CPU interrupt tree: DELIVER a message-signalled
+     * interrupt.
+     *
+     * ⚠ A second flag beside raise_status_irq and deliberately not the same one, though
+     * today both would end in one msix_notify().  They are two different CAUSES — the
+     * emulated GSP announcing that it queued something, versus the guest asking the device
+     * to interrupt the guest — and a boot that delivered the wrong number of vectors has to
+     * be diagnosable as to which.  Only this one is delivered at this stage; see
+     * nvkvm_trap_write. */
+    int32_t        raise_cpu_intr;
 } KayfabeRegWrite;
 
 /* Register-plane counters.  u64-only and address-free, like KayfabeAudit.
@@ -367,6 +378,14 @@ typedef struct KayfabeRegAudit {
     uint64_t faults;
     uint64_t ram_refusals;
     uint64_t irq_requests;
+    /* ★★★ #151 — the CPU interrupt tree.  `cpu_intr_raises` is the one to read: the
+     * driver's own loopback self-test triggers EXACTLY ONCE, so 1 is the healthy value.
+     * `cpu_intr_masked` counts the triggers real silicon would have suppressed on the
+     * enable bits, which this device deliberately does not gate on — see
+     * kayfabe_device::cpuintr. */
+    uint64_t cpu_intr_accesses;
+    uint64_t cpu_intr_raises;
+    uint64_t cpu_intr_masked;
     uint64_t commands;
     /* ★★★ THE LIST A BOOT IS WORTH.
      *

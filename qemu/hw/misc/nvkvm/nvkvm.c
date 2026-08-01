@@ -44,6 +44,7 @@
 #include "migration/blocker.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
+#include "qemu/main-loop.h"
 #include "qemu/module.h"
 #include "qemu/range.h"
 #include "qemu/units.h"
@@ -185,7 +186,65 @@ struct NvkvmState {
     uint64_t trap_writes;
     uint64_t reservation_touches;
     uint64_t irq_requests_dropped;
+    /* ★★★ #151.  Message-signalled vectors this device actually delivered, and the ones it
+     * could not because the guest had not enabled the table.  TWO numbers, because they are
+     * two different diagnoses: "we never asked" and "we asked and the guest was not
+     * listening" look identical in a boot log otherwise. */
+    uint64_t irq_vectors_delivered;
+    uint64_t irq_vectors_undeliverable;
 };
+
+/*
+ * ═══ ★★★ #151: DELIVERY ════════════════════════════════════════════════════════════════
+ *
+ * One message-signalled vector, raised.  This is the whole of what "the device can
+ * interrupt the guest" means here, and it exists because RmInitAdapter refuses to finish
+ * without it: osVerifySystemEnvironment runs a LOOPBACK SELF-TEST — the driver writes
+ * CPU_INTR_LEAF_TRIGGER and spins ~4.3 s waiting for its own ISR — and returns
+ * NV_ERR_IRQ_NOT_FIRING if nothing arrives (ogkm-580: src/nvidia/src/kernel/os/os_sanity.c
+ * :232-249, 292).  Measured as `RmInitAdapter failed! (0x11:0x45:2134)` in
+ * /workspace/bench/run_stateload2_dmesg.log:35.
+ *
+ * ★★ THE LOCK, which is what the previous refusal here was actually about.
+ *
+ * The old comment said raising from this path "would call the hypervisor's notify path
+ * underneath a region this device has taken the global-lock opt-out on".  That opt-out no
+ * longer exists — MemoryRegionOps::global_locking was removed, and QEMU 10.2's
+ * include/system/memory.h has no such field — so an MMIO write from a vCPU reaches here
+ * with the BQL already held.  BQL_LOCK_GUARD() is nonetheless the right thing rather than
+ * an assertion, because it is EXACTLY the conditional the concern named: bql_auto_lock()
+ * returns NULL and locks nothing when the lock is already ours (include/qemu/main-loop.h
+ * :393-401), so this is correct both from a vCPU write and from a future callback that is
+ * not one.  ⊘ Not a bare bql_lock(): that would deadlock on the common path.
+ *
+ * ★ msix_enabled() is checked, and a refusal is COUNTED rather than logged per event.  A
+ * guest that has not yet written its own table is not a fault — it is the ordinary state
+ * for the microseconds between msix_init and the driver enabling it — but a boot in which
+ * every vector fell into that hole would otherwise be indistinguishable from one in which
+ * none was ever raised.
+ */
+static void nvkvm_deliver_vector(NvkvmState *s, unsigned vector)
+{
+    PCIDevice *pci = PCI_DEVICE(s);
+
+    BQL_LOCK_GUARD();
+    if (!msix_enabled(pci) || vector >= s->msix_vectors) {
+        s->irq_vectors_undeliverable++;
+        return;
+    }
+    msix_notify(pci, vector);
+    s->irq_vectors_delivered++;
+}
+
+/*
+ * ⊘ ONE VECTOR, and the guest demultiplexes.  The interrupt tree carries the vector number
+ * in its own LEAF/TOP pending bits and the guest's ISR reads them to find out what
+ * happened (ogkm-580: intr_tu102.c:729-744); the message itself carries no identity that
+ * RM consults.  The C artifact makes the same choice at
+ * `C: src/qemu/nvkvm_gpu_emul.c:4386-4388` — "single stall vector; ISR demuxes via
+ * TOP/LEAF" — and it is the only implementation a real driver has accepted end to end.
+ */
+#define NVKVM_STALL_VECTOR 0u
 
 /* ===================================================================================
  * Region callbacks
@@ -258,6 +317,10 @@ static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
                         (uint64_t)addr, (int)w.fault_len, (const char *)w.fault);
         }
     }
+    /* ★★★ #151.  The guest's own trigger — delivered. */
+    if (w.raise_cpu_intr) {
+        nvkvm_deliver_vector(s, NVKVM_STALL_VECTOR);
+    }
     if (w.raise_status_irq) {
         s->irq_requests_dropped++;
         if (!s->irq_refusal_reported) {
@@ -265,18 +328,27 @@ static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
             /*
              * ★★ A NAMED REFUSAL, not silence, and the distinction is the whole point.
              *
-             * The interrupt CAPABILITY is real — this device offers a message-signalled
-             * vector table and a guest driver's probe-time gate is satisfied by it.
-             * DELIVERY is not wired: raising a vector from here would call the
-             * hypervisor's notify path underneath a region this device has taken the
-             * global-lock opt-out on, and that inversion is invisible to every gate in
-             * this tree.  A guest that blocks on an event we never deliver hangs, so the
-             * one thing this must not do is hang QUIETLY.
+             * ⚠ #151 CORRECTED THE SENTENCE THIS USED TO PRINT.  It said "this device does
+             * not deliver vectors yet", and that became false the moment raise_cpu_intr
+             * above started delivering them.  What is still true is narrower and is what it
+             * says now: the GSP's *status queue* announcement is not delivered, because
+             * doing it right means latching the GSP engine's own stall vector into the
+             * interrupt tree first — the C artifact raises vector 155 for
+             * MC_ENGINE_IDX_GSP (`C: src/qemu/nvkvm_gpu_emul.c:1828-1843`) — and a bare
+             * message with nothing pending sends the guest's ISR looking for an interrupt
+             * that is not there.
+             *
+             * ⊘ Not needed for the boot: the guest POLLS for GSP_INIT_DONE
+             * (kgspWaitForRmInitDone), and the oracle's own cap1 capture contains zero
+             * IRQSCLR writes across 359 062 records.  A guest that blocks on an event we
+             * never deliver would still hang, so this must not go quiet.
              */
-            warn_report("nvkvm: the emulated GSP asked for its status-queue interrupt and "
-                        "this device does not deliver vectors yet. The capability exists so "
-                        "the guest's driver can bind; delivery is a later stage. A guest "
-                        "that waits on this event will not be woken by us.");
+            warn_report("nvkvm: the emulated GSP asked for its STATUS-QUEUE interrupt and "
+                        "this device does not deliver that one. The guest's own interrupt "
+                        "trigger IS delivered; this is the GSP-engine stall vector, which "
+                        "needs a pending bit in the interrupt tree first. A guest that "
+                        "BLOCKS on a status-queue event will not be woken by us — the boot "
+                        "path polls instead.");
         }
     }
 }
@@ -886,13 +958,26 @@ static int32_t nvkvm_op_write_region(void *dev, uint64_t mr_u, uint64_t off,
     return KAYFABE_OK;
 }
 
+/*
+ * ★★★ #151.  The memory plane's own interrupt seam, wired to the same one delivery point.
+ *
+ * ⚠ This op and the register plane's raise_cpu_intr flag are TWO WIRES into one action, and
+ * they stay two: this one is called by kayfabe_fwd's completion path (IrqSpec::Msix(0)),
+ * which has nothing to do with the guest writing a trigger register.  Sharing
+ * nvkvm_deliver_vector means they cannot disagree about the lock or about what "enabled"
+ * means; sharing a FLAG would have meant losing which of them fired.
+ *
+ * ⊘ KAYFABE_E_REFUSED, not OK, when the guest has not enabled its table: the caller is a
+ * completion notifier, and telling it a vector went out when none did is precisely the
+ * "success without raising anything" this used to refuse to be.
+ */
 static int32_t nvkvm_op_signal_msix(void *dev, uint16_t vector)
 {
-    (void)dev;
-    (void)vector;
-    /* Not wired at this stage.  A named refusal is a smaller lie than a function that returns
-     * success without raising anything. */
-    return KAYFABE_E_UNSUPPORTED;
+    NvkvmState *s = (NvkvmState *)dev;
+    uint64_t before = s->irq_vectors_delivered;
+
+    nvkvm_deliver_vector(s, vector);
+    return s->irq_vectors_delivered != before ? KAYFABE_OK : KAYFABE_E_REFUSED;
 }
 
 static const KayfabeHostOps nvkvm_host_ops = {
@@ -1201,6 +1286,17 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.reads, a.writes, a.boot_reg_reads, a.rom_reads, a.gsp_reads,
                 a.gsp_writes, a.unclaimed_reads, a.unclaimed_writes,
                 a.faults, a.ram_refusals, s->irq_requests_dropped);
+
+    /* ★★★ #151 — THE INTERRUPT LINE, printed unconditionally including when every number is
+     * zero, for the reason the framebuffer line below is: a boot that stops at
+     * NV_ERR_IRQ_NOT_FIRING and a boot that never reached the self-test are the same silence
+     * otherwise.  `delivered` is the one to read: the driver's own loopback test triggers
+     * EXACTLY ONCE (measured, the oracle's cap1: one IrqRaise in 359 062 records), so 1 is
+     * the healthy value and 0 is the whole diagnosis. */
+    info_report("nvkvm: interrupts: %" PRIu64 " vectors delivered, %" PRIu64 " undeliverable "
+                "(guest had not enabled the table), %" PRIu64 " status-queue requests dropped",
+                s->irq_vectors_delivered, s->irq_vectors_undeliverable,
+                s->irq_requests_dropped);
 
     /*
      * ★★★ #146 — THE FRAMEBUFFER LINE, printed unconditionally INCLUDING when every number

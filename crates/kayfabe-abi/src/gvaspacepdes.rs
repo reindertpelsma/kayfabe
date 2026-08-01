@@ -76,6 +76,58 @@
 pub const NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER: u32 =
     0x2080_0a9f;
 
+/// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h:268`) — ★★★ **the same
+/// publication, the same 184 bytes, and a completely different caller.**
+///
+/// # ★★★ Two ids, one struct, and the second one is the one a real boot hits
+///
+/// `gvaspaceCopyServerRmReservedPdesToServerRm_IMPL` has two arms
+/// (`ogkm-580: src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:4039-4137`), chosen on whether
+/// there is a resserv call context:
+///
+/// - `pContext == NULL` — the GPU-group *global* VA space, built by RM for itself. Sends
+///   the `NV2080` wrapper [`NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`].
+/// - `pContext != NULL` — a VA space being constructed **under a client's device**, which
+///   RPCs `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` directly through
+///   `_gvaspaceCopyServerRmReservedPdesToServerRm` (`gpu_vaspace.c:5160-5190`).
+///
+/// ⚠ The second arm is not an alternative to the first — it is what runs for **every
+/// device default VA space**, so serving only the `NV2080` id leaves the guest unable to
+/// construct any VAS at all.
+///
+/// ## `[measured]` — this is the failure, not a theory about one
+///
+/// Run `stateload2` at `7819839` (`/workspace/bench/run_stateload2_dmesg.log:12-30`) shows
+/// the whole chain, in one boot, twice over:
+///
+/// ```text
+/// gpu_vaspace.c:5187   NV_ASSERT(NV_OK == status)          ← the RPC we refused
+/// gpu_vaspace.c:4129   NV_ASSERT_OR_GOTO(…, done)
+/// gpu_vaspace.c:611    NV_ASSERT_OR_GOTO(…, catch)         ← gvaspaceConstruct_
+/// device_share.c:260   NV_ASSERT(0)                        ← vmmCreateVaspace failed
+/// virtual_mem.c:133    vaspaceGetByHandleOrDeviceDefault → 0x56
+/// mem_utils_gm107.c:322  NV50_MEMORY_VIRTUAL alloc failed
+/// …:1301 / :857 → ce_utils.c:286 → mem_scrub.c:181 → mem_mgr.c:487 → kernel_fifo.c:3129
+/// ```
+///
+/// ⇒ refusing this one control amputates **the device VA space, the CE utility channel and
+/// the framebuffer scrubber**. ⊘ It is not what stopped that boot — `kernel_fifo.c:3129`'s
+/// failure is swallowed and the verdict was `NV_ERR_IRQ_NOT_FIRING` four seconds later —
+/// which is exactly why it had to be read off the log rather than inferred from the
+/// verdict.
+///
+/// # The transport trap, asked the right way round
+///
+/// `rpc.c:11088` memcpy's the reply **over the caller's own struct**, so the question is
+/// never *"does this control have `[OUT]` fields"* but *"does the caller read its params
+/// afterwards"*. Here: `pdeCopyParams` is a stack local at `gpu_vaspace.c:4060`, filled by
+/// `_gvaspacePopulatePDEentries` at `:4118`, passed at `:4127`, and from `done:` the
+/// function only issues `NV_RM_RPC_FREE` and returns (`:4130-4137`). It never reads it
+/// again. The re-encode is still faithful, for the reason
+/// [`encode_server_reserved_pdes`] gives.
+pub const NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES: u32 = 0x90f1_0106;
+
 /// `GMMU_FMT_MAX_LEVELS` (`ogkm-580: ctrl/ctrl90f1.h:37`) — the `levels[]` bound, and the
 /// only thing that makes `numLevelsToCopy` checkable.
 pub const GMMU_FMT_MAX_LEVELS: usize = 6;
