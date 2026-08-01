@@ -560,6 +560,42 @@ pub const ALLOCATED_CHANNELS_MAX: usize = 4096;
 /// padding: 4 + 512.
 pub const ALLOCATED_CHANNELS_PARAMS_SIZE: usize = 4 + ALLOCATED_CHANNELS_MAX / 8;
 
+/// `NV2080_CTRL_CMD_FIFO_GET_INFO` = `0x20801109`, on the **subdevice** —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h:262`.
+///
+/// ★★ Unlike [`NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS`] this one is
+/// `RMCTRL_FLAGS_NON_PRIVILEGED` (`flags = 0x30008u`, `g_subdevice_nvoc.c:4906`), so any
+/// client may ask it — which matters, because the E3 census needs it and the census must
+/// stay reproducible by someone who is not root.
+pub const NV2080_CTRL_CMD_FIFO_GET_INFO: u32 = 0x2080_1109;
+
+/// `sizeof(NV2080_CTRL_FIFO_GET_INFO_PARAMS)` — `NvU32 fifoInfoTblSize`, then 256
+/// `{NvU32 index; NvU32 data;}` pairs, then `NvU32 engineType`
+/// (`ctrl2080fifo.h:268-278`). All `NvU32`, so no padding: 4 + 2048 + 4.
+pub const FIFO_GET_INFO_PARAMS_SIZE: usize = 4 + 256 * 8 + 4;
+
+/// `NV2080_CTRL_FIFO_INFO_INDEX_IS_PER_RUNLIST_CHANNEL_RAM_SUPPORTED` —
+/// `ctrl2080fifo.h:231`. **1** = each runlist has its own channel RAM and therefore its
+/// own chid namespace; **0** = one global `CHID_MGR` for the whole device.
+///
+/// ★★★ Which it is decides whether `(GpuId, VChid)` is a channel identity at all, so it
+/// is measured rather than assumed. `[measured]` = **0** on RTX 3060 / GA106 /
+/// 580.159.04 — see `docs/design/doorbell_token_encoding.md` §4.
+pub const FIFO_INFO_INDEX_IS_PER_RUNLIST_CHANNEL_RAM_SUPPORTED: u32 = 7;
+
+/// `NV2080_CTRL_FIFO_INFO_INDEX_CHANNEL_GROUPS_IN_USE_PER_ENGINE` —
+/// `ctrl2080fifo.h:233`. Reads `params.engineType`, translates it to a **runlist id**
+/// through `kfifoEngineInfoXlate_HAL(… ENGINE_INFO_TYPE_RUNLIST …)` and returns that
+/// runlist's in-use channel-group count (`kernel_fifo_ctrl.c:299-306`).
+///
+/// ★★★ **The E3 instrument for the token's UPPER field.** Allocating one channel on
+/// engine *X* raises this count for exactly the engines that share *X*'s runlist, so
+/// diffing it across the sweep recovers the engines→runlist **partition** with no
+/// reference to a work-submit token. The runlist *ids* are not exposed to an
+/// unprivileged client (`GET_DEVICE_INFO_TABLE` is `KERNEL_PRIVILEGED`), so the partition
+/// is what is measurable and the census reports exactly that.
+pub const FIFO_INFO_INDEX_CHANNEL_GROUPS_IN_USE_PER_ENGINE: u32 = 9;
+
 // =====================================================================================
 // Device-local memory — the only kind a ring, a USERD and a semaphore can be built from
 // =====================================================================================

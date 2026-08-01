@@ -272,14 +272,39 @@ fn engines(rm: &mut HostRmBackend, gpu: u32) {
 fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle, gpu: u32) {
     use kayfabe_abi::submit::{
         ALLOCATED_CHANNELS_MAX, ALLOCATED_CHANNELS_PARAMS_SIZE, ENGINE_TYPE_GRAPHICS,
-        NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS, engine_type_copy,
+        FIFO_GET_INFO_PARAMS_SIZE, FIFO_INFO_INDEX_CHANNEL_GROUPS_IN_USE_PER_ENGINE,
+        FIFO_INFO_INDEX_IS_PER_RUNLIST_CHANNEL_RAM_SUPPORTED,
+        NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS, NV2080_CTRL_CMD_FIFO_GET_INFO,
+        engine_type_copy,
     };
 
-    /// How many runlist ids to sweep. `NV_CTRL_VF_DOORBELL_RUNLIST_ID` is 7 bits wide, but
-    /// an id past this part's `kfifoGetMaxNumRunlists` answers `NV_ERR_OUT_OF_RANGE`
-    /// (`kernel_fifo.c:3403-3406`) — which is itself reported, so the sweep's end is
-    /// measured rather than assumed.
+    /// How many runlist ids to sweep for the chid bitmask. `NV_CTRL_VF_DOORBELL_RUNLIST_ID`
+    /// is 7 bits wide; an id past what this part supports answers `NV_ERR_OUT_OF_RANGE`
+    /// (`ogkm-580: kernel_fifo.c:3392-3406`) — which is reported, so the sweep's end is
+    /// measured and not assumed.
     const RUNLISTS: u32 = 24;
+
+    /// One `NV2080_CTRL_CMD_FIFO_GET_INFO` entry. `engine_type` is a params-level field,
+    /// so one call answers one index for one engine.
+    fn fifo_info(
+        rm: &mut HostRmBackend,
+        subdevice: kayfabe_isolate::HostHandle,
+        index: u32,
+        engine_type: u32,
+    ) -> Option<u32> {
+        let mut p = vec![0u8; FIFO_GET_INFO_PARAMS_SIZE];
+        p[0..4].copy_from_slice(&1u32.to_le_bytes()); // fifoInfoTblSize = 1
+        p[4..8].copy_from_slice(&index.to_le_bytes()); // fifoInfoTbl[0].index
+        let et = FIFO_GET_INFO_PARAMS_SIZE - 4;
+        p[et..].copy_from_slice(&engine_type.to_le_bytes());
+        rm.control(
+            subdevice,
+            ControlCmd(NV2080_CTRL_CMD_FIFO_GET_INFO),
+            &mut p,
+        )
+        .ok()?;
+        Some(u32::from_le_bytes([p[8], p[9], p[10], p[11]])) // fifoInfoTbl[0].data
+    }
 
     /// Read every runlist's allocated-chid bitmask. `None` for a runlist the control
     /// refused — recorded per-runlist so a refusal cannot masquerade as "no channels".
@@ -308,7 +333,7 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
         out
     }
 
-    /// Every `(runlist, chid)` set in `after` and clear in `before`.
+    /// Every `(runlist_probe_index, chid)` set in `after` and clear in `before`.
     fn appeared(before: &[Option<Vec<u32>>], after: &[Option<Vec<u32>>]) -> Vec<(u32, u32)> {
         let mut new = Vec::new();
         for (runlist, (b, a)) in before.iter().zip(after).enumerate() {
@@ -320,7 +345,7 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
                 if is && !was {
                     #[expect(
                         clippy::cast_possible_truncation,
-                        reason = "runlist < RUNLISTS = 24 and chid < 4096"
+                        reason = "runlist < RUNLISTS = 24 and chid < ALLOCATED_CHANNELS_MAX = 4096"
                     )]
                     new.push((runlist as u32, chid as u32));
                 }
@@ -329,27 +354,66 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
         new
     }
 
-    println!("info  R13c census        = allocated-chid bitmask diff per channel, GPU {gpu}");
-    // ★ The probe FIRST, before any channel exists: a control that is refused (it is
-    // `RMCTRL_FLAGS_PRIVILEGED`) must be reported as a refusal of the INSTRUMENT, never
-    // as an empty census that a reader could mistake for a measurement.
+    println!("info  R13c census        = RM's own chid manager vs the work-submit token, GPU {gpu}");
+
+    // ── The two facts that decide how to READ everything below ───────────────────────
+    match fifo_info(
+        rm,
+        subdevice,
+        FIFO_INFO_INDEX_IS_PER_RUNLIST_CHANNEL_RAM_SUPPORTED,
+        ENGINE_TYPE_GRAPHICS,
+    ) {
+        Some(v) => println!("FACT per_runlist_channel_ram={v}"),
+        None => println!("FACT per_runlist_channel_ram=refused"),
+    }
     let probe = snapshot(rm, subdevice);
-    let live: usize = probe.iter().filter(|r| r.is_some()).count();
-    if live == 0 {
+    let answered: Vec<usize> = probe
+        .iter()
+        .enumerate()
+        .filter_map(|(i, r)| r.as_ref().map(|_| i))
+        .collect();
+    if answered.is_empty() {
         println!(
             "FAIL  R13c instrument    = every runlist refused NV2080_CTRL_CMD_FIFO_\
              GET_ALLOCATED_CHANNELS (it is PRIVILEGED — run as root); NO SAMPLES TAKEN"
         );
         return;
     }
-    println!("ok    R13c instrument    = {live}/{RUNLISTS} runlist ids answered");
+    println!("FACT chid_namespaces={answered:?} of 0..{RUNLISTS}");
 
-    // GR first, then the copy engines: on this part CE0/CE1 are the graphics copy
-    // engines, so a sweep that skipped GR would never sample the shared runlist.
+    // ★★ The instrument that would have named the runlist IDs outright, TRIED and its
+    // refusal RECORDED. `NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE` (0x20801112) carries
+    // `engineData[ENGINE_INFO_TYPE_RUNLIST]` per engine — exactly the number Part 2 below
+    // has to approximate — and its flags are `0x5c040`, i.e. neither `PRIVILEGED` (0x4)
+    // nor `NON_PRIVILEGED` (0x8), which is RM's `KERNEL_PRIVILEGED` default: refused to
+    // every usermode client including root (`control.h:170-208`,
+    // `g_subdevice_nvoc.c:4996`). Asking anyway costs one ioctl and converts *"we did not
+    // measure the runlist id"* into *"we asked and RM refused, with this status"*.
+    {
+        // `baseIndex + numEntries + bMore` then 32 entries of 16+2+2 NvU32 and a 16-byte
+        // name — the size is not load-bearing here because the call is expected to fail
+        // before the payload is read; what is recorded is the STATUS.
+        let mut p = vec![0u8; 12];
+        let r = rm.control(subdevice, ControlCmd(0x2080_1112), &mut p);
+        println!("FACT device_info_table={r:?}");
+    }
+
+    // The engine types this part will take a channel on. GR first: on this part CE0/CE1
+    // are the graphics copy engines, so a sweep that skipped GR would never sample the
+    // runlist they share.
     let mut engine_types: Vec<u32> = vec![ENGINE_TYPE_GRAPHICS];
     engine_types.extend((0..8u32).filter_map(engine_type_copy));
 
-    for engine_type in engine_types {
+    // ── PART 1 — the token's LOW field, against RM's chid manager ────────────────────
+    //
+    // ★★ The channels are held SIMULTANEOUSLY, and that is the whole difference from the
+    // first version of this rung: allocating and freeing one at a time returned chid 4
+    // every time, so the sweep produced one chid value six times and pinned nothing. Held
+    // together they take distinct chids, and a decoder that got the field WIDTH or the
+    // shift wrong now has somewhere to be wrong.
+    let mut held: Vec<(u32, kayfabe_isolate::HostHandle, kayfabe_isolate::HostHandle, u64)> =
+        Vec::new();
+    for &engine_type in &engine_types {
         let Ok(vas) = rm.alloc_vaspace() else {
             println!("SAMPLE-REFUSED engine_type={engine_type:#x} reason=no-vaspace");
             continue;
@@ -358,11 +422,10 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
         match rm.alloc_channel_on(vas, engine_type) {
             Ok((chan, token)) => {
                 let after = snapshot(rm, subdevice);
-                let new = appeared(&before, &after);
-                match new.as_slice() {
-                    [(runlist, chid)] => println!(
+                match appeared(&before, &after).as_slice() {
+                    [(ns, chid)] => println!(
                         "SAMPLE engine_type={engine_type:#x} token={token:#010x} \
-                         runlist={runlist} chid={chid}"
+                         chid={chid} chid_namespace={ns}"
                     ),
                     other => println!(
                         "SAMPLE-AMBIGUOUS engine_type={engine_type:#x} token={token:#010x} \
@@ -370,12 +433,90 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
                          cannot be attributed and is NOT evidence"
                     ),
                 }
+                held.push((engine_type, chan, vas, token));
+            }
+            Err(e) => {
+                println!("SAMPLE-REFUSED engine_type={engine_type:#x} reason={e:?}");
+                let _ = rm.free(vas);
+            }
+        }
+    }
+    for (_, chan, vas, _) in held.drain(..) {
+        let _ = rm.free(chan);
+        let _ = rm.free(vas);
+    }
+
+    // ── PART 2 — the token's UPPER field, against the engine→runlist PARTITION ───────
+    //
+    // ★★★ The runlist *ids* are not readable by an unprivileged client
+    // (`NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE` is KERNEL_PRIVILEGED), so this does
+    // not try to read one. It measures the **partition** instead:
+    // `CHANNEL_GROUPS_IN_USE_PER_ENGINE` translates an engine type to its runlist inside
+    // RM and returns that runlist's group count, so allocating ONE channel on engine X
+    // raises the count for exactly the engines that share X's runlist.
+    //
+    // That is an equivalence relation on engines, derived with no reference to a token —
+    // and the token's upper field must induce the SAME relation, or the field is not the
+    // runlist. It is a weaker statement than reading the id, and it is the strongest one
+    // this box can make; §4 of `doorbell_token_encoding.md` says so rather than implying
+    // the id was measured.
+    for &x in &engine_types {
+        let counts = |rm: &mut HostRmBackend| -> Vec<Option<u32>> {
+            engine_types
+                .iter()
+                .map(|&e| {
+                    fifo_info(
+                        rm,
+                        subdevice,
+                        FIFO_INFO_INDEX_CHANNEL_GROUPS_IN_USE_PER_ENGINE,
+                        e,
+                    )
+                })
+                .collect()
+        };
+        let Ok(vas) = rm.alloc_vaspace() else { continue };
+        let before = counts(rm);
+        match rm.alloc_channel_on(vas, x) {
+            Ok((chan, token)) => {
+                let after = counts(rm);
+                let members: Vec<String> = engine_types
+                    .iter()
+                    .zip(before.iter().zip(after.iter()))
+                    .filter(|(_, (b, a))| match (b, a) {
+                        (Some(b), Some(a)) => a > b,
+                        _ => false,
+                    })
+                    .map(|(e, _)| format!("{e:#x}"))
+                    .collect();
+                println!(
+                    "PARTITION engine_type={x:#x} token={token:#010x} members=[{}]",
+                    members.join(",")
+                );
                 let _ = rm.free(chan);
             }
-            Err(e) => println!("SAMPLE-REFUSED engine_type={engine_type:#x} reason={e:?}"),
+            Err(e) => println!("PARTITION-REFUSED engine_type={x:#x} reason={e:?}"),
         }
         let _ = rm.free(vas);
     }
+    // ★★★ The verdict on the INSTRUMENT, printed by the instrument, because a reader who
+    // sees the same member list under every engine must not have to work out whether that
+    // means "one runlist" or "this control cannot see runlists". On a part with
+    // `per_runlist_channel_ram=0` it is the latter, and it is structural:
+    // `kfifoGetChidMgr` returns `ppChidMgr[0]` for EVERY runlist id in that configuration
+    // (`ogkm-580: kernel_fifo.c:1457-1466`), so the per-engine count this rung diffs is
+    // one global number. Read `partition_is_vacuous=1` as: THIS RUNG MEASURED NOTHING
+    // ABOUT THE UPPER FIELD.
+    println!(
+        "FACT partition_is_vacuous={}",
+        u8::from(
+            fifo_info(
+                rm,
+                subdevice,
+                FIFO_INFO_INDEX_IS_PER_RUNLIST_CHANNEL_RAM_SUPPORTED,
+                ENGINE_TYPE_GRAPHICS,
+            ) == Some(0)
+        )
+    );
     println!("info  R13c census        = done");
 }
 
