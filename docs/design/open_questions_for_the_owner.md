@@ -674,3 +674,107 @@ page tables** — that needs the walker and `fb_read`, and it is a second pass.
 
 ⊘ **One limit named rather than assumed away:** `Aperture::Peer` does not say *which* peer. A
 second GPU axis belongs in the key the day a second peer exists.
+
+---
+
+# NEW — raised by the overnight run of 2026-08-01 → 02
+
+Six items. Q19 is new *evidence* rather than a new question: it changes the answer to a
+product question already settled once, so it is listed first.
+
+## ★★★ Q19 — the multi-tenant posture, because the wedge result inverted
+
+`guest_blast_radius.md` §5 accepted a wedge exposure for v1 on the reasoning that a hostile
+tenant could hang a host GPU engine and deny it to everyone. **The compute-hang half of that
+is now refuted on real hardware** (§5.1; `[run: scripts/bench/gpu_wedge_containment.sh,
+2026-08-01T21:48Z, vast 46529600, RTX 3060 GA106, host 580.159.04 open, repo af5b200]`): an
+attacker spinning 229 376 threads forever leaves an independent tenant fully live (12/12 over
+60 s), fully correct (`bad=0` throughout) and about **2.1× slower**, with **zero Xid** and a
+clean GPU the instant it is killed.
+
+⇒ **The exposure is fairness, not liveness or correctness.** That is a materially weaker
+problem than the one the v1 posture was chosen against.
+
+**Decide:** does multi-tenant move from "out of scope for v1" to "in scope, with a fairness
+caveat"? ⊘ Note what is still *not* established before answering: the **malformed-pushbuffer**
+shape (the only one that can *fault*, hence the only one that can reach the escalation hazards
+in §7) is untested, **VRAM exhaustion** is an unrelated and untested denial vector, and zero
+Xid means recovery was never *asked*, not that recovery is contained.
+
+**My recommendation:** do not widen scope yet. Measure the pushbuffer shape first — it is the
+one that can reach a GPU-wide reset, and it is cheap now that the harness exists.
+
+## Q20 — is there a repo-wide citation-attribution convention? (`#159` residue)
+
+`#159` found **three miscited oracle rows in shipped source**: `0x20800a3d`, `0x20800a48` and
+`0x20800a32` each cited a `mode2_initctrl_ga106.h` line belonging to a *different* control —
+and two of those lines are **truncated** rows. **Every value was right, every address was
+wrong, and the `C:` citation gate was satisfied throughout.**
+
+★★★ The general lesson, which is the reason this needs a decision and not just a patch:
+**a citation gate checks that a claim is *sourced*; it never checks that the source *says what
+the claim says*.** This is the sibling of the already-recorded trap where a gate demanding a
+`C:` citation was satisfied by a row citing an *empty* body as corroboration — same hole,
+approached from the opposite side.
+
+The new gate is deliberately scoped to citations of **truncated rows that name their control on
+the citing line**. About **28** citations elsewhere in the tree are unattributable under it.
+
+**Decide:** (a) a repo-wide convention — every `C:`/`ogkm-580:` citation names its subject on
+the citing line, so the gate can resolve it (~35 edit sites), or (b) leave the gate scoped and
+accept that citations outside it are untrusted. **My recommendation: (a)**, because the failure
+mode is silent and the edit is mechanical.
+
+## Q21 — the mock guest is STRICTER than the 610 driver (`#85`)
+
+`tests/src/gspworld.rs` refuses `rpc_length < 32`. That is exactly 580's bound, but **610 admits
+`rpc.length == 0`**. A double that refuses input a real driver accepts passes happily while the
+product fails — the same defect class as the earlier mock that enforced both transport words
+where 610 validates only a version nibble and a vendor id.
+
+Not silently relaxed: the fix is a shape change (the bound becomes a per-version profile entry,
+not an `if version ==`). A prohibition is written meanwhile: no test may assert that a 610 guest
+rejects a zero-length rpc.
+
+**Decide:** (a) per-version profile value, or (b) keep 580's bound and document the mock as
+580-only — which weakens every 610 test that uses it. **My recommendation: (a).**
+
+★ Related and separate, worth stating once: **a tag is not evidence of a read.** Several
+citations already carrying `ogkm-580:` pointed at the wrong function or line. The CI gate
+catches *untagged* citations, never *mis-tagged* ones — so tagging raises the floor without
+making citations trustworthy. Q20 is the same finding arriving independently.
+
+## Q22 — decision #33's refusal count is now false (`#68`)
+
+`l1_os_shell.md` decision #33 says *"five refusals, four of them compile-fail, the fifth a named
+review obligation."* After the §4.6 row mapping was corrected, **all five have a trybuild row**,
+so the "fifth is a review obligation" framing is wrong; the real review obligation is §4.2.1's
+*sixth* item. Marked ⚠ UNRESOLVED in place rather than silently renumbered, **because
+renumbering a decision record is the owner's call.** Small, but a decision record should say
+something true.
+
+## Q23 — five doc contradictions the audit would not resolve (`#60`)
+
+Each needs a decision, not an edit: (1) the QEMU backport is simultaneously **cancelled** and
+**the remedy**; (2) ★ the region lock has **three standings all written the same day** — uffd
+kept / uffd displaced by permanent-RO with arm64 unsound / arm64 refused outright — and arm64 is
+downstream of that choice; (3) the reentrancy-guard pairing is both "upstream's own function,
+nothing to maintain" and an owed task in three places; (4) §10.1 says a clause deletes two rules
+that both survive verbatim; (5) internal count disagreements, including trybuild "all ten rows"
+when nine exist — so **a gate was declared green against an incomplete matrix**, which is nearer
+a bug than a contradiction.
+
+★ (2) may be **cheaper than it looks**: GL11 §3 concludes the region lock may have **no members
+at all**, in which case the contradiction is moot and the right move is to defer building any
+mechanism rather than to pick one.
+
+## Q24 — E6 owes a witness for the one property that stays green if it regresses
+
+E2 established that a guest doorbell write reaches `SharedDevice::doorbell` and is refused by
+name. It could **not** establish that the doorbell and the object bridge reach the **same**
+`Gpu` — that needs a channel on the spine, which is E6. **A second `Gpu` would leave
+`UnknownVchid` as the permanent answer with every test passing.** It is guarded today only by a
+source-quantified test (one `Gpu::new`, one `SharedDevice::new`) and one bite.
+
+Not a question so much as a debt with a name: **E6's acceptance must assert this behaviourally,
+not structurally.** Recorded here so it cannot be lost between increments.
