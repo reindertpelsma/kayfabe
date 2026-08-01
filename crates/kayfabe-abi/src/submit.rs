@@ -745,6 +745,76 @@ pub const fn gp_entry(gpu_va: u64, len_bytes: u64) -> Option<u64> {
     Some(entry0 | (entry1 << 32))
 }
 
+/// The size of one channel's USERD — `NV_RAMUSERD_CHAN_SIZE`, i.e.
+/// `1 << NV_RAMUSERD_BASE_SHIFT` (`ogkm-580:
+/// src/common/inc/swref/published/maxwell/gm107/dev_ram.h:49-50`).
+///
+/// ★★ **Derived from the driver's own HAL choice, not from the chip's own header.**
+/// `kfifoGetUserdSizeAlign` is halified in two ways in `g_kernel_fifo_nvoc.c`, and every
+/// chip except `T234D`/`T264D` — GA106 included — falls to the `else` arm, which is
+/// `kfifoGetUserdSizeAlign_GM107` (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_fifo_gm107.c:1553`, `*pSize =
+/// 1<<NV_RAMUSERD_BASE_SHIFT`). So the number an Ampere channel's USERD is sized with is
+/// Maxwell's, and reaching for `published/ampere/ga102/dev_ram.h` finds **no**
+/// `NV_RAMUSERD` at all. `tests/oracle/pushbuffer_abi_oracle.c` compiles that function
+/// rather than trusting this sentence.
+///
+/// ★ Both cursors must fit: [`USERD_GP_PUT`] is at `0x8C`, so a size of `512` leaves the
+/// window closed over both. A model answering less would size a mapping that stops short
+/// of the produce cursor.
+pub const USERD_SIZE: u64 = 512;
+
+/// One GPFIFO entry, decoded — the inverse of [`gp_entry`], and the read side of the
+/// ring the guest fills.
+///
+/// ⊘ **A control entry decodes to `None`, not to a zero-length range.** `LENGTH == 0`
+/// means entry1's low byte is `GP_ENTRY1_OPCODE` (`NOP`/`ILLEGAL`/`GP_CRC`/`PB_CRC`,
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:280-284`) and **not**
+/// `GP_ENTRY1_GET_HI` — the two fields are the same eight bits. Reading the address out
+/// of a control entry produces a plausible pointer into guest memory that the guest never
+/// named, which is exactly the class of answer this port refuses to invent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpfifoEntry {
+    /// The GPU virtual address of the method words (`GP_ENTRY0_GET` + `GP_ENTRY1_GET_HI`).
+    pub gpu_va: u64,
+    /// Their length in **bytes** (`GP_ENTRY1_LENGTH` is in dwords).
+    pub len_bytes: u64,
+    /// `GP_ENTRY1_LEVEL == _SUBROUTINE` — a nested pushbuffer segment rather than a
+    /// top-level one. Carried, not acted on: it still names method words.
+    pub subroutine: bool,
+    /// `GP_ENTRY1_SYNC == _WAIT` — the host must drain before fetching this entry.
+    pub sync_wait: bool,
+}
+
+/// Decode one 8-byte GPFIFO entry (entry0 in the low dword, entry1 in the high dword).
+///
+/// Fields, all from `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:266-284` and the
+/// same four [`gp_entry`] writes.
+///
+/// Returns `None` for an entry that names **no method words**: `LENGTH == 0`. See
+/// [`GpfifoEntry`] for why that is a refusal and not a zero-length range.
+#[must_use]
+pub const fn gp_entry_decode(entry: u64) -> Option<GpfifoEntry> {
+    let entry0 = entry & 0xFFFF_FFFF;
+    let entry1 = entry >> 32;
+    // GP_ENTRY1_LENGTH is 30:10, in dwords.
+    let dwords = (entry1 >> 10) & 0x1F_FFFF;
+    if dwords == 0 {
+        return None;
+    }
+    // GP_ENTRY0_GET is 31:2 — the address' low 32 bits with bits 1:0 forced to zero,
+    // because bit 0 is FETCH and bit 1 is unused.
+    let lo = entry0 & 0xFFFF_FFFC;
+    // GP_ENTRY1_GET_HI is 7:0 — address bits 39:32.
+    let hi = entry1 & 0xFF;
+    Some(GpfifoEntry {
+        gpu_va: lo | (hi << 32),
+        len_bytes: dwords * 4,
+        subroutine: (entry1 >> 9) & 1 == 1,
+        sync_wait: (entry1 >> 31) & 1 == 1,
+    })
+}
+
 /// `AMPERE_USERMODE_A` — re-exported from [`crate::generated::classes`].
 ///
 /// ★ It was a hand-written literal here until `#156`. It is generated now, for one
@@ -815,6 +885,160 @@ pub const fn method_header_inc(subchannel: u32, method: u32, count: u32) -> Opti
     Some(addr | (subchannel << 13) | (count << 16) | (1 << 29))
 }
 
+/// ★★★ The `NVC56F_DMA_SEC_OP` universe — **all eight**, as the class header enumerates
+/// them (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:301-308`).
+///
+/// ★ It is a module of named constants plus [`sec_op::ALL`] for one reason recorded in
+/// `gates_quantified_over_a_list`: a decoder's coverage claim has to be quantified over
+/// the *driver's* enumeration, not over a list the decoder's author remembered. A codec
+/// that handles six of these looks identical to one that handles eight until something
+/// quantifies. `tests/tests/pushbuffer_abi_oracle.rs` reads the enumeration back out of
+/// NVIDIA's own header and compares it against [`sec_op::ALL`], so a ninth opcode in a
+/// later release turns that test red rather than being silently outside the universe.
+pub mod sec_op {
+    /// `NVC56F_DMA_SEC_OP_GRP0_USE_TERT` — the legacy group-0 encoding; `TERT_OP`
+    /// (`17:16`) selects between a legacy incrementing method and the sub-device-mask
+    /// operations.
+    pub const GRP0_USE_TERT: u32 = 0;
+    /// `NVC56F_DMA_SEC_OP_INC_METHOD` — `count` dwords applied to consecutive methods.
+    /// This is the one [`super::method_header_inc`] writes and the one everything in this
+    /// module's own pushbuffers uses.
+    pub const INC_METHOD: u32 = 1;
+    /// `NVC56F_DMA_SEC_OP_GRP2_USE_TERT` — the legacy group-2 encoding; `TERT_OP == 0` is
+    /// a legacy non-incrementing method and no other `TERT_OP` value is enumerated.
+    pub const GRP2_USE_TERT: u32 = 2;
+    /// `NVC56F_DMA_SEC_OP_NON_INC_METHOD` — `count` dwords all applied to one method.
+    pub const NON_INC_METHOD: u32 = 3;
+    /// `NVC56F_DMA_SEC_OP_IMMD_DATA_METHOD` — the datum is in the header itself
+    /// (`NVC56F_DMA_IMMD_DATA`, `28:16`), so **no** words follow.
+    pub const IMMD_DATA_METHOD: u32 = 4;
+    /// `NVC56F_DMA_SEC_OP_ONE_INC` — the first dword increments, the rest do not.
+    pub const ONE_INC: u32 = 5;
+    /// ⊘ `NVC56F_DMA_SEC_OP_RESERVED6` — enumerated by the header **with no format**.
+    /// [`super::method_header_decode`] returns `None` for it: it is the one opcode whose
+    /// argument count the class header does not define, and inventing one is how a parser
+    /// desynchronises onto data.
+    pub const RESERVED6: u32 = 6;
+    /// `NVC56F_DMA_SEC_OP_END_PB_SEGMENT` — the segment ends here; no words follow.
+    pub const END_PB_SEGMENT: u32 = 7;
+
+    /// Every value above, in numeric order. See the module docs for why this exists.
+    pub const ALL: [u32; 8] = [
+        GRP0_USE_TERT,
+        INC_METHOD,
+        GRP2_USE_TERT,
+        NON_INC_METHOD,
+        IMMD_DATA_METHOD,
+        ONE_INC,
+        RESERVED6,
+        END_PB_SEGMENT,
+    ];
+}
+
+/// `NVC56F_DMA_TERT_OP_GRP0_INC_METHOD` / `..._GRP2_NON_INC_METHOD` — both `0`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:294-299`). The other three
+/// `TERT_OP` values are the sub-device-mask operations and exist only under
+/// [`sec_op::GRP0_USE_TERT`].
+const TERT_OP_METHOD: u32 = 0;
+
+/// How a pushbuffer header says its arguments are applied.
+///
+/// ⚠ **This is a statement about the ARGUMENT STREAM, not about meaning.** It says how
+/// many words follow and how they are distributed over method addresses; what those words
+/// *are* is the [`Arch`](../../kayfabe_arch/trait.Arch.html)'s question, one crate up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MethodForm {
+    /// [`sec_op::INC_METHOD`] — `arg_words` dwords at `method`, `method + 4`, ….
+    Incrementing,
+    /// [`sec_op::NON_INC_METHOD`] — `arg_words` dwords, all at `method`.
+    NonIncrementing,
+    /// [`sec_op::ONE_INC`] — the first dword at `method`, the rest at `method + 4`.
+    IncrementOnce,
+    /// [`sec_op::IMMD_DATA_METHOD`] — the datum is in [`MethodHeader::immd`]; no words
+    /// follow.
+    Immediate,
+    /// [`sec_op::END_PB_SEGMENT`] — the segment ends; no words follow.
+    EndPbSegment,
+    /// The legacy [`sec_op::GRP0_USE_TERT`] / [`sec_op::GRP2_USE_TERT`] method formats,
+    /// whose address is `NVC56F_DMA_METHOD_ADDRESS_OLD` (`12:2`) and whose count is
+    /// `NVC56F_DMA_METHOD_COUNT_OLD` (`28:18`).
+    ///
+    /// ★★ **Sized, and only sized.** This port models none of these, so nothing decodes
+    /// their arguments — but a header this parser cannot *size* makes it advance by one
+    /// word and read every following datum as a header, which is how a stream of numbers
+    /// becomes a stream of plausible methods. Sizing the legacy forms costs two lines and
+    /// removes that door; refusing to size them would have left it open in the name of
+    /// caution. ⊘ Note `NVC56F_DMA_NOP` is `0x00000000`, i.e. this form with a zero
+    /// count — so a zero-filled pushbuffer parses as a run of NOPs and never desyncs.
+    Legacy,
+    /// The sub-device-mask operations ([`sec_op::GRP0_USE_TERT`] with a non-zero
+    /// `TERT_OP`) — header-only, no words follow.
+    SubDeviceMask,
+}
+
+/// One decoded pushbuffer header word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MethodHeader {
+    /// How the arguments are applied.
+    pub form: MethodForm,
+    /// The **byte** offset of the first method addressed, i.e. the header's dword index
+    /// multiplied by four — the same units [`method_header_inc`] takes and the units the
+    /// class headers name their methods in (`NVC7B5_LAUNCH_DMA` = `0x300`).
+    pub method: u32,
+    /// `SUBCHANNEL` (`15:13`).
+    pub subchannel: u32,
+    /// How many dwords follow this header. Zero for
+    /// [`MethodForm::Immediate`]/[`MethodForm::EndPbSegment`]/[`MethodForm::SubDeviceMask`].
+    pub arg_words: usize,
+    /// `NVC56F_DMA_IMMD_DATA` (`28:16`), meaningful only for [`MethodForm::Immediate`].
+    pub immd: u32,
+}
+
+/// Decode one pushbuffer header word — the read side of [`method_header_inc`], widened to
+/// every format `NVC56F_DMA_SEC_OP` enumerates.
+///
+/// ⊘ Returns `None` for the two encodings the class header does **not** define:
+/// [`sec_op::RESERVED6`], and [`sec_op::GRP2_USE_TERT`] with a `TERT_OP` other than
+/// `GRP2_NON_INC_METHOD`. Those are the only header words on this chip whose argument
+/// count is not a fact, and a guessed count is a parser walking off its own stream.
+#[must_use]
+pub const fn method_header_decode(header: u32) -> Option<MethodHeader> {
+    let sec_op = header >> 29;
+    let tert_op = (header >> 16) & 0x3;
+    let subchannel = (header >> 13) & 0x7;
+    // NVC56F_DMA_METHOD_ADDRESS is 11:0, dword-indexed.
+    let method = (header & 0xFFF) * 4;
+    // NVC56F_DMA_METHOD_COUNT is 28:16.
+    let count = ((header >> 16) & 0x1FFF) as usize;
+    // The legacy pair: NVC56F_DMA_METHOD_ADDRESS_OLD is 12:2, COUNT_OLD is 28:18.
+    let old_method = ((header >> 2) & 0x7FF) * 4;
+    let old_count = ((header >> 18) & 0x7FF) as usize;
+
+    let (form, method, arg_words) = match sec_op {
+        sec_op::INC_METHOD => (MethodForm::Incrementing, method, count),
+        sec_op::NON_INC_METHOD => (MethodForm::NonIncrementing, method, count),
+        sec_op::ONE_INC => (MethodForm::IncrementOnce, method, count),
+        sec_op::IMMD_DATA_METHOD => (MethodForm::Immediate, method, 0),
+        sec_op::END_PB_SEGMENT => (MethodForm::EndPbSegment, method, 0),
+        sec_op::GRP0_USE_TERT if tert_op == TERT_OP_METHOD => {
+            (MethodForm::Legacy, old_method, old_count)
+        }
+        sec_op::GRP0_USE_TERT => (MethodForm::SubDeviceMask, 0, 0),
+        sec_op::GRP2_USE_TERT if tert_op == TERT_OP_METHOD => {
+            (MethodForm::Legacy, old_method, old_count)
+        }
+        // GRP2 with an unenumerated TERT_OP, and RESERVED6. No format, no size.
+        _ => return None,
+    };
+    Some(MethodHeader {
+        form,
+        method,
+        subchannel,
+        arg_words,
+        immd: (header >> 16) & 0x1FFF,
+    })
+}
+
 /// `NVC56F_SET_OBJECT` — `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:68`.
 ///
 /// The method that binds a class to a subchannel. It is the first thing a pushbuffer
@@ -865,7 +1089,58 @@ pub mod fifo {
     /// three zeros are *choices*: a 64-bit payload writes eight bytes over a four-byte
     /// sentinel, and a timestamp release writes a 16-byte structure.
     pub const SEM_EXECUTE_RELEASE_32BIT: u32 = 1;
+
+    /// `NVC56F_SEM_EXECUTE_OPERATION` is `2:0`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:215`) — the mask a *reader*
+    /// needs, because seven other operations share the word and six of them are
+    /// **acquires**. ★ Decoding an acquire as a release would report a completion the
+    /// guest is still waiting for.
+    pub const SEM_EXECUTE_OPERATION_MASK: u32 = 0x7;
+    /// `NVC56F_SEM_EXECUTE_OPERATION_RELEASE` = 1
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:217`).
+    pub const SEM_EXECUTE_OPERATION_RELEASE: u32 = 1;
+    /// `NVC56F_SEM_EXECUTE_PAYLOAD_SIZE` is `24:24`, `_64BIT` = 1
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:229-231`). With `_32BIT`
+    /// (0) the engine writes four bytes and `SEM_PAYLOAD_HI` is **not** part of the
+    /// value — reading it anyway invents the top 32 bits of a fence.
+    pub const SEM_EXECUTE_PAYLOAD_SIZE_64BIT: u32 = 1 << 24;
+
+    /// `NVC56F_MEM_OP_A` @ `0x28`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:119`). ★ The header's own
+    /// comment on `MEM_OP_D` is *"MEM_OP_D MUST be preceded by MEM_OPs A-C"*, which is
+    /// why the only shape this port decodes is one incrementing run of **four** starting
+    /// here — the four words are one fact and no prefix of them is.
+    pub const MEM_OP_A: u32 = 0x0000_0028;
+    /// `NVC56F_MEM_OP_A_TLB_INVALIDATE_SYSMEMBAR` is `11:11`, `_EN` = 1
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:129-130`).
+    pub const MEM_OP_A_SYSMEMBAR_EN: u32 = 1 << 11;
+    /// `NVC56F_MEM_OP_C_TLB_INVALIDATE_PDB` is `0:0`, `_ONE` = 0
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:139-141`). `_ALL` carries no
+    /// PDB address at all, so the address fields below are meaningless for it.
+    pub const MEM_OP_C_PDB_ALL: u32 = 1;
+    /// `NVC56F_MEM_OP_C_TLB_INVALIDATE_PDB_ADDR_LO` is `31:12`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:178`).
+    pub const MEM_OP_C_PDB_ADDR_LO_MASK: u32 = 0xFFFF_F000;
+    /// `NVC56F_MEM_OP_D_TLB_INVALIDATE_PDB_ADDR_HI` is `26:0`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:182`) — address bits `58:32`.
+    pub const MEM_OP_D_PDB_ADDR_HI_MASK: u32 = 0x07FF_FFFF;
+    /// `NVC56F_MEM_OP_D_OPERATION` is `31:27`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:183`).
+    pub const MEM_OP_D_OPERATION_SHIFT: u32 = 27;
+    /// `NVC56F_MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE` = 9
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:185`).
+    pub const MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE: u32 = 9;
+    /// `NVC56F_MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE_TARGETED` = 0xa
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:186`).
+    pub const MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE_TARGETED: u32 = 0xa;
 }
+
+/// `NVC56F_SET_OBJECT_NVCLASS` is `15:0`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:69`) — the class id a
+/// `SET_OBJECT` binds. ★ Bits `20:16` are `ENGINE`, and a decoder that took the whole
+/// dword would report a class id nothing in `kayfabe_abi::generated::classes` names,
+/// turning every subchannel bind on a non-zero engine into an unknown class.
+pub const SET_OBJECT_NVCLASS_MASK: u32 = 0xFFFF;
 
 // =====================================================================================
 // The copy engine's methods
@@ -1304,6 +1579,130 @@ mod tests {
         assert_eq!(USERD_GP_GET, 0x88);
         assert_eq!(USERD_GP_PUT, 0x8C);
         assert_ne!(USERD_GP_GET, USERD_GP_PUT);
+    }
+
+    /// ⊘ **A round trip, and it is deliberately labelled as proving nothing on its own.**
+    /// [`gp_entry`] and [`gp_entry_decode`] are both ours; agreeing with each other is
+    /// what two functions written from the same wrong belief also do
+    /// (`never_let_a_test_use_the_thing_under_test_as_its_own_observer`, and the shape
+    /// that let a planted mutation survive `MockArch::token_for`). What settles the
+    /// encoding is `tests/tests/pushbuffer_abi_oracle.rs`, which builds the entry with
+    /// NVIDIA's own `DRF_NUM` over NVIDIA's own field definitions. This test is here to
+    /// catch a *regression* in one half, and that is all it is here for.
+    #[test]
+    fn gp_entry_round_trips_through_our_own_encoder_only() {
+        let e = gp_entry(0x00A5_0000_1230, 0x40).expect("encodable");
+        let d = gp_entry_decode(e).expect("names method words");
+        assert_eq!(d.gpu_va, 0x00A5_0000_1230);
+        assert_eq!(d.len_bytes, 0x40);
+        assert!(!d.subroutine);
+        assert!(!d.sync_wait);
+    }
+
+    /// ★★★ A **control** entry decodes to nothing. `LENGTH == 0` makes entry1's low byte
+    /// `OPCODE`, not `GET_HI`, so reading an address out of it fabricates a pointer.
+    #[test]
+    fn a_zero_length_gpfifo_entry_is_refused_and_not_read_as_an_address() {
+        for opcode in 0u64..=3 {
+            // Entry1 = the opcode alone (LENGTH = 0); entry0 = a plausible address.
+            let entry = 0x0000_1000u64 | (opcode << 32);
+            assert_eq!(
+                gp_entry_decode(entry),
+                None,
+                "opcode {opcode} is a control entry and names no method words"
+            );
+        }
+        // One dword of methods is the smallest entry that DOES name any.
+        assert!(gp_entry_decode(0x0000_1000 | (1u64 << (32 + 10))).is_some());
+    }
+
+    /// The `LEVEL`/`SYNC` bits are carried rather than dropped, and neither is confused
+    /// for the other or for the length.
+    #[test]
+    fn gp_entry_decode_reports_level_and_sync_without_disturbing_the_length() {
+        let base = gp_entry(0x2000, 8).expect("encodable");
+        let sub = base | (1u64 << (32 + 9));
+        let wait = base | (1u64 << (32 + 31));
+        let d = gp_entry_decode(sub).expect("range");
+        assert!(d.subroutine && !d.sync_wait && d.len_bytes == 8 && d.gpu_va == 0x2000);
+        let d = gp_entry_decode(wait).expect("range");
+        assert!(d.sync_wait && !d.subroutine && d.len_bytes == 8 && d.gpu_va == 0x2000);
+    }
+
+    /// The header decoder agrees with the header ENCODER on the one form the encoder
+    /// writes — again a regression check only, for
+    /// [`gp_entry_round_trips_through_our_own_encoder_only`]'s reason.
+    #[test]
+    fn method_header_decode_reads_back_what_method_header_inc_wrote() {
+        let h = method_header_inc(4, ce::OFFSET_IN_UPPER, 4).expect("encodable");
+        let d = method_header_decode(h).expect("a defined format");
+        assert_eq!(d.form, MethodForm::Incrementing);
+        assert_eq!(d.method, ce::OFFSET_IN_UPPER);
+        assert_eq!(d.subchannel, 4);
+        assert_eq!(d.arg_words, 4);
+    }
+
+    /// ★★★ **The refusal.** `RESERVED6` is enumerated by the class header with no
+    /// format, and `GRP2_USE_TERT` defines exactly one `TERT_OP`. Both are `None` — a
+    /// guessed argument count is a parser walking onto its own data.
+    #[test]
+    fn the_two_undefined_header_encodings_are_refused_and_not_sized() {
+        // RESERVED6, with an otherwise perfectly ordinary-looking body.
+        assert_eq!(method_header_decode((6 << 29) | (4 << 16) | 0xC0), None);
+        // GRP2 with each TERT_OP the header does not define.
+        for tert in 1u32..=3 {
+            assert_eq!(
+                method_header_decode((2 << 29) | (tert << 16) | 0xC0),
+                None,
+                "GRP2 TERT_OP {tert} has no enumerated format"
+            );
+        }
+        // …and the one it does define is sized.
+        assert!(method_header_decode(2 << 29).is_some());
+    }
+
+    /// Every enumerated `SEC_OP` except `RESERVED6` is sizable, quantified over
+    /// [`sec_op::ALL`] rather than over a list written here.
+    #[test]
+    fn every_enumerated_sec_op_but_reserved6_has_a_size() {
+        let mut sized = 0usize;
+        for op in sec_op::ALL {
+            let h = (op << 29) | 0xC0;
+            match method_header_decode(h) {
+                Some(_) => sized += 1,
+                None => assert_eq!(op, sec_op::RESERVED6, "SEC_OP {op} lost its format"),
+            }
+        }
+        assert_eq!(sized, sec_op::ALL.len() - 1);
+    }
+
+    /// `NVC56F_DMA_NOP` is `0x00000000`, i.e. the legacy form with a zero count — so a
+    /// zero-filled pushbuffer is a run of NOPs and the parser never desynchronises on it.
+    #[test]
+    fn an_all_zero_word_is_a_nop_that_consumes_no_arguments() {
+        let d = method_header_decode(0).expect("NOP is a defined format");
+        assert_eq!(d.form, MethodForm::Legacy);
+        assert_eq!(d.arg_words, 0);
+        assert_eq!(d.method, 0);
+    }
+
+    /// The immediate form carries its datum in the header and consumes **no** words. A
+    /// decoder that gave it `count` arguments would swallow the next method.
+    #[test]
+    fn the_immediate_form_consumes_no_argument_words() {
+        let d = method_header_decode((4 << 29) | (0x1234 << 16) | 0xC0).expect("defined");
+        assert_eq!(d.form, MethodForm::Immediate);
+        assert_eq!(d.arg_words, 0);
+        assert_eq!(d.immd, 0x1234);
+    }
+
+    /// USERD is 512 bytes and both cursors are inside it — a model answering less would
+    /// size a mapping that stops short of the produce cursor.
+    #[test]
+    fn userd_is_large_enough_for_both_cursors() {
+        assert_eq!(USERD_SIZE, 512);
+        const { assert!(USERD_GP_PUT + 4 <= USERD_SIZE) };
+        const { assert!(USERD_GP_GET + 4 <= USERD_SIZE) };
     }
 
     /// The `NVOS33` round trip, including a negative descriptor.

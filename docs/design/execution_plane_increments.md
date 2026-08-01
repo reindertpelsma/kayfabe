@@ -86,7 +86,7 @@ that makes a green mean something. A row whose acceptance has no control is mark
 | **E1** ✅ | a **failed** real isolate stops being indistinguishable from the stillborn one (bench gap 7) | a refusal reported at the `Isolate` seam with a **kind** (`spawn-failed` ≠ `no-plane`) and a sentence, printed by the device at teardown | the same archive with a working plane reports `0 refusing`. **`[measured]` §6** |
 | **E2** ✅ | the doorbell reaches the core: a guest MMIO write to the usermode doorbell aperture arrives at `kayfabe_rt::SharedDevice::doorbell` | a boot in which a guest doorbell write produces a `DoorbellOutcome`-or-named-`FwdFault`, counted | a non-doorbell BAR write in the same run produces neither. **`[measured]` §7** |
 | **E3** ✅ | ★ **`Ga10xArch::decode_doorbell` is built** and validated against real silicon | a token RM itself hands a channel decodes to that channel's own vChid, on hardware | a token from a *different* channel must decode to a different vChid — and a fabricated token must decode to `None`. **DONE — `doorbell_token_encoding.md`** |
-| **E4** | GA10x `UserdModel` + `PushbufferAbi` replace `UnbuiltUserd`/`UnbuiltPushbuffer` | `read_pushbuffer` over bytes captured from a real boot yields `LAUNCH_DMA`/`SEM_EXECUTE` at the offsets the guest wrote them | garbage bytes must **fault**, not decode to a plausible method |
+| **E4** ✅ | GA10x `UserdModel` + `PushbufferAbi` replace `UnbuiltUserd`/`UnbuiltPushbuffer` | `read_pushbuffer` over bytes NVIDIA's own macros encode yields `LAUNCH_DMA`/`SEM_EXECUTE` at the offsets the guest wrote them | garbage bytes must **fault**, not decode to a plausible method. **DONE — §7, and it REFUTED the seam: `CeLaunchDma` is not decodable per-method at all** |
 | **E5** | the address table is populated from the guest's own bindings, so the CE operands resolve in the isolate's host VAS | a guest VA that *was* bound resolves; the copy's operands are found | ★ a VA that was **never bound** must FAULT (`mode2_address_table.md`: miss = fault, never a reverse-resolve) |
 | **E6** | the join: guest CE copy → `plan_doorbell` → `Worker::execute` → `HostRmBackend::ce_copy_outcome` | `CeEvidence::copied()` — R17's predicate, driven by the guest | the same boot with `KAYFABE_ISOLATES` unset must **not** produce it |
 
@@ -445,8 +445,7 @@ half of it, because after E0b there is nothing to check at realize.
 
 ## 4. Order of work, and the one thing that should be re-decided
 
-E0 → E0b → E1 → **E3** → E2 → E4 → E5 → E6. **E0, E0b, E1, E3 and E2 are done**; E4 is
-next.
+E0 → E0b → E1 → **E3** → E2 → E4 → E5 → E6. **E0, E0b, E1, E3, E2 and E4 are done**; E5 is next.
 
 ★ E3 is pulled ahead of E2 deliberately. E2 (an ABI entry point for the doorbell) is
 mechanical and can be written at any time; E3 is the increment most likely to be *wrong for
@@ -455,11 +454,30 @@ hardware bench to settle it on, and while `kayfabe-rm-ladder` — which can allo
 channel and print the token RM assigned it — is a live, passing instrument.
 `c_rust_trace_differential.md` already records that the C oracle is **perishable**.
 
-⚠ **To re-decide before E4:** whether the pushbuffer codec is transcribed from `ogkm` or
-generated from it. The GMMU format went the transcription route at `#149` and
-`955c79a` then had to build "a GMMU-format oracle out of NVIDIA's OWN encoder" to catch
-five bites transcription missed. That is evidence for generating, and it is a bigger
-decision than a row in a table.
+⚠ **To re-decide before E4** *(the question, as it stood)*: whether the pushbuffer codec is
+transcribed from `ogkm` or generated from it. The GMMU format went the transcription route
+at `#149` and `955c79a` then had to build "a GMMU-format oracle out of NVIDIA's OWN encoder"
+to catch five bites transcription missed. That is evidence for generating, and it is a
+bigger decision than a row in a table.
+
+★★ **DECIDED, 2026-08-02, and the answer is neither — it is *transcribed and then judged by
+a compiled oracle*, which is what `#149` actually did.** The reasoning, so the next
+generation's codec does not re-litigate it:
+
+- A *generator* over `clc56f.h`/`clc7b5.h` would have to parse `hi:lo` field extents out of
+  `#define`s and emit Rust. That is a second implementation of `DRF_*`, written by us, and
+  a bug in **it** produces confidently wrong constants across every field at once — which
+  is worse than a typo in one.
+- The oracle route gets the same guarantee for less: the constants stay hand-written and
+  cited, and `tests/oracle/pushbuffer_abi_oracle.c` **compiles NVIDIA's own macros over
+  NVIDIA's own header** and both encodes and decodes with them. A wrong constant is a red
+  test naming the field.
+- `[measured]` it works: `scripts/bite_pushbuffer_codec.py` plants 26 defects and the oracle
+  arm alone catches 23 of them, including every wrong bit position. See §7.
+- ⊘ The honest cost, and it is real: **the oracle is only as available as the vendored
+  driver checkout**, so on a runner without one this whole family SKIPs. That is the same
+  bargain the VBIOS, GMMU and token oracles already struck, recorded again rather than
+  rediscovered.
 
 ## 5. Evidence log
 
@@ -599,6 +617,16 @@ always reports something: a working plane prints `0 refusing` and **no** refusal
   `./scripts/ci_gates.sh --all` → `ALL GATES CLEAN (21 steps, floor 21 for --all mode)`.
 - **Claim ledger**: `scripts/claim_ledger.py --gate` → 382 unattributed / 66 conflated /
   17 bare-hardware, i.e. the baseline, unmoved.
+
+⚠ **A measurement hazard this increment hit, recorded because it produced a confidently
+wrong suite run.** The bite harness rewrites two source files and `touch`es them
+(`bite_harness_must_touch_after_restore`); syncing a working tree onto that box afterwards
+with `rsync -a` puts the LOCAL — **older** — mtimes back, and cargo's freshness check then
+serves the rlib it built from the *bitten* sources. The result was a `--workspace` run
+reporting **two failures in files that pass in isolation**, with byte-identical sources on
+both ends (`md5sum` agreed). ⇒ **`find … -exec touch {} +` after any sync onto a box a bite
+harness has run on**, and treat "passes alone, fails in the suite" as an mtime question
+before it is a code question.
 - **Bites:** `scripts/bite_lazy_isolate.py` — **9/9 fired**, restored-tree sanity GREEN.
   ⚠ Reported honestly: the **first** run of this harness fired only **6/9**, and none of the
   three misses was a code finding — two `--exact` filters were missing their
@@ -794,3 +822,185 @@ A check that could not produce that sentence would not be a check.
   silent sink) are caught by the **device** arm only; B9 (the root never installs the port)
   and B10 (the doorbell rings a second object model) by the **shim** arm only. A harness with
   one arm would have missed four of ten.
+
+## 8. E4 — BUILT. The USERD model, the pushbuffer codec, and the seam it refuted
+
+### 8.1 What was built
+
+`kayfabe_chips::Ga10xArch` now answers `userd()` with **`Ga10xUserd`** and `pushbuffer()`
+with **`Ga10xPushbuffer`**. `UnbuiltUserd` / `UnbuiltPushbuffer` remain in the crate — as
+`UnbuiltGmmu` did after `#149` — because the statement they make is one an adapter may still
+need to make; nothing in the shipped `Arch` uses them.
+
+Every bit position lives in `kayfabe_abi::submit`, cited to `ogkm-580`, per decision #2's
+quarantine: `USERD_SIZE`, `gp_entry_decode`, `method_header_decode`, the `sec_op` module and
+the `fifo`/`ce` field constants are new there; `kayfabe-chips` maps them into the core's
+vocabulary and transcribes nothing.
+
+`[src]` at `e43bc71`+E4:
+
+| seam | answer | refusal it keeps |
+|---|---|---|
+| `userd_size` | **512** | — |
+| `gp_get_offset` / `gp_put_offset` | `0x88` / `0x8C` | both asserted **inside** the window |
+| `method_len` | the header's own count, per `SEC_OP` | `0` for the two encodings `NVC56F_DMA_SEC_OP` enumerates **without a format** (`RESERVED6`, `GRP2_USE_TERT` with an unenumerated `TERT_OP`) |
+| `decode_method` | `SetObject`, `SemRelease`, `TlbInvalidate` | `Opaque` for everything else, including **every** CE method |
+| `gpfifo_entries` | one `PushRange` per entry | **nothing at all** for a ring that is not whole entries; **nothing** for a control entry (`LENGTH == 0`) |
+
+⚠ **`MAX_PUSH_RANGE_BYTES` / `MAX_PUSH_TOTAL_BYTES` are untouched.** E4 changed what produces
+a range's length, not what bounds the read of it; `a_maximal_gpfifo_length_is_a_bounded_read_and_not_an_allocation`
+pins that a maximal entry (8 MiB − 4, the largest the 21-bit field holds) is still a bounded
+read.
+
+### 8.2 ★★★ The result that matters, and it is a REFUTATION
+
+**A real `AMPERE_DMA_COPY_B` copy is FIVE separate method runs, and `LAUNCH_DMA` carries
+none of its operands.** `OFFSET_IN_UPPER…OFFSET_OUT_LOWER` are one earlier run,
+`LINE_LENGTH_IN`/`LINE_COUNT` another, `SET_SEMAPHORE_A/B/PAYLOAD` a third; `LAUNCH_DMA`
+itself is a header and **one word of flags**. `[src]` `kayfabe_isolate_host::rm::ce_pushbuffer`,
+which is the encoder a real GA106 executed at rung R17, and `[measured]` from the class
+header itself by `tests/tests/pushbuffer_abi_oracle.rs::the_ce_pushbuffer_is_five_runs_and_launch_dma_carries_no_operands`.
+
+`PushbufferAbi::decode_method(&self, header, args)` is **per-method and stateless**. It is
+therefore *structurally incapable* of producing a `PushMethod::CeLaunchDma` whose `dst`,
+`src` and `len` are anything but invented.
+
+⊘ **`MockArch` hid this for the whole life of the seam.** `mock_method::CE_LAUNCH_DMA` packs
+destination, source, length and work kind into **one** method's arguments — an encoding no
+NVIDIA chip has. The seam looked sufficient for exactly as long as its only implementer was
+the mock. This is the same shape as §2.1's finding about `MockArch::token_for`, one seam
+along, and it is the third time a mock's invented encoding has made a seam look finished.
+
+**So E4 refuses:** `LAUNCH_DMA` decodes to `PushMethod::Opaque`. That is the posture this
+module's own header demands (*"a plausible answer on any of them is worse than a refusal"*),
+and it is stated here rather than buried because it is a **dependency E5 and E6 did not
+know they had**:
+
+★★ **OWNER DECISION NEEDED BEFORE E5.** The address plane cannot be populated from a CE
+page-table write (§2.1's second-place risk, and the *only* populate source the C measured on
+the compute path) while a CE write is undecodable. Three options, with the cost of each:
+
+1. **Give `PushbufferAbi` a run-aware entry point** — e.g. a provided
+   `decode_run(&self, &[(u32, Vec<u32>)]) -> Vec<PushMethod>` defaulting to a `decode_method`
+   map. Additive, no mock breakage, and the GA10x impl accumulates `SET_OBJECT` →
+   `OFFSET_*` → `LINE_*` → `LAUNCH_DMA` into one `CeLaunchDma`. **Cost:** the accumulator is
+   *state across methods*, so a run split across two GPFIFO ranges needs a decision about
+   what a partial run means (the C's answer, and the safe one, is that it means nothing).
+2. **Move the accumulation into `kayfabe-fwd`'s `apply_pushbuffer`** and keep the arch seam
+   per-method, with the arch supplying only "which method address is this". **Cost:** the
+   accumulation logic becomes core and therefore arch-shaped, which is what the Axis-B split
+   exists to prevent.
+3. **Leave it refusing and drive E6 from the isolate's own encoder.** **Cost:** E6's green
+   would then say nothing about the guest's pushbuffer, which is the whole north star.
+
+⊘ Nothing here guesses between them. Option 1 is the shape this document's author would
+pick; it is not what E4 shipped, and E4 did not widen its own scope to decide it.
+
+### 8.3 The instrument: `tests/oracle/pushbuffer_abi_oracle.c`
+
+The fourth compiled oracle in the tree, built exactly as the VBIOS / GMMU / token ones are:
+`tests/build.rs` hands `cc` **absolute paths** into a checkout beside this repository,
+nothing is vendored, an absent tree is a **loud skip** and a present-but-unbuildable one is a
+**hard error**.
+
+What is NVIDIA's, and it is all of the arithmetic:
+
+- `class/clc56f.h` + `class/clc7b5.h` — every `GP_ENTRY*`, `DMA_*`, `SEM_*`, `MEM_OP_*` and
+  `LAUNCH_DMA` field extent.
+- `nvmisc.h`'s `DRF_NUM` / `DRF_DEF` — the **encode** side.
+- ★★ `nvmisc.h`'s `DRF_VAL` — the **decode** side. Every assertion compares *our* decode
+  against *NVIDIA's* decode of the same word, never against the value the harness was called
+  with. That is what makes a sweep past a field's end meaningful: an address of 2^41 cannot
+  survive a 40-bit entry, NVIDIA's extractor says what does survive, and a decoder reporting
+  anything else has invented a field.
+- `SF_OFFSET`/`SF_SHIFT`/`SF_MASK`, sliced byte-for-byte out of `generated/g_gpu_access_nvoc.h`
+  — the macros that turn `NV_RAMUSERD_GP_GET`'s `(34*32+31):(34*32+0)` into a byte offset.
+- `kfifoGetUserdSizeAlign_<HAL>`, sliced out of the file the driver's **own** dispatch table
+  binds for `GA106`, with that file's **own** `published/…` includes.
+
+★★ **The USERD binding is itself a finding.** `kfifoGetUserdSizeAlign` is halified two ways;
+only `T234D`/`T264D` get their own arm and **GA106 falls to the fallback, which is
+Maxwell's** (`kfifoGetUserdSizeAlign_GM107`, `*pSize = 1<<NV_RAMUSERD_BASE_SHIFT`). So an
+Ampere channel's USERD is sized out of `published/maxwell/gm107/dev_ram.h`, and
+`published/ampere/ga102/dev_ram.h` — the obvious place to look — contains **no `NV_RAMUSERD`
+at all**. Reading the chip's own header and stopping there is exactly the mistake
+`a_table_does_not_decide_behaviour` records; deriving the binding is what avoids it.
+
+⊘ **This family has no `ci.yml` reached-count step**, unlike the other three oracles. Adding
+one moves `scripts/ci_gates.sh --all`'s pinned step floor, which E4 was told to leave at 21
+and which another agent is editing concurrently. **Until that step exists nothing stops these
+tests vanishing from CI and from a developer box at the same time**; the `PUSHBUFFER-ORACLE-GATE:
+RAN/SKIPPED` markers are emitted and greppable, and the floor is the missing half.
+
+### 8.4 The control, and why it is a separate ungated file
+
+`tests/tests/pushbuffer_ga10x_hostile.rs` is E4's stated control — *garbage must fault, not
+decode to a plausible method* — and it deliberately does **not** depend on the vendored tree,
+because it guards the property that costs a memory-safety fact when it breaks and must
+therefore run on a CI runner too.
+
+Refusal lives at three levels, and the file exercises all three:
+
+| level | vocabulary | test |
+|---|---|---|
+| ring | **no `PushRange`** | `a_ring_that_is_not_whole_entries_yields_nothing`, `a_gpfifo_control_entry_yields_no_range` |
+| range | `FwdFault` out of `read_pushbuffer` | `garbage_gpfifo_entries_fault_and_never_manufacture_a_method` |
+| method | `PushMethod::Opaque` | `garbage_method_words_decode_to_nothing_the_core_acts_on`, the three `every_near_miss_of_*` |
+
+★★ **The instrument checks itself.** `MockVmm::new()` declares the *whole* 64-bit space RAM,
+so a hostile GPFIFO entry would read zeros and succeed and the fault arm would never fire.
+`a_narrow_vmm_is_what_makes_the_fault_arm_reachable` asserts the narrowing is load-bearing by
+running the same ring through both.
+
+⊘ **What the corpus does NOT prove**: that no 32-bit word can ever decode to a modelled
+method. A header *is* a 32-bit word. What it proves is that over 4 096 hostile rings and
+2 048 noise ranges **none did**, and — the non-probabilistic half — that every *near miss* of
+a real run, one field changed at a time, refuses.
+
+### 8.5 Bites — and the two findings they produced about this work
+
+`scripts/bite_pushbuffer_codec.py`, 26 planted defects across `submit.rs` and `ga10x.rs`,
+four arms (`oracle`, `hostile`, `abi`, `port`). Numbers in §8.6.
+
+★★★ **Two findings, both about the instruments rather than the code, and both are the
+reason the harness exists.**
+
+1. **The oracle had a blind spot the first run found.** `GP_ENTRY0_GET` is `31:2`, so bits
+   `1:0` are not the address — bit 0 is `FETCH`. Every entry in the first sweep used
+   `FETCH_UNCONDITIONAL`, so `entry0 & 0xFFFF_FFFC` and a bare `entry0` agreed **everywhere**
+   and the bite "read the FETCH bit as address bit 0" was **MISSED BY EVERYTHING**. The
+   oracle now emits `FETCH_CONDITIONAL` cases (and one with bit 1 raw-set) and the bite is
+   caught. ⊘ A sweep that varies only the fields you thought of is not a sweep.
+2. **The bite harness itself was contaminated across files**, and it was caught only because
+   an `EQUIVALENT` row went red. The harness bites two files; its first version restored only
+   the file it had just bitten, leaving the *other* holding the previous bite — so every row
+   whose predecessor bit a different file was measured against **two** defects. The tell was
+   bite 25, a provably behaviour-preserving rewrite in `submit.rs`, reported RED because bite
+   24's fabricated `CeLaunchDma` was still in `ga10x.rs`. The harness now restores every file
+   before each bite. ⊘ The single-file harness this was copied from cannot exhibit this,
+   which is why nothing in the pattern guarded against it. `suspect_the_instrument_first`.
+
+### 8.6 Evidence
+
+- **Suite**, `[measured]` at the revision in §8.7 on the 38-core build box:
+  `cargo test --workspace --no-fail-fast` with `KAYFABE_NO_KVM` **unset**.
+- **Baseline** for comparison, `[measured]` at `e43bc71` on the same box, same command:
+  **1866 passed, 0 failed, 1 ignored**, `KVM-GATE: RAN` **56**.
+- **Gates**: `./scripts/ci_gates.sh --all`.
+- **Claim ledger**: `scripts/claim_ledger.py --gate` → 382 unattributed / 66 conflated /
+  17 bare-hardware, i.e. the baseline, unmoved.
+
+### 8.7 ⊘ What E4 does NOT establish
+
+1. **No boot.** `only_live_boots_are_proof`: every number here comes from NVIDIA's macros
+   compiled on a build box. **No guest has been booted against this codec**, and nothing here
+   says a real driver's pushbuffer parses. The first arm that could measure it is E6.
+2. **No forwarding.** No `VerbPlan` ran, no doorbell was rung, no `ce_copy`.
+3. **Nothing about a CE copy's operands** — see §8.2, which is the point.
+4. **Nothing about any other generation.** The bindings are derived for `GA106`;
+   `Ad10xArch`/`Gh100Arch` still delegate these two seams to `MockArch`'s invented ones.
+5. **Nothing about a run split across GPFIFO ranges.** `read_pushbuffer` decodes each range
+   independently, so a method run straddling two entries yields a short argument list in the
+   first and a header-shaped datum in the second. The codec refuses both (exact-count check;
+   whatever the datum sizes to is `Opaque` unless it is genuinely a modelled run), but *that
+   the guest never does this* is `[assumed]`, not measured.

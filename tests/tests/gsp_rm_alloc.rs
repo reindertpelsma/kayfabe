@@ -622,22 +622,46 @@ fn the_shipped_arch_refuses_every_data_plane_seam() {
         "and the 512 MiB size is ENUMERATED, or a leaf that claims it becomes a loud \
          UnknownLeafSize instead of a decodable mapping"
     );
-    // ⊘ Unchanged: the seams `#149` did NOT build. A `userd_size` of zero maps nothing
-    // rather than mapping a plausible-but-wrong window over guest memory.
-    assert_eq!(a.userd().userd_size(), 0);
+    // ★ CHANGED BY `E4`: the USERD model and the pushbuffer codec are built, so the
+    // tripwire moved from "these refuse everything" to "these answer the GA106 facts".
+    // `tests/tests/pushbuffer_abi_oracle.rs` is what judges the values against NVIDIA's
+    // own macros; these three lines are the tripwire on the SHIPPED `Arch`, so a
+    // generation swapped underneath it cannot quietly answer with somebody else's
+    // geometry.
+    assert_eq!(
+        a.userd().userd_size(),
+        512,
+        "★★ GA106 takes `kfifoGetUserdSizeAlign`'s FALLBACK arm, which is Maxwell's — a \
+         zero here maps nothing and a 4096 maps three other channels' USERD"
+    );
+    assert_eq!(a.userd().gp_put_offset(), 0x8C);
+    assert!(a.userd().gp_put_offset() + 4 <= a.userd().userd_size());
     assert_eq!(a.decode_doorbell(0xd000_0000_0000_0000), None);
+    // ⊘ Still refusing, and this is `E4`'s own negative result rather than an unbuilt
+    // seam: `0xffff_ffff` is `SEC_OP_END_PB_SEGMENT`, which carries no arguments and no
+    // fact. See `Ga10xPushbuffer` for why a real `LAUNCH_DMA` is Opaque here too.
     assert_eq!(
         a.pushbuffer().decode_method(0xffff_ffff, &[]),
         PushMethod::Opaque
     );
-    assert!(a.pushbuffer().gpfifo_entries(&[0xffu8; 64]).is_empty());
+    // A ring of all-ones entries: LENGTH is 0x1fffff dwords, so these DO name ranges —
+    // the refusal that matters is the method-level one above and the fault the consumer
+    // raises when the named memory does not exist (`pushbuffer_ga10x_hostile.rs`).
+    assert_eq!(
+        a.pushbuffer().gpfifo_entries(&[0xffu8; 64]).len(),
+        8,
+        "eight 8-byte entries"
+    );
+    // …and a ring that is not whole entries still yields nothing at all.
+    assert!(a.pushbuffer().gpfifo_entries(&[0xffu8; 63]).is_empty());
     assert!(
         a.gsp().is_none(),
         "the GSP REGISTER model is the ChipProfile's, never this Arch's"
     );
     assert!(
         a.name().contains("unbuilt"),
-        "the name must say so: it is what the homogeneity guard and every Debug print"
+        "the name must still say which seams are NOT built: it is what the homogeneity \
+         guard and every Debug print reports"
     );
 }
 

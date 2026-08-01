@@ -22,13 +22,21 @@
 //!   In the product it is the measured "mock wall" in its worst form: a plausible answer
 //!   on the one axis where a wrong answer is a silent memory-safety fact about the guest.
 //!
-//! ## ★★★ MOST of the data plane still refuses — and since `#149` the MMU does NOT
+//! ## ★★★ The data plane, seam by seam — and what still refuses
 //!
-//! GA10x's USERD model and pushbuffer codec are **not built**, and [`UnbuiltUserd`] /
-//! [`UnbuiltPushbuffer`] say so in the vocabulary the core already reads: zero size,
-//! `Opaque` for every method, no GPFIFO entries. Those are unchanged, and the paragraph
-//! they belong to is the one above: a *plausible* answer on any of them is worse than a
-//! refusal.
+//! Since `E4` the USERD model ([`Ga10xUserd`]) and the pushbuffer codec
+//! ([`Ga10xPushbuffer`]) are **built**; [`UnbuiltUserd`] / [`UnbuiltPushbuffer`] remain as
+//! the vocabulary's own spelling of a refusal, as [`UnbuiltGmmu`] did after `#149`, and
+//! are no longer what this `Arch` answers with.
+//!
+//! ⊘ **One seam inside the codec still refuses, and it is the interesting one.** A real
+//! `LAUNCH_DMA` carries **none** of its operands — they were written by *earlier, separate*
+//! method runs — and [`PushbufferAbi::decode_method`] is handed one `(header, args)` pair
+//! and nothing else. So [`PushMethod::CeLaunchDma`] is **not decodable at this seam at
+//! all**, and `LAUNCH_DMA` is [`PushMethod::Opaque`]. `MockArch` hid that by inventing a
+//! one-method encoding that packs both operands, a length and a work kind into a single
+//! method's arguments. See [`Ga10xPushbuffer`] for the full statement; closing it is `E5`'s
+//! decision, not a detail.
 //!
 //! ★★★ **`decode_doorbell` is now built (`E3`), and it is the one seam here that could
 //! not have been closed by reading.** It used to answer `None`. It answers a
@@ -52,9 +60,9 @@
 //! (`ogkm-580: kern_gmmu_fmt_gp10x.c`, `kern_gmmu_fmt_ga10x.c`) with its two GA10x traps
 //! encoded rather than commented — see [`Ga10xGmmu`].
 //!
-//! ⊘ This does **not** make the data plane built. Nothing here submits work or parses a
-//! pushbuffer; what exists is an address decoder and a token decoder, and every leaf
-//! neither can express is still a loud fault.
+//! ⊘ None of this makes the data plane *complete*. Nothing here submits work; what exists
+//! is an address decoder, a token decoder, a USERD geometry and a method framer, and every
+//! input none of them can express is still a loud refusal.
 //!
 //! ## ⊘ `gsp()` is `None`, deliberately, and it is not the same GSP question
 //!
@@ -68,8 +76,9 @@
 //! *this `Arch` does not carry a GSP register model.*
 
 use kayfabe_abi::generated::classes as nv;
+use kayfabe_abi::submit;
 use kayfabe_arch::gsp::GspModel;
-use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, RunlistId, VChid};
+use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, RunlistId, VChid};
 use kayfabe_arch::{
     Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, HostClasses, LevelShift, ObjectKind,
     PageSize, PdeEdge, PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
@@ -81,8 +90,8 @@ use kayfabe_arch::{
 #[derive(Debug, Default)]
 pub struct Ga10xArch {
     mmu: Ga10xGmmu,
-    userd: UnbuiltUserd,
-    push: UnbuiltPushbuffer,
+    userd: Ga10xUserd,
+    push: Ga10xPushbuffer,
 }
 
 impl Ga10xArch {
@@ -99,7 +108,7 @@ impl Arch for Ga10xArch {
     /// model prints. An operator reading "GA10x (GA106)" would have no way to know the
     /// data plane is not there.
     fn name(&self) -> &'static str {
-        "GA10x (GA106, object model + GMMU + doorbell; USERD/pushbuffer unbuilt)"
+        "GA10x (GA106, object model + GMMU + doorbell + USERD/pushbuffer; CE launch operands unbuilt)"
     }
 
     /// NVIDIA's real class ids. The constants are `kayfabe-abi`'s, per decision #2's
@@ -681,7 +690,43 @@ impl GmmuFmt for UnbuiltGmmu {
     }
 }
 
-/// A USERD model with no geometry — GA10x's real one is unbuilt.
+/// ★★ **GA10x's real USERD geometry** (`E4`) — 512 bytes with the two cursors at `0x88`
+/// and `0x8C`.
+///
+/// Every number is `kayfabe_abi::submit`'s, per decision #2's quarantine; this type is
+/// the mapping from that ABI into the [`UserdModel`] seam and transcribes nothing.
+///
+/// ⚠ **The size is a HAL choice, not a chip header's.** `kfifoGetUserdSizeAlign` is
+/// halified two ways and GA106 takes the `else` arm — Maxwell's — so the size comes from
+/// `published/maxwell/gm107/dev_ram.h` even though the chip is Ampere. Reaching for
+/// `published/ampere/ga102/dev_ram.h` instead finds **no `NV_RAMUSERD` at all**, and the
+/// `a_table_does_not_decide_behaviour` lesson is exactly this shape: read the ladder that
+/// binds the table, not only the table. `tests/oracle/pushbuffer_abi_oracle.c` compiles
+/// the driver's own function rather than trusting this paragraph.
+#[derive(Debug, Default)]
+pub struct Ga10xUserd;
+
+impl UserdModel for Ga10xUserd {
+    fn userd_size(&self) -> u64 {
+        submit::USERD_SIZE
+    }
+
+    fn gp_get_offset(&self) -> u64 {
+        submit::USERD_GP_GET
+    }
+
+    fn gp_put_offset(&self) -> u64 {
+        submit::USERD_GP_PUT
+    }
+}
+
+/// A USERD model with no geometry — kept as the vocabulary's own *"this generation has no
+/// USERD layout"*.
+///
+/// ⚠ **No longer what [`Ga10xArch`] answers with**: `E4` built the real one
+/// ([`Ga10xUserd`]). This type stays for [`UnbuiltGmmu`]'s reason — the statement it makes
+/// is one an adapter may still need to make, and deleting it would leave "refusing" with
+/// no spelling.
 ///
 /// ★ `userd_size() == 0` is the load-bearing zero: a caller sizing a USERD mapping from
 /// it maps nothing rather than mapping a plausible-but-wrong window over guest memory.
@@ -702,7 +747,180 @@ impl UserdModel for UnbuiltUserd {
     }
 }
 
-/// A pushbuffer codec that recognises no method — GA10x's real one is unbuilt.
+/// ★★★ **GA10x's real pushbuffer codec** (`E4`) — `AMPERE_CHANNEL_GPFIFO_A`'s GPFIFO
+/// entry format and `NVC56F_DMA_*` method framing, mapped into the core's four decoded
+/// fact kinds.
+///
+/// Every bit position is `kayfabe_abi::submit`'s, cited to `ogkm-580`, and none is
+/// transcribed here (decision #2's quarantine). What lives here is the *mapping* from a
+/// framed method run to [`PushMethod`], and the refusals that mapping makes.
+///
+/// # ★★★ What this codec DECODES — and it is three facts, not four
+///
+/// | fact | the exact shape accepted | why nothing looser |
+/// |---|---|---|
+/// | [`PushMethod::SetObject`] | one **incrementing** run, `SET_OBJECT`, count 1 | the class is `NVCLASS` (`15:0`) and *not* the whole word: bits `20:16` are `ENGINE` |
+/// | [`PushMethod::SemRelease`] | one **incrementing** run at `SEM_ADDR_LO`, count 5, with `SEM_EXECUTE.OPERATION == RELEASE` | the five words are one fact; six of the eight operations are **acquires**, and decoding one as a release reports a completion the guest is still waiting for |
+/// | [`PushMethod::TlbInvalidate`] | one **incrementing** run at `MEM_OP_A`, count 4, with `MEM_OP_D.OPERATION` an `MMU_TLB_INVALIDATE`, `PDB_ONE` | the class header's own comment is *"MEM_OP_D MUST be preceded by MEM_OPs A-C"*; `PDB_ALL` carries no address at all |
+///
+/// ⊘ **`LAUNCH_DMA` decodes to [`PushMethod::Opaque`], deliberately, and this is E4's
+/// most important finding.** A real `AMPERE_DMA_COPY_B` launch carries **none** of its
+/// operands: `OFFSET_IN_UPPER…OFFSET_OUT_LOWER` are a *separate earlier run*,
+/// `LINE_LENGTH_IN`/`LINE_COUNT` another, `SET_SEMAPHORE_A/B/PAYLOAD` a third, and
+/// `LAUNCH_DMA` itself is one word of flags (see `kayfabe_isolate_host::rm::ce_pushbuffer`,
+/// which is the encoder a real GA106 executed at rung R17). [`PushbufferAbi::decode_method`]
+/// is **per-method and stateless** — it is handed one `(header, args)` pair and nothing
+/// else — so it *cannot* produce a [`PushMethod::CeLaunchDma`] whose `dst`, `src` and
+/// `len` are anything but invented.
+///
+/// `MockArch` hid this: `mock_method::CE_LAUNCH_DMA` packs destination, source, length and
+/// work kind into **one** method's arguments, an encoding no NVIDIA chip has. So the seam
+/// looked sufficient for as long as the only implementer was the mock.
+///
+/// ⇒ The choice here is the one this module's header paragraph mandates — *"a plausible
+/// answer on any of them is worse than a refusal"*. Filling `CeLaunchDma` from a
+/// `LAUNCH_DMA` word alone would hand the address plane a destination the guest never
+/// wrote, which is a **silent memory-safety fact about the guest**. Closing this needs a
+/// seam that can see a *run* of methods, and that is a decision for `E5`, recorded in
+/// `docs/design/execution_plane_increments.md`.
+///
+/// # The refusals, and what each one stops
+///
+/// - **An argument count that does not match the header's exactly** ⇒ `Opaque`. The core
+///   parser clamps a truncated run to what is left in the range
+///   (`kayfabe_fwd::decode_methods`), so a range that ends mid-run yields a short `args`;
+///   decoding it would read zeros as a semaphore address.
+/// - **A non-incrementing framing of a modelled address** ⇒ `Opaque`. `NV_PUSH_nU` — the
+///   driver's own macro, and `rm::ce_pushbuffer` — writes `SEC_OP_INC_METHOD`; a
+///   `NON_INC` run at `SEM_ADDR_LO` writes five words to *one* register and is a
+///   different operation.
+/// - **A `SEC_OP` the class header does not define** (`RESERVED6`, and `GRP2_USE_TERT`
+///   with an unenumerated `TERT_OP`) ⇒ `method_len` is `0` and the decode is `Opaque`.
+/// - **A GPFIFO entry with `LENGTH == 0`** ⇒ **no range at all**. Its low byte is
+///   `OPCODE`, not `GET_HI`, so reading an address out of it fabricates a pointer.
+/// - **A ring whose byte length is not a whole number of 8-byte entries** ⇒ **no ranges
+///   at all**. If the ring's framing is wrong we do not know where entries start, and
+///   decoding the prefix would be answering a question we cannot answer.
+#[derive(Debug, Default)]
+pub struct Ga10xPushbuffer;
+
+impl Ga10xPushbuffer {
+    /// Read a 64-bit address held as `(low dword in place, high dword)` — the shape both
+    /// `SEM_ADDR_LO`/`_HI` and the GPFIFO entry use.
+    fn addr40(lo: u32, hi: u32) -> u64 {
+        u64::from(lo & 0xFFFF_FFFC) | (u64::from(hi & 0xFF) << 32)
+    }
+
+    /// Decode the five-word host-FIFO semaphore run, or `None` if it is not a release.
+    fn sem_release(args: &[u32]) -> Option<PushMethod> {
+        let [addr_lo, addr_hi, payload_lo, payload_hi, execute] = *args.first_chunk::<5>()?;
+        if execute & submit::fifo::SEM_EXECUTE_OPERATION_MASK
+            != submit::fifo::SEM_EXECUTE_OPERATION_RELEASE
+        {
+            // Six of the eight operations are acquires, and REDUCTION is neither.
+            return None;
+        }
+        // ★ `PAYLOAD_SIZE` decides whether `SEM_PAYLOAD_HI` is part of the value. With
+        // `_32BIT` the engine writes four bytes, and reading the high word anyway
+        // invents the top half of a fence.
+        let payload = if execute & submit::fifo::SEM_EXECUTE_PAYLOAD_SIZE_64BIT != 0 {
+            u64::from(payload_lo) | (u64::from(payload_hi) << 32)
+        } else {
+            u64::from(payload_lo)
+        };
+        Some(PushMethod::SemRelease {
+            addr: GpuVa(Self::addr40(addr_lo, addr_hi)),
+            payload,
+        })
+    }
+
+    /// Decode the four-word `MEM_OP_A..D` run, or `None` if it is not a PDB-targeted
+    /// TLB invalidate.
+    fn tlb_invalidate(args: &[u32]) -> Option<PushMethod> {
+        let [a, _b, c, d] = *args.first_chunk::<4>()?;
+        let op = d >> submit::fifo::MEM_OP_D_OPERATION_SHIFT;
+        if op != submit::fifo::MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE
+            && op != submit::fifo::MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE_TARGETED
+        {
+            // MEMBAR, the L2 operations and ACCESS_COUNTER_CLR share this method run.
+            return None;
+        }
+        if c & submit::fifo::MEM_OP_C_PDB_ALL != 0 {
+            // `PDB_ALL` names no page directory; there is no `pdb` to report.
+            return None;
+        }
+        let pdb = u64::from(c & submit::fifo::MEM_OP_C_PDB_ADDR_LO_MASK)
+            | (u64::from(d & submit::fifo::MEM_OP_D_PDB_ADDR_HI_MASK) << 32);
+        Some(PushMethod::TlbInvalidate {
+            pdb: Pdb(pdb),
+            membar: a & submit::fifo::MEM_OP_A_SYSMEMBAR_EN != 0,
+        })
+    }
+}
+
+impl PushbufferAbi for Ga10xPushbuffer {
+    /// The header's own argument count, per `SEC_OP`.
+    ///
+    /// ⊘ `0` for the two encodings `NVC56F_DMA_SEC_OP` enumerates without a format. That
+    /// is the trait's documented refusal — the core then advances past just the header —
+    /// and it is the *only* place this codec can desynchronise, which is why every other
+    /// form, including the legacy `GRP0`/`GRP2` ones this port models nothing of, is
+    /// sized rather than refused.
+    fn method_len(&self, header: u32) -> usize {
+        submit::method_header_decode(header).map_or(0, |h| h.arg_words)
+    }
+
+    /// One `(header, args)` pair → a core fact, or [`PushMethod::Opaque`].
+    ///
+    /// See the type docs for the three facts this decodes, and for why `LAUNCH_DMA` is
+    /// **not** one of them.
+    fn decode_method(&self, header: u32, args: &[u32]) -> PushMethod {
+        let Some(h) = submit::method_header_decode(header) else {
+            return PushMethod::Opaque;
+        };
+        // ★★ Only the incrementing framing, and only an argument list of exactly the
+        // length the header declared. A short list is a run the range cut in half; a
+        // non-incrementing run at the same address is a different operation.
+        if h.form != submit::MethodForm::Incrementing || args.len() != h.arg_words {
+            return PushMethod::Opaque;
+        }
+        let decoded = match (h.method, h.arg_words) {
+            (submit::SET_OBJECT, 1) => Some(PushMethod::SetObject {
+                class: ClassId(args[0] & submit::SET_OBJECT_NVCLASS_MASK),
+            }),
+            (submit::fifo::SEM_ADDR_LO, 5) => Self::sem_release(args),
+            (submit::fifo::MEM_OP_A, 4) => Self::tlb_invalidate(args),
+            _ => None,
+        };
+        decoded.unwrap_or(PushMethod::Opaque)
+    }
+
+    /// The ring's GPFIFO entries, 8 bytes each, little-endian.
+    ///
+    /// Two refusals, both of them whole-ring or whole-entry rather than partial: a ring
+    /// that is not a whole number of entries yields **nothing**, and a control entry
+    /// (`LENGTH == 0`) contributes **nothing**. See the type docs.
+    fn gpfifo_entries(&self, ring: &[u8]) -> Vec<PushRange> {
+        if ring.is_empty() || !ring.len().is_multiple_of(submit::GP_ENTRY_SIZE as usize) {
+            return Vec::new();
+        }
+        ring.chunks_exact(submit::GP_ENTRY_SIZE as usize)
+            .filter_map(|e| {
+                let raw = u64::from_le_bytes(e.try_into().expect("8 bytes"));
+                submit::gp_entry_decode(raw).map(|d| PushRange {
+                    gpa: d.gpu_va,
+                    len: d.len_bytes,
+                })
+            })
+            .collect()
+    }
+}
+
+/// A pushbuffer codec that recognises no method — kept as the vocabulary's own *"this
+/// generation has no method ABI"*.
+///
+/// ⚠ **No longer what [`Ga10xArch`] answers with**: `E4` built the real one
+/// ([`Ga10xPushbuffer`]). Kept for [`UnbuiltGmmu`]'s reason.
 #[derive(Debug, Default)]
 pub struct UnbuiltPushbuffer;
 
@@ -730,6 +948,8 @@ impl PushbufferAbi for UnbuiltPushbuffer {
 kayfabe_util::assert_send_sync!(
     Ga10xArch,
     Ga10xGmmu,
+    Ga10xUserd,
+    Ga10xPushbuffer,
     UnbuiltGmmu,
     UnbuiltUserd,
     UnbuiltPushbuffer

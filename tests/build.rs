@@ -321,6 +321,89 @@ const TOKEN_SLICE_ANCHORS: &[&str] = &[
     "kchannelIsRunlistSet",
 ];
 
+// =====================================================================================
+// ★★★ The PUSHBUFFER / USERD ABI oracle — increment E4's instrument
+// =====================================================================================
+//
+// See `oracle/pushbuffer_abi_oracle.c`. Everything here decides WHICH driver code is
+// compiled, and it decides it by reading the driver.
+
+/// The chip whose HAL binding the pushbuffer/USERD oracle is built with — the same GA106
+/// the shipped `kayfabe_chips::Ga10xArch` is, named here for [`GMMU_ORACLE_CHIP`]'s
+/// reason: nothing in the driver can tell us which chip we are pretending to be.
+const PUSHBUFFER_ORACLE_CHIP: &str = "GA106";
+
+/// The halified entry point that decides how large a channel's USERD is.
+///
+/// ★★ **This is not decoration, and it is the reason the oracle exists at all for USERD.**
+/// `kfifoGetUserdSizeAlign` is halified two ways in `g_kernel_fifo_nvoc.c`; only
+/// `T234D`/`T264D` get their own arm and **GA106 falls to the fallback**, which is
+/// *Maxwell's* `_GM107`. So an Ampere channel's USERD is sized out of
+/// `published/maxwell/gm107/dev_ram.h`, and `published/ampere/ga102/dev_ram.h` — the
+/// obvious place to look — contains no `NV_RAMUSERD` at all. Deriving the binding is what
+/// keeps that choice the driver's; `a_table_does_not_decide_behaviour` is the memory that
+/// names this exact mistake.
+const USERD_SIZE_HAL_FUNC: &str = "kfifoGetUserdSizeAlign";
+
+/// The class headers the oracle's own `#include`s reach, checked for presence before the
+/// build is attempted so an absent one is a **skip naming the file** rather than a wall of
+/// preprocessor errors.
+const PUSHBUFFER_CLASS_HEADERS: &[&str] = &[
+    "src/common/sdk/nvidia/inc/class/clc56f.h",
+    "src/common/sdk/nvidia/inc/class/clc7b5.h",
+    "src/common/sdk/nvidia/inc/nvmisc.h",
+];
+
+/// The generated header carrying the `SF_*` field accessors — the macros that turn a
+/// `dev_ram.h` field extent into a **byte offset**.
+const PUSHBUFFER_SF_HEADER: &str = "src/nvidia/generated/g_gpu_access_nvoc.h";
+
+/// The two lines the USERD half of the increment turns on. If a release stops sizing
+/// USERD with them, this oracle must **fail to build** rather than quietly judge our model
+/// against a function that no longer sizes anything.
+const USERD_SLICE_ANCHORS: &[&str] = &["NV_RAMUSERD_BASE_SHIFT", "pSize"];
+
+/// Cut the `SF_*` accessor block out of the driver's generated header, byte for byte.
+///
+/// Same construction as [`extract_interface_slice`]: both ends are located by the file's
+/// own text, and the result is checked for the anchors it must contain. The block is a
+/// contiguous run of `#define SF_…` / `#undef SF_…` lines, so the cut is the run itself.
+fn extract_sf_accessors(src: &str) -> Result<String, String> {
+    let needle = "#define SF_OFFSET(";
+    let at = src
+        .find(needle)
+        .ok_or_else(|| format!("no `{needle}` in the generated header"))?;
+    // Walk back to the first line of the contiguous SF block…
+    let mut start = src[..at].rfind('\n').map_or(0, |r| r + 1);
+    while let Some(r) = src[..start.saturating_sub(1)].rfind('\n') {
+        let prev_start = r + 1;
+        let line = src[prev_start..start].trim_start();
+        if !line.starts_with("#define SF_") && !line.starts_with("#undef  SF_") {
+            break;
+        }
+        start = prev_start;
+    }
+    // …and forward to the last one.
+    let mut end = start;
+    for line in src[start..].split_inclusive('\n') {
+        let t = line.trim_start();
+        if t.starts_with("#define SF_") || t.starts_with("#undef  SF_") {
+            end += line.len();
+        } else {
+            break;
+        }
+    }
+    let slice = &src[start..end];
+    for anchor in ["SF_OFFSET", "SF_SHIFT", "SF_MASK"] {
+        if !slice.contains(anchor) {
+            return Err(format!(
+                "the extracted SF block does not contain `{anchor}`"
+            ));
+        }
+    }
+    Ok(slice.to_string())
+}
+
 /// Read the symbol the driver's own dispatch table binds `func` to for `chip`.
 ///
 /// ★★★ Why this is derived and not listed. `kgmmuFmtInitPteComptagLine` looks like it
@@ -686,6 +769,7 @@ fn main() {
     println!("cargo:rerun-if-changed=oracle/vbios_oracle.c");
     println!("cargo:rerun-if-changed=oracle/gmmu_fmt_oracle.c");
     println!("cargo:rerun-if-changed=oracle/worksubmit_token_oracle.c");
+    println!("cargo:rerun-if-changed=oracle/pushbuffer_abi_oracle.c");
     for (env_var, _, _) in TREES {
         println!("cargo:rerun-if-env-changed={env_var}");
     }
@@ -705,6 +789,7 @@ fn main() {
         // exactly one of them, and say which.
         build_gmmu_oracle(&cc, &out_dir, &root, tag, env_var);
         build_token_oracle(&cc, &out_dir, &root, tag, env_var);
+        build_pushbuffer_oracle(&cc, &out_dir, &root, tag, env_var);
 
         if !root.join(VBIOS_TU102_C).is_file()
             || !root.join(FWSEC_C).is_file()
@@ -1144,6 +1229,164 @@ fn build_token_oracle(cc: &str, out_dir: &Path, root: &Path, tag: &str, env_var:
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr),
     );
+
+    println!("cargo:rustc-env={out_env}={}", bin.display());
+}
+
+/// Build the **pushbuffer / USERD ABI oracle** for one vendored tree — increment `E4`.
+///
+/// Failure polarity is the house rule, for the fourth time and the same reason: an absent
+/// tree is a **skip** with a `cargo:warning=`; a present tree that will not build is a
+/// **hard error**. An oracle that degrades to a skip is how a gate stops being able to
+/// fire.
+fn build_pushbuffer_oracle(cc: &str, out_dir: &Path, root: &Path, tag: &str, env_var: &str) {
+    let out_env = format!("KAYFABE_PUSHBUFFER_ORACLE_{tag}");
+    let dispatch = root.join(NVOC_KERNEL_FIFO_C);
+    let sf_header = root.join(PUSHBUFFER_SF_HEADER);
+    let missing: Vec<&str> = PUSHBUFFER_CLASS_HEADERS
+        .iter()
+        .copied()
+        .filter(|h| !root.join(h).is_file())
+        .collect();
+    if !dispatch.is_file()
+        || !sf_header.is_file()
+        || !root.join(TOKEN_IMPL_ROOT).is_dir()
+        || !missing.is_empty()
+    {
+        println!(
+            "cargo:warning=PUSHBUFFER ORACLE SKIPPED: no usable open-kernel-modules tree at \
+             {} (set {env_var} to relocate; missing class headers: {missing:?}). The tests \
+             that judge `Ga10xUserd` / `Ga10xPushbuffer` against NVIDIA's OWN field \
+             definitions announce themselves as SKIPPED and assert NOTHING. Nothing is \
+             vendored here to stand in for them.",
+            root.display()
+        );
+        return;
+    }
+
+    let fail = |what: &str| -> ! {
+        panic!(
+            "PUSHBUFFER ORACLE: {what}\n\
+             The tree at {} IS present, so this is NOT a machine without the oracle — it is \
+             the oracle having rotted against a driver whose text moved, and degrading it to \
+             a skip is how a gate stops being able to fire.",
+            root.display()
+        )
+    };
+
+    let dispatch_src = std::fs::read_to_string(&dispatch)
+        .unwrap_or_else(|e| fail(&format!("cannot read {}: {e}", dispatch.display())));
+
+    // ★★ Refuse a chip name this table has never heard of — `nvoc_hal_symbol` would
+    // otherwise fall through to the `else` arm silently. Here that arm is ALSO the right
+    // answer for GA106, which makes the check more important rather than less: without it,
+    // a typo'd chip would produce the identical binding and the oracle would look healthy
+    // for a chip that does not exist.
+    if !chip_is_known(&dispatch_src, PUSHBUFFER_ORACLE_CHIP) {
+        fail(&format!(
+            "`{PUSHBUFFER_ORACLE_CHIP}` appears in no `/* ChipHal: … */` comment in {} — \
+             the name is wrong.",
+            dispatch.display()
+        ));
+    }
+    let symbol = nvoc_hal_symbol(&dispatch_src, USERD_SIZE_HAL_FUNC, PUSHBUFFER_ORACLE_CHIP)
+        .unwrap_or_else(|e| fail(&e));
+
+    let impl_file =
+        find_definition_file(&root.join(TOKEN_IMPL_ROOT), &symbol).unwrap_or_else(|e| fail(&e));
+    let impl_src = std::fs::read_to_string(&impl_file)
+        .unwrap_or_else(|e| fail(&format!("cannot read {}: {e}", impl_file.display())));
+    let userd_fn = extract_function(&impl_src, &symbol)
+        .unwrap_or_else(|e| fail(&format!("{} — {e}", impl_file.display())));
+
+    for anchor in USERD_SLICE_ANCHORS {
+        if !userd_fn.contains(anchor) {
+            fail(&format!(
+                "the driver code sliced for `{symbol}` does not contain `{anchor}`. Either \
+                 the cut is wrong or this release no longer sizes USERD here — either way \
+                 the oracle must not be believed."
+            ));
+        }
+    }
+
+    // ★★★ The slice carries the IMPL FILE'S OWN `published/…` include lines, byte for
+    // byte, and not a header this script chose. `NV_RAMUSERD_BASE_SHIFT` — and, through
+    // the same header, `NV_RAMUSERD_GP_GET`/`_GP_PUT` — reach the compiler ONLY through
+    // those lines. Naming `published/maxwell/gm107/dev_ram.h` here instead would put the
+    // chip-generation choice back into our hands, which is the transcription this oracle
+    // exists to remove. (It is Maxwell's, on an Ampere chip; see USERD_SIZE_HAL_FUNC.)
+    let published: String = impl_src
+        .lines()
+        .filter(|l| l.trim_start().starts_with("#include") && l.contains("published/"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    if !published.contains("dev_ram.h") {
+        fail(&format!(
+            "{} no longer includes a `published/…/dev_ram.h`, so the slice would not see \
+             NV_RAMUSERD_* at all and USERD could not be sized against the driver's own \
+             field definitions.",
+            impl_file.display()
+        ));
+    }
+
+    let sf_src = std::fs::read_to_string(&sf_header)
+        .unwrap_or_else(|e| fail(&format!("cannot read {PUSHBUFFER_SF_HEADER}: {e}")));
+    let sf_slice = extract_sf_accessors(&sf_src).unwrap_or_else(|e| {
+        fail(&format!(
+            "slicing the SF accessors out of {PUSHBUFFER_SF_HEADER}: {e}"
+        ))
+    });
+
+    // Per-tag subdirectory with a stable basename, for `build_gmmu_oracle`'s reason.
+    let dir = out_dir.join(tag);
+    std::fs::create_dir_all(&dir).expect("slice dir");
+    let sf_path = dir.join("sf_accessor_slice.inc");
+    std::fs::write(&sf_path, &sf_slice).expect("write the SF slice");
+    let userd_path = dir.join("userd_size_slice.inc");
+    std::fs::write(&userd_path, format!("{published}\n{userd_fn}\n"))
+        .expect("write the USERD slice");
+
+    let harness = Path::new("oracle/pushbuffer_abi_oracle.c")
+        .canonicalize()
+        .expect("oracle/pushbuffer_abi_oracle.c is part of this crate");
+    let bin = out_dir.join(format!("pushbuffer_abi_oracle_{tag}"));
+    let mut cmd = Command::new(cc);
+    cmd.arg("-std=gnu11").arg("-O1").arg("-g");
+    cmd.arg("-fno-strict-aliasing");
+    cmd.arg("-o").arg(&bin);
+    cmd.arg(format!(
+        "-DOGKM_SF_ACCESSOR_SLICE=\"{}\"",
+        sf_path.display()
+    ));
+    cmd.arg(format!(
+        "-DOGKM_USERD_SIZE_SLICE=\"{}\"",
+        userd_path.display()
+    ));
+    cmd.arg(format!("-DOGKM_USERD_SIZE_FN={symbol}"));
+    cmd.arg(format!("-DOGKM_USERD_SIZE_FN_NAME=\"{symbol}\""));
+    cmd.arg(format!(
+        "-DOGKM_PUSHBUFFER_CHIP=\"{PUSHBUFFER_ORACLE_CHIP}\""
+    ));
+    for d in DEFINES {
+        cmd.arg(format!("-D{d}"));
+    }
+    cmd.arg("-include")
+        .arg(root.join("src/common/sdk/nvidia/inc/cpuopsys.h"));
+    for (prefix, sub) in INCLUDES {
+        cmd.arg("-I").arg(root.join(prefix).join(sub));
+    }
+    cmd.arg(&harness);
+
+    let out = cmd
+        .output()
+        .unwrap_or_else(|e| fail(&format!("could not run the C compiler `{cc}`: {e}")));
+    if !out.status.success() {
+        fail(&format!(
+            "the harness did not compile. Compiler output:\n{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        ));
+    }
 
     println!("cargo:rustc-env={out_env}={}", bin.display());
 }
