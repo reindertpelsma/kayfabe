@@ -59,7 +59,7 @@
 //!
 //! > **plan** (installer held — pure bookkeeping) → **execute** (every lock dropped, the
 //! > `mmap`/ioctl happens here) → **commit** (installer re-taken, **R5 re-validated**
-//! > against a per-window generation, then the view lock updated).
+//! > against the window's *presence*, then the view lock updated).
 //!
 //! `assert_leaf_free` sits at the top of the execute phase of every op, so *"the syscall
 //! ran with no lock at all"* is a mechanism, not a comment.
@@ -159,6 +159,12 @@
 //!
 //! **405 identical lines across same-named items**, of which roughly 120 are byte-identical
 //! whole functions. `map_guest` alone is 77.
+//!
+//! ★ The `map_guest` row is now an **under**-count and deliberately not re-measured: #89
+//! (2026-08-01) deleted this crate's per-window generation, so the two commit blocks are
+//! the same code where they used to differ. The table is a dated snapshot, and a row
+//! re-measured by a different method on a different day is worse than a stale one that
+//! says when it was taken.
 //!
 //! ### Genuinely hypervisor-specific — a third backend must write these itself
 //!
@@ -472,10 +478,6 @@ struct Window {
     memslots: Vec<KvmMemslot>,
     /// The shareable backing behind it, if guest RAM was created shareable.
     ram: Option<Arc<SharedRam>>,
-    /// ★ **The R5 token.** Bumped when the window is removed, and re-checked at commit: an
-    /// op that planned against generation `g` and commits to find `g'` planned against a
-    /// window that no longer exists.
-    generation: u64,
     /// Live `MAP_FIXED` placements inside it, by the slot id that names them.
     placements: BTreeMap<SlotId, (u64, u64)>,
 }
@@ -501,7 +503,6 @@ struct Installer {
     /// that makes keeping the vector worth more than deleting it.
     traps: Vec<(BarId, Range<u64>, TrapMode)>,
     exports: Vec<std::os::fd::OwnedFd>,
-    next_region: u64,
     next_slot_id: u64,
     /// ★★ Kernel memslot numbers, **recycled through a free list** — see
     /// [`crate::slotnum`] for the adjudication that changed this. It used to be a bare
@@ -511,7 +512,13 @@ struct Installer {
     /// the C's **measured** exhaustion (`C: nvkvm_mmap_host.c:382-389`, *"exhausted the
     /// pool after a few CUDA processes"*). Neither doc cited the other.
     memslot_numbers: MemslotNumbers,
-    generation: u64,
+    /// ★★★ **Strictly monotonic; region ids are minted here and NEVER recycled**, and that
+    /// is a load-bearing fact rather than an implementation convenience: it is the whole
+    /// reason [`Vmm::map_guest`]'s R5 re-validation can be a presence test. `RamRegionId`
+    /// is the key a commit re-looks-up, and a key that is never re-issued cannot suffer
+    /// ABA — `Some(w)` at commit is necessarily *the same* [`Window`] the plan read. See
+    /// the commit block for the argument this replaced.
+    next_region: u64,
     /// ★★ **Removed windows whose mapping has not been released yet** — see
     /// [`Plane::retire`]. The machine holds one reference to each, so an accessor's clone
     /// can never be the last one and an accessor can therefore never be the thread that
@@ -742,10 +749,9 @@ impl KvmMachine {
                     window_slot: BTreeMap::new(),
                     traps: Vec::new(),
                     exports: Vec::new(),
-                    next_region: 1,
                     next_slot_id: 1,
                     memslot_numbers: MemslotNumbers::new(max_memslots),
-                    generation: 1,
+                    next_region: 1,
                     retired: Vec::new(),
                 }),
                 clock: Mutex::new((Instant::ZERO, DeferQueue::new())),
@@ -820,7 +826,7 @@ impl KvmMachine {
         p.about_to_syscall(what);
 
         // ---- PLAN (installer held; pure bookkeeping, no syscall) -------------------
-        let (region, slot_id, memslot_numbers, spans, generation) = {
+        let (region, slot_id, memslot_numbers, spans) = {
             let (mut ins, _h) = p.installer();
             if !geometry::is_aligned(gpa, p.page) || !geometry::is_aligned(len, p.page) || len == 0
             {
@@ -859,7 +865,7 @@ impl KvmMachine {
             ins.next_region += 1;
             let slot_id = SlotId(ins.next_slot_id);
             ins.next_slot_id += 1;
-            (region, slot_id, numbers, spans, ins.generation)
+            (region, slot_id, numbers, spans)
         };
 
         // ---- EXECUTE (every lock dropped; this is where the syscalls happen) -------
@@ -915,7 +921,6 @@ impl KvmMachine {
                 window,
                 memslots,
                 ram,
-                generation,
                 placements: BTreeMap::new(),
             })
         })();
@@ -1006,7 +1011,10 @@ impl KvmMachine {
             let Some(w) = ins.windows.remove(&region) else {
                 return Err(VmmError::BadSlot(SlotId(region.0)));
             };
-            ins.generation += 1;
+            // ★★ **The removal from `ins.windows` above IS the R5 signal**, and nothing
+            // else is needed. There used to be an `ins.generation += 1` here, stamped into
+            // every window at install and re-checked at `map_guest`'s commit — see that
+            // block for why the check could not fail.
             ins.placement_owner.retain(|_, r| *r != region);
             ins.window_slot.retain(|_, r| *r != region);
             // ★ The debits, under the same lock that took the state away — see the note
@@ -1394,7 +1402,7 @@ impl Vmm for KvmVmm {
         p.about_to_syscall("map_guest (a MAP_FIXED placement inside a window)");
 
         // ---- PLAN -----------------------------------------------------------------
-        let (slot_id, region, window, offset, generation) = {
+        let (slot_id, region, window, offset) = {
             let (mut ins, _h) = p.installer();
             if prot == Prot::ReadOnly {
                 // §6.7 item 4: KVM's read-only flag is a SLOT property, so it cannot be
@@ -1426,10 +1434,9 @@ impl Vmm for KvmVmm {
                 ));
             }
             let window = Arc::clone(&w.window);
-            let generation = w.generation;
             let slot_id = SlotId(ins.next_slot_id);
             ins.next_slot_id += 1;
-            (slot_id, region, window, off, generation)
+            (slot_id, region, window, off)
         };
 
         // ---- EXECUTE (every lock dropped) -----------------------------------------
@@ -1473,9 +1480,36 @@ impl Vmm for KvmVmm {
         p.audit.placements_made.fetch_add(1, Ordering::SeqCst);
 
         // ---- COMMIT + R5 -----------------------------------------------------------
+        //
+        // ★★★ **R5's token is the window's PRESENCE, not a version counter** — the same
+        // ruling the sibling adapter already made (`kayfabe-vmm-qemu`'s `map_guest`), and
+        // it is re-derived here rather than copied, because an argument that fits one seam
+        // need not fit the other.
+        //
+        // What stood here was `Some(w) if w.generation == generation`, against a `u64`
+        // stamped into each [`Window`] at install from an `Installer`-wide counter that
+        // `remove_window` bumped. It reads as an ABA defence and is not one: it **cannot
+        // fail**. The key this commit re-looks-up is the `RamRegionId` minted from
+        // [`Installer::next_region`], which only ever increments and is never recycled, so
+        // no second window can ever appear under a region id a first one vacated. `Some(w)`
+        // therefore implies *the same* `Window` object the plan phase read — and a
+        // `Window`'s fields other than `placements` are never mutated after insert — so the
+        // stamped generation was, necessarily, the one the plan had already read out of the
+        // very same struct. A constant compared against itself.
+        //
+        // ⊘ And it was NOT worth making real. A counter can only carry information the
+        // key does not, i.e. re-identification across a recycled key, and that is
+        // structurally impossible above. Bumping it on *placement* changes instead would
+        // give it something to say — but the wrong thing: it would refuse a concurrent
+        // publication into a different part of a perfectly live window at publication
+        // frequency, converting a real (and separate) hazard into a livelock.
+        //
+        // The presence test, by contrast, is falsifiable and has been **watched fail**:
+        // `crates/kayfabe-vmm-kvm/tests/r5_revalidation.rs` races a `remove_window` into
+        // the gap and asserts the refusal and the ledger (2026-08-01).
         let (mut ins, _h) = p.installer();
         match ins.windows.get_mut(&region) {
-            Some(w) if w.generation == generation => {
+            Some(w) => {
                 w.placements.insert(slot_id, (offset, len));
                 ins.placement_owner.insert(slot_id, region);
                 // ★ The ledger moves WITH the state it counts, under the lock that owns
