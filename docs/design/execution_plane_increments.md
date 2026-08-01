@@ -584,3 +584,43 @@ always reports something: a working plane prints `0 refusing` and **no** refusal
 | `run_e0breal1_isolate.log` | ⊘ the instrument failure, kept: the first sighting caught the child mid-bring-up |
 | `run_e0breal2_qemu.log`, `run_e0bctl2_qemu.log`, `run_e0bfail1_qemu.log` | the device's own reports, the three isolate lines above |
 | `run_e0breal2_dmesg.log` | the guest driver's ring buffer — the wall, unmoved and identical in all four arms |
+
+#### Suite, gates, bites, ledger
+
+- **Suite**, `[measured]` at `853a311` on the **RTX 3060 box** (the KVM bench):
+  `cargo test --workspace --no-fail-fast` with `KAYFABE_NO_KVM` **unset** → **1851 passed,
+  0 failed**, `KVM-GATE: RAN` markers **56**, `SANDBOX-GATE: RAN` **10**.
+- **Gates**, `[measured]` at `853a311` on the 38-core box:
+  `./scripts/ci_gates.sh --all` → `ALL GATES CLEAN (21 steps, floor 21 for --all mode)`.
+- **Claim ledger**: `scripts/claim_ledger.py --gate` → 382 unattributed / 66 conflated /
+  17 bare-hardware, i.e. the baseline, unmoved.
+- **Bites:** `scripts/bite_lazy_isolate.py` — **9/9 fired**, restored-tree sanity GREEN.
+  ⚠ Reported honestly: the **first** run of this harness fired only **6/9**, and none of the
+  three misses was a code finding — two `--exact` filters were missing their
+  `isolate::tests::` module path (*"TEST DID NOT RUN — filter matched nothing"*) and one
+  planted replacement did not compile. All three would have read as *"the guard is not
+  needed"* to a careless reader; the harness reports them as their own outcomes precisely so
+  they cannot.
+- ★ **A red test that was a real finding, and the pin moved rather than the bar.**
+  `gsp_rm_alloc.rs::the_ports_object_model_realizes_with_no_forwarding_plane` asserted
+  `gpu.system.isolates.contains_key(&GpuId::ZERO)` — it was **pinning the defect**. It is now
+  `…_and_no_isolate`, asserting the negation plus the arena that realize legitimately still
+  carves, and a second test (`the_first_guest_alloc_materializes_the_ports_isolate`) was added
+  so the negation cannot be satisfied by a plane that never spawns at all.
+
+#### ⊘ What E0b and E1 do NOT establish
+
+1. **No forwarding.** No `VerbPlan` executed, no doorbell rung, no pushbuffer parsed, no
+   `ce_copy`. The verbs witnessed are still the isolate's own bring-up (R0–R6b).
+2. **Nothing about the boot.** The wall is unmoved: `RmInitAdapter failed!
+   (0x25:0xffff:1249)`, identical in all four arms. E0b buys attribution, E1 buys
+   visibility; neither buys progress.
+3. **Nothing about multi-process on hardware.** Every bench arm has exactly one `Proc` (the
+   system one) because the boot never reaches a second guest process. The per-process claim
+   is carried by the suite and by the projection's anchor-client key — see §3.7.
+4. **Nothing about latency or concurrency under load.** One isolate, one spawn, one boot.
+   The spawn now happens on a vCPU thread servicing a guest RPC *during* `RmInitAdapter`
+   rather than at realize, so its blocking hello handshake is on a guest-visible path for the
+   first time. `[measured]` only that three boots completed; no timing was taken.
+5. **`isolates_materialized` is not an attribution instrument** and must never be cited as
+   one — see §3.7 and the field's own docs.
