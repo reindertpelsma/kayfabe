@@ -80,6 +80,269 @@ pub enum WalkResult {
     },
 }
 
+/// ★★★ **One virtual address, resolved** — what [`translate`] answers.
+///
+/// It carries the leaf's whole statement and not just the address, because every consumer
+/// so far needs a second field: a translated aperture access needs [`Translation::aperture`]
+/// to know *which store* holds the byte, and a write needs [`Translation::read_only`] to
+/// know whether the guest said it may.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Translation {
+    /// The physical address of the byte, i.e. the leaf's page base **plus the offset
+    /// within the page**. Already offset — a caller that had to add it could add it twice.
+    pub phys: u64,
+    /// Which aperture `phys` is in. ⊘ Never assumed to be vidmem: a leaf may name system
+    /// memory, and answering a sysmem address out of a framebuffer store is the exact
+    /// aliasing `Aperture` exists to prevent.
+    pub aperture: Aperture,
+    /// The leaf's page size.
+    pub size: PageSize,
+    /// The guest's read-only bit, carried so a caller cannot silently widen rights.
+    pub read_only: bool,
+    /// The level the leaf was found at, for a diagnostic.
+    pub level: u8,
+}
+
+/// Why a **point** translation refused. Disjoint from [`WalkFault`] on purpose: those are
+/// reasons a *decode* could not be performed, these are reasons this VA has no answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TranslateFault {
+    /// The decoder refused. Carried whole rather than flattened — a walk that could not
+    /// read a table and a walk that read a table saying "nothing here" are opposite facts.
+    Walk(WalkFault),
+    /// ★★★ **MISS.** A slot on the path decoded to [`PteDecode::Invalid`]. This is the
+    /// address table's own `miss = fault`, arriving from the page tables rather than from
+    /// the table.
+    Unmapped {
+        /// The virtual address asked for.
+        va: u64,
+        /// The level whose slot was invalid.
+        level: u8,
+    },
+    /// ★★ The guest **declared** this range backing-free ([`PteDecode::Sparse`]). A
+    /// different answer from [`TranslateFault::Unmapped`] and it must stay different: one
+    /// is a statement the guest made, the other is the absence of one.
+    Sparse {
+        /// The virtual address asked for.
+        va: u64,
+        /// The level whose slot was sparse.
+        level: u8,
+    },
+    /// The descent ran past [`MAX_WALK_DEPTH`] — a guest-built cycle.
+    TooDeep {
+        /// The last table the descent refused to follow.
+        phys: u64,
+    },
+}
+
+impl TranslateFault {
+    /// One clause, for a diagnostic an operator reads beside a register offset.
+    #[must_use]
+    pub fn why(self) -> &'static str {
+        match self {
+            Self::Walk(_) => "the page-table decoder refused a level of this walk",
+            Self::Unmapped { .. } => "the guest's page tables map nothing at this address",
+            Self::Sparse { .. } => {
+                "the guest declared this range SPARSE — deliberately backing-free"
+            }
+            Self::TooDeep { .. } => {
+                "the descent exceeded its depth bound; a page directory points back at itself"
+            }
+        }
+    }
+}
+
+/// Read one entry of a table page.
+///
+/// ★ One entry, not the page: a point query that read the whole table would cost 4 KiB of
+/// round trip per level for eight bytes of answer, and [`FbRead`]'s production
+/// implementation is a *connection*. [`decode_page`] reads the page because its job is the
+/// page; this reads the entry because its job is the entry. They share the decoder, which
+/// is the part that can be wrong.
+fn entry_at(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    table: u64,
+    level: u8,
+    va: u64,
+) -> Result<u128, WalkFault> {
+    let geo = fmt
+        .level_shift(level)
+        .ok_or(WalkFault::NoSuchLevel { level })?;
+    let width = fmt.entry_size(level);
+    // ★ `entries` must be a power of two **here** and not in `decode_page`, and the
+    // asymmetry is real: `decode_page` iterates `0..entries` and never inverts the map,
+    // while a point query has to turn a virtual address back into an index. `%` would
+    // answer for a non-power-of-two count and the answer would be a different slot from
+    // the one `decode_page` gave that address — two descriptions of one table.
+    if width == 0
+        || width > MAX_ENTRY_BYTES
+        || geo.entries == 0
+        || !geo.entries.is_power_of_two()
+        || geo.shift >= 64
+    {
+        return Err(WalkFault::BadGeometry { level });
+    }
+    let idx = (va >> geo.shift) & u64::from(geo.entries - 1);
+    let at = idx
+        .checked_mul(u64::from(width))
+        .and_then(|o| table.checked_add(o))
+        .ok_or(WalkFault::BadGeometry { level })?;
+    let mut raw = [0u8; MAX_ENTRY_BYTES as usize];
+    if !fb.read(at, &mut raw[..width as usize]) {
+        return Err(WalkFault::Unbacked { phys: at, level });
+    }
+    Ok(u128::from_le_bytes(raw))
+}
+
+/// Turn one decoded slot into either an answer or the next hop, and follow it.
+///
+/// ★★ **Both halves of a dual slot are tried, in the order the format returned them.** A
+/// point query cannot know from the slot alone whether `va` is mapped by the small-page
+/// sub-table or the big-page one — that is what the sub-tables themselves say — so the
+/// first that answers wins and the *first* fault is reported if neither does. Following
+/// only [`PteDecode::Pde::edge`] would drop a whole sub-tree with no diagnostic, which is
+/// `#13`'s shape at the 16-byte level and the reason [`PteDecode::Pde::also`] exists.
+fn follow(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    decode: PteDecode,
+    level: u8,
+    va: u64,
+    depth: u8,
+) -> Result<Translation, TranslateFault> {
+    match decode {
+        PteDecode::Invalid => Err(TranslateFault::Unmapped { va, level }),
+        PteDecode::Sparse => Err(TranslateFault::Sparse { va, level }),
+        PteDecode::Leaf {
+            phys,
+            aperture,
+            size,
+            read_only,
+        } => {
+            // ★★ #13's corollary L3, at the point-query site as well as at the capture
+            // one: a leaf whose size this regime does not enumerate is a LOUD fault. It
+            // must not be rounded to the nearest real size — the offset within the page
+            // is computed from it, so a wrong size is a wrong ADDRESS.
+            if !fmt.page_sizes().contains(&size) {
+                return Err(TranslateFault::Walk(WalkFault::UnknownLeafSize {
+                    va,
+                    size,
+                }));
+            }
+            if size.0 == 0 || !size.0.is_power_of_two() {
+                return Err(TranslateFault::Walk(WalkFault::UnknownLeafSize {
+                    va,
+                    size,
+                }));
+            }
+            Ok(Translation {
+                phys: phys.saturating_add(va & (size.0 - 1)),
+                aperture,
+                size,
+                read_only,
+                level,
+            })
+        }
+        PteDecode::Pde { edge, also } => {
+            let mut first: Option<TranslateFault> = None;
+            for e in [Some(edge), also].into_iter().flatten() {
+                // A null sub-table pointer is not a sub-table — the same truthiness
+                // `decode_page` guards every descent with.
+                if e.next == 0 {
+                    continue;
+                }
+                match descend(fmt, fb, e.next, e.child_level, va, depth + 1) {
+                    Ok(t) => return Ok(t),
+                    Err(f) => first.get_or_insert(f),
+                };
+            }
+            Err(first.unwrap_or(TranslateFault::Unmapped { va, level }))
+        }
+    }
+}
+
+/// One level of the descent: read the slot `va` selects, decode it, follow it.
+fn descend(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    table: u64,
+    level: u8,
+    va: u64,
+    depth: u8,
+) -> Result<Translation, TranslateFault> {
+    if depth >= MAX_WALK_DEPTH {
+        return Err(TranslateFault::TooDeep { phys: table });
+    }
+    let raw = entry_at(fmt, fb, table, level, va).map_err(TranslateFault::Walk)?;
+    follow(fmt, fb, fmt.decode_entry(level, raw), level, va, depth)
+}
+
+/// ★★★ **Resolve ONE virtual address through the guest's own page tables** — the primitive
+/// a *translated aperture* needs, as distinct from the bulk capture [`decode_subtree`]
+/// performs.
+///
+/// # ⊘ Why this is not a second walker
+///
+/// It shares everything that can be wrong with [`decode_page`]: the same
+/// [`kayfabe_arch::GmmuFmt::decode_entry`], the same [`kayfabe_arch::GmmuFmt::level_shift`]
+/// geometry, the same [`FbRead`] byte source, the same `MISS = FAULT` rule and the same
+/// `#13` leaf-size check. What differs is only the *question*: `decode_page` asks "what
+/// does this table contain", which is what a reachability shadow
+/// ([`crate::reach::ReachShadow`]) is built from; this asks "where does this address
+/// land", which is what a hardware TLB miss asks. Neither can answer the other's question
+/// and neither re-implements the other's decode.
+///
+/// ⊘ And it deliberately does **not** consult [`leaf_disposition`]. That policy exists to
+/// stop the whole-framebuffer identity alias being *bound into the address table*; a
+/// translated aperture access is not a binding, and refusing it would refuse an access the
+/// hardware would have served.
+///
+/// `root` is the page directory to start from, carrying its own level — level 0 for a page
+/// directory base, and any level for a caller resuming under an edge it already holds.
+///
+/// # Errors
+/// [`TranslateFault`]: the decode refused, the address is unmapped, the guest declared it
+/// sparse, or the descent hit its depth bound.
+pub fn translate(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    root: PtPage,
+    va: u64,
+) -> Result<Translation, TranslateFault> {
+    descend(fmt, fb, root.phys, root.level, va, 0)
+}
+
+/// ★★★ **Resolve one virtual address from an ENTRY rather than from a table** — for a root
+/// the guest handed us as a *value*.
+///
+/// # Why this exists, and why it is not a convenience
+///
+/// A GSP-offload guest does not tell its GPU where its own bus-aperture page directory is.
+/// It builds the directory itself, reads its own **root entry** back out, and sends that
+/// eight-byte value to the firmware to install in the directory the hardware is actually
+/// bound to. So the only fact this port ever receives about that tree is one *entry*, at a
+/// known level, and there is no table page anywhere that contains it — the page that would
+/// have contained it is the firmware's, and this port is the firmware.
+///
+/// Starting the descent from the entry is therefore the **faithful** model, not a shortcut:
+/// it is exactly the state the hardware would be in after the firmware wrote that entry
+/// into slot `index` of its own root. ⊘ It is also the reason nothing here reverse-derives
+/// a root from observed traffic — the root is a value the guest *published*, which is the
+/// forward direction the address-table doctrine requires.
+///
+/// # Errors
+/// As [`translate`].
+pub fn translate_from_entry(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    level: u8,
+    entry: u128,
+    va: u64,
+) -> Result<Translation, TranslateFault> {
+    follow(fmt, fb, fmt.decode_entry(level, entry), level, va, 0)
+}
+
 /// ★★★ **One page-table page, and everything needed to decode it.**
 ///
 /// The C's `m2_cpt` entry (`C: nvkvm_gpu_emul.c:8714-8720`) minus the ownership fields,

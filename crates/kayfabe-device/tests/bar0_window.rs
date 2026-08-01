@@ -737,22 +737,66 @@ fn landed_and_refused_are_two_numbers_and_neither_absorbs_the_other() {
     assert!(c.bar0_window_writes >= 2 && c.bar0_window_reads >= 2);
 }
 
-/// ★★ The two GMMU-translated windows are **unchanged** — they still have no address model,
-/// and serving one would mean inventing a translation.
+/// ★★★ **UPDATED DELIBERATELY by `#149`, and the two halves went different ways.**
+///
+/// This test used to say *"the two GMMU-translated windows are unchanged — they still have
+/// no address model"*. One of them still has none and the other now does, and collapsing
+/// that into one sentence would hide the whole rung:
+///
+/// - **The framebuffer aperture (BAR1)** is unchanged. Nothing in this port resolves an
+///   access through it, so [`ReadOutcome::FbWindow`] — *"no address model at all"* — is
+///   still the honest answer and the assertion below is untouched.
+/// - **The instance/BAR2 window** now HAS one. A plane with no page-table format installed
+///   therefore answers a different thing: a **named refusal** carrying the virtual address
+///   ([`ReadOutcome::TranslationRefused`], [`NO_MMU_PORT`]), which is the same shape
+///   `RefusingFb` and `RefusingRam` already use for *"the shell never wired this port"*.
+///   That distinction is worth a test on its own, because *"this port cannot translate"*
+///   and *"this device was built without a format"* are different findings and only the
+///   second one is a wiring bug.
 #[test]
-fn the_translated_windows_still_refuse_because_this_port_has_no_page_table_format() {
+fn bar1_has_no_address_model_and_bar2_now_refuses_by_name_instead() {
     let p = plane();
     assert_eq!(
         p.read(1, 0x0009_008C, 4),
-        ReadOutcome::FbWindow(FbWindow::FbAperture)
+        ReadOutcome::FbWindow(FbWindow::FbAperture),
+        "⊘ BAR1 is unchanged: no address model, and serving it would invent a translation"
     );
-    assert_eq!(
-        p.read(2, 0x0000_1000, 4),
-        ReadOutcome::FbWindow(FbWindow::InstanceWindow)
+    assert!(
+        matches!(
+            p.read(2, 0x0000_1000, 4),
+            ReadOutcome::TranslationRefused {
+                window: FbWindow::InstanceWindow,
+                va: 0x0000_1000,
+                why,
+            } if why == kayfabe_device::plane::NO_MMU_PORT
+        ),
+        "BAR2 must name the missing format and carry the VIRTUAL address, never read as \
+         a plausible zero"
     );
     let w = p.write(2, 0x0000_1000, 4, 1);
-    assert_eq!(w.fb_window, Some(FbWindow::InstanceWindow));
+    assert_eq!(
+        w.fb_window, None,
+        "⊘ BAR2 is no longer a 'dropped window' — it is a named translation refusal"
+    );
     assert!(w.fb_landed.is_none() && w.fb_refusal.is_none());
-    assert_eq!(p.counters().fb_window_writes, 1);
-    assert_eq!(p.counters().fb_reads, 0);
+    let r = w
+        .bar2_refusal
+        .expect("a translated write that did not land says so");
+    assert_eq!(r.va, 0x0000_1000);
+    assert_eq!(r.len, 4);
+    assert_eq!(r.why, kayfabe_device::plane::NO_MMU_PORT);
+    assert_eq!(
+        w.fault,
+        Some(kayfabe_device::plane::BAR2_WRITE_REFUSED),
+        "★ and it is a FAULT, so the shell prints it at the instant the bytes are lost"
+    );
+    let c = p.counters();
+    assert_eq!(c.fb_window_writes, 0, "the BAR1 arm did not fire");
+    assert_eq!(
+        c.bar2_faults, 2,
+        "one read and one write, both refused by name"
+    );
+    assert_eq!(c.fb_reads, 0);
+    assert_eq!(c.bar2_reads, 0);
+    assert_eq!(c.bar2_writes, 0);
 }

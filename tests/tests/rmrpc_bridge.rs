@@ -512,6 +512,17 @@ fn every_function_id_lands_on_its_own_arm() {
         // object-model content either — a driver-branch string and a bus address — so it
         // is inert here and answered in `kayfabe_device::guestsysinfo`.
         (64, "the fn-1 tail call; a version string and a bus address"),
+        // ★★★ fn 70 joined the named set at `#149`, and it is the sharpest entry in this
+        // list: `UPDATE_BAR_PDE` is inert **to the object model** and very far from inert
+        // to the device. It carries a bus aperture's ROOT PAGE-DIRECTORY ENTRY — no
+        // client, no handle, no class — so an `RmGraph` has nothing to record; and
+        // `kayfabe_device::bar2` latches it, without which the translated BAR2 window is
+        // rooted at nothing and `kbusVerifyBar2` fails NV_ERR_MEMORY_ERROR. Two planes,
+        // one message, and this one is not the plane that acts on it.
+        (
+            70,
+            "a bus aperture's root PDE; the DEVICE acts on it, not the graph",
+        ),
     ] {
         assert_eq!(
             xlate(&w::message(code, 5, &[0u8; 16])),
@@ -592,7 +603,9 @@ fn every_function_id_lands_on_its_own_arm() {
     }
 
     // Not in the table at all — the third state.
-    for code in [0u32, 2, 4, 14, 15, 27, 70, 999, 0x1002, u32::MAX] {
+    // ⊘ 70 left this list at `#149` — it is named now, and it moved UP into the inert
+    // block above rather than out of the test.
+    for code in [0u32, 2, 4, 14, 15, 27, 999, 0x1002, u32::MAX] {
         assert_eq!(
             xlate(&w::message(code, 5, &[0u8; 16])),
             Err(BridgeRefusal::UnknownFunction { code }),

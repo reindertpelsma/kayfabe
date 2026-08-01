@@ -493,9 +493,13 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     );
     // ★ 19 -> 25 at `#146`: five framebuffer counters and the residency level, because a
     // window that serves bytes and one that drops them must not report the same numbers.
+    // ★ 25 -> 30 at `#149`: the translated BAR2 window's three counters, the count of
+    // published page-table roots and the root entry itself. A boot that never received a
+    // root and a boot whose walk landed on the wrong byte both end in the guest's
+    // NV_ERR_MEMORY_ERROR, and only these numbers tell them apart from outside the process.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (25 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (30 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
     );
@@ -610,6 +614,40 @@ fn the_register_plane_answers_through_the_seam_the_c_shim_calls() {
         regs.audit().unclaimed_writes,
         0,
         "a dropped framebuffer write is not a dropped register write"
+    );
+
+    // ★★★ `#149`, THROUGH THE SAME SEAM: the composition root installed a page-table
+    // FORMAT, so a write into the translated instance/BAR2 window is refused because the
+    // aperture is **unrooted** — the guest has not published a root page-directory entry
+    // yet — and NOT because this device was built without a format. Those are a guest fact
+    // and a wiring fact, and the whole reason `set_mmu` has a refusing default is that they
+    // must not read the same.
+    //
+    // ⊘ It is the strongest assertion available here without a page-table tree: it fails if
+    // the root ever stops calling `set_mmu`, and it fails LOUDLY rather than by a boot
+    // ending in NV_ERR_MEMORY_ERROR with the format silently absent.
+    let before = regs.audit().bar2_faults;
+    let w = regs.write(2, 0x0031_2000, 4, 0xABCD_ABCD);
+    assert!(!w.claimed);
+    assert!(
+        w.fb_landed.is_none(),
+        "nothing may land through an unrooted aperture"
+    );
+    let why = w
+        .bar2_refusal
+        .expect("a refused translated write says so, whole")
+        .why;
+    assert_eq!(
+        why,
+        kayfabe_device::plane::BAR2_UNROOTED,
+        "★★★ the composition root must have installed a format; without one this reads \
+         `the register plane has no page-table format installed`"
+    );
+    assert_eq!(regs.audit().bar2_faults, before + 1);
+    assert_eq!(
+        regs.audit().bar_pde_updates,
+        0,
+        "and no root has been published, which is the other half of the same statement"
     );
 
     // A write that reaches guest RAM the plane does not have refuses BY NAME through the

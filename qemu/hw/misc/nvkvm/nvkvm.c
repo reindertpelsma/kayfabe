@@ -215,7 +215,7 @@ static uint64_t nvkvm_trap_read(void *opaque, hwaddr addr, unsigned size)
     NvkvmState *s = opaque;
 
     s->trap_reads++;
-    return kayfabe_shim_regs_read(s->regs, 0, (uint64_t)addr, size);
+    return kayfabe_shim_regs_read(s->regs, KAYFABE_BUS_BAR_REGS, (uint64_t)addr, size);
 }
 
 static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
@@ -225,7 +225,7 @@ static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
 
     s->trap_writes++;
     memset(&w, 0, sizeof(w));
-    kayfabe_shim_regs_write(s->regs, 0, (uint64_t)addr, size, val, &w);
+    kayfabe_shim_regs_write(s->regs, KAYFABE_BUS_BAR_REGS, (uint64_t)addr, size, val, &w);
 
     if (w.fault && w.fault_len) {
         /* ★ Per-message, never fatal: the archive's own rule is that a refused message
@@ -288,6 +288,64 @@ static const MemoryRegionOps nvkvm_trap_ops = {
     .valid      = { .min_access_size = 1, .max_access_size = 8 },
 };
 
+/*
+ * ═══ ★★★ #149: THE TRANSLATED WINDOW ══════════════════════════════════════════════════
+ *
+ * The instance/BAR2 window used to be a RESERVATION — a region whose callbacks were not
+ * supposed to be reached, backed by nothing, counted as `reservation_touches`.  The
+ * 2026-08-01 `l2evict1` boot stopped at kbusVerifyBar2_GM107's MMU sub-test, which writes
+ * sixteen bytes through this window and reads them back through the BAR0 moving window:
+ *
+ *     NVRM: kbusVerifyBar2_GM107: MMUTest BAR0 window offset 0x70e000 returned garbage 0x0
+ *
+ * The write had nowhere to land, so it landed nowhere.  These callbacks are the routing
+ * that gives it somewhere, and — as with the register plane — THERE IS NO LOGIC BELOW THIS
+ * LINE: the page walk, the root, the refusals and the counters are all inside the archive.
+ *
+ * ★ The ONLY difference from nvkvm_trap_read/write is the base-address-register index the
+ * archive is handed.  It is written as a second pair rather than a shared helper with a
+ * parameter because the hypervisor's callback signature carries no index and the opaque is
+ * the device — so the index has to come from somewhere, and a literal at one call site is
+ * more auditable than an opaque that is sometimes the device and sometimes a row.
+ */
+static uint64_t nvkvm_bar2_read(void *opaque, hwaddr addr, unsigned size)
+{
+    NvkvmState *s = opaque;
+
+    s->trap_reads++;
+    return kayfabe_shim_regs_read(s->regs, KAYFABE_BUS_BAR_INST, (uint64_t)addr, size);
+}
+
+static void nvkvm_bar2_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    NvkvmState *s = opaque;
+    KayfabeRegWrite w;
+
+    s->trap_writes++;
+    memset(&w, 0, sizeof(w));
+    kayfabe_shim_regs_write(s->regs, KAYFABE_BUS_BAR_INST, (uint64_t)addr, size, val, &w);
+
+    if (w.fault && w.fault_len) {
+        /*
+         * ★★★ A translated write that did not land is the one fault whose ONLY other
+         * symptom arrives ninety lines of guest code later, as RmInitAdapter's
+         * NV_ERR_MEMORY_ERROR out of kbusVerifyBar2.  Said here, at the instant it happens,
+         * with the aperture offset — which for this region IS the virtual address the guest
+         * asked the GMMU to translate.
+         */
+        warn_report("nvkvm: a write through the translated BAR2 window at aperture offset "
+                    "+0x%" PRIx64 " DID NOT LAND: %.*s",
+                    (uint64_t)addr, (int)w.fault_len, (const char *)w.fault);
+    }
+}
+
+static const MemoryRegionOps nvkvm_bar2_ops = {
+    .read       = nvkvm_bar2_read,
+    .write      = nvkvm_bar2_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid      = { .min_access_size = 1, .max_access_size = 8 },
+};
+
 static uint64_t nvkvm_reservation_read(void *opaque, hwaddr addr, unsigned size)
 {
     NvkvmState *s = opaque;
@@ -335,8 +393,14 @@ static const NvkvmRegionSpec nvkvm_regions[NVKVM_N_REGIONS] = {
       offsetof(NvkvmState, bar0_size), &nvkvm_trap_ops },
     { "nvkvm-bar1-window", 1, 1, NVKVM_KIND_RESERVATION, true,
       offsetof(NvkvmState, bar1_size), &nvkvm_reservation_ops },
-    { "nvkvm-bar2-window", 2, 3, NVKVM_KIND_RESERVATION, true,
-      offsetof(NvkvmState, bar2_size), &nvkvm_reservation_ops },
+    /* ★★★ #149: TRAP, not RESERVATION.  This window is GMMU-translated — every access to
+     * it is a virtual address the archive must walk the guest's own page tables to
+     * resolve — so it cannot be shadowed by a memslot the way a flat reservation can.
+     * Changing the kind also changes nvkvm_op_bar_is_unbacked_reservation's answer for this
+     * register to "no", which is correct and load-bearing: the archive must not install a
+     * slot over a range it is trapping. */
+    { "nvkvm-bar2-window", 2, 3, NVKVM_KIND_TRAP, true,
+      offsetof(NvkvmState, bar2_size), &nvkvm_bar2_ops },
     { "nvkvm-msix",        3, 5, NVKVM_KIND_MSIX,        false,
       offsetof(NvkvmState, msix_size), NULL },
 };
@@ -1157,6 +1221,22 @@ static void nvkvm_report_registers(NvkvmState *s)
                 "r/%" PRIu64 "w, resident %" PRIu64 " bytes",
                 a.fb_reads, a.fb_writes, a.bar0_window_reads, a.bar0_window_writes,
                 a.fb_refusals, a.fb_window_reads, a.fb_window_writes, a.fb_resident_bytes);
+
+    /*
+     * ★★★ #149 — THE TRANSLATED WINDOW.  Printed unconditionally, all-zeros included, for
+     * the same reason as every other block here.
+     *
+     * Three numbers and they answer three different questions.  `roots published` says
+     * whether UPDATE_BAR_PDE ever arrived — the guest ignores that command's status, so
+     * this is the ONLY observable.  `bar2 faults` says whether a translated access was
+     * refused by name.  `reads/writes` say whether a page walk actually resolved one.
+     */
+    info_report("nvkvm: BAR2 (translated): %" PRIu64 " reads / %" PRIu64 " writes resolved "
+                "through the GMMU, %" PRIu64 " REFUSED by name; roots published %" PRIu64
+                " (%" PRIu64 " bodies refused), BAR2 root entry 0x%" PRIx64,
+                a.bar2_reads, a.bar2_writes, a.bar2_faults,
+                a.bar_pde_updates >> 32, a.bar_pde_updates & 0xffffffffu,
+                a.bar2_root_entry);
 
     /*
      * ★★★ THE LIST.  Printed unconditionally, INCLUDING when it is empty, because "no line

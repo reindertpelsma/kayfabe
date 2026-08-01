@@ -19,6 +19,12 @@ kayfabe-gsp.workspace = true
 # `Faulted::fault_tag` — how a `GspFault` becomes a `&'static str` a C shell can print
 # without this crate inventing a second name for every variant.
 kayfabe-trace.workspace = true
+# ★★★ `#149`: `walker::translate_from_entry` + `walker::FbRead` — the page-table DECODER,
+# so the register plane can resolve a translated aperture access without this crate
+# growing a second walk loop. A pure-logic → pure-logic edge: the algorithm is core, the
+# format is Axis-B (`kayfabe-arch`, already here) and the bytes are this crate's own
+# `FbStore`.
+kayfabe-mmu.workspace = true
 
 [lints]
 workspace = true

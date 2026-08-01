@@ -58,5 +58,5 @@ pub mod gh100;
 pub use ad10x::{Ad10xArch, Ad10xGspModel};
 // ★★ `ga10x` is the ONE module here that is linked into the shipped QEMU archive, and it
 // is deliberately NOT `MockArch`-composed like its two neighbours — see its module docs.
-pub use ga10x::{Ga10xArch, UnbuiltGmmu, UnbuiltPushbuffer, UnbuiltUserd};
+pub use ga10x::{Ga10xArch, Ga10xGmmu, UnbuiltGmmu, UnbuiltPushbuffer, UnbuiltUserd};
 pub use gh100::{Gh100Arch, Gh100GspModel};

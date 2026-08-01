@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 8u
+#define KAYFABE_SHIM_ABI 9u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -341,6 +341,26 @@ typedef struct KayfabeRegAudit {
     uint64_t fb_reads;
     uint64_t fb_writes;
     uint64_t fb_refusals;
+    /* ★★★ #149 — THE TRANSLATED WINDOW, SERVED.
+     *
+     * The instance/BAR2 window is GMMU-translated: an access to it is a virtual address in
+     * a page-table tree the guest built in framebuffer and whose ROOT ENTRY it published
+     * over UPDATE_BAR_PDE.  `bar2_reads`/`bar2_writes` count accesses a page walk resolved;
+     * `bar2_faults` counts the ones it refused BY NAME.
+     *
+     * Read the pair together.  kbusVerifyBar2's NV_ERR_MEMORY_ERROR cannot distinguish "the
+     * walk never happened" from "the walk happened and landed on the wrong byte"; these can.
+     *
+     * `bar_pde_updates` packs (roots published << 32 | bodies refused).  The guest IGNORES
+     * this command's status, so a refusal is invisible on its side and this is the only
+     * place the arrival of a root is observable at all.  `bar2_root_entry` is the entry
+     * itself — zero is a real value the guest publishes on teardown, which is why the count
+     * and not the value is what says whether one arrived. */
+    uint64_t bar2_reads;
+    uint64_t bar2_writes;
+    uint64_t bar2_faults;
+    uint64_t bar_pde_updates;
+    uint64_t bar2_root_entry;
     uint64_t bar0_window_reads;
     uint64_t bar0_window_writes;
     uint64_t fb_resident_bytes;
@@ -411,6 +431,18 @@ int32_t kayfabe_shim_regs_attach_ram(void *regs, void *shim);
  * memory-plane teardown by design, so the port that reaches INTO the memory plane has to be
  * withdrawn explicitly — a lifetime the C side cannot express any other way. */
 void    kayfabe_shim_regs_detach_ram(void *regs);
+
+/* ★★ The archive's own name for the REGISTER aperture — `BUS_BAR_0`.
+ *
+ * The `bar` argument below is RM's LOGICAL base-address-register index, which is dense
+ * (0..3) and is NOT the PCI slot number (0, 1, 3, 5 on this device, because two of the
+ * windows are 64-bit).  nvkvm_regions is the only translation between the two; these two
+ * names exist so the call sites read as a choice rather than as a magic number. */
+#define KAYFABE_BUS_BAR_REGS 0u
+/* ★★★ #149 — `BUS_BAR_2`, the instance window.  A GMMU-TRANSLATED aperture: the archive
+ * walks the guest's own page tables to turn an offset in it into a framebuffer address,
+ * rooted at the entry the guest published over UPDATE_BAR_PDE. */
+#define KAYFABE_BUS_BAR_INST 2u
 
 /* ★★ THE HOT PATH.  One trapped register access, one value.  `size` is the access width in
  * bytes and the answer is masked to it.  An empty handle reads zero — a device whose plane

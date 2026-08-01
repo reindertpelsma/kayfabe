@@ -582,6 +582,8 @@ kayfabe_util::assert_send_sync!(
     HostSliceError,
     AddressFault,
     walker::WalkResult,
+    walker::Translation,
+    walker::TranslateFault,
     walker::PtPage,
     walker::DecodedLeaf,
     walker::PageDecode,

@@ -350,6 +350,8 @@ pub const FUNCTIONS: FunctionCodes = FunctionCodes {
     gsp_set_system_info: 72,
     set_registry: 73,
     ecc_notifier_write_ack: 202,
+    // `X(RM, UPDATE_BAR_PDE, 70)` — `ogkm-610:`/`ogkm-580: rpc_global_enums.h:80`.
+    update_bar_pde: 70,
     gsp_rm_control: 76,
     gsp_rm_alloc: 103,
     gsp_init_done: 0x1001,

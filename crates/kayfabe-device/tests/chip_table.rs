@@ -1014,9 +1014,22 @@ fn a_framebuffer_window_access_is_not_an_unclaimed_register() {
         ReadOutcome::FbWindow(FbWindow::FbAperture)
     );
     // (3) The instance/BAR2 window — the one the traces hammer 177856 / 214552 times.
-    assert_eq!(
-        plane.read(2, 0x0000_0000, 4),
-        ReadOutcome::FbWindow(FbWindow::InstanceWindow)
+    //
+    // ★★★ UPDATED by `#149`. This window now HAS an address model (a GMMU walk), so a
+    // plane with no page-table format installed answers a NAMED REFUSAL carrying the
+    // virtual address rather than "no model at all". The finding this line is here to
+    // protect is unchanged and is the same one `PRAMIN` makes above: it must not read as
+    // a plausible zero, and it must not be swept into `unclaimed`.
+    assert!(
+        matches!(
+            plane.read(2, 0x0000_0000, 4),
+            ReadOutcome::TranslationRefused {
+                window: FbWindow::InstanceWindow,
+                va: 0,
+                ..
+            }
+        ),
+        "the translated window must refuse BY NAME, with the virtual address"
     );
     // A register offset nobody owns is still exactly that, and is NOT swept in here.
     assert_eq!(plane.read(0, 0x0055_5555, 4), ReadOutcome::Unclaimed);
@@ -1026,7 +1039,11 @@ fn a_framebuffer_window_access_is_not_an_unclaimed_register() {
     // have no address model and are dropped (`fb_window_reads`); `PRAMIN` resolves and is
     // refused by name for want of a store (`fb_refusals`). A port that merged them could
     // not answer "how many framebuffer accesses did this boot drop".
-    assert_eq!(c.fb_window_reads, 2, "the two TRANSLATED windows, dropped");
+    // ★★★ 2 → 1 by `#149`: BAR1 is still a dropped window with no address model, and
+    // BAR2 moved into its own counter because it now has one. THREE numbers describing
+    // three findings, which is what the paragraph above asks for.
+    assert_eq!(c.fb_window_reads, 1, "BAR1 alone — still no address model");
+    assert_eq!(c.bar2_faults, 1, "BAR2 resolved-and-refused, by name");
     assert_eq!(c.fb_refusals, 1, "PRAMIN resolved and was refused BY NAME");
     assert_eq!(
         c.fb_reads, 0,
@@ -1039,13 +1056,22 @@ fn a_framebuffer_window_access_is_not_an_unclaimed_register() {
 
     // Writes: the case that costs a page-table entry rather than a register value.
     let w = plane.write(2, 0x0000_1000, 4, 0xDEAD_BEEF);
-    assert_eq!(w.fb_window, Some(FbWindow::InstanceWindow));
+    assert_eq!(
+        w.fb_window, None,
+        "⊘ `#149`: BAR2 is a named translation refusal now, not an unmodelled window"
+    );
+    assert_eq!(w.bar2_refusal.map(|r| r.va), Some(0x0000_1000));
     assert!(!w.claimed);
     let w2 = plane.write(0, 0x0055_5555, 4, 1);
     assert_eq!(w2.fb_window, None, "a register write names no window");
 
     let c = plane.counters();
-    assert_eq!(c.fb_window_writes, 1);
+    // ★★★ 1 → 0 by `#149`, and the write it used to count is now in `bar2_faults`
+    // alongside the read. The pair below is the same finding the block above makes,
+    // stated for writes: a lost framebuffer write and a dropped register write are
+    // different facts and neither may absorb the other.
+    assert_eq!(c.fb_window_writes, 0, "BAR1 took no write in this test");
+    assert_eq!(c.bar2_faults, 2, "the BAR2 read AND the BAR2 write");
     assert_eq!(
         c.unclaimed_writes, 1,
         "★ the dropped framebuffer write must not be counted as a dropped register write"

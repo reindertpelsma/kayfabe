@@ -121,6 +121,21 @@ pub struct FunctionCodes {
     /// reply the guest never awaits, which surfaces as an unsolicited message and hits
     /// `NV_ASSERT(0)` in the bootup poll (`ogkm-580: kernel_gsp.c:1464-1482`).
     pub ecc_notifier_write_ack: u32,
+    /// ★★★ `UPDATE_BAR_PDE` — the guest handing its own **bus-aperture root page-directory
+    /// entry** to the firmware.
+    ///
+    /// A GSP-offload guest builds its own BAR2 page tables, reads its own `PDE3[0]` back
+    /// out through the BAR0 window and sends that eight-byte value here, because on this
+    /// model only the firmware's directory is bound to hardware
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/bus/kern_bus.c:829-881`). In Mode 2 the
+    /// firmware is us, so this is the **only** fact this port ever receives about that
+    /// tree — and the aperture is unrooted until it arrives.
+    ///
+    /// ⚠ The sender ignores the status (`kbusPatchBar2Pdb_GSPCLIENT` returns `NV_OK`
+    /// whatever comes back), so refusing it is **silent** — the symptom is a translated
+    /// write landing nowhere, hundreds of operations later, as `kbusVerifyBar2`'s
+    /// `NV_ERR_MEMORY_ERROR`.
+    pub update_bar_pde: u32,
     /// `GSP_RM_CONTROL`.
     pub gsp_rm_control: u32,
     /// `GSP_RM_ALLOC`.
@@ -147,7 +162,7 @@ pub struct FunctionCodes {
 
 impl FunctionCodes {
     /// Every id, for the distinctness check.
-    fn all(&self) -> [u32; 16] {
+    fn all(&self) -> [u32; 17] {
         [
             self.set_guest_system_info,
             self.set_guest_system_info_ext,
@@ -160,6 +175,7 @@ impl FunctionCodes {
             self.gsp_set_system_info,
             self.set_registry,
             self.ecc_notifier_write_ack,
+            self.update_bar_pde,
             self.gsp_rm_control,
             self.gsp_rm_alloc,
             self.gsp_init_done,
@@ -204,6 +220,7 @@ impl FunctionCodes {
             c if c == self.gsp_set_system_info => RpcFunction::GspSetSystemInfo,
             c if c == self.set_registry => RpcFunction::SetRegistry,
             c if c == self.ecc_notifier_write_ack => RpcFunction::EccNotifierWriteAck,
+            c if c == self.update_bar_pde => RpcFunction::UpdateBarPde,
             c if c == self.gsp_rm_control => RpcFunction::RmControl,
             c if c == self.gsp_rm_alloc => RpcFunction::RmAlloc,
             c if c == self.gsp_init_done => RpcFunction::InitDone,
@@ -259,6 +276,9 @@ pub enum RpcFunction {
     SetRegistry,
     /// `ECC_NOTIFIER_WRITE_ACK` — an acknowledgement the guest sends and never awaits.
     EccNotifierWriteAck,
+    /// ★★★ `UPDATE_BAR_PDE` — the guest publishing a bus aperture's root page-directory
+    /// entry. See [`FunctionCodes::update_bar_pde`].
+    UpdateBarPde,
     /// `GSP_RM_CONTROL`.
     RmControl,
     /// `GSP_RM_ALLOC`.

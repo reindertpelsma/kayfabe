@@ -966,7 +966,15 @@ pub fn translate(
         // no object, frees none and names none, so there is nothing here to translate —
         // and the transport layer does not answer it at all
         // (`kayfabe_gsp::RpcFunction::disposition`).
-        | RpcFunction::EccNotifierWriteAck => Ok(Translation::Inert),
+        | RpcFunction::EccNotifierWriteAck
+        // ★★★ `UpdateBarPde` is inert **to the object model**, and that is a statement
+        // about this function rather than about the message. It is a bus-aperture fact —
+        // the root page-directory entry of a directory the *firmware* owns — and it names
+        // no client, no handle and no class, so an `RmGraph` has nothing to record. It is
+        // very far from inert to the DEVICE: `kayfabe_device::bar2` latches it, and the
+        // translated aperture is rooted at nothing until it arrives. Two planes, one
+        // message, and the object model is not the one that acts on it.
+        | RpcFunction::UpdateBarPde => Ok(Translation::Inert),
         // ★★ B6, and the one arm whose answer is a property of this function's
         // signature. A continuation record is a *transport fragment*: it carries a raw
         // byte slice and no function of its own, so one message's worth of it cannot be

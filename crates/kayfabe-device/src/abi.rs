@@ -43,6 +43,7 @@ pub const FUNCTIONS: FunctionCodes = FunctionCodes {
     gsp_set_system_info: rpcids::NV_VGPU_MSG_FUNCTION_GSP_SET_SYSTEM_INFO,
     set_registry: rpcids::NV_VGPU_MSG_FUNCTION_SET_REGISTRY,
     ecc_notifier_write_ack: rpcids::NV_VGPU_MSG_FUNCTION_ECC_NOTIFIER_WRITE_ACK,
+    update_bar_pde: rpcids::NV_VGPU_MSG_FUNCTION_UPDATE_BAR_PDE,
     gsp_rm_control: rpcids::NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL,
     gsp_rm_alloc: rpcids::NV_VGPU_MSG_FUNCTION_GSP_RM_ALLOC,
     gsp_init_done: rpcids::NV_VGPU_MSG_EVENT_GSP_INIT_DONE,

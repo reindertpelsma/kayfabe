@@ -636,6 +636,19 @@ that codegen gives shapes and never protocol.",
                     // `ogkm-610: rpc.c:11170-11188`. The consumer is
                     // `kayfabe_gsp::RpcFunction::disposition`.
                     "ECC_NOTIFIER_WRITE_ACK",
+                    // ★★★ Added 2026-08-01 (task #149) — the ONE fact this port ever
+                    // receives about the guest's bus-aperture page tables. A GSP-offload
+                    // guest builds its own BAR2 page directory, reads its own ROOT ENTRY
+                    // back out through the BAR0 window and sends that eight-byte value
+                    // here for the firmware to install (`ogkm-580:
+                    // src/nvidia/src/kernel/gpu/bus/kern_bus.c:829-881`,
+                    // `kbusPatchBar2Pdb_GSPCLIENT`). In Mode 2 we ARE the firmware, so
+                    // refusing it leaves the aperture rooted at nothing and every write
+                    // through it lands nowhere — which is precisely what the 2026-08-01
+                    // `l2evict1` boot measured as `MMUTest BAR0 window offset 0x70e000
+                    // returned garbage 0x0`. The consumer is
+                    // `kayfabe_device::bar2::BarPdePolicy`.
+                    "UPDATE_BAR_PDE",
                 ],
                 doc: "RPC function IDs (`rpc_global_enums.h`, `X(RM, NAME, id)`).",
             },

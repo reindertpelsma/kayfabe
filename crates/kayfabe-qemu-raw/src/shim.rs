@@ -88,8 +88,19 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// and [`KayfabeRegWrite`] gained the framebuffer refusal's four fields. An ABI-7 shim would
 /// allocate both old layouts and this archive would write past the end of each.
 ///
+/// ★ Bumped to **9** at `#149`, the translated BAR2 window, and it is the ABI-3 reason a
+/// fifth time: [`KayfabeRegAudit`] gained five fields (`bar2_reads`, `bar2_writes`,
+/// `bar2_faults`, `bar_pde_updates`, `bar2_root_entry`), so an ABI-8 shim would allocate
+/// the old layout and this archive would write forty bytes past the end of it. Nothing but
+/// the version stands between those two.
+///
+/// ⊘ [`KayfabeRegWrite`] did **not** grow this time, deliberately: a refused *translated*
+/// write carries a **virtual** address, and putting it in a field named `fb_phys` would be
+/// the aliasing defect one layer up. The virtual address is the region offset the shim
+/// already has, and the sentence crosses in the `fault` pair that already exists.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 8;
+pub const ABI_VERSION: u32 = 9;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -808,6 +819,32 @@ pub struct KayfabeRegAudit {
     /// write?"* — the question `kbusVerifyBar2` used to be the only answer to, hundreds of
     /// operations after the fact.
     pub fb_refusals: u64,
+    /// ★★★ `#149` — reads **served through the GMMU** from the translated instance/`BAR2`
+    /// window.
+    pub bar2_reads: u64,
+    /// ★★★ `#149` — writes **served through the GMMU** into it.
+    pub bar2_writes: u64,
+    /// ★★★ `#149` — translated accesses this port **refused, by name**: an unrooted
+    /// aperture, an unmapped virtual address, or a leaf in an aperture it cannot serve.
+    ///
+    /// ⊘ The number that distinguishes *"the walk never happened"* from *"the walk
+    /// happened and landed somewhere else"*. `kbusVerifyBar2`'s `NV_ERR_MEMORY_ERROR`
+    /// cannot tell those apart; this and `bar2_writes` together can.
+    pub bar2_faults: u64,
+    /// ★★★ `#149` — how many bus-aperture roots the guest published (`UPDATE_BAR_PDE`),
+    /// and how many bodies were refused, packed `updates << 32 | refusals`.
+    ///
+    /// ⚠ Packed rather than two fields because the guest **ignores this command's
+    /// status**, so both halves are only ever read together: *"did the root arrive, and
+    /// did we take it?"* is one question.
+    pub bar_pde_updates: u64,
+    /// ★★★ `#149` — the BAR2 root entry the guest published, verbatim, or `0` if none.
+    ///
+    /// ⊘ Zero is ambiguous **on purpose and it is disambiguated by
+    /// [`KayfabeRegAudit::bar_pde_updates`]**: the guest really does publish `0` to unroot
+    /// the aperture on teardown (`ogkm-580: kern_bus_gm107.c:2137`), so the value alone
+    /// cannot say whether one arrived. The count can.
+    pub bar2_root_entry: u64,
     /// `#146` — reads of `NV_PBUS_BAR0_WINDOW` itself.
     pub bar0_window_reads: u64,
     /// `#146` — writes to `NV_PBUS_BAR0_WINDOW`, i.e. the guest re-pointing its window.
@@ -1035,6 +1072,21 @@ impl Regs {
         // smaller than what the device advertises would refuse an address the guest was
         // promised, which is a refusal we would have manufactured ourselves.
         plane.set_fb(Box::new(kayfabe_device::SparseFb::new(chip.fb_length)));
+        // ★★★ **THE COMPOSITION ROOT'S PAGE-TABLE-FORMAT DECISION** (`#149`), made here
+        // and nowhere else, for exactly the reasons the framebuffer decision above is.
+        //
+        // `kayfabe_device::RegPlane` is built with **no** format, so a shell that never
+        // made this decision gets a device whose translated apertures refuse by name
+        // rather than one that invents a stride. This is the shell, and it decides.
+        //
+        // ★★ **The same type `kayfabe_chips::Ga10xArch::mmu` answers with**, and that is
+        // the whole of why it is a port. A `GmmuFmt` is an Axis-B seam whose real
+        // implementation belongs in an arch-adapter crate; making it a `ChipProfile` row
+        // would put a second copy of one chip's page-table format in a second crate, which
+        // is the defect `kayfabe_chips::ga10x`'s own `gsp()` docs refuse for the register
+        // model one seam over. This root already holds both crates, so it is the one place
+        // that can join them without either naming the other.
+        plane.set_mmu(Box::new(kayfabe_chips::Ga10xGmmu::new()));
         Ok(Regs { plane, refusals })
     }
 
@@ -1125,6 +1177,9 @@ impl Regs {
             fb_reads,
             fb_writes,
             fb_refusals,
+            bar2_reads,
+            bar2_writes,
+            bar2_faults,
             bar0_window_reads,
             bar0_window_writes,
             faults,
@@ -1133,6 +1188,7 @@ impl Regs {
             commands,
             commands_unserviced,
         } = self.plane.counters();
+        let (bar_pde_updates, bar_pde_refusals) = self.plane.bar_pde_counts();
         // ★ Truncated to what the wire shape holds, and `unserviced_len` says how many —
         // never silently clipped to look complete. The plane's own sample is bounded by
         // the same order of magnitude, so this is a shape conversion and not a policy.
@@ -1175,6 +1231,11 @@ impl Regs {
             fb_reads,
             fb_writes,
             fb_refusals,
+            bar2_reads,
+            bar2_writes,
+            bar2_faults,
+            bar_pde_updates: (bar_pde_updates << 32) | (bar_pde_refusals & 0xFFFF_FFFF),
+            bar2_root_entry: self.plane.bar_pdes().bar2.map_or(0, |p| p.entry),
             bar0_window_reads,
             bar0_window_writes,
             // ★ Read from the plane's residue rather than kept as a counter: it is a

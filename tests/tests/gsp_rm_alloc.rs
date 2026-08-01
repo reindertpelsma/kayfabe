@@ -107,6 +107,7 @@ fn chain_with_objects() -> (
         *abi(),
         log.clone(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
+        kayfabe_device::bar2::BarPdeLog::new(),
         Some(Box::new(ObjectPolicy::new(
             abi(),
             GuestOs::Linux,
@@ -128,6 +129,7 @@ fn chain_without_objects() -> (
         *abi(),
         log.clone(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
+        kayfabe_device::bar2::BarPdeLog::new(),
         None,
     );
     (policy, log)
@@ -580,21 +582,48 @@ fn the_shipped_arch_classifies_the_real_wire_class_ids() {
 #[test]
 fn the_shipped_arch_refuses_every_data_plane_seam() {
     let a = Ga10xArch::new();
-    // ★★★ `#146`: the BAR0 moving window resolves an address WITHOUT this seam, and this
-    // seam is still empty. If a later edit routes `PRAMIN` through the MMU, one of the two
-    // halves of this line has to change and the change is visible in a diff.
+    // ★★★ **UPDATED DELIBERATELY by `#149`, and the guard fired first exactly as designed.**
+    //
+    // The three lines that used to be here read `entry_size(0) == 0`, `levels() == 0` and
+    // `page_sizes().is_empty()`, and their stated job was: *"an `Arch` that grew a
+    // page-table format WOULD be the seam this guard is for, and it must go red then."* It
+    // did. `#149` built [`kayfabe_chips::Ga10xGmmu`] because `kbusVerifyBar2_GM107` writes
+    // through a GMMU-TRANSLATED aperture and there is no way past that statement without
+    // translating an address.
+    //
+    // ⊘ The claim is **narrowed, not deleted**, and the narrowing is the point: the
+    // remaining assertions are the seams that are still unbuilt, and every one of them is
+    // untouched. What replaces the MMU half is not "we now have a format" — that would be
+    // a tautology over the type — but the two GA10x facts a wrong format gets wrong, which
+    // is what a guard here can actually protect (`#13`; `resume_from_fault.md` §6 hole 7):
+    // **PD0's entry is 16 bytes and dual**, and **PD1 is itself a 512 MiB leaf level**.
+    // `crates/kayfabe-chips/tests/ga10x_gmmu.rs` is where the format is exercised; these
+    // two lines are the tripwire on the SHIPPED `Arch`, so a generation swapped underneath
+    // it cannot quietly answer with a flat one.
     assert_eq!(
-        a.mmu().entry_size(0),
-        0,
-        "the untranslated window must not have brought a page-table format with it"
+        a.mmu().entry_size(3),
+        16,
+        "★★ PD0's entry is a 16-byte DUAL entry naming TWO sub-tables; an 8 decodes every \
+         other slot and drops every big-page table"
     );
-    assert_eq!(a.mmu().levels(), 0, "no walk is possible");
     assert!(
-        a.mmu().page_sizes().is_empty(),
-        "no leaf size is enumerated"
+        matches!(
+            a.mmu().decode_entry(2, u128::from(1u64 | (0x1234u64 << 8))),
+            PteDecode::Leaf { size, .. } if size.0 == 512 << 20
+        ),
+        "★★★ on THIS chip PD1 is itself a leaf level and its leaf is 512 MiB; a design \
+         keyed on 'leaves are PTEs' is wrong here and that gap cost weeks"
     );
-    assert_eq!(a.mmu().level_shift(0), None);
-    assert_eq!(a.mmu().decode_entry(0, u128::MAX), PteDecode::Invalid);
+    assert!(a.mmu().levels() >= 5, "a small-page walk is five deep");
+    assert!(
+        a.mmu()
+            .page_sizes()
+            .contains(&kayfabe_arch::PageSize(512 << 20)),
+        "and the 512 MiB size is ENUMERATED, or a leaf that claims it becomes a loud \
+         UnknownLeafSize instead of a decodable mapping"
+    );
+    // ⊘ Unchanged: the seams `#149` did NOT build. A `userd_size` of zero maps nothing
+    // rather than mapping a plausible-but-wrong window over guest memory.
     assert_eq!(a.userd().userd_size(), 0);
     assert_eq!(a.decode_doorbell(0xd000_0000_0000_0000), None);
     assert_eq!(

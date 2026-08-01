@@ -105,6 +105,8 @@ pub const FUNCTIONS: kayfabe_gsp::FunctionCodes = kayfabe_gsp::FunctionCodes {
     gsp_set_system_info: 72,
     set_registry: 73,
     ecc_notifier_write_ack: 202,
+    // `X(RM, UPDATE_BAR_PDE, 70)` — `ogkm-610:`/`ogkm-580: rpc_global_enums.h:80`.
+    update_bar_pde: 70,
     gsp_rm_control: 76,
     gsp_rm_alloc: 103,
     gsp_init_done: 0x1001,
@@ -195,6 +197,9 @@ pub fn served_policy() -> Box<dyn kayfabe_gsp::CommandPolicy> {
         bench_abi().driver,
         kayfabe_device::unserviced::UnservicedLog::new(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
+        // ★ Fresh per run for the same reason the unserviced log is: a shared latch would
+        // carry one round's published root into the next.
+        kayfabe_device::bar2::BarPdeLog::new(),
         // ⊘ **No object-model link, and this is a decision the differential depends on.**
         // `cap1`/`cap1b` are the C's replies, and the C had no object model — it answered
         // `GSP_RM_ALLOC` from its own tables. Installing one here would diff our object

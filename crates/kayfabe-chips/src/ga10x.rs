@@ -22,19 +22,27 @@
 //!   In the product it is the measured "mock wall" in its worst form: a plausible answer
 //!   on the one axis where a wrong answer is a silent memory-safety fact about the guest.
 //!
-//! ## ★★ So the data plane REFUSES here, and that is the accurate statement
+//! ## ★★★ MOST of the data plane still refuses — and since `#149` the MMU does NOT
 //!
-//! GA10x's real GMMU format, USERD model and pushbuffer codec are **not built** — the
-//! data plane is the stage blocked on an owner decision, and nothing in this port has
-//! ever walked a page table for a real guest. [`UnbuiltGmmu`], [`UnbuiltUserd`] and
-//! [`UnbuiltPushbuffer`] say so in the vocabulary the core already reads: zero levels,
-//! no page sizes, `Invalid` for every entry, `Opaque` for every method, no GPFIFO
-//! entries. A walker that reaches one **misses**, and a miss is a fault
-//! (`mode2_address_table.md`: *"the table IS the guest's TLB; miss = fault"*).
+//! GA10x's USERD model and pushbuffer codec are **not built**, and [`UnbuiltUserd`] /
+//! [`UnbuiltPushbuffer`] say so in the vocabulary the core already reads: zero size,
+//! `Opaque` for every method, no GPFIFO entries. `decode_doorbell` answers `None`. Those
+//! are unchanged, and the paragraph they belong to is the one above: a *plausible* answer
+//! on any of them is worse than a refusal.
 //!
-//! ⊘ The one thing that must never happen here is a *plausible* answer. Refusing is not a
-//! placeholder for the real codec — it is what keeps "the data plane is unbuilt" a fact
-//! the system can state instead of a fact it can only discover by corrupting a guest.
+//! ★★ **The page-table format is now real** ([`Ga10xGmmu`]), and the reason is a boot, not
+//! an appetite. `kbusVerifyBar2_GM107` writes sixteen bytes through the **BAR2 CPU
+//! mapping** — a GMMU-*translated* aperture — and reads them back through the untranslated
+//! BAR0 window; on 2026-08-01 the guest read `0x0` and `RmInitAdapter` failed with
+//! `NV_ERR_MEMORY_ERROR`. There is no way past that statement without translating an
+//! address, and translating an address without a format is exactly the invention this
+//! module refuses to make. So the format is transcribed from the driver's own level table
+//! (`ogkm-580: kern_gmmu_fmt_gp10x.c`, `kern_gmmu_fmt_ga10x.c`) with its two GA10x traps
+//! encoded rather than commented — see [`Ga10xGmmu`].
+//!
+//! ⊘ This does **not** make the data plane built. Nothing here submits work, decodes a
+//! doorbell or parses a pushbuffer; what exists is an address decoder, and every leaf it
+//! cannot express is still a loud fault.
 //!
 //! ## ⊘ `gsp()` is `None`, deliberately, and it is not the same GSP question
 //!
@@ -51,15 +59,16 @@ use kayfabe_abi::generated::classes as nv;
 use kayfabe_arch::gsp::GspModel;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, VChid};
 use kayfabe_arch::{
-    Arch, DoorbellTarget, GmmuFmt, GmmuVersion, LevelShift, ObjectKind, PageSize, PteDecode,
-    PushMethod, PushRange, PushbufferAbi, UserdModel,
+    Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, LevelShift, ObjectKind, PageSize,
+    PdeEdge, PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
 
-/// The GA10x architecture, as the port ships it: a **real** class table over a
-/// **refusing** data plane. See the module docs.
+/// The GA10x architecture, as the port ships it: a **real** class table and a **real**
+/// page-table format over a data plane that is otherwise still refusing. See the module
+/// docs, and [`Ga10xGmmu`] for what changed and why.
 #[derive(Debug, Default)]
 pub struct Ga10xArch {
-    mmu: UnbuiltGmmu,
+    mmu: Ga10xGmmu,
     userd: UnbuiltUserd,
     push: UnbuiltPushbuffer,
 }
@@ -78,7 +87,7 @@ impl Arch for Ga10xArch {
     /// model prints. An operator reading "GA10x (GA106)" would have no way to know the
     /// data plane is not there.
     fn name(&self) -> &'static str {
-        "GA10x (GA106, object model only — data plane unbuilt)"
+        "GA10x (GA106, object model + GMMU; USERD/pushbuffer/doorbell unbuilt)"
     }
 
     /// NVIDIA's real class ids. The constants are `kayfabe-abi`'s, per decision #2's
@@ -167,7 +176,359 @@ impl Arch for Ga10xArch {
     }
 }
 
-/// A GMMU format that decodes **nothing** — GA10x's real one is unbuilt.
+// ── ★★★ The GA10x GMMU, VER2 — `#149`, the first translated aperture ────────────────
+
+/// Level index of the root page directory (`PD3`, virtual address bits 48:47).
+const L_PD3: u8 = 0;
+/// `PD2`, bits 46:38.
+const L_PD2: u8 = 1;
+/// `PD1`, bits 37:29 — **and, on this generation only, a 512 MiB leaf**.
+const L_PD1: u8 = 2;
+/// `PD0`, bits 28:21 — a **16-byte dual** entry, and also a 2 MiB leaf.
+const L_PD0: u8 = 3;
+/// The big-page table, bits 20:16.
+const L_PT_BIG: u8 = 4;
+/// The small-page table, bits 20:12.
+const L_PT_SMALL: u8 = 5;
+
+/// `NV_MMU_VER2_PTE_VALID`, bit 0 — and the bit that tells a leaf from a directory at a
+/// level that can hold either (`ogkm-580: src/nvidia/src/libraries/mmu/gmmu_fmt.c:71-76`,
+/// `gmmuFmtEntryIsPte`: at a level that is both `bPageTable` and a page directory, the
+/// PTE's valid field decides).
+const VER2_VALID: u64 = 1 << 0;
+
+/// `NV_MMU_VER2_PTE_VOL` / `_PDE_VOL`, bit 3.
+///
+/// ★★ **This is how SPARSE is spelled on this regime.** `kgmmuFmtFamiliesInit_GM200`
+/// builds the sparse templates as *valid clear, volatile set* for a PTE and *aperture
+/// INVALID, volatile set* for a PDE (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/mmu/arch/maxwell/kern_gmmu_gm200.c:46-70`, whose own comment
+/// is "GM20X supports sparse directly in HW by setting the volatile bit when the valid bit
+/// is clear"). Reading that bit is the whole of what makes
+/// [`kayfabe_arch::PteDecode::Sparse`] distinguishable here; without it a declared-empty
+/// range and a never-written one are the same bits.
+const VER2_VOL: u64 = 1 << 3;
+
+/// `NV_MMU_VER2_PTE_READ_ONLY`, bit 6.
+const VER2_READ_ONLY: u64 = 1 << 6;
+
+/// `NV_MMU_VER2_PDE_APERTURE` / `_PTE_APERTURE`, bits 2:1.
+const VER2_APERTURE_SHIFT: u32 = 1;
+/// Ditto, width.
+const VER2_APERTURE_MASK: u64 = 0x3;
+
+/// `NV_MMU_VER2_PDE_ADDRESS_SHIFT` / `_PTE_ADDRESS_SHIFT` — 12
+/// (`ogkm-580: src/common/inc/swref/published/pascal/gp100/dev_mmu.h:111, 114, 156`).
+const VER2_ADDR_SHIFT: u32 = 12;
+
+/// `NV_MMU_VER2_PDE_ADDRESS_VID` / `_PTE_ADDRESS_VID` = `(35-3):8`, i.e. bits 32:8 — a
+/// 25-bit field (`dev_mmu.h:113, 140`).
+const VER2_ADDR_VID_BITS: u32 = 25;
+
+/// `NV_MMU_VER2_PDE_ADDRESS_SYS` / `_PTE_ADDRESS_SYS` = `53:8` — a 46-bit field
+/// (`dev_mmu.h:119, 139`).
+const VER2_ADDR_SYS_BITS: u32 = 46;
+
+/// `NV_MMU_VER2_DUAL_PDE_ADDRESS_BIG_SHIFT` — **8, not 12** (`dev_mmu.h:104`). The big
+/// half of a dual entry names its sub-table 256 bytes at a time; the small half names it
+/// 4 KiB at a time. Using one shift for both puts every big-page table at
+/// one-sixteenth of its real address.
+const VER2_BIG_ADDR_SHIFT: u32 = 8;
+
+/// `NV_MMU_VER2_DUAL_PDE_ADDRESS_BIG_VID` = `(35-3):(8-4)`, i.e. bits 32:4 — 29 bits
+/// (`dev_mmu.h:102`).
+const VER2_BIG_ADDR_VID_BITS: u32 = 29;
+
+/// `NV_MMU_VER2_DUAL_PDE_ADDRESS_BIG_SYS` = `53:(8-4)`, i.e. bits 53:4 — 50 bits
+/// (`dev_mmu.h:103`).
+const VER2_BIG_ADDR_SYS_BITS: u32 = 50;
+
+/// Extract a field of `bits` bits starting at bit `lo`, shifted left by `shift`.
+const fn field_addr(raw: u64, lo: u32, bits: u32, shift: u32) -> u64 {
+    ((raw >> lo) & ((1u64 << bits) - 1)) << shift
+}
+
+/// The aperture nibble of a **PDE** — `GMMU_APERTURE_INVALID`, `_VIDEO`, `_SYS_COH`,
+/// `_SYS_NONCOH` in that order (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/mmu/arch/maxwell/kern_gmmu_fmt_gm10x.c:165-182`, which binds
+/// the enum to `NV_MMU_PDE_APERTURE_BIG_*` values 0..3).
+///
+/// ⊘ `None` for `INVALID` — a PDE aperture of zero is not an aperture, it is the encoding
+/// for *"this sub-level is absent"*, and the enum's own doc says the value exists "only for
+/// GPU PDEs to distinguish invalid sub-levels".
+fn pde_aperture(raw: u64) -> Option<Aperture> {
+    match (raw >> VER2_APERTURE_SHIFT) & VER2_APERTURE_MASK {
+        0 => None,
+        1 => Some(Aperture::Vidmem),
+        2 => Some(Aperture::SysmemCoherent),
+        _ => Some(Aperture::SysmemNonCoherent),
+    }
+}
+
+/// The aperture nibble of a **PTE** — `_VIDEO`, `_PEER`, `_SYS_COH`, `_SYS_NONCOH`
+/// (`kern_gmmu_fmt_gm10x.c:184-201`).
+///
+/// ⚠ **The two tables are NOT the same table**, and that is the single easiest thing to get
+/// wrong on this regime: a PDE's `1` is video memory and a PTE's `0` is. A decoder that
+/// shared one function between them would put every leaf one aperture out.
+fn pte_aperture(raw: u64) -> Aperture {
+    match (raw >> VER2_APERTURE_SHIFT) & VER2_APERTURE_MASK {
+        0 => Aperture::Vidmem,
+        1 => Aperture::Peer,
+        2 => Aperture::SysmemCoherent,
+        _ => Aperture::SysmemNonCoherent,
+    }
+}
+
+/// Where a PTE's (or a single PDE's) target lives, given its aperture.
+fn ver2_address(raw: u64, aperture: Aperture) -> u64 {
+    let bits = match aperture {
+        Aperture::Vidmem | Aperture::Peer => VER2_ADDR_VID_BITS,
+        Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => VER2_ADDR_SYS_BITS,
+    };
+    field_addr(raw, 8, bits, VER2_ADDR_SHIFT)
+}
+
+/// Decode an 8-byte word as a leaf mapping of `size`, or `None` if its valid bit is clear.
+fn ver2_leaf(raw: u64, size: PageSize) -> Option<PteDecode> {
+    if raw & VER2_VALID == 0 {
+        return None;
+    }
+    let aperture = pte_aperture(raw);
+    Some(PteDecode::Leaf {
+        phys: ver2_address(raw, aperture),
+        aperture,
+        size,
+        read_only: raw & VER2_READ_ONLY != 0,
+    })
+}
+
+/// A slot with no target: `Sparse` if the guest set the volatile bit, else `Invalid`.
+///
+/// ★ One function, called from every level, so the two states cannot come apart at one
+/// level and not another. `reachability_on_transition.md` §3.6 hole 6 is the cost of
+/// conflating them: valid→sparse is an unmap the guest declared and invalid→sparse is
+/// nothing at all.
+const fn ver2_empty(raw: u64) -> PteDecode {
+    if raw & VER2_VOL != 0 {
+        PteDecode::Sparse
+    } else {
+        PteDecode::Invalid
+    }
+}
+
+/// Decode an 8-byte word as a single (non-dual) page-directory entry pointing at
+/// `child_level`.
+fn ver2_pde(raw: u64, child_level: u8) -> PteDecode {
+    match pde_aperture(raw) {
+        None => ver2_empty(raw),
+        Some(aperture) => PteDecode::Pde {
+            edge: PdeEdge {
+                next: ver2_address(raw, aperture),
+                aperture,
+                child_level,
+            },
+            also: None,
+        },
+    }
+}
+
+/// ★★★ **The GA10x page-table format — `GMMU_FMT_VERSION_2`, with this generation's own
+/// two leaf levels.**
+///
+/// # The tree, from RM's own diagram (`ogkm-580:
+/// `src/nvidia/src/kernel/gpu/mmu/arch/ampere/kern_gmmu_fmt_ga10x.c:29-46`)
+///
+/// ```text
+///  PD3 [48:47] → PD2 [46:38] → PD1 [37:29] / PT_512M [37:29]
+///                                   ↓
+///                              PD0 [28:21] / PT_HUGE [28:21]   (a 16-byte DUAL entry)
+///                                ↙        ↘
+///                       PT_SMALL [20:12]   PT_BIG [20:16]
+/// ```
+///
+/// The geometry is `kgmmuFmtInitLevels_GP10X`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/arch/pascal/kern_gmmu_fmt_gp10x.c:48-105`);
+/// the **one** GA10x delta is `kgmmuFmtInitLevels_GA10X`'s single statement,
+/// `pLevels[2].bPageTable = NV_TRUE` (`kern_gmmu_fmt_ga10x.c:52`).
+///
+/// # ★★★ TWO THINGS ON THIS EXACT CHIP THAT A "LEAVES ARE PTEs" DESIGN GETS WRONG
+///
+/// Both are encoded below rather than commented, because both have already cost this
+/// project weeks (`#13`; `resume_from_fault.md` §6 hole 7):
+///
+/// 1. **`PD0`'s entry is SIXTEEN bytes and names TWO sub-tables.**
+///    `NV_MMU_VER2_DUAL_PDE__SIZE` is 16 (`dev_mmu.h:112`) and
+///    `kgmmuFmtInitPdeMulti_GP10X` fills a big half and a small half from *different bit
+///    ranges with different shifts* (`kern_gmmu_fmt_gp10x.c:107-137`). A decode that
+///    returns one of them drops a whole sub-tree with no diagnostic. Both come back, as
+///    [`kayfabe_arch::PteDecode::Pde::edge`] (small) and `also` (big).
+/// 2. **`PD1` is itself a leaf level on GA10x, and only on GA10x.** Its slot with the
+///    valid bit set is a **512 MiB** page, not a pointer. Its known producer is the guest
+///    kernel-RM's copy-engine utility identity-mapping the whole framebuffer heap; this
+///    format **decodes it faithfully** and the *binding* site declines it
+///    ([`kayfabe_mmu::walker::leaf_disposition`]) — the separation `#13`'s round-4 silent
+///    drop was built by collapsing.
+///
+/// ⊘ `PD0` can also be a 2 MiB leaf by the same `bPageTable && numSubLevels` rule
+/// (`kern_gmmu_fmt_gp10x.c:87`), and that one is not GA10x-specific — it is decoded here
+/// for the same reason, off the same bit.
+///
+/// # ★★ Why the level numbering has SIX rows and a walk is FIVE deep
+///
+/// The rows are the *format's own* numbering, ascending from the root, exactly as
+/// [`kayfabe_arch::GmmuFmt::level_shift`]'s contract describes: "it may contain more rows
+/// than [`kayfabe_arch::GmmuFmt::levels`] counts a single walk to be deep: where a regime
+/// offers two alternative leaf tables … those are two rows, reachable only via
+/// [`kayfabe_arch::PdeEdge::child_level`]". Rows 4 and 5 are alternatives, not successive
+/// levels, so a small-page walk reads five tables and never six. The walker never
+/// increments a level itself — every child level is stated by the edge.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Ga10xGmmu;
+
+impl Ga10xGmmu {
+    /// The format.
+    #[must_use]
+    pub fn new() -> Ga10xGmmu {
+        Ga10xGmmu
+    }
+}
+
+/// Every leaf size this regime can express, ascending.
+///
+/// ★ **Exhaustive is the contract** ([`kayfabe_arch::GmmuFmt::page_sizes`]) and it is what
+/// makes an un-enumerated size a loud fault instead of a silent drop. 512 MiB is in the
+/// list because GA10x really can map one — leaving it out to avoid the `#13` alias would
+/// turn a decodable leaf into `UnknownLeafSize` and re-create the drop at the other end.
+static GA10X_PAGE_SIZES: &[PageSize] = &[
+    PageSize(4 << 10),
+    PageSize(64 << 10),
+    PageSize(2 << 20),
+    PageSize(512 << 20),
+];
+
+impl GmmuFmt for Ga10xGmmu {
+    fn version(&self) -> GmmuVersion {
+        GmmuVersion::Ver2
+    }
+
+    fn page_sizes(&self) -> &[PageSize] {
+        GA10X_PAGE_SIZES
+    }
+
+    /// 8 bytes everywhere except `PD0`, whose dual entry is 16 (`dev_mmu.h:97, 112, 157`).
+    ///
+    /// ⊘ A level this format does not have answers **0**, which
+    /// [`kayfabe_mmu::walker::decode_page`] and its point-query sibling both treat as
+    /// `BadGeometry` — a refusal, never a guessed width.
+    fn entry_size(&self, level: u8) -> u8 {
+        match level {
+            L_PD3 | L_PD2 | L_PD1 | L_PT_BIG | L_PT_SMALL => 8,
+            L_PD0 => 16,
+            _ => 0,
+        }
+    }
+
+    /// Five: `PD3 → PD2 → PD1 → PD0 → PT_SMALL`. See the type's docs for why that is not
+    /// the row count.
+    fn levels(&self) -> u8 {
+        5
+    }
+
+    fn level_shift(&self, level: u8) -> Option<LevelShift> {
+        // ★ `entries` is a COUNT read off each level's `virtAddrBitHi:Lo` pair, never
+        // derived from a page size — `PT_BIG` holds **32** entries in a page that could
+        // hold 512 (bits 20:16), and dividing 4 KiB by 8 would over-read it by 3 840
+        // bytes. This is `LevelShift`'s own warning, instantiated.
+        let (shift, entries) = match level {
+            L_PD3 => (47, 4),        // 48:47
+            L_PD2 => (38, 512),      // 46:38
+            L_PD1 => (29, 512),      // 37:29
+            L_PD0 => (21, 256),      // 28:21
+            L_PT_BIG => (16, 32),    // 20:16
+            L_PT_SMALL => (12, 512), // 20:12
+            _ => return None,
+        };
+        Some(LevelShift { shift, entries })
+    }
+
+    fn decode_entry(&self, level: u8, raw: u128) -> PteDecode {
+        let lo = raw as u64;
+        match level {
+            // Pure directories: no valid bit to consult, the aperture IS the validity.
+            L_PD3 => ver2_pde(lo, L_PD2),
+            L_PD2 => ver2_pde(lo, L_PD1),
+            // ★★★ GA10x only: a PD1 slot with the valid bit set is a 512 MiB PAGE.
+            L_PD1 => ver2_leaf(lo, PageSize(512 << 20)).unwrap_or_else(|| ver2_pde(lo, L_PD0)),
+            L_PD0 => {
+                // ★★★ A 2 MiB leaf is spelled in the LOW half's valid bit; a dual PDE is
+                // spelled in the two halves' aperture fields. The valid bit is asked
+                // first because that is the order `gmmuFmtEntryIsPte` asks it in.
+                if let Some(leaf) = ver2_leaf(lo, PageSize(2 << 20)) {
+                    return leaf;
+                }
+                let hi = (raw >> 64) as u64;
+                // The SMALL half: aperture at hi bits 2:1 (`_APERTURE_SMALL` 66:65),
+                // address at hi bits 32:8 / 53:8 (`_ADDRESS_SMALL_VID/_SYS` 96:72 /
+                // 117:72), shift 12 (`_ADDRESS_SHIFT`).
+                let small = pde_aperture(hi).map(|aperture| PdeEdge {
+                    next: ver2_address(hi, aperture),
+                    aperture,
+                    child_level: L_PT_SMALL,
+                });
+                // The BIG half: aperture at lo bits 2:1, address at lo bits 32:4 / 53:4,
+                // shift **8**.
+                let big = pde_aperture(lo).map(|aperture| PdeEdge {
+                    next: field_addr(
+                        lo,
+                        4,
+                        match aperture {
+                            Aperture::Vidmem | Aperture::Peer => VER2_BIG_ADDR_VID_BITS,
+                            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => {
+                                VER2_BIG_ADDR_SYS_BITS
+                            }
+                        },
+                        VER2_BIG_ADDR_SHIFT,
+                    ),
+                    aperture,
+                    child_level: L_PT_BIG,
+                });
+                // ★★ SMALL first, and the order is load-bearing for a point query: a
+                // translation follows `edge` before `also`, and the small-page table is
+                // the one RM populates for ordinary mappings — including every mapping the
+                // bus aperture makes. ⊘ Neither is dropped when both are present.
+                match (small, big) {
+                    (None, None) => ver2_empty(lo),
+                    (Some(e), also) => PteDecode::Pde { edge: e, also },
+                    (None, Some(e)) => PteDecode::Pde {
+                        edge: e,
+                        also: None,
+                    },
+                }
+            }
+            L_PT_BIG => ver2_leaf(lo, PageSize(64 << 10)).unwrap_or_else(|| ver2_empty(lo)),
+            L_PT_SMALL => ver2_leaf(lo, PageSize(4 << 10)).unwrap_or_else(|| ver2_empty(lo)),
+            // ⊘ A level this format does not have decodes to nothing, and NOT to a
+            // plausible entry. `Invalid` rather than `Sparse`: sparse is a declaration
+            // the guest made, and a level that does not exist carries none.
+            _ => PteDecode::Invalid,
+        }
+    }
+}
+
+/// A GMMU format that decodes **nothing** — kept as the vocabulary's own *"this generation
+/// has no page-table format"*.
+///
+/// ⚠ **No longer what [`Ga10xArch`] answers with**: `#149` built the real one
+/// ([`Ga10xGmmu`]) because the guest's bus aperture is a translated window and a boot
+/// stops dead at it. This type stays because the statement it makes is still one an
+/// adapter may need to make, and because deleting it would leave "refusing" with no
+/// spelling at all.
+///
+/// ★ Zero levels and no page sizes rather than plausible ones. #13's corollary L3 is
+/// that a walk hitting an un-enumerated leaf size must be a loud fault and never a silent
+/// drop (*"the GA10x PD1 512M-leaf gap cost weeks"*); an empty enumeration makes **every**
+/// size un-enumerated, so the first walk faults instead of the first *unusual* walk.
 ///
 /// ★ Zero levels and no page sizes rather than plausible ones. #13's corollary L3 is
 /// that a walk hitting an un-enumerated leaf size must be a loud fault and never a silent
@@ -255,4 +616,10 @@ impl PushbufferAbi for UnbuiltPushbuffer {
     }
 }
 
-kayfabe_util::assert_send_sync!(Ga10xArch, UnbuiltGmmu, UnbuiltUserd, UnbuiltPushbuffer);
+kayfabe_util::assert_send_sync!(
+    Ga10xArch,
+    Ga10xGmmu,
+    UnbuiltGmmu,
+    UnbuiltUserd,
+    UnbuiltPushbuffer
+);

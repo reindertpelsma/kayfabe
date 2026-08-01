@@ -137,9 +137,12 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use kayfabe_arch::gsp::GspModel;
+use kayfabe_arch::{Aperture, GmmuFmt};
 use kayfabe_gsp::{CommandPolicy, GspAbi, GspFault, GspFsm, GuestRam, RamRefused};
+use kayfabe_mmu::walker::{FbRead, translate_from_entry};
 use kayfabe_trace::Faulted;
 
+use crate::bar2::{BarPdeLog, BarPdes};
 use crate::fbwin::{Bar0Window, FbRefused, FbStore, RefusingFb};
 use crate::{ChipError, ChipProfile, FbWindow};
 
@@ -277,6 +280,25 @@ pub struct Counters {
     /// neither number can absorb the other. A port that counted attempts would report a
     /// healthy boot while dropping every byte.
     pub fb_writes: u64,
+    /// ★★★ Reads **served through the GMMU** from the translated instance/`BAR2` window.
+    ///
+    /// ★ Counted apart from [`Counters::fb_reads`] even though the bytes come out of the
+    /// same store, because the two say different things: `fb_reads` says a window
+    /// resolved an address arithmetically, this says a **page walk succeeded**. A boot in
+    /// which this is zero and `kbusVerifyBar2` still fails has an unrooted aperture; a
+    /// boot in which it is large and the test still fails has a translation that resolves
+    /// to the wrong byte. Merging them would make those two indistinguishable.
+    pub bar2_reads: u64,
+    /// ★★★ Writes **served through the GMMU** into the translated instance/`BAR2` window.
+    pub bar2_writes: u64,
+    /// ★★★ Translated accesses this port **refused, by name** — an unrooted aperture, an
+    /// unmapped virtual address, a leaf in an aperture this port cannot serve, or a
+    /// format that is not installed.
+    ///
+    /// ⊘ **This is what a dropped translated write looks like**, and it must never be
+    /// zero-with-a-shrug: `kbusVerifyBar2` detects exactly one such drop, ninety lines
+    /// and one L2 evict later, as `NV_ERR_MEMORY_ERROR`.
+    pub bar2_faults: u64,
     /// ★★★ Framebuffer accesses the store **refused, by name** — see
     /// [`crate::fbwin::FbRefused`].
     ///
@@ -346,6 +368,13 @@ pub struct PlaneResidue {
     /// where the previous guest left it is not indistinguishable from a cold one, and the
     /// register's reset value is a documented silicon fact (`_BASE_0`, `_TARGET_VID_MEM`).
     pub bar0_window: Bar0Window,
+    /// ★★★ The bus apertures' published page-table roots.
+    ///
+    /// Device state, so it is in the residue, and for the sharpest reason in this struct:
+    /// a reloaded device that still held the previous guest's BAR2 root would follow it
+    /// into framebuffer the new guest has not written and answer the **previous** guest's
+    /// mappings through the new one's aperture.
+    pub bar_pdes: BarPdes,
     /// ★★★ How many bytes of framebuffer the store is holding.
     ///
     /// ⊘ Content, not identity — this is a *size*, and it is here because the alternative
@@ -381,6 +410,11 @@ struct PlaneState {
     /// The framebuffer this device advertises, as a port. [`RefusingFb`] until a shell
     /// installs one — the exact shape [`PlaneState::ram`] already has.
     fb: Box<dyn FbStore>,
+    /// ★★★ The page-table format this chip's GMMU uses, as a port. `None` until a shell
+    /// installs one, and `None` is a **refusal**: a translated aperture with no format
+    /// answers *"this port has no page-table format"* by name rather than guessing a
+    /// stride. See [`RegPlane::set_mmu`].
+    mmu: Option<Box<dyn GmmuFmt>>,
 }
 
 /// How many distinct unclaimed offsets are remembered.
@@ -440,6 +474,22 @@ pub enum ReadOutcome {
         /// Why the store would not serve it.
         why: &'static str,
     },
+    /// ★★★ A **translated** window this port would not resolve — with the virtual
+    /// address and the reason.
+    ///
+    /// ⊘ A different variant from [`ReadOutcome::FbRefused`] because the two carry
+    /// different kinds of address: that one has a *physical* address the store refused,
+    /// this one has a *virtual* one that never became physical. Reporting a VA in a field
+    /// named `phys` is the aliasing defect `kayfabe_arch::Aperture` exists to prevent,
+    /// one layer up.
+    TranslationRefused {
+        /// Which window.
+        window: FbWindow,
+        /// The virtual address, i.e. the aperture offset the guest accessed.
+        va: u64,
+        /// Why it did not resolve.
+        why: &'static str,
+    },
     /// No source claimed the offset.
     Unclaimed,
 }
@@ -456,7 +506,11 @@ impl ReadOutcome {
             | Self::Gsp(v)
             | Self::Bar0Window(v) => v,
             Self::Fb { value, .. } => value,
-            Self::GspFault(_) | Self::FbWindow(_) | Self::FbRefused { .. } | Self::Unclaimed => 0,
+            Self::GspFault(_)
+            | Self::FbWindow(_)
+            | Self::FbRefused { .. }
+            | Self::TranslationRefused { .. }
+            | Self::Unclaimed => 0,
         }
     }
 }
@@ -488,6 +542,14 @@ pub struct WriteOutcome {
     ///
     /// Set only after [`FbStore::write`] returned `Ok`.
     pub fb_landed: Option<u64>,
+    /// ★★★ A **translated** write this port would not resolve — the virtual address, the
+    /// length and the reason.
+    ///
+    /// ⊘ There is deliberately no success-shaped answer beside it: a translated write is
+    /// either landed ([`WriteOutcome::fb_landed`], with the *physical* address the walk
+    /// produced) or refused here. `kbusVerifyBar2_GM107:4163-4200` is the caller that
+    /// notices, and it notices ninety lines later.
+    pub bar2_refusal: Option<Bar2Refused>,
     /// ★★★ The framebuffer store **refused** the write, whole — address, length, reason.
     ///
     /// ★ Kept as the payload rather than as a tag for the same reason
@@ -519,6 +581,7 @@ impl WriteOutcome {
             ram_refusal: None,
             fb_window: None,
             fb_landed: None,
+            bar2_refusal: None,
             fb_refusal: None,
             raise_status_irq: false,
             transitions: 0,
@@ -533,6 +596,59 @@ impl WriteOutcome {
 /// register offset and the reader is an operator staring at one line of a boot log.
 pub const FB_WRITE_REFUSED: &str = "the framebuffer store would not take a write through the BAR0 moving window; the \
      bytes did NOT land, and the guest will not be told";
+
+/// The fault tag a refused **translated** write carries out to the shell.
+///
+/// ★ Its own sentence, not [`FB_WRITE_REFUSED`] reused, because the two failures have
+/// different fixes: that one means the store would not take bytes at an address that had
+/// already been resolved, this one means no address was resolved at all.
+pub const BAR2_WRITE_REFUSED: &str = "the GMMU would not translate this write through the instance/BAR2 window; the \
+     bytes did NOT land anywhere, and the guest will not be told";
+
+/// ★★★ A translated access this port refused, whole.
+///
+/// The twin of [`FbRefused`] on the other side of the walk: address, length, reason. The
+/// address is **virtual** and the type says so in its field name, because a virtual and a
+/// physical address are different facts and one struct that could carry either would let
+/// a reader mistake one for the other at exactly the moment it matters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bar2Refused {
+    /// The aperture offset the guest accessed, i.e. the virtual address in the bus VAS.
+    pub va: u64,
+    /// How many bytes were asked for.
+    pub len: usize,
+    /// One sentence.
+    pub why: &'static str,
+}
+
+/// [`RegPlane`]'s refusal when no page-table format has been installed.
+pub const NO_MMU_PORT: &str = "the register plane has no page-table format installed; the shell never called \
+     set_mmu, so a translated aperture has no way to resolve an address and this port \
+     will not invent a stride";
+
+/// The aperture has no published root.
+pub const BAR2_UNROOTED: &str = "the guest has not published a root page-directory entry for this aperture \
+     (UPDATE_BAR_PDE); on the firmware-offload model that entry is the ONLY fact this \
+     port ever receives about that page-table tree";
+
+/// The published root names a level this format does not have.
+pub const BAR2_UNKNOWN_ROOT_LEVEL: &str = "the published root entry declares a level shift this chip's page-table format \
+     does not have a level for; decoding it at a guessed level would read the wrong \
+     fields of the entry";
+
+/// The access falls outside the one root slot the guest published.
+pub const BAR2_OUTSIDE_PUBLISHED_SLOT: &str = "this aperture offset indexes a root slot the guest never published; on the \
+     firmware-offload model the guest owns root slot 0 and the firmware owns the rest, \
+     and this port has published none of its own";
+
+/// The walk resolved to an aperture this port cannot serve.
+pub const BAR2_FOREIGN_APERTURE: &str = "the guest's page tables map this address into an aperture this port does not \
+     serve through the bus window; answering it out of the framebuffer store would \
+     alias two different memories onto one address";
+
+/// The walk resolved to a leaf the guest marked read-only.
+pub const BAR2_READ_ONLY: &str = "the guest's own page tables mark this mapping read-only; letting a write through \
+     would give the guest a mapping stronger than the one it published";
 
 /// ★★★ The register plane: the routing stage Q4 adds.
 pub struct RegPlane {
@@ -554,6 +670,12 @@ pub struct RegPlane {
     /// ★ Step 5a's whole deliverable: where the guest said its replayable fault buffer is
     /// (`crate::faultbuffer`). Recorded, never answered.
     fault_buffer: crate::faultbuffer::FaultBufferLog,
+    /// ★★★ The bus apertures' published root page-directory entries (`crate::bar2`). Held
+    /// here as well as inside the chain link that writes it, for the same two reasons
+    /// [`RegPlane::unserviced`] is: reading it must not take the FSM's lock behind a
+    /// doorbell, and a caller that replaced the policy still gets to read what the guest
+    /// published.
+    bar_pdes: BarPdeLog,
 }
 
 impl core::fmt::Debug for RegPlane {
@@ -585,12 +707,69 @@ struct PlaneCounters {
     fb_reads: AtomicU64,
     fb_writes: AtomicU64,
     fb_refusals: AtomicU64,
+    bar2_reads: AtomicU64,
+    bar2_writes: AtomicU64,
+    bar2_faults: AtomicU64,
     bar0_window_reads: AtomicU64,
     bar0_window_writes: AtomicU64,
     commands: AtomicU64,
     faults: AtomicU64,
     ram_refusals: AtomicU64,
     irq_requests: AtomicU64,
+}
+
+/// How many level rows [`RegPlane::bar2_phys`] will ask a format about when it maps a
+/// published root's level shift back to a level index.
+///
+/// ★ A bound rather than `u8::MAX`, and it is a bound on **our** loop rather than a claim
+/// about any format: `kayfabe_arch::GmmuFmt::level_shift` answers `None` for a row it does
+/// not have, so scanning further finds nothing and only costs calls. Sixteen is already
+/// three times the deepest regime this project has read.
+const MAX_FORMAT_LEVELS: u8 = 16;
+
+/// Why a windowed access did not resolve to a framebuffer address.
+///
+/// ★ Two variants and not one string, because the two are reported differently: one is a
+/// window this port has never modelled (counted as a dropped *window* access, which is
+/// what it has always been), and the other is a window that IS modelled and refused this
+/// particular address (counted as a translation fault, with the address).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowRefusal {
+    /// No address model for this window at all.
+    NoAddressModel,
+    /// A translated window that would not resolve this virtual address.
+    Translated {
+        /// The aperture offset asked for.
+        va: u64,
+        /// One sentence.
+        why: &'static str,
+    },
+}
+
+/// ★★★ **The join.** The device's one [`FbStore`], wearing the page-table walker's
+/// byte-source trait.
+///
+/// # Why this is five lines and not a second store
+///
+/// `kayfabe_mmu::walker::FbRead` and [`FbStore`] are two views of the same bytes and they
+/// exist separately for a reason that is about *direction*, not about content: `FbRead`
+/// deliberately has no method that hands content **in**, which is what makes *"the core
+/// acquired a store of device memory"* unrepresentable in the pure crates. A borrow is
+/// therefore the only correct adapter — it cannot outlive the store, cannot copy it, and
+/// cannot become a second one.
+///
+/// ⊘ `false`, never zeros. [`FbStore::read`] already answers `Ok` with zeros for an
+/// address inside the advertised framebuffer that nobody has written (which is a true
+/// statement about memory this device owns); it returns `Err` only for a range it does not
+/// back at all, and *that* is what the walker must see as a miss.
+struct FbStoreReader<'a> {
+    fb: &'a mut dyn FbStore,
+}
+
+impl FbRead for FbStoreReader<'_> {
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        self.fb.read(phys, buf).is_ok()
+    }
 }
 
 impl RegPlane {
@@ -638,6 +817,7 @@ impl RegPlane {
         assert_disjoint(chip, model.as_ref())?;
         let unserviced = crate::unserviced::UnservicedLog::new();
         let fault_buffer = crate::faultbuffer::FaultBufferLog::new();
+        let bar_pdes = BarPdeLog::new();
         Ok(RegPlane {
             chip,
             model,
@@ -651,16 +831,19 @@ impl RegPlane {
                     abi.driver,
                     unserviced.clone(),
                     fault_buffer.clone(),
+                    bar_pdes.clone(),
                     objects,
                 ),
                 unclaimed: Vec::new(),
                 fb_window: Vec::new(),
                 bar0_window: Bar0Window::new(),
                 fb: Box::new(RefusingFb),
+                mmu: None,
             }),
             c: PlaneCounters::default(),
             unserviced,
             fault_buffer,
+            bar_pdes,
         })
     }
 
@@ -706,6 +889,61 @@ impl RegPlane {
         s.fb = fb;
     }
 
+    /// ★★★ Install the chip's **page-table format**, replacing the refusal.
+    ///
+    /// # Why a port and not a [`ChipProfile`] row
+    ///
+    /// A `GmmuFmt` is an Axis-B seam, and the crate that implements one for a real
+    /// generation is an *arch adapter* (`kayfabe_chips`), not this one. Making it a chip
+    /// row would mean this crate naming that crate — the wrong direction, and the second
+    /// copy of a chip's page-table format the moment a second consumer appears. As a port
+    /// it is installed by the one composition root that already holds both, and the format
+    /// the plane walks with is **the same type** `kayfabe_arch::Arch::mmu` answers with.
+    ///
+    /// ⊘ Not installing it is a **refusal**, not a default: [`NO_MMU_PORT`] says so by
+    /// name at every translated access, and no arithmetic is invented in its absence.
+    ///
+    /// ★ Takes `&self` and the plane's lock, like [`RegPlane::set_fb`] and
+    /// [`RegPlane::set_ram`].
+    pub fn set_mmu(&self, mmu: Box<dyn GmmuFmt>) {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.mmu = Some(mmu);
+    }
+
+    /// What the guest has published about the bus apertures' page-table roots.
+    ///
+    /// ⊘ The only channel: the guest ignores this command's status
+    /// (`crate::bar2`), so *"did the root arrive?"* is not answerable from a guest log.
+    #[must_use]
+    pub fn bar_pdes(&self) -> BarPdes {
+        self.bar_pdes.pdes()
+    }
+
+    /// How many roots the guest published, and how many bodies were refused.
+    #[must_use]
+    pub fn bar_pde_counts(&self) -> (u64, u64) {
+        (self.bar_pdes.updates(), self.bar_pdes.refusals())
+    }
+
+    /// ★★★ The publication latch itself, as a shared handle.
+    ///
+    /// # ⊘ Why this hands out the writable handle rather than a copy
+    ///
+    /// [`RegPlane::set_policy`] replaces the **whole** command chain, and the link that
+    /// decodes `UPDATE_BAR_PDE` off the wire lives in that chain
+    /// ([`crate::bar2::BarPdePolicy`]). A caller that replaced the chain without being able
+    /// to reach this latch would **silently unroot the aperture**: the guest would go on
+    /// publishing its root, nothing would receive it, and every translated access would
+    /// refuse — with a correct-looking diagnosis pointing at the guest. So the latch is
+    /// part of the plane's surface and not a private field, exactly as
+    /// [`crate::unserviced::UnservicedLog`] is shared with the chain that writes it.
+    ///
+    /// ★ Read-mostly in practice. [`RegPlane::bar_pdes`] is what a *reporter* wants.
+    #[must_use]
+    pub fn bar_pde_log(&self) -> BarPdeLog {
+        self.bar_pdes.clone()
+    }
+
     /// Install a command policy, replacing the C-baseline echo.
     pub fn set_policy(&self, policy: Box<dyn CommandPolicy>) {
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -739,6 +977,9 @@ impl RegPlane {
             fb_reads,
             fb_writes,
             fb_refusals,
+            bar2_reads,
+            bar2_writes,
+            bar2_faults,
             bar0_window_reads,
             bar0_window_writes,
             commands,
@@ -761,6 +1002,9 @@ impl RegPlane {
             fb_reads: g(fb_reads),
             fb_writes: g(fb_writes),
             fb_refusals: g(fb_refusals),
+            bar2_reads: g(bar2_reads),
+            bar2_writes: g(bar2_writes),
+            bar2_faults: g(bar2_faults),
             bar0_window_reads: g(bar0_window_reads),
             bar0_window_writes: g(bar0_window_writes),
             commands: g(commands),
@@ -820,6 +1064,7 @@ impl RegPlane {
             c: _,
             unserviced,
             fault_buffer,
+            bar_pdes,
         } = self;
         let counters = self.counters();
         let s = state.lock().unwrap_or_else(|e| e.into_inner());
@@ -834,6 +1079,10 @@ impl RegPlane {
             // ★ The PORT is the shell's wiring, like `ram` and `policy`; what it HOLDS is
             // device state and is carried out as `fb_resident_bytes` just below.
             fb,
+            // ★ Also the shell's wiring: an immutable encoding table installed once
+            // through `set_mmu`. Two lives of the same chip cannot differ here, and it
+            // holds no guest bytes.
+            mmu: _,
         } = &*s;
         PlaneResidue {
             counters,
@@ -844,6 +1093,7 @@ impl RegPlane {
             fault_buffers: fault_buffer.sample(),
             fault_buffers_registered: fault_buffer.total(),
             bar0_window: *bar0_window,
+            bar_pdes: bar_pdes.pdes(),
             fb_resident_bytes: fb.resident_bytes(),
         }
     }
@@ -934,6 +1184,9 @@ impl RegPlane {
         s.fsm.device_reset();
         s.bar0_window = Bar0Window::new();
         s.fb.device_reset();
+        // ★★★ And the published roots. See `crate::bar2::BarPdeLog::device_reset` for why
+        // this one is a cross-life *information* leak and not merely stale state.
+        self.bar_pdes.device_reset();
     }
 
     /// ★★★ Serve one register read.
@@ -954,7 +1207,16 @@ impl RegPlane {
                 self.note_fb_window(w, off);
                 self.c.fb_window_reads.fetch_add(1, Ordering::Relaxed)
             }
-            ReadOutcome::Fb { .. } => self.c.fb_reads.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::Fb { window, .. } => {
+                if window == FbWindow::InstanceWindow {
+                    self.c.bar2_reads.fetch_add(1, Ordering::Relaxed);
+                }
+                self.c.fb_reads.fetch_add(1, Ordering::Relaxed)
+            }
+            ReadOutcome::TranslationRefused { window, .. } => {
+                self.note_fb_window(window, off);
+                self.c.bar2_faults.fetch_add(1, Ordering::Relaxed)
+            }
             ReadOutcome::FbRefused { window, .. } => {
                 self.note_fb_window(window, off);
                 self.c.fb_refusals.fetch_add(1, Ordering::Relaxed)
@@ -1024,18 +1286,119 @@ impl RegPlane {
     /// instance window are **GMMU-translated**, and this port's `GmmuFmt` says it has no
     /// page-table format (`kayfabe_chips::UnbuiltGmmu`). Answering them would mean
     /// inventing a translation, which is `MISS = FAULT`'s whole prohibition.
-    fn window_phys(&self, w: FbWindow, off: u64, s: &PlaneState) -> Option<u64> {
+    fn window_phys(
+        &self,
+        w: FbWindow,
+        off: u64,
+        write: bool,
+        s: &mut PlaneState,
+    ) -> Result<u64, WindowRefusal> {
         match w {
-            FbWindow::Pramin => Some(s.bar0_window.fb_addr(off - self.chip.pramin_window.base)),
-            FbWindow::FbAperture | FbWindow::InstanceWindow => None,
+            FbWindow::Pramin => Ok(s.bar0_window.fb_addr(off - self.chip.pramin_window.base)),
+            // ⊘ Still no address model. BAR1 is GMMU-translated like BAR2 and its root
+            // arrives through the same command — but nothing in this port serves an
+            // access through it, and building half of it would mean publishing a
+            // translation nobody has ever exercised.
+            FbWindow::FbAperture => Err(WindowRefusal::NoAddressModel),
+            FbWindow::InstanceWindow => self.bar2_phys(off, write, s),
         }
+    }
+
+    /// ★★★ **THE GMMU TRANSLATION** — one aperture offset, one page walk, one framebuffer
+    /// address.
+    ///
+    /// # ★★★ ONE STORE, TWO APERTURES — the whole point of this rung
+    ///
+    /// The page-table pages this walk reads come out of [`PlaneState::fb`], **the same
+    /// [`FbStore`] the BAR0 moving window writes into** — because that is where the guest
+    /// put them. `kbusSetupBar2GpuVaSpace_GM107` builds the whole BAR2 tree through the
+    /// BAR0 window before it publishes the root, and the leaf this walk resolves is read
+    /// back through that same window by `kbusVerifyBar2`. If this method reached a
+    /// *second* store, the two apertures would disagree about one physical byte, which is
+    /// exactly the defect the guest's own test is written to catch. [`FbStoreReader`] is
+    /// the whole of the join: it is a borrow of the one store wearing the walker's trait.
+    ///
+    /// # What each refusal means
+    ///
+    /// Every arm is a **named** refusal and none of them reads zero, because a zero-filled
+    /// page-table entry is a well-formed *"this maps nothing"* and a zero-filled data read
+    /// is a well-formed *"the guest wrote nothing"*. Both are answers a guest acts on.
+    fn bar2_phys(&self, va: u64, write: bool, s: &mut PlaneState) -> Result<u64, WindowRefusal> {
+        // ★ Destructured so the format and the byte store can be borrowed at once. They
+        // are different fields and the borrow checker knows it; a method call on `s`
+        // would not let it.
+        let PlaneState { mmu, fb, .. } = s;
+        let Some(fmt) = mmu.as_deref() else {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: NO_MMU_PORT,
+            });
+        };
+        let Some(root) = self.bar_pdes.pdes().bar2 else {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_UNROOTED,
+            });
+        };
+        // ★★ The level is DERIVED from the shift the guest sent beside the entry, never
+        // assumed to be zero. `kbusPatchBar2Pdb_GSPCLIENT` sends
+        // `pRootFmt->virtAddrBitLo` (`ogkm-580: kern_bus.c:880`) precisely because the
+        // entry alone does not say which format row it belongs to, and the fields of a
+        // dual entry and a single one do not overlap.
+        let Some((level, geo)) = (0..MAX_FORMAT_LEVELS)
+            .filter_map(|l| fmt.level_shift(l).map(|g| (l, g)))
+            .find(|(_, g)| u64::from(g.shift) == root.level_shift)
+        else {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_UNKNOWN_ROOT_LEVEL,
+            });
+        };
+        // ★★★ The guest published exactly ONE slot of that level — its own, slot 0. The
+        // other slots belong to the firmware's half of the address space
+        // (`ogkm-580: kern_bus.c:810-820`) and this port has published none, so an offset
+        // that indexes past slot 0 has no root at all. Refused by name rather than
+        // resolved against the one root we happen to hold, which would silently answer a
+        // foreign address space out of this one.
+        if geo.entries == 0 || (va >> geo.shift) & u64::from(geo.entries.saturating_sub(1)) != 0 {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_OUTSIDE_PUBLISHED_SLOT,
+            });
+        }
+        let mut src = FbStoreReader { fb: fb.as_mut() };
+        let t = translate_from_entry(fmt, &mut src, level, u128::from(root.entry), va)
+            .map_err(|f| WindowRefusal::Translated { va, why: f.why() })?;
+        // ⊘ Vidmem only, and by NAME. The guest's page tables can legitimately name
+        // system memory, and this port has a guest-RAM port that could serve it — but
+        // nothing on this boot path maps sysmem through the bus window (every memdesc
+        // `kbusVerifyBar2` and `kbusSetupCpuPointerForBusFlush` allocate is `ADDR_FBMEM`,
+        // `ogkm-580: kern_bus_gm107.c:4050`, `kern_bus_gv100.c:66-72`), so serving it
+        // would be an untested path answering a case nobody has observed.
+        if t.aperture != Aperture::Vidmem {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_FOREIGN_APERTURE,
+            });
+        }
+        if write && t.read_only {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_READ_ONLY,
+            });
+        }
+        Ok(t.phys)
     }
 
     /// Serve one framebuffer-window read.
     fn fb_read(&self, w: FbWindow, off: u64, size: u8) -> ReadOutcome {
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(phys) = self.window_phys(w, off, &s) else {
-            return ReadOutcome::FbWindow(w);
+        let phys = match self.window_phys(w, off, false, &mut s) {
+            Ok(p) => p,
+            Err(WindowRefusal::NoAddressModel) => return ReadOutcome::FbWindow(w),
+            Err(WindowRefusal::Translated { va, why }) => {
+                return ReadOutcome::TranslationRefused { window: w, va, why };
+            }
         };
         let n = usize::from(size.clamp(1, 8));
         let mut buf = [0u8; 8];
@@ -1063,15 +1426,38 @@ impl RegPlane {
     /// [`FbStore::write`] is matched, never discarded.
     fn fb_write(&self, w: FbWindow, off: u64, size: u8, val: u64) -> WriteOutcome {
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(phys) = self.window_phys(w, off, &s) else {
-            drop(s);
-            self.note_fb_window(w, off);
-            self.c.fb_window_writes.fetch_add(1, Ordering::Relaxed);
-            return WriteOutcome {
-                fb_window: Some(w),
-                ..WriteOutcome::nothing()
-            };
+        let phys = match self.window_phys(w, off, true, &mut s) {
+            Ok(p) => p,
+            Err(WindowRefusal::NoAddressModel) => {
+                drop(s);
+                self.note_fb_window(w, off);
+                self.c.fb_window_writes.fetch_add(1, Ordering::Relaxed);
+                return WriteOutcome {
+                    fb_window: Some(w),
+                    ..WriteOutcome::nothing()
+                };
+            }
+            Err(WindowRefusal::Translated { va, why }) => {
+                drop(s);
+                self.note_fb_window(w, off);
+                self.c.bar2_faults.fetch_add(1, Ordering::Relaxed);
+                return WriteOutcome {
+                    // ★ A FAULT, so the shell prints it at the instant the write is lost
+                    // rather than leaving it to be inferred from an NV_ERR_MEMORY_ERROR
+                    // ninety lines of guest code later.
+                    fault: Some(BAR2_WRITE_REFUSED),
+                    bar2_refusal: Some(Bar2Refused {
+                        va,
+                        len: usize::from(size.clamp(1, 8)),
+                        why,
+                    }),
+                    ..WriteOutcome::nothing()
+                };
+            }
         };
+        if w == FbWindow::InstanceWindow {
+            self.c.bar2_writes.fetch_add(1, Ordering::Relaxed);
+        }
         let n = usize::from(size.clamp(1, 8));
         let bytes = val.to_le_bytes();
         let outcome = match s.fb.write(phys, &bytes[..n]) {

@@ -51,6 +51,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod abi;
+pub mod bar2;
 pub mod faultbuffer;
 pub mod fbwin;
 pub mod ga10x;
@@ -768,11 +769,12 @@ pub fn served_policy(
     driver: kayfabe_abi::versions::DriverAbiTable,
     unserviced: unserviced::UnservicedLog,
     fault_buffer: faultbuffer::FaultBufferLog,
+    bar_pdes: bar2::BarPdeLog,
     objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
     Box::new(sticky::StickyAnswerGuard::new(
         driver,
-        served_chain(chip, driver, unserviced, fault_buffer, objects),
+        served_chain(chip, driver, unserviced, fault_buffer, bar_pdes, objects),
     ))
 }
 
@@ -789,12 +791,20 @@ pub fn served_chain(
     driver: kayfabe_abi::versions::DriverAbiTable,
     unserviced: unserviced::UnservicedLog,
     fault_buffer: faultbuffer::FaultBufferLog,
+    bar_pdes: bar2::BarPdeLog,
     objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
     let mut links: Vec<Box<dyn kayfabe_gsp::CommandPolicy>> = vec![
         Box::new(inittables::InitTablePolicy::new(chip, driver)),
         Box::new(staticinfo::StaticInfoPolicy::new(chip, driver)),
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
+        // ★★★ `#149`. Position: among the ANSWERING links, before the recorders, and
+        // before `InertPolicy` would have a chance to grow an arm for it. It answers
+        // exactly one function and declines everything else, so it can sit anywhere among
+        // them; it is written here, beside the other links that latch a guest fact, so a
+        // reader meets "the guest publishes its bus-aperture root" next to "the guest
+        // publishes its system info".
+        Box::new(bar2::BarPdePolicy::new(driver, bar_pdes)),
         Box::new(inert::InertPolicy::new()),
     ];
     // ★★★ The object-model link, if the composition root has one. Its POSITION is the
