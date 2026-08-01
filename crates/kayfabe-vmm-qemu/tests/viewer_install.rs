@@ -905,3 +905,65 @@ fn first_system_ram() -> Option<u64> {
     }
     None
 }
+
+/// ★★★ **A mapping whose GPA would not fit a `u64` is refused BY NAME, not wrapped.**
+///
+/// This is the cross-crate half of the defect the `gpga_index` fuzz campaign found
+/// (2026-08-01). The index closed its half by checking `view_off + region.len` where the
+/// offset enters, and its rustdoc enumerates the three consumers that later add to the
+/// stored value — ★ all three inside `kayfabe-mmu`. [`ViewInstaller::place_content`] is a
+/// **fourth**, in this crate, and it adds `self.gpa` — the window's base GPA, which the
+/// index has never seen. Two different sums: bounding one does not bound the other.
+///
+/// ⊘ Before the check, this input panicked under `overflow-checks` and **wrapped** in a
+/// release build, handing `map_guest` a GPA the view never described.
+///
+/// **The bite:** replace the `checked_add` in `place_content` with `+` and this goes red —
+/// as a panic in a debug build, and as the `assert!` below in a release one.
+#[test]
+fn a_mapping_gpa_that_would_not_fit_a_u64_is_refused_by_name() {
+    let (m, _slots) = machine();
+    let base = 1u64 << 63;
+    let inst = ViewInstaller::new(
+        FbWindow::Pramin,
+        kayfabe_mmu::gpga::ViewerId(0),
+        base,
+        win_len(),
+        HostPageSize::query(),
+    );
+
+    // base + view_off == 2^64 exactly: the first sum that does not fit.
+    let r = inst.place_content(
+        &m,
+        1u64 << 63,
+        common::page(),
+        kayfabe_vmm::HostRegion { id: 0, offset: 0 },
+    );
+    assert_eq!(
+        r,
+        Err(InstallRefusal::MappingGpaOverflows {
+            window_gpa: base,
+            view_off: 1u64 << 63,
+            len: common::page(),
+        }),
+        "an overflowing guest-physical address must be refused by name, not wrapped into \
+         a mapping at an address nobody chose"
+    );
+
+    // ★ NON-VACUITY: the refusal must be about the OVERFLOW, not about this harness
+    // refusing everything. An offset that fits must not produce THIS variant — it may
+    // still fail for unrelated reasons (the mock plane owes us nothing here), and that is
+    // fine; what must not happen is `MappingGpaOverflows` for a sum that fits.
+    let ok_off = common::page();
+    let r2 = inst.place_content(
+        &m,
+        ok_off,
+        common::page(),
+        kayfabe_vmm::HostRegion { id: 0, offset: 0 },
+    );
+    assert!(
+        !matches!(r2, Err(InstallRefusal::MappingGpaOverflows { .. })),
+        "a window offset that fits was reported as overflowing, so the check is firing on \
+         the wrong condition: {r2:?}"
+    );
+}

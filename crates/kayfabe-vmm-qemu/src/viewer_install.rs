@@ -333,6 +333,33 @@ pub enum InstallRefusal {
         /// Which object.
         object: ObjectId,
     },
+    /// ★★★ **The mapping's guest-physical address would not fit a `u64`.**
+    ///
+    /// `window_gpa + view_off` overflowed. Found while reviewing the `gpga_index` fuzz
+    /// campaign (2026-08-01), as the **cross-crate half** of a defect whose other half
+    /// [`kayfabe_mmu::ViewFault::ViewOffsetOverflows`] closes.
+    ///
+    /// ⚠ **That check does not cover this one, and it is worth being precise about why.**
+    /// The index checks `view_off + region.len` — the offset against the *extent of the
+    /// region*. Here the offset is added to `self.gpa`, the **window's base GPA**, which
+    /// the index has never seen. Two different sums; the first bounds the second only if
+    /// you already know `self.gpa` is small, and nothing states that. The index's own
+    /// rustdoc enumerates the three sites that consume the stored offset — and all three
+    /// are inside `kayfabe-mmu`. This is a fourth, in another crate.
+    ///
+    /// ⊘ Unchecked it panicked under `overflow-checks` and **wrapped** in release, which
+    /// hands [`kayfabe_vmm::Vmm::map_guest`] a GPA that is not the one the view describes
+    /// — guest memory installed at an address nobody chose. Refused by name rather than
+    /// saturated: a mapping at the wrong address is worse than no mapping, which is the
+    /// same judgement [`Self::HostGpuBackingHasNoVerb`] already records.
+    MappingGpaOverflows {
+        /// The window's base GPA.
+        window_gpa: u64,
+        /// The offset into the window.
+        view_off: u64,
+        /// How many bytes were to be placed.
+        len: u64,
+    },
     /// ★★ Content in this run arrived by a transport this port cannot observe, so no view of
     /// it can be vouched for. The run is demoted to [`Tier::Observe`] and the caller is told;
     /// it is a refusal to make it native, not a refusal to proceed.
@@ -748,16 +775,30 @@ impl ViewInstaller {
                 budget,
             });
         }
+        // ★ Same check as [`Self::place_content`], applied to the WHOLE covered set before
+        // anything is installed or reported. Doing it here as well is not redundant: this
+        // runs once per run rather than once per placement, so an overflowing layout is
+        // refused before the first `map_guest`, and the reported geometry can never carry a
+        // wrapped address. See [`InstallRefusal::MappingGpaOverflows`].
         report.geometry = layout
             .covered
             .iter()
-            .map(|r| MappingGeometry {
-                gpa: self.gpa + r.view_off,
-                len: r.len,
-                page: self.page,
-                huge: huge_pages_for(self.gpa + r.view_off, r.host_off, r.len),
+            .map(|r| {
+                let gpa = self.gpa.checked_add(r.view_off).ok_or(
+                    InstallRefusal::MappingGpaOverflows {
+                        window_gpa: self.gpa,
+                        view_off: r.view_off,
+                        len: r.len,
+                    },
+                )?;
+                Ok(MappingGeometry {
+                    gpa,
+                    len: r.len,
+                    page: self.page,
+                    huge: huge_pages_for(gpa, r.host_off, r.len),
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>, InstallRefusal>>()?;
         report.alignment = census_of(&layout, self.gpa);
 
         // ── 4. INSTALL, only if it changed. ─────────────────────────────────────────
@@ -834,8 +875,19 @@ impl ViewInstaller {
         len: u64,
         backing: kayfabe_vmm::HostRegion,
     ) -> Result<(), InstallRefusal> {
+        // ★ The GPA fits. Asked here because this is where the window base and the view
+        // offset MEET — the index bounds `view_off` against its region's extent and has
+        // never seen `self.gpa`. See [`InstallRefusal::MappingGpaOverflows`].
+        let gpa = self
+            .gpa
+            .checked_add(view_off)
+            .ok_or(InstallRefusal::MappingGpaOverflows {
+                window_gpa: self.gpa,
+                view_off,
+                len,
+            })?;
         let mut vmm = machine.vmm();
-        vmm.map_guest(self.gpa + view_off, len, backing, Prot::ReadWrite)?;
+        vmm.map_guest(gpa, len, backing, Prot::ReadWrite)?;
         Ok(())
     }
 
