@@ -43,7 +43,31 @@ first eight reply bytes.
 
 ⚠ **`head=` is the first 8 bytes only.** It is enough to settle a `NvU32` and to falsify an
 "empty" row; it is *not* a reply body. A control needing more must be re-measured on an
-RTX 3060 (open 580.159.04, as on 2026-08-01), and the recipe above is how.
+RTX 3060 (open 580.159.04, as on 2026-08-01), and the recipe above is how — see the next
+file, which is that re-measure.
+
+### `rpc_bodies_real_ga106.txt`
+
+★★★ **Whole reply bodies**, taken 2026-08-01 on the same part with the same recipe, with the
+probe widened from an 8-byte head to a chunked full-body dump over an allowlist: **the eleven
+`dlen = 0` rows of the C oracle's table, plus `0x20800a2a`** (3712 bytes, whose head was all
+the transcript above could see). 612 lines, 12 distinct commands.
+
+Every block is bracketed by a `BEGIN` carrying `psize` and an `END` carrying it again, and
+every line is `+<offset> <up to 16 bytes>`, so a dropped line is detectable rather than
+readable as a short reply — `crates/kayfabe-abi/tests/real_ga106_bodies.rs` asserts exactly
+that before it compares anything.
+
+★ Repeated blocks for one command are repeated **calls**, kept verbatim. `0x20800a6c`
+answers `0x31` three times during adapter init and `0x11` afterwards in the same run; a
+deduplication would have hidden it, and the fact that a "constant" is not one is the second
+most useful thing in the file.
+
+⚠ `0x20800a4c` (`INTERNAL_GPU_GET_SMC_MODE`) is **not** an `RmInitAdapter` control. It is
+reached only when a client asks `NV2080_CTRL_GPU_INFO_INDEX_GPU_SMC_MODE`
+(`ogkm-580: subdevice_ctrl_gpu_kernel.c:232-266`), so the run was widened with
+`nvidia-smi -q` to reach it. It is the eleventh row and it was the only one the previous
+transcript never saw.
 
 ## ★★★ Why this exists: the C oracle is wrong about a whole class of rows
 
@@ -51,18 +75,47 @@ The C research artifact's `src/qemu/mode2_initctrl_ga106.h` is labelled *"real, 
 host"*, and for rows carrying a body it **is** — `0x20800a61` and `0x20800a80` match this
 transcript byte for byte. But every row it recorded with `dlen = 0` is contradicted:
 
-| control | C's row | real GA106 |
-|---|---|---|
-| `0x20802a08` | `psize 4, dlen 0` | `00 50 00 00` |
-| `0x20802a06` | `psize 4, dlen 0` | `10 00 00 00` |
-| `0x2080017e` | `psize 8, dlen 0` | `00 00 00 02 00 00 00 00` |
-| `0x20800af3` | `psize 2, dlen 0` | `01 01` |
-| `0x20800a4b` | `psize 4, dlen 0` | `00 00 01 04` |
-| `0x20800aac` | `psize 4, dlen 0` | `00 00 01 00` |
+★★★ **All eleven were then re-measured, not a sample** (2026-08-01,
+`rpc_bodies_real_ga106.txt`):
 
-Six of six. So *"the oracle answered it with an empty body"* is **not** evidence that a real
-GSP answers zero — it is a capture artefact — and a triage row that cites one is citing
-nothing. `0x20802a08`'s row did exactly that for four rungs. See `kayfabe_abi::fmbsize`.
+| control | C's row | real GA106 | verdict |
+|---|---|---|---|
+| `0x20802a06` | `psize 4, dlen 0` | `10 00 00 00` | **contradicted** |
+| `0x2080017e` | `psize 8, dlen 0` | `00 00 00 02 00 00 00 00` | **contradicted** |
+| `0x20800af3` | `psize 2, dlen 0` | `01 01` | **contradicted** |
+| `0x20802a08` | `psize 4, dlen 0` | `00 50 00 00` | **contradicted** |
+| `0xa06f0103` | `psize 3, dlen 0` | `01 00 00` | **contradicted** |
+| `0xa06f0104` | `psize 4, dlen 0` | `0b 00 00 00` | **contradicted** |
+| `0x20800a4b` | `psize 4, dlen 0` | `00 00 01 04` | **contradicted** |
+| `0x20800aac` | `psize 4, dlen 0` | `00 00 01 00` | **contradicted** |
+| `0x20800a6c` | `psize 4, dlen 0` | `31 00 00 00` **and** `11 00 00 00` | **contradicted**, and *not a constant* |
+| `0x20800a4c` | `psize 4, dlen 0` | `00 00 00 00` | ⚠ coincides |
+| `0x20800a70` | `psize 0, dlen 0` | `<empty>` | ⚠ coincides |
+
+**Nine of eleven are wrong**, and the two that are not are the interesting ones.
+`0x20800a70` has `psize = 0` — there is no body it could have failed to capture, and that is
+checkable *from the row*. `0x20800a4c` genuinely answers zero because SMC is disabled on this
+part — and **nothing about its row says so**; in the capture it is byte-identical to the nine
+that are wrong.
+
+⇒ *"the oracle answered it with an empty body"* is **not** evidence that a real GSP answers
+zero. It is a capture artefact, and a triage row that cites one is citing nothing.
+`0x20802a08`'s row did exactly that for four rungs. The rule is now a named refusal in
+`kayfabe_abi::oracle`, keyed on `psize > 0 && dlen == 0` rather than on a list of ids, and
+`crates/kayfabe-device/tests/sweep_triage.rs` fails any triage row that cites one of these
+rows without naming what hardware said.
+
+## ★★ And the other direction: a FULL row was corroborated, all 3712 bytes
+
+`0x20800a2a` (`INTERNAL_STATIC_KGR_GET_INFO`) carries `dlen == psize == 3712` in the C's
+table. Asked of the real part it answered **byte-identically**, twice in one run. That is the
+class result stated the other way round and it is why this file does not demote the artifact:
+rows the C actually captured are right; rows it recorded empty say nothing. See
+`kayfabe_abi::grinfo`.
+
+⊘ **Untouched: the TRUNCATED rows** — `0 < dlen < psize`, of which `0x20800a22` (16 376 of
+34 592) is the largest. A third class, not measured here. The recipe now works for whole
+bodies of any size, so the measurement is available; it has not been taken.
 
 ⊘ This does **not** demote the C generally: it remains the only implementation a real driver
 has accepted end to end, and its non-empty bodies are corroborated here. It demotes one

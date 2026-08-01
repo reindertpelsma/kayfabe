@@ -521,6 +521,7 @@ const fn copy_of_ga106() -> ChipProfile {
         fifo_channels: ga10x::GA106_FIFO_CHANNELS,
         gmmu_static: ga10x::GA106_GMMU_STATIC,
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
+        gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: 0,

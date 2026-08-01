@@ -451,6 +451,18 @@ pub enum WantedTable {
     /// swallow. `[measured]` run `gmmu1` at `12b001f`: `RmInitAdapter failed!
     /// (0x25:0x40:1249)`.
     GrCaps,
+    /// ★★★ `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_INFO` — GR's **legacy info list**, and
+    /// the sixth GR reply rather than a sixth mandatory one. Its call site tolerates a
+    /// refusal (`if (status == NV_OK)` with no `else`, `ogkm-580: kernel_graphics.c:1234`);
+    /// a stranger twenty-one engines away does not. `kfifoGetMaxSubcontextFromGr_KERNEL`
+    /// asserts `pGrInfo != NULL` and **returns 0** on failure (`kernel_fifo.c:2789-2792`),
+    /// and that zero is what `kchangrpapiSetLegacyMode`'s `numMax != 0` rejects
+    /// (`kernel_channel_group_api.c:913`).
+    ///
+    /// `[measured]` run `fmb1`, a stock 580.159.04 guest at `93191ee`
+    /// (`/workspace/bench/run_fmb1_dmesg.log`): `RmInitAdapter failed! (0x25:0x40:1249)`.
+    /// See [`kayfabe_abi::grinfo`].
+    GrInfo,
     /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS` — ★ the one whose
     /// `gpcMask` is load-bearing twice over. `_kgraphicsPostSchedulingEnableHandler` returns
     /// `NV_OK` immediately when it is `0x0` (`kernel_graphics.c:486`), so a zero here would
@@ -543,7 +555,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 23] = [
+    pub const ALL: [WantedTable; 24] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -560,6 +572,7 @@ impl WantedTable {
         Self::MemsysL2InvalidateEvict,
         Self::CeFaultMethodBufferSize,
         Self::GrCaps,
+        Self::GrInfo,
         Self::GrFloorsweepingMasks,
         Self::GrGlobalSmOrder,
         Self::GrFecsRecordSize,
@@ -602,6 +615,7 @@ impl WantedTable {
                 kayfabe_abi::fmbsize::NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE
             }
             Self::GrCaps => grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CAPS,
+            Self::GrInfo => kayfabe_abi::grinfo::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_INFO,
             Self::GrFloorsweepingMasks => {
                 grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS
             }
@@ -650,6 +664,7 @@ impl WantedTable {
                 kayfabe_abi::fmbsize::CE_FAULT_METHOD_BUFFER_SIZE_PARAMS_SIZE
             }
             Self::GrCaps => grstatic::GR_CAPS_PARAMS_SIZE,
+            Self::GrInfo => kayfabe_abi::grinfo::KGR_GET_INFO_PARAMS_SIZE,
             Self::GrFloorsweepingMasks => grstatic::FLOORSWEEPING_PARAMS_SIZE,
             Self::GrGlobalSmOrder => grstatic::SM_ORDER_PARAMS_SIZE,
             Self::GrFecsRecordSize => grstatic::FECS_RECORD_SIZE_PARAMS_SIZE,
@@ -1038,6 +1053,31 @@ impl CommandPolicy for InitTablePolicy {
                 Ok(p) => p,
                 Err(_) => return refuse(),
             },
+            // ★★★ The sixth GR arm, and the only one that validates against ANOTHER
+            // chip-row field before it encodes. Six of its 58 entries restate the geometry
+            // the five arms above publish, and RM reads both descriptions — so a pair that
+            // disagrees is refused rather than served twice over. The other 52 are litter
+            // constants and are checked only for the three zeros RM would read as numbers.
+            //
+            // ⊘ `refuse()` here is the WORSE outcome and it is still right: a refusal
+            // reproduces run `fmb1` exactly (`0x25:0x40:1249`), which is loud, attributable
+            // and already in the log — while an answer built from a profile that contradicts
+            // `gr_static` would hand the guest two incompatible descriptions of one chip and
+            // no statement would fail.
+            WantedTable::GrInfo => {
+                if self
+                    .chip
+                    .gr_info
+                    .validate_against(&self.chip.gr_static)
+                    .is_err()
+                {
+                    return refuse();
+                }
+                match self.chip.gr_info.encode() {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
             WantedTable::GrFloorsweepingMasks => {
                 match grstatic::encode_floorsweeping_masks(&self.chip.gr_static) {
                     Ok(p) => p,

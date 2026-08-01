@@ -282,7 +282,11 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // ★ 22 -> 23 at the `irq1` rung: `0x20802a08` CE_GET_FAULT_METHOD_BUFFER_SIZE, the
     // first served control whose reply is a number MEASURED on a real GA106 rather than
     // read out of a tree or a capture — see `kayfabe_abi::fmbsize`.
-    assert_eq!(WantedTable::ALL.len(), 23, "the served universe's size");
+    // ★ 23 -> 24 at the `GR-info` rung: `0x20800a2a` INTERNAL_STATIC_KGR_GET_INFO. Its
+    // 3712-byte reply is the SECOND measured on a real GA106, and the measurement went the
+    // other way from `0x20802a08`'s: the C's captured row is FULL (`dlen == psize`) and
+    // hardware CORROBORATED it byte for byte — see `kayfabe_abi::grinfo`.
+    assert_eq!(WantedTable::ALL.len(), 24, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

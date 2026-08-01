@@ -72,6 +72,7 @@ use kayfabe_abi::deviceinfo::DeviceInfoRow;
 use kayfabe_abi::falconinfo::FalconInventoryRow;
 use kayfabe_abi::fifochannels::FifoChannelsRow;
 use kayfabe_abi::gmmustatic::GmmuStaticRow;
+use kayfabe_abi::grinfo::GrInfoProfile;
 use kayfabe_abi::grstatic::{CONTEXT_BUFFER_ID_COUNT, ContextBuffer, GrStaticProfile};
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
@@ -444,6 +445,17 @@ pub struct ChipProfile {
     /// channel entirely (`ogkm-580: kernel_graphics.c:486`). See
     /// [`kayfabe_abi::grstatic`]'s header for why this port does not.
     pub gr_static: GrStaticProfile,
+    /// ★★★ GR's **legacy info list** — the 58 `(index, data)` pairs `0x20800a2a` answers,
+    /// and the row whose absence ended run `fmb1` with `RmInitAdapter failed!
+    /// (0x25:0x40:1249)`.
+    ///
+    /// ⊘ A separate field from [`ChipProfile::gr_static`] even though six of its 58 entries
+    /// restate that geometry: the other 52 are **litter constants** — crossbar port counts,
+    /// LTC slice counts — that are not derivable from anything this port models. What ties
+    /// the two together is [`kayfabe_abi::grinfo::GrInfoProfile::validate_against`], which
+    /// refuses a pair that disagrees about the six they share, rather than a fold that would
+    /// have implied a relationship for all 58.
+    pub gr_info: GrInfoProfile,
     /// ★ This chip's twenty-six context-buffer sizes and alignments, indexed by
     /// `NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_*`.
     ///

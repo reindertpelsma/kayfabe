@@ -45,10 +45,14 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
     // static-info controls; the sixth is `0x20800a9f`, which MOVED here out of
     // `RefusalHalts` because the gmmu1 boot showed `gpuStatePostLoad` swallows its status.
     // ⊘ The count is not the point — the membership below is. See `sweep.rs`.
+    // ⚠ 13 -> 14 at the GR-info rung: `0x20800a2a` moved here from `AmputationIntended`,
+    // and it moved for the third time this class has been read wrong the same way — the
+    // CALL SITE tolerating a refusal is not a statement about the CONSUMER. Boot `fmb1` at
+    // `93191ee` named the consumer: `kernel_fifo.c:2789`, twenty-one engines away.
     assert_eq!(
         must.len(),
-        13,
-        "ten unsurvivable amputations and three silent fail-opens"
+        14,
+        "eleven unsurvivable amputations and three silent fail-opens"
     );
     let cmds: Vec<u32> = must.iter().map(|c| c.cmd).collect();
     assert_eq!(
@@ -62,6 +66,7 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
             0x2080_0a59,
             0x2080_0a9f,
             0x2080_0a1f,
+            0x2080_0a2a,
             0x2080_0a26,
             0x2080_0a22,
             0x2080_0a3d,
@@ -80,6 +85,7 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
             "KernelCE",
             "KernelGmmu",
             "OBJGVASPACE",
+            "KernelGraphics",
             "KernelGraphics",
             "KernelGraphics",
             "KernelGraphics",
@@ -120,6 +126,7 @@ fn the_unsurvivable_class_still_names_the_measured_crashes() {
             0x2080_2a08,
             0x2080_0a59,
             0x2080_0a1f,
+            0x2080_0a2a,
             0x2080_0a26,
             0x2080_0a22,
             0x2080_0a3d,
@@ -127,9 +134,11 @@ fn the_unsurvivable_class_still_names_the_measured_crashes() {
             0x2080_0a32,
         ],
         "t135a's KernelFifo, t134a's KernelMemorySystem, KernelGmmu's freed pStaticInfo, \
-         gmmu1's five GR static-info controls plus stateload1's sixth, and irq1's \
-         0x20802a08 — whose zero-length fault method buffer is the ONLY member measured \
-         against a real GA106 rather than reasoned out of the tree"
+         gmmu1's five GR static-info controls plus stateload1's sixth, irq1's 0x20802a08 \
+         and fmb1's 0x20800a2a — the TWO members measured against a real GA106 rather than \
+         reasoned out of the tree, and they were measured in opposite directions: \
+         0x20802a08's captured row was FALSIFIED (empty, hardware says 20480) and \
+         0x20800a2a's was CORROBORATED (3712 bytes, byte-identical)"
     );
 }
 
@@ -253,6 +262,56 @@ fn a_control_whose_refusal_is_invisible_must_cite_the_oracles_own_reply() {
             c.engine
         );
     }
+}
+
+#[test]
+fn a_citation_of_an_uncaptured_oracle_row_must_carry_what_hardware_said() {
+    // ★★★ THE GATE THE LAST DEFECT WALKED THROUGH. `every_triaged_control_carries_an_-
+    // argument_and_cites_something` demands a `C:` or `ogkm-580:` citation, and
+    // `0x20802a08`'s row satisfied it for four rungs while being WRONG — because it cited
+    // an EMPTY `ctl_` array as though an empty capture were an observation of emptiness.
+    //
+    // ⊘ A citation gate can check that a claim is SOURCED. It can never check that the
+    // source SAYS WHAT THE CLAIM SAYS. This closes the one case where that gap is
+    // mechanically decidable: `kayfabe_abi::oracle::EMPTY_CAPTURE_ROWS` enumerates every
+    // row of `mode2_initctrl_ga106.h` whose body was never captured, so a triage row that
+    // cites that file for one of THOSE controls is citing nothing — and must therefore also
+    // name the real-GA106 measurement that replaced it.
+    //
+    // ★ Non-vacuity is asserted below rather than hoped for: if no triaged control is ever
+    // an empty-capture row, this test would pass by quantifying over nothing.
+    let mut checked = 0usize;
+    for c in SWEEP_TRIAGE {
+        let Some(row) = kayfabe_abi::oracle::empty_capture_row(c.cmd) else {
+            continue;
+        };
+        // ⚠ `0x20800a70` is in the list and is NOT covered: its `psize` is 0, so there is
+        // no body that failed to be captured and the row IS checkable from itself. The
+        // exemption comes from the same predicate the decoder refuses on, rather than from
+        // an id written down here, so the two cannot drift apart.
+        if kayfabe_abi::oracle::captured_row_evidence(row.cmd, row.psize, 0).is_ok() {
+            continue;
+        }
+        checked += 1;
+        if !c.why.contains("mode2_initctrl_ga106.h") {
+            continue;
+        }
+        assert!(
+            c.why.contains("traces/real_ga106") || c.why.contains("real GA106"),
+            "{:#x} ({}) cites mode2_initctrl_ga106.h:{} — a row with psize {} and NO \
+             captured body. That citation is an address, not evidence. Name what a real \
+             GA106 answered ({:02x?}) or do not cite the row at all.",
+            c.cmd,
+            c.engine,
+            row.c_line,
+            row.psize,
+            row.real,
+        );
+    }
+    assert!(
+        checked >= 3,
+        "non-vacuity: this gate must quantify over real rows, saw {checked}"
+    );
 }
 
 #[test]

@@ -366,7 +366,9 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // ★ 22 -> 23 at the `fmb` rung: `0x20802a08`, and it is the STRONGEST kind of addition
     // this pair can see — the oracle asks it at sequence 18, INSIDE the closure limit, so
     // the new control is exercised by the replay rather than merely declared.
-    assert_eq!(universe.len(), 23, "non-vacuity: the universe is not empty");
+    // ★ 23 -> 24 at the `GR-info` rung: `0x20800a2a`, asked at sequence 50 — also INSIDE
+    // the closure limit, so it too is exercised by the replay rather than merely declared.
+    assert_eq!(universe.len(), 24, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
         5,
@@ -460,7 +462,11 @@ fn every_control_the_oracle_asks_is_either_served_or_triaged() {
     // — and unlike the three above it did NOT cross because a reading was overturned by
     // argument. It crossed because a **real GA106 was asked** and gave a number the C's own
     // captured row does not carry. See `kayfabe_abi::fmbsize`.
-    assert_eq!(served_here.len(), 18);
+    // ⚠ 18 -> 19 at the `GR-info` rung: `0x20800a2a` (seq 50) crossed from triaged to
+    // served, and it is the FIRST crossing driven by a BOOT rather than by a reading or a
+    // falsified oracle row. Run `fmb1` at `93191ee` showed the refusal killing
+    // `kernel_fifo.c:2789` twenty-one engines from the call site that tolerates it.
+    assert_eq!(served_here.len(), 19);
     let triaged_here: Vec<&str> = asked
         .iter()
         .filter(|c| WantedTable::from_cmd(**c).is_none())
@@ -471,7 +477,7 @@ fn every_control_the_oracle_asks_is_either_served_or_triaged() {
     // partitions the SAME asked set, so a control cannot leave one without entering the
     // other, and a rung that "served" something by dropping it from the trace would show
     // up here as a shrinking sum rather than as two independently plausible numbers.
-    assert_eq!(triaged_here.len(), 10);
+    assert_eq!(triaged_here.len(), 9);
     assert_eq!(
         served_here.len() + triaged_here.len(),
         28,
@@ -484,14 +490,19 @@ fn every_control_the_oracle_asks_is_either_served_or_triaged() {
     // itself names — the caller tolerates the status by hand in both — and they are listed
     // rather than exempted by a predicate, so a third would be red.
     //
-    // ⚠ And a third IS here now: `0x20800a2a` (GR info), added at the state-load rung. It
-    // qualifies under the SECOND clause of `AmputationIntended`'s own definition — "the
-    // caller's own tolerance of the status" — because `kgraphicsLoadStaticInfo` takes it
-    // into a bare `if (status == NV_OK)` with no `else` arm (`ogkm-580:
-    // kernel_graphics.c:1228-1248`). ⊘ It is NOT `RefusalIsInvisible`: the oracle's board
-    // answered it with 3712 real bytes, so refusing leaves `pGrInfo` NULL where a real GSP
-    // left it populated, and that difference is visible to anything that later reads it.
-    // The list grew by one **with an argument**, which is the only way it may grow.
+    // ⚠⚠ A third WAS here — `0x20800a2a` (GR info), added at the state-load rung — and it
+    // has been REMOVED by run `fmb1` at `93191ee`. Its admission argued that it "qualifies
+    // under the SECOND clause of `AmputationIntended`'s own definition — the caller's own
+    // tolerance of the status", because `kgraphicsLoadStaticInfo` takes it into a bare
+    // `if (status == NV_OK)` with no `else` arm. ⊘ The reading of the CALL SITE was right
+    // and the conclusion was wrong: the consumer is `kfifoGetMaxSubcontextFromGr_KERNEL`
+    // (`ogkm-580: kernel_fifo.c:2789`), twenty-one engines away, and it does not tolerate
+    // anything. `RmInitAdapter failed! (0x25:0x40:1249)`.
+    //
+    // ★★★ So this list's admission criterion is now known to be WEAK in a specific way: a
+    // caller's tolerance is a fact about the caller. That is the third control to enter on
+    // that clause and leave on a boot, which is why the two survivors below are named and
+    // not derived from a predicate — the predicate is the thing that was wrong.
     let intended: Vec<String> = asked
         .iter()
         .filter(|c| {
@@ -499,7 +510,7 @@ fn every_control_the_oracle_asks_is_either_served_or_triaged() {
         })
         .map(|c| format!("{c:#010x}"))
         .collect();
-    assert_eq!(intended, vec!["0x2080017e", "0x20800a2a", "0x20800a87"]);
+    assert_eq!(intended, vec!["0x2080017e", "0x20800a87"]);
 }
 
 #[test]
@@ -624,10 +635,15 @@ fn the_served_replies_are_the_ones_posted_and_each_carries_the_result_it_earned(
             // itemised rather than counted: seq 45 is the page-table PUBLICATION
             // (`0x20800a9f`) — the only entry here whose reply is a function of the request
             // rather than of the chip — and 49/51 are GR's caps and floorsweeping masks.
-            // ⊘ Seq 50 (`0x20800a2a`, GR info) is deliberately absent: it is asked between
-            // them and refused, which is why this list is not a contiguous run.
+            // ★★ Seq 50 (`0x20800a2a`, GR info) USED to be deliberately absent here, and
+            // this comment used to say so: "it is asked between them and refused, which is
+            // why this list is not a contiguous run". Run `fmb1` at `93191ee` turned that
+            // deliberate gap into `RmInitAdapter failed! (0x25:0x40:1249)`, so the run is
+            // contiguous now — 49, 50, 51 — and its 3712 bytes are the ones a real GA106
+            // answered (`kayfabe_abi::grinfo`).
             (WantedTable::GvaspaceServerReservedPdes, 45, 76, 0),
             (WantedTable::GrCaps, 49, 76, 0),
+            (WantedTable::GrInfo, 50, 76, 0),
             (WantedTable::GrFloorsweepingMasks, 51, 76, 0),
         ]
     );

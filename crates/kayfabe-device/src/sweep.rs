@@ -496,18 +496,28 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
     SweepControl {
         cmd: 0x2080_0a2a,
         engine: "KernelGraphics",
-        // ★ NOT one of the mandatory five, and that is a fact about the call site rather
-        // than about the data: this one's status is taken into a bare `if (status == NV_OK)`
-        // with no `else`, so a refusal is the caller's own way of being told the chip has
-        // no GR info to give.
-        disposition: SweepDisposition::AmputationIntended,
-        why: "GET_INFO, 3712 bytes (C: mode2_initctrl_ga106.h:6219, {0x20800a2au, 0x0u, \
-              3712u, 3712u}); kgraphicsLoadStaticInfo takes its status into a bare \
+        // ★★★ RECLASSIFIED from `AmputationIntended` by boot `fmb1` at `93191ee`. The old
+        // row's reading of the CALL SITE was correct and its conclusion was not: the caller
+        // tolerating a refusal says nothing about who else reads what the caller failed to
+        // allocate. This is the third control to sit in that shape.
+        disposition: SweepDisposition::AmputationUnsurvivable,
+        why: "GET_INFO, 3712 bytes. kgraphicsLoadStaticInfo takes its status into a bare \
               `if (status == NV_OK)` with NO else arm and only allocates pGrInfo inside it \
-              (ogkm-580: kernel_graphics.c:1228-1248), so a refusal leaves pGrInfo NULL \
-              rather than dangling and the very next control overwrites `status`. \
-              ⊘ Refused deliberately: an unread 3712-byte GR info block would be this port \
-              describing silicon nothing asked it to describe",
+              (ogkm-580: kernel_graphics.c:1228-1248) — so the CALLER tolerates a refusal, \
+              and that is not who dies. kfifoGetMaxSubcontextFromGr_KERNEL asserts \
+              pGrInfo != NULL and RETURNS 0 (kernel_fifo.c:2789-2792); \
+              kchangrpapiSetLegacyMode rejects that zero at `numMax != 0` \
+              (kernel_channel_group_api.c:913) with NV_ERR_INVALID_STATE, which gpu.c:3440 \
+              does NOT swallow. [measured] run fmb1 at 93191ee, stock 580.159.04 guest: \
+              RmInitAdapter failed! (0x25:0x40:1249). \
+              ★ The citation carries the CONTENT, not the address: the C's row is \
+              {0x20800a2au, 0x0u, 3712u, 3712u} (C: mode2_initctrl_ga106.h:6219) — a FULL \
+              body, dlen == psize — and it is byte-identical to a real GA106 for all 3712 \
+              bytes ([measured] 2026-08-01, RTX 3060 on open 580.159.04, \
+              traces/real_ga106/rpc_bodies_real_ga106.txt). Its infoList[0x2c] \
+              MAX_SUBCONTEXT_COUNT is 64, and 0 is the value that rebuilds the wall. \
+              ⊘ Contrast kayfabe_abi::oracle: a dlen=0 row would have cited the same file \
+              and been worth nothing. Served",
     },
     SweepControl {
         cmd: 0x2080_0a26,
