@@ -293,11 +293,26 @@ pub fn free_elements(read_ptr: u32, write_ptr: u32, count: MsgCount) -> Result<u
             count: n,
         });
     }
-    let mut free = read_ptr + n - (write_ptr % n) - 1;
-    if free >= n {
-        free -= n;
+    // ★ Widened to `u64` for the addition alone. `MsgCount` admits any non-zero `u32`,
+    // so `read_ptr + n` is representable only while `n <= 2^31` — and the guest supplies
+    // both. Found by the `gsp_msgq` fuzz target (2026-08-01), which reaches it directly
+    // because it constructs a `MsgCount` from a raw `u32` exactly as the type permits.
+    //
+    // ⚠ **Not reachable through `MsgqGeometry::bind` today**: `rx_link_check` requires
+    // `msgCount == (size - entryOff) / msgSize` with `msgSize >= MSGQ_MSG_SIZE_MIN` (16),
+    // so a bound ring's count is at most `u32::MAX / 16`. The widening is here anyway
+    // because the precondition that saves it lives in a *different function*, is not
+    // stated on this one, and a `pub fn` whose declared domain is `MsgCount` must be
+    // total over `MsgCount`. The pre-widening failure was a panic under
+    // `overflow-checks` and a WRAPPED count without them — and a wrong free-count
+    // desynchronises the ring silently, which is worse than the panic.
+    let n64 = u64::from(n);
+    let mut free = u64::from(read_ptr) + n64 - u64::from(write_ptr % n) - 1;
+    if free >= n64 {
+        free -= n64;
     }
-    Ok(free)
+    // Cannot truncate: the reduction above leaves `free < n <= u32::MAX`.
+    Ok(u32::try_from(free).unwrap_or(0))
 }
 
 /// Elements available to consume, exactly as the peer computes it.
@@ -318,11 +333,13 @@ pub fn available_elements(write_ptr: u32, read_ptr: u32, count: MsgCount) -> Res
             count: n,
         });
     }
-    let mut avail = write_ptr + n - (read_ptr % n);
-    if avail >= n {
-        avail -= n;
+    // Widened for the same reason as [`free_elements`]; see the note there.
+    let n64 = u64::from(n);
+    let mut avail = u64::from(write_ptr) + n64 - u64::from(read_ptr % n);
+    if avail >= n64 {
+        avail -= n64;
     }
-    Ok(avail)
+    Ok(u32::try_from(avail).unwrap_or(0))
 }
 
 /// Our **position** in a ring we produce into (the status queue).

@@ -366,6 +366,27 @@ pub enum RegionError {
         /// Its value.
         value: u64,
     },
+    /// ★ **The declared geometry describes a region longer than the address space.**
+    ///
+    /// `pages × pageSize` did not fit a `u64`. Found by the `gsp_region` fuzz target
+    /// (2026-08-01): [`crate::RegionMap::len`] multiplied the two directly, so a
+    /// declaration like `2 pages × 2^63` panicked in a debug build and wrapped in a
+    /// release one — and the wrapped value is what [`crate::RegionMap::runs`] compares
+    /// every access against, which is a bound computed from an overflow.
+    ///
+    /// ⚠ **Not reachable from a guest today** and the refusal is here anyway: the only
+    /// production caller passes `MsgqAbi::region_page_size` (`RM_PAGE_SIZE`, a driver
+    /// constant) and a 4096-entry cap, so the product is 16 MiB. But `load`'s *declared*
+    /// domain is any non-zero power of two, and a type whose stated contract is wider
+    /// than its arithmetic is a bug waiting for its second caller. Refused at
+    /// construction, in the same spirit as [`LayoutError`]: a [`crate::RegionMap`] that
+    /// cannot describe a real region is unconstructible, so no accessor has to re-check.
+    RegionTooLong {
+        /// How many pages the declaration carried.
+        pages: usize,
+        /// The declared page size.
+        page_size: u64,
+    },
 }
 
 impl From<RamRefused> for GspFault {

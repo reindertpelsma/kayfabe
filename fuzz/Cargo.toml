@@ -20,19 +20,90 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 
+kayfabe-abi = { path = "../crates/kayfabe-abi" }
 kayfabe-arch = { path = "../crates/kayfabe-arch" }
 kayfabe-core = { path = "../crates/kayfabe-core" }
 kayfabe-fwd = { path = "../crates/kayfabe-fwd" }
+kayfabe-gsp = { path = "../crates/kayfabe-gsp" }
+kayfabe-isolate = { path = "../crates/kayfabe-isolate" }
+kayfabe-isolate-host = { path = "../crates/kayfabe-isolate-host" }
+kayfabe-mmu = { path = "../crates/kayfabe-mmu" }
 kayfabe-mocks = { path = "../crates/kayfabe-mocks" }
+kayfabe-rmrpc = { path = "../crates/kayfabe-rmrpc" }
+kayfabe-util = { path = "../crates/kayfabe-util" }
 kayfabe-vmm = { path = "../crates/kayfabe-vmm" }
 kayfabe-tests = { path = "../tests" }
 
 [profile.release]
 debug = 1
 
+# ─────────────────────────────────────────────────────────────────────────────────────
+# ★★ The targets, and the rule for adding one.
+#
+# Every entry here decodes bytes or scalars a GUEST chose, inside the VMM's address
+# space. That is the whole membership rule — the boundary this project owns stops at VMM
+# escape, and a decoder running in the VMM is the classic way a device model gets
+# escaped. A target that fuzzes something the guest cannot reach does not belong here,
+# and one that the guest CAN reach and is absent is a gap, not a pass.
+#
+# ⚠ `scripts/run_full_suite.sh` derives its `fuzz-run` / `fuzz-corpus-replay` phases from
+# `cargo fuzz list`, i.e. from THIS table. Adding a `[[bin]]` here is therefore the whole
+# of wiring a new target into the authoritative suite — but it also means a target added
+# without a corpus directory makes the replay phase go red until one exists.
+# ─────────────────────────────────────────────────────────────────────────────────────
+
 [[bin]]
 name = "parse_pushbuffer"
 path = "fuzz_targets/parse_pushbuffer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "abi_decode"
+path = "fuzz_targets/abi_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gsp_msgq"
+path = "fuzz_targets/gsp_msgq.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gsp_region"
+path = "fuzz_targets/gsp_region.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rpc_bridge"
+path = "fuzz_targets/rpc_bridge.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gpga_index"
+path = "fuzz_targets/gpga_index.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pt_walker"
+path = "fuzz_targets/pt_walker.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "isolate_proto"
+path = "fuzz_targets/isolate_proto.rs"
 test = false
 doc = false
 bench = false
