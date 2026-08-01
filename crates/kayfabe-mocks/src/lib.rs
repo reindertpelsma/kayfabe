@@ -3021,6 +3021,16 @@ impl Isolate for MockIsolate {
     fn is_retired(&self) -> bool {
         self.retired
     }
+
+    /// ⊘ **Always `None`, and that is a claim rather than a stub.** A mock isolate is a
+    /// *working* isolate — it answers verbs — so it has no refusal to report, and one
+    /// invented here would be the mock deciding an E1 assertion's answer for it. The
+    /// E1 tests therefore drive the two REAL implementors
+    /// (`kayfabe_isolate::StillbornIsolate` and
+    /// `kayfabe_isolate_host::HostIsolate`), never this one.
+    fn refusal(&self) -> Option<kayfabe_isolate::IsolateRefusal<'_>> {
+        None
+    }
 }
 
 /// Spawns [`MockIsolate`]s that all record into one [`SharedRecorder`].

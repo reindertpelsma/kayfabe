@@ -586,6 +586,11 @@ impl CommandPolicy for GraphPolicy<'_> {
 pub struct ObjectPolicy {
     bridge: Bridge,
     gpu: Gpu,
+    /// ★★★ E1 — the isolate plane's health, republished after every delivered command so
+    /// the composition root can read it after this policy is boxed. Same handle shape,
+    /// same reason, as [`SharedRefusalCensus`]; see
+    /// [`kayfabe_core::gpu::SharedIsolateCensus`].
+    isolates: kayfabe_core::gpu::SharedIsolateCensus,
 }
 
 /// The RPC functions [`ObjectPolicy`] claims. **Closed, and public, so a test can quantify
@@ -611,9 +616,16 @@ impl ObjectPolicy {
         gpu: Gpu,
         limits: ReasmLimits,
     ) -> ObjectPolicy {
+        let isolates = kayfabe_core::gpu::SharedIsolateCensus::new();
+        // ★ Published ONCE at construction, before any command, so the handle is never
+        // "empty because nothing has happened yet" in a way a reader could mistake for
+        // "empty because the plane is fine". After E0b a freshly realized device really
+        // does hold zero isolates, and this is the value that says so.
+        isolates.publish(gpu.isolate_census());
         ObjectPolicy {
             bridge: Bridge::new(*abi, guest_os, limits),
             gpu,
+            isolates,
         }
     }
 
@@ -665,7 +677,21 @@ impl ObjectPolicy {
     ///
     /// [`BridgeRefusal`], by variant.
     pub fn deliver(&mut self, cmd: &RpcCommand) -> Result<Translation, BridgeRefusal> {
-        self.bridge.deliver(&mut self.gpu, cmd)
+        let out = self.bridge.deliver(&mut self.gpu, cmd);
+        // ★★★ E1/E0b — republished on BOTH arms, deliberately. A refused command can
+        // still be the one that materialized an isolate through an earlier accepted
+        // event's proc set, and — more to the point — a report that only refreshed on
+        // success would show the last *good* state while the plane was failing, which is
+        // the exact shape of "the instrument agreed with the claim it was checking".
+        self.isolates.publish(self.gpu.isolate_census());
+        out
+    }
+
+    /// The isolate census as a **handle**, for the composition root that must keep reading
+    /// it after boxing this policy — see [`kayfabe_core::gpu::SharedIsolateCensus`].
+    #[must_use]
+    pub fn isolate_census(&self) -> kayfabe_core::gpu::SharedIsolateCensus {
+        self.isolates.clone()
     }
 }
 

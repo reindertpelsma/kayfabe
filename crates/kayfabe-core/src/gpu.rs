@@ -20,8 +20,8 @@ use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa, HClient, Pdb, VChid};
 use kayfabe_completion::{CompletionQueue, DeliveryPlane, FenceArms, PostBatch};
 use kayfabe_isolate::{
-    CancelReason, Cancels, HostHandle, Isolate, IsolateBox, IsolateFactory, IsolateId, Orphans,
-    Worker,
+    CancelReason, Cancels, HostHandle, Isolate, IsolateBox, IsolateCensus, IsolateFactory,
+    IsolateId, Orphans, Worker,
 };
 use kayfabe_mmu::{AddressFault, AddressTable};
 use kayfabe_util::Instant;
@@ -1072,6 +1072,59 @@ pub struct Spine {
     /// ★ §12.13 — exec-plane routing for condemned components: `(GpuId, VChid)` → the
     /// condemned component's label. See [`Self::condemned_by_pdb`].
     condemned_by_vchid: BTreeMap<(GpuId, VChid), ProcAnchor>,
+    /// ★★★ **E0b/E1 — how many isolates this device has ever materialized**, across
+    /// every proc and every target, monotonically.
+    ///
+    /// It exists because E0b turned *"an isolate exists"* from a realize-time certainty
+    /// into a **guest-caused event**, and an event nothing counts is one that can only
+    /// be diagnosed by absence. A boot with zero here and a boot whose isolates all
+    /// refuse look identical from inside the guest — and, before this, identical from
+    /// outside it too (see [`Spine::isolate_census`]).
+    ///
+    /// ⊘ It is **not** the E0b acceptance instrument, and must never be cited as one:
+    /// it is produced by the code under test, so it can say *whether* a spawn happened
+    /// and never *why*. The attributing instrument is
+    /// `scripts/bench/e0_isolate_witness.sh`, which stamps host `/proc` sightings
+    /// against `boot_capture.sh`'s own phase lines — a timeline this device does not
+    /// write.
+    isolates_materialized: u64,
+}
+
+/// ★★★ **E1 — a clonable handle onto [`Gpu::isolate_census`]'s answer.**
+///
+/// Exists for exactly the reason [`kayfabe_rmrpc::SharedRefusalCensus`] does, and the
+/// shape is deliberately the same one: the policy that owns the [`Gpu`] is installed as a
+/// `Box<dyn CommandPolicy>` and is unreachable from the composition root the moment it is
+/// boxed, so a census reachable only through `&self` could be read by a test and by
+/// nothing else — which is the *"diagnosed by absence"* failure that motivated the
+/// refusal census in the first place.
+///
+/// ⊘ **Published, never accreted.** Each publish REPLACES the value; there is no adding
+/// up. The census is a *level* (how many isolates exist, how many refuse) with one
+/// monotonic total carried inside it, and a handle that summed would double-count every
+/// command.
+///
+/// [`kayfabe_rmrpc::SharedRefusalCensus`]: https://docs.rs/kayfabe-rmrpc
+#[derive(Debug, Clone, Default)]
+pub struct SharedIsolateCensus(std::sync::Arc<std::sync::Mutex<IsolateCensus>>);
+
+impl SharedIsolateCensus {
+    /// A fresh handle whose census is the empty one — `materialized: 0`, no isolates.
+    #[must_use]
+    pub fn new() -> SharedIsolateCensus {
+        SharedIsolateCensus::default()
+    }
+
+    /// A point-in-time copy.
+    #[must_use]
+    pub fn snapshot(&self) -> IsolateCensus {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Replace the published census with `c`.
+    pub fn publish(&self, c: IsolateCensus) {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner()) = c;
+    }
 }
 
 /// Union-find root with path halving, over condemned-entry indices (§12.22).
@@ -1276,25 +1329,57 @@ impl Spine {
         Ok(())
     }
 
-    /// Ensure `proc` has a materialized isolate + GPA arena for target `gpu`
-    /// (MG-5: per-`(Proc, GpuId)`). Idempotent; disjoint by construction. The caller
-    /// resolves which proc (a user proc or the system proc) — the spine never
+    /// Ensure `proc` has a GPA arena for target `gpu` (MG-5: per-`(Proc, GpuId)`) —
+    /// **and deliberately NOT an isolate**. Idempotent; disjoint by construction. The
+    /// caller resolves which proc (a user proc or the system proc) — the spine never
     /// reaches into the proc set itself here.
-    fn ensure_proc_target(&mut self, proc: &mut Proc, gpu: GpuId) -> Result<(), GpuError> {
+    ///
+    /// ★★★ **E0b: the arena and the isolate were one act and are now two**
+    /// (`execution_plane_increments.md` §3.6). The arena is *address-space* bookkeeping —
+    /// it costs a range out of a window and nothing else, it is the thing realize can
+    /// legitimately fail on, and carving it early is what keeps
+    /// [`GpuError::Gpa`] a realize-time refusal instead of a surprise on the guest's
+    /// first RPC. The isolate is a **host process**: `clone` into six namespaces,
+    /// `execveat` a sealed memfd, a blocking hello handshake, and — under
+    /// `KAYFABE_ISOLATES=real` — real `NV01_ROOT_CLIENT`/`NV01_DEVICE_0` ioctls on the
+    /// host GPU. Doing that at realize meant every one of those verbs was caused by
+    /// **QEMU realizing a device**, 28 seconds before the guest existed:
+    /// `[measured]` rev `e10a6bf`, runs `e0real2`/`e0real3` — child first sighting
+    /// **t+3 s**, guest device open **t+30–34 s**.
+    ///
+    /// [`Spine::materialize_isolate`] is now the only site that spawns, and
+    /// [`Spine::apply`] is the only caller — i.e. a guest RM event.
+    fn ensure_proc_arena(&mut self, proc: &mut Proc, gpu: GpuId) -> Result<(), GpuError> {
         self.ensure_target(gpu)?;
-        // Disjoint field borrows: the factory and the target are separate spine
-        // fields; the proc is a caller-provided borrow.
-        let isolates = &mut self.isolates;
         let target = self.targets.get_mut(&gpu).expect("ensured above");
-        let pid = proc.id;
-        proc.isolates
-            .entry(gpu)
-            .or_insert_with(|| IsolateBox::new(isolates.spawn(IsolateId::new(pid.0, gpu))));
         if let std::collections::btree_map::Entry::Vacant(e) = proc.arenas.entry(gpu) {
             e.insert(target.gpa.carve()?);
         }
         proc.targets.insert(gpu);
         Ok(())
+    }
+
+    /// ★★★ **Materialize `proc`'s isolate for `gpu` — the ONE spawn site** (E0b).
+    ///
+    /// Idempotent and **infallible**, which is not a convenience: [`Spine::refresh`]'s
+    /// step 3b installs isolates on a path §12.18 made infallible-by-construction, and
+    /// E0b must not smuggle a failure channel back into it.
+    /// [`kayfabe_isolate::IsolateFactory::spawn`] has no error channel by signature; a
+    /// factory that cannot spawn hands back a **refusing** isolate instead, which is
+    /// what `Isolate::refusal` (E1) makes readable rather than silent.
+    ///
+    /// Returns `true` if this call is the one that spawned — the fact the audit counts,
+    /// so *"an isolate was materialized during this boot"* is an observable rather than
+    /// an inference from a host-side `ps`.
+    fn materialize_isolate(&mut self, proc: &mut Proc, gpu: GpuId) -> bool {
+        let isolates = &mut self.isolates;
+        let pid = proc.id;
+        let mut spawned = false;
+        proc.isolates.entry(gpu).or_insert_with(|| {
+            spawned = true;
+            IsolateBox::new(isolates.spawn(IsolateId::new(pid.0, gpu)))
+        });
+        spawned
     }
 
     /// Apply one RM protocol event and re-sync all derived state to the graph.
@@ -1375,7 +1460,32 @@ impl Spine {
         // the clone is not what causes it.
         let snapshot = self.rmgraph.clone();
         match self.apply_inner(system, procs, ev) {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                // ★★★ E0b — THE LAZY SPAWN, and the only unconditional one in the device.
+                //
+                // The system proc is the guest **kernel**'s objects, and this is the point
+                // at which a guest RM event has been accepted. Materializing here rather
+                // than in `Gpu::realize` is the whole of E0b: the isolate — a `clone`d,
+                // namespaced host child that, under `KAYFABE_ISOLATES=real`, holds
+                // `/dev/nvidiactl` and an RM-served `/dev/nvidia0` mapping — now exists
+                // **because the guest allocated something**, and a device that is realized
+                // and never driven spawns nothing at all.
+                //
+                // ⊘ On the Ok path only. A refused event moves nothing else (this function
+                // is transactional); it must not be the one thing that buys a guest a host
+                // process either. And a boot whose every event is refused therefore shows
+                // ZERO children — which is a *distinguishable* outcome, not a silent one:
+                // `Spine::isolates_materialized` is 0 and the audit says so.
+                //
+                // ⊘ It does NOT cover the per-`(Proc, GpuId)` isolates of *user* procs;
+                // those are step 3b's `or_insert_with`, which was already event-driven and
+                // is unchanged. This covers exactly the one isolate `realize` used to
+                // create behind the guest's back.
+                if self.materialize_isolate(system, GpuId::ZERO) {
+                    self.isolates_materialized = self.isolates_materialized.saturating_add(1);
+                }
+                Ok(())
+            }
             Err(e) => {
                 // Undo: restore the last-good graph and re-derive from it. That graph
                 // projected cleanly before this event (every prior apply upheld the
@@ -2316,12 +2426,20 @@ impl Spine {
         for (i, &pid) in boundary_pid.iter().enumerate() {
             let Some(pid) = pid else { continue };
             let mut carved = core::mem::take(&mut plan.arenas[i]);
-            let isolates = &mut self.isolates;
             let p = procs.get_mut(pid).expect("live proc exists");
             for &gpu in &plan.spans[i] {
-                p.isolates
-                    .entry(gpu)
-                    .or_insert_with(|| IsolateBox::new(isolates.spawn(IsolateId::new(pid.0, gpu))));
+                // ★ E0b: routed through the one spawn site so the census counts it. The
+                // `or_insert_with` semantics are unchanged — this pass was already
+                // event-driven and is not what E0b moves.
+                let isolates = &mut self.isolates;
+                let mut spawned = false;
+                p.isolates.entry(gpu).or_insert_with(|| {
+                    spawned = true;
+                    IsolateBox::new(isolates.spawn(IsolateId::new(pid.0, gpu)))
+                });
+                if spawned {
+                    self.isolates_materialized = self.isolates_materialized.saturating_add(1);
+                }
                 if let Some(arena) = carved.remove(&gpu) {
                     let prev = p.arenas.insert(gpu, arena);
                     debug_assert!(
@@ -2338,11 +2456,17 @@ impl Spine {
         {
             let mut carved = core::mem::take(plan.arenas.last_mut().expect("system entry"));
             let span = plan.spans.last().expect("system entry").clone();
-            let isolates = &mut self.isolates;
             for gpu in span {
+                // ★ E0b: same routing as the user-proc pass above, same reason.
+                let isolates = &mut self.isolates;
+                let mut spawned = false;
                 system.isolates.entry(gpu).or_insert_with(|| {
+                    spawned = true;
                     IsolateBox::new(isolates.spawn(IsolateId::new(Gpu::SYSTEM_PROC.0, gpu)))
                 });
+                if spawned {
+                    self.isolates_materialized = self.isolates_materialized.saturating_add(1);
+                }
                 if let Some(arena) = carved.remove(&gpu) {
                     let prev = system.arenas.insert(gpu, arena);
                     debug_assert!(
@@ -2859,7 +2983,11 @@ impl Gpu {
     /// Realize a device: pick the arch (once), the isolate factory, the
     /// `GpuId::ZERO` target's GPA window geometry, and — ★ G9 (`l1_concurrency.md`
     /// §12.21) — the **entitlement**: the roster of physical GPUs this device actually
-    /// has. Materializes the system proc's `GpuId::ZERO` isolate + arena eagerly.
+    /// has. Carves the system proc's `GpuId::ZERO` **arena** eagerly.
+    ///
+    /// ⊘ **It does NOT materialize an isolate** — see [`Spine::ensure_proc_arena`] (E0b).
+    /// Every isolate this device ever owns is spawned by [`Spine::apply`], i.e. by a
+    /// guest RM event.
     ///
     /// The roster is the only thing standing between a guest-supplied `deviceInstance`
     /// and an unbounded supply of [`GpuTarget`]s (each one a guest-physical window and a
@@ -2917,10 +3045,16 @@ impl Gpu {
             condemned: Vec::new(),
             condemned_by_pdb: BTreeMap::new(),
             condemned_by_vchid: BTreeMap::new(),
+            isolates_materialized: 0,
         };
         let mut system = Proc::new(Self::SYSTEM_PROC, SYSTEM_ANCHOR);
-        // The system proc always touches the default target (kernel/scrubber traffic).
-        spine.ensure_proc_target(&mut system, GpuId::ZERO)?;
+        // The system proc always touches the default target (kernel/scrubber traffic), so
+        // its arena is carved here — ★ and its ISOLATE deliberately is NOT (E0b; see
+        // [`Spine::ensure_proc_arena`]). Realize keeps exactly the failure it always had
+        // (the window cannot supply the arena) and loses exactly the side effect it should
+        // never have had (a host process, and under `KAYFABE_ISOLATES=real` a chain of real
+        // host RM ioctls, before the guest has executed one instruction).
+        spine.ensure_proc_arena(&mut system, GpuId::ZERO)?;
         Ok(Gpu {
             spine,
             system,
@@ -2934,6 +3068,41 @@ impl Gpu {
     /// Apply one RM protocol event (see [`Spine::apply`]).
     pub fn apply(&mut self, ev: RmEvent) -> Result<(), GpuError> {
         self.spine.apply(&mut self.system, &mut self.procs, ev)
+    }
+
+    /// ★★★ **E1 — the isolate plane's health, over every isolate this device holds.**
+    ///
+    /// Two questions in one value, and they are different questions:
+    ///
+    /// - `materialized` — **did the guest cause a spawn at all?** Since E0b the answer is
+    ///   not a foregone conclusion (`realize` no longer spawns anything), so `0` is a
+    ///   diagnosis rather than a blank.
+    /// - `no_plane` / `spawn_failed` — **of the isolates that exist, which refuse, and
+    ///   because of what?** Before [`kayfabe_isolate::Isolate::refusal`] these two were
+    ///   one silence at this seam (`bench_rebuild_notes.md` §5 row 7).
+    ///
+    /// Retired-but-unreaped procs are counted: they still hold isolates, and an isolate
+    /// that refused is a fact about this boot whether or not its proc is still live.
+    #[must_use]
+    pub fn isolate_census(&self) -> IsolateCensus {
+        let mut c = IsolateCensus {
+            materialized: self.spine.isolates_materialized,
+            ..Default::default()
+        };
+        for iso in self.system.isolates.values() {
+            c.observe(&**iso);
+        }
+        for p in self.procs.values() {
+            for iso in p.isolates.values() {
+                c.observe(&**iso);
+            }
+        }
+        for p in &self.spine.retired {
+            for iso in p.isolates.values() {
+                c.observe(&**iso);
+            }
+        }
+        c
     }
 
     /// ★★ Apply one context promotion — the composed, single-owner form of

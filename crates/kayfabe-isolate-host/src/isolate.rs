@@ -805,6 +805,31 @@ impl Isolate for HostIsolate {
     fn is_retired(&self) -> bool {
         self.retired
     }
+
+    /// ★★★ **E1 — gap 7 closed at the seam this crate is on the wrong side of.**
+    ///
+    /// [`HostIsolate::spawn_error`] has recorded the reason since the type existed, and
+    /// its own docs said *"a composition root should check it at realize"* — which no
+    /// composition root could, because the core holds `dyn Isolate` and this accessor is
+    /// on the concrete type. Answering it here is what makes the sentence reachable.
+    ///
+    /// ⊘ **`SpawnFailed` and never `NoPlane`.** This factory was *asked* for a real
+    /// plane. Whether the cause was a build with no embedded image, a refused `clone`, or
+    /// a child whose RM bring-up handshake failed, something was attempted on this host
+    /// and did not work — which is precisely the half an operator must be able to
+    /// separate from a deliberately plane-less build.
+    ///
+    /// ⊘ And it is `None` for a **live** isolate even after [`Isolate::retire`]: an
+    /// ordinary teardown is not a refusal to be investigated, and reporting it as one
+    /// would make every clean shutdown print a failure.
+    fn refusal(&self) -> Option<kayfabe_isolate::IsolateRefusal<'_>> {
+        self.spawn_error
+            .as_deref()
+            .map(|why| kayfabe_isolate::IsolateRefusal {
+                kind: kayfabe_isolate::RefusalKind::SpawnFailed,
+                why,
+            })
+    }
 }
 
 impl Drop for HostIsolate {

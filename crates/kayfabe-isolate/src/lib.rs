@@ -2176,6 +2176,128 @@ pub trait Isolate: Send + Sync {
 
     /// True once `retire()` has been called (a retired isolate must refuse ops).
     fn is_retired(&self) -> bool;
+
+    /// ★★★ **E1 — why this isolate can never serve a verb, at the SEAM.**
+    /// `None` means it can (or could, until it was retired in the ordinary way).
+    ///
+    /// ## The gap this closes, stated as the bench measured it
+    ///
+    /// `bench_rebuild_notes.md` §5 row 7: *"a **failed** real isolate is
+    /// indistinguishable from the stillborn one at the seam"*. Both answer
+    /// `pool_size() == 0`-or-all-dead, `checkout() == None`, `is_retired() == true` — and
+    /// so does a **saturated** pool for one of those. The reason each already existed as a
+    /// fact ([`StillbornIsolate::why`], `HostIsolate::spawn_error`) and was reachable only
+    /// through the **concrete** type, which the core never holds: it holds
+    /// [`IsolateBox`], i.e. `dyn Isolate`. So a spawn that failed for a nameable reason —
+    /// no NVIDIA driver loaded, `clone` refused, descriptor table exhausted — presented to
+    /// every layer above as *"nothing happened"*.
+    ///
+    /// ## ⊘ Why it returns a KIND and not only a sentence
+    ///
+    /// Because a check keyed on a *word* is satisfied by writing the word. The two
+    /// conditions are structurally different and a caller must be able to branch on that
+    /// difference without parsing prose: [`RefusalKind::NoPlane`] is a **deployment**
+    /// fact chosen by the composition root and true before the process started;
+    /// [`RefusalKind::SpawnFailed`] is a **runtime failure** of a plane that was asked for
+    /// and could not be had. Only the second one means something is wrong with the host.
+    ///
+    /// The sentence travels alongside because the kind cannot carry the cause, and the
+    /// cause is what an operator acts on.
+    fn refusal(&self) -> Option<IsolateRefusal<'_>>;
+}
+
+/// Which of the two structurally different reasons an [`Isolate`] refuses everything.
+///
+/// See [`Isolate::refusal`] for why this is an enum and not a string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RefusalKind {
+    /// **There is no forwarding plane in this build/configuration** — the composition
+    /// root installed [`StillbornIsolates`] deliberately. Nothing was attempted and
+    /// nothing failed; a boot that shows only this is behaving exactly as configured.
+    NoPlane,
+    /// **A real plane was asked for and could not be built.** Something was attempted on
+    /// the host and it failed: the image would not publish, `clone` was refused, a
+    /// socketpair could not be made, or the child's RM bring-up handshake came back
+    /// `Failed`. ⊘ This is the one that means *investigate the host*.
+    SpawnFailed,
+}
+
+impl RefusalKind {
+    /// A stable, machine-greppable name. ⊘ Not the sentence — see [`IsolateRefusal::why`].
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RefusalKind::NoPlane => "no-plane",
+            RefusalKind::SpawnFailed => "spawn-failed",
+        }
+    }
+
+    /// Every kind, for gates that must quantify over the whole set rather than over a
+    /// list someone can shorten.
+    pub const ALL: [RefusalKind; 2] = [RefusalKind::NoPlane, RefusalKind::SpawnFailed];
+}
+
+/// One isolate's refusal: what kind, and the sentence that names the cause.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IsolateRefusal<'a> {
+    /// The structural classification — branch on this.
+    pub kind: RefusalKind,
+    /// The cause, for a human. Borrowed from the isolate, so it costs nothing to ask.
+    pub why: &'a str,
+}
+
+/// ★★★ **E1 — the isolate plane's health, as ONE value a teardown report can print.**
+///
+/// Counted over every isolate the device currently holds, plus the monotonic
+/// materialization total that survives their death.
+///
+/// ⊘ **`materialized == 0` is a finding, not a blank.** Since E0b an isolate is spawned
+/// by a *guest* RM event, so zero means the guest never got that far — a completely
+/// different diagnosis from "it spawned and refuses", and before this counter the two
+/// were the same silence on the host side.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct IsolateCensus {
+    /// How many isolates this device has ever materialized (monotonic; survives reaps).
+    pub materialized: u64,
+    /// How many it holds right now, across every live proc and target.
+    pub live: u64,
+    /// Of those, how many answer [`RefusalKind::NoPlane`].
+    pub no_plane: u64,
+    /// Of those, how many answer [`RefusalKind::SpawnFailed`] — ★ the number that means
+    /// the host could not do what it was asked.
+    pub spawn_failed: u64,
+    /// One refusal sentence, verbatim, and its kind.
+    ///
+    /// ★ **`SpawnFailed` outranks `NoPlane`** when both are present: a plane that was
+    /// asked for and broke is strictly more informative than one that was never
+    /// installed, and a report with room for one line must carry the actionable one.
+    pub first: Option<(RefusalKind, String)>,
+}
+
+impl IsolateCensus {
+    /// Fold one isolate's answer in. Keeps [`IsolateCensus::first`]'s precedence rule.
+    pub fn observe(&mut self, iso: &dyn Isolate) {
+        self.live = self.live.saturating_add(1);
+        let Some(r) = iso.refusal() else { return };
+        match r.kind {
+            RefusalKind::NoPlane => self.no_plane = self.no_plane.saturating_add(1),
+            RefusalKind::SpawnFailed => self.spawn_failed = self.spawn_failed.saturating_add(1),
+        }
+        let better = match &self.first {
+            None => true,
+            Some((RefusalKind::NoPlane, _)) => r.kind == RefusalKind::SpawnFailed,
+            Some((RefusalKind::SpawnFailed, _)) => false,
+        };
+        if better {
+            self.first = Some((r.kind, r.why.to_string()));
+        }
+    }
+
+    /// How many live isolates refuse, of either kind.
+    #[must_use]
+    pub fn refusing(&self) -> u64 {
+        self.no_plane.saturating_add(self.spawn_failed)
+    }
 }
 
 /// ★ **The only way core state owns an [`Isolate`] — and the door R1 is asserted at
@@ -2413,6 +2535,17 @@ impl Isolate for StillbornIsolate {
     fn is_retired(&self) -> bool {
         true
     }
+
+    /// ★ **Always [`RefusalKind::NoPlane`], and never `SpawnFailed`** — nothing was
+    /// attempted here. This type is what a composition root installs when it *chose* to
+    /// have no forwarding plane, and reporting it as a failure would put a red line in
+    /// front of an operator for a build behaving exactly as configured (E1).
+    fn refusal(&self) -> Option<IsolateRefusal<'_>> {
+        Some(IsolateRefusal {
+            kind: RefusalKind::NoPlane,
+            why: self.why,
+        })
+    }
 }
 
 // The concurrency contract, compile-time-asserted (decision #17).
@@ -2457,7 +2590,11 @@ kayfabe_util::assert_send_sync!(
     // losing either bound would be a compile error HERE rather than a confusing one at
     // the far end of `Gpu::realize`.
     StillbornIsolates,
-    StillbornIsolate
+    StillbornIsolate,
+    // E1: the census crosses from the core to the composition root through a shared
+    // handle, so it must be `Sync` for the same reason the factory is.
+    IsolateCensus,
+    RefusalKind
 );
 // The backend and the `Worker` that owns one: `Send + Sync` because pool slots live
 // inside the `Sync` core (crate docs), even though no call path ever shares one.

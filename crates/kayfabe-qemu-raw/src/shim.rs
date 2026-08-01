@@ -111,8 +111,18 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// `raise_cpu_intr` out of four bytes the archive never wrote, and the failure would have
 /// been an interrupt delivered — or not — at random.
 ///
+/// ★ Bumped to **11** at `execution_plane_increments.md` **E1**, the isolate-plane census,
+/// and it is the ABI-3 reason a seventh time: [`KayfabeRegAudit`] gained five fields plus a
+/// [`ISOLATE_REFUSAL_LEN`]-byte sentence, so an ABI-10 shim would allocate the old layout
+/// and this archive would write past the end of it.
+///
+/// ⊘ [`KayfabeRegWrite`] did **not** grow: an isolate refusal is a property of the device's
+/// forwarding plane over a whole boot, not of any one register write, and putting it on a
+/// per-write structure would make an operator read it once per access and still not know
+/// how many isolates there were.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 10;
+pub const ABI_VERSION: u32 = 11;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -760,6 +770,30 @@ pub const BRIDGE_REFUSAL_SLOTS: usize = 32;
 /// could drift from `BridgeRefusal::fault_tag`'s match.
 pub const BRIDGE_REFUSAL_TAG_LEN: usize = 64;
 
+/// How many bytes of the isolate plane's refusal sentence [`KayfabeRegAudit`] carries (E1).
+///
+/// ★ Longer than [`BRIDGE_REFUSAL_TAG_LEN`] because it is not a tag: a spawn failure's text
+/// is `format!`ed from the host's own error at the failing step — *"spawning the embedded
+/// isolate: …"*, *"worker socketpair: …"* — and truncating it to a tag width would cut off
+/// exactly the `errno` an operator acts on. It crosses **by value**, never as a pointer,
+/// for [`BRIDGE_REFUSAL_TAG_LEN`]'s reason.
+pub const ISOLATE_REFUSAL_LEN: usize = 192;
+
+/// [`KayfabeRegAudit::isolate_refusal_kind`] — no live isolate refuses.
+///
+/// ⊘ Deliberately the zero value, and it is the only one that is safe to be zero: an
+/// all-zero audit means "nothing happened", and "nothing refused" is a true reading of
+/// that. The two *kinds* below are non-zero so that a struct the archive never wrote can
+/// never be read as a specific diagnosis.
+pub const ISOLATE_REFUSAL_NONE: u64 = 0;
+/// [`KayfabeRegAudit::isolate_refusal_kind`] — `kayfabe_isolate::RefusalKind::NoPlane`:
+/// this build has no forwarding plane and none was attempted.
+pub const ISOLATE_REFUSAL_NO_PLANE: u64 = 1;
+/// [`KayfabeRegAudit::isolate_refusal_kind`] — `kayfabe_isolate::RefusalKind::SpawnFailed`:
+/// ★ a real plane was asked for and could not be built. **The one that means the host is
+/// wrong.**
+pub const ISOLATE_REFUSAL_SPAWN_FAILED: u64 = 2;
+
 /// One row of the bridge's refusal census: a `FaultTag`, and how many carried it.
 ///
 /// ★★★ **The instrument boot `alloc1` did without.** `[measured]` 2026-08-01, boot
@@ -787,6 +821,39 @@ impl Default for KayfabeBridgeRefusal {
             tag: [0; BRIDGE_REFUSAL_TAG_LEN],
             tag_len: 0,
             count: 0,
+        }
+    }
+}
+
+/// ★★★ **E1 — the isolate plane's refusal, in the wire shape.**
+///
+/// One sentence and its **kind**, and the kind is the point: a check keyed on a word is
+/// satisfied by writing the word, so the C shell branches on
+/// [`ISOLATE_REFUSAL_SPAWN_FAILED`] rather than grepping the prose for "spawn".
+///
+/// Mirrors [`KayfabeBridgeRefusal`]'s shape (NUL-**padded**, explicit length, `Default`
+/// written out because the array is wider than the derive covers) for its reasons.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct KayfabeIsolateRefusal {
+    /// The sentence's bytes, NUL-padded. Not NUL-*terminated* when the text exactly fills
+    /// the array, so the C side prints with an explicit precision.
+    pub text: [u8; ISOLATE_REFUSAL_LEN],
+    /// How many bytes of [`Self::text`] are the sentence. Never more than the array; a
+    /// longer sentence is **truncated**, which is visible because this stops short of the
+    /// full text rather than silently re-wrapping.
+    pub len: u64,
+    /// [`ISOLATE_REFUSAL_NONE`], [`ISOLATE_REFUSAL_NO_PLANE`] or
+    /// [`ISOLATE_REFUSAL_SPAWN_FAILED`].
+    pub kind: u64,
+}
+
+impl Default for KayfabeIsolateRefusal {
+    fn default() -> KayfabeIsolateRefusal {
+        KayfabeIsolateRefusal {
+            text: [0; ISOLATE_REFUSAL_LEN],
+            len: 0,
+            kind: ISOLATE_REFUSAL_NONE,
         }
     }
 }
@@ -905,6 +972,30 @@ pub struct KayfabeRegAudit {
     pub bridge_refusal_len: u64,
     /// The census, one row per tag, in tag order.
     pub bridge_refusal: [KayfabeBridgeRefusal; BRIDGE_REFUSAL_SLOTS],
+    /// ★★★ **E1/E0b — how many isolates this device has ever materialized.**
+    ///
+    /// ⊘ **Zero is a finding, not a blank.** Since E0b the isolate is spawned by a *guest*
+    /// RM event rather than by `Gpu::realize`, so `0` means the guest never got as far as
+    /// an accepted `GSP_RM_ALLOC` — a completely different diagnosis from "it spawned and
+    /// refuses", and one that was the same silence before this number existed.
+    ///
+    /// ⊘ And it is **not** the instrument that attributes a spawn to the guest: it is
+    /// written by the code under test. `scripts/bench/e0_isolate_witness.sh` is, because
+    /// it stamps host `/proc` sightings against a timeline this device does not write.
+    pub isolates_materialized: u64,
+    /// How many isolates the device holds right now (live procs, the system proc, and
+    /// retired-but-unreaped procs).
+    pub isolates_live: u64,
+    /// Of those, how many refuse because this build has **no forwarding plane**
+    /// (`KAYFABE_ISOLATES` unset or `stillborn`). Expected, not a fault.
+    pub isolates_no_plane: u64,
+    /// ★ Of those, how many refuse because a real plane was asked for and **could not be
+    /// built**. The number that means the host is wrong — `bench_rebuild_notes.md` §5 row
+    /// 7 is exactly the fact that this used to be indistinguishable from the line above.
+    pub isolates_spawn_failed: u64,
+    /// One refusal sentence, and its kind. `SpawnFailed` outranks `NoPlane` when both are
+    /// present: a plane that broke is more actionable than one that was never installed.
+    pub isolate_refusal: KayfabeIsolateRefusal,
 }
 
 /// Translate a chip-table refusal into the wire vocabulary, keeping the sentence.
@@ -1055,6 +1146,10 @@ pub struct Regs {
     /// [`kayfabe_rmrpc::SharedRefusalCensus`] for the boot that had to be diagnosed by the
     /// absence of a line instead.
     refusals: kayfabe_rmrpc::SharedRefusalCensus,
+    /// ★★★ E1 — the isolate plane's census, kept here for the reason
+    /// [`Regs::refusals`] is: the policy that owns the object model is boxed into the
+    /// chain and unreachable afterwards.
+    isolates: kayfabe_core::gpu::SharedIsolateCensus,
 }
 
 impl Regs {
@@ -1073,7 +1168,7 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
-        let (objects, refusals) = object_policy(abi.driver)?;
+        let (objects, refusals, isolates) = object_policy(abi.driver)?;
         let plane = RegPlane::with_objects(
             chip,
             abi,
@@ -1116,7 +1211,11 @@ impl Regs {
         // model one seam over. This root already holds both crates, so it is the one place
         // that can join them without either naming the other.
         plane.set_mmu(Box::new(kayfabe_chips::Ga10xGmmu::new()));
-        Ok(Regs { plane, refusals })
+        Ok(Regs {
+            plane,
+            refusals,
+            isolates,
+        })
     }
 
     /// The plane, for a caller that needs more than this seam exposes.
@@ -1248,6 +1347,32 @@ impl Regs {
         // ⊘ Reported from the census, not from the loop: a set larger than the array must
         // say so, exactly as `unserviced_len` does.
         let bridge_refusal_len = bridge_refusal_len.max(census.tags().count() as u64);
+        // ★★★ E1 — the isolate plane, DESTRUCTURED with no `..` for [`Shim::audit`]'s
+        // reason: a census field added and not wired here is a number the C shell can
+        // never read, and nothing goes red. `rustc` refuses the pattern instead.
+        let kayfabe_isolate::IsolateCensus {
+            materialized: isolates_materialized,
+            live: isolates_live,
+            no_plane: isolates_no_plane,
+            spawn_failed: isolates_spawn_failed,
+            first,
+        } = self.isolates.snapshot();
+        let mut isolate_refusal = KayfabeIsolateRefusal::default();
+        if let Some((kind, why)) = first {
+            isolate_refusal.kind = match kind {
+                kayfabe_isolate::RefusalKind::NoPlane => ISOLATE_REFUSAL_NO_PLANE,
+                kayfabe_isolate::RefusalKind::SpawnFailed => ISOLATE_REFUSAL_SPAWN_FAILED,
+            };
+            // ⊘ Truncated on a CHARACTER boundary, not on a byte: a sentence cut mid-UTF-8
+            // would print as a replacement character in the one line an operator reads to
+            // find out why their forwarding plane is down.
+            let mut take = why.len().min(ISOLATE_REFUSAL_LEN);
+            while take > 0 && !why.is_char_boundary(take) {
+                take -= 1;
+            }
+            isolate_refusal.text[..take].copy_from_slice(&why.as_bytes()[..take]);
+            isolate_refusal.len = take as u64;
+        }
         KayfabeRegAudit {
             reads,
             writes,
@@ -1287,6 +1412,11 @@ impl Regs {
             bridge_refusals,
             bridge_refusal_len,
             bridge_refusal,
+            isolates_materialized,
+            isolates_live,
+            isolates_no_plane,
+            isolates_spawn_failed,
+            isolate_refusal,
         }
     }
 }
@@ -1333,6 +1463,7 @@ impl Regs {
 type ObjectLink = (
     Box<dyn kayfabe_gsp::CommandPolicy>,
     kayfabe_rmrpc::SharedRefusalCensus,
+    kayfabe_core::gpu::SharedIsolateCensus,
 );
 
 fn object_policy(
@@ -1365,7 +1496,11 @@ fn object_policy(
     // `ObjectPolicy` left to ask — that is the whole reason the census had to become a
     // shared store rather than a field behind `&self`.
     let refusals = policy.refusal_census();
-    Ok((Box::new(policy), refusals))
+    // ★★★ E1 — and the isolate plane's own health, for the same reason and by the same
+    // mechanism. Before this the only channel that could say "the forwarding plane you
+    // asked for did not come up" was a host-side `ps`.
+    let isolates = policy.isolate_census();
+    Ok((Box::new(policy), refusals, isolates))
 }
 
 // =====================================================================================
