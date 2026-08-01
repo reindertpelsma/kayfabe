@@ -403,7 +403,8 @@ decision than a row in a table.
   **41 passed, 0 failed**, including `with_the_feature_both_host_planes_build_a_factory`.
   ⊘ This arm is **not** in CI: nothing enables the feature there, so the linkage half of E0
   is covered by this one command and by the bench build, not by a gate.
-- **Bites:** `scripts/bite_isolate_selector.py` — **5/5 fired** at `d6caffa` (`BS1` default
+- **Bites:** `scripts/bite_isolate_selector.py` — **5/5 fired**, run twice: at `d6caffa`
+  and again against the final committed content at `fd4d467` (`BS1` default
   moves to `Real`; `BS2` unknown value degrades silently; `BS3` case-insensitive parse;
   `BS4` host plane degrades instead of refusing without the feature; `BS5` refusal stops
   naming the planes). Restored-tree sanity check GREEN.
