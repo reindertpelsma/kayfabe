@@ -906,7 +906,7 @@ fn the_port_writes_guest_memory_where_the_guest_can_see_it() {
 /// ★★★ **The header and this archive must agree on the wire ABI, and until `#151` NOTHING
 /// IN THIS TREE CHECKED THAT.**
 ///
-/// # `[measured]` — the boot this test would have saved
+/// # `[measured]` run `irq1` at `bb4f48d` — the boot this test would have saved
 ///
 /// `#151` bumped `KAYFABE_SHIM_ABI` in `kayfabe_shim.h` to 10 and left
 /// `shim::ABI_VERSION` at 9. Every gate passed, the whole suite passed, the archive built,
