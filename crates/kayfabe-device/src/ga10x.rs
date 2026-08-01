@@ -40,6 +40,7 @@
 //! model owns this offset"* and never as a defaulted zero (plan §11-O1, still open).
 
 use kayfabe_abi::chipinfo::{ChipInfoRow, RegBaseRow, reg_base};
+use kayfabe_abi::deviceinfo::{DeviceInfoRow, DevicePriBase, EnginePriBase};
 use kayfabe_abi::falconinfo::FalconInventoryRow;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
@@ -1304,6 +1305,63 @@ pub static GA106_MEMORY_SYSTEM: MemorySystemRow = MemorySystemRow {
     lts_per_ltc_count: 4,
 };
 
+/// ★★★ **Where each advertised engine's PRI block begins — and the whole of what this chip
+/// has to state for the DEVICE_INFO2 reply.**
+///
+/// Six statements for the six rows of [`GA106_ENGINES`], because
+/// [`kayfabe_abi::deviceinfo`] refuses an engine it is told nothing about. Everything else
+/// in that reply — `faultId`, `instanceId`, `typeEnum`, `resetId`, `isEngine`, `rlEngId`,
+/// `runlistPriBase` — is projected out of [`GA106_ENGINES`] and is deliberately **not**
+/// restated here.
+///
+/// `[measured]`, and the run is the **C artifact's rather than this port's**: every base
+/// below is read out of its captured `ctl_20800a40`
+/// (`C: src/qemu/mode2_initctrl_ga106.h:4028`, `nvidia-gpu-passthrough` rev `018e492`),
+/// itself a replay of a real RTX 3060's own GSP reply.
+/// `tests/internal_device_info_table.rs` re-checks the whole 24580-byte projection against
+/// those bytes, so a base changed here goes red against the capture rather than silently.
+///
+/// ⚠ **The four copy engines share one base, and that is the capture's own answer, not a
+/// copy-paste.** `0x104000` is the `NV_PCE` block; `CE0..CE3` are logical copy engines
+/// carved out of it, which is why `instanceId` and not `devicePriBase` is what tells them
+/// apart on the wire. A reader who "fixed" this into four spaced bases would be inventing
+/// silicon.
+///
+/// ★ `SOFTWARE` is [`DevicePriBase::NotADevice`]: RM's own pseudo-engine, the one row of
+/// [`GA106_ENGINES`] with `IS_HOST_DRIVEN_ENGINE = 0`, absent from the oracle's DEVICE_INFO2
+/// table, and — being the row that carries the capture noise `0x77f2058f` — the row this
+/// port most needs kept off a field RM files as a register base. The exclusion is that
+/// marking, never a name check; see [`kayfabe_abi::deviceinfo`] for the three independent
+/// guards behind it.
+pub static GA106_DEVICE_INFO: DeviceInfoRow = DeviceInfoRow {
+    pri_bases: &[
+        EnginePriBase {
+            engine: "GR0",
+            pri_base: DevicePriBase::At(0x0040_0000),
+        },
+        EnginePriBase {
+            engine: "CE0",
+            pri_base: DevicePriBase::At(0x0010_4000),
+        },
+        EnginePriBase {
+            engine: "CE1",
+            pri_base: DevicePriBase::At(0x0010_4000),
+        },
+        EnginePriBase {
+            engine: "CE2",
+            pri_base: DevicePriBase::At(0x0010_4000),
+        },
+        EnginePriBase {
+            engine: "CE3",
+            pri_base: DevicePriBase::At(0x0010_4000),
+        },
+        EnginePriBase {
+            engine: "SOFTWARE",
+            pri_base: DevicePriBase::NotADevice,
+        },
+    ],
+};
+
 /// ★ **The GA106 row.** Everything above, selected.
 ///
 /// The PCI identity is deliberately *incomplete* here: the vendor id and class code are
@@ -1342,6 +1400,7 @@ pub static GA106: ChipProfile = ChipProfile {
     user_register_access_map: GA106_USER_REGISTER_ACCESS_MAP,
     constructed_falcons: GA106_CONSTRUCTED_FALCONS,
     memory_system: GA106_MEMORY_SYSTEM,
+    device_info: GA106_DEVICE_INFO,
     fb_length: GA106_FB_LENGTH,
 };
 

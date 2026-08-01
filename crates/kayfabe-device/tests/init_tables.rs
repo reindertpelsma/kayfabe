@@ -267,7 +267,7 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // variant does not compile until it has an id; this walks the array through it and back
     // through `from_cmd`, so a variant that has an id but is missing from `ALL` fails here.
     // The length is a literal on purpose — a fact someone must consciously change.
-    assert_eq!(WantedTable::ALL.len(), 7, "the served universe's size");
+    assert_eq!(WantedTable::ALL.len(), 8, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

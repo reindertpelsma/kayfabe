@@ -97,6 +97,7 @@
 pub mod bringup;
 pub mod capability;
 pub mod chipinfo;
+pub mod deviceinfo;
 pub mod falconinfo;
 pub mod faultbuffer;
 pub mod generated;

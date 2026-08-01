@@ -39,15 +39,22 @@ fn the_gate_is_not_vacuous_because_the_unsurvivable_class_is_not_empty() {
         .collect();
     assert_eq!(
         unsurvivable.len(),
-        1,
-        "exactly one control is currently known to be unsurvivable if refused"
+        2,
+        "two controls are currently known to be unsurvivable if refused"
     );
-    assert_eq!(unsurvivable[0].cmd, 0x2080_0a1c);
-    assert_eq!(unsurvivable[0].engine, "KernelMemorySystem");
+    let unsurvivable_cmds: Vec<u32> = unsurvivable.iter().map(|c| c.cmd).collect();
+    assert_eq!(unsurvivable_cmds, vec![0x2080_0a1c, 0x2080_0a40]);
+    let engines: Vec<&str> = unsurvivable.iter().map(|c| c.engine).collect();
+    assert_eq!(engines, vec!["KernelMemorySystem", "KernelFifo"]);
     assert_eq!(
         WantedTable::from_cmd(0x2080_0a1c),
         Some(WantedTable::MemorySystemStaticConfig),
         "and it is served, which is the only reason the gate above is green"
+    );
+    assert_eq!(
+        WantedTable::from_cmd(0x2080_0a40),
+        Some(WantedTable::InternalDeviceInfo),
+        "and so is the second, for the same reason"
     );
 }
 
@@ -55,9 +62,12 @@ fn the_gate_is_not_vacuous_because_the_unsurvivable_class_is_not_empty() {
 fn the_triage_universe_is_pinned_so_shortening_it_is_a_red_test() {
     // ★★ A gate quantified over a list is only as strong as the list. Pin its size and its
     // membership here, so removing an entry to make something pass is itself a failure.
-    assert_eq!(SWEEP_TRIAGE.len(), 3, "the triaged universe's size");
+    assert_eq!(SWEEP_TRIAGE.len(), 4, "the triaged universe's size");
     let cmds: Vec<u32> = SWEEP_TRIAGE.iter().map(|c| c.cmd).collect();
-    assert_eq!(cmds, vec![0x2080_0a1c, 0x2080_0a4b, 0x2080_0a87]);
+    assert_eq!(
+        cmds,
+        vec![0x2080_0a1c, 0x2080_0a40, 0x2080_0a4b, 0x2080_0a87]
+    );
 }
 
 #[test]
@@ -112,9 +122,13 @@ fn the_lookup_finds_a_triaged_control_and_admits_an_untriaged_one() {
         triage_for(0x2080_0a87).map(|c| c.disposition),
         Some(SweepDisposition::AmputationIntended)
     );
+    assert_eq!(
+        triage_for(0x2080_0a40).map(|c| c.engine),
+        Some("KernelFifo"),
+        "the control `t135a`'s first LEVEL_ERROR named is triaged, not merely known"
+    );
     // ⊘ `None` is the dangerous answer, not a neutral one — an untriaged control reached
-    // from the sweep is exactly `t134a`'s defect. `0x20800a40` is real and reached; it is
-    // simply not triaged yet, and the lookup says so rather than defaulting.
-    assert_eq!(triage_for(0x2080_0a40), None);
+    // from the sweep is exactly `t134a`'s defect, and the lookup says so rather than
+    // defaulting to something that reads as safe.
     assert_eq!(triage_for(0xdead_beef), None);
 }

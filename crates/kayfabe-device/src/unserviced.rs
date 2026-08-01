@@ -136,7 +136,7 @@
 //! `[inferred]`, not measured: the faulting field at `+0x201` has not been identified, only
 //! its two starved suppliers.
 //!
-//! ⊘ `0x20800a40` is therefore a **second** `AmputationUnsurvivable` for
+//! ⊘ `0x20800a40` is therefore triaged as a **second** `AmputationUnsurvivable` in
 //! [`crate::sweep::SWEEP_TRIAGE`], and by a worse mechanism than the first: it is asked from
 //! `gpuStateInit`, whose loop maps `NV_ERR_NOT_SUPPORTED` to `NV_OK` and does **not** remove
 //! the engine (`ogkm-580: gpu.c:2286-2287`). PreInit at least NULLs the pointer, so a NULL

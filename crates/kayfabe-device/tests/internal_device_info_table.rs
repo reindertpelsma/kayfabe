@@ -29,8 +29,8 @@
 use kayfabe_abi::deviceinfo::{
     self, DEV_TYPE_ENUM_LCE, DEVICE_BROADCAST_PRI_BASE_OFF, DEVICE_INFO_TABLE_OFF,
     DEVICE_PRI_BASE_OFF, DeviceInfoError, DeviceInfoRow, DevicePriBase, EnginePriBase,
-    FAULT_ID_OFF, GIN_TARGET_ID_OFF, GROUP_ID_OFF, GROUP_LOCAL_INSTANCE_ID_OFF,
-    INSTANCE_ID_OFF, INTERNAL_DEVICE_INFO_MAX_ENTRIES, INTERNAL_DEVICE_INFO_PARAMS_SIZE,
+    FAULT_ID_OFF, GIN_TARGET_ID_OFF, GROUP_ID_OFF, GROUP_LOCAL_INSTANCE_ID_OFF, INSTANCE_ID_OFF,
+    INTERNAL_DEVICE_INFO_MAX_ENTRIES, INTERNAL_DEVICE_INFO_PARAMS_SIZE,
     INTERNAL_DEVICE_INFO_STRIDE, IS_ENGINE_OFF, NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE,
     PRI_REGISTER_ALIGN, PriBaseField, RESET_ID_OFF, RL_ENG_ID_OFF, RUNLIST_PRI_BASE_OFF,
     TYPE_ENUM_OFF, engine_info_type,
@@ -85,10 +85,7 @@ fn policy() -> InitTablePolicy {
     InitTablePolicy::new(chip(), *table_for(BENCH_DRIVER).expect("bench ABI"))
 }
 
-fn encode(
-    engines: &[FifoDeviceEntry],
-    row: &DeviceInfoRow,
-) -> Result<Vec<u8>, DeviceInfoError> {
+fn encode(engines: &[FifoDeviceEntry], row: &DeviceInfoRow) -> Result<Vec<u8>, DeviceInfoError> {
     deviceinfo::encode_internal_device_info_table(engines, row, APERTURE)
 }
 
@@ -170,7 +167,11 @@ fn the_oracle_fixture_is_not_vacuous() {
     // compared against it would not be comparing against zeros.
     let p = oracle_params();
     assert_eq!(num_entries(&p), 5);
-    assert_eq!(field(&p, 0, DEVICE_PRI_BASE_OFF), 0x0040_0000, "GR0's PRI base");
+    assert_eq!(
+        field(&p, 0, DEVICE_PRI_BASE_OFF),
+        0x0040_0000,
+        "GR0's PRI base"
+    );
     for ce in 1..5 {
         assert_eq!(
             field(&p, ce, DEVICE_PRI_BASE_OFF),
@@ -184,7 +185,10 @@ fn the_oracle_fixture_is_not_vacuous() {
     assert_eq!(ids, vec![0x40, 0x0f, 0x10, 0x11, 0x12]);
     // And entry 5 is where the table stops.
     let sixth = DEVICE_INFO_TABLE_OFF + 5 * INTERNAL_DEVICE_INFO_STRIDE;
-    assert_eq!(&p[sixth..sixth + INTERNAL_DEVICE_INFO_STRIDE], &[0u8; 48][..]);
+    assert_eq!(
+        &p[sixth..sixth + INTERNAL_DEVICE_INFO_STRIDE],
+        &[0u8; 48][..]
+    );
 }
 
 #[test]
@@ -196,9 +200,16 @@ fn the_layout_constants_are_the_structs_own_arithmetic() {
         INTERNAL_DEVICE_INFO_MAX_ENTRIES, 512,
         "NV2080_CTRL_CMD_INTERNAL_DEVICE_INFO_MAX_ENTRIES"
     );
-    assert_eq!(4 + 512 * 48, 24580, "a count then five hundred and twelve entries");
+    assert_eq!(
+        4 + 512 * 48,
+        24580,
+        "a count then five hundred and twelve entries"
+    );
     assert_eq!(INTERNAL_DEVICE_INFO_PARAMS_SIZE, 24580);
-    assert_eq!(DEV_TYPE_ENUM_LCE, 19, "NV_PTOP_DEVICE_INFO2_DEV_TYPE_ENUM_LCE");
+    assert_eq!(
+        DEV_TYPE_ENUM_LCE, 19,
+        "NV_PTOP_DEVICE_INFO2_DEV_TYPE_ENUM_LCE"
+    );
     // The twelve field offsets, in declaration order, as the header gives them.
     assert_eq!(
         [
@@ -284,7 +295,12 @@ fn every_field_of_every_entry_comes_from_the_fifo_table_or_the_pri_base_row() {
                 // ★ The three the projection zeroes, and the one it aliases.
                 assert_eq!(field(&p, emitted, GROUP_ID_OFF), 0, "{} groupId", e.name);
                 assert_eq!(field(&p, emitted, GIN_TARGET_ID_OFF), 0, "{}", e.name);
-                assert_eq!(field(&p, emitted, DEVICE_BROADCAST_PRI_BASE_OFF), 0, "{}", e.name);
+                assert_eq!(
+                    field(&p, emitted, DEVICE_BROADCAST_PRI_BASE_OFF),
+                    0,
+                    "{}",
+                    e.name
+                );
                 assert_eq!(
                     field(&p, emitted, GROUP_LOCAL_INSTANCE_ID_OFF),
                     d[engine_info_type::INSTANCE_ID],
@@ -300,7 +316,11 @@ fn every_field_of_every_entry_comes_from_the_fifo_table_or_the_pri_base_row() {
         num_entries(&p) as usize,
         "the count is what was written, always"
     );
-    assert_eq!((emitted, skipped), (5, 1), "GR0 + CE0..CE3, and SOFTWARE dropped");
+    assert_eq!(
+        (emitted, skipped),
+        (5, 1),
+        "GR0 + CE0..CE3, and SOFTWARE dropped"
+    );
 }
 
 // ── The pseudo-engine ──────────────────────────────────────────────────────────────
@@ -322,16 +342,24 @@ fn the_pseudo_engine_is_excluded_by_its_marking_and_not_by_its_name() {
     );
     let marked_absent: Vec<&str> = ga10x::GA106_ENGINES
         .iter()
-        .filter(|e| ga10x::GA106_DEVICE_INFO.pri_base_for(e.name) == Some(DevicePriBase::NotADevice))
+        .filter(|e| {
+            ga10x::GA106_DEVICE_INFO.pri_base_for(e.name) == Some(DevicePriBase::NotADevice)
+        })
         .map(|e| e.name)
         .collect();
     assert_eq!(marked_absent, vec!["SOFTWARE"]);
 
     // (b) ⚠ What it would have put on the wire. The row is capture noise from RESET
     //     onward, and `runlistPriBase` is a value RM would file as a register base.
-    assert_eq!(software.engine_data[engine_info_type::MMU_FAULT_ID], 0xffff_ffff);
+    assert_eq!(
+        software.engine_data[engine_info_type::MMU_FAULT_ID],
+        0xffff_ffff
+    );
     assert_eq!(software.engine_data[engine_info_type::RESET], 0x8230_0810);
-    assert_eq!(software.engine_data[engine_info_type::RUNLIST_PRI_BASE], 0x77f2_058f);
+    assert_eq!(
+        software.engine_data[engine_info_type::RUNLIST_PRI_BASE],
+        0x77f2_058f
+    );
 
     // ...and none of it reaches the reply.
     let p = encode(ga10x::GA106_ENGINES, &ga10x::GA106_DEVICE_INFO).expect("projects");
@@ -373,7 +401,11 @@ fn a_row_the_fifo_table_does_not_call_host_driven_gets_no_runlist() {
     assert_eq!(num_entries(&p), 2);
     assert_eq!(field(&p, 1, DEVICE_PRI_BASE_OFF), 0x0011_0000);
     assert_eq!(field(&p, 1, IS_ENGINE_OFF), 0);
-    assert_eq!(field(&p, 1, RUNLIST_PRI_BASE_OFF), 0, "not data on this row");
+    assert_eq!(
+        field(&p, 1, RUNLIST_PRI_BASE_OFF),
+        0,
+        "not data on this row"
+    );
     assert_eq!(field(&p, 1, RL_ENG_ID_OFF), 0, "nor this one");
 }
 
@@ -572,7 +604,10 @@ fn a_pri_base_that_names_no_register_is_unencodable() {
     // granularity here would refuse silicon's own bytes.
     let engines = [synth("CE2", 0x11, DEV_TYPE_ENUM_LCE, 1, 0x00c0_0400)];
     let r = row(vec![at("CE2", 0x0010_4000)]);
-    assert!(encode(&engines, &r).is_ok(), "0xc00400 is a real runlist base");
+    assert!(
+        encode(&engines, &r).is_ok(),
+        "0xc00400 is a real runlist base"
+    );
 }
 
 // ── What the guest's only reader of this table requires ────────────────────────────
@@ -685,12 +720,20 @@ fn the_policy_answers_the_control_without_reflecting_one_byte_of_the_request() {
         .expect("this port serves the DEVICE_INFO2 table");
     assert_eq!(reply.rpc_result, 0, "NV_OK in the envelope");
     let params = &reply.body[PARAMS_AT..PARAMS_AT + 24580];
-    assert_eq!(params, &oracle_params()[..], "the oracle's five rows, in full");
+    assert_eq!(
+        params,
+        &oracle_params()[..],
+        "the oracle's five rows, in full"
+    );
     assert!(
         !params.contains(&0xAA),
         "not one poisoned request byte survived into the reply"
     );
-    assert_eq!(&reply.body[12..16], &0u32.to_le_bytes()[..], "status = NV_OK");
+    assert_eq!(
+        &reply.body[12..16],
+        &0u32.to_le_bytes()[..],
+        "status = NV_OK"
+    );
     assert_eq!(
         &reply.body[16..20],
         &24580u32.to_le_bytes()[..],
@@ -705,10 +748,8 @@ fn the_serve_site_refuses_when_the_projection_declines() {
     //
     // The chip carries two engines and says where only one of them is — the drift
     // `NoPriBaseForEngine` exists for.
-    let engines: &'static [FifoDeviceEntry] = Box::leak(Box::new([
-        one_ce(),
-        synth("GR0", 0x40, 0, 1, 0x00c0_0000),
-    ]));
+    let engines: &'static [FifoDeviceEntry] =
+        Box::leak(Box::new([one_ce(), synth("GR0", 0x40, 0, 1, 0x00c0_0000)]));
     let bad = bad_chip(engines, row(vec![at("CE0", 0x0010_4000)]));
     let mut p = InitTablePolicy::new(bad, *table_for(BENCH_DRIVER).expect("bench ABI"));
     let reply = p
@@ -751,7 +792,10 @@ fn a_serialized_request_is_refused_rather_than_answered_flat() {
             true,
         ))
         .expect("answers");
-    assert_ne!(reply.rpc_result, 0, "FINN-serialized is not our flat layout");
+    assert_ne!(
+        reply.rpc_result, 0,
+        "FINN-serialized is not our flat layout"
+    );
     assert!(reply.body.is_empty());
 }
 

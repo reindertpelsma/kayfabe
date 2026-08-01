@@ -62,6 +62,7 @@ pub mod sweep;
 pub mod unserviced;
 
 use kayfabe_abi::chipinfo::ChipInfoRow;
+use kayfabe_abi::deviceinfo::DeviceInfoRow;
 use kayfabe_abi::falconinfo::FalconInventoryRow;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
@@ -311,6 +312,28 @@ pub struct ChipProfile {
     /// See [`kayfabe_abi::memsysconfig`] for the full chain and for why an all-zero answer
     /// is a *different* crash rather than a safe default.
     pub memory_system: MemorySystemRow,
+    /// ★★★ **Where each advertised engine's own PRI register block starts** — the one fact
+    /// the DEVICE_INFO2 reply needs that [`ChipProfile::engines`] does not already carry.
+    ///
+    /// ⚠ **Deliberately not a second engine table.** Every other field of
+    /// `NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE` (`0x20800a40`) is *projected* from
+    /// [`ChipProfile::engines`] by [`kayfabe_abi::deviceinfo`], because that slice already
+    /// states this silicon for the FIFO device-info control (`0x20801112`). Two
+    /// independently written descriptions of one chip is the drift this row exists to
+    /// avoid, so it holds `devicePriBase` and the not-a-device marking and nothing else —
+    /// and an engine it says nothing about is a refusal
+    /// ([`kayfabe_abi::deviceinfo::DeviceInfoError::NoPriBaseForEngine`]), never a silent
+    /// omission.
+    ///
+    /// ⊘ Like [`ChipProfile::memory_system`] this is not a row that can be left out and
+    /// refused. `[measured]` run `t135a`, a stock 580.159.04 guest at `c84ef52`:
+    /// `gpuConstructDeviceInfoTable_HAL @ kernel_fifo.c:2208` was the guest's **first and
+    /// only** `LEVEL_ERROR`, twenty times, followed by `kfifoConstructEngineList_HAL` and
+    /// then a guest-kernel `NULL` dereference in `memmgrCalcReservedFbSpaceHal_GM107`
+    /// (`CR2=0x201`) — the heap sizing a reservation from a `KernelFifo` with no engine
+    /// list. See [`crate::sweep`] for why this refusal is worse than a refusal inside
+    /// `gpuPreInit`.
+    pub device_info: DeviceInfoRow,
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and
