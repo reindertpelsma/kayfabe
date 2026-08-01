@@ -198,7 +198,8 @@ MUTATIONS = [
         "★★ a truncated row leaves the sixteen — the class silently shortens, and the row "
         "that goes is the one already SERVED at 47%",
         ORACLE,
-        "    TruncatedRow { cmd: 0x2080_0a22, psize: 34592, kept: 16376, c_line: 6221, trailing_zeros_kept: 12053 },\n",
+        "    TruncatedRow {\n        cmd: 0x2080_0a22,\n        psize: 34592,\n"
+        "        kept: 16376,\n        c_line: 6221,\n        trailing_zeros_kept: 12053,\n    },\n",
         "",
         CENSUS,
         "every_truncated_row_in_the_c_header_is_in_truncated_rows_byte_for_byte",
@@ -207,8 +208,10 @@ MUTATIONS = [
         "★★★ the zero-trim refutation is inverted — a row is claimed to end in a non-zero "
         "byte, which would make refusing it wrong",
         ORACLE,
-        "    TruncatedRow { cmd: 0x2080_0a40, psize: 24580, kept: 16384, c_line: 6252, trailing_zeros_kept: 15833 },",
-        "    TruncatedRow { cmd: 0x2080_0a40, psize: 24580, kept: 16384, c_line: 6252, trailing_zeros_kept: 0 },",
+        "        cmd: 0x2080_0a40,\n        psize: 24580,\n        kept: 16384,\n"
+        "        c_line: 6252,\n        trailing_zeros_kept: 15833,",
+        "        cmd: 0x2080_0a40,\n        psize: 24580,\n        kept: 16384,\n"
+        "        c_line: 6252,\n        trailing_zeros_kept: 0,",
         CENSUS,
         "every_truncated_row_in_the_c_header_is_in_truncated_rows_byte_for_byte",
     ),
