@@ -1311,10 +1311,12 @@ impl Regs {
 /// 1. **`Ga10xArch`** classifies objects from NVIDIA's real class ids and **refuses** every
 ///    data-plane seam — zero MMU levels, no page sizes, no doorbell decode. It is not a
 ///    mock: `kayfabe_mocks` is not a dependency of this crate and must never become one.
-/// 2. **`StillbornIsolates`** spawns nothing. There is no forwarding plane in this build,
-///    and no host GPU on the bench that measured the wall, so every isolate is retired at
-///    birth and every verb refuses through the core's own backpressure path. ⊘ A verb that
-///    *succeeded* here would be the mock wall in the product.
+/// 2. **The isolate plane is now SELECTED, and it still defaults to `StillbornIsolates`**
+///    — see [`selected_isolate_plane`]. Unless `KAYFABE_ISOLATES` names another plane,
+///    every isolate is retired at birth and every verb refuses through the core's own
+///    backpressure path, exactly as before. ⊘ A verb that *succeeded* under the default
+///    would be the mock wall in the product; a verb that succeeds under
+///    `KAYFABE_ISOLATES=real` is a real host RM ioctl, which is the point.
 /// 3. **The GPA window** below is a declared range that nothing installs a memslot from.
 ///    Its only consumer at this stage is `Gpu::realize`, which carves the system proc an
 ///    arena out of it; no guest-physical address derived from it reaches the hypervisor.
@@ -1336,13 +1338,10 @@ type ObjectLink = (
 fn object_policy(
     driver: kayfabe_abi::versions::DriverAbiTable,
 ) -> Result<ObjectLink, (Status, &'static str)> {
-    let isolates = kayfabe_isolate::StillbornIsolates::new(
-        "this build has no forwarding plane: the object model accepts protocol facts and \
-         no host verb can be issued",
-    );
+    let isolates = isolate_factory(selected_isolate_plane()?)?;
     let gpu = kayfabe_core::gpu::Gpu::new(
         Box::new(kayfabe_chips::Ga10xArch::new()),
-        Box::new(isolates),
+        isolates,
         kayfabe_core::gpa::GpaSpace::new(OBJECT_GPA_WINDOW, OBJECT_GPA_ARENA),
     )
     .map_err(|_| {
@@ -1367,6 +1366,156 @@ fn object_policy(
     // shared store rather than a field behind `&self`.
     let refusals = policy.refusal_census();
     Ok((Box::new(policy), refusals))
+}
+
+// =====================================================================================
+// ★★★ The isolate-plane selector (`execution_plane_increments.md` increment E0)
+// =====================================================================================
+
+/// The environment variable that names which isolate plane the composition root installs.
+///
+/// ★★ **An environment variable and not a QOM property, deliberately, and only for E0.**
+/// A QOM property is the right long-term home — it is per-device, it appears in
+/// `-device nvkvm-gpu,help`, and it cannot leak from one device to another — but it costs
+/// a shim-ABI change plus a C hunk, and E0's whole claim is that the *join* works. Putting
+/// the selector on the ABI in the same increment would mean two unrelated things to review
+/// and would make the negative control run a different binary. `execution_plane_increments.md`
+/// E1 owns moving it.
+///
+/// ⚠ The consequence, stated rather than discovered later: this is **process-global**, so a
+/// hypervisor with two `nvkvm-gpu` devices gets the same plane for both. That is correct
+/// for the bench and wrong for a product.
+pub const ISOLATE_PLANE_ENV: &str = "KAYFABE_ISOLATES";
+
+/// Why [`IsolatePlane::Stillborn`] refuses — the string the core reports at the seam, and
+/// the one master shipped unconditionally.
+const STILLBORN_WHY: &str = "this build has no forwarding plane: the object model accepts \
+                             protocol facts and no host verb can be issued";
+
+/// Which isolate plane the composition root installs.
+///
+/// ⊘ **There is no `Auto`, and there is no fallback.** A selector that quietly degraded
+/// `real` to `stillborn` when the host GPU was absent would make "the boot behaved exactly
+/// as it did before" mean two different things, and the project's own ledger records seven
+/// occasions where the instrument was the defect. Every arm this build cannot serve is a
+/// refusal to realize the device, named.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IsolatePlane {
+    /// Every isolate retired at birth; no child process, no host verb. **The default**, and
+    /// what master shipped unconditionally.
+    Stillborn,
+    /// A real sandboxed child process per `(Proc, GpuId)` — with a **loopback** `RmBackend`
+    /// inside it. Real `clone`, real namespaces, real wire protocol, **no NVIDIA ioctl**.
+    ///
+    /// ★ This exists so the two halves of `real` can fail separately: a spawn that dies
+    /// here is a sandbox/namespace/image problem, and a spawn that dies only under `real`
+    /// is an RM bring-up problem. Without it those are one symptom.
+    Loopback,
+    /// A real sandboxed child that opens `/dev/nvidiactl`, `/dev/nvidia<N>` and completes
+    /// RM bring-up (`kayfabe_isolate_host::rm::RmConnection::open`, rungs R0–R6b) — i.e.
+    /// **real host RM ioctls, issued because the guest device path materialized a proc.**
+    Real,
+}
+
+impl IsolatePlane {
+    /// The spelling this plane is selected by. Round-trips with [`IsolatePlane::parse`].
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            IsolatePlane::Stillborn => "stillborn",
+            IsolatePlane::Loopback => "loopback",
+            IsolatePlane::Real => "real",
+        }
+    }
+
+    /// Parse a plane name. ⊘ Case-sensitive and exact, matching
+    /// `kayfabe_isolate_host::RmMode::parse`, whose own test is named
+    /// *"an unknown RM mode is refused rather than defaulted to real"*.
+    #[must_use]
+    pub fn parse(s: &str) -> Option<IsolatePlane> {
+        match s {
+            "stillborn" => Some(IsolatePlane::Stillborn),
+            "loopback" => Some(IsolatePlane::Loopback),
+            "real" => Some(IsolatePlane::Real),
+            _ => None,
+        }
+    }
+
+    /// Every plane this enum can express, for gates that must quantify over the whole set
+    /// rather than over a list someone can shorten (`gates_quantified_over_a_list`).
+    pub const ALL: [IsolatePlane; 3] = [
+        IsolatePlane::Stillborn,
+        IsolatePlane::Loopback,
+        IsolatePlane::Real,
+    ];
+}
+
+/// The plane named by `value` — the pure half of [`selected_isolate_plane`], so the
+/// decision can be tested without touching a process-global.
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` is not a plane name. **Absent is not an error**; it
+/// is [`IsolatePlane::Stillborn`], which is what master shipped.
+pub fn isolate_plane_from(value: Option<&str>) -> Result<IsolatePlane, (Status, &'static str)> {
+    match value {
+        None => Ok(IsolatePlane::Stillborn),
+        Some(v) => IsolatePlane::parse(v).ok_or((
+            Status::Unsupported,
+            "KAYFABE_ISOLATES does not name an isolate plane: the only values are \
+             `stillborn` (the default), `loopback` and `real`. It is not defaulted, \
+             because a typo that silently selected the refusing plane would make an \
+             evidence run and its own negative control indistinguishable.",
+        )),
+    }
+}
+
+/// The plane [`ISOLATE_PLANE_ENV`] names, or [`IsolatePlane::Stillborn`] if it is unset.
+///
+/// # Errors
+/// [`Status::Unsupported`] if the variable is set to something that is not a plane name,
+/// **including a non-UTF-8 value** — see [`isolate_plane_from`].
+fn selected_isolate_plane() -> Result<IsolatePlane, (Status, &'static str)> {
+    match std::env::var_os(ISOLATE_PLANE_ENV) {
+        None => Ok(IsolatePlane::Stillborn),
+        // ★ A non-UTF-8 value takes the `Some(non-name)` arm rather than the `None` arm:
+        // it was SET, so it must not read as unset.
+        Some(v) => isolate_plane_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
+/// Build the factory for `plane`.
+///
+/// ★★ **Both non-default arms are `Err` in a build without the `host-isolates` feature**,
+/// rather than silently stillborn. See [`ISOLATE_PLANE_ENV`] and the feature's own comment
+/// in `Cargo.toml`: the feature governs *linkage*, the variable governs *runtime*, and a
+/// build that cannot serve what it was asked for says so instead of pretending.
+///
+/// # Errors
+/// [`Status::Unsupported`], naming what this build cannot do.
+pub fn isolate_factory(
+    plane: IsolatePlane,
+) -> Result<Box<dyn kayfabe_isolate::IsolateFactory>, (Status, &'static str)> {
+    match plane {
+        IsolatePlane::Stillborn => Ok(Box::new(kayfabe_isolate::StillbornIsolates::new(
+            STILLBORN_WHY,
+        ))),
+        #[cfg(feature = "host-isolates")]
+        IsolatePlane::Loopback => Ok(Box::new(
+            kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Loopback),
+        )),
+        #[cfg(feature = "host-isolates")]
+        IsolatePlane::Real => Ok(Box::new(kayfabe_isolate_host::HostIsolateFactory::new(
+            kayfabe_isolate_host::RmMode::Real,
+        ))),
+        #[cfg(not(feature = "host-isolates"))]
+        IsolatePlane::Loopback | IsolatePlane::Real => Err((
+            Status::Unsupported,
+            "KAYFABE_ISOLATES asked for a host isolate plane, and this archive was built \
+             without the `host-isolates` feature — it does not link \
+             `kayfabe-isolate-host` and cannot spawn anything. Rebuild with \
+             `--features kayfabe-qemu-raw/host-isolates`.",
+        )),
+    }
 }
 
 /// The object model's guest-physical window. See [`object_policy`] for why it is a

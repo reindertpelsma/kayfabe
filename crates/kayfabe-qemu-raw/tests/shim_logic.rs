@@ -953,3 +953,143 @@ fn the_header_and_the_archive_agree_on_the_wire_abi() {
         kayfabe_qemu_raw::shim::ABI_VERSION,
     );
 }
+
+// =====================================================================================
+// ★★★ The isolate-plane selector — `docs/design/execution_plane_increments.md` E0
+// =====================================================================================
+//
+// ⊘ **What these tests do NOT cover, stated first.** They drive the *pure* half of the
+// decision, [`isolate_plane_from`]. They never read `KAYFABE_ISOLATES`, because a test
+// that mutated a process-global would race every other test in this binary, and they
+// never spawn a `real` isolate, because there is no GPU here. The env-read arm and the
+// spawn are covered by the live-boot pair recorded in `execution_plane_increments.md`
+// §E0-evidence — an evidence run and a negative control that differ in nothing but the
+// variable. If that pair is not in the doc, this seam is untested where it matters.
+
+use kayfabe_qemu_raw::shim::{IsolatePlane, isolate_factory, isolate_plane_from};
+
+/// The default is the plane master shipped — **absent is not an error**.
+#[test]
+fn an_unset_selector_is_the_stillborn_plane_master_shipped() {
+    assert_eq!(
+        isolate_plane_from(None),
+        Ok(IsolatePlane::Stillborn),
+        "★ the default moved. Every build that does not opt in must get the refusing \
+         plane; a default that spawned anything would put a host process behind every \
+         guest in the tree without a single line of configuration."
+    );
+}
+
+/// Every plane round-trips, quantified over [`IsolatePlane::ALL`] rather than over a list
+/// spelled here — `gates_quantified_over_a_list`: a hand-written list shrinks in one place
+/// with nothing going red.
+#[test]
+fn every_plane_round_trips_through_its_own_spelling() {
+    for plane in IsolatePlane::ALL {
+        assert_eq!(
+            isolate_plane_from(Some(plane.as_str())),
+            Ok(plane),
+            "★ {plane:?} does not parse from the name it prints"
+        );
+    }
+    // ★ Non-vacuity for the loop above: three DISTINCT spellings, so a `Display` that
+    // collapsed two planes onto one string would not be able to pass by luck.
+    let mut names: Vec<&str> = IsolatePlane::ALL.iter().map(|p| p.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), IsolatePlane::ALL.len(), "two planes share a name");
+}
+
+/// ⊘ A value that is not a plane name is a **refusal to realize**, never a quiet default.
+/// This is the property the whole selector exists for: an evidence run whose variable was
+/// misspelled must not be indistinguishable from its own negative control.
+#[test]
+fn a_value_that_is_not_a_plane_name_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "Real",
+        "REAL",
+        "real ",
+        " real",
+        "stillbornn",
+        "host",
+        "1",
+        "true",
+        "\u{fffd}invalid",
+    ] {
+        let got = isolate_plane_from(Some(bad));
+        let (status, why) = got.expect_err(&format!(
+            "★ {bad:?} was ACCEPTED as a plane name. A selector that accepts a near-miss \
+             is a selector that can be typo'd into the arm it was meant to leave."
+        ));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code(),
+            "the refusal for {bad:?} must be Unsupported, not a near-neighbour"
+        );
+        // ★ The message must name every plane, derived from `ALL` — so adding a fourth
+        // plane and forgetting to mention it turns this red rather than leaving an
+        // operator to guess.
+        for plane in IsolatePlane::ALL {
+            assert!(
+                why.contains(plane.as_str()),
+                "★ the refusal for {bad:?} does not name the `{}` plane; an operator \
+                 reading it cannot recover. Message was: {why}",
+                plane.as_str()
+            );
+        }
+    }
+}
+
+/// The stillborn factory really is stillborn — **the seam, not the name.**
+///
+/// ★ This is the one assertion here that reaches past the decision into the object it
+/// builds. `isolate_factory` returns a `Box<dyn IsolateFactory>` and nothing about the
+/// type says what it does; a factory that spawned would be caught here and only here.
+#[test]
+fn the_stillborn_factory_retires_every_isolate_at_birth() {
+    use kayfabe_arch::ids::GpuId;
+    use kayfabe_isolate::{IsolateFactory, IsolateId};
+
+    let mut f = isolate_factory(IsolatePlane::Stillborn).expect("the default plane builds");
+    let id = IsolateId::new(7, GpuId(0));
+    let mut iso = f.spawn(id);
+    assert_eq!(iso.id(), id);
+    assert!(iso.is_retired(), "★ the default plane spawned a LIVE isolate");
+    assert_eq!(iso.pool_size(), 0);
+    assert!(iso.checkout().is_none(), "★ a verb could be issued by default");
+}
+
+/// ★★ A build **without** `host-isolates` refuses the host planes; it does not degrade
+/// them to the refusing one. Two archives, one variable, and the difference must be
+/// legible from the outside.
+#[cfg(not(feature = "host-isolates"))]
+#[test]
+fn without_the_feature_a_host_plane_is_a_named_refusal_not_a_silent_stillborn() {
+    for plane in [IsolatePlane::Loopback, IsolatePlane::Real] {
+        let (status, why) = isolate_factory(plane)
+            .err()
+            .unwrap_or_else(|| panic!("★ {plane:?} was BUILT in an archive that cannot link it"));
+        assert_eq!(status.code(), kayfabe_qemu_raw::shim::Status::Unsupported.code());
+        assert!(
+            why.contains("host-isolates"),
+            "★ the refusal must name the feature to rebuild with; it said: {why}"
+        );
+    }
+}
+
+/// ★★ And with the feature on, both host planes **build a factory** — the linkage half of
+/// E0, asserted where a `cfg` typo would otherwise be invisible.
+///
+/// ⊘ It does not `spawn`. Spawning `Real` needs `/dev/nvidiactl`; spawning either needs
+/// `clone(CLONE_NEWUSER)`, which a container may refuse. Those belong to the live boot.
+#[cfg(feature = "host-isolates")]
+#[test]
+fn with_the_feature_both_host_planes_build_a_factory() {
+    for plane in [IsolatePlane::Loopback, IsolatePlane::Real] {
+        assert!(
+            isolate_factory(plane).is_ok(),
+            "★ {plane:?} could not be built in an archive that links kayfabe-isolate-host"
+        );
+    }
+}
