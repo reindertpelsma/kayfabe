@@ -263,10 +263,18 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // the list a second time. A list that could silently shrink would weaken that gate
     // with zero red tests, which is this repository's most-repeated defect shape.
     //
-    // The mechanism is two-sided. `cmd_id` is an exhaustive `match` over `Self`, so a new
-    // variant does not compile until it has an id; this walks the array through it and back
-    // through `from_cmd`, so a variant that has an id but is missing from `ALL` fails here.
-    // The length is a literal on purpose — a fact someone must consciously change.
+    // ⊘ CORRECTED. This comment used to claim the round trip meant "a variant that has an
+    // id but is missing from `ALL` fails here". It could not: the loop below iterates
+    // `ALL`, so a variant absent from `ALL` is precisely the one it never visits. The claim
+    // was false in the direction that flattered it — the same shape as PC-D6 — and it was
+    // guarding the two gates that quantify over `ALL` (the sticky-answer property, and
+    // `kayfabe-crec`'s reply-plane differential).
+    //
+    // ★★ What is true now is stronger than a test: `WantedTable::from_cmd` is a lookup
+    // THROUGH `ALL`, so "in `ALL`" and "served" are one fact. A variant left out of the
+    // array is not served at all, and the guest gets the ordinary named refusal. This test
+    // pins the two things that remain assertions rather than construction — the size, and
+    // that no two variants claim one id.
     assert_eq!(WantedTable::ALL.len(), 8, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
@@ -282,6 +290,29 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // And the negative: an id nothing serves must classify as nothing, or the universe is
     // not a universe.
     assert_eq!(WantedTable::from_cmd(0x2080_0000), None);
+
+    // ★ The construction, asserted from the OUTSIDE rather than read off the source: every
+    // id `from_cmd` accepts is an id some row of `ALL` states. Swept over the whole
+    // 16-bit index space of each class prefix `ALL` names — 0x2080_xxxx today — which is
+    // where every control this policy could plausibly grow into lives.
+    let served: std::collections::BTreeSet<u32> =
+        WantedTable::ALL.iter().map(|w| w.cmd_id()).collect();
+    let prefixes: std::collections::BTreeSet<u32> =
+        served.iter().map(|id| id & 0xffff_0000).collect();
+    assert!(!prefixes.is_empty(), "no class prefix to sweep");
+    let mut accepted = std::collections::BTreeSet::new();
+    for p in prefixes {
+        for i in 0..=0xffffu32 {
+            if WantedTable::from_cmd(p | i).is_some() {
+                accepted.insert(p | i);
+            }
+        }
+    }
+    assert_eq!(
+        accepted, served,
+        "`from_cmd` accepts an id no row of `ALL` states, so the served universe and the \
+         gates' universe have parted"
+    );
 }
 
 #[test]

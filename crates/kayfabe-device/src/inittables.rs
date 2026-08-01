@@ -224,11 +224,28 @@ impl WantedTable {
     /// A test that wants to say *"the differential exercises every served control"* has to
     /// get the universe from somewhere, and a list written in the test is the defect shape
     /// this repository has been bitten by most: shortening it weakens the gate with zero
-    /// red tests. The list lives here, next to the `match` that consumes it, and
-    /// [`WantedTable::cmd_id`] is what keeps the two in step — it is exhaustive over
-    /// `Self`, so a new variant does not compile until it has an id, and
-    /// `tests/init_tables.rs` walks this array through `cmd_id` → [`WantedTable::from_cmd`]
-    /// and back.
+    /// red tests. The list lives here, next to the `match` that consumes it.
+    ///
+    /// ## ★★★ Why this array is the served universe BY CONSTRUCTION, not by a test
+    ///
+    /// It used to be one of two lists — this array, and [`WantedTable::from_cmd`]'s `match`
+    /// — and `tests/init_tables.rs` claimed the round trip kept them in step: *"a variant
+    /// that has an id but is missing from `ALL` fails here"*. ⊘ **It could not.** That test
+    /// iterates `ALL`, so a variant absent from `ALL` is never visited by it; a new variant
+    /// with a `cmd_id` arm and a `from_cmd` arm but no row here compiled, served, and left
+    /// every gate quantified over `ALL` — the sticky-answer property below, and
+    /// `kayfabe-crec`'s reply-plane differential — silently one control short. That is the
+    /// same defect shape as PC-D6: a load-bearing rationale that is false.
+    ///
+    /// The two lists are now **one**. `from_cmd` is a lookup *through this array*, so
+    /// *"in `ALL`"* and *"served"* are the same fact rather than two statements that agree
+    /// today. A variant left out is not merely untested — it is **not served**, and the
+    /// guest gets this port's ordinary named refusal at that rung, which is loud and costs
+    /// one boot. ⊘ Deliberately the safe direction: the failure of forgetting a row is a
+    /// refusal, never an unchecked answer.
+    ///
+    /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
+    /// `Self`, so a new variant does not compile until it has an id.
     pub const ALL: [WantedTable; 8] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
@@ -240,11 +257,12 @@ impl WantedTable {
         Self::InternalDeviceInfo,
     ];
 
-    /// The control id this table answers — the inverse of [`WantedTable::from_cmd`].
+    /// The control id this table answers — and the **only** place an id is stated.
     ///
-    /// ★ An exhaustive `match`, which is the mechanism: adding a variant to this enum
-    /// stops the crate compiling until the id is stated, and the round trip in
-    /// `tests/init_tables.rs` then fails until it is in [`WantedTable::ALL`] too.
+    /// ★ An exhaustive `match`, which is the mechanism: adding a variant to this enum stops
+    /// the crate compiling until the id is stated. [`WantedTable::from_cmd`] is derived
+    /// from this and [`WantedTable::ALL`], so an id cannot be written down twice and cannot
+    /// disagree with itself.
     #[must_use]
     pub fn cmd_id(self) -> u32 {
         match self {
@@ -277,23 +295,20 @@ impl WantedTable {
     }
 
     /// Classify a control command, or `None` if this policy does not model it.
+    ///
+    /// ★★★ **Derived from [`WantedTable::ALL`], and that is the whole point.** This was a
+    /// second `match` listing the same seven ids a second time, which made *"the set we
+    /// serve"* and *"the set our gates quantify over"* two lists that happened to agree.
+    /// A lookup through `ALL` collapses them: the serve decision now reads the same array
+    /// the sticky-answer property and `kayfabe-crec`'s reply-plane differential read, so a
+    /// control cannot be served without being covered. See [`WantedTable::ALL`].
+    ///
+    /// ⊘ A linear scan of seven, not a `match` — this runs once per RM control command,
+    /// which the guest issues a few hundred times across a whole boot. Trading a jump table
+    /// for an unfalsifiable pair of lists would be the wrong way round.
     #[must_use]
     pub fn from_cmd(cmd: u32) -> Option<WantedTable> {
-        match cmd {
-            NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE => Some(Self::DeviceInfo),
-            NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE => Some(Self::IntrKernelTable),
-            NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO => Some(Self::PciBarInfo),
-            NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO => Some(Self::ChipInfo),
-            NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP => {
-                Some(Self::UserRegisterAccessMap)
-            }
-            NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO => Some(Self::ConstructedFalconInfo),
-            NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG => {
-                Some(Self::MemorySystemStaticConfig)
-            }
-            NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE => Some(Self::InternalDeviceInfo),
-            _ => None,
-        }
+        Self::ALL.into_iter().find(|w| w.cmd_id() == cmd)
     }
 }
 
