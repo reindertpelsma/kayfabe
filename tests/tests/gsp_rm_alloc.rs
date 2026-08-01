@@ -553,9 +553,41 @@ fn the_shipped_arch_classifies_the_real_wire_class_ids() {
 /// ⊘ **The data plane REFUSES, and this test exists so that "unbuilt" cannot quietly
 /// become "plausible".** The day somebody implements the GA10x GMMU, this test goes red
 /// and they must delete it deliberately — which is exactly the review that should happen.
+///
+/// # ★★★ `#146` came for this test and it did NOT go red — here is why, deliberately
+///
+/// The BAR0 moving window (`kayfabe_device::fbwin`) serves real framebuffer bytes to a real
+/// guest, so *"nothing in this port touches device memory"* stopped being true on
+/// 2026-08-01. It is fair to ask why the guard that exists to catch exactly that stayed
+/// green, and the answer is a property rather than an oversight:
+///
+/// > **`PRAMIN` is UNTRANSLATED.** The framebuffer address *is* the window base plus the
+/// > offset (`ogkm-580: dev_bus.h:43-50`, `kern_bus_gm107.c:4084-4090`) — there is no page
+/// > walk, no PTE decode and no leaf size anywhere in it. The framebuffer aperture (BAR1)
+/// > and the instance window (BAR2) **are** GMMU-translated, and they still refuse, in this
+/// > port and in `kayfabe_device::plane::RegPlane::window_phys`'s two `None` arms.
+///
+/// So `#146` built an *address model for one aperture*, which is a chip-row fact, and it
+/// built **no** `GmmuFmt`, no `UserdModel`, no doorbell decode and no pushbuffer codec.
+/// Every assertion below is unchanged and every one of them still holds. What changed is
+/// that this test now has to say **which** claim it is making, because "the data plane
+/// refuses" would otherwise read as a claim about device memory that is no longer true.
+///
+/// ★ The one assertion added is the negative that makes the distinction load-bearing: an
+/// `Arch` that grew a page-table format *would* be the seam this guard is for, and it must
+/// go red then. Serving an untranslated window must not be mistaken for having done so —
+/// and a future edit that reaches for `mmu()` to resolve `PRAMIN` fails here first.
 #[test]
 fn the_shipped_arch_refuses_every_data_plane_seam() {
     let a = Ga10xArch::new();
+    // ★★★ `#146`: the BAR0 moving window resolves an address WITHOUT this seam, and this
+    // seam is still empty. If a later edit routes `PRAMIN` through the MMU, one of the two
+    // halves of this line has to change and the change is visible in a diff.
+    assert_eq!(
+        a.mmu().entry_size(0),
+        0,
+        "the untranslated window must not have brought a page-table format with it"
+    );
     assert_eq!(a.mmu().levels(), 0, "no walk is possible");
     assert!(
         a.mmu().page_sizes().is_empty(),

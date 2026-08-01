@@ -98,6 +98,30 @@ pub struct KayfabeRegWrite {
     pub ram_gpa: u64,
     /// The refused access's length in bytes. Meaningful only when `ram_why` is non-null.
     pub ram_len: u64,
+    /// ★★★ `#146`: **why** a framebuffer write through the BAR0 moving window was refused,
+    /// or null. Exactly the shape `ram_why` has, one aperture over, and non-null is the
+    /// validity flag for the two fields below for exactly the same reason: framebuffer
+    /// address zero is an ordinary address and a zero-length access is legal.
+    ///
+    /// ⊘ Non-null means **the bytes did not land**. There is no third answer — see
+    /// `kayfabe_device::plane::RegPlane::fb_write`.
+    pub fb_why: *const u8,
+    /// `fb_why`'s length in bytes, or zero.
+    pub fb_why_len: u64,
+    /// The framebuffer-physical address refused. Meaningful only when `fb_why` is non-null.
+    pub fb_phys: u64,
+    /// The refused access's length in bytes. Meaningful only when `fb_why` is non-null.
+    pub fb_refused_len: u64,
+    /// ★★ `#146`: the framebuffer-physical address a write **landed** at, and non-zero
+    /// `fb_landed_valid` beside it.
+    ///
+    /// ⚠ Two fields for one fact, and the second is not redundant: address **zero** is
+    /// where a window at its reset base points, which is exactly where a boot that never
+    /// programmed the window would write. A single field could not tell "landed at 0" from
+    /// "did not land", and those are the two answers this whole rung is about.
+    pub fb_landed: u64,
+    /// Non-zero when `fb_landed` is meaningful.
+    pub fb_landed_valid: i32,
     /// How many boot transitions fired.
     pub transitions: u32,
     /// How many commands were decoded off the command queue.
@@ -119,6 +143,10 @@ impl KayfabeRegWrite {
             None => (core::ptr::null(), 0, 0, 0),
             Some(r) => (r.why.as_ptr(), r.why.len() as u64, r.gpa, r.len as u64),
         };
+        let (fb_why, fb_why_len, fb_phys, fb_refused_len) = match o.fb_refusal {
+            None => (core::ptr::null(), 0, 0, 0),
+            Some(r) => (r.why.as_ptr(), r.why.len() as u64, r.phys, r.len as u64),
+        };
         KayfabeRegWrite {
             fault,
             fault_len,
@@ -126,6 +154,12 @@ impl KayfabeRegWrite {
             ram_why_len,
             ram_gpa,
             ram_len,
+            fb_why,
+            fb_why_len,
+            fb_phys,
+            fb_refused_len,
+            fb_landed: o.fb_landed.unwrap_or(0),
+            fb_landed_valid: i32::from(o.fb_landed.is_some()),
             transitions: o.transitions as u32,
             commands: o.commands as u32,
             claimed: i32::from(o.claimed),

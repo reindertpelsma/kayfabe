@@ -107,6 +107,31 @@
 //! **211 836** of the cold boot's and **250 041** of the matmul's land in one of these three
 //! windows — and under the previous code every one was indistinguishable from an unknown
 //! register offset. See [`crate::FbWindow`] for the per-window split.
+//!
+//! # ★★★ AND ONE OF THE THREE IS NOW SERVED — `PRAMIN`, THE BAR0 MOVING WINDOW (`#146`)
+//!
+//! The paragraph above was written when **no** framebuffer byte was served and the arm
+//! existed so that the absence had a name. That is still true of two of the three windows.
+//! It is no longer true of `PRAMIN`: [`crate::fbwin`] gives it a real address model
+//! ([`Bar0Window`], the `NV_PBUS_BAR0_WINDOW` latch) and a real byte store
+//! ([`FbStore`]), because the boot of 2026-08-01 stopped at `kbusVerifyBar2_GM107`, whose
+//! first sub-test is a plain **dword write-then-read through `PRAMIN`** with no BAR2 and no
+//! MMU anywhere in it.
+//!
+//! The other two are unchanged and still refuse, and the difference is not effort: the
+//! framebuffer aperture and the instance window are **GMMU-translated**, so serving them
+//! needs the page-table format `kayfabe_chips::UnbuiltGmmu` says this port does not have.
+//! `PRAMIN` is **untranslated** — the framebuffer address *is* the window base plus the
+//! offset — so it needs no MMU at all. ⊘ That asymmetry is the whole of why one window
+//! could be built and two could not, and it is why serving this one did not turn
+//! `the_shipped_arch_refuses_every_data_plane_seam` red.
+//!
+//! ★★ The three counters that used to describe every window
+//! ([`Counters::fb_window_reads`], [`Counters::fb_window_writes`]) now describe **only the
+//! unserved ones**, and three new counters describe this one
+//! ([`Counters::fb_reads`], [`Counters::fb_writes`], [`Counters::fb_refusals`]). Merging
+//! them would have hidden exactly the fact that matters: *how many framebuffer accesses
+//! this boot dropped on the floor*.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -115,6 +140,7 @@ use kayfabe_arch::gsp::GspModel;
 use kayfabe_gsp::{CommandPolicy, GspAbi, GspFault, GspFsm, GuestRam, RamRefused};
 use kayfabe_trace::Faulted;
 
+use crate::fbwin::{Bar0Window, FbRefused, FbStore, RefusingFb};
 use crate::{ChipError, ChipProfile, FbWindow};
 
 /// A [`GuestRam`] that refuses every access, by name.
@@ -228,16 +254,48 @@ pub struct Counters {
     pub unclaimed_reads: u64,
     /// Writes no source claimed, dropped.
     pub unclaimed_writes: u64,
-    /// ★★★ Reads that landed in a framebuffer window ([`crate::FbWindow`]) — device
-    /// memory this port does not model. **Not** a subset of
+    /// ★★★ Reads that landed in a framebuffer window ([`crate::FbWindow`]) this port has
+    /// **no address model for** — the GMMU-translated ones. **Not** a subset of
     /// [`Counters::unclaimed_reads`]: an access is classified into exactly one of the two,
     /// because the whole point is that they are different facts.
+    ///
+    /// ⚠ Since `#146` this excludes `PRAMIN`, which is served — see
+    /// [`Counters::fb_reads`].
     pub fb_window_reads: u64,
-    /// Writes that landed in a framebuffer window and were therefore **dropped**.
+    /// Writes that landed in an unmodelled framebuffer window and were therefore
+    /// **dropped**.
     ///
     /// ★★ The one to watch. A dropped framebuffer write can be a dropped page-table entry,
     /// which does not fail here — it fails much later, as a mapping that is simply absent.
     pub fb_window_writes: u64,
+    /// ★★★ Reads **served** from the device's framebuffer through the BAR0 moving window.
+    pub fb_reads: u64,
+    /// ★★★ Writes **landed** in the device's framebuffer through the BAR0 moving window.
+    ///
+    /// ★ "Landed", not "attempted": this counter is incremented only after
+    /// [`FbStore::write`] returned `Ok`, so `fb_writes + fb_refusals == attempts` and
+    /// neither number can absorb the other. A port that counted attempts would report a
+    /// healthy boot while dropping every byte.
+    pub fb_writes: u64,
+    /// ★★★ Framebuffer accesses the store **refused, by name** — see
+    /// [`crate::fbwin::FbRefused`].
+    ///
+    /// ⊘ This is what a dropped framebuffer write looks like now: a number that moves, a
+    /// sentence, and a physical address, at the instant it happens. Before `#146` it looked
+    /// like nothing at all until `kbusVerifyBar2` reported `NV_ERR_MEMORY_ERROR` hundreds
+    /// of operations later.
+    pub fb_refusals: u64,
+    /// ★★ Reads of `NV_PBUS_BAR0_WINDOW` itself — the guest asking where its own window
+    /// points.
+    ///
+    /// ★ Worth a counter of its own because a boot in which this is **zero** and
+    /// [`Counters::fb_reads`] is large means the guest never checked, which is the
+    /// condition under which a dropped window write goes unnoticed. RM does both: it
+    /// read-modify-writes the register twice per re-point and refreshes its own cache from
+    /// it (`ogkm-580: kern_bus_gm107.c:4738-4741`).
+    pub bar0_window_reads: u64,
+    /// Writes to `NV_PBUS_BAR0_WINDOW` — the guest re-pointing its window.
+    pub bar0_window_writes: u64,
     /// Faults the FSM raised on a write.
     pub faults: u64,
     /// Guest-RAM accesses the plane's RAM port refused.
@@ -282,6 +340,21 @@ pub struct PlaneResidue {
     /// the sample bound. A count and a sample fail differently: a sample that saturates
     /// stops moving, and the count does not.
     pub fault_buffers_registered: u64,
+    /// ★★★ The BAR0 moving window's register, as the guest last wrote it.
+    ///
+    /// Device state, so it is in the residue: a reloaded device whose window still pointed
+    /// where the previous guest left it is not indistinguishable from a cold one, and the
+    /// register's reset value is a documented silicon fact (`_BASE_0`, `_TARGET_VID_MEM`).
+    pub bar0_window: Bar0Window,
+    /// ★★★ How many bytes of framebuffer the store is holding.
+    ///
+    /// ⊘ Content, not identity — this is a *size*, and it is here because the alternative
+    /// was leaving device memory out of the residue entirely. A device life that ended
+    /// holding the previous guest's page tables and instance blocks is exactly what
+    /// [`FbStore::device_reset`] exists to prevent, and a property quantified over "all of
+    /// the device's state" that silently skipped its **memory** would be `#130`'s own
+    /// shrinking-universe failure.
+    pub fb_resident_bytes: u64,
 }
 
 /// The mutable half — everything that needs the lock.
@@ -301,6 +374,13 @@ struct PlaneState {
     /// The first framebuffer-window accesses seen, as `(window, offset)`. Bounded for the
     /// same reason and by the same constant.
     fb_window: Vec<(FbWindow, u64)>,
+    /// ★★★ The BAR0 moving window's register. **Under the same lock as everything the
+    /// window resolves**, so a read and a write on two vCPUs cannot observe half of a
+    /// re-point.
+    bar0_window: Bar0Window,
+    /// The framebuffer this device advertises, as a port. [`RefusingFb`] until a shell
+    /// installs one — the exact shape [`PlaneState::ram`] already has.
+    fb: Box<dyn FbStore>,
 }
 
 /// How many distinct unclaimed offsets are remembered.
@@ -325,7 +405,41 @@ pub enum ReadOutcome {
     /// ★★★ The offset is inside a framebuffer window — **device memory**, which this port
     /// does not model. Reads zero like [`ReadOutcome::Unclaimed`] does and is a separate
     /// variant precisely because the two mean different things: see the module docs.
+    ///
+    /// ⚠ Since `#146` this is the answer for the **GMMU-translated** windows only; the
+    /// BAR0 moving window answers [`ReadOutcome::Fb`].
     FbWindow(FbWindow),
+    /// ★★★ The BAR0 moving window's register itself, `NV_PBUS_BAR0_WINDOW` — the last
+    /// word the guest wrote there.
+    ///
+    /// A variant of its own rather than a [`ReadOutcome::BootReg`], because a boot register
+    /// is a *constant of the silicon* and this one is a latch the guest owns. See
+    /// [`Bar0Window`] for why answering it with anything other than the guest's own word
+    /// breaks the guest's read-modify-write.
+    Bar0Window(u64),
+    /// ★★★ Framebuffer bytes, served through the BAR0 moving window.
+    Fb {
+        /// Which window (always [`FbWindow::Pramin`] today).
+        window: FbWindow,
+        /// The framebuffer-physical address the window resolved the offset to.
+        phys: u64,
+        /// The bytes, as a little-endian value masked to the access width.
+        value: u64,
+    },
+    /// ★★★ The framebuffer store **refused** the resolved address, by name.
+    ///
+    /// ⊘ It still reads zero, because a trapped register read has no error channel to the
+    /// guest — but it is a *different variant*, counted apart ([`Counters::fb_refusals`])
+    /// and sampled, so an operator is never left inferring a dropped access from a boot
+    /// that failed somewhere else.
+    FbRefused {
+        /// Which window.
+        window: FbWindow,
+        /// The address the window resolved to.
+        phys: u64,
+        /// Why the store would not serve it.
+        why: &'static str,
+    },
     /// No source claimed the offset.
     Unclaimed,
 }
@@ -336,8 +450,13 @@ impl ReadOutcome {
     #[must_use]
     pub fn value(self) -> u64 {
         match self {
-            Self::BootReg(v) | Self::Ptimer(v) | Self::Rom(v) | Self::Gsp(v) => v,
-            Self::GspFault(_) | Self::FbWindow(_) | Self::Unclaimed => 0,
+            Self::BootReg(v)
+            | Self::Ptimer(v)
+            | Self::Rom(v)
+            | Self::Gsp(v)
+            | Self::Bar0Window(v) => v,
+            Self::Fb { value, .. } => value,
+            Self::GspFault(_) | Self::FbWindow(_) | Self::FbRefused { .. } | Self::Unclaimed => 0,
         }
     }
 }
@@ -357,9 +476,26 @@ pub struct WriteOutcome {
     /// moment a real port was wired in there were several, and a diagnosis that cannot
     /// distinguish them costs a boot each time.
     pub ram_refusal: Option<RamRefused>,
-    /// ★★★ The write landed in a framebuffer window and was dropped, with the window
-    /// named. `None` means it did not.
+    /// ★★★ The write landed in a framebuffer window this port has no address model for
+    /// and was dropped, with the window named. `None` means it did not.
+    ///
+    /// ⚠ Since `#146` the BAR0 moving window is never reported here — it either lands
+    /// ([`WriteOutcome::fb_landed`]) or refuses ([`WriteOutcome::fb_refusal`]). ⊘ **There
+    /// is deliberately no third answer**: *"framebuffer write, dropped, success"* is the
+    /// shape this whole rung exists to make unrepresentable.
     pub fb_window: Option<FbWindow>,
+    /// ★★★ The write **landed** in the device's framebuffer, at this physical address.
+    ///
+    /// Set only after [`FbStore::write`] returned `Ok`.
+    pub fb_landed: Option<u64>,
+    /// ★★★ The framebuffer store **refused** the write, whole — address, length, reason.
+    ///
+    /// ★ Kept as the payload rather than as a tag for the same reason
+    /// [`WriteOutcome::ram_refusal`] is: the sentence and the address are the diagnosis,
+    /// and a shell that could only report *that* one happened would cost a boot to tell
+    /// "the shell forgot to install the store" from "the guest pointed the window past the
+    /// end of its own framebuffer".
+    pub fb_refusal: Option<FbRefused>,
     /// The status-queue interrupt should be announced to the guest.
     pub raise_status_irq: bool,
     /// How many transitions fired.
@@ -367,6 +503,36 @@ pub struct WriteOutcome {
     /// How many commands were decoded off the command queue.
     pub commands: usize,
 }
+
+impl WriteOutcome {
+    /// A write that claimed nothing, faulted nowhere and moved no byte.
+    ///
+    /// ★ The base every arm of the write path builds on, so that **adding a field to
+    /// [`WriteOutcome`] is one edit rather than six** — and, more to the point, so that the
+    /// field cannot be silently omitted from one arm and set in the other five. That shape
+    /// is how a "dropped" arm and a "landed" arm come to differ in a way nobody notices.
+    #[must_use]
+    pub fn nothing() -> WriteOutcome {
+        WriteOutcome {
+            claimed: false,
+            fault: None,
+            ram_refusal: None,
+            fb_window: None,
+            fb_landed: None,
+            fb_refusal: None,
+            raise_status_irq: false,
+            transitions: 0,
+            commands: 0,
+        }
+    }
+}
+
+/// The fault tag a refused framebuffer write carries out to the shell.
+///
+/// ★ A sentence rather than a name, because the shell prints it verbatim beside the
+/// register offset and the reader is an operator staring at one line of a boot log.
+pub const FB_WRITE_REFUSED: &str = "the framebuffer store would not take a write through the BAR0 moving window; the \
+     bytes did NOT land, and the guest will not be told";
 
 /// ★★★ The register plane: the routing stage Q4 adds.
 pub struct RegPlane {
@@ -416,6 +582,11 @@ struct PlaneCounters {
     unclaimed_writes: AtomicU64,
     fb_window_reads: AtomicU64,
     fb_window_writes: AtomicU64,
+    fb_reads: AtomicU64,
+    fb_writes: AtomicU64,
+    fb_refusals: AtomicU64,
+    bar0_window_reads: AtomicU64,
+    bar0_window_writes: AtomicU64,
     commands: AtomicU64,
     faults: AtomicU64,
     ram_refusals: AtomicU64,
@@ -484,6 +655,8 @@ impl RegPlane {
                 ),
                 unclaimed: Vec::new(),
                 fb_window: Vec::new(),
+                bar0_window: Bar0Window::new(),
+                fb: Box::new(RefusingFb),
             }),
             c: PlaneCounters::default(),
             unserviced,
@@ -511,6 +684,26 @@ impl RegPlane {
     pub fn set_ram(&self, ram: Box<dyn GuestRam>) {
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
         s.ram = ram;
+    }
+
+    /// ★★★ Install the device's framebuffer, replacing [`RefusingFb`].
+    ///
+    /// # Why it is a port and not a `Vec<u8>` in this struct
+    ///
+    /// Two reasons, and they point the same way. **(1)** The bytes are device *memory*, and
+    /// where device memory lives is a decision the owner made at another seam
+    /// (`eight_blockers_resolved.md` §12.2: the isolate's mapping of the fabricated
+    /// aperture). This crate must not become a second answer to it — see [`FbStore`] for
+    /// the three measured reasons that seam cannot serve *this* access today, and for what
+    /// convergence looks like when it can. **(2)** A 12 GiB framebuffer is not a `Vec` on
+    /// any box this project runs on.
+    ///
+    /// ★ Takes `&self` and the plane's lock, like [`RegPlane::set_ram`], so a plane already
+    /// answering registers acquires memory without being rebuilt and without an interval in
+    /// which it answers something else.
+    pub fn set_fb(&self, fb: Box<dyn FbStore>) {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.fb = fb;
     }
 
     /// Install a command policy, replacing the C-baseline echo.
@@ -543,6 +736,11 @@ impl RegPlane {
             unclaimed_writes,
             fb_window_reads,
             fb_window_writes,
+            fb_reads,
+            fb_writes,
+            fb_refusals,
+            bar0_window_reads,
+            bar0_window_writes,
             commands,
             faults,
             ram_refusals,
@@ -560,6 +758,11 @@ impl RegPlane {
             unclaimed_writes: g(unclaimed_writes),
             fb_window_reads: g(fb_window_reads),
             fb_window_writes: g(fb_window_writes),
+            fb_reads: g(fb_reads),
+            fb_writes: g(fb_writes),
+            fb_refusals: g(fb_refusals),
+            bar0_window_reads: g(bar0_window_reads),
+            bar0_window_writes: g(bar0_window_writes),
             commands: g(commands),
             commands_unserviced: self.unserviced.total(),
             faults: g(faults),
@@ -627,6 +830,10 @@ impl RegPlane {
             policy: _,
             unclaimed,
             fb_window,
+            bar0_window,
+            // ★ The PORT is the shell's wiring, like `ram` and `policy`; what it HOLDS is
+            // device state and is carried out as `fb_resident_bytes` just below.
+            fb,
         } = &*s;
         PlaneResidue {
             counters,
@@ -636,6 +843,8 @@ impl RegPlane {
             unserviced: unserviced.sample(),
             fault_buffers: fault_buffer.sample(),
             fault_buffers_registered: fault_buffer.total(),
+            bar0_window: *bar0_window,
+            fb_resident_bytes: fb.resident_bytes(),
         }
     }
 
@@ -713,11 +922,18 @@ impl RegPlane {
         s.fsm.clone()
     }
 
-    /// Power-on reset: rebuild the FSM. The RAM port and the policy survive, because they
-    /// are the *shell's* wiring and not the device's state.
+    /// Power-on reset: rebuild the FSM, re-point the BAR0 window at its reset value and
+    /// **forget every framebuffer byte**. The RAM port, the framebuffer *port* and the
+    /// policy survive, because they are the *shell's* wiring and not the device's state.
+    ///
+    /// ★★★ The framebuffer clear is not tidiness. Content that survived a device life is
+    /// the previous guest's page tables, instance blocks and semaphores, readable by the
+    /// next one through this very window — see [`FbStore::device_reset`].
     pub fn device_reset(&self) {
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
         s.fsm.device_reset();
+        s.bar0_window = Bar0Window::new();
+        s.fb.device_reset();
     }
 
     /// ★★★ Serve one register read.
@@ -733,9 +949,15 @@ impl RegPlane {
             ReadOutcome::Rom(_) => self.c.rom_reads.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::Gsp(_) => self.c.gsp_reads.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::GspFault(_) => self.c.faults.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::Bar0Window(_) => self.c.bar0_window_reads.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::FbWindow(w) => {
                 self.note_fb_window(w, off);
                 self.c.fb_window_reads.fetch_add(1, Ordering::Relaxed)
+            }
+            ReadOutcome::Fb { .. } => self.c.fb_reads.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::FbRefused { window, .. } => {
+                self.note_fb_window(window, off);
+                self.c.fb_refusals.fetch_add(1, Ordering::Relaxed)
             }
             ReadOutcome::Unclaimed => {
                 self.note_unclaimed(bar, off);
@@ -757,13 +979,25 @@ impl RegPlane {
                 return ReadOutcome::Rom(self.rom_read(off - self.chip.rom_window.base, size));
             }
         }
+        // ★★★ THE WINDOW REGISTER IS A LATCH. Asked here, before the GSP model and before
+        // the unclaimed arm, and answered with the guest's own last word — see
+        // `crate::fbwin` for the two independent ways a defaulted zero here loses a write
+        // permanently (the guest's read-modify-write, and RM's own
+        // `cachedBar0WindowVidOffset`).
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && self.chip.bar0_window_reg != 0
+            && off == self.chip.bar0_window_reg
+        {
+            let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            return ReadOutcome::Bar0Window(mask(u64::from(s.bar0_window.raw()), size));
+        }
         // ★★★ Device memory, not a register — asked BEFORE the GSP model and before the
         // unclaimed arm, because a framebuffer window that some future model happened to
         // claim an offset inside would be served as a register, which is the silent-
         // misattribution this classification exists to prevent. `assert_disjoint` refuses
         // such a chip at realize, so reaching here means the two really are separate.
         if let Some(w) = self.chip.fb_window(bar, off) {
-            return ReadOutcome::FbWindow(w);
+            return self.fb_read(w, off, size);
         }
         let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match s.fsm.mmio_read_with(self.model.as_ref(), bar, off) {
@@ -771,6 +1005,98 @@ impl RegPlane {
             Some(Ok(v)) => ReadOutcome::Gsp(mask(v, size)),
             Some(Err(f)) => ReadOutcome::GspFault(f.fault_tag().0),
         }
+    }
+
+    /// ★★★ **THE ONE RESOLVER.** Which framebuffer-physical address a windowed access at
+    /// register offset `off` names, or `None` for a window this port has no address model
+    /// for.
+    ///
+    /// # Why this is a function and not two lines inlined twice
+    ///
+    /// It is called by [`RegPlane::fb_read`] and by [`RegPlane::fb_write`] and by nothing
+    /// else. Two copies of `(base << 16) + (off - window_base)` could disagree about the
+    /// mask width, about `+` versus `|`, or about which end the offset is subtracted from —
+    /// and a read-after-write that resolved to two different addresses is precisely the
+    /// failure `kbusVerifyBar2_GM107` reports, arriving with no clue that the arithmetic
+    /// was the cause. One function cannot disagree with itself.
+    ///
+    /// ⊘ The two `None` arms are honest rather than lazy: the framebuffer aperture and the
+    /// instance window are **GMMU-translated**, and this port's `GmmuFmt` says it has no
+    /// page-table format (`kayfabe_chips::UnbuiltGmmu`). Answering them would mean
+    /// inventing a translation, which is `MISS = FAULT`'s whole prohibition.
+    fn window_phys(&self, w: FbWindow, off: u64, s: &PlaneState) -> Option<u64> {
+        match w {
+            FbWindow::Pramin => Some(s.bar0_window.fb_addr(off - self.chip.pramin_window.base)),
+            FbWindow::FbAperture | FbWindow::InstanceWindow => None,
+        }
+    }
+
+    /// Serve one framebuffer-window read.
+    fn fb_read(&self, w: FbWindow, off: u64, size: u8) -> ReadOutcome {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(phys) = self.window_phys(w, off, &s) else {
+            return ReadOutcome::FbWindow(w);
+        };
+        let n = usize::from(size.clamp(1, 8));
+        let mut buf = [0u8; 8];
+        match s.fb.read(phys, &mut buf[..n]) {
+            Ok(()) => ReadOutcome::Fb {
+                window: w,
+                phys,
+                value: mask(u64::from_le_bytes(buf), size),
+            },
+            Err(e) => ReadOutcome::FbRefused {
+                window: w,
+                phys,
+                why: e.why,
+            },
+        }
+    }
+
+    /// Serve one framebuffer-window write.
+    ///
+    /// ★★★ **There are exactly three answers and none of them is "dropped, success".**
+    /// Either the window has no address model (the two translated apertures — reported as
+    /// [`WriteOutcome::fb_window`], which is what "dropped" honestly means there), or the
+    /// store took the bytes ([`WriteOutcome::fb_landed`]), or the store refused by name
+    /// ([`WriteOutcome::fb_refusal`], with the address and the reason). The `Result` from
+    /// [`FbStore::write`] is matched, never discarded.
+    fn fb_write(&self, w: FbWindow, off: u64, size: u8, val: u64) -> WriteOutcome {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(phys) = self.window_phys(w, off, &s) else {
+            drop(s);
+            self.note_fb_window(w, off);
+            self.c.fb_window_writes.fetch_add(1, Ordering::Relaxed);
+            return WriteOutcome {
+                fb_window: Some(w),
+                ..WriteOutcome::nothing()
+            };
+        };
+        let n = usize::from(size.clamp(1, 8));
+        let bytes = val.to_le_bytes();
+        let outcome = match s.fb.write(phys, &bytes[..n]) {
+            Ok(()) => {
+                self.c.fb_writes.fetch_add(1, Ordering::Relaxed);
+                WriteOutcome {
+                    fb_landed: Some(phys),
+                    ..WriteOutcome::nothing()
+                }
+            }
+            Err(e) => {
+                self.c.fb_refusals.fetch_add(1, Ordering::Relaxed);
+                WriteOutcome {
+                    // ★ It is a FAULT, not merely a note: the shell prints `fault`
+                    // unconditionally, so a refused framebuffer write is loud in the same
+                    // boot rather than inferable from a later `NV_ERR_MEMORY_ERROR`.
+                    fault: Some(FB_WRITE_REFUSED),
+                    fb_refusal: Some(e),
+                    ..WriteOutcome::nothing()
+                }
+            }
+        };
+        drop(s);
+        self.note_fb_window(w, off);
+        outcome
     }
 
     /// The free-running counter's two halves, or `None` if `off` is neither.
@@ -817,38 +1143,39 @@ impl RegPlane {
 
     /// ★★★ Serve one register write.
     pub fn write(&self, bar: u8, off: u64, size: u8, val: u64) -> WriteOutcome {
-        let _ = size;
         self.c.writes.fetch_add(1, Ordering::Relaxed);
-        // ★★★ A framebuffer write is DROPPED and SAID SO. It is classified first, for the
-        // reason `read_inner` gives, and reported under its own name because "we dropped a
-        // write to device memory" and "we dropped a write to a register nobody models" are
-        // the two facts this counter used to merge.
-        if let Some(w) = self.chip.fb_window(bar, off) {
-            self.note_fb_window(w, off);
-            self.c.fb_window_writes.fetch_add(1, Ordering::Relaxed);
+        // ★★★ THE WINDOW REGISTER IS A LATCH, and it is classified FIRST — before the
+        // framebuffer windows, before the GSP model and before the unclaimed arm. A write
+        // here that fell through to `unclaimed_writes` would be dropped, and the guest
+        // would go on addressing framebuffer address zero believing it had moved the
+        // window. See `crate::fbwin`.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && self.chip.bar0_window_reg != 0
+            && off == self.chip.bar0_window_reg
+        {
+            self.c.bar0_window_writes.fetch_add(1, Ordering::Relaxed);
+            let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            // ⊘ The whole word, truncated to 32 bits and NOT masked to the two fields this
+            // port decodes: the guest reads this register back and re-writes it, so a bit
+            // we do not understand must survive the round trip. Dropping it would be a
+            // read-modify-LOSE at a register whose entire job is to be modified in place.
+            s.bar0_window.set_raw(val as u32);
             return WriteOutcome {
-                claimed: false,
-                fault: None,
-                ram_refusal: None,
-                fb_window: Some(w),
-                raise_status_irq: false,
-                transitions: 0,
-                commands: 0,
+                claimed: true,
+                ..WriteOutcome::nothing()
             };
+        }
+        // ★★★ A framebuffer write either LANDS or REFUSES BY NAME — see
+        // [`RegPlane::fb_write`], which is where the three-answers rule is written down.
+        // It is classified before the register sources for the reason `read_inner` gives.
+        if let Some(w) = self.chip.fb_window(bar, off) {
+            return self.fb_write(w, off, size, val);
         }
         let claimed = self.model.decode_reg(bar, off).is_some();
         if !claimed {
             self.note_unclaimed(bar, off);
             self.c.unclaimed_writes.fetch_add(1, Ordering::Relaxed);
-            return WriteOutcome {
-                claimed: false,
-                fault: None,
-                ram_refusal: None,
-                fb_window: None,
-                raise_status_irq: false,
-                transitions: 0,
-                commands: 0,
-            };
+            return WriteOutcome::nothing();
         }
         self.c.gsp_writes.fetch_add(1, Ordering::Relaxed);
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -872,12 +1199,10 @@ impl RegPlane {
                     .fetch_add(report.commands.len() as u64, Ordering::Relaxed);
                 WriteOutcome {
                     claimed: true,
-                    fault: None,
-                    ram_refusal: None,
-                    fb_window: None,
                     raise_status_irq: report.raise_status_irq,
                     transitions: report.transitions.len(),
                     commands: report.commands.len(),
+                    ..WriteOutcome::nothing()
                 }
             }
             Err(f) => {
@@ -896,10 +1221,7 @@ impl RegPlane {
                     claimed: true,
                     fault: Some(f.fault_tag().0),
                     ram_refusal,
-                    fb_window: None,
-                    raise_status_irq: false,
-                    transitions: 0,
-                    commands: 0,
+                    ..WriteOutcome::nothing()
                 }
             }
         }
@@ -1024,6 +1346,69 @@ fn assert_disjoint(chip: &ChipProfile, model: &dyn GspModel) -> Result<(), ChipE
             });
         }
         off += 4;
+    }
+    // ★★★ THE TWO HALVES OF THE BAR0 MOVING WINDOW MUST BOTH BE THERE, OR NEITHER.
+    //
+    // The register selects which framebuffer page the aperture shows. A row with the
+    // aperture and no register serves a FIXED view of framebuffer address zero while the
+    // guest believes it has moved the window — every access mis-addressed, nothing logged,
+    // and the first symptom hundreds of operations later at `kbusVerifyBar2`. That is the
+    // exact failure `#146` was written against, so it is refused at realize rather than
+    // discovered in a boot.
+    if (chip.pramin_window.len == 0) != (chip.bar0_window_reg == 0) {
+        return Err(ChipError::WindowWithoutItsRegister {
+            window_len: chip.pramin_window.len,
+            reg_off: chip.bar0_window_reg,
+        });
+    }
+    if chip.bar0_window_reg != 0 {
+        let off = chip.bar0_window_reg;
+        if off >= chip.regs_aperture_len {
+            return Err(ChipError::OutsideAperture {
+                off,
+                aperture: chip.regs_aperture_len,
+            });
+        }
+        // ★★ Checked against every other source, in the order the read path asks them, and
+        // for the sharpest version of the disjointness argument: this offset is answered
+        // BEFORE all of them, so an overlap would not merely resolve to the wrong source —
+        // it would make the other source *unreachable*, and the boot register or GSP
+        // register it swallowed would answer a guest's latch value forever.
+        if chip.boot_regs.iter().any(|r| r.off == off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the BAR0 moving window's own register",
+                b: "a silicon-constant register",
+            });
+        }
+        if off == chip.ptimer.lo_off || off == chip.ptimer.hi_off {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the BAR0 moving window's own register",
+                b: "the free-running nanosecond counter",
+            });
+        }
+        if chip.rom_window.contains(off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the BAR0 moving window's own register",
+                b: "the ROM window",
+            });
+        }
+        if chip.pramin_window.contains(off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the BAR0 moving window's own register",
+                b: "the PRAMIN framebuffer window",
+            });
+        }
+        if model.decode_reg(0, off).is_some() {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the BAR0 moving window's own register",
+                b: "the GSP register model",
+            });
+        }
     }
     // ★★★ The PRAMIN window is checked against every register source, exhaustively, for a
     // reason the other windows do not have: it is classified BEFORE the GSP model, so an

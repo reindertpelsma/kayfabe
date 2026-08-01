@@ -181,6 +181,13 @@ static OTHER_PRAMIN: RegSpan = RegSpan {
     len: 0x0002_0000,
 };
 
+/// The second chip's `NV_PBUS_BAR0_WINDOW` — deliberately at a **different offset** from
+/// GA10x's `0x1700`, for the reason its window is at a different base: a plane that had
+/// hard-coded the shipped generation's register would latch this chip's window from an
+/// offset the guest never wrote, and every access through the aperture would be
+/// mis-addressed with nothing said.
+const OTHER_BAR0_WINDOW_REG: u64 = 0x0000_2900;
+
 static NO_REG_BASES: kayfabe_abi::chipinfo::ChipInfoRow = kayfabe_abi::chipinfo::ChipInfoRow {
     chip_sub_rev: 0,
     is_cmp_sku: false,
@@ -215,6 +222,10 @@ static OTHER: ChipProfile = ChipProfile {
         len: 0x0010_0000,
     },
     pramin_window: OTHER_PRAMIN,
+    // ★ At a DIFFERENT offset from GA10x's `0x1700`, so a plane that had hard-coded the
+    // shipped generation's window register would move this chip's window from an offset it
+    // never wrote and be caught for it.
+    bar0_window_reg: OTHER_BAR0_WINDOW_REG,
     vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
     msix_vectors: 3,
     gsp_model: || Box::new(OtherGspModel),
@@ -373,6 +384,9 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
             len: 0x0010_0000,
         },
         pramin_window: NO_PRAMIN,
+        // ⊘ No window, therefore no register to move it — the two halves must be both or
+        // neither (`ChipError::WindowWithoutItsRegister`).
+        bar0_window_reg: 0,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
@@ -417,6 +431,9 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
             len: 0x0010_0000,
         },
         pramin_window: NO_PRAMIN,
+        // ⊘ No window, therefore no register to move it — the two halves must be both or
+        // neither (`ChipError::WindowWithoutItsRegister`).
+        bar0_window_reg: 0,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),
@@ -685,6 +702,9 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
             len: 0x0010_0000,
         },
         pramin_window: NO_PRAMIN,
+        // ⊘ No window, therefore no register to move it — the two halves must be both or
+        // neither (`ChipError::WindowWithoutItsRegister`).
+        bar0_window_reg: 0,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(OtherGspModel),
@@ -733,6 +753,9 @@ fn a_counter_outside_the_aperture_is_refused_at_realize() {
             len: 0x0001_0000,
         },
         pramin_window: NO_PRAMIN,
+        // ⊘ No window, therefore no register to move it — the two halves must be both or
+        // neither (`ChipError::WindowWithoutItsRegister`).
+        bar0_window_reg: 0,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(OtherGspModel),
@@ -966,9 +989,23 @@ fn a_framebuffer_window_access_is_not_an_unclaimed_register() {
     let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
 
     // (1) PRAMIN, inside the register aperture.
-    assert_eq!(
-        plane.read(0, 0x0077_7777, 4),
-        ReadOutcome::FbWindow(FbWindow::Pramin)
+    //
+    // ★★ Since `#146` this plane has an ADDRESS model for `PRAMIN` and no BYTE store (the
+    // shell installs one; this test is the plane on its own), so the honest answer is a
+    // NAMED REFUSAL carrying the resolved framebuffer address — not a defaulted zero and
+    // not the "no model at all" answer the two translated windows still give. Asserting on
+    // the variant is the point: the three windows must stay three different findings.
+    assert!(
+        matches!(
+            plane.read(0, 0x0077_7777, 4),
+            ReadOutcome::FbRefused {
+                window: FbWindow::Pramin,
+                phys: 0x0007_7777,
+                ..
+            }
+        ),
+        "PRAMIN must resolve to a framebuffer address and refuse BY NAME with no store, \
+         never read as a plausible zero"
     );
     // (2) The framebuffer aperture — RM's BAR1. The offset is the one the C's own cold-boot
     // trace writes (`cap1b_coldboot_hermetic_d6`, the single BAR1 write, offset 0x9008c).
@@ -985,7 +1022,16 @@ fn a_framebuffer_window_access_is_not_an_unclaimed_register() {
     assert_eq!(plane.read(0, 0x0055_5555, 4), ReadOutcome::Unclaimed);
 
     let c = plane.counters();
-    assert_eq!(c.fb_window_reads, 3, "three windows, three reads");
+    // ★★ TWO counters now, and the split IS the finding: the two GMMU-translated windows
+    // have no address model and are dropped (`fb_window_reads`); `PRAMIN` resolves and is
+    // refused by name for want of a store (`fb_refusals`). A port that merged them could
+    // not answer "how many framebuffer accesses did this boot drop".
+    assert_eq!(c.fb_window_reads, 2, "the two TRANSLATED windows, dropped");
+    assert_eq!(c.fb_refusals, 1, "PRAMIN resolved and was refused BY NAME");
+    assert_eq!(
+        c.fb_reads, 0,
+        "nothing was served: there is no store on this plane"
+    );
     assert_eq!(
         c.unclaimed_reads, 1,
         "★ and exactly ONE unclaimed read — the framebuffer reads must not also land here"
@@ -1032,15 +1078,26 @@ fn the_framebuffer_windows_come_from_the_chip_row_and_not_from_the_plane() {
     let plane = RegPlane::new(&OTHER, abi(), test_clock()).expect("servable");
     // Inside GA10x's PRAMIN, outside this chip's. It is a register offset here.
     assert_eq!(plane.read(0, 0x0077_7777, 4), ReadOutcome::Unclaimed);
-    // Inside THIS chip's declared window.
-    assert_eq!(
-        plane.read(0, 0x00A0_0004, 4),
-        ReadOutcome::FbWindow(FbWindow::Pramin)
+    // Inside THIS chip's declared window — and the address it resolves to is measured
+    // against THIS chip's base, so a plane that subtracted GA10x's `0x0070_0000` would
+    // produce `0x0030_0004` and be caught here rather than at a verify.
+    assert!(
+        matches!(
+            plane.read(0, 0x00A0_0004, 4),
+            ReadOutcome::FbRefused {
+                window: FbWindow::Pramin,
+                phys: 4,
+                ..
+            }
+        ),
+        "the window offset is measured from the CHIP'S OWN base"
     );
     // …and one byte past its end is a register again, so the length is read too.
     assert_eq!(plane.read(0, 0x00A2_0000, 4), ReadOutcome::Unclaimed);
     let c = plane.counters();
-    assert_eq!(c.fb_window_reads, 1);
+    // ★ `PRAMIN` resolves and refuses; it is no longer merely "dropped".
+    assert_eq!(c.fb_window_reads, 0);
+    assert_eq!(c.fb_refusals, 1);
     assert_eq!(c.unclaimed_reads, 2);
 }
 
@@ -1089,6 +1146,7 @@ fn a_chip_whose_pramin_window_swallows_a_gsp_register_is_refused_at_realize() {
             base: 0x0010_0000,
             len: 0x0010_0000,
         },
+        bar0_window_reg: OTHER_BAR0_WINDOW_REG,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(kayfabe_device::ga10x::Ga10xGspModel::new()),

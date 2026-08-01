@@ -83,8 +83,13 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// [`BRIDGE_REFUSAL_SLOTS`] rows short and this archive would write well past the end of
 /// it. The `sizeof` handshake still does not cover this structure; the version does.
 ///
+/// ★ Bumped to **8** at `#146`, the BAR0 moving window, and it is the ABI-3 reason a fourth
+/// time in **both** structures at once: [`KayfabeRegAudit`] gained six framebuffer counters
+/// and [`KayfabeRegWrite`] gained the framebuffer refusal's four fields. An ABI-7 shim would
+/// allocate both old layouts and this archive would write past the end of each.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 7;
+pub const ABI_VERSION: u32 = 8;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -792,6 +797,23 @@ pub struct KayfabeRegAudit {
     pub fb_window_reads: u64,
     /// Writes that landed in a framebuffer window and were therefore **dropped**.
     pub fb_window_writes: u64,
+    /// ★★★ `#146` — reads **served** from the device's framebuffer through the BAR0
+    /// moving window.
+    pub fb_reads: u64,
+    /// ★★★ `#146` — writes that **landed** in the device's framebuffer.
+    pub fb_writes: u64,
+    /// ★★★ `#146` — framebuffer accesses the store **refused, by name**.
+    ///
+    /// ⊘ The number an operator reads to answer *"did this boot drop a framebuffer
+    /// write?"* — the question `kbusVerifyBar2` used to be the only answer to, hundreds of
+    /// operations after the fact.
+    pub fb_refusals: u64,
+    /// `#146` — reads of `NV_PBUS_BAR0_WINDOW` itself.
+    pub bar0_window_reads: u64,
+    /// `#146` — writes to `NV_PBUS_BAR0_WINDOW`, i.e. the guest re-pointing its window.
+    pub bar0_window_writes: u64,
+    /// `#146` — how many bytes of framebuffer the store is holding for this device life.
+    pub fb_resident_bytes: u64,
     /// Faults the emulated GSP raised.
     pub faults: u64,
     /// Guest-RAM accesses the plane's RAM port refused.
@@ -867,6 +889,12 @@ pub fn classify_chip(e: &ChipError) -> (Status, &'static str) {
             Status::Unsupported,
             "the chip declares a register or window outside its own register aperture, so \
              the guest could never address it",
+        ),
+        ChipError::WindowWithoutItsRegister { .. } => (
+            Status::Unsupported,
+            "the chip declares a PRAMIN window and no NV_PBUS_BAR0_WINDOW register to move \
+             it, or the register and no window; the two are one mechanism, and an aperture \
+             nothing can move shows framebuffer address zero forever without saying so",
         ),
         ChipError::BarTableDisagreesWithAperture { .. } => (
             Status::Unsupported,
@@ -987,6 +1015,26 @@ impl Regs {
             Some(objects),
         )
         .map_err(|e| classify_chip(&e))?;
+        // ★★★ **THE COMPOSITION ROOT'S FRAMEBUFFER DECISION, made here and nowhere else.**
+        //
+        // `kayfabe_device::RegPlane` is built with `RefusingFb`, so a shell that never made
+        // this decision gets a device that says *"there is no framebuffer here"* rather than
+        // one that behaves like an empty one. This is the shell, and it decides.
+        //
+        // ⊘ **Why a shell-owned sparse store and not the isolate's `FbRead`**, which is
+        // where owner decision (b) put framebuffer content: three reasons, all read off the
+        // two seams' own signatures and lifetimes (`[inferred]`, stated in full in
+        // `kayfabe_device::fbwin::FbStore`'s docs), none of them about layering. The
+        // short one is that `kbusVerifyBar2` runs inside `RmInitAdapter`, **before the
+        // first client root exists** — there is no `Proc`, no isolate and no worker to
+        // borrow a byte from. The day the data plane exists, convergence is an `FbStore`
+        // implementation that delegates, installed through this same call.
+        //
+        // ★ Sized from the chip row's own `fb_length` — the SAME number the emulated GSP
+        // answers `NV2080_CTRL_CMD_FB_GET_INFO` and `GA106_FB_REGIONS` with. A store
+        // smaller than what the device advertises would refuse an address the guest was
+        // promised, which is a refusal we would have manufactured ourselves.
+        plane.set_fb(Box::new(kayfabe_device::SparseFb::new(chip.fb_length)));
         Ok(Regs { plane, refusals })
     }
 
@@ -1074,6 +1122,11 @@ impl Regs {
             unclaimed_writes,
             fb_window_reads,
             fb_window_writes,
+            fb_reads,
+            fb_writes,
+            fb_refusals,
+            bar0_window_reads,
+            bar0_window_writes,
             faults,
             ram_refusals,
             irq_requests,
@@ -1119,6 +1172,15 @@ impl Regs {
             unclaimed_writes,
             fb_window_reads,
             fb_window_writes,
+            fb_reads,
+            fb_writes,
+            fb_refusals,
+            bar0_window_reads,
+            bar0_window_writes,
+            // ★ Read from the plane's residue rather than kept as a counter: it is a
+            // LEVEL, not a total, so a counter would be wrong the moment a device reset
+            // freed the pages.
+            fb_resident_bytes: self.plane.residue().fb_resident_bytes,
             faults,
             ram_refusals,
             irq_requests,

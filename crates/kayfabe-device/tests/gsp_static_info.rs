@@ -341,6 +341,7 @@ const fn copy_of_ga106() -> ChipProfile {
             base: 0x0070_0000,
             len: 0x0010_0000,
         },
+        bar0_window_reg: 0x0000_1700,
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         gsp_model: || Box::new(ga10x::Ga10xGspModel::new()),

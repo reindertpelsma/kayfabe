@@ -471,7 +471,12 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // seam instead of only their tag. Exactly the change the ABI version exists for — the
     // `struct_size` handshake does not cover this structure, so nothing but the version and
     // this line stands between an ABI-3 shim and 32 bytes written past its allocation.
-    assert_eq!(size_of::<KayfabeRegWrite>(), 64);
+    // ★ 64 -> 112 at `#146`: the framebuffer refusal's own (pointer, length) pair plus its
+    // address and length, and the landed address plus its validity flag — the same shape,
+    // one aperture over. `fb_landed` needs the flag because framebuffer address ZERO is
+    // where an unprogrammed window points, so a single field could not tell "landed at 0"
+    // from "did not land", which are the two answers this rung is about.
+    assert_eq!(size_of::<KayfabeRegWrite>(), 112);
     // ★ 12 -> 15 counters plus a 32-slot list at task #127: the emulated GSP's default
     // became a NAMED REFUSAL, and the guest logs `NV_ERR_NOT_SUPPORTED` quietly, so the
     // list of what nobody answered has to cross the seam or it costs a boot per entry.
@@ -486,9 +491,11 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
         size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>(),
         kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_TAG_LEN + 2 * size_of::<u64>()
     );
+    // ★ 19 -> 25 at `#146`: five framebuffer counters and the residency level, because a
+    // window that serves bytes and one that drops them must not report the same numbers.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (19 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (25 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
     );
@@ -540,9 +547,10 @@ fn the_register_plane_answers_through_the_seam_the_c_shim_calls() {
     // was measuring a **framebuffer** access and calling it an unclaimed register. The two
     // are now separate answers and this line names the register one.
     assert_eq!(regs.read(0, 0x0055_5555, 4), 0);
-    // ★★★ …and the framebuffer one, through the same seam. `0x0077_7777` still reads zero
-    // — nothing here serves device memory — but it is now attributable, which is the whole
-    // change: `fb_window_reads` moves and `unclaimed_reads` does not.
+    // ★★★ …and the framebuffer one, through the same seam. Since `#146` this reads zero
+    // because the store is FRESH — memory this device advertises that nobody has written —
+    // and not because the access was dropped. `fb_reads` moves and `unclaimed_reads` does
+    // not.
     assert_eq!(regs.read(0, 0x0077_7777, 4), 0);
 
     let a = regs.audit();
@@ -555,9 +563,44 @@ fn the_register_plane_answers_through_the_seam_the_c_shim_calls() {
         "the PRAMIN read must NOT be counted as an unclaimed register"
     );
     assert_eq!(
-        a.fb_window_reads, 1,
-        "…it must be counted as a framebuffer-window read, across the C seam"
+        a.fb_reads, 1,
+        "…it must be counted as a SERVED framebuffer read, across the C seam"
     );
+    assert_eq!(
+        a.fb_refusals, 0,
+        "★★★ and NOTHING was refused: the composition root installed a store sized from \
+         the chip's own fb_length, so an address the guest was promised always resolves"
+    );
+
+    // ★★★ THE PROPERTY THE RUNG IS FOR, through the C seam: write a dword through the
+    // moving window and read it back. This is `kbusVerifyBar2_GM107:4084-4090` in
+    // miniature, and if it fails the guest reports NV_ERR_MEMORY_ERROR hundreds of
+    // operations later with no clue why.
+    const WINDOW_REG: u64 = 0x0000_1700;
+    const PRAMIN: u64 = 0x0070_0000;
+    let w = regs.write(0, WINDOW_REG, 4, 0x0002_EFBA);
+    assert!(w.claimed, "the window register is a LATCH this plane owns");
+    assert_eq!(
+        regs.read(0, WINDOW_REG, 4),
+        0x0002_EFBA,
+        "★★★ it must read back: RM's own field update is a READ-MODIFY-WRITE, and RM \
+         refreshes cachedBar0WindowVidOffset from this very read"
+    );
+    let w = regs.write(0, PRAMIN + 0xE000, 4, 0xABCD_ABCD);
+    assert_eq!(
+        w.fb_landed,
+        Some(0x0002_EFBA_E000),
+        "the write must LAND, at the address the window resolves — and say where"
+    );
+    assert!(w.fb_refusal.is_none() && w.fb_window.is_none());
+    assert_eq!(
+        regs.read(0, PRAMIN + 0xE000, 4),
+        0xABCD_ABCD,
+        "★★★ and read back through the same window"
+    );
+    // ⊘ …and NOT through a different one. The window really moves.
+    let _ = regs.write(0, WINDOW_REG, 4, 0x0002_EFBB);
+    assert_eq!(regs.read(0, PRAMIN + 0xE000, 4), 0);
     // A write into the framebuffer aperture is DROPPED and said so — the case that costs a
     // page-table entry rather than a register value.
     let w = regs.write(1, 0x0009_008C, 8, 0xDEAD_BEEF);

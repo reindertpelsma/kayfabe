@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 7u
+#define KAYFABE_SHIM_ABI 8u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -251,6 +251,27 @@ typedef struct KayfabeRegWrite {
     uint64_t       ram_why_len;
     uint64_t       ram_gpa;            /* valid only when ram_why != NULL */
     uint64_t       ram_len;            /* valid only when ram_why != NULL */
+    /* ★★★ #146 THE BAR0 MOVING WINDOW.  Exactly the shape of the four fields above, one
+     * aperture over: why a framebuffer write through NV_PBUS_BAR0_WINDOW was refused, and
+     * where.  Non-NULL means THE BYTES DID NOT LAND.
+     *
+     * There is deliberately no third answer.  kbusInitBar2 programs this window and never
+     * reads any of it back, so a window that silently dropped writes let every earlier step
+     * return NV_OK and was caught only at kbusVerifyBar2, hundreds of operations later, as
+     * NV_ERR_MEMORY_ERROR.  These fields are what makes a dropped write loud IN THE SAME
+     * BOOT, at the instant it happens. */
+    const uint8_t *fb_why;
+    uint64_t       fb_why_len;
+    uint64_t       fb_phys;            /* valid only when fb_why != NULL */
+    uint64_t       fb_refused_len;     /* valid only when fb_why != NULL */
+    /* Where a write LANDED, and its own validity flag.
+     *
+     * ⚠ Two fields for one fact, and the second is not redundant: framebuffer address ZERO
+     * is where a window at its reset base points, i.e. exactly where a boot that never
+     * programmed the window would write.  A single field could not tell "landed at 0" from
+     * "did not land". */
+    uint64_t       fb_landed;
+    int32_t        fb_landed_valid;
     uint32_t       transitions;
     uint32_t       commands;
     int32_t        claimed;            /* the register model owns this offset */
@@ -308,6 +329,21 @@ typedef struct KayfabeRegAudit {
      * unknown register offset. */
     uint64_t fb_window_reads;
     uint64_t fb_window_writes;
+    /* ★★★ #146 — THE BAR0 MOVING WINDOW, SERVED.
+     *
+     * The two counters above now describe only the windows this port has NO ADDRESS MODEL
+     * for — the GMMU-translated framebuffer aperture and instance window.  PRAMIN is
+     * untranslated (the framebuffer address IS the window base plus the offset), so it has
+     * a real address model and a real byte store, and it is counted apart.
+     *
+     * `fb_refusals` is the number to read.  It answers "did this boot drop a framebuffer
+     * write?" — the question that used to be answerable only by kbusVerifyBar2 failing. */
+    uint64_t fb_reads;
+    uint64_t fb_writes;
+    uint64_t fb_refusals;
+    uint64_t bar0_window_reads;
+    uint64_t bar0_window_writes;
+    uint64_t fb_resident_bytes;
     uint64_t faults;
     uint64_t ram_refusals;
     uint64_t irq_requests;

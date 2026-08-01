@@ -187,6 +187,15 @@ const PRAMIN_SIZE: u64 = 0x0010_0000;
 /// low bound of `NV_PRAMIN` (`dev_ram.h:26`) and the window offset the C artifact decodes
 /// (`C: src/qemu/mode2_regs_ga10x.h:80-81`).
 const PRAMIN_BASE: u64 = 0x0070_0000;
+/// ★★★ `NV_PBUS_BAR0_WINDOW` — the register that **positions** the window above
+/// (`ogkm-580: src/common/inc/swref/published/maxwell/gm107/dev_bus.h:43`, and the same
+/// offset the C artifact decodes at `C: src/qemu/mode2_regs_ga10x.h`'s
+/// `NVKVM_BAR0_WINDOW`).
+///
+/// ⊘ The two constants are one mechanism and the chip row carries both, because a row with
+/// only the aperture is refused at realize — see
+/// [`crate::ChipError::WindowWithoutItsRegister`] for the boot that motivates it.
+const BAR0_WINDOW_REG: u64 = 0x0000_1700;
 /// `kgspGetFrtsSize_TU102` — 1 MiB on Turing through Ada
 /// (`ogkm-580: .../gsp/arch/turing/kernel_gsp_frts_tu102.c:49-58`; GA100 and GB10B are 0).
 const FRTS_SIZE: u64 = 0x0010_0000;
@@ -1464,6 +1473,7 @@ pub static GA106: ChipProfile = ChipProfile {
         base: PRAMIN_BASE,
         len: PRAMIN_SIZE,
     },
+    bar0_window_reg: BAR0_WINDOW_REG,
     vbios_wire: VbiosWire::Tu102Bit,
     msix_vectors: MSIX_VECTORS,
     gsp_model: || Box::new(Ga10xGspModel::new()),

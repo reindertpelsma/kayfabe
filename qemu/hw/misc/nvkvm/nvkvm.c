@@ -232,7 +232,18 @@ static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
          * leaves the register surface answering.  Reported at trace level would be
          * invisible; reported every time would let a polling guest fill the disk — so it is
          * a warning, and the archive counts them for the audit. */
-        if (w.ram_why && w.ram_why_len) {
+        if (w.fb_why && w.fb_why_len) {
+            /* ★★★ #146.  A refused framebuffer write is the one fault whose ONLY other
+             * symptom arrives hundreds of operations later, as RmInitAdapter's
+             * NV_ERR_MEMORY_ERROR out of kbusVerifyBar2.  Said here, at the instant it
+             * happens, with the framebuffer address the moving window resolved to. */
+            warn_report("nvkvm: a framebuffer write through the BAR0 moving window at "
+                        "+0x%" PRIx64 " DID NOT LAND: %.*s; framebuffer address 0x%" PRIx64
+                        " (%" PRIu64 " bytes): %.*s",
+                        (uint64_t)addr, (int)w.fault_len, (const char *)w.fault,
+                        w.fb_phys, w.fb_refused_len,
+                        (int)w.fb_why_len, (const char *)w.fb_why);
+        } else if (w.ram_why && w.ram_why_len) {
             /* ★★ A guest-RAM refusal is the one fault with an ADDRESS, and the address is
              * the whole diagnosis: the register offset says which write the guest was
              * making, and this says which of the guest's own pointers we would not
@@ -1126,6 +1137,26 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.reads, a.writes, a.boot_reg_reads, a.rom_reads, a.gsp_reads,
                 a.gsp_writes, a.unclaimed_reads, a.unclaimed_writes,
                 a.faults, a.ram_refusals, s->irq_requests_dropped);
+
+    /*
+     * ★★★ #146 — THE FRAMEBUFFER LINE, printed unconditionally INCLUDING when every number
+     * is zero, for the reason every other unconditional block here is: "no line appeared"
+     * is what a silently-dead reporter looks like.
+     *
+     * `fb refusals` is the one to read.  A dropped framebuffer write used to have no
+     * symptom at all until kbusVerifyBar2 reported NV_ERR_MEMORY_ERROR hundreds of
+     * operations later; this number is that fact, at teardown, in one place.
+     *
+     * `window drops` counts the two GMMU-TRANSLATED windows, which this port genuinely has
+     * no address model for.  They are separate numbers because they are separate findings:
+     * one says "we are not there yet", the other says "we are there and we lost bytes".
+     */
+    info_report("nvkvm: framebuffer: %" PRIu64 " reads / %" PRIu64 " writes served through "
+                "the BAR0 moving window (%" PRIu64 " window register reads / %" PRIu64
+                " writes), fb refusals %" PRIu64 ", translated-window drops %" PRIu64
+                "r/%" PRIu64 "w, resident %" PRIu64 " bytes",
+                a.fb_reads, a.fb_writes, a.bar0_window_reads, a.bar0_window_writes,
+                a.fb_refusals, a.fb_window_reads, a.fb_window_writes, a.fb_resident_bytes);
 
     /*
      * ★★★ THE LIST.  Printed unconditionally, INCLUDING when it is empty, because "no line

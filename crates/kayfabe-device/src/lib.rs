@@ -52,6 +52,7 @@
 
 pub mod abi;
 pub mod faultbuffer;
+pub mod fbwin;
 pub mod ga10x;
 pub mod guestsysinfo;
 pub mod inert;
@@ -81,6 +82,13 @@ pub use plane::{
     Counters, NanoClock, PlaneResidue, ReadOutcome, RefusingRam, RegPlane, SteppingClock,
     WriteOutcome,
 };
+
+/// ★★★ The framebuffer port and the BAR0 moving window's register, re-exported —
+/// [`RegPlane::set_fb`]'s argument type and the vocabulary a shell needs to install it.
+///
+/// Same argument as [`GuestRam`]'s re-export one paragraph down: `set_fb` is *this* crate's
+/// seam, so a shell plugging into it should not have to name a third crate to do so.
+pub use fbwin::{Bar0Window, FbRefused, FbStore, RefusingFb, SparseFb};
 
 /// ★ The guest-RAM port, re-exported — [`RegPlane::set_ram`]'s argument type.
 ///
@@ -207,6 +215,22 @@ pub struct ChipProfile {
     /// window moved between generations, and a plane that hard-codes it is a plane the
     /// second generation edits.
     pub pramin_window: RegSpan,
+    /// ★★★ **Where `NV_PBUS_BAR0_WINDOW` — the register that POSITIONS
+    /// [`ChipProfile::pramin_window`] — sits in the register aperture.**
+    ///
+    /// On the row for the same reason the window it moves is, and with a sharper edge: the
+    /// two are one mechanism, and a port that had the aperture without the register would
+    /// serve a *fixed* view of framebuffer address zero while the guest believed it had
+    /// moved the window. See [`crate::fbwin::Bar0Window`] for the field layout and for why
+    /// the register must be a real read-write latch rather than a decoded write sink.
+    ///
+    /// ⊘ **Zero means this chip has no BAR0 moving window**, the same spelling
+    /// [`ChipProfile::pci_bar_len`] and [`ChipProfile::fb_window`] already use for *"this
+    /// aperture is not present"*. A chip declaring a `pramin_window` and no register to
+    /// move it is refused at realize ([`ChipError::WindowWithoutItsRegister`]) — the two
+    /// halves are useless apart and a row that carried only one is a row somebody stopped
+    /// editing halfway.
+    pub bar0_window_reg: u64,
     /// The VBIOS parse path this generation's driver speaks.
     pub vbios_wire: VbiosWire,
     /// How many message-signalled interrupt vectors the device offers.
@@ -514,6 +538,21 @@ pub enum ChipError {
         /// The aperture's length.
         aperture: u64,
     },
+    /// ★★★ The chip declares a `PRAMIN` window and **no `NV_PBUS_BAR0_WINDOW` register to
+    /// move it**, or the register and no window.
+    ///
+    /// The two halves are one mechanism: the register selects which framebuffer page the
+    /// aperture shows. A row with only the aperture would serve a *fixed* view of
+    /// framebuffer address zero while the guest believed it had moved the window — every
+    /// access mis-addressed, nothing logged, and the first symptom hundreds of operations
+    /// later. A row with only the register would latch a value nothing reads. Refused at
+    /// realize, because a half-filled row is what an interrupted edit leaves behind.
+    WindowWithoutItsRegister {
+        /// The `PRAMIN` window's length, `0` if the row declares none.
+        window_len: u64,
+        /// The `NV_PBUS_BAR0_WINDOW` offset, `0` if the row declares none.
+        reg_off: u64,
+    },
 }
 
 impl core::fmt::Display for ChipError {
@@ -543,6 +582,16 @@ impl core::fmt::Display for ChipError {
             Self::OutsideAperture { off, aperture } => write!(
                 f,
                 "offset {off:#x} lies outside the {aperture:#x}-byte register aperture"
+            ),
+            Self::WindowWithoutItsRegister {
+                window_len,
+                reg_off,
+            } => write!(
+                f,
+                "this chip declares a PRAMIN window of {window_len:#x} bytes and a \
+                 NV_PBUS_BAR0_WINDOW register at {reg_off:#x}; exactly one of them is zero, \
+                 and the two are one mechanism — an aperture nothing can move shows \
+                 framebuffer address zero forever, and says nothing while it does"
             ),
             Self::BarTableDisagreesWithAperture { bar_len, aperture } => write!(
                 f,

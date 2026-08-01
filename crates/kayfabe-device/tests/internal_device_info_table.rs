@@ -847,6 +847,7 @@ fn bad_chip(
         ptimer: g.ptimer,
         rom_window: g.rom_window,
         pramin_window: g.pramin_window,
+        bar0_window_reg: g.bar0_window_reg,
         vbios_wire: g.vbios_wire,
         msix_vectors: g.msix_vectors,
         gsp_model: g.gsp_model,

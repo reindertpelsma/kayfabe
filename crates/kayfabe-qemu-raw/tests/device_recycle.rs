@@ -138,6 +138,21 @@ const NOBODYS_OFFSET: u64 = 0x0055_5555;
 /// Now it is used for what it actually is.
 const PRAMIN_OFFSET: u64 = 0x0077_7777;
 
+/// `NV_PBUS_BAR0_WINDOW` — the register that positions the window above
+/// (`ogkm-580: src/common/inc/swref/published/maxwell/gm107/dev_bus.h:43`).
+///
+/// ★ Transcribed here rather than read off `ChipProfile::bar0_window_reg`, for this file's
+/// standing reason: it must be the **second** description, the one that disagrees when the
+/// first one moves.
+const BAR0_WINDOW_REG: u64 = 0x0000_1700;
+
+/// A window base this device's reset value is not: `BASE = 0x2EFBA`, `TARGET = VID_MEM`.
+///
+/// ★ The literal is the one the 2026-08-01 boot measured RM programming at
+/// `kbusVerifyBar2_GM107` (`bar0TestAddr = 0x2_EFBA_E000`), so the fixture soils the window
+/// with an address a real guest really used.
+const BAR0_WINDOW_DIRTY: u64 = 0x0002_EFBA;
+
 fn cfg() -> ShimConfig {
     ShimConfig {
         shareable_ram: true,
@@ -498,6 +513,11 @@ fn corrupt_to(m: &Machine, d: &Device, upto: BootPoint) {
         let _ = d.regs.write(0, NOBODYS_OFFSET + 8, 4, 0xDEAD_BEEF);
     }
     if want(BootPoint::FbWindowScribbled) {
+        // ★★★ `#146`: MOVE the window first, then scribble through it. Writing at the
+        // reset base would leave `PlaneResidue::bar0_window` equal to a cold device's and
+        // the residue member would be carried but never exercised — the shape this file's
+        // own comment calls out two screens down.
+        let _ = d.regs.write(0, BAR0_WINDOW_REG, 4, BAR0_WINDOW_DIRTY);
         let _ = d.regs.read(0, PRAMIN_OFFSET, 4);
         let _ = d.regs.write(0, PRAMIN_OFFSET + 8, 4, 0xDEAD_BEEF);
     }
@@ -594,10 +614,28 @@ fn the_dirty_state_is_visible_through_the_comparison_the_property_uses() {
          why it is a fact of its own and not an unclaimed register"
     );
     assert!(
-        soiled.register_residue.counters.fb_window_reads > 0
-            && soiled.register_residue.counters.fb_window_writes > 0,
-        "…and counted, in both directions: {:?}",
+        soiled.register_residue.counters.fb_reads > 0
+            && soiled.register_residue.counters.fb_writes > 0,
+        "…and counted, in both directions. ★ Since `#146` the shell installs a real \
+         framebuffer store, so a `PRAMIN` access is SERVED rather than dropped and the \
+         counters that move are `fb_reads`/`fb_writes`: {:?}",
         soiled.register_residue.counters
+    );
+    // ★★★ `#146`'s two residue members, asserted BY NAME for the reason the paragraph
+    // above gives — a member nothing dirties leaves the struct-level `assert_ne!` green on
+    // the strength of a sibling, which is exactly how `fb_window` and `fault_buffers` sat
+    // outside every snapshot in this file for a week.
+    assert_ne!(
+        soiled.register_residue.bar0_window,
+        kayfabe_device::Bar0Window::new(),
+        "★★ the BAR0 moving window must have MOVED — a reloaded device whose window still \
+         pointed where the previous guest left it is not indistinguishable from a cold one"
+    );
+    assert!(
+        soiled.register_residue.fb_resident_bytes > 0,
+        "★★★ and the store must be HOLDING the previous guest's bytes. This is the member \
+         whose survival across a reload would be a cross-life information leak: the next \
+         guest reads the last one's page tables through this very window."
     );
     assert_eq!(
         soiled.register_residue.fault_buffers_registered, 0,
