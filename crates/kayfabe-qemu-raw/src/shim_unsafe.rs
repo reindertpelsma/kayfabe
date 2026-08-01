@@ -130,6 +130,11 @@ pub struct KayfabeRegWrite {
     pub claimed: i32,
     /// Non-zero if the status-queue interrupt wants announcing.
     pub raise_status_irq: i32,
+    /// ★★★ `#151`: non-zero if a vector is pending in the CPU interrupt tree and a
+    /// message-signalled interrupt should be delivered. See
+    /// [`kayfabe_device::plane::WriteOutcome::raise_cpu_intr`] for why this is a second
+    /// field and not the one above.
+    pub raise_cpu_intr: i32,
 }
 
 impl KayfabeRegWrite {
@@ -164,6 +169,7 @@ impl KayfabeRegWrite {
             commands: o.commands as u32,
             claimed: i32::from(o.claimed),
             raise_status_irq: i32::from(o.raise_status_irq),
+            raise_cpu_intr: i32::from(o.raise_cpu_intr),
         }
     }
 }
@@ -592,11 +598,26 @@ impl QemuHost for ForeignHost {
         wire(rc, "copying into a reported region")
     }
 
-    fn signal_msix(&self, _vector: u16) -> Result<(), HostError> {
-        Err(HostError::Unsupported(
-            "message-signalled interrupts are not wired at this stage; the device realizes \
-             its memory plane and does not yet raise vectors",
-        ))
+    /// ★★★ `#151`: the vector is raised, through the host's own op.
+    ///
+    /// ⚠ It used to refuse **without calling `signal_msix` at all**, which is a shape worth
+    /// naming: the op existed in the vtable and was presence-checked by
+    /// [`KayfabeHostOps::complete`], so every gate that asked *"is the host op wired"*
+    /// answered yes while this side answered `Unsupported` regardless of what the host
+    /// could do. A stub on the near side of a validated seam is invisible to the seam's own
+    /// checks.
+    ///
+    /// ⊘ The host is allowed to refuse — it does, by name, when the guest has not enabled
+    /// its own vector table — and that refusal is carried through as a refusal rather than
+    /// swallowed. A completion notifier that is told a vector went out when none did is the
+    /// exact lie this method was written to avoid telling.
+    fn signal_msix(&self, vector: u16) -> Result<(), HostError> {
+        let f = op!(self, signal_msix);
+        // SAFETY: a validated primitive with no pointer arguments at all — the device
+        // handle is the one this `QemuHost` was built around, and the vector is a scalar
+        // the host bounds-checks against its own table size before using it as an index.
+        let rc = unsafe { f(self.dev.0, vector) };
+        wire(rc, "raising a message-signalled interrupt")
     }
 }
 

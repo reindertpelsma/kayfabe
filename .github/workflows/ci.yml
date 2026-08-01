@@ -1106,6 +1106,22 @@ jobs:
       #   [Q5-b] `kayfabe_shim_regs_detach_ram(regs)` — the withdrawal half. One handle, no
       #          return value, no out-parameter.
       #
+      # ★★★ `kayfabe-qemu-raw` 46 -> 47 AT `#151`, 2026-08-01 — interrupt delivery. ONE
+      # relaxation, and it is a DELETION of a stub rather than new surface:
+      #
+      #   [151-a] `QemuHost::signal_msix` — the `unsafe { f(self.dev.0, vector) }` that
+      #           calls the host vtable's `signal_msix`. ⚠ The method already existed and
+      #           already satisfied every gate; what it did was return `Unsupported` WITHOUT
+      #           EVER CALLING THE OP. So the count moves by one because a call appeared
+      #           where the vtable slot had been presence-checked and never dialled — the
+      #           gates asked "is the op wired" and got yes from `KayfabeHostOps::complete`
+      #           while this side refused regardless.
+      #
+      # ★ NO POINTERS AT ALL, which makes this the mildest shape in the file: the arguments
+      # are the device handle this `QemuHost` was built around and a `u16` the C bounds-checks
+      # against its own table size before indexing. Nothing is borrowed, nothing outlives the
+      # call, and there is no out-parameter.
+      #
       # ★ NO NEW SHAPE, and that is the thing to check when a ratchet moves. Both are the
       # [Q4-a] shape (an entry point whose whole relaxation is the handle borrow) and
       # neither adds a pointer that outlives the call: the port this installs holds an
@@ -1142,7 +1158,7 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:86 kayfabe-qemu-raw:46"
+          AUDITED="kayfabe-linux-raw:86 kayfabe-qemu-raw:47"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

@@ -143,6 +143,7 @@ use kayfabe_mmu::walker::{FbRead, translate_from_entry};
 use kayfabe_trace::Faulted;
 
 use crate::bar2::{BarPdeLog, BarPdes};
+use crate::cpuintr::CpuIntrTree;
 use crate::fbwin::{Bar0Window, FbRefused, FbStore, RefusingFb};
 use crate::{ChipError, ChipProfile, FbWindow};
 
@@ -324,6 +325,26 @@ pub struct Counters {
     pub ram_refusals: u64,
     /// Times a write asked for the status-queue interrupt to be announced.
     pub irq_requests: u64,
+    /// Accesses to the `CPU_INTR` tree (`crate::cpuintr`) — reads and writes together.
+    ///
+    /// ★ One counter for both directions on purpose: the diagnostic question is *"did the
+    /// guest drive this block at all"*, and a boot in which it is zero means the driver
+    /// never reached `_osVerifyInterrupts`, whatever else went wrong.
+    pub cpu_intr_accesses: u64,
+    /// ★★★ `CPU_INTR_LEAF_TRIGGER` writes that latched a vector — i.e. the number of
+    /// message-signalled interrupts this device asked the shell to deliver.
+    ///
+    /// `[measured]` the C oracle's `cap1` has **exactly one** across 359 062 records
+    /// (`crates/kayfabe-crec/tests/cap1_differential.rs:31`), so a healthy boot's expected
+    /// value here is 1, not 0 and not many.
+    pub cpu_intr_raises: u64,
+    /// ★★★ Of those, how many real silicon would have **masked** — see
+    /// [`crate::cpuintr::TriggerOutcome::would_be_masked`].
+    ///
+    /// ⊘ This device raises anyway, deliberately. A non-zero value here is not a fault; it
+    /// is the evidence that the enable bookkeeping and the guest's expectations disagree,
+    /// and it is the only thing that could ever justify turning gating on.
+    pub cpu_intr_masked: u64,
     /// Commands decoded off the guest's command queue.
     pub commands: u64,
     /// ★★ Of those, the ones **no policy answered** — refused by name by the FSM. See
@@ -407,6 +428,12 @@ struct PlaneState {
     /// window resolves**, so a read and a write on two vCPUs cannot observe half of a
     /// re-point.
     bar0_window: Bar0Window,
+    /// ★★★ The `CPU_INTR` tree — pending and enable bits for the Turing-or-later interrupt
+    /// block. Under the same lock as everything else here, because the guest's ISR reads
+    /// `TOP` and `LEAF` from one vCPU while another may still be inside the trigger write
+    /// that set them, and a torn view of that pair is a lost interrupt. See
+    /// [`crate::cpuintr`].
+    cpu_intr: CpuIntrTree,
     /// The framebuffer this device advertises, as a port. [`RefusingFb`] until a shell
     /// installs one — the exact shape [`PlaneState::ram`] already has.
     fb: Box<dyn FbStore>,
@@ -451,6 +478,15 @@ pub enum ReadOutcome {
     /// [`Bar0Window`] for why answering it with anything other than the guest's own word
     /// breaks the guest's read-modify-write.
     Bar0Window(u64),
+    /// ★★★ A `CPU_INTR` tree register — pending bits, enable bits, or the write-only
+    /// trigger reading as zero. See [`crate::cpuintr`].
+    ///
+    /// A variant of its own, and not folded into [`ReadOutcome::Gsp`], because the guest's
+    /// **interrupt service routine** is the reader: `osWaitForInterrupt` decides whether an
+    /// interrupt happened at all from one of these reads (`ogkm-580: os_sanity.c:57,101`),
+    /// so a boot in which this count is zero and a vector was raised is a boot in which the
+    /// ISR never looked — a completely different diagnosis from "we answered wrong".
+    CpuIntr(u64),
     /// ★★★ Framebuffer bytes, served through the BAR0 moving window.
     Fb {
         /// Which window (always [`FbWindow::Pramin`] today).
@@ -504,7 +540,8 @@ impl ReadOutcome {
             | Self::Ptimer(v)
             | Self::Rom(v)
             | Self::Gsp(v)
-            | Self::Bar0Window(v) => v,
+            | Self::Bar0Window(v)
+            | Self::CpuIntr(v) => v,
             Self::Fb { value, .. } => value,
             Self::GspFault(_)
             | Self::FbWindow(_)
@@ -560,6 +597,17 @@ pub struct WriteOutcome {
     pub fb_refusal: Option<FbRefused>,
     /// The status-queue interrupt should be announced to the guest.
     pub raise_status_irq: bool,
+    /// ★★★ The guest wrote `CPU_INTR_LEAF_TRIGGER` and a vector is now pending: **deliver a
+    /// message-signalled interrupt**.
+    ///
+    /// ⚠ A second field beside [`WriteOutcome::raise_status_irq`] and not the same one,
+    /// even though today both end in one `msix_notify`. They are two different *causes* —
+    /// one is the emulated GSP announcing that it put something on the status queue, the
+    /// other is the guest asking the device to interrupt the guest — and a boot that
+    /// delivered the wrong number of vectors must be diagnosable as to which. Folding them
+    /// would make `Counters::irq_requests` and `Counters::cpu_intr_raises` two names for
+    /// one number and lose exactly that.
+    pub raise_cpu_intr: bool,
     /// How many transitions fired.
     pub transitions: usize,
     /// How many commands were decoded off the command queue.
@@ -584,6 +632,7 @@ impl WriteOutcome {
             bar2_refusal: None,
             fb_refusal: None,
             raise_status_irq: false,
+            raise_cpu_intr: false,
             transitions: 0,
             commands: 0,
         }
@@ -716,6 +765,9 @@ struct PlaneCounters {
     faults: AtomicU64,
     ram_refusals: AtomicU64,
     irq_requests: AtomicU64,
+    cpu_intr_accesses: AtomicU64,
+    cpu_intr_raises: AtomicU64,
+    cpu_intr_masked: AtomicU64,
 }
 
 /// How many level rows [`RegPlane::bar2_phys`] will ask a format about when it maps a
@@ -837,6 +889,7 @@ impl RegPlane {
                 unclaimed: Vec::new(),
                 fb_window: Vec::new(),
                 bar0_window: Bar0Window::new(),
+                cpu_intr: CpuIntrTree::new(),
                 fb: Box::new(RefusingFb),
                 mmu: None,
             }),
@@ -986,6 +1039,9 @@ impl RegPlane {
             faults,
             ram_refusals,
             irq_requests,
+            cpu_intr_accesses,
+            cpu_intr_raises,
+            cpu_intr_masked,
         } = &self.c;
         Counters {
             reads: g(reads),
@@ -1012,6 +1068,9 @@ impl RegPlane {
             faults: g(faults),
             ram_refusals: g(ram_refusals),
             irq_requests: g(irq_requests),
+            cpu_intr_accesses: g(cpu_intr_accesses),
+            cpu_intr_raises: g(cpu_intr_raises),
+            cpu_intr_masked: g(cpu_intr_masked),
         }
     }
 
@@ -1076,6 +1135,11 @@ impl RegPlane {
             unclaimed,
             fb_window,
             bar0_window,
+            // ★ Carried out as three counters rather than as state. The tree's own arrays
+            // are transient — every bit the guest sets it clears again in the same ISR —
+            // so a snapshot of them at teardown says nothing, while "how many vectors did
+            // this life ask for, and would any have been masked" is the whole question.
+            cpu_intr: _,
             // ★ The PORT is the shell's wiring, like `ram` and `policy`; what it HOLDS is
             // device state and is carried out as `fb_resident_bytes` just below.
             fb,
@@ -1203,6 +1267,7 @@ impl RegPlane {
             ReadOutcome::Gsp(_) => self.c.gsp_reads.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::GspFault(_) => self.c.faults.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::Bar0Window(_) => self.c.bar0_window_reads.fetch_add(1, Ordering::Relaxed),
+            ReadOutcome::CpuIntr(_) => self.c.cpu_intr_accesses.fetch_add(1, Ordering::Relaxed),
             ReadOutcome::FbWindow(w) => {
                 self.note_fb_window(w, off);
                 self.c.fb_window_reads.fetch_add(1, Ordering::Relaxed)
@@ -1252,6 +1317,17 @@ impl RegPlane {
         {
             let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
             return ReadOutcome::Bar0Window(mask(u64::from(s.bar0_window.raw()), size));
+        }
+        // ★★★ THE INTERRUPT TREE, asked before the GSP model for the same reason the
+        // window latch is: `0x00B8_1000`-`0x00B8_1643` is a *register block the chip
+        // declares*, and a defaulted zero out of it is not a harmless unknown — it is the
+        // ISR being told "no vector is pending" at the one instant the answer decides
+        // whether the adapter initialises at all. See `crate::cpuintr`.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && let Some(reg) = crate::cpuintr::decode(off)
+        {
+            let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            return ReadOutcome::CpuIntr(mask(u64::from(s.cpu_intr.read(reg)), size));
         }
         // ★★★ Device memory, not a register — asked BEFORE the GSP model and before the
         // unclaimed arm, because a framebuffer window that some future model happened to
@@ -1548,6 +1624,34 @@ impl RegPlane {
             s.bar0_window.set_raw(val as u32);
             return WriteOutcome {
                 claimed: true,
+                ..WriteOutcome::nothing()
+            };
+        }
+        // ★★★ THE INTERRUPT TREE. Classified here, beside the window latch and before the
+        // model's `decode_reg` gate, because the model does not own these offsets and a
+        // write that fell through would be DROPPED — and the dropped write would be
+        // `CPU_INTR_LEAF_TRIGGER` itself, i.e. the entire request. See `crate::cpuintr`.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && let Some(reg) = crate::cpuintr::decode(off)
+        {
+            self.c.cpu_intr_accesses.fetch_add(1, Ordering::Relaxed);
+            let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let fired = s.cpu_intr.write(reg, val as u32);
+            drop(s);
+            // ⊘ `out_of_range` raises NOTHING: the guest named a leaf row this chip does
+            // not have, so no pending bit was latched, and a vector delivered with nothing
+            // pending would send the guest's ISR looking for an interrupt that is not
+            // there. It is counted as an access and no more.
+            let raise = fired.is_some_and(|t| !t.out_of_range);
+            if raise {
+                self.c.cpu_intr_raises.fetch_add(1, Ordering::Relaxed);
+            }
+            if fired.is_some_and(|t| t.would_be_masked && !t.out_of_range) {
+                self.c.cpu_intr_masked.fetch_add(1, Ordering::Relaxed);
+            }
+            return WriteOutcome {
+                claimed: true,
+                raise_cpu_intr: raise,
                 ..WriteOutcome::nothing()
             };
         }

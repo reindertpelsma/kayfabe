@@ -443,6 +443,27 @@ pub enum WantedTable {
     /// for what refusing *leaves behind* — a GPU group whose `pGlobalVASpace` was assigned
     /// before its constructor failed — and not for what it returns.
     GvaspaceServerReservedPdes,
+    /// `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`0x90f10106`) — ★★★ **the same
+    /// publication as [`WantedTable::GvaspaceServerReservedPdes`], from the arm of the same
+    /// function that a real boot actually takes.**
+    ///
+    /// `gvaspaceCopyServerRmReservedPdesToServerRm_IMPL` branches on whether there is a
+    /// resserv call context (`ogkm-580: gpu_vaspace.c:4058`): no context is the GPU group's
+    /// global VAS and sends the `NV2080` wrapper; a context is a VA space under a client's
+    /// **device**, and sends this id directly. Every device default VA space takes the
+    /// second arm.
+    ///
+    /// ⚠ Serving one and not the other looked like completeness and was not. `[measured]`
+    /// run `stateload2` at `7819839`: the `NV2080` id had been served for a rung and the
+    /// boot still lost its device VA space, its CE utility channel and its framebuffer
+    /// scrubber to this one — see [`kayfabe_abi::gvaspacepdes`] for the ten-line cascade
+    /// off `/workspace/bench/run_stateload2_dmesg.log:12-30`.
+    ///
+    /// ⊘ It shares the decode, the validation and the re-encode with the `NV2080` arm and
+    /// deliberately has no logic of its own: the payload is byte-identical
+    /// (`ctrl2080internal.h:1906-1908` wraps exactly this one member), so a second copy
+    /// could only ever disagree with the first.
+    GvaspaceServerReservedPdesClient,
     /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO` — ★★★ the **sixth**
     /// mandatory GR static-info control, and the one this port refused to guess at.
     ///
@@ -484,7 +505,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 21] = [
+    pub const ALL: [WantedTable; 22] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -505,6 +526,7 @@ impl WantedTable {
         Self::GrFecsRecordSize,
         Self::GrPdbProperties,
         Self::GvaspaceServerReservedPdes,
+        Self::GvaspaceServerReservedPdesClient,
         Self::GrContextBuffersInfo,
     ];
 
@@ -553,6 +575,9 @@ impl WantedTable {
             Self::GvaspaceServerReservedPdes => {
                 gvaspacepdes::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER
             }
+            Self::GvaspaceServerReservedPdesClient => {
+                gvaspacepdes::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES
+            }
             Self::GrContextBuffersInfo => {
                 grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO
             }
@@ -584,7 +609,9 @@ impl WantedTable {
             Self::GrGlobalSmOrder => grstatic::SM_ORDER_PARAMS_SIZE,
             Self::GrFecsRecordSize => grstatic::FECS_RECORD_SIZE_PARAMS_SIZE,
             Self::GrPdbProperties => grstatic::PDB_PROPERTIES_PARAMS_SIZE,
-            Self::GvaspaceServerReservedPdes => gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE,
+            Self::GvaspaceServerReservedPdes | Self::GvaspaceServerReservedPdesClient => {
+                gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE
+            }
             Self::GrContextBuffersInfo => grstatic::CONTEXT_BUFFERS_INFO_PARAMS_SIZE,
         }
     }
@@ -978,7 +1005,8 @@ impl CommandPolicy for InitTablePolicy {
             // non-`NV_OK` status (`ogkm-580: rpc.c:11066-11070`), so the guest's own
             // `globalCopyParams` is untouched and `NV_ASSERT_OK_OR_RETURN` fails at
             // `gpu_vaspace.c:4148` by name.
-            WantedTable::GvaspaceServerReservedPdes => {
+            WantedTable::GvaspaceServerReservedPdes
+            | WantedTable::GvaspaceServerReservedPdesClient => {
                 let at = req.params_at;
                 let Ok(pdes) = gvaspacepdes::decode_server_reserved_pdes(
                     &cmd.payload[at..at + gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE],

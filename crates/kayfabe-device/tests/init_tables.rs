@@ -276,7 +276,10 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // array is not served at all, and the guest gets the ordinary named refusal. This test
     // pins the two things that remain assertions rather than construction — the size, and
     // that no two variants claim one id.
-    assert_eq!(WantedTable::ALL.len(), 21, "the served universe's size");
+    // ★ 21 -> 22 at `#151`: `0x90f10106`, the client-context arm of the same page-directory
+    // publication `0x20800a9f` carries. Two ids, one struct, one decode — see
+    // `kayfabe_abi::gvaspacepdes`.
+    assert_eq!(WantedTable::ALL.len(), 22, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();
@@ -350,4 +353,69 @@ fn no_control_this_port_serves_can_be_cached_permanently_by_the_guest() {
     assert!(kayfabe_device::inittables::is_gss_legacy(
         NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE | 0x0000_8000
     ));
+}
+
+/// ★★★ **`#151`: both ids of the page-directory publication reach one decode, and the
+/// client-context one is the one a real boot needs.**
+///
+/// `gvaspaceCopyServerRmReservedPdesToServerRm_IMPL` branches on the resserv call context
+/// (`ogkm-580: gpu_vaspace.c:4058`): no context sends `0x20800a9f`, a context sends
+/// `0x90f10106` directly (`:5160-5190`). ⚠ Serving only the first looked complete and was
+/// not — `[measured]` run `stateload2` at `7819839` shows `0x90f10106` refused and the
+/// device VA space, the CE utility channel and the framebuffer scrubber all lost with it
+/// (`/workspace/bench/run_stateload2_dmesg.log:12-30`).
+///
+/// ⊘ The test is written against the *equivalence*, not against one id answering: two
+/// arms that decoded the same bytes differently would be a port whose page-directory
+/// publication depended on which caller made it, which is exactly the class of bug two
+/// copies of a decoder produce.
+#[test]
+fn both_ids_of_the_page_directory_publication_answer_identically() {
+    use kayfabe_abi::gvaspacepdes as g;
+
+    // The publication RM actually makes: `SPLIT_VAS_SERVER_RM_MANAGED_VA_START` = 0x1_0000_0000
+    // over 512 MiB at `pageSize = NVBIT64(21)` (`ogkm-580: g_gpu_vaspace_nvoc.h:99-100`,
+    // `gpu_vaspace.c:64`), with the four levels a GA106 publishes.
+    let mut params = vec![0u8; g::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE];
+    params[0x08..0x10].copy_from_slice(&(1u64 << 21).to_le_bytes()); // pageSize
+    params[0x10..0x18].copy_from_slice(&0x1_0000_0000u64.to_le_bytes()); // virtAddrLo
+    params[0x18..0x20].copy_from_slice(&0x1_1FFF_FFFFu64.to_le_bytes()); // virtAddrHi
+    params[0x20..0x24].copy_from_slice(&4u32.to_le_bytes()); // numLevelsToCopy
+    for (i, shift) in [47u8, 38, 29, 21].into_iter().enumerate() {
+        let at = 0x28 + i * g::LEVEL_SIZE;
+        params[at..at + 8].copy_from_slice(&(0x0300_0000u64 + (i as u64) * 0x1000).to_le_bytes());
+        params[at + 8..at + 16].copy_from_slice(&4096u64.to_le_bytes());
+        params[at + 20] = shift;
+    }
+
+    let ids = [
+        g::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER,
+        g::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+    ];
+    let mut bodies = Vec::new();
+    for cmd in ids {
+        let mut c = command(cmd, params.len());
+        c.payload[40..40 + params.len()].copy_from_slice(&params);
+        let r = policy().respond(&c).expect("both ids are served");
+        assert_eq!(r.rpc_result, 0, "cmd {cmd:#x} was refused");
+        // The re-encoded params, which must be the guest's own publication back.
+        assert_eq!(&r.body[40..40 + params.len()], &params[..], "cmd {cmd:#x}");
+        bodies.push(r.body[40..40 + params.len()].to_vec());
+    }
+    assert_eq!(
+        bodies[0], bodies[1],
+        "the two ids decoded the same bytes differently"
+    );
+
+    // ⊘ And the decode is still load-bearing on BOTH: a publication that contradicts
+    // `ctrl90f1.h`'s own alignment rule is refused, whichever caller made it. Without this
+    // the shared arm would be a fall-through `NV_OK` for any 184 bytes.
+    let mut bad = params.clone();
+    bad[0x10..0x18].copy_from_slice(&0x1_0000_0001u64.to_le_bytes()); // virtAddrLo misaligned
+    for cmd in ids {
+        let mut c = command(cmd, bad.len());
+        c.payload[40..40 + bad.len()].copy_from_slice(&bad);
+        let r = policy().respond(&c).expect("refused, not ignored");
+        assert_ne!(r.rpc_result, 0, "cmd {cmd:#x} accepted a misaligned range");
+    }
 }

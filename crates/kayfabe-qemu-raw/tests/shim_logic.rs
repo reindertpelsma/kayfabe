@@ -497,9 +497,12 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // published page-table roots and the root entry itself. A boot that never received a
     // root and a boot whose walk landed on the wrong byte both end in the guest's
     // NV_ERR_MEMORY_ERROR, and only these numbers tell them apart from outside the process.
+    // ★ 30 -> 33 at `#151`: the CPU interrupt tree's three. A boot that stopped at
+    // `NV_ERR_IRQ_NOT_FIRING` and a boot that never reached the driver's loopback self-test
+    // are the same silence from outside the process without `cpu_intr_raises`.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (30 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (33 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
     );
@@ -898,4 +901,55 @@ fn the_port_writes_guest_memory_where_the_guest_can_see_it() {
     ram.read(BOOT_ARGS_GPA + 8, &mut back)
         .expect("what was written reads back");
     assert_eq!(back, [0xDE, 0xAD, 0xBE, 0xEF]);
+}
+
+/// ★★★ **The header and this archive must agree on the wire ABI, and until `#151` NOTHING
+/// IN THIS TREE CHECKED THAT.**
+///
+/// # `[measured]` — the boot this test would have saved
+///
+/// `#151` bumped `KAYFABE_SHIM_ABI` in `kayfabe_shim.h` to 10 and left
+/// `shim::ABI_VERSION` at 9. Every gate passed, the whole suite passed, the archive built,
+/// the hypervisor linked, and the failure arrived as a **refused boot**:
+///
+/// ```text
+/// qemu-system-x86_64: -device nvkvm-gpu,...: nvkvm: this shim speaks wire ABI 10 and
+/// the archive it was linked against speaks 9; they are from different builds
+/// ```
+///
+/// ⊘ The runtime check did its job — it is the reason this cost one boot rather than a
+/// silent read of four bytes the archive never wrote. But it is the **last** place the
+/// disagreement could have been caught, and a bench boot is the most expensive instrument
+/// this project owns. The two numbers are one fact written twice; this is where they are
+/// made to agree.
+///
+/// ★ It parses the header rather than mirroring it, because a mirrored copy would be a
+/// *third* place to forget. `CARGO_MANIFEST_DIR` reaches the tree the archive is built
+/// from, which is exactly the header `build_qom_shim.sh` copies into the hypervisor.
+#[test]
+fn the_header_and_the_archive_agree_on_the_wire_abi() {
+    let header = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qemu/hw/misc/nvkvm/kayfabe_shim.h");
+    let text = std::fs::read_to_string(&header)
+        .unwrap_or_else(|e| panic!("the overlay header must be readable at {header:?}: {e}"));
+
+    const NEEDLE: &str = "#define KAYFABE_SHIM_ABI ";
+    let line = text
+        .lines()
+        .find(|l| l.starts_with(NEEDLE))
+        .expect("★ kayfabe_shim.h no longer declares KAYFABE_SHIM_ABI — this test has gone blind");
+    let declared: u32 = line[NEEDLE.len()..]
+        .trim()
+        .trim_end_matches('u')
+        .parse()
+        .expect("KAYFABE_SHIM_ABI must be a plain number");
+
+    assert_eq!(
+        declared,
+        kayfabe_qemu_raw::shim::ABI_VERSION,
+        "★ kayfabe_shim.h declares wire ABI {declared} and this archive declares {}. They \
+         are ONE fact written twice, and a build in which they disagree gets as far as the \
+         hypervisor's device line before anything notices.",
+        kayfabe_qemu_raw::shim::ABI_VERSION,
+    );
 }

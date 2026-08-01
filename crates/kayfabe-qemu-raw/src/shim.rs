@@ -99,8 +99,20 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// the aliasing defect one layer up. The virtual address is the region offset the shim
 /// already has, and the sentence crosses in the `fault` pair that already exists.
 ///
+/// ★ Bumped to **10** at `#151`, interrupt delivery, and it is the ABI-3 reason a sixth
+/// time in **both** structures at once: [`KayfabeRegAudit`] gained the interrupt tree's
+/// three counters and [`KayfabeRegWrite`] gained `raise_cpu_intr`. An ABI-9 shim would
+/// allocate both old layouts and this archive would write past the end of each.
+///
+/// ⚠ `[measured]` — this version check is not a formality, and it fired on this very rung:
+/// the first `irq1` boot attempt refused to start with *"this shim speaks wire ABI 10 and
+/// the archive it was linked against speaks 9"*, because the header had been bumped and
+/// this constant had not. ⊘ Without it the boot would have run, the shim would have read
+/// `raise_cpu_intr` out of four bytes the archive never wrote, and the failure would have
+/// been an interrupt delivered — or not — at random.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 9;
+pub const ABI_VERSION: u32 = 10;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -857,6 +869,14 @@ pub struct KayfabeRegAudit {
     pub ram_refusals: u64,
     /// Times a write asked for the status-queue interrupt to be announced.
     pub irq_requests: u64,
+    /// `#151`: accesses to the `CPU_INTR` tree, reads and writes together.
+    pub cpu_intr_accesses: u64,
+    /// `#151`: `CPU_INTR_LEAF_TRIGGER` writes that latched a vector — the number of
+    /// message-signalled interrupts the register plane asked the shell to deliver.
+    pub cpu_intr_raises: u64,
+    /// `#151`: of those, how many real silicon would have masked. See
+    /// `kayfabe_device::cpuintr::TriggerOutcome::would_be_masked`.
+    pub cpu_intr_masked: u64,
     /// Commands decoded off the guest's command queue.
     pub commands: u64,
     /// ★★ Of those, the ones **no policy answered**, and which the emulated GSP therefore
@@ -1185,6 +1205,9 @@ impl Regs {
             faults,
             ram_refusals,
             irq_requests,
+            cpu_intr_accesses,
+            cpu_intr_raises,
+            cpu_intr_masked,
             commands,
             commands_unserviced,
         } = self.plane.counters();
@@ -1245,6 +1268,9 @@ impl Regs {
             faults,
             ram_refusals,
             irq_requests,
+            cpu_intr_accesses,
+            cpu_intr_raises,
+            cpu_intr_masked,
             commands,
             commands_unserviced,
             unserviced_len: sample.len() as u64,
