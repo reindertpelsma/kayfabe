@@ -188,9 +188,10 @@ further back: `pHeap` is `memmgrGetDeviceSuballocator`'s answer
 — which does not complete, because **`NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` (`0x20800301`)
 is refused at `mem_mgr.c:625`**, followed by `memmgrRegisterSuspendCallbacks` at `:777`.
 
-⇒ **The next rung is `0x20800301`**, not another alloc class. `[measured]` — this is a
-differential between two boots that differ by one commit, which is the only reason it can
-be stated as cause rather than as correlation.
+⇒ **The next rung is `0x20800301`**, not another alloc class. `[measured]` 2026-08-01 —
+this is a differential between the `alloc1` boot at rev `2ced035` and the `alloc2` boot at
+rev `a6412c0`, two boots one commit apart, which is the only reason it can be stated as
+cause rather than as correlation.
 
 ## 8. ★ The archive can now name its own revision
 
