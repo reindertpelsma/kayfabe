@@ -1,8 +1,9 @@
 # The execution plane — the increments from here to a guest CE copy on the host GPU
 
-> **Status: PLAN, 2026-08-01.** Written at master `cf3aae9`. Every row is `[src]` at that
-> revision, `[measured]` with a named run, or explicitly `[assumed]`. Increment **E0** is
-> built and evidenced in this document; **E1–E6** are not built.
+> **Status: PLAN, 2026-08-01.** Written at master `cf3aae9`; increment **E0** built and
+> measured at `e10a6bf` on the RTX 3060 bench. Every row is `[src]` at `cf3aae9`,
+> `[measured]` with a named run and revision, or explicitly `[assumed]`. **E0b and E1–E6
+> are not built.**
 
 ## 0. Why this document exists now, and what it replaces
 
@@ -13,10 +14,27 @@ first forwarded operation, and ordered them with this judgement:
 > point paying for them until the emulated boot reaches a doorbell, because until then
 > there is no guest intent to forward.
 
-**That ordering is now wrong, and the boot is what refuted it.** Since `419afe8` the boot
-has climbed past `RmInitAdapter` and stopped at `memmgrInitCeUtils_IMPL:4158`, which calls
-`memmgrTestCeUtils` unconditionally on GA106: write `0xAABBCCDD` to FB, `memmgrMemCopy(…
-PREFER_CE)`, read back, assert equal. Four separate walls before it —
+**That ordering is now wrong, and the boot is what refuted it.** `[measured]` 2026-08-01 at
+rev `e10a6bf` on the RTX 3060 box — `docs/reference/bench_evidence/e10a6bf_run_e0real2_dmesg.log`,
+reproduced identically in the negative-control run, so this is not an artefact of the
+change this document ships:
+
+```
+NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, status: 56
+NVRM: … NV_ERR_GENERIC … from _memmgrMemUtilsScrubInitScheduleChannel(…) @ mem_utils.c:2006
+NVRM: … from memmgrMemUtilsChannelSchedulingSetup(…)                    @ mem_utils_gm107.c:1027
+NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK            @ ce_utils.c:304
+NVRM: … from objCreate(&pScrubber->pCeUtils, …)                         @ mem_scrub.c:181
+NVRM: … from memmgrScrubHandlePostSchedulingEnable_HAL(…)               @ mem_mgr.c:487
+NVRM: nvAssertFailedNoLog: Assertion failed: 0                          @ kernel_fifo.c:3129
+NVRM: RmInitNvDevice: *** Cannot load state into the device
+```
+
+The boot has climbed past `RmInitAdapter`'s early classes and now dies constructing
+`CeUtils` for the **scrubber** — one `NV_ERR_NOT_SUPPORTED` on a channel *schedule*
+(`0x56`) propagating to the fatal `kernel_fifo.c:3129` assert. ★ That single line is why
+the sweep's amputation rule does not apply here: `kernel_fifo.c:3126-3131` is fatal for
+**any** non-`NV_OK`. Four separate walls before it —
 `0xa06f0103` (schedule), `0xa06f0104` (bind), `0xc36f0108` (token) and the index-35 event
 arming — were diagnosed at `66230a1` as **one requirement asked four times**: put a channel
 on a runlist, arm its completion, hand back its doorbell.
@@ -62,7 +80,8 @@ that makes a green mean something. A row whose acceptance has no control is mark
 
 | # | increment | acceptance that could fail | control |
 |---|---|---|---|
-| **E0** | the crates join: `kayfabe-qemu-raw` can name `kayfabe-isolate-host`, and a runtime selector chooses the isolate plane. A guest `GSP_RM_ALLOC` materializes a **real sandboxed child** that completes RM bring-up on the host GPU | a live boot with `KAYFABE_ISOLATES=real` shows a `kayfabe-isolate` child of QEMU holding `/dev/nvidiactl` + `/dev/nvidia0` | the **same binary**, variable unset → no child, no fds |
+| **E0** ✅ | the crates join: `kayfabe-qemu-raw` can name `kayfabe-isolate-host`, and a runtime selector chooses the isolate plane. Realizing the device materializes a **real sandboxed child** that completes RM bring-up on the host GPU | a live boot with `KAYFABE_ISOLATES=real` shows a `kayfabe-isolate` child of QEMU holding `/dev/nvidiactl` + `/dev/nvidia0` + an RM-served `/dev/nvidia0` mapping | the **same binary**, variable unset → no child, no fds. **`[measured]` §3.5** |
+| **E0b** | ★ the spawn becomes **lazy**, so the first *guest* `GSP_RM_ALLOC` is what materializes the isolate — the increment E0's own measurement created (§3.6) | the child's first sighting is **after** the device-open phase line, not 28 s before it | variable unset → still zero children |
 | **E1** | a **failed** real isolate stops being indistinguishable from the stillborn one (bench gap 7) | with the image stubbed, the seam reports a refusal whose text differs from `STILLBORN_WHY` | the unstubbed build reports neither |
 | **E2** | the doorbell reaches the core: a guest MMIO write to the usermode doorbell aperture arrives at `kayfabe_rt::SharedDevice::doorbell` | a boot in which a guest doorbell write produces a `DoorbellOutcome`-or-named-`FwdFault`, counted | a non-doorbell BAR write in the same run produces neither |
 | **E3** | ★ **`Ga10xArch::decode_doorbell` is built** and validated against real silicon | a token RM itself hands a channel decodes to that channel's own vChid, on hardware | a token from a *different* channel must decode to a different vChid — and a fabricated token must decode to `None` |
@@ -149,19 +168,30 @@ without the feature is likewise a named refusal. A selector that degraded silent
 make a misspelled evidence run and its own control indistinguishable, which is precisely
 the failure `suspect_the_instrument_first` catalogues.
 
-### 3.2 ★★★ Why a guest `GSP_RM_ALLOC` is enough to issue a real host RM verb
+### 3.2 ⚠ How a device-path action issues a real host RM verb
 
-This is the load-bearing claim of E0, and it is a call graph, not a hope. `[src]` at
-`cf3aae9`:
+> ★★★ **CORRECTED BY THE BOOT, 2026-08-01 — read §3.5 first.** This section was written
+> before the measurement and its heading used to read *"Why a guest `GSP_RM_ALLOC` is
+> enough to issue a real host RM verb"*. **Step 3 below is right about the call graph and
+> wrong about the trigger**: `Gpu::realize` already installs the system proc's isolate, so
+> the spawn happens when QEMU realizes the device and a guest alloc finds it already
+> there. The chain is kept, because every step of it is what actually runs; only the
+> claimed cause was wrong.
+
+`[src]` at `cf3aae9`:
 
 1. The guest's GSP command queue write reaches `RegPlane`, which the shim built with the
    object-model link (`shim.rs:1076`, `object_policy`).
 2. `kayfabe_rmrpc::ObjectPolicy` turns `GSP_RM_ALLOC` into a `kayfabe_core::rmgraph::RmEvent`
    and calls `Gpu::apply`.
-3. `Gpu::apply`'s step 3b installs each live proc's per-`(Proc, GpuId)` isolate —
+3. ⚠ **This is the step that was wrong.** `Gpu::realize` itself calls
+   `ensure_proc_target(&mut system, GpuId::ZERO)`, so the system proc's isolate exists
+   before any guest traffic; `Gpu::apply`'s step 3b then installs each live proc's
+   per-`(Proc, GpuId)` isolate —
    `crates/kayfabe-core/src/gpu.rs:2324` and `:2344` (the **system** proc, which is the
    guest kernel's own objects), and `ensure_proc_target` at `:1292` — by calling
-   `IsolateFactory::spawn`.
+   `IsolateFactory::spawn`. Both sites are `or_insert_with`, so for a guest whose clients
+   all land on the system proc they are **no-ops**.
 4. With `KAYFABE_ISOLATES=real`, that factory is `HostIsolateFactory`, whose `spawn` runs
    `build_isolate` (`crates/kayfabe-isolate-host/src/isolate.rs:919`): `clone` into new
    user/pid/net/ipc/uts/mount namespaces, `execveat` a sealed memfd, then **block on a
@@ -221,10 +251,109 @@ What they do cover, and what each would catch:
 - with the feature off, both host planes are a **named** refusal mentioning
   `host-isolates`; with it on, both **build**.
 
-### 3.5 E0 — the evidence
+### 3.5 E0 — the evidence, and ★★★ the claim it FALSIFIED
 
-*(See §5. Filled in from the live boot; a plan row with an empty evidence section is a plan
-row, not a result.)*
+See §5 for the transcripts. The headline, stated before the good news:
+
+⊘ **E0 did NOT reach "a real host RM verb caused by a guest action". It reached "caused by
+the device path", which is weaker, and §3.2 above — written before the boot — asserted the
+stronger thing.** The boot refuted it, and the refutation is the most useful thing in this
+document.
+
+`[measured]` 2026-08-01, RTX 3060 GA106, host 580.159.04 open, archive rev `e10a6bf`:
+
+| run | `KAYFABE_ISOLATES` | distinct isolate children | first sighting |
+|---|---|---|---|
+| `e0ctl2` | *unset* | **0** | — |
+| `e0real2` | `real` | **1** | **t+3 s** |
+| `e0real3` | `real` | **1** | **t+3 s** |
+
+The guest reached a login prompt at **t+27–32 s** and the device was opened (the act that
+runs `RmInitAdapter` and issues every `GSP_RM_ALLOC` in the run) at **t+30–34 s**. The
+child appeared **~28 seconds earlier**, and its argv says `--proc 0` — `Gpu::SYSTEM_PROC`.
+
+⇒ **The spawn is `Gpu::realize`'s** (`crates/kayfabe-core/src/gpu.rs`, `realize` calls
+`ensure_proc_target(&mut system, GpuId::ZERO)` unconditionally), i.e. it happens when QEMU
+realizes the `nvkvm-gpu` device, **before the guest exists**. And the guest's own
+`GSP_RM_ALLOC`s cannot spawn a second one: the guest kernel's clients land on the *system*
+proc, whose isolate `or_insert_with` already made. `[measured]` at rev `e10a6bf`, runs
+`e0real2` and `e0real3`: **1** distinct child across the whole run, in two independent
+runs (`docs/reference/bench_evidence/e10a6bf_run_e0real2_isolate.log`,
+`d6caffa_run_e0real3_isolate.log`).
+
+★★ **The instrument nearly hid this.** The first version of the witness latched only the
+*first* sighting and reported "★ AN ISOLATE CHILD EXISTED", which reads as the strong
+claim. Dumping *every* pid **with a `t+` stamp against `boot_capture`'s own phase lines**
+is what turned an encouraging sentence into a falsification. `suspect_the_instrument_first`.
+
+#### What IS established, exactly
+
+**A real host RM verb chain is issued as a consequence of the device path**, in the shipped
+archive, with no mock anywhere:
+
+```
+cmdline: kayfabe-isolate --proc 0 --gpu 0 --workers 4 --rm real --park none
+ppid   : <the qemu-system-x86_64 running the guest>
+  fd  9 -> /dev/nvidiactl
+  fd 10 -> /dev/nvidia0
+  fd 12 -> /dev/nvidia0
+  746f08922000-746f08932000 rw-s 00000000 00:05 491   /dev/nvidia0
+CapEff/CapPrm/CapBnd 0000000000000000   NoNewPrivs: 1   Seccomp: 0
+user/pid/net/mnt/ipc/uts namespaces all distinct from the host's
+```
+
+The **64 KiB shared mapping of `/dev/nvidia0`** is the load-bearing line. It is the
+usermode BAR0 window, and RM only serves that `NV_ESC_RM_MAP_MEMORY` against an object
+reached through a live client → device → subdevice chain. A capability-less process in six
+fresh namespaces cannot fabricate it. Together with §3.2's fail-closed argument, the
+mapping means rungs **R0–R6b really ran and really succeeded on the host GPU**:
+`NV_ESC_CHECK_VERSION_STR`, `NV_ESC_REGISTER_FD`, `NV01_ROOT_CLIENT`, `NV01_DEVICE_0`,
+`NV20_SUBDEVICE_0`, usermode map.
+
+The negative control is the same binary with the variable unset: **zero** children, zero
+descriptors, and a `dmesg` that stops at the identical line
+(`RmInitAdapter failed! (0x25:0xffff:1249)`) — so the selector added a host process and
+changed nothing the guest could see, which is exactly what E0 should do.
+
+★ The `plane→RmMode` mapping is asserted **on hardware** by the witness itself
+(`--rm <plane>` in the child's argv, plus the two RM nodes and the mapping for `real`). No
+Rust test can see it — `isolate_factory` returns a `Box<dyn IsolateFactory>` and the
+`RmMode` inside is not observable — so this is the only instrument that covers it, and
+`scripts/bite_isolate_selector.py` says so rather than planting a bite that cannot fire.
+
+#### ⊘ What this does NOT establish
+
+1. **Not caused by the guest.** See above. The bar "a real host verb because the guest did
+   something" is **not met**; it needs **E0b** below.
+2. **No forwarding.** No `VerbPlan` was executed, no doorbell rung, no pushbuffer parsed,
+   no `ce_copy`. The verbs witnessed are the isolate's own bring-up.
+3. **Nothing about the boot.** The wall is unmoved and identical in both arms. E0 buys
+   capability, not progress.
+4. **Nothing about latency or concurrency under load.** One isolate, one spawn, one boot.
+5. **The env-read arm is covered only by these boots.** The unit tests drive the pure
+   decision function and deliberately never touch the process-global.
+
+### 3.6 E0b — the increment E0's own boot created
+
+**Make the isolate's spawn LAZY, so the first guest `GSP_RM_ALLOC` is what materializes
+it.** This is a named increment rather than a detail because of one number: `[measured]`
+at rev `e10a6bf`, runs `e0real2`/`e0real3`, the isolate child's first sighting is
+**t+3 s** and the device open is **t+30–34 s**, so nothing the guest does can carry the
+"caused by the guest" claim while the spawn is eager.
+
+- **Acceptance that could fail:** a boot with `KAYFABE_ISOLATES=real` in which the isolate
+  child's first sighting is **after** `boot_capture`'s "opening the device" line, not
+  before it. The instrument already exists and already discriminates — it is what produced
+  the table above.
+- **Control:** the same boot with the variable unset still shows zero children.
+- **Why it is worth doing rather than redefining the bar:** it also removes the
+  §3.3 hazard, because a spawn that happens at the *first guest alloc* is a spawn that
+  never happens at all for a guest that never allocates — which is every guest that fails
+  earlier, and every device that is realized and never used.
+- ⚠ It is not free: `IsolateFactory::spawn` is infallible by signature and `Gpu::realize`
+  currently uses that to make step 3b infallible-by-construction (`gpu.rs` §12.18). Making
+  materialization lazy must not turn an infallible installation into a fallible one on a
+  path with no error channel. Read that comment before touching it.
 
 ## 4. Order of work, and the one thing that should be re-decided
 
@@ -244,4 +373,30 @@ five bites transcription missed. That is evidence for generating, and it is a bi
 decision than a row in a table.
 
 ## 5. Evidence log
+
+### E0, 2026-08-01 — RTX 3060 GA106, host driver 580.159.04 **open**, vast `46494693`
+
+- **Archive under test:** `kayfabe-rev:e10a6bf48084facf0a99540c6989e1d4d7961412`, read out
+  of the QEMU binary with `strings`, and recorded in the head of every witness log.
+  Built `KAYFABE_SHIM_FEATURES=host-isolates scripts/build_qom_shim.sh`.
+- **Host driver:** stock DKMS, verified before the runs — banner
+  `NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64 580.159.04 Release Build`, and
+  **zero** `nvkvm`/`kayfabe` symbols in `/proc/kallsyms`.
+- **Committed transcripts** (`docs/reference/bench_evidence/`):
+  | file | what it is |
+  |---|---|
+  | `e10a6bf_run_e0ctl2_isolate.log` | ★ the **negative control** — variable unset, `0` children |
+  | `e10a6bf_run_e0real2_isolate.log` | `KAYFABE_ISOLATES=real` — 1 child at t+3 s, fds + mapping |
+  | `d6caffa_run_e0real3_isolate.log` | the repeat, with the `plane→RmMode` assertion active (`ok`) |
+  | `e10a6bf_run_e0real2_qemu.log` | the device's own report for the `real` run: 92 commands decoded, 20 unserviced |
+  | `e10a6bf_run_e0real2_dmesg.log` | the guest driver's ring buffer — the wall, identical to the control's |
+- **Harness:** `scripts/bench/e0_isolate_witness.sh <tag> <plane>`, which wraps
+  `scripts/bench/boot_capture.sh` and samples the host at 2 Hz. It **exits non-zero** if
+  the plane and the spawned child's `--rm` argument disagree, if `real` produced no
+  RM-served `/dev/nvidia0` mapping, or if a refusing plane spawned anything.
+- **Bites:** `scripts/bite_isolate_selector.py` — **5/5 fired** at `d6caffa` (`BS1` default
+  moves to `Real`; `BS2` unknown value degrades silently; `BS3` case-insensitive parse;
+  `BS4` host plane degrades instead of refusing without the feature; `BS5` refusal stops
+  naming the planes). Restored-tree sanity check GREEN.
+
 
