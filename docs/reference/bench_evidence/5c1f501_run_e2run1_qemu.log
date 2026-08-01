@@ -1,0 +1,31 @@
+2026-08-01T22:27:50.920417Z qemu-system-x86_64: -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0: info: nvkvm: presenting 10de:2504 class 030000 rev a1 subsys 1462:397d (8 interrupt vectors)
+2026-08-01T22:27:51.058893Z qemu-system-x86_64: info: nvkvm: memory plane realized (bar0=0xfd000000 bar1=0xe0000000 bar2=0xf0000000, register plane has guest memory=yes)
+2026-08-01T22:28:22.203983Z qemu-system-x86_64: warning: nvkvm: the emulated GSP asked for its STATUS-QUEUE interrupt and this device does not deliver that one. The guest's own interrupt trigger IS delivered; this is the GSP-engine stall vector, which needs a pending bit in the interrupt tree first. A guest that BLOCKS on a status-queue event will not be woken by us — the boot path polls instead.
+2026-08-01T22:28:33.011648Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00070005 at +0xbb0090 REFUSED [FwdFault::UnknownVchid]
+2026-08-01T22:28:42.713123Z qemu-system-x86_64: info: nvkvm: registers: 3634 reads / 56311 writes (chip-constant 38, rom 2316, gsp 342r/397w, UNCLAIMED 761r/763w), faults 0, guest-RAM refusals 0, interrupt requests dropped 91
+2026-08-01T22:28:42.713197Z qemu-system-x86_64: info: nvkvm: interrupts: 0 vectors delivered, 0 undeliverable (guest had not enabled the table), 91 status-queue requests dropped
+2026-08-01T22:28:42.713232Z qemu-system-x86_64: info: nvkvm: framebuffer: 122 reads / 55106 writes served through the BAR0 moving window (26 window register reads / 22 writes), fb refusals 0, translated-window drops 0r/0w, resident 155648 bytes
+2026-08-01T22:28:42.713266Z qemu-system-x86_64: info: nvkvm: BAR2 (translated): 111 reads / 21128 writes resolved through the GMMU, 0 REFUSED by name; roots published 2 (0 bodies refused), BAR2 root entry 0x0
+2026-08-01T22:28:42.713300Z qemu-system-x86_64: info: nvkvm: commands: 92 decoded, 20 UNSERVICED (refused by name; the guest logs these quietly, which is why they are here), 17 distinct
+2026-08-01T22:28:42.713334Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a87
+2026-08-01T22:28:42.713367Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a4b
+2026-08-01T22:28:42.713400Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800afe
+2026-08-01T22:28:42.713432Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800aff
+2026-08-01T22:28:42.713465Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a70
+2026-08-01T22:28:42.713498Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a80
+2026-08-01T22:28:42.713531Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802a0f
+2026-08-01T22:28:42.713563Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080017e
+2026-08-01T22:28:42.713596Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a30
+2026-08-01T22:28:42.713637Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2c
+2026-08-01T22:28:42.713702Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2e
+2026-08-01T22:28:42.713758Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a34
+2026-08-01T22:28:42.713792Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b03
+2026-08-01T22:28:42.713825Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b05
+2026-08-01T22:28:42.713857Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a3f
+2026-08-01T22:28:42.713889Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0xa06f0103
+2026-08-01T22:28:42.713922Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a38
+2026-08-01T22:28:42.713954Z qemu-system-x86_64: info: nvkvm: bridge refusals: 0 total, 0 distinct (these ANSWER the command and so never reach the unserviced list)
+2026-08-01T22:28:42.713987Z qemu-system-x86_64: info: nvkvm: isolates: 1 materialized, 1 live, 1 refusing (1 no-plane, 0 spawn-failed)
+2026-08-01T22:28:42.714021Z qemu-system-x86_64: info: nvkvm: doorbells: 1 arrived, 0 served, 1 REFUSED by name; last token 0x00070005 (1 logged)
+2026-08-01T22:28:42.714058Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [FwdFault::UnknownVchid] UnknownVchid { gpu: GpuId(0), vchid: VChid(5) }
+2026-08-01T22:28:42.714115Z qemu-system-x86_64: info: nvkvm:   isolate refusal [no-plane] this build has no forwarding plane: the object model accepts protocol facts and no host verb can be issued

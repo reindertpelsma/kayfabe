@@ -1,9 +1,10 @@
 # The execution plane — the increments from here to a guest CE copy on the host GPU
 
-> **Status: PLAN, 2026-08-01.** Written at master `cf3aae9`; increment **E0** built and
-> measured at `e10a6bf` on the RTX 3060 bench, **E3** at `6e4f66f`, and **E0b + E1** at
-> `853a311` (§6). Every row is `[src]` at `cf3aae9`, `[measured]` with a named run and
-> revision, or explicitly `[assumed]`. **E2 and E4–E6 are not built.**
+> **Status: PLAN, 2026-08-02.** Written at master `cf3aae9`; increment **E0** built and
+> measured at `e10a6bf` on the RTX 3060 bench, **E3** at `6e4f66f`, **E0b + E1** at
+> `853a311` (§6) and **E2** at `5c1f501` (§7). Every row is `[src]` at `cf3aae9`,
+> `[measured]` with a named run and revision, or explicitly `[assumed]`. **E4–E6 are not
+> built.**
 
 ## 0. Why this document exists now, and what it replaces
 
@@ -83,7 +84,7 @@ that makes a green mean something. A row whose acceptance has no control is mark
 | **E0** ✅ | the crates join: `kayfabe-qemu-raw` can name `kayfabe-isolate-host`, and a runtime selector chooses the isolate plane. Realizing the device materializes a **real sandboxed child** that completes RM bring-up on the host GPU | a live boot with `KAYFABE_ISOLATES=real` shows a `kayfabe-isolate` child of QEMU holding `/dev/nvidiactl` + `/dev/nvidia0` + an RM-served `/dev/nvidia0` mapping | the **same binary**, variable unset → no child, no fds. **`[measured]` §3.5** |
 | **E0b** ✅ | ★ the spawn becomes **lazy**, so the first *guest* `GSP_RM_ALLOC` is what materializes the isolate — the increment E0's own measurement created (§3.6) | the child's first sighting is **after** the device-open phase line, not 28 s before it | variable unset → still zero children. **`[measured]` §6** |
 | **E1** ✅ | a **failed** real isolate stops being indistinguishable from the stillborn one (bench gap 7) | a refusal reported at the `Isolate` seam with a **kind** (`spawn-failed` ≠ `no-plane`) and a sentence, printed by the device at teardown | the same archive with a working plane reports `0 refusing`. **`[measured]` §6** |
-| **E2** | the doorbell reaches the core: a guest MMIO write to the usermode doorbell aperture arrives at `kayfabe_rt::SharedDevice::doorbell` | a boot in which a guest doorbell write produces a `DoorbellOutcome`-or-named-`FwdFault`, counted | a non-doorbell BAR write in the same run produces neither |
+| **E2** ✅ | the doorbell reaches the core: a guest MMIO write to the usermode doorbell aperture arrives at `kayfabe_rt::SharedDevice::doorbell` | a boot in which a guest doorbell write produces a `DoorbellOutcome`-or-named-`FwdFault`, counted | a non-doorbell BAR write in the same run produces neither. **`[measured]` §7** |
 | **E3** ✅ | ★ **`Ga10xArch::decode_doorbell` is built** and validated against real silicon | a token RM itself hands a channel decodes to that channel's own vChid, on hardware | a token from a *different* channel must decode to a different vChid — and a fabricated token must decode to `None`. **DONE — `doorbell_token_encoding.md`** |
 | **E4** | GA10x `UserdModel` + `PushbufferAbi` replace `UnbuiltUserd`/`UnbuiltPushbuffer` | `read_pushbuffer` over bytes captured from a real boot yields `LAUNCH_DMA`/`SEM_EXECUTE` at the offsets the guest wrote them | garbage bytes must **fault**, not decode to a plausible method |
 | **E5** | the address table is populated from the guest's own bindings, so the CE operands resolve in the isolate's host VAS | a guest VA that *was* bound resolves; the copy's operands are found | ★ a VA that was **never bound** must FAULT (`mode2_address_table.md`: miss = fault, never a reverse-resolve) |
@@ -444,7 +445,8 @@ half of it, because after E0b there is nothing to check at realize.
 
 ## 4. Order of work, and the one thing that should be re-decided
 
-E0 → E0b → E1 → **E3** → E2 → E4 → E5 → E6. **E0, E0b, E1 and E3 are done**; E2 is next.
+E0 → E0b → E1 → **E3** → E2 → E4 → E5 → E6. **E0, E0b, E1, E3 and E2 are done**; E4 is
+next.
 
 ★ E3 is pulled ahead of E2 deliberately. E2 (an ABI entry point for the doorbell) is
 mechanical and can be written at any time; E3 is the increment most likely to be *wrong for
@@ -627,3 +629,154 @@ always reports something: a working plane prints `0 refusing` and **no** refusal
    first time. `[measured]` only that three boots completed; no timing was taken.
 5. **`isolates_materialized` is not an attribution instrument** and must never be cited as
    one — see §3.7 and the field's own docs.
+
+## 7. Evidence log — E2
+
+### 2026-08-01/02 — RTX 3060 GA106, host driver 580.159.04 **open** (stock DKMS), vast `46494693`
+
+- **Archive under test:** `kayfabe-rev:5c1f501d003d121034154731bd6c9ed692565894`, read out of
+  the QEMU binary with `strings` and recorded in the head of every `*_e2.log`. Built
+  `KAYFABE_SHIM_FEATURES=host-isolates scripts/build_qom_shim.sh`. ⊘ The stamp carries **no**
+  `-dirty` suffix and the sha is the branch tip, so the binary is this content at this
+  revision — the one thing `CLAUDE.md`'s standing warning is about ("the bench silently
+  served a binary built from `862c7c2` for weeks").
+  ⊘ **`5c1f501` is a CODE-ONLY commit and this section is not in it**, deliberately: the
+  measurement has to bind to the content that was measured, so the evidence and this log
+  land in the commit *after* it. The two differ in `docs/` and in nothing else — no file
+  under `crates/`, `qemu/` or `scripts/` differs between them, which a reader can check
+  with `git diff --stat 5c1f501 HEAD`. ★ Two earlier revisions (`80fabd7`, `ec6feed`)
+  produced the identical three-arm result and were discarded rather than cited: the first
+  had a stray build directory in the commit, and the second was voided by a `cargo fmt`
+  run **after** the boot. A verification binds to CONTENT at a REVISION, and an edit
+  between measuring and claiming voids it however cosmetic it is.
+- **Host driver, verified in the same session:** banner `NVRM: loading NVIDIA UNIX Open
+  Kernel Module for x86_64 580.159.04 Release Build`, `dkms status` →
+  `nvidia/580.159.04 … installed`, and **zero** `nvkvm`/`kayfabe` symbols in
+  `/proc/kallsyms`.
+- **Harness:** `scripts/bench/e2_doorbell_witness.sh <tag>`, which builds
+  `scripts/bench/e2_doorbell_poke.c` statically, boots through `boot_capture.sh` (new
+  `POST_CAPTURE_HOOK` phase, so the experiment runs on a **live** guest and before the
+  poweroff that flushes the device's report), stages the tool into the guest, and issues
+  **two** guest MMIO writes through **one** `mmap` of `resource0`, four bytes apart.
+
+#### ★★★ The three arms
+
+`[measured]` at `5c1f501`, and reproduced identically at two discarded predecessors — so the
+result does not rest on one boot of one binary.
+
+| run | what the guest wrote | `arrived` | `served` | `refused` | verdict |
+|---|---|---|---|---|---|
+| `e2run1` | `+0xbb0094` then `+0xbb0090` | **1** | 0 | **1** | ★ acceptance holds |
+| `e2run2` | the same, independently | **1** | 0 | **1** | ★ the repeat |
+| `e2ctl1` | `+0xbb0094` **only** | **0** | 0 | 0 | ⊘ **the harness goes RED** |
+
+The device's own line, verbatim from `run_e2run1_qemu.log`:
+
+```
+2026-08-01T22:28:33.011648Z … nvkvm: DOORBELL token 0x00070005 at +0xbb0090 REFUSED [FwdFault::UnknownVchid]
+2026-08-01T22:28:42.714021Z … nvkvm: doorbells: 1 arrived, 0 served, 1 REFUSED by name; last token 0x00070005 (1 logged)
+2026-08-01T22:28:42.714058Z … nvkvm:   first doorbell refusal [FwdFault::UnknownVchid] UnknownVchid { gpu: GpuId(0), vchid: VChid(5) }
+```
+
+★ `VChid(5)` is the payload, and it is the **decode** (E3's encoding: `VECTOR` 11:0 of
+`0x0007_0005`) reached through a real `route_doorbell` against a real spine. No wiring that
+dropped the write, and no port that was never installed, can produce that sentence: an
+unwired plane answers `Device::NoDoorbellPort`, from a different crate, and the harness
+fails by name on it.
+
+#### ★★★ Attribution — and why the counters alone would not have been enough
+
+`a_boolean_witness_cannot_attribute`. The device writes `doorbells: 1 arrived`, so it can
+say *whether* and never *why*. Three stamps, from three writers, settle it (`run_e2run1`):
+
+| stamp | written by |
+|---|---|
+| control window opened `22:28:28.890223Z` | the harness, on the host |
+| doorbell window `22:28:32.457621Z .. 22:28:33.023650Z` | the harness, on the host |
+| **arrival `22:28:33.011648Z`** | QEMU, `-msg timestamp=on` |
+
+The arrival falls **inside** the doorbell window and **outside** the control's, and the
+harness additionally asserts that **zero** arrivals are stamped before the first window
+opened (`e2_doorbell_witness.sh`, the `NBEFORE` check). That second half is the one that
+matters: it excludes *"something in the boot rang one"*, and it settles a fact this document
+had until now only read out of a source tree —
+
+> ⊘ **The guest driver rings no doorbell at this wall.**
+> `[measured]` 2026-08-01 at rev `5c1f501`, runs `e2run1`, `e2run2` and `e2ctl1` on the
+> RTX 3060 bench —
+> `docs/reference/bench_evidence/5c1f501_run_e2ctl1_qemu.log` reports
+> `nvkvm: doorbells: 0 arrived` across the whole of boot + `modprobe` + the device open, and
+> the two acceptance runs report exactly the **one** arrival their own poke made, stamped
+> inside their own window.
+> `[src]` for the mechanism, and only for the mechanism: `kfifoRingChannelDoorBell_HAL` is
+> reached from `ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c:557`, after the
+> channel *schedule* that this bench's `run_e2run1_dmesg.log` shows failing `0x56`.
+
+⇒ therefore the ring in these runs is issued **deliberately, by guest userspace**, through
+the same physical offset in the same BAR the driver's own `GPU_VREG_WR32` uses — the 64 KiB
+usermode window, reached through sysfs instead of through RM. The device cannot tell the two
+apart, which is the point: there is one classification and both rings arrive at it.
+
+#### ★★ The control, and why it is more than "the counter stayed at zero"
+
+Two writes, one `mmap`, one process, one instruction shape, **the same value**, four bytes
+apart — differing in the **offset** and in nothing else. The control is issued **first**, so
+a device that counted any BAR write would already be non-zero before the doorbell. Exactly
+one arrival was counted, in both acceptance runs.
+
+⊘ And `e2ctl1` is the artifact that could have shown otherwise: the identical boot with the
+doorbell store suppressed (`E2_SKIP_DOORBELL=1`) — same control write, same driver load,
+same wall — produces `0 arrived, 0 served, 0 REFUSED` and the harness's own verdict line
+reads:
+
+```
+★ FAILED (acceptance): expected EXACTLY ONE arrival (the poke), got 0.
+```
+
+A check that could not produce that sentence would not be a check.
+
+#### Files
+
+`docs/reference/bench_evidence/`, all prefixed `5c1f501_`:
+
+| file | what it is |
+|---|---|
+| `run_e2run1_e2.log` | ★ the acceptance verdict, with the three attribution stamps |
+| `run_e2run2_e2.log` | the independent repeat |
+| `run_e2ctl1_e2.log` | ⊘ **the negative control** — the harness going RED on a suppressed poke |
+| `run_e2run1_qemu.log`, `run_e2run2_qemu.log`, `run_e2ctl1_qemu.log` | the device's own reports, the lines quoted above |
+| `run_e2run1_probe.log` etc. | the hook's transcript: the guest's `E2POKE before/after` stamps, `CONTROL_RC=0`, `DOORBELL_RC=0` |
+| `run_e2run1_dmesg.log` etc. | the guest driver's ring buffer — the wall, unmoved and identical in all three arms |
+
+#### ⊘ What E2 does NOT establish
+
+1. **No forwarding, still.** `served == 0` in every arm, and it must be: serving a doorbell
+   needs a channel on the spine, which needs a guest that allocated one. E2 buys the
+   transport and the refusal vocabulary. `UnknownVchid` is the **expected** answer here and
+   becomes a bug only after E5.
+2. **Nothing about the boot.** The wall is unmoved: `RmInitAdapter failed!
+   (0x25:0xffff:1249)`, identical in all three arms and identical to E0b's.
+3. **The ring is guest *userspace*, not the guest *driver*.** Stated above, measured above,
+   and it is the honest half: E2's claim is about the transport, not about RM's intent.
+4. **The two consumers' shared object model is `[src]`, not measured.** The doorbell port
+   and the object bridge are two `Arc::clone`s of one `SharedDevice`
+   (`shim.rs`, `Regs::create`), and the behavioural witness — declare a channel through the
+   bridge, ring its vChid through the doorbell — is an **E6** assertion, because nothing in
+   this port can inject an `RmEvent` chain. What guards it meanwhile is
+   `crates/kayfabe-qemu-raw/tests/e2_doorbell.rs::the_archive_realizes_exactly_one_object_model`,
+   which quantifies over the composition root's own source: **one** `Gpu::new`, **one**
+   `SharedDevice::new`, both consumers built from a clone of that one handle. ★ It is the
+   defect nothing else would catch — a second `Gpu` leaves `UnknownVchid` as the permanent
+   answer with every test still green — and `scripts/bite_e2_doorbell.py` **B10** plants it.
+5. **Nothing about concurrency.** One ring per boot. The port is called with no plane lock
+   held (`RegPlane::write` classifies the doorbell *before* taking the FSM mutex, because
+   `SharedDevice::doorbell` can block on the isolate pool's gate) — that is `[src]` and a
+   documented requirement, not a measurement.
+
+#### Suite, gates, bites
+
+- **Bites:** `scripts/bite_e2_doorbell.py` — **10/10 caught**, restored-tree sanity GREEN,
+  and the *split* is the finding: B3 (token not masked) and B8 (the default port becomes a
+  silent sink) are caught by the **device** arm only; B9 (the root never installs the port)
+  and B10 (the doorbell rings a second object model) by the **shim** arm only. A harness with
+  one arm would have missed four of ten.
