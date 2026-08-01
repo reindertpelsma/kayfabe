@@ -130,12 +130,90 @@
 //!
 //! ## ⊘ What the widening does NOT establish
 //!
-//! - ⊘ **No hardware body has been taken for any of the sixteen.** That is #159. This is a
-//!   statement about *the capture*, not about what the missing bytes contain — every one of
-//!   them may yet turn out to be zeros.
+//! - ⊘ **No hardware body has been taken for any of the sixteen.** This is a statement about
+//!   *the capture*, not about what the missing bytes contain — every one of them may yet
+//!   turn out to be zeros.
 //! - ⊘ **It does not say the nine referenced rows are wrong.** It says their tails are
 //!   unevidenced. Where a module reads only the prefix (`grstatic`) or derives the reply
 //!   outright (`deviceinfo`), nothing about the value changes.
+//!
+//! # ★★★ THE CONSEQUENCE, MEASURED — nothing this port reads is missing
+//!
+//! The paragraph above closed with *"no hardware body has been taken"*, and that was the
+//! whole of what had been established: **the CAPTURE was measured, the CONSEQUENCE was
+//! not.** Which rows are short says nothing about whether anything in this tree *reads* the
+//! part that is short — and that second question is the one that cost four rungs on
+//! `0x20802a08`, where a consumer silently took zero-fill for an answer.
+//!
+//! `[measured]` 2026-08-02, by locating every byte blob this repository embeds from the C
+//! artifact's table inside the table's own arrays and reporting the offset range each one
+//! occupies. ⚠ **The read was taken at that repo's HEAD `8001cb5`**, not at the `8baf4f2`
+//! the tables above are attributed to. They are the same measurement:
+//! `git diff 8baf4f2 8001cb5 -- src/qemu/mode2_initctrl_ga106.h` is **empty**, and
+//! `8baf4f2` is an ancestor of `8001cb5`. Recorded rather than smoothed over, because a
+//! verification binds to CONTENT at a REVISION and the two revisions are not the same word.
+//!
+//! | row | `kept`/`psize` | the deepest byte this port relies on | inside? |
+//! |---|---|---|---|
+//! | `0x20800a22` | 16376/34592 | 16376 — the whole kept prefix, as a fixture | ✔ |
+//! | `0x20800a1f` | 176/184 | 176 — the whole kept prefix, as a fixture | ✔ |
+//! | `0x20800a9f` | 176/184 | 176 — the whole kept prefix, as a fixture | ✔ |
+//! | `0x20800a41` | 8200/8204 | 4108 — `profilingRangesSize`; the embedded prefix ends at 1277 | ✔ |
+//! | `0x20801112` | 3208/3212 | 1112 — header + all 11 entries the capture declares | ✔ |
+//! | `0x20800a40` | 16384/24580 | 580 — header + all 12 entries the capture declares | ✔ |
+//! | `0x208001b0` | 1280/1284 | 164 — count + all 8 falcons the capture declares | ✔ |
+//! | `0x20800301` | 16/20 | 0 — the reply is re-encoded from the request | ✔ |
+//! | `0x20802a0f` | 16/28 | 0 — refused; no byte of it is decoded | ✔ |
+//!
+//! ⇒ **No read in this tree lands at or beyond `dlen`.** ★ That is a *result*, not a
+//! reassurance: the four-byte-short rows are short in their **last array element**
+//! (`profilingRanges[4092..4096]`, `constructedFalconsTable[63]`'s last word,
+//! `entries[31]`'s last four name bytes), and every count field that bounds those arrays
+//! sits far inside the prefix. The two badly-short rows are short **past the only engine
+//! anything reads**.
+//!
+//! ⊘ **One place does read past `kept`, and it says so.** `tests/gvaspace_pdes.rs` pads the
+//! 176-byte `0x20800a9f` fixture to the struct's 184 bytes with **this port's own zeros**
+//! and round-trips the result; the eight bytes it adds are `levels[5]`'s `aperture` and
+//! `pageShift`, which a publication with `numLevelsToCopy = 4` does not use. The zeros are
+//! declared in that file and asserted to be its own — they are not evidence.
+//!
+//! ## [`CAPTURE_RELIANCE`] is that result as a checkable statement
+//!
+//! Prose cannot fail a build, and this argument is *nine* prose arguments. Each row of
+//! [`CAPTURE_RELIANCE`] states the deepest byte of a truncated row that this port's
+//! argument rests on; `tests/truncated_row_reads.rs` checks every one against
+//! [`field_is_captured`] **and derives the set of rows that need one** by scanning
+//! `crates/` rather than by trusting the list's length. A tenth truncated row acquiring a
+//! consumer turns that test red; so does a consumer reaching deeper into one that already
+//! has an entry.
+//!
+//! ★ The derivation found a row the hand-written list did not have: `0x20800b03`
+//! (`kept` 8192 of `psize` 16352) was referenced from `kayfabe_device::sweep` — by a
+//! **miscited line number**. That is the next section.
+//!
+//! # ★★ Three miscitations, and two of them landed on TRUNCATED rows
+//!
+//! `[measured]` 2026-08-02 by resolving every `mode2_initctrl_ga106.h:<line>` citation in
+//! the tree against the committed census's own `c_line` column:
+//!
+//! | claim | cited | that line is | should have been |
+//! |---|---|---|---|
+//! | `0x20800a3d`, *"32 bytes … 128 on this part"* | `:6246` | `0x20800a38` (24/24) | `:6228` |
+//! | `0x20800a48`, *"`01 00 00 00 00 00 00 00`"* | `:6252` | **`0x20800a40` (16384/24580)** | `:6230` |
+//! | `0x20800a32`, *"1664 bytes"* | `:6226` | **`0x20800b03` (8192/16352)** | `:6231` |
+//!
+//! Every one of the three **values** is right; only the address is wrong. ★★★ Which is the
+//! memory *citing the oracle is not the oracle being right* arriving from the other
+//! direction: there the citation was to a row that said nothing, here it is to the wrong
+//! row entirely, and in both cases the gate that demands a `C:` citation was satisfied. A
+//! citation gate checks that a claim is *sourced*; only resolving the address checks that
+//! the source is the one the claim means. `tests/truncated_row_reads.rs` resolves them.
+//!
+//! ⊘ **The gate that does this is scoped and says so:** it can only judge a citation that
+//! names its own control nearby (an id, or a `ctl_<cmd>` array name). A citation carrying
+//! neither is *unattributable*, and the test counts those rather than passing them
+//! silently.
 
 /// One row of `mode2_initctrl_ga106.h` whose reply body was **never captured**.
 ///
@@ -411,6 +489,145 @@ pub const TRUNCATED_ROWS: &[TruncatedRow] = &[
 #[must_use]
 pub fn truncated_row(cmd: u32) -> Option<&'static TruncatedRow> {
     TRUNCATED_ROWS.iter().find(|r| r.cmd == cmd)
+}
+
+/// ★★★ One statement of the form *"this port's argument about truncated row `cmd` rests on
+/// the capture's bytes `[0, read_end)` and on nothing after them"*.
+///
+/// ⊘ It is **not** a claim that those bytes are correct — [`field_is_captured`]'s docs say
+/// why that is a narrower thing than it looks. It is the claim that they came off the
+/// recorder rather than out of zero-fill, which is the only property the capture can settle
+/// about itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CaptureReliance {
+    /// The truncated control this is about. Must appear in [`TRUNCATED_ROWS`].
+    pub cmd: u32,
+    /// The deepest byte offset of the capture that this port's argument rests on, exclusive.
+    ///
+    /// ★ **Zero is a real answer**, and two rows carry it: a control this port refuses, and
+    /// one whose reply it re-encodes from the guest's own request. Neither decodes a byte of
+    /// the capture, so neither can be hurt by a short one.
+    pub read_end: usize,
+    /// The files whose argument this is. Each is checked to exist and to mention `cmd`, so a
+    /// site cannot be aspirational.
+    pub sites: &'static [&'static str],
+    /// How `read_end` was arrived at. ⚠ A number without this is a guess with a decimal
+    /// point.
+    pub why: &'static str,
+}
+
+/// ★★★ Every truncated row this tree references, with the extent of it that is load-bearing.
+///
+/// ⚠ **The list is not the gate.** `tests/truncated_row_reads.rs` derives the set of
+/// truncated rows referenced anywhere under `crates/` and requires it to equal the set here
+/// — so shortening this list turns that test red rather than quietly shrinking the universe
+/// it quantifies over (memory: *gates quantified over a LIST*). Deriving it is what surfaced
+/// `0x20800b03`, which was in the universe only because of a miscited line number.
+///
+/// `[measured]` 2026-08-02 — see the module docs for the offsets each row was measured at.
+pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
+    CaptureReliance {
+        cmd: 0x2080_0a22,
+        read_end: 16376,
+        sites: &[
+            "crates/kayfabe-abi/src/grstatic.rs",
+            "crates/kayfabe-abi/tests/gr_static_info.rs",
+        ],
+        why: "the fixture `ga106_ctl_20800a22.bin` IS the kept prefix, and \
+              `assert_prefix_matches_for` compares exactly that many bytes — the one site \
+              that already went through `field_is_captured`. Only `engineCaps[0]`'s 4324 \
+              bytes are ever read past the test",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0a1f,
+        read_end: 176,
+        sites: &[
+            "crates/kayfabe-abi/src/grstatic.rs",
+            "crates/kayfabe-abi/tests/gr_static_info.rs",
+        ],
+        why: "the fixture `ga106_ctl_20800a1f.bin` IS the kept prefix; `GA106_GR_CAPS` \
+              transcribes `engineCaps[0].capsTbl`, the first 23 bytes",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0a9f,
+        read_end: 176,
+        sites: &["crates/kayfabe-abi/tests/gvaspace_pdes.rs"],
+        why: "the fixture `ga106_ctl_20800a9f.bin` IS the kept prefix. ⊘ That test then \
+              pads it to the struct's 184 bytes with ITS OWN zeros and round-trips them; \
+              those eight bytes are `levels[5]`'s aperture and pageShift, they are declared \
+              in that file as this port's rather than silicon's, and they are NOT counted \
+              here",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0a41,
+        read_end: 4108,
+        sites: &[
+            "crates/kayfabe-abi/src/regaccessmap.rs",
+            "crates/kayfabe-device/tests/user_register_access_map.rs",
+        ],
+        why: "`profilingRangesSize` sits at 4104 and the module quotes its value; the \
+              embedded `ORACLE_PREFIX` is the first 1277 bytes — the two size words plus \
+              the whole 1269-byte gzip member. The four uncaptured bytes are \
+              `profilingRanges[4092..4096]`, which `profilingRangesSize = 0` puts out of \
+              reach of any reader",
+    },
+    CaptureReliance {
+        cmd: 0x2080_1112,
+        read_end: 1112,
+        sites: &["crates/kayfabe-device/tests/init_tables.rs"],
+        why: "12-byte header plus all 11 entries the capture's own `numEntries` declares, \
+              at 100 bytes each. `ORACLE_ENGINE_ENTRIES` embeds six of those eleven — \
+              entries 0, 4, 5, 6, 7 and 10 — so its deepest byte is the end of entry 10. \
+              The four uncaptured bytes are the last of `entries[31]`'s `engineName`",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0a40,
+        read_end: 580,
+        sites: &[
+            "crates/kayfabe-abi/src/deviceinfo.rs",
+            "crates/kayfabe-device/tests/internal_device_info_table.rs",
+        ],
+        why: "4-byte header plus all 12 entries the capture's own `numEntries` declares, at \
+              48 bytes each. `ORACLE_FIVE` embeds five of the twelve, ending at 388. ★ This \
+              is the row whose 8196-byte shortfall `deviceinfo`'s header calls a fail-open — \
+              and the reason it is harmless is exactly that 580 is far inside 16384",
+    },
+    CaptureReliance {
+        cmd: 0x2080_01b0,
+        read_end: 164,
+        sites: &[
+            "crates/kayfabe-abi/src/falconinfo.rs",
+            "crates/kayfabe-device/tests/constructed_falcon_info.rs",
+        ],
+        why: "4-byte count plus all 8 falcons the capture's own `numConstructedFalcons` \
+              declares, at 20 bytes each; `ORACLE_PREFIX` embeds the 163 non-zero bytes of \
+              exactly that. The four uncaptured bytes are the last word of \
+              `constructedFalconsTable[63]`, an entry the count puts out of reach",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0301,
+        read_end: 0,
+        sites: &["crates/kayfabe-abi/src/eventnotify.rs"],
+        why: "NOT A READ. Every member is `[IN]` and this port re-encodes the reply from the \
+              DECODED REQUEST rather than from any capture — see that module's `⊘ The reply \
+              is a PURE STATUS` section. The four uncaptured bytes are `info16` and its pad; \
+              nothing here has ever read them, so the truncation cannot reach this port",
+    },
+    CaptureReliance {
+        cmd: 0x2080_2a0f,
+        read_end: 0,
+        sites: &["crates/kayfabe-device/src/sweep.rs"],
+        why: "NOT A READ. `RefusalHalts`: the copy-engine topology triple is refused whole, \
+              so no byte of this row is decoded. ⊘ If it is ever served, this row must be \
+              re-decided — the five fields `kceGetPceConfigForLceType` copies out span 20 \
+              bytes of a 28-byte reply and only 16 were kept",
+    },
+];
+
+/// The reliance statement for `cmd`, if this tree has one.
+#[must_use]
+pub fn capture_reliance(cmd: u32) -> Option<&'static CaptureReliance> {
+    CAPTURE_RELIANCE.iter().find(|r| r.cmd == cmd)
 }
 
 /// Rows of `mode2_initctrl_ga106.h` whose capture is **complete** (`dlen >= psize`),
@@ -699,6 +916,78 @@ mod tests {
         assert!(!field_is_captured(16377, 0, 16376));
         // ⊘ An overflowing offset+len is not inside any capture, and must not wrap into one.
         assert!(!field_is_captured(usize::MAX, 1, 16376));
+    }
+
+    #[test]
+    fn nothing_this_port_relies_on_reaches_past_what_the_recorder_kept() {
+        // ★★★ The module docs' consequence table, as one assertion per row. This is the
+        // check `0x20802a08` never had: there the consumer read a field the capture did not
+        // contain and got a zero for it, and no test could have gone red because the
+        // argument that it was fine existed only in prose.
+        //
+        // Each `read_end` was `[measured]` 2026-08-02 by locating this repository's embedded
+        // capture bytes inside the C table's own arrays at `nvidia-gpu-passthrough` HEAD
+        // `8001cb5`, whose copy of that header is byte-identical to rev `8baf4f2` — the
+        // offsets are in this module's header. The universe of rows that
+        // need one is derived rather than listed, by `tests/truncated_row_reads.rs`.
+        assert!(!CAPTURE_RELIANCE.is_empty());
+        for r in CAPTURE_RELIANCE {
+            let row = truncated_row(r.cmd).unwrap_or_else(|| {
+                panic!(
+                    "{:#010x} has a reliance statement but is not a truncated row — either \
+                     the census moved or this entry is about the wrong control",
+                    r.cmd
+                )
+            });
+            assert!(
+                field_is_captured(0, r.read_end, row.kept),
+                "{:#010x}: this port relies on bytes [0,{}) but the recorder kept only {} \
+                 of {} — the bytes past {} are zero-fill wearing the oracle's name. {}",
+                r.cmd,
+                r.read_end,
+                row.kept,
+                row.psize,
+                row.kept,
+                r.why
+            );
+            // ⊘ And a reliance may not be a bare number: `read_end` without a derivation is
+            // the shape the empty rows were read in for four rungs.
+            assert!(
+                r.why.len() > 40,
+                "{:#010x}: `why` must say how `read_end` was arrived at",
+                r.cmd
+            );
+            assert!(!r.sites.is_empty(), "{:#010x}: no site", r.cmd);
+        }
+        let mut ids: Vec<u32> = CAPTURE_RELIANCE.iter().map(|r| r.cmd).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), CAPTURE_RELIANCE.len(), "an id appears once");
+        for r in CAPTURE_RELIANCE {
+            assert_eq!(capture_reliance(r.cmd), Some(r));
+        }
+        assert_eq!(
+            capture_reliance(0x2080_0a2a),
+            None,
+            "a complete row has none"
+        );
+    }
+
+    #[test]
+    fn a_reliance_that_reaches_one_byte_past_the_capture_is_refused() {
+        // ★★ The gate above is only worth its line count if it can FAIL, and a gate never
+        // seen to fail is not evidence (memory: *suspect the instrument first*). This is the
+        // same predicate applied to the same rows shifted by one byte: every one must flip.
+        for r in CAPTURE_RELIANCE {
+            let row = truncated_row(r.cmd).expect("a truncated row");
+            assert!(
+                !field_is_captured(0, row.kept + 1, row.kept),
+                "{:#010x}: the predicate must refuse one byte past the prefix",
+                r.cmd
+            );
+            // …and the boundary itself is in, so the check is not vacuously strict.
+            assert!(field_is_captured(0, row.kept, row.kept));
+        }
     }
 
     #[test]

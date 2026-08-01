@@ -9,8 +9,9 @@
 //! port composed.
 
 use kayfabe_abi::gvaspacepdes::{
-    COPY_SERVER_RESERVED_PDES_PARAMS_SIZE, GMMU_FMT_MAX_LEVELS, ServerReservedPdesError,
-    decode_server_reserved_pdes, encode_server_reserved_pdes,
+    COPY_SERVER_RESERVED_PDES_PARAMS_SIZE, GMMU_FMT_MAX_LEVELS,
+    NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER,
+    ServerReservedPdesError, decode_server_reserved_pdes, encode_server_reserved_pdes,
 };
 
 /// ⚠ The fixture is **176 bytes, not 184**: the C's recorder kept `dlen = 176` of a
@@ -22,7 +23,19 @@ use kayfabe_abi::gvaspacepdes::{
 /// than papered over: the round-trip test proves the decoder handles the whole struct, but
 /// only the first 176 bytes of it are corroborated by real hardware. A recorder that had
 /// kept the full `psize` would strengthen this test and nothing else here would change.
-const ORACLE_CAPTURED_LEN: usize = 176;
+///
+/// ★★★ Read from [`kayfabe_abi::oracle`]'s census rather than written as `176`. The literal
+/// was the whole of what said the fixture length meant anything: a re-extraction that
+/// zero-padded to `psize` would have moved the fixture, moved this constant to match, and
+/// widened every assertion below without a word changing. Now the length comes from the
+/// C table's own `dlen` and a fixture that disagrees is refused by name.
+fn oracle_captured_len() -> usize {
+    kayfabe_abi::oracle::truncated_row(
+        NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER,
+    )
+    .expect("0x20800a9f is a truncated row of the C's captured table")
+    .kept
+}
 
 fn oracle() -> Vec<u8> {
     let p = format!(
@@ -30,14 +43,49 @@ fn oracle() -> Vec<u8> {
         env!("CARGO_MANIFEST_DIR")
     );
     let mut b = std::fs::read(&p).unwrap_or_else(|e| panic!("fixture {p} unreadable: {e}"));
+    let kept = oracle_captured_len();
     assert_eq!(
         b.len(),
-        ORACLE_CAPTURED_LEN,
+        kept,
         "the fixture is the oracle's captured dlen; a different length means the extraction \
          changed and every assertion below is measuring something else"
     );
+    // ★ The prose turned into a predicate: every byte of the fixture came off the recorder…
+    assert!(
+        kayfabe_abi::oracle::field_is_captured(0, b.len(), kept),
+        "the fixture reaches past what the recorder kept"
+    );
+    // …and the eight this function is about to add did NOT. Asserting the negative is the
+    // point: it is the only thing that stops the pad from being read later as silicon's.
+    assert!(
+        !kayfabe_abi::oracle::field_is_captured(0, COPY_SERVER_RESERVED_PDES_PARAMS_SIZE, kept),
+        "if the whole struct were captured, the zero-fill below would be unnecessary and \
+         this test would be understating what the oracle corroborates"
+    );
     b.resize(COPY_SERVER_RESERVED_PDES_PARAMS_SIZE, 0);
     b
+}
+
+/// ★★★ The reliance this file's argument rests on, checked against the census.
+///
+/// ⊘ It is deliberately `kept` and not `COPY_SERVER_RESERVED_PDES_PARAMS_SIZE`: the decoder
+/// below reads all six `levels[]`, including the one whose tail the recorder never kept, and
+/// what makes that honest is that the bytes it reads there are this file's own zeros. The
+/// reliance statement in `kayfabe_abi::oracle` says the same thing, and the two must agree.
+#[test]
+fn every_oracle_byte_this_file_reads_is_inside_what_the_recorder_kept() {
+    let cmd = NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER;
+    let r = kayfabe_abi::oracle::capture_reliance(cmd).expect("0x20800a9f carries a reliance");
+    assert_eq!(
+        r.read_end,
+        oracle_captured_len(),
+        "this file relies on the whole kept prefix and on nothing after it"
+    );
+    assert!(kayfabe_abi::oracle::field_is_captured(
+        0,
+        r.read_end,
+        oracle_captured_len()
+    ));
 }
 
 /// ★★★ The whole licence for answering `NV_OK`, as one assertion: a **real** publication
@@ -52,7 +100,7 @@ fn the_real_ga106_publication_decodes_and_round_trips_byte_for_byte() {
     assert_eq!(bytes.len(), COPY_SERVER_RESERVED_PDES_PARAMS_SIZE);
     assert_eq!(bytes.len(), 184);
     assert!(
-        bytes[ORACLE_CAPTURED_LEN..].iter().all(|b| *b == 0),
+        bytes[oracle_captured_len()..].iter().all(|b| *b == 0),
         "the padded tail must be the zeros this test supplied"
     );
     let p = decode_server_reserved_pdes(&bytes).expect("a real driver's publication decodes");

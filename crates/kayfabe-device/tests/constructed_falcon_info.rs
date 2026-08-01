@@ -64,6 +64,46 @@ fn oracle_params() -> Vec<u8> {
     b
 }
 
+/// The deepest byte of the C capture this file's argument rests on: the 4-byte count plus
+/// all `numConstructedFalcons = 8` entries it declares, at 20 bytes each.
+///
+/// ★ `0x208001b0`'s row is TRUNCATED — `dlen` 1280 of `psize` 1284 — so the four bytes it
+/// does not carry are the last word of `constructedFalconsTable[63]`, an entry the count
+/// puts out of reach. This constant is what makes that sentence fail a build instead of
+/// reading well: it is checked against `kayfabe_abi::oracle`'s censused `kept`, and against
+/// the reliance statement that module publishes.
+const ORACLE_DEEPEST_BYTE: usize = 4 + 8 * 20;
+
+/// ★★★ Nothing this file reads of the oracle's reply is missing from the capture.
+///
+/// ⊘ Not a claim the bytes are right — [`ORACLE_PREFIX`] is checked against the encoder
+/// elsewhere in this file for that. It is the narrower claim the truncation makes
+/// necessary: that they came off the recorder rather than out of the zero-extension
+/// `oracle_params` performs two functions above.
+#[test]
+fn every_oracle_byte_this_file_reads_is_inside_what_the_recorder_kept() {
+    let cmd = NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO;
+    let row = kayfabe_abi::oracle::truncated_row(cmd).expect("0x208001b0 is a truncated row");
+    let r = kayfabe_abi::oracle::capture_reliance(cmd).expect("and it carries a reliance");
+    assert_eq!(
+        r.read_end, ORACLE_DEEPEST_BYTE,
+        "this file and kayfabe_abi::oracle must agree on how deep the argument reaches"
+    );
+    assert!(
+        kayfabe_abi::oracle::field_is_captured(0, ORACLE_DEEPEST_BYTE, row.kept),
+        "reads [0,{ORACLE_DEEPEST_BYTE}) of a capture that kept {} of {}",
+        row.kept,
+        row.psize
+    );
+    // …and the bytes actually embedded here end inside that.
+    assert!(unhex(ORACLE_PREFIX).len() <= ORACLE_DEEPEST_BYTE);
+    // ⊘ The zero-extension `oracle_params` applies is THIS FILE's, not the recorder's: the
+    // capture stops at `kept` and everything after is supplied here.
+    assert!(!kayfabe_abi::oracle::field_is_captured(
+        0, row.psize, row.kept
+    ));
+}
+
 /// The eight falcons the oracle's board reported, transcribed from
 /// `ogkm-580: g_eng_desc_nvoc.h` class ids rather than from the byte string above.
 ///

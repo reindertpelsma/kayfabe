@@ -244,7 +244,7 @@ pub const GROUP_LOCAL_INSTANCE_ID_OFF: usize = 44;
 /// ★ `[measured]`, and the run is the **C artifact's, not this port's**: its reply table
 /// registers `{0x20800a40u, 0x0u, 24580u, 16384u, ctl_20800a40}` — exactly this
 /// `paramsSize` against 16384 bytes of data — at
-/// `C: src/qemu/mode2_initctrl_ga106.h:6252`, `nvidia-gpu-passthrough` rev `018e492`, the
+/// `C: src/qemu/mode2_initctrl_ga106.h:6252` = `0x20800a40`, `nvidia-gpu-passthrough` rev `018e492`, the
 /// commit that last wrote those bytes. An inherited measurement, named as one; nothing
 /// here was read off a machine by us. See this module's docs for why that gap is the
 /// fail-open this encoder closes.

@@ -122,9 +122,9 @@
 //!
 //! ## ★★ What the oracle settled, and what it did not
 //!
-//! `C: src/qemu/mode2_initctrl_ga106.h:3363` (`ctl_20800a41`, registered at `:6249` as
-//! `{0x20800a41u, 0x0u, 8204u, 8200u, ctl_20800a41}` — `psize` 8204, captured `dlen` 8200,
-//! the four trailing zeros trimmed) reconstructs **verbatim** out of
+//! `C: src/qemu/mode2_initctrl_ga106.h:3363` (`ctl_20800a41`, registered at `:6249` =
+//! `0x20800a41` as `{0x20800a41u, 0x0u, 8204u, 8200u, ctl_20800a41}` — `psize` 8204,
+//! captured `dlen` 8200) reconstructs **verbatim** out of
 //! `traces/mode2_c_reference/cap1b_coldboot_hermetic_d6`: records **142000-142002**,
 //! three consecutive 4096-byte `GUEST_WR`s starting at gpa `0x1_2764_7000`, the params at
 //! payload offset **120** of the first, under an RPC envelope reading

@@ -77,6 +77,39 @@ fn oracle_params() -> Vec<u8> {
     b
 }
 
+/// The deepest byte of the C capture this file's argument rests on: the 4-byte count plus
+/// all `numEntries = 12` entries it declares, at 48 bytes each.
+///
+/// ★★★ `0x20800a40` is the row whose 8196-byte shortfall this file's own
+/// `the_c_oracles_own_reply_is_an_instance_of_the_fail_open` calls a fail-open — and the
+/// reason that fail-open never fired is exactly this number: 580 is far inside the 16384
+/// bytes the recorder kept, so the twelve entries RM filed all arrived.
+const ORACLE_DEEPEST_BYTE: usize = 4 + 12 * 48;
+
+/// ★★★ Nothing this file reads of the oracle's reply is missing from the capture.
+#[test]
+fn every_oracle_byte_this_file_reads_is_inside_what_the_recorder_kept() {
+    let cmd = NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE;
+    let row = kayfabe_abi::oracle::truncated_row(cmd).expect("0x20800a40 is a truncated row");
+    let r = kayfabe_abi::oracle::capture_reliance(cmd).expect("and it carries a reliance");
+    assert_eq!(
+        r.read_end, ORACLE_DEEPEST_BYTE,
+        "this file and kayfabe_abi::oracle must agree on how deep the argument reaches"
+    );
+    assert!(
+        kayfabe_abi::oracle::field_is_captured(0, ORACLE_DEEPEST_BYTE, row.kept),
+        "reads [0,{ORACLE_DEEPEST_BYTE}) of a capture that kept {} of {}",
+        row.kept,
+        row.psize
+    );
+    // The five entries embedded here — 0, 4, 5, 6 and 7 of the twelve — end well inside it.
+    assert!(4 + unhex(ORACLE_FIVE).len() <= ORACLE_DEEPEST_BYTE);
+    // ⊘ And the row IS short: `oracle_params`' 24580-byte buffer is mostly this file's.
+    assert!(!kayfabe_abi::oracle::field_is_captured(
+        0, row.psize, row.kept
+    ));
+}
+
 fn chip() -> &'static ChipProfile {
     kayfabe_device::chip_for_device_id(0x2504).expect("GA106 is in the table")
 }

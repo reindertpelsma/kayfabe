@@ -250,8 +250,8 @@ pub struct TpcRow {
 }
 
 /// SMs per TPC on Ampere consumer parts. Two, and the capture's 28 SMs over 14 TPCs is what
-/// says so — `[measured]` on a real GA106, `C: src/qemu/mode2_initctrl_ga106.h:6221`, and
-/// re-derived by `tests/gr_static_info.rs`, which fails if the pairing stops holding.
+/// says so — `[measured]` on a real GA106 (`C: mode2_initctrl_ga106.h:6221` = `0x20800a22`),
+/// and re-derived by `tests/gr_static_info.rs`, which fails if the pairing stops holding.
 pub const SMS_PER_TPC: u16 = 2;
 
 /// GA106's three GPCs. `[measured]` from `C: mode2_initctrl_ga106.h`'s `ctl_20800a26`.
@@ -372,7 +372,7 @@ pub const GA106_TPCS: [TpcRow; 14] = [
 /// bitfield table whose bits are named by `NV0080_CTRL_GR_CAPS_*` macros that this port has
 /// no consumer for; naming twenty of them here would be transcription dressed as modelling.
 /// It is carried as bytes, `[measured]` on a real GA106 from `ctl_20800a1f`
-/// (`C: src/qemu/mode2_initctrl_ga106.h:6218`), and `tests/gr_static_info.rs` is the test
+/// (`C: src/qemu/mode2_initctrl_ga106.h:6218` = `0x20800a1f`), and `tests/gr_static_info.rs` is the test
 /// that fails if a byte of it changes.
 pub const GA106_GR_CAPS: [u8; GR_CAPS_TBL_SIZE] = [
     0xb0, 0x62, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x10, 0x01, 0x08, 0x00, 0x10,
@@ -380,12 +380,15 @@ pub const GA106_GR_CAPS: [u8; GR_CAPS_TBL_SIZE] = [
 ];
 
 /// `fecsRecordSize` — 128 bytes per FECS trace record on this part. `[measured]` on a real
-/// GA106 (`C: src/qemu/mode2_initctrl_ga106.h:6246`), pinned by `tests/gr_static_info.rs`.
+/// GA106 (`C: src/qemu/mode2_initctrl_ga106.h:6228` = `0x20800a3d`), pinned by
+/// `tests/gr_static_info.rs`. ⚠ The line was `:6246` until 2026-08-02; that is
+/// `0x20800a38`'s row, not this control's.
 pub const GA106_FECS_RECORD_SIZE: u32 = 128;
 
 /// `bPerSubCtxheaderSupported` — Ampere supports the per-subcontext context header.
 /// `[measured]` on a real GA106 (`ctl_20800a48` is `01 00 00 00 00 00 00 00`,
-/// `C: src/qemu/mode2_initctrl_ga106.h:6252`, pinned by `tests/gr_static_info.rs`), and it is consumed
+/// `C: src/qemu/mode2_initctrl_ga106.h:6230` = `0x20800a48`, pinned by
+/// `tests/gr_static_info.rs`), and it is consumed
 /// immediately: `kgraphicsSetPerSubcontextContextHeaderSupported` (`kernel_graphics.c:1518`).
 pub const GA106_PER_SUBCTX_HEADER_SUPPORTED: bool = true;
 

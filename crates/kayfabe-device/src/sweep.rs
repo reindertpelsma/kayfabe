@@ -521,7 +521,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               NULL forever (:556-564), and _kgraphicsPostSchedulingEnableHandler — run from \
               KernelFifo's statePostLoad, not GR's — returns NV_ERR_INVALID_STATE on it \
               (:485), which gpu.c:3440 does NOT swallow. [measured] run gmmu1 at 12b001f. \
-              184 bytes (C: mode2_initctrl_ga106.h:6218). Served",
+              184 bytes (C: mode2_initctrl_ga106.h:6218 = 0x20800a1f). Served",
     },
     SweepControl {
         cmd: 0x2080_0a2a,
@@ -567,9 +567,9 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         disposition: SweepDisposition::AmputationUnsurvivable,
         why: "GET_GLOBAL_SM_ORDER under NV_CHECK_OK_OR_GOTO (ogkm-580: \
               kernel_graphics.c:1284-1292); 34592 bytes, the largest reply this port encodes \
-              and nine message-queue elements (C: mode2_initctrl_ga106.h:6221, whose own \
-              capture kept only the first 16376 of them). Same silent-then-fatal path as \
-              0x20800a1f. Served",
+              and nine message-queue elements (C: mode2_initctrl_ga106.h:6221 = 0x20800a22, \
+              whose own capture kept only the first 16376 of them). Same silent-then-fatal \
+              path as 0x20800a1f. Served",
     },
     SweepControl {
         cmd: 0x2080_0a30,
@@ -610,7 +610,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         disposition: SweepDisposition::AmputationUnsurvivable,
         why: "GET_FECS_RECORD_SIZE under NV_CHECK_OK_OR_GOTO (ogkm-580: \
               kernel_graphics.c:1465-1476); 32 bytes, one NvU32 per engine, 128 on this part \
-              (C: mode2_initctrl_ga106.h:6246). Same silent-then-fatal path as 0x20800a1f, \
+              (C: mode2_initctrl_ga106.h:6228). Same silent-then-fatal path as 0x20800a1f, \
               and the value is a divisor in the FECS buffer's record arithmetic so zero is \
               not merely a small answer. Served",
     },
@@ -631,7 +631,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               kernel_graphics.c:1504-1518) — the LAST mandatory one, so it is the control \
               that decides whether bInitialized becomes NV_TRUE on the next line (:1521). \
               Eight bytes, one NvBool per engine; bPerSubCtxheaderSupported is true on \
-              Ampere (C: mode2_initctrl_ga106.h:6252) and is consumed immediately by \
+              Ampere (C: mode2_initctrl_ga106.h:6230) and is consumed immediately by \
               kgraphicsSetPerSubcontextContextHeaderSupported. Served",
     },
     SweepControl {
@@ -651,7 +651,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               stateload1 at 041b4f1. Refusing sends the whole function to cleanup: and \
               un-sets bInitialized, so it is the same KernelFifo NV_ERR_INVALID_STATE as \
               0x20800a1f by a different route. 1664 bytes \
-              (C: mode2_initctrl_ga106.h:6226). Served",
+              (C: mode2_initctrl_ga106.h:6231). Served",
     },
     SweepControl {
         cmd: 0x2080_0a38,

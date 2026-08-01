@@ -72,6 +72,37 @@ fn unhex(s: &str) -> Vec<u8> {
         .collect()
 }
 
+/// The deepest byte of the C capture the `0x20801112` argument rests on: the 12-byte header
+/// plus all `numEntries = 11` entries it declares, at 100 bytes each.
+///
+/// ★ [`ORACLE_ENGINE_ENTRIES`] is six of those eleven — entries 0, 4, 5, 6, 7 and 10 — so
+/// the deepest byte it touches is the end of entry 10, which is this. `0x20801112`'s row is
+/// TRUNCATED (`dlen` 3208 of `psize` 3212) and the four bytes it drops are the last of
+/// `entries[31]`'s `engineName`, an entry the count puts out of reach.
+const ORACLE_DEEPEST_BYTE: usize = 12 + 11 * 100;
+
+/// ★★★ Nothing this file reads of the oracle's reply is missing from the capture.
+#[test]
+fn every_oracle_byte_this_file_reads_is_inside_what_the_recorder_kept() {
+    let cmd = NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE;
+    let row = kayfabe_abi::oracle::truncated_row(cmd).expect("0x20801112 is a truncated row");
+    let r = kayfabe_abi::oracle::capture_reliance(cmd).expect("and it carries a reliance");
+    assert_eq!(
+        r.read_end, ORACLE_DEEPEST_BYTE,
+        "this file and kayfabe_abi::oracle must agree on how deep the argument reaches"
+    );
+    assert!(
+        kayfabe_abi::oracle::field_is_captured(0, ORACLE_DEEPEST_BYTE, row.kept),
+        "reads [0,{ORACLE_DEEPEST_BYTE}) of a capture that kept {} of {}",
+        row.kept,
+        row.psize
+    );
+    assert!(12 + unhex(ORACLE_ENGINE_ENTRIES).len() <= ORACLE_DEEPEST_BYTE);
+    assert!(!kayfabe_abi::oracle::field_is_captured(
+        0, row.psize, row.kept
+    ));
+}
+
 fn chip() -> &'static kayfabe_device::ChipProfile {
     kayfabe_device::chip_for_device_id(0x2504).expect("the chip row this port ships")
 }

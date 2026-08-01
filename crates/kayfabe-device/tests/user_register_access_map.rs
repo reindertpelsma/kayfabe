@@ -109,6 +109,37 @@ fn oracle_params() -> Vec<u8> {
     b
 }
 
+/// The deepest byte of the C capture this file's argument rests on: `profilingRangesSize`,
+/// at 4104, whose value this file quotes as zero.
+///
+/// ★ `0x20800a41`'s row is TRUNCATED — `dlen` 8200 of `psize` 8204 — and the four bytes it
+/// does not carry are `profilingRanges[4092..4096]`, which a `profilingRangesSize` of zero
+/// puts out of reach of any reader. Stated here so it is checked rather than believed.
+const ORACLE_DEEPEST_BYTE: usize = 4104 + 4;
+
+/// ★★★ Nothing this file reads of the oracle's reply is missing from the capture.
+#[test]
+fn every_oracle_byte_this_file_reads_is_inside_what_the_recorder_kept() {
+    let cmd = NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP;
+    let row = kayfabe_abi::oracle::truncated_row(cmd).expect("0x20800a41 is a truncated row");
+    let r = kayfabe_abi::oracle::capture_reliance(cmd).expect("and it carries a reliance");
+    assert_eq!(
+        r.read_end, ORACLE_DEEPEST_BYTE,
+        "this file and kayfabe_abi::oracle must agree on how deep the argument reaches"
+    );
+    assert!(
+        kayfabe_abi::oracle::field_is_captured(0, ORACLE_DEEPEST_BYTE, row.kept),
+        "reads [0,{ORACLE_DEEPEST_BYTE}) of a capture that kept {} of {}",
+        row.kept,
+        row.psize
+    );
+    assert!(unhex(ORACLE_PREFIX).len() <= ORACLE_DEEPEST_BYTE);
+    // ⊘ The zero-extension in `oracle_params` is THIS FILE's, not the recorder's.
+    assert!(!kayfabe_abi::oracle::field_is_captured(
+        0, row.psize, row.kept
+    ));
+}
+
 /// The oracle's gzip stream on its own — `compressedData[..compressedSize]`.
 ///
 /// ★ Sliced at LITERAL 8 and 1269, not at the constants under test.

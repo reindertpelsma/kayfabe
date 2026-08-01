@@ -63,6 +63,21 @@ fn assert_prefix_matches_for(cmd: u32, what: &str, ours: &[u8], theirs: &[u8]) {
         "{what} ({cmd:#010x}): comparing {} bytes reaches past the captured prefix",
         theirs.len()
     );
+    // ★★★ And the extent this file relies on must be the extent `kayfabe_abi::oracle`
+    // publishes for it. Until 2026-08-02 the predicate above was the ONLY call site of
+    // `field_is_captured` in the tree, so it proved this file sound and said nothing about
+    // the other eight truncated rows; the reliance table is where that gap was closed, and
+    // this equality is what keeps the two from drifting apart.
+    if let Some(r) = abi_oracle::capture_reliance(cmd) {
+        assert_eq!(
+            r.read_end,
+            theirs.len(),
+            "{what} ({cmd:#010x}): this file compares {} bytes but the reliance statement \
+             says the argument rests on {}",
+            theirs.len(),
+            r.read_end
+        );
+    }
     assert_prefix_matches(what, ours, theirs);
 }
 
