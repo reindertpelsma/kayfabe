@@ -1217,11 +1217,15 @@ pub struct DoorbellRoute {
     pub gpu: GpuId,
     /// The decoded vChid — the chid **within [`Self::runlist`]**, not a per-GPU index.
     pub vchid: VChid,
-    /// ★★ The decoded runlist. Carried, **not** routed on: [`Spine::by_vchid`] is keyed
-    /// `(GpuId, VChid)` and cannot express it. See `doorbell_token_encoding.md` §4 — on a
-    /// real GA106 five channels held chid 7 on four different runlists, so this is a
-    /// measured ambiguity in the index, recorded here rather than hidden by dropping the
-    /// bits at the decoder.
+    /// ★★ The decoded runlist. Carried, **not** routed on: the exec-plane index is keyed
+    /// `(GpuId, VChid)` and cannot express it.
+    ///
+    /// `[measured]` on GA106 that key is nonetheless a channel identity — one global
+    /// `CHID_MGR`, so chids are device-unique (`doorbell_token_encoding.md` §4). ⊘ That
+    /// is a fact about the **part**, not about the key: on a part with per-runlist
+    /// channel RAM two live channels can share a chid, and this field is what a future
+    /// `(GpuId, RunlistId, VChid)` key would be built from. It is carried today so that
+    /// the decoder is not the thing that lost the information.
     pub runlist: RunlistId,
     /// The raw token (recorded per-proc for poll-kick replay).
     pub token: u64,

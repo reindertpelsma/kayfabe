@@ -161,19 +161,24 @@ pub enum ObjectKind {
 ///
 /// ## ★★★ `runlist` is not decoration — it is the half a decode used to DROP
 ///
-/// This struct used to be `{ vchid }` alone, and on GA10x that is **lossy**: a
-/// work-submit token is `(runlistId, chid)` and a chid is scoped to its runlist. It is
-/// not a theoretical loss. `[measured]` RTX 3060 / GA106 / 580.159.04,
-/// `docs/reference/bench_evidence/rm-ladder-419afe8.out:21-25`, five copy-engine
-/// channels all reported chid **7**, on runlists **0, 1, 2 and 8**. A decoder that
-/// returned only the chid would have answered those four *different* channels
-/// identically — the silent mis-route `execution_plane_increments.md` §2.1 says E3
-/// exists to prevent.
+/// This struct used to be `{ vchid }` alone, and on GA10x that is **lossy**: RM's own
+/// encoder writes a work-submit token as exactly two fields, `RUNLIST_ID` at 22:16 and
+/// `VECTOR` (the chid) at 11:0, and a `{ vchid }` decode throws the first one away.
+/// Keeping it is not a routing change (`kayfabe_core`'s exec-plane index is still keyed
+/// `(GpuId, VChid)`) — it is a refusal to *silently* discard bits on the one seam where a
+/// wrong answer has no second party to notice it (`execution_plane_increments.md` §2.1).
 ///
-/// ⊘ Carrying it here is **not** the same as routing on it. `kayfabe_core`'s exec-plane
-/// index is still keyed `(GpuId, VChid)`, so the ambiguity is now *visible and recorded*
-/// rather than closed — see `docs/design/doorbell_token_encoding.md` §4, which names it
-/// as the residual E3 leaves open.
+/// ⊘ **What the bench measured about the ambiguity, which is the opposite of what an
+/// earlier draft of this comment claimed.** `[measured]` RTX 3060 / GA106 / 580.159.04,
+/// `docs/reference/bench_evidence/doorbell-census-ba74151.out`:
+/// `per_runlist_channel_ram=0`, and six channels held **simultaneously** across four
+/// runlists took six **distinct** chids. On this part chids come from one global
+/// `CHID_MGR` (`ogkm-580: kernel_fifo.c:1457-1466`), so a chid is device-unique and
+/// `(GpuId, VChid)` *is* a channel identity. The earlier draft cited
+/// `rm-ladder-419afe8.out:21-25` — where five channels all read chid 7 — as proof of
+/// aliasing; that run allocated and freed them **one at a time** and was measuring
+/// handle recycling. `doorbell_token_encoding.md` §4 states the scope: the adequacy is a
+/// fact about GA106, not about the key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DoorbellTarget {
     /// The virtual channel ID the token addresses. On GA10x this is the token's

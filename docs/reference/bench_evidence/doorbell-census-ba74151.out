@@ -1,0 +1,38 @@
+# kayfabe-rm-ladder --doorbell-census  (increment E3)
+# host      : ubuntu  vast 46494693
+# gpu       : NVIDIA GeForce RTX 3060  (GA106)
+# driver    : NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+# kernel    : 6.8.0-59-generic
+# module    : /lib/modules/6.8.0-59-generic/updates/dkms/nvidia.ko   instrumented symbols in .ko: 0   in kallsyms: 0
+# taken     : 2026-08-01T18:12:22Z
+# builder   : cargo build --bin kayfabe-rm-ladder, KAYFABE_BUILD_REV stamped at compile time
+#
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d008d9
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=ba74151
+info  R13c census        = RM's own chid manager vs the work-submit token, GPU 0
+FACT per_runlist_channel_ram=0
+FACT chid_namespaces=[0] of 0..24
+FACT device_info_table=Err(InsufficientPermissions)
+SAMPLE engine_type=0x1 token=0x00000004 chid=4 chid_namespace=0
+SAMPLE engine_type=0x9 token=0x00000005 chid=5 chid_namespace=0
+SAMPLE engine_type=0xa token=0x00000006 chid=6 chid_namespace=0
+SAMPLE engine_type=0xb token=0x00010007 chid=7 chid_namespace=0
+SAMPLE engine_type=0xc token=0x00020008 chid=8 chid_namespace=0
+SAMPLE engine_type=0xd token=0x00080009 chid=9 chid_namespace=0
+SAMPLE-REFUSED engine_type=0xe reason=Other(87)
+SAMPLE-REFUSED engine_type=0xf reason=Other(87)
+SAMPLE-REFUSED engine_type=0x10 reason=Other(87)
+PARTITION engine_type=0x1 token=0x00000004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0x9 token=0x00000004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xa token=0x00000004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xb token=0x00010004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xc token=0x00020004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xd token=0x00080004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION-REFUSED engine_type=0xe reason=Other(87)
+PARTITION-REFUSED engine_type=0xf reason=Other(87)
+PARTITION-REFUSED engine_type=0x10 reason=Other(87)
+FACT partition_is_vacuous=1
+info  R13c census        = done
+done — doorbell census only

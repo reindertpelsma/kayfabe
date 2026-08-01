@@ -282,6 +282,45 @@ const GMMU_WHOLE_FILE_OK: &[&str] = &[
 /// own definition, located by its own text, with a two-line include prologue that is ours.
 const GMMU_SLICE_ONLY: &[&str] = &["kern_gmmu_gv100.c"];
 
+// =====================================================================================
+// ★★★ The WORK-SUBMIT TOKEN oracle — increment E3's second instrument
+// =====================================================================================
+//
+// See `oracle/worksubmit_token_oracle.c`. Everything here decides WHICH driver code is
+// compiled, and it decides it by reading the driver.
+
+/// The chip whose HAL binding the token oracle is built with — the same GA106 the shipped
+/// `kayfabe_chips::Ga10xArch` is, named here for [`GMMU_ORACLE_CHIP`]'s reason: nothing in
+/// the driver can tell us which chip we are pretending to be.
+const TOKEN_ORACLE_CHIP: &str = "GA106";
+
+/// The dispatch table that binds the token encoder per chip, and the header declaring it.
+const NVOC_KERNEL_FIFO_C: &str = "src/nvidia/generated/g_kernel_fifo_nvoc.c";
+
+/// Where a `kfifo*` implementation can live. Searched recursively for the symbol the
+/// dispatch table named — so a driver release that moves or rebinds the encoder is
+/// followed, or the build fails saying so.
+const TOKEN_IMPL_ROOT: &str = "src/nvidia/src/kernel/gpu/fifo";
+
+/// The halified entry point the oracle drives.
+const TOKEN_HAL_FUNC: &str = "kfifoGenerateWorkSubmitTokenHal";
+
+/// The channel-state accessors the encoder's own runlist gate reads, and the setter the
+/// harness drives them with. Both live in `kernel_channel.c` beside 4 000 lines the
+/// oracle must not compile, so both are sliced.
+const TOKEN_KCHANNEL_C: &str = "src/nvidia/src/kernel/gpu/fifo/kernel_channel.c";
+const TOKEN_KCHANNEL_FNS: &[&str] = &["kchannelIsRunlistSet", "kchannelSetRunlistSet"];
+
+/// The two lines the whole increment turns on. If a driver release stops writing the
+/// token with these, this oracle must **fail to build** rather than quietly judge our
+/// decoder against a function that no longer encodes anything.
+const TOKEN_SLICE_ANCHORS: &[&str] = &[
+    "_VF_DOORBELL, _RUNLIST_ID",
+    "_VF_DOORBELL, _VECTOR",
+    "kchannelGetRunlistId",
+    "kchannelIsRunlistSet",
+];
+
 /// Read the symbol the driver's own dispatch table binds `func` to for `chip`.
 ///
 /// ★★★ Why this is derived and not listed. `kgmmuFmtInitPteComptagLine` looks like it
@@ -646,6 +685,7 @@ fn extract_function(src: &str, symbol: &str) -> Result<String, String> {
 fn main() {
     println!("cargo:rerun-if-changed=oracle/vbios_oracle.c");
     println!("cargo:rerun-if-changed=oracle/gmmu_fmt_oracle.c");
+    println!("cargo:rerun-if-changed=oracle/worksubmit_token_oracle.c");
     for (env_var, _, _) in TREES {
         println!("cargo:rerun-if-env-changed={env_var}");
     }
@@ -664,6 +704,7 @@ fn main() {
         // its own presence check: a tree that can serve one and not the other must skip
         // exactly one of them, and say which.
         build_gmmu_oracle(&cc, &out_dir, &root, tag, env_var);
+        build_token_oracle(&cc, &out_dir, &root, tag, env_var);
 
         if !root.join(VBIOS_TU102_C).is_file()
             || !root.join(FWSEC_C).is_file()
@@ -947,6 +988,162 @@ fn build_gmmu_oracle(cc: &str, out_dir: &Path, root: &Path, tag: &str, env_var: 
             String::from_utf8_lossy(&out.stderr),
         ));
     }
+
+    println!("cargo:rustc-env={out_env}={}", bin.display());
+}
+
+/// Build the **work-submit token oracle** for one vendored tree.
+///
+/// Failure polarity is the house rule, for the third time and the same reason: an absent
+/// tree is a **skip** with a `cargo:warning=`; a present tree that will not build is a
+/// **hard error**. An oracle that degrades to a skip is how a gate stops being able to
+/// fire — and this one guards the increment whose wrong answer is silent, so a skip that
+/// nobody noticed would be worse here than anywhere else in the workspace.
+fn build_token_oracle(cc: &str, out_dir: &Path, root: &Path, tag: &str, env_var: &str) {
+    let out_env = format!("KAYFABE_TOKEN_ORACLE_{tag}");
+    let dispatch = root.join(NVOC_KERNEL_FIFO_C);
+    if !dispatch.is_file()
+        || !root.join(TOKEN_IMPL_ROOT).is_dir()
+        || !root.join(TOKEN_KCHANNEL_C).is_file()
+    {
+        println!(
+            "cargo:warning=TOKEN ORACLE SKIPPED: no open-kernel-modules tree at {} \
+             (set {env_var} to relocate). The test that judges `Ga10xArch::decode_doorbell` \
+             against NVIDIA's OWN work-submit-token encoder will announce itself as SKIPPED \
+             and assert NOTHING. Nothing is vendored here to stand in for it.",
+            root.display()
+        );
+        return;
+    }
+
+    let dispatch_src = std::fs::read_to_string(&dispatch)
+        .unwrap_or_else(|e| panic!("TOKEN ORACLE: cannot read {}: {e}", dispatch.display()));
+
+    // ★★ Refuse a chip name this table has never heard of — `nvoc_hal_symbol` would
+    // otherwise fall through to the `else` arm and bind the BLACKWELL encoder, judging our
+    // Ampere decoder against a different generation's field layout. That failure mode is
+    // not hypothetical; it is the one `chip_is_known` was written for on the GMMU oracle.
+    assert!(
+        chip_is_known(&dispatch_src, TOKEN_ORACLE_CHIP),
+        "TOKEN ORACLE: `{TOKEN_ORACLE_CHIP}` appears in no `/* ChipHal: … */` comment in \
+         {} — the name is wrong, and every binding would silently resolve to the fallback.",
+        dispatch.display()
+    );
+    let symbol = nvoc_hal_symbol(&dispatch_src, TOKEN_HAL_FUNC, TOKEN_ORACLE_CHIP)
+        .unwrap_or_else(|e| panic!("TOKEN ORACLE: {e}"));
+
+    let impl_file = find_definition_file(&root.join(TOKEN_IMPL_ROOT), &symbol)
+        .unwrap_or_else(|e| panic!("TOKEN ORACLE: {e}"));
+    let impl_src = std::fs::read_to_string(&impl_file)
+        .unwrap_or_else(|e| panic!("TOKEN ORACLE: cannot read {}: {e}", impl_file.display()));
+    let token_fn = extract_function(&impl_src, &symbol)
+        .unwrap_or_else(|e| panic!("TOKEN ORACLE: {} — {e}", impl_file.display()));
+
+    // ★★★ The slice carries the IMPL FILE'S OWN `#include` lines, byte for byte, and not
+    // a list of headers this script chose. `NV_CTRL_VF_DOORBELL_VECTOR` and `_RUNLIST_ID`
+    // — the two bit positions the whole increment is about — reach the compiler ONLY
+    // through those lines. Naming `published/ampere/ga100/dev_ctrl.h` here instead would
+    // have put the chip-generation choice back into our hands, which is the transcription
+    // this oracle exists to remove.
+    let includes: String = impl_src
+        .lines()
+        .filter(|l| l.trim_start().starts_with("#include"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    assert!(
+        includes.contains("dev_ctrl.h"),
+        "TOKEN ORACLE: {} no longer includes a `dev_ctrl.h`, so the slice would not see \
+         NV_CTRL_VF_DOORBELL_* at all and the encoder could not compile against the \
+         driver's own field positions.",
+        impl_file.display()
+    );
+
+    let mut kchannel_slices = String::new();
+    let kchannel_src = std::fs::read_to_string(root.join(TOKEN_KCHANNEL_C))
+        .unwrap_or_else(|e| panic!("TOKEN ORACLE: cannot read {TOKEN_KCHANNEL_C}: {e}"));
+    for f in TOKEN_KCHANNEL_FNS {
+        kchannel_slices.push_str(
+            &extract_function(&kchannel_src, f)
+                .unwrap_or_else(|e| panic!("TOKEN ORACLE: {TOKEN_KCHANNEL_C} — {e}")),
+        );
+        kchannel_slices.push('\n');
+    }
+
+    // The anchors the compiled driver code MUST still contain. A slice that landed on the
+    // wrong region, or a release that moved the encoding out of this function, is a build
+    // error naming the anchor rather than a green test.
+    let all = format!("{token_fn}\n{kchannel_slices}");
+    for anchor in TOKEN_SLICE_ANCHORS {
+        assert!(
+            all.contains(anchor),
+            "TOKEN ORACLE: the driver code sliced for `{symbol}` does not contain \
+             `{anchor}`. Either the cut is wrong or this release no longer encodes the \
+             token here — either way the oracle must not be believed."
+        );
+    }
+    // …and what it must NOT: the whole point of slicing rather than compiling the file.
+    for forbidden in ["kfifoUpdateUsermodeDoorbell", "kfifoRunlistGetBaseShift"] {
+        assert!(
+            !token_fn.contains(forbidden),
+            "TOKEN ORACLE: the slice reaches `{forbidden}` — it caught more than the \
+             encoder."
+        );
+    }
+
+    // Per-tag subdirectory with a stable basename, for `build_gmmu_oracle`'s reason: the
+    // driver's own `NV_PRINTF` puts `__FILE__`'s basename in every diagnostic.
+    let dir = out_dir.join(tag);
+    std::fs::create_dir_all(&dir).expect("slice dir");
+    let token_path = dir.join("worksubmit_token_slice.inc");
+    std::fs::write(&token_path, format!("{includes}\n{token_fn}\n"))
+        .expect("write the token slice");
+    let kchannel_path = dir.join("kchannel_runlist_slice.inc");
+    std::fs::write(&kchannel_path, &kchannel_slices).expect("write the kchannel slice");
+
+    let harness = Path::new("oracle/worksubmit_token_oracle.c")
+        .canonicalize()
+        .expect("oracle/worksubmit_token_oracle.c is part of this crate");
+    let bin = out_dir.join(format!("worksubmit_token_oracle_{tag}"));
+    let mut cmd = Command::new(cc);
+    cmd.arg("-std=gnu11").arg("-O1").arg("-g");
+    cmd.arg("-fno-strict-aliasing");
+    cmd.arg("-o").arg(&bin);
+    cmd.arg(format!(
+        "-DOGKM_WORKSUBMIT_TOKEN_SLICE=\"{}\"",
+        token_path.display()
+    ));
+    cmd.arg(format!(
+        "-DOGKM_KCHANNEL_RUNLIST_SLICE=\"{}\"",
+        kchannel_path.display()
+    ));
+    cmd.arg(format!("-DOGKM_WORKSUBMIT_TOKEN_FN={symbol}"));
+    cmd.arg(format!("-DOGKM_WORKSUBMIT_TOKEN_FN_NAME=\"{symbol}\""));
+    cmd.arg(format!(
+        "-DOGKM_WORKSUBMIT_TOKEN_CHIP=\"{TOKEN_ORACLE_CHIP}\""
+    ));
+    for d in DEFINES {
+        cmd.arg(format!("-D{d}"));
+    }
+    cmd.arg("-include")
+        .arg(root.join("src/common/sdk/nvidia/inc/cpuopsys.h"));
+    for (prefix, sub) in INCLUDES {
+        cmd.arg("-I").arg(root.join(prefix).join(sub));
+    }
+    cmd.arg(&harness);
+
+    let out = cmd
+        .output()
+        .unwrap_or_else(|e| panic!("TOKEN ORACLE: could not run the C compiler `{cc}`: {e}"));
+    assert!(
+        out.status.success(),
+        "TOKEN ORACLE FAILED TO BUILD against {}.\n\
+         The tree IS present, so this is NOT a machine without the oracle — it is the \
+         oracle having rotted, and degrading it to a skip is how a gate stops being able \
+         to fire. Compiler output:\n{}\n{}",
+        root.display(),
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
 
     println!("cargo:rustc-env={out_env}={}", bin.display());
 }

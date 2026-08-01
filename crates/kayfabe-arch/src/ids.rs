@@ -56,19 +56,30 @@ id_newtype!(
 );
 
 id_newtype!(
-    /// A **runlist** id — the *other half* of a GA10x work-submit token, and the half
-    /// this project spent its whole life so far calling a property of the [`VChid`].
-    ///
-    /// ★★★ MEASURED, RTX 3060 / GA106 / 580.159.04, `rm-ladder-419afe8.out:21-25`: five
-    /// copy-engine channels reported chid **7** on runlists **0, 1, 2 and 8**. A chid is
-    /// therefore *per-runlist*, not per-GPU: `(GpuId, VChid)` is **not** a channel
-    /// identity on this architecture, and the doc line one screen down
-    /// ([`GpuId`]: *"a vChid a per-GPU runlist index"*) states the model that measurement
-    /// falsifies. See `docs/design/doorbell_token_encoding.md` §4 for what is and is not
-    /// closed about that.
+    /// A **runlist** id — the *other half* of a GA10x work-submit token, and the half a
+    /// `{ vchid }`-only [`crate::DoorbellTarget`] used to drop on the floor.
     ///
     /// Seven bits wide on GA10x (`NV_CTRL_VF_DOORBELL_RUNLIST_ID 22:16`,
-    /// `ogkm-580: src/common/inc/swref/published/ampere/ga100/dev_ctrl.h:27`).
+    /// `ogkm-580: src/common/inc/swref/published/ampere/ga100/dev_ctrl.h:27`), which is
+    /// RM's own encoder's number and not a reading of it — see
+    /// `tests/tests/worksubmit_token_oracle.rs`.
+    ///
+    /// ## ⊘ A correction, kept because it is the more useful half of the record
+    ///
+    /// This newtype was introduced with a doc comment asserting that
+    /// `docs/reference/bench_evidence/rm-ladder-419afe8.out:21-25` **measured** five
+    /// copy-engine channels holding chid 7 on four different runlists, and therefore that
+    /// `(GpuId, VChid)` could not be a channel identity. That reading was wrong: those
+    /// five channels were allocated and freed **one at a time**, so RM handed the same
+    /// recycled chid back each time. The archive shows serial reuse, not simultaneity, and
+    /// nothing in it distinguishes the two.
+    ///
+    /// The census taken to settle it holds the channels **at once**
+    /// (`doorbell-census-ba74151.out`) and measures the opposite:
+    /// `per_runlist_channel_ram=0`, six live channels across four runlists taking six
+    /// **distinct** chids from one global heap. On GA106 a chid *is* device-unique, so
+    /// `(GpuId, VChid)` is adequate here — and would not be on a part where that flag is
+    /// 1. `doorbell_token_encoding.md` §4 carries the scope.
     RunlistId(u16)
 );
 
