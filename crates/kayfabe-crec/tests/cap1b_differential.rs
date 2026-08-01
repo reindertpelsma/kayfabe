@@ -309,7 +309,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         "a served control the differential never sees is a served control no differential \
          can regress"
     );
-    assert_eq!(universe.len(), 13, "non-vacuity: the universe is not empty");
+    assert_eq!(universe.len(), 14, "non-vacuity: the universe is not empty");
 
     // fn 65 is `StaticInfoPolicy`, and fn 228 is `InertPolicy`. Both are answered here too,
     // so all three answering links of the chain are exercised in one run.
@@ -370,27 +370,32 @@ fn every_control_the_oracle_asks_is_either_served_or_triaged() {
     );
 
     // ★★ And the split is counted on both sides, so a control MOVING between the two is a
-    // visible change rather than an invisible one. Thirteen served, fifteen refused with a
-    // written argument. ⊘ The triage table has 23 rows, not 15+13: seven of the thirteen
+    // visible change rather than an invisible one. Fourteen served, fourteen refused with a
+    // written argument. ⊘ The triage table has 23 rows, not 14+14: eight of the fourteen
     // served controls are ALSO triaged (that is what makes the must-serve gate possible),
     // and `0x20800a4b` is triaged without the oracle ever asking it.
     //
-    // ★★★ `0x20800301` is the control that most recently CROSSED this line, and the pair of
-    // numbers is the whole reason that is visible: it went 12/16 -> 13/15 in one commit.
-    // Its triage row is kept and corrected rather than deleted, so the argument for
-    // refusing it and the argument that overturned it sit side by side.
+    // ★★★ `0x20800a6c` is the control that most recently CROSSED this line — 13/15 -> 14/14
+    // in one commit, after `0x20800301` went 12/16 -> 13/15 in the one before. Both triage
+    // rows are kept and corrected rather than deleted, so the argument for refusing each and
+    // the argument that overturned it sit side by side.
+    //
+    // ⚠ `0x20800a70` did NOT cross: it stayed refused and only its DISPOSITION changed
+    // (`RefusalHalts` -> `RefusalIsInvisible`), which these two numbers cannot see. That is
+    // the limit of this pair as an instrument, and `sweep_triage.rs` is where the class
+    // sizes are pinned.
     let served_here: Vec<String> = asked
         .iter()
         .filter(|c| WantedTable::from_cmd(**c).is_some())
         .map(|c| format!("{c:#010x}"))
         .collect();
-    assert_eq!(served_here.len(), 13);
+    assert_eq!(served_here.len(), 14);
     let triaged_here: Vec<&str> = asked
         .iter()
         .filter(|c| WantedTable::from_cmd(**c).is_none())
         .map(|c| triage_for(*c).expect("accounted for above").engine)
         .collect();
-    assert_eq!(triaged_here.len(), 15);
+    assert_eq!(triaged_here.len(), 14);
 
     // ⊘ A control the oracle asks may not be triaged `AmputationIntended`: that disposition
     // means "the chip lacks the engine", and the oracle's board demonstrably had it.
@@ -497,6 +502,24 @@ fn the_served_replies_are_the_ones_posted_and_each_carries_the_result_it_earned(
             // ★★★ The one whose refusal leaves `pKernelGmmu->pStaticInfo` pointing at
             // memory `_kgmmuInitStaticInfo` already freed (`ogkm-580: kern_gmmu.c:139-166`).
             (WantedTable::GmmuStaticInfo, 26, 76, 0),
+            // ★★★ The **action** entries, and the only lines here whose control asks the
+            // device to DO something rather than to describe itself. Three of them, which
+            // is `kbusVerifyBar2_GM107`'s own signature — it is the only function in the
+            // driver that issues this control three times (`ogkm-580:
+            // kern_bus_gm107.c:4110`, `:4175`, `:4224`). `paylen 44` = 40 header + 4
+            // params, an independent confirmation of
+            // `L2_INVALIDATE_EVICT_PARAMS_SIZE` against the oracle's own wire.
+            //
+            // ⚠ `rc == 0` says less here than anywhere else in this list, and the reason is
+            // the OPPOSITE of `EventSetNotification`'s. There the reply body is read back by
+            // the guest, so an empty body would pass and be wrong. Here the guest reads
+            // nothing at all — `kmemsysSendL2InvalidateEvict_IMPL`'s params are a stack
+            // local it never reads after the call — so EVERY body passes this line, and
+            // what makes the four-zero body the right one is `kayfabe_abi::l2evict`'s own
+            // tests against the oracle's captured `psize 4, dlen 0`.
+            (WantedTable::MemsysL2InvalidateEvict, 30, 76, 0),
+            (WantedTable::MemsysL2InvalidateEvict, 31, 76, 0),
+            (WantedTable::MemsysL2InvalidateEvict, 32, 76, 0),
             // ★ The fourth ask of the channel count, from a runlist the first three did not
             // cover, and the second ask of the CC static info — this one from
             // `confComputeStatePostLoad_IMPL` rather than `StateInitLocked`.

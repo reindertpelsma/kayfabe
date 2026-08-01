@@ -170,7 +170,11 @@ fn a_control_whose_refusal_is_invisible_must_cite_the_oracles_own_reply() {
         .iter()
         .filter(|c| c.disposition == SweepDisposition::RefusalIsInvisible)
         .collect();
-    assert_eq!(invisible.len(), 2, "non-vacuity: the class has members");
+    // ⚠ 2 -> 3 at the L2-evict rung: `0x20800a70` moved here from `RefusalHalts` after
+    // its stated reason was found FALSE on the GA106 HAL path — `kbusFlush_GM107`
+    // overwrites its status only for `NV_ERR_TIMEOUT`, so a refused sysmembar is
+    // swallowed even at `kbusVerifyBar2_GM107:4218-4221`. See its `why`.
+    assert_eq!(invisible.len(), 3, "non-vacuity: the class has members");
     for c in invisible {
         assert!(
             c.why.contains("C:"),
@@ -220,12 +224,21 @@ fn a_halting_refusal_may_be_served_or_not_and_the_table_says_which() {
     // undelivered notification is only paid for an event that can occur. See
     // `kayfabe_abi::eventnotify::SILENT_NOTIFIERS`, which scopes the promise to exactly the
     // notifiers this device can defend it for.
+    // ★★★ `0x20800a6c` joined at the L2-evict rung, and it is the SECOND entry whose row
+    // argued against serving it — for a reason of a new kind. The row said an L2
+    // invalidate/evict "is an ACTION on the cache, and an NV_OK this port cannot back would
+    // tell the guest its framebuffer view is coherent when nothing made it so". The premise
+    // holds; the conclusion assumed the coherence had to be MADE. See
+    // `kayfabe_abi::l2evict`, which argues the postcondition already holds structurally and
+    // names the three futures that would falsify that.
     assert_eq!(
         served,
-        vec![0x2080_0a61, 0x2080_0301],
+        vec![0x2080_0a61, 0x2080_0301, 0x2080_0a6c],
         "the halting refusals this port has spent a rung on, in SWEEP_TRIAGE's own order"
     );
-    assert_eq!(halts.len(), 13, "non-vacuity: the class is the roadmap");
+    // ⚠ 13 -> 12: `0x20800a70` LEFT this class (to `RefusalIsInvisible`) at the same rung,
+    // and it left because its argument was wrong rather than because the port changed.
+    assert_eq!(halts.len(), 12, "non-vacuity: the class is the roadmap");
 }
 
 #[test]

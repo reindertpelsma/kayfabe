@@ -111,6 +111,7 @@ pub mod guest_os;
 pub mod guestsysinfo;
 pub mod host_driver;
 pub mod inittables;
+pub mod l2evict;
 pub mod memsysconfig;
 pub mod notifier;
 pub mod pcibars;

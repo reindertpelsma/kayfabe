@@ -322,12 +322,27 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
     SweepControl {
         cmd: 0x2080_0a70,
         engine: "KernelBus",
-        disposition: SweepDisposition::RefusalHalts,
-        why: "kbusSendSysmembarSingle_KERNEL returns the control's status verbatim with no \
-              params at all (ogkm-580: kern_bus.c:420-433), and its callers treat a failed \
-              sysmembar as a failed flush. ⊘ It is an ACTION, not a description: serving it \
-              NV_OK would claim this port had drained the GPU's system-memory write path, \
-              which it has not — the only honest answers are a refusal or a real flush",
+        disposition: SweepDisposition::RefusalIsInvisible,
+        why: "★★ CORRECTED (2026-08-01, with 0x20800a6c). This row read 'its callers treat a \
+              failed sysmembar as a failed flush' and classified it RefusalHalts. That is \
+              FALSE on the GA106 HAL path, and the correction is one function deep: \
+              kbusSendSysmembarSingle_KERNEL does return the status verbatim (ogkm-580: \
+              kern_bus.c:420-433) and kbusFlushSingle_GM107 does propagate it \
+              (kern_bus_gm107.c:3345-3353) — but its only caller kbusFlush_GM107 keeps \
+              `NV_STATUS status = NV_OK` and overwrites it ONLY for NV_ERR_TIMEOUT \
+              (kern_bus_gm107.c:3384-3405), and GA106 dispatches kbusFlush to _GM107 \
+              (g_kern_bus_nvoc.c:1871-1881). So NV_ERR_NOT_SUPPORTED is swallowed, including \
+              at kbusVerifyBar2_GM107:4218-4221, the one site that checks a flush. ⇒ the \
+              refusal is INVISIBLE, and the byte comparison the class demands is trivial \
+              because there are no bytes on either side: the control takes NULL params and \
+              paramsSize 0 (kern_bus.c:428-430), and the oracle's own captured reply is \
+              psize 0, dlen 0, empty array (C: mode2_initctrl_ga106.h:6244, ctl_20800a70[]). \
+              ⊘ NOT served, and the reason is the one that separates it from 0x20800a6c: an \
+              L2 evict's postcondition is about a READ path this port has exactly one \
+              authority for, while a sysmembar's is about a WRITE path crossing to system \
+              memory — the path a real host GPU's uninstrumented pci_dma_map will occupy the \
+              day forwarding is on. Vacuity makes an NV_OK permissible; a caller that CHECKS \
+              is what makes it necessary. This control has the first and not the second",
     },
     // ── seq 30, 31 and 32 ──────────────────────────────────────────────────────────
     SweepControl {
@@ -335,10 +350,25 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         engine: "KernelMemorySystem",
         disposition: SweepDisposition::RefusalHalts,
         why: "kmemsysSendL2InvalidateEvict_IMPL returns the control's status verbatim \
-              (ogkm-580: kern_mem_sys.c:1079-1094). Same argument as 0x20800a70 and it must \
-              be decided with it: an L2 invalidate/evict is an ACTION on the cache, and an \
-              NV_OK this port cannot back would tell the guest its framebuffer view is \
-              coherent when nothing made it so",
+              (ogkm-580: kern_mem_sys.c:1079-1093), and kbusVerifyBar2_GM107:4110-4115 turns \
+              that into NV_PRINTF('L2 evict failed') and a goto — loud, named, and where the \
+              bar0win boot stopped. ★★★ SERVED as of the L2-evict rung, and this row's \
+              original argument is CORRECTED rather than deleted. It read: 'an L2 \
+              invalidate/evict is an ACTION on the cache, and an NV_OK this port cannot back \
+              would tell the guest its framebuffer view is coherent when nothing made it \
+              so'. The premise is right and the conclusion does not follow: it assumes the \
+              coherence has to be MADE. The operation's only observable is the read \
+              kbusVerifyBar2 performs on the very next line (kern_bus_gm107.c:4106-4118), \
+              and on this device that read cannot be stale — kayfabe_device::fbwin's store IS \
+              the framebuffer rather than a cache over one, and the trapped write commits \
+              before the vmexit returns. So NV_OK says 'the state you asked for already \
+              holds', not 'we did it'. ★ Corroborated, not proven, by the oracle: a real \
+              GA106's own GSP answers this NV_OK with a four-zero body (C: \
+              mode2_initctrl_ga106.h:6245, {0x20800a6cu, 0x0u, 4u, 0u}). ⊘ Three named \
+              futures falsify it — real host-GPU forwarding, a write-back layer of this \
+              port's own, and any second writer of the framebuffer — and kayfabe_abi::l2evict \
+              carries all three plus the flag-by-flag licence. ⚠ It is NOT decided with \
+              0x20800a70 after all; see that row",
     },
     // ── seq 33 and 38 ──────────────────────────────────────────────────────────────
     SweepControl {
