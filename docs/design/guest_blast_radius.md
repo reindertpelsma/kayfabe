@@ -793,6 +793,52 @@ survived. Why it survived is `[inferred]`, and nothing here should be cited for 
    non-GA10x part. `compute_mode` was `Default` throughout; `EXCLUSIVE_PROCESS` would change the
    question by forbidding the second tenant outright.
 
+## ★★★ 5.2 MEASURED 2026-08-01 — a FAULT is contained too, and this time the escalation path WAS entered
+
+§5.1 closed with the honest limit that **zero Xid means recovery was never *asked*, not that
+recovery is contained**. That gap is now closed for the fault shape.
+
+`[run: scripts/bench/gpu_fault_containment.sh, 2026-08-01T23:34Z, vast 46529600, RTX 3060
+GA106, host 580.159.04 open, repo eea787f; full log
+docs/reference/bench_evidence/fault-containment-eea787f-ga106.log]`
+
+An attacker stores through a wild, unmapped device VA. RM logs a genuine fault:
+
+```
+NVRM: Xid (PCI:0000:00:08): 31, pid=…, name=gpu_wedge_probe, channel 0x00000008,
+  MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7000_00000000.
+  Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+```
+
+| arm | result |
+|---|---|
+| the attacker's own context | `CUDA_ERROR_ILLEGAL_ADDRESS`, **sticky** — dead for reuse, as CUDA specifies |
+| ★ **victim holding a LIVE context across the fault** | **2 682 576 iterations, 2 682 576 correct, 0 wrong, 0 errors** |
+| a fresh victim afterwards | `OK bad=0` |
+| the GPU afterwards | util 3 %, **no reset, no "reboot required", no "fell off the bus"** |
+
+⇒ **On this hardware a guest-reachable compute fault is contained to the offending channel.**
+The Xid fired, RM's recovery ran, and a second tenant's *live* context did not lose a single
+iteration.
+
+★ **This is stronger evidence than §5.1**, because the escalation path was actually exercised
+rather than merely not needed. §7's three hazards — whole-runlist preempt, node-level
+reboot-required latch, GSP-death halting every channel — did **not** materialise for this fault
+class.
+
+★★ **The arm that carries it is the live-context one, and the weak arm is kept visible to show
+why.** A victim started *after* the fault gets a *fresh* context and would survive a
+context-scoped kill without noticing — it is in the log as arm B2 precisely so nobody mistakes
+it for the finding. Same trap as the 1×32 occupancy error below: an instrument that could not
+have shown otherwise.
+
+⊘ **Still not established, and the list is shorter but not empty:** this is an **MMU fault from
+a wild store, NOT a malformed pushbuffer** — the pushbuffer here was well-formed and RM built
+it. What it shares with §5's second shape is that it reaches the fault/Xid path at all. A
+submission malformed at the *pushbuffer* level (bad method headers, a bogus GPFIFO entry) is a
+different input to a different parser and remains untested. VRAM exhaustion, multiple
+simultaneous faulters, and non-GA10x parts also remain untested.
+
 ### ★ The instrument was wrong first, and it was wrong in the flattering direction
 
 The first version of this experiment span **1 block × 32 threads** on a 28-SM GPU. The victim

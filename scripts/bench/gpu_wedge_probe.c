@@ -74,6 +74,18 @@ static const char *PTX =
 "  st.global.u32 [%rd2], %r3;\n"
 "  ret;\n"
 "}\n"
+/* A kernel that FAULTS: stores through a wild, unmapped device VA.  This is the
+ * shape a hang is not — it produces a real MMU fault and an Xid, which is the
+ * only way to reach RM's channel-recovery/escalation path. */
+".visible .entry fault(.param .u64 p)\n"
+"{\n"
+"  .reg .b32 %r1;\n"
+"  .reg .b64 %rd1;\n"
+"  mov.u64 %rd1, 0x0000700000000000;\n"
+"  mov.u32 %r1, 3735928559;\n"
+"  st.global.u32 [%rd1], %r1;\n"
+"  ret;\n"
+"}\n"
 ".visible .entry addone(.param .u64 p)\n"
 "{\n"
 "  .reg .b32 %r1, %r2, %r3;\n"
@@ -177,6 +189,61 @@ int main(int argc, char **argv) {
         CK(p_cuCtxSynchronize(), "sync burn");
         printf("[burn] DONE t=%.2f\n", now() - t0);
         return 0;
+    }
+
+    if (!strcmp(mode, "fault")) {
+        CUfunction f; CK(p_cuModuleGetFunction(&f, mod, "fault"), "getfn fault");
+        void *a[] = { &d };
+        printf("[fault] LAUNCH wild store t=%.2f\n", now() - t0); fflush(stdout);
+        CUresult lr = p_cuLaunchKernel(f, 1,1,1, 32,1,1, 0, 0, a, 0);
+        CUresult sr = p_cuCtxSynchronize();
+        const char *ln = "?", *sn = "?";
+        if (p_cuGetErrorName) { p_cuGetErrorName(lr, &ln); p_cuGetErrorName(sr, &sn); }
+        printf("[fault] launch rc=%d (%s) sync rc=%d (%s) t=%.2f\n",
+               lr, ln, sr, sn, now() - t0);
+        /* Does this context survive its own fault?  A sticky context is the
+         * expected CUDA behaviour; what matters for containment is the OTHER
+         * process, which the harness checks separately. */
+        CUresult again = p_cuCtxSynchronize();
+        printf("[fault] context reusable? rc=%d %s\n", again,
+               again == 0 ? "YES" : "NO (sticky, as expected)");
+        return 0;
+    }
+
+    if (!strcmp(mode, "loop")) {
+        /* A victim that HOLDS A LIVE CONTEXT across the attacker's fault —
+         * the arm that matters, because a fresh process would silently get a
+         * fresh context and hide a context-scoped kill. */
+        CUfunction f; CK(p_cuModuleGetFunction(&f, mod, "addone"), "getfn addone");
+        int secs = argc > 2 ? atoi(argv[2]) : 30;
+        void *a[] = { &d };
+        int iter = 0, ok = 0, bad = 0, err = 0;
+        printf("[loop] holding one context for %d s t=%.2f\n", secs, now() - t0);
+        fflush(stdout);
+        while (now() - t0 < secs) {
+            for (int i = 0; i < 64; i++) host[i] = i;
+            CUresult r = p_cuMemcpyHtoD(d, host, sizeof host);
+            if (!r) r = p_cuLaunchKernel(f, 1,1,1, 64,1,1, 0, 0, a, 0);
+            if (!r) r = p_cuCtxSynchronize();
+            if (!r) r = p_cuMemcpyDtoH(host, d, sizeof host);
+            iter++;
+            if (r) {
+                const char *n = "?";
+                if (p_cuGetErrorName) p_cuGetErrorName(r, &n);
+                err++;
+                printf("[loop] iter=%d ERROR rc=%d (%s) t=%.2f\n", iter, r, n, now() - t0);
+                fflush(stdout);
+                if (err > 3) break;   /* context is dead; stop hammering */
+            } else {
+                int b = 0;
+                for (int i = 0; i < 64; i++) if (host[i] != (unsigned)i + 1) b++;
+                if (b) { bad++; printf("[loop] iter=%d WRONG bad=%d\n", iter, b); }
+                else ok++;
+            }
+        }
+        printf("[loop] DONE iters=%d ok=%d wrong=%d errors=%d t=%.2f\n",
+               iter, ok, bad, err, now() - t0);
+        return err ? 4 : (bad ? 3 : 0);
     }
 
     /* victim: a real, verified computation by an independent tenant */

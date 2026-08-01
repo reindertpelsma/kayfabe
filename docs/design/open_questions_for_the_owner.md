@@ -701,8 +701,24 @@ shape (the only one that can *fault*, hence the only one that can reach the esca
 in §7) is untested, **VRAM exhaustion** is an unrelated and untested denial vector, and zero
 Xid means recovery was never *asked*, not that recovery is contained.
 
-**My recommendation:** do not widen scope yet. Measure the pushbuffer shape first — it is the
-one that can reach a GPU-wide reset, and it is cheap now that the harness exists.
+**★ UPDATE, same night — I took my own recommendation, and the fault shape is contained too.**
+`[run: scripts/bench/gpu_fault_containment.sh, 2026-08-01T23:34Z, same box and repo eea787f;
+§5.2]` A wild-store kernel raises a genuine **Xid 31 MMU fault**, so RM's recovery path *was*
+entered this time — and a second tenant **holding a live context across it** completed
+**2 682 576 of 2 682 576 iterations with zero errors**. No reset, no reboot-required latch.
+§7's three escalation hazards did not materialise for this fault class.
+
+⊘ That is the *fault* shape, **not** a malformed pushbuffer: the pushbuffer was well-formed and
+RM built it. A submission malformed at the pushbuffer level is a different input to a different
+parser and is still untested — and after E4 we now know our own decoder refuses far more than it
+serves, which changes who would even see such a thing.
+
+**My recommendation, revised:** the containment evidence is now two-for-two on the shapes that
+can be reached from a guest through CUDA. I would still **not** widen v1 scope on it, but the
+reason is no longer "we might deny the GPU to everyone" — it is that **fairness is unmanaged**
+(a 2.1× tax with no mechanism behind it) and that **VRAM exhaustion is an untested and probably
+easier denial vector than either of the two shapes above.** If multi-tenant is wanted, those two
+are the work, not wedge recovery.
 
 ## Q20 — is there a repo-wide citation-attribution convention? (`#159` residue)
 
