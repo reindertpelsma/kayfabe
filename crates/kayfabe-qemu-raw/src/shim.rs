@@ -1500,9 +1500,9 @@ pub fn isolate_factory(
             STILLBORN_WHY,
         ))),
         #[cfg(feature = "host-isolates")]
-        IsolatePlane::Loopback => Ok(Box::new(
-            kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Loopback),
-        )),
+        IsolatePlane::Loopback => Ok(Box::new(kayfabe_isolate_host::HostIsolateFactory::new(
+            kayfabe_isolate_host::RmMode::Loopback,
+        ))),
         #[cfg(feature = "host-isolates")]
         IsolatePlane::Real => Ok(Box::new(kayfabe_isolate_host::HostIsolateFactory::new(
             kayfabe_isolate_host::RmMode::Real,

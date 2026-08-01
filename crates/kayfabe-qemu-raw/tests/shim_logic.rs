@@ -997,7 +997,11 @@ fn every_plane_round_trips_through_its_own_spelling() {
     let mut names: Vec<&str> = IsolatePlane::ALL.iter().map(|p| p.as_str()).collect();
     names.sort_unstable();
     names.dedup();
-    assert_eq!(names.len(), IsolatePlane::ALL.len(), "two planes share a name");
+    assert_eq!(
+        names.len(),
+        IsolatePlane::ALL.len(),
+        "two planes share a name"
+    );
 }
 
 /// ⊘ A value that is not a plane name is a **refusal to realize**, never a quiet default.
@@ -1049,15 +1053,21 @@ fn a_value_that_is_not_a_plane_name_refuses_rather_than_defaulting() {
 #[test]
 fn the_stillborn_factory_retires_every_isolate_at_birth() {
     use kayfabe_arch::ids::GpuId;
-    use kayfabe_isolate::{IsolateFactory, IsolateId};
+    use kayfabe_isolate::IsolateId;
 
     let mut f = isolate_factory(IsolatePlane::Stillborn).expect("the default plane builds");
     let id = IsolateId::new(7, GpuId(0));
     let mut iso = f.spawn(id);
     assert_eq!(iso.id(), id);
-    assert!(iso.is_retired(), "★ the default plane spawned a LIVE isolate");
+    assert!(
+        iso.is_retired(),
+        "★ the default plane spawned a LIVE isolate"
+    );
     assert_eq!(iso.pool_size(), 0);
-    assert!(iso.checkout().is_none(), "★ a verb could be issued by default");
+    assert!(
+        iso.checkout().is_none(),
+        "★ a verb could be issued by default"
+    );
 }
 
 /// ★★ A build **without** `host-isolates` refuses the host planes; it does not degrade
@@ -1070,7 +1080,10 @@ fn without_the_feature_a_host_plane_is_a_named_refusal_not_a_silent_stillborn() 
         let (status, why) = isolate_factory(plane)
             .err()
             .unwrap_or_else(|| panic!("★ {plane:?} was BUILT in an archive that cannot link it"));
-        assert_eq!(status.code(), kayfabe_qemu_raw::shim::Status::Unsupported.code());
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
         assert!(
             why.contains("host-isolates"),
             "★ the refusal must name the feature to rebuild with; it said: {why}"

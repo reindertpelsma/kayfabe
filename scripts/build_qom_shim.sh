@@ -22,8 +22,19 @@ echo "== target: $QEMU ($(cat "$QEMU/VERSION"))"
 # ---- 1. the Rust archive ------------------------------------------------------------
 # ★ Built in release, because a debug archive drags the whole standard library's assertions
 # into a hypervisor's link and the difference is measured in tens of megabytes.
+# ★ `KAYFABE_SHIM_FEATURES` names cargo features for the archive, space-separated.
+# `execution_plane_increments.md` E0's evidence build uses `host-isolates`; the default is
+# EMPTY, so a bench that does not set it gets byte-for-byte the archive master ships.
+# ⊘ It is not a boolean and there is no default-on list: a feature that arrived silently in
+# a hypervisor archive would be a host-side capability nobody chose.
+FEATURES="${KAYFABE_SHIM_FEATURES:-}"
+FEATARGS=()
+if [ -n "$FEATURES" ]; then
+  FEATARGS=(--features "$(echo "$FEATURES" | tr ' ' ',')")
+  echo "== archive features: $FEATURES"
+fi
 echo "== building the archive"
-( cd "$REPO" && cargo build --release -p kayfabe-qemu-raw )
+( cd "$REPO" && cargo build --release -p kayfabe-qemu-raw "${FEATARGS[@]}" )
 ARCHIVE="$REPO/target/release/libkayfabe_qemu_raw.a"
 [ -f "$ARCHIVE" ] || { echo "★ no archive at $ARCHIVE"; exit 1; }
 
