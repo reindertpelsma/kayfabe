@@ -251,11 +251,9 @@ fn our_decode_inverts_rms_own_encoder_over_the_whole_field_space() {
             // 0xFFFFFFFF) comes back 0x007f0fff, so RM keeps 12 bits of chid and 7 of
             // runlist and drops the rest. A decoder must agree with the TRUNCATED value,
             // not with the value that was offered.
-            // Masked to 12 / 7 bits before the cast, so neither narrows.
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "both values are masked to 12 and 7 bits respectively"
-            )]
+            // Masked to 12 / 7 bits before the cast, so neither narrows. (No `#[expect]`
+            // here: clippy does not fire `cast_possible_truncation` on a masked value, and
+            // an unfulfilled expectation is itself `-D warnings`.)
             let (want_chid, want_runlist) = (
                 VChid((chid & 0xFFF) as u16),
                 RunlistId((runlist & 0x7F) as u16),
