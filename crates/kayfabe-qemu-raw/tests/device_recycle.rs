@@ -32,16 +32,28 @@
 //! ## ★★★ How "indistinguishable" is checked: DERIVED, not enumerated
 //!
 //! [`DeviceState`] compares three **whole values** — [`KayfabeAudit`], [`KayfabeRegAudit`]
-//! and [`kayfabe_device::GspFsm`] — each of whose `PartialEq` is `#[derive]`d over every
-//! field it has. A field added to any of them is compared by this test **on the day it is
-//! added, with no edit here**. That is deliberate and it is this repository's most-repeated
-//! defect shape in reverse: a gate quantified over a hand-written list stops covering what
-//! the list stopped naming, silently and with zero red tests.
+//! and [`kayfabe_device::PlaneResidue`] — each of whose `PartialEq` is `#[derive]`d over
+//! every field it has. A field added to any of them is compared by this test **on the day
+//! it is added, with no edit here**. That is deliberate and it is this repository's
+//! most-repeated defect shape in reverse: a gate quantified over a hand-written list stops
+//! covering what the list stopped naming, silently and with zero red tests.
 //!
-//! Exactly one member is not derived — `unclaimed_offsets` — because the plane's state
-//! struct holds two `Box<dyn …>` (the guest-RAM port and the command policy) and therefore
-//! cannot derive equality at all. Those two are named in
-//! [`a_reload_clears_what_a_power_on_reset_keeps`] rather than left silent.
+//! ★★★ **And "derived" has to mean derived all the way down, which it did not.** This file
+//! shipped on 2026-07-31 naming `unclaimed_offsets` as its one non-derived member. It was
+//! not the only one: the derivation stopped a level *above* the state, because
+//! `Shim::audit`, `Regs::audit` and the snapshot itself were hand-written projections. Two
+//! guest-driven samples (`fb_window`, `fault_buffer`) were added to the register plane in
+//! the days after and were in **no** snapshot at all; twenty of the memory plane's
+//! thirty-one counters never crossed the seam. `#130` closed the class rather than the
+//! instances: every projection now **destructures its source with no `..`**, so the next
+//! field is `error[E0027]` at the projection instead of a silence. See
+//! [`kayfabe_device::RegPlane::residue`] and [`Shim::audit`].
+//!
+//! Two members of the plane are still absent and cannot be otherwise: the guest-RAM port
+//! and the command policy are `Box<dyn …>` with no equality. They are the shell's wiring
+//! rather than the device's state, they are `_`-bound *by name* in `residue`'s pattern, and
+//! they are asserted in [`a_reload_clears_what_a_power_on_reset_keeps`] rather than left
+//! silent.
 //!
 //! ## What this file does NOT observe — stated, not implied
 //!
@@ -51,14 +63,20 @@
 //! (`kayfabe-isolate`, `kayfabe-isolate-host` and `kayfabe-core` are all absent from its
 //! manifest, and the word does not appear in the crate). So the question *"does the isolate
 //! die with the device?"* has no answer at this seam — not because it was checked and found
-//! fine, but because there is nothing yet to check. When forwarding is wired in, a reload
-//! that reattaches to a live isolate holding stale host RM objects is a cross-lifetime
-//! hazard the C measured (kernel clients hold refcounted references into **user** memory),
-//! and this file is where the assertion belongs.
+//! fine, but because there is nothing yet to check. When forwarding is wired into *this*
+//! seam, a reload that reattaches to a live isolate holding stale host RM objects is a
+//! cross-lifetime hazard the C measured (kernel clients hold refcounted references into
+//! **user** memory), and this file is where the assertion belongs.
+//!
+//! ★ **It does have an answer one crate over, and it is measured there.** An isolate is
+//! owned by a `kayfabe_core::gpu::Proc`, which is owned by the `Spine`, which is owned by
+//! the core device — so the same requirement is asked and answered against *that* device in
+//! `tests/tests/device_reload_isolates.rs`, including for a proc so wedged that ordinary
+//! reclamation provably never frees it. What is missing here is the wiring between the two
+//! devices, not the property.
 
 use std::sync::Arc;
 
-use kayfabe_device::GspFsm;
 use kayfabe_qemu_raw::shim::{
     BarDesc, KayfabeAudit, KayfabeRegAudit, Regs, SectionWire, Shim, ShimConfig,
 };
@@ -110,6 +128,15 @@ const SECOND_RAM_LEN: u64 = 0x1_0000;
 /// repository had picked a `PRAMIN` address for exactly that reason — the conflation
 /// `kayfabe_device::FbWindow` exists to end. See `plane`'s module docs.
 const NOBODYS_OFFSET: u64 = 0x0055_5555;
+
+/// An offset inside `PRAMIN` — the framebuffer window that lives *inside* the register
+/// aperture, i.e. **device memory**, which is a different fact from an unclaimed register
+/// and is classified before it (`kayfabe_device::FbWindow`, `#102` stage C).
+///
+/// ★ It is exactly the address [`NOBODYS_OFFSET`] used to be, and the reason is the point:
+/// this fixture once called `0x0077_7777` "an offset nobody owns" and it was never that.
+/// Now it is used for what it actually is.
+const PRAMIN_OFFSET: u64 = 0x0077_7777;
 
 fn cfg() -> ShimConfig {
     ShimConfig {
@@ -208,23 +235,34 @@ fn unload_device(d: Device) {
 struct DeviceState {
     /// The memory plane's complete audit — nine counters, compared as one value.
     memory_plane: KayfabeAudit,
-    /// The register plane's complete audit — twelve counters, compared as one value.
+    /// The register plane's audit **in the shape the C shell reads it**. Kept beside the
+    /// residue below rather than replaced by it: this is the value that crosses the
+    /// `#[repr(C)]` seam, and a reload that was clean inside the process while the wire
+    /// value carried the first life's numbers would be a real defect and an invisible one.
     register_plane: KayfabeRegAudit,
-    /// ★★ The emulated GSP, **whole**: phase, queue binding, both ring cursors, both
-    /// sequence numbers, the mailbox shadows, the boot-args conjunction, the region
-    /// identity, the `INIT_DONE` latch and the interrupt latch. Every one of the C's
-    /// four disagreeing reset sites is a field in here.
-    emulated_gsp: GspFsm,
-    /// The distinct offsets no source claimed. Not derived — named because it cannot be.
-    unclaimed_offsets: Vec<(u8, u64)>,
+    /// ★★★ **The register plane's residue, WHOLE** — counters, the emulated GSP, the
+    /// unclaimed sample, the framebuffer-window sample, the unserviced list and the
+    /// fault-buffer registrations, as one derived-equality value.
+    ///
+    /// ★★ It replaces three hand-named members, and the reason is a defect this file had
+    /// **already contracted**. When it shipped it named `unclaimed_offsets` as its one
+    /// non-derived member and argued, correctly, that a hand-written list stops covering
+    /// what it stops naming. By the next task `RegPlane::fb_window_sample` and
+    /// `RegPlane::fault_buffer_sample` had been added beside it — both guest-driven, both
+    /// bounded, both survivors of a `device_reset` — and both outside every snapshot in
+    /// this file. Nothing went red, and nothing could have.
+    ///
+    /// [`kayfabe_device::RegPlane::residue`] is built by **destructuring the plane and its
+    /// locked state with no `..`**, so the next such field is `error[E0027]` on the commit
+    /// that adds it. That is the difference between a guarantee and a list.
+    register_residue: kayfabe_device::PlaneResidue,
 }
 
 fn observe(d: &Device) -> DeviceState {
     DeviceState {
         memory_plane: d.shim.audit(),
         register_plane: d.regs.audit(),
-        emulated_gsp: d.regs.plane().gsp_state(),
-        unclaimed_offsets: d.regs.plane().unclaimed_sample(),
+        register_residue: d.regs.plane().residue(),
     }
 }
 
@@ -322,44 +360,147 @@ fn wire_of(d: SectionDesc) -> SectionWire {
 /// 6. **Two reported RAM sections outstanding** — references taken and never deleted,
 ///    which is what a device being unloaded under a live guest actually looks like.
 /// 7. **The unclaimed sample polluted** — a guest poking offsets nobody owns.
+/// 8. **The framebuffer-window sample polluted** — a guest scribbling in `PRAMIN`.
+///
+/// ⊘ **One member of the residue this fixture cannot dirty, stated rather than implied:**
+/// `PlaneResidue::fault_buffers`. A fault-buffer registration arrives as a `GSP_RM_CONTROL`
+/// off the *command queue*, which needs a queue that bound, which needs an `RMARGS` entry
+/// seeded into guest memory — and the mock machine can only report what the device wrote
+/// (see (3) below). It is carried in the compared value because the point of the value is
+/// that it is total; it is not claimed to be exercised here.
 fn dirty(m: &Machine, d: &Device) {
-    // (1) and (6)
-    let libos = m
-        .host
-        .mint_foreign(BOOT_ARGS_GPA, LIBOS_ARRAY_LEN, SectionFacts::plain_ram());
-    d.shim
-        .region_add(wire_of(libos))
-        .expect("plain memory is taken");
-    let extra = m
-        .host
-        .mint_foreign(SECOND_RAM_GPA, SECOND_RAM_LEN, SectionFacts::plain_ram());
-    d.shim
-        .region_add(wire_of(extra))
-        .expect("plain memory is taken");
-    // (4)
-    d.shim
-        .install_window(BAR1_BASE, 64 * PAGE)
-        .expect("a reservation in a register the hypervisor does not back");
-    // (5) — installing a reservation LATCHES that register's base, which is what the move
-    // detector compares against afterwards. The latch being set is observable from outside
-    // as the preventer refusing every further move of that register.
-    d.shim
-        .bar_move_requested(1)
-        .expect_err("a reservation latches its register, and the preventer must say so");
-    // (2): `kgspBootstrap_TU102`'s order — FWSEC/STARTCPU, the boot-args mailboxes,
-    // Booter Load.
-    let _ = d.regs.write(0, GSP_CPUCTL, 4, STARTCPU);
-    let _ = d
-        .regs
-        .write(0, GSP_MAILBOX0, 4, BOOT_ARGS_GPA & 0xFFFF_FFFF);
-    let _ = d.regs.write(0, GSP_MAILBOX1, 4, BOOT_ARGS_GPA >> 32);
-    let _ = d.regs.write(0, SEC2_MAILBOX0, 4, 0);
-    let _ = d.regs.write(0, SEC2_CPUCTL, 4, STARTCPU);
-    // (3)
-    let _ = d.regs.write(0, GSP_QUEUE_HEAD0, 4, 1);
-    // (7)
-    let _ = d.regs.read(0, NOBODYS_OFFSET, 4);
-    let _ = d.regs.write(0, NOBODYS_OFFSET + 8, 4, 0xDEAD_BEEF);
+    // ★ ONE description of the sequence. This used to be a second copy of the steps below,
+    // in a slightly different order, and a fixture that documents a fixture is a fixture
+    // that drifts from it.
+    corrupt_to(m, d, BootPoint::FbWindowScribbled);
+}
+
+// =====================================================================================
+// ★★★ MEAN, part two: the boot has POINTS, and a reload must work from every one
+// =====================================================================================
+
+/// ★★★ **How far into the boot the guest got before it bricked the device.**
+///
+/// [`dirty`] drives the whole sequence, which answers *"can the device recover from a
+/// fully-dirtied life?"* and only that. It is the easy question. A device can be perfectly
+/// recoverable from its end state and unrecoverable from the middle — that is exactly the
+/// shape of the C artifact's `#64`, where `publish` reset the command ring's cursor and so
+/// the *half-booted* device was the one that could never restart — and it is the shape of
+/// its WPR2 note, where the emulated GSP is stuck precisely because a partial bring-up
+/// latched something a rebuild does not clear.
+///
+/// So the cycle is driven from **every prefix of the bring-up**, in the driver's own order.
+/// Each variant is the state after its own step and every step before it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BootPoint {
+    /// Realized, and the guest has not touched it. A reload from *here* must also work: a
+    /// device that only recovers once something has happened is a device whose reload path
+    /// is doing the recovery.
+    Cold,
+    /// The hypervisor has reported the guest's RAM; the device holds a reference per
+    /// section. Nothing has been written yet.
+    RegionsReported,
+    /// `FWSEC` released: `NV_PFALCON_FALCON_CPUCTL.STARTCPU` on the GSP falcon.
+    FwsecReleased,
+    /// The LibOS boot-args pointer pair is latched and the emulated GSP has **followed it
+    /// into guest memory** and walked the region array.
+    BootArgsPublished,
+    /// The Booter has run on `SEC2` and **WPR2 is up** — the state the C research artifact
+    /// could leave only by restarting the hypervisor.
+    Wpr2Up,
+    /// ★ The command-queue doorbell rung on a queue that never bound: refused by name, and
+    /// a dirty state of its own. This is the *stale-queue latch* shape — the reset blocker
+    /// the C artifact measured on real hardware on 2026-07-25, and its own bench lifecycle
+    /// findings put it **ahead of** WPR2 as the thing that actually stops a restart.
+    DoorbellOnAnUnboundQueue,
+    /// Memslots installed and the base-address tripwire latched.
+    MemslotsAndLatch,
+    /// The guest has polluted the unclaimed sample by poking offsets nobody owns.
+    UnclaimedPolluted,
+    /// ★ The guest has scribbled in `PRAMIN` — the framebuffer window inside the register
+    /// aperture. A separate point from [`BootPoint::UnclaimedPolluted`] because it is a
+    /// separate fact: a *dropped framebuffer write can be a dropped page-table entry*, and
+    /// it is recorded in its own bounded sample.
+    FbWindowScribbled,
+}
+
+/// Every point, in boot order. ★ A `const` array rather than a `#[test]` per point, so
+/// adding a point adds it to every quantified test at once — the same reason
+/// [`DeviceState`] is compared whole.
+const BOOT_POINTS: [BootPoint; 9] = [
+    BootPoint::Cold,
+    BootPoint::RegionsReported,
+    BootPoint::FwsecReleased,
+    BootPoint::BootArgsPublished,
+    BootPoint::Wpr2Up,
+    BootPoint::DoorbellOnAnUnboundQueue,
+    BootPoint::MemslotsAndLatch,
+    BootPoint::UnclaimedPolluted,
+    BootPoint::FbWindowScribbled,
+];
+
+/// Drive the bring-up as far as `upto`, inclusive, and stop.
+///
+/// ★ One description of the sequence, not two: [`dirty`] is this function run to the end.
+/// A second copy would be a fixture that drifts from the fixture it documents.
+fn corrupt_to(m: &Machine, d: &Device, upto: BootPoint) {
+    let want = |p: BootPoint| {
+        BOOT_POINTS
+            .iter()
+            .position(|q| *q == p)
+            .expect("a known point")
+            <= BOOT_POINTS
+                .iter()
+                .position(|q| *q == upto)
+                .expect("a known point")
+    };
+
+    if want(BootPoint::RegionsReported) {
+        let libos = m
+            .host
+            .mint_foreign(BOOT_ARGS_GPA, LIBOS_ARRAY_LEN, SectionFacts::plain_ram());
+        d.shim
+            .region_add(wire_of(libos))
+            .expect("plain memory is taken");
+        let extra = m
+            .host
+            .mint_foreign(SECOND_RAM_GPA, SECOND_RAM_LEN, SectionFacts::plain_ram());
+        d.shim
+            .region_add(wire_of(extra))
+            .expect("plain memory is taken");
+    }
+    if want(BootPoint::FwsecReleased) {
+        let _ = d.regs.write(0, GSP_CPUCTL, 4, STARTCPU);
+    }
+    if want(BootPoint::BootArgsPublished) {
+        let _ = d
+            .regs
+            .write(0, GSP_MAILBOX0, 4, BOOT_ARGS_GPA & 0xFFFF_FFFF);
+        let _ = d.regs.write(0, GSP_MAILBOX1, 4, BOOT_ARGS_GPA >> 32);
+    }
+    if want(BootPoint::Wpr2Up) {
+        let _ = d.regs.write(0, SEC2_MAILBOX0, 4, 0);
+        let _ = d.regs.write(0, SEC2_CPUCTL, 4, STARTCPU);
+    }
+    if want(BootPoint::DoorbellOnAnUnboundQueue) {
+        let _ = d.regs.write(0, GSP_QUEUE_HEAD0, 4, 1);
+    }
+    if want(BootPoint::MemslotsAndLatch) {
+        d.shim
+            .install_window(BAR1_BASE, 64 * PAGE)
+            .expect("a reservation in a register the hypervisor does not back");
+        d.shim
+            .bar_move_requested(1)
+            .expect_err("a reservation latches its register, and the preventer must say so");
+    }
+    if want(BootPoint::UnclaimedPolluted) {
+        let _ = d.regs.read(0, NOBODYS_OFFSET, 4);
+        let _ = d.regs.write(0, NOBODYS_OFFSET + 8, 4, 0xDEAD_BEEF);
+    }
+    if want(BootPoint::FbWindowScribbled) {
+        let _ = d.regs.read(0, PRAMIN_OFFSET, 4);
+        let _ = d.regs.write(0, PRAMIN_OFFSET + 8, 4, 0xDEAD_BEEF);
+    }
 }
 
 // =====================================================================================
@@ -400,15 +541,15 @@ fn the_dirty_state_is_visible_through_the_comparison_the_property_uses() {
     // …and now which parts of it, because `assert_ne!` on a four-member struct passes if
     // any ONE member moved, and three of the four could have gone quiet unnoticed.
     assert_ne!(
-        soiled.emulated_gsp, untouched.emulated_gsp,
+        soiled.register_residue.gsp, untouched.register_residue.gsp,
         "the emulated GSP must have moved"
     );
     assert!(
-        soiled.emulated_gsp.phase().wpr2_up(),
+        soiled.register_residue.gsp.phase().wpr2_up(),
         "★★ WPR2 must be UP — this is the exact latch the C artifact could only clear by \
          restarting the hypervisor, and cycling a device that never raised it would prove \
          nothing about reload. Phase reached: {:?}",
-        soiled.emulated_gsp.phase()
+        soiled.register_residue.gsp.phase()
     );
     assert!(
         soiled.memory_plane.live_memslots > 0,
@@ -437,8 +578,36 @@ fn the_dirty_state_is_visible_through_the_comparison_the_property_uses() {
         soiled.register_plane.gsp_writes
     );
     assert!(
-        !soiled.unclaimed_offsets.is_empty(),
+        !soiled.register_residue.unclaimed.is_empty(),
         "the unclaimed sample must be polluted"
+    );
+    // ★★★ Each residue member that this fixture can reach is asserted BY NAME, and not
+    // because the struct-level `assert_ne!` above is weak — because it is *too strong to
+    // be informative*. A member that stopped being carried, or one nothing dirties, leaves
+    // `assert_ne!` green on the strength of a sibling, which is how `fb_window` and
+    // `fault_buffers` sat outside every snapshot in this file for a week without a red
+    // test. These lines are what a removed member fails on.
+    assert!(
+        !soiled.register_residue.fb_window.is_empty(),
+        "★★ the framebuffer-window sample must be polluted — the guest scribbled in \
+         `PRAMIN`, and a dropped write there can be a dropped page-table entry, which is \
+         why it is a fact of its own and not an unclaimed register"
+    );
+    assert!(
+        soiled.register_residue.counters.fb_window_reads > 0
+            && soiled.register_residue.counters.fb_window_writes > 0,
+        "…and counted, in both directions: {:?}",
+        soiled.register_residue.counters
+    );
+    assert_eq!(
+        soiled.register_residue.fault_buffers_registered, 0,
+        "⊘ **STATED, not asserted-as-a-property**: this fixture cannot reach a fault-buffer \
+         registration at all. It arrives as a `GSP_RM_CONTROL` off the command queue, which \
+         needs a queue that bound, which needs an `RMARGS` entry seeded into guest memory — \
+         and the mock machine can only report what the device wrote. The member is carried \
+         because the compared value must be total; it is NOT exercised here, and this line \
+         is here so that nobody reads its inclusion as coverage. If it ever goes red, the \
+         fixture gained a bound queue and this file's `dirty` should use it."
     );
 
     // The machine must be visibly encumbered too, or the conservation half is vacuous.
@@ -483,7 +652,7 @@ fn a_reloaded_device_is_indistinguishable_from_a_first_boot() {
     let first = load_device(&m);
     dirty(&m, &first);
     assert!(
-        observe(&first).emulated_gsp.phase().wpr2_up(),
+        observe(&first).register_residue.gsp.phase().wpr2_up(),
         "precondition: the device really is bricked-shaped before the reload"
     );
     unload_device(first);
@@ -625,7 +794,7 @@ fn the_residue_snapshot_can_see_an_outstanding_reference() {
 fn a_power_on_reset_puts_the_emulated_gsp_back_to_cold() {
     let m = Machine::new();
     let d = load_device(&m);
-    let cold = observe(&d).emulated_gsp;
+    let cold = observe(&d).register_residue.gsp;
 
     dirty(&m, &d);
     let hot = d.regs.plane().gsp_state();
@@ -670,7 +839,7 @@ fn a_reload_clears_what_a_power_on_reset_keeps() {
     let after_reset = observe(&d);
 
     assert!(
-        !after_reset.unclaimed_offsets.is_empty(),
+        !after_reset.register_residue.unclaimed.is_empty(),
         "MEASURED: the unclaimed sample survives a power-on reset"
     );
     assert!(
@@ -682,7 +851,7 @@ fn a_reload_clears_what_a_power_on_reset_keeps() {
     let reloaded = load_device(&m);
     let after_reload = observe(&reloaded);
     assert!(
-        after_reload.unclaimed_offsets.is_empty(),
+        after_reload.register_residue.unclaimed.is_empty(),
         "…and a reload does clear it, because a reload destroys the plane"
     );
     assert_eq!(
@@ -802,5 +971,95 @@ fn the_topology_listener_is_the_shells_to_withdraw_and_the_archive_says_so() {
          to withdraw it with. The C shell owns the listener object and unregisters it in \
          `nvkvm_exit`, before it unrealizes the plane. If this ever goes red, an \
          unregister primitive was added and this file's `unload_device` must call it."
+    );
+}
+
+// =====================================================================================
+// ★★★ THE CYCLE FROM EVERY POINT OF THE BOOT
+// =====================================================================================
+
+/// ★★★ **The non-vacuity gate for [`BOOT_POINTS`], and it runs before the property.**
+///
+/// "The cycle was driven from eight points" is worth nothing if two of those points leave
+/// the device in the same state — that would be one observation reported nine times, which
+/// is the shape this repository has caught most often. Every point is asserted to produce a
+/// state **distinct from every other**, so a step that silently stopped biting (a refused
+/// write, a moved offset, a guest-RAM port that is no longer attached) goes red *here*,
+/// naming the two points that collided, instead of making eight reload tests green for the
+/// wrong reason.
+#[test]
+fn every_boot_point_leaves_the_device_in_a_distinct_state() {
+    let m = Machine::new();
+    let mut seen: Vec<(BootPoint, DeviceState)> = Vec::new();
+    for p in BOOT_POINTS {
+        let d = load_device(&m);
+        corrupt_to(&m, &d, p);
+        let s = observe(&d);
+        for (q, t) in &seen {
+            assert_ne!(
+                &s, t,
+                "★★ boot points {p:?} and {q:?} are INDISTINGUISHABLE — one of the two \
+                 steps between them stopped dirtying the device, so the reload test below \
+                 would be measuring the same thing twice",
+            );
+        }
+        seen.push((p, s));
+        unload_device(d);
+    }
+    assert_eq!(seen.len(), BOOT_POINTS.len(), "every point was reached");
+}
+
+/// ★★★ **THE HEADLINE, quantified: a reload is a first boot from EVERY point of the boot.**
+///
+/// `a_reloaded_device_is_indistinguishable_from_a_first_boot` asks the question once, of a
+/// fully-dirtied life. This asks it of every prefix — because the failures this requirement
+/// exists for are *partial* ones. The C artifact's `#64` was a half-published ring whose
+/// cursor a rebuild did not clear; its WPR2 note is a half-brought-up GSP that only a
+/// hypervisor restart could leave. A device that recovers from its end state and not from
+/// its middle is precisely as unusable as one that recovers from neither, and it passes a
+/// single-point test.
+///
+/// ★ Every cycle runs on **one machine**, so a residue that only appears after the eighth
+/// load is visible; the machine is asserted back to pristine at the end, which is the half
+/// no device-side snapshot can see.
+#[test]
+fn a_reload_from_every_point_of_the_boot_is_a_first_boot() {
+    let m = Machine::new();
+    let pristine = residue(&m);
+
+    let virgin = Machine::new();
+    let control = load_device(&virgin);
+    let cold = observe(&control);
+
+    for p in BOOT_POINTS {
+        let first = load_device(&m);
+        corrupt_to(&m, &first, p);
+        unload_device(first);
+
+        let second = load_device(&m);
+        assert_eq!(
+            observe(&second),
+            cold,
+            "★★★ a device reloaded after a life that reached {p:?} must be \
+             indistinguishable from a first boot — every counter, every field of the \
+             emulated GSP, both bounded samples, the unserviced list and the fault-buffer \
+             registrations",
+        );
+        // ★ The base-address latch has no counter: its only observation is the preventer's
+        // answer, so it is asked rather than trusted to the snapshot.
+        second
+            .shim
+            .bar_move_requested(1)
+            .expect("the reloaded device's base-address latch is cold, as a first boot's is");
+        unload_device(second);
+    }
+
+    unload_device(control);
+    assert_eq!(
+        residue(&m),
+        pristine,
+        "★★ and after eighteen device loads on this one machine — nine points, two loads \
+         each — it is the machine it started as: no leaked reference, blocker or memslot \
+         accumulated one per cycle",
     );
 }

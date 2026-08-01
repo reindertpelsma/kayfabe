@@ -449,19 +449,64 @@ impl Shim {
     }
 
     /// The counters, in the wire shape.
+    ///
+    /// ★★★ **The source is DESTRUCTURED with no `..`, and that is the whole design.**
+    /// `AuditReport` carries thirty-one counters and this wire value carries nine. Written
+    /// as `a.field` nine times, the other twenty-two are invisible *and so is the
+    /// twenty-third*: a counter added to the memory plane reaches nobody outside the
+    /// process, and no test in this repository can go red about it — the exact
+    /// shrinking-universe failure the `#130` recovery work was written to end. Binding
+    /// every field by name turns "should this cross the seam?" into `error[E0027]` on the
+    /// commit that adds it.
+    ///
+    /// ⊘ The twenty-two `_`-bound names are **not** a claim that they do not matter. They
+    /// are peaks, depth witnesses and internal accounting whose consumer is
+    /// [`crate::shim::Shim`]'s own tests rather than the C shell; if one of them ever needs
+    /// to reach an operator, the wire struct and [`ABI_VERSION`] move together.
     #[must_use]
     pub fn audit(&self) -> KayfabeAudit {
-        let a = self.machine.audit();
+        // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
+        let kayfabe_vmm_qemu::AuditReport {
+            live_windows,
+            live_memslots,
+            memslot_installs,
+            regions_published,
+            topology_adds,
+            topology_dels,
+            bar_base_checks,
+            bar_moves_detected,
+            ops_refused_after_unrealize,
+            live_placements: _,
+            window_bytes: _,
+            peak_windows: _,
+            peak_placements: _,
+            placements_made: _,
+            peak_memslots: _,
+            slot_numbers_recycled: _,
+            accessor_ranked_depth: _,
+            syscall_ranked_depth: _,
+            own_copy_leaf_depth_max: _,
+            host_copy_leaf_depth_min: _,
+            view_leaf_depth_max: _,
+            accesses_served: _,
+            accesses_refused: _,
+            host_refusals: _,
+            r5_revalidation_failures: _,
+            topology_generation: _,
+            irqs_raised: _,
+            window_releases_deferred: _,
+            window_mappings_released: _,
+        } = self.machine.audit();
         KayfabeAudit {
-            live_windows: a.live_windows,
-            live_memslots: a.live_memslots,
-            memslot_installs: a.memslot_installs,
-            regions_published: a.regions_published,
-            topology_adds: a.topology_adds,
-            topology_dels: a.topology_dels,
-            bar_base_checks: a.bar_base_checks,
-            bar_moves_detected: a.bar_moves_detected,
-            ops_refused_after_unrealize: a.ops_refused_after_unrealize,
+            live_windows,
+            live_memslots,
+            memslot_installs,
+            regions_published,
+            topology_adds,
+            topology_dels,
+            bar_base_checks,
+            bar_moves_detected,
+            ops_refused_after_unrealize,
         }
     }
 }
@@ -922,9 +967,32 @@ impl Regs {
     }
 
     /// The counters, in the wire shape.
+    ///
+    /// ★★★ **The source is DESTRUCTURED with no `..`** — same obligation, same reason, as
+    /// [`Shim::audit`]: a counter added to `kayfabe_device::Counters` and not wired here is
+    /// a number the C shell can never read, and nothing goes red. `rustc` refuses the
+    /// pattern (E0027) instead.
     #[must_use]
     pub fn audit(&self) -> KayfabeRegAudit {
-        let c = self.plane.counters();
+        // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
+        let kayfabe_device::Counters {
+            reads,
+            writes,
+            boot_reg_reads,
+            ptimer_reads,
+            rom_reads,
+            gsp_reads,
+            gsp_writes,
+            unclaimed_reads,
+            unclaimed_writes,
+            fb_window_reads,
+            fb_window_writes,
+            faults,
+            ram_refusals,
+            irq_requests,
+            commands,
+            commands_unserviced,
+        } = self.plane.counters();
         // ★ Truncated to what the wire shape holds, and `unserviced_len` says how many —
         // never silently clipped to look complete. The plane's own sample is bounded by
         // the same order of magnitude, so this is a shape conversion and not a policy.
@@ -934,22 +1002,22 @@ impl Regs {
             *slot = (u64::from(e.function) << 32) | u64::from(e.cmd.unwrap_or(UNSERVICED_NO_CMD));
         }
         KayfabeRegAudit {
-            reads: c.reads,
-            writes: c.writes,
-            boot_reg_reads: c.boot_reg_reads,
-            ptimer_reads: c.ptimer_reads,
-            rom_reads: c.rom_reads,
-            gsp_reads: c.gsp_reads,
-            gsp_writes: c.gsp_writes,
-            unclaimed_reads: c.unclaimed_reads,
-            unclaimed_writes: c.unclaimed_writes,
-            fb_window_reads: c.fb_window_reads,
-            fb_window_writes: c.fb_window_writes,
-            faults: c.faults,
-            ram_refusals: c.ram_refusals,
-            irq_requests: c.irq_requests,
-            commands: c.commands,
-            commands_unserviced: c.commands_unserviced,
+            reads,
+            writes,
+            boot_reg_reads,
+            ptimer_reads,
+            rom_reads,
+            gsp_reads,
+            gsp_writes,
+            unclaimed_reads,
+            unclaimed_writes,
+            fb_window_reads,
+            fb_window_writes,
+            faults,
+            ram_refusals,
+            irq_requests,
+            commands,
+            commands_unserviced,
             unserviced_len: sample.len() as u64,
             unserviced,
         }

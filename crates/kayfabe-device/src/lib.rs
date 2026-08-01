@@ -78,7 +78,8 @@ use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
 
 pub use plane::{
-    Counters, NanoClock, ReadOutcome, RefusingRam, RegPlane, SteppingClock, WriteOutcome,
+    Counters, NanoClock, PlaneResidue, ReadOutcome, RefusingRam, RegPlane, SteppingClock,
+    WriteOutcome,
 };
 
 /// ★ The guest-RAM port, re-exported — [`RegPlane::set_ram`]'s argument type.

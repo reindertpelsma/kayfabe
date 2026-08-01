@@ -252,6 +252,38 @@ pub struct Counters {
     pub commands_unserviced: u64,
 }
 
+/// ★★★ **One device life's residue, whole.** What [`RegPlane::residue`] answers; see that
+/// method for why the enumeration is a compiler obligation and not a list.
+///
+/// ★ Every member has derived equality, so comparing two lives is `==` on one value. The
+/// two members [`RegPlane`] holds that *cannot* have equality — the guest-RAM port and the
+/// command policy, both `Box<dyn …>` — are absent by decision rather than by oversight, and
+/// [`RegPlane::residue`]'s docs say which and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaneResidue {
+    /// Every route counter, as [`RegPlane::counters`] reports them.
+    pub counters: Counters,
+    /// ★★ The emulated GSP, **whole**: phase, queue binding, both ring cursors, both
+    /// sequence numbers, the mailbox shadows, the boot-args conjunction, the region
+    /// identity and both latches. `PartialEq` is derived over every field it has.
+    pub gsp: GspFsm,
+    /// The bounded sample of `(bar, offset)` pairs no source claimed.
+    pub unclaimed: Vec<(u8, u64)>,
+    /// ★ The bounded sample of framebuffer-window accesses. Added to the residue in
+    /// `#130`: it is the exact twin of `unclaimed` and had been outside every snapshot
+    /// since it was written.
+    pub fb_window: Vec<(FbWindow, u64)>,
+    /// The distinct commands no policy answered.
+    pub unserviced: Vec<crate::unserviced::UnservicedCommand>,
+    /// ★ The replayable-fault-buffer registrations the guest asked for and this port
+    /// declined. Guest-driven, and — like `fb_window` — in no snapshot before `#130`.
+    pub fault_buffers: Vec<crate::faultbuffer::FaultBufferNote>,
+    /// How many such registrations arrived in total, including repeats and anything past
+    /// the sample bound. A count and a sample fail differently: a sample that saturates
+    /// stops moving, and the count does not.
+    pub fault_buffers_registered: u64,
+}
+
 /// The mutable half — everything that needs the lock.
 struct PlaneState {
     fsm: GspFsm,
@@ -459,26 +491,122 @@ impl RegPlane {
     }
 
     /// The counters.
+    ///
+    /// ★★★ **The source is DESTRUCTURED, and the absent `..` is the point.** This is a
+    /// projection from one struct to another, i.e. exactly the shape that goes silently
+    /// out of date: an atomic added to [`PlaneCounters`] that nobody wires here is a
+    /// number the outside world can never read, with no red test anywhere. Binding every
+    /// field by name makes `rustc` refuse the pattern (E0027) on the day the field is
+    /// added, so *"is this on the wire?"* becomes a question someone must answer rather
+    /// than one nobody is asked.
     #[must_use]
     pub fn counters(&self) -> Counters {
         let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
+        let PlaneCounters {
+            reads,
+            writes,
+            boot_reg_reads,
+            ptimer_reads,
+            rom_reads,
+            gsp_reads,
+            gsp_writes,
+            unclaimed_reads,
+            unclaimed_writes,
+            fb_window_reads,
+            fb_window_writes,
+            commands,
+            faults,
+            ram_refusals,
+            irq_requests,
+        } = &self.c;
         Counters {
-            reads: g(&self.c.reads),
-            writes: g(&self.c.writes),
-            boot_reg_reads: g(&self.c.boot_reg_reads),
-            ptimer_reads: g(&self.c.ptimer_reads),
-            rom_reads: g(&self.c.rom_reads),
-            gsp_reads: g(&self.c.gsp_reads),
-            gsp_writes: g(&self.c.gsp_writes),
-            unclaimed_reads: g(&self.c.unclaimed_reads),
-            unclaimed_writes: g(&self.c.unclaimed_writes),
-            fb_window_reads: g(&self.c.fb_window_reads),
-            fb_window_writes: g(&self.c.fb_window_writes),
-            commands: g(&self.c.commands),
+            reads: g(reads),
+            writes: g(writes),
+            boot_reg_reads: g(boot_reg_reads),
+            ptimer_reads: g(ptimer_reads),
+            rom_reads: g(rom_reads),
+            gsp_reads: g(gsp_reads),
+            gsp_writes: g(gsp_writes),
+            unclaimed_reads: g(unclaimed_reads),
+            unclaimed_writes: g(unclaimed_writes),
+            fb_window_reads: g(fb_window_reads),
+            fb_window_writes: g(fb_window_writes),
+            commands: g(commands),
             commands_unserviced: self.unserviced.total(),
-            faults: g(&self.c.faults),
-            ram_refusals: g(&self.c.ram_refusals),
-            irq_requests: g(&self.c.irq_requests),
+            faults: g(faults),
+            ram_refusals: g(ram_refusals),
+            irq_requests: g(irq_requests),
+        }
+    }
+
+    /// ★★★ **Everything this device life would leave behind, as ONE value — and the
+    /// enumeration is enforced by the COMPILER, not by a reviewer's memory.**
+    ///
+    /// # The property this exists for (`#130`)
+    ///
+    /// > After a guest bricks the emulator, unload → reload must yield a device
+    /// > **indistinguishable from first boot**.
+    ///
+    /// "Indistinguishable" is a statement quantified over *all* of the device's state, so
+    /// the way it fails is not a wrong assertion — it is a **true assertion about a
+    /// shrinking universe**. This repository has been bitten by that shape five separate
+    /// times, and it had already happened here: the recovery test shipped on 2026-07-31
+    /// named [`RegPlane::unclaimed_sample`] as its one non-derived member, and by the time
+    /// the next task looked, [`RegPlane::fb_window_sample`] and
+    /// [`RegPlane::fault_buffer_sample`] had been added beside it and were in **no**
+    /// snapshot at all. Nothing went red. Nothing could have.
+    ///
+    /// # ★★ How this is structural rather than another list
+    ///
+    /// The body **destructures [`RegPlane`] and [`PlaneState`] with no `..`**. A field
+    /// added to either is `error[E0027]: pattern does not mention field` — the build stops
+    /// on the commit that adds the state, and the author decides *there* whether it is
+    /// device state (into the residue) or shell wiring (bound to `_` with a reason). That
+    /// is the difference between a guarantee and a reset function someone must remember to
+    /// extend.
+    ///
+    /// ⊘ Six fields are deliberately `_`, in three groups, each with a stated reason:
+    /// - `chip`, `model`, `rom` — a `&'static` table, its model and the ROM generated from
+    ///   it. Immutable for the plane's whole life; two lives of the same chip cannot
+    ///   differ here.
+    /// - `clock` — the host's monotonic time, which is *supposed* to keep running across a
+    ///   reload. A device whose clock reset would be the bug (see this module's
+    ///   "a stopped clock is an unkillable hang").
+    /// - `ram`, `policy` — the **shell's** wiring, replaced through [`RegPlane::set_ram`]
+    ///   and [`RegPlane::set_policy`], and `Box<dyn …>` with no equality to compare. That
+    ///   they survive a [`RegPlane::device_reset`] is asserted separately and by name.
+    #[must_use]
+    pub fn residue(&self) -> PlaneResidue {
+        // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
+        let RegPlane {
+            chip: _,
+            model: _,
+            rom: _,
+            clock: _,
+            state,
+            // Read through `counters()`, which destructures it in turn.
+            c: _,
+            unserviced,
+            fault_buffer,
+        } = self;
+        let counters = self.counters();
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        // ★★★ EXHAUSTIVE, for the same reason.
+        let PlaneState {
+            fsm,
+            ram: _,
+            policy: _,
+            unclaimed,
+            fb_window,
+        } = &*s;
+        PlaneResidue {
+            counters,
+            gsp: fsm.clone(),
+            unclaimed: unclaimed.clone(),
+            fb_window: fb_window.clone(),
+            unserviced: unserviced.sample(),
+            fault_buffers: fault_buffer.sample(),
+            fault_buffers_registered: fault_buffer.total(),
         }
     }
 

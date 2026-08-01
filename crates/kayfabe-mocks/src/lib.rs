@@ -1948,6 +1948,24 @@ pub struct RmRecorder {
     /// Every isolate's [`ClientLock`], by session — how a test reaches the edge
     /// [`ClientLock::wait_until_blocked`] without owning the factory.
     pub client_locks: BTreeMap<IsolateId, Arc<ClientLock>>,
+    /// ★★★ **Every isolate that has been DROPPED, in drop order** (`#130`).
+    ///
+    /// [`MockIsolateFactory::spawned`] has always recorded the births. Nothing recorded
+    /// the deaths, so *"does the isolate die with the device?"* — the owner's
+    /// unload-and-reload requirement, and the cross-lifetime hazard the C measured on
+    /// real hardware on 2026-06-18 (kernel RM clients hold refcounted references into
+    /// **user** memory; the consequence is pinned here by
+    /// `tests/tests/cross_proc_lifetime.rs`) — was a question this harness **could not
+    /// answer either way**. A property whose instrument
+    /// does not exist reads exactly like a property that holds.
+    ///
+    /// ★ Deaths, not retirements. `Isolate::retire` sets a `bool` and nothing else: it
+    /// refuses new checkouts and leaves the sandbox alive, which is correct and is
+    /// **not** what a reload needs. Only `Drop` kills — for `HostIsolate` it is
+    /// close-fds → `SIGKILL` → blocking `waitpid`
+    /// (`kayfabe-isolate-host/src/isolate.rs:810`, `kayfabe-linux-raw/src/spawn_unsafe.rs:980`).
+    /// This list is written from the same place, so a test can tell the two apart.
+    pub isolates_dropped: Vec<IsolateId>,
     /// ★ Every verb that entered a [`VerbHold`] and the ranked-lock mask it parked with
     /// (see [`ParkedVerb`]).
     pub parked_verbs: Vec<ParkedVerb>,
@@ -2881,6 +2899,26 @@ pub struct MockIsolate {
     next_txn: u64,
     ns: Arc<Mutex<RmNamespace>>,
     retired: bool,
+    /// ★ Held for exactly one reason: to write this isolate's **death** into
+    /// [`RmRecorder::isolates_dropped`]. See that field.
+    recorder: SharedRecorder,
+}
+
+/// ★★★ **The death witness** (`#130`). Without it the harness records births and nothing
+/// else, so "the isolate dies with the device" is unfalsifiable in every test that uses
+/// these mocks — and unfalsifiable reads as true.
+///
+/// ★ It models a real event rather than decorating one. The production `HostIsolate` has
+/// no `kill()` a caller must remember: its `Drop` closes the worker sockets, sends
+/// `SIGKILL` and `waitpid`s, so **being dropped IS the kill**. Recording the drop is
+/// therefore recording the kill, and a `Proc` that is leaked instead of reaped leaves a
+/// live sandboxed process holding host RM objects — exactly the residue a reloaded device
+/// must not reattach to.
+impl Drop for MockIsolate {
+    fn drop(&mut self) {
+        let mut r = self.recorder.lock().unwrap_or_else(|e| e.into_inner());
+        r.isolates_dropped.push(self.id);
+    }
 }
 
 impl Isolate for MockIsolate {
@@ -3068,6 +3106,7 @@ impl IsolateFactory for MockIsolateFactory {
             next_txn: 0,
             ns,
             retired: false,
+            recorder: Arc::clone(&self.recorder),
         })
     }
 }
