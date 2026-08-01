@@ -360,7 +360,8 @@ is the whole value of that section: it converted a ~1 h debugging episode into o
    Survivors, and they are the right survivors: `nvidia-container-toolkit{,-base}`,
    `libnvidia-container{-tools,1}`, `nvidia-modprobe`.
 
-**[measured]** verification, on content and not on exit codes:
+**[measured]** on `vb2` (vast instance **46529600**, RTX 3060 GA106, host 580.159.04 open) at
+rev `6e4f66f`, 2026-08-01 — verification on **content**, not on exit codes:
 
 ```
 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build …
@@ -432,7 +433,8 @@ source revisions** — is **one line**:
 ```
 
 `hClient` is **RM-allocated**, and the *same* one-line diff appears between **two consecutive
-runs of the same binary on the same box** — **[measured]**, `diff /tmp/a.out /tmp/b.out` after
+runs of the same binary on the same box** — **[measured]** on `vb2` (vast instance **46529600**,
+RTX 3060 GA106) at rev `6e4f66f`, 2026-08-01: `diff /tmp/a.out /tmp/b.out` after
 two back-to-back invocations gave exactly `< 0xc1d0006f` / `> 0xc1d0007a` and nothing else. So
 it is the transcript's one legitimately non-deterministic field, and the cross-machine diff is
 **not larger than the within-machine one**. Everything else — the semaphore value,
