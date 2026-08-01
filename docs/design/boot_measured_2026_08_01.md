@@ -600,3 +600,149 @@ translation is exercised for the first time.
   without the rung would isolate it, and none was spent.
 - ⊘ **One boot.** `#98` records a Mode-2 symptom that was 1/3 one day and 9/9 the next on a
   bit-identical binary.
+
+---
+
+# The SIXTH boot of 2026-08-01 — `l2evict1`, and the wall moved INTO the MMU test
+
+> A live boot of the bench, reported in full including what it does not establish.
+
+## 26. Provenance
+
+| | |
+|---|---|
+| Rust archive | built from `/root/kf-l2evict` on the 38-core box, `cargo build --release -p kayfabe-qemu-raw`, rc 0, from a tree `git status --porcelain` reported as **0 files dirty** |
+| boot `l2evict1` | rev **`9551dd1`** — the archive says so itself: `strings … \| grep kayfabe-rev` → `kayfabe-rev:9551dd18158c03c9f2033c7324e9660536b03116`, with **no `-dirty`** suffix and exactly one occurrence. ⊘ Not "the only 40-hex string in the binary": the literal is concatenated with the neighbouring `KvmVmfd` in rodata, so a `\b`-anchored search misses it and finds only QEMU's own hash. The `kayfabe-rev:` prefix is the discriminator, not the hex shape |
+| C overlay | **unchanged and not copied.** All four of `nvkvm.c`, `kayfabe_shim.h`, `nvkvm_compat.h`, `meson.build` were `cmp`-clean against the deployed copies *before* the link, so this boot changes the Rust side and nothing else |
+| link | `ninja -C /workspace/bench/qemu-build qemu-system-x86_64`, rc 0 |
+| discriminator | `nm -C … \| grep -c kayfabe` went **4385 → 4393** |
+| guest | Ubuntu, kernel 6.8.0-136-generic, **stock unpatched** NVIDIA 580.159.04 open kernel module, driven with `nvidia-smi` |
+| rollback | `/workspace/bench/libkayfabe_qemu_raw.a.PREV-f43668b`, `/workspace/bench/qemu-system-x86_64.PREV-f43668b` |
+
+## 27. ★★★ The rung is CLEARED — and the two halves of that must be reported together
+
+```
+NVRM: kbusVerifyBar2_GM107: MMUTest BAR0 window offset 0x70e000 returned garbage 0x0
+NVRM: nvAssertOkFailedNoLog: … [NV_ERR_MEMORY_ERROR] (0x00000072) returned from
+      kbusVerifyBar2_HAL(pGpu, pKernelBus, NULL, NULL, 0, 0) @ kern_bus_gm107.c:360
+NVRM: nvAssertOkFailedNoLog: … returned from kbusStateInitLockedKernel_HAL @ kern_bus_gm107.c:465
+NVRM: RmInitNvDevice: *** Cannot initialize the device
+NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x24:0x72:1220)
+```
+
+Against §21's wall:
+
+| | `bar0win` (`f43668b`) | `l2evict1` (`9551dd1`) |
+|---|---|---|
+| `kbusVerifyBar2_GM107: L2 evict failed` | present | ★★★ **absent** |
+| where `kbusVerifyBar2_GM107` fails | `kmemsysSendL2InvalidateEvict`, `:4110` | ★★★ the **MMU test's** read-back, `:4200` |
+| `kbusVerifyBar2_HAL` status | `NV_ERR_NOT_SUPPORTED` (`0x56`) | `NV_ERR_MEMORY_ERROR` (`0x72`) |
+| `RmInitNvDevice` | *"Cannot **load state** into the device"* | *"Cannot **initialize** the device"* |
+| `RmInitAdapter failed!` | `(0x25:0x40:1249)` | `(0x24:0x72:1220)` |
+| `0x20800a6c` in the unserviced list | yes | ★★★ **no** |
+
+★★ **Why "cleared" is a structure and not an impression.** `kbusVerifyBar2_GM107:4110-4200`
+is straight-line code. The string *"L2 evict failed"* is printed by the `if (NV_OK != status)`
+arm at `:4113` and there is no other producer of it; the string *"MMUTest BAR0 window offset
+… returned garbage"* exists only at `:4200`. Between them lie the **first** L2 evict
+(`:4110`), the BAR0-window restore (`:4138-4141`), the BAR2 write loop
+(`MEM_WR32(pOffset + index, SAMPLEDATA)`, `:4163-4166`), and the **second** L2 evict
+(`:4175`). ⇒ printing the second message proves both L2 evicts were answered `NV_OK` and the
+guest ran past them. It cannot be reached any other way.
+
+## 28. ⊘ AND THE BOOT WENT BACKWARDS IN PHASE — §23 in reverse, and both halves are true
+
+⚠ This is the exact trap §23 named, running the other direction, and reporting either half
+alone would be wrong.
+
+`gpuStateInit_IMPL` maps `NV_ERR_NOT_SUPPORTED` to `NV_OK` and does **not** map
+`NV_ERR_MEMORY_ERROR`. `bar0win`'s `0x56` was therefore *absorbed* — `KernelBus` was
+amputated and the boot ran on into `gpuStateLoad`, `kgmmuStatePostLoad`,
+`kceGetPceConfigForLceType` and `kgraphicsLoadStaticInfo`. `l2evict1`'s `0x72` is **not**
+absorbed, so `kbusStateInitLockedKernel` aborts `gpuStateInit` outright and none of those
+later phases run at all.
+
+⇒ **The wall moved FORWARD ninety lines inside `kbusVerifyBar2` and BACKWARD one phase in the
+boot.** Both are consequences of the same change and neither is the headline on its own:
+
+- ⊘ It is **not** a regression. `bar0win` reached `gpuStateLoad` *without a `KernelBus`*, and
+  §23 already said no `StateLoad` result in that log could be read as *"that subsystem
+  works"*. Trading a deeper log full of results from an amputated bus for a shallower log in
+  which the bus is real and fails honestly is the trade this rung was for.
+- ⊘ It is **not** unqualified advancement either. The boot ends earlier in wall-clock phase
+  terms, and every count below is smaller because of it.
+
+## 29. ★★★ The new wall is the FIRST GMMU TRANSLATION this port has ever been asked for
+
+`:4155-4200` is the sub-test §25 recorded as *"past the L2 evict and not reached"*. It is
+reached now, and what it does is the whole point:
+
+1. `MEM_WR32(pOffset + index, SAMPLEDATA)` — sixteen bytes written through the **BAR2 CPU
+   mapping**, which is a *translated* aperture: the address goes through the GMMU page
+   tables RM published.
+2. `GPU_REG_RD32(pGpu, DRF_BASE(NV_PRAMIN) + …)` — the same sixteen bytes read back through
+   the **untranslated** BAR0 moving window at the physical framebuffer address.
+
+The guest read `0x0` where it had written `0xabcdabcd`. ⇒ the BAR2 write **did not land in
+the framebuffer**. That is the data-plane wall §17 predicted, and it is now the boot's own
+statement rather than a forecast.
+
+⊘ `translated-window drops 0r/0w` again, which says the two translated apertures were still
+never *reached through the window classifier* — so this log does not yet say **where** the
+BAR2 write went, only that it did not arrive.
+
+## 30. ★★ The unserviced ledger — one control left because it is SERVED, seven because their phase is gone
+
+```text
+nvkvm: commands: 39 decoded, 8 UNSERVICED, 7 distinct
+  0x20800a87  0x20800a4b  0x20802a08  0x20800afe  0x20800aff  fn 70  0x20800a70
+```
+
+| | `bar0win` | `l2evict1` |
+|---|---|---|
+| commands decoded | 62 | 39 |
+| UNSERVICED | 18 | 8 |
+| distinct | 14 | **7** |
+| framebuffer writes through the window | 33 973 | 17 520 |
+| `fb refusals` | 0 | 0 |
+| registers | 3464r / 35089w | 2844r / 18434w |
+
+★★★ **The two reasons a control left this set are different and must not be conflated.**
+
+- `0x20800a6c` left because it is **served**. It is still asked — §27's structural argument
+  requires both of `kbusVerifyBar2`'s first two calls to have been answered — and it is
+  simply no longer refused.
+- `0x20800a80`, `0x20802a0f`, `0x2080017e`, `0x20800a9f`, `0x20800a1f`, `0x20800a38` left
+  because **nothing asks them any more**: every one of them is issued from `gpuStateLoad` or
+  later, which §28 says this boot does not reach. Their absence is not progress and must not
+  be read as any.
+
+★ `0x20800a70` is still there, deliberately. Its triage row was corrected in the same commit
+— `RefusalHalts` → `RefusalIsInvisible`, because `kbusFlush_GM107` overwrites its status only
+for `NV_ERR_TIMEOUT` (`ogkm-580: kern_bus_gm107.c:3384-3405`) and GA106 dispatches `kbusFlush`
+there (`g_kern_bus_nvoc.c:1871-1881`) — and it is still refused, because vacuity makes an
+`NV_OK` *permissible* while a caller that checks is what makes one *necessary*. ⚠ This boot
+does **not** test that correction: `kbusVerifyBar2_GM107:4218`, the one site that checks a
+flush, is past `:4200` and was not reached.
+
+## 31. ⊘ What this boot does NOT establish
+
+- ⊘ **No compute, no working device.** `nvidia-smi` prints *"No devices were found"*.
+  ⚠ `/dev/nvidia0`, `/dev/nvidiactl`, `/dev/nvidia-uvm` and `/dev/nvidia-uvm-tools` all
+  **exist** — they are created by the module load, before `RmInitAdapter` — so their presence
+  says nothing about the adapter and must not be quoted as if it did.
+- ⊘ **Nothing about a real L2.** This device has none. §27 shows the guest accepted the
+  answer; it does not show the answer was *right* in any world but this one. The three
+  futures that falsify it are in `kayfabe_abi::l2evict`, and the first of them — real
+  host-GPU forwarding — requires the row to be **re-decided**, not inherited.
+- ⊘ **The third L2 evict is unexercised.** `kbusVerifyBar2_GM107:4224` is past `:4200`.
+  Two of the three calls were answered; the third was never made.
+- ⊘ **The `WAIT_FB_PULL` prediction is unconfirmed.** `kayfabe_abi::l2evict` predicts the
+  wire value is `0x31` (`ALL | CLEAN | WAIT_FB_PULL`, because `bL2CleanFbPull` is `NV_TRUE`
+  for GA106 in `ogkm-580: g_kern_mem_sys_nvoc.c:256-262`). This boot proves only that the
+  value the guest sent **decoded** — a `0x11` would have decoded too. Distinguishing them
+  needs a recorder this boot did not run.
+- ⊘ **`interrupt requests dropped 38`** (was 61). This port still delivers no vectors. The
+  number moved only because the boot is shorter; it is not an improvement in anything.
+- ⊘ **One boot.** `#98` records a Mode-2 symptom that was 1/3 one day and 9/9 the next on a
+  bit-identical binary.
