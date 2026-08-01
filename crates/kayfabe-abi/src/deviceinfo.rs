@@ -241,8 +241,13 @@ pub const GROUP_LOCAL_INSTANCE_ID_OFF: usize = 44;
 /// `sizeof(NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS)` — the `[OUT]` struct RM
 /// allocates (`ogkm-580: gpu_gspclient.c:219`) and therefore the `paramsSize` it declares.
 ///
-/// `[measured]` the C declares exactly this and delivers 16384 bytes of it; see this
-/// module's docs for why that gap is the fail-open this encoder closes.
+/// ★ `[measured]`, and the run is the **C artifact's, not this port's**: its reply table
+/// registers `{0x20800a40u, 0x0u, 24580u, 16384u, ctl_20800a40}` — exactly this
+/// `paramsSize` against 16384 bytes of data — at
+/// `C: src/qemu/mode2_initctrl_ga106.h:6252`, `nvidia-gpu-passthrough` rev `018e492`, the
+/// commit that last wrote those bytes. An inherited measurement, named as one; nothing
+/// here was read off a machine by us. See this module's docs for why that gap is the
+/// fail-open this encoder closes.
 pub const INTERNAL_DEVICE_INFO_PARAMS_SIZE: usize =
     DEVICE_INFO_TABLE_OFF + INTERNAL_DEVICE_INFO_MAX_ENTRIES * INTERNAL_DEVICE_INFO_STRIDE;
 
@@ -258,7 +263,10 @@ pub const DEV_TYPE_ENUM_LCE: u32 = 19;
 ///
 /// ⚠ **Deliberately not 4 KiB.** [`crate::falconinfo::FALCON_REGISTER_BLOCK_LEN`] can check
 /// a 4 KiB boundary because `[measured]` every falcon base the oracle reports is
-/// `0x1000`-aligned. Here it would refuse the oracle's own bytes: `runlistPriBase` is
+/// `0x1000`-aligned — the C artifact's captured GA106 replies at
+/// `C: src/qemu/mode2_initctrl_ga106.h`, `nvidia-gpu-passthrough` rev `018e492`, which is
+/// an inherited measurement and not one this port took. Here it would refuse the oracle's
+/// own bytes: `runlistPriBase` is
 /// `0xc00400`, `0xc00800`, `0xc00c00` on `CE2`, `CE3`, `CE4`. So the only granularity this
 /// module can honestly claim is the one that makes the value name a register at all.
 pub const PRI_REGISTER_ALIGN: u32 = 4;
@@ -437,8 +445,10 @@ pub enum DeviceInfoError {
     /// derivation instead of a name it happens to know.
     ///
     /// ⊘ The converse is **not** refused: a device with `isEngine = 0` is a normal thing
-    /// (`[measured]`, the oracle's rows 10 and 11 are exactly that), so a non-host-driven
-    /// row may still be marked [`DevicePriBase::At`].
+    /// (`[measured]` — the oracle's rows 10 and 11 are exactly that, in
+    /// `C: src/qemu/mode2_initctrl_ga106.h:4028`'s `ctl_20800a40` at
+    /// `nvidia-gpu-passthrough` rev `018e492`; the C's run, inherited, not ours), so a
+    /// non-host-driven row may still be marked [`DevicePriBase::At`].
     PriBaseAbsentForHostDrivenEngine {
         /// The engine the FIFO table calls host-driven.
         engine: &'static str,
@@ -453,8 +463,12 @@ pub enum DeviceInfoError {
     ///
     /// ★ `[inferred]`, and stated as such: no consumer in the vendored open tree reads
     /// `devicePriBase` after the copy — `gpu_vgpu.c:313` only prints it — so this guards no
-    /// *measured* MMIO. What it does guard is measured: `GA106_ENGINES`' `SOFTWARE` row
-    /// carries the capture noise `0x77f2058f` in `RUNLIST_PRI_BASE`, and no such value can
+    /// *measured* MMIO. What it does guard is measured, and by whom: `GA106_ENGINES`'
+    /// `SOFTWARE` row carries the capture noise `0x77f2058f` in `RUNLIST_PRI_BASE` — read
+    /// out of the committed
+    /// `cap1b_coldboot_hermetic_d6.rec.zst` (the `cmd=0x20801112` reply at record 142049),
+    /// `nvidia-gpu-passthrough` rev `018e492`, which is the C artifact's capture and not a
+    /// run of ours — and no such value can
     /// be filed by RM as a register base. (On `SOFTWARE` itself the Esched-validity rule
     /// already zeroes the field, and `0x77f2058f` in particular is caught one check earlier
     /// by [`DeviceInfoError::PriBaseNotRegisterAligned`] — see this module's docs for all
@@ -574,11 +588,7 @@ impl core::fmt::Display for DeviceInfoError {
                 "no entry has typeEnum {DEV_TYPE_ENUM_LCE:#x} (LCE); \
                  kgmmuInitCeMmuFaultIdRange would find no MMU fault id and end the boot"
             ),
-            Self::CopyEngineFaultIdsNotContiguous {
-                first,
-                last,
-                count,
-            } => write!(
+            Self::CopyEngineFaultIdsNotContiguous { first, last, count } => write!(
                 f,
                 "{count} copy engines with fault ids spanning {first:#x}..={last:#x}; RM \
                  reduces them to that range and treats every id in it as a copy engine's"
@@ -723,12 +733,17 @@ pub fn encode_internal_device_info_table(
         );
         put(RL_ENG_ID_OFF, rl_eng_id);
         put(RUNLIST_PRI_BASE_OFF, runlist_pri_base);
-        // `groupId`, `ginTargetId` and `deviceBroadcastPriBase` stay zero — `[measured]`,
-        // all twelve of the oracle's rows. See this module's docs for the scope of that.
+        // `groupId`, `ginTargetId` and `deviceBroadcastPriBase` stay zero — `[measured]` in
+        // all twelve of the oracle's rows: `ctl_20800a40` at
+        // `C: src/qemu/mode2_initctrl_ga106.h:4028`, `nvidia-gpu-passthrough` rev `018e492`.
+        // The C's capture, inherited; no run of ours says this. See this module's docs for
+        // the scope of it.
         put(GROUP_ID_OFF, 0);
         put(GIN_TARGET_ID_OFF, 0);
         put(DEVICE_BROADCAST_PRI_BASE_OFF, 0);
-        // `[measured]` equal to `instanceId` in all twelve of the oracle's rows.
+        // `[measured]` equal to `instanceId` in all twelve of the oracle's rows —
+        // `ctl_20800a40` at `C: src/qemu/mode2_initctrl_ga106.h:4028`,
+        // `nvidia-gpu-passthrough` rev `018e492`. The C's capture, inherited, not ours.
         put(GROUP_LOCAL_INSTANCE_ID_OFF, instance_id);
 
         written += 1;

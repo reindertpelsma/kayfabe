@@ -107,6 +107,17 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               [measured] run t134a, a stock 580.159.04 guest at 1c79474",
     },
     SweepControl {
+        cmd: kayfabe_abi::deviceinfo::NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE,
+        engine: "KernelFifo",
+        disposition: SweepDisposition::AmputationUnsurvivable,
+        why: "asked from gpuStateInit_IMPL, whose loop maps NV_ERR_NOT_SUPPORTED to NV_OK \
+              and does NOT remove the engine (ogkm-580: gpu.c:2286-2287) — so unlike the \
+              PreInit sweep it leaves a constructed-but-uninitialised KernelFifo with no \
+              engine list, which every NULL check passes and which \
+              memmgrCalcReservedFbSpaceHal_GM107 then sizes a heap reservation from; \
+              [measured] run t135a, a stock 580.159.04 guest at c84ef52",
+    },
+    SweepControl {
         cmd: 0x2080_0a4b,
         engine: "KernelDisplay",
         disposition: SweepDisposition::AmputationIntended,

@@ -1,13 +1,13 @@
-//! The command policy that answers the six `GSP_RM_CONTROL`s the guest's RM cannot start
+//! The command policy that answers the eight `GSP_RM_CONTROL`s the guest's RM cannot start
 //! without, from the chip row's own tables.
 //!
-//! ⚠ The type names say *table* and three of the six are not one:
+//! ⚠ The type names say *table* and three of the eight are not one:
 //! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` is an identity,
 //! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP` is a **permission policy**,
 //! and `NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO` is an **instruction to construct**
-//! — none of which is a list. The names are kept because what actually unifies the six is
+//! — none of which is a list. The names are kept because what actually unifies them is
 //! the property the module is about — **`[OUT]`-only, and a pure function of the chip
-//! row** — and that holds for all six.
+//! row** — and that holds for all eight.
 //!
 //! ## ★★ Why this is here and not in a logic crate
 //!
@@ -20,7 +20,7 @@
 //!
 //! ## ★★★ What it does NOT do, deliberately
 //!
-//! Six controls, all `[OUT]`-only, all answered from the chip row. It touches no RM graph
+//! Eight controls, all `[OUT]`-only, all answered from the chip row. It touches no RM graph
 //! state, allocates no handle, and remembers nothing between commands. Every other command
 //! falls through to whatever the FSM would have done — this is a *supplement* to the
 //! baseline policy, not a replacement for `kayfabe_rmrpc::GraphPolicy`, which is the
@@ -39,6 +39,9 @@
 use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
 use kayfabe_abi::chipinfo::{
     self, CHIP_INFO_PARAMS_SIZE, ChipIdentity, NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO,
+};
+use kayfabe_abi::deviceinfo::{
+    self, INTERNAL_DEVICE_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE,
 };
 use kayfabe_abi::falconinfo::{
     self, FALCON_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
@@ -191,6 +194,28 @@ pub enum WantedTable {
     /// (`kern_mem_sys.c:422`) and divide-by-zero in `mem_mgr_gm107.c:211`. See
     /// [`kayfabe_abi::memsysconfig`], which makes both unencodable.
     MemorySystemStaticConfig,
+    /// `NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE` — the DEVICE_INFO2 table, and ★★★
+    /// the **second** unsurvivable refusal, by a worse mechanism than
+    /// [`Self::MemorySystemStaticConfig`]'s.
+    ///
+    /// That one is asked from `gpuStatePreInit_IMPL`, whose sweep at least *NULLs* the
+    /// engine pointer, so a `NULL` check downstream can catch it. This one is asked from
+    /// `gpuStateInit_IMPL`, whose loop maps `NV_ERR_NOT_SUPPORTED` to `NV_OK` and does
+    /// **not** remove the engine (`ogkm-580: gpu.c:2286-2287`) — leaving a
+    /// constructed-but-uninitialised `KernelFifo` that every `NULL` check passes.
+    ///
+    /// ⊘ `[measured]` run `t135a`, a stock 580.159.04 guest at `c84ef52`: refusing it made
+    /// `gpuConstructDeviceInfoTable_HAL @ kernel_fifo.c:2208` the guest's first and only
+    /// `LEVEL_ERROR`, twenty times, then `kfifoConstructEngineList_HAL`, then a guest-kernel
+    /// `NULL` dereference in `memmgrCalcReservedFbSpaceHal_GM107` — the heap sizing a
+    /// reservation from a `KernelFifo` that has no engine list.
+    ///
+    /// ★★ And *"answer honestly with nothing"* is not available here either, unlike the
+    /// falcon inventory: `gpuConstructDeviceInfoTable_FWCLIENT` accepts `numEntries == 0`
+    /// with `NV_OK` (`ogkm-580: gpu_gspclient.c:231-232`), and the boot then dies two engine
+    /// steps later in `kgmmuInitCeMmuFaultIdRange_GA100`, attributed to nothing. See
+    /// [`kayfabe_abi::deviceinfo`].
+    InternalDeviceInfo,
 }
 
 impl WantedTable {
@@ -204,7 +229,7 @@ impl WantedTable {
     /// `Self`, so a new variant does not compile until it has an id, and
     /// `tests/init_tables.rs` walks this array through `cmd_id` → [`WantedTable::from_cmd`]
     /// and back.
-    pub const ALL: [WantedTable; 7] = [
+    pub const ALL: [WantedTable; 8] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -212,6 +237,7 @@ impl WantedTable {
         Self::UserRegisterAccessMap,
         Self::ConstructedFalconInfo,
         Self::MemorySystemStaticConfig,
+        Self::InternalDeviceInfo,
     ];
 
     /// The control id this table answers — the inverse of [`WantedTable::from_cmd`].
@@ -231,6 +257,7 @@ impl WantedTable {
             }
             Self::ConstructedFalconInfo => NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
             Self::MemorySystemStaticConfig => NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG,
+            Self::InternalDeviceInfo => NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE,
         }
     }
 
@@ -245,6 +272,7 @@ impl WantedTable {
             Self::UserRegisterAccessMap => USER_REGISTER_ACCESS_MAP_PARAMS_SIZE,
             Self::ConstructedFalconInfo => FALCON_INFO_PARAMS_SIZE,
             Self::MemorySystemStaticConfig => MEMSYS_STATIC_CONFIG_PARAMS_SIZE,
+            Self::InternalDeviceInfo => INTERNAL_DEVICE_INFO_PARAMS_SIZE,
         }
     }
 
@@ -263,6 +291,7 @@ impl WantedTable {
             NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG => {
                 Some(Self::MemorySystemStaticConfig)
             }
+            NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE => Some(Self::InternalDeviceInfo),
             _ => None,
         }
     }
@@ -420,6 +449,31 @@ impl CommandPolicy for InitTablePolicy {
             // default here; there is only a row that is right.
             WantedTable::MemorySystemStaticConfig => {
                 match memsysconfig::encode_memsys_static_config(&self.chip.memory_system) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The only arm that is a **projection** rather than a statement: the reply
+            // is derived from `chip.engines` — the same slice `WantedTable::DeviceInfo`
+            // serves through a different control — and `chip.device_info` supplies only the
+            // one field that slice does not carry. Two hand-written descriptions of one
+            // silicon is the drift `kayfabe_abi::deviceinfo` exists to forbid.
+            //
+            // ⚠ The error arm is the same shape as the one above and just as load-bearing:
+            // this control is asked from `gpuStateInit_IMPL`, which maps a refusal to
+            // `NV_OK` and leaves `KernelFifo` constructed-but-empty
+            // (`ogkm-580: gpu.c:2286-2287`). `refuse()` is therefore the worse outcome here
+            // too — and still the right one, because every projection the encoder declines
+            // is a guest-kernel fault of its own: no `LCE` row ends the boot inside
+            // `kgmmuInitCeMmuFaultIdRange_GA100` (`ogkm-580: kern_gmmu_ga100.c:281-287`),
+            // and a gap in the copy-engine fault ids is an id the guest attributes to an
+            // engine this device never advertised.
+            WantedTable::InternalDeviceInfo => {
+                match deviceinfo::encode_internal_device_info_table(
+                    self.chip.engines,
+                    &self.chip.device_info,
+                    self.chip.regs_aperture_len,
+                ) {
                     Ok(p) => p,
                     Err(_) => return refuse(),
                 }

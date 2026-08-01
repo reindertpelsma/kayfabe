@@ -464,6 +464,7 @@ fn the_serve_site_refuses_when_the_encoder_declines() {
     // prevent.
     static BAD: ChipProfile = ChipProfile {
         memory_system: kayfabe_device::ga10x::GA106_MEMORY_SYSTEM,
+        device_info: kayfabe_device::ga10x::GA106_DEVICE_INFO,
         constructed_falcons: FalconInventoryRow {
             // Inside RM's 71-slot check, outside the 64-entry table it indexes.
             falcons: &SIXTY_FIVE,
@@ -576,6 +577,7 @@ const fn copy_of_ga106() -> ChipProfile {
         },
         user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
         memory_system: kayfabe_device::ga10x::GA106_MEMORY_SYSTEM,
+        device_info: kayfabe_device::ga10x::GA106_DEVICE_INFO,
         constructed_falcons: FalconInventoryRow::NONE,
         fb_length: 0,
     }
