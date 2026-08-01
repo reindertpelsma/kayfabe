@@ -227,8 +227,9 @@ had rewritten `Cargo.lock` and nothing had committed it.
 
 # The `EVENT_SET_NOTIFICATION` rung — what was built, and the two things §7 got slightly wrong
 
-> Written at the rung, **before** the boot that tests it. Everything below that is not
-> marked `[measured]` is a source reading, said as one.
+> Written at the rung, **before** the boot that tests it — that boot is §14-§19, `evt1` at
+> rev `0d82456`. Everything in §10-§13 that does not name a run is a source reading of
+> `ogkm-580`, said as one.
 
 ## 10. ★★★ §7 named the right control for a slightly wrong reason
 
@@ -327,3 +328,122 @@ nvkvm:   bridge refusal BridgeRefusal::<Tag> xK
 
 ★ `bridge refusals: 0` is a **positive** statement that the bridge refused nothing. The
 absence of a line was never one.
+
+---
+
+# The FOURTH boot of 2026-08-01 — `evt1`, and the wall is GONE
+
+> A live boot of the bench, reported in full including what it does not establish.
+
+## 14. Provenance
+
+| | |
+|---|---|
+| Rust archive | built from `/root/kfevt` on the 38-core box, `cargo build --release -p kayfabe-qemu-raw`, rc 0, from a tree `git status --porcelain` reported as **0 files dirty** |
+| boot `evt1` | rev **`0d82456`** — the archive says so itself: `strings … \| grep kayfabe-rev` → `kayfabe-rev:0d824561134a68bf0be5f5dcf0717871ad0aa473`, with **no `-dirty`** suffix |
+| C overlay | `nvkvm.c` and `kayfabe_shim.h` **changed** (ABI 6 → 7, and the bridge-refusal print) and were copied; `nvkvm_compat.h` and `meson.build` `cmp`-clean |
+| link | `ninja -C /workspace/bench/qemu-build qemu-system-x86_64`, rc 0 |
+| discriminator | `nm -C … \| grep -c kayfabe` went **4148 → 4361** |
+| guest | Ubuntu, kernel 6.8.0-136-generic, **stock unpatched** NVIDIA 580.159.04 open kernel module, driven with `nvidia-smi` |
+
+## 15. ★★★ The rung is CLEARED — four independent signs, not one
+
+```
+NVRM: kbusVerifyBar2_GM107: Pre-L2 invalidate evict: Address 0x2efbae000 programmed
+      through the bar0 window with value 0xabcdabcd did not read back the last write.
+NVRM: nvAssertOkFailedNoLog: … [NV_ERR_MEMORY_ERROR] (0x00000072) returned from
+      kbusVerifyBar2_HAL(pGpu, pKernelBus, NULL, NULL, 0, 0) @ kern_bus_gm107.c:360
+NVRM: nvAssertOkFailedNoLog: … returned from kbusStateInitLockedKernel_HAL @ kern_bus_gm107.c:465
+NVRM: RmInitNvDevice: *** Cannot initialize the device
+NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x24:0x72:1220)
+```
+
+Against §7's wall, which was byte-identical across two boots:
+
+| | `alloc1`/`alloc2` | `evt1` |
+|---|---|---|
+| `pHeap != NULL @ mem_desc.c:152` | present | ★ **absent** |
+| `_memdescSetSubAllocatorFlag` → `NV_ERR_INVALID_STATE` | present | ★ **absent** |
+| which BAR2 call fails | `kbusInitBar2_HAL` (`kern_bus_gm107.c:332`) | ★ `kbusVerifyBar2_HAL` (`:360`) |
+| `RmInitAdapter failed!` | `(0x24:**0x40**:1220)` — `NV_ERR_INVALID_STATE` | ★ `(0x24:**0x72**:1220)` — `NV_ERR_MEMORY_ERROR` |
+| `0x20800301` in the unserviced ledger | **yes** | ★ **no** |
+
+⇒ `memmgrStateInitLocked_IMPL` **completes**. The heap it creates at `mem_mgr.c:684` is no
+longer rolled back by the `failed:` label, `memmgrGetDeviceSuballocator` returns it, and the
+whole `kbusInitBar2_HAL` chain that consumed the null heap now succeeds.
+
+★★ And the call order makes "further" a **structural** claim rather than an impression:
+`kbusStateInitLockedKernel_GM107` is a linear chain of `NV_ASSERT_OK_OR_RETURN`s —
+`:332 kbusInitBar2_HAL` then `:360 kbusVerifyBar2_HAL`. Reaching the second means the first
+returned `NV_OK`. It cannot be reached any other way.
+
+## 16. ★★ The unserviced ledger's membership churned exactly as its own docs predict
+
+```text
+nvkvm: commands: 37 decoded, 8 UNSERVICED, 7 distinct
+nvkvm:   unserviced fn 76 cmd 0x20800a87   nvkvm:   unserviced fn 76 cmd 0x20800a4b
+nvkvm:   unserviced fn 76 cmd 0x20802a08   nvkvm:   unserviced fn 76 cmd 0x20800afe
+nvkvm:   unserviced fn 76 cmd 0x20800aff   nvkvm:   unserviced fn 70
+nvkvm:   unserviced fn 76 cmd 0x20800a70
+```
+
+`commands` **28 → 37**. Distinct **6 → 7**, and the *set* moved: `0x20800301` left it
+(served), and **`fn 70`** and **`0x20800a70`** entered — two the boot had never got far
+enough to ask. In `cap1b` those sit at `rpc.sequence` **27, 28 and 29**, immediately after
+`0x20800301` (25) and `0x20800a59` (26), so the guest is walking the oracle's own order.
+⊘ `kayfabe_device::unserviced`'s rule holds again: watch the membership, never the
+cardinality.
+
+## 17. ★★★ The new wall is a DATA-PLANE wall, and it is not BAR2
+
+⚠ The message names BAR2 and the test is not one. `kbusVerifyBar2_GM107`
+(`ogkm-580: kern_bus_gm107.c:3970`) allocates a 16-byte FB buffer and, at `:4084-4090`,
+runs a check that touches **no BAR2 and no MMU**:
+
+```c
+GPU_FLD_WR_DRF_NUM(pGpu, _PBUS, _BAR0_WINDOW, _BASE, NvU64_LO32(bar0TestAddr >> 16));
+GPU_FLD_WR_DRF_NUM(pGpu, _PBUS, _BAR0_WINDOW, _TARGET, testAddrSpace);
+testData = GPU_REG_RD32(pGpu, DRF_BASE(NV_PRAMIN) + NvU64_LO32(bar0TestAddr & 0xffff));
+GPU_REG_WR32(pGpu, DRF_BASE(NV_PRAMIN) + NvU64_LO32(bar0TestAddr & 0xffff), SAMPLEDATA);
+if (GPU_REG_RD32(pGpu, DRF_BASE(NV_PRAMIN) + NvU64_LO32(bar0TestAddr & 0xffff)) != SAMPLEDATA)
+```
+
+It programs the **BAR0 moving window** (`NV_PBUS_BAR0_WINDOW` at BAR0 `0x1700`, base =
+`phys >> 16` in bits 23:0, target aperture in 25:24 —
+`ogkm-580: dev_bus.h:43-50`), then does a plain **read-after-write of one dword through
+PRAMIN** (BAR0 `0x700000..0x7FFFFF`, `ogkm-580: dev_ram.h:26-33`). For
+`bar0TestAddr = 0x2efbae000` that is window base `0x2efba` and BAR0 offset `0x70e000`.
+
+⇒ what this port must provide is a BAR0 window that **aliases real framebuffer storage** at
+`(BASE << 16) + (off - 0x700000)` with dword write-then-read coherency, honouring the full
+24-bit base. Not page tables, not GMMU translation — those come in the *later* sub-tests at
+`:4155-4200` that this boot never reaches.
+
+## 18. ⊘ What this boot does NOT establish
+
+- ⊘ **No compute, no `/dev/nvidia*`.** `nvidia-smi` still prints *"No devices were found"*.
+- ⊘ **BAR2 bring-up is not shown to be CORRECT — only to have reported success.**
+  `kbusInitBar2`'s own BAR0-window writes are never read back, so a window that silently
+  drops writes lets every step of it return `NV_OK` and is caught only here. "Further along"
+  is proven; "right" is not.
+- ⊘ **No host GPU.** This box has none, forwarding is off, and the isolate factory is
+  `StillbornIsolates`.
+- ⊘ **That serving `0x20800301` is what moved the wall is `[inferred]` from the four signs
+  in §15, not isolated.** This boot changed one rung *and* added the refusal instrument; the
+  instrument answers nothing and cannot move a wall, but only a boot at a revision with the
+  instrument and without the rung would isolate it, and none was spent.
+- ⊘ **One boot.** `#98` records a Mode-2 symptom that was 1/3 one day and 9/9 the next on a
+  bit-identical binary.
+
+## 19. ★ The refusal instrument, first light
+
+```text
+nvkvm: bridge refusals: 0 total, 0 distinct (these ANSWER the command and so never reach
+                                             the unserviced list)
+```
+
+⊘ **Zero is the finding, and it is a finding rather than a null result.** §6 could only say
+*"`fn 103` is absent from six lines"*; this boot says *"the bridge refused nothing"* as a
+positive statement, in one line, without a reader having to know which function numbers
+should have been present. The object model accepted every allocation and free this boot
+issued.
