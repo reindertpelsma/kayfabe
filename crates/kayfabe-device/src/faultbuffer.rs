@@ -21,6 +21,16 @@
 //! link that both recorded and answered would be instrumentation that changes what it
 //! observes.
 //!
+//! ★ **And that is also the whole of its sticky-answer argument.** The guest's control
+//! cache is populated only from a reply the RPC layer treats as accepted
+//! (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11093-11104`, `ogkm-610: :10898-10909` — the
+//! `else` arm of `if (rpc_params->status != NV_OK)`). A policy that never returns `Some`
+//! authors no reply at all, so there is nothing for either branch to persist. ⊘ Note the
+//! direction: this is safe because it declines, **not** because the control it decodes is
+//! outside the mask — `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER` is a fn-76
+//! control and the day this recorder starts answering it inherits the whole question. See
+//! [`crate::sticky`]; `tests/tests/sticky_answer.rs` executes the claim against this type.
+//!
 //! ⚠ **What it therefore does NOT establish.** Seeing this control means the guest asked;
 //! it does not mean the guest went on to use the buffer, because we refuse. The C's
 //! captures show the *registers* being polled on the compute path

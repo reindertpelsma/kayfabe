@@ -357,6 +357,19 @@ pub trait CommandPolicy: Send {
 /// decided by flag fields *the replying GSP fills in the reply body* — `EchoOk` avoids it
 /// only by the accident of reflecting a request in which the guest zeroed them itself.
 ///
+/// ★★ **The accident, spelled out, because it is the whole of this type's defence and it
+/// has two holes.** `rpcRmApiControl_GSP` writes `rpc_params->rmctrlFlags = 0;
+/// rpc_params->rmctrlAccessRight = 0;` before every send (`ogkm-580: rpc.c:10994-10995`,
+/// `ogkm-610: :10799-10800`) and the GSS-legacy cache branch's first test is
+/// `!(flags & RMCTRL_FLAGS_CACHEABLE_ANY) -> NV_FALSE`
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/rmapi_cache.c:152-158`, `ogkm-610: :152-158`).
+/// So the echo reflects zero and nothing sticks — **provided the sender is stock**. A guest
+/// that sets those bits itself gets them straight back. And the *other* cache branch,
+/// `bCacheable`, is decided inside the guest from its own export table before the RPC is
+/// even sent (`ogkm-580: rpc.c:10900-10913`), so no reply — echo or otherwise — can prevent
+/// it. `kayfabe_device::sticky` carries both readings and closes the half that is ours;
+/// this type is outside that guard because nothing installs it in the port.
+///
 /// ## ★★★ And the guest does NOT always zero them — measured on hardware, 2026-07-31
 ///
 /// The paragraph above assumes an `[OUT]` request arrives zeroed. It does not always.

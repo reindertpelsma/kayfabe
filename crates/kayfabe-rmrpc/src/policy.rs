@@ -388,6 +388,34 @@ impl CommandPolicy for GraphPolicy<'_> {
     /// guest's own source. A refusal expressed in the reply *body* instead of the envelope
     /// would inherit both hazards.
     ///
+    /// ## ★★★ …and the argument above is about REFUSALS ONLY. Here is the accepted path
+    ///
+    /// ⊘ **The envelope short-circuit says nothing about a command this policy ACCEPTS.**
+    /// An accepted control leaves here with `rpc_result: 0` and the request's own body, so
+    /// `_issueRpcAndWait` returns `NV_OK`, `rpcRmApiControl_GSP`'s post-RPC block runs in
+    /// full, and the control cache is live for it. That gap sat unexamined until
+    /// 2026-08-01: every sticky-answer sentence in this crate was attached to a refusal.
+    ///
+    /// What discharges it is a property of the **body**, read out of the guest's send path
+    /// rather than assumed. `rpcRmApiControl_GSP` writes `rpc_params->rmctrlFlags = 0;
+    /// rpc_params->rmctrlAccessRight = 0;` into every request it sends
+    /// (`ogkm-580: rpc.c:10994-10995`, `ogkm-610: :10799-10800`), and the GSS-legacy cache
+    /// branch is guarded by `rmapiControlIsCacheable(rpc_params->rmctrlFlags,
+    /// rpc_params->rmctrlAccessRight, NV_TRUE)`, whose first test is
+    /// `!(flags & RMCTRL_FLAGS_CACHEABLE_ANY) -> NV_FALSE`
+    /// (`ogkm-580: rmapi_cache.c:152-158`, `ogkm-610: :152-158`). Reflecting the request
+    /// therefore reflects **zero** into both fields, and zero is *"do not remember this"*.
+    ///
+    /// ⚠ **That is an accident of the echo, not a decision this type makes, and it holds
+    /// only for a stock sender.** `rmctrlFlags` is a field on a message the *guest* wrote;
+    /// a guest that pre-sets `RMCTRL_FLAGS_CACHEABLE` in a bit-15 request gets it handed
+    /// straight back under `NV_OK`. This type has no guard against that because nothing
+    /// installs it in the port — `kayfabe_device::served_policy` is the one production
+    /// chain and it is wrapped in `kayfabe_device::sticky::StickyAnswerGuard`, which zeroes
+    /// both fields on every accepted control reply. ⊘ **The day this policy is installed,
+    /// it must go inside that wrapper**, and `tests/tests/sticky_answer.rs` is where the
+    /// claim that it is not installed is checked rather than asserted.
+    ///
     /// ★★ **The `Held` arm is load-bearing on the wire, not a convenience.** For a
     /// fragmented `GSP_RM_CONTROL` the driver awaits one reply per fragment — the head at
     /// `(expectedFunc, firstSequence)`, then each continuation at

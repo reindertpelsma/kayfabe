@@ -307,6 +307,81 @@ fn a_refused_control_is_still_answered() {
 }
 
 // =====================================================================================
+// 2b. ★★★ The ACCEPTED path — the half the envelope argument does not reach
+// =====================================================================================
+
+/// **The envelope short-circuit says nothing about a command this policy ACCEPTS**, and
+/// until 2026-08-01 every sticky-answer sentence in this crate was attached to a refusal.
+///
+/// An accepted control leaves `GraphPolicy::respond` with `rpc_result: 0` and the request's
+/// own body, so `_issueRpcAndWait` returns `NV_OK` and `rpcRmApiControl_GSP`'s post-RPC
+/// block — copy-out **and** control cache — runs in full. What discharges the hazard is a
+/// property of the body: the guest zeroes `rmctrlFlags`/`rmctrlAccessRight` in every request
+/// it sends (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:10994-10995`,
+/// `ogkm-610: :10799-10800`), and `rmapiControlIsCacheable`'s first test is
+/// `!(flags & RMCTRL_FLAGS_CACHEABLE_ANY) -> NV_FALSE`
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/rmapi_cache.c:152-158`). Reflecting the request
+/// reflects **zero**, and zero means *"do not remember this"*.
+///
+/// ⚠ So this test asserts the accident, and then asserts that it IS an accident: a request
+/// with the bits pre-set comes straight back. That second half is why
+/// `kayfabe_device::sticky::StickyAnswerGuard` exists and why this policy must go inside it
+/// the day anything installs it.
+#[test]
+fn an_accepted_answer_echoes_the_guests_own_cacheability_bits_verbatim() {
+    const RMCTRL_FLAGS_CACHEABLE: u32 = 0x0000_0400;
+    // On a `GSP_RM_CONTROL` payload these two words ARE `rmctrlFlags` and
+    // `rmctrlAccessRight` (`rpc_gsp_rm_control_v03_00`, +24 and +28).
+    const WINDOW: std::ops::Range<usize> = 24..32;
+
+    let mut gpu = fresh_gpu();
+    let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
+
+    // ★ A command this policy really ACCEPTS. `SET_GUEST_SYSTEM_INFO` translates to
+    // `Translation::Inert` unconditionally (`kayfabe_rmrpc::translate`), so the accepted
+    // arm is reached without building graph state — which is the point: the arm is what is
+    // under test, not the object model.
+    let mut payload = vec![0u8; 64];
+    payload[WINDOW].copy_from_slice(&[0xaa; 8]);
+    let accepted = kayfabe_gsp::RpcCommand {
+        function: RpcFunction::SetGuestSystemInfo,
+        code: 1,
+        sequence: 3,
+        payload,
+        elements: 1,
+    };
+    let r = policy
+        .respond(&accepted)
+        .expect("an accepted command is acknowledged");
+    assert_eq!(r.rpc_result, 0, "the premise: this command is ACCEPTED");
+    assert_eq!(
+        r.body, accepted.payload,
+        "the accepted arm echoes the request VERBATIM — that is the mechanism under test",
+    );
+    assert_eq!(
+        &r.body[WINDOW], &[0xaa; 8],
+        "the accepted arm filters the two words that decide whether the guest keeps our \
+         answer forever; it did not before, and the rustdoc argument rests on it not doing \
+         so — see `kayfabe_device::sticky`",
+    );
+
+    // ⇒ For a `GSP_RM_CONTROL` this arm hands `rmctrlFlags` straight back. Against a stock
+    // guest that is ZERO (`ogkm-580: rpc.c:10994-10995`) and therefore not cacheable
+    // (`rmapiControlIsCacheable`'s first test, `ogkm-580: rmapi_cache.c:152-158`); against a
+    // guest that sets the bit it is the bit. Both halves, so neither can be read as the
+    // other.
+    let mut crafted = control_cmd(CUDART_INIT_GATE[0], 8);
+    crafted.payload[24..28].copy_from_slice(&RMCTRL_FLAGS_CACHEABLE.to_le_bytes());
+    let r = policy.respond(&crafted).expect("a refusal is never a drop");
+    assert_ne!(
+        r.rpc_result, 0,
+        "an UNMODELLED GSS-legacy control must still be refused — the envelope is what \
+         keeps the crafted flags out of the guest's cache today",
+    );
+    assert!(r.body.is_empty());
+}
+
+// =====================================================================================
 // 3. The structural guarantee behind all of the above
 // =====================================================================================
 

@@ -24,6 +24,19 @@
 //! That is strictly better than a well-formed body that is wrong, and it is what an
 //! unencodable row gets. ⊘ It is *not* what an unknown function gets — those fall through
 //! to the chain, which is a different statement.
+//!
+//! ## ★★ Fn 65's accepted reply is 1792 bytes the guest keeps — but not in the CACHE
+//!
+//! The guest copies this body into `pGpu->pGspStaticInfo` and reads it for the rest of the
+//! boot, which is a form of stickiness this module already argues about above. It is **not**
+//! the `rmapiControlCache` kind, and the two must not be conflated: the cache is populated
+//! from an RPC reply at exactly two call sites in the whole driver —
+//! `ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11097` and `:11102` (`ogkm-610: :10902`,
+//! `:10907`) — both inside `rpcRmApiControl_GSP`, reachable only for
+//! `NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL`. Fn 65 is not that function. ⇒ a wrong static-info
+//! reply dies with the driver life that read it, where a cached control answer would not
+//! even be re-asked. [`crate::sticky`] §1a derives the call-site universe by grep;
+//! `tests/tests/sticky_answer.rs` executes the claim against this type.
 
 use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
 use kayfabe_abi::gspstaticinfo::{

@@ -114,9 +114,20 @@ const CONTROL_PARAMS_SIZE_OFF: usize = 16;
 /// ★★ **The gate on a STICKY answer.** A reply's `rmctrlFlags` decide whether the guest
 /// puts our answer in its control cache *permanently*: `rmapiControlCacheSetUnchecked`
 /// (`ogkm-580: rpc.c:11096-11103`) is reached only when `IsGssLegacyCall(cmd)` holds, is
-/// not FINN-serialized, and the flags say cacheable. Our replies **reflect the request's
-/// `rmctrlFlags`**, because the whole control header is kept — so for a GSS-legacy control
-/// the guest would cache whatever we answered and never ask again.
+/// not FINN-serialized, and the flags say cacheable.
+///
+/// ⚠ **CORRECTED (2026-08-01).** This used to continue: *"Our replies reflect the request's
+/// `rmctrlFlags`, because the whole control header is kept — so for a GSS-legacy control
+/// the guest would cache whatever we answered and never ask again."* The mechanism is
+/// backwards. `rpcRmApiControl_GSP` assigns `rpc_params->rmctrlFlags = 0;
+/// rpc_params->rmctrlAccessRight = 0;` before every send (`ogkm-580: rpc.c:10994-10995`,
+/// `ogkm-610: :10799-10800`), and `rmapiControlIsCacheable` returns `NV_FALSE` the moment
+/// `!(flags & RMCTRL_FLAGS_CACHEABLE_ANY)` (`ogkm-580: rmapi_cache.c:152-158`). So a
+/// reflected header carries zero and the reflection is what SAVES an echo — against a
+/// **stock** guest. What is real is that `rmctrlFlags` is a field the guest wrote, so a
+/// guest that pre-sets it gets it reflected; the reasoning was wrong, the guard is not.
+/// [`crate::sticky`] §2 carries the full reading and closes the branch for every policy at
+/// once.
 ///
 /// None of the controls this port serves has bit 15 set, so the branch is unreachable
 /// today. ⊘ Nothing checked that, which is the defect shape: the NEXT served control with

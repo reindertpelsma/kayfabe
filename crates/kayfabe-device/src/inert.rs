@@ -76,6 +76,17 @@
 //! there is no GSP-side driver state to unload. The guest asked us to acknowledge that it
 //! is going away, and it is.
 //!
+//! ## ★★ An inert answer is still an ACCEPTED answer — can the guest keep it forever?
+//!
+//! No, and not because the body is empty. The guest's control cache is populated from an
+//! RPC reply at exactly two call sites in the whole driver —
+//! `ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11097` and `:11102` (`ogkm-610: :10902`,
+//! `:10907`) — and both sit inside `rpcRmApiControl_GSP`, reachable only for
+//! `NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL`. Fn 228 and fn 47 are not that function, and this
+//! policy returns `None` for everything else, so neither site can see a reply of ours.
+//! [`crate::sticky`] §1a derives that call-site universe by grep; `tests/tests/sticky_answer.rs`
+//! executes the claim against this type rather than leaving it as a reading.
+//!
 //! ⊘ The address the guest sent is **not recorded**. Nothing here may write to it, so
 //! keeping it would be storing a guest-supplied pointer with no consumer — and the day
 //! something does want to write GSP traces, it will need the address *and* a guest-RAM

@@ -225,6 +225,14 @@ impl UnservicedLog {
 }
 
 /// The terminal chain link: writes down what it was asked, and answers nothing.
+///
+/// ★ **Its sticky-answer argument is the same one sentence, and it is worth stating because
+/// this link sees every fn-76 control the port declines.** The guest's control cache is
+/// populated only from a reply the RPC layer accepted (`ogkm-580:
+/// src/nvidia/src/kernel/vgpu/rpc.c:11093-11104`, `ogkm-610: :10898-10909`), and `respond`
+/// here is `None` unconditionally — recording is not answering, so there is no reply for
+/// either branch to persist. See [`crate::sticky`]; `tests/tests/sticky_answer.rs` executes
+/// the claim against this type rather than trusting this paragraph.
 #[derive(Debug, Clone)]
 pub struct UnservicedLedger {
     driver: DriverAbiTable,

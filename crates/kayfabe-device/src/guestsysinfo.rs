@@ -39,6 +39,17 @@
 //! nothing out of that reply — the function's whole contract is the status — so the answer
 //! is a bare `NV_OK` over a zeroed body, and `[inferred]` from that source rather than
 //! measured, because a run that refuses fn 1 never gets far enough to send it.
+//!
+//! ## ★★ Both of those are ACCEPTED answers, so: can the guest keep them forever?
+//!
+//! No, and the argument is structural rather than a property of these two replies. The
+//! guest's control cache is populated from an RPC reply at exactly two call sites in the
+//! whole driver — `ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11097` and `:11102`
+//! (`ogkm-610: :10902`, `:10907`) — and both are inside `rpcRmApiControl_GSP`, i.e. both
+//! are reachable only for `NV_VGPU_MSG_FUNCTION_GSP_RM_CONTROL`. This policy answers fn 1
+//! and fn 64 and returns `None` for everything else, so no reply of its can reach either.
+//! [`crate::sticky`] §1a derives that call-site universe by grep rather than by reading,
+//! and `tests/tests/sticky_answer.rs` executes the claim against this type.
 
 use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
 use kayfabe_abi::guestsysinfo::{

@@ -58,6 +58,7 @@ pub mod inert;
 pub mod inittables;
 pub mod plane;
 pub mod staticinfo;
+pub mod sticky;
 pub mod sweep;
 pub mod unserviced;
 
@@ -700,8 +701,39 @@ pub fn rom_for(chip: &ChipProfile) -> Result<Vec<u8>, ChipError> {
 /// ★ The LEDGER is last, and it answers nothing — it writes down exactly what the links
 /// above declined and lets the FSM refuse it by name. See [`unserviced`] for why a
 /// host-side list is the only way to know how long that list is.
+///
+/// ## ★★★ The chain is WRAPPED, and the wrapper is what makes the sticky rule a property
+///
+/// [`sticky::StickyAnswerGuard`] sits outside the whole chain rather than inside any link.
+/// Every accepted `GSP_RM_CONTROL` reply — from a link that exists today, from one added
+/// tomorrow, from a link that never heard of the rule — crosses it, and it writes the two
+/// reply fields that decide whether the guest keeps our answer **forever** back to zero
+/// (`rmapiControlCacheSetUnchecked`, `ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11098-11103`).
+/// So *"installed in this port"* and *"cannot hand out a sticky answer"* are **one fact**,
+/// not two lists that agree today; [`sticky`]'s module docs carry the derivation, including
+/// the branch this cannot reach and why that one is tolerable.
 #[must_use]
 pub fn served_policy(
+    chip: &'static ChipProfile,
+    driver: kayfabe_abi::versions::DriverAbiTable,
+    unserviced: unserviced::UnservicedLog,
+    fault_buffer: faultbuffer::FaultBufferLog,
+) -> Box<dyn kayfabe_gsp::CommandPolicy> {
+    Box::new(sticky::StickyAnswerGuard::new(
+        driver,
+        served_chain(chip, driver, unserviced, fault_buffer),
+    ))
+}
+
+/// The chain [`served_policy`] wraps — exposed so a test can drive the links **without**
+/// the guard and see the difference the guard makes.
+///
+/// ⊘ Nothing in the port calls this. A caller that wants the port's behaviour wants
+/// [`served_policy`]; this exists because *"the guard changes the bytes"* is only
+/// assertable against the unguarded bytes, and a test that could not build them would be
+/// asserting the guard against itself.
+#[must_use]
+pub fn served_chain(
     chip: &'static ChipProfile,
     driver: kayfabe_abi::versions::DriverAbiTable,
     unserviced: unserviced::UnservicedLog,
