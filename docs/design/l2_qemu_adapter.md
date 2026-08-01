@@ -144,10 +144,43 @@ destructor-shaped foreign resources than KVM does:
 
 1. **`memory_region_unref()` is a `Drop`-shaped call site.** It is `object_unref` on the
    region's owner and can run a QOM finalizer. Any place we drop the last reference to a
-   foreign `MemoryRegion` is subject to the #57 rule, and the adapter's answer is the same one
-   `kayfabe_vmm_kvm::Plane::retire`/`collect_retired` already implements: the *plane* keeps a
-   reference no accessor can take away, and collection happens at a door already proven
-   lock-free.
+   foreign `MemoryRegion` is subject to the #57 rule.
+
+   > ### ★★ AMENDED 2026-08-01 — this item was BACKWARDS for foreign regions
+   >
+   > It previously read: *"the adapter's answer is the same one
+   > `kayfabe_vmm_kvm::Plane::retire`/`collect_retired` already implements: the plane keeps a
+   > reference no accessor can take away, and collection happens at a door already proven
+   > lock-free."* ⊘ **That is the right answer for our own resources and the wrong one here**,
+   > and this document already said so 460 lines further down without noticing the conflict:
+   >
+   > > *"`region_del` arrives BQL-held, so a QOM finalizer running there is legal."*
+   >
+   > **Split the rule by who frees it**, because #57's hazard and QOM's requirement point in
+   > opposite directions:
+   >
+   > * **Ours to free** — `retire`/`collect_retired`, unchanged. #57's finding stands: a `Drop`
+   >   is a call site, so the release must not happen under a rank we hold.
+   > * **Foreign (`MemoryRegion`, any QOM object)** — release it **inside the topology callback
+   >   that already holds the BQL**. Deferring it to a lock-free door is not neutral: it moves a
+   >   QOM finalizer *off* the BQL, which is where QOM requires it to run. The lock-free door is
+   >   the hazard, not the remedy.
+   >
+   > ⇒ The generalisable point: *"never release under a lock"* is not a universal — it is a
+   > claim about **which** lock and **whose** destructor. A foreign object's finalizer may
+   > *require* the very lock our own rule avoids. Ask who wrote the destructor before choosing
+   > the door.
+   >
+   > ★ **§5.5's second R5 invalidator is also gone, but credit it correctly** — it is dissolved
+   > by the *second amendment banner*, not by this item. That invalidator guards a **cached
+   > foreign pointer** retired between plan and commit; since the memory plane no longer goes
+   > through QEMU's `MemoryRegion` tree and no base-address accessor exists, no foreign pointer
+   > is ever cached, so the hazard has no subject. This item only moves *where the release
+   > runs*.
+   >
+   > [inferred] from `qemu_bql_spike.md` + this document's own `region_del` ordering; **not**
+   > measured against a running hypervisor — the C QOM shim is still unbuilt (see the second
+   > amendment banner), so no foreign finalizer has yet run in a real QEMU under this rule.
 2. **`leafwitness` must be adopted on day one.** `kayfabe_vmm_kvm::leaf`'s own rustdoc predicts
    *"the `leaf` witness will be forgotten by the QEMU adapter"*. It now lives in
    `kayfabe_util::leafwitness`; `kayfabe-vmm-qemu` depends on it directly and every lock
