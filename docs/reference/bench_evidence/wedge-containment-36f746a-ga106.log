@@ -1,0 +1,71 @@
+### gpu: NVIDIA GeForce RTX 3060, 580.159.04, Default
+### host: 6.8.0-59-generic  2026-08-01T21:48:00Z
+### Xid before: 0
+
+=== A. BASELINE — idle GPU
+[victim] ctx-create t=1.82
+[victim] ctx-ok t=2.00
+[victim] OK bad=0 kernel_ms=0.0 total_s=2.00
+   rc=0
+[burn] ctx-create t=1.91
+[burn] ctx-ok t=2.08
+[burn] LAUNCH n=500000000 (terminates) t=2.08
+[burn] DONE t=4.74
+   baseline_realwork_wall=5.07s
+   rc=0
+
+=== B. CONTROL — attacker saturates but TERMINATES (must NOT deny service)
+   util=100 %
+[victim] ctx-create t=0.02
+[victim] ctx-ok t=0.31
+[victim] OK bad=0 kernel_ms=2.2 total_s=0.31
+   rc=0
+[victim] ctx-create t=0.02
+[victim] ctx-ok t=0.25
+[victim] OK bad=0 kernel_ms=2.2 total_s=0.26
+   rc=0
+[victim] ctx-create t=0.02
+[victim] ctx-ok t=0.24
+[victim] OK bad=0 kernel_ms=2.2 total_s=0.25
+   rc=0
+   control attacker exit=0
+
+=== C. THE EXPERIMENT — attacker NEVER terminates and OVERSUBSCRIBES the device
+[spin] ctx-create t=1.89
+[spin] ctx-ok t=2.06
+[spin] LAUNCH grid=224 block=1024 (never terminates) t=2.07
+   attacker alive, util=100 %
+   -- liveness: trivial victim x3 (60 s hard timeout each)
+[victim] ctx-create t=0.02
+[victim] ctx-ok t=0.25
+[victim] OK bad=0 kernel_ms=2.3 total_s=0.25
+   rc=0
+[victim] ctx-create t=0.02
+[victim] ctx-ok t=0.26
+[victim] OK bad=0 kernel_ms=2.3 total_s=0.26
+   rc=0
+[victim] ctx-create t=0.02
+[victim] ctx-ok t=0.25
+[victim] OK bad=0 kernel_ms=2.3 total_s=0.26
+   rc=0
+   -- soak: trivial victim every 5 s for 60 s
+   SOAK: ok=12 fail=0 of 12
+   -- fairness: victim doing REAL work under the wedge (compare to baseline above)
+[burn] ctx-create t=0.02
+[burn] ctx-ok t=0.26
+[burn] LAUNCH n=500000000 (terminates) t=0.26
+[burn] DONE t=5.83
+   under_wedge_realwork_wall=5.90s
+   rc=0
+
+=== D. AFTERMATH — kill the attacker, is the GPU clean?
+gpu_wedge_containment.sh: line 83: 71032 Killed                  $PROBE spin 224 1024 > /tmp/spin.log 2>&1
+   util=4 %
+   compute apps: 
+[victim] ctx-create t=1.84
+[victim] ctx-ok t=2.05
+[victim] OK bad=0 kernel_ms=0.0 total_s=2.05
+   rc=0
+   Xid after: 0
+   recovery lines: 0
+### done 2026-08-01T21:50:05Z

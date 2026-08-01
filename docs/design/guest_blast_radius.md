@@ -729,7 +729,8 @@ What follows:
 
 - **Single-tenant: accepted for v1.** The tenant denies itself its own GPU. That is the
   posture this document records, and it is a decision rather than an oversight.
-- **Multi-tenant: this is the exposure**, and per-VM pacing does not close it — a rate limiter
+- **Multi-tenant: this is the exposure** — ★ but read §5.1 before quoting this bullet: the
+  *compute-hang* half of it was measured on 2026-08-01 and **does not hold**. Per-VM pacing does not close it — a rate limiter
   makes an honest tenant fair and does nothing to a hostile one, which needs to get exactly one
   pushbuffer through (`compute_limiting_and_priority.md` §6.3). The two mitigations that would
   actually bear on it are **one guest per physical GPU** (partitioning the blast radius rather
@@ -739,6 +740,69 @@ What follows:
 - ⊘ **Do not describe the wedge as a violation of P.** It is inside it, and conflating "P holds"
   with "the GPU is safe from denial of service" is the specific misreading this document is
   written to prevent.
+
+---
+
+## ★★★ 5.1 MEASURED 2026-08-01 — an infinite kernel does NOT deny service, and §5's first shape is REFUTED
+
+§5 above names two shapes: *"a non-terminating kernel **or** a malformed pushbuffer"*. **The
+first one has now been run on real hardware, and it does not do what §5 implies.**
+
+`[run: scripts/bench/gpu_wedge_containment.sh, 2026-08-01T21:48Z, vast 46529600, RTX 3060
+GA106, host driver 580.159.04 open, kernel 6.8.0-59, repo at 36f746a; full log
+docs/reference/bench_evidence/wedge-containment-36f746a-ga106.log]`
+
+An attacker process launches a kernel that spins on a global flag that is never written, at
+**224 blocks × 1024 threads = 229 376 threads** against GA106's ~43 008 resident capacity, so
+the device is genuinely oversubscribed and the scheduler must juggle it. A second, independent
+process then does real, verified work.
+
+| arm | result |
+|---|---|
+| liveness, trivial victim | **3/3** then **12/12** over 60 s, every one `rc=0` |
+| correctness under the wedge | `bad=0` on every run — never once wrong |
+| fairness, victim doing real GPU work | 2.66 s idle → **5.57 s** under the wedge (**~2.1×**), still correct |
+| `nvidia-smi` during the wedge | responsive |
+| **Xid** | **0** — before, during, and after |
+| aftermath: kill the attacker | util → 4 %, no compute apps, no residue, victim back to 0.1 ms. **No GPU reset needed** |
+
+⇒ **On this hardware a hostile tenant cannot deny the GPU to another tenant by hanging a compute
+kernel.** It costs its neighbour roughly a factor of two in throughput — which is a *fairness*
+problem, and the honest name for it — not a liveness or correctness one.
+
+★★ **The run above establishes the OUTCOME, not the MECHANISM.** Ampere-class compute preemption
+and context time-slicing are the obvious explanation and are almost certainly right, but the
+`gpu_wedge_containment.sh` run did not instrument preemption — it observed only that the victim
+survived. Why it survived is `[inferred]`, and nothing here should be cited for it.
+
+### ⊘ What this does NOT establish — and the list matters more than the result
+
+1. **The malformed-pushbuffer shape — §5's other half — is untested.** It is the one that can
+   actually *fault*, and therefore the only one that can reach the escalation hazards in §7. A
+   hang and a fault are different events and this experiment produced only the former.
+2. **The escalation path was never exercised, because no recovery ever fired.** Zero Xid in 60+ s
+   means the RC watchdog did not trip at all on a headless compute context. ⊘ Do not read "the
+   wedge was contained" as "recovery is contained" — the second was not tested, and this is
+   exactly the [[a_boolean_witness_cannot_attribute]] shape: an absence of Xid is compatible with
+   both "recovery is fine" and "recovery was never asked". (A boolean witness cannot attribute —
+   the same trap that made E0's first isolate witness read as a causal claim; see
+   `execution_plane_increments.md` §3.5.)
+3. **VRAM exhaustion is a separate and untested vector**, and it needs no preemption story at all
+   — a tenant that allocates the framebuffer denies it by ordinary means.
+4. Untested: multiple simultaneous wedgers, graphics/display contexts, MMU-fault storms, and any
+   non-GA10x part. `compute_mode` was `Default` throughout; `EXCLUSIVE_PROCESS` would change the
+   question by forbidding the second tenant outright.
+
+### ★ The instrument was wrong first, and it was wrong in the flattering direction
+
+The first version of this experiment span **1 block × 32 threads** on a 28-SM GPU. The victim
+survived — but it survived because **27 SMs were free**, so no preemption was ever involved and
+the result was guaranteed before the experiment ran. It reported total containment and **could
+not have shown otherwise**. `nvidia-smi utilization.gpu` reads **100 %** in both the 1×32 and the
+224×1024 case, so the one number that looked like a saturation check could not discriminate
+either. The finding only became real once the wedge oversubscribed the device.
+⇒ Recorded in the script's own header so the next person cannot re-run the weak version by
+accident: suspect the instrument before believing a result that flatters you.
 
 ---
 
@@ -771,13 +835,16 @@ uncomfortable symmetry worth writing down: we cannot brick it *and* we cannot un
 
 Stated as gaps, not padded into guesses.
 
-- **Whether a wedge's blast radius stops at the offending channel.** The open tree notifies at
-  channel-or-TSG scope and stubs out "recover all channels", but the reset decision is GSP's,
-  and three escalation hazards are visible in it — a whole-runlist preempt inside the per-channel
-  halt, a node-level "reboot required" latch on a UVM-owned channel, and a GSP-death path that
-  halts every channel GPU-wide (`compute_limiting_and_priority.md` §3.3, `[src@580]` there).
-  ⇒ **Whether one tenant's wedge is containable is `[unknown]`**, and it is the single most
-  consequential unknown for the multi-tenant claim.
+- **Whether a wedge's blast radius stops at the offending channel.** ★★★ **PARTIALLY ANSWERED
+  BY EXPERIMENT, 2026-08-01 — see §5.1.** The *non-terminating compute kernel* shape does **not**
+  deny service to another tenant, measured on real hardware. What is still `[unknown]` is
+  narrower and is now stated as such in §5.1: the escalation path below was never exercised,
+  **because nothing made it fire**. The open tree notifies at channel-or-TSG scope and stubs out
+  "recover all channels", but the reset decision is GSP's, and three escalation hazards are
+  visible in it — a whole-runlist preempt inside the per-channel halt, a node-level "reboot
+  required" latch on a UVM-owned channel, and a GSP-death path that halts every channel GPU-wide
+  (`compute_limiting_and_priority.md` §3.3, `[src@580]` there). Reaching any of them needs a
+  **fault**, not a hang.
 - **What the host driver does with a bit-15 command absent from its tables** (F6). Not readable:
   the space is GSP-serviced and GSP is a signed binary.
 - **Whether the proprietary driver implements `NV0000_CTRL_CMD_PUSH_UCODE_IMAGE`** (`0x285`).
