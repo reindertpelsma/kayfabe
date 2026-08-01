@@ -1413,7 +1413,16 @@ pub enum IsolatePlane {
     Loopback,
     /// A real sandboxed child that opens `/dev/nvidiactl`, `/dev/nvidia<N>` and completes
     /// RM bring-up (`kayfabe_isolate_host::rm::RmConnection::open`, rungs R0–R6b) — i.e.
-    /// **real host RM ioctls, issued because the guest device path materialized a proc.**
+    /// **real host RM ioctls on the real host GPU.**
+    ///
+    /// ⚠ **They are issued at device-REALIZE time, not by anything the guest does**, and
+    /// this comment used to say the opposite. `Gpu::realize` installs the system proc's
+    /// isolate unconditionally, so the child exists before the guest has run a single
+    /// instruction; a guest `GSP_RM_ALLOC` then finds it already there and spawns nothing.
+    /// `[measured]` 2026-08-01 at rev `e10a6bf` on RTX 3060 / 580.159.04 open: the child's
+    /// first sighting is **t+3 s** and the guest opens the device at **t+30–34 s**
+    /// (`docs/reference/bench_evidence/e10a6bf_run_e0real2_isolate.log`). Making the spawn
+    /// lazy is `execution_plane_increments.md` **E0b**.
     Real,
 }
 
