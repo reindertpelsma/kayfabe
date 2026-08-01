@@ -447,3 +447,144 @@ nvkvm: bridge refusals: 0 total, 0 distinct (these ANSWER the command and so nev
 positive statement, in one line, without a reader having to know which function numbers
 should have been present. The object model accepted every allocation and free this boot
 issued.
+
+---
+
+# The FIFTH boot of 2026-08-01 — `bar0win`, and the window READS BACK
+
+> A live boot of the bench, reported in full including what it does not establish.
+
+## 20. Provenance
+
+| | |
+|---|---|
+| Rust archive | built from `/root/kfbar0` on the 38-core box, `cargo build --release -p kayfabe-qemu-raw`, rc 0, from a tree `git status --porcelain` reported as **0 files dirty** |
+| boot `bar0win` | rev **`f43668b`** — the archive says so itself: `strings … \| grep kayfabe-rev` → `kayfabe-rev:f43668be6d5a295c4777514e419b9d825b8da1d1`, with **no `-dirty`** suffix, and it is the binary's **only** 40-hex string |
+| C overlay | `nvkvm.c` and `kayfabe_shim.h` **changed** (ABI 7 → 8, and the framebuffer report) and were copied; `nvkvm_compat.h` and `meson.build` `cmp`-clean, and all four `cmp`-clean after the copy |
+| link | `ninja -C /workspace/bench/qemu-build qemu-system-x86_64`, rc 0 |
+| discriminator | `nm -C … \| grep -c kayfabe` went **4361 → 4385** |
+| guest | Ubuntu, kernel 6.8.0-136-generic, **stock unpatched** NVIDIA 580.159.04 open kernel module, driven with `nvidia-smi` |
+
+## 21. ★★★ The rung is CLEARED, and "cleared" is a STRUCTURAL claim
+
+```
+NVRM: kbusVerifyBar2_GM107: L2 evict failed
+NVRM: nvAssertOkFailedNoLog: … [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from
+      kbusVerifyBar2_HAL(pGpu, pKernelBus, NULL, NULL, 0, 0) @ kern_bus_gm107.c:360
+```
+
+Against §15's wall:
+
+| | `evt1` (`0d82456`) | `bar0win` (`f43668b`) |
+|---|---|---|
+| `Pre-L2 invalidate evict: Address 0x2efbae000 … did not read back the last write.` | present | ★★★ **absent** |
+| where `kbusVerifyBar2_GM107` fails | the BAR0-window read-back, `:4084-4090` | ★ `kmemsysSendL2InvalidateEvict`, `:4110` |
+| `kbusVerifyBar2_HAL` status | `NV_ERR_MEMORY_ERROR` (`0x72`) | ★ `NV_ERR_NOT_SUPPORTED` (`0x56`) |
+| `RmInitNvDevice` | *"Cannot **initialize** the device"* | ★★ *"Cannot **load state** into the device"* |
+| `RmInitAdapter failed!` | `(0x24:0x72:1220)` | ★ `(0x25:0x40:1249)` |
+
+★★ **Why "the window works" is a structure and not an impression.**
+`kbusVerifyBar2_GM107:4084-4114` is straight-line code: the read-back check at `:4090` is
+`if (… != SAMPLEDATA) { … goto kbusVerifyBar2_failed; }`, and
+`kmemsysSendL2InvalidateEvict` is the **next statement**. The string *"L2 evict failed"*
+exists only past that branch. ⇒ printing it **proves** that
+`GPU_REG_RD32(DRF_BASE(NV_PRAMIN) + 0xe000)` returned `0xabcdabcd` after
+`GPU_REG_WR32` put it there, with the window programmed to base `0x2efba`. It cannot be
+reached any other way.
+
+## 22. ★★ The device's own framebuffer report, first light
+
+```text
+nvkvm: framebuffer: 6 reads / 33973 writes served through the BAR0 moving window
+       (18 window register reads / 16 writes), fb refusals 0,
+       translated-window drops 0r/0w, resident 86016 bytes
+nvkvm: registers: 3464 reads / 35089 writes (chip-constant 32, rom 2316,
+       gsp 347r/367w, UNCLAIMED 700r/733w), faults 0, guest-RAM refusals 0
+nvkvm: bridge refusals: 0 total, 0 distinct
+```
+
+★★★ **33 973** `PRAMIN` writes. The C oracle's cold-boot census — decoded 2026-07-31 from
+`traces/mode2_c_reference/cap1_coldboot_hermetic` through this port's own window classifier —
+is **33 978**. Two independent implementations, five years of driver apart from each other's
+code, within **five writes** of the same number. ⊘ It is a corroboration and not a
+verification: the C's capture is a different boot of a different emulator and nothing forced
+the two to agree, so the right reading is *"the guest is doing the `PRAMIN` work the oracle
+saw"*, not *"the count is correct"*.
+
+★ `fb refusals 0` is the positive statement the rung was built for: **not one framebuffer
+access was dropped**, said as a number rather than inferred from the absence of a later
+failure. `resident 86016 bytes` = 21 pages, i.e. the whole boot's framebuffer footprint fits
+in 84 KiB — the 1 GiB residency ceiling is four orders of magnitude away from being reached.
+
+⊘ `translated-window drops 0r/0w`: the framebuffer aperture and the instance window were
+**never touched** this boot, so this boot says nothing about them. The BAR2 sub-test at
+`:4155-4200` is past the L2 evict and was not reached.
+
+## 23. ★★★ The boot advanced a whole PHASE — and part of that is an artefact of the ERROR CODE
+
+`gpuStateInit_IMPL` maps `NV_ERR_NOT_SUPPORTED` to `NV_OK` and carries on
+(`ogkm-580: src/nvidia/src/kernel/gpu/gpu.c`, the engine sweep's
+`if (rmStatus == NV_ERR_NOT_SUPPORTED) rmStatus = NV_OK;`). `NV_ERR_MEMORY_ERROR` is **not**
+in that map. So `evt1`'s `0x72` aborted `gpuStateInit` outright, and `bar0win`'s `0x56` is
+absorbed — `KernelBus` is amputated and the boot runs on into `gpuStateLoad`.
+
+⇒ **Both halves are true and neither should be reported alone.** The window really does read
+back (§21's structural argument does not depend on the error code at all). *And* the reason
+the boot now reaches `kgmmuStatePostLoad`, `kceGetPceConfigForLceType` and
+`kgraphicsLoadStaticInfo` is that the failure it still hits changed class, not that the
+failure went away. Everything downstream of `kbusStateInitLockedKernel` this boot ran
+**without a `KernelBus`**.
+
+The new tail, in order:
+
+```
+NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+NVRM: … NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE @ kernel_ce.c:1020
+NVRM: … NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER @ gpu_vaspace.c:4148
+NVRM: kgmmuStatePostLoad_IMPL: Failed to create GVASpace, status:56
+NVRM: … NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CAPS @ kernel_graphics.c:1212
+NVRM: nvAssertFailedNoLog: Assertion failed: pKernelGraphicsStaticInfo != NULL @ kernel_graphics.c:485
+NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+NVRM: RmInitNvDevice: *** Cannot load state into the device
+NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0x40:1249)
+```
+
+## 24. The unserviced ledger — membership again, not cardinality
+
+```text
+nvkvm: commands: 62 decoded, 18 UNSERVICED, 14 distinct
+  0x20800a87  0x20800a4b  0x20802a08  0x20800afe  0x20800aff  fn 70  0x20800a70
+  0x20800a6c  0x20800a80  0x20802a0f  0x2080017e  0x20800a9f  0x20800a1f  0x20800a38
+```
+
+`commands` **37 → 62**, distinct **7 → 14**. Nothing **left** the set and **seven entered**,
+every one of them a control the boot had never got far enough to ask:
+
+| new | what asked for it |
+|---|---|
+| `0x20800a6c` `INTERNAL_MEMSYS_L2_INVALIDATE_EVICT` | ★ **the immediate wall** — `kbusVerifyBar2_GM107:4110`, the statement after the read-back that now passes |
+| `0x20800a80` | `kperfGpuBoostSyncStateInit_IMPL` |
+| `0x20802a0f` `INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE` | `kernel_ce.c:1020` |
+| `0x2080017e` | `gpu_vaspace.c:4148`, `GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER` |
+| `0x20800a9f`, `0x20800a1f`, `0x20800a38` | the `StateLoad` sweep, incl. `STATIC_KGR_GET_CAPS` |
+
+⇒ **The next rung is `0x20800a6c`.** It is the one that stands between this boot and the
+*rest* of `kbusVerifyBar2` — the BAR2 sub-test at `:4155-4200`, which is where an actual MMU
+translation is exercised for the first time.
+
+## 25. ⊘ What this boot does NOT establish
+
+- ⊘ **No compute, no `/dev/nvidia*`.** `nvidia-smi` still prints *"No devices were found"*.
+- ⊘ **BAR2 is still not exercised.** The window this rung built is `PRAMIN`, which is
+  **untranslated**. Nothing here says anything about a GMMU walk, and
+  `translated-window drops 0r/0w` says the two translated apertures were not even touched.
+- ⊘ **The `KernelBus` is amputated.** §23: everything after `kbusStateInitLockedKernel` ran
+  without one, so no `StateLoad` result in this log may be read as *"that subsystem works"*.
+- ⊘ **No host GPU.** This box has none, forwarding is off, and the isolate factory is
+  `StillbornIsolates`. Not one byte of the 33 973 framebuffer writes went near real hardware.
+- ⊘ **That serving the window is what moved the wall is `[inferred]` from §21's five signs**,
+  not isolated — this boot changed one rung *and* added the framebuffer report. The report
+  answers nothing and cannot move a wall, but only a boot at a revision with the report and
+  without the rung would isolate it, and none was spent.
+- ⊘ **One boot.** `#98` records a Mode-2 symptom that was 1/3 one day and 9/9 the next on a
+  bit-identical binary.
