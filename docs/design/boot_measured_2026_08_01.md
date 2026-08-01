@@ -954,3 +954,147 @@ Two things were wrong, and both are now encoded in the script rather than in thi
 capture is complete. `run_<tag>_probe.log` carries `MODPROBE_RC`, `SMI_RC`, the `/dev` listing
 and `lsmod` beside it, because each of those distinguishes a different way the file below can be
 short.
+
+---
+
+# 39. Boot `stateload1` — rev `041b4f1`, and the row the boot wrote for me
+
+| | |
+|---|---|
+| provenance | `/workspace/kf-stateload` at **`041b4f1`**, `scripts/build_qom_shim.sh` → `ninja`, rc 0. ★ The archive is built from the same tree the SHA names — no `kayfabe-wt` in the loop. |
+| harness | `scripts/bench/boot_capture.sh stateload1` |
+| **evidence** | **`/workspace/bench/run_stateload1_dmesg.log`** — 22 lines, 19 `NVRM`, 3 adapter. ★ The first boot rung of this project whose driver output is on disk. |
+| result | `RmInitAdapter failed! (0x25:0x40:1249)` — **the same triple as `gmmu1`** |
+
+## 39.1 The same code, a different boot
+
+⊘ **The triple is not the instrument.** These five lines are GONE:
+
+```
+kgmmuStatePostLoad_IMPL: Failed to create GVASpace, status:56
+nvAssertFailedNoLog: NV_OK == status @ gpu_vaspace.c:611
+nvAssertFailedNoLog: (NV_OK == rmStatus) @ kern_gmmu.c:245
+... returned from kgraphicsLoadStaticInfo(...) @ kernel_graphics.c:444   [the CAPS cause]
+... and every one of the five GR static-info refusals
+```
+
+and one line is new:
+
+```
+... NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO @ kernel_graphics.c:743
+... returned from kgraphicsInitializeDeferredStaticData(...)     @ kernel_graphics.c:1527
+```
+
+## 39.2 ★★★ It answered a question the rung REFUSED to answer
+
+`#150` left `0x20800a32` unserved **on purpose**, and wrote the reason into
+`kayfabe_abi::grstatic`'s header before the boot: `kgraphicsShouldDeferContextInit` was
+`[assumed]`, and `bInitialized = NV_TRUE` is set at `:1521` *before* the branch that depends
+on it, so the two outcomes are distinguishable in one log.
+
+**It does not defer.** ⇒ `0x20800a32` is the sixth mandatory GR control, and refusing it
+reaches the same `cleanup:` label as refusing the first.
+
+⊘ The general point, because it generalises: **recording the absence of a measurement beat
+borrowing one.** The guess had even odds. Naming it `[assumed]` cost one paragraph; the boot
+that settled it was already being spent on something else.
+
+# ★★★ 40. Boot `stateload2` — rev `7819839` — `gpuStateLoad` COMPLETES
+
+| | |
+|---|---|
+| provenance | `/workspace/kf-stateload` at **`7819839`**, rebuilt, rc 0 |
+| **evidence** | **`/workspace/bench/run_stateload2_dmesg.log`** + `_probe.log` + `_qemu.log` |
+| result | **`RmInitAdapter failed! (0x11:0x45:2134)`** |
+
+## 40.1 The wall left state-load
+
+`0x11` is **`RM_INIT_SYS_ENVIRONMENT_FAILED`** — *not* in the `0x20` GPU block at all
+(`ogkm-580: osinit.c:95-102`). `0x45` is **`NV_ERR_IRQ_NOT_FIRING`**
+(`nvstatuscodes.h:98`), and `2134` is the `osVerifySystemEnvironment(pGpu)` call
+(`osinit.c:2127`). The log says it in words:
+
+```
+NVRM: RmInitAdapter: osVerifySystemEnvironment failed, bailing!
+```
+
+⇒ **`RmInitNvDevice` returned `NV_OK`.** *"Cannot load state into the device"* is gone. The
+engine walk — `gpuStateInit`, `gpuStateLoad`, `gpuStatePostLoad`, all ~60 engines — is
+**through**, and the driver has moved on to a phase that is not about controls at all.
+
+## 40.2 ★★ Why the scrubber's identical-looking failure is survivable and GR's was not
+
+`kernel_fifo.c:3129` still fires. The callback that failed is now the **memory scrubber's**,
+not GR's:
+
+```
+memmgrScrubHandlePostSchedulingEnable_HAL   @ mem_mgr.c:487
+ └ scrubberConstruct                        @ mem_mgr_scrub_gp100.c:63
+    └ objCreate(CeUtils)                    @ mem_scrub.c:181
+       └ _memUtilsAllocateChannel           @ mem_utils_gm107.c:857
+          └ vaspaceGetByHandleOrDeviceDefault @ kernel_channel_group_api.c:224
+             └ gvaspaceConstruct_           @ gpu_vaspace.c:611
+```
+
+★★★ **The difference is one status code.** GR's handler returned `NV_ERR_INVALID_STATE`
+(`0x40`), which `gpu.c:3440` does not swallow. The scrubber's returns
+`NV_ERR_NOT_SUPPORTED` (`0x56`), which `gpu.c:3438` **does**. Same assert, same line, same
+`NV_ASSERT(0)` — opposite consequence. ⇒ *"`kernel_fifo.c:3129` fired"* is not a finding;
+**which status reached it** is the finding, and only the dmesg above distinguishes them.
+
+## 40.3 ★★★ The next wall, named, and it was PREDICTED
+
+`gpu_vaspace.c:611` is back — but at `:5187` and `:4129`, which is the **other branch** of
+`gvaspaceCopyServerRmReservedPdesToServerRm`. `#150` served the branch taken when
+`resservGetTlsCallContext()` is `NULL` (state load, internal client, `0x20800a9f`). A real
+client allocating a channel takes the **first** branch, which issues:
+
+1. `NV_RM_RPC_ALLOC_OBJECT(… FERMI_VASPACE_A = 0x000090f1 …)` — `gpu_vaspace.c:4106-4113`
+2. **`NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES = 0x90f10106`** — `:5160-5190`,
+   asserted at `:5187`
+
+★ **`0x90f10106` is now in the device's own unserviced list**, and it takes the *identical*
+184-byte `NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS` that
+`kayfabe_abi::gvaspacepdes` already decodes and validates. ⇒ the cheapest rung on the board.
+
+## 40.4 The unserviced ledger — 19 distinct → 20, and five are new
+
+```
+kept:  0x20800a87 0x20800a4b 0x20802a08 0x20800afe 0x20800aff 0x20800a70 0x20800a80
+       0x20802a0f 0x2080017e 0x20800a2a 0x20800a30 0x20800a2c 0x20800a2e 0x20800a3f
+       0x20800a38
+new:   0x20800a34  0x20800b03  0x20800b05  0x90f10106  0x2080013f
+gone:  0x20800a1f 0x20800a26 0x20800a22 0x20800a3d 0x20800a48 0x20800a32 0x20800a9f
+```
+
+⊘ Membership, never cardinality. The seven that left are the seven this rung serves; the five
+that entered are reached only *because* state-load completed, so their appearance is the
+rung's own evidence.
+
+| | `gmmu1` | `stateload1` | `stateload2` |
+|---|---|---|---|
+| commands decoded | 64 | 77 | **90** |
+| distinct unserviced | 12 | 19 | 20 |
+| BAR2 writes through the GMMU | 12 402 | 12 396 | **23 244** |
+| framebuffer writes | 46 380 | — | **57 222** |
+| interrupt requests **dropped** | 63 | 76 | **89** |
+
+## 40.5 ⊘ What these two boots do NOT establish
+
+- ⊘ **Nothing works.** `nvidia-smi` still prints *"No devices were found"*, `SMI_RC=6`.
+- ⊘ **The GR geometry is ACCEPTED, not VALIDATED.** RM read 34 592 bytes of SM order and did
+  not complain. Nothing here says it agrees with them — a wrong-but-well-formed geometry
+  produces an identical log. The only check on the numbers is
+  `kayfabe-abi/tests/gr_static_info.rs`, against the C oracle, which is a different artifact
+  and not this boot.
+- ⊘ **The golden-image channel was never reached**, either time.
+  `_kgraphicsPostSchedulingEnableHandler` got past its `NULL` check at `stateload2` — and
+  then the *scrubber's* callback failed first. `kgraphicsCreateGoldenImageChannel` is still
+  untested machinery this port has not built.
+- ⊘ **The scrubber is AMPUTATED, not working.** State load completed *with* it destroyed. A
+  guest that later needs scrubbed memory has not been shown to get it.
+- ⊘ **`IRQ_NOT_FIRING` is a product gap, not a discovery.** `interrupt requests dropped 89`
+  and the device's own realize-time warning have said so since the first rung. This boot
+  proves the driver now gets far enough to *care*, and nothing more.
+- ⊘ **One boot each**, on one 4-core box. `#98` records a Mode-2 symptom that was 1/3 one day
+  and 9/9 the next on a bit-identical binary.
