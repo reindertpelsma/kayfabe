@@ -1,5 +1,5 @@
-//! The command policy that answers the thirteen `GSP_RM_CONTROL`s the guest's RM cannot get
-//! past — twelve from the chip row's own tables, and one from the request itself.
+//! The command policy that answers the fourteen `GSP_RM_CONTROL`s the guest's RM cannot get
+//! past — twelve from the chip row's own tables, and two that are verbs rather than tables.
 //!
 //! ⚠ The type names say *table* and most of them are not one:
 //! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` is an identity,
@@ -11,9 +11,12 @@
 //!
 //! ⚠ **It no longer holds for all of them.** [`WantedTable::EventSetNotification`] is a
 //! *verb on the event plane*: nothing about it is `[OUT]`, no chip row could answer it, and
-//! serving it changes this policy's state. It is here because [`WantedTable::ALL`] is the
-//! universe every coverage gate quantifies over, not because it is a table — its own
-//! rustdoc argues that trade rather than eliding it.
+//! serving it changes this policy's state. [`WantedTable::MemsysL2InvalidateEvict`] is a
+//! verb on **hardware this device does not have** — it asks for an L2 that does not exist to
+//! be evicted, and its licence is a structural claim about this port rather than a row.
+//! Both are here because [`WantedTable::ALL`] is the universe every coverage gate quantifies
+//! over, not because either is a table — their own rustdoc argues that trade rather than
+//! eliding it.
 //!
 //! ## ★★ Why this is here and not in a logic crate
 //!
@@ -26,7 +29,7 @@
 //!
 //! ## ★★★ What it does NOT do, deliberately
 //!
-//! Thirteen controls, twelve of them `[OUT]`-only and answered from the chip row. It
+//! Fourteen controls, twelve of them `[OUT]`-only and answered from the chip row. It
 //! touches no RM graph state and allocates no handle. ⚠ It no longer *remembers nothing*:
 //! [`InitTablePolicy::notify_actions`] is one action per notifier index, keyed by a bounded
 //! small integer and by nothing a guest can mint — see that field for why the bound is
@@ -73,6 +76,7 @@ use kayfabe_abi::inittables::{
     self, DEVICE_INFO_PARAMS_SIZE, INTR_PARAMS_SIZE, NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
     NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE,
 };
+use kayfabe_abi::l2evict;
 use kayfabe_abi::memsysconfig::{
     self, MEMSYS_STATIC_CONFIG_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG,
 };
@@ -356,6 +360,42 @@ pub enum WantedTable {
     /// [`SILENT_NOTIFIERS`](kayfabe_abi::eventnotify::SILENT_NOTIFIERS) scope that decides
     /// which armings this port may accept at all.
     EventSetNotification,
+    /// `NV2080_CTRL_CMD_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT` — ★★★ the first variant that
+    /// is neither a description of silicon nor a registration, but an **instruction to
+    /// perform an action on hardware this device does not have**.
+    ///
+    /// # ⊘ Why this is a different kind of decision, and why it is not a generic `NV_OK`
+    ///
+    /// [`Self::EventSetNotification`] is a verb, but it is a verb about *bookkeeping* — the
+    /// port can genuinely keep the arming it is asked to keep. This one asks for L2 to be
+    /// invalidated and evicted, and **this emulated GPU has no L2**. The batched triage in
+    /// [`crate::sweep`] classified it with `0x20800a70` as *"an ACTION, not a description —
+    /// refuse"*, and that classification is what the `bar0win` boot falsified as a place to
+    /// stop: the refusal propagates verbatim out of `kmemsysSendL2InvalidateEvict_IMPL`
+    /// into `kbusVerifyBar2_GM107:4110-4115`, which prints *"L2 evict failed"* and takes its
+    /// `goto`.
+    ///
+    /// # ★★★ The licence is that the postcondition already holds, structurally
+    ///
+    /// The operation's only observable is the read `kbusVerifyBar2_GM107` performs
+    /// immediately afterwards (`ogkm-580: kern_bus_gm107.c:4106-4118`), and on this device
+    /// that read cannot be stale: [`crate::fbwin`]'s store is the framebuffer's
+    /// **authority**, not a cache over one, and the trapped write commits before the vmexit
+    /// returns. ⊘ `NV_OK` is therefore *"the state you asked for already holds"*, which is a
+    /// modelled yes with three named futures that would falsify it — see
+    /// [`kayfabe_abi::l2evict`], which carries the full argument, the falsifiers, and the
+    /// `[measured]` corroboration that a real GA106's own GSP answers `NV_OK` too.
+    ///
+    /// # ★★ The `0x20800301` trap, checked and NOT present
+    ///
+    /// The transport copies the reply's params back over the caller's struct
+    /// (`ogkm-580: rpc.c:11085-11090`), which is why an empty body was wrong for
+    /// [`Self::EventSetNotification`]. Here the caller's params are a **stack local** that
+    /// `kmemsysSendL2InvalidateEvict_IMPL` never reads after the call
+    /// (`ogkm-580: kern_mem_sys.c:1079-1093`), and the oracle's captured reply is four zero
+    /// bytes (`C: mode2_initctrl_ga106.h:6245`, `psize = 4, dlen = 0`). Both sources agree
+    /// on a zero-filled body, so that is what is encoded.
+    MemsysL2InvalidateEvict,
 }
 
 impl WantedTable {
@@ -386,7 +426,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 13] = [
+    pub const ALL: [WantedTable; 14] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -400,6 +440,7 @@ impl WantedTable {
         Self::FifoNumChannels,
         Self::GmmuStaticInfo,
         Self::EventSetNotification,
+        Self::MemsysL2InvalidateEvict,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -428,6 +469,9 @@ impl WantedTable {
             Self::EventSetNotification => {
                 kayfabe_abi::eventnotify::NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION
             }
+            Self::MemsysL2InvalidateEvict => {
+                kayfabe_abi::l2evict::NV2080_CTRL_CMD_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT
+            }
         }
     }
 
@@ -450,6 +494,7 @@ impl WantedTable {
             Self::EventSetNotification => {
                 kayfabe_abi::eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE
             }
+            Self::MemsysL2InvalidateEvict => kayfabe_abi::l2evict::L2_INVALIDATE_EVICT_PARAMS_SIZE,
         }
     }
 
@@ -770,6 +815,35 @@ impl CommandPolicy for InitTablePolicy {
                 // Until then it is what makes the transition rule above enforceable.
                 *slot = u8::try_from(reg.action).unwrap_or(0);
                 eventnotify::encode_event_set_notification(&reg)
+            }
+            // ★★★ The arm that answers an **action** rather than a description, and the
+            // only one whose licence is a claim about this device's own structure rather
+            // than a number out of a chip row. The full argument — why `NV_OK` is honest
+            // here, what would make it false, and why the reply is four zeros rather than
+            // an echo — is in `kayfabe_abi::l2evict`; it is deliberately not restated,
+            // because a summary of an argument is the shape this repository has been bitten
+            // by (`read_at_invalidate_is_false_on_compute_path`).
+            //
+            // ⊘ The decode is load-bearing and is the ONLY thing this arm decides. The body
+            // does not depend on the request, so a decoder that could not fail would make
+            // this arm a fall-through `NV_OK` — precisely what `#127`'s named-refusal
+            // default forbids. `L2EvictError::UnknownFlags` is what keeps it from being
+            // one: the vacuity argument enumerates six operations, so a seventh, named by a
+            // bit the 580 SDK does not define, is refused rather than blanket-accepted.
+            //
+            // ⚠ And `refuse()` here is the SAFE direction, unlike the amputating arms
+            // above: the copyout is skipped on a non-`NV_OK` status (`ogkm-580:
+            // rpc.c:11066-11070`), and `kbusVerifyBar2_GM107:4110-4115` turns the refusal
+            // into `"L2 evict failed"` and a `goto` — loud, named, and exactly where the
+            // boot stood before this rung.
+            WantedTable::MemsysL2InvalidateEvict => {
+                let at = req.params_at;
+                let Ok(evict) = l2evict::decode_l2_invalidate_evict(
+                    &cmd.payload[at..at + l2evict::L2_INVALIDATE_EVICT_PARAMS_SIZE],
+                ) else {
+                    return refuse();
+                };
+                l2evict::encode_l2_invalidate_evict(&evict)
             }
         };
 
