@@ -2,6 +2,15 @@
 
 > **Status: threat-model statement plus a source audit. Task #129, written 2026-07-31 against
 > `ogkm-580.159.04` and this tree at `225126f`. No GPU was switched on for this document.**
+>
+> **★ Amended 2026-08-01 (task #133, the actionable half).** Three changes, each marked in
+> place: **F1's census was re-counted and CORRECTED** (591 → 613 closed, 43.5 % → 45.1 %; 22
+> entries carry both `INTERNAL` and `NON_PRIVILEGED` and are closed by `control.c:799-803`, a
+> gate §3.3 did not cite); **F11's `hClient` invariant is now STRUCTURAL** and its resolution
+> block names the compiler errors that were watched firing; and **§3.4 was added** to state,
+> in one place, that P is *not* carried by our allowlist (F5) and that the Case-1/Case-2 split
+> is *not* a security mechanism (F13). Still no GPU, and still no run behind the security
+> reasoning itself.
 
 ## 0. The epistemic frame — read before quoting anything below
 
@@ -186,10 +195,49 @@ and there is no call it can make to become otherwise `[inferred]`.
   `RS_PRIV_LEVEL_KERNEL` (`control.c:702-711`) — a level no userspace escape can reach, since
   `escape.c:304` can only produce `USER` or `USER_ROOT`.
 
+⚠ **A third rule lives outside this function, and F1's ★ CORRECTION is what found that.**
+`RMCTRL_FLAGS_INTERNAL` is *not* refused by `rmControlValidateClientPrivilegeAccess` — in the
+second rule above it is one of the flags whose presence **satisfies** the check. What closes
+it is `if (ctrlFlags & RMCTRL_FLAGS_INTERNAL) { if (!pRmCtrlParams->bInternal) return
+NV_ERR_NOT_SUPPORTED; }` (`ogkm-580: src/nvidia/src/kernel/rmapi/control.c:799-803`)
+**[src@580]**. Same file, same unconditional path, different function — but reading the
+`INTERNAL` column off this section alone under-counts the closed set by 22.
+
 **This is the sentence the whole property rests on:** the bar is applied to *the credentials of
 the caller*, not to *which control the caller chose*. Nothing we forward, allow, mis-adjudicate
-or fail to filter can change the answer, because we are not the one being asked. Our own
-allowlist (§4 F5) is defence in depth over a decision the host driver makes again regardless.
+or fail to filter can change the answer, because we are not the one being asked.
+
+### ★★★ 3.4 What makes P true is NOT our allowlist — and the docs must not say it is
+
+Stated separately because it is the single most quotable sentence in this document and it has
+already been mis-stated elsewhere in the tree:
+
+> **P holds because RM re-derives the caller's privilege on every ioctl and refuses by
+> default. It does not hold because of anything we allow, deny, divert or filter.**
+
+Three consequences, each of which strikes a citation that was being made:
+
+1. ⊘ **The `CapabilityTable` allowlist/denylist does not carry P** — §4 F5. All six of our
+   explicitly denied controls are `NON_PRIVILEGED` in RM, i.e. reachable by any unprivileged
+   local process already. Deleting the whole table tomorrow would leave P standing. What the
+   table buys is **cross-tenant isolation inside our own system**
+   (`core_security_threat_model.md`) and defence in depth — real things, different property.
+   Writing it the other way round would make P depend on a table we maintain, which is exactly
+   the fragility P was formulated to avoid.
+2. ⊘ **The Case-1/Case-2 control split is a CORRECTNESS mechanism and must not be cited as
+   security** — §4 F13. `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` is `PRIVILEGED` and
+   `NV2080_CTRL_CMD_GR_GET_CTX_BUFFER_INFO` is kernel-only, **both are on our ingress
+   allowlist**, and admitting them breaches nothing because RM refuses both regardless. The
+   split exists so an unprivileged replay does not come back `InsufficientPermissions`. It is
+   not a containment boundary and it has none of a boundary's obligations.
+3. ★ **The scale of the driver's own default is the argument.** 613 of 1 359 exported controls
+   — **45.1 %** — are closed to every userspace caller before our layer says anything (F1).
+   Our allowlist is defence in depth over a decision the host driver makes again regardless.
+
+⊘ **No run stands behind §3.3/§3.4, and none behind F1 either.** All of it is `[src@580]` or
+`[inferred]`. F1's census was independently **re-derived** on 2026-08-01 against ogkm
+**580.159.04**, which caught a 22-entry error — but a census is a parser over source text, not
+a measurement, and none of this has been in front of a running driver.
 
 ---
 
@@ -204,22 +252,59 @@ one 32-bit store into the mapped usermode window that is the doorbell (`:1744-17
 finding below asks the same question of one of them: *does it exceed an unprivileged local
 process?*
 
-### F1 — The census: 43.5 % of RM's control plane is unreachable from userspace at all
+### F1 — The census: 45.1 % of RM's control plane is unreachable from userspace at all
 
 Re-derived for this document over the generated exported-method tables
 (`ogkm-580: src/nvidia/generated/*.c`, 1 359 entries) **[src@580]**:
 
 | class | count | who can call it |
 |---|---|---|
-| `NON_PRIVILEGED` (`0x8`) | 768 | any unprivileged process — **and therefore us** |
+| `NON_PRIVILEGED` (`0x8`) **and nothing stronger** | 746 | any unprivileged process — **and therefore us** |
 | `PRIVILEGED` (`0x4`) | 265 | `CAP_SYS_ADMIN` in the initial userns only |
-| `INTERNAL` (`0x80`) | 211 | RM-internal callers only |
+| `INTERNAL` (`0x80`, not also `PRIVILEGED`) | 233 | RM-internal callers only |
 | `KERNEL_PRIVILEGED` (default, no flag) | 115 | `RS_PRIV_LEVEL_KERNEL` only |
 
-⇒ **591 of 1 359 (43.5 %) are closed to every userspace caller**, us included, by §3.3's rules
-`[inferred]`. ★ This census is **not** in `compute_limiting_and_priority.md` §4.2, which counted
-only the *access-right* field. Both are true and they measure different gates; F4 says why the
+⇒ **613 of 1 359 (45.1 %) are closed to every userspace caller**, us included `[inferred]`.
+★ This census is **not** in `compute_limiting_and_priority.md` §4.2, which counted only the
+*access-right* field. Both are true and they measure different gates; F4 says why the
 difference matters.
+
+#### ★ CORRECTED 2026-08-01 — this table used to read 768 / 211 / **591 (43.5 %)**
+
+**[src@580]** — and, per §0, a census is a **reading**, not a measurement: nothing ran but a
+parser over source text. Re-derived independently on 2026-08-01 against ogkm tag
+**580.159.04** (named because `ogkm` is versioned and the vendored tree elsewhere in this
+project is **610.43.02**, which does not agree with it); the tag was taken from `version.mk`
+`NVIDIA_VERSION`, and the parser read the `/*flags=*/ 0x…u` literals inside every
+`__nvoc_exported_method_def_*[]` table under `src/nvidia/generated/*.c`.
+
+The re-count reproduced **1 359 total**, **265 `PRIVILEGED`** and **115 kernel-by-default**
+*exactly*, so the universe and the parser agree with the original. One cell did not:
+
+- **22 entries carry BOTH `INTERNAL` and `NON_PRIVILEGED`** — counted, and the arithmetic
+  closes on both sides: `233 − 211 = 22` and `768 − 746 = 22`, the same 22 entries. The
+  original count credited them to the *reachable* side.
+- They are **not** reachable. `RMCTRL_FLAGS_INTERNAL` is enforced independently of the
+  privilege-level rules: *"if the `INTERNAL` flag is specified, the call will only be allowed
+  to be issued from RM itself. Otherwise, `NV_ERR_NOT_SUPPORTED` is returned"*
+  (`ogkm-580: src/nvidia/inc/kernel/rmapi/control.h:234-239`), implemented as
+  `if (ctrlFlags & RMCTRL_FLAGS_INTERNAL) { if (!pRmCtrlParams->bInternal) return NV_ERR_NOT_SUPPORTED; }`
+  (`ogkm-580: src/nvidia/src/kernel/rmapi/control.c:799-803`) **[src@580]**. Carrying
+  `NON_PRIVILEGED` as well does not soften it — that clause never reads the privilege level.
+
+⇒ The correction moves **22 controls from the reachable side to the closed side**, which makes
+§3.3's argument *stronger*, not weaker. It is recorded rather than silently patched because a
+census is the kind of number that gets quoted downstream.
+
+⚠ **And the citation in §3.3 was imprecise, which is how the miscount survived.** §3.3
+attributes all three rules to `rmControlValidateClientPrivilegeAccess`
+(`control.c:675-712`). That function implements only **two** of them — it refuses
+`PRIVILEGED` below `USER_ROOT`, and it refuses when *none* of
+`NON_PRIVILEGED`/`PRIVILEGED`/`INTERNAL` is set. It does **not** refuse `INTERNAL`; there,
+`INTERNAL` *satisfies* the second clause. The gate that closes `INTERNAL` is the separate one
+at `control.c:799-803` above. Both are inside `rmapi/control.c` and both are unconditional,
+so the conclusion is unchanged — but "closed by §3.3's rules" was not literally true of the
+`INTERNAL` column, and anyone re-deriving the table from §3.3 alone would land back on 591.
 
 ### F2 — RM caches a privilege level per client, and our ordering is what closes it
 
@@ -295,6 +380,33 @@ real for a *different* boundary — cross-tenant isolation inside our own system
 `core_security_threat_model.md`'s subject — but it contributes **nothing** to P, and if the
 allowlist were deleted tomorrow P would still hold on §3.3's mechanism `[inferred]`. Stating it
 the other way round would be the mistake: it would make P depend on a table we maintain.
+
+#### ★ STRUCK 2026-08-01 — and three code citations still to strike, located
+
+A tree-wide sweep for places that cite the allowlist/denylist as the *security* property, or
+the Case-1/Case-2 split as a containment mechanism, was run on 2026-08-01 over all 57 `.md`
+files, every `crates/*/src/**.rs` and `crates/*/tests/**.rs`, the root `tests/` crate, and all
+23 `Cargo.toml` descriptions.
+
+**F13 / Case-2: the tree is CLEAN.** Every site that mentions `classify_control`, the Case-2
+set or the `PROMOTE_CTX`/`GET_CTX_BUFFER_INFO` diversion already uses the correctness framing,
+and four of them say *"wrong layer, never a privilege gain"* outright
+(`kayfabe-arch/src/lib.rs:622-627`, `kayfabe-fwd/src/lib.rs:1608-1612` and `:1927-1929`,
+`kayfabe-isolate/src/lib.rs:166-170`, `kayfabe-isolate-host/src/rm.rs:380-384`,
+`execution_plane.md:225-226`). **No edit is owed.** Recorded as a *verified negative* so the
+next auditor does not re-run the sweep.
+
+**F5 / allowlist: three rustdoc sites still overstate it**, and they are named here with their
+current wording because ⊘ **this commit deliberately did not edit them** — `kayfabe-abi` and
+`kayfabe-rmrpc` were both being modified by a concurrent `GspRmAlloc` task, and a doc-comment
+edit landing in the middle of that is a merge conflict for no urgency. They are latent
+documentation defects, not live security defects.
+
+| site | current wording | why it overstates |
+|---|---|---|
+| `crates/kayfabe-rmrpc/src/lib.rs:389-392` | *"the only thing standing between a guest and an arbitrary class was whether we happened to decode it, so adding a decoder widened the **security boundary**"* | promotes the table from mechanism to **the** security boundary. It is not one: RM adjudicates the class regardless. Correct restatement: adding a decoder used to widen **what we permit**, which is a policy surface, not P. |
+| `crates/kayfabe-abi/src/capability.rs:50` | section heading *"## Ordering, which is a security property"* | the table's internal resolution order is a **review/policy** property. The paragraph under it is fine; the heading is the false citation. |
+| `crates/kayfabe-abi/src/capability.rs:213-216` | *"there is no version of this we want reachable from a guest"* (on the `EXEC_REG_OPS` deny rows) | reads as *our deny row makes it unreachable*. It does not — both rows are `NON_PRIVILEGED` in RM. ★ The **neighbouring** `DeniedBecause::SmDebuggerTrapping` doc at `:237-241` already gets this exactly right and says the surface *is* reachable by an unprivileged app; bring these up to that standard. |
 
 ★ `EXEC_REG_OPS` deserves its own sentence, because "unprivileged arbitrary register access"
 would be a startling thing to leave implied. It is non-privileged **at the dispatch layer only**;
@@ -401,19 +513,56 @@ client-handle protection, which is a real boundary between an unprivileged proce
 root GPU client on the host (`nvidia-persistenced`, a display server, another root CUDA
 process), does not stand between the isolate and those clients `[inferred]`.
 
-★ **Why P nonetheless holds today, and it is one line rather than an invariant.** Every ioctl we
-issue hard-codes *our own* client in the `hClient` field — `raw_control` writes
-`h_client: self.client` (`crates/kayfabe-isolate-host/src/rm.rs:857`) and `alloc` passes
-`self.conn.client` with a handle minted by `mint()` (`rm.rs:730-736`, `:1437-1441`)
-**[src-rust]**. The guest supplies object handles, never the client handle, so it cannot name a
-foreign client through the op set that exists. The euid is a latent widening, not a live one.
+★ **Why P nonetheless holds, and — until 2026-08-01 — it was one line rather than an
+invariant.** Every ioctl we issue stamps *our own* client into the `hClient` field. The guest
+supplies object handles, never the client handle, so it cannot name a foreign client through
+the op set that exists. The euid is a latent widening, not a live one.
 
-⇒ **Two follow-ups, and the first is nearly free.** (1) Run the isolate at a **non-zero uid** —
-map it to `nobody` rather than to the VMM's uid — and the widening disappears rather than being
-argued about. ⚠ The mapping is `0 <outer_uid> 1`, so this is a change to how the namespace is
-built and needs its own analysis of what else in the sandbox assumes uid 0. (2) Pin
-*"`hClient` is never guest-derived"* as a test, since P currently rests on it and nothing states
-it. ⊘ **I did not test any of this** — no run exists on either side of it.
+What made that fragile was **where** the property lived: `RmConnection::raw_alloc` took a
+`root: u32` parameter and all eight call sites *happened* to pass `self.client`. Nothing said
+so, nothing checked it, and one future call site passing anything else would have converted a
+latent widening into a live one with **no red test anywhere**.
+
+#### ★★★ RESOLVED 2026-08-01 — follow-up (2), and it is structural rather than checked
+
+The invariant is now one a wrong call site **cannot satisfy**. `rm.rs` has a private
+`mod own_client` whose `OwnClient(u32)` has a **private field** and exactly one constructor,
+`OwnClient::allocate_root`, which *performs* the `NV01_ROOT_CLIENT` allocation and wraps the
+handle RM wrote back. So *"an `OwnClient` value exists"* and *"this process minted that
+client"* are **one statement**, in the shape `#139`'s `StickyAnswerGuard` and `#137`'s
+`WantedTable::from_cmd` both took. `raw_alloc` no longer has a client parameter at all — it
+stamps `self.client`, so a caller cannot express a foreign client.
+
+Three deliberately-wrong call sites were planted and **watched failing to compile**
+`[run: 2026-08-01, branch `f11-invariant`, 38-core x86_64 build box, rustc 1.97.1,
+`cargo build -p kayfabe-isolate-host`; each mutation applied, the error recorded, then
+reverted and the file verified byte-identical by `sha256sum`]`:
+
+| planted mistake | compiler says |
+|---|---|
+| pass a foreign client to `raw_alloc` | `error[E0061]: this method takes 4 arguments but 5 arguments were supplied` |
+| `OwnClient(0xdead_beef)` | `error[E0423]: cannot initialize a tuple struct which contains private fields` |
+| `client: 0xdead_beefu32` in the connection | `error[E0308]: mismatched types … expected `OwnClient`, found `u32`` |
+
+⚠ **What is NOT structural, stated because the split is the honest part.** The ABI parameter
+blocks in `kayfabe-abi` type their client fields as plain `u32`, and typing them is a
+crate-wide change deliberately not made. So a **new struct literal** in `rm.rs` could still
+write `h_client: 0xdead_beef` and compile. That residue is covered by a *checked* gate —
+`crates/kayfabe-isolate-host/tests/own_client_invariant.rs`, three tests, whose universe of
+"client-ish field names" is **read out of `kayfabe-abi` at test time** rather than listed
+(`gates_quantified_over_a_list`). Five more mutations were planted and watched going red,
+including two that break the instrument itself so the gate cannot pass vacuously.
+
+⊘ **Follow-up (1) is still open and is the better fix.** Running the isolate at a **non-zero
+uid** — mapping it to `nobody` rather than to the VMM's uid — makes the widening *disappear*
+instead of being argued about. The map is `0 <outer_uid> 1`, so it is a change to how the
+namespace is built and needs its own analysis of what else in the sandbox assumes uid 0. What
+landed here bounds the consequence; it does not remove the cause.
+
+⊘ **Still no run on the security question itself.** Whether F11's euid widening is exploitable
+at all remains `[unknown]` — it needs a root-owned RM client on the box whose handle value we
+could name. Nothing in this section has been in front of a real driver; the runs cited above
+are a compiler and a test binary.
 
 ### F12 — ★★ A real counterexample, in the C artifact, and it is why the evidence base matters
 
@@ -432,6 +581,15 @@ node outside the isolate **[src-rust]** (F8 is the one named future exception). 
 here because the C is this project's standing oracle and is where people go for evidence: **P is
 a statement about the Rust port and it is false of the C artifact.** Anyone quoting P at the C
 would be quoting it at the wrong system.
+
+★★ **And this is exactly the kind of C bug the port exists to subtract.** `port_the_c_not_a_redesign`
+is the standing directive — *reproduce the C and subtract its named bugs, because its bugs are
+enumerable and its correct behaviour is not*. F12 is one of those named bugs: a root RM client,
+outside every sandbox, whose trigger is a guest message. The port does not have it, and the
+reason it does not is not luck — **nothing in this tree opens a device node outside the
+isolate**, which is a structural difference and not a policy one. Recording the contrast is how
+the subtraction stays visible; a later reader who finds `nvkvm_admin_ensure` in the oracle and
+assumes the port inherited it would be wrong in the direction that matters.
 
 ### F13 — The host egress is default-FORWARD, and its whole policy is a two-entry `matches!`
 
@@ -484,8 +642,10 @@ same fd.
 ★ **Not reachable today, and the reason is that the consumer is unbuilt.** `CrossedFd` has no
 call site outside its own module, its re-export, and the crossing's tests **[src-rust]**; the
 `#128` passthrough the crossing exists for is explicitly not built. So this is a **latent**
-widening, like F11 — and, like F11, P currently holds for a reason that is not written down as
-an invariant anywhere.
+widening, like F11 was — but the comparison no longer runs all the way. ★ **F11's half of it
+was closed on 2026-08-01** (see F11's ★★★ RESOLVED block): *"`hClient` is never guest-derived"*
+is now a type a wrong call site cannot satisfy. This one is still held by nothing but the
+absence of a caller, so it is now the **weaker** of the two and the one to reach for next.
 
 ### ★★★ F14 — SUPERSEDED IN PART, 2026-07-31. Read §1.1 first.
 
@@ -537,13 +697,19 @@ it would cost to be wrong:
    descriptor no longer crosses at all for the classes (b) covers.
 2. **F11** — the isolate's init-namespace euid is the VMM's, RM keys a real check on euid, and
    P holds only because `hClient` is never guest-derived. The one finding here that is not
-   about capabilities at all.
+   about capabilities at all. ★ **The `hClient` half is CLOSED as of 2026-08-01** — it is a
+   private-field newtype whose only constructor is the root-client allocation, so a foreign
+   client is `error[E0423]`/`error[E0061]` rather than a red test. The **cause** is untouched:
+   the isolate still runs at the VMM's uid, and follow-up (1) — map it to `nobody` — remains
+   open and is the better fix.
 3. **F12** — the C artifact *does* violate P, through a root RM client reachable by a guest
    message. Not ported; recorded because the C is where the evidence base lives.
 4. **F2/F7** — RM caches a per-client privilege level, and the ordering that stops us latching
    an admin one is call order in one function rather than a type.
 5. **F13** — two controls RM treats as privileged/kernel-only sit on our ingress allowlist; the
-   egress that would carry them is default-forward with a two-entry mock policy.
+   egress that would carry them is default-forward with a two-entry mock policy. ⊘ The
+   Case-1/Case-2 split this describes is a **correctness** mechanism; §3.4 records that it must
+   not be cited as security, and a tree-wide sweep on 2026-08-01 found **no** site doing so.
 
 F5, F6 and F10 each looked like a way to exceed the bar and each turns out to be inside it, for
 the same reason every time — §3.3 makes the host driver, not us, the adjudicator. F8 is the

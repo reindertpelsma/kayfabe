@@ -149,6 +149,150 @@ const FIRST_HANDLE: u32 = 0xCAFE_0001;
 /// actually assigned, which is what we keep — asking is not choosing.
 const REQUESTED_CLIENT_HANDLE: u32 = 0xCAFE_0000;
 
+/// ★★★ **`hClient` is never guest-derived — as a TYPE, not as a habit.**
+///
+/// This module exists so that *"the client handle in every RM escape we issue is one this
+/// isolate minted"* is a fact the compiler enforces, rather than a property held by the
+/// eight call sites that happen to write `self.client` today.
+///
+/// ## Why this is worth a module (`guest_blast_radius.md` §4 F11)
+///
+/// [`crate::sandbox`]'s `surrender_privilege` drops **capabilities, not uid**: the user
+/// namespace map is the single line `0 <outer_uid> 1`
+/// (`crates/kayfabe-linux-raw/src/sandbox_unsafe.rs:596-617`), so on a VMM running as root
+/// the isolate's euid **as the host kernel sees it** is 0. RM keys a real check on exactly
+/// that value, and the check is an **OR**:
+///
+/// ```c
+/// if ((pClientTokenUser->euid != pCurrentTokenUser->euid) &&
+///     (pClientTokenUser->pid  != pCurrentTokenUser->pid))
+///     return NV_ERR_INVALID_CLIENT;
+/// ```
+///
+/// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/os.c:3844-3868`, driven from
+/// `_rmclientUserClientSecurityCheck`, `ogkm-580: src/nvidia/src/kernel/rmapi/client.c:447-512`;
+/// on by default — the property initialises true independent of any registry key,
+/// `ogkm-580: src/nvidia/generated/g_system_nvoc.c:103`). A matching euid **alone** passes.
+///
+/// ⇒ A local unprivileged process (euid 1000) fails that check against a root-owned RM
+/// client. **We pass it.** So RM's cross-user client-handle protection — a real boundary
+/// between an unprivileged process and every root GPU client on the host
+/// (`nvidia-persistenced`, a display server, another root CUDA process) — does not stand
+/// between this isolate and those clients.
+///
+/// The reason that is a *latent* widening and not a live one is the whole of this type:
+/// **there is no way for us to name a client we did not mint.** Before this module that
+/// reason was one line — [`RmConnection::raw_alloc`] took a `root: u32` parameter and every
+/// caller passed `self.client` — and a single future call site passing anything else would
+/// have turned a latent widening into a live one with nothing red anywhere.
+///
+/// ## The construction that makes it structural
+///
+/// [`OwnClient`] wraps a `u32` in a **private field inside a private module**, and the only
+/// constructor is [`OwnClient::allocate_root`], which *performs* the `NV01_ROOT_CLIENT`
+/// allocation and wraps the handle RM wrote back. So the two statements
+///
+/// * *"an `OwnClient` value exists"*, and
+/// * *"this process allocated that client against this control node"*
+///
+/// are **one statement**. There is no `From<u32>`, no `new`, no `Default`, and the field is
+/// unreachable from `rm.rs` itself. A call site cannot name a foreign client because it
+/// cannot *build* the only thing the escape-issuing code will accept.
+///
+/// ⚠ **What this does NOT close, stated plainly.** The ABI parameter blocks
+/// ([`Nvos54Parameters::h_client`] and friends) are `u32`, and typing them is a
+/// `kayfabe-abi`-wide change this module deliberately does not make. So a *new* struct
+/// literal in `rm.rs` could still write `h_client: <some other u32>` and compile. That
+/// residue is covered by a **checked** gate rather than a structural one —
+/// `tests/own_client_invariant.rs::every_rm_escape_in_rm_rs_stamps_the_isolates_own_client`,
+/// which derives its universe by scanning the file rather than from a pinned list. The
+/// honest split is: the *parameter* hole is structural, the *literal* hole is tested.
+///
+/// ⊘ **No run stands behind the security reasoning above.** The euid mechanism is read out
+/// of `ogkm-580` source; whether F11's widening is exploitable at all is `[unknown]` and
+/// needs a root-owned RM client on the box whose handle value we could guess. Nothing here
+/// has been in front of a real driver.
+mod own_client {
+    use super::{
+        CharDevice, Indirect, NOT_ON_THIS_RUNG, NV_ESC_RM_ALLOC, NV_IOCTL_MAGIC, NV01_ROOT_CLIENT,
+        Nvos21Parameters, REQUESTED_CLIENT_HANDLE, RmError, ioctl, ioctl_error, status_check,
+    };
+
+    /// **The client handle this isolate minted for itself, and the only kind of client
+    /// handle any RM escape in this crate will accept.**
+    ///
+    /// Construct it with [`OwnClient::allocate_root`] — which is the `NV01_ROOT_CLIENT`
+    /// allocation, not a wrapper around it. See the module docs for why that identity is
+    /// the point.
+    ///
+    /// `Copy`, because it is a 32-bit handle and passing it around must not be a reason to
+    /// reach for the raw value. **No** `From<u32>`, `new`, `Default`, `FromStr` or
+    /// `Deserialize` — every one of those would re-open exactly what this exists to close,
+    /// so the absence is deliberate and adding one needs the module docs re-read first.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(super) struct OwnClient(u32);
+
+    impl core::fmt::Debug for OwnClient {
+        /// Named rather than bare-hex: a handle in a log is only ever interesting relative
+        /// to *whose* namespace it came from, and this type's whole content is the answer.
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            write!(f, "OwnClient({:#010x})", self.0)
+        }
+    }
+
+    impl OwnClient {
+        /// **R4 — allocate this isolate's root RM client, and BE the only way to obtain an
+        /// [`OwnClient`].**
+        ///
+        /// `hRoot` is `0` here and nowhere else in the crate: a root-client allocation is
+        /// the one escape with no owning client, which is precisely why it is the one
+        /// constructor. RM writes the handle it actually assigned back into
+        /// `hObjectNew`, and *that* — not [`REQUESTED_CLIENT_HANDLE`] — is what we keep.
+        ///
+        /// ★ Taking `&CharDevice` rather than `&RmConnection` is load-bearing: it lets the
+        /// client be minted **before** the connection struct is built, so there is no
+        /// window in which an [`RmConnection`](super::RmConnection) exists carrying a
+        /// placeholder client. That placeholder (`client: 0`) is what the previous shape
+        /// needed and it was a second way to be wrong.
+        pub(super) fn allocate_root(ctl: &CharDevice) -> Result<Self, RmError> {
+            let mut arg = [0u8; Nvos21Parameters::SIZE];
+            Nvos21Parameters {
+                h_root: 0,
+                h_object_parent: 0,
+                h_object_new: REQUESTED_CLIENT_HANDLE,
+                h_class: NV01_ROOT_CLIENT,
+                p_alloc_parms: 0,
+                params_size: 0,
+                status: 0,
+            }
+            .encode_into(&mut arg)
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len())
+                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            // No `pAllocParms`: `NV01_ROOT_CLIENT` takes none, so the patch list is empty
+            // rather than pointing at a zero-length buffer.
+            let mut patches: Vec<Indirect<'_>> = Vec::new();
+            ctl.ioctl(req, &mut arg, &mut patches)
+                .map_err(|e| ioctl_error(&e))?;
+            let out =
+                Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            status_check(out.status)?;
+            Ok(Self(out.h_object_new))
+        }
+
+        /// The raw handle, for the one thing it is for: filling an ABI parameter block.
+        ///
+        /// ⚠ This is an *exit*, not a hole. It hands out the client we minted; it cannot
+        /// manufacture one we did not. The direction that would matter — `u32 ->
+        /// OwnClient` — does not exist.
+        pub(super) fn raw(self) -> u32 {
+            self.0
+        }
+    }
+}
+
+use own_client::OwnClient;
+
 /// The shared RM connection: **one per isolate, shared by its whole worker pool**.
 ///
 /// That sharing is the fact `host_execution_plane.md` §0 is about. RM serialises every
@@ -173,7 +317,10 @@ pub struct RmConnection {
     /// Which GPU node to open for those mappings. Kept as the index rather than as a name
     /// so the naming rule lives in exactly one place.
     gpu_index: u32,
-    client: u32,
+    /// ★★★ **F11's invariant, as a type.** Not a `u32`: see [`mod@own_client`]. The only
+    /// value that can be here is one [`OwnClient::allocate_root`] produced, so every
+    /// escape this connection issues names a client this isolate minted.
+    client: OwnClient,
     device: u32,
     subdevice: u32,
     /// The **host** driver's version string, as its frontend reported it.
@@ -532,12 +679,19 @@ impl RmConnection {
         rung("R3 REGISTER_FD", gpu_node.ioctl(req, &mut reg, &mut []))?;
 
         let held = rung("R1 hold the /dev grant", dev.try_clone())?;
+
+        // R4 — the root client, minted **before** the connection exists. RM writes back the
+        // handle it assigned. ★ Ordered this way so there is never an `RmConnection`
+        // carrying a placeholder client: `OwnClient` has no zero value and no constructor
+        // but this one, which is the whole of F11's invariant (see `mod own_client`).
+        let client = rung("R4 NV01_ROOT_CLIENT", OwnClient::allocate_root(&ctl))?;
+
         let conn = RmConnection {
             ctl,
             gpu: gpu_node,
             dev: held,
             gpu_index: gpu.0,
-            client: 0,
+            client,
             device: 0,
             subdevice: 0,
             version,
@@ -551,12 +705,6 @@ impl RmConnection {
             // Filled in below, once there is a subdevice to parent it to.
             usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),
         };
-
-        // R4 — the root client. RM writes back the handle it assigned.
-        let client = rung(
-            "R4 NV01_ROOT_CLIENT",
-            conn.raw_alloc(0, 0, REQUESTED_CLIENT_HANDLE, NV01_ROOT_CLIENT, &mut []),
-        )?;
 
         // R5 — the device. The parameters are NOT optional: without them RM does not
         // associate the device with a physical GPU and every later control answers
@@ -572,7 +720,7 @@ impl RmConnection {
         )?;
         let device = rung(
             "R5 NV01_DEVICE_0",
-            conn.raw_alloc(client, client, FIRST_HANDLE, NV01_DEVICE_0, &mut dev_params),
+            conn.raw_alloc(client.raw(), FIRST_HANDLE, NV01_DEVICE_0, &mut dev_params),
         )?;
 
         // R6 — the subdevice.
@@ -583,19 +731,13 @@ impl RmConnection {
         )?;
         let subdevice = rung(
             "R6 NV20_SUBDEVICE_0",
-            conn.raw_alloc(
-                client,
-                device,
-                FIRST_HANDLE + 1,
-                NV20_SUBDEVICE_0,
-                &mut sub_params,
-            ),
+            conn.raw_alloc(device, FIRST_HANDLE + 1, NV20_SUBDEVICE_0, &mut sub_params),
         )?;
 
         {
             let mut o = conn.objects.lock().expect("objects");
             o.next = FIRST_HANDLE + 2;
-            o.parents.insert(device, client);
+            o.parents.insert(device, client.raw());
             o.parents.insert(subdevice, device);
         }
         // ★★ R6b — the doorbell window, attempted here and NOT fatal. See
@@ -633,13 +775,7 @@ impl RmConnection {
     ///    [`RmConnection::map_cpu`] before this call site existed.
     fn open_usermode(&self) -> Result<UsermodeWindow, RmError> {
         let want = self.mint();
-        let object = self.raw_alloc(
-            self.client,
-            self.subdevice,
-            want,
-            AMPERE_USERMODE_A,
-            &mut [],
-        )?;
+        let object = self.raw_alloc(self.subdevice, want, AMPERE_USERMODE_A, &mut [])?;
         self.remember(object, self.subdevice);
         let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::Uncached)?;
         Ok(UsermodeWindow {
@@ -682,7 +818,7 @@ impl RmConnection {
     /// The client handle RM assigned.
     #[must_use]
     pub fn client(&self) -> u32 {
-        self.client
+        self.client.raw()
     }
 
     /// The subdevice handle — the parent of most per-GPU controls.
@@ -691,10 +827,20 @@ impl RmConnection {
         self.subdevice
     }
 
-    /// One `NV_ESC_RM_ALLOC`, returning the handle RM ended up assigning.
+    /// One `NV_ESC_RM_ALLOC` under **this isolate's own client**, returning the handle RM
+    /// ended up assigning.
+    ///
+    /// ★★★ **There is deliberately no `root` parameter** (`guest_blast_radius.md` §4 F11).
+    /// This function used to take `root: u32` and every caller passed `self.client`, which
+    /// made *"we never allocate under a client we did not mint"* a property of eight call
+    /// sites rather than of the code. Stamping it here means a caller cannot express the
+    /// wrong thing: the only client this escape can carry is [`OwnClient`], and the only
+    /// way to obtain one is to have allocated it ([`OwnClient::allocate_root`]).
+    ///
+    /// The one allocation with no owning client — `NV01_ROOT_CLIENT` itself, `hRoot = 0` —
+    /// does not come through here at all; it *is* [`OwnClient::allocate_root`].
     fn raw_alloc(
         &self,
-        root: u32,
         parent: u32,
         want: u32,
         class: u32,
@@ -702,7 +848,7 @@ impl RmConnection {
     ) -> Result<u32, RmError> {
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
-            h_root: root,
+            h_root: self.client.raw(),
             h_object_parent: parent,
             h_object_new: want,
             h_class: class,
@@ -859,7 +1005,7 @@ impl RmConnection {
     fn raw_control(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos54Parameters::SIZE];
         Nvos54Parameters {
-            h_client: self.client,
+            h_client: self.client.raw(),
             h_object: object,
             cmd,
             flags: 0,
@@ -907,7 +1053,7 @@ impl RmConnection {
     ) -> Result<u64, RmError> {
         let mut arg = [0u8; Nvos46Parameters::SIZE];
         Nvos46Parameters {
-            h_client: self.client,
+            h_client: self.client.raw(),
             h_device: self.device,
             h_dma,
             h_memory,
@@ -939,7 +1085,7 @@ impl RmConnection {
     fn raw_unmap_dma(&self, h_dma: u32, gpu_va: u64) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos47Parameters::SIZE];
         Nvos47Parameters {
-            h_client: self.client,
+            h_client: self.client.raw(),
             h_device: self.device,
             h_dma,
             h_memory: 0,
@@ -1002,7 +1148,7 @@ impl RmConnection {
 
         let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];
         Nvos33ParametersWithFd {
-            h_client: self.client,
+            h_client: self.client.raw(),
             h_device: self.device,
             h_memory,
             offset: 0,
@@ -1057,7 +1203,7 @@ impl RmConnection {
     fn alloc_device_local(&self, len: u64) -> Result<u32, RmError> {
         let mut params = [0u8; NvMemoryAllocationParams::SIZE];
         NvMemoryAllocationParams {
-            owner: self.client,
+            owner: self.client.raw(),
             kind: 0,
             attr: ATTR_CONTIGUOUS_VIDMEM,
             size: len,
@@ -1066,13 +1212,7 @@ impl RmConnection {
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
         let want = self.mint();
-        let h = self.raw_alloc(
-            self.client,
-            self.device,
-            want,
-            NV01_MEMORY_LOCAL_USER,
-            &mut params,
-        )?;
+        let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params)?;
         self.remember(h, self.device);
         Ok(h)
     }
@@ -1439,7 +1579,7 @@ impl RmBackend for HostRmBackend {
         params: &[u8],
     ) -> Result<HostHandle, RmError> {
         let parent_raw = if parent == HostHandle::NULL {
-            self.conn.client
+            self.conn.client.raw()
         } else {
             self.narrow(parent)?
         };
@@ -1447,7 +1587,7 @@ impl RmBackend for HostRmBackend {
         let mut params = params.to_vec();
         let h = self
             .conn
-            .raw_alloc(self.conn.client, parent_raw, want, class.0, &mut params)?;
+            .raw_alloc(parent_raw, want, class.0, &mut params)?;
         self.conn.remember(h, parent_raw);
         Ok(self.stamp(h))
     }
@@ -1460,13 +1600,9 @@ impl RmBackend for HostRmBackend {
             .encode_into(&mut params)
             .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
         let want = self.conn.mint();
-        let space = self.conn.raw_alloc(
-            self.conn.client,
-            self.conn.device,
-            want,
-            FERMI_VASPACE_A,
-            &mut params,
-        )?;
+        let space = self
+            .conn
+            .raw_alloc(self.conn.device, want, FERMI_VASPACE_A, &mut params)?;
         self.conn.remember(space, self.conn.device);
 
         // ★★ R7b, and it was missing until hardware said so. `NV_ESC_RM_MAP_MEMORY_DMA`'s
@@ -1488,13 +1624,10 @@ impl RmBackend for HostRmBackend {
         .encode_into(&mut range)
         .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
         let want = self.conn.mint();
-        match self.conn.raw_alloc(
-            self.conn.client,
-            self.conn.device,
-            want,
-            NV01_MEMORY_VIRTUAL,
-            &mut range,
-        ) {
+        match self
+            .conn
+            .raw_alloc(self.conn.device, want, NV01_MEMORY_VIRTUAL, &mut range)
+        {
             Ok(h) => {
                 self.conn.remember(h, self.conn.device);
                 self.conn.pair(h, space);
@@ -1519,7 +1652,7 @@ impl RmBackend for HostRmBackend {
         let want = self.conn.mint();
         let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
         Nvos02ParametersWithFd {
-            h_root: self.conn.client,
+            h_root: self.conn.client.raw(),
             h_object_parent: self.conn.device,
             h_object_new: want,
             h_class: NV01_MEMORY_SYSTEM,
@@ -1633,9 +1766,7 @@ impl RmBackend for HostRmBackend {
         }
         let want = self.conn.mint();
         let mut params = params.to_vec();
-        let h = self
-            .conn
-            .raw_alloc(self.conn.client, parent, want, class.0, &mut params)?;
+        let h = self.conn.raw_alloc(parent, want, class.0, &mut params)?;
         self.conn.remember(h, parent);
         Ok(self.stamp(h))
     }
@@ -1992,7 +2123,6 @@ impl HostRmBackend {
         }
         let want = self.conn.mint();
         let tsg = match self.conn.raw_alloc(
-            self.conn.client,
             self.conn.device,
             want,
             KEPLER_CHANNEL_GROUP_A,
@@ -2037,13 +2167,10 @@ impl HostRmBackend {
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
-        let chan = match self.conn.raw_alloc(
-            self.conn.client,
-            tsg,
-            want,
-            AMPERE_CHANNEL_GPFIFO_A,
-            &mut chan_params,
-        ) {
+        let chan = match self
+            .conn
+            .raw_alloc(tsg, want, AMPERE_CHANNEL_GPFIFO_A, &mut chan_params)
+        {
             Ok(h) => {
                 self.conn.remember(h, tsg);
                 h
@@ -2650,7 +2777,7 @@ impl HostRmBackend {
             .ok_or_else(|| RmError::BadHandle(self.stamp(raw)))?;
         let mut arg = [0u8; Nvos00Parameters::SIZE];
         Nvos00Parameters {
-            h_root: self.conn.client,
+            h_root: self.conn.client.raw(),
             h_object_parent: parent,
             h_object_old: raw,
             status: 0,

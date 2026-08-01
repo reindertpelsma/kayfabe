@@ -263,6 +263,17 @@ against 22 real applications at host parity:
 
 Recorded status: *"nvproxy-parity security model COMPLETE across all four gate categories."*
 
+⚠ **That quoted status is the C artifact's own, and it must not be read as "the allowlist is
+what makes us safe"** (`guest_blast_radius.md` §3.4, §4 F5, added 2026-08-01). All **six** of
+the controls this port explicitly denies are `NON_PRIVILEGED` in RM — reachable by any
+unprivileged local process already — so the table carries **no** part of the blast-radius
+property P. What carries P is that RM re-derives the caller's privilege on every ioctl and
+refuses by default: 613 of 1 359 exported controls (**45.1 %**) are closed to every userspace
+caller before our layer says anything. The allowlist is **defence in depth**, and it is real
+for a *different* boundary — cross-tenant isolation inside our own system
+(`core_security_threat_model.md`). Porting it is still worth doing; claiming P rests on it
+would make P depend on a table we maintain.
+
 **Current Rust state:** default-**allow**; the only real Case-2 set is **two constants in the
 mock crate**; class and parameter bytes pass through unsanitised.
 
