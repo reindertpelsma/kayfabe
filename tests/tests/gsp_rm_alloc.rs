@@ -97,21 +97,31 @@ fn port_gpu() -> Gpu {
 }
 
 /// The port's policy chain, **with** the object-model link.
-fn chain_with_objects() -> (Box<dyn CommandPolicy>, kayfabe_device::unserviced::UnservicedLog) {
+fn chain_with_objects() -> (
+    Box<dyn CommandPolicy>,
+    kayfabe_device::unserviced::UnservicedLog,
+) {
     let log = kayfabe_device::unserviced::UnservicedLog::new();
     let policy = kayfabe_device::served_policy(
         kayfabe_device::default_chip(),
         *abi(),
         log.clone(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
-        Some(Box::new(ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu()))),
+        Some(Box::new(ObjectPolicy::new(
+            abi(),
+            GuestOs::Linux,
+            port_gpu(),
+        ))),
     );
     (policy, log)
 }
 
 /// ★★★ The **negative control** — master's chain, exactly: no object-model link. This is
 /// what the 2026-08-01 boot ran against.
-fn chain_without_objects() -> (Box<dyn CommandPolicy>, kayfabe_device::unserviced::UnservicedLog) {
+fn chain_without_objects() -> (
+    Box<dyn CommandPolicy>,
+    kayfabe_device::unserviced::UnservicedLog,
+) {
     let log = kayfabe_device::unserviced::UnservicedLog::new();
     let policy = kayfabe_device::served_policy(
         kayfabe_device::default_chip(),
@@ -317,7 +327,10 @@ fn the_matching_frees_are_served() {
     for cmd in boot_allocs() {
         ok(&chain.respond(&cmd).expect("alloc answered"), "alloc");
     }
-    for (seq, h) in [H_EVENT, H_SUBDEVICE, H_DEVICE, BOOT_HCLIENT].into_iter().enumerate() {
+    for (seq, h) in [H_EVENT, H_SUBDEVICE, H_DEVICE, BOOT_HCLIENT]
+        .into_iter()
+        .enumerate()
+    {
         let reply = chain
             .respond(&free(10 + seq as u32, h))
             .unwrap_or_else(|| panic!("free of {h:#010x} was not answered"));
@@ -332,9 +345,15 @@ fn the_matching_frees_are_served() {
 #[test]
 fn without_the_object_link_the_frees_are_refused_too() {
     let (mut chain, log) = chain_without_objects();
-    for (seq, h) in [H_EVENT, H_SUBDEVICE, H_DEVICE, BOOT_HCLIENT].into_iter().enumerate() {
+    for (seq, h) in [H_EVENT, H_SUBDEVICE, H_DEVICE, BOOT_HCLIENT]
+        .into_iter()
+        .enumerate()
+    {
         if let Some(r) = chain.respond(&free(10 + seq as u32, h)) {
-            assert_ne!(r.rpc_result, 0, "a free must never be answered NV_OK by a chain that models no objects");
+            assert_ne!(
+                r.rpc_result, 0,
+                "a free must never be answered NV_OK by a chain that models no objects"
+            );
         }
     }
     assert_eq!(log.total(), 4);
@@ -360,7 +379,10 @@ fn a_class_this_port_does_not_model_is_still_refused_by_name() {
         .deliver(&alloc(2, BOOT_HCLIENT, 0xdead_0001, 0x1234))
         .expect_err("an unlisted class must be refused");
     assert!(
-        matches!(e, BridgeRefusal::AllocClassNotPermitted { class: 0x1234, .. }),
+        matches!(
+            e,
+            BridgeRefusal::AllocClassNotPermitted { class: 0x1234, .. }
+        ),
         "expected the CAPABILITY gate to refuse it (before the params table), got {e:?}"
     );
     assert_eq!(
@@ -535,12 +557,18 @@ fn the_shipped_arch_classifies_the_real_wire_class_ids() {
 fn the_shipped_arch_refuses_every_data_plane_seam() {
     let a = Ga10xArch::new();
     assert_eq!(a.mmu().levels(), 0, "no walk is possible");
-    assert!(a.mmu().page_sizes().is_empty(), "no leaf size is enumerated");
+    assert!(
+        a.mmu().page_sizes().is_empty(),
+        "no leaf size is enumerated"
+    );
     assert_eq!(a.mmu().level_shift(0), None);
     assert_eq!(a.mmu().decode_entry(0, u128::MAX), PteDecode::Invalid);
     assert_eq!(a.userd().userd_size(), 0);
     assert_eq!(a.decode_doorbell(0xd000_0000_0000_0000), None);
-    assert_eq!(a.pushbuffer().decode_method(0xffff_ffff, &[]), PushMethod::Opaque);
+    assert_eq!(
+        a.pushbuffer().decode_method(0xffff_ffff, &[]),
+        PushMethod::Opaque
+    );
     assert!(a.pushbuffer().gpfifo_entries(&[0xffu8; 64]).is_empty());
     assert!(
         a.gsp().is_none(),
@@ -564,8 +592,15 @@ fn the_shipped_isolate_factory_can_never_issue_a_verb() {
     assert!(iso.checkout().is_none(), "no worker, ever");
     assert!(iso.checked_out().is_empty());
     assert!(iso.in_flight() == 0);
-    assert!(iso.is_retired(), "retired at birth: the refusal is permanent");
-    assert_eq!(f.spawned.len(), 1, "the witness records the id it was asked for");
+    assert!(
+        iso.is_retired(),
+        "retired at birth: the refusal is permanent"
+    );
+    assert_eq!(
+        f.spawned.len(),
+        1,
+        "the witness records the id it was asked for"
+    );
 }
 
 /// ★ And the object model realizes on top of it — the composition the port performs, run
@@ -573,7 +608,11 @@ fn the_shipped_isolate_factory_can_never_issue_a_verb() {
 #[test]
 fn the_ports_object_model_realizes_with_no_forwarding_plane() {
     let gpu = port_gpu();
-    assert_eq!(gpu.procs.len(), 0, "no guest proc exists before any client root");
+    assert_eq!(
+        gpu.procs.len(),
+        0,
+        "no guest proc exists before any client root"
+    );
     // The system proc got its GpuId::ZERO isolate — a stillborn one.
     assert!(gpu.system.isolates.contains_key(&GpuId::ZERO));
 }
@@ -622,7 +661,9 @@ fn a_recycled_hclient_survives_alloc_free_alloc() {
     let (mut chain, _) = chain_with_objects();
     for round in 0..3u32 {
         ok(
-            &chain.respond(&root_alloc(round * 10 + 1)).expect("answered"),
+            &chain
+                .respond(&root_alloc(round * 10 + 1))
+                .expect("answered"),
             "root",
         );
         ok(
@@ -776,5 +817,67 @@ fn a_reply_is_sized_by_the_declared_length_never_by_the_delivered_run() {
     };
     assert_eq!(cmd.reply(0, &[]).payload.len(), 32);
     assert_eq!(cmd.ack(0).payload.len(), 32);
-    assert_eq!(cmd.wire_body().len(), 4064, "…while the decoder still sees it all");
+    assert_eq!(
+        cmd.wire_body().len(),
+        4064,
+        "…while the decoder still sees it all"
+    );
+}
+
+/// ★★ **The delivered run stops at the guest's own element count, not at the size of
+/// whatever buffer the caller handed over.**
+///
+/// ⊘ This test exists because the bite harness said so. `bite_gsp_rm_alloc.py`'s B4 —
+/// replacing the `elements * element_size_min` bound with `usize::MAX` — was a
+/// **non-biter** on its first run, and the bite was right while the test was wrong: the
+/// only existing test passes a run that is *either* exactly `msg_len` *or* exactly one
+/// element, and in both of those `run.len()` and the element bound agree. Dropping one of
+/// them is invisible until a run is LONGER than the guest's element count.
+///
+/// That is not a hypothetical: the ring hands over a slice whose length is its own
+/// business. If it ever hands over two elements' worth for a one-element message, the
+/// weaker bound turns the size of somebody else's buffer into a statement about how many
+/// bytes a guest message contains — and `wire_body()` feeds those bytes straight to a
+/// params decoder.
+#[test]
+fn the_delivered_run_stops_at_the_guests_element_count_not_the_callers_buffer() {
+    use kayfabe_tests::gspworld::P580;
+
+    let layout = P580.layout();
+    let hdr = layout.hdr_size();
+    let payload: Vec<u8> = (0..40u32).map(|i| (i * 7 % 251) as u8).collect();
+    let one = kayfabe_gsp::encode_message(
+        &layout,
+        0x0300_0000,
+        4096,
+        65536,
+        9,
+        &kayfabe_gsp::OutgoingRpc {
+            function: 76,
+            sequence: 3,
+            rpc_result: 0,
+            rpc_result_private: 0,
+            payload,
+        },
+    )
+    .expect("one element");
+    assert_eq!(one.len(), 4096, "the wire form is exactly one element");
+
+    // The caller hands over TWICE what the guest submitted.
+    let mut oversized = one.clone();
+    oversized.extend(std::iter::repeat_n(0xa5u8, 4096));
+    assert_eq!(oversized.len(), 8192);
+
+    let len = kayfabe_gsp::peek_len(&layout, &oversized, 4096, 65536).expect("declared");
+    assert_eq!(len.elements(), 1, "the guest submitted ONE element");
+    let decoded = kayfabe_gsp::decode_message(&layout, &oversized, len, 9, abi()).expect("decodes");
+    assert_eq!(
+        decoded.delivered.len(),
+        4096 - hdr - 32,
+        "the delivered body must stop at one element, not at the caller's 8 KiB"
+    );
+    assert!(
+        !decoded.delivered.contains(&0xa5),
+        "not one byte of the caller's tail may appear in the delivered body"
+    );
 }

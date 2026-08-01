@@ -109,3 +109,115 @@ generic `NV_OK` fall-through would have let this proceed on a lie.
   next on a bit-identical binary.
 - ⊘ The reachability shadow (`4a93d54`) and promote-ctx (`0644241`) are **not exercised** by this
   boot: it never gets far enough to publish a page table or promote a context.
+
+---
+
+# The SECOND and THIRD boots of 2026-08-01 — the `GspRmAlloc` rung, measured
+
+> Same discipline as everything above: these are two live boots of the same bench, not a
+> replay and not a reading. Both are reported, including the one that failed, because the
+> failure is where the finding is.
+
+## 5. Provenance
+
+| | |
+|---|---|
+| Rust archive | built from `/root/kfalloc` on the 38-core box, `cargo build --release -p kayfabe-qemu-raw`, rc 0 |
+| boot `alloc1` | rev **`2ced035`** — the archive says so itself (see §8) |
+| boot `alloc2` | rev **`a6412c0`** |
+| C overlay | `qemu/hw/misc/nvkvm/{nvkvm.c,kayfabe_shim.h,nvkvm_compat.h,meson.build}` — **byte-identical** to the installed tree (`cmp` clean, all four), so only the archive moved |
+| link | `ninja -C /workspace/bench/qemu-build`, rc 0 |
+| guest | Ubuntu 24.04, kernel 6.8.0-136-generic, **stock unpatched** NVIDIA 580.159.04 open kernel module |
+
+## 6. ★★★ Boot `alloc1` (`2ced035`) — the rung was built and the wall did not move
+
+Every class was still refused `0x56`, byte for byte the §3 log. What made it diagnosable
+in one boot instead of five was the device's own audit, printed at teardown:
+
+```
+nvkvm: commands: 34 decoded, 7 UNSERVICED, 6 distinct
+nvkvm:   unserviced fn 76 cmd 0x20800a87   (INTERNAL_NVLINK_GET_NVLINK_DEVICE_INFO)
+nvkvm:   unserviced fn 76 cmd 0x20800a4b   (INTERNAL_DISPLAY_GET_IP_VERSION)
+nvkvm:   unserviced fn 76 cmd 0x20802a08   (CE_GET_FAULT_METHOD_BUFFER_SIZE)
+nvkvm:   unserviced fn 76 cmd 0x20800afe   (INTERNAL_INIT_USER_SHARED_DATA)
+nvkvm:   unserviced fn 76 cmd 0x20800aff   (INTERNAL_USER_SHARED_DATA_SET_DATA_POLL)
+nvkvm:   unserviced fn 76 cmd 0x20800301   (EVENT_SET_NOTIFICATION)
+```
+
+⊘ **All seven are `fn 76`. Not one `fn 103` reached the ledger** — so the alloc *was*
+claimed and answered, and the answer was a refusal from inside the bridge. That single
+negative is what turned "it still fails" into "it fails inside `translate_alloc`", and it
+is the payoff of the unserviced ledger being a **host-side list** rather than something
+read one boot at a time.
+
+★★ The refusal is `ParamsSizeExceedsPayload`, and it is a **protocol fact**:
+`rpcRmApiAlloc_GSP` declares `length = sizeof(rpc_message_header_v) +
+sizeof(rpc_gsp_rm_alloc_v03_00)` (`ogkm-580: rpc.c:11196-11199`, `rpc_common.c:183`) and
+that struct's last member is a **flexible** `NvU8 params[]`
+(`ogkm-580: g_rpc-structures.h:1491-1502`) — so the declared length stops exactly where
+the params begin, and the params are copied in afterwards without updating it. They still
+arrive, because the queue transfers whole `RM_PAGE_SIZE` elements
+(`message_queue_cpu.c:563-565`). ⊘ The C artifact reads them exactly that way, at a fixed
+element offset with no reference to `length` (`C: nvkvm_gpu_emul.c:6775-6781`).
+
+## 7. ★★★ Boot `alloc2` (`a6412c0`) — the wall is GONE
+
+```
+NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04
+[drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:03.0 on minor 0
+```
+**Zero `rpcRmApiAlloc_GSP` lines. Zero `rpcRmApiFree_GSP` lines.** All four classes
+(`0x0`, `0x80`, `0x2080`, `0x7e`) and all three frees are served. The device audit for this
+boot lists the same six controls and, again, no `fn 103`.
+
+### ⊘ And §3's causal claim is REFUTED by it
+
+§3 said, in bold: *"Refusing object allocation starves the heap, and a null heap fails
+BAR2 init."* That was inferred from adjacency in one log, and it is wrong. Serving every
+allocation changed **nothing** downstream — the identical chain still runs:
+
+```
+pHeap != NULL @ mem_desc.c:152 → _memdescSetSubAllocatorFlag → NV_ERR_INVALID_STATE
+  → kern_bus_gm107.c:1798 → :1413 → kbusInitBar2_HAL → kbusStateInitLockedKernel_HAL
+    → RmInitNvDevice: *** Cannot initialize the device → RmInitAdapter failed! (0x24:0x40:1220)
+```
+
+★ What the two boots together establish is the *real* dependency, and it is one rung
+further back: `pHeap` is `memmgrGetDeviceSuballocator`'s answer
+(`ogkm-580: mem_desc.c:150-152`), and the heap is created inside `memmgr`'s own state init
+— which does not complete, because **`NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` (`0x20800301`)
+is refused at `mem_mgr.c:625`**, followed by `memmgrRegisterSuspendCallbacks` at `:777`.
+
+⇒ **The next rung is `0x20800301`**, not another alloc class. `[measured]` — this is a
+differential between two boots that differ by one commit, which is the only reason it can
+be stated as cause rather than as correlation.
+
+## 8. ★ The archive can now name its own revision
+
+§0 recorded that the previous bench binary could not: its only 40-hex string was a
+build-id. `build.rs` now stamps `kayfabe-rev:<sha>` into `.rodata` behind a `#[used]`
+anchor, and it survives a release build:
+
+```
+$ strings /workspace/bench/qemu-build/qemu-system-x86_64 | grep -o 'kayfabe-rev:[a-f0-9]\{40\}'
+kayfabe-rev:a6412c0c4ec506301f1df295a7eaa6196cec2974
+$ nm -C /workspace/bench/qemu-build/qemu-system-x86_64 | grep -c kayfabe
+4148          # was 1746 at 55a106f
+```
+
+★ The first thing it caught was the author. The `2ced035` archive stamped itself
+`…-dirty` from a tree `git status` called clean at the repo root, because `cargo build`
+had rewritten `Cargo.lock` and nothing had committed it.
+
+## 9. What these two boots do NOT establish
+
+- ⊘ **No `/dev/nvidia*` node, no compute.** `nvidia-smi` still prints *"No devices were
+  found"*. The adapter does not initialise.
+- ⊘ **No host GPU.** This box has none; forwarding is off, and the shipped isolate factory
+  is `StillbornIsolates` — every isolate is retired at birth and can issue no verb. Nothing
+  here says anything about a forwarded operation.
+- ⊘ **The data plane was never exercised.** `Ga10xArch` refuses every MMU, USERD and
+  pushbuffer seam, and the boot never reaches one. That the refusals are *correct* is a
+  unit-test claim, not a boot claim.
+- ⊘ **One boot each, one guest, one driver version.** `#98` records a Mode-2 symptom that
+  was 1/3 one day and 9/9 the next on a bit-identical binary.

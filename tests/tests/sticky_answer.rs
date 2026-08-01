@@ -347,10 +347,7 @@ fn the_not_a_control_rows_decline_every_control_command() {
                 kayfabe_core::gpu::Gpu::new(
                     Box::new(kayfabe_chips::Ga10xArch::new()),
                     Box::new(kayfabe_isolate::StillbornIsolates::new("test")),
-                    kayfabe_core::gpa::GpaSpace::new(
-                        0x10_0000_0000..0x20_0000_0000,
-                        0x1_0000_0000,
-                    ),
+                    kayfabe_core::gpa::GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
                 )
                 .expect("the port's object model realizes"),
             )),
@@ -376,7 +373,11 @@ fn the_not_a_control_rows_decline_every_control_command() {
             }
         }
     }
-    assert_eq!(asked, policies.len() * 2 * WantedTable::ALL.len(), "sweep arithmetic");
+    assert_eq!(
+        asked,
+        policies.len() * 2 * WantedTable::ALL.len(),
+        "sweep arithmetic"
+    );
 
     // ★ Non-vacuity: each of these DOES answer something, so "returns None" above is a
     // statement about fn 76 and not about a policy that answers nothing at all.

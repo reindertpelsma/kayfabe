@@ -2427,8 +2427,7 @@ fn a_run_sized_exactly_to_its_message_decodes_and_one_byte_less_does_not() {
         // element. Those are different facts about the same message, and the whole point
         // of the field is that the second one is bigger — `GSP_RM_ALLOC`'s `params[]`
         // live in exactly that difference (`kayfabe_gsp::RpcCommand::delivered`).
-        let padded = kayfabe_gsp::decode_message(&layout, &run, len, 9, p.table())
-            .expect("padded");
+        let padded = kayfabe_gsp::decode_message(&layout, &run, len, 9, p.table()).expect("padded");
         assert_eq!(decoded.seq_num, padded.seq_num);
         assert_eq!(decoded.envelope, padded.envelope);
         assert_eq!(decoded.elements, padded.elements);
