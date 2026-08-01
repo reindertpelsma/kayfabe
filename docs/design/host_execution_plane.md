@@ -519,6 +519,93 @@ the host side entirely mocked, **some of it is machinery validated by a fixture 
 satisfy it**. Building the real isolate is as much an opportunity to retire mock
 complexity as to add code, and that should be looked for rather than assumed.
 
+## 5a. ★★★ The host-class axis — BUILT, 2026-08-01 (`#156`)
+
+The owner, asked whether the hardcoded `AMPERE_*` class ids on this path should get an
+`Arch` trait now or be accepted as documented coupling: *"yes hopper is important, not a
+retrofit"* — plus the standing rule that follows, that **anything new on the exec path
+gets its arch seam at the time it is written**.
+
+### What varies, and what does not — sourced, not reasoned
+
+The oracle is NVIDIA's own generated per-chip class table, `ogkm-580:
+src/nvidia/generated/g_gpu_class_list.c`. Three of the six classes this path allocates
+differ with the host board's generation; three do not:
+
+| role | GA106 | AD106 | GH100 | seam? |
+|---|---|---|---|---|
+| GPFIFO channel | `AMPERE_CHANNEL_GPFIFO_A` `:1113` | same `:1738` | `HOPPER_CHANNEL_GPFIFO_A` `:2009` | **yes** |
+| usermode / doorbell | `AMPERE_USERMODE_A` `:1120` | same `:1744` | `HOPPER_USERMODE_A` `:2029` | **yes** |
+| CE object | `AMPERE_DMA_COPY_B` `:1115-1119` | same `:1739-1743` | `HOPPER_DMA_COPY_A` `:2018-2027` | **yes** |
+| VA space | `FERMI_VASPACE_A` `:1124` | `:1748` | `:2001` | ⊘ no |
+| channel group | `KEPLER_CHANNEL_GROUP_A` `:1134` | `:1758` | `:2031` | ⊘ no |
+| context share | `FERMI_CONTEXT_SHARE_A` `:1122` | `:1746` | `:1999` | ⊘ no |
+
+★★★ **The name is not the fact.** Six of these carry a generation word; three of them
+mean one. Traiting all six would have been the bit-15 error — counting address space
+instead of risk. Two further host-path values were checked for variation and found
+**invariant**, so they are not seams either: the doorbell offset and window size (every
+USERMODE class from Volta on inherits `clc361.h`'s `0x90` / 65536) and every CE method
+this path emits (`clc8b5.h` is a delta header and redefines none of `OFFSET_IN/OUT_*`,
+`LINE_LENGTH_IN`, `LINE_COUNT`, `SET_SEMAPHORE_*`, `LAUNCH_DMA` to a different offset).
+
+### ★★ Why it is a seam and not a lint: two of three wrong picks are SERVED
+
+A Hopper board's class list **still contains** `AMPERE_CHANNEL_GPFIFO_A` (`:1996`) and
+`AMPERE_USERMODE_A` (`:1997`), and RM has a live `CliGetChannelClassInfo` arm for the
+former (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:1588-1594`). So
+allocating the Ampere id on Hopper succeeds and the channel merely carries `NVC56F`
+notifier geometry on a part that wants `NVC86F`. No status says so. Only
+`AMPERE_DMA_COPY_B` is absent from GH100 and fails loudly — one of three.
+
+### The shape
+
+`kayfabe_arch::HostClasses`, reached through `Arch::host_classes() -> Option<&dyn
+HostClasses>` — a **sub-trait**, not three more `Arch` methods, because every other `Arch`
+method describes the *guest's emulated* GPU and these describe the *host's*. The `Option`
+is the refusal `Arch::gsp()` already models, and it is what lets `MockArch` decline
+instead of inventing three class ids. Profiles live in `kayfabe-chips`.
+
+### ⊘ What it does NOT establish
+
+**Compiling for a generation is not booting on one.** No Ada or Hopper board has run any
+of this; those two profiles are INFERRED from the vendored tables and nothing else. The
+profile is a **pin, not a probe** — every caller passes `pinned_host_classes()` (GA10x,
+the only part measured). RM's own client is a probe: `findDeviceClasses` reads
+`NV0080_CTRL_CMD_GPU_GET_CLASSLIST` off the live device and takes the numerically largest
+member of each family (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:8630-8699`).
+Reproducing that is the next increment and is deliberately unbuilt: it cannot be
+exercised without a host GPU.
+
+### Evidence — `scripts/bite_host_classes.py`, 2026-08-01, against the final committed content
+
+Every number below is one run of that script on branch `task156` (its baseline check
+refuses to report anything unless the three guard suites start green):
+
+- **PROFILE arm: 9/9 RED.** Wrong number (×3, including both silent ones), wrong role,
+  the pin moved to an unmeasured generation, a delegation to the composed `MockArch`
+  answering `None`, an arch handing back its neighbour's profile, an invariant role
+  rewired, and a fourth member joining the invariant set uncited.
+- **WIRING arm: 0/3 RED, and that is the finding.** Mutating which *role* `rm.rs` asks
+  the profile for — allocate the doorbell as the channel class, the channel as the CE
+  class, `SET_OBJECT` carrying the channel class — leaves the whole offline suite green.
+  That path issues real ioctls and no test reaches it without a host GPU. It is recorded
+  as an **uncovered surface**, not a broken instrument: the nine PROFILE bites in the same
+  harness are the proof the harness works. ⚠ One WIRING anchor initially matched zero
+  times; that was a harness bug (rustfmt had split the line) and it was fixed and re-run,
+  because a bite that does not apply reads exactly like a guard that is not needed.
+
+### The gate got narrower, not reworded
+
+`kayfabe-isolate-host` was **exempt** from the Generation-name gate, with a comment
+recording the residue as this task. The exemption row is **deleted** and the crate is in
+the gate's scoped list in `ci.yml` — 10 matching code lines before, **0** after. The two
+lines that remained after the seam landed were `FERMI_VASPACE_A` and
+`KEPLER_CHANNEL_GROUP_A`, a false positive a name scan cannot resolve; they are named by
+role through `kayfabe_abi::invariant_classes`, which is the fix the gate's own failure
+text prescribes and which carries the per-chip citations that make the invariance a
+checked statement.
+
 ## 6. Not decided here
 
 - GSP §11-O7a — **downgraded, not closed.** The C never sends `RUN_CPU_SEQUENCER` at all
