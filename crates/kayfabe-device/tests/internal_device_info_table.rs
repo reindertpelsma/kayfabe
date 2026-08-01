@@ -864,6 +864,7 @@ fn bad_chip(
         bif_static: g.bif_static,
         fifo_channels: g.fifo_channels,
         gmmu_static: g.gmmu_static,
+        gr_static: g.gr_static,
         fb_length: g.fb_length,
     }))
 }

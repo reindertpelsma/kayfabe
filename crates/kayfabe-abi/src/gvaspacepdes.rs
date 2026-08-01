@@ -1,0 +1,297 @@
+//! `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`
+//! (`0x20800a9f`) — 184 bytes, every field `[in]`, and ★★★ **the first control this port
+//! answers in which the guest is TELLING US where its page directories live.**
+//!
+//! # ★★★ What is actually happening here
+//!
+//! Every other control this port serves is a question. This one is a **publication**. RM has
+//! just built the client-RM half of a *split* virtual address space — `bClientRm`, because
+//! `pGpu->bSplitVasManagementServerClientRm` defaults to true for any GSP client
+//! (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_registry.c:171-182`) — and it is handing the
+//! server (us, since we are the GSP) the physical addresses of the page-directory levels it
+//! reserved, so that the server's own walker can share them.
+//!
+//! ```c
+//! gvaspaceReserveSplitVaSpace(pGVAS, pGpu)                      // gpu_vaspace.c:395
+//!   → _gvaspaceReserveVaForClientRm(pGVAS, pGpu)                //             :315
+//!       → mmuWalkReserveEntries(…, 0x1_0000_0000, 0x1_1FFF_FFFF, NV_TRUE)   // :368
+//!       → gvaspaceCopyServerRmReservedPdesToServerRm(pGVAS, pGpu)           // :378
+//!           → pRmApi->Control(…, 0x20800a9f, &globalCopyParams, 184)        // :4151
+//! ```
+//!
+//! The range is fixed and named: `SPLIT_VAS_SERVER_RM_MANAGED_VA_START` = `0x1_0000_0000`
+//! and a 512 MiB span (`ogkm-580: src/nvidia/generated/g_gpu_vaspace_nvoc.h:99-100`), at
+//! `pageSize = NVBIT64(21)` — PD0 coverage, `GMMU_PD0_VADDR_BIT_LO = 21`
+//! (`gpu_vaspace.c:64`).
+//!
+//! ★★ **This is a page-table publication event, and this port has a doctrine about those.**
+//! `docs/design/mode2_address_table.md`: the address table is forward-populated from
+//! bind-time bindings and from witnessed page-table writes, never reverse-resolved. These
+//! four levels are a *binding*, arriving by the sanctioned transport. ⊘ Nothing is recorded
+//! from them **yet** — the GVAS walker is not built and inventing a half-populated table
+//! from a control nothing consumes would be worse than not having one. What this rung does
+//! is make the event **decodable and refusable**, which is the precondition for recording it.
+//!
+//! # ★★★ Why answering `NV_OK` is a decision and not a fall-through
+//!
+//! `[inferred]` from `ogkm-580`, and the two facts that carry it:
+//!
+//! 1. **There are no `[out]` fields.** Every member of
+//!    `NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS` is documented `[in]`
+//!    (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h:272-332`).
+//! 2. **The caller never reads its params again.** `globalCopyParams` is a stack local at
+//!    `gpu_vaspace.c:4142`, filled by `_gvaspacePopulatePDEentries` at `:4144`, passed at
+//!    `:4152`, and the function returns at `:4156`. ⚠ That second fact is the one that
+//!    matters, and it is the one the transport trap makes people skip: `rpc.c:11088` does
+//!    `portMemCopy(pParamStructPtr, paramsSize, rpc_params->params, paramsSize)` — the reply
+//!    is memcpy'd **over the caller's own struct** — so *"has `[out]` fields"* is the wrong
+//!    question and *"does the caller read its own params afterwards"* is the right one. Here
+//!    it does not, so the body cannot matter. It is re-encoded faithfully regardless.
+//!
+//! ⊘ **What `NV_OK` does NOT mean.** It does not mean the server shares those page
+//! directories, because there is no server-side walker to share them with. It means *"the
+//! publication was well-formed and was accepted"*. The day a host GPU is behind this, a
+//! `NV_OK` here without an actual page-table publication becomes a lie of the kind
+//! `kayfabe_abi::l2evict`'s header enumerates, and it must be re-decided there rather than
+//! inherited.
+//!
+//! # ★★ Refusing it is survivable, which is why this is not the rung's fatal fix
+//!
+//! `NV_ASSERT_OK_OR_RETURN` at `gpu_vaspace.c:4148` sends `0x56` back up through
+//! `gvaspaceConstruct_` (`:611`) and `_kgmmuCreateGlobalVASpace` (`kern_gmmu.c:245`) into
+//! `kgmmuStatePostLoad_IMPL` — and then into `gpuStatePostLoad`, which maps
+//! `NV_ERR_NOT_SUPPORTED` to `NV_OK` at `gpu.c:3438` like every other post-`gpuPreInit`
+//! loop. ⇒ `[measured]` run `gmmu1` at `12b001f`: three assertion lines, and the boot
+//! carried on to fail twenty lines later on something else entirely.
+//!
+//! ★ So this is served for what refusing *leaves behind*, not for what it returns:
+//! `pGpuGrp->pGlobalVASpace` is assigned **before** `vaspaceConstruct_` runs
+//! (`ogkm-580: src/nvidia/src/kernel/mem_mgr/virt_mem_mgr.c:126` vs `:134`), so a failed
+//! construct leaves the GPU group without the device VA space that every later
+//! `vaspaceGetByHandleOrDeviceDefault` expects to find. That is a `RefusalFailsOpen`, and
+//! it is classified as one.
+
+/// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`
+/// (`ogkm-580: ctrl/ctrl2080/ctrl2080internal.h:1902`).
+pub const NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER: u32 =
+    0x2080_0a9f;
+
+/// `GMMU_FMT_MAX_LEVELS` (`ogkm-580: ctrl/ctrl90f1.h:37`) — the `levels[]` bound, and the
+/// only thing that makes `numLevelsToCopy` checkable.
+pub const GMMU_FMT_MAX_LEVELS: usize = 6;
+
+/// Size of one `levels[]` entry: `NvU64 physAddress`, `NvU64 size`, `NvU32 aperture`,
+/// `NvU8 pageShift`, three bytes of tail padding to the 8-byte alignment the `NvU64`s force.
+pub const LEVEL_SIZE: usize = 24;
+
+/// `sizeof(NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS)`, and the identical size of
+/// the `NV2080` wrapper that contains exactly this one member
+/// (`ctrl2080internal.h:1906-1908`).
+pub const COPY_SERVER_RESERVED_PDES_PARAMS_SIZE: usize = 0x28 + GMMU_FMT_MAX_LEVELS * LEVEL_SIZE;
+
+const O_H_SUBDEVICE: usize = 0x00;
+const O_SUBDEVICE_ID: usize = 0x04;
+const O_PAGE_SIZE: usize = 0x08;
+const O_VIRT_ADDR_LO: usize = 0x10;
+const O_VIRT_ADDR_HI: usize = 0x18;
+const O_NUM_LEVELS: usize = 0x20;
+const O_LEVELS: usize = 0x28;
+const _: () = assert!(COPY_SERVER_RESERVED_PDES_PARAMS_SIZE == 184);
+
+/// One published page-directory level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PdeLevel {
+    /// Physical address of this level instance. ⚠ A **guest** physical address, in the
+    /// guest's own frame of reference — nothing here translates it, and nothing may treat it
+    /// as a host address.
+    pub phys_address: u64,
+    /// Bytes allocated for this level instance.
+    pub size: u64,
+    /// `GMMU_APERTURE_*` — which memory this level lives in.
+    pub aperture: u32,
+    /// Page shift of the level. `[measured]` on GA106 the four levels are 47, 38, 29, 21.
+    pub page_shift: u8,
+}
+
+/// The decoded publication.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ServerReservedPdes {
+    /// `hSubDevice` — zero means *"use `subDeviceId`"* (`ctrl90f1.h:274-277`).
+    pub h_subdevice: u32,
+    /// `subDeviceId`.
+    pub subdevice_id: u32,
+    /// VA coverage of the level being reserved.
+    pub page_size: u64,
+    /// First GPU VA of the reserved range; must be `page_size`-aligned.
+    pub virt_addr_lo: u64,
+    /// Last GPU VA of the reserved range; `+1` must be `page_size`-aligned.
+    pub virt_addr_hi: u64,
+    /// How many of [`Self::levels`] are meaningful.
+    pub num_levels: u32,
+    /// The published levels. Entries at or past [`Self::num_levels`] are decoded but carry
+    /// no meaning; they are kept so the re-encode is faithful.
+    pub levels: [PdeLevel; GMMU_FMT_MAX_LEVELS],
+}
+
+/// Why a publication was refused.
+///
+/// ⊘ Each variant is a property the header itself states, so a refusal here is *"the guest
+/// contradicted its own ABI"* rather than *"we did not like it"*. That distinction is what
+/// keeps `NV_OK` from being a fall-through: there exist 184-byte payloads this port says no
+/// to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServerReservedPdesError {
+    /// Not [`COPY_SERVER_RESERVED_PDES_PARAMS_SIZE`] bytes.
+    WrongSize {
+        /// Byte length actually supplied.
+        got: usize,
+    },
+    /// `numLevelsToCopy > GMMU_FMT_MAX_LEVELS`, or zero — a publication of no levels is not
+    /// a publication.
+    LevelCountOutOfRange {
+        /// The `numLevelsToCopy` the guest wrote.
+        got: u32,
+    },
+    /// `pageSize` is zero or not a power of two. It is a *"VA coverage"* (`ctrl90f1.h:284`),
+    /// so a non-power-of-two makes the two alignment rules below unstatable.
+    PageSizeNotPowerOfTwo {
+        /// The `pageSize` the guest wrote.
+        got: u64,
+    },
+    /// `virtAddrLo` is not `pageSize`-aligned — the header requires it (`ctrl90f1.h:290`).
+    VirtAddrLoMisaligned {
+        /// The `virtAddrLo` the guest wrote.
+        lo: u64,
+        /// The `pageSize` it is required to be aligned to.
+        page_size: u64,
+    },
+    /// `virtAddrHi + 1` is not `pageSize`-aligned (`ctrl90f1.h:296`), or `virtAddrHi` is
+    /// `u64::MAX` so `+1` does not exist.
+    VirtAddrHiMisaligned {
+        /// The `virtAddrHi` the guest wrote.
+        hi: u64,
+        /// The `pageSize` that `hi + 1` is required to be aligned to.
+        page_size: u64,
+    },
+    /// `virtAddrHi < virtAddrLo` — an empty or inverted range.
+    RangeInverted {
+        /// The `virtAddrLo` the guest wrote.
+        lo: u64,
+        /// The `virtAddrHi` the guest wrote.
+        hi: u64,
+    },
+    /// A meaningful level has `size == 0`. A page-directory level of zero bytes is a
+    /// publication of nothing at an address.
+    ZeroLevelSize {
+        /// Index into `levels[]` of the offending entry.
+        level: u32,
+    },
+}
+
+fn rd32(b: &[u8], off: usize) -> u32 {
+    u32::from_le_bytes([b[off], b[off + 1], b[off + 2], b[off + 3]])
+}
+fn rd64(b: &[u8], off: usize) -> u64 {
+    let mut v = [0u8; 8];
+    v.copy_from_slice(&b[off..off + 8]);
+    u64::from_le_bytes(v)
+}
+
+/// Decode and **validate** one publication.
+///
+/// # Errors
+/// [`ServerReservedPdesError`] — see that type; every variant is a rule from `ctrl90f1.h`.
+pub fn decode_server_reserved_pdes(
+    buf: &[u8],
+) -> Result<ServerReservedPdes, ServerReservedPdesError> {
+    if buf.len() != COPY_SERVER_RESERVED_PDES_PARAMS_SIZE {
+        return Err(ServerReservedPdesError::WrongSize { got: buf.len() });
+    }
+    let page_size = rd64(buf, O_PAGE_SIZE);
+    if page_size == 0 || !page_size.is_power_of_two() {
+        return Err(ServerReservedPdesError::PageSizeNotPowerOfTwo { got: page_size });
+    }
+    let virt_addr_lo = rd64(buf, O_VIRT_ADDR_LO);
+    let virt_addr_hi = rd64(buf, O_VIRT_ADDR_HI);
+    if virt_addr_hi < virt_addr_lo {
+        return Err(ServerReservedPdesError::RangeInverted {
+            lo: virt_addr_lo,
+            hi: virt_addr_hi,
+        });
+    }
+    if virt_addr_lo % page_size != 0 {
+        return Err(ServerReservedPdesError::VirtAddrLoMisaligned {
+            lo: virt_addr_lo,
+            page_size,
+        });
+    }
+    // ⚠ `hi + 1`, not `hi`: `virtAddrHi` is the LAST address in the range, so it is the
+    // exclusive end that must be aligned. Reading `hi % page_size == 0` would reject every
+    // legal publication and accept none — and it is the natural misreading.
+    let hi_end =
+        virt_addr_hi
+            .checked_add(1)
+            .ok_or(ServerReservedPdesError::VirtAddrHiMisaligned {
+                hi: virt_addr_hi,
+                page_size,
+            })?;
+    if hi_end % page_size != 0 {
+        return Err(ServerReservedPdesError::VirtAddrHiMisaligned {
+            hi: virt_addr_hi,
+            page_size,
+        });
+    }
+    let num_levels = rd32(buf, O_NUM_LEVELS);
+    if num_levels == 0 || num_levels as usize > GMMU_FMT_MAX_LEVELS {
+        return Err(ServerReservedPdesError::LevelCountOutOfRange { got: num_levels });
+    }
+    let mut levels = [PdeLevel::default(); GMMU_FMT_MAX_LEVELS];
+    for (i, lv) in levels.iter_mut().enumerate() {
+        let at = O_LEVELS + i * LEVEL_SIZE;
+        *lv = PdeLevel {
+            phys_address: rd64(buf, at),
+            size: rd64(buf, at + 8),
+            aperture: rd32(buf, at + 16),
+            page_shift: buf[at + 20],
+        };
+        if (i as u32) < num_levels && lv.size == 0 {
+            return Err(ServerReservedPdesError::ZeroLevelSize { level: i as u32 });
+        }
+    }
+    Ok(ServerReservedPdes {
+        h_subdevice: rd32(buf, O_H_SUBDEVICE),
+        subdevice_id: rd32(buf, O_SUBDEVICE_ID),
+        page_size,
+        virt_addr_lo,
+        virt_addr_hi,
+        num_levels,
+        levels,
+    })
+}
+
+/// Re-encode a publication into the 184-byte reply body.
+///
+/// ⊘ **A re-encode, not an echo**, on purpose. An echo would answer `NV_OK` for any 184
+/// bytes whatsoever and would make the decode above dead code that no test could notice was
+/// dead. Round-tripping means the reply is a function of the *fields this port understood*,
+/// so a field it failed to decode would show up as a byte difference —
+/// `tests/gvaspace_pdes.rs` is where that is checked against the oracle's own captured
+/// publication.
+#[must_use]
+pub fn encode_server_reserved_pdes(p: &ServerReservedPdes) -> Vec<u8> {
+    let mut out = vec![0u8; COPY_SERVER_RESERVED_PDES_PARAMS_SIZE];
+    out[O_H_SUBDEVICE..O_H_SUBDEVICE + 4].copy_from_slice(&p.h_subdevice.to_le_bytes());
+    out[O_SUBDEVICE_ID..O_SUBDEVICE_ID + 4].copy_from_slice(&p.subdevice_id.to_le_bytes());
+    out[O_PAGE_SIZE..O_PAGE_SIZE + 8].copy_from_slice(&p.page_size.to_le_bytes());
+    out[O_VIRT_ADDR_LO..O_VIRT_ADDR_LO + 8].copy_from_slice(&p.virt_addr_lo.to_le_bytes());
+    out[O_VIRT_ADDR_HI..O_VIRT_ADDR_HI + 8].copy_from_slice(&p.virt_addr_hi.to_le_bytes());
+    out[O_NUM_LEVELS..O_NUM_LEVELS + 4].copy_from_slice(&p.num_levels.to_le_bytes());
+    for (i, lv) in p.levels.iter().enumerate() {
+        let at = O_LEVELS + i * LEVEL_SIZE;
+        out[at..at + 8].copy_from_slice(&lv.phys_address.to_le_bytes());
+        out[at + 8..at + 16].copy_from_slice(&lv.size.to_le_bytes());
+        out[at + 16..at + 20].copy_from_slice(&lv.aperture.to_le_bytes());
+        out[at + 20] = lv.page_shift;
+    }
+    out
+}

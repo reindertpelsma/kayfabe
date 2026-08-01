@@ -1491,6 +1491,7 @@ pub static GA106: ChipProfile = ChipProfile {
     bif_static: GA106_BIF_STATIC,
     fifo_channels: GA106_FIFO_CHANNELS,
     gmmu_static: GA106_GMMU_STATIC,
+    gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
     fb_length: GA106_FB_LENGTH,
 };
 

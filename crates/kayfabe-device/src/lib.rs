@@ -71,6 +71,7 @@ use kayfabe_abi::deviceinfo::DeviceInfoRow;
 use kayfabe_abi::falconinfo::FalconInventoryRow;
 use kayfabe_abi::fifochannels::FifoChannelsRow;
 use kayfabe_abi::gmmustatic::GmmuStaticRow;
+use kayfabe_abi::grstatic::GrStaticProfile;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::memsysconfig::MemorySystemRow;
@@ -408,6 +409,19 @@ pub struct ChipProfile {
     /// ⊘ `[inferred]` from source, not from a boot — see [`kayfabe_abi::gmmustatic`], which
     /// states the boundary rather than eliding it.
     pub gmmu_static: GmmuStaticRow,
+    /// ★★★ **This chip's GR geometry** — GPCs, TPCs, the global SM order, the FECS record
+    /// size and the per-subcontext-header property, as one value.
+    ///
+    /// One field rather than five, because RM reads all five replies and **cross-checks
+    /// them**: `numTpc` comes out of the SM order and `tpcCount` out of the floorsweeping
+    /// masks, and a row that could state them separately is a row that could state them
+    /// differently. [`kayfabe_abi::grstatic::GrStaticProfile::validate`] is what makes the
+    /// disagreement unencodable rather than merely unlikely.
+    ///
+    /// ⚠ Its `gpcMask` is the field a shortcut would have zeroed to skip the golden-image
+    /// channel entirely (`ogkm-580: kernel_graphics.c:486`). See
+    /// [`kayfabe_abi::grstatic`]'s header for why this port does not.
+    pub gr_static: GrStaticProfile,
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and

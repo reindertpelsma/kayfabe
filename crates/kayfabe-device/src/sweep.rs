@@ -437,48 +437,163 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
     SweepControl {
         cmd: 0x2080_0a9f,
         engine: "OBJGVASPACE",
-        disposition: SweepDisposition::RefusalHalts,
+        // ★★★ CORRECTED, and by a boot rather than by a re-reading. This row said
+        // `RefusalHalts` and gave as its reason that the NV_ASSERT_OK_OR_RETURN at
+        // gpu_vaspace.c:4148 "aborts ... at a named statement". That is true of the
+        // FUNCTION and false of the BOOT: the status travels up through
+        // _kgmmuCreateGlobalVASpace (kern_gmmu.c:245) into kgmmuStatePostLoad_IMPL and
+        // then into gpuStatePostLoad, which maps NV_ERR_NOT_SUPPORTED to NV_OK at
+        // gpu.c:3438 exactly like every other post-gpuPreInit loop. [measured] run gmmu1
+        // at 12b001f: three assertion lines, and the boot carried on regardless.
+        // ⊘ The lesson is the table's own: "halts" is a claim about where the status ENDS
+        // UP, and a local `OR_RETURN` says nothing about that.
+        disposition: SweepDisposition::RefusalFailsOpen,
         why: "_gvaspaceCopyServerReservedPdes issues it under NV_ASSERT_OK_OR_RETURN after \
               populating the PDE entries it is about to publish (ogkm-580: \
-              gpu_vaspace.c:4144-4152), so a refusal aborts the reserved-split GVASPACE \
-              construction at a named statement. ⊘ Serving it is a page-table publication \
-              and belongs with docs/design/mode2_address_table.md's populate sources, not \
-              with a static chip row — it is the first control in this table that is not a \
-              description of silicon at all",
+              gpu_vaspace.c:4144-4152) — but gpuStatePostLoad swallows the 0x56 (gpu.c:3438), \
+              so the refusal is INVISIBLE to the boot and leaves a GPU group whose \
+              pGlobalVASpace was assigned before its constructor failed (virt_mem_mgr.c:126 \
+              vs :134); [measured] run gmmu1 at 12b001f. Served: a page-table publication, \
+              decoded and validated against ctrl90f1.h's own rules rather than echoed — see \
+              kayfabe_abi::gvaspacepdes and docs/design/mode2_address_table.md",
     },
     // ── seq 49, 50 and 51 ──────────────────────────────────────────────────────────
+    // ★★★ The GR static-info rows below were `RefusalHalts` and are now
+    // `AmputationUnsurvivable`. The old reason — "the cleanup arm propagates" — described
+    // kgraphicsLoadStaticInfo_KERNEL correctly and the BOOT incorrectly: the status it
+    // propagates lands in gpuStatePostLoad, which maps NV_ERR_NOT_SUPPORTED to NV_OK at
+    // gpu.c:3438. Nothing halts. What actually happens is that `cleanup:` sets
+    // bInitialized = NV_FALSE (:1544), kgraphicsGetStaticInfo returns NULL forever
+    // (:556-564), and TWENTY-ONE ENGINES LATER KernelFifo's own statePostLoad runs the
+    // callback GR registered and dies on it with NV_ERR_INVALID_STATE (:485) — which
+    // gpu.c:3440 does not swallow. [measured] run gmmu1 at 12b001f:
+    // `RmInitAdapter failed! (0x25:0x40:1249)`.
+    //
+    // ⊘ That is the amputation class by definition: the refusal is silent and the
+    // subsystem that dies is not the one that asked.
     SweepControl {
         cmd: 0x2080_0a1f,
         engine: "KernelGraphics",
-        disposition: SweepDisposition::RefusalHalts,
+        disposition: SweepDisposition::AmputationUnsurvivable,
         why: "kgraphicsLoadStaticInfo issues GET_CAPS under NV_CHECK_OK_OR_GOTO(cleanup) \
-              into a portMemSet-zeroed params block (ogkm-580: kernel_graphics.c:1210-1225), \
-              and the cleanup arm propagates. ⊘ The first of the three GR static-info \
-              replies and by far the smallest at 184 bytes (C: mode2_initctrl_ga106.h:6218); \
-              deferred with the other two because a GR capability bitmap served without the \
-              GR info and floorsweeping masks that qualify it is a partial description of \
-              the one engine this port's north star runs on",
+              into a portMemSet-zeroed params block (ogkm-580: kernel_graphics.c:1210-1225); \
+              cleanup sets bInitialized = NV_FALSE (:1544) so kgraphicsGetStaticInfo returns \
+              NULL forever (:556-564), and _kgraphicsPostSchedulingEnableHandler — run from \
+              KernelFifo's statePostLoad, not GR's — returns NV_ERR_INVALID_STATE on it \
+              (:485), which gpu.c:3440 does NOT swallow. [measured] run gmmu1 at 12b001f. \
+              184 bytes (C: mode2_initctrl_ga106.h:6218). Served",
     },
     SweepControl {
         cmd: 0x2080_0a2a,
         engine: "KernelGraphics",
-        disposition: SweepDisposition::RefusalHalts,
-        why: "GET_INFO, the 3712-byte second member of the GR static-info triple \
-              (C: mode2_initctrl_ga106.h:6219, {0x20800a2au, 0x0u, 3712u, 3712u}); \
-              kgraphicsLoadStaticInfo takes its status and only allocates pGrInfo when it is \
-              NV_OK (ogkm-580: kernel_graphics.c:1228-1240), so a refusal leaves pGrInfo NULL \
-              rather than dangling. Deferred with 0x20800a1f and 0x20800a26",
+        // ★ NOT one of the mandatory five, and that is a fact about the call site rather
+        // than about the data: this one's status is taken into a bare `if (status == NV_OK)`
+        // with no `else`, so a refusal is the caller's own way of being told the chip has
+        // no GR info to give.
+        disposition: SweepDisposition::AmputationIntended,
+        why: "GET_INFO, 3712 bytes (C: mode2_initctrl_ga106.h:6219, {0x20800a2au, 0x0u, \
+              3712u, 3712u}); kgraphicsLoadStaticInfo takes its status into a bare \
+              `if (status == NV_OK)` with NO else arm and only allocates pGrInfo inside it \
+              (ogkm-580: kernel_graphics.c:1228-1248), so a refusal leaves pGrInfo NULL \
+              rather than dangling and the very next control overwrites `status`. \
+              ⊘ Refused deliberately: an unread 3712-byte GR info block would be this port \
+              describing silicon nothing asked it to describe",
     },
     SweepControl {
         cmd: 0x2080_0a26,
         engine: "KernelGraphics",
-        disposition: SweepDisposition::RefusalHalts,
-        why: "GET_FLOORSWEEPING_MASKS, the 3008-byte third member of the GR static-info \
-              triple (C: mode2_initctrl_ga106.h:6220), issued under NV_CHECK_OK_OR_GOTO from \
-              the same function (ogkm-580: kernel_graphics.c:1253-1260). ⊘ Floorsweeping \
-              masks are the statement of which TPCs and GPCs this die actually has, so they \
-              must be served together with the engine list they qualify — deferred as one \
-              decision with 0x20800a1f and 0x20800a2a",
+        disposition: SweepDisposition::AmputationUnsurvivable,
+        why: "GET_FLOORSWEEPING_MASKS, 3008 bytes (C: mode2_initctrl_ga106.h:6220), issued \
+              under NV_CHECK_OK_OR_GOTO (ogkm-580: kernel_graphics.c:1253-1260) with the \
+              same silent-then-fatal consequence as 0x20800a1f. ⚠ Its gpcMask is read \
+              DIRECTLY by _kgraphicsPostSchedulingEnableHandler, which returns NV_OK early \
+              when it is 0 (:486) — so a zero here would skip the golden-image channel and \
+              buy a longer green log with a lie about the die. This device publishes 0x7. \
+              Served",
+    },
+    SweepControl {
+        cmd: 0x2080_0a22,
+        engine: "KernelGraphics",
+        disposition: SweepDisposition::AmputationUnsurvivable,
+        why: "GET_GLOBAL_SM_ORDER under NV_CHECK_OK_OR_GOTO (ogkm-580: \
+              kernel_graphics.c:1284-1292); 34592 bytes, the largest reply this port encodes \
+              and nine message-queue elements (C: mode2_initctrl_ga106.h:6221, whose own \
+              capture kept only the first 16376 of them). Same silent-then-fatal path as \
+              0x20800a1f. Served",
+    },
+    SweepControl {
+        cmd: 0x2080_0a30,
+        engine: "KernelGraphics",
+        disposition: SweepDisposition::AmputationIntended,
+        why: "GET_PPC_MASKS; kgraphicsLoadStaticInfo converts NV_ERR_NOT_SUPPORTED to NV_OK \
+              explicitly, with the comment \"Some chips don't support this call, so just \
+              keep the pPpcMasks pointer as NULL, but don't return error\" (ogkm-580: \
+              kernel_graphics.c:1316-1327). ★ The caller's own tolerance, written down by \
+              NVIDIA — refusing IS the sanctioned way to say this chip has no PPC masks",
+    },
+    SweepControl {
+        cmd: 0x2080_0a2c,
+        engine: "KernelGraphics",
+        // ★★ The correction this rung is proudest of, because the `else if` reads the
+        // other way. See kayfabe_abi::grstatic's header.
+        disposition: SweepDisposition::AmputationIntended,
+        why: "GET_ZCULL_INFO. ⚠ Its else-if forgives NV_ERR_NOT_SUPPORTED only under MIG \
+              (ogkm-580: kernel_graphics.c:1345-1356), which is OFF here — so read alone it \
+              looks mandatory. It is not: the arm does not branch, and the next paragraph's \
+              first act is `status = pRmApi->Control(...)` for ROP at :1360, an ASSIGNMENT \
+              that discards it. The 0x56 is dead before anything tests it",
+    },
+    SweepControl {
+        cmd: 0x2080_0a2e,
+        engine: "KernelGraphics",
+        disposition: SweepDisposition::AmputationIntended,
+        why: "GET_ROP_INFO, the same shape as 0x20800a2c and the same reason (ogkm-580: \
+              kernel_graphics.c:1375-1386): its MIG-only else-if leaves 0x56 in `status`, and \
+              SM_ISSUE_RATE_MODIFIER's call at :1391 overwrites it — and that one \
+              normalises NV_ERR_NOT_SUPPORTED to NV_OK unconditionally at :1410. ⊘ The \
+              oracle's own GA106 answered ROP_INFO with three zeros anyway \
+              (C: mode2_initctrl_ga106.h:6224)",
+    },
+    SweepControl {
+        cmd: 0x2080_0a3d,
+        engine: "KernelGraphics",
+        disposition: SweepDisposition::AmputationUnsurvivable,
+        why: "GET_FECS_RECORD_SIZE under NV_CHECK_OK_OR_GOTO (ogkm-580: \
+              kernel_graphics.c:1465-1476); 32 bytes, one NvU32 per engine, 128 on this part \
+              (C: mode2_initctrl_ga106.h:6246). Same silent-then-fatal path as 0x20800a1f, \
+              and the value is a divisor in the FECS buffer's record arithmetic so zero is \
+              not merely a small answer. Served",
+    },
+    SweepControl {
+        cmd: 0x2080_0a3f,
+        engine: "KernelGraphics",
+        disposition: SweepDisposition::AmputationIntended,
+        why: "GET_FECS_TRACE_DEFINES; kgraphicsLoadStaticInfo converts NV_ERR_NOT_SUPPORTED \
+              to NV_OK explicitly and leaves pFecsTraceDefines NULL (ogkm-580: \
+              kernel_graphics.c:1494-1501). This device delivers no FECS trace, so declining \
+              to define its record layout is the consistent statement",
+    },
+    SweepControl {
+        cmd: 0x2080_0a48,
+        engine: "KernelGraphics",
+        disposition: SweepDisposition::AmputationUnsurvivable,
+        why: "GET_PDB_PROPERTIES under NV_CHECK_OK_OR_GOTO (ogkm-580: \
+              kernel_graphics.c:1504-1518) — the LAST mandatory one, so it is the control \
+              that decides whether bInitialized becomes NV_TRUE on the next line (:1521). \
+              Eight bytes, one NvBool per engine; bPerSubCtxheaderSupported is true on \
+              Ampere (C: mode2_initctrl_ga106.h:6252) and is consumed immediately by \
+              kgraphicsSetPerSubcontextContextHeaderSupported. Served",
+    },
+    SweepControl {
+        cmd: 0x2080_0a38,
+        engine: "KernelGraphics",
+        disposition: SweepDisposition::AmputationIntended,
+        why: "GET_FECS_TRACE_HW_ENABLE, asked from fecsBufferDisableHw — a function that \
+              returns VOID and whose NV_ASSERT_OR_RETURN_VOID therefore cannot propagate \
+              anything (ogkm-580: fecs_event_list.c:1623, :1643). ⚠ It appears in this \
+              port's dmesg only on the TEARDOWN path that runs after RmInitAdapter has \
+              already decided to fail, so it is a symptom of the failure and never a cause \
+              of one",
     },
     // ── NOT in the oracle's prefix: kept because the decision is still ours to make ──
     SweepControl {
