@@ -394,6 +394,15 @@ decision than a row in a table.
   `scripts/bench/boot_capture.sh` and samples the host at 2 Hz. It **exits non-zero** if
   the plane and the spawned child's `--rm` argument disagree, if `real` produced no
   RM-served `/dev/nvidia0` mapping, or if a refusing plane spawned anything.
+- **Suite, default arm** (`host-isolates` OFF, the shipped configuration), `[measured]` at
+  `d6caffa` on the 38-core box: `cargo test --workspace --no-fail-fast`, **1835 passed, 0
+  failed**, `KVM-GATE: RAN` markers **56** with `KAYFABE_NO_KVM` unset.
+- **Suite, feature-on arm**, `[measured]` at `1041050` on the RTX 3060 box (the only box
+  with the musl target the isolate image needs):
+  `cargo test -p kayfabe-qemu-raw --features host-isolates --test shim_logic` →
+  **41 passed, 0 failed**, including `with_the_feature_both_host_planes_build_a_factory`.
+  ⊘ This arm is **not** in CI: nothing enables the feature there, so the linkage half of E0
+  is covered by this one command and by the bench build, not by a gate.
 - **Bites:** `scripts/bite_isolate_selector.py` — **5/5 fired** at `d6caffa` (`BS1` default
   moves to `Real`; `BS2` unknown value degrades silently; `BS3` case-insensitive parse;
   `BS4` host plane degrades instead of refusing without the feature; `BS5` refusal stops
