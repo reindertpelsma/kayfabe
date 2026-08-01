@@ -48,6 +48,19 @@ MOCK_TEST = ["cargo", "test", "-q", "-p", "kayfabe-mocks"]
 
 # The decoder, as it ships. Every bite below rewrites exactly this block, so a refactor
 # that moves it turns every anchor red at once rather than silently disarming the harness.
+#
+# ★★★ THAT HAPPENED, 2026-08-01 (`#156`), and the design worked. The decoder moved out of
+# `impl Arch for Ga10xArch` into the file-scope `decode_work_submit_token`, so that AD10x
+# and GH100 could stop delegating this seam to `MockArch`'s INVENTED encoding — RM binds
+# all three generations to one `kfifoGenerateWorkSubmitTokenHal_GA100`. The body is
+# byte-identical apart from **four columns of indentation**, and all sixteen anchors
+# announced `ANCHOR MATCHED 0 TIMES` at once rather than quietly passing.
+#
+# ⊘ The fix is a de-indent applied to BOTH halves of every bite, NOT a re-typing of the
+# block: `BODY` and its replacements below stay written at method indentation so the
+# embedded `\n        ` continuations inside the replacement strings keep agreeing with
+# it, and `_dedent4` moves the pair together. Re-typing sixteen anchors by hand is how a
+# harness comes back with one bite silently not applying.
 BODY = """        let raw = u32::try_from(token).ok()?;
         // The two fields RM defines…
         let vector = raw & 0x0000_0FFF; // NV_CTRL_VF_DOORBELL_VECTOR      11:0
@@ -68,8 +81,21 @@ RED = "RED"
 EQUIVALENT = "EQUIVALENT"
 
 
+def _dedent4(text):
+    """Drop four columns of leading indentation from every line that has them.
+
+    The anchors are authored at *method* indentation (8 spaces) because that is how the
+    replacement strings' embedded continuations are written; the decoder now lives at
+    *file* scope (4). Transforming both halves of a bite through one function is what
+    keeps them from drifting apart.
+    """
+    return "\n".join(
+        line[4:] if line.startswith("    ") else line for line in text.split("\n")
+    )
+
+
 def bite(name, replacement, expect=RED):
-    return (name, BODY, replacement, expect)
+    return (name, _dedent4(BODY), _dedent4(replacement), expect)
 
 
 # (name, old, new, expect) — `old` must appear EXACTLY ONCE in the file.

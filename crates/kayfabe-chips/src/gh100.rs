@@ -705,8 +705,16 @@ impl Arch for Gh100Arch {
     fn vchid_from_userd_flags(&self, flags: u32) -> VChid {
         self.inner.vchid_from_userd_flags(flags)
     }
+    /// ★★★ NOT `self.inner` (`#156`). `MockArch`'s doorbell encoding is **invented** —
+    /// deliberately so, it is a mock — and it was answering here, for the one seam
+    /// `execution_plane_increments.md` §2.1 names as unable to fail loudly.
+    ///
+    /// RM binds this generation to the SAME `kfifoGenerateWorkSubmitTokenHal_GA100` as
+    /// GA10x, and neither this generation's header directory nor Ada's overrides the
+    /// `NV_CTRL_VF_DOORBELL_*` field positions — see
+    /// [`crate::ga10x::decode_work_submit_token`] for both citations.
     fn decode_doorbell(&self, token: u64) -> Option<DoorbellTarget> {
-        self.inner.decode_doorbell(token)
+        crate::ga10x::decode_work_submit_token(token)
     }
     fn mmu(&self) -> &dyn GmmuFmt {
         self.inner.mmu()

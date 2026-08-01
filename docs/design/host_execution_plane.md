@@ -595,6 +595,34 @@ refuses to report anything unless the three guard suites start green):
   times; that was a harness bug (rustfmt had split the line) and it was fixed and re-run,
   because a bite that does not apply reads exactly like a guard that is not needed.
 
+### ★★ The same ruling, applied to E3's doorbell decode
+
+E3 built a real work-submit-token decoder for `Ga10xArch` and recorded that `Ad10xArch`
+and `Gh100Arch` still delegated the seam to `MockArch`'s **invented** encoding — the one
+error `execution_plane_increments.md` §2.1 names as unable to fail loudly, because on the
+Mode-2 path we are the GSP and a ring routed to the wrong channel has no second party to
+notice. `#156` closes it, and closes it by *sourcing* rather than by copying:
+
+- RM binds **one** implementation, `kfifoGenerateWorkSubmitTokenHal_GA100`, to
+  `ChipHal: GA100 | GA102 | GA103 | GA104 | GA106 | GA107 | AD102 | AD103 | AD104 |
+  AD106 | AD107 | GH100` (`ogkm-580:
+  src/nvidia/generated/g_kernel_fifo_nvoc.c:648-652`). Blackwell takes a different one.
+- The field positions `NV_CTRL_VF_DOORBELL_VECTOR` `11:0` / `_RUNLIST_ID` `22:16` are
+  defined in exactly two headers in the tree (`turing/tu102/dev_ctrl.h:36-37`,
+  `ampere/ga100/dev_ctrl.h:26-27`), and neither `ada/ad102/` nor `hopper/gh100/` carries
+  a `dev_ctrl.h` to override them.
+
+The decoder moved to a file-scope `ga10x::decode_work_submit_token` that all three
+generations call. ⊘ It is still not a run on Ada or Hopper silicon — it replaces an
+invented answer with the implementation the vendored driver binds to those parts.
+
+⚠ **And it broke `scripts/bite_doorbell_token.py`, loudly, which is that harness working.**
+Its anchors are one `BODY` block; the move changed four columns of indentation and all
+sixteen announced `ANCHOR MATCHED 0 TIMES` at once instead of quietly passing. Re-armed
+with a de-indent applied to both halves of every bite (never by re-typing the anchors),
+and re-run to E3's own recorded numbers: **15/15 live bites RED, 11 by the oracle alone,
+0 by the mock suite, 2 equivalent mutants correctly green.**
+
 ### The gate got narrower, not reworded
 
 `kayfabe-isolate-host` was **exempt** from the Generation-name gate, with a comment

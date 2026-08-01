@@ -200,19 +200,7 @@ impl Arch for Ga10xArch {
     /// is well-formed whether or not any channel holds chid 4, and only the core's
     /// exec-plane index can answer that (`FwdFault::UnknownVchid`).
     fn decode_doorbell(&self, token: u64) -> Option<DoorbellTarget> {
-        let raw = u32::try_from(token).ok()?;
-        // The two fields RM defines…
-        let vector = raw & 0x0000_0FFF; // NV_CTRL_VF_DOORBELL_VECTOR      11:0
-        let runlist = (raw >> 16) & 0x0000_007F; // NV_CTRL_VF_DOORBELL_RUNLIST_ID 22:16
-        // …and everything RM's encoder cannot have written.
-        if raw & !0x007F_0FFF != 0 {
-            return None;
-        }
-        Some(DoorbellTarget {
-            // Both casts are lossless by the masks above (12 and 7 bits into a u16).
-            vchid: VChid(vector as u16),
-            runlist: RunlistId(runlist as u16),
-        })
+        decode_work_submit_token(token)
     }
 
     fn mmu(&self) -> &dyn GmmuFmt {
@@ -249,6 +237,54 @@ impl Arch for Ga10xArch {
     fn host_classes(&self) -> Option<&dyn HostClasses> {
         Some(&crate::host_classes::Ga10xHostClasses)
     }
+}
+
+/// ★★★ The work-submit-token decode, **shared by three generations** — and the sharing
+/// is sourced, not assumed (`#156`).
+///
+/// [`Ga10xArch::decode_doorbell`] holds the evidence for this encoding and the two
+/// instruments that settled it. What this function adds is the *scope* of that evidence:
+/// it is not GA10x's encoding, it is the encoding RM uses on **GA10x, AD10x and GH100
+/// alike**, and it lives at file scope so `ad10x` and `gh100` can call it instead of
+/// delegating to `MockArch`'s invented one.
+///
+/// ## The citation, two independent halves
+///
+/// 1. **The generator is one function for all three.** The driver's own dispatch table
+///    binds `kfifoGenerateWorkSubmitTokenHal_GA100` to
+///    `ChipHal: GA100 | GA102 | GA103 | GA104 | GA106 | GA107 | AD102 | AD103 | AD104 |
+///    AD106 | AD107 | GH100` (`ogkm-580:
+///    src/nvidia/generated/g_kernel_fifo_nvoc.c:648-652`). Blackwell is where it changes
+///    — `GB202`-and-later and `GB100` take different HALs (`:644-647`, `:653-656`).
+/// 2. **The field positions are one header for all three.** `NV_CTRL_VF_DOORBELL_VECTOR`
+///    `11:0` and `_RUNLIST_ID` `22:16` are defined in exactly two places in the tree,
+///    `turing/tu102/dev_ctrl.h:36-37` and `ampere/ga100/dev_ctrl.h:26-27`. Neither
+///    `ada/ad102/` nor `hopper/gh100/` carries a `dev_ctrl.h` at all, so neither
+///    overrides them.
+///
+/// ## ⊘ What this does NOT establish, and it is the same limit as everywhere else here
+///
+/// **Compiling for a generation is not booting on one.** The two instruments that settled
+/// this encoding — the replayed GA106 hardware tokens and the differential against RM's
+/// compiled `_GA100` encoder — both speak about the *implementation* the driver binds to
+/// three generations. That is a strictly stronger position than `MockArch`'s invented
+/// encoding, which was answering here for Ada and Hopper before `#156` and which
+/// `execution_plane_increments.md` §2.1 records as the one wrong answer that **cannot
+/// fail loudly**. It is not a run on an Ada or Hopper board.
+pub fn decode_work_submit_token(token: u64) -> Option<DoorbellTarget> {
+    let raw = u32::try_from(token).ok()?;
+    // The two fields RM defines…
+    let vector = raw & 0x0000_0FFF; // NV_CTRL_VF_DOORBELL_VECTOR      11:0
+    let runlist = (raw >> 16) & 0x0000_007F; // NV_CTRL_VF_DOORBELL_RUNLIST_ID 22:16
+    // …and everything RM's encoder cannot have written.
+    if raw & !0x007F_0FFF != 0 {
+        return None;
+    }
+    Some(DoorbellTarget {
+        // Both casts are lossless by the masks above (12 and 7 bits into a u16).
+        vchid: VChid(vector as u16),
+        runlist: RunlistId(runlist as u16),
+    })
 }
 
 // ── ★★★ The GA10x GMMU, VER2 — `#149`, the first translated aperture ────────────────

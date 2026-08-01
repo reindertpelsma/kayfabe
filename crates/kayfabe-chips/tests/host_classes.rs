@@ -181,8 +181,7 @@ fn each_profile_names_the_class_the_drivers_own_rule_selects_for_that_chip() {
             ("ce_object", newest(chip.ce), profile.ce_object().0),
         ] {
             assert_eq!(
-                got,
-                expect,
+                got, expect,
                 "★ {} :: {role} — the profile {:?} answers {got:#06x}, but the newest \
                  member of that family in {}'s own class list \
                  (g_gpu_class_list.c) is {expect:#06x}. A wrong class id here is an \
@@ -353,4 +352,76 @@ fn each_arch_declares_its_own_profile_and_not_a_composed_ones() {
             arch.name()
         );
     }
+}
+
+// ── The doorbell decode, no longer `MockArch`'s invention on two generations (`#156`) ──
+
+/// ★★★ All three generations decode a work-submit token **identically**, and none of them
+/// answers with `MockArch`'s invented encoding any more.
+///
+/// `execution_plane_increments.md` §2.1 names a wrong doorbell decode as the one
+/// execution-plane error that **cannot fail loudly** — on the Mode-2 path we are the GSP,
+/// so a ring routed to the wrong channel has no second party to notice. `Ad10xArch` and
+/// `Gh100Arch` were delegating that seam to their composed `MockArch`, whose encoding is
+/// deliberately made up. They now share GA10x's, which is what RM does: the driver's own
+/// dispatch table binds `kfifoGenerateWorkSubmitTokenHal_GA100` to
+/// `GA100..GA107 | AD102..AD107 | GH100` (`ogkm-580: g_kernel_fifo_nvoc.c:648-652`), and
+/// neither `ada/ad102/` nor `hopper/gh100/` carries a `dev_ctrl.h` to override the field
+/// positions.
+///
+/// ⊘ Still not a run on Ada or Hopper silicon. It replaces an INVENTED answer with the
+/// implementation the vendored driver binds to those parts.
+#[test]
+fn every_generation_decodes_a_work_submit_token_the_same_way_and_none_uses_the_mocks() {
+    use kayfabe_arch::Arch;
+    let arches: [&dyn Arch; 3] = [
+        &kayfabe_chips::Ga10xArch::default(),
+        &kayfabe_chips::Ad10xArch::default(),
+        &kayfabe_chips::Gh100Arch::default(),
+    ];
+    // Well-formed tokens (runlist 22:16, chid 11:0) and malformed ones (a bit RM's
+    // encoder starts from zero and never sets).
+    let probes: [u64; 8] = [
+        0x0000_0000,
+        0x0000_0004,
+        0x0000_0FFF,
+        0x007F_0FFF,
+        0x0003_0001,
+        0x0000_1000,      // bit 12 — in the 15:12 hole
+        0x0080_0000,      // bit 23 — above RUNLIST_ID
+        0x1_0000_0000,    // wider than the u32 RM writes
+    ];
+    let mut refusals = 0usize;
+    for t in probes {
+        let base = kayfabe_chips::ga10x::decode_work_submit_token(t);
+        if base.is_none() {
+            refusals += 1;
+        }
+        for a in arches {
+            assert_eq!(
+                a.decode_doorbell(t),
+                base,
+                "★ {} decodes token {t:#x} differently from the shared encoder RM binds \
+                 to all three generations",
+                a.name()
+            );
+        }
+    }
+    assert_eq!(
+        refusals, 3,
+        "★ NON-VACUITY: three of the probes are malformed and must be REFUSED, or this \
+         test is comparing three functions that all say Some(0)"
+    );
+
+    // ★★ And the delegation really changed something: `MockArch` must disagree, or
+    // "no longer the mock's" is a statement about two identical functions.
+    let mock = kayfabe_mocks::MockArch::default();
+    let disagreement = probes
+        .iter()
+        .any(|t| mock.decode_doorbell(*t) != kayfabe_chips::ga10x::decode_work_submit_token(*t));
+    assert!(
+        disagreement,
+        "★ NON-VACUITY: MockArch's INVENTED encoding agrees with RM's on every probe, so \
+         switching away from it proves nothing. Pick probes that separate them"
+    );
 }
