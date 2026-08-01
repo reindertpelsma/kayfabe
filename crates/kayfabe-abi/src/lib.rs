@@ -115,6 +115,9 @@ pub mod guestsysinfo;
 pub mod gvaspacepdes;
 pub mod host_driver;
 pub mod inittables;
+// ★ #156 — the ⊘ half of the host-class seam: the three classes that do NOT vary,
+// named by role so a name-based gate can tell them from the three that do.
+pub mod invariant_classes;
 pub mod l2evict;
 pub mod memsysconfig;
 pub mod notifier;

@@ -10,10 +10,12 @@ kayfabe-util.workspace = true
 kayfabe-arch.workspace = true
 kayfabe-abi.workspace = true
 # ★ #156 — the arch-impl crate, for `HostClasses` PROFILES only. This crate holds the
-# host-forwarding path; the three class ids it allocates differ on a Hopper host, so the
-# numbers live behind `kayfabe_arch::HostClasses` and in the crate where a chip's facts
-# are ALLOWED to live. Depending on it is what lets this crate be SCOPED by the
-# Generation-name gate instead of exempted from it.
+# host-forwarding path, and three of the class ids it allocates change with the host
+# board's generation, so the numbers live behind `kayfabe_arch::HostClasses` and in the
+# crate where a chip's facts are ALLOWED to live. Depending on it is what lets this crate
+# be SCOPED by the Generation-name gate instead of exempted from it.
+# ⊘ A TOML `#` comment is NOT filtered by that gate the way a `//` line is, so this
+# comment may not name a generation either. That is the gate working, not a nuisance.
 kayfabe-chips.workspace = true
 kayfabe-vmm.workspace = true
 kayfabe-isolate.workspace = true

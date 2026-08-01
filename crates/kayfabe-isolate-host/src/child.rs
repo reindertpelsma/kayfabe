@@ -227,8 +227,15 @@ fn build_backends(
                 .map_err(|e| format!("the isolate sandbox could not be built: {e}"))?;
             // ★ #156 — the host board's class profile, PINNED. See
             // `kayfabe_chips::host_classes::pinned_host_classes`: this process does not
-            // ask the device what generation it is, and the pin is to the only part any
-            // of the host path has been measured on.
+            // ask the device what generation it is.
+            //
+            // The pin is GA10x because that is the only generation the rungs below it
+            // have ever run on — the CE copy and the `userdOffset` failure shape were
+            // both measured on RTX 3060 / 580.159.04, 2026-07-30, and are cited at their
+            // call sites in `rm.rs` (`alloc_channel_on`'s `userd_offset_0`,
+            // `HostRmBackend::ce_copy`). Nothing has been measured on Ada or Hopper:
+            // those profiles are INFERRED from `ogkm`'s per-chip class tables
+            // (`src/nvidia/generated/g_gpu_class_list.c`) and compile only.
             let conn = Arc::new(
                 RmConnection::open(&dev, GpuId(args.gpu), kayfabe_chips::pinned_host_classes())
                     .map_err(|e| e.to_string())?,

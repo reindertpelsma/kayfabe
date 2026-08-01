@@ -107,14 +107,21 @@ use kayfabe_abi::bringup::{
 // src/nvidia/generated/g_gpu_class_list.c` — `FERMI_VASPACE_A` at `:1124`/`:1748`/`:2001`,
 // `KEPLER_CHANNEL_GROUP_A` at `:1134`/`:1758`/`:2031`).
 use kayfabe_abi::generated::classes::{
-    FERMI_VASPACE_A, KEPLER_CHANNEL_GROUP_A, NV01_DEVICE_0, NV01_ROOT_CLIENT,
-    Nv0080AllocParameters, NvChannelGroupAllocationParameters,
+    NV01_DEVICE_0, NV01_ROOT_CLIENT, Nv0080AllocParameters, NvChannelGroupAllocationParameters,
 };
+// ★★ The two host classes that do NOT vary, by ROLE. `kayfabe_abi::invariant_classes`
+// carries the ids and, more importantly, the per-chip citations that make "does not vary"
+// a checked statement rather than an assumption. Naming them by role is what the
+// Generation-name gate's own failure text prescribes ("a name that says what it MEANS,
+// not which chip has it") and is why this crate can be SCOPED by that gate rather than
+// excused from it — a name scan cannot distinguish `KEPLER_CHANNEL_GROUP_A`, whose
+// generation word is vestigial, from `AMPERE_DMA_COPY_B`, whose is not.
 use kayfabe_abi::generated::nvos::{
     NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA,
     NV_ESC_RM_UNMAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters, Nvos46Parameters,
     Nvos47Parameters, Nvos54Parameters,
 };
+use kayfabe_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kayfabe_abi::submit::{
     ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, ENGINE_TYPE_COPY0,
     ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY,
@@ -1646,7 +1653,7 @@ impl RmBackend for HostRmBackend {
         let want = self.conn.mint();
         let space = self
             .conn
-            .raw_alloc(self.conn.device, want, FERMI_VASPACE_A, &mut params)?;
+            .raw_alloc(self.conn.device, want, VA_SPACE, &mut params)?;
         self.conn.remember(space, self.conn.device);
 
         // ★★ R7b, and it was missing until hardware said so. `NV_ESC_RM_MAP_MEMORY_DMA`'s
@@ -2166,12 +2173,10 @@ impl HostRmBackend {
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
-        let tsg = match self.conn.raw_alloc(
-            self.conn.device,
-            want,
-            KEPLER_CHANNEL_GROUP_A,
-            &mut tsg_params,
-        ) {
+        let tsg = match self
+            .conn
+            .raw_alloc(self.conn.device, want, CHANNEL_GROUP, &mut tsg_params)
+        {
             Ok(h) => {
                 self.conn.remember(h, self.conn.device);
                 h
