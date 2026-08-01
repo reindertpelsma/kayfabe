@@ -386,6 +386,43 @@ pub struct AuditReport {
     /// Retired reservation mappings actually released. At quiescence this must equal the
     /// number removed, or a mapping is parked forever.
     pub window_mappings_released: u64,
+    /// ★★ **Ranges claimed by a [`Vmm::map_guest`] plan that has not committed yet** —
+    /// see [`PlanReservation`]. **At quiescence this must be zero**: a reservation
+    /// outliving its planner is a permanent denial of that guest-physical range, which is
+    /// a strictly worse bug than the race it exists to close.
+    ///
+    /// Non-vacuity is [`AuditReport::peak_plan_reservations`]: a suite in which no plan
+    /// ever claimed anything reports `0` here for a reason that has nothing to do with
+    /// release.
+    pub live_plan_reservations: u64,
+    /// ★★★ High-water mark of concurrently-claimed ranges — and it carries a second,
+    /// sharper fact than "the counter is not stuck".
+    ///
+    /// `≥ 2` says **two plans were genuinely in flight at the same instant**, which is
+    /// the property a generation counter would have destroyed: bumping a version on every
+    /// placement refuses concurrent publications into a live reservation at publication
+    /// frequency. A claim refuses only on an actual **range** overlap, so two disjoint
+    /// publications into one reservation must still proceed together — and this is the
+    /// number that says they did rather than serialising by accident.
+    pub peak_plan_reservations: u64,
+    /// ★★ Plans refused because another plan had already claimed an overlapping range and
+    /// had not yet committed.
+    ///
+    /// The refusal is the *same* [`VmmError::Unsupported`] a committed overlap gets — it
+    /// is the refusal the caller would have had a moment later — so **this counter is the
+    /// only thing that distinguishes the raced refusal from the sequential one**, exactly
+    /// as [`AuditReport::r5_revalidation_failures`] is the only thing that distinguishes
+    /// an R5 refusal from a plan-phase `BadGpa`. It is race-exclusive by construction: a
+    /// committed placement lives in `Window::placements`, never in the claim map, so no
+    /// sequential ordering can move it.
+    pub plan_conflicts: u64,
+    /// ★★ Reservations released by [`PlanReservation::drop`] because their plan never
+    /// reached commit — a host refusal in the execute phase, or an unwind.
+    ///
+    /// This is the non-vacuity half of the leak claim: `live_plan_reservations == 0` is
+    /// satisfied identically by a plane that never abandoned anything, so a leak test that
+    /// does not watch this move has not exercised the release path at all.
+    pub plan_reservations_abandoned: u64,
 }
 
 #[derive(Debug, Default)]
@@ -421,6 +458,10 @@ struct Audit {
     irqs_raised: AtomicU64,
     window_releases_deferred: AtomicU64,
     window_mappings_released: AtomicU64,
+    live_plan_reservations: AtomicU64,
+    peak_plan_reservations: AtomicU64,
+    plan_conflicts: AtomicU64,
+    plan_reservations_abandoned: AtomicU64,
 }
 
 impl Audit {
@@ -483,6 +524,10 @@ impl Audit {
             irqs_raised: g(&self.irqs_raised),
             window_releases_deferred: g(&self.window_releases_deferred),
             window_mappings_released: g(&self.window_mappings_released),
+            live_plan_reservations: g(&self.live_plan_reservations),
+            peak_plan_reservations: g(&self.peak_plan_reservations),
+            plan_conflicts: g(&self.plan_conflicts),
+            plan_reservations_abandoned: g(&self.plan_reservations_abandoned),
         }
     }
 }
@@ -633,6 +678,72 @@ struct Window {
     /// kernel; the number goes back to the allocator only afterwards.
     memslots: Vec<(u32, Box<dyn LiveSlot>)>,
     placements: BTreeMap<SlotId, (u64, u64)>,
+    /// ★★★ **Ranges a plan has CLAIMED but not yet committed** — the half of the overlap
+    /// rule that makes it hold across the plan→commit gap (issue #145).
+    ///
+    /// [`Vmm::map_guest`] checks for overlap under the installer lock and then *releases
+    /// that lock* to run its `MAP_FIXED`. With `placements` as the only record, two
+    /// planners could both look at an empty reservation, both find no overlap, both place
+    /// `MAP_FIXED` over the same host range — the second silently overwriting the first —
+    /// and both commit. No refusal, no counter, no log.
+    ///
+    /// The claim goes in here **in the same lock hold as the check**, so checking and
+    /// claiming are one action rather than two. Released by the commit (which moves the
+    /// range into `placements`) or by [`PlanReservation::drop`].
+    planned: BTreeMap<SlotId, (u64, u64)>,
+}
+
+/// ★★★ **A range claimed by a plan that has not committed yet, and the thing that
+/// guarantees the claim is given back.**
+///
+/// A leaked reservation is a **permanent denial of that guest-physical range** — strictly
+/// worse than the race it closes, because the race needs two threads and a leak needs one
+/// — and `map_guest` has three exits between the claim and the commit (an unminted backing
+/// id, a failed `dup`, a failed `place`) plus whatever an unwind adds. Three matching edits
+/// is a property maintained by hand; a destructor is one that holds structurally.
+///
+/// ## ★★ The reentrancy argument, because `Mutex` is not reentrant
+///
+/// `drop` takes the installer lock, so it must never run on a thread already holding it.
+/// It cannot: every exit between the claim and the commit is a `return` out of an inner
+/// block that owns the guard, and Rust drops innermost-scope locals first — the guard is
+/// released before this value, which lives in the function scope, is touched. The commit
+/// block drops its guard explicitly in **both** arms for the same reason.
+///
+/// ## ★ It does NOT consult the lifecycle gate
+///
+/// This is the one place the QEMU port had to be re-derived rather than mirrored: every
+/// other memory-plane door here calls [`Plane::assert_live`] first, and this one must not.
+/// [`QemuMachine::unrealize`] removes every reservation and *then* clears `live`, so a
+/// planner still in its execute phase at that moment drops its guard against a dead
+/// device. Refusing there would be refusing to give memory back, which is the leak this
+/// type exists to prevent. Releasing a claim is not an operation on the device; it is the
+/// withdrawal of one.
+struct PlanReservation {
+    plane: Arc<Plane>,
+    region: RamRegionId,
+    slot: SlotId,
+}
+
+impl Drop for PlanReservation {
+    fn drop(&mut self) {
+        let (mut ins, _h) = self.plane.installer();
+        let released = ins
+            .windows
+            .get_mut(&self.region)
+            .is_some_and(|w| w.planned.remove(&self.slot).is_some());
+        if released {
+            Audit::bump(
+                &self.plane.audit.live_plan_reservations,
+                &self.plane.audit.peak_plan_reservations,
+                -1,
+            );
+            self.plane
+                .audit
+                .plan_reservations_abandoned
+                .fetch_add(1, Ordering::SeqCst);
+        }
+    }
 }
 
 /// Everything one reservation's execute phase created, so a failure anywhere inside it
@@ -1197,6 +1308,7 @@ impl QemuMachine {
                     window: Arc::clone(&installed.window),
                     memslots: installed.memslots,
                     placements: BTreeMap::new(),
+                    planned: BTreeMap::new(),
                 },
             );
             Audit::bump(&p.audit.live_windows, &p.audit.peak_windows, 1);
@@ -1689,6 +1801,15 @@ impl QemuMachine {
                 &p.audit.peak_memslots,
                 -(w.memslots.len() as i64),
             );
+            // ★ And the claims this reservation was still holding for plans in flight.
+            // Their `PlanReservation`s will find no window and debit nothing, which is
+            // why the debit has to happen here: the state leaves under this guard, so the
+            // ledger leaves with it.
+            Audit::bump(
+                &p.audit.live_plan_reservations,
+                &p.audit.peak_plan_reservations,
+                -(w.planned.len() as i64),
+            );
             p.audit.window_bytes.fetch_sub(w.len, Ordering::SeqCst);
             w
         };
@@ -1903,19 +2024,63 @@ impl Vmm for QemuVmm {
             else {
                 return Err(VmmError::BadGpa { gpa });
             };
-            let w = ins.windows.get(&region).expect("just found");
-            if w.placements
-                .values()
-                .any(|(o, l)| off < o + l && *o < off + len)
-            {
+            // ★★★ **CHECK AND CLAIM ARE ONE ACTION** — issue #145, and the same defect
+            // and the same fix as the sibling KVM adapter, re-derived here rather than
+            // ported by reflex (see [`PlanReservation`] for the one clause that differs:
+            // the release must not consult the lifecycle gate).
+            //
+            // What stood here checked `placements` alone — a check against what has
+            // COMMITTED — and the installer guard is released a few lines below so the
+            // `MAP_FIXED` can run lock-free. So two planners could both read an empty
+            // reservation, both find no overlap, both place over the same host range (the
+            // second silently overwriting the first), and both commit.
+            //
+            // ⊘ **Not a generation counter.** A version bumped on every placement refuses
+            // concurrent publications into a *live* reservation at publication frequency,
+            // i.e. converts this hazard into a livelock. A claim refuses on an actual
+            // **range** overlap and on nothing else, so two disjoint publications into one
+            // reservation still proceed together — [`AuditReport::peak_plan_reservations`]
+            // is the number that says so.
+            //
+            // ⊘ And R5's presence token cannot reach it: here the reservation is alive.
+            let slot_id = SlotId(ins.next_slot_id);
+            let w = ins.windows.get_mut(&region).expect("just found");
+            let hits = |m: &BTreeMap<SlotId, (u64, u64)>| {
+                m.values().any(|(o, l)| off < o + l && *o < off + len)
+            };
+            if hits(&w.placements) {
                 return Err(VmmError::Unsupported(
                     "a placement overlapping one already live in the same reservation",
                 ));
             }
+            if hits(&w.planned) {
+                // ★ The SAME refusal a committed overlap gets, deliberately: the caller
+                // asked for a range somebody else has, and that the other holder is a
+                // microsecond from committing rather than already committed is a timing
+                // fact about us. `plan_conflicts` is what makes the two distinguishable to
+                // a test without making them distinguishable to the guest.
+                p.audit.plan_conflicts.fetch_add(1, Ordering::SeqCst);
+                return Err(VmmError::Unsupported(
+                    "a placement overlapping one already live in the same reservation",
+                ));
+            }
+            w.planned.insert(slot_id, (off, len));
             let window = Arc::clone(&w.window);
-            let slot_id = SlotId(ins.next_slot_id);
             ins.next_slot_id += 1;
+            Audit::bump(
+                &p.audit.live_plan_reservations,
+                &p.audit.peak_plan_reservations,
+                1,
+            );
             (slot_id, region, window, off)
+        };
+        // ★★★ From here the claim is owned by a destructor, so every exit below — an
+        // unminted backing id, a failed `dup`, a failed `place`, an unwind — gives the
+        // range back.
+        let _reservation = PlanReservation {
+            plane: Arc::clone(&self.plane),
+            region,
+            slot: slot_id,
         };
 
         // ---- EXECUTE (every lock dropped) ------------------------------------------
@@ -1964,8 +2129,25 @@ impl Vmm for QemuVmm {
         let (mut ins, _h) = p.installer();
         match ins.windows.get_mut(&region) {
             Some(w) => {
+                // ★★ The claim BECOMES the placement, in one lock hold. Doing it in two —
+                // release the claim, retake the lock, insert the placement — would open a
+                // gap in which the range is guarded by neither map, i.e. would reintroduce
+                // #145 one instant wide instead of one syscall wide.
+                let claimed = w.planned.remove(&slot_id);
+                debug_assert_eq!(
+                    claimed,
+                    Some((offset, len)),
+                    "the commit must find its own plan's claim, unchanged"
+                );
                 w.placements.insert(slot_id, (offset, len));
                 ins.placement_owner.insert(slot_id, region);
+                if claimed.is_some() {
+                    Audit::bump(
+                        &p.audit.live_plan_reservations,
+                        &p.audit.peak_plan_reservations,
+                        -1,
+                    );
+                }
                 Audit::bump(&p.audit.live_placements, &p.audit.peak_placements, 1);
                 drop(_h);
                 drop(ins);

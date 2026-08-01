@@ -162,9 +162,13 @@
 //!
 //! ★ The `map_guest` row is now an **under**-count and deliberately not re-measured: #89
 //! (2026-08-01) deleted this crate's per-window generation, so the two commit blocks are
-//! the same code where they used to differ. The table is a dated snapshot, and a row
-//! re-measured by a different method on a different day is worse than a stale one that
-//! says when it was taken.
+//! the same code where they used to differ, and #145 (2026-08-01) then added the *same*
+//! plan-time range claim, the *same* [`PlanReservation`] destructor and the *same* four
+//! ledger fields to both files — the two `map_guest` bodies now differ only in the two
+//! refusal strings ("window" versus "reservation") and in QEMU's extra `assert_live`. The
+//! table is a dated snapshot, and a row re-measured by a different method on a different
+//! day is worse than a stale one that says when it was taken; the honest reading is that
+//! the shared core the last section describes has grown, not shrunk.
 //!
 //! ### Genuinely hypervisor-specific — a third backend must write these itself
 //!
@@ -349,6 +353,43 @@ pub struct AuditReport {
     /// thread that is lock-free by contract. At quiescence this must equal the number of
     /// windows removed, or a mapping is parked forever.
     pub window_mappings_released: u64,
+    /// ★★ **Ranges claimed by a [`Vmm::map_guest`] plan that has not committed yet** —
+    /// see [`PlanReservation`]. **At quiescence this must be zero**: a reservation
+    /// outliving its planner is a permanent denial of that guest-physical range, which is
+    /// a strictly worse bug than the race it exists to close.
+    ///
+    /// Non-vacuity is [`AuditReport::peak_plan_reservations`]: a suite in which no plan
+    /// ever claimed anything reports `0` here for a reason that has nothing to do with
+    /// release.
+    pub live_plan_reservations: u64,
+    /// ★★★ High-water mark of concurrently-claimed ranges — and it carries a second,
+    /// sharper fact than "the counter is not stuck".
+    ///
+    /// `≥ 2` says **two plans were genuinely in flight at the same instant**, which is
+    /// the property the rejected generation counter would have destroyed: bumping a
+    /// version on every placement refuses concurrent publications into a live window at
+    /// publication frequency. A reservation refuses only on an actual **range** overlap,
+    /// so two disjoint publications into one window must still proceed together — and
+    /// this is the number that says they did rather than serialising by accident.
+    pub peak_plan_reservations: u64,
+    /// ★★ Plans refused because another plan had already claimed an overlapping range and
+    /// had not yet committed.
+    ///
+    /// The refusal is the *same* [`VmmError::Unsupported`] a committed overlap gets — it
+    /// is the refusal the caller would have had a moment later — so **this counter is the
+    /// only thing that distinguishes the raced refusal from the sequential one**, exactly
+    /// as [`AuditReport::r5_revalidation_failures`] is the only thing that distinguishes
+    /// an R5 refusal from a plan-phase `BadGpa`. It is race-exclusive by construction: a
+    /// committed placement lives in `Window::placements`, never in the reservation map, so
+    /// no sequential ordering can move it.
+    pub plan_conflicts: u64,
+    /// ★★ Reservations released by [`PlanReservation::drop`] because their plan never
+    /// reached commit — a host refusal in the execute phase, or an unwind.
+    ///
+    /// This is the non-vacuity half of the leak claim: `live_plan_reservations == 0` is
+    /// satisfied identically by a plane that never abandoned anything, so a leak test that
+    /// does not watch this move has not exercised the release path at all.
+    pub plan_reservations_abandoned: u64,
 }
 
 #[derive(Debug, Default)]
@@ -378,6 +419,10 @@ struct Audit {
     first_ram_declared_exit: AtomicU64,
     window_releases_deferred: AtomicU64,
     window_mappings_released: AtomicU64,
+    live_plan_reservations: AtomicU64,
+    peak_plan_reservations: AtomicU64,
+    plan_conflicts: AtomicU64,
+    plan_reservations_abandoned: AtomicU64,
 }
 
 impl Audit {
@@ -440,6 +485,10 @@ impl Audit {
             },
             window_releases_deferred: g(&self.window_releases_deferred),
             window_mappings_released: g(&self.window_mappings_released),
+            live_plan_reservations: g(&self.live_plan_reservations),
+            peak_plan_reservations: g(&self.peak_plan_reservations),
+            plan_conflicts: g(&self.plan_conflicts),
+            plan_reservations_abandoned: g(&self.plan_reservations_abandoned),
         }
     }
 }
@@ -480,6 +529,74 @@ struct Window {
     ram: Option<Arc<SharedRam>>,
     /// Live `MAP_FIXED` placements inside it, by the slot id that names them.
     placements: BTreeMap<SlotId, (u64, u64)>,
+    /// ★★★ **Ranges a plan has CLAIMED but not yet committed** — the half of the overlap
+    /// rule that makes it hold across the plan→commit gap.
+    ///
+    /// [`Vmm::map_guest`] checks for overlap under the installer lock and then *releases
+    /// that lock* to run its `MAP_FIXED`. With `placements` as the only record, two
+    /// planners could both look at an empty window, both find no overlap, both place
+    /// `MAP_FIXED` over the same host range — the second silently overwriting the first —
+    /// and both commit. No refusal, no counter, no log.
+    ///
+    /// The claim goes in here **in the same lock hold as the check**, so checking and
+    /// claiming are one action rather than two, and the second planner sees it. Released
+    /// by the commit (which moves the range into `placements`) or by
+    /// [`PlanReservation::drop`] (which is what a planner that dies or errors out leaves
+    /// behind).
+    planned: BTreeMap<SlotId, (u64, u64)>,
+}
+
+/// ★★★ **A range claimed by a plan that has not committed yet, and the thing that
+/// guarantees the claim is given back.**
+///
+/// Holding the claim in a `Drop` type rather than releasing it at each exit is the whole
+/// point. A leaked reservation is a **permanent denial of that guest-physical range** —
+/// strictly worse than the race it closes, because the race needs two threads and a leak
+/// needs one — and `map_guest` has three exits between the claim and the commit (an
+/// unminted backing id, a failed `dup`, a failed `place`) plus whatever an unwind adds.
+/// Three matching edits is a property maintained by hand; a destructor is one that holds
+/// structurally, including on a panic.
+///
+/// ## ★★ The reentrancy argument, because `Mutex` is not reentrant
+///
+/// `drop` takes the installer lock, so it must never run on a thread already holding it.
+/// It cannot: every exit between the claim and the commit is a `return` out of an inner
+/// block that owns the guard, and Rust drops innermost-scope locals first — the guard is
+/// released before this value, which lives in the function scope, is touched. The commit
+/// block drops its guard explicitly in **both** arms for the same reason.
+///
+/// ## Idempotence
+///
+/// A committed plan has already moved its range out of [`Window::planned`], so this
+/// destructor finds nothing and debits nothing. `slot_id`s are never reused, so "found
+/// nothing" can only mean "somebody already released it" — the commit, or a
+/// [`KvmMachine::remove_window`] that took the whole window (and debited the reservation
+/// with it).
+struct PlanReservation {
+    plane: Arc<Plane>,
+    region: RamRegionId,
+    slot: SlotId,
+}
+
+impl Drop for PlanReservation {
+    fn drop(&mut self) {
+        let (mut ins, _h) = self.plane.installer();
+        let released = ins
+            .windows
+            .get_mut(&self.region)
+            .is_some_and(|w| w.planned.remove(&self.slot).is_some());
+        if released {
+            Audit::bump(
+                &self.plane.audit.live_plan_reservations,
+                &self.plane.audit.peak_plan_reservations,
+                -1,
+            );
+            self.plane
+                .audit
+                .plan_reservations_abandoned
+                .fetch_add(1, Ordering::SeqCst);
+        }
+    }
 }
 
 /// The **installer**'s state: everything authoritative about the memory plane.
@@ -922,6 +1039,7 @@ impl KvmMachine {
                 memslots,
                 ram,
                 placements: BTreeMap::new(),
+                planned: BTreeMap::new(),
             })
         })();
 
@@ -1031,6 +1149,15 @@ impl KvmMachine {
                 &p.audit.live_placements,
                 &p.audit.peak_placements,
                 -(w.placements.len() as i64),
+            );
+            // ★ And the claims the departing window was still holding for plans in
+            // flight. Their `PlanReservation`s will find no window and debit nothing,
+            // which is exactly why the debit has to happen here: the state is leaving
+            // under this guard, so the ledger leaves with it.
+            Audit::bump(
+                &p.audit.live_plan_reservations,
+                &p.audit.peak_plan_reservations,
+                -(w.planned.len() as i64),
             );
             p.audit.window_bytes.fetch_sub(w.len, Ordering::SeqCst);
             w
@@ -1424,19 +1551,67 @@ impl Vmm for KvmVmm {
             else {
                 return Err(VmmError::BadGpa { gpa });
             };
-            let w = ins.windows.get(&region).expect("just found");
-            if w.placements
-                .values()
-                .any(|(o, l)| off < o + l && *o < off + len)
-            {
+            // ★★★ **CHECK AND CLAIM ARE ONE ACTION** — issue #145.
+            //
+            // What stood here checked `placements` alone. That is a check against what has
+            // COMMITTED, and the installer guard is released a few lines below so the
+            // `MAP_FIXED` can run lock-free — so two planners could both read an empty
+            // window, both find no overlap, both place over the same host range (the second
+            // silently overwriting the first), and both commit. No refusal, no counter, no
+            // log; a mapping installed where another already is.
+            //
+            // ⊘ **Not a generation counter**, and not by preference — #89 removed one from
+            // this exact block for being unfalsifiable, and named what making it real would
+            // cost: a version bumped on every placement refuses concurrent publications into
+            // a *live* window at publication frequency, i.e. converts this hazard into a
+            // livelock. The reservation refuses on an actual **range** overlap and on
+            // nothing else, so two disjoint publications into one window still proceed
+            // together — [`AuditReport::peak_plan_reservations`] is the number that says so.
+            //
+            // ⊘ And R5's presence token cannot reach it either: here the window is
+            // perfectly alive. Presence is the right token for teardown and says nothing
+            // about this.
+            let slot_id = SlotId(ins.next_slot_id);
+            let w = ins.windows.get_mut(&region).expect("just found");
+            let hits = |m: &BTreeMap<SlotId, (u64, u64)>| {
+                m.values().any(|(o, l)| off < o + l && *o < off + len)
+            };
+            if hits(&w.placements) {
                 return Err(VmmError::Unsupported(
                     "a placement overlapping one already live in the same window",
                 ));
             }
+            if hits(&w.planned) {
+                // ★ The SAME refusal a committed overlap gets, deliberately. The caller
+                // asked for a range somebody else has; that the other holder is a
+                // microsecond from committing rather than already committed is a timing
+                // fact about us, and #89's own ruling — *"the refusal the guest would have
+                // got had it asked a moment later, not a bespoke error"* — applies
+                // unchanged. `plan_conflicts` is what makes the two distinguishable to a
+                // test without making them distinguishable to the guest.
+                p.audit.plan_conflicts.fetch_add(1, Ordering::SeqCst);
+                return Err(VmmError::Unsupported(
+                    "a placement overlapping one already live in the same window",
+                ));
+            }
+            w.planned.insert(slot_id, (off, len));
             let window = Arc::clone(&w.window);
-            let slot_id = SlotId(ins.next_slot_id);
             ins.next_slot_id += 1;
+            Audit::bump(
+                &p.audit.live_plan_reservations,
+                &p.audit.peak_plan_reservations,
+                1,
+            );
             (slot_id, region, window, off)
+        };
+        // ★★★ From here the claim is owned by a destructor, so every exit below — an
+        // unminted backing id, a failed `dup`, a failed `place`, an unwind — gives the
+        // range back. See [`PlanReservation`] for why this is a `Drop` type and for the
+        // argument that it can never run with the installer lock already held.
+        let _reservation = PlanReservation {
+            plane: Arc::clone(&self.plane),
+            region,
+            slot: slot_id,
         };
 
         // ---- EXECUTE (every lock dropped) -----------------------------------------
@@ -1493,9 +1668,9 @@ impl Vmm for KvmVmm {
         // [`Installer::next_region`], which only ever increments and is never recycled, so
         // no second window can ever appear under a region id a first one vacated. `Some(w)`
         // therefore implies *the same* `Window` object the plan phase read — and a
-        // `Window`'s fields other than `placements` are never mutated after insert — so the
-        // stamped generation was, necessarily, the one the plan had already read out of the
-        // very same struct. A constant compared against itself.
+        // `Window`'s fields other than `placements` and `planned` are never mutated after
+        // insert — so the stamped generation was, necessarily, the one the plan had already
+        // read out of the very same struct. A constant compared against itself.
         //
         // ⊘ And it was NOT worth making real. A counter can only carry information the
         // key does not, i.e. re-identification across a recycled key, and that is
@@ -1510,8 +1685,25 @@ impl Vmm for KvmVmm {
         let (mut ins, _h) = p.installer();
         match ins.windows.get_mut(&region) {
             Some(w) => {
+                // ★★ The claim BECOMES the placement, in one lock hold. Doing it in two —
+                // release the reservation, retake the lock, insert the placement — would
+                // open a gap in which the range is guarded by neither map, i.e. would
+                // reintroduce #145 one instant wide instead of one syscall wide.
+                let claimed = w.planned.remove(&slot_id);
+                debug_assert_eq!(
+                    claimed,
+                    Some((offset, len)),
+                    "the commit must find its own plan's claim, unchanged"
+                );
                 w.placements.insert(slot_id, (offset, len));
                 ins.placement_owner.insert(slot_id, region);
+                if claimed.is_some() {
+                    Audit::bump(
+                        &p.audit.live_plan_reservations,
+                        &p.audit.peak_plan_reservations,
+                        -1,
+                    );
+                }
                 // ★ The ledger moves WITH the state it counts, under the lock that owns
                 // the state. Outside it, a concurrent `remove_window` — which subtracts
                 // `w.placements.len()`, i.e. *including this one* — can land its debit

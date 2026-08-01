@@ -7346,6 +7346,22 @@ impl RealMeanReport {
             // asserted as a NON-VACUITY bound below, per `window_releases_deferred`'s
             // precedent, so the free list is still proven to have served.
             slot_numbers_recycled: 0,
+            // ★★ The HIGH-WATER MARK of `map_guest` claims held at once (#145) is a clock
+            // by construction: it counts how many planners were between their claim and
+            // their commit at the same instant, which is exactly what the churn threads'
+            // interleaving decides. MEASURED on this run, 2026-08-01: 2 under one lock mode
+            // and 3 under the other, with every other field bit-identical — the same shape
+            // `slot_numbers_recycled` above has, found the same way.
+            //
+            // ⊘ Out of the equality, NOT out of coverage: the bound below keeps it proven
+            // that claims were made at all. The stronger *concurrency* claim (two held at
+            // once) is not asserted here, where it is a race nobody retries — it lives in
+            // `kayfabe-vmm-{kvm,qemu}/tests/plan_reservation.rs`, which retry until they
+            // observe it. The three DETERMINISTIC #145 fields — `live_plan_reservations`,
+            // `plan_conflicts` and `plan_reservations_abandoned` — stay in the equality,
+            // and that is real coverage: this run must leak no claim and conflict never,
+            // identically in both modes.
+            peak_plan_reservations: 0,
             ..self.audit
         };
         self
@@ -7801,6 +7817,17 @@ fn a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_
             "({name}) ★ NON-VACUITY: not one slot number came from the free list, so this \
              run exercised a never-recycling allocator and every claim about recycling \
              below is about a mechanism that did not run"
+        );
+        // ★ NON-VACUITY for the one #145 field `mode_independent` neutralises, by the same
+        // rule: its exact value is a clock, but that `map_guest` CLAIMED AT ALL is not.
+        // A run reporting zero here would mean no publication ever reserved its range, so
+        // the equality's `live_plan_reservations == 0` and `plan_conflicts == 0` would both
+        // be true of a plane that never ran the mechanism.
+        assert!(
+            r.audit.peak_plan_reservations > 0,
+            "({name}) ★ NON-VACUITY: not one `map_guest` plan ever claimed its range, so \
+             every #145 assertion in the equality above is about a mechanism that did not \
+             run in this configuration"
         );
     }
 

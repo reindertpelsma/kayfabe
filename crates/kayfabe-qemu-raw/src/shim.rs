@@ -458,18 +458,24 @@ impl Shim {
     /// The counters, in the wire shape.
     ///
     /// ★★★ **The source is DESTRUCTURED with no `..`, and that is the whole design.**
-    /// `AuditReport` carries thirty-one counters and this wire value carries nine. Written
-    /// as `a.field` nine times, the other twenty-two are invisible *and so is the
-    /// twenty-third*: a counter added to the memory plane reaches nobody outside the
+    /// `AuditReport` carries thirty-five counters and this wire value carries nine. Written
+    /// as `a.field` nine times, the other twenty-six are invisible *and so is the
+    /// twenty-seventh*: a counter added to the memory plane reaches nobody outside the
     /// process, and no test in this repository can go red about it — the exact
     /// shrinking-universe failure the `#130` recovery work was written to end. Binding
     /// every field by name turns "should this cross the seam?" into `error[E0027]` on the
     /// commit that adds it.
     ///
-    /// ⊘ The twenty-two `_`-bound names are **not** a claim that they do not matter. They
+    /// ⊘ The twenty-six `_`-bound names are **not** a claim that they do not matter. They
     /// are peaks, depth witnesses and internal accounting whose consumer is
     /// [`crate::shim::Shim`]'s own tests rather than the C shell; if one of them ever needs
     /// to reach an operator, the wire struct and [`ABI_VERSION`] move together.
+    ///
+    /// ★ The four `plan_*` / `*_plan_reservations` counters (#145) are adjudicated the same
+    /// way and stay inside: three of them can only move under a genuine two-thread race on
+    /// one guest-physical range, which is a defect in whatever is calling `map_guest` and
+    /// not a device condition an operator can act on, and the fourth (`live_plan_reservations`)
+    /// is an invariant that must read zero at quiescence — a thing to ASSERT, not to report.
     #[must_use]
     pub fn audit(&self) -> KayfabeAudit {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
@@ -503,6 +509,10 @@ impl Shim {
             irqs_raised: _,
             window_releases_deferred: _,
             window_mappings_released: _,
+            live_plan_reservations: _,
+            peak_plan_reservations: _,
+            plan_conflicts: _,
+            plan_reservations_abandoned: _,
         } = self.machine.audit();
         KayfabeAudit {
             live_windows,

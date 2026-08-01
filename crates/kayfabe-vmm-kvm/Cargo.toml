@@ -16,6 +16,12 @@ kayfabe-linux-raw.workspace = true
 # belongs to `kayfabe-linux-raw`, and a dependency here would be the first step of that
 # rule decaying.
 libc = "0.2"
+# ★ DEV-ONLY, and for `watchdog` alone — `tests/plan_reservation.rs` races two planners in
+# a retry loop, and the failure mode of the defect class it covers (a claim released under
+# a lock already held) is a SELF-DEADLOCK, which no `Instant::now()` deadline on the main
+# thread can ever observe. One shared watchdog rather than an eleventh hand-written copy;
+# see that module for why a copy per file is the shape this project keeps being bitten by.
+kayfabe-mocks.workspace = true
 
 [lints]
 workspace = true

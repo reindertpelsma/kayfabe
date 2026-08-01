@@ -371,6 +371,7 @@ name = "kayfabe-vmm-kvm"
 version = "0.1.0"
 dependencies = [
  "kayfabe-linux-raw",
+ "kayfabe-mocks",
  "kayfabe-util",
  "kayfabe-vmm",
  "libc",
