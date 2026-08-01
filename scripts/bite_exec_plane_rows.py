@@ -71,11 +71,20 @@ MUTATIONS = [
         "the_triage_universe_is_pinned_so_shortening_it_is_a_red_test",
     ),
     (
-        "the citation stripped from 0xc36f0108's argument — a row that decides without "
-        "naming a source",
+        "EVERY citation stripped from 0xc36f0108's argument — a row that decides without "
+        "naming a source. \u26a0 A first attempt at this bite removed only the FIRST of the "
+        "row's two `ogkm-580:` tags and SURVIVED, correctly: the gate is satisfied by one "
+        "citation anywhere in the string. That is the `a gate keyed on a WORD is satisfied "
+        "by writing the word` shape, recorded here rather than silently worked around",
         SWEEP,
-        "why: \"NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN (ogkm-580: ctrlc36f.h:79), one \\",
-        'why: "NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, one \\',
+        'why: "NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN (ogkm-580: ctrlc36f.h:79), one \\\n'
+        "              [OUT] NvU32 workSubmitToken (:83-85). Reached from mem_utils.c:2024 via \\\n"
+        "              kfifoRmctrlGetWorkSubmitToken_GV100, which returns rmStatus VERBATIM \\\n"
+        "              (ogkm-580: kernel_fifo_gv100.c:86-93) \u2014 so unlike its two neighbours in \\",
+        'why: "NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, one \\\n'
+        "              [OUT] NvU32 workSubmitToken. Reached from the scrubber setup via \\\n"
+        "              kfifoRmctrlGetWorkSubmitToken_GV100, which returns rmStatus VERBATIM \\\n"
+        "              \u2014 so unlike its two neighbours in \\",
         TRIAGE,
         "every_triaged_control_carries_an_argument_and_cites_something",
     ),
