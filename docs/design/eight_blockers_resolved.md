@@ -1142,3 +1142,101 @@ this repository rather than of the C** — it is pinned by
 `0x0077_7777`, which is inside `PRAMIN`. Both were asserting that a **framebuffer** access
 was an unclaimed register, and both were green. The classification turned them red on the
 first run, which is the non-vacuity evidence for it.
+
+---
+
+## 16. ★★★ `#146` — ONE of the three windows is now SERVED, and the store is the shell's
+
+> `[measured]` boot `evt1`, 2026-08-01, rev `0d82456`
+> (`docs/design/boot_measured_2026_08_01.md` §15/§17): a stock 580.159.04 guest reached
+> `kbusVerifyBar2_HAL` and printed *"Address 0x2efbae000 programmed through the bar0 window
+> with value 0xabcdabcd did not read back the last write."* Everything in §16.1 that does
+> not name a run is a source reading of `ogkm-580`, said as one.
+
+### 16.1 The access is UNTRANSLATED, which is the whole reason it could be built
+
+`kbusVerifyBar2_GM107:4084-4090` programs `NV_PBUS_BAR0_WINDOW` (BAR0 `0x1700`; `BASE` bits
+23:0, `TARGET` bits 25:24, `ogkm-580: dev_bus.h:43-50`) and then does a plain dword
+read-after-write through `PRAMIN` (BAR0 `0x700000..0x7FFFFF`, `dev_ram.h:26`). **No BAR2, no
+GMMU, no page table.** The framebuffer address is `(BASE << 16) + window_offset` and nothing
+else.
+
+⇒ §15's *"nothing serves a framebuffer byte"* now has exactly one exception, and the boundary
+is a property rather than a plan: `PRAMIN` is untranslated; the framebuffer aperture (BAR1)
+and the instance window (BAR2) are GMMU-translated and still refuse, because serving them
+means owning a page-table format this port does not have
+(`kayfabe_chips::UnbuiltGmmu`). `kayfabe_device::plane::RegPlane::window_phys`'s two `None`
+arms are that statement in code, and
+`tests/tests/gsp_rm_alloc.rs::the_shipped_arch_refuses_every_data_plane_seam` is unchanged
+and still green — deliberately, with an added assertion that pins the distinction.
+
+### 16.2 ⊘ It is NOT the isolate's `FbRead`, and that was checked rather than assumed
+
+§12.2 put framebuffer content in *"the isolate's VRAM-backed mapping of the fabricated
+aperture"*, behind `kayfabe_mmu::walker::FbRead`. Reusing that seam here was the first thing
+tried. It does not reach, for three independent reasons — **each one sufficient**, and all
+three read off the two seams' own signatures and lifetimes:
+
+| # | why |
+|---|---|
+| 1 | **`FbRead` cannot write.** It has no method that hands content *in*, deliberately — that absence is what makes §11.6 option 3 unrepresentable. `kbusVerifyBar2` is a **write** then a read. |
+| 2 | **There is no isolate yet.** `IsolateFb::new` takes a `&mut Worker`, i.e. a worker checked out of an isolate spawned for a guest *process*. This access happens inside `RmInitAdapter`, **before the first client root exists** — no `Proc`, no isolate, no worker. |
+| 3 | **Different range.** The isolate's aperture is the **fabricated** one — addresses this port invented for page tables it performs writes into. The window is pointed at whatever RM's own heap handed out (`0x2_EFBA_E000` on the measured boot: real advertised framebuffer, near the top of the usable region). |
+
+⇒ **A second port, and not a second description of one fact.** `FbRead` answers *"what is in
+the isolate's mapping of the fabricated aperture"*; `kayfabe_device::fbwin::FbStore` answers
+*"what is in the framebuffer this device advertises"*. They are different questions at
+different points in the device's life. The day the ranges overlap — when the data plane exists
+and a page table lives in advertised framebuffer — **convergence is an `FbStore`
+implementation that delegates to the isolate**, installed through the same
+`RegPlane::set_fb`, and nothing above the trait learns that it moved. That is §11.6's
+recommendation unchanged: option 1's port shape as the seam.
+
+★ Structurally this is `Vmm`'s shape: an effect port outside the pure crates, defaulting to a
+refuser, installed by the composition root
+(`kayfabe_qemu_raw::shim::Regs::create`, sized from the chip row's own `fb_length`).
+`kayfabe-core`, `-mmu`, `-fwd` and `-completion` hold no device memory and did not change.
+
+### 16.3 ★★★ Why a dropped write is IMPOSSIBLE here rather than merely detected
+
+The rung's own warning (§18 of the boot doc): **`kbusInitBar2` programs this same window and
+never reads any of it back**, so a window that silently drops writes lets every earlier step
+return `NV_OK` and is caught only at the verify, hundreds of operations later, as
+`NV_ERR_MEMORY_ERROR`. A design that can only be checked at a verify site has rebuilt the
+bug. Three mechanisms, each closing one way to lose a write:
+
+1. **The window register is a LATCH.** `GPU_FLD_WR_DRF_NUM` is a *read*-modify-write and the
+   guest performs two of them back to back (`_BASE`, then `_TARGET`), so a defaulted-zero read
+   makes the second write zero the base. Worse, `kbusSetBAR0WindowVidOffset_GM107:4728-4760`
+   keeps a `cachedBar0WindowVidOffset`, **seeds it from this very read**, and then *skips the
+   register write entirely* whenever the cache already holds the offset asked for — so a
+   dropped first write mis-points the window **permanently**, with no later write to correct
+   it. Both mechanisms are transcribed as tests, not paraphrased.
+2. **ONE address function, called by both sides.** `Bar0Window::fb_addr` is the only
+   arithmetic that turns a window offset into a framebuffer address; the read path and the
+   write path both call it. Two copies could disagree about the mask width, about `+` versus
+   `|`, or about which end the offset is subtracted from — and that disagreement *is* the
+   failure the verify reports.
+3. **No silent-drop arm.** `FbStore::write` returns a `Result` the plane matches; there is no
+   `let _ = …` and no `WriteOutcome` arm meaning *"framebuffer write, dropped, success"*.
+   Within the framebuffer the chip **advertises** there is no refusal to have — `SparseFb`
+   allocates a page on first write — so the only refusals are for addresses the guest was
+   never promised and for a store that was never installed, and both carry the physical
+   address and a sentence out to the shell, which prints them at the instant they happen.
+
+⚠ **What remains detected-not-prevented, stated rather than elided:** a read of an address
+the store refuses still reads **zero** to the guest, because a trapped register read has no
+error channel. It is a distinct outcome variant, counted (`Counters::fb_refusals`) and
+sampled — which is the strongest available statement, not a complete one.
+
+### 16.4 Two smaller decisions worth recording
+
+- **Unwritten framebuffer reads zero and returns `Ok`.** That is *not* `RefusingRam`'s
+  argument being abandoned: guest RAM is not ours and a zero-filled queue element is a wrong
+  answer the guest acts on; the framebuffer is memory **we advertised**, with no other
+  writer, so *"nothing has been written there yet"* has a correct answer we get to choose.
+- **`device_reset` clears the store.** Content surviving a device life is the previous
+  guest's page tables, instance blocks and semaphores, readable by the next one through this
+  very window. It is `#130`'s property and a cross-life information leak with no other
+  detector; `PlaneResidue` carries `fb_resident_bytes` so the recovery test quantifies over
+  it.
