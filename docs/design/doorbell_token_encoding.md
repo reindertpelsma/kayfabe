@@ -265,6 +265,41 @@ guest was entitled to submit on. That is the #14 ring gate in `plan_doorbell`, u
 
 ---
 
+## 5.1 The bite check — and the number that is uncomfortable
+
+**MEASURED**, `scripts/bite_doorbell_token.py` at rev `b2ff418` on 2026-08-01, 38-core box,
+17 planted defects in `Ga10xArch::decode_doorbell`, three arms run per bite:
+
+```
+15/15 live bites caught by the E3 guards (11 by the ORACLE alone, 0 by HARDWARE alone).
+ 0/15 caught by the pre-existing mock suite.
+ 2 rows are EQUIVALENT MUTANTS (required to stay green; 0 did not).
+```
+
+Three readings, and the middle one is the useful one:
+
+1. **`0/15` for the mock suite.** §0's claim that `MockArch::token_for` is structurally
+   blind to this class was an *assertion* until this ran. It is now a number. The mock arm
+   is in the harness for exactly that reason — a harness that ran only the two new arms
+   would have left the argument unquantified.
+2. ⚠ **`0` bites caught by HARDWARE alone.** Every defect the census caught, the oracle
+   caught too. So instrument B bought **no additional mutation-catching power**, and it
+   would be dishonest to imply otherwise. What it buys is different and not measurable this
+   way: the oracle is told `(runlist, chid)` and asked what token results — it assumes the
+   pairing. Only the census shows that on a real part the low field really is the number
+   *RM's allocator* handed out, over six live channels. Instrument A settles the
+   **encoding**; instrument B settles that the encoding is the one this **part** uses.
+   Delete the census and every bite still fails — and the decoder would rest entirely on a
+   compiled model of a driver, never on a GPU.
+3. ★★★ **Two rows are equivalent mutants, and finding that out changed the harness rather
+   than the code.** Widening the chid mask to 16 bits, or the runlist mask to 16, cannot
+   change any answer: the reserved-bit refusal rejects every token with a bit in 15:12 or
+   31:23 *before* the masks are read, so on all 2^24 inputs the decoder accepts the wide and
+   narrow masks agree (checked exhaustively). They were first reported as `MISSED BY
+   EVERYTHING`, which reads as a hole and is not one. Rows 14 and 15 relax the refusal *and*
+   widen the field together, and both are caught — so the widths are load-bearing the moment
+   the refusal is gone, and the redundancy is defence in depth rather than dead code.
+
 ## 6. What is committed, and where
 
 | artifact | what it is |
@@ -277,3 +312,5 @@ guest was entitled to submit on. That is the #14 ring gate in `plan_doorbell`, u
 | `crates/kayfabe-isolate-host/src/bin/rmladder.rs` | rung `R13c`, `--doorbell-census` |
 | `docs/reference/bench_evidence/doorbell-census-ba74151.out` | instrument B's output, with its own revision stamp |
 | `tests/tests/doorbell_token.rs` | the hardware differential, keyed on that file |
+| `scripts/bite_doorbell_token.py` | the three-arm bite check, with the equivalent-mutant class |
+| `.github/workflows/ci.yml` | the `TOKEN-ORACLE-GATE` reached-count step, floor 2 |
