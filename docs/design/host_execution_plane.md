@@ -595,6 +595,94 @@ refuses to report anything unless the three guard suites start green):
   times; that was a harness bug (rustfmt had split the line) and it was fixed and re-run,
   because a bite that does not apply reads exactly like a guard that is not needed.
 
+## 5b. ★★★ The role wiring — the WIRING arm, closed 2026-08-01 (`#166`)
+
+`#156` above ends on a hole measured by `scripts/bite_host_classes.py` at `36f746a`
+(2026-08-01, `KAYFABE_NO_KVM=1`, baseline green): **`PROFILE: 9/9 caught. WIRING: 0/3
+caught.`** The three *values* were pinned nine ways; **which role each call site asked
+for was pinned zero ways**, and every swap compiled.
+
+### Why a test was the wrong instrument
+
+The obvious move is to write a test that watches `rm.rs` ask for the right role. It cannot
+be written offline — that path issues real `NV_ESC_RM_ALLOC` ioctls — and, worse, it would
+be quantified over a hand-written list of call sites, which
+`gates_quantified_over_a_list` says is the weakest form of gate available: a call site
+added tomorrow is uncovered by default and nothing goes red.
+
+So the roles became **three distinct types**. `HostClasses` returns
+`ChannelClass` / `UsermodeClass` / `CeObjectClass` instead of three `ClassId`s, and each
+of the four consumers on the host path names the role it needs in a parameter or field:
+
+| call site | consumer that names the role |
+|---|---|
+| doorbell window alloc | `RmConnection::open_usermode(class: UsermodeClass)` |
+| host channel alloc | `RmConnection::alloc_gpfifo_channel(…, class: ChannelClass, …)` |
+| pushbuffer `SET_OBJECT` | `CePush { class_id: CeObjectClass, … }` |
+| CE engine object alloc | `HostRmBackend::alloc_ce_engine_object(…, class: CeObjectClass, …)` |
+
+★ **rustc is the derivation.** The universe is every call site in the workspace, present
+and future, with no list to maintain — the strongest available answer to *"derive the
+universe instead of listing it"*. And the refusal is a **compile error**, which is
+categorically stronger than a red test on a path whose wrong answer real hardware
+**serves** (`g_gpu_class_list.c:1996` / `:1997`).
+
+### Evidence — `scripts/bite_host_classes.py`, branch `task166-role-wiring`
+
+| arm | at `36f746a` (`#156`) | at `#166` | kind |
+|---|---|---|---|
+| PROFILE (9 bites) | **9/9** | **9/9** | TEST |
+| WIRING (role swaps) | **0/3** | **4/4** | **COMPILE** |
+| TYPING (3 bites) | — | **3/3** | TEST |
+
+The WIRING arm gained a fourth bite (the CE engine object, a call site `#156`'s harness
+never mutated). A representative red, verbatim:
+
+```text
+error[E0308]: mismatched types
+   --> crates/kayfabe-isolate-host/src/rm.rs:796:43
+796 |         let usermode = conn.open_usermode(conn.classes.gpfifo_channel());
+    |                             ------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `UsermodeClass`, found `ChannelClass`
+```
+
+### ⊘ What a type cannot refuse, and what still covers it
+
+Three things, and each has a named owner rather than a hope:
+
+1. **A wrong number under the right role tag.** `UsermodeClass::new(ClassId(AMPERE_CHANNEL_GPFIFO_A))`
+   type-checks perfectly. PROFILE bite 4 is exactly this and is caught by
+   `crates/kayfabe-chips/tests/host_classes.rs`, against NVIDIA's own per-chip table.
+   **Neither instrument covers the other's half** — that is why both exist.
+2. **A body that holds `&dyn HostClasses` untagging a different role by hand.** The untag
+   methods are role-named (`channel_id`, `usermode_id`, `ce_object_id` — there is no
+   uniform `.id()`, no `Deref`, no `From`), and `tests/tests/host_class_role_wiring.rs`
+   pins the complete **derived** set of untag sites in the tree, so a new one is red.
+3. **Dismantling the refusal itself** in one quiet line — alias two roles, add a uniform
+   escape, or untag at the call site. Those are the three TYPING bites and the three
+   tests in that file, each of which is watched firing against a synthetic violation in
+   the same test that uses it.
+
+⊘ And the standing limit is unchanged: **no board of any generation has run this.** The
+gate is drift prevention, not proof.
+
+### ★ Self-refutation worth recording: the gate failed on itself, first run
+
+`host_class_role_wiring.rs` walks every `.rs` in the tree hunting for untag patterns —
+and its own synthetic violation fixtures are `.rs`. Its first run reported two violations
+that were its own test data. This project has hit that shape before (*"a gate matched its
+own scanner's string literal"*), and the remedy is the recorded one: the needles are
+assembled from fragments at runtime, so the file contains no occurrence of anything it
+hunts for and needs **no self-exemption** — an exemption for the scanner would be a
+permanent blind spot in the file most likely to be edited when the gate is inconvenient.
+
+★ A second one, in the harness: the four WIRING bites first reported their red as
+`failed to run custom build command … exit status: 101`. True, and useless — the isolate
+image is cross-compiled for musl by `build.rs`, so a type error in `rm.rs` surfaces as a
+build-script panic before it surfaces as itself, and that message is equally consistent
+with any breakage at all. `first_error` now searches by **specificity** (a typed rustc
+diagnostic beats a panic beats cargo's summary), because a bite that prints only
+RED/GREEN is a boolean witness and a boolean witness cannot attribute.
+
 ### ★★ The same ruling, applied to E3's doorbell decode
 
 E3 built a real work-submit-token decoder for `Ga10xArch` and recorded that `Ad10xArch`

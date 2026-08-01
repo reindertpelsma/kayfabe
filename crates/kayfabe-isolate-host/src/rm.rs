@@ -130,8 +130,8 @@ use kayfabe_abi::submit::{
     SET_OBJECT, USERD_GP_GET, USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_WINDOW_SIZE,
     WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce, engine_type_copy, fifo, gp_entry, method_header_inc,
 };
-use kayfabe_arch::HostClasses;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
+use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
 use kayfabe_isolate::{
     CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, HostHandle,
     IsolateId, RmBackend, RmError,
@@ -391,6 +391,18 @@ pub struct RmConnection {
     /// of eighteen literals, and that a second generation costs an `impl` and no edit
     /// here. Turning it into a probe is a separate, hardware-requiring increment and is
     /// named in `kayfabe_chips::host_classes`' module docs.
+    ///
+    /// ★★★ **Which ROLE each site asks this for is now a type, not a convention**
+    /// (`#166`). The three methods return [`ChannelClass`], [`UsermodeClass`] and
+    /// [`CeObjectClass`], and the four consumers in this file —
+    /// [`RmConnection::open_usermode`], [`RmConnection::alloc_gpfifo_channel`],
+    /// [`CePush::class_id`] and [`HostRmBackend::alloc_ce_engine_object`] — each name the
+    /// role in a parameter or field type, so asking for the wrong one does not compile.
+    ///
+    /// That was measured to be worth doing rather than assumed: at `36f746a` the bite
+    /// harness reported `WIRING: 0/3 caught` — every role swap in this file compiled and
+    /// left the whole suite green, and a Hopper host **serves** two of the three wrong
+    /// picks with no error to notice.
     classes: &'static dyn HostClasses,
 }
 
@@ -793,7 +805,7 @@ impl RmConnection {
             subdevice,
             ..conn
         };
-        let usermode = conn.open_usermode();
+        let usermode = conn.open_usermode(conn.classes.usermode());
         Ok(RmConnection { usermode, ..conn })
     }
 
@@ -823,9 +835,16 @@ impl RmConnection {
     ///    `None` by design, so `require_attainable` cannot refuse a wrong requirement over
     ///    a device fd — which is precisely why the policy had to become a parameter of
     ///    [`RmConnection::map_cpu`] before this call site existed.
-    fn open_usermode(&self) -> Result<UsermodeWindow, RmError> {
+    ///
+    /// ★★★ **`class` is a parameter, and it is a [`UsermodeClass`] rather than a
+    /// `ClassId`** (`#166`). The caller in [`RmConnection::open`] must therefore *name
+    /// the role* it is asking the profile for, and asking for the wrong one —
+    /// `classes.gpfifo_channel()` — is a **type error**, not a silent mis-allocation
+    /// that a Hopper host would have served. Before this signature, that exact swap was
+    /// bitten and **nothing in the workspace went red**.
+    fn open_usermode(&self, class: UsermodeClass) -> Result<UsermodeWindow, RmError> {
         let want = self.mint();
-        let object = self.raw_alloc(self.subdevice, want, self.classes.usermode().0, &mut [])?;
+        let object = self.raw_alloc(self.subdevice, want, class.usermode_id().0, &mut [])?;
         self.remember(object, self.subdevice);
         let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::Uncached)?;
         Ok(UsermodeWindow {
@@ -923,6 +942,30 @@ impl RmConnection {
         let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
         status_check(out.status)?;
         Ok(out.h_object_new)
+    }
+
+    /// [`Self::raw_alloc`] for a **GPFIFO channel**, and the only reason it exists is the
+    /// type of `class` (`#166`).
+    ///
+    /// The generic [`Self::raw_alloc`] takes a bare `u32` because it allocates everything
+    /// — VA spaces, TSGs, memory, engine objects — so it cannot name a role. That left
+    /// the channel's class id a `u32` at its call site, where swapping
+    /// `classes.gpfifo_channel()` for `classes.ce_object()` compiled and turned nothing
+    /// red (measured: `scripts/bite_host_classes.py`, WIRING 0/3 at `36f746a`). Naming
+    /// the role in the *parameter* makes that swap a type error, and the wrapper is one
+    /// line — the cheapest place to put a compile-time refusal on this path.
+    ///
+    /// ⊘ It is deliberately not "alloc anything, but typed": there is one channel class
+    /// per generation ([`HostClasses::gpfifo_channel`]), and a GR channel and a CE
+    /// channel differ only by `engineType`, so exactly one role can ever reach here.
+    fn alloc_gpfifo_channel(
+        &self,
+        tsg: u32,
+        want: u32,
+        class: ChannelClass,
+        params: &mut [u8],
+    ) -> Result<u32, RmError> {
+        self.raw_alloc(tsg, want, class.channel_id().0, params)
     }
 
     /// Mint the next handle value. Taken and released around the ioctl, never held across
@@ -1323,7 +1366,12 @@ struct CePush {
     /// encoding and the driver's own client say it is, not because a measurement here
     /// distinguishes it, and claiming otherwise would be attributing a green run to the
     /// wrong cause.
-    class_id: u32,
+    ///
+    /// ★★ **Typed [`CeObjectClass`], not `u32`** (`#166`). This field is the pushbuffer
+    /// half of the role wiring, and the bite that put `classes.gpfifo_channel()` here
+    /// used to compile and stay green. It cannot now: the only value that fits is one a
+    /// [`HostClasses`] handed back **from the `ce_object` role**.
+    class_id: CeObjectClass,
     /// Source GPU VA.
     src: u64,
     /// Destination GPU VA.
@@ -1375,7 +1423,7 @@ fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
     let sub = CE_SUBCHANNEL;
     Ok(vec![
         method_header_inc(sub, SET_OBJECT, 1).ok_or_else(bad)?,
-        p.class_id,
+        p.class_id.ce_object_id().0,
         method_header_inc(sub, ce::OFFSET_IN_UPPER, 4).ok_or_else(bad)?,
         (p.src >> 32) as u32,
         (p.src & 0xFFFF_FFFF) as u32,
@@ -2096,6 +2144,26 @@ pub(crate) fn mint_fabricated(
 }
 
 impl HostRmBackend {
+    /// [`RmBackend::alloc_engine_object`] for the **copy engine**, and — like
+    /// [`RmConnection::alloc_gpfifo_channel`] — it exists for the type of `class`
+    /// (`#166`).
+    ///
+    /// The trait verb takes a bare [`ClassId`] and must: it is the generic
+    /// engine-object forward, and the guest's own compute/graphics/NVENC classes come
+    /// through it from [`crate::child`] as numbers off the wire. That genericity is
+    /// correct there and wrong *here*, where the class is not the guest's at all but the
+    /// host profile's `ce_object` role. This wrapper is the one call site in the tree
+    /// that allocates an engine object from a [`HostClasses`] rather than from guest
+    /// intent, so it is the one that can afford to name the role.
+    fn alloc_ce_engine_object(
+        &mut self,
+        chan: HostHandle,
+        class: CeObjectClass,
+        params: &[u8],
+    ) -> Result<HostHandle, RmError> {
+        self.alloc_engine_object(chan, class.ce_object_id(), params)
+    }
+
     /// ★★ [`RmBackend::alloc_channel`]'s body, taking the **raw** `NV2080_ENGINE_TYPE_*`
     /// instead of an [`EngineKind`].
     ///
@@ -2216,10 +2284,10 @@ impl HostRmBackend {
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
-        let chan = match self.conn.raw_alloc(
+        let chan = match self.conn.alloc_gpfifo_channel(
             tsg,
             want,
-            self.conn.classes.gpfifo_channel().0,
+            self.conn.classes.gpfifo_channel(),
             &mut chan_params,
         ) {
             Ok(h) => {
@@ -2557,7 +2625,7 @@ impl HostRmBackend {
         let pb_va = parts.ring_va + pb_off;
 
         let words = ce_pushbuffer(CePush {
-            class_id: self.conn.classes.ce_object().0,
+            class_id: self.conn.classes.ce_object(),
             src,
             dst: sub.dst,
             len,
@@ -2612,7 +2680,7 @@ impl HostRmBackend {
         }
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(BAD_ENCODE))?;
-        if let Err(e) = self.alloc_engine_object(chan, self.conn.classes.ce_object(), &params) {
+        if let Err(e) = self.alloc_ce_engine_object(chan, self.conn.classes.ce_object(), &params) {
             let _ = self.free(chan);
             return Err(e);
         }
@@ -3023,6 +3091,16 @@ mod tests {
     /// defines can only appear in `w[1]` by having been passed in.
     const NOT_A_REAL_CLASS: u32 = 0x0000_C0DE;
 
+    /// The same value, wearing the **role** [`CePush::class_id`] now demands (`#166`).
+    ///
+    /// ★ Note what has to be written to get here: `CeObjectClass::new`. There is no way
+    /// to hand [`ce_pushbuffer`] a channel or usermode class any more — the field's type
+    /// refuses it — so the test can go on checking the *value* is carried while rustc
+    /// checks the *role* is right at every production call site.
+    fn probe_ce_class() -> CeObjectClass {
+        CeObjectClass::new(ClassId(NOT_A_REAL_CLASS))
+    }
+
     /// ★★ The copy-engine pushbuffer, word for word. This is the only part of rung 4 that
     /// can be checked without a GPU, and the two things it pins are the two that failed
     /// silently on hardware: **which subchannel** every header names, and that the source
@@ -3030,7 +3108,7 @@ mod tests {
     #[test]
     fn the_ce_pushbuffer_addresses_the_copy_engine_subchannel_and_does_not_swap_operands() {
         let w = ce_pushbuffer(CePush {
-            class_id: NOT_A_REAL_CLASS,
+            class_id: probe_ce_class(),
             src: 0x1234_5678_9ABC,
             dst: 0x0000_DEAD_0000,
             len: 4096,
@@ -3081,7 +3159,7 @@ mod tests {
     #[test]
     fn an_inexpressible_copy_operand_is_refused() {
         let base = CePush {
-            class_id: NOT_A_REAL_CLASS,
+            class_id: probe_ce_class(),
             src: 0,
             dst: 0,
             len: 4,

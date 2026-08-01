@@ -28,6 +28,32 @@
 //! `:8543-8601`). Each profile below is therefore a **compile-time statement of what
 //! that runtime query would return** on that generation.
 //!
+//! ## ★★★ What is pinned, and what is still not (`#166`)
+//!
+//! Two independent things can be wrong about a host class, and they are pinned by two
+//! different instruments — worth separating, because each is blind to the other's half:
+//!
+//! | wrong thing | example | what refuses it |
+//! |---|---|---|
+//! | the **value** in a role | `Gh100HostClasses::ce_object` answers `0xc7b5` | `crates/kayfabe-chips/tests/host_classes.rs` — nine comparisons against NVIDIA's own per-chip table, plus the max-in-family selection rule `findDeviceClasses` applies to it |
+//! | the **role** a call site asks for | the doorbell window allocated as `gpfifo_channel()` | **the type system**: the three methods return `ChannelClass` / `UsermodeClass` / `CeObjectClass`, and every consumer names the role, so the swap does not compile |
+//!
+//! ★ The second was measured to be pinned **zero** ways at `36f746a`
+//! (`scripts/bite_host_classes.py`: `PROFILE 9/9 caught, WIRING 0/3 caught`) — nine value
+//! bites all fired and not one role bite did. `#166` closed it with types rather than
+//! tests because rustc quantifies over every call site, including ones written later.
+//! `tests/tests/host_class_role_wiring.rs` guards the three one-line edits that would
+//! dismantle that (alias two roles, add a uniform escape, untag at the call site).
+//!
+//! ⊘ **What is still NOT pinned by either**, stated so it is not read as closed:
+//!
+//! - **A profile that puts the wrong number under the right role tag.** The types cannot
+//!   see it — `UsermodeClass::new(ClassId(AMPERE_CHANNEL_GPFIFO_A))` type-checks
+//!   perfectly. Only the value oracle above catches that, which is why both instruments
+//!   have to exist.
+//! - **Whether a real board accepts any of it.** Nothing below has run on Ada or Hopper.
+//! - **Which generation the host actually is.** Everything here is a pin; see below.
+//!
 //! ## ⊘ What this module is NOT, stated before anything reads it as more
 //!
 //! **Compiling for a generation is not booting on one.** Nothing here has been run
@@ -45,8 +71,8 @@
 //! says it is pinned.
 
 use kayfabe_abi::generated::classes as nv;
-use kayfabe_arch::HostClasses;
 use kayfabe_arch::ids::ClassId;
+use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
 
 /// The GA10x host-class profile — the **bench** part, and the only one any of this has
 /// been measured on.
@@ -63,14 +89,14 @@ impl HostClasses for Ga10xHostClasses {
     fn name(&self) -> &'static str {
         "GA10x host classes (GA106)"
     }
-    fn gpfifo_channel(&self) -> ClassId {
-        ClassId(nv::AMPERE_CHANNEL_GPFIFO_A)
+    fn gpfifo_channel(&self) -> ChannelClass {
+        ChannelClass::new(ClassId(nv::AMPERE_CHANNEL_GPFIFO_A))
     }
-    fn usermode(&self) -> ClassId {
-        ClassId(nv::AMPERE_USERMODE_A)
+    fn usermode(&self) -> UsermodeClass {
+        UsermodeClass::new(ClassId(nv::AMPERE_USERMODE_A))
     }
-    fn ce_object(&self) -> ClassId {
-        ClassId(nv::AMPERE_DMA_COPY_B)
+    fn ce_object(&self) -> CeObjectClass {
+        CeObjectClass::new(ClassId(nv::AMPERE_DMA_COPY_B))
     }
 }
 
@@ -96,14 +122,14 @@ impl HostClasses for Ad10xHostClasses {
     fn name(&self) -> &'static str {
         "AD10x host classes (AD106)"
     }
-    fn gpfifo_channel(&self) -> ClassId {
-        ClassId(nv::AMPERE_CHANNEL_GPFIFO_A)
+    fn gpfifo_channel(&self) -> ChannelClass {
+        ChannelClass::new(ClassId(nv::AMPERE_CHANNEL_GPFIFO_A))
     }
-    fn usermode(&self) -> ClassId {
-        ClassId(nv::AMPERE_USERMODE_A)
+    fn usermode(&self) -> UsermodeClass {
+        UsermodeClass::new(ClassId(nv::AMPERE_USERMODE_A))
     }
-    fn ce_object(&self) -> ClassId {
-        ClassId(nv::AMPERE_DMA_COPY_B)
+    fn ce_object(&self) -> CeObjectClass {
+        CeObjectClass::new(ClassId(nv::AMPERE_DMA_COPY_B))
     }
 }
 
@@ -143,14 +169,14 @@ impl HostClasses for Gh100HostClasses {
     fn name(&self) -> &'static str {
         "GH100 host classes"
     }
-    fn gpfifo_channel(&self) -> ClassId {
-        ClassId(nv::HOPPER_CHANNEL_GPFIFO_A)
+    fn gpfifo_channel(&self) -> ChannelClass {
+        ChannelClass::new(ClassId(nv::HOPPER_CHANNEL_GPFIFO_A))
     }
-    fn usermode(&self) -> ClassId {
-        ClassId(nv::HOPPER_USERMODE_A)
+    fn usermode(&self) -> UsermodeClass {
+        UsermodeClass::new(ClassId(nv::HOPPER_USERMODE_A))
     }
-    fn ce_object(&self) -> ClassId {
-        ClassId(nv::HOPPER_DMA_COPY_A)
+    fn ce_object(&self) -> CeObjectClass {
+        CeObjectClass::new(ClassId(nv::HOPPER_DMA_COPY_A))
     }
 }
 

@@ -22,6 +22,24 @@
 //! establishes nothing about whether an Ada or Hopper board accepts any of it: **compiling
 //! for a generation is not booting on one**, and no board of either kind has ever run this.
 //!
+//! ## ★★★ The half this file CANNOT reach, and what took it over (`#166`)
+//!
+//! "A swapped role" above means *a profile that answers the channel number when asked for
+//! usermode* — a defect inside an `impl HostClasses`, and this file's whole business. It
+//! does **not** mean *a call site that asks the profile for the wrong role*. That second
+//! thing is in `crates/kayfabe-isolate-host`, it is where the class id actually reaches a
+//! real `NV_ESC_RM_ALLOC`, and no test in this file can see it: every value it could
+//! observe would be a correct one, just fetched for the wrong hole.
+//!
+//! It was measured uncovered — `PROFILE 9/9 caught, WIRING 0/3 caught` at `36f746a` — and
+//! it is now refused by the **type system** instead: `HostClasses`' three methods return
+//! `ChannelClass` / `UsermodeClass` / `CeObjectClass` and every host-path consumer names
+//! the role, so the swap does not compile. ★ Note the division of labour, because neither
+//! instrument covers the other's half: **types cannot see a wrong number under a right
+//! role tag** (`UsermodeClass::new(ClassId(AMPERE_CHANNEL_GPFIFO_A))` type-checks), which
+//! is exactly what this file exists for. `tests/tests/host_class_role_wiring.rs` guards
+//! the type refusal's own edges.
+//!
 //! ## The wrinkle this file records rather than hides
 //!
 //! For the *usermode* role, RM's UVM-facing client does **not** use the max-in-family
@@ -36,6 +54,27 @@ use kayfabe_arch::HostClasses;
 use kayfabe_chips::{
     Ad10xHostClasses, Ga10xHostClasses, Gh100HostClasses, host_classes::pinned_host_classes,
 };
+
+/// ★★★ **The one place in this file that unwraps a role type** (`#166`).
+///
+/// Since `#166` the three roles are three distinct Rust types
+/// (`kayfabe_arch::{ChannelClass, UsermodeClass, CeObjectClass}`), so the profile's
+/// answers can no longer be compared to each other, or to the oracle's raw ids, without
+/// saying which role each one is. That is the point — but this file's oracle is a table
+/// of bare `u32`s read out of `g_gpu_class_list.c`, so *somewhere* the tag has to come
+/// off.
+///
+/// It comes off **here, once, in role order**, and `tests/tests/host_class_role_wiring.rs`
+/// pins that this file contains exactly these three unwraps. A fourth one appearing
+/// anywhere in the tree is a red test, which is what keeps "the role is a type" from
+/// decaying into "the role is a type except where it was inconvenient".
+fn roles(p: &dyn HostClasses) -> (u32, u32, u32) {
+    (
+        p.gpfifo_channel().channel_id().0,
+        p.usermode().usermode_id().0,
+        p.ce_object().ce_object_id().0,
+    )
+}
 
 // ── The oracle's vocabulary: NVIDIA class ids, from the class headers ────────────────
 //
@@ -171,14 +210,11 @@ fn cases() -> Vec<(ChipClassList, &'static dyn HostClasses)> {
 fn each_profile_names_the_class_the_drivers_own_rule_selects_for_that_chip() {
     let mut checked = 0usize;
     for (chip, profile) in cases() {
+        let (chan, user, ce) = roles(profile);
         for (role, expect, got) in [
-            (
-                "gpfifo_channel",
-                newest(chip.gpfifo),
-                profile.gpfifo_channel().0,
-            ),
-            ("usermode", newest(chip.usermode), profile.usermode().0),
-            ("ce_object", newest(chip.ce), profile.ce_object().0),
+            ("gpfifo_channel", newest(chip.gpfifo), chan),
+            ("usermode", newest(chip.usermode), user),
+            ("ce_object", newest(chip.ce), ce),
         ] {
             assert_eq!(
                 got,
@@ -204,27 +240,27 @@ fn each_profile_names_the_class_the_drivers_own_rule_selects_for_that_chip() {
 /// Ampere's**, and the two channel/usermode ones would have been served silently.
 #[test]
 fn the_hopper_profile_differs_in_all_three_roles_and_two_of_them_fail_silently() {
-    let amp = &Ga10xHostClasses as &dyn HostClasses;
-    let hop = &Gh100HostClasses as &dyn HostClasses;
+    let amp = roles(&Ga10xHostClasses);
+    let hop = roles(&Gh100HostClasses);
 
-    assert_ne!(amp.gpfifo_channel(), hop.gpfifo_channel());
-    assert_ne!(amp.usermode(), hop.usermode());
-    assert_ne!(amp.ce_object(), hop.ce_object());
+    assert_ne!(amp.0, hop.0, "channel");
+    assert_ne!(amp.1, hop.1, "usermode");
+    assert_ne!(amp.2, hop.2, "CE object");
 
     // ★★★ …and this is the half a `!=` cannot say. The Ampere channel and usermode ids are
     // IN GH100's class list, so picking them there is not refused — it is served. Only the
     // CE object is absent and fails loudly.
     assert!(
-        GH100.gpfifo.contains(&amp.gpfifo_channel().0),
+        GH100.gpfifo.contains(&amp.0),
         "GH100 lists AMPERE_CHANNEL_GPFIFO_A (g_gpu_class_list.c:1996) — the wrong pick \
          ALLOCATES. If this ever stops being true the seam is less urgent, not more"
     );
     assert!(
-        GH100.usermode.contains(&amp.usermode().0),
+        GH100.usermode.contains(&amp.1),
         "GH100 lists AMPERE_USERMODE_A (g_gpu_class_list.c:1997) — the wrong pick ALLOCATES"
     );
     assert!(
-        !GH100.ce.contains(&amp.ce_object().0),
+        !GH100.ce.contains(&amp.2),
         "AMPERE_DMA_COPY_B is ABSENT from GH100's list — this is the ONE role of three \
          whose wrong pick fails at alloc"
     );
@@ -239,11 +275,7 @@ fn the_hopper_profile_differs_in_all_three_roles_and_two_of_them_fail_silently()
 /// sourced (`g_gpu_class_list.c:1738/:1744/:1739-1743`), not assumed.
 #[test]
 fn the_ada_profile_is_identical_to_the_ampere_one_because_the_class_lists_are() {
-    let ga = &Ga10xHostClasses as &dyn HostClasses;
-    let ad = &Ad10xHostClasses as &dyn HostClasses;
-    assert_eq!(ga.gpfifo_channel(), ad.gpfifo_channel());
-    assert_eq!(ga.usermode(), ad.usermode());
-    assert_eq!(ga.ce_object(), ad.ce_object());
+    assert_eq!(roles(&Ga10xHostClasses), roles(&Ad10xHostClasses));
 
     // Non-vacuity in the other direction: AD106's transcribed lists must really be the
     // same rows as GA106's, or "identical because the class lists are" is a claim about
@@ -264,7 +296,7 @@ fn the_ada_profile_is_identical_to_the_ampere_one_because_the_class_lists_are() 
 #[test]
 fn the_three_roles_are_three_distinct_classes_within_every_profile() {
     for (chip, p) in cases() {
-        let (c, u, e) = (p.gpfifo_channel(), p.usermode(), p.ce_object());
+        let (c, u, e) = roles(p);
         assert_ne!(c, u, "{}: channel and usermode collapsed", chip.chip);
         assert_ne!(c, e, "{}: channel and CE object collapsed", chip.chip);
         assert_ne!(u, e, "{}: usermode and CE object collapsed", chip.chip);
@@ -278,14 +310,10 @@ fn the_three_roles_are_three_distinct_classes_within_every_profile() {
 /// generation any host-path measurement in this project exists for.
 #[test]
 fn the_isolates_pinned_profile_is_the_one_generation_that_was_measured() {
-    let pinned = pinned_host_classes();
-    let ga = &Ga10xHostClasses as &dyn HostClasses;
-    assert_eq!(pinned.gpfifo_channel(), ga.gpfifo_channel());
-    assert_eq!(pinned.usermode(), ga.usermode());
-    assert_eq!(pinned.ce_object(), ga.ce_object());
+    let pinned = roles(pinned_host_classes());
+    assert_eq!(pinned, roles(&Ga10xHostClasses));
     assert_eq!(
-        pinned.usermode().0,
-        AMPERE_USERMODE_A,
+        pinned.1, AMPERE_USERMODE_A,
         "★ the pinned usermode class is the one the C artifact's proven host self-test \
          allocated; changing it changes what a bring-up failure would mean"
     );
@@ -337,18 +365,8 @@ fn each_arch_declares_its_own_profile_and_not_a_composed_ones() {
     for (arch, want) in pairs {
         let got = arch.host_classes().expect("declared above");
         assert_eq!(
-            (
-                got.gpfifo_channel(),
-                got.usermode(),
-                got.ce_object(),
-                got.name()
-            ),
-            (
-                want.gpfifo_channel(),
-                want.usermode(),
-                want.ce_object(),
-                want.name()
-            ),
+            (roles(got), got.name()),
+            (roles(want), want.name()),
             "★ {} returned the wrong profile",
             arch.name()
         );

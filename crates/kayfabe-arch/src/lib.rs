@@ -684,6 +684,96 @@ pub trait Arch: Send + Sync {
     }
 }
 
+/// The GPFIFO **channel** class, tagged with its role.
+///
+/// # ★★★ The ROLE is a TYPE, not a convention (`#166`)
+///
+/// This type and its two siblings ([`UsermodeClass`], [`CeObjectClass`]) exist for one
+/// reason, and it is the reason [`HostClasses`] exists at all, one level down.
+///
+/// `#156` pinned the three host class *values* nine ways. It pinned **which role each
+/// call site asks for** zero ways, and a bite campaign measured exactly that: swap
+/// `classes.usermode()` for `classes.gpfifo_channel()` at the doorbell-window allocation
+/// and **0 of 3** such swaps turned anything red. Both sides of every swap were a bare
+/// [`ids::ClassId`], so nothing — not rustc, not a test — could tell *"the number is
+/// right"* from *"the number is right **for this hole**"*.
+///
+/// That is the worst shape a defect can have here, because [`HostClasses`]' own
+/// §*Why the wrong answer is SILENT* is about these same three ids: a Hopper host
+/// **serves** two of the three wrong picks. A wrong role would have been accepted by a
+/// real board with no error, no Xid and no diagnostic.
+///
+/// So the three roles are three distinct types. A call site that asks for the wrong one
+/// **no longer compiles**, which makes the check total: rustc quantifies over every call
+/// site in the workspace, so there is no list to keep current and a call site added
+/// tomorrow is checked tomorrow. (`gates_quantified_over_a_list`: *derive the universe
+/// instead of listing it* — rustc is the strongest derivation available.)
+///
+/// ⊘ **What this does NOT do**, stated so nothing reads it as more. It refuses a role
+/// swap *at a call site*. It does not stop a body that already holds a
+/// `&dyn HostClasses` from unwrapping a different role by hand — [`Self::channel_id`]
+/// and its siblings exist, and must, because a `u32` has to reach the
+/// `NV_ESC_RM_ALLOC` eventually. Two things contain that residue: the unwraps are
+/// deliberately **role-named rather than uniform** (there is no `.id()`, no `Deref`, no
+/// `From<ChannelClass> for ClassId`), so writing one spells the role out loud; and
+/// `tests/tests/host_class_role_wiring.rs` pins the complete **derived** set of unwrap
+/// sites in the tree, so a new one is a red test rather than a silent widening.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ChannelClass(ClassId);
+
+impl ChannelClass {
+    /// Tag a class id as the channel role.
+    #[must_use]
+    pub const fn new(id: ClassId) -> Self {
+        Self(id)
+    }
+
+    /// Untag — **the one escape**, and it names the role so that using it for anything
+    /// else is a lie a reader can see.
+    #[must_use]
+    pub const fn channel_id(self) -> ClassId {
+        self.0
+    }
+}
+
+/// The **usermode** class whose 64 KiB CPU mapping is the doorbell window, tagged with
+/// its role — see [`ChannelClass`] for why the role is a type (`#166`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct UsermodeClass(ClassId);
+
+impl UsermodeClass {
+    /// Tag a class id as the usermode role.
+    #[must_use]
+    pub const fn new(id: ClassId) -> Self {
+        Self(id)
+    }
+
+    /// Untag — see [`ChannelClass::channel_id`].
+    #[must_use]
+    pub const fn usermode_id(self) -> ClassId {
+        self.0
+    }
+}
+
+/// The copy-engine **object** class, tagged with its role — see [`ChannelClass`] for why
+/// the role is a type (`#166`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CeObjectClass(ClassId);
+
+impl CeObjectClass {
+    /// Tag a class id as the CE-object role.
+    #[must_use]
+    pub const fn new(id: ClassId) -> Self {
+        Self(id)
+    }
+
+    /// Untag — see [`ChannelClass::channel_id`].
+    #[must_use]
+    pub const fn ce_object_id(self) -> ClassId {
+        self.0
+    }
+}
+
 /// # `HostClasses` — the class ids the HOST forwarding path allocates
 ///
 /// Three NVIDIA class ids that the unprivileged host isolate passes to a real
@@ -763,15 +853,15 @@ pub trait HostClasses: Send + Sync + core::fmt::Debug {
     /// The GPFIFO **channel** class: the object a host channel is allocated as, under a
     /// TSG. There is exactly one per generation — a GR channel and a CE channel are the
     /// same class and differ only by `NV_CHANNEL_ALLOC_PARAMS.engineType`.
-    fn gpfifo_channel(&self) -> ClassId;
+    fn gpfifo_channel(&self) -> ChannelClass;
 
     /// The **usermode** class whose 64 KiB CPU mapping is the doorbell window, allocated
     /// under the subdevice.
-    fn usermode(&self) -> ClassId;
+    fn usermode(&self) -> UsermodeClass;
 
     /// The copy-engine **object** class, allocated under a CE channel — and the same
     /// number the pushbuffer's `SET_OBJECT` carries in its `NVCLASS` field.
-    fn ce_object(&self) -> ClassId;
+    fn ce_object(&self) -> CeObjectClass;
 }
 
 // The concurrency contract, compile-time-asserted (decision #17): every public type
@@ -788,6 +878,9 @@ kayfabe_util::assert_send_sync!(
     ids::GpuId,
     ids::ControlCmd,
     ids::EngineKind,
+    ChannelClass,
+    UsermodeClass,
+    CeObjectClass,
     ObjectKind,
     DoorbellTarget,
     GmmuVersion,
