@@ -107,6 +107,16 @@ so the refusal rule is the encoder's, not a plausibility rule we invented.
 `NV_ERR_INVALID_STATE` (`0x40`) and **no token**. That is the fact the whole `R13` rung
 leans on when it calls a token "evidence".
 
+★ **Both vendored tags serve this oracle, and the differential runs against both.**
+`ogkm_is_versioned` is a standing rule here — 580.159.04 and 610.43.02 already disagree
+about the GSP queue, and they disagree about the GMMU abstraction hard enough that
+`tests/build.rs` skips the *other* oracle for 610 by name. They do **not** disagree about
+this: both dispatch tables bind `GA106` to `kfifoGenerateWorkSubmitTokenHal_GA100`
+(`g_kernel_fifo_nvoc.c:649-652` at 580, `:656-659` at 610), the slice compiles under both,
+and `our_decode_inverts_rms_own_encoder_over_the_whole_field_space` loops over whichever
+tags built. Two releases fourteen months apart agreeing is not proof the encoding is
+stable, and it is the cheapest evidence available that it has not moved.
+
 ---
 
 ## 3. Instrument B — a real GA106, asked without going near a token
