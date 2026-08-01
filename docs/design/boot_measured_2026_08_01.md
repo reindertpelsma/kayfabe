@@ -746,3 +746,153 @@ flush, is past `:4200` and was not reached.
   number moved only because the boot is shorter; it is not an improvement in anything.
 - ⊘ **One boot.** `#98` records a Mode-2 symptom that was 1/3 one day and 9/9 the next on a
   bit-identical binary.
+
+---
+
+# The SEVENTH boot of 2026-08-01 — `gmmu1`, and the MMU TEST PASSES
+
+> A live boot of the bench, reported in full including what it does not establish.
+
+## 32. Provenance
+
+| | |
+|---|---|
+| Rust archive | built on the 38-core build box, `cargo build --release -p kayfabe-qemu-raw`, rc 0, from a tree `git status --porcelain` reported as **0 files dirty** |
+| boot `gmmu1` | rev **`12b001f`** — the archive says so itself: `strings … \| grep kayfabe-rev` → `kayfabe-rev:12b001f145c5a641c20a4675ded02556b5494318`, no `-dirty`, exactly one occurrence, and the same string is present exactly once in the linked `qemu-system-x86_64` |
+| C overlay | **changed and copied.** `nvkvm.c` and `kayfabe_shim.h` differed and were copied; `nvkvm_compat.h` and `meson.build` were `cmp`-clean and were not. ⚠ So this boot changes the Rust side **and** the shell, and §35 says what that costs |
+| link | `ninja -C /workspace/bench/qemu-build qemu-system-x86_64`, rc 0 |
+| discriminator | `nm -C … \| grep -c kayfabe` went **4393 → 4388** |
+| guest | Ubuntu 24.04.4, kernel 6.8.0-136-generic, **stock unpatched** NVIDIA 580.159.04 open kernel module, driven with `nvidia-smi` |
+| rollback | `/workspace/bench/libkayfabe_qemu_raw.a.PREV-9551dd1`, `/workspace/bench/qemu-system-x86_64.PREV-9551dd1` |
+
+## 33. ★★★ The rung is CLEARED — and this time the phase moved forward on a REAL `KernelBus`
+
+```
+NVRM: nvAssertOkFailedNoLog: … NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE @ kernel_ce.c:843
+NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+NVRM: … NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE @ kernel_ce.c:1020
+NVRM: … NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER @ gpu_vaspace.c:4148
+NVRM: kgmmuStatePostLoad_IMPL: Failed to create GVASpace, status:56
+NVRM: … NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CAPS @ kernel_graphics.c:1212
+NVRM: nvAssertFailedNoLog: Assertion failed: pKernelGraphicsStaticInfo != NULL @ kernel_graphics.c:485
+NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+NVRM: RmInitNvDevice: *** Cannot load state into the device
+NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0x40:1249)
+```
+
+Against §27's wall:
+
+| | `l2evict1` (`9551dd1`) | `gmmu1` (`12b001f`) |
+|---|---|---|
+| `kbusVerifyBar2_GM107: MMUTest BAR0 window offset … returned garbage` | present | ★★★ **absent** |
+| `kbusVerifyBar2_HAL` status | `NV_ERR_MEMORY_ERROR` (`0x72`) | ★★★ **no failure at all** |
+| `RmInitNvDevice` | *"Cannot **initialize** the device"* | *"Cannot **load state** into the device"* |
+| `RmInitAdapter failed!` | `(0x24:0x72:1220)` | `(0x25:0x40:1249)` |
+| `fn 70` in the unserviced list | yes | ★★★ **no** |
+| `translated-window drops` | `0r/0w` (never reached) | `0r/0w` (reached and **served**) |
+
+★★ **Why "cleared" is a structure and not an impression, and it is stronger than §27's.**
+`kbusVerifyBar2_GM107:4155-4230` is straight-line code with **four** failure prints, each with
+exactly one producer: *"MMUTest BAR0 window offset … returned garbage"* at `:4200`,
+*"MMUTest BAR2 Read of virtual addr … returned garbage"* at `:4240`, and two *"L2 evict
+failed"* at `:4175`/`:4224`. **None of the four is in this log**, and the function's caller
+`kbusStateInitLockedKernel` is under `NV_ASSERT_OK_OR_RETURN` (`:360`) whose failure prints
+`kern_bus_gm107.c:360 → :465`, also absent. ⇒ every statement of the MMU sub-test ran and
+passed: the BAR2 write, the BAR0 read-back, the reverse BAR0 write and the BAR2 read-back.
+
+## 34. ★★★ AND IT IS NOT §23's TRADE — the bus is real this time
+
+⚠ §23 and §28 both warn that a deeper log can be bought by an **amputated `KernelBus`**:
+`gpuStateInit_IMPL` absorbs `NV_ERR_NOT_SUPPORTED` and not `NV_ERR_MEMORY_ERROR`, so a `0x56`
+lets the boot run on without a bus. This boot ends in `gpuStateLoad` and its statuses are
+`0x56`, which is the *shape* of that trade — so the question has to be asked directly, and
+the answer is that it is not that trade:
+
+- ⊘ `bar0win`'s depth came from `kbusVerifyBar2` **failing** `NV_ERR_NOT_SUPPORTED` at the L2
+  evict, i.e. from the bus's own init being absorbed. Here `kbusVerifyBar2` does not fail at
+  all — §33's four-producer argument — so `kbusStateInitLockedKernel` returned `NV_OK` and
+  `KernelBus` is constructed.
+- ★ The `0x56`s in this log come from **different controls, at different call sites**:
+  `CE_GET_FAULT_METHOD_BUFFER_SIZE`, `INIT_USER_SHARED_DATA`,
+  `CE_GET_PCE_CONFIG_FOR_LCE_TYPE`, `GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`,
+  `STATIC_KGR_GET_CAPS` — every one a control this port has not built, none of them
+  `kbusVerifyBar2`'s.
+
+⇒ **forward in phase AND with a real bus**, which is the first time both have been true
+together.
+
+## 35. ★★ The device's own translated-window report, first light
+
+```text
+nvkvm: framebuffer: 67 reads / 46380 writes served through the BAR0 moving window
+       (26 window register reads / 22 writes), fb refusals 0,
+       translated-window drops 0r/0w, resident 102400 bytes
+nvkvm: BAR2 (translated): 56 reads / 12402 writes resolved through the GMMU,
+       0 REFUSED by name; roots published 2 (0 bodies refused), BAR2 root entry 0x0
+```
+
+- ★★★ **12 402 writes and 56 reads resolved through a page walk**, and **zero** refused. The
+  guest's BAR2 traffic is not a handful of dwords: `kbusUpdateRmAperture_GM107` writes page
+  tables *through BAR2 itself* after bootstrap, so most of that number is the guest editing
+  its own page tables through the aperture those tables describe.
+- ★★ `fb refusals 0` and `translated-window drops 0r/0w` **together**. Before this rung the
+  second number was also `0` and meant *"never reached"*; it now means *"reached, and served
+  by the other counter"*. The pair is only readable because they are separate counters.
+- ⚠ **`BAR2 root entry 0x0` with `roots published 2`, and that is the guest's own teardown.**
+  `kbusDestroyBar2GpuVaSpace` publishes `entryValue = 0` to unroot the aperture
+  (`ogkm-580: kern_bus_gm107.c:2137`), which is what the *second* publication is — after
+  `RmInitAdapter` failed. The 12 402 writes resolved against the **first**. ⊘ This is exactly
+  why `PublishedPde::entry` is `u64` and not `Option<u64>`, and why the **count** rather than
+  the value is what says whether a root ever arrived: the value alone would read as "none".
+
+## 36. The unserviced ledger — seven → twelve, and every new one is a `gpuStateLoad` control
+
+```text
+nvkvm: commands: 64 decoded, 15 UNSERVICED, 12 distinct
+  0x20800a87  0x20800a4b  0x20802a08  0x20800afe  0x20800aff  0x20800a70
+  0x20800a80  0x20802a0f  0x2080017e  0x20800a9f  0x20800a1f  0x20800a38
+```
+
+| | `l2evict1` | `gmmu1` |
+|---|---|---|
+| commands decoded | 39 | 64 |
+| UNSERVICED | 8 | 15 |
+| distinct | 7 | **12** |
+| framebuffer writes through the window | 17 520 | 46 380 |
+| BAR2 writes through the GMMU | — (unbuilt) | **12 402** |
+| registers | 2844r / 18434w | 3517r / 47504w |
+
+★ `fn 70` **left the set because it is served**, and the five that entered
+(`0x20800a80`, `0x20802a0f`, `0x2080017e`, `0x20800a9f`, `0x20800a1f`, `0x20800a38`) are the
+`gpuStateLoad` sweep's — the same five that entered at `bar0win` and left again at
+`l2evict1` when the phase went away. They are back because the phase is back, and this time
+it is back with a bus. ⊘ Membership, never cardinality (§24, §30).
+
+★ `0x20800a70` is still refused, deliberately, and this boot **does** now reach a site that
+checks a flush — `kbusVerifyBar2_GM107:4218` is inside the region §33 shows ran. Its triage
+row (`RefusalIsInvisible`) therefore survived its first real exercise.
+
+## 37. ⊘ What this boot does NOT establish
+
+- ⊘ **No compute, no working device.** `nvidia-smi` prints *"No devices were found"*.
+  ⚠ `/dev/nvidia0`, `/dev/nvidiactl`, `/dev/nvidia-uvm` and `/dev/nvidia-uvm-tools` all
+  **exist** — created by the module load, before `RmInitAdapter` — so their presence says
+  nothing about the adapter.
+- ⊘ **Nothing about the CORRECTNESS of 12 402 translations beyond the one the guest checks.**
+  `kbusVerifyBar2` verifies sixteen bytes. The other translations are unaudited by anything
+  in this log; a walk that resolved a *different* wrong page for some later mapping would
+  look identical here.
+- ⊘ **BAR1 is untranslated and unexercised.** Its root is recorded and nothing resolves
+  through it; `translated-window drops 0r/0w` says the framebuffer aperture was never touched
+  either, so that zero is *"not reached"*, not *"served"*.
+- ⊘ **Two things changed at once.** This boot carries the Rust rung **and** a C-overlay change
+  (the BAR2 region became a trap region — it could not be otherwise, since a reservation
+  region never reaches the archive at all). The two are not separable by this boot, and no
+  boot was spent separating them.
+- ⊘ **No host GPU.** This box has none, forwarding is off, and the isolate factory is
+  `StillbornIsolates`. Not one of the 12 402 translated writes went near real hardware.
+- ⊘ **No sysmem leaf, no big-page leaf, no 512 MiB leaf was exercised by this guest** — or
+  rather, this log cannot say whether one was: `bar2_faults` is 0, which proves no access was
+  *refused*, and there is no counter that says which leaf size resolved.
+- ⊘ **One boot.** `#98` records a Mode-2 symptom that was 1/3 one day and 9/9 the next on a
+  bit-identical binary.
