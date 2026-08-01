@@ -280,28 +280,66 @@ impl FbWindow {
     }
 }
 
+/// ★★ **ONE edge out of a page-directory slot** — where the sub-table is, which
+/// aperture it lives in, and what level it is.
+///
+/// It is a type rather than three fields because a slot can name **two** of them
+/// ([`PteDecode::Pde::also`]), and three loose fields cannot be optional together.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PdeEdge {
+    /// Physical address of the next level.
+    pub next: u64,
+    /// Aperture the next level lives in.
+    pub aperture: Aperture,
+    /// ★★ **Which level the pointed-at table is** — supplied by the format, never
+    /// assumed to be `level + 1` by the walker.
+    ///
+    /// It is `level + 1` for most edges and it is **not** universally: in the regime the
+    /// C artifact decoded, the deepest directory's slot names a small-page table *and* a
+    /// big-page table, which are two different rows of [`GmmuFmt::level_shift`]'s table
+    /// with different strides and different entry counts
+    /// (`C: nvkvm_gpu_emul.c:8706-8708`, rows 4 and 5). A walker that incremented would
+    /// decode a 32-entry table as a 512-entry one and read 3 840 bytes past its end.
+    pub child_level: u8,
+}
+
 /// A decoded page-table entry, in core terms (no raw bits).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PteDecode {
     /// Invalid / not present.
     Invalid,
-    /// A pointer to a next-level page directory/table.
+    /// ★★★ **SPARSE — a third state, and conflating it with either neighbour is a
+    /// different bug** (`reachability_on_transition.md` §3.6, hole 6).
+    ///
+    /// Sparse is a distinct fill state with its own templates in the walker RM ships —
+    /// `MMU_WALK_FILL_SPARSE`, `ogkm-580:
+    /// src/nvidia/src/kernel/gpu/mmu/gmmu_walk.c:904-935`. The guest declares *"there is
+    /// deliberately nothing here"*, which is not the same statement as *"nothing has been
+    /// written here"*:
+    ///
+    /// - fold it into [`PteDecode::Leaf`] and a valid→sparse transition **binds** a
+    ///   mapping the guest declared backing-free;
+    /// - fold it into [`PteDecode::Invalid`] and the declaration disappears, so nothing
+    ///   downstream can ever answer a sparse access differently from an unmapped one.
+    ///
+    /// It contributes **no binding and no edge**. Its whole content is that it is
+    /// distinguishable.
+    Sparse,
+    /// A pointer to a next-level page directory/table — one edge, or two.
     Pde {
-        /// Physical address of the next level.
-        next: u64,
-        /// Aperture the next level lives in.
-        aperture: Aperture,
-        /// ★★ **Which level the pointed-at table is** — supplied by the format, never
-        /// assumed to be `level + 1` by the walker.
+        /// The sub-table this slot names.
+        edge: PdeEdge,
+        /// ★★★ **The SECOND sub-table a dual entry names**, or `None`.
         ///
-        /// It is `level + 1` for most edges and it is **not** universally: in the
-        /// measured regime the deepest directory's slot names a small-page table *and* a
-        /// big-page table, which are two different rows of
-        /// [`GmmuFmt::level_shift`]'s table with different strides and different entry
-        /// counts (`C: nvkvm_gpu_emul.c:8706-8708`, rows 4 and 5). A walker that
-        /// incremented would decode a 32-entry table as a 512-entry one and read 3 840
-        /// bytes past its end.
-        child_level: u8,
+        /// The deepest directory's slots are 16 bytes wide and name two sub-tables — a
+        /// small-page table and a big-page table — not one
+        /// (`ogkm-580: src/common/inc/swref/published/pascal/gp100/dev_mmu.h:112`, the
+        /// `DUAL_PDE` width; the level table at `ogkm-580:
+        /// src/nvidia/src/kernel/gpu/mmu/arch/pascal/kern_gmmu_fmt_gp10x.c:61-102`). A
+        /// decode that can only return one of them drops the other **silently**, which
+        /// is `#13`'s exact shape one level up the tree, and the previous shape of this
+        /// enum could not express the second edge at all.
+        also: Option<PdeEdge>,
     },
     /// A leaf mapping.
     Leaf {
@@ -625,6 +663,7 @@ kayfabe_util::assert_send_sync!(
     Aperture,
     FbWindow,
     PteDecode,
+    PdeEdge,
     LevelShift,
     PushMethod,
     CeWork,

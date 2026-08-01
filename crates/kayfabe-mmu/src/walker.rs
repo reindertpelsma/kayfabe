@@ -126,9 +126,20 @@ pub struct DecodedLeaf {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PageDecode {
     /// Sub-tables this page points at, each already carrying its own level and `vabase`.
+    ///
+    /// ★ A **dual** slot contributes **two** entries here with the same `vabase`, because
+    /// one 16-byte slot names two sub-tables ([`PteDecode::Pde::also`]). A consumer that
+    /// assumes one child per slot is `#13`'s silent drop one level up the tree.
     pub children: Vec<PtPage>,
     /// Leaf mappings this page defines. **Includes** the ones policy will drop.
     pub leaves: Vec<DecodedLeaf>,
+    /// ★★ Virtual addresses of slots the guest declared **SPARSE**, ascending.
+    ///
+    /// Kept as addresses rather than as a count, and kept apart from
+    /// [`PageDecode::invalid`], because sparse is a *declaration* and invalid is an
+    /// absence (`reachability_on_transition.md` §3.6). A shadow that cannot tell them
+    /// apart cannot tell valid→sparse (an unmap) from invalid→sparse (nothing).
+    pub sparse: Vec<u64>,
     /// Slots that decoded to [`PteDecode::Invalid`] — a page that maps nothing there.
     /// Counted rather than discarded so "this page was empty" and "this page was never
     /// read" are different observations.
@@ -250,20 +261,24 @@ pub fn decode_page(
 
         match fmt.decode_entry(page.level, u128::from_le_bytes(raw)) {
             PteDecode::Invalid => out.invalid += 1,
-            PteDecode::Pde {
-                next,
-                aperture,
-                child_level,
-            } => {
+            // ★★ A third state, carried as a third state. See [`PageDecode::sparse`].
+            PteDecode::Sparse => out.sparse.push(va),
+            PteDecode::Pde { edge, also } => {
                 // A null sub-table pointer is not a sub-table. The C guards every descent
                 // with the same truthiness (`C: :8615`, `:8623`, `:8636`).
-                if next != 0 {
-                    out.children.push(PtPage {
-                        phys: next,
-                        aperture,
-                        level: child_level,
-                        vabase: va,
-                    });
+                //
+                // ★★ BOTH halves of a dual slot are followed. Taking `edge` and dropping
+                // `also` would lose a whole sub-tree with no diagnostic — the shape #13
+                // was, at the 16-byte level.
+                for e in [Some(edge), also].into_iter().flatten() {
+                    if e.next != 0 {
+                        out.children.push(PtPage {
+                            phys: e.next,
+                            aperture: e.aperture,
+                            level: e.child_level,
+                            vabase: va,
+                        });
+                    }
                 }
             }
             PteDecode::Leaf {
@@ -307,6 +322,18 @@ pub struct SubtreeDecode {
     /// forward-populated metadata chain, for the caller to remember so that a later
     /// *direct* decode of one of these pages knows what it is.
     pub visited: Vec<PtPage>,
+    /// ★★★ **Each visited page beside WHAT IT CONTAINED**, in visit order.
+    ///
+    /// [`SubtreeDecode::leaves`] is these pages' leaves flattened, and flattening is
+    /// lossy in the one way `reachability_on_transition.md` needs: it forgets **which
+    /// page** a leaf came out of, and therefore whether that page was witnessed and
+    /// whether it is reachable. It also forgets the edges and the sparse slots entirely.
+    /// A reachability shadow is a statement about pages, so it is fed from here.
+    ///
+    /// Kept **alongside** the flattened views rather than replacing them: a consumer that
+    /// only wants "every leaf under this root" should not have to re-flatten, and the two
+    /// cannot disagree because one is built from the other.
+    pub decodes: Vec<(PtPage, PageDecode)>,
     /// ★★★ Branches that could not be decoded, **kept and returned rather than
     /// absorbed**. A subtree that faulted contributes no leaves and is not silently a
     /// subtree with no mappings.
@@ -356,13 +383,14 @@ pub fn decode_subtree(
             Ok(d) => {
                 out.visited.push(page);
                 out.invalid += d.invalid;
-                out.leaves.extend(d.leaves);
+                out.leaves.extend(d.leaves.iter().copied());
                 // Pushed in reverse so the pop order is ascending in virtual address — a
                 // deterministic visit order is what makes a `leaves` comparison in a test
                 // an assertion rather than a coin flip.
-                for c in d.children.into_iter().rev() {
-                    stack.push((c, depth + 1));
+                for c in d.children.iter().rev() {
+                    stack.push((*c, depth + 1));
                 }
+                out.decodes.push((page, d));
             }
             Err(e) => out.faults.push(e),
         }
@@ -454,6 +482,23 @@ pub enum PopulateRefusal {
     /// the `ALREADY-MAPPED` collision class hides.
     StraddlesLiveBinding {
         /// The leaf's virtual address.
+        va: GpuVa,
+    },
+    /// ★★★ **An UNBIND of a range that is host-published**
+    /// (`reachability_on_transition.md` §6).
+    ///
+    /// The mirror image of [`PopulateRefusal::RepointsPublished`], and it gets its own
+    /// variant because it is a different act with the same consequence: dropping the
+    /// range from the table would leave the host object still allocated and still mapped
+    /// into that address space's host VAS, with **no core state naming it**. That is
+    /// worse than a leak — hardware would keep resolving it — and it is what a teardown
+    /// (`reachability_on_transition.md` §3.3) would do to a published range if the
+    /// unbind were performed rather than refused.
+    ///
+    /// Unpublishing needs a worker and an unmap verb, i.e. the forwarding plane. So the
+    /// refusal is the answer, and the binding stays.
+    UnbindsPublished {
+        /// The virtual address that would have been dropped.
         va: GpuVa,
     },
 }

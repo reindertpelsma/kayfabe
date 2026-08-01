@@ -1013,9 +1013,12 @@ fn a_format_whose_child_level_never_descends_is_stopped_by_the_depth_bound() {
         }
         fn decode_entry(&self, level: u8, _raw: u128) -> kayfabe_arch::PteDecode {
             kayfabe_arch::PteDecode::Pde {
-                next: PD_L1,
-                aperture: Aperture::Vidmem,
-                child_level: level,
+                edge: kayfabe_arch::PdeEdge {
+                    next: PD_L1,
+                    aperture: Aperture::Vidmem,
+                    child_level: level,
+                },
+                also: None,
             }
         }
     }
@@ -1574,7 +1577,7 @@ fn the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_un
 
         // A complete chain, written the way the guest writes it: through copies WE
         // performed, because every one of these addresses is fabricated.
-        for (phys, img) in [
+        let chain = [
             (ROOT, page_at(fmt, 0, &[(0, pde(PD_L1))])),
             (PD_L1, page_at(fmt, 1, &[(0, pde(PD_L2))])),
             (PD_L2, page_at(fmt, 2, &[(0, pde(PD_DUAL))])),
@@ -1586,19 +1589,26 @@ fn the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_un
                 PT_SMALL,
                 page_at(fmt, small_leaf_level(), &[(2, leaf(0x7700_0000))]),
             ),
-        ] {
-            write_fabricated(&mut worker, &rec, vas, phys, &img);
+        ];
+        for (phys, img) in &chain {
+            write_fabricated(&mut worker, &rec, vas, *phys, img);
         }
 
         let pid = gpu.procs.keys().copied().next().expect("one proc");
         let device = gpu.map(|g| SharedDevice::new(g, mode));
         device
             .with_proc_mut(pid, |p| {
-                p.vases
-                    .get_mut(&(GPU, A_PDB))
-                    .expect("the vas")
-                    .pt_pages
-                    .insert(ROOT);
+                let v = p.vases.get_mut(&(GPU, A_PDB)).expect("the vas");
+                // ★★ EVERY page the guest wrote enters the dirty set, and that is not
+                // bookkeeping — it is the model. `reachability_on_transition.md` §2.2:
+                // a leaf binds only if the guest was SEEN to write its page, so a
+                // fixture that writes five pages and declares one is modelling four
+                // unwitnessed writes, and the pass is then right to bind nothing. The
+                // sibling test below writes the same chain and declares only the leaf's
+                // page, and asserts exactly that.
+                for (phys, _) in &chain {
+                    v.pt_pages.insert(*phys);
+                }
             })
             .expect("the proc is live");
 
@@ -1613,6 +1623,11 @@ fn the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_un
         );
         assert_eq!(out.transport, None, "{mode:?}");
         assert_eq!(out.meta_learned, 4, "{mode:?}");
+        assert_eq!(
+            (out.unwitnessed, out.unreachable),
+            (0, 0),
+            "{mode:?}: every page in the chain was witnessed and every one is linked"
+        );
 
         device.with_proc(pid, |p| {
             assert_eq!(

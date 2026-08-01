@@ -52,7 +52,7 @@ use std::time::Duration;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
 use kayfabe_arch::{
     Aperture, Arch, CeWork, DoorbellTarget, GmmuFmt, GmmuVersion, LevelShift, ObjectKind, PageSize,
-    PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
+    PdeEdge, PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, ExportRequest, ExportSource,
@@ -587,7 +587,7 @@ impl MockGmmuFmt {
 
     /// Encode a fake directory entry pointing at `next`.
     ///
-    /// `big` is the mock's one-bit stand-in for the measured regime's dual slot: set, an
+    /// `big` is the mock's one-bit stand-in for the dual slot's second half: set, an
     /// entry at [`MOCK_DUAL_LEVEL`] names the **big-page** table (level 5, 32 entries,
     /// 64 KiB stride) instead of the small-page one (level 4, 512 entries, 4 KiB). It
     /// exists so `child_level` has a live value other than `level + 1`; a field whose
@@ -600,6 +600,36 @@ impl MockGmmuFmt {
                 | if sysmem { 0b100 } else { 0 }
                 | if big { 0b1000 } else { 0 },
         )
+    }
+
+    /// ★★ Encode a **DUAL** directory entry at [`MOCK_DUAL_LEVEL`] — one 16-byte slot
+    /// naming a small-page table **and** a big-page table.
+    ///
+    /// The real thing is a 16-byte `DUAL_PDE` whose two halves are two independent
+    /// sub-table pointers (`ogkm-580:
+    /// src/common/inc/swref/published/pascal/gp100/dev_mmu.h:112`). The mock keeps the
+    /// same shape at the same width: the low 64 bits are the small-page edge and the
+    /// high 64 bits are the big-page edge, either of which may be zero for "this half
+    /// names nothing".
+    #[must_use]
+    pub fn encode_dual_pde(small: u64, big: u64) -> u128 {
+        let half = |p: u64, b: bool| {
+            if p == 0 {
+                0u128
+            } else {
+                Self::encode_pde(p, false, b)
+            }
+        };
+        half(small, false) | (half(big, true) << 64)
+    }
+
+    /// Encode a fake **sparse** entry — the third state (`PteDecode::Sparse`).
+    ///
+    /// Distinguishable from invalid (all-zero, what `MMU_WALK_FILL_INVALID` writes) and
+    /// from a leaf, which is the entire point of the variant.
+    #[must_use]
+    pub const fn encode_sparse() -> u128 {
+        0b1_0000
     }
 }
 
@@ -623,7 +653,14 @@ impl GmmuFmt for MockGmmuFmt {
         MOCK_LEVELS.get(usize::from(level)).copied()
     }
     fn decode_entry(&self, level: u8, raw: u128) -> PteDecode {
+        let hi = (raw >> 64) as u64;
         let raw = raw as u64;
+        // Sparse is checked FIRST and on its own bit: it is neither valid nor absent, and
+        // a decoder that reaches the valid-bit test before it can only answer one of the
+        // two things sparse is not (`reachability_on_transition.md` §3.6).
+        if raw & 0b1_0000 != 0 {
+            return PteDecode::Sparse;
+        }
         if raw & 0b1 == 0 {
             return PteDecode::Invalid;
         }
@@ -650,13 +687,29 @@ impl GmmuFmt for MockGmmuFmt {
                 read_only: false,
             }
         } else {
-            PteDecode::Pde {
-                next: phys,
-                aperture,
-                child_level: if level == MOCK_DUAL_LEVEL && raw & 0b1000 != 0 {
+            let edge = |w: u64| PdeEdge {
+                next: w & 0x000f_ffff_ffff_f000,
+                aperture: if w & 0b100 != 0 {
+                    Aperture::SysmemCoherent
+                } else {
+                    Aperture::Vidmem
+                },
+                child_level: if level == MOCK_DUAL_LEVEL && w & 0b1000 != 0 {
                     5
                 } else {
                     level + 1
+                },
+            };
+            PteDecode::Pde {
+                edge: edge(raw),
+                // ★ The dual slot's SECOND half — present only at the 16-byte level, and
+                // only when that half names something. Everywhere else the high 64 bits
+                // of the `u128` are padding the walker zero-filled, so answering `Some`
+                // from them would invent an edge out of a slot that is 8 bytes wide.
+                also: if level == MOCK_DUAL_LEVEL && hi != 0 && hi & 0b1 != 0 {
+                    Some(edge(hi))
+                } else {
+                    None
                 },
             }
         }

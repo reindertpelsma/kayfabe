@@ -46,15 +46,16 @@
 //! two apart is that this exact claim, stated in one breath, is the one CLAUDE.md
 //! repeated for weeks after its own design doc had corrected it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_arch::GmmuFmt;
 use kayfabe_arch::ids::GpuVa;
 use kayfabe_arch::ids::{GpuId, Pdb};
 use kayfabe_core::gpu::Proc;
 use kayfabe_isolate::{RmError, Worker};
+use kayfabe_mmu::reach::ReachFault;
 use kayfabe_mmu::walker::{
-    DropReason, FbRead, PopulateRefusal, PtPage, SubtreeDecode, WalkFault, decode_subtree, populate,
+    DropReason, FbRead, PopulateRefusal, PtPage, SubtreeDecode, WalkFault, decode_subtree,
 };
 
 /// ★★★ **THE PRODUCTION [`FbRead`]** — page-table bytes, read out of the isolate's
@@ -252,14 +253,49 @@ pub struct PtDecodeOutcome {
     /// identical from inside the walker — both make a read fail — and telling them apart
     /// is the difference between debugging a guest's page tables and debugging a socket.
     pub transport: Option<RmError>,
+    /// ★★ Ranges the reachability settlement **removed** from the table — a teardown
+    /// (`reachability_on_transition.md` §3.3), a valid→sparse transition (§3.6), or a leaf
+    /// that stopped being reachable. Counted, because *"the guest unmapped and we followed"*
+    /// is otherwise indistinguishable from *"nothing happened"*.
+    pub unbound: usize,
+    /// ★★★ Page-table pages **retired** from the shadow: they were reachable and are not any
+    /// more, so their level metadata was dropped too. Reported rather than counted so a test
+    /// can name the page — this is the half of hole 3 that stops a recycled page's next
+    /// contents being misparsed as page-table entries.
+    pub retired: Vec<u64>,
+    /// ★★ Slots whose ONLY change was the read-only bit. Named, never folded into
+    /// `unchanged`: [`kayfabe_mmu::Binding`] carries no rights, so this is a mapping change
+    /// this port sees, reports and does not model (`reachability_on_transition.md` §3.4).
+    pub protection_changes: Vec<GpuVa>,
+    /// ★★★ Leaves in a **reachable** page the guest was never seen to write. They stay a
+    /// MISS, which is a fault, which is `resume_from_fault.md` §7 step 5. This is §6.1's
+    /// witness rule as a number: a non-zero here is the design working, not failing.
+    pub unwitnessed: usize,
+    /// Leaves in a **witnessed** page nothing points at yet — the orphan, waiting for its
+    /// link. Also a miss, and also on purpose.
+    pub unreachable: usize,
+    /// Slots the guest declared **sparse** in a reachable, witnessed page (§3.6, hole 6).
+    pub sparse: usize,
+    /// ★ Refusals from the shadow itself — a root that is not the address space's, or a
+    /// bound reached. Kept apart from [`PtDecodeOutcome::faults`] (a statement about the
+    /// guest's page tables) and from [`PtDecodeOutcome::transport`] (a statement about us):
+    /// this is a statement about our **shadow**, and three different things to debug should
+    /// not share one field.
+    pub reach_faults: Vec<ReachFault>,
 }
 
 impl PtDecodeOutcome {
     /// Did anything go wrong that a caller must look at?
+    ///
+    /// ★ [`PtDecodeOutcome::unwitnessed`] and [`PtDecodeOutcome::unreachable`] are
+    /// deliberately **not** in here. They are the witness and reachability gates doing their
+    /// job; a pass that declines to bind an unwitnessed leaf is a correct pass, and folding
+    /// them in would make the normal case read as an error.
     #[must_use]
     pub fn is_clean(&self) -> bool {
         self.refusals.is_empty()
             && self.faults.is_empty()
+            && self.reach_faults.is_empty()
             && self.meta_refused == 0
             && self.transport.is_none()
     }
@@ -283,6 +319,13 @@ pub fn plan_pt_decode(proc: &mut Proc) -> PtDecodePlan {
         // learned forward, from a decode that reached it.
         let root = pdb.0 & !0xfff;
         for page in dirty {
+            // ★★★ WITNESS, taken HERE and not at the commit — `reachability_on_transition.md`
+            // §2.2. The dirty set is *drained* (a page written again must be dirty again), so
+            // the record has to be taken at the drain: a page witnessed in this pass and linked
+            // in the next would otherwise have no witness left by the time its link arrives, and
+            // would never bind. It is taken for DEFERRED pages too, which is the same case —
+            // §12.1(i)'s orphan leaf is exactly a page whose write is seen long before its link.
+            vas.reach.witness(page);
             let known = if page == root {
                 Some(PtPage {
                     phys: root,
@@ -351,11 +394,25 @@ pub fn commit_pt_decode(
     results: &[PtDecodeResult],
 ) -> PtDecodeOutcome {
     let mut out = PtDecodeOutcome::default();
+    // Address spaces this pass observed something for, so `settle` runs once each rather
+    // than once per decoded page — `reachability_on_transition.md` §4: a closure and a
+    // desired-set recompute are O(the shadow), and a shadow that emitted a transition
+    // halfway through a pass would be answering with a tree the guest had not finished
+    // writing.
+    let mut touched: BTreeSet<(GpuId, Pdb)> = BTreeSet::new();
     for r in results {
         let Some(vas) = proc.vases.get_mut(&(r.task.gpu, r.task.pdb)) else {
             out.vas_gone += 1;
             continue;
         };
+        // ★★★ HOLE 5's standing audit, run before anything is believed. A shadow whose
+        // root is not this address space's page-directory base is answering reachability
+        // for a tree that is not installed; the `Vas` keying makes that unreachable, and
+        // this is the check that the keying held.
+        if let Err(e) = vas.reach.audit_root(r.task.pdb) {
+            out.reach_faults.push(e);
+            continue;
+        }
         let d = match &r.decode {
             Ok(d) => d,
             Err(e) => {
@@ -380,10 +437,43 @@ pub fn commit_pt_decode(
             vas.pt_meta.insert(p.phys, *p);
             out.meta_learned += 1;
         }
-        let po = populate(fmt, &mut vas.table, r.task.pdb, &d.leaves);
+        // OBSERVE — content in, nothing decided yet.
+        for (page, decode) in &d.decodes {
+            if let Err(e) = vas.reach.observe(*page, decode) {
+                out.reach_faults.push(e);
+            }
+        }
+        touched.insert((r.task.gpu, r.task.pdb));
+    }
+
+    // SETTLE + APPLY, once per address space.
+    for key in touched {
+        let Some(vas) = proc.vases.get_mut(&key) else {
+            // The `Vas` cannot vanish between the loops — no lock is released here — but
+            // re-resolving costs nothing and the alternative is an `expect` that would be
+            // the only unproven assumption in the pass.
+            out.vas_gone += 1;
+            continue;
+        };
+        let s = vas.reach.settle(fmt);
+        // ★★ HOLE 3's second half. A page that fell out of the tree must stop being a page
+        // table *to us*: `_mmuWalkPdeRelease` frees the backing store right after clearing
+        // the parent, so the next thing written there is not a page table at all. Dropping
+        // the level means a later write to it is DEFERRED by `plan_pt_decode` rather than
+        // decoded, which is the honest answer to "we no longer know what this page is".
+        for phys in &s.retired {
+            vas.pt_meta.remove(phys);
+        }
+        let po = kayfabe_mmu::reach::apply_settlement(fmt, &mut vas.table, &mut vas.reach, key.1, &s);
         out.bound += po.bound;
         out.unchanged += po.unchanged;
         out.repointed += po.repointed;
+        out.unbound += po.unbound;
+        out.retired.extend(s.retired);
+        out.protection_changes.extend(s.protection_changes);
+        out.unwitnessed += s.unwitnessed;
+        out.unreachable += s.unreachable;
+        out.sparse += s.sparse;
         out.dropped.extend(po.dropped);
         out.refusals.extend(po.refusals);
     }

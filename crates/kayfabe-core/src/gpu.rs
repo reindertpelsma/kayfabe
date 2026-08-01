@@ -185,6 +185,21 @@ pub struct Vas {
     /// `kayfabe_fwd::MAX_PT_META`, which is guest-influenced and therefore a boundary-1
     /// concern rather than a tidiness one.
     pub pt_meta: BTreeMap<u64, kayfabe_mmu::walker::PtPage>,
+    /// ★★★ **The reachability shadow** — `resume_from_fault.md` §7 step 4, model in
+    /// `reachability_on_transition.md`.
+    ///
+    /// Answers the question [`Vas::pt_meta`] and [`Vas::table`] together cannot: *is this
+    /// leaf reachable from the page-directory root, and did we see the guest write it?*
+    /// A leaf binds only if both, so a page-table page filled before anything points at
+    /// it waits for its link (hole 1) and a directory entry read out of allocator residue
+    /// can make a page reachable but can never bind a mapping out of it (hole 2).
+    ///
+    /// ★ It lives on the `Vas` and nowhere else, and that is hole 5: a `Vas` is keyed by
+    /// `(GpuId, Pdb)`, so a `SET_PAGE_DIRECTORY` rebind — which re-points an entire
+    /// address space with **zero** entry writes — mints a different key and therefore a
+    /// different shadow. Nothing carries over. `ReachShadow::audit_root` is the standing
+    /// check that this held.
+    pub reach: kayfabe_mmu::reach::ReachShadow,
     /// ★ G6 (§12.20): the live [`GpaBlock`] behind each **host-published** VA — the
     /// token that lets that GPA range be given BACK to the proc's arena instead of
     /// leaking until the whole proc is reaped. Keyed by VA, exactly like the binding it
@@ -220,6 +235,10 @@ impl Vas {
             host_vas: None,
             pt_pages: BTreeSet::new(),
             pt_meta: BTreeMap::new(),
+            // Level 0 is a DECLARED fact: a PDB *is* its own root page. The shadow is
+            // rooted here and nowhere else, which is what `ReachShadow::audit_root`
+            // checks at every commit.
+            reach: kayfabe_mmu::reach::ReachShadow::new(pdb.0 & !0xfff),
             blocks: BTreeMap::new(),
             rpc_bound: BTreeSet::new(),
             promote_bound: BTreeSet::new(),

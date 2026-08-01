@@ -42,6 +42,7 @@
 //! compile-time-asserted below; full contract in `kayfabe-core`'s crate docs.
 
 pub mod gpga;
+pub mod reach;
 pub mod walker;
 
 use kayfabe_arch::Aperture;
