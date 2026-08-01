@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# ssh into the nvkvm-booted guest (tap net, 192.168.77.2)
+exec ssh -i /workspace/bench/guest_key -o StrictHostKeyChecking=no \
+     -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+     -o ConnectTimeout=5 ubuntu@192.168.77.2 "$@"
