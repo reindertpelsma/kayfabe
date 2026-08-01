@@ -195,7 +195,9 @@ mod policy;
 mod reasm;
 
 pub use fault::{FaultEmitRefusal, rc_triggered_for};
-pub use policy::{GraphPolicy, OBJECT_VERBS, ObjectPolicy, RefusalCensus, SharedRefusalCensus};
+pub use policy::{
+    GraphPolicy, OBJECT_VERBS, ObjectModel, ObjectPolicy, RefusalCensus, SharedRefusalCensus,
+};
 pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassembled, Reassembler};
 
 use kayfabe_abi::capability::{AllocPermit, ControlPermit, Denial, PassthroughRule};

@@ -159,6 +159,31 @@ say "captured $n_lines dmesg lines, $n_nvrm NVRM, $n_adapter adapter → $DMESG"
 say "--- the verdict lines ---"
 grep -E 'RmInitAdapter|Cannot (load state into|initialize) the device' "$DMESG" | tail -5
 
+# ---- phase 3b: the caller's own experiment, while the guest is still UP --------------
+#
+# ★★★ Added for `execution_plane_increments.md` E2. `boot_capture.sh` powers the guest down
+# at the end (the emulated GSP's WPR2 only resets on a full QEMU restart), so a harness that
+# wants to do anything *to the running guest* has nowhere to stand: by the time this script
+# returns, the machine is gone and the device's teardown report is already written.
+#
+# `POST_CAPTURE_HOOK` is that place. It runs with the guest up, the driver loaded and the
+# device opened — i.e. after everything above has been observed and recorded — and BEFORE
+# the poweroff that flushes the device's own report. Its stdout is appended to the probe
+# log, so whatever it observed is on disk beside everything else.
+#
+# ⊘ Its exit status is recorded and does NOT abort this script: the capture above is already
+# valid evidence, and losing it because an experiment failed would be the opposite of what
+# this file is for. The hook's own harness is what judges the hook.
+if [ -n "${POST_CAPTURE_HOOK:-}" ]; then
+  say "running POST_CAPTURE_HOOK: $POST_CAPTURE_HOOK"
+  {
+    echo "=== POST_CAPTURE_HOOK $POST_CAPTURE_HOOK at $(date -Is) ==="
+    "$POST_CAPTURE_HOOK" "$TAG"
+    echo "HOOK_RC=$?"
+  } >> "$PROBE" 2>&1
+  say "hook finished: $(grep -c '^HOOK_RC=0$' "$PROBE" >/dev/null && echo rc=0 || echo 'rc!=0 — see the probe log')"
+fi
+
 # ---- phase 4: fresh boot next time --------------------------------------------------
 say "powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)"
 "$BENCH/gssh_nv" 'sudo poweroff' >/dev/null 2>&1

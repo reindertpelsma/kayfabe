@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 11u
+#define KAYFABE_SHIM_ABI 12u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -287,7 +287,36 @@ typedef struct KayfabeRegWrite {
      * be diagnosable as to which.  Only this one is delivered at this stage; see
      * nvkvm_trap_write. */
     int32_t        raise_cpu_intr;
+    /* ★★★ E2 — THIS WRITE WAS A USERMODE DOORBELL, and here is what the core answered.
+     *
+     * `doorbell` is 0 when the write was NOT a doorbell at all — which is the CONTROL every
+     * E2 acceptance needs, in the wire shape rather than as a counter comparison.  1 means
+     * the core SERVED it (a DoorbellOutcome came back); 2 means the core REFUSED it BY NAME
+     * and `doorbell_kind` is that name.
+     *
+     * ⊘ There is deliberately no third value and no "accepted, dropped" state: a ring that
+     * was counted and went nowhere while looking healthy is the exact shape #146 had to
+     * remove from the framebuffer write path.
+     *
+     * ★★ WHY THIS IS ON THE PER-WRITE STRUCT AND THE ISOLATE CENSUS IS NOT.  An isolate
+     * refusal is a property of a whole boot.  A doorbell is a property of ONE WRITE, and
+     * E2's acceptance is that THIS guest store, at THIS instant, reached the core — so the
+     * shell logs it as it happens, against QEMU's own -msg timestamp, i.e. against a
+     * timeline the device under test does not write.  A per-boot counter cannot be stamped.
+     *
+     * `doorbell_kind` is (pointer, length) into the archive's read-only data, or NULL, like
+     * `fault`.  It is a FaultTag — a &'static str from a fixed finite set — never a
+     * formatted string, so no host allocation crosses here.  Print it with "%.*s". */
+    int32_t        doorbell;           /* 0 = not a doorbell, 1 = served, 2 = REFUSED */
+    uint64_t       doorbell_token;     /* valid only when doorbell != 0 */
+    const uint8_t *doorbell_kind;      /* non-NULL only when doorbell == 2 */
+    uint64_t       doorbell_kind_len;
 } KayfabeRegWrite;
+
+/* What KayfabeRegWrite::doorbell may be. */
+#define KAYFABE_DOORBELL_NONE    0
+#define KAYFABE_DOORBELL_SERVED  1
+#define KAYFABE_DOORBELL_REFUSED 2
 
 /* Register-plane counters.  u64-only and address-free, like KayfabeAudit.
  *
@@ -327,6 +356,27 @@ typedef struct KayfabeBridgeRefusal {
 #define KAYFABE_ISOLATE_REFUSAL_NONE 0u
 #define KAYFABE_ISOLATE_REFUSAL_NO_PLANE 1u
 #define KAYFABE_ISOLATE_REFUSAL_SPAWN_FAILED 2u
+
+/* ★★★ E2 — how many bytes of a refused doorbell's KIND and SENTENCE the audit carries.
+ *
+ * Two arrays and not one, for the reason KayfabeIsolateRefusal separates its kind from its
+ * text: the kind is a stable name a check may branch on (FwdFault::MalformedToken is a
+ * different diagnosis from FwdFault::UnknownVchid, with a different fix), and the sentence
+ * is the fault variant's payload, which is prose.  A single blob would make the only
+ * machine-readable half a substring search. */
+#define KAYFABE_DOORBELL_KIND_LEN 64u
+#define KAYFABE_DOORBELL_REFUSAL_LEN 192u
+
+typedef struct KayfabeDoorbellRefusal {
+    uint8_t kind[KAYFABE_DOORBELL_KIND_LEN];  /* NUL-PADDED, not NUL-terminated */
+    uint8_t text[KAYFABE_DOORBELL_REFUSAL_LEN];
+    uint64_t kind_len;
+    uint64_t len;
+    /* ⊘ Non-zero exactly when a doorbell was refused, and the validity flag for everything
+     * above.  A kind_len of zero is not a reserved value — an audit nobody wrote is also all
+     * zeros — so a reader needs a field that is zero ONLY in the never-happened case. */
+    uint64_t present;
+} KayfabeDoorbellRefusal;
 
 typedef struct KayfabeIsolateRefusal {
     uint8_t text[KAYFABE_ISOLATE_REFUSAL_LEN];  /* NUL-PADDED, not NUL-terminated */
@@ -456,6 +506,30 @@ typedef struct KayfabeRegAudit {
     uint64_t isolates_no_plane;
     uint64_t isolates_spawn_failed;
     KayfabeIsolateRefusal isolate_refusal;
+    /* ★★★ E2 — THE USERMODE DOORBELL APERTURE.
+     *
+     * `doorbells` is the ARRIVAL count: guest MMIO writes that landed on
+     * NV_VIRTUAL_FUNCTION_DOORBELL.  It is incremented before the core is consulted, so it
+     * is a statement about the GUEST and nothing the core decides can reduce it, and
+     * doorbells == doorbells_served + doorbells_refused always holds.  Neither of the two
+     * can absorb the other, so "the transport works and the routing does not" — which is
+     * exactly what E2 expects to read before E5 exists — is a state and not a silence.
+     *
+     * ⊘ A boot in which `doorbells` is ZERO is not evidence that the transport is broken.
+     * At the current wall the guest driver never reaches kfifoUpdateUsermodeDoorbell: the
+     * channel SCHEDULE before it fails (status 0x56), and the doorbell is rung from
+     * channel_utils.c only after scheduling succeeds.  See
+     * docs/design/execution_plane_increments.md §7.
+     *
+     * `doorbell_last_token_valid` exists because token 0 is a LEGAL work-submit token
+     * (runlist 0, channel 0), so one field could not tell "rang channel 0" from "never
+     * rang" — the same two-fields-for-one-fact argument fb_landed_valid already carries. */
+    uint64_t doorbells;
+    uint64_t doorbells_served;
+    uint64_t doorbells_refused;
+    uint64_t doorbell_last_token;
+    uint64_t doorbell_last_token_valid;
+    KayfabeDoorbellRefusal doorbell_refusal;
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.

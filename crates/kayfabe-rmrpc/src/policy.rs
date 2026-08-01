@@ -66,7 +66,7 @@ use std::collections::BTreeMap;
 use kayfabe_abi::DriverAbi;
 use kayfabe_abi::GuestOs;
 use kayfabe_abi::versions::DriverAbiTable;
-use kayfabe_core::gpu::Gpu;
+use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand};
 use kayfabe_trace::{FaultTag, Faulted};
 
@@ -157,6 +157,94 @@ impl SharedRefusalCensus {
     fn record(&self, r: &BridgeRefusal) {
         let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
         *g.entry(r.fault_tag()).or_default() += 1;
+    }
+}
+
+/// ★★★ **The object model, as the two mutations a delivered command can make** — the seam
+/// that lets one bridge declare into a bare [`Gpu`] *or* into a shell that owns it behind
+/// ranked locks.
+///
+/// # Why this exists, in the words of the type it un-blocks
+///
+/// [`ObjectPolicy`]'s own docs have said, since it was written:
+///
+/// > Owns its [`Gpu`] because a `CommandPolicy` is installed as `Box<dyn CommandPolicy>`
+/// > … ⚠ That is a **stage fact, not a design**: `GraphPolicy`'s doc explains why
+/// > borrowing is right the moment the doorbell path and the projection also want it, and
+/// > the day either exists this type hands its `Gpu` to whatever owns them.
+///
+/// `docs/design/execution_plane_increments.md` **E2** is that day. A guest MMIO write to
+/// the usermode doorbell aperture has to reach `kayfabe_rt::SharedDevice::doorbell`, and
+/// it must reach **the same object model** the guest's own `GSP_RM_ALLOC`s populated — a
+/// second `Gpu` behind the doorbell would be a routing table that can never resolve, i.e. a
+/// green transport over a permanently-wrong answer. So the model becomes a port, one
+/// implementation is the plain `Gpu` this crate already had, and the composition root
+/// supplies the other.
+///
+/// # ★ Two methods, and they are the two `Bridge::deliver` calls
+///
+/// Not a general "device" interface: exactly the mutations a translated command performs,
+/// so the surface cannot grow by accident. [`ObjectModel::isolate_census`] is here for the
+/// third thing [`ObjectPolicy`] does after every delivery (E1's republication) and reads
+/// nothing else.
+///
+/// `Send` because a `CommandPolicy` is held by the GSP FSM across vCPU threads
+/// (`kayfabe_gsp::boot` asserts the trait object is `Send`).
+pub trait ObjectModel: Send {
+    /// Apply one RM protocol event.
+    ///
+    /// # Errors
+    /// [`kayfabe_core::gpu::GpuError`] — the graph's own refusal, unchanged.
+    fn apply(&mut self, ev: kayfabe_core::rmgraph::RmEvent) -> Result<(), GpuError>;
+
+    /// Apply one context promotion.
+    ///
+    /// # Errors
+    /// [`kayfabe_core::promote::PromoteFault`], by variant.
+    fn promote_ctx(
+        &mut self,
+        p: &kayfabe_core::promote::CtxPromotion,
+    ) -> Result<kayfabe_core::promote::PromoteJoin, kayfabe_core::promote::PromoteFault>;
+
+    /// Publish the isolate plane's health — increment E1's census — into `to`.
+    ///
+    /// ★ A **publish** and not a getter, so this trait never names `IsolateCensus` and this
+    /// crate needs no `kayfabe-isolate` dependency to hold the port. It also puts the two
+    /// implementations' locking where it belongs: a bare `Gpu` walks its own maps, a shell
+    /// takes its device read lock and each proc lock in turn, and neither has to hand out a
+    /// value across a guard.
+    fn publish_isolate_census(&self, to: &kayfabe_core::gpu::SharedIsolateCensus);
+
+    /// The model as a plain [`Gpu`], if it **is** one.
+    ///
+    /// ⊘ `None` is the honest answer for a model behind ranked locks: there is no `&Gpu`
+    /// to hand out, because the state lives inside a device lock and a proc lock and a
+    /// borrow of it would outlive both guards. Callers that projected the graph directly
+    /// (tests, the differential) hold a bare `Gpu` and get `Some`; the shipped composition
+    /// root does not project and does not ask.
+    fn as_gpu(&self) -> Option<&Gpu>;
+}
+
+/// The bare-[`Gpu`] implementation — the one this crate had inline before E2 made the
+/// model a port. Every arm is the call `Bridge::deliver` used to make directly.
+impl ObjectModel for Gpu {
+    fn apply(&mut self, ev: kayfabe_core::rmgraph::RmEvent) -> Result<(), GpuError> {
+        Gpu::apply(self, ev)
+    }
+
+    fn promote_ctx(
+        &mut self,
+        p: &kayfabe_core::promote::CtxPromotion,
+    ) -> Result<kayfabe_core::promote::PromoteJoin, kayfabe_core::promote::PromoteFault> {
+        Gpu::promote_ctx(self, p)
+    }
+
+    fn publish_isolate_census(&self, to: &kayfabe_core::gpu::SharedIsolateCensus) {
+        to.publish(Gpu::isolate_census(self));
+    }
+
+    fn as_gpu(&self) -> Option<&Gpu> {
+        Some(self)
     }
 }
 
@@ -360,9 +448,20 @@ impl Bridge {
     /// Translate one command and apply whatever it declared, into the caller's `gpu`.
     ///
     /// ★★ The `gpu` is a **parameter**, and that is the whole of the borrow/own split:
-    /// [`GraphPolicy`] passes a `&mut Gpu` it borrowed, [`ObjectPolicy`] passes a
-    /// `&mut Gpu` it owns, and neither can have a different idea of what a command means.
-    fn deliver(&mut self, gpu: &mut Gpu, cmd: &RpcCommand) -> Result<Translation, BridgeRefusal> {
+    /// [`GraphPolicy`] passes a `&mut Gpu` it borrowed, [`ObjectPolicy`] passes the
+    /// [`ObjectModel`] it owns, and neither can have a different idea of what a command
+    /// means.
+    ///
+    /// ★★★ Since E2 the parameter is `&mut dyn ObjectModel` rather than `&mut Gpu`, and
+    /// that is the *only* change: a shell whose object model lives behind ranked locks
+    /// declares into it through the same two calls, in the same order, with the same
+    /// counters and the same census. A second `deliver` for the shell would be the drift
+    /// this function was extracted to prevent.
+    fn deliver(
+        &mut self,
+        gpu: &mut dyn ObjectModel,
+        cmd: &RpcCommand,
+    ) -> Result<Translation, BridgeRefusal> {
         // ★ B6 — reassembly runs FIRST and decides nothing. It either hands `translate`
         // the message that arrived, or the message the guest actually meant, or holds a
         // fragment. Every rule `translate` owns is then applied exactly ONCE, to the
@@ -585,7 +684,11 @@ impl CommandPolicy for GraphPolicy<'_> {
 /// the day either exists this type hands its `Gpu` to whatever owns them.
 pub struct ObjectPolicy {
     bridge: Bridge,
-    gpu: Gpu,
+    /// ★★★ **E2** — the object model as a **port**, not as a `Gpu` by value. See
+    /// [`ObjectModel`] for why the sentence two paragraphs up ("that is a stage fact, not a
+    /// design") came due. [`ObjectPolicy::new`] still takes a `Gpu` and boxes it, so every
+    /// existing call site is unchanged; [`ObjectPolicy::over`] is the shell's constructor.
+    gpu: Box<dyn ObjectModel>,
     /// ★★★ E1 — the isolate plane's health, republished after every delivered command so
     /// the composition root can read it after this policy is boxed. Same handle shape,
     /// same reason, as [`SharedRefusalCensus`]; see
@@ -616,12 +719,31 @@ impl ObjectPolicy {
         gpu: Gpu,
         limits: ReasmLimits,
     ) -> ObjectPolicy {
+        ObjectPolicy::over(abi, guest_os, Box::new(gpu), limits)
+    }
+
+    /// ★★★ **E2** — a policy over an object model somebody else owns.
+    ///
+    /// The composition root's constructor: the model is a shell that also serves the
+    /// doorbell path, so the `Gpu` cannot live here. See [`ObjectModel`] for the argument
+    /// and `execution_plane_increments.md` E2 for the increment that needed it.
+    ///
+    /// ⊘ Not a fallback for [`ObjectPolicy::new`] and not a default: a caller that holds a
+    /// bare `Gpu` should keep using `new`, because `Box<dyn ObjectModel>` erases the
+    /// `as_gpu` answer for nobody's benefit.
+    #[must_use]
+    pub fn over(
+        abi: &DriverAbiTable,
+        guest_os: GuestOs,
+        gpu: Box<dyn ObjectModel>,
+        limits: ReasmLimits,
+    ) -> ObjectPolicy {
         let isolates = kayfabe_core::gpu::SharedIsolateCensus::new();
         // ★ Published ONCE at construction, before any command, so the handle is never
         // "empty because nothing has happened yet" in a way a reader could mistake for
         // "empty because the plane is fine". After E0b a freshly realized device really
         // does hold zero isolates, and this is the value that says so.
-        isolates.publish(gpu.isolate_census());
+        gpu.publish_isolate_census(&isolates);
         ObjectPolicy {
             bridge: Bridge::new(*abi, guest_os, limits),
             gpu,
@@ -660,10 +782,17 @@ impl ObjectPolicy {
         self.bridge.applied
     }
 
-    /// The object model, for a caller that wants to project it.
+    /// The object model, for a caller that wants to project it — if it **is** a plain
+    /// [`Gpu`].
+    ///
+    /// ⊘ `None` since **E2**, and the `Option` is the honest half of that change: a policy
+    /// built with [`ObjectPolicy::over`] declares into a shell whose state is behind ranked
+    /// locks, and there is no `&Gpu` in existence to return. A method that panicked, or
+    /// that handed back an empty stand-in, would let a projection read as *"the guest
+    /// declared nothing"* when it means *"you asked the wrong object".*
     #[must_use]
-    pub fn gpu(&self) -> &Gpu {
-        &self.gpu
+    pub fn gpu(&self) -> Option<&Gpu> {
+        self.gpu.as_gpu()
     }
 
     /// Translate one command and apply whatever it declared — the `Result` form, for a
@@ -677,13 +806,13 @@ impl ObjectPolicy {
     ///
     /// [`BridgeRefusal`], by variant.
     pub fn deliver(&mut self, cmd: &RpcCommand) -> Result<Translation, BridgeRefusal> {
-        let out = self.bridge.deliver(&mut self.gpu, cmd);
+        let out = self.bridge.deliver(&mut *self.gpu, cmd);
         // ★★★ E1/E0b — republished on BOTH arms, deliberately. A refused command can
         // still be the one that materialized an isolate through an earlier accepted
         // event's proc set, and — more to the point — a report that only refreshed on
         // success would show the last *good* state while the plane was failing, which is
         // the exact shape of "the instrument agreed with the claim it was checking".
-        self.isolates.publish(self.gpu.isolate_census());
+        self.gpu.publish_isolate_census(&self.isolates);
         out
     }
 

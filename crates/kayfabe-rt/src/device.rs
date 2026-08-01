@@ -649,6 +649,46 @@ impl SharedDevice {
             .collect()
     }
 
+    /// ★★★ **E1's isolate census, over the sharded shell** — `Gpu::isolate_census`'s twin
+    /// for a device whose procs live behind rank-1 locks.
+    ///
+    /// **Spine op shape, one proc lock at a time.** The spine's own counter and the retired
+    /// corpses are read under the rank-0 guard (a vacated proc has left its lock cell and
+    /// is a bare value inside the spine — see [`SharedDevice::with_retired`]); each live
+    /// proc is then visited on its own, never two at once, which is exactly what R3
+    /// requires and what [`SharedDevice::live_pids`] + [`SharedDevice::with_proc`] exist
+    /// for.
+    ///
+    /// ⊘ It says **whether** an isolate was materialized, live or refusing, and it can
+    /// never say **why** — the census is written by the code under test, so attribution of
+    /// a spawn to the guest belongs to an instrument outside the process
+    /// (`scripts/bench/e0_isolate_witness.sh`). That sentence is in `IsolateCensus`'s own
+    /// docs and is repeated here because this is the entry point a shell will reach for.
+    #[must_use]
+    pub fn isolate_census(&self) -> kayfabe_isolate::IsolateCensus {
+        // ★ The device-global half first, under rank 0 alone: the materialization counter
+        // and every retired proc's isolates.
+        let (mut census, pids) = {
+            let st = self.state.read();
+            let c = st.spine.isolate_census_seed();
+            let pids: Vec<ProcId> = core::iter::once(Gpu::SYSTEM_PROC)
+                .chain(st.procs.keys().copied())
+                .collect();
+            (c, pids)
+        };
+        // ★ Then each live proc, ONE rank-1 lock at a time. A proc that retired in the gap
+        // is simply absent — its isolates were counted above if it is still a corpse, and
+        // if it was reaped it has none.
+        for pid in pids {
+            self.with_proc(pid, |p| {
+                for iso in p.isolates.values() {
+                    census.observe(&**iso);
+                }
+            });
+        }
+        census
+    }
+
     /// ★ Read window over the **retired-but-unreaped** procs (`Spine::retired_procs`).
     /// **Spine op** (read guard), and no proc lock: a vacated proc has left the lock
     /// cells and is a bare value inside the spine. Needed by the §12.35 teardown audit,

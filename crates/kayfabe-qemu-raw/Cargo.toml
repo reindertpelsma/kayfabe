@@ -36,6 +36,10 @@ kayfabe-isolate.workspace = true
 # `kayfabe_mocks::WireClassArch` because `kayfabe-mocks` is test-only and this archive
 # ships; see `kayfabe_chips::ga10x`'s module docs for what it refuses and why.
 kayfabe-chips.workspace = true
+# ★★★ E2 — the L1 shell (`SharedDevice`). The object model now lives behind its ranked
+# locks because TWO paths reach it: the object bridge and the doorbell port. See
+# `shim::SharedObjectModel`.
+kayfabe-rt.workspace = true
 # `CommandPolicy` — the trait the object-model link crosses as.
 kayfabe-gsp.workspace = true
 # ★★★ The REAL host isolate plane — OPTIONAL, and off unless `host-isolates` is on. See

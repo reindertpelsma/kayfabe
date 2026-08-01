@@ -133,8 +133,8 @@
 //! them would have hidden exactly the fact that matters: *how many framebuffer accesses
 //! this boot dropped on the floor*.
 
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, RwLock};
 
 use kayfabe_arch::gsp::GspModel;
 use kayfabe_arch::{Aperture, GmmuFmt};
@@ -144,6 +144,7 @@ use kayfabe_trace::Faulted;
 
 use crate::bar2::{BarPdeLog, BarPdes};
 use crate::cpuintr::CpuIntrTree;
+use crate::doorbell::{DoorbellPort, DoorbellRefused, DoorbellReport, RefusingDoorbell};
 use crate::fbwin::{Bar0Window, FbRefused, FbStore, RefusingFb};
 use crate::{ChipError, ChipProfile, FbWindow};
 
@@ -345,6 +346,25 @@ pub struct Counters {
     /// is the evidence that the enable bookkeeping and the guest's expectations disagree,
     /// and it is the only thing that could ever justify turning gating on.
     pub cpu_intr_masked: u64,
+    /// ★★★ **E2** — guest MMIO writes that landed on the usermode doorbell register
+    /// ([`crate::doorbell_reg`]), i.e. work-submit tokens the guest rang.
+    ///
+    /// ★ The **arrival** count, incremented before the port is consulted, so it is a
+    /// statement about the guest and not about the core: `doorbells == doorbells_served +
+    /// doorbells_refused` at all times, and neither of the two can absorb the other.
+    ///
+    /// ⊘ A boot in which this is zero is not evidence that the doorbell path is broken —
+    /// see `docs/design/execution_plane_increments.md` §7: at the current wall the guest
+    /// driver never reaches `kfifoUpdateUsermodeDoorbell` because the channel *schedule*
+    /// before it fails.
+    pub doorbells: u64,
+    /// Of those, the ones the installed [`crate::DoorbellPort`] **served** — a
+    /// `DoorbellOutcome` came back from the core.
+    pub doorbells_served: u64,
+    /// Of those, the ones the port **refused, by name**. Includes the refusal of the
+    /// default [`crate::RefusingDoorbell`], which is what a build with no forwarding plane
+    /// answers every ring with.
+    pub doorbells_refused: u64,
     /// Commands decoded off the guest's command queue.
     pub commands: u64,
     /// ★★ Of those, the ones **no policy answered** — refused by name by the FSM. See
@@ -405,6 +425,14 @@ pub struct PlaneResidue {
     /// the device's state" that silently skipped its **memory** would be `#130`'s own
     /// shrinking-universe failure.
     pub fb_resident_bytes: u64,
+    /// ★★★ **E2** — what the usermode doorbell aperture saw: the last token and the first
+    /// refusal ([`DoorbellLog`]).
+    ///
+    /// In the residue rather than only in the counters because it is *state*, and because
+    /// the property `#130` exists for is the one that matters here: a device life that
+    /// ended still reporting the **previous** guest's work-submit token would attribute a
+    /// ring to whoever booted next.
+    pub doorbell: DoorbellLog,
 }
 
 /// The mutable half — everything that needs the lock.
@@ -608,6 +636,16 @@ pub struct WriteOutcome {
     /// would make `Counters::irq_requests` and `Counters::cpu_intr_raises` two names for
     /// one number and lose exactly that.
     pub raise_cpu_intr: bool,
+    /// ★★★ **E2** — this write was a **usermode doorbell**, and here is what the core
+    /// answered: a served outcome, or a refusal with a kind and a sentence.
+    ///
+    /// `None` means the write was not a doorbell at all — which is the *control* every E2
+    /// acceptance needs, expressed in the type rather than in a counter comparison.
+    ///
+    /// ⊘ There is deliberately no `doorbell: bool` beside it. Two fields for one fact is
+    /// how a *"was a doorbell"* and a *"went somewhere"* come to disagree; see
+    /// [`crate::DoorbellReport`], which has the same shape for the same reason.
+    pub doorbell: Option<DoorbellReport>,
     /// How many transitions fired.
     pub transitions: usize,
     /// How many commands were decoded off the command queue.
@@ -633,6 +671,7 @@ impl WriteOutcome {
             fb_refusal: None,
             raise_status_irq: false,
             raise_cpu_intr: false,
+            doorbell: None,
             transitions: 0,
             commands: 0,
         }
@@ -725,6 +764,40 @@ pub struct RegPlane {
     /// doorbell, and a caller that replaced the policy still gets to read what the guest
     /// published.
     bar_pdes: BarPdeLog,
+    /// ★★★ **E2 — the usermode doorbell seam** (`crate::doorbell`).
+    ///
+    /// ⚠ **Outside [`RegPlane::state`], and that is a requirement rather than a
+    /// preference.** `kayfabe_rt::SharedDevice::doorbell` takes the core's ranked locks and
+    /// can *block* on the isolate pool's backpressure gate; running it under the FSM mutex
+    /// would put a guest-controlled wait beneath the lock every other vCPU needs to read a
+    /// register. The classification in [`RegPlane::write`] therefore runs before that mutex
+    /// is taken, and this port has a lock of its own.
+    ///
+    /// ★ A [`RwLock`] and not a [`Mutex`]: rings are the hot path and sibling vCPUs must be
+    /// able to ring concurrently; only [`RegPlane::set_doorbell`] — one call, at
+    /// composition — takes it for writing.
+    doorbell: RwLock<Box<dyn DoorbellPort>>,
+    /// What the doorbell aperture has seen, beyond the counts. Its own small lock, taken
+    /// *after* the port has answered and never held across the call.
+    doorbell_log: Mutex<DoorbellLog>,
+}
+
+/// ★★★ **E2** — what this device life's doorbell aperture saw, beyond the counters.
+///
+/// ⊘ The **first** refusal is kept and later ones are not. A flood of identical rings must
+/// not be able to push the diagnosis out of a one-line report, and the first one is the one
+/// that happened before anything else could have changed the device's state.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct DoorbellLog {
+    /// The most recent token the guest stored, or `None` if it never rang.
+    ///
+    /// ★ An `Option` and not a bare `0`: token zero is a legal work-submit token (runlist
+    /// 0, channel 0), so a sentinel could not tell *"rang channel 0"* from *"never rang"* —
+    /// the same two-fields-for-one-fact argument `KayfabeRegWrite::fb_landed` already
+    /// carries.
+    pub last_token: Option<u64>,
+    /// The first ring the port refused — kind and sentence — or `None` if none was.
+    pub first_refusal: Option<DoorbellRefused>,
 }
 
 impl core::fmt::Debug for RegPlane {
@@ -768,6 +841,9 @@ struct PlaneCounters {
     cpu_intr_accesses: AtomicU64,
     cpu_intr_raises: AtomicU64,
     cpu_intr_masked: AtomicU64,
+    doorbells: AtomicU64,
+    doorbells_served: AtomicU64,
+    doorbells_refused: AtomicU64,
 }
 
 /// How many level rows [`RegPlane::bar2_phys`] will ask a format about when it maps a
@@ -897,6 +973,9 @@ impl RegPlane {
             unserviced,
             fault_buffer,
             bar_pdes,
+            // ⊘ The default is a REFUSAL, not an empty sink — see `crate::RefusingDoorbell`.
+            doorbell: RwLock::new(Box::new(RefusingDoorbell)),
+            doorbell_log: Mutex::new(DoorbellLog::default()),
         })
     }
 
@@ -961,6 +1040,38 @@ impl RegPlane {
     pub fn set_mmu(&self, mmu: Box<dyn GmmuFmt>) {
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
         s.mmu = Some(mmu);
+    }
+
+    /// ★★★ **E2** — install the **usermode doorbell port**, replacing
+    /// [`crate::RefusingDoorbell`].
+    ///
+    /// This is the seam a guest work-submit token crosses on its way to
+    /// `kayfabe_rt::SharedDevice::doorbell`. Until a shell calls this, every ring is
+    /// **counted and refused by name** ([`crate::NO_DOORBELL_PORT`]) rather than dropped —
+    /// see [`crate::doorbell`] for why silently swallowing it is the one answer this seam
+    /// must not have.
+    ///
+    /// ⚠ Takes the port's **own** lock, not [`RegPlane::state`]'s. See the field's docs:
+    /// the port is called with no plane lock held because it can block.
+    pub fn set_doorbell(&self, port: Box<dyn DoorbellPort>) {
+        let mut p = self.doorbell.write().unwrap_or_else(|e| e.into_inner());
+        *p = port;
+    }
+
+    /// What this device life's doorbell aperture has seen — see [`DoorbellLog`].
+    #[must_use]
+    pub fn doorbell_log(&self) -> DoorbellLog {
+        self.doorbell_log
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Where this plane's chip puts its usermode doorbell, or `None` if it names no
+    /// usermode register group. Derived — see [`crate::doorbell_reg`].
+    #[must_use]
+    pub fn doorbell_reg(&self) -> Option<u64> {
+        crate::doorbell::doorbell_reg(self.chip)
     }
 
     /// What the guest has published about the bus apertures' page-table roots.
@@ -1042,6 +1153,9 @@ impl RegPlane {
             cpu_intr_accesses,
             cpu_intr_raises,
             cpu_intr_masked,
+            doorbells,
+            doorbells_served,
+            doorbells_refused,
         } = &self.c;
         Counters {
             reads: g(reads),
@@ -1071,6 +1185,9 @@ impl RegPlane {
             cpu_intr_accesses: g(cpu_intr_accesses),
             cpu_intr_raises: g(cpu_intr_raises),
             cpu_intr_masked: g(cpu_intr_masked),
+            doorbells: g(doorbells),
+            doorbells_served: g(doorbells_served),
+            doorbells_refused: g(doorbells_refused),
         }
     }
 
@@ -1124,8 +1241,16 @@ impl RegPlane {
             unserviced,
             fault_buffer,
             bar_pdes,
+            // ★ The PORT is the shell's wiring, like `ram` and `policy`; what this device
+            // life SAW through it is carried out as `doorbell` just below.
+            doorbell: _,
+            doorbell_log,
         } = self;
         let counters = self.counters();
+        let doorbell = doorbell_log
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         let s = state.lock().unwrap_or_else(|e| e.into_inner());
         // ★★★ EXHAUSTIVE, for the same reason.
         let PlaneState {
@@ -1159,6 +1284,7 @@ impl RegPlane {
             bar0_window: *bar0_window,
             bar_pdes: bar_pdes.pdes(),
             fb_resident_bytes: fb.resident_bytes(),
+            doorbell,
         }
     }
 
@@ -1251,6 +1377,12 @@ impl RegPlane {
         // ★★★ And the published roots. See `crate::bar2::BarPdeLog::device_reset` for why
         // this one is a cross-life *information* leak and not merely stale state.
         self.bar_pdes.device_reset();
+        // ★★ E2 — and the doorbell log, for the same reason: a token the PREVIOUS guest
+        // rang, reported after a reset as this life's, is a false attribution in exactly
+        // the direction that would make an E2 acceptance run pass on somebody else's ring.
+        // ⊘ The PORT is not touched: it is the shell's wiring, and a reset is the guest's
+        // event, not the composition root's.
+        *self.doorbell_log.lock().unwrap_or_else(|e| e.into_inner()) = DoorbellLog::default();
     }
 
     /// ★★★ Serve one register read.
@@ -1627,6 +1759,29 @@ impl RegPlane {
                 ..WriteOutcome::nothing()
             };
         }
+        // ★★★ **THE USERMODE DOORBELL** (E2). Classified here — before the FSM's lock is
+        // taken, before the framebuffer windows and before `decode_reg` — for two separate
+        // reasons, and both of them are load-bearing.
+        //
+        // 1. ⚠ **No plane lock may be held.** The port calls into the core, which takes
+        //    ranked locks and can block on the isolate pool's backpressure gate. Every
+        //    arm below this one is inside `self.state.lock()`; a doorbell classified there
+        //    would put a guest-controlled wait under the lock every other vCPU needs to
+        //    read a register. This is the only classification in `write` whose POSITION is
+        //    a concurrency requirement rather than a precedence one.
+        // 2. ★ A write that fell through to `unclaimed_writes` would be **dropped**, and
+        //    the dropped write would be the guest's entire submission — the same argument
+        //    the window latch and the interrupt tree make, one aperture over.
+        //
+        // ⊘ `bar` is checked, not assumed. The register aperture's offset `0x00bb0090` and
+        // the framebuffer aperture's offset `0x00bb0090` are the same number and different
+        // facts (`PlaneState::unclaimed`'s own note), and only one of them is a ring.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && let Some(reg) = self.doorbell_reg()
+            && off == reg
+        {
+            return self.ring_doorbell(mask(val, size));
+        }
         // ★★★ THE INTERRUPT TREE. Classified here, beside the window latch and before the
         // model's `decode_reg` gate, because the model does not own these offsets and a
         // write that fell through would be DROPPED — and the dropped write would be
@@ -1714,6 +1869,47 @@ impl RegPlane {
                     ..WriteOutcome::nothing()
                 }
             }
+        }
+    }
+
+    /// ★★★ **E2** — hand one guest work-submit token to the installed port, count what
+    /// came back, and report it whole.
+    ///
+    /// Split out of [`RegPlane::write`] so the *"no plane lock is held here"* obligation is
+    /// visible in one place: nothing in this function takes [`RegPlane::state`], and the
+    /// only lock it holds across the port call is the port's own [`RwLock`] read guard.
+    fn ring_doorbell(&self, token: u64) -> WriteOutcome {
+        // ★ Counted BEFORE the port is consulted, so `doorbells` is a statement about what
+        // the GUEST did and cannot be reduced by anything the core decides.
+        self.c.doorbells.fetch_add(1, Ordering::Relaxed);
+        let report = {
+            let port = self.doorbell.read().unwrap_or_else(|e| e.into_inner());
+            port.ring(token)
+        };
+        match &report {
+            DoorbellReport::Served { .. } => {
+                self.c.doorbells_served.fetch_add(1, Ordering::Relaxed);
+            }
+            DoorbellReport::Refused { .. } => {
+                self.c.doorbells_refused.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        {
+            let mut log = self.doorbell_log.lock().unwrap_or_else(|e| e.into_inner());
+            log.last_token = Some(token);
+            if log.first_refusal.is_none()
+                && let DoorbellReport::Refused { refusal, .. } = &report
+            {
+                log.first_refusal = Some(refusal.clone());
+            }
+        }
+        WriteOutcome {
+            // ★ `claimed`, because this device DOES own the offset — whatever the core then
+            // decided. A doorbell reported as unclaimed would tell an operator the aperture
+            // is unmodelled, which is the opposite of what happened.
+            claimed: true,
+            doorbell: Some(report),
+            ..WriteOutcome::nothing()
         }
     }
 
@@ -1896,6 +2092,68 @@ fn assert_disjoint(chip: &ChipProfile, model: &dyn GspModel) -> Result<(), ChipE
             return Err(ChipError::OverlappingSources {
                 off,
                 a: "the BAR0 moving window's own register",
+                b: "the GSP register model",
+            });
+        }
+    }
+    // ★★★ **E2 — THE USERMODE DOORBELL, checked against every other source.**
+    //
+    // It is classified FIRST in `RegPlane::write` (earlier even than the window latch,
+    // because its port may block and therefore may hold no plane lock), so an overlap here
+    // makes the loser **unreachable** rather than merely mis-ordered — and the loser would
+    // be answered by a call into the forwarding core instead of by the register model. That
+    // is the strongest form of the argument the BAR0 window register's block above makes.
+    //
+    // ⊘ The offset is DERIVED from the usermode register base this chip advertises to the
+    // guest (`crate::doorbell_reg`), so this check also has a second edge: it refuses a
+    // chip row whose advertised usermode window collides with something it also decodes,
+    // which is a row the guest driver would have been TOLD to map over a live register.
+    if let Some(off) = crate::doorbell::doorbell_reg(chip) {
+        if off >= chip.regs_aperture_len {
+            return Err(ChipError::OutsideAperture {
+                off,
+                aperture: chip.regs_aperture_len,
+            });
+        }
+        if chip.boot_regs.iter().any(|r| r.off == off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "a silicon-constant register",
+            });
+        }
+        if off == chip.ptimer.lo_off || off == chip.ptimer.hi_off {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "the free-running nanosecond counter",
+            });
+        }
+        if off == chip.bar0_window_reg && chip.bar0_window_reg != 0 {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "the BAR0 moving window's own register",
+            });
+        }
+        if chip.rom_window.contains(off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "the ROM window",
+            });
+        }
+        if chip.pramin_window.contains(off) {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
+                b: "the PRAMIN framebuffer window",
+            });
+        }
+        if model.decode_reg(0, off).is_some() {
+            return Err(ChipError::OverlappingSources {
+                off,
+                a: "the usermode doorbell register",
                 b: "the GSP register model",
             });
         }

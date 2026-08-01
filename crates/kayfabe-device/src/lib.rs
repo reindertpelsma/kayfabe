@@ -53,6 +53,7 @@
 pub mod abi;
 pub mod bar2;
 pub mod cpuintr;
+pub mod doorbell;
 pub mod faultbuffer;
 pub mod fbwin;
 pub mod ga10x;
@@ -83,9 +84,17 @@ use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
 
 pub use plane::{
-    Counters, NanoClock, PlaneResidue, ReadOutcome, RefusingRam, RegPlane, SteppingClock,
-    WriteOutcome,
+    Counters, DoorbellLog, NanoClock, PlaneResidue, ReadOutcome, RefusingRam, RegPlane,
+    SteppingClock, WriteOutcome,
 };
+
+/// ★ The fault vocabulary a [`DoorbellReport`] speaks, re-exported.
+///
+/// [`DoorbellRefused::kind`] is a [`FaultTag`], and the composition root that fills one in
+/// needs [`Faulted`] in scope to ask a fault for its own. Same argument as [`FbStore`]'s
+/// re-export below: this is *this* crate's seam, and a shell plugging into it should not
+/// have to name a further crate to spell the type its answer already carries.
+pub use kayfabe_trace::{FaultTag, Faulted};
 
 /// ★★★ The framebuffer port and the BAR0 moving window's register, re-exported —
 /// [`RegPlane::set_fb`]'s argument type and the vocabulary a shell needs to install it.
@@ -93,6 +102,17 @@ pub use plane::{
 /// Same argument as [`GuestRam`]'s re-export one paragraph down: `set_fb` is *this* crate's
 /// seam, so a shell plugging into it should not have to name a third crate to do so.
 pub use fbwin::{Bar0Window, FbRefused, FbStore, RefusingFb, SparseFb};
+
+/// ★★★ **E2** — the usermode doorbell port, re-exported: [`RegPlane::set_doorbell`]'s
+/// argument type and the vocabulary a shell needs to read its answer.
+///
+/// Same argument as [`FbStore`]'s re-export above. `set_doorbell` is *this* crate's seam,
+/// and the one composition root that installs it already holds four other crates; it
+/// should not have to name a fifth to spell the trait.
+pub use doorbell::{
+    DoorbellPort, DoorbellRefused, DoorbellReport, NO_DOORBELL_PORT, NO_DOORBELL_PORT_KIND,
+    RefusingDoorbell, USERMODE_DOORBELL_OFF, doorbell_reg,
+};
 
 /// ★ The guest-RAM port, re-exported — [`RegPlane::set_ram`]'s argument type.
 ///

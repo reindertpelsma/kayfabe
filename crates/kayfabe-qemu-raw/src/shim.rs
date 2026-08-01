@@ -121,8 +121,22 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// per-write structure would make an operator read it once per access and still not know
 /// how many isolates there were.
 ///
+/// ★ Bumped to **12** at `execution_plane_increments.md` **E2**, the usermode doorbell
+/// transport, and it is the ABI-3 reason an eighth time — in **both** structures at once.
+/// [`KayfabeRegAudit`] gained three counters, a token and a
+/// [`DOORBELL_REFUSAL_LEN`]-byte refusal; [`KayfabeRegWrite`] gained `doorbell`,
+/// `doorbell_token` and the `doorbell_kind` pair. An ABI-11 shim would allocate both old
+/// layouts and this archive would write past the end of each.
+///
+/// ★★ **`KayfabeRegWrite` DID grow this time, unlike at E1, and the difference is the
+/// point.** An isolate refusal is a property of a whole boot; a doorbell is a property of
+/// **one write** — and E2's acceptance is that *this* guest store, at *this* instant,
+/// reached the core. A per-boot counter alone cannot be stamped against a timeline the
+/// device does not write, and stamping is the whole of the attribution
+/// (`a_boolean_witness_cannot_attribute`).
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 11;
+pub const ABI_VERSION: u32 = 12;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -794,6 +808,57 @@ pub const ISOLATE_REFUSAL_NO_PLANE: u64 = 1;
 /// wrong.**
 pub const ISOLATE_REFUSAL_SPAWN_FAILED: u64 = 2;
 
+/// ★★★ **E2** — how many bytes of a doorbell refusal's **sentence** [`KayfabeRegAudit`]
+/// carries, and how many of its **kind**.
+///
+/// Two arrays and not one, for the reason [`KayfabeIsolateRefusal`] separates its `kind`
+/// from its `text`: the kind is a stable name a check may branch on
+/// (`FwdFault::MalformedToken` ≠ `FwdFault::UnknownVchid` — two different diagnoses with
+/// two different fixes), and the sentence is the variant's payload, which is prose. A
+/// single blob would make the only machine-readable half a substring search.
+pub const DOORBELL_REFUSAL_LEN: usize = 192;
+/// How many bytes of a doorbell refusal's **kind** the audit carries.
+///
+/// ★ [`BRIDGE_REFUSAL_TAG_LEN`]'s width and for its reason: a `FaultTag` is a
+/// `&'static str` from a fixed finite set, and 64 bytes covers every one of them with room
+/// to spare.
+pub const DOORBELL_KIND_LEN: usize = 64;
+
+/// ★★★ **E2 — a refused guest doorbell, in the wire shape**: the fault's stable kind and
+/// one sentence.
+///
+/// Mirrors [`KayfabeIsolateRefusal`]'s shape (NUL-**padded**, explicit lengths, `Default`
+/// written out because the arrays are wider than the derive covers) for its reasons.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct KayfabeDoorbellRefusal {
+    /// The fault's stable name, NUL-padded — e.g. `FwdFault::UnknownVchid`.
+    pub kind: [u8; DOORBELL_KIND_LEN],
+    /// The sentence's bytes, NUL-padded.
+    pub text: [u8; DOORBELL_REFUSAL_LEN],
+    /// How many bytes of [`Self::kind`] are the name.
+    pub kind_len: u64,
+    /// How many bytes of [`Self::text`] are the sentence.
+    pub len: u64,
+    /// ⊘ **Non-zero exactly when a doorbell was refused**, and the validity flag for
+    /// everything above: a kind of length zero is not a reserved value (an archive that
+    /// never wrote this struct also leaves it zero), so a reader needs a field that is
+    /// zero *only* in the never-happened case. This is it.
+    pub present: u64,
+}
+
+impl Default for KayfabeDoorbellRefusal {
+    fn default() -> KayfabeDoorbellRefusal {
+        KayfabeDoorbellRefusal {
+            kind: [0; DOORBELL_KIND_LEN],
+            text: [0; DOORBELL_REFUSAL_LEN],
+            kind_len: 0,
+            len: 0,
+            present: 0,
+        }
+    }
+}
+
 /// One row of the bridge's refusal census: a `FaultTag`, and how many carried it.
 ///
 /// ★★★ **The instrument boot `alloc1` did without.** `[measured]` 2026-08-01, boot
@@ -996,6 +1061,32 @@ pub struct KayfabeRegAudit {
     /// One refusal sentence, and its kind. `SpawnFailed` outranks `NoPlane` when both are
     /// present: a plane that broke is more actionable than one that was never installed.
     pub isolate_refusal: KayfabeIsolateRefusal,
+    /// ★★★ **E2** — guest MMIO writes that landed on the usermode doorbell register, i.e.
+    /// work-submit tokens the guest rang. See `kayfabe_device::Counters::doorbells`: this
+    /// is the **arrival** count and it is not reducible by anything the core decides.
+    pub doorbells: u64,
+    /// Of those, the ones the core **served** — a `DoorbellOutcome` came back.
+    pub doorbells_served: u64,
+    /// Of those, the ones the core **refused, by name**.
+    ///
+    /// ★ `doorbells == doorbells_served + doorbells_refused`, always. Neither can absorb
+    /// the other, so *"the transport works and the routing does not"* is a readable state
+    /// rather than a silence — which is exactly what E2 expects to see before E5.
+    pub doorbells_refused: u64,
+    /// The last token the guest stored, and its own validity flag below.
+    pub doorbell_last_token: u64,
+    /// ⊘ Non-zero iff [`Self::doorbell_last_token`] means anything.
+    ///
+    /// ⚠ **Two fields for one fact, and the second is not redundant**: token `0` is a
+    /// legal work-submit token (runlist 0, channel 0), so a single field could not tell
+    /// *"rang channel 0"* from *"never rang"*. The same argument `fb_landed_valid` already
+    /// carries one aperture over.
+    pub doorbell_last_token_valid: u64,
+    /// The **first** doorbell the core refused — kind and sentence.
+    ///
+    /// ⊘ First, not last: a flood of identical rings must not be able to push the
+    /// diagnosis out of the one line a teardown report has room for.
+    pub doorbell_refusal: KayfabeDoorbellRefusal,
 }
 
 /// Translate a chip-table refusal into the wire vocabulary, keeping the sentence.
@@ -1137,10 +1228,145 @@ impl NanoClock for HostMonotonicClock {
     }
 }
 
+// =====================================================================================
+// ★★★ E2 — the join between a trapped BAR write and `kayfabe_rt::SharedDevice`
+// =====================================================================================
+
+/// ★★★ **The object model, as the shell owns it** — `kayfabe_rmrpc::ObjectModel`
+/// implemented over the L1 shared device.
+///
+/// # Why the `Gpu` moved here, and what it bought
+///
+/// `ObjectPolicy` used to **own** its `Gpu`, and its own docs called that *"a stage fact,
+/// not a design"* that would end *"the day the doorbell path also wants it"*. This is that
+/// day: `docs/design/execution_plane_increments.md` **E2** routes a guest MMIO write to
+/// `SharedDevice::doorbell`, and it must route into **the same** object model the guest's
+/// `GSP_RM_ALLOC`s populated. A second `Gpu` behind the doorbell would give a transport
+/// that is trivially green and a routing table that can never resolve — the shape this
+/// project calls a plausible wrong answer.
+///
+/// ⊘ **Nothing else changed.** The bridge's meaning of a command, its reassembly ordering,
+/// its four counters and its census are one implementation
+/// (`kayfabe_rmrpc::policy::Bridge`), driven through the same two calls.
+// ⊘ Hand-written `Debug` rather than derived: `SharedDevice` is not `Debug` and must not
+// become it — the whole object model in a panic message is unreadable, which is the same
+// argument `kayfabe_rmrpc::ObjectPolicy` already makes about its `Gpu`.
+#[derive(Clone)]
+struct SharedObjectModel(Arc<kayfabe_rt::device::SharedDevice>);
+
+impl core::fmt::Debug for SharedObjectModel {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SharedObjectModel")
+            .field("mode", &self.0.mode())
+            .finish_non_exhaustive()
+    }
+}
+
+impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
+    fn apply(
+        &mut self,
+        ev: kayfabe_core::rmgraph::RmEvent,
+    ) -> Result<(), kayfabe_core::gpu::GpuError> {
+        self.0.apply(ev)
+    }
+
+    fn promote_ctx(
+        &mut self,
+        p: &kayfabe_core::promote::CtxPromotion,
+    ) -> Result<kayfabe_core::promote::PromoteJoin, kayfabe_core::promote::PromoteFault> {
+        self.0.promote_ctx(p)
+    }
+
+    fn publish_isolate_census(&self, to: &kayfabe_core::gpu::SharedIsolateCensus) {
+        to.publish(self.0.isolate_census());
+    }
+
+    /// `None`, and that is the whole of what a sharded shell can honestly say: the graph
+    /// lives inside a device lock and a proc lock, and a `&Gpu` handed out here would
+    /// outlive both guards.
+    fn as_gpu(&self) -> Option<&kayfabe_core::gpu::Gpu> {
+        None
+    }
+}
+
+/// ★★★ **E2 — the doorbell port**: a guest store to `NV_VIRTUAL_FUNCTION_DOORBELL` becomes
+/// one `SharedDevice::doorbell` call, and its answer becomes a
+/// [`kayfabe_device::DoorbellReport`].
+///
+/// # What is deliberately not decided here
+///
+/// - **The token is passed through, whole.** Decoding it is `Ga10xArch::decode_doorbell`'s
+///   job (increment E3, settled against RM's own compiled encoder — see
+///   `docs/design/doorbell_token_encoding.md`), and a second, weaker decode in the shim
+///   would be exactly the "two descriptions of one fact" this port refuses elsewhere.
+/// - **The working set is empty**, and that is honest rather than lax: recovering which
+///   VAs a submission touches means parsing the ring, which is increment **E4**. An empty
+///   working set is `plan_doorbell`'s documented *"this submission touches no tracked VA"*
+///   — there is nothing to gate on and no host state at risk. ⚠ It is **not** a bypass of
+///   the #14 gate: the gate still runs, over an empty set. E4/E5 fill it.
+/// - **The target GPU is [`GpuId::ZERO`]**, because this device is one GPU — the same id
+///   `Gpu::realize` carves the system proc's arena for. The day a shim realizes two, this
+///   comes from the device instance and not from a constant.
+struct SharedDoorbell(Arc<kayfabe_rt::device::SharedDevice>);
+
+impl core::fmt::Debug for SharedDoorbell {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SharedDoorbell")
+            .field("gpu", &DOORBELL_TARGET_GPU.0)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The GPU a `nvkvm-gpu` device is. See [`SharedDoorbell`]'s docs.
+const DOORBELL_TARGET_GPU: kayfabe_rt::GpuId = kayfabe_rt::GpuId(0);
+
+impl kayfabe_device::DoorbellPort for SharedDoorbell {
+    fn ring(&self, token: u64) -> kayfabe_device::DoorbellReport {
+        match self.0.doorbell(DOORBELL_TARGET_GPU, token, &[]) {
+            Ok(o) => kayfabe_device::DoorbellReport::Served {
+                token,
+                proc: o.proc.0,
+                chan: o.chan.0,
+                host_token: o.host_token,
+                scheduled_now: o.scheduled_now,
+            },
+            // ★ A **kind** and a sentence, which is increment E1's standard: the kind comes
+            // from the fault type's own exhaustive `Faulted::fault_tag` (so a new variant
+            // fails `kayfabe-fwd`'s build until it is named) and the sentence is the
+            // variant's payload, which carries the token, the decoded vChid or whichever
+            // of those the refusal is about.
+            Err(f) => kayfabe_device::DoorbellReport::Refused {
+                token,
+                refusal: kayfabe_device::DoorbellRefused {
+                    kind: kayfabe_device::Faulted::fault_tag(&f),
+                    why: format!("{f:?}"),
+                },
+            },
+        }
+    }
+}
+
 /// The realized register plane — what the C shim holds behind its second opaque handle.
-#[derive(Debug)]
+///
+/// ⊘ Hand-written [`core::fmt::Debug`] since E2, because `SharedDevice` deliberately has
+/// none — see [`SharedObjectModel`].
 pub struct Regs {
     plane: RegPlane,
+    /// ★★★ **E2** — the L1 shell that owns the object model, held here because **two**
+    /// paths now reach it: the object bridge (boxed into the register plane's served
+    /// chain, and unreachable afterwards) and the doorbell port. Before E2 there was one
+    /// path and it could own the `Gpu` outright.
+    ///
+    /// ⊘ Held for the doorbell port's sake and read by nothing else in this struct: the
+    /// two censuses below are still the shell's own channels, for the reason each states.
+    ///
+    /// ⚠ `#[allow(dead_code)]` because the *field* is never read — the live reference is the
+    /// clone inside the doorbell port, which the register plane owns. Dropping the field
+    /// would be wrong anyway: it is what keeps this device's object model alive for exactly
+    /// as long as the device, and a shell that let it go would leave the plane's port
+    /// holding the last handle to a graph nobody can reach.
+    #[allow(dead_code)]
+    device: Arc<kayfabe_rt::device::SharedDevice>,
     /// ★★★ The object bridge's refusal census, kept **here** because the policy that owns
     /// it is boxed into the chain and is unreachable afterwards. See
     /// [`kayfabe_rmrpc::SharedRefusalCensus`] for the boot that had to be diagnosed by the
@@ -1150,6 +1376,14 @@ pub struct Regs {
     /// [`Regs::refusals`] is: the policy that owns the object model is boxed into the
     /// chain and unreachable afterwards.
     isolates: kayfabe_core::gpu::SharedIsolateCensus,
+}
+
+impl core::fmt::Debug for Regs {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Regs")
+            .field("plane", &self.plane)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Regs {
@@ -1168,7 +1402,7 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
-        let (objects, refusals, isolates) = object_policy(abi.driver)?;
+        let (objects, refusals, isolates, device) = object_policy(abi.driver)?;
         let plane = RegPlane::with_objects(
             chip,
             abi,
@@ -1211,8 +1445,21 @@ impl Regs {
         // model one seam over. This root already holds both crates, so it is the one place
         // that can join them without either naming the other.
         plane.set_mmu(Box::new(kayfabe_chips::Ga10xGmmu::new()));
+        // ★★★ **THE COMPOSITION ROOT'S DOORBELL DECISION** (`execution_plane_increments.md`
+        // E2), made here and nowhere else, for exactly the reasons the two decisions above
+        // are.
+        //
+        // `kayfabe_device::RegPlane` is built with `RefusingDoorbell`, so a shell that never
+        // made this decision gets a device that **counts** a guest ring and says, by name,
+        // that it forwarded nothing — rather than one that swallows a submission and looks
+        // healthy. This is the shell, and it decides.
+        //
+        // ★ The port is a `SharedDevice` handle and not a second object model; see
+        // [`SharedObjectModel`] for why that identity is the whole increment.
+        plane.set_doorbell(Box::new(SharedDoorbell(Arc::clone(&device))));
         Ok(Regs {
             plane,
+            device,
             refusals,
             isolates,
         })
@@ -1318,6 +1565,9 @@ impl Regs {
             cpu_intr_masked,
             commands,
             commands_unserviced,
+            doorbells,
+            doorbells_served,
+            doorbells_refused,
         } = self.plane.counters();
         let (bar_pde_updates, bar_pde_refusals) = self.plane.bar_pde_counts();
         // ★ Truncated to what the wire shape holds, and `unserviced_len` says how many —
@@ -1373,6 +1623,29 @@ impl Regs {
             isolate_refusal.text[..take].copy_from_slice(&why.as_bytes()[..take]);
             isolate_refusal.len = take as u64;
         }
+        // ★★★ **E2** — what the doorbell aperture saw, DESTRUCTURED with no `..` for
+        // `Shim::audit`'s reason: a field added to `DoorbellLog` and not wired here is a
+        // fact the C shell can never read, and nothing goes red. `rustc` refuses instead.
+        let kayfabe_device::DoorbellLog {
+            last_token,
+            first_refusal,
+        } = self.plane.doorbell_log();
+        let mut doorbell_refusal = KayfabeDoorbellRefusal::default();
+        if let Some(r) = first_refusal {
+            doorbell_refusal.present = 1;
+            let kb = r.kind.0.as_bytes();
+            let ktake = kb.len().min(DOORBELL_KIND_LEN);
+            doorbell_refusal.kind[..ktake].copy_from_slice(&kb[..ktake]);
+            doorbell_refusal.kind_len = ktake as u64;
+            // ⊘ Truncated on a CHARACTER boundary, not on a byte, for the reason the
+            // isolate sentence above is.
+            let mut take = r.why.len().min(DOORBELL_REFUSAL_LEN);
+            while take > 0 && !r.why.is_char_boundary(take) {
+                take -= 1;
+            }
+            doorbell_refusal.text[..take].copy_from_slice(&r.why.as_bytes()[..take]);
+            doorbell_refusal.len = take as u64;
+        }
         KayfabeRegAudit {
             reads,
             writes,
@@ -1417,6 +1690,12 @@ impl Regs {
             isolates_no_plane,
             isolates_spawn_failed,
             isolate_refusal,
+            doorbells,
+            doorbells_served,
+            doorbells_refused,
+            doorbell_last_token: last_token.unwrap_or(0),
+            doorbell_last_token_valid: u64::from(last_token.is_some()),
+            doorbell_refusal,
         }
     }
 }
@@ -1464,6 +1743,8 @@ type ObjectLink = (
     Box<dyn kayfabe_gsp::CommandPolicy>,
     kayfabe_rmrpc::SharedRefusalCensus,
     kayfabe_core::gpu::SharedIsolateCensus,
+    // ★★★ E2 — and the shell itself, because the doorbell port needs the SAME one.
+    Arc<kayfabe_rt::device::SharedDevice>,
 );
 
 fn object_policy(
@@ -1482,7 +1763,19 @@ fn object_policy(
              the system proc an arena",
         )
     })?;
-    let policy = kayfabe_rmrpc::ObjectPolicy::new(
+    // ★★★ **E2** — the realized `Gpu` goes into the L1 shell, and the shell is what both
+    // the object bridge and the doorbell port declare into. See [`SharedObjectModel`].
+    //
+    // ★ `LockMode::Sharded` — the #14-gate configuration, in which a per-proc op takes the
+    // device *read* lock and then that one proc's mutex. ⊘ Not `Degenerate`: the doorbell
+    // path's whole reason for existing is that a guest process's submissions must not
+    // serialize behind another's, and choosing the single-lock shape here would make the
+    // shipped archive the one configuration the #14 design does not apply to.
+    let device = Arc::new(kayfabe_rt::device::SharedDevice::new(
+        gpu,
+        kayfabe_rt::device::LockMode::Sharded,
+    ));
+    let policy = kayfabe_rmrpc::ObjectPolicy::over(
         &driver,
         // ★ The fourth axis, DECLARED and never sniffed. The guest OS is a `#define` in
         // the guest driver's build and is undetectable on the wire, so a port that
@@ -1490,7 +1783,8 @@ fn object_policy(
         // build answers as the bench's guest, and the day it must answer as another one,
         // this becomes a realize-time property beside the driver version — not an `if`.
         kayfabe_abi::GuestOs::Linux,
-        gpu,
+        Box::new(SharedObjectModel(Arc::clone(&device))),
+        kayfabe_rmrpc::ReasmLimits::default(),
     );
     // ★ The handle is taken BEFORE the policy is boxed, because afterwards there is no
     // `ObjectPolicy` left to ask — that is the whole reason the census had to become a
@@ -1500,7 +1794,7 @@ fn object_policy(
     // mechanism. Before this the only channel that could say "the forwarding plane you
     // asked for did not come up" was a host-side `ps`.
     let isolates = policy.isolate_census();
-    Ok((Box::new(policy), refusals, isolates))
+    Ok((Box::new(policy), refusals, isolates, device))
 }
 
 // =====================================================================================

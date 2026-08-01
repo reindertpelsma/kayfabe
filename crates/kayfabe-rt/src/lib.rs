@@ -53,6 +53,16 @@ pub mod executor;
 pub mod inbox;
 pub mod lock;
 
+/// ★ The id this shell's own entry points **require** a caller to name, re-exported.
+///
+/// `SharedDevice::doorbell` takes a [`GpuId`], so a composition root cannot call it without
+/// naming one — and a crate whose public API demands a type it does not re-export forces
+/// every consumer to take a dependency it otherwise would not (`kayfabe-qemu-raw`'s
+/// manifest says at length why it declines to depend on `kayfabe-arch`). Re-exporting the
+/// id is API hygiene, not a new edge: it is a plain newtype over an integer and carries no
+/// architecture with it.
+pub use kayfabe_arch::ids::GpuId;
+
 // The concurrency contract (decision #17), compile-time-asserted for the shell's
 // public types. `BlockingSection` is deliberately ABSENT: it is `!Send` by
 // construction (its asserts are against the constructing thread's lock state).

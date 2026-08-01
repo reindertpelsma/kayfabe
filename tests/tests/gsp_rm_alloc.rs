@@ -702,9 +702,23 @@ fn the_ports_object_model_realizes_with_no_forwarding_plane_and_no_isolate() {
 #[test]
 fn the_first_guest_alloc_materializes_the_ports_isolate() {
     let mut policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
-    assert_eq!(policy.gpu().isolate_census().materialized, 0);
+    // ★ `.expect` and not `.unwrap_or_default()`: since E2 `ObjectPolicy::gpu` is an
+    // `Option` because a policy may be built over a shell whose graph is behind ranked
+    // locks. This test builds one over a bare `Gpu`, so `None` here would mean the
+    // constructor changed under it — which must be loud, not absorbed into a zero.
+    assert_eq!(
+        policy
+            .gpu()
+            .expect("this policy was built over a bare Gpu")
+            .isolate_census()
+            .materialized,
+        0
+    );
     let _ = policy.deliver(&root_alloc(1)).expect("root accepted");
-    let c = policy.gpu().isolate_census();
+    let c = policy
+        .gpu()
+        .expect("this policy was built over a bare Gpu")
+        .isolate_census();
     assert_eq!(
         c.materialized, 1,
         "the guest's own NV01_ROOT_CLIENT is what spawns it"
@@ -735,7 +749,7 @@ fn the_client_root_is_normalised_so_the_device_beneath_it_resolves() {
     let _ = policy
         .deliver(&device_alloc(2, BOOT_HCLIENT, H_DEVICE))
         .expect("a device parented on the CLIENT HANDLE must resolve");
-    let g = policy.gpu();
+    let g = policy.gpu().expect("this policy was built over a bare Gpu");
     assert!(
         g.spine
             .rmgraph

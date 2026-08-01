@@ -2891,6 +2891,32 @@ impl Spine {
         &self.retired
     }
 
+    /// ★★★ **The DEVICE-GLOBAL half of an isolate census** — the materialization counter
+    /// plus every retired-but-unreaped proc's isolates, and no live proc.
+    ///
+    /// # Why this is a seam rather than a field getter (E2)
+    ///
+    /// `Gpu::isolate_census` walks live procs through `&self`, which a **sharded** shell
+    /// cannot do: its procs are behind rank-1 locks and R3 forbids holding two at once, so
+    /// it must seed the census here (rank 0, alone) and then visit each proc on its own.
+    /// Exposing `isolates_materialized` as a bare getter would have let the two callers
+    /// disagree about what else belongs in the seed — the corpses are the easy thing to
+    /// forget, and forgetting them under-reports exactly the isolates that already failed.
+    /// `Gpu::isolate_census` is built on this, so there is one definition of the seed.
+    #[must_use]
+    pub fn isolate_census_seed(&self) -> IsolateCensus {
+        let mut c = IsolateCensus {
+            materialized: self.isolates_materialized,
+            ..Default::default()
+        };
+        for p in &self.retired {
+            for iso in p.isolates.values() {
+                c.observe(&**iso);
+            }
+        }
+        c
+    }
+
     /// Compose+post one completion batch for target `gpu` if ITS drain gate is open
     /// (§4.3.2, MG-6: per-target GSP queue). Composes from the procs that span this
     /// target (+ the system proc) — a batch outstanding on one GPU never gates
@@ -3085,19 +3111,13 @@ impl Gpu {
     /// that refused is a fact about this boot whether or not its proc is still live.
     #[must_use]
     pub fn isolate_census(&self) -> IsolateCensus {
-        let mut c = IsolateCensus {
-            materialized: self.spine.isolates_materialized,
-            ..Default::default()
-        };
+        // ★ The device-global half comes from ONE definition, shared with the sharded
+        // shell — see `Spine::isolate_census_seed`.
+        let mut c = self.spine.isolate_census_seed();
         for iso in self.system.isolates.values() {
             c.observe(&**iso);
         }
         for p in self.procs.values() {
-            for iso in p.isolates.values() {
-                c.observe(&**iso);
-            }
-        }
-        for p in &self.spine.retired {
             for iso in p.isolates.values() {
                 c.observe(&**iso);
             }

@@ -275,6 +275,7 @@ dependencies = [
  "kayfabe-isolate",
  "kayfabe-isolate-host",
  "kayfabe-rmrpc",
+ "kayfabe-rt",
  "kayfabe-vmm",
  "kayfabe-vmm-qemu",
 ]

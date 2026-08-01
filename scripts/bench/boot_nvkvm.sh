@@ -18,6 +18,12 @@ exec "$Q" \
   -device virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56 \
   -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0 \
   -display none \
+  `# ★★★ E2 — TIMESTAMP every error_report/info_report the device writes.
+   # The device's per-doorbell line is the ATTRIBUTION instrument: a ring is only
+   # attributable to a guest action if its arrival can be bracketed between two instants
+   # recorded by somebody other than the device. Without this the qemu log's lines are
+   # ordered and undated, and ordering alone cannot exclude "it happened during boot".` \
+  -msg timestamp=on \
   -serial "file:${LOG}_serial.log" \
   -monitor "unix:${LOG}.mon,server,nowait" \
   "$@" \

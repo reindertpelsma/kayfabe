@@ -135,7 +135,35 @@ pub struct KayfabeRegWrite {
     /// [`kayfabe_device::plane::WriteOutcome::raise_cpu_intr`] for why this is a second
     /// field and not the one above.
     pub raise_cpu_intr: i32,
+    /// ★★★ **E2** — this write was a **usermode doorbell**:
+    /// [`DOORBELL_NONE`] (it was not one — the *control*), [`DOORBELL_SERVED`] (the core
+    /// answered with a `DoorbellOutcome`) or [`DOORBELL_REFUSED`] (the core refused it by
+    /// name, and `doorbell_kind` is that name).
+    ///
+    /// ⊘ Three values and no fourth: *"counted as a doorbell, went nowhere, looked
+    /// healthy"* is unrepresentable, which is the whole shape of
+    /// [`kayfabe_device::DoorbellReport`].
+    pub doorbell: i32,
+    /// The work-submit token the guest stored. Meaningful only when `doorbell` is not
+    /// [`DOORBELL_NONE`].
+    pub doorbell_token: u64,
+    /// The refusal's stable **kind**, or null — a `FaultTag`, i.e. a `&'static str` from a
+    /// fixed finite set, so no host allocation crosses here.
+    ///
+    /// ★ Non-null exactly when `doorbell == DOORBELL_REFUSED`; the *sentence* (the fault
+    /// variant's payload, which is formatted and therefore owned) does **not** cross per
+    /// write — it reaches the shell once, through `KayfabeRegAudit::doorbell_refusal`.
+    pub doorbell_kind: *const u8,
+    /// `doorbell_kind`'s length in bytes, or zero.
+    pub doorbell_kind_len: u64,
 }
+
+/// [`KayfabeRegWrite::doorbell`] — the write was not a doorbell.
+pub const DOORBELL_NONE: i32 = 0;
+/// [`KayfabeRegWrite::doorbell`] — the core served it.
+pub const DOORBELL_SERVED: i32 = 1;
+/// [`KayfabeRegWrite::doorbell`] — the core refused it, by name.
+pub const DOORBELL_REFUSED: i32 = 2;
 
 impl KayfabeRegWrite {
     /// The wire form of the port's outcome. The one place the sentence becomes an address.
@@ -151,6 +179,23 @@ impl KayfabeRegWrite {
         let (fb_why, fb_why_len, fb_phys, fb_refused_len) = match o.fb_refusal {
             None => (core::ptr::null(), 0, 0, 0),
             Some(r) => (r.why.as_ptr(), r.why.len() as u64, r.phys, r.len as u64),
+        };
+        // ★★★ E2. ⊘ Only the KIND crosses per write, and only because it is a
+        // `&'static str` in this archive's read-only data — the same lifetime claim
+        // `fault` above already makes. The sentence is `format!`ed and therefore owned by
+        // a temporary; handing out an address into it would be a dangling pointer the
+        // instant this function returns. It reaches the shell through the audit instead.
+        let (doorbell, doorbell_token, doorbell_kind, doorbell_kind_len) = match &o.doorbell {
+            None => (DOORBELL_NONE, 0, core::ptr::null(), 0),
+            Some(kayfabe_device::DoorbellReport::Served { token, .. }) => {
+                (DOORBELL_SERVED, *token, core::ptr::null(), 0)
+            }
+            Some(kayfabe_device::DoorbellReport::Refused { token, refusal }) => (
+                DOORBELL_REFUSED,
+                *token,
+                refusal.kind.0.as_ptr(),
+                refusal.kind.0.len() as u64,
+            ),
         };
         KayfabeRegWrite {
             fault,
@@ -170,6 +215,10 @@ impl KayfabeRegWrite {
             claimed: i32::from(o.claimed),
             raise_status_irq: i32::from(o.raise_status_irq),
             raise_cpu_intr: i32::from(o.raise_cpu_intr),
+            doorbell,
+            doorbell_token,
+            doorbell_kind,
+            doorbell_kind_len,
         }
     }
 }

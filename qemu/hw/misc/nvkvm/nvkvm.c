@@ -192,7 +192,20 @@ struct NvkvmState {
      * listening" look identical in a boot log otherwise. */
     uint64_t irq_vectors_delivered;
     uint64_t irq_vectors_undeliverable;
+    /* ★★★ E2.  How many doorbell arrivals this SHELL printed a timestamped line for.
+     *
+     * ⊘ Deliberately the shell's own number and not the archive's `doorbells`: the two are
+     * counted by different code and a disagreement between them (arrivals that were never
+     * logged, beyond the bound) is visible in the report rather than inferred. */
+    uint64_t doorbells_logged;
 };
+
+/* ★★ How many doorbell arrivals get a timestamped log line before the device goes quiet.
+ *
+ * Small, and the smallness is the point: the line is an ATTRIBUTION instrument for an
+ * acceptance run that rings a handful of times on purpose, not a trace.  A guest that rings
+ * in a loop must be able to move a counter and unable to fill a disk. */
+#define NVKVM_DOORBELL_LOG_MAX 16u
 
 /*
  * ═══ ★★★ #151: DELIVERY ════════════════════════════════════════════════════════════════
@@ -315,6 +328,40 @@ static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
         } else {
             warn_report("nvkvm: the emulated GSP refused a register write at +0x%" PRIx64 ": %.*s",
                         (uint64_t)addr, (int)w.fault_len, (const char *)w.fault);
+        }
+    }
+    /* ★★★ E2 — THE DOORBELL, LOGGED AS IT HAPPENS, and this is the ATTRIBUTION instrument.
+     *
+     * ⊘ The audit counters at teardown say WHETHER a ring arrived and can never say WHEN, so
+     * they cannot answer "did it arrive BECAUSE THE GUEST WROTE ONE?" — a boolean witness
+     * cannot attribute, which this project has been bitten by once already (E0's isolate
+     * child, sighted 28 seconds before the guest existed and read as the strong claim).
+     * This line carries a QEMU -msg timestamp, so a ring can be bracketed by a guest-side
+     * command whose own start and end times were recorded by a different writer.
+     *
+     * ★ BOUNDED, and the bound is why it is safe on a hot path: after
+     * NVKVM_DOORBELL_LOG_MAX lines the device stops printing and keeps counting.  A guest
+     * that rings in a loop can fill a counter; it cannot fill a disk.  The `s->doorbells_
+     * logged` counter is the device's, not the archive's — deliberately, so that "how many
+     * did the archive see" and "how many did the shell print" are two numbers and a
+     * disagreement between them is visible.
+     *
+     * ⊘ It is info_report and not warn_report even for a refusal: at E2 a refused doorbell
+     * is the EXPECTED answer (no channel has been allocated on this port, and the routing
+     * that would find one is increments E4/E5).  A warning would train a reader to ignore
+     * the line that matters later. */
+    if (w.doorbell != KAYFABE_DOORBELL_NONE) {
+        if (s->doorbells_logged < NVKVM_DOORBELL_LOG_MAX) {
+            s->doorbells_logged++;
+            if (w.doorbell == KAYFABE_DOORBELL_REFUSED) {
+                info_report("nvkvm: DOORBELL token 0x%08" PRIx64 " at +0x%" PRIx64
+                            " REFUSED [%.*s]",
+                            w.doorbell_token, (uint64_t)addr,
+                            (int)w.doorbell_kind_len, (const char *)w.doorbell_kind);
+            } else {
+                info_report("nvkvm: DOORBELL token 0x%08" PRIx64 " at +0x%" PRIx64 " SERVED",
+                            w.doorbell_token, (uint64_t)addr);
+            }
         }
     }
     /* ★★★ #151.  The guest's own trigger — delivered. */
@@ -1413,6 +1460,39 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.isolates_materialized, a.isolates_live,
                 a.isolates_no_plane + a.isolates_spawn_failed,
                 a.isolates_no_plane, a.isolates_spawn_failed);
+    /*
+     * ★★★ E2 — THE USERMODE DOORBELL APERTURE.  Printed unconditionally, all-zeros
+     * included, for the reason every other block here is.
+     *
+     * `arrived` is the number to read, and it is a statement about the GUEST: it counts
+     * writes that landed on NV_VIRTUAL_FUNCTION_DOORBELL, before the core was consulted.
+     * `served + refused == arrived` always; neither can absorb the other, so "the transport
+     * works and the routing does not" is a readable state and not a silence.
+     *
+     * ⊘ ZERO IS NOT A FAILURE OF THE TRANSPORT.  At the current wall the guest driver never
+     * reaches kfifoUpdateUsermodeDoorbell — the channel SCHEDULE before it fails with 0x56
+     * — so a stock boot rings nothing.  See docs/design/execution_plane_increments.md §7,
+     * and note that this line ALSO cannot attribute: the device writes it.  The per-write
+     * lines above, stamped by -msg timestamp, are the attributing instrument.
+     */
+    info_report("nvkvm: doorbells: %" PRIu64 " arrived, %" PRIu64 " served, %" PRIu64
+                " REFUSED by name; last token %s0x%08" PRIx64 " (%" PRIu64 " logged)",
+                a.doorbells, a.doorbells_served, a.doorbells_refused,
+                a.doorbell_last_token_valid ? "" : "n/a ",
+                a.doorbell_last_token, s->doorbells_logged);
+    if (a.doorbell_refusal.present) {
+        int klen = (int)(a.doorbell_refusal.kind_len > KAYFABE_DOORBELL_KIND_LEN
+                         ? KAYFABE_DOORBELL_KIND_LEN : a.doorbell_refusal.kind_len);
+        int tlen = (int)(a.doorbell_refusal.len > KAYFABE_DOORBELL_REFUSAL_LEN
+                         ? KAYFABE_DOORBELL_REFUSAL_LEN : a.doorbell_refusal.len);
+
+        /* %.*s, never %s: both arrays are NUL-PADDED and a name that exactly fills one
+         * carries no terminator. */
+        info_report("nvkvm:   first doorbell refusal [%.*s] %.*s",
+                    klen, (const char *)a.doorbell_refusal.kind,
+                    tlen, (const char *)a.doorbell_refusal.text);
+    }
+
     if (a.isolate_refusal.kind != KAYFABE_ISOLATE_REFUSAL_NONE) {
         const char *kind = a.isolate_refusal.kind == KAYFABE_ISOLATE_REFUSAL_SPAWN_FAILED
                            ? "spawn-failed" : "no-plane";
