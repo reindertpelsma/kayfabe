@@ -133,6 +133,7 @@ dependencies = [
 name = "kayfabe-chips"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-abi",
  "kayfabe-arch",
  "kayfabe-gsp",
  "kayfabe-mocks",
@@ -264,7 +265,12 @@ name = "kayfabe-qemu-raw"
 version = "0.1.0"
 dependencies = [
  "kayfabe-abi",
+ "kayfabe-chips",
+ "kayfabe-core",
  "kayfabe-device",
+ "kayfabe-gsp",
+ "kayfabe-isolate",
+ "kayfabe-rmrpc",
  "kayfabe-vmm",
  "kayfabe-vmm-qemu",
 ]
