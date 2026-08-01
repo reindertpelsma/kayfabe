@@ -175,11 +175,14 @@ the section number — because that is precisely the move `CLAUDE.md` made.
 - **CONFLATED — exact.** 65, both directions pinned. Small enough that whoever moves it can
   read the whole list; a growth-only check would leave slack, which is the argument the ogkm
   doc ratchet makes about itself.
-- **UNATTRIBUTED — a ceiling.** 383. This is the weakest of the three and it is weaker on
-  purpose. 383 is a census of pre-existing prose across a tree several agents write into at
-  once; an exact pin would turn unrelated doc commits red, and the outcome of that is not
-  better prose but people bumping the number without reading it. The gate prints the exact
-  line to change whenever the true count drops below the bar, so tightening stays one edit.
+- **UNATTRIBUTED — a ceiling.** 382 (was 383; tightened on the reachability-on-transition
+  branch, and the script's own comment names the site that left). This is the weakest of the
+  three and it is weaker on purpose: it is a census of pre-existing prose across a tree
+  several agents write into at once, and an exact pin would turn unrelated doc commits red,
+  whose outcome is not better prose but people bumping the number without reading it. The
+  gate prints the exact line to change whenever the true count drops below the bar, so
+  tightening stays one edit — and the tightening is expected to happen in the commit that
+  created the slack, not later.
 
 ## 5. ★★ What this gate CANNOT see
 

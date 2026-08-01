@@ -454,7 +454,16 @@ def sweep() -> list[Site]:
 # blocks turning out to be local proofs only) while CONFLATED and BARE-HW did not move.
 # Two false positives in four firings is the honest hit rate; both were pattern defects
 # rather than bar pressure, and both were cheaper to fix than to absorb.
-UNATTRIBUTED_BAR = 383
+# ★ 383 -> 382 on the reachability-on-transition branch (`resume_from_fault.md` §7 step 4).
+# Not a campaign, and worth naming exactly because "a site left" is the sort of thing that
+# gets attributed to whatever the commit was about: the site was `kayfabe-mocks`'s
+# `encode_pde` doc, which called the regime it stands in for "the *measured* regime" and
+# named no run. The block was being rewritten anyway (the dual slot grew a second edge) and
+# the phrase went with it — the claim word left, the block stopped being a claim site. The
+# runner asks for the tightening the moment the ceiling has slack, and the reason it asks is
+# that a ceiling nobody tightens stops biting, so it happens in the commit that created the
+# slack rather than being left as headroom the next diff can grow into.
+UNATTRIBUTED_BAR = 382
 CONFLATED_BAR = 66
 BARE_HW_BAR = 17
 
