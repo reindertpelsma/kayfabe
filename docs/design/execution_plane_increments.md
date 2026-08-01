@@ -642,9 +642,10 @@ always reports something: a working plane prints `0 refusing` and **no** refusal
   served a binary built from `862c7c2` for weeks").
   ⊘ **`5c1f501` is a CODE-ONLY commit and this section is not in it**, deliberately: the
   measurement has to bind to the content that was measured, so the evidence and this log
-  land in the commit *after* it. The two differ in `docs/` and in nothing else — no file
-  under `crates/`, `qemu/` or `scripts/` differs between them, which a reader can check
-  with `git diff --stat 5c1f501 HEAD`. ★ Two earlier revisions (`80fabd7`, `ec6feed`)
+  land in the commits *after* it. `git diff --name-only 5c1f501 HEAD` is `docs/…` plus
+  exactly one source file — `crates/kayfabe-qemu-raw/tests/shim_logic.rs`, a **test target
+  that is not linked into the archive** (the wire-size mirror; the full suite caught it and
+  §"Suite" below says so). Nothing the archive contains differs. ★ Two earlier revisions (`80fabd7`, `ec6feed`)
   produced the identical three-arm result and were discarded rather than cited: the first
   had a stray build directory in the commit, and the second was voided by a `cargo fmt`
   run **after** the boot. A verification binds to CONTENT at a REVISION, and an edit

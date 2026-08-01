@@ -476,7 +476,19 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // one aperture over. `fb_landed` needs the flag because framebuffer address ZERO is
     // where an unprogrammed window points, so a single field could not tell "landed at 0"
     // from "did not land", which are the two answers this rung is about.
-    assert_eq!(size_of::<KayfabeRegWrite>(), 112);
+    // ★ 112 -> 144 at `execution_plane_increments.md` **E2**: `doorbell` (which of the
+    // three answers this write was), the token, and the refusal KIND's own (pointer,
+    // length) pair.
+    // ⊘ This is the FIRST time a per-write field has been added since E1 declined to add
+    // one, and the difference is the increment's argument: an isolate refusal is a property
+    // of a whole boot, a doorbell is a property of ONE WRITE, and E2's acceptance is that
+    // *this* store at *this* instant reached the core. A per-boot counter cannot be stamped
+    // against a timeline the device does not write.
+    // ⚠ The KIND crosses as a pointer and the SENTENCE does not: the kind is a `FaultTag`,
+    // i.e. a `&'static str` in this archive's read-only data, while the sentence is
+    // `format!`ed and owned by a temporary. The sentence reaches the shell through
+    // `KayfabeRegAudit::doorbell_refusal` instead.
+    assert_eq!(size_of::<KayfabeRegWrite>(), 144);
     // ★ 12 -> 15 counters plus a 32-slot list at task #127: the emulated GSP's default
     // became a NAMED REFUSAL, and the guest logs `NV_ERR_NOT_SUPPORTED` quietly, so the
     // list of what nobody answered has to cross the seam or it costs a boot per entry.
@@ -512,12 +524,30 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // `isolates_materialized` (E0b: an isolate exists because the GUEST acted, so zero is a
     // finding) and `isolates_spawn_failed` (E1: a plane that was asked for and broke, which
     // used to be the same silence as a build that never had one).
+    // ★ E2: the doorbell refusal's own row — a KIND and a SENTENCE in two arrays rather
+    // than one blob, because the kind is a stable name a check may branch on
+    // (`FwdFault::MalformedToken` and `FwdFault::UnknownVchid` are two diagnoses with two
+    // fixes) and the sentence is prose. A single blob would make the only machine-readable
+    // half a substring search. `present` is the validity flag, and it is needed because a
+    // `kind_len` of zero is also what an audit nobody wrote looks like.
+    assert_eq!(
+        size_of::<kayfabe_qemu_raw::shim::KayfabeDoorbellRefusal>(),
+        kayfabe_qemu_raw::shim::DOORBELL_KIND_LEN
+            + kayfabe_qemu_raw::shim::DOORBELL_REFUSAL_LEN
+            + 3 * size_of::<u64>()
+    );
+    // ★ 37 -> 42 at `execution_plane_increments.md` E2: the doorbell aperture's three
+    // counters, the last token and its validity flag, plus the refusal row. The flag is not
+    // redundant — token ZERO is a legal work-submit token (runlist 0, channel 0), so one
+    // field could not tell "rang channel 0" from "never rang", which is the same
+    // two-fields-for-one-fact argument `fb_landed_valid` already carries.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (37 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (42 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
             + size_of::<kayfabe_qemu_raw::shim::KayfabeIsolateRefusal>()
+            + size_of::<kayfabe_qemu_raw::shim::KayfabeDoorbellRefusal>()
     );
     // ⊘ And the three `kind` values are DISTINCT and NONE is zero — the property the C
     // shell's branch and the "an unwritten struct is not a diagnosis" argument both rest
