@@ -1388,6 +1388,42 @@ static void nvkvm_report_registers(NvkvmState *s)
                         len, (const char *)r->tag, r->count);
         }
     }
+
+    /*
+     * ★★★ E0b/E1 — THE ISOLATE PLANE.  Printed unconditionally, all-zeros included, for
+     * the reason every other block here is: "no line appeared" is what a silently-dead
+     * reporter looks like, and this device has been bitten by that before.
+     *
+     * Two numbers, two different questions.
+     *
+     *  - `materialized` — DID THE GUEST CAUSE A SPAWN AT ALL?  Since E0b the isolate is
+     *    spawned by an accepted guest RM event and NOT by Gpu::realize, so 0 is a real
+     *    diagnosis (the guest never reached an accepted GSP_RM_ALLOC) rather than a blank.
+     *    ⊘ It says whether, never why: this device writes it, so it cannot attribute a
+     *    spawn to the guest.  scripts/bench/e0_isolate_witness.sh does that, against a
+     *    timeline this device does not write.
+     *
+     *  - `spawn-failed` — DID A PLANE WE ASKED FOR FAIL TO COME UP?  bench_rebuild_notes.md
+     *    §5 row 7: a failed real isolate used to be indistinguishable from a deliberately
+     *    plane-less build at the seam.  `no-plane` is a configuration; `spawn-failed` means
+     *    the host could not do what it was asked, and the sentence below says at which step.
+     */
+    info_report("nvkvm: isolates: %" PRIu64 " materialized, %" PRIu64 " live, "
+                "%" PRIu64 " refusing (%" PRIu64 " no-plane, %" PRIu64 " spawn-failed)",
+                a.isolates_materialized, a.isolates_live,
+                a.isolates_no_plane + a.isolates_spawn_failed,
+                a.isolates_no_plane, a.isolates_spawn_failed);
+    if (a.isolate_refusal.kind != KAYFABE_ISOLATE_REFUSAL_NONE) {
+        const char *kind = a.isolate_refusal.kind == KAYFABE_ISOLATE_REFUSAL_SPAWN_FAILED
+                           ? "spawn-failed" : "no-plane";
+        int len = (int)(a.isolate_refusal.len > KAYFABE_ISOLATE_REFUSAL_LEN
+                        ? KAYFABE_ISOLATE_REFUSAL_LEN : a.isolate_refusal.len);
+
+        /* %.*s, never %s: the sentence is NUL-PADDED and one that exactly fills the array
+         * carries no terminator. */
+        info_report("nvkvm:   isolate refusal [%s] %.*s",
+                    kind, len, (const char *)a.isolate_refusal.text);
+    }
 }
 
 static void nvkvm_exit_notify(Notifier *n, void *data)

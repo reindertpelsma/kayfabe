@@ -2275,10 +2275,21 @@ pub struct IsolateCensus {
 }
 
 impl IsolateCensus {
-    /// Fold one isolate's answer in. Keeps [`IsolateCensus::first`]'s precedence rule.
+    /// Fold one isolate in: counts it live, and folds its [`Isolate::refusal`].
     pub fn observe(&mut self, iso: &dyn Isolate) {
         self.live = self.live.saturating_add(1);
-        let Some(r) = iso.refusal() else { return };
+        self.observe_refusal(iso.refusal());
+    }
+
+    /// Fold one **answer** in, without a live count — the fold's own rule, reachable
+    /// without an [`Isolate`] to build.
+    ///
+    /// ★ Split out from [`IsolateCensus::observe`] so the precedence rule below can be
+    /// tested against both kinds in both orders. The alternative would have been a test
+    /// double that reports `SpawnFailed`, i.e. a mock deciding the answer to the question
+    /// under test — the shape this project has already had a planted mutation survive.
+    pub fn observe_refusal(&mut self, r: Option<IsolateRefusal<'_>>) {
+        let Some(r) = r else { return };
         match r.kind {
             RefusalKind::NoPlane => self.no_plane = self.no_plane.saturating_add(1),
             RefusalKind::SpawnFailed => self.spawn_failed = self.spawn_failed.saturating_add(1),

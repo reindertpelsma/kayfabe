@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 10u
+#define KAYFABE_SHIM_ABI 11u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -315,6 +315,25 @@ typedef struct KayfabeBridgeRefusal {
     uint64_t count;
 } KayfabeBridgeRefusal;
 
+/* How many bytes of the isolate plane's refusal SENTENCE KayfabeRegAudit carries, and the
+ * three values its `kind` may take.  Longer than a bridge tag because it is not a tag: a
+ * spawn failure's text is formatted from the host's own error at the failing step, and
+ * truncating it to a tag width would cut off exactly the errno an operator acts on.
+ *
+ * ★ NONE is 0 so that an all-zero audit reads as "nothing refused", which is true of a
+ * struct nobody wrote; the two real kinds are non-zero so an unwritten struct can never be
+ * read as a specific diagnosis. */
+#define KAYFABE_ISOLATE_REFUSAL_LEN 192u
+#define KAYFABE_ISOLATE_REFUSAL_NONE 0u
+#define KAYFABE_ISOLATE_REFUSAL_NO_PLANE 1u
+#define KAYFABE_ISOLATE_REFUSAL_SPAWN_FAILED 2u
+
+typedef struct KayfabeIsolateRefusal {
+    uint8_t text[KAYFABE_ISOLATE_REFUSAL_LEN];  /* NUL-PADDED, not NUL-terminated */
+    uint64_t len;
+    uint64_t kind;
+} KayfabeIsolateRefusal;
+
 typedef struct KayfabeRegAudit {
     uint64_t reads;
     uint64_t writes;
@@ -417,6 +436,26 @@ typedef struct KayfabeRegAudit {
     uint64_t bridge_refusals;
     uint64_t bridge_refusal_len;
     KayfabeBridgeRefusal bridge_refusal[KAYFABE_BRIDGE_REFUSAL_SLOTS];
+    /* ★★★ E1 — THE ISOLATE PLANE, AND WHY IT NEEDS ITS OWN FIELDS.
+     *
+     * `isolates_materialized` is the E0b number: since the spawn became LAZY, an isolate
+     * exists because the GUEST caused an RM event, so 0 means the guest never got that far.
+     * Before E0b it was 1 unconditionally, at device-realize time, 28 seconds before the
+     * guest existed (MEASURED, rev e10a6bf, runs e0real2/e0real3).
+     *
+     * ⊘ It is NOT the instrument that attributes a spawn to the guest — the device writes
+     * it, so it can say WHETHER and never WHY.  scripts/bench/e0_isolate_witness.sh is,
+     * because it stamps host /proc sightings against boot_capture's own phase lines.
+     *
+     * `isolates_spawn_failed` is the E1 number: bench_rebuild_notes.md §5 row 7 recorded
+     * that a FAILED real isolate was indistinguishable from a deliberately plane-less one
+     * at the seam — both are "retired, no workers, checkout returns None".  They are two
+     * different diagnoses and only one of them means the host is wrong. */
+    uint64_t isolates_materialized;
+    uint64_t isolates_live;
+    uint64_t isolates_no_plane;
+    uint64_t isolates_spawn_failed;
+    KayfabeIsolateRefusal isolate_refusal;
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.

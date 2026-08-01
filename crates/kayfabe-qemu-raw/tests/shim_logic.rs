@@ -500,12 +500,36 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // ★ 30 -> 33 at `#151`: the CPU interrupt tree's three. A boot that stopped at
     // `NV_ERR_IRQ_NOT_FIRING` and a boot that never reached the driver's loopback self-test
     // are the same silence from outside the process without `cpu_intr_raises`.
+    // ★ E1: the isolate refusal's own row, same shape and same reason as
+    // `KayfabeBridgeRefusal`'s — text by value, an explicit length, and a KIND, because a
+    // check keyed on a word is satisfied by writing the word.
+    assert_eq!(
+        size_of::<kayfabe_qemu_raw::shim::KayfabeIsolateRefusal>(),
+        kayfabe_qemu_raw::shim::ISOLATE_REFUSAL_LEN + 2 * size_of::<u64>()
+    );
+    // ★ 33 -> 37 at `execution_plane_increments.md` E1: the isolate plane's four counters,
+    // plus the refusal row. Two of the four are the increments' own headline numbers —
+    // `isolates_materialized` (E0b: an isolate exists because the GUEST acted, so zero is a
+    // finding) and `isolates_spawn_failed` (E1: a plane that was asked for and broke, which
+    // used to be the same silence as a build that never had one).
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (33 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (37 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
+            + size_of::<kayfabe_qemu_raw::shim::KayfabeIsolateRefusal>()
     );
+    // ⊘ And the three `kind` values are DISTINCT and NONE is zero — the property the C
+    // shell's branch and the "an unwritten struct is not a diagnosis" argument both rest
+    // on. Asserted rather than assumed: they are three `pub const`s that a careless edit
+    // could collapse without any other test noticing.
+    use kayfabe_qemu_raw::shim::{
+        ISOLATE_REFUSAL_NONE, ISOLATE_REFUSAL_NO_PLANE, ISOLATE_REFUSAL_SPAWN_FAILED,
+    };
+    assert_eq!(ISOLATE_REFUSAL_NONE, 0);
+    assert_ne!(ISOLATE_REFUSAL_NO_PLANE, ISOLATE_REFUSAL_NONE);
+    assert_ne!(ISOLATE_REFUSAL_SPAWN_FAILED, ISOLATE_REFUSAL_NONE);
+    assert_ne!(ISOLATE_REFUSAL_SPAWN_FAILED, ISOLATE_REFUSAL_NO_PLANE);
 }
 
 #[test]
@@ -1067,6 +1091,20 @@ fn the_stillborn_factory_retires_every_isolate_at_birth() {
     assert!(
         iso.checkout().is_none(),
         "★ a verb could be issued by default"
+    );
+    // ★★★ E1 — and it says WHY, by kind and by sentence, at the seam the core holds.
+    // ⊘ `NoPlane` and never `SpawnFailed`: this archive is behaving exactly as
+    // configured, and an operator who reads "spawn-failed" here goes and debugs a host
+    // that is fine. `bench_rebuild_notes.md` §5 row 7 is the fact that these two used to
+    // be the same silence.
+    let r = iso
+        .refusal()
+        .expect("★ the shipped default plane must say why it refuses");
+    assert_eq!(r.kind, kayfabe_isolate::RefusalKind::NoPlane);
+    assert!(
+        r.why.contains("no forwarding plane"),
+        "★ the sentence is the composition root's own; it said: {}",
+        r.why
     );
 }
 

@@ -1156,6 +1156,86 @@ mod tests {
         assert_eq!(iso.spawn_error(), Some("no image in this build"));
     }
 
+    /// ★★★ **E1 — bench gap 7, reproduced and then closed, in one test.**
+    ///
+    /// `bench_rebuild_notes.md` §5 row 7: *"a **failed** real isolate is indistinguishable
+    /// from the stillborn one at the seam"*. The first half below **reproduces** that —
+    /// every observable the core had before E1 agrees between a host spawn that failed and
+    /// a build that deliberately has no forwarding plane — so the second half is measuring
+    /// a real ambiguity rather than asserting into a vacuum. Delete
+    /// [`Isolate::refusal`] and the first half still passes; that is the point of writing
+    /// it out.
+    ///
+    /// ⊘ Driven through the two REAL implementors. `MockIsolate::refusal` is `None` by
+    /// construction, deliberately: a mock that answered here would be the thing under test
+    /// observing itself.
+    #[test]
+    fn a_failed_host_isolate_is_distinguishable_from_a_deliberately_planeless_one() {
+        use kayfabe_isolate::{IsolateCensus, RefusalKind, StillbornIsolates};
+
+        const NO_PLANE_WHY: &str = "this build has no forwarding plane: the object model \
+                                    accepts protocol facts and no host verb can be issued";
+        const FAILED_WHY: &str = "spawning the embedded isolate: EPERM (clone)";
+
+        let mut failed = HostIsolate::stillborn(IsolateId::new(2, GpuId(0)), 4, FAILED_WHY.into());
+        let mut sf = StillbornIsolates::new(NO_PLANE_WHY);
+        let mut planeless = sf.spawn(IsolateId::new(3, GpuId(0)));
+
+        // ---- gap 7, reproduced: every PRE-E1 observable agrees -----------------------
+        assert_eq!(failed.is_retired(), planeless.is_retired());
+        assert!(failed.is_retired(), "and both really are refusing");
+        assert!(failed.checkout().is_none() && planeless.checkout().is_none());
+        assert_eq!(failed.idle_workers(), planeless.idle_workers());
+        assert_eq!(failed.in_flight(), planeless.in_flight());
+        assert_eq!(failed.checked_out(), planeless.checked_out());
+        assert!(failed.is_quiesced() && planeless.is_quiesced());
+
+        // ---- and the E1 seam separates them ------------------------------------------
+        let f = failed.refusal().expect("a failed spawn refuses");
+        let p = planeless.refusal().expect("a plane-less build refuses");
+        assert_eq!(f.kind, RefusalKind::SpawnFailed);
+        assert_eq!(p.kind, RefusalKind::NoPlane);
+        assert_ne!(f.kind, p.kind, "the KIND is what a check may branch on");
+        assert_ne!(f.why, p.why, "and the sentences differ too");
+        assert_eq!(f.why, FAILED_WHY);
+        assert_eq!(p.why, NO_PLANE_WHY);
+
+        // ---- the census counts them apart, and prefers the actionable one -------------
+        let mut c = IsolateCensus::default();
+        c.observe(&*planeless);
+        c.observe(&failed);
+        assert_eq!((c.live, c.no_plane, c.spawn_failed), (2, 1, 1));
+        assert_eq!(c.refusing(), 2);
+        assert_eq!(
+            c.first,
+            Some((RefusalKind::SpawnFailed, FAILED_WHY.to_owned())),
+            "the one line a report has room for must be the one that means the host is wrong"
+        );
+    }
+
+    /// ⊘ A **live** isolate reports no refusal, and still reports none after an ordinary
+    /// [`Isolate::retire`] — the control for the test above. Without it, `refusal()`
+    /// returning `Some` unconditionally would pass everything else.
+    ///
+    /// Driven against a real loopback child: it is the only arm that can be spawned on a
+    /// runner with no GPU.
+    #[test]
+    fn a_live_isolate_reports_no_refusal_even_after_retire() {
+        let mut f = HostIsolateFactory::new(RmMode::Loopback);
+        let mut iso = f.spawn_host(IsolateId::new(9, GpuId(0)));
+        assert_eq!(
+            iso.spawn_error(),
+            None,
+            "the fixture must really have come up"
+        );
+        assert!(iso.refusal().is_none(), "a working isolate refuses nothing");
+        iso.retire();
+        assert!(
+            iso.refusal().is_none(),
+            "an ordinary teardown is not a refusal to investigate"
+        );
+    }
+
     /// ★★ The image really is embedded, and it really is a **static** ELF.
     ///
     /// Asserted on the bytes rather than on the build script's exit status: a build that
