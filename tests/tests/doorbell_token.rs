@@ -166,13 +166,13 @@ fn ga106_hardware_tokens_decode_to_rms_own_chids() {
                  and our decoder REFUSED it"
             )
         });
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a chid RM assigned on this part is < 4096"
+        )]
+        let want = VChid(*chid as u16);
         assert_eq!(
-            got.vchid,
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a chid RM assigned on this part is < 4096"
-            )]
-            VChid(*chid as u16),
+            got.vchid, want,
             "engine_type {engine_type:#x}: RM's channel-ID manager says this channel is \
              chid {chid}; the token it also handed out is {token:#010x}, which we decode \
              to {:?}",
@@ -255,8 +255,7 @@ fn the_census_records_the_part_the_conclusion_is_scoped_to() {
         "the census must carry the driver it was taken against"
     );
     assert!(
-        text.contains("instrumented symbols in .ko: 0")
-            && text.contains("in kallsyms: 0"),
+        text.contains("instrumented symbols in .ko: 0") && text.contains("in kallsyms: 0"),
         "the census must carry its own proof that the module was STOCK — an instrumented \
          driver could have answered anything"
     );

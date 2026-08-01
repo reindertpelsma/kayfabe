@@ -73,7 +73,11 @@ want_all=0
 # page-table format encoder over our GA10x decoder). Like the VBIOS-ORACLE step it READS
 # the test log, so the extractor defers it out of the default mode — which is why only the
 # `--all` literal moves and `GATE_STEPS_FAST_MIN` stays where it was.
-GATE_STEPS_ALL_MIN=20
+# ★ 20 -> 21: the TOKEN-ORACLE reached-count step (the tests that judge
+# `Ga10xArch::decode_doorbell` against NVIDIA's own work-submit-token encoder, increment
+# E3). Like the other two oracle steps it READS the test log, so the extractor defers it
+# out of the default mode — only the `--all` literal moves.
+GATE_STEPS_ALL_MIN=21
 GATE_STEPS_FAST_MIN=11
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.

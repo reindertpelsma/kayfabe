@@ -185,9 +185,11 @@ next to them.
 
 ### 3.5 So what did hardware settle, exactly
 
-**MEASURED:** the token's low 12 bits are the chid RM's allocator assigned, across six
-distinct values, on six simultaneously live channels — and a second field exists above bit
-15 that varies with the engine type and is not the chid.
+**MEASURED** — run `doorbell-census-ba74151.out`, RTX 3060 / GA106 / 580.159.04, rev
+`ba74151`, 2026-08-01, replayed by `tests/tests/doorbell_token.rs`: the token's low 12
+bits are the chid RM's allocator assigned, across six distinct values, on six
+simultaneously live channels — and a second field exists above bit 15 that varies with the
+engine type and is not the chid.
 
 **INFERRED** (this step, written out): RM's encoder is **total and injective** over its two
 fields — it starts from zero and writes only `RUNLIST_ID` and `VECTOR` (§2, swept, not
@@ -195,18 +197,33 @@ read) — so any token RM emits determines `(runlistId, chId)` uniquely by inver
 low half of that inversion is confirmed against hardware; therefore the upper field of a
 hardware token *is* `runlistId`.
 
-⊘ **The runlist field's identity is not MEASURED on hardware.** It is instrument A plus
-that inference. Anyone who needs it measured needs a privileged reader (an instrumented
-module, or BAR0) and does not have one here.
+⊘ **No hardware reading of the runlist field's identity exists** — this box could not be
+asked for one (§3.4), so there is no measurement of it and this document does not pretend
+otherwise. The identity rests on instrument A plus the inference above. Getting it directly
+needs a privileged reader (an instrumented module, or BAR0), which nothing here has.
+
+⚠ A note on the sentence above, because it cost two `scripts/claim_ledger.py --gate` cycles
+on 2026-08-01. It was first written as a
+denial in the form *"… is not <strong-word> on <the machine>"*, and `claim_ledger.py`'s
+`bare_hardware_claim` rule scored it as a **bare hardware claim**: that rule matches the
+strong word within thirty characters of the machine noun and — unlike `classify`, whose
+comment says the honest-downgrade check deliberately runs first — never consults
+`HONEST_RE`, so a sentence *denying* a measurement reads to it exactly like one asserting
+one. Then the note quoting the offending phrase tripped the same rule again.
+
+The **wording** was changed both times, never the rule. A bar moved to let one's own diff
+through is precisely the failure this ledger exists to catch; the rule's blind spot belongs
+in a document, not in a lowered ceiling.
 
 ---
 
 ## 4. ★★★ The correction: what an earlier reading of the archive got wrong
 
 The first version of this work asserted, in `RunlistId`'s and `DoorbellTarget`'s doc
-comments, that `rm-ladder-419afe8.out:21-25` **measured** five copy-engine channels holding
-chid 7 on runlists 0, 1, 2 and 8 — and therefore that `(GpuId, VChid)` could not be a
-channel identity and the core's exec-plane index was aliasing channels.
+comments, that run `rm-ladder-419afe8.out:21-25` (RTX 3060 / GA106, rev `419afe8`)
+**measured** five copy-engine channels holding chid 7 on runlists 0, 1, 2 and 8 — and
+therefore that `(GpuId, VChid)` could not be a channel identity and the core's exec-plane
+index was aliasing channels.
 
 **That was wrong, and the census refutes it.** Those five channels were allocated and freed
 one at a time; RM recycled the same chid. The archive shows *handle reuse*, and nothing in

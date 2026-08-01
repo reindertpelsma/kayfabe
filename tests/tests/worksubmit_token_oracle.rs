@@ -211,7 +211,8 @@ fn run(path: &str) -> (BTreeMap<String, String>, Vec<Case>) {
 #[test]
 fn our_decode_inverts_rms_own_encoder_over_the_whole_field_space() {
     let arch = Ga10xArch::new();
-    for (tag, path) in require_oracle!("our_decode_inverts_rms_own_encoder_over_the_whole_field_space")
+    for (tag, path) in
+        require_oracle!("our_decode_inverts_rms_own_encoder_over_the_whole_field_space")
     {
         let (header, cases) = run(path);
         // The scope, asserted rather than assumed: a harness that silently started
@@ -250,29 +251,26 @@ fn our_decode_inverts_rms_own_encoder_over_the_whole_field_space() {
             // 0xFFFFFFFF) comes back 0x007f0fff, so RM keeps 12 bits of chid and 7 of
             // runlist and drops the rest. A decoder must agree with the TRUNCATED value,
             // not with the value that was offered.
-            assert_eq!(
-                got.vchid,
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "masked to 12 bits on the line above"
-                )]
+            // Masked to 12 / 7 bits before the cast, so neither narrows.
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "both values are masked to 12 and 7 bits respectively"
+            )]
+            let (want_chid, want_runlist) = (
                 VChid((chid & 0xFFF) as u16),
-                "{tag}: case `{}` — RM encoded chid {chid} into {token:#010x}; we read \
-                 back {:?}",
-                case.name,
-                got.vchid
+                RunlistId((runlist & 0x7F) as u16),
             );
             assert_eq!(
-                got.runlist,
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "masked to 7 bits on the line above"
-                )]
-                RunlistId((runlist & 0x7F) as u16),
+                got.vchid, want_chid,
+                "{tag}: case `{}` — RM encoded chid {chid} into {token:#010x}; we read \
+                 back {:?}",
+                case.name, got.vchid
+            );
+            assert_eq!(
+                got.runlist, want_runlist,
                 "{tag}: case `{}` — RM encoded runlist {runlist} into {token:#010x}; we \
                  read back {:?}",
-                case.name,
-                got.runlist
+                case.name, got.runlist
             );
             checked += 1;
         }

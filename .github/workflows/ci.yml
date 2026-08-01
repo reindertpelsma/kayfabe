@@ -296,6 +296,51 @@ jobs:
           if [ "$ran" -gt 0 ]; then
             echo "This machine has a vendored ogkm tree: $ran oracle tests actually executed."
           fi
+      # ★★★ TOKEN-ORACLE-gate non-vacuity — increment E3, and the reason this one is here
+      # is sharper than either gate above.
+      #
+      # `Ga10xArch::decode_doorbell` is the ONLY seam in the port whose wrong answer is
+      # SILENT: a mis-decoded work-submit token routes a guest's ring to another channel,
+      # and on the Mode-2 path we are the GSP, so nothing downstream notices
+      # (`execution_plane_increments.md` §2.1). Both standing oracles are structurally
+      # blind to it — `MockArch::token_for` is the inverse of the mock's own decode, and
+      # `c_rust_trace_differential.md` records that the completion plane has NO C oracle.
+      # `tests/oracle/worksubmit_token_oracle.c` compiles NVIDIA's own
+      # `kfifoGenerateWorkSubmitTokenHal_*` and sweeps it; these two tests are the only
+      # place that encoding is checked against anything but our own beliefs.
+      #
+      # ★ Same honest limit as the GMMU gate: GitHub's runners have no vendored tree, so
+      # here the suite is counted and never passes. The floor is what stops it vanishing
+      # from the bench and from CI at the same time.
+      #
+      # Floor 2 = the two tests in the suite. A floor, not an equality.
+      - name: TOKEN-ORACLE-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'TOKEN-ORACLE-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'TOKEN-ORACLE-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          echo "TOKEN-oracle gate: ran=$ran skipped=$skipped total=$total (floor 2)"
+          if [ "$total" -lt 2 ]; then
+            echo "::error::TOKEN-oracle tests were not reached: $total < 2." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "These are the ONLY tests that judge the GA10x doorbell decode against" \
+                 "RM's own encoder, and a wrong doorbell decode fails SILENTLY."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This machine has a vendored ogkm tree: $ran token-oracle tests executed."
+          fi
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Format check

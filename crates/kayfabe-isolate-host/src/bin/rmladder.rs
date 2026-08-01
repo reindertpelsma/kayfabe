@@ -297,12 +297,8 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
         p[4..8].copy_from_slice(&index.to_le_bytes()); // fifoInfoTbl[0].index
         let et = FIFO_GET_INFO_PARAMS_SIZE - 4;
         p[et..].copy_from_slice(&engine_type.to_le_bytes());
-        rm.control(
-            subdevice,
-            ControlCmd(NV2080_CTRL_CMD_FIFO_GET_INFO),
-            &mut p,
-        )
-        .ok()?;
+        rm.control(subdevice, ControlCmd(NV2080_CTRL_CMD_FIFO_GET_INFO), &mut p)
+            .ok()?;
         Some(u32::from_le_bytes([p[8], p[9], p[10], p[11]])) // fifoInfoTbl[0].data
     }
 
@@ -354,7 +350,9 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
         new
     }
 
-    println!("info  R13c census        = RM's own chid manager vs the work-submit token, GPU {gpu}");
+    println!(
+        "info  R13c census        = RM's own chid manager vs the work-submit token, GPU {gpu}"
+    );
 
     // ── The two facts that decide how to READ everything below ───────────────────────
     match fifo_info(
@@ -414,8 +412,12 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
     // every time, so the sweep produced one chid value six times and pinned nothing. Held
     // together they take distinct chids, and a decoder that got the field WIDTH or the
     // shift wrong now has somewhere to be wrong.
-    let mut held: Vec<(u32, kayfabe_isolate::HostHandle, kayfabe_isolate::HostHandle, u64)> =
-        Vec::new();
+    let mut held: Vec<(
+        u32,
+        kayfabe_isolate::HostHandle,
+        kayfabe_isolate::HostHandle,
+        u64,
+    )> = Vec::new();
     for &engine_type in &engine_types {
         let Ok(vas) = rm.alloc_vaspace() else {
             println!("SAMPLE-REFUSED engine_type={engine_type:#x} reason=no-vaspace");
@@ -477,7 +479,9 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
                 })
                 .collect()
         };
-        let Ok(vas) = rm.alloc_vaspace() else { continue };
+        let Ok(vas) = rm.alloc_vaspace() else {
+            continue;
+        };
         let before = counts(rm);
         match rm.alloc_channel_on(vas, x) {
             Ok((chan, token)) => {
@@ -507,8 +511,8 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
     // `per_runlist_channel_ram=0` it is the latter, and it is structural:
     // `kfifoGetChidMgr` returns `ppChidMgr[0]` for EVERY runlist id in that configuration
     // (`ogkm-580: kernel_fifo.c:1457-1466`), so the per-engine count this rung diffs is
-    // one global number. Read `partition_is_vacuous=1` as: THIS RUNG MEASURED NOTHING
-    // ABOUT THE UPPER FIELD.
+    // one global number. Read `partition_is_vacuous=1` as: this rung has **not measured**
+    // anything at all about the token's upper field.
     println!(
         "FACT partition_is_vacuous={}",
         u8::from(
