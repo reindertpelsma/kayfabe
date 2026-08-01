@@ -343,10 +343,51 @@ pub struct RpcCommand {
     pub code: u32,
     /// `rpc.sequence` — the transaction id a reply is matched on.
     pub sequence: u32,
-    /// The declared body length, after the 32-byte envelope.
+    /// The body as the envelope's own `length` **declares** it, after the 32-byte
+    /// envelope.
+    ///
+    /// ⚠ This is the DECLARED extent and not necessarily everything that arrived — see
+    /// [`RpcCommand::delivered`]. It is what a reply is sized against
+    /// ([`RpcCommand::reply`]) and what every function whose `length` covers its whole
+    /// body should be decoded from.
     pub payload: Vec<u8>,
     /// How many ring elements the command occupied.
     pub elements: u32,
+    /// ★★★ **Everything the guest actually put in the element run**, after the envelope —
+    /// a superset of [`RpcCommand::payload`], or empty when the transport recorded none.
+    ///
+    /// # Why this exists: `GSP_RM_ALLOC`'s `length` does not cover its `params[]`
+    ///
+    /// `[measured]` — the 2026-08-01 boot at rev `2ced035` refused all four of
+    /// `RmInitAdapter`'s allocations with `ParamsSizeExceedsPayload`, and reading the
+    /// guest's send path says why. `rpcRmApiAlloc_GSP` calls
+    /// `rpcWriteCommonHeader(pGpu, pRpc, NV_VGPU_MSG_FUNCTION_GSP_RM_ALLOC,
+    /// sizeof(rpc_gsp_rm_alloc_v03_00))` (`ogkm-580: rpc.c:11196-11199`) and
+    /// `rpcWriteCommonHeader` sets `length = sizeof(rpc_message_header_v) + paramLength`
+    /// (`ogkm-580: rpc_common.c:183`). `rpc_gsp_rm_alloc_v03_00`'s last member is
+    /// `NvU8 params[]`, a **flexible array** (`ogkm-580: g_rpc-structures.h:1491-1502`),
+    /// so `sizeof` is 32 and the declared `length` stops exactly where `params[]` begins.
+    /// The params are then `portMemCopy`'d in afterwards and `length` is never updated.
+    ///
+    /// They still arrive: `GspMsgQueueSendCommand` copies whole
+    /// `GSP_MSG_QUEUE_ELEMENT_SIZE_MIN` (`RM_PAGE_SIZE`) elements into the queue
+    /// (`ogkm-580: message_queue_cpu.c:563-565`), so an alloc's params sit in the element
+    /// run past the declared length. ⊘ The C artifact — the only implementation a real
+    /// driver has ever accepted end to end — reads them exactly that way, at a fixed
+    /// element offset with no reference to `length` at all
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:6775-6781`, `params = cmd + 112`).
+    ///
+    /// ⚠ **And they are NOT covered by the queue checksum.** On the non-confidential-
+    /// compute path the guest checksums `msgLen` bytes only
+    /// (`ogkm-580: message_queue_cpu.c:519`), which is the declared length — so these
+    /// bytes have no integrity check on either side. They are still **bounded**: the run
+    /// the guest submitted is `elemCount * RM_PAGE_SIZE` and nothing here reads past it.
+    /// Treat them as hostile bytes inside a bounded window, which is what
+    /// `AllocParams::NoDeclaredFacts` already assumes of every params blob.
+    ///
+    /// ⊘ Reply sizing must NEVER use this. A reply is clamped to `payload`, because that
+    /// is the window the guest reads its answer out of.
+    pub delivered: Vec<u8>,
 }
 
 impl RpcCommand {
@@ -359,6 +400,25 @@ impl RpcCommand {
             sequence: msg.envelope.sequence,
             payload: msg.payload.clone(),
             elements: msg.elements,
+            delivered: msg.delivered.clone(),
+        }
+    }
+
+    /// The bytes a **params decoder** may look at: [`Self::delivered`] when the transport
+    /// recorded a longer run, else [`Self::payload`].
+    ///
+    /// ★ Never the other way round, and never a `max` of two lengths over one buffer:
+    /// `delivered` is a superset of `payload` by construction (same start, further end),
+    /// so choosing the longer of the two is choosing the same bytes plus more of them.
+    ///
+    /// ⊘ A caller that wants the *declared* extent — anything sizing a reply — wants
+    /// [`Self::payload`] and must not call this.
+    #[must_use]
+    pub fn wire_body(&self) -> &[u8] {
+        if self.delivered.len() > self.payload.len() {
+            &self.delivered
+        } else {
+            &self.payload
         }
     }
 

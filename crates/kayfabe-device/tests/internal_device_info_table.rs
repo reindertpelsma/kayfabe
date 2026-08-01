@@ -705,6 +705,7 @@ fn device_info_command(cmd: u32, params_size: u32, serialized: bool) -> RpcComma
         sequence: 5,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 

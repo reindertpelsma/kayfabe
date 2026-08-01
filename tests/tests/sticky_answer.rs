@@ -76,6 +76,7 @@ fn control(cmd: u32, params: usize, flags: u32, access_right: u32) -> RpcCommand
         sequence: 11,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 
@@ -388,6 +389,7 @@ fn the_not_a_control_rows_decline_every_control_command() {
                 sequence: 1,
                 payload: vec![0u8; 12],
                 elements: 1,
+                delivered: Vec::new(),
             })
             .is_some(),
         "InertPolicy answers nothing at all — the sweep above is vacuous",

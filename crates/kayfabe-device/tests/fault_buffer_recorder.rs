@@ -43,6 +43,7 @@ fn control(cmd: u32, params: &[u8]) -> RpcCommand {
         sequence: 3,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 
@@ -86,6 +87,7 @@ fn the_recorder_answers_nothing() {
             sequence: 4,
             payload: Vec::new(),
             elements: 1,
+            delivered: Vec::new(),
         })
         .is_none()
     );

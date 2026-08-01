@@ -123,6 +123,7 @@ fuzz_target!(|input: Input| {
             sequence: m.sequence,
             payload: m.payload.clone(),
             elements: m.elements,
+            delivered: Vec::new(),
         };
 
         // (1) The reply constructor the audit flagged: the body is clamped to the

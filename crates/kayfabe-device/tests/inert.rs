@@ -20,6 +20,7 @@ fn command(function: RpcFunction, code: u32, payload: Vec<u8>) -> RpcCommand {
         sequence: 7,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 

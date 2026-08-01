@@ -165,6 +165,7 @@ fn falcon_command(cmd: u32, params_size: u32, serialized: bool) -> RpcCommand {
         sequence: 5,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 

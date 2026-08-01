@@ -90,6 +90,7 @@ fn memsys_command(cmd: u32, params_size: u32, serialized: bool) -> RpcCommand {
         sequence: 11,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 

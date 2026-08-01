@@ -90,6 +90,7 @@ fn command(msg: &[u8]) -> RpcCommand {
         sequence: env.sequence,
         payload: abi().rpc_payload(msg).expect("payload").to_vec(),
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 
@@ -6775,6 +6776,7 @@ fn a_fragmented_control_reassembles_into_the_unfragmented_command() {
                 // One element per fragment: `command` builds each with `elements: 1`, and
                 // the reassembled fact must still measure the transport it cost.
                 elements: run.len() as u32,
+                delivered: Vec::new(),
             })),
             "★ the reassembled command is the head's identity and the whole body, {what}",
         );
@@ -6823,6 +6825,7 @@ fn a_control_split_into_many_records_rejoins_byte_for_byte() {
                 sequence: 0x2200,
                 payload: body.clone(),
                 elements: run.len() as u32,
+                delivered: Vec::new(),
             })),
             "split {split}",
         );
@@ -7362,6 +7365,7 @@ fn no_refusal_wedges_the_reassembler() {
                     sequence: 0x1100,
                     payload: whole.payload.clone(),
                     elements: 2,
+                    delivered: Vec::new(),
                 })),
             ],
             "★ the reassembler is wedged after {what}",

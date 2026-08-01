@@ -169,6 +169,7 @@ fn command(cmd: u32, params_size: usize) -> RpcCommand {
         sequence: 7,
         payload: control_payload(cmd, params_size),
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 

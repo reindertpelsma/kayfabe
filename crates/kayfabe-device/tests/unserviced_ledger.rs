@@ -26,6 +26,7 @@ fn control(cmd: u32) -> RpcCommand {
         sequence: 1,
         payload,
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 
@@ -36,6 +37,7 @@ fn other(code: u32) -> RpcCommand {
         sequence: 2,
         payload: Vec::new(),
         elements: 1,
+        delivered: Vec::new(),
     }
 }
 
@@ -110,6 +112,7 @@ fn a_control_too_short_to_decode_is_recorded_without_inventing_a_command() {
         sequence: 3,
         payload: vec![0u8; 8],
         elements: 1,
+        delivered: Vec::new(),
     });
     assert_eq!(
         log.sample(),
