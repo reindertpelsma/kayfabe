@@ -94,13 +94,17 @@
 //!   is invisible until a guest trips it.
 
 /// The generated wire layouts. Produced by `kayfabe-abi-gen`; do not edit.
+pub mod bifstatic;
 pub mod bringup;
 pub mod capability;
 pub mod chipinfo;
+pub mod confcompute;
 pub mod deviceinfo;
 pub mod falconinfo;
 pub mod faultbuffer;
+pub mod fifochannels;
 pub mod generated;
+pub mod gmmustatic;
 pub mod gspstaticinfo;
 pub mod guest_os;
 pub mod guestsysinfo;

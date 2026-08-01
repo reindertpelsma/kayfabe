@@ -61,9 +61,13 @@ pub mod staticinfo;
 pub mod sweep;
 pub mod unserviced;
 
+use kayfabe_abi::bifstatic::BifStaticRow;
 use kayfabe_abi::chipinfo::ChipInfoRow;
+use kayfabe_abi::confcompute::ConfComputeRow;
 use kayfabe_abi::deviceinfo::DeviceInfoRow;
 use kayfabe_abi::falconinfo::FalconInventoryRow;
+use kayfabe_abi::fifochannels::FifoChannelsRow;
+use kayfabe_abi::gmmustatic::GmmuStaticRow;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::memsysconfig::MemorySystemRow;
@@ -334,6 +338,49 @@ pub struct ChipProfile {
     /// list. See [`crate::sweep`] for why this refusal is worse than a refusal inside
     /// `gpuPreInit`.
     pub device_info: DeviceInfoRow,
+    /// ★★ **What this device says about its confidential-compute plane** — two `NvBool`s,
+    /// and the only thing standing between CPU-RM and a BAR1 mapping of protected vidmem
+    /// (`ogkm-580: src/nvidia/src/kernel/rmapi/mapping_cpu.c:227-235`).
+    ///
+    /// ⊘ A chip row rather than a constant because *whether a part has a CC plane at all*
+    /// is a fact about silicon. `kayfabe_abi::confcompute` makes the widening direction —
+    /// claiming trust this port cannot back — unencodable; it cannot make the fail-open
+    /// direction unencodable, because here the all-zero answer is the **right** one. See
+    /// that module for why refusing and serving the truth are byte-identical to the guest.
+    pub conf_compute: ConfComputeRow,
+    /// ★★ **What this device says about its bus interface** — four `NvBool`s that become
+    /// four `KernelBif` PDB properties.
+    ///
+    /// ⊘ Two of them point RM at hardware: `bIsC2CLinkUp` at a coherent chip-to-chip
+    /// mapping of framebuffer, and `bIsDeviceMultiFunction` at configuration space for a
+    /// PCI function 1. `kayfabe_abi::bifstatic` makes both unencodable for a device that
+    /// presents neither.
+    pub bif_static: BifStaticRow,
+    /// ★★★ **How many channel ids this chip's FIFO has per runlist** — the first control in
+    /// the sweep whose refusal **halts** the boot instead of amputating something.
+    ///
+    /// `kfifoRunlistQueryNumChannels_KERNEL` returns zero on any failure
+    /// (`ogkm-580: kernel_fifo.c:1330-1336`) and `kfifoChidMgrConstruct` turns that zero
+    /// into `NV_ERR_INVALID_STATE` (`:300-308`) — which `gpuStateInit_IMPL` does **not**
+    /// map to `NV_OK`, so the boot aborts at a named statement rather than continuing with
+    /// an amputated engine. ⊘ That makes refusing safe and makes serving the thing that
+    /// buys the next boot any reach at all: every engine after `KernelFifo` in
+    /// `gpuChildOrderList_GM200` is unreachable while this answers zero.
+    pub fifo_channels: FifoChannelsRow,
+    /// ★★★ **The two MMU fault buffers' sizes** — and the row whose absence is a
+    /// guest-kernel **use-after-free** rather than an amputation.
+    ///
+    /// `_kgmmuInitStaticInfo` allocates `pKernelGmmu->pStaticInfo`, and on a failed control
+    /// `portMemFree`s it **without NULLing the field**
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:139-166`).
+    /// `gpuStateInit_IMPL` then maps the `NV_ERR_NOT_SUPPORTED` to `NV_OK` and carries on
+    /// (`ogkm-580: gpu.c:2286-2287`), leaving `KernelGmmu` alive with a dangling pointer that
+    /// every `NULL` check passes and that guest-reachable control handlers read
+    /// (`mmu_fault_buffer_ctrl.c:84, 176`).
+    ///
+    /// ⊘ `[inferred]` from source, not from a boot — see [`kayfabe_abi::gmmustatic`], which
+    /// states the boundary rather than eliding it.
+    pub gmmu_static: GmmuStaticRow,
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and

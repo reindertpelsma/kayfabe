@@ -39,9 +39,13 @@
 //! variant for; `decode_reg` returns `None` there, which the FSM treats as *"another
 //! model owns this offset"* and never as a defaulted zero (plan §11-O1, still open).
 
+use kayfabe_abi::bifstatic::BifStaticRow;
 use kayfabe_abi::chipinfo::{ChipInfoRow, RegBaseRow, reg_base};
+use kayfabe_abi::confcompute::ConfComputeRow;
 use kayfabe_abi::deviceinfo::{DeviceInfoRow, DevicePriBase, EnginePriBase};
 use kayfabe_abi::falconinfo::FalconInventoryRow;
+use kayfabe_abi::fifochannels::FifoChannelsRow;
+use kayfabe_abi::gmmustatic::GmmuStaticRow;
 use kayfabe_abi::gspstaticinfo::FbRegion;
 use kayfabe_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
 use kayfabe_abi::memsysconfig::{ComptagAllocationPolicy, MemorySystemRow, RAM_TYPE_GDDR6};
@@ -1362,6 +1366,78 @@ pub static GA106_DEVICE_INFO: DeviceInfoRow = DeviceInfoRow {
     ],
 };
 
+/// ★★ **What a GA106 says about its confidential-compute plane: nothing is trusted.**
+///
+/// `[measured]`, and the run is the **C artifact's rather than this port's**: the oracle's
+/// captured reply table carries `{0x20800af3u, 0x0u, 2u, 0u, ctl_20800af3}`
+/// (`C: src/qemu/mode2_initctrl_ga106.h:6216`, `nvidia-gpu-passthrough` rev `018e492`) with
+/// an **empty** `ctl_20800af3[]` at `:39-40`. The capture trims trailing zeros, so a real
+/// RTX 3060's own GSP answered `NV_OK` with both bits clear.
+///
+/// ⊘ Written down rather than defaulted, because the fail-open value and the true value are
+/// the same two bytes — see [`kayfabe_abi::confcompute`]. Both bits clear is RM **refusing**
+/// to map compute-protected vidmem through BAR1
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/mapping_cpu.c:227-235`), and that refusal is one
+/// this port wants kept: it serves no CPR aperture.
+pub static GA106_CONF_COMPUTE: ConfComputeRow = ConfComputeRow {
+    bar1_trusted: false,
+    pcie_trusted: false,
+};
+
+/// ★★ **What a GA106 says about its bus interface: four `NvBool`s, all clear.**
+///
+/// `[measured]`, and the run is the **C artifact's rather than this port's**:
+/// `{0x20800aacu, 0x0u, 4u, 0u, ctl_20800aac}` (`C: src/qemu/mode2_initctrl_ga106.h:6258`,
+/// rev `018e492`) with an **empty** `ctl_20800aac[]` at `:5413-5414`.
+///
+/// ⚠ `bPcieGen4Capable = false` on a board that is Gen4-capable is the oracle's own answer,
+/// carried verbatim. This port has no independent source for it, and nothing in the open 580
+/// tree reads the property it sets — `[inferred]` from a grep of the open trees only. See
+/// [`kayfabe_abi::bifstatic`].
+///
+/// The other three are statements about *this device* and not about the oracle's board:
+/// there is no chip-to-chip link, one PCI function, and no power-state transition for a PMU
+/// to restore configuration space across.
+pub static GA106_BIF_STATIC: BifStaticRow = BifStaticRow {
+    pcie_gen4_capable: false,
+    c2c_link_up: false,
+    device_multi_function: false,
+    gcx_pmu_cfg_space_restore: false,
+};
+
+/// ★★★ **2048 channel ids per runlist** — and refusing to say so halts the boot.
+///
+/// `[measured]`, and the run is the **C artifact's rather than this port's**:
+/// `{0x20800a61u, 0x0u, 8u, 8u, ctl_20800a61}` (`C: src/qemu/mode2_initctrl_ga106.h:6210`,
+/// rev `018e492`), whose eight bytes are `runlistId = 0` then `numChannels = 0x0800`
+/// (`:12-14`). A real RTX 3060's own GSP answered this control 2048.
+///
+/// ⊘ `[inferred]`: that every runlist has the same count. The oracle's table is keyed on the
+/// command alone, so all four of `cap1b`'s asks got the same 2048 and a stock guest booted
+/// through it. See [`kayfabe_abi::fifochannels`] for what a chip with differing runlists
+/// would need instead.
+pub static GA106_FIFO_CHANNELS: FifoChannelsRow = FifoChannelsRow {
+    channels_per_runlist: 0x0800,
+};
+
+/// ★★★ **The two MMU fault buffers a GA106's GSP sizes** — and the only row in this file
+/// whose absence is a **use-after-free** rather than an amputation.
+///
+/// `[measured]`, and the run is the **C artifact's rather than this port's**:
+/// `{0x20800a59u, 0x0u, 16u, 16u, ctl_20800a59}` (`C: src/qemu/mode2_initctrl_ga106.h:6260`,
+/// `nvidia-gpu-passthrough` rev `018e492`) — `psize` 16, captured `dlen` 16, nothing trimmed
+/// — whose sixteen bytes are at `:5418-5419`.
+///
+/// ★ Both sizes are exact multiples of `NVC369_BUF_SIZE` = 32 (6 272 and 36 961 fault
+/// packets), which is the arithmetic RM performs on them and therefore an independent check
+/// on the field order rather than a restatement of it. See [`kayfabe_abi::gmmustatic`].
+pub static GA106_GMMU_STATIC: GmmuStaticRow = GmmuStaticRow {
+    replayable_size: 0x0003_1000,
+    replayable_shadow_metadata_size: 0,
+    non_replayable_size: 0x0012_0c20,
+    non_replayable_shadow_metadata_size: 0,
+};
+
 /// ★ **The GA106 row.** Everything above, selected.
 ///
 /// The PCI identity is deliberately *incomplete* here: the vendor id and class code are
@@ -1401,6 +1477,10 @@ pub static GA106: ChipProfile = ChipProfile {
     constructed_falcons: GA106_CONSTRUCTED_FALCONS,
     memory_system: GA106_MEMORY_SYSTEM,
     device_info: GA106_DEVICE_INFO,
+    conf_compute: GA106_CONF_COMPUTE,
+    bif_static: GA106_BIF_STATIC,
+    fifo_channels: GA106_FIFO_CHANNELS,
+    gmmu_static: GA106_GMMU_STATIC,
     fb_length: GA106_FB_LENGTH,
 };
 

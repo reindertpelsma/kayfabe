@@ -57,6 +57,7 @@ use kayfabe_crec::{
     census, load_cap1, load_cap1b, served_policy,
 };
 use kayfabe_device::inittables::WantedTable;
+use kayfabe_device::sweep::{SweepDisposition, triage_for};
 use kayfabe_gsp::{BootPhase, GspFault, Observation, Transition};
 
 fn cap1b() -> CTrace {
@@ -308,7 +309,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         "a served control the differential never sees is a served control no differential \
          can regress"
     );
-    assert_eq!(universe.len(), 8, "non-vacuity: the universe is not empty");
+    assert_eq!(universe.len(), 12, "non-vacuity: the universe is not empty");
 
     // fn 65 is `StaticInfoPolicy`, and fn 228 is `InertPolicy`. Both are answered here too,
     // so all three answering links of the chain are exercised in one run.
@@ -321,6 +322,84 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     for want in [1, 65, 76, 103, 228] {
         assert!(functions.contains(&want), "fn {want} never arrived");
     }
+}
+
+#[test]
+fn every_control_the_oracle_asks_is_either_served_or_triaged() {
+    // ★★★ **The gate that replaces the pre-flight table nobody kept up to date.**
+    //
+    // `docs/design/preinit_sweep_loop.md` §4.1 listed six controls it expected the sweep to
+    // reach. It was a table in a document, so it could only ever be as current as the last
+    // person to edit it — and `t134a`'s defect was precisely a control nobody had written
+    // anything about. This derives the universe from the **capture**: every `fn 76` command
+    // the C oracle's own boot issues inside the replay's closure limit.
+    //
+    // Each one must be in `WantedTable::ALL` (this port answers it) or in `SWEEP_TRIAGE`
+    // (this port has written down what refusing it does, and why). ⊘ Neither list can be
+    // shortened into agreement, because the universe is neither of them.
+    //
+    // ⚠ It is *not* a demand that everything be served. Most of these are refused on
+    // purpose; see `kayfabe_device::sweep::SweepDisposition` for the five outcomes and
+    // `sweep_triage.rs` for the gate that says which refusals are allowed.
+    let (_t, r) = served();
+    let limit = r.closure_limit.expect("this capture has one");
+
+    let asked: BTreeSet<u32> = r
+        .commands
+        .iter()
+        .filter(|(t, _)| *t < limit)
+        .filter_map(|(_, c)| control_cmd(c))
+        .collect();
+
+    // Non-vacuity, and it is the load-bearing half: a harness that decoded nothing would
+    // pass this test with an empty universe.
+    assert_eq!(
+        asked.len(),
+        28,
+        "the distinct controls the oracle's boot issues before the wall"
+    );
+
+    let unaccounted: Vec<String> = asked
+        .iter()
+        .filter(|c| WantedTable::from_cmd(**c).is_none() && triage_for(**c).is_none())
+        .map(|c| format!("{c:#010x}"))
+        .collect();
+    assert!(
+        unaccounted.is_empty(),
+        "the oracle's own boot asks these and this port has neither served them nor written          down what refusing them does — which is exactly t134a's defect: {unaccounted:?}"
+    );
+
+    // ★★ And the split is counted on both sides, so a control MOVING between the two is a
+    // visible change rather than an invisible one. Twelve served, sixteen refused with a
+    // written argument. ⊘ The triage table has 23 rows, not 16+12: six of the twelve served
+    // controls are ALSO triaged (that is what makes the must-serve gate possible), and
+    // `0x20800a4b` is triaged without the oracle ever asking it.
+    let served_here: Vec<String> = asked
+        .iter()
+        .filter(|c| WantedTable::from_cmd(**c).is_some())
+        .map(|c| format!("{c:#010x}"))
+        .collect();
+    assert_eq!(served_here.len(), 12);
+    let triaged_here: Vec<&str> = asked
+        .iter()
+        .filter(|c| WantedTable::from_cmd(**c).is_none())
+        .map(|c| triage_for(*c).expect("accounted for above").engine)
+        .collect();
+    assert_eq!(triaged_here.len(), 16);
+
+    // ⊘ A control the oracle asks may not be triaged `AmputationIntended`: that disposition
+    // means "the chip lacks the engine", and the oracle's board demonstrably had it.
+    // `0x20800a87` (NVLink) and `0x2080017e` (VMMU) are the two exceptions the argument
+    // itself names — the caller tolerates the status by hand in both — and they are listed
+    // rather than exempted by a predicate, so a third would be red.
+    let intended: Vec<String> = asked
+        .iter()
+        .filter(|c| {
+            triage_for(**c).is_some_and(|t| t.disposition == SweepDisposition::AmputationIntended)
+        })
+        .map(|c| format!("{c:#010x}"))
+        .collect();
+    assert_eq!(intended, vec!["0x2080017e", "0x20800a87"]);
 }
 
 #[test]
@@ -383,6 +462,28 @@ fn the_served_replies_are_the_ones_posted_and_each_carries_the_result_it_earned(
             // this row is the first evidence of it that costs no boot.
             (WantedTable::MemorySystemStaticConfig, 11, 76, 0),
             (WantedTable::PciBarInfo, 12, 76, 0),
+            // ★★★ From here down is the first BATCHED rung — four controls served in one
+            // change because the sweep reaches all of them in one boot
+            // (`docs/design/preinit_sweep_loop.md` §4.3). Sequences 13 and 14 fail open:
+            // their callers hand RM a zeroed destination and swallow the status, so the
+            // guest state is the same either way and only the envelope changes.
+            (WantedTable::ConfComputeStaticInfo, 13, 76, 0),
+            (WantedTable::BifStaticInfo, 14, 76, 0),
+            // ★★ Three runlists in a row, and each reply carries the guest's OWN `[IN]`
+            // `runlistId` rather than a number of ours. Refusing these three is where the
+            // boot stopped: `kfifoChidMgrConstruct` reads a zero channel count as
+            // `NV_ERR_INVALID_STATE`, which `gpuStateInit_IMPL` does not map to `NV_OK`.
+            (WantedTable::FifoNumChannels, 15, 76, 0),
+            (WantedTable::FifoNumChannels, 16, 76, 0),
+            (WantedTable::FifoNumChannels, 17, 76, 0),
+            // ★★★ The one whose refusal leaves `pKernelGmmu->pStaticInfo` pointing at
+            // memory `_kgmmuInitStaticInfo` already freed (`ogkm-580: kern_gmmu.c:139-166`).
+            (WantedTable::GmmuStaticInfo, 26, 76, 0),
+            // ★ The fourth ask of the channel count, from a runlist the first three did not
+            // cover, and the second ask of the CC static info — this one from
+            // `confComputeStatePostLoad_IMPL` rather than `StateInitLocked`.
+            (WantedTable::FifoNumChannels, 34, 76, 0),
+            (WantedTable::ConfComputeStaticInfo, 44, 76, 0),
         ]
     );
 }

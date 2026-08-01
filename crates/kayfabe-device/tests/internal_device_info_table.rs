@@ -858,6 +858,10 @@ fn bad_chip(
         memory_system: g.memory_system,
         constructed_falcons: g.constructed_falcons,
         device_info,
+        conf_compute: g.conf_compute,
+        bif_static: g.bif_static,
+        fifo_channels: g.fifo_channels,
+        gmmu_static: g.gmmu_static,
         fb_length: g.fb_length,
     }))
 }

@@ -164,31 +164,100 @@ Three sources answer "what will be asked" with no bench at all:
    `every_control_this_port_serves_is_exercised_by_the_replay` asserts
    `reached == WantedTable::ALL`. **A served control the capture never reaches makes it go
    red and cannot be made green.** So membership in the prefix is a design input, decided
-   before the code is written. `[measured]` by running
-   `cargo run -p kayfabe-crec --example cap1b_report` over
-   `traces/cap1b_coldboot_hermetic_d6.rec` at `df9dd36`, for the six `t134a` named:
+   before the code is written.
 
-   | control | in `cap1b`'s prefix? |
-   |---|---|
-   | `0x20800a87` NVLINK | yes — seq 7 |
-   | `0x20800a40` DEVICE_INFO_TABLE | yes — seq 8, 7 queue elements |
-   | `0x20800a1c` MEMSYS_STATIC_CONFIG | yes — seq 11 |
-   | `0x20800af3` CONF_COMPUTE | yes — seq 13 |
-   | `0x20800aac` BIF_STATIC_INFO | yes — seq 14 |
-   | `0x20800a4b` DISPLAY_IP_VERSION | ⊘ **no** — the oracle's board never asked |
+   ★★★ **CORRECTED, and this is the important change to this section.** The version of this
+   document that named six controls here was reading source 1 and checking six of its
+   answers against the capture. That is backwards. **Source 3 is not a check on the
+   pre-flight — it IS the pre-flight**, because it is the only one of the three that is a
+   *observation* rather than a reading: it lists exactly what the guest asked, in order,
+   with nothing inferred about which engine wanted it.
+
+   `[measured]` `cargo run -p kayfabe-crec --example cap1b_report` over
+   `traces/mode2_c_reference/cap1b_coldboot_hermetic_d6.rec` at `a96f867`. **28 distinct
+   `fn 76` controls** inside the closure limit (txn 1028 / `rpc.sequence` 51):
+
+   | seq | control | engine | served at `a96f867`? |
+   |---|---|---|---|
+   | 3 | `0x20800a36` GPU_GET_CHIP_INFO | `gpuPreInit` | ✅ |
+   | 4 | `0x20800a41` USER_REGISTER_ACCESS_MAP | `gpuPreInit` | ✅ |
+   | 5, 6 | `0x208001b0` CONSTRUCTED_FALCON_INFO | `gpuPreInit` ×2 | ✅ |
+   | 7 | `0x20800a87` NVLINK_DEVICE_INFO | `KernelNvlink` PreInit | ⊘ refused |
+   | 8 | `0x20800a40` INTERNAL_GET_DEVICE_INFO_TABLE | `KernelFifo` | ✅ |
+   | 9 | `0x20801112` FIFO_GET_DEVICE_INFO_TABLE | `KernelFifo` | ✅ |
+   | 10 | `0x20800a5c` INTR_GET_KERNEL_TABLE | `Intr` | ✅ |
+   | 11 | `0x20800a1c` MEMSYS_GET_STATIC_CONFIG | `KernelMemorySystem` PreInit | ✅ |
+   | 12 | `0x20801803` BUS_GET_PCI_BAR_INFO | `KernelBus` | ✅ |
+   | 13, 44 | `0x20800af3` CONF_COMPUTE_GET_STATIC_INFO | `ConfidentialCompute` | ★ **now served** |
+   | 14 | `0x20800aac` BIF_GET_STATIC_INFO | `KernelBif` | ★ **now served** |
+   | 15, 16, 17, 34 | `0x20800a61` FIFO_GET_NUM_CHANNELS | `KernelFifo` | ★ **now served** |
+   | 18 | `0x20802a08` CE_GET_FAULT_METHOD_BUFFER_SIZE | `KernelCE` | ⊘ refused |
+   | 19 | `0x20800afe` INIT_USER_SHARED_DATA | RUSD | ⊘ refused |
+   | 20 | `0x20800aff` USER_SHARED_DATA_SET_DATA_POLL | RUSD | ⊘ refused |
+   | 25 | `0x20800301` EVENT_SET_NOTIFICATION | subdevice | ⊘ refused |
+   | 26 | `0x20800a59` GMMU_GET_STATIC_INFO | `KernelGmmu` | ★ **now served** |
+   | 28, 29 | `0x20800a70` BUS_FLUSH_WITH_SYSMEMBAR | `KernelBus` | ⊘ refused |
+   | 30, 31, 32 | `0x20800a6c` MEMSYS_L2_INVALIDATE_EVICT | `KernelMemorySystem` | ⊘ refused |
+   | 33, 38 | `0x20800a80` PERF_GPU_BOOST_SYNC_GET_INFO | `KernelPerf` | ⊘ refused |
+   | 39 | `0x20802a0f` CE_GET_PCE_CONFIG_FOR_LCE_TYPE | `KernelCE` | ⊘ refused |
+   | 40, 42 | `0x20802a06` CE_UPDATE_CLASS_DB | `KernelCE` | ⊘ refused |
+   | 41 | `0x20802a0d` CE_UPDATE_PCE_LCE_MAPPINGS_V2 | `KernelCE` | ⊘ refused |
+   | 43 | `0x2080017e` GPU_GET_VMMU_SEGMENT_SIZE | `gpuInitVmmuInfo` | ⊘ refused |
+   | 45 | `0x20800a9f` GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES | `OBJGVASPACE` | ⊘ refused |
+   | 49 | `0x20800a1f` STATIC_KGR_GET_CAPS | `KernelGraphics` | ⊘ refused |
+   | 50 | `0x20800a2a` STATIC_KGR_GET_INFO | `KernelGraphics` | ⊘ refused |
+   | 51 | `0x20800a26` STATIC_KGR_GET_FLOORSWEEPING_MASKS | `KernelGraphics` | ⊘ refused |
+
+   ⊘ `0x20800a4b` DISPLAY_IP_VERSION is **not in this list** — the oracle's board never
+   asked, so it must stay refused; serving it would make
+   `every_control_this_port_serves_is_exercised_by_the_replay` red with no way back.
+
+   ★★ **And the table is now a gate rather than a document.**
+   `every_control_the_oracle_asks_is_either_served_or_triaged` in the same file derives this
+   universe from the capture and demands every entry be in `WantedTable::ALL` or in
+   `kayfabe_device::sweep::SWEEP_TRIAGE`. ⇒ a control nobody has written anything about is a
+   **red test**, which is exactly what `t134a` did not have.
 
 ### 4.2 Triage every refusal by what the sweep does with it
 
-This three-way choice did not exist in the ladder, where a refusal was simply a stop:
+This choice did not exist in the ladder, where a refusal was simply a stop.
 
-- **Amputation is CORRECT.** The chip genuinely lacks the engine, and refusing is RM's own
-  vocabulary for saying so. Check that the engine is either on the sweep's sanctioned list
-  (`ENG_KERNEL_DISPLAY`, `ENG_INFOROM`, `ENG_HDACODEC` — `gpu.c:2178-2198`) or that the
-  caller handles the refusal itself. **Refuse, and write down the argument.**
-- **Amputation is WRONG.** We need the engine. **Serve.**
-- ★★ **Amputation is UNSURVIVABLE.** Something downstream dereferences the engine pointer
-  with no NULL check. **Serve, and serve this first** — it is the class that turns a refusal
-  into a guest-kernel Oops attributed to the wrong subsystem.
+★★★ **CORRECTED: it is FIVE outcomes, not three.** This section named three — correct /
+wrong / unsurvivable. Pre-flighting the *whole* observed prefix rather than six controls
+produced two the three could not express, and collapsing them would have meant writing down
+a consequence that is not the one the source says. The five live in
+`kayfabe_device::sweep::SweepDisposition`, and the classes are distinguished by **what the
+guest ends up in**, not by how bad they sound:
+
+- **`AmputationIntended` — refuse.** The chip genuinely lacks the engine, and refusing is
+  RM's own vocabulary for saying so. Check that the engine is either on the sweep's
+  sanctioned list (`ENG_KERNEL_DISPLAY`, `ENG_INFOROM`, `ENG_HDACODEC` — `gpu.c:2178-2198`)
+  or that the caller handles the refusal itself. **Write down the argument.**
+- ★★ **`AmputationUnsurvivable` — serve, and serve this FIRST.** Something downstream
+  dereferences the engine pointer, or a pointer the failed path *freed*, with no NULL check.
+  It is the class that turns a refusal into a guest-kernel Oops attributed to the wrong
+  subsystem.
+- ★★ **`RefusalFailsOpen` — serve.** RM pre-zeroes or ignores the destination, so nothing
+  distinguishes a refusal from an answer, **and** the zeros are not what a real GSP would
+  have said. Not a crash; a port defaulting where it could be stating, with nothing able to
+  tell.
+- ★ **`RefusalIsInvisible` — refuse.** The same invisibility, but the state a refusal leaves
+  is **byte-identical to what the oracle's own GSP answered**. ⊘ The class that is easiest
+  to get wrong in the flattering direction, so an entry must cite the C artifact's captured
+  reply and not merely `ogkm-580`. Refusing is still distinguishable at the *envelope*
+  (`rpc_result`), which is a diagnostic cost and can justify serving it anyway.
+- ★★ **`RefusalHalts` — refuse, for now.** The caller turns the failure into a status
+  `gpuStateInit_IMPL` does **not** map to `NV_OK`, so the boot aborts at a named statement
+  rather than continuing damaged. Refusing is *safe*; it is simply the end of the road.
+  **This is the class the next batch is drawn from**, and 13 of the 23 triaged controls are
+  in it.
+
+⚠ Note what the correction did to the two controls this document told the next agent to
+serve. `0x20800af3` and `0x20800aac` are **not** amputations at all: both are asked from
+`gpuStateInit`/`gpuStatePostLoad`, whose loops map `NV_ERR_NOT_SUPPORTED` to `NV_OK` without
+removing the engine, and both destinations are pre-zeroed — so serving them changes **no
+guest state whatsoever**. They were served for the envelope and the `dmesg`, and the
+`RefusalFailsOpen` row says so instead of implying a crash that is not there.
 
 ### 4.3 Batch, then spend one boot confirming the batch
 
@@ -209,9 +278,9 @@ batch. A boot is now a confirmation instrument, not a discovery instrument.
 
 ---
 
-## 5. What this rung did, under the new loop
+## 5. What the rungs did, under the new loop
 
-Pre-flight named six controls and triaged them without a boot:
+### 5.1 The first rung (`0x20800a1c`), and the two named refusals
 
 | control | engine | disposition | argument |
 |---|---|---|---|
@@ -219,9 +288,31 @@ Pre-flight named six controls and triaged them without a boot:
 | `0x20800a4b` DISPLAY_IP_VERSION | `KernelDisplay` | **named refusal** | amputation is **correct**: `ENG_KERNEL_DISPLAY` is the sweep's own whitelisted removal (`gpu.c:2178-2182`), and `kdispStatePreInitLocked_IMPL` returns this very status itself when the display fuse is clear (`ogkm-580: src/nvidia/src/kernel/gpu/disp/kern_disp.c:329-330`). This device has no display plane. ★★ It also **overrules the oracle**, which answered `NV_OK` with `ipVersion = 0` from a board that had one |
 | `0x20800a87` NVLINK_DEVICE_INFO | `KernelNvlink` | **named refusal** | amputation is **correct**: a GeForce GA106 has no NVLink, the caller handles the status itself with `NV_PRINTF(LEVEL_INFO, "NVLink is unavailable")` (`ogkm-580: src/nvidia/src/kernel/gpu/nvlink/kernel_nvlink.c:1826-1830`), and ★ **the real GA106's own GSP returns `0x56` for it too** (`C: mode2_initctrl_ga106.h:6251`, `{0x20800a87u, 0x56u, …}`). Refusing *is* the oracle here |
 
-⊘ `0x20800af3` (ConfidentialCompute) and `0x20800aac` (KernelBif) are both **StateInit**-phase
-and are left for the next batch; `0x20800a40` (KernelFifo) likewise, and it is the largest
-reply this port would encode — 24 580 bytes over seven queue elements.
+### 5.2 ★★★ The first BATCHED rung — four controls, one change
+
+Pre-flighted from the measured §4.1 table and served together, because the sweep reaches all
+four in one boot and there is nothing to learn from serving them one at a time:
+
+| control | engine | disposition | why it is in the batch |
+|---|---|---|---|
+| `0x20800a59` GMMU_GET_STATIC_INFO | `KernelGmmu` | ★★★ `AmputationUnsurvivable` | `_kgmmuInitStaticInfo`'s `fail:` label `portMemFree`s `pKernelGmmu->pStaticInfo` and does **not** NULL the field (`ogkm-580: kern_gmmu.c:139-166`), while `gpuStateInit_IMPL` maps the refusal to `NV_OK` and carries on. A **dangling** pointer is worse than `0x20800a1c`'s NULLed one: every NULL check passes it, and guest-reachable control handlers read through it (`mmu_fault_buffer_ctrl.c:84, 176`) |
+| `0x20800a61` FIFO_GET_NUM_CHANNELS | `KernelFifo` | ★★ `RefusalHalts` | the wall. `kfifoRunlistQueryNumChannels_KERNEL` returns 0 on failure (`kernel_fifo.c:1330-1336`) and `kfifoChidMgrConstruct` turns that into `NV_ERR_INVALID_STATE` (`:300-308`), which `gpuStateInit_IMPL` does **not** map to `NV_OK`. Every engine after `KernelFifo` in `gpuChildOrderList_GM200` is unreachable behind it |
+| `0x20800af3` CONF_COMPUTE_GET_STATIC_INFO | `ConfidentialCompute` | `RefusalFailsOpen` | ⊘ **changes no guest state** — see §4.2's ⚠. Served for the envelope, and because the encoder can then forbid the *widening*: either trust bit deletes RM's own refusal to map CPR vidmem through BAR1 (`mapping_cpu.c:227-235`) |
+| `0x20800aac` BIF_GET_STATIC_INFO | `KernelBif` | `RefusalFailsOpen` | same, and quieter still: `kbifStateInitLocked` calls `kbifStaticInfoInit` as a **bare statement** and discards its status (`kernel_bif.c:132`) |
+
+⊘ **What was deliberately NOT served, and it is most of the list.** Sixteen controls in the
+observed prefix are refused with a written argument. Twelve of them are `RefusalHalts` — the
+roadmap — and the two largest clusters are worth naming because they must be decided
+*together* rather than one at a time:
+
+- **The copy-engine topology triple** — `0x20802a0f` (PCE config), `0x20802a06` (class DB),
+  `0x20802a0d` (156-byte PCE→LCE mapping). A topology served in pieces is worse than one
+  refused whole: a wrong PCE→LCE map surfaces as a copy that lands nowhere, which is the one
+  wrongness that is not diagnosable from the reply.
+- **The GR static-info triple** — `0x20800a1f` (caps, 184 B), `0x20800a2a` (info, 3 712 B),
+  `0x20800a26` (floorsweeping masks, 3 008 B). Floorsweeping masks state which TPCs and GPCs
+  the die has; a capability bitmap without them is a partial description of the one engine
+  the north star runs on.
 
 ---
 
@@ -278,3 +369,17 @@ offsetBar0 = 0;` on the line above. There is no underflow and nothing here claim
 - Whether anything downstream dereferences `KernelNvlink` or `KernelDisplay` after
   amputation is `[inferred]` from the absence of an unchecked `GPU_GET_*` on those paths,
   not from a boot that survived one.
+- ★★★ **The whole of §5.2 is `[inferred]`. NO BOOT has been spent at a revision that serves
+  those four controls.** The measurement behind them is the *capture* — which controls the
+  oracle asks, and what its GSP answered — plus `ogkm-580` source readings of what refusing
+  does. That is strictly weaker than a boot and strictly stronger than a guess, and it is
+  the whole point of §4.3: the batch is built offline and **one** boot confirms it.
+- ★★ The single most consequential unverified thing: serving `0x20800a59` lets
+  `kgmmuStateInitLocked_IMPL` reach `kgmmuFaultBufferInit_HAL` for the first time, and this
+  port answers that path's `REGISTER_FAULT_BUFFER` with a deliberate refusal
+  (`kayfabe_device::faultbuffer`, gated by `resume_from_fault.md` §7 step 0). The reading is
+  that `gpuStateInit_IMPL` maps that `NV_ERR_NOT_SUPPORTED` to `NV_OK` and the boot survives.
+  `[inferred]`. A boot settles it in one line of `dmesg`.
+- ⊘ That refusing `0x20800a61` is where the boot currently *stops* is also `[inferred]`,
+  from `kernel_fifo.c:300-308`. The `t135a` `dmesg` named `KernelFifo` and `KernelCE` as the
+  starved suppliers but did not reach a `pChidMgr->numChannels is 0` line.

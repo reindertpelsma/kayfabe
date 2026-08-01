@@ -513,6 +513,10 @@ const fn copy_of_ga106() -> ChipProfile {
         user_register_access_map: kayfabe_abi::regaccessmap::RegisterAccessMapRow::NOT_PUBLISHED,
         memory_system: ga10x::GA106_MEMORY_SYSTEM,
         device_info: ga10x::GA106_DEVICE_INFO,
+        conf_compute: ga10x::GA106_CONF_COMPUTE,
+        bif_static: ga10x::GA106_BIF_STATIC,
+        fifo_channels: ga10x::GA106_FIFO_CHANNELS,
+        gmmu_static: ga10x::GA106_GMMU_STATIC,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: 0,
     }

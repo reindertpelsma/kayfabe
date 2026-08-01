@@ -1,7 +1,7 @@
-//! The command policy that answers the eight `GSP_RM_CONTROL`s the guest's RM cannot start
-//! without, from the chip row's own tables.
+//! The command policy that answers the twelve `GSP_RM_CONTROL`s the guest's RM cannot get
+//! past, from the chip row's own tables.
 //!
-//! ⚠ The type names say *table* and three of the eight are not one:
+//! ⚠ The type names say *table* and most of them are not one:
 //! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` is an identity,
 //! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP` is a **permission policy**,
 //! and `NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO` is an **instruction to construct**
@@ -20,7 +20,7 @@
 //!
 //! ## ★★★ What it does NOT do, deliberately
 //!
-//! Eight controls, all `[OUT]`-only, all answered from the chip row. It touches no RM graph
+//! Twelve controls, eleven of them `[OUT]`-only, all answered from the chip row. It touches no RM graph
 //! state, allocates no handle, and remembers nothing between commands. Every other command
 //! falls through to whatever the FSM would have done — this is a *supplement* to the
 //! baseline policy, not a replacement for `kayfabe_rmrpc::GraphPolicy`, which is the
@@ -37,14 +37,27 @@
 //! (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:1994`).
 
 use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
+use kayfabe_abi::bifstatic::{
+    self, BIF_STATIC_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_BIF_GET_STATIC_INFO,
+};
 use kayfabe_abi::chipinfo::{
     self, CHIP_INFO_PARAMS_SIZE, ChipIdentity, NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO,
+};
+use kayfabe_abi::confcompute::{
+    self, CONF_COMPUTE_STATIC_INFO_PARAMS_SIZE,
+    NV2080_CTRL_CMD_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO,
 };
 use kayfabe_abi::deviceinfo::{
     self, INTERNAL_DEVICE_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE,
 };
 use kayfabe_abi::falconinfo::{
     self, FALCON_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
+};
+use kayfabe_abi::fifochannels::{
+    self, FIFO_NUM_CHANNELS_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_FIFO_GET_NUM_CHANNELS,
+};
+use kayfabe_abi::gmmustatic::{
+    self, GMMU_STATIC_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,
 };
 use kayfabe_abi::inittables::{
     self, DEVICE_INFO_PARAMS_SIZE, INTR_PARAMS_SIZE, NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
@@ -216,6 +229,59 @@ pub enum WantedTable {
     /// steps later in `kgmmuInitCeMmuFaultIdRange_GA100`, attributed to nothing. See
     /// [`kayfabe_abi::deviceinfo`].
     InternalDeviceInfo,
+    /// `NV2080_CTRL_CMD_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO` — ★★★ the first variant this
+    /// port serves whose refusal is **survivable**, and it is here anyway.
+    ///
+    /// `confComputeStateInitLocked_IMPL` and `confComputeStatePostLoad_IMPL` both ask it
+    /// under `NV_ASSERT_OK_OR_RETURN` (`ogkm-580:
+    /// src/nvidia/src/kernel/gpu/conf_compute/conf_compute.c:548-566` and `:441-456`), and
+    /// both of their loops map `NV_ERR_NOT_SUPPORTED` to `NV_OK` without removing the
+    /// engine (`ogkm-580: gpu.c:2286-2287`, `:3437-3439`). ⇒ no amputation, no halt.
+    ///
+    /// ⊘ The reason to serve it is the *other* failure shape: `ccStaticInfo` is a zeroed
+    /// NVOC member, so a refusal and a served all-zero reply are **byte-identical to the
+    /// guest**. The port would be defaulting where it could be stating, with nothing able
+    /// to tell the two apart. See [`kayfabe_abi::confcompute`], which makes the widening
+    /// direction — a trust claim this port cannot back — unencodable.
+    ConfComputeStaticInfo,
+    /// `NV2080_CTRL_CMD_INTERNAL_BIF_GET_STATIC_INFO` — the same fail-open shape as
+    /// [`Self::ConfComputeStaticInfo`], by an even quieter mechanism: `kbifStateInitLocked`
+    /// calls `kbifStaticInfoInit` as a **bare statement** and discards its status
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/bif/kernel_bif.c:132`), while every other call
+    /// in that function is checked.
+    ///
+    /// ⊘ Two of its four `NvBool`s point RM at hardware — a coherent C2C mapping of
+    /// framebuffer and a PCI function 1 — and [`kayfabe_abi::bifstatic`] makes both
+    /// unencodable for a device that presents neither.
+    BifStaticInfo,
+    /// `NV2080_CTRL_CMD_INTERNAL_FIFO_GET_NUM_CHANNELS` — ★★★ the first control this port
+    /// serves whose refusal **halts** the boot rather than amputating or failing open, and
+    /// the only one whose reply reads a field out of the request.
+    ///
+    /// `kfifoRunlistQueryNumChannels_KERNEL` returns zero on any failure
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_fifo.c:1330-1336`) and
+    /// `kfifoChidMgrConstruct` turns that zero into `NV_ERR_INVALID_STATE` (`:300-308`) —
+    /// which `gpuStateInit_IMPL` does **not** map to `NV_OK`, so the boot aborts at a named
+    /// statement. ⊘ Refusing is therefore *safe*; it is simply the end of the road, and
+    /// every engine after `KernelFifo` in `gpuChildOrderList_GM200` is unreachable behind
+    /// it. See [`kayfabe_abi::fifochannels`].
+    FifoNumChannels,
+    /// `NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO` — ★★★ the **third** unsurvivable
+    /// refusal, and by the worst mechanism of the three.
+    ///
+    /// [`Self::MemorySystemStaticConfig`]'s refusal NULLs the engine pointer, so a `NULL`
+    /// check can catch it. [`Self::InternalDeviceInfo`]'s leaves the engine constructed but
+    /// empty. This one leaves `pKernelGmmu->pStaticInfo` pointing at memory
+    /// `_kgmmuInitStaticInfo` has already `portMemFree`d, because its `fail:` label frees
+    /// the allocation and does **not** NULL the field
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:139-166`), while
+    /// `gpuStateInit_IMPL` maps the refusal to `NV_OK` and carries on (`gpu.c:2286-2287`).
+    ///
+    /// ⊘ `[inferred]` from source. No boot has been spent at a revision that serves it, and
+    /// serving it lets `kgmmuStateInitLocked_IMPL` reach `kgmmuFaultBufferInit_HAL` for the
+    /// first time — see [`kayfabe_abi::gmmustatic`], which states that boundary rather than
+    /// eliding it.
+    GmmuStaticInfo,
 }
 
 impl WantedTable {
@@ -246,7 +312,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 8] = [
+    pub const ALL: [WantedTable; 12] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -255,6 +321,10 @@ impl WantedTable {
         Self::ConstructedFalconInfo,
         Self::MemorySystemStaticConfig,
         Self::InternalDeviceInfo,
+        Self::ConfComputeStaticInfo,
+        Self::BifStaticInfo,
+        Self::FifoNumChannels,
+        Self::GmmuStaticInfo,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -276,6 +346,10 @@ impl WantedTable {
             Self::ConstructedFalconInfo => NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
             Self::MemorySystemStaticConfig => NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG,
             Self::InternalDeviceInfo => NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE,
+            Self::ConfComputeStaticInfo => NV2080_CTRL_CMD_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO,
+            Self::BifStaticInfo => NV2080_CTRL_CMD_INTERNAL_BIF_GET_STATIC_INFO,
+            Self::FifoNumChannels => NV2080_CTRL_CMD_INTERNAL_FIFO_GET_NUM_CHANNELS,
+            Self::GmmuStaticInfo => NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,
         }
     }
 
@@ -291,6 +365,10 @@ impl WantedTable {
             Self::ConstructedFalconInfo => FALCON_INFO_PARAMS_SIZE,
             Self::MemorySystemStaticConfig => MEMSYS_STATIC_CONFIG_PARAMS_SIZE,
             Self::InternalDeviceInfo => INTERNAL_DEVICE_INFO_PARAMS_SIZE,
+            Self::ConfComputeStaticInfo => CONF_COMPUTE_STATIC_INFO_PARAMS_SIZE,
+            Self::BifStaticInfo => BIF_STATIC_INFO_PARAMS_SIZE,
+            Self::FifoNumChannels => FIFO_NUM_CHANNELS_PARAMS_SIZE,
+            Self::GmmuStaticInfo => GMMU_STATIC_INFO_PARAMS_SIZE,
         }
     }
 
@@ -303,7 +381,7 @@ impl WantedTable {
     /// the sticky-answer property and `kayfabe-crec`'s reply-plane differential read, so a
     /// control cannot be served without being covered. See [`WantedTable::ALL`].
     ///
-    /// ⊘ A linear scan of seven, not a `match` — this runs once per RM control command,
+    /// ⊘ A linear scan of twelve, not a `match` — this runs once per RM control command,
     /// which the guest issues a few hundred times across a whole boot. Trading a jump table
     /// for an unfalsifiable pair of lists would be the wrong way round.
     #[must_use]
@@ -489,6 +567,67 @@ impl CommandPolicy for InitTablePolicy {
                     &self.chip.device_info,
                     self.chip.regs_aperture_len,
                 ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ Two `NvBool`s, and the arm where the error branch is the ONLY thing
+            // this encoder can make unencodable. Both bits clear is the truth for this
+            // device AND what a refusal leaves behind — see `kayfabe_abi::confcompute` —
+            // so there is no fail-open combination to forbid. What is forbidden is the
+            // widening: either bit set deletes RM's own refusal to map compute-protected
+            // vidmem through BAR1 (`ogkm-580: mapping_cpu.c:227-235`), and this port serves
+            // no such region.
+            WantedTable::ConfComputeStaticInfo => {
+                match confcompute::encode_conf_compute_static_info(&self.chip.conf_compute) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★ Four `NvBool`s, two of which are directions rather than descriptions:
+            // `bIsC2CLinkUp` sends `kmemsysStateInitLocked` down a coherent chip-to-chip
+            // mapping of framebuffer, and `bIsDeviceMultiFunction` sends
+            // `_kbifSavePcieConfigRegisters` at configuration space for a PCI function 1.
+            // The encoder declines both for a device that presents neither.
+            WantedTable::BifStaticInfo => {
+                match bifstatic::encode_bif_static_info(&self.chip.bif_static) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The second arm that reads the request, and for the opposite reason to
+            // `DeviceInfo`'s cursor: `runlistId` is an `[IN]` field the guest chose, and
+            // overwriting it with a number of our own would be answering a question the
+            // guest did not ask. `numChannels` is the answer and it comes from the chip row.
+            //
+            // ⚠ The error arm is load-bearing in the direction `MemorySystemStaticConfig`'s
+            // is: a zero count would be answered `NV_OK` and then read as
+            // `NV_ERR_INVALID_STATE` by `kfifoChidMgrConstruct`
+            // (`ogkm-580: kernel_fifo.c:300-308`) — an envelope that says the answer is good
+            // wrapped around the content of a refusal.
+            WantedTable::FifoNumChannels => {
+                let at = req.params_at;
+                let runlist_id = u32::from_le_bytes([
+                    cmd.payload[at],
+                    cmd.payload[at + 1],
+                    cmd.payload[at + 2],
+                    cmd.payload[at + 3],
+                ]);
+                match fifochannels::encode_fifo_num_channels(&self.chip.fifo_channels, runlist_id) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The arm whose refusal is a guest-kernel USE-AFTER-FREE rather than a
+            // NULL dereference: `_kgmmuInitStaticInfo`'s `fail:` label frees
+            // `pKernelGmmu->pStaticInfo` and leaves the field pointing at it
+            // (`ogkm-580: kern_gmmu.c:139-166`). Every declined combination here is a fault
+            // of its own — a zero non-replayable size is an invariant RM asserts against
+            // itself (`kern_gmmu.c:1909`), and a size that is not a multiple of
+            // `NVC369_BUF_SIZE` is a partial fault packet in a queue whose capacity is a
+            // division (`kern_gmmu.c:1725`).
+            WantedTable::GmmuStaticInfo => {
+                match gmmustatic::encode_gmmu_static_info(&self.chip.gmmu_static) {
                     Ok(p) => p,
                     Err(_) => return refuse(),
                 }
