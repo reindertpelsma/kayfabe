@@ -666,16 +666,54 @@ fn the_shipped_isolate_factory_can_never_issue_a_verb() {
 
 /// ★ And the object model realizes on top of it — the composition the port performs, run
 /// here so a failure is a unit failure and not a boot failure.
+///
+/// ★★★ **AMENDED at E0b, and the amendment is the increment.** This used to assert
+/// `gpu.system.isolates.contains_key(&GpuId::ZERO)` — *"the system proc got its
+/// `GpuId::ZERO` isolate at realize"* — which was true and was the defect: under
+/// `KAYFABE_ISOLATES=real` that isolate is a `clone`d host child completing real RM
+/// bring-up on the host GPU, and it existed **before the guest had run one instruction**
+/// (`[measured]` rev `e10a6bf`: child t+3 s, guest device open t+30–34 s). The assertion
+/// is now its negation, and the arena — which realize legitimately still carves, so that
+/// `GpuError::Gpa` stays a realize-time refusal — is asserted beside it so the two halves
+/// cannot be confused for one another.
 #[test]
-fn the_ports_object_model_realizes_with_no_forwarding_plane() {
+fn the_ports_object_model_realizes_with_no_forwarding_plane_and_no_isolate() {
     let gpu = port_gpu();
     assert_eq!(
         gpu.procs.len(),
         0,
         "no guest proc exists before any client root"
     );
-    // The system proc got its GpuId::ZERO isolate — a stillborn one.
-    assert!(gpu.system.isolates.contains_key(&GpuId::ZERO));
+    assert!(
+        !gpu.system.isolates.contains_key(&GpuId::ZERO),
+        "★ E0b: realize must materialize NO isolate — not even a stillborn one, because \
+         the same call under KAYFABE_ISOLATES=real spawns a real host child"
+    );
+    assert_eq!(gpu.isolate_census().materialized, 0);
+    assert!(
+        gpu.system.arenas.contains_key(&GpuId::ZERO),
+        "…while the GPA arena IS still realize-time"
+    );
+}
+
+/// ★ And the very first guest alloc is what materializes it — the same composition, one
+/// command later. Without this, the assertion above is satisfied by an isolate plane that
+/// never spawns at all.
+#[test]
+fn the_first_guest_alloc_materializes_the_ports_isolate() {
+    let mut policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    assert_eq!(policy.gpu().isolate_census().materialized, 0);
+    let _ = policy.deliver(&root_alloc(1)).expect("root accepted");
+    let c = policy.gpu().isolate_census();
+    assert_eq!(
+        c.materialized, 1,
+        "the guest's own NV01_ROOT_CLIENT is what spawns it"
+    );
+    assert_eq!(
+        c.no_plane, 1,
+        "and in the SHIPPED configuration it is a plane-less refusal, named as one"
+    );
+    assert_eq!(c.spawn_failed, 0);
 }
 
 // =================================================================================

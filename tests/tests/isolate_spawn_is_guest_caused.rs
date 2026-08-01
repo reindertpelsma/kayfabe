@@ -32,6 +32,8 @@
 //! concurrent CUDA processes share one dup-DST client). `two_guest_processes_...` below
 //! quantifies over that: three isolates, from three distinct events, none at realize.
 
+#![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped PDB literals, as `sim_14_two_process`
+
 use kayfabe_arch::ids::{GpuId, HClient, Pdb};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
