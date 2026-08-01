@@ -314,6 +314,7 @@ fn the_not_a_control_rows_decline_every_control_command() {
             "GuestSystemInfoPolicy",
             "InertPolicy",
             "ObjectPolicy",
+            "BarPdePolicy",
         ],
         "a NotAControl row was added or removed without extending this test",
     );
@@ -352,6 +353,16 @@ fn the_not_a_control_rows_decline_every_control_command() {
                     kayfabe_core::gpa::GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
                 )
                 .expect("the port's object model realizes"),
+            )),
+        ),
+        // ★★ `#149`. It answers exactly `UPDATE_BAR_PDE` (fn 70) and declines every other
+        // function, so no reply of its can reach `rpcRmApiControl_GSP`'s two cache-populating
+        // call sites however it is composed.
+        (
+            "BarPdePolicy",
+            Box::new(kayfabe_device::bar2::BarPdePolicy::new(
+                abi(),
+                kayfabe_device::bar2::BarPdeLog::new(),
             )),
         ),
     ];
@@ -396,6 +407,23 @@ fn the_not_a_control_rows_decline_every_control_command() {
             })
             .is_some(),
         "InertPolicy answers nothing at all — the sweep above is vacuous",
+    );
+    // ★ …and the same for the row `#149` added, because a policy that answered NOTHING
+    // would satisfy the whole sweep above by accident.
+    let mut bar_pde =
+        kayfabe_device::bar2::BarPdePolicy::new(abi(), kayfabe_device::bar2::BarPdeLog::new());
+    assert!(
+        bar_pde
+            .respond(&RpcCommand {
+                function: RpcFunction::UpdateBarPde,
+                code: kayfabe_abi::generated::rpc::NV_VGPU_MSG_FUNCTION_UPDATE_BAR_PDE,
+                sequence: 1,
+                payload: vec![0u8; kayfabe_device::bar2::UPDATE_BAR_PDE_BODY_SIZE],
+                elements: 1,
+                delivered: Vec::new(),
+            })
+            .is_some(),
+        "BarPdePolicy answers nothing at all — the sweep above is vacuous",
     );
 }
 

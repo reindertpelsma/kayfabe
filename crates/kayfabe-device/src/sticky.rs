@@ -449,7 +449,7 @@ pub struct PolicyDisposition {
 /// ⊘ Test-only implementations are out of scope by the same derivation: the test filters
 /// `git ls-files` to `crates/*/src/**`, so a `CommandPolicy` written inside a `#[test]`
 /// module or a `tests/` target is neither required here nor forbidden there.
-pub const POLICY_DISPOSITIONS: [PolicyDisposition; 11] = [
+pub const POLICY_DISPOSITIONS: [PolicyDisposition; 12] = [
     PolicyDisposition {
         name: "InitTablePolicy",
         path: "crates/kayfabe-device/src/inittables.rs",
@@ -519,6 +519,21 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 11] = [
     PolicyDisposition {
         name: "ObjectPolicy",
         path: "crates/kayfabe-rmrpc/src/policy.rs",
+        disposition: StickyDisposition::NotAControl,
+    },
+    // ★★ `#149`. `BarPdePolicy` answers exactly `UPDATE_BAR_PDE` (fn 70) and declines
+    // everything else, so `NotAControl` is the unconditional statement — it is a claim
+    // about the TYPE and not about who installs it, and both cache-populating call sites
+    // live inside `rpcRmApiControl_GSP` (§1a), which fn 70 never reaches.
+    //
+    // ⊘ Worth saying why the question is not vacuous even so: this policy answers `NV_OK`
+    // to a command whose sender **discards the status**, which is the shape that most
+    // invites "then it does not matter what we reply". It matters for a different reason —
+    // the reply is what makes the FSM stop refusing — and the sticky question is separate
+    // and is answered here.
+    PolicyDisposition {
+        name: "BarPdePolicy",
+        path: "crates/kayfabe-device/src/bar2.rs",
         disposition: StickyDisposition::NotAControl,
     },
 ];
