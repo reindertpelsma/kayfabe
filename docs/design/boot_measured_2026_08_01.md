@@ -65,7 +65,19 @@ only a boot could test.
 `:213`) and `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` (`mem_mgr.c:625`, then
 `memmgrRegisterSuspendCallbacks` at `:777`).
 
-## 3. ★★★ The new wall, and it is a different KIND of thing
+## 3. ⊘ REFUTED — kept as the record of a wrong inference. See §7 and §10.
+
+> ⊘ **The causal claim in this section is FALSE and was refuted by measurement.** It reads
+> *"refusing object allocation starves the heap"*; that was inferred from **adjacency in a
+> single log**. `GspRmAlloc` was then fully served (`7b5d8c3`) and boot `alloc2` showed **zero**
+> `rpcRmApiAlloc_GSP` and **zero** `rpcRmApiFree_GSP` lines — **and the heap was still null**
+> (§7). The heap is not starved at all: it is **created** at `mem_mgr.c:684` and then **torn
+> down** by the `failed:` label's `memmgrStateDestroy` (`:963-975`) (§10).
+>
+> ★ It is kept, not deleted, because the *observation* below is accurate and only the
+> *inference* was wrong — and because this is the clearest example in the file of the failure
+> mode the whole document exists to resist: **a chain of assertions read as a chain of
+> causes.** ⇒ Do not cite this section for causation; cite §7 and §10.
 
 Not a missing **control** — a missing **verb**. `GspRmAlloc` is refused for every class:
 
