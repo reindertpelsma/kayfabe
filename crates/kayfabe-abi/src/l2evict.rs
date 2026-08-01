@@ -165,6 +165,23 @@
 //!
 //! # ⚠ `[measured]` where it appears in the oracle's own boot
 //!
+//! # ★★★ `[measured]` — boot `l2evict1`, rev `9551dd1`, 2026-08-01
+//!
+//! A stock 580.159.04 guest accepted the answer:
+//! `docs/design/boot_measured_2026_08_01.md` §27. `kbusVerifyBar2_GM107: L2 evict failed` is
+//! **gone**, `0x20800a6c` leaves the device's unserviced list, and the same function now
+//! fails ninety lines later at `:4200` — the MMU test's read-back — which is past **both**
+//! the first evict (`:4110`) and the second (`:4175`).
+//!
+//! ⊘ Three things that boot did **not** establish, and they matter here specifically:
+//! the third call at `:4224` was never made; the `0x31` prediction below is unconfirmed
+//! because a `0x11` would have decoded identically; and the boot went **backwards one phase**
+//! (`NV_ERR_MEMORY_ERROR` is not in `gpuStateInit_IMPL`'s absorb map where
+//! `NV_ERR_NOT_SUPPORTED` was), so every later-phase result in the previous log is simply
+//! absent rather than regressed. §28 carries both halves.
+//!
+//! # ⚠ `[measured]` where it appears in the oracle's own boot
+//!
 //! `cap1b` carries it at `rpc.sequence` **30, 31 and 32** (txn 1006-1008), `paylen 44` = 40
 //! header + **4** params — an independent confirmation of the struct size below — all three
 //! inside the replay's closure limit of 1028. `cargo run -p kayfabe-crec --example

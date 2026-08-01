@@ -368,7 +368,10 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               futures falsify it — real host-GPU forwarding, a write-back layer of this \
               port's own, and any second writer of the framebuffer — and kayfabe_abi::l2evict \
               carries all three plus the flag-by-flag licence. ⚠ It is NOT decided with \
-              0x20800a70 after all; see that row",
+              0x20800a70 after all; see that row. [measured] 2026-08-01, boot l2evict1 \
+              (9551dd1): 'L2 evict failed' is GONE, the control leaves the unserviced list, \
+              and kbusVerifyBar2_GM107 now fails ninety lines later at :4200 — the MMU \
+              test's read-back, which is past BOTH of the first two evicts",
     },
     // ── seq 33 and 38 ──────────────────────────────────────────────────────────────
     SweepControl {
